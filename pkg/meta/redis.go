@@ -84,10 +84,11 @@ import (
 
 type redisMeta struct {
 	*baseMeta
-	rdb        redis.UniversalClient
-	prefix     string
-	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
-	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
+	rdb         redis.UniversalClient
+	prefix      string
+	shaLookup   string // The SHA returned by Redis for the loaded `scriptLookup`
+	shaResolve  string // The SHA returned by Redis for the loaded `scriptResolve`
+	aclKeyCache map[uint32]string
 }
 
 var _ Meta = &redisMeta{}
@@ -243,9 +244,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 
 	m := &redisMeta{
-		baseMeta: newBaseMeta(addr, conf),
-		rdb:      rdb,
-		prefix:   prefix,
+		baseMeta:    newBaseMeta(addr, conf),
+		rdb:         rdb,
+		prefix:      prefix,
+		aclKeyCache: make(map[uint32]string),
 	}
 	m.en = m
 	m.checkServerConfig()
@@ -636,7 +638,11 @@ func (m *redisMeta) totalInodesKey() string {
 }
 
 func (m *redisMeta) aclKey(id uint32) string {
-	return fmt.Sprintf("%sacl%d", m.prefix, id)
+	if key, ok := m.aclKeyCache[id]; ok {
+		return key
+	}
+	m.aclKeyCache[id] = fmt.Sprintf("%sacl%d", m.prefix, id)
+	return m.aclKeyCache[id]
 }
 
 func (m *redisMeta) delfiles() string {
