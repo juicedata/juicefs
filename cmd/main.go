@@ -87,7 +87,6 @@ func Main(args []string) error {
 			cmdCompact(),
 		},
 	}
-
 	if calledViaMount(args) {
 		var err error
 		args, err = handleSysMountArgs(args)
@@ -98,7 +97,10 @@ func Main(args []string) error {
 			args = []string{"mount", "--help"}
 		}
 	}
-	err := app.Run(reorderOptions(app, args))
+	options := reorderOptions(app, args)
+	// replace original args with handled args to pass to child process
+	os.Args = options
+	err := app.Run(options)
 	if errno, ok := err.(syscall.Errno); ok && errno == 0 {
 		err = nil
 	}
@@ -106,7 +108,7 @@ func Main(args []string) error {
 }
 
 func calledViaMount(args []string) bool {
-	return strings.HasSuffix(args[0], "/mount.juicefs")
+	return strings.HasSuffix(args[0], "/mount.juicefs") && args[1] != "mount"
 }
 
 func handleSysMountArgs(args []string) ([]string, error) {
@@ -115,7 +117,10 @@ func handleSysMountArgs(args []string) ([]string, error) {
 		"entrycacheto":    "entry-cache",
 		"direntrycacheto": "dir-entry-cache",
 	}
-	newArgs := []string{"juicefs", "mount", "-d"}
+	var newArgs = []string{args[0], "mount"}
+	if !utils.StringContains(args, "-d") && !utils.StringContains(args, "--background") {
+		newArgs = append(newArgs, "-d")
+	}
 	if len(args) < 3 {
 		return nil, nil
 	}

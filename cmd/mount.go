@@ -529,13 +529,6 @@ func updateFstab(c *cli.Context) error {
 func mount(c *cli.Context) error {
 	setup(c, 2)
 	addr := c.Args().Get(0)
-	var osArgs []string
-	if calledViaMount(os.Args) {
-		osArgs = append(osArgs, os.Args[0], "mount")
-		osArgs = append(osArgs, os.Args[1:]...)
-	} else {
-		osArgs = os.Args
-	}
 	removePassword(addr)
 	mp := c.Args().Get(1)
 
@@ -604,7 +597,7 @@ func mount(c *cli.Context) error {
 			daemonRun(c, addr, vfsConf)
 		}
 		os.Setenv("JFS_SUPERVISOR", strconv.Itoa(os.Getppid()))
-		return launchMount(mp, vfsConf, osArgs)
+		return launchMount(mp, vfsConf)
 	}
 	logger.Infof("JuiceFS version %s", version.Version())
 
