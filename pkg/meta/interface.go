@@ -167,8 +167,8 @@ type Attr struct {
 	Full      bool // the attributes are completed or not
 	KeepCache bool // whether to keep the cached page or not
 
-	AccessACLId  uint32 // access ACL id (identical ACL rules share the same access ACL ID.)
-	DefaultACLId uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
+	AccessACL  uint32 // access ACL id (identical ACL rules share the same access ACL ID.)
+	DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
 }
 
 func typeToStatType(_type uint8) uint32 {
