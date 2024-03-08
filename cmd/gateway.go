@@ -81,7 +81,7 @@ func cmdGateway() *cli.Command {
 		},
 		&cli.StringFlag{
 			Name:  "domain",
-			Usage: "set virtual-host-style requests domain",
+			Usage: "domain for virtual-host-style requests",
 		},
 	}
 
