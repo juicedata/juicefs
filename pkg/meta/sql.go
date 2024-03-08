@@ -878,8 +878,8 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Rdev = n.Rdev
 	attr.Parent = n.Parent
 	attr.Full = true
-	attr.AccessACLId = n.AccessACLId
-	attr.DefaultACLId = n.DefaultACLId
+	attr.AccessACL = n.AccessACLId
+	attr.DefaultACL = n.DefaultACLId
 }
 
 func (m *dbMeta) parseNode(attr *Attr, n *node) {
@@ -901,8 +901,8 @@ func (m *dbMeta) parseNode(attr *Attr, n *node) {
 	n.Length = attr.Length
 	n.Rdev = attr.Rdev
 	n.Parent = attr.Parent
-	n.AccessACLId = attr.AccessACLId
-	n.DefaultACLId = attr.DefaultACLId
+	n.AccessACLId = attr.AccessACL
+	n.DefaultACLId = attr.DefaultACL
 }
 
 func (m *dbMeta) updateStats(space int64, inodes int64) {
@@ -972,8 +972,8 @@ func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		}
 		m.parseAttr(&n, attr)
 
-		if attr != nil && attr.AccessACLId != aclAPI.None {
-			rule, err := m.getACL(s, attr.AccessACLId)
+		if attr != nil && attr.AccessACL != aclAPI.None {
+			rule, err := m.getACL(s, attr.AccessACL)
 			if err != nil {
 				return err
 			}
@@ -1002,8 +1002,8 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 
 		// get acl
 		var rule *aclAPI.Rule
-		if curAttr.AccessACLId != aclAPI.None {
-			rule, err = m.getACL(s, curAttr.AccessACLId)
+		if curAttr.AccessACL != aclAPI.None {
+			rule, err = m.getACL(s, curAttr.AccessACL)
 			if err != nil {
 				return err
 			}
@@ -1387,14 +1387,14 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 
 		mode &= 07777
-		if pattr.DefaultACLId != aclAPI.None && _type != TypeSymlink {
+		if pattr.DefaultACL != aclAPI.None && _type != TypeSymlink {
 			// inherit default acl
 			if _type == TypeDirectory {
-				n.DefaultACLId = pattr.DefaultACLId
+				n.DefaultACLId = pattr.DefaultACL
 			}
 
 			// set access acl by parent's default acl
-			rule, err := m.getACL(s, pattr.DefaultACLId)
+			rule, err := m.getACL(s, pattr.DefaultACL)
 			if err != nil {
 				return err
 			}

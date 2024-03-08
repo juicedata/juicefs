@@ -847,8 +847,8 @@ func (m *redisMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno 
 		}
 		m.parseAttr(val, attr)
 
-		if attr != nil && attr.AccessACLId != aclAPI.None {
-			rule, err := m.getACL(ctx, tx, attr.AccessACLId)
+		if attr != nil && attr.AccessACL != aclAPI.None {
+			rule, err := m.getACL(ctx, tx, attr.AccessACL)
 			if err != nil {
 				return err
 			}
@@ -1196,8 +1196,8 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 
 		// get acl
 		var rule *aclAPI.Rule
-		if cur.AccessACLId != aclAPI.None {
-			rule, err = m.getACL(ctx, tx, cur.AccessACLId)
+		if cur.AccessACL != aclAPI.None {
+			rule, err = m.getACL(ctx, tx, cur.AccessACL)
 			if err != nil {
 				return err
 			}
@@ -1363,14 +1363,14 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		}
 
 		mode &= 07777
-		if pattr.DefaultACLId != aclAPI.None && _type != TypeSymlink {
+		if pattr.DefaultACL != aclAPI.None && _type != TypeSymlink {
 			// inherit default acl
 			if _type == TypeDirectory {
-				attr.DefaultACLId = pattr.DefaultACLId
+				attr.DefaultACL = pattr.DefaultACL
 			}
 
 			// set access acl by parent's default acl
-			rule, err := m.getACL(ctx, tx, pattr.DefaultACLId)
+			rule, err := m.getACL(ctx, tx, pattr.DefaultACL)
 			if err != nil {
 				return err
 			}
@@ -1389,7 +1389,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 					return err
 				}
 
-				attr.AccessACLId = id
+				attr.AccessACL = id
 				attr.Mode = (mode & 0xFE00) | cRule.GetMode()
 			}
 		} else {

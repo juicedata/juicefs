@@ -1171,15 +1171,15 @@ func (m *baseMeta) parseAttr(buf []byte, attr *Attr) {
 	}
 	attr.Full = true
 	if rb.Left() >= 8 {
-		attr.AccessACLId = rb.Get32()
-		attr.DefaultACLId = rb.Get32()
+		attr.AccessACL = rb.Get32()
+		attr.DefaultACL = rb.Get32()
 	}
 	logger.Tracef("attr: %+v -> %+v", buf, attr)
 }
 
 func (m *baseMeta) marshal(attr *Attr) []byte {
 	size := uint32(36 + 24 + 4 + 8)
-	if attr.AccessACLId|attr.DefaultACLId != aclAPI.None {
+	if attr.AccessACL|attr.DefaultACL != aclAPI.None {
 		size += 8
 	}
 	w := utils.NewBuffer(size)
@@ -1197,9 +1197,9 @@ func (m *baseMeta) marshal(attr *Attr) []byte {
 	w.Put64(attr.Length)
 	w.Put32(attr.Rdev)
 	w.Put64(uint64(attr.Parent))
-	if attr.AccessACLId+attr.DefaultACLId > 0 {
-		w.Put32(attr.AccessACLId)
-		w.Put32(attr.DefaultACLId)
+	if attr.AccessACL+attr.DefaultACL > 0 {
+		w.Put32(attr.AccessACL)
+		w.Put32(attr.DefaultACL)
 	}
 	logger.Tracef("attr: %+v -> %+v", attr, w.Bytes())
 	return w.Bytes()
@@ -2844,18 +2844,18 @@ func (m *baseMeta) getFaclFromCache(ctx Context, ino Ino, aclType uint8, rule *a
 func setAttrACLId(attr *Attr, aclType uint8, id uint32) {
 	switch aclType {
 	case aclAPI.TypeAccess:
-		attr.AccessACLId = id
+		attr.AccessACL = id
 	case aclAPI.TypeDefault:
-		attr.DefaultACLId = id
+		attr.DefaultACL = id
 	}
 }
 
 func getAttrACLId(attr *Attr, aclType uint8) uint32 {
 	switch aclType {
 	case aclAPI.TypeAccess:
-		return attr.AccessACLId
+		return attr.AccessACL
 	case aclAPI.TypeDefault:
-		return attr.DefaultACLId
+		return attr.DefaultACL
 	}
 	return aclAPI.None
 }
