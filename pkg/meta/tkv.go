@@ -82,6 +82,7 @@ type kvMeta struct {
 }
 
 var _ Meta = &kvMeta{}
+var _ engine = &kvMeta{}
 
 var drivers = make(map[string]func(string) (tkvClient, error))
 
@@ -3687,21 +3688,7 @@ func (m *kvMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 	return updated, err
 }
 
-func (m *kvMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
-	if aclType != aclAPI.TypeAccess && aclType != aclAPI.TypeDefault {
-		return syscall.EINVAL
-	}
-
-	if !ino.IsNormal() {
-		return syscall.EPERM
-	}
-
-	now := time.Now() // TODO from context
-	defer func() {
-		m.timeit("SetFacl", now)
-		m.of.InvalidateChunk(ino, invalidateAttrOnly)
-	}()
-
+func (m *kvMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
 	return errno(m.txn(func(tx *kvTxn) error {
 		val := tx.get(m.inodeKey(ino))
 		if val == nil {
@@ -3746,6 +3733,7 @@ func (m *kvMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule)
 
 		// update attr
 		if oriACL != getAttrACLId(attr, aclType) || oriMode != attr.Mode {
+			now := time.Now()
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
 			tx.set(m.inodeKey(ino), m.marshal(attr))
@@ -3754,18 +3742,7 @@ func (m *kvMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule)
 	}, ino))
 }
 
-func (m *kvMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
-	var err error
-	if err = m.getFaclFromCache(ctx, ino, aclType, rule); err == nil {
-		return 0
-	}
-
-	if !errors.Is(err, errACLNotInCache) {
-		return errno(err)
-	}
-
-	defer m.timeit("GetFacl", time.Now())
-
+func (m *kvMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
 	return errno(m.client.txn(func(tx *kvTxn) error {
 		val := tx.get(m.inodeKey(ino))
 		if val == nil {

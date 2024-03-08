@@ -238,6 +238,7 @@ type dbMeta struct {
 }
 
 var _ Meta = &dbMeta{}
+var _ engine = &dbMeta{}
 
 type dbSnap struct {
 	node    map[Ino]*node
@@ -4352,21 +4353,7 @@ func (m *dbMeta) getACL(s *xorm.Session, id uint32) (*aclAPI.Rule, error) {
 	return r, nil
 }
 
-func (m *dbMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
-	if aclType != aclAPI.TypeAccess && aclType != aclAPI.TypeDefault {
-		return syscall.EINVAL
-	}
-
-	if !ino.IsNormal() {
-		return syscall.EPERM
-	}
-
-	now := time.Now() // TODO from context
-	defer func() {
-		m.timeit("SetFacl", now)
-		m.of.InvalidateChunk(ino, invalidateAttrOnly)
-	}()
-
+func (m *dbMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		attr := &Attr{}
 		n := &node{Inode: ino}
@@ -4424,6 +4411,7 @@ func (m *dbMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule)
 
 			var dirtyNode node
 			m.parseNode(attr, &dirtyNode)
+			now := time.Now()
 			dirtyNode.Ctime = now.UnixNano() / 1e3
 			dirtyNode.Ctimensec = int16(now.Nanosecond() % 1000)
 			_, err := s.Cols(updateCols...).Update(&dirtyNode, &node{Inode: ino})
@@ -4434,18 +4422,7 @@ func (m *dbMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule)
 	}, ino))
 }
 
-func (m *dbMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
-	var err error
-	if err = m.getFaclFromCache(ctx, ino, aclType, rule); err == nil {
-		return 0
-	}
-
-	if !errors.Is(err, errACLNotInCache) {
-		return errno(err)
-	}
-
-	defer m.timeit("GetFacl", time.Now())
-
+func (m *dbMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
 	return errno(m.roTxn(func(s *xorm.Session) error {
 		attr := &Attr{}
 		n := &node{Inode: ino}

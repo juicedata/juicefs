@@ -92,6 +92,7 @@ type redisMeta struct {
 }
 
 var _ Meta = &redisMeta{}
+var _ engine = &redisMeta{}
 
 func init() {
 	Register("redis", newRedisMeta)
@@ -4557,21 +4558,7 @@ func (m *redisMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Ti
 	return updated, err
 }
 
-func (m *redisMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
-	if aclType != aclAPI.TypeAccess && aclType != aclAPI.TypeDefault {
-		return syscall.EINVAL
-	}
-
-	if !ino.IsNormal() {
-		return syscall.EPERM
-	}
-
-	now := time.Now() // TODO from context
-	defer func() {
-		m.timeit("SetFacl", now)
-		m.of.InvalidateChunk(ino, invalidateAttrOnly)
-	}()
-
+func (m *redisMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		val, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
 		if err != nil {
@@ -4616,6 +4603,7 @@ func (m *redisMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Ru
 
 		// update attr
 		if oriACL != getAttrACLId(attr, aclType) || oriMode != attr.Mode {
+			now := time.Now()
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
@@ -4628,18 +4616,7 @@ func (m *redisMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Ru
 	}, m.inodeKey(ino)))
 }
 
-func (m *redisMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
-	var err error
-	if err = m.getFaclFromCache(ctx, ino, aclType, rule); err == nil {
-		return 0
-	}
-
-	if !errors.Is(err, errACLNotInCache) {
-		return errno(err)
-	}
-
-	defer m.timeit("GetFacl", time.Now())
-
+func (m *redisMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
 	return errno(m.rdb.Watch(ctx, func(tx *redis.Tx) error {
 		val, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
 		if err != nil {

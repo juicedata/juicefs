@@ -113,6 +113,9 @@ type engine interface {
 	scanPendingFiles(Context, pendingFileScan) error
 
 	GetSession(sid uint64, detail bool) (*Session, error)
+
+	doSetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
+	doGetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -1176,7 +1179,7 @@ func (m *baseMeta) parseAttr(buf []byte, attr *Attr) {
 
 func (m *baseMeta) marshal(attr *Attr) []byte {
 	size := uint32(36 + 24 + 4 + 8)
-	if attr.AccessACLId+attr.DefaultACLId > 0 {
+	if attr.AccessACLId|attr.DefaultACLId != aclAPI.None {
 		size += 8
 	}
 	w := utils.NewBuffer(size)
@@ -2855,4 +2858,36 @@ func getAttrACLId(attr *Attr, aclType uint8) uint32 {
 		return attr.DefaultACLId
 	}
 	return aclAPI.None
+}
+
+func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	if aclType != aclAPI.TypeAccess && aclType != aclAPI.TypeDefault {
+		return syscall.EINVAL
+	}
+
+	if !ino.IsNormal() {
+		return syscall.EPERM
+	}
+
+	defer func() {
+		m.timeit("SetFacl", time.Now())
+		m.of.InvalidateChunk(ino, invalidateAttrOnly)
+	}()
+
+	return m.en.doSetFacl(ctx, ino, aclType, rule)
+}
+
+func (m *baseMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	var err error
+	if err = m.getFaclFromCache(ctx, ino, aclType, rule); err == nil {
+		return 0
+	}
+
+	if !errors.Is(err, errACLNotInCache) {
+		return errno(err)
+	}
+
+	defer m.timeit("GetFacl", time.Now())
+
+	return m.en.doGetFacl(ctx, ino, aclType, rule)
 }
