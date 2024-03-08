@@ -678,6 +678,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 				serveFuseFD(serverAddress)
 			}
 		}
+
 		cmd := exec.Command(path, os.Args[1:]...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
