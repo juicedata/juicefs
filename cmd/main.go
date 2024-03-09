@@ -87,7 +87,7 @@ func Main(args []string) error {
 			cmdCompact(),
 		},
 	}
-	if calledViaMount(args) {
+	if calledViaMount(args) && args[1] != "mount" {
 		var err error
 		args, err = handleSysMountArgs(args)
 		if err != nil {
@@ -108,7 +108,7 @@ func Main(args []string) error {
 }
 
 func calledViaMount(args []string) bool {
-	return strings.HasSuffix(args[0], "/mount.juicefs") && args[1] != "mount"
+	return strings.HasSuffix(args[0], "/mount.juicefs")
 }
 
 func handleSysMountArgs(args []string) ([]string, error) {
