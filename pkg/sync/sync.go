@@ -932,15 +932,20 @@ func matchTwoStar(p string, s []string) bool {
 		return p == "*"
 	}
 	idx := strings.Index(p, "**")
+	ss := strings.Join(s, "/")
 	if idx == -1 {
-		ok, _ := path.Match(p, strings.Join(s, "/"))
+		ok, _ := path.Match(p, ss)
 		return ok
 	}
-	ok, _ := path.Match(p[:idx+1], s[0])
+	ok, _ := path.Match(p, ss)
+	if ok {
+		return true
+	}
+	ok, _ = path.Match(p[:idx+1], s[0])
 	if !ok {
 		return false
 	}
-	for i := 0; i <= len(s); i++ {
+	for i := 1; i <= len(s); i++ {
 		if matchTwoStar(p[idx+1:], s[i:]) {
 			return true
 		}
