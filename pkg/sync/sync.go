@@ -981,7 +981,7 @@ func matchSuffix(p, s []string) bool {
 	}
 	last := p[len(p)-1]
 	if len(s) == 0 {
-		return last == "***"
+		return last == "***" || last == "**"
 	}
 	prefix := p[:len(p)-1]
 	n := len(s)

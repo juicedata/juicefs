@@ -649,6 +649,8 @@ func TestMatchObjects(t *testing.T) {
 		{rules: []rule{{pattern: "a**"}}, key: "a"},
 		{rules: []rule{{pattern: "a**a"}}, key: "a", want: true},
 		{rules: []rule{{pattern: "aa**a"}}, key: "aa", want: true},
+		{rules: []rule{{pattern: "**/d2/**a"}}, key: "/d2/d3/1a"},
+		{rules: []rule{{pattern: "**/d2/**a"}}, key: "d2/d3/1a"},
 	}
 	for _, c := range tests {
 		if got := matchKey(c.rules, c.key); got != c.want {
