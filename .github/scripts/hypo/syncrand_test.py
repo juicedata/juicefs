@@ -75,5 +75,19 @@ class TestFsrand2(unittest.TestCase):
         {'option': '--exclude', 'pattern': 'a'}])
         state.teardown()
 
+    def test_sync10(self):
+        state = SyncMachine()
+        v1 = state.init_folders()
+        v2 = state.create_file(content=b'\xdf"\x18\x11f\xbb\xef\xe3P', file_name='c', mode='a', parent=v1, umask=248)
+        v3 = state.mkdir(mode=2647, parent=v1, subdir='*c', umask=93)
+        v4 = state.mkdir(mode=2981, parent=v1, subdir='***', umask=98)
+        v5 = state.create_file(content=b'\xff\x8f', file_name='b', mode='w', parent=v3, umask=63)
+        state.create_file(content=b'=\xeb\xad\xd2\t\x7f6', file_name='?/?b', mode='a', parent=v3, umask=176)
+        v6 = state.mkdir(mode=765, parent=v1, subdir='cc', umask=332)
+        v7 = state.create_file(content=b'k+\x82', file_name='*', mode='a', parent=v4, umask=304)
+        state.create_file(content=b'\x81\x0b', file_name='*b//', mode='w', parent=v1, umask=227)
+        state.create_file(content=b'\xb2BUw', file_name='/ab', mode='x', parent=v1, umask=228)
+        state.teardown()
+
 if __name__ == '__main__':
     unittest.main()
