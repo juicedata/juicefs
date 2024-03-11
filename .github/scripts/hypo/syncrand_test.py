@@ -67,11 +67,18 @@ class TestFsrand2(unittest.TestCase):
     def test_sync9(self):
         state = SyncMachine()
         v1 = state.init_folders()
-        v2 = state.mkdir(mode=8, parent=v1, subdir='aa', umask=0)
+        v2 = state.mkdir(mode=8, parent=v1, subdir='aa', umask=0) 
         v3 = state.create_file(content=b'', file_name='a', mode='w', parent=v2, umask=0)
         state.sync(options=[{'option': '--include', 'pattern': '**aa**'},
         {'option': '--exclude', 'pattern': 'a'}])
         state.teardown()
-        
+
+    def test_sync10(self):
+        state = SyncMachine()
+        v1 = state.init_folders()
+        v2 = state.create_file(content=b'', file_name='a', mode='w', parent=v1, umask=0)
+        state.sync(options=[{'option': '--include', 'pattern': '/***'},
+                {'option': '--exclude', 'pattern': 'a'}])
+        state.teardown()
 if __name__ == '__main__':
     unittest.main()
