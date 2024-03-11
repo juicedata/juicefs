@@ -922,10 +922,12 @@ func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		var rule *aclAPI.Rule
 		if cur.AccessACL != aclAPI.None {
 			var err error
-			rule, err = m.getACL(tx, cur.AccessACL)
+			oldRule, err := m.getACL(tx, cur.AccessACL)
 			if err != nil {
 				return err
 			}
+			rule = &aclAPI.Rule{}
+			*rule = *oldRule
 		}
 
 		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &cur, attr, now, rule)

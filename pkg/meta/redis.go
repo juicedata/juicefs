@@ -1197,10 +1197,12 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 		// get acl
 		var rule *aclAPI.Rule
 		if cur.AccessACL != aclAPI.None {
-			rule, err = m.getACL(ctx, tx, cur.AccessACL)
+			oldRule, err := m.getACL(ctx, tx, cur.AccessACL)
 			if err != nil {
 				return err
 			}
+			rule = &aclAPI.Rule{}
+			*rule = *oldRule
 		}
 
 		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &cur, attr, now, rule)

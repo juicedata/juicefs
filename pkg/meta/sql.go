@@ -1003,10 +1003,12 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		// get acl
 		var rule *aclAPI.Rule
 		if curAttr.AccessACL != aclAPI.None {
-			rule, err = m.getACL(s, curAttr.AccessACL)
+			oldRule, err := m.getACL(s, curAttr.AccessACL)
 			if err != nil {
 				return err
 			}
+			rule = &aclAPI.Rule{}
+			*rule = *oldRule
 		}
 
 		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &curAttr, attr, now, rule)
