@@ -179,13 +179,6 @@ var bufPool = sync.Pool{
 	},
 }
 
-var (
-	// for multiple upload mem limit
-	availMem int64
-	mutex    sync.Mutex
-	cond     = sync.NewCond(&mutex)
-)
-
 func try(n int, f func() error) (err error) {
 	for i := 0; i < n; i++ {
 		err = f()
@@ -444,24 +437,126 @@ func (w *withProgress) Read(b []byte) (int, error) {
 	return n, err
 }
 
-func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload) error {
+func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64, key, uploadID string, num int) (*object.Part, error) {
+	if limiter != nil {
+		limiter.Wait(size)
+	}
+	start := time.Now()
+	sz := size
+	p := chunk.NewOffPage(int(size))
+	defer p.Release()
+	data := p.Data
+	var part *object.Part
+	err := try(3, func() error {
+		in, err := src.Get(srckey, off, sz)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		if _, err = io.ReadFull(in, data); err != nil {
+			return err
+		}
+		// PartNumber starts from 1
+		part, err = dst.UploadPart(key, uploadID, num+1, data)
+		return err
+	})
+	if err != nil {
+		logger.Warnf("Failed to copy data of %s part %d: %s", key, num, err)
+		return nil, fmt.Errorf("part %d: %s", num, err)
+	}
+	logger.Debugf("Copied data of %s part %d in %s", key, num, time.Since(start))
+	copiedBytes.IncrInt64(sz)
+	return part, nil
+}
+
+func choosePartSize(upload *object.MultipartUpload, size int64) int64 {
 	partSize := int64(upload.MinPartSize)
 	if partSize == 0 {
 		partSize = defaultPartSize
-	}
-	limits := dst.Limits()
-	if size > limits.MaxPartSize*int64(limits.MaxPartCount) {
-		return fmt.Errorf("object size %d is too large to copy", size)
 	}
 	if size > partSize*int64(upload.MaxCount) {
 		partSize = size / int64(upload.MaxCount)
 		partSize = ((partSize-1)>>20 + 1) << 20 // align to MB
 	}
+	return partSize
+}
+
+func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upload *object.MultipartUpload, num int, abort chan struct{}) (*object.Part, error) {
+	select {
+	case <-abort:
+		return nil, fmt.Errorf("aborted")
+	case concurrent <- 1:
+		defer func() {
+			<-concurrent
+		}()
+	}
+
+	limits := dst.Limits()
+	if size <= 32<<20 || !limits.IsSupportUploadPartCopy {
+		return doUploadPart(src, dst, key, off, size, key, upload.UploadID, num)
+	}
+
+	tmpkey := fmt.Sprintf("%s.part%d", key, num)
+	var up *object.MultipartUpload
+	var err error
+	err = try(3, func() error {
+		up, err = dst.CreateMultipartUpload(tmpkey)
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("range(%d,%d): %s", off, size, err)
+	}
+
+	partSize := choosePartSize(up, size)
+	n := int((size-1)/partSize) + 1
+	logger.Debugf("Copying data of %s (range: %d,%d) as %d parts (size: %d): %s", key, off, size, n, partSize, up.UploadID)
+	parts := make([]*object.Part, n)
+
+	for i := 0; i < n; i++ {
+		sz := partSize
+		if i == n-1 {
+			sz = size - int64(i)*partSize
+		}
+		select {
+		case <-abort:
+			dst.AbortUpload(tmpkey, up.UploadID)
+			return nil, fmt.Errorf("aborted")
+		default:
+		}
+		parts[i], err = doUploadPart(src, dst, key, off+int64(i)*partSize, sz, tmpkey, up.UploadID, i)
+		if err != nil {
+			dst.AbortUpload(tmpkey, up.UploadID)
+			return nil, fmt.Errorf("range(%d,%d): %s", off, size, err)
+		}
+	}
+
+	err = try(3, func() error { return dst.CompleteUpload(tmpkey, up.UploadID, parts) })
+	if err != nil {
+		dst.AbortUpload(tmpkey, up.UploadID)
+		return nil, fmt.Errorf("multipart: %s", err)
+	}
+	var part *object.Part
+	err = try(3, func() error {
+		part, err = dst.UploadPartCopy(key, upload.UploadID, num+1, tmpkey, 0, size)
+		return err
+	})
+	_ = dst.Delete(tmpkey)
+	return part, err
+}
+
+func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload) error {
+	limits := dst.Limits()
+	if size > limits.MaxPartSize*int64(upload.MaxCount) {
+		return fmt.Errorf("object size %d is too large to copy", size)
+	}
+
+	partSize := choosePartSize(upload, size)
 	n := int((size-1)/partSize) + 1
 	logger.Debugf("Copying data of %s as %d parts (size: %d): %s", key, n, partSize, upload.UploadID)
 	abort := make(chan struct{})
 	parts := make([]*object.Part, n)
 	errs := make(chan error, n)
+	var err error
 
 	for i := 0; i < n; i++ {
 		go func(num int) {
@@ -469,60 +564,11 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 			if num == n-1 {
 				sz = size - int64(num)*partSize
 			}
-
-			mutex.Lock()
-			for availMem < 0 {
-				cond.Wait()
-			}
-			availMem -= partSize
-			mutex.Unlock()
-			defer func() {
-				mutex.Lock()
-				availMem += partSize
-				mutex.Unlock()
-				cond.Signal()
-			}()
-
-			select {
-			case <-abort:
-				errs <- fmt.Errorf("aborted")
-				return
-			case concurrent <- 1:
-				defer func() {
-					<-concurrent
-				}()
-			}
-
-			if limiter != nil {
-				limiter.Wait(sz)
-			}
-			p := chunk.NewOffPage(int(sz))
-			defer p.Release()
-			data := p.Data
-			if err := try(3, func() error {
-				in, err := src.Get(key, int64(num)*partSize, sz)
-				if err != nil {
-					return err
-				}
-				defer in.Close()
-				if _, err = io.ReadFull(in, data); err != nil {
-					return err
-				}
-				// PartNumber starts from 1
-				parts[num], err = dst.UploadPart(key, upload.UploadID, num+1, data)
-				return err
-			}); err == nil {
-				errs <- nil
-				copiedBytes.IncrInt64(sz)
-				logger.Debugf("Copied data of %s part %d", key, num)
-			} else {
-				errs <- fmt.Errorf("part %d: %s", num, err)
-				logger.Warnf("Failed to copy data of %s part %d: %s", key, num, err)
-			}
+			parts[num], err = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort)
+			errs <- err
 		}(i)
 	}
 
-	var err error
 	for i := 0; i < n; i++ {
 		if err = <-errs; err != nil {
 			close(abort)
@@ -886,11 +932,16 @@ func matchTwoStar(p string, s []string) bool {
 		return p == "*"
 	}
 	idx := strings.Index(p, "**")
+	ss := strings.Join(s, "/")
 	if idx == -1 {
-		ok, _ := path.Match(p, strings.Join(s, "/"))
+		ok, _ := path.Match(p, ss)
 		return ok
 	}
-	ok, _ := path.Match(p[:idx+1], s[0])
+	ok, _ := path.Match(p, ss)
+	if ok {
+		return true
+	}
+	ok, _ = path.Match(p[:idx+1], s[0])
 	if !ok {
 		return false
 	}
@@ -930,7 +981,7 @@ func matchSuffix(p, s []string) bool {
 	}
 	last := p[len(p)-1]
 	if len(s) == 0 {
-		return last == "***"
+		return last == "***" || last == "**"
 	}
 	prefix := p[:len(p)-1]
 	n := len(s)
@@ -1128,7 +1179,6 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if config.Manager != "" {
 		bufferSize = 100
 	}
-	availMem = int64(config.Threads) * (32 << 20)
 	tasks := make(chan object.Object, bufferSize)
 	wg := sync.WaitGroup{}
 	concurrent = make(chan int, config.Threads)

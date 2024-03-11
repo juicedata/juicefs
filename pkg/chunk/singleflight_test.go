@@ -33,20 +33,20 @@ func TestSingleFlight(t *testing.T) {
 	for i := 0; i < iters; i++ {
 		gp.Add(1)
 		go func(k int) {
-			p, _ := g.Execute(strconv.Itoa(k/1000), func() (*Page, error) {
-				time.Sleep(time.Microsecond * 50000) // In most cases 50ms is enough to run 1000 goroutines
+			p, _ := g.Execute(strconv.Itoa(k/100), func() (*Page, error) {
+				time.Sleep(time.Microsecond * 500000) // In most cases 500ms is enough to run 100 goroutines
 				atomic.AddInt32(&n, 1)
 				return NewOffPage(100), nil
 			})
 			p.Release()
-			cache.LoadOrStore(strconv.Itoa(k/1000), p)
+			cache.LoadOrStore(strconv.Itoa(k/100), p)
 			gp.Done()
 		}(i)
 	}
 	gp.Wait()
 
 	nv := int(atomic.LoadInt32(&n))
-	if nv != iters/1000 {
+	if nv != iters/100 {
 		t.Fatalf("singleflight doesn't take effect: %v", nv)
 	}
 

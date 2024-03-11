@@ -52,10 +52,7 @@ func (q *qiniu) String() string {
 func (q *qiniu) SetStorageClass(_ string) {}
 
 func (q *qiniu) Limits() Limits {
-	return Limits{
-		IsSupportMultipartUpload: false,
-		IsSupportUploadPartCopy:  false,
-	}
+	return Limits{}
 }
 
 func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {

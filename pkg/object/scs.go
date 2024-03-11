@@ -49,7 +49,6 @@ func (s *scsClient) String() string {
 func (s *scsClient) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,
-		IsSupportUploadPartCopy:  false,
 	}
 }
 
