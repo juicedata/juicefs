@@ -114,5 +114,17 @@ class TestFsrand2(unittest.TestCase):
         state.create_file(content=b'', file_name='afds', mode='w', parent=v1, umask=295, user='root')
         state.teardown()
 
+    def test_acl_4465(self):
+        # SEE: https://github.com/juicedata/juicefs/issues/4465
+        state = JuicefsMachine()
+        v1 = state.init_folders()
+        v2 = state.create_file(content=b'', file_name='stsn', mode='x', parent=v1, umask=464, user='root')
+        state.set_acl(default=True, entry=v2, group='user1', group_perm={'r', 'w', 'x'}, logical=False, mask={'r', 'w', 'x'}, not_recalc_mask=False, other_perm={'r'}, physical=False, recalc_mask=True, recursive=False, set_mask=False, sudo_user='user1', user='user1', user_perm=set())
+        state.create_file(content=b'', file_name='vbcx', mode='a', parent=v1, umask=154, user='user1')
+        v6 = state.create_file(content=b'w\xb1', file_name='sctj', mode='w', parent=v1, umask=376, user='root')
+        state.set_acl(default=False, entry=v6, group='group3', group_perm={'w'}, logical=False, mask={'w', 'x'}, not_recalc_mask=False, other_perm=set(), physical=False, recalc_mask=False, recursive=True, set_mask=True, sudo_user='root', user='root', user_perm=set())
+        state.set_acl(default=True, entry=v1, group='user3', group_perm={'r', 'w', 'x'}, logical=False, mask={'x'}, not_recalc_mask=True, other_perm=set(), physical=False, recalc_mask=True, recursive=False, set_mask=False, sudo_user='user1', user='user3', user_perm=set())
+        state.teardown()
+
 if __name__ == '__main__':
     unittest.main()
