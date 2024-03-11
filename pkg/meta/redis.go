@@ -3646,8 +3646,6 @@ var entryPool = sync.Pool{
 	},
 }
 
-const scanEntryBatch = 1000
-
 func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 	ctx := Background
 	var keys []string
@@ -3669,7 +3667,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 			case "regular":
 				cr[i] = p.LRange(ctx, m.chunkKey(inode, 0), 0, -1)
 			case "directory":
-				dr[i] = p.HScan(ctx, m.entryKey(inode), 0, "*", scanEntryBatch)
+				dr[i] = p.HScan(ctx, m.entryKey(inode), 0, "*", 1000)
 			case "symlink":
 				sr[i] = p.Get(ctx, m.symKey(inode))
 			}
@@ -3745,11 +3743,13 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 					}
 				}
 			case TypeDirectory:
-				keys, _, err := dr[i].Result()
+				keys, cursor, err := dr[i].Result()
 				if err != nil {
 					return err
 				}
-				e.keys = keys
+				if cursor == 0 {
+					e.keys = keys
+				}
 			case TypeSymlink:
 				if e.Symlink, err = sr[i].Result(); err != nil {
 					if err != redis.Nil {
@@ -3803,9 +3803,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		}
 	}
 
-	if len(tree.keys) == scanEntryBatch*2 {
-		// partial scan, retry
-		tree.keys = tree.keys[:0]
+	if tree.keys == nil {
 		err := m.hscan(Background, m.entryKey(inode), func(keys []string) error {
 			tree.keys = append(tree.keys, keys...)
 			return nil
