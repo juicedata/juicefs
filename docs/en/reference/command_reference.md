@@ -735,6 +735,7 @@ Apart from options listed below, this command shares options with `juicefs mount
 |`--multi-buckets`|use top level of directories as buckets (default: false)|
 |`--keep-etag`|save the ETag for uploaded objects (default: false)|
 |`--umask=022`|umask for new file and directory in octal (default: 022)|
+| `--domain value`<VersionAdd>1.2</VersionAdd>   |domain for virtual-host-style requests|
 
 ### `juicefs webdav` {#webdav}
 

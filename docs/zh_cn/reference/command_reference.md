@@ -735,6 +735,7 @@ juicefs gateway redis://localhost localhost:9000
 |`--multi-buckets`|使用第一级目录作为存储桶 (默认：false)|
 |`--keep-etag`|保留对象上传时的 ETag (默认：false)|
 |`--umask=022`|新文件和新目录的 umask 的八进制格式 (默认值：022)|
+| `--domain value`<VersionAdd>1.2</VersionAdd>   |虚拟主机样式请求的域|
 
 ### `juicefs webdav` {#webdav}
 
