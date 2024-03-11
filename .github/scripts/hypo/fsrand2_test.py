@@ -135,5 +135,15 @@ class TestFsrand2(unittest.TestCase):
         state.open(file=v8, flags=[512], mode=2579, umask=34, user='root')
         state.teardown()
 
+    def test_4483(self):
+        # SEE https://github.com/juicedata/juicefs/issues/4483
+        state = JuicefsMachine()
+        v1 = state.init_folders()
+        state.set_acl(default=True, entry=v1, group='root', group_perm={'r'}, logical=True, mask={'r'}, not_recalc_mask=False, other_perm={'r', 'x'}, physical=False, recalc_mask=False, recursive=True, set_mask=True, sudo_user='user1', user='user2', user_perm={'r', 'w', 'x'})
+        v4 = state.create_file(content=b'\xe65', file_name='abha', mode='a', parent=v1, umask=3, user='root')
+        v5 = state.set_acl(default=False, entry=v4, group='user3', group_perm={'x'}, logical=False, mask={'x'}, not_recalc_mask=True, other_perm=set(), physical=True, recalc_mask=True, recursive=False, set_mask=False, sudo_user='root', user='user1', user_perm=set())
+        state.list_xattr(file=v4, user='root')
+        state.teardown()
+
 if __name__ == '__main__':
     unittest.main()
