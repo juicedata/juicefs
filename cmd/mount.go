@@ -529,6 +529,7 @@ func updateFstab(c *cli.Context) error {
 func mount(c *cli.Context) error {
 	setup(c, 2)
 	addr := c.Args().Get(0)
+	removePassword(addr)
 	mp := c.Args().Get(1)
 
 	// __DAEMON_STAGE env is set by the godaemon.MakeDaemon function
@@ -620,7 +621,6 @@ func mount(c *cli.Context) error {
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
 
-	removePassword(addr)
 	err = metaCli.NewSession(true)
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
