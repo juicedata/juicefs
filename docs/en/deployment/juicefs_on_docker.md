@@ -94,6 +94,9 @@ volumes:
     driver: juicedata/juicefs
     driver_opts:
       name: ${VOL_NAME}
+      # Because SQLite creates DB files in a local path of the plugin container,
+      # sqlite:// will be failed on services restarting.
+      # (Details in https://github.com/juicedata/docker-volume-juicefs/issues/37)
       metaurl: ${META_URL}
       storage: ${STORAGE_TYPE}
       bucket: ${BUCKET}
