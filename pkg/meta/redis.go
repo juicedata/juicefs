@@ -4571,6 +4571,10 @@ func (m *redisMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.
 			return syscall.EPERM
 		}
 
+		if attr.Flags&FlagImmutable != 0 {
+			return syscall.EPERM
+		}
+
 		oriACL, oriMode := getAttrACLId(attr, aclType), attr.Mode
 		if rule.IsEmpty() {
 			// remove acl
