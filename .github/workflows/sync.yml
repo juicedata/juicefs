@@ -49,19 +49,22 @@ jobs:
       - name: Test Sync
         timeout-minutes: 30
         run: |
-          if [[ "${{matrix.meta}}" == 'sync' ]]; then
+          if [[ "${{matrix.type}}" == 'sync' ]]; then
             sudo META=redis .github/scripts/sync/sync.sh 
-          elif [[ "${{matrix.meta}}" == 'sync_fsrand' ]]; then
+          elif [[ "${{matrix.type}}" == 'sync_fsrand' ]]; then
             sudo META=redis .github/scripts/sync/sync_fsrand.sh 
-          elif [[ "${{matrix.meta}}" == 'sync_minio' ]]; then
+          elif [[ "${{matrix.type}}" == 'sync_minio' ]]; then
             sudo META=redis .github/scripts/sync/sync_minio.sh 
-          elif [[ "${{matrix.meta}}" == 'sync_cluster' ]]; then
+          elif [[ "${{matrix.type}}" == 'sync_cluster' ]]; then
             types=("ecdsa"  "ed25519"  "rsa")
             random_type=${types[$RANDOM % ${#types[@]}]}
             sudo CI=true META=redis KEY_TYPE=$random_type .github/scripts/sync/sync_cluster.sh
-          elif [[ "${{matrix.meta}}" == 'sync_exclude' ]]; then
+          elif [[ "${{matrix.type}}" == 'sync_exclude' ]]; then
             sudo python3 .github/scripts/hypo/syncrand_test.py
             sudo LOG_LEVEL=WARNING PROFILE=ci python3 .github/scripts/hypo/syncrand.py
+          else
+            echo "Unknown type: ${{matrix.type}}"
+            exit 1
           fi
           
       - name: Setup upterm session
