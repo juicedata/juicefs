@@ -2820,8 +2820,6 @@ func (m *baseMeta) CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) s
 	return st
 }
 
-const aclCounter = "acl"
-
 var errACLNotInCache = errors.New("acl not in cache")
 
 func (m *baseMeta) getFaclFromCache(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) error {
