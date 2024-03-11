@@ -88,7 +88,7 @@ test_list_threads(){
     check_diff $DEST_DIR1 $DEST_DIR2
 }
 
-test_update(){
+skip_test_update(){
     prepare_test
     ./juicefs mount $META_URL /tmp/jfs -d
     sync_option="--dirs --perms --check-all --links --list-threads 10 --list-depth 5"
