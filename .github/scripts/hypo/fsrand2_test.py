@@ -135,7 +135,7 @@ class TestFsrand2(unittest.TestCase):
         state.open(file=v8, flags=[512], mode=2579, umask=34, user='root')
         state.teardown()
 
-    def test_4483(self):
+    def test_acl_4483(self):
         # SEE https://github.com/juicedata/juicefs/issues/4483
         state = JuicefsMachine()
         v1 = state.init_folders()
