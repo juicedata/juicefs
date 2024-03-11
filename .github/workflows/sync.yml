@@ -61,7 +61,11 @@ jobs:
             sudo CI=true META=redis KEY_TYPE=$random_type .github/scripts/sync/sync_cluster.sh
           elif [[ "${{matrix.type}}" == 'sync_exclude' ]]; then
             sudo python3 .github/scripts/hypo/syncrand_test.py
-            sudo LOG_LEVEL=WARNING PROFILE=ci python3 .github/scripts/hypo/syncrand.py
+            if [ "${{github.event_name}}" == "pull_request" ]; then
+              sudo MAX_EXAMPLE=100 STEP_COUNT=50 LOG_LEVEL=WARNING PROFILE=ci python3 .github/scripts/hypo/syncrand.py
+            else
+            sudo MAX_EXAMPLE=1000 STEP_COUNT=200 LOG_LEVEL=WARNING PROFILE=ci python3 .github/scripts/hypo/syncrand.py
+            fi
           else
             echo "Unknown type: ${{matrix.type}}"
             exit 1
