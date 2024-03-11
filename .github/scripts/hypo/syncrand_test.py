@@ -56,6 +56,13 @@ class TestFsrand2(unittest.TestCase):
         v2 = state.create_file(content=b'', file_name='aa', mode='w', parent=v1, umask=0)
         state.sync(options=[{'option': '--exclude', 'pattern': 'aa**a'}])
         state.teardown()
+    
+    def test_sync8(self):
+        state = SyncMachine()
+        v1 = state.init_folders()
+        v2 = state.mkdir(mode=8, parent=v1, subdir='a', umask=0)
+        state.sync(options=[{'option': '--exclude', 'pattern': 'a/**/a'}])
+        state.teardown()
         
 if __name__ == '__main__':
     unittest.main()
