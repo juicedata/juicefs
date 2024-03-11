@@ -3815,7 +3815,6 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		}
 	}
 	entries := make([]*DumpedEntry, len(tree.keys)/2)
-	tree.Entries = make(map[string]*DumpedEntry)
 	for i := range entries {
 		name := tree.keys[i*2]
 		t, inode := m.parseEntry([]byte(tree.keys[i*2+1]))
@@ -3824,7 +3823,6 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		e.Attr.Inode = inode
 		e.Attr.Type = typeToString(t)
 		entries[i] = e
-		tree.Entries[name] = e
 	}
 
 	var err error
@@ -3885,11 +3883,9 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 			err = e.writeJSON(bw, depth+2)
 		}
 		entries[i] = nil
-		delete(tree.Entries, e.Name)
 		e.Name = ""
 		e.Xattrs = nil
 		e.Chunks = nil
-		e.Entries = nil
 		e.Symlink = ""
 		e.keys = nil
 		entryPool.Put(e)
