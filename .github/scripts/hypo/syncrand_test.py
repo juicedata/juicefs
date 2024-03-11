@@ -43,5 +43,37 @@ class TestFsrand2(unittest.TestCase):
         {'option': '--exclude', 'pattern': 'a?**'}])
         state.teardown()
 
+    def test_sync6(self):
+        state = SyncMachine()
+        v1 = state.init_folders()
+        v2 = state.create_file(content=b'', file_name='a', mode='w', parent=v1, umask=0)
+        state.sync(options=[{'option': '--exclude', 'pattern': '**a'}])
+        state.teardown()
+
+    def test_sync7(self):
+        state = SyncMachine()
+        v1 = state.init_folders()
+        v2 = state.create_file(content=b'', file_name='aa', mode='w', parent=v1, umask=0)
+        state.sync(options=[{'option': '--exclude', 'pattern': 'aa**a'}])
+        state.teardown()
+    
+    def test_sync8(self):
+        # SEE: https://github.com/juicedata/juicefs/issues/4471
+        state = SyncMachine()
+        v1 = state.init_folders()
+        v2 = state.mkdir(mode=8, parent=v1, subdir='a', umask=0)
+        state.sync(options=[{'option': '--exclude', 'pattern': 'a/**/a'}])
+        state.teardown()
+
+    def test_sync9(self):
+        # SEE: https://github.com/juicedata/juicefs/issues/4471
+        state = SyncMachine()
+        v1 = state.init_folders()
+        v2 = state.mkdir(mode=8, parent=v1, subdir='aa', umask=0) 
+        v3 = state.create_file(content=b'', file_name='a', mode='w', parent=v2, umask=0)
+        state.sync(options=[{'option': '--include', 'pattern': '**aa**'},
+        {'option': '--exclude', 'pattern': 'a'}])
+        state.teardown()
+
 if __name__ == '__main__':
     unittest.main()

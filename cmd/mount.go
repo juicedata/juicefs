@@ -361,6 +361,8 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 		vfsConf.Port.ConsulAddr = c.String("consul")
 	}
 	if !metaConf.ReadOnly && !metaConf.NoBGJob && vfsConf.BackupMeta > 0 {
+		registerer.MustRegister(vfs.LastBackupTimeG)
+		registerer.MustRegister(vfs.LastBackupDurationG)
 		go vfs.Backup(m, blob, vfsConf.BackupMeta, vfsConf.BackupSkipTrash)
 	}
 	if !c.Bool("no-usage-report") {

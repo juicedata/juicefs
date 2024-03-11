@@ -173,7 +173,7 @@ func collectMetrics(registry *prometheus.Registry) []byte {
 		for _, m := range mf.Metric {
 			var name = *mf.Name
 			for _, l := range m.Label {
-				if *l.Name != "mp" && *l.Name != "vol_name" {
+				if (name == "juicefs_object_request_durations_histogram_seconds" || name == "juicefs_object_request_data_bytes") && *l.Name == "method" {
 					name += "_" + *l.Value
 				}
 			}
