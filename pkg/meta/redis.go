@@ -3876,7 +3876,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 			return err
 		}
 		if e.Attr.Type == "directory" {
-			err = m.dumpDir(inode, e, bw, depth+2, bar)
+			err = m.dumpDir(e.Attr.Inode, e, bw, depth+2, bar)
 		} else {
 			err = e.writeJSON(bw, depth+2)
 		}
