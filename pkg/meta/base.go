@@ -2869,8 +2869,9 @@ func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 		return syscall.EPERM
 	}
 
+	now := time.Now()
 	defer func() {
-		m.timeit("SetFacl", time.Now())
+		m.timeit("SetFacl", now)
 		m.of.InvalidateChunk(ino, invalidateAttrOnly)
 	}()
 
@@ -2887,7 +2888,8 @@ func (m *baseMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 		return errno(err)
 	}
 
-	defer m.timeit("GetFacl", time.Now())
+	now := time.Now()
+	defer m.timeit("GetFacl", now)
 
 	return m.en.doGetFacl(ctx, ino, aclType, rule)
 }
