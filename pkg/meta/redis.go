@@ -3549,6 +3549,14 @@ func (m *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Err
 		*names = append(*names, []byte(name)...)
 		*names = append(*names, 0)
 	}
+
+	val, err := m.rdb.Get(ctx, m.inodeKey(inode)).Bytes()
+	if err != nil {
+		return errno(err)
+	}
+	attr := &Attr{}
+	m.parseAttr(val, attr)
+	setXAttrACL(names, attr.AccessACL, attr.DefaultACL)
 	return 0
 }
 

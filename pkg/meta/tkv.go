@@ -2846,6 +2846,17 @@ func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 		*names = append(*names, name[prefix:]...)
 		*names = append(*names, 0)
 	}
+
+	val, err := m.get(m.inodeKey(inode))
+	if err != nil {
+		return errno(err)
+	}
+	if val == nil {
+		return syscall.ENOENT
+	}
+	attr := &Attr{}
+	m.parseAttr(val, attr)
+	setXAttrACL(names, attr.AccessACL, attr.DefaultACL)
 	return 0
 }
 

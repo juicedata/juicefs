@@ -3320,6 +3320,17 @@ func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 			*names = append(*names, []byte(x.Name)...)
 			*names = append(*names, 0)
 		}
+
+		var n = node{Inode: inode}
+		ok, err := s.Get(&n)
+		if err != nil {
+			return err
+		} else if !ok {
+			return syscall.ENOENT
+		}
+		attr := &Attr{}
+		m.parseAttr(&n, attr)
+		setXAttrACL(names, attr.AccessACL, attr.DefaultACL)
 		return nil
 	}))
 }

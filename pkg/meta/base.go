@@ -2866,6 +2866,17 @@ func getAttrACLId(attr *Attr, aclType uint8) uint32 {
 	return aclAPI.None
 }
 
+func setXAttrACL(xattrs *[]byte, accessACL, defaultACL uint32) {
+	if accessACL != aclAPI.None {
+		*xattrs = append(*xattrs, []byte("system.posix_acl_access")...)
+		*xattrs = append(*xattrs, 0)
+	}
+	if defaultACL != aclAPI.None {
+		*xattrs = append(*xattrs, []byte("system.posix_acl_default")...)
+		*xattrs = append(*xattrs, 0)
+	}
+}
+
 func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
 	if aclType != aclAPI.TypeAccess && aclType != aclAPI.TypeDefault {
 		return syscall.EINVAL
