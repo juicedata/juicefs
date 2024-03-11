@@ -76,9 +76,8 @@ func (tx *kvTxn) deleteKeys(prefix []byte) {
 
 type kvMeta struct {
 	*baseMeta
-	client      tkvClient
-	snap        map[Ino]*DumpedEntry
-	aclKeyCache sync.Map
+	client tkvClient
+	snap   map[Ino]*DumpedEntry
 }
 
 var _ Meta = &kvMeta{}
@@ -102,9 +101,8 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 	// TODO: ping server and check latency > Millisecond
 	// logger.Warnf("The latency to database is too high: %s", time.Since(start))
 	m := &kvMeta{
-		baseMeta:    newBaseMeta(addr, conf),
-		client:      client,
-		aclKeyCache: sync.Map{},
+		baseMeta: newBaseMeta(addr, conf),
+		client:   client,
 	}
 	m.en = m
 	return m, nil
@@ -258,8 +256,7 @@ func (m *kvMeta) dirQuotaKey(inode Ino) []byte {
 }
 
 func (m *kvMeta) aclKey(id uint32) []byte {
-	key, _ := m.aclKeyCache.LoadOrStore(id, m.fmtKey("R", id))
-	return key.([]byte)
+	return m.fmtKey("R", id)
 }
 
 func (m *kvMeta) parseACLId(key string) uint32 {
