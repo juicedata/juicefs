@@ -32,12 +32,12 @@ import (
 
 var (
 	LastBackupTimeG = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "last_success_backup_time",
-		Help: "Last successful backup time.",
+		Name: "last_successful_backup",
+		Help: "Last successful backup.",
 	})
 	LastBackupDurationG = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "last_success_backup_duration",
-		Help: "Last successful backup duration.",
+		Name: "last_backup_duration",
+		Help: "Last backup duration.",
 	})
 )
 
@@ -79,11 +79,11 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
 			logger.Debugf("backup metadata started")
 			if err = backup(m, blob, now); err == nil {
 				LastBackupTimeG.Set(float64(now.UnixNano()) / 1e9)
-				LastBackupDurationG.Set(time.Since(now).Seconds())
 				logger.Infof("backup metadata succeed, used %s", time.Since(now))
 			} else {
 				logger.Warnf("backup metadata failed: %s", err)
 			}
+			LastBackupDurationG.Set(time.Since(now).Seconds())
 		}
 	}
 }
