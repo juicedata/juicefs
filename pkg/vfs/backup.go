@@ -27,6 +27,18 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
+)
+
+var (
+	LastBackupTimeG = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "last_success_backup_time",
+		Help: "Last successful backup time.",
+	})
+	LastBackupDurationG = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "last_success_backup_duration",
+		Help: "Last successful backup duration.",
+	})
 )
 
 // Backup metadata periodically in the object storage
@@ -66,6 +78,8 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
 			go cleanupBackups(blob, now)
 			logger.Debugf("backup metadata started")
 			if err = backup(m, blob, now); err == nil {
+				LastBackupTimeG.Set(float64(now.UnixNano()) / 1e9)
+				LastBackupDurationG.Set(time.Since(now).Seconds())
 				logger.Infof("backup metadata succeed, used %s", time.Since(now))
 			} else {
 				logger.Warnf("backup metadata failed: %s", err)
