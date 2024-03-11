@@ -110,6 +110,45 @@ test_restart_from_old_version(){
     [[ $count -ne 0 ]] && echo "mount process count should be 0" && exit 1 || true
 }
 
+test_restart_from_old_version(){
+    prepare_test
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs-1.1 mount  -d $META_URL /tmp/jfs --rsa-key my-priv-key.pem
+    echo hello |tee /tmp/jfs/test
+    ./juicefs mount -d $META_URL /tmp/jfs --rsa-key my-priv-key.pem
+    count=$(ps -ef | grep juicefs | grep mount | wc -l)
+    [[ $count -ne 3 ]] && echo "mount process count should be 3" && exit 1 || true
+    version=$(./juicefs version | awk '{print $3,$4,$5}')
+    grep Version /tmp/jfs/.config | grep $version
+    grep "hello" /tmp/jfs/test
+    echo world | tee /tmp/jfs/test 
+    ./juicefs umount /tmp/jfs
+    count=$(ps -ef | grep juicefs | grep mount | wc -l)
+    [[ $count -ne 1 ]] && echo "mount process count should be 1" && exit 1 || true
+    ./juicefs umount /tmp/jfs
+    count=$(ps -ef | grep juicefs | grep mount | wc -l)
+    [[ $count -ne 0 ]] && echo "mount process count should be 0" && exit 1 || true
+}
+
+test_restart_from_current_version(){
+    prepare_test
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs format $META_URL myjfs-vc --encrypt-rsa-key my-priv-key.pem
+    
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs mount  -d $META_URL /tmp/jfs --rsa-key my-priv-key.pem
+    echo hello |tee /tmp/jfs/test
+    ./juicefs mount -d $META_URL /tmp/jfs --rsa-key my-priv-key.pem
+    count=$(ps -ef | grep juicefs | grep mount | wc -l)
+    [[ $count -ne 3 ]] && echo "mount process count should be 3" && exit 1 || true
+    version=$(./juicefs version | awk '{print $3,$4,$5}')
+    grep Version /tmp/jfs/.config | grep $version
+    grep "hello" /tmp/jfs/test
+    echo world | tee /tmp/jfs/test 
+    ./juicefs umount /tmp/jfs
+    count=$(ps -ef | grep juicefs | grep mount | wc -l)
+    [[ $count -ne 1 ]] && echo "mount process count should be 1" && exit 1 || true
+    ./juicefs umount /tmp/jfs
+    count=$(ps -ef | grep juicefs | grep mount | wc -l)
+    [[ $count -ne 0 ]] && echo "mount process count should be 0" && exit 1 || true
+}
 
 do_upgrade_restart_from_python(){
     prepare_test
