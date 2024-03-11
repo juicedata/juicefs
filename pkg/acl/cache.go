@@ -62,16 +62,9 @@ func (c *cache) GetMissIds() []uint32 {
 	}
 
 	n := c.maxId + 1
-	mark := make([]bool, n)
-	for i := uint32(1); i < n; i++ {
-		if _, ok := c.id2Rule[i]; ok {
-			mark[i] = true
-		}
-	}
-
 	var ret []uint32
 	for i := uint32(1); i < n; i++ {
-		if !mark[i] {
+		if _, ok := c.id2Rule[i]; !ok {
 			ret = append(ret, i)
 		}
 	}
