@@ -106,6 +106,7 @@ type DumpedEntry struct {
 	Xattrs  []*DumpedXattr          `json:"xattrs,omitempty"`
 	Chunks  []*DumpedChunk          `json:"chunks,omitempty"`
 	Entries map[string]*DumpedEntry `json:"entries,omitempty"`
+	keys    []string
 }
 
 var CHARS = []byte("0123456789ABCDEF")

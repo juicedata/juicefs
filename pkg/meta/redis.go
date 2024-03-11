@@ -3646,6 +3646,8 @@ var entryPool = sync.Pool{
 	},
 }
 
+const scanEntryBatch = 1000
+
 func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 	ctx := Background
 	var keys []string
@@ -3658,7 +3660,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 		var xr = make([]*redis.MapStringStringCmd, len(es))
 		var sr = make([]*redis.StringCmd, len(es))
 		var cr = make([]*redis.StringSliceCmd, len(es))
-		var dr = make([]*redis.MapStringStringCmd, len(es))
+		var dr = make([]*redis.ScanCmd, len(es))
 		for i, e := range es {
 			inode := e.Attr.Inode
 			ar[i] = p.Get(ctx, m.inodeKey(inode))
@@ -3667,7 +3669,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 			case "regular":
 				cr[i] = p.LRange(ctx, m.chunkKey(inode, 0), 0, -1)
 			case "directory":
-				dr[i] = p.HGetAll(ctx, m.entryKey(inode))
+				dr[i] = p.HScan(ctx, m.entryKey(inode), 0, "*", scanEntryBatch)
 			case "symlink":
 				sr[i] = p.Get(ctx, m.symKey(inode))
 			}
@@ -3743,18 +3745,11 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 					}
 				}
 			case TypeDirectory:
-				dirs, err := dr[i].Result()
+				keys, _, err := dr[i].Result()
 				if err != nil {
 					return err
 				}
-				e.Entries = make(map[string]*DumpedEntry)
-				for name := range dirs {
-					t, inode := m.parseEntry([]byte(dirs[name]))
-					ce := entryPool.Get().(*DumpedEntry)
-					ce.Attr.Inode = inode
-					ce.Attr.Type = typeToString(t)
-					e.Entries[name] = ce
-				}
+				e.keys = keys
 			case TypeSymlink:
 				if e.Symlink, err = sr[i].Result(); err != nil {
 					if err != redis.Nil {
@@ -3807,12 +3802,32 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 			panic(err)
 		}
 	}
-	var err error
-	entries := make([]*DumpedEntry, 0, len(tree.Entries))
-	for name, e := range tree.Entries {
-		e.Name = name
-		entries = append(entries, e)
+
+	if len(tree.keys) == scanEntryBatch*2 {
+		// partial scan, retry
+		tree.keys = tree.keys[:0]
+		err := m.hscan(Background, m.entryKey(inode), func(keys []string) error {
+			tree.keys = append(tree.keys, keys...)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
 	}
+	entries := make([]*DumpedEntry, len(tree.keys)/2)
+	tree.Entries = make(map[string]*DumpedEntry)
+	for i := range entries {
+		name := tree.keys[i*2]
+		t, inode := m.parseEntry([]byte(tree.keys[i*2+1]))
+		e := entryPool.Get().(*DumpedEntry)
+		e.Name = name
+		e.Attr.Inode = inode
+		e.Attr.Type = typeToString(t)
+		entries[i] = e
+		tree.Entries[name] = e
+	}
+
+	var err error
 	if err = tree.writeJsonWithOutEntry(bw, depth); err != nil {
 		return err
 	}
@@ -3871,10 +3886,12 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		}
 		entries[i] = nil
 		delete(tree.Entries, e.Name)
+		e.Name = ""
 		e.Xattrs = nil
 		e.Chunks = nil
 		e.Entries = nil
 		e.Symlink = ""
+		e.keys = nil
 		entryPool.Put(e)
 		if err != nil {
 			return err
