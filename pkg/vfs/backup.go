@@ -30,7 +30,7 @@ import (
 )
 
 // Backup metadata periodically in the object storage
-func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
+func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skipTrash bool) {
 	ctx := meta.Background
 	key := "lastBackup"
 	for {
@@ -65,7 +65,7 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
 			}
 			go cleanupBackups(blob, now)
 			logger.Debugf("backup metadata started")
-			if err = backup(m, blob, now); err == nil {
+			if err = backup(m, blob, now, skipTrash); err == nil {
 				logger.Infof("backup metadata succeed, used %s", time.Since(now))
 			} else {
 				logger.Warnf("backup metadata failed: %s", err)
@@ -74,7 +74,7 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
 	}
 }
 
-func backup(m meta.Meta, blob object.ObjectStorage, now time.Time) error {
+func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, skipTrash bool) error {
 	name := "dump-" + now.UTC().Format("2006-01-02-150405") + ".json.gz"
 	fp, err := os.CreateTemp("", "juicefs-meta-*")
 	if err != nil {
@@ -83,7 +83,7 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time) error {
 	defer os.Remove(fp.Name())
 	defer fp.Close()
 	zw := gzip.NewWriter(fp)
-	err = m.DumpMeta(zw, 0, false, false) // force dump the whole tree
+	err = m.DumpMeta(zw, 0, false, false, skipTrash) // force dump the whole tree
 	_ = zw.Close()
 	if err != nil {
 		return err

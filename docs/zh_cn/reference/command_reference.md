@@ -384,6 +384,8 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 |`FILE`|导出文件路径，如果不指定，则会导出到标准输出。如果文件名以 `.gz` 结尾，将会自动压缩。|
 |`--subdir=path`|只导出指定子目录的元数据。|
 |`--keep-secret-key` <VersionAdd>1.1</VersionAdd>|导出对象存储认证信息，默认为 `false`。由于是明文导出，使用时注意数据安全。如果导出文件不包含对象存储认证信息，后续的导入完成后，需要用 [`juicefs config`](#config) 重新配置对象存储认证信息。|
+|`--fast` <VersionAdd>1.2</VersionAdd>|使用更多内存来加速导出。|
+|`--skip-trash` <VersionAdd>1.2</VersionAdd>|跳过回收站中的文件和目录。|
 
 ### `juicefs load` {#load}
 
@@ -628,6 +630,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |-|-|
 |`--subdir=value`|挂载指定的子目录，默认挂载整个文件系统。|
 |`--backup-meta=3600`|自动备份元数据到对象存储的间隔时间；单位秒，默认 3600，设为 0 表示不备份。|
+|`--backup-skip-trash=3600` <VersionAdd>1.2</VersionAdd>|备份元数据时跳过回收站中的文件和目录。|
 |`--heartbeat=12`|发送心跳的间隔（单位秒），建议所有客户端使用相同的心跳值 (默认：12)|
 |`--read-only`|启用只读模式挂载。|
 |`--no-bgjob`|禁用后台任务，默认为 false，也就是说客户端会默认运行后台任务。后台任务包含：<br/><ul><li>清理回收站中过期的文件（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupDeletedFiles` 和 `cleanupTrash`）</li><li>清理引用计数为 0 的 Slice（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupSlices`）</li><li>清理过期的客户端会话（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `CleanStaleSessions`）</li></ul>特别地，与[企业版](https://juicefs.com/docs/zh/cloud/guide/background-job)不同，社区版碎片合并（Compaction）不受该选项的影响，而是随着文件读写操作，自动判断是否需要合并，然后异步执行（以 Redis 为例，在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/redis.go) 中搜索 `compactChunk`）|

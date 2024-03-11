@@ -578,7 +578,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			BackupMeta:      time.Second * time.Duration(jConf.BackupMeta),
 		}
 		if !jConf.ReadOnly && !jConf.NoSession && !jConf.NoBGJob && conf.BackupMeta > 0 {
-			go vfs.Backup(m, blob, conf.BackupMeta)
+			go vfs.Backup(m, blob, conf.BackupMeta, conf.BackupSkipTrash)
 		}
 		if !jConf.NoUsageReport && !jConf.NoSession {
 			go usage.ReportUsage(m, "java-sdk "+version.Version())
