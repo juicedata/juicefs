@@ -462,13 +462,15 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 			{"totalInodes", 0},
 			{"nextCleanupSlices", 0},
 		}
-		if err = mustInsert(s, n, &cs); err != nil {
-			return err
-		}
+		return mustInsert(s, n, &cs)
+	})
+}
 
+func (m *dbMeta) cacheACLs(ctx Context) error {
+	return m.roTxn(func(s *xorm.Session) error {
 		// cache all acls
 		var acls []acl
-		if err = s.Find(&acls); err != nil {
+		if err := s.Find(&acls); err != nil {
 			return err
 		}
 		for _, val := range acls {

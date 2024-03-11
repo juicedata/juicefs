@@ -321,10 +321,10 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 
 	// root inode
 	attr.Mode = 0777
-	if err = m.rdb.Set(ctx, m.inodeKey(1), m.marshal(attr), 0).Err(); err != nil {
-		return err
-	}
+	return m.rdb.Set(ctx, m.inodeKey(1), m.marshal(attr), 0).Err()
+}
 
+func (m *redisMeta) cacheACLs(ctx Context) error {
 	// cache all acls
 	maxId, err := m.getCounter(aclCounter)
 	if err != nil {

@@ -116,6 +116,7 @@ type engine interface {
 
 	doSetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
 	doGetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
+	cacheACLs(ctx Context) error
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -483,6 +484,13 @@ func (m *baseMeta) newSessionInfo() []byte {
 
 func (m *baseMeta) NewSession(record bool) error {
 	go m.refresh()
+
+	if m.getFormat().EnableACL {
+		if err := m.en.cacheACLs(Background); err != nil {
+			return err
+		}
+	}
+
 	if m.conf.ReadOnly {
 		logger.Infof("Create read-only session OK with version: %s", version.Version())
 		return nil

@@ -490,19 +490,22 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 			tx.incrBy(m.counterKey("nextInode"), 2)
 			tx.incrBy(m.counterKey("nextChunk"), 1)
 		}
-
-		// cache all acls
-		acls, err := m.scanValues(m.fmtKey("R"), -1, nil)
-		if err != nil {
-			return err
-		}
-		for key, val := range acls {
-			tmpRule := &aclAPI.Rule{}
-			tmpRule.Decode(val)
-			m.aclCache.Put(m.parseACLId(key), tmpRule)
-		}
 		return nil
 	})
+}
+
+func (m *kvMeta) cacheACLs(ctx Context) error {
+	// cache all acls
+	acls, err := m.scanValues(m.fmtKey("R"), -1, nil)
+	if err != nil {
+		return err
+	}
+	for key, val := range acls {
+		tmpRule := &aclAPI.Rule{}
+		tmpRule.Decode(val)
+		m.aclCache.Put(m.parseACLId(key), tmpRule)
+	}
+	return nil
 }
 
 func (m *kvMeta) Reset() error {
