@@ -95,6 +95,16 @@ class TestFsrand2(unittest.TestCase):
         state.listdir(dir=v1, user='user1')
         state.teardown()
 
+    def test_acl_1022(self):
+        # SEE https://github.com/juicedata/jfs/issues/1022
+        state = JuicefsMachine()
+        v1 = state.init_folders()
+        state.create_file(content=b'\xda\x07', file_name='lbca', mode='w', parent=v1, umask=103, user='root')
+        state.set_acl(default=False, entry=v1, group='user1', group_perm={'r', 'w'}, logical=False, mask={'r', 'w', 'x'}, not_recalc_mask=True, other_perm=set(), physical=True, recalc_mask=True, recursive=True, set_mask=True, sudo_user='root', user='root', user_perm={'r', 'w', 'x'})
+        state.chmod(entry=v1, mode=0o4004, user='root')
+        state.set_acl(default=True, entry=v1, group='group4', group_perm={'x'}, logical=False, mask={'w', 'x'}, not_recalc_mask=False, other_perm=set(), physical=True, recalc_mask=False, recursive=True, set_mask=True, sudo_user='user1', user='user2', user_perm=set())
+        state.teardown()
+
     def test_acl_1044(self):
         # SEE: https://github.com/juicedata/jfs/issues/1044
         state = JuicefsMachine()
