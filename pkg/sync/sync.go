@@ -764,14 +764,14 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 		return fmt.Errorf("list %s: %s", dst, err)
 	}
 
-	produce(tasks, src, dst, srckeys, dstkeys, config)
+	produce(tasks, srckeys, dstkeys, config)
 	return nil
 }
 
-func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys, dstkeys <-chan object.Object, config *Config) {
+func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, config *Config) {
 	if len(config.rules) > 0 {
-		srckeys = filter(srckeys, config.rules)
-		dstkeys = filter(dstkeys, config.rules)
+		srckeys = filter(srckeys, config.rules, config)
+		dstkeys = filter(dstkeys, config.rules, config)
 	}
 	var dstobj object.Object
 	for obj := range srckeys {
@@ -909,14 +909,20 @@ func parseIncludeRules(args []string) (rules []rule) {
 	return
 }
 
-func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
+func filter(keys <-chan object.Object, rules []rule, config *Config) <-chan object.Object {
 	r := make(chan object.Object)
 	go func() {
 		for o := range keys {
 			if o == nil {
 				break
 			}
-			if matchKey(rules, o.Key()) {
+			var ok bool
+			if config.MatchFullPath {
+				ok = matchFullPath(rules, o.Key())
+			} else {
+				ok = matchLeveledPath(rules, o.Key())
+			}
+			if ok {
 				r <- o
 			} else {
 				logger.Debugf("exclude %s", o.Key())
@@ -1005,8 +1011,32 @@ func matchSuffix(p, s []string) bool {
 	}
 }
 
+func matchFullPath(rules []rule, key string) bool {
+	ps := strings.Split(key, "/")
+	for _, rule := range rules {
+		p := strings.Split(rule.pattern, "/")
+		var ok bool
+		if p[0] == "" {
+			if ps[0] != "" {
+				p = p[1:]
+			}
+			ok = matchPrefix(p, ps)
+		} else {
+			ok = matchSuffix(p, ps)
+		}
+		if ok {
+			if rule.include {
+				break // try next level
+			} else {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
-func matchKey(rules []rule, key string) bool {
+func matchLeveledPath(rules []rule, key string) bool {
 	parts := strings.Split(key, "/")
 	for i := range parts {
 		if parts[i] == "" {
@@ -1094,7 +1124,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 			processing[c.Key()] = true
 			mu.Unlock()
 
-			if len(config.rules) > 0 && !matchKey(config.rules, c.Key()) {
+			if len(config.rules) > 0 && !matchLeveledPath(config.rules, c.Key()) {
 				logger.Infof("exclude prefix %s", c.Key())
 				continue
 			}
@@ -1144,7 +1174,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		return fmt.Errorf("list %s with delimiter: %s", dst, err)
 	}
 	// sync returned objects
-	produce(tasks, src, dst, srckeys, dstkeys, config)
+	produce(tasks, srckeys, dstkeys, config)
 	// consume all the keys from dst
 	for range dstkeys {
 	}

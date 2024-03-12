@@ -35,6 +35,7 @@ type Config struct {
 	Dry            bool
 	DeleteSrc      bool
 	DeleteDst      bool
+	MatchFullPath  bool
 	Dirs           bool
 	Exclude        []string
 	Include        []string
@@ -147,6 +148,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		DeleteDst:      c.Bool("delete-dst"),
 		Exclude:        c.StringSlice("exclude"),
 		Include:        c.StringSlice("include"),
+		MatchFullPath:  c.Bool("match-full-path"),
 		Existing:       c.Bool("existing"),
 		IgnoreExisting: c.Bool("ignore-existing"),
 		Links:          c.Bool("links"),
