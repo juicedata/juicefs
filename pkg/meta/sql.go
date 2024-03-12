@@ -3518,6 +3518,21 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry,
 		e.Xattrs = xattrs
 	}
 
+	if attr.AccessACL != aclAPI.None {
+		accessACl, err := m.getACL(s, attr.AccessACL)
+		if err != nil {
+			return nil, err
+		}
+		e.AccessACL = dumpACL(accessACl)
+	}
+	if attr.DefaultACL != aclAPI.None {
+		defaultACL, err := m.getACL(s, attr.DefaultACL)
+		if err != nil {
+			return nil, err
+		}
+		e.DefaultACL = dumpACL(defaultACL)
+	}
+
 	if attr.Typ == TypeFile {
 		for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
 			c := &chunk{Inode: inode, Indx: indx}
@@ -3572,6 +3587,23 @@ func (m *dbMeta) dumpEntryFast(s *xorm.Session, inode Ino, typ uint8) *DumpedEnt
 		}
 		sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
 		e.Xattrs = xattrs
+	}
+
+	if attr.AccessACL != aclAPI.None {
+		accessACl, err := m.getACL(s, attr.AccessACL)
+		if err != nil {
+			logger.Errorf("get access acl error: %s, attr %v", err, attr)
+		} else {
+			e.AccessACL = dumpACL(accessACl)
+		}
+	}
+	if attr.DefaultACL != aclAPI.None {
+		defaultACL, err := m.getACL(s, attr.DefaultACL)
+		if err != nil {
+			logger.Errorf("get default acl error: %s, attr %v", err, attr)
+		} else {
+			e.DefaultACL = dumpACL(defaultACL)
+		}
 	}
 
 	if attr.Typ == TypeFile {
@@ -3672,14 +3704,13 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 		chunk:   make(map[string]*chunk),
 	}
 
-	for _, s := range []interface{}{new(node), new(symlink), new(edge), new(xattr), new(chunk)} {
+	for _, s := range []interface{}{new(node), new(symlink), new(edge), new(xattr), new(chunk), new(acl)} {
 		if count, err := ses.Count(s); err == nil {
 			bar.IncrTotal(count)
 		} else {
 			return err
 		}
 	}
-
 	if err := ses.Table(&node{}).Iterate(new(node), func(idx int, bean interface{}) error {
 		n := bean.(*node)
 		snap.node[n.Inode] = n
@@ -3723,6 +3754,16 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 	}); err != nil {
 		return err
 	}
+
+	if err := ses.Table(&acl{}).Iterate(new(acl), func(idx int, bean interface{}) error {
+		a := bean.(*acl)
+		m.aclCache.Put(a.Id, a.toRule())
+		bar.Increment()
+		return nil
+	}); err != nil {
+		return err
+	}
+
 	m.snap = snap
 	return nil
 }
@@ -3871,7 +3912,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 	})
 }
 
-func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}) {
+func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}, aclMaxId *uint32) {
 	inode := e.Attr.Inode
 	attr := e.Attr
 	n := &node{
@@ -3932,6 +3973,17 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}) {
 	}
 	for _, x := range e.Xattrs {
 		chs[4] <- &xattr{Inode: inode, Name: x.Name, Value: unescape(x.Value)}
+	}
+
+	// put dumped acls into cache, then store back to sql
+	if e.AccessACL != nil {
+		r := loadACL(e.AccessACL)
+		n.AccessACLId, _ = m.aclCache.GetOrPut(r, aclMaxId)
+	}
+
+	if e.DefaultACL != nil {
+		r := loadACL(e.DefaultACL)
+		n.DefaultACLId, _ = m.aclCache.GetOrPut(r, aclMaxId)
 	}
 	chs[0] <- n
 }
@@ -4021,13 +4073,18 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		}(i)
 	}
 
+	var aclMaxId uint32 = 0
 	dm, counters, parents, refs, err := loadEntries(r,
-		func(e *DumpedEntry) { m.loadEntry(e, chs) },
+		func(e *DumpedEntry) { m.loadEntry(e, chs, &aclMaxId) },
 		func(ck *chunkKey) { chs[3] <- &sliceRef{ck.id, ck.size, 1} })
 	if err != nil {
 		return err
 	}
 	m.loadDumpedQuotas(Background, dm.Quotas)
+	if err = m.loadDumpedACLs(); err != nil {
+		return err
+	}
+
 	format, _ := json.MarshalIndent(dm.Setting, "", "")
 	chs[5] <- &setting{"format", string(format)}
 	chs[5] <- &counter{usedSpace, counters.UsedSpace}
@@ -4474,4 +4531,29 @@ func (m *dbMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 		*rule = *a
 		return nil
 	}))
+}
+
+func (m *dbMeta) loadDumpedACLs() error {
+	id2Rule := m.aclCache.GetAll()
+	if len(id2Rule) == 0 {
+		return nil
+	}
+
+	acls := make([]*acl, 0, len(id2Rule))
+	for id, rule := range id2Rule {
+		aclV := newSQLAcl(rule)
+		aclV.Id = id
+		acls = append(acls, aclV)
+	}
+
+	return m.txn(func(s *xorm.Session) error {
+		n, err := s.Insert(acls)
+		if err != nil {
+			return err
+		}
+		if int(n) != len(acls) {
+			return fmt.Errorf("only %d acls inserted, expected %d", n, len(acls))
+		}
+		return nil
+	})
 }
