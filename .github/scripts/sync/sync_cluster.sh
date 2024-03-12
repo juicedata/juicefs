@@ -129,7 +129,7 @@ check_sync_log(){
     [ -z "$count3" ] && count3=0
     count1=$((file_count - count2 - count3))
     echo "count1, $count1, count2, $count2, count3, $count3"
-    min_count=$((file_count / 20))
+    min_count=10
     # check if count1 is less than min_count
     if [ "$count1" -lt "$min_count" ] || [ "$count2" -lt "$min_count" ] || [ "$count3" -lt "$min_count" ]; then
         echo "count is less than min_count, $count1, $count2, $count3, $min_count"
