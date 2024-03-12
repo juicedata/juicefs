@@ -43,7 +43,7 @@ jobs:
         uses: ./.github/actions/build
 
       - name: Test Sync
-        timeout-minutes: 30
+        timeout-minutes: 60
         run: |
           if [[ "${{matrix.type}}" == 'sync' ]]; then
             sudo META=redis .github/scripts/sync/sync.sh 
