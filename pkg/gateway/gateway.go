@@ -623,8 +623,15 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		err = jfsToObjectErr(ctx, eno, bucket, object)
 		return
 	}
-	// put /dir1/key1; head /dir1 return 404; head /dir1/ return 200
-	if strings.HasSuffix(object, sep) && !fi.IsDir() || !strings.HasSuffix(object, sep) && fi.IsDir() {
+	// put /dir1/key1; head /dir1 return 404; head /dir1/ return 404; head /dir1/key1 return 200
+	// put /dir1/key1/; head /dir1/key1 return 404; head /dir1/key1/ return 200
+	var isObject bool
+	if strings.HasSuffix(object, sep) && fi.IsDir() && fi.Atime() == 0 {
+		isObject = true
+	} else if !strings.HasSuffix(object, sep) && !fi.IsDir() {
+		isObject = true
+	}
+	if !isObject {
 		err = jfsToObjectErr(ctx, syscall.ENOENT, bucket, object)
 		return
 	}

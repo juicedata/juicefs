@@ -245,6 +245,10 @@ func metaFlags() []cli.Flag {
 			Value: "3600",
 			Usage: "interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup)",
 		},
+		&cli.BoolFlag{
+			Name:  "backup-skip-trash",
+			Usage: "skip files in trash when backup metadata",
+		},
 		&cli.StringFlag{
 			Name:  "heartbeat",
 			Value: "12",

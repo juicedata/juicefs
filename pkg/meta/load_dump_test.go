@@ -248,7 +248,7 @@ func testDump(t *testing.T, m Meta, root Ino, expect, result string) {
 	if _, err = m.Load(true); err != nil {
 		t.Fatalf("load setting: %s", err)
 	}
-	if err = m.DumpMeta(fp, root, false, true); err != nil {
+	if err = m.DumpMeta(fp, root, false, true, false); err != nil {
 		t.Fatalf("dump meta: %s", err)
 	}
 	cmd := exec.Command("diff", expect, result)
