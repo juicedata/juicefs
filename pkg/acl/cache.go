@@ -33,7 +33,8 @@ type Cache interface {
 	Get(id uint32) *Rule
 	GetId(r *Rule) uint32
 	Size() int
-	GetMissIds(maxId uint32) []uint32
+	GetMissIds() []uint32
+	Clear()
 }
 
 func NewCache() Cache {
@@ -52,30 +53,27 @@ type cache struct {
 	cksum2Id map[uint32][]uint32
 }
 
-// GetMissIds return all miss ids from 1 to max(maxId, c.maxId)
-func (c *cache) GetMissIds(maxId uint32) []uint32 {
+func (c *cache) Clear() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.maxId = None
+	c.id2Rule = make(map[uint32]*Rule)
+	c.cksum2Id = make(map[uint32][]uint32)
+}
+
+// GetMissIds return all miss ids from 1 to c.maxId
+func (c *cache) GetMissIds() []uint32 {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	if c.maxId == maxId && uint32(len(c.id2Rule)) == maxId {
+	if uint32(len(c.id2Rule)) == c.maxId {
 		return nil
 	}
 
-	if c.maxId > maxId {
-		maxId = c.maxId
-	}
-
-	n := maxId + 1
-	mark := make([]bool, n)
-	for i := uint32(1); i < n; i++ {
-		if _, ok := c.id2Rule[i]; ok {
-			mark[i] = true
-		}
-	}
-
+	n := c.maxId + 1
 	var ret []uint32
 	for i := uint32(1); i < n; i++ {
-		if !mark[i] {
+		if _, ok := c.id2Rule[i]; !ok {
 			ret = append(ret, i)
 		}
 	}

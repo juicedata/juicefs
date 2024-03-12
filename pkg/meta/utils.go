@@ -34,6 +34,7 @@ import (
 )
 
 const (
+	aclCounter     = "aclMaxId"
 	usedSpace      = "usedSpace"
 	totalInodes    = "totalInodes"
 	legacySessions = "sessions"

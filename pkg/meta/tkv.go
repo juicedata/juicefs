@@ -34,6 +34,7 @@ import (
 	"syscall"
 	"time"
 
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/pkg/errors"
 
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -78,6 +79,9 @@ type kvMeta struct {
 	client tkvClient
 	snap   map[Ino]*DumpedEntry
 }
+
+var _ Meta = &kvMeta{}
+var _ engine = &kvMeta{}
 
 var drivers = make(map[string]func(string) (tkvClient, error))
 
@@ -165,6 +169,7 @@ func (m *kvMeta) fmtKey(args ...interface{}) []byte {
   name    ...
   sliceId cccccccc
   session ssssssss
+  aclId   aaaa
 
 All keys:
   setting            format
@@ -187,6 +192,7 @@ All keys:
   Uiiiiiiii          data length, space and inodes usage in directory
   Niiiiiiii          detached inde
   QDiiiiiiii         directory quota
+  Raaaa			     POSIX acl
 */
 
 func (m *kvMeta) inodeKey(inode Ino) []byte {
@@ -247,6 +253,16 @@ func (m *kvMeta) detachedKey(inode Ino) []byte {
 
 func (m *kvMeta) dirQuotaKey(inode Ino) []byte {
 	return m.fmtKey("QD", inode)
+}
+
+func (m *kvMeta) aclKey(id uint32) []byte {
+	return m.fmtKey("R", id)
+}
+
+func (m *kvMeta) parseACLId(key string) uint32 {
+	// trim "R"
+	rb := utils.ReadBuffer([]byte(key[1:]))
+	return rb.Get32()
 }
 
 func (m *kvMeta) parseSid(key string) uint64 {
@@ -470,6 +486,20 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		}
 		return nil
 	})
+}
+
+func (m *kvMeta) cacheACLs(ctx Context) error {
+	// cache all acls
+	acls, err := m.scanValues(m.fmtKey("R"), -1, nil)
+	if err != nil {
+		return err
+	}
+	for key, val := range acls {
+		tmpRule := &aclAPI.Rule{}
+		tmpRule.Decode(val)
+		m.aclCache.Put(m.parseACLId(key), tmpRule)
+	}
+	return nil
 }
 
 func (m *kvMeta) Reset() error {
@@ -854,13 +884,22 @@ func (m *kvMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 }
 
 func (m *kvMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
-	a, err := m.get(m.inodeKey(inode))
-	if a != nil {
-		m.parseAttr(a, attr)
-	} else if err == nil {
-		err = syscall.ENOENT
-	}
-	return errno(err)
+	return errno(m.client.txn(func(tx *kvTxn) error {
+		val := tx.get(m.inodeKey(inode))
+		if val == nil {
+			return syscall.ENOENT
+		}
+		m.parseAttr(val, attr)
+
+		if attr != nil && attr.AccessACL != aclAPI.None {
+			rule, err := m.getACL(tx, attr.AccessACL)
+			if err != nil {
+				return err
+			}
+			attr.Mode = (rule.GetMode() & 0777) | (attr.Mode & 07000)
+		}
+		return nil
+	}, 0))
 }
 
 func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
@@ -875,13 +914,40 @@ func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			return syscall.EPERM
 		}
 		now := time.Now()
-		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &cur, attr, now)
+
+		// get acl
+		var rule *aclAPI.Rule
+		if cur.AccessACL != aclAPI.None {
+			var err error
+			oldRule, err := m.getACL(tx, cur.AccessACL)
+			if err != nil {
+				return err
+			}
+			rule = &aclAPI.Rule{}
+			*rule = *oldRule
+		}
+
+		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &cur, attr, now, rule)
 		if st != 0 {
 			return st
 		}
 		if dirtyAttr == nil {
 			return nil
 		}
+
+		// set acl
+		if rule != nil {
+			if err := m.tryLoadMissACLs(tx); err != nil {
+				logger.Warnf("SetAttr: load miss acls error: %s", err)
+			}
+
+			aclId, err := m.insertACL(tx, rule)
+			if err != nil {
+				return err
+			}
+			setAttrACLId(dirtyAttr, aclAPI.TypeAccess, aclId)
+		}
+
 		dirtyAttr.Ctime = now.Unix()
 		dirtyAttr.Ctimensec = uint32(now.Nanosecond())
 		tx.set(m.inodeKey(inode), m.marshal(dirtyAttr))
@@ -1105,7 +1171,6 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		attr = &Attr{}
 	}
 	attr.Typ = _type
-	attr.Mode = mode & ^cumask
 	attr.Uid = ctx.Uid()
 	attr.Gid = ctx.Gid()
 	if _type == TypeDirectory {
@@ -1169,6 +1234,40 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				}
 			}
 			return syscall.EEXIST
+		}
+
+		mode &= 07777
+		if pattr.DefaultACL != aclAPI.None && _type != TypeSymlink {
+			// inherit default acl
+			if _type == TypeDirectory {
+				attr.DefaultACL = pattr.DefaultACL
+			}
+
+			// set access acl by parent's default acl
+			rule, err := m.getACL(tx, pattr.DefaultACL)
+			if err != nil {
+				return err
+			}
+
+			if rule.IsMinimal() {
+				// simple acl as default
+				attr.Mode = (mode & 0xFE00) | rule.GetMode()
+			} else {
+				if err = m.tryLoadMissACLs(tx); err != nil {
+					logger.Warnf("Mknode: load miss acls error: %s", err)
+				}
+
+				cRule := rule.ChildAccessACL(mode)
+				id, err := m.insertACL(tx, cRule)
+				if err != nil {
+					return err
+				}
+
+				attr.AccessACL = id
+				attr.Mode = (mode & 0xFE00) | cRule.GetMode()
+			}
+		} else {
+			attr.Mode = mode & ^cumask
 		}
 
 		var updateParent bool
@@ -2744,6 +2843,17 @@ func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 		*names = append(*names, name[prefix:]...)
 		*names = append(*names, 0)
 	}
+
+	val, err := m.get(m.inodeKey(inode))
+	if err != nil {
+		return errno(err)
+	}
+	if val == nil {
+		return syscall.ENOENT
+	}
+	attr := &Attr{}
+	m.parseAttr(val, attr)
+	setXAttrACL(names, attr.AccessACL, attr.DefaultACL)
 	return 0
 }
 
@@ -3586,4 +3696,135 @@ func (m *kvMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 		return nil
 	}, inode)
 	return updated, err
+}
+
+func (m *kvMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	return errno(m.txn(func(tx *kvTxn) error {
+		val := tx.get(m.inodeKey(ino))
+		if val == nil {
+			return syscall.ENOENT
+		}
+		attr := &Attr{}
+		m.parseAttr(val, attr)
+
+		if ctx.Uid() != 0 && ctx.Uid() != attr.Uid {
+			return syscall.EPERM
+		}
+
+		if attr.Flags&FlagImmutable != 0 {
+			return syscall.EPERM
+		}
+
+		oriACL, oriMode := getAttrACLId(attr, aclType), attr.Mode
+		if rule.IsEmpty() {
+			// remove acl
+			setAttrACLId(attr, aclType, aclAPI.None)
+		} else if rule.IsMinimal() && aclType == aclAPI.TypeAccess {
+			// remove acl
+			setAttrACLId(attr, aclType, aclAPI.None)
+			// set mode
+			attr.Mode &= 07000
+			attr.Mode |= ((rule.Owner & 7) << 6) | ((rule.Group & 7) << 3) | (rule.Other & 7)
+		} else {
+			if err := m.tryLoadMissACLs(tx); err != nil {
+				logger.Warnf("SetFacl: load miss acls error: %s", err)
+			}
+
+			// set acl
+			rule.InheritPerms(attr.Mode)
+			aclId, err := m.insertACL(tx, rule)
+			if err != nil {
+				return err
+			}
+			setAttrACLId(attr, aclType, aclId)
+
+			// set mode
+			if aclType == aclAPI.TypeAccess {
+				attr.Mode &= 07000
+				attr.Mode |= ((rule.Owner & 7) << 6) | ((rule.Mask & 7) << 3) | (rule.Other & 7)
+			}
+		}
+
+		// update attr
+		if oriACL != getAttrACLId(attr, aclType) || oriMode != attr.Mode {
+			now := time.Now()
+			attr.Ctime = now.Unix()
+			attr.Ctimensec = uint32(now.Nanosecond())
+			tx.set(m.inodeKey(ino), m.marshal(attr))
+		}
+		return nil
+	}, ino))
+}
+
+func (m *kvMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	return errno(m.client.txn(func(tx *kvTxn) error {
+		val := tx.get(m.inodeKey(ino))
+		if val == nil {
+			return syscall.ENOENT
+		}
+		attr := &Attr{}
+		m.parseAttr(val, attr)
+		m.of.Update(ino, attr)
+
+		aclId := getAttrACLId(attr, aclType)
+		if aclId == aclAPI.None {
+			return ENOATTR
+		}
+
+		a, err := m.getACL(tx, aclId)
+		if err != nil {
+			return err
+		}
+		*rule = *a
+		return nil
+	}, 0))
+}
+
+func (m *kvMeta) insertACL(tx *kvTxn, rule *aclAPI.Rule) (uint32, error) {
+	var aclId uint32
+	if aclId = m.aclCache.GetId(rule); aclId == aclAPI.None {
+		newId, err := m.incrCounter(aclCounter, 1)
+		if err != nil {
+			return aclAPI.None, err
+		}
+		aclId = uint32(newId)
+
+		tx.set(m.aclKey(aclId), rule.Encode())
+		m.aclCache.Put(aclId, rule)
+	}
+	return aclId, nil
+}
+
+func (m *kvMeta) tryLoadMissACLs(tx *kvTxn) error {
+	missIds := m.aclCache.GetMissIds()
+	if len(missIds) > 0 {
+		missKeys := make([][]byte, len(missIds))
+		for i, id := range missIds {
+			missKeys[i] = m.aclKey(id)
+		}
+
+		acls := tx.gets(missKeys...)
+		for i, data := range acls {
+			r := &aclAPI.Rule{}
+			r.Decode(data)
+			m.aclCache.Put(missIds[i], r)
+		}
+	}
+	return nil
+}
+
+func (m *kvMeta) getACL(tx *kvTxn, id uint32) (*aclAPI.Rule, error) {
+	if cRule := m.aclCache.Get(id); cRule != nil {
+		return cRule, nil
+	}
+
+	val := tx.get(m.aclKey(id))
+	if val == nil {
+		return nil, ENOATTR
+	}
+
+	rule := &aclAPI.Rule{}
+	rule.Decode(val)
+	m.aclCache.Put(id, rule)
+	return rule, nil
 }

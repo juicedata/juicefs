@@ -225,7 +225,7 @@ func (fs *fileSystem) RemoveXAttr(cancel <-chan struct{}, header *fuse.InHeader,
 func (fs *fileSystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name string, out *fuse.CreateOut) (code fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	entry, fh, err := fs.v.Create(ctx, Ino(in.NodeId), name, uint16(in.Mode), 0, in.Flags)
+	entry, fh, err := fs.v.Create(ctx, Ino(in.NodeId), name, uint16(in.Mode), getCreateUmask(in), in.Flags)
 	if err != 0 {
 		return fuse.Status(err)
 	}
@@ -450,6 +450,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	opt.MaxBackground = 50
 	opt.EnableLocks = true
 	opt.EnableAcl = conf.Format.EnableACL
+	opt.DontUmask = conf.Format.EnableACL
 	opt.DisableXAttrs = !xattrs
 	opt.EnableIoctl = ioctl
 	opt.MaxWrite = 1 << 20
