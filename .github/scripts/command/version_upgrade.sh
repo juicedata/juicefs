@@ -85,24 +85,11 @@ test_update_fuse_option(){
     [[ $count -ne 0 ]] && echo "mount process count should be 0, count=$count" && exit 1 || true
 }
 
-test_restart_from_1_dot_1(){
+test_update_from_old_version(){
     prepare_test
-    ./juicefs-1.1 mount  -d $META_URL /tmp/jfs 
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs-1.1 mount  -d $META_URL /tmp/jfs
     echo hello |tee /tmp/jfs/test
-    ./juicefs mount -d $META_URL /tmp/jfs
-    wait_process_started
-    version=$(./juicefs version | awk '{print $3,$4,$5}')
-    grep Version /tmp/jfs/.jfsconfig | grep "$version"
-    grep "hello" /tmp/jfs/test 
-    ./juicefs umount /tmp/jfs
-    wait_process_killed
-}
-
-test_restart_from_old_version(){
-    prepare_test
-    JFS_RSA_PASSPHRASE=12345678 ./juicefs-1.1 mount  -d $META_URL /tmp/jfs --rsa-key my-priv-key.pem
-    echo hello |tee /tmp/jfs/test
-    ./juicefs mount -d $META_URL /tmp/jfs --rsa-key my-priv-key.pem
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs
     count=$(ps -ef | grep juicefs | grep mount | wc -l)
     [[ $count -ne 3 ]] && echo "mount process count should be 3" && exit 1 || true
     version=$(./juicefs version | awk '{print $3,$4,$5}')

@@ -66,8 +66,7 @@ func TestCache(t *testing.T) {
 	assert.Equal(t, uint32(3), c.GetId(rule2))
 
 	c.Put(8, rule2)
-	assert.Equal(t, []uint32{4, 5, 6, 7, 9, 10}, c.GetMissIds(10))
-	assert.Equal(t, []uint32{4, 5, 6, 7}, c.GetMissIds(6))
+	assert.Equal(t, []uint32{4, 5, 6, 7}, c.GetMissIds())
 
 	assert.NotPanics(t, func() {
 		c.Put(10, nil)

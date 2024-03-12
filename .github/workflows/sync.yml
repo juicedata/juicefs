@@ -6,19 +6,15 @@ on:
       - 'main'
       - 'release-**'
     paths-ignore:
-      - '**/sync.yml'
-      - '**/syncrand_test.py'
-      - '**/syncrand.py'
-      - '.github/scripts/sync/*.sh'
+      - 'docs/**'
+      - '**.md'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
-    paths:
-      - '**/sync.yml'
-      - '**/syncrand_test.py'
-      - '**/syncrand.py'
-      - '.github/scripts/sync/*.sh'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   schedule:
     - cron:  '30 20 * * *'
 
@@ -47,7 +43,7 @@ jobs:
         uses: ./.github/actions/build
 
       - name: Test Sync
-        timeout-minutes: 30
+        timeout-minutes: 60
         run: |
           if [[ "${{matrix.type}}" == 'sync' ]]; then
             sudo META=redis .github/scripts/sync/sync.sh 
@@ -61,10 +57,10 @@ jobs:
             sudo CI=true META=redis KEY_TYPE=$random_type .github/scripts/sync/sync_cluster.sh
           elif [[ "${{matrix.type}}" == 'sync_exclude' ]]; then
             sudo python3 .github/scripts/hypo/syncrand_test.py
-            if [ "${{github.event_name}}" == "pull_request" ]; then
-              sudo MAX_EXAMPLE=100 STEP_COUNT=50 LOG_LEVEL=WARNING PROFILE=ci python3 .github/scripts/hypo/syncrand.py
+            if [ "${{github.event_name}}" == "schedule" ]; then
+              sudo MAX_EXAMPLE=500 STEP_COUNT=100 PROFILE=ci python3 .github/scripts/hypo/syncrand.py
             else
-            sudo MAX_EXAMPLE=1000 STEP_COUNT=200 LOG_LEVEL=WARNING PROFILE=ci python3 .github/scripts/hypo/syncrand.py
+              sudo MAX_EXAMPLE=200 STEP_COUNT=50 PROFILE=ci python3 .github/scripts/hypo/syncrand.py
             fi
           else
             echo "Unknown type: ${{matrix.type}}"

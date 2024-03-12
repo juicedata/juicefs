@@ -93,6 +93,9 @@ volumes:
     driver: juicedata/juicefs
     driver_opts:
       name: ${VOL_NAME}
+      # 因为 SQLite 在插件容器本地路径创建数据库文件，
+      # sqlite:// 将在服务重启时失败。
+      # （详见 https://github.com/juicedata/docker-volume-juicefs/issues/37）
       metaurl: ${META_URL}
       storage: ${STORAGE_TYPE}
       bucket: ${BUCKET}
