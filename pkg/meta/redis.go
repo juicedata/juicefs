@@ -324,30 +324,16 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 
 func (m *redisMeta) cacheACLs(ctx Context) error {
 	// cache all acls
-	maxId, err := m.getCounter(aclCounter)
+	vals, err := m.rdb.HGetAll(ctx, m.aclKey()).Result()
 	if err != nil {
 		return err
 	}
 
-	if maxId > 0 {
-		allKeys := make([]string, maxId)
-		for i := 0; i < int(maxId); i++ {
-			allKeys[i] = m.aclKey(uint32(i) + 1)
-		}
-
-		acls, err := m.rdb.MGet(ctx, allKeys...).Result()
-		if err != nil {
-			return err
-		}
-		for i, val := range acls {
-			var tmpRule *aclAPI.Rule
-			if val != nil {
-				tmpRule = &aclAPI.Rule{}
-				tmpRule.Decode(([]byte)(val.(string)))
-			}
-			// may have empty slot
-			m.aclCache.Put(uint32(i)+1, tmpRule)
-		}
+	for k, v := range vals {
+		id, _ := strconv.ParseUint(k, 10, 32)
+		tmpRule := &aclAPI.Rule{}
+		tmpRule.Decode([]byte(v))
+		m.aclCache.Put(uint32(id), tmpRule)
 	}
 	return nil
 }
@@ -636,8 +622,8 @@ func (m *redisMeta) totalInodesKey() string {
 	return m.prefix + totalInodes
 }
 
-func (m *redisMeta) aclKey(id uint32) string {
-	return fmt.Sprintf("%sacl%d", m.prefix, id)
+func (m *redisMeta) aclKey() string {
+	return m.prefix + "acl"
 }
 
 func (m *redisMeta) delfiles() string {
@@ -4654,7 +4640,7 @@ func (m *redisMeta) getACL(ctx Context, tx *redis.Tx, id uint32) (*aclAPI.Rule, 
 	}
 
 	cmds, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.Get(ctx, m.aclKey(id))
+		pipe.HGet(ctx, m.aclKey(), strconv.FormatUint(uint64(id), 10))
 		return nil
 	})
 	if err != nil {
@@ -4685,7 +4671,7 @@ func (m *redisMeta) insertACL(ctx Context, tx *redis.Tx, rule *aclAPI.Rule) (uin
 		}
 		aclId = uint32(newId)
 
-		if err = tx.Set(ctx, m.aclKey(aclId), rule.Encode(), 0).Err(); err != nil {
+		if err = tx.HSet(ctx, m.aclKey(), strconv.FormatUint(uint64(aclId), 10), rule.Encode()).Err(); err != nil {
 			return aclAPI.None, err
 		}
 		m.aclCache.Put(aclId, rule)
@@ -4699,14 +4685,14 @@ func (m *redisMeta) tryLoadMissACLs(ctx Context, tx *redis.Tx) error {
 	if len(missIds) > 0 {
 		missKeys := make([]string, len(missIds))
 		for i, id := range missIds {
-			missKeys[i] = m.aclKey(id)
+			missKeys[i] = strconv.FormatUint(uint64(id), 10)
 		}
 
-		acls, err := tx.MGet(ctx, missKeys...).Result()
+		vals, err := tx.HMGet(ctx, m.aclKey(), missKeys...).Result()
 		if err != nil {
 			return err
 		}
-		for i, data := range acls {
+		for i, data := range vals {
 			var rule *aclAPI.Rule
 			if data != nil {
 				rule = &aclAPI.Rule{}

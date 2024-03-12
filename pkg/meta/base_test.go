@@ -155,7 +155,10 @@ func testMeta(t *testing.T, m Meta) {
 }
 
 func testACL(t *testing.T, m Meta) {
-	if err := m.Init(testFormat(), false); err != nil {
+	format := testFormat()
+	format.EnableACL = true
+
+	if err := m.Init(format, false); err != nil {
 		t.Fatalf("test acl failed: %s", err)
 	}
 
@@ -167,6 +170,7 @@ func testACL(t *testing.T, m Meta) {
 	if st := m.Mkdir(ctx, RootInode, testDir, 0644, 0, 0, &testDirIno, attr1); st != 0 {
 		t.Fatalf("create %s: %s", testDir, st)
 	}
+	defer m.Rmdir(ctx, RootInode, testDir)
 
 	rule := &aclAPI.Rule{
 		Owner: 7,
@@ -258,6 +262,7 @@ func testACL(t *testing.T, m Meta) {
 	if st := m.Mkdir(ctx, testDirIno, subDir, mode, 0022, 0, &subDirIno, attr2); st != 0 {
 		t.Fatalf("create %s: %s", subDir, st)
 	}
+	defer m.Rmdir(ctx, testDirIno, subDir)
 
 	// subdir inherit default acl
 	rule3 = &aclAPI.Rule{}
@@ -305,6 +310,7 @@ func testACL(t *testing.T, m Meta) {
 	if st := m.Mkdir(ctx, testDirIno, subDir2, mode, 0022, 0, &subDirIno2, attr2); st != 0 {
 		t.Fatalf("create %s: %s", subDir, st)
 	}
+	defer m.Rmdir(ctx, testDirIno, subDir2)
 
 	// subdir inherit default acl
 	rule3 = &aclAPI.Rule{}
@@ -323,6 +329,12 @@ func testACL(t *testing.T, m Meta) {
 		t.Fatalf("getattr error: %s", st)
 	}
 	assert.Equal(t, rule.GetMode(), attr2.Mode)
+
+	// test cache all
+	sz := m.getBase().aclCache.Size()
+	err := m.getBase().en.cacheACLs(ctx)
+	assert.Nil(t, err)
+	assert.Equal(t, sz, m.getBase().aclCache.Size())
 }
 
 func testMetaClient(t *testing.T, m Meta) {

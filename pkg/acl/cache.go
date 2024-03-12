@@ -34,6 +34,7 @@ type Cache interface {
 	GetId(r *Rule) uint32
 	Size() int
 	GetMissIds() []uint32
+	Clear()
 }
 
 func NewCache() Cache {
@@ -50,6 +51,14 @@ type cache struct {
 	maxId    uint32
 	id2Rule  map[uint32]*Rule
 	cksum2Id map[uint32][]uint32
+}
+
+func (c *cache) Clear() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.maxId = None
+	c.id2Rule = make(map[uint32]*Rule)
+	c.cksum2Id = make(map[uint32][]uint32)
 }
 
 // GetMissIds return all miss ids from 1 to c.maxId
