@@ -15,7 +15,15 @@ type openFile struct {
 	attr      Attr
 	refs      int
 	lastCheck int64
+	first     []Slice
 	chunks    map[uint32][]Slice
+}
+
+func (o *openFile) invalidateChunk() {
+	o.first = nil
+	for c := range o.chunks {
+		delete(o.chunks, c)
+	}
 }
 
 type openfiles struct {
@@ -99,12 +107,11 @@ func (o *openfiles) Open(ino Ino, attr *Attr) {
 	of, ok := o.files[ino]
 	if !ok {
 		of = &openFile{}
-		of.chunks = make(map[uint32][]Slice)
 		o.files[ino] = of
 	} else if attr != nil && attr.Mtime == of.attr.Mtime && attr.Mtimensec == of.attr.Mtimensec {
 		attr.KeepCache = of.attr.KeepCache
 	} else {
-		of.chunks = make(map[uint32][]Slice)
+		of.invalidateChunk()
 	}
 	if attr != nil {
 		of.attr = *attr
@@ -149,7 +156,7 @@ func (o *openfiles) Update(ino Ino, attr *Attr) bool {
 	of, ok := o.files[ino]
 	if ok {
 		if attr.Mtime != of.attr.Mtime || attr.Mtimensec != of.attr.Mtimensec {
-			of.chunks = make(map[uint32][]Slice)
+			of.invalidateChunk()
 		} else {
 			attr.KeepCache = of.attr.KeepCache
 		}
@@ -174,15 +181,27 @@ func (o *openfiles) ReadChunk(ino Ino, indx uint32) ([]Slice, bool) {
 	if !ok {
 		return nil, false
 	}
-	cs, ok := of.chunks[indx]
-	return cs, ok
+	if indx == 0 {
+		return of.first, of.first != nil
+	} else {
+		cs, ok := of.chunks[indx]
+		return cs, ok
+	}
 }
 
 func (o *openfiles) CacheChunk(ino Ino, indx uint32, cs []Slice) {
 	o.Lock()
 	defer o.Unlock()
 	of, ok := o.files[ino]
-	if ok {
+	if !ok {
+		return
+	}
+	if indx == 0 {
+		of.first = cs
+	} else {
+		if of.chunks == nil {
+			of.chunks = make(map[uint32][]Slice)
+		}
 		of.chunks[indx] = cs
 	}
 }
@@ -193,7 +212,9 @@ func (o *openfiles) InvalidateChunk(ino Ino, indx uint32) {
 	of, ok := o.files[ino]
 	if ok {
 		if indx == invalidateAllChunks {
-			of.chunks = make(map[uint32][]Slice)
+			of.invalidateChunk()
+		} else if indx == 0 {
+			of.first = nil
 		} else {
 			delete(of.chunks, indx)
 		}
