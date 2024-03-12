@@ -8,11 +8,8 @@ META_URL=$(get_meta_url $META)
 echo meta_url is $META_URL
 
 dpkg -s fio >/dev/null 2>&1 || .github/scripts/apt_install.sh fio
-lsof -t -i:8081 | xargs -r sudo kill -9
-python3 -m http.server 8081 &
-server_pid=$!
-trap "kill -9 $server_pid" EXIT
-.github/scripts/apt_install.sh attr
+dpkg -s attr >/dev/null 2>&1 || .github/scripts/apt_install.sh attr
+
 if [[ ! -x "./juicefs.1.1" ]]; then 
     wget -q https://github.com/juicedata/juicefs/releases/download/v1.1.0/juicefs-1.1.0-linux-amd64.tar.gz
     tar -xzvf juicefs-1.1.0-linux-amd64.tar.gz --transform='s|^juicefs$|juicefs-1.1|' juicefs
@@ -20,6 +17,7 @@ if [[ ! -x "./juicefs.1.1" ]]; then
     ./juicefs-1.1 version
 fi
 [[ ! -f my-priv-key.pem ]] && openssl genrsa -out my-priv-key.pem -aes256  -passout pass:12345678 2048
+JFS_RSA_PASSPHRASE=12345678 ./juicefs format $META_URL myjfs-vc --encrypt-rsa-key my-priv-key.pem
 
 test_kill_mount_process()
 {
@@ -42,40 +40,49 @@ test_kill_mount_process()
     wait_process_killed 5
 }
 
+
 test_update_non_fuse_option(){
-    prepare_test
-    ./juicefs mount -d $META_URL /tmp/jfs --cache-dir=/tmp/cache1 --cache-size=800
-    dd if=/dev/zero of=/tmp/jfs/test bs=1M count=2000
-    cat /tmp/jfs/test > /dev/null
-    check_cache_size  /tmp/cache1 800
-    ./juicefs mount -d $META_URL /tmp/jfs --cache-dir=/tmp/cache1 --cache-size=400
-    sleep 2
-    check_cache_size  /tmp/cache1 400
-    ./juicefs umount /tmp/jfs
+    umount_jfs /tmp/jfs $META_URL
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs
+    echo abc | tee /tmp/jfs/test
+    # sleep 1s
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs --read-only
+    echo abc | tee /tmp/jfs/test && (echo "should not write read-only file system" && exit 1) || true
+    # sleep 1s
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs 
+    echo abc | tee /tmp/jfs/test
+    ps -ef | grep juicefs | grep mount | grep -v grep || true
+    count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
+    [[ $count -ne 2 ]] && echo "mount process count should be 2, count=$count" && exit 1 || true
+    umount /tmp/jfs
+    sleep 1s
+    ps -ef | grep juicefs | grep mount | grep -v grep || true
+    count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
+    [[ $count -ne 0 ]] && echo "mount process count should be 0, count=$count" && exit 1 || true
 }
 
-
 test_update_fuse_option(){
-    umount_jfs /tmp/jfs_xattr $META_URL
-    mkdir -p /tmp/jfs_xattr && chmod 777 /tmp/jfs_xattr
-    ./juicefs mount -d $META_URL /tmp/jfs_xattr --enable-xattr
-    setfattr -n user.test -v "juicedata" /tmp/jfs_xattr
-    getfattr -n user.test /tmp/jfs_xattr | grep juicedata
+    umount_jfs /tmp/jfs $META_URL
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs --enable-xattr
+    setfattr -n user.test -v "juicedata" /tmp/jfs
+    getfattr -n user.test /tmp/jfs | grep juicedata
     sleep 1s
-    ./juicefs mount -d $META_URL /tmp/jfs_xattr
-    getfattr -n user.test /tmp/jfs_xattr && exit 1 || true
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs
+    getfattr -n user.test /tmp/jfs && exit 1 || true
     sleep 1s
-    ./juicefs mount -d $META_URL /tmp/jfs_xattr --enable-xattr
-    setfattr -n user.test -v "juicedata" /tmp/jfs_xattr
-    getfattr -n user.test /tmp/jfs_xattr | grep juicedata
-    count=$(ps -ef | grep juicefs | grep mount | wc -l)
-    [[ $count -ne 4 ]] && echo "mount process count should be 4" && exit 1 || true
-    umount /tmp/jfs_xattr
-    count=$(ps -ef | grep juicefs | grep mount | wc -l)
-    [[ $count -ne 2 ]] && echo "mount process count should be 2" && exit 1 || true
-    umount /tmp/jfs_xattr
-    count=$(ps -ef | grep juicefs | grep mount | wc -l)
-    [[ $count -ne 0 ]] && echo "mount process count should be 0" && exit 1 || true
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs --enable-xattr
+    getfattr -n user.test /tmp/jfs | grep juicedata
+    count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
+    [[ $count -ne 4 ]] && echo "mount process count should be 4, count=$count" && exit 1 || true
+    umount /tmp/jfs
+    getfattr -n user.test /tmp/jfs && exit 1 || true
+    count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
+    [[ $count -ne 2 ]] && echo "mount process count should be 2, count=$count" && exit 1 || true
+    umount /tmp/jfs
+    sleep 1s
+    ps -ef | grep juicefs | grep mount | grep -v grep || true
+    count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
+    [[ $count -ne 0 ]] && echo "mount process count should be 0, count=$count" && exit 1 || true
 }
 
 test_restart_from_1_dot_1(){
@@ -131,9 +138,7 @@ test_restart_from_old_version(){
 
 test_restart_from_current_version(){
     prepare_test
-    JFS_RSA_PASSPHRASE=12345678 ./juicefs format $META_URL myjfs-vc --encrypt-rsa-key my-priv-key.pem
     
-    JFS_RSA_PASSPHRASE=12345678 ./juicefs mount  -d $META_URL /tmp/jfs --rsa-key my-priv-key.pem
     echo hello |tee /tmp/jfs/test
     ./juicefs mount -d $META_URL /tmp/jfs --rsa-key my-priv-key.pem
     count=$(ps -ef | grep juicefs | grep mount | wc -l)

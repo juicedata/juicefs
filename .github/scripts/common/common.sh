@@ -1,5 +1,5 @@
 #!/bin/bash -e
-
+dpkg -s jq >/dev/null 2>&1 || .github/scripts/apt_install.sh jq
 prepare_test()
 {
     umount_jfs /jfs $META_URL
