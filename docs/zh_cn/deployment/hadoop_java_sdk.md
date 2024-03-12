@@ -211,6 +211,7 @@ make win
 | `juicefs.file.checksum`   | `false`      | DistCp 使用 `-update` 参数时，是否计算文件 Checksum                                                                     |
 | `juicefs.no-bgjob`        | `false`      | 是否关闭后台任务（清理、备份等）                                                                                            |
 | `juicefs.backup-meta`     | 3600         | 自动将 JuiceFS 元数据备份到对象存储间隔（单位：秒），设置为 0 关闭自动备份                                                                 |
+|`juicefs.backup-skip-trash`| `false`      | 备份元数据时忽略回收站中的文件和目录。                                                                                    |
 | `juicefs.heartbeat`       | 12           | 客户端和元数据引擎之间的心跳间隔（单位：秒），建议所有客户端都设置一样                                                                         |
 
 #### 多文件系统配置

@@ -3890,7 +3890,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	return nil
 }
 
-func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast bool) (err error) {
+func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash bool) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if e, ok := p.(error); ok {
@@ -4011,7 +4011,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast bool) (err 
 	if err = m.dumpDir(root, tree, bw, 1, bar); err != nil {
 		return err
 	}
-	if root == RootInode {
+	if root == RootInode && !skipTrash {
 		trash := &DumpedEntry{
 			Name: "Trash",
 			Attr: &DumpedAttr{

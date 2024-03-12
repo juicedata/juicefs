@@ -246,15 +246,16 @@ func expandPathForEmbedded(addr string) string {
 
 func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config) *vfs.Config {
 	cfg := &vfs.Config{
-		Meta:           metaConf,
-		Format:         *format,
-		Version:        version.Version(),
-		Chunk:          chunkConf,
-		BackupMeta:     duration(c.String("backup-meta")),
-		Port:           &vfs.Port{DebugAgent: debugAgent, PyroscopeAddr: c.String("pyroscope")},
-		PrefixInternal: c.Bool("prefix-internal"),
-		Pid:            os.Getpid(),
-		PPid:           os.Getppid(),
+		Meta:            metaConf,
+		Format:          *format,
+		Version:         version.Version(),
+		Chunk:           chunkConf,
+		BackupMeta:      duration(c.String("backup-meta")),
+		BackupSkipTrash: c.Bool("backup-skip-trash"),
+		Port:            &vfs.Port{DebugAgent: debugAgent, PyroscopeAddr: c.String("pyroscope")},
+		PrefixInternal:  c.Bool("prefix-internal"),
+		Pid:             os.Getpid(),
+		PPid:            os.Getppid(),
 	}
 	skip_check := os.Getenv("SKIP_BACKUP_META_CHECK") == "true"
 	if !skip_check && cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
@@ -362,7 +363,7 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 	if !metaConf.ReadOnly && !metaConf.NoBGJob && vfsConf.BackupMeta > 0 {
 		registerer.MustRegister(vfs.LastBackupTimeG)
 		registerer.MustRegister(vfs.LastBackupDurationG)
-		go vfs.Backup(m, blob, vfsConf.BackupMeta)
+		go vfs.Backup(m, blob, vfsConf.BackupMeta, vfsConf.BackupSkipTrash)
 	}
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())

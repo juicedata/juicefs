@@ -117,6 +117,7 @@ type Config struct {
 	DirEntryTimeout      time.Duration
 	EntryTimeout         time.Duration
 	BackupMeta           time.Duration
+	BackupSkipTrash      bool
 	FastResolve          bool   `json:",omitempty"`
 	AccessLog            string `json:",omitempty"`
 	PrefixInternal       bool
