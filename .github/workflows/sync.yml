@@ -12,7 +12,7 @@ on:
     branches:
       - 'main'
       - 'release-**'
-    paths:
+    paths-ignore:
       - 'docs/**'
       - '**.md'
   schedule:
