@@ -3737,11 +3737,36 @@ func (m *redisMeta) checkServerConfig() {
 	logger.Infof("Ping redis latency: %s", time.Since(start))
 }
 
-var entryPool = sync.Pool{
-	New: func() interface{} {
-		return &DumpedEntry{
-			Attr: &DumpedAttr{},
-		}
+type wrapEntryPool struct {
+	sync.Pool
+}
+
+func (p *wrapEntryPool) Get() *DumpedEntry {
+	return p.Pool.Get().(*DumpedEntry)
+}
+
+func (p *wrapEntryPool) Put(de *DumpedEntry) {
+	if de == nil {
+		return
+	}
+
+	de.Name = ""
+	de.Xattrs = nil
+	de.Chunks = nil
+	de.Symlink = ""
+	de.keys = nil
+	de.AccessACL = nil
+	de.DefaultACL = nil
+	p.Pool.Put(de)
+}
+
+var entryPool = wrapEntryPool{
+	Pool: sync.Pool{
+		New: func() interface{} {
+			return &DumpedEntry{
+				Attr: &DumpedAttr{},
+			}
+		},
 	},
 }
 
@@ -3816,6 +3841,22 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 				sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
 				e.Xattrs = xattrs
 			}
+
+			if attr.AccessACL != aclAPI.None {
+				accessACl, err := m.getACL(ctx, tx, attr.AccessACL)
+				if err != nil {
+					return err
+				}
+				e.AccessACL = dumpACL(accessACl)
+			}
+			if attr.DefaultACL != aclAPI.None {
+				defaultACL, err := m.getACL(ctx, tx, attr.DefaultACL)
+				if err != nil {
+					return err
+				}
+				e.DefaultACL = dumpACL(defaultACL)
+			}
+
 			switch typ {
 			case TypeFile:
 				e.Chunks = e.Chunks[:0]
@@ -3915,7 +3956,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	for i := range entries {
 		name := tree.keys[i*2]
 		t, inode := m.parseEntry([]byte(tree.keys[i*2+1]))
-		e := entryPool.Get().(*DumpedEntry)
+		e := entryPool.Get()
 		e.Name = name
 		e.Attr.Inode = inode
 		e.Attr.Type = typeToString(t)
@@ -3980,11 +4021,6 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 			err = e.writeJSON(bw, depth+2)
 		}
 		entries[i] = nil
-		e.Name = ""
-		e.Xattrs = nil
-		e.Chunks = nil
-		e.Symlink = ""
-		e.keys = nil
 		entryPool.Put(e)
 		if err != nil {
 			return err
@@ -4212,6 +4248,17 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func())
 		}
 		p.HSet(ctx, m.xattrKey(inode), xattrs)
 	}
+
+	if e.AccessACL != nil {
+		r := loadACL(e.AccessACL)
+		attr.AccessACL, _ = m.insertACL(ctx, p, r)
+	}
+
+	if e.DefaultACL != nil {
+		r := loadACL(e.DefaultACL)
+		attr.DefaultACL, _ = m.insertACL(ctx, p, r)
+	}
+
 	p.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
 	tryExec()
 }
@@ -4672,7 +4719,7 @@ func (m *redisMeta) getACL(ctx Context, tx *redis.Tx, id uint32) (*aclAPI.Rule, 
 	return rule, nil
 }
 
-func (m *redisMeta) insertACL(ctx Context, tx *redis.Tx, rule *aclAPI.Rule) (uint32, error) {
+func (m *redisMeta) insertACL(ctx Context, tx redis.Cmdable, rule *aclAPI.Rule) (uint32, error) {
 	var aclId uint32
 	if aclId = m.aclCache.GetId(rule); aclId == aclAPI.None {
 		// TODO failures may result in some id wastage.
