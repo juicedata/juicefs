@@ -14,7 +14,7 @@ type openFile struct {
 	sync.RWMutex
 	attr      Attr
 	refs      int
-	lastCheck time.Time
+	lastCheck int64
 	chunks    map[uint32][]Slice
 }
 
@@ -46,13 +46,14 @@ func (o *openfiles) cleanup() {
 		if o.limit > 0 && len(o.files) > int(o.limit) {
 			todel = len(o.files) - int(o.limit)
 		}
+		now := time.Now().Unix()
 		for ino, of := range o.files {
 			cnt++
 			if cnt > 1e3 || todel > 0 && deleted >= todel {
 				break
 			}
 			if of.refs <= 0 {
-				if time.Since(of.lastCheck) > time.Hour*12 {
+				if now-of.lastCheck > 3600*12 {
 					delete(o.files, ino)
 					deleted++
 					continue
@@ -65,7 +66,7 @@ func (o *openfiles) cleanup() {
 					candidateOf = of
 					continue
 				}
-				if of.lastCheck.Before(candidateOf.lastCheck) {
+				if of.lastCheck < candidateOf.lastCheck {
 					candidateIno = ino
 				}
 				delete(o.files, candidateIno)
@@ -82,7 +83,7 @@ func (o *openfiles) OpenCheck(ino Ino, attr *Attr) bool {
 	o.Lock()
 	defer o.Unlock()
 	of, ok := o.files[ino]
-	if ok && time.Since(of.lastCheck) < o.expire {
+	if ok && time.Second*time.Duration(time.Now().Unix()-of.lastCheck) < o.expire {
 		if attr != nil {
 			*attr = of.attr
 		}
@@ -111,7 +112,7 @@ func (o *openfiles) Open(ino Ino, attr *Attr) {
 	// next open can keep cache if not modified
 	of.attr.KeepCache = true
 	of.refs++
-	of.lastCheck = time.Now()
+	of.lastCheck = time.Now().Unix()
 }
 
 func (o *openfiles) Close(ino Ino) bool {
@@ -132,7 +133,7 @@ func (o *openfiles) Check(ino Ino, attr *Attr) bool {
 	o.Lock()
 	defer o.Unlock()
 	of, ok := o.files[ino]
-	if ok && time.Since(of.lastCheck) < o.expire {
+	if ok && time.Second*time.Duration(time.Now().Unix()-of.lastCheck) < o.expire {
 		*attr = of.attr
 		return true
 	}
@@ -153,7 +154,7 @@ func (o *openfiles) Update(ino Ino, attr *Attr) bool {
 			attr.KeepCache = of.attr.KeepCache
 		}
 		of.attr = *attr
-		of.lastCheck = time.Now()
+		of.lastCheck = time.Now().Unix()
 		return true
 	}
 	return false
@@ -196,7 +197,7 @@ func (o *openfiles) InvalidateChunk(ino Ino, indx uint32) {
 		} else {
 			delete(of.chunks, indx)
 		}
-		of.lastCheck = time.Unix(0, 0)
+		of.lastCheck = 0
 	}
 }
 
