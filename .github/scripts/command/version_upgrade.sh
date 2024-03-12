@@ -22,7 +22,7 @@ JFS_RSA_PASSPHRASE=12345678 ./juicefs format $META_URL myjfs-vc --encrypt-rsa-ke
 test_kill_mount_process()
 {
     prepare_test
-    ./juicefs mount $META_URL /tmp/jfs -d
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs mount $META_URL /tmp/jfs -d
     wait_process_started 1
     force_kill_child_process
     sleep 3
@@ -97,10 +97,14 @@ test_update_from_old_version(){
     grep "hello" /tmp/jfs/test
     echo world | tee /tmp/jfs/test 
     ./juicefs umount /tmp/jfs
-    count=$(ps -ef | grep juicefs | grep mount | wc -l)
+    sleep 1s
+    ps -ef | grep juicefs | grep mount | grep -v grep || true
+    count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
     [[ $count -ne 1 ]] && echo "mount process count should be 1" && exit 1 || true
     ./juicefs umount /tmp/jfs
-    count=$(ps -ef | grep juicefs | grep mount | wc -l)
+    sleep 1s
+    ps -ef | grep juicefs | grep mount | grep -v grep || true
+    count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
     [[ $count -ne 0 ]] && echo "mount process count should be 0" && exit 1 || true
 }
 
