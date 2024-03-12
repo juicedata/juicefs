@@ -8,6 +8,7 @@ on:
     paths:
     - '**/fsrand2.yml'
     - '**/fsrand2.py'
+    - '**/fsrand2_test.py'
   pull_request:
     branches:
     - main
@@ -15,6 +16,7 @@ on:
     paths:
     - '**/fsrand2.yml'
     - '**/fsrand2.py'
+    - '**/fsrand2_test.py'
   schedule:
     - cron:  '0 16 * * 0'
   workflow_dispatch:
