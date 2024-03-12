@@ -10,6 +10,12 @@ const (
 	invalidateAttrOnly  = 0xFFFFFFFE
 )
 
+var ofPool = sync.Pool{
+	New: func() interface{} {
+		return &openFile{}
+	},
+}
+
 type openFile struct {
 	sync.RWMutex
 	attr      Attr
@@ -24,6 +30,15 @@ func (o *openFile) invalidateChunk() {
 	for c := range o.chunks {
 		delete(o.chunks, c)
 	}
+}
+
+func (o *openFile) release() {
+	o.attr = Attr{}
+	o.refs = 0
+	o.lastCheck = 0
+	o.first = nil
+	o.chunks = nil
+	ofPool.Put(o)
 }
 
 type openfiles struct {
@@ -62,6 +77,7 @@ func (o *openfiles) cleanup() {
 			}
 			if of.refs <= 0 {
 				if now-of.lastCheck > 3600*12 {
+					of.release()
 					delete(o.files, ino)
 					deleted++
 					continue
@@ -76,7 +92,9 @@ func (o *openfiles) cleanup() {
 				}
 				if of.lastCheck < candidateOf.lastCheck {
 					candidateIno = ino
+					candidateOf = of
 				}
+				candidateOf.release()
 				delete(o.files, candidateIno)
 				deleted++
 				candidateIno = 0
@@ -106,7 +124,7 @@ func (o *openfiles) Open(ino Ino, attr *Attr) {
 	defer o.Unlock()
 	of, ok := o.files[ino]
 	if !ok {
-		of = &openFile{}
+		of = ofPool.Get().(*openFile)
 		o.files[ino] = of
 	} else if attr != nil && attr.Mtime == of.attr.Mtime && attr.Mtimensec == of.attr.Mtimensec {
 		attr.KeepCache = of.attr.KeepCache
