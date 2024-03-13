@@ -1027,10 +1027,20 @@ func testDeadlockDetection(t *testing.T, m Meta) {
 			}
 		}(i)
 	}
-	gAll.Wait()
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		gAll.Wait()
+	}()
+	select {
+	case <-c:
+		break
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timeout, maybe deadlocked")
+	}
 	if err != syscall.EDEADLK {
-        t.Fatalf("deadlock not detected, %s", err)
-    }
+		t.Fatalf("deadlock not detected, %s", err)
+	}
 	if r, ok := m.(*redisMeta); ok {
 		ms, err := r.rdb.HKeys(context.Background(), r.conflictKey()).Result()
 		if err != nil {
