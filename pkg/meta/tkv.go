@@ -489,7 +489,10 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 }
 
 func (m *kvMeta) cacheACLs(ctx Context) error {
-	// cache all acls
+	if !m.getFormat().EnableACL {
+		return nil
+	}
+
 	acls, err := m.scanValues(m.fmtKey("R"), -1, nil)
 	if err != nil {
 		return err
@@ -3008,6 +3011,21 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 			e.Xattrs = xattrs
 		}
 
+		if attr.AccessACL != aclAPI.None {
+			accessACl, err := m.getACL(tx, attr.AccessACL)
+			if err != nil {
+				return err
+			}
+			e.AccessACL = dumpACL(accessACl)
+		}
+		if attr.DefaultACL != aclAPI.None {
+			defaultACL, err := m.getACL(tx, attr.DefaultACL)
+			if err != nil {
+				return err
+			}
+			e.DefaultACL = dumpACL(defaultACL)
+		}
+
 		if attr.Typ == TypeFile {
 			e.Chunks = e.Chunks[:0]
 			vals := make(map[string][]byte)
@@ -3157,6 +3175,11 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 		bar.SetTotal(guessKeyTotal)
 		threshold := 0.1
 		var cnt int
+
+		if err = m.cacheACLs(Background); err != nil {
+			return err
+		}
+
 		err := m.client.scan(nil, func(key, value []byte) {
 			if len(key) > 9 && key[0] == 'A' {
 				ino := m.decodeInode(key[1:9])
@@ -3171,6 +3194,8 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 					m.parseAttr(value, attr)
 					dumpAttr(attr, e.Attr)
 					e.Attr.Inode = ino
+					e.AccessACL = dumpACL(m.aclCache.Get(attr.AccessACL))
+					e.DefaultACL = dumpACL(m.aclCache.Get(attr.DefaultACL))
 				case 'C':
 					indx := binary.BigEndian.Uint32(key[10:])
 					ss := readSliceBuf(value)
@@ -3358,7 +3383,7 @@ type pair struct {
 	value []byte
 }
 
-func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair) {
+func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair, aclMaxId *uint32) {
 	inode := e.Attr.Inode
 	attr := loadAttr(e.Attr)
 	attr.Parent = e.Parents[0]
@@ -3396,6 +3421,16 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair) {
 	}
 	for _, x := range e.Xattrs {
 		kv <- &pair{m.xattrKey(inode, x.Name), []byte(unescape(x.Value))}
+	}
+	// put dumped acls into cache, then store back to sql
+	if e.AccessACL != nil {
+		r := loadACL(e.AccessACL)
+		attr.AccessACL, _ = m.aclCache.GetOrPut(r, aclMaxId)
+	}
+
+	if e.DefaultACL != nil {
+		r := loadACL(e.DefaultACL)
+		attr.DefaultACL, _ = m.aclCache.GetOrPut(r, aclMaxId)
 	}
 	kv <- &pair{m.inodeKey(inode), m.marshal(attr)}
 }
@@ -3456,10 +3491,16 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		}()
 	}
 
-	dm, counters, parents, refs, err := loadEntries(r, func(e *DumpedEntry) { m.loadEntry(e, kv) }, nil)
+	var aclMaxId uint32
+	dm, counters, parents, refs, err := loadEntries(r, func(e *DumpedEntry) { m.loadEntry(e, kv, &aclMaxId) }, nil)
 	if err != nil {
 		return err
 	}
+
+	if err = m.loadDumpedACLs(Background); err != nil {
+		return err
+	}
+
 	format, _ := json.MarshalIndent(dm.Setting, "", "")
 	kv <- &pair{m.fmtKey("setting"), format}
 	kv <- &pair{m.counterKey(usedSpace), packCounter(counters.UsedSpace)}
@@ -3827,4 +3868,23 @@ func (m *kvMeta) getACL(tx *kvTxn, id uint32) (*aclAPI.Rule, error) {
 	rule.Decode(val)
 	m.aclCache.Put(id, rule)
 	return rule, nil
+}
+
+func (m *kvMeta) loadDumpedACLs(ctx Context) error {
+	id2Rule := m.aclCache.GetAll()
+	if len(id2Rule) == 0 {
+		return nil
+	}
+
+	return m.txn(func(tx *kvTxn) error {
+		maxId := uint32(0)
+		for id, rule := range id2Rule {
+			if id > maxId {
+				maxId = id
+			}
+			tx.set(m.aclKey(id), rule.Encode())
+		}
+		tx.set(m.counterKey(aclCounter), packCounter(int64(maxId)))
+		return nil
+	})
 }

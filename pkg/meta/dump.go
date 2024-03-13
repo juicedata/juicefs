@@ -24,6 +24,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/goccy/go-json"
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
@@ -98,15 +99,31 @@ type DumpedQuota struct {
 	UsedInodes int64 `json:"-"`
 }
 
+type DumpedACLEntry struct {
+	Id   uint32 `json:"id"`
+	Perm uint16 `json:"perm"`
+}
+
+type DumpedACL struct {
+	Owner  uint16           `json:"owner"`
+	Group  uint16           `json:"group"`
+	Other  uint16           `json:"other"`
+	Mask   uint16           `json:"mask"`
+	Users  []DumpedACLEntry `json:"users"`
+	Groups []DumpedACLEntry `json:"groups"`
+}
+
 type DumpedEntry struct {
-	Name    string                  `json:"-"`
-	Parents []Ino                   `json:"-"`
-	Attr    *DumpedAttr             `json:"attr,omitempty"`
-	Symlink string                  `json:"symlink,omitempty"`
-	Xattrs  []*DumpedXattr          `json:"xattrs,omitempty"`
-	Chunks  []*DumpedChunk          `json:"chunks,omitempty"`
-	Entries map[string]*DumpedEntry `json:"entries,omitempty"`
-	keys    []string
+	Name       string                  `json:"-"`
+	Parents    []Ino                   `json:"-"`
+	Attr       *DumpedAttr             `json:"attr,omitempty"`
+	Symlink    string                  `json:"symlink,omitempty"`
+	Xattrs     []*DumpedXattr          `json:"xattrs,omitempty"`
+	Chunks     []*DumpedChunk          `json:"chunks,omitempty"`
+	Entries    map[string]*DumpedEntry `json:"entries,omitempty"`
+	keys       []string
+	AccessACL  *DumpedACL `json:"posix_acl_access,omitempty"`
+	DefaultACL *DumpedACL `json:"posix_acl_default,omitempty"`
 }
 
 var CHARS = []byte("0123456789ABCDEF")
@@ -199,6 +216,18 @@ func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
 		}
 		write(fmt.Sprintf(",\n%s\"xattrs\": %s", fieldPrefix, data))
 	}
+	if de.AccessACL != nil {
+		if data, err = json.Marshal(de.AccessACL); err != nil {
+			return err
+		}
+		write(fmt.Sprintf(",\n%s\"posix_acl_access\": %s", fieldPrefix, data))
+	}
+	if de.DefaultACL != nil {
+		if data, err = json.Marshal(de.DefaultACL); err != nil {
+			return err
+		}
+		write(fmt.Sprintf(",\n%s\"posix_acl_default\": %s", fieldPrefix, data))
+	}
 	if len(de.Chunks) == 1 {
 		if data, err = json.Marshal(de.Chunks); err != nil {
 			return err
@@ -244,6 +273,18 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 			return err
 		}
 		write(fmt.Sprintf(",\n%s\"xattrs\": %s", fieldPrefix, data))
+	}
+	if de.AccessACL != nil {
+		if data, err = json.Marshal(de.AccessACL); err != nil {
+			return err
+		}
+		write(fmt.Sprintf(",\n%s\"posix_acl_access\": %s", fieldPrefix, data))
+	}
+	if de.DefaultACL != nil {
+		if data, err = json.Marshal(de.DefaultACL); err != nil {
+			return err
+		}
+		write(fmt.Sprintf(",\n%s\"posix_acl_default\": %s", fieldPrefix, data))
 	}
 	write(fmt.Sprintf(",\n%s\"entries\": {", fieldPrefix))
 	return nil
@@ -502,6 +543,10 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 			err = dec.Decode(&e.Symlink)
 		case "xattrs":
 			err = dec.Decode(&e.Xattrs)
+		case "posix_acl_access":
+			err = dec.Decode(&e.AccessACL)
+		case "posix_acl_default":
+			err = dec.Decode(&e.DefaultACL)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("decode %v: %s", name, err)
@@ -515,4 +560,53 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 		return nil, err
 	}
 	return &e, nil
+}
+
+func dumpACL(rule *aclAPI.Rule) *DumpedACL {
+	if rule == nil {
+		return nil
+	}
+	return &DumpedACL{
+		Owner:  rule.Owner,
+		Group:  rule.Group,
+		Other:  rule.Other,
+		Mask:   rule.Mask,
+		Users:  dumpACLEntries(rule.NamedUsers),
+		Groups: dumpACLEntries(rule.NamedGroups),
+	}
+}
+
+func dumpACLEntries(entries aclAPI.Entries) []DumpedACLEntry {
+	if len(entries) == 0 {
+		return nil
+	}
+	dumpedEnts := make([]DumpedACLEntry, len(entries))
+	for i, ent := range entries {
+		dumpedEnts[i].Id = ent.Id
+		dumpedEnts[i].Perm = ent.Perm
+	}
+	return dumpedEnts
+}
+
+func loadACL(dumped *DumpedACL) *aclAPI.Rule {
+	return &aclAPI.Rule{
+		Owner:       dumped.Owner,
+		Group:       dumped.Group,
+		Mask:        dumped.Mask,
+		Other:       dumped.Other,
+		NamedUsers:  loadACLEntries(dumped.Users),
+		NamedGroups: loadACLEntries(dumped.Groups),
+	}
+}
+
+func loadACLEntries(dumpedEnts []DumpedACLEntry) aclAPI.Entries {
+	if len(dumpedEnts) == 0 {
+		return nil
+	}
+	ents := make(aclAPI.Entries, len(dumpedEnts))
+	for i, d := range dumpedEnts {
+		ents[i].Id = d.Id
+		ents[i].Perm = d.Perm
+	}
+	return ents
 }

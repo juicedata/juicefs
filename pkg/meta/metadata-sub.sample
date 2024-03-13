@@ -11,7 +11,7 @@
     "KeyEncrypted": true,
     "TrashDays": 1,
     "MetaVersion": 1,
-    "EnableACL": false
+    "EnableACL": true
   },
   "Counters": {
     "usedSpace": 115392512,
@@ -41,6 +41,7 @@
     "entries": {
       "big": {
         "attr": {"inode":6,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1637150857,"mtime":1637150858,"ctime":1637150878,"atimensec":961503222,"mtimensec":961503222,"ctimensec":961503222,"nlink":1,"length":104857600},
+        "posix_acl_default": {"owner":7,"group":5,"other":5,"mask":5,"users":null,"groups":[{"id":5,"perm":4},{"id":6,"perm":4}]},
         "chunks": [
           {"index":0,"slices":[{"id":5,"size":67108864,"len":67108864}]},
           {"index":1,"slices":[{"id":6,"size":37748736,"len":37748736}]}
