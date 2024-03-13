@@ -2028,7 +2028,7 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 	}
 	*slices = buildSlice(ss)
 	m.of.CacheChunk(inode, indx, *slices)
-	if !m.conf.ReadOnly && (len(val)/sliceBytes >= 5 || len(*slices) >= 5) {
+	if !m.conf.ReadOnly && (len(val)/sliceBytes >= m.conf.CompactByRead || len(*slices) >= m.conf.CompactByRead) {
 		go m.compactChunk(inode, indx, false)
 	}
 	return 0
@@ -2085,7 +2085,8 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
 		tx.set(m.chunkKey(inode, indx), val)
 		ns := len(val) / sliceBytes // number of slices
-		needCompact = ns%100 == 99 || ns > 350
+		needCompact = ns > 0 && ns%m.conf.CompactByWrite == 0 ||
+			ns > m.conf.CompactByWrite*3+m.conf.CompactByWrite/2
 		return nil
 	}, inode)
 	if err == nil {

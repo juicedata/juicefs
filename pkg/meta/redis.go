@@ -2335,7 +2335,7 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (
 	}
 	*slices = buildSlice(ss)
 	m.of.CacheChunk(inode, indx, *slices)
-	if !m.conf.ReadOnly && (len(vals) >= 5 || len(*slices) >= 5) {
+	if !m.conf.ReadOnly && (len(vals) >= m.conf.CompactByRead || len(*slices) >= m.conf.CompactByRead) {
 		go m.compactChunk(inode, indx, false)
 	}
 	return 0
@@ -2390,7 +2390,8 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			return nil
 		})
 		if err == nil {
-			needCompact = rpush.Val()%100 == 99 || rpush.Val() > 350
+			needCompact = rpush.Val() > 0 && rpush.Val()%int64(m.conf.CompactByWrite) == 0 ||
+				rpush.Val() > int64(m.conf.CompactByWrite*3+m.conf.CompactByWrite/2)
 		}
 		return err
 	}, m.inodeKey(inode))

@@ -277,6 +277,18 @@ func metaFlags() []cli.Flag {
 			Value: "100ms",
 			Usage: "skip updating attribute of a directory if the mtime difference is smaller than this value",
 		},
+		&cli.IntFlag{
+			Name:   "compact-by-read",
+			Value:  5,
+			Hidden: true,
+			Usage:  "minimal number of slices that will trigger compaction when reading a chunk",
+		},
+		&cli.IntFlag{
+			Name:   "compact-by-write",
+			Value:  100,
+			Hidden: true,
+			Usage:  "minimal number of slices that will trigger compaction when writing a chunk",
+		},
 	})
 }
 

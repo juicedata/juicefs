@@ -48,10 +48,21 @@ type Config struct {
 	DirStatFlushPeriod time.Duration
 	SkipDirMtime       time.Duration
 	Sid                uint64
+	CompactByRead      int
+	CompactByWrite     int
 }
 
 func DefaultConf() *Config {
-	return &Config{Strict: true, Retries: 10, MaxDeletes: 2, Heartbeat: 12 * time.Second, AtimeMode: NoAtime, DirStatFlushPeriod: 1 * time.Second}
+	return &Config{
+		Strict:             true,
+		Retries:            10,
+		MaxDeletes:         2,
+		Heartbeat:          12 * time.Second,
+		AtimeMode:          NoAtime,
+		DirStatFlushPeriod: 1 * time.Second,
+		CompactByRead:      5,
+		CompactByWrite:     100,
+	}
 }
 
 func (c *Config) SelfCheck() {

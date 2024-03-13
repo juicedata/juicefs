@@ -2385,7 +2385,7 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 	}
 	*slices = buildSlice(ss)
 	m.of.CacheChunk(inode, indx, *slices)
-	if !m.conf.ReadOnly && (len(c.Slices)/sliceBytes >= 5 || len(*slices) >= 5) {
+	if !m.conf.ReadOnly && (len(c.Slices)/sliceBytes >= m.conf.CompactByRead || len(*slices) >= m.conf.CompactByRead) {
 		go m.compactChunk(inode, indx, false)
 	}
 	return 0
@@ -2451,7 +2451,8 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		_, err = s.Cols("length", "mtime", "ctime", "mtimensec", "ctimensec").Update(&nodeAttr, &node{Inode: inode})
 		if err == nil {
 			ns := len(ck.Slices) / sliceBytes // number of slices
-			needCompact = ns%100 == 99 || ns > 350
+			needCompact = ns > 0 && ns%m.conf.CompactByWrite == 0 ||
+				ns > m.conf.CompactByWrite*3+m.conf.CompactByWrite/2
 		}
 		return err
 	}, inode)
