@@ -104,8 +104,6 @@ func handleFDRequest(conn *net.UnixConn) {
 	var fds = []int{0}
 	if fuseFd > 0 {
 		fds = append(fds, fuseFd)
-	} else {
-		logger.Warnf("no FUSE fd available")
 	}
 	err := putFd(conn, fuseSetting, fds...)
 	if err != nil {
