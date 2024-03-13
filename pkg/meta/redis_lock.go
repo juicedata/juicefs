@@ -136,12 +136,8 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 	ikey := r.plockKey(inode)
 	lkey := r.ownerKey(owner)
 	var err error
+	blockedTime := 0
 	lock := plockRecord{ltype, pid, start, end}
-	// FIXME: causing out of range error
-	// defer r.txn(ctx, func(tx *redis.Tx) error {
-	// 	tx.HDel(ctx, r.conflictKey(), lkey)
-	// 	return nil
-	// })
 	for {
 		err = r.txn(ctx, func(tx *redis.Tx) error {
 			if ltype == F_UNLCK {
@@ -180,34 +176,21 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 			}
 			ls := loadLocks([]byte(owners[lkey]))
 			delete(owners, lkey)
-			var conflictOwner string
 			for owner, d := range owners {
 				ls := loadLocks([]byte(d))
 				for _, l := range ls {
 					// find conflicted locks
 					if (ltype == F_WRLCK || l.Type == F_WRLCK) && end >= l.Start && start <= l.End {
-						conflictOwner = owner
-						err = syscall.EAGAIN
+						if block {
+							tx.HSet(ctx, r.conflictKey(), lkey, owner)
+						}
+						return syscall.EAGAIN
 					}
 				}
 			}
-			if block && err == syscall.EAGAIN {
-				tx.HSet(ctx, r.conflictKey(), lkey, conflictOwner)
-				// FIXME: delay detection
-				deadlock, err := r.detectDeadlock(ctx, tx, lkey, conflictOwner)
-				if err != nil {
-					return err
-				}
-				if deadlock {
-					return syscall.EDEADLK
-				} else {
-					return syscall.EAGAIN
-				}
-			} else if err != nil {
-				return err
-			}
 			ls = updateLocks(ls, lock)
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.HDel(ctx, r.conflictKey(), lkey)
 				pipe.HSet(ctx, ikey, lkey, dumpLocks(ls))
 				pipe.SAdd(ctx, r.lockedKey(r.sid), ikey)
 				return nil
@@ -218,9 +201,16 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 		if !block || err != syscall.EAGAIN {
 			break
 		}
+		if blockedTime > 1000 {
+			if err := r.detectDeadlock(ctx, lkey); err != nil {
+				return errno(err)
+			}
+		}
 		if ltype == F_WRLCK {
+			blockedTime += 1
 			time.Sleep(time.Millisecond * 1)
 		} else {
+			blockedTime += 10
 			time.Sleep(time.Millisecond * 10)
 		}
 		if ctx.Canceled() {
@@ -230,21 +220,33 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 	return errno(err)
 }
 
-func (r *redisMeta) detectDeadlock(ctx context.Context, tx *redis.Tx, waiter string, blocker string) (bool, error) {
-	for i := 0; i < 10; i++ {
-		owner, err := tx.HGet(ctx, r.conflictKey(), blocker).Result()
+func (r *redisMeta) detectDeadlock(ctx Context, waiter string) error {
+	err := r.txn(ctx, func(tx *redis.Tx) error {
+		blocker, err := tx.HGet(ctx, r.conflictKey(), waiter).Result()
 		if err != nil && err != redis.Nil {
-			return false, err
+			return err
 		}
 		if err == redis.Nil {
-			break
+			return nil
 		}
-		blocker = owner
-		if waiter == blocker {
-			return true, nil
+		for i := 0; i < 10; i++ {
+			owner, err := tx.HGet(ctx, r.conflictKey(), blocker).Result()
+			if err != nil && err != redis.Nil {
+				return err
+			}
+			if err == redis.Nil {
+				return nil
+			}
+			blocker = owner
+			if waiter == blocker {
+				// prevent key leak
+				tx.HDel(ctx, r.conflictKey(), waiter)
+				return syscall.EDEADLK
+			}
 		}
-	}
-	return false, nil
+		return nil
+	}, r.conflictKey())
+	return err
 }
 
 func (r *redisMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {

@@ -119,36 +119,36 @@ func testMeta(t *testing.T, m Meta) {
 	}
 
 	testMetaClient(t, m)
-	// testTruncateAndDelete(t, m)
-	// testTrash(t, m)
-	// testParents(t, m)
-	// testRemove(t, m)
-	// testResolve(t, m)
-	// testStickyBit(t, m)
-	// testLocks(t, m)
-	// testListLocks(t, m)
+	testTruncateAndDelete(t, m)
+	testTrash(t, m)
+	testParents(t, m)
+	testRemove(t, m)
+	testResolve(t, m)
+	testStickyBit(t, m)
+	testLocks(t, m)
+	testListLocks(t, m)
 	testDeadlockDetection(t, m)
-	// testConcurrentWrite(t, m)
-	// testCompaction(t, m, false)
-	// time.Sleep(time.Second)
-	// testCompaction(t, m, true)
-	// testCopyFileRange(t, m)
-	// testCloseSession(t, m)
-	// testConcurrentDir(t, m)
-	// testAttrFlags(t, m)
-	// testQuota(t, m)
-	// testAtime(t, m)
-	// base := m.getBase()
-	// base.conf.OpenCache = time.Second
-	// base.of.expire = time.Second
-	// testOpenCache(t, m)
-	// base.conf.CaseInsensi = true
-	// testCaseIncensi(t, m)
-	// testCheckAndRepair(t, m)
-	// testDirStat(t, m)
-	// testClone(t, m)
-	// base.conf.ReadOnly = true
-	// testReadOnly(t, m)
+	testConcurrentWrite(t, m)
+	testCompaction(t, m, false)
+	time.Sleep(time.Second)
+	testCompaction(t, m, true)
+	testCopyFileRange(t, m)
+	testCloseSession(t, m)
+	testConcurrentDir(t, m)
+	testAttrFlags(t, m)
+	testQuota(t, m)
+	testAtime(t, m)
+	base := m.getBase()
+	base.conf.OpenCache = time.Second
+	base.of.expire = time.Second
+	testOpenCache(t, m)
+	base.conf.CaseInsensi = true
+	testCaseIncensi(t, m)
+	testCheckAndRepair(t, m)
+	testDirStat(t, m)
+	testClone(t, m)
+	base.conf.ReadOnly = true
+	testReadOnly(t, m)
 }
 
 func testMetaClient(t *testing.T, m Meta) {
@@ -999,40 +999,47 @@ func testDeadlockDetection(t *testing.T, m Meta) {
 		t.Fatalf("create f: %s", st)
 	}
 
-	var g sync.WaitGroup
+	var gAll sync.WaitGroup
+	var gLock sync.WaitGroup
 	var err syscall.Errno
 	for i := 0; i < 3; i++ {
-		g.Add(1)
+		gAll.Add(1)
+		gLock.Add(1)
 		go func(i int) {
-			defer g.Done()
+			defer gAll.Done()
 			start1 := uint64(i) << 8
 			end1 := start1 + 0xFF
 			if st := m.Setlk(ctx, inode, uint64(i), true, syscall.F_WRLCK, start1, end1, uint32(i)); st != 0 {
-				panic(fmt.Errorf("set wlock"))
+				panic(fmt.Errorf("plock wlock"))
 			}
-			t.Logf("%d locks %d-%d", i, start1, end1)
-			time.Sleep(100 * time.Millisecond)
+			gLock.Done()
+			gLock.Wait()
 			start2 := uint64((i+1) % 3) << 8
 			end2 := start2 + 0xFF
-			if st := m.Setlk(ctx, inode, uint64(i), true, syscall.F_WRLCK, start2, end2, uint32(i)); st != 0 {
+			if st := m.Setlk(ctx, inode, uint64(i), true, syscall.F_RDLCK, start2, end2, uint32(i)); st != 0 {
 				err = st
-				t.Logf("%d try to locks %d-%d, got %d", i, start2, end2, st)
-			} else {
-				t.Logf("%d locks %d-%d", i, start2, end2)
 			}
-			time.Sleep(100 * time.Millisecond)
 			if st := m.Setlk(ctx, inode, uint64(i), false, syscall.F_UNLCK, start2, end2, uint32(i)); st != 0 {
-				panic(fmt.Errorf("set unlock"))
+				panic(fmt.Errorf("plock unlock"))
 			}
 			if st := m.Setlk(ctx, inode, uint64(i), false, syscall.F_UNLCK, start1, end1, uint32(i)); st != 0 {
-				panic(fmt.Errorf("set unlock"))
+				panic(fmt.Errorf("plock unlock"))
 			}
 		}(i)
 	}
-	g.Wait()
+	gAll.Wait()
 	if err != syscall.EDEADLK {
-        t.Fatalf("should be DEADLK")
+        t.Fatalf("deadlock not detected, %s", err)
     }
+	if r, ok := m.(*redisMeta); ok {
+		ms, err := r.rdb.HKeys(context.Background(), r.conflictKey()).Result()
+		if err != nil {
+			t.Fatalf("Skeys %s: %s", r.conflictKey(), err)
+		}
+		if len(ms) != 0 {
+			t.Fatalf("conflict key leaked: %d", len(ms))
+		}
+	}
 }
 
 func testResolve(t *testing.T, m Meta) {
