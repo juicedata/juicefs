@@ -137,6 +137,11 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 	lkey := r.ownerKey(owner)
 	var err error
 	lock := plockRecord{ltype, pid, start, end}
+	// FIXME: causing out of range error
+	// defer r.txn(ctx, func(tx *redis.Tx) error {
+	// 	tx.HDel(ctx, r.conflictKey(), lkey)
+	// 	return nil
+	// })
 	for {
 		err = r.txn(ctx, func(tx *redis.Tx) error {
 			if ltype == F_UNLCK {
@@ -188,6 +193,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 			}
 			if block && err == syscall.EAGAIN {
 				tx.HSet(ctx, r.conflictKey(), lkey, conflictOwner)
+				// FIXME: delay detection
 				deadlock, err := r.detectDeadlock(ctx, tx, lkey, conflictOwner)
 				if err != nil {
 					return err
@@ -197,6 +203,8 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 				} else {
 					return syscall.EAGAIN
 				}
+			} else if err != nil {
+				return err
 			}
 			ls = updateLocks(ls, lock)
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
