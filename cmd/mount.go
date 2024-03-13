@@ -581,6 +581,13 @@ func mount(c *cli.Context) error {
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
 	setFuseOption(c, format, vfsConf)
 
+	// should create object storage before launchMount
+	blob, err := NewReloadableStorage(format, metaCli, updateFormat(c))
+	if err != nil {
+		return fmt.Errorf("object storage: %s", err)
+	}
+	logger.Infof("Data use %s", blob)
+
 	if os.Getenv("JFS_SUPERVISOR") == "" {
 		// close the database connection that is not in the final stage
 		if err = metaCli.Shutdown(); err != nil {
@@ -614,12 +621,6 @@ func mount(c *cli.Context) error {
 	}
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
 	registerer, registry := wrapRegister(c, mp, format.Name)
-
-	blob, err := NewReloadableStorage(format, metaCli, updateFormat(c))
-	if err != nil {
-		return fmt.Errorf("object storage: %s", err)
-	}
-	logger.Infof("Data use %s", blob)
 
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
