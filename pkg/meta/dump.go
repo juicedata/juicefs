@@ -563,6 +563,9 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 }
 
 func dumpACL(rule *aclAPI.Rule) *DumpedACL {
+	if rule == nil {
+		return nil
+	}
 	return &DumpedACL{
 		Owner:  rule.Owner,
 		Group:  rule.Group,

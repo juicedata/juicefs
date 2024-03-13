@@ -467,16 +467,15 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 }
 
 func (m *dbMeta) cacheACLs(ctx Context) error {
-	return m.roTxn(func(s *xorm.Session) error {
-		// cache all acls
-		var acls []acl
-		if err := s.Find(&acls); err != nil {
-			return err
-		}
-		for _, val := range acls {
-			m.aclCache.Put(val.Id, val.toRule())
-		}
+	if !m.getFormat().EnableACL {
 		return nil
+	}
+	return m.roTxn(func(s *xorm.Session) error {
+		return s.Table(&acl{}).Iterate(new(acl), func(idx int, bean interface{}) error {
+			a := bean.(*acl)
+			m.aclCache.Put(a.Id, a.toRule())
+			return nil
+		})
 	})
 }
 
@@ -3975,7 +3974,6 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}, aclMaxId *uin
 		chs[4] <- &xattr{Inode: inode, Name: x.Name, Value: unescape(x.Value)}
 	}
 
-	// put dumped acls into cache, then store back to sql
 	if e.AccessACL != nil {
 		r := loadACL(e.AccessACL)
 		n.AccessACLId, _ = m.aclCache.GetOrPut(r, aclMaxId)
@@ -4081,7 +4079,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 	m.loadDumpedQuotas(Background, dm.Quotas)
-	if err = m.loadDumpedACLs(); err != nil {
+	if err = m.loadDumpedACLs(Background); err != nil {
 		return err
 	}
 
@@ -4533,7 +4531,7 @@ func (m *dbMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 	}))
 }
 
-func (m *dbMeta) loadDumpedACLs() error {
+func (m *dbMeta) loadDumpedACLs(ctx Context) error {
 	id2Rule := m.aclCache.GetAll()
 	if len(id2Rule) == 0 {
 		return nil

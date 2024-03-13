@@ -323,7 +323,10 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 }
 
 func (m *redisMeta) cacheACLs(ctx Context) error {
-	// cache all acls
+	if !m.getFormat().EnableACL {
+		return nil
+	}
+
 	vals, err := m.rdb.HGetAll(ctx, m.aclKey()).Result()
 	if err != nil {
 		return err
@@ -4183,7 +4186,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash 
 	return bw.Flush()
 }
 
-func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func()) {
+func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func(), aclMaxId *uint32) {
 	ctx := Background
 	inode := e.Attr.Inode
 	attr := loadAttr(e.Attr)
@@ -4251,12 +4254,12 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func())
 
 	if e.AccessACL != nil {
 		r := loadACL(e.AccessACL)
-		attr.AccessACL, _ = m.insertACL(ctx, p, r)
+		attr.AccessACL, _ = m.aclCache.GetOrPut(r, aclMaxId)
 	}
 
 	if e.DefaultACL != nil {
 		r := loadACL(e.DefaultACL)
-		attr.DefaultACL, _ = m.insertACL(ctx, p, r)
+		attr.DefaultACL, _ = m.aclCache.GetOrPut(r, aclMaxId)
 	}
 
 	p.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
@@ -4306,11 +4309,15 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 		}
 	}()
 
-	dm, counters, parents, refs, err := loadEntries(r, func(e *DumpedEntry) { m.loadEntry(e, p, tryExec) }, nil)
+	var aclMaxId uint32
+	dm, counters, parents, refs, err := loadEntries(r, func(e *DumpedEntry) { m.loadEntry(e, p, tryExec, &aclMaxId) }, nil)
 	if err != nil {
 		return err
 	}
 	m.loadDumpedQuotas(ctx, dm.Quotas)
+	if err = m.loadDumpedACLs(ctx); err != nil {
+		return err
+	}
 	format, _ := json.MarshalIndent(dm.Setting, "", "")
 	p.Set(ctx, m.setting(), format, 0)
 	cs := make(map[string]interface{})
@@ -4719,7 +4726,7 @@ func (m *redisMeta) getACL(ctx Context, tx *redis.Tx, id uint32) (*aclAPI.Rule, 
 	return rule, nil
 }
 
-func (m *redisMeta) insertACL(ctx Context, tx redis.Cmdable, rule *aclAPI.Rule) (uint32, error) {
+func (m *redisMeta) insertACL(ctx Context, tx *redis.Tx, rule *aclAPI.Rule) (uint32, error) {
 	var aclId uint32
 	if aclId = m.aclCache.GetId(rule); aclId == aclAPI.None {
 		// TODO failures may result in some id wastage.
@@ -4729,7 +4736,7 @@ func (m *redisMeta) insertACL(ctx Context, tx redis.Cmdable, rule *aclAPI.Rule) 
 		}
 		aclId = uint32(newId)
 
-		if err = tx.HSet(ctx, m.aclKey(), strconv.FormatUint(uint64(aclId), 10), rule.Encode()).Err(); err != nil {
+		if err = tx.HSetNX(ctx, m.aclKey(), strconv.FormatUint(uint64(aclId), 10), rule.Encode()).Err(); err != nil {
 			return aclAPI.None, err
 		}
 		m.aclCache.Put(aclId, rule)
@@ -4738,7 +4745,6 @@ func (m *redisMeta) insertACL(ctx Context, tx redis.Cmdable, rule *aclAPI.Rule) 
 }
 
 func (m *redisMeta) tryLoadMissACLs(ctx Context, tx *redis.Tx) error {
-	// try load miss
 	missIds := m.aclCache.GetMissIds()
 	if len(missIds) > 0 {
 		missKeys := make([]string, len(missIds))
@@ -4761,4 +4767,26 @@ func (m *redisMeta) tryLoadMissACLs(ctx Context, tx *redis.Tx) error {
 		}
 	}
 	return nil
+}
+
+func (m *redisMeta) loadDumpedACLs(ctx Context) error {
+	id2Rule := m.aclCache.GetAll()
+	if len(id2Rule) == 0 {
+		return nil
+	}
+
+	return m.txn(ctx, func(tx *redis.Tx) error {
+		maxId := uint32(0)
+		acls := make(map[string]interface{}, len(id2Rule))
+		for id, rule := range id2Rule {
+			if id > maxId {
+				maxId = id
+			}
+			acls[strconv.FormatUint(uint64(id), 10)] = rule.Encode()
+		}
+		if err := tx.HSet(ctx, m.aclKey(), acls).Err(); err != nil {
+			return err
+		}
+		return tx.Set(ctx, m.prefix+aclCounter, maxId, 0).Err()
+	}, m.inodeKey(RootInode))
 }
