@@ -3757,9 +3757,9 @@ func (p *wrapEntryPool) Put(de *DumpedEntry) {
 	de.Xattrs = nil
 	de.Chunks = nil
 	de.Symlink = ""
-	de.keys = nil
 	de.AccessACL = nil
 	de.DefaultACL = nil
+	de.Entries = nil
 	p.Pool.Put(de)
 }
 
@@ -3891,7 +3891,16 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 					return err
 				}
 				if cursor == 0 {
-					e.keys = keys
+					e.Entries = make(map[string]*DumpedEntry)
+					for i := 0; i < len(keys); i += 2 {
+						name := keys[i]
+						t, inode := m.parseEntry([]byte(keys[i+1]))
+						ce := entryPool.Get()
+						ce.Name = name
+						ce.Attr.Inode = inode
+						ce.Attr.Type = typeToString(t)
+						e.Entries[name] = ce
+					}
 				}
 			case TypeSymlink:
 				if e.Symlink, err = sr[i].Result(); err != nil {
@@ -3946,31 +3955,38 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		}
 	}
 
-	if tree.keys == nil {
+	if tree.Entries == nil {
+		tree.Entries = make(map[string]*DumpedEntry)
 		err := m.hscan(Background, m.entryKey(inode), func(keys []string) error {
-			tree.keys = append(tree.keys, keys...)
+			for i := 0; i < len(keys); i += 2 {
+				name := keys[i]
+				t, inode := m.parseEntry([]byte(keys[i+1]))
+				e := entryPool.Get()
+				e.Name = name
+				e.Attr.Inode = inode
+				e.Attr.Type = typeToString(t)
+				tree.Entries[name] = e
+			}
 			return nil
 		})
 		if err != nil {
 			return err
 		}
 	}
-	entries := make([]*DumpedEntry, len(tree.keys)/2)
-	for i := range entries {
-		name := tree.keys[i*2]
-		t, inode := m.parseEntry([]byte(tree.keys[i*2+1]))
-		e := entryPool.Get()
-		e.Name = name
-		e.Attr.Inode = inode
-		e.Attr.Type = typeToString(t)
-		entries[i] = e
-	}
 
 	var err error
 	if err = tree.writeJsonWithOutEntry(bw, depth); err != nil {
 		return err
 	}
+	entries := make([]*DumpedEntry, 0, len(tree.Entries))
+	for _, e := range tree.Entries {
+		entries = append(entries, e)
+	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	if bar != nil {
+		bar.IncrTotal(int64(len(entries)))
+	}
+
 	var concurrent = 2
 	var batch = 100
 	ms := make([]sync.Mutex, concurrent)
@@ -3980,7 +3996,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		conds[c] = sync.NewCond(&ms[c])
 		if c*batch < len(entries) {
 			go func(c int) {
-				for i := c * batch; i < len(entries); i += concurrent * batch {
+				for i := c * batch; i < len(entries) && err == nil; i += concurrent * batch {
 					es := entries[i:]
 					if len(es) > batch {
 						es = es[:batch]
@@ -3992,10 +4008,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 						err = e
 					}
 					conds[c].Signal()
-					ms[c].Unlock()
-
-					ms[c].Lock()
-					for ready[c] > 0 {
+					for ready[c] > 0 && err == nil {
 						conds[c].Wait()
 					}
 					ms[c].Unlock()
@@ -4007,7 +4020,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		b := i / batch
 		c := b % concurrent
 		ms[c].Lock()
-		for ready[c] == 0 {
+		for ready[c] == 0 && err == nil {
 			conds[c].Wait()
 		}
 		ready[c]--
@@ -4042,8 +4055,8 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash bool) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
+			debug.PrintStack()
 			if e, ok := p.(error); ok {
-				debug.PrintStack()
 				err = e
 			} else {
 				err = errors.Errorf("DumpMeta error: %v", p)

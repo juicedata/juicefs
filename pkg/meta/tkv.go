@@ -2983,10 +2983,7 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
 	})
 }
 
-func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
-	if m.snap != nil {
-		return nil
-	}
+func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
 	return m.client.txn(func(tx *kvTxn) error {
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
@@ -3055,6 +3052,26 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 				logger.Warnf("no link target for inode %d", inode)
 			}
 			e.Symlink = string(l)
+		} else if attr.Typ == TypeDirectory {
+			vals, err := m.scanValues(m.entryKey(inode, ""), 10000, nil)
+			if err != nil {
+				return err
+			}
+			if showProgress != nil {
+				showProgress(int64(len(e.Entries)), 0)
+			}
+			if len(vals) < 10000 {
+				e.Entries = make(map[string]*DumpedEntry, len(vals))
+				for k, value := range vals {
+					name := k[10:]
+					ce := entryPool.Get()
+					ce.Name = name
+					typ, inode := m.parseEntry(value)
+					ce.Attr.Inode = inode
+					ce.Attr.Type = typeToString(typ)
+					e.Entries[name] = ce
+				}
+			}
 		}
 		return nil
 	}, 0)
@@ -3066,57 +3083,119 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 			panic(err)
 		}
 	}
-	var entries map[string]*DumpedEntry
-	var err error
-	var sortedName []string
-	if m.snap != nil {
-		e := m.snap[inode]
-		entries = e.Entries
-		for n, de := range e.Entries {
-			if !de.Attr.full && de.Attr.Inode != TrashInode {
-				logger.Warnf("Corrupt inode: %d, missing attribute", inode)
-			}
-			sortedName = append(sortedName, n)
-		}
-	} else {
+	if tree.Entries == nil {
+		// retry for large directory
 		vals, err := m.scanValues(m.entryKey(inode, ""), -1, nil)
 		if err != nil {
 			return err
 		}
-		entries = map[string]*DumpedEntry{}
+		tree.Entries = make(map[string]*DumpedEntry, len(vals))
 		for k, value := range vals {
 			name := k[10:]
+			ce := entryPool.Get()
+			ce.Name = name
 			typ, inode := m.parseEntry(value)
-			sortedName = append(sortedName, name)
-			entries[name] = &DumpedEntry{Name: name, Attr: &DumpedAttr{Inode: inode, Type: typeToString(typ)}}
+			ce.Attr.Inode = inode
+			ce.Attr.Type = typeToString(typ)
+			tree.Entries[name] = ce
+		}
+		if showProgress != nil {
+			showProgress(int64(len(tree.Entries))-10000, 0)
 		}
 	}
-	sort.Slice(sortedName, func(i, j int) bool { return sortedName[i] < sortedName[j] })
-	if showProgress != nil && m.snap == nil {
-		showProgress(int64(len(entries)), 0)
+	var entries []*DumpedEntry
+	for _, e := range tree.Entries {
+		entries = append(entries, e)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	_ = tree.writeJsonWithOutEntry(bw, depth)
+
+	var concurrent = 10
+	ms := make([]sync.Mutex, concurrent)
+	conds := make([]*sync.Cond, concurrent)
+	ready := make([]bool, concurrent)
+	var err error
+	for c := 0; c < concurrent; c++ {
+		conds[c] = sync.NewCond(&ms[c])
+		if c < len(entries) {
+			go func(c int) {
+				for i := c; i < len(entries) && err == nil; i += concurrent {
+					e := entries[i]
+					er := m.dumpEntry(e.Attr.Inode, e, showProgress)
+					ms[c].Lock()
+					ready[c] = true
+					if er != nil {
+						err = er
+					}
+					conds[c].Signal()
+					for ready[c] && err == nil {
+						conds[c].Wait()
+					}
+					ms[c].Unlock()
+				}
+			}(c)
+		}
 	}
 
-	if err = tree.writeJsonWithOutEntry(bw, depth); err != nil {
-		return err
-	}
-
-	for idx, name := range sortedName {
-		entry := entries[name]
-		entry.Name = name
-		inode := entry.Attr.Inode
-		err = m.dumpEntry(inode, entry)
+	for i, e := range entries {
+		c := i % concurrent
+		ms[c].Lock()
+		for !ready[c] && err == nil {
+			conds[c].Wait()
+		}
+		ready[c] = false
+		conds[c].Signal()
+		ms[c].Unlock()
 		if err != nil {
 			return err
 		}
-		if entry.Attr.Type == "directory" {
-			err = m.dumpDir(inode, entry, bw, depth+2, showProgress)
+		if e.Attr.Type == "directory" {
+			err = m.dumpDir(e.Attr.Inode, e, bw, depth+2, showProgress)
 		} else {
-			err = entry.writeJSON(bw, depth+2)
+			err = e.writeJSON(bw, depth+2)
 		}
 		if err != nil {
 			return err
 		}
-		if idx != len(entries)-1 {
+		entries[i] = nil
+		entryPool.Put(e)
+		if i != len(entries)-1 {
+			bwWrite(",")
+		}
+		if showProgress != nil {
+			showProgress(0, 1)
+		}
+	}
+	bwWrite(fmt.Sprintf("\n%s}\n%s}", strings.Repeat(jsonIndent, depth+1), strings.Repeat(jsonIndent, depth)))
+	return nil
+}
+
+func (m *kvMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
+	bwWrite := func(s string) {
+		if _, err := bw.WriteString(s); err != nil {
+			panic(err)
+		}
+	}
+	var names []string
+	entries := tree.Entries
+	for n, de := range entries {
+		if !de.Attr.full && de.Attr.Inode != TrashInode {
+			logger.Warnf("Corrupt inode: %d, missing attribute", inode)
+		}
+		names = append(names, n)
+	}
+	sort.Slice(names, func(i, j int) bool { return names[i] < names[j] })
+	_ = tree.writeJsonWithOutEntry(bw, depth)
+	for i, name := range names {
+		e := entries[name]
+		e.Name = name
+		inode := e.Attr.Inode
+		if e.Attr.Type == "directory" {
+			_ = m.dumpDirFast(inode, e, bw, depth+2, showProgress)
+		} else {
+			_ = e.writeJSON(bw, depth+2)
+		}
+		if i != len(entries)-1 {
 			bwWrite(",")
 		}
 		if showProgress != nil {
@@ -3247,7 +3326,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 				Type:  "directory",
 			},
 		}
-		if err = m.dumpEntry(root, tree); err != nil {
+		if err = m.dumpEntry(root, tree, nil); err != nil {
 			return err
 		}
 		if root == 1 && !skipTrash {
@@ -3257,7 +3336,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 					Type:  "directory",
 				},
 			}
-			if err = m.dumpEntry(TrashInode, trash); err != nil {
+			if err = m.dumpEntry(TrashInode, trash, nil); err != nil {
 				return err
 			}
 		}
@@ -3359,15 +3438,29 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 		bar.IncrTotal(totalIncr)
 		bar.IncrInt64(currentIncr)
 	}
-	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
-		return err
+	if m.snap != nil {
+		if err = m.dumpDirFast(root, tree, bw, 1, showProgress); err != nil {
+			return err
+		}
+	} else {
+		showProgress(int64(len(tree.Entries)), 0)
+		if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
+			return err
+		}
 	}
 	if trash != nil {
 		if _, err = bw.WriteString(","); err != nil {
 			return err
 		}
-		if err = m.dumpDir(TrashInode, trash, bw, 1, showProgress); err != nil {
-			return err
+		if m.snap != nil {
+			if err = m.dumpDirFast(TrashInode, trash, bw, 1, showProgress); err != nil {
+				return err
+			}
+		} else {
+			showProgress(int64(len(tree.Entries)), 0)
+			if err = m.dumpDir(TrashInode, trash, bw, 1, showProgress); err != nil {
+				return err
+			}
 		}
 	}
 	if _, err = bw.WriteString("\n}\n"); err != nil {

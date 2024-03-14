@@ -121,9 +121,8 @@ type DumpedEntry struct {
 	Xattrs     []*DumpedXattr          `json:"xattrs,omitempty"`
 	Chunks     []*DumpedChunk          `json:"chunks,omitempty"`
 	Entries    map[string]*DumpedEntry `json:"entries,omitempty"`
-	keys       []string
-	AccessACL  *DumpedACL `json:"posix_acl_access,omitempty"`
-	DefaultACL *DumpedACL `json:"posix_acl_default,omitempty"`
+	AccessACL  *DumpedACL              `json:"posix_acl_access,omitempty"`
+	DefaultACL *DumpedACL              `json:"posix_acl_default,omitempty"`
 }
 
 var CHARS = []byte("0123456789ABCDEF")
@@ -201,7 +200,7 @@ func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
 	write(fmt.Sprintf("\n%s\"%s\": {", prefix, escape(de.Name)))
 	data, err := json.Marshal(de.Attr)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	write(fmt.Sprintf("\n%s\"attr\": %s", fieldPrefix, data))
 	if len(de.Symlink) > 0 {
@@ -212,7 +211,7 @@ func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
 			dumpedXattr.Value = escape(dumpedXattr.Value)
 		}
 		if data, err = json.Marshal(de.Xattrs); err != nil {
-			return err
+			panic(err)
 		}
 		write(fmt.Sprintf(",\n%s\"xattrs\": %s", fieldPrefix, data))
 	}
@@ -230,7 +229,7 @@ func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
 	}
 	if len(de.Chunks) == 1 {
 		if data, err = json.Marshal(de.Chunks); err != nil {
-			return err
+			panic(err)
 		}
 		write(fmt.Sprintf(",\n%s\"chunks\": %s", fieldPrefix, data))
 	} else if len(de.Chunks) > 1 {
@@ -238,7 +237,7 @@ func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
 		write(fmt.Sprintf(",\n%s\"chunks\": [", fieldPrefix))
 		for i, c := range de.Chunks {
 			if data, err = json.Marshal(c); err != nil {
-				return err
+				panic(err)
 			}
 			write(fmt.Sprintf("\n%s%s", chunkPrefix, data))
 			if i != len(de.Chunks)-1 {
@@ -262,7 +261,7 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 	write(fmt.Sprintf("\n%s\"%s\": {", prefix, escape(de.Name)))
 	data, err := json.Marshal(de.Attr)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	write(fmt.Sprintf("\n%s\"attr\": %s", fieldPrefix, data))
 	if len(de.Xattrs) > 0 {
@@ -270,7 +269,7 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 			dumpedXattr.Value = escape(dumpedXattr.Value)
 		}
 		if data, err = json.Marshal(de.Xattrs); err != nil {
-			return err
+			panic(err)
 		}
 		write(fmt.Sprintf(",\n%s\"xattrs\": %s", fieldPrefix, data))
 	}
@@ -326,7 +325,9 @@ func (m *baseMeta) loadDumpedQuotas(ctx Context, quotas map[Ino]*DumpedQuota) {
 }
 
 func dumpAttr(a *Attr, d *DumpedAttr) {
-	d.Type = typeToString(a.Typ)
+	if a.Typ > 0 {
+		d.Type = typeToString(a.Typ)
+	}
 	d.Flags = a.Flags
 	d.Mode = a.Mode
 	d.Uid = a.Uid
