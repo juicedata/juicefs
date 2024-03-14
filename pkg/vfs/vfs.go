@@ -1214,8 +1214,12 @@ func (v *VFS) cleanupModified() {
 	}
 }
 
-func (v *VFS) FlushAll(path string) error {
-	err := v.writer.FlushAll()
+func (v *VFS) FlushAll(path string) (err error) {
+	now := time.Now()
+	defer func() {
+		logger.Infof("flush buffered data to %s duration %s error %s", path, time.Since(now), err)
+	}()
+	err = v.writer.FlushAll()
 	if err != nil {
 		return err
 	}

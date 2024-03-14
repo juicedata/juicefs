@@ -630,6 +630,7 @@ func installHandler(mp string, v *vfs.VFS) {
 					if err != nil {
 						logger.Fatalf("flush buffered data failed: %s", err)
 					}
+					logger.Warnf("will exit with return code 1")
 					os.Exit(1)
 				} else {
 					logger.Warnf("flush buffered data failed: %s, don't restart", err)
