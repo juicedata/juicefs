@@ -87,12 +87,19 @@ func closeAccessLog(fh uint64) {
 	delete(readers, fh)
 }
 
-func readAccessLog(fh uint64, buf []byte) int {
+func readAccessLog(fh uint64, buf []byte, v *VFS) int {
 	readerLock.Lock()
 	r, ok := readers[fh]
 	readerLock.Unlock()
+	// If it is not being opened, just open it and bind to given fh (for smooth upgrade)
 	if !ok {
-		return 0
+		v.hanleM.Lock()
+		h := &handle{inode: logInode, fh: fh}
+		h.cond = utils.NewCond(h)
+		v.handles[logInode] = append(v.handles[logInode], h)
+		v.hanleM.Unlock()
+		openAccessLog(fh)
+		r = readers[fh]
 	}
 	r.Lock()
 	defer r.Unlock()

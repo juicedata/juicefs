@@ -30,7 +30,7 @@ func TestAccessLog(t *testing.T) {
 	ctx := NewLogContext(meta.NewContext(10, 1, []uint32{2}))
 	logit(ctx, "test")
 
-	n := readAccessLog(2, nil)
+	n := readAccessLog(2, nil, nil)
 	if n != 0 {
 		t.Fatalf("invalid fd")
 	}
@@ -38,7 +38,7 @@ func TestAccessLog(t *testing.T) {
 	now := time.Now()
 	// partial read
 	buf := make([]byte, 1024)
-	n = readAccessLog(1, buf[:10])
+	n = readAccessLog(1, buf[:10], nil)
 	if n != 10 {
 		t.Fatalf("partial read: %d", n)
 	}
@@ -47,7 +47,7 @@ func TestAccessLog(t *testing.T) {
 	}
 
 	// read whole line, block for 1 second
-	n = readAccessLog(1, buf[10:])
+	n = readAccessLog(1, buf[10:], nil)
 	if n != 54 {
 		t.Fatalf("partial read: %d", n)
 	}
@@ -66,7 +66,7 @@ func TestAccessLog(t *testing.T) {
 	}
 
 	// block read
-	n = readAccessLog(1, buf)
+	n = readAccessLog(1, buf, nil)
 	if n != 2 || string(buf[:2]) != "#\n" {
 		t.Fatalf("expected line: %q", string(buf[:n]))
 	}

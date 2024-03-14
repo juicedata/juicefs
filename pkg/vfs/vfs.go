@@ -648,7 +648,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 	size := uint32(len(buf))
 	if IsSpecialNode(ino) {
 		if ino == logInode {
-			n = readAccessLog(fh, buf)
+			n = readAccessLog(fh, buf, v)
 		} else {
 			defer func() { logit(ctx, "read (%d,%d,%d,%d): %s (%d)", ino, size, off, fh, strerr(err), n) }()
 			if ino == controlInode && runtime.GOOS == "darwin" {
