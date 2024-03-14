@@ -19,6 +19,7 @@ package acl
 import (
 	"sort"
 	"sync"
+	"sync/atomic"
 )
 
 const None = 0
@@ -31,10 +32,12 @@ const None = 0
 type Cache interface {
 	Put(id uint32, r *Rule)
 	Get(id uint32) *Rule
+	GetAll() map[uint32]*Rule
 	GetId(r *Rule) uint32
 	Size() int
 	GetMissIds() []uint32
 	Clear()
+	GetOrPut(r *Rule, currId *uint32) (id uint32, got bool)
 }
 
 func NewCache() Cache {
@@ -51,6 +54,33 @@ type cache struct {
 	maxId    uint32
 	id2Rule  map[uint32]*Rule
 	cksum2Id map[uint32][]uint32
+}
+
+func (c *cache) GetAll() map[uint32]*Rule {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	cpy := make(map[uint32]*Rule, len(c.id2Rule))
+	for id, r := range c.id2Rule {
+		cpy[id] = r
+	}
+	return cpy
+}
+
+// GetOrPut returns id for the Rule r if exists.
+// Otherwise, it stores r with a new id (atomically increment curId) and returns the new id.
+// The got result is true if the Rule was already exists, false if stored.
+func (c *cache) GetOrPut(r *Rule, curId *uint32) (id uint32, got bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if id = c.getId(r); id != None {
+		return id, true
+	}
+
+	id = atomic.AddUint32(curId, 1)
+	c.put(id, r)
+	return id, false
 }
 
 func (c *cache) Clear() {
@@ -99,6 +129,10 @@ func (c *cache) Put(id uint32, r *Rule) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
+	c.put(id, r)
+}
+
+func (c *cache) put(id uint32, r *Rule) {
 	if _, ok := c.id2Rule[id]; ok {
 		return
 	}
@@ -129,6 +163,10 @@ func (c *cache) GetId(r *Rule) uint32 {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
+	return c.getId(r)
+}
+
+func (c *cache) getId(r *Rule) uint32 {
 	if r == nil {
 		return None
 	}

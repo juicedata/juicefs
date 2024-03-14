@@ -463,7 +463,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	}
 
 	if opt.EnableAcl && opt.DisableXAttrs {
-		logger.Infof("The format \"enable-acl\" flag wiil enable the xattrs feature.")
+		logger.Infof("The format \"enable-acl\" flag will enable the xattrs feature.")
 		opt.DisableXAttrs = false
 	}
 	opt.IgnoreSecurityLabels = !opt.EnableAcl

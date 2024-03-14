@@ -486,10 +486,8 @@ func (m *baseMeta) newSessionInfo() []byte {
 func (m *baseMeta) NewSession(record bool) error {
 	go m.refresh()
 
-	if m.getFormat().EnableACL {
-		if err := m.en.cacheACLs(Background); err != nil {
-			return err
-		}
+	if err := m.en.cacheACLs(Background); err != nil {
+		return err
 	}
 
 	if m.conf.ReadOnly {
