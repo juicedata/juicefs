@@ -3797,21 +3797,23 @@ func (m *kvMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 	}, ino))
 }
 
-func (m *kvMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+func (m *kvMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno {
 	return errno(m.client.txn(func(tx *kvTxn) error {
-		val := tx.get(m.inodeKey(ino))
-		if val == nil {
-			return syscall.ENOENT
-		}
-		attr := &Attr{}
-		m.parseAttr(val, attr)
-		m.of.Update(ino, attr)
+		if aclId == aclAPI.None {
+			val := tx.get(m.inodeKey(ino))
+			if val == nil {
+				return syscall.ENOENT
+			}
+			attr := &Attr{}
+			m.parseAttr(val, attr)
+			m.of.Update(ino, attr)
 
-		aclId := getAttrACLId(attr, aclType)
+			aclId = getAttrACLId(attr, aclType)
+		}
+
 		if aclId == aclAPI.None {
 			return ENOATTR
 		}
-
 		a, err := m.getACL(tx, aclId)
 		if err != nil {
 			return err

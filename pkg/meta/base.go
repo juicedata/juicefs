@@ -114,8 +114,8 @@ type engine interface {
 
 	GetSession(sid uint64, detail bool) (*Session, error)
 
-	doSetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
-	doGetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
+	doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno
+	doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno
 	cacheACLs(ctx Context) error
 }
 
@@ -1269,6 +1269,7 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 	if !ctx.CheckPermission() {
 		return 0
 	}
+
 	if attr == nil || !attr.Full {
 		if attr == nil {
 			attr = &Attr{}
@@ -1278,6 +1279,18 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 			return err
 		}
 	}
+
+	if attr.AccessACL != aclAPI.None {
+		rule := &aclAPI.Rule{}
+		if st := m.en.doGetFacl(ctx, inode, aclAPI.TypeAccess, attr.AccessACL, rule); st != 0 {
+			return st
+		}
+		if rule.CanAccess(ctx.Uid(), ctx.Gids(), attr.Uid, attr.Gid, mmask) {
+			return 0
+		}
+		return syscall.EACCES
+	}
+
 	mode := accessMode(attr, ctx.Uid(), ctx.Gids())
 	if mode&mmask != mmask {
 		logger.Debugf("Access inode %d %o, mode %o, request mode %o", inode, attr.Mode, mode, mmask)
@@ -2913,5 +2926,5 @@ func (m *baseMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 	now := time.Now()
 	defer m.timeit("GetFacl", now)
 
-	return m.en.doGetFacl(ctx, ino, aclType, rule)
+	return m.en.doGetFacl(ctx, ino, aclType, aclAPI.None, rule)
 }
