@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -94,6 +95,8 @@ func readControl(cf *os.File, resp []byte) int {
 			return n
 		} else if err == io.EOF {
 			time.Sleep(time.Millisecond * 300)
+		} else if errors.Is(err, syscall.EBADF) {
+			logger.Fatalf("JuiceFS client was restarted")
 		} else {
 			logger.Fatalf("Read message: %d %s", n, err)
 		}
