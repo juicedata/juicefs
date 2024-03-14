@@ -74,6 +74,44 @@ test_dump_load_gzip()
     do_dump_load dump.json.gz
 }
 
+test_dump_load_with_fsrand()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 0 --enable-acl
+    ./juicefs mount -d $META_URL /jfs --enable-xattr
+    MAX_EXAMPLE=10 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
+    
+    ./juicefs dump $META_URL dump.json --fast
+    ./juicefs load sqlite3://test2.db dump.json
+    ./juicefs dump sqlite3://test2.db dump2.json --fast
+    # compare_dump_json
+    ./juicefs mount -d sqlite3://test2.db /jfs2
+    compare_stat -ur /jfs/fsrand /jfs2/fsrand
+}
+
+compare_dump_json(){
+    sed -i '/usedSpace/d' dump*.json
+    sed -i '/usedInodes/d' dump*.json
+    sed -i '/nextInodes/d' dump*.json
+    sed -i '/nextChunk/d' dump*.json
+    sed -i '/nextSession/d' dump*.json
+    sed -i 's/"inode":[0-9]\+/"inode":0/g' dump*.json
+    diff -ur dump.json dump2.json
+}
+
+compare_stat(){
+    source_dir=$1
+    dest_dir=$2
+    diff -ur --no-dereference $source_dir $dest_dir
+    # TODO: check size and nlinks, see # https://github.com/juicedata/jfs/issues/999
+    pushd . && diff <(cd $source_dir && find . -printf "%p:%m:%u:%g:%y:%n:%s\n" | sort) <(cd $dest_dir && find . -printf "%p:%m:%u:%g:%y:%n:%s\n" | sort) && popd
+    # pushd . && diff <(cd $source_dir && find . -printf "%p:%m:%u:%g:%y\n" | sort) <(cd $dest_dir && find . -printf "%p:%m:%u:%g:%y\n" | sort) && popd
+    if [ $? -ne 0 ]; then
+        echo "$source_dir differs with $dest_dir"
+        exit 1
+    fi
+}
+
 test_load_encrypted_meta_backup()
 {
     prepare_test
