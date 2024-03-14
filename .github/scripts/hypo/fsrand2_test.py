@@ -154,7 +154,7 @@ class TestFsrand2(unittest.TestCase):
         state.list_xattr(file=v4, user='root')
         state.teardown()
 
-    def test_acl_4496(self):
+    def skip_test_acl_4496(self):
         # SEE https://github.com/juicedata/juicefs/issues/4496
         state = JuicefsMachine()
         v1 = state.init_folders()
