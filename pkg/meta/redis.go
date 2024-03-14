@@ -3891,6 +3891,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 					return err
 				}
 				if cursor == 0 {
+					e.Entries = make(map[string]*DumpedEntry)
 					for i := 0; i < len(keys); i += 2 {
 						name := keys[i]
 						t, inode := m.parseEntry([]byte(keys[i+1]))
@@ -3955,22 +3956,21 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	}
 
 	if tree.Entries == nil {
-		var keys []string
-		err := m.hscan(Background, m.entryKey(inode), func(vs []string) error {
-			keys = append(keys, vs...)
+		tree.Entries = make(map[string]*DumpedEntry)
+		err := m.hscan(Background, m.entryKey(inode), func(keys []string) error {
+			for i := 0; i < len(keys); i += 2 {
+				name := keys[i]
+				t, inode := m.parseEntry([]byte(keys[i+1]))
+				e := entryPool.Get()
+				e.Name = name
+				e.Attr.Inode = inode
+				e.Attr.Type = typeToString(t)
+				tree.Entries[name] = e
+			}
 			return nil
 		})
 		if err != nil {
 			return err
-		}
-		for i := 0; i < len(keys); i += 2 {
-			name := keys[i]
-			t, inode := m.parseEntry([]byte(keys[i+1]))
-			e := entryPool.Get()
-			e.Name = name
-			e.Attr.Inode = inode
-			e.Attr.Type = typeToString(t)
-			tree.Entries[name] = e
 		}
 	}
 
