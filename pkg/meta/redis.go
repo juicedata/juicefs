@@ -3983,6 +3983,10 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		entries = append(entries, e)
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	if bar != nil {
+		bar.IncrTotal(int64(len(entries)))
+	}
+
 	var concurrent = 2
 	var batch = 100
 	ms := make([]sync.Mutex, concurrent)
