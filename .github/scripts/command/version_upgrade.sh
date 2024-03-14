@@ -56,7 +56,26 @@ test_update_on_fstab(){
     mount /tmp/jfs
     ./juicefs mount sqlite3://test2.db /tmp/jfs -d
     ps -ef | grep mount
+}
 
+test_update_with_flock(){
+    umount_jfs /tmp/jfs $META_URL
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs
+    ps -ef | grep mount
+    cat /tmp/jfs/.config | grep -i sid
+    echo abc | tee /tmp/jfs/test
+    sleep 1s
+    flock -x /tmp/jfs/test -c cat & 
+    sleep 1s
+    flock -s /tmp/jfs/test -c "echo abc" > flock.log 2>&1 &
+    sleep 1s
+    exit 1
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs
+    ps -ef | grep mount
+    cat /tmp/jfs/.config | grep -i sid
+    cat flock.log
+    count=$(ps -ef | grep flock | grep -v grep | wc -l)
+    [[ $count -ne 2 ]] && echo "flock process should be 2, count=$count" && exit 1 || true    
 }
 
 test_update_non_fuse_option(){
