@@ -2983,10 +2983,7 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
 	})
 }
 
-func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
-	if m.snap != nil {
-		return nil
-	}
+func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
 	return m.client.txn(func(tx *kvTxn) error {
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
@@ -3060,6 +3057,9 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 			if err != nil {
 				return err
 			}
+			if showProgress != nil {
+				showProgress(int64(len(e.Entries)), 0)
+			}
 			if len(vals) < 10000 {
 				e.Entries = make(map[string]*DumpedEntry, len(vals))
 				for k, value := range vals {
@@ -3099,18 +3099,18 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 			ce.Attr.Type = typeToString(typ)
 			tree.Entries[name] = ce
 		}
+		if showProgress != nil {
+			showProgress(int64(len(tree.Entries))-10000, 0)
+		}
 	}
 	var entries []*DumpedEntry
 	for _, e := range tree.Entries {
 		entries = append(entries, e)
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
-	if showProgress != nil && m.snap == nil {
-		showProgress(int64(len(entries)), 0)
-	}
 	_ = tree.writeJsonWithOutEntry(bw, depth)
 
-	var concurrent = 5
+	var concurrent = 10
 	ms := make([]sync.Mutex, concurrent)
 	conds := make([]*sync.Cond, concurrent)
 	ready := make([]bool, concurrent)
@@ -3121,7 +3121,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 			go func(c int) {
 				for i := c; i < len(entries) && err == nil; i += concurrent {
 					e := entries[i]
-					er := m.dumpEntry(e.Attr.Inode, e)
+					er := m.dumpEntry(e.Attr.Inode, e, showProgress)
 					ms[c].Lock()
 					ready[c] = true
 					if er != nil {
@@ -3158,10 +3158,6 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 			return err
 		}
 		entries[i] = nil
-		e.Name = ""
-		e.Xattrs = nil
-		e.Chunks = nil
-		e.Symlink = ""
 		entryPool.Put(e)
 		if i != len(entries)-1 {
 			bwWrite(",")
@@ -3330,7 +3326,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 				Type:  "directory",
 			},
 		}
-		if err = m.dumpEntry(root, tree); err != nil {
+		if err = m.dumpEntry(root, tree, nil); err != nil {
 			return err
 		}
 		if root == 1 && !skipTrash {
@@ -3340,7 +3336,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 					Type:  "directory",
 				},
 			}
-			if err = m.dumpEntry(TrashInode, trash); err != nil {
+			if err = m.dumpEntry(TrashInode, trash, nil); err != nil {
 				return err
 			}
 		}
@@ -3447,6 +3443,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 			return err
 		}
 	} else {
+		showProgress(int64(len(tree.Entries)), 0)
 		if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
 			return err
 		}
@@ -3460,6 +3457,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 				return err
 			}
 		} else {
+			showProgress(int64(len(tree.Entries)), 0)
 			if err = m.dumpDir(TrashInode, trash, bw, 1, showProgress); err != nil {
 				return err
 			}

@@ -3488,7 +3488,7 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
 	})
 }
 
-func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry) error {
+func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
 	n := &node{Inode: inode}
 	ok, err := s.Get(n)
 	if err != nil {
@@ -3561,11 +3561,13 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 		}
 		e.Symlink = string(l.Target)
 	} else if attr.Typ == TypeDirectory {
-		// retry for large directory
 		var edges []*edge
 		err := s.Limit(1000, 0).Find(&edges, &edge{Parent: inode})
 		if err != nil {
 			return err
+		}
+		if showProgress != nil {
+			showProgress(int64(len(edges)), 0)
 		}
 		if len(edges) < 1000 {
 			e.Entries = make(map[string]*DumpedEntry, len(edges))
@@ -3661,18 +3663,18 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 			ce.Attr.Type = typeToString(edge.Type)
 			tree.Entries[name] = ce
 		}
+		if showProgress != nil {
+			showProgress(int64(len(edges))-1000, 0)
+		}
 	}
 	var entries []*DumpedEntry
 	for _, e := range tree.Entries {
 		entries = append(entries, e)
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
-	if showProgress != nil {
-		showProgress(int64(len(entries)), 0)
-	}
 	_ = tree.writeJsonWithOutEntry(bw, depth)
 
-	var concurrent = 5
+	var concurrent = 10
 	ms := make([]sync.Mutex, concurrent)
 	conds := make([]*sync.Cond, concurrent)
 	ready := make([]bool, concurrent)
@@ -3681,20 +3683,23 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 		conds[c] = sync.NewCond(&ms[c])
 		if c < len(entries) {
 			go func(c int) {
-				for i := c; i < len(entries) && err == nil; i += concurrent {
-					e := entries[i]
-					er := m.dumpEntry(s, e.Attr.Inode, 0, e)
-					ms[c].Lock()
-					ready[c] = true
-					if er != nil {
-						err = er
+				_ = m.roTxn(func(s *xorm.Session) error {
+					for i := c; i < len(entries) && err == nil; i += concurrent {
+						e := entries[i]
+						er := m.dumpEntry(s, e.Attr.Inode, 0, e, showProgress)
+						ms[c].Lock()
+						ready[c] = true
+						if er != nil {
+							err = er
+						}
+						conds[c].Signal()
+						for ready[c] && err == nil {
+							conds[c].Wait()
+						}
+						ms[c].Unlock()
 					}
-					conds[c].Signal()
-					for ready[c] && err == nil {
-						conds[c].Wait()
-					}
-					ms[c].Unlock()
-				}
+					return nil
+				})
 			}(c)
 		}
 	}
@@ -3720,10 +3725,6 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 			return err
 		}
 		entries[i] = nil
-		e.Name = ""
-		e.Xattrs = nil
-		e.Chunks = nil
-		e.Symlink = ""
 		entryPool.Put(e)
 		if i != len(entries)-1 {
 			bwWrite(",")
@@ -3876,7 +3877,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 					Type:  typeToString(TypeDirectory),
 				},
 			}
-			if err = m.dumpEntry(s, root, TypeDirectory, trash); err != nil {
+			if err = m.dumpEntry(s, root, TypeDirectory, tree, nil); err != nil {
 				return err
 			}
 			if root == 1 && !skipTrash {
@@ -3887,7 +3888,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 						Type:  typeToString(TypeDirectory),
 					},
 				}
-				if err = m.dumpEntry(s, TrashInode, TypeDirectory, trash); err != nil {
+				if err = m.dumpEntry(s, TrashInode, TypeDirectory, trash, nil); err != nil {
 					return err
 				}
 			}
@@ -3984,6 +3985,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 		if m.snap != nil {
 			_ = m.dumpDirFast(root, tree, bw, 1, showProgress)
 		} else {
+			showProgress(int64(len(tree.Entries)), 0)
 			if err = m.dumpDir(s, root, tree, bw, 1, showProgress); err != nil {
 				logger.Errorf("dump dir %d failed: %s", root, err)
 				return fmt.Errorf("dump dir %d failed", root) // don't retry
@@ -3996,6 +3998,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 			if m.snap != nil {
 				_ = m.dumpDirFast(TrashInode, trash, bw, 1, showProgress)
 			} else {
+				showProgress(int64(len(trash.Entries)), 0)
 				if err = m.dumpDir(s, TrashInode, trash, bw, 1, showProgress); err != nil {
 					logger.Errorf("dump trash failed: %s", err)
 					return fmt.Errorf("dump trash failed") // don't retry
