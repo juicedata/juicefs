@@ -648,7 +648,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 	size := uint32(len(buf))
 	if IsSpecialNode(ino) {
 		if ino == logInode {
-			n = readAccessLog(fh, buf, v)
+			n = v.readAccessLog(fh, buf)
 		} else {
 			defer func() { logit(ctx, "read (%d,%d,%d,%d): %s (%d)", ino, size, off, fh, strerr(err), n) }()
 			if ino == controlInode && runtime.GOOS == "darwin" {
@@ -1223,6 +1223,47 @@ func (v *VFS) FlushAll(path string) error {
 		return nil
 	}
 	return v.dumpAllHandles(path)
+}
+
+func (v *VFS) readAccessLog(fh uint64, buf []byte) int {
+	readerLock.Lock()
+	r, ok := readers[fh]
+	readerLock.Unlock()
+	// If it is not being opened, just open it and bind to given fh (for smooth upgrade)
+	if !ok {
+		v.hanleM.Lock()
+		h := &handle{inode: logInode, fh: fh}
+		h.cond = utils.NewCond(h)
+		v.handles[logInode] = append(v.handles[logInode], h)
+		v.hanleM.Unlock()
+		openAccessLog(fh)
+		r = readers[fh]
+	}
+	r.Lock()
+	defer r.Unlock()
+	var n int
+	if len(r.last) > 0 {
+		n = copy(buf, r.last)
+		r.last = r.last[n:]
+	}
+	var t = time.NewTimer(time.Second)
+	defer t.Stop()
+	for n < len(buf) {
+		select {
+		case line := <-r.buffer:
+			l := copy(buf[n:], line)
+			n += l
+			if l < len(line) {
+				r.last = line[l:]
+			}
+		case <-t.C:
+			if n == 0 {
+				n = copy(buf, "#\n")
+			}
+			return n
+		}
+	}
+	return n
 }
 
 func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer prometheus.Registerer) {
