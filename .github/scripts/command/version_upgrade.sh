@@ -40,6 +40,25 @@ test_kill_mount_process()
     wait_process_killed 5
 }
 
+test_update_on_fstab(){
+    ./juicefs format sqlite3://test2.db myjfs-vc2
+    umount_jfs /tmp/jfs sqlite3://test2.db
+    rm /sbin/mount.juicefs -rf 
+    ./juicefs mount --update-fstab sqlite3://test2.db /tmp/jfs -d \
+        -o debug,allow_other,writeback_cache \
+        --max-uploads 20  --prefetch 3 --upload-limit 3 \
+        --download-limit 100 --get-timeout 60  --put-timeout 60
+    grep /tmp/jfs /etc/fstab
+    ls /sbin/mount.juicefs -l
+    umount /tmp/jfs
+    sleep 1s
+    exit 1
+    mount /tmp/jfs
+    ./juicefs mount sqlite3://test2.db /tmp/jfs -d
+    ps -ef | grep mount
+
+}
+
 test_update_non_fuse_option(){
     umount_jfs /tmp/jfs $META_URL
     JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs
@@ -55,6 +74,54 @@ test_update_non_fuse_option(){
     [[ $count -ne 2 ]] && echo "mount process count should be 2, count=$count" && exit 1 || true
     umount /tmp/jfs
     sleep 1s
+    ps -ef | grep juicefs | grep mount | grep -v grep || true
+    count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
+    [[ $count -ne 0 ]] && echo "mount process count should be 0, count=$count" && exit 1 || true
+}
+
+test_update_on_failure(){
+    umount_jfs /tmp/jfs $META_URL
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs
+    echo abc | tee /tmp/jfs/test
+    sleep 1s
+    JFS_RSA_PASSPHRASE=abc123xx ./juicefs mount -d $META_URL /tmp/jfs || true
+    echo abc | tee /tmp/jfs/test
+    ps -ef | grep juicefs | grep mount | grep -v grep || true
+    count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
+    [[ $count -ne 2 ]] && echo "mount process count should be 2, count=$count" && exit 1 || true
+    umount /tmp/jfs
+    sleep 1s
+    ps -ef | grep juicefs | grep mount | grep -v grep || true
+    count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
+    [[ $count -ne 0 ]] && echo "mount process count should be 0, count=$count" && exit 1 || true
+}
+
+test_update_non_fuse_option_with_fio(){
+    umount_jfs /tmp/jfs $META_URL
+    JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs --buffer-size 300
+    sleep 1s
+    fio -name=fio -filename=/tmp/jfs/testfile -direct=1 -iodepth 64 -ioengine=libaio \
+        -rw=randwrite -bs=4k -size=500M -numjobs=16 -runtime=60 -group_reporting &
+    fio_pid=$!
+    trap "kill -9 $fio_pid || true" EXIT
+    for i in {1..10}; do 
+        JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs --buffer-size $((i+300))
+        for t in {1..30}; do
+            ps -ef | grep juicefs | grep mount | grep -v grep || true
+            count=$(ps -ef | grep juicefs | grep mount | grep "buffer-size $((i+300))" | grep -v grep | wc -l)
+            if [[ $count -ne 2 ]]; then
+                echo "$t wait update finish, count=$count..." && sleep 1s
+            else
+                echo "update finish, count=$count" && break
+            fi
+            if [[ $t -eq 30 ]]; then
+                echo "update not finish, count=$count" && exit 1
+            fi
+            echo abc | tee /tmp/jfs/test
+        done
+    done
+    kill -9 $fio_pid > /dev/null 2>&1 || true
+    umount_jfs /tmp/jfs $META_URL
     ps -ef | grep juicefs | grep mount | grep -v grep || true
     count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
     [[ $count -ne 0 ]] && echo "mount process count should be 0, count=$count" && exit 1 || true
