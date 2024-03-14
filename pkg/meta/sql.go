@@ -3487,12 +3487,11 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
 	})
 }
 
-func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry, error) {
-	e := &DumpedEntry{}
+func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry) error {
 	n := &node{Inode: inode}
 	ok, err := s.Get(n)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	attr := &Attr{Typ: typ, Nlink: 1}
 	if !ok {
@@ -3500,13 +3499,12 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry,
 	} else {
 		m.parseAttr(n, attr)
 	}
-	e.Attr = &DumpedAttr{}
 	dumpAttr(attr, e.Attr)
 	e.Attr.Inode = inode
 
 	var rows []xattr
 	if err = s.Find(&rows, &xattr{Inode: inode}); err != nil {
-		return nil, err
+		return err
 	}
 	if len(rows) > 0 {
 		xattrs := make([]*DumpedXattr, 0, len(rows))
@@ -3520,14 +3518,14 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry,
 	if attr.AccessACL != aclAPI.None {
 		accessACl, err := m.getACL(s, attr.AccessACL)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		e.AccessACL = dumpACL(accessACl)
 	}
 	if attr.DefaultACL != aclAPI.None {
 		defaultACL, err := m.getACL(s, attr.DefaultACL)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		e.DefaultACL = dumpACL(defaultACL)
 	}
@@ -3536,7 +3534,7 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry,
 		for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
 			c := &chunk{Inode: inode, Indx: indx}
 			if ok, err = s.MustCols("indx").Get(c); err != nil {
-				return nil, err
+				return err
 			}
 			if !ok {
 				continue
@@ -3555,17 +3553,35 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry,
 		l := &symlink{Inode: inode}
 		ok, err = s.Get(l)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
 			logger.Warnf("no link target for inode %d", inode)
 		}
 		e.Symlink = string(l.Target)
+	} else if attr.Typ == TypeDirectory {
+		// retry for large directory
+		var edges []*edge
+		err := s.Limit(1000, 0).Find(&edges, &edge{Parent: inode})
+		if err != nil {
+			return err
+		}
+		if len(edges) < 1000 {
+			e.Entries = make(map[string]*DumpedEntry, len(edges))
+			for _, edge := range edges {
+				name := string(edge.Name)
+				ce := entryPool.Get()
+				ce.Name = name
+				ce.Attr.Inode = edge.Inode
+				ce.Attr.Type = typeToString(edge.Type)
+				e.Entries[name] = ce
+			}
+		}
 	}
-	return e, nil
+	return nil
 }
 
-func (m *dbMeta) dumpEntryFast(s *xorm.Session, inode Ino, typ uint8) *DumpedEntry {
+func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 	e := &DumpedEntry{}
 	n, ok := m.snap.node[inode]
 	if !ok && inode != TrashInode {
@@ -3589,20 +3605,10 @@ func (m *dbMeta) dumpEntryFast(s *xorm.Session, inode Ino, typ uint8) *DumpedEnt
 	}
 
 	if attr.AccessACL != aclAPI.None {
-		accessACl, err := m.getACL(s, attr.AccessACL)
-		if err != nil {
-			logger.Errorf("get access acl error: %s, attr %v", err, attr)
-		} else {
-			e.AccessACL = dumpACL(accessACl)
-		}
+		e.AccessACL = dumpACL(m.aclCache.Get(attr.AccessACL))
 	}
 	if attr.DefaultACL != aclAPI.None {
-		defaultACL, err := m.getACL(s, attr.DefaultACL)
-		if err != nil {
-			logger.Errorf("get default acl error: %s, attr %v", err, attr)
-		} else {
-			e.DefaultACL = dumpACL(defaultACL)
-		}
+		e.DefaultACL = dumpACL(m.aclCache.Get(attr.DefaultACL))
 	}
 
 	if attr.Typ == TypeFile {
@@ -3638,37 +3644,109 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 			panic(err)
 		}
 	}
-	var edges []*edge
-	var err error
-	if m.snap != nil {
-		edges = m.snap.edges[inode]
-	} else {
-		err = s.Find(&edges, &edge{Parent: inode})
+	if tree.Entries == nil {
+		// retry for large directory
+		var edges []*edge
+		err := s.Find(&edges, &edge{Parent: inode})
 		if err != nil {
 			return err
 		}
+		tree.Entries = make(map[string]*DumpedEntry, len(edges))
+		for _, edge := range edges {
+			name := string(edge.Name)
+			ce := entryPool.Get()
+			ce.Name = name
+			ce.Attr.Inode = edge.Inode
+			ce.Attr.Type = typeToString(edge.Type)
+			tree.Entries[name] = ce
+		}
 	}
-
+	var entries []*DumpedEntry
+	for _, e := range tree.Entries {
+		entries = append(entries, e)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	if showProgress != nil {
-		showProgress(int64(len(edges)), 0)
+		showProgress(int64(len(entries)), 0)
 	}
-	if err := tree.writeJsonWithOutEntry(bw, depth); err != nil {
-		return err
+	_ = tree.writeJsonWithOutEntry(bw, depth)
+
+	var concurrent = 5
+	ms := make([]sync.Mutex, concurrent)
+	conds := make([]*sync.Cond, concurrent)
+	ready := make([]bool, concurrent)
+	var err error
+	for c := 0; c < concurrent; c++ {
+		conds[c] = sync.NewCond(&ms[c])
+		if c < len(entries) {
+			go func(c int) {
+				for i := c; i < len(entries) && err == nil; i += concurrent {
+					e := entries[i]
+					er := m.dumpEntry(s, e.Attr.Inode, 0, e)
+					ms[c].Lock()
+					ready[c] = true
+					if er != nil {
+						err = er
+					}
+					conds[c].Signal()
+					for ready[c] && err == nil {
+						conds[c].Wait()
+					}
+					ms[c].Unlock()
+				}
+			}(c)
+		}
 	}
 
+	for i, e := range entries {
+		c := i % concurrent
+		ms[c].Lock()
+		for !ready[c] && err == nil {
+			conds[c].Wait()
+		}
+		ready[c] = false
+		conds[c].Signal()
+		ms[c].Unlock()
+		if err != nil {
+			return err
+		}
+		if e.Attr.Type == "directory" {
+			err = m.dumpDir(s, e.Attr.Inode, e, bw, depth+2, showProgress)
+		} else {
+			err = e.writeJSON(bw, depth+2)
+		}
+		if err != nil {
+			return err
+		}
+		entries[i] = nil
+		e.Name = ""
+		e.Xattrs = nil
+		e.Chunks = nil
+		e.Symlink = ""
+		entryPool.Put(e)
+		if i != len(entries)-1 {
+			bwWrite(",")
+		}
+		if showProgress != nil {
+			showProgress(0, 1)
+		}
+	}
+	bwWrite(fmt.Sprintf("\n%s}\n%s}", strings.Repeat(jsonIndent, depth+1), strings.Repeat(jsonIndent, depth)))
+	return nil
+}
+
+func (m *dbMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
+	bwWrite := func(s string) {
+		if _, err := bw.WriteString(s); err != nil {
+			panic(err)
+		}
+	}
+	edges := m.snap.edges[inode]
+	_ = tree.writeJsonWithOutEntry(bw, depth)
 	sort.Slice(edges, func(i, j int) bool { return bytes.Compare(edges[i].Name, edges[j].Name) == -1 })
 
-	for idx, e := range edges {
-		var entry *DumpedEntry
-		if m.snap != nil {
-			entry = m.dumpEntryFast(s, e.Inode, e.Type)
-		} else {
-			entry, err = m.dumpEntry(s, e.Inode, e.Type)
-			if err != nil {
-				return err
-			}
-		}
-
+	for i, e := range edges {
+		entry := m.dumpEntryFast(e.Inode, e.Type)
 		if entry == nil {
 			logger.Warnf("ignore broken entry %s (inode: %d) in %s", string(e.Name), e.Inode, inode)
 			continue
@@ -3676,14 +3754,11 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 
 		entry.Name = string(e.Name)
 		if e.Type == TypeDirectory {
-			err = m.dumpDir(s, e.Inode, entry, bw, depth+2, showProgress)
+			_ = m.dumpDirFast(e.Inode, entry, bw, depth+2, showProgress)
 		} else {
-			err = entry.writeJSON(bw, depth+2)
+			_ = entry.writeJSON(bw, depth+2)
 		}
-		if err != nil {
-			return err
-		}
-		if idx != len(edges)-1 {
+		if i != len(edges)-1 {
 			bwWrite(",")
 		}
 		if showProgress != nil {
@@ -3789,14 +3864,28 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 				return fmt.Errorf("Fetch all metadata from DB: %s", err)
 			}
 			bar.Done()
-			tree = m.dumpEntryFast(s, root, TypeDirectory)
-			trash = m.dumpEntryFast(s, TrashInode, TypeDirectory)
+			tree = m.dumpEntryFast(root, TypeDirectory)
+			trash = m.dumpEntryFast(TrashInode, TypeDirectory)
 		} else {
-			if tree, err = m.dumpEntry(s, root, TypeDirectory); err != nil {
+			tree = &DumpedEntry{
+				Name: "FSTree",
+				Attr: &DumpedAttr{
+					Inode: root,
+					Type:  typeToString(TypeDirectory),
+				},
+			}
+			if err = m.dumpEntry(s, root, TypeDirectory, trash); err != nil {
 				return err
 			}
 			if root == 1 && !skipTrash {
-				if trash, err = m.dumpEntry(s, TrashInode, TypeDirectory); err != nil {
+				trash = &DumpedEntry{
+					Name: "Trash",
+					Attr: &DumpedAttr{
+						Inode: TrashInode,
+						Type:  typeToString(TypeDirectory),
+					},
+				}
+				if err = m.dumpEntry(s, TrashInode, TypeDirectory, trash); err != nil {
 					return err
 				}
 			}
@@ -3890,17 +3979,25 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 			bar.IncrTotal(totalIncr)
 			bar.IncrInt64(currentIncr)
 		}
-		if err = m.dumpDir(s, root, tree, bw, 1, showProgress); err != nil {
-			logger.Errorf("dump dir %d failed: %s", root, err)
-			return fmt.Errorf("dump dir %d failed", root) // don't retry
+		if m.snap != nil {
+			_ = m.dumpDirFast(root, tree, bw, 1, showProgress)
+		} else {
+			if err = m.dumpDir(s, root, tree, bw, 1, showProgress); err != nil {
+				logger.Errorf("dump dir %d failed: %s", root, err)
+				return fmt.Errorf("dump dir %d failed", root) // don't retry
+			}
 		}
 		if trash != nil {
 			if _, err = bw.WriteString(","); err != nil {
 				return err
 			}
-			if err = m.dumpDir(s, TrashInode, trash, bw, 1, showProgress); err != nil {
-				logger.Errorf("dump trash failed: %s", err)
-				return fmt.Errorf("dump trash failed") // don't retry
+			if m.snap != nil {
+				_ = m.dumpDirFast(TrashInode, trash, bw, 1, showProgress)
+			} else {
+				if err = m.dumpDir(s, TrashInode, trash, bw, 1, showProgress); err != nil {
+					logger.Errorf("dump trash failed: %s", err)
+					return fmt.Errorf("dump trash failed") // don't retry
+				}
 			}
 		}
 		if _, err = bw.WriteString("\n}\n"); err != nil {
