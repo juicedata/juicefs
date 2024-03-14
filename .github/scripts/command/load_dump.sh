@@ -19,8 +19,6 @@ sleep 3s
 mc alias set myminio http://localhost:9000 minioadmin minioadmin
 python3 -c "import xattr" || sudo pip install xattr
 
-
-
 test_dump_load_with_iflag(){
     prepare_test
     ./juicefs format $META_URL myjfs
@@ -81,9 +79,9 @@ test_load_encrypted_meta_backup()
     prepare_test
     [[ ! -f my-priv-key.pem ]] && openssl genrsa -out my-priv-key.pem -aes256 -passout pass:12345678 2048
     export JFS_RSA_PASSPHRASE=12345678
-    ./juicefs format $META_URL myjfs --encrypt-rsa-key my-priv-key.pem --enable-acl
-    ./juicefs mount -d $META_URL /jfs --enable-xattr
-    PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
+    ./juicefs format $META_URL myjfs --encrypt-rsa-key my-priv-key.pem
+    ./juicefs mount -d $META_URL /jfs
+    python3 .github/scripts/fsrand.py -c 1000 /jfs/fsrand -v -a
     umount /jfs
     SKIP_BACKUP_META_CHECK=true ./juicefs mount -d --backup-meta 10s $META_URL /jfs
     sleep 10s
@@ -94,10 +92,8 @@ test_load_encrypted_meta_backup()
     ./juicefs load sqlite3://test2.db $backup_path --encrypt-rsa-key my-priv-key.pem --encrypt-algo aes256gcm-rsa
     ./juicefs mount -d sqlite3://test2.db /jfs2
     diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
-    # ROOT_DIR1=/jfs/fsrand1 ROOT_DIR2=/jfs2/fsrand1 python3 .github/scripts/hypo/fsrand2.py
-    # diff -ur /jfs/fsrand1 /jfs2/fsrand1 --no-dereference
     umount_jfs /jfs2 sqlite3://test2.db
-    # rm test2.db -rf
+    rm test2.db -rf
 }
 
 prepare_test(){
