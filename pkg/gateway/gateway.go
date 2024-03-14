@@ -468,7 +468,7 @@ func (n *jfsObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	if err != nil {
 		return
 	}
-	f, eno := n.fs.Open(mctx, n.path(bucket, object), 0)
+	f, eno := n.fs.Open(mctx, n.path(bucket, object), vfs.MODE_MASK_R)
 	if eno != 0 {
 		return nil, jfsToObjectErr(ctx, eno, bucket, object)
 	}
