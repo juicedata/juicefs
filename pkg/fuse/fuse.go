@@ -17,7 +17,6 @@
 package fuse
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -459,7 +458,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	opt.AllowOther = os.Getuid() == 0
 
 	if opt.EnableAcl && conf.NonDefaultPermission {
-		return errors.New("cannot mount without default_permissions when format with enable-acl")
+		logger.Warnf("it is recommended to turn on 'default-permissions' when enable acl")
 	}
 
 	if opt.EnableAcl && opt.DisableXAttrs {

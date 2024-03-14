@@ -4607,23 +4607,24 @@ func (m *dbMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 	}, ino))
 }
 
-func (m *dbMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+func (m *dbMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno {
 	return errno(m.roTxn(func(s *xorm.Session) error {
-		attr := &Attr{}
-		n := &node{Inode: ino}
-		if ok, err := s.Get(n); err != nil {
-			return err
-		} else if !ok {
-			return syscall.ENOENT
+		if aclId == aclAPI.None {
+			attr := &Attr{}
+			n := &node{Inode: ino}
+			if ok, err := s.Get(n); err != nil {
+				return err
+			} else if !ok {
+				return syscall.ENOENT
+			}
+			m.parseAttr(n, attr)
+			m.of.Update(ino, attr)
+			aclId = getAttrACLId(attr, aclType)
 		}
-		m.parseAttr(n, attr)
-		m.of.Update(ino, attr)
 
-		aclId := getAttrACLId(attr, aclType)
 		if aclId == aclAPI.None {
 			return ENOATTR
 		}
-
 		a, err := m.getACL(s, aclId)
 		if err != nil {
 			return err

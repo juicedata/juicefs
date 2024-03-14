@@ -4688,21 +4688,23 @@ func (m *redisMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.
 	}, m.inodeKey(ino)))
 }
 
-func (m *redisMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+func (m *redisMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno {
 	return errno(m.rdb.Watch(ctx, func(tx *redis.Tx) error {
-		val, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
-		if err != nil {
-			return err
-		}
-		attr := &Attr{}
-		m.parseAttr(val, attr)
-		m.of.Update(ino, attr)
+		if aclId == aclAPI.None {
+			val, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
+			if err != nil {
+				return err
+			}
+			attr := &Attr{}
+			m.parseAttr(val, attr)
+			m.of.Update(ino, attr)
 
-		aclId := getAttrACLId(attr, aclType)
+			aclId = getAttrACLId(attr, aclType)
+		}
+
 		if aclId == aclAPI.None {
 			return ENOATTR
 		}
-
 		a, err := m.getACL(ctx, tx, aclId)
 		if err != nil {
 			return err
