@@ -96,7 +96,7 @@ func (f *jFile) Close() error {
 }
 
 func (j *juiceFS) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	f, err := j.jfs.Open(ctx, j.path(key), 0)
+	f, err := j.jfs.Open(ctx, j.path(key), vfs.MODE_MASK_R)
 	if err != 0 {
 		return nil, err
 	}
