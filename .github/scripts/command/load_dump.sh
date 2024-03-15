@@ -79,14 +79,15 @@ test_dump_load_with_fsrand()
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0 --enable-acl
     ./juicefs mount -d $META_URL /jfs --enable-xattr
-    MAX_EXAMPLE=10 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
+    MAX_EXAMPLE=100 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
     
     ./juicefs dump $META_URL dump.json --fast
     ./juicefs load sqlite3://test2.db dump.json
     ./juicefs dump sqlite3://test2.db dump2.json --fast
     # compare_dump_json
     ./juicefs mount -d sqlite3://test2.db /jfs2
-    compare_stat -ur /jfs/fsrand /jfs2/fsrand
+    diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
+    compare_stat_acl /jfs/fsrand /jfs2/fsrand
 }
 
 compare_dump_json(){
@@ -99,17 +100,26 @@ compare_dump_json(){
     diff -ur dump.json dump2.json
 }
 
-compare_stat(){
-    source_dir=$1
-    dest_dir=$2
-    diff -ur --no-dereference $source_dir $dest_dir
-    # TODO: check size and nlinks, see # https://github.com/juicedata/jfs/issues/999
-    pushd . && diff <(cd $source_dir && find . -printf "%p:%m:%u:%g:%y:%n:%s\n" | sort) <(cd $dest_dir && find . -printf "%p:%m:%u:%g:%y:%n:%s\n" | sort) && popd
-    # pushd . && diff <(cd $source_dir && find . -printf "%p:%m:%u:%g:%y\n" | sort) <(cd $dest_dir && find . -printf "%p:%m:%u:%g:%y\n" | sort) && popd
-    if [ $? -ne 0 ]; then
-        echo "$source_dir differs with $dest_dir"
-        exit 1
-    fi
+compare_stat_acl(){
+    dir1=$1
+    dir2=$2
+    files1=($(find "$dir1" -type f -o -type d -exec stat -c "%n" {} + | sort))
+    files2=($(find "$dir2" -type f -o -type d -exec stat -c "%n" {} + | sort))
+    [[ ${#files1[@]} -ne ${#files2[@]} ]] && echo "compare_stat_acl: number of files differs" && exit 1
+    for i in "${!files1[@]}"; do
+        stat1=$(stat -c "%F %a %s %h %U %G" "${files1[$i]}")
+        stat2=$(stat -c "%F %a %s %h %U %G" "${files2[$i]}")
+        acl1=$(getfacl -p "${files1[$i]}" | tail -n +2)
+        acl2=$(getfacl -p "${files2[$i]}" | tail -n +2)
+        # echo $i
+        # echo $stat1
+        # echo $stat2
+        # echo $acl1
+        # echo $acl2
+        [[ "$stat1" != "$stat2" ]] && echo "compare_stat_acl: stat for ${files1[$i]} and ${files2[$i]} differs" && echo $stat1 && echo $stat2 && exit 1
+        [[ "$acl1" != "$acl2" ]] && echo "compare_stat_acl: ACLs for ${files1[$i]} and ${files2[$i]} differs" && echo $acl1 && echo $acl2 && exit 1
+    done
+    echo "compare_stat_acl: ACLs and stats are the same"
 }
 
 test_load_encrypted_meta_backup()
