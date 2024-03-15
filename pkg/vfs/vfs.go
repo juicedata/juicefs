@@ -656,8 +656,6 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 			return
 		}
 		switch ino {
-		case logInode:
-			openAccessLog(fh)
 		case statsInode:
 			h.data = collectMetrics(v.registry)
 		case configInode:
