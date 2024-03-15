@@ -6,6 +6,14 @@ source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
 
+prepare_test()
+{
+    umount_jfs /tmp/jfs $META_URL
+    python3 .github/scripts/flush_meta.py $META_URL
+    rm -rf /var/jfs/myjfs || true
+    rm -rf /var/jfsCache/myjfs || true
+}
+
 test_acl_with_kernel_check()
 {
     prepare_test
@@ -29,6 +37,9 @@ test_modify_acl_config()
     ./juicefs mount -d $META_URL /tmp/jfs
     touch /tmp/jfs/test
     setfacl -m u:root:rw /tmp/jfs/test && echo "setfacl should failed" && exit 1
+    ./juicefs config $META_URL --enable-acl
+    ./juicefs mount -d $META_URL /tmp/jfs
+    setfacl -m u:root:rw /tmp/jfs/test
     ./juicefs config $META_URL --enable-acl
     setfacl -m u:root:rw /tmp/jfs/test
     ./juicefs config $META_URL --enable-acl False 
