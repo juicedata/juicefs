@@ -79,12 +79,12 @@ test_dump_load_with_fsrand()
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0 --enable-acl
     ./juicefs mount -d $META_URL /jfs --enable-xattr
-    MAX_EXAMPLE=100 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
+    MAX_EXAMPLE=100 STEP_COUNT=50 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
     
     ./juicefs dump $META_URL dump.json --fast
     ./juicefs load sqlite3://test2.db dump.json
     ./juicefs dump sqlite3://test2.db dump2.json --fast
-    # compare_dump_json
+    compare_dump_json
     ./juicefs mount -d sqlite3://test2.db /jfs2
     diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
     compare_stat_acl /jfs/fsrand /jfs2/fsrand
