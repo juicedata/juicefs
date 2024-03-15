@@ -28,7 +28,7 @@ juicefs config sqlite3://myjfs.db --enable-acl
 If ACL is enabled, it is recommended that all clients upgrade. If an old client mounts a new volume (without ACL enabled) and ACL is subsequently enabled on the volume, operations by the old client may impact the correctness of ACL.
 :::
 
-## Other Information
+## Others
 - Enabling ACL increases the minimum client version requirement to v1.2.
 - Enabling ACL may have additional performance implications. For scenarios with infrequent ACL changes, the impact is minimal with memory cache optimization.
 - Enabling ACL will activate extended attributes (xattr) functionality.
