@@ -3830,6 +3830,9 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 				e.Attr.Type = typeToString(attr.Typ)
 				return redis.TxFailedErr // retry
 			}
+			if err == redis.Nil && attr.Typ == TypeDirectory {
+				attr.Nlink = 2
+			}
 			dumpAttr(&attr, e.Attr)
 
 			keys, err := xr[i].Result()

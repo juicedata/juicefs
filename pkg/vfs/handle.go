@@ -276,6 +276,11 @@ func (v *VFS) invalidateDirHandle(parent Ino, name string, inode Ino, attr *Attr
 	}
 }
 
+type state struct {
+	Handler map[uint64]saveHandle
+	NextFh  uint64
+}
+
 type saveHandle struct {
 	Inode      uint64
 	Length     uint64
@@ -289,8 +294,8 @@ type saveHandle struct {
 func (v *VFS) dumpAllHandles(path string) (err error) {
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
-
-	var toSave = make(map[uint64]saveHandle)
+	var vfsState state
+	vfsState.Handler = make(map[uint64]saveHandle)
 	for ino, hs := range v.handles {
 		if ino == logInode {
 			continue // will be recovered
@@ -319,10 +324,11 @@ func (v *VFS) dumpAllHandles(path string) (err error) {
 				Off:        h.off,
 				Data:       hex.EncodeToString(h.data),
 			}
-			toSave[h.fh] = s
+			vfsState.Handler[h.fh] = s
 		}
 	}
-	d, err := json.Marshal(toSave)
+	vfsState.NextFh = v.nextfh
+	d, err := json.Marshal(vfsState)
 	if err != nil {
 		return err
 	}
@@ -348,14 +354,14 @@ func (v *VFS) loadAllHandles(path string) error {
 	if err != nil {
 		return err
 	}
-	var toRestore map[uint64]saveHandle
-	err = json.Unmarshal(d, &toRestore)
+	var vfsState state
+	err = json.Unmarshal(d, &vfsState)
 	if err != nil {
 		return err
 	}
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
-	for fh, s := range toRestore {
+	for fh, s := range vfsState.Handler {
 		data, err := hex.DecodeString(s.Data)
 		if err != nil {
 			logger.Warnf("decode data for inode %d: %s", s.Inode, err)
@@ -385,6 +391,7 @@ func (v *VFS) loadAllHandles(path string) error {
 	if len(v.handleIno) > 0 {
 		logger.Infof("load %d handles from %s", len(v.handleIno), path)
 	}
+	v.nextfh = vfsState.NextFh
 	// _ = os.Remove(path)
 	return nil
 }
