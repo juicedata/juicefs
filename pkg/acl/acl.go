@@ -204,6 +204,42 @@ func (r *Rule) Checksum() uint32 {
 	return crc32.Checksum(r.Encode(), crc32c)
 }
 
+func (r *Rule) CanAccess(uid uint32, gids []uint32, fUid, fGid uint32, mMask uint8) bool {
+	if uid == fUid {
+		return uint8(r.Owner&7)&mMask == mMask
+	}
+	for _, nUser := range r.NamedUsers {
+		if uid == nUser.Id {
+			return uint8(nUser.Perm&r.Mask&7)&mMask == mMask
+		}
+	}
+
+	isGrpMatched := false
+	for _, gid := range gids {
+		if gid == fGid {
+			if uint8(r.Group&r.Mask&7)&mMask == mMask {
+				return true
+			}
+			isGrpMatched = true
+		}
+	}
+	for _, gid := range gids {
+		for _, nGrp := range r.NamedGroups {
+			if gid == nGrp.Id {
+				if uint8(nGrp.Perm&r.Mask&7)&mMask == mMask {
+					return true
+				}
+				isGrpMatched = true
+			}
+		}
+	}
+	if isGrpMatched {
+		return false
+	}
+
+	return uint8(r.Other&7)&mMask == mMask
+}
+
 const (
 	TypeNone = iota
 	TypeAccess

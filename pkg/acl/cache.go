@@ -19,6 +19,7 @@ package acl
 import (
 	"sort"
 	"sync"
+	"sync/atomic"
 )
 
 const None = 0
@@ -31,9 +32,12 @@ const None = 0
 type Cache interface {
 	Put(id uint32, r *Rule)
 	Get(id uint32) *Rule
+	GetAll() map[uint32]*Rule
 	GetId(r *Rule) uint32
 	Size() int
-	GetMissIds(maxId uint32) []uint32
+	GetMissIds() []uint32
+	Clear()
+	GetOrPut(r *Rule, currId *uint32) (id uint32, got bool)
 }
 
 func NewCache() Cache {
@@ -52,30 +56,54 @@ type cache struct {
 	cksum2Id map[uint32][]uint32
 }
 
-// GetMissIds return all miss ids from 1 to max(maxId, c.maxId)
-func (c *cache) GetMissIds(maxId uint32) []uint32 {
+func (c *cache) GetAll() map[uint32]*Rule {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	if c.maxId == maxId && uint32(len(c.id2Rule)) == maxId {
+	cpy := make(map[uint32]*Rule, len(c.id2Rule))
+	for id, r := range c.id2Rule {
+		cpy[id] = r
+	}
+	return cpy
+}
+
+// GetOrPut returns id for the Rule r if exists.
+// Otherwise, it stores r with a new id (atomically increment curId) and returns the new id.
+// The got result is true if the Rule was already exists, false if stored.
+func (c *cache) GetOrPut(r *Rule, curId *uint32) (id uint32, got bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if id = c.getId(r); id != None {
+		return id, true
+	}
+
+	id = atomic.AddUint32(curId, 1)
+	c.put(id, r)
+	return id, false
+}
+
+func (c *cache) Clear() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.maxId = None
+	c.id2Rule = make(map[uint32]*Rule)
+	c.cksum2Id = make(map[uint32][]uint32)
+}
+
+// GetMissIds return all miss ids from 1 to c.maxId
+func (c *cache) GetMissIds() []uint32 {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	if uint32(len(c.id2Rule)) == c.maxId {
 		return nil
 	}
 
-	if c.maxId > maxId {
-		maxId = c.maxId
-	}
-
-	n := maxId + 1
-	mark := make([]bool, n)
-	for i := uint32(1); i < n; i++ {
-		if _, ok := c.id2Rule[i]; ok {
-			mark[i] = true
-		}
-	}
-
+	n := c.maxId + 1
 	var ret []uint32
 	for i := uint32(1); i < n; i++ {
-		if !mark[i] {
+		if _, ok := c.id2Rule[i]; !ok {
 			ret = append(ret, i)
 		}
 	}
@@ -101,6 +129,10 @@ func (c *cache) Put(id uint32, r *Rule) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
+	c.put(id, r)
+}
+
+func (c *cache) put(id uint32, r *Rule) {
 	if _, ok := c.id2Rule[id]; ok {
 		return
 	}
@@ -131,6 +163,10 @@ func (c *cache) GetId(r *Rule) uint32 {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
+	return c.getId(r)
+}
+
+func (c *cache) getId(r *Rule) uint32 {
 	if r == nil {
 		return None
 	}

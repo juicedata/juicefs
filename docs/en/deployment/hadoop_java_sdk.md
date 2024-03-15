@@ -209,6 +209,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected.                         |
 | `juicefs.no-bgjob`        | `false`       | Disable background jobs (clean-up, backup, etc.)                                                                                                                            |
 | `juicefs.backup-meta`     | 3600          | Interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup)                                                                       |
+|`juicefs.backup-skip-trash`| `false`       | Skip files and directories in trash when backup metadata.                                                                  |
 | `juicefs.heartbeat`       | 12            | Heartbeat interval (in seconds) between client and metadata engine. It's recommended that all clients use the same value.                                                   |
 
 #### Multiple file systems configuration

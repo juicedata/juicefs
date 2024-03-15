@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/pkg/errors"
@@ -112,6 +113,10 @@ type engine interface {
 	scanPendingFiles(Context, pendingFileScan) error
 
 	GetSession(sid uint64, detail bool) (*Session, error)
+
+	doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno
+	doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno
+	cacheACLs(ctx Context) error
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -162,6 +167,7 @@ type baseMeta struct {
 	reloadCb     []func(*Format)
 	umounting    bool
 	sesMu        sync.Mutex
+	aclCache     aclAPI.Cache
 
 	dirStatsLock sync.Mutex
 	dirStats     map[Ino]dirStat
@@ -203,6 +209,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
+		aclCache: aclAPI.NewCache(),
 
 		usedSpaceG: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "used_space",
@@ -478,6 +485,11 @@ func (m *baseMeta) newSessionInfo() []byte {
 
 func (m *baseMeta) NewSession(record bool) error {
 	go m.refresh()
+
+	if err := m.en.cacheACLs(Background); err != nil {
+		return err
+	}
+
 	if m.conf.ReadOnly {
 		logger.Infof("Create read-only session OK with version: %s", version.Version())
 		return nil
@@ -1171,11 +1183,19 @@ func (m *baseMeta) parseAttr(buf []byte, attr *Attr) {
 		attr.Parent = Ino(rb.Get64())
 	}
 	attr.Full = true
+	if rb.Left() >= 8 {
+		attr.AccessACL = rb.Get32()
+		attr.DefaultACL = rb.Get32()
+	}
 	logger.Tracef("attr: %+v -> %+v", buf, attr)
 }
 
 func (m *baseMeta) marshal(attr *Attr) []byte {
-	w := utils.NewBuffer(36 + 24 + 4 + 8)
+	size := uint32(36 + 24 + 4 + 8)
+	if attr.AccessACL|attr.DefaultACL != aclAPI.None {
+		size += 8
+	}
+	w := utils.NewBuffer(size)
 	w.Put8(attr.Flags)
 	w.Put16((uint16(attr.Typ) << 12) | (attr.Mode & 0xfff))
 	w.Put32(attr.Uid)
@@ -1190,6 +1210,10 @@ func (m *baseMeta) marshal(attr *Attr) []byte {
 	w.Put64(attr.Length)
 	w.Put32(attr.Rdev)
 	w.Put64(uint64(attr.Parent))
+	if attr.AccessACL+attr.DefaultACL > 0 {
+		w.Put32(attr.AccessACL)
+		w.Put32(attr.DefaultACL)
+	}
 	logger.Tracef("attr: %+v -> %+v", attr, w.Bytes())
 	return w.Bytes()
 }
@@ -1245,6 +1269,7 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 	if !ctx.CheckPermission() {
 		return 0
 	}
+
 	if attr == nil || !attr.Full {
 		if attr == nil {
 			attr = &Attr{}
@@ -1254,6 +1279,18 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 			return err
 		}
 	}
+
+	if attr.AccessACL != aclAPI.None {
+		rule := &aclAPI.Rule{}
+		if st := m.en.doGetFacl(ctx, inode, aclAPI.TypeAccess, attr.AccessACL, rule); st != 0 {
+			return st
+		}
+		if rule.CanAccess(ctx.Uid(), ctx.Gids(), attr.Uid, attr.Gid, mmask) {
+			return 0
+		}
+		return syscall.EACCES
+	}
+
 	mode := accessMode(attr, ctx.Uid(), ctx.Gids())
 	if mode&mmask != mmask {
 		logger.Debugf("Access inode %d %o, mode %o, request mode %o", inode, attr.Mode, mode, mmask)
@@ -2703,7 +2740,7 @@ LOOP:
 	return eno
 }
 
-func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr, now time.Time) (*Attr, syscall.Errno) {
+func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr, now time.Time, rule *aclAPI.Rule) (*Attr, syscall.Errno) {
 	dirtyAttr := *cur
 	if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 		attr.Mode |= (cur.Mode & 06000)
@@ -2738,7 +2775,12 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 				attr.Mode &= 05777
 			}
 		}
-		if attr.Mode != cur.Mode {
+
+		if rule != nil {
+			rule.SetMode(attr.Mode)
+			dirtyAttr.Mode = attr.Mode&07000 | rule.GetMode()
+			changed = true
+		} else if attr.Mode != cur.Mode {
 			if ctx.Uid() != 0 && ctx.Uid() != cur.Uid &&
 				(cur.Mode&01777 != attr.Mode&01777 || attr.Mode&02000 > cur.Mode&02000 || attr.Mode&04000 > cur.Mode&04000) {
 				return nil, syscall.EPERM
@@ -2800,6 +2842,89 @@ func (m *baseMeta) CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) s
 	if st := m.en.doGetAttr(ctx, inode, &cur); st != 0 {
 		return st
 	}
-	_, st := m.mergeAttr(ctx, inode, set, &cur, &attr, time.Now())
+	_, st := m.mergeAttr(ctx, inode, set, &cur, &attr, time.Now(), nil)
 	return st
+}
+
+var errACLNotInCache = errors.New("acl not in cache")
+
+func (m *baseMeta) getFaclFromCache(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) error {
+	ino = m.checkRoot(ino)
+	cAttr := &Attr{}
+	if m.conf.OpenCache > 0 && m.of.Check(ino, cAttr) {
+		aclId := getAttrACLId(cAttr, aclType)
+		if aclId == aclAPI.None {
+			return ENOATTR
+		}
+
+		if cRule := m.aclCache.Get(aclId); cRule != nil {
+			*rule = *cRule
+			return nil
+		}
+	}
+	return errACLNotInCache
+}
+
+func setAttrACLId(attr *Attr, aclType uint8, id uint32) {
+	switch aclType {
+	case aclAPI.TypeAccess:
+		attr.AccessACL = id
+	case aclAPI.TypeDefault:
+		attr.DefaultACL = id
+	}
+}
+
+func getAttrACLId(attr *Attr, aclType uint8) uint32 {
+	switch aclType {
+	case aclAPI.TypeAccess:
+		return attr.AccessACL
+	case aclAPI.TypeDefault:
+		return attr.DefaultACL
+	}
+	return aclAPI.None
+}
+
+func setXAttrACL(xattrs *[]byte, accessACL, defaultACL uint32) {
+	if accessACL != aclAPI.None {
+		*xattrs = append(*xattrs, []byte("system.posix_acl_access")...)
+		*xattrs = append(*xattrs, 0)
+	}
+	if defaultACL != aclAPI.None {
+		*xattrs = append(*xattrs, []byte("system.posix_acl_default")...)
+		*xattrs = append(*xattrs, 0)
+	}
+}
+
+func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	if aclType != aclAPI.TypeAccess && aclType != aclAPI.TypeDefault {
+		return syscall.EINVAL
+	}
+
+	if !ino.IsNormal() {
+		return syscall.EPERM
+	}
+
+	now := time.Now()
+	defer func() {
+		m.timeit("SetFacl", now)
+		m.of.InvalidateChunk(ino, invalidateAttrOnly)
+	}()
+
+	return m.en.doSetFacl(ctx, ino, aclType, rule)
+}
+
+func (m *baseMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	var err error
+	if err = m.getFaclFromCache(ctx, ino, aclType, rule); err == nil {
+		return 0
+	}
+
+	if !errors.Is(err, errACLNotInCache) {
+		return errno(err)
+	}
+
+	now := time.Now()
+	defer m.timeit("GetFacl", now)
+
+	return m.en.doGetFacl(ctx, ino, aclType, aclAPI.None, rule)
 }

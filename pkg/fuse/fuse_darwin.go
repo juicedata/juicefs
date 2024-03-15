@@ -24,5 +24,9 @@ func getUmask(in *fuse.MknodIn) uint16 {
 	return 0
 }
 
+func getCreateUmask(in *fuse.CreateIn) uint16 {
+	return 0
+}
+
 func setBlksize(out *fuse.Attr, size uint32) {
 }

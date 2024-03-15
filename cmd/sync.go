@@ -119,6 +119,10 @@ func selectionFlags() []cli.Flag {
 			Name:  "include",
 			Usage: "don't exclude Key matching PATTERN, need to be used with \"--exclude\" option",
 		},
+		&cli.BoolFlag{
+			Name:  "match-full-path",
+			Usage: "match filters again the full path",
+		},
 		&cli.Int64Flag{
 			Name:  "limit",
 			Usage: "limit the number of objects that will be processed (-1 is unlimited, 0 is to process nothing)",

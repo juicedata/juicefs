@@ -384,6 +384,8 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 |`FILE`|Export file path, if not specified, it will be exported to standard output. If the filename ends with `.gz`, it will be automatically compressed.|
 |`--subdir=path`|Only export metadata for the specified subdirectory.|
 |`--keep-secret-key` <VersionAdd>1.1</VersionAdd> |Export object storage authentication information, the default is `false`. Since it is exported in plain text, pay attention to data security when using it. If the export file does not contain object storage authentication information, you need to use [`juicefs config`](#config) to reconfigure object storage authentication information after the subsequent import is completed.|
+|`--fast` <VersionAdd>1.2</VersionAdd>|Use more memory to speedup dump.|
+|`--skip-trash` <VersionAdd>1.2</VersionAdd>|Skip files and directories in trash.|
 
 ### `juicefs load` {#load}
 
@@ -628,6 +630,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |-|-|
 |`--subdir=value`|mount a sub-directory as root (default: "")|
 |`--backup-meta=3600`|interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup) (default: "3600")|
+|`--backup-skip-trash` <VersionAdd>1.2</VersionAdd>|skip files and directories in trash when backup metadata.|
 |`--heartbeat=12`|interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value (default: "12")|
 |`--read-only`|allow lookup/read operations only (default: false)|
 |`--no-bgjob`|Disable background jobs, default to false, which means clients by default carry out background jobs, including:<br/><ul><li>Clean up expired files in Trash (look for `cleanupDeletedFiles`, `cleanupTrash` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))</li><li>Delete slices that's not referenced (look for `cleanupSlices` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))</li><li>Clean up stale client sessions (look for `CleanStaleSessions` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))</li></ul>Note that compaction isn't affected by this option, it happens automatically with file reads and writes, client will check if compaction is in need, and run in background (take Redis for example, look for `compactChunk` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/redis.go)).|
@@ -735,6 +738,7 @@ Apart from options listed below, this command shares options with `juicefs mount
 |`--multi-buckets`|use top level of directories as buckets (default: false)|
 |`--keep-etag`|save the ETag for uploaded objects (default: false)|
 |`--umask=022`|umask for new file and directory in octal (default: 022)|
+| `--domain value`<VersionAdd>1.2</VersionAdd>   |domain for virtual-host-style requests|
 
 ### `juicefs webdav` {#webdav}
 

@@ -28,6 +28,7 @@ import (
 	"syscall"
 	"time"
 
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -123,6 +124,10 @@ func (i Ino) IsTrash() bool {
 	return i >= TrashInode
 }
 
+func (i Ino) IsNormal() bool {
+	return i >= RootInode && i < TrashInode
+}
+
 var TrashName = ".trash"
 
 func isTrash(ino Ino) bool {
@@ -161,6 +166,9 @@ type Attr struct {
 	Parent    Ino  // inode of parent; 0 means tracked by parentKey (for hardlinks)
 	Full      bool // the attributes are completed or not
 	KeepCache bool // whether to keep the cached page or not
+
+	AccessACL  uint32 // access ACL id (identical ACL rules share the same access ACL ID.)
+	DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
 }
 
 func typeToStatType(_type uint8) uint32 {
@@ -468,12 +476,15 @@ type Meta interface {
 	HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool) error
 
 	// Dump the tree under root, which may be modified by checkRoot
-	DumpMeta(w io.Writer, root Ino, keepSecret, fast bool) error
+	DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash bool) error
 	LoadMeta(r io.Reader) error
 
 	// getBase return the base engine.
 	getBase() *baseMeta
 	InitMetrics(registerer prometheus.Registerer)
+
+	SetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
+	GetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)

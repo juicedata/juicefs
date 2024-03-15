@@ -279,6 +279,7 @@ type javaConf struct {
 	NoBGJob           bool    `json:"noBGJob"`
 	OpenCache         float64 `json:"openCache"`
 	BackupMeta        int64   `json:"backupMeta"`
+	BackupSkipTrash   bool    `json:"backupSkipTrash"`
 	Heartbeat         int     `json:"heartbeat"`
 	CacheDir          string  `json:"cacheDir"`
 	CacheSize         int64   `json:"cacheSize"`
@@ -576,9 +577,10 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			AccessLog:       jConf.AccessLog,
 			FastResolve:     jConf.FastResolve,
 			BackupMeta:      time.Second * time.Duration(jConf.BackupMeta),
+			BackupSkipTrash: jConf.BackupSkipTrash,
 		}
 		if !jConf.ReadOnly && !jConf.NoSession && !jConf.NoBGJob && conf.BackupMeta > 0 {
-			go vfs.Backup(m, blob, conf.BackupMeta)
+			go vfs.Backup(m, blob, conf.BackupMeta, conf.BackupSkipTrash)
 		}
 		if !jConf.NoUsageReport && !jConf.NoSession {
 			go usage.ReportUsage(m, "java-sdk "+version.Version())

@@ -26,6 +26,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -117,6 +118,7 @@ type Config struct {
 	DirEntryTimeout      time.Duration
 	EntryTimeout         time.Duration
 	BackupMeta           time.Duration
+	BackupSkipTrash      bool
 	FastResolve          bool   `json:",omitempty"`
 	AccessLog            string `json:",omitempty"`
 	PrefixInternal       bool
@@ -1002,11 +1004,23 @@ func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags ui
 		err = syscall.EINVAL
 		return
 	}
-	if name == "system.posix_acl_access" || name == "system.posix_acl_default" {
-		err = syscall.ENOTSUP
-		return
+
+	aclType := GetACLType(name)
+	if aclType != acl.TypeNone {
+		if !v.Conf.Format.EnableACL {
+			err = syscall.ENOTSUP
+			return
+		}
+
+		var rule *acl.Rule
+		rule, err = decodeACL(value)
+		if err != 0 {
+			return
+		}
+		err = v.Meta.SetFacl(ctx, ino, aclType, rule)
+	} else {
+		err = v.Meta.SetXattr(ctx, ino, name, value, flags)
 	}
-	err = v.Meta.SetXattr(ctx, ino, name, value, flags)
 	return
 }
 
@@ -1028,11 +1042,22 @@ func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []
 		err = syscall.EINVAL
 		return
 	}
-	if name == "system.posix_acl_access" || name == "system.posix_acl_default" {
-		err = syscall.ENOTSUP
-		return
+
+	aclType := GetACLType(name)
+	if aclType != acl.TypeNone {
+		if !v.Conf.Format.EnableACL {
+			err = syscall.ENOTSUP
+			return
+		}
+
+		rule := &acl.Rule{}
+		if err = v.Meta.GetFacl(ctx, ino, aclType, rule); err != 0 {
+			return nil, err
+		}
+		value = encodeACL(rule)
+	} else {
+		err = v.Meta.GetXattr(ctx, ino, name, &value)
 	}
-	err = v.Meta.GetXattr(ctx, ino, name, &value)
 	if size > 0 && len(value) > int(size) {
 		err = syscall.ERANGE
 	}
@@ -1058,9 +1083,6 @@ func (v *VFS) RemoveXattr(ctx Context, ino Ino, name string) (err syscall.Errno)
 		err = syscall.EPERM
 		return
 	}
-	if name == "system.posix_acl_access" || name == "system.posix_acl_default" {
-		return syscall.ENOTSUP
-	}
 	if len(name) > xattrMaxName {
 		if runtime.GOOS == "darwin" {
 			err = syscall.EPERM
@@ -1073,7 +1095,18 @@ func (v *VFS) RemoveXattr(ctx Context, ino Ino, name string) (err syscall.Errno)
 		err = syscall.EINVAL
 		return
 	}
-	err = v.Meta.RemoveXattr(ctx, ino, name)
+
+	aclType := GetACLType(name)
+	if aclType != acl.TypeNone {
+		if !v.Conf.Format.EnableACL {
+			err = syscall.ENOTSUP
+			return
+		}
+		err = v.Meta.SetFacl(ctx, ino, aclType, acl.EmptyRule())
+	} else {
+		err = v.Meta.RemoveXattr(ctx, ino, name)
+	}
+
 	return
 }
 
@@ -1181,8 +1214,12 @@ func (v *VFS) cleanupModified() {
 	}
 }
 
-func (v *VFS) FlushAll(path string) error {
-	err := v.writer.FlushAll()
+func (v *VFS) FlushAll(path string) (err error) {
+	now := time.Now()
+	defer func() {
+		logger.Infof("flush buffered data in %s: %s", time.Since(now), err)
+	}()
+	err = v.writer.FlushAll()
 	if err != nil {
 		return err
 	}
@@ -1245,4 +1282,103 @@ func InitMetrics(registerer prometheus.Registerer) {
 	registerer.MustRegister(writtenSizeHistogram)
 	registerer.MustRegister(opsDurationsHistogram)
 	registerer.MustRegister(compactSizeHistogram)
+}
+
+// Linux ACL format:
+//
+//	version:8 (2)
+//	flags:8 (0)
+//	filler:16
+//	N * [ tag:16 perm:16 id:32 ]
+//	tag:
+//	  01 - user
+//	  02 - named user
+//	  04 - group
+//	  08 - named group
+//	  10 - mask
+//	  20 - other
+
+func encodeACL(n *acl.Rule) []byte {
+	length := 4 + 24 + uint32(len(n.NamedUsers)+len(n.NamedGroups))*8
+	if n.Mask != 0xFFFF {
+		length += 8
+	}
+	buff := make([]byte, length)
+	w := utils.NewNativeBuffer(buff)
+	w.Put8(acl.Version) // version
+	w.Put8(0)           // flag
+	w.Put16(0)          // filler
+	wRule := func(tag, perm uint16, id uint32) {
+		w.Put16(tag)
+		w.Put16(perm)
+		w.Put32(id)
+	}
+	wRule(1, n.Owner, 0xFFFFFFFF)
+	for _, rule := range n.NamedUsers {
+		wRule(2, rule.Perm, rule.Id)
+	}
+	wRule(4, n.Group, 0xFFFFFFFF)
+	for _, rule := range n.NamedGroups {
+		wRule(8, rule.Perm, rule.Id)
+	}
+	if n.Mask != 0xFFFF {
+		wRule(0x10, n.Mask, 0xFFFFFFFF)
+	}
+	wRule(0x20, n.Other, 0xFFFFFFFF)
+	return buff
+}
+
+func decodeACL(buff []byte) (*acl.Rule, syscall.Errno) {
+	length := len(buff)
+	if length < 4 || ((length % 8) != 4) || buff[0] != acl.Version {
+		return nil, syscall.EINVAL
+	}
+
+	n := acl.EmptyRule()
+	r := utils.NewNativeBuffer(buff[4:])
+	for r.HasMore() {
+		tag := r.Get16()
+		perm := r.Get16()
+		id := r.Get32()
+		switch tag {
+		case 1:
+			if n.Owner != 0xFFFF {
+				return nil, syscall.EINVAL
+			}
+			n.Owner = perm
+		case 2:
+			n.NamedUsers = append(n.NamedUsers, acl.Entry{Id: id, Perm: perm})
+		case 4:
+			if n.Group != 0xFFFF {
+				return nil, syscall.EINVAL
+			}
+			n.Group = perm
+		case 8:
+			n.NamedGroups = append(n.NamedGroups, acl.Entry{Id: id, Perm: perm})
+		case 0x10:
+			if n.Mask != 0xFFFF {
+				return nil, syscall.EINVAL
+			}
+			n.Mask = perm
+		case 0x20:
+			if n.Other != 0xFFFF {
+				return nil, syscall.EINVAL
+			}
+			n.Other = perm
+		}
+	}
+	if n.Mask == 0xFFFF && len(n.NamedUsers)+len(n.NamedGroups) > 0 {
+		return nil, syscall.EINVAL
+	}
+	return n, 0
+}
+
+func GetACLType(name string) uint8 {
+	switch name {
+	case "system.posix_acl_access":
+		return acl.TypeAccess
+	case "system.posix_acl_default":
+		return acl.TypeDefault
+	}
+	return acl.TypeNone
 }
