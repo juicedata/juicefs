@@ -15,13 +15,11 @@
  */
 package io.juicefs;
 
+import com.google.common.collect.Lists;
 import com.kenai.jffi.internal.StubLoader;
 import io.juicefs.exception.QuotaExceededException;
 import io.juicefs.metrics.JuiceFSInstrumentation;
-import io.juicefs.utils.BgTaskUtil;
-import io.juicefs.utils.ConsistentHash;
-import io.juicefs.utils.NodesFetcher;
-import io.juicefs.utils.NodesFetcherBuilder;
+import io.juicefs.utils.*;
 import jnr.ffi.LibraryLoader;
 import jnr.ffi.Memory;
 import jnr.ffi.Pointer;
@@ -35,8 +33,7 @@ import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.*;
-import org.apache.hadoop.fs.permission.FsAction;
-import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.fs.permission.*;
 import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.io.MD5Hash;
 import org.apache.hadoop.security.AccessControlException;
@@ -173,6 +170,10 @@ public class JuiceFileSystemImpl extends FileSystem {
     int jfs_listXattr(long pid, long h, String path, Pointer buf, int size);
 
     int jfs_removeXattr(long pid, long h, String path, String name);
+
+    int jfs_getfacl(long pid, long h, String path, int acltype, Pointer b, int len);
+
+    int jfs_setfacl(long pid, long h, String path, int acltype, Pointer b, int len);
 
     void jfs_set_callback(LogCallBack callBack);
 
@@ -1699,5 +1700,223 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
     if (r < 0)
       throw error(r, path);
+  }
+
+  @Override
+  public void modifyAclEntries(Path path, List<AclEntry> aclSpec) throws IOException {
+    List<AclEntry> existingEntries = getAllAclEntries(path);
+    List<AclEntry> newAcl = AclTransformation.mergeAclEntries(existingEntries, aclSpec);
+    setAclInternal(path, newAcl);
+  }
+
+  @Override
+  public void removeAclEntries(Path path, List<AclEntry> aclSpec) throws IOException {
+    List<AclEntry> existingEntries = getAllAclEntries(path);
+    List<AclEntry> newAcl = AclTransformation.filterAclEntriesByAclSpec(existingEntries, aclSpec);
+    setAclInternal(path, newAcl);
+  }
+
+  @Override
+  public void setAcl(Path path, List<AclEntry> aclSpec) throws IOException {
+    List<AclEntry> existingEntries = getAllAclEntries(path);
+    List<AclEntry> newAcl = AclTransformation.replaceAclEntries(existingEntries, aclSpec);
+    setAclInternal(path, newAcl);
+  }
+
+  private void setAclInternal(Path path, List<AclEntry> aclSpec) throws IOException {
+    List<AclEntry> aclEntries = AclTransformation.buildAndValidateAcl(Lists.newArrayList(aclSpec));
+    ScopedAclEntries scoped = new ScopedAclEntries(aclEntries);
+    setAclInternal(path, AclEntryScope.ACCESS, scoped.getAccessEntries());
+    setAclInternal(path, AclEntryScope.DEFAULT, scoped.getDefaultEntries());
+  }
+
+  private void removeAclInternal(Path path, AclEntryScope scope) throws IOException {
+    Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 6 * 2);
+    buf.putShort(0, (short) -1);
+    buf.putShort(2, (short) -1);
+    buf.putShort(4, (short) -1);
+    buf.putShort(6, (short) -1);
+    buf.putShort(8, (short) 0);
+    buf.putShort(10, (short) 0);
+    int r = lib.jfs_setfacl(Thread.currentThread().getId(), handle, normalizePath(path), scope.ordinal() + 1, buf,
+        6 * 2);
+    if (r == ENOATTR || r == ENODATA)
+      return;
+    if (r < 0)
+      throw error(r, path);
+  }
+
+  @Override
+  public void removeDefaultAcl(Path path) throws IOException {
+    removeAclInternal(path, AclEntryScope.DEFAULT);
+  }
+
+  @Override
+  public void removeAcl(Path path) throws IOException {
+    removeAclInternal(path, AclEntryScope.ACCESS);
+    removeAclInternal(path, AclEntryScope.DEFAULT);
+  }
+
+  private void setAclInternal(Path path, AclEntryScope scope, List<AclEntry> aclSpec) throws IOException {
+    if (aclSpec.size() == 0)
+      return;
+    short userperm = -1, groupperm = -1, otherperm = -1, maskperm = -1;
+    short namedusers = 0, namedgroups = 0;
+    int namedaclsize = 0;
+    for (AclEntry e : aclSpec) {
+      if (e.getName() != null) {
+        if (e.getType() == AclEntryType.USER) {
+          namedusers++;
+        } else {
+          namedgroups++;
+        }
+        namedaclsize += e.getName().getBytes("utf8").length + 2;
+      } else {
+        short perm = (short) e.getPermission().ordinal();
+        switch (e.getType()) {
+          case USER:
+            userperm = perm;
+            break;
+          case GROUP:
+            groupperm = perm;
+            break;
+          case OTHER:
+            otherperm = perm;
+            break;
+          case MASK:
+            maskperm = perm;
+            break;
+        }
+      }
+    }
+    Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 12 + namedaclsize);
+    buf.putShort(0, userperm);
+    buf.putShort(2, groupperm);
+    buf.putShort(4, otherperm);
+    buf.putShort(6, maskperm);
+    buf.putShort(8, namedusers);
+    buf.putShort(10, namedgroups);
+    int off = 12;
+    for (AclEntry e : aclSpec) {
+      String name = e.getName();
+      if (name != null && e.getType() == AclEntryType.USER) {
+        byte[] nb = name.getBytes("utf8");
+        buf.putByte(off, (byte) nb.length);
+        buf.put(off + 1, nb, 0, nb.length);
+        off += 1 + nb.length;
+        buf.putByte(off, (byte) e.getPermission().ordinal());
+        off += 1;
+      }
+    }
+    for (AclEntry e : aclSpec) {
+      String name = e.getName();
+      if (name != null && e.getType() == AclEntryType.GROUP) {
+        byte[] nb = name.getBytes("utf8");
+        buf.putByte(off, (byte) nb.length);
+        buf.put(off + 1, nb, 0, nb.length);
+        off += 1 + nb.length;
+        buf.putByte(off, (byte) e.getPermission().ordinal());
+        off += 1;
+      }
+    }
+    int r = lib.jfs_setfacl(Thread.currentThread().getId(), handle, normalizePath(path), scope.ordinal() + 1, buf,
+        12 + namedaclsize);
+    if (r < 0)
+      throw error(r, path);
+  }
+
+  private List<AclEntry> getAclEntries(Path path, AclEntryScope scope) throws IOException {
+    int bufsize = 1024;
+    int r;
+    Pointer buf;
+    do {
+      bufsize *= 2;
+      buf = Memory.allocate(Runtime.getRuntime(lib), bufsize);
+      r = lib.jfs_getfacl(Thread.currentThread().getId(), handle, normalizePath(path), scope.ordinal() + 1, buf,
+          bufsize);
+    } while (r == -100);
+    if (r == ENOATTR || r == ENODATA) {
+      return Lists.newArrayList();
+    }
+    if (r < 0)
+      throw error(r, path);
+
+    int off = 0;
+    short userperm = buf.getShort(0);
+    short groupperm = buf.getShort(2);
+    short otherperm = buf.getShort(4);
+    short maskperm = buf.getShort(6);
+    short namedusers = buf.getShort(8);
+    short namedgroups = buf.getShort(10);
+    off += 12;
+
+    List<AclEntry> entries = new ArrayList<>();
+    AclEntry.Builder builder = new AclEntry.Builder().setScope(scope);
+    if (userperm != -1) {
+      entries.add(builder.setType(AclEntryType.USER).setPermission(FsAction.values()[userperm]).build());
+    }
+    if (groupperm != -1) {
+      entries.add(builder.setType(AclEntryType.GROUP).setPermission(FsAction.values()[groupperm]).build());
+    }
+    if (otherperm != -1) {
+      entries.add(builder.setType(AclEntryType.OTHER).setPermission(FsAction.values()[otherperm]).build());
+    }
+    if (maskperm != -1) {
+      entries.add(builder.setType(AclEntryType.MASK).setPermission(FsAction.values()[maskperm]).build());
+    }
+
+    for (int i = 0; i < namedusers + namedgroups; i++) {
+      String name = buf.getString(off);
+      off += name.length() + 1;
+      short perm = buf.getShort(off);
+      off += 2;
+      entries.add(builder.setType(i < namedusers ? AclEntryType.USER : AclEntryType.GROUP).setName(name)
+          .setPermission(FsAction.values()[perm]).build());
+    }
+    Collections.sort(entries, AclTransformation.ACL_ENTRY_COMPARATOR);
+    return entries;
+  }
+
+  /**
+   * include acl entries from permission
+   */
+  private List<AclEntry> getAllAclEntries(Path path) throws IOException {
+    List<AclEntry> entries = getAclEntries(path, AclEntryScope.ACCESS);
+    if (entries.size() == 0) {
+      FsPermission perm = getFileStatus(path).getPermission();
+      entries = AclUtil.getAclFromPermAndEntries(perm, entries);
+    }
+    entries.addAll(getAclEntries(path, AclEntryScope.DEFAULT));
+    return entries;
+  }
+
+  /**
+   * exclude acl entries from permission
+   */
+  private List<AclEntry> getAclEntries(Path path) throws IOException {
+    List<AclEntry> res = new ArrayList<>();
+    List<AclEntry> accessEntries = getAclEntries(path, AclEntryScope.ACCESS);
+    // minimal 3 acls for ugo
+    if (accessEntries.size() != 0 && accessEntries.size() != 3) {
+      res.addAll(accessEntries.subList(1, accessEntries.size() - 2));
+    }
+    res.addAll(getAclEntries(path, AclEntryScope.DEFAULT));
+    return res;
+  }
+
+  @Override
+  public AclStatus getAclStatus(Path path) throws IOException {
+    FileStatus st = getFileStatus(path);
+    List<AclEntry> entries = getAclEntries(path);
+    AclStatus.Builder builder = new AclStatus.Builder().owner(st.getOwner()).group(st.getGroup())
+        .stickyBit(st.getPermission().getStickyBit()).addEntries(entries);
+    try {
+      Class<AclStatus.Builder> ab = AclStatus.Builder.class;
+      Method abm = ab.getDeclaredMethod("setPermission", FsPermission.class);
+      abm.setAccessible(true);
+      abm.invoke(builder, st.getPermission());
+    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {
+    }
+    return builder.build();
   }
 }
