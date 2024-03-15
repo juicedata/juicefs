@@ -96,7 +96,7 @@ func (f *jFile) Close() error {
 }
 
 func (j *juiceFS) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	f, err := j.jfs.Open(ctx, j.path(key), 0)
+	f, err := j.jfs.Open(ctx, j.path(key), vfs.MODE_MASK_R)
 	if err != 0 {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func (j *juiceFS) Put(key string, in io.Reader) (err error) {
 			}
 		}()
 	}
-	f, eno := j.jfs.Open(ctx, tmp, 0666)
+	f, eno := j.jfs.Open(ctx, tmp, vfs.MODE_MASK_W)
 	if eno == syscall.ENOENT {
 		_ = j.jfs.MkdirAll(ctx, path.Dir(tmp), 0777, j.umask)
 		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)

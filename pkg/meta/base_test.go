@@ -140,6 +140,7 @@ func testMeta(t *testing.T, m Meta) {
 	testAttrFlags(t, m)
 	testQuota(t, m)
 	testAtime(t, m)
+	testAccess(t, m)
 	base := m.getBase()
 	base.conf.OpenCache = time.Second
 	base.of.expire = time.Second
@@ -154,6 +155,65 @@ func testMeta(t *testing.T, m Meta) {
 	testReadOnly(t, m)
 }
 
+func testAccess(t *testing.T, m Meta) {
+	if err := m.Init(testFormat(), false); err != nil {
+		t.Fatalf("init error: %s", err)
+	}
+
+	defer m.getBase().aclCache.Clear()
+
+	var testNode Ino = 2
+	ctx := NewContext(1, 1, []uint32{2})
+	attr := &Attr{
+		Mode:       0,
+		Uid:        0,
+		Gid:        0,
+		AccessACL:  1,
+		DefaultACL: 0,
+		Full:       true,
+	}
+
+	r1 := &aclAPI.Rule{
+		Owner: 5,
+		Group: 4,
+		Mask:  2,
+		Other: 1,
+		NamedUsers: aclAPI.Entries{
+			{
+				Id:   1,
+				Perm: 6,
+			},
+		},
+		NamedGroups: aclAPI.Entries{
+			{
+				Id:   2,
+				Perm: 6,
+			},
+		},
+	}
+	m.getBase().aclCache.Put(1, r1)
+
+	// case: match owner, skip named entries
+	st := m.Access(ctx, testNode, MODE_MASK_R|MODE_MASK_W, attr)
+	assert.Equal(t, syscall.EACCES, st)
+
+	// case: match named grouped entry, but group perm & mask failed
+	ctx = NewContext(1, 2, []uint32{2})
+	st = m.Access(ctx, testNode, MODE_MASK_R|MODE_MASK_W, attr)
+	assert.Equal(t, syscall.EACCES, st)
+
+	// case: same as above, make mask to pass test
+	r2 := &aclAPI.Rule{}
+	*r2 = *r1
+	r2.Mask = 7
+	m.getBase().aclCache.Put(2, r2)
+	attr.AccessACL = 2
+
+	ctx = NewContext(1, 2, []uint32{2})
+	st = m.Access(ctx, testNode, MODE_MASK_R|MODE_MASK_W, attr)
+	assert.Equal(t, syscall.Errno(0), st)
+}
+
 func testACL(t *testing.T, m Meta) {
 	format := testFormat()
 	format.EnableACL = true
@@ -161,6 +221,8 @@ func testACL(t *testing.T, m Meta) {
 	if err := m.Init(format, false); err != nil {
 		t.Fatalf("test acl failed: %s", err)
 	}
+
+	defer m.getBase().aclCache.Clear()
 
 	ctx := Background
 	testDir := "test_dir"

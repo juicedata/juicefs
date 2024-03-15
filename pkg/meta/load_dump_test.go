@@ -255,6 +255,14 @@ func testDump(t *testing.T, m Meta, root Ino, expect, result string) {
 	if out, err := cmd.Output(); err != nil {
 		t.Fatalf("diff %s %s: %s", expect, result, out)
 	}
+	fp.Seek(0, 0)
+	if err = m.DumpMeta(fp, root, false, false, false); err != nil {
+		t.Fatalf("dump meta: %s", err)
+	}
+	cmd = exec.Command("diff", expect, result)
+	if out, err := cmd.Output(); err != nil {
+		t.Fatalf("diff %s %s: %s", expect, result, out)
+	}
 }
 
 func testLoadDump(t *testing.T, name, addr string) {
