@@ -43,7 +43,10 @@ class JuicefsMachine(RuleBasedStateMachine):
     group_created = False
     INCLUDE_RULES = []
     EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file', \
-                        'clone_cp_file', 'clone_cp_dir', 'write', 'fallocate', 'truncate', 'symlink', 'hardlink', 'rename_file', 'rename_dir', 'unlink', 'rmdir', 'read']
+                        'clone_cp_file', 'clone_cp_dir']
+    # EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file', 'clone_cp_file', 'clone_cp_dir', \
+    #                  'write', 'fallocate', 'truncate', 'symlink', 'hardlink', 'rename_file', \
+    #                 'rename_dir', 'unlink', 'rmdir', 'read']
     @initialize(target=Folders)
     def init_folders(self):
         if not os.path.exists(self.ROOT_DIR1):
@@ -421,10 +424,10 @@ class JuicefsMachine(RuleBasedStateMachine):
           user=st.sampled_from(USERS+['']),
           user_perm = st.sets(st.sampled_from(['r', 'w', 'x'])),
           group=st.sampled_from(GROUPS+['']),
-          group_perm = st.sets(st.sampled_from(['r', 'w', 'x'])), #.filter(lambda x: len(x) > 0),
+          group_perm = st.sets(st.sampled_from(['r', 'w', 'x'])),
           other_perm = st.sets(st.sampled_from(['r', 'w', 'x'])),
           set_mask = st.booleans(),
-          mask = st.sets(st.sampled_from(['r', 'w', 'x'])), #.filter(lambda x: len(x) > 0),
+          mask = st.sets(st.sampled_from(['r', 'w', 'x'])),
           default = st.booleans(),
           recursive = st.booleans(),
           recalc_mask = st.booleans(),
