@@ -10,7 +10,7 @@ test_acl_with_kernel_check()
 {
     prepare_test
     ./juicefs format $META_URL myjfs --enable-acl --trash-days 0
-    ./juicefs mount -d $META_URL /jfs
+    ./juicefs mount -d $META_URL /tmp/jfs
     python3 .github/scripts/hypo/acl_test.py 
 }
 
@@ -18,7 +18,7 @@ test_acl_with_user_space_check()
 {
     prepare_test
     ./juicefs format $META_URL myjfs --enable-acl --trash-days 0
-    ./juicefs mount -d $META_URL /jfs --no-default-permission
+    ./juicefs mount -d $META_URL /tmp/jfs --no-default-permission
     python3 .github/scripts/hypo/acl_test.py 
 }
 
@@ -26,9 +26,11 @@ test_modify_acl_config()
 {
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0
+    ./juicefs mount -d $META_URL /tmp/jfs
+    touch /tmp/jfs/test
+    setfacl -m u:root:rw /tmp/jfs/test && echo "setfacl should failed" && exit 1
     ./juicefs config $META_URL --enable-acl
-    ./juicefs mount -d $META_URL /jfs
-    python3 .github/scripts/hypo/acl_test.py
+    setfacl -m u:root:rw /tmp/jfs/test
     ./juicefs config $META_URL --enable-acl False 
     ./juicefs config $META_URL | grep EnableACL | grep "true" || (echo "EnableACL should be true" && exit 1) 
 }
