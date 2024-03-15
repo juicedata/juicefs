@@ -722,10 +722,10 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 		return
 	}
 	// there could be read operation for write-only if kernel writeback is enabled
-	if !v.Conf.FuseOpts.EnableWriteback && (h.flags&O_ACCMODE) != syscall.O_RDONLY {
-		err = syscall.EACCES
-		return
-	}
+	//if !v.Conf.FuseOpts.EnableWriteback && (h.flags&O_ACCMODE) != syscall.O_RDONLY {
+	//	err = syscall.EACCES
+	//	return
+	//}
 	if h.reader == nil {
 		err = syscall.EBADF
 		return
