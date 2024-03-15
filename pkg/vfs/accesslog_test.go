@@ -26,7 +26,7 @@ import (
 func TestAccessLog(t *testing.T) {
 	v, _ := createTestVFS()
 	openAccessLog(1)
-	defer closeAccessLog(1)
+	defer v.closeAccessLog(1)
 
 	ctx := NewLogContext(meta.NewContext(10, 1, []uint32{2}))
 	logit(ctx, "test")

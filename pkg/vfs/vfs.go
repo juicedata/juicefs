@@ -607,7 +607,7 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 	defer func() { logit(ctx, "release (%d,%d): %s", ino, fh, strerr(err)) }()
 	if IsSpecialNode(ino) {
 		if ino == logInode {
-			closeAccessLog(fh)
+			v.closeAccessLog(fh)
 		}
 		v.releaseHandle(ino, fh)
 		return
