@@ -34,13 +34,13 @@ test_kill_mount_process()
     sleep 2
     stat /tmp/jfs
     ./juicefs umount /tmp/jfs
-    wait_process_killed 3
+    wait_command_success "ps -ef | grep "mount" | grep "/tmp/jfs" | grep -v grep | wc -l" 0
     ./juicefs mount $META_URL /tmp/jfs -d
     kill_child_process
-    wait_process_killed 4
+    wait_command_success "ps -ef | grep "mount" | grep "/tmp/jfs" | grep -v grep | wc -l" 0
     ./juicefs mount $META_URL /tmp/jfs -d
     ./juicefs umount /tmp/jfs
-    wait_process_killed 5
+    wait_command_success "ps -ef | grep "mount" | grep "/tmp/jfs" | grep -v grep | wc -l" 0
 }
 
 skip_test_update_with_flock(){
@@ -194,28 +194,6 @@ test_update_on_fstab(){
     done
 }
 
-wait_command_success()
-{
-    command=$1
-    expected=$2
-    timeout=$3
-    [[ -z "$timeout" ]] && timeout=30
-    echo "wait_command_success command=$command, expected=$expected, timeout=$timeout"
-    for i in $(seq 1 $timeout); do
-        result=$(eval "$command")
-        if [[ "$result" == "$expected" ]]; then
-            echo "command success"
-            break
-        fi
-        if [ $i -eq $timeout ]; then
-            eval "$command"
-            echo "command failed after $timeout"
-            exit 1
-        fi
-        echo "wait command to success in $i sec..." && sleep 1
-    done
-}
-
 prepare_test(){
     umount_jfs /tmp/jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
@@ -242,26 +220,6 @@ kill_parent_process()
     echo "kill_parent_process"
     parent_pid=$(ps -ef | grep "juicefs" | grep "mount" | grep -v grep | awk '$3 == 1 {print $2}')
     kill $parent_pid
-}
-
-wait_process_killed()
-{   
-    echo "wait_process_killed $1"
-    wait_seconds=15
-    for i in $(seq 1 $wait_seconds); do
-        count=$(ps -ef | grep "cmd/mount/mount mount" | grep -v grep | wc -l)
-        echo i is $i, count is $count
-        if [ $count -eq 0 ]; then
-            echo "mount process is killed"
-            break
-        fi
-        if [ $i -eq $wait_seconds ]; then
-            ps -ef | grep "cmd/mount/mount | grep -v grep "
-            echo "mount process is not killed after $wait_seconds"
-            exit 1
-        fi
-        echo "wait process to kill" && sleep 1
-    done
 }
 
 wait_process_started()

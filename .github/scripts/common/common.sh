@@ -62,3 +62,27 @@ compare_md5sum(){
         exit 1
     fi
 }
+
+
+wait_command_success()
+{
+    command=$1
+    expected=$2
+    timeout=$3
+    [[ -z "$timeout" ]] && timeout=30
+    echo "wait_command_success command=$command, expected=$expected, timeout=$timeout"
+    for i in $(seq 1 $timeout); do
+        result=$(eval "$command")
+        echo result is $result
+        if [[ "$result" == "$expected" ]]; then
+            echo "command success"
+            break
+        fi
+        if [ $i -eq $timeout ]; then
+            eval "$command"
+            echo "command failed after $timeout"
+            exit 1
+        fi
+        echo "wait command to success in $i sec..." && sleep 1
+    done
+}
