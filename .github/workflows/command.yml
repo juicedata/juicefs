@@ -80,6 +80,11 @@ jobs:
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/config.sh
     
+      - name: Test acl
+        timeout-minutes: 30
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/acl.sh     
+
       - name: Test Clone
         timeout-minutes: 30
         run: |
