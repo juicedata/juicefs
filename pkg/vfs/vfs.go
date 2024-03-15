@@ -397,7 +397,7 @@ func (v *VFS) Opendir(ctx Context, ino Ino, flags uint32) (fh uint64, err syscal
 			return
 		}
 	}
-	fh = v.newHandle(ino).fh
+	fh = v.newHandle(ino, true).fh
 	return
 }
 
@@ -519,7 +519,7 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 			err = syscall.EACCES
 			return
 		}
-		h := v.newHandle(ino)
+		h := v.newHandle(ino, true)
 		fh = h.fh
 		n := getInternalNode(ino)
 		if n == nil {
@@ -647,18 +647,32 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n int, err syscall.Errno) {
 	size := uint32(len(buf))
 	if IsSpecialNode(ino) {
+		if ino == controlInode && runtime.GOOS == "darwin" {
+			fh = v.getControlHandle(ctx.Pid())
+		}
+		h := v.findHandle(ino, fh)
+		if h == nil {
+			err = syscall.EBADF
+			return
+		}
+		switch ino {
+		case logInode:
+			openAccessLog(fh)
+		case statsInode:
+			h.data = collectMetrics(v.registry)
+		case configInode:
+			v.Conf.Format = v.Meta.GetFormat()
+			if v.UpdateFormat != nil {
+				v.UpdateFormat(&v.Conf.Format)
+			}
+			v.Conf.Format.RemoveSecret()
+			h.data, _ = json.MarshalIndent(v.Conf, "", " ")
+		}
+
 		if ino == logInode {
 			n = readAccessLog(fh, buf)
 		} else {
 			defer func() { logit(ctx, "read (%d,%d,%d,%d): %s (%d)", ino, size, off, fh, strerr(err), n) }()
-			if ino == controlInode && runtime.GOOS == "darwin" {
-				fh = v.getControlHandle(ctx.Pid())
-			}
-			h := v.findHandle(ino, fh)
-			if h == nil {
-				err = syscall.EBADF
-				return
-			}
 			h.Lock()
 			defer h.Unlock()
 			if off < h.off {
@@ -687,8 +701,29 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 		err = syscall.EBADF
 		return
 	}
+	if h.flags == 0 {
+		// recovered
+		var attr Attr
+		err = v.Meta.Open(ctx, ino, syscall.O_RDONLY, &attr)
+		if err != 0 {
+			v.releaseHandle(ino, fh)
+			err = syscall.EBADF
+			return
+		}
+		h.Lock()
+		v.UpdateLength(ino, &attr)
+		h.flags = syscall.O_RDONLY
+		h.reader = v.reader.Open(h.inode, attr.Length)
+		h.Unlock()
+	}
+
 	if off >= maxFileSize || off+uint64(size) >= maxFileSize {
 		err = syscall.EFBIG
+		return
+	}
+	// there could be read operation for write-only if kernel writeback is enabled
+	if !v.Conf.FuseOpts.EnableWriteback && (h.flags&syscall.O_ACCMODE) != syscall.O_RDONLY {
+		err = syscall.EACCES
 		return
 	}
 	if h.reader == nil {
