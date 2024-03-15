@@ -3,18 +3,18 @@ name: "command-test"
 on:
   push:
     branches:
-      # - 'main'
+      - 'main'
       - 'release-**'
     paths-ignore:
-      - 'docs/**'
-      - '**.md'
+      - '.github/scripts/command/*.sh'
+      - '**/command.yml'
   pull_request:
     branches:
-      # - 'main'
+      - 'main'
       - 'release-**'
     paths-ignore:
-      - 'docs/**'
-      - '**.md'
+      - '.github/scripts/command/*.sh'
+      - '**/command.yml'
   schedule:
     - cron:  '30 20 * * *'
 
