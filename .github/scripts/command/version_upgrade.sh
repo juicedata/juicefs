@@ -12,9 +12,11 @@ dpkg -s attr >/dev/null 2>&1 || .github/scripts/apt_install.sh attr
 
 if [[ ! -x "./juicefs.1.1" ]]; then 
     wget -q https://github.com/juicedata/juicefs/releases/download/v1.1.0/juicefs-1.1.0-linux-amd64.tar.gz
-    tar -xzvf juicefs-1.1.0-linux-amd64.tar.gz --transform='s|^juicefs$|juicefs-1.1|' juicefs
-    chmod +x juicefs-1.1
-    ./juicefs-1.1 version
+    rm /tmp/juicefs -rf && mkdir -p /tmp/juicefs
+    tar -xzvf juicefs-1.1.0-linux-amd64.tar.gz -C /tmp/juicefs
+    mv /tmp/juicefs/juicefs juicefs-1.1 && chmod +x juicefs-1.1 
+    rm /tmp/juicefs -rf && rm juicefs-1.1.0-linux-amd64.tar.gz
+    ./juicefs-1.1 version | grep "version 1.1"
 fi
 [[ ! -f my-priv-key.pem ]] && openssl genrsa -out my-priv-key.pem -aes256  -passout pass:12345678 2048
 
@@ -101,7 +103,7 @@ test_update_on_failure(){
     [[ $count -ne 0 ]] && echo "mount process count should be 0, count=$count" && exit 1 || true
 }
 #TODO: fio test failed on database locked.
-skip_test_update_non_fuse_option_with_fio(){
+test_update_non_fuse_option_with_fio(){
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /tmp/jfs --buffer-size 300
@@ -113,19 +115,8 @@ skip_test_update_non_fuse_option_with_fio(){
     for i in {1..10}; do
         echo "update buffer-size to $((i+300))"
         ./juicefs mount -d $META_URL /tmp/jfs --buffer-size $((i+300))
-        for t in {1..30}; do
-            ps -ef | grep juicefs | grep mount | grep -v grep || true
-            count=$(ps -ef | grep juicefs | grep mount | grep "buffer-size $((i+300))" | grep -v grep | wc -l)
-            if [[ $count -ne 2 ]]; then
-                echo "wait update finish in $t second, count=$count..." && sleep 1s
-            else
-                echo "update finish, count=$count" && break
-            fi
-            if [[ $t -eq 30 ]]; then
-                echo "update not finish, count=$count" && exit 1
-            fi
-            echo abc | tee /tmp/jfs/test
-        done
+        wait_command_success "ps -ef | grep juicefs | grep mount | grep \"buffer-size $((i+300))\" | wc -l" 2
+        echo abc | tee /tmp/jfs/test
     done
     kill -9 $fio_pid > /dev/null 2>&1 || true
     umount_jfs /tmp/jfs $META_URL
@@ -195,12 +186,34 @@ test_update_on_fstab(){
     grep /tmp/jfs /etc/fstab
     ls /sbin/mount.juicefs -l
     umount /tmp/jfs
-    sleep 1s
-    mount /tmp/jfs
-    ./juicefs mount $META_URL /tmp/jfs -d
-    ps -ef | grep mount
-    #TODO: fstab 是怎么升级的？
-    exit 1
+    for i in {1..10}; do
+        mount /tmp/jfs
+        wait_command_success "ps -ef | grep juicefs | grep /tmp/jfs | grep -v grep | wc -l" 2
+        cat /tmp/jfs/.config
+        sleep 3s
+    done
+}
+
+wait_command_success()
+{
+    command=$1
+    expected=$2
+    timeout=$3
+    [[ -z "$timeout" ]] && timeout=30
+    echo "wait_command_success command=$command, expected=$expected, timeout=$timeout"
+    for i in $(seq 1 $timeout); do
+        result=$(eval "$command")
+        if [[ "$result" == "$expected" ]]; then
+            echo "command success"
+            break
+        fi
+        if [ $i -eq $timeout ]; then
+            eval "$command"
+            echo "command failed after $timeout"
+            exit 1
+        fi
+        echo "wait command to success in $i sec..." && sleep 1
+    done
 }
 
 prepare_test(){
