@@ -3497,6 +3497,9 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 	attr := &Attr{Typ: typ, Nlink: 1}
 	if !ok {
 		logger.Warnf("The entry of the inode was not found. inode: %d", inode)
+		if attr.Typ == TypeDirectory {
+			attr.Nlink = 2
+		}
 	} else {
 		m.parseAttr(n, attr)
 	}
