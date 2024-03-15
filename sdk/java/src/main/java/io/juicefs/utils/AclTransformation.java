@@ -50,19 +50,6 @@ import static org.apache.hadoop.fs.permission.AclEntryType.*;
 public final class AclTransformation {
   private static final int MAX_ENTRIES = 32;
 
-  /**
-   * Filters (discards) any existing ACL entries that have the same scope, type
-   * and name of any entry in the ACL spec.  If necessary, recalculates the mask
-   * entries.  If necessary, default entries may be inferred by copying the
-   * permissions of the corresponding access entries.  It is invalid to request
-   * removal of the mask entry from an ACL that would otherwise require a mask
-   * entry, due to existing named entries or an unnamed group entry.
-   *
-   * @param existingAcl List<AclEntry> existing ACL
-   * @param inAclSpec   List<AclEntry> ACL spec describing entries to filter
-   * @return List<AclEntry> new ACL
-   * @throws AclException if validation fails
-   */
   public static List<AclEntry> filterAclEntriesByAclSpec(List<AclEntry> existingAcl, List<AclEntry> inAclSpec) throws AclException {
     ValidatedAclSpec aclSpec = new ValidatedAclSpec(inAclSpec);
     ArrayList<AclEntry> aclBuilder = Lists.newArrayListWithCapacity(MAX_ENTRIES);
@@ -88,16 +75,6 @@ public final class AclTransformation {
     return buildAndValidateAcl(aclBuilder);
   }
 
-  /**
-   * Merges the entries of the ACL spec into the existing ACL.  If necessary,
-   * recalculates the mask entries.  If necessary, default entries may be
-   * inferred by copying the permissions of the corresponding access entries.
-   *
-   * @param existingAcl List<AclEntry> existing ACL
-   * @param inAclSpec   List<AclEntry> ACL spec containing entries to merge
-   * @return List<AclEntry> new ACL
-   * @throws AclException if validation fails
-   */
   public static List<AclEntry> mergeAclEntries(List<AclEntry> existingAcl, List<AclEntry> inAclSpec) throws AclException {
     ValidatedAclSpec aclSpec = new ValidatedAclSpec(inAclSpec);
     ArrayList<AclEntry> aclBuilder = Lists.newArrayListWithCapacity(MAX_ENTRIES);
@@ -141,21 +118,6 @@ public final class AclTransformation {
     return buildAndValidateAcl(aclBuilder);
   }
 
-  /**
-   * Completely replaces the ACL with the entries of the ACL spec.  If
-   * necessary, recalculates the mask entries.  If necessary, default entries
-   * are inferred by copying the permissions of the corresponding access
-   * entries.  Replacement occurs separately for each of the access ACL and the
-   * default ACL.  If the ACL spec contains only access entries, then the
-   * existing default entries are retained.  If the ACL spec contains only
-   * default entries, then the existing access entries are retained.  If the ACL
-   * spec contains both access and default entries, then both are replaced.
-   *
-   * @param existingAcl List<AclEntry> existing ACL
-   * @param inAclSpec   List<AclEntry> ACL spec containing replacement entries
-   * @return List<AclEntry> new ACL
-   * @throws AclException if validation fails
-   */
   public static List<AclEntry> replaceAclEntries(List<AclEntry> existingAcl, List<AclEntry> inAclSpec) throws AclException {
     ValidatedAclSpec aclSpec = new ValidatedAclSpec(inAclSpec);
     ArrayList<AclEntry> aclBuilder = Lists.newArrayListWithCapacity(MAX_ENTRIES);
@@ -187,22 +149,9 @@ public final class AclTransformation {
     return buildAndValidateAcl(aclBuilder);
   }
 
-  /**
-   * There is no reason to instantiate this class.
-   */
   private AclTransformation() {
   }
 
-  /**
-   * Comparator that enforces required ordering for entries within an ACL:
-   * -owner entry (unnamed user)
-   * -all named user entries (internal ordering undefined)
-   * -owning group entry (unnamed group)
-   * -all named group entries (internal ordering undefined)
-   * -mask entry
-   * -other entry
-   * All access ACL entries sort ahead of all default ACL entries.
-   */
   public static final Comparator<AclEntry> ACL_ENTRY_COMPARATOR = new Comparator<AclEntry>() {
     @Override
     public int compare(AclEntry entry1, AclEntry entry2) {
@@ -210,14 +159,6 @@ public final class AclTransformation {
     }
   };
 
-  /**
-   * Builds the final list of ACL entries to return by trimming, sorting and
-   * validating the ACL entries that have been added.
-   *
-   * @param aclBuilder ArrayList<AclEntry> containing entries to build
-   * @return List<AclEntry> unmodifiable, sorted list of ACL entries
-   * @throws AclException if validation fails
-   */
   public static List<AclEntry> buildAndValidateAcl(ArrayList<AclEntry> aclBuilder) throws AclException {
     aclBuilder.trimToSize();
     Collections.sort(aclBuilder, ACL_ENTRY_COMPARATOR);
@@ -253,8 +194,6 @@ public final class AclTransformation {
     return Collections.unmodifiableList(aclBuilder);
   }
 
-  // Check the max entries separately on access and default entries
-  // HDFS-7582
   private static void checkMaxEntries(ScopedAclEntries scopedEntries) throws AclException {
     List<AclEntry> accessEntries = scopedEntries.getAccessEntries();
     List<AclEntry> defaultEntries = scopedEntries.getDefaultEntries();
@@ -266,28 +205,6 @@ public final class AclTransformation {
     }
   }
 
-  /**
-   * Calculates mask entries required for the ACL.  Mask calculation is performed
-   * separately for each scope: access and default.  This method is responsible
-   * for handling the following cases of mask calculation:
-   * 1. Throws an exception if the caller attempts to remove the mask entry of an
-   * existing ACL that requires it.  If the ACL has any named entries, then a
-   * mask entry is required.
-   * 2. If the caller supplied a mask in the ACL spec, use it.
-   * 3. If the caller did not supply a mask, but there are ACL entry changes in
-   * this scope, then automatically calculate a new mask.  The permissions of
-   * the new mask are the union of the permissions on the group entry and all
-   * named entries.
-   *
-   * @param aclBuilder   ArrayList<AclEntry> containing entries to build
-   * @param providedMask EnumMap<AclEntryScope, AclEntry> mapping each scope to
-   *                     the mask entry that was provided for that scope (if provided)
-   * @param maskDirty    EnumSet<AclEntryScope> which contains a scope if the mask
-   *                     entry is dirty (added or deleted) in that scope
-   * @param scopeDirty   EnumSet<AclEntryScope> which contains a scope if any entry
-   *                     is dirty (added or deleted) in that scope
-   * @throws AclException if validation fails
-   */
   private static void calculateMasks(List<AclEntry> aclBuilder, EnumMap<AclEntryScope, AclEntry> providedMask, EnumSet<AclEntryScope> maskDirty, EnumSet<AclEntryScope> scopeDirty) throws AclException {
     EnumSet<AclEntryScope> scopeFound = EnumSet.noneOf(AclEntryScope.class);
     EnumMap<AclEntryScope, FsAction> unionPerms = Maps.newEnumMap(AclEntryScope.class);
@@ -324,12 +241,6 @@ public final class AclTransformation {
     }
   }
 
-  /**
-   * Adds unspecified default entries by copying permissions from the
-   * corresponding access entries.
-   *
-   * @param aclBuilder ArrayList<AclEntry> containing entries to build
-   */
   private static void copyDefaultsIfNeeded(List<AclEntry> aclBuilder) {
     Collections.sort(aclBuilder, ACL_ENTRY_COMPARATOR);
     ScopedAclEntries scopedEntries = new ScopedAclEntries(aclBuilder);
@@ -354,9 +265,6 @@ public final class AclTransformation {
     }
   }
 
-  /**
-   * An ACL spec that has been pre-validated and sorted.
-   */
   private static final class ValidatedAclSpec implements Iterable<AclEntry> {
     private final List<AclEntry> aclSpec;
 
