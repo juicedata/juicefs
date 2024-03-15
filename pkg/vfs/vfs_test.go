@@ -205,7 +205,7 @@ func TestVFSIO(t *testing.T) {
 		t.Fatalf("write file: %s", e)
 	}
 	var attr meta.Attr
-	if e = v.Truncate(ctx, fe.Inode, (100<<20)+2, 1, &attr); e != 0 {
+	if e = v.Truncate(ctx, fe.Inode, (100<<20)+2, fh, &attr); e != 0 {
 		t.Fatalf("truncate file: %s", e)
 	}
 	if n, e := v.CopyFileRange(ctx, fe.Inode, fh, 0, fe.Inode, fh, 10<<20, 10, 0); e != 0 || n != 10 {
