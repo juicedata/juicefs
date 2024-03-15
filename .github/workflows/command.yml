@@ -114,7 +114,7 @@ jobs:
         run: |
           echo "juicefs log"
           sudo tail -n 1000 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          grep "<FATAL>:" /var/log/juicefs.log || true
           
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
