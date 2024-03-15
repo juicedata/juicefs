@@ -231,7 +231,7 @@ func (v *VFS) releaseHandle(inode Ino, fh uint64) {
 }
 
 func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32) uint64 {
-	h := v.newHandle(inode, (flags&syscall.O_ACCMODE) == syscall.O_RDONLY)
+	h := v.newHandle(inode, (flags&O_ACCMODE) == syscall.O_RDONLY)
 	h.Lock()
 	defer h.Unlock()
 	h.flags = flags
