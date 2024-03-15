@@ -1280,7 +1280,10 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 		}
 	}
 
-	if attr.AccessACL != aclAPI.None {
+	// ref: https://github.com/torvalds/linux/blob/master/fs/namei.c
+	// ci: 5fc475b749c72e0b3f3991b33a90d302f52ae746
+	// dont check acl if group mode is 0
+	if attr.AccessACL != aclAPI.None && (attr.Mode&00070) != 0 {
 		rule := &aclAPI.Rule{}
 		if st := m.en.doGetFacl(ctx, inode, aclAPI.TypeAccess, attr.AccessACL, rule); st != 0 {
 			return st
