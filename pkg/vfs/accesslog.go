@@ -125,13 +125,5 @@ func (v *VFS) readAccessLog(fh uint64, buf []byte) int {
 func (v *VFS) closeAccessLog(fh uint64) {
 	readerLock.Lock()
 	defer readerLock.Unlock()
-	if _, ok := readers[fh]; !ok {
-		v.hanleM.Lock()
-		h := &handle{inode: logInode, fh: fh}
-		h.cond = utils.NewCond(h)
-		v.handles[logInode] = append(v.handles[logInode], h)
-		v.hanleM.Unlock()
-		openAccessLog(fh)
-	}
 	delete(readers, fh)
 }
