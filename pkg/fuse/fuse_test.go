@@ -95,9 +95,10 @@ func mount(url, mp string) {
 	}))
 
 	conf := &vfs.Config{
-		Meta:   metaConf,
-		Format: *format,
-		Chunk:  &chunkConf,
+		Meta:     metaConf,
+		Format:   *format,
+		Chunk:    &chunkConf,
+		FuseOpts: &FuseOptions{},
 	}
 
 	err = m.NewSession(true)
