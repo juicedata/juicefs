@@ -1,6 +1,18 @@
 name: "vdbench"
 
 on:
+  push:
+    branches:
+      - 'main'
+      - 'release-*'
+    paths:
+      - '**/vdbench.yml'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-*'
+    paths:
+      - '**/vdbench.yml'
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
