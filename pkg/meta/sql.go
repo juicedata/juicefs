@@ -2430,20 +2430,18 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		nodeAttr.Ctime = ctime.UnixNano() / 1e3
 		nodeAttr.Ctimensec = int16(ctime.Nanosecond())
 
-		var ck = chunk{Inode: inode, Indx: indx}
-		ok, err = s.ForUpdate().MustCols("indx").Get(&ck)
+		buf := marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len)
+		var ck = chunk{Inode: inode, Indx: indx, Slices: buf}
+		_, err = s.Insert(&ck)
+		if err != nil && isDuplicateEntryErr(err) {
+			ck.Slices = nil
+			if _, err = s.ForUpdate().MustCols("indx").Get(&ck); err != nil {
+				return err
+			}
+			err = m.appendSlice(s, inode, indx, buf)
+		}
 		if err != nil {
 			return err
-		}
-		buf := marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len)
-		if ok {
-			if err := m.appendSlice(s, inode, indx, buf); err != nil {
-				return err
-			}
-		} else {
-			if err = mustInsert(s, &chunk{Inode: inode, Indx: indx, Slices: buf}); err != nil {
-				return err
-			}
 		}
 		if err = mustInsert(s, sliceRef{slice.Id, slice.Size, 1}); err != nil {
 			return err
