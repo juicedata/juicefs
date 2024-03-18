@@ -3,15 +3,16 @@ name: "rediscompile"
 on:
   push:
     branches:
+      - 'main'
       - 'release-**'
-    paths-ignore:
-      - 'docs/**'
+    paths:
+      - '**/redis_compile.yml'
   pull_request:
-    #The branches below must be a subset of the branches above
     branches:
+      - 'main'
       - 'release-**'
-    paths-ignore:
-      - 'docs/**'
+    paths:
+      - '**/redis_compile.yml'
   schedule:
     - cron:  '30 20 * * *'
   workflow_dispatch:
