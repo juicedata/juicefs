@@ -694,13 +694,35 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 		readSizeHistogram.Observe(float64(n))
 		logit(ctx, "read (%d,%d,%d): %s (%d)", ino, size, off, strerr(err), n)
 	}()
-	h := v.findHandle(ino, fh)
+
+	var isRecovered bool
+	var findHandle = func(inode Ino, fh uint64) *handle {
+		v.hanleM.Lock()
+		defer v.hanleM.Unlock()
+		for _, f := range v.handles[inode] {
+			if f.fh == fh {
+				return f
+			}
+		}
+		if fh&1 == 1 && inode != controlInode {
+			isRecovered = true
+			f := &handle{inode: inode, fh: fh}
+			f.cond = utils.NewCond(f)
+			v.handles[inode] = append(v.handles[inode], f)
+			if v.handleIno[fh] == 0 {
+				v.handleIno[fh] = inode
+			}
+			return f
+		}
+		return nil
+	}
+
+	h := findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF
 		return
 	}
-	if h.flags == 0 {
-		// recovered
+	if isRecovered {
 		var attr Attr
 		err = v.Meta.Open(ctx, ino, syscall.O_RDONLY, &attr)
 		if err != 0 {
