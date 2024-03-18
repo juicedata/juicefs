@@ -97,6 +97,7 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           ./juicefs format $meta_url vdbench-long-run --trash-days 0 --storage minio --bucket http://127.0.0.1:19000/mypics --access-key minioadmin --secret-key minioadmin
           ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --cache-size 1024
+          exit 1
           vdbench/vdbench -f .github/workflows/resources/vdbench_long_run.conf -jn
 
       - uses: actions/upload-artifact@v3
