@@ -181,6 +181,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--capacity=0`|storage space limit in GiB, default to 0 which means no limit. Capacity will include trash files, if [trash](../security/trash.md) is enabled.|
 |`--inodes=0`|Limit the number of inodes, default to 0 which means no limit.|
 |`--trash-days=1`|By default, delete files are put into [trash](../security/trash.md), this option controls the number of days before trash files are expired, default to 1, set to 0 to disable trash.|
+|`--enable-acl=true` <VersionAdd>1.2</VersionAdd>|enable [POSIX ACL](../security/posix_acl.md)，it is irreversible. |
 
 ### `juicefs config` {#config}
 
@@ -235,6 +236,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--min-client-version value` <VersionAdd>1.1</VersionAdd> |minimum client version allowed to connect|
 |`--max-client-version value` <VersionAdd>1.1</VersionAdd> |maximum client version allowed to connect|
 |`--dir-stats` <VersionAdd>1.1</VersionAdd> |enable dir stats, which is necessary for fast summary and dir quota (default: false)|
+|`--enable-acl` <VersionAdd>1.2</VersionAdd>|enable POSIX ACL(irreversible), min-client-version will be set to v1.2|
 
 ### `juicefs quota` <VersionAdd>1.1</VersionAdd> {#quota}
 
