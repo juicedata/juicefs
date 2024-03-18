@@ -14,16 +14,16 @@ sidebar_position: 3
 
 目前 ACL 开启后暂不支持取消，所以--enable-acl flag 与卷关联。
 
-### 新卷创建启用ACL
+### 新卷创建启用 ACL
 
 ```shell
 juicefs format sqlite3://myjfs.db myjfs --enable-acl
 ```
 
-### 已有卷启用ACL
+### 已有卷启用 ACL
 
-- 所有旧客户端升级到v1.2, 并且重新mount卷
-- 使用v1.2版本客户端执行下面指令进行配置
+- 所有旧客户端升级到 v1.2, 并且重新 mount 卷
+- 使用 v1.2 版本客户端执行下面指令进行配置
 
 ```shell
 juicefs config sqlite3://myjfs.db --enable-acl
