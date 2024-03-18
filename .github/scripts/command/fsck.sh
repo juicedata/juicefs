@@ -38,7 +38,7 @@ test_sync_dir_stat()
     kill -9 $pid
     ./juicefs info -r /jfs/d
     ./juicefs info -r /jfs/d --strict 
-    ./juicefs fsck $META_URL --path /d --sync-dir-stat --repair -r -v
+    ./juicefs fsck $META_URL --path /d --sync-dir-stat --repair -r
     ./juicefs info -r /jfs/d | tee info1.log
     ./juicefs info -r /jfs/d --strict | tee info2.log
     diff info1.log info2.log
