@@ -2434,11 +2434,11 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		var ck = chunk{Inode: inode, Indx: indx, Slices: buf}
 		_, err = s.Insert(&ck)
 		if err != nil && isDuplicateEntryErr(err) {
-			ck.Slices = nil
-			if _, err = s.ForUpdate().MustCols("indx").Get(&ck); err != nil {
+			if err = m.appendSlice(s, inode, indx, buf); err != nil {
 				return err
 			}
-			err = m.appendSlice(s, inode, indx, buf)
+			ck.Slices = nil
+			_, err = s.MustCols("indx").Get(&ck)
 		}
 		if err != nil {
 			return err
