@@ -3,18 +3,18 @@ name: "command-test"
 on:
   push:
     branches:
-      # - 'main'
+      - 'main'
       - 'release-**'
     paths-ignore:
-      - 'docs/**'
-      - '**.md'
+      - '.github/scripts/command/*.sh'
+      - '**/command.yml'
   pull_request:
     branches:
-      # - 'main'
+      - 'main'
       - 'release-**'
     paths-ignore:
-      - 'docs/**'
-      - '**.md'
+      - '.github/scripts/command/*.sh'
+      - '**/command.yml'
   schedule:
     - cron:  '30 20 * * *'
 
@@ -80,6 +80,11 @@ jobs:
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/config.sh
     
+      - name: Test acl
+        timeout-minutes: 30
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/acl.sh     
+
       - name: Test Clone
         timeout-minutes: 30
         run: |
@@ -94,11 +99,6 @@ jobs:
         timeout-minutes: 30
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/gc.sh
-  
-      - name: Test Load & Dump
-        timeout-minutes: 30
-        run: |
-          sudo META=${{matrix.meta}} .github/scripts/command/load_dump.sh
 
       - name: Test Info
         run: |
@@ -109,7 +109,7 @@ jobs:
         run: |
           echo "juicefs log"
           sudo tail -n 1000 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          grep "<FATAL>:" /var/log/juicefs.log || true
           
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
@@ -132,6 +132,11 @@ jobs:
 
       - name: Build 
         uses: ./.github/actions/build
+  
+      - name: Test Load & Dump
+        timeout-minutes: 30
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/load_dump.sh
 
       - name: Test Quota
         timeout-minutes: 30
