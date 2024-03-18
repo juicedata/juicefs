@@ -49,4 +49,4 @@ operations by the old client may impact the correctness of ACL.
 For scenarios with infrequent ACL changes,
 the impact is minimal with memory cache optimization.
 - Enabling ACL will activate extended attributes (xattr) functionality.
-- Enabling ACL is recommended for using ["Sync Accounts between Multiple Hosts"](administration/sync_accounts_between_multiple_hosts.md)
+- Enabling ACL is recommended for using ["Sync Accounts between Multiple Hosts"](../administration/sync_accounts_between_multiple_hosts.md)
