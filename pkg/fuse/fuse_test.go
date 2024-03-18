@@ -98,7 +98,7 @@ func mount(url, mp string) {
 		Meta:     metaConf,
 		Format:   *format,
 		Chunk:    &chunkConf,
-		FuseOpts: &FuseOptions{},
+		FuseOpts: &vfs.FuseOptions{},
 	}
 
 	err = m.NewSession(true)
