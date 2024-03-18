@@ -741,13 +741,14 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 		err = syscall.EFBIG
 		return
 	}
+	if h.reader == nil {
+		err = syscall.EBADF
+		return
+	}
+
 	// there could be read operation for write-only if kernel writeback is enabled
 	if !v.Conf.FuseOpts.EnableWriteback && !hasReadPerm(h.flags) {
 		err = syscall.EACCES
-		return
-	}
-	if h.reader == nil {
-		err = syscall.EBADF
 		return
 	}
 	if !h.Rlock(ctx) {

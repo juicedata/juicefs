@@ -67,6 +67,7 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 			CacheSize:  10,
 			CacheDir:   "memory",
 		},
+		FuseOpts: &FuseOptions{},
 	}
 	blob, _ := object.CreateStorage("mem", "", "", "", "")
 	registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
