@@ -3,7 +3,7 @@ source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
 source .github/scripts/start_meta_engine.sh
-start_meta_engine $META
+start_meta_engine $META minio
 META_URL=$(get_meta_url $META)
 [ ! -x mc ] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc && chmod +x mc
 
