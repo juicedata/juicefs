@@ -75,6 +75,10 @@ jobs:
       - name: Build 
         timeout-minutes: 10
         uses: ./.github/actions/build
+      
+      - name: Test Format
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/format.sh
 
       - name: Test Config
         run: |
