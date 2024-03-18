@@ -5,7 +5,7 @@ sidebar_position: 3
 
 1.2 版本支持 POSIX ACL, 详细规则参考
 
-- [POSIX Access Control Lists on Linux](https://www.usenix.org/legacy/publications/library/proceedings/usenix03/tech/freenix03/full_papers/gruenbacher/gruenbacher_html/main.html#:~:text=Access%20Check%20Algorithm&text=The%20ACL%20entries%20are%20looked,matching%20entry%20contains%20sufficient%20permissions.)
+- [POSIX Access Control Lists on Linux](https://www.usenix.org/legacy/publications/library/proceedings/usenix03/tech/freenix03/full_papers/gruenbacher/gruenbacher_html/main.html)
 - [setfacl](https://linux.die.net/man/1/setfacl)
 
 ## 使用
@@ -23,6 +23,8 @@ juicefs format sqlite3://myjfs.db myjfs --enable-acl
 - 修改已有卷配置
 
 ```shell
+# 所有旧客户端升级到v1.2, 并且重新mount卷
+# 使用v1.2版本客户端进行配置
 juicefs config sqlite3://myjfs.db --enable-acl
 ```
 
@@ -40,5 +42,3 @@ juicefs config sqlite3://myjfs.db --enable-acl
 
 - 开启 ACL 后，客户端版本要求会提升到 v1.2
 - 开启 ACL 会有额外的性能影响，对于 ACL 变动不频繁的场景，有内存 cache 优化影响不大
-- 开启 ACL 会启用扩展属性 (xattr) 功能
-- 开启 ACL 建议使用[「多主机间同步账户」](../administration/sync_accounts_between_multiple_hosts.md)
