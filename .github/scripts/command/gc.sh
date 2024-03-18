@@ -19,9 +19,7 @@ test_delay_delete_slice_after_compaction(){
     # don't skip files when gc compact
     export JFS_SKIPPED_TIME=1
     ./juicefs gc --compact --delete $META_URL
-    exit 1
     killall -9 redis-server
-    docker restart $container_id
     sleep 3
     ./juicefs fsck $META_URL
 }
