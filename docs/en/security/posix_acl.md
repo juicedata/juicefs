@@ -16,17 +16,18 @@ Version 1.2 supports POSIX ACL. For detailed rules, please refer to:
 Currently, once ACL is enabled, it cannot be disabled.  
 Therefore, the --enable-acl flag is associated with the volume.
 
-- Create a new volume
+### Enable ACL for new volumes
 
 ```shell
 juicefs format sqlite3://myjfs.db myjfs --enable-acl
 ```
 
-- Modify the configuration of an existing volume
+### Enable ACl for existing volumes
+
+- Upgrade all old client to v1.2 and remount it.
+- Use the following command with v1.2 client to change the volume configuration.
 
 ```shell
-# upgrade all client to v1.2 and remount it
-# enable ACL using v1.2 client
 juicefs config sqlite3://myjfs.db --enable-acl
 ```
 
