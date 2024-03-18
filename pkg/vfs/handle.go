@@ -191,6 +191,8 @@ func (v *VFS) findAllHandles(inode Ino) []*handle {
 	return hs2
 }
 
+const O_RECOVERED = 1 << 31 // is recovered fd
+
 func (v *VFS) findHandle(inode Ino, fh uint64) *handle {
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
@@ -200,7 +202,7 @@ func (v *VFS) findHandle(inode Ino, fh uint64) *handle {
 		}
 	}
 	if fh&1 == 1 && inode != controlInode {
-		f := &handle{inode: inode, fh: fh}
+		f := &handle{inode: inode, fh: fh, flags: O_RECOVERED}
 		f.cond = utils.NewCond(f)
 		v.handles[inode] = append(v.handles[inode], f)
 		if v.handleIno[fh] == 0 {

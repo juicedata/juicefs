@@ -699,7 +699,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 		err = syscall.EBADF
 		return
 	}
-	if h.flags == 0 {
+	if h.flags&O_RECOVERED != 0 {
 		// recovered
 		var attr Attr
 		err = v.Meta.Open(ctx, ino, syscall.O_RDONLY, &attr)
