@@ -236,7 +236,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--min-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最小客户端版本|
 |`--max-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最大客户端版本|
 |`--dir-stats` <VersionAdd>1.1</VersionAdd>|开启目录统计，这是快速汇总和目录配额所必需的 (默认值：false)|
-|`--enable-acl` <VersionAdd>1.2</VersionAdd>|开启POSIX ACL(不支持关闭), 同时允许连接的最小客户端版本会提升到v1.2|
+|`--enable-acl` <VersionAdd>1.2</VersionAdd>|开启 POSIX ACL(不支持关闭), 同时允许连接的最小客户端版本会提升到 v1.2|
 
 ### `juicefs quota` <VersionAdd>1.1</VersionAdd> {#quota}
 
