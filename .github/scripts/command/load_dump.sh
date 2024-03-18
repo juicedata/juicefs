@@ -100,11 +100,6 @@ compare_stat_acl(){
         stat2=$(stat -c "%F %a %s %h %U %G" "${files2[$i]}")
         acl1=$(getfacl -p "${files1[$i]}" | tail -n +2)
         acl2=$(getfacl -p "${files2[$i]}" | tail -n +2)
-        # echo $i
-        # echo $stat1
-        # echo $stat2
-        # echo $acl1
-        # echo $acl2
         [[ "$stat1" != "$stat2" ]] && echo "compare_stat_acl: stat for ${files1[$i]} and ${files2[$i]} differs" && echo $stat1 && echo $stat2 && exit 1
         [[ "$acl1" != "$acl2" ]] && echo "compare_stat_acl: ACLs for ${files1[$i]} and ${files2[$i]} differs" && echo $acl1 && echo $acl2 && exit 1
     done

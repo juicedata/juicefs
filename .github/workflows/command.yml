@@ -99,11 +99,6 @@ jobs:
         timeout-minutes: 30
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/gc.sh
-  
-      - name: Test Load & Dump
-        timeout-minutes: 30
-        run: |
-          sudo META=${{matrix.meta}} .github/scripts/command/load_dump.sh
 
       - name: Test Info
         run: |
@@ -137,6 +132,11 @@ jobs:
 
       - name: Build 
         uses: ./.github/actions/build
+  
+      - name: Test Load & Dump
+        timeout-minutes: 30
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/load_dump.sh
 
       - name: Test Quota
         timeout-minutes: 30
