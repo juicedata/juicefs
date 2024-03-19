@@ -232,12 +232,8 @@ func (v *VFS) releaseHandle(inode Ino, fh uint64) {
 	}
 }
 
-func hasReadPerm(flag uint32) bool {
-	return (flag & O_ACCMODE) != syscall.O_WRONLY
-}
-
 func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32) uint64 {
-	h := v.newHandle(inode, hasReadPerm(flags))
+	h := v.newHandle(inode, (flags&O_ACCMODE) == syscall.O_RDONLY)
 	h.Lock()
 	defer h.Unlock()
 	h.flags = flags
