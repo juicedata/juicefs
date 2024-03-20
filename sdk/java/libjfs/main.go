@@ -31,6 +31,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/juicedata/juicefs/pkg/acl"
 	"io"
 	"net/http"
 	_ "net/http/pprof"
@@ -880,6 +881,71 @@ func jfs_removeXattr(pid int, h int64, path *C.char, name *C.char) int {
 		return EINVAL
 	}
 	return errno(w.RemoveXattr(w.withPid(pid), C.GoString(path), C.GoString(name)))
+}
+
+//export jfs_getfacl
+func jfs_getfacl(pid int, h int64, path *C.char, acltype int, buf uintptr, blen int) int {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	rule := acl.EmptyRule()
+	err := w.GetFacl(w.withPid(pid), C.GoString(path), uint8(acltype), rule)
+	if err != 0 {
+		return errno(err)
+	}
+	wb := utils.NewNativeBuffer(toBuf(buf, blen))
+	wb.Put16(rule.Owner)
+	wb.Put16(rule.Group)
+	wb.Put16(rule.Other)
+	wb.Put16(rule.Mask)
+	wb.Put16(uint16(len(rule.NamedUsers)))
+	wb.Put16(uint16(len(rule.NamedGroups)))
+	var off uintptr = 12
+	for i, entry := range append(rule.NamedUsers, rule.NamedGroups...) {
+		var name string
+		if i < len(rule.NamedUsers) {
+			name = w.uid2name(entry.Id)
+		} else {
+			name = w.gid2name(entry.Id)
+		}
+		if wb.Left() < len(name)+1+2 {
+			return -100
+		}
+		wb.Put([]byte(name))
+		wb.Put8(0)
+		wb.Put16(entry.Perm)
+	}
+	return int(off)
+}
+
+//export jfs_setfacl
+func jfs_setfacl(pid int, h int64, path *C.char, acltype int, buf uintptr, alen int) int {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	rule := acl.EmptyRule()
+	r := utils.NewNativeBuffer(toBuf(buf, alen))
+	rule.Owner = r.Get16()
+	rule.Group = r.Get16()
+	rule.Other = r.Get16()
+	rule.Mask = r.Get16()
+	namedusers := r.Get16()
+	namedgroups := r.Get16()
+	for i := uint16(0); i < namedusers+namedgroups; i++ {
+		name := string(r.Get(int(r.Get8())))
+		var entry acl.Entry
+		entry.Perm = uint16(r.Get8())
+		if i < namedusers {
+			entry.Id = w.lookupUid(name)
+			rule.NamedUsers = append(rule.NamedUsers, entry)
+		} else {
+			entry.Id = w.lookupGid(name)
+			rule.NamedGroups = append(rule.NamedGroups, entry)
+		}
+	}
+	return errno(w.SetFacl(w.withPid(pid), C.GoString(path), uint8(acltype), rule))
 }
 
 //export jfs_readlink
