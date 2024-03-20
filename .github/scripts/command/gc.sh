@@ -11,6 +11,10 @@ start_meta_engine $META
 META_URL=$(get_meta_url $META)
 
 test_delay_delete_slice_after_compaction(){
+    if [[ "$META" != redis* ]]; then
+        echo "this test only runs for redis meta engine"
+        return
+    fi
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 1
     ./juicefs mount -d $META_URL /jfs --no-usage-report
