@@ -151,3 +151,4 @@ func (c *memcache) stage(key string, data []byte, keepCache bool) (string, error
 }
 func (c *memcache) uploaded(key string, size int) {}
 func (c *memcache) stagePath(key string) string   { return "" }
+func (c *memcache) isEmpty() bool                 { return false }

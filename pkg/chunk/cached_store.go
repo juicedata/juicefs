@@ -763,6 +763,16 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 			return false
 		}
 	})
+
+	go func() {
+		for {
+			if store.bcache.isEmpty() {
+				logger.Warn("cache store is empty, use memory cache")
+			}
+			store.bcache = newMemStore(&store.conf, newCacheManagerMetrics(reg))
+		}
+	}()
+
 	if config.CacheSize == 0 {
 		config.Prefetch = 0 // disable prefetch if cache is disabled
 	}
