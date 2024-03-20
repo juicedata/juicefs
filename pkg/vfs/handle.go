@@ -160,9 +160,16 @@ func (h *handle) Close() {
 	}
 }
 
-func (v *VFS) newHandle(inode Ino) *handle {
+func (v *VFS) newHandle(inode Ino, readOnly bool) *handle {
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
+	var lowBits uint64
+	if readOnly {
+		lowBits = 1
+	}
+	for v.handleIno[v.nextfh] > 0 || v.nextfh&1 != lowBits {
+		v.nextfh++ // skip recovered fd
+	}
 	fh := v.nextfh
 	h := &handle{inode: inode, fh: fh}
 	v.nextfh++
@@ -184,6 +191,8 @@ func (v *VFS) findAllHandles(inode Ino) []*handle {
 	return hs2
 }
 
+const O_RECOVERED = 1 << 31 // is recovered fd
+
 func (v *VFS) findHandle(inode Ino, fh uint64) *handle {
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
@@ -191,6 +200,15 @@ func (v *VFS) findHandle(inode Ino, fh uint64) *handle {
 		if f.fh == fh {
 			return f
 		}
+	}
+	if fh&1 == 1 && inode != controlInode {
+		f := &handle{inode: inode, fh: fh, flags: O_RECOVERED}
+		f.cond = utils.NewCond(f)
+		v.handles[inode] = append(v.handles[inode], f)
+		if v.handleIno[fh] == 0 {
+			v.handleIno[fh] = inode
+		}
+		return f
 	}
 	return nil
 }
@@ -215,7 +233,7 @@ func (v *VFS) releaseHandle(inode Ino, fh uint64) {
 }
 
 func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32) uint64 {
-	h := v.newHandle(inode)
+	h := v.newHandle(inode, (flags&O_ACCMODE) == syscall.O_RDONLY)
 	h.Lock()
 	defer h.Unlock()
 	h.flags = flags
