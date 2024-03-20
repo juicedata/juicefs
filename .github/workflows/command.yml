@@ -5,14 +5,14 @@ on:
     branches:
       - 'main'
       - 'release-**'
-    paths-ignore:
+    paths:
       - '.github/scripts/command/*.sh'
       - '**/command.yml'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
-    paths-ignore:
+    paths:
       - '.github/scripts/command/*.sh'
       - '**/command.yml'
   schedule:
