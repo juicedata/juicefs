@@ -672,6 +672,9 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 		}
 
 		if ino == logInode {
+			if h.flags&O_RECOVERED != 0 {
+				openAccessLog(fh)
+			}
 			n = readAccessLog(fh, buf)
 		} else {
 			defer func() { logit(ctx, "read (%d,%d,%d,%d): %s (%d)", ino, size, off, fh, strerr(err), n) }()
