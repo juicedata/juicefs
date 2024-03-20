@@ -889,8 +889,8 @@ func jfs_getfacl(pid int, h int64, path *C.char, acltype int, buf uintptr, blen 
 	if w == nil {
 		return EINVAL
 	}
-	var rule acl.Rule
-	err := w.GetFacl(w.withPid(pid), C.GoString(path), uint8(acltype), &rule)
+	rule := acl.EmptyRule()
+	err := w.GetFacl(w.withPid(pid), C.GoString(path), uint8(acltype), rule)
 	if err != 0 {
 		return errno(err)
 	}
@@ -925,7 +925,7 @@ func jfs_setfacl(pid int, h int64, path *C.char, acltype int, buf uintptr, alen 
 	if w == nil {
 		return EINVAL
 	}
-	var rule acl.Rule
+	rule := acl.EmptyRule()
 	r := utils.NewNativeBuffer(toBuf(buf, alen))
 	rule.Owner = r.Get16()
 	rule.Group = r.Get16()
@@ -945,7 +945,7 @@ func jfs_setfacl(pid int, h int64, path *C.char, acltype int, buf uintptr, alen 
 			rule.NamedGroups = append(rule.NamedGroups, entry)
 		}
 	}
-	return errno(w.SetFacl(w.withPid(pid), C.GoString(path), uint8(acltype), &rule))
+	return errno(w.SetFacl(w.withPid(pid), C.GoString(path), uint8(acltype), rule))
 }
 
 //export jfs_readlink

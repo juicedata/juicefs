@@ -1100,4 +1100,24 @@ public class JuiceFileSystemTest extends TestCase {
     fs.delete(parent, true);
   }
 
+  public void testFileStatusWithAcl() throws Exception {
+    List<AclEntry> acls = Lists.newArrayList(
+        aclEntry(ACCESS, USER, ALL),
+        aclEntry(ACCESS, USER, "foo", ALL),
+        aclEntry(ACCESS, OTHER, ALL),
+        aclEntry(ACCESS, GROUP, ALL)
+    );
+    Path p = new Path("/test_acl_status");
+    fs.delete(p, true);
+    fs.mkdirs(p);
+    FileStatus pStatus = fs.getFileStatus(p);
+    assertFalse(pStatus.hasAcl());
+
+    Path f = new Path(p, "f");
+    fs.create(f).close();
+    fs.setAcl(f, acls);
+    FileStatus[] fileStatuses = fs.listStatus(p);
+    assertTrue(fileStatuses[0].getPermission().getAclBit());
+    assertTrue(fileStatuses[0].hasAcl());
+  }
 }

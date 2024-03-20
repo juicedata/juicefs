@@ -87,6 +87,9 @@ func (fs *FileStat) Mode() os.FileMode {
 	if attr.Mode&01000 != 0 {
 		mode |= os.ModeSticky
 	}
+	if attr.AccessACL+attr.DefaultACL > 0 {
+		mode |= 1 << 18
+	}
 	switch attr.Typ {
 	case meta.TypeDirectory:
 		mode |= os.ModeDir
@@ -649,6 +652,22 @@ func (fs *FileSystem) SetFacl(ctx meta.Context, p string, acltype uint8, rule *a
 	fi, err := fs.resolve(ctx, p, true)
 	if err != 0 {
 		return
+	}
+	if acltype == acl.TypeDefault && fi.Mode().IsRegular() {
+		if rule.IsEmpty() {
+			return
+		} else {
+			return syscall.ENOTSUP
+		}
+	}
+	if rule.IsEmpty() {
+		oldRule := acl.EmptyRule()
+		if err = fs.m.GetFacl(ctx, fi.inode, acltype, oldRule); err != 0 {
+			return err
+		}
+		rule.Owner = oldRule.Owner
+		rule.Other = oldRule.Other
+		rule.Group = oldRule.Group & oldRule.Mask
 	}
 	err = fs.m.SetFacl(ctx, fi.inode, acltype, rule)
 	return

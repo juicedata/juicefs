@@ -99,6 +99,8 @@ public class JuiceFileSystemImpl extends FileSystem {
    * hadoop compatibility
    */
   private boolean withStreamCapability;
+  private Constructor<FileStatus> fileStatusConstructor;
+
   // constructor for BufferedFSOutputStreamWithStreamCapabilities
   private Constructor<?> constructor;
   private Method setStorageIds;
@@ -430,6 +432,17 @@ public class JuiceFileSystemImpl extends FileSystem {
                 .getConstructor(OutputStream.class, Integer.TYPE, String.class);
       } catch (ClassNotFoundException | NoSuchMethodException e) {
         throw new RuntimeException(e);
+      }
+    }
+    // for hadoop compatibility
+    boolean hasAclMtd = ReflectionUtil.hasMethod(FileStatus.class.getName(), "hasAcl", (String[]) null);
+    if (hasAclMtd) {
+      fileStatusConstructor = ReflectionUtil.getConstructor(FileStatus.class,
+          long.class, boolean.class, int.class, long.class, long.class,
+          long.class, FsPermission.class, String.class, String.class, Path.class,
+          Path.class, boolean.class, boolean.class, boolean.class);
+      if (fileStatusConstructor == null) {
+        throw new IOException("incompatible hadoop version");
       }
     }
 
@@ -1433,14 +1446,25 @@ public class JuiceFileSystemImpl extends FileSystem {
     int mode = buf.getInt(0);
     boolean isdir = ((mode >>> 31) & 1) == 1; // Go
     int stickybit = (mode >>> 20) & 1;
+    boolean hasAcl = (mode >> 18 & 1) == 1;
     FsPermission perm = new FsPermission((short) ((mode & 0777) | (stickybit << 9)));
+    perm = new FsPermissionExtension(perm, hasAcl, false);
     long length = buf.getLongLong(4);
     long mtime = buf.getLongLong(12);
     long atime = buf.getLongLong(20);
     String user = buf.getString(28);
     String group = buf.getString(28 + user.length() + 1);
     assert (30 + user.length() + group.length() == size);
-    return new FileStatus(length, isdir, 1, blocksize, mtime, atime, perm, user, group, p);
+
+    if (fileStatusConstructor == null) {
+      return new FileStatus(length, isdir, 1, blocksize, mtime, atime, perm, user, group, p);
+    } else {
+      try {
+        return fileStatusConstructor.newInstance(length, isdir, 1, blocksize, mtime, atime, perm, user, group, null, p, hasAcl, false, false);
+      } catch (Exception e) {
+        throw new IOException("construct fileStatus failed", e);
+      }
+    }
   }
 
   @Override
@@ -1821,6 +1845,9 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
     int r = lib.jfs_setfacl(Thread.currentThread().getId(), handle, normalizePath(path), scope.ordinal() + 1, buf,
         12 + namedaclsize);
+    if (r == ENOTSUP) {
+      throw new IOException("Invalid ACL: only directories may have a default ACL");
+    }
     if (r < 0)
       throw error(r, path);
   }
