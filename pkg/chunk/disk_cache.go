@@ -129,6 +129,7 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingP
 	}
 	logger.Infof("Disk cache (%s): capacity (%d MB), free ratio (%d%%), max pending pages (%d)", c.dir, c.capacity>>20, int(c.freeRatio*100), pendingPages)
 	c.createLockFile()
+	go c.checkLockFile()
 	go c.flush()
 	go c.checkFreeSpace()
 	if c.cacheExpire > 0 {
@@ -140,8 +141,12 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingP
 	return c
 }
 
+func (cache *cacheStore) lockFilePath() string {
+	return filepath.Join(cache.dir, ".lock")
+}
+
 func (cache *cacheStore) createLockFile() {
-	lockfile := filepath.Join(cache.dir, ".lock")
+	lockfile := cache.lockFilePath()
 	err := cache.checkErr(func() error {
 		f, err := os.OpenFile(lockfile, os.O_CREATE|os.O_RDWR, 0666)
 		if err != nil {
@@ -165,6 +170,20 @@ func (cache *cacheStore) createLockFile() {
 	})
 	if err != nil {
 		logger.Panicf("create lock file %s: %s", lockfile, err)
+	}
+}
+
+func (cache *cacheStore) checkLockFile() {
+	lockfile := cache.lockFilePath()
+	for cache.available() {
+		time.Sleep(time.Second * 10)
+		if err := cache.statFile(lockfile); err != nil && os.IsNotExist(err) {
+			logger.Infof("lockfile is lost, cache device maybe broken")
+			if inRootVolume(cache.dir) && cache.freeRatio < 0.2 {
+				logger.Infof("cache directory %s is in root volume, keep 20%% space free", cache.dir)
+				cache.freeRatio = 0.2
+			}
+		}
 	}
 }
 
@@ -221,6 +240,13 @@ func (c *cacheStore) checkTimeout() {
 		c.opMu.Unlock()
 		time.Sleep(time.Second)
 	}
+}
+
+func (c *cacheStore) statFile(path string) error {
+	return c.checkErr(func() error {
+		_, err := os.Stat(path)
+		return err
+	})
 }
 
 func (cache *cacheStore) removeFile(path string) error {
