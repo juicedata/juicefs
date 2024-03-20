@@ -176,7 +176,8 @@ func CreateStorage(name, endpoint, accessKey, secretKey, token string) (ObjectSt
 
 var bufPool = sync.Pool{
 	New: func() interface{} {
-		buf := make([]byte, 32<<10)
+		// Default io.Copy uses 32KB buffer, here we choose a larger one (1MiB io-size increases throughput by ~20%)
+		buf := make([]byte, 1<<20)
 		return &buf
 	},
 }
