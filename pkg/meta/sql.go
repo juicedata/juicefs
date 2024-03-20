@@ -1074,6 +1074,28 @@ func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 	return err
 }
 
+func (m *dbMeta) upsertSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte, insert *bool) error {
+	var err error
+	driver := m.Name()
+	if driver == "sqlite3" || driver == "postgres" {
+		_, err = s.Exec(`
+		INSERT INTO jfs_chunk (inode, indx, slices)
+		VALUES (?, ?, ?)
+		ON CONFLICT (inode, indx)
+		DO UPDATE SET slices=jfs_chunk.slices || ?`, inode, indx, buf, buf)
+	} else {
+		var r sql.Result
+		r, err = s.Exec(`
+		INSERT INTO jfs_chunk (inode, indx, slices)
+		VALUES (?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+		slices=concat(slices, ?)`, inode, indx, buf, buf)
+		n, _ := r.RowsAffected()
+		*insert = n == 1 // https://dev.mysql.com/doc/refman/5.7/en/insert-on-duplicate.html
+	}
+	return err
+}
+
 func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
 	defer m.timeit("Truncate", time.Now())
 	f := m.of.find(inode)
@@ -2430,26 +2452,18 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		nodeAttr.Ctime = ctime.UnixNano() / 1e3
 		nodeAttr.Ctimensec = int16(ctime.Nanosecond())
 
-		var ck = chunk{Inode: inode, Indx: indx}
-		ok, err = s.ForUpdate().MustCols("indx").Get(&ck)
-		if err != nil {
-			return err
-		}
 		buf := marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len)
-		if ok {
-			if err := m.appendSlice(s, inode, indx, buf); err != nil {
-				return err
-			}
-		} else {
-			if err = mustInsert(s, &chunk{Inode: inode, Indx: indx, Slices: buf}); err != nil {
-				return err
-			}
+		var insert bool // no compaction check for the first slice
+		if err = m.upsertSlice(s, inode, indx, buf, &insert); err != nil {
+			return err
 		}
 		if err = mustInsert(s, sliceRef{slice.Id, slice.Size, 1}); err != nil {
 			return err
 		}
 		_, err = s.Cols("length", "mtime", "ctime", "mtimensec", "ctimensec").Update(&nodeAttr, &node{Inode: inode})
-		if err == nil {
+		if err == nil && !insert {
+			ck := chunk{Inode: inode, Indx: indx}
+			_, _ = s.MustCols("indx").Get(&ck)
 			ns := len(ck.Slices) / sliceBytes // number of slices
 			needCompact = ns%100 == 99 || ns > 350
 		}
@@ -3497,6 +3511,9 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 	attr := &Attr{Typ: typ, Nlink: 1}
 	if !ok {
 		logger.Warnf("The entry of the inode was not found. inode: %d", inode)
+		if attr.Typ == TypeDirectory {
+			attr.Nlink = 2
+		}
 	} else {
 		m.parseAttr(n, attr)
 	}

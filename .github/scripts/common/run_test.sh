@@ -35,9 +35,13 @@ run_test(){
     else
         # Find and run all test functions
         tests=$(grep -oP '^\s*test_\w+\s*\(\s*\)' "$0")
-        for test in ${tests}; do
-            run_one_test $test
-        done
+        if [[ -z "$tests" ]]; then
+            echo -e "\033[0;31mNo test function found in $0\033[0m"
+        else
+            for test in ${tests}; do
+                run_one_test $test
+            done
+        fi
     fi
     END_TIME_ALL=$(date +%s)
     ELAPSED_TIME_ALL=$((END_TIME_ALL - START_TIME_ALL))

@@ -181,6 +181,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--capacity=0`|容量配额，单位为 GiB，默认为 0 代表不限制。如果启用了[回收站](../security/trash.md)，那么配额大小也将包含回收站文件。|
 |`--inodes=0`|文件数配额，默认为 0 代表不限制。|
 |`--trash-days=1`|文件被删除后，默认会进入[回收站](../security/trash.md)，该选项控制已删除文件在回收站内保留的天数，默认为 1，设为 0 以禁用回收站。|
+|`--enable-acl=true` <VersionAdd>1.2</VersionAdd>|启用[POSIX ACL](../security/posix_acl.md)，该选项启用后暂不支持关闭。|
 
 ### `juicefs config` {#config}
 
@@ -235,6 +236,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--min-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最小客户端版本|
 |`--max-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最大客户端版本|
 |`--dir-stats` <VersionAdd>1.1</VersionAdd>|开启目录统计，这是快速汇总和目录配额所必需的 (默认值：false)|
+|`--enable-acl` <VersionAdd>1.2</VersionAdd>|开启 POSIX ACL(不支持关闭), 同时允许连接的最小客户端版本会提升到 v1.2|
 
 ### `juicefs quota` <VersionAdd>1.1</VersionAdd> {#quota}
 

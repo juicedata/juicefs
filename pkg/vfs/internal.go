@@ -52,7 +52,7 @@ func (v *VFS) getControlHandle(pid uint32) uint64 {
 	defer controlMutex.Unlock()
 	fh := controlHandlers[pid]
 	if fh == 0 {
-		h := v.newHandle(controlInode)
+		h := v.newHandle(controlInode, false)
 		fh = h.fh
 		controlHandlers[pid] = fh
 	}

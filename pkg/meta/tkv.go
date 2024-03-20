@@ -2994,6 +2994,9 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalInc
 		m.parseAttr(a, attr)
 		if a == nil && e.Attr != nil {
 			attr.Typ = typeFromString(e.Attr.Type)
+			if attr.Typ == TypeDirectory {
+				attr.Nlink = 2
+			}
 		}
 		dumpAttr(attr, e.Attr)
 		e.Attr.Inode = inode

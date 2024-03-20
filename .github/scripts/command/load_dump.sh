@@ -5,6 +5,8 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
+[[ -z "$SEED" ]] && SEED=$(date +%s)
+trap "echo random seed is $SEED" EXIT
 
 if ! docker ps | grep -q minio; then
     docker run -d -p 9000:9000 --name minio \
@@ -62,16 +64,46 @@ test_dump_without_keep_secret()
     cat /jfs/hello.txt | grep hello
 }
 
-test_dump_load()
+test_dump_load_with_fsrand()
 {
     prepare_test
-    do_dump_load dump.json
+    ./juicefs format $META_URL myjfs --trash-days 0 --enable-acl
+    ./juicefs mount -d $META_URL /jfs --enable-xattr
+    SEED=$SEED MAX_EXAMPLE=100 STEP_COUNT=50 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
+    ./juicefs dump $META_URL dump.json --fast
+    ./juicefs load sqlite3://test2.db dump.json
+    ./juicefs dump sqlite3://test2.db dump2.json --fast
+    # compare_dump_json
+    ./juicefs mount -d sqlite3://test2.db /jfs2
+    diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
+    compare_stat_acl /jfs/fsrand /jfs2/fsrand
 }
 
-test_dump_load_gzip()
-{
-    prepare_test
-    do_dump_load dump.json.gz
+compare_dump_json(){
+    sed -i '/usedSpace/d' dump*.json
+    sed -i '/usedInodes/d' dump*.json
+    sed -i '/nextInodes/d' dump*.json
+    sed -i '/nextChunk/d' dump*.json
+    sed -i '/nextSession/d' dump*.json
+    sed -i 's/"inode":[0-9]\+/"inode":0/g' dump*.json
+    diff -ur dump.json dump2.json
+}
+
+compare_stat_acl(){
+    dir1=$1
+    dir2=$2
+    files1=($(find "$dir1" -type f -o -type d -exec stat -c "%n" {} + | sort))
+    files2=($(find "$dir2" -type f -o -type d -exec stat -c "%n" {} + | sort))
+    [[ ${#files1[@]} -ne ${#files2[@]} ]] && echo "compare_stat_acl: number of files differs" && exit 1
+    for i in "${!files1[@]}"; do
+        stat1=$(stat -c "%F %a %s %h %U %G" "${files1[$i]}")
+        stat2=$(stat -c "%F %a %s %h %U %G" "${files2[$i]}")
+        acl1=$(getfacl -p "${files1[$i]}" | tail -n +2)
+        acl2=$(getfacl -p "${files2[$i]}" | tail -n +2)
+        [[ "$stat1" != "$stat2" ]] && echo "compare_stat_acl: stat for ${files1[$i]} and ${files2[$i]} differs" && echo $stat1 && echo $stat2 && exit 1
+        [[ "$acl1" != "$acl2" ]] && echo "compare_stat_acl: ACLs for ${files1[$i]} and ${files2[$i]} differs" && echo $acl1 && echo $acl2 && exit 1
+    done
+    echo "compare_stat_acl: ACLs and stats are the same"
 }
 
 test_load_encrypted_meta_backup()
@@ -81,7 +113,7 @@ test_load_encrypted_meta_backup()
     export JFS_RSA_PASSPHRASE=12345678
     ./juicefs format $META_URL myjfs --encrypt-rsa-key my-priv-key.pem
     ./juicefs mount -d $META_URL /jfs
-    python3 .github/scripts/fsrand.py -c 1000 /jfs/fsrand -v -a
+    SEED=$SEED MAX_EXAMPLE=50 STEP_COUNT=50 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
     umount /jfs
     SKIP_BACKUP_META_CHECK=true ./juicefs mount -d --backup-meta 10s $META_URL /jfs
     sleep 10s
@@ -103,19 +135,6 @@ prepare_test(){
     rm test2.db -rf 
     rm -rf /var/jfs/myjfs || true
     mc rm --force --recursive myminio/test || true
-}
-
-do_dump_load(){
-    dump_file=$1
-    ./juicefs format $META_URL myjfs
-    ./juicefs mount -d $META_URL /jfs
-    python3 .github/scripts/fsrand.py -c 1000 /jfs/fsrand -v -a
-    ./juicefs dump  $META_URL $dump_file --fast
-
-    ./juicefs load  sqlite3://test2.db $dump_file   
-    ./juicefs mount -d sqlite3://test2.db /jfs2
-
-    diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
 }
 
 source .github/scripts/common/run_test.sh && run_test $@

@@ -165,7 +165,7 @@ func testAccess(t *testing.T, m Meta) {
 	var testNode Ino = 2
 	ctx := NewContext(1, 1, []uint32{2})
 	attr := &Attr{
-		Mode:       0,
+		Mode:       0541,
 		Uid:        0,
 		Gid:        0,
 		AccessACL:  1,
