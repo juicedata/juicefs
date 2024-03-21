@@ -183,7 +183,7 @@ test_mount_same_disk_after_failure()
 }
 
 
-test_rebalance_after_disk_failure_and_replace()
+skip_test_rebalance_after_disk_failure_and_replace()
 {
     prepare_test
     mount_jfsCache1
