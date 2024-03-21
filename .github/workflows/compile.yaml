@@ -1,0 +1,128 @@
+name: "compile"
+
+on:
+  push:
+    branches:
+    - main
+    - release**
+    paths:
+    - '**/compile.yml'
+  pull_request:
+    branches:
+    - main
+    - release**
+    paths:
+    - '**/compile.yml'
+  schedule:
+    - cron:  '0 20 * * *'
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+jobs:
+  compile:
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [ 'kernel','redis']
+#        app: [ 'gcc','kernel','redis']
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      
+      - name: Build
+        timeout-minutes: 10
+        uses: ./.github/actions/build
+      
+      - name: Remove unused software
+        timeout-minutes: 10
+        run: |
+          echo "before remove unused software"
+          sudo df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          echo "after remove unused software"
+          sudo df -h
+
+      - name: Run Redis
+        run: |
+          sudo docker run -d --name redis -v redis-data:/data  \
+          -p 6379:6379  redis redis-server --appendonly yes
+
+      - name: Setup minio
+        run: |
+          docker run -d -p 9000:9000 --name minio \
+                    -e "MINIO_ACCESS_KEY=minioadmin" \
+                    -e "MINIO_SECRET_KEY=minioadmin" \
+                    -v /mnt/data:/data \
+                    -v /tmp/config:/root/.minio \
+                    minio/minio server /data
+          sleep 5
+
+      - name: Juicefs Format
+        run: |
+          sudo ./juicefs format --trash-days 0  --storage minio --bucket http://127.0.0.1:9000/mypics \
+            --access-key minioadmin \
+            --secret-key minioadmin \
+            redis://127.0.0.1:6379/1 pics
+
+      - name: Juicefs Mount
+        run: |
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs  --no-usage-report --cache-size 1024 --max-deletes 50 &
+
+      - name: Install Dependency
+        run: |
+          cd ~
+          git clone https://github.com/spack/spack.git
+          source spack/share/spack/setup-env.sh
+          spack --version
+          spack bootstrap now
+          spack compiler find 
+          spack compilers
+          spack config get config > ~/.spack/config.yaml 
+          sed -i '/build_stage:/,+2d' ~/.spack/config.yaml
+          echo -e "build_stage:\n  - /data/jfs/spack-stage" >> ~/.spack/config.yaml
+          cd -
+ 
+      - name: Run Workload
+        run: |
+          if [ ${{matrix.app}} == "kernel" ];then
+            cp .github/scripts/build_kernel.sh /data/jfs
+            cd /data/jfs && bash build_kernel.sh
+          elif [ ${{matrix.app}} == "redis" ];then
+            cd /data/jfs
+            wget -O redis.tar.gz https://github.com/redis/redis/archive/refs/tags/6.0.16.tar.gz
+            mkdir redis
+            tar -xvf redis.tar.gz -C redis --strip-components 1
+            cd redis
+            make
+            stat /data/jfs
+            df -lh
+          else
+            spack install ${{matrix.app}}
+          fi
+
+      - name: Log
+        if: always()
+        run: |
+          df -lh
+          echo "juicefs log"
+          sudo rm -rf /mnt/data
+          sudo tail -n 1000 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+
+      - name: Send Slack Notification
+        if: failure()
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}" 
