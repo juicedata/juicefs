@@ -198,9 +198,9 @@ func dataCacheFlags() []cli.Flag {
 			Value: "0600", // only owner can read/write cache
 			Usage: "file permissions for cached blocks",
 		},
-		&cli.IntFlag{
+		&cli.StringFlag{
 			Name:  "cache-size",
-			Value: 100 << 10,
+			Value: "100G",
 			Usage: "size of cached object for read in MiB",
 		},
 		&cli.Float64Flag{

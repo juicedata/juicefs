@@ -515,7 +515,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			Compress:          format.Compression,
 			CacheDir:          jConf.CacheDir,
 			CacheMode:         0644, // all user can read cache
-			CacheSize:         jConf.CacheSize,
+			CacheSize:         uint64(jConf.CacheSize << 20),
 			FreeSpace:         float32(freeSpaceRatio),
 			AutoCreate:        jConf.AutoCreate,
 			CacheFullBlock:    jConf.CacheFullBlock,

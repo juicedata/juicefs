@@ -329,7 +329,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		UploadHours:   c.String("upload-hours"),
 
 		CacheDir:          c.String("cache-dir"),
-		CacheSize:         int64(c.Int("cache-size")),
+		CacheSize:         parseBytes(c, "cache-size", 'M'),
 		FreeSpace:         float32(c.Float64("free-space-ratio")),
 		CacheMode:         os.FileMode(cm),
 		CacheFullBlock:    !c.Bool("cache-partial-only"),

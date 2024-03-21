@@ -40,7 +40,7 @@ type memcache struct {
 
 func newMemStore(config *Config, metrics *cacheManagerMetrics) *memcache {
 	c := &memcache{
-		capacity: config.CacheSize << 20,
+		capacity: int64(config.CacheSize),
 		pages:    make(map[string]memItem),
 		eviction: config.CacheEviction,
 		metrics:  metrics,

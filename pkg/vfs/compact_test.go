@@ -31,7 +31,7 @@ func TestCompact(t *testing.T) {
 		Compress:   "lz4",
 		MaxUpload:  2,
 		BufferSize: 30 << 20,
-		CacheSize:  10,
+		CacheSize:  10 << 20,
 		CacheDir:   "memory",
 	}
 	blob, _ := object.CreateStorage("mem", "", "", "", "")

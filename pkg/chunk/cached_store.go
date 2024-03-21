@@ -511,7 +511,7 @@ func (s *wSlice) Abort() {
 type Config struct {
 	CacheDir          string
 	CacheMode         os.FileMode
-	CacheSize         int64
+	CacheSize         uint64
 	CacheChecksum     string
 	CacheEviction     string
 	CacheScanInterval time.Duration
@@ -768,7 +768,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		for {
 			if store.bcache.isEmpty() {
 				logger.Warn("cache store is empty, use memory cache")
-				config.CacheSize = 100
+				config.CacheSize = 100 << 20
 				config.CacheDir = "memory"
 				store.bcache = newMemStore(&config, store.bcache.getMetrics())
 			}
