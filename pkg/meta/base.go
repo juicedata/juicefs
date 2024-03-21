@@ -2930,3 +2930,12 @@ func (m *baseMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 
 	return m.en.doGetFacl(ctx, ino, aclType, aclAPI.None, rule)
 }
+
+func inGroup(ctx Context, gid uint32) bool {
+	for _, egid := range ctx.Gids() {
+		if egid == gid {
+			return true
+		}
+	}
+	return false
+}
