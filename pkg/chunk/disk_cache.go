@@ -997,7 +997,7 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 	}
 
 	// 20% of buffer could be used for pending pages
-	pendingPages := config.BufferSize * 2 / 10 / config.BlockSize / len(dirs)
+	pendingPages := int(config.BufferSize) * 2 / 10 / config.BlockSize / len(dirs)
 	for i, d := range dirs {
 		store := newCacheStore(metrics, strings.TrimSpace(d)+string(filepath.Separator), dirCacheSize, pendingPages, config, uploader)
 		m.stores[i] = store

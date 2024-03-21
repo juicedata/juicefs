@@ -322,7 +322,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		MaxRetries:    c.Int("io-retries"),
 		Writeback:     c.Bool("writeback"),
 		Prefetch:      c.Int("prefetch"),
-		BufferSize:    c.Int("buffer-size") << 20,
+		BufferSize:    parseBytes(c, "buffer-size", 'M'),
 		UploadLimit:   c.Int64("upload-limit") * 1e6 / 8,
 		DownloadLimit: c.Int64("download-limit") * 1e6 / 8,
 		UploadDelay:   duration(c.String("upload-delay")),
