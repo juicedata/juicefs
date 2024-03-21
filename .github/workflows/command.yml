@@ -134,6 +134,16 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Remove unused software
+        run: |
+            echo "before remove unused software"
+            sudo df -h
+            sudo rm -rf /usr/share/dotnet
+            sudo rm -rf /usr/local/lib/android
+            sudo rm -rf /opt/ghc
+            echo "after remove unused software"
+            sudo df -h
+            
       - name: Build 
         uses: ./.github/actions/build
 
