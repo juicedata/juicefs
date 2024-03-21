@@ -140,7 +140,7 @@ jobs:
       - name: Test Cache
         timeout-minutes: 30
         run: |
-          sudo META=${{matrix.meta}} .github/scripts/cache/cache.sh
+          sudo META=${{matrix.meta}} .github/scripts/command/cache.sh
 
       - name: Test Load & Dump
         timeout-minutes: 30
