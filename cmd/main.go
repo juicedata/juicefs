@@ -318,6 +318,7 @@ func setup(c *cli.Context, n int) {
 		go debugAgentOnce.Do(func() {
 			for port := 6060; port < 6100; port++ {
 				debugAgent = fmt.Sprintf("127.0.0.1:%d", port)
+				logger.Debugf("Debug agent listening on %s", debugAgent)
 				_ = http.ListenAndServe(debugAgent, nil)
 			}
 		})
