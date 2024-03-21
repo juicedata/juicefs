@@ -46,7 +46,7 @@ import (
 var (
 	stagingDir   = "rawstaging"
 	cacheDir     = "raw"
-	maxIODur     = time.Second * 5
+	maxIODur     = time.Second * 60
 	errNotCached = errors.New("not cached")
 	errCacheDown = errors.New("cache down")
 )
@@ -1053,7 +1053,7 @@ func (m *cacheManager) removeStore(id string) {
 		}
 	}
 	m.Unlock()
-	logger.Infof("cache dir `%s`(%s) is unavailable, removed", dir, id)
+	logger.Errorf("cache dir `%s`(%s) is unavailable, removed", dir, id)
 }
 
 func (m *cacheManager) getStore(key string) *cacheStore {
