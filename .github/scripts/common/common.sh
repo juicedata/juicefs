@@ -80,7 +80,7 @@ wait_command_success()
         fi
         if [ $i -eq $timeout ]; then
             eval "$command"
-            echo "command failed after $timeout"
+            echo "command failed after $timeout: $command"
             exit 1
         fi
         echo "wait command to success in $i sec..." && sleep 1
