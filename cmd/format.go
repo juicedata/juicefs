@@ -176,14 +176,12 @@ func formatFlags() []cli.Flag {
 
 func formatManagementFlags() []cli.Flag {
 	return addCategories("MANAGEMENT", []cli.Flag{
-		&cli.Uint64Flag{
+		&cli.StringFlag{
 			Name:  "capacity",
-			Value: 0,
 			Usage: "hard quota of the volume limiting its usage of space in GiB",
 		},
 		&cli.Uint64Flag{
 			Name:  "inodes",
-			Value: 0,
 			Usage: "hard quota of the volume limiting its number of inodes",
 		},
 		&cli.IntFlag{
@@ -193,7 +191,6 @@ func formatManagementFlags() []cli.Flag {
 		},
 		&cli.BoolFlag{
 			Name:  "enable-acl",
-			Value: false,
 			Usage: "enable POSIX ACL (this flag is irreversible once enabled)",
 		},
 	})
@@ -383,7 +380,7 @@ func format(c *cli.Context) error {
 		for _, flag := range c.LocalFlagNames() {
 			switch flag {
 			case "capacity":
-				format.Capacity = c.Uint64(flag) << 30
+				format.Capacity = parseBytes(c, flag, 'G')
 			case "inodes":
 				format.Inodes = c.Uint64(flag)
 			case "bucket":
@@ -433,7 +430,7 @@ func format(c *cli.Context) error {
 			EncryptAlgo:      c.String("encrypt-algo"),
 			Shards:           c.Int("shards"),
 			HashPrefix:       c.Bool("hash-prefix"),
-			Capacity:         c.Uint64("capacity") << 30,
+			Capacity:         parseBytes(c, "capacity", 'G'),
 			Inodes:           c.Uint64("inodes"),
 			BlockSize:        int(fixObjectSize(parseBytes(c, "block-size", 'K')) >> 10),
 			Compression:      c.String("compress"),
