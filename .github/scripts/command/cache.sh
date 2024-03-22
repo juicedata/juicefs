@@ -1,6 +1,7 @@
 #!/bin/bash -e
 source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
+[[ -z "$META" ]] && META=sqlite3
 start_meta_engine $META minio
 META_URL=$(get_meta_url $META)
 TEST_FILE_SIZE=1024
@@ -20,7 +21,7 @@ mount_jfsCache1(){
     rm -rf cache.db || true
     ./juicefs format sqlite3://cache.db test --trash-days 0
     ./juicefs mount sqlite3://cache.db /var/jfsCache1 -d --log /tmp/juicefs.log
-    trap "umount -l /var/jfsCache1" EXIT
+    trap "echo umount /var/jfsCache1 && umount -l /var/jfsCache1" EXIT
 }
 
 check_evict_log(){
