@@ -108,6 +108,11 @@ jobs:
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/info.sh
 
+      - name: Test Cache
+        timeout-minutes: 30
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/cache.sh
+
       - name: Log
         if: always()
         run: |
@@ -146,11 +151,6 @@ jobs:
             
       - name: Build 
         uses: ./.github/actions/build
-
-      - name: Test Cache
-        timeout-minutes: 30
-        run: |
-          sudo META=${{matrix.meta}} .github/scripts/command/cache.sh
 
       - name: Test Load & Dump
         timeout-minutes: 30
