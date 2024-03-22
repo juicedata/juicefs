@@ -48,3 +48,5 @@ func getDiskUsage(path string) (uint64, uint64, uint64, uint64) {
 }
 
 func changeMode(dir string, st os.FileInfo, mode os.FileMode) {}
+
+func inRootVolume(dir string) bool { return false }
