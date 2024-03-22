@@ -20,6 +20,7 @@ mount_jfsCache1(){
     rm -rf cache.db || true
     ./juicefs format sqlite3://cache.db test --trash-days 0
     ./juicefs mount sqlite3://cache.db /var/jfsCache1 -d --log /tmp/juicefs.log
+    trap "umount -l /var/jfsCache1" EXIT
 }
 
 check_evict_log(){
