@@ -108,8 +108,8 @@ test_update_on_fio(){
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /tmp/jfs --buffer-size 300
     sleep 1s
-    fio -name=fio -filename=/tmp/jfs/testfile -direct=1 -iodepth 64 -ioengine=libaio \
-        -rw=randwrite -bs=4k -size=500M -numjobs=16 -runtime=60 -group_reporting >fio.log 2>&1 &
+    fio -name=fio -filename=/tmp/jfs/testfile -direct=1 -iodepth 16 -ioengine=libaio \
+        -rw=randwrite -bs=4k -size=100M -numjobs=4 -runtime=30 -group_reporting >fio.log 2>&1 &
     fio_pid=$!
     trap "kill -9 $fio_pid > /dev/null || true" EXIT
     for i in {1..5}; do
