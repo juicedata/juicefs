@@ -24,7 +24,7 @@ umount_jfs()
         umount -l $mp
     done
     for pid in $pids; do
-        wait_mount_process_killed $pid 20
+        wait_mount_process_killed $pid 60
     done    
 }
 
