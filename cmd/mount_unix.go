@@ -698,12 +698,21 @@ func launchMount(mp string, conf *vfs.Config) error {
 		cancel()
 		if err == nil {
 			return nil
+		} else {
+			var exitError *exec.ExitError
+			if ok := errors.As(err, &exitError); ok {
+				if waitStatus, ok := exitError.Sys().(syscall.WaitStatus); ok && waitStatus.ExitStatus() == meta.UmountCode {
+					logger.Errorf("received umount exit code")
+					_ = doUmount(mp, true)
+					return nil
+				}
+			}
+			if fuseFd < 0 {
+				logger.Info("transfer FUSE session to others")
+				return nil
+			}
+			time.Sleep(time.Second)
 		}
-		if fuseFd < 0 {
-			logger.Info("transfer FUSE session to others")
-			return nil
-		}
-		time.Sleep(time.Second)
 	}
 }
 
