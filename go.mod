@@ -32,7 +32,7 @@ require (
 	github.com/hashicorp/go-hclog v1.5.0
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.12+incompatible
 	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099
-	github.com/jackc/pgx/v5 v5.3.1
+	github.com/jackc/pgx/v5 v5.5.4
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/json-iterator/go v1.1.12
 	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
@@ -85,6 +85,8 @@ require (
 	pgregory.net/rapid v0.5.3
 	xorm.io/xorm v1.0.7
 )
+
+require github.com/jackc/puddle/v2 v2.2.1 // indirect
 
 require (
 	cloud.google.com/go v0.102.1 // indirect
