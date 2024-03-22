@@ -1,9 +1,7 @@
 #!/bin/bash -e
 source .github/scripts/common/common.sh
-.github/scripts/apt_install.sh  redis-tools redis-server
-META=sqlite3
 source .github/scripts/start_meta_engine.sh
-start_meta_engine $META
+start_meta_engine $META minio
 META_URL=$(get_meta_url $META)
 TEST_FILE_SIZE=1024
 
@@ -13,17 +11,6 @@ prepare_test()
     python3 .github/scripts/flush_meta.py $META_URL
     rm -rf /var/jfs/myjfs || true
     rm -rf /var/jfsCache/myjfs || true
-}
-
-mount_jfsCache1_redis(){
-    /etc/init.d/redis-server start
-    timeout 30s bash -c 'until nc -zv localhost 6379; do sleep 1; done'
-    umount -l /var/jfsCache1 || true
-    rm -rf /var/jfsCache1
-    redis-cli flushall
-    rm -rf /var/jfs/test
-    ./juicefs format redis://localhost/1 test --trash-days 0
-    ./juicefs mount redis://localhost/1 /var/jfsCache1 -d --log /tmp/juicefs.log
 }
 
 mount_jfsCache1(){
