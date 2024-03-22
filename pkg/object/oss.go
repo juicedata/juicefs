@@ -271,6 +271,10 @@ func (o *ossClient) SetStorageClass(sc string) {
 	o.sc = sc
 }
 
+func (o *ossClient) SignedURL(key string, expire time.Duration) (string, error) {
+	return o.bucket.SignURL(key, oss.HTTPGet, int64(expire/time.Second))
+}
+
 type stsCred struct {
 	AccessKeyId     string
 	AccessKeySecret string
