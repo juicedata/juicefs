@@ -3885,7 +3885,9 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 			}
 			bar.Done()
 			tree = m.dumpEntryFast(root, TypeDirectory)
-			trash = m.dumpEntryFast(TrashInode, TypeDirectory)
+			if !skipTrash {
+				trash = m.dumpEntryFast(TrashInode, TypeDirectory)
+			}
 		} else {
 			tree = &DumpedEntry{
 				Name: "FSTree",

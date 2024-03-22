@@ -3321,7 +3321,9 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 		}
 		bar.Done()
 		tree = m.snap[root]
-		trash = m.snap[TrashInode]
+		if !skipTrash {
+			trash = m.snap[TrashInode]
+		}
 	} else {
 		tree = &DumpedEntry{
 			Attr: &DumpedAttr{
