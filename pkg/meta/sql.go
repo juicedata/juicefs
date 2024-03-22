@@ -3609,7 +3609,14 @@ func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 	}
 
 	attr := &Attr{Typ: typ, Nlink: 1}
-	m.parseAttr(n, attr)
+	if !ok {
+		logger.Warnf("The entry of the inode was not found. inode: %d", inode)
+		if attr.Typ == TypeDirectory {
+			attr.Nlink = 2
+		}
+	} else {
+		m.parseAttr(n, attr)
+	}
 	e.Attr = &DumpedAttr{}
 	dumpAttr(attr, e.Attr)
 	e.Attr.Inode = inode
