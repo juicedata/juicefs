@@ -47,3 +47,17 @@ func changeMode(dir string, st os.FileInfo, mode os.FileMode) {
 		_ = os.Chmod(dir, mode)
 	}
 }
+
+func inRootVolume(dir string) bool {
+	dstat, err := os.Stat(dir)
+	if err != nil {
+		logger.Warnf("stat `%s`: %s", dir, err.Error())
+		return false
+	}
+	rstat, err := os.Stat("/")
+	if err != nil {
+		logger.Warnf("stat `/`: %s", err.Error())
+		return false
+	}
+	return dstat.Sys().(*syscall.Stat_t).Dev == rstat.Sys().(*syscall.Stat_t).Dev
+}
