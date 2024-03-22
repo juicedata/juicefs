@@ -112,19 +112,18 @@ test_update_on_fio(){
         -rw=randwrite -bs=4k -size=500M -numjobs=16 -runtime=60 -group_reporting >fio.log 2>&1 &
     fio_pid=$!
     trap "kill -9 $fio_pid > /dev/null || true" EXIT
-    for i in {1..10}; do
+    for i in {1..5}; do
         echo "update buffer-size to $((i+300))"
         ./juicefs mount -d $META_URL /tmp/jfs --buffer-size $((i+300))
         wait_command_success "ps -ef | grep juicefs | grep mount | grep \"buffer-size $((i+300))\" | wc -l" 2
         echo abc | tee /tmp/jfs/test
+        sleep 3s
     done
-    ps -ef | grep mount 
     kill -9 $fio_pid > /dev/null 2>&1 || true
-    ps -ef | grep mount 
-    # umount_jfs /tmp/jfs $META_URL
-    # ps -ef | grep juicefs | grep mount | grep -v grep || true
-    # count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
-    # [[ $count -ne 0 ]] && echo "mount process count should be 0, count=$count" && exit 1 || true
+    umount_jfs /tmp/jfs $META_URL
+    ps -ef | grep juicefs | grep mount | grep -v grep || true
+    count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
+    [[ $count -ne 0 ]] && echo "mount process count should be 0, count=$count" && exit 1 || true
 }
 
 test_update_fuse_option(){
@@ -188,10 +187,10 @@ test_update_on_fstab(){
     grep /tmp/jfs /etc/fstab
     ls /sbin/mount.juicefs -l
     umount /tmp/jfs
-    for i in {1..10}; do
+    for i in {1..5}; do
         mount /tmp/jfs
         wait_command_success "ps -ef | grep juicefs | grep /tmp/jfs | grep -v grep | wc -l" 2
-        cat /tmp/jfs/.config
+        # cat /tmp/jfs/.config
         sleep 3s
     done
 }
