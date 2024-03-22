@@ -164,7 +164,8 @@ func collectMetrics(registry *prometheus.Registry) []byte {
 	}
 	for _, mf := range mfs {
 		var name = *mf.Name
-		if name == "juicefs_meta_ops_durations_histogram_seconds" && *mf.Type == io_prometheus_client.MetricType_HISTOGRAM {
+		if (name == "juicefs_meta_ops_durations_histogram_seconds" || name == "juicefs_fuse_ops_durations_histogram_seconds") &&
+			*mf.Type == io_prometheus_client.MetricType_HISTOGRAM {
 			total, sum := mergeHistogramMetrics(mf)
 			_, _ = fmt.Fprintf(w, "%s_total %d\n", name, total)
 			_, _ = fmt.Fprintf(w, "%s_sum %s\n", name, format(sum))
