@@ -571,17 +571,11 @@ func (m *baseMeta) refresh() {
 
 		old := m.getFormat()
 		if format, err := m.Load(false); err != nil {
-			if strings.HasPrefix(err.Error(), "database is not formatted") {
-				logger.Errorf("reload setting: %s", err)
-				os.Exit(0)
-			}
 			logger.Warnf("reload setting: %s", err)
 		} else if format.MetaVersion > MaxVersion {
-			logger.Errorf("incompatible metadata version %d > max version %d", format.MetaVersion, MaxVersion)
-			os.Exit(0)
+			logger.Fatalf("incompatible metadata version %d > max version %d", format.MetaVersion, MaxVersion)
 		} else if format.UUID != old.UUID {
-			logger.Errorf("UUID changed from %s to %s", old.UUID, format.UUID)
-			os.Exit(0)
+			logger.Fatalf("UUID changed from %s to %s", old, format.UUID)
 		} else if !reflect.DeepEqual(format, old) {
 			m.msgCallbacks.Lock()
 			cbs := m.reloadCb
