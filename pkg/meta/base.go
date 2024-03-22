@@ -550,6 +550,8 @@ func (m *baseMeta) OnReload(fn func(f *Format)) {
 	m.reloadCb = append(m.reloadCb, fn)
 }
 
+const UmountCode = 11
+
 func (m *baseMeta) refresh() {
 	for {
 		if m.conf.Heartbeat > 0 {
@@ -571,11 +573,14 @@ func (m *baseMeta) refresh() {
 
 		old := m.getFormat()
 		if format, err := m.Load(false); err != nil {
-			logger.Warnf("reload setting: %s", err)
+			logger.Errorf("reload setting: %s", err)
+			os.Exit(UmountCode)
 		} else if format.MetaVersion > MaxVersion {
-			logger.Fatalf("incompatible metadata version %d > max version %d", format.MetaVersion, MaxVersion)
+			logger.Errorf("incompatible metadata version %d > max version %d", format.MetaVersion, MaxVersion)
+			os.Exit(UmountCode)
 		} else if format.UUID != old.UUID {
-			logger.Fatalf("UUID changed from %s to %s", old, format.UUID)
+			logger.Errorf("UUID changed from %s to %s", old, format.UUID)
+			os.Exit(UmountCode)
 		} else if !reflect.DeepEqual(format, old) {
 			m.msgCallbacks.Lock()
 			cbs := m.reloadCb
