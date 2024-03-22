@@ -64,7 +64,7 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 			Compress:   format.Compression,
 			MaxUpload:  2,
 			BufferSize: 30 << 20,
-			CacheSize:  10,
+			CacheSize:  10 << 20,
 			CacheDir:   "memory",
 		},
 		FuseOpts: &FuseOptions{},

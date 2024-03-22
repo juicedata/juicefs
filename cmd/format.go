@@ -35,6 +35,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -143,9 +144,9 @@ func formatStorageFlags() []cli.Flag {
 
 func formatFlags() []cli.Flag {
 	return addCategories("DATA FORMAT", []cli.Flag{
-		&cli.IntFlag{
+		&cli.StringFlag{
 			Name:  "block-size",
-			Value: 4096,
+			Value: "4M",
 			Usage: "size of block in KiB",
 		},
 		&cli.StringFlag{
@@ -168,7 +169,6 @@ func formatFlags() []cli.Flag {
 		},
 		&cli.IntFlag{
 			Name:  "shards",
-			Value: 0,
 			Usage: "store the blocks into N buckets by hash of key",
 		},
 	})
@@ -176,14 +176,12 @@ func formatFlags() []cli.Flag {
 
 func formatManagementFlags() []cli.Flag {
 	return addCategories("MANAGEMENT", []cli.Flag{
-		&cli.Uint64Flag{
+		&cli.StringFlag{
 			Name:  "capacity",
-			Value: 0,
 			Usage: "hard quota of the volume limiting its usage of space in GiB",
 		},
 		&cli.Uint64Flag{
 			Name:  "inodes",
-			Value: 0,
 			Usage: "hard quota of the volume limiting its number of inodes",
 		},
 		&cli.IntFlag{
@@ -193,14 +191,13 @@ func formatManagementFlags() []cli.Flag {
 		},
 		&cli.BoolFlag{
 			Name:  "enable-acl",
-			Value: false,
 			Usage: "enable POSIX ACL (this flag is irreversible once enabled)",
 		},
 	})
 }
 
-func fixObjectSize(s int) int {
-	const min, max = 64, 16 << 10
+func fixObjectSize(s uint64) uint64 {
+	const min, max = 64 << 10, 16 << 20
 	var bits uint
 	for s > 1 {
 		bits++
@@ -208,10 +205,10 @@ func fixObjectSize(s int) int {
 	}
 	s = s << bits
 	if s < min {
-		logger.Warnf("block size is too small: %d, use %d instead", s, min)
+		logger.Warnf("block size is too small: %s, use %s instead", humanize.IBytes(s), humanize.IBytes(min))
 		s = min
 	} else if s > max {
-		logger.Warnf("block size is too large: %d, use %d instead", s, max)
+		logger.Warnf("block size is too large: %s, use %s instead", humanize.IBytes(s), humanize.IBytes(max))
 		s = max
 	}
 	return s
@@ -383,7 +380,7 @@ func format(c *cli.Context) error {
 		for _, flag := range c.LocalFlagNames() {
 			switch flag {
 			case "capacity":
-				format.Capacity = c.Uint64(flag) << 30
+				format.Capacity = parseBytes(c, flag, 'G')
 			case "inodes":
 				format.Inodes = c.Uint64(flag)
 			case "bucket":
@@ -405,7 +402,7 @@ func format(c *cli.Context) error {
 			case "trash-days":
 				format.TrashDays = c.Int(flag)
 			case "block-size":
-				format.BlockSize = fixObjectSize(c.Int(flag))
+				format.BlockSize = int(fixObjectSize(parseBytes(c, flag, 'K')) >> 10)
 			case "compress":
 				format.Compression = c.String(flag)
 			case "shards":
@@ -433,9 +430,9 @@ func format(c *cli.Context) error {
 			EncryptAlgo:      c.String("encrypt-algo"),
 			Shards:           c.Int("shards"),
 			HashPrefix:       c.Bool("hash-prefix"),
-			Capacity:         c.Uint64("capacity") << 30,
+			Capacity:         parseBytes(c, "capacity", 'G'),
 			Inodes:           c.Uint64("inodes"),
-			BlockSize:        fixObjectSize(c.Int("block-size")),
+			BlockSize:        int(fixObjectSize(parseBytes(c, "block-size", 'K')) >> 10),
 			Compression:      c.String("compress"),
 			TrashDays:        c.Int("trash-days"),
 			DirStats:         true,

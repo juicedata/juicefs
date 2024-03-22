@@ -511,7 +511,7 @@ func (s *wSlice) Abort() {
 type Config struct {
 	CacheDir          string
 	CacheMode         os.FileMode
-	CacheSize         int64
+	CacheSize         uint64
 	CacheChecksum     string
 	CacheEviction     string
 	CacheScanInterval time.Duration
@@ -531,7 +531,7 @@ type Config struct {
 	GetTimeout        time.Duration
 	PutTimeout        time.Duration
 	CacheFullBlock    bool
-	BufferSize        int
+	BufferSize        uint64
 	Readahead         int
 	Prefetch          int
 }
@@ -559,7 +559,7 @@ func (c *Config) SelfCheck(uuid string) {
 		c.MaxUpload = 1
 	}
 	if c.BufferSize <= 32<<20 {
-		logger.Warnf("buffer-size should be more than 32 MiB")
+		logger.Warnf("buffer-size is too small, setting it to 32 MiB")
 		c.BufferSize = 32 << 20
 	}
 	if c.CacheDir != "memory" {
@@ -768,7 +768,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		for {
 			if store.bcache.isEmpty() {
 				logger.Warn("cache store is empty, use memory cache")
-				config.CacheSize = 100
+				config.CacheSize = 100 << 20
 				config.CacheDir = "memory"
 				store.bcache = newMemStore(&config, store.bcache.getMetrics())
 			}

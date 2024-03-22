@@ -31,7 +31,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/acl"
 	"io"
 	"net/http"
 	_ "net/http/pprof"
@@ -46,6 +45,7 @@ import (
 	"unsafe"
 
 	"github.com/juicedata/juicefs/cmd"
+	"github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -515,7 +515,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			Compress:          format.Compression,
 			CacheDir:          jConf.CacheDir,
 			CacheMode:         0644, // all user can read cache
-			CacheSize:         jConf.CacheSize,
+			CacheSize:         uint64(jConf.CacheSize << 20),
 			FreeSpace:         float32(freeSpaceRatio),
 			AutoCreate:        jConf.AutoCreate,
 			CacheFullBlock:    jConf.CacheFullBlock,
@@ -532,7 +532,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			HashPrefix:        format.HashPrefix,
 			GetTimeout:        time.Second * time.Duration(jConf.GetTimeout),
 			PutTimeout:        time.Second * time.Duration(jConf.PutTimeout),
-			BufferSize:        jConf.MemorySize << 20,
+			BufferSize:        uint64(jConf.MemorySize << 20),
 			Readahead:         jConf.Readahead << 20,
 		}
 		if chunkConf.UploadLimit == 0 {

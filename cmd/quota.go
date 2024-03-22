@@ -78,7 +78,7 @@ $ juicefs quota delete redis://localhost --path /dir1`,
 				Name:  "path",
 				Usage: "full path of the directory within the volume",
 			},
-			&cli.Uint64Flag{
+			&cli.StringFlag{
 				Name:  "capacity",
 				Usage: "hard quota of the directory limiting its usage of space in GiB",
 			},
@@ -132,7 +132,7 @@ func quota(c *cli.Context) error {
 		strict = c.Bool("strict")
 		q := &meta.Quota{MaxSpace: -1, MaxInodes: -1} // negative means no change
 		if c.IsSet("capacity") {
-			q.MaxSpace = int64(c.Uint64("capacity")) << 30
+			q.MaxSpace = int64(parseBytes(c, "capacity", 'G'))
 		}
 		if c.IsSet("inodes") {
 			q.MaxInodes = int64(c.Uint64("inodes"))

@@ -32,6 +32,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -74,19 +75,19 @@ Details: https://juicefs.com/docs/community/performance_evaluation_guide#juicefs
 				Name:  "session-token",
 				Usage: "session token for object storage",
 			},
-			&cli.UintFlag{
+			&cli.StringFlag{
 				Name:  "block-size",
-				Value: 4096,
+				Value: "4M",
 				Usage: "size of each IO block in KiB",
 			},
-			&cli.UintFlag{
+			&cli.StringFlag{
 				Name:  "big-object-size",
-				Value: 1024,
+				Value: "1G",
 				Usage: "size of each big object in MiB",
 			},
-			&cli.UintFlag{
+			&cli.StringFlag{
 				Name:  "small-object-size",
-				Value: 128,
+				Value: "128K",
 				Usage: "size of each small object in KiB",
 			},
 			&cli.UintFlag{
@@ -121,10 +122,16 @@ var groupName string
 
 func objbench(ctx *cli.Context) error {
 	setup(ctx, 1)
-	for _, name := range []string{"big-object-size", "small-object-size", "block-size", "small-objects", "threads"} {
+	for _, name := range []string{"small-objects", "threads"} {
 		if ctx.Uint(name) == 0 {
 			logger.Fatalf("%s should not be set to zero", name)
 		}
+	}
+	bSize := int(parseBytes(ctx, "block-size", 'K'))
+	fsize := int(parseBytes(ctx, "big-object-size", 'M'))
+	smallBSize := int(parseBytes(ctx, "small-object-size", 'K'))
+	if bSize == 0 || fsize == 0 || smallBSize == 0 {
+		logger.Fatalf("block-size, big-object-size and small-object-size should not be zero")
 	}
 	ak, sk, token := ctx.String("access-key"), ctx.String("secret-key"), ctx.String("session-token")
 	if ak == "" {
@@ -154,9 +161,6 @@ func objbench(ctx *cli.Context) error {
 	defer func() {
 		_ = blobOrigin.Delete(prefix)
 	}()
-	bSize := int(ctx.Uint("block-size")) << 10
-	fsize := int(ctx.Uint("big-object-size")) << 20
-	smallBSize := int(ctx.Uint("small-object-size")) << 10
 	bCount := int(math.Ceil(float64(fsize) / float64(bSize)))
 	sCount := int(ctx.Uint("small-objects"))
 	threads := int(ctx.Uint("threads"))
@@ -356,8 +360,8 @@ func objbench(ctx *cli.Context) error {
 		_ = bm.delete(strconv.Itoa(i), 0)
 	}
 
-	fmt.Printf("Benchmark finished! block-size: %d KiB, big-object-size: %d MiB, small-object-size: %d KiB, small-objects: %d, NumThreads: %d\n",
-		ctx.Uint("block-size"), ctx.Uint("big-object-size"), ctx.Uint("small-object-size"), sCount, threads)
+	fmt.Printf("Benchmark finished! block-size: %s, big-object-size: %s, small-object-size: %s, small-objects: %d, NumThreads: %d\n",
+		humanize.IBytes(uint64(bSize)), humanize.IBytes(uint64(fsize)), humanize.IBytes(uint64(smallBSize)), sCount, threads)
 
 	// adjust the print order
 	pResult[1], pResult[3] = pResult[3], pResult[1]

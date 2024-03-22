@@ -982,13 +982,12 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 		}
 	}
 	if len(dirs) == 0 {
-		config.CacheSize = 100
-		logger.Warnf("No cache dir existed, use memory cache instead, cache size: %dMB", config.CacheSize)
+		config.CacheSize = 100 << 20
+		logger.Warnf("No cache dir existed, use memory cache instead, cache size: 100 MiB")
 		return newMemStore(config, metrics)
 	}
 	sort.Strings(dirs)
-	dirCacheSize := config.CacheSize << 20
-	dirCacheSize /= int64(len(dirs))
+	dirCacheSize := int64(config.CacheSize) / int64(len(dirs))
 	m := &cacheManager{
 		consistentMap: consistenthash.New(100, murmur3.Sum32),
 		storeMap:      make(map[string]*cacheStore, len(dirs)),
@@ -997,7 +996,7 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 	}
 
 	// 20% of buffer could be used for pending pages
-	pendingPages := config.BufferSize * 2 / 10 / config.BlockSize / len(dirs)
+	pendingPages := int(config.BufferSize) * 2 / 10 / config.BlockSize / len(dirs)
 	for i, d := range dirs {
 		store := newCacheStore(metrics, strings.TrimSpace(d)+string(filepath.Separator), dirCacheSize, pendingPages, config, uploader)
 		m.stores[i] = store

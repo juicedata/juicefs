@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/pkg/errors"
@@ -144,14 +145,16 @@ func config(ctx *cli.Context) error {
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
 		case "capacity":
-			if new := ctx.Uint64(flag); new != format.Capacity>>30 {
-				msg.WriteString(fmt.Sprintf("%10s: %d GiB -> %d GiB\n", flag, format.Capacity>>30, new))
-				format.Capacity = new << 30
+			if new := parseBytes(ctx, flag, 'G'); new != format.Capacity {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag,
+					humanize.IBytes(format.Capacity), humanize.IBytes(new)))
+				format.Capacity = new
 				quota = true
 			}
 		case "inodes":
 			if new := ctx.Uint64(flag); new != format.Inodes {
-				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.Inodes, new))
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag,
+					humanize.Comma(int64(format.Inodes)), humanize.Comma(int64(new))))
 				format.Inodes = new
 				quota = true
 			}
