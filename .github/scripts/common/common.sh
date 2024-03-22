@@ -1,5 +1,5 @@
 #!/bin/bash -e
-
+dpkg -s jq >/dev/null 2>&1 || .github/scripts/apt_install.sh jq
 prepare_test()
 {
     umount_jfs /jfs $META_URL
@@ -15,13 +15,17 @@ umount_jfs()
     [[ -z "$mp" ]] && echo "mount point is empty" && exit 1
     [[ -z "$meta_url" ]] && echo "meta url is empty" && exit 1
     echo "umount_jfs $mp $meta_url"
-    [[ ! -f $mp/.config ]] && echo "$mp/.config not found, $mp is not juicefs mount point" && return
+    [[ ! -f $mp/.config ]] && return
     ls -l $mp/.config
-    pid=$(./juicefs status --log-level error $meta_url 2>/dev/null |tee status.log| jq --arg mp "$mp" '.Sessions[] | select(.MountPoint == $mp) | .ProcessID')
-    [[ -z "$pid" ]] && echo "pid is empty" && return
-    echo "umount  $mp, pid $pid"
-    umount -l $mp
-    wait_mount_process_killed $pid 20
+    pids=$(./juicefs status --log-level error $meta_url 2>/dev/null |tee status.log| jq --arg mp "$mp" '.Sessions[] | select(.MountPoint == $mp) | .ProcessID')
+    [[ -z "$pids" ]] && echo "pid is empty" && return
+    echo "umount is $mp, pids is $pids"
+    for pid in $pids; do
+        umount -l $mp
+    done
+    for pid in $pids; do
+        wait_mount_process_killed $pid 60
+    done    
 }
 
 wait_mount_process_killed()
@@ -57,4 +61,28 @@ compare_md5sum(){
         echo "md5 are different: md51 is $md51, md52 is $md52"
         exit 1
     fi
+}
+
+
+wait_command_success()
+{
+    command=$1
+    expected=$2
+    timeout=$3
+    [[ -z "$timeout" ]] && timeout=30
+    echo "wait_command_success command=$command, expected=$expected, timeout=$timeout"
+    for i in $(seq 1 $timeout); do
+        result=$(eval "$command")
+        echo result is $result
+        if [[ "$result" == "$expected" ]]; then
+            echo "command success"
+            break
+        fi
+        if [ $i -eq $timeout ]; then
+            eval "$command"
+            echo "command failed after $timeout: $command"
+            exit 1
+        fi
+        echo "wait command to success in $i sec..." && sleep 1
+    done
 }

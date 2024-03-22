@@ -26,11 +26,11 @@ import (
 )
 
 var (
-	opsDurationsHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
+	opsDurationsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "fuse_ops_durations_histogram_seconds",
 		Help:    "Operations latency distributions.",
 		Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
-	})
+	}, []string{"method"})
 )
 
 type logReader struct {
@@ -40,7 +40,7 @@ type logReader struct {
 }
 
 var (
-	readerLock sync.Mutex
+	readerLock sync.RWMutex
 	readers    map[uint64]*logReader
 )
 
@@ -48,16 +48,16 @@ func init() {
 	readers = make(map[uint64]*logReader)
 }
 
-func logit(ctx Context, format string, args ...interface{}) {
+func logit(ctx Context, method, format string, args ...interface{}) {
 	used := ctx.Duration()
-	opsDurationsHistogram.Observe(used.Seconds())
-	readerLock.Lock()
-	defer readerLock.Unlock()
+	opsDurationsHistogram.WithLabelValues(method).Observe(used.Seconds())
+	readerLock.RLock()
+	defer readerLock.RUnlock()
 	if len(readers) == 0 && used < time.Second*10 {
 		return
 	}
 
-	cmd := fmt.Sprintf(format, args...)
+	cmd := fmt.Sprintf(method+" "+format, args...)
 	t := utils.Now()
 	ts := t.Format("2006.01.02 15:04:05.000000")
 	cmd += fmt.Sprintf(" <%.6f>", used.Seconds())
@@ -88,9 +88,9 @@ func closeAccessLog(fh uint64) {
 }
 
 func readAccessLog(fh uint64, buf []byte) int {
-	readerLock.Lock()
+	readerLock.RLock()
 	r, ok := readers[fh]
-	readerLock.Unlock()
+	readerLock.RUnlock()
 	if !ok {
 		return 0
 	}
