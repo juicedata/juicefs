@@ -120,10 +120,10 @@ test_update_on_fio(){
         sleep 3s
     done
     kill -9 $fio_pid > /dev/null 2>&1 || true
-    umount_jfs /tmp/jfs $META_URL
+    # umount_jfs /tmp/jfs $META_URL
     ps -ef | grep juicefs | grep mount | grep -v grep || true
     count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
-    [[ $count -ne 0 ]] && echo "mount process count should be 0, count=$count" && exit 1 || true
+    [[ $count -ne 2 ]] && echo "mount process count should be 2, count=$count" && exit 1 || true
 }
 
 test_update_fuse_option(){

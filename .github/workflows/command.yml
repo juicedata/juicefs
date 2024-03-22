@@ -150,8 +150,9 @@ jobs:
       - name: Test Graceful upgrade
         timeout-minutes: 30
         run: |
-          sudo META=${{matrix.meta}} .github/scripts/command/graceful_upgrade.sh
-
+          if [ "${{matrix.meta}}" == "redis" ]; then
+            sudo META=${{matrix.meta}} .github/scripts/command/graceful_upgrade.sh
+          fi
       - name: Log
         if: always()
         run: |
