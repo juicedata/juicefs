@@ -3,8 +3,8 @@ module github.com/juicedata/juicefs
 go 1.20
 
 require (
-	cloud.google.com/go/compute v1.7.0
-	cloud.google.com/go/storage v1.26.0
+	cloud.google.com/go/compute/metadata v0.2.3
+	cloud.google.com/go/storage v1.28.1
 	github.com/Arvintian/scs-go-sdk v1.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.0.0
 	github.com/DataDog/zstd v1.5.0
@@ -17,7 +17,7 @@ require (
 	github.com/ceph/go-ceph v0.18.0
 	github.com/colinmarc/hdfs/v2 v2.3.0
 	github.com/davies/groupcache v0.0.0-20230821031435-e4e8362f58e1
-	github.com/dgraph-io/badger/v3 v3.2103.5
+	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/erikdubbelboer/gspt v0.0.0-20210805194459-ce36a5128377
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
@@ -79,18 +79,17 @@ require (
 	golang.org/x/sys v0.15.0
 	golang.org/x/term v0.15.0
 	golang.org/x/text v0.14.0
-	google.golang.org/api v0.94.0
+	google.golang.org/api v0.114.0
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
 	pgregory.net/rapid v0.5.3
 	xorm.io/xorm v1.0.7
 )
 
-require github.com/jackc/puddle/v2 v2.2.1 // indirect
-
 require (
-	cloud.google.com/go v0.102.1 // indirect
-	cloud.google.com/go/iam v0.3.0 // indirect
+	cloud.google.com/go v0.110.0 // indirect
+	cloud.google.com/go/compute v1.19.1 // indirect
+	cloud.google.com/go/iam v0.13.0 // indirect
 	git.apache.org/thrift.git v0.13.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.3.0
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.1.1 // indirect
@@ -104,7 +103,6 @@ require (
 	github.com/beevik/ntp v0.3.0 // indirect
 	github.com/benbjohnson/clock v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cheggaaa/pb v1.0.29 // indirect
 	github.com/clbanning/mxj v1.8.4 // indirect
@@ -133,7 +131,7 @@ require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
-	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b // indirect
+	github.com/golang/glog v1.1.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
@@ -141,8 +139,8 @@ require (
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/google/readahead v0.0.0-20161222183148-eaceba169032 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.1.0 // indirect
-	github.com/googleapis/gax-go/v2 v2.4.0 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
+	github.com/googleapis/gax-go/v2 v2.7.1 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20181017120253-0766667cb4d1 // indirect
 	github.com/gorilla/handlers v1.5.1 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
@@ -163,6 +161,7 @@ require (
 	github.com/hashicorp/vault/sdk v0.1.13 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
+	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
 	github.com/jcmturner/gofork v1.7.6 // indirect
@@ -240,14 +239,14 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.9 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.9 // indirect
-	go.opencensus.io v0.23.0 // indirect
+	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/xerrors v0.0.0-20220609144429-65e65417b02f // indirect
+	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20220810155839-1856144b1d9c // indirect
-	google.golang.org/grpc v1.48.0 // indirect
+	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
+	google.golang.org/grpc v1.56.3 // indirect
 	gopkg.in/ini.v1 v1.57.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1 // indirect
@@ -263,8 +262,6 @@ replace github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8 => git
 replace github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/golang-jwt/jwt v3.2.1+incompatible
 
 replace github.com/vbauerster/mpb/v7 v7.0.3 => github.com/juicedata/mpb/v7 v7.0.4-0.20231024073412-2b8d31be510b
-
-replace google.golang.org/grpc v1.43.0 => google.golang.org/grpc v1.29.0
 
 replace xorm.io/xorm v1.0.7 => gitea.com/davies/xorm v1.0.8-0.20220528043536-552d84d1b34a
 

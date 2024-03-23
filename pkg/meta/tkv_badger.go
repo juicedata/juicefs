@@ -23,7 +23,7 @@ import (
 	"bytes"
 	"time"
 
-	badger "github.com/dgraph-io/badger/v3"
+	badger "github.com/dgraph-io/badger/v4"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
