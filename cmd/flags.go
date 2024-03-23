@@ -385,30 +385,32 @@ func parseBytes(ctx *cli.Context, key string, unit byte) uint64 {
 		unit = c
 		s = s[:len(s)-1]
 	}
-	val, err := strconv.ParseUint(s, 10, 64)
+	val, err := strconv.ParseFloat(s, 64)
 	if err == nil {
+		var shift int
 		switch unit {
 		case 'k', 'K':
-			val <<= 10
+			shift = 10
 		case 'm', 'M':
-			val <<= 20
+			shift = 20
 		case 'g', 'G':
-			val <<= 30
+			shift = 30
 		case 't', 'T':
-			val <<= 40
+			shift = 40
 		case 'p', 'P':
-			val <<= 50
+			shift = 50
 		case 'e', 'E':
-			val <<= 60
+			shift = 60
 		default:
 			err = errors.New("invalid unit")
 		}
+		val *= float64(uint64(1) << shift)
 	}
 	if err != nil {
 		logger.Fatalf("Invalid value \"%s\" for option \"--%s\"", str, key)
 	}
 
-	return val
+	return uint64(val)
 }
 
 func parseMbps(ctx *cli.Context, key string) int64 {
