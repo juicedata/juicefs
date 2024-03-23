@@ -55,11 +55,11 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 		Flags: expandFlags(
 			formatStorageFlags(),
 			addCategories("DATA STORAGE", []cli.Flag{
-				&cli.Int64Flag{
+				&cli.StringFlag{
 					Name:  "upload-limit",
 					Usage: "default bandwidth limit of a client for upload in Mbps",
 				},
-				&cli.Int64Flag{
+				&cli.StringFlag{
 					Name:  "download-limit",
 					Usage: "default bandwidth limit of a client for download in Mbps",
 				},
@@ -204,13 +204,13 @@ func config(ctx *cli.Context) error {
 				storage = true
 			}
 		case "upload-limit":
-			if new := ctx.Int64(flag); new != format.UploadLimit {
-				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.UploadLimit, new))
+			if new := parseMbps(ctx, flag); new != format.UploadLimit {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, mbps(format.UploadLimit), mbps(new)))
 				format.UploadLimit = new
 			}
 		case "download-limit":
-			if new := ctx.Int64(flag); new != format.DownloadLimit {
-				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.DownloadLimit, new))
+			if new := parseMbps(ctx, flag); new != format.DownloadLimit {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, mbps(format.DownloadLimit), mbps(new)))
 				format.DownloadLimit = new
 			}
 		case "trash-days":

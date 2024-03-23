@@ -176,10 +176,10 @@ func updateFormat(c *cli.Context) func(*meta.Format) {
 			format.StorageClass = c.String("storage-class")
 		}
 		if c.IsSet("upload-limit") {
-			format.UploadLimit = c.Int64("upload-limit")
+			format.UploadLimit = parseMbps(c, "upload-limit")
 		}
 		if c.IsSet("download-limit") {
-			format.DownloadLimit = c.Int64("download-limit")
+			format.DownloadLimit = parseMbps(c, "download-limit")
 		}
 	}
 }
@@ -323,8 +323,8 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		Writeback:     c.Bool("writeback"),
 		Prefetch:      c.Int("prefetch"),
 		BufferSize:    parseBytes(c, "buffer-size", 'M'),
-		UploadLimit:   c.Int64("upload-limit") * 1e6 / 8,
-		DownloadLimit: c.Int64("download-limit") * 1e6 / 8,
+		UploadLimit:   parseMbps(c, "upload-limit") * 1e6 / 8,
+		DownloadLimit: parseMbps(c, "download-limit") * 1e6 / 8,
 		UploadDelay:   duration(c.String("upload-delay")),
 		UploadHours:   c.String("upload-hours"),
 

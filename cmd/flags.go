@@ -135,11 +135,11 @@ func storageFlags() []cli.Flag {
 			Value: 10,
 			Usage: "number of threads to delete objects",
 		},
-		&cli.Int64Flag{
+		&cli.StringFlag{
 			Name:  "upload-limit",
 			Usage: "bandwidth limit for upload in Mbps",
 		},
-		&cli.Int64Flag{
+		&cli.StringFlag{
 			Name:  "download-limit",
 			Usage: "bandwidth limit for download in Mbps",
 		},
@@ -409,4 +409,49 @@ func parseBytes(ctx *cli.Context, key string, unit byte) uint64 {
 	}
 
 	return val
+}
+
+func parseMbps(ctx *cli.Context, key string) int64 {
+	str := ctx.String(key)
+	if len(str) == 0 {
+		return 0
+	}
+
+	s := str
+	var unit byte = 'M'
+	if c := s[len(s)-1]; c < '0' || c > '9' {
+		unit = c
+		s = s[:len(s)-1]
+	}
+	val, err := strconv.ParseFloat(s, 64)
+	if err == nil {
+		switch unit {
+		case 'm', 'M':
+		case 'g', 'G':
+			val *= 1e3
+		case 't', 'T':
+			val *= 1e6
+		case 'p', 'P':
+			val *= 1e9
+		default:
+			err = errors.New("invalid unit")
+		}
+	}
+	if err != nil {
+		logger.Fatalf("Invalid value \"%s\" for option \"--%s\"", str, key)
+	}
+
+	return int64(val)
+}
+
+func mbps(val int64) string {
+	v := float64(val)
+	if v < 1e3 {
+		return strconv.FormatFloat(v, 'f', 1, 64) + " Mbps"
+	} else if v < 1e6 {
+		return strconv.FormatFloat(v/1e3, 'f', 1, 64) + " Gbps"
+	} else if v < 1e9 {
+		return strconv.FormatFloat(v/1e6, 'f', 1, 64) + " Tbps"
+	}
+	return strconv.FormatFloat(v/1e9, 'f', 1, 64) + " Pbps"
 }
