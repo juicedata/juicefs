@@ -298,7 +298,7 @@ First you need to add JuiceFS SDK to `classpath` in Kafka Connect, e.g., `/usr/s
 
 While creating a Connect Sink task, configuration needs to be set up as follows:
 
-- Specify `hadoop.conf.dir` as the directory that contains the configuration file `core-site.xml`. If it is not running in Hadoop environment, you can create a seperate directory such as `/usr/local/juicefs/hadoop`, and then add the JuiceFS related configurations to `core-site.xml`.
+- Specify `hadoop.conf.dir` as the directory that contains the configuration file `core-site.xml`. If it is not running in Hadoop environment, you can create a separate directory such as `/usr/local/juicefs/hadoop`, and then add the JuiceFS related configurations to `core-site.xml`.
 - Specify `store.url` as a path starting with `jfs://`.
 
 For example:
