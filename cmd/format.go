@@ -41,6 +41,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/urfave/cli/v2"
 )
@@ -380,7 +381,7 @@ func format(c *cli.Context) error {
 		for _, flag := range c.LocalFlagNames() {
 			switch flag {
 			case "capacity":
-				format.Capacity = parseBytes(c, flag, 'G')
+				format.Capacity = utils.ParseBytes(c, flag, 'G')
 			case "inodes":
 				format.Inodes = c.Uint64(flag)
 			case "bucket":
@@ -402,7 +403,7 @@ func format(c *cli.Context) error {
 			case "trash-days":
 				format.TrashDays = c.Int(flag)
 			case "block-size":
-				format.BlockSize = int(fixObjectSize(parseBytes(c, flag, 'K')) >> 10)
+				format.BlockSize = int(fixObjectSize(utils.ParseBytes(c, flag, 'K')) >> 10)
 			case "compress":
 				format.Compression = c.String(flag)
 			case "shards":
@@ -430,9 +431,9 @@ func format(c *cli.Context) error {
 			EncryptAlgo:      c.String("encrypt-algo"),
 			Shards:           c.Int("shards"),
 			HashPrefix:       c.Bool("hash-prefix"),
-			Capacity:         parseBytes(c, "capacity", 'G'),
+			Capacity:         utils.ParseBytes(c, "capacity", 'G'),
 			Inodes:           c.Uint64("inodes"),
-			BlockSize:        int(fixObjectSize(parseBytes(c, "block-size", 'K')) >> 10),
+			BlockSize:        int(fixObjectSize(utils.ParseBytes(c, "block-size", 'K')) >> 10),
 			Compression:      c.String("compress"),
 			TrashDays:        c.Int("trash-days"),
 			DirStats:         true,

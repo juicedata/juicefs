@@ -22,6 +22,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 
 	"github.com/urfave/cli/v2"
 )
@@ -132,7 +133,7 @@ func quota(c *cli.Context) error {
 		strict = c.Bool("strict")
 		q := &meta.Quota{MaxSpace: -1, MaxInodes: -1} // negative means no change
 		if c.IsSet("capacity") {
-			q.MaxSpace = int64(parseBytes(c, "capacity", 'G'))
+			q.MaxSpace = int64(utils.ParseBytes(c, "capacity", 'G'))
 		}
 		if c.IsSet("inodes") {
 			q.MaxInodes = int64(c.Uint64("inodes"))

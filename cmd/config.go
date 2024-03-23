@@ -25,6 +25,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
@@ -145,7 +146,7 @@ func config(ctx *cli.Context) error {
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
 		case "capacity":
-			if new := parseBytes(ctx, flag, 'G'); new != format.Capacity {
+			if new := utils.ParseBytes(ctx, flag, 'G'); new != format.Capacity {
 				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag,
 					humanize.IBytes(format.Capacity), humanize.IBytes(new)))
 				format.Capacity = new
@@ -204,13 +205,13 @@ func config(ctx *cli.Context) error {
 				storage = true
 			}
 		case "upload-limit":
-			if new := parseMbps(ctx, flag); new != format.UploadLimit {
-				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, mbps(format.UploadLimit), mbps(new)))
+			if new := utils.ParseMbps(ctx, flag); new != format.UploadLimit {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, utils.Mbps(format.UploadLimit), utils.Mbps(new)))
 				format.UploadLimit = new
 			}
 		case "download-limit":
-			if new := parseMbps(ctx, flag); new != format.DownloadLimit {
-				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, mbps(format.DownloadLimit), mbps(new)))
+			if new := utils.ParseMbps(ctx, flag); new != format.DownloadLimit {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, utils.Mbps(format.DownloadLimit), utils.Mbps(new)))
 				format.DownloadLimit = new
 			}
 		case "trash-days":

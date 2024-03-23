@@ -127,9 +127,9 @@ func objbench(ctx *cli.Context) error {
 			logger.Fatalf("%s should not be set to zero", name)
 		}
 	}
-	bSize := int(parseBytes(ctx, "block-size", 'K'))
-	fsize := int(parseBytes(ctx, "big-object-size", 'M'))
-	smallBSize := int(parseBytes(ctx, "small-object-size", 'K'))
+	bSize := int(utils.ParseBytes(ctx, "block-size", 'K'))
+	fsize := int(utils.ParseBytes(ctx, "big-object-size", 'M'))
+	smallBSize := int(utils.ParseBytes(ctx, "small-object-size", 'K'))
 	if bSize == 0 || fsize == 0 || smallBSize == 0 {
 		logger.Fatalf("block-size, big-object-size and small-object-size should not be zero")
 	}
