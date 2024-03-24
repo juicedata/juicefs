@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
 
@@ -135,11 +134,11 @@ func storageFlags() []cli.Flag {
 			Value: 10,
 			Usage: "number of threads to delete objects",
 		},
-		&cli.Int64Flag{
+		&cli.StringFlag{
 			Name:  "upload-limit",
 			Usage: "bandwidth limit for upload in Mbps",
 		},
-		&cli.Int64Flag{
+		&cli.StringFlag{
 			Name:  "download-limit",
 			Usage: "bandwidth limit for download in Mbps",
 		},
@@ -372,41 +371,4 @@ func duration(s string) time.Duration {
 		return 0
 	}
 	return d + time.Hour*time.Duration(v*24)
-}
-
-func parseBytes(ctx *cli.Context, key string, unit byte) uint64 {
-	str := ctx.String(key)
-	if len(str) == 0 {
-		return 0
-	}
-
-	s := str
-	if c := s[len(s)-1]; c < '0' || c > '9' {
-		unit = c
-		s = s[:len(s)-1]
-	}
-	val, err := strconv.ParseUint(s, 10, 64)
-	if err == nil {
-		switch unit {
-		case 'k', 'K':
-			val <<= 10
-		case 'm', 'M':
-			val <<= 20
-		case 'g', 'G':
-			val <<= 30
-		case 't', 'T':
-			val <<= 40
-		case 'p', 'P':
-			val <<= 50
-		case 'e', 'E':
-			val <<= 60
-		default:
-			err = errors.New("invalid unit")
-		}
-	}
-	if err != nil {
-		logger.Fatalf("Invalid value \"%s\" for option \"--%s\"", str, key)
-	}
-
-	return val
 }

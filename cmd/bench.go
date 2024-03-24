@@ -315,7 +315,7 @@ func printResult(result [][]string, leftAlign int, colorful bool) {
 func bench(ctx *cli.Context) error {
 	setup(ctx, 1)
 	/* --- Pre-check --- */
-	blockSize := parseBytes(ctx, "block-size", 'M')
+	blockSize := utils.ParseBytes(ctx, "block-size", 'M')
 	if blockSize == 0 || ctx.Uint("threads") == 0 {
 		return os.ErrInvalid
 	}
@@ -323,8 +323,8 @@ func bench(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("Failed to get absolute path of %s: %s", ctx.Args().First(), err)
 	}
-	bigSize := parseBytes(ctx, "big-file-size", 'M')
-	smallSize := parseBytes(ctx, "small-file-size", 'K')
+	bigSize := utils.ParseBytes(ctx, "big-file-size", 'M')
+	smallSize := utils.ParseBytes(ctx, "small-file-size", 'K')
 	tmpdir = filepath.Join(tmpdir, fmt.Sprintf("__juicefs_benchmark_%d__", time.Now().UnixNano()))
 	bm := newBenchmark(tmpdir, int(blockSize), int(bigSize), int(smallSize),
 		int(ctx.Uint("small-file-count")), int(ctx.Uint("threads")))

@@ -20,6 +20,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/urfave/cli/v2"
 )
@@ -49,7 +50,7 @@ type Config struct {
 	ManagerAddr    string
 	ListThreads    int
 	ListDepth      int
-	BWLimit        int
+	BWLimit        int64
 	NoHTTPS        bool
 	Verbose        bool
 	Quiet          bool
@@ -157,7 +158,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Workers:        c.StringSlice("worker"),
 		ManagerAddr:    c.String("manager-addr"),
 		Manager:        c.String("manager"),
-		BWLimit:        c.Int("bwlimit"),
+		BWLimit:        utils.ParseMbps(c, "bwlimit"),
 		NoHTTPS:        c.Bool("no-https"),
 		Verbose:        c.Bool("verbose"),
 		Quiet:          c.Bool("quiet"),

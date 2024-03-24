@@ -176,10 +176,10 @@ func updateFormat(c *cli.Context) func(*meta.Format) {
 			format.StorageClass = c.String("storage-class")
 		}
 		if c.IsSet("upload-limit") {
-			format.UploadLimit = c.Int64("upload-limit")
+			format.UploadLimit = utils.ParseMbps(c, "upload-limit")
 		}
 		if c.IsSet("download-limit") {
-			format.DownloadLimit = c.Int64("download-limit")
+			format.DownloadLimit = utils.ParseMbps(c, "download-limit")
 		}
 	}
 }
@@ -322,14 +322,14 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		MaxRetries:    c.Int("io-retries"),
 		Writeback:     c.Bool("writeback"),
 		Prefetch:      c.Int("prefetch"),
-		BufferSize:    parseBytes(c, "buffer-size", 'M'),
-		UploadLimit:   c.Int64("upload-limit") * 1e6 / 8,
-		DownloadLimit: c.Int64("download-limit") * 1e6 / 8,
+		BufferSize:    utils.ParseBytes(c, "buffer-size", 'M'),
+		UploadLimit:   utils.ParseMbps(c, "upload-limit") * 1e6 / 8,
+		DownloadLimit: utils.ParseMbps(c, "download-limit") * 1e6 / 8,
 		UploadDelay:   duration(c.String("upload-delay")),
 		UploadHours:   c.String("upload-hours"),
 
 		CacheDir:          c.String("cache-dir"),
-		CacheSize:         parseBytes(c, "cache-size", 'M'),
+		CacheSize:         utils.ParseBytes(c, "cache-size", 'M'),
 		FreeSpace:         float32(c.Float64("free-space-ratio")),
 		CacheMode:         os.FileMode(cm),
 		CacheFullBlock:    !c.Bool("cache-partial-only"),

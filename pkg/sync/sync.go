@@ -1212,7 +1212,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	wg := sync.WaitGroup{}
 	concurrent = make(chan int, config.Threads)
 	if config.BWLimit > 0 {
-		bps := float64(int64(config.BWLimit)*(1<<20)/8) * 0.85 // 15% overhead
+		bps := float64(config.BWLimit*1e6/8) * 0.85 // 15% overhead
 		limiter = ratelimit.NewBucketWithRate(bps, int64(bps)*3)
 	}
 

@@ -220,7 +220,7 @@ func syncStorageFlags() []cli.Flag {
 			Name:  "storage-class",
 			Usage: "the storage class for destination",
 		},
-		&cli.IntFlag{
+		&cli.StringFlag{
 			Name:  "bwlimit",
 			Usage: "limit bandwidth in Mbps (0 means unlimited)",
 		},
