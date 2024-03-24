@@ -144,8 +144,8 @@ func TestStoreCompressed(t *testing.T) {
 func TestStoreLimited(t *testing.T) {
 	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf
-	conf.UploadLimit = 1 << 20
-	conf.DownloadLimit = 1 << 20
+	conf.UploadLimit = 1e6
+	conf.DownloadLimit = 1e6
 	store := NewCachedStore(mem, conf, nil)
 	testStore(t, store)
 }
