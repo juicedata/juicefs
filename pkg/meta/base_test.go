@@ -1215,7 +1215,7 @@ func testLocks(t *testing.T, m Meta) {
 			time.Sleep(time.Millisecond)
 			count--
 			if count > 0 {
-				panic(fmt.Errorf("count should be be zero but got %d", count))
+				panic(fmt.Errorf("count should be zero but got %d", count))
 			}
 			if st := m.Setlk(ctx, inode, uint64(i), false, syscall.F_UNLCK, 0, 0xFFFF, uint32(i)); st != 0 {
 				panic(fmt.Errorf("plock unlock: %s", st))
