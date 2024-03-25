@@ -22,21 +22,7 @@ except ImportError:
     subprocess.check_call(["pip", "install", "fallocate"])
 import fallocate
 from context import Context
-
-class Statistics:
-    def __init__(self):
-        self.stats = {}
-    def success(self, function_name):
-        if function_name not in self.stats:
-            self.stats[function_name] = {'success': 0, 'failure': 0}
-        self.stats[function_name]['success'] += 1
-    def failure(self, function_name):
-        if function_name not in self.stats:
-            self.stats[function_name] = {'success': 0, 'failure': 0}
-        self.stats[function_name]['failure'] += 1
-
-    def get(self):
-        return self.stats
+from stats import Statistics
 
 class CommandOperation:
     JFS_CONTROL_FILES=['.accesslog', '.config', '.stats']
@@ -156,10 +142,10 @@ class CommandOperation:
         self.loggers[context.root_dir].info(f'do_info {abs_path} succeed')
         return result 
     
-    def do_rmr(self, context:Context, entry, mount, user='root'):
+    def do_rmr(self, context:Context, entry, user='root'):
         abspath = os.path.join(context.root_dir, entry)
         try:
-            result = self.run_cmd(f'sudo -u {user} {mount} rmr {abspath}', context.root_dir)
+            result = self.run_cmd(f'sudo -u {user} ./juicefs rmr {abspath}', context.root_dir)
             if '<ERROR>:' in result:
                 return self.handleException(Exception(result), context.root_dir, 'do_rmr', abspath)
         except subprocess.CalledProcessError as e:
@@ -169,20 +155,19 @@ class CommandOperation:
         self.loggers[context.root_dir].info(f'do_rmr {abspath} succeed')
         return True
     
-    def do_status(self, context:Context, mount, user='root'):
+    def do_status(self, context:Context, user='root'):
         try:
-            result = self.run_cmd(f'sudo -u {user} {mount} status {context.volume} --conf-dir={context.conf_dir}', context.root_dir)
+            result = subprocess.run(f'sudo -u {user} ./juicefs status {context.meta_url}'.split(), check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            # result = self.run_cmd(f'sudo -u {user} ./juicefs status {context.meta_url} ', context.root_dir)
+            result = result.stdout.decode()
             result = json.loads(result)['Setting']
-            # TODO: check why, should remove this line.
-            if 'tested' in result:
-                del result['tested']
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_status', '')
         self.stats.success('do_status')
         self.loggers[context.root_dir].info(f'do_status succeed')
-        return result['rootname'], result['password'], result['uuid'], result['storage'], \
-            result['token'], result['accesskey'], result['secretkey'], \
-            result['blockSize'], result['partitions'], result['compress']
+        return result['Storage'], result['Bucket'], result['BlockSize'], result['Compression'], \
+            result['EncryptAlgo'], result['TrashDays'], result['MetaVersion'], \
+            result['MinClientVersion'], result['DirStats'], result['EnableACL']
     
     def do_dump(self, context:Context, entry, mount, user='root'):
         abspath = os.path.join(context.root_dir, entry)
