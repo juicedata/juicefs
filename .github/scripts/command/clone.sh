@@ -164,6 +164,7 @@ check_guid_after_clone(){
     [[ "$is_preserve" == "true" ]] && preserve="--preserve" || preserve=""
     rm /jfs/test1 -rf
     rm /jfs/test2 -rf
+    ls /jfs/test1 && echo "test1 should not exist" && exit 1 || echo "/jfs/test1 not exist" 
     ./juicefs clone /jfs/test /jfs/test1 $preserve
     cp /jfs/test /jfs/test2 -rf $preserve
     uid1=$(stat -c %u /jfs/test1)
