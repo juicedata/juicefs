@@ -64,8 +64,26 @@ test_dump_without_keep_secret()
     cat /jfs/hello.txt | grep hello
 }
 
-test_dump_load_with_fsrand()
+test_dump_load_with_fsrand1(){
+    dump_load_with_fsrand
+}
+
+test_dump_load_with_fsrand2(){
+    dump_load_with_fsrand --skip-trash
+}
+
+test_dump_load_with_fsrand3(){
+    dump_load_with_fsrand --fast
+}
+
+test_dump_load_with_fsrand4(){
+    dump_load_with_fsrand --fast --skip-trash
+}
+
+dump_load_with_fsrand()
 {
+    option=$@
+    echo option is $option
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 1 --enable-acl
     ./juicefs mount -d $META_URL /jfs --enable-xattr
