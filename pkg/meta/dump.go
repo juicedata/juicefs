@@ -507,7 +507,7 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 					if err != nil {
 						break
 					}
-					if typeFromString(child.Attr.Type) == TypeDirectory && reCountNlink {
+					if reCountNlink && typeFromString(child.Attr.Type) == TypeDirectory {
 						e.Attr.Nlink++
 					}
 					e.Entries[n.(string)] = &DumpedEntry{
