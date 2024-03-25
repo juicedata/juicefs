@@ -412,9 +412,9 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 		case "Quotas":
 			err = dec.Decode(&dm.Quotas)
 		case "FSTree":
-			_, err = decodeEntry(dec, 0, counters, parents, dm.Quotas, refs, bar, load, addChunk, true)
+			_, err = decodeEntry(dec, 0, counters, parents, dm.Quotas, refs, bar, load, addChunk)
 		case "Trash":
-			_, err = decodeEntry(dec, 1, counters, parents, nil, refs, bar, load, addChunk, false)
+			_, err = decodeEntry(dec, 1, counters, parents, nil, refs, bar, load, addChunk)
 		}
 		if err != nil {
 			err = fmt.Errorf("load %v: %s", name, err)
@@ -429,7 +429,7 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 }
 
 func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[Ino][]Ino, quotas map[Ino]*DumpedQuota,
-	refs map[chunkKey]int64, bar *utils.Bar, load func(*DumpedEntry), addChunk func(*chunkKey), reCountNlink bool) (*DumpedEntry, error) {
+	refs map[chunkKey]int64, bar *utils.Bar, load func(*DumpedEntry), addChunk func(*chunkKey)) (*DumpedEntry, error) {
 	if _, err := dec.Token(); err != nil {
 		return nil, err
 	}
@@ -503,11 +503,11 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 						break
 					}
 					var child *DumpedEntry
-					child, err = decodeEntry(dec, e.Attr.Inode, cs, parents, quotas, refs, bar, load, addChunk, reCountNlink)
+					child, err = decodeEntry(dec, e.Attr.Inode, cs, parents, quotas, refs, bar, load, addChunk)
 					if err != nil {
 						break
 					}
-					if typeFromString(child.Attr.Type) == TypeDirectory && reCountNlink {
+					if typeFromString(child.Attr.Type) == TypeDirectory {
 						e.Attr.Nlink++
 					}
 					e.Entries[n.(string)] = &DumpedEntry{
