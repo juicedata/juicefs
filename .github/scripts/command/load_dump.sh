@@ -67,7 +67,7 @@ test_dump_without_keep_secret()
 test_dump_load_with_fsrand()
 {
     prepare_test
-    ./juicefs format $META_URL myjfs --trash-days 0 --enable-acl
+    ./juicefs format $META_URL myjfs --trash-days 1 --enable-acl
     ./juicefs mount -d $META_URL /jfs --enable-xattr
     SEED=$SEED MAX_EXAMPLE=100 STEP_COUNT=50 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
     ./juicefs dump $META_URL dump.json --fast
