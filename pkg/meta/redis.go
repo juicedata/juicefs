@@ -3140,6 +3140,9 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	}
 
 	if force {
+		m.Lock()
+		delete(m.compacting, k)
+		m.Unlock()
 		m.compactChunk(inode, indx, once, force)
 	}
 }
