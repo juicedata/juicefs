@@ -2422,7 +2422,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	}
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newLength, newSpace int64
-	var needCompact bool
+	var numSlices int
 	var nodeAttr node
 	err := m.txn(func(s *xorm.Session) error {
 		newLength, newSpace = 0, 0
@@ -2464,16 +2464,17 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if err == nil && !insert {
 			ck := chunk{Inode: inode, Indx: indx}
 			_, _ = s.MustCols("indx").Get(&ck)
-			ns := len(ck.Slices) / sliceBytes // number of slices
-			needCompact = ns%100 == 99 || ns > 350
+			numSlices = len(ck.Slices) / sliceBytes
 		}
 		return err
 	}, inode)
 	if err == nil {
-		if needCompact {
-			go m.compactChunk(inode, indx, false)
-		}
 		m.updateParentStat(ctx, inode, nodeAttr.Parent, newLength, newSpace)
+		if numSlices%100 == 99 {
+			go m.compactChunk(inode, indx, false)
+		} else if numSlices > 350 {
+			m.compactChunk(inode, indx, true)
+		}
 	}
 	return errno(err)
 }

@@ -2354,7 +2354,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newLength, newSpace int64
 	var attr Attr
-	var needCompact bool
+	var numSlices int64
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newLength, newSpace = 0, 0
 		attr = Attr{}
@@ -2393,15 +2393,17 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			return nil
 		})
 		if err == nil {
-			needCompact = rpush.Val()%100 == 99 || rpush.Val() > 350
+			numSlices = rpush.Val()
 		}
 		return err
 	}, m.inodeKey(inode))
 	if err == nil {
-		if needCompact {
-			go m.compactChunk(inode, indx, false)
-		}
 		m.updateParentStat(ctx, inode, attr.Parent, newLength, newSpace)
+		if numSlices%100 == 99 {
+			go m.compactChunk(inode, indx, false)
+		} else if numSlices > 350 {
+			m.compactChunk(inode, indx, true)
+		}
 	}
 	return errno(err)
 }

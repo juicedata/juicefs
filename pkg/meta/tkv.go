@@ -2046,7 +2046,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	}
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newLength, newSpace int64
-	var needCompact bool
+	var numSlices int
 	var attr Attr
 	err := m.txn(func(tx *kvTxn) error {
 		newLength, newSpace = 0, 0
@@ -2087,15 +2087,16 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		val = append(rs[1], val...)
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
 		tx.set(m.chunkKey(inode, indx), val)
-		ns := len(val) / sliceBytes // number of slices
-		needCompact = ns%100 == 99 || ns > 350
+		numSlices = len(val) / sliceBytes
 		return nil
 	}, inode)
 	if err == nil {
-		if needCompact {
-			go m.compactChunk(inode, indx, false)
-		}
 		m.updateParentStat(ctx, inode, attr.Parent, newLength, newSpace)
+		if numSlices%100 == 99 {
+			go m.compactChunk(inode, indx, false)
+		} else if numSlices > 350 {
+			m.compactChunk(inode, indx, true)
+		}
 	}
 	return errno(err)
 }
