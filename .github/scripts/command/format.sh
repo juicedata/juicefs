@@ -6,7 +6,7 @@ source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
 
-skip_test_mount_process_exit_on_format()
+test_mount_process_exit_on_format()
 {
     prepare_test
     echo "round $i"
