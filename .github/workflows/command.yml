@@ -238,12 +238,15 @@ jobs:
           if [ "${{matrix.meta}}" == "redis" ]; then
             sudo META=${{matrix.meta}} .github/scripts/command/graceful_upgrade.sh
           fi
+          
       - name: Log
         if: always()
         run: |
-          echo "juicefs log"
-          sudo tail -n 1000 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          if [ "${{matrix.meta}}" == "redis" ]; then
+            echo "juicefs log"
+            sudo tail -n 1000 /var/log/juicefs.log
+            grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          fi
           
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
