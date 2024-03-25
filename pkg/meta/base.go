@@ -47,6 +47,7 @@ const (
 )
 
 var maxCompactSlices = 1000
+var maxSlices = 2500
 
 type engine interface {
 	// Get the value of counter name.
@@ -67,7 +68,7 @@ type engine interface {
 	doInit(format *Format, force bool) error
 
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
-	compactChunk(inode Ino, indx uint32, force bool)
+	compactChunk(inode Ino, indx uint32, once, force bool)
 	doDeleteSustainedInode(sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
@@ -2255,7 +2256,7 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 		go func() {
 			for c := range ch {
 				logger.Debugf("Compacting chunk %d:%d (%d slices)", c.inode, c.indx, c.slices)
-				m.en.compactChunk(c.inode, c.indx, true)
+				m.en.compactChunk(c.inode, c.indx, false, true)
 				bar.Increment()
 			}
 			wg.Done()
@@ -2287,7 +2288,7 @@ func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 		go func() {
 			defer wg.Done()
 			for c := range chunkChan {
-				m.en.compactChunk(c.inode, c.indx, true)
+				m.en.compactChunk(c.inode, c.indx, false, true)
 				postFunc()
 			}
 		}()

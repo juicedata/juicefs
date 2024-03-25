@@ -2339,7 +2339,7 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (
 	*slices = buildSlice(ss)
 	m.of.CacheChunk(inode, indx, *slices)
 	if !m.conf.ReadOnly && (len(vals) >= 5 || len(*slices) >= 5) {
-		go m.compactChunk(inode, indx, false)
+		go m.compactChunk(inode, indx, false, false)
 	}
 	return 0
 }
@@ -2399,10 +2399,12 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 	}, m.inodeKey(inode))
 	if err == nil {
 		m.updateParentStat(ctx, inode, attr.Parent, newLength, newSpace)
-		if numSlices%100 == 99 {
-			go m.compactChunk(inode, indx, false)
-		} else if numSlices > 350 {
-			m.compactChunk(inode, indx, true)
+		if numSlices%100 == 99 || numSlices > 350 {
+			if numSlices < int64(maxSlices) {
+				go m.compactChunk(inode, indx, false, false)
+			} else {
+				m.compactChunk(inode, indx, true, false)
+			}
 		}
 	}
 	return errno(err)
@@ -2998,11 +3000,11 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	return count, err
 }
 
-func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
+func (m *redisMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	// avoid too many or duplicated compaction
-	k := uint64(inode) + (uint64(indx) << 32)
+	k := uint64(inode) + (uint64(indx) << 40)
 	m.Lock()
-	if force {
+	if once || force {
 		for m.compacting[k] {
 			m.Unlock()
 			time.Sleep(time.Millisecond * 10)
@@ -3011,17 +3013,19 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	} else if len(m.compacting) > 10 || m.compacting[k] {
 		m.Unlock()
 		return
-	} else {
-		m.compacting[k] = true
-		defer func() {
-			m.Lock()
-			delete(m.compacting, k)
-			m.Unlock()
-		}()
 	}
+	m.compacting[k] = true
+	defer func() {
+		m.Lock()
+		delete(m.compacting, k)
+		m.Unlock()
+	}()
 	m.Unlock()
 
 	var ctx = Background
+	if once && m.rdb.LLen(ctx, m.chunkKey(inode, indx)).Val() < int64(maxSlices) {
+		return
+	}
 	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, int64(maxCompactSlices)).Result()
 	if err != nil {
 		return
@@ -3136,7 +3140,7 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 
 	if force {
-		m.compactChunk(inode, indx, force)
+		m.compactChunk(inode, indx, once, force)
 	}
 }
 
