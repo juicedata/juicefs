@@ -124,7 +124,7 @@ jobs:
   command_test2:
     needs: [build-matrix]
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
     runs-on: ubuntu-20.04
@@ -168,7 +168,7 @@ jobs:
   command_test3:
     needs: [build-matrix]
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
     runs-on: ubuntu-20.04
@@ -212,7 +212,7 @@ jobs:
   command_test4:
     needs: [build-matrix]
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
     runs-on: ubuntu-20.04
