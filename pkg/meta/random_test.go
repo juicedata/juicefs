@@ -208,12 +208,10 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 	}
 
 	mode &= 07777
-	var aclXattrList []string
 	if p.defACL != nil && _type != TypeSymlink {
 		// inherit default acl
 		if _type == TypeDirectory {
 			n.defACL = p.defACL
-			aclXattrList = append(aclXattrList, "system.posix_acl_default")
 		}
 
 		// set access acl by parent's default acl
@@ -225,7 +223,6 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 		} else {
 			cRule := rule.ChildAccessACL(mode)
 			n.accACL = cRule
-			aclXattrList = append(aclXattrList, "system.posix_acl_access")
 			n.mode = (mode & 0xFE00) | cRule.GetMode()
 		}
 	} else {
@@ -247,9 +244,6 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 	// p.mtime = m.ctx.ts
 	// p.ctime = m.ctx.ts
 	m.nodes[inode] = n
-	for _, xattr := range aclXattrList {
-		m.setxattr(inode, xattr, []byte{}, XattrCreate)
-	}
 	p.children[name] = n
 	return 0
 }
@@ -1007,6 +1001,14 @@ func (m *fsMachine) listxattr(inode Ino) ([]byte, syscall.Errno) {
 	for name := range n.xattrs {
 		names = append(names, name+"\x00")
 	}
+
+	if n.accACL != nil {
+		names = append(names, "system.posix_acl_access"+"\x00")
+	}
+	if n.defACL != nil {
+		names = append(names, "system.posix_acl_default"+"\x00")
+	}
+
 	sort.Slice(names, func(i, j int) bool { return names[i] < names[j] })
 	r := []byte(strings.Join(names, ""))
 	if len(r) > 65536 {
@@ -1556,8 +1558,6 @@ func (m *fsMachine) setfacl(inode Ino, atype uint8, rule *aclAPI.Rule) syscall.E
 
 	if rule.IsMinimal() && atype == aclAPI.TypeAccess {
 		n.accACL = nil
-		m.removexattr(inode, "system.posix_acl_access")
-
 		n.mode &= 07000
 		n.mode |= ((rule.Owner & 7) << 6) | ((rule.Group & 7) << 3) | (rule.Other & 7)
 		return 0
@@ -1566,13 +1566,11 @@ func (m *fsMachine) setfacl(inode Ino, atype uint8, rule *aclAPI.Rule) syscall.E
 	rule.InheritPerms(n.mode)
 	if atype == aclAPI.TypeAccess {
 		n.accACL = rule
-		m.setxattr(inode, "system.posix_acl_access", []byte{}, XattrCreateOrReplace)
 		if n.accACL.GetMode() != n.mode&0777 {
 			n.mode = n.mode&07000 | n.accACL.GetMode()
 		}
 	} else {
 		n.defACL = rule
-		m.setxattr(inode, "system.posix_acl_default", []byte{}, XattrCreateOrReplace)
 	}
 	return 0
 }
