@@ -95,6 +95,7 @@ do_dump_load_and_compare()
     ./juicefs mount -d sqlite3://test2.db /jfs2
     diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
     compare_stat_acl /jfs/fsrand /jfs2/fsrand
+    umount /jfs2
 }
 
 compare_dump_json(){
@@ -102,6 +103,7 @@ compare_dump_json(){
     sed -i '/usedInodes/d' dump*.json
     sed -i '/nextInodes/d' dump*.json
     sed -i '/nextChunk/d' dump*.json
+    sed -i '/nextTrash/d' dump*.json
     sed -i '/nextSession/d' dump*.json
     sed -i 's/"inode":[0-9]\+/"inode":0/g' dump*.json
     diff -ur dump.json dump2.json
