@@ -3903,8 +3903,10 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 					Type:  typeToString(TypeDirectory),
 				},
 			}
-			if err = m.dumpEntry(s, root, TypeDirectory, tree, nil); err != nil {
-				return err
+			if !skipTrash {
+				if err = m.dumpEntry(s, root, TypeDirectory, tree, nil); err != nil {
+					return err
+				}
 			}
 			if root == 1 && !skipTrash {
 				trash = &DumpedEntry{

@@ -103,13 +103,14 @@ func dump(ctx *cli.Context) (err error) {
 	metaConf := meta.DefaultConf()
 	metaConf.Subdir = ctx.String("subdir")
 	m := meta.NewClient(metaUri, metaConf)
-	if _, err := m.Load(true); err != nil {
+	format, err := m.Load(true)
+	if err != nil {
 		return err
 	}
 	if st := m.Chroot(meta.Background, metaConf.Subdir); st != 0 {
 		return st
 	}
-	if err := m.DumpMeta(w, 1, ctx.Bool("keep-secret-key"), ctx.Bool("fast"), ctx.Bool("skip-trash")); err != nil {
+	if err := m.DumpMeta(w, 1, ctx.Bool("keep-secret-key"), ctx.Bool("fast"), ctx.Bool("skip-trash") || format.TrashDays == 0); err != nil {
 		return err
 	}
 	logger.Infof("Dump metadata into %s succeed", dst)
