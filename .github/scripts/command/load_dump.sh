@@ -64,33 +64,33 @@ test_dump_without_keep_secret()
     cat /jfs/hello.txt | grep hello
 }
 
-test_dump_load_with_fsrand1(){
-    dump_load_with_fsrand
+test_dump_load_with_trash_enable(){
+    do_dump_load_with_fsrand 1
+}
+test_dump_load_with_trash_disable(){
+    do_dump_load_with_fsrand 0
 }
 
-test_dump_load_with_fsrand2(){
-    dump_load_with_fsrand --skip-trash
+do_dump_load_with_fsrand(){
+    trash_days=$1
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days $trash_days --enable-acl
+    ./juicefs mount -d $META_URL /jfs --enable-xattr
+    SEED=$SEED MAX_EXAMPLE=100 STEP_COUNT=50 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
+    do_dump_load_and_compare 
+    do_dump_load_and_compare --fast
+    do_dump_load_and_compare --skip-trash
+    do_dump_load_and_compare --fast --skip-trash
 }
 
-test_dump_load_with_fsrand3(){
-    dump_load_with_fsrand --fast
-}
-
-test_dump_load_with_fsrand4(){
-    dump_load_with_fsrand --fast --skip-trash
-}
-
-dump_load_with_fsrand()
+do_dump_load_and_compare()
 {
     option=$@
     echo option is $option
-    prepare_test
-    ./juicefs format $META_URL myjfs --trash-days 1 --enable-acl
-    ./juicefs mount -d $META_URL /jfs --enable-xattr
-    SEED=$SEED MAX_EXAMPLE=100 STEP_COUNT=50 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
-    ./juicefs dump $META_URL dump.json --fast
+    ./juicefs dump $META_URL dump.json $option
+    rm -rf test2.db 
     ./juicefs load sqlite3://test2.db dump.json
-    ./juicefs dump sqlite3://test2.db dump2.json --fast
+    ./juicefs dump sqlite3://test2.db dump2.json $option
     compare_dump_json
     ./juicefs mount -d sqlite3://test2.db /jfs2
     diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
