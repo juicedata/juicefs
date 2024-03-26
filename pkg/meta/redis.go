@@ -1047,34 +1047,10 @@ func (m *redisMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint6
 	}, m.inodeKey(inode)))
 }
 
-func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, flength *uint64) syscall.Errno {
-	if mode&fallocCollapesRange != 0 && mode != fallocCollapesRange {
-		return syscall.EINVAL
-	}
-	if mode&fallocInsertRange != 0 && mode != fallocInsertRange {
-		return syscall.EINVAL
-	}
-	if mode == fallocInsertRange || mode == fallocCollapesRange {
-		return syscall.ENOTSUP
-	}
-	if mode&fallocPunchHole != 0 && mode&fallocKeepSize == 0 {
-		return syscall.EINVAL
-	}
-	if size == 0 {
-		return syscall.EINVAL
-	}
-	defer m.timeit("Fallocate", time.Now())
-	f := m.of.find(inode)
-	if f != nil {
-		f.Lock()
-		defer f.Unlock()
-	}
-	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
-	var newLength, newSpace int64
-	var t Attr
-	err := m.txn(ctx, func(tx *redis.Tx) error {
-		newLength, newSpace = 0, 0
-		t = Attr{}
+func (m *redisMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, delta *dirStat, attr *Attr) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		*delta = dirStat{}
+		t := Attr{}
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err != nil {
 			return err
@@ -1100,13 +1076,10 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		}
 
 		old := t.Length
-		newLength = int64(length) - int64(old)
-		newSpace = align4K(length) - align4K(old)
-		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, inode, t.Parent)...); err != 0 {
+		delta.length = int64(length) - int64(old)
+		delta.space = align4K(length) - align4K(old)
+		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(ctx, tx, inode, t.Parent)...); err != 0 {
 			return err
-		}
-		if flength != nil {
-			*flength = length
 		}
 		t.Length = length
 		now := time.Now()
@@ -1136,12 +1109,11 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(length)-align4K(old))
 			return nil
 		})
+		if err == nil {
+			*attr = t
+		}
 		return err
-	}, m.inodeKey(inode))
-	if err == nil {
-		m.updateParentStat(ctx, inode, t.Parent, newLength, newSpace)
-	}
-	return errno(err)
+	}, m.inodeKey(inode)))
 }
 
 func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {

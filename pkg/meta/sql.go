@@ -1168,34 +1168,10 @@ func (m *dbMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 	}, inode))
 }
 
-func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, flength *uint64) syscall.Errno {
-	if mode&fallocCollapesRange != 0 && mode != fallocCollapesRange {
-		return syscall.EINVAL
-	}
-	if mode&fallocInsertRange != 0 && mode != fallocInsertRange {
-		return syscall.EINVAL
-	}
-	if mode == fallocInsertRange || mode == fallocCollapesRange {
-		return syscall.ENOTSUP
-	}
-	if mode&fallocPunchHole != 0 && mode&fallocKeepSize == 0 {
-		return syscall.EINVAL
-	}
-	if size == 0 {
-		return syscall.EINVAL
-	}
-	defer m.timeit("Fallocate", time.Now())
-	f := m.of.find(inode)
-	if f != nil {
-		f.Lock()
-		defer f.Unlock()
-	}
-	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
-	var newLength, newSpace int64
-	var nodeAttr node
-	err := m.txn(func(s *xorm.Session) error {
-		newLength, newSpace = 0, 0
-		nodeAttr = node{Inode: inode}
+func (m *dbMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, delta *dirStat, attr *Attr) syscall.Errno {
+	return errno(m.txn(func(s *xorm.Session) error {
+		*delta = dirStat{}
+		nodeAttr := node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&nodeAttr)
 		if err != nil {
 			return err
@@ -1220,9 +1196,9 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		}
 
 		old := nodeAttr.Length
-		newLength = int64(length) - int64(old)
-		newSpace = align4K(length) - align4K(old)
-		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+		delta.length = int64(length) - int64(old)
+		delta.space = align4K(length) - align4K(old)
+		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
 			return err
 		}
 		now := time.Now().UnixNano()
@@ -1233,9 +1209,6 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		nodeAttr.Ctimensec = int16(now % 1e3)
 		if _, err := s.Cols("length", "mtime", "ctime", "mtimensec", "ctimensec").Update(&nodeAttr, &node{Inode: inode}); err != nil {
 			return err
-		}
-		if flength != nil {
-			*flength = length
 		}
 		if mode&(fallocZeroRange|fallocPunchHole) != 0 && off < old {
 			off, size := off, size
@@ -1257,12 +1230,9 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 				size -= l
 			}
 		}
+		m.parseAttr(&nodeAttr, attr)
 		return nil
-	}, inode)
-	if err == nil {
-		m.updateParentStat(ctx, inode, nodeAttr.Parent, newLength, newSpace)
-	}
-	return errno(err)
+	}, inode))
 }
 
 func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, target []byte, err error) {

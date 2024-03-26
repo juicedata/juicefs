@@ -1017,38 +1017,14 @@ func (m *kvMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 	}, inode))
 }
 
-func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, flength *uint64) syscall.Errno {
-	if mode&fallocCollapesRange != 0 && mode != fallocCollapesRange {
-		return syscall.EINVAL
-	}
-	if mode&fallocInsertRange != 0 && mode != fallocInsertRange {
-		return syscall.EINVAL
-	}
-	if mode == fallocInsertRange || mode == fallocCollapesRange {
-		return syscall.ENOTSUP
-	}
-	if mode&fallocPunchHole != 0 && mode&fallocKeepSize == 0 {
-		return syscall.EINVAL
-	}
-	if size == 0 {
-		return syscall.EINVAL
-	}
-	defer m.timeit("Fallocate", time.Now())
-	f := m.of.find(inode)
-	if f != nil {
-		f.Lock()
-		defer f.Unlock()
-	}
-	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
-	var newLength, newSpace int64
-	var t Attr
-	err := m.txn(func(tx *kvTxn) error {
-		newLength, newSpace = 0, 0
+func (m *kvMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, delta *dirStat, attr *Attr) syscall.Errno {
+	return errno(m.txn(func(tx *kvTxn) error {
+		*delta = dirStat{}
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			return syscall.ENOENT
 		}
-		t = Attr{}
+		t := Attr{}
 		m.parseAttr(a, &t)
 		if t.Typ == TypeFIFO {
 			return syscall.EPIPE
@@ -1067,13 +1043,10 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		}
 
 		old := t.Length
-		newLength = int64(length) - int64(t.Length)
-		newSpace = align4K(length) - align4K(t.Length)
-		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(tx, inode, t.Parent)...); err != 0 {
+		delta.length = int64(length) - int64(t.Length)
+		delta.space = align4K(length) - align4K(t.Length)
+		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(tx, inode, t.Parent)...); err != 0 {
 			return err
-		}
-		if flength != nil {
-			*flength = length
 		}
 		t.Length = length
 		now := time.Now()
@@ -1099,12 +1072,9 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 				size -= l
 			}
 		}
+		*attr = t
 		return nil
-	}, inode)
-	if err == nil {
-		m.updateParentStat(ctx, inode, t.Parent, newLength, newSpace)
-	}
-	return errno(err)
+	}, inode))
 }
 
 func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, target []byte, err error) {

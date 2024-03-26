@@ -103,6 +103,7 @@ type engine interface {
 	doTouchAtime(ctx Context, inode Ino, attr *Attr, ts time.Time) (bool, error)
 	doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno
 	doTruncate(ctx Context, inode Ino, flags uint8, length uint64, delta *dirStat, attr *Attr, skipPermCheck bool) syscall.Errno
+	doFallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, delta *dirStat, attr *Attr) syscall.Errno
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
@@ -1412,6 +1413,41 @@ func (m *baseMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, 
 	var delta dirStat
 	st := m.en.doTruncate(ctx, inode, flags, length, &delta, attr, skipPermCheck)
 	if st == 0 {
+		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
+	}
+	return st
+}
+
+func (m *baseMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, flength *uint64) syscall.Errno {
+	if mode&fallocCollapesRange != 0 && mode != fallocCollapesRange {
+		return syscall.EINVAL
+	}
+	if mode&fallocInsertRange != 0 && mode != fallocInsertRange {
+		return syscall.EINVAL
+	}
+	if mode == fallocInsertRange || mode == fallocCollapesRange {
+		return syscall.ENOTSUP
+	}
+	if mode&fallocPunchHole != 0 && mode&fallocKeepSize == 0 {
+		return syscall.EINVAL
+	}
+	if size == 0 {
+		return syscall.EINVAL
+	}
+	defer m.timeit("Fallocate", time.Now())
+	f := m.of.find(inode)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
+	}
+	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
+	var delta dirStat
+	var attr Attr
+	st := m.en.doFallocate(ctx, inode, mode, off, size, &delta, &attr)
+	if st == 0 {
+		if flength != nil {
+			*flength = attr.Length
+		}
 		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
 	}
 	return st
