@@ -179,10 +179,10 @@ class CommandOperation:
         self.loggers[context.root_dir].info(f'do_dump {abspath} succeed')
         return result
 
-    def do_warmup(self, context:Context, entry, mount, user='root'):
+    def do_warmup(self, context:Context, entry, user='root'):
         abspath = os.path.join(context.root_dir, entry)
         try:
-            self.run_cmd(f'sudo -u {user} {mount} warmup {abspath}', context.root_dir)
+            self.run_cmd(f'sudo -u {user} ./juicefs warmup {abspath}', context.root_dir)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_warmup', abspath)
         self.stats.success('do_warmup')
