@@ -184,11 +184,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		} else {
 			tmp.Acquire()
 		}
-		tmp.Acquire()
-		err := utils.WithTimeout(func() error {
-			defer tmp.Release()
-			return s.store.load(key, tmp, s.store.shouldCache(blockSize), false)
-		}, s.store.conf.GetTimeout)
+		err = s.store.load(key, tmp, s.store.shouldCache(blockSize), false)
 		return tmp, err
 	})
 	defer block.Release()
@@ -204,7 +200,9 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 func (s *rSlice) delete(indx int) error {
 	key := s.key(indx)
 	st := time.Now()
-	err := s.store.storage.Delete(key)
+	err := utils.WithTimeout(func() error {
+		return s.store.storage.Delete(key)
+	}, s.store.conf.PutTimeout)
 	used := time.Since(st)
 	if err != nil && (strings.Contains(err.Error(), "NoSuchKey") ||
 		strings.Contains(err.Error(), "not found") ||
@@ -670,33 +668,38 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	var in io.ReadCloser
 	tried := 0
 	start := time.Now()
-	// it will be retried outside
-	for err != nil && tried < 2 {
-		time.Sleep(time.Second * time.Duration(tried*tried))
-		if tried > 0 {
-			logger.Warnf("GET %s: %s; retrying", key, err)
-			store.objectReqErrors.Add(1)
-			start = time.Now()
-		}
-		in, err = store.storage.Get(key, 0, -1)
-		tried++
-	}
 	var n int
 	var buf []byte
-	if err == nil {
-		if compressed {
-			c := NewOffPage(needed)
-			defer c.Release()
-			buf = c.Data
-		} else {
-			buf = page.Data
+	page.Acquire()
+	err = utils.WithTimeout(func() error {
+		defer page.Release()
+		// it will be retried outside
+		for err != nil && tried < 2 {
+			time.Sleep(time.Second * time.Duration(tried*tried))
+			if tried > 0 {
+				logger.Warnf("GET %s: %s; retrying", key, err)
+				store.objectReqErrors.Add(1)
+				start = time.Now()
+			}
+			in, err = store.storage.Get(key, 0, -1)
+			tried++
 		}
-		n, err = io.ReadFull(in, buf)
-		_ = in.Close()
-	}
-	if compressed && err == io.ErrUnexpectedEOF {
-		err = nil
-	}
+		if err == nil {
+			if compressed {
+				c := NewOffPage(needed)
+				defer c.Release()
+				buf = c.Data
+			} else {
+				buf = page.Data
+			}
+			n, err = io.ReadFull(in, buf)
+			_ = in.Close()
+		}
+		if compressed && err == io.ErrUnexpectedEOF {
+			err = nil
+		}
+		return err
+	}, store.conf.GetTimeout)
 	used := time.Since(start)
 	logRequest("GET", key, "", err, used)
 	if store.downLimit != nil && compressed {
