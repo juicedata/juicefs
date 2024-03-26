@@ -2037,25 +2037,15 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 	return 0
 }
 
-func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time) syscall.Errno {
-	defer m.timeit("Write", time.Now())
-	f := m.of.find(inode)
-	if f != nil {
-		f.Lock()
-		defer f.Unlock()
-	}
-	defer func() { m.of.InvalidateChunk(inode, indx) }()
-	var newLength, newSpace int64
-	var numSlices int
-	var attr Attr
-	err := m.txn(func(tx *kvTxn) error {
-		newLength, newSpace = 0, 0
-		attr = Attr{}
+func (m *kvMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno {
+	return errno(m.txn(func(tx *kvTxn) error {
+		*delta = dirStat{}
+		*attr = Attr{}
 		rs := tx.gets(m.inodeKey(inode), m.chunkKey(inode, indx))
 		if rs[0] == nil {
 			return syscall.ENOENT
 		}
-		m.parseAttr(rs[0], &attr)
+		m.parseAttr(rs[0], attr)
 		if attr.Typ != TypeFile {
 			return syscall.EPERM
 		}
@@ -2065,11 +2055,11 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
 		if newleng > attr.Length {
-			newLength = int64(newleng - attr.Length)
-			newSpace = align4K(newleng) - align4K(attr.Length)
+			delta.length = int64(newleng - attr.Length)
+			delta.space = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(tx, inode, attr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(tx, inode, attr.Parent)...); err != 0 {
 			return err
 		}
 		now := time.Now()
@@ -2085,22 +2075,11 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			}
 		}
 		val = append(rs[1], val...)
-		tx.set(m.inodeKey(inode), m.marshal(&attr))
+		tx.set(m.inodeKey(inode), m.marshal(attr))
 		tx.set(m.chunkKey(inode, indx), val)
-		numSlices = len(val) / sliceBytes
+		*numSlices = len(val) / sliceBytes
 		return nil
-	}, inode)
-	if err == nil {
-		m.updateParentStat(ctx, inode, attr.Parent, newLength, newSpace)
-		if numSlices%100 == 99 || numSlices > 350 {
-			if numSlices < maxSlices {
-				go m.compactChunk(inode, indx, false, false)
-			} else {
-				m.compactChunk(inode, indx, true, false)
-			}
-		}
-	}
-	return errno(err)
+	}, inode))
 }
 
 func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {

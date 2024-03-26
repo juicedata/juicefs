@@ -2413,20 +2413,10 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 	return 0
 }
 
-func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time) syscall.Errno {
-	defer m.timeit("Write", time.Now())
-	f := m.of.find(inode)
-	if f != nil {
-		f.Lock()
-		defer f.Unlock()
-	}
-	defer func() { m.of.InvalidateChunk(inode, indx) }()
-	var newLength, newSpace int64
-	var numSlices int
-	var nodeAttr node
-	err := m.txn(func(s *xorm.Session) error {
-		newLength, newSpace = 0, 0
-		nodeAttr = node{Inode: inode}
+func (m *dbMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno {
+	return errno(m.txn(func(s *xorm.Session) error {
+		*delta = dirStat{}
+		nodeAttr := node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&nodeAttr)
 		if err != nil {
 			return err
@@ -2439,11 +2429,11 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
 		if newleng > nodeAttr.Length {
-			newLength = int64(newleng - nodeAttr.Length)
-			newSpace = align4K(newleng) - align4K(nodeAttr.Length)
+			delta.length = int64(newleng - nodeAttr.Length)
+			delta.space = align4K(newleng) - align4K(nodeAttr.Length)
 			nodeAttr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
 			return err
 		}
 		nodeAttr.Mtime = mtime.UnixNano() / 1e3
@@ -2451,6 +2441,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		ctime := time.Now()
 		nodeAttr.Ctime = ctime.UnixNano() / 1e3
 		nodeAttr.Ctimensec = int16(ctime.Nanosecond())
+		m.parseAttr(&nodeAttr, attr)
 
 		buf := marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len)
 		var insert bool // no compaction check for the first slice
@@ -2464,21 +2455,10 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if err == nil && !insert {
 			ck := chunk{Inode: inode, Indx: indx}
 			_, _ = s.MustCols("indx").Get(&ck)
-			numSlices = len(ck.Slices) / sliceBytes
+			*numSlices = len(ck.Slices) / sliceBytes
 		}
 		return err
-	}, inode)
-	if err == nil {
-		m.updateParentStat(ctx, inode, nodeAttr.Parent, newLength, newSpace)
-		if numSlices%100 == 99 || numSlices > 350 {
-			if numSlices < maxSlices {
-				go m.compactChunk(inode, indx, false, false)
-			} else {
-				m.compactChunk(inode, indx, true, false)
-			}
-		}
-	}
-	return errno(err)
+	}, inode))
 }
 
 func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {

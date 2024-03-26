@@ -101,6 +101,7 @@ type engine interface {
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doTouchAtime(ctx Context, inode Ino, attr *Attr, ts time.Time) (bool, error)
+	doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
@@ -1369,6 +1370,31 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 		}
 	}
 	return 0
+}
+
+func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time) syscall.Errno {
+	defer m.timeit("Write", time.Now())
+	f := m.of.find(inode)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
+	}
+	defer func() { m.of.InvalidateChunk(inode, indx) }()
+	var numSlices int
+	var delta dirStat
+	var attr Attr
+	st := m.en.doWrite(ctx, inode, indx, off, slice, mtime, &numSlices, &delta, &attr)
+	if st == 0 {
+		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
+		if numSlices%100 == 99 || numSlices > 350 {
+			if numSlices < maxSlices {
+				go m.en.compactChunk(inode, indx, false, false)
+			} else {
+				m.en.compactChunk(inode, indx, true, false)
+			}
+		}
+	}
+	return st
 }
 
 func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) (rerr syscall.Errno) {
