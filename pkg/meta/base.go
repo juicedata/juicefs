@@ -646,7 +646,7 @@ func (m *baseMeta) CloseSession() error {
 	if m.sid > 0 {
 		err = m.en.doCleanStaleSession(m.sid)
 	}
-	logger.Infof("close session %d: %s", m.sid, err)
+	logger.Infof("close session %d: %v", m.sid, err)
 	return err
 }
 
