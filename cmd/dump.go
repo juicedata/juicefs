@@ -115,7 +115,7 @@ func dump(ctx *cli.Context) (err error) {
 		return st
 	}
 	threads := ctx.Int("threads")
-	if threads < 0 {
+	if threads <= 0 {
 		logger.Warnf("Invalid threads number %d, reset to 1", threads)
 		threads = 1
 	}
