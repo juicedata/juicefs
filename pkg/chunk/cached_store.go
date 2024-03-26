@@ -668,11 +668,18 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	var in io.ReadCloser
 	tried := 0
 	start := time.Now()
+	var p *Page
+	if compressed {
+		c := NewOffPage(needed)
+		defer c.Release()
+		p = c
+	} else {
+		p = page
+	}
+	p.Acquire()
 	var n int
-	var buf []byte
-	page.Acquire()
 	err = utils.WithTimeout(func() error {
-		defer page.Release()
+		defer p.Release()
 		// it will be retried outside
 		for err != nil && tried < 2 {
 			time.Sleep(time.Second * time.Duration(tried*tried))
@@ -685,14 +692,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 			tried++
 		}
 		if err == nil {
-			if compressed {
-				c := NewOffPage(needed)
-				defer c.Release()
-				buf = c.Data
-			} else {
-				buf = page.Data
-			}
-			n, err = io.ReadFull(in, buf)
+			n, err = io.ReadFull(in, p.Data)
 			_ = in.Close()
 		}
 		if compressed && err == io.ErrUnexpectedEOF {
@@ -712,7 +712,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 		return fmt.Errorf("get %s: %s", key, err)
 	}
 	if compressed {
-		n, err = store.compressor.Decompress(page.Data, buf[:n])
+		n, err = store.compressor.Decompress(page.Data, p.Data[:n])
 	}
 	if err != nil || n < len(page.Data) {
 		return fmt.Errorf("read %s fully: %s (%d < %d) after %s (tried %d)", key, err, n, len(page.Data),
