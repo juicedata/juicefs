@@ -3323,6 +3323,16 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 		tree = m.snap[root]
 		if !skipTrash {
 			trash = m.snap[TrashInode]
+			if trash == nil {
+				trash = &DumpedEntry{
+					Attr: &DumpedAttr{
+						Inode: TrashInode,
+						Type:  "directory",
+						Nlink: 2,
+					},
+				}
+				m.snap[TrashInode] = trash
+			}
 		}
 	} else {
 		tree = &DumpedEntry{
