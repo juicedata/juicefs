@@ -3960,7 +3960,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 	}, keys...)
 }
 
-func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, bar *utils.Bar) error {
+func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, threads int, bar *utils.Bar) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -3999,16 +3999,15 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		bar.IncrTotal(int64(len(entries)))
 	}
 
-	var concurrent = 2
 	var batch = 100
-	ms := make([]sync.Mutex, concurrent)
-	conds := make([]*sync.Cond, concurrent)
-	ready := make([]int, concurrent)
-	for c := 0; c < concurrent; c++ {
+	ms := make([]sync.Mutex, threads)
+	conds := make([]*sync.Cond, threads)
+	ready := make([]int, threads)
+	for c := 0; c < threads; c++ {
 		conds[c] = sync.NewCond(&ms[c])
 		if c*batch < len(entries) {
 			go func(c int) {
-				for i := c * batch; i < len(entries) && err == nil; i += concurrent * batch {
+				for i := c * batch; i < len(entries) && err == nil; i += threads * batch {
 					es := entries[i:]
 					if len(es) > batch {
 						es = es[:batch]
@@ -4030,7 +4029,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	}
 	for i, e := range entries {
 		b := i / batch
-		c := b % concurrent
+		c := b % threads
 		ms[c].Lock()
 		for ready[c] == 0 && err == nil {
 			conds[c].Wait()
@@ -4044,7 +4043,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 			return err
 		}
 		if e.Attr.Type == "directory" {
-			err = m.dumpDir(e.Attr.Inode, e, bw, depth+2, bar)
+			err = m.dumpDir(e.Attr.Inode, e, bw, depth+2, threads, bar)
 		} else {
 			err = e.writeJSON(bw, depth+2)
 		}
@@ -4064,7 +4063,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	return nil
 }
 
-func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash bool) (err error) {
+func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			debug.PrintStack()
@@ -4182,7 +4181,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash 
 	if err = m.dumpEntries(tree); err != nil {
 		return err
 	}
-	if err = m.dumpDir(root, tree, bw, 1, bar); err != nil {
+	if err = m.dumpDir(root, tree, bw, 1, threads, bar); err != nil {
 		return err
 	}
 	if root == RootInode && !skipTrash {
@@ -4199,7 +4198,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash 
 		if _, err = bw.WriteString(","); err != nil {
 			return err
 		}
-		if err = m.dumpDir(TrashInode, trash, bw, 1, bar); err != nil {
+		if err = m.dumpDir(TrashInode, trash, bw, 1, threads, bar); err != nil {
 			return err
 		}
 	}
