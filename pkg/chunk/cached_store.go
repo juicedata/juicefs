@@ -106,7 +106,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 	boff := off % s.store.conf.BlockSize
 	blockSize := s.blockSize(indx)
 	if boff+len(p) > blockSize {
-		// read beyond currend page
+		// read beyond current page
 		var got int
 		for got < len(p) {
 			// aligned to current page
@@ -884,6 +884,14 @@ func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 		func() float64 {
 			_, used := store.bcache.stats()
 			return float64(used)
+		}))
+	reg.MustRegister(prometheus.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Name: "object_request_uploading",
+			Help: "number of uploading requests",
+		},
+		func() float64 {
+			return float64(len(store.currentUpload))
 		}))
 }
 
