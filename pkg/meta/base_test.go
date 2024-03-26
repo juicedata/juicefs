@@ -1576,6 +1576,28 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 	if errno != 0 {
 		t.Fatal()
 	}
+
+	var g2 sync.WaitGroup
+	for i := 0; i <= 10; i++ {
+		g2.Add(1)
+		go func() {
+			defer g2.Done()
+			for j := 0; j < 1000; j++ {
+				var sliceId uint64
+				m.NewSlice(ctx, &sliceId)
+				var slice = Slice{Id: sliceId, Size: 100, Len: 100}
+				st := m.Write(ctx, inode, 0, uint32(200*j), slice, time.Now())
+				if st != 0 {
+					errno = st
+					break
+				}
+			}
+		}()
+	}
+	g2.Wait()
+	if errno != 0 {
+		t.Fatal()
+	}
 }
 
 func testTruncateAndDelete(t *testing.T, m Meta) {
