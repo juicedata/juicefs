@@ -155,11 +155,16 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		}
 		// partial read
 		st := time.Now()
-		in, err := s.store.storage.Get(key, int64(boff), int64(len(p)))
-		if err == nil {
-			n, err = io.ReadFull(in, p)
-			_ = in.Close()
-		}
+		page.Acquire()
+		err := utils.WithTimeout(func() error {
+			defer page.Release()
+			in, err := s.store.storage.Get(key, int64(boff), int64(len(p)))
+			if err == nil {
+				n, err = io.ReadFull(in, p)
+				_ = in.Close()
+			}
+			return err
+		}, s.store.conf.GetTimeout)
 		used := time.Since(st)
 		logRequest("GET", key, fmt.Sprintf("RANGE(%d,%d) ", boff, len(p)), err, used)
 		s.store.objectDataBytes.WithLabelValues("GET").Add(float64(n))
