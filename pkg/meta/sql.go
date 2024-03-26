@@ -2408,7 +2408,7 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 	*slices = buildSlice(ss)
 	m.of.CacheChunk(inode, indx, *slices)
 	if !m.conf.ReadOnly && (len(c.Slices)/sliceBytes >= 5 || len(*slices) >= 5) {
-		go m.compactChunk(inode, indx, false)
+		go m.compactChunk(inode, indx, false, false)
 	}
 	return 0
 }
@@ -2422,7 +2422,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	}
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newLength, newSpace int64
-	var needCompact bool
+	var numSlices int
 	var nodeAttr node
 	err := m.txn(func(s *xorm.Session) error {
 		newLength, newSpace = 0, 0
@@ -2464,16 +2464,19 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if err == nil && !insert {
 			ck := chunk{Inode: inode, Indx: indx}
 			_, _ = s.MustCols("indx").Get(&ck)
-			ns := len(ck.Slices) / sliceBytes // number of slices
-			needCompact = ns%100 == 99 || ns > 350
+			numSlices = len(ck.Slices) / sliceBytes
 		}
 		return err
 	}, inode)
 	if err == nil {
-		if needCompact {
-			go m.compactChunk(inode, indx, false)
-		}
 		m.updateParentStat(ctx, inode, nodeAttr.Parent, newLength, newSpace)
+		if numSlices%100 == 99 || numSlices > 350 {
+			if numSlices < maxSlices {
+				go m.compactChunk(inode, indx, false, false)
+			} else {
+				m.compactChunk(inode, indx, true, false)
+			}
+		}
 	}
 	return errno(err)
 }
@@ -2919,11 +2922,11 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	return count, nil
 }
 
-func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
+func (m *dbMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	// avoid too many or duplicated compaction
-	k := uint64(inode) + (uint64(indx) << 32)
+	k := uint64(inode) + (uint64(indx) << 40)
 	m.Lock()
-	if force {
+	if once || force {
 		for m.compacting[k] {
 			m.Unlock()
 			time.Sleep(time.Millisecond * 10)
@@ -2932,14 +2935,13 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	} else if len(m.compacting) > 10 || m.compacting[k] {
 		m.Unlock()
 		return
-	} else {
-		m.compacting[k] = true
-		defer func() {
-			m.Lock()
-			delete(m.compacting, k)
-			m.Unlock()
-		}()
 	}
+	m.compacting[k] = true
+	defer func() {
+		m.Lock()
+		delete(m.compacting, k)
+		m.Unlock()
+	}()
 	m.Unlock()
 
 	var c = chunk{Inode: inode, Indx: indx}
@@ -2948,6 +2950,9 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return err
 	})
 	if err != nil {
+		return
+	}
+	if once && len(c.Slices) < sliceBytes*maxSlices {
 		return
 	}
 	if len(c.Slices) > sliceBytes*maxCompactSlices {
@@ -3078,7 +3083,10 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 
 	if force {
-		m.compactChunk(inode, indx, force)
+		m.Lock()
+		delete(m.compacting, k)
+		m.Unlock()
+		m.compactChunk(inode, indx, once, force)
 	}
 }
 
