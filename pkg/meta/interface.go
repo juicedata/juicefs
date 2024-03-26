@@ -24,7 +24,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -303,34 +302,6 @@ type Session struct {
 	Sustained []Ino   `json:",omitempty"`
 	Flocks    []Flock `json:",omitempty"`
 	Plocks    []Plock `json:",omitempty"`
-}
-
-type Quota struct {
-	MaxSpace, MaxInodes   int64
-	UsedSpace, UsedInodes int64
-	newSpace, newInodes   int64
-}
-
-// Returns true if it will exceed the quota limit
-func (q *Quota) check(space, inodes int64) bool {
-	if space > 0 {
-		max := atomic.LoadInt64(&q.MaxSpace)
-		if max > 0 && atomic.LoadInt64(&q.UsedSpace)+atomic.LoadInt64(&q.newSpace)+space > max {
-			return true
-		}
-	}
-	if inodes > 0 {
-		max := atomic.LoadInt64(&q.MaxInodes)
-		if max > 0 && atomic.LoadInt64(&q.UsedInodes)+atomic.LoadInt64(&q.newInodes)+inodes > max {
-			return true
-		}
-	}
-	return false
-}
-
-func (q *Quota) update(space, inodes int64) {
-	atomic.AddInt64(&q.newSpace, space)
-	atomic.AddInt64(&q.newInodes, inodes)
 }
 
 // Meta is a interface for a meta service for file system.
