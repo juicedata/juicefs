@@ -3080,7 +3080,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalInc
 	}, 0)
 }
 
-func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, threads int, showProgress func(totalIncr, currentIncr int64)) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -3113,16 +3113,15 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	_ = tree.writeJsonWithOutEntry(bw, depth)
 
-	var concurrent = 10
-	ms := make([]sync.Mutex, concurrent)
-	conds := make([]*sync.Cond, concurrent)
-	ready := make([]bool, concurrent)
+	ms := make([]sync.Mutex, threads)
+	conds := make([]*sync.Cond, threads)
+	ready := make([]bool, threads)
 	var err error
-	for c := 0; c < concurrent; c++ {
+	for c := 0; c < threads; c++ {
 		conds[c] = sync.NewCond(&ms[c])
 		if c < len(entries) {
 			go func(c int) {
-				for i := c; i < len(entries) && err == nil; i += concurrent {
+				for i := c; i < len(entries) && err == nil; i += threads {
 					e := entries[i]
 					er := m.dumpEntry(e.Attr.Inode, e, showProgress)
 					ms[c].Lock()
@@ -3141,7 +3140,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	}
 
 	for i, e := range entries {
-		c := i % concurrent
+		c := i % threads
 		ms[c].Lock()
 		for !ready[c] && err == nil {
 			conds[c].Wait()
@@ -3153,7 +3152,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 			return err
 		}
 		if e.Attr.Type == "directory" {
-			err = m.dumpDir(e.Attr.Inode, e, bw, depth+2, showProgress)
+			err = m.dumpDir(e.Attr.Inode, e, bw, depth+2, threads, showProgress)
 		} else {
 			err = e.writeJSON(bw, depth+2)
 		}
@@ -3209,7 +3208,7 @@ func (m *kvMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dep
 	return nil
 }
 
-func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash bool) (err error) {
+func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			debug.PrintStack()
@@ -3449,7 +3448,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 		}
 	} else {
 		showProgress(int64(len(tree.Entries)), 0)
-		if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
+		if err = m.dumpDir(root, tree, bw, 1, threads, showProgress); err != nil {
 			return err
 		}
 	}
@@ -3463,7 +3462,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 			}
 		} else {
 			showProgress(int64(len(tree.Entries)), 0)
-			if err = m.dumpDir(TrashInode, trash, bw, 1, showProgress); err != nil {
+			if err = m.dumpDir(TrashInode, trash, bw, 1, threads, showProgress); err != nil {
 				return err
 			}
 		}

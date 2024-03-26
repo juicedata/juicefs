@@ -55,6 +55,10 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 				Name:  "keep-secret-key",
 				Usage: "keep secret keys intact (WARNING: Be careful as they may be leaked)",
 			},
+			&cli.IntFlag{
+				Name:  "threads",
+				Usage: "number of threads to dump metadata",
+			},
 			&cli.BoolFlag{
 				Name:  "fast",
 				Usage: "speedup dump by load all metadata into memory",
@@ -109,7 +113,7 @@ func dump(ctx *cli.Context) (err error) {
 	if st := m.Chroot(meta.Background, metaConf.Subdir); st != 0 {
 		return st
 	}
-	if err := m.DumpMeta(w, 1, ctx.Bool("keep-secret-key"), ctx.Bool("fast"), ctx.Bool("skip-trash")); err != nil {
+	if err := m.DumpMeta(w, 1, ctx.Int("threads"), ctx.Bool("keep-secret-key"), ctx.Bool("fast"), ctx.Bool("skip-trash")); err != nil {
 		return err
 	}
 	logger.Infof("Dump metadata into %s succeed", dst)

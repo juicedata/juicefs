@@ -3665,7 +3665,7 @@ func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 	return e
 }
 
-func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, threads int, showProgress func(totalIncr, currentIncr int64)) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -3698,17 +3698,16 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	_ = tree.writeJsonWithOutEntry(bw, depth)
 
-	var concurrent = 10
-	ms := make([]sync.Mutex, concurrent)
-	conds := make([]*sync.Cond, concurrent)
-	ready := make([]bool, concurrent)
+	ms := make([]sync.Mutex, threads)
+	conds := make([]*sync.Cond, threads)
+	ready := make([]bool, threads)
 	var err error
-	for c := 0; c < concurrent; c++ {
+	for c := 0; c < threads; c++ {
 		conds[c] = sync.NewCond(&ms[c])
 		if c < len(entries) {
 			go func(c int) {
 				_ = m.roTxn(func(s *xorm.Session) error {
-					for i := c; i < len(entries) && err == nil; i += concurrent {
+					for i := c; i < len(entries) && err == nil; i += threads {
 						e := entries[i]
 						er := m.dumpEntry(s, e.Attr.Inode, 0, e, showProgress)
 						ms[c].Lock()
@@ -3729,7 +3728,7 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 	}
 
 	for i, e := range entries {
-		c := i % concurrent
+		c := i % threads
 		ms[c].Lock()
 		for !ready[c] && err == nil {
 			conds[c].Wait()
@@ -3741,7 +3740,7 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 			return err
 		}
 		if e.Attr.Type == "directory" {
-			err = m.dumpDir(s, e.Attr.Inode, e, bw, depth+2, showProgress)
+			err = m.dumpDir(s, e.Attr.Inode, e, bw, depth+2, threads, showProgress)
 		} else {
 			err = e.writeJSON(bw, depth+2)
 		}
@@ -3868,7 +3867,7 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 	return nil
 }
 
-func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash bool) (err error) {
+func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			debug.PrintStack()
@@ -4012,7 +4011,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 			_ = m.dumpDirFast(root, tree, bw, 1, showProgress)
 		} else {
 			showProgress(int64(len(tree.Entries)), 0)
-			if err = m.dumpDir(s, root, tree, bw, 1, showProgress); err != nil {
+			if err = m.dumpDir(s, root, tree, bw, 1, threads, showProgress); err != nil {
 				logger.Errorf("dump dir %d failed: %s", root, err)
 				return fmt.Errorf("dump dir %d failed", root) // don't retry
 			}
@@ -4025,7 +4024,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 				_ = m.dumpDirFast(TrashInode, trash, bw, 1, showProgress)
 			} else {
 				showProgress(int64(len(trash.Entries)), 0)
-				if err = m.dumpDir(s, TrashInode, trash, bw, 1, showProgress); err != nil {
+				if err = m.dumpDir(s, TrashInode, trash, bw, 1, threads, showProgress); err != nil {
 					logger.Errorf("dump trash failed: %s", err)
 					return fmt.Errorf("dump trash failed") // don't retry
 				}
