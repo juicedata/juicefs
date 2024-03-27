@@ -41,7 +41,7 @@ install_etcd(){
         quay.io/coreos/etcd:v3.5.7 \
         /usr/local/bin/etcd --data-dir=/etcd-data --name node1 \
         --listen-client-urls http://0.0.0.0:2379 \
-        --advertise-client-urls http://0.0.0.0:2379 \
+        --advertise-client-urls http://0.0.0.0:3379 \
         --listen-peer-urls http://0.0.0.0:2380 \
         --initial-advertise-peer-urls http://0.0.0.0:2380 \
         --initial-cluster node1=http://0.0.0.0:2380

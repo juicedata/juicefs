@@ -27,7 +27,7 @@ This document compares the key attributes of JuiceFS and SeaweedFS in a table an
 | WebDAV protocol | Supported | Supported |
 | HDFS compatibility | Basic | Full |
 | CSI Driver | Supported | Supported |
-| Client cache | Unsupported | Supported |
+| Client cache | Supported | Supported |
 | Cluster data replication | Unidirectional and bidirectional replication is supported | Exclusive to the Enterprise Edition, only unidirectional replication is supported |
 | Cloud data cache | Supported (manual synchronization) | Exclusive to the Enterprise Edition |
 | Trash | Unsupported | Supported |
