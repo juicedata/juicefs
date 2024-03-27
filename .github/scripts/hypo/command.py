@@ -127,8 +127,8 @@ class JuicefsCommandMachine(JuicefsMachine):
     )
     @precondition(lambda self: 'warmup' not in self.EXCLUDE_RULES)
     def warmup(self, entry, user='root'):
-        result1 = self.fsop.do_warmup(self.context1, entry, user)
-        result2 = self.fsop.do_warmup(self.context2, entry, user)
+        result1 = self.cmdop.do_warmup(context=self.context1, entry=entry, user=user)
+        result2 = self.cmdop.do_warmup(context=self.context2, entry=entry, user=user)
         assert self.equal(result1, result2), f'\033[31mwarmup:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(entry = Entries.filter(lambda x: x != multiple()),
@@ -136,10 +136,9 @@ class JuicefsCommandMachine(JuicefsMachine):
     )
     @precondition(lambda self: 'dump' not in self.EXCLUDE_RULES)
     def dump(self, entry, user='root'):
-        result1 = self.fsop.do_dump(context=self.context1, entry=entry, user=user)
-        result2 = self.fsop.do_dump(context=self.context2, entry=entry, user=user)
-        #TODO: compare dump result.
-        assert self.equal(result1, result2), f'\033[31mdump diff is:\n{diff}\033[0m'
+        result1 = self.cmdop.do_dump(context=self.context1, entry=entry, user=user)
+        result2 = self.cmdop.do_dump(context=self.context2, entry=entry, user=user)
+        assert self.equal(result1, result2), f'\033[31mdump:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         
     def teardown(self):
         pass
