@@ -253,6 +253,7 @@ func config(ctx *cli.Context) error {
 					msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", "min-client-version", format.MinClientVersion, "1.2.0-A"))
 					format.EnableACL = true
 					format.MinClientVersion = "1.2.0-A"
+					clientVer = true
 				} else {
 					return errors.New("cannot disable acl")
 				}

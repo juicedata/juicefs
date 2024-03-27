@@ -145,13 +145,13 @@ func (f *Format) String() string {
 
 func (f *Format) CheckVersion() error {
 	if f.MetaVersion > MaxVersion {
-		return fmt.Errorf("incompatible metadata version: %d; please upgrade the client", f.MetaVersion)
+		return fmt.Errorf("metadata version %d > max version %d: %w", f.MetaVersion, MaxVersion, ErrMetadataVer)
 	}
 
 	if f.MinClientVersion != "" {
 		r, err := version.Compare(f.MinClientVersion)
 		if err == nil && r < 0 {
-			err = fmt.Errorf("allowed minimum version: %s; please upgrade the client", f.MinClientVersion)
+			err = fmt.Errorf("allowed minimum version %s: %w", f.MinClientVersion, ErrClientVerTooOld)
 		}
 		if err != nil {
 			return err
@@ -160,7 +160,7 @@ func (f *Format) CheckVersion() error {
 	if f.MaxClientVersion != "" {
 		r, err := version.Compare(f.MaxClientVersion)
 		if err == nil && r > 0 {
-			err = fmt.Errorf("allowed maximum version: %s; please use an older client", f.MaxClientVersion)
+			err = fmt.Errorf("allowed maximum version %s: %w", f.MaxClientVersion, ErrClientVerTooNew)
 		}
 		if err != nil {
 			return err
