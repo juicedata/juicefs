@@ -908,6 +908,27 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
 
+	base.loadQuotas()
+	base.quotaMu.RLock()
+	q := base.dirQuotas[subIno]
+	base.quotaMu.RUnlock()
+	q.update(4<<10, 15) // used > max
+	base.doFlushQuotas()
+	if st := m.StatFS(ctx, subIno, &totalspace, &availspace, &iused, &iavail); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 4<<10 || availspace != 0 || iused != 15 || iavail != 0 {
+		t.Fatalf("total space %d, availspace %d, iused %d, iavail %d", totalspace, availspace, iused, iavail)
+	}
+	q.update(-8<<10, -20) // used < 0
+	base.doFlushQuotas()
+	if st := m.StatFS(ctx, subIno, &totalspace, &availspace, &iused, &iavail); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<10 || availspace != 1<<10 || iused != 0 || iavail != 10 {
+		t.Fatalf("total space %d, availspace %d, iused %d, iavail %d", totalspace, availspace, iused, iavail)
+	}
+
 	if st := m.Rmdir(ctx, 1, "subdir"); st != 0 {
 		t.Fatalf("rmdir subdir: %s", st)
 	}
