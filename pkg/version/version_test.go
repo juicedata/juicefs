@@ -28,10 +28,10 @@ func TestVersion(t *testing.T) {
 	if v := Version(); v != "1.0.0+2022-02-22.f4692af9" {
 		t.Fatalf("Version %s != expected 1.0.0+2022-02-22.f4692af9", v)
 	}
-	if _, err := Compare(""); err == nil {
+	if _, err := CompareVersions(&ver, Parse("")); err == nil {
 		t.Fatalf("Expect failed to parse empty string")
 	}
-	if _, err := Compare("0.1.2.3"); err == nil {
+	if _, err := CompareVersions(&ver, Parse("0.1.2.3")); err == nil {
 		t.Fatalf("Expect failed to parse string \"0.1.2.3\"")
 	}
 
@@ -47,7 +47,7 @@ func TestVersion(t *testing.T) {
 		{"2.0.0-alpha", -1},
 	}
 	for _, c := range cases {
-		if r, _ := Compare(c.vs); r != c.expect {
+		if r, _ := CompareVersions(&ver, Parse(c.vs)); r != c.expect {
 			t.Fatalf("Failed case: %+v", c)
 		}
 	}
@@ -59,7 +59,7 @@ func TestVersion(t *testing.T) {
 	cases[2].expect = 0
 	cases[3].expect = -1
 	for _, c := range cases {
-		if r, _ := Compare(c.vs); r != c.expect {
+		if r, _ := CompareVersions(&ver, Parse(c.vs)); r != c.expect {
 			t.Fatalf("Failed case: %+v", c)
 		}
 	}

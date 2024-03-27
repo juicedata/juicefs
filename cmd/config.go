@@ -253,6 +253,7 @@ func config(ctx *cli.Context) error {
 					msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", "min-client-version", format.MinClientVersion, "1.2.0-A"))
 					format.EnableACL = true
 					format.MinClientVersion = "1.2.0-A"
+					clientVer = true
 				} else {
 					return errors.New("cannot disable acl")
 				}
@@ -308,10 +309,25 @@ func config(ctx *cli.Context) error {
 				return fmt.Errorf("cannot disable dir stats when there are still %d dir quotas: %v", len(qs), paths)
 			}
 		}
-		if clientVer && format.CheckVersion() != nil {
-			warn("Clients with the same version of this will be rejected after modification.")
-			if !yes && !userConfirmed() {
-				return fmt.Errorf("Aborted.")
+		if clientVer {
+			if format.CheckVersion() != nil {
+				warn("Clients with the same version of this will be rejected after modification.")
+				if !yes && !userConfirmed() {
+					return fmt.Errorf("Aborted.")
+				}
+			}
+
+			// check all clients
+			if sessions, err := m.ListSessions(); err == nil {
+				warnMsg := ""
+				for _, session := range sessions {
+					if err := format.CheckCliVersion(version.Parse(session.Version)); err != nil {
+						warnMsg += fmt.Sprintf("host %s pid %d client version error: %s\n", session.HostName, session.ProcessID, err)
+					}
+				}
+				if warnMsg != "" {
+					fmt.Println(warnMsg)
+				}
 			}
 		}
 	}
