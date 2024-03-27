@@ -158,7 +158,7 @@ There are three ways to use JuiceFS on Windows systems.
 
 - [Using pre-compiled Windows client](#pre-compiled-windows-client)
 - [Using Scoop](#scoop)
-- [Using the Linux client in WSL](#using-linux-client-in-wsl)
+- [Using Linux client in WSL](#using-linux-client-in-wsl)
 
 #### Using the pre-compiled Windows client
 
