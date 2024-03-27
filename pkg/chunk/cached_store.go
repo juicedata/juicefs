@@ -155,11 +155,16 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		}
 		// partial read
 		st := time.Now()
-		in, err := s.store.storage.Get(key, int64(boff), int64(len(p)))
-		if err == nil {
-			n, err = io.ReadFull(in, p)
-			_ = in.Close()
-		}
+		page.Acquire()
+		err := utils.WithTimeout(func() error {
+			defer page.Release()
+			in, err := s.store.storage.Get(key, int64(boff), int64(len(p)))
+			if err == nil {
+				n, err = io.ReadFull(in, p)
+				_ = in.Close()
+			}
+			return err
+		}, s.store.conf.GetTimeout)
 		used := time.Since(st)
 		logRequest("GET", key, fmt.Sprintf("RANGE(%d,%d) ", boff, len(p)), err, used)
 		s.store.objectDataBytes.WithLabelValues("GET").Add(float64(n))
@@ -179,11 +184,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		} else {
 			tmp.Acquire()
 		}
-		tmp.Acquire()
-		err := utils.WithTimeout(func() error {
-			defer tmp.Release()
-			return s.store.load(key, tmp, s.store.shouldCache(blockSize), false)
-		}, s.store.conf.GetTimeout)
+		err = s.store.load(key, tmp, s.store.shouldCache(blockSize), false)
 		return tmp, err
 	})
 	defer block.Release()
@@ -199,7 +200,9 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 func (s *rSlice) delete(indx int) error {
 	key := s.key(indx)
 	st := time.Now()
-	err := s.store.storage.Delete(key)
+	err := utils.WithTimeout(func() error {
+		return s.store.storage.Delete(key)
+	}, s.store.conf.PutTimeout)
 	used := time.Since(st)
 	if err != nil && (strings.Contains(err.Error(), "NoSuchKey") ||
 		strings.Contains(err.Error(), "not found") ||
@@ -665,33 +668,38 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	var in io.ReadCloser
 	tried := 0
 	start := time.Now()
-	// it will be retried outside
-	for err != nil && tried < 2 {
-		time.Sleep(time.Second * time.Duration(tried*tried))
-		if tried > 0 {
-			logger.Warnf("GET %s: %s; retrying", key, err)
-			store.objectReqErrors.Add(1)
-			start = time.Now()
-		}
-		in, err = store.storage.Get(key, 0, -1)
-		tried++
+	var p *Page
+	if compressed {
+		c := NewOffPage(needed)
+		defer c.Release()
+		p = c
+	} else {
+		p = page
 	}
+	p.Acquire()
 	var n int
-	var buf []byte
-	if err == nil {
-		if compressed {
-			c := NewOffPage(needed)
-			defer c.Release()
-			buf = c.Data
-		} else {
-			buf = page.Data
+	err = utils.WithTimeout(func() error {
+		defer p.Release()
+		// it will be retried outside
+		for err != nil && tried < 2 {
+			time.Sleep(time.Second * time.Duration(tried*tried))
+			if tried > 0 {
+				logger.Warnf("GET %s: %s; retrying", key, err)
+				store.objectReqErrors.Add(1)
+				start = time.Now()
+			}
+			in, err = store.storage.Get(key, 0, -1)
+			tried++
 		}
-		n, err = io.ReadFull(in, buf)
-		_ = in.Close()
-	}
-	if compressed && err == io.ErrUnexpectedEOF {
-		err = nil
-	}
+		if err == nil {
+			n, err = io.ReadFull(in, p.Data)
+			_ = in.Close()
+		}
+		if compressed && err == io.ErrUnexpectedEOF {
+			err = nil
+		}
+		return err
+	}, store.conf.GetTimeout)
 	used := time.Since(start)
 	logRequest("GET", key, "", err, used)
 	if store.downLimit != nil && compressed {
@@ -704,7 +712,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 		return fmt.Errorf("get %s: %s", key, err)
 	}
 	if compressed {
-		n, err = store.compressor.Decompress(page.Data, buf[:n])
+		n, err = store.compressor.Decompress(page.Data, p.Data[:n])
 	}
 	if err != nil || n < len(page.Data) {
 		return fmt.Errorf("read %s fully: %s (%d < %d) after %s (tried %d)", key, err, n, len(page.Data),
