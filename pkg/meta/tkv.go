@@ -1110,43 +1110,7 @@ func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 	return
 }
 
-func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
-	var ino Ino
-	var err error
-	if parent == TrashInode {
-		var next int64
-		next, err = m.incrCounter("nextTrash", 1)
-		ino = TrashInode + Ino(next)
-	} else {
-		ino, err = m.nextInode()
-	}
-	if err != nil {
-		return errno(err)
-	}
-	if attr == nil {
-		attr = &Attr{}
-	}
-	attr.Typ = _type
-	attr.Uid = ctx.Uid()
-	attr.Gid = ctx.Gid()
-	if _type == TypeDirectory {
-		attr.Nlink = 2
-		attr.Length = 4 << 10
-	} else {
-		attr.Nlink = 1
-		if _type == TypeSymlink {
-			attr.Length = uint64(len(path))
-		} else {
-			attr.Length = 0
-			attr.Rdev = rdev
-		}
-	}
-	attr.Parent = parent
-	attr.Full = true
-	if inode != nil {
-		*inode = ino
-	}
-
+func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(tx *kvTxn) error {
 		var pattr Attr
 		a := tx.get(m.inodeKey(parent))
@@ -1185,9 +1149,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				} else {
 					*attr = Attr{Typ: foundType, Parent: parent} // corrupt entry
 				}
-				if inode != nil {
-					*inode = foundIno
-				}
+				*inode = foundIno
 			}
 			return syscall.EEXIST
 		}
@@ -1270,16 +1232,16 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 
-		tx.set(m.entryKey(parent, name), m.packEntry(_type, ino))
+		tx.set(m.entryKey(parent, name), m.packEntry(_type, *inode))
 		if updateParent {
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		}
-		tx.set(m.inodeKey(ino), m.marshal(attr))
+		tx.set(m.inodeKey(*inode), m.marshal(attr))
 		if _type == TypeSymlink {
-			tx.set(m.symKey(ino), []byte(path))
+			tx.set(m.symKey(*inode), []byte(path))
 		}
 		if _type == TypeDirectory {
-			tx.set(m.dirStatKey(ino), m.packDirStat(&dirStat{}))
+			tx.set(m.dirStatKey(*inode), m.packDirStat(&dirStat{}))
 		}
 		return nil
 	}, parent))
