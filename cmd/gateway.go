@@ -83,6 +83,10 @@ func cmdGateway() *cli.Command {
 			Name:  "domain",
 			Usage: "domain for virtual-host-style requests",
 		},
+		&cli.StringFlag{
+			Name:  "refresh-iam-interval",
+			Usage: "interval to reload gateway IAM from configuration",
+		},
 	}
 
 	return &cli.Command{
@@ -124,6 +128,10 @@ func gateway(c *cli.Context) error {
 	}
 	if c.IsSet("domain") {
 		os.Setenv("MINIO_DOMAIN", c.String("domain"))
+	}
+
+	if c.IsSet("refresh-iam-interval") {
+		os.Setenv("MINIO_REFRESH_IAM_INTERVAL", c.String("refresh-iam-interval"))
 	}
 
 	metaAddr := c.Args().Get(0)
