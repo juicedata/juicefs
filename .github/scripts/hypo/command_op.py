@@ -228,9 +228,11 @@ class CommandOperation:
         # src_uri is stared with /, so we need to remove the first /
         return self.do_info(context=context, mount=mount, entry=os.path.join(dest_path, src_uri[1:]))
     
-    def do_gc(self, context:Context, mount:str, delete:bool, user:str='root'):
+    def do_gc(self, context:Context, compact:bool,  delete:bool, user:str='root'):
         try:
-            cmd = f'sudo -u {user} {mount} gc {context.volume} --conf-dir={context.conf_dir}'
+            cmd = f'sudo -u {user} ./juicefs gc {context.meta_url}'
+            if compact:
+                cmd += ' --compact'
             if delete:
                 cmd += ' --delete'
             self.run_cmd(cmd, context.root_dir)
@@ -240,12 +242,29 @@ class CommandOperation:
         self.loggers[context.root_dir].info(f'do_gc succeed')
         return True
     
-    def do_fsck(self, context:Context, mount, repair, user='root'):
+    def do_clone(self, context:Context, entry, parent, new_entry_name, preserve:bool, user:str='root'):
+        abspath = os.path.join(context.root_dir, entry)
+        dest_abspath = os.path.join(context.root_dir, parent, new_entry_name)
         try:
-            cmd = f'sudo -u {user} {mount} fsck {context.volume} --conf-dir={context.conf_dir}'
+            cmd = f'sudo -u {user} ./juicefs clone {abspath} {dest_abspath}'
+            if preserve:
+                cmd += ' --preserve'
+            self.run_cmd(cmd, context.root_dir)
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, context.root_dir, 'do_clone', '')
+        self.stats.success('do_clone')
+        self.loggers[context.root_dir].info(f'do_clone succeed')
+        return True    
+    
+    def do_fsck(self, context:Context, entry, repair=False, recuisive=False, user='root'):
+        abspath = os.path.join(context.root_dir, entry)
+        try:
+            cmd = f'sudo -u {user} ./juicefs fsck {context.meta_url} --path {abspath}'
             if repair:
                 cmd += ' --repair'
-            self.run_cmd(cmd, context.root_dir)
+            if recuisive:
+                cmd += ' --recursive'
+            self.run_cmd(cmd, context.root_dir, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_fsck', '')
         self.stats.success('do_fsck')

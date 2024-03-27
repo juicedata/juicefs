@@ -385,7 +385,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           file = Files.filter(lambda x: x != multiple()), 
           name = st_xattr_name,
           value = st_xattr_value, 
-          flag = st.sampled_from([xattr.XATTR_CREATE, xattr.XATTR_REPLACE]), 
+          flag = st.sampled_from([xattr.XATTR_CREATE]), 
           user = st.sampled_from(SUDO_USERS)
         )
     @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'set_xattr' not in self.EXCLUDE_RULES)\

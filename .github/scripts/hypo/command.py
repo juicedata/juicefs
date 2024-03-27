@@ -55,7 +55,7 @@ class JuicefsCommandMachine(JuicefsMachine):
     context2 = Context(root_dir=ROOT_DIR2, mp='/tmp/jfs2')
     
     EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file']
-    EXCLUDE_RULES = []
+    # EXCLUDE_RULES = []
     INCLUDE_RULES = ['dump_load_dump', 'mkdir', 'create_file', 'set_xattr']
     log_level = os.environ.get('LOG_LEVEL', 'INFO')
     loggers = {f'{ROOT_DIR1}': common.setup_logger(f'./log1', 'cmdlogger1', log_level), \
@@ -150,6 +150,48 @@ class JuicefsCommandMachine(JuicefsMachine):
         result1 = self.cmdop.do_warmup(context=self.context1, entry=entry, user=user)
         result2 = self.cmdop.do_warmup(context=self.context2, entry=entry, user=user)
         assert self.equal(result1, result2), f'\033[31mwarmup:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        compact = st.booleans(),
+        delete = st.booleans(),
+        user = st.just('root'),
+    )
+    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'gc' not in self.EXCLUDE_RULES)\
+                   or (len(self.EXCLUDE_RULES)==0 and 'gc' in self.INCLUDE_RULES)
+    )
+    def gc(self, compact=False, delete=False, user='root'):
+        result1 = self.cmdop.do_gc(context=self.context1, compact=compact, delete=delete, user=user)
+        result2 = self.cmdop.do_gc(context=self.context2, compact=compact, delete=delete, user=user)
+        assert self.equal(result1, result2), f'\033[31mgc:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        entry = Entries.filter(lambda x: x != multiple()),
+        repair = st.booleans(),
+        recuisive = st.booleans(),
+        user = st_sudo_user, 
+    )
+    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'fsck' not in self.EXCLUDE_RULES)\
+                   or (len(self.EXCLUDE_RULES)==0 and 'fsck' in self.INCLUDE_RULES)
+    )
+    def fsck(self, entry, repair=False, recuisive=False, user='root'):
+        result1 = self.cmdop.do_fsck(context=self.context1, entry=entry, repair=repair, recuisive=recuisive, user=user)
+        result2 = self.cmdop.do_fsck(context=self.context2, entry=entry, repair=repair, recuisive=recuisive, user=user)
+        assert self.equal(result1, result2), f'\033[31mfsck:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        entry = Entries.filter(lambda x: x != multiple()),
+        parent = Folders.filter(lambda x: x != multiple()),
+        new_entry_name = st_entry_name,
+        user = st_sudo_user,
+        preserve = st.booleans()
+    )
+    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'clone' not in self.EXCLUDE_RULES)\
+                   or (len(self.EXCLUDE_RULES)==0 and 'clone' in self.INCLUDE_RULES)
+    )
+    def clone(self, entry, parent, new_entry_name, preserve=False, user='root'):
+        result1 = self.cmdop.do_clone(context=self.context1, entry=entry, parent=parent, new_entry_name=new_entry_name, preserve=preserve, user=user)
+        result2 = self.cmdop.do_clone(context=self.context2, entry=entry, parent=parent, new_entry_name=new_entry_name, preserve=preserve, user=user)
+        assert self.equal(result1, result2), f'\033[31mclone:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(folder = Folders.filter(lambda x: x != multiple()),
         fast = st.booleans(),
