@@ -91,7 +91,7 @@ type engine interface {
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
-	doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno
+	doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
 	doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno
 	doRmdir(ctx Context, parent Ino, name string, inode *Ino, skipCheckTrash ...bool) syscall.Errno
@@ -1409,13 +1409,42 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if err := m.checkQuota(ctx, space, inodes, parent); err != 0 {
 		return err
 	}
-	err := m.en.doMknod(ctx, parent, name, _type, mode, cumask, rdev, path, inode, attr)
-	if err == 0 {
+
+	ino, err := m.nextInode()
+	if err != nil {
+		return errno(err)
+	}
+	if inode == nil {
+		inode = &ino
+	}
+	*inode = ino
+	if attr == nil {
+		attr = &Attr{}
+	}
+	attr.Typ = _type
+	attr.Uid = ctx.Uid()
+	attr.Gid = ctx.Gid()
+	if _type == TypeDirectory {
+		attr.Nlink = 2
+		attr.Length = 4 << 10
+	} else {
+		attr.Nlink = 1
+		if _type == TypeSymlink {
+			attr.Length = uint64(len(path))
+		} else {
+			attr.Length = 0
+			attr.Rdev = rdev
+		}
+	}
+	attr.Parent = parent
+	attr.Full = true
+	st := m.en.doMknod(ctx, parent, name, _type, mode, cumask, path, inode, attr)
+	if st == 0 {
 		m.en.updateStats(space, inodes)
 		m.updateDirStat(ctx, parent, 0, space, inodes)
 		m.updateDirQuota(ctx, parent, space, inodes)
 	}
-	return err
+	return st
 }
 
 func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
@@ -2386,7 +2415,14 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 
 	st := m.en.doLookup(Background, TrashInode, name, trash, nil)
 	if st == syscall.ENOENT {
-		st = m.en.doMknod(Background, TrashInode, name, TypeDirectory, 0555, 0, 0, "", trash, nil)
+		next, err := m.en.incrCounter("nextTrash", 1)
+		if err == nil {
+			*trash = TrashInode + Ino(next)
+			attr := Attr{Typ: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: TrashInode, Full: true}
+			st = m.en.doMknod(Background, TrashInode, name, TypeDirectory, 0555, 0, "", trash, &attr)
+		} else {
+			st = errno(err)
+		}
 	}
 
 	m.Lock()

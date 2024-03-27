@@ -1331,41 +1331,7 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 	return
 }
 
-func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
-	var ino Ino
-	var err error
-	if parent == TrashInode {
-		var next int64
-		next, err = m.incrCounter("nextTrash", 1)
-		ino = TrashInode + Ino(next)
-	} else {
-		ino, err = m.nextInode()
-	}
-	if err != nil {
-		return errno(err)
-	}
-	var n node
-	n.Inode = ino
-	n.Type = _type
-	n.Uid = ctx.Uid()
-	n.Gid = ctx.Gid()
-	if _type == TypeDirectory {
-		n.Nlink = 2
-		n.Length = 4 << 10
-	} else {
-		n.Nlink = 1
-		if _type == TypeSymlink {
-			n.Length = uint64(len(path))
-		} else {
-			n.Length = 0
-			n.Rdev = rdev
-		}
-	}
-	n.Parent = parent
-	if inode != nil {
-		*inode = ino
-	}
-
+func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
 		ok, err := s.ForUpdate().Get(&pn)
@@ -1414,13 +1380,13 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				} else if attr != nil {
 					*attr = Attr{Typ: foundType, Parent: parent} // corrupt entry
 				}
-				if inode != nil {
-					*inode = foundIno
-				}
+				*inode = foundIno
 			}
 			return syscall.EEXIST
 		}
 
+		n := node{Inode: *inode}
+		m.parseNode(attr, &n)
 		mode &= 07777
 		if pattr.DefaultACL != aclAPI.None && _type != TypeSymlink {
 			// inherit default acl
@@ -1493,7 +1459,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 
-		if err = mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: ino, Type: _type}, &n); err != nil {
+		if err = mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: *inode, Type: _type}, &n); err != nil {
 			return err
 		}
 		if updateParent {
@@ -1502,12 +1468,12 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 		if _type == TypeSymlink {
-			if err = mustInsert(s, &symlink{Inode: ino, Target: []byte(path)}); err != nil {
+			if err = mustInsert(s, &symlink{Inode: *inode, Target: []byte(path)}); err != nil {
 				return err
 			}
 		}
 		if _type == TypeDirectory {
-			if err = mustInsert(s, &dirStats{Inode: ino}); err != nil {
+			if err = mustInsert(s, &dirStats{Inode: *inode}); err != nil {
 				return err
 			}
 		}

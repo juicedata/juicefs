@@ -1260,43 +1260,7 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 	return
 }
 
-func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
-	var ino Ino
-	var err error
-	if parent == TrashInode {
-		var next int64
-		next, err = m.incrCounter("nextTrash", 1)
-		ino = TrashInode + Ino(next)
-	} else {
-		ino, err = m.nextInode()
-	}
-	if err != nil {
-		return errno(err)
-	}
-	if attr == nil {
-		attr = &Attr{}
-	}
-	attr.Typ = _type
-	attr.Uid = ctx.Uid()
-	attr.Gid = ctx.Gid()
-	if _type == TypeDirectory {
-		attr.Nlink = 2
-		attr.Length = 4 << 10
-	} else {
-		attr.Nlink = 1
-		if _type == TypeSymlink {
-			attr.Length = uint64(len(path))
-		} else {
-			attr.Length = 0
-			attr.Rdev = rdev
-		}
-	}
-	attr.Parent = parent
-	attr.Full = true
-	if inode != nil {
-		*inode = ino
-	}
-
+func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		var pattr Attr
 		a, err := tx.Get(ctx, m.inodeKey(parent)).Bytes()
@@ -1340,9 +1304,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				} else {
 					return err
 				}
-				if inode != nil {
-					*inode = foundIno
-				}
+				*inode = foundIno
 			}
 			return syscall.EEXIST
 		}
@@ -1422,16 +1384,16 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.HSet(ctx, m.entryKey(parent), name, m.packEntry(_type, ino))
+			pipe.HSet(ctx, m.entryKey(parent), name, m.packEntry(_type, *inode))
 			if updateParent {
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
-			pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
+			pipe.Set(ctx, m.inodeKey(*inode), m.marshal(attr), 0)
 			if _type == TypeSymlink {
-				pipe.Set(ctx, m.symKey(ino), path, 0)
+				pipe.Set(ctx, m.symKey(*inode), path, 0)
 			}
 			if _type == TypeDirectory {
-				field := ino.String()
+				field := (*inode).String()
 				pipe.HSet(ctx, m.dirUsedInodesKey(), field, "0")
 				pipe.HSet(ctx, m.dirDataLengthKey(), field, "0")
 				pipe.HSet(ctx, m.dirUsedSpaceKey(), field, "0")
