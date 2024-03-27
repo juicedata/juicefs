@@ -304,6 +304,22 @@ func (q *Quota) update(space, inodes int64) {
 	atomic.AddInt64(&q.newInodes, inodes)
 }
 
+// not thread safe
+func (q *Quota) sanitize() {
+	if q.UsedSpace < 0 {
+		q.UsedSpace = 0
+	}
+	if q.MaxSpace > 0 && q.MaxSpace < q.UsedSpace {
+		q.MaxSpace = q.UsedSpace
+	}
+	if q.UsedInodes < 0 {
+		q.UsedInodes = 0
+	}
+	if q.MaxInodes > 0 && q.MaxInodes < q.UsedInodes {
+		q.MaxInodes = q.UsedInodes
+	}
+}
+
 // Meta is a interface for a meta service for file system.
 type Meta interface {
 	// Name of database
