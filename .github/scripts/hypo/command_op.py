@@ -124,14 +124,16 @@ class CommandOperation:
         paths = ','.join(paths)
         return filename, files, dirs, length, size, paths
 
-    def do_info(self, context:Context, entry, user='root', **kwargs):
+    def do_info(self, context:Context, entry, strict=True, user='root', raw=True, recuisive=False):
         abs_path = os.path.join(context.root_dir, entry)
         try:
             cmd = f'sudo -u {user} ./juicefs info {abs_path}'
-            if kwargs.get('raw', True):
+            if raw:
                 cmd += ' --raw'
-            if kwargs.get('recuisive', False):
+            if recuisive:
                 cmd += ' --recursive'
+            if strict:
+                cmd += ' --strict'
             result = self.run_cmd(cmd, context.root_dir)
             if '<ERROR>:' in result or "permission denied" in result:
                 return self.handleException(Exception(result), context.root_dir, 'do_info', abs_path, **kwargs)

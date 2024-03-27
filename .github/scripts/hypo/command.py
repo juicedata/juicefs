@@ -109,12 +109,13 @@ class JuicefsCommandMachine(JuicefsMachine):
           entry = Entries.filter(lambda x: x != multiple()),
           raw = st.just(True),
           recuisive = st.booleans(),
+          strict = st.just(True),
           user = st_sudo_user
           )
     @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'info' not in self.EXCLUDE_RULES)\
                    or (len(self.EXCLUDE_RULES)==0 and 'info' in self.INCLUDE_RULES)
     )
-    def info(self, entry, raw=True, recuisive=False, user='root'):
+    def info(self, entry, raw=True, recuisive=False, strict=True, user='root'):
         result1 = self.cmdop.do_info(self.context1, entry=entry, user=user, raw=raw, recuisive=recuisive) 
         result2 = self.cmdop.do_info(self.context2, entry=entry, user=user, raw=raw, recuisive=recuisive)
         assert self.equal(result1, result2), f'\033[31minfo:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
