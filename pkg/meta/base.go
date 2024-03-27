@@ -580,25 +580,20 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 		if q == nil {
 			continue
 		}
+		q.sanitize()
 		if usage == nil {
 			usage = q
 		}
 		if q.MaxSpace > 0 {
-			ls := q.MaxSpace - q.UsedSpace
-			if ls < 0 {
-				ls = 0
-			}
-			if uint64(ls) < *availspace {
-				*availspace = uint64(ls)
+			ls := uint64(q.MaxSpace - q.UsedSpace)
+			if ls < *availspace {
+				*availspace = ls
 			}
 		}
 		if q.MaxInodes > 0 {
-			li := q.MaxInodes - q.UsedInodes
-			if li < 0 {
-				li = 0
-			}
-			if uint64(li) < *iavail {
-				*iavail = uint64(li)
+			li := uint64(q.MaxInodes - q.UsedInodes)
+			if li < *iavail {
+				*iavail = li
 			}
 		}
 	}
