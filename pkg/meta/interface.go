@@ -24,7 +24,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -305,34 +304,6 @@ type Session struct {
 	Plocks    []Plock `json:",omitempty"`
 }
 
-type Quota struct {
-	MaxSpace, MaxInodes   int64
-	UsedSpace, UsedInodes int64
-	newSpace, newInodes   int64
-}
-
-// Returns true if it will exceed the quota limit
-func (q *Quota) check(space, inodes int64) bool {
-	if space > 0 {
-		max := atomic.LoadInt64(&q.MaxSpace)
-		if max > 0 && atomic.LoadInt64(&q.UsedSpace)+atomic.LoadInt64(&q.newSpace)+space > max {
-			return true
-		}
-	}
-	if inodes > 0 {
-		max := atomic.LoadInt64(&q.MaxInodes)
-		if max > 0 && atomic.LoadInt64(&q.UsedInodes)+atomic.LoadInt64(&q.newInodes)+inodes > max {
-			return true
-		}
-	}
-	return false
-}
-
-func (q *Quota) update(space, inodes int64) {
-	atomic.AddInt64(&q.newSpace, space)
-	atomic.AddInt64(&q.newInodes, inodes)
-}
-
 // Meta is a interface for a meta service for file system.
 type Meta interface {
 	// Name of database
@@ -476,7 +447,7 @@ type Meta interface {
 	HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool) error
 
 	// Dump the tree under root, which may be modified by checkRoot
-	DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash bool) error
+	DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) error
 	LoadMeta(r io.Reader) error
 
 	// getBase return the base engine.

@@ -957,21 +957,9 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	return lastErr
 }
 
-func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
-	defer m.timeit("Truncate", time.Now())
-	f := m.of.find(inode)
-	if f != nil {
-		f.Lock()
-		defer f.Unlock()
-	}
-	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
-	var newLength, newSpace int64
-	if attr == nil {
-		attr = &Attr{}
-	}
-	err := m.txn(ctx, func(tx *redis.Tx) error {
-		newLength = 0
-		newSpace = 0
+func (m *redisMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, delta *dirStat, attr *Attr, skipPermCheck bool) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		*delta = dirStat{}
 		var t Attr
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err != nil {
@@ -987,14 +975,12 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			}
 		}
 		if length == t.Length {
-			if attr != nil {
-				*attr = t
-			}
+			*attr = t
 			return nil
 		}
-		newLength = int64(length) - int64(t.Length)
-		newSpace = align4K(length) - align4K(t.Length)
-		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, inode, t.Parent)...); err != 0 {
+		delta.length = int64(length) - int64(t.Length)
+		delta.space = align4K(length) - align4K(t.Length)
+		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(ctx, tx, inode, t.Parent)...); err != 0 {
 			return err
 		}
 		var zeroChunks []uint32
@@ -1051,50 +1037,20 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			if right > (left/ChunkSize+1)*ChunkSize && right%ChunkSize > 0 {
 				pipe.RPush(ctx, m.chunkKey(inode, uint32(right/ChunkSize)), marshalSlice(0, 0, 0, 0, uint32(right%ChunkSize)))
 			}
-			pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
+			pipe.IncrBy(ctx, m.usedSpaceKey(), delta.space)
 			return nil
 		})
 		if err == nil {
-			if attr != nil {
-				*attr = t
-			}
+			*attr = t
 		}
 		return err
-	}, m.inodeKey(inode))
-	if err == nil {
-		m.updateParentStat(ctx, inode, attr.Parent, newLength, newSpace)
-	}
-	return errno(err)
+	}, m.inodeKey(inode)))
 }
 
-func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, flength *uint64) syscall.Errno {
-	if mode&fallocCollapesRange != 0 && mode != fallocCollapesRange {
-		return syscall.EINVAL
-	}
-	if mode&fallocInsertRange != 0 && mode != fallocInsertRange {
-		return syscall.EINVAL
-	}
-	if mode == fallocInsertRange || mode == fallocCollapesRange {
-		return syscall.ENOTSUP
-	}
-	if mode&fallocPunchHole != 0 && mode&fallocKeepSize == 0 {
-		return syscall.EINVAL
-	}
-	if size == 0 {
-		return syscall.EINVAL
-	}
-	defer m.timeit("Fallocate", time.Now())
-	f := m.of.find(inode)
-	if f != nil {
-		f.Lock()
-		defer f.Unlock()
-	}
-	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
-	var newLength, newSpace int64
-	var t Attr
-	err := m.txn(ctx, func(tx *redis.Tx) error {
-		newLength, newSpace = 0, 0
-		t = Attr{}
+func (m *redisMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, delta *dirStat, attr *Attr) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		*delta = dirStat{}
+		t := Attr{}
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err != nil {
 			return err
@@ -1120,13 +1076,10 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		}
 
 		old := t.Length
-		newLength = int64(length) - int64(old)
-		newSpace = align4K(length) - align4K(old)
-		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, inode, t.Parent)...); err != 0 {
+		delta.length = int64(length) - int64(old)
+		delta.space = align4K(length) - align4K(old)
+		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(ctx, tx, inode, t.Parent)...); err != 0 {
 			return err
-		}
-		if flength != nil {
-			*flength = length
 		}
 		t.Length = length
 		now := time.Now()
@@ -1156,12 +1109,11 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(length)-align4K(old))
 			return nil
 		})
+		if err == nil {
+			*attr = t
+		}
 		return err
-	}, m.inodeKey(inode))
-	if err == nil {
-		m.updateParentStat(ctx, inode, t.Parent, newLength, newSpace)
-	}
-	return errno(err)
+	}, m.inodeKey(inode)))
 }
 
 func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
@@ -1260,43 +1212,7 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 	return
 }
 
-func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
-	var ino Ino
-	var err error
-	if parent == TrashInode {
-		var next int64
-		next, err = m.incrCounter("nextTrash", 1)
-		ino = TrashInode + Ino(next)
-	} else {
-		ino, err = m.nextInode()
-	}
-	if err != nil {
-		return errno(err)
-	}
-	if attr == nil {
-		attr = &Attr{}
-	}
-	attr.Typ = _type
-	attr.Uid = ctx.Uid()
-	attr.Gid = ctx.Gid()
-	if _type == TypeDirectory {
-		attr.Nlink = 2
-		attr.Length = 4 << 10
-	} else {
-		attr.Nlink = 1
-		if _type == TypeSymlink {
-			attr.Length = uint64(len(path))
-		} else {
-			attr.Length = 0
-			attr.Rdev = rdev
-		}
-	}
-	attr.Parent = parent
-	attr.Full = true
-	if inode != nil {
-		*inode = ino
-	}
-
+func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		var pattr Attr
 		a, err := tx.Get(ctx, m.inodeKey(parent)).Bytes()
@@ -1340,9 +1256,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				} else {
 					return err
 				}
-				if inode != nil {
-					*inode = foundIno
-				}
+				*inode = foundIno
 			}
 			return syscall.EEXIST
 		}
@@ -1422,16 +1336,16 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.HSet(ctx, m.entryKey(parent), name, m.packEntry(_type, ino))
+			pipe.HSet(ctx, m.entryKey(parent), name, m.packEntry(_type, *inode))
 			if updateParent {
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
-			pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
+			pipe.Set(ctx, m.inodeKey(*inode), m.marshal(attr), 0)
 			if _type == TypeSymlink {
-				pipe.Set(ctx, m.symKey(ino), path, 0)
+				pipe.Set(ctx, m.symKey(*inode), path, 0)
 			}
 			if _type == TypeDirectory {
-				field := ino.String()
+				field := (*inode).String()
 				pipe.HSet(ctx, m.dirUsedInodesKey(), field, "0")
 				pipe.HSet(ctx, m.dirDataLengthKey(), field, "0")
 				pipe.HSet(ctx, m.dirUsedSpaceKey(), field, "0")
@@ -2320,35 +2234,25 @@ func (m *redisMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, sysca
 	return ss, 0
 }
 
-func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time) syscall.Errno {
-	defer m.timeit("Write", time.Now())
-	f := m.of.find(inode)
-	if f != nil {
-		f.Lock()
-		defer f.Unlock()
-	}
-	defer func() { m.of.InvalidateChunk(inode, indx) }()
-	var newLength, newSpace int64
-	var attr Attr
-	var numSlices int64
-	err := m.txn(ctx, func(tx *redis.Tx) error {
-		newLength, newSpace = 0, 0
-		attr = Attr{}
+func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		*delta = dirStat{}
+		*attr = Attr{}
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err != nil {
 			return err
 		}
-		m.parseAttr(a, &attr)
+		m.parseAttr(a, attr)
 		if attr.Typ != TypeFile {
 			return syscall.EPERM
 		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
 		if newleng > attr.Length {
-			newLength = int64(newleng - attr.Length)
-			newSpace = align4K(newleng) - align4K(attr.Length)
+			delta.length = int64(newleng - attr.Length)
+			delta.space = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, inode, attr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(ctx, tx, inode, attr.Parent)...); err != 0 {
 			return err
 		}
 		now := time.Now()
@@ -2362,28 +2266,17 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			rpush = pipe.RPush(ctx, m.chunkKey(inode, indx), marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len))
 			// most of chunk are used by single inode, so use that as the default (1 == not exists)
 			// pipe.Incr(ctx, r.sliceKey(slice.ID, slice.Size))
-			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&attr), 0)
-			if newSpace > 0 {
-				pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
+			pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
+			if delta.space > 0 {
+				pipe.IncrBy(ctx, m.usedSpaceKey(), delta.space)
 			}
 			return nil
 		})
 		if err == nil {
-			numSlices = rpush.Val()
+			*numSlices = int(rpush.Val())
 		}
 		return err
-	}, m.inodeKey(inode))
-	if err == nil {
-		m.updateParentStat(ctx, inode, attr.Parent, newLength, newSpace)
-		if numSlices%100 == 99 || numSlices > 350 {
-			if numSlices < int64(maxSlices) {
-				go m.compactChunk(inode, indx, false, false)
-			} else {
-				m.compactChunk(inode, indx, true, false)
-			}
-		}
-	}
-	return errno(err)
+	}, m.inodeKey(inode)))
 }
 
 func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
@@ -3857,7 +3750,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 	}, keys...)
 }
 
-func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, bar *utils.Bar) error {
+func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, threads int, bar *utils.Bar) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -3896,16 +3789,15 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		bar.IncrTotal(int64(len(entries)))
 	}
 
-	var concurrent = 2
 	var batch = 100
-	ms := make([]sync.Mutex, concurrent)
-	conds := make([]*sync.Cond, concurrent)
-	ready := make([]int, concurrent)
-	for c := 0; c < concurrent; c++ {
+	ms := make([]sync.Mutex, threads)
+	conds := make([]*sync.Cond, threads)
+	ready := make([]int, threads)
+	for c := 0; c < threads; c++ {
 		conds[c] = sync.NewCond(&ms[c])
 		if c*batch < len(entries) {
 			go func(c int) {
-				for i := c * batch; i < len(entries) && err == nil; i += concurrent * batch {
+				for i := c * batch; i < len(entries) && err == nil; i += threads * batch {
 					es := entries[i:]
 					if len(es) > batch {
 						es = es[:batch]
@@ -3927,7 +3819,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	}
 	for i, e := range entries {
 		b := i / batch
-		c := b % concurrent
+		c := b % threads
 		ms[c].Lock()
 		for ready[c] == 0 && err == nil {
 			conds[c].Wait()
@@ -3941,7 +3833,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 			return err
 		}
 		if e.Attr.Type == "directory" {
-			err = m.dumpDir(e.Attr.Inode, e, bw, depth+2, bar)
+			err = m.dumpDir(e.Attr.Inode, e, bw, depth+2, threads, bar)
 		} else {
 			err = e.writeJSON(bw, depth+2)
 		}
@@ -3961,7 +3853,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	return nil
 }
 
-func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash bool) (err error) {
+func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			debug.PrintStack()
@@ -4079,7 +3971,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash 
 	if err = m.dumpEntries(tree); err != nil {
 		return err
 	}
-	if err = m.dumpDir(root, tree, bw, 1, bar); err != nil {
+	if err = m.dumpDir(root, tree, bw, 1, threads, bar); err != nil {
 		return err
 	}
 	if root == RootInode && !skipTrash {
@@ -4096,7 +3988,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash 
 		if _, err = bw.WriteString(","); err != nil {
 			return err
 		}
-		if err = m.dumpDir(TrashInode, trash, bw, 1, bar); err != nil {
+		if err = m.dumpDir(TrashInode, trash, bw, 1, threads, bar); err != nil {
 			return err
 		}
 	}

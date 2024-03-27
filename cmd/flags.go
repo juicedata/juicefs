@@ -362,7 +362,7 @@ func duration(s string) time.Duration {
 	if p >= 0 {
 		v, err = strconv.Atoi(s[:p])
 	}
-	if err == nil {
+	if err == nil && s[p+1:] != "" {
 		d, err = time.ParseDuration(s[p+1:])
 	}
 
