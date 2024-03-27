@@ -2284,29 +2284,13 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 
 func (m *dbMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno) {
 	var c = chunk{Inode: inode, Indx: indx}
-	err := m.roTxn(func(s *xorm.Session) error {
+	if err := m.roTxn(func(s *xorm.Session) error {
 		_, err := s.MustCols("indx").Get(&c)
 		return err
-	})
-	if err != nil {
+	}); err != nil {
 		return nil, errno(err)
 	}
-	if len(c.Slices) == 0 {
-		var attr Attr
-		eno := m.doGetAttr(ctx, inode, &attr)
-		if eno != 0 {
-			return nil, eno
-		}
-		if attr.Typ != TypeFile {
-			return nil, syscall.EPERM
-		}
-		return nil, 0
-	}
-	ss := readSliceBuf(c.Slices)
-	if ss == nil {
-		return nil, syscall.EIO
-	}
-	return ss, 0
+	return readSliceBuf(c.Slices), 0
 }
 
 func (m *dbMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno {

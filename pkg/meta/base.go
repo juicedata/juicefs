@@ -67,8 +67,6 @@ type engine interface {
 	doInit(format *Format, force bool) error
 
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
-	doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno)
-	doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno
 	doDeleteSustainedInode(sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
@@ -102,9 +100,11 @@ type engine interface {
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doTouchAtime(ctx Context, inode Ino, attr *Attr, ts time.Time) (bool, error)
+	doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno)
 	doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno
 	doTruncate(ctx Context, inode Ino, flags uint8, length uint64, delta *dirStat, attr *Attr, skipPermCheck bool) syscall.Errno
 	doFallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, delta *dirStat, attr *Attr) syscall.Errno
+	doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
@@ -1368,16 +1368,13 @@ func (m *baseMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sys
 	return 0
 }
 
-func (m *baseMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rerr syscall.Errno) {
+func (m *baseMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (st syscall.Errno) {
 	defer func() {
-		if rerr == 0 {
+		if st == 0 {
 			m.touchAtime(ctx, inode, nil)
 		}
 	}()
 
-	if slices != nil {
-		*slices = nil
-	}
 	f := m.of.find(inode)
 	if f != nil {
 		f.RLock()
@@ -1387,11 +1384,27 @@ func (m *baseMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (r
 		*slices = ss
 		return 0
 	}
+
+	*slices = nil
 	defer m.timeit("Read", time.Now())
-	ss, err := m.en.doRead(ctx, inode, indx)
-	if err != 0 {
-		return err
+	ss, st := m.en.doRead(ctx, inode, indx)
+	if st != 0 {
+		return st
 	}
+	if ss == nil {
+		return syscall.EIO
+	}
+	if len(ss) == 0 {
+		var attr Attr
+		if st = m.en.doGetAttr(ctx, inode, &attr); st != 0 {
+			return st
+		}
+		if attr.Typ != TypeFile {
+			return syscall.EPERM
+		}
+		return 0
+	}
+
 	*slices = buildSlice(ss)
 	m.of.CacheChunk(inode, indx, *slices)
 	if !m.conf.ReadOnly && (len(ss) >= 5 || len(*slices) >= 5) {
@@ -1447,9 +1460,9 @@ func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
 		if numSlices%100 == 99 || numSlices > 350 {
 			if numSlices < maxSlices {
-				go m.en.compactChunk(inode, indx, false, false)
+				go m.compactChunk(inode, indx, false, false)
 			} else {
-				m.en.compactChunk(inode, indx, true, false)
+				m.compactChunk(inode, indx, true, false)
 			}
 		}
 	}

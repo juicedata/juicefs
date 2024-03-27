@@ -2216,22 +2216,7 @@ func (m *redisMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, sysca
 	if err != nil {
 		return nil, errno(err)
 	}
-	if len(vals) == 0 {
-		var attr Attr
-		eno := m.doGetAttr(ctx, inode, &attr)
-		if eno != 0 {
-			return nil, eno
-		}
-		if attr.Typ != TypeFile {
-			return nil, syscall.EPERM
-		}
-		return nil, 0
-	}
-	ss := readSlices(vals)
-	if ss == nil {
-		return nil, syscall.EIO
-	}
-	return ss, 0
+	return readSlices(vals), 0
 }
 
 func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno {

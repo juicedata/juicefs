@@ -1905,27 +1905,12 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	return err
 }
 
-func (m *kvMeta) doRead(ctx Context, inode Ino, indx uint32) (ss []*slice, rerr syscall.Errno) {
+func (m *kvMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno) {
 	val, err := m.get(m.chunkKey(inode, indx))
 	if err != nil {
 		return nil, errno(err)
 	}
-	if len(val) == 0 {
-		var attr Attr
-		eno := m.doGetAttr(ctx, inode, &attr)
-		if eno != 0 {
-			return nil, eno
-		}
-		if attr.Typ != TypeFile {
-			return nil, syscall.EPERM
-		}
-		return nil, 0
-	}
-	ss = readSliceBuf(val)
-	if ss == nil {
-		return nil, syscall.EIO
-	}
-	return
+	return readSliceBuf(val), 0
 }
 
 func (m *kvMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno {
