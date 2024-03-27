@@ -54,7 +54,9 @@ class JuicefsCommandMachine(JuicefsMachine):
     context1 = Context(root_dir=ROOT_DIR1, mp='/tmp/jfs1')
     context2 = Context(root_dir=ROOT_DIR2, mp='/tmp/jfs2')
     
-    EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file', 'info', 'status', 'warmup', 'rmr']
+    EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file']
+    EXCLUDE_RULES = []
+    INCLUDE_RULES = ['dump_load_dump', 'mkdir', 'create_file', 'set_xattr']
     log_level = os.environ.get('LOG_LEVEL', 'INFO')
     loggers = {f'{ROOT_DIR1}': common.setup_logger(f'./log1', 'cmdlogger1', log_level), \
                             f'{ROOT_DIR2}': common.setup_logger(f'./log2', 'cmdlogger2', log_level)}
@@ -109,7 +111,9 @@ class JuicefsCommandMachine(JuicefsMachine):
           recuisive = st.booleans(),
           user = st_sudo_user
           )
-    @precondition(lambda self: 'info' not in self.EXCLUDE_RULES )
+    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'info' not in self.EXCLUDE_RULES)\
+                   or (len(self.EXCLUDE_RULES)==0 and 'info' in self.INCLUDE_RULES)
+    )
     def info(self, entry, raw=True, recuisive=False, user='root'):
         result1 = self.cmdop.do_info(self.context1, entry=entry, user=user, raw=raw, recuisive=recuisive) 
         result2 = self.cmdop.do_info(self.context2, entry=entry, user=user, raw=raw, recuisive=recuisive)
@@ -118,7 +122,9 @@ class JuicefsCommandMachine(JuicefsMachine):
     @rule(entry = Entries.filter(lambda x: x != multiple()),
           user = st_sudo_user
         )
-    @precondition(lambda self: 'rmr' not in self.EXCLUDE_RULES)
+    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'rmr' not in self.EXCLUDE_RULES)\
+                   or (len(self.EXCLUDE_RULES)==0 and 'rmr' in self.INCLUDE_RULES)
+    )
     def rmr(self, entry, user='root'):
         assume(entry != '')
         result1 = self.cmdop.do_rmr(context=self.context1, entry=entry, user=user)
@@ -126,7 +132,9 @@ class JuicefsCommandMachine(JuicefsMachine):
         assert self.equal(result1, result2), f'\033[31mrmr:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule()
-    @precondition(lambda self: 'status' not in self.EXCLUDE_RULES)
+    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'status' not in self.EXCLUDE_RULES)\
+                   or (len(self.EXCLUDE_RULES)==0 and 'status' in self.INCLUDE_RULES)
+    )
     def status(self):
         result1 = self.cmdop.do_status(context = self.context1)
         result2 = self.cmdop.do_status(context = self.context2)
@@ -135,7 +143,9 @@ class JuicefsCommandMachine(JuicefsMachine):
     @rule(entry = Entries.filter(lambda x: x != multiple()),
         user = st_sudo_user
     )
-    @precondition(lambda self: 'warmup' not in self.EXCLUDE_RULES)
+    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'warmup' not in self.EXCLUDE_RULES)\
+                   or (len(self.EXCLUDE_RULES)==0 and 'warmup' in self.INCLUDE_RULES)
+    )
     def warmup(self, entry, user='root'):
         result1 = self.cmdop.do_warmup(context=self.context1, entry=entry, user=user)
         result2 = self.cmdop.do_warmup(context=self.context2, entry=entry, user=user)
@@ -147,7 +157,9 @@ class JuicefsCommandMachine(JuicefsMachine):
         threads = st.integers(min_value=1, max_value=10),
         keep_secret_key = st.booleans()
     )
-    @precondition(lambda self: 'dump' not in self.EXCLUDE_RULES)
+    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'dump' not in self.EXCLUDE_RULES)\
+                   or (len(self.EXCLUDE_RULES)==0 and 'dump' in self.INCLUDE_RULES)
+    )
     def dump(self, folder, fast, skip_trash, threads, keep_secret_key):
         result1 = self.cmdop.do_dump(context=self.context1, folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
         result2 = self.cmdop.do_dump(context=self.context2, folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
@@ -155,7 +167,25 @@ class JuicefsCommandMachine(JuicefsMachine):
         result2 = self.clean_dump(result2)
         d=self.diff(result1, result2)
         assert self.equal(result1, result2), f'\033[31mdump:\nresult1 is {result1}\nresult2 is {result2}\ndiff is {d}\033[0m'
-    
+
+    @rule(folder = st.just(''),
+        fast = st.booleans(),
+        skip_trash = st.booleans(),
+        threads = st.integers(min_value=1, max_value=10),
+        keep_secret_key = st.booleans()
+    )
+    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'dump_load_dump' not in self.EXCLUDE_RULES)\
+                   or (len(self.EXCLUDE_RULES)==0 and 'dump_load_dump' in self.INCLUDE_RULES)
+    )
+    def dump_load_dump(self, folder, fast=False, skip_trash=False, threads=10, keep_secret_key=False):
+        result1 = self.cmdop.do_dump_load_dump(context=self.context1, folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
+        result2 = self.cmdop.do_dump_load_dump(context=self.context2, folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
+        print(result1)
+        result1 = self.clean_dump(result1)
+        result2 = self.clean_dump(result2)
+        d=self.diff(result1, result2)
+        assert self.equal(result1, result2), f'\033[31mdump:\nresult1 is {result1}\nresult2 is {result2}\ndiff is {d}\033[0m'
+
     def diff(self, str1:str, str2:str):
         differ = Differ()
         diff = differ.compare(str1.splitlines(), str2.splitlines())
@@ -165,7 +195,7 @@ class JuicefsCommandMachine(JuicefsMachine):
         lines = dump.split('\n')
         new_lines = []
         exclude_keys = ['Name', 'UUID', 'usedSpace', 'usedInodes', 'nextInodes', 'nextChunk', 'nextTrash', 'nextSession']
-        reset_keys = ['atimensec', 'mtimensec', 'ctimensec', 'atime', 'ctime', 'mtime']
+        reset_keys = ['id', 'inode', 'atimensec', 'mtimensec', 'ctimensec', 'atime', 'ctime', 'mtime']
         for line in lines:
             should_delete = False
             for key in exclude_keys:

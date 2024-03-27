@@ -171,11 +171,35 @@ class CommandOperation:
         abspath = os.path.join(context.root_dir, folder)
         subdir = os.path.relpath(abspath, context.mp)
         try:
-            cmd = f'./juicefs dump {context.meta_url} --subdir /{subdir}'
-            cmd += f' --fast' if fast else ''
-            cmd += f' --skip-trash' if skip_trash else ''
-            cmd += f' --keep-secret-key' if keep_secret_key else ''
-            cmd += f' --threads {threads}'
+            cmd=self.get_dump_cmd(context.meta_url, subdir, fast, skip_trash, keep_secret_key, threads)
+            result = self.run_cmd(cmd, context.root_dir, stderr=subprocess.DEVNULL)
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, context.root_dir, 'do_dump', abspath)
+        self.stats.success('do_dump')
+        self.loggers[context.root_dir].info(f'do_dump {abspath} succeed')
+        return result
+
+    def get_dump_cmd(self, meta_url, subdir, fast, skip_trash, keep_secret_key, threads):
+        cmd = f'./juicefs dump {meta_url} '
+        cmd += f' --subdir /{subdir}' if subdir != '' else ''
+        cmd += f' --fast' if fast else ''
+        cmd += f' --skip-trash' if skip_trash else ''
+        cmd += f' --keep-secret-key' if keep_secret_key else ''
+        cmd += f' --threads {threads}'
+        return cmd
+
+    def do_dump_load_dump(self, context:Context, folder, fast=False, skip_trash=False, threads=1, keep_secret_key=False):
+        abspath = os.path.join(context.root_dir, folder)
+        subdir = os.path.relpath(abspath, context.mp)
+        try:
+            cmd = self.get_dump_cmd(context.meta_url, subdir, fast, skip_trash, keep_secret_key, threads)
+            result = self.run_cmd(cmd, context.root_dir, stderr=subprocess.DEVNULL)
+            with open('dump.json', 'w') as f:
+                f.write(result)
+            if os.path.exists('load.db'):
+                os.remove('load.db')
+            self.run_cmd(f'./juicefs load sqlite3://load.db dump.json', context.root_dir)
+            cmd = self.get_dump_cmd('sqlite3://load.db', '', fast, skip_trash, keep_secret_key, threads)
             result = self.run_cmd(cmd, context.root_dir, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_dump', abspath)

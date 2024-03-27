@@ -6,7 +6,8 @@ class TestCommand(unittest.TestCase):
         state = JuicefsCommandMachine()
         folders_0 = state.init_folders()
         files_0 = state.create_file(content=b'', file_name='aazz', mode='w', parent=folders_0, umask=312, user='root')
-        state.dump(entry=files_0, fast=False, keep_secret_key=True, skip_trash=True, threads=3)
+        state.set_xattr(file=files_0, flag=1, name='\x9d', user='root', value=b'D\xca!sTQ\x94\x85\xd9\xc5\x00i')
+        state.dump_load_dump(folders_0)
         state.teardown()
 
     def test_info(self):
