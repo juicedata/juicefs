@@ -156,7 +156,7 @@ makepkg -si
 
 There are three ways to use JuiceFS on Windows systems.
 
-- [Using the pre-compiled Windows client](#pre-compiled-windows-client)
+- [Using pre-compiled Windows client](#pre-compiled-windows-client)
 - [Using Scoop](#scoop)
 - [Using the Linux client in WSL](#using-linux-client-in-wsl)
 
