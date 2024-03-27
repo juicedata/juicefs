@@ -30,7 +30,7 @@ class CommandOperation:
     def __init__(self, loggers: Dict[str, logging.Logger]):
         self.loggers = loggers
 
-    def run_cmd(self, command:str, root_dir:str) -> str:
+    def run_cmd(self, command:str, root_dir:str, stderr=subprocess.STDOUT) -> str:
         self.loggers[root_dir].info(f'run_cmd: {command}')
         if '|' in command or '>' in command or '&' in command:
             ret=os.system(command)
@@ -39,7 +39,7 @@ class CommandOperation:
             else: 
                 raise Exception(f"run command {command} failed with {ret}")
         try:
-            output = subprocess.run(command.split(), check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            output = subprocess.run(command.split(), check=True, stdout=subprocess.PIPE, stderr=stderr)
         except subprocess.CalledProcessError as e:
             raise e
         return output.stdout.decode()
@@ -155,11 +155,9 @@ class CommandOperation:
         self.loggers[context.root_dir].info(f'do_rmr {abspath} succeed')
         return True
     
-    def do_status(self, context:Context, user='root'):
+    def do_status(self, context:Context):
         try:
-            result = subprocess.run(f'sudo -u {user} ./juicefs status {context.meta_url}'.split(), check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-            # result = self.run_cmd(f'sudo -u {user} ./juicefs status {context.meta_url} ', context.root_dir)
-            result = result.stdout.decode()
+            result = self.run_cmd(f'./juicefs status {context.meta_url}', context.root_dir, stderr=subprocess.DEVNULL)
             result = json.loads(result)['Setting']
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_status', '')
@@ -169,10 +167,16 @@ class CommandOperation:
             result['EncryptAlgo'], result['TrashDays'], result['MetaVersion'], \
             result['MinClientVersion'], result['DirStats'], result['EnableACL']
     
-    def do_dump(self, context:Context, entry, mount, user='root'):
-        abspath = os.path.join(context.root_dir, entry)
+    def do_dump(self, context:Context, folder, fast=False, skip_trash=False, threads=1, keep_secret_key=False):
+        abspath = os.path.join(context.root_dir, folder)
+        subdir = os.path.relpath(abspath, context.mp)
         try:
-            result = self.run_cmd(f'sudo -u {user} {mount} dump {abspath}', context.root_dir)
+            cmd = f'./juicefs dump {context.meta_url} --subdir /{subdir}'
+            cmd += f' --fast' if fast else ''
+            cmd += f' --skip-trash' if skip_trash else ''
+            cmd += f' --keep-secret-key' if keep_secret_key else ''
+            cmd += f' --threads {threads}'
+            result = self.run_cmd(cmd, context.root_dir, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_dump', abspath)
         self.stats.success('do_dump')

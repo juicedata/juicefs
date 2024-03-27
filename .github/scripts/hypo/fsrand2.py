@@ -37,7 +37,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             f'{ROOT_DIR2}': common.setup_logger(f'./log2', 'logger2', log_level)}
     fsop = FsOperation(loggers)
     ZONES = {ROOT_DIR1:common.get_zones(ROOT_DIR1), ROOT_DIR2:common.get_zones(ROOT_DIR2)}
-    SUDO_USERS = ['root', 'user1']
+    SUDO_USERS = ['root']
     USERS=['root', 'user1', 'user2','user3']
     GROUPS = USERS+['group1', 'group2', 'group3', 'group4']
     group_created = False

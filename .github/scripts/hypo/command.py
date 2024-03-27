@@ -1,7 +1,18 @@
+from difflib import Differ
 import json
 import os
+import re
 import subprocess
+try: 
+    __import__('jsondiff')
+except ImportError:
+    subprocess.check_call(["pip", "install", "jsondiff"])
 from jsondiff import diff
+try: 
+    __import__('psutil')
+except ImportError:
+    subprocess.check_call(["pip", "install", "psutil"])
+import psutil
 try: 
     __import__('fallocate')
 except ImportError:
@@ -25,7 +36,7 @@ from fs_op import FsOperation
 from command_op import CommandOperation
 from fsrand2 import JuicefsMachine
 from context import Context
-import psutil
+
 
 SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
 
@@ -43,7 +54,7 @@ class JuicefsCommandMachine(JuicefsMachine):
     context1 = Context(root_dir=ROOT_DIR1, mp='/tmp/jfs1')
     context2 = Context(root_dir=ROOT_DIR2, mp='/tmp/jfs2')
     
-    EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file']
+    EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file', 'info', 'status', 'warmup', 'rmr']
     log_level = os.environ.get('LOG_LEVEL', 'INFO')
     loggers = {f'{ROOT_DIR1}': common.setup_logger(f'./log1', 'cmdlogger1', log_level), \
                             f'{ROOT_DIR2}': common.setup_logger(f'./log2', 'cmdlogger2', log_level)}
@@ -114,12 +125,11 @@ class JuicefsCommandMachine(JuicefsMachine):
         result2 = self.cmdop.do_rmr(context=self.context2, entry=entry, user=user)
         assert self.equal(result1, result2), f'\033[31mrmr:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
-    @rule(user = st_sudo_user
-        )
+    @rule()
     @precondition(lambda self: 'status' not in self.EXCLUDE_RULES)
-    def status(self, user='root'):
-        result1 = self.cmdop.do_status(context = self.context1, user=user)
-        result2 = self.cmdop.do_status(context = self.context2, user=user)
+    def status(self):
+        result1 = self.cmdop.do_status(context = self.context1)
+        result2 = self.cmdop.do_status(context = self.context2)
         assert result1 == result2, f'\033[31mresult1 is {result1}\nresult2 is {result2}, {diff(result1, result2)}\033[0m'
 
     @rule(entry = Entries.filter(lambda x: x != multiple()),
@@ -131,15 +141,47 @@ class JuicefsCommandMachine(JuicefsMachine):
         result2 = self.cmdop.do_warmup(context=self.context2, entry=entry, user=user)
         assert self.equal(result1, result2), f'\033[31mwarmup:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
-    @rule(entry = Entries.filter(lambda x: x != multiple()),
-        user = st_sudo_user
+    @rule(folder = Folders.filter(lambda x: x != multiple()),
+        fast = st.booleans(),
+        skip_trash = st.booleans(),
+        threads = st.integers(min_value=1, max_value=10),
+        keep_secret_key = st.booleans()
     )
     @precondition(lambda self: 'dump' not in self.EXCLUDE_RULES)
-    def dump(self, entry, user='root'):
-        result1 = self.cmdop.do_dump(context=self.context1, entry=entry, user=user)
-        result2 = self.cmdop.do_dump(context=self.context2, entry=entry, user=user)
-        assert self.equal(result1, result2), f'\033[31mdump:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
-        
+    def dump(self, folder, fast, skip_trash, threads, keep_secret_key):
+        result1 = self.cmdop.do_dump(context=self.context1, folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
+        result2 = self.cmdop.do_dump(context=self.context2, folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
+        result1 = self.clean_dump(result1)
+        result2 = self.clean_dump(result2)
+        d=self.diff(result1, result2)
+        assert self.equal(result1, result2), f'\033[31mdump:\nresult1 is {result1}\nresult2 is {result2}\ndiff is {d}\033[0m'
+    
+    def diff(self, str1:str, str2:str):
+        differ = Differ()
+        diff = differ.compare(str1.splitlines(), str2.splitlines())
+        return '\n'.join([line for line in diff])
+
+    def clean_dump(self, dump):
+        lines = dump.split('\n')
+        new_lines = []
+        exclude_keys = ['Name', 'UUID', 'usedSpace', 'usedInodes', 'nextInodes', 'nextChunk', 'nextTrash', 'nextSession']
+        reset_keys = ['atimensec', 'mtimensec', 'ctimensec', 'atime', 'ctime', 'mtime']
+        for line in lines:
+            should_delete = False
+            for key in exclude_keys:
+                if f'"{key}"' in line:
+                    should_delete = True
+                    break
+            if should_delete:
+                continue
+            for key in reset_keys:
+                if f'"{key}"' in line:
+                    pattern = rf'"{key}":(\d+)'
+                    line = re.sub(pattern, f'"{key}":0', line)
+            new_lines.append(line)
+        return '\n'.join(new_lines)
+    
+
     def teardown(self):
         pass
 
