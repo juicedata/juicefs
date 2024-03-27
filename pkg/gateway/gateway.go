@@ -76,6 +76,14 @@ type jfsObjects struct {
 	gConf    *Config
 }
 
+func (n *jfsObjects) PutObjectMetadata(ctx context.Context, s string, s2 string, options minio.ObjectOptions) (minio.ObjectInfo, error) {
+	return minio.ObjectInfo{}, minio.NotImplemented{}
+}
+
+func (n *jfsObjects) NSScanner(ctx context.Context, bf *minio.BloomFilter, updates chan<- madmin.DataUsageInfo) error {
+	return nil
+}
+
 func (n *jfsObjects) IsCompressionSupported() bool {
 	return false
 }
@@ -95,7 +103,7 @@ func (n *jfsObjects) Shutdown(ctx context.Context) error {
 
 func (n *jfsObjects) StorageInfo(ctx context.Context) (info minio.StorageInfo, errors []error) {
 	sinfo := minio.StorageInfo{}
-	sinfo.Backend.Type = minio.BackendFS
+	sinfo.Backend.Type = madmin.FS
 	return sinfo, nil
 }
 
@@ -1147,8 +1155,8 @@ func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker 
 	return n.nsMutex.NewNSLock(nil, bucket, objects...)
 }
 
-func (n *jfsObjects) BackendInfo() minio.BackendInfo {
-	return minio.BackendInfo{Type: minio.BackendFS}
+func (n *jfsObjects) BackendInfo() madmin.BackendInfo {
+	return madmin.BackendInfo{Type: madmin.FS}
 }
 
 func (n *jfsObjects) LocalStorageInfo(ctx context.Context) (minio.StorageInfo, []error) {
@@ -1271,10 +1279,6 @@ func (n *jfsObjects) DeleteObjectTags(ctx context.Context, bucket, object string
 		return minio.ObjectInfo{}, errno
 	}
 	return n.GetObjectInfo(ctx, bucket, object, opts)
-}
-
-func (n *jfsObjects) CrawlAndGetDataUsage(ctx context.Context, bf *minio.BloomFilter, updates chan<- minio.DataUsageInfo) error {
-	return nil
 }
 
 func (n *jfsObjects) IsNotificationSupported() bool {
