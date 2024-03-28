@@ -22,21 +22,7 @@ except ImportError:
     subprocess.check_call(["pip", "install", "fallocate"])
 import fallocate
 from context import Context
-
-class Statistics:
-    def __init__(self):
-        self.stats = {}
-    def success(self, function_name):
-        if function_name not in self.stats:
-            self.stats[function_name] = {'success': 0, 'failure': 0}
-        self.stats[function_name]['success'] += 1
-    def failure(self, function_name):
-        if function_name not in self.stats:
-            self.stats[function_name] = {'success': 0, 'failure': 0}
-        self.stats[function_name]['failure'] += 1
-
-    def get(self):
-        return self.stats
+from stats import Statistics
 
 class FsOperation:
     JFS_CONTROL_FILES=['.accesslog', '.config', '.stats']

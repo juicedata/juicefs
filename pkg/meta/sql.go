@@ -1096,22 +1096,10 @@ func (m *dbMeta) upsertSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 	return err
 }
 
-func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
-	defer m.timeit("Truncate", time.Now())
-	f := m.of.find(inode)
-	if f != nil {
-		f.Lock()
-		defer f.Unlock()
-	}
-	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
-	var newLength, newSpace int64
-	var nodeAttr node
-	if attr == nil {
-		attr = &Attr{}
-	}
-	err := m.txn(func(s *xorm.Session) error {
-		newLength, newSpace = 0, 0
-		nodeAttr = node{Inode: inode}
+func (m *dbMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, delta *dirStat, attr *Attr, skipPermCheck bool) syscall.Errno {
+	return errno(m.txn(func(s *xorm.Session) error {
+		*delta = dirStat{}
+		nodeAttr := node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&nodeAttr)
 		if err != nil {
 			return err
@@ -1131,9 +1119,9 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		if length == nodeAttr.Length {
 			return nil
 		}
-		newLength = int64(length) - int64(nodeAttr.Length)
-		newSpace = align4K(length) - align4K(nodeAttr.Length)
-		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+		delta.length = int64(length) - int64(nodeAttr.Length)
+		delta.space = align4K(length) - align4K(nodeAttr.Length)
+		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
 			return err
 		}
 		var zeroChunks []chunk
@@ -1177,41 +1165,13 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		}
 		m.parseAttr(&nodeAttr, attr)
 		return nil
-	}, inode)
-	if err == nil {
-		m.updateParentStat(ctx, inode, nodeAttr.Parent, newLength, newSpace)
-	}
-	return errno(err)
+	}, inode))
 }
 
-func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, flength *uint64) syscall.Errno {
-	if mode&fallocCollapesRange != 0 && mode != fallocCollapesRange {
-		return syscall.EINVAL
-	}
-	if mode&fallocInsertRange != 0 && mode != fallocInsertRange {
-		return syscall.EINVAL
-	}
-	if mode == fallocInsertRange || mode == fallocCollapesRange {
-		return syscall.ENOTSUP
-	}
-	if mode&fallocPunchHole != 0 && mode&fallocKeepSize == 0 {
-		return syscall.EINVAL
-	}
-	if size == 0 {
-		return syscall.EINVAL
-	}
-	defer m.timeit("Fallocate", time.Now())
-	f := m.of.find(inode)
-	if f != nil {
-		f.Lock()
-		defer f.Unlock()
-	}
-	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
-	var newLength, newSpace int64
-	var nodeAttr node
-	err := m.txn(func(s *xorm.Session) error {
-		newLength, newSpace = 0, 0
-		nodeAttr = node{Inode: inode}
+func (m *dbMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, delta *dirStat, attr *Attr) syscall.Errno {
+	return errno(m.txn(func(s *xorm.Session) error {
+		*delta = dirStat{}
+		nodeAttr := node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&nodeAttr)
 		if err != nil {
 			return err
@@ -1236,9 +1196,9 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		}
 
 		old := nodeAttr.Length
-		newLength = int64(length) - int64(old)
-		newSpace = align4K(length) - align4K(old)
-		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+		delta.length = int64(length) - int64(old)
+		delta.space = align4K(length) - align4K(old)
+		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
 			return err
 		}
 		now := time.Now().UnixNano()
@@ -1249,9 +1209,6 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		nodeAttr.Ctimensec = int16(now % 1e3)
 		if _, err := s.Cols("length", "mtime", "ctime", "mtimensec", "ctimensec").Update(&nodeAttr, &node{Inode: inode}); err != nil {
 			return err
-		}
-		if flength != nil {
-			*flength = length
 		}
 		if mode&(fallocZeroRange|fallocPunchHole) != 0 && off < old {
 			off, size := off, size
@@ -1273,12 +1230,9 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 				size -= l
 			}
 		}
+		m.parseAttr(&nodeAttr, attr)
 		return nil
-	}, inode)
-	if err == nil {
-		m.updateParentStat(ctx, inode, nodeAttr.Parent, newLength, newSpace)
-	}
-	return errno(err)
+	}, inode))
 }
 
 func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, target []byte, err error) {
@@ -1331,41 +1285,7 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 	return
 }
 
-func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
-	var ino Ino
-	var err error
-	if parent == TrashInode {
-		var next int64
-		next, err = m.incrCounter("nextTrash", 1)
-		ino = TrashInode + Ino(next)
-	} else {
-		ino, err = m.nextInode()
-	}
-	if err != nil {
-		return errno(err)
-	}
-	var n node
-	n.Inode = ino
-	n.Type = _type
-	n.Uid = ctx.Uid()
-	n.Gid = ctx.Gid()
-	if _type == TypeDirectory {
-		n.Nlink = 2
-		n.Length = 4 << 10
-	} else {
-		n.Nlink = 1
-		if _type == TypeSymlink {
-			n.Length = uint64(len(path))
-		} else {
-			n.Length = 0
-			n.Rdev = rdev
-		}
-	}
-	n.Parent = parent
-	if inode != nil {
-		*inode = ino
-	}
-
+func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
 		ok, err := s.ForUpdate().Get(&pn)
@@ -1414,13 +1334,13 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				} else if attr != nil {
 					*attr = Attr{Typ: foundType, Parent: parent} // corrupt entry
 				}
-				if inode != nil {
-					*inode = foundIno
-				}
+				*inode = foundIno
 			}
 			return syscall.EEXIST
 		}
 
+		n := node{Inode: *inode}
+		m.parseNode(attr, &n)
 		mode &= 07777
 		if pattr.DefaultACL != aclAPI.None && _type != TypeSymlink {
 			// inherit default acl
@@ -1493,7 +1413,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 
-		if err = mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: ino, Type: _type}, &n); err != nil {
+		if err = mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: *inode, Type: _type}, &n); err != nil {
 			return err
 		}
 		if updateParent {
@@ -1502,12 +1422,12 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 		if _type == TypeSymlink {
-			if err = mustInsert(s, &symlink{Inode: ino, Target: []byte(path)}); err != nil {
+			if err = mustInsert(s, &symlink{Inode: *inode, Target: []byte(path)}); err != nil {
 				return err
 			}
 		}
 		if _type == TypeDirectory {
-			if err = mustInsert(s, &dirStats{Inode: ino}); err != nil {
+			if err = mustInsert(s, &dirStats{Inode: *inode}); err != nil {
 				return err
 			}
 		}
@@ -2408,25 +2328,15 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 	*slices = buildSlice(ss)
 	m.of.CacheChunk(inode, indx, *slices)
 	if !m.conf.ReadOnly && (len(c.Slices)/sliceBytes >= 5 || len(*slices) >= 5) {
-		go m.compactChunk(inode, indx, false)
+		go m.compactChunk(inode, indx, false, false)
 	}
 	return 0
 }
 
-func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time) syscall.Errno {
-	defer m.timeit("Write", time.Now())
-	f := m.of.find(inode)
-	if f != nil {
-		f.Lock()
-		defer f.Unlock()
-	}
-	defer func() { m.of.InvalidateChunk(inode, indx) }()
-	var newLength, newSpace int64
-	var needCompact bool
-	var nodeAttr node
-	err := m.txn(func(s *xorm.Session) error {
-		newLength, newSpace = 0, 0
-		nodeAttr = node{Inode: inode}
+func (m *dbMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno {
+	return errno(m.txn(func(s *xorm.Session) error {
+		*delta = dirStat{}
+		nodeAttr := node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&nodeAttr)
 		if err != nil {
 			return err
@@ -2439,11 +2349,11 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
 		if newleng > nodeAttr.Length {
-			newLength = int64(newleng - nodeAttr.Length)
-			newSpace = align4K(newleng) - align4K(nodeAttr.Length)
+			delta.length = int64(newleng - nodeAttr.Length)
+			delta.space = align4K(newleng) - align4K(nodeAttr.Length)
 			nodeAttr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
 			return err
 		}
 		nodeAttr.Mtime = mtime.UnixNano() / 1e3
@@ -2451,6 +2361,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		ctime := time.Now()
 		nodeAttr.Ctime = ctime.UnixNano() / 1e3
 		nodeAttr.Ctimensec = int16(ctime.Nanosecond())
+		m.parseAttr(&nodeAttr, attr)
 
 		buf := marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len)
 		var insert bool // no compaction check for the first slice
@@ -2464,18 +2375,10 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if err == nil && !insert {
 			ck := chunk{Inode: inode, Indx: indx}
 			_, _ = s.MustCols("indx").Get(&ck)
-			ns := len(ck.Slices) / sliceBytes // number of slices
-			needCompact = ns%100 == 99 || ns > 350
+			*numSlices = len(ck.Slices) / sliceBytes
 		}
 		return err
-	}, inode)
-	if err == nil {
-		if needCompact {
-			go m.compactChunk(inode, indx, false)
-		}
-		m.updateParentStat(ctx, inode, nodeAttr.Parent, newLength, newSpace)
-	}
-	return errno(err)
+	}, inode))
 }
 
 func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
@@ -2919,11 +2822,11 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	return count, nil
 }
 
-func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
+func (m *dbMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	// avoid too many or duplicated compaction
-	k := uint64(inode) + (uint64(indx) << 32)
+	k := uint64(inode) + (uint64(indx) << 40)
 	m.Lock()
-	if force {
+	if once || force {
 		for m.compacting[k] {
 			m.Unlock()
 			time.Sleep(time.Millisecond * 10)
@@ -2932,14 +2835,13 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	} else if len(m.compacting) > 10 || m.compacting[k] {
 		m.Unlock()
 		return
-	} else {
-		m.compacting[k] = true
-		defer func() {
-			m.Lock()
-			delete(m.compacting, k)
-			m.Unlock()
-		}()
 	}
+	m.compacting[k] = true
+	defer func() {
+		m.Lock()
+		delete(m.compacting, k)
+		m.Unlock()
+	}()
 	m.Unlock()
 
 	var c = chunk{Inode: inode, Indx: indx}
@@ -2948,6 +2850,9 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return err
 	})
 	if err != nil {
+		return
+	}
+	if once && len(c.Slices) < sliceBytes*maxSlices {
 		return
 	}
 	if len(c.Slices) > sliceBytes*maxCompactSlices {
@@ -3078,7 +2983,10 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 
 	if force {
-		m.compactChunk(inode, indx, force)
+		m.Lock()
+		delete(m.compacting, k)
+		m.Unlock()
+		m.compactChunk(inode, indx, once, force)
 	}
 }
 
@@ -3665,7 +3573,7 @@ func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 	return e
 }
 
-func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, threads int, showProgress func(totalIncr, currentIncr int64)) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -3698,17 +3606,16 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	_ = tree.writeJsonWithOutEntry(bw, depth)
 
-	var concurrent = 10
-	ms := make([]sync.Mutex, concurrent)
-	conds := make([]*sync.Cond, concurrent)
-	ready := make([]bool, concurrent)
+	ms := make([]sync.Mutex, threads)
+	conds := make([]*sync.Cond, threads)
+	ready := make([]bool, threads)
 	var err error
-	for c := 0; c < concurrent; c++ {
+	for c := 0; c < threads; c++ {
 		conds[c] = sync.NewCond(&ms[c])
 		if c < len(entries) {
 			go func(c int) {
 				_ = m.roTxn(func(s *xorm.Session) error {
-					for i := c; i < len(entries) && err == nil; i += concurrent {
+					for i := c; i < len(entries) && err == nil; i += threads {
 						e := entries[i]
 						er := m.dumpEntry(s, e.Attr.Inode, 0, e, showProgress)
 						ms[c].Lock()
@@ -3729,7 +3636,7 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 	}
 
 	for i, e := range entries {
-		c := i % concurrent
+		c := i % threads
 		ms[c].Lock()
 		for !ready[c] && err == nil {
 			conds[c].Wait()
@@ -3741,7 +3648,7 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 			return err
 		}
 		if e.Attr.Type == "directory" {
-			err = m.dumpDir(s, e.Attr.Inode, e, bw, depth+2, showProgress)
+			err = m.dumpDir(s, e.Attr.Inode, e, bw, depth+2, threads, showProgress)
 		} else {
 			err = e.writeJSON(bw, depth+2)
 		}
@@ -3868,7 +3775,7 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 	return nil
 }
 
-func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash bool) (err error) {
+func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			debug.PrintStack()
@@ -4012,7 +3919,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 			_ = m.dumpDirFast(root, tree, bw, 1, showProgress)
 		} else {
 			showProgress(int64(len(tree.Entries)), 0)
-			if err = m.dumpDir(s, root, tree, bw, 1, showProgress); err != nil {
+			if err = m.dumpDir(s, root, tree, bw, 1, threads, showProgress); err != nil {
 				logger.Errorf("dump dir %d failed: %s", root, err)
 				return fmt.Errorf("dump dir %d failed", root) // don't retry
 			}
@@ -4025,7 +3932,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast, skipTrash boo
 				_ = m.dumpDirFast(TrashInode, trash, bw, 1, showProgress)
 			} else {
 				showProgress(int64(len(trash.Entries)), 0)
-				if err = m.dumpDir(s, TrashInode, trash, bw, 1, showProgress); err != nil {
+				if err = m.dumpDir(s, TrashInode, trash, bw, 1, threads, showProgress); err != nil {
 					logger.Errorf("dump trash failed: %s", err)
 					return fmt.Errorf("dump trash failed") // don't retry
 				}

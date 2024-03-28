@@ -1258,7 +1258,7 @@ func (v *VFS) cleanupModified() {
 func (v *VFS) FlushAll(path string) (err error) {
 	now := time.Now()
 	defer func() {
-		logger.Infof("flush buffered data in %s: %s", time.Since(now), err)
+		logger.Infof("flush buffered data in %s: %v", time.Since(now), err)
 	}()
 	err = v.writer.FlushAll()
 	if err != nil {

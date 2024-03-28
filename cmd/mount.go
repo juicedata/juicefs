@@ -137,7 +137,7 @@ func exposeMetrics(c *cli.Context, registerer prometheus.Registerer, registry *p
 }
 
 func wrapRegister(c *cli.Context, mp, name string) (prometheus.Registerer, *prometheus.Registry) {
-	commonLabels := prometheus.Labels{"mp": mp, "vol_name": name}
+	commonLabels := prometheus.Labels{"mp": mp, "vol_name": name, "juicefs_version": version.Version()}
 	if h, err := os.Hostname(); err == nil {
 		commonLabels["instance"] = h
 	} else {

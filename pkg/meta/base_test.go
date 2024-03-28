@@ -908,6 +908,27 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
 
+	base.loadQuotas()
+	base.quotaMu.RLock()
+	q := base.dirQuotas[subIno]
+	base.quotaMu.RUnlock()
+	q.update(4<<10, 15) // used > max
+	base.doFlushQuotas()
+	if st := m.StatFS(ctx, subIno, &totalspace, &availspace, &iused, &iavail); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 4<<10 || availspace != 0 || iused != 15 || iavail != 0 {
+		t.Fatalf("total space %d, availspace %d, iused %d, iavail %d", totalspace, availspace, iused, iavail)
+	}
+	q.update(-8<<10, -20) // used < 0
+	base.doFlushQuotas()
+	if st := m.StatFS(ctx, subIno, &totalspace, &availspace, &iused, &iavail); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<10 || availspace != 1<<10 || iused != 0 || iavail != 10 {
+		t.Fatalf("total space %d, availspace %d, iused %d, iavail %d", totalspace, availspace, iused, iavail)
+	}
+
 	if st := m.Rmdir(ctx, 1, "subdir"); st != 0 {
 		t.Fatalf("rmdir subdir: %s", st)
 	}
@@ -1369,7 +1390,7 @@ func testCaseIncensi(t *testing.T, m Meta) {
 }
 
 type compactor interface {
-	compactChunk(inode Ino, indx uint32, force bool)
+	compactChunk(inode Ino, indx uint32, once, force bool)
 }
 
 func testCompaction(t *testing.T, m Meta, trash bool) {
@@ -1422,7 +1443,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		t.Fatalf("expect 5 slices, but got %+v", cs1)
 	}
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 1, true)
+		c.compactChunk(inode, 1, false, true)
 	}
 	var cs []Slice
 	_ = m.Read(ctx, inode, 1, &cs)
@@ -1441,7 +1462,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		time.Sleep(time.Millisecond)
 	}
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 0, true)
+		c.compactChunk(inode, 0, false, true)
 	}
 	var slices []Slice
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
@@ -1494,7 +1515,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		t.Fatalf("truncate file: %s", st)
 	}
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 0, true)
+		c.compactChunk(inode, 0, false, true)
 	}
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read 0: %s", st)
@@ -1509,7 +1530,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	m.NewSlice(ctx, &sliceId)
 	_ = m.Write(ctx, inode, 0, uint32(1<<20), Slice{Id: sliceId, Size: 2 << 20, Len: 2 << 20}, time.Now())
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 0, true)
+		c.compactChunk(inode, 0, false, true)
 	}
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read 0: %s", st)
@@ -1527,7 +1548,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	_ = m.Write(ctx, inode, 0, uint32(128<<10), Slice{Id: sliceId, Size: 2 << 20, Len: 128 << 10}, time.Now())
 	_ = m.Write(ctx, inode, 0, uint32(0), Slice{Id: 0, Size: 1 << 20, Len: 1 << 20}, time.Now())
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 0, true)
+		c.compactChunk(inode, 0, false, true)
 	}
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read 0: %s", st)
@@ -1573,6 +1594,28 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 		}(uint32(i))
 	}
 	g.Wait()
+	if errno != 0 {
+		t.Fatal()
+	}
+
+	var g2 sync.WaitGroup
+	for i := 0; i <= 10; i++ {
+		g2.Add(1)
+		go func() {
+			defer g2.Done()
+			for j := 0; j < 1000; j++ {
+				var sliceId uint64
+				m.NewSlice(ctx, &sliceId)
+				var slice = Slice{Id: sliceId, Size: 100, Len: 100}
+				st := m.Write(ctx, inode, 0, uint32(200*j), slice, time.Now())
+				if st != 0 {
+					errno = st
+					break
+				}
+			}
+		}()
+	}
+	g2.Wait()
 	if errno != 0 {
 		t.Fatal()
 	}
