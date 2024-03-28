@@ -15,13 +15,13 @@ from strategy import *
 from s3_op import S3Client
 
 SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
-
-
+# ./juicefs format sqlite3://test.db gateway
+# MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway sqlite3://test.db localhost:9005 --multi-buckets
 @seed(SEED)
 class S3Machine(RuleBasedStateMachine):
     BUCKET_NAME = 's3test'
-    client1 = S3Client(alias='minio', url='http://localhost:9000', access_key='minioadmin', secret_key='minioadmin', log_level=os.environ.get('LOG_LEVEL', 'INFO'))
-    client2 = S3Client(alias='juice', url='http://localhost:9005', access_key='minioadmin', secret_key='minioadmin', log_level=os.environ.get('LOG_LEVEL', 'INFO'))
+    client1 = S3Client(name='minio', url='localhost:9000', access_key='minioadmin', secret_key='minioadmin')
+    client2 = S3Client(name='juice', url='localhost:9005', access_key='minioadmin', secret_key='minioadmin')
     EXCLUDE_RULES = []
 
     def __init__(self):
