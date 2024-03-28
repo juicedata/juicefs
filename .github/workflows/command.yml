@@ -35,11 +35,11 @@ jobs:
           echo "github.event_name is ${{github.event_name}}"
           echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
           if [ "${{github.event_name}}" == "schedule"  ]; then
-            echo 'meta_matrix=["sqlite3", "redis", "tikv"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["mysql", "redis", "tikv"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "pull_request"  ]; then
-            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["mysql", "redis", "tikv"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
-            echo 'meta_matrix=["sqlite3", "redis", "tikv"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["mysql", "redis", "tikv"]' >> $GITHUB_OUTPUT
           else
             echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           fi
@@ -50,7 +50,7 @@ jobs:
     timeout-minutes: 60
     needs: [build-matrix]
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         # meta: [ 'sqlite3', 'redis', 'tikv']
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
@@ -81,10 +81,6 @@ jobs:
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/gc.sh      
 
-      - name: Test Format
-        run: |
-          sudo META=${{matrix.meta}} .github/scripts/command/format.sh
-
       - name: Test Config
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/config.sh
@@ -108,6 +104,10 @@ jobs:
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/info.sh
 
+      - name: Test Format
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/format.sh
+  
       - name: Log
         if: always()
         run: |
@@ -124,7 +124,7 @@ jobs:
   command_test2:
     needs: [build-matrix]
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
     runs-on: ubuntu-20.04
@@ -168,7 +168,7 @@ jobs:
   command_test3:
     needs: [build-matrix]
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
     runs-on: ubuntu-20.04
@@ -212,7 +212,7 @@ jobs:
   command_test4:
     needs: [build-matrix]
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
     runs-on: ubuntu-20.04
@@ -238,12 +238,15 @@ jobs:
           if [ "${{matrix.meta}}" == "redis" ]; then
             sudo META=${{matrix.meta}} .github/scripts/command/graceful_upgrade.sh
           fi
+
       - name: Log
         if: always()
         run: |
-          echo "juicefs log"
-          sudo tail -n 1000 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          if [ "${{matrix.meta}}" == "redis" ]; then
+            echo "juicefs log"
+            sudo tail -n 1000 /var/log/juicefs.log
+            grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          fi
           
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
