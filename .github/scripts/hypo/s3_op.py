@@ -93,17 +93,26 @@ class S3Client(Minio):
         print(stat_str)
         return stat_str
 
-    def do_put_object(self, bucket:str, obj_name:str, src_path:str):
+    def do_put_object(self, bucket:str, object_name:str, src_path:str):
         try:
-            self.fput_object(
-                bucket, obj_name, src_path)
+            self.fput_object(bucket, object_name, src_path)
         except Exception as e:
-            return self.handleException(e, 'do_put_object', bucket=bucket, obj_name=obj_name, src_path=src_path)
+            return self.handleException(e, 'do_put_object', bucket=bucket, obj_name=object_name, src_path=src_path)
         finally:
             pass
         self.stats.success('do_put_object')
-        self.logger.info(f'do_put_object {bucket} {obj_name} {src_path} succeed')
-        return self.do_stat_object(bucket, obj_name)
+        self.logger.info(f'do_put_object {bucket} {object_name} {src_path} succeed')
+        return self.do_stat_object(bucket, object_name)
     
-
+    def do_remove_object(self, bucket:str, object_name:str):
+        try:
+            self.remove_object(bucket, object_name)
+        except Exception as e:
+            return self.handleException(e, 'do_remove_object', bucket=bucket, object_name=object_name)
+        finally:
+            pass
+        assert not self.stat_object(bucket, object_name)
+        self.stats.success('do_remove_object')
+        self.logger.info(f'do_remove_object {bucket} {object} succeed')
+        return True
     

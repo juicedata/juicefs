@@ -19,6 +19,7 @@ SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
 # MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway sqlite3://test.db localhost:9005 --multi-buckets
 @seed(SEED)
 class S3Machine(RuleBasedStateMachine):
+    objects = Bundle('objects')
     BUCKET_NAME = 's3test'
     client1 = S3Client(name='minio', url='localhost:9000', access_key='minioadmin', secret_key='minioadmin')
     client2 = S3Client(name='juice', url='localhost:9005', access_key='minioadmin', secret_key='minioadmin')
@@ -29,11 +30,27 @@ class S3Machine(RuleBasedStateMachine):
         self.client1.do_create_bucket(self.BUCKET_NAME)
         self.client2.do_create_bucket(self.BUCKET_NAME)
         
-    @rule()
+    @rule(object_name = st_object_name)
     @precondition(lambda self: 'put_object' not in self.EXCLUDE_RULES)
-    def put_object(self):
-        self.client1.do_put_object(self.BUCKET_NAME, obj_name='test', src_path='README.md')
-        self.client2.do_put_object(self.BUCKET_NAME, obj_name='test', src_path='README.md')
+    def put_object(self, object_name):
+        result1 = self.client1.do_put_object(self.BUCKET_NAME, object_name=object_name, src_path='README.md')
+        result2 = self.client2.do_put_object(self.BUCKET_NAME, object_name=object_name, src_path='README.md')
+        assert result1 == result2
+        if isinstance(result1, Exception):
+            return multiple()
+        else:
+            return object
+
+    @rule(object_name = objects.filter(lambda x: x != multiple()), )
+    @precondition(lambda self: 'remove_object' not in self.EXCLUDE_RULES)
+    def remove_object(self, object_name):
+        result1 = self.client1.do_remove_object(self.BUCKET_NAME, object_name=object_name)
+        result2 = self.client2.do_remove_object(self.BUCKET_NAME, object_name=object_name)
+        assert result1 == result2
+        if isinstance(result1, Exception):
+            return object
+        else:
+            return multiple()
 
     def teardown(self):
         pass
