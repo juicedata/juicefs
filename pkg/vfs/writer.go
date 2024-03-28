@@ -404,7 +404,11 @@ func (f *fileWriter) Flush(ctx meta.Context) syscall.Errno {
 
 func (f *fileWriter) Close(ctx meta.Context) syscall.Errno {
 	defer f.w.free(f)
-	return f.Flush(ctx)
+	eno := f.Flush(ctx)
+	if eno == 0 {
+		fileSizeHistogram.Observe(float64(f.GetLength()))
+	}
+	return eno
 }
 
 func (f *fileWriter) GetLength() uint64 {

@@ -494,10 +494,10 @@ func (m *baseMeta) CleanStaleSessions() {
 	for _, sid := range sids {
 		s, err := m.en.GetSession(sid, false)
 		if err != nil {
-			logger.Warnf("Get session info %d: %s", sid, err)
+			logger.Warnf("Get session info %d: %v", sid, err)
 			s = &Session{Sid: sid}
 		}
-		logger.Infof("clean up stale session %d %+v: %s", sid, s.SessionInfo, m.en.doCleanStaleSession(sid))
+		logger.Infof("clean up stale session %d %+v: %v", sid, s.SessionInfo, m.en.doCleanStaleSession(sid))
 	}
 }
 
