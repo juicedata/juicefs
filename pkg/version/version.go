@@ -55,21 +55,24 @@ func SetVersion(v string) {
 	ver = *Parse(v)
 }
 
-func Compare(vs string) (int, error) {
-	v := Parse(vs)
-	if v == nil {
-		return 1, fmt.Errorf("invalid version string: %s", vs)
+func GetVersion() Semver {
+	return ver
+}
+
+func CompareVersions(v1, v2 *Semver) (int, error) {
+	if v1 == nil || v2 == nil {
+		return 0, fmt.Errorf("v1 %v and v2 %v cant be nil", v1, v2)
 	}
 	var less bool
-	if ver.major != v.major {
-		less = ver.major < v.major
-	} else if ver.minor != v.minor {
-		less = ver.minor < v.minor
-	} else if ver.patch != v.patch {
-		less = ver.patch < v.patch
-	} else if ver.preRelease != v.preRelease {
-		less = ver.preRelease < v.preRelease
-		if ver.preRelease == "" || v.preRelease == "" {
+	if v1.major != v2.major {
+		less = v1.major < v2.major
+	} else if v1.minor != v2.minor {
+		less = v1.minor < v2.minor
+	} else if v1.patch != v2.patch {
+		less = v1.patch < v2.patch
+	} else if v1.preRelease != v2.preRelease {
+		less = v1.preRelease < v2.preRelease
+		if v1.preRelease == "" || v2.preRelease == "" {
 			less = !less
 		}
 	} else {
