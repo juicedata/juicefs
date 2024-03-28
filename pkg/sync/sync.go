@@ -759,11 +759,17 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 		return fmt.Errorf("list %s: %s", src, err)
 	}
 
-	dstkeys, err := ListAll(dst, prefix, start, end, !config.Links)
-	if err != nil {
-		return fmt.Errorf("list %s: %s", dst, err)
+	var dstkeys <-chan object.Object
+	if config.ForceUpdate {
+		t := make(chan object.Object)
+		close(t)
+		dstkeys = t
+	} else {
+		dstkeys, err = ListAll(dst, prefix, start, end, !config.Links)
+		if err != nil {
+			return fmt.Errorf("list %s: %s", dst, err)
+		}
 	}
-
 	produce(tasks, srckeys, dstkeys, config)
 	return nil
 }
@@ -1167,11 +1173,18 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	if config.DeleteDst {
 		dcp = commonPrefix // search common prefix in dst
 	}
-	dstkeys, err := listCommonPrefix(dst, prefix, dcp, !config.Links)
-	if err == utils.ENOTSUP {
-		return startSingleProducer(tasks, src, dst, prefix, config)
-	} else if err != nil {
-		return fmt.Errorf("list %s with delimiter: %s", dst, err)
+	var dstkeys <-chan object.Object
+	if config.ForceUpdate {
+		t := make(chan object.Object)
+		close(t)
+		dstkeys = t
+	} else {
+		dstkeys, err = listCommonPrefix(dst, prefix, dcp, !config.Links)
+		if err == utils.ENOTSUP {
+			return startSingleProducer(tasks, src, dst, prefix, config)
+		} else if err != nil {
+			return fmt.Errorf("list %s with delimiter: %s", dst, err)
+		}
 	}
 	// sync returned objects
 	produce(tasks, srckeys, dstkeys, config)
