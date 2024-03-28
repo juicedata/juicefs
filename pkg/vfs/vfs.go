@@ -150,6 +150,11 @@ var (
 		Help:    "size of write distributions.",
 		Buckets: prometheus.LinearBuckets(4096, 4096, 32),
 	})
+	fileSizeHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "fuse_written_file_size_bytes",
+		Help:    "distribution of written file size.",
+		Buckets: prometheus.ExponentialBuckets(1, 2, 41), // 1 byte to 1 TiB
+	})
 )
 
 func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
@@ -1321,6 +1326,7 @@ func InitMetrics(registerer prometheus.Registerer) {
 	}
 	registerer.MustRegister(readSizeHistogram)
 	registerer.MustRegister(writtenSizeHistogram)
+	registerer.MustRegister(fileSizeHistogram)
 	registerer.MustRegister(opsDurationsHistogram)
 	registerer.MustRegister(compactSizeHistogram)
 }

@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"github.com/davies/groupcache/consistenthash"
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
@@ -127,7 +128,8 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingP
 	if br < c.freeRatio || fr < c.freeRatio {
 		logger.Warnf("not enough space (%d%%) or inodes (%d%%) for caching in %s: free ratio should be >= %d%%", int(br*100), int(fr*100), c.dir, int(c.freeRatio*100))
 	}
-	logger.Infof("Disk cache (%s): capacity (%d MB), free ratio (%d%%), max pending pages (%d)", c.dir, c.capacity>>20, int(c.freeRatio*100), pendingPages)
+	logger.Infof("Disk cache (%s): capacity (%s), free ratio %d%%, used ratio - [space %s%%, inode %s%%], max pending pages %d",
+		c.dir, humanize.IBytes(uint64(c.capacity)), int(c.freeRatio*100), humanize.FtoaWithDigits(float64((1-br)*100), 1), humanize.FtoaWithDigits(float64((1-fr)*100), 1), pendingPages)
 	c.createLockFile()
 	go c.checkLockFile()
 	go c.flush()
