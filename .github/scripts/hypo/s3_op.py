@@ -1,0 +1,90 @@
+from ast import List
+import hashlib
+import json
+import logging
+import os
+import pwd
+import re
+import shlex
+import shutil
+import stat
+import subprocess
+try: 
+    __import__('xattr')
+except ImportError:
+    subprocess.check_call(["pip", "install", "xattr"])
+import xattr
+from common import is_jfs, get_acl, get_root, get_stat
+from typing import Dict
+try: 
+    __import__('fallocate')
+except ImportError:
+    subprocess.check_call(["pip", "install", "fallocate"])
+import fallocate
+from s3 import MinioClient
+from stats import Statistics
+from minio.error import S3Error
+import common
+from minio import Minio
+
+class S3Client(Minio):
+    stats = Statistics()
+    def __init__(self, alias, url, access_key, secret_key, log_level):
+        super.__init__(
+            url,
+            access_key=access_key,
+            secret_key=secret_key,
+            secure=False
+        )
+        self.alias = alias
+        self.url = url
+        self.access_key = access_key
+        self.secret_key = secret_key
+        self.logger = common.setup_logger(f'{alias}.log', f'{alias}', log_level)
+
+    def run_cmd(self, command:str, root_dir:str, stderr=subprocess.STDOUT) -> str:
+        self.logger.info(f'run_cmd: {command}')
+        if '|' in command or '>' in command or '&' in command:
+            ret=os.system(command)
+            if ret == 0:
+                return ret
+            else: 
+                raise Exception(f"run command {command} failed with {ret}")
+        try:
+            output = subprocess.run(command.split(), check=True, stdout=subprocess.PIPE, stderr=stderr)
+        except subprocess.CalledProcessError as e:
+            raise e
+        return output.stdout.decode()
+    
+    def handleException(self, e, root_dir, action, path, **kwargs):
+        if isinstance(e, subprocess.CalledProcessError):
+            err = e.output.decode()
+        else:
+            err = str(e)
+        err = '\n'.join([elem.split('<FATAL>:')[-1].split('<ERROR>:')[-1] for elem in err.split('\n')])
+        err = re.sub(r'\[\w+\.go:\d+\]', '', err)
+        if err.find('setfacl') != -1 and err.find('\n') != -1:
+            err = '\n'.join(sorted(err.split('\n')))
+        self.stats.failure(action)
+        self.logger.info(f'{action} {path} {kwargs} failed: {err}')
+        return Exception(err)
+    
+    def do_create_bucket(self, bucket_name:str):
+        try:
+            if self.bucket_exists(bucket_name):
+                self.remove_bucket(bucket_name)
+                print(f"Bucket '{bucket_name}' removed successfully.")
+            self.make_bucket(bucket_name)
+            print(f"Bucket '{bucket_name}' created successfully.")
+        except S3Error as e:
+            raise e
+    
+    def do_put_object(self, bucket_name:str, obj_name:str, src_path:str):
+        try:
+            self.fput_object(
+                bucket_name, obj_name, src_path)
+        except S3Error as e:
+            raise e
+    
+
+    
