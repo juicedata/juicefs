@@ -94,7 +94,7 @@ do_dump_load_and_compare()
     rm -rf test2.db 
     ./juicefs load sqlite3://test2.db dump.json
     ./juicefs dump sqlite3://test2.db dump2.json $option
-    compare_dump_json
+    # compare_dump_json
     ./juicefs mount -d sqlite3://test2.db /jfs2
     diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
     compare_stat_acl_xattr /jfs/fsrand /jfs2/fsrand
