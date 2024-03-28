@@ -845,7 +845,7 @@ juicefs format \
 
 [Gluster](https://github.com/gluster/glusterfs) is a software defined distributed storage that can scale to several petabytes. JuiceFS communicates with Gluster via the `libgfapi` library, so it needs to be built separately before used.
 
-First, install `libgfapi` (version 6.0+):
+First, install `libgfapi` (version 6.0 - 10.1, [10.4+ is not supported yet](https://github.com/juicedata/juicefs/issues/4043))
 
 <Tabs>
   <TabItem value="debian" label="Debian and derivatives">
