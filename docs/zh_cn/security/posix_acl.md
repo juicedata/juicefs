@@ -41,5 +41,6 @@ juicefs config sqlite3://myjfs.db --enable-acl
 
 ## 其他
 
+- 开启 ACL 后，需要[Linux kernel 4.9](https://lkml.iu.edu/hypermail/linux/kernel/1610.0/01531.html)及以上版本，才支持 ACL 权限检测
 - 开启 ACL 后，客户端版本要求会提升到 v1.2
 - 开启 ACL 会有额外的性能影响，对于 ACL 变动不频繁的场景，有内存 cache 优化影响不大

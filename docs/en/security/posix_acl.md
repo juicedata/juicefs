@@ -47,6 +47,7 @@ operations by the old client may impact the correctness of ACL.
 
 ## Others
 
+- ACL permission checks are supported only in Linux kernel 4.9 and higher versions. You can refer to this [documentation](https://lkml.iu.edu/hypermail/linux/kernel/1610.0/01531.html) for more details.
 - Enabling ACL increases the minimum client version requirement to v1.2.
 - Enabling ACL may have additional performance implications.
 For scenarios with infrequent ACL changes,
