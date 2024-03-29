@@ -112,8 +112,12 @@ func setStorageClass(o ObjectStorage) string {
 // nolint:errcheck
 func testStorage(t *testing.T, s ObjectStorage) {
 	sc := setStorageClass(s)
+	scSupported := sc != "" // StorageClass supported
 	if err := s.Create(); err != nil {
 		t.Fatalf("Can't create bucket %s: %s", s, err)
+	}
+	if scSupported && GetStorageClassOrDefault(s) != sc {
+		t.Fatalf("Storage class should be %q, got %q", sc, GetStorageClassOrDefault(s))
 	}
 	if err := s.Create(); err != nil {
 		t.Fatalf("err should be nil when creating a bucket with the same name")
@@ -138,9 +142,15 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 	_ = s.Delete(key)
 
-	_, err := s.Get("not_exists", 0, -1)
+	resp, err := s.Get("not_exists", 0, -1)
 	if err == nil {
 		t.Fatalf("Get should failed: %s", err)
+	}
+	if scSupported {
+		// assert resp is an instance of scReadCloser
+		if _, ok := resp.(scReadCloser); !ok {
+			t.Fatalf("Storage class is supported by %s, but not returned", s)
+		}
 	}
 
 	br := []byte("hello")

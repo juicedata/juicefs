@@ -292,6 +292,9 @@ func (d *dragonfly) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("bad response status %s", resp.Status)
 	}
 
+	if sc := resp.Header.Get(HeaderDragonflyObjectMetaStorageClass); sc != "" {
+		return scReadCloser{resp.Body, sc}, nil
+	}
 	return resp.Body, nil
 }
 

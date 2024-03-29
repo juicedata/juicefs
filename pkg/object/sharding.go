@@ -85,6 +85,15 @@ func (s *sharded) SetStorageClass(sc string) {
 	}
 }
 
+func (s *sharded) StorageClass() string {
+	for _, o := range s.stores {
+		if os, ok := o.(StorageClassGetter); ok {
+			return os.StorageClass()
+		}
+	}
+	return ""
+}
+
 const maxResults = 10000
 
 // ListAll on all the keys that starts at marker from object storage.

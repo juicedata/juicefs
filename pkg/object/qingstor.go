@@ -98,6 +98,9 @@ func (q *qingstor) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		_ = output.Body.Close()
 		return nil, err
 	}
+	if output.XQSStorageClass != nil {
+		return scReadCloser{output.Body, *output.XQSStorageClass}, nil
+	}
 	return output.Body, nil
 }
 
@@ -314,6 +317,10 @@ func (q *qingstor) ListUploads(marker string) ([]*PendingPart, string, error) {
 
 func (q *qingstor) SetStorageClass(sc string) {
 	q.sc = sc
+}
+
+func (q *qingstor) StorageClass() string {
+	return q.sc
 }
 
 func newQingStor(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

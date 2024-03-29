@@ -110,7 +110,8 @@ func (g *gs) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	return reader, nil
+	// TODO fire another attr request to get the actual storage class
+	return scReadCloser{reader, g.sc}, nil
 }
 
 func (g *gs) Put(key string, data io.Reader) error {
@@ -172,6 +173,10 @@ func (g *gs) List(prefix, marker, delimiter string, limit int64, followLink bool
 
 func (g *gs) SetStorageClass(sc string) {
 	g.sc = sc
+}
+
+func (g *gs) StorageClass() string {
+	return g.sc
 }
 
 func newGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

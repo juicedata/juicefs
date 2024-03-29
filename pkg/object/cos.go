@@ -36,8 +36,11 @@ import (
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
-const cosChecksumKey = "x-cos-meta-" + checksumAlgr
-const cosRequestIDKey = "X-Cos-Request-Id"
+const (
+	cosChecksumKey        = "x-cos-meta-" + checksumAlgr
+	cosRequestIDKey       = "X-Cos-Request-Id"
+	cosStorageClassHeader = "X-Cos-Storage-Class"
+)
 
 type COS struct {
 	c        *cos.Client
@@ -87,8 +90,8 @@ func (c *COS) Head(key string) (Object, error) {
 		mtime, _ = time.Parse(time.RFC1123, val[0])
 	}
 	var sc string
-	if val, ok := header["X-Cos-Storage-Class"]; ok {
-		sc = val[0]
+	if val := header.Get(cosStorageClassHeader); val != "" {
+		sc = val
 	} else {
 		// https://cloud.tencent.com/document/product/436/7745
 		// This header is returned only if the object is not STANDARD storage class.
@@ -117,6 +120,9 @@ func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 	if resp != nil {
 		ReqIDCache.put(key, resp.Header.Get(cosRequestIDKey))
+	}
+	if sc := resp.Header.Get(cosStorageClassHeader); sc != "" {
+		return scReadCloser{resp.Body, sc}, nil
 	}
 	return resp.Body, nil
 }
@@ -267,6 +273,10 @@ func (c *COS) ListUploads(marker string) ([]*PendingPart, string, error) {
 
 func (c *COS) SetStorageClass(sc string) {
 	c.sc = sc
+}
+
+func (c *COS) StorageClass() string {
+	return c.sc
 }
 
 func autoCOSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {
