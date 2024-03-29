@@ -39,6 +39,13 @@ func (s *withPrefix) SetStorageClass(sc string) {
 	}
 }
 
+func (s *withPrefix) StorageClass() string {
+	if o, ok := s.os.(StorageClassGetter); ok {
+		return o.StorageClass()
+	}
+	return ""
+}
+
 func (s *withPrefix) Symlink(oldName, newName string) error {
 	if w, ok := s.os.(SupportSymlink); ok {
 		return w.Symlink(oldName, s.prefix+newName)

@@ -84,7 +84,8 @@ func (b *wasb) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return nil, err
 	}
 	ReqIDCache.put(key, aws.StringValue(download.RequestID))
-	return download.Body, err
+	// TODO fire another property request to get the actual storage class
+	return scReadCloser{download.Body, b.sc}, err
 }
 
 func str2Tier(tier string) *blob2.AccessTier {
@@ -178,6 +179,10 @@ func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bo
 
 func (b *wasb) SetStorageClass(sc string) {
 	b.sc = sc
+}
+
+func (b *wasb) StorageClass() string {
+	return b.sc
 }
 
 func autoWasbEndpoint(containerName, accountName, scheme string, credential *azblob.SharedKeyCredential) (string, error) {

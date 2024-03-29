@@ -138,6 +138,10 @@ func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err e
 	}
 	ReqIDCache.put(key, respHeader.Get(oss.HTTPHeaderOssRequestID))
 	err = o.checkError(err)
+	if err == nil {
+		sc := respHeader.Get(oss.HTTPHeaderOssStorageClass)
+		resp = scReadCloser{resp, sc}
+	}
 	return
 }
 
@@ -269,6 +273,10 @@ func (o *ossClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 
 func (o *ossClient) SetStorageClass(sc string) {
 	o.sc = sc
+}
+
+func (o *ossClient) StorageClass() string {
+	return o.sc
 }
 
 type stsCred struct {

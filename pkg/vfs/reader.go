@@ -587,7 +587,7 @@ func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, 
 		for s.state != READY && uint64(s.currentPos) < s.block.len {
 			if s.cond.WaitWithTimeout(time.Second) {
 				if ctx.Canceled() {
-					logger.Warnf("read %d interrupted after %d", f.inode, time.Since(start))
+					logger.Warnf("read %d interrupted after %s", f.inode, time.Since(start))
 					return 0, syscall.EINTR
 				}
 			}

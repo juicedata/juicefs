@@ -101,7 +101,7 @@ func (q *bosclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	return r.Body, nil
+	return scReadCloser{r.Body, r.StorageClass}, nil
 }
 
 func (q *bosclient) Put(key string, in io.Reader) error {

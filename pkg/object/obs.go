@@ -128,7 +128,7 @@ func (s *obsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		_ = resp.Body.Close()
 		return nil, err
 	}
-	return resp.Body, nil
+	return scReadCloser{resp.Body, string(resp.StorageClass)}, nil
 }
 
 func (s *obsClient) Put(key string, in io.Reader) error {
@@ -330,6 +330,10 @@ func (s *obsClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 
 func (s *obsClient) SetStorageClass(sc string) {
 	s.sc = sc
+}
+
+func (s *obsClient) StorageClass() string {
+	return s.sc
 }
 
 func autoOBSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {

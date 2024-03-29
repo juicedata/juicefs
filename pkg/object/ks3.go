@@ -40,6 +40,8 @@ import (
 	"github.com/ks3sdklib/aws-sdk-go/service/s3"
 )
 
+const s3StorageClassHdr = "X-Amz-Storage-Class"
+
 type ks3 struct {
 	bucket string
 	s3     *s3.S3
@@ -83,7 +85,7 @@ func (s *ks3) Head(key string) (Object, error) {
 	}
 
 	var sc string
-	if val, ok := r.Metadata["X-Amz-Storage-Class"]; ok {
+	if val, ok := r.Metadata[s3StorageClassHdr]; ok {
 		sc = *val
 	} else {
 		sc = "STANDARD"
@@ -114,6 +116,9 @@ func (s *ks3) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	if sc, ok := resp.Metadata[s3StorageClassHdr]; ok && sc != nil {
+		return scReadCloser{resp.Body, *sc}, nil
 	}
 	return resp.Body, nil
 }
@@ -311,6 +316,10 @@ func (s *ks3) ListUploads(marker string) ([]*PendingPart, string, error) {
 
 func (s *ks3) SetStorageClass(sc string) {
 	s.sc = sc
+}
+
+func (s *ks3) StorageClass() string {
+	return s.sc
 }
 
 var ks3Regions = map[string]string{

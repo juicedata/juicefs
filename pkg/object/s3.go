@@ -105,7 +105,7 @@ func (s *s3client) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
-	var sc = "STANDARD"
+	var sc = defaultStorageClass
 	if r.StorageClass != nil {
 		sc = *r.StorageClass
 	}
@@ -131,7 +131,7 @@ func (s *s3client) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 	var reqID string
 	resp, err := s.s3.GetObjectWithContext(ctx, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	ReqIDCache.put(key, reqID)
+	ReqIDCache.put(key, reqID) // TODO: set reqID to the io.ReadCloser?
 	if err != nil {
 		return nil, err
 	}
@@ -144,6 +144,9 @@ func (s *s3client) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		if cs != nil {
 			resp.Body = verifyChecksum(resp.Body, *cs, length)
 		}
+	}
+	if resp.StorageClass != nil {
+		return scReadCloser{resp.Body, *resp.StorageClass}, nil
 	}
 	return resp.Body, nil
 }
@@ -233,7 +236,7 @@ func (s *s3client) List(prefix, marker, delimiter string, limit int64, followLin
 		if !strings.HasPrefix(oKey, prefix) || oKey < marker {
 			return nil, fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, marker)
 		}
-		var sc = "STANDARD"
+		var sc = defaultStorageClass
 		if o.StorageClass != nil {
 			sc = *o.StorageClass
 		}
@@ -357,6 +360,10 @@ func (s *s3client) ListUploads(marker string) ([]*PendingPart, string, error) {
 
 func (s *s3client) SetStorageClass(sc string) {
 	s.sc = sc
+}
+
+func (s *s3client) StorageClass() string {
+	return s.sc
 }
 
 func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {

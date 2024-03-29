@@ -88,6 +88,9 @@ func (s *ibmcos) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+	if resp.StorageClass != nil {
+		return scReadCloser{resp.Body, *resp.StorageClass}, nil
+	}
 	return resp.Body, nil
 }
 
@@ -290,6 +293,10 @@ func (s *ibmcos) ListUploads(marker string) ([]*PendingPart, string, error) {
 
 func (s *ibmcos) SetStorageClass(sc string) {
 	s.sc = sc
+}
+
+func (s *ibmcos) StorageClass() string {
+	return s.sc
 }
 
 func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage, error) {

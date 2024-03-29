@@ -82,7 +82,7 @@ func (t *tosClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		_ = resp.Content.Close()
 		return nil, err
 	}
-	return resp.Content, nil
+	return scReadCloser{resp.Content, string(resp.StorageClass)}, nil
 }
 
 func (t *tosClient) Put(key string, in io.Reader) error {
@@ -269,6 +269,10 @@ func (t *tosClient) Copy(dst, src string) error {
 
 func (t *tosClient) SetStorageClass(sc string) {
 	t.sc = sc
+}
+
+func (t *tosClient) StorageClass() string {
+	return t.sc
 }
 
 func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
