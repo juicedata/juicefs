@@ -2364,7 +2364,7 @@ func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice,
 				tx.set(m.delSliceKey(time.Now().Unix(), id), delayed)
 			}
 		} else {
-			for _, s := range ss[:skipped] {
+			for _, s := range ss {
 				if s.id > 0 {
 					tx.incrBy(m.sliceKey(s.id, s.size), -1)
 				}
@@ -2390,7 +2390,7 @@ func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice,
 		m.cleanupZeroRef(id, size)
 		if delayed == nil {
 			var refs int64
-			for _, s := range ss[skipped:] {
+			for _, s := range ss {
 				if s.id > 0 && m.client.txn(func(tx *kvTxn) error {
 					refs = tx.incrBy(m.sliceKey(s.id, s.size), 0)
 					return nil

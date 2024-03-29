@@ -2809,7 +2809,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 				}
 			}
 		} else {
-			for _, s_ := range ss[skipped:] {
+			for _, s_ := range ss {
 				if s_.id == 0 {
 					continue
 				}
@@ -2840,7 +2840,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 	}
 
 	if err == nil && delayed == nil {
-		for _, s := range ss[skipped:] {
+		for _, s := range ss {
 			if s.id == 0 {
 				continue
 			}

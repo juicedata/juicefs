@@ -2857,7 +2857,7 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno {
 	var rs []*redis.IntCmd // trash disabled: check reference of slices
 	if delayed == nil {
-		rs = make([]*redis.IntCmd, len(ss)-skipped)
+		rs = make([]*redis.IntCmd, len(ss))
 	}
 	key := m.chunkKey(inode, indx)
 	ctx := Background
@@ -2888,7 +2888,7 @@ func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*
 					pipe.HSet(ctx, m.delSlices(), fmt.Sprintf("%d_%d", id, time.Now().Unix()), delayed)
 				}
 			} else {
-				for i, s := range ss[skipped:] {
+				for i, s := range ss {
 					if s.id > 0 {
 						rs[i] = pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.id, s.size), -1)
 					}
@@ -2912,7 +2912,7 @@ func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*
 	} else if errno == 0 {
 		m.cleanupZeroRef(m.sliceKey(id, size))
 		if rs != nil {
-			for i, s := range ss[skipped:] {
+			for i, s := range ss {
 				if s.id > 0 && rs[i].Err() == nil && rs[i].Val() < 0 {
 					m.deleteSlice(s.id, s.size)
 				}

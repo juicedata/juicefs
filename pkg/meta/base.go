@@ -2010,7 +2010,14 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 		m.Unlock()
 	}()
 
-	ss, _ := m.en.doRead(Background, inode, indx)
+	ss, st := m.en.doRead(Background, inode, indx)
+	if st != 0 {
+		return
+	}
+	if ss == nil {
+		logger.Errorf("Corrupt value for inode %d chunk indx %d", inode, indx)
+		return
+	}
 	if once && len(ss) < maxSlices {
 		return
 	}
@@ -2022,9 +2029,9 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	if skipped > 0 {
 		first, last = ss[0], ss[skipped-1]
 	}
-	ss = ss[skipped:]
-	pos, size, slices := compactChunk(ss)
-	if len(ss) < 2 || size == 0 {
+	compacted := ss[skipped:]
+	pos, size, slices := compactChunk(compacted)
+	if len(compacted) < 2 || size == 0 {
 		return
 	}
 	if first != nil && last != nil && pos+size > first.pos && last.pos+last.len > pos {
@@ -2032,16 +2039,14 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	}
 
 	var id uint64
-	ctx := Background
-	st := m.NewSlice(ctx, &id)
-	if st != 0 {
+	if st = m.NewSlice(Background, &id); st != 0 {
 		return
 	}
-	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
+	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(compacted), size)
 	err := m.newMsg(CompactChunk, slices, id)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
-			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
+			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(compacted), err)
 		}
 		return
 	}
@@ -2049,28 +2054,31 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	var dsbuf []byte
 	trash := m.toTrash(0)
 	if trash {
-		dsbuf = make([]byte, 0)
-		for _, s := range ss {
+		dsbuf = make([]byte, 0, len(compacted)*12)
+		for _, s := range compacted {
 			if s.id > 0 {
 				dsbuf = append(dsbuf, m.encodeDelayedSlice(s.id, s.size)...)
 			}
 		}
 	}
-
-	var origin []byte
+	origin := make([]byte, 0, len(ss)*sliceBytes)
 	for _, s := range ss {
 		origin = append(origin, marshalSlice(s.pos, s.id, s.size, s.off, s.len)...)
 	}
-	errno := m.en.doCompactChunk(inode, indx, origin, ss, skipped, pos, id, size, dsbuf)
-	if errno == syscall.EINVAL {
+	st = m.en.doCompactChunk(inode, indx, origin, compacted, skipped, pos, id, size, dsbuf)
+	if st == syscall.EINVAL {
 		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, id, size)
 		m.deleteSlice(id, size)
-	} else if errno == 0 {
+	} else if st == 0 {
 		m.of.InvalidateChunk(inode, indx)
 	} else {
 		logger.Warnf("compact %d %d: %s", inode, indx, err)
 	}
+
 	if force {
+		m.Lock()
+		delete(m.compacting, k)
+		m.Unlock()
 		m.compactChunk(inode, indx, once, force)
 	}
 }
