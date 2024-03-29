@@ -56,10 +56,11 @@ var disableSha256Func = func(r *request.Request) {
 }
 
 type s3client struct {
-	bucket string
-	sc     string
-	s3     *s3.S3
-	ses    *session.Session
+	bucket          string
+	sc              string
+	s3              *s3.S3
+	ses             *session.Session
+	disableChecksum bool
 }
 
 func (s *s3client) String() string {
@@ -158,14 +159,16 @@ func (s *s3client) Put(key string, in io.Reader) error {
 		}
 		body = bytes.NewReader(data)
 	}
-	checksum := generateChecksum(body)
 	mimeType := utils.GuessMimeType(key)
 	params := &s3.PutObjectInput{
 		Bucket:      &s.bucket,
 		Key:         &key,
 		Body:        body,
 		ContentType: &mimeType,
-		Metadata:    map[string]*string{checksumAlgr: &checksum},
+	}
+	if !s.disableChecksum {
+		checksum := generateChecksum(body)
+		params.Metadata = map[string]*string{checksumAlgr: &checksum}
 	}
 	if s.sc != "" {
 		params.SetStorageClass(s.sc)
@@ -517,14 +520,24 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	awsConfig := &aws.Config{
-		Region:     aws.String(region),
+		Region:     &region,
 		DisableSSL: aws.Bool(!ssl),
 		HTTPClient: httpClient,
 	}
 
 	disable100Continue := strings.EqualFold(uri.Query().Get("disable-100-continue"), "true")
 	if disable100Continue {
+		logger.Infof("HTTP header 100-Continue is disabled")
 		awsConfig.S3Disable100Continue = aws.Bool(true)
+	}
+	disableMD5 := strings.EqualFold(uri.Query().Get("disable-content-md5"), "true")
+	if disableMD5 {
+		logger.Infof("HTTP header Content-MD5 is disabled")
+		awsConfig.S3DisableContentMD5Validation = &disableMD5
+	}
+	disableChecksum := strings.EqualFold(uri.Query().Get("disable-checksum"), "true")
+	if disableChecksum {
+		logger.Infof("CRC checksum is disabled")
 	}
 
 	if accessKey == "anonymous" {
@@ -542,7 +555,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		return nil, fmt.Errorf("Fail to create aws session: %s", err)
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &s3client{bucket: bucketName, s3: s3.New(ses), ses: ses}, nil
+	return &s3client{bucket: bucketName, s3: s3.New(ses), ses: ses, disableChecksum: disableChecksum}, nil
 }
 
 func init() {
