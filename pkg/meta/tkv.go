@@ -2348,7 +2348,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 }
 
 func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno {
-	err := m.txn(func(tx *kvTxn) error {
+	st := errno(m.txn(func(tx *kvTxn) error {
 		buf2 := tx.get(m.chunkKey(inode, indx))
 		if len(buf2) < len(buf) || !bytes.Equal(buf, buf2[:len(buf)]) {
 			logger.Infof("chunk %d:%d was changed %d -> %d", inode, indx, len(buf), len(buf2))
@@ -2371,22 +2371,26 @@ func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice,
 			}
 		}
 		return nil
-	})
+	}))
 	// there could be false-negative that the compaction is successful, double-check
-	if err != nil {
-		logger.Warnf("compact %d:%d failed: %s", inode, indx, err)
+	if st != 0 && st != syscall.EINVAL {
 		refs, e := m.get(m.sliceKey(id, size))
 		if e == nil {
 			if len(refs) > 0 {
-				err = nil
+				st = 0
 			} else {
 				logger.Infof("compacted chunk %d was not used", id)
-				err = syscall.EINVAL
+				st = syscall.EINVAL
 			}
 		}
 	}
 
-	if err == nil {
+	if st == syscall.EINVAL {
+		_ = m.txn(func(tx *kvTxn) error {
+			tx.incrBy(m.sliceKey(id, size), -1)
+			return nil
+		})
+	} else if st == 0 {
 		m.cleanupZeroRef(id, size)
 		if delayed == nil {
 			var refs int64
@@ -2400,7 +2404,7 @@ func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice,
 			}
 		}
 	}
-	return errno(err)
+	return st
 }
 
 func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {

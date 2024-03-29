@@ -2861,7 +2861,7 @@ func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*
 	}
 	key := m.chunkKey(inode, indx)
 	ctx := Background
-	errno := errno(m.txn(ctx, func(tx *redis.Tx) error {
+	st := errno(m.txn(ctx, func(tx *redis.Tx) error {
 		n := len(origin) / sliceBytes
 		vals2, err := tx.LRange(ctx, key, 0, int64(n-1)).Result()
 		if err != nil {
@@ -2899,19 +2899,20 @@ func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*
 		return err
 	}, key))
 	// there could be false-negative that the compaction is successful, double-check
-	if errno != 0 && errno != syscall.EINVAL {
-		if e := m.rdb.HGet(ctx, m.sliceRefs(), m.sliceKey(id, size)).Err(); e == redis.Nil {
-			errno = syscall.EINVAL // failed
-		} else if e == nil {
-			errno = 0 // successful
+	if st != 0 && st != syscall.EINVAL {
+		if e := m.rdb.HGet(ctx, m.sliceRefs(), m.sliceKey(id, size)).Err(); e == nil {
+			st = 0 // successful
+		} else if e == redis.Nil {
+			logger.Infof("compacted chunk %d was not used", id)
+			st = syscall.EINVAL // failed
 		}
 	}
 
-	if errno == syscall.EINVAL {
+	if st == syscall.EINVAL {
 		m.rdb.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(id, size), -1)
-	} else if errno == 0 {
+	} else if st == 0 {
 		m.cleanupZeroRef(m.sliceKey(id, size))
-		if rs != nil {
+		if delayed == nil {
 			for i, s := range ss {
 				if s.id > 0 && rs[i].Err() == nil && rs[i].Val() < 0 {
 					m.deleteSlice(s.id, s.size)
@@ -2919,7 +2920,7 @@ func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*
 			}
 		}
 	}
-	return errno
+	return st
 }
 
 func (m *redisMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {

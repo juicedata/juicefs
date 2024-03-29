@@ -2783,7 +2783,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 }
 
 func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno {
-	err := m.txn(func(s *xorm.Session) error {
+	st := errno(m.txn(func(s *xorm.Session) error {
 		var c2 = chunk{Inode: inode, Indx: indx}
 		_, err := s.ForUpdate().MustCols("indx").Get(&c2)
 		if err != nil {
@@ -2819,27 +2819,29 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 			}
 		}
 		return nil
-	})
+	}))
 	// there could be false-negative that the compaction is successful, double-check
-	if err != nil {
-		var c = sliceRef{Id: id}
+	if st != 0 && st != syscall.EINVAL {
 		var ok bool
-		e := m.roTxn(func(s *xorm.Session) error {
+		if err := m.roTxn(func(s *xorm.Session) error {
 			var e error
-			ok, e = s.Get(&c)
+			ok, e = s.Get(&sliceRef{Id: id})
 			return e
-		})
-		if e == nil {
+		}); err == nil {
 			if ok {
-				err = nil
+				st = 0
 			} else {
 				logger.Infof("compacted chunk %d was not used", id)
-				err = syscall.EINVAL
+				st = syscall.EINVAL
 			}
 		}
 	}
 
-	if err == nil && delayed == nil {
+	if st == syscall.EINVAL {
+		_ = m.txn(func(s *xorm.Session) error {
+			return mustInsert(s, &sliceRef{id, size, 0})
+		})
+	} else if st == 0 && delayed == nil {
 		for _, s := range ss {
 			if s.id == 0 {
 				continue
@@ -2856,7 +2858,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 			}
 		}
 	}
-	return errno(err)
+	return st
 }
 
 func dup(b []byte) []byte {
