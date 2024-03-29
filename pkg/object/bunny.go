@@ -76,16 +76,11 @@ func (b *bunnyClient) Put(key string, in io.Reader) error {
 // We implement a conditional retry here to try deleting the directory if the delete for a key of the passed name fails.
 // Deleting keys that do not exist are expected to not throw an error
 func (b *bunnyClient) Delete(key string) error {
+	logger.Warnf("Delete: %v", key)
 	if err := b.client.Delete(key, false); err != nil {
 		if err.Error() == "Not Found" {
-			// Retry delete the directory with the same name
-			if errDirectoryDelete := b.client.Delete(key, true); err != nil {
-				if err.Error() == "Not Found" {
-					return nil
-				} else {
-					return errDirectoryDelete
-				}
-			}
+			logger.Warnf("Failed to delete %v, %v", key, err)
+			return nil
 		}
 		return err
 	}
