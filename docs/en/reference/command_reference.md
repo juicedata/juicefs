@@ -688,7 +688,7 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 ||Items|Description|
 |-|-|
 |`--metrics=127.0.0.1:9567`|address to export metrics (default: `127.0.0.1:9567`)|
-|`--custom-labels`|custom labels for metrics, format: `key1:value1,key2:value2` (default: "")|
+|`--custom-labels`|custom labels for metrics, format: `key1:value1;key2:value2` (default: "")|
 |`--consul=127.0.0.1:8500`|Consul address to register (default: `127.0.0.1:8500`)|
 |`--no-usage-report`|do not send usage report (default: false)|
 
