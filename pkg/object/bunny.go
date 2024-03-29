@@ -149,8 +149,13 @@ func normalizedObjectNameWithinZone(o bunnystorage.Object) string {
 // Parse Bunnystorage API Object to JuiceFS Object
 func parseObjectMetadata(object bunnystorage.Object) Object {
 	lastChanged, _ := time.Parse("2006-01-02T15:04:05", object.LastChanged)
+
+	key := normalizedObjectNameWithinZone(object)
+	if object.IsDirectory && !strings.HasSuffix(key, "/")	{
+		key = key+"/"
+	}
 	return &obj{
-		normalizedObjectNameWithinZone(object),
+		key,
 		int64(object.Length),
 		lastChanged,
 		object.IsDirectory,
