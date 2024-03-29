@@ -66,53 +66,65 @@ class S3Client(Minio):
         self.logger.info(f'{action} {kwargs} failed: {err}')
         return Exception(err)
     
+    def remove_all_buckets(self):
+        buckets = self.list_buckets()
+        for bucket in buckets:
+            bucket_name = bucket.name
+            objects = self.list_objects(bucket_name, recursive=True)
+            for obj in objects:
+                self.remove_object(bucket_name, obj.object_name)
+            self.remove_bucket(bucket_name)
+            print(f"Bucket '{bucket_name}' removed successfully.")
+        
     def do_create_bucket(self, bucket_name:str):
         try:
-            if self.bucket_exists(bucket_name):
-                objects = self.list_objects(bucket_name, recursive=True)
-                for obj in objects:
-                    self.remove_object(bucket_name, obj.object_name)
-                self.remove_bucket(bucket_name)
-                print(f"Bucket '{bucket_name}' removed successfully.")
             self.make_bucket(bucket_name)
             print(f"Bucket '{bucket_name}' created successfully.")
         except S3Error as e:
-            raise e
+            return self.handleException(e, 'do_create_bucket', bucket_name=bucket_name)
+        assert self.bucket_exists(bucket_name)
+        self.stats.success('do_create_bucket')
+        self.logger.info(f'do_create_bucket {bucket_name}  succeed')
+        return True
     
-    def do_stat_object(self, bucket:str, obj_name:str):
+    def do_stat_object(self, bucket_name:str, object_name:str):
         try:
-            stat = self.stat_object(bucket, obj_name)
-        except Exception as e:
-            return self.handleException(e, 'do_stat_object', bucket=bucket, obj_name=obj_name)
+            stat = self.stat_object(bucket_name, object_name)
+        except S3Error as e:
+            return self.handleException(e, 'do_stat_object', bucket_name=bucket_name, object_name=object_name)
         finally:
             pass
         self.stats.success('do_stat_object')
-        self.logger.info(f'do_stat_object {bucket} {obj_name} succeed')
+        self.logger.info(f'do_stat_object {bucket_name} {object_name} succeed')
         sorted_stat = sorted(stat.__dict__.items())
         stat_str = "\n".join([f"{key}: {value}" for key, value in sorted_stat])
         print(stat_str)
         return stat_str
 
-    def do_put_object(self, bucket:str, object_name:str, src_path:str):
+    def do_put_object(self, bucket_name:str, object_name:str, src_path:str):
         try:
-            self.fput_object(bucket, object_name, src_path)
-        except Exception as e:
-            return self.handleException(e, 'do_put_object', bucket=bucket, obj_name=object_name, src_path=src_path)
-        finally:
-            pass
+            self.fput_object(bucket_name, object_name, src_path)
+        except S3Error as e:
+            return self.handleException(e, 'do_put_object', bucket_name=bucket_name, obj_name=object_name, src_path=src_path)
         self.stats.success('do_put_object')
-        self.logger.info(f'do_put_object {bucket} {object_name} {src_path} succeed')
-        return self.do_stat_object(bucket, object_name)
+        self.logger.info(f'do_put_object {bucket_name} {object_name} {src_path} succeed')
+        return self.do_stat_object(bucket_name, object_name)
     
-    def do_remove_object(self, bucket:str, object_name:str):
+    def do_remove_object(self, bucket_name:str, object_name:str):
         try:
-            self.remove_object(bucket, object_name)
-        except Exception as e:
-            return self.handleException(e, 'do_remove_object', bucket=bucket, object_name=object_name)
-        finally:
-            pass
-        assert not self.stat_object(bucket, object_name)
+            self.remove_object(bucket_name, object_name)
+        except S3Error as e:
+            return self.handleException(e, 'do_remove_object', bucket_name=bucket_name, object_name=object_name)
+        assert not self.stat_object(bucket_name, object_name)
         self.stats.success('do_remove_object')
-        self.logger.info(f'do_remove_object {bucket} {object} succeed')
+        self.logger.info(f'do_remove_object {bucket_name} {object} succeed')
         return True
     
+    def do_list_objects(self, bucket_name, prefix, start_after, include_user_meta, include_version, use_url_encoding_type, recuisive):
+        try:
+            objects = self.list_objects(bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recuisive=recuisive)
+        except S3Error as e:
+            return self.handleException(e, 'do_list_objects', bucket_name=bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recuisive=recuisive)
+        self.stats.success('do_list_objects')
+        self.logger.info(f'do_list_objects {bucket_name} {prefix} {start_after} {include_user_meta} {include_version} {use_url_encoding_type} {recuisive} succeed')
+        return objects
