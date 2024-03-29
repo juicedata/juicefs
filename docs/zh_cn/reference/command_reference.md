@@ -688,7 +688,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |项 | 说明|
 |-|-|
 |`--metrics=127.0.0.1:9567`|监控数据导出地址，默认为 `127.0.0.1:9567`。|
-|`--custom-labels`|监控指标自定义标签，格式为 `key1:value1,key2:value2` (默认："")|
+|`--custom-labels`|监控指标自定义标签，格式为 `key1:value1;key2:value2` (默认："")|
 |`--consul=127.0.0.1:8500`|Consul 注册中心地址，默认为 `127.0.0.1:8500`。|
 |`--no-usage-report`|不发送使用量信息 (默认：false)|
 
