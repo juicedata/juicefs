@@ -346,6 +346,10 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	getObjectInfo := func(ctx context.Context, bucket, object string) (obj minio.ObjectInfo, err error) {
 		fi, eno := n.fs.Stat(mctx, n.path(bucket, object))
 		if eno == 0 {
+			var etag []byte
+			if n.gConf.KeepEtag && !fi.IsDir() {
+				etag, _ = n.fs.GetXattr(mctx, n.path(bucket, object), s3Etag)
+			}
 			size := fi.Size()
 			if fi.IsDir() {
 				size = 0
@@ -357,6 +361,7 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 				Size:    size,
 				IsDir:   fi.IsDir(),
 				AccTime: fi.ModTime(),
+				ETag:    string(etag),
 			}
 		}
 
