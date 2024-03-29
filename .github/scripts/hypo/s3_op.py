@@ -98,8 +98,8 @@ class S3Client(Minio):
         self.logger.info(f'do_stat_object {bucket_name} {object_name} succeed')
         sorted_stat = sorted(stat.__dict__.items())
         stat_str = "\n".join([f"{key}: {value}" for key, value in sorted_stat])
-        print(stat_str)
-        return stat_str
+        # print(stat_str)
+        return stat.bucket_name, stat.object_name, stat.size
 
     def do_put_object(self, bucket_name:str, object_name:str, src_path:str):
         try:
@@ -110,14 +110,24 @@ class S3Client(Minio):
         self.logger.info(f'do_put_object {bucket_name} {object_name} {src_path} succeed')
         return self.do_stat_object(bucket_name, object_name)
     
+    def object_exists(self, bucket_name:str, object_name:str):
+        try:
+            self.stat_object(bucket_name, object_name)
+            return True
+        except S3Error as e:
+            if e.code == "NoSuchKey":
+                return False
+            else:
+                raise e
+
     def do_remove_object(self, bucket_name:str, object_name:str):
         try:
             self.remove_object(bucket_name, object_name)
         except S3Error as e:
             return self.handleException(e, 'do_remove_object', bucket_name=bucket_name, object_name=object_name)
-        assert not self.stat_object(bucket_name, object_name)
+        assert not self.object_exists(bucket_name, object_name)
         self.stats.success('do_remove_object')
-        self.logger.info(f'do_remove_object {bucket_name} {object} succeed')
+        self.logger.info(f'do_remove_object {bucket_name} {object_name} succeed')
         return True
     
     def do_list_objects(self, bucket_name, prefix, start_after, include_user_meta, include_version, use_url_encoding_type, recuisive):
