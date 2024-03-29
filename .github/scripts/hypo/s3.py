@@ -7,7 +7,7 @@ try:
 except ImportError:
     subprocess.check_call(["pip", "install", "hypothesis"])
 from hypothesis import assume, settings, Verbosity
-from hypothesis.stateful import rule, precondition, RuleBasedStateMachine, Bundle, initialize, multiple
+from hypothesis.stateful import rule, precondition, RuleBasedStateMachine, Bundle, initialize, multiple, consumes
 from hypothesis import Phase, seed
 from hypothesis import strategies as st
 import random
@@ -35,7 +35,28 @@ class S3Machine(RuleBasedStateMachine):
         super().__init__()
         self.client1.remove_all_buckets()
         self.client2.remove_all_buckets()
-    
+
+    def equal(self, result1, result2):
+        if os.getenv('PROFILE', 'dev') == 'generate':
+            return True
+        if type(result1) != type(result2):
+            return False
+        if isinstance(result1, Exception):
+            r1 = str(result1)
+            r2 = str(result2)
+            return r1 == r2
+        elif isinstance(result1, tuple):
+            return result1 == result2
+        else:
+            return result1 == result2
+
+    @rule()
+    @precondition(lambda self: 'list_buckets' not in self.EXCLUDE_RULES)
+    def list_buckets(self):
+        result1 = self.client1.do_list_buckets()
+        result2 = self.client2.do_list_buckets()
+        assert self.equal(result1, result2), f'\033[31mdo_list_buckets:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
     @rule(
         target = buckets,
         bucket_name = st_bucket_name)
@@ -43,11 +64,22 @@ class S3Machine(RuleBasedStateMachine):
     def create_bucket(self, bucket_name):
         result1 = self.client1.do_create_bucket(bucket_name)
         result2 = self.client2.do_create_bucket(bucket_name)
-        assert result1 == result2, f'\033[31mcreate_bucket:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        assert self.equal(result1, result2), f'\033[31mcreate_bucket:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()
         else:
             return bucket_name
+    @rule(
+        target = buckets, 
+        bucket_name = consumes(buckets).filter(lambda x: x != multiple()))
+    def remove_bucket(self, bucket_name):
+        result1 = self.client1.do_remove_bucket(bucket_name)
+        result2 = self.client2.do_remove_bucket(bucket_name)
+        assert self.equal(result1, result2), f'\033[31mremove_bucket:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        if isinstance(result1, Exception):
+            return bucket_name
+        else:
+            return multiple()
 
     @rule(
         target=objects,
@@ -57,7 +89,7 @@ class S3Machine(RuleBasedStateMachine):
     def put_object(self, bucket_name, object_name):
         result1 = self.client1.do_put_object(bucket_name, object_name, 'README.md')
         result2 = self.client2.do_put_object(bucket_name, object_name, 'README.md')
-        assert result1 == result2, f'\033[31mput_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        assert self.equal(result1, result2), f'\033[31mput_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()
         else:
@@ -65,14 +97,14 @@ class S3Machine(RuleBasedStateMachine):
 
     @rule(
         target = objects,
-        obj = objects.filter(lambda x: x != multiple()))
+        obj = consumes(objects).filter(lambda x: x != multiple()))
     @precondition(lambda self: 'remove_object' not in self.EXCLUDE_RULES)
     def remove_object(self, obj:str):
         bucket_name = obj.split(':')[0]
         object_name = obj.split(':')[1]
         result1 = self.client1.do_remove_object(bucket_name, object_name)
         result2 = self.client2.do_remove_object(bucket_name, object_name)
-        assert result1 == result2, f'\033[31mremove_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        assert self.equal(result1, result2), f'\033[31mremove_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return object_name
         else:
@@ -87,7 +119,7 @@ class S3Machine(RuleBasedStateMachine):
         object_name = obj.split(':')[1]
         result1 = self.client1.do_stat_object(bucket_name, object_name)
         result2 = self.client2.do_stat_object(bucket_name, object_name)
-        assert result1 == result2, f'\033[31mstat_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        assert self.equal(result1, result2), f'\033[31mstat_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
           bucket_name = buckets.filter(lambda x: x != multiple()),
@@ -101,7 +133,7 @@ class S3Machine(RuleBasedStateMachine):
     def list_objects(self, bucket_name, prefix=None, start_after=None, include_user_meta=False, include_version=False, use_url_encoding_type=True, recursive=False):
         result1 = self.client1.do_list_objects(bucket_name=bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recursive=recursive)
         result2 = self.client2.do_list_objects(bucket_name=bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recursive=recursive)
-        assert result1 == result2, f'\033[31mlist_objects:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        assert self.equal(result1, result2), f'\033[31mlist_objects:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     def teardown(self):
         pass

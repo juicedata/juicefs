@@ -58,13 +58,10 @@ class S3Client(Minio):
         return output.stdout.decode()
     
     def handleException(self, e, action, **kwargs):
-        if isinstance(e, subprocess.CalledProcessError):
-            err = e.output.decode()
-        else:
-            err = str(e)
+        assert isinstance(e, S3Error)
         self.stats.failure(action)
-        self.logger.info(f'{action} {kwargs} failed: {err}')
-        return Exception(err)
+        self.logger.info(f'{action} {kwargs} failed: {e}')
+        return Exception(f'code:{e.code} message:{e.message}')
     
     def remove_all_buckets(self):
         buckets = self.list_buckets()
@@ -76,6 +73,25 @@ class S3Client(Minio):
             self.remove_bucket(bucket_name)
             print(f"Bucket '{bucket_name}' removed successfully.")
         
+    def do_list_buckets(self):
+        try:
+            buckets = self.list_buckets()
+        except S3Error as e:
+            return self.handleException(e, 'do_list_buckets')
+        self.stats.success('do_list_buckets')
+        self.logger.info(f'do_list_buckets succeed')
+        return sorted([bucket.name for bucket in buckets])
+    
+    def do_remove_bucket(self, bucket_name:str):
+        try:
+            self.remove_bucket(bucket_name)
+        except S3Error as e:
+            return self.handleException(e, 'do_remove_bucket', bucket_name=bucket_name)
+        assert not self.bucket_exists(bucket_name)
+        self.stats.success('do_remove_bucket')
+        self.logger.info(f'do_remove_bucket {bucket_name} succeed')
+        return True
+
     def do_create_bucket(self, bucket_name:str):
         try:
             self.make_bucket(bucket_name)
