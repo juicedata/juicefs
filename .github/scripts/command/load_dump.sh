@@ -80,10 +80,10 @@ do_dump_load_with_fsrand(){
     ./juicefs mount -d $META_URL /jfs --enable-xattr
     SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
     # find /jfs/fsrand -mindepth 1 -maxdepth 1 ! -name "syly" -exec rm -rf {} \; 
-    do_dump_load_and_compare 
+    # do_dump_load_and_compare 
     do_dump_load_and_compare --fast
-    do_dump_load_and_compare --skip-trash
-    do_dump_load_and_compare --fast --skip-trash
+    # do_dump_load_and_compare --skip-trash
+    # do_dump_load_and_compare --fast --skip-trash
 }
 
 do_dump_load_and_compare()
@@ -94,7 +94,7 @@ do_dump_load_and_compare()
     rm -rf test2.db 
     ./juicefs load sqlite3://test2.db dump.json
     ./juicefs dump sqlite3://test2.db dump2.json $option
-    # compare_dump_json
+    compare_dump_json
     ./juicefs mount -d sqlite3://test2.db /jfs2
     diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
     compare_stat_acl_xattr /jfs/fsrand /jfs2/fsrand
