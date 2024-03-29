@@ -96,30 +96,41 @@ func (b *bunnyClient) List(prefix, marker, delimiter string, limit int64, follow
 	if delimiter != "/" {
 		return nil, notSupported
 	}
+	var output []Object
+	var dir = prefix
+	if !strings.HasSuffix(dir, dirSuffix) { // If no Directory list in parent directory
+		dir = path.Dir(dir)
+		if !strings.HasSuffix(dir, dirSuffix) {
+			dir += dirSuffix
+		}
+	} else if marker == "" { // If Directory && no marker: Return prefix directory as well
+		parentPath := path.Dir(path.Dir(prefix))
+		objects, err := b.client.List(parentPath+dirSuffix)
+		if err == nil	{
+			for _, o := range objects	{
+				logger.Warnf("%v == %v", normalizedObjectNameWithinZone(o), path.Dir(prefix)+dirSuffix)
+				if normalizedObjectNameWithinZone(o) == path.Dir(prefix)	{
+					output = append(output, parseObjectMetadata(o))
+				}
+			}
+		}
+	}
 
-	//listInParentDirectory := !strings.HasSuffix(prefix, "/")
-
-	listedObjects, err := b.client.List(path.Dir(prefix))
+	listedObjects, err := b.client.List(dir)
 	if err != nil {
-		logger.Errorf("Unable to list objects in path %v", prefix)
+		logger.Errorf("Unable to list objects in path %v with prefix %v", dir, prefix)
 		return nil, err
 	}
 
-	markerEncountered := marker == ""
-	output := make([]Object, 0)
-
-	logger.Warnf("List: %v %v", prefix, marker)
-	for i := 0; i < len(listedObjects); i++ {
-		o := listedObjects[i]
+	logger.Debugf("List: %v %v", prefix, marker)
+	for _, o := range listedObjects {
 		normalizedPath := normalizedObjectNameWithinZone(o)
-		if strings.HasPrefix(normalizedPath, prefix) {
-			if normalizedPath == marker {
-				markerEncountered = true
-			}
-			if markerEncountered {
-				logger.Warn(normalizedPath)
-				output = append(output, parseObjectMetadata(o))
-			}
+		if !strings.HasPrefix(normalizedPath, prefix) || (marker != "" && normalizedPath <= marker) {
+			continue
+		}
+		output = append(output, parseObjectMetadata(o))
+		if len(output) == int(limit) {
+			break
 		}
 	}
 
