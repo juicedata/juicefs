@@ -130,11 +130,12 @@ class S3Client(Minio):
         self.logger.info(f'do_remove_object {bucket_name} {object_name} succeed')
         return True
     
-    def do_list_objects(self, bucket_name, prefix, start_after, include_user_meta, include_version, use_url_encoding_type, recuisive):
+    def do_list_objects(self, bucket_name, prefix, start_after, include_user_meta, include_version, use_url_encoding_type, recursive):
         try:
-            objects = self.list_objects(bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recuisive=recuisive)
+            objects = self.list_objects(bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recursive=recursive)
         except S3Error as e:
-            return self.handleException(e, 'do_list_objects', bucket_name=bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recuisive=recuisive)
+            return self.handleException(e, 'do_list_objects', bucket_name=bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recursive=recursive)
         self.stats.success('do_list_objects')
-        self.logger.info(f'do_list_objects {bucket_name} {prefix} {start_after} {include_user_meta} {include_version} {use_url_encoding_type} {recuisive} succeed')
-        return objects
+        self.logger.info(f'do_list_objects {bucket_name} {prefix} {start_after} {include_user_meta} {include_version} {use_url_encoding_type} {recursive} succeed')
+        result = '\n'.join([f'{obj.object_name} {obj.size} {obj.etag}' for obj in objects])
+        return result

@@ -8,6 +8,8 @@ class TestS3(unittest.TestCase):
         state.create_bucket('bucket2')
         state.put_object('bucket1', 'object1')
         state.put_object('bucket1', 'object2')
+        state.list_objects('bucket1')
+        state.list_objects('bucket2')
         state.remove_object('bucket1:object1')
         state.remove_object('bucket1:object2')
         state.teardown()

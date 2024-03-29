@@ -21,7 +21,7 @@ st_object_prefix = st.text(alphabet=ascii_lowercase, min_size=1, max_size=1)
 
 SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
 # ./juicefs format sqlite3://test.db gateway
-# MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway sqlite3://test.db localhost:9005 --multi-buckets
+# MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway sqlite3://test.db localhost:9005 --multi-buckets --keep-etag
 @seed(SEED)
 class S3Machine(RuleBasedStateMachine):
     buckets = Bundle('buckets')
@@ -43,7 +43,7 @@ class S3Machine(RuleBasedStateMachine):
     def create_bucket(self, bucket_name):
         result1 = self.client1.do_create_bucket(bucket_name)
         result2 = self.client2.do_create_bucket(bucket_name)
-        assert result1 == result2
+        assert result1 == result2, f'\033[31mcreate_bucket:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()
         else:
@@ -57,7 +57,7 @@ class S3Machine(RuleBasedStateMachine):
     def put_object(self, bucket_name, object_name):
         result1 = self.client1.do_put_object(bucket_name, object_name, 'README.md')
         result2 = self.client2.do_put_object(bucket_name, object_name, 'README.md')
-        assert result1 == result2
+        assert result1 == result2, f'\033[31mput_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()
         else:
@@ -72,7 +72,7 @@ class S3Machine(RuleBasedStateMachine):
         object_name = obj.split(':')[1]
         result1 = self.client1.do_remove_object(bucket_name, object_name)
         result2 = self.client2.do_remove_object(bucket_name, object_name)
-        assert result1 == result2
+        assert result1 == result2, f'\033[31mremove_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return object_name
         else:
@@ -87,7 +87,7 @@ class S3Machine(RuleBasedStateMachine):
         object_name = obj.split(':')[1]
         result1 = self.client1.do_stat_object(bucket_name, object_name)
         result2 = self.client2.do_stat_object(bucket_name, object_name)
-        assert result1 == result2
+        assert result1 == result2, f'\033[31mstat_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
           bucket_name = buckets.filter(lambda x: x != multiple()),
@@ -96,12 +96,12 @@ class S3Machine(RuleBasedStateMachine):
           include_user_meta = st.booleans(),
           include_version = st.booleans(),
           use_url_encoding_type = st.booleans(),
-          recuisive=st.booleans())
+          recursive=st.booleans())
     @precondition(lambda self: 'list_objects' not in self.EXCLUDE_RULES)
-    def list_objects(self, bucket_name, prefix=None, start_after=None, include_user_meta=False, include_version=False, use_url_encoding_type=True, recuisive=False):
-        result1 = self.client1.do_list_objects(bucket_name=bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recuisive=recuisive)
-        result2 = self.client2.do_list_objects(bucket_name=bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recuisive=recuisive)
-        assert result1 == result2
+    def list_objects(self, bucket_name, prefix=None, start_after=None, include_user_meta=False, include_version=False, use_url_encoding_type=True, recursive=False):
+        result1 = self.client1.do_list_objects(bucket_name=bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recursive=recursive)
+        result2 = self.client2.do_list_objects(bucket_name=bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recursive=recursive)
+        assert result1 == result2, f'\033[31mlist_objects:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     def teardown(self):
         pass
