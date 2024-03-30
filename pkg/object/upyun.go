@@ -62,7 +62,7 @@ func (u *up) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (u *up) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (u *up) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	w := bytes.NewBuffer(nil)
 	_, err := u.c.Get(&upyun.GetObjectConfig{
 		Path:   "/" + key,
@@ -78,14 +78,14 @@ func (u *up) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (u *up) Put(key string, in io.Reader) error {
+func (u *up) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	return u.c.Put(&upyun.PutObjectConfig{
 		Path:   "/" + key,
 		Reader: in,
 	})
 }
 
-func (u *up) Delete(key string) error {
+func (u *up) Delete(key string, getters ...AttrGetter) error {
 	return u.c.Delete(&upyun.DeleteObjectConfig{
 		Path: "/" + key,
 	})

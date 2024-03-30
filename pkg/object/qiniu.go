@@ -102,7 +102,7 @@ func (q *qiniu) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (q *qiniu) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (q *qiniu) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	// S3 SDK cannot get objects with prefix "/" in the key
 	if strings.HasPrefix(key, "/") && os.Getenv("QINIU_DOMAIN") != "" {
 		return q.download(key, off, limit)
@@ -111,10 +111,10 @@ func (q *qiniu) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		key = key[1:]
 	}
 	// S3ForcePathStyle = true
-	return q.s3client.Get("/"+key, off, limit)
+	return q.s3client.Get("/"+key, off, limit, getters...)
 }
 
-func (q *qiniu) Put(key string, in io.Reader) error {
+func (q *qiniu) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	body, vlen, err := findLen(in)
 	if err != nil {
 		return err
@@ -134,7 +134,7 @@ func (q *qiniu) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	return nil, notSupported
 }
 
-func (q *qiniu) Delete(key string) error {
+func (q *qiniu) Delete(key string, getters ...AttrGetter) error {
 	err := q.bm.Delete(q.bucket, key)
 	if err != nil && strings.Contains(err.Error(), notexist) {
 		return nil

@@ -109,7 +109,7 @@ type SectionReaderCloser struct {
 	io.Closer
 }
 
-func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (d *filestore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	p := d.path(key)
 
 	f, err := os.Open(p)
@@ -136,7 +136,7 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return f, nil
 }
 
-func (d *filestore) Put(key string, in io.Reader) (err error) {
+func (d *filestore) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
 	p := d.path(key)
 
 	if strings.HasSuffix(key, dirSuffix) || key == "" && strings.HasSuffix(d.root, dirSuffix) {
@@ -199,7 +199,7 @@ func (d *filestore) Copy(dst, src string) error {
 	return d.Put(dst, r)
 }
 
-func (d *filestore) Delete(key string) error {
+func (d *filestore) Delete(key string, getters ...AttrGetter) error {
 	err := os.Remove(d.path(key))
 	if err != nil && os.IsNotExist(err) {
 		err = nil
