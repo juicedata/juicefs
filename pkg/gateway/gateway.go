@@ -1151,8 +1151,58 @@ func (n *jfsObjects) cleanup() {
 	}
 }
 
+type JFSFLock struct {
+	Id     string
+	Inodes []meta.Ino
+	Owner  uint64
+	Meta   meta.Meta
+}
+
+func (j *JFSFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
+	for _, inode := range j.Inodes {
+		if errno := j.Meta.Flock(mctx, inode, j.Owner, syscall.F_WRLCK, true); errno != 0 {
+			logger.Errorf("failed to get write lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
+		}
+	}
+	return ctx, nil
+}
+
+func (j *JFSFLock) Unlock() {
+	for _, inode := range j.Inodes {
+		if errno := j.Meta.Flock(mctx, inode, j.Owner, syscall.F_UNLCK, true); errno != 0 {
+			logger.Errorf("failed to release write lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
+		}
+	}
+}
+
+func (j *JFSFLock) GetRLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
+	for _, inode := range j.Inodes {
+		if errno := j.Meta.Flock(mctx, inode, j.Owner, syscall.F_RDLCK, true); errno != 0 {
+			logger.Errorf("failed to get read lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
+		}
+	}
+	return ctx, nil
+}
+
+func (j *JFSFLock) RUnlock() {
+	for _, inode := range j.Inodes {
+		if errno := j.Meta.Flock(mctx, inode, j.Owner, syscall.F_UNLCK, true); errno != 0 {
+			logger.Errorf("failed to release read lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
+		}
+	}
+}
+
 func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker {
-	return n.nsMutex.NewNSLock(nil, bucket, objects...)
+	fLock := JFSFLock{Id: minio.MustGetUUID(), Owner: n.conf.Meta.Sid, Meta: n.fs.Meta()}
+	for _, object := range objects {
+		fi, eno := n.fs.Stat(mctx, n.path(bucket, object))
+		if eno != 0 {
+			logger.Errorf("failed to get the status of the file to be locked: %s error %s", n.path(bucket, object), eno)
+			continue
+		}
+		fLock.Inodes = append(fLock.Inodes, fi.Inode())
+	}
+	return &fLock
 }
 
 func (n *jfsObjects) BackendInfo() madmin.BackendInfo {

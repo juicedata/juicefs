@@ -154,6 +154,13 @@ func gateway(c *cli.Context) error {
 			logger.Fatalf("init MinioMetaBucket error %s: %s", minio.MinioMetaBucket, err)
 		}
 	}
+	lockfile := path.Join(minio.MinioMetaBucket, minio.MinioMetaLockFile)
+	mctx := meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
+	if _, errno := jfs.Stat(mctx, lockfile); errors.Is(errno, syscall.ENOENT) {
+		if _, errno := jfs.Create(mctx, lockfile, 0666, uint16(umask)); errno != 0 {
+			logger.Fatalf("failed to create gateway lock file err %s", errno)
+		}
+	}
 
 	args := []string{"server", "--address", listenAddr, "--anonymous"}
 	if c.Bool("no-banner") {
