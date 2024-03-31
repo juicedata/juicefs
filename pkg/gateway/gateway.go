@@ -76,6 +76,14 @@ type jfsObjects struct {
 	gConf    *Config
 }
 
+func (n *jfsObjects) PutObjectMetadata(ctx context.Context, s string, s2 string, options minio.ObjectOptions) (minio.ObjectInfo, error) {
+	return minio.ObjectInfo{}, minio.NotImplemented{}
+}
+
+func (n *jfsObjects) NSScanner(ctx context.Context, bf *minio.BloomFilter, updates chan<- madmin.DataUsageInfo) error {
+	return nil
+}
+
 func (n *jfsObjects) IsCompressionSupported() bool {
 	return false
 }
@@ -95,7 +103,7 @@ func (n *jfsObjects) Shutdown(ctx context.Context) error {
 
 func (n *jfsObjects) StorageInfo(ctx context.Context) (info minio.StorageInfo, errors []error) {
 	sinfo := minio.StorageInfo{}
-	sinfo.Backend.Type = minio.BackendFS
+	sinfo.Backend.Type = madmin.FS
 	return sinfo, nil
 }
 
@@ -1148,12 +1156,62 @@ func (n *jfsObjects) cleanup() {
 	}
 }
 
-func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker {
-	return n.nsMutex.NewNSLock(nil, bucket, objects...)
+type JFSFLock struct {
+	Id     string
+	Inodes []meta.Ino
+	Owner  uint64
+	Meta   meta.Meta
 }
 
-func (n *jfsObjects) BackendInfo() minio.BackendInfo {
-	return minio.BackendInfo{Type: minio.BackendFS}
+func (j *JFSFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
+	for _, inode := range j.Inodes {
+		if errno := j.Meta.Flock(mctx, inode, j.Owner, syscall.F_WRLCK, true); errno != 0 {
+			logger.Errorf("failed to get write lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
+		}
+	}
+	return ctx, nil
+}
+
+func (j *JFSFLock) Unlock() {
+	for _, inode := range j.Inodes {
+		if errno := j.Meta.Flock(mctx, inode, j.Owner, syscall.F_UNLCK, true); errno != 0 {
+			logger.Errorf("failed to release write lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
+		}
+	}
+}
+
+func (j *JFSFLock) GetRLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
+	for _, inode := range j.Inodes {
+		if errno := j.Meta.Flock(mctx, inode, j.Owner, syscall.F_RDLCK, true); errno != 0 {
+			logger.Errorf("failed to get read lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
+		}
+	}
+	return ctx, nil
+}
+
+func (j *JFSFLock) RUnlock() {
+	for _, inode := range j.Inodes {
+		if errno := j.Meta.Flock(mctx, inode, j.Owner, syscall.F_UNLCK, true); errno != 0 {
+			logger.Errorf("failed to release read lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
+		}
+	}
+}
+
+func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker {
+	fLock := JFSFLock{Id: minio.MustGetUUID(), Owner: n.conf.Meta.Sid, Meta: n.fs.Meta()}
+	for _, object := range objects {
+		fi, eno := n.fs.Stat(mctx, n.path(bucket, object))
+		if eno != 0 {
+			logger.Errorf("failed to get the status of the file to be locked: %s error %s", n.path(bucket, object), eno)
+			continue
+		}
+		fLock.Inodes = append(fLock.Inodes, fi.Inode())
+	}
+	return &fLock
+}
+
+func (n *jfsObjects) BackendInfo() madmin.BackendInfo {
+	return madmin.BackendInfo{Type: madmin.FS}
 }
 
 func (n *jfsObjects) LocalStorageInfo(ctx context.Context) (minio.StorageInfo, []error) {
@@ -1276,10 +1334,6 @@ func (n *jfsObjects) DeleteObjectTags(ctx context.Context, bucket, object string
 		return minio.ObjectInfo{}, errno
 	}
 	return n.GetObjectInfo(ctx, bucket, object, opts)
-}
-
-func (n *jfsObjects) CrawlAndGetDataUsage(ctx context.Context, bf *minio.BloomFilter, updates chan<- minio.DataUsageInfo) error {
-	return nil
 }
 
 func (n *jfsObjects) IsNotificationSupported() bool {
