@@ -117,15 +117,54 @@ class S3Client(Minio):
         # print(stat_str)
         return stat.bucket_name, stat.object_name, stat.size
 
-    def do_put_object(self, bucket_name:str, object_name:str, src_path:str):
+    def do_put_object(self, bucket_name:str, object_name:str, data, length, content_type='application/octet-stream', part_size=4*1024*1024):
+        try:
+            self.put_object(bucket_name, object_name, data, length=length, content_type=content_type, part_size=part_size)
+        except S3Error as e:
+            return self.handleException(e, 'do_put_object', bucket_name=bucket_name, object_name=object_name, length=length, part_size=part_size)
+        self.stats.success('do_put_object')
+        self.logger.info(f'do_put_object {bucket_name} {object_name} succeed')
+        return self.do_stat_object(bucket_name, object_name)
+
+    def do_get_object(self, bucket_name:str, object_name:str, offset=0, length=0):
+        try:
+            stat = self.stat_object(bucket_name, object_name)
+            if stat.size == 0:
+                offset = 0
+            else
+                offset = offset % stat.size
+            if length > stat.size - offset:
+                length = stat.size - offset
+            response = self.get_object(bucket_name, object_name, offset=offset, length=length)
+            md5_hash = hashlib.md5()
+            for data in response.stream(32*1024):
+                md5_hash.update(data)
+            md5_hex = md5_hash.hexdigest()
+        except S3Error as e:
+            return self.handleException(e, 'do_get_object', bucket_name=bucket_name, object_name=object_name, offset=offset, length=length)
+        self.stats.success('do_get_object')
+        self.logger.info(f'do_get_object {bucket_name} {object_name} succeed')
+        return md5_hex
+
+    def do_fput_object(self, bucket_name:str, object_name:str, src_path:str):
         try:
             self.fput_object(bucket_name, object_name, src_path)
         except S3Error as e:
-            return self.handleException(e, 'do_put_object', bucket_name=bucket_name, obj_name=object_name, src_path=src_path)
-        self.stats.success('do_put_object')
-        self.logger.info(f'do_put_object {bucket_name} {object_name} {src_path} succeed')
+            return self.handleException(e, 'do_fput_object', bucket_name=bucket_name, obj_name=object_name, src_path=src_path)
+        self.stats.success('do_fput_object')
+        self.logger.info(f'do_fput_object {bucket_name} {object_name} {src_path} succeed')
         return self.do_stat_object(bucket_name, object_name)
     
+    def do_fget_object(self, bucket_name:str, object_name:str, file_path:str):
+        try:
+            self.fget_object(bucket_name, object_name, file_path)
+        except S3Error as e:
+            return self.handleException(e, 'do_fget_object', bucket_name=bucket_name, object_name=object_name, file_path=file_path)
+        assert(os.path.exists(file_path))
+        self.stats.success('do_fget_object')
+        self.logger.info(f'do_fget_object {bucket_name} {object_name} {file_path} succeed')
+        return os.stat(file_path).st_size
+
     def object_exists(self, bucket_name:str, object_name:str):
         try:
             self.stat_object(bucket_name, object_name)

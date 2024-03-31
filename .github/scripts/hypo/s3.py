@@ -14,10 +14,14 @@ import random
 import common
 from common import run_cmd
 from s3_op import S3Client
-
+MAX_OBJECT_SIZE=5*1024*1024
 st_bucket_name = st.text(alphabet=ascii_lowercase, min_size=4, max_size=4)
 st_object_name = st.text(alphabet=ascii_lowercase, min_size=4, max_size=4)
 st_object_prefix = st.text(alphabet=ascii_lowercase, min_size=1, max_size=1)
+st_content = st.binary(min_size=0, max_size=MAX_OBJECT_SIZE)
+st_part_size = st.sampled_from([128*1024, 256*1024, 512*1024, 1*1024*1024, 2*1024*1024, 4*1024*1024])
+st_offset = st.integers(min_value=0, max_value=MAX_OBJECT_SIZE)
+st_length = st.integers(min_value=0, max_value=MAX_OBJECT_SIZE)
 
 SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
 # ./juicefs format sqlite3://test.db gateway
@@ -83,17 +87,64 @@ class S3Machine(RuleBasedStateMachine):
 
     @rule(
         target=objects,
-        bucket_name = st.just(BUCKET_NAME),
-        object_name = st_object_name)
+        bucket_name = buckets.filter(lambda x: x != multiple()),
+        object_name = st_object_name, 
+        data = st_content,
+        use_part_size = st.booleans(),
+        part_size = st_part_size
+    )
     @precondition(lambda self: 'put_object' not in self.EXCLUDE_RULES)
-    def put_object(self, bucket_name, object_name):
-        result1 = self.client1.do_put_object(bucket_name, object_name, 'README.md')
-        result2 = self.client2.do_put_object(bucket_name, object_name, 'README.md')
+    def put_object(self, bucket_name, object_name, data, use_part_size, part_size=4*1024*1024):
+        if use_part_size:
+            result1 = self.client1.do_put_object(bucket_name, object_name, data, -1, part_size=part_size)
+            result2 = self.client2.do_put_object(bucket_name, object_name, data, -1, part_size=part_size)
+        else:
+            result1 = self.client1.do_put_object(bucket_name, object_name, data, len(data))
+            result2 = self.client2.do_put_object(bucket_name, object_name, data, len(data))
         assert self.equal(result1, result2), f'\033[31mput_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()
         else:
             return f'{bucket_name}:{object_name}'
+
+    @rule(
+        obj = objects.filter(lambda x: x != multiple()),
+        offset = st_offset, 
+        length = st_length
+    )
+    @precondition(lambda self: 'get_object' not in self.EXCLUDE_RULES)
+    def get_object(self, obj:str, offset=0, length=0):
+        bucket_name = obj.split(':')[0]
+        object_name = obj.split(':')[1]
+        result1 = self.client1.do_get_object(bucket_name, object_name, offset=offset, length=length)
+        result2 = self.client2.do_get_object(bucket_name, object_name, offset=offset, length=length)
+        assert self.equal(result1, result2), f'\033[31mget_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        target=objects,
+        bucket_name = buckets.filter(lambda x: x != multiple()),
+        object_name = st_object_name)
+    @precondition(lambda self: 'fput_object' not in self.EXCLUDE_RULES)
+    def fput_object(self, bucket_name, object_name):
+        result1 = self.client1.do_fput_object(bucket_name, object_name, 'README.md')
+        result2 = self.client2.do_fput_object(bucket_name, object_name, 'README.md')
+        assert self.equal(result1, result2), f'\033[31mfput_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        if isinstance(result1, Exception):
+            return multiple()
+        else:
+            return f'{bucket_name}:{object_name}'
+
+    @rule(
+        obj = objects.filter(lambda x: x != multiple()),
+        file_path = st.just('/tmp/file')
+    )
+    @precondition(lambda self: 'fget_object' not in self.EXCLUDE_RULES)
+    def fget_object(self, obj:str, file_path):
+        bucket_name = obj.split(':')[0]
+        object_name = obj.split(':')[1]
+        result1 = self.client1.do_fget_object(bucket_name, object_name, file_path)
+        result2 = self.client2.do_fget_object(bucket_name, object_name, file_path)
+        assert self.equal(result1, result2), f'\033[31mfget_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
         target = objects,
