@@ -12,46 +12,9 @@ from hypothesis import Phase, seed
 from hypothesis import strategies as st
 import random
 from s3_op import S3Client
+from s3_strategy import *
 # ./juicefs format sqlite3://test.db gateway
 # MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway sqlite3://test.db localhost:9005 --multi-buckets --keep-etag
-
-MAX_OBJECT_SIZE=10*1024*1024
-# https://min.io/docs/minio/linux/administration/identity-access-management/policy-based-access-control.html#minio-policy-actions
-S3_ACTION_LIST = ["s3:*", "s3:DeleteObject", "s3:GetObject","s3:ListBucket","s3:PutObject", "s3:PutObjectTagging", "s3:GetObjectTagging", "s3:DeleteObjectTagging"]
-st_bucket_name = st.text(alphabet=ascii_lowercase, min_size=4, max_size=4)
-st_object_name = st.text(alphabet=ascii_lowercase, min_size=4, max_size=4)
-st_object_prefix = st.text(alphabet=ascii_lowercase, min_size=1, max_size=1)
-st_content = st.binary(min_size=0, max_size=MAX_OBJECT_SIZE)
-st_part_size = st.sampled_from([5*1024*1024, 8*1024*1024])
-st_offset = st.integers(min_value=0, max_value=MAX_OBJECT_SIZE)
-st_length = st.integers(min_value=0, max_value=MAX_OBJECT_SIZE)
-st_policy = st.fixed_dictionaries({
-    "Statement": st.lists(
-        st.one_of(
-            st.fixed_dictionaries({
-                "Effect": st.sampled_from(["Allow", "Deny"]),
-                "Principal": st.fixed_dictionaries({"AWS": st.just("*")}),
-                "Resource": st.just("arn:aws:s3:::{{bucket}}"),
-                "Action": st.lists(
-                    st.sampled_from(["s3:GetBucketLocation", "s3:ListBucket"]),
-                    min_size=1, max_size=3, 
-                    unique=True
-                ),
-            }),
-            st.fixed_dictionaries({
-                "Effect": st.sampled_from(["Allow", "Deny"]),
-                "Principal": st.fixed_dictionaries({"AWS": st.just("*")}),
-                "Action": st.lists(
-                    st.sampled_from(S3_ACTION_LIST),
-                    min_size=1, max_size=3,
-                    unique=True
-                ),
-                "Resource": st.just("arn:aws:s3:::{{bucket}}/*"),
-            }),
-        ),
-        min_size=1, max_size=3
-    )
-})
 
 SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
 @seed(SEED)
@@ -59,20 +22,21 @@ class S3Machine(RuleBasedStateMachine):
     buckets = Bundle('buckets')
     objects = Bundle('objects')
     BUCKET_NAME = 's3test'
-    client1 = S3Client(name='minio', url='localhost:9000', access_key='minioadmin', secret_key='minioadmin')
-    client2 = S3Client(name='juice', url='localhost:9005', access_key='minioadmin', secret_key='minioadmin')
-    EXCLUDE_RULES = ['list_buckets']
+    client1 = S3Client(alias='minio', url='localhost:9000', access_key='minioadmin', secret_key='minioadmin')
+    client2 = S3Client(alias='juice', url='localhost:9005', access_key='minioadmin', secret_key='minioadmin')
+    EXCLUDE_RULES = ['list_buckets', 'create_bucket', 'remove_bucket', 'set_bucket_policy', 'get_bucket_policy', 'delete_bucket_policy', 'put_object', 'get_object', 'fput_object', 'fget_object', 'remove_object', 'stat_object', 'list_objects', 'add_user', 'remove_user', 'add_group', 'remove_group']
 
     def __init__(self):
         super().__init__()
         self.client1.remove_all_buckets()
         self.client2.remove_all_buckets()
 
-    # @initialize(target=buckets)
-    # def init_buckets(self):
-    #     self.client1.do_create_bucket(self.BUCKET_NAME)
-    #     self.client2.do_create_bucket(self.BUCKET_NAME)
-    #     return self.BUCKET_NAME
+    @initialize(target=buckets)
+    def init_buckets(self):
+        self.client1.do_create_bucket(self.BUCKET_NAME)
+        self.client2.do_create_bucket(self.BUCKET_NAME)
+        return self.BUCKET_NAME
+    
     
     def equal(self, result1, result2):
         if os.getenv('PROFILE', 'dev') == 'generate':
@@ -252,6 +216,38 @@ class S3Machine(RuleBasedStateMachine):
         result2 = self.client2.do_list_objects(bucket_name=bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recursive=recursive)
         assert self.equal(result1, result2), f'\033[31mlist_objects:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
+    @rule(
+        access_key = st_access_key, 
+        secret_key = st_secret_key
+    )
+    @precondition(lambda self: 'add_user' not in self.EXCLUDE_RULES)
+    def add_user(self, access_key, secret_key):
+        result1 = self.client1.do_add_user(access_key, secret_key)
+        result2 = self.client2.do_add_user(access_key, secret_key)
+        assert self.equal(result1, result2), f'\033[31madd_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(access_key = st_access_key)
+    @precondition(lambda self: 'remove_user' not in self.EXCLUDE_RULES)
+    def remove_user(self, access_key):
+        result1 = self.client1.do_remove_user(access_key)
+        result2 = self.client2.do_remove_user(access_key)
+        assert self.equal(result1, result2), f'\033[31mremove_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+    
+    @rule(group_name=st_group_name, 
+          members = st_group_members)
+    @precondition(lambda self: 'add_group' not in self.EXCLUDE_RULES)
+    def add_group(self, group_name, members):
+        result1 = self.client1.do_add_group(group_name, members)
+        result2 = self.client2.do_add_group(group_name, members)
+        assert self.equal(result1, result2), f'\033[31madd_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(group_name=st_group_name)
+    @precondition(lambda self: 'remove_group' not in self.EXCLUDE_RULES)
+    def do_remove_group(self, group_name):
+        result1 = self.client1.do_remove_group(group_name)
+        result2 = self.client2.do_remove_group(group_name)
+        assert self.equal(result1, result2), f'\033[31mremove_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
     def teardown(self):
         pass
 
@@ -265,7 +261,7 @@ if __name__ == '__main__':
     settings.register_profile("dev", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, 
-        phases=[Phase.generate, Phase.target])
+        phases=[Phase.generate])
     profile = os.environ.get('PROFILE', 'dev')
     settings.load_profile(profile)
     

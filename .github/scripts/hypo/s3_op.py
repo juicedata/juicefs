@@ -18,21 +18,22 @@ import io
 
 class S3Client(Minio):
     stats = Statistics()
-    def __init__(self, name, url, access_key, secret_key):
+    def __init__(self, alias, url, access_key, secret_key):
         super().__init__(
             url,
             access_key=access_key,
             secret_key=secret_key,
             secure=False
         )
-        self.name = name
+        self.alias = alias
         self.url = url
         self.access_key = access_key
         self.secret_key = secret_key
         log_level=os.environ.get('LOG_LEVEL', 'INFO')
-        self.logger = common.setup_logger(f'./{name}.log', f'{name}', log_level)
+        self.logger = common.setup_logger(f'./{alias}.log', f'{alias}', log_level)
+        self.run_cmd(f'mc alias set {alias} http://{url} {access_key} {secret_key}')
 
-    def run_cmd(self, command:str, root_dir:str, stderr=subprocess.STDOUT) -> str:
+    def run_cmd(self, command:str, stderr=subprocess.STDOUT) -> str:
         self.logger.info(f'run_cmd: {command}')
         if '|' in command or '>' in command or '&' in command:
             ret=os.system(command)
@@ -47,10 +48,14 @@ class S3Client(Minio):
         return output.stdout.decode()
     
     def handleException(self, e, action, **kwargs):
-        assert isinstance(e, S3Error)
         self.stats.failure(action)
         self.logger.info(f'{action} {kwargs} failed: {e}')
-        return Exception(f'code:{e.code} message:{e.message}')
+        if isinstance(e, S3Error):
+            return Exception(f'code:{e.code} message:{e.message}')
+        elif isinstance(e, subprocess.CalledProcessError):
+            return Exception(f'returncode:{e.returncode} output:{e.output.decode()}')
+        else:
+            return e
     
     def remove_all_buckets(self):
         buckets = self.list_buckets()
@@ -210,3 +215,48 @@ class S3Client(Minio):
         self.logger.info(f'do_list_objects {bucket_name} {prefix} {start_after} {include_user_meta} {include_version} {use_url_encoding_type} {recursive} succeed')
         result = '\n'.join([f'{obj.object_name} {obj.size} {obj.etag}' for obj in objects])
         return result
+    
+    def do_add_user(self, access_key, secret_key):
+        try:
+            self.run_cmd(f'mc admin user add {self.alias} {access_key} {secret_key}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_add_user', access_key=access_key, secret_key=secret_key)
+        self.stats.success('do_add_user')
+        self.logger.info(f'do_add_user {access_key} succeed')
+        return True
+    
+    def do_remove_user(self, access_key):
+        try:
+            self.run_cmd(f'mc admin user remove {self.alias} {access_key}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_remove_user', access_key=access_key)
+        self.stats.success('do_remove_user')
+        self.logger.info(f'do_remove_user {access_key} succeed')
+        return True
+
+    def do_add_group(self, group_name, members):
+        try:
+            self.run_cmd(f'mc admin group add {self.alias} {group_name} {" ".join(members)}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_add_group', group_name=group_name)
+        self.stats.success('do_add_group')
+        self.logger.info(f'do_add_group {group_name} succeed')
+        return self.do_group_info(group_name)
+
+    def do_remove_group(self, group_name):
+        try:
+            self.run_cmd(f'mc admin group remove {self.alias} {group_name}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_remove_group', group_name=group_name)
+        self.stats.success('do_remove_group')
+        self.logger.info(f'do_remove_group {group_name} succeed')
+        return True
+
+    def do_group_info(self, group_name):
+        try:
+            self.run_cmd(f'mc admin group info {self.alias} {group_name}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_group_info', group_name=group_name)
+        self.stats.success('do_group_info')
+        self.logger.info(f'do_group_info {group_name} succeed')
+        return True
