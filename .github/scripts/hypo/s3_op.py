@@ -13,6 +13,7 @@ from stats import Statistics
 from minio.error import S3Error
 import common
 from minio import Minio
+import io
 
 
 class S3Client(Minio):
@@ -132,9 +133,9 @@ class S3Client(Minio):
         # print(stat_str)
         return stat.bucket_name, stat.object_name, stat.size
 
-    def do_put_object(self, bucket_name:str, object_name:str, data, length, content_type='application/octet-stream', part_size=4*1024*1024):
+    def do_put_object(self, bucket_name:str, object_name:str, data, length, content_type='application/octet-stream', part_size=5*1024*1024):
         try:
-            self.put_object(bucket_name, object_name, data, length=length, content_type=content_type, part_size=part_size)
+            self.put_object(bucket_name, object_name, io.BytesIO(data), length=length, content_type=content_type, part_size=part_size)
         except S3Error as e:
             return self.handleException(e, 'do_put_object', bucket_name=bucket_name, object_name=object_name, length=length, part_size=part_size)
         self.stats.success('do_put_object')

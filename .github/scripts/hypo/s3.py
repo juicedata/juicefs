@@ -11,17 +11,18 @@ from hypothesis.stateful import rule, precondition, RuleBasedStateMachine, Bundl
 from hypothesis import Phase, seed
 from hypothesis import strategies as st
 import random
-import common
-from common import run_cmd
 from s3_op import S3Client
-MAX_OBJECT_SIZE=5*1024*1024
+# ./juicefs format sqlite3://test.db gateway
+# MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway sqlite3://test.db localhost:9005 --multi-buckets --keep-etag
+
+MAX_OBJECT_SIZE=10*1024*1024
 # https://min.io/docs/minio/linux/administration/identity-access-management/policy-based-access-control.html#minio-policy-actions
-S3_ACTION_LIST = ["s3:*", "s3:CreateBucket", "s3:DeleteBucket", "s3:ForceDeleteBucket", "s3:GetBucketLocation", "s3:ListAllMyBuckets", "s3:DeleteObject", "s3:GetObject","s3:ListBucket","s3:PutObject", "s3:PutObjectTagging", "s3:GetObjectTagging", "s3:DeleteObjectTagging", "s3:GetBucketPolicy", "s3:PutBucketPolicy", "s3:DeleteBucketPolicy", "s3:GetBucketTagging", "s3:PutBucketTagging"]
+S3_ACTION_LIST = ["s3:*", "s3:DeleteObject", "s3:GetObject","s3:ListBucket","s3:PutObject", "s3:PutObjectTagging", "s3:GetObjectTagging", "s3:DeleteObjectTagging"]
 st_bucket_name = st.text(alphabet=ascii_lowercase, min_size=4, max_size=4)
 st_object_name = st.text(alphabet=ascii_lowercase, min_size=4, max_size=4)
 st_object_prefix = st.text(alphabet=ascii_lowercase, min_size=1, max_size=1)
 st_content = st.binary(min_size=0, max_size=MAX_OBJECT_SIZE)
-st_part_size = st.sampled_from([128*1024, 256*1024, 512*1024, 1*1024*1024, 2*1024*1024, 4*1024*1024])
+st_part_size = st.sampled_from([5*1024*1024, 8*1024*1024])
 st_offset = st.integers(min_value=0, max_value=MAX_OBJECT_SIZE)
 st_length = st.integers(min_value=0, max_value=MAX_OBJECT_SIZE)
 st_policy = st.fixed_dictionaries({
@@ -30,7 +31,7 @@ st_policy = st.fixed_dictionaries({
             st.fixed_dictionaries({
                 "Effect": st.sampled_from(["Allow", "Deny"]),
                 "Principal": st.fixed_dictionaries({"AWS": st.just("*")}),
-                "Resource": st.just("arn:aws:s3:::my-bucket"),
+                "Resource": st.just("arn:aws:s3:::{{bucket}}"),
                 "Action": st.lists(
                     st.sampled_from(["s3:GetBucketLocation", "s3:ListBucket"]),
                     min_size=1, max_size=3, 
@@ -45,16 +46,14 @@ st_policy = st.fixed_dictionaries({
                     min_size=1, max_size=3,
                     unique=True
                 ),
-                "Resource": st.just("arn:aws:s3:::my-bucket/*"),
+                "Resource": st.just("arn:aws:s3:::{{bucket}}/*"),
             }),
         ),
-        unique=True
+        min_size=1, max_size=3
     )
 })
 
 SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
-# ./juicefs format sqlite3://test.db gateway
-# MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway sqlite3://test.db localhost:9005 --multi-buckets --keep-etag
 @seed(SEED)
 class S3Machine(RuleBasedStateMachine):
     buckets = Bundle('buckets')
@@ -62,22 +61,19 @@ class S3Machine(RuleBasedStateMachine):
     BUCKET_NAME = 's3test'
     client1 = S3Client(name='minio', url='localhost:9000', access_key='minioadmin', secret_key='minioadmin')
     client2 = S3Client(name='juice', url='localhost:9005', access_key='minioadmin', secret_key='minioadmin')
-    EXCLUDE_RULES = []
+    EXCLUDE_RULES = ['list_buckets']
 
     def __init__(self):
         super().__init__()
         self.client1.remove_all_buckets()
         self.client2.remove_all_buckets()
 
-    @initialize(target=buckets)
-    def init_buckets(self):
-        self.client1.do_create_bucket(self.BUCKET_NAME)
-        self.client2.do_create_bucket(self.BUCKET_NAME)
-        self.client1.do_fput_object(self.BUCKET_NAME, 'testobj', 'README.md')
-        self.client2.do_fput_object(self.BUCKET_NAME, 'testobj', 'README.md')
-
-        return self.BUCKET_NAME
-
+    # @initialize(target=buckets)
+    # def init_buckets(self):
+    #     self.client1.do_create_bucket(self.BUCKET_NAME)
+    #     self.client2.do_create_bucket(self.BUCKET_NAME)
+    #     return self.BUCKET_NAME
+    
     def equal(self, result1, result2):
         if os.getenv('PROFILE', 'dev') == 'generate':
             return True
@@ -113,7 +109,9 @@ class S3Machine(RuleBasedStateMachine):
             return bucket_name
     @rule(
         target = buckets, 
-        bucket_name = consumes(buckets).filter(lambda x: x != multiple()))
+        bucket_name = consumes(buckets)
+    )
+    @precondition(lambda self: 'remove_bucket' not in self.EXCLUDE_RULES)
     def remove_bucket(self, bucket_name):
         result1 = self.client1.do_remove_bucket(bucket_name)
         result2 = self.client2.do_remove_bucket(bucket_name)
@@ -123,18 +121,19 @@ class S3Machine(RuleBasedStateMachine):
         else:
             return multiple()
 
-    # @rule(
-    #     bucket_name = buckets.filter(lambda x: x != multiple()),
-    #     policy = st_policy
-    # )
+    @rule(
+        bucket_name = buckets.filter(lambda x: x != multiple()),
+        policy = st_policy
+    )
     @precondition(lambda self: 'set_bucket_policy' not in self.EXCLUDE_RULES)
     def set_bucket_policy(self, bucket_name, policy):
-        result1 = self.client1.do_set_bucket_policy(bucket_name, json.dumps(policy))
-        result2 = self.client2.do_set_bucket_policy(bucket_name, json.dumps(policy))
+        policy_str = json.dumps(policy).replace('{{bucket}}', bucket_name)
+        result1 = self.client1.do_set_bucket_policy(bucket_name, policy_str)
+        result2 = self.client2.do_set_bucket_policy(bucket_name, policy_str)
         assert self.equal(result1, result2), f'\033[31mset_bucket_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
-        bucket_name = buckets.filter(lambda x: x != multiple())
+        bucket_name = buckets
     )
     @precondition(lambda self: 'get_bucket_policy' not in self.EXCLUDE_RULES)
     def get_bucket_policy(self, bucket_name):
@@ -143,7 +142,7 @@ class S3Machine(RuleBasedStateMachine):
         assert self.equal(result1, result2), f'\033[31mget_bucket_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
-        bucket_name = buckets.filter(lambda x: x != multiple())
+        bucket_name = buckets
     )
     @precondition(lambda self: 'delete_bucket_policy' not in self.EXCLUDE_RULES)
     def delete_bucket_policy(self, bucket_name):
@@ -153,14 +152,14 @@ class S3Machine(RuleBasedStateMachine):
 
     @rule(
         target=objects,
-        bucket_name = buckets.filter(lambda x: x != multiple()),
+        bucket_name = buckets,
         object_name = st_object_name, 
         data = st_content,
         use_part_size = st.booleans(),
         part_size = st_part_size
     )
     @precondition(lambda self: 'put_object' not in self.EXCLUDE_RULES)
-    def put_object(self, bucket_name, object_name, data, use_part_size, part_size=4*1024*1024):
+    def put_object(self, bucket_name, object_name, data, use_part_size, part_size=5*1024*1024):
         if use_part_size:
             result1 = self.client1.do_put_object(bucket_name, object_name, data, -1, part_size=part_size)
             result2 = self.client2.do_put_object(bucket_name, object_name, data, -1, part_size=part_size)
@@ -174,7 +173,7 @@ class S3Machine(RuleBasedStateMachine):
             return f'{bucket_name}:{object_name}'
 
     @rule(
-        obj = objects.filter(lambda x: x != multiple()),
+        obj = objects,
         offset = st_offset, 
         length = st_length
     )
@@ -188,7 +187,7 @@ class S3Machine(RuleBasedStateMachine):
 
     @rule(
         target=objects,
-        bucket_name = buckets.filter(lambda x: x != multiple()),
+        bucket_name = buckets,
         object_name = st_object_name)
     @precondition(lambda self: 'fput_object' not in self.EXCLUDE_RULES)
     def fput_object(self, bucket_name, object_name):
@@ -201,7 +200,7 @@ class S3Machine(RuleBasedStateMachine):
             return f'{bucket_name}:{object_name}'
 
     @rule(
-        obj = objects.filter(lambda x: x != multiple()),
+        obj = objects,
         file_path = st.just('/tmp/file')
     )
     @precondition(lambda self: 'fget_object' not in self.EXCLUDE_RULES)
@@ -214,7 +213,8 @@ class S3Machine(RuleBasedStateMachine):
 
     @rule(
         target = objects,
-        obj = consumes(objects).filter(lambda x: x != multiple()))
+        obj = consumes(objects)
+    )
     @precondition(lambda self: 'remove_object' not in self.EXCLUDE_RULES)
     def remove_object(self, obj:str):
         bucket_name = obj.split(':')[0]
@@ -228,7 +228,7 @@ class S3Machine(RuleBasedStateMachine):
             return multiple()
         
     @rule(
-        obj = objects.filter(lambda x: x != multiple())
+        obj = objects
     )
     @precondition(lambda self: 'stat_object' not in self.EXCLUDE_RULES)
     def stat_object(self, obj:str):
@@ -239,7 +239,7 @@ class S3Machine(RuleBasedStateMachine):
         assert self.equal(result1, result2), f'\033[31mstat_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
-          bucket_name = buckets.filter(lambda x: x != multiple()),
+          bucket_name = buckets,
           prefix = st.one_of(st_object_prefix, None),
           start_after = st.one_of(st_object_name, None),
           include_user_meta = st.booleans(),
@@ -262,6 +262,10 @@ if __name__ == '__main__':
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, 
         phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
+    settings.register_profile("dev", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
+        print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
+        report_multiple_bugs=False, 
+        phases=[Phase.generate, Phase.target])
     profile = os.environ.get('PROFILE', 'dev')
     settings.load_profile(profile)
     

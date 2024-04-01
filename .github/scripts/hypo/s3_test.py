@@ -19,5 +19,39 @@ class TestS3(unittest.TestCase):
         state.remove_bucket('bucket2')
         state.teardown()
 
+    def test_s3_2(self):
+        state = S3Machine()
+        v1 = state.create_bucket(bucket_name='lwre')
+        v2 = state.create_bucket(bucket_name='imrr')
+        v3 = state.fput_object(bucket_name=v1, object_name='zqqs')
+        state.get_bucket_policy(bucket_name=v1)
+        state.delete_bucket_policy(bucket_name=v2)
+        state.put_object(bucket_name=v1, data=b'\x1c', object_name='mvtl', part_size=8388608, use_part_size=False)
+        state.teardown()
+
+    def test_s3_policy(self):
+        state = S3Machine()
+        state.list_buckets()
+        v1 = state.create_bucket(bucket_name='bqgl')
+        state.list_buckets()
+        state.list_buckets()
+        state.set_bucket_policy(bucket_name=v1, policy={'Statement': [{'Effect': 'Deny',
+        'Principal': {'AWS': '*'},
+        'Action': ['s3:PutObject'],
+        'Resource': 'arn:aws:s3:::{{bucket}}/*'}]})
+        state.remove_bucket(bucket_name=v1)
+        state.teardown()
+
+    def test_s3_4(self):
+        state = S3Machine()
+        v1 = state.create_bucket(bucket_name='rznp')
+        state.set_bucket_policy(bucket_name=v1, policy={'Statement': [{'Effect': 'Deny',
+        'Principal': {'AWS': '*'},
+        'Resource': 'arn:aws:s3:::{{bucket}}',
+        'Action': ['s3:GetBucketLocation']}]})
+        state.delete_bucket_policy(bucket_name=v1)
+        state.delete_bucket_policy(bucket_name=v1)
+        state.teardown()
+
 if __name__ == '__main__':
     unittest.main()
