@@ -1058,6 +1058,9 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if name == "" {
 		return syscall.ENOENT
 	}
+	if name == "." || name == ".." {
+		return syscall.EEXIST
+	}
 
 	defer m.timeit("Link", time.Now())
 	if attr == nil {
