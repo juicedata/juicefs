@@ -1165,7 +1165,7 @@ type JFSFLock struct {
 
 func (j *JFSFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
 	for _, inode := range j.Inodes {
-		if errno := j.Meta.Flock(mctx, inode, j.Owner, syscall.F_WRLCK, true); errno != 0 {
+		if errno := j.Meta.Flock(mctx, inode, j.Owner, meta.F_WRLCK, true); errno != 0 {
 			logger.Errorf("failed to get write lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
 		}
 	}
@@ -1174,7 +1174,7 @@ func (j *JFSFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (
 
 func (j *JFSFLock) Unlock() {
 	for _, inode := range j.Inodes {
-		if errno := j.Meta.Flock(mctx, inode, j.Owner, syscall.F_UNLCK, true); errno != 0 {
+		if errno := j.Meta.Flock(mctx, inode, j.Owner, meta.F_UNLCK, true); errno != 0 {
 			logger.Errorf("failed to release write lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
 		}
 	}
@@ -1182,7 +1182,7 @@ func (j *JFSFLock) Unlock() {
 
 func (j *JFSFLock) GetRLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
 	for _, inode := range j.Inodes {
-		if errno := j.Meta.Flock(mctx, inode, j.Owner, syscall.F_RDLCK, true); errno != 0 {
+		if errno := j.Meta.Flock(mctx, inode, j.Owner, meta.F_RDLCK, true); errno != 0 {
 			logger.Errorf("failed to get read lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
 		}
 	}
@@ -1191,7 +1191,7 @@ func (j *JFSFLock) GetRLock(ctx context.Context, timeout *minio.DynamicTimeout) 
 
 func (j *JFSFLock) RUnlock() {
 	for _, inode := range j.Inodes {
-		if errno := j.Meta.Flock(mctx, inode, j.Owner, syscall.F_UNLCK, true); errno != 0 {
+		if errno := j.Meta.Flock(mctx, inode, j.Owner, meta.F_UNLCK, true); errno != 0 {
 			logger.Errorf("failed to release read lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
 		}
 	}
