@@ -3,7 +3,7 @@ source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
 source .github/scripts/start_meta_engine.sh
-start_meta_engine $META minio
+start_meta_engine $META
 META_URL=$(get_meta_url $META)
 [[ -z "$SEED" ]] && SEED=$(date +%s)
 # [[ -z "$SEED" ]] && SEED=1711594639
