@@ -144,7 +144,7 @@ func wrapRegister(c *cli.Context, mp, name string) (prometheus.Registerer, *prom
 		logger.Warnf("cannot get hostname: %s", err)
 	}
 	if c.IsSet("custom-labels") {
-		for _, kv := range strings.Split(c.String("custom-labels"), ",") {
+		for _, kv := range strings.Split(c.String("custom-labels"), ";") {
 			splited := strings.Split(kv, ":")
 			if len(splited) != 2 {
 				logger.Fatalf("invalid label format: %s", kv)

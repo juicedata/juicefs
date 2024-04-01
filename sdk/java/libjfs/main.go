@@ -460,7 +460,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 				logger.Warnf("cannot get hostname: %s", err)
 			}
 			if jConf.PushLabels != "" {
-				for _, kv := range strings.Split(jConf.PushLabels, ",") {
+				for _, kv := range strings.Split(jConf.PushLabels, ";") {
 					var splited = strings.Split(kv, ":")
 					if len(splited) != 2 {
 						logger.Errorf("invalid label format: %s", kv)

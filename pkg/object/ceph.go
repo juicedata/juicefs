@@ -318,6 +318,22 @@ func newCeph(endpoint, cluster, user, token string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Can't create connection to cluster %s for user %s: %s", cluster, user, err)
 	}
+	if opt := os.Getenv("CEPH_ADMIN_SOCKET"); opt != "none" {
+		if opt == "" {
+			opt = "$run_dir/jfs-$cluster-$name.asok"
+		}
+		if err = conn.SetConfigOption("admin_socket", opt); err != nil {
+			logger.Warnf("Failed to set admin_socket to %s: %s", opt, err)
+		}
+	}
+	if opt := os.Getenv("CEPH_LOG_FILE"); opt != "none" {
+		if opt == "" {
+			opt = "/var/log/ceph/jfs-$cluster-$name.log"
+		}
+		if err = conn.SetConfigOption("log_file", opt); err != nil {
+			logger.Warnf("Failed to set log_file to %s: %s", opt, err)
+		}
+	}
 	if os.Getenv("JFS_NO_CHECK_OBJECT_STORAGE") == "" {
 		if err := conn.ReadDefaultConfigFile(); err != nil {
 			return nil, fmt.Errorf("Can't read default config file: %s", err)
