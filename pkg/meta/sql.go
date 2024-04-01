@@ -2253,10 +2253,10 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			return err
 		}
 		nodeAttr.Mtime = mtime.UnixNano() / 1e3
-		nodeAttr.Mtimensec = int16(mtime.Nanosecond())
+		nodeAttr.Mtimensec = int16(mtime.Nanosecond() % 1e3)
 		ctime := time.Now()
 		nodeAttr.Ctime = ctime.UnixNano() / 1e3
-		nodeAttr.Ctimensec = int16(ctime.Nanosecond())
+		nodeAttr.Ctimensec = int16(ctime.Nanosecond() % 1e3)
 
 		var ck = chunk{Inode: inode, Indx: indx}
 		ok, err = s.ForUpdate().MustCols("indx").Get(&ck)
