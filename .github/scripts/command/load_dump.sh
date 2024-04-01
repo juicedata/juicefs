@@ -3,7 +3,7 @@ source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
 source .github/scripts/start_meta_engine.sh
-start_meta_engine $META
+start_meta_engine $META minio
 META_URL=$(get_meta_url $META)
 [[ -z "$SEED" ]] && SEED=$(date +%s)
 # [[ -z "$SEED" ]] && SEED=1711594639
@@ -79,11 +79,10 @@ do_dump_load_with_fsrand(){
     ./juicefs format $META_URL myjfs --trash-days $trash_days --enable-acl
     ./juicefs mount -d $META_URL /jfs --enable-xattr
     SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
-    # find /jfs/fsrand -mindepth 1 -maxdepth 1 ! -name "syly" -exec rm -rf {} \; 
-    # do_dump_load_and_compare 
+    do_dump_load_and_compare 
     do_dump_load_and_compare --fast
-    # do_dump_load_and_compare --skip-trash
-    # do_dump_load_and_compare --fast --skip-trash
+    do_dump_load_and_compare --skip-trash
+    do_dump_load_and_compare --fast --skip-trash
 }
 
 do_dump_load_and_compare()
@@ -94,7 +93,7 @@ do_dump_load_and_compare()
     rm -rf test2.db 
     ./juicefs load sqlite3://test2.db dump.json
     ./juicefs dump sqlite3://test2.db dump2.json $option
-    compare_dump_json
+    compare_dump_json $option
     ./juicefs mount -d sqlite3://test2.db /jfs2
     diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
     compare_stat_acl_xattr /jfs/fsrand /jfs2/fsrand
@@ -102,6 +101,7 @@ do_dump_load_and_compare()
 }
 
 compare_dump_json(){
+    option=$@
     cp dump.json dump.json.bak
     cp dump2.json dump2.json.bak
     sed -i '/usedSpace/d' dump*.json.bak
@@ -110,7 +110,11 @@ compare_dump_json(){
     sed -i '/nextChunk/d' dump*.json.bak
     sed -i '/nextTrash/d' dump*.json.bak
     sed -i '/nextSession/d' dump*.json.bak
-    sed -i 's/"inode":[0-9]\+/"inode":0/g' dump*.json.bak
+    sed -i 's/"inode":[0-9]\+/"inode":removed/g' dump*.json.bak
+    #TODO SEE: https://github.com/juicedata/juicefs/issues/4624
+    if [[ "$option" == *"--skip-trash"* ]]; then
+        sed -i 's/"nlink":[0-9]\+/"nlink":removed/g' dump*.json.bak
+    fi
     diff -ur dump.json.bak dump2.json.bak
 }
 
