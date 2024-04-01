@@ -18,6 +18,7 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -1156,57 +1157,67 @@ func (n *jfsObjects) cleanup() {
 	}
 }
 
-type JFSFLock struct {
-	Id     string
-	Inodes []meta.Ino
-	Owner  uint64
-	Meta   meta.Meta
+type jfsFLock struct {
+	inode meta.Ino
+	owner uint64
+	meta  meta.Meta
 }
 
-func (j *JFSFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
-	for _, inode := range j.Inodes {
-		if errno := j.Meta.Flock(mctx, inode, j.Owner, meta.F_WRLCK, true); errno != 0 {
-			logger.Errorf("failed to get write lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
+func (j *jfsFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
+	return j.getFlockWithTimeOut(ctx, meta.F_WRLCK, timeout)
+}
+
+func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeout *minio.DynamicTimeout) (context.Context, error) {
+	start := time.Now().UTC()
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout.Timeout())
+	defer cancel()
+	for {
+		select {
+		case <-timeoutCtx.Done():
+			if errors.Is(timeoutCtx.Err(), context.DeadlineExceeded) {
+				timeout.LogFailure()
+				logger.Errorf("get write lock timed out ino:%d", j.inode)
+				return timeoutCtx, minio.OperationTimedOut{}
+			}
+		default:
+			if errno := j.meta.Flock(mctx, j.inode, j.owner, ltype, false); errno != 0 {
+				logger.Errorf("failed to get write lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
+			} else {
+				timeout.LogSuccess(time.Now().UTC().Sub(start))
+				return timeoutCtx, nil
+			}
 		}
+		time.Sleep(500 * time.Millisecond)
 	}
-	return ctx, nil
 }
 
-func (j *JFSFLock) Unlock() {
-	for _, inode := range j.Inodes {
-		if errno := j.Meta.Flock(mctx, inode, j.Owner, meta.F_UNLCK, true); errno != 0 {
-			logger.Errorf("failed to release write lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
-		}
+func (j *jfsFLock) Unlock() {
+	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
+		logger.Errorf("failed to release write lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
 	}
 }
 
-func (j *JFSFLock) GetRLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
-	for _, inode := range j.Inodes {
-		if errno := j.Meta.Flock(mctx, inode, j.Owner, meta.F_RDLCK, true); errno != 0 {
-			logger.Errorf("failed to get read lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
-		}
-	}
-	return ctx, nil
+func (j *jfsFLock) GetRLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
+	return j.getFlockWithTimeOut(ctx, meta.F_RDLCK, timeout)
 }
 
-func (j *JFSFLock) RUnlock() {
-	for _, inode := range j.Inodes {
-		if errno := j.Meta.Flock(mctx, inode, j.Owner, meta.F_UNLCK, true); errno != 0 {
-			logger.Errorf("failed to release read lock for inode %d by owner %d, error : %s", inode, j.Owner, errno)
-		}
+func (j *jfsFLock) RUnlock() {
+	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
+		logger.Errorf("failed to release read lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
 	}
 }
 
 func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker {
-	fLock := JFSFLock{Id: minio.MustGetUUID(), Owner: n.conf.Meta.Sid, Meta: n.fs.Meta()}
-	for _, object := range objects {
-		fi, eno := n.fs.Stat(mctx, n.path(bucket, object))
-		if eno != 0 {
-			logger.Errorf("failed to get the status of the file to be locked: %s error %s", n.path(bucket, object), eno)
-			continue
-		}
-		fLock.Inodes = append(fLock.Inodes, fi.Inode())
+	if len(objects) != 1 {
+		logger.Errorf("only allow locking one object,but get %s", objects)
+		return &jfsFLock{}
 	}
+	fLock := jfsFLock{owner: n.conf.Meta.Sid, meta: n.fs.Meta()}
+	fi, eno := n.fs.Stat(mctx, n.path(bucket, objects[0]))
+	if eno != 0 {
+		logger.Errorf("failed to get the status of the file to be locked: %s error %s", n.path(bucket, objects[0]), eno)
+	}
+	fLock.inode = fi.Inode()
 	return &fLock
 }
 
