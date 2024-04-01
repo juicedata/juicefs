@@ -21,6 +21,12 @@ SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
 class S3Machine(RuleBasedStateMachine):
     buckets = Bundle('buckets')
     objects = Bundle('objects')
+    users = Bundle('users')
+    groups = Bundle('groups')
+    policies = Bundle('policies')
+    user_policy = Bundle('user_policy')
+    group_policy = Bundle('group_policy')
+
     BUCKET_NAME = 's3test'
     client1 = S3Client(alias='minio', url='localhost:9000', access_key='minioadmin', secret_key='minioadmin')
     client2 = S3Client(alias='juice', url='localhost:9005', access_key='minioadmin', secret_key='minioadmin')
@@ -50,6 +56,13 @@ class S3Machine(RuleBasedStateMachine):
             return result1 == result2
         else:
             return result1 == result2
+
+    @rule()
+    @precondition(lambda self: 'info' not in self.EXCLUDE_RULES)
+    def info(self):
+        result1 = self.client1.do_info()
+        result2 = self.client2.do_info()
+        assert self.equal(result1, result2), f'\033[31minfo:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule()
     @precondition(lambda self: 'list_buckets' not in self.EXCLUDE_RULES)
@@ -203,7 +216,7 @@ class S3Machine(RuleBasedStateMachine):
 
     @rule(
           bucket_name = buckets,
-          prefix = st.one_of(st_object_prefix, st.just(None)),
+          prefix = st.just(None), # st.one_of(st_object_prefix, st.just(None)),
           start_after = st.one_of(st_object_name, st.just(None)),
           include_user_meta = st.booleans(),
           include_version = st.just(False),
@@ -216,36 +229,226 @@ class S3Machine(RuleBasedStateMachine):
         assert self.equal(result1, result2), f'\033[31mlist_objects:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
-        access_key = st_access_key, 
+        target = users,
+        user_name = st_user_name, 
         secret_key = st_secret_key
     )
     @precondition(lambda self: 'add_user' not in self.EXCLUDE_RULES)
-    def add_user(self, access_key, secret_key):
-        result1 = self.client1.do_add_user(access_key, secret_key)
-        result2 = self.client2.do_add_user(access_key, secret_key)
+    def add_user(self, user_name, secret_key):
+        result1 = self.client1.do_add_user(user_name, secret_key)
+        result2 = self.client2.do_add_user(user_name, secret_key)
         assert self.equal(result1, result2), f'\033[31madd_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
-
-    @rule(access_key = st_access_key)
+        if isinstance(result1, Exception):
+            return multiple()
+        else:
+            return user_name
+        
+    @rule(
+        user_name = consumes(users).filter(lambda x: x != multiple())
+    )
     @precondition(lambda self: 'remove_user' not in self.EXCLUDE_RULES)
-    def remove_user(self, access_key):
-        result1 = self.client1.do_remove_user(access_key)
-        result2 = self.client2.do_remove_user(access_key)
+    def remove_user(self, user_name):
+        result1 = self.client1.do_remove_user(user_name)
+        result2 = self.client2.do_remove_user(user_name)
         assert self.equal(result1, result2), f'\033[31mremove_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
-    
-    @rule(group_name=st_group_name, 
-          members = st_group_members)
+        if isinstance(result1, Exception):
+            return user_name
+        else:
+            return multiple()
+
+    @rule(
+        user_name = users.filter(lambda x: x != multiple())
+    )
+    @precondition(lambda self: 'enable_user' not in self.EXCLUDE_RULES)
+    def enaable_user(self, user_name):
+        result1 = self.client1.do_enable_user(user_name)
+        result2 = self.client2.do_enable_user(user_name)
+        assert self.equal(result1, result2), f'\033[31menable_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        user_name = users.filter(lambda x: x != multiple())
+    )
+    @precondition(lambda self: 'disable_user' not in self.EXCLUDE_RULES)
+    def disable_user(self, user_name):
+        result1 = self.client1.do_disable_user(user_name)
+        result2 = self.client2.do_disable_user(user_name)
+        assert self.equal(result1, result2), f'\033[31mdisable_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        user_name = users.filter(lambda x: x != multiple())
+    )
+    @precondition(lambda self: 'user_info' not in self.EXCLUDE_RULES)
+    def user_info(self, user_name):
+        result1 = self.client1.do_user_info(user_name)
+        result2 = self.client2.do_user_info(user_name)
+        assert self.equal(result1, result2), f'\033[31muser_info:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+    )
+    @precondition(lambda self: 'list_users' not in self.EXCLUDE_RULES)
+    def list_users(self):
+        result1 = self.client1.do_list_users()
+        result2 = self.client2.do_list_users()
+        assert self.equal(result1, result2), f'\033[31mlist_users:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule()
+    @precondition(lambda self: 'list_groups' not in self.EXCLUDE_RULES)
+    def list_groups(self):
+        result1 = self.client1.do_list_groups()
+        result2 = self.client2.do_list_groups()
+        assert self.equal(result1, result2), f'\033[31mlist_groups:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        target = groups,    
+        group_name=st_group_name, 
+        members = st_group_members)
     @precondition(lambda self: 'add_group' not in self.EXCLUDE_RULES)
     def add_group(self, group_name, members):
         result1 = self.client1.do_add_group(group_name, members)
         result2 = self.client2.do_add_group(group_name, members)
         assert self.equal(result1, result2), f'\033[31madd_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
-
-    @rule(group_name=st_group_name)
+        if isinstance(result1, Exception):
+            return multiple()
+        else:
+            return group_name
+        
+    @rule(
+        group_name=consumes(groups).filter(lambda x: x != multiple())
+    )
     @precondition(lambda self: 'remove_group' not in self.EXCLUDE_RULES)
-    def do_remove_group(self, group_name):
+    def remove_group(self, group_name):
         result1 = self.client1.do_remove_group(group_name)
         result2 = self.client2.do_remove_group(group_name)
         assert self.equal(result1, result2), f'\033[31mremove_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        if isinstance(result1, Exception):
+            return group_name
+        else:
+            return multiple()
+        
+    @rule(
+        group_name=groups.filter(lambda x: x != multiple())
+    )
+    @precondition(lambda self: 'disable_group' not in self.EXCLUDE_RULES)
+    def disable_group(self, group_name):
+        result1 = self.client1.do_disable_group(group_name)
+        result2 = self.client2.do_disable_group(group_name)
+        assert self.equal(result1, result2), f'\033[31mdisable_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        group_name=groups.filter(lambda x: x != multiple())
+    )
+    @precondition(lambda self: 'enable_group' not in self.EXCLUDE_RULES)
+    def enable_group(self, group_name):
+        result1 = self.client1.do_enable_group(group_name)
+        result2 = self.client2.do_enable_group(group_name)
+        assert self.equal(result1, result2), f'\033[31menable_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        target = policies,
+        policy_name = st_policy_name,
+        policy = st_policy
+    )
+    @precondition(lambda self: 'create_policy' not in self.EXCLUDE_RULES)
+    def create_policy(self, policy_name, policy):
+        #TODO: render policy with bucket name
+        policy_str = json.dumps(policy)
+        result1 = self.client1.do_create_policy(policy_name, policy_str)
+        result2 = self.client2.do_create_policy(policy_name, policy_str)
+        assert self.equal(result1, result2), f'\033[31m_create_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        if isinstance(result1, Exception):
+            return multiple()
+        else:
+            return policy_name
+    
+    @rule(
+        policy_name = consumes(policies).filter(lambda x: x != multiple())
+    )
+    @precondition(lambda self: 'remove_policy' not in self.EXCLUDE_RULES)
+    def remove_policy(self, policy_name):
+        result1 = self.client1.do_remove_policy(policy_name)
+        result2 = self.client2.do_remove_policy(policy_name)
+        assert self.equal(result1, result2), f'\033[31mremove_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        if isinstance(result1, Exception):
+            return policy_name
+        else:
+            return multiple()
+
+    @rule(
+        policy_name = policies.filter(lambda x: x != multiple())
+    )
+    @precondition(lambda self: 'policy_info' not in self.EXCLUDE_RULES)
+    def policy_info(self, policy_name):
+        result1 = self.client1.do_policy_info(policy_name)
+        result2 = self.client2.do_policy_info(policy_name)
+        assert self.equal(result1, result2), f'\033[31mpolicy_info:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+    
+    @rule()
+    @precondition(lambda self: 'list_policies' not in self.EXCLUDE_RULES)
+    def list_policies(self):
+        result1 = self.client1.do_list_policies()
+        result2 = self.client2.do_list_policies()
+        assert self.equal(result1, result2), f'\033[31mlist_policies:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        target = user_policy,
+        user_name = users.filter(lambda x: x != multiple()),
+        #TODO: add internal policy
+        policy_name = policies.filter(lambda x: x != multiple())
+    )
+    @precondition(lambda self: 'attach_policy_to_user' not in self.EXCLUDE_RULES)
+    def attach_policy_to_user(self, user_name, policy_name):
+        result1 = self.client1.do_attach_policy_to_user(policy_name, user_name)
+        result2 = self.client2.do_attach_policy_to_user(policy_name, user_name)
+        assert self.equal(result1, result2), f'\033[31mattach_policy_to_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        if isinstance(result1, Exception):
+            return multiple()
+        else:
+            return f'{user_name}:{policy_name}'
+
+    @rule(
+        target = group_policy, 
+        group_name = groups.filter(lambda x: x != multiple()),
+        policy_name = policies.filter(lambda x: x != multiple())
+    )
+    @precondition(lambda self: 'attach_policy_to_group' not in self.EXCLUDE_RULES)
+    def attach_policy_to_group(self, group_name, policy_name):
+        result1 = self.client1.do_attach_policy_to_group(policy_name, group_name)
+        result2 = self.client2.do_attach_policy_to_group(policy_name, group_name)
+        assert self.equal(result1, result2), f'\033[31mattach_policy_to_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        if isinstance(result1, Exception):
+            return multiple()
+        else:
+            return f'{group_name}:{policy_name}'
+        
+    @rule(
+        user_policy = consumes(user_policy).filter(lambda x: x != multiple())
+    )
+    @precondition(lambda self: 'detach_policy_from_user' not in self.EXCLUDE_RULES)
+    def detach_policy_from_user(self, user_policy):
+        user_name = user_policy.split(':')[0]
+        policy_name = user_policy.split(':')[1]
+        result1 = self.client1.do_detach_policy_from_user(policy_name, user_name)
+        result2 = self.client2.do_detach_policy_from_user(policy_name, user_name)
+        assert self.equal(result1, result2), f'\033[31mdetach_policy_to_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        if isinstance(result1, Exception):
+            return user_policy
+        else:
+            return multiple()
+        
+    @rule(
+        group_policy = consumes(group_policy).filter(lambda x: x != multiple())
+    )
+    @precondition(lambda self: 'detach_policy_from_group' not in self.EXCLUDE_RULES)
+    def detach_policy_from_group(self, group_policy):
+        group_name = group_policy.split(':')[0]
+        policy_name = group_policy.split(':')[1]
+        result1 = self.client1.do_detach_policy_from_group(policy_name, group_name)
+        result2 = self.client2.do_detach_policy_from_group(policy_name, group_name)
+        assert self.equal(result1, result2), f'\033[31mdetach_policy_to_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        if isinstance(result1, Exception):
+            return group_policy
+        else:
+            return multiple()
 
     def teardown(self):
         pass

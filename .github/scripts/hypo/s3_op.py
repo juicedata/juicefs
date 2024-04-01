@@ -56,7 +56,16 @@ class S3Client(Minio):
             return Exception(f'returncode:{e.returncode} output:{e.output.decode()}')
         else:
             return e
-    
+        
+    def do_info(self):
+        try:
+            self.run_cmd(f'mc admin info {self.alias}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_info')
+        self.stats.success('do_info')
+        self.logger.info(f'do_info succeed')
+        return True
+
     def remove_all_buckets(self):
         buckets = self.list_buckets()
         for bucket in buckets:
@@ -234,6 +243,51 @@ class S3Client(Minio):
         self.logger.info(f'do_remove_user {access_key} succeed')
         return True
 
+    def do_enable_user(self, access_key):
+        try:
+            self.run_cmd(f'mc admin user enable {self.alias} {access_key}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_enable_user', access_key=access_key)
+        self.stats.success('do_enable_user')
+        self.logger.info(f'do_enable_user {access_key} succeed')
+        return True
+    
+    def do_disable_user(self, access_key):
+        try:
+            self.run_cmd(f'mc admin user disable {self.alias} {access_key}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_disable_user', access_key=access_key)
+        self.stats.success('do_disable_user')
+        self.logger.info(f'do_disable_user {access_key} succeed')
+        return True
+    
+    def do_user_info(self, access_key):
+        try:
+            self.run_cmd(f'mc admin user info {self.alias} {access_key}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_user_info', access_key=access_key)
+        self.stats.success('do_user_info')
+        self.logger.info(f'do_user_info {access_key} succeed')
+        return True
+    
+    def do_list_users(self):
+        try:
+            result = self.run_cmd(f'mc admin user ls {self.alias}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_list_users')
+        self.stats.success('do_list_users')
+        self.logger.info(f'do_list_users succeed')
+        return result
+
+    def do_list_groups(self):
+        try:
+            result = self.run_cmd(f'mc admin group ls {self.alias}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_list_groups')
+        self.stats.success('do_list_groups')
+        self.logger.info(f'do_list_groups succeed')
+        return result
+
     def do_add_group(self, group_name, members):
         try:
             self.run_cmd(f'mc admin group add {self.alias} {group_name} {" ".join(members)}')
@@ -252,6 +306,24 @@ class S3Client(Minio):
         self.logger.info(f'do_remove_group {group_name} succeed')
         return True
 
+    def do_disable_group(self, group_name):
+        try:
+            self.run_cmd(f'mc admin group disable {self.alias} {group_name}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_disable_group', group_name=group_name)
+        self.stats.success('do_disable_group')
+        self.logger.info(f'do_disable_group {group_name} succeed')
+        return True
+    
+    def do_enable_group(self, group_name):
+        try:
+            self.run_cmd(f'mc admin group enable {self.alias} {group_name}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_enable_group', group_name=group_name)
+        self.stats.success('do_enable_group')
+        self.logger.info(f'do_enable_group {group_name} succeed')
+        return True
+
     def do_group_info(self, group_name):
         try:
             self.run_cmd(f'mc admin group info {self.alias} {group_name}')
@@ -259,4 +331,79 @@ class S3Client(Minio):
             return self.handleException(e, 'do_group_info', group_name=group_name)
         self.stats.success('do_group_info')
         self.logger.info(f'do_group_info {group_name} succeed')
+        return True
+    
+    def do_create_policy(self, policy_name, policy):
+        policy_path = 'policy.json'
+        with open(policy_path, 'w') as f:
+            f.write(policy)
+        try:
+            self.run_cmd(f'mc admin policy create {self.alias} {policy_name} {policy_path}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_create_policy', policy_name=policy_name)
+        self.stats.success('do_create_policy')
+        self.logger.info(f'do_create_policy {policy_name} succeed')
+        return True
+    
+    def do_remove_policy(self, policy_name):
+        try:
+            self.run_cmd(f'mc admin policy remove {self.alias} {policy_name}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_remove_policy', policy_name=policy_name)
+        self.stats.success('do_remove_policy')
+        self.logger.info(f'do_remove_policy {policy_name} succeed')
+        return True
+    
+    def do_policy_info(self, policy_name):
+        try:
+            self.run_cmd(f'mc admin policy info {self.alias} {policy_name}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_policy_info', policy_name=policy_name)
+        self.stats.success('do_policy_info')
+        self.logger.info(f'do_policy_info {policy_name} succeed')
+        return True
+    
+    def do_list_policies(self):
+        try:
+            result = self.run_cmd(f'mc admin policy ls {self.alias}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_list_policies')
+        self.stats.success('do_list_policies')
+        self.logger.info(f'do_list_policies succeed')
+        return result
+    
+    def do_attach_policy_to_user(self, policy_name, user_name):
+        try:
+            self.run_cmd(f'mc admin policy attach {self.alias} {policy_name} --user {user_name}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_attach_policy_to_user', policy_name=policy_name, user_name=user_name)
+        self.stats.success('do_attach_policy_to_user')
+        self.logger.info(f'do_attach_policy_to_user {policy_name} {user_name} succeed')
+        return True
+
+    def do_attach_policy_to_group(self, policy_name, group_name):
+        try:
+            self.run_cmd(f'mc admin policy attach {self.alias} {policy_name} --group {group_name}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_attach_policy_to_group', policy_name=policy_name, group_name=group_name)
+        self.stats.success('do_attach_policy_to_group')
+        self.logger.info(f'do_attach_policy_to_group {policy_name} {group_name} succeed')
+        return True
+    
+    def do_detach_policy_from_user(self, policy_name, user_name):
+        try:
+            self.run_cmd(f'mc admin policy detach {self.alias} {policy_name} --user {user_name}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_detach_policy_from_user', policy_name=policy_name, user_name=user_name)
+        self.stats.success('do_detach_policy_from_user')
+        self.logger.info(f'do_detach_policy_from_user {policy_name} {user_name} succeed')
+        return True
+    
+    def do_detach_policy_from_group(self, policy_name, group_name):
+        try:
+            self.run_cmd(f'mc admin policy detach {self.alias} {policy_name} --group {group_name}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_detach_policy_from_group', policy_name=policy_name, group_name=group_name)
+        self.stats.success('do_detach_policy_from_group')
+        self.logger.info(f'do_detach_policy_from_group {policy_name} {group_name} succeed')
         return True
