@@ -103,6 +103,33 @@ class S3Client(Minio):
         self.logger.info(f'do_create_bucket {bucket_name}  succeed')
         return True
     
+    def do_set_bucket_policy(self, bucket_name:str, policy:str):
+        try:
+            self.set_bucket_policy(bucket_name, policy)
+        except S3Error as e:
+            return self.handleException(e, 'do_set_bucket_policy', bucket_name=bucket_name, policy=policy)
+        self.stats.success('do_set_bucket_policy')
+        self.logger.info(f'do_set_bucket_policy {bucket_name} succeed')
+        return True
+    
+    def do_get_bucket_policy(self, bucket_name:str):
+        try:
+            policy = self.get_bucket_policy(bucket_name)
+        except S3Error as e:
+            return self.handleException(e, 'do_get_bucket_policy', bucket_name=bucket_name)
+        self.stats.success('do_get_bucket_policy')
+        self.logger.info(f'do_get_bucket_policy {bucket_name} succeed')
+        return policy
+
+    def do_delete_bucket_policy(self, bucket_name:str):
+        try:
+            self.delete_bucket_policy(bucket_name)
+        except S3Error as e:
+            return self.handleException(e, 'do_delete_bucket_policy', bucket_name=bucket_name)
+        self.stats.success('do_delete_bucket_policy')
+        self.logger.info(f'do_delete_bucket_policy {bucket_name} succeed')
+        return True
+
     def do_stat_object(self, bucket_name:str, object_name:str):
         try:
             stat = self.stat_object(bucket_name, object_name)
