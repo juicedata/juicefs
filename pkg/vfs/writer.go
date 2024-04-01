@@ -451,21 +451,35 @@ func (w *dataWriter) flushAll() {
 	for {
 		w.Lock()
 		now := time.Now()
+		var timeTriggered, sliceTriggered, bufferTriggered int
 		for _, f := range w.files {
 			f.refs++
 			w.Unlock()
-			tooMany := f.totalSlices() > 800
-			f.Lock()
-
+			tooManySlices := f.totalSlices() > 800
+			tooManyBuffer := f.w.usedBufferSize() > int64(float64(f.w.bufferSize)*0.8)
 			lastBit := uint32(rand.Int() % 2) // choose half of chunks randomly
+			flushThreshold := rand.Float32() * float32(f.w.blockSize)
+
+			f.Lock()
 			for i, c := range f.chunks {
 				hs := len(c.slices) / 2
 				for j, s := range c.slices {
-					if !s.freezed && (now.Sub(s.started) > flushDuration || now.Sub(s.lastMod) > time.Second && now.Sub(s.started) > time.Second ||
-						tooMany && i%2 == lastBit && j <= hs) {
-						s.freezed = true
-						go s.flushData()
+					switch {
+					case s.freezed:
+						continue
+					case now.Sub(s.started) > flushDuration:
+						fallthrough
+					case now.Sub(s.lastMod) > time.Second && now.Sub(s.started) > time.Second:
+						timeTriggered += 1 // too long
+					case tooManySlices && i%2 == lastBit && j <= hs:
+						sliceTriggered += 1 // too many slices
+					case tooManyBuffer && float32(s.slen) > flushThreshold:
+						bufferTriggered += 1 // too much buffer
+					default:
+						continue
 					}
+					s.freezed = true
+					go s.flushData()
 				}
 			}
 			f.Unlock()
@@ -473,6 +487,10 @@ func (w *dataWriter) flushAll() {
 			w.Lock()
 		}
 		w.Unlock()
+
+		if timeTriggered+sliceTriggered+bufferTriggered != 0 {
+			logger.Debugf("Flush triggered by: time: %d, slice: %d, buffer: %d", timeTriggered, sliceTriggered, bufferTriggered)
+		}
 		time.Sleep(time.Millisecond * 100)
 	}
 }
