@@ -1169,23 +1169,18 @@ func (j *jfsFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (
 
 func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeout *minio.DynamicTimeout) (context.Context, error) {
 	start := time.Now().UTC()
-	timeoutCtx, cancel := context.WithTimeout(ctx, timeout.Timeout())
-	defer cancel()
+	deadline := start.Add(timeout.Timeout())
 	for {
-		select {
-		case <-timeoutCtx.Done():
-			if errors.Is(timeoutCtx.Err(), context.DeadlineExceeded) {
-				timeout.LogFailure()
-				logger.Errorf("get write lock timed out ino:%d", j.inode)
-				return timeoutCtx, minio.OperationTimedOut{}
-			}
-		default:
-			if errno := j.meta.Flock(mctx, j.inode, j.owner, ltype, false); errno != 0 {
-				logger.Errorf("failed to get write lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
-			} else {
-				timeout.LogSuccess(time.Now().UTC().Sub(start))
-				return timeoutCtx, nil
-			}
+		if errno := j.meta.Flock(mctx, j.inode, j.owner, ltype, false); errno != 0 && !errors.Is(errno, syscall.EAGAIN) {
+			logger.Errorf("failed to get write lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
+		} else {
+			timeout.LogSuccess(time.Now().UTC().Sub(start))
+			return ctx, nil
+		}
+		if time.Now().UTC().After(deadline) {
+			timeout.LogFailure()
+			logger.Errorf("get write lock timed out ino:%d", j.inode)
+			return ctx, minio.OperationTimedOut{}
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
