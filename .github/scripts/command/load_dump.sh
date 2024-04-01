@@ -7,6 +7,8 @@ start_meta_engine $META minio
 META_URL=$(get_meta_url $META)
 [[ -z "$SEED" ]] && SEED=$(date +%s)
 # [[ -z "$SEED" ]] && SEED=1711594639
+[[ -z "$MAX_EXAMPLE" ]] && MAX_EXAMPLE=100
+[[ -z "$STEP_COUNT" ]] && STEP_COUNT=50
 
 trap "echo random seed is $SEED" EXIT
 
@@ -78,7 +80,7 @@ do_dump_load_with_fsrand(){
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days $trash_days --enable-acl
     ./juicefs mount -d $META_URL /jfs --enable-xattr
-    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
+    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=$MAX_EXAMPLE STEP_COUNT=$STEP_COUNT PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
     do_dump_load_and_compare 
     do_dump_load_and_compare --fast
     do_dump_load_and_compare --skip-trash
