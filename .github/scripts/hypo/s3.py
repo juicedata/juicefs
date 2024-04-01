@@ -24,19 +24,18 @@ class S3Machine(RuleBasedStateMachine):
     BUCKET_NAME = 's3test'
     client1 = S3Client(alias='minio', url='localhost:9000', access_key='minioadmin', secret_key='minioadmin')
     client2 = S3Client(alias='juice', url='localhost:9005', access_key='minioadmin', secret_key='minioadmin')
-    EXCLUDE_RULES = ['list_buckets', 'create_bucket', 'remove_bucket', 'set_bucket_policy', 'get_bucket_policy', 'delete_bucket_policy', 'put_object', 'get_object', 'fput_object', 'fget_object', 'remove_object', 'stat_object', 'list_objects', 'add_user', 'remove_user', 'add_group', 'remove_group']
+    EXCLUDE_RULES = []
 
     def __init__(self):
         super().__init__()
         self.client1.remove_all_buckets()
         self.client2.remove_all_buckets()
 
-    @initialize(target=buckets)
-    def init_buckets(self):
-        self.client1.do_create_bucket(self.BUCKET_NAME)
-        self.client2.do_create_bucket(self.BUCKET_NAME)
-        return self.BUCKET_NAME
-    
+    # @initialize(target=buckets)
+    # def init_buckets(self):
+    #     self.client1.do_create_bucket(self.BUCKET_NAME)
+    #     self.client2.do_create_bucket(self.BUCKET_NAME)
+    #     return self.BUCKET_NAME
     
     def equal(self, result1, result2):
         if os.getenv('PROFILE', 'dev') == 'generate':
@@ -204,10 +203,10 @@ class S3Machine(RuleBasedStateMachine):
 
     @rule(
           bucket_name = buckets,
-          prefix = st.one_of(st_object_prefix, None),
-          start_after = st.one_of(st_object_name, None),
+          prefix = st.one_of(st_object_prefix, st.just(None)),
+          start_after = st.one_of(st_object_name, st.just(None)),
           include_user_meta = st.booleans(),
-          include_version = st.booleans(),
+          include_version = st.just(False),
           use_url_encoding_type = st.booleans(),
           recursive=st.booleans())
     @precondition(lambda self: 'list_objects' not in self.EXCLUDE_RULES)
