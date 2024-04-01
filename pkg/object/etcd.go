@@ -46,7 +46,7 @@ func (c *etcdClient) String() string {
 	return fmt.Sprintf("etcd://%s/", c.addr)
 }
 
-func (c *etcdClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (c *etcdClient) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	resp, err := c.kv.Get(context.TODO(), key, etcd.WithLimit(1))
 	if err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func (c *etcdClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return nil, os.ErrNotExist
 }
 
-func (c *etcdClient) Put(key string, in io.Reader) error {
+func (c *etcdClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	d, err := io.ReadAll(in)
 	if err != nil {
 		return err
@@ -94,7 +94,7 @@ func (c *etcdClient) Head(key string) (Object, error) {
 	return nil, os.ErrNotExist
 }
 
-func (c *etcdClient) Delete(key string) error {
+func (c *etcdClient) Delete(key string, getters ...AttrGetter) error {
 	_, err := c.kv.Delete(context.TODO(), key)
 	return err
 }

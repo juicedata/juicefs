@@ -88,7 +88,7 @@ func (q *bosclient) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (q *bosclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (q *bosclient) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	var r *api.GetObjectResult
 	var err error
 	if limit > 0 {
@@ -101,10 +101,12 @@ func (q *bosclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	return scReadCloser{r.Body, r.StorageClass}, nil
+	attrs := applyGetters(getters...)
+	attrs.SetStorageClass(r.StorageClass)
+	return r.Body, nil
 }
 
-func (q *bosclient) Put(key string, in io.Reader) error {
+func (q *bosclient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	b, vlen, err := findLen(in)
 	if err != nil {
 		return err
@@ -118,6 +120,8 @@ func (q *bosclient) Put(key string, in io.Reader) error {
 		args.StorageClass = q.sc
 	}
 	_, err = q.c.PutObject(q.bucket, key, body, args)
+	attrs := applyGetters(getters...)
+	attrs.SetStorageClass(q.sc)
 	return err
 }
 
@@ -130,7 +134,7 @@ func (q *bosclient) Copy(dst, src string) error {
 	return err
 }
 
-func (q *bosclient) Delete(key string) error {
+func (q *bosclient) Delete(key string, getters ...AttrGetter) error {
 	err := q.c.DeleteObject(q.bucket, key)
 	if err != nil && strings.Contains(err.Error(), "NoSuchKey") {
 		err = nil

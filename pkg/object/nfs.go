@@ -110,7 +110,7 @@ func (n *nfsStore) Head(key string) (Object, error) {
 	return n.fileInfo(key, fi), nil
 }
 
-func (n *nfsStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (n *nfsStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	p := n.path(key)
 	if strings.HasSuffix(p, "/") {
 		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
@@ -154,7 +154,7 @@ func (n *nfsStore) mkdirAll(p string, perm fs.FileMode) error {
 	return err
 }
 
-func (n *nfsStore) Put(key string, in io.Reader) (err error) {
+func (n *nfsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
 	p := n.path(key)
 	if strings.HasSuffix(p, dirSuffix) {
 		return n.mkdirAll(p, 0777)
@@ -209,7 +209,7 @@ func (n *nfsStore) Put(key string, in io.Reader) (err error) {
 	return err
 }
 
-func (n *nfsStore) Delete(key string) error {
+func (n *nfsStore) Delete(key string, getters ...AttrGetter) error {
 	path := n.path(key)
 	if path == "./" {
 		return nil

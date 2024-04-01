@@ -719,7 +719,7 @@ func (cache *cacheStore) cleanupFull() {
 			freed += int64(lastValue.size + 4096)
 			cache.used -= int64(lastValue.size + 4096)
 			todel = append(todel, lastK)
-			logger.Debugf("remove %s from cache, age: %d", lastK, now-lastValue.atime)
+			logger.Debugf("remove %s from cache, age: %ds", lastK, now-lastValue.atime)
 			cache.m.cacheEvicts.Add(1)
 			cnt = 0
 			if len(cache.keys) < num && cache.used < goal {

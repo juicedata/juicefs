@@ -61,20 +61,20 @@ func (s *sharded) Head(key string) (Object, error) {
 	return s.pick(key).Head(key)
 }
 
-func (s *sharded) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	return s.pick(key).Get(key, off, limit)
+func (s *sharded) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	return s.pick(key).Get(key, off, limit, getters...)
 }
 
-func (s *sharded) Put(key string, body io.Reader) error {
-	return s.pick(key).Put(key, body)
+func (s *sharded) Put(key string, body io.Reader, getters ...AttrGetter) error {
+	return s.pick(key).Put(key, body, getters...)
 }
 
 func (s *sharded) Copy(dst, src string) error {
 	return notSupported
 }
 
-func (s *sharded) Delete(key string) error {
-	return s.pick(key).Delete(key)
+func (s *sharded) Delete(key string, getters ...AttrGetter) error {
+	return s.pick(key).Delete(key, getters...)
 }
 
 func (s *sharded) SetStorageClass(sc string) {
@@ -83,15 +83,6 @@ func (s *sharded) SetStorageClass(sc string) {
 			os.SetStorageClass(sc)
 		}
 	}
-}
-
-func (s *sharded) StorageClass() string {
-	for _, o := range s.stores {
-		if os, ok := o.(StorageClassGetter); ok {
-			return os.StorageClass()
-		}
-	}
-	return ""
 }
 
 const maxResults = 10000

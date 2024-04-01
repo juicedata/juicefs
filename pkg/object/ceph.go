@@ -127,7 +127,7 @@ func (r *cephReader) Close() error {
 	return nil
 }
 
-func (c *ceph) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (c *ceph) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if _, err := c.Head(key); err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ var cephPool = sync.Pool{
 	},
 }
 
-func (c *ceph) Put(key string, in io.Reader) error {
+func (c *ceph) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	// ceph default osd_max_object_size = 128M
 	return c.do(func(ctx *rados.IOContext) error {
 		if b, ok := in.(*bytes.Reader); ok {
@@ -181,7 +181,7 @@ func (c *ceph) Put(key string, in io.Reader) error {
 	})
 }
 
-func (c *ceph) Delete(key string) error {
+func (c *ceph) Delete(key string, getters ...AttrGetter) error {
 	err := c.do(func(ctx *rados.IOContext) error {
 		return ctx.Delete(key)
 	})
