@@ -1,26 +1,14 @@
-from ast import List
 import hashlib
-import json
-import logging
 import os
-import pwd
-import re
-import shlex
-import shutil
-import stat
 import subprocess
 try: 
     __import__('xattr')
 except ImportError:
     subprocess.check_call(["pip", "install", "xattr"])
-import xattr
-from common import is_jfs, get_acl, get_root, get_stat
-from typing import Dict
 try: 
     __import__('fallocate')
 except ImportError:
     subprocess.check_call(["pip", "install", "fallocate"])
-import fallocate
 from stats import Statistics
 from minio.error import S3Error
 import common
@@ -158,7 +146,7 @@ class S3Client(Minio):
             stat = self.stat_object(bucket_name, object_name)
             if stat.size == 0:
                 offset = 0
-            else
+            else:
                 offset = offset % stat.size
             if length > stat.size - offset:
                 length = stat.size - offset

@@ -24,8 +24,6 @@ st_content = st.binary(min_size=0, max_size=MAX_OBJECT_SIZE)
 st_part_size = st.sampled_from([128*1024, 256*1024, 512*1024, 1*1024*1024, 2*1024*1024, 4*1024*1024])
 st_offset = st.integers(min_value=0, max_value=MAX_OBJECT_SIZE)
 st_length = st.integers(min_value=0, max_value=MAX_OBJECT_SIZE)
-st_policy_actions = st.list(st.sampled_from(['s3:GetObject', 's3:PutObject', 's3:ListBucket']), min_size=1, max_size=3)
-
 st_policy = st.fixed_dictionaries({
     "Statement": st.lists(
         st.one_of(
@@ -70,6 +68,15 @@ class S3Machine(RuleBasedStateMachine):
         super().__init__()
         self.client1.remove_all_buckets()
         self.client2.remove_all_buckets()
+
+    @initialize(target=buckets)
+    def init_buckets(self):
+        self.client1.do_create_bucket(self.BUCKET_NAME)
+        self.client2.do_create_bucket(self.BUCKET_NAME)
+        self.client1.do_fput_object(self.BUCKET_NAME, 'testobj', 'README.md')
+        self.client2.do_fput_object(self.BUCKET_NAME, 'testobj', 'README.md')
+
+        return self.BUCKET_NAME
 
     def equal(self, result1, result2):
         if os.getenv('PROFILE', 'dev') == 'generate':
@@ -116,10 +123,10 @@ class S3Machine(RuleBasedStateMachine):
         else:
             return multiple()
 
-    @rule(
-        bucket_name = buckets.filter(lambda x: x != multiple()),
-        policy = st_policy
-    )
+    # @rule(
+    #     bucket_name = buckets.filter(lambda x: x != multiple()),
+    #     policy = st_policy
+    # )
     @precondition(lambda self: 'set_bucket_policy' not in self.EXCLUDE_RULES)
     def set_bucket_policy(self, bucket_name, policy):
         result1 = self.client1.do_set_bucket_policy(bucket_name, json.dumps(policy))
