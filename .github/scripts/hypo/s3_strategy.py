@@ -21,7 +21,7 @@ st_policy = st.fixed_dictionaries({
             st.fixed_dictionaries({
                 "Effect": st.sampled_from(["Allow", "Deny"]),
                 "Principal": st.fixed_dictionaries({"AWS": st.just("*")}),
-                "Resource": st.just("arn:aws:s3:::{{bucket}}"),
+                "Resource": st.just("arn:aws:s3:::*"),
                 "Action": st.lists(
                     st.sampled_from(["s3:GetBucketLocation", "s3:ListBucket"]),
                     min_size=1, max_size=3, 
@@ -36,7 +36,7 @@ st_policy = st.fixed_dictionaries({
                     min_size=1, max_size=3,
                     unique=True
                 ),
-                "Resource": st.just("arn:aws:s3:::{{bucket}}/*"),
+                "Resource": st.just("arn:aws:s3:::*"),
             }),
         ),
         min_size=1, max_size=3

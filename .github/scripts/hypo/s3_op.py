@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import subprocess
 try: 
@@ -350,16 +351,18 @@ class S3Client(Minio):
             self.run_cmd(f'mc admin group remove {self.alias} {group}')
             print(f"Group '{group}' removed successfully.")
     
-    def do_create_policy(self, policy_name, policy):
+    def do_add_policy(self, policy_name, policy_document):
+        policy = json.dumps(policy_document)
+        print(policy)
         policy_path = 'policy.json'
         with open(policy_path, 'w') as f:
             f.write(policy)
         try:
-            self.run_cmd(f'mc admin policy create {self.alias} {policy_name} {policy_path}')
+            self.run_cmd(f'mc admin policy add {self.alias} {policy_name} {policy_path}')
         except subprocess.CalledProcessError as e:
-            return self.handleException(e, 'do_create_policy', policy_name=policy_name)
-        self.stats.success('do_create_policy')
-        self.logger.info(f'do_create_policy {policy_name} succeed')
+            return self.handleException(e, 'do_add_policy', policy_name=policy_name)
+        self.stats.success('do_add_policy')
+        self.logger.info(f'do_add_policy {policy_name} succeed')
         return True
     
     def do_remove_policy(self, policy_name):
@@ -389,38 +392,38 @@ class S3Client(Minio):
         self.logger.info(f'do_list_policies succeed')
         return result
     
-    def do_attach_policy_to_user(self, policy_name, user_name):
+    def do_set_policy_to_user(self, policy_name, user_name):
         try:
-            self.run_cmd(f'mc admin policy attach {self.alias} {policy_name} --user {user_name}')
+            self.run_cmd(f'mc admin policy set {self.alias} {policy_name} user={user_name}')
         except subprocess.CalledProcessError as e:
-            return self.handleException(e, 'do_attach_policy_to_user', policy_name=policy_name, user_name=user_name)
-        self.stats.success('do_attach_policy_to_user')
-        self.logger.info(f'do_attach_policy_to_user {policy_name} {user_name} succeed')
+            return self.handleException(e, 'do_set_policy_to_user', policy_name=policy_name, user_name=user_name)
+        self.stats.success('do_set_policy_to_user')
+        self.logger.info(f'do_set_policy_to_user {policy_name} {user_name} succeed')
         return True
 
-    def do_attach_policy_to_group(self, policy_name, group_name):
+    def do_set_policy_to_group(self, policy_name, group_name):
         try:
-            self.run_cmd(f'mc admin policy attach {self.alias} {policy_name} --group {group_name}')
+            self.run_cmd(f'mc admin policy set {self.alias} {policy_name} group={group_name}')
         except subprocess.CalledProcessError as e:
-            return self.handleException(e, 'do_attach_policy_to_group', policy_name=policy_name, group_name=group_name)
-        self.stats.success('do_attach_policy_to_group')
-        self.logger.info(f'do_attach_policy_to_group {policy_name} {group_name} succeed')
+            return self.handleException(e, 'do_set_policy_to_group', policy_name=policy_name, group_name=group_name)
+        self.stats.success('do_set_policy_to_group')
+        self.logger.info(f'do_set_policy_to_group {policy_name} {group_name} succeed')
         return True
     
-    def do_detach_policy_from_user(self, policy_name, user_name):
+    def do_unset_policy_from_user(self, policy_name, user_name):
         try:
-            self.run_cmd(f'mc admin policy detach {self.alias} {policy_name} --user {user_name}')
+            self.run_cmd(f'mc admin policy unset {self.alias} {policy_name} user={user_name}')
         except subprocess.CalledProcessError as e:
-            return self.handleException(e, 'do_detach_policy_from_user', policy_name=policy_name, user_name=user_name)
-        self.stats.success('do_detach_policy_from_user')
-        self.logger.info(f'do_detach_policy_from_user {policy_name} {user_name} succeed')
+            return self.handleException(e, 'do_unset_policy_from_user', policy_name=policy_name, user_name=user_name)
+        self.stats.success('do_unset_policy_from_user')
+        self.logger.info(f'do_unset_policy_from_user {policy_name} {user_name} succeed')
         return True
     
-    def do_detach_policy_from_group(self, policy_name, group_name):
+    def do_unset_policy_from_group(self, policy_name, group_name):
         try:
-            self.run_cmd(f'mc admin policy detach {self.alias} {policy_name} --group {group_name}')
+            self.run_cmd(f'mc admin policy unset {self.alias} {policy_name} group={group_name}')
         except subprocess.CalledProcessError as e:
-            return self.handleException(e, 'do_detach_policy_from_group', policy_name=policy_name, group_name=group_name)
-        self.stats.success('do_detach_policy_from_group')
-        self.logger.info(f'do_detach_policy_from_group {policy_name} {group_name} succeed')
+            return self.handleException(e, 'do_unset_policy_from_group', policy_name=policy_name, group_name=group_name)
+        self.stats.success('do_unset_policy_from_group')
+        self.logger.info(f'do_unset_policy_from_group {policy_name} {group_name} succeed')
         return True

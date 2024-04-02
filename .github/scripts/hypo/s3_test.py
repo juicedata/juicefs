@@ -31,16 +31,34 @@ class TestS3(unittest.TestCase):
 
     def test_s3_policy(self):
         state = S3Machine()
-        state.list_buckets()
-        v1 = state.create_bucket(bucket_name='bqgl')
-        state.list_buckets()
-        state.list_buckets()
-        state.set_bucket_policy(bucket_name=v1, policy={'Statement': [{'Effect': 'Deny',
-        'Principal': {'AWS': '*'},
-        'Action': ['s3:PutObject'],
-        'Resource': 'arn:aws:s3:::{{bucket}}/*'}]})
-        state.remove_bucket(bucket_name=v1)
+        state.create_bucket('bucket1')
+        state.add_user('user1')
+        state.add_policy(policy_name='policy1', policy_document={
+                "Version" : "2012-10-17",
+                'Statement': [{
+                    'Effect': 'Deny',
+                    'Principal': {'AWS': '*'},
+                    'Action': ['s3:PutObject'],
+                    'Resource': 'arn:aws:s3:::bucket1/*'
+                }]
+            }
+        )
+        state.set_policy_to_user('policy1', 'user1')
+        state.put_object('bucket1', 'object1', data=b'hello')
+        state.add_policy(policy_name='policy2', policy_document={
+                "Version" : "2012-10-17",
+                'Statement': [{
+                    'Effect': 'Allow',
+                    'Principal': {'AWS': '*'},
+                    'Action': ['s3:GetObject'],
+                    'Resource': 'arn:aws:s3:::bucket1/*'
+                }]
+            }
+        )
+        state.get_object('bucket1:object1')
+
         state.teardown()
+
 
     def test_s3_user(self):
         state = S3Machine()

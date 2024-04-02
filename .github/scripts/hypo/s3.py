@@ -45,12 +45,6 @@ class S3Machine(RuleBasedStateMachine):
     def init_policies(self):
         return multiple('consoleAdmin', 'readonly', 'readwrite', 'diagnostics', 'writeonly')
 
-    # @initialize(target=buckets)
-    # def init_buckets(self):
-    #     self.client1.do_create_bucket(self.BUCKET_NAME)
-    #     self.client2.do_create_bucket(self.BUCKET_NAME)
-    #     return self.BUCKET_NAME
-    
     def equal(self, result1, result2):
         if os.getenv('PROFILE', 'dev') == 'generate':
             return True
@@ -143,7 +137,7 @@ class S3Machine(RuleBasedStateMachine):
         part_size = st_part_size
     )
     @precondition(lambda self: 'put_object' not in self.EXCLUDE_RULES)
-    def put_object(self, bucket_name, object_name, data, use_part_size, part_size=5*1024*1024):
+    def put_object(self, bucket_name, object_name, data, use_part_size=False, part_size=5*1024*1024):
         if use_part_size:
             result1 = self.client1.do_put_object(bucket_name, object_name, data, -1, part_size=part_size)
             result2 = self.client2.do_put_object(bucket_name, object_name, data, -1, part_size=part_size)
@@ -356,15 +350,13 @@ class S3Machine(RuleBasedStateMachine):
     @rule(
         target = policies,
         policy_name = st_policy_name,
-        policy = st_policy
+        policy_document = st_policy
     )
-    @precondition(lambda self: 'create_policy' not in self.EXCLUDE_RULES)
-    def create_policy(self, policy_name, policy):
-        #TODO: render policy with bucket name
-        policy_str = json.dumps(policy)
-        result1 = self.client1.do_create_policy(policy_name, policy_str)
-        result2 = self.client2.do_create_policy(policy_name, policy_str)
-        assert self.equal(result1, result2), f'\033[31m_create_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+    @precondition(lambda self: 'add_policy' not in self.EXCLUDE_RULES)
+    def add_policy(self, policy_name, policy_document):
+        result1 = self.client1.do_add_policy(policy_name, policy_document)
+        result2 = self.client2.do_add_policy(policy_name, policy_document)
+        assert self.equal(result1, result2), f'\033[31madd_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()
         else:
@@ -405,11 +397,11 @@ class S3Machine(RuleBasedStateMachine):
         user_name = users.filter(lambda x: x != multiple()),
         policy_name = policies.filter(lambda x: x != multiple())
     )
-    @precondition(lambda self: 'attach_policy_to_user' not in self.EXCLUDE_RULES)
-    def attach_policy_to_user(self, user_name, policy_name):
-        result1 = self.client1.do_attach_policy_to_user(policy_name, user_name)
-        result2 = self.client2.do_attach_policy_to_user(policy_name, user_name)
-        assert self.equal(result1, result2), f'\033[31mattach_policy_to_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+    @precondition(lambda self: 'set_policy_to_user' not in self.EXCLUDE_RULES)
+    def set_policy_to_user(self, policy_name, user_name,):
+        result1 = self.client1.do_set_policy_to_user(policy_name, user_name)
+        result2 = self.client2.do_set_policy_to_user(policy_name, user_name)
+        assert self.equal(result1, result2), f'\033[31mset_policy_to_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()
         else:
@@ -420,11 +412,11 @@ class S3Machine(RuleBasedStateMachine):
         group_name = groups.filter(lambda x: x != multiple()),
         policy_name = policies.filter(lambda x: x != multiple())
     )
-    @precondition(lambda self: 'attach_policy_to_group' not in self.EXCLUDE_RULES)
-    def attach_policy_to_group(self, group_name, policy_name):
-        result1 = self.client1.do_attach_policy_to_group(policy_name, group_name)
-        result2 = self.client2.do_attach_policy_to_group(policy_name, group_name)
-        assert self.equal(result1, result2), f'\033[31mattach_policy_to_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+    @precondition(lambda self: 'set_policy_to_group' not in self.EXCLUDE_RULES)
+    def set_policy_to_group(self, group_name, policy_name):
+        result1 = self.client1.do_set_policy_to_group(policy_name, group_name)
+        result2 = self.client2.do_set_policy_to_group(policy_name, group_name)
+        assert self.equal(result1, result2), f'\033[31mset_policy_to_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()
         else:
@@ -434,13 +426,13 @@ class S3Machine(RuleBasedStateMachine):
         target = user_policies,
         user_policy = consumes(user_policies).filter(lambda x: x != multiple())
     )
-    @precondition(lambda self: 'detach_policy_from_user' not in self.EXCLUDE_RULES)
-    def detach_policy_from_user(self, user_policy):
+    @precondition(lambda self: 'unset_policy_from_user' not in self.EXCLUDE_RULES)
+    def unset_policy_from_user(self, user_policy:str):
         user_name = user_policy.split(':')[0]
         policy_name = user_policy.split(':')[1]
-        result1 = self.client1.do_detach_policy_from_user(policy_name, user_name)
-        result2 = self.client2.do_detach_policy_from_user(policy_name, user_name)
-        assert self.equal(result1, result2), f'\033[31mdetach_policy_to_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        result1 = self.client1.do_unset_policy_from_user(policy_name, user_name)
+        result2 = self.client2.do_unset_policy_from_user(policy_name, user_name)
+        assert self.equal(result1, result2), f'\033[31munset_policy_from_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return user_policy
         else:
@@ -450,13 +442,13 @@ class S3Machine(RuleBasedStateMachine):
         target = group_policies,
         group_policy = consumes(group_policies).filter(lambda x: x != multiple())
     )
-    @precondition(lambda self: 'detach_policy_from_group' not in self.EXCLUDE_RULES)
-    def detach_policy_from_group(self, group_policy):
+    @precondition(lambda self: 'unset_policy_from_group' not in self.EXCLUDE_RULES)
+    def unset_policy_from_group(self, group_policy:str):
         group_name = group_policy.split(':')[0]
         policy_name = group_policy.split(':')[1]
-        result1 = self.client1.do_detach_policy_from_group(policy_name, group_name)
-        result2 = self.client2.do_detach_policy_from_group(policy_name, group_name)
-        assert self.equal(result1, result2), f'\033[31mdetach_policy_to_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        result1 = self.client1.do_unset_policy_from_group(policy_name, group_name)
+        result2 = self.client2.do_unset_policy_from_group(policy_name, group_name)
+        assert self.equal(result1, result2), f'\033[31munset_policy_from_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return group_policy
         else:
