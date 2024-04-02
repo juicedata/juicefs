@@ -24,8 +24,8 @@ class S3Machine(RuleBasedStateMachine):
     users = Bundle('users')
     groups = Bundle('groups')
     policies = Bundle('policies')
-    user_policy = Bundle('user_policy')
-    group_policy = Bundle('group_policy')
+    user_policies = Bundle('user_policy')
+    group_policies = Bundle('group_policy')
 
     BUCKET_NAME = 's3test'
     client1 = S3Client(alias='minio', url='localhost:9000', access_key='minioadmin', secret_key='minioadmin')
@@ -36,6 +36,14 @@ class S3Machine(RuleBasedStateMachine):
         super().__init__()
         self.client1.remove_all_buckets()
         self.client2.remove_all_buckets()
+        self.client1.remove_all_users()
+        self.client2.remove_all_users()
+        self.client1.remove_all_groups()
+        self.client2.remove_all_groups()
+
+    @initialize(target=policies)
+    def init_policies(self):
+        return multiple('consoleAdmin', 'readonly', 'readwrite', 'diagnostics', 'writeonly')
 
     # @initialize(target=buckets)
     # def init_buckets(self):
@@ -234,7 +242,7 @@ class S3Machine(RuleBasedStateMachine):
         secret_key = st_secret_key
     )
     @precondition(lambda self: 'add_user' not in self.EXCLUDE_RULES)
-    def add_user(self, user_name, secret_key):
+    def add_user(self, user_name, secret_key='minioadmin'):
         result1 = self.client1.do_add_user(user_name, secret_key)
         result2 = self.client2.do_add_user(user_name, secret_key)
         assert self.equal(result1, result2), f'\033[31madd_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -244,6 +252,7 @@ class S3Machine(RuleBasedStateMachine):
             return user_name
         
     @rule(
+        target = users,
         user_name = consumes(users).filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'remove_user' not in self.EXCLUDE_RULES)
@@ -260,7 +269,7 @@ class S3Machine(RuleBasedStateMachine):
         user_name = users.filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'enable_user' not in self.EXCLUDE_RULES)
-    def enaable_user(self, user_name):
+    def enable_user(self, user_name):
         result1 = self.client1.do_enable_user(user_name)
         result2 = self.client2.do_enable_user(user_name)
         assert self.equal(result1, result2), f'\033[31menable_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -313,6 +322,7 @@ class S3Machine(RuleBasedStateMachine):
             return group_name
         
     @rule(
+        target = groups,
         group_name=consumes(groups).filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'remove_group' not in self.EXCLUDE_RULES)
@@ -361,6 +371,7 @@ class S3Machine(RuleBasedStateMachine):
             return policy_name
     
     @rule(
+        target = policies,
         policy_name = consumes(policies).filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'remove_policy' not in self.EXCLUDE_RULES)
@@ -390,9 +401,8 @@ class S3Machine(RuleBasedStateMachine):
         assert self.equal(result1, result2), f'\033[31mlist_policies:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
-        target = user_policy,
+        target = user_policies,
         user_name = users.filter(lambda x: x != multiple()),
-        #TODO: add internal policy
         policy_name = policies.filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'attach_policy_to_user' not in self.EXCLUDE_RULES)
@@ -406,7 +416,7 @@ class S3Machine(RuleBasedStateMachine):
             return f'{user_name}:{policy_name}'
 
     @rule(
-        target = group_policy, 
+        target = group_policies, 
         group_name = groups.filter(lambda x: x != multiple()),
         policy_name = policies.filter(lambda x: x != multiple())
     )
@@ -421,7 +431,8 @@ class S3Machine(RuleBasedStateMachine):
             return f'{group_name}:{policy_name}'
         
     @rule(
-        user_policy = consumes(user_policy).filter(lambda x: x != multiple())
+        target = user_policies,
+        user_policy = consumes(user_policies).filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'detach_policy_from_user' not in self.EXCLUDE_RULES)
     def detach_policy_from_user(self, user_policy):
@@ -436,7 +447,8 @@ class S3Machine(RuleBasedStateMachine):
             return multiple()
         
     @rule(
-        group_policy = consumes(group_policy).filter(lambda x: x != multiple())
+        target = group_policies,
+        group_policy = consumes(group_policies).filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'detach_policy_from_group' not in self.EXCLUDE_RULES)
     def detach_policy_from_group(self, group_policy):

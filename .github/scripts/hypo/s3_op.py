@@ -272,21 +272,30 @@ class S3Client(Minio):
     
     def do_list_users(self):
         try:
-            result = self.run_cmd(f'mc admin user ls {self.alias}')
+            result = self.run_cmd(f'mc admin user list {self.alias}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_list_users')
         self.stats.success('do_list_users')
         self.logger.info(f'do_list_users succeed')
-        return result
+        return sorted(result.split("\n"))
+
+    def remove_all_users(self):
+        lines = self.run_cmd(f'mc admin user list {self.alias}').split("\n")
+        for line in lines:
+            if not line.strip():
+                continue
+            user = line.split()[1]
+            self.run_cmd(f'mc admin user remove {self.alias} {user}')
+            print(f"User '{user}' removed successfully.")
 
     def do_list_groups(self):
         try:
-            result = self.run_cmd(f'mc admin group ls {self.alias}')
+            result = self.run_cmd(f'mc admin group list {self.alias}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_list_groups')
         self.stats.success('do_list_groups')
         self.logger.info(f'do_list_groups succeed')
-        return result
+        return sorted(result.split("\n"))
 
     def do_add_group(self, group_name, members):
         try:
@@ -332,6 +341,14 @@ class S3Client(Minio):
         self.stats.success('do_group_info')
         self.logger.info(f'do_group_info {group_name} succeed')
         return True
+    
+    def remove_all_groups(self):
+        groups = self.run_cmd(f'mc admin group list {self.alias}').split("\n")
+        for group in groups:
+            if not group.strip():
+                continue
+            self.run_cmd(f'mc admin group remove {self.alias} {group}')
+            print(f"Group '{group}' removed successfully.")
     
     def do_create_policy(self, policy_name, policy):
         policy_path = 'policy.json'
