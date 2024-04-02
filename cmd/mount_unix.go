@@ -206,7 +206,36 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 	}
 }
 
-func makeDaemonForSvc(c *cli.Context, m meta.Meta) error {
+func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl string) error {
+	if runtime.GOOS != "windows" {
+		if cd := c.String("cache-dir"); cd != "memory" {
+			ds := utils.SplitDir(cd)
+			for i, d := range ds {
+				if strings.HasPrefix(d, "/") {
+					continue
+				} else if strings.HasPrefix(d, "~/") {
+					if h, err := os.UserHomeDir(); err == nil {
+						ds[i] = filepath.Join(h, d[1:])
+					} else {
+						logger.Fatalf("Expand user home dir of %s: %s", d, err)
+					}
+				} else {
+					if ad, err := filepath.Abs(d); err == nil {
+						ds[i] = ad
+					} else {
+						logger.Fatalf("Find absolute path of %s: %s", d, err)
+					}
+				}
+			}
+			for i, a := range os.Args {
+				if a == cd || a == "--cache-dir="+cd {
+					os.Args[i] = a[:len(a)-len(cd)] + strings.Join(ds, string(os.PathListSeparator))
+				}
+			}
+		}
+	}
+	_ = expandPathForEmbedded(metaUrl)
+
 	var attrs godaemon.DaemonAttr
 	logfile := c.String("log")
 	attrs.OnExit = func(stage int) error {
