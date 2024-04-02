@@ -427,3 +427,30 @@ class S3Client(Minio):
         self.stats.success('do_unset_policy_from_group')
         self.logger.info(f'do_unset_policy_from_group {policy_name} {group_name} succeed')
         return True
+    
+    def do_set_alias(self, alias_name, access_key, secret_key):
+        try:
+            self.run_cmd(f'mc alias set {alias_name} http://{self.url} {access_key} {secret_key}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_set_alias', alias_name=alias_name, url=self.url, access_key=access_key, secret_key=secret_key)
+        self.stats.success('do_set_alias')
+        self.logger.info(f'do_set_alias {alias_name} {self.url} {access_key} {secret_key} succeed')
+        return True
+    
+    def do_remove_alias(self, alias_name):
+        try:
+            self.run_cmd(f'mc alias remove {alias_name}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_remove_alias', alias_name=alias_name)
+        self.stats.success('do_remove_alias')
+        self.logger.info(f'do_remove_alias {alias_name} succeed')
+        return True
+    
+    def do_list_aliases(self):
+        try:
+            result = self.run_cmd(f'mc alias list')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_list_aliases')
+        self.stats.success('do_list_aliases')
+        self.logger.info(f'do_list_aliases succeed')
+        return sorted(result.split("\n"))

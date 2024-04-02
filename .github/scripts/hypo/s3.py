@@ -19,6 +19,7 @@ from s3_strategy import *
 SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
 @seed(SEED)
 class S3Machine(RuleBasedStateMachine):
+    aliases = Bundle('aliases')
     buckets = Bundle('buckets')
     objects = Bundle('objects')
     users = Bundle('users')
@@ -453,6 +454,41 @@ class S3Machine(RuleBasedStateMachine):
             return group_policy
         else:
             return multiple()
+
+    @rule(
+        target=aliases, 
+        alias_name = st_alias_name,
+        user_name = st_user_name,
+    )
+    @precondition(lambda self: 'set_alias' not in self.EXCLUDE_RULES)
+    def set_alias(self, alias_name, user_name):
+        result1 = self.client1.do_set_alias(alias_name, user_name, 'minioadmin')
+        result2 = self.client2.do_set_alias(alias_name, user_name, 'minioadmin')
+        assert self.equal(result1, result2), f'\033[31mset_alias:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        if isinstance(result1, Exception):
+            return multiple()
+        else:
+            return alias_name
+
+    @rule(
+        target = aliases,
+        alias_name = consumes(aliases)
+    )
+    @precondition(lambda self: 'remove_alias' not in self.EXCLUDE_RULES)
+    def remove_alias(self, alias_name):
+        result1 = self.client1.do_remove_alias(alias_name)
+        result2 = self.client2.do_remove_alias(alias_name)
+        assert self.equal(result1, result2), f'\033[31mremove_alias:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+        if isinstance(result1, Exception):
+            return alias_name
+        else:
+            return multiple()
+    @rule()
+    @precondition(lambda self: 'list_aliases' not in self.EXCLUDE_RULES)
+    def list_aliases(self):
+        result1 = self.client1.do_list_aliases()
+        result2 = self.client2.do_list_aliases()
+        assert self.equal(result1, result2), f'\033[31mlist_aliases:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     def teardown(self):
         pass

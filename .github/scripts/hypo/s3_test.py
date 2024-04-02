@@ -2,7 +2,7 @@ import unittest
 from s3 import S3Machine
 
 class TestS3(unittest.TestCase):
-    def test_s3(self):
+    def test_bucket(self):
         state = S3Machine()
         state.create_bucket('bucket1')
         state.create_bucket('bucket2')
@@ -13,6 +13,7 @@ class TestS3(unittest.TestCase):
         state.list_buckets()
         state.list_objects('bucket1')
         state.list_objects('bucket2')
+        state.list_objects('bucket1', prefix='obj')
         state.remove_object('bucket1:object1')
         state.remove_object('bucket1:object2')
         state.remove_bucket('bucket1')
@@ -29,7 +30,7 @@ class TestS3(unittest.TestCase):
         state.put_object(bucket_name=v1, data=b'\x1c', object_name='mvtl', part_size=8388608, use_part_size=False)
         state.teardown()
 
-    def test_s3_policy(self):
+    def test_policy(self):
         state = S3Machine()
         state.create_bucket('bucket1')
         state.add_user('user1')
@@ -60,7 +61,7 @@ class TestS3(unittest.TestCase):
         state.teardown()
 
 
-    def test_s3_user(self):
+    def test_user(self):
         state = S3Machine()
         state.create_bucket('bucket1')
         state.add_user('user1')
@@ -75,7 +76,7 @@ class TestS3(unittest.TestCase):
         state.list_users()
         state.teardown()
         
-    def test_s3_group(self):
+    def test_group(self):
         state = S3Machine()
         state.create_bucket('bucket1')
         state.add_user('user1')
