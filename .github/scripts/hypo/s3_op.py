@@ -15,24 +15,17 @@ from minio.error import S3Error
 import common
 from minio import Minio
 import io
+from s3_contant import *
 
-
-class S3Client(Minio):
+class S3Client():
+    ROOT_ACCESS_KEY = 'minioadmin'
+    ROOT_SECRET_KEY = 'minioadmin'
     stats = Statistics()
-    def __init__(self, alias, url, access_key, secret_key):
-        super().__init__(
-            url,
-            access_key=access_key,
-            secret_key=secret_key,
-            secure=False
-        )
-        self.alias = alias
+    def __init__(self, prefix, url):
+        self.prefix = prefix
         self.url = url
-        self.access_key = access_key
-        self.secret_key = secret_key
         log_level=os.environ.get('LOG_LEVEL', 'INFO')
-        self.logger = common.setup_logger(f'./{alias}.log', f'{alias}', log_level)
-        self.run_cmd(f'mc alias set {alias} http://{url} {access_key} {secret_key}')
+        self.logger = common.setup_logger(f'./{prefix}.log', f'{prefix}', log_level)
 
     def run_cmd(self, command:str, stderr=subprocess.STDOUT) -> str:
         self.logger.info(f'run_cmd: {command}')
@@ -68,18 +61,20 @@ class S3Client(Minio):
         return True
 
     def remove_all_buckets(self):
-        buckets = self.list_buckets()
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        buckets = client.list_buckets()
         for bucket in buckets:
             bucket_name = bucket.name
-            objects = self.list_objects(bucket_name, recursive=True)
+            objects = client.list_objects(bucket_name, recursive=True)
             for obj in objects:
-                self.remove_object(bucket_name, obj.object_name)
-            self.remove_bucket(bucket_name)
+                client.remove_object(bucket_name, obj.object_name)
+            client.remove_bucket(bucket_name)
             print(f"Bucket '{bucket_name}' removed successfully.")
         
     def do_list_buckets(self):
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
         try:
-            buckets = self.list_buckets()
+            buckets = client.list_buckets()
         except S3Error as e:
             return self.handleException(e, 'do_list_buckets')
         self.stats.success('do_list_buckets')
@@ -87,29 +82,32 @@ class S3Client(Minio):
         return sorted([bucket.name for bucket in buckets])
     
     def do_remove_bucket(self, bucket_name:str):
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
         try:
-            self.remove_bucket(bucket_name)
+            client.remove_bucket(bucket_name)
         except S3Error as e:
             return self.handleException(e, 'do_remove_bucket', bucket_name=bucket_name)
-        assert not self.bucket_exists(bucket_name)
+        assert not client.bucket_exists(bucket_name)
         self.stats.success('do_remove_bucket')
         self.logger.info(f'do_remove_bucket {bucket_name} succeed')
         return True
 
     def do_create_bucket(self, bucket_name:str):
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
         try:
-            self.make_bucket(bucket_name)
+            client.make_bucket(bucket_name)
             print(f"Bucket '{bucket_name}' created successfully.")
         except S3Error as e:
             return self.handleException(e, 'do_create_bucket', bucket_name=bucket_name)
-        assert self.bucket_exists(bucket_name)
+        assert client.bucket_exists(bucket_name)
         self.stats.success('do_create_bucket')
         self.logger.info(f'do_create_bucket {bucket_name}  succeed')
         return True
     
     def do_set_bucket_policy(self, bucket_name:str, policy:str):
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
         try:
-            self.set_bucket_policy(bucket_name, policy)
+            client.set_bucket_policy(bucket_name, policy)
         except S3Error as e:
             return self.handleException(e, 'do_set_bucket_policy', bucket_name=bucket_name, policy=policy)
         self.stats.success('do_set_bucket_policy')
@@ -117,8 +115,9 @@ class S3Client(Minio):
         return True
     
     def do_get_bucket_policy(self, bucket_name:str):
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
         try:
-            policy = self.get_bucket_policy(bucket_name)
+            policy = client.get_bucket_policy(bucket_name)
         except S3Error as e:
             return self.handleException(e, 'do_get_bucket_policy', bucket_name=bucket_name)
         self.stats.success('do_get_bucket_policy')
@@ -126,8 +125,9 @@ class S3Client(Minio):
         return policy
 
     def do_delete_bucket_policy(self, bucket_name:str):
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
         try:
-            self.delete_bucket_policy(bucket_name)
+            client.delete_bucket_policy(bucket_name)
         except S3Error as e:
             return self.handleException(e, 'do_delete_bucket_policy', bucket_name=bucket_name)
         self.stats.success('do_delete_bucket_policy')
@@ -135,8 +135,9 @@ class S3Client(Minio):
         return True
 
     def do_stat_object(self, bucket_name:str, object_name:str):
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
         try:
-            stat = self.stat_object(bucket_name, object_name)
+            stat = client.stat_object(bucket_name, object_name)
         except S3Error as e:
             return self.handleException(e, 'do_stat_object', bucket_name=bucket_name, object_name=object_name)
         finally:
@@ -149,8 +150,9 @@ class S3Client(Minio):
         return stat.bucket_name, stat.object_name, stat.size
 
     def do_put_object(self, bucket_name:str, object_name:str, data, length, content_type='application/octet-stream', part_size=5*1024*1024):
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
         try:
-            self.put_object(bucket_name, object_name, io.BytesIO(data), length=length, content_type=content_type, part_size=part_size)
+            client.put_object(bucket_name, object_name, io.BytesIO(data), length=length, content_type=content_type, part_size=part_size)
         except S3Error as e:
             return self.handleException(e, 'do_put_object', bucket_name=bucket_name, object_name=object_name, length=length, part_size=part_size)
         self.stats.success('do_put_object')
@@ -158,15 +160,16 @@ class S3Client(Minio):
         return self.do_stat_object(bucket_name, object_name)
 
     def do_get_object(self, bucket_name:str, object_name:str, offset=0, length=0):
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
         try:
-            stat = self.stat_object(bucket_name, object_name)
+            stat = client.stat_object(bucket_name, object_name)
             if stat.size == 0:
                 offset = 0
             else:
                 offset = offset % stat.size
             if length > stat.size - offset:
                 length = stat.size - offset
-            response = self.get_object(bucket_name, object_name, offset=offset, length=length)
+            response = client.get_object(bucket_name, object_name, offset=offset, length=length)
             md5_hash = hashlib.md5()
             for data in response.stream(32*1024):
                 md5_hash.update(data)
@@ -178,8 +181,9 @@ class S3Client(Minio):
         return md5_hex
 
     def do_fput_object(self, bucket_name:str, object_name:str, src_path:str):
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
         try:
-            self.fput_object(bucket_name, object_name, src_path)
+            client.fput_object(bucket_name, object_name, src_path)
         except S3Error as e:
             return self.handleException(e, 'do_fput_object', bucket_name=bucket_name, obj_name=object_name, src_path=src_path)
         self.stats.success('do_fput_object')
@@ -187,8 +191,9 @@ class S3Client(Minio):
         return self.do_stat_object(bucket_name, object_name)
     
     def do_fget_object(self, bucket_name:str, object_name:str, file_path:str):
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
         try:
-            self.fget_object(bucket_name, object_name, file_path)
+            client.fget_object(bucket_name, object_name, file_path)
         except S3Error as e:
             return self.handleException(e, 'do_fget_object', bucket_name=bucket_name, object_name=object_name, file_path=file_path)
         assert(os.path.exists(file_path))
@@ -197,8 +202,9 @@ class S3Client(Minio):
         return os.stat(file_path).st_size
 
     def object_exists(self, bucket_name:str, object_name:str):
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
         try:
-            self.stat_object(bucket_name, object_name)
+            client.stat_object(bucket_name, object_name)
             return True
         except S3Error as e:
             if e.code == "NoSuchKey":
@@ -207,8 +213,9 @@ class S3Client(Minio):
                 raise e
 
     def do_remove_object(self, bucket_name:str, object_name:str):
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
         try:
-            self.remove_object(bucket_name, object_name)
+            client.remove_object(bucket_name, object_name)
         except S3Error as e:
             return self.handleException(e, 'do_remove_object', bucket_name=bucket_name, object_name=object_name)
         assert not self.object_exists(bucket_name, object_name)
@@ -217,8 +224,9 @@ class S3Client(Minio):
         return True
     
     def do_list_objects(self, bucket_name, prefix, start_after, include_user_meta, include_version, use_url_encoding_type, recursive):
+        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
         try:
-            objects = self.list_objects(bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recursive=recursive)
+            objects = client.list_objects(bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recursive=recursive)
         except S3Error as e:
             return self.handleException(e, 'do_list_objects', bucket_name=bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recursive=recursive)
         self.stats.success('do_list_objects')
@@ -226,224 +234,228 @@ class S3Client(Minio):
         result = '\n'.join([f'{obj.object_name} {obj.size} {obj.etag}' for obj in objects])
         return result
     
-    def do_add_user(self, access_key, secret_key):
+    def get_alias(self, alias):
+        return self.prefix + '_' + alias
+
+    def do_add_user(self, access_key, secret_key, alias):
         try:
-            self.run_cmd(f'mc admin user add {self.alias} {access_key} {secret_key}')
+            self.run_cmd(f'mc admin user add {self.get_alias(alias)} {access_key} {secret_key}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_add_user', access_key=access_key, secret_key=secret_key)
         self.stats.success('do_add_user')
         self.logger.info(f'do_add_user {access_key} succeed')
         return True
     
-    def do_remove_user(self, access_key):
+    def do_remove_user(self, access_key, alias):
         try:
-            self.run_cmd(f'mc admin user remove {self.alias} {access_key}')
+            self.run_cmd(f'mc admin user remove {self.get_alias(alias)} {access_key}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_remove_user', access_key=access_key)
         self.stats.success('do_remove_user')
         self.logger.info(f'do_remove_user {access_key} succeed')
         return True
 
-    def do_enable_user(self, access_key):
+    def do_enable_user(self, access_key, alias):
         try:
-            self.run_cmd(f'mc admin user enable {self.alias} {access_key}')
+            self.run_cmd(f'mc admin user enable {self.get_alias(alias)} {access_key}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_enable_user', access_key=access_key)
         self.stats.success('do_enable_user')
         self.logger.info(f'do_enable_user {access_key} succeed')
         return True
     
-    def do_disable_user(self, access_key):
+    def do_disable_user(self, access_key, alias):
         try:
-            self.run_cmd(f'mc admin user disable {self.alias} {access_key}')
+            self.run_cmd(f'mc admin user disable {self.get_alias(alias)} {access_key}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_disable_user', access_key=access_key)
         self.stats.success('do_disable_user')
         self.logger.info(f'do_disable_user {access_key} succeed')
         return True
     
-    def do_user_info(self, access_key):
+    def do_user_info(self, access_key, alias):
         try:
-            self.run_cmd(f'mc admin user info {self.alias} {access_key}')
+            self.run_cmd(f'mc admin user info {self.get_alias(alias)} {access_key}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_user_info', access_key=access_key)
         self.stats.success('do_user_info')
         self.logger.info(f'do_user_info {access_key} succeed')
         return True
     
-    def do_list_users(self):
+    def do_list_users(self, alias):
         try:
-            result = self.run_cmd(f'mc admin user list {self.alias}')
+            result = self.run_cmd(f'mc admin user list {self.get_alias(alias)}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_list_users')
         self.stats.success('do_list_users')
         self.logger.info(f'do_list_users succeed')
         return sorted(result.split("\n"))
 
-    def remove_all_users(self):
-        lines = self.run_cmd(f'mc admin user list {self.alias}').split("\n")
+    def remove_all_users(self, alias=DEFAULT_ALIAS):
+        lines = self.run_cmd(f'mc admin user list {self.get_alias(alias)}').split("\n")
         for line in lines:
             if not line.strip():
                 continue
             user = line.split()[1]
-            self.run_cmd(f'mc admin user remove {self.alias} {user}')
+            self.run_cmd(f'mc admin user remove {self.get_alias(alias)} {user}')
             print(f"User '{user}' removed successfully.")
 
-    def do_list_groups(self):
+    def do_list_groups(self, alias):
         try:
-            result = self.run_cmd(f'mc admin group list {self.alias}')
+            result = self.run_cmd(f'mc admin group list {self.get_alias(alias)}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_list_groups')
         self.stats.success('do_list_groups')
         self.logger.info(f'do_list_groups succeed')
         return sorted(result.split("\n"))
 
-    def do_add_group(self, group_name, members):
+    def do_add_group(self, group_name, members, alias):
         try:
-            self.run_cmd(f'mc admin group add {self.alias} {group_name} {" ".join(members)}')
+            self.run_cmd(f'mc admin group add {self.get_alias(alias)} {group_name} {" ".join(members)}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_add_group', group_name=group_name)
         self.stats.success('do_add_group')
         self.logger.info(f'do_add_group {group_name} succeed')
-        return self.do_group_info(group_name)
+        return self.do_group_info(group_name, alias)
 
-    def do_remove_group(self, group_name):
+    def do_remove_group(self, group_name, alias):
         try:
-            self.run_cmd(f'mc admin group remove {self.alias} {group_name}')
+            self.run_cmd(f'mc admin group remove {self.get_alias(alias)} {group_name}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_remove_group', group_name=group_name)
         self.stats.success('do_remove_group')
         self.logger.info(f'do_remove_group {group_name} succeed')
         return True
 
-    def do_disable_group(self, group_name):
+    def do_disable_group(self, group_name, alias):
         try:
-            self.run_cmd(f'mc admin group disable {self.alias} {group_name}')
+            self.run_cmd(f'mc admin group disable {self.get_alias(alias)} {group_name}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_disable_group', group_name=group_name)
         self.stats.success('do_disable_group')
         self.logger.info(f'do_disable_group {group_name} succeed')
         return True
     
-    def do_enable_group(self, group_name):
+    def do_enable_group(self, group_name, alias=DEFAULT_ALIAS):
         try:
-            self.run_cmd(f'mc admin group enable {self.alias} {group_name}')
+            self.run_cmd(f'mc admin group enable {self.get_alias(alias)} {group_name}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_enable_group', group_name=group_name)
         self.stats.success('do_enable_group')
         self.logger.info(f'do_enable_group {group_name} succeed')
         return True
 
-    def do_group_info(self, group_name):
+    def do_group_info(self, group_name, alias):
         try:
-            self.run_cmd(f'mc admin group info {self.alias} {group_name}')
+            self.run_cmd(f'mc admin group info {self.get_alias(alias)} {group_name}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_group_info', group_name=group_name)
         self.stats.success('do_group_info')
         self.logger.info(f'do_group_info {group_name} succeed')
         return True
     
-    def remove_all_groups(self):
-        groups = self.run_cmd(f'mc admin group list {self.alias}').split("\n")
+    def remove_all_groups(self, alias=DEFAULT_ALIAS):
+        groups = self.run_cmd(f'mc admin group list {self.get_alias(alias)}').split("\n")
         for group in groups:
             if not group.strip():
                 continue
-            self.run_cmd(f'mc admin group remove {self.alias} {group}')
+            self.run_cmd(f'mc admin group remove {self.get_alias(alias)} {group}')
             print(f"Group '{group}' removed successfully.")
     
-    def do_add_policy(self, policy_name, policy_document):
+    def do_add_policy(self, policy_name, policy_document, alias=DEFAULT_ALIAS):
         policy = json.dumps(policy_document)
         print(policy)
         policy_path = 'policy.json'
         with open(policy_path, 'w') as f:
             f.write(policy)
         try:
-            self.run_cmd(f'mc admin policy add {self.alias} {policy_name} {policy_path}')
+            self.run_cmd(f'mc admin policy add {self.get_alias(alias)} {policy_name} {policy_path}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_add_policy', policy_name=policy_name)
         self.stats.success('do_add_policy')
         self.logger.info(f'do_add_policy {policy_name} succeed')
         return True
     
-    def do_remove_policy(self, policy_name):
+    def do_remove_policy(self, policy_name, alias=DEFAULT_ALIAS):
         try:
-            self.run_cmd(f'mc admin policy remove {self.alias} {policy_name}')
+            self.run_cmd(f'mc admin policy remove {self.get_alias(alias)} {policy_name}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_remove_policy', policy_name=policy_name)
         self.stats.success('do_remove_policy')
         self.logger.info(f'do_remove_policy {policy_name} succeed')
         return True
     
-    def do_policy_info(self, policy_name):
+    def do_policy_info(self, policy_name, alias=DEFAULT_ALIAS):
         try:
-            self.run_cmd(f'mc admin policy info {self.alias} {policy_name}')
+            self.run_cmd(f'mc admin policy info {self.get_alias(alias)} {policy_name}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_policy_info', policy_name=policy_name)
         self.stats.success('do_policy_info')
         self.logger.info(f'do_policy_info {policy_name} succeed')
         return True
     
-    def do_list_policies(self):
+    def do_list_policies(self, alias=DEFAULT_ALIAS):
         try:
-            result = self.run_cmd(f'mc admin policy ls {self.alias}')
+            result = self.run_cmd(f'mc admin policy ls {self.get_alias(alias)}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_list_policies')
         self.stats.success('do_list_policies')
         self.logger.info(f'do_list_policies succeed')
         return result
     
-    def do_set_policy_to_user(self, policy_name, user_name):
+    def do_set_policy_to_user(self, policy_name, user_name, alias=DEFAULT_ALIAS):
         try:
-            self.run_cmd(f'mc admin policy set {self.alias} {policy_name} user={user_name}')
+            self.run_cmd(f'mc admin policy set {self.get_alias(alias)} {policy_name} user={user_name}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_set_policy_to_user', policy_name=policy_name, user_name=user_name)
         self.stats.success('do_set_policy_to_user')
         self.logger.info(f'do_set_policy_to_user {policy_name} {user_name} succeed')
         return True
 
-    def do_set_policy_to_group(self, policy_name, group_name):
+    def do_set_policy_to_group(self, policy_name, group_name, alias=DEFAULT_ALIAS):
         try:
-            self.run_cmd(f'mc admin policy set {self.alias} {policy_name} group={group_name}')
+            self.run_cmd(f'mc admin policy set {self.get_alias(alias)} {policy_name} group={group_name}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_set_policy_to_group', policy_name=policy_name, group_name=group_name)
         self.stats.success('do_set_policy_to_group')
         self.logger.info(f'do_set_policy_to_group {policy_name} {group_name} succeed')
         return True
     
-    def do_unset_policy_from_user(self, policy_name, user_name):
+    def do_unset_policy_from_user(self, policy_name, user_name, alias=DEFAULT_ALIAS):
         try:
-            self.run_cmd(f'mc admin policy unset {self.alias} {policy_name} user={user_name}')
+            self.run_cmd(f'mc admin policy unset {self.get_alias(alias)} {policy_name} user={user_name}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_unset_policy_from_user', policy_name=policy_name, user_name=user_name)
         self.stats.success('do_unset_policy_from_user')
         self.logger.info(f'do_unset_policy_from_user {policy_name} {user_name} succeed')
         return True
     
-    def do_unset_policy_from_group(self, policy_name, group_name):
+    def do_unset_policy_from_group(self, policy_name, group_name, alias=DEFAULT_ALIAS):
         try:
-            self.run_cmd(f'mc admin policy unset {self.alias} {policy_name} group={group_name}')
+            self.run_cmd(f'mc admin policy unset {self.get_alias(alias)} {policy_name} group={group_name}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_unset_policy_from_group', policy_name=policy_name, group_name=group_name)
         self.stats.success('do_unset_policy_from_group')
         self.logger.info(f'do_unset_policy_from_group {policy_name} {group_name} succeed')
         return True
     
-    def do_set_alias(self, alias_name, access_key, secret_key):
+    def do_set_alias(self, alias, access_key, secret_key):
+        alias_name = self.get_alias(alias)
         try:
             self.run_cmd(f'mc alias set {alias_name} http://{self.url} {access_key} {secret_key}')
         except subprocess.CalledProcessError as e:
-            return self.handleException(e, 'do_set_alias', alias_name=alias_name, url=self.url, access_key=access_key, secret_key=secret_key)
+            return self.handleException(e, 'do_set_alias', alias=alias, url=self.url, access_key=access_key, secret_key=secret_key)
         self.stats.success('do_set_alias')
-        self.logger.info(f'do_set_alias {alias_name} {self.url} {access_key} {secret_key} succeed')
+        self.logger.info(f'do_set_alias {alias} {self.url} {access_key} {secret_key} succeed')
         return True
     
-    def do_remove_alias(self, alias_name):
+    def do_remove_alias(self, alias):
         try:
-            self.run_cmd(f'mc alias remove {alias_name}')
+            self.run_cmd(f'mc alias remove {self.get_alias(alias)}')
         except subprocess.CalledProcessError as e:
-            return self.handleException(e, 'do_remove_alias', alias_name=alias_name)
+            return self.handleException(e, 'do_remove_alias', alias=alias)
         self.stats.success('do_remove_alias')
-        self.logger.info(f'do_remove_alias {alias_name} succeed')
+        self.logger.info(f'do_remove_alias {alias} succeed')
         return True
     
     def do_list_aliases(self):

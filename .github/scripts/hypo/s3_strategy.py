@@ -1,5 +1,6 @@
 from hypothesis import strategies as st
 from string import ascii_lowercase
+
 MAX_OBJECT_SIZE=10*1024*1024
 # https://min.io/docs/minio/linux/administration/identity-access-management/policy-based-access-control.html#minio-policy-actions
 S3_ACTION_LIST = ["s3:*", "s3:DeleteObject", "s3:GetObject","s3:ListBucket","s3:PutObject", "s3:PutObjectTagging", "s3:GetObjectTagging", "s3:DeleteObjectTagging"]
