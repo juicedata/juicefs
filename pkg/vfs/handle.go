@@ -410,6 +410,5 @@ func (v *VFS) loadAllHandles(path string) error {
 		logger.Infof("load %d handles from %s", len(v.handleIno), path)
 	}
 	v.nextfh = vfsState.NextFh
-	// _ = os.Remove(path)
 	return nil
 }

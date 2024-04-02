@@ -1215,6 +1215,8 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 
 	if err := v.loadAllHandles(statePath); err != nil && !os.IsNotExist(err) {
 		logger.Errorf("load state from %s: %s", statePath, err)
+	} else if err == nil { // keep the file when error occurs for debugging purpose
+		_ = os.Remove(statePath)
 	}
 
 	go v.cleanupModified()
