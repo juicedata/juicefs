@@ -982,16 +982,16 @@ func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 			return syscall.ENOENT
 		}
 		m.parseAttr(&n, attr)
-
-		if attr != nil && attr.AccessACL != aclAPI.None {
-			rule, err := m.getACL(s, attr.AccessACL)
-			if err != nil {
-				return err
-			}
-			attr.Mode = (rule.GetMode() & 0777) | (attr.Mode & 07000)
-		}
 		return nil
 	}))
+}
+
+func dupAcl(acl *aclAPI.Rule) *aclAPI.Rule {
+	if acl == nil {
+		return nil
+	}
+	var dup = *acl
+	return &dup
 }
 
 func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
@@ -1011,17 +1011,12 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		}
 		now := time.Now()
 
-		// get acl
-		var rule *aclAPI.Rule
-		if curAttr.AccessACL != aclAPI.None {
-			oldRule, err := m.getACL(s, curAttr.AccessACL)
-			if err != nil {
-				return err
-			}
-			rule = &aclAPI.Rule{}
-			*rule = *oldRule
+		rule, err := m.getACL(s, curAttr.AccessACL)
+		if err != nil {
+			return err
 		}
 
+		rule = dupAcl(rule)
 		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &curAttr, attr, now, rule)
 		if st != 0 {
 			return st
@@ -1030,17 +1025,9 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			return nil
 		}
 
-		// set acl
-		if rule != nil {
-			if err = m.tryLoadMissACLs(s); err != nil {
-				logger.Warnf("SetAttr: load miss acls error: %s", err)
-			}
-
-			aclId, err := m.insertACL(s, rule)
-			if err != nil {
-				return err
-			}
-			setAttrACLId(dirtyAttr, aclAPI.TypeAccess, aclId)
+		dirtyAttr.AccessACL, err = m.insertACL(s, rule)
+		if err != nil {
+			return err
 		}
 
 		var dirtyNode node
@@ -1358,10 +1345,6 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				// simple acl as default
 				n.Mode = (mode & 0xFE00) | rule.GetMode()
 			} else {
-				if err = m.tryLoadMissACLs(s); err != nil {
-					logger.Warnf("Mknode: load miss acls error: %s", err)
-				}
-
 				cRule := rule.ChildAccessACL(mode)
 				id, err := m.insertACL(s, cRule)
 				if err != nil {
@@ -3441,20 +3424,16 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 		e.Xattrs = xattrs
 	}
 
-	if attr.AccessACL != aclAPI.None {
-		accessACl, err := m.getACL(s, attr.AccessACL)
-		if err != nil {
-			return err
-		}
-		e.AccessACL = dumpACL(accessACl)
+	accessACl, err := m.getACL(s, attr.AccessACL)
+	if err != nil {
+		return err
 	}
-	if attr.DefaultACL != aclAPI.None {
-		defaultACL, err := m.getACL(s, attr.DefaultACL)
-		if err != nil {
-			return err
-		}
-		e.DefaultACL = dumpACL(defaultACL)
+	e.AccessACL = dumpACL(accessACl)
+	defaultACL, err := m.getACL(s, attr.DefaultACL)
+	if err != nil {
+		return err
 	}
+	e.DefaultACL = dumpACL(defaultACL)
 
 	if attr.Typ == TypeFile {
 		for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
@@ -4009,15 +3988,8 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}, aclMaxId *uin
 		chs[4] <- &xattr{Inode: inode, Name: x.Name, Value: unescape(x.Value)}
 	}
 
-	if e.AccessACL != nil {
-		r := loadACL(e.AccessACL)
-		n.AccessACLId, _ = m.aclCache.GetOrPut(r, aclMaxId)
-	}
-
-	if e.DefaultACL != nil {
-		r := loadACL(e.DefaultACL)
-		n.DefaultACLId, _ = m.aclCache.GetOrPut(r, aclMaxId)
-	}
+	n.AccessACLId = m.saveACL(loadACL(e.AccessACL), aclMaxId)
+	n.DefaultACLId = m.saveACL(loadACL(e.DefaultACL), aclMaxId)
 	chs[0] <- n
 }
 
@@ -4422,6 +4394,12 @@ func (m *dbMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 }
 
 func (m *dbMeta) insertACL(s *xorm.Session, rule *aclAPI.Rule) (uint32, error) {
+	if rule == nil {
+		return aclAPI.None, nil
+	}
+	if err := m.tryLoadMissACLs(s); err != nil {
+		logger.Warnf("Mknode: load miss acls error: %s", err)
+	}
 	var aclId uint32
 	if aclId = m.aclCache.GetId(rule); aclId == aclAPI.None {
 		// TODO conflicts from multiple clients are rare and result in only minor duplicates, thus not addressed for now.
@@ -4443,14 +4421,26 @@ func (m *dbMeta) tryLoadMissACLs(s *xorm.Session) error {
 			return err
 		}
 
+		got := make(map[uint32]struct{}, len(acls))
 		for _, data := range acls {
+			got[data.Id] = struct{}{}
 			m.aclCache.Put(data.Id, data.toRule())
+		}
+		if len(acls) < len(missIds) {
+			for _, id := range missIds {
+				if _, ok := got[id]; !ok {
+					m.aclCache.Put(id, aclAPI.EmptyRule())
+				}
+			}
 		}
 	}
 	return nil
 }
 
 func (m *dbMeta) getACL(s *xorm.Session, id uint32) (*aclAPI.Rule, error) {
+	if id == aclAPI.None {
+		return nil, nil
+	}
 	if cRule := m.aclCache.Get(id); cRule != nil {
 		return cRule, nil
 	}
@@ -4459,7 +4449,7 @@ func (m *dbMeta) getACL(s *xorm.Session, id uint32) (*aclAPI.Rule, error) {
 	if ok, err := s.Get(aclVal); err != nil {
 		return nil, err
 	} else if !ok {
-		return nil, ENOATTR
+		return nil, syscall.EIO
 	}
 
 	r := aclVal.toRule()
@@ -4505,10 +4495,6 @@ func (m *dbMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 			attr.Mode &= 07000
 			attr.Mode |= ((rule.Owner & 7) << 6) | ((rule.Group & 7) << 3) | (rule.Other & 7)
 		} else {
-			if err := m.tryLoadMissACLs(s); err != nil {
-				logger.Warnf("SetFacl: load miss acls error: %s", err)
-			}
-
 			// set acl
 			rule.InheritPerms(attr.Mode)
 			aclId, err := m.insertACL(s, rule)
@@ -4563,12 +4549,12 @@ func (m *dbMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, ru
 			aclId = getAttrACLId(attr, aclType)
 		}
 
-		if aclId == aclAPI.None {
-			return ENOATTR
-		}
 		a, err := m.getACL(s, aclId)
 		if err != nil {
 			return err
+		}
+		if a == nil {
+			return ENOATTR
 		}
 		*rule = *a
 		return nil

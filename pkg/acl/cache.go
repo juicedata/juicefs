@@ -17,9 +17,7 @@
 package acl
 
 import (
-	"sort"
 	"sync"
-	"sync/atomic"
 )
 
 const None = 0
@@ -37,7 +35,6 @@ type Cache interface {
 	Size() int
 	GetMissIds() []uint32
 	Clear()
-	GetOrPut(r *Rule, currId *uint32) (id uint32, got bool)
 }
 
 func NewCache() Cache {
@@ -65,22 +62,6 @@ func (c *cache) GetAll() map[uint32]*Rule {
 		cpy[id] = r
 	}
 	return cpy
-}
-
-// GetOrPut returns id for the Rule r if exists.
-// Otherwise, it stores r with a new id (atomically increment curId) and returns the new id.
-// The got result is true if the Rule was already exists, false if stored.
-func (c *cache) GetOrPut(r *Rule, curId *uint32) (id uint32, got bool) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	if id = c.getId(r); id != None {
-		return id, true
-	}
-
-	id = atomic.AddUint32(curId, 1)
-	c.put(id, r)
-	return id, false
 }
 
 func (c *cache) Clear() {
@@ -129,10 +110,6 @@ func (c *cache) Put(id uint32, r *Rule) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	c.put(id, r)
-}
-
-func (c *cache) put(id uint32, r *Rule) {
 	if _, ok := c.id2Rule[id]; ok {
 		return
 	}
@@ -148,28 +125,17 @@ func (c *cache) put(id uint32, r *Rule) {
 		return
 	}
 
-	sort.Sort(&c.id2Rule[id].NamedUsers)
-	sort.Sort(&c.id2Rule[id].NamedGroups)
-
 	cksum := r.Checksum()
-	if _, ok := c.cksum2Id[cksum]; ok {
-		c.cksum2Id[cksum] = append(c.cksum2Id[cksum], id)
-	} else {
-		c.cksum2Id[r.Checksum()] = []uint32{id}
-	}
+	c.cksum2Id[cksum] = append(c.cksum2Id[cksum], id)
 }
 
 func (c *cache) GetId(r *Rule) uint32 {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-
-	return c.getId(r)
-}
-
-func (c *cache) getId(r *Rule) uint32 {
 	if r == nil {
 		return None
 	}
+
+	c.lock.RLock()
+	defer c.lock.RUnlock()
 
 	if ids, ok := c.cksum2Id[r.Checksum()]; ok {
 		for _, id := range ids {
