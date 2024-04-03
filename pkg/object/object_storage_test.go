@@ -73,40 +73,22 @@ func listAll(s ObjectStorage, prefix, marker string, limit int64, followLink boo
 }
 
 func setStorageClass(o ObjectStorage) string {
-	switch s := o.(type) {
-	case *wasb:
-		s.sc = string(blob2.AccessTierCool)
-		return s.sc
-	case *bosclient:
-		s.sc = "STANDARD_IA"
-		return s.sc
-	case *COS:
-		s.sc = "STANDARD_IA"
-		return s.sc
-	case *ks3:
-		s.sc = "STANDARD_IA"
-		return s.sc
-	case *gs:
-		s.sc = "NEARLINE"
-		return s.sc
-	case *obsClient:
-		s.sc = "STANDARD_IA"
-		return s.sc
-	case *ossClient:
-		s.sc = string(oss.StorageIA)
-		return s.sc
-	case *qingstor:
-		s.sc = "STANDARD_IA"
-		return s.sc
-	case *s3client:
-		s.sc = "STANDARD_IA"
-		return s.sc
-	case *tosClient:
-		s.sc = string(enum.StorageClassIa)
-		return s.sc
-	default:
-		return ""
+	if osc, ok := o.(SupportStorageClass); ok {
+		var sc = "STANDARD_IA"
+		switch o.(type) {
+		case *wasb:
+			sc = string(blob2.AccessTierCool)
+		case *gs:
+			sc = "NEARLINE"
+		case *ossClient:
+			sc = string(oss.StorageIA)
+		case *tosClient:
+			sc = string(enum.StorageClassIa)
+		}
+		osc.SetStorageClass(sc)
+		return sc
 	}
+	return ""
 }
 
 // nolint:errcheck
