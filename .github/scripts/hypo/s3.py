@@ -28,7 +28,6 @@ class S3Machine(RuleBasedStateMachine):
     policies = Bundle('policies')
     user_policies = Bundle('user_policy')
     group_policies = Bundle('group_policy')
-    DEFAULT_ALIAS = 'admin'
     client1 = S3Client(prefix='minio', url='localhost:9000')
     client2 = S3Client(prefix='juice', url='localhost:9005')
     EXCLUDE_RULES = []

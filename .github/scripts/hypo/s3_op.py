@@ -18,8 +18,6 @@ import io
 from s3_contant import *
 
 class S3Client():
-    ROOT_ACCESS_KEY = 'minioadmin'
-    ROOT_SECRET_KEY = 'minioadmin'
     stats = Statistics()
     def __init__(self, prefix, url):
         self.prefix = prefix
@@ -61,7 +59,7 @@ class S3Client():
         return True
 
     def remove_all_buckets(self):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         buckets = client.list_buckets()
         for bucket in buckets:
             bucket_name = bucket.name
@@ -72,7 +70,7 @@ class S3Client():
             print(f"Bucket '{bucket_name}' removed successfully.")
         
     def do_list_buckets(self):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
             buckets = client.list_buckets()
         except S3Error as e:
@@ -82,7 +80,7 @@ class S3Client():
         return sorted([bucket.name for bucket in buckets])
     
     def do_remove_bucket(self, bucket_name:str):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
             client.remove_bucket(bucket_name)
         except S3Error as e:
@@ -93,7 +91,7 @@ class S3Client():
         return True
 
     def do_create_bucket(self, bucket_name:str):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
             client.make_bucket(bucket_name)
             print(f"Bucket '{bucket_name}' created successfully.")
@@ -105,7 +103,7 @@ class S3Client():
         return True
     
     def do_set_bucket_policy(self, bucket_name:str, policy:str):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
             client.set_bucket_policy(bucket_name, policy)
         except S3Error as e:
@@ -115,7 +113,7 @@ class S3Client():
         return True
     
     def do_get_bucket_policy(self, bucket_name:str):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
             policy = client.get_bucket_policy(bucket_name)
         except S3Error as e:
@@ -125,7 +123,7 @@ class S3Client():
         return policy
 
     def do_delete_bucket_policy(self, bucket_name:str):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
             client.delete_bucket_policy(bucket_name)
         except S3Error as e:
@@ -135,7 +133,7 @@ class S3Client():
         return True
 
     def do_stat_object(self, bucket_name:str, object_name:str):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
             stat = client.stat_object(bucket_name, object_name)
         except S3Error as e:
@@ -150,7 +148,7 @@ class S3Client():
         return stat.bucket_name, stat.object_name, stat.size
 
     def do_put_object(self, bucket_name:str, object_name:str, data, length, content_type='application/octet-stream', part_size=5*1024*1024):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
             client.put_object(bucket_name, object_name, io.BytesIO(data), length=length, content_type=content_type, part_size=part_size)
         except S3Error as e:
@@ -160,7 +158,7 @@ class S3Client():
         return self.do_stat_object(bucket_name, object_name)
 
     def do_get_object(self, bucket_name:str, object_name:str, offset=0, length=0):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
             stat = client.stat_object(bucket_name, object_name)
             if stat.size == 0:
@@ -181,7 +179,7 @@ class S3Client():
         return md5_hex
 
     def do_fput_object(self, bucket_name:str, object_name:str, src_path:str):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
             client.fput_object(bucket_name, object_name, src_path)
         except S3Error as e:
@@ -191,7 +189,7 @@ class S3Client():
         return self.do_stat_object(bucket_name, object_name)
     
     def do_fget_object(self, bucket_name:str, object_name:str, file_path:str):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
             client.fget_object(bucket_name, object_name, file_path)
         except S3Error as e:
@@ -202,7 +200,7 @@ class S3Client():
         return os.stat(file_path).st_size
 
     def object_exists(self, bucket_name:str, object_name:str):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
             client.stat_object(bucket_name, object_name)
             return True
@@ -213,7 +211,7 @@ class S3Client():
                 raise e
 
     def do_remove_object(self, bucket_name:str, object_name:str):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
             client.remove_object(bucket_name, object_name)
         except S3Error as e:
@@ -224,7 +222,7 @@ class S3Client():
         return True
     
     def do_list_objects(self, bucket_name, prefix, start_after, include_user_meta, include_version, use_url_encoding_type, recursive):
-        client=Minio(self.url,access_key=self.ROOT_ACCESS_KEY,secret_key=self.ROOT_SECRET_KEY,secure=False)
+        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
             objects = client.list_objects(bucket_name, prefix=prefix, start_after=start_after, include_user_meta=include_user_meta, include_version=include_version, use_url_encoding_type=use_url_encoding_type, recursive=recursive)
         except S3Error as e:
