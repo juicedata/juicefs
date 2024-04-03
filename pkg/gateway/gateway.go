@@ -1218,15 +1218,23 @@ func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker 
 
 	lockfile := path.Join(minio.MinioMetaBucket, minio.MinioMetaLockFile)
 	var file *fs.File
-	file, errno := n.fs.Open(mctx, lockfile, vfs.MODE_MASK_W)
+	var errno syscall.Errno
+	file, errno = n.fs.Open(mctx, lockfile, vfs.MODE_MASK_W)
 	if errno != 0 && !errors.Is(errno, syscall.ENOENT) {
-		logger.Errorf("failed to open the file to be locked: %s error %s", n.path(bucket, objects[0]), errno)
+		logger.Errorf("failed to open the file to be locked: %s error %s", lockfile, errno)
 		return &jfsFLock{}
 	}
 	if errors.Is(errno, syscall.ENOENT) {
 		if file, errno = n.fs.Create(mctx, lockfile, 0666, n.gConf.Umask); errno != 0 {
-			logger.Errorf("failed to create gateway lock file err %s", errno)
-			return &jfsFLock{}
+			if errors.Is(errno, syscall.EEXIST) {
+				if file, errno = n.fs.Open(mctx, lockfile, vfs.MODE_MASK_W); errno != 0 {
+					logger.Errorf("failed to open the file to be locked: %s error %s", lockfile, errno)
+					return &jfsFLock{}
+				}
+			} else {
+				logger.Errorf("failed to create gateway lock file err %s", errno)
+				return &jfsFLock{}
+			}
 		}
 	}
 	defer file.Close(mctx)
