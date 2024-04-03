@@ -347,6 +347,14 @@ func objbench(ctx *cli.Context) error {
 		threads:     threads,
 		seed:        make([]byte, bSize),
 		smallSeed:   make([]byte, smallBSize),
+		buffPool: &sync.Pool{New: func() interface{} {
+			buff := make([]byte, bSize)
+			return &buff
+		}},
+		smallBuffPool: &sync.Pool{New: func() interface{} {
+			buff := make([]byte, smallBSize)
+			return &buff
+		}},
 	}
 	randRead(bm.seed)
 	randRead(bm.smallSeed)
@@ -424,10 +432,11 @@ type apiInfo struct {
 }
 
 type benchMarkObj struct {
-	progressBar     *utils.Progress
-	blob            object.ObjectStorage
-	threads         int
-	seed, smallSeed []byte
+	progressBar             *utils.Progress
+	blob                    object.ObjectStorage
+	threads                 int
+	seed, smallSeed         []byte
+	buffPool, smallBuffPool *sync.Pool
 }
 
 func (bm *benchMarkObj) run(api apiInfo) []string {
@@ -503,40 +512,57 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 	return line
 }
 
-func getMockData(seed []byte, idx int) []byte {
+func getMockData(seed []byte, idx int, result *[]byte) {
 	size := len(seed)
-	if size == 0 {
-		return nil
+	rSize := len(*result)
+	if size == 0 || rSize == 0 {
+		return
 	}
-	content := make([]byte, size)
-	if idx == 0 {
-		content = seed
+	i := idx % size
+	if size-i > rSize {
+		copy(*result, seed[i:i+rSize])
 	} else {
-		i := idx % size
-		copy(content[:size-i], seed[i:size])
-		copy(content[size-i:size], seed[:i])
+		copy((*result)[:size-i], seed[i:size])
+		copy((*result)[size-i:rSize], seed[:rSize-(size-i)])
 	}
-	return content
+
 }
 
 func (bm *benchMarkObj) put(key string, startKey int) error {
 	idx, _ := strconv.Atoi(key)
-	return bm.blob.Put(key, bytes.NewReader(getMockData(bm.seed, idx-startKey)))
+	if idx-startKey == 0 {
+		return bm.blob.Put(key, bytes.NewReader(bm.seed))
+	}
+	buff := bm.buffPool.Get().(*[]byte)
+	defer bm.buffPool.Put(buff)
+	getMockData(bm.seed, idx-startKey, buff)
+	return bm.blob.Put(key, bytes.NewReader(*buff))
 }
 
 func (bm *benchMarkObj) smallPut(key string, startKey int) error {
 	idx, _ := strconv.Atoi(key)
-	return bm.blob.Put(key, bytes.NewReader(getMockData(bm.smallSeed, idx)))
+	if idx == 0 {
+		return bm.blob.Put(key, bytes.NewReader(bm.smallSeed))
+	}
+
+	buff := bm.smallBuffPool.Get().(*[]byte)
+	defer bm.smallBuffPool.Put(buff)
+	getMockData(bm.smallSeed, idx-startKey, buff)
+	return bm.blob.Put(key, bytes.NewReader(*buff))
 }
 
-func getAndCheckN(blob object.ObjectStorage, key string, seed []byte, getOrgIdx func(idx int) int) error {
+func getAndCheckN(blob object.ObjectStorage, key string, seed []byte, pool *sync.Pool, getOrgIdx func(idx int) int) error {
 	idx, _ := strconv.Atoi(key)
 	r, err := blob.Get(key, 0, -1)
 	if err != nil {
 		return err
 	}
 	defer r.Close()
-	content, err := io.ReadAll(r)
+	content := pool.Get().(*[]byte)
+	defer pool.Put(content)
+
+	var n int
+	n, err = io.ReadFull(r, *content)
 	if err != nil {
 		return err
 	}
@@ -546,20 +572,32 @@ func getAndCheckN(blob object.ObjectStorage, key string, seed []byte, getOrgIdx 
 	if l < checkN {
 		checkN = l
 	}
-	if len(content) != len(seed) || !bytes.Equal(content[:checkN], getMockData(seed, orgIdx)[:checkN]) {
+
+	// if orgIdx is 0, mockdata is the same as the seed
+	var preNMockData []byte
+	if orgIdx == 0 {
+		preNMockData = seed[:checkN]
+	} else {
+		mockResult := pool.Get().(*[]byte)
+		defer pool.Put(mockResult)
+		preNMockData = (*mockResult)[:checkN]
+		getMockData(seed, orgIdx, &preNMockData)
+	}
+
+	if n != len(seed) || !bytes.Equal((*content)[:checkN], preNMockData) {
 		return fmt.Errorf("the downloaded content is incorrect")
 	}
 	return nil
 }
 
 func (bm *benchMarkObj) get(key string, startKey int) error {
-	return getAndCheckN(bm.blob, key, bm.seed, func(idx int) int {
+	return getAndCheckN(bm.blob, key, bm.seed, bm.buffPool, func(idx int) int {
 		return idx - startKey
 	})
 }
 
 func (bm *benchMarkObj) smallGet(key string, startKey int) error {
-	return getAndCheckN(bm.blob, key, bm.smallSeed, func(idx int) int {
+	return getAndCheckN(bm.blob, key, bm.smallSeed, bm.smallBuffPool, func(idx int) int {
 		return idx
 	})
 }
@@ -962,7 +1000,8 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			parts := make([]*object.Part, total)
 			content := make([][]byte, total)
 			for i := 0; i < total; i++ {
-				content[i] = getMockData(seed, i)
+				content[i] = make([]byte, upload.MinPartSize)
+				getMockData(seed, i, &content[i])
 			}
 			var eg errgroup.Group
 			eg.SetLimit(4)
@@ -982,7 +1021,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 				return err
 			}
 			// overwrite the first part
-			firstPartContent := append(getMockData(seed, 0), getMockData(seed, 0)...)
+			firstPartContent := append(seed, seed...)
 			if parts[0], err = blob.UploadPart(key, upload.UploadID, 1, firstPartContent); err != nil {
 				return fmt.Errorf("multipart upload error: %v", err)
 			}
