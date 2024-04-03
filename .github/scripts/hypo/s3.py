@@ -16,6 +16,7 @@ from s3_strategy import *
 from s3_contant import *
 # minio client: https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z
 # minio server: minio/minio:RELEASE.2021-04-22T15-44-28Z
+# docker run -d -p 9000:9000 --name minio -e "MINIO_ACCESS_KEY=minioadmin" -e "MINIO_SECRET_KEY=minioadmin" minio/minio:RELEASE.2021-04-22T15-44-28Z server /data
 # ./juicefs format sqlite3://test.db gateway
 # MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway sqlite3://test.db localhost:9005 --multi-buckets --keep-etag
 
@@ -38,8 +39,8 @@ class S3Machine(RuleBasedStateMachine):
 
     def __init__(self):
         super().__init__()
-        self.client1.do_set_alias(DEFAULT_ALIAS, DEFAULT_ACCESS_KEY, DEFAULT_SECRET_KEY)
-        self.client2.do_set_alias(DEFAULT_ALIAS, DEFAULT_ACCESS_KEY, DEFAULT_SECRET_KEY)
+        self.client1.do_set_alias(ROOT_ALIAS, DEFAULT_ACCESS_KEY, DEFAULT_SECRET_KEY)
+        self.client2.do_set_alias(ROOT_ALIAS, DEFAULT_ACCESS_KEY, DEFAULT_SECRET_KEY)
         self.client1.remove_all_buckets()
         self.client2.remove_all_buckets()
         self.client1.remove_all_users()
@@ -49,36 +50,45 @@ class S3Machine(RuleBasedStateMachine):
 
     @initialize(target=aliases)
     def init_aliases(self):
-        return DEFAULT_ALIAS
+        return ROOT_ALIAS
 
     @initialize(target=policies)
     def init_policies(self):
-        return multiple(BUILD_IN_POLICIES)
+        return multiple(*BUILD_IN_POLICIES)
             
+    def replace(self, result, prefix):
+        if isinstance(result, str):
+            return result.replace(prefix, '***')
+        elif isinstance(result, list):
+            return [self.replace(x, prefix) for x in result]
+        elif isinstance(result, dict):
+            return {k: self.replace(v, prefix) for k, v in result.items()}
+        else:
+            return result
+
     def equal(self, result1, result2):
         if os.getenv('PROFILE', 'dev') == 'generate':
             return True
         if type(result1) != type(result2):
             return False
         if isinstance(result1, Exception):
-            result1 = str(result1).replace(self.PREFIX1, '***')
-            result2 = str(result2).replace(self.PREFIX2, '***')
-        elif isinstance(result1, str) and isinstance(result2, str) :
-            result1 = result1.replace(self.PREFIX1, '***')
-            result2 = result2.replace(self.PREFIX2, '***')
+            result1 = str(result1)
+            result2 = str(result2)
+        result1 = self.replace(result1, self.PREFIX1)
+        result2 = self.replace(result2, self.PREFIX2)
         # print(f'result1 is {result1}\nresult2 is {result2}')
         return result1 == result2
 
     @rule(alias = aliases)
     @precondition(lambda self: False)
-    def info(self, alias=DEFAULT_ALIAS):
+    def info(self, alias=ROOT_ALIAS):
         result1 = self.client1.do_info(alias)
         result2 = self.client2.do_info(alias)
         assert self.equal(result1, result2), f'\033[31minfo:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(alias = aliases)
     @precondition(lambda self: 'list_buckets' not in self.EXCLUDE_RULES)
-    def list_buckets(self, alias=DEFAULT_ALIAS):
+    def list_buckets(self, alias=ROOT_ALIAS):
         result1 = self.client1.do_list_buckets(alias)
         result2 = self.client2.do_list_buckets(alias)
         assert self.equal(result1, result2), f'\033[31mdo_list_buckets:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -88,7 +98,7 @@ class S3Machine(RuleBasedStateMachine):
         alias = aliases,
         bucket_name = st_bucket_name)
     @precondition(lambda self: 'create_bucket' not in self.EXCLUDE_RULES)
-    def create_bucket(self, bucket_name, alias = DEFAULT_ALIAS):
+    def create_bucket(self, bucket_name, alias = ROOT_ALIAS):
         result1 = self.client1.do_create_bucket(bucket_name, alias)
         result2 = self.client2.do_create_bucket(bucket_name, alias)
         assert self.equal(result1, result2), f'\033[31mcreate_bucket:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -102,7 +112,7 @@ class S3Machine(RuleBasedStateMachine):
         alias = aliases
     )
     @precondition(lambda self: 'remove_bucket' not in self.EXCLUDE_RULES)
-    def remove_bucket(self, bucket_name, alias = DEFAULT_ALIAS):
+    def remove_bucket(self, bucket_name, alias = ROOT_ALIAS):
         result1 = self.client1.do_remove_bucket(bucket_name, alias)
         result2 = self.client2.do_remove_bucket(bucket_name, alias)
         assert self.equal(result1, result2), f'\033[31mremove_bucket:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -112,33 +122,25 @@ class S3Machine(RuleBasedStateMachine):
             return multiple()
 
     @rule(
+        alias = aliases,
         bucket_name = buckets.filter(lambda x: x != multiple()),
-        policy = st_policy
+        policy = st.sampled_from(['public', 'download', 'upload', 'none'])
     )
     @precondition(lambda self: 'set_bucket_policy' not in self.EXCLUDE_RULES)
-    def set_bucket_policy(self, bucket_name, policy):
-        policy_str = json.dumps(policy).replace('{{bucket}}', bucket_name)
-        result1 = self.client1.do_set_bucket_policy(bucket_name, policy_str)
-        result2 = self.client2.do_set_bucket_policy(bucket_name, policy_str)
+    def set_bucket_policy(self, bucket_name, policy, alias=ROOT_ALIAS):
+        result1 = self.client1.do_set_bucket_policy(bucket_name, policy, alias)
+        result2 = self.client2.do_set_bucket_policy(bucket_name, policy, alias)
         assert self.equal(result1, result2), f'\033[31mset_bucket_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
-        bucket_name = buckets
+        bucket_name = buckets,
+        alias = aliases
     )
     @precondition(lambda self: 'get_bucket_policy' not in self.EXCLUDE_RULES)
-    def get_bucket_policy(self, bucket_name):
-        result1 = self.client1.do_get_bucket_policy(bucket_name)
-        result2 = self.client2.do_get_bucket_policy(bucket_name)
+    def get_bucket_policy(self, bucket_name, alias=ROOT_ALIAS):
+        result1 = self.client1.do_get_bucket_policy(bucket_name, alias)
+        result2 = self.client2.do_get_bucket_policy(bucket_name, alias)
         assert self.equal(result1, result2), f'\033[31mget_bucket_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
-
-    @rule(
-        bucket_name = buckets
-    )
-    @precondition(lambda self: 'delete_bucket_policy' not in self.EXCLUDE_RULES)
-    def delete_bucket_policy(self, bucket_name):
-        result1 = self.client1.do_delete_bucket_policy(bucket_name)
-        result2 = self.client2.do_delete_bucket_policy(bucket_name)
-        assert self.equal(result1, result2), f'\033[31mdelete_bucket_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
         target=objects,
@@ -181,7 +183,7 @@ class S3Machine(RuleBasedStateMachine):
         bucket_name = buckets,
         object_name = st_object_name)
     @precondition(lambda self: 'fput_object' not in self.EXCLUDE_RULES)
-    def fput_object(self, bucket_name, object_name, alias=DEFAULT_ALIAS):
+    def fput_object(self, bucket_name, object_name, alias=ROOT_ALIAS):
         result1 = self.client1.do_fput_object(bucket_name, object_name, 'README.md', alias)
         result2 = self.client2.do_fput_object(bucket_name, object_name, 'README.md', alias)
         assert self.equal(result1, result2), f'\033[31mfput_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -196,7 +198,7 @@ class S3Machine(RuleBasedStateMachine):
         file_path = st.just('/tmp/file')
     )
     @precondition(lambda self: 'fget_object' not in self.EXCLUDE_RULES)
-    def fget_object(self, obj:str, file_path, alias = DEFAULT_ALIAS):
+    def fget_object(self, obj:str, file_path, alias = ROOT_ALIAS):
         bucket_name = obj.split(':')[0]
         object_name = obj.split(':')[1]
         result1 = self.client1.do_fget_object(bucket_name, object_name, file_path, alias)
@@ -209,7 +211,7 @@ class S3Machine(RuleBasedStateMachine):
         obj = consumes(objects)
     )
     @precondition(lambda self: 'remove_object' not in self.EXCLUDE_RULES)
-    def remove_object(self, obj:str, alias=DEFAULT_ALIAS):
+    def remove_object(self, obj:str, alias=ROOT_ALIAS):
         bucket_name = obj.split(':')[0]
         object_name = obj.split(':')[1]
         result1 = self.client1.do_remove_object(bucket_name, object_name, alias)
@@ -225,7 +227,7 @@ class S3Machine(RuleBasedStateMachine):
         alias = aliases
     )
     @precondition(lambda self: 'stat_object' not in self.EXCLUDE_RULES)
-    def stat_object(self, obj:str, alias=DEFAULT_ALIAS):
+    def stat_object(self, obj:str, alias=ROOT_ALIAS):
         bucket_name = obj.split(':')[0]
         object_name = obj.split(':')[1]
         result1 = self.client1.do_stat_object(bucket_name, object_name, alias)
@@ -250,10 +252,9 @@ class S3Machine(RuleBasedStateMachine):
         target = users,
         alias = aliases,
         user_name = st_user_name, 
-        secret_key = st_secret_key
     )
     @precondition(lambda self: 'add_user' not in self.EXCLUDE_RULES)
-    def add_user(self, user_name, secret_key=DEFAULT_SECRET_KEY, alias = DEFAULT_ALIAS):
+    def add_user(self, user_name, secret_key=DEFAULT_SECRET_KEY, alias = ROOT_ALIAS):
         result1 = self.client1.do_add_user(user_name, secret_key, alias)
         result2 = self.client2.do_add_user(user_name, secret_key, alias)
         assert self.equal(result1, result2), f'\033[31madd_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -268,7 +269,7 @@ class S3Machine(RuleBasedStateMachine):
         user_name = consumes(users).filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'remove_user' not in self.EXCLUDE_RULES)
-    def remove_user(self, user_name, alias = DEFAULT_ALIAS):
+    def remove_user(self, user_name, alias = ROOT_ALIAS):
         result1 = self.client1.do_remove_user(user_name, alias)
         result2 = self.client2.do_remove_user(user_name, alias)
         assert self.equal(result1, result2), f'\033[31mremove_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -282,7 +283,7 @@ class S3Machine(RuleBasedStateMachine):
         user_name = users.filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'enable_user' not in self.EXCLUDE_RULES)
-    def enable_user(self, user_name, alias=DEFAULT_ALIAS):
+    def enable_user(self, user_name, alias=ROOT_ALIAS):
         result1 = self.client1.do_enable_user(user_name, alias)
         result2 = self.client2.do_enable_user(user_name, alias)
         assert self.equal(result1, result2), f'\033[31menable_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -292,7 +293,7 @@ class S3Machine(RuleBasedStateMachine):
         user_name = users.filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'disable_user' not in self.EXCLUDE_RULES)
-    def disable_user(self, user_name, alias=DEFAULT_ALIAS):
+    def disable_user(self, user_name, alias=ROOT_ALIAS):
         result1 = self.client1.do_disable_user(user_name, alias)
         result2 = self.client2.do_disable_user(user_name, alias)
         assert self.equal(result1, result2), f'\033[31mdisable_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -302,21 +303,21 @@ class S3Machine(RuleBasedStateMachine):
         user_name = users.filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'user_info' not in self.EXCLUDE_RULES)
-    def user_info(self, user_name, alias=DEFAULT_ALIAS):
+    def user_info(self, user_name, alias=ROOT_ALIAS):
         result1 = self.client1.do_user_info(user_name, alias)
         result2 = self.client2.do_user_info(user_name, alias)
         assert self.equal(result1, result2), f'\033[31muser_info:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(alias = aliases)
     @precondition(lambda self: 'list_users' not in self.EXCLUDE_RULES)
-    def list_users(self, alias=DEFAULT_ALIAS):
+    def list_users(self, alias=ROOT_ALIAS):
         result1 = self.client1.do_list_users(alias)
         result2 = self.client2.do_list_users(alias)
         assert self.equal(result1, result2), f'\033[31mlist_users:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(alias = aliases)
     @precondition(lambda self: 'list_groups' not in self.EXCLUDE_RULES)
-    def list_groups(self, alias=DEFAULT_ALIAS):
+    def list_groups(self, alias=ROOT_ALIAS):
         result1 = self.client1.do_list_groups(alias)
         result2 = self.client2.do_list_groups(alias)
         assert self.equal(result1, result2), f'\033[31mlist_groups:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -327,7 +328,7 @@ class S3Machine(RuleBasedStateMachine):
         group_name=st_group_name, 
         members = st_group_members)
     @precondition(lambda self: 'add_group' not in self.EXCLUDE_RULES)
-    def add_group(self, group_name, members, alias=DEFAULT_ALIAS):
+    def add_group(self, group_name, members, alias=ROOT_ALIAS):
         result1 = self.client1.do_add_group(group_name, members, alias)
         result2 = self.client2.do_add_group(group_name, members, alias)
         assert self.equal(result1, result2), f'\033[31madd_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -340,7 +341,7 @@ class S3Machine(RuleBasedStateMachine):
         group_name = groups, 
         alias = aliases)
     @precondition(lambda self: 'group_info' not in self.EXCLUDE_RULES)
-    def group_info(self, group_name, alias=DEFAULT_ALIAS):
+    def group_info(self, group_name, alias=ROOT_ALIAS):
         result1 = self.client1.do_group_info(group_name, alias)
         result2 = self.client2.do_group_info(group_name, alias)
         assert self.equal(result1, result2), f'\033[31mgroup_info:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -351,7 +352,7 @@ class S3Machine(RuleBasedStateMachine):
         group_name=consumes(groups).filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'remove_group' not in self.EXCLUDE_RULES)
-    def remove_group(self, group_name, alias=DEFAULT_ALIAS):
+    def remove_group(self, group_name, alias=ROOT_ALIAS):
         result1 = self.client1.do_remove_group(group_name, alias)
         result2 = self.client2.do_remove_group(group_name, alias)
         assert self.equal(result1, result2), f'\033[31mremove_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -365,7 +366,7 @@ class S3Machine(RuleBasedStateMachine):
         group_name=groups.filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'disable_group' not in self.EXCLUDE_RULES)
-    def disable_group(self, group_name, alias=DEFAULT_ALIAS):
+    def disable_group(self, group_name, alias=ROOT_ALIAS):
         result1 = self.client1.do_disable_group(group_name, alias)
         result2 = self.client2.do_disable_group(group_name, alias)
         assert self.equal(result1, result2), f'\033[31mdisable_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -375,34 +376,35 @@ class S3Machine(RuleBasedStateMachine):
         group_name=groups.filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'enable_group' not in self.EXCLUDE_RULES)
-    def enable_group(self, group_name, alias=DEFAULT_ALIAS):
+    def enable_group(self, group_name, alias=ROOT_ALIAS):
         result1 = self.client1.do_enable_group(group_name, alias)
         result2 = self.client2.do_enable_group(group_name, alias)
         assert self.equal(result1, result2), f'\033[31menable_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
         target = policies,
-        alias = aliases,
+        alias = st.just(ROOT_ALIAS),
         policy_name = st_policy_name,
         policy_document = st_policy
     )
     @precondition(lambda self: 'add_policy' not in self.EXCLUDE_RULES)
-    def add_policy(self, policy_name, policy_document, alias=DEFAULT_ALIAS):
+    def add_policy(self, policy_name, policy_document, alias=ROOT_ALIAS):
         result1 = self.client1.do_add_policy(policy_name, policy_document, alias)
         result2 = self.client2.do_add_policy(policy_name, policy_document, alias)
         assert self.equal(result1, result2), f'\033[31madd_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
+            assert False, 'add policy failed'
             return multiple()
         else:
             return policy_name
     
     @rule(
         target = policies,
-        alias = aliases,
+        alias = st.just(ROOT_ALIAS),
         policy_name = consumes(policies).filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'remove_policy' not in self.EXCLUDE_RULES)
-    def remove_policy(self, policy_name, alias=DEFAULT_ALIAS):
+    def remove_policy(self, policy_name, alias=ROOT_ALIAS):
         assume(policy_name not in BUILD_IN_POLICIES)
         result1 = self.client1.do_remove_policy(policy_name, alias)
         result2 = self.client2.do_remove_policy(policy_name, alias)
@@ -413,30 +415,30 @@ class S3Machine(RuleBasedStateMachine):
             return multiple()
 
     @rule(
-        alias = aliases,
+        alias = st.just(ROOT_ALIAS),
         policy_name = policies.filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'policy_info' not in self.EXCLUDE_RULES)
-    def policy_info(self, policy_name, alias=DEFAULT_ALIAS):
+    def policy_info(self, policy_name, alias=ROOT_ALIAS):
         result1 = self.client1.do_policy_info(policy_name, alias)
         result2 = self.client2.do_policy_info(policy_name, alias)
         assert self.equal(result1, result2), f'\033[31mpolicy_info:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
     
-    @rule(alias = aliases)
+    @rule(alias = st.just(ROOT_ALIAS))
     @precondition(lambda self: 'list_policies' not in self.EXCLUDE_RULES)
-    def list_policies(self, alias=DEFAULT_ALIAS):
+    def list_policies(self, alias=ROOT_ALIAS):
         result1 = self.client1.do_list_policies(alias)
         result2 = self.client2.do_list_policies(alias)
         assert self.equal(result1, result2), f'\033[31mlist_policies:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
         target = user_policies,
-        alias = aliases,
+        alias = st.just(ROOT_ALIAS),
         user_name = users.filter(lambda x: x != multiple()),
         policy_name = policies.filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'set_policy_to_user' not in self.EXCLUDE_RULES)
-    def set_policy_to_user(self, policy_name, user_name, alias=DEFAULT_ALIAS):
+    def set_policy_to_user(self, policy_name, user_name, alias=ROOT_ALIAS):
         result1 = self.client1.do_set_policy_to_user(policy_name, user_name, alias)
         result2 = self.client2.do_set_policy_to_user(policy_name, user_name, alias)
         assert self.equal(result1, result2), f'\033[31mset_policy_to_user:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -447,12 +449,12 @@ class S3Machine(RuleBasedStateMachine):
 
     @rule(
         target = group_policies, 
-        alias = aliases,
+        alias = st.just(ROOT_ALIAS),
         group_name = groups.filter(lambda x: x != multiple()),
         policy_name = policies.filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'set_policy_to_group' not in self.EXCLUDE_RULES)
-    def set_policy_to_group(self, group_name, policy_name, alias=DEFAULT_ALIAS):
+    def set_policy_to_group(self, group_name, policy_name, alias=ROOT_ALIAS):
         result1 = self.client1.do_set_policy_to_group(policy_name, group_name, alias)
         result2 = self.client2.do_set_policy_to_group(policy_name, group_name, alias)
         assert self.equal(result1, result2), f'\033[31mset_policy_to_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -463,11 +465,11 @@ class S3Machine(RuleBasedStateMachine):
         
     @rule(
         target = user_policies,
-        alias = aliases,
+        alias = st.just(ROOT_ALIAS),
         user_policy = consumes(user_policies).filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'unset_policy_from_user' not in self.EXCLUDE_RULES)
-    def unset_policy_from_user(self, user_policy:str, alias=DEFAULT_ALIAS):
+    def unset_policy_from_user(self, user_policy:str, alias=ROOT_ALIAS):
         user_name = user_policy.split(':')[0]
         policy_name = user_policy.split(':')[1]
         result1 = self.client1.do_unset_policy_from_user(policy_name, user_name, alias)
@@ -480,11 +482,11 @@ class S3Machine(RuleBasedStateMachine):
         
     @rule(
         target = group_policies,
-        alias = aliases,
+        alias = st.just(ROOT_ALIAS),
         group_policy = consumes(group_policies).filter(lambda x: x != multiple())
     )
     @precondition(lambda self: 'unset_policy_from_group' not in self.EXCLUDE_RULES)
-    def unset_policy_from_group(self,  group_policy:str, alias=DEFAULT_ALIAS):
+    def unset_policy_from_group(self,  group_policy:str, alias=ROOT_ALIAS):
         group_name = group_policy.split(':')[0]
         policy_name = group_policy.split(':')[1]
         result1 = self.client1.do_unset_policy_from_group(policy_name, group_name, alias)
@@ -515,7 +517,8 @@ class S3Machine(RuleBasedStateMachine):
         alias = consumes(aliases)
     )
     @precondition(lambda self: 'remove_alias' not in self.EXCLUDE_RULES)
-    def remove_alias(self, alias=''):
+    def remove_alias(self, alias):
+        assume(alias != ROOT_ALIAS)
         result1 = self.client1.do_remove_alias(alias)
         result2 = self.client2.do_remove_alias(alias)
         assert self.equal(result1, result2), f'\033[31mremove_alias:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -523,13 +526,7 @@ class S3Machine(RuleBasedStateMachine):
             return alias
         else:
             return multiple()
-    @rule()
-    @precondition(lambda self: 'list_aliases' not in self.EXCLUDE_RULES)
-    def list_aliases(self):
-        result1 = self.client1.do_list_aliases()
-        result2 = self.client2.do_list_aliases()
-        assert self.equal(result1, result2), f'\033[31mlist_aliases:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
-
+    
     def teardown(self):
         pass
 

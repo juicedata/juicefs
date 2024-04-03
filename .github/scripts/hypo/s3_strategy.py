@@ -18,29 +18,18 @@ st_offset = st.integers(min_value=0, max_value=MAX_OBJECT_SIZE)
 st_length = st.integers(min_value=0, max_value=MAX_OBJECT_SIZE)
 st_policy_name = st.text(alphabet=ascii_lowercase, min_size=4, max_size=4)
 st_policy = st.fixed_dictionaries({
+    "Version": st.just("2012-10-17"),
     "Statement": st.lists(
-        st.one_of(
-            st.fixed_dictionaries({
-                "Effect": st.sampled_from(["Allow", "Deny"]),
-                "Principal": st.fixed_dictionaries({"AWS": st.just("*")}),
-                "Resource": st.just("arn:aws:s3:::*"),
-                "Action": st.lists(
-                    st.sampled_from(["s3:GetBucketLocation", "s3:ListBucket"]),
-                    min_size=1, max_size=3, 
-                    unique=True
-                ),
-            }),
-            st.fixed_dictionaries({
-                "Effect": st.sampled_from(["Allow", "Deny"]),
-                "Principal": st.fixed_dictionaries({"AWS": st.just("*")}),
-                "Action": st.lists(
-                    st.sampled_from(S3_ACTION_LIST),
-                    min_size=1, max_size=3,
-                    unique=True
-                ),
-                "Resource": st.just("arn:aws:s3:::*"),
-            }),
-        ),
+        st.fixed_dictionaries({
+            "Effect": st.sampled_from(["Allow", "Deny"]),
+            "Principal": st.fixed_dictionaries({"AWS": st.just("*")}),
+            "Action": st.lists(
+                st.sampled_from(S3_ACTION_LIST),
+                min_size=1, max_size=3,
+                unique=True
+            ),
+            "Resource": st.just("arn:aws:s3:::*"),
+        }),
         min_size=1, max_size=3
     )
 })

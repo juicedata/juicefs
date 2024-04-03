@@ -1,4 +1,4 @@
-DEFAULT_ALIAS = 'admin'
+ROOT_ALIAS = 'admin'
 ROOT_ACCESS_KEY = 'minioadmin'
 ROOT_SECRET_KEY = 'minioadmin'
 DEFAULT_ACCESS_KEY = ROOT_ACCESS_KEY
