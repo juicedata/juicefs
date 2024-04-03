@@ -99,7 +99,12 @@ jobs:
         timeout-minutes: 30
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/fsck.sh 
-
+      
+      - name:Test Gateway
+        timeout-minutes:30
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/gateway.sh
+      
       - name: Test Info
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/info.sh
