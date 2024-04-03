@@ -84,6 +84,8 @@ func setStorageClass(o ObjectStorage) string {
 			sc = string(oss.StorageIA)
 		case *tosClient:
 			sc = string(enum.StorageClassIa)
+		case *minio, *wasabi, *qiniu:
+			sc = ""
 		}
 		osc.SetStorageClass(sc)
 		return sc
