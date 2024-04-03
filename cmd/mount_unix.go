@@ -206,7 +206,10 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 	}
 }
 
-func makeDaemonForSvc(c *cli.Context, m meta.Meta) error {
+func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl string) error {
+	cacheDirPathToAbs(c)
+	_ = expandPathForEmbedded(metaUrl)
+
 	var attrs godaemon.DaemonAttr
 	logfile := c.String("log")
 	attrs.OnExit = func(stage int) error {

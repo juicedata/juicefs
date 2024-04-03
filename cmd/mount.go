@@ -184,7 +184,7 @@ func updateFormat(c *cli.Context) func(*meta.Format) {
 	}
 }
 
-func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config) {
+func cacheDirPathToAbs(c *cli.Context) {
 	if runtime.GOOS != "windows" {
 		if cd := c.String("cache-dir"); cd != "memory" {
 			ds := utils.SplitDir(cd)
@@ -212,6 +212,10 @@ func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config) {
 			}
 		}
 	}
+}
+
+func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config) {
+	cacheDirPathToAbs(c)
 	_ = expandPathForEmbedded(addr)
 	// The default log to syslog is only in daemon mode.
 	utils.InitLoggers(!c.Bool("no-syslog"))

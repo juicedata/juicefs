@@ -194,9 +194,8 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	removePassword(metaUrl)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
-
 	if c.Bool("background") {
-		if err := makeDaemonForSvc(c, metaCli); err != nil {
+		if err := makeDaemonForSvc(c, metaCli, metaUrl); err != nil {
 			logger.Fatalf("make daemon: %s", err)
 		}
 	}
