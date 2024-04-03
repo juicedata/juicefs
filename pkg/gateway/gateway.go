@@ -1169,7 +1169,7 @@ func (j *jfsFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (
 
 func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeout *minio.DynamicTimeout) (context.Context, error) {
 	if j.inode == 0 {
-		logger.Errorf("the lock failed because the inode of the gateway lock file should not be 0")
+		logger.Warnf("failed to get lock")
 		return ctx, nil
 	}
 	start := time.Now().UTC()
@@ -1196,7 +1196,6 @@ func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeou
 
 func (j *jfsFLock) Unlock() {
 	if j.inode == 0 {
-		logger.Errorf("the gateway config file inode should not be 0")
 		return
 	}
 	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
@@ -1214,8 +1213,7 @@ func (j *jfsFLock) RUnlock() {
 
 func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker {
 	if len(objects) != 1 {
-		logger.Errorf("only allow locking one object,but get %s", objects)
-		return &jfsFLock{}
+		panic(fmt.Errorf("jfsObjects.NewNSLock: the length of the objects parameter must be 1, current %s", objects))
 	}
 
 	lockfile := path.Join(minio.MinioMetaBucket, minio.MinioMetaLockFile)
