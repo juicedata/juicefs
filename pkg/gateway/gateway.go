@@ -1168,11 +1168,19 @@ func (j *jfsFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (
 }
 
 func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeout *minio.DynamicTimeout) (context.Context, error) {
+	if j.inode == 0 {
+		logger.Errorf("the lock failed because the inode of the gateway lock file should not be 0")
+		return ctx, nil
+	}
 	start := time.Now().UTC()
 	deadline := start.Add(timeout.Timeout())
+	lockStr := "write"
+	if ltype == meta.F_RDLCK {
+		lockStr = "read"
+	}
 	for {
 		if errno := j.meta.Flock(mctx, j.inode, j.owner, ltype, false); errno != 0 && !errors.Is(errno, syscall.EAGAIN) {
-			logger.Errorf("failed to get write lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
+			logger.Errorf("failed to get %s lock for inode %d by owner %d, error : %s", lockStr, j.inode, j.owner, errno)
 		} else {
 			timeout.LogSuccess(time.Now().UTC().Sub(start))
 			return ctx, nil
@@ -1182,11 +1190,15 @@ func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeou
 			logger.Errorf("get write lock timed out ino:%d", j.inode)
 			return ctx, minio.OperationTimedOut{}
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 
 func (j *jfsFLock) Unlock() {
+	if j.inode == 0 {
+		logger.Errorf("the gateway config file inode should not be 0")
+		return
+	}
 	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
 		logger.Errorf("failed to release write lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
 	}
@@ -1197,9 +1209,7 @@ func (j *jfsFLock) GetRLock(ctx context.Context, timeout *minio.DynamicTimeout) 
 }
 
 func (j *jfsFLock) RUnlock() {
-	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
-		logger.Errorf("failed to release read lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
-	}
+	j.Unlock()
 }
 
 func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker {
@@ -1207,12 +1217,22 @@ func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker 
 		logger.Errorf("only allow locking one object,but get %s", objects)
 		return &jfsFLock{}
 	}
-	fLock := jfsFLock{owner: n.conf.Meta.Sid, meta: n.fs.Meta()}
-	fi, eno := n.fs.Stat(mctx, n.path(bucket, objects[0]))
-	if eno != 0 {
-		logger.Errorf("failed to get the status of the file to be locked: %s error %s", n.path(bucket, objects[0]), eno)
+
+	lockfile := path.Join(minio.MinioMetaBucket, minio.MinioMetaLockFile)
+	var file *fs.File
+	file, errno := n.fs.Open(mctx, lockfile, vfs.MODE_MASK_W)
+	if errno != 0 && !errors.Is(errno, syscall.ENOENT) {
+		logger.Errorf("failed to open the file to be locked: %s error %s", n.path(bucket, objects[0]), errno)
 	}
-	fLock.inode = fi.Inode()
+	if errors.Is(errno, syscall.ENOENT) {
+		if file, errno = n.fs.Create(mctx, lockfile, 0666, n.gConf.Umask); errno != 0 {
+			logger.Errorf("failed to create gateway lock file err %s", errno)
+			return &jfsFLock{}
+		}
+	}
+	defer file.Close(mctx)
+	fLock := jfsFLock{owner: n.conf.Meta.Sid, meta: n.fs.Meta()}
+	fLock.inode = file.Inode()
 	return &fLock
 }
 
