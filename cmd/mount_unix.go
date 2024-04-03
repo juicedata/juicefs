@@ -207,6 +207,36 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 }
 
 func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl string) error {
+	cacheDirPathToAbs(c)
+	_ = expandPathForEmbedded(metaUrl)
+
+	var attrs godaemon.DaemonAttr
+	logfile := c.String("log")
+	attrs.OnExit = func(stage int) error {
+		return nil
+	}
+
+	// the current dir will be changed to root in daemon,
+	// so the mount point has to be an absolute path.
+	if godaemon.Stage() == 0 {
+		var err error
+		attrs.Stdout, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		logger.Infof("open log file %s: %s", logfile, err)
+		if err != nil {
+			logger.Errorf("open log file %s: %s", logfile, err)
+		}
+	}
+	if godaemon.Stage() <= 1 {
+		err := m.Shutdown()
+		if err != nil {
+			logger.Errorf("shutdown: %s", err)
+		}
+	}
+	_, _, err := godaemon.MakeDaemon(&attrs)
+	return err
+}
+
+func cacheDirPathToAbs(c *cli.Context) {
 	if runtime.GOOS != "windows" {
 		if cd := c.String("cache-dir"); cd != "memory" {
 			ds := utils.SplitDir(cd)
@@ -234,32 +264,6 @@ func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl string) error {
 			}
 		}
 	}
-	_ = expandPathForEmbedded(metaUrl)
-
-	var attrs godaemon.DaemonAttr
-	logfile := c.String("log")
-	attrs.OnExit = func(stage int) error {
-		return nil
-	}
-
-	// the current dir will be changed to root in daemon,
-	// so the mount point has to be an absolute path.
-	if godaemon.Stage() == 0 {
-		var err error
-		attrs.Stdout, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		logger.Infof("open log file %s: %s", logfile, err)
-		if err != nil {
-			logger.Errorf("open log file %s: %s", logfile, err)
-		}
-	}
-	if godaemon.Stage() <= 1 {
-		err := m.Shutdown()
-		if err != nil {
-			logger.Errorf("shutdown: %s", err)
-		}
-	}
-	_, _, err := godaemon.MakeDaemon(&attrs)
-	return err
 }
 
 func fuseFlags() []cli.Flag {
