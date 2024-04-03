@@ -315,8 +315,9 @@ func (s *ks3) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func (s *ks3) SetStorageClass(sc string) {
+func (s *ks3) SetStorageClass(sc string) error {
 	s.sc = sc
+	return nil
 }
 
 var ks3Regions = map[string]string{

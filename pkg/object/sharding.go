@@ -77,12 +77,14 @@ func (s *sharded) Delete(key string, getters ...AttrGetter) error {
 	return s.pick(key).Delete(key, getters...)
 }
 
-func (s *sharded) SetStorageClass(sc string) {
+func (s *sharded) SetStorageClass(sc string) error {
+	var err = notSupported
 	for _, o := range s.stores {
 		if os, ok := o.(SupportStorageClass); ok {
-			os.SetStorageClass(sc)
+			err = os.SetStorageClass(sc)
 		}
 	}
+	return err
 }
 
 const maxResults = 10000

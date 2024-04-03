@@ -57,8 +57,9 @@ func (q *bosclient) Limits() Limits {
 	}
 }
 
-func (q *bosclient) SetStorageClass(sc string) {
+func (q *bosclient) SetStorageClass(sc string) error {
 	q.sc = sc
+	return nil
 }
 
 func (q *bosclient) Create() error {

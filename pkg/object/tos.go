@@ -270,8 +270,9 @@ func (t *tosClient) Copy(dst, src string) error {
 	return err
 }
 
-func (t *tosClient) SetStorageClass(sc string) {
+func (t *tosClient) SetStorageClass(sc string) error {
 	t.sc = sc
+	return nil
 }
 
 func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

@@ -271,8 +271,9 @@ func (o *ossClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, result.NextKeyMarker, nil
 }
 
-func (o *ossClient) SetStorageClass(sc string) {
+func (o *ossClient) SetStorageClass(sc string) error {
 	o.sc = sc
+	return nil
 }
 
 type stsCred struct {

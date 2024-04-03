@@ -84,11 +84,11 @@ func setStorageClass(o ObjectStorage) string {
 			sc = string(oss.StorageIA)
 		case *tosClient:
 			sc = string(enum.StorageClassIa)
-		case *minio, *wasabi, *qiniu:
+		}
+		err := osc.SetStorageClass(sc)
+		if err != nil {
 			sc = ""
 		}
-		osc.SetStorageClass(sc)
-		return sc
 	}
 	return ""
 }
@@ -126,7 +126,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 	_ = s.Delete(key)
 
-	_, err := s.Get("not_exists", 0, -1)
+	_, err = s.Get("not_exists", 0, -1)
 	if err == nil {
 		t.Fatalf("Get should failed: %s", err)
 	}
