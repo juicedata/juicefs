@@ -75,34 +75,34 @@ func listAll(s ObjectStorage, prefix, marker string, limit int64, followLink boo
 func setStorageClass(o ObjectStorage) string {
 	switch s := o.(type) {
 	case *wasb:
-		s.sc = string(blob2.AccessTierCool)
+		s.SetStorageClass(string(blob2.AccessTierCool))
 		return s.sc
 	case *bosclient:
-		s.sc = "STANDARD_IA"
+		s.SetStorageClass("STANDARD_IA")
 		return s.sc
 	case *COS:
-		s.sc = "STANDARD_IA"
+		s.SetStorageClass("STANDARD_IA")
 		return s.sc
 	case *ks3:
-		s.sc = "STANDARD_IA"
+		s.SetStorageClass("STANDARD_IA")
 		return s.sc
 	case *gs:
-		s.sc = "NEARLINE"
+		s.SetStorageClass("NEARLINE")
 		return s.sc
 	case *obsClient:
-		s.sc = "STANDARD_IA"
+		s.SetStorageClass("STANDARD_IA")
 		return s.sc
 	case *ossClient:
-		s.sc = string(oss.StorageIA)
+		s.SetStorageClass(string(oss.StorageIA))
 		return s.sc
 	case *qingstor:
-		s.sc = "STANDARD_IA"
+		s.SetStorageClass("STANDARD_IA")
 		return s.sc
 	case *s3client:
-		s.sc = "STANDARD_IA"
+		s.SetStorageClass("STANDARD_IA")
 		return s.sc
 	case *tosClient:
-		s.sc = string(enum.StorageClassIa)
+		s.SetStorageClass(string(enum.StorageClassIa))
 		return s.sc
 	default:
 		return ""
