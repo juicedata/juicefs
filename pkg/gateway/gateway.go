@@ -1172,7 +1172,7 @@ func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeou
 		logger.Warnf("failed to get lock")
 		return ctx, nil
 	}
-	start := time.Now().UTC()
+	start := time.Now()
 	deadline := start.Add(timeout.Timeout())
 	lockStr := "write"
 	if ltype == meta.F_RDLCK {
@@ -1182,10 +1182,10 @@ func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeou
 		if errno := j.meta.Flock(mctx, j.inode, j.owner, ltype, false); errno != 0 && !errors.Is(errno, syscall.EAGAIN) {
 			logger.Errorf("failed to get %s lock for inode %d by owner %d, error : %s", lockStr, j.inode, j.owner, errno)
 		} else {
-			timeout.LogSuccess(time.Now().UTC().Sub(start))
+			timeout.LogSuccess(time.Since(start))
 			return ctx, nil
 		}
-		if time.Now().UTC().After(deadline) {
+		if time.Now().After(deadline) {
 			timeout.LogFailure()
 			logger.Errorf("get write lock timed out ino:%d", j.inode)
 			return ctx, minio.OperationTimedOut{}
