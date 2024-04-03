@@ -184,6 +184,36 @@ func updateFormat(c *cli.Context) func(*meta.Format) {
 	}
 }
 
+func cacheDirPathToAbs(c *cli.Context) {
+	if runtime.GOOS != "windows" {
+		if cd := c.String("cache-dir"); cd != "memory" {
+			ds := utils.SplitDir(cd)
+			for i, d := range ds {
+				if strings.HasPrefix(d, "/") {
+					continue
+				} else if strings.HasPrefix(d, "~/") {
+					if h, err := os.UserHomeDir(); err == nil {
+						ds[i] = filepath.Join(h, d[1:])
+					} else {
+						logger.Fatalf("Expand user home dir of %s: %s", d, err)
+					}
+				} else {
+					if ad, err := filepath.Abs(d); err == nil {
+						ds[i] = ad
+					} else {
+						logger.Fatalf("Find absolute path of %s: %s", d, err)
+					}
+				}
+			}
+			for i, a := range os.Args {
+				if a == cd || a == "--cache-dir="+cd {
+					os.Args[i] = a[:len(a)-len(cd)] + strings.Join(ds, string(os.PathListSeparator))
+				}
+			}
+		}
+	}
+}
+
 func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config) {
 	cacheDirPathToAbs(c)
 	_ = expandPathForEmbedded(addr)
