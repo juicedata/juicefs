@@ -1232,9 +1232,7 @@ func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker 
 		}
 	}
 	defer file.Close(mctx)
-	fLock := jfsFLock{owner: n.conf.Meta.Sid, meta: n.fs.Meta()}
-	fLock.inode = file.Inode()
-	return &fLock
+	return &jfsFLock{owner: n.conf.Meta.Sid, inode: file.Inode(), meta: n.fs.Meta()}
 }
 
 func (n *jfsObjects) BackendInfo() madmin.BackendInfo {
