@@ -433,6 +433,7 @@ func (s *wSlice) upload(indx int) {
 		if s.store.conf.Writeback {
 			stagingPath, err := s.store.bcache.stage(key, block.Data, s.store.shouldCache(blen))
 			if err != nil {
+				s.store.stageBlockErrors.Add(1)
 				logger.Warnf("write %s to disk: %s, upload it directly", stagingPath, err)
 			} else {
 				s.errors <- nil
@@ -644,6 +645,7 @@ type cachedStore struct {
 	objectReqErrors     prometheus.Counter
 	objectDataBytes     *prometheus.CounterVec
 	stageBlockDelay     prometheus.Counter
+	stageBlockErrors    prometheus.Counter
 }
 
 func logRequest(typeStr, key, param, reqID string, err error, used time.Duration) {
@@ -867,6 +869,10 @@ func (store *cachedStore) initMetrics() {
 		Name: "staging_block_delay_seconds",
 		Help: "Total seconds of delay for staging blocks",
 	})
+	store.stageBlockErrors = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "staging_block_errors",
+		Help: "Total errors when staging blocks",
+	})
 }
 
 func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
@@ -882,6 +888,7 @@ func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(store.objectReqErrors)
 	reg.MustRegister(store.objectDataBytes)
 	reg.MustRegister(store.stageBlockDelay)
+	reg.MustRegister(store.stageBlockErrors)
 	reg.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Name: "blockcache_blocks",
