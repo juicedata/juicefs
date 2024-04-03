@@ -1223,6 +1223,7 @@ func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker 
 	file, errno := n.fs.Open(mctx, lockfile, vfs.MODE_MASK_W)
 	if errno != 0 && !errors.Is(errno, syscall.ENOENT) {
 		logger.Errorf("failed to open the file to be locked: %s error %s", n.path(bucket, objects[0]), errno)
+		return &jfsFLock{}
 	}
 	if errors.Is(errno, syscall.ENOENT) {
 		if file, errno = n.fs.Create(mctx, lockfile, 0666, n.gConf.Umask); errno != 0 {
