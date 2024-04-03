@@ -14,6 +14,8 @@ import random
 from s3_op import S3Client
 from s3_strategy import *
 from s3_contant import *
+# minio client: https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z
+# minio server: minio/minio:RELEASE.2021-04-22T15-44-28Z
 # ./juicefs format sqlite3://test.db gateway
 # MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway sqlite3://test.db localhost:9005 --multi-buckets --keep-etag
 
@@ -28,8 +30,10 @@ class S3Machine(RuleBasedStateMachine):
     policies = Bundle('policies')
     user_policies = Bundle('user_policy')
     group_policies = Bundle('group_policy')
-    client1 = S3Client(prefix='minio', url='localhost:9000')
-    client2 = S3Client(prefix='juice', url='localhost:9005')
+    PREFIX1 = 'minio'
+    PREFIX2 = 'juice'
+    client1 = S3Client(prefix=PREFIX1, url='localhost:9000')
+    client2 = S3Client(prefix=PREFIX2, url='localhost:9005')
     EXCLUDE_RULES = []
 
     def __init__(self):
@@ -49,43 +53,44 @@ class S3Machine(RuleBasedStateMachine):
 
     @initialize(target=policies)
     def init_policies(self):
-        return multiple('consoleAdmin', 'readonly', 'readwrite', 'diagnostics', 'writeonly')
-
+        return multiple(BUILD_IN_POLICIES)
+            
     def equal(self, result1, result2):
         if os.getenv('PROFILE', 'dev') == 'generate':
             return True
         if type(result1) != type(result2):
             return False
         if isinstance(result1, Exception):
-            r1 = str(result1)
-            r2 = str(result2)
-            return r1 == r2
-        elif isinstance(result1, tuple):
-            return result1 == result2
-        else:
-            return result1 == result2
+            result1 = str(result1).replace(self.PREFIX1, '***')
+            result2 = str(result2).replace(self.PREFIX2, '***')
+        elif isinstance(result1, str) and isinstance(result2, str) :
+            result1 = result1.replace(self.PREFIX1, '***')
+            result2 = result2.replace(self.PREFIX2, '***')
+        # print(f'result1 is {result1}\nresult2 is {result2}')
+        return result1 == result2
 
-    @rule()
-    @precondition(lambda self: 'info' not in self.EXCLUDE_RULES)
-    def info(self):
-        result1 = self.client1.do_info()
-        result2 = self.client2.do_info()
+    @rule(alias = aliases)
+    @precondition(lambda self: False)
+    def info(self, alias=DEFAULT_ALIAS):
+        result1 = self.client1.do_info(alias)
+        result2 = self.client2.do_info(alias)
         assert self.equal(result1, result2), f'\033[31minfo:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
-    @rule()
+    @rule(alias = aliases)
     @precondition(lambda self: 'list_buckets' not in self.EXCLUDE_RULES)
-    def list_buckets(self):
-        result1 = self.client1.do_list_buckets()
-        result2 = self.client2.do_list_buckets()
+    def list_buckets(self, alias=DEFAULT_ALIAS):
+        result1 = self.client1.do_list_buckets(alias)
+        result2 = self.client2.do_list_buckets(alias)
         assert self.equal(result1, result2), f'\033[31mdo_list_buckets:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
         target = buckets,
+        alias = aliases,
         bucket_name = st_bucket_name)
     @precondition(lambda self: 'create_bucket' not in self.EXCLUDE_RULES)
-    def create_bucket(self, bucket_name):
-        result1 = self.client1.do_create_bucket(bucket_name)
-        result2 = self.client2.do_create_bucket(bucket_name)
+    def create_bucket(self, bucket_name, alias = DEFAULT_ALIAS):
+        result1 = self.client1.do_create_bucket(bucket_name, alias)
+        result2 = self.client2.do_create_bucket(bucket_name, alias)
         assert self.equal(result1, result2), f'\033[31mcreate_bucket:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()
@@ -93,12 +98,13 @@ class S3Machine(RuleBasedStateMachine):
             return bucket_name
     @rule(
         target = buckets, 
-        bucket_name = consumes(buckets)
+        bucket_name = consumes(buckets),
+        alias = aliases
     )
     @precondition(lambda self: 'remove_bucket' not in self.EXCLUDE_RULES)
-    def remove_bucket(self, bucket_name):
-        result1 = self.client1.do_remove_bucket(bucket_name)
-        result2 = self.client2.do_remove_bucket(bucket_name)
+    def remove_bucket(self, bucket_name, alias = DEFAULT_ALIAS):
+        result1 = self.client1.do_remove_bucket(bucket_name, alias)
+        result2 = self.client2.do_remove_bucket(bucket_name, alias)
         assert self.equal(result1, result2), f'\033[31mremove_bucket:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return bucket_name
@@ -171,12 +177,13 @@ class S3Machine(RuleBasedStateMachine):
 
     @rule(
         target=objects,
+        alias = aliases,
         bucket_name = buckets,
         object_name = st_object_name)
     @precondition(lambda self: 'fput_object' not in self.EXCLUDE_RULES)
-    def fput_object(self, bucket_name, object_name):
-        result1 = self.client1.do_fput_object(bucket_name, object_name, 'README.md')
-        result2 = self.client2.do_fput_object(bucket_name, object_name, 'README.md')
+    def fput_object(self, bucket_name, object_name, alias=DEFAULT_ALIAS):
+        result1 = self.client1.do_fput_object(bucket_name, object_name, 'README.md', alias)
+        result2 = self.client2.do_fput_object(bucket_name, object_name, 'README.md', alias)
         assert self.equal(result1, result2), f'\033[31mfput_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()
@@ -185,26 +192,28 @@ class S3Machine(RuleBasedStateMachine):
 
     @rule(
         obj = objects,
+        alias = aliases,
         file_path = st.just('/tmp/file')
     )
     @precondition(lambda self: 'fget_object' not in self.EXCLUDE_RULES)
-    def fget_object(self, obj:str, file_path):
+    def fget_object(self, obj:str, file_path, alias = DEFAULT_ALIAS):
         bucket_name = obj.split(':')[0]
         object_name = obj.split(':')[1]
-        result1 = self.client1.do_fget_object(bucket_name, object_name, file_path)
-        result2 = self.client2.do_fget_object(bucket_name, object_name, file_path)
+        result1 = self.client1.do_fget_object(bucket_name, object_name, file_path, alias)
+        result2 = self.client2.do_fget_object(bucket_name, object_name, file_path, alias)
         assert self.equal(result1, result2), f'\033[31mfget_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
         target = objects,
+        alias = aliases,
         obj = consumes(objects)
     )
     @precondition(lambda self: 'remove_object' not in self.EXCLUDE_RULES)
-    def remove_object(self, obj:str):
+    def remove_object(self, obj:str, alias=DEFAULT_ALIAS):
         bucket_name = obj.split(':')[0]
         object_name = obj.split(':')[1]
-        result1 = self.client1.do_remove_object(bucket_name, object_name)
-        result2 = self.client2.do_remove_object(bucket_name, object_name)
+        result1 = self.client1.do_remove_object(bucket_name, object_name, alias)
+        result2 = self.client2.do_remove_object(bucket_name, object_name, alias)
         assert self.equal(result1, result2), f'\033[31mremove_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return object_name
@@ -212,14 +221,15 @@ class S3Machine(RuleBasedStateMachine):
             return multiple()
         
     @rule(
-        obj = objects
+        obj = objects, 
+        alias = aliases
     )
     @precondition(lambda self: 'stat_object' not in self.EXCLUDE_RULES)
-    def stat_object(self, obj:str):
+    def stat_object(self, obj:str, alias=DEFAULT_ALIAS):
         bucket_name = obj.split(':')[0]
         object_name = obj.split(':')[1]
-        result1 = self.client1.do_stat_object(bucket_name, object_name)
-        result2 = self.client2.do_stat_object(bucket_name, object_name)
+        result1 = self.client1.do_stat_object(bucket_name, object_name, alias)
+        result2 = self.client2.do_stat_object(bucket_name, object_name, alias)
         assert self.equal(result1, result2), f'\033[31mstat_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
@@ -393,6 +403,7 @@ class S3Machine(RuleBasedStateMachine):
     )
     @precondition(lambda self: 'remove_policy' not in self.EXCLUDE_RULES)
     def remove_policy(self, policy_name, alias=DEFAULT_ALIAS):
+        assume(policy_name not in BUILD_IN_POLICIES)
         result1 = self.client1.do_remove_policy(policy_name, alias)
         result2 = self.client2.do_remove_policy(policy_name, alias)
         assert self.equal(result1, result2), f'\033[31mremove_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'

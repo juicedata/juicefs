@@ -39,6 +39,16 @@ class S3Client():
             raise e
         return output.stdout.decode()
     
+    def sort_dict(self, obj):
+        if isinstance(obj, dict):
+            return {k: self.sort_dict(v) for k, v in obj.items()}
+        elif isinstance(obj, list) and all(isinstance(elem, (int, float, str)) for elem in obj):
+            return sorted(obj)
+        elif isinstance(obj, list) and all(isinstance(elem, dict) for elem in obj):
+            return [self.sort_dict(elem) for elem in obj]
+        else:
+            return obj
+        
     def handleException(self, e, action, **kwargs):
         self.stats.failure(action)
         self.logger.info(f'{action} {kwargs} failed: {e}')
@@ -49,9 +59,9 @@ class S3Client():
         else:
             return e
         
-    def do_info(self):
+    def do_info(self, alias):
         try:
-            self.run_cmd(f'mc admin info {self.alias}')
+            self.run_cmd(f'mc admin info {self.get_alias(alias)}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_info')
         self.stats.success('do_info')
@@ -69,39 +79,35 @@ class S3Client():
             client.remove_bucket(bucket_name)
             print(f"Bucket '{bucket_name}' removed successfully.")
         
-    def do_list_buckets(self):
-        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
+    def do_list_buckets(self, alias=DEFAULT_ALIAS):
         try:
-            buckets = client.list_buckets()
-        except S3Error as e:
+            result = self.run_cmd(f'mc ls {self.get_alias(alias)}')
+        except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_list_buckets')
         self.stats.success('do_list_buckets')
         self.logger.info(f'do_list_buckets succeed')
-        return sorted([bucket.name for bucket in buckets])
+        result = [item.split()[-1][:-1] for item in result.split("\n") if item.strip()]
+        # print(result)
+        return sorted(result)
     
-    def do_remove_bucket(self, bucket_name:str):
-        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
+    def do_remove_bucket(self, bucket_name:str, alias):
         try:
-            client.remove_bucket(bucket_name)
-        except S3Error as e:
-            return self.handleException(e, 'do_remove_bucket', bucket_name=bucket_name)
-        assert not client.bucket_exists(bucket_name)
+            self.run_cmd(f'mc rb {self.get_alias(alias)}/{bucket_name}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_remove_bucket', bucket_name=bucket_name, alias=alias)
         self.stats.success('do_remove_bucket')
-        self.logger.info(f'do_remove_bucket {bucket_name} succeed')
+        self.logger.info(f'do_remove_bucket {alias} {bucket_name} succeed')
         return True
 
-    def do_create_bucket(self, bucket_name:str):
-        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
+    def do_create_bucket(self, bucket_name:str, alias):
         try:
-            client.make_bucket(bucket_name)
-            print(f"Bucket '{bucket_name}' created successfully.")
-        except S3Error as e:
+            self.run_cmd(f'mc mb {self.get_alias(alias)}/{bucket_name}')
+        except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_create_bucket', bucket_name=bucket_name)
-        assert client.bucket_exists(bucket_name)
         self.stats.success('do_create_bucket')
-        self.logger.info(f'do_create_bucket {bucket_name}  succeed')
+        self.logger.info(f'do_create_bucket {bucket_name} succeed')
         return True
-    
+
     def do_set_bucket_policy(self, bucket_name:str, policy:str):
         client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
         try:
@@ -132,20 +138,16 @@ class S3Client():
         self.logger.info(f'do_delete_bucket_policy {bucket_name} succeed')
         return True
 
-    def do_stat_object(self, bucket_name:str, object_name:str):
-        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
+    def do_stat_object(self, bucket_name:str, object_name:str, alias=DEFAULT_ALIAS):
         try:
-            stat = client.stat_object(bucket_name, object_name)
-        except S3Error as e:
+            result = self.run_cmd(f'mc stat {self.get_alias(alias)}/{bucket_name}/{object_name} --json')
+        except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_stat_object', bucket_name=bucket_name, object_name=object_name)
-        finally:
-            pass
+        stat = json.loads(result)
+        print(stat)
         self.stats.success('do_stat_object')
         self.logger.info(f'do_stat_object {bucket_name} {object_name} succeed')
-        sorted_stat = sorted(stat.__dict__.items())
-        stat_str = "\n".join([f"{key}: {value}" for key, value in sorted_stat])
-        # print(stat_str)
-        return stat.bucket_name, stat.object_name, stat.size
+        return stat['name'], stat['etag'], stat['size']
 
     def do_put_object(self, bucket_name:str, object_name:str, data, length, content_type='application/octet-stream', part_size=5*1024*1024):
         client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
@@ -178,45 +180,37 @@ class S3Client():
         self.logger.info(f'do_get_object {bucket_name} {object_name} succeed')
         return md5_hex
 
-    def do_fput_object(self, bucket_name:str, object_name:str, src_path:str):
-        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
+    def do_fput_object(self, bucket_name:str, object_name:str, src_path:str, alias):
         try:
-            client.fput_object(bucket_name, object_name, src_path)
-        except S3Error as e:
-            return self.handleException(e, 'do_fput_object', bucket_name=bucket_name, obj_name=object_name, src_path=src_path)
+            self.run_cmd(f'mc cp {src_path} {self.get_alias(alias)}/{bucket_name}/{object_name}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_fput_object', bucket_name=bucket_name, object_name=object_name, src_path=src_path)
         self.stats.success('do_fput_object')
         self.logger.info(f'do_fput_object {bucket_name} {object_name} {src_path} succeed')
         return self.do_stat_object(bucket_name, object_name)
     
-    def do_fget_object(self, bucket_name:str, object_name:str, file_path:str):
-        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
+    def do_fget_object(self, bucket_name:str, object_name:str, file_path:str, alias):
         try:
-            client.fget_object(bucket_name, object_name, file_path)
-        except S3Error as e:
+            self.run_cmd(f'mc cp {self.get_alias(alias)}/{bucket_name}/{object_name} {file_path}')
+        except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_fget_object', bucket_name=bucket_name, object_name=object_name, file_path=file_path)
-        assert(os.path.exists(file_path))
         self.stats.success('do_fget_object')
         self.logger.info(f'do_fget_object {bucket_name} {object_name} {file_path} succeed')
         return os.stat(file_path).st_size
 
-    def object_exists(self, bucket_name:str, object_name:str):
-        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
+    def object_exists(self, bucket_name:str, object_name:str, alias=DEFAULT_ALIAS):
         try:
-            client.stat_object(bucket_name, object_name)
-            return True
-        except S3Error as e:
-            if e.code == "NoSuchKey":
-                return False
-            else:
-                raise e
+            self.run_cmd(f'mc stat {self.get_alias(alias)}/{bucket_name}/{object_name}')
+        except subprocess.CalledProcessError as e:
+            return False
+        return True
 
-    def do_remove_object(self, bucket_name:str, object_name:str):
-        client=Minio(self.url,access_key=ROOT_ACCESS_KEY,secret_key=ROOT_SECRET_KEY,secure=False)
+    def do_remove_object(self, bucket_name:str, object_name:str, alias):
         try:
-            client.remove_object(bucket_name, object_name)
-        except S3Error as e:
+            self.run_cmd(f'mc rm {self.get_alias(alias)}/{bucket_name}/{object_name}')
+        except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_remove_object', bucket_name=bucket_name, object_name=object_name)
-        assert not self.object_exists(bucket_name, object_name)
+        assert not self.object_exists(bucket_name, object_name, DEFAULT_ALIAS)
         self.stats.success('do_remove_object')
         self.logger.info(f'do_remove_object {bucket_name} {object_name} succeed')
         return True
@@ -385,12 +379,12 @@ class S3Client():
     
     def do_policy_info(self, policy_name, alias=DEFAULT_ALIAS):
         try:
-            self.run_cmd(f'mc admin policy info {self.get_alias(alias)} {policy_name}')
+            result = self.run_cmd(f'mc admin policy info {self.get_alias(alias)} {policy_name}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_policy_info', policy_name=policy_name)
         self.stats.success('do_policy_info')
         self.logger.info(f'do_policy_info {policy_name} succeed')
-        return True
+        return self.sort_dict(json.loads(result))
     
     def do_list_policies(self, alias=DEFAULT_ALIAS):
         try:
