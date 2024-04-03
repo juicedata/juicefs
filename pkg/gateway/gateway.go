@@ -1199,7 +1199,7 @@ func (j *jfsFLock) Unlock() {
 		return
 	}
 	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
-		logger.Errorf("failed to release write lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
+		logger.Errorf("failed to release lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
 	}
 }
 
