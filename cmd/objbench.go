@@ -536,28 +536,18 @@ func getAndCheckN(blob object.ObjectStorage, key string, seed []byte, getOrgIdx 
 		return err
 	}
 	defer r.Close()
-	checkN := 10
-	var onlyCheckN bool
-	l := len(seed)
-	if l <= checkN {
-		checkN = l
-		onlyCheckN = true
-	}
-	prefixContent := make([]byte, checkN)
-	if _, err := r.Read(prefixContent); err != nil && !errors.Is(err, io.EOF) {
+	content, err := io.ReadAll(r)
+	if err != nil {
 		return err
 	}
-	if !bytes.Equal(prefixContent, getMockData(seed, getOrgIdx(idx))[:checkN]) {
-		return fmt.Errorf("the downloaded content is incorrect")
+	orgIdx := getOrgIdx(idx)
+	checkN := 10
+	l := len(seed)
+	if l < checkN {
+		checkN = l
 	}
-	if !onlyCheckN {
-		copied, err := io.Copy(io.Discard, r)
-		if err != nil {
-			return err
-		}
-		if int64(checkN)+copied != int64(len(seed)) {
-			return fmt.Errorf("the downloaded content length is incorrect")
-		}
+	if len(content) != len(seed) || !bytes.Equal(content[:checkN], getMockData(seed, orgIdx)[:checkN]) {
+		return fmt.Errorf("the downloaded content is incorrect")
 	}
 	return nil
 }
