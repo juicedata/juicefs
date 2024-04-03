@@ -57,6 +57,10 @@ func (q *bosclient) Limits() Limits {
 	}
 }
 
+func (q *bosclient) SetStorageClass(sc string) {
+	q.sc = sc
+}
+
 func (q *bosclient) Create() error {
 	_, err := q.c.PutBucket(q.bucket)
 	if err == nil && q.sc != "" {
