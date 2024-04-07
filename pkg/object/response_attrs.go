@@ -19,7 +19,7 @@ package object
 const DefaultStorageClass = "STANDARD"
 
 type SupportStorageClass interface {
-	SetStorageClass(sc string)
+	SetStorageClass(sc string) error
 }
 
 // A generic way to get attributes from different object storage clients

@@ -180,8 +180,9 @@ func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bo
 	return objs, nil
 }
 
-func (b *wasb) SetStorageClass(sc string) {
+func (b *wasb) SetStorageClass(sc string) error {
 	b.sc = sc
+	return nil
 }
 
 func autoWasbEndpoint(containerName, accountName, scheme string, credential *azblob.SharedKeyCredential) (string, error) {

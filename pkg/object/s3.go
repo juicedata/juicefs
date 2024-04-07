@@ -361,8 +361,9 @@ func (s *s3client) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func (s *s3client) SetStorageClass(sc string) {
+func (s *s3client) SetStorageClass(sc string) error {
 	s.sc = sc
+	return nil
 }
 
 func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {

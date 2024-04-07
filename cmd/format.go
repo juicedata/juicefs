@@ -247,7 +247,10 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	blob = object.WithPrefix(blob, format.Name+"/")
 	if format.StorageClass != "" {
 		if os, ok := blob.(object.SupportStorageClass); ok {
-			os.SetStorageClass(format.StorageClass)
+			err := os.SetStorageClass(format.StorageClass)
+			if err != nil {
+				logger.Warnf("set storage class %q: %v", format.StorageClass, err)
+			}
 		} else {
 			logger.Warnf("Storage class is not supported by %q, will ignore", format.Storage)
 		}

@@ -85,8 +85,10 @@ func setStorageClass(o ObjectStorage) string {
 		case *tosClient:
 			sc = string(enum.StorageClassIa)
 		}
-		osc.SetStorageClass(sc)
-		return sc
+		err := osc.SetStorageClass(sc)
+		if err != nil {
+			sc = ""
+		}
 	}
 	return ""
 }

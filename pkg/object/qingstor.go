@@ -318,8 +318,9 @@ func (q *qingstor) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func (q *qingstor) SetStorageClass(sc string) {
+func (q *qingstor) SetStorageClass(sc string) error {
 	q.sc = sc
+	return nil
 }
 
 func newQingStor(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

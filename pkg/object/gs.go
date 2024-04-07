@@ -175,8 +175,9 @@ func (g *gs) List(prefix, marker, delimiter string, limit int64, followLink bool
 	return objs, nil
 }
 
-func (g *gs) SetStorageClass(sc string) {
+func (g *gs) SetStorageClass(sc string) error {
 	g.sc = sc
+	return nil
 }
 
 func newGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
