@@ -28,7 +28,6 @@ import (
 	"path"
 	"strconv"
 	"syscall"
-	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
@@ -195,9 +194,8 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	removePassword(metaUrl)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
-
 	if c.Bool("background") {
-		if err := makeDaemonForSvc(c, metaCli); err != nil {
+		if err := makeDaemonForSvc(c, metaCli, metaUrl); err != nil {
 			logger.Fatalf("make daemon: %s", err)
 		}
 	}
@@ -244,9 +242,9 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	}()
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
 	vfsConf.AccessLog = c.String("access-log")
-	vfsConf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
-	vfsConf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
-	vfsConf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
+	vfsConf.AttrTimeout = duration(c.String("attr-cache"))
+	vfsConf.EntryTimeout = duration(c.String("entry-cache"))
+	vfsConf.DirEntryTimeout = duration(c.String("dir-entry-cache"))
 
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	jfs, err := fs.NewFileSystem(vfsConf, metaCli, store)

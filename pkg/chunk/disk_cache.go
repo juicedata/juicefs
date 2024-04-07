@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"github.com/davies/groupcache/consistenthash"
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
@@ -127,7 +128,8 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingP
 	if br < c.freeRatio || fr < c.freeRatio {
 		logger.Warnf("not enough space (%d%%) or inodes (%d%%) for caching in %s: free ratio should be >= %d%%", int(br*100), int(fr*100), c.dir, int(c.freeRatio*100))
 	}
-	logger.Infof("Disk cache (%s): capacity (%d MB), free ratio (%d%%), max pending pages (%d)", c.dir, c.capacity>>20, int(c.freeRatio*100), pendingPages)
+	logger.Infof("Disk cache (%s): capacity (%s), free ratio %d%%, used ratio - [space %s%%, inode %s%%], max pending pages %d",
+		c.dir, humanize.IBytes(uint64(c.capacity)), int(c.freeRatio*100), humanize.FtoaWithDigits(float64((1-br)*100), 1), humanize.FtoaWithDigits(float64((1-fr)*100), 1), pendingPages)
 	c.createLockFile()
 	go c.checkLockFile()
 	go c.flush()
@@ -717,7 +719,7 @@ func (cache *cacheStore) cleanupFull() {
 			freed += int64(lastValue.size + 4096)
 			cache.used -= int64(lastValue.size + 4096)
 			todel = append(todel, lastK)
-			logger.Debugf("remove %s from cache, age: %d", lastK, now-lastValue.atime)
+			logger.Debugf("remove %s from cache, age: %ds", lastK, now-lastValue.atime)
 			cache.m.cacheEvicts.Add(1)
 			cnt = 0
 			if len(cache.keys) < num && cache.used < goal {
@@ -852,7 +854,7 @@ func (cache *cacheStore) scanStaging() {
 
 	var start = time.Now()
 	var oneMinAgo = start.Add(-time.Minute)
-	var count int
+	var count, usage uint64
 	stagingPrefix := filepath.Join(cache.dir, stagingDir)
 	logger.Debugf("Scan %s to find staging blocks", stagingPrefix)
 	_ = filepath.WalkDir(stagingPrefix, func(path string, d fs.DirEntry, err error) error {
@@ -887,12 +889,13 @@ func (cache *cacheStore) scanStaging() {
 				cache.m.stageBlockBytes.Add(float64(origSize))
 				cache.uploader(key, path, false)
 				count++
+				usage += uint64(origSize)
 			}
 		}
 		return nil
 	})
 	if count > 0 {
-		logger.Infof("Found %d staging blocks (%d bytes) in %s with %s", count, cache.used, cache.dir, time.Since(start))
+		logger.Infof("Found %d staging blocks (%s) in %s with %s", count, humanize.IBytes(usage), cache.dir, time.Since(start))
 	}
 }
 

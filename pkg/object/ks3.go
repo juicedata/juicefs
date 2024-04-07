@@ -40,6 +40,8 @@ import (
 	"github.com/ks3sdklib/aws-sdk-go/service/s3"
 )
 
+const s3StorageClassHdr = "X-Amz-Storage-Class"
+
 type ks3 struct {
 	bucket string
 	s3     *s3.S3
@@ -83,7 +85,7 @@ func (s *ks3) Head(key string) (Object, error) {
 	}
 
 	var sc string
-	if val, ok := r.Metadata["X-Amz-Storage-Class"]; ok {
+	if val, ok := r.Metadata[s3StorageClassHdr]; ok {
 		sc = *val
 	} else {
 		sc = "STANDARD"
@@ -97,7 +99,7 @@ func (s *ks3) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (s *ks3) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (s *ks3) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	params := &s3.GetObjectInput{Bucket: &s.bucket, Key: &key}
 	if off > 0 || limit > 0 {
 		var r string
@@ -110,7 +112,9 @@ func (s *ks3) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 	resp, err := s.s3.GetObject(params)
 	if resp != nil {
-		ReqIDCache.put(key, aws2.StringValue(resp.Metadata[s3RequestIDKey]))
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(aws2.StringValue(resp.Metadata[s3RequestIDKey]))
+		attrs.SetStorageClass(aws2.StringValue(resp.Metadata[s3StorageClassHdr]))
 	}
 	if err != nil {
 		return nil, err
@@ -118,7 +122,7 @@ func (s *ks3) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
-func (s *ks3) Put(key string, in io.Reader) error {
+func (s *ks3) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b
@@ -141,7 +145,8 @@ func (s *ks3) Put(key string, in io.Reader) error {
 	}
 	resp, err := s.s3.PutObject(params)
 	if resp != nil {
-		ReqIDCache.put(key, aws2.StringValue(resp.Metadata[s3RequestIDKey]))
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(aws2.StringValue(resp.Metadata[s3RequestIDKey])).SetStorageClass(s.sc)
 	}
 	return err
 }
@@ -159,14 +164,15 @@ func (s *ks3) Copy(dst, src string) error {
 	return err
 }
 
-func (s *ks3) Delete(key string) error {
+func (s *ks3) Delete(key string, getters ...AttrGetter) error {
 	param := s3.DeleteObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
 	resp, err := s.s3.DeleteObject(&param)
 	if resp != nil {
-		ReqIDCache.put(key, aws2.StringValue(resp.Metadata[s3RequestIDKey]))
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(aws2.StringValue(resp.Metadata[s3RequestIDKey]))
 	}
 	if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
 		return nil

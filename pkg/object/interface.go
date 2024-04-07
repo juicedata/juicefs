@@ -81,13 +81,13 @@ type ObjectStorage interface {
 	// Create the bucket if not existed.
 	Create() error
 	// Get the data for the given object specified by key.
-	Get(key string, off, limit int64) (io.ReadCloser, error)
+	Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error)
 	// Put data read from a reader to an object specified by key.
-	Put(key string, in io.Reader) error
+	Put(key string, in io.Reader, getters ...AttrGetter) error
 	// Copy an object from src to dst.
 	Copy(dst, src string) error
 	// Delete a object.
-	Delete(key string) error
+	Delete(key string, getters ...AttrGetter) error
 
 	// Head returns some information about the object or an error if not found.
 	Head(key string) (Object, error)

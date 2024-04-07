@@ -50,7 +50,7 @@ func makeDaemon(c *cli.Context, conf *vfs.Config) error {
 	return nil
 }
 
-func makeDaemonForSvc(c *cli.Context, m meta.Meta) error {
+func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl string) error {
 	logger.Warnf("Cannot run in background in Windows.")
 	return nil
 }

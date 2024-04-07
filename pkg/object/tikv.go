@@ -45,7 +45,7 @@ func (t *tikv) String() string {
 	return fmt.Sprintf("tikv://%s/", t.addr)
 }
 
-func (t *tikv) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (t *tikv) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	d, err := t.c.Get(context.TODO(), []byte(key))
 	if len(d) == 0 {
 		err = os.ErrNotExist
@@ -63,7 +63,7 @@ func (t *tikv) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (t *tikv) Put(key string, in io.Reader) error {
+func (t *tikv) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	d, err := io.ReadAll(in)
 	if err != nil {
 		return err
@@ -85,7 +85,7 @@ func (t *tikv) Head(key string) (Object, error) {
 	}, err
 }
 
-func (t *tikv) Delete(key string) error {
+func (t *tikv) Delete(key string, getters ...AttrGetter) error {
 	return t.c.Delete(context.TODO(), []byte(key))
 }
 

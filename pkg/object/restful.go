@@ -183,7 +183,7 @@ func checkGetStatus(statusCode int, partial bool) error {
 	return nil
 }
 
-func (s *RestfulStorage) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (s *RestfulStorage) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	headers := make(map[string]string)
 	if off > 0 || limit > 0 {
 		headers["Range"] = getRange(off, limit)
@@ -202,7 +202,7 @@ func (s *RestfulStorage) Get(key string, off, limit int64) (io.ReadCloser, error
 	return resp.Body, nil
 }
 
-func (u *RestfulStorage) Put(key string, body io.Reader) error {
+func (u *RestfulStorage) Put(key string, body io.Reader, getters ...AttrGetter) error {
 	resp, err := u.request("PUT", key, body, nil)
 	if err != nil {
 		return err
@@ -227,7 +227,7 @@ func (s *RestfulStorage) Copy(dst, src string) error {
 	return s.Put(dst, bytes.NewReader(d))
 }
 
-func (s *RestfulStorage) Delete(key string) error {
+func (s *RestfulStorage) Delete(key string, getters ...AttrGetter) error {
 	resp, err := s.request("DELETE", key, nil, nil)
 	if err != nil {
 		return err

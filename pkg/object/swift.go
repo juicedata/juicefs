@@ -51,7 +51,7 @@ func (s *swiftOSS) Create() error {
 	return s.conn.ContainerCreate(context.Background(), s.container, nil)
 }
 
-func (s *swiftOSS) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (s *swiftOSS) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	headers := make(map[string]string)
 	if off > 0 || limit > 0 {
 		if limit > 0 {
@@ -64,13 +64,13 @@ func (s *swiftOSS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return f, err
 }
 
-func (s *swiftOSS) Put(key string, in io.Reader) error {
+func (s *swiftOSS) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	mimeType := utils.GuessMimeType(key)
 	_, err := s.conn.ObjectPut(context.Background(), s.container, key, in, true, "", mimeType, nil)
 	return err
 }
 
-func (s *swiftOSS) Delete(key string) error {
+func (s *swiftOSS) Delete(key string, getters ...AttrGetter) error {
 	err := s.conn.ObjectDelete(context.Background(), s.container, key)
 	if err != nil && errors.Is(err, swift.ObjectNotFound) {
 		err = nil

@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"runtime"
@@ -109,14 +110,14 @@ func storageFlags() []cli.Flag {
 			Name:  "storage-class",
 			Usage: "the storage class for data written by current client",
 		},
-		&cli.IntFlag{
+		&cli.StringFlag{
 			Name:  "get-timeout",
-			Value: 60,
+			Value: "60s",
 			Usage: "the max number of seconds to download an object",
 		},
-		&cli.IntFlag{
+		&cli.StringFlag{
 			Name:  "put-timeout",
-			Value: 60,
+			Value: "60s",
 			Usage: "the max number of seconds to upload an object",
 		},
 		&cli.IntFlag{
@@ -314,24 +315,24 @@ func shareInfoFlags() []cli.Flag {
 
 func metaCacheFlags(defaultEntryCache float64) []cli.Flag {
 	return addCategories("META CACHE", []cli.Flag{
-		&cli.Float64Flag{
+		&cli.StringFlag{
 			Name:  "attr-cache",
-			Value: 1.0,
-			Usage: "attributes cache timeout in seconds",
+			Value: "1s",
+			Usage: "attributes cache timeout",
 		},
-		&cli.Float64Flag{
+		&cli.StringFlag{
 			Name:  "entry-cache",
-			Value: defaultEntryCache,
-			Usage: "file entry cache timeout in seconds",
+			Value: fmt.Sprintf("%.1f", defaultEntryCache),
+			Usage: "file entry cache timeout",
 		},
-		&cli.Float64Flag{
+		&cli.StringFlag{
 			Name:  "dir-entry-cache",
-			Value: 1.0,
-			Usage: "dir entry cache timeout in seconds",
+			Value: "1s",
+			Usage: "dir entry cache timeout",
 		},
-		&cli.Float64Flag{
+		&cli.StringFlag{
 			Name:  "open-cache",
-			Value: 0.0,
+			Value: "0",
 			Usage: "The seconds to reuse open file without checking update (0 means disable this feature)",
 		},
 		&cli.IntFlag{
@@ -351,16 +352,19 @@ func expandFlags(compoundFlags ...[]cli.Flag) []cli.Flag {
 }
 
 func duration(s string) time.Duration {
-	v, err := strconv.Atoi(s)
+	if s == "" {
+		return 0
+	}
+	v, err := strconv.ParseFloat(s, 64)
 	if err == nil {
-		return time.Second * time.Duration(v)
+		return time.Microsecond * time.Duration(v*1e6)
 	}
 
 	err = nil
 	var d time.Duration
 	p := strings.Index(s, "d")
 	if p >= 0 {
-		v, err = strconv.Atoi(s[:p])
+		v, err = strconv.ParseFloat(s[:p], 64)
 	}
 	if err == nil && s[p+1:] != "" {
 		d, err = time.ParseDuration(s[p+1:])

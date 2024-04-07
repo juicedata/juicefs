@@ -44,10 +44,6 @@ type SupportSymlink interface {
 	Readlink(name string) (string, error)
 }
 
-type SupportStorageClass interface {
-	SetStorageClass(sc string)
-}
-
 type File interface {
 	Object
 	Owner() string
@@ -280,53 +276,4 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 		}
 	}()
 	return listed, nil
-}
-
-func init() {
-	ReqIDCache = reqIDCache{cache: make(map[string]reqItem)}
-	go ReqIDCache.clean()
-}
-
-type reqItem struct {
-	reqID string
-	time  time.Time
-}
-
-var ReqIDCache reqIDCache
-
-type reqIDCache struct {
-	sync.Mutex
-	cache map[string]reqItem
-}
-
-func (*reqIDCache) clean() {
-	for range time.Tick(time.Second) {
-		ReqIDCache.Lock()
-		for k, v := range ReqIDCache.cache {
-			if time.Since(v.time) > time.Second {
-				delete(ReqIDCache.cache, k)
-			}
-		}
-		ReqIDCache.Unlock()
-	}
-}
-
-func (*reqIDCache) put(key, reqID string) {
-	if reqID == "" {
-		return
-	}
-	if part := strings.Split(key, "chunks"); len(part) == 2 {
-		ReqIDCache.Lock()
-		defer ReqIDCache.Unlock()
-		ReqIDCache.cache[part[1]] = reqItem{reqID: reqID, time: time.Now()}
-	}
-}
-
-func (*reqIDCache) Get(key string) string {
-	if part := strings.Split(key, "chunks"); len(part) == 2 {
-		ReqIDCache.Lock()
-		defer ReqIDCache.Unlock()
-		return ReqIDCache.cache[part[1]].reqID
-	}
-	return ""
 }
