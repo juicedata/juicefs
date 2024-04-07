@@ -18,13 +18,14 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/urfave/cli/v2"
 	"os"
 	"path"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/urfave/cli/v2"
 )
 
 func globalFlags() []cli.Flag {
