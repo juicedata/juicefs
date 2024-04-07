@@ -97,16 +97,12 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $meta_url localhost:9005 --multi-buckets --keep-etag -d
-          if [ ! -f /tmp/jfs/.accesslog ]; then
-            echo "<FATAL>: mount failed"
-            exit 1
-          fi
-
+          
       - name: Start minio
         run: |
-          wget -q https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z -O /usr/local/bin/mc && chmod +x /usr/local/bin/mc
-          docker run -d -p 9000:9000 --name minio -e "MINIO_ACCESS_KEY=minioadmin" -e "MINIO_SECRET_KEY=minioadmin" minio/minio:RELEASE.2021-04-22T15-44-28Z server /data
-      
+          sudo wget -q https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z -O /usr/local/bin/mc && sudo chmod +x /usr/local/bin/mc
+          sudo docker run -d -p 9000:9000 --name minio -e "MINIO_ACCESS_KEY=minioadmin" -e "MINIO_SECRET_KEY=minioadmin" minio/minio:RELEASE.2021-04-22T15-44-28Z server /data
+
       - name: Gateway Test
         run: |
           sudo python3 .github/scripts/hypo/s3.py

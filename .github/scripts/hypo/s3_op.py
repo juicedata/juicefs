@@ -7,6 +7,10 @@ try:
 except ImportError:
     subprocess.check_call(["pip", "install", "xattr"])
 try: 
+    __import__('minio')
+except ImportError:
+    subprocess.check_call(["pip", "install", "minio"])
+try: 
     __import__('fallocate')
 except ImportError:
     subprocess.check_call(["pip", "install", "fallocate"])
