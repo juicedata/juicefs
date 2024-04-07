@@ -395,8 +395,7 @@ class S3Client():
         return sorted(result)
     
     def remove_all_policies(self, alias=ROOT_ALIAS):
-        policies = self.run_cmd(f'mc admin policy list {self.get_alias(alias)}').split("\n")
-        policies = [policy.strip() for policy in policies if policy.strip()]
+        policies = self.do_list_policies(alias)
         for policy in policies:
             if policy in BUILD_IN_POLICIES:
                 continue

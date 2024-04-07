@@ -330,7 +330,7 @@ class S3Machine(RuleBasedStateMachine):
         target = groups,    
         alias = aliases,
         group_name=st_group_name, 
-        members = st_group_members.filter(lambda x: len(x) > 0)
+        members = st.lists(users, min_size=1, max_size=3, unique=True)
     )
     @precondition(lambda self: 'add_group' not in self.EXCLUDE_RULES)
     def add_group(self, group_name, members, alias=ROOT_ALIAS):
@@ -544,10 +544,6 @@ if __name__ == '__main__':
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, 
         phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
-    settings.register_profile("dev", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
-        print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
-        report_multiple_bugs=False, 
-        phases=[Phase.reuse, Phase.generate, Phase.target, Phase.explain])
     profile = os.environ.get('PROFILE', 'dev')
     settings.load_profile(profile)
     
