@@ -23,9 +23,10 @@ from s3_contant import *
 
 class S3Client():
     stats = Statistics()
-    def __init__(self, prefix, url):
+    def __init__(self, prefix, url, url2=None):
         self.prefix = prefix
         self.url = url
+        self.url2 = url2
         log_level=os.environ.get('LOG_LEVEL', 'INFO')
         self.logger = common.setup_logger(f'./{prefix}.log', f'{prefix}', log_level)
 
@@ -438,14 +439,14 @@ class S3Client():
         self.logger.info(f'do_unset_policy_from_group {policy_name} {group_name} succeed')
         return True
     
-    def do_set_alias(self, alias, access_key, secret_key):
+    def do_set_alias(self, alias, access_key, secret_key, url):
         alias_name = self.get_alias(alias)
         try:
-            self.run_cmd(f'mc alias set {alias_name} http://{self.url} {access_key} {secret_key}')
+            self.run_cmd(f'mc alias set {alias_name} http://{url} {access_key} {secret_key}')
         except subprocess.CalledProcessError as e:
-            return self.handleException(e, 'do_set_alias', alias=alias, url=self.url, access_key=access_key, secret_key=secret_key)
+            return self.handleException(e, 'do_set_alias', alias=alias, url=url, access_key=access_key, secret_key=secret_key)
         self.stats.success('do_set_alias')
-        self.logger.info(f'do_set_alias {alias} {self.url} {access_key} {secret_key} succeed')
+        self.logger.info(f'do_set_alias {alias} {url} {access_key} {secret_key} succeed')
         return True
     
     def do_remove_alias(self, alias):

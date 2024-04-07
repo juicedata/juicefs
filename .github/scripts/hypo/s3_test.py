@@ -1,15 +1,17 @@
 import unittest
 from s3 import S3Machine
-
+from s3_contant import *
 class TestS3(unittest.TestCase):
     def test_bucket(self):
         state = S3Machine()
+        state.set_alias('alias1', DEFAULT_ACCESS_KEY, use_url2=False)
+        state.set_alias('alias2', DEFAULT_ACCESS_KEY, use_url2=True)
         state.create_bucket('bucket1')
         state.create_bucket('bucket2')
-        state.fput_object('bucket1', 'object1')
-        state.fput_object('bucket1', 'object2')
-        state.fput_object('bucket2', 'object1')
-        state.fput_object('bucket2', 'object2')
+        state.fput_object('bucket1', 'object1', alias='alias1')
+        state.fput_object('bucket1', 'object2', alias='alias2')
+        state.fput_object('bucket2', 'object1', alias='alias1')
+        state.fput_object('bucket2', 'object2', alias='alias2')
         state.list_buckets()
         state.list_objects('bucket1')
         state.list_objects('bucket2')

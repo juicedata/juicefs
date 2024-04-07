@@ -35,14 +35,15 @@ class S3Machine(RuleBasedStateMachine):
     PREFIX2 = 'juice'
     URL1 = 'localhost:9000'
     URL2 = 'localhost:9005'
+    URL3 = 'localhost:9006'
     client1 = S3Client(prefix=PREFIX1, url=URL1)
-    client2 = S3Client(prefix=PREFIX2, url=URL2)
+    client2 = S3Client(prefix=PREFIX2, url=URL2, url2=URL3)
     EXCLUDE_RULES = []
 
     def __init__(self):
         super().__init__()
-        self.client1.do_set_alias(ROOT_ALIAS, DEFAULT_ACCESS_KEY, DEFAULT_SECRET_KEY)
-        self.client2.do_set_alias(ROOT_ALIAS, DEFAULT_ACCESS_KEY, DEFAULT_SECRET_KEY)
+        self.client1.do_set_alias(ROOT_ALIAS, DEFAULT_ACCESS_KEY, DEFAULT_SECRET_KEY, self.URL1)
+        self.client2.do_set_alias(ROOT_ALIAS, DEFAULT_ACCESS_KEY, DEFAULT_SECRET_KEY, self.URL2)
         self.client1.remove_all_buckets()
         self.client2.remove_all_buckets()
         self.client1.remove_all_users()
@@ -508,11 +509,13 @@ class S3Machine(RuleBasedStateMachine):
         target=aliases, 
         alias = st_alias_name,
         user_name = st_user_name,
+        url1=st.just(URL1),
+        url2=st.sampled_from([URL2, URL3])
     )
     @precondition(lambda self: 'set_alias' not in self.EXCLUDE_RULES)
-    def set_alias(self, alias, user_name):
-        result1 = self.client1.do_set_alias(alias, user_name, DEFAULT_SECRET_KEY)
-        result2 = self.client2.do_set_alias(alias, user_name, DEFAULT_SECRET_KEY)
+    def set_alias(self, alias, user_name, url1=URL1, url2=URL2):
+        result1 = self.client1.do_set_alias(alias, user_name, DEFAULT_SECRET_KEY, url1)
+        result2 = self.client2.do_set_alias(alias, user_name, DEFAULT_SECRET_KEY, url2)
         assert self.equal(result1, result2), f'\033[31mset_alias:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()
