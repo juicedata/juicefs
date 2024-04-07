@@ -126,7 +126,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 	_ = s.Delete(key)
 
-	_, err = s.Get("not_exists", 0, -1)
+	_, err := s.Get("not_exists", 0, -1)
 	if err == nil {
 		t.Fatalf("Get should failed: %s", err)
 	}
