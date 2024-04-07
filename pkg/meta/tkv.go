@@ -915,7 +915,7 @@ func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			return err
 		}
 
-		rule = dupAcl(rule)
+		rule = rule.Dup()
 		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &cur, attr, now, rule)
 		if st != 0 {
 			return st

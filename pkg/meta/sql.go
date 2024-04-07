@@ -986,14 +986,6 @@ func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}))
 }
 
-func dupAcl(acl *aclAPI.Rule) *aclAPI.Rule {
-	if acl == nil {
-		return nil
-	}
-	var dup = *acl
-	return &dup
-}
-
 func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		var cur = node{Inode: inode}
@@ -1016,7 +1008,7 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			return err
 		}
 
-		rule = dupAcl(rule)
+		rule = rule.Dup()
 		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &curAttr, attr, now, rule)
 		if st != 0 {
 			return st
