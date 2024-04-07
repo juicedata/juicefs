@@ -33,8 +33,10 @@ class S3Machine(RuleBasedStateMachine):
     group_policies = Bundle('group_policy')
     PREFIX1 = 'minio'
     PREFIX2 = 'juice'
-    client1 = S3Client(prefix=PREFIX1, url='localhost:9000')
-    client2 = S3Client(prefix=PREFIX2, url='localhost:9005')
+    URL1 = 'localhost:9000'
+    URL2 = 'localhost:9005'
+    client1 = S3Client(prefix=PREFIX1, url=URL1)
+    client2 = S3Client(prefix=PREFIX2, url=URL2)
     EXCLUDE_RULES = []
 
     def __init__(self):
@@ -47,6 +49,8 @@ class S3Machine(RuleBasedStateMachine):
         self.client2.remove_all_users()
         self.client1.remove_all_groups()
         self.client2.remove_all_groups()
+        self.client1.remove_all_policies()
+        self.client2.remove_all_policies()
 
     @initialize(target=aliases)
     def init_aliases(self):
@@ -56,13 +60,13 @@ class S3Machine(RuleBasedStateMachine):
     def init_policies(self):
         return multiple(*BUILD_IN_POLICIES)
             
-    def replace(self, result, prefix):
+    def replace(self, result, prefix, url):
         if isinstance(result, str):
-            return result.replace(prefix, '***')
+            return result.replace(prefix, '***').replace(url, '***')
         elif isinstance(result, list):
-            return [self.replace(x, prefix) for x in result]
+            return [self.replace(x, prefix, url) for x in result]
         elif isinstance(result, dict):
-            return {k: self.replace(v, prefix) for k, v in result.items()}
+            return {k: self.replace(v, prefix, url) for k, v in result.items()}
         else:
             return result
 
@@ -74,8 +78,8 @@ class S3Machine(RuleBasedStateMachine):
         if isinstance(result1, Exception):
             result1 = str(result1)
             result2 = str(result2)
-        result1 = self.replace(result1, self.PREFIX1)
-        result2 = self.replace(result2, self.PREFIX2)
+        result1 = self.replace(result1, self.PREFIX1, self.URL1)
+        result2 = self.replace(result2, self.PREFIX2, self.URL2)
         # print(f'result1 is {result1}\nresult2 is {result2}')
         return result1 == result2
 
@@ -326,7 +330,8 @@ class S3Machine(RuleBasedStateMachine):
         target = groups,    
         alias = aliases,
         group_name=st_group_name, 
-        members = st_group_members)
+        members = st_group_members.filter(lambda x: len(x) > 0)
+    )
     @precondition(lambda self: 'add_group' not in self.EXCLUDE_RULES)
     def add_group(self, group_name, members, alias=ROOT_ALIAS):
         result1 = self.client1.do_add_group(group_name, members, alias)
@@ -406,6 +411,7 @@ class S3Machine(RuleBasedStateMachine):
     )
     @precondition(lambda self: 'remove_policy' not in self.EXCLUDE_RULES)
     def remove_policy(self, policy_name, alias=ROOT_ALIAS):
+        # SEE https://github.com/juicedata/juicefs/issues/4639
         assume(policy_name not in BUILD_IN_POLICIES)
         result1 = self.client1.do_remove_policy(policy_name, alias)
         result2 = self.client2.do_remove_policy(policy_name, alias)
@@ -541,7 +547,7 @@ if __name__ == '__main__':
     settings.register_profile("dev", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, 
-        phases=[Phase.generate])
+        phases=[Phase.reuse, Phase.generate, Phase.target, Phase.explain])
     profile = os.environ.get('PROFILE', 'dev')
     settings.load_profile(profile)
     

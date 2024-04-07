@@ -303,9 +303,9 @@ class S3Client():
         try:
             self.run_cmd(f'mc admin group add {self.get_alias(alias)} {group_name} {" ".join(members)}')
         except subprocess.CalledProcessError as e:
-            return self.handleException(e, 'do_add_group', group_name=group_name)
+            return self.handleException(e, 'do_add_group', group_name=group_name, members=members)
         self.stats.success('do_add_group')
-        self.logger.info(f'do_add_group {group_name} succeed')
+        self.logger.info(f'do_add_group {group_name} {members} succeed')
         return self.do_group_info(group_name, alias)
 
     def do_remove_group(self, group_name, members, alias):
@@ -391,8 +391,18 @@ class S3Client():
             return self.handleException(e, 'do_list_policies')
         self.stats.success('do_list_policies')
         self.logger.info(f'do_list_policies succeed')
-        return result
+        result = [item.strip() for item in result.split("\n") if item.strip()!='diagnostics' and item.strip()!='']
+        return sorted(result)
     
+    def remove_all_policies(self, alias=ROOT_ALIAS):
+        policies = self.run_cmd(f'mc admin policy list {self.get_alias(alias)}').split("\n")
+        policies = [policy.strip() for policy in policies if policy.strip()]
+        for policy in policies:
+            if policy in BUILD_IN_POLICIES:
+                continue
+            self.run_cmd(f'mc admin policy remove {self.get_alias(alias)} {policy}')
+            print(f"Policy '{policy}' removed successfully.")
+
     def do_set_policy_to_user(self, policy_name, user_name, alias):
         try:
             self.run_cmd(f'mc admin policy set {self.get_alias(alias)} {policy_name} user={user_name}')
