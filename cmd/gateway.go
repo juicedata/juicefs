@@ -22,6 +22,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"github.com/juicedata/juicefs/pkg/utils"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -242,9 +243,9 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	}()
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
 	vfsConf.AccessLog = c.String("access-log")
-	vfsConf.AttrTimeout = duration(c.String("attr-cache"))
-	vfsConf.EntryTimeout = duration(c.String("entry-cache"))
-	vfsConf.DirEntryTimeout = duration(c.String("dir-entry-cache"))
+	vfsConf.AttrTimeout = utils.Duration(c.String("attr-cache"))
+	vfsConf.EntryTimeout = utils.Duration(c.String("entry-cache"))
+	vfsConf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
 
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	jfs, err := fs.NewFileSystem(vfsConf, metaCli, store)

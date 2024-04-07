@@ -442,7 +442,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 		metaConf.Retries = jConf.IORetries
 		metaConf.MaxDeletes = jConf.MaxDeletes
 		metaConf.SkipDirNlink = jConf.SkipDirNlink
-		metaConf.SkipDirMtime = duration(jConf.SkipDirMtime)
+		metaConf.SkipDirMtime = utils.Duration(jConf.SkipDirMtime)
 		metaConf.ReadOnly = jConf.ReadOnly
 		metaConf.NoBGJob = jConf.NoBGJob || jConf.NoSession
 		metaConf.OpenCache = time.Duration(jConf.OpenCache * 1e9)
@@ -1323,32 +1323,6 @@ func jfs_close(pid, fd int) int {
 	}
 	freeHandle(fd)
 	return errno(f.Close(f.w.withPid(pid)))
-}
-
-func duration(s string) time.Duration {
-	if s == "" {
-		return 0
-	}
-	v, err := strconv.ParseFloat(s, 64)
-	if err == nil {
-		return time.Microsecond * time.Duration(v*1e6)
-	}
-
-	err = nil
-	var d time.Duration
-	p := strings.Index(s, "d")
-	if p >= 0 {
-		v, err = strconv.ParseFloat(s[:p], 64)
-	}
-	if err == nil && s[p+1:] != "" {
-		d, err = time.ParseDuration(s[p+1:])
-	}
-
-	if err != nil {
-		logger.Warnf("Invalid duration value: %s, setting it to 0", s)
-		return 0
-	}
-	return d + time.Hour*time.Duration(v*24)
 }
 
 func main() {
