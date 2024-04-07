@@ -355,7 +355,7 @@ class S3Machine(RuleBasedStateMachine):
         target = groups,
         alias = aliases,
         group_name=consumes(groups).filter(lambda x: x != multiple()),
-        members = st_group_members
+        group_members = st_group_members
     )
     @precondition(lambda self: 'remove_group' not in self.EXCLUDE_RULES)
     def remove_group(self, group_name, group_members, alias=ROOT_ALIAS):
