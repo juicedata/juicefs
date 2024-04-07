@@ -45,7 +45,7 @@ jobs:
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
 
-  pjdfstest:
+  gateway:
     needs: build-matrix
     strategy:
       fail-fast: false
@@ -125,7 +125,7 @@ jobs:
 
   success-all-test:
     runs-on: ubuntu-latest
-    needs: [pjdfstest]
+    needs: [gateway]
     if: always()
     steps:
       - uses: technote-space/workflow-conclusion-action@v3
