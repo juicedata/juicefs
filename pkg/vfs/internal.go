@@ -166,7 +166,7 @@ func collectMetrics(registry *prometheus.Registry) []byte {
 		for _, m := range mf.Metric {
 			var name = *mf.Name
 			for _, l := range m.Label {
-				if *l.Name == "method" {
+				if *l.Name == "method" || *l.Name == "errno" {
 					name += "_" + *l.Value
 				}
 			}

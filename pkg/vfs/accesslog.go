@@ -19,6 +19,7 @@ package vfs
 import (
 	"fmt"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -39,6 +40,10 @@ var (
 		Name: "fuse_ops_durations_seconds",
 		Help: "Operations latency in seconds.",
 	}, []string{"method"})
+	opsIOErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "fuse_ops_io_errors",
+		Help: "Number of IO errors.",
+	}, []string{"errno"})
 )
 
 type logReader struct {
@@ -56,11 +61,14 @@ func init() {
 	readers = make(map[uint64]*logReader)
 }
 
-func logit(ctx Context, method, format string, args ...interface{}) {
+func logit(ctx Context, method string, err syscall.Errno, format string, args ...interface{}) {
 	used := ctx.Duration()
 	opsDurationsHistogram.Observe(used.Seconds())
 	opsTotal.WithLabelValues(method).Inc()
 	opsDurations.WithLabelValues(method).Add(used.Seconds())
+	if err != 0 {
+		opsIOErrors.WithLabelValues(utils.ErrnoName(err)).Inc()
+	}
 	readerLock.RLock()
 	defer readerLock.RUnlock()
 	if len(readers) == 0 && used < time.Second*10 {
@@ -70,7 +78,7 @@ func logit(ctx Context, method, format string, args ...interface{}) {
 	cmd := fmt.Sprintf(method+" "+format, args...)
 	t := utils.Now()
 	ts := t.Format("2006.01.02 15:04:05.000000")
-	cmd += fmt.Sprintf(" <%.6f>", used.Seconds())
+	cmd += fmt.Sprintf(" - %s <%.6f>", strerr(err), used.Seconds())
 	if ctx.Pid() != 0 && used >= time.Second*10 {
 		logger.Infof("slow operation: %s", cmd)
 	}
