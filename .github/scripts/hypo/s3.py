@@ -349,12 +349,13 @@ class S3Machine(RuleBasedStateMachine):
     @rule(
         target = groups,
         alias = aliases,
-        group_name=consumes(groups).filter(lambda x: x != multiple())
+        group_name=consumes(groups).filter(lambda x: x != multiple()),
+        members = st_group_members
     )
     @precondition(lambda self: 'remove_group' not in self.EXCLUDE_RULES)
-    def remove_group(self, group_name, alias=ROOT_ALIAS):
-        result1 = self.client1.do_remove_group(group_name, alias)
-        result2 = self.client2.do_remove_group(group_name, alias)
+    def remove_group(self, group_name, group_members, alias=ROOT_ALIAS):
+        result1 = self.client1.do_remove_group(group_name, group_members, alias)
+        result2 = self.client2.do_remove_group(group_name, group_members, alias)
         assert self.equal(result1, result2), f'\033[31mremove_group:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return group_name

@@ -51,12 +51,14 @@ class S3Client():
         
     def handleException(self, e, action, **kwargs):
         self.stats.failure(action)
-        self.logger.info(f'{action} {kwargs} failed: {e}')
         if isinstance(e, S3Error):
+            self.logger.info(f'{action} {kwargs} failed: {e}')
             return Exception(f'code:{e.code} message:{e.message}')
         elif isinstance(e, subprocess.CalledProcessError):
+            self.logger.info(f'{action} {kwargs} failed: {e.output.decode()}')
             return Exception(f'returncode:{e.returncode} output:{e.output.decode()}')
         else:
+            self.logger.info(f'{action} {kwargs} failed: {e}')
             return e
         
     def do_info(self, alias):
@@ -302,9 +304,9 @@ class S3Client():
         self.logger.info(f'do_add_group {group_name} succeed')
         return self.do_group_info(group_name, alias)
 
-    def do_remove_group(self, group_name, alias):
+    def do_remove_group(self, group_name, members, alias):
         try:
-            self.run_cmd(f'mc admin group remove {self.get_alias(alias)} {group_name}')
+            self.run_cmd(f'mc admin group remove {self.get_alias(alias)} {group_name} {" ".join(members)}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_remove_group', group_name=group_name)
         self.stats.success('do_remove_group')
@@ -380,7 +382,7 @@ class S3Client():
     
     def do_list_policies(self, alias):
         try:
-            result = self.run_cmd(f'mc admin policy ls {self.get_alias(alias)}')
+            result = self.run_cmd(f'mc admin policy list {self.get_alias(alias)}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_list_policies')
         self.stats.success('do_list_policies')

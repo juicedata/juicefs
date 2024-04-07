@@ -6,7 +6,7 @@ MAX_OBJECT_SIZE=10*1024*1024
 S3_ACTION_LIST = ["s3:*", "s3:DeleteObject", "s3:GetObject","s3:ListBucket","s3:PutObject", "s3:PutObjectTagging", "s3:GetObjectTagging", "s3:DeleteObjectTagging"]
 st_user_name = st.sampled_from(['user1', 'user2', 'user3'])
 st_group_name = st.sampled_from(['group1', 'group2', 'group3'])
-st_group_members = st.lists(st_user_name, min_size=1, max_size=3, unique=True)
+st_group_members = st.lists(st_user_name)
 st_secret_key = st.text(alphabet=ascii_lowercase, min_size=8, max_size=8)
 st_alias_name = st.text(alphabet=ascii_lowercase, min_size=4, max_size=4)
 st_bucket_name = st.text(alphabet=ascii_lowercase, min_size=4, max_size=4)
