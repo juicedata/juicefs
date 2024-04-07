@@ -724,9 +724,9 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 		disableUpdatedb()
 	}
 	conf := v.Conf
-	conf.AttrTimeout = duration(c.String("attr-cache"))
-	conf.EntryTimeout = duration(c.String("entry-cache"))
-	conf.DirEntryTimeout = duration(c.String("dir-entry-cache"))
+	conf.AttrTimeout = utils.Duration(c.String("attr-cache"))
+	conf.EntryTimeout = utils.Duration(c.String("entry-cache"))
+	conf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
 	conf.NonDefaultPermission = c.Bool("non-default-permission")
 	rootSquash := c.String("root-squash")
 	if rootSquash != "" {
