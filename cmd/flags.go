@@ -335,7 +335,7 @@ func metaCacheFlags(defaultEntryCache float64) []cli.Flag {
 			Value: "0",
 			Usage: "The seconds to reuse open file without checking update (0 means disable this feature)",
 		},
-		&cli.IntFlag{
+		&cli.Uint64Flag{
 			Name:  "open-cache-limit",
 			Value: 10000,
 			Usage: "max number of open files to cache (soft limit, 0 means unlimited)",
