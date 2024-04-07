@@ -101,7 +101,7 @@ jobs:
 
       - name: Test
         run: |
-          sudo python3 .github/scripts/hypo/s3.py
+          sudo LOG_LEVEL=WARNING python3 .github/scripts/hypo/s3.py
 
       - name: check log
         if: always()
