@@ -300,6 +300,7 @@ type javaConf struct {
 	MaxUploads        int     `json:"maxUploads"`
 	MaxDeletes        int     `json:"maxDeletes"`
 	SkipDirNlink      int     `json:"skipDirNlink"`
+	SkipDirMtime      string  `json:"skipDirMtime"`
 	IORetries         int     `json:"ioRetries"`
 	GetTimeout        int     `json:"getTimeout"`
 	PutTimeout        int     `json:"putTimeout"`
@@ -441,6 +442,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 		metaConf.Retries = jConf.IORetries
 		metaConf.MaxDeletes = jConf.MaxDeletes
 		metaConf.SkipDirNlink = jConf.SkipDirNlink
+		metaConf.SkipDirMtime = utils.Duration(jConf.SkipDirMtime)
 		metaConf.ReadOnly = jConf.ReadOnly
 		metaConf.NoBGJob = jConf.NoBGJob || jConf.NoSession
 		metaConf.OpenCache = time.Duration(jConf.OpenCache * 1e9)
