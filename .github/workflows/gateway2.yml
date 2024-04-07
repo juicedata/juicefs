@@ -55,10 +55,6 @@ jobs:
     runs-on: ubuntu-20.04
 
     steps:
-      - uses: shogo82148/actions-setup-perl@v1
-        with:
-          perl-version: '5.34'
-
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -103,18 +99,18 @@ jobs:
           sudo wget -q https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z -O /usr/local/bin/mc && sudo chmod +x /usr/local/bin/mc
           sudo docker run -d -p 9000:9000 --name minio -e "MINIO_ACCESS_KEY=minioadmin" -e "MINIO_SECRET_KEY=minioadmin" minio/minio:RELEASE.2021-04-22T15-44-28Z server /data
 
-      - name: Gateway Test
+      - name: Test
         run: |
           sudo python3 .github/scripts/hypo/s3.py
 
-      - name: log
+      - name: check log
         if: always()
         run: | 
-          if [ -f /var/log/juicefs.log ]; then
-            tail -300 /var/log/juicefs.log
-            grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          if [ -f /var/log/juicefs-gateway.log ]; then
+            tail -300 /var/log/juicefs-gateway.log
+            grep "<FATAL>:" /var/log/juicefs-gateway.log && exit 1 || true
           fi
-
+          
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         timeout-minutes: 60
