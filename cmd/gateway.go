@@ -153,7 +153,6 @@ func gateway(c *cli.Context) error {
 			logger.Fatalf("init MinioMetaBucket error %s: %s", minio.MinioMetaBucket, err)
 		}
 	}
-
 	args := []string{"server", "--address", listenAddr, "--anonymous"}
 	if c.Bool("no-banner") {
 		args = append(args, "--quiet")

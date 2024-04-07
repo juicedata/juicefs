@@ -271,8 +271,9 @@ func (c *COS) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, result.NextKeyMarker, nil
 }
 
-func (c *COS) SetStorageClass(sc string) {
+func (c *COS) SetStorageClass(sc string) error {
 	c.sc = sc
+	return nil
 }
 
 func autoCOSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {

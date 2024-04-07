@@ -294,8 +294,9 @@ func (s *ibmcos) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func (s *ibmcos) SetStorageClass(sc string) {
+func (s *ibmcos) SetStorageClass(sc string) error {
 	s.sc = sc
+	return nil
 }
 
 func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage, error) {

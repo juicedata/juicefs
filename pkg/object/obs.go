@@ -331,8 +331,9 @@ func (s *obsClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func (s *obsClient) SetStorageClass(sc string) {
+func (s *obsClient) SetStorageClass(sc string) error {
 	s.sc = sc
+	return nil
 }
 
 func autoOBSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {
