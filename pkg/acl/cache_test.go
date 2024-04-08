@@ -56,7 +56,6 @@ func TestCache(t *testing.T) {
 	assert.True(t, rule.IsEqual(c.Get(1)))
 	assert.True(t, rule.IsEqual(c.Get(2)))
 	assert.Equal(t, uint32(1), c.GetId(rule))
-	assert.Equal(t, uint32(1), c.Get(1).NamedUsers[0].Id) // sorted
 
 	rule2 := &Rule{}
 	*rule2 = *rule

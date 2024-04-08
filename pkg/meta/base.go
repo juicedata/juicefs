@@ -2726,6 +2726,19 @@ func setXAttrACL(xattrs *[]byte, accessACL, defaultACL uint32) {
 	}
 }
 
+func (m *baseMeta) saveACL(rule *aclAPI.Rule, aclMaxId *uint32) uint32 {
+	if rule == nil {
+		return aclAPI.None
+	}
+	id := m.aclCache.GetId(rule)
+	if id == aclAPI.None {
+		(*aclMaxId)++
+		id = *aclMaxId
+		m.aclCache.Put(id, rule)
+	}
+	return id
+}
+
 func (m *baseMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
 	if aclType != aclAPI.TypeAccess && aclType != aclAPI.TypeDefault {
 		return syscall.EINVAL

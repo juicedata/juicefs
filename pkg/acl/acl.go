@@ -82,6 +82,15 @@ func (r *Rule) String() string {
 		r.Owner, r.Group, r.Mask, r.Other, r.NamedUsers, r.NamedGroups)
 }
 
+func (r *Rule) Dup() *Rule {
+	if r != nil {
+		newRule := *r
+		// NamedUsers and NamedGroups are never modified
+		return &newRule
+	}
+	return nil
+}
+
 func (r *Rule) Encode() []byte {
 	w := utils.NewBuffer(uint32(16 + (len(r.NamedUsers)+len(r.NamedGroups))*6))
 	w.Put16(r.Owner)
