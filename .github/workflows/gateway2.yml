@@ -105,7 +105,11 @@ jobs:
           sudo wget -q https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z -O /usr/local/bin/mc && sudo chmod +x /usr/local/bin/mc
           sudo docker run -d -p 9000:9000 --name minio -e "MINIO_ACCESS_KEY=minioadmin" -e "MINIO_SECRET_KEY=minioadmin" minio/minio:RELEASE.2021-04-22T15-44-28Z server /data
 
-      - name: Test
+      - name: Test with example
+        run: |
+          sudo python3 .github/scripts/hypo/s3_test.py
+
+      - name: Test randomly
         run: |
           sudo LOG_LEVEL=WARNING python3 .github/scripts/hypo/s3.py
 
