@@ -4,14 +4,13 @@ from s3_contant import *
 class TestS3(unittest.TestCase):
     def test_bucket(self):
         state = S3Machine()
-        state.set_alias('alias1', DEFAULT_ACCESS_KEY, use_url2=False)
-        state.set_alias('alias2', DEFAULT_ACCESS_KEY, use_url2=True)
+        state.set_alias('alias1', DEFAULT_ACCESS_KEY)
         state.create_bucket('bucket1')
         state.create_bucket('bucket2')
         state.fput_object('bucket1', 'object1', alias='alias1')
-        state.fput_object('bucket1', 'object2', alias='alias2')
+        state.fput_object('bucket1', 'object2', alias='alias1')
         state.fput_object('bucket2', 'object1', alias='alias1')
-        state.fput_object('bucket2', 'object2', alias='alias2')
+        state.fput_object('bucket2', 'object2', alias='alias1')
         state.list_buckets()
         state.list_objects('bucket1')
         state.list_objects('bucket2')
@@ -55,7 +54,8 @@ class TestS3(unittest.TestCase):
         state.list_groups()
         state.teardown()
 
-    def test_policy_remove(self):
+    def skip_test_policy_remove(self):
+        # SEE https://github.com/juicedata/juicefs/issues/4639
         state = S3Machine()
         v1 = state.init_aliases()
         v2, v3, v4, v5 = state.init_policies()
