@@ -173,11 +173,12 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		logRequest("GET", key, fmt.Sprintf("RANGE(%d,%d) ", boff, len(p)), reqID, err, used)
 		s.store.objectDataBytes.WithLabelValues("GET", sc).Add(float64(n))
 		s.store.objectReqsHistogram.WithLabelValues("GET", sc).Observe(used.Seconds())
-		s.store.fetcher.fetch(key)
 		if err == nil {
+			s.store.fetcher.fetch(key)
 			return n, nil
 		} else {
 			s.store.objectReqErrors.Add(1)
+			// fall back to full read
 		}
 	}
 
