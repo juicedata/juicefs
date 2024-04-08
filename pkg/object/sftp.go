@@ -175,7 +175,7 @@ func (f *sftpStore) Head(key string) (Object, error) {
 	return f.fileInfo(nil, key, info, true), nil
 }
 
-func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (f *sftpStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return nil, err
@@ -204,7 +204,7 @@ func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return ff, err
 }
 
-func (f *sftpStore) Put(key string, in io.Reader) (err error) {
+func (f *sftpStore) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return err
@@ -309,7 +309,7 @@ func (f *sftpStore) Readlink(name string) (string, error) {
 	return c.sftpClient.ReadLink(f.path(name))
 }
 
-func (f *sftpStore) Delete(key string) error {
+func (f *sftpStore) Delete(key string, getters ...AttrGetter) error {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return err

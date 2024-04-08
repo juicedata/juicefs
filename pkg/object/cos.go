@@ -100,7 +100,7 @@ func (c *COS) Head(key string) (Object, error) {
 	return &obj{key, size, mtime, strings.HasSuffix(key, "/"), sc}, nil
 }
 
-func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (c *COS) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	params := &cos.ObjectGetOptions{Range: getRange(off, limit)}
 	resp, err := c.c.Object.Get(ctx, key, params)
 	if err != nil {
@@ -119,15 +119,13 @@ func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey), length)
 	}
 	if resp != nil {
-		ReqIDCache.put(key, resp.Header.Get(cosRequestIDKey))
-	}
-	if sc := resp.Header.Get(cosStorageClassHeader); sc != "" {
-		return scReadCloser{resp.Body, sc}, nil
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey)).SetStorageClass(resp.Header.Get(cosStorageClassHeader))
 	}
 	return resp.Body, nil
 }
 
-func (c *COS) Put(key string, in io.Reader) error {
+func (c *COS) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	var options cos.ObjectPutOptions
 	if ins, ok := in.(io.ReadSeeker); ok {
 		header := http.Header(map[string][]string{
@@ -143,7 +141,8 @@ func (c *COS) Put(key string, in io.Reader) error {
 	}
 	resp, err := c.c.Object.Put(ctx, key, in, &options)
 	if resp != nil {
-		ReqIDCache.put(key, resp.Header.Get(cosRequestIDKey))
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey)).SetStorageClass(c.sc)
 	}
 	return err
 }
@@ -158,10 +157,11 @@ func (c *COS) Copy(dst, src string) error {
 	return err
 }
 
-func (c *COS) Delete(key string) error {
+func (c *COS) Delete(key string, getters ...AttrGetter) error {
 	resp, err := c.c.Object.Delete(ctx, key)
 	if resp != nil {
-		ReqIDCache.put(key, resp.Header.Get(cosRequestIDKey))
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey))
 	}
 	return err
 }
@@ -271,12 +271,9 @@ func (c *COS) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, result.NextKeyMarker, nil
 }
 
-func (c *COS) SetStorageClass(sc string) {
+func (c *COS) SetStorageClass(sc string) error {
 	c.sc = sc
-}
-
-func (c *COS) StorageClass() string {
-	return c.sc
+	return nil
 }
 
 func autoCOSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {

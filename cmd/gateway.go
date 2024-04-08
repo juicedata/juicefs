@@ -22,13 +22,13 @@ package cmd
 import (
 	"context"
 	"errors"
+	"github.com/juicedata/juicefs/pkg/utils"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path"
 	"strconv"
 	"syscall"
-	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
@@ -83,6 +83,10 @@ func cmdGateway() *cli.Command {
 			Name:  "domain",
 			Usage: "domain for virtual-host-style requests",
 		},
+		&cli.StringFlag{
+			Name:  "refresh-iam-interval",
+			Usage: "interval to reload gateway IAM from configuration",
+		},
 	}
 
 	return &cli.Command{
@@ -126,6 +130,10 @@ func gateway(c *cli.Context) error {
 		os.Setenv("MINIO_DOMAIN", c.String("domain"))
 	}
 
+	if c.IsSet("refresh-iam-interval") {
+		os.Setenv("MINIO_REFRESH_IAM_INTERVAL", c.String("refresh-iam-interval"))
+	}
+
 	metaAddr := c.Args().Get(0)
 	listenAddr := c.Args().Get(1)
 	conf, jfs := initForSvc(c, "s3gateway", metaAddr)
@@ -154,7 +162,6 @@ func gateway(c *cli.Context) error {
 			logger.Fatalf("init MinioMetaBucket error %s: %s", minio.MinioMetaBucket, err)
 		}
 	}
-
 	args := []string{"server", "--address", listenAddr, "--anonymous"}
 	if c.Bool("no-banner") {
 		args = append(args, "--quiet")
@@ -195,9 +202,8 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	removePassword(metaUrl)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
-
 	if c.Bool("background") {
-		if err := makeDaemonForSvc(c, metaCli); err != nil {
+		if err := makeDaemonForSvc(c, metaCli, metaUrl); err != nil {
 			logger.Fatalf("make daemon: %s", err)
 		}
 	}
@@ -244,9 +250,9 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	}()
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
 	vfsConf.AccessLog = c.String("access-log")
-	vfsConf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
-	vfsConf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
-	vfsConf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
+	vfsConf.AttrTimeout = utils.Duration(c.String("attr-cache"))
+	vfsConf.EntryTimeout = utils.Duration(c.String("entry-cache"))
+	vfsConf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
 
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	jfs, err := fs.NewFileSystem(vfsConf, metaCli, store)

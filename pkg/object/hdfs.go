@@ -102,7 +102,7 @@ func (h *hdfsclient) toFile(key string, info os.FileInfo) *file {
 	return f
 }
 
-func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (h *hdfsclient) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	f, err := h.c.Open(h.path(key))
 	if err != nil {
 		return nil, err
@@ -122,7 +122,7 @@ func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return f, nil
 }
 
-func (h *hdfsclient) Put(key string, in io.Reader) (err error) {
+func (h *hdfsclient) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
 	p := h.path(key)
 	if strings.HasSuffix(p, dirSuffix) {
 		return h.c.MkdirAll(p, 0777&^h.umask)
@@ -178,7 +178,7 @@ func IsErrReplicating(err error) bool {
 	return ok && pe.Err == hdfs.ErrReplicating
 }
 
-func (h *hdfsclient) Delete(key string) error {
+func (h *hdfsclient) Delete(key string, getters ...AttrGetter) error {
 	err := h.c.Remove(h.path(key))
 	if err != nil && os.IsNotExist(err) {
 		err = nil

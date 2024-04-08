@@ -1730,7 +1730,7 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		if pattr.Parent > TrashInode {
 			return syscall.ENOENT
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
 		if pattr.Flags&FlagImmutable != 0 {
@@ -1879,51 +1879,12 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	return err
 }
 
-func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rerr syscall.Errno) {
-	defer func() {
-		if rerr == 0 {
-			m.touchAtime(ctx, inode, nil)
-		}
-	}()
-
-	if slices != nil {
-		*slices = nil
-	}
-	f := m.of.find(inode)
-	if f != nil {
-		f.RLock()
-		defer f.RUnlock()
-	}
-	if ss, ok := m.of.ReadChunk(inode, indx); ok {
-		*slices = ss
-		return 0
-	}
-	defer m.timeit("Read", time.Now())
+func (m *kvMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno) {
 	val, err := m.get(m.chunkKey(inode, indx))
 	if err != nil {
-		return errno(err)
+		return nil, errno(err)
 	}
-	if len(val) == 0 {
-		var attr Attr
-		eno := m.doGetAttr(ctx, inode, &attr)
-		if eno != 0 {
-			return eno
-		}
-		if attr.Typ != TypeFile {
-			return syscall.EPERM
-		}
-		return 0
-	}
-	ss := readSliceBuf(val)
-	if ss == nil {
-		return syscall.EIO
-	}
-	*slices = buildSlice(ss)
-	m.of.CacheChunk(inode, indx, *slices)
-	if !m.conf.ReadOnly && (len(val)/sliceBytes >= 5 || len(*slices) >= 5) {
-		go m.compactChunk(inode, indx, false, false)
-	}
-	return 0
+	return readSliceBuf(val), 0
 }
 
 func (m *kvMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno {
@@ -2360,81 +2321,8 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	return count, nil
 }
 
-func (m *kvMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
-	// avoid too many or duplicated compaction
-	k := uint64(inode) + (uint64(indx) << 40)
-	m.Lock()
-	if once || force {
-		for m.compacting[k] {
-			m.Unlock()
-			time.Sleep(time.Millisecond * 10)
-			m.Lock()
-		}
-	} else if len(m.compacting) > 10 || m.compacting[k] {
-		m.Unlock()
-		return
-	}
-	m.compacting[k] = true
-	defer func() {
-		m.Lock()
-		delete(m.compacting, k)
-		m.Unlock()
-	}()
-	m.Unlock()
-
-	buf, err := m.get(m.chunkKey(inode, indx))
-	if err != nil {
-		return
-	}
-	if once && len(buf) < sliceBytes*maxSlices {
-		return
-	}
-	if len(buf) > sliceBytes*maxCompactSlices {
-		buf = buf[:sliceBytes*maxCompactSlices]
-	}
-
-	ss := readSliceBuf(buf)
-	if ss == nil {
-		logger.Errorf("Corrupt value for inode %d chunk indx %d", inode, indx)
-		return
-	}
-	skipped := skipSome(ss)
-	var first, last *slice
-	if skipped > 0 {
-		first, last = ss[0], ss[skipped-1]
-	}
-	ss = ss[skipped:]
-	pos, size, slices := compactChunk(ss)
-	if len(ss) < 2 || size == 0 {
-		return
-	}
-	if first != nil && last != nil && pos+size > first.pos && last.pos+last.len > pos {
-		panic(fmt.Sprintf("invalid compaction: skipped slices [%+v, %+v], pos %d, size %d", *first, *last, pos, size))
-	}
-
-	var id uint64
-	st := m.NewSlice(Background, &id)
-	if st != 0 {
-		return
-	}
-	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
-	err = m.newMsg(CompactChunk, slices, id)
-	if err != nil {
-		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
-			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
-		}
-		return
-	}
-	var dsbuf []byte
-	trash := m.toTrash(0)
-	if trash {
-		for _, s := range ss {
-			if s.id > 0 {
-				dsbuf = append(dsbuf, m.encodeDelayedSlice(s.id, s.size)...)
-			}
-		}
-	}
-	err = m.txn(func(tx *kvTxn) error {
+func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno {
+	st := errno(m.txn(func(tx *kvTxn) error {
 		buf2 := tx.get(m.chunkKey(inode, indx))
 		if len(buf2) < len(buf) || !bytes.Equal(buf, buf2[:len(buf)]) {
 			logger.Infof("chunk %d:%d was changed %d -> %d", inode, indx, len(buf), len(buf2))
@@ -2445,9 +2333,9 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 		tx.set(m.chunkKey(inode, indx), buf2)
 		// create the key to tracking it
 		tx.set(m.sliceKey(id, size), make([]byte, 8))
-		if trash {
-			if len(dsbuf) > 0 {
-				tx.set(m.delSliceKey(time.Now().Unix(), id), dsbuf)
+		if delayed != nil {
+			if len(delayed) > 0 {
+				tx.set(m.delSliceKey(time.Now().Unix(), id), delayed)
 			}
 		} else {
 			for _, s := range ss {
@@ -2457,28 +2345,28 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 			}
 		}
 		return nil
-	})
+	}))
 	// there could be false-negative that the compaction is successful, double-check
-	if err != nil {
-		logger.Warnf("compact %d:%d failed: %s", inode, indx, err)
+	if st != 0 && st != syscall.EINVAL {
 		refs, e := m.get(m.sliceKey(id, size))
 		if e == nil {
 			if len(refs) > 0 {
-				err = nil
+				st = 0
 			} else {
 				logger.Infof("compacted chunk %d was not used", id)
-				err = syscall.EINVAL
+				st = syscall.EINVAL
 			}
 		}
 	}
 
-	if errno, ok := err.(syscall.Errno); ok && errno == syscall.EINVAL {
-		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, id, size)
-		m.deleteSlice(id, size)
-	} else if err == nil {
-		m.of.InvalidateChunk(inode, indx)
+	if st == syscall.EINVAL {
+		_ = m.txn(func(tx *kvTxn) error {
+			tx.incrBy(m.sliceKey(id, size), -1)
+			return nil
+		})
+	} else if st == 0 {
 		m.cleanupZeroRef(id, size)
-		if !trash {
+		if delayed == nil {
 			var refs int64
 			for _, s := range ss {
 				if s.id > 0 && m.client.txn(func(tx *kvTxn) error {
@@ -2489,16 +2377,8 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 				}
 			}
 		}
-	} else {
-		logger.Warnf("compact %d %d: %s", inode, indx, err)
 	}
-
-	if force {
-		m.Lock()
-		delete(m.compacting, k)
-		m.Unlock()
-		m.compactChunk(inode, indx, once, force)
-	}
+	return st
 }
 
 func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {

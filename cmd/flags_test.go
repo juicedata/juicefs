@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/juicedata/juicefs/pkg/utils"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ func Test_duration(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, duration(tt.args.s), "duration(%v)", tt.args.s)
+			assert.Equalf(t, tt.want, utils.Duration(tt.args.s), "duration(%v)", tt.args.s)
 		})
 	}
 }

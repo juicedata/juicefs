@@ -18,6 +18,7 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -76,6 +77,14 @@ type jfsObjects struct {
 	gConf    *Config
 }
 
+func (n *jfsObjects) PutObjectMetadata(ctx context.Context, s string, s2 string, options minio.ObjectOptions) (minio.ObjectInfo, error) {
+	return minio.ObjectInfo{}, minio.NotImplemented{}
+}
+
+func (n *jfsObjects) NSScanner(ctx context.Context, bf *minio.BloomFilter, updates chan<- madmin.DataUsageInfo) error {
+	return nil
+}
+
 func (n *jfsObjects) IsCompressionSupported() bool {
 	return false
 }
@@ -95,7 +104,7 @@ func (n *jfsObjects) Shutdown(ctx context.Context) error {
 
 func (n *jfsObjects) StorageInfo(ctx context.Context) (info minio.StorageInfo, errors []error) {
 	sinfo := minio.StorageInfo{}
-	sinfo.Backend.Type = minio.BackendFS
+	sinfo.Backend.Type = madmin.FS
 	return sinfo, nil
 }
 
@@ -1148,12 +1157,92 @@ func (n *jfsObjects) cleanup() {
 	}
 }
 
-func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker {
-	return n.nsMutex.NewNSLock(nil, bucket, objects...)
+type jfsFLock struct {
+	inode meta.Ino
+	owner uint64
+	meta  meta.Meta
 }
 
-func (n *jfsObjects) BackendInfo() minio.BackendInfo {
-	return minio.BackendInfo{Type: minio.BackendFS}
+func (j *jfsFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
+	return j.getFlockWithTimeOut(ctx, meta.F_WRLCK, timeout)
+}
+
+func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeout *minio.DynamicTimeout) (context.Context, error) {
+	if j.inode == 0 {
+		logger.Warnf("failed to get lock")
+		return ctx, nil
+	}
+	start := time.Now()
+	deadline := start.Add(timeout.Timeout())
+	lockStr := "write"
+	if ltype == meta.F_RDLCK {
+		lockStr = "read"
+	}
+	for {
+		if errno := j.meta.Flock(mctx, j.inode, j.owner, ltype, false); errno != 0 && !errors.Is(errno, syscall.EAGAIN) {
+			logger.Errorf("failed to get %s lock for inode %d by owner %d, error : %s", lockStr, j.inode, j.owner, errno)
+		} else {
+			timeout.LogSuccess(time.Since(start))
+			return ctx, nil
+		}
+		if time.Now().After(deadline) {
+			timeout.LogFailure()
+			logger.Errorf("get write lock timed out ino:%d", j.inode)
+			return ctx, minio.OperationTimedOut{}
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func (j *jfsFLock) Unlock() {
+	if j.inode == 0 {
+		return
+	}
+	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
+		logger.Errorf("failed to release lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
+	}
+}
+
+func (j *jfsFLock) GetRLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
+	return j.getFlockWithTimeOut(ctx, meta.F_RDLCK, timeout)
+}
+
+func (j *jfsFLock) RUnlock() {
+	j.Unlock()
+}
+
+func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker {
+	if len(objects) != 1 {
+		panic(fmt.Errorf("jfsObjects.NewNSLock: the length of the objects parameter must be 1, current %s", objects))
+	}
+
+	lockfile := path.Join(minio.MinioMetaBucket, minio.MinioMetaLockFile)
+	var file *fs.File
+	var errno syscall.Errno
+	file, errno = n.fs.Open(mctx, lockfile, vfs.MODE_MASK_W)
+	if errno != 0 && !errors.Is(errno, syscall.ENOENT) {
+		logger.Errorf("failed to open the file to be locked: %s error %s", lockfile, errno)
+		return &jfsFLock{}
+	}
+	if errors.Is(errno, syscall.ENOENT) {
+		if file, errno = n.fs.Create(mctx, lockfile, 0666, n.gConf.Umask); errno != 0 {
+			if errors.Is(errno, syscall.EEXIST) {
+				if file, errno = n.fs.Open(mctx, lockfile, vfs.MODE_MASK_W); errno != 0 {
+					logger.Errorf("failed to open the file to be locked: %s error %s", lockfile, errno)
+					return &jfsFLock{}
+				}
+			} else {
+				logger.Errorf("failed to create gateway lock file err %s", errno)
+				return &jfsFLock{}
+			}
+		}
+	}
+	defer file.Close(mctx)
+	return &jfsFLock{owner: n.conf.Meta.Sid, inode: file.Inode(), meta: n.fs.Meta()}
+}
+
+func (n *jfsObjects) BackendInfo() madmin.BackendInfo {
+	return madmin.BackendInfo{Type: madmin.FS}
 }
 
 func (n *jfsObjects) LocalStorageInfo(ctx context.Context) (minio.StorageInfo, []error) {
@@ -1276,10 +1365,6 @@ func (n *jfsObjects) DeleteObjectTags(ctx context.Context, bucket, object string
 		return minio.ObjectInfo{}, errno
 	}
 	return n.GetObjectInfo(ctx, bucket, object, opts)
-}
-
-func (n *jfsObjects) CrawlAndGetDataUsage(ctx context.Context, bf *minio.BloomFilter, updates chan<- minio.DataUsageInfo) error {
-	return nil
 }
 
 func (n *jfsObjects) IsNotificationSupported() bool {

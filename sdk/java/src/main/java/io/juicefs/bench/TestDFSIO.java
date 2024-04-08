@@ -584,6 +584,7 @@ public class TestDFSIO extends Main.Command {
           Class<? extends Mapper<Text, LongWritable, Text, Text>> mapperClass,
           Path outputDir) throws IOException {
     JobConf job = new JobConf(config, TestDFSIO.class);
+    job.setBoolean("mapreduce.output.fileoutputformat.compress", false);
 
     FileInputFormat.setInputPaths(job, getControlDir(config));
     job.setInputFormat(SequenceFileInputFormat.class);

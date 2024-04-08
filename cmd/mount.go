@@ -184,7 +184,7 @@ func updateFormat(c *cli.Context) func(*meta.Format) {
 	}
 }
 
-func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config) {
+func cacheDirPathToAbs(c *cli.Context) {
 	if runtime.GOOS != "windows" {
 		if cd := c.String("cache-dir"); cd != "memory" {
 			ds := utils.SplitDir(cd)
@@ -212,6 +212,10 @@ func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config) {
 			}
 		}
 	}
+}
+
+func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config) {
+	cacheDirPathToAbs(c)
 	_ = expandPathForEmbedded(addr)
 	// The default log to syslog is only in daemon mode.
 	utils.InitLoggers(!c.Bool("no-syslog"))
@@ -250,7 +254,7 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		Format:          *format,
 		Version:         version.Version(),
 		Chunk:           chunkConf,
-		BackupMeta:      duration(c.String("backup-meta")),
+		BackupMeta:      utils.Duration(c.String("backup-meta")),
 		BackupSkipTrash: c.Bool("backup-skip-trash"),
 		Port:            &vfs.Port{DebugAgent: debugAgent, PyroscopeAddr: c.String("pyroscope")},
 		PrefixInternal:  c.Bool("prefix-internal"),
@@ -288,12 +292,12 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf.SkipDirNlink = c.Int("skip-dir-nlink")
 	conf.ReadOnly = readOnly
 	conf.NoBGJob = c.Bool("no-bgjob")
-	conf.OpenCache = time.Duration(c.Float64("open-cache") * 1e9)
+	conf.OpenCache = utils.Duration(c.String("open-cache"))
 	conf.OpenCacheLimit = c.Uint64("open-cache-limit")
-	conf.Heartbeat = duration(c.String("heartbeat"))
+	conf.Heartbeat = utils.Duration(c.String("heartbeat"))
 	conf.MountPoint = mp
 	conf.Subdir = c.String("subdir")
-	conf.SkipDirMtime = duration(c.String("skip-dir-mtime"))
+	conf.SkipDirMtime = utils.Duration(c.String("skip-dir-mtime"))
 	conf.Sid, _ = strconv.ParseUint(os.Getenv("_JFS_META_SID"), 10, 64)
 
 	atimeMode := c.String("atime-mode")
@@ -316,8 +320,8 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		Compress:   format.Compression,
 		HashPrefix: format.HashPrefix,
 
-		GetTimeout:    time.Second * time.Duration(c.Int("get-timeout")),
-		PutTimeout:    time.Second * time.Duration(c.Int("put-timeout")),
+		GetTimeout:    utils.Duration(c.String("get-timeout")),
+		PutTimeout:    utils.Duration(c.String("put-timeout")),
 		MaxUpload:     c.Int("max-uploads"),
 		MaxRetries:    c.Int("io-retries"),
 		Writeback:     c.Bool("writeback"),
@@ -325,7 +329,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		BufferSize:    utils.ParseBytes(c, "buffer-size", 'M'),
 		UploadLimit:   utils.ParseMbps(c, "upload-limit") * 1e6 / 8,
 		DownloadLimit: utils.ParseMbps(c, "download-limit") * 1e6 / 8,
-		UploadDelay:   duration(c.String("upload-delay")),
+		UploadDelay:   utils.Duration(c.String("upload-delay")),
 		UploadHours:   c.String("upload-hours"),
 
 		CacheDir:          c.String("cache-dir"),
@@ -335,8 +339,8 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheFullBlock:    !c.Bool("cache-partial-only"),
 		CacheChecksum:     c.String("verify-cache-checksum"),
 		CacheEviction:     c.String("cache-eviction"),
-		CacheScanInterval: duration(c.String("cache-scan-interval")),
-		CacheExpire:       duration(c.String("cache-expire")),
+		CacheScanInterval: utils.Duration(c.String("cache-scan-interval")),
+		CacheExpire:       utils.Duration(c.String("cache-expire")),
 		AutoCreate:        true,
 	}
 	if chunkConf.UploadLimit == 0 {

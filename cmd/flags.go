@@ -17,14 +17,11 @@
 package cmd
 
 import (
+	"fmt"
+	"github.com/urfave/cli/v2"
 	"os"
 	"path"
 	"runtime"
-	"strconv"
-	"strings"
-	"time"
-
-	"github.com/urfave/cli/v2"
 )
 
 func globalFlags() []cli.Flag {
@@ -109,14 +106,14 @@ func storageFlags() []cli.Flag {
 			Name:  "storage-class",
 			Usage: "the storage class for data written by current client",
 		},
-		&cli.IntFlag{
+		&cli.StringFlag{
 			Name:  "get-timeout",
-			Value: 60,
+			Value: "60s",
 			Usage: "the max number of seconds to download an object",
 		},
-		&cli.IntFlag{
+		&cli.StringFlag{
 			Name:  "put-timeout",
-			Value: 60,
+			Value: "60s",
 			Usage: "the max number of seconds to upload an object",
 		},
 		&cli.IntFlag{
@@ -314,27 +311,27 @@ func shareInfoFlags() []cli.Flag {
 
 func metaCacheFlags(defaultEntryCache float64) []cli.Flag {
 	return addCategories("META CACHE", []cli.Flag{
-		&cli.Float64Flag{
+		&cli.StringFlag{
 			Name:  "attr-cache",
-			Value: 1.0,
-			Usage: "attributes cache timeout in seconds",
+			Value: "1s",
+			Usage: "attributes cache timeout",
 		},
-		&cli.Float64Flag{
+		&cli.StringFlag{
 			Name:  "entry-cache",
-			Value: defaultEntryCache,
-			Usage: "file entry cache timeout in seconds",
+			Value: fmt.Sprintf("%.1f", defaultEntryCache),
+			Usage: "file entry cache timeout",
 		},
-		&cli.Float64Flag{
+		&cli.StringFlag{
 			Name:  "dir-entry-cache",
-			Value: 1.0,
-			Usage: "dir entry cache timeout in seconds",
+			Value: "1s",
+			Usage: "dir entry cache timeout",
 		},
-		&cli.Float64Flag{
+		&cli.StringFlag{
 			Name:  "open-cache",
-			Value: 0.0,
+			Value: "0",
 			Usage: "The seconds to reuse open file without checking update (0 means disable this feature)",
 		},
-		&cli.IntFlag{
+		&cli.Uint64Flag{
 			Name:  "open-cache-limit",
 			Value: 10000,
 			Usage: "max number of open files to cache (soft limit, 0 means unlimited)",
@@ -348,27 +345,4 @@ func expandFlags(compoundFlags ...[]cli.Flag) []cli.Flag {
 		flags = append(flags, flag...)
 	}
 	return flags
-}
-
-func duration(s string) time.Duration {
-	v, err := strconv.Atoi(s)
-	if err == nil {
-		return time.Second * time.Duration(v)
-	}
-
-	err = nil
-	var d time.Duration
-	p := strings.Index(s, "d")
-	if p >= 0 {
-		v, err = strconv.Atoi(s[:p])
-	}
-	if err == nil && s[p+1:] != "" {
-		d, err = time.ParseDuration(s[p+1:])
-	}
-
-	if err != nil {
-		logger.Warnf("Invalid duration value: %s, setting it to 0", s)
-		return 0
-	}
-	return d + time.Hour*time.Duration(v*24)
 }

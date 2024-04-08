@@ -46,8 +46,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func get(s ObjectStorage, k string, off, limit int64) (string, error) {
-	r, err := s.Get(k, off, limit)
+func get(s ObjectStorage, k string, off, limit int64, getters ...AttrGetter) (string, error) {
+	r, err := s.Get(k, off, limit, getters...)
 	if err != nil {
 		return "", err
 	}
@@ -73,51 +73,31 @@ func listAll(s ObjectStorage, prefix, marker string, limit int64, followLink boo
 }
 
 func setStorageClass(o ObjectStorage) string {
-	switch s := o.(type) {
-	case *wasb:
-		s.sc = string(blob2.AccessTierCool)
-		return s.sc
-	case *bosclient:
-		s.sc = "STANDARD_IA"
-		return s.sc
-	case *COS:
-		s.sc = "STANDARD_IA"
-		return s.sc
-	case *ks3:
-		s.sc = "STANDARD_IA"
-		return s.sc
-	case *gs:
-		s.sc = "NEARLINE"
-		return s.sc
-	case *obsClient:
-		s.sc = "STANDARD_IA"
-		return s.sc
-	case *ossClient:
-		s.sc = string(oss.StorageIA)
-		return s.sc
-	case *qingstor:
-		s.sc = "STANDARD_IA"
-		return s.sc
-	case *s3client:
-		s.sc = "STANDARD_IA"
-		return s.sc
-	case *tosClient:
-		s.sc = string(enum.StorageClassIa)
-		return s.sc
-	default:
-		return ""
+	if osc, ok := o.(SupportStorageClass); ok {
+		var sc = "STANDARD_IA"
+		switch o.(type) {
+		case *wasb:
+			sc = string(blob2.AccessTierCool)
+		case *gs:
+			sc = "NEARLINE"
+		case *ossClient:
+			sc = string(oss.StorageIA)
+		case *tosClient:
+			sc = string(enum.StorageClassIa)
+		}
+		err := osc.SetStorageClass(sc)
+		if err != nil {
+			sc = ""
+		}
 	}
+	return ""
 }
 
 // nolint:errcheck
 func testStorage(t *testing.T, s ObjectStorage) {
 	sc := setStorageClass(s)
-	scSupported := sc != "" // StorageClass supported
 	if err := s.Create(); err != nil {
 		t.Fatalf("Can't create bucket %s: %s", s, err)
-	}
-	if scSupported && GetStorageClassOrDefault(s) != sc {
-		t.Fatalf("Storage class should be %q, got %q", sc, GetStorageClassOrDefault(s))
 	}
 	if err := s.Create(); err != nil {
 		t.Fatalf("err should be nil when creating a bucket with the same name")
@@ -130,10 +110,14 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}()
 
+	var scPut string
 	key := "测试编码文件" + `{"name":"juicefs"}` + string('\u001F') + "%uFF081%uFF09.jpg"
-	if err := s.Put(key, bytes.NewReader(nil)); err != nil {
+	if err := s.Put(key, bytes.NewReader(nil), WithStorageClass(&scPut)); err != nil {
 		t.Logf("PUT testEncodeFile failed: %s", err.Error())
 	} else {
+		if scPut != sc {
+			t.Fatalf("Storage class should be %q, got %q", sc, scPut)
+		}
 		if resp, err := s.List("", "测试编码文件", "", 1, true); err != nil && err != notSupported {
 			t.Logf("List testEncodeFile Failed: %s", err)
 		} else if len(resp) == 1 && resp[0].Key() != key {
@@ -142,15 +126,9 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 	_ = s.Delete(key)
 
-	resp, err := s.Get("not_exists", 0, -1)
+	_, err := s.Get("not_exists", 0, -1)
 	if err == nil {
 		t.Fatalf("Get should failed: %s", err)
-	}
-	if scSupported {
-		// assert resp is an instance of scReadCloser
-		if _, ok := resp.(scReadCloser); !ok {
-			t.Fatalf("Storage class is supported by %s, but not returned", s)
-		}
 	}
 
 	br := []byte("hello")
@@ -158,10 +136,15 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 
+	var scGet string
 	// get all
-	if d, e := get(s, "test", 0, -1); e != nil || d != "hello" {
+	if d, e := get(s, "test", 0, -1, WithStorageClass(&scGet)); e != nil || d != "hello" {
 		t.Fatalf("expect hello, but got %v, error: %s", d, e)
 	}
+	if scGet != sc { // Relax me when testing against a storage that doesnot use specified storage class
+		t.Fatalf("Storage class should be %q, got %q", sc, scGet)
+	}
+
 	if d, e := get(s, "test", 0, 5); e != nil || d != "hello" {
 		t.Fatalf("expect hello, but got %v, error: %s", d, e)
 	}

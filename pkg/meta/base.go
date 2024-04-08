@@ -67,7 +67,6 @@ type engine interface {
 	doInit(format *Format, force bool) error
 
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
-	compactChunk(inode Ino, indx uint32, once, force bool)
 	doDeleteSustainedInode(sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
@@ -101,9 +100,11 @@ type engine interface {
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doTouchAtime(ctx Context, inode Ino, attr *Attr, ts time.Time) (bool, error)
+	doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno)
 	doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno
 	doTruncate(ctx Context, inode Ino, flags uint8, length uint64, delta *dirStat, attr *Attr, skipPermCheck bool) syscall.Errno
 	doFallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, delta *dirStat, attr *Attr) syscall.Errno
+	doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
@@ -1058,6 +1059,9 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if name == "" {
 		return syscall.ENOENT
 	}
+	if name == "." || name == ".." {
+		return syscall.EEXIST
+	}
 
 	defer m.timeit("Link", time.Now())
 	if attr == nil {
@@ -1367,6 +1371,51 @@ func (m *baseMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sys
 	return 0
 }
 
+func (m *baseMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (st syscall.Errno) {
+	defer func() {
+		if st == 0 {
+			m.touchAtime(ctx, inode, nil)
+		}
+	}()
+
+	f := m.of.find(inode)
+	if f != nil {
+		f.RLock()
+		defer f.RUnlock()
+	}
+	if ss, ok := m.of.ReadChunk(inode, indx); ok {
+		*slices = ss
+		return 0
+	}
+
+	*slices = nil
+	defer m.timeit("Read", time.Now())
+	ss, st := m.en.doRead(ctx, inode, indx)
+	if st != 0 {
+		return st
+	}
+	if ss == nil {
+		return syscall.EIO
+	}
+	if len(ss) == 0 {
+		var attr Attr
+		if st = m.en.doGetAttr(ctx, inode, &attr); st != 0 {
+			return st
+		}
+		if attr.Typ != TypeFile {
+			return syscall.EPERM
+		}
+		return 0
+	}
+
+	*slices = buildSlice(ss)
+	m.of.CacheChunk(inode, indx, *slices)
+	if !m.conf.ReadOnly && (len(ss) >= 5 || len(*slices) >= 5) {
+		go m.compactChunk(inode, indx, false, false)
+	}
+	return 0
+}
+
 func (m *baseMeta) NewSlice(ctx Context, id *uint64) syscall.Errno {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
@@ -1414,9 +1463,9 @@ func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
 		if numSlices%100 == 99 || numSlices > 350 {
 			if numSlices < maxSlices {
-				go m.en.compactChunk(inode, indx, false, false)
+				go m.compactChunk(inode, indx, false, false)
 			} else {
-				m.en.compactChunk(inode, indx, true, false)
+				m.compactChunk(inode, indx, true, false)
 			}
 		}
 	}
@@ -1925,7 +1974,7 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 		go func() {
 			for c := range ch {
 				logger.Debugf("Compacting chunk %d:%d (%d slices)", c.inode, c.indx, c.slices)
-				m.en.compactChunk(c.inode, c.indx, false, true)
+				m.compactChunk(c.inode, c.indx, false, true)
 				bar.Increment()
 			}
 			wg.Done()
@@ -1940,6 +1989,101 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 		return errno(err)
 	}
 	return 0
+}
+
+func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
+	// avoid too many or duplicated compaction
+	k := uint64(inode) + (uint64(indx) << 40)
+	m.Lock()
+	if once || force {
+		for m.compacting[k] {
+			m.Unlock()
+			time.Sleep(time.Millisecond * 10)
+			m.Lock()
+		}
+	} else if len(m.compacting) > 10 || m.compacting[k] {
+		m.Unlock()
+		return
+	}
+	m.compacting[k] = true
+	m.Unlock()
+	defer func() {
+		m.Lock()
+		delete(m.compacting, k)
+		m.Unlock()
+	}()
+
+	ss, st := m.en.doRead(Background, inode, indx)
+	if st != 0 {
+		return
+	}
+	if ss == nil {
+		logger.Errorf("Corrupt value for inode %d chunk indx %d", inode, indx)
+		return
+	}
+	if once && len(ss) < maxSlices {
+		return
+	}
+	if len(ss) > maxCompactSlices {
+		ss = ss[:maxCompactSlices]
+	}
+	skipped := skipSome(ss)
+	var first, last *slice
+	if skipped > 0 {
+		first, last = ss[0], ss[skipped-1]
+	}
+	compacted := ss[skipped:]
+	pos, size, slices := compactChunk(compacted)
+	if len(compacted) < 2 || size == 0 {
+		return
+	}
+	if first != nil && last != nil && pos+size > first.pos && last.pos+last.len > pos {
+		panic(fmt.Sprintf("invalid compaction: skipped slices [%+v, %+v], pos %d, size %d", *first, *last, pos, size))
+	}
+
+	var id uint64
+	if st = m.NewSlice(Background, &id); st != 0 {
+		return
+	}
+	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(compacted), size)
+	err := m.newMsg(CompactChunk, slices, id)
+	if err != nil {
+		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
+			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(compacted), err)
+		}
+		return
+	}
+
+	var dsbuf []byte
+	trash := m.toTrash(0)
+	if trash {
+		dsbuf = make([]byte, 0, len(compacted)*12)
+		for _, s := range compacted {
+			if s.id > 0 {
+				dsbuf = append(dsbuf, m.encodeDelayedSlice(s.id, s.size)...)
+			}
+		}
+	}
+	origin := make([]byte, 0, len(ss)*sliceBytes)
+	for _, s := range ss {
+		origin = append(origin, marshalSlice(s.pos, s.id, s.size, s.off, s.len)...)
+	}
+	st = m.en.doCompactChunk(inode, indx, origin, compacted, skipped, pos, id, size, dsbuf)
+	if st == syscall.EINVAL {
+		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, id, size)
+		m.deleteSlice(id, size)
+	} else if st == 0 {
+		m.of.InvalidateChunk(inode, indx)
+	} else {
+		logger.Warnf("compact %d %d: %s", inode, indx, err)
+	}
+
+	if force {
+		m.Lock()
+		delete(m.compacting, k)
+		m.Unlock()
+		m.compactChunk(inode, indx, once, force)
+	}
 }
 
 func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, postFunc func()) syscall.Errno {
@@ -1957,7 +2101,7 @@ func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 		go func() {
 			defer wg.Done()
 			for c := range chunkChan {
-				m.en.compactChunk(c.inode, c.indx, false, true)
+				m.compactChunk(c.inode, c.indx, false, true)
 				postFunc()
 			}
 		}()

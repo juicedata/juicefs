@@ -82,7 +82,7 @@ func (c *b2client) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (c *b2client) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (c *b2client) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if off == 0 && limit == -1 {
 		_, r, err := c.bucket.DownloadFileByName(key)
 		return r, err
@@ -95,7 +95,7 @@ func (c *b2client) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return r, err
 }
 
-func (c *b2client) Put(key string, data io.Reader) error {
+func (c *b2client) Put(key string, data io.Reader, getters ...AttrGetter) error {
 	_, err := c.bucket.UploadFile(key, nil, data)
 	return err
 }
@@ -110,7 +110,7 @@ func (c *b2client) Copy(dst, src string) error {
 	return err
 }
 
-func (c *b2client) Delete(key string) error {
+func (c *b2client) Delete(key string, getters ...AttrGetter) error {
 	f, err := c.getFileInfo(key)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "not_found") {

@@ -272,49 +272,50 @@ func freeHandle(fd int) {
 }
 
 type javaConf struct {
-	MetaURL           string  `json:"meta"`
-	Bucket            string  `json:"bucket"`
-	StorageClass      string  `json:"storageClass"`
-	ReadOnly          bool    `json:"readOnly"`
-	NoSession         bool    `json:"noSession"`
-	NoBGJob           bool    `json:"noBGJob"`
-	OpenCache         float64 `json:"openCache"`
-	BackupMeta        int64   `json:"backupMeta"`
-	BackupSkipTrash   bool    `json:"backupSkipTrash"`
-	Heartbeat         int     `json:"heartbeat"`
-	CacheDir          string  `json:"cacheDir"`
-	CacheSize         int64   `json:"cacheSize"`
-	FreeSpace         string  `json:"freeSpace"`
-	AutoCreate        bool    `json:"autoCreate"`
-	CacheFullBlock    bool    `json:"cacheFullBlock"`
-	CacheChecksum     string  `json:"cacheChecksum"`
-	CacheEviction     string  `json:"cacheEviction"`
-	CacheScanInterval int     `json:"cacheScanInterval"`
-	CacheExpire       int64   `json:"cacheExpire"`
-	Writeback         bool    `json:"writeback"`
-	MemorySize        int     `json:"memorySize"`
-	Prefetch          int     `json:"prefetch"`
-	Readahead         int     `json:"readahead"`
-	UploadLimit       int     `json:"uploadLimit"`
-	DownloadLimit     int     `json:"downloadLimit"`
-	MaxUploads        int     `json:"maxUploads"`
-	MaxDeletes        int     `json:"maxDeletes"`
-	SkipDirNlink      int     `json:"skipDirNlink"`
-	IORetries         int     `json:"ioRetries"`
-	GetTimeout        int     `json:"getTimeout"`
-	PutTimeout        int     `json:"putTimeout"`
-	FastResolve       bool    `json:"fastResolve"`
-	AttrTimeout       float64 `json:"attrTimeout"`
-	EntryTimeout      float64 `json:"entryTimeout"`
-	DirEntryTimeout   float64 `json:"dirEntryTimeout"`
-	Debug             bool    `json:"debug"`
-	NoUsageReport     bool    `json:"noUsageReport"`
-	AccessLog         string  `json:"accessLog"`
-	PushGateway       string  `json:"pushGateway"`
-	PushInterval      int     `json:"pushInterval"`
-	PushAuth          string  `json:"pushAuth"`
-	PushLabels        string  `json:"pushLabels"`
-	PushGraphite      string  `json:"pushGraphite"`
+	MetaURL           string `json:"meta"`
+	Bucket            string `json:"bucket"`
+	StorageClass      string `json:"storageClass"`
+	ReadOnly          bool   `json:"readOnly"`
+	NoSession         bool   `json:"noSession"`
+	NoBGJob           bool   `json:"noBGJob"`
+	OpenCache         string `json:"openCache"`
+	BackupMeta        string `json:"backupMeta"`
+	BackupSkipTrash   bool   `json:"backupSkipTrash"`
+	Heartbeat         string `json:"heartbeat"`
+	CacheDir          string `json:"cacheDir"`
+	CacheSize         string `json:"cacheSize"`
+	FreeSpace         string `json:"freeSpace"`
+	AutoCreate        bool   `json:"autoCreate"`
+	CacheFullBlock    bool   `json:"cacheFullBlock"`
+	CacheChecksum     string `json:"cacheChecksum"`
+	CacheEviction     string `json:"cacheEviction"`
+	CacheScanInterval string `json:"cacheScanInterval"`
+	CacheExpire       string `json:"cacheExpire"`
+	Writeback         bool   `json:"writeback"`
+	MemorySize        string `json:"memorySize"`
+	Prefetch          int    `json:"prefetch"`
+	Readahead         string `json:"readahead"`
+	UploadLimit       string `json:"uploadLimit"`
+	DownloadLimit     string `json:"downloadLimit"`
+	MaxUploads        int    `json:"maxUploads"`
+	MaxDeletes        int    `json:"maxDeletes"`
+	SkipDirNlink      int    `json:"skipDirNlink"`
+	SkipDirMtime      string `json:"skipDirMtime"`
+	IORetries         int    `json:"ioRetries"`
+	GetTimeout        string `json:"getTimeout"`
+	PutTimeout        string `json:"putTimeout"`
+	FastResolve       bool   `json:"fastResolve"`
+	AttrTimeout       string `json:"attrTimeout"`
+	EntryTimeout      string `json:"entryTimeout"`
+	DirEntryTimeout   string `json:"dirEntryTimeout"`
+	Debug             bool   `json:"debug"`
+	NoUsageReport     bool   `json:"noUsageReport"`
+	AccessLog         string `json:"accessLog"`
+	PushGateway       string `json:"pushGateway"`
+	PushInterval      string `json:"pushInterval"`
+	PushAuth          string `json:"pushAuth"`
+	PushLabels        string `json:"pushLabels"`
+	PushGraphite      string `json:"pushGraphite"`
 }
 
 func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.FileSystem) int64 {
@@ -441,10 +442,11 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 		metaConf.Retries = jConf.IORetries
 		metaConf.MaxDeletes = jConf.MaxDeletes
 		metaConf.SkipDirNlink = jConf.SkipDirNlink
+		metaConf.SkipDirMtime = utils.Duration(jConf.SkipDirMtime)
 		metaConf.ReadOnly = jConf.ReadOnly
 		metaConf.NoBGJob = jConf.NoBGJob || jConf.NoSession
-		metaConf.OpenCache = time.Duration(jConf.OpenCache * 1e9)
-		metaConf.Heartbeat = time.Second * time.Duration(jConf.Heartbeat)
+		metaConf.OpenCache = utils.Duration(jConf.OpenCache)
+		metaConf.Heartbeat = utils.Duration(jConf.Heartbeat)
 		m := meta.NewClient(jConf.MetaURL, metaConf)
 		format, err := m.Load(true)
 		if err != nil {
@@ -477,10 +479,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 			registerer.MustRegister(collectors.NewGoCollector())
 
-			var interval time.Duration
-			if jConf.PushInterval > 0 {
-				interval = time.Second * time.Duration(jConf.PushInterval)
-			}
+			var interval = utils.Duration(jConf.PushInterval)
 			if jConf.PushGraphite != "" {
 				push2Graphite(jConf.PushGraphite, interval, registry, commonLabels)
 			}
@@ -515,25 +514,25 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			Compress:          format.Compression,
 			CacheDir:          jConf.CacheDir,
 			CacheMode:         0644, // all user can read cache
-			CacheSize:         uint64(jConf.CacheSize << 20),
+			CacheSize:         utils.ParseBytesStr("cache-size", jConf.CacheSize, 'M'),
 			FreeSpace:         float32(freeSpaceRatio),
 			AutoCreate:        jConf.AutoCreate,
 			CacheFullBlock:    jConf.CacheFullBlock,
 			CacheChecksum:     jConf.CacheChecksum,
 			CacheEviction:     jConf.CacheEviction,
-			CacheScanInterval: time.Second * time.Duration(jConf.CacheScanInterval),
-			CacheExpire:       time.Second * time.Duration(jConf.CacheExpire),
+			CacheScanInterval: utils.Duration(jConf.CacheScanInterval),
+			CacheExpire:       utils.Duration(jConf.CacheExpire),
 			MaxUpload:         jConf.MaxUploads,
 			MaxRetries:        jConf.IORetries,
-			UploadLimit:       int64(jConf.UploadLimit) * 1e6 / 8,
-			DownloadLimit:     int64(jConf.DownloadLimit) * 1e6 / 8,
+			UploadLimit:       utils.ParseMbpsStr("upload-limit", jConf.UploadLimit),
+			DownloadLimit:     utils.ParseMbpsStr("download-limit", jConf.DownloadLimit),
 			Prefetch:          jConf.Prefetch,
 			Writeback:         jConf.Writeback,
 			HashPrefix:        format.HashPrefix,
-			GetTimeout:        time.Second * time.Duration(jConf.GetTimeout),
-			PutTimeout:        time.Second * time.Duration(jConf.PutTimeout),
-			BufferSize:        uint64(jConf.MemorySize << 20),
-			Readahead:         jConf.Readahead << 20,
+			GetTimeout:        utils.Duration(jConf.GetTimeout),
+			PutTimeout:        utils.Duration(jConf.PutTimeout),
+			BufferSize:        utils.ParseBytesStr("memory-size", jConf.MemorySize, 'M'),
+			Readahead:         int(utils.ParseBytesStr("max-readahead", jConf.Readahead, 'M')),
 		}
 		if chunkConf.UploadLimit == 0 {
 			chunkConf.UploadLimit = format.UploadLimit * 1e6 / 8
@@ -559,11 +558,11 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			return nil
 		}
 		m.OnReload(func(fmt *meta.Format) {
-			if jConf.UploadLimit > 0 {
-				fmt.UploadLimit = int64(jConf.UploadLimit)
+			if chunkConf.UploadLimit > 0 {
+				fmt.UploadLimit = chunkConf.UploadLimit
 			}
-			if jConf.DownloadLimit > 0 {
-				fmt.DownloadLimit = int64(jConf.DownloadLimit)
+			if chunkConf.DownloadLimit > 0 {
+				fmt.DownloadLimit = chunkConf.DownloadLimit
 			}
 			store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
 		})
@@ -572,12 +571,12 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			Meta:            metaConf,
 			Format:          *format,
 			Chunk:           &chunkConf,
-			AttrTimeout:     time.Millisecond * time.Duration(jConf.AttrTimeout*1000),
-			EntryTimeout:    time.Millisecond * time.Duration(jConf.EntryTimeout*1000),
-			DirEntryTimeout: time.Millisecond * time.Duration(jConf.DirEntryTimeout*1000),
+			AttrTimeout:     utils.Duration(jConf.AttrTimeout),
+			EntryTimeout:    utils.Duration(jConf.EntryTimeout),
+			DirEntryTimeout: utils.Duration(jConf.DirEntryTimeout),
 			AccessLog:       jConf.AccessLog,
 			FastResolve:     jConf.FastResolve,
-			BackupMeta:      time.Second * time.Duration(jConf.BackupMeta),
+			BackupMeta:      utils.Duration(jConf.BackupMeta),
 			BackupSkipTrash: jConf.BackupSkipTrash,
 		}
 		if !jConf.ReadOnly && !jConf.NoSession && !jConf.NoBGJob && conf.BackupMeta > 0 {

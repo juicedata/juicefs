@@ -473,7 +473,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		} else if n == "nonempty" || n == "ro" {
 		} else if n == "debug" {
 			opt.Debug = true
-		} else if n == "writeback_cache" || n == "writeback" {
+		} else if n == "writeback_cache" {
 			opt.EnableWriteback = true
 		} else if strings.TrimSpace(n) != "" {
 			opt.Options = append(opt.Options, strings.TrimSpace(n))

@@ -71,7 +71,7 @@ func (s *ibmcos) Limits() Limits {
 	}
 }
 
-func (s *ibmcos) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (s *ibmcos) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	params := &s3.GetObjectInput{Bucket: &s.bucket, Key: &key}
 	if off > 0 || limit > 0 {
 		var r string
@@ -84,17 +84,18 @@ func (s *ibmcos) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 	var reqID string
 	resp, err := s.s3.GetObjectWithContext(ctx, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	ReqIDCache.put(key, reqID)
+	attrs := applyGetters(getters...)
+	attrs.SetRequestID(reqID)
 	if err != nil {
 		return nil, err
 	}
 	if resp.StorageClass != nil {
-		return scReadCloser{resp.Body, *resp.StorageClass}, nil
+		attrs.SetStorageClass(*resp.StorageClass)
 	}
 	return resp.Body, nil
 }
 
-func (s *ibmcos) Put(key string, in io.Reader) error {
+func (s *ibmcos) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b
@@ -117,7 +118,8 @@ func (s *ibmcos) Put(key string, in io.Reader) error {
 	}
 	var reqID string
 	_, err := s.s3.PutObjectWithContext(ctx, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	ReqIDCache.put(key, reqID)
+	attrs := applyGetters(getters...)
+	attrs.SetRequestID(reqID).SetStorageClass(s.sc)
 	return err
 }
 
@@ -156,14 +158,15 @@ func (s *ibmcos) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (s *ibmcos) Delete(key string) error {
+func (s *ibmcos) Delete(key string, getters ...AttrGetter) error {
 	param := s3.DeleteObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
 	var reqID string
 	_, err := s.s3.DeleteObjectWithContext(ctx, &param, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	ReqIDCache.put(key, reqID)
+	attrs := applyGetters(getters...)
+	attrs.SetRequestID(reqID)
 	return err
 }
 
@@ -291,12 +294,9 @@ func (s *ibmcos) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func (s *ibmcos) SetStorageClass(sc string) {
+func (s *ibmcos) SetStorageClass(sc string) error {
 	s.sc = sc
-}
-
-func (s *ibmcos) StorageClass() string {
-	return s.sc
+	return nil
 }
 
 func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage, error) {

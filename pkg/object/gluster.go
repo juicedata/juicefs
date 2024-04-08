@@ -85,7 +85,7 @@ func (g *gluster) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 	}
 }
 
-func (g *gluster) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (g *gluster) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	f, err := g.vol().Open(key)
 	if err != nil {
 		return nil, err
@@ -110,7 +110,7 @@ func (g *gluster) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return f, nil
 }
 
-func (g *gluster) Put(key string, in io.Reader) error {
+func (g *gluster) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	v := g.vol()
 	if strings.HasSuffix(key, dirSuffix) {
 		return v.MkdirAll(key, os.FileMode(0777))
@@ -146,7 +146,7 @@ func (g *gluster) Put(key string, in io.Reader) error {
 	return err
 }
 
-func (g *gluster) Delete(key string) error {
+func (g *gluster) Delete(key string, getters ...AttrGetter) error {
 	v := g.vol()
 	err := v.Unlink(key)
 	if err != nil && strings.Contains(err.Error(), "is a directory") {

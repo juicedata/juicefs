@@ -105,7 +105,7 @@ func (s *s3client) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
-	var sc = defaultStorageClass
+	var sc = DefaultStorageClass
 	if r.StorageClass != nil {
 		sc = *r.StorageClass
 	}
@@ -118,7 +118,7 @@ func (s *s3client) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (s *s3client) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (s *s3client) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	params := &s3.GetObjectInput{Bucket: &s.bucket, Key: &key}
 	if off > 0 || limit > 0 {
 		var r string
@@ -131,7 +131,8 @@ func (s *s3client) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 	var reqID string
 	resp, err := s.s3.GetObjectWithContext(ctx, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	ReqIDCache.put(key, reqID) // TODO: set reqID to the io.ReadCloser?
+	attrs := applyGetters(getters...)
+	attrs.SetRequestID(reqID)
 	if err != nil {
 		return nil, err
 	}
@@ -146,12 +147,12 @@ func (s *s3client) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		}
 	}
 	if resp.StorageClass != nil {
-		return scReadCloser{resp.Body, *resp.StorageClass}, nil
+		attrs.SetStorageClass(*resp.StorageClass)
 	}
 	return resp.Body, nil
 }
 
-func (s *s3client) Put(key string, in io.Reader) error {
+func (s *s3client) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b
@@ -178,7 +179,8 @@ func (s *s3client) Put(key string, in io.Reader) error {
 	}
 	var reqID string
 	_, err := s.s3.PutObjectWithContext(ctx, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	ReqIDCache.put(key, reqID)
+	attrs := applyGetters(getters...)
+	attrs.SetRequestID(reqID).SetStorageClass(s.sc)
 	return err
 }
 
@@ -196,7 +198,7 @@ func (s *s3client) Copy(dst, src string) error {
 	return err
 }
 
-func (s *s3client) Delete(key string) error {
+func (s *s3client) Delete(key string, getters ...AttrGetter) error {
 	param := s3.DeleteObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
@@ -206,7 +208,8 @@ func (s *s3client) Delete(key string) error {
 	if err != nil && strings.Contains(err.Error(), "NoSuchKey") {
 		err = nil
 	}
-	ReqIDCache.put(key, reqID)
+	attrs := applyGetters(getters...)
+	attrs.SetRequestID(reqID)
 	return err
 }
 
@@ -236,7 +239,7 @@ func (s *s3client) List(prefix, marker, delimiter string, limit int64, followLin
 		if !strings.HasPrefix(oKey, prefix) || oKey < marker {
 			return nil, fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, marker)
 		}
-		var sc = defaultStorageClass
+		var sc = DefaultStorageClass
 		if o.StorageClass != nil {
 			sc = *o.StorageClass
 		}
@@ -358,12 +361,9 @@ func (s *s3client) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func (s *s3client) SetStorageClass(sc string) {
+func (s *s3client) SetStorageClass(sc string) error {
 	s.sc = sc
-}
-
-func (s *s3client) StorageClass() string {
-	return s.sc
+	return nil
 }
 
 func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {
