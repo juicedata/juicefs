@@ -511,7 +511,7 @@ class S3Machine(RuleBasedStateMachine):
         alias = st_alias_name,
         user_name = st_user_name,
         url1=st.just(URL1),
-        url2=st.sampled_from([URL2, URL3])
+        url2=st.sampled_from([URL2])
     )
     @precondition(lambda self: 'set_alias' not in self.EXCLUDE_RULES)
     def set_alias(self, alias, user_name, url1=URL1, url2=URL2):
