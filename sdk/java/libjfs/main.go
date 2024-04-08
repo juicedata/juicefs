@@ -514,7 +514,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			Compress:          format.Compression,
 			CacheDir:          jConf.CacheDir,
 			CacheMode:         0644, // all user can read cache
-			CacheSize:         utils.ParseBytesStr(jConf.CacheSize, 'M'),
+			CacheSize:         utils.ParseBytesStr("cache-size", jConf.CacheSize, 'M'),
 			FreeSpace:         float32(freeSpaceRatio),
 			AutoCreate:        jConf.AutoCreate,
 			CacheFullBlock:    jConf.CacheFullBlock,
@@ -524,15 +524,15 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			CacheExpire:       utils.Duration(jConf.CacheExpire),
 			MaxUpload:         jConf.MaxUploads,
 			MaxRetries:        jConf.IORetries,
-			UploadLimit:       utils.ParseMbpsStr(jConf.UploadLimit),
-			DownloadLimit:     utils.ParseMbpsStr(jConf.DownloadLimit),
+			UploadLimit:       utils.ParseMbpsStr("upload-limit", jConf.UploadLimit),
+			DownloadLimit:     utils.ParseMbpsStr("download-limit", jConf.DownloadLimit),
 			Prefetch:          jConf.Prefetch,
 			Writeback:         jConf.Writeback,
 			HashPrefix:        format.HashPrefix,
 			GetTimeout:        utils.Duration(jConf.GetTimeout),
 			PutTimeout:        utils.Duration(jConf.PutTimeout),
-			BufferSize:        utils.ParseBytesStr(jConf.MemorySize, 'M'),
-			Readahead:         int(utils.ParseBytesStr(jConf.Readahead, 'M')),
+			BufferSize:        utils.ParseBytesStr("memory-size", jConf.MemorySize, 'M'),
+			Readahead:         int(utils.ParseBytesStr("max-readahead", jConf.Readahead, 'M')),
 		}
 		if chunkConf.UploadLimit == 0 {
 			chunkConf.UploadLimit = format.UploadLimit * 1e6 / 8

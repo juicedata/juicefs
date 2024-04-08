@@ -28,16 +28,10 @@ func ParseBytes(ctx *cli.Context, key string, unit byte) uint64 {
 	if len(str) == 0 {
 		return 0
 	}
-
-	val, err := parsBytesStr(str, unit)
-	if err != nil {
-		logger.Fatalf("Invalid value \"%s\" for option \"--%s\"", str, key)
-	}
-
-	return val
+	return ParseBytesStr(key, str, unit)
 }
 
-func parsBytesStr(str string, unit byte) (uint64, error) {
+func ParseBytesStr(key, str string, unit byte) uint64 {
 	s := str
 	if c := s[len(s)-1]; c < '0' || c > '9' {
 		unit = c
@@ -65,17 +59,9 @@ func parsBytesStr(str string, unit byte) (uint64, error) {
 		val *= float64(uint64(1) << shift)
 	}
 	if err != nil {
-		return 0, err
+		logger.Fatalf("Invalid value \"%s\" for \"%s\"", str, key)
 	}
-	return uint64(val), nil
-}
-
-func ParseBytesStr(str string, unit byte) uint64 {
-	u, err := parsBytesStr(str, unit)
-	if err != nil {
-		logger.Fatalf("Invalid value \"%s\"", str)
-	}
-	return u
+	return uint64(val)
 }
 
 func ParseMbps(ctx *cli.Context, key string) int64 {
@@ -84,15 +70,10 @@ func ParseMbps(ctx *cli.Context, key string) int64 {
 		return 0
 	}
 
-	val, err := parseMbpsStr(str)
-	if err != nil {
-		logger.Fatalf("Invalid value \"%s\" for option \"--%s\"", str, key)
-	}
-
-	return val
+	return ParseMbpsStr(key, str)
 }
 
-func parseMbpsStr(str string) (int64, error) {
+func ParseMbpsStr(key, str string) int64 {
 	s := str
 	var unit byte = 'M'
 	if c := s[len(s)-1]; c < '0' || c > '9' {
@@ -113,15 +94,10 @@ func parseMbpsStr(str string) (int64, error) {
 			err = errors.New("invalid unit")
 		}
 	}
-	return int64(val), err
-}
-
-func ParseMbpsStr(str string) int64 {
-	val, err := parseMbpsStr(str)
 	if err != nil {
-		logger.Fatalf("Invalid value \"%s\"", str)
+		logger.Fatalf("Invalid value \"%s\" for \"%s\"", str, key)
 	}
-	return val
+	return int64(val)
 }
 
 func Mbps(val int64) string {
