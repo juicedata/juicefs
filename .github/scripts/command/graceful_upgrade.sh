@@ -19,7 +19,10 @@ if [[ ! -x "./juicefs-1.1" ]]; then
     ./juicefs-1.1 version | grep "version 1.1"
 fi
 [[ ! -f my-priv-key.pem ]] && openssl genrsa -out my-priv-key.pem -aes256  -passout pass:12345678 2048
-
+if [[ ! -d "vdbench" ]]; then
+    wget -q https://s.juicefs.com/static/bench/vdbench50407.zip
+    unzip vdbench50407.zip -d vdbench
+fi
 
 test_kill_mount_process()
 {
@@ -102,6 +105,31 @@ test_update_on_failure(){
     count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
     [[ $count -ne 0 ]] && echo "mount process count should be 0, count=$count" && exit 1 || true
 }
+
+test_update_on_vdbench(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /tmp/jfs --buffer-size 300
+    sleep 1s
+    sed -i 's/elapsed=[0-9]\+/elapsed=120/g' .github/workflows/resources/vdbench_long_run.conf
+    vdbench/vdbench -f .github/workflows/resources/vdbench_long_run.conf -jn >vdbench.log 2>&1 &
+    pid=$!
+    trap "kill -9 $pid > /dev/null || true" EXIT
+    for i in {1..20}; do
+        echo "update buffer-size to $((i+300))"
+        ./juicefs mount -d $META_URL /tmp/jfs --buffer-size $((i+300))
+        wait_command_success "ps -ef | grep juicefs | grep mount | grep \"buffer-size $((i+300))\" | wc -l" 2
+        echo abc | tee /tmp/jfs/test
+        sleep 5s
+        grep -i "java.lang.RuntimeException" vdbench.log && echo "vdbench failed" && exit 1 || true
+    done
+    wait $pid
+    # kill -9 $pid > /dev/null 2>&1 || true
+    ps -ef | grep juicefs | grep mount | grep -v grep || true
+    count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
+    [[ $count -ne 2 ]] && echo "mount process count should be 2, count=$count" && exit 1 || true
+}
+
 #TODO: fio test failed on database locked.
 test_update_on_fio(){
     prepare_test
