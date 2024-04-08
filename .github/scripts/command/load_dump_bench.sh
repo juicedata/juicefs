@@ -63,9 +63,13 @@ do_load_dump_with_big_dir(){
   python3 .github/scripts/db.py --name load_big_dir --result $runtime --version $version --meta $META --storage file
   start=`date +%s`
   if [ "$with_subdir" = true ] ; then
-    ./juicefs dump $META_URL dump.json --subdir test --fast
+    ./juicefs dump $META_URL dump1.json --subdir test --fast
+    ./juicefs dump $META_URL dump2.json --subdir test
+    diff dump1.json dump2.json
   else
-    ./juicefs dump $META_URL dump.json --fast
+    ./juicefs dump $META_URL dump1.json --fast
+    ./juicefs dump $META_URL dump2.json
+    diff dump1.json dump2.json
   fi
   end=`date +%s`
   runtime=$((end-start))
