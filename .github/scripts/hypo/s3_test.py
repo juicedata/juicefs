@@ -65,5 +65,6 @@ class TestS3(unittest.TestCase):
         state.policy_info(alias=v1, policy_name=v5)
         state.teardown()
 
+
 if __name__ == '__main__':
     unittest.main()

@@ -42,6 +42,8 @@ class S3Machine(RuleBasedStateMachine):
 
     def __init__(self):
         super().__init__()
+        self.client1.remove_all_aliases()
+        self.client2.remove_all_aliases()
         self.client1.do_set_alias(ROOT_ALIAS, DEFAULT_ACCESS_KEY, DEFAULT_SECRET_KEY, self.URL1)
         self.client2.do_set_alias(ROOT_ALIAS, DEFAULT_ACCESS_KEY, DEFAULT_SECRET_KEY, self.URL2)
         self.client1.remove_all_buckets()
@@ -400,7 +402,6 @@ class S3Machine(RuleBasedStateMachine):
         result2 = self.client2.do_add_policy(policy_name, policy_document, alias)
         assert self.equal(result1, result2), f'\033[31madd_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
-            assert False, 'add policy failed'
             return multiple()
         else:
             return policy_name

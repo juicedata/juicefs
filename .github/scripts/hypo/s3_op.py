@@ -466,3 +466,10 @@ class S3Client():
         self.stats.success('do_list_aliases')
         self.logger.info(f'do_list_aliases succeed')
         return sorted([line.strip() for line in result.split("\n") if line.strip() and ':' not in line])
+    
+    def remove_all_aliases(self):
+        aliases = self.do_list_aliases()
+        for alias in aliases:
+            if alias.startswith(self.prefix+'_'):
+                self.run_cmd(f'mc alias remove {alias}')
+                print(f"Alias '{alias}' removed successfully.")
