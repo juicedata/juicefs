@@ -547,7 +547,7 @@ if __name__ == '__main__':
     settings.register_profile("dev", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, 
-        phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
+        phases=[Phase.reuse, Phase.generate, Phase.target])
     profile = os.environ.get('PROFILE', 'dev')
     settings.load_profile(profile)
     
