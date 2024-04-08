@@ -204,7 +204,7 @@ func (s *sliceReader) run() {
 	p := s.page.Slice(0, int(need))
 	defer p.Release()
 	var n int
-	ctx := context.TODO()
+	ctx := context.WithValue(context.TODO(), meta.CtxKey("inode"), inode) // Output inode in log for debugging
 	n = f.r.Read(ctx, p, slices, (uint32(s.block.off))%meta.ChunkSize)
 
 	f.Lock()
@@ -808,8 +808,8 @@ func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.P
 		n, err := reader.ReadAt(ctx, p, off+int(s.Off))
 		p.Release()
 		if n == 0 && err != nil {
-			logger.Warningf("fail to read sliceId %d (off:%d, size:%d, clen: %d): %s",
-				s.Id, off+int(s.Off), len(buf)-read, s.Size, err)
+			logger.Warningf("fail to read sliceId %d (off:%d, size:%d, clen: %d, inode: %d): %s",
+				s.Id, off+int(s.Off), len(buf)-read, s.Size, ctx.Value(meta.CtxKey("inode")), err)
 			return err
 		}
 		read += n
