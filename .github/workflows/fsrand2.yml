@@ -83,8 +83,8 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs mount -d $meta_url /tmp/myjfs --no-usage-report --enable-xattr 
-          if [ ! -f /tmp/myjfs/.accesslog ]; then
+          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr 
+          if [ ! -f /tmp/jfs/.accesslog ]; then
             echo "<FATAL>: mount failed"
             exit 1
           fi
