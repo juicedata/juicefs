@@ -1333,19 +1333,16 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				return err
 			}
 
-			if rule.IsMinimal() {
-				// simple acl as default
-				n.Mode = (mode & 0xFE00) | rule.GetMode()
-			} else {
-				cRule := rule.ChildAccessACL(mode)
+			newMode := mode
+			cRule := rule.ChildAccessACL(&newMode)
+			if !cRule.IsMinimal() {
 				id, err := m.insertACL(s, cRule)
 				if err != nil {
 					return err
 				}
-
 				n.AccessACLId = id
-				n.Mode = (mode & 0xFE00) | cRule.GetMode()
 			}
+			n.Mode = (mode & 0xFE00) | newMode
 		} else {
 			n.Mode = mode & ^cumask
 		}

@@ -216,15 +216,12 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 
 		// set access acl by parent's default acl
 		rule := p.defACL
-
-		if rule.IsMinimal() {
-			// simple acl as default
-			n.mode = (mode & 0xFE00) | rule.GetMode()
-		} else {
-			cRule := rule.ChildAccessACL(mode)
+		newMode := mode
+		cRule := rule.ChildAccessACL(&newMode)
+		if !cRule.IsMinimal() {
 			n.accACL = cRule
-			n.mode = (mode & 0xFE00) | cRule.GetMode()
 		}
+		n.mode = (mode & 0xFE00) | newMode
 	} else {
 		n.mode = mode & ^umask
 	}
@@ -1671,7 +1668,7 @@ func TestFSOps(t *testing.T) {
 	flag.Set("timeout", "10s")
 	flag.Set("rapid.steps", "200")
 	flag.Set("rapid.checks", "5000")
-	//flag.Set("rapid.seed", time.Now().String())
+	// flag.Set("rapid.seed", time.Now().String())
 	flag.Set("rapid.seed", "1")
 	rapid.Check(t, rapid.Run[*fsMachine]())
 }
