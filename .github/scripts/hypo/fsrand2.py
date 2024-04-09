@@ -580,14 +580,14 @@ if __name__ == '__main__':
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, 
         phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
-    settings.register_profile("schedule", max_examples=2000, verbosity=Verbosity.debug, 
+    settings.register_profile("schedule", max_examples=1000, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=200, deadline=None, \
         report_multiple_bugs=False, 
-        phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
-    settings.register_profile("pull_request", max_examples=100, verbosity=Verbosity.debug, 
-        print_blob=True, stateful_step_count=50, deadline=None, \
-        report_multiple_bugs=False, derandomize=True, 
-        phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
+        phases=[Phase.reuse, Phase.generate, Phase.target])
+    settings.register_profile("pull_request", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
+        print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
+        report_multiple_bugs=False, 
+        phases=[Phase.reuse, Phase.generate, Phase.target])
     settings.register_profile("generate", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, \
