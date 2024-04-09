@@ -1322,6 +1322,8 @@ func InitMetrics(registerer prometheus.Registerer) {
 	registerer.MustRegister(readSizeHistogram)
 	registerer.MustRegister(writtenSizeHistogram)
 	registerer.MustRegister(opsDurationsHistogram)
+	registerer.MustRegister(opsTotal)
+	registerer.MustRegister(opsDurations)
 	registerer.MustRegister(compactSizeHistogram)
 }
 
