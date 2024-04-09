@@ -26,10 +26,18 @@ import (
 )
 
 var (
-	opsDurationsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	opsDurationsHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "fuse_ops_durations_histogram_seconds",
 		Help:    "Operations latency distributions.",
 		Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
+	})
+	opsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "fuse_ops_total",
+		Help: "Total number of operations.",
+	}, []string{"method"})
+	opsDurations = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "fuse_ops_durations_seconds",
+		Help: "Operations latency in seconds.",
 	}, []string{"method"})
 )
 
@@ -50,7 +58,9 @@ func init() {
 
 func logit(ctx Context, method, format string, args ...interface{}) {
 	used := ctx.Duration()
-	opsDurationsHistogram.WithLabelValues(method).Observe(used.Seconds())
+	opsDurationsHistogram.Observe(used.Seconds())
+	opsTotal.WithLabelValues(method).Inc()
+	opsDurations.WithLabelValues(method).Add(used.Seconds())
 	readerLock.RLock()
 	defer readerLock.RUnlock()
 	if len(readers) == 0 && used < time.Second*10 {
