@@ -197,22 +197,26 @@ func (r *Rule) GetMode() uint16 {
 // ChildAccessACL return the child node access acl with this default acl
 // ref: https://github.com/torvalds/linux/blob/20cb38a7af88dc40095da7c2c9094da3873fea23/fs/posix_acl.c#L445-L505
 func (r *Rule) ChildAccessACL(mode *uint16) *Rule {
+	nMode := *mode
 	cRule := &Rule{}
-	cRule.Owner = (*mode >> 6) & 7 & r.Owner
-	cRule.Other = *mode & 7 & r.Other
-	*mode = (cRule.Owner&7)<<6 | (cRule.Other & 7)
+	cRule.Owner = (nMode >> 6) & 7 & r.Owner
+	nMode = (nMode &^ (7 << 6)) | (cRule.Owner << 6)
+	cRule.Other = nMode & 7 & r.Other
+	nMode = (nMode &^ 7) | cRule.Other
 
 	cRule.Group = r.Group
 	cRule.Mask = r.Mask
-	if r.Mask != 0xFFFF {
-		cRule.Mask &= (*mode >> 3) & 7
-		*mode |= ((cRule.Mask & 7) << 3)
+	if cRule.Mask != 0xFFFF {
+		cRule.Mask &= (nMode >> 3) & 7
+		nMode = (nMode &^ (7 << 3)) | (cRule.Mask << 3)
 	} else {
-		cRule.Group &= (*mode >> 3) & 7
-		*mode |= ((cRule.Group & 7) << 3)
+		cRule.Group &= (nMode >> 3) & 7
+		nMode = (nMode &^ (7 << 3)) | (cRule.Group << 3)
 	}
 	cRule.NamedUsers = r.NamedUsers
 	cRule.NamedGroups = r.NamedGroups
+
+	*mode = (*mode & 0xFE00) | nMode
 	return cRule
 }
 

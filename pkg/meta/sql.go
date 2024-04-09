@@ -1333,8 +1333,8 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				return err
 			}
 
-			newMode := mode
-			cRule := rule.ChildAccessACL(&newMode)
+			cRule := rule.ChildAccessACL(&mode)
+			n.Mode = mode
 			if !cRule.IsMinimal() {
 				id, err := m.insertACL(s, cRule)
 				if err != nil {
@@ -1342,7 +1342,6 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				}
 				n.AccessACLId = id
 			}
-			n.Mode = (mode & 0xFE00) | newMode
 		} else {
 			n.Mode = mode & ^cumask
 		}

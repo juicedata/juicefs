@@ -1253,8 +1253,8 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				return err
 			}
 
-			newMode := mode
-			cRule := rule.ChildAccessACL(&newMode)
+			cRule := rule.ChildAccessACL(&mode)
+			attr.Mode = mode
 			if !cRule.IsMinimal() {
 				id, err := m.insertACL(ctx, tx, cRule)
 				if err != nil {
@@ -1262,7 +1262,6 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				}
 				attr.AccessACL = id
 			}
-			attr.Mode = (mode & 0xFE00) | newMode
 		} else {
 			attr.Mode = mode & ^cumask
 		}
