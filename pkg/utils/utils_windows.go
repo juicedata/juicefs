@@ -19,6 +19,8 @@ package utils
 import (
 	"os"
 	"os/exec"
+	"strconv"
+	"syscall"
 
 	"golang.org/x/sys/windows"
 )
@@ -48,3 +50,7 @@ func GetSysInfo() string {
 }
 
 func GetUmask() int { return 0 }
+
+func ErrnoName(err syscall.Errno) string {
+	return strconv.Itoa(int(err))
+}

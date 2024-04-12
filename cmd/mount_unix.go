@@ -115,7 +115,7 @@ func loadConfig(path string) (string, *vfs.Config, error) {
 			return d, &conf, err
 		}
 		if !os.IsNotExist(err) {
-			logger.Fatalf("read .config: %s", err)
+			return "", nil, fmt.Errorf("read %s: %w", d, err)
 		}
 	}
 	return "", nil, fmt.Errorf("%s is not inside JuiceFS", path)
@@ -150,6 +150,9 @@ func watchdog(ctx context.Context, mp string) {
 						logger.Infof("watching %s, pid %d", mp, conf.Pid)
 						pid = conf.Pid
 						agentAddr = conf.DebugAgent
+					} else {
+						logger.Warnf("load config: %s", err)
+						continue
 					}
 				}
 			}

@@ -219,7 +219,7 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 
 		if rule.IsMinimal() {
 			// simple acl as default
-			n.mode = (mode & 0xFE00) | rule.GetMode()
+			n.mode = mode & (0xFE00 | rule.GetMode())
 		} else {
 			cRule := rule.ChildAccessACL(mode)
 			n.accACL = cRule
