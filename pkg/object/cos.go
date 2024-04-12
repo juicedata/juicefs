@@ -297,7 +297,7 @@ func autoCOSEndpoint(bucketName, accessKey, secretKey, token string) (string, er
 		}
 	}
 
-	return "", fmt.Errorf("bucket %q doesnot exist", bucketName)
+	return "", fmt.Errorf("bucket %q doesn't exist", bucketName)
 }
 
 func newCOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
