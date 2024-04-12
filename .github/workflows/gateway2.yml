@@ -94,12 +94,6 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $meta_url localhost:9005 --multi-buckets --keep-etag -d
           
-      - name: Start another gateway
-        run: |
-          source .github/scripts/start_meta_engine.sh
-          meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $meta_url localhost:9006 --multi-buckets --keep-etag -d
-      
       - name: Start minio
         run: |
           sudo wget -q https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z -O /usr/local/bin/mc && sudo chmod +x /usr/local/bin/mc
