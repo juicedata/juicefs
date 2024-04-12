@@ -50,7 +50,7 @@ func (v *VFS) StatFS(ctx Context, ino Ino) (st *Statfs, err syscall.Errno) {
 	st.Avail = availspace
 	st.Files = iused + iavail
 	st.Favail = iavail
-	logit(ctx, "statfs", "(%d): OK (%d,%d,%d,%d)", ino, totalspace-availspace, availspace, iused, iavail)
+	logit(ctx, "statfs", err, "(%d): (%d,%d,%d,%d)", ino, totalspace-availspace, availspace, iused, iavail)
 	return
 }
 
@@ -75,7 +75,7 @@ func accessTest(attr *Attr, mmode uint16, uid uint32, gid uint32) syscall.Errno 
 }
 
 func (v *VFS) Access(ctx Context, ino Ino, mask int) (err syscall.Errno) {
-	defer func() { logit(ctx, "access", "(%d,0x%X): %s", ino, mask, strerr(err)) }()
+	defer func() { logit(ctx, "access", err, "(%d,0x%X)", ino, mask) }()
 	var mmask uint16
 	if mask&unix.R_OK != 0 {
 		mmask |= MODE_MASK_R
@@ -144,7 +144,7 @@ func setattrStr(set int, mode, uid, gid uint32, atime, mtime int64, size uint64)
 func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid uint32, atime, mtime int64, atimensec, mtimensec uint32, size uint64) (entry *meta.Entry, err syscall.Errno) {
 	str := setattrStr(set, mode, uid, gid, atime, mtime, size)
 	defer func() {
-		logit(ctx, "setattr", "(%d[%d],0x%X,[%s]): %s%s", ino, fh, set, str, strerr(err), (*Entry)(entry))
+		logit(ctx, "setattr", err, "(%d[%d],0x%X,[%s]):%s", ino, fh, set, str, (*Entry)(entry))
 	}()
 	if IsSpecialNode(ino) {
 		n := getInternalNode(ino)
@@ -219,7 +219,7 @@ func (l lockType) String() string {
 
 func (v *VFS) Getlk(ctx Context, ino Ino, fh uint64, owner uint64, start, len *uint64, typ *uint32, pid *uint32) (err syscall.Errno) {
 	defer func() {
-		logit(ctx, "getlk", "(%d,%d,%016X): %s (%d,%d,%s,%d)", ino, fh, owner, strerr(err), *start, *len, lockType(*typ), *pid)
+		logit(ctx, "getlk", err, "(%d,%d,%016X): (%d,%d,%s,%d)", ino, fh, owner, *start, *len, lockType(*typ), *pid)
 	}()
 	if lockType(*typ).String() == "X" {
 		return syscall.EINVAL
@@ -238,7 +238,7 @@ func (v *VFS) Getlk(ctx Context, ino Ino, fh uint64, owner uint64, start, len *u
 
 func (v *VFS) Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end uint64, typ uint32, pid uint32, block bool) (err syscall.Errno) {
 	defer func() {
-		logit(ctx, "setlk", "(%d,%d,%016X,%d,%d,%s,%t,%d): %s", ino, fh, owner, start, end, lockType(typ), block, pid, strerr(err))
+		logit(ctx, "setlk", err, "(%d,%d,%016X,%d,%d,%s,%t,%d)", ino, fh, owner, start, end, lockType(typ), block, pid)
 	}()
 	if lockType(typ).String() == "X" {
 		return syscall.EINVAL
@@ -271,7 +271,7 @@ func (v *VFS) Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end ui
 
 func (v *VFS) Flock(ctx Context, ino Ino, fh uint64, owner uint64, typ uint32, block bool) (err syscall.Errno) {
 	var name string
-	defer func() { logit(ctx, "flock", "(%d,%d,%016X,%s,%t): %s", ino, fh, owner, name, block, strerr(err)) }()
+	defer func() { logit(ctx, "flock", err, "(%d,%d,%016X,%s,%t)", ino, fh, owner, name, block) }()
 	switch typ {
 	case syscall.F_RDLCK:
 		name = "LOCKSH"
@@ -323,7 +323,7 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 		FS_XFLAG_IMMUTABLE = 0x00000008
 		FS_XFLAG_APPEND    = 0x00000010
 	)
-	defer func() { logit(ctx, "ioctl", "(%d,0x%X,0x%X,%v,%v): %s", ino, cmd, arg, bufIn, bufOut, strerr(err)) }()
+	defer func() { logit(ctx, "ioctl", err, "(%d,0x%X,0x%X,%v,%v)", ino, cmd, arg, bufIn, bufOut) }()
 	switch cmd {
 	default:
 		return syscall.ENOTTY
