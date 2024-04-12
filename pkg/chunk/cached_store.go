@@ -412,6 +412,9 @@ func (s *wSlice) upload(indx int) {
 	blen := s.blockSize(indx)
 	key := s.key(indx)
 	pages := s.pages[indx]
+	if pages == nil {
+		panic(fmt.Sprintf("block #%d is nil, concurrent upload?", indx))
+	}
 	s.pages[indx] = nil
 	s.pendings++
 
