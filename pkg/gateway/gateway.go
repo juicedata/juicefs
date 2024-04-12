@@ -200,6 +200,10 @@ func (n *jfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelet
 	if !n.gConf.MultiBucket {
 		return minio.BucketNotEmpty{Bucket: bucket}
 	}
+	if eno := n.fs.Delete(mctx, n.path(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket, minio.BucketMetadataFile)); eno != 0 {
+		logger.Errorf("delete bucket metadata: %s", eno)
+	}
+	_ = n.fs.Delete(mctx, n.path(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket))
 	eno := n.fs.Delete(mctx, n.path(bucket))
 	return jfsToObjectErr(ctx, eno, bucket)
 }
@@ -214,6 +218,10 @@ func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 		}
 	}
 	eno := n.fs.Mkdir(mctx, n.path(bucket), 0777, n.gConf.Umask)
+	metadata := minio.NewBucketMetadata(bucket)
+	if err := metadata.Save(ctx, n); err != nil {
+		return err
+	}
 	return jfsToObjectErr(ctx, eno, bucket)
 }
 
