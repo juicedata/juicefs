@@ -117,6 +117,7 @@ func (s *RestfulStorage) request(method, key string, body io.Reader, headers map
 			req.ContentLength = st.Size()
 		}
 	}
+	req.Header.Set("User-Agent", UserAgent)
 	now := time.Now().UTC().Format(http.TimeFormat)
 	req.Header.Add("Date", now)
 	for key := range headers {

@@ -287,6 +287,8 @@ func newBOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	if err != nil {
 		return nil, err
 	}
+	bosClient.Config.Credentials.SessionToken = token
+	bosClient.Config.UserAgent = UserAgent
 	return &bosclient{bucket: bucketName, c: bosClient}, nil
 }
 

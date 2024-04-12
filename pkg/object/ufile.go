@@ -103,6 +103,7 @@ func (u *ufile) Create() error {
 	if err != nil {
 		return err
 	}
+	req.Header.Add("User-Agent", UserAgent)
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err

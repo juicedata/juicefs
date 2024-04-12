@@ -312,6 +312,7 @@ func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage
 	conf := aws.NewConfig().
 		WithRegion(region).
 		WithEndpoint(serviceEndpoint).
+		WithHTTPClient(httpClient).
 		WithCredentials(ibmiam.NewStaticCredentials(aws.NewConfig(),
 			authEndpoint, apiKey, serviceInstanceID)).
 		WithS3ForcePathStyle(true)

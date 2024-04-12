@@ -49,7 +49,7 @@ func (t *tosClient) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,
 		IsSupportUploadPartCopy:  true,
-		MinPartSize:              5 << 20,
+		MinPartSize:              4 << 20,
 		MaxPartSize:              5 << 30,
 		MaxPartCount:             10000,
 	}
@@ -290,6 +290,7 @@ func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		hostParts[1]+"."+hostParts[2],
 		tos.WithRegion(strings.TrimSuffix(hostParts[1], "tos-")),
 		tos.WithCredentials(credentials),
+		tos.WithHTTPTransport(httpClient.Transport),
 		tos.WithEnableVerifySSL(httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify))
 	if err != nil {
 		return nil, err

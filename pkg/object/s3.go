@@ -562,6 +562,10 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		return nil, fmt.Errorf("Fail to create aws session: %s", err)
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
+	var a = request.NamedHandler{
+		Name: "juicefs.s3.disableChecksum",
+		Fn:   request.MakeAddToUserAgentHandler("JuiceFS", UserAgent),
+	}
 	return &s3client{bucket: bucketName, s3: s3.New(ses), ses: ses, disableChecksum: disableChecksum}, nil
 }
 

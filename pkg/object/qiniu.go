@@ -64,6 +64,7 @@ func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("User-Agent", UserAgent)
 	now := time.Now().UTC().Format(http.TimeFormat)
 	req.Header.Add("Date", now)
 	if off > 0 || limit > 0 {

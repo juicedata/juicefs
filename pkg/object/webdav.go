@@ -102,6 +102,7 @@ func (w *webdav) Get(key string, off, limit int64, getters ...AttrGetter) (io.Re
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("User-Agent", UserAgent)
 	if limit > 0 {
 		req.Header.Add("Range", fmt.Sprintf("bytes=%d-%d", off, off+limit-1))
 	} else {
@@ -245,6 +246,7 @@ func newWebDAV(endpoint, user, passwd, token string) (ObjectStorage, error) {
 	uri.User = url.UserPassword(user, passwd)
 	c := gowebdav.NewClient(uri.String(), user, passwd)
 	c.SetTransport(httpClient.Transport)
+	c.SetHeader("User-Agent", UserAgent)
 	return &webdav{endpoint: uri, c: c}, nil
 }
 
