@@ -63,8 +63,8 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skip
 		}
 		if now := time.Now(); now.Sub(last) >= interval {
 			var iused, dummy uint64
+			_ = m.StatFS(ctx, meta.RootInode, &dummy, &dummy, &iused, &dummy)
 			if interval <= time.Hour {
-				_ = m.StatFS(ctx, meta.RootInode, &dummy, &dummy, &iused, &dummy)
 				if iused > 1e6 {
 					logger.Warnf("backup metadata skipped because of too many inodes: %d %s; "+
 						"you may increase `--backup-meta` to enable it again", iused, interval)
@@ -79,7 +79,7 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skip
 			logger.Debugf("backup metadata started")
 			if err = backup(m, blob, now, iused < 1e5, skipTrash); err == nil {
 				LastBackupTimeG.Set(float64(now.UnixNano()) / 1e9)
-				logger.Infof("backup metadata succeed, used %s", time.Since(now))
+				logger.Infof("backup metadata succeed, fast mode: %v, used %s", iused < 1e5, time.Since(now))
 			} else {
 				logger.Warnf("backup metadata failed: %s", err)
 			}
