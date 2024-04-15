@@ -95,7 +95,7 @@ $ aws --endpoint-url http://localhost:9000 s3 ls s3://<bucket>
 
 ## 使用 MinIO 客户端
 
-为避免兼容性问题，我们推荐采用的 mc 的版本为 RELEASE.2021-04-22T17-40-00Z，你可以在这个[地址](https://dl.min.io/client/mc/release/)找到历史版本和不同架构的 mc ，比如这是 amd64 架构 RELEASE.2021-04-22T17-40-00Z 版本的 mc 的[下载地址](https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z)
+为避免兼容性问题，我们推荐采用的 mc 的版本为 RELEASE.2021-04-22T17-40-00Z，你可以在这个[地址](https://dl.min.io/client/mc/release/)找到历史版本和不同架构的 mc，比如这是 amd64 架构 RELEASE.2021-04-22T17-40-00Z 版本的 mc 的[下载地址](https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z)
 
 下载安装完成 mc 后添加一个新的 alias：
 
@@ -150,16 +150,6 @@ export MINIO_DOMAIN=mydomain.com
 
 `juicefs gateway xxxx xxxx    --refresh-iam-interval 1m`
 
-## 后台运行
-
-Juicefs gateway 自 v1.2 版本 支持 gateway 以后台模式运行，在启动时添加 `-d` 参数即可
-
-```
-$ juicefs gateway redis://localhost:6379 localhost:9000 -d
-```
-
-后台运行时可以通过`--log` 指定日志输出文件路径
-
 # 高级功能
 
 JuiceFS gateway 的核心功能是对外提供 S3 接口，目前对 S3 协议的支持已经比较完善。在 v1.2 版本中，我们又添加了对身份和访问控制（IAM）和桶事件通知的支持。高级功能需要使用 RELEASE.2021-04-22T17-40-00Z 版本的 mc 命令行工具调用。这些高级功能的使用方法可以参考当时 MinIO [相关文档](https://github.com/minio/minio/tree/e0d3a8c1f4e52bb4a7d82f7f369b6796103740b3/docs)使用，也可以直接参考 mc 的命令行帮助信息。如果你不知道有哪些功能或者不知道某个功能如何使用，你可以直接在子命令后加 `-h` 查看帮助说明。下文将简要介绍支持哪些高级功能和部分示例。
@@ -170,7 +160,7 @@ JuiceFS gateway 的核心功能是对外提供 S3 接口，目前对 S3 协议�
 
 #### 普通用户
 
-在v1.2 版本之前，juicefs gateway 只有在启动时创建一个超级用户，这个超级用户只属于这个进程，即使多个 gateway 的背后是同一个文件系统，其用户也都是进程间隔离的（你可以为每个 gateway 进程设置不同的超级用户，他们相互独立，互不影响）。v1.2 版本后，juicefs gateway 启动时仍需要设置超级用户，该超级用户仍旧是进程隔离的，但是允许使用 mc admin user add 添加新的用户。新添加的用户将是同文件系统共享的。新添加的用户可以使用 `mc admin user` 进行管理，支持添加，关闭，启用，删除用户，也支持查看所有用户以及展示用户信息和查看用户的策略
+在 v1.2 版本之前，juicefs gateway 只有在启动时创建一个超级用户，这个超级用户只属于这个进程，即使多个 gateway 的背后是同一个文件系统，其用户也都是进程间隔离的（你可以为每个 gateway 进程设置不同的超级用户，他们相互独立，互不影响）。v1.2 版本后，juicefs gateway 启动时仍需要设置超级用户，该超级用户仍旧是进程隔离的，但是允许使用 mc admin user add 添加新的用户。新添加的用户将是同文件系统共享的。新添加的用户可以使用 `mc admin user` 进行管理，支持添加，关闭，启用，删除用户，也支持查看所有用户以及展示用户信息和查看用户的策略
 
 ```Shell
 $ mc admin user -h
@@ -242,9 +232,9 @@ Gateway 安全令牌服务（STS）是一种服务，可让客户端请求 MinIO
 
 ##### AssumeRole
 
-返回一组临时安全凭证，您可以使用这些凭证访问Gateway资源。AssumeRole 需要现有 Gateway 用户的授权凭据，返回的临时安全凭证包括访问密钥、秘密密钥和安全令牌。应用程序可以使用这些临时安全凭证对 Gateway API操作进行签名调用。应用于这些临时凭据的策略略继承自 Gateway 用户凭据。默认情况下，AssumeRole 创建的临时安全凭证有效期为一个小时。但是，请使用可选参数 DurationSeconds 指定凭据的持续时间范围。该值从900秒（15分钟）变化到最长7天会话持续时间限制之间不等。
+返回一组临时安全凭证，您可以使用这些凭证访问 Gateway 资源。AssumeRole 需要现有 Gateway 用户的授权凭据，返回的临时安全凭证包括访问密钥、秘密密钥和安全令牌。应用程序可以使用这些临时安全凭证对 Gateway API 操作进行签名调用。应用于这些临时凭据的策略略继承自 Gateway 用户凭据。默认情况下，AssumeRole 创建的临时安全凭证有效期为一个小时。但是，请使用可选参数 DurationSeconds 指定凭据的持续时间范围。该值从 900 秒（15 分钟）变化到最长 7 天会话持续时间限制之间不等。
 
-###### API请求参数
+###### API 请求参数
 
 1. Version
    
@@ -261,12 +251,12 @@ Gateway 安全令牌服务（STS）是一种服务，可让客户端请求 MinIO
 
 3. DurationSeconds
 
-   持续时间，以秒为单位。该值可以在900秒（15分钟）至7天之间变化。如果值高于此设置，则操作失败。默认情况下，该值设置为3600秒。
+   持续时间，以秒为单位。该值可以在 900 秒（15 分钟）至 7 天之间变化。如果值高于此设置，则操作失败。默认情况下，该值设置为 3600 秒。
    
    | Params      | Value               |
    |-------------|---------------------|
    | *Type*      | Integer             |
-   | Valid Range | 最小值为900，最大值为604800。 |
+   | Valid Range | 最小值为 900，最大值为 604800。 |
    | Required    | No                  |
 
 4. Policy
@@ -276,7 +266,7 @@ Gateway 安全令牌服务（STS）是一种服务，可让客户端请求 MinIO
    | Params      | Value             |
    |-------------|-------------------|
    | Type        | String            |
-   | Valid Range | 最小长度为1。最大长度为2048。 |
+   | Valid Range | 最小长度为 1。最大长度为 2048。 |
    | Required    | No                |
 
 ###### 响应元素
@@ -285,7 +275,7 @@ Gateway 安全令牌服务（STS）是一种服务，可让客户端请求 MinIO
 
 ###### 错误
 
-此API的XML错误响应类似于 [AWS STS AssumeRole](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html#API_AssumeRole_Errors)
+此 API 的 XML 错误响应类似于 [AWS STS AssumeRole](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html#API_AssumeRole_Errors)
 
 ###### `POST`请求示例
 
@@ -330,7 +320,7 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 
 3. 使用 aws cli 请求 AssumeRole api
 
-   > 注意:在以下命令中，“--role-arn”和“--role-session-name”对 Gateway 没有意义，可以设置为满足命令行要求的任何值。
+   > 注意：在以下命令中，“--role-arn”和“--role-session-name”对 Gateway 没有意义，可以设置为满足命令行要求的任何值。
    
    ```
    $ aws --profile foobar --endpoint-url http://localhost:9000 sts assume-role --policy '{"Version":"2012-10-17","Statement":[{"Sid":"Stmt1","Effect":"Allow","Action":"s3:*","Resource":"arn:aws:s3:::*"}]}' --role-arn arn:xxx:xxx:xxx:xxxx --role-session-name anything
@@ -412,7 +402,7 @@ EXAMPLES:
      $ mc admin policy add myminio writeonly /tmp/writeonly.json
 ```
 
-这里要添加的策略文件必须是一个JSON格式的文件，具有[IAM兼容](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies.html)的语法，且不超过2048个字符。通过该语法你可以实现更为精细化的访问控制，如果你对此不熟悉，你可以先用下面的命令查看内置的这些简单的策略是如何写的并在此基础上加以更改。
+这里要添加的策略文件必须是一个 JSON 格式的文件，具有[IAM 兼容](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies.html)的语法，且不超过 2048 个字符。通过该语法你可以实现更为精细化的访问控制，如果你对此不熟悉，你可以先用下面的命令查看内置的这些简单的策略是如何写的并在此基础上加以更改。
 
 ```Shell
 $ mc admin policy info myminio readonly
@@ -435,7 +425,7 @@ $ mc admin policy info myminio readonly
 
 #### 用户组管理
 
-JuiceFS Gateway支持创建用户组，类似于 linux 用户组的概念，使用 `mc admin group`  管理。你可以把一个或者多个用户设置为一个组，然后为组统一赋权。该用法与用户管理类似，就不在赘述了。
+JuiceFS Gateway 支持创建用户组，类似于 linux 用户组的概念，使用 `mc admin group`  管理。你可以把一个或者多个用户设置为一个组，然后为组统一赋权。该用法与用户管理类似，就不在赘述了。
 
 ```Shell
 $ mc admin  group -h
@@ -506,7 +496,7 @@ EXAMPLES:
 
 #### 配置生效时间
 
-JuiceFS Gateway 的所有管理 API 的更新操作都会立即生效并且持久化到 JuiceFS 文件系统中，而且接受该 API 请求的客户端也会立即生效。但是当 Gateway 多机运行时，情况会有所不同，因为Gateway 在处理请求鉴权时会直接采用内存缓存信息作为校验基准，否则每次请求都读取配置文件内容作为校验基准将带来不可接受的性能问题。但是有了缓存就会存在缓存数据与配置文件不一致的问题。目前 JuiceFS Gateway 的缓存刷新策略是每 5 分钟强制更新内存缓存（部分操作也会触发缓存更新操作），这样保证多机情况下配置生效最长不会超过 5 分钟。你也可以通过 `--refresh-iam-interval` 参数来调整该时间。如果希望某个 Gateway 立即生效，可以尝试手动将其重启。
+JuiceFS Gateway 的所有管理 API 的更新操作都会立即生效并且持久化到 JuiceFS 文件系统中，而且接受该 API 请求的客户端也会立即生效。但是当 Gateway 多机运行时，情况会有所不同，因为 Gateway 在处理请求鉴权时会直接采用内存缓存信息作为校验基准，否则每次请求都读取配置文件内容作为校验基准将带来不可接受的性能问题。但是有了缓存就会存在缓存数据与配置文件不一致的问题。目前 JuiceFS Gateway 的缓存刷新策略是每 5 分钟强制更新内存缓存（部分操作也会触发缓存更新操作），这样保证多机情况下配置生效最长不会超过 5 分钟。你也可以通过 `--refresh-iam-interval` 参数来调整该时间。如果希望某个 Gateway 立即生效，可以尝试手动将其重启。
 
 ### 桶事件通知
 
@@ -527,7 +517,7 @@ JuiceFS Gateway 的所有管理 API 的更新操作都会立即生效并且持�
 - s3:BucketCreated
 - s3:BucketRemoved
 
-可以使用 mc 客户端工具通过 event 子命令设置和监听事件通知。MinIO发送的用于发布事件的通知消息是JSON格式的，JSON结构参考[这里](https://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html)。
+可以使用 mc 客户端工具通过 event 子命令设置和监听事件通知。MinIO 发送的用于发布事件的通知消息是 JSON 格式的，JSON 结构参考[这里](https://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html)。
 
 JuiceFS Gateway 为了减少依赖，裁剪了部分支持的事件目标类型。目前存储桶事件可以支持发布到以下目标：
 
@@ -546,13 +536,13 @@ notify_redis          publish bucket notifications to Redis datastores
 
 #### 使用 Redis 发布事件
 
-redis 事件目标支持两种格式: `namespace` 和 `access`。
+redis 事件目标支持两种格式：`namespace` 和 `access`。
 
-如果用的是 `namespacee` 格式，Gateway将存储桶里的对象同步成 Redis hash 中的条目。对于每一个条目，对应一个存储桶里的对象，其key都被设为"存储桶名称/对象名称"，value 都是一个有关这个 Gateway 对象的JSON格式的事件数据。如果对象更新或者删除，hash中对象的条目也会相应的更新或者删除。
+如果用的是 `namespacee` 格式，Gateway 将存储桶里的对象同步成 Redis hash 中的条目。对于每一个条目，对应一个存储桶里的对象，其 key 都被设为"存储桶名称/对象名称"，value 都是一个有关这个 Gateway 对象的 JSON 格式的事件数据。如果对象更新或者删除，hash 中对象的条目也会相应的更新或者删除。
 
-如果使用的是 access , Gateway 使用[RPUSH](https://redis.io/commands/rpush)将事件添加到 list 中。这个 list 中每一个元素都是一个 JSON 格式的 list,这个 list 中又有两个元素，第一个元素是时间戳的字符串，第二个元素是一个含有在这个存储桶上进行操作的事件数据的 JSON 对象。在这种格式下，list 中的元素不会更新或者删除。
+如果使用的是 access , Gateway 使用[RPUSH](https://redis.io/commands/rpush)将事件添加到 list 中。这个 list 中每一个元素都是一个 JSON 格式的 list，这个 list 中又有两个元素，第一个元素是时间戳的字符串，第二个元素是一个含有在这个存储桶上进行操作的事件数据的 JSON 对象。在这种格式下，list 中的元素不会更新或者删除。
 
-下面的步骤展示如何在namespace和access格式下使用通知目标。
+下面的步骤展示如何在 namespace 和 access 格式下使用通知目标。
 
 1. 配置 Redis 到 Gateway
 
@@ -576,16 +566,16 @@ redis 事件目标支持两种格式: `namespace` 和 `access`。
    
    ```Shell
    notify_redis[:name]               支持设置多个 redis，只需要其 name 不同即可
-   address*     (address)            Redis服务器的地址. 例如: localhost:6379
-   key*         (string)             存储/更新事件的Redis key, key会自动创建
-   format*      (namespace*|access)  是namespace 还是 access，默认是 'namespace'
-   password     (string)             Redis服务器的密码
+   address*     (address)            Redis 服务器的地址。例如：localhost:6379
+   key*         (string)             存储/更新事件的 Redis key, key 会自动创建
+   format*      (namespace*|access)  是 namespace 还是 access，默认是 'namespace'
+   password     (string)             Redis 服务器的密码
    queue_dir    (path)               未发送消息的暂存目录 例如 '/home/events'
-   queue_limit  (number)             未发送消息的最大限制, 默认是'100000'
+   queue_limit  (number)             未发送消息的最大限制，默认是'100000'
    comment      (sentence)           可选的注释说明
    ```
    
-   Gateway 支持持久事件存储。持久存储将在Redis broker离线时备份事件，并在broker恢复在线时重播事件。事件存储的目录可以通过queue_dir字段设置，存储的最大限制可以通过queue_limit设置。例如, queue_dir可以设置为/home/events, 并且queue_limit可以设置为1000. 默认情况下 queue_limit 是100000。在更新配置前，可以通过mc admin config get命令获取当前配置。
+   Gateway 支持持久事件存储。持久存储将在 Redis broker 离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 queue_dir 字段设置，存储的最大限制可以通过 queue_limit 设置。例如，queue_dir 可以设置为/home/events, 并且 queue_limit 可以设置为 1000. 默认情况下 queue_limit 是 100000。在更新配置前，可以通过 mc admin config get 命令获取当前配置。
    
    ```Shell
    $ mc admin config get myminio notify_redis
@@ -595,20 +585,20 @@ redis 事件目标支持两种格式: `namespace` 和 `access`。
    $ mc admin config set myminio notify_redis:1 queue_limit="1000"
    Successfully applied new settings.
    Please restart your server 'mc admin service restart myminio'.
-   # 注意这里无法使用 mc admin service restart myminio 重启，JuiceFS Gateway 暂不支持该功能,当使用 mc 配置后出现该提醒时需要手动重启 JuiceFS Gateway
+   # 注意这里无法使用 mc admin service restart myminio 重启，JuiceFS Gateway 暂不支持该功能，当使用 mc 配置后出现该提醒时需要手动重启 JuiceFS Gateway
    ```
    
-   使用mc admin config set命令更新配置后，重启 JuiceFS Gateway 让配置生效。 如果一切顺利，JuiceFS Gateway会在启动时输出一行信息，类似SQS ARNs: arn:minio:sqs::1:redis
+   使用 mc admin config set 命令更新配置后，重启 JuiceFS Gateway 让配置生效。如果一切顺利，JuiceFS Gateway 会在启动时输出一行信息，类似 SQS ARNs: arn:minio:sqs::1:redis
    
-   根据你的需要，你可以添加任意多个Redis 目标，只要提供 Redis 实例的标识符（如上例“notify_redis:1”中的“ 1”）和每个实例配置参数的信息即可。
+   根据你的需要，你可以添加任意多个 Redis 目标，只要提供 Redis 实例的标识符（如上例“notify_redis:1”中的“1”）和每个实例配置参数的信息即可。
 
-2. 启用bucket通知
+2. 启用 bucket 通知
 
-   我们现在可以在一个叫images的存储桶上开启事件通知。当一个JPEG文件被创建或者覆盖，一个新的key会被创建,或者一个已经存在的key就会被更新到之前配置好的redis hash里。如果一个已经存在的对象被删除，这个对应的key也会从hash中删除。因此，这个Redis hash里的行，就映射着images存储桶里的.jpg对象。
+   我们现在可以在一个叫 images 的存储桶上开启事件通知。当一个 JPEG 文件被创建或者覆盖，一个新的 key 会被创建，或者一个已经存在的 key 就会被更新到之前配置好的 redis hash 里。如果一个已经存在的对象被删除，这个对应的 key 也会从 hash 中删除。因此，这个 Redis hash 里的行，就映射着 images 存储桶里的.jpg 对象。
    
-   要配置这种存储桶通知，我们需要用到前面步骤Gateway输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
+   要配置这种存储桶通知，我们需要用到前面步骤 Gateway 输出的 ARN 信息。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
    
-   使用 mc 这个工具，这些配置信息很容易就能添加上。假设 Gateway 服务别名叫 myminio,可执行下列脚本：
+   使用 mc 这个工具，这些配置信息很容易就能添加上。假设 Gateway 服务别名叫 myminio，可执行下列脚本：
    
    ```Shell
    mc mb myminio/images
@@ -617,9 +607,9 @@ redis 事件目标支持两种格式: `namespace` 和 `access`。
    arn:minio:sqs::1:redis   s3:ObjectCreated:*,s3:ObjectRemoved:*,s3:ObjectAccessed:*   Filter: suffix=".jpg"
    ```
 
-3. 验证Redis
+3. 验证 Redis
 
-   启动 redis-cli 这个Redis客户端程序来检查 Redis 中的内容. 运行 monitor Redis命令将会输出在 Redis 上执行的每个命令的。
+   启动 redis-cli 这个 Redis 客户端程序来检查 Redis 中的内容。运行 monitor Redis 命令将会输出在 Redis 上执行的每个命令的。
    
    ```Shell
    redis-cli -a yoursecret
@@ -627,7 +617,7 @@ redis 事件目标支持两种格式: `namespace` 和 `access`。
    OK
    ```
    
-   上传一个名为myphoto.jpg 的文件到images 存储桶。
+   上传一个名为 myphoto.jpg 的文件到 images 存储桶。
    
    ```Shell
    mc cp myphoto.jpg myminio/images
@@ -653,7 +643,7 @@ redis 事件目标支持两种格式: `namespace` 和 `access`。
 
 #### 使用 MySQL 发布事件
 
-这个通知目标支持两种格式: `namespace` 和 `access`。
+这个通知目标支持两种格式：`namespace` 和 `access`。
 
 如果使用的是 `namespace` 格式，Gateway 将存储桶里的对象同步成数据库表中的行。每一行有两列：key_name 和 value。key_name 是这个对象的存储桶名字加上对象名，value 都是一个有关这个 Gateway 对象的 JSON 格式的事件数据。如果对象更新或者删除，表中相应的行也会相应的更新或者删除。
 
@@ -663,7 +653,7 @@ redis 事件目标支持两种格式: `namespace` 和 `access`。
 
 1. 确保 MySQL 版本至少满足最低要求
 
-   JuiceFS Gateway 要求 MySQL 版本 5.7.8及以上，因为使用了MySQL5.7.8版本才引入的[ JSON](https://dev.mysql.com/doc/refman/5.7/en/json.html) 数据类型。
+   JuiceFS Gateway 要求 MySQL 版本 5.7.8 及以上，因为使用了 MySQL5.7.8 版本才引入的[ JSON](https://dev.mysql.com/doc/refman/5.7/en/json.html) 数据类型。
 
 2. 配置 MySQL 到 Gateway
 
@@ -684,14 +674,14 @@ redis 事件目标支持两种格式: `namespace` 和 `access`。
 
    ```Shell
    KEY:
-   notify_mysql[:name]  发布存储桶通知到MySQL数据库. 当需要多个MySQL server endpoint时，可以为每个配置添加用户指定的“name”（例如"notify_mysql:myinstance"）.
+   notify_mysql[:name]  发布存储桶通知到 MySQL 数据库。当需要多个 MySQL server endpoint 时，可以为每个配置添加用户指定的“name”（例如"notify_mysql:myinstance"）.
    
    ARGS:
-   dsn_string*  (string)             MySQL数据源名称连接字符串，例如 "<user>:<password>@tcp(<host>:<port>)/<database>"
-   table*       (string)             存储/更新事件的数据库表名, 表会自动被创建
+   dsn_string*  (string)             MySQL 数据源名称连接字符串，例如 "<user>:<password>@tcp(<host>:<port>)/<database>"
+   table*       (string)             存储/更新事件的数据库表名，表会自动被创建
    format*      (namespace*|access)  'namespace'或者'access', 默认是'namespace'
    queue_dir    (path)               未发送消息的暂存目录 例如 '/home/events'
-   queue_limit  (number)             未发送消息的最大限制, 默认是'100000'
+   queue_limit  (number)             未发送消息的最大限制，默认是'100000'
    comment      (sentence)           可选的注释说明
    ```
 
@@ -706,28 +696,28 @@ redis 事件目标支持两种格式: `namespace` 和 `access`。
    notify_mysql:myinstance enable=off format=namespace host= port= username= password= database= dsn_string= table= queue_dir= queue_limit=0
    ```
 
-   使用带有dsn_string参数的mc admin config set的命令更新MySQL的通知配置:
+   使用带有 dsn_string 参数的 mc admin config set 的命令更新 MySQL 的通知配置：
 
    ```Shell
    $ mc admin config set myminio notify_mysql:myinstance table="minio_images" dsn_string="root:xxxx@tcp(127.0.0.1:3306)/miniodb"
    ```
    
-   请注意, 根据你的需要，你可以添加任意多个MySQL server endpoint，只要提供MySQL实例的标识符（如上例中的"myinstance"）和每个实例配置参数的信息即可。
+   请注意，根据你的需要，你可以添加任意多个 MySQL server endpoint，只要提供 MySQL 实例的标识符（如上例中的"myinstance"）和每个实例配置参数的信息即可。
    
-   使用`mc admin config set`命令更新配置后，重启 Gateway 让配置生效。 如果一切顺利，Gateway Server会在启动时输出一行信息，类似 `SQS ARNs: arn:minio:sqs::myinstance:mysql`
+   使用`mc admin config set`命令更新配置后，重启 Gateway 让配置生效。如果一切顺利，Gateway Server 会在启动时输出一行信息，类似 `SQS ARNs: arn:minio:sqs::myinstance:mysql`
 
 3. 启用 bucket 通知
 
-   我们现在可以在一个叫 images 的存储桶上开启事件通知，一旦上有文件上传到存储桶中，MySQL 中会 insert 一条新的记录或者一条已经存在的记录会被 update，如果一个存在对象被删除，一条对应的记录也会从MySQL表中删除。因此，MySQL表中的行，对应的就是存储桶里的一个对象。
+   我们现在可以在一个叫 images 的存储桶上开启事件通知，一旦上有文件上传到存储桶中，MySQL 中会 insert 一条新的记录或者一条已经存在的记录会被 update，如果一个存在对象被删除，一条对应的记录也会从 MySQL 表中删除。因此，MySQL 表中的行，对应的就是存储桶里的一个对象。
 
-   要配置这种存储桶通知，我们需要用到前面步骤MinIO输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
+   要配置这种存储桶通知，我们需要用到前面步骤 MinIO 输出的 ARN 信息。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-   有了 mc 这个工具，这些配置信息很容易就能添加上。假设 Gateway 服务别名叫 myminio,可执行下列脚本：
+   有了 mc 这个工具，这些配置信息很容易就能添加上。假设 Gateway 服务别名叫 myminio，可执行下列脚本：
 
    ```Shell
-   # 在我的minio中创建名为`images`的存储桶
+   # 在我的 minio 中创建名为`images`的存储桶
    mc mb myminio/images
-   # 使用 MySQL ARN 在“images” 存储桶上添加通知配置。--suffix 参数用于过滤事件。
+   # 使用 MySQL ARN 在“images”存储桶上添加通知配置。--suffix 参数用于过滤事件。
    mc event add myminio/images arn:minio:sqs::myinstance:mysql --suffix .jpg
    # 在“images”存储桶上打印出通知配置。
    mc event list myminio/images
@@ -736,43 +726,43 @@ redis 事件目标支持两种格式: `namespace` 和 `access`。
 
 4. 验证 MySQL
 
-   打开一个新的terminal终端并上传一张JPEG图片到images 存储桶。
+   打开一个新的 terminal 终端并上传一张 JPEG 图片到 images 存储桶。
 
    ```Shell
    mc cp myphoto.jpg myminio/images
    ```
 
-   打开一个MySQL终端列出表 minio_images 中所有的记录。将会发现一条刚插入的记录
+   打开一个 MySQL 终端列出表 minio_images 中所有的记录。将会发现一条刚插入的记录
 
 #### 使用 PostgreSQL 发布事件
 
    整体方法与使用 MySQL 发布 MinIO 事件相同，这里不再累述。
    
-   需要注意的点是要求 PostgresSQL 9.5版本及以上。 Gateway 用了 PostgreSQL 9.5引入的[INSERT ON CONFLICT](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (aka UPSERT) 特性,以及9.4引入的[ JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) 数据类型。
+   需要注意的点是要求 PostgresSQL 9.5 版本及以上。Gateway 用了 PostgreSQL 9.5 引入的[INSERT ON CONFLICT](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (aka UPSERT) 特性，以及 9.4 引入的[ JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) 数据类型。
 
-#### 使用Webhook发布事件
+#### 使用 Webhook 发布事件
 
 [Webhooks](https://en.wikipedia.org/wiki/Webhook) 采用推的方式获取数据，而不是一直去拉取。
 
 1. 配置 webhook 到 Gateway
 
-   Gateway 支持持久事件存储。持久存储将在 webhook 离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 queue_dir 字段设置，存储的最大限制可以通过 queue_limit 设置。例如,  /home/events, 并且 queue_limit 可以设置为 1000. 默认情况下 queue_limit 是100000.
+   Gateway 支持持久事件存储。持久存储将在 webhook 离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 queue_dir 字段设置，存储的最大限制可以通过 queue_limit 设置。例如， /home/events, 并且 queue_limit 可以设置为 1000. 默认情况下 queue_limit 是 100000.
 
    ```Shell
    KEY:
-   notify_webhook[:name]  发布存储桶通知到webhook endpoints
+   notify_webhook[:name]  发布存储桶通知到 webhook endpoints
    
    ARGS:
-   endpoint*    (url)       webhook server endpoint,例如 http://localhost:8080/minio/events
-   auth_token   (string)    opaque token或者JWT authorization token
+   endpoint*    (url)       webhook server endpoint，例如 http://localhost:8080/minio/events
+   auth_token   (string)    opaque token 或者 JWT authorization token
    queue_dir    (path)      未发送消息的暂存目录 例如 '/home/events'
-   queue_limit  (number)    未发送消息的最大限制, 默认是'100000'
-   client_cert  (string)    Webhook的mTLS身份验证的客户端证书
-   client_key   (string)    Webhook的mTLS身份验证的客户端证书密钥
+   queue_limit  (number)    未发送消息的最大限制，默认是'100000'
+   client_cert  (string)    Webhook 的 mTLS 身份验证的客户端证书
+   client_key   (string)    Webhook 的 mTLS 身份验证的客户端证书密钥
    comment      (sentence)  可选的注释说明
    ```
 
-   用mc admin config set 命令更新配置. 在这endpoint是监听webhook通知的服务. 保存配置文件并重启MinIO服务让配配置生效. 注意一下，在重启MinIO时，这个endpoint必须是启动并且可访问到。
+   用 mc admin config set 命令更新配置。在这 endpoint 是监听 webhook 通知的服务。保存配置文件并重启 MinIO 服务让配配置生效。注意一下，在重启 MinIO 时，这个 endpoint 必须是启动并且可访问到。
 
    ```Shell
    $ mc admin config set myminio notify_webhook:1 queue_limit="0"  endpoint="http://localhost:3000" queue_dir=""
@@ -780,7 +770,7 @@ redis 事件目标支持两种格式: `namespace` 和 `access`。
 
 2. 启用 bucket 通知
 
-   我们现在可以在一个叫images的存储桶上开启事件通知，一旦上有文件上传到存储桶中，事件将被触发。在这里，ARN的值是arn:minio:sqs::1:webhook。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
+   我们现在可以在一个叫 images 的存储桶上开启事件通知，一旦上有文件上传到存储桶中，事件将被触发。在这里，ARN 的值是 arn:minio:sqs::1:webhook。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
    ```Shell
    mc mb myminio/images
@@ -788,180 +778,31 @@ redis 事件目标支持两种格式: `namespace` 和 `access`。
    mc event add myminio/images arn:minio:sqs::1:webhook --event put --suffix .jpg
    ```
 
-3. ##### 采用Thumbnailer进行验证
+3. ##### 采用 Thumbnailer 进行验证
 
-   [ Thumbnailer](https://github.com/minio/thumbnailer)  项目是一个使用 Minio 的listenBucketNotification API 的缩略图生成器示例，我们使用[ Thumbnailer](https://github.com/minio/thumbnailer) 来监听 Gateway 通知。如果有文件上传于是 Gateway 服务，Thumnailer 监听到该通知，生成一个缩略图并上传到 Gateway 服务。 安装Thumbnailer:
+   [ Thumbnailer](https://github.com/minio/thumbnailer)  项目是一个使用 Minio 的 listenBucketNotification API 的缩略图生成器示例，我们使用[ Thumbnailer](https://github.com/minio/thumbnailer) 来监听 Gateway 通知。如果有文件上传于是 Gateway 服务，Thumnailer 监听到该通知，生成一个缩略图并上传到 Gateway 服务。安装 Thumbnailer:
 
    ```Shell
    git clone https://github.com/minio/thumbnailer/
    npm install
    ```
 
-   然后打开Thumbnailer的config/webhook.json配置文件，添加有关MinIO server的配置，使用下面的方式启动Thumbnailer:
+   然后打开 Thumbnailer 的 config/webhook.json 配置文件，添加有关 MinIO server 的配置，使用下面的方式启动 Thumbnailer:
 
    ```Shell
    NODE_ENV=webhook node thumbnail-webhook.js
    ```
 
-   Thumbnailer运行在http://localhost:3000/。下一步，配置MinIO server,让其发送消息到这个URL（第一步提到的），并使用 mc 来设置存储桶通知（第二步提到的）。然后上传一张图片到 Gateway server:
+   Thumbnailer 运行在 http://localhost:3000/。下一步，配置 MinIO server，让其发送消息到这个 URL（第一步提到的），并使用 mc 来设置存储桶通知（第二步提到的）。然后上传一张图片到 Gateway server:
 
    ```Shell
    mc cp ~/images.jpg myminio/images
    .../images.jpg:  8.31 KB / 8.31 KB ┃▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┃ 100.00% 59.42 KB/s 0s
    ```
 
-   稍等片刻，然后使用 mc ls检查存储桶的内容，你将看到有个缩略图出现了。
+   稍等片刻，然后使用 mc ls 检查存储桶的内容，你将看到有个缩略图出现了。
 
    ```Shell
    mc ls myminio/images-thumbnail
    [2017-02-08 11:39:40 IST]   992B images-thumbnail.jpg
    ```
-
-
-
-## 在 Kubernetes 中部署 S3 网关 {#deploy-in-kubernetes}
-
-### 通过 kubectl 部署
-
-首先创建 secret（以 Amazon S3 为例）：
-
-```shell
-export NAMESPACE=default
-```
-
-```shell
-kubectl -n ${NAMESPACE} create secret generic juicefs-secret \
-    --from-literal=name=<NAME> \
-    --from-literal=metaurl=redis://[:<PASSWORD>]@<HOST>:6379[/<DB>] \
-    --from-literal=storage=s3 \
-    --from-literal=bucket=https://<BUCKET>.s3.<REGION>.amazonaws.com \
-    --from-literal=access-key=<ACCESS_KEY> \
-    --from-literal=secret-key=<SECRET_KEY>
-```
-
-其中：
-
-- `name`：JuiceFS 文件系统名称
-- `metaurl`：元数据服务的访问 URL（比如 Redis）。更多信息参考[这篇文档](../reference/how_to_set_up_metadata_engine.md)。
-- `storage`：对象存储类型，比如 `s3`、`gs`、`oss`。更多信息参考[这篇文档](../reference/how_to_set_up_object_storage.md)。
-- `bucket`：Bucket URL。更多信息参考[这篇文档](../reference/how_to_set_up_object_storage.md)。
-- `access-key`：对象存储的 access key。更多信息参考[这篇文档](../reference/how_to_set_up_object_storage.md)。
-- `secret-key`：对象存储的 secret key。更多信息参考[这篇文档](../reference/how_to_set_up_object_storage.md)。
-
-然后下载 S3 网关[部署 YAML](https://github.com/juicedata/juicefs/blob/main/deploy/juicefs-s3-gateway.yaml) 并通过 `kubectl` 创建 `Deployment` 和 `Service` 资源。以下几点需要特别注意：
-
-- 请将以下命令的 `${NAMESPACE}` 替换为实际部署 S3 网关的 Kubernetes 名字空间，默认为 `kube-system`。
-- `Deployment` 的 `replicas` 默认为 1，请根据实际情况调整。
-- 默认使用 `juicedata/juicefs-csi-driver` 最新版镜像，其中已经集成了最新版 JuiceFS 客户端，具体集成的 JuiceFS 客户端版本请查看[这里](https://github.com/juicedata/juicefs-csi-driver/releases)。
-- `Deployment` 的 `initContainers` 会先尝试格式化 JuiceFS 文件系统，如果你已经提前格式化完毕，这一步不会影响现有 JuiceFS 文件系统。
-- S3 网关默认监听的端口号为 9000
-- S3 网关[启动选项](../reference/command_reference.md#gateway)均为默认值，请根据实际需求调整。
-- `MINIO_ROOT_USER` 环境变量的值为 Secret 中的 `access-key`，`MINIO_ROOT_PASSWORD` 环境变量的值为 Secret 中的 `secret-key`。
-
-```shell
-curl -sSL https://raw.githubusercontent.com/juicedata/juicefs/main/deploy/juicefs-s3-gateway.yaml | sed "s@kube-system@${NAMESPACE}@g" | kubectl apply -f -
-```
-
-检查是否已经部署成功：
-
-```shell
-$ kubectl -n $NAMESPACE get po -o wide -l app.kubernetes.io/name=juicefs-s3-gateway
-juicefs-s3-gateway-5c7d65c77f-gj69l         1/1     Running   0          37m     10.244.2.238   kube-node-3   <none>           <none>
-```
-
-```shell
-$ kubectl -n $NAMESPACE get svc -l app.kubernetes.io/name=juicefs-s3-gateway
-NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
-juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
-```
-
-可以在应用 pod 中通过 `juicefs-s3-gateway.${NAMESPACE}.svc.cluster.local:9000` 域名或 `juicefs-s3-gateway` 的 pod IP 及端口号（例如 `10.244.2.238:9000`）访问 JuiceFS S3 网关。
-
-若想通过 Ingress 访问，需要确保集群中已经部署了 Ingress Controller，参考 [Ingress Controller 部署文档](https://kubernetes.github.io/ingress-nginx/deploy)。创建 `Ingress` 资源：
-
-```yaml
-kubectl apply -f - <<EOF
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: juicefs-s3-gateway
-  namespace: ${NAMESPACE}
-spec:
-  ingressClassName: nginx
-  rules:
-  - http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: juicefs-s3-gateway
-            port:
-              number: 9000
-EOF
-```
-
-可以通过 Ingress Controller 的 `<external IP>` 来访问 S3 网关（不需要带上 9000 端口号），如下：
-
-```shell
-kubectl get services -n ingress-nginx
-```
-
-Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress Controller 使用文档](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage)。
-
-### 通过 Helm 部署
-
-1. 准备配置文件
-
-   创建一个配置文件，例如：`values.yaml`，复制并完善下列配置信息。其中，`secret` 部分是 JuiceFS 文件系统相关的信息，你可以参照 [JuiceFS 快速上手指南](../getting-started/standalone.md) 了解相关内容。
-
-   ```yaml title="values.yaml"
-   secret:
-     name: "<name>"
-     metaurl: "<meta-url>"
-     storage: "<storage-type>"
-     accessKey: "<access-key>"
-     secretKey: "<secret-key>"
-     bucket: "<bucket>"
-   ```
-
-   若需要部署 Ingress，在 `values.yaml` 中再加上：
-
-   ```yaml title="values.yaml"
-   ingress:
-     enabled: true
-   ```
-
-2. 部署
-
-   依次执行以下三条命令，通过 Helm 部署 JuiceFS S3 网关（注意以下示例是部署到 `kube-system` 名字空间）。
-
-   ```sh
-   helm repo add juicefs-s3-gateway https://juicedata.github.io/charts/
-   helm repo update
-   helm install juicefs-s3-gateway juicefs-s3-gateway/juicefs-s3-gateway -n kube-system -f ./values.yaml
-   ```
-
-3. 检查部署状态
-
-    - **检查 Pods**：部署过程会启动一个名为 `juicefs-s3-gateway` 的 `Deployment`。执行命令 `kubectl -n kube-system get po -l app.kubernetes.io/name=juicefs-s3-gateway` 查看部署的 pod：
-
-      ```sh
-      $ kubectl -n kube-system get po -l app.kubernetes.io/name=juicefs-s3-gateway
-      NAME                                  READY   STATUS    RESTARTS   AGE
-      juicefs-s3-gateway-5c69d574cc-t92b6   1/1     Running   0          136m
-      ```
-
-    - **检查 Service**：执行命令 `kubectl -n kube-system get svc -l app.kubernetes.io/name=juicefs-s3-gateway` 查看部署的 Service：
-
-      ```shell
-      $ kubectl -n kube-system get svc -l app.kubernetes.io/name=juicefs-s3-gateway
-      NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
-      juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
-      ```
-
-
-
-## 监控
-
-请查看[「监控」](../administration/monitoring.md)文档了解如何收集及展示 JuiceFS 监控指标
