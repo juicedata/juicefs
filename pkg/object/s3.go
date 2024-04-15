@@ -433,7 +433,8 @@ func parseRegion(endpoint string) string {
 }
 
 func defaultPathStyle() bool {
-	return os.Getenv("JFS_S3_VHOST_STYLE") == ""
+	v := os.Getenv("JFS_S3_VHOST_STYLE")
+	return v == "" || v == "0" || v == "false"
 }
 
 var oracleCompileRegexp = `.*\.compat.objectstorage\.(.*)\.oraclecloud\.com`
