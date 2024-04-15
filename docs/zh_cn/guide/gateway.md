@@ -493,6 +493,32 @@ EXAMPLES:
      $ mc policy --recursive links s3/shared/
 ```
 
+Gateway 默认内置了 4 种匿名权限
+
+- none: 不允许匿名访问（一般用来清除已有的权限）
+- download：允许任何人读取
+- upload：允许任何人写入
+- public：允许任何人读写
+
+下面举例说明如何设置一个对象允许匿名下载
+
+```
+# 设置 testbucket1/afile 为匿名访问
+mc policy set download useradmin/testbucket1/afile
+
+# 查看具体权限
+mc policy get-json useradmin/testbucket1/afile
+
+$ mc policy --recursive links useradmin/testbucket1/
+http://127.0.0.1:9001/testbucket1/afile
+
+# 直接下载该对象
+wget http://127.0.0.1:9001/testbucket1/afile
+
+# 清除 afile 的 download 权限
+mc policy set none  useradmin/testbucket1/afile
+```
+
 #### 配置生效时间
 
 JuiceFS Gateway 的所有管理 API 的更新操作都会立即生效并且持久化到 JuiceFS 文件系统中，而且接受该 API 请求的客户端也会立即生效。但是当 Gateway 多机运行时，情况会有所不同，因为 Gateway 在处理请求鉴权时会直接采用内存缓存信息作为校验基准，否则每次请求都读取配置文件内容作为校验基准将带来不可接受的性能问题。但是有了缓存就会存在缓存数据与配置文件不一致的问题。目前 JuiceFS Gateway 的缓存刷新策略是每 5 分钟强制更新内存缓存（部分操作也会触发缓存更新操作），这样保证多机情况下配置生效最长不会超过 5 分钟。你也可以通过 `--refresh-iam-interval` 参数来调整该时间。如果希望某个 Gateway 立即生效，可以尝试手动将其重启。
