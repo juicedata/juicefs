@@ -49,7 +49,7 @@ func (t *tosClient) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,
 		IsSupportUploadPartCopy:  true,
-		MinPartSize:              5 << 20,
+		MinPartSize:              4 << 20,
 		MaxPartSize:              5 << 30,
 		MaxPartCount:             10000,
 	}
