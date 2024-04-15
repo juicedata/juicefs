@@ -8,7 +8,9 @@ JuiceFS 会将文件[分块存储到底层的对象存储中](../introduction/ar
 
 ![JuiceFS S3 Gateway architecture](../images/juicefs-s3-gateway-arch.png)
 
-JuiceFS S3 网关是通过 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)实现的功能，常见的使用场景有：
+JuiceFS S3 网关是通过 [MinIO S3 网关](https://github.com/minio/minio/tree/ea1803417f80a743fc6c7bb261d864c38628cf8d/docs/gateway)实现的功能，我们通过实现起来其 [object 接口](https://github.com/minio/minio/blob/d46386246fb6db5f823df54d932b6f7274d46059/cmd/object-api-interface.go#L88) 并且将 JuiceFS 文件系统作为其 server 的后端存储，获得了近乎原生 minio 的体验，继承 minio 的很多企业级功能。这种架构对于 minio 来说，JuiceFS 是其运行 server 命令的一块本地盘，整体的原理类似于 `minio server /data1`。
+
+JuiceFS Gateway 的常见的使用场景有：
 
 * 为 JuiceFS 文件系统暴露 S3 接口，应用可以通过 S3 SDK 访问 JuiceFS 上存储的文件
 * 使用 s3cmd、AWS CLI、MinIO 客户端来方便地访问和操作 JuiceFS 上存储的文件

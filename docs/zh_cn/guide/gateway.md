@@ -144,7 +144,7 @@ export MINIO_DOMAIN=mydomain.com
 
 ## 调整 IAM 刷新时间
 
-默认 IAM 缓存的刷新时间为 5 分钟，可以通过 `--refresh-iam-interval` 调整，该参数的值是一个带单位的时间字符串，例如 "300ms", "-1.5h" or "2h45m"，有效的时间单位是 "ns", "us" (or "µs"), "ms", "s", "m", "h".
+默认 IAM 缓存的刷新时间为 5 分钟，可以通过 `--refresh-iam-interval` 调整，该参数的值是一个带单位的时间字符串，例如 "300ms", "-1.5h" 或者 "2h45m"，有效的时间单位是 "ns", "us" (or "µs"), "ms", "s", "m", "h".
 
 例如设置 1 分钟刷新
 
@@ -205,12 +205,12 @@ $ mc admin user list myminio --json
 `mc admin user svcacct` 命令支持服务账户的管理，允许为某个用户添加服务账户，每个服务账户都与用户身份相关联，并继承附加到其父用户或父用户所属组的策略。每个访问密钥还支持可选的内联策略，可进一步限制对父用户可用的操作和资源子集的访问。
 
 ```
-$ mc_old admin user svcacct -h
+$ mc admin user svcacct -h
 NAME:
-  mc_old admin user svcacct - manage service accounts
+  mc admin user svcacct - manage service accounts
 
 USAGE:
-  mc_old admin user svcacct COMMAND [COMMAND FLAGS | -h] [ARGUMENTS...]
+  mc admin user svcacct COMMAND [COMMAND FLAGS | -h] [ARGUMENTS...]
 
 COMMANDS:
   add      add a new service account
@@ -712,7 +712,7 @@ redis 事件目标支持两种格式：`namespace` 和 `access`。
 
    要配置这种存储桶通知，我们需要用到前面步骤 MinIO 输出的 ARN 信息。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-   有了 mc 这个工具，这些配置信息很容易就能添加上。假设 Gateway 服务别名叫 myminio，可执行下列脚本：
+   假设 Gateway 服务别名叫 myminio，可执行下列脚本：
 
    ```Shell
    # 在我的 minio 中创建名为`images`的存储桶
