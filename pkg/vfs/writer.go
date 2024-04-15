@@ -135,6 +135,9 @@ func (s *sliceWriter) write(ctx meta.Context, off uint32, data []uint8) syscall.
 		s.slen = off + uint32(len(data))
 	}
 	s.lastMod = time.Now()
+	if s.id == 0 {
+		go s.prepareID(ctx, false)
+	}
 	if s.slen == meta.ChunkSize {
 		s.freezed = true
 		go s.flushData()
@@ -145,8 +148,6 @@ func (s *sliceWriter) write(ctx meta.Context, off uint32, data []uint8) syscall.
 				logger.Warnf("write: chunk: %d off: %d %s", s.id, off, err)
 				return syscall.EIO
 			}
-		} else if int(off) <= f.w.blockSize {
-			go s.prepareID(ctx, false)
 		}
 	}
 	return 0

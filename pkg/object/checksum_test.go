@@ -56,7 +56,7 @@ func TestChecksumRead(t *testing.T) {
 		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
 		n, err := reader.Read(make([]byte, length))
 		if n != length || (err != nil && err != io.EOF) {
-			t.Fatalf("verify checksum shuold success")
+			t.Fatalf("verify checksum should success")
 		}
 	}
 
@@ -65,7 +65,7 @@ func TestChecksumRead(t *testing.T) {
 		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
 		n, err := reader.Read(make([]byte, length+100))
 		if n != length || (err != nil && err != io.EOF) {
-			t.Fatalf("verify checksum shuold success")
+			t.Fatalf("verify checksum should success")
 		}
 	}
 

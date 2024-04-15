@@ -141,7 +141,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if d, e := get(s, "test", 0, -1, WithStorageClass(&scGet)); e != nil || d != "hello" {
 		t.Fatalf("expect hello, but got %v, error: %s", d, e)
 	}
-	if scGet != sc { // Relax me when testing against a storage that doesnot use specified storage class
+	if scGet != sc { // Relax me when testing against a storage that doesn't use specified storage class
 		t.Fatalf("Storage class should be %q, got %q", sc, scGet)
 	}
 
