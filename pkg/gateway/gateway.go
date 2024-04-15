@@ -157,7 +157,7 @@ func (n *jfsObjects) isValidBucketName(bucket string) error {
 }
 
 func (n *jfsObjects) path(p ...string) string {
-	if len(p) > 0 && p[0] == n.conf.Format.Name {
+	if !n.gConf.MultiBucket && len(p) > 0 && p[0] == n.conf.Format.Name {
 		p = p[1:]
 	}
 	return sep + minio.PathJoin(p...)
