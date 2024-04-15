@@ -145,7 +145,7 @@ $ mc ls juicefs/jfs
 export MINIO_DOMAIN=mydomain.com
 ```
 
-#### 调整 IAM 刷新时间
+### 调整 IAM 刷新时间
 
 默认 IAM 缓存的刷新时间为 5 分钟，可以通过 `--refresh-iam-interval` 调整，该参数的值是一个带单位的时间字符串，例如 "300ms", "-1.5h" 或者 "2h45m"，有效的时间单位是 "ns", "us" (or "µs"), "ms", "s", "m", "h".
 
