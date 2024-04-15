@@ -84,6 +84,8 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skip
 				logger.Warnf("backup metadata failed: %s", err)
 			}
 			LastBackupDurationG.Set(time.Since(now).Seconds())
+		} else {
+			LastBackupDurationG.Set(0)
 		}
 	}
 }
