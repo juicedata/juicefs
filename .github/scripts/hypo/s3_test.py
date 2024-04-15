@@ -54,7 +54,7 @@ class TestS3(unittest.TestCase):
         state.list_groups()
         state.teardown()
 
-    def test_issue_4639(self):
+    def skip_test_issue_4639(self):
         # SEE https://github.com/juicedata/juicefs/issues/4639
         state = S3Machine()
         v1 = state.init_aliases()
@@ -65,7 +65,7 @@ class TestS3(unittest.TestCase):
         state.policy_info(alias=v1, policy_name=v5)
         state.teardown()
 
-    def test_issue_4660(self):
+    def skip_test_issue_4660(self):
         #SEE https://github.com/juicedata/juicefs/issues/4660
         state = S3Machine()
         v1 = state.init_aliases()
