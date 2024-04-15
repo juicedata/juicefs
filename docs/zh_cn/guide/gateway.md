@@ -2,7 +2,7 @@
 title: JuiceFS S3 网关
 sidebar_position: 5
 ---
-# 架构与原理
+## 架构与原理
 
 JuiceFS 会将文件[分块存储到底层的对象存储中](../introduction/architecture.md#how-juicefs-store-files)，暴露给用户的往往是 POSIX 接口，而如果你需要同时用 S3 兼容接口访问 JuiceFS 中的文件，就可以用到 S3 网关。其架构图如下：
 
@@ -17,7 +17,8 @@ JuiceFS Gateway 的常见的使用场景有：
 * S3 网关还提供一个基于网页的文件管理器，使用浏览器就能对 JuiceFS 文件系统进行常规的增删管理
 * 在跨集群复制数据的场景下，作为集群的统一数据出口，避免跨区访问元数据以提升数据传输性能，详见[「使用 S3 网关进行跨区域数据同步」](../guide/sync.md#sync-across-region)
 
-# 快速开始
+## 快速开始
+
 1. 创建文件系统
 
     S3 网关只是将一个 POSIX 文件系统以 S3 协议对外提供服务，所以在启动 S3 网关前需要先准备好一个的文件系统
@@ -61,7 +62,7 @@ JuiceFS Gateway 的常见的使用场景有：
     - 与 S3 网关所在主机处于同一局域网的第三方客户端可以使用 `http://192.168.1.8:9000` 访问（假设启用 S3 网关的主机内网 IP 地址为 192.168.1.8）；
     - 通过互联网访问 S3 网关可以使用 `http://110.220.110.220:9000` 访问（假设启用 S3 网关的主机公网 IP 地址为 110.220.110.220）。
 
-# 访问 S3 网关
+## 访问 S3 网关
 
 各类支持 S3 API 的客户端、桌面程序、Web 程序等都可以访问 JuiceFS S3 网关。使用时请注意 S3 网关监听的地址和端口。
 
@@ -69,7 +70,7 @@ JuiceFS Gateway 的常见的使用场景有：
 以下示例均为使用第三方客户端访问本地主机上运行的 S3 网关。在具体场景下，请根据实际情况调整访问 S3 网关的地址。
 :::
 
-## 使用 AWS CLI
+### 使用 AWS CLI
 
 从 [https://aws.amazon.com/cli](https://aws.amazon.com/cli) 下载并安装 AWS CLI，然后进行配置：
 
@@ -93,7 +94,7 @@ $ aws --endpoint-url http://localhost:9000 s3 ls
 $ aws --endpoint-url http://localhost:9000 s3 ls s3://<bucket>
 ```
 
-## 使用 MinIO 客户端
+### 使用 MinIO 客户端
 
 为避免兼容性问题，我们推荐采用的 mc 的版本为 RELEASE.2021-04-22T17-40-00Z，你可以在这个[地址](https://dl.min.io/client/mc/release/)找到历史版本和不同架构的 mc，比如这是 amd64 架构 RELEASE.2021-04-22T17-40-00Z 版本的 mc 的[下载地址](https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z)
 
@@ -118,21 +119,21 @@ $ mc ls juicefs/jfs
 [2021-10-20 11:59:10 CST]  11MiB work-4997565.svg
 ```
 
-# 常用功能
+## 常用功能
 
-## 多桶支持
+### 多桶支持
 
 默认情况下，juicefs Gateway 只允许一个 bucket，bucket 名字为文件系统名字，如果需要多个桶，可以在启动时添加 `--multi-buckets`开启多桶支持，该参数将会把 juicefs 文件系统顶级目录下的每个子目录都导出为一个 bucket。创建 bucket 的行为在文件系统上的反映是顶级目录下创建了一个同名的子目录。
 
-## 保留 etag
+### 保留 etag
 
 默认  Gateway 不会保存和返回对象的 etag 信息，可以通过`--keep-etag` 开启
 
-## 开启对象标签
+### 开启对象标签
 
 默认不支持对象标签，可以通过`--object-tag` 开启
 
-## 启用虚拟主机风格请求
+### 启用虚拟主机风格请求
 
 默认情况下，Gateway 支持格式为 <http://mydomain.com/bucket/object> 的路径类型请求。
 `MINIO_DOMAIN` 环境变量被用来启用虚拟主机类型请求。如果请求的`Host`头信息匹配 `(.+).mydomain.com`，则匹配的模式 `$1` 被用作 bucket，并且路径被用作 object.
@@ -142,7 +143,7 @@ $ mc ls juicefs/jfs
 export MINIO_DOMAIN=mydomain.com
 ```
 
-## 调整 IAM 刷新时间
+#### 调整 IAM 刷新时间
 
 默认 IAM 缓存的刷新时间为 5 分钟，可以通过 `--refresh-iam-interval` 调整，该参数的值是一个带单位的时间字符串，例如 "300ms", "-1.5h" 或者 "2h45m"，有效的时间单位是 "ns", "us" (or "µs"), "ms", "s", "m", "h".
 
@@ -150,13 +151,11 @@ export MINIO_DOMAIN=mydomain.com
 
 `juicefs gateway xxxx xxxx    --refresh-iam-interval 1m`
 
-# 高级功能
+## 高级功能
 
 JuiceFS gateway 的核心功能是对外提供 S3 接口，目前对 S3 协议的支持已经比较完善。在 v1.2 版本中，我们又添加了对身份和访问控制（IAM）和桶事件通知的支持。高级功能需要使用 RELEASE.2021-04-22T17-40-00Z 版本的 mc 命令行工具调用。这些高级功能的使用方法可以参考当时 MinIO [相关文档](https://github.com/minio/minio/tree/e0d3a8c1f4e52bb4a7d82f7f369b6796103740b3/docs)使用，也可以直接参考 mc 的命令行帮助信息。如果你不知道有哪些功能或者不知道某个功能如何使用，你可以直接在子命令后加 `-h` 查看帮助说明。下文将简要介绍支持哪些高级功能和部分示例。
 
-## 身份和访问控制
-
-### 用户管理
+### 身份和访问控制
 
 #### 普通用户
 
@@ -222,7 +221,7 @@ COMMANDS:
   disable  Disable a services account
 ```
 
-#### 安全令牌服务
+#### AssumeRole 安全令牌服务
 
 Gateway 安全令牌服务（STS）是一种服务，可让客户端请求 MinIO 资源的临时凭证。临时凭证的工作原理与默认管理员凭证几乎相同，但有一些不同之处：
 
@@ -230,11 +229,9 @@ Gateway 安全令牌服务（STS）是一种服务，可让客户端请求 MinIO
 
 - 临时凭据不需要与应用程序一起存储，而是动态生成并在请求时提供给应用程序。当（甚至在）临时凭据过期时，应用程序可以请求新的凭据。
 
-##### AssumeRole
+AssumeRole 会返回一组临时安全凭证，您可以使用这些凭证访问 Gateway 资源。AssumeRole 需要现有 Gateway 用户的授权凭据，返回的临时安全凭证包括访问密钥、秘密密钥和安全令牌。应用程序可以使用这些临时安全凭证对 Gateway API 操作进行签名调用。应用于这些临时凭据的策略略继承自 Gateway 用户凭据。默认情况下，AssumeRole 创建的临时安全凭证有效期为一个小时。但是，请使用可选参数 DurationSeconds 指定凭据的持续时间范围。该值从 900 秒（15 分钟）变化到最长 7 天会话持续时间限制之间不等。
 
-返回一组临时安全凭证，您可以使用这些凭证访问 Gateway 资源。AssumeRole 需要现有 Gateway 用户的授权凭据，返回的临时安全凭证包括访问密钥、秘密密钥和安全令牌。应用程序可以使用这些临时安全凭证对 Gateway API 操作进行签名调用。应用于这些临时凭据的策略略继承自 Gateway 用户凭据。默认情况下，AssumeRole 创建的临时安全凭证有效期为一个小时。但是，请使用可选参数 DurationSeconds 指定凭据的持续时间范围。该值从 900 秒（15 分钟）变化到最长 7 天会话持续时间限制之间不等。
-
-###### API 请求参数
+##### API 请求参数
 
 1. Version
    
@@ -269,21 +266,21 @@ Gateway 安全令牌服务（STS）是一种服务，可让客户端请求 MinIO
    | Valid Range | 最小长度为 1。最大长度为 2048。 |
    | Required    | No                |
 
-###### 响应元素
+##### 响应元素
 
 此 API 的 XML 响应类似于 [AWS STS AssumeRole](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html#API_AssumeRole_ResponseElements)
 
-###### 错误
+##### 错误
 
 此 API 的 XML 错误响应类似于 [AWS STS AssumeRole](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html#API_AssumeRole_Errors)
 
-###### `POST`请求示例
+##### `POST`请求示例
 
 ```
 http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Policy={"Version":"2012-10-17","Statement":[{"Sid":"Stmt1","Effect":"Allow","Action":"s3:*","Resource":"arn:aws:s3:::*"}]}&AUTHPARAMS
 ```
 
-###### 响应示例
+##### 响应示例
 
 ```
 <?xml version="1.0" encoding="UTF-8"?>
@@ -306,7 +303,7 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 </AssumeRoleResponse>
 ```
 
-###### aws cli 使用 AssumeRole API
+##### aws cli 使用 AssumeRole API
 
 1. 启动 Gateway 并 创建 foobar 用户
 2. 配置 aws cli
@@ -337,7 +334,7 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
    }
    ```
 
-######  go 应用程序访问 AssumeRole API
+#####  go 应用程序访问 AssumeRole API
 
 请参考 minio 官方[示例程序](https://github.com/minio/minio/blob/master/docs/sts/assume-role.go)
 

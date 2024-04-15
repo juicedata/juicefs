@@ -56,7 +56,7 @@ juicefs gateway redis://localhost:6379 0.0.0.0:9000
 
 ## 后台运行
 
-Juicefs gateway 自 v1.2 版本支持 gateway 以后台模式运行，在启动时添加 `-d` 参数即可
+JuiceFS gateway 自 v1.2 版本支持 gateway 以后台模式运行，在启动时添加 `-d` 参数即可
 
 ```
 juicefs gateway redis://localhost:6379 localhost:9000 -d
