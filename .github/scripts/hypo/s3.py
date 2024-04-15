@@ -150,6 +150,16 @@ class S3Machine(RuleBasedStateMachine):
         assert self.equal(result1, result2), f'\033[31mget_bucket_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
+        bucket_name = buckets,
+        alias = aliases, 
+        recursive = st.booleans()
+    )
+    def list_bucket_policy(self, bucket_name, alias=ROOT_ALIAS, recursive=False):
+        result1 = self.client1.do_list_bucket_policy(bucket_name, alias, recursive)
+        result2 = self.client2.do_list_bucket_policy(bucket_name, alias, recursive)
+        assert self.equal(result1, result2), f'\033[31mlist_bucket_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
         target=objects,
         bucket_name = buckets,
         object_name = st_object_name, 
@@ -409,12 +419,10 @@ class S3Machine(RuleBasedStateMachine):
     @rule(
         target = policies,
         alias = st.just(ROOT_ALIAS),
-        policy_name = consumes(policies).filter(lambda x: x != multiple())
+        policy_name = consumes(policies).filter(lambda x: x != multiple()).filter(lambda x: x not in BUILD_IN_POLICIES)
     )
     @precondition(lambda self: 'remove_policy' not in self.EXCLUDE_RULES)
     def remove_policy(self, policy_name, alias=ROOT_ALIAS):
-        # SEE https://github.com/juicedata/juicefs/issues/4639
-        assume(policy_name not in BUILD_IN_POLICIES)
         result1 = self.client1.do_remove_policy(policy_name, alias)
         result2 = self.client2.do_remove_policy(policy_name, alias)
         assert self.equal(result1, result2), f'\033[31mremove_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'

@@ -54,7 +54,7 @@ class TestS3(unittest.TestCase):
         state.list_groups()
         state.teardown()
 
-    def skip_test_policy_remove(self):
+    def skip_test_issue_4639(self):
         # SEE https://github.com/juicedata/juicefs/issues/4639
         state = S3Machine()
         v1 = state.init_aliases()
@@ -65,7 +65,7 @@ class TestS3(unittest.TestCase):
         state.policy_info(alias=v1, policy_name=v5)
         state.teardown()
 
-    def skip_test_disable_user(self):
+    def skip_test_issue_4660(self):
         #SEE https://github.com/juicedata/juicefs/issues/4660
         state = S3Machine()
         v1 = state.init_aliases()
@@ -73,6 +73,15 @@ class TestS3(unittest.TestCase):
         v8 = state.add_user(alias=v1, user_name='user1')
         state.disable_user(alias=v1, user_name=v8)
         state.set_alias(alias='pjzm', url1='localhost:9000', url2='localhost:9006', user_name=v8)
+        state.teardown()
+
+    def test_issue_4682(self):
+        # SEE https://github.com/juicedata/juicefs/issues/4682
+        state = S3Machine()
+        v1 = state.init_aliases()
+        v2, v3, v4, v5 = state.init_policies()
+        v6 = state.create_bucket(alias=v1, bucket_name='nzpy')
+        state.get_bucket_policy(alias=v1, bucket_name=v6)
         state.teardown()
 
 if __name__ == '__main__':

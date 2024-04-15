@@ -133,6 +133,18 @@ class S3Client():
         self.logger.info(f'do_get_bucket_policy {bucket_name} succeed')
         return self.sort_dict(json.loads(result))
 
+    def do_list_bucket_policy(self, bucket_name:str, alias, recursive=False):
+        try:
+            cmd = f'mc policy list {self.get_alias(alias)}/{bucket_name}'
+            if recursive:
+                cmd += ' --recursive'
+            result = self.run_cmd(cmd)
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_list_bucket_policy', bucket_name=bucket_name)
+        self.stats.success('do_list_bucket_policy')
+        self.logger.info(f'do_list_bucket_policy {bucket_name} succeed')
+        return sorted(result.split("\n"))
+
     def do_stat_object(self, bucket_name:str, object_name:str, alias):
         try:
             result = self.run_cmd(f'mc stat {self.get_alias(alias)}/{bucket_name}/{object_name} ')
