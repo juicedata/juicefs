@@ -1158,7 +1158,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 				continue
 			}
 			if c.Key() < config.Start {
-				logger.Infof("ingore prefix %s", c.Key())
+				logger.Infof("ignore prefix %s", c.Key())
 				continue
 			}
 			if config.End != "" && c.Key() > config.End {

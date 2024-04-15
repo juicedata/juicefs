@@ -432,6 +432,11 @@ func parseRegion(endpoint string) string {
 	return region
 }
 
+func defaultPathStyle() bool {
+	v := os.Getenv("JFS_S3_VHOST_STYLE")
+	return v == "" || v == "0" || v == "false"
+}
+
 var oracleCompileRegexp = `.*\.compat.objectstorage\.(.*)\.oraclecloud\.com`
 var OVHCompileRegexp = `^s3\.(\w*)(\.\w*)?\.cloud\.ovh\.net$`
 
@@ -554,7 +559,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 	}
 	if ep != "" {
 		awsConfig.Endpoint = aws.String(ep)
-		awsConfig.S3ForcePathStyle = aws.Bool(true)
+		awsConfig.S3ForcePathStyle = aws.Bool(defaultPathStyle())
 	}
 
 	ses, err := session.NewSession(awsConfig)
