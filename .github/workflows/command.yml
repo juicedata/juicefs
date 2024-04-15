@@ -227,6 +227,16 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Remove unused software
+        run: |
+            echo "before remove unused software"
+            sudo df -h
+            sudo rm -rf /usr/share/dotnet
+            sudo rm -rf /usr/local/lib/android
+            sudo rm -rf /opt/ghc
+            echo "after remove unused software"
+            sudo df -h
+              
       - name: Build 
         uses: ./.github/actions/build
 
@@ -243,7 +253,7 @@ jobs:
           if [ "${{matrix.meta}}" == "redis" ]; then
             sudo META=${{matrix.meta}} .github/scripts/command/graceful_upgrade.sh
           fi
-
+      
       - name: Log
         if: always()
         run: |
@@ -252,7 +262,14 @@ jobs:
             sudo tail -n 1000 /var/log/juicefs.log
             grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
           fi
-          
+      
+      - name: check vdbench log
+        if: always()
+        run: |
+          if [ "${{matrix.meta}}" == "redis" ]; then
+            tail -n 1000 vdbench.log
+          fi
+      
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         # if: failure()
