@@ -52,6 +52,10 @@ func (c *COS) String() string {
 	return fmt.Sprintf("cos://%s/", strings.Split(c.endpoint, ".")[0])
 }
 
+func (c *COS) Shutdown() error {
+	return nil
+}
+
 func (c *COS) Create() error {
 	_, err := c.c.Bucket.Put(ctx, nil)
 	if err != nil && isExists(err) {

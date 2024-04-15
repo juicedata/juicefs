@@ -67,6 +67,10 @@ func (s *s3client) String() string {
 	return fmt.Sprintf("s3://%s/", s.bucket)
 }
 
+func (s *s3client) Shutdown() error {
+	return nil
+}
+
 func (s *s3client) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,

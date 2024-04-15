@@ -50,6 +50,10 @@ func (s *ibmcos) String() string {
 	return fmt.Sprintf("ibmcos://%s/", s.bucket)
 }
 
+func (s *ibmcos) Shutdown() error {
+	return nil
+}
+
 func (s *ibmcos) Create() error {
 	input := &s3.CreateBucketInput{Bucket: &s.bucket}
 	// https://cloud.ibm.com/docs/cloud-object-storage?topic=cloud-object-storage-classes&code=go

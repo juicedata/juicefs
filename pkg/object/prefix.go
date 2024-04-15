@@ -58,6 +58,10 @@ func (p *withPrefix) String() string {
 	return fmt.Sprintf("%s%s", p.os, p.prefix)
 }
 
+func (p *withPrefix) Shutdown() error {
+	return p.os.Shutdown()
+}
+
 func (p *withPrefix) Limits() Limits {
 	return p.os.Limits()
 }

@@ -47,6 +47,10 @@ func (q *qingstor) String() string {
 	return fmt.Sprintf("qingstor://%s/", *q.bucket.Properties.BucketName)
 }
 
+func (q *qingstor) Shutdown() error {
+	return nil
+}
+
 func (q *qingstor) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,

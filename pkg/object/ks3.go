@@ -52,6 +52,10 @@ func (s *ks3) String() string {
 	return fmt.Sprintf("ks3://%s/", s.bucket)
 }
 
+func (s *ks3) Shutdown() error {
+	return nil
+}
+
 func (s *ks3) Create() error {
 	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
 	if err != nil && isExists(err) {

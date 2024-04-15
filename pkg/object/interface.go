@@ -76,6 +76,8 @@ type Limits struct {
 type ObjectStorage interface {
 	// Description of the object storage.
 	String() string
+	// Shutdown connections with the object storage.
+	Shutdown() error
 	// Limits of the object storage.
 	Limits() Limits
 	// Create the bucket if not existed.
