@@ -163,18 +163,10 @@ func collectMetrics(registry *prometheus.Registry) []byte {
 		return strconv.FormatFloat(v, 'f', -1, 64)
 	}
 	for _, mf := range mfs {
-		var name = *mf.Name
-		if (name == "juicefs_meta_ops_durations_histogram_seconds" || name == "juicefs_fuse_ops_durations_histogram_seconds") &&
-			*mf.Type == io_prometheus_client.MetricType_HISTOGRAM {
-			total, sum := mergeHistogramMetrics(mf)
-			_, _ = fmt.Fprintf(w, "%s_total %d\n", name, total)
-			_, _ = fmt.Fprintf(w, "%s_sum %s\n", name, format(sum))
-			continue
-		}
 		for _, m := range mf.Metric {
 			var name = *mf.Name
 			for _, l := range m.Label {
-				if (name == "juicefs_object_request_durations_histogram_seconds" || name == "juicefs_object_request_data_bytes") && *l.Name == "method" {
+				if *l.Name == "method" || *l.Name == "errno" {
 					name += "_" + *l.Value
 				}
 			}
@@ -191,16 +183,6 @@ func collectMetrics(registry *prometheus.Registry) []byte {
 		}
 	}
 	return w.Bytes()
-}
-
-func mergeHistogramMetrics(mf *io_prometheus_client.MetricFamily) (uint64, float64) {
-	var total uint64
-	var sum float64
-	for _, metric := range mf.Metric {
-		total += metric.Histogram.GetSampleCount()
-		sum += metric.Histogram.GetSampleSum()
-	}
-	return total, sum
 }
 
 func writeProgress(item1, item2 *uint64, out io.Writer, done chan struct{}) {

@@ -115,5 +115,13 @@ class TestFsrand2(unittest.TestCase):
         state.set_acl(default=False, entry=v40, group='group2', group_perm={'r', 'w', 'x'}, logical=True, mask={'r', 'w', 'x'}, not_recalc_mask=True, other_perm={'x'}, physical=False, recalc_mask=True, recursive=False, set_mask=False, sudo_user='user1', user=v1, user_perm=set())
         state.teardown()
 
+    def test_acl_4663(self):
+        #SEE https://github.com/juicedata/juicefs/issues/4663
+        state = JuicefsMachine()
+        v1 = state.init_folders()
+        v3 = state.set_acl(default=True, entry=v1, group=v1, group_perm=set(), logical=False, mask=set(), not_recalc_mask=False, other_perm=set(), physical=False, recalc_mask=False, recursive=False, set_mask=False, sudo_user='root', user=v1, user_perm={'r'})
+        state.mkdir(mode=0, parent=v1, subdir='aaaa', umask=0, user='root')
+        state.teardown()
+
 if __name__ == '__main__':
     unittest.main()
