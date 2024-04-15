@@ -1059,6 +1059,7 @@ func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags ui
 			return
 		}
 		err = v.Meta.SetFacl(ctx, ino, aclType, rule)
+		v.invalidateAttr(ino)
 	} else {
 		err = v.Meta.SetXattr(ctx, ino, name, value, flags)
 	}
