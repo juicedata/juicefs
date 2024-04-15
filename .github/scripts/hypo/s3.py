@@ -150,6 +150,16 @@ class S3Machine(RuleBasedStateMachine):
         assert self.equal(result1, result2), f'\033[31mget_bucket_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
+        bucket_name = buckets,
+        alias = aliases, 
+        recursive = st.booleans()
+    )
+    def list_bucket_policy(self, bucket_name, alias=ROOT_ALIAS, recursive=False):
+        result1 = self.client1.do_list_bucket_policy(bucket_name, alias, recursive)
+        result2 = self.client2.do_list_bucket_policy(bucket_name, alias, recursive)
+        assert self.equal(result1, result2), f'\033[31mlist_bucket_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
         target=objects,
         bucket_name = buckets,
         object_name = st_object_name, 
