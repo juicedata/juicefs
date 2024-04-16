@@ -1278,6 +1278,9 @@ func (m *fsMachine) Readdir(t *rapid.T) {
 	}
 }
 
+// Truncate is currently disabled.
+// FIXME: The comparison of the truncate results requires compacting all slices,
+// and some tricky processing are required on results.
 //func (m *fsMachine) Truncate(t *rapid.T) {
 //	inode := m.pickNode(t)
 //	length := rapid.Uint64Range(0, 500<<20).Draw(t, "length")
