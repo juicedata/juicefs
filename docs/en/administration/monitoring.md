@@ -26,7 +26,7 @@ After mounting JuiceFS, it will automatically expose Prometheus-formatted metric
 
 The process for collecting metrics may vary slightly depending on the mount method or access type (such as FUSE mount, CSI Driver, S3 Gateway, Hadoop SDK, etc.). For detailed instructions, see [Collecting Monitoring metrics data](#collect-metrics).
 
-For example, here's how you might configure Prometheus for a common FUSE mount: If you haven't already set up Prometheus, follow the [official documentation](https://prometheus.io/docs/prometheus/latest/installation/).
+For example, here's how you might configure Prometheus for a common FUSE mount: If you haven't already set up Prometheus, follow the [official documentation](https://prometheus.io/docs/prometheus/latest/installation).
 
 Edit your `prometheus.yml` configuration file and add a new scrape configuration under `scrape_configs`. Define the JuiceFS client metrics address:
 
@@ -66,7 +66,7 @@ Visit `http://localhost:9090` to see the Prometheus interface.
 
 Once Prometheus begins scraping JuiceFS metrics, the next step is to set up Grafana to read from Prometheus.
 
-If you haven't yet installed Grafana, follow the [official documentation](https://grafana.com/docs/grafana/latest/installation/).
+If you haven't yet installed Grafana, follow the [official documentation](https://grafana.com/docs/grafana/latest/installation).
 
 In Grafana, create a new data source of type Prometheus:
 

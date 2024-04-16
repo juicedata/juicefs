@@ -26,7 +26,7 @@ JuiceFS 挂载后，默认会通过 `http://localhost:9567/metrics` 地址实时
 
 不同挂载或访问方式（如 FUSE 挂载、CSI 驱动、S3 网关、Hadoop SDK 等）收集指标数据的方式略有区别，详见[「收集监控指标」](#collect-metrics)。
 
-这里以最常见的 FUSE 挂载方式为例介绍，如果还没安装 Prometheus，可以参考[官方文档](https://prometheus.io/docs/prometheus/latest/installation/)。
+这里以最常见的 FUSE 挂载方式为例介绍，如果还没安装 Prometheus，可以参考[官方文档](https://prometheus.io/docs/prometheus/latest/installation)。
 
 编辑 [`prometheus.yml`](https://prometheus.io/docs/prometheus/latest/configuration/configuration) 配置文件，在抓取配置部分（`scrape_configs`）添加新的任务，定义 JuiceFS 客户端输出监控指标的地址：
 
@@ -67,7 +67,7 @@ scrape_configs:
 
 Prometheus 开始抓取 JuiceFS 的监控指标后，接下来要配置 Grafana 读取 Prometheus 中的数据。
 
-如果还没安装 Grafana，可以参考[官方文档](https://grafana.com/docs/grafana/latest/installation/)。
+如果还没安装 Grafana，可以参考[官方文档](https://grafana.com/docs/grafana/latest/installation)。
 
 在 Grafana 中新建 Prometheus 类型的数据源：
 
