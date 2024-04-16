@@ -109,3 +109,7 @@ type ObjectStorage interface {
 	// ListUploads lists existing multipart uploads.
 	ListUploads(marker string) ([]*PendingPart, string, error)
 }
+
+type Shutdownable interface {
+	Shutdown()
+}

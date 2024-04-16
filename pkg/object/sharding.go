@@ -35,6 +35,14 @@ func (s *sharded) String() string {
 	return fmt.Sprintf("shard%d://%s", len(s.stores), s.stores[0])
 }
 
+func (s *sharded) Shutdown() {
+	for _, o := range s.stores {
+		if sd, ok := o.(Shutdownable); ok {
+			sd.Shutdown()
+		}
+	}
+}
+
 func (s *sharded) Limits() Limits {
 	l := s.stores[0].Limits()
 	l.IsSupportUploadPartCopy = false

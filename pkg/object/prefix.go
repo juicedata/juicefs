@@ -58,6 +58,12 @@ func (p *withPrefix) String() string {
 	return fmt.Sprintf("%s%s", p.os, p.prefix)
 }
 
+func (p *withPrefix) Shutdown() {
+	if sd, ok := p.os.(Shutdownable); ok {
+		sd.Shutdown()
+	}
+}
+
 func (p *withPrefix) Limits() Limits {
 	return p.os.Limits()
 }
