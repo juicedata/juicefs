@@ -120,7 +120,9 @@ func (s *sliceWriter) flushData() {
 		s.writer.Abort()
 		s.err = syscall.EIO
 	}
+	s.chunk.file.Lock()
 	s.writer = nil
+	s.chunk.file.Unlock()
 }
 
 // protected by s.chunk.file
