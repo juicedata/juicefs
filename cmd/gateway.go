@@ -137,7 +137,7 @@ func gateway(c *cli.Context) error {
 
 	metaAddr := c.Args().Get(0)
 	listenAddr := c.Args().Get(1)
-	conf, jfs := initForSvc(c, "s3gateway", metaAddr)
+	conf, jfs := initForSvc(c, "s3gateway", metaAddr, listenAddr)
 
 	umask, err := strconv.ParseUint(c.String("umask"), 8, 16)
 	if err != nil {
@@ -199,12 +199,12 @@ func gateway2(ctx *mcli.Context) error {
 	return nil
 }
 
-func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.FileSystem) {
+func initForSvc(c *cli.Context, mp string, metaUrl, listenAddr string) (*vfs.Config, *fs.FileSystem) {
 	removePassword(metaUrl)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
 	if c.Bool("background") {
-		if err := makeDaemonForSvc(c, metaCli, metaUrl); err != nil {
+		if err := makeDaemonForSvc(c, metaCli, metaUrl, listenAddr); err != nil {
 			logger.Fatalf("make daemon: %s", err)
 		}
 	}
