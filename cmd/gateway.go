@@ -85,6 +85,7 @@ func cmdGateway() *cli.Command {
 		},
 		&cli.StringFlag{
 			Name:  "refresh-iam-interval",
+			Value: "5m",
 			Usage: "interval to reload gateway IAM from configuration",
 		},
 	}
