@@ -763,7 +763,7 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
 
 整体方法与使用 MySQL 发布 MinIO 事件相同，这里不再累述。
 
-需要注意的点是要求 PostgresSQL 9.5 版本及以上。Gateway 用了 PostgreSQL 9.5 引入的[INSERT ON CONFLICT](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (aka UPSERT) 特性，以及 9.4 引入的[JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) 数据类型。
+需要注意的点是要求 PostgreSQL 9.5 版本及以上。Gateway 用了 PostgreSQL 9.5 引入的[INSERT ON CONFLICT](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (aka UPSERT) 特性，以及 9.4 引入的[JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) 数据类型。
 
 #### 使用 Webhook 发布事件
 

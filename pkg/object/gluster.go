@@ -274,7 +274,7 @@ func newGluster(endpoint, ak, sk, token string) (ObjectStorage, error) {
 		return nil, fmt.Errorf("no volume provided")
 	}
 	name := ps[1]
-	// multiple clinets for possible performance improvement
+	// multiple clients for possible performance improvement
 	var size int
 	if ssize := os.Getenv("JFS_NUM_GLUSTER_CLIENTS"); ssize != "" {
 		size, _ = strconv.Atoi(ssize)
