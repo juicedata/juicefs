@@ -37,7 +37,7 @@ func (r *ResponseAttrs) SetRequestID(id string) *ResponseAttrs {
 }
 
 func (r *ResponseAttrs) SetStorageClass(sc string) *ResponseAttrs {
-	if r.storageClass != nil && sc != "" { // Donot overwrite default storage class
+	if r.storageClass != nil && sc != "" { // Don't overwrite default storage class
 		*r.storageClass = sc
 	}
 	return r
