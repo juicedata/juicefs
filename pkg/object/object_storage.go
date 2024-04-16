@@ -107,10 +107,6 @@ var notSupported = utils.ENOTSUP
 
 type DefaultObjectStorage struct{}
 
-func (s DefaultObjectStorage) Shutdown() error {
-	return nil
-}
-
 func (s DefaultObjectStorage) Create() error {
 	return nil
 }

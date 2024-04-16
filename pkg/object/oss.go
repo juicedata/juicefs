@@ -48,10 +48,6 @@ func (o *ossClient) String() string {
 	return fmt.Sprintf("oss://%s/", o.bucket.BucketName)
 }
 
-func (o *ossClient) Shutdown() error {
-	return nil
-}
-
 func (o *ossClient) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,

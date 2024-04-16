@@ -45,10 +45,6 @@ func (t *tosClient) String() string {
 	return fmt.Sprintf("tos://%s/", t.bucket)
 }
 
-func (t *tosClient) Shutdown() error {
-	return nil
-}
-
 func (t *tosClient) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,

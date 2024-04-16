@@ -53,10 +53,6 @@ func (s *obsClient) String() string {
 	return fmt.Sprintf("obs://%s/", s.bucket)
 }
 
-func (s *obsClient) Shutdown() error {
-	return nil
-}
-
 func (s *obsClient) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,

@@ -27,21 +27,12 @@ import (
 )
 
 type sharded struct {
+	DefaultObjectStorage
 	stores []ObjectStorage
 }
 
 func (s *sharded) String() string {
 	return fmt.Sprintf("shard%d://%s", len(s.stores), s.stores[0])
-}
-
-func (s *sharded) Shutdown() error {
-	var err error
-	for _, o := range s.stores {
-		if e := o.Shutdown(); e != nil {
-			err = e
-		}
-	}
-	return err
 }
 
 func (s *sharded) Limits() Limits {
@@ -94,10 +85,6 @@ func (s *sharded) SetStorageClass(sc string) error {
 		}
 	}
 	return err
-}
-
-func (s *sharded) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return nil, notSupported
 }
 
 const maxResults = 10000
@@ -218,20 +205,12 @@ func (s *sharded) UploadPart(key string, uploadID string, num int, body []byte) 
 	return s.pick(key).UploadPart(key, uploadID, num, body)
 }
 
-func (s *sharded) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
-	return nil, notSupported
-}
-
 func (s *sharded) AbortUpload(key string, uploadID string) {
 	s.pick(key).AbortUpload(key, uploadID)
 }
 
 func (s *sharded) CompleteUpload(key string, uploadID string, parts []*Part) error {
 	return s.pick(key).CompleteUpload(key, uploadID, parts)
-}
-
-func (s *sharded) ListUploads(marker string) ([]*PendingPart, string, error) {
-	return nil, "", nil
 }
 
 func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage, error) {

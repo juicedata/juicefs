@@ -232,7 +232,7 @@ func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl string) error {
 	if godaemon.Stage() <= 1 {
 		err := m.Shutdown()
 		if err != nil {
-			logger.Errorf("Shutdown metadata: %s", err)
+			logger.Errorf("shutdown: %s", err)
 		}
 	}
 	_, _, err := godaemon.MakeDaemon(&attrs)

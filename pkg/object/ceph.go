@@ -45,11 +45,6 @@ func (c *ceph) String() string {
 	return fmt.Sprintf("ceph://%s/", c.name)
 }
 
-func (c *ceph) Shutdown() error {
-	c.conn.Shutdown()
-	return nil
-}
-
 func (c *ceph) Create() error {
 	names, err := c.conn.ListPools()
 	if err != nil {
@@ -333,7 +328,7 @@ func newCeph(endpoint, cluster, user, token string) (ObjectStorage, error) {
 	}
 	if opt := os.Getenv("CEPH_LOG_FILE"); opt != "none" {
 		if opt == "" {
-			opt = "/var/log/ceph/jfs-$cluster-$name-$pid.log"
+			opt = "/var/log/ceph/jfs-$cluster-$name.log"
 		}
 		if err = conn.SetConfigOption("log_file", opt); err != nil {
 			logger.Warnf("Failed to set log_file to %s: %s", opt, err)

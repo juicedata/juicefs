@@ -597,9 +597,6 @@ func mount(c *cli.Context) error {
 		if err = metaCli.Shutdown(); err != nil {
 			logger.Errorf("[pid=%d] meta shutdown: %s", os.Getpid(), err)
 		}
-		if err = blob.Shutdown(); err != nil {
-			logger.Errorf("[pid=%d] data shutdown: %s", os.Getpid(), err)
-		}
 		var foreground bool
 		if runtime.GOOS == "windows" || !c.Bool("background") || os.Getenv("JFS_FOREGROUND") != "" {
 			foreground = true
