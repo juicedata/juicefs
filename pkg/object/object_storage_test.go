@@ -233,6 +233,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
+	defer s.Delete("a/")
 	defer s.Delete("a/a")
 	if err := s.Put("a/a", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
@@ -241,6 +242,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put("a/a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
+	defer s.Delete("b/")
 	defer s.Delete("b/b")
 	if err := s.Put("b/b", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())

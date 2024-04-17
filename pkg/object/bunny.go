@@ -1,5 +1,5 @@
-//go:build !nobunny
-// +build !nobunny
+//go:build bunny
+// +build bunny
 
 /*
  * JuiceFS, Copyright 2024 Juicedata, Inc.
@@ -88,15 +88,6 @@ func (b *bunnyClient) List(prefix, marker, delimiter string, limit int64, follow
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix
 		}
-	} else if marker == "" {
-		obj, err := b.Head(dir)
-		if err != nil {
-			if os.IsNotExist(err) {
-				err = nil
-			}
-			return nil, err
-		}
-		output = append(output, obj)
 	}
 
 	listedObjects, err := b.client.List(dir)
