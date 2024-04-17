@@ -162,7 +162,7 @@ The JuiceFS officially maintained image [`juicedata/mount`](https://hub.docker.c
 
 Before you start, you need to prepare [object storage](../reference/how_to_set_up_object_storage.md) and [metadata engine](../reference/how_to_set_up_metadata_engine.md).
 
-#### Create a File System
+#### Create a file system
 
 Create a file system through a temporary container, for example:
 
