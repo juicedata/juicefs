@@ -22,7 +22,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"github.com/juicedata/juicefs/pkg/utils"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -33,6 +32,8 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 
 	jfsgateway "github.com/juicedata/juicefs/pkg/gateway"
@@ -247,6 +248,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 		if err := metaCli.CloseSession(); err != nil {
 			logger.Fatalf("close session failed: %s", err)
 		}
+		object.Shutdown(blob)
 		os.Exit(0)
 	}()
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
