@@ -69,7 +69,7 @@ docker run -it -v jfsvolume:/opt busybox ls /opt
 docker volume rm jfsvolume
 ```
 
-### Using the Plugin in Docker Compose {#using-plugin-in-docker-compose}
+### Using the plugin in Docker Compose {#using-plugin-in-docker-compose}
 
 Here is an example of using the JuiceFS volume plugin in `docker-compose`:
 
