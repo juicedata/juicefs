@@ -2337,21 +2337,22 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		if nin.Type != TypeFile {
 			return syscall.EINVAL
 		}
-		if offIn >= nin.Length {
-			if copied != nil {
-				*copied = 0
-			}
-			return nil
-		}
-		size := size
-		if offIn+size > nin.Length {
-			size = nin.Length - offIn
-		}
+
 		if nout.Type != TypeFile {
 			return syscall.EINVAL
 		}
 		if (nout.Flags&FlagImmutable) != 0 || (nout.Flags&FlagAppend) != 0 {
 			return syscall.EPERM
+		}
+
+		if offIn >= nin.Length || size == 0 {
+			if copied != nil {
+				*copied = 0
+			}
+			return nil
+		}
+		if offIn+size > nin.Length {
+			size = nin.Length - offIn
 		}
 
 		newleng := offOut + size
