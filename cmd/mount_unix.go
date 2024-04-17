@@ -44,6 +44,7 @@ import (
 	"github.com/juicedata/godaemon"
 	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
@@ -619,7 +620,7 @@ func adjustOOMKiller(score int) {
 	}
 }
 
-func installHandler(mp string, v *vfs.VFS) {
+func installHandler(mp string, v *vfs.VFS, blob object.ObjectStorage) {
 	// Go will catch all the signals
 	signal.Ignore(syscall.SIGPIPE)
 	signalChan := make(chan os.Signal, 10)
@@ -636,6 +637,7 @@ func installHandler(mp string, v *vfs.VFS) {
 					if err != nil {
 						logger.Fatalf("flush buffered data failed: %s", err)
 					}
+					object.Shutdown(blob)
 					logger.Warnf("exit with code 1")
 					os.Exit(1)
 				} else {
