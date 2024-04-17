@@ -44,9 +44,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     INCLUDE_RULES = []
     EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file', \
                         'clone_cp_file', 'clone_cp_dir']
-    # EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file', 'clone_cp_file', 'clone_cp_dir', \
-    #                  'write', 'fallocate', 'truncate', 'symlink', 'hardlink', 'rename_file', \
-    #                 'rename_dir', 'unlink', 'rmdir', 'read']
+    
     @initialize(target=Folders)
     def init_folders(self):
         if not os.path.exists(self.ROOT_DIR1):
@@ -101,14 +99,18 @@ class JuicefsMachine(RuleBasedStateMachine):
         os.seteuid(pwd.getpwnam(user).pw_uid)
         # os.setegid(pwd.getpwnam(user).pw_gid)
 
+    def should_run(self, rule):
+        if len(self.EXCLUDE_RULES) > 0:
+            return rule not in self.EXCLUDE_RULES
+        else:
+            return rule in self.INCLUDE_RULES
+
     @rule(file = Files.filter(lambda x: x != multiple()), 
           flags = st_open_flags, 
           umask = st_umask,
           mode = st_entry_mode,
           user = st.sampled_from(SUDO_USERS))
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'open' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'open' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('open'))
     def open(self, file, flags, mode, user='root', umask=0o022):
         result1 = self.fsop1.do_open(file, flags, umask, mode, user)
         result2 = self.fsop2.do_open(file, flags, umask, mode, user)
@@ -122,9 +124,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           whence = st.sampled_from([os.SEEK_SET, os.SEEK_CUR, os.SEEK_END]),
           user = st.sampled_from(SUDO_USERS)
           )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'write' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'write' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('write'))
     def write(self, file, offset, content, flags, whence, user='root'):
         result1 = self.fsop1.do_write(file, offset, content, flags, whence, user)
         result2 = self.fsop2.do_write(file, offset, content, flags, whence, user)
@@ -136,9 +136,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           length = st.integers(min_value=0, max_value=MAX_FALLOCATE_LENGTH),
           mode = st.just(0), 
           user = st.sampled_from(SUDO_USERS))
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'fallocate' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'fallocate' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('fallocate'))
     def fallocate(self, file, offset, length, mode, user='root'):
         result1 = self.fsop1.do_fallocate(file, offset, length, mode, user)
         result2 = self.fsop2.do_fallocate(file, offset, length, mode, user)
@@ -149,9 +147,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           offset = st_offset, 
           length = st.integers(min_value=0, max_value=MAX_FILE_SIZE), 
           user = st.sampled_from(SUDO_USERS))
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'read' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'read' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('read'))
     def read(self, file, offset, length, user='root'):
         result1 = self.fsop1.do_read(file, offset, length, user)
         result2 = self.fsop2.do_read(file, offset, length, user)
@@ -161,9 +157,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(file=Files.filter(lambda x: x != multiple()), 
           size=st.integers(min_value=0, max_value=MAX_TRUNCATE_LENGTH), 
           user=st.sampled_from(SUDO_USERS))
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'truncate' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'truncate' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('truncate'))
     def truncate(self, file, size, user='root'):
         result1 = self.fsop1.do_truncate(file, size, user)
         result2 = self.fsop2.do_truncate(file, size, user)
@@ -176,9 +170,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           content = st_content, 
           user = st.sampled_from(SUDO_USERS), 
           umask = st_umask)
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'create_file' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'create_file' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('create_file'))
     def create_file(self, parent, file_name, content, mode='x', user='root', umask=0o022):
         result1 = self.fsop1.do_create_file(parent, file_name, mode, content, user, umask)
         result2 = self.fsop2.do_create_file(parent, file_name, mode, content, user, umask)
@@ -190,9 +182,7 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     @rule(dir = Folders.filter(lambda x: x != multiple()), 
           user = st.sampled_from(SUDO_USERS))
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'listdir' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'listdir' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('listdir'))
     def listdir(self, dir, user='root'):
         result1 = self.fsop1.do_listdir(dir, user)
         result2 = self.fsop2.do_listdir(dir, user)
@@ -202,9 +192,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           target = Files,
           file = consumes(Files).filter(lambda x: x != multiple()),
           user = st.sampled_from(SUDO_USERS))
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'unlink' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'unlink' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('unlink'))
     def unlink(self, file, user='root'):
         print(file)
         result1 = self.fsop1.do_unlink(file, user)
@@ -221,9 +209,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           new_entry_name = st_entry_name, 
           user = st.sampled_from(SUDO_USERS), 
           umask = st_umask)
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'rename_file' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'rename_file' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('rename_file'))
     def rename_file(self, entry, parent, new_entry_name, user='root', umask=0o022):
         result1 = self.fsop1.do_rename(entry, parent, new_entry_name, user, umask)
         result2 = self.fsop2.do_rename(entry, parent, new_entry_name, user, umask)
@@ -239,9 +225,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           new_entry_name = st_entry_name,
           user = st.sampled_from(SUDO_USERS),
           umask = st_umask)
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'rename_dir' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'rename_dir' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('rename_dir'))
     def rename_dir(self, entry, parent, new_entry_name, user='root', umask=0o022):
         result1 = self.fsop1.do_rename(entry, parent, new_entry_name, user, umask)
         result2 = self.fsop2.do_rename(entry, parent, new_entry_name, user, umask)
@@ -258,9 +242,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           follow_symlinks = st.booleans(),
           user = st.sampled_from(SUDO_USERS), 
           umask = st_umask )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'copy_file' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'copy_file' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('copy_file'))
     def copy_file(self, entry, parent, new_entry_name, follow_symlinks, user='root',  umask=0o022):
         result1 = self.fsop1.do_copy_file(entry, parent, new_entry_name, follow_symlinks, user, umask)
         result2 = self.fsop2.do_copy_file(entry, parent, new_entry_name, follow_symlinks, user, umask)
@@ -276,9 +258,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           preserve = st.booleans(),
           user = st.sampled_from(SUDO_USERS), 
           umask = st_umask )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'clone_cp_file' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'clone_cp_file' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('clone_cp_file'))
     def clone_cp_file(self, entry, parent, new_entry_name, preserve, user='root', umask=0o022):
         result1 = self.fsop1.do_clone_entry(entry, parent, new_entry_name, preserve, user, umask)
         result2 = self.fsop2.do_clone_entry(entry, parent, new_entry_name, preserve, user, umask)
@@ -298,9 +278,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           user = st.sampled_from(SUDO_USERS), 
           umask = st_umask,
     )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'clone_cp_dir' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'clone_cp_dir' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('clone_cp_dir'))
     def clone_cp_dir(self, entry, parent, new_entry_name, preserve, user, umask):
         result1 = self.fsop1.do_clone_entry(entry, parent, new_entry_name, preserve, user, umask)
         result2 = self.fsop2.do_clone_entry(entry, parent, new_entry_name, preserve, user, umask)
@@ -317,9 +295,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           mode = st_entry_mode,
           user = st.sampled_from(SUDO_USERS), 
           umask = st_umask )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'mkdir' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'mkdir' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('mkdir'))
     def mkdir(self, parent, subdir, mode, user='root', umask=0o022):
         result1 = self.fsop1.do_mkdir(parent, subdir, mode, user, umask)
         result2 = self.fsop2.do_mkdir(parent, subdir, mode, user, umask)
@@ -332,9 +308,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule( target = Folders,
           dir = consumes(Folders).filter(lambda x: x != multiple()),
           user = st.sampled_from(SUDO_USERS))
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'rmdir' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'rmdir' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('rmdir'))
     def rmdir(self, dir, user='root'):
         assume(dir != '')
         result1 = self.fsop1.do_rmdir(dir, user)
@@ -351,9 +325,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           link_file_name = st_entry_name, 
           user = st.sampled_from(SUDO_USERS), 
           umask = st_umask)
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'hardlink' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'hardlink' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('hardlink'))
     def hardlink(self, dest_file, parent, link_file_name, user='root', umask=0o022):
         result1 = self.fsop1.do_hardlink(dest_file, parent, link_file_name, user, umask)
         result2 = self.fsop2.do_hardlink(dest_file, parent, link_file_name, user, umask)
@@ -369,9 +341,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           link_file_name = st_entry_name, 
           user = st.sampled_from(SUDO_USERS), 
           umask = st_umask )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'symlink' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'symlink' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('symlink'))
     def symlink(self, dest_file, parent, link_file_name, user='root', umask=0o022):
         result1 = self.fsop1.do_symlink(dest_file, parent, link_file_name, user, umask)
         result2 = self.fsop2.do_symlink(dest_file, parent, link_file_name, user, umask)
@@ -388,9 +358,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           flag = st.sampled_from([xattr.XATTR_CREATE]), 
           user = st.sampled_from(SUDO_USERS)
         )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'set_xattr' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'set_xattr' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('set_xattr'))
     def set_xattr(self, file, name, value, flag, user='root'):
         # assert '\x00' not in name, f'xattr name should not include \x00'
         result1 = self.fsop1.do_set_xattr(file, name, value, flag, user)
@@ -403,9 +371,7 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     @rule(file = FilesWithXattr.filter(lambda x: x != multiple()), 
           user = st.sampled_from(SUDO_USERS))
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'list_xattr' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'list_xattr' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('list_xattr'))
     def list_xattr(self, file, user='root'):
         result1 = self.fsop1.do_list_xattr(file, user)
         result2 = self.fsop2.do_list_xattr(file, user)
@@ -414,9 +380,7 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     @rule(file = FilesWithXattr.filter(lambda x: x != multiple()), 
           user = st.sampled_from(SUDO_USERS))
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'get_xattr' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'get_xattr' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('remove_xattr'))
     def remove_xattr(self, file, user='root'):
         result1 = self.fsop1.do_remove_xattr(file, user)
         result2 = self.fsop2.do_remove_xattr(file, user)
@@ -425,9 +389,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(user = st.sampled_from(USERS).filter(lambda x: x != 'root'), 
           group = st.sampled_from(GROUPS),
           groups = st.lists(st.sampled_from(GROUPS), unique=True))
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'change_groups' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'change_groups' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('change_groups'))
     def change_groups(self, user, group, groups):
         self.fsop1.do_change_groups(user, group, groups)
         self.fsop2.do_change_groups(user, group, groups)
@@ -435,19 +397,14 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(entry = Entries.filter(lambda x: x != multiple()), 
           mode = st_entry_mode, 
           user = st.sampled_from(SUDO_USERS))
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'chmod' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'chmod' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('chmod'))
     def chmod(self, entry, mode, user='root'):
         result1 = self.fsop1.do_chmod(entry, mode, user)
         result2 = self.fsop2.do_chmod(entry, mode, user)
         assert self.equal(result1, result2), f'\033[31mchmod:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(entry = Entries.filter(lambda x: x != multiple()))
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'get_acl' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'get_acl' in self.INCLUDE_RULES) \
-                  and common.support_acl(self.ROOT_DIR1) and common.support_acl(self.ROOT_DIR2) 
-    )
+    @precondition(lambda self: self.should_run('get_acl'))
     def get_acl(self, entry):
         result1 = self.fsop1.do_get_acl(entry)
         result2 = self.fsop2.do_get_acl(entry)
@@ -458,10 +415,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           option = st.sampled_from(['--remove-all', '--remove-default']),
           user = st.sampled_from(SUDO_USERS)
           )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'remove_acl' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'remove_acl' in self.INCLUDE_RULES) \
-                  and common.support_acl(self.ROOT_DIR1) and common.support_acl(self.ROOT_DIR2) 
-    )
+    @precondition(lambda self: self.should_run('remove_acl'))
     def remove_acl(self, entry: str, option: str, user='root'):
         result1 = self.fsop1.do_remove_acl(entry, option, user)
         result2 = self.fsop2.do_remove_acl(entry, option, user)
@@ -485,10 +439,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           logical = st.booleans(),
           physical = st.booleans(),
           )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'set_acl' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'set_acl' in self.INCLUDE_RULES) \
-                  and common.support_acl(self.ROOT_DIR1) and common.support_acl(self.ROOT_DIR2) 
-    )
+    @precondition(lambda self: self.should_run('set_acl'))
     def set_acl(self, sudo_user, entry, user, user_perm, group, group_perm, other_perm, set_mask, mask, default, recursive, recalc_mask, not_recalc_mask, logical, physical):
         result1 = self.fsop1.do_set_acl(sudo_user, entry, user, user_perm, group, group_perm, other_perm, set_mask, mask, default, recursive, recalc_mask, not_recalc_mask, logical, physical)
         result2 = self.fsop2.do_set_acl(sudo_user, entry, user, user_perm, group, group_perm, other_perm, set_mask, mask, default, recursive, recalc_mask, not_recalc_mask, logical, physical)
@@ -503,9 +454,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           modify_time=st_time, 
           follow_symlinks=st.booleans(), 
           user = st.sampled_from(USERS))
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'utime' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'utime' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('utime'))
     def utime(self, entry, access_time, modify_time, follow_symlinks, user='root'):
         result1 = self.fsop1.do_utime(entry, access_time, modify_time, follow_symlinks, user)
         result2 = self.fsop2.do_utime(entry, access_time, modify_time, follow_symlinks, user)
@@ -515,18 +464,15 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(entry = Entries.filter(lambda x: x != multiple()), 
           owner= st.sampled_from(USERS), 
           user = st.sampled_from(USERS))
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'chown' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'chown' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('chown'))
     def chown(self, entry, owner, user='root'):
         result1 = self.fsop1.do_chown(entry, owner, user)
         result2 = self.fsop2.do_chown(entry, owner, user)
         assert self.equal(result1, result2), f'\033[31mchown:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
      
     @rule( dir =Folders, vdirs = st.integers(min_value=2, max_value=31) )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'split_dir' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'split_dir' in self.INCLUDE_RULES) \
-                    and (common.is_jfs(self.ROOT_DIR1) or common.is_jfs(self.ROOT_DIR2))
+    @precondition(lambda self: self.should_run('split_dir') \
+                  and (common.is_jfs(self.ROOT_DIR1) or common.is_jfs(self.ROOT_DIR2))
     )
     def split_dir(self, dir, vdirs):
         self.fsop1.do_split_dir(dir, vdirs)
@@ -534,8 +480,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     
 
     @rule(dir = Folders)
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'merge_dir' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'merge_dir' in self.INCLUDE_RULES) \
+    @precondition(lambda self: self.should_run('merge_dir') \
                    and (common.is_jfs(self.ROOT_DIR1) or common.is_jfs(self.ROOT_DIR2))
     )
     def merge_dir(self, dir):
@@ -546,8 +491,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           zone1=st.sampled_from(ZONES[ROOT_DIR1]),
           zone2=st.sampled_from(ZONES[ROOT_DIR2]),
           is_vdir=st.booleans())
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'rebalance_dir' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'rebalance_dir' in self.INCLUDE_RULES) \
+    @precondition(lambda self: self.should_run('rebalance_dir') \
                    and (common.is_jfs(self.ROOT_DIR1) or common.is_jfs(self.ROOT_DIR2))
     )
     def rebalance_dir(self, dir, zone1, zone2, is_vdir):
@@ -558,8 +502,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           zone1=st.sampled_from(ZONES[ROOT_DIR1]),
           zone2=st.sampled_from(ZONES[ROOT_DIR2]),
           )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'rebalance_file' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'rebalance_file' in self.INCLUDE_RULES) \
+    @precondition(lambda self: self.should_run('rebalance_file') \
                    and (common.is_jfs(self.ROOT_DIR1) or common.is_jfs(self.ROOT_DIR2))
     )
     def rebalance_file(self, file, zone1, zone2):
