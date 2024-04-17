@@ -115,7 +115,7 @@ class CommandOperation:
                 cmd += ' --recursive'
             if strict:
                 cmd += ' --strict'
-            result = self.run_cmd(cmd, self.root_dir)
+            result = self.run_cmd(cmd)
             if '<ERROR>:' in result or "permission denied" in result:
                 return self.handleException(Exception(result), 'do_info', abs_path)
         except subprocess.CalledProcessError as e:
@@ -128,7 +128,7 @@ class CommandOperation:
     def do_rmr(self, entry, user='root'):
         abspath = os.path.join(self.root_dir, entry)
         try:
-            result = self.run_cmd(f'sudo -u {user} ./juicefs rmr {abspath}', self.root_dir)
+            result = self.run_cmd(f'sudo -u {user} ./juicefs rmr {abspath}')
             if '<ERROR>:' in result:
                 return self.handleException(Exception(result), 'do_rmr', abspath)
         except subprocess.CalledProcessError as e:
@@ -140,7 +140,7 @@ class CommandOperation:
     
     def do_status(self):
         try:
-            result = self.run_cmd(f'./juicefs status {self.meta_url}', self.root_dir, stderr=subprocess.DEVNULL)
+            result = self.run_cmd(f'./juicefs status {self.meta_url}', stderr=subprocess.DEVNULL)
             result = json.loads(result)['Setting']
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_status', '')
@@ -155,7 +155,7 @@ class CommandOperation:
         subdir = os.path.relpath(abspath, self.mp)
         try:
             cmd=self.get_dump_cmd(self.meta_url, subdir, fast, skip_trash, keep_secret_key, threads)
-            result = self.run_cmd(cmd, self.root_dir, stderr=subprocess.DEVNULL)
+            result = self.run_cmd(cmd, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as e:
             return self.handleException(e,  'do_dump', abspath)
         self.stats.success('do_dump')
@@ -176,14 +176,14 @@ class CommandOperation:
         subdir = os.path.relpath(abspath, self.mp)
         try:
             cmd = self.get_dump_cmd(self.meta_url, subdir, fast, skip_trash, keep_secret_key, threads)
-            result = self.run_cmd(cmd, self.root_dir, stderr=subprocess.DEVNULL)
+            result = self.run_cmd(cmd, stderr=subprocess.DEVNULL)
             with open('dump.json', 'w') as f:
                 f.write(result)
             if os.path.exists('load.db'):
                 os.remove('load.db')
-            self.run_cmd(f'./juicefs load sqlite3://load.db dump.json', self.root_dir)
+            self.run_cmd(f'./juicefs load sqlite3://load.db dump.json')
             cmd = self.get_dump_cmd('sqlite3://load.db', '', fast, skip_trash, keep_secret_key, threads)
-            result = self.run_cmd(cmd, self.root_dir, stderr=subprocess.DEVNULL)
+            result = self.run_cmd(cmd, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_dump', abspath)
         self.stats.success('do_dump')
@@ -193,7 +193,7 @@ class CommandOperation:
     def do_warmup(self, entry, user='root'):
         abspath = os.path.join(self.root_dir, entry)
         try:
-            self.run_cmd(f'sudo -u {user} ./juicefs warmup {abspath}', self.root_dir)
+            self.run_cmd(f'sudo -u {user} ./juicefs warmup {abspath}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_warmup', abspath)
         self.stats.success('do_warmup')
@@ -207,7 +207,7 @@ class CommandOperation:
                 cmd += ' --compact'
             if delete:
                 cmd += ' --delete'
-            self.run_cmd(cmd, self.root_dir)
+            self.run_cmd(cmd)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_gc', '')
         self.stats.success('do_gc')
@@ -221,7 +221,7 @@ class CommandOperation:
             cmd = f'sudo -u {user} ./juicefs clone {abspath} {dest_abspath}'
             if preserve:
                 cmd += ' --preserve'
-            self.run_cmd(cmd, self.root_dir)
+            self.run_cmd(cmd)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_clone', '')
         self.stats.success('do_clone')
@@ -236,7 +236,7 @@ class CommandOperation:
                 cmd += ' --repair'
             if recuisive:
                 cmd += ' --recursive'
-            self.run_cmd(cmd, self.root_dir, stderr=subprocess.DEVNULL)
+            self.run_cmd(cmd, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_fsck', '')
         self.stats.success('do_fsck')
@@ -266,7 +266,7 @@ class CommandOperation:
         trash_file:str = trash_list[index]
         abspath = os.path.join(self.mp, '.trash', shlex.quote(trash_file))
         try:
-            self.run_cmd(f'sudo -u {user} mv {abspath} {self.mp}', self.root_dir)
+            self.run_cmd(f'sudo -u {user} mv {abspath} {self.mp}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_trash_restore', abspath, user=user)
         restored_path = os.path.join(self.mp, '/'.join(trash_file.split('|')[1:]))
