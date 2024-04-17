@@ -143,7 +143,7 @@ If it is not working properly, it is recommended to first [upgrade the volume pl
 
 Compared to the volume plugin, using the JuiceFS client directly in the container is more flexible. You can directly mount the JuiceFS file system in the container or access it through S3 Gateway or WebDAV.
 
-### Method 1: Build Your Own Image
+### Method 1: Build your own image
 
 The JuiceFS client is a standalone binary program that provides versions for both AMD64 and ARM64 architectures. You can define the command to download and install the JuiceFS client in the Dockerfile, for example:
 
