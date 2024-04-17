@@ -936,7 +936,7 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 	}
 	var length uint64
 	err = v.Meta.CopyFileRange(ctx, nodeIn, offIn, nodeOut, offOut, size, flags, &copied, &length)
-	if err == 0 {
+	if err == 0 && copied > 0 {
 		v.writer.Truncate(nodeOut, length)
 		v.reader.Invalidate(nodeOut, offOut, size)
 		v.invalidateAttr(nodeOut)
