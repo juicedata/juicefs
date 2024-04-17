@@ -190,7 +190,7 @@ docker run --privileged --name myjfs \
 
 Replace the metadata engine URL with your own configuration. `/mnt` is the mount point and can be modified as needed. Since FUSE is used, `--privileged` permission is also required.
 
-#### Mount the File System Through Docker Compose
+#### Mount the file system through Docker Compose
 
 Here is an example using Docker Compose. Replace the metadata engine URL and mount point with your own configuration.
 
