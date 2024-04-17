@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/juicedata/juicefs/pkg/winfsp"
 	"github.com/urfave/cli/v2"
@@ -68,4 +69,4 @@ func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {}
 
 func launchMount(mp string, conf *vfs.Config) error { return nil }
 
-func installHandler(mp string, v *vfs.VFS) {}
+func installHandler(mp string, v *vfs.VFS, blob object.ObjectStorage) {}
