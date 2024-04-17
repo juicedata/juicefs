@@ -59,7 +59,7 @@ docker volume create -d juicedata/juicefs \
 
 If you need to pass additional environment variables when mounting the file system, such as in [Google Cloud](../reference/how_to_set_up_object_storage.md#google-cloud), you can append parameters similar to `-o env=FOO=bar,SPAM=egg` to the above command.
 
-### Usage and Management {#usage-and-management}
+### Usage and management {#usage-and-management}
 
 ```shell
 # Mount the volume when creating a container
