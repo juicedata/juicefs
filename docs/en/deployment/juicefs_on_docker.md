@@ -139,7 +139,7 @@ If it is not working properly, it is recommended to first [upgrade the volume pl
 
   If there is an error when the plugin calls `juicefs` or if the plugin itself reports an error, it will be reflected in the logs.
 
-## Using JuiceFS Client in Containers {#mount-juicefs-in-docker}
+## Using the JuiceFS client in containers {#mount-juicefs-in-docker}
 
 Compared to the volume plugin, using the JuiceFS client directly in the container is more flexible. You can directly mount the JuiceFS file system in the container or access it through S3 Gateway or WebDAV.
 
