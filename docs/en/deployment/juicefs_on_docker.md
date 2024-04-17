@@ -178,7 +178,7 @@ docker run --rm \
 
 Replace `--storage`, `--bucket`, `--access-key`, `--secret-key`, and the metadata engine URL with your own configuration.
 
-#### Mount the File System Directly in the Container
+#### Mount the file system directly in the container
 
 Create a container and mount the JuiceFS file system in the container, for example:
 
