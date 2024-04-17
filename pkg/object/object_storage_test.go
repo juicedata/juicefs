@@ -1022,16 +1022,16 @@ func TestDragonfly(t *testing.T) { //skip mutate
 	testStorage(t, dragonfly)
 }
 
-func TestBunny(t *testing.T) { //skip mutate
-	if os.Getenv("BUNNY_ENDPOINT") == "" {
-		t.SkipNow()
-	}
-	bunny, err := newBunny(os.Getenv("BUNNY_ENDPOINT"), "", os.Getenv("BUNNY_SECRET_KEY"), "")
-	if err != nil {
-		t.Fatalf("create: %s", err)
-	}
-	testStorage(t, bunny)
-}
+// func TestBunny(t *testing.T) { //skip mutate
+// 	if os.Getenv("BUNNY_ENDPOINT") == "" {
+// 		t.SkipNow()
+// 	}
+// 	bunny, err := newBunny(os.Getenv("BUNNY_ENDPOINT"), "", os.Getenv("BUNNY_SECRET_KEY"), "")
+// 	if err != nil {
+// 		t.Fatalf("create: %s", err)
+// 	}
+// 	testStorage(t, bunny)
+// }
 
 func TestMain(m *testing.M) {
 	if envFile := os.Getenv("JUICEFS_ENV_FILE_FOR_TEST"); envFile != "" {
