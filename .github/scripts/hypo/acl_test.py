@@ -1,5 +1,5 @@
 import unittest
-from fsrand2 import JuicefsMachine
+from fs import JuicefsMachine
 
 class TestFsrand2(unittest.TestCase):
     def test_acl_913(self):
