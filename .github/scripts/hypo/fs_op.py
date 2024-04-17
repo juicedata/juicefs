@@ -50,7 +50,6 @@ class FsOperation:
         os.seteuid(pwd.getpwnam(user).pw_uid)
         os.setegid(pwd.getpwnam(user).pw_gid)
     
-    #TODO: remove root_dir
     def handleException(self, e, action, path, **kwargs):
         if isinstance(e, subprocess.CalledProcessError):
             err = e.output.decode()

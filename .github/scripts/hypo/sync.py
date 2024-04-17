@@ -33,9 +33,9 @@ class SyncMachine(RuleBasedStateMachine):
     ROOT_DIR2 = '/tmp/sync_src2'
     DEST_RSYNC = '/tmp/rsync'
     DEST_JUICESYNC = '/tmp/juicesync'
-    log_level = os.environ.get('LOG_LEVEL', 'INFO')
-    logger = common.setup_logger(f'./syncrand.log', 'syncrand_logger', log_level)
-    fsop = FsOperation({ROOT_DIR1: logger, ROOT_DIR2: logger})
+    
+    fsop1 = FsOperation('fs1', ROOT_DIR1)
+    fsop2 = FsOperation('fs2', ROOT_DIR2)
     
     @initialize(target=Folders)
     def init_folders(self):
@@ -74,8 +74,8 @@ class SyncMachine(RuleBasedStateMachine):
           umask = st_umask, 
             )
     def create_file(self, parent, file_name, content, mode='x', user='root', umask=0o022):
-        result1 = self.fsop.do_create_file(self.ROOT_DIR1, parent, file_name, mode, content, user, umask)
-        result2 = self.fsop.do_create_file(self.ROOT_DIR2, parent, file_name, mode, content, user, umask)
+        result1 = self.fsop1.do_create_file(parent, file_name, mode, content, user, umask)
+        result2 = self.fsop2.do_create_file(parent, file_name, mode, content, user, umask)
         assert self.equal(result1, result2), f'\033[31mcreate_file:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()
@@ -89,8 +89,8 @@ class SyncMachine(RuleBasedStateMachine):
           umask = st_umask, 
           )
     def mkdir(self, parent, subdir, mode, user='root', umask=0o022):
-        result1 = self.fsop.do_mkdir(self.ROOT_DIR1, parent, subdir, mode, user, umask)
-        result2 = self.fsop.do_mkdir(self.ROOT_DIR2, parent, subdir, mode, user, umask)
+        result1 = self.fsop1.do_mkdir(parent, subdir, mode, user, umask)
+        result2 = self.fsop2.do_mkdir(parent, subdir, mode, user, umask)
         assert self.equal(result1, result2), f'\033[31mmkdir:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()
@@ -104,16 +104,17 @@ class SyncMachine(RuleBasedStateMachine):
         subprocess.check_call(['rm', '-rf', self.DEST_JUICESYNC])
         options_run = ' '.join([f'{item["option"]} {item["pattern"]}' for item in options])
         options_display = ' '.join([f'{item["option"]} "{item["pattern"]}"' for item in options])
-        self.logger.info(f'rsync -r -vvv {self.ROOT_DIR1}/ {self.DEST_RSYNC}/ {options_display}')
+        print(f'rsync -r -vvv {self.ROOT_DIR1}/ {self.DEST_RSYNC}/ {options_display}')
         subprocess.check_call(f'rsync -r -vvv {self.ROOT_DIR1}/ {self.DEST_RSYNC}/ {options_run}'.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        self.logger.info(f'./juicefs sync --dirs -v {self.ROOT_DIR1}/ {self.DEST_JUICESYNC}/ {options_display}')
+        print(f'./juicefs sync --dirs -v {self.ROOT_DIR1}/ {self.DEST_JUICESYNC}/ {options_display}')
         subprocess.check_call(f'./juicefs sync --dirs -v {self.ROOT_DIR1}/ {self.DEST_JUICESYNC}/ {options_run}'.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             subprocess.check_call(['diff', '-r', self.DEST_RSYNC, self.DEST_JUICESYNC])
         except subprocess.CalledProcessError as e:
             print(f'\033[31m{e}\033[0m')
             raise e
-        self.fsop.stats.success('do_sync')
+        self.fsop1.stats.success('do_sync')
+        self.fsop2.stats.success('do_sync')
 
     def teardown(self):
         pass
