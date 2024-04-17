@@ -214,7 +214,7 @@ services:
 
 In the container, the JuiceFS file system is mounted to the `/mnt` directory, and the volumes section in the configuration file maps the `/mnt` in the container to the `./mnt` directory on the host, allowing direct access to the JuiceFS file system mounted in the container from the host.
 
-#### Access the File System through S3 Gateway
+#### Access the file system through S3 Gateway
 
 Here is an example of exposing JuiceFS for access through S3 Gateway. Replace `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, the metadata engine URL, and the address and port number to listen on with your own configuration.
 
