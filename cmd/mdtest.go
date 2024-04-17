@@ -217,9 +217,9 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 
 	conf := getVfsConf(c, metaConf, format, chunkConf)
 	conf.AccessLog = c.String("access-log")
-	conf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
-	conf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
-	conf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
+	conf.AttrTimeout = utils.Duration(c.String("attr-cache"))
+	conf.EntryTimeout = utils.Duration(c.String("entry-cache"))
+	conf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
 
 	metricsAddr := exposeMetrics(c, registerer, registry)
 	m.InitMetrics(registerer)

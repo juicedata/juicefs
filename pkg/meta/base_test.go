@@ -373,6 +373,7 @@ func testACL(t *testing.T, m Meta) {
 		t.Fatalf("create %s: %s", subDir, st)
 	}
 	defer m.Rmdir(ctx, testDirIno, subDir2)
+	assert.Equal(t, uint16(0), attr2.Mode)
 
 	// subdir inherit default acl
 	rule3 = &aclAPI.Rule{}
@@ -385,12 +386,6 @@ func testACL(t *testing.T, m Meta) {
 	rule3 = &aclAPI.Rule{}
 	st = m.GetFacl(ctx, subDirIno2, aclAPI.TypeAccess, rule3)
 	assert.Equal(t, ENOATTR, st)
-
-	attr2 = &Attr{}
-	if st := m.GetAttr(ctx, subDirIno2, attr2); st != 0 {
-		t.Fatalf("getattr error: %s", st)
-	}
-	assert.Equal(t, rule.GetMode(), attr2.Mode)
 
 	// test cache all
 	sz := m.getBase().aclCache.Size()

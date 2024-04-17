@@ -829,14 +829,6 @@ func (m *redisMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno 
 			return err
 		}
 		m.parseAttr(val, attr)
-
-		if attr != nil && attr.AccessACL != aclAPI.None {
-			rule, err := m.getACL(ctx, tx, attr.AccessACL)
-			if err != nil {
-				return err
-			}
-			attr.Mode = (rule.GetMode() & 0777) | (attr.Mode & 07000)
-		}
 		return nil
 	}, m.inodeKey(inode)))
 }
@@ -1129,17 +1121,12 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 		}
 		now := time.Now()
 
-		// get acl
-		var rule *aclAPI.Rule
-		if cur.AccessACL != aclAPI.None {
-			oldRule, err := m.getACL(ctx, tx, cur.AccessACL)
-			if err != nil {
-				return err
-			}
-			rule = &aclAPI.Rule{}
-			*rule = *oldRule
+		rule, err := m.getACL(ctx, tx, cur.AccessACL)
+		if err != nil {
+			return err
 		}
 
+		rule = rule.Dup()
 		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &cur, attr, now, rule)
 		if st != 0 {
 			return st
@@ -1148,17 +1135,9 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 			return nil
 		}
 
-		// set acl
-		if rule != nil {
-			if err = m.tryLoadMissACLs(ctx, tx); err != nil {
-				logger.Warnf("SetAttr: load miss acls error: %s", err)
-			}
-
-			aclId, err := m.insertACL(ctx, tx, rule)
-			if err != nil {
-				return err
-			}
-			setAttrACLId(dirtyAttr, aclAPI.TypeAccess, aclId)
+		dirtyAttr.AccessACL, err = m.insertACL(ctx, tx, rule)
+		if err != nil {
+			return err
 		}
 
 		dirtyAttr.Ctime = now.Unix()
@@ -1276,12 +1255,8 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 
 			if rule.IsMinimal() {
 				// simple acl as default
-				attr.Mode = (mode & 0xFE00) | rule.GetMode()
+				attr.Mode = mode & (0xFE00 | rule.GetMode())
 			} else {
-				if err = m.tryLoadMissACLs(ctx, tx); err != nil {
-					logger.Warnf("Mknode: load miss acls error: %s", err)
-				}
-
 				cRule := rule.ChildAccessACL(mode)
 				id, err := m.insertACL(ctx, tx, cRule)
 				if err != nil {
@@ -1917,7 +1892,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 		if pattr.Parent > TrashInode {
 			return syscall.ENOENT
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
 		if pattr.Flags&FlagImmutable != 0 {
@@ -2211,51 +2186,12 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	return err
 }
 
-func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rerr syscall.Errno) {
-	defer func() {
-		if rerr == 0 {
-			m.touchAtime(ctx, inode, nil)
-		}
-	}()
-
-	if slices != nil {
-		*slices = nil
-	}
-	f := m.of.find(inode)
-	if f != nil {
-		f.RLock()
-		defer f.RUnlock()
-	}
-	if ss, ok := m.of.ReadChunk(inode, indx); ok {
-		*slices = ss
-		return 0
-	}
-	defer m.timeit("Read", time.Now())
+func (m *redisMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno) {
 	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, -1).Result()
 	if err != nil {
-		return errno(err)
+		return nil, errno(err)
 	}
-	if len(vals) == 0 {
-		var attr Attr
-		eno := m.doGetAttr(ctx, inode, &attr)
-		if eno != 0 {
-			return eno
-		}
-		if attr.Typ != TypeFile {
-			return syscall.EPERM
-		}
-		return 0
-	}
-	ss := readSlices(vals)
-	if ss == nil {
-		return syscall.EIO
-	}
-	*slices = buildSlice(ss)
-	m.of.CacheChunk(inode, indx, *slices)
-	if !m.conf.ReadOnly && (len(vals) >= 5 || len(*slices) >= 5) {
-		go m.compactChunk(inode, indx, false, false)
-	}
-	return 0
+	return readSlices(vals), 0
 }
 
 func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno {
@@ -2893,106 +2829,38 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	return count, err
 }
 
-func (m *redisMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
-	// avoid too many or duplicated compaction
-	k := uint64(inode) + (uint64(indx) << 40)
-	m.Lock()
-	if once || force {
-		for m.compacting[k] {
-			m.Unlock()
-			time.Sleep(time.Millisecond * 10)
-			m.Lock()
-		}
-	} else if len(m.compacting) > 10 || m.compacting[k] {
-		m.Unlock()
-		return
-	}
-	m.compacting[k] = true
-	defer func() {
-		m.Lock()
-		delete(m.compacting, k)
-		m.Unlock()
-	}()
-	m.Unlock()
-
-	var ctx = Background
-	if once && m.rdb.LLen(ctx, m.chunkKey(inode, indx)).Val() < int64(maxSlices) {
-		return
-	}
-	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, int64(maxCompactSlices)).Result()
-	if err != nil {
-		return
-	}
-
-	ss := readSlices(vals)
-	if ss == nil {
-		logger.Errorf("Corrupt value for inode %d chunk indx %d", inode, indx)
-		return
-	}
-	skipped := skipSome(ss)
-	var first, last *slice
-	if skipped > 0 {
-		first, last = ss[0], ss[skipped-1]
-	}
-	ss = ss[skipped:]
-	pos, size, slices := compactChunk(ss)
-	if len(ss) < 2 || size == 0 {
-		return
-	}
-	if first != nil && last != nil && pos+size > first.pos && last.pos+last.len > pos {
-		panic(fmt.Sprintf("invalid compaction: skipped slices [%+v, %+v], pos %d, size %d", *first, *last, pos, size))
-	}
-
-	var id uint64
-	st := m.NewSlice(ctx, &id)
-	if st != 0 {
-		return
-	}
-	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
-	err = m.newMsg(CompactChunk, slices, id)
-	if err != nil {
-		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
-			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
-		}
-		return
-	}
-	var buf []byte         // trash enabled: track delayed slices
+func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno {
 	var rs []*redis.IntCmd // trash disabled: check reference of slices
-	trash := m.toTrash(0)
-	if trash {
-		for _, s := range ss {
-			if s.id > 0 {
-				buf = append(buf, m.encodeDelayedSlice(s.id, s.size)...)
-			}
-		}
-	} else {
+	if delayed == nil {
 		rs = make([]*redis.IntCmd, len(ss))
 	}
 	key := m.chunkKey(inode, indx)
-	errno := errno(m.txn(ctx, func(tx *redis.Tx) error {
-		vals2, err := tx.LRange(ctx, key, 0, int64(len(vals)-1)).Result()
+	ctx := Background
+	st := errno(m.txn(ctx, func(tx *redis.Tx) error {
+		n := len(origin) / sliceBytes
+		vals2, err := tx.LRange(ctx, key, 0, int64(n-1)).Result()
 		if err != nil {
 			return err
 		}
-		if len(vals2) != len(vals) {
+		if len(vals2) != n {
 			return syscall.EINVAL
 		}
 		for i, val := range vals2 {
-			if val != vals[i] {
+			if val != string(origin[i*sliceBytes:(i+1)*sliceBytes]) {
 				return syscall.EINVAL
 			}
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.LTrim(ctx, key, int64(len(vals)), -1)
+			pipe.LTrim(ctx, key, int64(n), -1)
 			pipe.LPush(ctx, key, marshalSlice(pos, id, size, 0, size))
 			for i := skipped; i > 0; i-- {
-				pipe.LPush(ctx, key, vals[i-1])
+				pipe.LPush(ctx, key, origin[(i-1)*sliceBytes:i*sliceBytes])
 			}
 			pipe.HSet(ctx, m.sliceRefs(), m.sliceKey(id, size), "0") // create the key to tracking it
-			if trash {
-				if len(buf) > 0 {
-					pipe.HSet(ctx, m.delSlices(), fmt.Sprintf("%d_%d", id, time.Now().Unix()), buf)
+			if delayed != nil {
+				if len(delayed) > 0 {
+					pipe.HSet(ctx, m.delSlices(), fmt.Sprintf("%d_%d", id, time.Now().Unix()), delayed)
 				}
 			} else {
 				for i, s := range ss {
@@ -3006,38 +2874,28 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 		return err
 	}, key))
 	// there could be false-negative that the compaction is successful, double-check
-	if errno != 0 && errno != syscall.EINVAL {
-		if e := m.rdb.HGet(ctx, m.sliceRefs(), m.sliceKey(id, size)).Err(); e == redis.Nil {
-			errno = syscall.EINVAL // failed
-		} else if e == nil {
-			errno = 0 // successful
+	if st != 0 && st != syscall.EINVAL {
+		if e := m.rdb.HGet(ctx, m.sliceRefs(), m.sliceKey(id, size)).Err(); e == nil {
+			st = 0 // successful
+		} else if e == redis.Nil {
+			logger.Infof("compacted chunk %d was not used", id)
+			st = syscall.EINVAL // failed
 		}
 	}
 
-	if errno == syscall.EINVAL {
+	if st == syscall.EINVAL {
 		m.rdb.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(id, size), -1)
-		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, id, size)
-		m.deleteSlice(id, size)
-	} else if errno == 0 {
-		m.of.InvalidateChunk(inode, indx)
+	} else if st == 0 {
 		m.cleanupZeroRef(m.sliceKey(id, size))
-		if !trash {
+		if delayed == nil {
 			for i, s := range ss {
 				if s.id > 0 && rs[i].Err() == nil && rs[i].Val() < 0 {
 					m.deleteSlice(s.id, s.size)
 				}
 			}
 		}
-	} else {
-		logger.Warnf("compact %s: %s", key, errno)
 	}
-
-	if force {
-		m.Lock()
-		delete(m.compacting, k)
-		m.Unlock()
-		m.compactChunk(inode, indx, once, force)
-	}
+	return st
 }
 
 func (m *redisMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {
@@ -3750,20 +3608,16 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 				e.Xattrs = xattrs
 			}
 
-			if attr.AccessACL != aclAPI.None {
-				accessACl, err := m.getACL(ctx, tx, attr.AccessACL)
-				if err != nil {
-					return err
-				}
-				e.AccessACL = dumpACL(accessACl)
+			accessACl, err := m.getACL(ctx, tx, attr.AccessACL)
+			if err != nil {
+				return err
 			}
-			if attr.DefaultACL != aclAPI.None {
-				defaultACL, err := m.getACL(ctx, tx, attr.DefaultACL)
-				if err != nil {
-					return err
-				}
-				e.DefaultACL = dumpACL(defaultACL)
+			e.AccessACL = dumpACL(accessACl)
+			defaultACL, err := m.getACL(ctx, tx, attr.DefaultACL)
+			if err != nil {
+				return err
 			}
+			e.DefaultACL = dumpACL(defaultACL)
 
 			switch typ {
 			case TypeFile:
@@ -4169,15 +4023,8 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func(),
 		p.HSet(ctx, m.xattrKey(inode), xattrs)
 	}
 
-	if e.AccessACL != nil {
-		r := loadACL(e.AccessACL)
-		attr.AccessACL, _ = m.aclCache.GetOrPut(r, aclMaxId)
-	}
-
-	if e.DefaultACL != nil {
-		r := loadACL(e.DefaultACL)
-		attr.DefaultACL, _ = m.aclCache.GetOrPut(r, aclMaxId)
-	}
+	attr.AccessACL = m.saveACL(loadACL(e.AccessACL), aclMaxId)
+	attr.DefaultACL = m.saveACL(loadACL(e.DefaultACL), aclMaxId)
 
 	p.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
 	tryExec()
@@ -4566,11 +4413,6 @@ func (m *redisMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.
 			attr.Mode &= 07000
 			attr.Mode |= ((rule.Owner & 7) << 6) | ((rule.Group & 7) << 3) | (rule.Other & 7)
 		} else {
-			if err = m.tryLoadMissACLs(ctx, tx); err != nil {
-				logger.Warnf("SetFacl: load miss acls error: %s", err)
-			}
-
-			// set acl
 			rule.InheritPerms(attr.Mode)
 			aclId, err := m.insertACL(ctx, tx, rule)
 			if err != nil {
@@ -4614,12 +4456,12 @@ func (m *redisMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32,
 			aclId = getAttrACLId(attr, aclType)
 		}
 
-		if aclId == aclAPI.None {
-			return ENOATTR
-		}
 		a, err := m.getACL(ctx, tx, aclId)
 		if err != nil {
 			return err
+		}
+		if a == nil {
+			return ENOATTR
 		}
 		*rule = *a
 		return nil
@@ -4627,6 +4469,9 @@ func (m *redisMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32,
 }
 
 func (m *redisMeta) getACL(ctx Context, tx *redis.Tx, id uint32) (*aclAPI.Rule, error) {
+	if id == aclAPI.None {
+		return nil, nil
+	}
 	if cRule := m.aclCache.Get(id); cRule != nil {
 		return cRule, nil
 	}
@@ -4644,7 +4489,7 @@ func (m *redisMeta) getACL(ctx Context, tx *redis.Tx, id uint32) (*aclAPI.Rule, 
 		return nil, err
 	}
 	if val == nil {
-		return nil, ENOATTR
+		return nil, syscall.EIO
 	}
 
 	rule := &aclAPI.Rule{}
@@ -4654,6 +4499,15 @@ func (m *redisMeta) getACL(ctx Context, tx *redis.Tx, id uint32) (*aclAPI.Rule, 
 }
 
 func (m *redisMeta) insertACL(ctx Context, tx *redis.Tx, rule *aclAPI.Rule) (uint32, error) {
+	if rule == nil || rule.IsEmpty() {
+		return aclAPI.None, nil
+	}
+
+	if err := m.tryLoadMissACLs(ctx, tx); err != nil {
+		logger.Warnf("SetFacl: load miss acls error: %s", err)
+	}
+
+	// set acl
 	var aclId uint32
 	if aclId = m.aclCache.GetId(rule); aclId == aclAPI.None {
 		// TODO failures may result in some id wastage.
@@ -4684,13 +4538,11 @@ func (m *redisMeta) tryLoadMissACLs(ctx Context, tx *redis.Tx) error {
 			return err
 		}
 		for i, data := range vals {
-			var rule *aclAPI.Rule
+			var rule aclAPI.Rule
 			if data != nil {
-				rule = &aclAPI.Rule{}
 				rule.Decode([]byte(data.(string)))
 			}
-			// may have empty slot
-			m.aclCache.Put(missIds[i], rule)
+			m.aclCache.Put(missIds[i], &rule)
 		}
 	}
 	return nil

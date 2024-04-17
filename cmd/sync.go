@@ -437,7 +437,10 @@ func doSync(c *cli.Context) error {
 	}
 	if config.StorageClass != "" {
 		if os, ok := dst.(object.SupportStorageClass); ok {
-			os.SetStorageClass(config.StorageClass)
+			err := os.SetStorageClass(config.StorageClass)
+			if err != nil {
+				logger.Errorf("set storage class %s: %s", config.StorageClass, err)
+			}
 		}
 	}
 

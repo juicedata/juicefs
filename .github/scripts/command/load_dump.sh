@@ -78,7 +78,7 @@ do_dump_load_with_fsrand(){
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days $trash_days --enable-acl
     ./juicefs mount -d $META_URL /jfs --enable-xattr
-    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
+    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fs.py || true
     # find /jfs/fsrand -mindepth 1 -maxdepth 1 ! -name "syly" -exec rm -rf {} \; 
     do_dump_load_and_compare 
     do_dump_load_and_compare --fast
@@ -142,7 +142,7 @@ test_load_encrypted_meta_backup()
     export JFS_RSA_PASSPHRASE=12345678
     ./juicefs format $META_URL myjfs --encrypt-rsa-key my-priv-key.pem
     ./juicefs mount -d $META_URL /jfs
-    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=50 STEP_COUNT=50 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fsrand2.py || true
+    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=50 STEP_COUNT=50 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fs.py || true
     umount /jfs
     SKIP_BACKUP_META_CHECK=true ./juicefs mount -d --backup-meta 10s $META_URL /jfs
     sleep 10s

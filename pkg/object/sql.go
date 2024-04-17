@@ -58,7 +58,7 @@ func (s *sqlStore) String() string {
 	return fmt.Sprintf("%s://%s/", driver, s.addr)
 }
 
-func (s *sqlStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (s *sqlStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	var b = blob{Key: []byte(key)}
 	// TODO: range
 	ok, err := s.db.Get(&b)
@@ -78,7 +78,7 @@ func (s *sqlStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (s *sqlStore) Put(key string, in io.Reader) error {
+func (s *sqlStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	d, err := io.ReadAll(in)
 	if err != nil {
 		return err
@@ -123,7 +123,7 @@ func (s *sqlStore) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (s *sqlStore) Delete(key string) error {
+func (s *sqlStore) Delete(key string, getters ...AttrGetter) error {
 	_, err := s.db.Delete(&blob{Key: []byte(key)})
 	return err
 }

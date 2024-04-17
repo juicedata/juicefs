@@ -45,6 +45,10 @@ func (c *ceph) String() string {
 	return fmt.Sprintf("ceph://%s/", c.name)
 }
 
+func (c *ceph) Shutdown() {
+	c.conn.Shutdown()
+}
+
 func (c *ceph) Create() error {
 	names, err := c.conn.ListPools()
 	if err != nil {
@@ -127,7 +131,7 @@ func (r *cephReader) Close() error {
 	return nil
 }
 
-func (c *ceph) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (c *ceph) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if _, err := c.Head(key); err != nil {
 		return nil, err
 	}
@@ -144,7 +148,7 @@ var cephPool = sync.Pool{
 	},
 }
 
-func (c *ceph) Put(key string, in io.Reader) error {
+func (c *ceph) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	// ceph default osd_max_object_size = 128M
 	return c.do(func(ctx *rados.IOContext) error {
 		if b, ok := in.(*bytes.Reader); ok {
@@ -181,7 +185,7 @@ func (c *ceph) Put(key string, in io.Reader) error {
 	})
 }
 
-func (c *ceph) Delete(key string) error {
+func (c *ceph) Delete(key string, getters ...AttrGetter) error {
 	err := c.do(func(ctx *rados.IOContext) error {
 		return ctx.Delete(key)
 	})
@@ -320,7 +324,7 @@ func newCeph(endpoint, cluster, user, token string) (ObjectStorage, error) {
 	}
 	if opt := os.Getenv("CEPH_ADMIN_SOCKET"); opt != "none" {
 		if opt == "" {
-			opt = "$run_dir/jfs-$cluster-$name.asok"
+			opt = "$run_dir/jfs-$cluster-$name-$pid.asok"
 		}
 		if err = conn.SetConfigOption("admin_socket", opt); err != nil {
 			logger.Warnf("Failed to set admin_socket to %s: %s", opt, err)

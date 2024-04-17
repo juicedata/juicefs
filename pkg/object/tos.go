@@ -49,7 +49,7 @@ func (t *tosClient) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,
 		IsSupportUploadPartCopy:  true,
-		MinPartSize:              5 << 20,
+		MinPartSize:              4 << 20,
 		MaxPartSize:              5 << 30,
 		MaxPartCount:             10000,
 	}
@@ -65,7 +65,7 @@ func (t *tosClient) Create() error {
 	return err
 }
 
-func (t *tosClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (t *tosClient) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	rangeStr := getRange(off, limit)
 	resp, err := t.client.GetObjectV2(context.Background(), &tos.GetObjectV2Input{
 		Bucket: t.bucket,
@@ -73,7 +73,8 @@ func (t *tosClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		Range:  rangeStr, // When Range and RangeStart & RangeEnd appear together, range is preferred
 	})
 	if resp != nil {
-		ReqIDCache.put(key, resp.RequestID)
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(resp.RequestID).SetStorageClass(string(resp.StorageClass))
 	}
 	if err != nil {
 		return nil, err
@@ -82,10 +83,10 @@ func (t *tosClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		_ = resp.Content.Close()
 		return nil, err
 	}
-	return scReadCloser{resp.Content, string(resp.StorageClass)}, nil
+	return resp.Content, nil
 }
 
-func (t *tosClient) Put(key string, in io.Reader) error {
+func (t *tosClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	resp, err := t.client.PutObjectV2(context.Background(), &tos.PutObjectV2Input{
 		PutObjectBasicInput: tos.PutObjectBasicInput{
 			Bucket:       t.bucket,
@@ -95,18 +96,20 @@ func (t *tosClient) Put(key string, in io.Reader) error {
 		Content: in,
 	})
 	if resp != nil {
-		ReqIDCache.put(key, resp.RequestID)
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(resp.RequestID).SetStorageClass(t.sc)
 	}
 	return err
 }
 
-func (t *tosClient) Delete(key string) error {
+func (t *tosClient) Delete(key string, getters ...AttrGetter) error {
 	resp, err := t.client.DeleteObjectV2(context.Background(), &tos.DeleteObjectV2Input{
 		Bucket: t.bucket,
 		Key:    key,
 	})
 	if resp != nil {
-		ReqIDCache.put(key, resp.RequestID)
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(resp.RequestID)
 	}
 	return err
 }
@@ -267,12 +270,9 @@ func (t *tosClient) Copy(dst, src string) error {
 	return err
 }
 
-func (t *tosClient) SetStorageClass(sc string) {
+func (t *tosClient) SetStorageClass(sc string) error {
 	t.sc = sc
-}
-
-func (t *tosClient) StorageClass() string {
-	return t.sc
+	return nil
 }
 
 func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

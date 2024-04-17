@@ -61,7 +61,7 @@ func GetVersion() Semver {
 
 func CompareVersions(v1, v2 *Semver) (int, error) {
 	if v1 == nil || v2 == nil {
-		return 0, fmt.Errorf("v1 %v and v2 %v cant be nil", v1, v2)
+		return 0, fmt.Errorf("v1 %v and v2 %v can't be nil", v1, v2)
 	}
 	var less bool
 	if v1.major != v2.major {

@@ -694,7 +694,7 @@ func TestInternalFile(t *testing.T) {
 	}
 	if n, e = v.Read(ctx, fe.Inode, buf, 0, fh); e != 0 {
 		t.Fatalf("read .accesslog: %s", e)
-	} else if !strings.Contains(string(buf[:n]), "open (9223372032559808513)") {
+	} else if !strings.Contains(string(buf[:n]), "open (9223372032559808513") {
 		t.Fatalf("invalid access log: %q", string(buf[:n]))
 	}
 	_ = v.Flush(ctx, fe.Inode, fh, 0)

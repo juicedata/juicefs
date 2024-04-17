@@ -1,26 +1,22 @@
-name: "fsrand2"
+name: "gateway_random_test"
 
 on:
   push:
     branches:
-    - main
-    - release**
+      - 'main'
+      - 'release-**'
     paths:
-    - '**/fsrand2.yml'
-    - '**/fsrand2.py'
-    - '**/fsrand2_test.py'
-    - '**/acl_test.py'
+      - '**/gateway2.yml'
+      - '.github/scripts/hypo/s3**.py'
   pull_request:
     branches:
-    - main
-    - release**
+      - 'main'
+      - 'release-**'
     paths:
-    - '**/fsrand2.yml'
-    - '**/fsrand2.py'
-    - '**/fsrand2_test.py'
-    - '**/acl_test.py'
+      - '**/gateway2.yml'
+      - '.github/scripts/hypo/s3**.py'
   schedule:
-    - cron:  '0 16 * * 0'
+    - cron:  '0 19 * * *'
   workflow_dispatch:
     inputs:
       debug:
@@ -28,16 +24,36 @@ on:
         description: "Run the build with tmate debugging enabled"
         required: false
         default: false
+
 jobs:
-  fsrand2:
+  build-matrix:
+    runs-on: ubuntu-20.04
+    steps:
+      - id: set-matrix
+        run: |
+          echo "github.event_name is ${{github.event_name}}"
+          echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
+          if [ "${{github.event_name}}" == "schedule"  ]; then
+            echo 'meta_matrix=["mysql", "redis", "tikv"]' >> $GITHUB_OUTPUT
+          elif [ "${{github.event_name}}" == "pull_request"  ]; then
+            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
+            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+          else
+            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+          fi
+    outputs:
+      meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
+
+  gateway:
     timeout-minutes: 60
+    needs: build-matrix
     strategy:
       fail-fast: false
       matrix:
-        meta: ['redis', 'mysql', 'tikv']
-        # meta: ['redis']
-        
-    runs-on: ubuntu-latest
+        meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
+    runs-on: ubuntu-20.04
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -52,9 +68,8 @@ jobs:
           else
             echo "target=juicefs" >> $GITHUB_OUTPUT
           fi
-  
+
       - name: Build
-        timeout-minutes: 10
         uses: ./.github/actions/build
         with: 
           target: ${{steps.vars.outputs.target}}
@@ -67,71 +82,47 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           create_database $meta_url
 
-      - name: Install tool
-        run: | 
-          sudo .github/scripts/apt_install.sh attr
-          sudo pip install xattr
-          sudo pip install minio
-
       - name: Juicefs Format
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs format $meta_url --enable-acl --trash-days 0 myjfs
+          sudo ./juicefs format $meta_url --trash-days 0 pics
 
-      - name: Juicefs Mount
+      - name: Start Gateway
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs mount -d $meta_url /tmp/myjfs --no-usage-report --enable-xattr 
-          if [ ! -f /tmp/myjfs/.accesslog ]; then
-            echo "<FATAL>: mount failed"
-            exit 1
-          fi
+          sudo MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $meta_url localhost:9005 --multi-buckets --keep-etag -d
           
-      - name: Run Examples
-        timeout-minutes: 10
+      - name: Start minio
         run: |
-          sudo -E python3 .github/scripts/hypo/fsrand2_test.py
-          sudo -E python3 .github/scripts/hypo/acl_test.py
-          
-      - name: Test
-        timeout-minutes: 120
-        run: |
-          if [ "${{ github.event_name }}" == "schedule" ]; then
-            PROFILE='schedule'
-          else
-            PROFILE='pull_request'
-          fi
-          sudo -E PROFILE=${PROFILE} python3 .github/scripts/hypo/fsrand2.py 2>&1 | tee fsrand.log
-          exit ${PIPESTATUS[0]}
+          sudo wget -q https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z -O /usr/local/bin/mc && sudo chmod +x /usr/local/bin/mc
+          sudo docker run -d -p 9000:9000 --name minio -e "MINIO_ACCESS_KEY=minioadmin" -e "MINIO_SECRET_KEY=minioadmin" minio/minio:RELEASE.2021-04-22T15-44-28Z server /data
 
-      - name: check fsrand.log
+      - name: Test with example
+        run: |
+          sudo python3 .github/scripts/hypo/s3_test.py
+
+      - name: Test randomly
+        run: |
+          sudo LOG_LEVEL=WARNING python3 .github/scripts/hypo/s3.py
+
+      - name: check log
         if: always()
         run: | 
-          tail -500 fsrand.log
-
-      - name: check juicefs.log
-        if: always()
-        run: | 
-          if [ -f ~/.juicefs/juicefs.log ]; then
-            tail -300 ~/.juicefs/juicefs.log
-            grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+          if [ -f /var/log/juicefs-gateway.log ]; then
+            tail -300 /var/log/juicefs-gateway.log
+            grep "<FATAL>:" /var/log/juicefs-gateway.log && exit 1 || true
           fi
-          if [ -f /var/log/juicefs.log ]; then
-            tail -300 /var/log/juicefs.log
-            grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
-          fi
-
+          
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
-        # if: failure() 
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
   success-all-test:
     runs-on: ubuntu-latest
-    needs: [fsrand2]
+    needs: [gateway]
     if: always()
     steps:
       - uses: technote-space/workflow-conclusion-action@v3
@@ -149,5 +140,5 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Success
-        if: success()
+        if: success() 
         run: echo "All Done"

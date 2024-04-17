@@ -46,7 +46,7 @@ Furthermore, accessing object storage services requires authentication using Acc
 AWS offers various network-based fully managed databases that can be used to build the JuiceFS metadata engine, mainly including:
 
 - **Amazon MemoryDB for Redis** (hereinafter referred to as MemoryDB): A durable Redis in-memory database service that provides extremely fast performance.
-- **Amazon RDS**: Fully managed databases such as MariaDB, MySQL, PostgresSQL, and more.
+- **Amazon RDS**: Fully managed databases such as MariaDB, MySQL, PostgreSQL, and more.
 
 :::note
 Although Amazon ElastiCache for Redis (hereinafter referred to as ElastiCache) also provides services compatible with the Redis protocol, compared with MemoryDB, ElastiCache cannot provide "strong consistency guarantee", so MemoryDB is recommended.

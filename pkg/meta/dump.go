@@ -590,6 +590,9 @@ func dumpACLEntries(entries aclAPI.Entries) []DumpedACLEntry {
 }
 
 func loadACL(dumped *DumpedACL) *aclAPI.Rule {
+	if dumped == nil {
+		return nil
+	}
 	return &aclAPI.Rule{
 		Owner:       dumped.Owner,
 		Group:       dumped.Group,

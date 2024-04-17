@@ -1,5 +1,5 @@
 import unittest
-from command import JuicefsCommandMachine
+from . import cmd 
 
 class TestCommand(unittest.TestCase):
     def test_dump(self):
