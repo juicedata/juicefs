@@ -113,3 +113,24 @@ type ObjectStorage interface {
 type Shutdownable interface {
 	Shutdown()
 }
+
+func Shutdown(o ObjectStorage) {
+	fn := func(o ObjectStorage) {
+		if s, ok := o.(Shutdownable); ok {
+			s.Shutdown()
+		}
+	}
+
+	switch o := o.(type) {
+	case *encrypted:
+		fn(o.ObjectStorage)
+	case *withPrefix:
+		fn(o.os)
+	case *sharded:
+		for _, s := range o.stores {
+			fn(s)
+		}
+	default:
+		fn(o)
+	}
+}
