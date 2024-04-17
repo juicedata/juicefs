@@ -529,6 +529,8 @@ Cloudflare R2 `ListObjects` API is not fully S3 compatible (result list is not s
 
 Bunny Storage offers a non-S3 compatible object storage with multiple performance tiers and many storage regions. It uses [it uses a custom API](https://docs.bunny.net/reference/storage-api).
 
+This is not included by default, please build it with tag `bunny`
+
 #### Usage
 
 Create a Storage Zone and use the Zone Name with the Hostname of the Location seperated by a dot as Bucket name and the `Write Password` as Secret Key.
