@@ -9,7 +9,7 @@ You can use the JuiceFS file system in Docker by running the client directly in 
 
 ## Using a volume plugin {#volume-plugin}
 
-If you have specific requirements for mount management, such as managing mount points through Docker to facilitate different application containers using different JuiceFS file systems, you can use [Docker volume plugin](https://github.com/juicedata/docker-volume-juicefs).
+If you have specific requirements for mount management, such as managing mount points through Docker to facilitate different application containers using different JuiceFS file systems, you can use a [Docker volume plugin](https://github.com/juicedata/docker-volume-juicefs).
 
 Docker plugins are usually provided in the form of images. The [JuiceFS volume plugin image](https://hub.docker.com/r/juicedata/juicefs) contains the [JuiceFS Community Edition](../introduction/README.md) and [JuiceFS Cloud Service](https://juicefs.com/docs/cloud) clients. After installation, you can run the volume plugin to create JuiceFS volumes in Docker.
 
