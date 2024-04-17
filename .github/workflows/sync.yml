@@ -56,11 +56,11 @@ jobs:
             random_type=${types[$RANDOM % ${#types[@]}]}
             sudo CI=true META=redis KEY_TYPE=$random_type .github/scripts/sync/sync_cluster.sh
           elif [[ "${{matrix.type}}" == 'sync_exclude' ]]; then
-            sudo python3 .github/scripts/hypo/syncrand_test.py
+            sudo python3 .github/scripts/hypo/sync_test.py
             if [ "${{github.event_name}}" == "schedule" ]; then
-              sudo MAX_EXAMPLE=500 STEP_COUNT=100 PROFILE=ci python3 .github/scripts/hypo/syncrand.py
+              sudo MAX_EXAMPLE=500 STEP_COUNT=100 PROFILE=ci python3 .github/scripts/hypo/sync.py
             else
-              sudo MAX_EXAMPLE=200 STEP_COUNT=50 PROFILE=ci python3 .github/scripts/hypo/syncrand.py
+              sudo MAX_EXAMPLE=200 STEP_COUNT=50 PROFILE=ci python3 .github/scripts/hypo/sync.py
             fi
           else
             echo "Unknown type: ${{matrix.type}}"
