@@ -121,7 +121,7 @@ If it is not working properly, it is recommended to first [upgrade the volume pl
   ls /run/docker/plugins/runtime-root/plugins.moby
 
   # Print plugin container information
-  # If the printed container list is empty, it means that the plugin container failed to create
+  # If the printed container list is empty, it means that the plugin container failed to be created
   # Read the plugin startup log below to continue troubleshooting
   runc --root /run/docker/plugins/runtime-root/plugins.moby list
 
