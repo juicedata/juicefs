@@ -5,7 +5,7 @@ slug: /juicefs_on_docker
 description: Using JuiceFS in Docker in different ways, including volume mapping, volume plugin, and mounting in containers.
 ---
 
-You can use JuiceFS file system in Docker by running the client directly in the container or using a volume plugin.
+You can use the JuiceFS file system in Docker by running the client directly in the container or using a volume plugin.
 
 ## Using Volume Plugin {#volume-plugin}
 
