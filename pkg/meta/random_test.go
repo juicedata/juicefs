@@ -30,6 +30,7 @@ import (
 
 	"pgregory.net/rapid"
 
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -58,6 +59,9 @@ type tNode struct {
 	children map[string]*tNode
 	target   string
 	xattrs   map[string][]byte
+
+	accACL *aclAPI.Rule
+	defACL *aclAPI.Rule
 }
 
 func (n *tNode) accessMode(uid uint32, gids []uint32) uint8 {
@@ -77,6 +81,14 @@ func (n *tNode) accessMode(uid uint32, gids []uint32) uint8 {
 }
 
 func (n *tNode) access(ctx Context, mask uint8) bool {
+	if ctx.Uid() == 0 {
+		return true
+	}
+
+	if n.accACL != nil && (n.mode&00070) != 0 {
+		return n.accACL.CanAccess(ctx.Uid(), ctx.Gids(), n.uid, n.gid, mask)
+	}
+
 	mode := n.accessMode(ctx.Uid(), ctx.Gids())
 	if mode&mask != mask {
 		return false
@@ -193,6 +205,28 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 				n.mode &= ^uint16(02000)
 			}
 		}
+	}
+
+	mode &= 07777
+	if p.defACL != nil && _type != TypeSymlink {
+		// inherit default acl
+		if _type == TypeDirectory {
+			n.defACL = p.defACL
+		}
+
+		// set access acl by parent's default acl
+		rule := p.defACL
+
+		if rule.IsMinimal() {
+			// simple acl as default
+			n.mode = mode & (0xFE00 | rule.GetMode())
+		} else {
+			cRule := rule.ChildAccessACL(mode)
+			n.accACL = cRule
+			n.mode = (mode & 0xFE00) | cRule.GetMode()
+		}
+	} else {
+		n.mode = mode & ^umask
 	}
 
 	switch _type {
@@ -346,9 +380,6 @@ func (m *fsMachine) readlink(inode Ino) (string, syscall.Errno) {
 	}
 	if n.target == "" {
 		return "", syscall.EINVAL
-	}
-	if !n.access(m.ctx, MODE_MASK_R) {
-		return "", syscall.EACCES
 	}
 	return n.target, 0
 }
@@ -970,6 +1001,14 @@ func (m *fsMachine) listxattr(inode Ino) ([]byte, syscall.Errno) {
 	for name := range n.xattrs {
 		names = append(names, name+"\x00")
 	}
+
+	if n.accACL != nil {
+		names = append(names, "system.posix_acl_access"+"\x00")
+	}
+	if n.defACL != nil {
+		names = append(names, "system.posix_acl_default"+"\x00")
+	}
+
 	sort.Slice(names, func(i, j int) bool { return names[i] < names[j] })
 	r := []byte(strings.Join(names, ""))
 	if len(r) > 65536 {
@@ -1494,6 +1533,138 @@ func (m *fsMachine) checkFSTree(root Ino) error {
 		}
 	}
 	return nil
+}
+
+func (m *fsMachine) setfacl(inode Ino, atype uint8, rule *aclAPI.Rule) syscall.Errno {
+	if atype != aclAPI.TypeAccess && atype != aclAPI.TypeDefault {
+		return syscall.EINVAL
+	}
+	n := m.nodes[inode]
+	if n == nil {
+		return syscall.ENOENT
+	}
+	if m.ctx.Uid() != 0 && m.ctx.Uid() != n.uid {
+		return syscall.EPERM
+	}
+
+	if rule.IsEmpty() {
+		if atype == aclAPI.TypeDefault {
+			n.defACL = nil
+			m.removexattr(inode, "system.posix_acl_default")
+		}
+		// TODO: update ctime
+		return 0
+	}
+
+	if rule.IsMinimal() && atype == aclAPI.TypeAccess {
+		n.accACL = nil
+		n.mode &= 07000
+		n.mode |= ((rule.Owner & 7) << 6) | ((rule.Group & 7) << 3) | (rule.Other & 7)
+		return 0
+	}
+
+	rule.InheritPerms(n.mode)
+	if atype == aclAPI.TypeAccess {
+		n.accACL = rule
+		if n.accACL.GetMode() != n.mode&0777 {
+			n.mode = n.mode&07000 | n.accACL.GetMode()
+		}
+	} else {
+		n.defACL = rule
+	}
+	return 0
+}
+
+func (m *fsMachine) Setfacl(t *rapid.T) {
+	inode := m.pickNode(t)
+	atype := rapid.Uint8Range(1, 2).Draw(t, "atype")
+	user := rapid.Uint16Range(0, 7).Draw(t, "user")
+	group := rapid.Uint16Range(0, 7).Draw(t, "group")
+	other := rapid.Uint16Range(0, 7).Draw(t, "other")
+	mask := rapid.Uint16Range(0, 7).Draw(t, "mask")
+	var users aclAPI.Entries
+	var groups aclAPI.Entries
+
+	us := rapid.IntRange(0, 3).Draw(t, "users")
+	for i := 0; i < us; i++ {
+		users = append(users, aclAPI.Entry{Id: rapid.Uint32Range(1, 5).Draw(t, "uid"), Perm: rapid.Uint16Range(0, 7).Draw(t, "perm")})
+	}
+	gs := rapid.IntRange(0, 3).Draw(t, "groups")
+	for i := 0; i < gs; i++ {
+		groups = append(groups, aclAPI.Entry{Id: rapid.Uint32Range(1, 5).Draw(t, "gid"), Perm: rapid.Uint16Range(0, 7).Draw(t, "perm")})
+	}
+	rule := &aclAPI.Rule{
+		Owner:       user,
+		Group:       group,
+		Mask:        mask,
+		Other:       other,
+		NamedUsers:  users,
+		NamedGroups: groups,
+	}
+
+	st := m.meta.SetFacl(m.ctx, inode, atype, rule)
+	st2 := m.setfacl(inode, atype, rule)
+
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
+
+func (m *fsMachine) getfacl(inode Ino, atype uint8) (*aclAPI.Rule, syscall.Errno) {
+	n := m.nodes[inode]
+	if n == nil {
+		return nil, syscall.ENOENT
+	}
+	switch atype {
+	case aclAPI.TypeAccess:
+		if n.accACL == nil {
+			return nil, ENOATTR
+		}
+		return n.accACL, 0
+	case aclAPI.TypeDefault:
+		if n.defACL == nil {
+			return nil, ENOATTR
+		}
+		return n.defACL, 0
+	default:
+		return nil, syscall.EINVAL
+	}
+}
+
+func (m *fsMachine) GetACL(t *rapid.T) {
+	inode := m.pickNode(t)
+	atype := rapid.Uint8Range(1, 2).Draw(t, "atype")
+
+	rule := &aclAPI.Rule{}
+	st := m.meta.GetFacl(m.ctx, inode, atype, rule)
+	rule2, st2 := m.getfacl(inode, atype)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+	if st == 0 && !rule.IsEqual(rule2) {
+		t.Fatalf("expect %+v but got %+v, %t", rule2, rule, reflect.DeepEqual(rule, *rule2))
+	}
+}
+
+func (m *fsMachine) RemoveACL(t *rapid.T) {
+	inode := m.pickNode(t)
+	atype := rapid.Uint8Range(1, 2).Draw(t, "atype")
+
+	var rule *aclAPI.Rule
+	if atype == aclAPI.TypeAccess {
+		rule = &aclAPI.Rule{
+			Mask: 0xFFFF,
+		}
+		rule.InheritPerms(m.nodes[inode].mode)
+	} else {
+		rule = aclAPI.EmptyRule()
+	}
+
+	st := m.meta.SetFacl(m.ctx, inode, atype, rule)
+	st2 := m.setfacl(inode, atype, rule)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
 }
 
 func TestFSOps(t *testing.T) {

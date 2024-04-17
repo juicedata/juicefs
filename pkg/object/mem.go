@@ -74,7 +74,7 @@ func (m *memStore) Head(key string) (Object, error) {
 	return f, nil
 }
 
-func (m *memStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (m *memStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	m.Lock()
 	defer m.Unlock()
 	// Minimum length is 1.
@@ -95,7 +95,7 @@ func (m *memStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (m *memStore) Put(key string, in io.Reader) error {
+func (m *memStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	m.Lock()
 	defer m.Unlock()
 	// Minimum length is 1.
@@ -122,7 +122,7 @@ func (m *memStore) Copy(dst, src string) error {
 	return m.Put(dst, d)
 }
 
-func (m *memStore) Delete(key string) error {
+func (m *memStore) Delete(key string, getters ...AttrGetter) error {
 	m.Lock()
 	defer m.Unlock()
 	delete(m.objects, key)

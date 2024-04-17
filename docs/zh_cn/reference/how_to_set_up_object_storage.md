@@ -822,7 +822,7 @@ juicefs format \
 
 [Gluster](https://github.com/gluster/glusterfs) 是一款开源的软件定义分布式存储，单集群能支持 PiB 级别的数据。JuiceFS 通过 `libgfapi` 库与 Gluster 集群交互，使用前需要单独编译。
 
-首先安装 `libgfapi`（6.0 或以上版本）：
+首先安装 `libgfapi`（版本范围 6.0 - 10.1, [10.4+ 暂不支持](https://github.com/juicedata/juicefs/issues/4043))：
 
 <Tabs>
   <TabItem value="debian" label="Debian 及衍生版本">

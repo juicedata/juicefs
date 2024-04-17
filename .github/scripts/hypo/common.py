@@ -104,19 +104,17 @@ def support_acl(path):
         with open(file, 'r') as f:
             config = json.load(f)
             if config['Meta'].get('Args', '').find('--enable-acl') != -1:
-                # print(f"{path} has enabled ACL.")
+                return True
+            elif config['Format'].get('EnableACL', False):
                 return True
             else:
-                # print(f"{path} does not have enabled ACL.")
                 return False
     else:
         mount_point = subprocess.check_output(["df", root]).decode("utf-8").splitlines()[-1].split()[0]
         mount_options = subprocess.check_output(["sudo", "tune2fs", "-l", mount_point]).decode("utf-8")
         if "acl" not in mount_options:
-            # print(f"{path} does not have enabled ACL.")
             return False
         else:
-            # print(f"{path} has enabled ACL.")
             return True
         
 def get_stat(path):

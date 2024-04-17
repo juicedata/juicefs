@@ -88,7 +88,7 @@ func (l *limitedReadCloser) Close() error {
 	return l.rc.Close()
 }
 
-func (w *webdav) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (w *webdav) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if off == 0 && limit <= 0 {
 		return w.c.ReadStream(key)
 	}
@@ -129,7 +129,7 @@ func (w *webdav) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return nil, &os.PathError{Op: "ReadStreamRange", Path: key, Err: err}
 }
 
-func (w *webdav) Put(key string, in io.Reader) error {
+func (w *webdav) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	if key == "" {
 		return nil
 	}
@@ -139,7 +139,7 @@ func (w *webdav) Put(key string, in io.Reader) error {
 	return w.c.WriteStream(key, in, 0)
 }
 
-func (w *webdav) Delete(key string) error {
+func (w *webdav) Delete(key string, getters ...AttrGetter) error {
 	info, err := w.c.Stat(key)
 	if gowebdav.IsErrNotFound(err) {
 		return nil

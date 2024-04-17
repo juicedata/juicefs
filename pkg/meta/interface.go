@@ -24,10 +24,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
 
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -123,6 +123,10 @@ func (i Ino) IsTrash() bool {
 	return i >= TrashInode
 }
 
+func (i Ino) IsNormal() bool {
+	return i >= RootInode && i < TrashInode
+}
+
 var TrashName = ".trash"
 
 func isTrash(ino Ino) bool {
@@ -161,6 +165,9 @@ type Attr struct {
 	Parent    Ino  // inode of parent; 0 means tracked by parentKey (for hardlinks)
 	Full      bool // the attributes are completed or not
 	KeepCache bool // whether to keep the cached page or not
+
+	AccessACL  uint32 // access ACL id (identical ACL rules share the same access ACL ID.)
+	DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
 }
 
 func typeToStatType(_type uint8) uint32 {
@@ -297,34 +304,6 @@ type Session struct {
 	Plocks    []Plock `json:",omitempty"`
 }
 
-type Quota struct {
-	MaxSpace, MaxInodes   int64
-	UsedSpace, UsedInodes int64
-	newSpace, newInodes   int64
-}
-
-// Returns true if it will exceed the quota limit
-func (q *Quota) check(space, inodes int64) bool {
-	if space > 0 {
-		max := atomic.LoadInt64(&q.MaxSpace)
-		if max > 0 && atomic.LoadInt64(&q.UsedSpace)+atomic.LoadInt64(&q.newSpace)+space > max {
-			return true
-		}
-	}
-	if inodes > 0 {
-		max := atomic.LoadInt64(&q.MaxInodes)
-		if max > 0 && atomic.LoadInt64(&q.UsedInodes)+atomic.LoadInt64(&q.newInodes)+inodes > max {
-			return true
-		}
-	}
-	return false
-}
-
-func (q *Quota) update(space, inodes int64) {
-	atomic.AddInt64(&q.newSpace, space)
-	atomic.AddInt64(&q.newInodes, inodes)
-}
-
 // Meta is a interface for a meta service for file system.
 type Meta interface {
 	// Name of database
@@ -337,7 +316,7 @@ type Meta interface {
 	Reset() error
 	// Load loads the existing setting of a formatted volume from meta service.
 	Load(checkVersion bool) (*Format, error)
-	// NewSession creates a new client session.
+	// NewSession creates or update client session.
 	NewSession(record bool) error
 	// CloseSession does cleanup and close the session.
 	CloseSession() error
@@ -468,12 +447,15 @@ type Meta interface {
 	HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool) error
 
 	// Dump the tree under root, which may be modified by checkRoot
-	DumpMeta(w io.Writer, root Ino, keepSecret, fast bool) error
+	DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) error
 	LoadMeta(r io.Reader) error
 
 	// getBase return the base engine.
 	getBase() *baseMeta
 	InitMetrics(registerer prometheus.Registerer)
+
+	SetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
+	GetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)

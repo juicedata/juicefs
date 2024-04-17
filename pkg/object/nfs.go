@@ -23,7 +23,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/fs"
 	"math/rand"
 	"os"
 	"os/user"
@@ -46,6 +45,8 @@ type nfsStore struct {
 	username string
 	host     string
 	root     string
+	fmode    os.FileMode
+	dmode    os.FileMode
 
 	target *nfs.Target
 }
@@ -110,7 +111,7 @@ func (n *nfsStore) Head(key string) (Object, error) {
 	return n.fileInfo(key, fi), nil
 }
 
-func (n *nfsStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (n *nfsStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	p := n.path(key)
 	if strings.HasSuffix(p, "/") {
 		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
@@ -130,7 +131,7 @@ func (n *nfsStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return ff, err
 }
 
-func (n *nfsStore) mkdirAll(p string, perm fs.FileMode) error {
+func (n *nfsStore) mkdirAll(p string) error {
 	p = strings.TrimSuffix(p, "/")
 	fi, _, err := n.target.Lookup(p)
 	if err == nil {
@@ -146,18 +147,18 @@ func (n *nfsStore) mkdirAll(p string, perm fs.FileMode) error {
 
 	dir, _ := path.Split(p)
 	if dir != "." {
-		if err = n.mkdirAll(dir, perm); err != nil {
+		if err = n.mkdirAll(dir); err != nil {
 			return err
 		}
 	}
-	_, err = n.target.Mkdir(p, perm)
+	_, err = n.target.Mkdir(p, n.dmode)
 	return err
 }
 
-func (n *nfsStore) Put(key string, in io.Reader) (err error) {
+func (n *nfsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
 	p := n.path(key)
 	if strings.HasSuffix(p, dirSuffix) {
-		return n.mkdirAll(p, 0777)
+		return n.mkdirAll(p)
 	}
 	var tmp string
 	if PutInplace {
@@ -174,14 +175,14 @@ func (n *nfsStore) Put(key string, in io.Reader) (err error) {
 			}
 		}()
 	}
-	_, err = n.target.Create(tmp, 0777)
+	_, err = n.target.Create(tmp, n.fmode)
 	if os.IsNotExist(err) {
-		_ = n.mkdirAll(path.Dir(p), 0777)
-		_, err = n.target.Create(tmp, 0777)
+		_ = n.mkdirAll(path.Dir(p))
+		_, err = n.target.Create(tmp, n.fmode)
 	}
 	if os.IsExist(err) {
 		_ = n.target.Remove(tmp)
-		_, err = n.target.Create(tmp, 0777)
+		_, err = n.target.Create(tmp, n.fmode)
 	}
 	if err != nil {
 		return errors.Wrapf(err, "create %s", tmp)
@@ -209,7 +210,7 @@ func (n *nfsStore) Put(key string, in io.Reader) (err error) {
 	return err
 }
 
-func (n *nfsStore) Delete(key string) error {
+func (n *nfsStore) Delete(key string, getters ...AttrGetter) error {
 	path := n.path(key)
 	if path == "./" {
 		return nil
@@ -400,7 +401,7 @@ func (n *nfsStore) Symlink(oldName, newName string) error {
 	p := n.path(newName)
 	dir := path.Dir(p)
 	if _, _, err := n.target.Lookup(dir); err != nil && os.IsNotExist(err) {
-		if _, err := n.target.Mkdir(dir, os.FileMode(0777)); err != nil && !os.IsExist(err) {
+		if _, err := n.target.Mkdir(dir, n.dmode); err != nil && !os.IsExist(err) {
 			return errors.Wrapf(err, "mkdir %s", dir)
 		}
 	} else if err != nil && !os.IsNotExist(err) {
@@ -458,7 +459,14 @@ func newNFSStore(addr, username, pass, token string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to mount %s: %v", addr, err)
 	}
-	return &nfsStore{DefaultObjectStorage{}, username, host, path, target}, nil
+	umask := utils.GetUmask()
+	return &nfsStore{
+		username: username,
+		host:     host,
+		root:     path,
+		fmode:    os.FileMode(0666 &^ umask),
+		dmode:    os.FileMode(0777 &^ umask),
+		target:   target}, nil
 }
 
 func init() {

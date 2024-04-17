@@ -26,6 +26,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/stretchr/testify/require"
 )
 
 // Copy from https://github.com/prometheus/client_golang/blob/v1.14.0/prometheus/testutil/testutil.go
@@ -296,4 +297,48 @@ func TestCheckPath(t *testing.T) {
 			t.Fatalf("check path %s expected %v but got %v", c.path, c.expected, res)
 		}
 	}
+}
+
+func TestCacheManager(t *testing.T) {
+	conf := defaultConf
+	conf.CacheDir = "/tmp/diskCache0:/tmp/diskCache1:/tmp/diskCache2"
+	conf.AutoCreate = true
+	defer os.RemoveAll("/tmp/diskCache0")
+	defer os.RemoveAll("/tmp/diskCache1")
+	defer os.RemoveAll("/tmp/diskCache2")
+	manager := newCacheManager(&conf, nil, nil)
+	require.True(t, !manager.isEmpty())
+
+	m, ok := manager.(*cacheManager)
+	require.True(t, ok)
+	require.Equal(t, 3, m.length())
+
+	// case: key rehash after store removal
+	k1 := "k1"
+	p1 := NewPage([]byte{1, 2, 3})
+	defer p1.Release()
+	m.cache(k1, p1, true)
+
+	s1 := m.getStore(k1)
+	require.NotNil(t, s1)
+
+	m.Lock()
+	s1.shutdown()
+	m.Unlock()
+	time.Sleep(3 * time.Second)
+
+	rc, _ := m.load(k1)
+	require.Nil(t, rc)
+
+	s2 := m.getStore(k1)
+	require.NotNil(t, s2)
+
+	// case: remove all store
+	m.Lock()
+	for _, s := range m.storeMap {
+		s.shutdown()
+	}
+	m.Unlock()
+	time.Sleep(3 * time.Second)
+	require.True(t, m.isEmpty())
 }

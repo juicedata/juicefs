@@ -64,9 +64,10 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 			Compress:   format.Compression,
 			MaxUpload:  2,
 			BufferSize: 30 << 20,
-			CacheSize:  10,
+			CacheSize:  10 << 20,
 			CacheDir:   "memory",
 		},
+		FuseOpts: &FuseOptions{},
 	}
 	blob, _ := object.CreateStorage("mem", "", "", "", "")
 	registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
@@ -205,7 +206,7 @@ func TestVFSIO(t *testing.T) {
 		t.Fatalf("write file: %s", e)
 	}
 	var attr meta.Attr
-	if e = v.Truncate(ctx, fe.Inode, (100<<20)+2, 1, &attr); e != 0 {
+	if e = v.Truncate(ctx, fe.Inode, (100<<20)+2, fh, &attr); e != 0 {
 		t.Fatalf("truncate file: %s", e)
 	}
 	if n, e := v.CopyFileRange(ctx, fe.Inode, fh, 0, fe.Inode, fh, 10<<20, 10, 0); e != 0 || n != 10 {
@@ -693,7 +694,7 @@ func TestInternalFile(t *testing.T) {
 	}
 	if n, e = v.Read(ctx, fe.Inode, buf, 0, fh); e != 0 {
 		t.Fatalf("read .accesslog: %s", e)
-	} else if !strings.Contains(string(buf[:n]), "open (9223372032559808513)") {
+	} else if !strings.Contains(string(buf[:n]), "open (9223372032559808513") {
 		t.Fatalf("invalid access log: %q", string(buf[:n]))
 	}
 	_ = v.Flush(ctx, fe.Inode, fh, 0)
@@ -860,5 +861,75 @@ func TestInternalFile(t *testing.T) {
 		t.Fatalf("read result: %s %d", e, n)
 	} else if resp[0] != uint8(syscall.EIO) {
 		t.Fatalf("result: %s", string(resp[:n]))
+	}
+}
+
+func TestReaddirCache(t *testing.T) {
+	v, _ := createTestVFS()
+	ctx := NewLogContext(meta.Background)
+	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
+	if st != 0 {
+		t.Fatalf("mkdir testdir: %s", st)
+	}
+	parent := entry.Inode
+	for i := 0; i < 100; i++ {
+		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
+	}
+	fh, _ := v.Opendir(ctx, parent, 0)
+	_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", 100), 0777, 022)
+	defer v.Releasedir(ctx, parent, fh)
+	var off = 20
+	var files = make(map[string]bool)
+	// read first 20
+	entries, _, _ := v.Readdir(ctx, parent, 20, 0, fh, true)
+	for _, e := range entries[:off] {
+		files[string(e.Name)] = true
+	}
+	v.UpdateReaddirOffset(ctx, parent, fh, off)
+	for i := 0; i < 100; i += 10 {
+		name := fmt.Sprintf("d%d", i)
+		_ = v.Rmdir(ctx, parent, name)
+		delete(files, name)
+	}
+	for i := 100; i < 110; i++ {
+		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
+		_ = v.Rename(ctx, parent, fmt.Sprintf("d%d", i), parent, fmt.Sprintf("d%d", i+10), 0)
+		delete(files, fmt.Sprintf("d%d", i))
+	}
+	for {
+		entries, _, _ := v.Readdir(ctx, parent, 20, off, fh, true)
+		if len(entries) == 0 {
+			break
+		}
+		if len(entries) > 20 {
+			entries = entries[:20]
+		}
+		for _, e := range entries {
+			if e.Inode > 0 {
+				files[string(e.Name)] = true
+			} else {
+				t.Logf("invalid entry %s", e.Name)
+			}
+		}
+		off += len(entries)
+		v.UpdateReaddirOffset(ctx, parent, fh, off)
+	}
+	for i := 0; i < 100; i += 10 {
+		name := fmt.Sprintf("d%d", i)
+		if _, ok := files[name]; ok {
+			t.Fatalf("dir %s should be deleted", name)
+		}
+	}
+	for i := 100; i < 110; i++ {
+		name := fmt.Sprintf("d%d", i)
+		if _, ok := files[name]; ok {
+			t.Fatalf("dir %s should be deleted", name)
+		}
+	}
+	for i := 110; i < 120; i++ {
+		name := fmt.Sprintf("d%d", i)
+		if _, ok := files[name]; !ok {
+			t.Fatalf("dir %s should be added", name)
+		}
 	}
 }

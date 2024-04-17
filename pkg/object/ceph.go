@@ -127,7 +127,7 @@ func (r *cephReader) Close() error {
 	return nil
 }
 
-func (c *ceph) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (c *ceph) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if _, err := c.Head(key); err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ var cephPool = sync.Pool{
 	},
 }
 
-func (c *ceph) Put(key string, in io.Reader) error {
+func (c *ceph) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	// ceph default osd_max_object_size = 128M
 	return c.do(func(ctx *rados.IOContext) error {
 		if b, ok := in.(*bytes.Reader); ok {
@@ -181,7 +181,7 @@ func (c *ceph) Put(key string, in io.Reader) error {
 	})
 }
 
-func (c *ceph) Delete(key string) error {
+func (c *ceph) Delete(key string, getters ...AttrGetter) error {
 	err := c.do(func(ctx *rados.IOContext) error {
 		return ctx.Delete(key)
 	})
@@ -317,6 +317,22 @@ func newCeph(endpoint, cluster, user, token string) (ObjectStorage, error) {
 	conn, err := rados.NewConnWithClusterAndUser(cluster, user)
 	if err != nil {
 		return nil, fmt.Errorf("Can't create connection to cluster %s for user %s: %s", cluster, user, err)
+	}
+	if opt := os.Getenv("CEPH_ADMIN_SOCKET"); opt != "none" {
+		if opt == "" {
+			opt = "$run_dir/jfs-$cluster-$name.asok"
+		}
+		if err = conn.SetConfigOption("admin_socket", opt); err != nil {
+			logger.Warnf("Failed to set admin_socket to %s: %s", opt, err)
+		}
+	}
+	if opt := os.Getenv("CEPH_LOG_FILE"); opt != "none" {
+		if opt == "" {
+			opt = "/var/log/ceph/jfs-$cluster-$name.log"
+		}
+		if err = conn.SetConfigOption("log_file", opt); err != nil {
+			logger.Warnf("Failed to set log_file to %s: %s", opt, err)
+		}
 	}
 	if os.Getenv("JFS_NO_CHECK_OBJECT_STORAGE") == "" {
 		if err := conn.ReadDefaultConfigFile(); err != nil {

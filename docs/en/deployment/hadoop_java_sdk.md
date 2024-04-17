@@ -190,26 +190,28 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 
 #### Other Configurations
 
-| Configuration             | Default Value | Description                                                                                                                                                                 |
-|---------------------------|---------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `juicefs.bucket`          |               | Specify a different endpoint for object storage                                                                                                                             |
-| `juicefs.debug`           | `false`       | Whether enable debug log                                                                                                                                                    |
-| `juicefs.access-log`      |               | Access log path. Ensure Hadoop application has write permission, e.g. `/tmp/juicefs.access.log`. The log file will rotate  automatically to keep at most 7 files.           |
-| `juicefs.superuser`       | `hdfs`        | The super user                                                                                                                                                              |
-| `juicefs.supergroup`      | `supergroup`  | The super user group                                                                                                                                                        |
-| `juicefs.users`           | `null`        | The path of username and UID list file, e.g. `jfs://name/etc/users`. The file format is `<username>:<UID>`, one user per line.                                              |
-| `juicefs.groups`          | `null`        | The path of group name, GID and group members list file, e.g. `jfs://name/etc/groups`. The file format is `<group-name>:<GID>:<username1>,<username2>`, one group per line. |
-| `juicefs.umask`           | `null`        | The umask used when creating files and directories (e.g. `0022`), default value is `fs.permissions.umask-mode`.                                                             |
-| `juicefs.push-gateway`    |               | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) address, format is `<host>:<port>`.                                                                     |
-| `juicefs.push-auth`       |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`.                                                       |
-| `juicefs.push-graphite`   |               | [Graphite](https://graphiteapp.org) address, format is `<host>:<port>`.                                                                                                     |
-| `juicefs.push-interval`   | 10            | Metric push interval (in seconds)                                                                                                                                           |
-| `juicefs.push-labels`     |               | Metric labels, format is `key1:value1,key2:value2`.                                    |
-| `juicefs.fast-resolve`    | `true`        | Whether enable faster metadata lookup using Redis Lua script                                                                                                                |
+| Configuration           | Default Value | Description                                                                                                                                                                 |
+|-------------------------|---------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `juicefs.bucket`        |               | Specify a different endpoint for object storage                                                                                                                             |
+| `juicefs.debug`         | `false`       | Whether enable debug log                                                                                                                                                    |
+| `juicefs.access-log`    |               | Access log path. Ensure Hadoop application has write permission, e.g. `/tmp/juicefs.access.log`. The log file will rotate  automatically to keep at most 7 files.           |
+| `juicefs.superuser`     | `hdfs`        | The super user                                                                                                                                                              |
+| `juicefs.supergroup`    | `supergroup`  | The super user group                                                                                                                                                        |
+| `juicefs.users`         | `null`        | The path of username and UID list file, e.g. `jfs://name/etc/users`. The file format is `<username>:<UID>`, one user per line.                                              |
+| `juicefs.groups`        | `null`        | The path of group name, GID and group members list file, e.g. `jfs://name/etc/groups`. The file format is `<group-name>:<GID>:<username1>,<username2>`, one group per line. |
+| `juicefs.umask`         | `null`        | The umask used when creating files and directories (e.g. `0022`), default value is `fs.permissions.umask-mode`.                                                             |
+| `juicefs.push-gateway`  |               | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) address, format is `<host>:<port>`.                                                                     |
+| `juicefs.push-auth`     |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`.                                                       |
+| `juicefs.push-graphite` |               | [Graphite](https://graphiteapp.org) address, format is `<host>:<port>`.                                                                                                     |
+| `juicefs.push-interval` | 10            | Metric push interval (in seconds)                                                                                                                                           |
+| `juicefs.push-labels`   |               | Metric labels, format is `key1:value1;key2:value2`.                                                                                                                         |
+| `juicefs.fast-resolve`  | `true`        | Whether enable faster metadata lookup using Redis Lua script                                                                                                                |
 | `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected.                         |
-| `juicefs.no-bgjob`        | `false`       | Disable background jobs (clean-up, backup, etc.)                                                                                                                            |
-| `juicefs.backup-meta`     | 3600          | Interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup)                                                                       |
-| `juicefs.heartbeat`       | 12            | Heartbeat interval (in seconds) between client and metadata engine. It's recommended that all clients use the same value.                                                   |
+| `juicefs.no-bgjob`      | `false`       | Disable background jobs (clean-up, backup, etc.)                                                                                                                            |
+| `juicefs.backup-meta`   | 3600          | Interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup)                                                                       |
+| `juicefs.backup-skip-trash` | `false`       | Skip files and directories in trash when backup metadata.                                                                                                                   |
+| `juicefs.heartbeat`     | 12            | Heartbeat interval (in seconds) between client and metadata engine. It's recommended that all clients use the same value.                                                   |
+| `juicefs.skip-dir-mtime`              | 100ms         | Minimal duration to modify parent dir mtime.                                                                                                                                |
 
 #### Multiple file systems configuration
 
@@ -297,7 +299,7 @@ First you need to add JuiceFS SDK to `classpath` in Kafka Connect, e.g., `/usr/s
 
 While creating a Connect Sink task, configuration needs to be set up as follows:
 
-- Specify `hadoop.conf.dir` as the directory that contains the configuration file `core-site.xml`. If it is not running in Hadoop environment, you can create a seperate directory such as `/usr/local/juicefs/hadoop`, and then add the JuiceFS related configurations to `core-site.xml`.
+- Specify `hadoop.conf.dir` as the directory that contains the configuration file `core-site.xml`. If it is not running in Hadoop environment, you can create a separate directory such as `/usr/local/juicefs/hadoop`, and then add the JuiceFS related configurations to `core-site.xml`.
 - Specify `store.url` as a path starting with `jfs://`.
 
 For example:

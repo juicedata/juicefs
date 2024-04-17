@@ -32,6 +32,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -74,19 +75,19 @@ Details: https://juicefs.com/docs/community/performance_evaluation_guide#juicefs
 				Name:  "session-token",
 				Usage: "session token for object storage",
 			},
-			&cli.UintFlag{
+			&cli.StringFlag{
 				Name:  "block-size",
-				Value: 4096,
+				Value: "4M",
 				Usage: "size of each IO block in KiB",
 			},
-			&cli.UintFlag{
+			&cli.StringFlag{
 				Name:  "big-object-size",
-				Value: 1024,
+				Value: "1G",
 				Usage: "size of each big object in MiB",
 			},
-			&cli.UintFlag{
+			&cli.StringFlag{
 				Name:  "small-object-size",
-				Value: 128,
+				Value: "128K",
 				Usage: "size of each small object in KiB",
 			},
 			&cli.UintFlag{
@@ -121,10 +122,16 @@ var groupName string
 
 func objbench(ctx *cli.Context) error {
 	setup(ctx, 1)
-	for _, name := range []string{"big-object-size", "small-object-size", "block-size", "small-objects", "threads"} {
+	for _, name := range []string{"small-objects", "threads"} {
 		if ctx.Uint(name) == 0 {
 			logger.Fatalf("%s should not be set to zero", name)
 		}
+	}
+	bSize := int(utils.ParseBytes(ctx, "block-size", 'K'))
+	fsize := int(utils.ParseBytes(ctx, "big-object-size", 'M'))
+	smallBSize := int(utils.ParseBytes(ctx, "small-object-size", 'K'))
+	if bSize == 0 || fsize == 0 || smallBSize == 0 {
+		logger.Fatalf("block-size, big-object-size and small-object-size should not be zero")
 	}
 	ak, sk, token := ctx.String("access-key"), ctx.String("secret-key"), ctx.String("session-token")
 	if ak == "" {
@@ -154,9 +161,6 @@ func objbench(ctx *cli.Context) error {
 	defer func() {
 		_ = blobOrigin.Delete(prefix)
 	}()
-	bSize := int(ctx.Uint("block-size")) << 10
-	fsize := int(ctx.Uint("big-object-size")) << 20
-	smallBSize := int(ctx.Uint("small-object-size")) << 10
 	bCount := int(math.Ceil(float64(fsize) / float64(bSize)))
 	sCount := int(ctx.Uint("small-objects"))
 	threads := int(ctx.Uint("threads"))
@@ -343,6 +347,14 @@ func objbench(ctx *cli.Context) error {
 		threads:     threads,
 		seed:        make([]byte, bSize),
 		smallSeed:   make([]byte, smallBSize),
+		buffPool: &sync.Pool{New: func() interface{} {
+			buff := make([]byte, bSize)
+			return &buff
+		}},
+		smallBuffPool: &sync.Pool{New: func() interface{} {
+			buff := make([]byte, smallBSize)
+			return &buff
+		}},
 	}
 	randRead(bm.seed)
 	randRead(bm.smallSeed)
@@ -356,8 +368,8 @@ func objbench(ctx *cli.Context) error {
 		_ = bm.delete(strconv.Itoa(i), 0)
 	}
 
-	fmt.Printf("Benchmark finished! block-size: %d KiB, big-object-size: %d MiB, small-object-size: %d KiB, small-objects: %d, NumThreads: %d\n",
-		ctx.Uint("block-size"), ctx.Uint("big-object-size"), ctx.Uint("small-object-size"), sCount, threads)
+	fmt.Printf("Benchmark finished! block-size: %s, big-object-size: %s, small-object-size: %s, small-objects: %d, NumThreads: %d\n",
+		humanize.IBytes(uint64(bSize)), humanize.IBytes(uint64(fsize)), humanize.IBytes(uint64(smallBSize)), sCount, threads)
 
 	// adjust the print order
 	pResult[1], pResult[3] = pResult[3], pResult[1]
@@ -420,10 +432,11 @@ type apiInfo struct {
 }
 
 type benchMarkObj struct {
-	progressBar     *utils.Progress
-	blob            object.ObjectStorage
-	threads         int
-	seed, smallSeed []byte
+	progressBar             *utils.Progress
+	blob                    object.ObjectStorage
+	threads                 int
+	seed, smallSeed         []byte
+	buffPool, smallBuffPool *sync.Pool
 }
 
 func (bm *benchMarkObj) run(api apiInfo) []string {
@@ -499,40 +512,57 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 	return line
 }
 
-func getMockData(seed []byte, idx int) []byte {
+func getMockData(seed []byte, idx int, result *[]byte) {
 	size := len(seed)
-	if size == 0 {
-		return nil
+	rSize := len(*result)
+	if size == 0 || rSize == 0 {
+		return
 	}
-	content := make([]byte, size)
-	if idx == 0 {
-		content = seed
+	i := idx % size
+	if size-i > rSize {
+		copy(*result, seed[i:i+rSize])
 	} else {
-		i := idx % size
-		copy(content[:size-i], seed[i:size])
-		copy(content[size-i:size], seed[:i])
+		copy((*result)[:size-i], seed[i:size])
+		copy((*result)[size-i:rSize], seed[:rSize-(size-i)])
 	}
-	return content
+
 }
 
 func (bm *benchMarkObj) put(key string, startKey int) error {
 	idx, _ := strconv.Atoi(key)
-	return bm.blob.Put(key, bytes.NewReader(getMockData(bm.seed, idx-startKey)))
+	if idx-startKey == 0 {
+		return bm.blob.Put(key, bytes.NewReader(bm.seed))
+	}
+	buff := bm.buffPool.Get().(*[]byte)
+	defer bm.buffPool.Put(buff)
+	getMockData(bm.seed, idx-startKey, buff)
+	return bm.blob.Put(key, bytes.NewReader(*buff))
 }
 
 func (bm *benchMarkObj) smallPut(key string, startKey int) error {
 	idx, _ := strconv.Atoi(key)
-	return bm.blob.Put(key, bytes.NewReader(getMockData(bm.smallSeed, idx)))
+	if idx == 0 {
+		return bm.blob.Put(key, bytes.NewReader(bm.smallSeed))
+	}
+
+	buff := bm.smallBuffPool.Get().(*[]byte)
+	defer bm.smallBuffPool.Put(buff)
+	getMockData(bm.smallSeed, idx-startKey, buff)
+	return bm.blob.Put(key, bytes.NewReader(*buff))
 }
 
-func getAndCheckN(blob object.ObjectStorage, key string, seed []byte, getOrgIdx func(idx int) int) error {
+func getAndCheckN(blob object.ObjectStorage, key string, seed []byte, pool *sync.Pool, getOrgIdx func(idx int) int) error {
 	idx, _ := strconv.Atoi(key)
 	r, err := blob.Get(key, 0, -1)
 	if err != nil {
 		return err
 	}
 	defer r.Close()
-	content, err := io.ReadAll(r)
+	content := pool.Get().(*[]byte)
+	defer pool.Put(content)
+
+	var n int
+	n, err = io.ReadFull(r, *content)
 	if err != nil {
 		return err
 	}
@@ -542,20 +572,32 @@ func getAndCheckN(blob object.ObjectStorage, key string, seed []byte, getOrgIdx 
 	if l < checkN {
 		checkN = l
 	}
-	if len(content) != len(seed) || !bytes.Equal(content[:checkN], getMockData(seed, orgIdx)[:checkN]) {
+
+	// if orgIdx is 0, mockdata is the same as the seed
+	var preNMockData []byte
+	if orgIdx == 0 {
+		preNMockData = seed[:checkN]
+	} else {
+		mockResult := pool.Get().(*[]byte)
+		defer pool.Put(mockResult)
+		preNMockData = (*mockResult)[:checkN]
+		getMockData(seed, orgIdx, &preNMockData)
+	}
+
+	if n != len(seed) || !bytes.Equal((*content)[:checkN], preNMockData) {
 		return fmt.Errorf("the downloaded content is incorrect")
 	}
 	return nil
 }
 
 func (bm *benchMarkObj) get(key string, startKey int) error {
-	return getAndCheckN(bm.blob, key, bm.seed, func(idx int) int {
+	return getAndCheckN(bm.blob, key, bm.seed, bm.buffPool, func(idx int) int {
 		return idx - startKey
 	})
 }
 
 func (bm *benchMarkObj) smallGet(key string, startKey int) error {
-	return getAndCheckN(bm.blob, key, bm.smallSeed, func(idx int) int {
+	return getAndCheckN(bm.blob, key, bm.smallSeed, bm.smallBuffPool, func(idx int) int {
 		return idx
 	})
 }
@@ -958,7 +1000,8 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			parts := make([]*object.Part, total)
 			content := make([][]byte, total)
 			for i := 0; i < total; i++ {
-				content[i] = getMockData(seed, i)
+				content[i] = make([]byte, upload.MinPartSize)
+				getMockData(seed, i, &content[i])
 			}
 			var eg errgroup.Group
 			eg.SetLimit(4)
@@ -978,7 +1021,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 				return err
 			}
 			// overwrite the first part
-			firstPartContent := append(getMockData(seed, 0), getMockData(seed, 0)...)
+			firstPartContent := append(seed, seed...)
 			if parts[0], err = blob.UploadPart(key, upload.UploadID, 1, firstPartContent); err != nil {
 				return fmt.Errorf("multipart upload error: %v", err)
 			}

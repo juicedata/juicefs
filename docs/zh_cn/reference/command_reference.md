@@ -181,6 +181,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--capacity=0`|容量配额，单位为 GiB，默认为 0 代表不限制。如果启用了[回收站](../security/trash.md)，那么配额大小也将包含回收站文件。|
 |`--inodes=0`|文件数配额，默认为 0 代表不限制。|
 |`--trash-days=1`|文件被删除后，默认会进入[回收站](../security/trash.md)，该选项控制已删除文件在回收站内保留的天数，默认为 1，设为 0 以禁用回收站。|
+|`--enable-acl=true` <VersionAdd>1.2</VersionAdd>|启用[POSIX ACL](../security/posix_acl.md)，该选项启用后暂不支持关闭。|
 
 ### `juicefs config` {#config}
 
@@ -235,6 +236,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--min-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最小客户端版本|
 |`--max-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最大客户端版本|
 |`--dir-stats` <VersionAdd>1.1</VersionAdd>|开启目录统计，这是快速汇总和目录配额所必需的 (默认值：false)|
+|`--enable-acl` <VersionAdd>1.2</VersionAdd>|开启 POSIX ACL(不支持关闭), 同时允许连接的最小客户端版本会提升到 v1.2|
 
 ### `juicefs quota` <VersionAdd>1.1</VersionAdd> {#quota}
 
@@ -384,6 +386,8 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 |`FILE`|导出文件路径，如果不指定，则会导出到标准输出。如果文件名以 `.gz` 结尾，将会自动压缩。|
 |`--subdir=path`|只导出指定子目录的元数据。|
 |`--keep-secret-key` <VersionAdd>1.1</VersionAdd>|导出对象存储认证信息，默认为 `false`。由于是明文导出，使用时注意数据安全。如果导出文件不包含对象存储认证信息，后续的导入完成后，需要用 [`juicefs config`](#config) 重新配置对象存储认证信息。|
+|`--fast` <VersionAdd>1.2</VersionAdd>|使用更多内存来加速导出。|
+|`--skip-trash` <VersionAdd>1.2</VersionAdd>|跳过回收站中的文件和目录。|
 
 ### `juicefs load` {#load}
 
@@ -628,6 +632,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |-|-|
 |`--subdir=value`|挂载指定的子目录，默认挂载整个文件系统。|
 |`--backup-meta=3600`|自动备份元数据到对象存储的间隔时间；单位秒，默认 3600，设为 0 表示不备份。|
+|`--backup-skip-trash` <VersionAdd>1.2</VersionAdd>|备份元数据时跳过回收站中的文件和目录。|
 |`--heartbeat=12`|发送心跳的间隔（单位秒），建议所有客户端使用相同的心跳值 (默认：12)|
 |`--read-only`|启用只读模式挂载。|
 |`--no-bgjob`|禁用后台任务，默认为 false，也就是说客户端会默认运行后台任务。后台任务包含：<br/><ul><li>清理回收站中过期的文件（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupDeletedFiles` 和 `cleanupTrash`）</li><li>清理引用计数为 0 的 Slice（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupSlices`）</li><li>清理过期的客户端会话（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `CleanStaleSessions`）</li></ul>特别地，与[企业版](https://juicefs.com/docs/zh/cloud/guide/background-job)不同，社区版碎片合并（Compaction）不受该选项的影响，而是随着文件读写操作，自动判断是否需要合并，然后异步执行（以 Redis 为例，在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/redis.go) 中搜索 `compactChunk`）|
@@ -683,7 +688,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |项 | 说明|
 |-|-|
 |`--metrics=127.0.0.1:9567`|监控数据导出地址，默认为 `127.0.0.1:9567`。|
-|`--custom-labels`|监控指标自定义标签，格式为 `key1:value1,key2:value2` (默认："")|
+|`--custom-labels`|监控指标自定义标签，格式为 `key1:value1;key2:value2` (默认："")|
 |`--consul=127.0.0.1:8500`|Consul 注册中心地址，默认为 `127.0.0.1:8500`。|
 |`--no-usage-report`|不发送使用量信息 (默认：false)|
 
@@ -735,6 +740,7 @@ juicefs gateway redis://localhost localhost:9000
 |`--multi-buckets`|使用第一级目录作为存储桶 (默认：false)|
 |`--keep-etag`|保留对象上传时的 ETag (默认：false)|
 |`--umask=022`|新文件和新目录的 umask 的八进制格式 (默认值：022)|
+| `--domain value`<VersionAdd>1.2</VersionAdd>   |虚拟主机样式请求的域|
 
 ### `juicefs webdav` {#webdav}
 

@@ -1,0 +1,97 @@
+name: "sync"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  schedule:
+    - cron:  '30 20 * * *'
+
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        type: ['sync', 'sync_fsrand', 'sync_minio', 'sync_cluster', 'sync_exclude']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Build 
+        uses: ./.github/actions/build
+
+      - name: Test Sync
+        timeout-minutes: 60
+        run: |
+          if [[ "${{matrix.type}}" == 'sync' ]]; then
+            sudo META=redis .github/scripts/sync/sync.sh 
+          elif [[ "${{matrix.type}}" == 'sync_fsrand' ]]; then
+            sudo META=redis .github/scripts/sync/sync_fsrand.sh 
+          elif [[ "${{matrix.type}}" == 'sync_minio' ]]; then
+            sudo META=redis .github/scripts/sync/sync_minio.sh 
+          elif [[ "${{matrix.type}}" == 'sync_cluster' ]]; then
+            types=("ecdsa"  "ed25519"  "rsa")
+            random_type=${types[$RANDOM % ${#types[@]}]}
+            sudo CI=true META=redis KEY_TYPE=$random_type .github/scripts/sync/sync_cluster.sh
+          elif [[ "${{matrix.type}}" == 'sync_exclude' ]]; then
+            sudo python3 .github/scripts/hypo/syncrand_test.py
+            if [ "${{github.event_name}}" == "schedule" ]; then
+              sudo MAX_EXAMPLE=500 STEP_COUNT=100 PROFILE=ci python3 .github/scripts/hypo/syncrand.py
+            else
+              sudo MAX_EXAMPLE=200 STEP_COUNT=50 PROFILE=ci python3 .github/scripts/hypo/syncrand.py
+            fi
+          else
+            echo "Unknown type: ${{matrix.type}}"
+            exit 1
+          fi
+          
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [sync]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
+      - name: Send Slack Notification
+        if: failure() && github.event_name != 'workflow_dispatch' 
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Success
+        if: success()
+        run: echo "All Done"

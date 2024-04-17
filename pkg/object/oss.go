@@ -113,7 +113,7 @@ func (o *ossClient) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err error) {
+func (o *ossClient) Get(key string, off, limit int64, getters ...AttrGetter) (resp io.ReadCloser, err error) {
 	var respHeader http.Header
 	if off > 0 || limit > 0 {
 		var r string
@@ -136,12 +136,14 @@ func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err e
 				length)
 		}
 	}
-	ReqIDCache.put(key, respHeader.Get(oss.HTTPHeaderOssRequestID))
+	attrs := applyGetters(getters...)
+	attrs.SetRequestID(respHeader.Get(oss.HTTPHeaderOssRequestID))
+	attrs.SetStorageClass(respHeader.Get(oss.HTTPHeaderOssStorageClass))
 	err = o.checkError(err)
 	return
 }
 
-func (o *ossClient) Put(key string, in io.Reader) error {
+func (o *ossClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	var option []oss.Option
 	if ins, ok := in.(io.ReadSeeker); ok {
 		option = append(option, oss.Meta(checksumAlgr, generateChecksum(ins)))
@@ -152,7 +154,8 @@ func (o *ossClient) Put(key string, in io.Reader) error {
 	var respHeader http.Header
 	option = append(option, oss.GetResponseHeader(&respHeader))
 	err := o.bucket.PutObject(key, in, option...)
-	ReqIDCache.put(key, respHeader.Get(oss.HTTPHeaderOssRequestID))
+	attrs := applyGetters(getters...)
+	attrs.SetRequestID(respHeader.Get(oss.HTTPHeaderOssRequestID)).SetStorageClass(o.sc)
 	return o.checkError(err)
 }
 
@@ -165,10 +168,11 @@ func (o *ossClient) Copy(dst, src string) error {
 	return o.checkError(err)
 }
 
-func (o *ossClient) Delete(key string) error {
+func (o *ossClient) Delete(key string, getters ...AttrGetter) error {
 	var respHeader http.Header
 	err := o.bucket.DeleteObject(key, oss.GetResponseHeader(&respHeader))
-	ReqIDCache.put(key, respHeader.Get(oss.HTTPHeaderOssRequestID))
+	attrs := applyGetters(getters...)
+	attrs.SetRequestID(respHeader.Get(oss.HTTPHeaderOssRequestID))
 	return o.checkError(err)
 }
 
@@ -267,8 +271,9 @@ func (o *ossClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, result.NextKeyMarker, nil
 }
 
-func (o *ossClient) SetStorageClass(sc string) {
+func (o *ossClient) SetStorageClass(sc string) error {
 	o.sc = sc
+	return nil
 }
 
 type stsCred struct {

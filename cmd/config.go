@@ -23,7 +23,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
@@ -54,11 +56,11 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 		Flags: expandFlags(
 			formatStorageFlags(),
 			addCategories("DATA STORAGE", []cli.Flag{
-				&cli.Int64Flag{
+				&cli.StringFlag{
 					Name:  "upload-limit",
 					Usage: "default bandwidth limit of a client for upload in Mbps",
 				},
-				&cli.Int64Flag{
+				&cli.StringFlag{
 					Name:  "download-limit",
 					Usage: "default bandwidth limit of a client for download in Mbps",
 				},
@@ -144,14 +146,16 @@ func config(ctx *cli.Context) error {
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
 		case "capacity":
-			if new := ctx.Uint64(flag); new != format.Capacity>>30 {
-				msg.WriteString(fmt.Sprintf("%10s: %d GiB -> %d GiB\n", flag, format.Capacity>>30, new))
-				format.Capacity = new << 30
+			if new := utils.ParseBytes(ctx, flag, 'G'); new != format.Capacity {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag,
+					humanize.IBytes(format.Capacity), humanize.IBytes(new)))
+				format.Capacity = new
 				quota = true
 			}
 		case "inodes":
 			if new := ctx.Uint64(flag); new != format.Inodes {
-				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.Inodes, new))
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag,
+					humanize.Comma(int64(format.Inodes)), humanize.Comma(int64(new))))
 				format.Inodes = new
 				quota = true
 			}
@@ -201,13 +205,13 @@ func config(ctx *cli.Context) error {
 				storage = true
 			}
 		case "upload-limit":
-			if new := ctx.Int64(flag); new != format.UploadLimit {
-				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.UploadLimit, new))
+			if new := utils.ParseMbps(ctx, flag); new != format.UploadLimit {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, utils.Mbps(format.UploadLimit), utils.Mbps(new)))
 				format.UploadLimit = new
 			}
 		case "download-limit":
-			if new := ctx.Int64(flag); new != format.DownloadLimit {
-				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.DownloadLimit, new))
+			if new := utils.ParseMbps(ctx, flag); new != format.DownloadLimit {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, utils.Mbps(format.DownloadLimit), utils.Mbps(new)))
 				format.DownloadLimit = new
 			}
 		case "trash-days":
@@ -241,6 +245,18 @@ func config(ctx *cli.Context) error {
 				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.MaxClientVersion, new))
 				format.MaxClientVersion = new
 				clientVer = true
+			}
+		case "enable-acl":
+			if enableACL := ctx.Bool(flag); enableACL != format.EnableACL {
+				if enableACL {
+					msg.WriteString(fmt.Sprintf("%s: %v -> %v\n", flag, format.EnableACL, true))
+					msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", "min-client-version", format.MinClientVersion, "1.2.0-A"))
+					format.EnableACL = true
+					format.MinClientVersion = "1.2.0-A"
+					clientVer = true
+				} else {
+					return errors.New("cannot disable acl")
+				}
 			}
 		}
 	}
@@ -293,10 +309,25 @@ func config(ctx *cli.Context) error {
 				return fmt.Errorf("cannot disable dir stats when there are still %d dir quotas: %v", len(qs), paths)
 			}
 		}
-		if clientVer && format.CheckVersion() != nil {
-			warn("Clients with the same version of this will be rejected after modification.")
-			if !yes && !userConfirmed() {
-				return fmt.Errorf("Aborted.")
+		if clientVer {
+			if format.CheckVersion() != nil {
+				warn("Clients with the same version of this will be rejected after modification.")
+				if !yes && !userConfirmed() {
+					return fmt.Errorf("Aborted.")
+				}
+			}
+
+			// check all clients
+			if sessions, err := m.ListSessions(); err == nil {
+				warnMsg := ""
+				for _, session := range sessions {
+					if err := format.CheckCliVersion(version.Parse(session.Version)); err != nil {
+						warnMsg += fmt.Sprintf("host %s pid %d client version error: %s\n", session.HostName, session.ProcessID, err)
+					}
+				}
+				if warnMsg != "" {
+					fmt.Println(warnMsg)
+				}
 			}
 		}
 	}

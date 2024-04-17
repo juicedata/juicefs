@@ -23,7 +23,7 @@ import (
 	"bytes"
 	"time"
 
-	badger "github.com/dgraph-io/badger/v3"
+	badger "github.com/dgraph-io/badger/v4"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
@@ -57,10 +57,7 @@ func (tx *badgerTxn) gets(keys ...[]byte) [][]byte {
 
 func (tx *badgerTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
 	var prefix bool
-	var options = badger.IteratorOptions{
-		PrefetchValues: !keysOnly,
-		PrefetchSize:   1024,
-	}
+	var options = badger.IteratorOptions{}
 	if bytes.Equal(nextKey(begin), end) {
 		prefix = true
 		options.Prefix = begin

@@ -78,12 +78,14 @@ func (b *wasb) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (b *wasb) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (b *wasb) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	download, err := b.container.NewBlobClient(key).DownloadStream(ctx, &azblob.DownloadStreamOptions{Range: blob2.HTTPRange{Offset: off, Count: limit}})
 	if err != nil {
 		return nil, err
 	}
-	ReqIDCache.put(key, aws.StringValue(download.RequestID))
+	attrs := applyGetters(getters...)
+	// TODO fire another property request to get the actual storage class
+	attrs.SetRequestID(aws.StringValue(download.RequestID)).SetStorageClass(b.sc)
 	return download.Body, err
 }
 
@@ -96,13 +98,14 @@ func str2Tier(tier string) *blob2.AccessTier {
 	return nil
 }
 
-func (b *wasb) Put(key string, data io.Reader) error {
+func (b *wasb) Put(key string, data io.Reader, getters ...AttrGetter) error {
 	options := azblob.UploadStreamOptions{}
 	if b.sc != "" {
 		options.AccessTier = str2Tier(b.sc)
 	}
 	resp, err := b.azblobCli.UploadStream(ctx, b.cName, key, data, &options)
-	ReqIDCache.put(key, aws.StringValue(resp.RequestID))
+	attrs := applyGetters(getters...)
+	attrs.SetRequestID(aws.StringValue(resp.RequestID)).SetStorageClass(b.sc)
 	return err
 }
 
@@ -121,14 +124,15 @@ func (b *wasb) Copy(dst, src string) error {
 	return err
 }
 
-func (b *wasb) Delete(key string) error {
+func (b *wasb) Delete(key string, getters ...AttrGetter) error {
 	resp, err := b.container.NewBlobClient(key).Delete(ctx, nil)
 	if err != nil {
 		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.BlobNotFound) {
 			err = nil
 		}
 	}
-	ReqIDCache.put(key, aws.StringValue(resp.RequestID))
+	attrs := applyGetters(getters...)
+	attrs.SetRequestID(aws.StringValue(resp.RequestID))
 	return err
 }
 
@@ -176,8 +180,9 @@ func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bo
 	return objs, nil
 }
 
-func (b *wasb) SetStorageClass(sc string) {
+func (b *wasb) SetStorageClass(sc string) error {
 	b.sc = sc
+	return nil
 }
 
 func autoWasbEndpoint(containerName, accountName, scheme string, credential *azblob.SharedKeyCredential) (string, error) {

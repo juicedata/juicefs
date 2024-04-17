@@ -46,6 +46,7 @@ type DataWriter interface {
 	GetLength(inode Ino) uint64
 	Truncate(inode Ino, length uint64)
 	UpdateMtime(inode Ino, mtime time.Time)
+	FlushAll() error
 }
 
 type sliceWriter struct {
@@ -134,6 +135,9 @@ func (s *sliceWriter) write(ctx meta.Context, off uint32, data []uint8) syscall.
 		s.slen = off + uint32(len(data))
 	}
 	s.lastMod = time.Now()
+	if s.id == 0 {
+		go s.prepareID(ctx, false)
+	}
 	if s.slen == meta.ChunkSize {
 		s.freezed = true
 		go s.flushData()
@@ -144,8 +148,6 @@ func (s *sliceWriter) write(ctx meta.Context, off uint32, data []uint8) syscall.
 				logger.Warnf("write: chunk: %d off: %d %s", s.id, off, err)
 				return syscall.EIO
 			}
-		} else if int(off) <= f.w.blockSize {
-			go s.prepareID(ctx, false)
 		}
 	}
 	return 0
@@ -538,4 +540,23 @@ func (w *dataWriter) UpdateMtime(inode Ino, mtime time.Time) {
 	if f != nil {
 		f.updateMtime(mtime)
 	}
+}
+
+func (w *dataWriter) FlushAll() error {
+	var err error
+	w.Lock()
+	for inode, ind := range w.files {
+		ind.refs++
+		w.Unlock()
+		eno := ind.Flush(meta.Background)
+		w.free(ind)
+		if eno != 0 {
+			logger.Errorf("flush %s: %s", inode, eno)
+			return eno
+		}
+		logger.Debugf("Flush %d", inode)
+		w.Lock()
+	}
+	w.Unlock()
+	return err
 }

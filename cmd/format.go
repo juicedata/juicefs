@@ -35,11 +35,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/urfave/cli/v2"
 )
@@ -143,9 +145,9 @@ func formatStorageFlags() []cli.Flag {
 
 func formatFlags() []cli.Flag {
 	return addCategories("DATA FORMAT", []cli.Flag{
-		&cli.IntFlag{
+		&cli.StringFlag{
 			Name:  "block-size",
-			Value: 4096,
+			Value: "4M",
 			Usage: "size of block in KiB",
 		},
 		&cli.StringFlag{
@@ -168,7 +170,6 @@ func formatFlags() []cli.Flag {
 		},
 		&cli.IntFlag{
 			Name:  "shards",
-			Value: 0,
 			Usage: "store the blocks into N buckets by hash of key",
 		},
 	})
@@ -176,14 +177,12 @@ func formatFlags() []cli.Flag {
 
 func formatManagementFlags() []cli.Flag {
 	return addCategories("MANAGEMENT", []cli.Flag{
-		&cli.Uint64Flag{
+		&cli.StringFlag{
 			Name:  "capacity",
-			Value: 0,
 			Usage: "hard quota of the volume limiting its usage of space in GiB",
 		},
 		&cli.Uint64Flag{
 			Name:  "inodes",
-			Value: 0,
 			Usage: "hard quota of the volume limiting its number of inodes",
 		},
 		&cli.IntFlag{
@@ -191,11 +190,15 @@ func formatManagementFlags() []cli.Flag {
 			Value: 1,
 			Usage: "number of days after which removed files will be permanently deleted",
 		},
+		&cli.BoolFlag{
+			Name:  "enable-acl",
+			Usage: "enable POSIX ACL (this flag is irreversible once enabled)",
+		},
 	})
 }
 
-func fixObjectSize(s int) int {
-	const min, max = 64, 16 << 10
+func fixObjectSize(s uint64) uint64 {
+	const min, max = 64 << 10, 16 << 20
 	var bits uint
 	for s > 1 {
 		bits++
@@ -203,10 +206,10 @@ func fixObjectSize(s int) int {
 	}
 	s = s << bits
 	if s < min {
-		logger.Warnf("block size is too small: %d, use %d instead", s, min)
+		logger.Warnf("block size is too small: %s, use %s instead", humanize.IBytes(s), humanize.IBytes(min))
 		s = min
 	} else if s > max {
-		logger.Warnf("block size is too large: %d, use %d instead", s, max)
+		logger.Warnf("block size is too large: %s, use %s instead", humanize.IBytes(s), humanize.IBytes(max))
 		s = max
 	}
 	return s
@@ -244,7 +247,12 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	blob = object.WithPrefix(blob, format.Name+"/")
 	if format.StorageClass != "" {
 		if os, ok := blob.(object.SupportStorageClass); ok {
-			os.SetStorageClass(format.StorageClass)
+			err := os.SetStorageClass(format.StorageClass)
+			if err != nil {
+				logger.Warnf("set storage class %q: %v", format.StorageClass, err)
+			}
+		} else {
+			logger.Warnf("Storage class is not supported by %q, will ignore", format.Storage)
 		}
 	}
 	if format.EncryptKey != "" {
@@ -313,8 +321,8 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 	}
 	err = store.Delete(key)
 	if err != nil {
-		// it's OK to don't have delete permission
-		fmt.Printf("Failed to delete: %s", err)
+		// it's OK to don't have delete permission, but we should warn user explicitly
+		logger.Warnf("Failed to delete, err: %s", err)
 	}
 	return nil
 }
@@ -378,7 +386,7 @@ func format(c *cli.Context) error {
 		for _, flag := range c.LocalFlagNames() {
 			switch flag {
 			case "capacity":
-				format.Capacity = c.Uint64(flag) << 30
+				format.Capacity = utils.ParseBytes(c, flag, 'G')
 			case "inodes":
 				format.Inodes = c.Uint64(flag)
 			case "bucket":
@@ -400,7 +408,7 @@ func format(c *cli.Context) error {
 			case "trash-days":
 				format.TrashDays = c.Int(flag)
 			case "block-size":
-				format.BlockSize = fixObjectSize(c.Int(flag))
+				format.BlockSize = int(fixObjectSize(utils.ParseBytes(c, flag, 'K')) >> 10)
 			case "compress":
 				format.Compression = c.String(flag)
 			case "shards":
@@ -428,15 +436,20 @@ func format(c *cli.Context) error {
 			EncryptAlgo:      c.String("encrypt-algo"),
 			Shards:           c.Int("shards"),
 			HashPrefix:       c.Bool("hash-prefix"),
-			Capacity:         c.Uint64("capacity") << 30,
+			Capacity:         utils.ParseBytes(c, "capacity", 'G'),
 			Inodes:           c.Uint64("inodes"),
-			BlockSize:        fixObjectSize(c.Int("block-size")),
+			BlockSize:        int(fixObjectSize(utils.ParseBytes(c, "block-size", 'K')) >> 10),
 			Compression:      c.String("compress"),
 			TrashDays:        c.Int("trash-days"),
 			DirStats:         true,
 			MetaVersion:      meta.MaxVersion,
 			MinClientVersion: "1.1.0-A",
+			EnableACL:        c.Bool("enable-acl"),
 		}
+		if format.EnableACL {
+			format.MinClientVersion = "1.2.0-A"
+		}
+
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")
 			_ = os.Unsetenv("ACCESS_KEY")

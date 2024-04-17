@@ -28,7 +28,7 @@ func TestAccessLog(t *testing.T) {
 	defer closeAccessLog(1)
 
 	ctx := NewLogContext(meta.NewContext(10, 1, []uint32{2}))
-	logit(ctx, "test")
+	logit(ctx, "method", 0, "test")
 
 	n := readAccessLog(2, nil)
 	if n != 0 {
@@ -48,7 +48,7 @@ func TestAccessLog(t *testing.T) {
 
 	// read whole line, block for 1 second
 	n = readAccessLog(1, buf[10:])
-	if n != 54 {
+	if n != 66 {
 		t.Fatalf("partial read: %d", n)
 	}
 	logs := string(buf[:10+n])
@@ -61,7 +61,7 @@ func TestAccessLog(t *testing.T) {
 	if now.Sub(ts.Local()) > time.Millisecond*10 {
 		t.Fatalf("stale time: %s now: %s", ts, time.Now())
 	}
-	if logs[26:len(logs)-4] != " [uid:1,gid:2,pid:10] test <0.0000" {
+	if logs[26:len(logs)-4] != " [uid:1,gid:2,pid:10] method test - OK <0.0000" {
 		t.Fatalf("unexpected log: %q", logs[26:])
 	}
 

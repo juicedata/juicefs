@@ -106,7 +106,7 @@ func (s *obsClient) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (s *obsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (s *obsClient) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	params := &obs.GetObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = key
@@ -119,7 +119,8 @@ func (s *obsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		resp, err = s.c.GetObject(params)
 	}
 	if resp != nil {
-		ReqIDCache.put(key, resp.RequestId)
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(resp.RequestId).SetStorageClass(string(resp.StorageClass))
 	}
 	if err != nil {
 		return nil, err
@@ -131,7 +132,7 @@ func (s *obsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
-func (s *obsClient) Put(key string, in io.Reader) error {
+func (s *obsClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	var body io.ReadSeeker
 	var vlen int64
 	var sum []byte
@@ -174,7 +175,8 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
 	}
 	if resp != nil {
-		ReqIDCache.put(key, resp.RequestId)
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(resp.RequestId).SetStorageClass(s.sc)
 	}
 	return err
 }
@@ -190,13 +192,14 @@ func (s *obsClient) Copy(dst, src string) error {
 	return err
 }
 
-func (s *obsClient) Delete(key string) error {
+func (s *obsClient) Delete(key string, getters ...AttrGetter) error {
 	params := obs.DeleteObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = key
 	resp, err := s.c.DeleteObject(&params)
 	if resp != nil {
-		ReqIDCache.put(key, resp.RequestId)
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(resp.RequestId)
 	}
 	return err
 }
@@ -328,8 +331,9 @@ func (s *obsClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func (s *obsClient) SetStorageClass(sc string) {
+func (s *obsClient) SetStorageClass(sc string) error {
 	s.sc = sc
+	return nil
 }
 
 func autoOBSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {

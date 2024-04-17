@@ -156,6 +156,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Scaleway Object Storage](#scaleway-object-storage)         | `scw`      |
 | [DigitalOcean Spaces](#digitalocean-spaces)                 | `space`    |
 | [Wasabi](#wasabi)                                           | `wasabi`   |
+| [Telnyx Cloud Storage](#telnyx)                             | `s3`       |
 | [Storj DCS](#storj-dcs)                                     | `s3`       |
 | [Vultr Object Storage](#vultr-object-storage)               | `s3`       |
 | [Cloudflare R2](#r2)                                        | `s3`       |
@@ -435,6 +436,27 @@ juicefs format \
 :::note
 For users in Tokyo (ap-northeast-1) region, please refer to [this document](https://wasabi-support.zendesk.com/hc/en-us/articles/360039372392-How-do-I-access-the-Wasabi-Tokyo-ap-northeast-1-storage-region-) to learn how to get appropriate endpoint URI.***
 :::
+
+### Telnyx
+
+Prerequisites
+
+- A [Telnyx account](https://telnyx.com/sign-up)
+- [API key](https://portal.telnyx.com/#/app/api-keys) – this will be used as both `access-key` and `secret-key`
+
+Set up JuiceFS:
+
+```bash
+juicefs format \
+    --storage s3 \
+    --bucket https://<regional-endpoint>.telnyxstorage.com/<bucket> \
+    --access-key <api-key> \
+    --secret-key <api-key> \
+    ... \
+    myjfs
+```
+
+Available regional endpoints are [here](https://developers.telnyx.com/docs/cloud-storage/api-endpoints).
 
 ### Storj DCS
 
@@ -823,7 +845,7 @@ juicefs format \
 
 [Gluster](https://github.com/gluster/glusterfs) is a software defined distributed storage that can scale to several petabytes. JuiceFS communicates with Gluster via the `libgfapi` library, so it needs to be built separately before used.
 
-First, install `libgfapi` (version 6.0+):
+First, install `libgfapi` (version 6.0 - 10.1, [10.4+ is not supported yet](https://github.com/juicedata/juicefs/issues/4043))
 
 <Tabs>
   <TabItem value="debian" label="Debian and derivatives">

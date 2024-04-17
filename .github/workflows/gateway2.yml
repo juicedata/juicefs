@@ -1,0 +1,144 @@
+name: "gateway_random_test"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - '**/gateway2.yml'
+      - '.github/scripts/hypo/s3**.py'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - '**/gateway2.yml'
+      - '.github/scripts/hypo/s3**.py'
+  schedule:
+    - cron:  '0 19 * * *'
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+jobs:
+  build-matrix:
+    runs-on: ubuntu-20.04
+    steps:
+      - id: set-matrix
+        run: |
+          echo "github.event_name is ${{github.event_name}}"
+          echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
+          if [ "${{github.event_name}}" == "schedule"  ]; then
+            echo 'meta_matrix=["mysql", "redis", "tikv"]' >> $GITHUB_OUTPUT
+          elif [ "${{github.event_name}}" == "pull_request"  ]; then
+            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
+            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+          else
+            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+          fi
+    outputs:
+      meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
+
+  gateway:
+    timeout-minutes: 60
+    needs: build-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Set Variable
+        id: vars
+        run: |
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
+          else
+            echo "target=juicefs" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build
+        uses: ./.github/actions/build
+        with: 
+          target: ${{steps.vars.outputs.target}}
+
+      - name: Prepare meta db
+        run: | 
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+
+      - name: Juicefs Format
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo ./juicefs format $meta_url --trash-days 0 pics
+
+      - name: Start Gateway
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $meta_url localhost:9005 --multi-buckets --keep-etag -d
+          
+      - name: Start minio
+        run: |
+          sudo wget -q https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z -O /usr/local/bin/mc && sudo chmod +x /usr/local/bin/mc
+          sudo docker run -d -p 9000:9000 --name minio -e "MINIO_ACCESS_KEY=minioadmin" -e "MINIO_SECRET_KEY=minioadmin" minio/minio:RELEASE.2021-04-22T15-44-28Z server /data
+
+      - name: Test with example
+        run: |
+          sudo python3 .github/scripts/hypo/s3_test.py
+
+      - name: Test randomly
+        run: |
+          sudo LOG_LEVEL=WARNING python3 .github/scripts/hypo/s3.py
+
+      - name: check log
+        if: always()
+        run: | 
+          if [ -f /var/log/juicefs-gateway.log ]; then
+            tail -300 /var/log/juicefs-gateway.log
+            grep "<FATAL>:" /var/log/juicefs-gateway.log && exit 1 || true
+          fi
+          
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [gateway]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
+      - name: Send Slack Notification
+        if: failure() && github.event_name != 'workflow_dispatch'
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Success
+        if: success() 
+        run: echo "All Done"

@@ -8,6 +8,8 @@ on:
     paths:
     - '**/fsrand2.yml'
     - '**/fsrand2.py'
+    - '**/fsrand2_test.py'
+    - '**/acl_test.py'
   pull_request:
     branches:
     - main
@@ -15,6 +17,8 @@ on:
     paths:
     - '**/fsrand2.yml'
     - '**/fsrand2.py'
+    - '**/fsrand2_test.py'
+    - '**/acl_test.py'
   schedule:
     - cron:  '0 16 * * 0'
   workflow_dispatch:
@@ -73,15 +77,14 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs format $meta_url --trash-days 0 myjfs
+          ./juicefs format $meta_url --enable-acl --trash-days 0 myjfs
 
       - name: Juicefs Mount
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs mount -d $meta_url /tmp/myjfs --no-usage-report --enable-xattr 
-          sleep 5
-          if [ ! -f /tmp/myjfs/.accesslog ]; then
+          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr 
+          if [ ! -f /tmp/jfs/.accesslog ]; then
             echo "<FATAL>: mount failed"
             exit 1
           fi
@@ -90,6 +93,7 @@ jobs:
         timeout-minutes: 10
         run: |
           sudo -E python3 .github/scripts/hypo/fsrand2_test.py
+          sudo -E python3 .github/scripts/hypo/acl_test.py
           
       - name: Test
         timeout-minutes: 120
@@ -99,17 +103,16 @@ jobs:
           else
             PROFILE='pull_request'
           fi
-          sudo -E PROFILE=${PROFILE} python3 .github/scripts/hypo/fsrand2.py
+          sudo -E PROFILE=${PROFILE} python3 .github/scripts/hypo/fsrand2.py 2>&1 | tee fsrand.log
+          exit ${PIPESTATUS[0]}
 
       - name: check fsrand.log
         if: always()
-        shell: bash
         run: | 
           tail -500 fsrand.log
-          
+
       - name: check juicefs.log
         if: always()
-        shell: bash
         run: | 
           if [ -f ~/.juicefs/juicefs.log ]; then
             tail -300 ~/.juicefs/juicefs.log

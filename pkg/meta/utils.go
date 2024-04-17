@@ -34,6 +34,7 @@ import (
 )
 
 const (
+	aclCounter     = "aclMaxId"
 	usedSpace      = "usedSpace"
 	totalInodes    = "totalInodes"
 	legacySessions = "sessions"
@@ -256,9 +257,6 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 }
 
 func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *uint64, concurrent chan int) syscall.Errno {
-	if st := m.Access(ctx, inode, MODE_MASK_W|MODE_MASK_X, nil); st != 0 {
-		return st
-	}
 	for {
 		var entries []*Entry
 		if st := m.en.doReaddir(ctx, inode, 0, &entries, 10000); st != 0 && st != syscall.ENOENT {
@@ -266,6 +264,9 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 		}
 		if len(entries) == 0 {
 			return 0
+		}
+		if st := m.Access(ctx, inode, MODE_MASK_W|MODE_MASK_X, nil); st != 0 {
+			return st
 		}
 		var wg sync.WaitGroup
 		var status syscall.Errno

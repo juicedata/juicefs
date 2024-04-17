@@ -119,6 +119,10 @@ func selectionFlags() []cli.Flag {
 			Name:  "include",
 			Usage: "don't exclude Key matching PATTERN, need to be used with \"--exclude\" option",
 		},
+		&cli.BoolFlag{
+			Name:  "match-full-path",
+			Usage: "match filters again the full path",
+		},
 		&cli.Int64Flag{
 			Name:  "limit",
 			Usage: "limit the number of objects that will be processed (-1 is unlimited, 0 is to process nothing)",
@@ -216,7 +220,7 @@ func syncStorageFlags() []cli.Flag {
 			Name:  "storage-class",
 			Usage: "the storage class for destination",
 		},
-		&cli.IntFlag{
+		&cli.StringFlag{
 			Name:  "bwlimit",
 			Usage: "limit bandwidth in Mbps (0 means unlimited)",
 		},
@@ -433,7 +437,10 @@ func doSync(c *cli.Context) error {
 	}
 	if config.StorageClass != "" {
 		if os, ok := dst.(object.SupportStorageClass); ok {
-			os.SetStorageClass(config.StorageClass)
+			err := os.SetStorageClass(config.StorageClass)
+			if err != nil {
+				logger.Errorf("set storage class %s: %s", config.StorageClass, err)
+			}
 		}
 	}
 

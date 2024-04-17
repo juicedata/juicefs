@@ -105,21 +105,26 @@ func (g *gs) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (g *gs) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (g *gs) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	reader, err := g.client.Bucket(g.bucket).Object(key).NewRangeReader(ctx, off, limit)
 	if err != nil {
 		return nil, err
 	}
+	// TODO fire another attr request to get the actual storage class
+	attrs := applyGetters(getters...)
+	attrs.SetStorageClass(g.sc)
 	return reader, nil
 }
 
-func (g *gs) Put(key string, data io.Reader) error {
+func (g *gs) Put(key string, data io.Reader, getters ...AttrGetter) error {
 	writer := g.client.Bucket(g.bucket).Object(key).NewWriter(ctx)
 	writer.StorageClass = g.sc
 	_, err := io.Copy(writer, data)
 	if err != nil {
 		return err
 	}
+	attrs := applyGetters(getters...)
+	attrs.SetStorageClass(g.sc)
 	return writer.Close()
 }
 
@@ -134,7 +139,7 @@ func (g *gs) Copy(dst, src string) error {
 	return err
 }
 
-func (g *gs) Delete(key string) error {
+func (g *gs) Delete(key string, getters ...AttrGetter) error {
 	if err := g.client.Bucket(g.bucket).Object(key).Delete(ctx); err != storage.ErrObjectNotExist {
 		return err
 	}
@@ -170,8 +175,9 @@ func (g *gs) List(prefix, marker, delimiter string, limit int64, followLink bool
 	return objs, nil
 }
 
-func (g *gs) SetStorageClass(sc string) {
+func (g *gs) SetStorageClass(sc string) error {
 	g.sc = sc
+	return nil
 }
 
 func newGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

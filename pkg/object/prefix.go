@@ -33,10 +33,11 @@ func WithPrefix(os ObjectStorage, prefix string) ObjectStorage {
 	return &withPrefix{os, prefix}
 }
 
-func (s *withPrefix) SetStorageClass(sc string) {
+func (s *withPrefix) SetStorageClass(sc string) error {
 	if o, ok := s.os.(SupportStorageClass); ok {
-		o.SetStorageClass(sc)
+		return o.SetStorageClass(sc)
 	}
+	return notSupported
 }
 
 func (s *withPrefix) Symlink(oldName, newName string) error {
@@ -106,23 +107,23 @@ func (p *withPrefix) Head(key string) (Object, error) {
 	return p.updateKey(o), nil
 }
 
-func (p *withPrefix) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (p *withPrefix) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if off > 0 && limit < 0 {
 		return nil, fmt.Errorf("invalid range: %d-%d", off, limit)
 	}
-	return p.os.Get(p.prefix+key, off, limit)
+	return p.os.Get(p.prefix+key, off, limit, getters...)
 }
 
-func (p *withPrefix) Put(key string, in io.Reader) error {
-	return p.os.Put(p.prefix+key, in)
+func (p *withPrefix) Put(key string, in io.Reader, getters ...AttrGetter) error {
+	return p.os.Put(p.prefix+key, in, getters...)
 }
 
 func (p *withPrefix) Copy(dst, src string) error {
 	return p.os.Copy(dst, src)
 }
 
-func (p *withPrefix) Delete(key string) error {
-	return p.os.Delete(p.prefix + key)
+func (p *withPrefix) Delete(key string, getters ...AttrGetter) error {
+	return p.os.Delete(p.prefix+key, getters...)
 }
 
 func (p *withPrefix) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
