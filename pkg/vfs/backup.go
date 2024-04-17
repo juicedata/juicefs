@@ -27,10 +27,22 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
+)
+
+var (
+	LastBackupTimeG = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "last_successful_backup",
+		Help: "Last successful backup.",
+	})
+	LastBackupDurationG = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "last_backup_duration",
+		Help: "Last backup duration.",
+	})
 )
 
 // Backup metadata periodically in the object storage
-func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
+func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skipTrash bool) {
 	ctx := meta.Background
 	key := "lastBackup"
 	for {
@@ -50,9 +62,9 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
 			continue
 		}
 		if now := time.Now(); now.Sub(last) >= interval {
+			var iused, dummy uint64
+			_ = m.StatFS(ctx, meta.RootInode, &dummy, &dummy, &iused, &dummy)
 			if interval <= time.Hour {
-				var iused, dummy uint64
-				_ = m.StatFS(ctx, meta.RootInode, &dummy, &dummy, &iused, &dummy)
 				if iused > 1e6 {
 					logger.Warnf("backup metadata skipped because of too many inodes: %d %s; "+
 						"you may increase `--backup-meta` to enable it again", iused, interval)
@@ -65,16 +77,20 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
 			}
 			go cleanupBackups(blob, now)
 			logger.Debugf("backup metadata started")
-			if err = backup(m, blob, now); err == nil {
-				logger.Infof("backup metadata succeed, used %s", time.Since(now))
+			if err = backup(m, blob, now, iused < 1e5, skipTrash); err == nil {
+				LastBackupTimeG.Set(float64(now.UnixNano()) / 1e9)
+				logger.Infof("backup metadata succeed, fast mode: %v, used %s", iused < 1e5, time.Since(now))
 			} else {
 				logger.Warnf("backup metadata failed: %s", err)
 			}
+			LastBackupDurationG.Set(time.Since(now).Seconds())
+		} else {
+			LastBackupDurationG.Set(0)
 		}
 	}
 }
 
-func backup(m meta.Meta, blob object.ObjectStorage, now time.Time) error {
+func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTrash bool) error {
 	name := "dump-" + now.UTC().Format("2006-01-02-150405") + ".json.gz"
 	fp, err := os.CreateTemp("", "juicefs-meta-*")
 	if err != nil {
@@ -83,7 +99,11 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time) error {
 	defer os.Remove(fp.Name())
 	defer fp.Close()
 	zw := gzip.NewWriter(fp)
-	err = m.DumpMeta(zw, 0, false, false) // force dump the whole tree
+	var threads = 2
+	if m.Name() == "tikv" {
+		threads = 10
+	}
+	err = m.DumpMeta(zw, 0, threads, false, fast, skipTrash) // force dump the whole tree
 	_ = zw.Close()
 	if err != nil {
 		return err

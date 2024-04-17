@@ -1,14 +1,32 @@
 #!/bin/bash -e
 
-python3 -c "import xattr" || sudo pip install xattr 
-sudo dpkg -s redis-tools || sudo .github/scripts/apt_install.sh redis-tools
-
+python3 -c "import xattr" || pip install xattr 
+dpkg -s redis-tools || .github/scripts/apt_install.sh redis-tools
+dpkg -s fio || .github/scripts/apt_install.sh fio
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
+
+test_delay_delete_slice_after_compaction(){
+    if [[ "$META" != redis* ]]; then
+        echo "this test only runs for redis meta engine"
+        return
+    fi
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 1
+    ./juicefs mount -d $META_URL /jfs --no-usage-report
+    fio --name=abc --rw=randwrite --refill_buffers --size=500M --bs=256k --directory=/jfs
+    redis-cli save
+    # don't skip files when gc compact
+    export JFS_SKIPPED_TIME=1
+    ./juicefs gc --compact --delete $META_URL
+    killall -9 redis-server
+    sleep 3
+    ./juicefs fsck $META_URL
+}
 
 test_gc_trash_slices(){
     prepare_test

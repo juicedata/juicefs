@@ -260,7 +260,7 @@ func (d *dragonfly) Head(key string) (Object, error) {
 }
 
 // Get returns the object if it exists.
-func (d *dragonfly) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (d *dragonfly) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	u, err := url.Parse(d.endpoint)
 	if err != nil {
 		return nil, err
@@ -291,12 +291,14 @@ func (d *dragonfly) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("bad response status %s", resp.Status)
 	}
+	attrs := applyGetters(getters...)
+	attrs.SetStorageClass(resp.Header.Get(HeaderDragonflyObjectMetaStorageClass))
 
 	return resp.Body, nil
 }
 
 // Put creates or replaces the object.
-func (d *dragonfly) Put(key string, data io.Reader) error {
+func (d *dragonfly) Put(key string, data io.Reader, getters ...AttrGetter) error {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -404,7 +406,7 @@ func (d *dragonfly) Copy(dst, src string) error {
 }
 
 // Delete deletes the object if it exists.
-func (d *dragonfly) Delete(key string) error {
+func (d *dragonfly) Delete(key string, getters ...AttrGetter) error {
 	// get delete object request.
 	u, err := url.Parse(d.endpoint)
 	if err != nil {

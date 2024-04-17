@@ -46,7 +46,7 @@ Caching these metadata in kernel for 1 second really speeds up `lookup` and `get
 
 Do note that `entry` cache is gradually built upon file access and may not contain a complete file list under directory, so `readdir` calls or `ls` command cannot utilize this cache, that's why `entry` cache only improves `lookup` performance. The meaning of `direntry` here is different from [kernel directory entry](https://www.kernel.org/doc/html/latest/filesystems/ext4/directory.html), `direntry` does not tell you the files under a directory, but rather, it's the same concept as `entry`, just distinguished based on whether it's a directory.
 
-Real world scenarios scarcely require setting different values for `--entry-cache` and `--dir-entry-cache`, these options exist for theoretical possibilities like when directories seldomly change while files change a lot, in that situation, you can use a higher `--dir-entry-cache` than `--entry-cache`.
+Real world scenarios scarcely require setting different values for `--entry-cache` and `--dir-entry-cache`, these options exist for theoretical possibilities like when directories seldom change while files change a lot, in that situation, you can use a higher `--dir-entry-cache` than `--entry-cache`.
 
 ### Metadata cache in client memory {#client-memory-metadata-cache}
 

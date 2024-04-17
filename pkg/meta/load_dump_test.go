@@ -204,7 +204,7 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	if st := m.GetXattr(ctx, 2, "k", &value); st != 0 || string(value) != "v" {
 		t.Fatalf("getxattr: %s %v", st, value)
 	}
-	if st := m.GetXattr(ctx, 3, "dk", &value); st != 0 || string(value) != "果汁" {
+	if st := m.GetXattr(ctx, 3, "dk", &value); st != 0 || string(value) != "果汁%25" {
 		t.Fatalf("getxattr: %s %v", st, value)
 	}
 
@@ -248,10 +248,18 @@ func testDump(t *testing.T, m Meta, root Ino, expect, result string) {
 	if _, err = m.Load(true); err != nil {
 		t.Fatalf("load setting: %s", err)
 	}
-	if err = m.DumpMeta(fp, root, false, true); err != nil {
+	if err = m.DumpMeta(fp, root, 1, false, true, false); err != nil {
 		t.Fatalf("dump meta: %s", err)
 	}
 	cmd := exec.Command("diff", expect, result)
+	if out, err := cmd.Output(); err != nil {
+		t.Fatalf("diff %s %s: %s", expect, result, out)
+	}
+	fp.Seek(0, 0)
+	if err = m.DumpMeta(fp, root, 10, false, false, false); err != nil {
+		t.Fatalf("dump meta: %s", err)
+	}
+	cmd = exec.Command("diff", expect, result)
 	if out, err := cmd.Output(); err != nil {
 		t.Fatalf("diff %s %s: %s", expect, result, out)
 	}
@@ -276,6 +284,7 @@ func testLoadDump(t *testing.T, name, addr string) {
 func TestLoadDump(t *testing.T) { //skip mutate
 	testLoadDump(t, "redis", "redis://127.0.0.1/10")
 	testLoadDump(t, "mysql", "mysql://root:@/dev")
+	testLoadDump(t, "badger", "badger://jfs-load-dump")
 	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
 }
 

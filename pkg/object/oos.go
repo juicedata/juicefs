@@ -41,7 +41,6 @@ func (s *oos) String() string {
 func (s *oos) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,
-		IsSupportUploadPartCopy:  false,
 	}
 }
 
@@ -77,13 +76,13 @@ func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	bucket := hostParts[0]
 	region := hostParts[1][4:]
 	endpoint = uri.Host[len(bucket)+1:]
-	forcePathStyle := strings.Contains(strings.ToLower(endpoint), "xstore.ctyun.cn")
+	forcePathStyle := !strings.Contains(strings.ToLower(endpoint), "xstore.ctyun.cn")
 
 	awsConfig := &aws.Config{
 		Region:           &region,
 		Endpoint:         &endpoint,
 		DisableSSL:       aws.Bool(!ssl),
-		S3ForcePathStyle: aws.Bool(!forcePathStyle),
+		S3ForcePathStyle: aws.Bool(forcePathStyle),
 		HTTPClient:       httpClient,
 		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
 	}

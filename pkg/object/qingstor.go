@@ -81,7 +81,7 @@ func (q *qingstor) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (q *qingstor) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (q *qingstor) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	input := &qs.GetObjectInput{}
 	rangeStr := getRange(off, limit)
 	if rangeStr != "" {
@@ -89,7 +89,11 @@ func (q *qingstor) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 	output, err := q.bucket.GetObject(key, input)
 	if output != nil {
-		ReqIDCache.put(key, aws.StringValue(output.RequestID))
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(aws.StringValue(output.RequestID))
+		if output.XQSStorageClass != nil {
+			attrs.SetStorageClass(*output.XQSStorageClass)
+		}
 	}
 	if err != nil {
 		return nil, err
@@ -136,7 +140,7 @@ func findLen(in io.Reader) (io.Reader, int64, error) {
 	return in, vlen, nil
 }
 
-func (q *qingstor) Put(key string, in io.Reader) error {
+func (q *qingstor) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	body, vlen, err := findLen(in)
 	if err != nil {
 		return err
@@ -152,7 +156,8 @@ func (q *qingstor) Put(key string, in io.Reader) error {
 	}
 	out, err := q.bucket.PutObject(key, input)
 	if out != nil {
-		ReqIDCache.put(key, aws.StringValue(out.RequestID))
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(aws.StringValue(out.RequestID)).SetStorageClass(q.sc)
 	}
 	if err != nil {
 		return err
@@ -181,10 +186,11 @@ func (q *qingstor) Copy(dst, src string) error {
 	return nil
 }
 
-func (q *qingstor) Delete(key string) error {
+func (q *qingstor) Delete(key string, getters ...AttrGetter) error {
 	output, err := q.bucket.DeleteObject(key)
 	if output != nil {
-		ReqIDCache.put(key, aws.StringValue(output.RequestID))
+		attrs := applyGetters(getters...)
+		attrs.SetRequestID(aws.StringValue(output.RequestID))
 	}
 	return err
 }
@@ -312,8 +318,9 @@ func (q *qingstor) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func (q *qingstor) SetStorageClass(sc string) {
+func (q *qingstor) SetStorageClass(sc string) error {
 	q.sc = sc
+	return nil
 }
 
 func newQingStor(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

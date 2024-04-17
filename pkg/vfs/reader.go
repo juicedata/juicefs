@@ -68,6 +68,7 @@ func (m sstate) String() string {
 
 type FileReader interface {
 	Read(ctx meta.Context, off uint64, buf []byte) (int, syscall.Errno)
+	GetLength() uint64
 	Close(ctx meta.Context)
 }
 
@@ -203,7 +204,7 @@ func (s *sliceReader) run() {
 	p := s.page.Slice(0, int(need))
 	defer p.Release()
 	var n int
-	ctx := context.TODO()
+	ctx := context.WithValue(context.TODO(), meta.CtxKey("inode"), inode) // Output inode in log for debugging
 	n = f.r.Read(ctx, p, slices, (uint32(s.block.off))%meta.ChunkSize)
 
 	f.Lock()
@@ -296,6 +297,12 @@ type fileReader struct {
 	refs uint16
 	next *fileReader
 	r    *dataReader
+}
+
+func (f *fileReader) GetLength() uint64 {
+	f.Lock()
+	defer f.Unlock()
+	return f.length
 }
 
 // protected by f
@@ -580,7 +587,7 @@ func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, 
 		for s.state != READY && uint64(s.currentPos) < s.block.len {
 			if s.cond.WaitWithTimeout(time.Second) {
 				if ctx.Canceled() {
-					logger.Warnf("read %d interrupted after %d", f.inode, time.Since(start))
+					logger.Warnf("read %d interrupted after %s", f.inode, time.Since(start))
 					return 0, syscall.EINTR
 				}
 			}
@@ -684,7 +691,7 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 	var readAheadTotal = 256 << 20
 	var readAheadMax = conf.Chunk.BlockSize * 8
 	if conf.Chunk.BufferSize > 0 {
-		readAheadTotal = conf.Chunk.BufferSize / 10 * 8 // 80% of total buffer
+		readAheadTotal = int(conf.Chunk.BufferSize / 10 * 8) // 80% of total buffer
 	}
 	if conf.Chunk.Readahead > 0 {
 		readAheadMax = conf.Chunk.Readahead
@@ -801,8 +808,8 @@ func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.P
 		n, err := reader.ReadAt(ctx, p, off+int(s.Off))
 		p.Release()
 		if n == 0 && err != nil {
-			logger.Warningf("fail to read sliceId %d (off:%d, size:%d, clen: %d): %s",
-				s.Id, off+int(s.Off), len(buf)-read, s.Size, err)
+			logger.Warningf("fail to read sliceId %d (off:%d, size:%d, clen: %d, inode: %d): %s",
+				s.Id, off+int(s.Off), len(buf)-read, s.Size, ctx.Value(meta.CtxKey("inode")), err)
 			return err
 		}
 		read += n

@@ -39,7 +39,9 @@ func (m *minio) String() string {
 	return fmt.Sprintf("minio://%s/%s/", *m.s3client.ses.Config.Endpoint, m.s3client.bucket)
 }
 
-func (m *minio) SetStorageClass(_ string) {}
+func (m *minio) SetStorageClass(_ string) error {
+	return notSupported
+}
 
 func (m *minio) Limits() Limits {
 	return Limits{
@@ -71,7 +73,7 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		Region:           aws.String(region),
 		Endpoint:         &uri.Host,
 		DisableSSL:       aws.Bool(!ssl),
-		S3ForcePathStyle: aws.Bool(true),
+		S3ForcePathStyle: aws.Bool(defaultPathStyle()),
 		HTTPClient:       httpClient,
 	}
 	if accessKey == "" {

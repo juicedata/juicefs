@@ -18,6 +18,7 @@ package fuse
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -223,7 +224,7 @@ func (fs *fileSystem) RemoveXAttr(cancel <-chan struct{}, header *fuse.InHeader,
 func (fs *fileSystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name string, out *fuse.CreateOut) (code fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	entry, fh, err := fs.v.Create(ctx, Ino(in.NodeId), name, uint16(in.Mode), 0, in.Flags)
+	entry, fh, err := fs.v.Create(ctx, Ino(in.NodeId), name, uint16(in.Mode), getCreateUmask(in), in.Flags)
 	if err != 0 {
 		return fuse.Status(err)
 	}
@@ -354,11 +355,12 @@ func (fs *fileSystem) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse
 	defer releaseContext(ctx)
 	entries, _, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, false)
 	var de fuse.DirEntry
-	for _, e := range entries {
+	for i, e := range entries {
 		de.Ino = uint64(e.Inode)
 		de.Name = string(e.Name)
 		de.Mode = e.Attr.SMode()
 		if !out.AddDirEntry(de) {
+			fs.v.UpdateReaddirOffset(ctx, Ino(in.NodeId), in.Fh, int(in.Offset)+i)
 			break
 		}
 	}
@@ -371,12 +373,13 @@ func (fs *fileSystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *
 	entries, readAt, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, true)
 	ctx.start = readAt
 	var de fuse.DirEntry
-	for _, e := range entries {
+	for i, e := range entries {
 		de.Ino = uint64(e.Inode)
 		de.Name = string(e.Name)
 		de.Mode = e.Attr.SMode()
 		eo := out.AddDirLookupEntry(de)
 		if eo == nil {
+			fs.v.UpdateReaddirOffset(ctx, Ino(in.NodeId), in.Fh, int(in.Offset)+i)
 			break
 		}
 		if e.Attr.Full {
@@ -445,20 +448,32 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	opt.SingleThreaded = false
 	opt.MaxBackground = 50
 	opt.EnableLocks = true
+	opt.EnableAcl = conf.Format.EnableACL
+	opt.DontUmask = conf.Format.EnableACL
 	opt.DisableXAttrs = !xattrs
 	opt.EnableIoctl = ioctl
-	opt.IgnoreSecurityLabels = true
 	opt.MaxWrite = 1 << 20
 	opt.MaxReadAhead = 1 << 20
 	opt.DirectMount = true
 	opt.AllowOther = os.Getuid() == 0
+
+	if opt.EnableAcl && conf.NonDefaultPermission {
+		logger.Warnf("it is recommended to turn on 'default-permissions' when enable acl")
+	}
+
+	if opt.EnableAcl && opt.DisableXAttrs {
+		logger.Infof("The format \"enable-acl\" flag will enable the xattrs feature.")
+		opt.DisableXAttrs = false
+	}
+	opt.IgnoreSecurityLabels = !opt.EnableAcl
+
 	for _, n := range strings.Split(options, ",") {
 		if n == "allow_other" || n == "allow_root" {
 			opt.AllowOther = true
 		} else if n == "nonempty" || n == "ro" {
 		} else if n == "debug" {
 			opt.Debug = true
-		} else if n == "writeback_cache" || n == "writeback" {
+		} else if n == "writeback_cache" {
 			opt.EnableWriteback = true
 		} else if strings.TrimSpace(n) != "" {
 			opt.Options = append(opt.Options, strings.TrimSpace(n))
@@ -489,6 +504,51 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		}
 	}
 
+	fsserv = fssrv
 	fssrv.Serve()
 	return nil
+}
+
+func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool) fuse.MountOptions {
+	var opt fuse.MountOptions
+	opt.FsName = "JuiceFS:" + conf.Format.Name
+	opt.Name = "juicefs"
+	opt.SingleThreaded = mt == 0
+	opt.MaxBackground = 200
+	opt.EnableLocks = true
+	opt.DisableXAttrs = noxattr
+	opt.EnableAcl = !noacl
+	opt.IgnoreSecurityLabels = noacl
+	opt.MaxWrite = 1 << 20
+	opt.MaxReadAhead = 1 << 20
+	opt.DirectMount = true
+	opt.DontUmask = true
+	for _, n := range strings.Split(options, ",") {
+		// TODO allow_root
+		if n == "allow_other" {
+			opt.AllowOther = true
+		} else if strings.HasPrefix(n, "fsname=") {
+			opt.FsName = n[len("fsname="):]
+		} else if n == "debug" {
+			opt.Debug = true
+			log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+		} else if strings.TrimSpace(n) != "" {
+			opt.Options = append(opt.Options, strings.TrimSpace(n))
+		}
+	}
+	opt.Options = append(opt.Options, "default_permissions")
+	if runtime.GOOS == "darwin" {
+		opt.Options = append(opt.Options, "fssubtype=juicefs", "volname="+conf.Format.Name)
+		opt.Options = append(opt.Options, "daemon_timeout=60", "iosize=65536", "novncache")
+	}
+	return opt
+}
+
+var fsserv *fuse.Server
+
+func Shutdown() bool {
+	if fsserv != nil {
+		return fsserv.Shutdown()
+	}
+	return false
 }

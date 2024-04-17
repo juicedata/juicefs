@@ -50,7 +50,7 @@ func (r *redisStore) Create() error {
 	return nil
 }
 
-func (r *redisStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (r *redisStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	data, err := r.rdb.Get(ctx, key).Bytes()
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func (r *redisStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (r *redisStore) Put(key string, in io.Reader) error {
+func (r *redisStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	data, err := io.ReadAll(in)
 	if err != nil {
 		return err
@@ -73,7 +73,7 @@ func (r *redisStore) Put(key string, in io.Reader) error {
 	return r.rdb.Set(ctx, key, data, 0).Err()
 }
 
-func (r *redisStore) Delete(key string) error {
+func (r *redisStore) Delete(key string, getters ...AttrGetter) error {
 	return r.rdb.Del(ctx, key).Err()
 }
 

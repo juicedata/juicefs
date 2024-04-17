@@ -10,7 +10,8 @@
     "EncryptKey": "AQSttslKOSE/hQT/gmaMniCsdPF8JdPRfoYK6zFkdUOnifYwBA==",
     "KeyEncrypted": true,
     "TrashDays": 1,
-    "MetaVersion": 1
+    "MetaVersion": 1,
+    "EnableACL": true
   },
   "Counters": {
     "usedSpace": 115392512,
@@ -37,9 +38,12 @@
   "FSTree": {
     "attr": {"inode":1,"type":"directory","mode":511,"uid":0,"gid":0,"atime":1623745101,"mtime":1638437879,"ctime":1638437879,"nlink":5,"length":0},
     "xattrs": [{"name":"lastBackup","value":"2021-11-23T18:29:54+08:00"}],
+    "posix_acl_access": {"owner":6,"group":4,"other":4,"mask":4,"users":null,"groups":null},
     "entries": {
       "GBK%B9%FB֭%CA%FD%BEݿƼ%BC%D3%D0%CF޹%AB˾%CEļ%FE": {
-        "attr": {"inode":34,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1648717321,"mtime":1648717321,"ctime":1648717321,"atimensec":401146141,"mtimensec":401146141,"ctimensec":401146141,"nlink":1,"length":0}
+        "attr": {"inode":34,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1648717321,"mtime":1648717321,"ctime":1648717321,"atimensec":401146141,"mtimensec":401146141,"ctimensec":401146141,"nlink":1,"length":0},
+        "posix_acl_access": {"owner":6,"group":4,"other":4,"mask":4,"users":[{"id":1,"perm":6},{"id":2,"perm":7}],"groups":null},
+        "posix_acl_default": {"owner":7,"group":5,"other":5,"mask":5,"users":null,"groups":[{"id":3,"perm":6},{"id":4,"perm":7}]}
       },
       "UTF8果汁数据科技有限公司文件": {
         "attr": {"inode":33,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1648717211,"mtime":1648717211,"ctime":1648717211,"atimensec":36325414,"mtimensec":36325414,"ctimensec":36325414,"nlink":1,"length":0}
@@ -56,10 +60,11 @@
       },
       "d1": {
         "attr": {"inode":3,"type":"directory","mode":493,"uid":501,"gid":20,"atime":1623746591,"mtime":1623746610,"ctime":1623746610,"atimensec":959224111,"mtimensec":959224111,"ctimensec":959224111,"nlink":2,"length":0},
-        "xattrs": [{"name":"dk","value":"果汁"}],
+        "xattrs": [{"name":"dk","value":"果汁%2525"}],
         "entries": {
           "big": {
             "attr": {"inode":6,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1637150857,"mtime":1637150858,"ctime":1637150878,"atimensec":961503222,"mtimensec":961503222,"ctimensec":961503222,"nlink":1,"length":104857600},
+            "posix_acl_default": {"owner":7,"group":5,"other":5,"mask":5,"users":null,"groups":[{"id":5,"perm":4},{"id":6,"perm":4}]},
             "chunks": [
               {"index":0,"slices":[{"id":5,"size":67108864,"len":67108864}]},
               {"index":1,"slices":[{"id":6,"size":37748736,"len":37748736}]}
@@ -91,10 +96,10 @@
     }
   },
   "Trash": {
-    "attr": {"inode":9223372032828243968,"type":"directory","mode":365,"uid":0,"gid":0,"atime":1623745101,"mtime":1638437877,"ctime":1638437877,"nlink":3,"length":0},
+    "attr": {"inode":9223372032828243968,"type":"directory","mode":365,"uid":0,"gid":0,"atime":1623745101,"mtime":1638437877,"ctime":1638437877,"nlink":2,"length":0},
     "entries": {
       "2021-12-02-09": {
-        "attr": {"inode":9223372032828243969,"type":"directory","mode":365,"uid":0,"gid":0,"atime":1638437877,"mtime":1638437877,"ctime":1638437877,"atimensec":598277000,"mtimensec":598277000,"ctimensec":598277000,"nlink":3,"length":0},
+        "attr": {"inode":9223372032828243969,"type":"directory","mode":365,"uid":0,"gid":0,"atime":1638437877,"mtime":1638437877,"ctime":1638437877,"atimensec":598277000,"mtimensec":598277000,"ctimensec":598277000,"nlink":2,"length":0},
         "entries": {
           "1-27-tf1": {
             "attr": {"inode":27,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1638437852,"mtime":1638437852,"ctime":1638437877,"atimensec":28186000,"mtimensec":28186000,"ctimensec":28186000,"nlink":1,"length":11},

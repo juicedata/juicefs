@@ -28,7 +28,7 @@ The table below provides a quick overview of the differences between GlusterFS a
 | S3 protocol | Supported (but not updated) | Supported |
 | HDFS compatibility | Supported (but not updated) | Supported |
 | CSI Driver | Supported | Supported |
-| POSIX ACLs | Supported | Not supported |
+| POSIX ACLs | Supported | Supported |
 | Cross-cluster replication | Supported | Relies on external service |
 | Directory quotas | Supported | Supported |
 | Snapshots | Supported | Not supported (but supports cloning) |

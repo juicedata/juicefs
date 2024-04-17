@@ -644,10 +644,76 @@ func TestMatchObjects(t *testing.T) {
 		{rules: []rule{{pattern: "a**/b"}}, key: "a/c/d/ab/", want: true},
 		{rules: []rule{{pattern: "a**b"}}, key: "a/c/d/b/"},
 		{rules: []rule{{pattern: "a**b"}}, key: "b/c/d/b/", want: true},
+		{rules: []rule{{pattern: "a?**"}}, key: "a/a", want: true},
+		{rules: []rule{{pattern: "**a"}}, key: "a"},
+		{rules: []rule{{pattern: "a**"}}, key: "a"},
+		{rules: []rule{{pattern: "a**a"}}, key: "a", want: true},
+		{rules: []rule{{pattern: "aa**a"}}, key: "aa", want: true},
+		{rules: []rule{{pattern: "**/d2/**a"}}, key: "/d2/d3/1a"},
+		{rules: []rule{{pattern: "**/d2/**a"}}, key: "d2/d3/1a"},
+		{rules: []rule{{pattern: "a/**/a"}}, key: "a", want: true},
+		{rules: []rule{{pattern: "a/**/a"}}, key: "a/", want: true},
+		{rules: []rule{{pattern: "**aa**", include: true}, {pattern: "a"}}, key: "aa/a", want: true},
 	}
 	for _, c := range tests {
-		if got := matchKey(c.rules, c.key); got != c.want {
+		if got := matchLeveledPath(c.rules, c.key); got != c.want {
 			t.Errorf("matchKey(%+v, %s) = %v, want %v", c.rules, c.key, got, c.want)
+		}
+	}
+}
+
+func TestMatchFullPatch(t *testing.T) {
+	type tcase struct {
+		rules []rule
+		key   string
+	}
+	matchedCases := []tcase{
+		{rules: []rule{{pattern: "a"}}, key: "b/a"},
+		{rules: []rule{{pattern: "a*"}}, key: "a1"},
+		{rules: []rule{{pattern: "a*/b*"}}, key: "a1/b1"},
+		{rules: []rule{{pattern: "/a*"}}, key: "/a1"},
+		{rules: []rule{{pattern: "a*/b?/"}}, key: "a1/b1/"},
+		{rules: []rule{{pattern: "a/**/b"}}, key: "a/c/b"},
+		{rules: []rule{{pattern: "a/**/b"}}, key: "a/c/d/b"},
+		{rules: []rule{{pattern: "a/**/b"}}, key: "a/c/d/e/b"},
+		{rules: []rule{{pattern: "/**/b"}}, key: "a/c/b"},
+		{rules: []rule{{pattern: "a**/b"}}, key: "a/c/d/b"},
+		{rules: []rule{{pattern: "a**b"}}, key: "a/c/d/b"},
+		{rules: []rule{{pattern: "**a"}}, key: "a"},
+		{rules: []rule{{pattern: "a**"}}, key: "a"},
+		{rules: []rule{{pattern: "**/d2/**a"}}, key: "/d2/d3/1a"},
+		{rules: []rule{{pattern: "**/d2/**a"}}, key: "d2/d3/1a"},
+	}
+	for _, c := range matchedCases {
+		if got := matchFullPath(c.rules, c.key); got != false {
+			t.Errorf("matchKey(%+v, %s) = %v, want %v", c.rules, c.key, got, false)
+		}
+	}
+	unmatchedCases := []tcase{
+		{rules: []rule{{pattern: "/a"}}, key: "/a1"},
+		{rules: []rule{{pattern: "a*/b?"}}, key: "a1/b1/c2/d1"},
+		{rules: []rule{{pattern: "/a/b/c"}}, key: "/a1"},
+		{rules: []rule{{pattern: "a*/b?/"}}, key: "a1/"},
+		{rules: []rule{{pattern: "a*/b?/c.txt"}}, key: "a1/b1"},
+		{rules: []rule{{pattern: "a*/b?/"}}, key: "a1/b1/c.txt"},
+		{rules: []rule{{pattern: "a*/"}}, key: "a1/b1"},
+		{rules: []rule{{pattern: "a*/b*/"}}, key: "a1/b1/c1/d.txt/"},
+		{rules: []rule{{pattern: "/a*/b*"}}, key: "/a1/b1/c1/d.txt/"},
+		{rules: []rule{{pattern: "a"}}, key: "a/b/c/d/"},
+		{rules: []rule{{pattern: "a*/b*/c"}}, key: "a1/b1/c1/d.txt/"},
+		{rules: []rule{{pattern: "a**/b"}}, key: "a/c/d/ab/"},
+		{rules: []rule{{pattern: "a**b"}}, key: "b/c/d/b"},
+		{rules: []rule{{pattern: "/**/b"}}, key: "a/c/d/b/"},
+		{rules: []rule{{pattern: "a?**"}}, key: "a/a"},
+		{rules: []rule{{pattern: "a**a"}}, key: "a"},
+		{rules: []rule{{pattern: "aa**a"}}, key: "aa"},
+		{rules: []rule{{pattern: "a/**/a"}}, key: "a"},
+		{rules: []rule{{pattern: "a/**/a"}}, key: "a/"},
+		{rules: []rule{{pattern: "**aa**", include: true}, {pattern: "a"}}, key: "aa/a"},
+	}
+	for _, c := range unmatchedCases {
+		if got := matchFullPath(c.rules, c.key); got != true {
+			t.Errorf("matchKey(%+v, %s) = %v, want %v", c.rules, c.key, got, true)
 		}
 	}
 }

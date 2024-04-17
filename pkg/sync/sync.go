@@ -48,13 +48,14 @@ const (
 )
 
 var (
-	handled                  *utils.Bar
-	pending                  *utils.Bar
-	copied, copiedBytes      *utils.Bar
-	checked, checkedBytes    *utils.Bar
-	deleted, skipped, failed *utils.Bar
-	concurrent               chan int
-	limiter                  *ratelimit.Bucket
+	handled               *utils.Bar
+	pending               *utils.Bar
+	copied, copiedBytes   *utils.Bar
+	checked, checkedBytes *utils.Bar
+	skipped, skippedBytes *utils.Bar
+	deleted, failed       *utils.Bar
+	concurrent            chan int
+	limiter               *ratelimit.Bucket
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -177,13 +178,6 @@ var bufPool = sync.Pool{
 		return &buf
 	},
 }
-
-var (
-	// for multiple upload mem limit
-	availMem int64
-	mutex    sync.Mutex
-	cond     = sync.NewCond(&mutex)
-)
 
 func try(n int, f func() error) (err error) {
 	for i := 0; i < n; i++ {
@@ -443,24 +437,126 @@ func (w *withProgress) Read(b []byte) (int, error) {
 	return n, err
 }
 
-func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload) error {
+func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64, key, uploadID string, num int) (*object.Part, error) {
+	if limiter != nil {
+		limiter.Wait(size)
+	}
+	start := time.Now()
+	sz := size
+	p := chunk.NewOffPage(int(size))
+	defer p.Release()
+	data := p.Data
+	var part *object.Part
+	err := try(3, func() error {
+		in, err := src.Get(srckey, off, sz)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		if _, err = io.ReadFull(in, data); err != nil {
+			return err
+		}
+		// PartNumber starts from 1
+		part, err = dst.UploadPart(key, uploadID, num+1, data)
+		return err
+	})
+	if err != nil {
+		logger.Warnf("Failed to copy data of %s part %d: %s", key, num, err)
+		return nil, fmt.Errorf("part %d: %s", num, err)
+	}
+	logger.Debugf("Copied data of %s part %d in %s", key, num, time.Since(start))
+	copiedBytes.IncrInt64(sz)
+	return part, nil
+}
+
+func choosePartSize(upload *object.MultipartUpload, size int64) int64 {
 	partSize := int64(upload.MinPartSize)
 	if partSize == 0 {
 		partSize = defaultPartSize
-	}
-	limits := dst.Limits()
-	if size > int64(limits.MaxPartSize)*int64(limits.MaxPartCount) {
-		return fmt.Errorf("object size %d is too large to copy", size)
 	}
 	if size > partSize*int64(upload.MaxCount) {
 		partSize = size / int64(upload.MaxCount)
 		partSize = ((partSize-1)>>20 + 1) << 20 // align to MB
 	}
+	return partSize
+}
+
+func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upload *object.MultipartUpload, num int, abort chan struct{}) (*object.Part, error) {
+	select {
+	case <-abort:
+		return nil, fmt.Errorf("aborted")
+	case concurrent <- 1:
+		defer func() {
+			<-concurrent
+		}()
+	}
+
+	limits := dst.Limits()
+	if size <= 32<<20 || !limits.IsSupportUploadPartCopy {
+		return doUploadPart(src, dst, key, off, size, key, upload.UploadID, num)
+	}
+
+	tmpkey := fmt.Sprintf("%s.part%d", key, num)
+	var up *object.MultipartUpload
+	var err error
+	err = try(3, func() error {
+		up, err = dst.CreateMultipartUpload(tmpkey)
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("range(%d,%d): %s", off, size, err)
+	}
+
+	partSize := choosePartSize(up, size)
+	n := int((size-1)/partSize) + 1
+	logger.Debugf("Copying data of %s (range: %d,%d) as %d parts (size: %d): %s", key, off, size, n, partSize, up.UploadID)
+	parts := make([]*object.Part, n)
+
+	for i := 0; i < n; i++ {
+		sz := partSize
+		if i == n-1 {
+			sz = size - int64(i)*partSize
+		}
+		select {
+		case <-abort:
+			dst.AbortUpload(tmpkey, up.UploadID)
+			return nil, fmt.Errorf("aborted")
+		default:
+		}
+		parts[i], err = doUploadPart(src, dst, key, off+int64(i)*partSize, sz, tmpkey, up.UploadID, i)
+		if err != nil {
+			dst.AbortUpload(tmpkey, up.UploadID)
+			return nil, fmt.Errorf("range(%d,%d): %s", off, size, err)
+		}
+	}
+
+	err = try(3, func() error { return dst.CompleteUpload(tmpkey, up.UploadID, parts) })
+	if err != nil {
+		dst.AbortUpload(tmpkey, up.UploadID)
+		return nil, fmt.Errorf("multipart: %s", err)
+	}
+	var part *object.Part
+	err = try(3, func() error {
+		part, err = dst.UploadPartCopy(key, upload.UploadID, num+1, tmpkey, 0, size)
+		return err
+	})
+	_ = dst.Delete(tmpkey)
+	return part, err
+}
+
+func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload) error {
+	limits := dst.Limits()
+	if size > limits.MaxPartSize*int64(upload.MaxCount) {
+		return fmt.Errorf("object size %d is too large to copy", size)
+	}
+
+	partSize := choosePartSize(upload, size)
 	n := int((size-1)/partSize) + 1
 	logger.Debugf("Copying data of %s as %d parts (size: %d): %s", key, n, partSize, upload.UploadID)
 	abort := make(chan struct{})
 	parts := make([]*object.Part, n)
 	errs := make(chan error, n)
+	var err error
 
 	for i := 0; i < n; i++ {
 		go func(num int) {
@@ -468,60 +564,11 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 			if num == n-1 {
 				sz = size - int64(num)*partSize
 			}
-
-			mutex.Lock()
-			for availMem < 0 {
-				cond.Wait()
-			}
-			availMem -= partSize
-			mutex.Unlock()
-			defer func() {
-				mutex.Lock()
-				availMem += partSize
-				mutex.Unlock()
-				cond.Signal()
-			}()
-
-			select {
-			case <-abort:
-				errs <- fmt.Errorf("aborted")
-				return
-			case concurrent <- 1:
-				defer func() {
-					<-concurrent
-				}()
-			}
-
-			if limiter != nil {
-				limiter.Wait(sz)
-			}
-			p := chunk.NewOffPage(int(sz))
-			defer p.Release()
-			data := p.Data
-			if err := try(3, func() error {
-				in, err := src.Get(key, int64(num)*partSize, sz)
-				if err != nil {
-					return err
-				}
-				defer in.Close()
-				if _, err = io.ReadFull(in, data); err != nil {
-					return err
-				}
-				// PartNumber starts from 1
-				parts[num], err = dst.UploadPart(key, upload.UploadID, num+1, data)
-				return err
-			}); err == nil {
-				errs <- nil
-				copiedBytes.IncrInt64(sz)
-				logger.Debugf("Copied data of %s part %d", key, num)
-			} else {
-				errs <- fmt.Errorf("part %d: %s", num, err)
-				logger.Warnf("Failed to copy data of %s part %d: %s", key, num, err)
-			}
+			parts[num], err = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort)
+			errs <- err
 		}(i)
 	}
 
-	var err error
 	for i := 0; i < n; i++ {
 		if err = <-errs; err != nil {
 			close(abort)
@@ -601,6 +648,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 							copied.Increment()
 						} else {
 							skipped.Increment()
+							skippedBytes.IncrInt64(obj.Size())
 						}
 					} else {
 						logger.Warnf("Failed to head object %s: %s", key, e)
@@ -608,6 +656,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 					}
 				} else {
 					skipped.Increment()
+					skippedBytes.IncrInt64(obj.Size())
 				}
 				break
 			}
@@ -710,19 +759,25 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 		return fmt.Errorf("list %s: %s", src, err)
 	}
 
-	dstkeys, err := ListAll(dst, prefix, start, end, !config.Links)
-	if err != nil {
-		return fmt.Errorf("list %s: %s", dst, err)
+	var dstkeys <-chan object.Object
+	if config.ForceUpdate {
+		t := make(chan object.Object)
+		close(t)
+		dstkeys = t
+	} else {
+		dstkeys, err = ListAll(dst, prefix, start, end, !config.Links)
+		if err != nil {
+			return fmt.Errorf("list %s: %s", dst, err)
+		}
 	}
-
-	produce(tasks, src, dst, srckeys, dstkeys, config)
+	produce(tasks, srckeys, dstkeys, config)
 	return nil
 }
 
-func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys, dstkeys <-chan object.Object, config *Config) {
+func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, config *Config) {
 	if len(config.rules) > 0 {
-		srckeys = filter(srckeys, config.rules)
-		dstkeys = filter(dstkeys, config.rules)
+		srckeys = filter(srckeys, config.rules, config)
+		dstkeys = filter(dstkeys, config.rules, config)
 	}
 	var dstobj object.Object
 	for obj := range srckeys {
@@ -772,6 +827,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 		if dstobj == nil || obj.Key() < dstobj.Key() {
 			if config.Existing {
 				skipped.Increment()
+				skippedBytes.IncrInt64(obj.Size())
 				handled.Increment()
 				continue
 			}
@@ -779,6 +835,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 		} else { // obj.key == dstobj.key
 			if config.IgnoreExisting {
 				skipped.Increment()
+				skippedBytes.IncrInt64(obj.Size())
 				handled.Increment()
 				dstobj = nil
 				continue
@@ -789,6 +846,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 				tasks <- obj
 			} else if config.Update && obj.Mtime().Unix() < dstobj.Mtime().Unix() {
 				skipped.Increment()
+				skippedBytes.IncrInt64(obj.Size())
 				handled.Increment()
 			} else if config.CheckAll { // two objects are likely the same
 				tasks <- &withSize{obj, markChecksum}
@@ -798,6 +856,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 				tasks <- &withFSize{obj.(object.File), markCopyPerms}
 			} else {
 				skipped.Increment()
+				skippedBytes.IncrInt64(obj.Size())
 				handled.Increment()
 			}
 			dstobj = nil
@@ -856,14 +915,20 @@ func parseIncludeRules(args []string) (rules []rule) {
 	return
 }
 
-func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
+func filter(keys <-chan object.Object, rules []rule, config *Config) <-chan object.Object {
 	r := make(chan object.Object)
 	go func() {
 		for o := range keys {
 			if o == nil {
 				break
 			}
-			if matchKey(rules, o.Key()) {
+			var ok bool
+			if config.MatchFullPath {
+				ok = matchFullPath(rules, o.Key())
+			} else {
+				ok = matchLeveledPath(rules, o.Key())
+			}
+			if ok {
 				r <- o
 			} else {
 				logger.Debugf("exclude %s", o.Key())
@@ -872,6 +937,31 @@ func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
 		close(r)
 	}()
 	return r
+}
+
+func matchTwoStar(p string, s []string) bool {
+	if len(s) == 0 {
+		return p == "*"
+	}
+	idx := strings.Index(p, "**")
+	if idx == -1 {
+		ok, _ := path.Match(p, strings.Join(s, "/"))
+		return ok
+	}
+	ok, _ := path.Match(p[:idx+1], s[0])
+	if !ok {
+		return false
+	}
+	for i := 0; i <= len(s); i++ {
+		tp := p[idx+1:]
+		if i == 0 {
+			tp = p[:idx] + p[idx+1:]
+		}
+		if matchTwoStar(tp, s[i:]) {
+			return true
+		}
+	}
+	return false
 }
 
 func matchPrefix(p, s []string) bool {
@@ -885,7 +975,7 @@ func matchPrefix(p, s []string) bool {
 		return true
 	case strings.Contains(first, "**"):
 		for i := 1; i <= n; i++ {
-			if ok, _ := path.Match(first, strings.Join(s[:i], "*")); ok && matchPrefix(p[1:], s[i:]) {
+			if matchTwoStar(first, s[:i]) && matchPrefix(p[1:], s[i:]) {
 				return true
 			}
 		}
@@ -902,7 +992,7 @@ func matchSuffix(p, s []string) bool {
 	}
 	last := p[len(p)-1]
 	if len(s) == 0 {
-		return last == "***"
+		return len(p) == 1 && (last == "***" || last == "**")
 	}
 	prefix := p[:len(p)-1]
 	n := len(s)
@@ -916,7 +1006,7 @@ func matchSuffix(p, s []string) bool {
 		return false
 	case strings.Contains(last, "**"):
 		for i := 0; i < n; i++ {
-			if ok, _ := path.Match(last, strings.Join(s[i:], "*")); ok && matchSuffix(prefix, s[:i]) {
+			if matchTwoStar(last, s[i:]) && matchSuffix(prefix, s[:i]) {
 				return true
 			}
 		}
@@ -927,8 +1017,32 @@ func matchSuffix(p, s []string) bool {
 	}
 }
 
+func matchFullPath(rules []rule, key string) bool {
+	ps := strings.Split(key, "/")
+	for _, rule := range rules {
+		p := strings.Split(rule.pattern, "/")
+		var ok bool
+		if p[0] == "" {
+			if ps[0] != "" {
+				p = p[1:]
+			}
+			ok = matchPrefix(p, ps)
+		} else {
+			ok = matchSuffix(p, ps)
+		}
+		if ok {
+			if rule.include {
+				break // try next level
+			} else {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
-func matchKey(rules []rule, key string) bool {
+func matchLeveledPath(rules []rule, key string) bool {
 	parts := strings.Split(key, "/")
 	for i := range parts {
 		if parts[i] == "" {
@@ -995,6 +1109,29 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 }
 
 func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, config *Config) error {
+	if prefix == "" && config.Limit == 1 && len(config.rules) == 0 {
+		// fast path for single key
+		obj, err := src.Head(config.Start)
+		if err == nil && (!obj.IsDir() || config.Dirs) {
+			var srckeys = make(chan object.Object, 1)
+			srckeys <- obj
+			close(srckeys)
+			var dstkeys = make(chan object.Object, 1)
+			if dobj, err := dst.Head(config.Start); err == nil || os.IsNotExist(err) {
+				if dobj != nil {
+					dstkeys <- dobj
+				}
+				close(dstkeys)
+				logger.Debugf("produce single key %s", config.Start)
+				produce(tasks, srckeys, dstkeys, config)
+				return nil
+			} else {
+				logger.Warnf("head %s from %s: %s", config.Start, dst, err)
+			}
+		} else if err != nil && !os.IsNotExist(err) {
+			logger.Warnf("head %s from %s: %s", config.Start, src, err)
+		}
+	}
 	if config.ListThreads <= 1 || strings.Count(prefix, "/") >= config.ListDepth {
 		return startSingleProducer(tasks, src, dst, prefix, config)
 	}
@@ -1016,12 +1153,12 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 			processing[c.Key()] = true
 			mu.Unlock()
 
-			if len(config.rules) > 0 && !matchKey(config.rules, c.Key()) {
+			if len(config.rules) > 0 && !matchLeveledPath(config.rules, c.Key()) {
 				logger.Infof("exclude prefix %s", c.Key())
 				continue
 			}
 			if c.Key() < config.Start {
-				logger.Infof("ingore prefix %s", c.Key())
+				logger.Infof("ignore prefix %s", c.Key())
 				continue
 			}
 			if config.End != "" && c.Key() > config.End {
@@ -1059,14 +1196,21 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	if config.DeleteDst {
 		dcp = commonPrefix // search common prefix in dst
 	}
-	dstkeys, err := listCommonPrefix(dst, prefix, dcp, !config.Links)
-	if err == utils.ENOTSUP {
-		return startSingleProducer(tasks, src, dst, prefix, config)
-	} else if err != nil {
-		return fmt.Errorf("list %s with delimiter: %s", dst, err)
+	var dstkeys <-chan object.Object
+	if config.ForceUpdate {
+		t := make(chan object.Object)
+		close(t)
+		dstkeys = t
+	} else {
+		dstkeys, err = listCommonPrefix(dst, prefix, dcp, !config.Links)
+		if err == utils.ENOTSUP {
+			return startSingleProducer(tasks, src, dst, prefix, config)
+		} else if err != nil {
+			return fmt.Errorf("list %s with delimiter: %s", dst, err)
+		}
 	}
 	// sync returned objects
-	produce(tasks, src, dst, srckeys, dstkeys, config)
+	produce(tasks, srckeys, dstkeys, config)
 	// consume all the keys from dst
 	for range dstkeys {
 	}
@@ -1100,18 +1244,18 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if config.Manager != "" {
 		bufferSize = 100
 	}
-	availMem = int64(config.Threads * 32 << 20)
 	tasks := make(chan object.Object, bufferSize)
 	wg := sync.WaitGroup{}
 	concurrent = make(chan int, config.Threads)
 	if config.BWLimit > 0 {
-		bps := float64(config.BWLimit*(1<<20)/8) * 0.85 // 15% overhead
+		bps := float64(config.BWLimit*1e6/8) * 0.85 // 15% overhead
 		limiter = ratelimit.NewBucketWithRate(bps, int64(bps)*3)
 	}
 
 	progress := utils.NewProgress(config.Verbose || config.Quiet || config.Manager != "")
 	handled = progress.AddCountBar("Scanned objects", 0)
 	skipped = progress.AddCountSpinner("Skipped objects")
+	skippedBytes = progress.AddByteSpinner("Skipped bytes")
 	pending = progress.AddCountSpinner("Pending objects")
 	copied = progress.AddCountSpinner("Copied objects")
 	copiedBytes = progress.AddByteSpinner("Copied bytes")
@@ -1182,8 +1326,8 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	progress.Done()
 
 	if config.Manager == "" {
-		msg := fmt.Sprintf("Found: %d, skipped: %d, copied: %d (%s)",
-			total, skipped.Current(), copied.Current(), formatSize(copiedBytes.Current()))
+		msg := fmt.Sprintf("Found: %d, skipped: %d (%s), copied: %d (%s)",
+			total, skipped.Current(), formatSize(skippedBytes.Current()), copied.Current(), formatSize(copiedBytes.Current()))
 		if checked != nil {
 			msg += fmt.Sprintf(", checked: %d (%s)", checked.Current(), formatSize(checkedBytes.Current()))
 		}
@@ -1247,6 +1391,12 @@ func initSyncMetrics(config *Config) {
 				Help: "Skipped objects",
 			}, func() float64 {
 				return float64(skipped.Current())
+			}),
+			prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "skipped_bytes",
+				Help: "Skipped bytes",
+			}, func() float64 {
+				return float64(skippedBytes.Current())
 			}),
 		)
 		if failed != nil {

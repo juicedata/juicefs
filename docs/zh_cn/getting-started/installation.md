@@ -154,9 +154,9 @@ makepkg -si
 
 在 Windows 系统安装 JuiceFS 有以下几种方法：
 
-1. [使用预编译的 Windows 客户端](#预编译的-windows-客户端)
-2. [使用 Scoop 安装](#scoop)
-3. [在 WSL 中使用 Linux 版客户端](#在-wsl-中使用-linux-版客户端)
+- [使用预编译的 Windows 客户端](#预编译的-windows-客户端)
+- [使用 Scoop 安装](#scoop)
+- [在 WSL 中使用 Linux 版客户端](#在-wsl-中使用-linux-版客户端)
 
 #### 预编译的 Windows 客户端
 
@@ -345,9 +345,7 @@ CMD [ "juicefs" ]
 
 ### 在 Linux 中交叉编译 Windows 客户端
 
-为 Windows 编译特定版本客户端的过程与[类 Unix 客户端](#类-unix-客户端)基本一致，可以直接在 Linux 系统中进行编译，但除了 `go` 和 `gcc` 必须安装以外，还需要安装：
-
-- [MinGW-w64](https://www.mingw-w64.org/downloads)
+为 Windows 编译特定版本客户端的过程与[类 Unix 客户端](#类-unix-客户端)基本一致，可以直接在 Linux 系统中进行编译，但除了 `go` 和 `gcc` 必须安装以外，还需要安装 [MinGW-w64](https://www.mingw-w64.org/downloads)
 
 安装 Linux 发行版包管理器提供的最新版本即可，例如 Ubuntu 20.04+ 可以直接安装：
 

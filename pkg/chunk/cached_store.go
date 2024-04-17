@@ -106,7 +106,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 	boff := off % s.store.conf.BlockSize
 	blockSize := s.blockSize(indx)
 	if boff+len(p) > blockSize {
-		// read beyond currend page
+		// read beyond current page
 		var got int
 		for got < len(p) {
 			// aligned to current page
@@ -155,20 +155,30 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		}
 		// partial read
 		st := time.Now()
-		in, err := s.store.storage.Get(key, int64(boff), int64(len(p)))
-		if err == nil {
-			n, err = io.ReadFull(in, p)
-			_ = in.Close()
-		}
+		var (
+			reqID string
+			sc    = object.DefaultStorageClass
+		)
+		page.Acquire()
+		err := utils.WithTimeout(func() error {
+			defer page.Release()
+			in, err := s.store.storage.Get(key, int64(boff), int64(len(p)), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+			if err == nil {
+				n, err = io.ReadFull(in, p)
+				_ = in.Close()
+			}
+			return err
+		}, s.store.conf.GetTimeout)
 		used := time.Since(st)
-		logRequest("GET", key, fmt.Sprintf("RANGE(%d,%d) ", boff, len(p)), err, used)
-		s.store.objectDataBytes.WithLabelValues("GET").Add(float64(n))
-		s.store.objectReqsHistogram.WithLabelValues("GET").Observe(used.Seconds())
-		s.store.fetcher.fetch(key)
+		logRequest("GET", key, fmt.Sprintf("RANGE(%d,%d) ", boff, len(p)), reqID, err, used)
+		s.store.objectDataBytes.WithLabelValues("GET", sc).Add(float64(n))
+		s.store.objectReqsHistogram.WithLabelValues("GET", sc).Observe(used.Seconds())
 		if err == nil {
+			s.store.fetcher.fetch(key)
 			return n, nil
 		} else {
 			s.store.objectReqErrors.Add(1)
+			// fall back to full read
 		}
 	}
 
@@ -179,11 +189,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		} else {
 			tmp.Acquire()
 		}
-		tmp.Acquire()
-		err := utils.WithTimeout(func() error {
-			defer tmp.Release()
-			return s.store.load(key, tmp, s.store.shouldCache(blockSize), false)
-		}, s.store.conf.GetTimeout)
+		err = s.store.load(key, tmp, s.store.shouldCache(blockSize), false)
 		return tmp, err
 	})
 	defer block.Release()
@@ -199,15 +205,18 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 func (s *rSlice) delete(indx int) error {
 	key := s.key(indx)
 	st := time.Now()
-	err := s.store.storage.Delete(key)
+	var reqID string
+	err := utils.WithTimeout(func() error {
+		return s.store.storage.Delete(key, object.WithRequestID(&reqID))
+	}, s.store.conf.PutTimeout)
 	used := time.Since(st)
 	if err != nil && (strings.Contains(err.Error(), "NoSuchKey") ||
 		strings.Contains(err.Error(), "not found") ||
 		strings.Contains(err.Error(), "No such file")) {
 		err = nil
 	}
-	logRequest("DELETE", key, "", err, used)
-	s.store.objectReqsHistogram.WithLabelValues("DELETE").Observe(used.Seconds())
+	logRequest("DELETE", key, "", reqID, err, used)
+	s.store.objectReqsHistogram.WithLabelValues("DELETE", "").Observe(used.Seconds())
 	if err != nil {
 		s.store.objectReqErrors.Add(1)
 	}
@@ -336,14 +345,18 @@ func (store *cachedStore) put(key string, p *Page) error {
 		store.upLimit.Wait(int64(len(p.Data)))
 	}
 	p.Acquire()
+	var (
+		reqID string
+		sc    = object.DefaultStorageClass
+	)
 	return utils.WithTimeout(func() error {
 		defer p.Release()
 		st := time.Now()
-		err := store.storage.Put(key, bytes.NewReader(p.Data))
+		err := store.storage.Put(key, bytes.NewReader(p.Data), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
 		used := time.Since(st)
-		logRequest("PUT", key, "", err, used)
-		store.objectDataBytes.WithLabelValues("PUT").Add(float64(len(p.Data)))
-		store.objectReqsHistogram.WithLabelValues("PUT").Observe(used.Seconds())
+		logRequest("PUT", key, "", reqID, err, used)
+		store.objectDataBytes.WithLabelValues("PUT", sc).Add(float64(len(p.Data)))
+		store.objectReqsHistogram.WithLabelValues("PUT", sc).Observe(used.Seconds())
 		if err != nil {
 			store.objectReqErrors.Add(1)
 		}
@@ -399,6 +412,9 @@ func (s *wSlice) upload(indx int) {
 	blen := s.blockSize(indx)
 	key := s.key(indx)
 	pages := s.pages[indx]
+	if pages == nil {
+		panic(fmt.Sprintf("block #%d is nil, concurrent upload?", indx))
+	}
 	s.pages[indx] = nil
 	s.pendings++
 
@@ -421,6 +437,7 @@ func (s *wSlice) upload(indx int) {
 		if s.store.conf.Writeback {
 			stagingPath, err := s.store.bcache.stage(key, block.Data, s.store.shouldCache(blen))
 			if err != nil {
+				s.store.stageBlockErrors.Add(1)
 				logger.Warnf("write %s to disk: %s, upload it directly", stagingPath, err)
 			} else {
 				s.errors <- nil
@@ -511,7 +528,7 @@ func (s *wSlice) Abort() {
 type Config struct {
 	CacheDir          string
 	CacheMode         os.FileMode
-	CacheSize         int64
+	CacheSize         uint64
 	CacheChecksum     string
 	CacheEviction     string
 	CacheScanInterval time.Duration
@@ -531,7 +548,7 @@ type Config struct {
 	GetTimeout        time.Duration
 	PutTimeout        time.Duration
 	CacheFullBlock    bool
-	BufferSize        int
+	BufferSize        uint64
 	Readahead         int
 	Prefetch          int
 }
@@ -559,7 +576,7 @@ func (c *Config) SelfCheck(uuid string) {
 		c.MaxUpload = 1
 	}
 	if c.BufferSize <= 32<<20 {
-		logger.Warnf("buffer-size should be more than 32 MiB")
+		logger.Warnf("buffer-size is too small, setting it to 32 MiB")
 		c.BufferSize = 32 << 20
 	}
 	if c.CacheDir != "memory" {
@@ -632,19 +649,14 @@ type cachedStore struct {
 	objectReqErrors     prometheus.Counter
 	objectDataBytes     *prometheus.CounterVec
 	stageBlockDelay     prometheus.Counter
+	stageBlockErrors    prometheus.Counter
 }
 
-func logRequest(typeStr string, key string, param string, err error, used time.Duration) {
-	var info string
-	if id := object.ReqIDCache.Get(key); id != "" {
-		info += fmt.Sprintf("RequestID: %s ", id)
-	}
-	if err != nil {
-		info += err.Error()
-	}
-	logger.Debugf("%s %s %s(%v, %.3fs)", typeStr, key, param, info, used.Seconds())
+func logRequest(typeStr, key, param, reqID string, err error, used time.Duration) {
 	if used > SlowRequest {
-		logger.Infof("slow request: %s %s %s(%v, %.3fs)", typeStr, key, param, info, used.Seconds())
+		logger.Warnf("slow request: %s %s %s(req_id: %q, err: %v, cost: %s)", typeStr, key, param, reqID, err, used)
+	} else {
+		logger.Debugf("%s %s %s(req_id: %q, err: %v, cost: %s)", typeStr, key, param, reqID, err, used)
 	}
 }
 
@@ -665,46 +677,55 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	var in io.ReadCloser
 	tried := 0
 	start := time.Now()
-	// it will be retried outside
-	for err != nil && tried < 2 {
-		time.Sleep(time.Second * time.Duration(tried*tried))
-		if tried > 0 {
-			logger.Warnf("GET %s: %s; retrying", key, err)
-			store.objectReqErrors.Add(1)
-			start = time.Now()
-		}
-		in, err = store.storage.Get(key, 0, -1)
-		tried++
+	var p *Page
+	if compressed {
+		c := NewOffPage(needed)
+		defer c.Release()
+		p = c
+	} else {
+		p = page
 	}
+	p.Acquire()
 	var n int
-	var buf []byte
-	if err == nil {
-		if compressed {
-			c := NewOffPage(needed)
-			defer c.Release()
-			buf = c.Data
-		} else {
-			buf = page.Data
+	var (
+		reqID string
+		sc    = object.DefaultStorageClass
+	)
+	err = utils.WithTimeout(func() error {
+		defer p.Release()
+		// it will be retried outside
+		for err != nil && tried < 2 {
+			time.Sleep(time.Second * time.Duration(tried*tried))
+			if tried > 0 {
+				logger.Warnf("GET %s: %s; retrying", key, err)
+				store.objectReqErrors.Add(1)
+				start = time.Now()
+			}
+			in, err = store.storage.Get(key, 0, -1, object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+			tried++
 		}
-		n, err = io.ReadFull(in, buf)
-		_ = in.Close()
-	}
-	if compressed && err == io.ErrUnexpectedEOF {
-		err = nil
-	}
+		if err == nil {
+			n, err = io.ReadFull(in, p.Data)
+			_ = in.Close()
+		}
+		if compressed && err == io.ErrUnexpectedEOF {
+			err = nil
+		}
+		return err
+	}, store.conf.GetTimeout)
 	used := time.Since(start)
-	logRequest("GET", key, "", err, used)
+	logRequest("GET", key, "", reqID, err, used)
 	if store.downLimit != nil && compressed {
 		store.downLimit.Wait(int64(n))
 	}
-	store.objectDataBytes.WithLabelValues("GET").Add(float64(n))
-	store.objectReqsHistogram.WithLabelValues("GET").Observe(used.Seconds())
+	store.objectDataBytes.WithLabelValues("GET", sc).Add(float64(n))
+	store.objectReqsHistogram.WithLabelValues("GET", sc).Observe(used.Seconds())
 	if err != nil {
 		store.objectReqErrors.Add(1)
 		return fmt.Errorf("get %s: %s", key, err)
 	}
 	if compressed {
-		n, err = store.compressor.Decompress(page.Data, buf[:n])
+		n, err = store.compressor.Decompress(page.Data, p.Data[:n])
 	}
 	if err != nil || n < len(page.Data) {
 		return fmt.Errorf("read %s fully: %s (%d < %d) after %s (tried %d)", key, err, n, len(page.Data),
@@ -763,6 +784,19 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 			return false
 		}
 	})
+
+	go func() {
+		for {
+			if store.bcache.isEmpty() {
+				logger.Warn("cache store is empty, use memory cache")
+				config.CacheSize = 100 << 20
+				config.CacheDir = "memory"
+				store.bcache = newMemStore(&config, store.bcache.getMetrics())
+			}
+			time.Sleep(time.Second)
+		}
+	}()
+
 	if config.CacheSize == 0 {
 		config.Prefetch = 0 // disable prefetch if cache is disabled
 	}
@@ -826,7 +860,7 @@ func (store *cachedStore) initMetrics() {
 		Name:    "object_request_durations_histogram_seconds",
 		Help:    "Object requests latency distributions.",
 		Buckets: prometheus.ExponentialBuckets(0.01, 1.5, 25),
-	}, []string{"method"})
+	}, []string{"method", "storage_class"})
 	store.objectReqErrors = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "object_request_errors",
 		Help: "failed requests to object store",
@@ -834,10 +868,14 @@ func (store *cachedStore) initMetrics() {
 	store.objectDataBytes = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "object_request_data_bytes",
 		Help: "Object requests size in bytes.",
-	}, []string{"method"})
+	}, []string{"method", "storage_class"})
 	store.stageBlockDelay = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "staging_block_delay_seconds",
 		Help: "Total seconds of delay for staging blocks",
+	})
+	store.stageBlockErrors = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "staging_block_errors",
+		Help: "Total errors when staging blocks",
 	})
 }
 
@@ -854,6 +892,7 @@ func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(store.objectReqErrors)
 	reg.MustRegister(store.objectDataBytes)
 	reg.MustRegister(store.stageBlockDelay)
+	reg.MustRegister(store.stageBlockErrors)
 	reg.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Name: "blockcache_blocks",
@@ -871,6 +910,14 @@ func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 		func() float64 {
 			_, used := store.bcache.stats()
 			return float64(used)
+		}))
+	reg.MustRegister(prometheus.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Name: "object_request_uploading",
+			Help: "number of uploading requests",
+		},
+		func() float64 {
+			return float64(len(store.currentUpload))
 		}))
 }
 

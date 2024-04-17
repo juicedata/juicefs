@@ -8,7 +8,9 @@ JuiceFS 会将文件[分块存储到底层的对象存储中](../introduction/ar
 
 ![JuiceFS S3 Gateway architecture](../images/juicefs-s3-gateway-arch.png)
 
-JuiceFS S3 网关是通过 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)实现的功能，常见的使用场景有：
+JuiceFS S3 网关是通过 [MinIO S3 网关](https://github.com/minio/minio/tree/ea1803417f80a743fc6c7bb261d864c38628cf8d/docs/gateway)实现的功能，我们通过实现起来其 [object 接口](https://github.com/minio/minio/blob/d46386246fb6db5f823df54d932b6f7274d46059/cmd/object-api-interface.go#L88) 并且将 JuiceFS 文件系统作为其 server 的后端存储，获得了近乎原生 minio 的体验，继承 minio 的很多高级功能。这种架构对于 minio 来说，JuiceFS 是其运行 server 命令的一块本地盘，整体的原理类似于 `minio server /data1`。
+
+JuiceFS Gateway 的常见的使用场景有：
 
 * 为 JuiceFS 文件系统暴露 S3 接口，应用可以通过 S3 SDK 访问 JuiceFS 上存储的文件
 * 使用 s3cmd、AWS CLI、MinIO 客户端来方便地访问和操作 JuiceFS 上存储的文件
@@ -52,7 +54,17 @@ juicefs gateway redis://localhost:6379 0.0.0.0:9000
 - 与 S3 网关所在主机处于同一局域网的第三方客户端可以使用 `http://192.168.1.8:9000` 访问（假设启用 S3 网关的主机内网 IP 地址为 192.168.1.8）；
 - 通过互联网访问 S3 网关可以使用 `http://110.220.110.220:9000` 访问（假设启用 S3 网关的主机公网 IP 地址为 110.220.110.220）。
 
-## S3 网关 以守护进程的形式运行
+## 后台运行
+
+JuiceFS gateway 自 v1.2 版本支持 gateway 以后台模式运行，在启动时添加 `-d` 参数即可
+
+```
+juicefs gateway redis://localhost:6379 localhost:9000 -d
+```
+
+后台运行时可以通过`--log` 指定日志输出文件路径
+
+## 以守护进程的形式运行
 
 S3 网关 可以通过以下配置以 Linux 守护进程的形式在后台运行。
 
@@ -90,75 +102,6 @@ sudo systemctl status juicefs-gateway
 
 ```bash
 sudo journalctl -xefu juicefs-gateway.service
-```
-
-## 访问 S3 网关
-
-各类支持 S3 API 的客户端、桌面程序、Web 程序等都可以访问 JuiceFS S3 网关。使用时请注意 S3 网关监听的地址和端口。
-
-:::tip 提示
-以下示例均为使用第三方客户端访问本地主机上运行的 S3 网关。在具体场景下，请根据实际情况调整访问 S3 网关的地址。
-:::
-
-### 使用 AWS CLI
-
-从 [https://aws.amazon.com/cli](https://aws.amazon.com/cli) 下载并安装 AWS CLI，然后进行配置：
-
-```bash
-$ aws configure
-AWS Access Key ID [None]: admin
-AWS Secret Access Key [None]: 12345678
-Default region name [None]:
-Default output format [None]:
-```
-
-程序会通过交互式的方式引导你完成新配置的添加，其中 `Access Key ID` 与 `MINIO_ROOT_USER` 相同，`Secret Access Key` 与 `MINIO_ROOT_PASSWORD` 相同，区域名称和输出格式请留空。
-
-之后，即可使用 `aws s3` 命令访问 JuiceFS 存储，例如：
-
-```bash
-# List buckets
-$ aws --endpoint-url http://localhost:9000 s3 ls
-
-# List objects in bucket
-$ aws --endpoint-url http://localhost:9000 s3 ls s3://<bucket>
-```
-
-### 使用 MinIO 客户端
-
-首先参照 [MinIO 下载页面](https://min.io/download)安装 mc，然后添加一个新的 alias：
-
-```bash
-mc alias set juicefs http://localhost:9000 admin 12345678 --api S3v4
-```
-
-依照 mc 的命令格式，以上命令创建了一个别名为 `juicefs` 的配置。特别注意，命令中必须指定 API 版本，即 `--api "s3v4"`。
-
-然后，你可以通过 mc 客户端自由的在本地磁盘与 JuiceFS 存储以及其他云存储之间进行文件和文件夹的复制、移动、增删等管理操作。
-
-```shell
-$ mc ls juicefs/jfs
-[2021-10-20 11:59:00 CST] 130KiB avatar-2191932_1920.png
-[2021-10-20 11:59:00 CST] 4.9KiB box-1297327.svg
-[2021-10-20 11:59:00 CST]  21KiB cloud-4273197.svg
-[2021-10-20 11:59:05 CST]  17KiB hero.svg
-[2021-10-20 11:59:06 CST] 1.7MiB hugo-rocha-qFpnvZ_j9HU-unsplash.jpg
-[2021-10-20 11:59:06 CST]  16KiB man-1352025.svg
-[2021-10-20 11:59:06 CST] 1.3MiB man-1459246.ai
-[2021-10-20 11:59:08 CST]  19KiB sign-up-accent-left.07ab168.svg
-[2021-10-20 11:59:10 CST]  11MiB work-4997565.svg
-```
-
-### 使用虚拟路径格式
-
-默认情况下，Gateway 支持格式为 <http://mydomain.com/bucket/object> 的路径类型请求。
-`MINIO_DOMAIN` 环境变量被用来启用虚拟主机类型请求。如果请求的`Host`头信息匹配 `(.+).mydomain.com`，则匹配的模式 `$1` 被用作 bucket，并且路径被用作 object.
-示例：
-
-```shell
-
-export MINIO_DOMAIN=mydomain.com
-
 ```
 
 ## 在 Kubernetes 中部署 S3 网关 {#deploy-in-kubernetes}
@@ -305,44 +248,3 @@ Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress
 ## 监控
 
 请查看[「监控」](../administration/monitoring.md)文档了解如何收集及展示 JuiceFS 监控指标
-
-## 使用功能更完整的 S3 网关
-
-如果需要使用 MinIO S3 网关的一些高级功能，可以拉取[该仓库的 gateway 分支](https://github.com/juicedata/minio/tree/gateway)并自行编译 MinIO。该分支是基于 [MinIO RELEASE.2022-03-05T06-32-39Z](https://github.com/minio/minio/tree/RELEASE.2022-03-05T06-32-39Z) 版本开发，并添加了 JuiceFS 网关支持，支持在使用 JuiceFS 作为后端的同时使用 MinIO 网关的完整功能，比如[多用户管理](https://docs.min.io/docs/minio-multi-user-quickstart-guide.html)。
-
-### 编译
-
-:::tip 提示
-该分支依赖较新版本的 JuiceFS，具体的 JuiceFS 版本请查看 [`go.mod`](https://github.com/juicedata/minio/blob/gateway/go.mod) 文件。
-
-与[手动编译 JuiceFS 客户端](../getting-started/installation.md#install-the-pre-compiled-client)类似，你需要提前安装一些依赖才能正常编译 S3 网关。
-:::
-
-```shell
-git clone -b gateway git@github.com:juicedata/minio.git && cd minio
-```
-
-将会生成 MinIO 二进制文件
-
-```shell
-make build
-```
-
-### 使用
-
-该版本 MinIO 网关的使用方法与原生 MinIO 网关完全一致，原生功能的使用可以参考 MinIO 的[文档](https://docs.min.io/docs/minio-gateway-for-s3.html)，而 JuiceFS 自身的配置选项可以通过命令行传入。你可以使用 `minio gateway juicefs -h` 查看当前支持的所有选项。
-
-与使用 JuiceFS 集成的 S3 网关类似，可以通过以下命令启动网关服务：
-
-```shell
-export MINIO_ROOT_USER=admin
-export MINIO_ROOT_PASSWORD=12345678
-```
-
-```shell
-./minio gateway juicefs --console-address ':59001' redis://localhost:6379
-```
-
-这里显式指定了 S3 网关控制台的端口号为 59001，如果不指定则会随机选择一个端口。根据命令行提示，在浏览器中打开 [http://127.0.0.1:59001](http://127.0.0.1:59001) 地址便可以访问控制台，如下图所示：
-
-![S3-gateway-console](../images/s3-gateway-console.png)

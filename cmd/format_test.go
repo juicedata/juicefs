@@ -27,12 +27,12 @@ import (
 func TestFixObjectSize(t *testing.T) {
 	t.Run("Should make sure the size is in range", func(t *testing.T) {
 		cases := []struct {
-			input, expected int
+			input, expected uint64
 		}{
-			{30, 64},
-			{0, 64},
-			{2 << 30, 16 << 10},
-			{16 << 11, 16 << 10},
+			{30 << 10, 64 << 10},
+			{0, 64 << 10},
+			{2 << 40, 16 << 20},
+			{16 << 21, 16 << 20},
 		}
 		for _, c := range cases {
 			if size := fixObjectSize(c.input); size != c.expected {
@@ -42,11 +42,11 @@ func TestFixObjectSize(t *testing.T) {
 	})
 	t.Run("Should use powers of two", func(t *testing.T) {
 		cases := []struct {
-			input, expected int
+			input, expected uint64
 		}{
-			{150, 128},
-			{99, 64},
-			{1077, 1024},
+			{150 << 10, 128 << 10},
+			{99 << 10, 64 << 10},
+			{1077 << 10, 1024 << 10},
 		}
 		for _, c := range cases {
 			if size := fixObjectSize(c.input); size != c.expected {

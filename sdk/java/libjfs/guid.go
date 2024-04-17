@@ -115,7 +115,7 @@ func (m *mapping) lookupGroup(name string) uint32 {
 	}
 	logger.Debugf("update group to %s:%d by lookup group", name, id)
 	m.updateGroup(name, id)
-	return 0
+	return id
 }
 
 func (m *mapping) lookupUserID(id uint32) string {

@@ -23,7 +23,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func mount_flags() []cli.Flag {
+func mountFlags() []cli.Flag {
 	return []cli.Flag{
 		&cli.StringFlag{
 			Name:  "o",
@@ -45,19 +45,27 @@ func mount_flags() []cli.Flag {
 	}
 }
 
-func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
+func makeDaemon(c *cli.Context, conf *vfs.Config) error {
 	logger.Warnf("Cannot run in background in Windows.")
 	return nil
 }
 
-func makeDaemonForSvc(c *cli.Context, m meta.Meta) error {
+func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl string) error {
 	logger.Warnf("Cannot run in background in Windows.")
 	return nil
 }
 
-func mount_main(v *vfs.VFS, c *cli.Context) {
+func mountMain(v *vfs.VFS, c *cli.Context) {
 	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"))
 }
 
 func checkMountpoint(name, mp, logPath string, background bool) {
 }
+
+func prepareMp(mp string) {}
+
+func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {}
+
+func launchMount(mp string, conf *vfs.Config) error { return nil }
+
+func installHandler(mp string, v *vfs.VFS) {}

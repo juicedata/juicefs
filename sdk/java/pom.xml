@@ -42,6 +42,9 @@
 				<configuration>
 					<argLine>${argLine}</argLine>
 					<trimStackTrace>false</trimStackTrace>
+					<systemProperties>
+						<test.cache.data>${project.build.directory}/test-classes</test.cache.data>
+					</systemProperties>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -216,6 +219,9 @@
 		<testResources>
 			<testResource>
 				<directory>conf</directory>
+			</testResource>
+			<testResource>
+				<directory>src/test/resources</directory>
 			</testResource>
 		</testResources>
 	</build>

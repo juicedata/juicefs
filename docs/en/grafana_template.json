@@ -266,11 +266,11 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "count(juicefs_uptime{vol_name=\"$name\"})",
+          "expr": "count by (juicefs_version) (juicefs_uptime{vol_name=\"$name\"})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "Sessions",
+          "legendFormat": "Version {{juicefs_version}}",
           "refId": "A"
         }
       ],
