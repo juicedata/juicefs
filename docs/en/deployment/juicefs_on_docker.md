@@ -33,7 +33,7 @@ docker plugin enable juicedata/juicefs
 docker plugin rm juicedata/juicefs
 ```
 
-### Create a Storage Volume {#create-volume}
+### Create a storage volume {#create-volume}
 
 Replace `<VOLUME_NAME>`, `<META_URL>`, `<STORAGE_TYPE>`, `<BUCKET_NAME>`, `<ACCESS_KEY>`, and `<SECRET_KEY>` in the following command with your own file system configuration:
 
