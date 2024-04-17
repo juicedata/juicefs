@@ -308,6 +308,18 @@ func TestVFSIO(t *testing.T) {
 		t.Fatalf("copyfilerange too big file: %s %d", e, n)
 	}
 
+	beforeLen := v.writer.GetLength(fe.Inode)
+	if n, e := v.CopyFileRange(ctx, fe.Inode, fh, 0, fe.Inode, fh, 0, 0, 0); e != 0 || n != 0 {
+		t.Fatalf("copyfilerange zero length: %s %d", e, n)
+	}
+	if n, e := v.CopyFileRange(ctx, fe.Inode, fh, beforeLen+1, fe.Inode, fh, 0, 1<<20, 0); e != 0 || n != 0 {
+		t.Fatalf("copyfilerange offset exceed src inode's length: %s %d", e, n)
+	}
+	afterLen := v.writer.GetLength(fe.Inode)
+	if beforeLen != afterLen {
+		t.Fatalf("copyfilerange length should be unchanged: %d %d", beforeLen, afterLen)
+	}
+
 	// sequntial write/read
 	for i := uint64(0); i < 1001; i++ {
 		if e := v.Write(ctx, fe.Inode, make([]byte, 128<<10), i*(128<<10), fh); e != 0 {
