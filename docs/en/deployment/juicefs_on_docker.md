@@ -156,7 +156,7 @@ RUN curl -sSL https://d.juicefs.com/install | sh -
 
 For more information, see [Customizing Container Images](https://juicefs.com/docs/csi/guide/custom-image).
 
-### Method 2: Use the Officially Maintained Image
+### Method 2: Use the officially maintained image
 
 The JuiceFS officially maintained image [`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) can be specified with the desired version using a tag. **The community edition tag is `ce`**, for example: latest, ce-v1.1.2, ce-nightly. The `latest` tag only contains the latest community edition, and the `nightly` tag points to the latest development version. For details, see the [tags page](https://hub.docker.com/r/juicedata/mount/tags) on Docker Hub.
 
