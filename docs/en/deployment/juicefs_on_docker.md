@@ -158,7 +158,7 @@ For more information, see [Customizing Container Images](https://juicefs.com/doc
 
 ### Method 2: Use the officially maintained image
 
-The JuiceFS officially maintained image [`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) can be specified with the desired version using a tag. **The community edition tag is `ce`**, for example: latest, ce-v1.1.2, ce-nightly. The `latest` tag only contains the latest community edition, and the `nightly` tag points to the latest development version. For details, see the [tags page](https://hub.docker.com/r/juicedata/mount/tags) on Docker Hub.
+The JuiceFS officially maintained image [`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) is tagged to specify the desired version. **The community edition tags include `latest` and `ce`**, such as `ce-v1.1.2` and `ce-nightly`. The `latest` tag represents the latest community edition, and the `nightly` tag points to the latest development version. For details, see the [tags page](https://hub.docker.com/r/juicedata/mount/tags) on Docker Hub.
 
 Before you start, you need to prepare [object storage](../reference/how_to_set_up_object_storage.md) and [metadata engine](../reference/how_to_set_up_metadata_engine.md).
 
