@@ -617,9 +617,6 @@ func (m *fsMachine) copy_file_range(srcinode Ino, srcoff uint64, dstinode Ino, d
 	if src._type != TypeFile {
 		return syscall.EINVAL
 	}
-	if srcoff >= src.length {
-		return 0
-	}
 	dst := m.nodes[dstinode]
 	if dst == nil {
 		return syscall.ENOENT
@@ -646,6 +643,12 @@ func (m *fsMachine) copy_file_range(srcinode Ino, srcoff uint64, dstinode Ino, d
 			s.len -= len
 			off += uint64(len)
 		}
+	}
+	if srcoff >= src.length {
+		return 0
+	}
+	if srcoff+size > src.length {
+		size = src.length - srcoff
 	}
 	if dstoff+size > dst.length {
 		dst.length = dstoff + size
@@ -880,33 +883,6 @@ func (m *fsMachine) write(inode Ino, indx uint32, pos uint32, chunkid uint64, cl
 		n.length = uint64(indx)*ChunkSize + uint64(pos) + uint64(len)
 	}
 	return 0
-}
-
-func (m *fsMachine) append_file(inode Ino, srcinode Ino) syscall.Errno {
-	n := m.nodes[inode]
-	if n == nil {
-		return syscall.ENOENT
-	}
-	if n._type != TypeFile {
-		return syscall.EPERM
-	}
-	if !n.access(m.ctx, MODE_MASK_W) {
-		return syscall.EACCES
-	}
-	if inode == srcinode {
-		return syscall.EPERM
-	}
-	sn := m.nodes[srcinode]
-	if sn == nil {
-		return syscall.ENOENT
-	}
-	if sn._type != TypeFile {
-		return syscall.EPERM
-	}
-	if !sn.access(m.ctx, MODE_MASK_R) {
-		return syscall.EACCES
-	}
-	return m.copy_file_range(srcinode, 0, inode, n.length, sn.length, 0)
 }
 
 func (m *fsMachine) read(inode Ino, indx uint32) (uint64, []tSlice, syscall.Errno) {
@@ -1303,6 +1279,7 @@ func (m *fsMachine) Fallocate(t *rapid.T) {
 	}
 }
 
+// Truncate is currently disabled, same reason as Truncate.
 //func (m *fsMachine) CopyFileRange(t *rapid.T) {
 //	srcinode := m.pickNode(t)
 //	srcoff := rapid.Uint64Max(m.nodes[srcinode].length).Draw(t, "srcoff")
