@@ -302,14 +302,14 @@ class FsOperation:
             old_umask = os.umask(umask)
             if is_jfs(abspath):
                 if preserve:
-                    self.run_cmd(f'sudo -u {user} {mount} clone {abspath} {new_abspath} --preserve', root_dir)
+                    self.run_cmd(f'sudo -u {user} {mount} clone {abspath} {new_abspath} --preserve')
                 else:
-                    self.run_cmd(f'sudo -u {user} {mount} clone {abspath} {new_abspath}', root_dir)
+                    self.run_cmd(f'sudo -u {user} {mount} clone {abspath} {new_abspath}')
             else:
                 if preserve:
-                    self.run_cmd(f'sudo -u {user} cp  {abspath} {new_abspath} -L --preserve=all', root_dir)
+                    self.run_cmd(f'sudo -u {user} cp  {abspath} {new_abspath} -L --preserve=all')
                 else:
-                    self.run_cmd(f'sudo -u {user} cp  {abspath} {new_abspath} -L', root_dir)
+                    self.run_cmd(f'sudo -u {user} cp  {abspath} {new_abspath} -L')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_clone_entry', abspath, new_abspath=new_abspath, user=user)
         finally:
@@ -510,7 +510,7 @@ class FsOperation:
     def do_remove_acl(self,  entry: str, option: str, user: str):
         abspath = os.path.join(self.root_dir, entry)
         try:
-            self.run_cmd(f'sudo -u {user} setfacl {option} {abspath} ', self.root_dir)
+            self.run_cmd(f'sudo -u {user} setfacl {option} {abspath} ')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_remove_acl', abspath, option=option,user=user)
         self.stats.success('do_remove_acl')
@@ -533,7 +533,7 @@ class FsOperation:
             text = f'u:{user}:{user_perm},g:{group}:{group_perm},o::{other_perm}'
             if set_mask:
                 text += f',m::{mask}'
-            self.run_cmd(f'sudo -u {sudo_user} setfacl {default} {recursive} {recalc_mask} {not_recalc_mask} {logical} {physical} -m {text} {abspath}', root_dir)
+            self.run_cmd(f'sudo -u {sudo_user} setfacl {default} {recursive} {recalc_mask} {not_recalc_mask} {logical} {physical} -m {text} {abspath}')
             acl = get_acl(abspath)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_set_acl', abspath, user_perm=user_perm, group_perm=group_perm, other_perm=other_perm)
@@ -636,7 +636,7 @@ class FsOperation:
         if context.cache_dir != '':
             command += f' --cache-dir={context.cache_dir}'
         try:
-            output = self.run_cmd(command, context.root_dir)
+            output = self.run_cmd(command)
         except subprocess.CalledProcessError as e:
             return self.handleException(e,  'do_mount', context.root_dir)
         return output
@@ -644,7 +644,7 @@ class FsOperation:
     def do_gateway(self, context:Context, mount, user='root'):
         command = f'sudo -u {user} MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin {mount} gateway {context.volume} {context.gateway_address} --conf-dir={context.conf_dir} --no-update &'
         try:
-            self.run_cmd(command, context.root_dir)
+            self.run_cmd(command)
         except Exception as e:
             return self.handleException(e, 'do_gateway', context.root_dir)
         return True
@@ -692,7 +692,7 @@ class FsOperation:
                 cmd += ' --raw'
             if kwargs.get('recuisive', False):
                 cmd += ' --recursive'
-            result = self.run_cmd(cmd, context.root_dir)
+            result = self.run_cmd(cmd)
             if '<ERROR>:' in result or "permission denied" in result:
                 return self.handleException(Exception(result), 'do_info', abs_path, **kwargs)
         except subprocess.CalledProcessError as e:
@@ -705,7 +705,7 @@ class FsOperation:
     def do_rmr(self, context:Context, entry, mount, user='root'):
         abspath = os.path.join(context.root_dir, entry)
         try:
-            result = self.run_cmd(f'sudo -u {user} {mount} rmr {abspath}', context.root_dir)
+            result = self.run_cmd(f'sudo -u {user} {mount} rmr {abspath}')
             if '<ERROR>:' in result:
                 return self.handleException(Exception(result), 'do_rmr', abspath)
         except subprocess.CalledProcessError as e:
@@ -717,7 +717,7 @@ class FsOperation:
     
     def do_status(self, context:Context, mount, user='root'):
         try:
-            result = self.run_cmd(f'sudo -u {user} {mount} status {context.volume} --conf-dir={context.conf_dir}', context.root_dir)
+            result = self.run_cmd(f'sudo -u {user} {mount} status {context.volume} --conf-dir={context.conf_dir}')
             result = json.loads(result)['Setting']
             # TODO: check why, should remove this line.
             if 'tested' in result:
@@ -733,7 +733,7 @@ class FsOperation:
     def do_dump(self, context:Context, entry, mount, user='root'):
         abspath = os.path.join(context.root_dir, entry)
         try:
-            result = self.run_cmd(f'sudo -u {user} {mount} dump {abspath}', context.root_dir)
+            result = self.run_cmd(f'sudo -u {user} {mount} dump {abspath}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_dump', abspath)
         self.stats.success('do_dump')
@@ -743,7 +743,7 @@ class FsOperation:
     def do_warmup(self, context:Context, entry, mount, user='root'):
         abspath = os.path.join(context.root_dir, entry)
         try:
-            self.run_cmd(f'sudo -u {user} {mount} warmup {abspath}', context.root_dir)
+            self.run_cmd(f'sudo -u {user} {mount} warmup {abspath}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_warmup', abspath)
         self.stats.success('do_warmup')
@@ -753,7 +753,7 @@ class FsOperation:
     def do_import(self, context:Context, mount, src_uri, dest_path, mode, user='root'):
         abspath = os.path.join(context.root_dir, dest_path)
         try:
-            self.run_cmd(f'sudo -u {user} {mount} import {src_uri} {abspath} --mode {mode} --conf-dir={context.conf_dir}', context.root_dir)
+            self.run_cmd(f'sudo -u {user} {mount} import {src_uri} {abspath} --mode {mode} --conf-dir={context.conf_dir}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_import', abspath, src_uri=src_uri)
         self.stats.success('do_import')
@@ -766,7 +766,7 @@ class FsOperation:
             cmd = f'sudo -u {user} {mount} gc {context.volume} --conf-dir={context.conf_dir}'
             if delete:
                 cmd += ' --delete'
-            self.run_cmd(cmd, context.root_dir)
+            self.run_cmd(cmd)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_gc', '')
         self.stats.success('do_gc')
@@ -778,7 +778,7 @@ class FsOperation:
             cmd = f'sudo -u {user} {mount} fsck {context.volume} --conf-dir={context.conf_dir}'
             if repair:
                 cmd += ' --repair'
-            self.run_cmd(cmd, context.root_dir)
+            self.run_cmd(cmd)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_fsck', '')
         self.stats.success('do_fsck')
@@ -795,7 +795,7 @@ class FsOperation:
                 cmd += f' --capacity {capacity}'
             if inodes > -1 :
                 cmd += f' --inodes {inodes}'
-            self.run_cmd(cmd, context.root_dir)
+            self.run_cmd(cmd)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_quota_set', abspath)
         self.stats.success('do_quota_set')
@@ -807,7 +807,7 @@ class FsOperation:
         relative_path = os.path.relpath(abspath, os.path.join(context.mp))
         try:
             cmd = f'sudo -u {user} {mount} quota delete {context.volume} --conf-dir {context.conf_dir} --path /{relative_path}'
-            self.run_cmd(cmd, context.root_dir)
+            self.run_cmd(cmd)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_quota_delete', abspath)
         self.stats.success('do_quota_delete')
@@ -819,7 +819,7 @@ class FsOperation:
         relative_path = os.path.relpath(abspath, os.path.join(context.mp))
         try:
             cmd = f'sudo -u {user} {mount} quota get {context.volume} --conf-dir {context.conf_dir} --path /{relative_path}'
-            result = self.run_cmd(cmd, context.root_dir)
+            result = self.run_cmd(cmd)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_quota_get', abspath)
         self.stats.success('do_quota_get')
@@ -829,7 +829,7 @@ class FsOperation:
     def do_quota_list(self, context:Context, mount, user='root'):
         try:
             cmd = f'sudo -u {user} {mount} quota list {context.volume} --conf-dir {context.conf_dir}'
-            result = self.run_cmd(cmd, context.root_dir)
+            result = self.run_cmd(cmd)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_quota_list', '')
         self.stats.success('do_quota_list')
@@ -859,7 +859,7 @@ class FsOperation:
         trash_file:str = trash_list[index]
         abspath = os.path.join(context.mp, '.trash', shlex.quote(trash_file))
         try:
-            self.run_cmd(f'sudo -u {user} mv {abspath} {context.mp}', context.root_dir)
+            self.run_cmd(f'sudo -u {user} mv {abspath} {context.mp}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_trash_restore', abspath, user=user)
         restored_path = os.path.join(context.mp, '/'.join(trash_file.split('|')[1:]))
