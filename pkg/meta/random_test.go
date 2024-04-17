@@ -42,6 +42,11 @@ type tSlice struct {
 	len  uint32
 }
 
+type tQuota struct {
+	size   uint64
+	inodes uint64
+}
+
 type tNode struct {
 	name  string
 	inode Ino
@@ -60,6 +65,7 @@ type tNode struct {
 	children map[string]*tNode
 	target   string
 	xattrs   map[string][]byte
+	quota    *tQuota
 
 	accACL *aclAPI.Rule
 	defACL *aclAPI.Rule
@@ -1279,7 +1285,7 @@ func (m *fsMachine) Fallocate(t *rapid.T) {
 	}
 }
 
-// Truncate is currently disabled, same reason as Truncate.
+// CopyFileRange is currently disabled, same reason as Truncate.
 //func (m *fsMachine) CopyFileRange(t *rapid.T) {
 //	srcinode := m.pickNode(t)
 //	srcoff := rapid.Uint64Max(m.nodes[srcinode].length).Draw(t, "srcoff")
@@ -1675,6 +1681,65 @@ func (m *fsMachine) RemoveACL(t *rapid.T) {
 	st2 := m.setfacl(inode, atype, rule)
 	if st != st2 {
 		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
+
+func (n *tNode) stat(visited map[Ino]struct{}) (uint64, uint64) {
+	if _, ok := visited[n.inode]; ok {
+		return 0, 0
+	}
+	visited[n.inode] = struct{}{}
+
+	var size uint64 = uint64(align4K(n.length))
+	var inodes uint64 = 1
+	if n._type == TypeDirectory {
+		for _, c := range n.children {
+			s, i := c.stat(visited)
+			size += s
+			inodes += i
+		}
+	}
+	return size, inodes
+}
+
+func (m *fsMachine) statfs(format Format) (uint64, uint64, uint64, uint64) {
+	n := m.nodes[RootInode]
+	visited := make(map[Ino]struct{})
+	used, iused := n.stat(visited)
+	used -= uint64(align4K(0))
+	iused -= 1
+	var avail, iavail uint64
+	avail = 1<<50 - used
+	iavail = 10 << 20
+	// if inodes is not limited in Format, iavail always keep the same number of inodes
+	if format.Inodes > 0 {
+		iavail -= iused
+	}
+	if n.quota != nil {
+		if n.quota.size > 0 {
+			if used > n.quota.size {
+				avail = 0
+			} else {
+				avail = n.quota.size - used
+			}
+		}
+		if n.quota.inodes > 0 {
+			if iused > n.quota.inodes {
+				iavail = 0
+			} else {
+				iavail = uint64(n.quota.inodes) - iused
+			}
+		}
+	}
+	return used + avail, avail, iused, iavail
+}
+
+func (m *fsMachine) StatFS(t *rapid.T) {
+	var totalsize, availspace, iused, iavail uint64
+	m.meta.StatFS(m.ctx, RootInode, &totalsize, &availspace, &iused, &iavail)
+	total2, avail2, iused2, iavail2 := m.statfs(m.meta.GetFormat())
+	if totalsize != total2 || availspace != avail2 || iused != iused2 || iavail != iavail2 {
+		t.Fatalf("expect %d %d %d %d but got %d %d %d %d", total2, avail2, iused2, iavail2, totalsize, availspace, iused, iavail)
 	}
 }
 
