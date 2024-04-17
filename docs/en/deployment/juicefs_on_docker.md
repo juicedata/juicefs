@@ -109,7 +109,7 @@ docker-compose up
 docker-compose down --volumes
 ```
 
-### Troubleshooting the Volume Plugin {#troubleshooting}
+### Troubleshooting the volume plugin {#troubleshooting}
 
 If it is not working properly, it is recommended to first [upgrade the volume plugin](#volume-plugin), and then check the logs based on the problem.
 
