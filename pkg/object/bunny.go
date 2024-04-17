@@ -1,3 +1,6 @@
+//go:build !nobunny
+// +build !nobunny
+
 /*
  * JuiceFS, Copyright 2024 Juicedata, Inc.
  *
@@ -27,12 +30,12 @@ import (
 	"strings"
 	"time"
 
-	bunnystorage "github.com/l0wl3vel/bunny-storage-go-sdk"
+	bunny "github.com/l0wl3vel/bunny-storage-go-sdk"
 )
 
 type bunnyClient struct {
 	DefaultObjectStorage
-	client   *bunnystorage.Client
+	client   *bunny.Client
 	endpoint string
 }
 
@@ -41,20 +44,15 @@ func (b *bunnyClient) String() string {
 	return fmt.Sprintf("bunny://%v", b.endpoint)
 }
 
-// Limits of the object storage.
-func (b *bunnyClient) Limits() Limits {
-	return Limits{
-		IsSupportMultipartUpload: false,
-		IsSupportUploadPartCopy:  false,
-	}
-}
-
 // Get the data for the given object specified by key.
-func (b *bunnyClient) Get(key string, off int64, limit int64) (io.ReadCloser, error) {
+func (b *bunnyClient) Get(key string, off int64, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	var end int64
 	if limit == -1 {
-		limit = math.MaxInt64
+		end = math.MaxInt64
+	} else {
+		end = off + limit - 1
 	}
-	body, err := b.client.DownloadPartial(key, off, limit+off-1)
+	body, err := b.client.DownloadPartial(key, off, end)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +60,7 @@ func (b *bunnyClient) Get(key string, off int64, limit int64) (io.ReadCloser, er
 }
 
 // Put data read from a reader to an object specified by key.
-func (b *bunnyClient) Put(key string, in io.Reader) error {
+func (b *bunnyClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	content, readErr := io.ReadAll(in)
 	if readErr != nil {
 		return readErr
@@ -71,20 +69,12 @@ func (b *bunnyClient) Put(key string, in io.Reader) error {
 }
 
 // Delete a object.
-// Requires a conditional retry, since deleting a directory or file called foo/bar requires two different calls to the Bunny API, which JuiceFS does not do
-// Deleting a directory requires a trailing slash in the key to delete, which JuiceFS does not add to the path, leading to test case failures.
-// We implement a conditional retry here to try deleting the directory if the delete for a key of the passed name fails.
-// Deleting keys that do not exist are expected to not throw an error
-func (b *bunnyClient) Delete(key string) error {
-	logger.Warnf("Delete: %v", key)
-	if err := b.client.Delete(key, false); err != nil {
-		if err.Error() == "Not Found" {
-			logger.Warnf("Failed to delete %v, %v", key, err)
-			return nil
-		}
-		return err
+func (b *bunnyClient) Delete(key string, getters ...AttrGetter) error {
+	err := b.client.Delete(key, false)
+	if err != nil && err.Error() == "Not Found" {
+		err = nil
 	}
-	return nil
+	return err
 }
 
 func (b *bunnyClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
@@ -98,26 +88,25 @@ func (b *bunnyClient) List(prefix, marker, delimiter string, limit int64, follow
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix
 		}
-	} else if marker == "" { // If Directory && no marker: Return prefix directory as well
-		parentPath := path.Dir(path.Dir(prefix))
-		objects, err := b.client.List(parentPath+dirSuffix)
-		if err == nil	{
-			for _, o := range objects	{
-				logger.Warnf("%v == %v", normalizedObjectNameWithinZone(o), path.Dir(prefix)+dirSuffix)
-				if normalizedObjectNameWithinZone(o) == path.Dir(prefix)	{
-					output = append(output, parseObjectMetadata(o))
-				}
+	} else if marker == "" {
+		obj, err := b.Head(dir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				err = nil
 			}
+			return nil, err
 		}
+		output = append(output, obj)
 	}
 
 	listedObjects, err := b.client.List(dir)
 	if err != nil {
-		logger.Errorf("Unable to list objects in path %v with prefix %v", dir, prefix)
+		if os.IsNotExist(err) {
+			err = nil
+		}
 		return nil, err
 	}
 
-	logger.Debugf("List: %v %v", prefix, marker)
 	for _, o := range listedObjects {
 		normalizedPath := normalizedObjectNameWithinZone(o)
 		if !strings.HasPrefix(normalizedPath, prefix) || (marker != "" && normalizedPath <= marker) {
@@ -133,7 +122,7 @@ func (b *bunnyClient) List(prefix, marker, delimiter string, limit int64, follow
 }
 
 // The Object Path returned by the Bunny API contains the Storage Zone Name, which this function removes
-func normalizedObjectNameWithinZone(o bunnystorage.Object) string {
+func normalizedObjectNameWithinZone(o bunny.Object) string {
 	normalizedPath := path.Join(o.Path, o.ObjectName)
 	if o.IsDirectory {
 		normalizedPath = normalizedPath + "/" // Append a trailing slash to allow deletion of directories
@@ -141,13 +130,12 @@ func normalizedObjectNameWithinZone(o bunnystorage.Object) string {
 	return strings.TrimPrefix(normalizedPath, "/"+o.StorageZoneName+"/")
 }
 
-// Parse Bunnystorage API Object to JuiceFS Object
-func parseObjectMetadata(object bunnystorage.Object) Object {
+func parseObjectMetadata(object bunny.Object) Object {
 	lastChanged, _ := time.Parse("2006-01-02T15:04:05", object.LastChanged)
 
 	key := normalizedObjectNameWithinZone(object)
-	if object.IsDirectory && !strings.HasSuffix(key, "/")	{
-		key = key+"/"
+	if object.IsDirectory && !strings.HasSuffix(key, "/") {
+		key = key + "/"
 	}
 	return &obj{
 		key,
@@ -162,7 +150,7 @@ func (b *bunnyClient) Head(key string) (Object, error) {
 	object, err := b.client.Describe(key)
 	if err != nil {
 		if err.Error() == "Not Found" {
-			return nil, os.ErrNotExist
+			err = os.ErrNotExist
 		}
 		return nil, err
 	}
@@ -170,14 +158,15 @@ func (b *bunnyClient) Head(key string) (Object, error) {
 }
 
 func newBunny(endpoint, accessKey, password, token string) (ObjectStorage, error) {
+	if !strings.Contains(endpoint, "://") {
+		endpoint = fmt.Sprintf("https://%s", endpoint)
+	}
 	endpoint_url, err := url.Parse(endpoint)
-
 	if err != nil {
 		return nil, err
 	}
 
-	client := bunnystorage.NewClient(*endpoint_url, password)
-
+	client := bunny.NewClient(*endpoint_url, password)
 	return &bunnyClient{client: &client, endpoint: endpoint}, nil
 }
 
