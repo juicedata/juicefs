@@ -613,7 +613,7 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
    # 注意这里无法使用 mc admin service restart myminio 重启，JuiceFS Gateway 暂不支持该功能，当使用 mc 配置后出现该提醒时需要手动重启 JuiceFS Gateway
    ```
 
-   使用 mc admin config set 命令更新配置后，重启 JuiceFS Gateway 让配置生效。如果一切顺利，JuiceFS Gateway 会在启动时输出一行信息，类似 SQS ARNs: arn:MinIO:sqs::1:Redis
+   使用 mc admin config set 命令更新配置后，重启 JuiceFS Gateway 让配置生效。如果一切顺利，JuiceFS Gateway 会在启动时输出一行信息，类似 SQS ARNs: `arn:minio:sqs::1:redis`
 
    根据你的需要，你可以添加任意多个 Redis 目标，只要提供 Redis 实例的标识符（如上例“notify_redis:1”中的“1”）和每个实例配置参数的信息即可。
 
@@ -634,7 +634,7 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
 
 3. 验证 Redis
 
-   启动 Redis-cli 这个 Redis 客户端程序来检查 Redis 中的内容。运行 monitor Redis 命令将会输出在 Redis 上执行的每个命令的。
+   启动 `redis-cli` 这个 Redis 客户端程序来检查 Redis 中的内容。运行 monitor Redis 命令将会输出在 Redis 上执行的每个命令的。
 
    ```Shell
    redis-cli -a yoursecret
