@@ -67,17 +67,11 @@ jobs:
       - name: Run Example
         timeout-minutes: 60
         run: |
-          if [ "${{matrix.meta}}" == "redis" ]; then
-            echo "skip test for redis"
-          fi
           sudo META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_examples
       
       - name: Run All
         timeout-minutes: 60
         run: |
-          if [ "${{matrix.meta}}" == "redis" ]; then
-            echo "skip test for redis"
-          fi
           sudo META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all
   
       - name: Log
