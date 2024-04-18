@@ -125,7 +125,7 @@ $ mc ls juicefs/jfs
 
 ### 多桶支持
 
-默认情况下，JuiceFS gateway 只允许一个 bucket，bucket 名字为文件系统名字，如果需要多个桶，可以在启动时添加 `--multi-buckets`开启多桶支持，该参数将会把 JuiceFS 文件系统顶级目录下的每个子目录都导出为一个 bucket。创建 bucket 的行为在文件系统上的反映是顶级目录下创建了一个同名的子目录。
+默认情况下，`juicefs gateway` 只允许一个 bucket，bucket 名字为文件系统名字，如果需要多个桶，可以在启动时添加 `--multi-buckets`开启多桶支持，该参数将会把 JuiceFS 文件系统顶级目录下的每个子目录都导出为一个 bucket。创建 bucket 的行为在文件系统上的反映是顶级目录下创建了一个同名的子目录。
 
 ### 保留 etag
 
@@ -161,7 +161,7 @@ JuiceFS gateway 的核心功能是对外提供 S3 接口，目前对 S3 协议�
 
 #### 普通用户
 
-在 v1.2 版本之前，JuiceFS gateway 只有在启动时创建一个超级用户，这个超级用户只属于这个进程，即使多个 gateway 的背后是同一个文件系统，其用户也都是进程间隔离的（你可以为每个 gateway 进程设置不同的超级用户，他们相互独立，互不影响）。v1.2 版本后，JuiceFS gateway 启动时仍需要设置超级用户，该超级用户仍旧是进程隔离的，但是允许使用 mc admin user add 添加新的用户。新添加的用户将是同文件系统共享的。新添加的用户可以使用 `mc admin user` 进行管理，支持添加，关闭，启用，删除用户，也支持查看所有用户以及展示用户信息和查看用户的策略
+在 v1.2 版本之前，`juicefs gateway` 只有在启动时创建一个超级用户，这个超级用户只属于这个进程，即使多个 gateway 的背后是同一个文件系统，其用户也都是进程间隔离的（你可以为每个 gateway 进程设置不同的超级用户，他们相互独立，互不影响）。v1.2 版本后，`juicefs gateway` 启动时仍需要设置超级用户，该超级用户仍旧是进程隔离的，但是允许使用 mc admin user add 添加新的用户。新添加的用户将是同文件系统共享的。新添加的用户可以使用 `mc admin user` 进行管理，支持添加，关闭，启用，删除用户，也支持查看所有用户以及展示用户信息和查看用户的策略
 
 ```Shell
 $ mc admin user -h
@@ -529,18 +529,18 @@ JuiceFS Gateway 的所有管理 API 的更新操作都会立即生效并且持�
 
 目前支持的对象事件类型有
 
-- S3:ObjectCreated:Put
-- S3:ObjectCreated:CompleteMultipartUpload
-- S3:ObjectAccessed:Head
-- S3:ObjectCreated:Post
-- S3:ObjectRemoved:Delete
-- S3:ObjectCreated:Copy
-- S3:ObjectAccessed:Get
+- `s3:ObjectCreated:Put`
+- `s3:ObjectCreated:CompleteMultipartUpload`
+- `s3:ObjectAccessed:Head`
+- `s3:ObjectCreated:Post`
+- `s3:ObjectRemoved:Delete`
+- `s3:ObjectCreated:Copy`
+- `s3:ObjectAccessed:Get`
 
 支持的全局事件有
 
-- S3:BucketCreated
-- S3:BucketRemoved
+- `s3:BucketCreated`
+- `s3:BucketRemoved`
 
 可以使用 mc 客户端工具通过 event 子命令设置和监听事件通知。MinIO 发送的用于发布事件的通知消息是 JSON 格式的，JSON 结构参考[这里](https://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html)。
 
@@ -795,7 +795,7 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
 
 2. 启用 bucket 通知
 
-   我们现在可以在一个叫 images 的存储桶上开启事件通知，一旦上有文件上传到存储桶中，事件将被触发。在这里，ARN 的值是 arn:MinIO:sqs::1:webhook。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
+   我们现在可以在一个叫 images 的存储桶上开启事件通知，一旦上有文件上传到存储桶中，事件将被触发。在这里，ARN 的值是 `arn:minio:sqs::1:webhook`。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
    ```Shell
    mc mb myminio/images
@@ -812,13 +812,13 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
    npm install
    ```
 
-   然后打开 Thumbnailer 的 config/webhook.JSON 配置文件，添加有关 MinIO server 的配置，使用下面的方式启动 Thumbnailer:
+   然后打开 Thumbnailer 的 `config/webhook.json` 配置文件，添加有关 MinIO server 的配置，使用下面的方式启动 Thumbnailer:
 
    ```Shell
    NODE_ENV=webhook node thumbnail-webhook.js
    ```
 
-   Thumbnailer 运行在 <http://localhost:3000/>。下一步，配置 MinIO server，让其发送消息到这个 URL（第一步提到的），并使用 mc 来设置存储桶通知（第二步提到的）。然后上传一张图片到 Gateway server:
+   Thumbnailer 运行在 `http://localhost:3000/`。下一步，配置 MinIO server，让其发送消息到这个 URL（第一步提到的），并使用 mc 来设置存储桶通知（第二步提到的）。然后上传一张图片到 Gateway server:
 
    ```Shell
    mc cp ~/images.jpg myminio/images
