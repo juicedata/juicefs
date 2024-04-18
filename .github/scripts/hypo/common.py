@@ -6,13 +6,13 @@ import os
 import pwd
 import subprocess
 import sys
-def replace(self, src, old, new):
+def replace(src, old, new):
     if isinstance(src, str):
-        return src.replace(old, new).replace(old, new)
+        return src.replace(old, new)
     elif isinstance(src, list):
-        return [self.replace(x, old, new) for x in src]
+        return [replace(x, old, new) for x in src]
     elif isinstance(src, dict):
-        return {k: self.replace(v, old, new) for k, v in src.items()}
+        return {k: replace(v, old, new) for k, v in src.items()}
     else:
         return src
 def run_cmd(command: str) -> str:
