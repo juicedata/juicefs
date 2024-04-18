@@ -39,7 +39,7 @@ jobs:
           if [ "${{github.event_name}}" == "schedule"  ]; then
             echo 'meta_matrix=["mysql", "redis", "tikv"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "pull_request"  ]; then
-            echo 'meta_matrix=["mysql", "redis", "tikv"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
             echo 'meta_matrix=["mysql", "redis", "tikv"]' >> $GITHUB_OUTPUT
           else
@@ -67,14 +67,19 @@ jobs:
       - name: Run Example
         timeout-minutes: 60
         run: |
+          if [ "${{matrix.meta}}" == "redis" ]; then
+            echo "skip test for redis"
+          fi
           sudo META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_examples
       
       - name: Run All
         timeout-minutes: 60
         run: |
+          if [ "${{matrix.meta}}" == "redis" ]; then
+            echo "skip test for redis"
+          fi
           sudo META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all
   
-
       - name: Log
         if: always()
         run: |
