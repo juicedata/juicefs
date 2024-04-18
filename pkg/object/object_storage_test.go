@@ -233,6 +233,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
+	defer s.Delete("a/")
 	defer s.Delete("a/a")
 	if err := s.Put("a/a", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
@@ -241,6 +242,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put("a/a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
+	defer s.Delete("b/")
 	defer s.Delete("b/b")
 	if err := s.Put("b/b", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
@@ -1019,6 +1021,17 @@ func TestDragonfly(t *testing.T) { //skip mutate
 	}
 	testStorage(t, dragonfly)
 }
+
+// func TestBunny(t *testing.T) { //skip mutate
+// 	if os.Getenv("BUNNY_ENDPOINT") == "" {
+// 		t.SkipNow()
+// 	}
+// 	bunny, err := newBunny(os.Getenv("BUNNY_ENDPOINT"), "", os.Getenv("BUNNY_SECRET_KEY"), "")
+// 	if err != nil {
+// 		t.Fatalf("create: %s", err)
+// 	}
+// 	testStorage(t, bunny)
+// }
 
 func TestMain(m *testing.M) {
 	if envFile := os.Getenv("JUICEFS_ENV_FILE_FOR_TEST"); envFile != "" {

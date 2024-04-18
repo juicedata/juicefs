@@ -379,6 +379,10 @@ type storageHolder struct {
 	fmt meta.Format
 }
 
+func (h *storageHolder) Shutdown() {
+	object.Shutdown(h.ObjectStorage)
+}
+
 func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.Format)) (object.ObjectStorage, error) {
 	if patch != nil {
 		patch(format)
@@ -597,7 +601,7 @@ func mount(c *cli.Context) error {
 		if err = metaCli.Shutdown(); err != nil {
 			logger.Errorf("[pid=%d] meta shutdown: %s", os.Getpid(), err)
 		}
-		object.Shutdown(blob.(*storageHolder).ObjectStorage)
+		object.Shutdown(blob)
 		var foreground bool
 		if runtime.GOOS == "windows" || !c.Bool("background") || os.Getenv("JFS_FOREGROUND") != "" {
 			foreground = true
@@ -640,7 +644,7 @@ func mount(c *cli.Context) error {
 		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
 	})
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
-	installHandler(mp, v)
+	installHandler(mp, v, blob)
 	v.UpdateFormat = updateFormat(c)
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	mountMain(v, c)
@@ -648,6 +652,7 @@ func mount(c *cli.Context) error {
 		logger.Errorf("flush all delayed data: %s", err)
 	}
 	err = metaCli.CloseSession()
+	object.Shutdown(blob)
 	logger.Infof("The juicefs mount process exit successfully, mountpoint: %s", metaConf.MountPoint)
 	return err
 }
