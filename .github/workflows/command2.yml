@@ -61,8 +61,19 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Build 
+      - name: Set Variable
+        id: vars
+        run: |
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
+          else
+            echo "target=juicefs" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build
         uses: ./.github/actions/build
+        with: 
+          target: ${{steps.vars.outputs.target}}
 
       - name: Run Example
         timeout-minutes: 60
