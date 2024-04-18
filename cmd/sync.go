@@ -357,6 +357,16 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 	}
 
 	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey, token)
+	if name == "nfs" && err != nil {
+		p := u.Path
+		for err != nil && strings.Contains(err.Error(), "MNT3ERR_NOENT") {
+			p = filepath.Dir(p)
+			store, err = object.CreateStorage(name, u.Host+p, accessKey, secretKey, token)
+		}
+		if err == nil {
+			store = object.WithPrefix(store, u.Path[len(p):])
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("create %s %s: %s", name, endpoint, err)
 	}

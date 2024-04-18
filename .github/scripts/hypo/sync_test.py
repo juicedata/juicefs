@@ -1,5 +1,5 @@
 import unittest
-from syncrand import SyncMachine
+from sync import SyncMachine
 
 class TestFsrand2(unittest.TestCase):
 

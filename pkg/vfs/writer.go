@@ -120,7 +120,6 @@ func (s *sliceWriter) flushData() {
 		s.writer.Abort()
 		s.err = syscall.EIO
 	}
-	s.writer = nil
 }
 
 // protected by s.chunk.file
@@ -135,9 +134,6 @@ func (s *sliceWriter) write(ctx meta.Context, off uint32, data []uint8) syscall.
 		s.slen = off + uint32(len(data))
 	}
 	s.lastMod = time.Now()
-	if s.id == 0 {
-		go s.prepareID(ctx, false)
-	}
 	if s.slen == meta.ChunkSize {
 		s.freezed = true
 		go s.flushData()
@@ -265,6 +261,7 @@ func (f *fileWriter) writeChunk(ctx meta.Context, indx uint32, off uint32, data 
 			notify:  utils.NewCond(&f.Mutex),
 			started: time.Now(),
 		}
+		go s.prepareID(meta.Background, false)
 		c.slices = append(c.slices, s)
 		if len(c.slices) == 1 {
 			f.w.Lock()

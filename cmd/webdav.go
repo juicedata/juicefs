@@ -81,7 +81,7 @@ func webdav(c *cli.Context) error {
 	setup(c, 2)
 	metaUrl := c.Args().Get(0)
 	listenAddr := c.Args().Get(1)
-	_, jfs := initForSvc(c, "webdav", metaUrl)
+	_, jfs := initForSvc(c, "webdav", metaUrl, listenAddr)
 	fs.StartHTTPServer(jfs, fs.WebdavConfig{
 		Addr:         listenAddr,
 		DisallowList: c.Bool("disallowList"),
