@@ -48,15 +48,18 @@ class JuicefsCommandMachine(JuicefsMachine):
     Entries = Files | Folders
     MP1 = '/tmp/jfs1'
     MP2 = '/tmp/jfs2'
+    ROOT_DIR1=os.path.join(MP1, 'fsrand')
+    ROOT_DIR2=os.path.join(MP2, 'fsrand')
     EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file']
     # EXCLUDE_RULES = []
     INCLUDE_RULES = ['dump_load_dump', 'mkdir', 'create_file', 'set_xattr']
-
+    cmd1 = CommandOperation('cmd1', MP1, ROOT_DIR1)
+    cmd2 = CommandOperation('cmd2', MP2, ROOT_DIR2)
+    fsop1 = FsOperation('fs1', ROOT_DIR1)
+    fsop2 = FsOperation('fs2', ROOT_DIR2)
     def __init__(self):
         super().__init__()
-        self.cmd1 = CommandOperation('cmd1', self.MP1, self.get_default_rootdir1())
-        self.cmd2 = CommandOperation('cmd2', self.MP2, self.get_default_rootdir2())
-
+        
     def get_default_rootdir1(self):
         return os.path.join(self.MP1, 'fsrand')
     

@@ -37,7 +37,9 @@ class JuicefsMachine(RuleBasedStateMachine):
     INCLUDE_RULES = []
     EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file', \
                         'clone_cp_file', 'clone_cp_dir']
-    
+    fsop1 = FsOperation('fs1', os.environ.get('ROOT_DIR1', '/tmp/fsrand'))
+    fsop2 = FsOperation('fs2', os.environ.get('ROOT_DIR2', '/tmp/jfs/fsrand'))
+
     @initialize(target=Folders)
     def init_folders(self):
         self.fsop1.init_rootdir()
@@ -58,8 +60,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def __init__(self):
         super(JuicefsMachine, self).__init__()
         print(f'__init__')
-        self.fsop1 = FsOperation('fs1', os.environ.get('ROOT_DIR1', self.get_default_rootdir1()))
-        self.fsop2 = FsOperation('fs2', os.environ.get('ROOT_DIR2', self.get_default_rootdir2()))
+        
         if not self.group_created:
             for group in self.GROUPS:
                 common.create_group(group)
