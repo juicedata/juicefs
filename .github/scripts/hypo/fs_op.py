@@ -23,9 +23,9 @@ import common
 class FsOperation:
     JFS_CONTROL_FILES=['.accesslog', '.config', '.stats']
     stats = Statistics()
-    def __init__(self, name, root_dir):
+    def __init__(self, name, root_dir:str):
         self.logger =common.setup_logger(f'./{name}.log', name, os.environ.get('LOG_LEVEL', 'INFO'))
-        self.root_dir = root_dir
+        self.root_dir = root_dir.rstrip('/')
 
     def run_cmd(self, command:str) -> str:
         self.logger.info(f'run_cmd: {command}')
@@ -40,6 +40,18 @@ class FsOperation:
         except subprocess.CalledProcessError as e:
             raise e
         return output.stdout.decode()
+
+    def get_zones(self):
+        return common.get_zones(self.root_dir)
+
+    def is_jfs(self):
+        return common.is_jfs(self.root_dir)
+
+    def init_rootdir(self):
+        if not os.path.exists(self.root_dir):
+            os.makedirs(self.root_dir)
+        if os.environ.get('PROFILE', 'dev') != 'generate':
+            common.clean_dir(self.root_dir)
 
     def seteuid(self, user):
         os.seteuid(pwd.getpwnam(user).pw_uid)
