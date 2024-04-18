@@ -9,7 +9,7 @@ import sys
 def replace(src, old, new):
     if isinstance(src, str):
         return src.replace(old, new)
-    elif isinstance(src, list):
+    elif isinstance(src, list) or isinstance(src, tuple):
         return [replace(x, old, new) for x in src]
     elif isinstance(src, dict):
         return {k: replace(v, old, new) for k, v in src.items()}

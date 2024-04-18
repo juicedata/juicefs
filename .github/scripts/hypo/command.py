@@ -76,6 +76,7 @@ class JuicefsCommandMachine(JuicefsMachine):
             result2 = str(result2)
         result1 = common.replace(result1, self.MP1, '***')
         result2 = common.replace(result2, self.MP2, '***')
+        print(f'result1 is {result1}\nresult2 is {result2}')
         return result1 == result2
 
     def get_client_version(self, mount):

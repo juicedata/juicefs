@@ -102,7 +102,7 @@ class CommandOperation:
                     paths.append(li[i].strip())
                 else:
                     break
-        paths = ','.join(paths)
+        paths = ','.join(sorted(paths))
         return filename, files, dirs, length, size, paths
 
     def do_info(self, entry, strict=True, user='root', raw=True, recuisive=False):
