@@ -61,6 +61,7 @@ juicefs.exe: /usr/local/include/winfsp cmd/*.go pkg/*/*.go
 .PHONY: snapshot release test
 snapshot:
 	docker run --rm --privileged \
+		-u `id -u` \
 		-e REVISIONDATE=$(REVISIONDATE) \
 		-e PRIVATE_KEY=${PRIVATE_KEY} \
 		-v ~/go/pkg/mod:/go/pkg/mod \
@@ -71,6 +72,7 @@ snapshot:
 
 release:
 	docker run --rm --privileged \
+		-u `id -u` \
 		-e REVISIONDATE=$(REVISIONDATE) \
 		-e PRIVATE_KEY=${PRIVATE_KEY} \
 		--env-file .release-env \
