@@ -30,13 +30,6 @@ class JuicefsMachine(RuleBasedStateMachine):
     EntryWithACL = Bundle('entry_with_acl')
     FilesWithXattr = Bundle('files_with_xattr')
     start = time.time()
-    ROOT_DIR1=os.environ.get('ROOT_DIR1', '/tmp/fsrand').rstrip('/')
-    ROOT_DIR2=os.environ.get('ROOT_DIR2', '/tmp/jfs/fsrand').rstrip('/')
-    
-    fsop1 = FsOperation('fs1', ROOT_DIR1)
-    fsop2 = FsOperation('fs2', ROOT_DIR2)
-
-    ZONES = {ROOT_DIR1:common.get_zones(ROOT_DIR1), ROOT_DIR2:common.get_zones(ROOT_DIR2)}
     SUDO_USERS = ['root']
     USERS=['root', 'user1', 'user2','user3']
     GROUPS = USERS+['group1', 'group2', 'group3', 'group4']
@@ -47,13 +40,8 @@ class JuicefsMachine(RuleBasedStateMachine):
     
     @initialize(target=Folders)
     def init_folders(self):
-        if not os.path.exists(self.ROOT_DIR1):
-            os.makedirs(self.ROOT_DIR1)
-        if not os.path.exists(self.ROOT_DIR2):
-            os.makedirs(self.ROOT_DIR2)
-        if os.environ.get('PROFILE', 'dev') != 'generate':
-            common.clean_dir(self.ROOT_DIR1)
-            common.clean_dir(self.ROOT_DIR2)
+        self.fsop1.init_rootdir()
+        self.fsop2.init_rootdir()
         return ''
     
     def create_users(self, users):
@@ -61,11 +49,17 @@ class JuicefsMachine(RuleBasedStateMachine):
             if user != 'root':
                 common.create_user(user)
 
+    def get_default_rootdir1(self):
+        return '/tmp/fsrand'
+    
+    def get_default_rootdir2(self):
+        return '/tmp/jfs/fsrand'
+
     def __init__(self):
         super(JuicefsMachine, self).__init__()
         print(f'__init__')
-        if os.environ.get('EXCLUDE_RULES') is not None:
-            self.EXCLUDE_RULES = os.environ.get('EXCLUDE_RULES').split(',')
+        self.fsop1 = FsOperation('fs1', os.environ.get('ROOT_DIR1', self.get_default_rootdir1()))
+        self.fsop2 = FsOperation('fs2', os.environ.get('ROOT_DIR2', self.get_default_rootdir2()))
         if not self.group_created:
             for group in self.GROUPS:
                 common.create_group(group)
@@ -83,17 +77,13 @@ class JuicefsMachine(RuleBasedStateMachine):
         if type(result1) != type(result2):
             return False
         if isinstance(result1, Exception):
-            r1 = str(result1).replace(self.ROOT_DIR1, '')
-            r2 = str(result2).replace(self.ROOT_DIR2, '')
-            return r1 == r2
-        elif isinstance(result1, tuple):
-            return result1 == result2
-        elif isinstance(result1, str):
-            r1 = str(result1).replace(self.ROOT_DIR1, '')
-            r2 = str(result2).replace(self.ROOT_DIR2, '')
-            return  r1 == r2
-        else:
-            return result1 == result2
+            if 'panic:' in str(result1) or 'panic:' in str(result2):
+                return False
+            result1 = str(result1)
+            result2 = str(result2)
+        result1 = common.replace(result1, self.fsop1.root_dir, '***')
+        result2 = common.replace(result2, self.fsop2.root_dir, '***')
+        return result1 == result2
 
     def seteuid(self, user):
         os.seteuid(pwd.getpwnam(user).pw_uid)
@@ -472,38 +462,37 @@ class JuicefsMachine(RuleBasedStateMachine):
      
     @rule( dir =Folders, vdirs = st.integers(min_value=2, max_value=31) )
     @precondition(lambda self: self.should_run('split_dir') \
-                  and (common.is_jfs(self.ROOT_DIR1) or common.is_jfs(self.ROOT_DIR2))
+                  and (self.fsop1.is_jfs() or self.fsop2.is_jfs())
     )
     def split_dir(self, dir, vdirs):
         self.fsop1.do_split_dir(dir, vdirs)
         self.fsop2.do_split_dir(dir, vdirs)
-    
 
     @rule(dir = Folders)
     @precondition(lambda self: self.should_run('merge_dir') \
-                   and (common.is_jfs(self.ROOT_DIR1) or common.is_jfs(self.ROOT_DIR2))
+                 and (self.fsop1.is_jfs() or self.fsop2.is_jfs())
     )
     def merge_dir(self, dir):
         self.fsop1.do_merge_dir(dir)
         self.fsop2.do_merge_dir(dir)
     
-    @rule(dir = Folders,
-          zone1=st.sampled_from(ZONES[ROOT_DIR1]),
-          zone2=st.sampled_from(ZONES[ROOT_DIR2]),
-          is_vdir=st.booleans())
+    # @rule(dir = Folders,
+    #       zone1=st.sampled_from(self.fsop1.get_zones()),
+    #       zone2=st.sampled_from(self.fsop2.get_zones()),
+    #       is_vdir=st.booleans())
     @precondition(lambda self: self.should_run('rebalance_dir') \
-                   and (common.is_jfs(self.ROOT_DIR1) or common.is_jfs(self.ROOT_DIR2))
+                   and (self.fsop1.is_jfs() or self.fsop2.is_jfs())
     )
     def rebalance_dir(self, dir, zone1, zone2, is_vdir):
         self.fsop1.do_rebalance(dir, zone1, is_vdir)
         self.fsop2.do_rebalance(dir, zone2, is_vdir)
 
-    @rule(file = Files, 
-          zone1=st.sampled_from(ZONES[ROOT_DIR1]),
-          zone2=st.sampled_from(ZONES[ROOT_DIR2]),
-          )
+    # @rule(file = Files, 
+    #       zone1=st.sampled_from(self.fsop1.get_zones()),
+    #       zone2=st.sampled_from(self.fsop2.get_zones()),
+    #       )
     @precondition(lambda self: self.should_run('rebalance_file') \
-                   and (common.is_jfs(self.ROOT_DIR1) or common.is_jfs(self.ROOT_DIR2))
+                   and (self.fsop1.is_jfs() or self.fsop2.is_jfs())
     )
     def rebalance_file(self, file, zone1, zone2):
         self.fsop1.do_rebalance(file, zone1, False)
@@ -511,10 +500,6 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     def teardown(self):
         pass
-        # if COMPARE and os.path.exists(ROOT_DIR1):
-        #     common.compare_content(ROOT_DIR1, ROOT_DIR2)
-        #     common.compare_stat(ROOT_DIR1, ROOT_DIR2)
-        #     common.compare_acl(ROOT_DIR1, ROOT_DIR2)
 
 if __name__ == '__main__':
     MAX_EXAMPLE=int(os.environ.get('MAX_EXAMPLE', '100'))

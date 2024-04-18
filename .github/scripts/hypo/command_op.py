@@ -22,10 +22,10 @@ import common
 class CommandOperation:
     JFS_CONTROL_FILES=['.accesslog', '.config', '.stats']
     stats = Statistics()
-    def __init__(self, name, mp):
+    def __init__(self, name, mp, root_dir):
         self.logger = common.setup_logger(f'./{name}.log', name, os.environ.get('LOG_LEVEL', 'INFO'))
         self.mp = mp
-        self.root_dir = self.mp+'/fsrand'
+        self.root_dir = root_dir
         self.meta_url = self.get_meta_url(mp)
                 
     def get_meta_url(self, mp):

@@ -34,6 +34,7 @@ from strategy import *
 from fs_op import FsOperation
 from command_op import CommandOperation
 from fs import JuicefsMachine
+import common
 
 SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
 
@@ -50,8 +51,17 @@ class JuicefsCommandMachine(JuicefsMachine):
     EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file']
     # EXCLUDE_RULES = []
     INCLUDE_RULES = ['dump_load_dump', 'mkdir', 'create_file', 'set_xattr']
-    cmd1 = CommandOperation('cmd1', mp=MP1)
-    cmd2 = CommandOperation('cmd2', mp=MP2)
+
+    def __init__(self):
+        super().__init__()
+        self.cmd1 = CommandOperation('cmd1', self.MP1, self.get_default_rootdir1())
+        self.cmd2 = CommandOperation('cmd2', self.MP2, self.get_default_rootdir2())
+
+    def get_default_rootdir1(self):
+        return os.path.join(self.MP1, 'fsrand')
+    
+    def get_default_rootdir2(self):
+        return os.path.join(self.MP2, 'fsrand')
 
     def equal(self, result1, result2):
         if type(result1) != type(result2):
@@ -59,26 +69,15 @@ class JuicefsCommandMachine(JuicefsMachine):
         if isinstance(result1, Exception):
             if 'panic:' in str(result1) or 'panic:' in str(result2):
                 return False
-            r1 = str(result1).replace(self.MP1, '')
-            r2 = str(result2).replace(self.MP2, '')
-            return r1 == r2
-        elif isinstance(result1, str):
-            r1 = str(result1).replace(self.MP1, '')
-            r2 = str(result2).replace(self.MP2, '')
-            return r1 == r2
-        elif isinstance(result1, tuple):
-            r1 = [str(item).replace(self.MP1, '') for item in result1]
-            r2 = [str(item).replace(self.MP2, '') for item in result2]
-            return r1 == r2
-        else:
-            return  result1 == result2
+            result1 = str(result1)
+            result2 = str(result2)
+        result1 = common.replace(result1, self.MP1, '***')
+        result2 = common.replace(result2, self.MP2, '***')
+        return result1 == result2
 
     def get_client_version(self, mount):
         output = run_cmd(f'{mount} version')
         return output.split()[2]
-
-    def __init__(self):
-        super().__init__()
 
     def should_run(self, rule):
         if len(self.EXCLUDE_RULES) > 0:
