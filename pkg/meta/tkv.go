@@ -1953,6 +1953,16 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		if sattr.Typ != TypeFile {
 			return syscall.EINVAL
 		}
+		if offIn >= sattr.Length {
+			if copied != nil {
+				*copied = 0
+			}
+			return nil
+		}
+		size := size
+		if offIn+size > sattr.Length {
+			size = sattr.Length - offIn
+		}
 		attr = Attr{}
 		m.parseAttr(rs[1], &attr)
 		if attr.Typ != TypeFile {
@@ -1960,16 +1970,6 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		}
 		if (attr.Flags&FlagImmutable) != 0 || (attr.Flags&FlagAppend) != 0 {
 			return syscall.EPERM
-		}
-
-		if offIn >= sattr.Length || size == 0 {
-			if copied != nil {
-				*copied = 0
-			}
-			return nil
-		}
-		if offIn+size > sattr.Length {
-			size = sattr.Length - offIn
 		}
 
 		newleng := offOut + size
