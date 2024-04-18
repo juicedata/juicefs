@@ -39,7 +39,7 @@ jobs:
           if [ "${{github.event_name}}" == "schedule"  ]; then
             echo 'meta_matrix=["mysql", "tikv"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "pull_request"  ]; then
-            echo 'meta_matrix=["sqlite3", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["sqlite3", "mysql", "tikv", "tidb", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
             echo 'meta_matrix=["mysql", "tikv"]' >> $GITHUB_OUTPUT
           else

@@ -190,6 +190,7 @@ class JuicefsCommandMachine(JuicefsMachine):
         result1 = self.cmd1.do_dump_load_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
         result2 = self.cmd2.do_dump_load_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
         print(result1)
+        print(result2)
         result1 = self.clean_dump(result1)
         result2 = self.clean_dump(result2)
         d=self.diff(result1, result2)
