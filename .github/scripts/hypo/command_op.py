@@ -140,7 +140,7 @@ class CommandOperation:
     
     def do_status(self):
         try:
-            result = self.run_cmd(f'./juicefs status {self.meta_url}', stderr=subprocess.DEVNULL)
+            result = self.run_cmd(f'./juicefs status {self.meta_url} --log-level error', stderr=subprocess.DEVNULL)
             result = json.loads(result)['Setting']
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_status', '')
