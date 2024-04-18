@@ -168,9 +168,9 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 		uri = "postgres://" + uri
 		driver = "pgx"
 
-		parse, err := url.Parse(addr)
+		parse, err := url.Parse(uri)
 		if err != nil {
-			return nil, fmt.Errorf("parse url %s failed: %s", addr, err)
+			return nil, fmt.Errorf("parse url %s failed: %s", uri, err)
 		}
 		searchPath = parse.Query().Get("search_path")
 		if searchPath != "" {
