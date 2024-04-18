@@ -37,13 +37,13 @@ jobs:
           echo "github.event_name is ${{github.event_name}}"
           echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
           if [ "${{github.event_name}}" == "schedule"  ]; then
-            echo 'meta_matrix=["mysql", "tikv"]' >> $GITHUB_OUTPUT
-          elif [ "${{github.event_name}}" == "pull_request"  ]; then
             echo 'meta_matrix=["sqlite3", "mysql", "tikv", "tidb", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
+          elif [ "${{github.event_name}}" == "pull_request"  ]; then
+            echo 'meta_matrix=["sqlite3", "tikv"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
-            echo 'meta_matrix=["mysql", "tikv"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["sqlite3", "tikv"]' >> $GITHUB_OUTPUT
           else
-            echo 'meta_matrix=["mysql", "tikv"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["sqlite3", "tikv"]' >> $GITHUB_OUTPUT
           fi
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
