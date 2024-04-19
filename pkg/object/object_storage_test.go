@@ -926,7 +926,7 @@ func TestPG(t *testing.T) { //skip mutate
 
 }
 func TestPGWithSearchPath(t *testing.T) { //skip mutate
-	_, err := newSQLStore("postgres", "localhost:5432/test?sslmode=disable&search_path=juicefs,public", "", "")
+	_, err := newSQLStore("postgres", "127.0.0.1:5432/test?sslmode=disable&search_path=juicefs,public", "", "")
 	if !strings.Contains(err.Error(), "currently, only one schema is supported in search_path") {
 		t.Fatalf("TestPGWithSearchPath error: %s", err)
 	}
