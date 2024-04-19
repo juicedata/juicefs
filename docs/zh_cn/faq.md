@@ -123,7 +123,7 @@ uid=1201(alice) gid=500(staff) groups=500(staff)
 
 ### JuiceFS S3 网关支持多用户管理等高级功能吗？
 
-JuiceFS 内置的 `gateway` 子命令不支持多用户管理等功能，只提供基本的 S3 网关功能。如果需要使用这些高级功能，请参考[文档](deployment/s3_gateway.md)。
+JuiceFS 内置的 `gateway` 从 1.2 版本开始支持多用户管理等高级功能。
 
 ### JuiceFS 目前有 SDK 可以使用吗？
 
