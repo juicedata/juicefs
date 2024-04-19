@@ -29,5 +29,11 @@ class TestCommand(unittest.TestCase):
         state.clone(entry=v2, new_entry_name='drqj', parent=v1, preserve=False, user='user1')
         state.teardown()
 
+    def test_config(self):
+        state = JuicefsCommandMachine()
+        folders_0 = state.init_folders()
+        state.config(capacity=1, enable_acl=True, encrypt_secret=True, force=False, inodes=81, trash_days=0, user='root', yes=True)
+        state.teardown()
+
 if __name__ == '__main__':
     unittest.main()

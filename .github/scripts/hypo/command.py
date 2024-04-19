@@ -237,11 +237,12 @@ class JuicefsCommandMachine(JuicefsMachine):
         enable_acl = st.booleans(),
         encrypt_secret = st.booleans(),
         force = st.booleans(),
+        yes = st.just(True),
         user = st_sudo_user
     )
-    def config(self, capacity, inodes, trash_days, enable_acl, encrypt_secret, force, user='root'):
-        result1 = self.cmd1.do_config(capacity=capacity, inodes=inodes, trash_days=trash_days, enable_acl=enable_acl, encrypt_secret=encrypt_secret, force=force, user=user)
-        result2 = self.cmd2.do_config(capacity=capacity, inodes=inodes, trash_days=trash_days, enable_acl=enable_acl, encrypt_secret=encrypt_secret, force=force, user=user)
+    def config(self, capacity, inodes, trash_days, enable_acl, encrypt_secret, force, yes, user='root'):
+        result1 = self.cmd1.do_config(capacity=capacity, inodes=inodes, trash_days=trash_days, enable_acl=enable_acl, encrypt_secret=encrypt_secret, force=force, yes=yes, user=user)
+        result2 = self.cmd2.do_config(capacity=capacity, inodes=inodes, trash_days=trash_days, enable_acl=enable_acl, encrypt_secret=encrypt_secret, force=force, yes=yes, user=user)
         assert self.equal(result1, result2), f'\033[31mconfig:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     def teardown(self):

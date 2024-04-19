@@ -333,11 +333,13 @@ class CommandOperation:
         self.logger.info(f'do_compact succeed')
         return True
     
-    def do_config(self, capacity, inodes, trash_days, enable_acl, encrypt_secret, force, user):
+    def do_config(self, capacity, inodes, trash_days, enable_acl, encrypt_secret, force, yes, user):
         try:
             cmd = f'sudo -u {user} ./juicefs config {self.meta_url} --capacity {capacity} --inodes {inodes} --trash-days {trash_days} --enable-acl {enable_acl} --encrypt-secret {encrypt_secret}'
             if force:
                 cmd += ' --force'
+            if yes:
+                cmd += ' --yes'
             self.run_cmd(cmd)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_config', '')
