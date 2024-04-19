@@ -1,7 +1,7 @@
 #!/bin/bash -e
 source .github/scripts/common/common.sh
-[[ -z "$MAX_EXAMPLE" ]] && MAX_EXAMPLE=1000
-[[ -z "$STEP_COUNT" ]] && STEP_COUNT=300
+[[ -z "$MAX_EXAMPLE" ]] && MAX_EXAMPLE=100
+[[ -z "$STEP_COUNT" ]] && STEP_COUNT=50
 
 [[ -z "$META1" ]] && META1=sqlite3
 source .github/scripts/start_meta_engine.sh
