@@ -105,6 +105,7 @@ start_meta_engine(){
         else
             docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
             sleep 10
+        fi
     elif [ "$meta" == "tidb" ]; then
         retry install_tidb
         mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
@@ -127,6 +128,7 @@ start_meta_engine(){
         mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;"
     elif [ "$meta" == "postgres" ]; then
         echo "start postgres"
+        lsof -i:5432 || true
         if lsof -i:5432; then
             echo "postgres is already running"
         else
