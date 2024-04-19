@@ -204,6 +204,7 @@ class JuicefsCommandMachine(JuicefsMachine):
     @rule(
         user = st_sudo_user
     )
+    @precondition(lambda self: self.should_run('trash_list'))
     def trash_list(self, user='root'):
         result1 = self.cmd1.do_trash_list(user=user)
         result2 = self.cmd2.do_trash_list(user=user)
@@ -241,6 +242,7 @@ class JuicefsCommandMachine(JuicefsMachine):
         yes = st.just(True),
         user = st_sudo_user
     )
+    @precondition(lambda self: self.should_run('config'))
     def config(self, capacity, inodes, trash_days, enable_acl, encrypt_secret, force, yes, user='root'):
         result1 = self.cmd1.do_config(capacity=capacity, inodes=inodes, trash_days=trash_days, enable_acl=enable_acl, encrypt_secret=encrypt_secret, force=force, yes=yes, user=user)
         result2 = self.cmd2.do_config(capacity=capacity, inodes=inodes, trash_days=trash_days, enable_acl=enable_acl, encrypt_secret=encrypt_secret, force=force, yes=yes, user=user)
