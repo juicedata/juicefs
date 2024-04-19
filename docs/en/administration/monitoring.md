@@ -1,18 +1,34 @@
 ---
 title: Monitoring and Data Visualization
 sidebar_position: 3
-description: This article describes how to collect and visualize JuiceFS metrics with third-party tools such as Prometheus, Grafana, etc.
+description: This guide will help you understand the monitoring metrics provided by JuiceFS, and how to visualize these metrics using Prometheus and Grafana.
 ---
 
-The JuiceFS client exposes real-time metrics in [Prometheus](https://prometheus.io) format through the monitoring API. Users configure Prometheus to scrape metrics data, and then use tools such as [Grafana](https://grafana.com) to realize data visualization.
+JuiceFS offers a suite of monitoring metrics, and this document outlines how to collect these metrics and visualize them with a monitoring system similar to the one depicted in the following image using Prometheus and Grafana.
 
-## Add scrape config in Prometheus {#add-scrape-config}
+![Monitoring Dashboard](../images/grafana_dashboard.png)
 
-After JuiceFS is mounted on a host, you can access its metrics using `http://localhost:9567/metrics`, other types of JuiceFS Client (CSI Driver, S3 Gateway, Hadoop SDK) is slightly different in this regard, see [Collecting metrics data](#collect-metrics).
+The setup process is as follows:
 
-![Prometheus-client-data](../images/prometheus-client-data.jpg)
+1. Configure Prometheus to scrape JuiceFS monitoring metrics.
+2. Configure Grafana to read the monitoring data from Prometheus.
+3. Use the official JuiceFS Grafana dashboard template to display the monitoring metrics.
 
-Here, taking collect metrics of the mount point as an example, edit [`prometheus.yml`](https://prometheus.io/docs/prometheus/latest/configuration/configuration) to add a new scrape config (`scrape_configs`):
+:::tip
+This document uses open-source versions of Grafana and Prometheus for examples.
+:::
+
+## 1. Configuring Prometheus to Scrape JuiceFS Monitoring Metrics {#add-scrape-config}
+
+After mounting JuiceFS, it will automatically expose Prometheus-formatted metrics at `http://localhost:9567/metrics`. To observe the state changes of various metrics over a time range, you'll need to set up Prometheus and configure it to periodically scrape and save these metrics.
+
+![Prometheus Client Data](../images/prometheus-client-data.jpg)
+
+The process for collecting metrics may vary slightly depending on the mount method or access type (such as FUSE mount, CSI Driver, S3 Gateway, Hadoop SDK, etc.). For detailed instructions, see [Collecting Monitoring metrics data](#collect-metrics).
+
+For example, here's how you might configure Prometheus for a common FUSE mount: If you haven't already set up Prometheus, follow the [official documentation](https://prometheus.io/docs/prometheus/latest/installation).
+
+Edit your `prometheus.yml` configuration file and add a new scrape configuration under `scrape_configs`. Define the JuiceFS client metrics address:
 
 ```yaml {20-22}
 global:
@@ -26,8 +42,7 @@ alerting:
           # - alertmanager:9093
 
 rule_files:
-  # - "first_rules.yml"
-  # - "second_rules.yml"
+  # - "rules.yml"
 
 scrape_configs:
   - job_name: "prometheus"
@@ -47,25 +62,26 @@ Start the Prometheus service:
 
 Visit `http://localhost:9090` to see the Prometheus interface.
 
-## Visualizing metrics using Grafana {#grafana}
+## 2. Configuring Grafana to Read from Prometheus {#grafana}
 
-Create a new Prometheus-type data source in Grafana:
+Once Prometheus begins scraping JuiceFS metrics, the next step is to set up Grafana to read from Prometheus.
 
-- **Name**: For identification purposes, you can fill it in with the name of the file system.
-- **URL**: Data interface for Prometheus, which defaults to `http://localhost:9090`.
+If you haven't yet installed Grafana, follow the [official documentation](https://grafana.com/docs/grafana/latest/installation).
 
-![Grafana-data-source](../images/grafana-data-source.jpg)
+In Grafana, create a new data source of type Prometheus:
 
-JuiceFS provides some dashboard templates for Grafana, which can be imported to show the collected metrics in Prometheus:
+- **Name**: A name that helps you identify the data source, such as the name of the file system.
+- **URL**: The Prometheus data API endpoint, typically `http://localhost:9090`.
 
-| Name                                                                                                            | Description                                                                                             |
-|-----------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
-| [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json)         | For show metrics collected from mount point, S3 gateway (non-Kubernetes deployment) and Hadoop Java SDK |
-| [`grafana_template_k8s.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_k8s.json) | For show metrics collected from Kubernetes CSI Driver and S3 gateway (Kubernetes deployment)            |
+![Grafana Data Source](../images/grafana-data-source.jpg)
 
-Our Grafana dashboard looks like this:
+## 3. Using the Official JuiceFS Grafana Dashboard Template {#grafana-dashboard}
 
-![grafana_dashboard](../images/grafana_dashboard.png)
+JuiceFS's official Grafana dashboard templates can be found in the Grafana Dashboard repository and can be imported directly into Grafana via the URL `https://grafana.com/grafana/dashboards/20794/` or by using the ID `20794`.
+
+Here's what the official JuiceFS Grafana dashboard might look like:
+
+![Grafana Monitoring Dashboard](../images/grafana_dashboard.png)
 
 ## Collecting metrics data {#collect-metrics}
 
