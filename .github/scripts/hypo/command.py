@@ -88,7 +88,7 @@ class JuicefsCommandMachine(JuicefsMachine):
             return rule not in self.EXCLUDE_RULES
         else:
             return rule in self.INCLUDE_RULES
-        
+
     @rule(
           entry = Entries.filter(lambda x: x != multiple()),
           raw = st.just(True),
@@ -201,6 +201,49 @@ class JuicefsCommandMachine(JuicefsMachine):
         diff = differ.compare(str1.splitlines(), str2.splitlines())
         return '\n'.join([line for line in diff])
     
+    @rule(
+        user = st_sudo_user
+    )
+    def trash_list(self, user='root'):
+        result1 = self.cmd1.do_trash_list(user=user)
+        result2 = self.cmd2.do_trash_list(user=user)
+        assert self.equal(result1, result2), f'\033[31mtrash_list:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        put_back = st.booleans(),
+        user=st_sudo_user
+    )
+    @precondition(lambda self: self.should_run('restore'))
+    def restore(self, put_back, user='root'):
+        result1 = self.cmd1.do_restore(put_back=put_back, user=user)
+        result2 = self.cmd2.do_restore(put_back=put_back, user=user)
+        assert self.equal(result1, result2), f'\033[31mrestore:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        entry = Entries.filter(lambda x: x != multiple()),
+        thread = st.integers(min_value=1, max_value=10),
+        user = st_sudo_user
+    )
+    @precondition(lambda self: self.should_run('compact'))
+    def compact(self, entry, thread, user='root'):
+        result1 = self.cmd1.do_compact(entry=entry, thread=thread, user=user)
+        result2 = self.cmd2.do_compact(entry=entry, thread=thread, user=user)
+        assert self.equal(result1, result2), f'\033[31mcompact:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        capacity = st.integers(min_value=1, max_value=2),
+        inodes = st.one_of(st.just(0), st.integers(min_value=50, max_value=100)),
+        trash_days = st.integers(min_value=0, max_value=1),
+        enable_acl = st.booleans(),
+        encrypt_secret = st.booleans(),
+        force = st.booleans(),
+        user = st_sudo_user
+    )
+    def config(self, capacity, inodes, trash_days, enable_acl, encrypt_secret, force, user='root'):
+        result1 = self.cmd1.do_config(capacity=capacity, inodes=inodes, trash_days=trash_days, enable_acl=enable_acl, encrypt_secret=encrypt_secret, force=force, user=user)
+        result2 = self.cmd2.do_config(capacity=capacity, inodes=inodes, trash_days=trash_days, enable_acl=enable_acl, encrypt_secret=encrypt_secret, force=force, user=user)
+        assert self.equal(result1, result2), f'\033[31mconfig:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
     def teardown(self):
         pass
 

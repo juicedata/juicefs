@@ -291,6 +291,21 @@ class CommandOperation:
         self.logger.info(f'do_trash_list succeed')
         return tuple(li)
     
+    def do_restore(self, index, put_back, user='root'):
+        abspath = os.path.join(self.mp, '.trash')
+        try:
+            li =  os.listdir(abspath)
+            for trash_dir in li:
+                cmd = f'sudo -u {user} ./juicefs restore {trash_dir}'
+                if put_back:
+                    cmd += ' --put-back'
+                self.run_cmd(cmd)
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_restore', abspath, user=user)
+        self.stats.success('do_restore')
+        self.logger.info(f'do_restore succeed')
+        return True
+
     def do_trash_restore(self, index, user='root'):
         trash_list = self.do_trash_list()
         if len(trash_list) == 0:
@@ -308,3 +323,24 @@ class CommandOperation:
         self.logger.info(f'do_trash_restore succeed')
         return restored_path
     
+    def do_compact(self, entry, thread, user):
+        path = os.path.join(self.root_dir, entry)
+        try:
+            self.run_cmd(f'sudo -u {user} ./juicefs compact {path} --thread {thread}')
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_compact', path, user=user)
+        self.stats.success('do_compact')
+        self.logger.info(f'do_compact succeed')
+        return True
+    
+    def do_config(self, capacity, inodes, trash_days, enable_acl, encrypt_secret, force, user):
+        try:
+            cmd = f'sudo -u {user} ./juicefs config {self.meta_url} --capacity {capacity} --inodes {inodes} --trash-days {trash_days} --enable-acl {enable_acl} --encrypt-secret {encrypt_secret}'
+            if force:
+                cmd += ' --force'
+            self.run_cmd(cmd)
+        except subprocess.CalledProcessError as e:
+            return self.handleException(e, 'do_config', '')
+        self.stats.success('do_config')
+        self.logger.info(f'do_config succeed')
+        return True

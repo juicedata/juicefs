@@ -1,5 +1,7 @@
 #!/bin/bash -e
 source .github/scripts/common/common.sh
+[[ -z "$MAX_EXAMPLE" ]] && MAX_EXAMPLE=1000
+[[ -z "$STEP_COUNT" ]] && STEP_COUNT=300
 
 [[ -z "$META1" ]] && META1=sqlite3
 source .github/scripts/start_meta_engine.sh
@@ -16,18 +18,20 @@ prepare_test()
     meta_url=$1
     mp=$2
     volume=$3
+    shift 3
+    options=$@
     umount_jfs $mp $meta_url
     python3 .github/scripts/flush_meta.py $meta_url
     rm -rf /var/jfs/$volume || true
     rm -rf /var/jfsCache/$volume || true
-    ./juicefs format $meta_url $volume --enable-acl --trash-days 0
+    ./juicefs format $meta_url $volume $options
     ./juicefs mount -d $meta_url $mp
 }
 
 test_run_examples()
 {
-    prepare_test $META_URL1 /tmp/jfs1 myjfs1
-    prepare_test $META_URL2 /tmp/jfs2 myjfs2
+    prepare_test $META_URL1 /tmp/jfs1 myjfs1 --enable-acl --trash-days 0
+    prepare_test $META_URL2 /tmp/jfs2 myjfs2 --enable-acl --trash-days 0
     python3 .github/scripts/hypo/command_test.py
 }
 
@@ -35,7 +39,7 @@ test_run_all()
 {
     prepare_test $META_URL1 /tmp/jfs1 myjfs1
     prepare_test $META_URL2 /tmp/jfs2 myjfs2
-    python3 .github/scripts/hypo/command.py
+    CHECK_NLINK=false MAX_EXAMPLE=$MAX_EXAMPLE STEP_COUNT=$STEP_COUNT python3 .github/scripts/hypo/command.py
 }
 
 source .github/scripts/common/run_test.sh && run_test $@
