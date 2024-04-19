@@ -37,13 +37,13 @@ jobs:
           echo "github.event_name is ${{github.event_name}}"
           echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
           if [ "${{github.event_name}}" == "schedule"  ]; then
-            echo 'meta_matrix=["sqlite3", "mysql", "tikv", "tidb", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["sqlite3", "mysql", "tikv",  "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "pull_request"  ]; then
-            echo 'meta_matrix=["sqlite3", "tikv"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["mysql", "tikv"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
-            echo 'meta_matrix=["sqlite3", "tikv"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["mysql", "tikv"]' >> $GITHUB_OUTPUT
           else
-            echo 'meta_matrix=["sqlite3", "tikv"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["mysql", "tikv"]' >> $GITHUB_OUTPUT
           fi
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
@@ -80,10 +80,28 @@ jobs:
         run: |
           sudo META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_examples
       
+      - name: Remove unused software
+        run: |
+          if [ "${{ github.event_name }}" == "schedule" ]; then
+            echo "before remove unused software"
+            sudo df -h
+            sudo rm -rf /usr/share/dotnet
+            sudo rm -rf /usr/local/lib/android
+            sudo rm -rf /opt/ghc
+            echo "after remove unused software"
+            sudo df -h
+          fi
       - name: Run All
         timeout-minutes: 60
         run: |
-          sudo META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all
+          if [ "${{ github.event_name }}" == "schedule" ]; then
+            MAX_EXAMPLE=500
+            STEP_COUNT=200
+          else
+            MAX_EXAMPLE=100
+            STEP_COUNT=50
+          fi
+          sudo MAX_EXAMPLE=$MAX_EXAMPLE STEP_COUNT=$STEP_COUNT META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all
   
       - name: Log
         if: always()

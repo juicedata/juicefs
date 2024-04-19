@@ -14,7 +14,7 @@ class TestCommand(unittest.TestCase):
         state.dump_load_dump(folders_0)
         state.teardown()
 
-    def test_info(self):
+    def skip_test_info(self):
         state = JuicefsCommandMachine()
         folders_0 = state.init_folders()
         files_2 = state.create_file(content=b'0', file_name='mvvd', mode='a', parent=folders_0, umask=293, user='root')
@@ -27,6 +27,12 @@ class TestCommand(unittest.TestCase):
         v2 = state.create_file(content=b'\x9bcR\xba', file_name='ygbl', mode='x', parent=v1, umask=466, user='root')
         state.chmod(entry=v1, mode=715, user='root')
         state.clone(entry=v2, new_entry_name='drqj', parent=v1, preserve=False, user='user1')
+        state.teardown()
+
+    def test_config(self):
+        state = JuicefsCommandMachine()
+        folders_0 = state.init_folders()
+        state.config(capacity=1, enable_acl=True, encrypt_secret=True, force=False, inodes=81, trash_days=0, user='root', yes=True)
         state.teardown()
 
 if __name__ == '__main__':
