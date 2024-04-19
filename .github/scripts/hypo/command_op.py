@@ -28,6 +28,14 @@ class CommandOperation:
         self.root_dir = root_dir
         self.meta_url = self.get_meta_url(mp)
                 
+    def guess_password(self, meta_url):
+        if '****' not in meta_url:
+            return meta_url
+        if meta_url.startswith('postgres://'):
+            return meta_url.replace('****', 'postgres')
+        else:
+            return meta_url.replace('****', 'root')
+
     def get_meta_url(self, mp):
         with open(os.path.join(mp, '.config')) as f:
             config = json.loads(f.read())
@@ -35,8 +43,12 @@ class CommandOperation:
             process = psutil.Process(pid)
             cmdline = process.cmdline()
             for item in cmdline:
-                if '://' in item:
-                    return item
+                if ' ' in item:
+                    for subitem in item.split(' '):
+                        if '://' in subitem:
+                            return self.guess_password(subitem)
+                elif '://' in item:
+                    return self.guess_password(item)
             raise Exception(f'get_meta_url: {cmdline} does not contain meta url')
         
     def run_cmd(self, command:str, stderr=subprocess.STDOUT) -> str:
@@ -150,20 +162,20 @@ class CommandOperation:
             result['EncryptAlgo'], result['TrashDays'], result['MetaVersion'], \
             result['MinClientVersion'], result['DirStats'], result['EnableACL']
     
-    def do_dump(self, folder, fast=False, skip_trash=False, threads=1, keep_secret_key=False):
+    def do_dump(self, folder, fast=False, skip_trash=False, threads=1, keep_secret_key=False, user='root'):
         abspath = os.path.join(self.root_dir, folder)
         subdir = os.path.relpath(abspath, self.mp)
         try:
-            cmd=self.get_dump_cmd(self.meta_url, subdir, fast, skip_trash, keep_secret_key, threads)
+            cmd=self.get_dump_cmd(self.meta_url, subdir, fast, skip_trash, keep_secret_key, threads, user)
             result = self.run_cmd(cmd, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as e:
             return self.handleException(e,  'do_dump', abspath)
         self.stats.success('do_dump')
         self.logger.info(f'do_dump {abspath} succeed')
-        return result
+        return self.clean_dump(result)
 
-    def get_dump_cmd(self, meta_url, subdir, fast, skip_trash, keep_secret_key, threads):
-        cmd = f'./juicefs dump {meta_url} '
+    def get_dump_cmd(self, meta_url, subdir, fast, skip_trash, keep_secret_key, threads, user='root'):
+        cmd = f'sudo -u {user} ./juicefs dump {meta_url} '
         cmd += f' --subdir /{subdir}' if subdir != '' else ''
         cmd += f' --fast' if fast else ''
         cmd += f' --skip-trash' if skip_trash else ''
@@ -171,24 +183,45 @@ class CommandOperation:
         cmd += f' --threads {threads}'
         return cmd
 
-    def do_dump_load_dump(self, folder, fast=False, skip_trash=False, threads=1, keep_secret_key=False):
+    def do_dump_load_dump(self, folder, fast=False, skip_trash=False, threads=1, keep_secret_key=False, user='root'):
         abspath = os.path.join(self.root_dir, folder)
         subdir = os.path.relpath(abspath, self.mp)
         try:
-            cmd = self.get_dump_cmd(self.meta_url, subdir, fast, skip_trash, keep_secret_key, threads)
+            print(f'meta_url is {self.meta_url}')
+            cmd = self.get_dump_cmd(self.meta_url, subdir, fast, skip_trash, keep_secret_key, threads, user)
             result = self.run_cmd(cmd, stderr=subprocess.DEVNULL)
             with open('dump.json', 'w') as f:
                 f.write(result)
             if os.path.exists('load.db'):
                 os.remove('load.db')
-            self.run_cmd(f'./juicefs load sqlite3://load.db dump.json')
-            cmd = self.get_dump_cmd('sqlite3://load.db', '', fast, skip_trash, keep_secret_key, threads)
+            self.run_cmd(f'sudo -u {user} ./juicefs load sqlite3://load.db dump.json')
+            cmd = self.get_dump_cmd('sqlite3://load.db', '', fast, skip_trash, keep_secret_key, threads, user)
             result = self.run_cmd(cmd, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_dump', abspath)
         self.stats.success('do_dump')
         self.logger.info(f'do_dump {abspath} succeed')
-        return result
+        return self.clean_dump(result)
+
+    def clean_dump(self, dump):
+        lines = dump.split('\n')
+        new_lines = []
+        exclude_keys = ['Name', 'UUID', 'usedSpace', 'usedInodes', 'nextInodes', 'nextChunk', 'nextTrash', 'nextSession']
+        reset_keys = ['id', 'inode', 'atimensec', 'mtimensec', 'ctimensec', 'atime', 'ctime', 'mtime']
+        for line in lines:
+            should_delete = False
+            for key in exclude_keys:
+                if f'"{key}"' in line:
+                    should_delete = True
+                    break
+            if should_delete:
+                continue
+            for key in reset_keys:
+                if f'"{key}"' in line:
+                    pattern = rf'"{key}":(\d+)'
+                    line = re.sub(pattern, f'"{key}":0', line)
+            new_lines.append(line)
+        return '\n'.join(new_lines)
 
     def do_warmup(self, entry, user='root'):
         abspath = os.path.join(self.root_dir, entry)

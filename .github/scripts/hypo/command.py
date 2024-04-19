@@ -76,7 +76,7 @@ class JuicefsCommandMachine(JuicefsMachine):
             result2 = str(result2)
         result1 = common.replace(result1, self.MP1, '***')
         result2 = common.replace(result2, self.MP2, '***')
-        print(f'result1 is {result1}\nresult2 is {result2}')
+        # print(f'result1 is {result1}\nresult2 is {result2}')
         return result1 == result2
 
     def get_client_version(self, mount):
@@ -168,60 +168,39 @@ class JuicefsCommandMachine(JuicefsMachine):
         fast = st.booleans(),
         skip_trash = st.booleans(),
         threads = st.integers(min_value=1, max_value=10),
-        keep_secret_key = st.booleans()
+        keep_secret_key = st.booleans(),
+        user = st.just('root')
     )
     @precondition(lambda self: self.should_run('dump'))
-    def dump(self, folder, fast, skip_trash, threads, keep_secret_key):
-        result1 = self.cmd1.do_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
-        result2 = self.cmd2.do_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
-        result1 = self.clean_dump(result1)
-        result2 = self.clean_dump(result2)
-        d=self.diff(result1, result2)
+    def dump(self, folder, fast, skip_trash, threads, keep_secret_key, user='root'):
+        result1 = self.cmd1.do_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key, user=user)
+        result2 = self.cmd2.do_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key, user=user)
+        d=''
+        if isinstance(result1, str) and isinstance(result2, str):
+            d=self.diff(result1, result2)
         assert self.equal(result1, result2), f'\033[31mdump:\nresult1 is {result1}\nresult2 is {result2}\ndiff is {d}\033[0m'
 
     @rule(folder = st.just(''),
         fast = st.booleans(),
         skip_trash = st.booleans(),
         threads = st.integers(min_value=1, max_value=10),
-        keep_secret_key = st.booleans()
+        keep_secret_key = st.booleans(),
+        user = st.just('root')
     )
     @precondition(lambda self: self.should_run('dump_load_dump'))
-    def dump_load_dump(self, folder, fast=False, skip_trash=False, threads=10, keep_secret_key=False):
-        result1 = self.cmd1.do_dump_load_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
-        result2 = self.cmd2.do_dump_load_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
-        print(result1)
-        print(result2)
-        result1 = self.clean_dump(result1)
-        result2 = self.clean_dump(result2)
-        d=self.diff(result1, result2)
+    def dump_load_dump(self, folder, fast=False, skip_trash=False, threads=10, keep_secret_key=False, user='root'):
+        result1 = self.cmd1.do_dump_load_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key, user=user)
+        result2 = self.cmd2.do_dump_load_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key, user=user)
+        d=''
+        if isinstance(result1, str) and isinstance(result2, str):
+            d=self.diff(result1, result2)
         assert self.equal(result1, result2), f'\033[31mdump:\nresult1 is {result1}\nresult2 is {result2}\ndiff is {d}\033[0m'
 
     def diff(self, str1:str, str2:str):
         differ = Differ()
         diff = differ.compare(str1.splitlines(), str2.splitlines())
         return '\n'.join([line for line in diff])
-
-    def clean_dump(self, dump):
-        lines = dump.split('\n')
-        new_lines = []
-        exclude_keys = ['Name', 'UUID', 'usedSpace', 'usedInodes', 'nextInodes', 'nextChunk', 'nextTrash', 'nextSession']
-        reset_keys = ['id', 'inode', 'atimensec', 'mtimensec', 'ctimensec', 'atime', 'ctime', 'mtime']
-        for line in lines:
-            should_delete = False
-            for key in exclude_keys:
-                if f'"{key}"' in line:
-                    should_delete = True
-                    break
-            if should_delete:
-                continue
-            for key in reset_keys:
-                if f'"{key}"' in line:
-                    pattern = rf'"{key}":(\d+)'
-                    line = re.sub(pattern, f'"{key}":0', line)
-            new_lines.append(line)
-        return '\n'.join(new_lines)
     
-
     def teardown(self):
         pass
 
