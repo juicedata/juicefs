@@ -28,22 +28,21 @@ JuiceFS 在 v1.2 版本中开始支持平滑升级功能，即在相同的挂载
 下面举例说明两个常用的场景
 
 1. 客户端升级
+   比如当前存在 `juicefs mount` 进程 `juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d`，现希望在不卸载挂载点的情况下部署新的 JuiceFS 客户端，可以执行以下步骤：
 
-比如当前存在 `juicefs mount` 进程 `juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d`，现希望在不卸载挂载点的情况下部署新的 JuiceFS 客户端，可以执行以下步骤：
-
-```shell
-# 1. 备份当前二进制
-cp juicefs juicefs.bak
-
-# 2. 下载新的二进制覆盖当前 juicefs 二进制
-
-# 3. 再次执行 juicefs mount 命令完成平滑升级
-juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d
-```
+   ```shell
+    # 1. 备份当前二进制
+   cp juicefs juicefs.bak
+   
+   # 2. 下载新的二进制覆盖当前 juicefs 二进制
+   
+   # 3. 再次执行 juicefs mount 命令完成平滑升级
+   juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d
+    ```
 
 2. 动态调整挂载参数
 
-比如当前存在 juicefs mount 进程 `juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d`，现希望在不卸载挂载点的情况下将日志级别调整为 debug，可以执行以下命令：
+  比如当前存在 `juicefs mount` 进程 `juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d`，现希望在不卸载挂载点的情况下将日志级别调整为 debug，可以执行以下命令：
 
 ```shell
 # 调整日志级别
@@ -51,7 +50,8 @@ juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs --debug -d
 ```
 
 一些注意事项：
-1. 平滑升级要求新旧进程的 juicefs 客户端版本都至少为 v1.2 版本。
+
+1. 平滑升级要求新旧进程的 JuiceFS 客户端版本都至少为 v1.2 版本。
 
 2. 新的挂载参数中的 FUSE 参数应该与旧的挂载参数保持一致，否则平滑升级会在当前挂载点上继续覆盖挂载。
 
