@@ -93,23 +93,23 @@ func TestMetrics(t *testing.T) {
 		t.Fatalf("expect the cacheWriteBytes is %d", len(content))
 	}
 
-	if toFloat64(metrics.stageBlocks) != 0.0 {
-		t.Fatalf("expect the stageBlocks is %d", len(content))
+	if cnt, _ := m.stageStats(); cnt != 0.0 {
+		t.Fatalf("expect the stageBlocks is 0, got %d", cnt)
 	}
 
-	if toFloat64(metrics.stageBlockBytes) != 0.0 {
-		t.Fatalf("expect the stageBlockBytes is %d", len(content))
+	if _, usage := m.stageStats(); usage != 0.0 {
+		t.Fatalf("expect the stageBlockBytes is 0, got %d", usage)
 	}
 	key := fmt.Sprintf("chunks/0/5/5000_2_%d", len(content))
 	stagingPath, err := m.stage(key, content, false)
 	if err != nil {
 		t.Fatalf("stage failed: %s", err)
 	}
-	if toFloat64(metrics.stageBlocks) != 1.0 {
-		t.Fatalf("expect the stageBlocks is %d", len(content))
+	if cnt, _ := m.stageStats(); cnt != 1.0 {
+		t.Fatalf("expect the stageBlocks is 1, got %d", cnt)
 	}
 
-	if toFloat64(metrics.stageBlockBytes) != float64(len(content)) {
+	if _, usage := m.stageStats(); usage != int64(len(content)) {
 		t.Fatalf("expect the stageBlockBytes is %d", len(content))
 	}
 	err = m.removeStage(key)
@@ -117,12 +117,12 @@ func TestMetrics(t *testing.T) {
 		t.Fatalf("faild to remove stage")
 	}
 
-	if toFloat64(metrics.stageBlocks) != 0.0 {
-		t.Fatalf("expect the stageBlocks is %d", len(content))
+	if cnt, _ := m.stageStats(); cnt != 0.0 {
+		t.Fatalf("expect the stageBlocks is 0, got %d", cnt)
 	}
 
-	if toFloat64(metrics.stageBlockBytes) != 0.0 {
-		t.Fatalf("expect the stageBlockBytes is %d", len(content))
+	if _, usage := m.stageStats(); usage != 0.0 {
+		t.Fatalf("expect the stageBlockBytes is 0, got %d", usage)
 	}
 
 	if _, err := os.Stat(stagingPath); err != nil && !os.IsNotExist(err) {

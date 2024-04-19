@@ -25,8 +25,6 @@ type cacheManagerMetrics struct {
 	cacheEvicts     prometheus.Counter
 	cacheWriteBytes prometheus.Counter
 	cacheWriteHist  prometheus.Histogram
-	stageBlocks     prometheus.Gauge
-	stageBlockBytes prometheus.Gauge
 }
 
 func newCacheManagerMetrics(reg prometheus.Registerer) *cacheManagerMetrics {
@@ -43,8 +41,6 @@ func (c *cacheManagerMetrics) registerMetrics(reg prometheus.Registerer) {
 		reg.MustRegister(c.cacheEvicts)
 		reg.MustRegister(c.cacheWriteHist)
 		reg.MustRegister(c.cacheWriteBytes)
-		reg.MustRegister(c.stageBlocks)
-		reg.MustRegister(c.stageBlockBytes)
 	}
 }
 
@@ -69,13 +65,5 @@ func (c *cacheManagerMetrics) initMetrics() {
 		Name:    "blockcache_write_hist_seconds",
 		Help:    "write cached block latency distribution",
 		Buckets: prometheus.ExponentialBuckets(0.00001, 2, 20),
-	})
-	c.stageBlocks = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "staging_blocks",
-		Help: "Number of blocks in the staging path.",
-	})
-	c.stageBlockBytes = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "staging_block_bytes",
-		Help: "Total bytes of blocks in the staging path.",
 	})
 }

@@ -86,6 +86,8 @@ type cacheStore struct {
 	m            *cacheManagerMetrics
 
 	used      int64
+	stageCnt  atomic.Int64
+	stageSize atomic.Int64
 	keys      map[cacheKey]cacheItem
 	scanned   bool
 	stageFull bool
@@ -286,6 +288,10 @@ func (cache *cacheStore) stats() (int64, int64) {
 	return int64(len(cache.pages) + len(cache.keys)), cache.used + cache.usedMemory()
 }
 
+func (cache *cacheStore) stageStats() (int64, int64) {
+	return cache.stageCnt.Load(), cache.stageSize.Load()
+}
+
 func (cache *cacheStore) checkFreeSpace() {
 	for cache.available() {
 		br, fr := cache.curFreeRatio()
@@ -366,8 +372,8 @@ func (cache *cacheStore) refreshCacheKeys() {
 func (cache *cacheStore) removeStage(key string) error {
 	var err error
 	if err = cache.removeFile(cache.stagePath(key)); err == nil {
-		cache.m.stageBlocks.Sub(1)
-		cache.m.stageBlockBytes.Sub(float64(parseObjOrigSize(key)))
+		cache.stageCnt.Add(-1)
+		cache.stageSize.Add(-int64(parseObjOrigSize(key)))
 	}
 	// ignore ENOENT error
 	if err != nil && os.IsNotExist(err) {
@@ -640,13 +646,13 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 
 func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string, error) {
 	stagingPath := cache.stagePath(key)
-	if cache.stageFull {
-		return stagingPath, errors.New("space not enough on device")
+	if cache.stageFull || cache.stageSize.Load() > cache.capacity {
+		return stagingPath, fmt.Errorf("space not enough on device, usage: %s", humanize.IBytes(uint64(cache.stageSize.Load())))
 	}
 	err := cache.flushPage(stagingPath, data)
 	if err == nil {
-		cache.m.stageBlocks.Add(1)
-		cache.m.stageBlockBytes.Add(float64(len(data)))
+		cache.stageCnt.Add(1)
+		cache.stageSize.Add(int64(len(data)))
 		if cache.capacity > 0 && keepCache {
 			path := cache.cachePath(key)
 			cache.createDir(filepath.Dir(path))
@@ -854,7 +860,6 @@ func (cache *cacheStore) scanStaging() {
 
 	var start = time.Now()
 	var oneMinAgo = start.Add(-time.Minute)
-	var count, usage uint64
 	stagingPrefix := filepath.Join(cache.dir, stagingDir)
 	logger.Debugf("Scan %s to find staging blocks", stagingPrefix)
 	_ = filepath.WalkDir(stagingPrefix, func(path string, d fs.DirEntry, err error) error {
@@ -885,17 +890,15 @@ func (cache *cacheStore) scanStaging() {
 					return nil
 				}
 				logger.Debugf("Found staging block: %s", path)
-				cache.m.stageBlocks.Add(1)
-				cache.m.stageBlockBytes.Add(float64(origSize))
+				cache.stageCnt.Add(1)
+				cache.stageSize.Add(int64(origSize))
 				cache.uploader(key, path, false)
-				count++
-				usage += uint64(origSize)
 			}
 		}
 		return nil
 	})
-	if count > 0 {
-		logger.Infof("Found %d staging blocks (%s) in %s with %s", count, humanize.IBytes(usage), cache.dir, time.Since(start))
+	if cache.stageCnt.Load() > 0 {
+		logger.Infof("Found %d staging blocks %s in %s with %s", cache.stageCnt.Load(), humanize.IBytes(uint64(cache.stageSize.Load())), cache.dir, time.Since(start))
 	}
 }
 
@@ -961,6 +964,7 @@ type CacheManager interface {
 	removeStage(key string) error
 	stagePath(key string) string
 	stats() (int64, int64)
+	stageStats() (int64, int64)
 	usedMemory() int64
 	isEmpty() bool
 	getMetrics() *cacheManagerMetrics
@@ -1095,6 +1099,18 @@ func (m *cacheManager) stats() (int64, int64) {
 	for _, s := range m.stores {
 		if s != nil {
 			c, u := s.stats()
+			cnt += c
+			used += u
+		}
+	}
+	return cnt, used
+}
+
+func (m *cacheManager) stageStats() (int64, int64) {
+	var cnt, used int64
+	for _, s := range m.stores {
+		if s != nil {
+			c, u := s.stageStats()
 			cnt += c
 			used += u
 		}

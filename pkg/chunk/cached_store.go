@@ -908,6 +908,20 @@ func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 			_, used := store.bcache.stats()
 			return float64(used)
 		}))
+	reg.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "staging_blocks",
+		Help: "Number of blocks in the staging path.",
+	}, func() float64 {
+		cnt, _ := store.bcache.stageStats()
+		return float64(cnt)
+	}))
+	reg.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "staging_block_bytes",
+		Help: "Total bytes of blocks in the staging path.",
+	}, func() float64 {
+		_, used := store.bcache.stageStats()
+		return float64(used)
+	}))
 	reg.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Name: "object_request_uploading",
