@@ -266,6 +266,10 @@ func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl, listenAddr string) e
 	return err
 }
 
+func getDaemonStage() int {
+	return int(godaemon.Stage())
+}
+
 func fuseFlags() []cli.Flag {
 	return addCategories("FUSE", []cli.Flag{
 		&cli.BoolFlag{
