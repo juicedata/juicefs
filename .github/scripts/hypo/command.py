@@ -211,23 +211,24 @@ class JuicefsCommandMachine(JuicefsMachine):
 
     @rule(
         put_back = st.booleans(),
+        threads = st.integers(min_value=1, max_value=10),
         user=st_sudo_user
     )
     @precondition(lambda self: self.should_run('restore'))
-    def restore(self, put_back, user='root'):
-        result1 = self.cmd1.do_restore(put_back=put_back, user=user)
-        result2 = self.cmd2.do_restore(put_back=put_back, user=user)
+    def restore(self, put_back, threads, user='root'):
+        result1 = self.cmd1.do_restore(put_back=put_back, threads=threads, user=user)
+        result2 = self.cmd2.do_restore(put_back=put_back, threads=threads, user=user)
         assert self.equal(result1, result2), f'\033[31mrestore:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
         entry = Entries.filter(lambda x: x != multiple()),
-        thread = st.integers(min_value=1, max_value=10),
+        threads = st.integers(min_value=1, max_value=10),
         user = st_sudo_user
     )
     @precondition(lambda self: self.should_run('compact'))
-    def compact(self, entry, thread, user='root'):
-        result1 = self.cmd1.do_compact(entry=entry, thread=thread, user=user)
-        result2 = self.cmd2.do_compact(entry=entry, thread=thread, user=user)
+    def compact(self, entry, threads, user='root'):
+        result1 = self.cmd1.do_compact(entry=entry, thread=threads, user=user)
+        result2 = self.cmd2.do_compact(entry=entry, thread=threads, user=user)
         assert self.equal(result1, result2), f'\033[31mcompact:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(

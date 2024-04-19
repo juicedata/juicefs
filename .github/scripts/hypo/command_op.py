@@ -291,12 +291,12 @@ class CommandOperation:
         self.logger.info(f'do_trash_list succeed')
         return tuple(li)
     
-    def do_restore(self, index, put_back, user='root'):
+    def do_restore(self, put_back, threads, user='root'):
         abspath = os.path.join(self.mp, '.trash')
         try:
-            li =  os.listdir(abspath)
+            li = os.listdir(abspath)
             for trash_dir in li:
-                cmd = f'sudo -u {user} ./juicefs restore {trash_dir}'
+                cmd = f'sudo -u {user} ./juicefs restore {trash_dir} --threads {threads}'
                 if put_back:
                     cmd += ' --put-back'
                 self.run_cmd(cmd)
@@ -323,10 +323,10 @@ class CommandOperation:
         self.logger.info(f'do_trash_restore succeed')
         return restored_path
     
-    def do_compact(self, entry, thread, user):
+    def do_compact(self, entry, threads, user):
         path = os.path.join(self.root_dir, entry)
         try:
-            self.run_cmd(f'sudo -u {user} ./juicefs compact {path} --thread {thread}')
+            self.run_cmd(f'sudo -u {user} ./juicefs compact {path} --threads {threads}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_compact', path, user=user)
         self.stats.success('do_compact')
