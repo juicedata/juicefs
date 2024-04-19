@@ -181,6 +181,7 @@ class CommandOperation:
         cmd += f' --skip-trash' if skip_trash else ''
         cmd += f' --keep-secret-key' if keep_secret_key else ''
         cmd += f' --threads {threads}'
+        cmd += f' --log-level error'
         return cmd
 
     def do_dump_load_dump(self, folder, fast=False, skip_trash=False, threads=1, keep_secret_key=False, user='root'):
