@@ -1,5 +1,5 @@
 import unittest
-from . import cmd 
+from command import JuicefsCommandMachine
 
 class TestCommand(unittest.TestCase):
     def test_dump(self):
@@ -19,6 +19,14 @@ class TestCommand(unittest.TestCase):
         folders_0 = state.init_folders()
         files_2 = state.create_file(content=b'0', file_name='mvvd', mode='a', parent=folders_0, umask=293, user='root')
         state.info(entry=folders_0, raw=True, recuisive=True, user='user1')
+        state.teardown()
+
+    def skip_test_clone(self):
+        state = JuicefsCommandMachine()
+        v1 = state.init_folders()
+        v2 = state.create_file(content=b'\x9bcR\xba', file_name='ygbl', mode='x', parent=v1, umask=466, user='root')
+        state.chmod(entry=v1, mode=715, user='root')
+        state.clone(entry=v2, new_entry_name='drqj', parent=v1, preserve=False, user='user1')
         state.teardown()
 
 if __name__ == '__main__':

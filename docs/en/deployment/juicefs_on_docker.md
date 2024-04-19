@@ -1,48 +1,41 @@
 ---
-title: Use JuiceFS on Docker
+title: Using JuiceFS in Docker
 sidebar_position: 6
 slug: /juicefs_on_docker
-description: Different ways to use JuiceFS in Docker, including bind mount and Docker volume plugin, and mount inside container.
+description: Using JuiceFS in Docker in different ways, including volume mapping, volume plugin, and mounting in containers.
 ---
 
-The simplest way would be using bind mount, you can directly mount JuiceFS into container using `-v`. Note that if host mount point isn't created by root, you'll have to enable [`allow_other`](../reference/fuse_mount_options.md#allow_other) to allow access inside container.
+You can use the JuiceFS file system in Docker by running the client directly in the container or using a volume plugin.
 
-```shell
-docker run -d --name nginx \
-  -v /jfs/html:/usr/share/nginx/html \
-  -p 8080:80 \
-  nginx
-```
+## Using a volume plugin {#volume-plugin}
 
-If you wish to control mount points using Docker, so that different application containers may use different JuiceFS file systems, you can use our [Docker volume plugin](https://github.com/juicedata/docker-volume-juicefs).
+If you have specific requirements for mount management, such as managing mount points through Docker to facilitate different application containers using different JuiceFS file systems, you can use a [Docker volume plugin](https://github.com/juicedata/docker-volume-juicefs).
 
-## Docker volume plugin {#volume-plugin}
+Docker plugins are usually provided in the form of images. The [JuiceFS volume plugin image](https://hub.docker.com/r/juicedata/juicefs) contains the [JuiceFS Community Edition](../introduction/README.md) and [JuiceFS Cloud Service](https://juicefs.com/docs/cloud) clients. After installation, you can run the volume plugin to create JuiceFS volumes in Docker.
 
-Every Docker plugin itself is a Docker image, and [JuiceFS Docker volume plugin image](https://hub.docker.com/r/juicedata/juicefs) is packed with [JuiceFS Community Edition](../introduction/README.md) as well as [JuiceFS Cloud Service](https://juicefs.com/docs/cloud) clients, after installation, you'll be able to run this plugin, and create JuiceFS Volume inside Docker.
-
-Install the plugin with the following command, grant permissions when asked:
+Install the plugin using the following command and provide the necessary permissions for FUSE as prompted:
 
 ```shell
 docker plugin install juicedata/juicefs
 ```
 
-You can manage volume plugin with the following commands:
+You can use the following commands to manage the volume plugin:
 
 ```shell
-# Disable the volume plugin
+# Disable the plugin
 docker plugin disable juicedata/juicefs
 
-# Upgrade plugin (need to disable first)
+# Upgrade the plugin (must be disabled first)
 docker plugin upgrade juicedata/juicefs
 docker plugin enable juicedata/juicefs
 
-# Uninstall plugin
+# Remove the plugin
 docker plugin rm juicedata/juicefs
 ```
 
 ### Create a storage volume {#create-volume}
 
-In the following command, replace `<VOLUME_NAME>`, `<META_URL>`, `<STORAGE_TYPE>`, `<BUCKET_NAME>`, `<ACCESS_KEY>`, `<SECRET_KEY>` accordingly.
+Replace `<VOLUME_NAME>`, `<META_URL>`, `<STORAGE_TYPE>`, `<BUCKET_NAME>`, `<ACCESS_KEY>`, and `<SECRET_KEY>` in the following command with your own file system configuration:
 
 ```shell
 docker volume create -d juicedata/juicefs \
@@ -55,7 +48,7 @@ docker volume create -d juicedata/juicefs \
   jfsvolume
 ```
 
-To use Docker volume plugin with existing JuiceFS volumes, simply specify the file system name and database address:
+For pre-created file systems, you only need to specify the file system name and database address when creating the volume plugin, for example:
 
 ```shell
 docker volume create -d juicedata/juicefs \
@@ -64,118 +57,180 @@ docker volume create -d juicedata/juicefs \
   jfsvolume
 ```
 
-If you need to pass extra environment variables to the mount process (e.g. [Google Cloud](../reference/how_to_set_up_object_storage.md#google-cloud)), append them as `-o env=FOO=bar,SPAM=egg`.
+If you need to pass additional environment variables when mounting the file system, such as in [Google Cloud](../reference/how_to_set_up_object_storage.md#google-cloud), you can append parameters similar to `-o env=FOO=bar,SPAM=egg` to the above command.
 
 ### Usage and management {#usage-and-management}
 
 ```shell
-# Mount the volume in container
+# Mount the volume when creating a container
 docker run -it -v jfsvolume:/opt busybox ls /opt
 
-# After a volume has been unmounted, delete using the following command
-# Deleting a volume only remove the relevant resources from Docker, which doesn't affect data stored in JuiceFS
+# After unmounting, you can delete the storage volume. Note that this only deletes the corresponding resources in Docker and does not affect the data stored in JuiceFS.
 docker volume rm jfsvolume
 ```
 
-### Using Docker Compose {#using-docker-compose}
+### Using the plugin in Docker Compose {#using-plugin-in-docker-compose}
 
-Example for creating and mounting JuiceFS volume with `docker-compose`:
+Here is an example of using the JuiceFS volume plugin in `docker-compose`:
 
 ```yaml
 version: '3'
 services:
-busybox:
-  image: busybox
-  command: "ls /jfs"
-  volumes:
-    - jfsvolume:/jfs
+  busybox:
+    image: busybox
+    command: "ls /jfs"
+    volumes:
+      - jfsvolume:/jfs
+      
 volumes:
   jfsvolume:
     driver: juicedata/juicefs
     driver_opts:
       name: ${VOL_NAME}
-      # Because SQLite creates DB files in a local path of the plugin container,
-      # sqlite:// will be failed on services restarting.
-      # (Details in https://github.com/juicedata/docker-volume-juicefs/issues/37)
+      # SQLite creates the database file in the plugin container's local path,
+      # and sqlite:// will fail when the service is restarted.
+      # (See https://github.com/juicedata/docker-volume-juicefs/issues/37 for details)
       metaurl: ${META_URL}
       storage: ${STORAGE_TYPE}
       bucket: ${BUCKET}
       access-key: ${ACCESS_KEY}
       secret-key: ${SECRET_KEY}
-      # Pass extra environment variables using env
+      # If necessary, you can pass additional environment variables using env
       # env: FOO=bar,SPAM=egg
 ```
 
-Common management commands:
+Usage and management:
 
 ```shell
 # Start the service
 docker-compose up
 
-# Shut down the service and remove Docker volumes
+# Stop the service and unmount the JuiceFS file system from Docker
 docker-compose down --volumes
 ```
 
-### Troubleshooting {#troubleshooting}
+### Troubleshooting the volume plugin {#troubleshooting}
 
-If JuiceFS Docker volume plugin is not working properly, it's recommend to [upgrade the volume plugin](#volume-plugin) first, and then check logs to debug.
+If it is not working properly, it is recommended to first [upgrade the volume plugin](#volume-plugin), and then check the logs based on the problem.
 
-* Collect JuiceFS Client logs, which is inside the Docker volume plugin container itself:
+* Collect JuiceFS client logs. The logs are located inside the Docker volume plugin container and need to be accessed by entering the container:
 
   ```shell
-  # locate the docker plugins runtime directory, your environment may differ from below example
-  # container directories will be printed, directory name is container ID
+  # Confirm the docker plugins runtime directory, which may be different from the example below depending on the actual situation
+  # The directory printed by ls is the container directory, and the name is the container ID
   ls /run/docker/plugins/runtime-root/plugins.moby
 
-  # print plugin container info
-  # if container list is empty, that means plugin container didn't start properly
-  # read the next step to continue debugging
+  # Print plugin container information
+  # If the printed container list is empty, it means that the plugin container failed to be created
+  # Read the plugin startup log below to continue troubleshooting
   runc --root /run/docker/plugins/runtime-root/plugins.moby list
 
-  # collect log inside plugin container
+  # Enter the container and print the log
   runc --root /run/docker/plugins/runtime-root/plugins.moby exec 452d2c0cf3fd45e73a93a2f2b00d03ed28dd2bc0c58669cca9d4039e8866f99f cat /var/log/juicefs.log
   ```
 
-  If it is found that the container doesn't exist (`ls` found that the directory is empty), or that `juicefs.log` doesn't exist, this usually indicates a bad mount, check plugin logs to further debug.
+  If the container does not exist (`ls` finds an empty directory) or the `juicefs.log` does not exist in the final log printing stage, it is likely that the mount itself failed. Continue to check the plugin's own logs to find the cause.
 
-* Collect plugin log, for example under systemd:
+* Collect plugin logs, using systemd as an example:
 
   ```shell
   journalctl -f -u docker | grep "plugin="
   ```
 
-  `juicefs` is called to perform the actual mount inside the plugin container, if any error occurs, it will be shown in the Docker daemon logs, same when there's error with the volume plugin itself.
+  If there is an error when the plugin calls `juicefs` or if the plugin itself reports an error, it will be reflected in the logs.
 
-## Using JuiceFS in a Docker Container {#mount-juicefs-in-docker}
+## Using the JuiceFS client in containers {#mount-juicefs-in-docker}
 
-Mounting JuiceFS in a Docker container usually serves two purposes, one is to provide storage for the applications in the container, and the other is to map the mount point inside container to the host.
+Compared to the volume plugin, using the JuiceFS client directly in the container is more flexible. You can directly mount the JuiceFS file system in the container or access it through S3 Gateway or WebDAV.
 
-The official maintained image of JuiceFS, [`juicedata/mount`](https://hub.docker.com/r/juicedata/mount), you can specify the desired version by using tags.
+### Method 1: Build your own image
 
-The tag for **the Community Edition is "ce"**, for example: latest, ce-v1.1.0, ce-nightly.
+The JuiceFS client is a standalone binary program that provides versions for both AMD64 and ARM64 architectures. You can define the command to download and install the JuiceFS client in the Dockerfile, for example:
 
-The `latest` tag only contains the latest version of the Community Edition. The `nightly` tag points to the latest development version. For more details, please check the [tags page](https://hub.docker.com/r/juicedata/mount/tags) on Docker Hub.
+```Dockerfile
+FROM ubuntu:22.04
+...
+# Use the official one-click installation script
+RUN curl -sSL https://d.juicefs.com/install | sh - 
+```
 
-For example, to create a JuiceFS volume using the community edition:
+For more information, see [Customizing Container Images](https://juicefs.com/docs/csi/guide/custom-image).
+
+### Method 2: Use the officially maintained image
+
+The JuiceFS officially maintained image [`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) is tagged to specify the desired version. **The community edition tags include `latest` and `ce`**, such as `ce-v1.1.2` and `ce-nightly`. The `latest` tag represents the latest community edition, and the `nightly` tag points to the latest development version. For details, see the [tags page](https://hub.docker.com/r/juicedata/mount/tags) on Docker Hub.
+
+Before you start, you need to prepare [object storage](../reference/how_to_set_up_object_storage.md) and [metadata engine](../reference/how_to_set_up_metadata_engine.md).
+
+#### Create a file system
+
+Create a file system through a temporary container, for example:
 
 ```sh
 docker run --rm \
-    juicedata/mount:ce-v1.1.0 juicefs format \
+    juicedata/mount:ce-v1.1.2 juicefs format \
     --storage s3 \
-    --bucket https://xxx.xxx.xxx \
+    --bucket https://xxx.your-s3-endpoint.com \
     --access-key=ACCESSKEY \
     --secret-key=SECRETKEY \
-    ...
-    redis://127.0.0.1/1 myjfs
+    rediss://user:password@xxx.your-redis-server.com:6379/1 myjfs
 ```
 
-Mount this volume:
+Replace `--storage`, `--bucket`, `--access-key`, `--secret-key`, and the metadata engine URL with your own configuration.
+
+#### Mount the file system directly in the container
+
+Create a container and mount the JuiceFS file system in the container, for example:
 
 ```sh
-docker run --name myjfs -d \
-    juicedata/mount:ce-v1.1.0 juicefs mount \
-    ...
-    redis://127.0.0.1/1 myjfs /mnt
+docker run --privileged --name myjfs \
+    juicedata/mount:ce-v1.1.2 juicefs mount \
+    rediss://user:password@xxx.your-redis-server.com:6379/1 /mnt
 ```
 
-In addition, you can also write your own Dockerfile to package the JuiceFS client into the image, refer to [Customize Container Image](https://juicefs.com/docs/csi/guide/custom-image).
+Replace the metadata engine URL with your own configuration. `/mnt` is the mount point and can be modified as needed. Since FUSE is used, `--privileged` permission is also required.
+
+#### Mount the file system through Docker Compose
+
+Here is an example using Docker Compose. Replace the metadata engine URL and mount point with your own configuration.
+
+```yaml
+version: "3"
+services:
+    juicefs:
+      image: juicedata/mount:ce-v1.1.2
+      container_name: myjfs
+      volumes:
+        - ./mnt:/mnt:rw,rshared
+      cap_add:
+        - SYS_ADMIN
+      devices:
+        - /dev/fuse
+      security_opt: 
+        - apparmor:unconfined
+      command: ["juicefs", "mount", "rediss://user:password@xxx.your-redis-server.com:6379/1", "/mnt"]
+      restart: unless-stopped
+```
+
+In the container, the JuiceFS file system is mounted to the `/mnt` directory, and the volumes section in the configuration file maps the `/mnt` in the container to the `./mnt` directory on the host, allowing direct access to the JuiceFS file system mounted in the container from the host.
+
+#### Access the file system through S3 Gateway
+
+Here is an example of exposing JuiceFS for access through S3 Gateway. Replace `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, the metadata engine URL, and the address and port number to listen on with your own configuration.
+
+```yaml
+version: "3"
+services:
+    s3-gateway:
+      image: juicedata/mount:ce-v1.1.2
+      container_name: juicefs-s3-gateway
+      environment:
+        - MINIO_ROOT_USER=your-username
+        - MINIO_ROOT_PASSWORD=your-password
+      ports:
+        - "9090:9090"
+      command: ["juicefs", "gateway", "rediss://user:password@xxx.your-redis-server.com:6379/1", "0.0.0.0:9090"]
+      restart: unless-stopped
+```
+
+Use port `9090` on the host to access the S3 Gateway console, and use the same address to read and write the JuiceFS file system through the S3 client or SDK.

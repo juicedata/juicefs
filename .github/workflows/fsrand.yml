@@ -103,7 +103,7 @@ jobs:
           else
             PROFILE='pull_request'
           fi
-          sudo -E PROFILE=${PROFILE} python3 .github/scripts/hypo/fs.py 2>&1 | tee fsrand.log
+          sudo -E PROFILE=${PROFILE} LOG_LEVEL=WARNING python3 .github/scripts/hypo/fs.py 2>&1 | tee fsrand.log
           exit ${PIPESTATUS[0]}
 
       - name: check fsrand.log

@@ -34,6 +34,7 @@ from strategy import *
 from fs_op import FsOperation
 from command_op import CommandOperation
 from fs import JuicefsMachine
+import common
 
 SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
 
@@ -47,11 +48,23 @@ class JuicefsCommandMachine(JuicefsMachine):
     Entries = Files | Folders
     MP1 = '/tmp/jfs1'
     MP2 = '/tmp/jfs2'
+    ROOT_DIR1=os.path.join(MP1, 'fsrand')
+    ROOT_DIR2=os.path.join(MP2, 'fsrand')
     EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file']
     # EXCLUDE_RULES = []
     INCLUDE_RULES = ['dump_load_dump', 'mkdir', 'create_file', 'set_xattr']
-    cmd1 = CommandOperation('cmd1', mp=MP1)
-    cmd2 = CommandOperation('cmd2', mp=MP2)
+    cmd1 = CommandOperation('cmd1', MP1, ROOT_DIR1)
+    cmd2 = CommandOperation('cmd2', MP2, ROOT_DIR2)
+    fsop1 = FsOperation('fs1', ROOT_DIR1)
+    fsop2 = FsOperation('fs2', ROOT_DIR2)
+    def __init__(self):
+        super().__init__()
+        
+    def get_default_rootdir1(self):
+        return os.path.join(self.MP1, 'fsrand')
+    
+    def get_default_rootdir2(self):
+        return os.path.join(self.MP2, 'fsrand')
 
     def equal(self, result1, result2):
         if type(result1) != type(result2):
@@ -59,26 +72,16 @@ class JuicefsCommandMachine(JuicefsMachine):
         if isinstance(result1, Exception):
             if 'panic:' in str(result1) or 'panic:' in str(result2):
                 return False
-            r1 = str(result1).replace(self.MP1, '')
-            r2 = str(result2).replace(self.MP2, '')
-            return r1 == r2
-        elif isinstance(result1, str):
-            r1 = str(result1).replace(self.MP1, '')
-            r2 = str(result2).replace(self.MP2, '')
-            return r1 == r2
-        elif isinstance(result1, tuple):
-            r1 = [str(item).replace(self.MP1, '') for item in result1]
-            r2 = [str(item).replace(self.MP2, '') for item in result2]
-            return r1 == r2
-        else:
-            return  result1 == result2
+            result1 = str(result1)
+            result2 = str(result2)
+        result1 = common.replace(result1, self.MP1, '***')
+        result2 = common.replace(result2, self.MP2, '***')
+        print(f'result1 is {result1}\nresult2 is {result2}')
+        return result1 == result2
 
     def get_client_version(self, mount):
         output = run_cmd(f'{mount} version')
         return output.split()[2]
-
-    def __init__(self):
-        super().__init__()
 
     def should_run(self, rule):
         if len(self.EXCLUDE_RULES) > 0:
@@ -187,6 +190,7 @@ class JuicefsCommandMachine(JuicefsMachine):
         result1 = self.cmd1.do_dump_load_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
         result2 = self.cmd2.do_dump_load_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
         print(result1)
+        print(result2)
         result1 = self.clean_dump(result1)
         result2 = self.clean_dump(result2)
         d=self.diff(result1, result2)

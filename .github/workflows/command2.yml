@@ -1,0 +1,122 @@
+name: "command-random-test"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - '.github/scripts/command/random.sh'
+      - '.github/scripts/hypo/command*.py'
+      - '**/command2.yml'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - '.github/scripts/command/random.sh'
+      - '.github/scripts/hypo/command*.py'
+      - '**/command2.yml'
+  schedule:
+    - cron:  '30 20 * * *'
+
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+jobs:
+  build-matrix:
+    runs-on: ubuntu-20.04
+    steps:
+      - id: set-matrix
+        run: |
+          echo "github.event_name is ${{github.event_name}}"
+          echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
+          if [ "${{github.event_name}}" == "schedule"  ]; then
+            echo 'meta_matrix=["sqlite3", "mysql", "tikv", "tidb", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
+          elif [ "${{github.event_name}}" == "pull_request"  ]; then
+            echo 'meta_matrix=["sqlite3", "tikv"]' >> $GITHUB_OUTPUT
+          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
+            echo 'meta_matrix=["sqlite3", "tikv"]' >> $GITHUB_OUTPUT
+          else
+            echo 'meta_matrix=["sqlite3", "tikv"]' >> $GITHUB_OUTPUT
+          fi
+    outputs:
+      meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
+
+  test:
+    needs: [build-matrix]
+    strategy:
+      fail-fast: false
+      matrix:
+        meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Set Variable
+        id: vars
+        run: |
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
+          else
+            echo "target=juicefs" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build
+        uses: ./.github/actions/build
+        with: 
+          target: ${{steps.vars.outputs.target}}
+
+      - name: Run Example
+        timeout-minutes: 60
+        run: |
+          sudo META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_examples
+      
+      - name: Run All
+        timeout-minutes: 60
+        run: |
+          sudo META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all
+  
+      - name: Log
+        if: always()
+        run: |
+          echo "juicefs log"
+          sudo tail -n 1000 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
+      - name: Send Slack Notification
+        if: failure() && github.event_name != 'workflow_dispatch'
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Success
+        if: success()
+        run: echo "All Done"
