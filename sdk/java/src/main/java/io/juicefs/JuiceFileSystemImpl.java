@@ -63,6 +63,8 @@ import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /****************************************************************
  * Implement the FileSystem API for JuiceFS
@@ -106,6 +108,9 @@ public class JuiceFileSystemImpl extends FileSystem {
   private Method setStorageIds;
   private String[] storageIds;
   private Random random = new Random();
+
+  private static final String USERNAME_UID_PATTERN = "[a-zA-Z0-9_-]+:[0-9]+";
+  private static final String GROUPNAME_GID_USERNAMES_PATTERN = "[a-zA-Z0-9_-]+:[0-9]+:[,a-zA-Z0-9_-]+";
 
   /*
     go call back
@@ -508,13 +513,29 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
   }
 
+  private String parseUidAndGrouping(String pattern, String input) {
+    String result = null;
+    if (input == null || "".equals(input.trim())) {
+      return result;
+    }
+    List<String> matched = new ArrayList<>();
+    Matcher matcher = Pattern.compile(pattern).matcher(input);
+    while (matcher.find()) {
+      matched.add(matcher.group());
+    }
+    if (matched.size() > 0) {
+      result = String.join("\n", matched);
+    }
+    return result;
+  }
+
   private void updateUidAndGrouping(String uidFile, String groupFile) throws IOException {
-    String uidstr = null;
-    if (uidFile != null && !"".equals(uidFile.trim())) {
+    String uidstr = parseUidAndGrouping(USERNAME_UID_PATTERN, uidFile);
+    if (uidstr == null && uidFile != null && !"".equals(uidFile.trim())) {
       uidstr = readFile(uidFile);
     }
-    String grouping = null;
-    if (groupFile != null && !"".equals(groupFile.trim())) {
+    String grouping = parseUidAndGrouping(GROUPNAME_GID_USERNAMES_PATTERN, groupFile);
+    if (grouping == null && groupFile != null && !"".equals(groupFile.trim())) {
       grouping = readFile(groupFile);
     }
 

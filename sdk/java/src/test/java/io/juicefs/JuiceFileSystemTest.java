@@ -751,6 +751,29 @@ public class JuiceFileSystemTest extends TestCase {
     fooFs.delete(f, false);
   }
 
+  public void testGuidMappingFromString() throws Exception {
+    Configuration newConf = new Configuration(cfg);
+
+    newConf.set("juicefs.users", "bar:10000;foo:20000;baz:30000");
+    newConf.set("juicefs.groups", "user:1000:foo,bar;admin:2000:baz");
+    newConf.set("juicefs.superuser", UserGroupInformation.getCurrentUser().getShortUserName());
+
+    FileSystem fooFs = createNewFs(newConf, "foo", new String[]{"nogrp"});
+    Path f = new Path("/test_foo");
+    fooFs.create(f).close();
+    fooFs.setOwner(f, "foo", "user");
+    assertEquals("foo", fooFs.getFileStatus(f).getOwner());
+    assertEquals("user", fooFs.getFileStatus(f).getGroup());
+
+    newConf.set("juicefs.users", "foo:20001");
+    newConf.set("juicefs.groups", "user:1001:foo,bar;admin:2001:baz");
+    FileSystem newFS = FileSystem.newInstance(newConf);
+    assertEquals("20000", fooFs.getFileStatus(f).getOwner());
+    assertEquals("1000", fooFs.getFileStatus(f).getGroup());
+
+    fooFs.delete(f, false);
+  }
+
   public void testTrash() throws Exception {
     Trash trash = new Trash(fs, cfg);
     Path trashFile = new Path("/tmp/trashfile");
