@@ -100,8 +100,11 @@ start_meta_engine(){
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
     elif [ "$meta" == "mariadb" ]; then
-        docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
-        sleep 10
+        if lsof -i:3306; then
+            echo "mariadb is already running"
+        else
+            docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
+            sleep 10
     elif [ "$meta" == "tidb" ]; then
         retry install_tidb
         mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
@@ -124,7 +127,6 @@ start_meta_engine(){
         mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;"
     elif [ "$meta" == "postgres" ]; then
         echo "start postgres"
-        lsof -i:5432
         if lsof -i:5432; then
             echo "postgres is already running"
         else

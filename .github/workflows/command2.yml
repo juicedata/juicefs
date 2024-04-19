@@ -80,6 +80,16 @@ jobs:
         run: |
           sudo META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_examples
       
+      - name: Remove unused software
+        run: |
+            echo "before remove unused software"
+            sudo df -h
+            sudo rm -rf /usr/share/dotnet
+            sudo rm -rf /usr/local/lib/android
+            sudo rm -rf /opt/ghc
+            echo "after remove unused software"
+            sudo df -h
+
       - name: Run All
         timeout-minutes: 60
         run: |

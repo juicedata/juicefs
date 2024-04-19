@@ -227,8 +227,8 @@ class JuicefsCommandMachine(JuicefsMachine):
     )
     @precondition(lambda self: self.should_run('compact'))
     def compact(self, entry, threads, user='root'):
-        result1 = self.cmd1.do_compact(entry=entry, thread=threads, user=user)
-        result2 = self.cmd2.do_compact(entry=entry, thread=threads, user=user)
+        result1 = self.cmd1.do_compact(entry=entry, threads=threads, user=user)
+        result2 = self.cmd2.do_compact(entry=entry, threads=threads, user=user)
         assert self.equal(result1, result2), f'\033[31mcompact:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
