@@ -438,8 +438,10 @@ func (s *wSlice) upload(indx int) {
 		if s.store.conf.Writeback {
 			stagingPath, err := s.store.bcache.stage(key, block.Data, s.store.shouldCache(blen))
 			if err != nil {
-				s.store.stageBlockErrors.Add(1)
-				logger.Warnf("write %s to disk: %s, upload it directly", stagingPath, err)
+				if !errors.Is(err, errStageConcurrency) {
+					s.store.stageBlockErrors.Add(1)
+					logger.Warnf("write %s to disk: %s, upload it directly", stagingPath, err)
+				}
 			} else {
 				s.errors <- nil
 				if s.store.conf.UploadDelay == 0 && s.store.canUpload() {
@@ -538,6 +540,7 @@ type Config struct {
 	AutoCreate        bool
 	Compress          string
 	MaxUpload         int
+	MaxStageWrite     int
 	MaxRetries        int
 	UploadLimit       int64 // bytes per second
 	DownloadLimit     int64 // bytes per second
@@ -563,10 +566,16 @@ func (c *Config) SelfCheck(uuid string) {
 		}
 		c.CacheDir = "memory"
 	}
-	if !c.Writeback && (c.UploadDelay > 0 || c.UploadHours != "") {
-		logger.Warnf("delayed upload is disabled in non-writeback mode")
-		c.UploadDelay = 0
-		c.UploadHours = ""
+	if !c.Writeback {
+		if c.UploadDelay > 0 || c.UploadHours != "" {
+			logger.Warnf("delayed upload is disabled in non-writeback mode")
+			c.UploadDelay = 0
+			c.UploadHours = ""
+		}
+		if c.MaxStageWrite > 0 {
+			logger.Warnf("max-stage-write is disabled in non-writeback mode")
+			c.MaxStageWrite = 0
+		}
 	}
 	if _, _, err := c.parseHours(); err != nil {
 		logger.Warnf("invalid value (%s) for upload-hours: %s", c.UploadHours, err)

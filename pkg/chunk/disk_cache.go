@@ -45,12 +45,15 @@ import (
 )
 
 var (
-	stagingDir   = "rawstaging"
-	cacheDir     = "raw"
-	maxIODur     = time.Second * 20
-	maxIOErrors  = 10
-	errNotCached = errors.New("not cached")
-	errCacheDown = errors.New("cache down")
+	stagingDir          = "rawstaging"
+	cacheDir            = "raw"
+	maxIODur            = time.Second * 20
+	maxIOErrors         = 10
+	stagingBlocks       atomic.Int64
+	errNotCached        = errors.New("not cached")
+	errCacheDown        = errors.New("cache down")
+	errStageFull        = errors.New("space not enough on device")
+	errStageConcurrency = errors.New("concurrent staging limit reached")
 )
 
 type cacheKey struct {
@@ -75,16 +78,17 @@ type cacheStore struct {
 	id         string
 	totalPages int64
 	sync.Mutex
-	dir          string
-	mode         os.FileMode
-	capacity     int64
-	freeRatio    float32
-	hashPrefix   bool
-	scanInterval time.Duration
-	cacheExpire  time.Duration
-	pending      chan pendingFile
-	pages        map[string]*Page
-	m            *cacheManagerMetrics
+	dir           string
+	mode          os.FileMode
+	maxStageWrite int
+	capacity      int64
+	freeRatio     float32
+	hashPrefix    bool
+	scanInterval  time.Duration
+	cacheExpire   time.Duration
+	pending       chan pendingFile
+	pages         map[string]*Page
+	m             *cacheManagerMetrics
 
 	used      int64
 	keys      map[cacheKey]cacheItem
@@ -108,21 +112,22 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingP
 		config.FreeSpace = 0.1 // 10%
 	}
 	c := &cacheStore{
-		m:            m,
-		dir:          dir,
-		mode:         config.CacheMode,
-		capacity:     cacheSize,
-		freeRatio:    config.FreeSpace,
-		eviction:     config.CacheEviction,
-		checksum:     config.CacheChecksum,
-		hashPrefix:   config.HashPrefix,
-		scanInterval: config.CacheScanInterval,
-		cacheExpire:  config.CacheExpire,
-		keys:         make(map[cacheKey]cacheItem),
-		pending:      make(chan pendingFile, pendingPages),
-		pages:        make(map[string]*Page),
-		uploader:     uploader,
-		opTs:         make(map[time.Duration]func() error),
+		m:             m,
+		dir:           dir,
+		mode:          config.CacheMode,
+		capacity:      cacheSize,
+		maxStageWrite: config.MaxStageWrite,
+		freeRatio:     config.FreeSpace,
+		eviction:      config.CacheEviction,
+		checksum:      config.CacheChecksum,
+		hashPrefix:    config.HashPrefix,
+		scanInterval:  config.CacheScanInterval,
+		cacheExpire:   config.CacheExpire,
+		keys:          make(map[cacheKey]cacheItem),
+		pending:       make(chan pendingFile, pendingPages),
+		pages:         make(map[string]*Page),
+		uploader:      uploader,
+		opTs:          make(map[time.Duration]func() error),
 	}
 	c.createDir(c.dir)
 	br, fr := c.curFreeRatio()
@@ -551,8 +556,12 @@ func (cache *cacheStore) remove(key string) {
 	}
 	cache.Unlock()
 	if path != "" {
-		_ = cache.removeFile(path)
-		_ = cache.removeStage(key)
+		if err := cache.removeFile(path); err != nil && !os.IsNotExist(err) {
+			logger.Warnf("remove %s failed: %s", path, err)
+		}
+		if err := cache.removeStage(key); err != nil && !os.IsNotExist(err) {
+			logger.Warnf("remove %s failed: %s", cache.stagePath(key), err)
+		}
 	}
 }
 
@@ -645,12 +654,18 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string, error) {
 	stagingPath := cache.stagePath(key)
 	if cache.stageFull {
-		return stagingPath, errors.New("space not enough on device")
+		return stagingPath, errStageFull
 	}
+	if cache.maxStageWrite != 0 && stagingBlocks.Load() > int64(cache.maxStageWrite) {
+		return stagingPath, errStageConcurrency
+	}
+	stagingBlocks.Add(1)
+	defer stagingBlocks.Add(-1)
 	err := cache.flushPage(stagingPath, data)
 	if err == nil {
 		cache.m.stageBlocks.Add(1)
 		cache.m.stageBlockBytes.Add(float64(len(data)))
+		cache.m.stageWriteBytes.Add(float64(len(data)))
 		if cache.capacity > 0 && keepCache {
 			path := cache.cachePath(key)
 			cache.createDir(filepath.Dir(path))
@@ -845,7 +860,7 @@ func (cache *cacheStore) scanCached() {
 
 	cache.Lock()
 	cache.scanned = true
-	logger.Debugf("Found %d cached blocks (%d bytes) in %s with %s", len(cache.keys), cache.used, cache.dir, time.Since(start))
+	logger.Debugf("Found %d cached blocks (%s) in %s with %s", len(cache.keys), humanize.IBytes(uint64(cache.used)), cache.dir, time.Since(start))
 	cache.Unlock()
 }
 
