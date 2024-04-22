@@ -204,23 +204,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 
 func (s *rSlice) delete(indx int) error {
 	key := s.key(indx)
-	st := time.Now()
-	var reqID string
-	err := utils.WithTimeout(func() error {
-		return s.store.storage.Delete(key, object.WithRequestID(&reqID))
-	}, s.store.conf.PutTimeout)
-	used := time.Since(st)
-	if err != nil && (strings.Contains(err.Error(), "NoSuchKey") ||
-		strings.Contains(err.Error(), "not found") ||
-		strings.Contains(err.Error(), "No such file")) {
-		err = nil
-	}
-	logRequest("DELETE", key, "", reqID, err, used)
-	s.store.objectReqsHistogram.WithLabelValues("DELETE", "").Observe(used.Seconds())
-	if err != nil {
-		s.store.objectReqErrors.Add(1)
-	}
-	return err
+	return s.store.delete(key)
 }
 
 func (s *rSlice) Remove() error {
@@ -362,6 +346,26 @@ func (store *cachedStore) put(key string, p *Page) error {
 		}
 		return err
 	}, store.conf.PutTimeout)
+}
+
+func (store *cachedStore) delete(key string) error {
+	st := time.Now()
+	var reqID string
+	err := utils.WithTimeout(func() error {
+		return store.storage.Delete(key, object.WithRequestID(&reqID))
+	}, store.conf.PutTimeout)
+	used := time.Since(st)
+	if err != nil && (strings.Contains(err.Error(), "NoSuchKey") ||
+		strings.Contains(err.Error(), "not found") ||
+		strings.Contains(err.Error(), "No such file")) {
+		err = nil
+	}
+	logRequest("DELETE", key, "", reqID, err, used)
+	store.objectReqsHistogram.WithLabelValues("DELETE", "").Observe(used.Seconds())
+	if err != nil {
+		store.objectReqErrors.Add(1)
+	}
+	return err
 }
 
 func (store *cachedStore) upload(key string, block *Page, s *wSlice) error {
@@ -947,10 +951,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	blen := parseObjOrigSize(key)
 	f, err := openCacheFile(stagingPath, blen, store.conf.CacheChecksum)
 	if err != nil {
-		store.pendingMutex.Lock()
-		_, ok = store.pendingKeys[key]
-		store.pendingMutex.Unlock()
-		if ok {
+		if store.isPendingValid(key) {
 			logger.Errorf("Open staging file %s: %s", stagingPath, err)
 		} else {
 			logger.Debugf("Key %s is not needed, drop it", key)
@@ -965,13 +966,23 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		logger.Errorf("Read staging file %s: %s", stagingPath, err)
 		return
 	}
+	if !store.isPendingValid(key) {
+		block.Release()
+		logger.Debugf("Key %s is not needed, drop it", key)
+		return
+	}
 
 	store.stageBlockDelay.Add(time.Since(item.ts).Seconds())
 	if err = store.upload(key, block, nil); err == nil {
-		store.bcache.uploaded(key, blen)
-		store.removePending(key)
-		if err := store.bcache.removeStage(key); err != nil {
-			logger.Warnf("failed to remove stage %s, in upload staging file", stagingPath)
+		if !store.isPendingValid(key) { // Delete leaked objects if it's already deleted by other goroutines
+			err := store.delete(key)
+			logger.Infof("Key %s is not needed, abandoned, err: %v", key, err)
+		} else {
+			store.bcache.uploaded(key, blen)
+			store.removePending(key)
+			if err := store.bcache.removeStage(key); err != nil {
+				logger.Warnf("failed to remove stage %s, in upload staging file", stagingPath)
+			}
 		}
 	} else {
 		item.uploading = false
@@ -1005,6 +1016,13 @@ func (store *cachedStore) removePending(key string) {
 	store.pendingMutex.Lock()
 	delete(store.pendingKeys, key)
 	store.pendingMutex.Unlock()
+}
+
+func (store *cachedStore) isPendingValid(key string) bool {
+	store.pendingMutex.Lock()
+	defer store.pendingMutex.Unlock()
+	_, ok := store.pendingKeys[key]
+	return ok
 }
 
 func (store *cachedStore) scanDelayedStaging() {
