@@ -131,7 +131,7 @@ Read ["Sync Accounts between Multiple Hosts"](administration/sync_accounts_betwe
 
 ### Does JuiceFS Gateway support advanced features such as multi-user management?
 
-The built-in `gateway` subcommand of JuiceFS does not support functions such as multi-user management, and only provides basic S3 gateway functions. If you need to use these advanced features, please refer to the [documentation](deployment/s3_gateway.md#use-a-full-featured-s3-gateway).
+The built-in `gateway` subcommand of JuiceFS does not support functions such as multi-user management, and only provides basic S3 gateway functions. If you need to use these advanced features, please refer to the [documentation](guide/gateway.md).
 
 ### Is there currently an SDK available for JuiceFS?
 
