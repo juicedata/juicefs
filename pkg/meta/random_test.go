@@ -42,6 +42,11 @@ type tSlice struct {
 	len  uint32
 }
 
+type tQuota struct {
+	size   uint64
+	inodes uint64
+}
+
 type tNode struct {
 	name  string
 	inode Ino
@@ -55,10 +60,12 @@ type tNode struct {
 	iflags   uint8
 	length   uint64
 	parents  []*tNode
+	hardlink bool
 	chunks   map[uint32][]tSlice
 	children map[string]*tNode
 	target   string
 	xattrs   map[string][]byte
+	quota    *tQuota
 
 	accACL *aclAPI.Rule
 	defACL *aclAPI.Rule
@@ -132,6 +139,14 @@ func (m *fsMachine) Init(t *rapid.T) {
 	registerer := prometheus.WrapRegistererWithPrefix("juicefs_",
 		prometheus.WrapRegistererWith(prometheus.Labels{"mp": "virtual-mp", "vol_name": "test-vol"}, registry))
 	m.meta.InitMetrics(registerer)
+}
+
+func (m *fsMachine) genName(t *rapid.T) string {
+	name := rapid.StringN(1, 200, 255).Draw(t, "name")
+	name = strings.ReplaceAll(name, "|", "a") // FIXME: name can't contain '|'
+	name = strings.ReplaceAll(name, ".#", "aa")
+	name = strings.ReplaceAll(name, "\n", "a")
+	return name
 }
 
 func (m *fsMachine) Cleanup() {
@@ -274,6 +289,9 @@ func fsnodes_namecheck(name string) syscall.Errno {
 }
 
 func (m *fsMachine) link(parent Ino, name string, inode Ino) syscall.Errno {
+	if name == "." || name == ".." {
+		return syscall.EEXIST
+	}
 	n := m.nodes[inode]
 	if n == nil {
 		return syscall.ENOENT
@@ -301,6 +319,7 @@ func (m *fsMachine) link(parent Ino, name string, inode Ino) syscall.Errno {
 	// p.mtime = m.ctx.ts
 	// p.ctime = m.ctx.ts
 	n.parents = append(n.parents, p)
+	n.hardlink = true
 	p.children[name] = n
 	return 0
 }
@@ -604,9 +623,6 @@ func (m *fsMachine) copy_file_range(srcinode Ino, srcoff uint64, dstinode Ino, d
 	if src._type != TypeFile {
 		return syscall.EINVAL
 	}
-	if srcoff >= src.length {
-		return 0
-	}
 	dst := m.nodes[dstinode]
 	if dst == nil {
 		return syscall.ENOENT
@@ -633,6 +649,12 @@ func (m *fsMachine) copy_file_range(srcinode Ino, srcoff uint64, dstinode Ino, d
 			s.len -= len
 			off += uint64(len)
 		}
+	}
+	if srcoff >= src.length {
+		return 0
+	}
+	if srcoff+size > src.length {
+		size = src.length - srcoff
 	}
 	if dstoff+size > dst.length {
 		dst.length = dstoff + size
@@ -815,7 +837,12 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 	return 0
 }
 
-func (m *fsMachine) readdir(inode Ino) ([]*tNode, syscall.Errno) {
+type tEntry struct {
+	name string
+	node *tNode
+}
+
+func (m *fsMachine) readdir(inode Ino) ([]*tEntry, syscall.Errno) {
 	n := m.nodes[inode]
 	if n == nil {
 		return nil, syscall.ENOENT
@@ -823,10 +850,20 @@ func (m *fsMachine) readdir(inode Ino) ([]*tNode, syscall.Errno) {
 	if !n.access(m.ctx, MODE_MASK_R) {
 		return nil, syscall.EACCES
 	}
-	var result []*tNode
-	result = append(result, &tNode{name: ".", _type: TypeDirectory}, &tNode{name: "..", _type: TypeDirectory})
-	for _, node := range n.children {
-		result = append(result, node)
+	var result []*tEntry
+	result = append(result, &tEntry{
+		name: ".",
+		node: n,
+	}, &tEntry{
+		name: "..",
+		node: n.parents[0],
+	})
+
+	for name, node := range n.children {
+		result = append(result, &tEntry{
+			name: name,
+			node: node,
+		})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].name < result[j].name })
 	return result, 0
@@ -852,33 +889,6 @@ func (m *fsMachine) write(inode Ino, indx uint32, pos uint32, chunkid uint64, cl
 		n.length = uint64(indx)*ChunkSize + uint64(pos) + uint64(len)
 	}
 	return 0
-}
-
-func (m *fsMachine) append_file(inode Ino, srcinode Ino) syscall.Errno {
-	n := m.nodes[inode]
-	if n == nil {
-		return syscall.ENOENT
-	}
-	if n._type != TypeFile {
-		return syscall.EPERM
-	}
-	if !n.access(m.ctx, MODE_MASK_W) {
-		return syscall.EACCES
-	}
-	if inode == srcinode {
-		return syscall.EPERM
-	}
-	sn := m.nodes[srcinode]
-	if sn == nil {
-		return syscall.ENOENT
-	}
-	if sn._type != TypeFile {
-		return syscall.EPERM
-	}
-	if !sn.access(m.ctx, MODE_MASK_R) {
-		return syscall.EACCES
-	}
-	return m.copy_file_range(srcinode, 0, inode, n.length, sn.length, 0)
 }
 
 func (m *fsMachine) read(inode Ino, indx uint32) (uint64, []tSlice, syscall.Errno) {
@@ -1054,17 +1064,16 @@ func (m *fsMachine) Mknod(t *rapid.T) {
 	}
 }
 
-//func (m *fsMachine) Link(t *rapid.T) {
-//	parent := m.pickNode(t)
-//	name := rapid.StringN(1, 200, 255).Draw(t, "name")
-//	inode := m.pickNode(t)
-//	st := m.meta.Link(m.ctx, inode, parent, name, nil)
-//	st2 := m.link(parent, name, inode)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//}
-
+func (m *fsMachine) Link(t *rapid.T) {
+	parent := m.pickNode(t)
+	name := m.genName(t)
+	inode := m.pickNode(t)
+	st := m.meta.Link(m.ctx, inode, parent, name, nil)
+	st2 := m.link(parent, name, inode)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
 func (m *fsMachine) Rmdir(t *rapid.T) {
 	parent := m.pickNode(t)
 	name := m.pickChild(parent, t)
@@ -1226,6 +1235,7 @@ Due to concurrency issues, the execution result of rmr is unpredictable.
 		}
 	}
 */
+
 func (m *fsMachine) Readdir(t *rapid.T) {
 	inode := m.pickNode(t)
 	var names []string
@@ -1242,14 +1252,17 @@ func (m *fsMachine) Readdir(t *rapid.T) {
 		t.Fatalf("expect %s but got %s", st2, st)
 	}
 	var names2 []string
-	for _, node := range stdRes {
-		names2 = append(names2, node.name)
+	for _, entry := range stdRes {
+		names2 = append(names2, entry.name)
 	}
 	if st == 0 && !reflect.DeepEqual(names, names2) {
 		t.Fatalf("expect %+v but got %+v", names2, names)
 	}
 }
 
+// Truncate is currently disabled.
+// FIXME: The comparison of the truncate results requires compacting all slices,
+// and some tricky processing are required on results.
 //func (m *fsMachine) Truncate(t *rapid.T) {
 //	inode := m.pickNode(t)
 //	length := rapid.Uint64Range(0, 500<<20).Draw(t, "length")
@@ -1272,6 +1285,7 @@ func (m *fsMachine) Fallocate(t *rapid.T) {
 	}
 }
 
+// CopyFileRange is currently disabled, same reason as Truncate.
 //func (m *fsMachine) CopyFileRange(t *rapid.T) {
 //	srcinode := m.pickNode(t)
 //	srcoff := rapid.Uint64Max(m.nodes[srcinode].length).Draw(t, "srcoff")
@@ -1364,7 +1378,7 @@ func cleanupSlices(ss []tSlice) []tSlice {
 	return ss
 }
 
-func (m *fsMachine) Setxattr(t *rapid.T) {
+func (m *fsMachine) SetXAttr(t *rapid.T) {
 	inode := m.pickNode(t)
 	name := rapid.StringN(1, 200, XATTR_NAME_MAX+1).Draw(t, "name")
 	value := rapid.SliceOfN(rapid.Byte(), 0, XATTR_SIZE_MAX+1).Draw(t, "value")
@@ -1390,7 +1404,7 @@ const XATTR_REMOVE = 5
 const XATTR_NAME_MAX = 255
 const XATTR_SIZE_MAX = 65536
 
-func (m *fsMachine) Getxattr(t *rapid.T) {
+func (m *fsMachine) GetXAttr(t *rapid.T) {
 	inode := m.pickNode(t)
 	name := rapid.StringN(1, 200, XATTR_NAME_MAX+1).Draw(t, "name")
 	var value []byte
@@ -1404,7 +1418,7 @@ func (m *fsMachine) Getxattr(t *rapid.T) {
 	}
 }
 
-func (m *fsMachine) Listxattr(t *rapid.T) {
+func (m *fsMachine) ListXAttr(t *rapid.T) {
 	inode := m.pickNode(t)
 	var attrs []byte
 	st := m.meta.ListXattr(m.ctx, inode, &attrs)
@@ -1443,16 +1457,17 @@ func (m *fsMachine) checkFSTree(root Ino) error {
 		return fmt.Errorf("the results of reading the directory should have equal lengths. standard meta: %#v test meta: %#v", stdResult, result)
 	}
 	for i := 0; i < len(result); i++ {
-		stdNode := stdResult[i]
+		stdEntry := stdResult[i]
+		stdNode := stdEntry.node
 		entry := result[i]
-		if stdNode._type != entry.Attr.Typ {
-			return fmt.Errorf("type should equal ino: %d, standard meta: %d, test meta %d", entry.Inode, stdNode._type, entry.Attr.Typ)
+		if stdEntry.name == "." || stdEntry.name == ".." {
+			continue
 		}
-		if stdNode.name != string(entry.Name) {
+		if stdEntry.name != string(entry.Name) {
 			return fmt.Errorf("name should equal. ino %d standard meta: %s, test meta %s", stdNode.inode, stdNode.name, string(entry.Name))
 		}
-		if stdNode.name == "." || stdNode.name == ".." {
-			continue
+		if stdNode._type != entry.Attr.Typ {
+			return fmt.Errorf("type should equal ino: %d, standard meta: %d, test meta %d", entry.Inode, stdNode._type, entry.Attr.Typ)
 		}
 		switch entry.Attr.Typ {
 		case TypeDirectory:
@@ -1478,9 +1493,11 @@ func (m *fsMachine) checkFSTree(root Ino) error {
 			if stdNode.mode != entry.Attr.Mode {
 				return fmt.Errorf("mode should equal. ino %d standard meta: %d, test meta %d", stdNode.inode, stdNode.mode, entry.Attr.Mode)
 			}
-			// fixme: hardlink
-			if stdNode.parents[0].inode != entry.Attr.Parent {
-				return fmt.Errorf("parent should equal. ino %d standard meta: %d, test meta %d", stdNode.inode, stdNode.parents[0].inode, entry.Attr.Parent)
+			// If a hard link has been set, the parent will be cleared.
+			if !stdNode.hardlink {
+				if stdNode.parents[0].inode != entry.Attr.Parent {
+					return fmt.Errorf("parent should equal. ino %d standard meta: %d, test meta %d", stdNode.inode, stdNode.parents[0].inode, entry.Attr.Parent)
+				}
 			}
 
 			// check chunks
@@ -1667,11 +1684,70 @@ func (m *fsMachine) RemoveACL(t *rapid.T) {
 	}
 }
 
+func (n *tNode) stat(visited map[Ino]struct{}) (uint64, uint64) {
+	if _, ok := visited[n.inode]; ok {
+		return 0, 0
+	}
+	visited[n.inode] = struct{}{}
+
+	var size uint64 = uint64(align4K(n.length))
+	var inodes uint64 = 1
+	if n._type == TypeDirectory {
+		for _, c := range n.children {
+			s, i := c.stat(visited)
+			size += s
+			inodes += i
+		}
+	}
+	return size, inodes
+}
+
+func (m *fsMachine) statfs(format Format) (uint64, uint64, uint64, uint64) {
+	n := m.nodes[RootInode]
+	visited := make(map[Ino]struct{})
+	used, iused := n.stat(visited)
+	used -= uint64(align4K(0))
+	iused -= 1
+	var avail, iavail uint64
+	avail = 1<<50 - used
+	iavail = 10 << 20
+	// if inodes is not limited in Format, iavail always keep the same number of inodes
+	if format.Inodes > 0 {
+		iavail -= iused
+	}
+	if n.quota != nil {
+		if n.quota.size > 0 {
+			if used > n.quota.size {
+				avail = 0
+			} else {
+				avail = n.quota.size - used
+			}
+		}
+		if n.quota.inodes > 0 {
+			if iused > n.quota.inodes {
+				iavail = 0
+			} else {
+				iavail = uint64(n.quota.inodes) - iused
+			}
+		}
+	}
+	return used + avail, avail, iused, iavail
+}
+
+func (m *fsMachine) StatFS(t *rapid.T) {
+	var totalsize, availspace, iused, iavail uint64
+	m.meta.StatFS(m.ctx, RootInode, &totalsize, &availspace, &iused, &iavail)
+	total2, avail2, iused2, iavail2 := m.statfs(m.meta.GetFormat())
+	if totalsize != total2 || availspace != avail2 || iused != iused2 || iavail != iavail2 {
+		t.Fatalf("expect %d %d %d %d but got %d %d %d %d", total2, avail2, iused2, iavail2, totalsize, availspace, iused, iavail)
+	}
+}
+
 func TestFSOps(t *testing.T) {
 	flag.Set("timeout", "10s")
 	flag.Set("rapid.steps", "200")
 	flag.Set("rapid.checks", "5000")
-	//flag.Set("rapid.seed", time.Now().String())
+	// flag.Set("rapid.seed", time.Now().String())
 	flag.Set("rapid.seed", "1")
 	rapid.Check(t, rapid.Run[*fsMachine]())
 }
