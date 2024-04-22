@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -299,6 +300,10 @@ func TestCheckPath(t *testing.T) {
 	}
 }
 
+func shutdownStore(s *cacheStore) {
+	atomic.StoreUint32(&s.ioErrCnt, uint32(maxIOErrors))
+}
+
 func TestCacheManager(t *testing.T) {
 	conf := defaultConf
 	conf.CacheDir = "/tmp/diskCache0:/tmp/diskCache1:/tmp/diskCache2"
@@ -323,7 +328,7 @@ func TestCacheManager(t *testing.T) {
 	require.NotNil(t, s1)
 
 	m.Lock()
-	s1.shutdown()
+	shutdownStore(s1)
 	m.Unlock()
 	time.Sleep(3 * time.Second)
 
@@ -336,7 +341,7 @@ func TestCacheManager(t *testing.T) {
 	// case: remove all store
 	m.Lock()
 	for _, s := range m.storeMap {
-		s.shutdown()
+		shutdownStore(s)
 	}
 	m.Unlock()
 	time.Sleep(3 * time.Second)

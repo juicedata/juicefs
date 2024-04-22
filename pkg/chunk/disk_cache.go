@@ -47,7 +47,8 @@ import (
 var (
 	stagingDir   = "rawstaging"
 	cacheDir     = "raw"
-	maxIODur     = time.Second * 60
+	maxIODur     = time.Second * 20
+	maxIOErrors  = 10
 	errNotCached = errors.New("not cached")
 	errCacheDown = errors.New("cache down")
 )
@@ -94,9 +95,9 @@ type cacheStore struct {
 	checksum  string // checksum level
 	uploader  func(key, path string, force bool) bool
 
-	down uint32
-	opTs map[time.Duration]func() error
-	opMu sync.Mutex
+	ioErrCnt uint32
+	opTs     map[time.Duration]func() error
+	opMu     sync.Mutex
 }
 
 func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
@@ -189,12 +190,12 @@ func (cache *cacheStore) checkLockFile() {
 	}
 }
 
-func (cache *cacheStore) available() bool {
-	return atomic.LoadUint32(&cache.down) == 0
+func (c *cacheStore) available() bool {
+	return atomic.LoadUint32(&c.ioErrCnt) < uint32(maxIOErrors)
 }
 
-func (cache *cacheStore) shutdown() {
-	atomic.StoreUint32(&cache.down, 1)
+func (c *cacheStore) tryShutdown() {
+	atomic.AddUint32(&c.ioErrCnt, 1)
 }
 
 func (cache *cacheStore) checkErr(f func() error) error {
@@ -212,12 +213,9 @@ func (cache *cacheStore) checkErr(f func() error) error {
 	cache.opMu.Unlock()
 
 	if err != nil {
-		if errors.Is(err, syscall.EIO) {
+		if errors.Is(err, syscall.EIO) || errors.Is(err, utils.ErrFuncTimeout) {
 			logger.Errorf("cache store is unavailable: %s", err)
-			cache.shutdown()
-		} else if strings.HasPrefix(err.Error(), "timeout after ") {
-			logger.Errorf("cache store is unavailable: %s", err)
-			cache.shutdown()
+			cache.tryShutdown()
 		}
 	}
 	return err
@@ -228,15 +226,21 @@ func getFunctionName(f interface{}) string {
 }
 
 func (c *cacheStore) checkTimeout() {
+	var lastReset = time.Now()
 	for c.available() {
-		cutOff := utils.Clock() - maxIODur
+		if time.Since(lastReset) > time.Minute*10 {
+			atomic.StoreUint32(&c.ioErrCnt, 0)
+			lastReset = time.Now()
+		}
+
+		now := utils.Clock()
+		cutOff := now - maxIODur
 		c.opMu.Lock()
 		for ts := range c.opTs {
 			if ts < cutOff {
-				c.opMu.Unlock()
-				logger.Errorf("IO operation %s on %s is timeout after %s, ", getFunctionName(c.opTs[ts]), c.dir, utils.Clock()-ts)
-				c.shutdown()
-				return
+				logger.Errorf("IO operation %s on %s is timeout after %s, ", getFunctionName(c.opTs[ts]), c.dir, now-ts)
+				c.tryShutdown()
+				delete(c.opTs, ts)
 			}
 		}
 		c.opMu.Unlock()
