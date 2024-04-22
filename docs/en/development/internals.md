@@ -81,7 +81,7 @@ type Format struct {
     MetaVersion      int    `json:",omitempty"`
     MinClientVersion string `json:",omitempty"`
     MaxClientVersion string `json:",omitempty"`
-	EnableACL        bool
+    EnableACL        bool
 }
 ```
 
@@ -172,7 +172,7 @@ type Attr struct {
     KeepCache bool // whether to keep the cached page or not
 
     AccessACL  uint32 // access ACL id (identical ACL rules share the same access ACL ID.)
-	DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
+    DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
 }
 ```
 
@@ -509,7 +509,7 @@ type node struct {
     Rdev   uint32
     Parent Ino
     AccessACLId  uint32 `xorm:"'access_acl_id'"`
-	DefaultACLId uint32 `xorm:"'default_acl_id'"`
+    DefaultACLId uint32 `xorm:"'default_acl_id'"`
 }
 ```
 
