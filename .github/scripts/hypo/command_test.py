@@ -21,7 +21,7 @@ class TestCommand(unittest.TestCase):
         state.info(entry=folders_0, raw=True, recuisive=True, user='user1')
         state.teardown()
 
-    def skip_test_clone(self):
+    def test_clone(self):
         state = JuicefsCommandMachine()
         v1 = state.init_folders()
         v2 = state.create_file(content=b'\x9bcR\xba', file_name='ygbl', mode='x', parent=v1, umask=466, user='root')
