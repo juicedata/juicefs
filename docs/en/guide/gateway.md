@@ -824,7 +824,7 @@ The method of publishing events using PostgreSQL is similar to publishing MinIO 
     mc event add myminio/images arn:minio:sqs::1:webhook --event put --suffix .jpg
     ```
 
-3. ##### Use Thumbnailer to verify.
+3. Use Thumbnailer to verify.
 
     [Thumbnailer](https://github.com/minio/thumbnailer) is a project that generates thumbnails using MinIO's `listenBucketNotification` API. JuiceFS uses Thumbnailer to listen to gateway notifications. If a file is uploaded to the gateway service, Thumbnailer listens to that notification, generates a thumbnail, and uploads it to the gateway service.
 
