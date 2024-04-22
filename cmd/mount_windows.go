@@ -56,12 +56,15 @@ func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl, listenAddr string) e
 	return nil
 }
 
+func getDaemonStage() int {
+	return 0
+}
+
 func mountMain(v *vfs.VFS, c *cli.Context) {
 	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"))
 }
 
-func checkMountpoint(name, mp, logPath string, background bool) {
-}
+func checkMountpoint(name, mp, logPath string, background bool) {}
 
 func prepareMp(mp string) {}
 
