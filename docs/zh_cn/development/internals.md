@@ -84,6 +84,7 @@ type Format struct {
     MetaVersion      int    `json:",omitempty"`
     MinClientVersion string `json:",omitempty"`
     MaxClientVersion string `json:",omitempty"`
+  	EnableACL        bool
 }
 ```
 
@@ -106,6 +107,7 @@ type Format struct {
 - MetaVersion：元数据结构的版本，目前为 V1（V0 和 V1 相同）
 - MinClientVersion：允许连接的最小客户端版本，早于此版本的客户端会被拒绝连接
 - MaxClientVersion：允许连接的最大客户端版本
+- EnableACL: 是否开启ACL功能
 
 此结构会序列化成 JSON 格式保存在元数据引擎中。
 
@@ -171,6 +173,9 @@ type Attr struct {
     Parent    Ino  // inode of parent; 0 means tracked by parentKey (for hardlinks)
     Full      bool // the attributes are completed or not
     KeepCache bool // whether to keep the cached page or not
+
+	  AccessACL  uint32 // access ACL id (identical ACL rules share the same access ACL ID.)
+	  DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
 }
 ```
 
@@ -506,6 +511,8 @@ type node struct {
     Length uint64 `xorm:"notnull"`
     Rdev   uint32
     Parent Ino
+    AccessACLId  uint32 `xorm:"'access_acl_id'"`
+	  DefaultACLId uint32 `xorm:"'default_acl_id'"`
 }
 ```
 
