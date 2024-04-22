@@ -3907,6 +3907,12 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		n.Inode = ino
 		n.Parent = parent
 		now := time.Now()
+
+		m.parseAttr(&n, attr)
+		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
+			return eno
+		}
+
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 			n.Uid = ctx.Uid()
 			n.Gid = ctx.Gid()
@@ -3921,10 +3927,6 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		// TODO: preserve hardlink
 		if n.Type == TypeFile && n.Nlink > 1 {
 			n.Nlink = 1
-		}
-		m.parseAttr(&n, attr)
-		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
-			return eno
 		}
 
 		if top {
