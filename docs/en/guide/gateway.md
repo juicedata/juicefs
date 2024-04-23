@@ -1,37 +1,37 @@
 ---
-title: JuiceFS Gateway
+title: JuiceFS S3 Gateway
 sidebar_position: 5
-description: Learn JuiceFS Gateway's architecture, principles, and usage. 
+description: Learn JuiceFS S3 Gateway's architecture, principles, and usage. 
 ---
 
 ## Architecture and principles
 
-JuiceFS stores files by [splitting them into chunks in the underlying object storage](../introduction/architecture.md#how-juicefs-store-files). It typically exposes the POSIX interface to you. If you need to access JuiceFS files using S3-compatible APIs, you can use JuiceFS Gateway. Here is the architecture diagram:
+JuiceFS stores files by [splitting them into chunks in the underlying object storage](../introduction/architecture.md#how-juicefs-store-files). It typically exposes the POSIX interface to you. If you need to access JuiceFS files using S3-compatible APIs, you can use JuiceFS S3 Gateway. Here is the architecture diagram:
 
-![JuiceFS Gateway architecture](../images/juicefs-s3-gateway-arch.png)
+![JuiceFS S3 Gateway architecture](../images/juicefs-s3-gateway-arch.png)
 
-JuiceFS Gateway implements its functionalities through [MinIO S3 Gateway](https://github.com/minio/minio/tree/ea1803417f80a743fc6c7bb261d864c38628cf8d/docs/gateway). By implementing its [object interface](https://github.com/minio/minio/blob/d46386246fb6db5f823df54d932b6f7274d46059/cmd/object-api-interface.go#L88) and using the JuiceFS file system as the backend storage for its server, JuiceFS has achieved a use experience almost the same as using native MinIO and inherited many advanced features from MinIO. In this architecture, JuiceFS acts as a local disk for MinIO's server command, similar to `minio server /data1`  in principle.
+JuiceFS S3 Gateway implements its functionalities through [MinIO S3 Gateway](https://github.com/minio/minio/tree/ea1803417f80a743fc6c7bb261d864c38628cf8d/docs/gateway). By implementing its [object interface](https://github.com/minio/minio/blob/d46386246fb6db5f823df54d932b6f7274d46059/cmd/object-api-interface.go#L88) and using the JuiceFS file system as the backend storage for its server, JuiceFS has achieved a use experience almost the same as using native MinIO and inherited many advanced features from MinIO. In this architecture, JuiceFS acts as a local disk for MinIO's server command, similar to `minio server /data1`  in principle.
 
-Common application scenarios for JuiceFS Gateway include:
+Common application scenarios for JuiceFS S3 Gateway include:
 
 * Exposing S3 APIs for the JuiceFS file system so that applications can access files stored on JuiceFS using S3 SDKs.
 * Using tools like S3cmd, AWS CLI, and MinIO clients to conveniently access and manipulate files stored on JuiceFS.
-* Providing a web-based file manager through JuiceFS Gateway, which allows you to perform regular add and delete operations of the JuiceFS file system using a browser.
-* Serving as a unified data export for cross-cluster data replication scenarios to avoid cross-region metadata access, thereby enhancing data transfer performance. For details, see [Sync across regions using JuiceFS Gateway](../guide/sync.md#sync-across-region).
+* Providing a web-based file manager through JuiceFS S3 Gateway, which allows you to perform regular add and delete operations of the JuiceFS file system using a browser.
+* Serving as a unified data export for cross-cluster data replication scenarios to avoid cross-region metadata access, thereby enhancing data transfer performance. For details, see [Sync across regions using JuiceFS S3 Gateway](../guide/sync.md#sync-across-region).
 
 ## Quick start
 
 1. Create a file system.
 
-    JuiceFS Gateway only enables a POSIX file system to provide external services using the S3 protocol. Therefore, before you start the gateway, you need to prepare a file system:
+    JuiceFS S3 Gateway only enables a POSIX file system to provide external services using the S3 protocol. Therefore, before you start the gateway, you need to prepare a file system:
 
     ```shell
     juicefs format redis://localhost:6379 test1
     ```
 
-2. Start JuiceFS Gateway.
+2. Start JuiceFS S3 Gateway.
 
-    To enable JuiceFS Gateway on the current host, use JuiceFS' `gateway` subcommand. Before enabling the gateway, set the `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` environment variables. They serve as the access key and secret key for authentication when you access the S3 API. These credentials are called administrator credentials, with the highest privileges. For example:
+    To enable JuiceFS S3 Gateway on the current host, use JuiceFS' `gateway` subcommand. Before enabling the gateway, set the `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` environment variables. They serve as the access key and secret key for authentication when you access the S3 API. These credentials are called administrator credentials, with the highest privileges. For example:
 
     ```shell
     export MINIO_ROOT_USER=admin
@@ -39,39 +39,39 @@ Common application scenarios for JuiceFS Gateway include:
     ```
 
     ```shell
-    juicefs gateway redis://localhost:6379 localhost:9000
+    JuiceFS S3 Gateway redis://localhost:6379 localhost:9000
     ```
 
     The first two commands set the environment variables. Note that `MINIO_ROOT_USER` must be at least 3 characters long, and `MINIO_ROOT_PASSWORD` must be at least 8 characters long. Windows users must use the `set` command to set environment variables, for example, `set MINIO_ROOT_USER=admin`.
 
-    The last command enables JuiceFS Gateway. The `gateway` subcommand requires at least two parameters: the database URL for storing metadata and the address/port for JuiceFS Gateway to listen on. To optimize JuiceFS Gateway, you can add [other options](../reference/command_reference.md#gateway) to `gateway` subcommands as needed. For example, you can set the default local cache to 20 GiB.
+    The last command enables JuiceFS S3 Gateway. The `gateway` subcommand requires at least two parameters: the database URL for storing metadata and the address/port for JuiceFS S3 Gateway to listen on. To optimize JuiceFS S3 Gateway, you can add [other options](../reference/command_reference.md#gateway) to `gateway` subcommands as needed. For example, you can set the default local cache to 20 GiB.
 
     ```shell
-    juicefs gateway --cache-size 20480 redis://localhost:6379 localhost:9000
+    JuiceFS S3 Gateway --cache-size 20480 redis://localhost:6379 localhost:9000
     ```
 
-    This example assumes that the JuiceFS file system uses a local Redis database. When JuiceFS Gateway is enabled, you can access the gateway's management interface at `http://localhost:9000` on the **current host**.
+    This example assumes that the JuiceFS file system uses a local Redis database. When JuiceFS S3 Gateway is enabled, you can access the gateway's management interface at `http://localhost:9000` on the **current host**.
 
     ![S3-gateway-file-manager](../images/s3-gateway-file-manager.jpg)
 
-    To allow access to JuiceFS Gateway from other hosts on the local network or the internet, adjust the listen address. For example:
+    To allow access to JuiceFS S3 Gateway from other hosts on the local network or the internet, adjust the listen address. For example:
 
     ```shell
-    juicefs gateway redis://localhost:6379 0.0.0.0:9000
+    JuiceFS S3 Gateway redis://localhost:6379 0.0.0.0:9000
     ```
 
-    This configuration makes JuiceFS Gateway accept requests from all networks. Different S3 clients can access JuiceFS Gateway using different addresses. For example:
+    This configuration makes JuiceFS S3 Gateway accept requests from all networks. Different S3 clients can access JuiceFS S3 Gateway using different addresses. For example:
 
-    - Third-party clients on the same host as JuiceFS Gateway can use `http://127.0.0.1:9000` or `http://localhost:9000` for access.
-    - Third-party clients on the same local network as the JuiceFS Gateway host can use `http://192.168.1.8:9000` for access (assuming the JuiceFS Gateway host's internal IP address is `192.168.1.8`).
-    - Using `http://110.220.110.220:9000` to access JuiceFS Gateway over the internet (assuming the JuiceFS Gateway host's public IP address is `110.220.110.220`).
+    - Third-party clients on the same host as JuiceFS S3 Gateway can use `http://127.0.0.1:9000` or `http://localhost:9000` for access.
+    - Third-party clients on the same local network as the JuiceFS S3 Gateway host can use `http://192.168.1.8:9000` for access (assuming the JuiceFS S3 Gateway host's internal IP address is `192.168.1.8`).
+    - Using `http://110.220.110.220:9000` to access JuiceFS S3 Gateway over the internet (assuming the JuiceFS S3 Gateway host's public IP address is `110.220.110.220`).
 
-## Access JuiceFS Gateway
+## Access JuiceFS S3 Gateway
 
-Various S3 API-supported clients, desktop applications, and web applications can access JuiceFS Gateway. Ensure you use the correct address and port for accessing JuiceFS Gateway.
+Various S3 API-supported clients, desktop applications, and web applications can access JuiceFS S3 Gateway. Ensure you use the correct address and port for accessing JuiceFS S3 Gateway.
 
 :::tip Note
-The following examples assume accessing JuiceFS Gateway running on the local host with third-party clients. Adjust JuiceFS Gateway's address according to your specific scenario.
+The following examples assume accessing JuiceFS S3 Gateway running on the local host with third-party clients. Adjust JuiceFS S3 Gateway's address according to your specific scenario.
 :::
 
 ### Use the AWS CLI
@@ -129,11 +129,11 @@ $ mc ls juicefs/jfs
 
 ### Multi-bucket support
 
-By default, JuiceFS Gateway only allows one bucket. The bucket name is the file system name. If you need multiple buckets, you can add `--multi-buckets` at startup to enable multi-bucket support. This parameter exports each subdirectory under the top-level directory of the JuiceFS file system as a separate bucket. Creating a bucket means creating a subdirectory with the same name at the top level of the file system.
+By default, JuiceFS S3 Gateway only allows one bucket. The bucket name is the file system name. If you need multiple buckets, you can add `--multi-buckets` at startup to enable multi-bucket support. This parameter exports each subdirectory under the top-level directory of the JuiceFS file system as a separate bucket. Creating a bucket means creating a subdirectory with the same name at the top level of the file system.
 
 ### Retain ETags
 
-By default, JuiceFS Gateway does not save or return object ETag information. You can enable this with `--keep-etag`.
+By default, JuiceFS S3 Gateway does not save or return object ETag information. You can enable this with `--keep-etag`.
 
 ### Enable object tags
 
@@ -141,7 +141,7 @@ Object tags are not supported by default, but you can use `--object-tag` to enab
 
 ### Enable virtual host-style requests
 
-By default, JuiceFS Gateway supports path-style requests in the format of `http://mydomain.com/bucket/object`. The `MINIO_DOMAIN` environment variable is used to enable virtual host-style requests. If the request's `Host` header information matches `(.+).mydomain.com`, the matched pattern `$1` is used as the bucket, and the path is used as the object.
+By default, JuiceFS S3 Gateway supports path-style requests in the format of `http://mydomain.com/bucket/object`. The `MINIO_DOMAIN` environment variable is used to enable virtual host-style requests. If the request's `Host` header information matches `(.+).mydomain.com`, the matched pattern `$1` is used as the bucket, and the path is used as the object.
 
 For example:
 
@@ -155,11 +155,11 @@ The default refresh interval for Identity and Access Management (IAM) caching is
 
 For example, to set a refresh interval of 1 minute:
 
-`juicefs gateway xxxx xxxx    --refresh-iam-interval 1m`
+`JuiceFS S3 Gateway xxxx xxxx    --refresh-iam-interval 1m`
 
 ## Advanced features
 
-The core feature of JuiceFS Gateway is to provide the S3 API. Now, the support for the S3 protocol is comprehensive. Version 1.2 supports IAM and bucket event notifications. Advanced features require using the `mc` command-line tool of the `RELEASE.2021-04-22T17-40-00Z` version. For the usage of these advanced features, see the [MinIO documentation](https://github.com/minio/minio/tree/e0d3a8c1f4e52bb4a7d82f7f369b6796103740b3/docs) or the `mc` command-line help information.
+The core feature of JuiceFS S3 Gateway is to provide the S3 API. Now, the support for the S3 protocol is comprehensive. Version 1.2 supports IAM and bucket event notifications. Advanced features require using the `mc` command-line tool of the `RELEASE.2021-04-22T17-40-00Z` version. For the usage of these advanced features, see the [MinIO documentation](https://github.com/minio/minio/tree/e0d3a8c1f4e52bb4a7d82f7f369b6796103740b3/docs) or the `mc` command-line help information.
 
 If you are unsure about the available features or how to use a specific feature, you can append `-h` to a subcommand to view the help information. The sections below will introduce the supported advanced features with examples.
 
@@ -167,7 +167,7 @@ If you are unsure about the available features or how to use a specific feature,
 
 #### Regular users
 
-Before version 1.2, JuiceFS Gateway only created a superuser when starting, and this superuser belonged only to that process. Even if multiple gateway processes shared the same file system, their users were isolated between processes. You could set different superusers for each gateway process, and they were independent and unaffected by each other. Starting from version 1.2, JuiceFS Gateway still requires setting a superuser at startup, and this superuser remains isolated per process. However, it allows adding new users using `mc admin user add`. Newly added users are shared across the same file system. You can manage new users using `mc admin user`. This supports adding, disabling, enabling, and deleting users, as well as viewing all users and displaying user information and policies.
+Before version 1.2, JuiceFS S3 Gateway only created a superuser when starting, and this superuser belonged only to that process. Even if multiple gateway processes shared the same file system, their users were isolated between processes. You could set different superusers for each gateway process, and they were independent and unaffected by each other. Starting from version 1.2, JuiceFS S3 Gateway still requires setting a superuser at startup, and this superuser remains isolated per process. However, it allows adding new users using `mc admin user add`. Newly added users are shared across the same file system. You can manage new users using `mc admin user`. This supports adding, disabling, enabling, and deleting users, as well as viewing all users and displaying user information and policies.
 
 ```Shell
 $ mc admin user -h
@@ -430,7 +430,7 @@ $ mc admin policy info myminio readonly
 
 #### User group management
 
-JuiceFS Gateway supports creating user groups, similar to Linux user groups, and uses `mc admin group` for management. You can set one or more users to a group and grant permissions uniformly to the group. This usage is similar to user management.
+JuiceFS S3 Gateway supports creating user groups, similar to Linux user groups, and uses `mc admin group` for management. You can set one or more users to a group and grant permissions uniformly to the group. This usage is similar to user management.
 
 ```Shell
 $ mc admin  group -h
@@ -527,9 +527,9 @@ mc policy set none  useradmin/testbucket1/afile
 
 #### Configuration effective time
 
-All management API updates for JuiceFS Gateway take effect immediately and are persisted to the JuiceFS file system. Clients that accept these API requests also immediately reflect these changes.
+All management API updates for JuiceFS S3 Gateway take effect immediately and are persisted to the JuiceFS file system. Clients that accept these API requests also immediately reflect these changes.
 
-However, in a multi-server gateway setup, the situation is slightly different. This is because when the gateway handles request authentication, it uses in-memory cached information as the validation baseline. Otherwise, reading configuration file content for every request would pose unacceptable performance issues. However, caching also introduces potential inconsistencies between cached data and the configuration file. Currently, JuiceFS Gateway's cache refresh strategy involves forcibly updating the in-memory cache every 5 minutes (certain operations also trigger cache update operations). This ensures that configuration changes take effect within a maximum of 5 minutes in a multi-server setup. You can adjust this time by using the `--refresh-iam-interval` parameter. If immediate effect on a specific gateway is required, you can manually restart it.
+However, in a multi-server gateway setup, the situation is slightly different. This is because when the gateway handles request authentication, it uses in-memory cached information as the validation baseline. Otherwise, reading configuration file content for every request would pose unacceptable performance issues. However, caching also introduces potential inconsistencies between cached data and the configuration file. Currently, JuiceFS S3 Gateway's cache refresh strategy involves forcibly updating the in-memory cache every 5 minutes (certain operations also trigger cache update operations). This ensures that configuration changes take effect within a maximum of 5 minutes in a multi-server setup. You can adjust this time by using the `--refresh-iam-interval` parameter. If immediate effect on a specific gateway is required, you can manually restart it.
 
 ### Bucket event notifications
 
@@ -552,7 +552,7 @@ Supported global events include:
 
 You can use the `mc` client tool with the event subcommand to set up and monitor event notifications. Notifications sent by MinIO for publishing events are in JSON format. See the [JSON structure](https://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html).
 
-To reduce dependencies, JuiceFS Gateway has cut support for certain event destination types. Currently, storage bucket events can be published to the following destinations:
+To reduce dependencies, JuiceFS S3 Gateway has cut support for certain event destination types. Currently, storage bucket events can be published to the following destinations:
 
 - Redis
 - MySQL
@@ -623,10 +623,10 @@ To use notification destinations in `namespace` and `access` formats:
     $ mc admin config set myminio notify_redis:1 queue_limit="1000"
     Successfully applied new settings.
     Please restart your server 'mc admin service restart myminio'.
-    # Note that you cannot use `mc admin service restart myminio` to restart. JuiceFS Gateway does not currently support this functionality. You need to manually restart JuiceFS Gateway when prompted after configuring with `mc`.
+    # Note that you cannot use `mc admin service restart myminio` to restart. JuiceFS S3 Gateway does not currently support this functionality. You need to manually restart JuiceFS S3 Gateway when prompted after configuring with `mc`.
     ```
 
-    After using the `mc admin config set` command to update the configuration, restart JuiceFS Gateway to apply the changes. JuiceFS Gateway will output a line similar to `SQS ARNs: arn:minio:sqs::1:redis`.
+    After using the `mc admin config set` command to update the configuration, restart JuiceFS S3 Gateway to apply the changes. JuiceFS S3 Gateway will output a line similar to `SQS ARNs: arn:minio:sqs::1:redis`.
 
     Based on your needs, you can add multiple Redis destinations by providing the identifier for each Redis instance (like the "1" in the example "notify_redis:1") along with the configuration parameters for each instance.
 
@@ -701,7 +701,7 @@ The following steps show how to use the notification destination in `namespace` 
 
 1. Ensure the MySQL version meets the minimum requirements.
 
-    JuiceFS Gateway requires MySQL version 5.7.8 or above, because it uses the [JSON](https://dev.mysql.com/doc/refman/5.7/en/json.html) data type introduced in MySQL 5.7.8.
+    JuiceFS S3 Gateway requires MySQL version 5.7.8 or above, because it uses the [JSON](https://dev.mysql.com/doc/refman/5.7/en/json.html) data type introduced in MySQL 5.7.8.
 
 2. Configure MySQL to the gateway.
 
