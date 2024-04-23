@@ -113,7 +113,7 @@ func WithTimeout(f func() error, timeout time.Duration) error {
 	case <-done:
 		t.Stop()
 	case <-t.C:
-		err = fmt.Errorf("timeout after %s", timeout)
+		err = fmt.Errorf("timeout after %s: %w", timeout, ErrFuncTimeout)
 	}
 	return err
 }
