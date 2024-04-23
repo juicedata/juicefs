@@ -28,7 +28,7 @@ JuiceFS S3 网关的常见的使用场景有：
     首先，你需要创建一个 JuiceFS 文件系统。如果你还没有创建 JuiceFS 文件系统，请参考[创建 JuiceFS 文件系统](../getting-started/standalone.md)。
 
 2. 启动 S3 网关
-   
+
    在开启功能之前，需要先设置 `MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD` 两个环境变量，即访问 S3 API 时认证身份用的 Access Key 和 Secret Key。这对凭证我们称为管理员凭证，拥有最高权限。例如：
 
     ```shell
@@ -836,7 +836,7 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
 
    Thumbnailer 运行在 `http://localhost:3000/`
 
-   下一步，配置 MinIO server，让其发送消息到这个 URL（第一步提到的），并使用 mc 来设置存储桶通知（第二步提到的）。然后上传一张图片到 S3 网关server:
+   下一步，配置 MinIO server，让其发送消息到这个 URL（第一步提到的），并使用 mc 来设置存储桶通知（第二步提到的）。然后上传一张图片到 S3 网关 server：
 
    ```Shell
    mc cp ~/images.jpg myminio/images
