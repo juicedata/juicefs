@@ -207,7 +207,7 @@ juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 
 ##### 单层过滤模式
 
-![单层过滤示例图](../images/single-layer-filtration.png)
+![单层过滤示例图](../images/sync-single-layer-filtration.png)
 
 单层过滤是指针对待匹配的对象，直接将其全路径与多个模式进行依次匹配。
 
@@ -232,7 +232,7 @@ juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 
 ##### 层级过滤模式
 
-![层级过滤示例图](../images/hierarchical-filtration.png)
+![层级过滤示例图](../images/sync-hierarchical-filtration.png)
 
 层级过滤的核心是将先待匹配的对象路径按照路径层级逐层增加的子路径元素依次组成序列，比如原始路径为 `a1/b1/c1.txt` 的对象层级过滤的序列就是 `a1`,`a1/b1`,`a1/b1/c1.txt`。
 然后将这这个序列中的每个元素都当成单层过滤中的原始路径，依次执行单次过滤。某层的单次过滤中如过匹配上了某个模式，则直接返回该模式的行为结果作为整个层级匹配原始对象的结果。如过某层的所有规则都未匹配，则进入下一层级，如果所有层级未匹配则返回默认的行为——包含。
