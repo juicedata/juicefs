@@ -16,16 +16,16 @@ JuiceFS S3 网关功能是通过 [MinIO S3 网关](https://github.com/minio/mini
 
 JuiceFS S3 网关的常见的使用场景有：
 
-* **为 JuiceFS 开放 S3 接口**：应用可以通过 S3 SDK 访问 JuiceFS 上存储的文件；
-* **使用 S3 客户端**：使用 s3cmd、AWS CLI、MinIO 客户端来方便地访问和操作 JuiceFS 上存储的文件；
-* **管理 JuiceFS 中的文件**：S3 网关提供了一个基于网页的文件管理器，可以在浏览器中管理 JuiceFS 中的文件；
-* **集群复制**：在跨集群复制数据的场景下，作为集群的统一数据出口，避免跨区访问元数据以提升数据传输性能，详见[「使用 S3 网关进行跨区域数据同步」](../guide/sync.md#sync-across-region)
+- **为 JuiceFS 开放 S3 接口**：应用可以通过 S3 SDK 访问 JuiceFS 上存储的文件；
+- **使用 S3 客户端**：使用 s3cmd、AWS CLI、MinIO 客户端来方便地访问和操作 JuiceFS 上存储的文件；
+- **管理 JuiceFS 中的文件**：S3 网关提供了一个基于网页的文件管理器，可以在浏览器中管理 JuiceFS 中的文件；
+- **集群复制**：在跨集群复制数据的场景下，作为集群的统一数据出口，避免跨区访问元数据以提升数据传输性能，详见[「使用 S3 网关进行跨区域数据同步」](../guide/sync.md#sync-across-region)
 
 ## 快速开始
 
 1. 创建文件系统
 
-    首先，你需要创建一个 JuiceFS 文件系统。如果你还没有创建 JuiceFS 文件系统，请参考[创建 JuiceFS 文件系统](../getting-started/standalone.md)。
+   首先，你需要创建一个 JuiceFS 文件系统。如果你还没有创建 JuiceFS 文件系统，请参考[创建 JuiceFS 文件系统](../getting-started/standalone.md)。
 
 2. 启动 S3 网关
 
@@ -36,15 +36,15 @@ JuiceFS S3 网关的常见的使用场景有：
     export MINIO_ROOT_PASSWORD=12345678
     ```
 
-    注意，`MINIO_ROOT_USER` 的长度至少 3 个字符， `MINIO_ROOT_PASSWORD` 的长度至少 8 个字符（Windows 用户请改用 `set` 命令设置环境变量，例如：`set MINIO_ROOT_USER=admin`）。
+   注意，`MINIO_ROOT_USER` 的长度至少 3 个字符， `MINIO_ROOT_PASSWORD` 的长度至少 8 个字符（Windows 用户请改用 `set` 命令设置环境变量，例如：`set MINIO_ROOT_USER=admin`）。
 
-    然后，使用 `juicefs gateway` 命令启动 S3 网关。例如：
+   然后，使用 `juicefs gateway` 命令启动 S3 网关。例如：
 
     ```shell
     juicefs gateway redis://localhost:6379/1 localhost:9000
     ```
 
-    `gateway` 子命令至少需要提供两个参数，第一个是元数据引擎的 URL，第二个是 S3 网关监听的地址和端口。你可以根据需要在 `gateway` 子命令中添加[其他选项](../reference/command_reference.md#gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
+   `gateway` 子命令至少需要提供两个参数，第一个是元数据引擎的 URL，第二个是 S3 网关监听的地址和端口。你可以根据需要在 `gateway` 子命令中添加[其他选项](../reference/command_reference.md#gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
 
     ```shell
     juicefs gateway --cache-size 20480 redis://localhost:6379/1 localhost:9000
@@ -62,9 +62,9 @@ JuiceFS S3 网关的常见的使用场景有：
 
    这样一来，S3 网关将会默认接受所有网络请求。不同的位置的 S3 客户端可以使用不同的地址访问 S3 网关，例如：
 
-    - S3 网关所在主机中的第三方客户端可以使用 `http://127.0.0.1:9000` 或 `http://localhost:9000` 进行访问；
-    - 与 S3 网关所在主机处于同一局域网的第三方客户端可以使用 `http://192.168.1.8:9000` 访问（假设启用 S3 网关的主机内网 IP 地址为 192.168.1.8）；
-    - 通过互联网访问 S3 网关可以使用 `http://110.220.110.220:9000` 访问（假设启用 S3 网关的主机公网 IP 地址为 110.220.110.220）。
+   - S3 网关所在主机中的第三方客户端可以使用 `http://127.0.0.1:9000` 或 `http://localhost:9000` 进行访问；
+   - 与 S3 网关所在主机处于同一局域网的第三方客户端可以使用 `http://192.168.1.8:9000` 访问（假设启用 S3 网关的主机内网 IP 地址为 192.168.1.8）；
+   - 通过互联网访问 S3 网关可以使用 `http://110.220.110.220:9000` 访问（假设启用 S3 网关的主机公网 IP 地址为 110.220.110.220）。
 
 ## 访问 S3 网关
 
@@ -157,7 +157,9 @@ export MINIO_DOMAIN=mydomain.com
 
 例如设置 1 分钟刷新：
 
-`juicefs gateway xxxx xxxx    --refresh-iam-interval 1m`
+```sh
+juicefs gateway xxxx xxxx    --refresh-iam-interval 1m
+```
 
 ## 高级功能
 
@@ -252,7 +254,7 @@ S3 网关安全令牌服务（STS）是一种服务，可让客户端请求 MinI
    指示 STS API 版本信息，唯一支持的值是 '2011-06-15'。出于兼容性原因，此值借用自 AWS STS API 文档。
 
    | Params  | Value  |
-               |---------|--------|
+   | ------- | ------ |
    | Type    | String |
    | Require | Yes    |
 
@@ -264,21 +266,21 @@ S3 网关安全令牌服务（STS）是一种服务，可让客户端请求 MinI
 
    持续时间，以秒为单位。该值可以在 900 秒（15 分钟）至 7 天之间变化。如果值高于此设置，则操作失败。默认情况下，该值设置为 3600 秒。
 
-   | Params      | Value               |
-               |-------------|---------------------|
-   | *Type*      | Integer             |
+   | Params      | Value                           |
+   | ----------- | ------------------------------- |
+   | _Type_      | Integer                         |
    | Valid Range | 最小值为 900，最大值为 604800。 |
-   | Required    | No                  |
+   | Required    | No                              |
 
 4. Policy
 
    您希望将其用作内联会话策略的 JSON 格式的 IAM 策略。此参数是可选的。将策略传递给此操作会返回新的临时凭证。生成会话的权限是预设策略名称和此处设置的策略集合的交集。您不能使用该策略授予比被假定预设策略名称允许的更多权限。
 
-   | Params      | Value             |
-               |-------------|-------------------|
-   | Type        | String            |
+   | Params      | Value                           |
+   | ----------- | ------------------------------- |
+   | Type        | String                          |
    | Valid Range | 最小长度为 1。最大长度为 2048。 |
-   | Required    | No                |
+   | Required    | No                              |
 
 ##### 响应元素
 
@@ -322,33 +324,33 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 1. 启动 S3 网关并创建名为 foobar 的用户
 2. 配置 AWS cli
 
-   ```
-   [foobar]
-   region = us-east-1
-   aws_access_key_id = foobar
-   aws_secret_access_key = foo12345
-   ```
+    ```
+    [foobar]
+    region = us-east-1
+    aws_access_key_id = foobar
+    aws_secret_access_key = foo12345
+    ```
 
 3. 使用 AWS cli 请求 AssumeRole API
 
-:::note 注意
-在以下命令中，“--role-arn”和“--role-session-name”对 S3 网关没有意义，可以设置为满足命令行要求的任何值。
-:::
+    :::note 注意
+    在以下命令中，“--role-arn”和“--role-session-name”对 S3 网关没有意义，可以设置为满足命令行要求的任何值。
+    :::
 
-   ```
-   $ aws --profile foobar --endpoint-url http://localhost:9000 sts assume-role --policy '{"Version":"2012-10-17","Statement":[{"Sid":"Stmt1","Effect":"Allow","Action":"s3:*","Resource":"arn:aws:s3:::*"}]}' --role-arn arn:xxx:xxx:xxx:xxxx --role-session-name anything
-   {
-       "AssumedRoleUser": {
-           "Arn": ""
-       },
-       "Credentials": {
-           "SecretAccessKey": "xbnWUoNKgFxi+uv3RI9UgqP3tULQMdI+Hj+4psd4",
-           "SessionToken": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiJLOURUSU1VVlpYRVhKTDNBVFVPWSIsImV4cCI6MzYwMDAwMDAwMDAwMCwicG9saWN5IjoidGVzdCJ9.PetK5wWUcnCJkMYv6TEs7HqlA4x_vViykQ8b2T_6hapFGJTO34sfTwqBnHF6lAiWxRoZXco11B0R7y58WAsrQw",
-           "Expiration": "2019-02-20T19:56:59-08:00",
-           "AccessKeyId": "K9DTIMUVZXEXJL3ATUOY"
-       }
-   }
-   ```
+    ```sh
+    $ aws --profile foobar --endpoint-url http://localhost:9000 sts assume-role --policy '{"Version":"2012-10-17","Statement":[{"Sid":"Stmt1","Effect":"Allow","Action":"s3:*","Resource":"arn:aws:s3:::*"}]}' --role-arn arn:xxx:xxx:xxx:xxxx --role-session-name anything
+    {
+        "AssumedRoleUser": {
+            "Arn": ""
+        },
+        "Credentials": {
+            "SecretAccessKey": "xbnWUoNKgFxi+uv3RI9UgqP3tULQMdI+Hj+4psd4",
+            "SessionToken": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiJLOURUSU1VVlpYRVhKTDNBVFVPWSIsImV4cCI6MzYwMDAwMDAwMDAwMCwicG9saWN5IjoidGVzdCJ9.PetK5wWUcnCJkMYv6TEs7HqlA4x_vViykQ8b2T_6hapFGJTO34sfTwqBnHF6lAiWxRoZXco11B0R7y58WAsrQw",
+            "Expiration": "2019-02-20T19:56:59-08:00",
+            "AccessKeyId": "K9DTIMUVZXEXJL3ATUOY"
+        }
+    }
+    ```
 
 ##### go 应用程序访问 AssumeRole API
 
@@ -589,45 +591,45 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
 
    使用 mc admin config set 命令配置 Redis 为 事件通知的目标
 
-   ```Shell
-   # 命令行参数
-   # mc admin config set myminio notify_redis[:name] address="xxx" format="namespace|access" key="xxxx" password="xxxx" queue_dir="" queue_limit="0"
-   # 具体举例
-   $ mc admin config set myminio notify_redis:1 address="127.0.0.1:6379/1" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0"
-   ```
+    ```Shell
+    # 命令行参数
+    # mc admin config set myminio notify_redis[:name] address="xxx" format="namespace|access" key="xxxx" password="xxxx" queue_dir="" queue_limit="0"
+    # 具体举例
+    $ mc admin config set myminio notify_redis:1 address="127.0.0.1:6379/1" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0"
+    ```
 
    你可以通过 `mc admin config get myminio notify_redis` 来查看有哪些配置项，不同类型的目标其配置项也不同，针对 Redis 类型，其有以下配置项：
 
-   ```Shell
-   $ mc admin config get myminio notify_redis
-   notify_redis enable=off format=namespace address= key= password= queue_dir= queue_limit=0
-   ```
+    ```Shell
+    $ mc admin config get myminio notify_redis
+    notify_redis enable=off format=namespace address= key= password= queue_dir= queue_limit=0
+    ```
 
    每个配置项的含义
 
-   ```Shell
-   notify_redis[:name]               支持设置多个 redis，只需要其 name 不同即可
-   address*     (address)            Redis 服务器的地址。例如：localhost:6379
-   key*         (string)             存储/更新事件的 Redis key, key 会自动创建
-   format*      (namespace*|access)  是 namespace 还是 access，默认是 'namespace'
-   password     (string)             Redis 服务器的密码
-   queue_dir    (path)               未发送消息的暂存目录 例如 '/home/events'
-   queue_limit  (number)             未发送消息的最大限制，默认是'100000'
-   comment      (sentence)           可选的注释说明
-   ```
+    ```Shell
+    notify_redis[:name]               支持设置多个 redis，只需要其 name 不同即可
+    address*     (address)            Redis 服务器的地址。例如：localhost:6379
+    key*         (string)             存储/更新事件的 Redis key, key 会自动创建
+    format*      (namespace*|access)  是 namespace 还是 access，默认是 'namespace'
+    password     (string)             Redis 服务器的密码
+    queue_dir    (path)               未发送消息的暂存目录 例如 '/home/events'
+    queue_limit  (number)             未发送消息的最大限制，默认是'100000'
+    comment      (sentence)           可选的注释说明
+    ```
 
    S3 网关支持持久事件存储。持久存储将在 Redis broker 离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 queue_dir 字段设置，存储的最大限制可以通过 queue_limit 设置。例如，queue_dir 可以设置为/home/events, 并且 queue_limit 可以设置为 1000. 默认情况下 queue_limit 是 100000。在更新配置前，可以通过 mc admin config get 命令获取当前配置。
 
-   ```Shell
-   $ mc admin config get myminio notify_redis
-   notify_redis:1 address="127.0.0.1:6379/1" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0"
-   
-   # 重启后生效
-   $ mc admin config set myminio notify_redis:1 queue_limit="1000"
-   Successfully applied new settings.
-   Please restart your server 'mc admin service restart myminio'.
-   # 注意这里无法使用 mc admin service restart myminio 重启，JuiceFS S3 网关暂不支持该功能，当使用 mc 配置后出现该提醒时需要手动重启 JuiceFS Gateway
-   ```
+    ```Shell
+    $ mc admin config get myminio notify_redis
+    notify_redis:1 address="127.0.0.1:6379/1" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0"
+
+    # 重启后生效
+    $ mc admin config set myminio notify_redis:1 queue_limit="1000"
+    Successfully applied new settings.
+    Please restart your server 'mc admin service restart myminio'.
+    # 注意这里无法使用 mc admin service restart myminio 重启，JuiceFS S3 网关暂不支持该功能，当使用 mc 配置后出现该提醒时需要手动重启 JuiceFS Gateway
+    ```
 
    使用 mc admin config set 命令更新配置后，重启 JuiceFS S3 网关让配置生效。如果一切顺利，JuiceFS S3 网关会在启动时输出一行信息，类似 `SQS ARNs: arn:minio:sqs::1:redis`
 
@@ -641,46 +643,46 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
 
    使用 mc 这个工具，这些配置信息很容易就能添加上。假设 S3 网关服务别名叫 myminio，可执行下列脚本：
 
-   ```Shell
-   mc mb myminio/images
-   mc event add myminio/images arn:minio:sqs::1:redis --suffix .jpg
-   mc event list myminio/images
-   arn:minio:sqs::1:redis   s3:ObjectCreated:*,s3:ObjectRemoved:*,s3:ObjectAccessed:*   Filter: suffix=".jpg"
-   ```
+    ```Shell
+    mc mb myminio/images
+    mc event add myminio/images arn:minio:sqs::1:redis --suffix .jpg
+    mc event list myminio/images
+    arn:minio:sqs::1:redis   s3:ObjectCreated:*,s3:ObjectRemoved:*,s3:ObjectAccessed:*   Filter: suffix=".jpg"
+    ```
 
 3. 验证 Redis
 
    启动 `redis-cli` 这个 Redis 客户端程序来检查 Redis 中的内容。运行 monitor Redis 命令将会输出在 Redis 上执行的每个命令的。
 
-   ```Shell
-   redis-cli -a yoursecret
-   127.0.0.1:6379> monitor
-   OK
-   ```
+    ```Shell
+    redis-cli -a yoursecret
+    127.0.0.1:6379> monitor
+    OK
+    ```
 
    上传一个名为 myphoto.jpg 的文件到 images 存储桶。
 
-   ```Shell
-   mc cp myphoto.jpg myminio/images
-   ```
+    ```Shell
+    mc cp myphoto.jpg myminio/images
+    ```
 
    在上一个终端中，你将看到 S3 网关在 Redis 上执行的操作：
 
-   ```Shell
-   127.0.0.1:6379> monitor
-   OK
-   1712562516.867831 [1 192.168.65.1:59280] "hset" "bucketevents" "images/myphoto.jpg" "{\"Records\":[{\"eventVersion\":\"2.0\",\"eventSource\":\"minio:s3\",\"awsRegion\":\"\",\"eventTime\":\"2024-04-08T07:48:36.865Z\",\"eventName\":\"s3:ObjectCreated:Put\",\"userIdentity\":{\"principalId\":\"admin\"},\"requestParameters\":{\"principalId\":\"admin\",\"region\":\"\",\"sourceIPAddress\":\"127.0.0.1\"},\"responseElements\":{\"content-length\":\"0\",\"x-amz-request-id\":\"17C43E891887BA48\",\"x-minio-origin-endpoint\":\"http://127.0.0.1:9001\"},\"s3\":{\"s3SchemaVersion\":\"1.0\",\"configurationId\":\"Config\",\"bucket\":{\"name\":\"images\",\"ownerIdentity\":{\"principalId\":\"admin\"},\"arn\":\"arn:aws:s3:::images\"},\"object\":{\"key\":\"myphoto.jpg\",\"size\":4,\"eTag\":\"40b134ab8a3dee5dd9760a7805fd495c\",\"userMetadata\":{\"content-type\":\"image/jpeg\"},\"sequencer\":\"17C43E89196AE2A0\"}},\"source\":{\"host\":\"127.0.0.1\",\"port\":\"\",\"userAgent\":\"MinIO (darwin; arm64) minio-go/v7.0.11 mc/RELEASE.2021-04-22T17-40-00Z\"}}]}"
-   ```
+    ```Shell
+    127.0.0.1:6379> monitor
+    OK
+    1712562516.867831 [1 192.168.65.1:59280] "hset" "bucketevents" "images/myphoto.jpg" "{\"Records\":[{\"eventVersion\":\"2.0\",\"eventSource\":\"minio:s3\",\"awsRegion\":\"\",\"eventTime\":\"2024-04-08T07:48:36.865Z\",\"eventName\":\"s3:ObjectCreated:Put\",\"userIdentity\":{\"principalId\":\"admin\"},\"requestParameters\":{\"principalId\":\"admin\",\"region\":\"\",\"sourceIPAddress\":\"127.0.0.1\"},\"responseElements\":{\"content-length\":\"0\",\"x-amz-request-id\":\"17C43E891887BA48\",\"x-minio-origin-endpoint\":\"http://127.0.0.1:9001\"},\"s3\":{\"s3SchemaVersion\":\"1.0\",\"configurationId\":\"Config\",\"bucket\":{\"name\":\"images\",\"ownerIdentity\":{\"principalId\":\"admin\"},\"arn\":\"arn:aws:s3:::images\"},\"object\":{\"key\":\"myphoto.jpg\",\"size\":4,\"eTag\":\"40b134ab8a3dee5dd9760a7805fd495c\",\"userMetadata\":{\"content-type\":\"image/jpeg\"},\"sequencer\":\"17C43E89196AE2A0\"}},\"source\":{\"host\":\"127.0.0.1\",\"port\":\"\",\"userAgent\":\"MinIO (darwin; arm64) minio-go/v7.0.11 mc/RELEASE.2021-04-22T17-40-00Z\"}}]}"
+    ```
 
    在这我们可以看到 S3 网关在 minio_events 这个 key 上执行了 HSET 命令。
 
    如果用的是 access 格式，那么 minio_events 就是一个 list，S3 网关就会调用 RPUSH 添加到 list 中，在 monitor 命令中将看到：
 
-   ```Shell
-   127.0.0.1:6379> monitor
-   OK
-   1712562751.922469 [1 192.168.65.1:61102] "rpush" "aceesseventskey" "[{\"Event\":[{\"eventVersion\":\"2.0\",\"eventSource\":\"minio:s3\",\"awsRegion\":\"\",\"eventTime\":\"2024-04-08T07:52:31.921Z\",\"eventName\":\"s3:ObjectCreated:Put\",\"userIdentity\":{\"principalId\":\"admin\"},\"requestParameters\":{\"principalId\":\"admin\",\"region\":\"\",\"sourceIPAddress\":\"127.0.0.1\"},\"responseElements\":{\"content-length\":\"0\",\"x-amz-request-id\":\"17C43EBFD35A53B8\",\"x-minio-origin-endpoint\":\"http://127.0.0.1:9001\"},\"s3\":{\"s3SchemaVersion\":\"1.0\",\"configurationId\":\"Config\",\"bucket\":{\"name\":\"images\",\"ownerIdentity\":{\"principalId\":\"admin\"},\"arn\":\"arn:aws:s3:::images\"},\"object\":{\"key\":\"myphoto.jpg\",\"size\":4,\"eTag\":\"40b134ab8a3dee5dd9760a7805fd495c\",\"userMetadata\":{\"content-type\":\"image/jpeg\"},\"sequencer\":\"17C43EBFD3DACA70\"}},\"source\":{\"host\":\"127.0.0.1\",\"port\":\"\",\"userAgent\":\"MinIO (darwin; arm64) minio-go/v7.0.11 mc/RELEASE.2021-04-22T17-40-00Z\"}}],\"EventTime\":\"2024-04-08T07:52:31.921Z\"}]"
-   ```
+    ```Shell
+    127.0.0.1:6379> monitor
+    OK
+    1712562751.922469 [1 192.168.65.1:61102] "rpush" "aceesseventskey" "[{\"Event\":[{\"eventVersion\":\"2.0\",\"eventSource\":\"minio:s3\",\"awsRegion\":\"\",\"eventTime\":\"2024-04-08T07:52:31.921Z\",\"eventName\":\"s3:ObjectCreated:Put\",\"userIdentity\":{\"principalId\":\"admin\"},\"requestParameters\":{\"principalId\":\"admin\",\"region\":\"\",\"sourceIPAddress\":\"127.0.0.1\"},\"responseElements\":{\"content-length\":\"0\",\"x-amz-request-id\":\"17C43EBFD35A53B8\",\"x-minio-origin-endpoint\":\"http://127.0.0.1:9001\"},\"s3\":{\"s3SchemaVersion\":\"1.0\",\"configurationId\":\"Config\",\"bucket\":{\"name\":\"images\",\"ownerIdentity\":{\"principalId\":\"admin\"},\"arn\":\"arn:aws:s3:::images\"},\"object\":{\"key\":\"myphoto.jpg\",\"size\":4,\"eTag\":\"40b134ab8a3dee5dd9760a7805fd495c\",\"userMetadata\":{\"content-type\":\"image/jpeg\"},\"sequencer\":\"17C43EBFD3DACA70\"}},\"source\":{\"host\":\"127.0.0.1\",\"port\":\"\",\"userAgent\":\"MinIO (darwin; arm64) minio-go/v7.0.11 mc/RELEASE.2021-04-22T17-40-00Z\"}}],\"EventTime\":\"2024-04-08T07:52:31.921Z\"}]"
+    ```
 
 #### 使用 MySQL 发布事件
 
@@ -700,31 +702,31 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
 
    使用 `mc admin config set` 命令配置 MySQL 为事件通知的目标
 
-   ```Shell
-   mc admin config set myminio notify_mysql:myinstance table="minio_images" dsn_string="root:123456@tcp(172.17.0.1:3306)/miniodb"
-   ```
+    ```Shell
+    mc admin config set myminio notify_mysql:myinstance table="minio_images" dsn_string="root:123456@tcp(172.17.0.1:3306)/miniodb"
+    ```
 
    你可以通过 `mc admin config get myminio notify_mysql` 来查看有哪些配置项，不同类型的目标其配置项也不同，针对 MySQL 类型，其有以下配置项：
 
-   ```shell
-   $ mc admin config get myminio notify_mysql
-   format=namespace dsn_string= table= queue_dir= queue_limit=0 max_open_connections=2
-   ```
+    ```shell
+    $ mc admin config get myminio notify_mysql
+    format=namespace dsn_string= table= queue_dir= queue_limit=0 max_open_connections=2
+    ```
 
    每个配置项的含义
 
-   ```Shell
-   KEY:
-   notify_mysql[:name]  发布存储桶通知到 MySQL 数据库。当需要多个 MySQL server endpoint 时，可以为每个配置添加用户指定的“name”（例如"notify_mysql:myinstance"）.
-   
-   ARGS:
-   dsn_string*  (string)             MySQL 数据源名称连接字符串，例如 "<user>:<password>@tcp(<host>:<port>)/<database>"
-   table*       (string)             存储/更新事件的数据库表名，表会自动被创建
-   format*      (namespace*|access)  'namespace' 或者 'access', 默认是 'namespace'
-   queue_dir    (path)               未发送消息的暂存目录 例如 '/home/events'
-   queue_limit  (number)             未发送消息的最大限制，默认是 '100000'
-   comment      (sentence)           可选的注释说明
-   ```
+    ```Shell
+    KEY:
+    notify_mysql[:name]  发布存储桶通知到 MySQL 数据库。当需要多个 MySQL server endpoint 时，可以为每个配置添加用户指定的“name”（例如"notify_mysql:myinstance"）.
+
+    ARGS:
+    dsn_string*  (string)             MySQL 数据源名称连接字符串，例如 "<user>:<password>@tcp(<host>:<port>)/<database>"
+    table*       (string)             存储/更新事件的数据库表名，表会自动被创建
+    format*      (namespace*|access)  'namespace' 或者 'access', 默认是 'namespace'
+    queue_dir    (path)               未发送消息的暂存目录 例如 '/home/events'
+    queue_limit  (number)             未发送消息的最大限制，默认是 '100000'
+    comment      (sentence)           可选的注释说明
+    ```
 
    dsn_string 是必须的，并且格式为 `<user>:<password>@tcp(<host>:<port>)/<database>`
 
@@ -732,16 +734,16 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
 
    更新配置前，可以使用 `mc admin config get` 命令获取当前配置：
 
-   ```Shell
-   $ mc admin config get myminio/ notify_mysql
-   notify_mysql:myinstance enable=off format=namespace host= port= username= password= database= dsn_string= table= queue_dir= queue_limit=0
-   ```
+    ```Shell
+    $ mc admin config get myminio/ notify_mysql
+    notify_mysql:myinstance enable=off format=namespace host= port= username= password= database= dsn_string= table= queue_dir= queue_limit=0
+    ```
 
    使用带有 dsn_string 参数的 `mc admin config set` 的命令更新 MySQL 的通知配置：
 
-   ```Shell
-   mc admin config set myminio notify_mysql:myinstance table="minio_images" dsn_string="root:xxxx@tcp(127.0.0.1:3306)/miniodb"
-   ```
+    ```Shell
+    mc admin config set myminio notify_mysql:myinstance table="minio_images" dsn_string="root:xxxx@tcp(127.0.0.1:3306)/miniodb"
+    ```
 
    请注意，根据你的需要，你可以添加任意多个 MySQL server endpoint，只要提供 MySQL 实例的标识符（如上例中的"myinstance"）和每个实例配置参数的信息即可。
 
@@ -755,23 +757,23 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
 
    假设 S3 网关服务别名叫 myminio，可执行下列脚本：
 
-   ```Shell
-   # 在我的 minio 中创建名为`images`的存储桶
-   mc mb myminio/images
-   # 使用 MySQL ARN 在“images”存储桶上添加通知配置。--suffix 参数用于过滤事件。
-   mc event add myminio/images arn:minio:sqs::myinstance:mysql --suffix .jpg
-   # 在“images”存储桶上打印出通知配置。
-   mc event list myminio/images
-   arn:minio:sqs::myinstance:mysql s3:ObjectCreated:*,s3:ObjectRemoved:*,s3:ObjectAccessed:* Filter: suffix=”.jpg”
-   ```
+    ```Shell
+    # 在我的 minio 中创建名为`images`的存储桶
+    mc mb myminio/images
+    # 使用 MySQL ARN 在“images”存储桶上添加通知配置。--suffix 参数用于过滤事件。
+    mc event add myminio/images arn:minio:sqs::myinstance:mysql --suffix .jpg
+    # 在“images”存储桶上打印出通知配置。
+    mc event list myminio/images
+    arn:minio:sqs::myinstance:mysql s3:ObjectCreated:*,s3:ObjectRemoved:*,s3:ObjectAccessed:* Filter: suffix=”.jpg”
+    ```
 
 4. 验证 MySQL
 
    打开一个新的 terminal 终端并上传一张 JPEG 图片到 images 存储桶。
 
-   ```Shell
-   mc cp myphoto.jpg myminio/images
-   ```
+    ```Shell
+    mc cp myphoto.jpg myminio/images
+    ```
 
    打开一个 MySQL 终端列出表 minio_images 中所有的记录，将会发现一条刚插入的记录。
 
@@ -789,63 +791,63 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
 
    S3 网关支持持久事件存储。持久存储将在 webhook 离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 queue_dir 字段设置，存储的最大限制可以通过 queue_limit 设置。例如， /home/events，并且 queue_limit 可以设置为 1000。默认情况下 queue_limit 是 100000。
 
-   ```Shell
-   KEY:
-   notify_webhook[:name]  发布存储桶通知到 webhook endpoints
-   
-   ARGS:
-   endpoint*    (url)       webhook server endpoint，例如 http://localhost:8080/minio/events
-   auth_token   (string)    opaque token 或者 JWT authorization token
-   queue_dir    (path)      未发送消息的暂存目录 例如 '/home/events'
-   queue_limit  (number)    未发送消息的最大限制，默认是 '100000'
-   client_cert  (string)    Webhook 的 mTLS 身份验证的客户端证书
-   client_key   (string)    Webhook 的 mTLS 身份验证的客户端证书密钥
-   comment      (sentence)  可选的注释说明
-   ```
+    ```Shell
+    KEY:
+    notify_webhook[:name]  发布存储桶通知到 webhook endpoints
+
+    ARGS:
+    endpoint*    (url)       webhook server endpoint，例如 http://localhost:8080/minio/events
+    auth_token   (string)    opaque token 或者 JWT authorization token
+    queue_dir    (path)      未发送消息的暂存目录 例如 '/home/events'
+    queue_limit  (number)    未发送消息的最大限制，默认是 '100000'
+    client_cert  (string)    Webhook 的 mTLS 身份验证的客户端证书
+    client_key   (string)    Webhook 的 mTLS 身份验证的客户端证书密钥
+    comment      (sentence)  可选的注释说明
+    ```
 
    用 `mc admin config set` 命令更新配置，这里的 endpoint 是监听 webhook 通知的服务地址。保存配置文件并重启 MinIO 服务让配配置生效。注意，在重启 MinIO 时，这个 endpoint 必须是启动并且可访问到。
 
-   ```Shell
-   mc admin config set myminio notify_webhook:1 queue_limit="0"  endpoint="http://localhost:3000" queue_dir=""
-   ```
+    ```Shell
+    mc admin config set myminio notify_webhook:1 queue_limit="0"  endpoint="http://localhost:3000" queue_dir=""
+    ```
 
 2. 启用 bucket 通知
 
    我们现在可以在一个叫 images 的存储桶上开启事件通知，一旦上有文件上传到存储桶中，事件将被触发。在这里，ARN 的值是 `arn:minio:sqs::1:webhook`。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-   ```Shell
-   mc mb myminio/images
-   mc mb myminio/images-thumbnail
-   mc event add myminio/images arn:minio:sqs::1:webhook --event put --suffix .jpg
-   ```
+    ```Shell
+    mc mb myminio/images
+    mc mb myminio/images-thumbnail
+    mc event add myminio/images arn:minio:sqs::1:webhook --event put --suffix .jpg
+    ```
 
 3. ##### 采用 Thumbnailer 进行验证
 
-   [Thumbnailer](https://github.com/minio/thumbnailer)  项目是一个使用 MinIO 的 listenBucketNotification API 的缩略图生成器示例，我们使用 [Thumbnailer](https://github.com/minio/thumbnailer) 来监听 S3 网关通知。如果有文件上传于是 S3 网关服务，Thumnailer 监听到该通知，生成一个缩略图并上传到 S3 网关服务。安装 Thumbnailer:
+   [Thumbnailer](https://github.com/minio/thumbnailer) 项目是一个使用 MinIO 的 listenBucketNotification API 的缩略图生成器示例，我们使用 [Thumbnailer](https://github.com/minio/thumbnailer) 来监听 S3 网关通知。如果有文件上传于是 S3 网关服务，Thumnailer 监听到该通知，生成一个缩略图并上传到 S3 网关服务。安装 Thumbnailer:
 
-   ```Shell
-   git clone https://github.com/minio/thumbnailer/
-   npm install
-   ```
+    ```Shell
+    git clone https://github.com/minio/thumbnailer/
+    npm install
+    ```
 
    然后打开 Thumbnailer 的 `config/webhook.json` 配置文件，添加有关 MinIO server 的配置，使用下面的方式启动 Thumbnailer:
 
-   ```Shell
-   NODE_ENV=webhook node thumbnail-webhook.js
-   ```
+    ```Shell
+    NODE_ENV=webhook node thumbnail-webhook.js
+    ```
 
    Thumbnailer 运行在 `http://localhost:3000/`
 
    下一步，配置 MinIO server，让其发送消息到这个 URL（第一步提到的），并使用 mc 来设置存储桶通知（第二步提到的）。然后上传一张图片到 S3 网关 server：
 
-   ```Shell
-   mc cp ~/images.jpg myminio/images
-   .../images.jpg:  8.31 KB / 8.31 KB ┃▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┃ 100.00% 59.42 KB/s 0s
-   ```
+    ```Shell
+    mc cp ~/images.jpg myminio/images
+    .../images.jpg:  8.31 KB / 8.31 KB ┃▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┃ 100.00% 59.42 KB/s 0s
+    ```
 
    稍等片刻，然后使用 mc ls 检查存储桶的内容，你将看到有个缩略图出现了。
 
-   ```Shell
-   mc ls myminio/images-thumbnail
-   [2017-02-08 11:39:40 IST]   992B images-thumbnail.jpg
-   ```
+    ```Shell
+    mc ls myminio/images-thumbnail
+    [2017-02-08 11:39:40 IST]   992B images-thumbnail.jpg
+    ```
