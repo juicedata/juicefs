@@ -161,6 +161,7 @@ juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 ### 过滤 {#filter-matching}
 
 #### include/exclude 规则
+
 你可以用 `--exclude` 和 `--include` 来过滤出需要同步的文件，并通过多个规则的按序组合实现任意集合的同步。
 `exclude/include` 具体规则是：同一个待匹配路径会逐次匹配给出的`include`,`exclude` 规则，一旦匹配上就返回匹配上的模式的行为（包含或者不包含），如果所有的模式都未匹配上则执行默认行为——包含。
 
