@@ -1,51 +1,53 @@
 ---
-title: JuiceFS S3 网关
+title: S3 网关
+description: JuiceFS S3 网关是 JuiceFS 的一个功能，它将 JuiceFS 文件系统以 S3 协议对外提供服务，使得应用可以通过 S3 SDK 访问 JuiceFS 上存储的文件。
 sidebar_position: 5
 ---
+
+JuiceFS S3 网关是 JuiceFS 支持的多种访问方式之一，它可以将 JuiceFS 文件系统以 S3 协议对外提供服务，使得应用可以通过 S3 SDK 访问 JuiceFS 上存储的文件。
+
 ## 架构与原理
 
-JuiceFS 会将文件[分块存储到底层的对象存储中](../introduction/architecture.md#how-juicefs-store-files)，暴露给用户的往往是 POSIX 接口，而如果你需要同时用 S3 兼容接口访问 JuiceFS 中的文件，就可以用到 S3 网关。其架构图如下：
+在 JuiceFS 中，文件是以对象的形式[分块存储到底层的对象存储中](../introduction/architecture.md#how-juicefs-store-files)。JuiceFS 提供了 FUSE POSIX、WebDAV、S3 网关、CSI 驱动等多种访问方式，其中 S3 网关是较为常用的一种，其架构图如下：
 
 ![JuiceFS S3 Gateway architecture](../images/juicefs-s3-gateway-arch.png)
 
-JuiceFS S3 网关是通过 [MinIO S3 网关](https://github.com/minio/minio/tree/ea1803417f80a743fc6c7bb261d864c38628cf8d/docs/gateway)实现的功能，我们通过实现起来其 [object 接口](https://github.com/minio/minio/blob/d46386246fb6db5f823df54d932b6f7274d46059/cmd/object-api-interface.go#L88) 并且将 JuiceFS 文件系统作为其 server 的后端存储，获得了近乎原生 MinIO; 的体验，继承 MinIO 的很多高级功能。这种架构对于 MinIO 来说，JuiceFS 是其运行 server 命令的一块本地盘，整体的原理类似于 `minio server /data1`。
+JuiceFS S3 网关功能是通过 [MinIO S3 网关](https://github.com/minio/minio/tree/ea1803417f80a743fc6c7bb261d864c38628cf8d/docs/gateway)实现的。我们利用 MinIO 的 [`object 接口`](https://github.com/minio/minio/blob/d46386246fb6db5f823df54d932b6f7274d46059/cmd/object-api-interface.go#L88)将 JuiceFS 文件系统作为 MinIO 服务器的后端存储，提供接近原生 MinIO 的使用体验，同时继承 MinIO 的许多高级功能。在这种架构中，JuiceFS 就相当于 MinIO 实例的一块本地磁盘，原理与 `minio server /data1` 命令类似。
 
-JuiceFS Gateway 的常见的使用场景有：
+JuiceFS S3 网关的常见的使用场景有：
 
-* 为 JuiceFS 文件系统暴露 S3 接口，应用可以通过 S3 SDK 访问 JuiceFS 上存储的文件
-* 使用 s3cmd、AWS CLI、MinIO 客户端来方便地访问和操作 JuiceFS 上存储的文件
-* S3 网关还提供一个基于网页的文件管理器，使用浏览器就能对 JuiceFS 文件系统进行常规的增删管理
-* 在跨集群复制数据的场景下，作为集群的统一数据出口，避免跨区访问元数据以提升数据传输性能，详见[「使用 S3 网关进行跨区域数据同步」](../guide/sync.md#sync-across-region)
+* **为 JuiceFS 开放 S3 接口**：应用可以通过 S3 SDK 访问 JuiceFS 上存储的文件；
+* **使用 S3 客户端**：使用 s3cmd、AWS CLI、MinIO 客户端来方便地访问和操作 JuiceFS 上存储的文件；
+* **管理 JuiceFS 中的文件**：S3 网关提供了一个基于网页的文件管理器，可以在浏览器中管理 JuiceFS 中的文件；
+* **集群复制**：在跨集群复制数据的场景下，作为集群的统一数据出口，避免跨区访问元数据以提升数据传输性能，详见[「使用 S3 网关进行跨区域数据同步」](../guide/sync.md#sync-across-region)
 
 ## 快速开始
 
 1. 创建文件系统
 
-   S3 网关只是将一个 POSIX 文件系统以 S3 协议对外提供服务，所以在启动 S3 网关前需要先准备好一个的文件系统
-
-    ```shell
-    juicefs format redis://localhost:6379 test1
-    ```
+    首先，你需要创建一个 JuiceFS 文件系统。如果你还没有创建 JuiceFS 文件系统，请参考[创建 JuiceFS 文件系统](../getting-started/standalone.md)。
 
 2. 启动 S3 网关
-
-   使用 JuiceFS 的 `gateway` 子命令即可在当前主机启用 S3 网关。在开启功能之前，需要先设置 `MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD` 两个环境变量，即访问 S3 API 时认证身份用的 Access Key 和 Secret Key。这对凭证我们称为管理员凭证，拥有最高权限。例如：
+   
+   在开启功能之前，需要先设置 `MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD` 两个环境变量，即访问 S3 API 时认证身份用的 Access Key 和 Secret Key。这对凭证我们称为管理员凭证，拥有最高权限。例如：
 
     ```shell
     export MINIO_ROOT_USER=admin
     export MINIO_ROOT_PASSWORD=12345678
     ```
 
+    注意，`MINIO_ROOT_USER` 的长度至少 3 个字符， `MINIO_ROOT_PASSWORD` 的长度至少 8 个字符（Windows 用户请改用 `set` 命令设置环境变量，例如：`set MINIO_ROOT_USER=admin`）。
+
+    然后，使用 `juicefs gateway` 命令启动 S3 网关。例如：
+
     ```shell
-    juicefs gateway redis://localhost:6379 localhost:9000
+    juicefs gateway redis://localhost:6379/1 localhost:9000
     ```
 
-   以上三条命令中，前两条命令用于设置环境变量。注意，`MINIO_ROOT_USER` 的长度至少 3 个字符， `MINIO_ROOT_PASSWORD` 的长度至少 8 个字符（Windows 用户请改用 `set` 命令设置环境变量，例如：`set MINIO_ROOT_USER=admin`）。
-
-   最后一条命令用于启用 S3 网关，`gateway` 子命令至少需要提供两个参数，第一个是存储元数据的数据库 URL，第二个是 S3 网关监听的地址和端口。你可以根据需要在 `gateway` 子命令中添加[其他选项](../reference/command_reference.md#gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
+    `gateway` 子命令至少需要提供两个参数，第一个是元数据引擎的 URL，第二个是 S3 网关监听的地址和端口。你可以根据需要在 `gateway` 子命令中添加[其他选项](../reference/command_reference.md#gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
 
     ```shell
-    juicefs gateway --cache-size 20480 redis://localhost:6379 localhost:9000
+    juicefs gateway --cache-size 20480 redis://localhost:6379/1 localhost:9000
     ```
 
    在这个例子中，我们假设 JuiceFS 文件系统使用的是本地的 Redis 数据库。当 S3 网关启用时，在**当前主机**上可以使用 `http://localhost:9000` 这个地址访问到 S3 网关的管理界面。
@@ -55,7 +57,7 @@ JuiceFS Gateway 的常见的使用场景有：
    如果你希望通过局域网或互联网上的其他主机访问 S3 网关，则需要调整监听地址，例如：
 
     ```shell
-    juicefs gateway redis://localhost:6379 0.0.0.0:9000
+    juicefs gateway redis://localhost:6379/1 0.0.0.0:9000
     ```
 
    这样一来，S3 网关将会默认接受所有网络请求。不同的位置的 S3 客户端可以使用不同的地址访问 S3 网关，例如：
@@ -127,9 +129,13 @@ $ mc ls juicefs/jfs
 
 默认情况下，`juicefs gateway` 只允许一个 bucket，bucket 名字为文件系统名字，如果需要多个桶，可以在启动时添加 `--multi-buckets`开启多桶支持，该参数将会把 JuiceFS 文件系统顶级目录下的每个子目录都导出为一个 bucket。创建 bucket 的行为在文件系统上的反映是顶级目录下创建了一个同名的子目录。
 
+```shell
+juicefs gateway redis://localhost:6379/1 localhost:9000 --multi-buckets
+```
+
 ### 保留 etag
 
-默认  Gateway 不会保存和返回对象的 etag 信息，可以通过`--keep-etag` 开启
+默认 S3 网关不会保存和返回对象的 etag 信息，可以通过`--keep-etag` 开启
 
 ### 开启对象标签
 
@@ -137,7 +143,7 @@ $ mc ls juicefs/jfs
 
 ### 启用虚拟主机风格请求
 
-默认情况下，Gateway 支持格式为 <http://mydomain.com/bucket/object> 的路径类型请求。
+默认情况下，S3 网关支持格式为 <http://mydomain.com/bucket/object> 的路径类型请求。
 `MINIO_DOMAIN` 环境变量被用来启用虚拟主机类型请求。如果请求的`Host`头信息匹配 `(.+).mydomain.com`，则匹配的模式 `$1` 被用作 bucket，并且路径被用作 object.
 示例：
 
@@ -147,21 +153,25 @@ export MINIO_DOMAIN=mydomain.com
 
 ### 调整 IAM 刷新时间
 
-默认 IAM 缓存的刷新时间为 5 分钟，可以通过 `--refresh-iam-interval` 调整，该参数的值是一个带单位的时间字符串，例如 "300ms", "-1.5h" 或者 "2h45m"，有效的时间单位是 "ns", "us" (or "µs"), "ms", "s", "m", "h".
+默认 IAM 缓存的刷新时间为 5 分钟，可以通过 `--refresh-iam-interval` 调整，该参数的值是一个带单位的时间字符串，例如 "300ms", "-1.5h" 或者 "2h45m"，有效的时间单位是 "ns"、"us" (或 "µs")、"ms"、"s"、"m"、"h"。
 
-例如设置 1 分钟刷新
+例如设置 1 分钟刷新：
 
 `juicefs gateway xxxx xxxx    --refresh-iam-interval 1m`
 
 ## 高级功能
 
-JuiceFS gateway 的核心功能是对外提供 S3 接口，目前对 S3 协议的支持已经比较完善。在 v1.2 版本中，我们又添加了对身份和访问控制（IAM）和桶事件通知的支持。高级功能需要使用 RELEASE.2021-04-22T17-40-00Z 版本的 mc 命令行工具调用。这些高级功能的使用方法可以参考当时 MinIO [相关文档](https://github.com/minio/minio/tree/e0d3a8c1f4e52bb4a7d82f7f369b6796103740b3/docs)使用，也可以直接参考 mc 的命令行帮助信息。如果你不知道有哪些功能或者不知道某个功能如何使用，你可以直接在子命令后加 `-h` 查看帮助说明。下文将简要介绍支持哪些高级功能和部分示例。
+JuiceFS S3 网关的核心功能是对外提供 S3 接口，目前对 S3 协议的支持已经比较完善。在 v1.2 版本中，我们又添加了对身份和访问控制（IAM）和桶事件通知的支持。
+
+这些高级功能要求 mc 客户端的版本为 `RELEASE.2021-04-22T17-40-00Z`，使用方法可以参考当时 MinIO [相关文档](https://github.com/minio/minio/tree/e0d3a8c1f4e52bb4a7d82f7f369b6796103740b3/docs)，也可以直接参考 mc 的命令行帮助信息。如果你不知道有哪些功能或者不知道某个功能如何使用，你可以直接在子命令后加 `-h` 查看帮助说明。
 
 ### 身份和访问控制
 
 #### 普通用户
 
-在 v1.2 版本之前，`juicefs gateway` 只有在启动时创建一个超级用户，这个超级用户只属于这个进程，即使多个 gateway 的背后是同一个文件系统，其用户也都是进程间隔离的（你可以为每个 gateway 进程设置不同的超级用户，他们相互独立，互不影响）。v1.2 版本后，`juicefs gateway` 启动时仍需要设置超级用户，该超级用户仍旧是进程隔离的，但是允许使用 mc admin user add 添加新的用户。新添加的用户将是同文件系统共享的。新添加的用户可以使用 `mc admin user` 进行管理，支持添加，关闭，启用，删除用户，也支持查看所有用户以及展示用户信息和查看用户的策略
+在 v1.2 版本之前，`juicefs gateway` 只有在启动时创建一个超级用户，这个超级用户只属于这个进程，即使多个 gateway 的背后是同一个文件系统，其用户也都是进程间隔离的（你可以为每个 gateway 进程设置不同的超级用户，他们相互独立，互不影响）。
+
+在 v1.2 版本之后，`juicefs gateway` 启动时仍需要设置超级用户，该超级用户仍旧是进程隔离的，但是允许使用 `mc admin user add` 添加新的用户，新添加的用户将是同文件系统共享的。可以使用 `mc admin user` 进行管理，支持添加，关闭，启用，删除用户，也支持查看所有用户以及展示用户信息和查看用户的策略。
 
 ```Shell
 $ mc admin user -h
@@ -182,7 +192,7 @@ COMMANDS:
   svcacct  manage service accounts
 ```
 
-这里以添加用户为例子
+例如，添加用户：
 
 ```Shell
 # 添加新用户
@@ -225,13 +235,15 @@ COMMANDS:
 
 #### AssumeRole 安全令牌服务
 
-Gateway 安全令牌服务（STS）是一种服务，可让客户端请求 MinIO 资源的临时凭证。临时凭证的工作原理与默认管理员凭证几乎相同，但有一些不同之处：
+S3 网关安全令牌服务（STS）是一种服务，可让客户端请求 MinIO 资源的临时凭证。临时凭证的工作原理与默认管理员凭证几乎相同，但有一些不同之处：
 
-- 临时凭据顾名思义是短期的。它们可以配置为持续几分钟到几小时不等。证书过期后，Gateway 将不再识别它们，也不允许使用它们进行任何形式的 API 请求访问。
+- **临时凭据顾名思义是短期的。**它们可以配置为持续几分钟到几小时不等。证书过期后，S3 网关将不再识别它们，也不允许使用它们进行任何形式的 API 请求访问。
 
-- 临时凭据不需要与应用程序一起存储，而是动态生成并在请求时提供给应用程序。当（甚至在）临时凭据过期时，应用程序可以请求新的凭据。
+- **临时凭据不需要与应用程序一起存储，而是动态生成并在请求时提供给应用程序。**当（甚至在）临时凭据过期时，应用程序可以请求新的凭据。
 
-AssumeRole 会返回一组临时安全凭证，您可以使用这些凭证访问 Gateway 资源。AssumeRole 需要现有 Gateway 用户的授权凭据，返回的临时安全凭证包括访问密钥、秘密密钥和安全令牌。应用程序可以使用这些临时安全凭证对 Gateway API 操作进行签名调用。应用于这些临时凭据的策略略继承自 Gateway 用户凭据。默认情况下，AssumeRole 创建的临时安全凭证有效期为一个小时。但是，请使用可选参数 DurationSeconds 指定凭据的持续时间范围。该值从 900 秒（15 分钟）变化到最长 7 天会话持续时间限制之间不等。
+`AssumeRole` 会返回一组临时安全凭证，您可以使用这些凭证访问网关资源。`AssumeRole` 需要现有网关用户的授权凭据，返回的临时安全凭证包括访问密钥、秘密密钥和安全令牌。应用程序可以使用这些临时安全凭证对网关 API 操作进行签名调用，应用于这些临时凭据的策略略继承自网关用户凭据。
+
+默认情况下，`AssumeRole` 创建的临时安全凭证有效期为一个小时，可以通过可选参数 DurationSeconds 指定凭据的有效期，该值范围从 900（15 分钟）到 604800（7 天）。
 
 ##### API 请求参数
 
@@ -307,7 +319,7 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 
 ##### AWS cli 使用 AssumeRole API
 
-1. 启动 Gateway 并 创建 foobar 用户
+1. 启动 S3 网关并创建名为 foobar 的用户
 2. 配置 AWS cli
 
    ```
@@ -319,7 +331,9 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 
 3. 使用 AWS cli 请求 AssumeRole API
 
-   > 注意：在以下命令中，“--role-arn”和“--role-session-name”对 Gateway 没有意义，可以设置为满足命令行要求的任何值。
+:::note 注意
+在以下命令中，“--role-arn”和“--role-session-name”对 S3 网关没有意义，可以设置为满足命令行要求的任何值。
+:::
 
    ```
    $ aws --profile foobar --endpoint-url http://localhost:9000 sts assume-role --policy '{"Version":"2012-10-17","Statement":[{"Sid":"Stmt1","Effect":"Allow","Action":"s3:*","Resource":"arn:aws:s3:::*"}]}' --role-arn arn:xxx:xxx:xxx:xxxx --role-session-name anything
@@ -362,17 +376,17 @@ COMMANDS:
   update  Attach new IAM policy to a user or group
 ```
 
-gateway 内置了以下 4 种常用的策略
+S3 网关内置了以下 4 种常用的策略：
 
-- readonly：只读用户
-- readwrite：可读写用户
-- writeonly：只写用户
-- consoleAdmin：可读可写可管理，可管理指可以调用管理 API，比如创建用户等等。
+- **readonly**：只读用户
+- **readwrite**：可读写用户
+- **writeonly**：只写用户
+- **consoleAdmin**：可读可写可管理，可管理指可以调用管理 API，比如创建用户等等。
 
-例如设置某个用户为只读用户
+例如，设置某个用户为只读：
 
 ```Shell
-# 设置 user1 为只读用户
+# 设置 user1 为只读
 $ mc admin policy set myminio readonly user=user1
 
 # 查看用户策略
@@ -380,7 +394,7 @@ $ mc admin user list myminio
 enabled    user1                 readonly
 ```
 
-以上是简单的策略，如需设置自定义的策略，可以使用 `mc admin policy add`  添加
+以上是简单的策略，如需设置自定义的策略，可以使用 `mc admin policy add`。
 
 ```Shell
 $ mc admin policy add -h
@@ -401,7 +415,7 @@ EXAMPLES:
      $ mc admin policy add myminio writeonly /tmp/writeonly.json
 ```
 
-这里要添加的策略文件必须是一个 JSON 格式的文件，具有[IAM 兼容](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies.html)的语法，且不超过 2048 个字符。通过该语法你可以实现更为精细化的访问控制，如果你对此不熟悉，你可以先用下面的命令查看内置的这些简单的策略是如何写的并在此基础上加以更改。
+这里要添加的策略文件必须是一个 JSON 格式的文件，具有[IAM 兼容](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies.html)的语法，且不超过 2048 个字符。该语法可以实现更为精细化的访问控制，如果不熟悉，可以先用下面的命令查看内置的简单策略并在此基础上加以更改。
 
 ```Shell
 $ mc admin policy info myminio readonly
@@ -424,7 +438,7 @@ $ mc admin policy info myminio readonly
 
 #### 用户组管理
 
-JuiceFS Gateway 支持创建用户组，类似于 Linux 用户组的概念，使用 `mc admin group`  管理。你可以把一个或者多个用户设置为一个组，然后为组统一赋权。该用法与用户管理类似，就不在赘述了。
+JuiceFS S3 Gateway 支持创建用户组，类似于 Linux 用户组的概念，使用 `mc admin group` 管理。你可以把一个或者多个用户设置为一个组，然后为组统一赋权，该用法与用户管理类似，此处不再赘述。
 
 ```Shell
 $ mc admin  group -h
@@ -445,7 +459,7 @@ COMMANDS:
 
 #### 匿名访问管理
 
-以上是针对有用户记录的管理，但是有时我们希望特定的对象或桶可以被任何人访问，这时就需要匿名访问管理了，这部分功能使用 `mc policy`  命令管理
+以上是针对有用户记录的管理，如果希望特定的对象或桶可以被任何人访问，可以使用 `mc policy` 命令配置匿名访问策略。
 
 ```Shell
 Name:
@@ -493,14 +507,14 @@ EXAMPLES:
      $ mc policy --recursive links s3/shared/
 ```
 
-Gateway 默认内置了 4 种匿名权限
+S3 网关默认内置了 4 种匿名权限
 
-- none: 不允许匿名访问（一般用来清除已有的权限）
-- download：允许任何人读取
-- upload：允许任何人写入
-- public：允许任何人读写
+- **none**：不允许匿名访问（一般用来清除已有的权限）
+- **download**：允许任何人读取
+- **upload**：允许任何人写入
+- **public**：允许任何人读写
 
-下面举例说明如何设置一个对象允许匿名下载
+例如，设置一个允许匿名下载对象：
 
 ```
 # 设置 testbucket1/afile 为匿名访问
@@ -521,13 +535,15 @@ mc policy set none  useradmin/testbucket1/afile
 
 #### 配置生效时间
 
-JuiceFS Gateway 的所有管理 API 的更新操作都会立即生效并且持久化到 JuiceFS 文件系统中，而且接受该 API 请求的客户端也会立即生效。但是当 Gateway 多机运行时，情况会有所不同，因为 Gateway 在处理请求鉴权时会直接采用内存缓存信息作为校验基准，否则每次请求都读取配置文件内容作为校验基准将带来不可接受的性能问题。但是有了缓存就会存在缓存数据与配置文件不一致的问题。目前 JuiceFS Gateway 的缓存刷新策略是每 5 分钟强制更新内存缓存（部分操作也会触发缓存更新操作），这样保证多机情况下配置生效最长不会超过 5 分钟。你也可以通过 `--refresh-iam-interval` 参数来调整该时间。如果希望某个 Gateway 立即生效，可以尝试手动将其重启。
+JuiceFS S3 网关的所有管理 API 的更新操作都会立即生效并且持久化到 JuiceFS 文件系统中，而且接受该 API 请求的客户端也会立即生效。但是，当 S3 网关多机运行时，情况会有所不同，因为 S3 网关在处理请求鉴权时会直接采用内存缓存信息作为校验基准，避免每次请求都读取配置文件内容作为校验基准将带来不可接受的性能问题。
+
+目前 JuiceFS S3 网关的缓存刷新策略是每 5 分钟强制更新内存缓存（部分操作也会触发缓存更新操作），这样保证多机情况下配置生效最长不会超过 5 分钟，可以通过 `--refresh-iam-interval` 参数来调整该时间。如果希望某个 S3 网关立即生效，可以尝试手动将其重启。
 
 ### 桶事件通知
 
-有时用户需要根据桶上发生的事件来触发一些行为，这时就需要桶时间通知该功能了。存储桶事件通知可以用来监视存储桶中对象上发生的事件。
+桶事件通知功能可以用来监视存储桶中对象上发生的事件，从而触发一些行为。
 
-目前支持的对象事件类型有
+目前支持的对象事件类型有：
 
 - `s3:ObjectCreated:Put`
 - `s3:ObjectCreated:CompleteMultipartUpload`
@@ -537,14 +553,14 @@ JuiceFS Gateway 的所有管理 API 的更新操作都会立即生效并且持�
 - `s3:ObjectCreated:Copy`
 - `s3:ObjectAccessed:Get`
 
-支持的全局事件有
+支持的全局事件有：
 
 - `s3:BucketCreated`
 - `s3:BucketRemoved`
 
 可以使用 mc 客户端工具通过 event 子命令设置和监听事件通知。MinIO 发送的用于发布事件的通知消息是 JSON 格式的，JSON 结构参考[这里](https://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html)。
 
-JuiceFS Gateway 为了减少依赖，裁剪了部分支持的事件目标类型。目前存储桶事件可以支持发布到以下目标：
+JuiceFS S3 网关为了减少依赖，裁剪了部分支持的事件目标类型。目前存储桶事件可以支持发布到以下目标：
 
 - Redis
 - MySQL
@@ -563,13 +579,13 @@ notify_redis          publish bucket notifications to Redis datastores
 
 Redis 事件目标支持两种格式：`namespace` 和 `access`。
 
-如果用的是 `namespacee` 格式，Gateway 将存储桶里的对象同步成 Redis hash 中的条目。对于每一个条目，对应一个存储桶里的对象，其 key 都被设为"存储桶名称/对象名称"，value 都是一个有关这个 Gateway 对象的 JSON 格式的事件数据。如果对象更新或者删除，hash 中对象的条目也会相应的更新或者删除。
+如果用的是 `namespacee` 格式，S3 网关将存储桶里的对象同步成 Redis hash 中的条目。对于每一个条目，对应一个存储桶里的对象，其 key 都被设为"存储桶名称/对象名称"，value 都是一个有关这个网关对象的 JSON 格式的事件数据。如果对象更新或者删除，hash 中对象的条目也会相应的更新或者删除。
 
-如果使用的是 access , Gateway 使用[RPUSH](https://redis.io/commands/rpush)将事件添加到 list 中。这个 list 中每一个元素都是一个 JSON 格式的 list，这个 list 中又有两个元素，第一个元素是时间戳的字符串，第二个元素是一个含有在这个存储桶上进行操作的事件数据的 JSON 对象。在这种格式下，list 中的元素不会更新或者删除。
+如果使用的是 access , 网关使用[RPUSH](https://redis.io/commands/rpush)将事件添加到 list 中。这个 list 中每一个元素都是一个 JSON 格式的 list，这个 list 中又有两个元素，第一个元素是时间戳的字符串，第二个元素是一个含有在这个存储桶上进行操作的事件数据的 JSON 对象。在这种格式下，list 中的元素不会更新或者删除。
 
 下面的步骤展示如何在 namespace 和 access 格式下使用通知目标。
 
-1. 配置 Redis 到 Gateway
+1. 配置 Redis 到 S3 网关
 
    使用 mc admin config set 命令配置 Redis 为 事件通知的目标
 
@@ -580,7 +596,7 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
    $ mc admin config set myminio notify_redis:1 address="127.0.0.1:6379/1" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0"
    ```
 
-   你可以通过 `mc admin config get myminio notify_redis` 来查看有哪些配置项，不同类型的目标其配置项也不同，针对 Redis 类型，其有以下配置项，
+   你可以通过 `mc admin config get myminio notify_redis` 来查看有哪些配置项，不同类型的目标其配置项也不同，针对 Redis 类型，其有以下配置项：
 
    ```Shell
    $ mc admin config get myminio notify_redis
@@ -600,7 +616,7 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
    comment      (sentence)           可选的注释说明
    ```
 
-   Gateway 支持持久事件存储。持久存储将在 Redis broker 离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 queue_dir 字段设置，存储的最大限制可以通过 queue_limit 设置。例如，queue_dir 可以设置为/home/events, 并且 queue_limit 可以设置为 1000. 默认情况下 queue_limit 是 100000。在更新配置前，可以通过 mc admin config get 命令获取当前配置。
+   S3 网关支持持久事件存储。持久存储将在 Redis broker 离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 queue_dir 字段设置，存储的最大限制可以通过 queue_limit 设置。例如，queue_dir 可以设置为/home/events, 并且 queue_limit 可以设置为 1000. 默认情况下 queue_limit 是 100000。在更新配置前，可以通过 mc admin config get 命令获取当前配置。
 
    ```Shell
    $ mc admin config get myminio notify_redis
@@ -610,10 +626,10 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
    $ mc admin config set myminio notify_redis:1 queue_limit="1000"
    Successfully applied new settings.
    Please restart your server 'mc admin service restart myminio'.
-   # 注意这里无法使用 mc admin service restart myminio 重启，JuiceFS Gateway 暂不支持该功能，当使用 mc 配置后出现该提醒时需要手动重启 JuiceFS Gateway
+   # 注意这里无法使用 mc admin service restart myminio 重启，JuiceFS S3 网关暂不支持该功能，当使用 mc 配置后出现该提醒时需要手动重启 JuiceFS Gateway
    ```
 
-   使用 mc admin config set 命令更新配置后，重启 JuiceFS Gateway 让配置生效。如果一切顺利，JuiceFS Gateway 会在启动时输出一行信息，类似 `SQS ARNs: arn:minio:sqs::1:redis`
+   使用 mc admin config set 命令更新配置后，重启 JuiceFS S3 网关让配置生效。如果一切顺利，JuiceFS S3 网关会在启动时输出一行信息，类似 `SQS ARNs: arn:minio:sqs::1:redis`
 
    根据你的需要，你可以添加任意多个 Redis 目标，只要提供 Redis 实例的标识符（如上例“notify_redis:1”中的“1”）和每个实例配置参数的信息即可。
 
@@ -621,9 +637,9 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
 
    我们现在可以在一个叫 images 的存储桶上开启事件通知。当一个 JPEG 文件被创建或者覆盖，一个新的 key 会被创建，或者一个已经存在的 key 就会被更新到之前配置好的 Redis hash 里。如果一个已经存在的对象被删除，这个对应的 key 也会从 hash 中删除。因此，这个 Redis hash 里的行，就映射着 images 存储桶里的.jpg 对象。
 
-   要配置这种存储桶通知，我们需要用到前面步骤 Gateway 输出的 ARN 信息。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
+   要配置这种存储桶通知，我们需要用到前面步骤 S3 网关输出的 ARN 信息。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-   使用 mc 这个工具，这些配置信息很容易就能添加上。假设 Gateway 服务别名叫 myminio，可执行下列脚本：
+   使用 mc 这个工具，这些配置信息很容易就能添加上。假设 S3 网关服务别名叫 myminio，可执行下列脚本：
 
    ```Shell
    mc mb myminio/images
@@ -648,7 +664,7 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
    mc cp myphoto.jpg myminio/images
    ```
 
-   在上一个终端中，你将看到 Gateway 在 Redis 上执行的操作：
+   在上一个终端中，你将看到 S3 网关在 Redis 上执行的操作：
 
    ```Shell
    127.0.0.1:6379> monitor
@@ -656,9 +672,9 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
    1712562516.867831 [1 192.168.65.1:59280] "hset" "bucketevents" "images/myphoto.jpg" "{\"Records\":[{\"eventVersion\":\"2.0\",\"eventSource\":\"minio:s3\",\"awsRegion\":\"\",\"eventTime\":\"2024-04-08T07:48:36.865Z\",\"eventName\":\"s3:ObjectCreated:Put\",\"userIdentity\":{\"principalId\":\"admin\"},\"requestParameters\":{\"principalId\":\"admin\",\"region\":\"\",\"sourceIPAddress\":\"127.0.0.1\"},\"responseElements\":{\"content-length\":\"0\",\"x-amz-request-id\":\"17C43E891887BA48\",\"x-minio-origin-endpoint\":\"http://127.0.0.1:9001\"},\"s3\":{\"s3SchemaVersion\":\"1.0\",\"configurationId\":\"Config\",\"bucket\":{\"name\":\"images\",\"ownerIdentity\":{\"principalId\":\"admin\"},\"arn\":\"arn:aws:s3:::images\"},\"object\":{\"key\":\"myphoto.jpg\",\"size\":4,\"eTag\":\"40b134ab8a3dee5dd9760a7805fd495c\",\"userMetadata\":{\"content-type\":\"image/jpeg\"},\"sequencer\":\"17C43E89196AE2A0\"}},\"source\":{\"host\":\"127.0.0.1\",\"port\":\"\",\"userAgent\":\"MinIO (darwin; arm64) minio-go/v7.0.11 mc/RELEASE.2021-04-22T17-40-00Z\"}}]}"
    ```
 
-   在这我们可以看到 Gateway 在 minio_events 这个 key 上执行了 HSET 命令。
+   在这我们可以看到 S3 网关在 minio_events 这个 key 上执行了 HSET 命令。
 
-   如果用的是 access 格式，那么 minio_events 就是一个 list,Gateway 就会调用 RPUSH 添加到 list 中。再 monitor 命令中将看到
+   如果用的是 access 格式，那么 minio_events 就是一个 list，S3 网关就会调用 RPUSH 添加到 list 中，在 monitor 命令中将看到：
 
    ```Shell
    127.0.0.1:6379> monitor
@@ -668,27 +684,27 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
 
 #### 使用 MySQL 发布事件
 
-这个通知目标支持两种格式：`namespace` 和 `access`。
+MySQL 通知目标支持两种格式：`namespace` 和 `access`。
 
-如果使用的是 `namespace` 格式，Gateway 将存储桶里的对象同步成数据库表中的行。每一行有两列：key_name 和 value。key_name 是这个对象的存储桶名字加上对象名，value 都是一个有关这个 Gateway 对象的 JSON 格式的事件数据。如果对象更新或者删除，表中相应的行也会相应的更新或者删除。
+如果使用的是 `namespace` 格式，S3 网关将存储桶里的对象同步成数据库表中的行。每一行有两列：key_name 和 value。key_name 是这个对象的存储桶名字加上对象名，value 都是一个有关这个 S3 网关对象的 JSON 格式的事件数据。如果对象更新或者删除，表中相应的行也会相应的更新或者删除。
 
-如果使用的是 `access`,Gateway 将将事件添加到表里，行有两列：event_time 和 event_data。event_time 是事件在 Gateway server 里发生的时间，event_data 是有关这个 Gateway 对象的 JSON 格式的事件数据。在这种格式下，不会有行会被删除或者修改。
+如果使用的是 `access`，S3 网关将将事件添加到表里，行有两列：event_time 和 event_data。event_time 是事件在 S3 网关 server 里发生的时间，event_data 是有关这个 S3 网关对象的 JSON 格式的事件数据。在这种格式下，不会有行会被删除或者修改。
 
-下面的步骤展示的是如何在`namespace`格式下使用通知目标，`access`差不多，不再赘述。
+下面的步骤展示的是如何在 `namespace` 格式下使用通知目标，与 `access` 类似，不再赘述。
 
 1. 确保 MySQL 版本至少满足最低要求
 
-   JuiceFS Gateway 要求 MySQL 版本 5.7.8 及以上，因为使用了 MySQL5.7.8 版本才引入的[JSON](https://dev.mysql.com/doc/refman/5.7/en/json.html) 数据类型。
+   JuiceFS S3 网关要求 MySQL 版本 5.7.8 及以上，因为使用了 MySQL5.7.8 版本才引入的[JSON](https://dev.mysql.com/doc/refman/5.7/en/json.html) 数据类型。
 
-2. 配置 MySQL 到 Gateway
+2. 配置 MySQL 到 S3 网关
 
-   使用 mc admin config set 命令配置 MySQL 为 事件通知的目标
+   使用 `mc admin config set` 命令配置 MySQL 为事件通知的目标
 
    ```Shell
    mc admin config set myminio notify_mysql:myinstance table="minio_images" dsn_string="root:123456@tcp(172.17.0.1:3306)/miniodb"
    ```
 
-   你可以通过 `mc admin config get myminio notify_mysql` 来查看有哪些配置项，不同类型的目标其配置项也不同，针对 MySQL 类型，其有以下配置项
+   你可以通过 `mc admin config get myminio notify_mysql` 来查看有哪些配置项，不同类型的目标其配置项也不同，针对 MySQL 类型，其有以下配置项：
 
    ```shell
    $ mc admin config get myminio notify_mysql
@@ -704,24 +720,24 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
    ARGS:
    dsn_string*  (string)             MySQL 数据源名称连接字符串，例如 "<user>:<password>@tcp(<host>:<port>)/<database>"
    table*       (string)             存储/更新事件的数据库表名，表会自动被创建
-   format*      (namespace*|access)  'namespace'或者'access', 默认是'namespace'
+   format*      (namespace*|access)  'namespace' 或者 'access', 默认是 'namespace'
    queue_dir    (path)               未发送消息的暂存目录 例如 '/home/events'
-   queue_limit  (number)             未发送消息的最大限制，默认是'100000'
+   queue_limit  (number)             未发送消息的最大限制，默认是 '100000'
    comment      (sentence)           可选的注释说明
    ```
 
    dsn_string 是必须的，并且格式为 `<user>:<password>@tcp(<host>:<port>)/<database>`
 
-   MinIO 支持持久事件存储。持久存储将在 MySQL 连接离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 queue_dir 字段设置，存储的最大限制可以通过 queue_limit 设置。例如，queue_dir 可以设置为 /home/events, 并且 queue_limit 可以设置为 1000. 默认情况下 queue_limit 是 100000.
+   MinIO 支持持久事件存储。持久存储将在 MySQL 连接离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 queue_dir 字段设置，存储的最大限制可以通过 queue_limit 设置。例如，queue_dir 可以设置为 /home/events, 并且 queue_limit 可以设置为 1000。默认情况下 queue_limit 是 100000。
 
-   更新配置前，可以使用 mc admin config get 命令获取当前配置。
+   更新配置前，可以使用 `mc admin config get` 命令获取当前配置：
 
    ```Shell
    $ mc admin config get myminio/ notify_mysql
    notify_mysql:myinstance enable=off format=namespace host= port= username= password= database= dsn_string= table= queue_dir= queue_limit=0
    ```
 
-   使用带有 dsn_string 参数的 mc admin config set 的命令更新 MySQL 的通知配置：
+   使用带有 dsn_string 参数的 `mc admin config set` 的命令更新 MySQL 的通知配置：
 
    ```Shell
    mc admin config set myminio notify_mysql:myinstance table="minio_images" dsn_string="root:xxxx@tcp(127.0.0.1:3306)/miniodb"
@@ -729,7 +745,7 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
 
    请注意，根据你的需要，你可以添加任意多个 MySQL server endpoint，只要提供 MySQL 实例的标识符（如上例中的"myinstance"）和每个实例配置参数的信息即可。
 
-   使用`mc admin config set`命令更新配置后，重启 Gateway 让配置生效。如果一切顺利，Gateway Server 会在启动时输出一行信息，类似 `SQS ARNs: arn:minio:sqs::myinstance:mysql`
+   使用`mc admin config set`命令更新配置后，重启 S3 网关让配置生效。如果一切顺利，S3 网关 Server 会在启动时输出一行信息，类似 `SQS ARNs: arn:minio:sqs::myinstance:mysql`
 
 3. 启用 bucket 通知
 
@@ -737,7 +753,7 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
 
    要配置这种存储桶通知，我们需要用到前面步骤 MinIO 输出的 ARN 信息。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-   假设 Gateway 服务别名叫 myminio，可执行下列脚本：
+   假设 S3 网关服务别名叫 myminio，可执行下列脚本：
 
    ```Shell
    # 在我的 minio 中创建名为`images`的存储桶
@@ -757,21 +773,21 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
    mc cp myphoto.jpg myminio/images
    ```
 
-   打开一个 MySQL 终端列出表 minio_images 中所有的记录。将会发现一条刚插入的记录
+   打开一个 MySQL 终端列出表 minio_images 中所有的记录，将会发现一条刚插入的记录。
 
 #### 使用 PostgreSQL 发布事件
 
-整体方法与使用 MySQL 发布 MinIO 事件相同，这里不再累述。
+整体方法与使用 MySQL 发布 MinIO 事件相同，这里不再赘述。
 
-需要注意的点是要求 PostgreSQL 9.5 版本及以上。Gateway 用了 PostgreSQL 9.5 引入的[INSERT ON CONFLICT](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (aka UPSERT) 特性，以及 9.4 引入的[JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) 数据类型。
+需要注意的是，该功能要求 PostgreSQL 9.5 版本及以上。S3 网关用了 PostgreSQL 9.5 引入的[INSERT ON CONFLICT](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (aka UPSERT) 特性，以及 9.4 引入的[JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) 数据类型。
 
 #### 使用 Webhook 发布事件
 
 [Webhooks](https://en.wikipedia.org/wiki/Webhook) 采用推的方式获取数据，而不是一直去拉取。
 
-1. 配置 webhook 到 Gateway
+1. 配置 webhook 到 S3 网关
 
-   Gateway 支持持久事件存储。持久存储将在 webhook 离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 queue_dir 字段设置，存储的最大限制可以通过 queue_limit 设置。例如， /home/events, 并且 queue_limit 可以设置为 1000. 默认情况下 queue_limit 是 100000.
+   S3 网关支持持久事件存储。持久存储将在 webhook 离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 queue_dir 字段设置，存储的最大限制可以通过 queue_limit 设置。例如， /home/events，并且 queue_limit 可以设置为 1000。默认情况下 queue_limit 是 100000。
 
    ```Shell
    KEY:
@@ -781,13 +797,13 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
    endpoint*    (url)       webhook server endpoint，例如 http://localhost:8080/minio/events
    auth_token   (string)    opaque token 或者 JWT authorization token
    queue_dir    (path)      未发送消息的暂存目录 例如 '/home/events'
-   queue_limit  (number)    未发送消息的最大限制，默认是'100000'
+   queue_limit  (number)    未发送消息的最大限制，默认是 '100000'
    client_cert  (string)    Webhook 的 mTLS 身份验证的客户端证书
    client_key   (string)    Webhook 的 mTLS 身份验证的客户端证书密钥
    comment      (sentence)  可选的注释说明
    ```
 
-   用 mc admin config set 命令更新配置。在这 endpoint 是监听 webhook 通知的服务。保存配置文件并重启 MinIO 服务让配配置生效。注意一下，在重启 MinIO 时，这个 endpoint 必须是启动并且可访问到。
+   用 `mc admin config set` 命令更新配置，这里的 endpoint 是监听 webhook 通知的服务地址。保存配置文件并重启 MinIO 服务让配配置生效。注意，在重启 MinIO 时，这个 endpoint 必须是启动并且可访问到。
 
    ```Shell
    mc admin config set myminio notify_webhook:1 queue_limit="0"  endpoint="http://localhost:3000" queue_dir=""
@@ -805,7 +821,7 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
 
 3. ##### 采用 Thumbnailer 进行验证
 
-   [Thumbnailer](https://github.com/minio/thumbnailer)  项目是一个使用 MinIO 的 listenBucketNotification API 的缩略图生成器示例，我们使用 [Thumbnailer](https://github.com/minio/thumbnailer) 来监听 Gateway 通知。如果有文件上传于是 Gateway 服务，Thumnailer 监听到该通知，生成一个缩略图并上传到 Gateway 服务。安装 Thumbnailer:
+   [Thumbnailer](https://github.com/minio/thumbnailer)  项目是一个使用 MinIO 的 listenBucketNotification API 的缩略图生成器示例，我们使用 [Thumbnailer](https://github.com/minio/thumbnailer) 来监听 S3 网关通知。如果有文件上传于是 S3 网关服务，Thumnailer 监听到该通知，生成一个缩略图并上传到 S3 网关服务。安装 Thumbnailer:
 
    ```Shell
    git clone https://github.com/minio/thumbnailer/
@@ -818,7 +834,9 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
    NODE_ENV=webhook node thumbnail-webhook.js
    ```
 
-   Thumbnailer 运行在 `http://localhost:3000/`。下一步，配置 MinIO server，让其发送消息到这个 URL（第一步提到的），并使用 mc 来设置存储桶通知（第二步提到的）。然后上传一张图片到 Gateway server:
+   Thumbnailer 运行在 `http://localhost:3000/`
+
+   下一步，配置 MinIO server，让其发送消息到这个 URL（第一步提到的），并使用 mc 来设置存储桶通知（第二步提到的）。然后上传一张图片到 S3 网关server:
 
    ```Shell
    mc cp ~/images.jpg myminio/images
