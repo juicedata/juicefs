@@ -3500,39 +3500,6 @@ func (m *redisMeta) checkServerConfig() {
 	logger.Infof("Ping redis latency: %s", time.Since(start))
 }
 
-type wrapEntryPool struct {
-	sync.Pool
-}
-
-func (p *wrapEntryPool) Get() *DumpedEntry {
-	return p.Pool.Get().(*DumpedEntry)
-}
-
-func (p *wrapEntryPool) Put(de *DumpedEntry) {
-	if de == nil {
-		return
-	}
-
-	de.Name = ""
-	de.Xattrs = nil
-	de.Chunks = nil
-	de.Symlink = ""
-	de.AccessACL = nil
-	de.DefaultACL = nil
-	de.Entries = nil
-	p.Pool.Put(de)
-}
-
-var entryPool = wrapEntryPool{
-	Pool: sync.Pool{
-		New: func() interface{} {
-			return &DumpedEntry{
-				Attr: &DumpedAttr{},
-			}
-		},
-	},
-}
-
 func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 	ctx := Background
 	var keys []string
