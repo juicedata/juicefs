@@ -128,6 +128,11 @@ func storageFlags() []cli.Flag {
 			Usage: "number of connections to upload",
 		},
 		&cli.IntFlag{
+			Name:  "max-stage-write",
+			Value: 0, // Enable this to have concurrent uploads to two backends, and get write bandwidth equals to sum of the two
+			Usage: "number of threads allowed to write staged files, other requests will be uploaded directly (this option is only effective when 'writeback' mode is enabled)",
+		},
+		&cli.IntFlag{
 			Name:  "max-deletes",
 			Value: 10,
 			Usage: "number of threads to delete objects",
