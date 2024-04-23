@@ -165,6 +165,7 @@ juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 `exclude/include` 具体规则是：同一个待匹配路径会逐次匹配给出的`include`,`exclude` 规则，一旦匹配上就返回匹配上的模式的行为（包含或者不包含），如果所有的模式都未匹配上则执行默认行为——包含。
 
 `exclude/include` 的两个要点：
+
 1. 默认情况下，`juicefs sync` 默认是传输所有扫描到的文件的，但是 exclude 参数则允许排除符合某种模式的文件从而达到某些文件不被传输的效果。而 `include` 与`exclude` 的含义相反则是不排除这些文件。
 2. `exclude/include` 规则可以有任意多个，且先后顺序是有意义的。可以是 `--include pattern1 --exclude pattern2`,也可以是 `--exclude pattern2 --include pattern1`, 参数相同但顺序不同，两者代表意义就不同。原因是针对对单个文件，先匹配上的规则生效，一旦匹配上后续的规则就不再匹配了，即如果先匹配上 `exclude` 规则，则该文件被跳过，如果该文件先匹配 `include` 或不能匹配任何规则，则不跳过该文件。
 
@@ -175,6 +176,7 @@ juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 匹配规则包含 3 部分，分别是通配符规则，后缀匹配和前缀匹配。
 
 ##### 通配符规则
+
 `include/exclude` 使用的通配符规则都是类似 shell 通配符的规则
 
 + 单个`*`匹配任意路径元素，但在遇到 `/` 终止匹配。
@@ -213,6 +215,7 @@ juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 
 例如现有对象 `a1/b1/c1.txt` 和 `--include a*.txt --inlude c1.txt --exclude c*.txt`。直接将 `a1/b1/c1.txt` 这个字符串与 `--include a*.txt` ，`--inlude c1.txt` ，`--exclude c*.txt` 三个模式进行依次匹配。
 具体步骤：
+
 1. `a1/b1/c1.txt` 与 `--include a*.txt` 尝试匹配，结果是未匹配，
 2. 尝试下一个规则 `a1/b1/c1.txt` 与 `--inlude c1.txt` 尝试匹配，此时根据后缀匹配原理，将会匹配成功。直接返回 `a1/b1/c1.txt` 的最终匹配结果为包含。
 
@@ -239,12 +242,14 @@ juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 
 例如现有对象 `a1/b1/c1.txt` 和 `--include a*.txt`, `--inlude c1.txt`, `--exclude c*.txt`，可以结合层级过滤图片分析步骤，在这个例子中途中途中子路径 1 到子路径 n 就分别是 `a1`,`a1/b1`,`a1/b1/c1.txt`。
 该例子的层级过滤具体步骤：
+
 1. 第一层级的单层过滤，单层过滤的路径是 `a1`，模式序列是 `--include a*.txt`, `--inlude c1.txt`, `--exclude c*.txt`，根据单层匹配规则结果将会是，单层内全部未匹配。继续下一层级。
 2. 第二层级的单层过滤，单层过滤的路径是 `a1/b1`，模式序列是 `--include a*.txt`, `--inlude c1.txt`, `--exclude c*.txt`，根据单层匹配规则结果将会是，单层内全部未匹配。继续下一层级。
 3. 第三层级的单层过滤，单层过滤的路径是 `a1/b1/c1.txt`，模式序列是 `--include a*.txt`, `--inlude c1.txt`, `--exclude c*.txt`，根据单层匹配规则结果将会是匹配上 `--inlude c1.txt` 模式。该模式的行为是包含，
 4. 返回匹配成功的模式的行为，即 `a1/b1/c1.txt` 匹配上了 `--inlude c1.txt` 模式，所以最终结果是包含。
 
 上面的例子是到层级最后一层才匹配成功，除此之外还有两种情况：
+
 1. 匹配未到最后一层，在某层提前匹配成功，此时会直接返回匹配成功的模式的行为作为整个层级过滤的最终结果。
 2. 所有层级都未匹配成功，此时将会返回默认的行为作为最终结果——包含。
 
@@ -255,8 +260,8 @@ juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 + `--exclude *.o`将排除所有文件名能匹配"*.o"的文件。
 + `--exclude /foo`将排除传输中根目录名为"foo"的文件或目录。
 + `--exclude foo/`将排除所有名为"foo"的目录。
-+ `--exclude /foo/*/bar ` 将排除传输中根目录下"foo"目录再向下两层的"bar"文件。
-+ `--exclude /foo/**/bar ` 将排除传输中根目录下"foo"目录再向下递归任意层次后名为"bar"的文件。("**"匹配任意多个层次的目录)
++ `--exclude /foo/*/bar` 将排除传输中根目录下"foo"目录再向下两层的"bar"文件。
++ `--exclude /foo/**/bar` 将排除传输中根目录下"foo"目录再向下递归任意层次后名为"bar"的文件。("**"匹配任意多个层次的目录)
 + 同时使用`--include */ --include *.c --exclude *` 将只包含所有目录和 C 源码文件，除此之外的所有文件和目录都被排除。
 + 同时使用 `--include foo/ --include foo/bar.c --exclude *` 将只包含"foo"目录和"foo/bar.c"。("foo"目录必须显式包含，否则将被排除规则`--exclude *`排除掉)
 + 对于 `dir_name/***` 来说，它将匹配 dir_name 下的所有层次的文件。注意，每个子路径元素会自顶向下逐层，被访问因此 include/exclude 匹配模式会对每个子路径元素的全路径名进行递归 (例如，要包含 `/foo/bar/baz`，则`/foo`和`/foo/bar`必须不能被排除)。实际上，排除匹配模式在发现有文件要传输时，此文件所在目录层次的排除遍历会被短路。如果排除了某个父目录，则更深层次的 include 模式匹配将无效，这在使用尾随`*`时尤为重要。例如，下面的例子不会正常工作：
