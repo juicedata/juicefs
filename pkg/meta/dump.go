@@ -18,6 +18,7 @@ package meta
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -299,6 +300,13 @@ type DumpedMeta struct {
 	Trash     *DumpedEntry         `json:",omitempty"`
 }
 
+func (dm *DumpedMeta) validate() error {
+	if dm.Counters == nil {
+		return errors.New("invalid dumped meta: missing counters")
+	}
+	return nil
+}
+
 func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
 	if dm.FSTree != nil || dm.Trash != nil {
 		return nil, fmt.Errorf("invalid dumped meta")
@@ -382,9 +390,7 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 
 	progress := utils.NewProgress(false)
 	bar := progress.AddCountBar("Loaded entries", 1) // with root
-	dm = &DumpedMeta{
-		Counters: &DumpedCounters{},
-	}
+	dm = &DumpedMeta{}
 	counters = &DumpedCounters{ // rebuild counters
 		NextInode: 2,
 		NextChunk: 1,
@@ -425,6 +431,11 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 	}
 	_, _ = dec.Token() // }
 	progress.Done()
+
+	if err = dm.validate(); err != nil {
+		return
+	}
+
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
 	return
