@@ -659,16 +659,18 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 			err = syscall.EBADF
 			return
 		}
-		switch ino {
-		case statsInode:
-			h.data = collectMetrics(v.registry)
-		case configInode:
-			v.Conf.Format = v.Meta.GetFormat()
-			if v.UpdateFormat != nil {
-				v.UpdateFormat(&v.Conf.Format)
+		if len(h.data) == 0 {
+			switch ino {
+			case statsInode:
+				h.data = collectMetrics(v.registry)
+			case configInode:
+				v.Conf.Format = v.Meta.GetFormat()
+				if v.UpdateFormat != nil {
+					v.UpdateFormat(&v.Conf.Format)
+				}
+				v.Conf.Format.RemoveSecret()
+				h.data, _ = json.MarshalIndent(v.Conf, "", " ")
 			}
-			v.Conf.Format.RemoveSecret()
-			h.data, _ = json.MarshalIndent(v.Conf, "", " ")
 		}
 
 		if ino == logInode {
