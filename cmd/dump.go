@@ -72,24 +72,25 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 	}
 }
 
-func dump(ctx *cli.Context) (err error) {
-	setup(ctx, 1)
-	metaUri := ctx.Args().Get(0)
-	dst := ctx.Args().Get(1)
-	removePassword(metaUri)
+func dumpMeta(m meta.Meta, dst string, threads int, keepSecret, fast, skipTrash bool) (err error) {
 	var w io.WriteCloser
-	if ctx.Args().Len() == 1 {
+	if dst == "" {
 		w = os.Stdout
-		dst = "STDOUT"
 	} else {
-		fp, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err != nil {
-			return err
+		tmp := dst + ".tmp"
+		fp, e := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if e != nil {
+			return e
 		}
 		defer func() {
 			e := fp.Close()
 			if err == nil {
 				err = e
+			}
+			if err == nil {
+				err = os.Rename(tmp, dst)
+			} else {
+				_ = os.Remove(tmp)
 			}
 		}()
 		if strings.HasSuffix(dst, ".gz") {
@@ -105,6 +106,17 @@ func dump(ctx *cli.Context) (err error) {
 			w = fp
 		}
 	}
+	return m.DumpMeta(w, 1, threads, keepSecret, fast, skipTrash)
+}
+
+func dump(ctx *cli.Context) error {
+	setup(ctx, 1)
+	metaUri := ctx.Args().Get(0)
+	var dst string
+	if ctx.Args().Len() > 1 {
+		dst = ctx.Args().Get(1)
+	}
+	removePassword(metaUri)
 	metaConf := meta.DefaultConf()
 	metaConf.Subdir = ctx.String("subdir")
 	m := meta.NewClient(metaUri, metaConf)
@@ -119,9 +131,12 @@ func dump(ctx *cli.Context) (err error) {
 		logger.Warnf("Invalid threads number %d, reset to 1", threads)
 		threads = 1
 	}
-	if err := m.DumpMeta(w, 1, threads, ctx.Bool("keep-secret-key"), ctx.Bool("fast"), ctx.Bool("skip-trash")); err != nil {
-		return err
+	err := dumpMeta(m, dst, threads, ctx.Bool("keep-secret-key"), ctx.Bool("fast"), ctx.Bool("skip-trash"))
+	if err == nil {
+		if dst == "" {
+			dst = "STDOUT"
+		}
+		logger.Infof("Dump metadata into %s succeed", dst)
 	}
-	logger.Infof("Dump metadata into %s succeed", dst)
-	return nil
+	return err
 }
