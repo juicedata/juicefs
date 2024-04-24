@@ -93,6 +93,7 @@ func dumpMeta(m meta.Meta, dst string, threads int, keepSecret, fast, skipTrash 
 				_ = os.Remove(tmp)
 			}
 		}()
+
 		if strings.HasSuffix(dst, ".gz") {
 			zw := gzip.NewWriter(fp)
 			defer func() {
@@ -117,6 +118,7 @@ func dump(ctx *cli.Context) error {
 		dst = ctx.Args().Get(1)
 	}
 	removePassword(metaUri)
+
 	metaConf := meta.DefaultConf()
 	metaConf.Subdir = ctx.String("subdir")
 	m := meta.NewClient(metaUri, metaConf)
@@ -126,6 +128,7 @@ func dump(ctx *cli.Context) error {
 	if st := m.Chroot(meta.Background, metaConf.Subdir); st != 0 {
 		return st
 	}
+
 	threads := ctx.Int("threads")
 	if threads <= 0 {
 		logger.Warnf("Invalid threads number %d, reset to 1", threads)
