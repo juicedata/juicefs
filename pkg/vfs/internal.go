@@ -274,11 +274,15 @@ type CacheResponse struct {
 }
 
 func (resp *CacheResponse) IncrSlice() {
-	atomic.AddUint64(&resp.SliceCount, 1)
+	if resp != nil {
+		atomic.AddUint64(&resp.SliceCount, 1)
+	}
 }
 
 func (resp *CacheResponse) IncrBytes(size uint32) {
-	atomic.AddUint64(&resp.TotalBytes, uint64(size))
+	if resp != nil {
+		atomic.AddUint64(&resp.TotalBytes, uint64(size))
+	}
 }
 
 func (resp *CacheResponse) Add(other CacheResponse) {
