@@ -382,7 +382,9 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 
 	progress := utils.NewProgress(false)
 	bar := progress.AddCountBar("Loaded entries", 1) // with root
-	dm = &DumpedMeta{}
+	dm = &DumpedMeta{
+		Counters: &DumpedCounters{},
+	}
 	counters = &DumpedCounters{ // rebuild counters
 		NextInode: 2,
 		NextChunk: 1,
