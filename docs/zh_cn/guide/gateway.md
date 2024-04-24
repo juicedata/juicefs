@@ -821,7 +821,7 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
     mc event add myminio/images arn:minio:sqs::1:webhook --event put --suffix .jpg
     ```
 
-3. ##### 采用 Thumbnailer 进行验证
+3. 采用 Thumbnailer 进行验证
 
    [Thumbnailer](https://github.com/minio/thumbnailer) 项目是一个使用 MinIO 的 listenBucketNotification API 的缩略图生成器示例，我们使用 [Thumbnailer](https://github.com/minio/thumbnailer) 来监听 S3 网关通知。如果有文件上传于是 S3 网关服务，Thumnailer 监听到该通知，生成一个缩略图并上传到 S3 网关服务。安装 Thumbnailer:
 
