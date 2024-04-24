@@ -273,18 +273,6 @@ type CacheResponse struct {
 	MissBytes  uint64 // for check op
 }
 
-func (resp *CacheResponse) IncrSlice() {
-	if resp != nil {
-		atomic.AddUint64(&resp.SliceCount, 1)
-	}
-}
-
-func (resp *CacheResponse) IncrBytes(size uint32) {
-	if resp != nil {
-		atomic.AddUint64(&resp.TotalBytes, uint64(size))
-	}
-}
-
 func (resp *CacheResponse) Add(other CacheResponse) {
 	resp.FileCount += other.FileCount
 	resp.TotalBytes += other.TotalBytes

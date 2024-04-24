@@ -57,6 +57,9 @@ const (
 func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concurrent int, resp *CacheResponse) {
 	logger.Infof("start to %s %d paths with %d workers", action, len(paths), concurrent)
 
+	if resp == nil {
+		resp = &CacheResponse{}
+	}
 	start := time.Now()
 	todo := make(chan _file, 10*concurrent)
 	wg := sync.WaitGroup{}
@@ -98,9 +101,7 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 						if err != nil {
 							return err
 						}
-						if resp != nil {
-							atomic.AddUint64(&resp.MissBytes, missBytes)
-						}
+						atomic.AddUint64(&resp.MissBytes, missBytes)
 						return nil
 					}
 				}
@@ -111,9 +112,7 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 					logger.Errorf("%s error : %s", action, err)
 				}
 
-				if resp != nil {
-					atomic.AddUint64(&resp.FileCount, 1)
-				}
+				atomic.AddUint64(&resp.FileCount, 1)
 			}
 		}()
 	}
@@ -295,8 +294,8 @@ func (iter *sliceIterator) Iterate(handler sliceHandler) error {
 	}
 	for iter.hasNext() {
 		s := iter.next()
-		iter.stat.IncrSlice()
-		iter.stat.IncrBytes(s.Size)
+		atomic.AddUint64(&iter.stat.SliceCount, 1)
+		atomic.AddUint64(&iter.stat.TotalBytes, uint64(s.Size))
 		if err := handler(s); err != nil {
 			return fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
 		}
