@@ -17,7 +17,6 @@
 package chunk
 
 import (
-	"crypto/rand"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
@@ -147,7 +147,7 @@ func TestChecksum(t *testing.T) {
 	s.cache(k2, p, true)
 
 	buf := make([]byte, 102400)
-	_, _ = rand.Read(buf)
+	utils.RandRead(buf)
 	s.cache(k3, NewPage(buf), true)
 
 	fpath := s.cachePath(k4)
@@ -172,7 +172,7 @@ func TestChecksum(t *testing.T) {
 	s.add(k4, 102400, uint32(time.Now().Unix()))
 
 	buf = make([]byte, 1048576)
-	_, _ = rand.Read(buf)
+	utils.RandRead(buf)
 	s.cache(k5, NewPage(buf), true)
 	time.Sleep(time.Second * 5) // wait for cache file flushed
 

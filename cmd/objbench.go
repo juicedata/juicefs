@@ -356,8 +356,8 @@ func objbench(ctx *cli.Context) error {
 			return &buff
 		}},
 	}
-	randRead(bm.seed)
-	randRead(bm.smallSeed)
+	utils.RandRead(bm.seed)
+	utils.RandRead(bm.smallSeed)
 
 	for _, api := range apis {
 		pResult = append(pResult, bm.run(api))
@@ -954,7 +954,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		fsize := 256 << 20
 		buffL := 4 << 20
 		buff := make([]byte, buffL)
-		randRead(buff)
+		utils.RandRead(buff)
 		count := int(math.Floor(float64(fsize) / float64(buffL)))
 		content := make([]byte, fsize)
 		for i := 0; i < count; i++ {
@@ -996,7 +996,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			}
 			total := 3
 			seed := make([]byte, upload.MinPartSize)
-			randRead(seed)
+			utils.RandRead(seed)
 			parts := make([]*object.Part, total)
 			content := make([][]byte, total)
 			for i := 0; i < total; i++ {

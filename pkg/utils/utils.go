@@ -17,6 +17,7 @@
 package utils
 
 import (
+	"crypto/rand"
 	"fmt"
 	"mime"
 	"net"
@@ -166,6 +167,12 @@ func FormatBytes(n uint64) string {
 
 func SupportANSIColor(fd uintptr) bool {
 	return isatty.IsTerminal(fd) && runtime.GOOS != "windows"
+}
+
+func RandRead(buf []byte) {
+	if _, err := rand.Read(buf); err != nil {
+		logger.Fatalf("Generate random content: %s", err)
+	}
 }
 
 var uids = make(map[int]string)
