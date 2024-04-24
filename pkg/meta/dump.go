@@ -302,7 +302,7 @@ type DumpedMeta struct {
 
 func (dm *DumpedMeta) validate() error {
 	if dm.Counters == nil {
-		return errors.New("invalid dumped meta: missing counters")
+		return errors.New("invalid dumped meta: missing 'Counters'")
 	}
 	return nil
 }
