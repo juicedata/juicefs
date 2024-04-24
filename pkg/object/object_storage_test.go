@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/colinmarc/hdfs/v2/hadoopconf"
+	"github.com/juicedata/juicefs/pkg/utils"
 
 	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 
@@ -438,7 +439,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if upload, err := s.CreateMultipartUpload(k); err == nil {
 		total := 3
 		seed := make([]byte, upload.MinPartSize)
-		_, _ = rand.Read(seed)
+		utils.RandRead(seed)
 		parts := make([]*Part, total)
 		content := make([][]byte, total)
 		for i := 0; i < total; i++ {
