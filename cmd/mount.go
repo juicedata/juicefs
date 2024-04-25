@@ -373,6 +373,7 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
 	}
+	go utils.FlushDirtyPages()
 }
 
 type storageHolder struct {
