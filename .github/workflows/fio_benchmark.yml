@@ -6,13 +6,15 @@ on:
     - main
     - release**
     paths:
-    - '**/fio_benchmak.yml'
+    - '**/fio_benchmark.yml'
+    - '**/fio.sh'
   pull_request:
     branches:
     - main
     - release**
     paths:
-    - '**/fio_benchmak.yml'
+    - '**/fio_benchmark.yml'
+    - '**/fio.sh'
   schedule:
     - cron:  '0 0 * * *'
   workflow_dispatch:
