@@ -50,17 +50,18 @@ get_fio_job_options(){
     echo $fio_job
 }
 parse_bandwidth(){
-    echo "parse bandwidth"
-    cat fio.log
+    echo "parse bandwidth"  >&2
+    cat fio.log 1>&2
     bw_str=$(tail -1 fio.log | awk '{print $2}' | awk -F '=' '{print $2}' )
-    echo bw_str is $bw_str
+    echo bw_str is $bw_str  >&2
     bw=$(echo $bw_str | sed 's/.iB.*//g') 
     if [[ $bw_str == *KiB* ]]; then
         bw=$(echo "scale=2; $bw/1024.0" | bc -l)
     elif [[ $bw_str == *GiB* ]]; then
         bw=$(echo "scale=2; $bw*1024.0" | bc -l)
     fi
-    echo bw is $bw
+    echo bw is $bw  >&2
+    echo $bw 
 }
           
 fio_test()
