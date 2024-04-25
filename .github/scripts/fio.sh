@@ -91,5 +91,7 @@ meta_url=$1
 name=$2
 fio_test $meta_url $name
 bandwidth=$(parse_bandwidth)
+[[ -z "$bandwidth" ]] && echo "bandwidth is empty" && exit 1
 meta=$(echo $meta_url | awk -F: '{print $1}')
+[[ -z "$meta" ]] && echo "meta is empty" && exit 1
 .github/scripts/save_benchmark.sh --name $name --result $bandwidth --meta $meta --storage $storage minio
