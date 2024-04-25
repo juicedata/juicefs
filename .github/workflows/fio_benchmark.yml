@@ -175,7 +175,25 @@ jobs:
             fi
             meta=`echo $meta_url | awk -F: '{print $1}'`
             hostname | grep bench  && runner="self_runner" || runner='github_runner'
-            mysql -h 8.210.231.144 -u juicedata -p${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} -e "use  test_result;  INSERT INTO fio_test (name, bandwidth,  juicefs_version, size, nrfiles, ref_name, created_date, github_revision, workflow_url, meta_engine, storage, runner) values ('$name', $bw, '$juicefs_version', '1G', 10000, '${{ github.ref_name }}', '$(date +"%Y-%m-%d %H:%M:%S")', '${{github.sha}}', 'https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}',  '$meta', '${{inputs.storage}}', '$runner'); "
+            created_date=$(date +"%Y-%m-%d)
+            cat <<EOF > perf.json
+            {
+              "name": "$name",
+              "bandwidth": "$bw",
+              "juicefs_version": "$juicefs_version",
+              "size": "1G",
+              "nrfiles": 10000,
+              "ref_name": "${{ github.ref_name }}",
+              "created_date": $created_date,
+              "github_revision": "${{github.sha}}",
+              "workflow_url": "https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}",
+              "meta_engine": "$meta",
+              "storage": "${{inputs.storage}}",
+              "runner": "$runner"
+            }
+            EOF
+            cat perf.json
+            AWS_ACCESS_KEY_ID=${{secrets.CI_AWS_ACCESS_KEY_ID}} AWS_ACCESS_KEY_SECRET=${{secrets.CI_AWS_ACCESS_KEY_SECRET}} ./juicefs sync --force-update perf.json s3://juicefs-ci-aws.s3.us-east-1.amazonaws.com/ci-report/fio-test/$created_date/$name
             ./$bin_name umount -f $mount_point
             uuid=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4)
             if [ -n "$uuid" ];then
