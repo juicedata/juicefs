@@ -50,14 +50,17 @@ get_fio_job_options(){
     echo $fio_job
 }
 parse_bandwidth(){
+    echo "parse bandwidth"
     cat fio.log
     bw_str=$(tail -1 fio.log | awk '{print $2}' | awk -F '=' '{print $2}' )
+    echo bw_str is $bw_str
     bw=$(echo $bw_str | sed 's/.iB.*//g') 
     if [[ $bw_str == *KiB* ]]; then
         bw=$(echo "scale=2; $bw/1024.0" | bc -l)
     elif [[ $bw_str == *GiB* ]]; then
         bw=$(echo "scale=2; $bw*1024.0" | bc -l)
     fi
+    echo bw is $bw
 }
           
 fio_test()
@@ -92,7 +95,9 @@ meta_url=$1
 name=$2
 fio_test $meta_url $name
 bandwidth=$(parse_bandwidth)
+echo bandwidth is $bandwidth
 [[ -z "$bandwidth" ]] && echo "bandwidth is empty" && exit 1
 meta=$(echo $meta_url | awk -F: '{print $1}')
+echo meta is $meta
 [[ -z "$meta" ]] && echo "meta is empty" && exit 1
 .github/scripts/save_benchmark.sh --name $name --result $bandwidth --meta $meta --storage $storage minio
