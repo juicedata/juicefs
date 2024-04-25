@@ -22,14 +22,14 @@ test_load_dump_with_small_dir(){
   end=`date +%s`
   runtime=$((end-start))
   version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
-  python3 .github/scripts/db.py --name load_small_dir --result $runtime --version $version --meta $META --storage file
+  .github/scripts/save_benchmark.sh --name load_small_dir --result $runtime --meta $META --storage file
   echo "load cost $runtime seconds"
   start=`date +%s`
   ./juicefs dump $META_URL dump.json
   end=`date +%s`
   runtime=$((end-start))
   echo "dump cost $runtime seconds"
-  python3 .github/scripts/db.py --name dump_small_dir --result $runtime --version $version --meta $META --storage file
+  .github/scripts/save_benchmark.sh --name dump_small_dir --result $runtime --meta $META --storage file
   ./juicefs mount $META_URL /jfs -d --no-usage-report
   inode=$(df -i /jfs | grep JuiceFS |awk -F" " '{print $3}')
   if [ "$inode" -ne "2233313" ]; then 
@@ -60,7 +60,7 @@ do_load_dump_with_big_dir(){
   runtime=$((end-start))
   echo "load cost $runtime seconds"
   version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
-  python3 .github/scripts/db.py --name load_big_dir --result $runtime --version $version --meta $META --storage file
+  .github/scripts/save_benchmark.sh --name load_big_dir --result $runtime --meta $META --storage file
   start=`date +%s`
   if [ "$with_subdir" = true ] ; then
     ./juicefs dump $META_URL dump.json --subdir test
@@ -70,7 +70,7 @@ do_load_dump_with_big_dir(){
   end=`date +%s`
   runtime=$((end-start))
   echo "dump cost $runtime seconds"
-  python3 .github/scripts/db.py --name dump_big_dir --result $runtime --version $version --meta $META --storage file
+  .github/scripts/save_benchmark.sh --name dump_big_dir --result $runtime --meta $META --storage file
   ./juicefs mount $META_URL /jfs -d --no-usage-report
   df -i /jfs
   inode=$(df -i /jfs | grep JuiceFS |awk -F" " '{print $3}')
@@ -89,7 +89,7 @@ test_list_with_big_dir(){
   runtime=$((end-start))
   echo "list cost $runtime seconds"
   version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
-  python3 .github/scripts/db.py --name list_big_dir --result $runtime --version $version --meta $META --storage file
+  .github/scripts/save_benchmark.sh --name list_big_dir --result $runtime --meta $META --storage file
   if [ "$file_count" -ne "1000001" ]; then 
     echo "<FATAL>: file_count error: $file_count"
     exit 1
