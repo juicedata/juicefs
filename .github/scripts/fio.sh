@@ -116,4 +116,4 @@ fio_test()
 }
 
 fio_test $1 $2
-upload_result $1 $2
+# upload_result $1 $2
