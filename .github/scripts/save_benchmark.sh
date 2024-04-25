@@ -53,7 +53,7 @@ save_benchmark(){
         "workflow_url": "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID",
     }
 EOF
-    cat perf.json
+    cat result.json
     # AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_ACCESS_KEY_SECRET=$AWS_ACCESS_KEY_SECRET ./juicefs sync --force-update result.json s3://juicefs-ci-aws.s3.us-east-1.amazonaws.com/ci-report/fio-test/$created_date/$name
 }
 
