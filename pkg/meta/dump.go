@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"runtime"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -114,16 +115,24 @@ type DumpedACL struct {
 	Groups []DumpedACLEntry `json:"groups"`
 }
 
+type compressedAttr struct {
+	inode  Ino
+	name   string
+	typ    string
+	length uint64
+}
+
 type DumpedEntry struct {
-	Name       string                  `json:"-"`
-	Parents    []Ino                   `json:"-"`
-	Attr       *DumpedAttr             `json:"attr,omitempty"`
-	Symlink    string                  `json:"symlink,omitempty"`
-	Xattrs     []*DumpedXattr          `json:"xattrs,omitempty"`
-	Chunks     []*DumpedChunk          `json:"chunks,omitempty"`
-	Entries    map[string]*DumpedEntry `json:"entries,omitempty"`
-	AccessACL  *DumpedACL              `json:"posix_acl_access,omitempty"`
-	DefaultACL *DumpedACL              `json:"posix_acl_default,omitempty"`
+	Name              string                  `json:"-"`
+	Parents           []Ino                   `json:"-"`
+	Attr              *DumpedAttr             `json:"attr,omitempty"`
+	Symlink           string                  `json:"symlink,omitempty"`
+	Xattrs            []*DumpedXattr          `json:"xattrs,omitempty"`
+	Chunks            []*DumpedChunk          `json:"chunks,omitempty"`
+	Entries           map[string]*DumpedEntry `json:"entries,omitempty"`
+	CompressedEntries []*compressedAttr       `json:"-"` // for loading only
+	AccessACL         *DumpedACL              `json:"posix_acl_access,omitempty"`
+	DefaultACL        *DumpedACL              `json:"posix_acl_default,omitempty"`
 }
 
 type wrapEntryPool struct {
@@ -146,6 +155,7 @@ func (p *wrapEntryPool) Put(de *DumpedEntry) {
 	de.AccessACL = nil
 	de.DefaultACL = nil
 	de.Entries = nil
+	de.CompressedEntries = nil
 	p.Pool.Put(de)
 }
 
@@ -462,8 +472,14 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 	return
 }
 
+var decodeCounter uint32 = 0
+
+const gcThreshold = 100000
+
 func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[Ino][]Ino, quotas map[Ino]*DumpedQuota,
 	refs map[chunkKey]int64, bar *utils.Bar, load func(*DumpedEntry), addChunk func(*chunkKey)) (*DumpedEntry, error) {
+	decodeCounter++
+
 	if _, err := dec.Token(); err != nil {
 		return nil, err
 	}
@@ -526,7 +542,6 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 				}
 			}
 		case "entries":
-			e.Entries = make(map[string]*DumpedEntry)
 			_, err = dec.Token()
 			var usedSpace, usedInodes int64
 			if err == nil {
@@ -544,13 +559,7 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 					if e.Attr.Inode < TrashInode && typeFromString(child.Attr.Type) == TypeDirectory {
 						e.Attr.Nlink++
 					}
-					e.Entries[n.(string)] = &DumpedEntry{
-						Attr: &DumpedAttr{
-							Inode:  child.Attr.Inode,
-							Type:   child.Attr.Type,
-							Length: child.Attr.Length,
-						},
-					}
+					e.CompressedEntries = append(e.CompressedEntries, &compressedAttr{child.Attr.Inode, n.(string), child.Attr.Type, child.Attr.Length})
 					usedSpace += align4K(child.Attr.Length)
 					usedInodes++
 				}
@@ -587,6 +596,11 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 			return nil, fmt.Errorf("decode %v: %s", name, err)
 		}
 	}
+	if decodeCounter >= gcThreshold || len(e.CompressedEntries) > gcThreshold {
+		decodeCounter = 0
+		runtime.GC()
+	}
+
 	if len(e.Parents) == 1 {
 		load(&e)
 		bar.Increment()

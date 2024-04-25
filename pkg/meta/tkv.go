@@ -3261,16 +3261,16 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair, aclMaxId *uint32) {
 	} else if attr.Typ == TypeDirectory {
 		attr.Length = 4 << 10
 		var stat dirStat
-		for name, c := range e.Entries {
+		for _, a := range e.CompressedEntries {
 			length := uint64(0)
-			if typeFromString(c.Attr.Type) == TypeFile {
-				length = c.Attr.Length
+			if typeFromString(a.typ) == TypeFile {
+				length = a.length
 			}
 			stat.length += int64(length)
 			stat.space += align4K(length)
 			stat.inodes++
 
-			kv <- &pair{m.entryKey(inode, string(unescape(name))), m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)}
+			kv <- &pair{m.entryKey(inode, string(unescape(a.name))), m.packEntry(typeFromString(a.typ), a.inode)}
 		}
 		kv <- &pair{m.dirStatKey(inode), m.packDirStat(&stat)}
 	} else if attr.Typ == TypeSymlink {

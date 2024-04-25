@@ -3825,10 +3825,10 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}, aclMaxId *uin
 	} else if n.Type == TypeDirectory {
 		n.Length = 4 << 10
 		stat := &dirStats{Inode: inode}
-		for name, c := range e.Entries {
+		for _, a := range e.CompressedEntries {
 			length := uint64(0)
-			if typeFromString(c.Attr.Type) == TypeFile {
-				length = c.Attr.Length
+			if typeFromString(a.typ) == TypeFile {
+				length = a.length
 			}
 			stat.DataLength += int64(length)
 			stat.UsedSpace += align4K(length)
@@ -3836,9 +3836,9 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}, aclMaxId *uin
 
 			chs[1] <- &edge{
 				Parent: inode,
-				Name:   unescape(name),
-				Inode:  c.Attr.Inode,
-				Type:   typeFromString(c.Attr.Type),
+				Name:   unescape(a.name),
+				Inode:  a.inode,
+				Type:   typeFromString(a.typ),
 			}
 		}
 		chs[5] <- stat

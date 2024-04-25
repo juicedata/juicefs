@@ -3953,16 +3953,16 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func(),
 		attr.Length = 4 << 10
 		dentries := make(map[string]interface{}, batch)
 		var stat dirStat
-		for name, c := range e.Entries {
+		for _, a := range e.CompressedEntries {
 			length := uint64(0)
-			if typeFromString(c.Attr.Type) == TypeFile {
-				length = c.Attr.Length
+			if typeFromString(a.typ) == TypeFile {
+				length = a.length
 			}
 			stat.length += int64(length)
 			stat.space += align4K(length)
 			stat.inodes++
 
-			dentries[string(unescape(name))] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
+			dentries[string(unescape(a.name))] = m.packEntry(typeFromString(a.typ), a.inode)
 			if len(dentries) >= batch {
 				p.HSet(ctx, m.entryKey(inode), dentries)
 				tryExec()
