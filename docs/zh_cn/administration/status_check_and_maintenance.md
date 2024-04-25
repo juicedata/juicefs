@@ -466,7 +466,7 @@ $ juicefs fsck redis://localhost --path /d --sync-dir-stat
 
 `juicefs compact` 是 v1.2 版本中新增的功能，它是一个用来处理因为覆盖写而产生的碎片数据的工具。它将随机写产生的大量不连续的 slice 进行合并或清理，从而提升文件系统的读性能。
 
-相比于 `juicefs gc` 是对整个文件系统进行垃圾回收和碎片整理，`juicefs compact` 只处理因为覆盖写而产生的碎片数据，而不会处理对象泄漏、待清理对象等问题。而且，`juicefs compact` 只会处理指定目录下的碎片数据，不会处理整个文件系统。
+相比于 `juicefs gc` 对整个文件系统进行垃圾回收和碎片整理，`juicefs compact` 可指定目录处理因为覆盖写而产生的碎片数据。
 
 ```shell
 juicefs compact /mnt/jfs/foo
