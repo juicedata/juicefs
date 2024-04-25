@@ -1,53 +1,51 @@
 ---
 title: JuiceFS S3 Gateway
 sidebar_position: 5
-description: Learn JuiceFS S3 Gateway's architecture, principles, and usage. 
+description: JuiceFS S3 Gateway allows the JuiceFS file system to be accessed externally using the S3 protocol. This enables applications to access files stored on JuiceFS through Amazon S3 SDKs. 
 ---
+
+JuiceFS S3 Gateway is one of the various access methods supported by JuiceFS. It allows the JuiceFS file system to be accessed externally using the S3 protocol. This enables applications to access files stored on JuiceFS using Amazon S3 SDKs.
 
 ## Architecture and principles
 
-JuiceFS stores files by [splitting them into chunks in the underlying object storage](../introduction/architecture.md#how-juicefs-store-files). It typically exposes the POSIX interface to you. If you need to access JuiceFS files using S3-compatible APIs, you can use JuiceFS S3 Gateway. Here is the architecture diagram:
+In JuiceFS, [files are stored as objects and distributed in chunks within the underlying object storage](../introduction/architecture.md#how-juicefs-store-files). JuiceFS provides multiple access methods, including the FUSE POSIX, WebDAV, S3 Gateway, and CSI Driver. Among these options, S3 Gateway is particularly popular. Below is the S3 Gateway architecture:
 
 ![JuiceFS S3 Gateway architecture](../images/juicefs-s3-gateway-arch.png)
 
-JuiceFS S3 Gateway implements its functionalities through [MinIO S3 Gateway](https://github.com/minio/minio/tree/ea1803417f80a743fc6c7bb261d864c38628cf8d/docs/gateway). By implementing its [object interface](https://github.com/minio/minio/blob/d46386246fb6db5f823df54d932b6f7274d46059/cmd/object-api-interface.go#L88) and using the JuiceFS file system as the backend storage for its server, JuiceFS has achieved a use experience almost the same as using native MinIO and inherited many advanced features from MinIO. In this architecture, JuiceFS acts as a local disk for MinIO's server command, similar to `minio server /data1`  in principle.
+JuiceFS S3 Gateway implements its functionality through [MinIO S3 Gateway](https://github.com/minio/minio/tree/ea1803417f80a743fc6c7bb261d864c38628cf8d/docs/gateway). Leveraging MinIO's [`object` interface](https://github.com/minio/minio/blob/d46386246fb6db5f823df54d932b6f7274d46059/cmd/object-api-interface.go#L88), we integrate the JuiceFS file system as the backend storage for MinIO servers. This provides a user experience close to that of native MinIO usage while inheriting many advanced features of MinIO. In this architecture, JuiceFS acts as a local disk for the MinIO instance, and the principle is similar to the `minio server /data1` command..
 
 Common application scenarios for JuiceFS S3 Gateway include:
 
-* Exposing S3 APIs for the JuiceFS file system so that applications can access files stored on JuiceFS using S3 SDKs.
-* Using tools like S3cmd, AWS CLI, and MinIO clients to conveniently access and manipulate files stored on JuiceFS.
-* Providing a web-based file manager through JuiceFS S3 Gateway, which allows you to perform regular add and delete operations of the JuiceFS file system using a browser.
-* Serving as a unified data export for cross-cluster data replication scenarios to avoid cross-region metadata access, thereby enhancing data transfer performance. For details, see [Sync across regions using JuiceFS S3 Gateway](../guide/sync.md#sync-across-region).
+- **Exposing the S3 API for JuiceFS:** Applications can access files stored on JuiceFS using S3 SDKs.
+- **Using S3 clients:** Using tools like S3cmd, AWS CLI, and MinIO clients to easily access and manage files stored on JuiceFS.
+- **Managing files in JuiceFS:** JuiceFS S3 Gateway provides a web-based file manager to manage files in JuiceFS directly from a browser.
+- **Cluster replication:** In scenarios requiring cross-cluster data replication, JuiceFS S3 Gateway serves as a unified data export for clusters. This avoids cross-region metadata access and enhances data transfer performance. For details, see [Sync across regions using JuiceFS S3 Gateway](../guide/sync.md#sync-across-region).
 
 ## Quick start
 
-1. Create a file system.
-
-    JuiceFS S3 Gateway only enables a POSIX file system to provide external services using the S3 protocol. Therefore, before you start the gateway, you need to prepare a file system:
-
-    ```shell
-    juicefs format redis://localhost:6379 test1
-    ```
+1. Create a JuiceFS file system by following the steps in [this document](../getting-started/standalone.md).
 
 2. Start JuiceFS S3 Gateway.
 
-    To enable JuiceFS S3 Gateway on the current host, use JuiceFS' `gateway` subcommand. Before enabling the gateway, set the `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` environment variables. They serve as the access key and secret key for authentication when you access the S3 API. These credentials are called administrator credentials, with the highest privileges. For example:
+    Before enabling the gateway, set the `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` environment variables. They serve as the access key and secret key for authentication when you access the S3 API. These credentials are called administrator credentials, with the highest privileges. For example:
 
     ```shell
     export MINIO_ROOT_USER=admin
     export MINIO_ROOT_PASSWORD=12345678
     ```
 
+    Note that `MINIO_ROOT_USER` must be at least 3 characters long, and `MINIO_ROOT_PASSWORD` must be at least 8 characters long. Windows users must use the `set` command to set environment variables, for example, `set MINIO_ROOT_USER=admin`.
+
+    Then, use the `juicefs gateway` command to start JuiceFS S3 Gateway. For example:
+
     ```shell
-    juicefs gateway redis://localhost:6379 localhost:9000
+    juicefs gateway redis://localhost:6379/1 localhost:9000
     ```
 
-    The first two commands set the environment variables. Note that `MINIO_ROOT_USER` must be at least 3 characters long, and `MINIO_ROOT_PASSWORD` must be at least 8 characters long. Windows users must use the `set` command to set environment variables, for example, `set MINIO_ROOT_USER=admin`.
-
-    The last command enables JuiceFS S3 Gateway. The `gateway` subcommand requires at least two parameters: the database URL for storing metadata and the address/port for JuiceFS S3 Gateway to listen on. To optimize JuiceFS S3 Gateway, you can add [other options](../reference/command_reference.md#gateway) to `gateway` subcommands as needed. For example, you can set the default local cache to 20 GiB.
+    The `gateway` subcommand requires at least two parameters: the database URL for storing metadata and the address/port for JuiceFS S3 Gateway to listen on. To optimize JuiceFS S3 Gateway, you can add [other options](../reference/command_reference.md#gateway) to `gateway` subcommands as needed. For example, you can set the default local cache to 20 GiB.
 
     ```shell
-    juicefs gateway --cache-size 20480 redis://localhost:6379 localhost:9000
+    juicefs gateway --cache-size 20480 redis://localhost:6379/1 localhost:9000
     ```
 
     This example assumes that the JuiceFS file system uses a local Redis database. When JuiceFS S3 Gateway is enabled, you can access the gateway's management interface at `http://localhost:9000` on the **current host**.
@@ -57,10 +55,10 @@ Common application scenarios for JuiceFS S3 Gateway include:
     To allow access to JuiceFS S3 Gateway from other hosts on the local network or the internet, adjust the listen address. For example:
 
     ```shell
-    juicefs gateway redis://localhost:6379 0.0.0.0:9000
+    juicefs gateway redis://localhost:6379/1 0.0.0.0:9000
     ```
 
-    This configuration makes JuiceFS S3 Gateway accept requests from all networks. Different S3 clients can access JuiceFS S3 Gateway using different addresses. For example:
+    This configuration makes JuiceFS S3 Gateway accept requests from all networks by default. Different S3 clients can access JuiceFS S3 Gateway using different addresses. For example:
 
     - Third-party clients on the same host as JuiceFS S3 Gateway can use `http://127.0.0.1:9000` or `http://localhost:9000` for access.
     - Third-party clients on the same local network as the JuiceFS S3 Gateway host can use `http://192.168.1.8:9000` for access (assuming the JuiceFS S3 Gateway host's internal IP address is `192.168.1.8`).
@@ -131,6 +129,10 @@ $ mc ls juicefs/jfs
 
 By default, JuiceFS S3 Gateway only allows one bucket. The bucket name is the file system name. If you need multiple buckets, you can add `--multi-buckets` at startup to enable multi-bucket support. This parameter exports each subdirectory under the top-level directory of the JuiceFS file system as a separate bucket. Creating a bucket means creating a subdirectory with the same name at the top level of the file system.
 
+```shell
+juicefs gateway redis://localhost:6379/1 localhost:9000 --multi-buckets
+```
+
 ### Retain ETags
 
 By default, JuiceFS S3 Gateway does not save or return object ETag information. You can enable this with `--keep-etag`.
@@ -155,19 +157,25 @@ The default refresh interval for Identity and Access Management (IAM) caching is
 
 For example, to set a refresh interval of 1 minute:
 
-`juicefs gateway xxxx xxxx    --refresh-iam-interval 1m`
+```sh
+juicefs gateway xxxx xxxx    --refresh-iam-interval 1m
+```
 
 ## Advanced features
 
-The core feature of JuiceFS S3 Gateway is to provide the S3 API. Now, the support for the S3 protocol is comprehensive. Version 1.2 supports IAM and bucket event notifications. Advanced features require using the `mc` command-line tool of the `RELEASE.2021-04-22T17-40-00Z` version. For the usage of these advanced features, see the [MinIO documentation](https://github.com/minio/minio/tree/e0d3a8c1f4e52bb4a7d82f7f369b6796103740b3/docs) or the `mc` command-line help information.
+The core feature of JuiceFS S3 Gateway is to provide the S3 API. Now, the support for the S3 protocol is comprehensive. Version 1.2 supports IAM and bucket event notifications.
 
-If you are unsure about the available features or how to use a specific feature, you can append `-h` to a subcommand to view the help information. The sections below will introduce the supported advanced features with examples.
+These advanced features require the `RELEASE.2021-04-22T17-40-00Z` version of the `mc` client. For the usage of these advanced features, see the [MinIO documentation](https://github.com/minio/minio/tree/e0d3a8c1f4e52bb4a7d82f7f369b6796103740b3/docs) or the `mc` command-line help information.
+
+If you are unsure about the available features or how to use a specific feature, you can append `-h` to a subcommand to view the help information.
 
 ### Identity and access control
 
 #### Regular users
 
-Before version 1.2, JuiceFS S3 Gateway only created a superuser when starting, and this superuser belonged only to that process. Even if multiple gateway processes shared the same file system, their users were isolated between processes. You could set different superusers for each gateway process, and they were independent and unaffected by each other. Starting from version 1.2, JuiceFS S3 Gateway still requires setting a superuser at startup, and this superuser remains isolated per process. However, it allows adding new users using `mc admin user add`. Newly added users are shared across the same file system. You can manage new users using `mc admin user`. This supports adding, disabling, enabling, and deleting users, as well as viewing all users and displaying user information and policies.
+Before version 1.2, `juicefs gateway` only created a superuser when starting, and this superuser belonged only to that process. Even if multiple gateway processes shared the same file system, their users were isolated between processes. You could set different superusers for each gateway process, and they were independent and unaffected by each other.
+
+Starting from version 1.2, `juicefs gateway` still requires setting a superuser at startup, and this superuser remains isolated per process. However, it allows adding new users using `mc admin user add`. Newly added users are shared across the same file system. You can manage new users using `mc admin user`. This supports adding, disabling, enabling, and deleting users, as well as viewing all users and displaying user information and policies.
 
 ```Shell
 $ mc admin user -h
@@ -231,12 +239,14 @@ COMMANDS:
 
 #### AssumeRole security token service
 
-The gateway Security Token Service (STS) allows clients to request temporary credentials to access MinIO resources. The working principle of temporary credentials is almost the same as default administrator credentials but with some differences:
+The S3 Gateway Security Token Service (STS) is a service that allows clients to request temporary credentials to access MinIO resources. The working principle of temporary credentials is almost the same as default administrator credentials but with some differences:
 
-- Temporary credentials are short-lived. They can be configured to last from minutes to hours. After expiration, the gateway no longer recognizes them and does not allow any form of API request access.
-- Temporary credentials do not need to be stored with the application. They are dynamically generated and provided to the application when requested. When temporary credentials expire, applications can request new credentials.
+- **Temporary credentials are short-lived.** They can be configured to last from minutes to hours. After expiration, the gateway no longer recognizes them and does not allow any form of API request access.
+- **Temporary credentials do not need to be stored with the application. They are dynamically generated and provided to the application when requested.** When temporary credentials expire, applications can request new credentials.
 
-The `AssumeRole` operation returns a set of temporary security credentials. You can use them to access gateway resources. `AssumeRole` requires authorization credentials for an existing gateway user and returns temporary security credentials, including an access key, secret key, and security token. Applications can use these temporary security credentials to sign requests for gateway API operations. The policies applied to these temporary credentials inherit from gateway user credentials. By default, `AssumeRole` creates temporary security credentials with a validity period of one hour. However, you can specify the duration of the credentials using the optional parameter `DurationSeconds`, which can range from 900 seconds (15 minutes) to a maximum of 7 days.
+The `AssumeRole` operation returns a set of temporary security credentials. You can use them to access gateway resources. `AssumeRole` requires authorization credentials for an existing gateway user and returns temporary security credentials, including an access key, secret key, and security token. Applications can use these temporary security credentials to sign requests for gateway API operations. The policies applied to these temporary credentials inherit from gateway user credentials. 
+
+By default, `AssumeRole` creates temporary security credentials with a validity period of one hour. However, you can specify the duration of the credentials using the optional parameter `DurationSeconds`, which can range from 900 (15 minutes) to 604,800 (7 days).
 
 ##### API request parameters
 
@@ -245,7 +255,7 @@ The `AssumeRole` operation returns a set of temporary security credentials. You 
     Indicates the STS API version information. The only supported value is '2011-06-15', borrowed from the AWS STS API documentation for compatibility.
 
     | Parameter  | Value  |
-               |---------|--------|
+    | ---------- | ------ |
     | Type    | String |
     | Require | Yes    |
 
@@ -258,9 +268,9 @@ The `AssumeRole` operation returns a set of temporary security credentials. You 
    Duration in seconds. This value can range from 900 seconds (15 minutes) to 7 days. If the value is higher than this setting, the operation fails. By default, this value is set to 3,600 seconds.
 
     | Parameter      | Value               |
-               |-------------|---------------------|
+    |-------------|---------------------|
     | *Type*      | Integer             |
-    | Valid Range | From 900 to 604,800|
+    | Valid range | From 900 to 604,800 |
     | Required    | No                  |
 
 - Policy
@@ -268,9 +278,9 @@ The `AssumeRole` operation returns a set of temporary security credentials. You 
     A JSON-format IAM policy that you want to use as an inline session policy. This parameter is optional. Passing a policy to this operation returns new temporary credentials. The permissions of the generated session are the intersection of preset policy names and the policy set here. You cannot use this policy to grant more permissions than allowed by the assumed preset policy names.
 
     | Parameter      | Value             |
-               |-------------|-------------------|
+    |-------------|-------------------|
     | Type        | String            |
-    | Valid Range | From 1 to 2,048 |
+    | Valid range | From 1 to 2,048 |
     | Required    | No                |
 
 ##### Response elements
@@ -312,7 +322,7 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 
 ##### Use the AWS CLI with the AssumeRole API
 
-1. Start the gateway and create the `foobar` user.
+1. Start the gateway and create a user named `foobar`.
 
 2. Configure the AWS CLI:
 
@@ -325,9 +335,11 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 
 3. Use the AWS CLI to request the `AssumeRole` API.
 
-    > Note: In the command below, `--role-arn` and `--role-session-name` have no significance for the gateway. You can set them to any value that meets the command line requirements.
+    :::note Note
+    In the command below, `--role-arn` and `--role-session-name` have no significance for the gateway. You can set them to any value that meets the command line requirements.
+    :::
 
-    ```
+    ```sh
     $ aws --profile foobar --endpoint-url http://localhost:9000 sts assume-role --policy '{"Version":"2012-10-17","Statement":[{"Sid":"Stmt1","Effect":"Allow","Action":"s3:*","Resource":"arn:aws:s3:::*"}]}' --role-arn arn:xxx:xxx:xxx:xxxx --role-session-name anything
     {
         "AssumedRoleUser": {
@@ -386,7 +398,7 @@ $ mc admin user list myminio
 enabled    user1                 readonly
 ```
 
-For custom policies, use `mc admin policy add` to add them:
+For custom policies, use `mc admin policy add`:
 
 ```Shell
 $ mc admin policy add -h
@@ -407,7 +419,7 @@ EXAMPLES:
      $ mc admin policy add myminio writeonly /tmp/writeonly.json
 ```
 
-The policy file to be added here must be in JSON format with [IAM-compatible](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies.html) syntax, and no more than 2,048 characters. This syntax allows for more fine-grained access control. If you are unfamiliar with this, you can first use the following command to see how these simple policies are written and then modify them accordingly.
+The policy file to be added here must be in JSON format with [IAM-compatible](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies.html) syntax, and no more than 2,048 characters. This syntax allows for more fine-grained access control. If you are unfamiliar with this, you can first use the following command to see the simple policies and then modify them accordingly.
 
 ```Shell
 $ mc admin policy info myminio readonly
@@ -529,11 +541,13 @@ mc policy set none  useradmin/testbucket1/afile
 
 All management API updates for JuiceFS S3 Gateway take effect immediately and are persisted to the JuiceFS file system. Clients that accept these API requests also immediately reflect these changes.
 
-However, in a multi-server gateway setup, the situation is slightly different. This is because when the gateway handles request authentication, it uses in-memory cached information as the validation baseline. Otherwise, reading configuration file content for every request would pose unacceptable performance issues. However, caching also introduces potential inconsistencies between cached data and the configuration file. Currently, JuiceFS S3 Gateway's cache refresh strategy involves forcibly updating the in-memory cache every 5 minutes (certain operations also trigger cache update operations). This ensures that configuration changes take effect within a maximum of 5 minutes in a multi-server setup. You can adjust this time by using the `--refresh-iam-interval` parameter. If immediate effect on a specific gateway is required, you can manually restart it.
+However, in a multi-server gateway setup, the situation is slightly different. This is because when the gateway handles request authentication, it uses in-memory cached information as the validation baseline. Otherwise, reading configuration file content for every request would pose unacceptable performance issues. However, caching also introduces potential inconsistencies between cached data and the configuration file.
+
+Currently, JuiceFS S3 Gateway's cache refresh strategy involves forcibly updating the in-memory cache every 5 minutes (certain operations also trigger cache update operations). This ensures that configuration changes take effect within a maximum of 5 minutes in a multi-server setup. You can adjust this time by using the `--refresh-iam-interval` parameter. If immediate effect on a specific gateway is required, you can manually restart it.
 
 ### Bucket event notifications
 
-If you want to trigger certain actions based on events occurring on a bucket, you need the bucket event notification feature. You can use this feature to monitor events happening on objects within a storage bucket.
+You can use bucket event notifications to monitor events happening on objects within a storage bucket and trigger certain actions in response.
 
 Currently supported object event types include:
 
@@ -681,7 +695,7 @@ To use notification destinations in `namespace` and `access` formats:
 
 #### Use MySQL to publish events
 
-This notification destination supports two formats: `namespace` and `access`.
+The MySQL notification destination supports two formats: `namespace` and `access`.
 
 If you use the `namespace` format, the gateway synchronizes objects in the bucket to rows in the database table. Each row has two columns:
 
@@ -797,7 +811,7 @@ The method of publishing events using PostgreSQL is similar to publishing MinIO 
     ```Shell
     KEY:
     notify_webhook[:name]  Publish bucket notifications to webhook endpoints.
-   
+
     ARGS:
     endpoint*    (url)       Webhook server endpoint, for example, http://localhost:8080/minio/events.
     auth_token   (string)    Opaque token or JWT authorization token.
@@ -841,7 +855,9 @@ The method of publishing events using PostgreSQL is similar to publishing MinIO 
     NODE_ENV=webhook node thumbnail-webhook.js
     ```
 
-    Thumbnailer runs on <http://localhost:3000/>. Next, configure the MinIO server to send messages to this URL (mentioned in step 1) and set up bucket notifications using `mc` (mentioned in step 2). Then upload an image to the gateway server:
+    Thumbnailer runs on `http://localhost:3000/`.
+
+    Next, configure the MinIO server to send messages to this URL (mentioned in step 1) and set up bucket notifications using `mc` (mentioned in step 2). Then upload an image to the gateway server:
 
     ```Shell
     mc cp ~/images.jpg myminio/images
