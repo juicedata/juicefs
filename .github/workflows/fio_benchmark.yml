@@ -33,10 +33,11 @@ jobs:
       fail-fast: false
       matrix:
         meta: ['redis']
-        fio_job : ['big-file-sequential-read', 'big-file-sequential-write',  'big-file-multi-read-4', 
-          'big-file-multi-write-4', 'big-file-rand-read-256k', 'big-file-random-write-256k', 
-          'small-file-seq-read-256k', 'small-file-seq-write-256k', 'small-file-multi-read-4', 
-          'small-file-multi-write-4'] 
+        # fio_job : ['big-file-sequential-read', 'big-file-sequential-write',  'big-file-multi-read-4', 
+        #   'big-file-multi-write-4', 'big-file-rand-read-256k', 'big-file-random-write-256k', 
+        #   'small-file-seq-read-256k', 'small-file-seq-write-256k', 'small-file-multi-read-4', 
+        #   'small-file-multi-write-4'] 
+        fio_job : ['big-file-sequential-read']
 
     steps:
       - name: Checkout
@@ -58,8 +59,6 @@ jobs:
       - name: Install tools
         run: |
           sudo .github/scripts/apt_install.sh fio
-          wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
-          chmod +x mc 
 
       - name: Start meta and storage
         run: |
@@ -71,12 +70,10 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          .github/scripts/fio.sh $meta_url ${{matrix.fio_job}} 
-        shell: bash
+          AWS_ACCESS_KEY_ID=${{secrets.CI_AWS_ACCESS_KEY_ID}} AWS_ACCESS_KEY_SECRET=${{secrets.CI_AWS_ACCESS_KEY_SECRET}} .github/scripts/fio.sh $meta_url  ${{matrix.fio_job}} 
 
       - name: log
         if: always()
-        shell: bash
         run: | 
           if [ -f ~/.juicefs/juicefs.log ]; then
             tail -300 ~/.juicefs/juicefs.log

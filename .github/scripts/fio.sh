@@ -58,21 +58,46 @@ parse_bandwidth(){
         bw=$(echo "scale=2; $bw*1024.0" | bc -l)
     fi
 }
+
+upload_result(){
+    meta_url=$1
+    fio_job_name=$2
+    juicefs_version=$(./juicefs -V | cut -b 17- | sed 's/:/-/g')
+    bw=$(parse_bandwidth)
+    meta=$(echo $meta_url | awk -F: '{print $1}')
+    created_date=$(date +"%Y-%m-%d")
+    cat <<EOF > perf.json
+    {
+        "name": "$fio_job_name",
+        "bandwidth": "$bw",
+        "juicefs_version": "$juicefs_version",
+        "size": "1G",
+        "nrfiles": 10000,
+        "ref_name": "$GITHUB_REF_NAME",
+        "created_date": "$created_date",
+        "github_revision": "$GITHUB_SHA",
+        "workflow_url": "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID",
+        "meta_engine": "$meta",
+        "storage": "minio",
+        "runner": "github_runner"
+    }
+EOF
+    cat perf.json
+    AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_ACCESS_KEY_SECRET=$AWS_ACCESS_KEY_SECRET ./juicefs sync --force-update perf.json s3://juicefs-ci-aws.s3.us-east-1.amazonaws.com/ci-report/fio-test/$created_date/$name
+}
           
 fio_test()
 {
     meta_url=$1
-    storage=$2
-    fio_job_name=$3
+    fio_job_name=$2
     echo "Fio Benchmark"
     fio_job_options=$(get_fio_job_options $fio_job_name)
     echo fio_job_options is $fio_job_options
-    juicefs_version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
     name=$(echo $fio_job_options | awk -F: '{print $1}' | xargs)
     fio_arg=$(echo $fio_job_options | awk -F: '{print $2}' | xargs)
     mount_arg=$(echo $fio_job_options | awk -F: '{print $3}' | xargs)
-    ./juicefs format --trash-days 0 --storage minio --bucket  http://localhost:9000/fio  --access-key minioadmin --secret-key minioadmin  $meta_url  fio
-    ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report  $mount_arg
+    ./juicefs format --trash-days 0 --storage minio --bucket http://localhost:9000/fio --access-key minioadmin --secret-key minioadmin $meta_url fio
+    ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report $mount_arg
     if [[ "$name" =~ ^big-file-rand-read.* ]]; then
         block_size=$(echo $name | awk -F- '{print $NF}' | xargs)
         echo block_size is $block_size
@@ -83,32 +108,12 @@ fio_test()
     echo "start fio"
     fio --name=$name --directory=/tmp/jfs $fio_arg | tee "fio.log"
     echo "finish fio"
-    bw=$(parse_bandwidth)
-    meta=$(echo $meta_url | awk -F: '{print $1}')
-    created_date=$(date +"%Y-%m-%d)
-    cat <<EOF > perf.json
-    {
-        "name": "$name",
-        "bandwidth": "$bw",
-        "juicefs_version": "$juicefs_version",
-        "size": "1G",
-        "nrfiles": 10000,
-        "ref_name": "$GITHUB_REF_NAME",
-        "created_date": $created_date,
-        "github_revision": "$GITHUB_SHA",
-        "workflow_url": "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID",
-        "meta_engine": "$meta",
-        "storage": "$storage",
-        "runner": "github_runner"
-    }
-    EOF
-    cat perf.json
-    AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_ACCESS_KEY_SECRET=$AWS_ACCESS_KEY_SECRET ./juicefs sync --force-update perf.json s3://juicefs-ci-aws.s3.us-east-1.amazonaws.com/ci-report/fio-test/$created_date/$name
     ./juicefs umount -f /tmp/jfs
     uuid=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4)
-    if [ -n "$uuid" ];then
+    if [ -n "$uuid" ]; then
         sudo ./juicefs destroy --yes $meta_url $uuid
     fi
 }
 
-fio_test $1 $2 $3
+fio_test $1 $2
+upload_result $1 $2
