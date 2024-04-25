@@ -107,6 +107,7 @@ func handleFDRequest(conn *net.UnixConn) {
 	fuseMu.Lock()
 	if fuseFd > 0 {
 		fds = append(fds, fuseFd)
+		logger.Debugf("send FUSE fd: %d", fuseFd)
 	}
 	err := putFd(conn, fuseSetting, fds...)
 	if err != nil {
@@ -128,6 +129,7 @@ func handleFDRequest(conn *net.UnixConn) {
 	}
 	fuseMu.Lock()
 	if string(msg) != "CLOSE" && fuseFd <= 0 && len(fds) == 1 {
+		logger.Debugf("recv FUSE fd: %d", fds[0])
 		fuseFd = fds[0]
 		fuseSetting = msg
 	} else {
@@ -179,6 +181,7 @@ func getFuseFd(path string) (int, []byte) {
 	if len(fds) > 1 {
 		// for old version
 		_ = putFd(conn.(*net.UnixConn), []byte("CLOSE"), 0) // close it
+		logger.Debugf("recv FUSE fd: %d", fds[1])
 		return fds[1], msg
 	}
 	return 0, nil
@@ -198,5 +201,6 @@ func sendFuseFd(path string, msg []byte, fd int) error {
 	for _, fd := range fds {
 		_ = syscall.Close(fd)
 	}
+	logger.Debugf("send FUSE fd: %d", fd)
 	return putFd(conn.(*net.UnixConn), msg, fd)
 }
