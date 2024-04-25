@@ -485,6 +485,10 @@ func shutdownGraceful(mp string) {
 		return
 	}
 	fuseFd, fuseSetting = getFuseFd(conf.CommPath)
+	for i := 0; i < 100 && fuseFd == 0; i++ {
+		time.Sleep(time.Millisecond * 100)
+		fuseFd, fuseSetting = getFuseFd(conf.CommPath)
+	}
 	if fuseFd == 0 {
 		logger.Warnf("fail to recv FUSE fd from %s", conf.CommPath)
 		return
@@ -498,11 +502,13 @@ func shutdownGraceful(mp string) {
 		time.Sleep(time.Millisecond * 100)
 	}
 	logger.Infof("mount point %s is busy, stop upgrade, mount on top of it", mp)
-	err = sendFuseFd(conf.CommPath, string(fuseSetting), fuseFd)
+	err = sendFuseFd(conf.CommPath, fuseSetting, fuseFd)
 	if err != nil {
 		logger.Warnf("send FUSE fd: %s", err)
 	}
+	_ = syscall.Close(fuseFd)
 	fuseFd = 0
+	fuseSetting = []byte("FUSE")
 }
 
 func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
