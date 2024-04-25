@@ -50,6 +50,7 @@ get_fio_job_options(){
     echo $fio_job
 }
 parse_bandwidth(){
+    cat fio.log
     bw_str=$(tail -1 fio.log | awk '{print $2}' | awk -F '=' '{print $2}' )
     bw=$(echo $bw_str | sed 's/.iB.*//g') 
     if [[ $bw_str == *KiB* ]]; then

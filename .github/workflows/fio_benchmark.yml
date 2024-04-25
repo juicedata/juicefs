@@ -35,11 +35,11 @@ jobs:
       fail-fast: false
       matrix:
         meta: ['redis']
-        fio_job : ['big-file-sequential-read', 'big-file-sequential-write',  'big-file-multi-read-4', 
-          'big-file-multi-write-4', 'big-file-rand-read-256k', 'big-file-random-write-256k', 
-          'small-file-seq-read-256k', 'small-file-seq-write-256k', 'small-file-multi-read-4', 
-          'small-file-multi-write-4'] 
-        # fio_job : ['big-file-sequential-read']
+        # fio_job : ['big-file-sequential-read', 'big-file-sequential-write',  'big-file-multi-read-4', 
+        #   'big-file-multi-write-4', 'big-file-rand-read-256k', 'big-file-random-write-256k', 
+        #   'small-file-seq-read-256k', 'small-file-seq-write-256k', 'small-file-multi-read-4', 
+        #   'small-file-multi-write-4'] 
+        fio_job : ['big-file-sequential-read']
 
     steps:
       - name: Checkout
