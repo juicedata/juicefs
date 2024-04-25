@@ -54,7 +54,7 @@ save_benchmark(){
     }
 EOF
     cat perf.json
-    AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_ACCESS_KEY_SECRET=$AWS_ACCESS_KEY_SECRET ./juicefs sync --force-update result.json s3://juicefs-ci-aws.s3.us-east-1.amazonaws.com/ci-report/fio-test/$created_date/$name
+    # AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_ACCESS_KEY_SECRET=$AWS_ACCESS_KEY_SECRET ./juicefs sync --force-update result.json s3://juicefs-ci-aws.s3.us-east-1.amazonaws.com/ci-report/fio-test/$created_date/$name
 }
 
 save_benchmark $@
