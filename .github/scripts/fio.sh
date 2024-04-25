@@ -1,5 +1,4 @@
 #/bin/bash -e 
-source .github/scripts/save_benchmark.sh
 get_fio_job_options(){
     fio_job_name=$1
     case "$fio_job_name" in
@@ -93,4 +92,4 @@ name=$2
 fio_test $meta_url $name
 bandwidth=$(parse_bandwidth)
 meta=$(echo $meta_url | awk -F: '{print $1}')
-save_benchmark --name $name --result $bandwidth --meta $meta --storage $storage minio
+.github/scripts/save_benchmark.sh --name $name --result $bandwidth --meta $meta --storage $storage minio
