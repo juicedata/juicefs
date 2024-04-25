@@ -30,6 +30,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -986,6 +987,7 @@ type CacheManager interface {
 }
 
 func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(key, path string, force bool) bool) CacheManager {
+	getEnvs()
 	metrics := newCacheManagerMetrics(reg)
 	if config.CacheDir == "memory" || config.CacheSize == 0 {
 		return newMemStore(config, metrics)
@@ -1027,6 +1029,18 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 	}
 	go m.cleanup()
 	return m
+}
+
+func getEnvs() {
+	if os.Getenv("JFS_MAX_IO_ERRORS") != "" {
+		maxIOErrors, _ = strconv.Atoi(os.Getenv("JFS_MAX_IO_ERRORS"))
+		logger.Infof("set maxIOErrors to %d", maxIOErrors)
+	}
+	if os.Getenv("JFS_MAX_IO_DURATION") != "" {
+		dur, _ := strconv.Atoi(os.Getenv("JFS_MAX_IO_DURATION"))
+		maxIODur = time.Duration(dur) * time.Second
+		logger.Infof("set maxIODur to %d", maxIODur)
+	}
 }
 
 func (m *cacheManager) getMetrics() *cacheManagerMetrics {
