@@ -50,40 +50,18 @@ get_fio_job_options(){
     echo $fio_job
 }
 parse_bandwidth(){
+    echo "parse bandwidth"  >&2
+    cat fio.log 1>&2
     bw_str=$(tail -1 fio.log | awk '{print $2}' | awk -F '=' '{print $2}' )
+    echo bw_str is $bw_str  >&2
     bw=$(echo $bw_str | sed 's/.iB.*//g') 
     if [[ $bw_str == *KiB* ]]; then
         bw=$(echo "scale=2; $bw/1024.0" | bc -l)
     elif [[ $bw_str == *GiB* ]]; then
         bw=$(echo "scale=2; $bw*1024.0" | bc -l)
     fi
-}
-
-upload_result(){
-    meta_url=$1
-    fio_job_name=$2
-    juicefs_version=$(./juicefs -V | cut -b 17- | sed 's/:/-/g')
-    bw=$(parse_bandwidth)
-    meta=$(echo $meta_url | awk -F: '{print $1}')
-    created_date=$(date +"%Y-%m-%d")
-    cat <<EOF > perf.json
-    {
-        "name": "$fio_job_name",
-        "bandwidth": "$bw",
-        "juicefs_version": "$juicefs_version",
-        "size": "1G",
-        "nrfiles": 10000,
-        "ref_name": "$GITHUB_REF_NAME",
-        "created_date": "$created_date",
-        "github_revision": "$GITHUB_SHA",
-        "workflow_url": "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID",
-        "meta_engine": "$meta",
-        "storage": "minio",
-        "runner": "github_runner"
-    }
-EOF
-    cat perf.json
-    AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_ACCESS_KEY_SECRET=$AWS_ACCESS_KEY_SECRET ./juicefs sync --force-update perf.json s3://juicefs-ci-aws.s3.us-east-1.amazonaws.com/ci-report/fio-test/$created_date/$name
+    echo bw is $bw  >&2
+    echo $bw 
 }
           
 fio_test()
@@ -114,6 +92,13 @@ fio_test()
         sudo ./juicefs destroy --yes $meta_url $uuid
     fi
 }
-
-fio_test $1 $2
-# upload_result $1 $2
+meta_url=$1
+name=$2
+fio_test $meta_url $name
+bandwidth=$(parse_bandwidth)
+echo bandwidth is $bandwidth
+[[ -z "$bandwidth" ]] && echo "bandwidth is empty" && exit 1
+meta=$(echo $meta_url | awk -F: '{print $1}')
+echo meta is $meta
+[[ -z "$meta" ]] && echo "meta is empty" && exit 1
+.github/scripts/save_benchmark.sh --name $name --result $bandwidth --meta $meta --storage $storage minio
