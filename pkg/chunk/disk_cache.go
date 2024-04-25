@@ -1091,7 +1091,11 @@ func (m *cacheManager) getStore(key string) *cacheStore {
 }
 
 func (m *cacheManager) removeStage(key string) error {
-	return m.getStore(key).removeStage(key)
+	if s := m.getStore(key); s == nil {
+		return errCacheDown
+	} else {
+		return s.removeStage(key)
+	}
 }
 
 // Deprecated: use getStore instead
