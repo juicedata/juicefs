@@ -68,6 +68,11 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           start_meta_engine ${{matrix.meta}} minio
 
+      - name: Test upload
+        run: |
+          echo abc > test.json
+          AWS_ACCESS_KEY_ID=${{secrets.CI_AWS_ACCESS_KEY_ID}} AWS_ACCESS_KEY_SECRET=${{secrets.CI_AWS_ACCESS_KEY_SECRET}} ./juicefs sync --force-update test.json s3://juicefs-ci-aws.s3.us-east-1.amazonaws.com/ci-report/fio-test/test.json
+
       - name: Fio Benchmark 
         run: |
           source .github/scripts/start_meta_engine.sh
