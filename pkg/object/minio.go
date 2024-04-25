@@ -73,7 +73,7 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		Region:           aws.String(region),
 		Endpoint:         &uri.Host,
 		DisableSSL:       aws.Bool(!ssl),
-		S3ForcePathStyle: aws.Bool(true),
+		S3ForcePathStyle: aws.Bool(defaultPathStyle()),
 		HTTPClient:       httpClient,
 	}
 	if accessKey == "" {

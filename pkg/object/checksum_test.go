@@ -18,12 +18,13 @@ package object
 
 import (
 	"bytes"
-	"crypto/rand"
 	"hash/crc32"
 	"io"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 func TestChecksum(t *testing.T) {
@@ -45,9 +46,7 @@ func TestChecksum(t *testing.T) {
 func TestChecksumRead(t *testing.T) {
 	length := 10240
 	content := make([]byte, length)
-	if _, err := rand.Read(content); err != nil {
-		t.Fatalf("Generate random content: %s", err)
-	}
+	utils.RandRead(content)
 	actual := generateChecksum(bytes.NewReader(content))
 
 	// content length equal buff length case
@@ -56,7 +55,7 @@ func TestChecksumRead(t *testing.T) {
 		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
 		n, err := reader.Read(make([]byte, length))
 		if n != length || (err != nil && err != io.EOF) {
-			t.Fatalf("verify checksum shuold success")
+			t.Fatalf("verify checksum should success")
 		}
 	}
 
@@ -65,7 +64,7 @@ func TestChecksumRead(t *testing.T) {
 		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
 		n, err := reader.Read(make([]byte, length+100))
 		if n != length || (err != nil && err != io.EOF) {
-			t.Fatalf("verify checksum shuold success")
+			t.Fatalf("verify checksum should success")
 		}
 	}
 

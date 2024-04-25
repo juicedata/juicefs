@@ -83,7 +83,7 @@ $ juicefs mount redis://localhost /mnt/jfs --backup-meta 0`,
 
 func exposeMetrics(c *cli.Context, registerer prometheus.Registerer, registry *prometheus.Registry) string {
 	var ip, port string
-	//default set
+	// default set
 	ip, port, err := net.SplitHostPort(c.String("metrics"))
 	if err != nil {
 		logger.Fatalf("metrics format error: %v", err)
@@ -323,6 +323,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		GetTimeout:    utils.Duration(c.String("get-timeout")),
 		PutTimeout:    utils.Duration(c.String("put-timeout")),
 		MaxUpload:     c.Int("max-uploads"),
+		MaxStageWrite: c.Int("max-stage-write"),
 		MaxRetries:    c.Int("io-retries"),
 		Writeback:     c.Bool("writeback"),
 		Prefetch:      c.Int("prefetch"),
@@ -377,6 +378,10 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 type storageHolder struct {
 	object.ObjectStorage
 	fmt meta.Format
+}
+
+func (h *storageHolder) Shutdown() {
+	object.Shutdown(h.ObjectStorage)
 }
 
 func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.Format)) (object.ObjectStorage, error) {
@@ -539,11 +544,17 @@ func mount(c *cli.Context) error {
 	removePassword(addr)
 	mp := c.Args().Get(1)
 
-	// __DAEMON_STAGE env is set by the godaemon.MakeDaemon function
+	stage := getDaemonStage()
+	if stage < 0 || stage > 2 {
+		logger.Fatalf("Invalid daemon stage: %d", stage)
+	}
 	supervisor := os.Getenv("JFS_SUPERVISOR")
-	inFirstProcess := supervisor == "test" || supervisor == "" && os.Getenv("__DAEMON_STAGE") == ""
-	if inFirstProcess {
-		var err error
+	if supervisor != "" {
+		stage = 3
+	}
+
+	var err error
+	if stage == 0 || supervisor == "test" {
 		err = utils.WithTimeout(func() error {
 			mp, err = filepath.Abs(mp)
 			return err
@@ -573,29 +584,43 @@ func mount(c *cli.Context) error {
 		}
 	}
 
+	var format = &meta.Format{}
+	var metaCli meta.Meta
+	var blob object.ObjectStorage
 	metaConf := getMetaConf(c, mp, c.Bool("read-only") || utils.StringContains(strings.Split(c.String("o"), ","), "ro"))
 	metaConf.CaseInsensi = strings.HasSuffix(mp, ":") && runtime.GOOS == "windows"
-	metaCli := meta.NewClient(addr, metaConf)
-	format, err := metaCli.Load(true)
-	if err != nil {
-		return err
+	// stage 0: check the connection to fail fast
+	// stage 2: need the volume name to check if it's already mounted
+	// stage 3: the real service process
+	if stage != 1 {
+		metaCli = meta.NewClient(addr, metaConf)
+		format, err = metaCli.Load(true)
+		if err != nil {
+			return err
+		}
 	}
 
 	chunkConf := getChunkConf(c, format)
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
 	setFuseOption(c, format, vfsConf)
+	if stage == 0 || stage == 3 {
+		blob, err = NewReloadableStorage(format, metaCli, updateFormat(c))
+		if err != nil {
+			return fmt.Errorf("object storage: %s", err)
+		}
+		logger.Infof("Data use %s", blob)
 
-	// should create object storage before launchMount
-	blob, err := NewReloadableStorage(format, metaCli, updateFormat(c))
-	if err != nil {
-		return fmt.Errorf("object storage: %s", err)
 	}
-	logger.Infof("Data use %s", blob)
 
-	if os.Getenv("JFS_SUPERVISOR") == "" {
-		// close the database connection that is not in the final stage
-		if err = metaCli.Shutdown(); err != nil {
-			logger.Errorf("[pid=%d] meta shutdown: %s", os.Getpid(), err)
+	if stage < 3 {
+		// supervisor serves no user request
+		if metaCli != nil {
+			if err = metaCli.Shutdown(); err != nil {
+				logger.Errorf("[pid=%d] meta shutdown: %s", os.Getpid(), err)
+			}
+		}
+		if blob != nil {
+			object.Shutdown(blob)
 		}
 		var foreground bool
 		if runtime.GOOS == "windows" || !c.Bool("background") || os.Getenv("JFS_FOREGROUND") != "" {
@@ -608,7 +633,7 @@ func mount(c *cli.Context) error {
 		if foreground {
 			go checkMountpoint(format.Name, mp, c.String("log"), false)
 		} else {
-			daemonRun(c, addr, vfsConf)
+			daemonRun(c, addr, vfsConf) // only stage 0 needs the vfsConf
 		}
 		os.Setenv("JFS_SUPERVISOR", strconv.Itoa(os.Getppid()))
 		return launchMount(mp, vfsConf)
@@ -639,7 +664,7 @@ func mount(c *cli.Context) error {
 		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
 	})
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
-	installHandler(mp, v)
+	installHandler(mp, v, blob)
 	v.UpdateFormat = updateFormat(c)
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	mountMain(v, c)
@@ -647,6 +672,7 @@ func mount(c *cli.Context) error {
 		logger.Errorf("flush all delayed data: %s", err)
 	}
 	err = metaCli.CloseSession()
+	object.Shutdown(blob)
 	logger.Infof("The juicefs mount process exit successfully, mountpoint: %s", metaConf.MountPoint)
 	return err
 }

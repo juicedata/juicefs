@@ -18,12 +18,12 @@ package sync
 
 import (
 	"bytes"
-	"crypto/rand"
 	"io"
 	"os"
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 func TestDownload(t *testing.T) {
@@ -166,7 +166,7 @@ func TestDownload(t *testing.T) {
 
 	for _, c := range tcases {
 		content := make([]byte, c.config.fsize)
-		_, _ = rand.Read(content)
+		utils.RandRead(content)
 		_ = a.Put(key, bytes.NewReader(content))
 		c.tfunc(t, newParallelDownloader(a, key, c.config.fsize, c.blockSize, make(chan int, c.concurrent)), content)
 	}

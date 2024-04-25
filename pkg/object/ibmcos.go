@@ -314,7 +314,7 @@ func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage
 		WithEndpoint(serviceEndpoint).
 		WithCredentials(ibmiam.NewStaticCredentials(aws.NewConfig(),
 			authEndpoint, apiKey, serviceInstanceID)).
-		WithS3ForcePathStyle(true)
+		WithS3ForcePathStyle(defaultPathStyle())
 	sess := session.Must(session.NewSession())
 	client := s3.New(sess, conf)
 	return &ibmcos{bucket: bucket, s3: client}, nil

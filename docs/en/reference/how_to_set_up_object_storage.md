@@ -160,6 +160,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Storj DCS](#storj-dcs)                                     | `s3`       |
 | [Vultr Object Storage](#vultr-object-storage)               | `s3`       |
 | [Cloudflare R2](#r2)                                        | `s3`       |
+| [Bunny Storage](#bunny)                                     | `bunny`    |
 | [Alibaba Cloud OSS](#alibaba-cloud-oss)                     | `oss`      |
 | [Tencent Cloud COS](#tencent-cloud-cos)                     | `cos`      |
 | [Huawei Cloud OBS](#huawei-cloud-obs)                       | `obs`      |
@@ -523,6 +524,24 @@ juicefs format \
 :::caution
 Cloudflare R2 `ListObjects` API is not fully S3 compatible (result list is not sorted), so some features of JuiceFS do not work. For example, `juicefs gc`, `juicefs fsck`, `juicefs sync`, `juicefs destroy`. And when using `juicefs mount`, you need to disable [automatic-backup](../administration/metadata_dump_load.md#backup-automatically) function by adding `--backup-meta 0`.
 :::
+
+### Bunny Storage {#bunny}
+
+Bunny Storage offers a non-S3 compatible object storage with multiple performance tiers and many storage regions. It uses [it uses a custom API](https://docs.bunny.net/reference/storage-api).
+
+This is not included by default, please build it with tag `bunny`
+
+#### Usage
+
+Create a Storage Zone and use the Zone Name with the Hostname of the Location seperated by a dot as Bucket name and the `Write Password` as Secret Key.
+
+```shell
+juicefs format \
+    --storage bunny \
+    --secret-key "write-password" \
+    --bucket "https://uk.storage.bunnycdn.com/myzone" \ # https://<Endpoint>/<Zonename>
+    myjfs
+```
 
 ### Alibaba Cloud OSS
 

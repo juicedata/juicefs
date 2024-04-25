@@ -45,6 +45,10 @@ func (c *ceph) String() string {
 	return fmt.Sprintf("ceph://%s/", c.name)
 }
 
+func (c *ceph) Shutdown() {
+	c.conn.Shutdown()
+}
+
 func (c *ceph) Create() error {
 	names, err := c.conn.ListPools()
 	if err != nil {
@@ -320,7 +324,7 @@ func newCeph(endpoint, cluster, user, token string) (ObjectStorage, error) {
 	}
 	if opt := os.Getenv("CEPH_ADMIN_SOCKET"); opt != "none" {
 		if opt == "" {
-			opt = "$run_dir/jfs-$cluster-$name.asok"
+			opt = "$run_dir/jfs-$cluster-$name-$pid.asok"
 		}
 		if err = conn.SetConfigOption("admin_socket", opt); err != nil {
 			logger.Warnf("Failed to set admin_socket to %s: %s", opt, err)

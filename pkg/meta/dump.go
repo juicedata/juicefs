@@ -18,9 +18,11 @@ package meta
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/goccy/go-json"
@@ -123,6 +125,39 @@ type DumpedEntry struct {
 	Entries    map[string]*DumpedEntry `json:"entries,omitempty"`
 	AccessACL  *DumpedACL              `json:"posix_acl_access,omitempty"`
 	DefaultACL *DumpedACL              `json:"posix_acl_default,omitempty"`
+}
+
+type wrapEntryPool struct {
+	sync.Pool
+}
+
+func (p *wrapEntryPool) Get() *DumpedEntry {
+	return p.Pool.Get().(*DumpedEntry)
+}
+
+func (p *wrapEntryPool) Put(de *DumpedEntry) {
+	if de == nil {
+		return
+	}
+
+	de.Name = ""
+	de.Xattrs = nil
+	de.Chunks = nil
+	de.Symlink = ""
+	de.AccessACL = nil
+	de.DefaultACL = nil
+	de.Entries = nil
+	p.Pool.Put(de)
+}
+
+var entryPool = wrapEntryPool{
+	Pool: sync.Pool{
+		New: func() interface{} {
+			return &DumpedEntry{
+				Attr: &DumpedAttr{},
+			}
+		},
+	},
 }
 
 var CHARS = []byte("0123456789ABCDEF")
@@ -299,6 +334,13 @@ type DumpedMeta struct {
 	Trash     *DumpedEntry         `json:",omitempty"`
 }
 
+func (dm *DumpedMeta) validate() error {
+	if dm.Counters == nil {
+		return errors.New("invalid dumped meta: missing 'Counters'")
+	}
+	return nil
+}
+
 func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
 	if dm.FSTree != nil || dm.Trash != nil {
 		return nil, fmt.Errorf("invalid dumped meta")
@@ -423,6 +465,11 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 	}
 	_, _ = dec.Token() // }
 	progress.Done()
+
+	if err = dm.validate(); err != nil {
+		return
+	}
+
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
 	return
@@ -590,6 +637,9 @@ func dumpACLEntries(entries aclAPI.Entries) []DumpedACLEntry {
 }
 
 func loadACL(dumped *DumpedACL) *aclAPI.Rule {
+	if dumped == nil {
+		return nil
+	}
 	return &aclAPI.Rule{
 		Owner:       dumped.Owner,
 		Group:       dumped.Group,

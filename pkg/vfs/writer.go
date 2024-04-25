@@ -120,7 +120,6 @@ func (s *sliceWriter) flushData() {
 		s.writer.Abort()
 		s.err = syscall.EIO
 	}
-	s.writer = nil
 }
 
 // protected by s.chunk.file
@@ -145,8 +144,6 @@ func (s *sliceWriter) write(ctx meta.Context, off uint32, data []uint8) syscall.
 				logger.Warnf("write: chunk: %d off: %d %s", s.id, off, err)
 				return syscall.EIO
 			}
-		} else if int(off) <= f.w.blockSize {
-			go s.prepareID(ctx, false)
 		}
 	}
 	return 0
@@ -264,6 +261,7 @@ func (f *fileWriter) writeChunk(ctx meta.Context, indx uint32, off uint32, data 
 			notify:  utils.NewCond(&f.Mutex),
 			started: time.Now(),
 		}
+		go s.prepareID(meta.Background, false)
 		c.slices = append(c.slices, s)
 		if len(c.slices) == 1 {
 			f.w.Lock()

@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/colinmarc/hdfs/v2/hadoopconf"
+	"github.com/juicedata/juicefs/pkg/utils"
 
 	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 
@@ -141,7 +142,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if d, e := get(s, "test", 0, -1, WithStorageClass(&scGet)); e != nil || d != "hello" {
 		t.Fatalf("expect hello, but got %v, error: %s", d, e)
 	}
-	if scGet != sc { // Relax me when testing against a storage that doesnot use specified storage class
+	if scGet != sc { // Relax me when testing against a storage that doesn't use specified storage class
 		t.Fatalf("Storage class should be %q, got %q", sc, scGet)
 	}
 
@@ -233,6 +234,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
+	defer s.Delete("a/")
 	defer s.Delete("a/a")
 	if err := s.Put("a/a", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
@@ -241,6 +243,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put("a/a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
+	defer s.Delete("b/")
 	defer s.Delete("b/b")
 	if err := s.Put("b/b", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
@@ -436,7 +439,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if upload, err := s.CreateMultipartUpload(k); err == nil {
 		total := 3
 		seed := make([]byte, upload.MinPartSize)
-		_, _ = rand.Read(seed)
+		utils.RandRead(seed)
 		parts := make([]*Part, total)
 		content := make([][]byte, total)
 		for i := 0; i < total; i++ {
@@ -924,7 +927,7 @@ func TestPG(t *testing.T) { //skip mutate
 
 }
 func TestPGWithSearchPath(t *testing.T) { //skip mutate
-	_, err := newSQLStore("postgres", "localhost:5432/test?sslmode=disable&search_path=juicefs,public", "", "")
+	_, err := newSQLStore("postgres", "127.0.0.1:5432/test?sslmode=disable&search_path=juicefs,public", "", "")
 	if !strings.Contains(err.Error(), "currently, only one schema is supported in search_path") {
 		t.Fatalf("TestPGWithSearchPath error: %s", err)
 	}
@@ -1019,6 +1022,17 @@ func TestDragonfly(t *testing.T) { //skip mutate
 	}
 	testStorage(t, dragonfly)
 }
+
+// func TestBunny(t *testing.T) { //skip mutate
+// 	if os.Getenv("BUNNY_ENDPOINT") == "" {
+// 		t.SkipNow()
+// 	}
+// 	bunny, err := newBunny(os.Getenv("BUNNY_ENDPOINT"), "", os.Getenv("BUNNY_SECRET_KEY"), "")
+// 	if err != nil {
+// 		t.Fatalf("create: %s", err)
+// 	}
+// 	testStorage(t, bunny)
+// }
 
 func TestMain(m *testing.M) {
 	if envFile := os.Getenv("JUICEFS_ENV_FILE_FOR_TEST"); envFile != "" {

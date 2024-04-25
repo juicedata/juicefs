@@ -133,8 +133,8 @@ func RegisterToConsul(consulAddr, metricsAddr string, metadata map[string]string
 		Check:   check,
 	}
 	if err = client.Agent().ServiceRegister(&registration); err != nil {
-		logger.Errorf("Service register failed:%s", err)
+		logger.Errorf("Service register failed: %s", err)
 	} else {
-		logger.Info("Juicefs register to consul success")
+		logger.Infof("Juicefs register to consul success, id: %q, port: %d", id, port)
 	}
 }

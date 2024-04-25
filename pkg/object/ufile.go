@@ -191,7 +191,7 @@ type DataItem struct {
 	ModifyTime int
 }
 
-// ListObjectsOutput presents output for ListObjects.
+// uFileListObjectsOutput presents output for ListObjects.
 type uFileListObjectsOutput struct {
 	// Object keys
 	DataSet []*DataItem `json:"DataSet,omitempty"`

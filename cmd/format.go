@@ -330,7 +330,7 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 func test(store object.ObjectStorage) error {
 	key := "testing/" + randSeq(10)
 	data := make([]byte, 100)
-	randRead(data)
+	utils.RandRead(data)
 	nRetry := 3
 	var err error
 	for i := 0; i < nRetry; i++ {

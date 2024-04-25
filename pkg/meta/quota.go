@@ -292,8 +292,9 @@ func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) Ino {
 		if inode <= RootInode {
 			break
 		}
+		lastInode := inode
 		if inode, st = m.getDirParent(ctx, inode); st != 0 {
-			logger.Warnf("Get directory parent of inode %d: %s", inode, st)
+			logger.Warnf("Get directory parent of inode %d: %s", lastInode, st)
 			break
 		}
 	}
@@ -316,8 +317,9 @@ func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bo
 		if inode <= RootInode {
 			break
 		}
+		lastInode := inode
 		if inode, st = m.getDirParent(ctx, inode); st != 0 {
-			logger.Warnf("Get directory parent of inode %d: %s", inode, st)
+			logger.Warnf("Get directory parent of inode %d: %s", lastInode, st)
 			break
 		}
 	}
@@ -340,8 +342,9 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 		if inode <= RootInode {
 			break
 		}
+		lastInode := inode
 		if inode, st = m.getDirParent(ctx, inode); st != 0 {
-			logger.Warnf("Get directory parent of inode %d: %s", inode, st)
+			logger.Warnf("Get directory parent of inode %d: %s", lastInode, st)
 			break
 		}
 	}

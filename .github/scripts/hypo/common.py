@@ -6,8 +6,15 @@ import os
 import pwd
 import subprocess
 import sys
-
-
+def replace(src, old, new):
+    if isinstance(src, str):
+        return src.replace(old, new)
+    elif isinstance(src, list) or isinstance(src, tuple):
+        return [replace(x, old, new) for x in src]
+    elif isinstance(src, dict):
+        return {k: replace(v, old, new) for k, v in src.items()}
+    else:
+        return src
 def run_cmd(command: str) -> str:
     print('run_cmd:'+command)
     if '|' in command or '>' in command:
@@ -119,10 +126,14 @@ def support_acl(path):
         
 def get_stat(path):
     # TODO: add st_nlink and st_mode etc.
+    check_nlink = os.environ.get('CHECK_NLINK', 'true').lower() == 'true'
     if os.path.isfile(path):
         stat = os.stat(path)
         # print(f'{path} is file: {stat}')
-        return stat.st_gid, stat.st_uid,  stat.st_size, oct(stat.st_mode), stat.st_nlink
+        if check_nlink:
+            return stat.st_gid, stat.st_uid,  stat.st_size, oct(stat.st_mode), stat.st_nlink
+        else:
+            return stat.st_gid, stat.st_uid,  stat.st_size, oct(stat.st_mode)
     elif os.path.isdir(path):
         stat = os.stat(path)
         # print(f'{path} is dir: {stat}')
@@ -131,12 +142,12 @@ def get_stat(path):
         stat = os.stat(path)
         lstat = os.lstat(path)
         # print(f'{path} is good link: {stat}\n{lstat}')
-        return stat.st_gid, stat.st_uid,  stat.st_size, oct(stat.st_mode),stat.st_nlink,\
+        return stat.st_gid, stat.st_uid,  stat.st_size, oct(stat.st_mode), \
             lstat.st_gid, lstat.st_uid, oct(lstat.st_mode), 
     elif os.path.islink(path) and not os.path.exists(path): # broken link
         lstat = os.lstat(path)
         # print(f'{path} is broken link: {lstat}')
-        return lstat.st_gid, lstat.st_uid, oct(lstat.st_mode), lstat.st_nlink
+        return lstat.st_gid, lstat.st_uid, oct(lstat.st_mode)
     else:
         return ()
     

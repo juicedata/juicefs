@@ -18,10 +18,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/urfave/cli/v2"
 	"os"
 	"path"
 	"runtime"
+
+	"github.com/urfave/cli/v2"
 )
 
 func globalFlags() []cli.Flag {
@@ -109,12 +110,12 @@ func storageFlags() []cli.Flag {
 		&cli.StringFlag{
 			Name:  "get-timeout",
 			Value: "60s",
-			Usage: "the max number of seconds to download an object",
+			Usage: "the timeout to download an object",
 		},
 		&cli.StringFlag{
 			Name:  "put-timeout",
 			Value: "60s",
-			Usage: "the max number of seconds to upload an object",
+			Usage: "the timeout to upload an object",
 		},
 		&cli.IntFlag{
 			Name:  "io-retries",
@@ -125,6 +126,11 @@ func storageFlags() []cli.Flag {
 			Name:  "max-uploads",
 			Value: 20,
 			Usage: "number of connections to upload",
+		},
+		&cli.IntFlag{
+			Name:  "max-stage-write",
+			Value: 0, // Enable this to have concurrent uploads to two backends, and get write bandwidth equals to sum of the two
+			Usage: "number of threads allowed to write staged files, other requests will be uploaded directly (this option is only effective when 'writeback' mode is enabled)",
 		},
 		&cli.IntFlag{
 			Name:  "max-deletes",
@@ -177,8 +183,8 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "upload-delay",
-			Value: "0",
-			Usage: "delayed duration (in seconds) for uploading blocks",
+			Value: "0s",
+			Usage: "delayed duration for uploading blocks",
 		},
 		&cli.StringFlag{
 			Name:  "upload-hours",
@@ -220,12 +226,12 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "cache-scan-interval",
-			Value: "3600",
-			Usage: "interval (in seconds) to scan cache-dir to rebuild in-memory index",
+			Value: "1h",
+			Usage: "interval to scan cache-dir to rebuild in-memory index",
 		},
 		&cli.StringFlag{
 			Name:  "cache-expire",
-			Value: "0",
+			Value: "0s",
 			Usage: "cached blocks not accessed for longer than this option will be automatically evicted (0 means never)",
 		},
 	})
@@ -239,8 +245,8 @@ func metaFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "backup-meta",
-			Value: "3600",
-			Usage: "interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup)",
+			Value: "1h",
+			Usage: "interval to automatically backup metadata in the object storage (0 means disable backup)",
 		},
 		&cli.BoolFlag{
 			Name:  "backup-skip-trash",
@@ -248,8 +254,8 @@ func metaFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "heartbeat",
-			Value: "12",
-			Usage: "interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value",
+			Value: "12s",
+			Usage: "interval to send heartbeat; it's recommended that all clients use the same heartbeat value",
 		},
 		&cli.BoolFlag{
 			Name:  "read-only",
@@ -313,23 +319,23 @@ func metaCacheFlags(defaultEntryCache float64) []cli.Flag {
 	return addCategories("META CACHE", []cli.Flag{
 		&cli.StringFlag{
 			Name:  "attr-cache",
-			Value: "1s",
+			Value: "1.0s",
 			Usage: "attributes cache timeout",
 		},
 		&cli.StringFlag{
 			Name:  "entry-cache",
-			Value: fmt.Sprintf("%.1f", defaultEntryCache),
+			Value: fmt.Sprintf("%.1fs", defaultEntryCache),
 			Usage: "file entry cache timeout",
 		},
 		&cli.StringFlag{
 			Name:  "dir-entry-cache",
-			Value: "1s",
+			Value: "1.0s",
 			Usage: "dir entry cache timeout",
 		},
 		&cli.StringFlag{
 			Name:  "open-cache",
-			Value: "0",
-			Usage: "The seconds to reuse open file without checking update (0 means disable this feature)",
+			Value: "0s",
+			Usage: "The cache time to reuse open file without checking update (0 means disable this feature)",
 		},
 		&cli.Uint64Flag{
 			Name:  "open-cache-limit",

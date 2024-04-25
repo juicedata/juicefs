@@ -29,14 +29,12 @@ from hypothesis import HealthCheck, assume, strategies as st, settings, Verbosit
 from hypothesis.stateful import rule, precondition, RuleBasedStateMachine, Bundle, initialize, multiple
 from hypothesis import Phase, seed
 import random
-import common
 from common import run_cmd
 from strategy import *
 from fs_op import FsOperation
 from command_op import CommandOperation
-from fsrand2 import JuicefsMachine
-from context import Context
-
+from fs import JuicefsMachine
+import common
 
 SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
 
@@ -48,31 +46,25 @@ class JuicefsCommandMachine(JuicefsMachine):
     Files = Bundle('files')
     Folders = Bundle('folders')
     Entries = Files | Folders
-    ROOT_DIR1='/tmp/jfs1/fsrand'
-    ROOT_DIR2='/tmp/jfs2/fsrand'
-    
-    context1 = Context(root_dir=ROOT_DIR1, mp='/tmp/jfs1')
-    context2 = Context(root_dir=ROOT_DIR2, mp='/tmp/jfs2')
-    
-    EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file']
+    MP1 = '/tmp/jfs1'
+    MP2 = '/tmp/jfs2'
+    ROOT_DIR1=os.path.join(MP1, 'fsrand')
+    ROOT_DIR2=os.path.join(MP2, 'fsrand')
+    EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file', 'config']
     # EXCLUDE_RULES = []
     INCLUDE_RULES = ['dump_load_dump', 'mkdir', 'create_file', 'set_xattr']
-    log_level = os.environ.get('LOG_LEVEL', 'INFO')
-    loggers = {f'{ROOT_DIR1}': common.setup_logger(f'./log1', 'cmdlogger1', log_level), \
-                            f'{ROOT_DIR2}': common.setup_logger(f'./log2', 'cmdlogger2', log_level)}
-    fsop = FsOperation(loggers)
-    cmdop = CommandOperation(loggers)
-
-    def get_meta_url(self, mp):
-        with open(os.path.join(mp, '.config')) as f:
-            config = json.loads(f.read())
-            pid = config['Pid']
-            process = psutil.Process(pid)
-            cmdline = process.cmdline()
-            for item in cmdline:
-                if '://' in item:
-                    return item
-            raise Exception(f'get_meta_url: {cmdline} does not contain meta url')
+    cmd1 = CommandOperation('cmd1', MP1, ROOT_DIR1)
+    cmd2 = CommandOperation('cmd2', MP2, ROOT_DIR2)
+    fsop1 = FsOperation('fs1', ROOT_DIR1)
+    fsop2 = FsOperation('fs2', ROOT_DIR2)
+    def __init__(self):
+        super().__init__()
+        
+    def get_default_rootdir1(self):
+        return os.path.join(self.MP1, 'fsrand')
+    
+    def get_default_rootdir2(self):
+        return os.path.join(self.MP2, 'fsrand')
 
     def equal(self, result1, result2):
         if type(result1) != type(result2):
@@ -80,31 +72,23 @@ class JuicefsCommandMachine(JuicefsMachine):
         if isinstance(result1, Exception):
             if 'panic:' in str(result1) or 'panic:' in str(result2):
                 return False
-            r1 = str(result1).replace(self.context1.mp, '')
-            r2 = str(result2).replace(self.context2.mp, '')
-            return r1 == r2
-        elif isinstance(result1, str):
-            r1 = str(result1).replace(self.context1.mp, '')
-            r2 = str(result2).replace(self.context2.mp, '')
-            return r1 == r2
-        elif isinstance(result1, tuple):
-            r1 = [str(item).replace(self.context1.mp, '') for item in result1]
-            r2 = [str(item).replace(self.context2.mp, '') for item in result2]
-            return r1 == r2
-        else:
-            return  result1 == result2
+            result1 = str(result1)
+            result2 = str(result2)
+        result1 = common.replace(result1, self.MP1, '***')
+        result2 = common.replace(result2, self.MP2, '***')
+        # print(f'result1 is {result1}\nresult2 is {result2}')
+        return result1 == result2
 
     def get_client_version(self, mount):
         output = run_cmd(f'{mount} version')
         return output.split()[2]
 
-    def __init__(self):
-        super().__init__()
-        self.context1.meta_url = self.get_meta_url(self.context1.mp)
-        self.context2.meta_url = self.get_meta_url(self.context2.mp)
-        assert self.context1.meta_url != ''
-        assert self.context2.meta_url != ''
-        
+    def should_run(self, rule):
+        if len(self.EXCLUDE_RULES) > 0:
+            return rule not in self.EXCLUDE_RULES
+        else:
+            return rule in self.INCLUDE_RULES
+
     @rule(
           entry = Entries.filter(lambda x: x != multiple()),
           raw = st.just(True),
@@ -112,44 +96,36 @@ class JuicefsCommandMachine(JuicefsMachine):
           strict = st.just(True),
           user = st_sudo_user
           )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'info' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'info' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('info'))
     def info(self, entry, raw=True, recuisive=False, strict=True, user='root'):
-        result1 = self.cmdop.do_info(self.context1, entry=entry, user=user, raw=raw, recuisive=recuisive) 
-        result2 = self.cmdop.do_info(self.context2, entry=entry, user=user, raw=raw, recuisive=recuisive)
+        result1 = self.cmd1.do_info(entry=entry, user=user, strict=strict, raw=raw, recuisive=recuisive) 
+        result2 = self.cmd2.do_info(entry=entry, user=user, strict=strict, raw=raw, recuisive=recuisive)
         assert self.equal(result1, result2), f'\033[31minfo:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(entry = Entries.filter(lambda x: x != multiple()),
           user = st_sudo_user
         )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'rmr' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'rmr' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('rmr'))
     def rmr(self, entry, user='root'):
         assume(entry != '')
-        result1 = self.cmdop.do_rmr(context=self.context1, entry=entry, user=user)
-        result2 = self.cmdop.do_rmr(context=self.context2, entry=entry, user=user)
+        result1 = self.cmd1.do_rmr(entry=entry, user=user)
+        result2 = self.cmd2.do_rmr(entry=entry, user=user)
         assert self.equal(result1, result2), f'\033[31mrmr:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule()
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'status' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'status' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('status'))
     def status(self):
-        result1 = self.cmdop.do_status(context = self.context1)
-        result2 = self.cmdop.do_status(context = self.context2)
+        result1 = self.cmd1.do_status()
+        result2 = self.cmd2.do_status()
         assert result1 == result2, f'\033[31mresult1 is {result1}\nresult2 is {result2}, {diff(result1, result2)}\033[0m'
 
     @rule(entry = Entries.filter(lambda x: x != multiple()),
         user = st_sudo_user
     )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'warmup' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'warmup' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('warmup'))
     def warmup(self, entry, user='root'):
-        result1 = self.cmdop.do_warmup(context=self.context1, entry=entry, user=user)
-        result2 = self.cmdop.do_warmup(context=self.context2, entry=entry, user=user)
+        result1 = self.cmd1.do_warmup(entry=entry, user=user)
+        result2 = self.cmd2.do_warmup(entry=entry, user=user)
         assert self.equal(result1, result2), f'\033[31mwarmup:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
@@ -157,12 +133,10 @@ class JuicefsCommandMachine(JuicefsMachine):
         delete = st.booleans(),
         user = st.just('root'),
     )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'gc' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'gc' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('gc'))
     def gc(self, compact=False, delete=False, user='root'):
-        result1 = self.cmdop.do_gc(context=self.context1, compact=compact, delete=delete, user=user)
-        result2 = self.cmdop.do_gc(context=self.context2, compact=compact, delete=delete, user=user)
+        result1 = self.cmd1.do_gc(compact=compact, delete=delete, user=user)
+        result2 = self.cmd2.do_gc(compact=compact, delete=delete, user=user)
         assert self.equal(result1, result2), f'\033[31mgc:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
@@ -171,12 +145,10 @@ class JuicefsCommandMachine(JuicefsMachine):
         recuisive = st.booleans(),
         user = st_sudo_user, 
     )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'fsck' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'fsck' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('fsck'))
     def fsck(self, entry, repair=False, recuisive=False, user='root'):
-        result1 = self.cmdop.do_fsck(context=self.context1, entry=entry, repair=repair, recuisive=recuisive, user=user)
-        result2 = self.cmdop.do_fsck(context=self.context2, entry=entry, repair=repair, recuisive=recuisive, user=user)
+        result1 = self.cmd1.do_fsck(entry=entry, repair=repair, recuisive=recuisive, user=user)
+        result2 = self.cmd2.do_fsck(entry=entry, repair=repair, recuisive=recuisive, user=user)
         assert self.equal(result1, result2), f'\033[31mfsck:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
@@ -186,74 +158,95 @@ class JuicefsCommandMachine(JuicefsMachine):
         user = st_sudo_user,
         preserve = st.booleans()
     )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'clone' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'clone' in self.INCLUDE_RULES)
-    )
+    @precondition(lambda self: self.should_run('clone'))
     def clone(self, entry, parent, new_entry_name, preserve=False, user='root'):
-        result1 = self.cmdop.do_clone(context=self.context1, entry=entry, parent=parent, new_entry_name=new_entry_name, preserve=preserve, user=user)
-        result2 = self.cmdop.do_clone(context=self.context2, entry=entry, parent=parent, new_entry_name=new_entry_name, preserve=preserve, user=user)
+        result1 = self.cmd1.do_clone(entry=entry, parent=parent, new_entry_name=new_entry_name, preserve=preserve, user=user)
+        result2 = self.cmd2.do_clone(entry=entry, parent=parent, new_entry_name=new_entry_name, preserve=preserve, user=user)
         assert self.equal(result1, result2), f'\033[31mclone:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(folder = Folders.filter(lambda x: x != multiple()),
         fast = st.booleans(),
         skip_trash = st.booleans(),
         threads = st.integers(min_value=1, max_value=10),
-        keep_secret_key = st.booleans()
+        keep_secret_key = st.booleans(),
+        user = st.just('root')
     )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'dump' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'dump' in self.INCLUDE_RULES)
-    )
-    def dump(self, folder, fast, skip_trash, threads, keep_secret_key):
-        result1 = self.cmdop.do_dump(context=self.context1, folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
-        result2 = self.cmdop.do_dump(context=self.context2, folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
-        result1 = self.clean_dump(result1)
-        result2 = self.clean_dump(result2)
-        d=self.diff(result1, result2)
+    @precondition(lambda self: self.should_run('dump'))
+    def dump(self, folder, fast, skip_trash, threads, keep_secret_key, user='root'):
+        result1 = self.cmd1.do_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key, user=user)
+        result2 = self.cmd2.do_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key, user=user)
+        d=''
+        if isinstance(result1, str) and isinstance(result2, str):
+            d=self.diff(result1, result2)
         assert self.equal(result1, result2), f'\033[31mdump:\nresult1 is {result1}\nresult2 is {result2}\ndiff is {d}\033[0m'
 
     @rule(folder = st.just(''),
         fast = st.booleans(),
         skip_trash = st.booleans(),
         threads = st.integers(min_value=1, max_value=10),
-        keep_secret_key = st.booleans()
+        keep_secret_key = st.booleans(),
+        user = st.just('root')
     )
-    @precondition(lambda self: (len(self.EXCLUDE_RULES)>0 and 'dump_load_dump' not in self.EXCLUDE_RULES)\
-                   or (len(self.EXCLUDE_RULES)==0 and 'dump_load_dump' in self.INCLUDE_RULES)
-    )
-    def dump_load_dump(self, folder, fast=False, skip_trash=False, threads=10, keep_secret_key=False):
-        result1 = self.cmdop.do_dump_load_dump(context=self.context1, folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
-        result2 = self.cmdop.do_dump_load_dump(context=self.context2, folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key)
-        print(result1)
-        result1 = self.clean_dump(result1)
-        result2 = self.clean_dump(result2)
-        d=self.diff(result1, result2)
+    @precondition(lambda self: self.should_run('dump_load_dump'))
+    def dump_load_dump(self, folder, fast=False, skip_trash=False, threads=10, keep_secret_key=False, user='root'):
+        result1 = self.cmd1.do_dump_load_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key, user=user)
+        result2 = self.cmd2.do_dump_load_dump(folder=folder, fast=fast, skip_trash=skip_trash, threads=threads, keep_secret_key=keep_secret_key, user=user)
+        d=''
+        if isinstance(result1, str) and isinstance(result2, str):
+            d=self.diff(result1, result2)
         assert self.equal(result1, result2), f'\033[31mdump:\nresult1 is {result1}\nresult2 is {result2}\ndiff is {d}\033[0m'
 
     def diff(self, str1:str, str2:str):
         differ = Differ()
         diff = differ.compare(str1.splitlines(), str2.splitlines())
         return '\n'.join([line for line in diff])
-
-    def clean_dump(self, dump):
-        lines = dump.split('\n')
-        new_lines = []
-        exclude_keys = ['Name', 'UUID', 'usedSpace', 'usedInodes', 'nextInodes', 'nextChunk', 'nextTrash', 'nextSession']
-        reset_keys = ['id', 'inode', 'atimensec', 'mtimensec', 'ctimensec', 'atime', 'ctime', 'mtime']
-        for line in lines:
-            should_delete = False
-            for key in exclude_keys:
-                if f'"{key}"' in line:
-                    should_delete = True
-                    break
-            if should_delete:
-                continue
-            for key in reset_keys:
-                if f'"{key}"' in line:
-                    pattern = rf'"{key}":(\d+)'
-                    line = re.sub(pattern, f'"{key}":0', line)
-            new_lines.append(line)
-        return '\n'.join(new_lines)
     
+    @rule(
+        user = st_sudo_user
+    )
+    @precondition(lambda self: self.should_run('trash_list'))
+    def trash_list(self, user='root'):
+        result1 = self.cmd1.do_trash_list(user=user)
+        result2 = self.cmd2.do_trash_list(user=user)
+        assert self.equal(result1, result2), f'\033[31mtrash_list:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        put_back = st.booleans(),
+        threads = st.integers(min_value=1, max_value=10),
+        user=st_sudo_user
+    )
+    @precondition(lambda self: self.should_run('restore'))
+    def restore(self, put_back, threads, user='root'):
+        result1 = self.cmd1.do_restore(put_back=put_back, threads=threads, user=user)
+        result2 = self.cmd2.do_restore(put_back=put_back, threads=threads, user=user)
+        assert self.equal(result1, result2), f'\033[31mrestore:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        entry = Entries.filter(lambda x: x != multiple()),
+        threads = st.integers(min_value=1, max_value=10),
+        user = st_sudo_user
+    )
+    @precondition(lambda self: self.should_run('compact'))
+    def compact(self, entry, threads, user='root'):
+        result1 = self.cmd1.do_compact(entry=entry, threads=threads, user=user)
+        result2 = self.cmd2.do_compact(entry=entry, threads=threads, user=user)
+        assert self.equal(result1, result2), f'\033[31mcompact:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        capacity = st.integers(min_value=1, max_value=2),
+        inodes = st.one_of(st.just(0), st.integers(min_value=50, max_value=100)),
+        trash_days = st.integers(min_value=0, max_value=1),
+        enable_acl = st.booleans(),
+        encrypt_secret = st.booleans(),
+        force = st.booleans(),
+        yes = st.just(True),
+        user = st_sudo_user
+    )
+    @precondition(lambda self: self.should_run('config'))
+    def config(self, capacity, inodes, trash_days, enable_acl, encrypt_secret, force, yes, user='root'):
+        result1 = self.cmd1.do_config(capacity=capacity, inodes=inodes, trash_days=trash_days, enable_acl=enable_acl, encrypt_secret=encrypt_secret, force=force, yes=yes, user=user)
+        result2 = self.cmd2.do_config(capacity=capacity, inodes=inodes, trash_days=trash_days, enable_acl=enable_acl, encrypt_secret=encrypt_secret, force=force, yes=yes, user=user)
+        assert self.equal(result1, result2), f'\033[31mconfig:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     def teardown(self):
         pass

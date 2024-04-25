@@ -16,7 +16,9 @@
 
 package chunk
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 // CacheManager Metrics
 type cacheManagerMetrics struct {
@@ -27,6 +29,7 @@ type cacheManagerMetrics struct {
 	cacheWriteHist  prometheus.Histogram
 	stageBlocks     prometheus.Gauge
 	stageBlockBytes prometheus.Gauge
+	stageWriteBytes prometheus.Counter
 }
 
 func newCacheManagerMetrics(reg prometheus.Registerer) *cacheManagerMetrics {
@@ -45,6 +48,13 @@ func (c *cacheManagerMetrics) registerMetrics(reg prometheus.Registerer) {
 		reg.MustRegister(c.cacheWriteBytes)
 		reg.MustRegister(c.stageBlocks)
 		reg.MustRegister(c.stageBlockBytes)
+		reg.MustRegister(c.stageWriteBytes)
+		reg.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Name: "staging_writing_blocks",
+			Help: "Number of writing blocks in staging.",
+		}, func() float64 {
+			return float64(stagingBlocks.Load())
+		}))
 	}
 }
 
@@ -77,5 +87,9 @@ func (c *cacheManagerMetrics) initMetrics() {
 	c.stageBlockBytes = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "staging_block_bytes",
 		Help: "Total bytes of blocks in the staging path.",
+	})
+	c.stageWriteBytes = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "staging_write_bytes",
+		Help: "write bytes of blocks in the staging path.",
 	})
 }

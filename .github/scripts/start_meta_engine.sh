@@ -100,19 +100,27 @@ start_meta_engine(){
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
     elif [ "$meta" == "mariadb" ]; then
-        docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
-        sleep 10
+        if lsof -i:3306; then
+            echo "mariadb is already running"
+        else
+            docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
+            sleep 10
+        fi
     elif [ "$meta" == "tidb" ]; then
         retry install_tidb
         mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
     elif [ "$meta" == "etcd" ]; then
         sudo .github/scripts/apt_install.sh etcd
     elif [ "$meta" == "fdb" ]; then
-        docker run --name fdb --rm -d -p 4500:4500 foundationdb/foundationdb:6.3.23
-        sleep 5
-        docker exec fdb fdbcli --exec "configure new single memory"
-        echo "docker:docker@127.0.0.1:4500" > /home/runner/fdb.cluster
-        fdbcli -C /home/runner/fdb.cluster --exec "status"
+        if lsof -i:4500; then
+            echo "fdb is already running"
+        else  
+            docker run --name fdb --rm -d -p 4500:4500 foundationdb/foundationdb:6.3.23
+            sleep 5
+            docker exec fdb fdbcli --exec "configure new single memory"
+            echo "docker:docker@127.0.0.1:4500" > /home/runner/fdb.cluster
+            fdbcli -C /home/runner/fdb.cluster --exec "status"
+        fi
     elif [ "$meta" == "ob" ]; then
         docker rm obstandalone --force || echo "remove obstandalone failed"
         docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
@@ -120,13 +128,18 @@ start_meta_engine(){
         mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;"
     elif [ "$meta" == "postgres" ]; then
         echo "start postgres"
-        docker run --name postgresql \
-            -e POSTGRES_USER=postgres \
-            -e POSTGRES_PASSWORD=postgres \
-            -p 5432:5432 \
-            -v /tmp/data:/var/lib/postgresql/data \
-            -d postgres
-        sleep 10
+        lsof -i:5432 || true
+        if lsof -i:5432; then
+            echo "postgres is already running"
+        else
+            docker run --name postgresql \
+                -e POSTGRES_USER=postgres \
+                -e POSTGRES_PASSWORD=postgres \
+                -p 5432:5432 \
+                -v /tmp/postgresql:/var/lib/postgresql/data \
+                -d postgres
+            sleep 10
+        fi
     fi
     
     if [ "$storage" == "minio" ]; then
@@ -146,13 +159,17 @@ start_meta_engine(){
         systemctl start glusterd.service
     elif [ "$meta" != "postgres" ] && [ "$storage" == "postgres" ]; then
         echo "start postgres"
-        docker run --name postgresql \
-            -e POSTGRES_USER=postgres \
-            -e POSTGRES_PASSWORD=postgres \
-            -p 5432:5432 \
-            -v /tmp/data:/var/lib/postgresql/data \
-            -d postgres
-        sleep 10
+        if lsof -i:5432; then
+            echo "postgres is already running"
+        else
+            docker run --name postgresql \
+                -e POSTGRES_USER=postgres \
+                -e POSTGRES_PASSWORD=postgres \
+                -p 5432:5432 \
+                -v /tmp/data:/var/lib/postgresql/data \
+                -d postgres
+            sleep 10
+        fi
     elif [ "$meta" != "mysql" ] && [ "$storage" == "mysql" ]; then
         echo "start mysql"
         sudo /etc/init.d/mysql start

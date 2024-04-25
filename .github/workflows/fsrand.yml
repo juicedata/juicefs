@@ -1,13 +1,26 @@
 name: "fsrand"
+
 on:
   push:
     branches:
-      - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    - main
+    - release**
+    paths:
+    - '**/fsrand.yml'
+    - '**/fs.py'
+    - '**/fs_test.py'
+    - '**/acl_test.py'
+  pull_request:
+    branches:
+    - main
+    - release**
+    paths:
+    - '**/fsrand2.yml'
+    - '**/fs.py'
+    - '**/fs_test.py'
+    - '**/acl_test.py'
   schedule:
-    - cron:  '0 18 * * *'
+    - cron:  '0 16 * * 0'
   workflow_dispatch:
     inputs:
       debug:
@@ -15,17 +28,16 @@ on:
         description: "Run the build with tmate debugging enabled"
         required: false
         default: false
-
 jobs:
-  fsrand:
+  fsrand2:
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
         meta: ['redis', 'mysql', 'tikv']
-    runs-on: ubuntu-20.04
-
+        # meta: ['redis']
+        
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -40,7 +52,7 @@ jobs:
           else
             echo "target=juicefs" >> $GITHUB_OUTPUT
           fi
-
+  
       - name: Build
         timeout-minutes: 10
         uses: ./.github/actions/build
@@ -65,62 +77,42 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs format $meta_url --trash-days 0 pics
+          ./juicefs format $meta_url --enable-acl --trash-days 0 myjfs
 
       - name: Juicefs Mount
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          # sudo mkdir /var/jfs
-          # sudo chmod 777 /var/jfs
-          ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr
-          sleep 5
+          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr 
           if [ ! -f /tmp/jfs/.accesslog ]; then
             echo "<FATAL>: mount failed"
             exit 1
           fi
-
-      - name: Generate random files
-        timeout-minutes: 60
+          
+      - name: Run Examples
+        timeout-minutes: 10
         run: |
-          count=10000
-          seed=$(date +%s)
-          echo seed: $seed
-          mkdir /tmp/fsrand
-          mkdir /tmp/jfs/fsrand
-          declare -a pids   
-          python3 .github/scripts/fsrand.py  -c $count -v -s $seed  /tmp/fsrand &
-          pids+=($!)
-          python3 .github/scripts/fsrand.py  -c $count -v -s $seed  /tmp/jfs/fsrand &
-          pids+=($!)
-          wait "${pids[@]}"
-          python3 .github/scripts/cmptree.py /tmp/fsrand /tmp/jfs/fsrand
-      
-      - name: Dump with random files
+          sudo -E python3 .github/scripts/hypo/fs_test.py
+          sudo -E python3 .github/scripts/hypo/acl_test.py
+          
+      - name: Test
+        timeout-minutes: 120
         run: |
-          source .github/scripts/start_meta_engine.sh
-          meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs dump $meta_url dump.json --fast
+          if [ "${{ github.event_name }}" == "schedule" ]; then
+            PROFILE='schedule'
+          else
+            PROFILE='pull_request'
+          fi
+          sudo -E PROFILE=${PROFILE} LOG_LEVEL=WARNING python3 .github/scripts/hypo/fs.py 2>&1 | tee fsrand.log
+          exit ${PIPESTATUS[0]}
 
-      - name: Load random files
-        run: |
-          umount /tmp/jfs
-          source .github/scripts/start_meta_engine.sh
-          meta_url=$(get_meta_url ${{matrix.meta}})
-          python3 .github/scripts/flush_meta.py $meta_url
-          ./juicefs load $meta_url dump.json
-          ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr
-          sleep 5
-          python3 .github/scripts/cmptree.py /tmp/fsrand /tmp/jfs/fsrand
-
-      - name: Rmr random files
-        run: | 
-          ./juicefs rmr /tmp/jfs/fsrand
-          ls -l /tmp/jfs/fsrand && exit 1 || true
-
-      - name: log
+      - name: check fsrand.log
         if: always()
-        shell: bash
+        run: | 
+          tail -500 fsrand.log
+
+      - name: check juicefs.log
+        if: always()
         run: | 
           if [ -f ~/.juicefs/juicefs.log ]; then
             tail -300 ~/.juicefs/juicefs.log
@@ -131,14 +123,31 @@ jobs:
             grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
           fi
 
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure() 
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [fsrand2]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
       - name: Send Slack Notification
         if: failure() && github.event_name != 'workflow_dispatch'
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
-          
-      - name: Setup upterm session
-        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
-        timeout-minutes: 60
-        uses: lhotari/action-upterm@v1
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Success
+        if: success()
+        run: echo "All Done"

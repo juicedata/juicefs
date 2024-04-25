@@ -343,7 +343,7 @@ func newKS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	bucket := hostParts[0]
 	region := hostParts[1][3:]
 	region = strings.TrimLeft(region, "-")
-	var pathStyle bool = true
+	var pathStyle bool = defaultPathStyle()
 	if strings.HasSuffix(uri.Host, "ksyun.com") || strings.HasSuffix(uri.Host, "ksyuncs.com") {
 		region = strings.TrimSuffix(region, "-internal")
 		region = ks3Regions[region]

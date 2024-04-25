@@ -14,6 +14,7 @@ import random
 from s3_op import S3Client
 from s3_strategy import *
 from s3_contant import *
+import common
 # minio client: https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z
 # minio server: minio/minio:RELEASE.2021-04-22T15-44-28Z
 # docker run -d -p 9000:9000 --name minio -e "MINIO_ACCESS_KEY=minioadmin" -e "MINIO_SECRET_KEY=minioadmin" minio/minio:RELEASE.2021-04-22T15-44-28Z server /data
@@ -62,16 +63,6 @@ class S3Machine(RuleBasedStateMachine):
     @initialize(target=policies)
     def init_policies(self):
         return multiple(*BUILD_IN_POLICIES)
-            
-    def replace(self, result, prefix, url):
-        if isinstance(result, str):
-            return result.replace(prefix, '***').replace(url, '***')
-        elif isinstance(result, list):
-            return [self.replace(x, prefix, url) for x in result]
-        elif isinstance(result, dict):
-            return {k: self.replace(v, prefix, url) for k, v in result.items()}
-        else:
-            return result
 
     def equal(self, result1, result2):
         if os.getenv('PROFILE', 'dev') == 'generate':
@@ -81,8 +72,10 @@ class S3Machine(RuleBasedStateMachine):
         if isinstance(result1, Exception):
             result1 = str(result1)
             result2 = str(result2)
-        result1 = self.replace(result1, self.PREFIX1, self.URL1)
-        result2 = self.replace(result2, self.PREFIX2, self.URL2)
+        result1 = common.replace(result1, self.PREFIX1, '***')
+        result1 = common.replace(result1, self.URL1, '***')
+        result2 = common.replace(result2, self.PREFIX2, '***')
+        result2 = common.replace(result2, self.URL2, '***')
         # print(f'result1 is {result1}\nresult2 is {result2}')
         return result1 == result2
 
@@ -148,6 +141,16 @@ class S3Machine(RuleBasedStateMachine):
         result1 = self.client1.do_get_bucket_policy(bucket_name, alias)
         result2 = self.client2.do_get_bucket_policy(bucket_name, alias)
         assert self.equal(result1, result2), f'\033[31mget_bucket_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
+
+    @rule(
+        bucket_name = buckets,
+        alias = aliases, 
+        recursive = st.booleans()
+    )
+    def list_bucket_policy(self, bucket_name, alias=ROOT_ALIAS, recursive=False):
+        result1 = self.client1.do_list_bucket_policy(bucket_name, alias, recursive)
+        result2 = self.client2.do_list_bucket_policy(bucket_name, alias, recursive)
+        assert self.equal(result1, result2), f'\033[31mlist_bucket_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
 
     @rule(
         target=objects,
@@ -409,12 +412,10 @@ class S3Machine(RuleBasedStateMachine):
     @rule(
         target = policies,
         alias = st.just(ROOT_ALIAS),
-        policy_name = consumes(policies).filter(lambda x: x != multiple())
+        policy_name = consumes(policies).filter(lambda x: x != multiple()).filter(lambda x: x not in BUILD_IN_POLICIES)
     )
     @precondition(lambda self: 'remove_policy' not in self.EXCLUDE_RULES)
     def remove_policy(self, policy_name, alias=ROOT_ALIAS):
-        # SEE https://github.com/juicedata/juicefs/issues/4639
-        assume(policy_name not in BUILD_IN_POLICIES)
         result1 = self.client1.do_remove_policy(policy_name, alias)
         result2 = self.client2.do_remove_policy(policy_name, alias)
         assert self.equal(result1, result2), f'\033[31mremove_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'

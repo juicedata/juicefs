@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"crypto/rand"
 	"fmt"
 	"os"
 	"os/exec"
@@ -114,12 +113,6 @@ type benchmark struct {
 	tmpdir     string
 }
 
-func randRead(buf []byte) {
-	if _, err := rand.Read(buf); err != nil {
-		logger.Fatalf("Generate random content: %s", err)
-	}
-}
-
 func (bc *benchCase) writeFiles(index int) {
 	for i := 0; i < bc.fcount; i++ {
 		fname := filepath.Join(bc.bm.tmpdir, fmt.Sprintf("%s.%d.%d", bc.name, index, i))
@@ -128,7 +121,7 @@ func (bc *benchCase) writeFiles(index int) {
 			logger.Fatalf("Failed to open file %s: %s", fname, err)
 		}
 		buf := make([]byte, bc.bsize)
-		randRead(buf)
+		utils.RandRead(buf)
 		for j := 0; j < bc.bcount; j++ {
 			if _, err = fp.Write(buf); err != nil {
 				logger.Fatalf("Failed to write file %s: %s", fname, err)

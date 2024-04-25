@@ -17,13 +17,14 @@
 package chunk
 
 import (
-	"crypto/rand"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
@@ -146,7 +147,7 @@ func TestChecksum(t *testing.T) {
 	s.cache(k2, p, true)
 
 	buf := make([]byte, 102400)
-	_, _ = rand.Read(buf)
+	utils.RandRead(buf)
 	s.cache(k3, NewPage(buf), true)
 
 	fpath := s.cachePath(k4)
@@ -171,7 +172,7 @@ func TestChecksum(t *testing.T) {
 	s.add(k4, 102400, uint32(time.Now().Unix()))
 
 	buf = make([]byte, 1048576)
-	_, _ = rand.Read(buf)
+	utils.RandRead(buf)
 	s.cache(k5, NewPage(buf), true)
 	time.Sleep(time.Second * 5) // wait for cache file flushed
 
@@ -299,6 +300,10 @@ func TestCheckPath(t *testing.T) {
 	}
 }
 
+func shutdownStore(s *cacheStore) {
+	atomic.StoreUint32(&s.ioErrCnt, uint32(maxIOErrors))
+}
+
 func TestCacheManager(t *testing.T) {
 	conf := defaultConf
 	conf.CacheDir = "/tmp/diskCache0:/tmp/diskCache1:/tmp/diskCache2"
@@ -323,7 +328,7 @@ func TestCacheManager(t *testing.T) {
 	require.NotNil(t, s1)
 
 	m.Lock()
-	s1.shutdown()
+	shutdownStore(s1)
 	m.Unlock()
 	time.Sleep(3 * time.Second)
 
@@ -336,7 +341,7 @@ func TestCacheManager(t *testing.T) {
 	// case: remove all store
 	m.Lock()
 	for _, s := range m.storeMap {
-		s.shutdown()
+		shutdownStore(s)
 	}
 	m.Unlock()
 	time.Sleep(3 * time.Second)

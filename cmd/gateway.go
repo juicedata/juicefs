@@ -22,7 +22,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"github.com/juicedata/juicefs/pkg/utils"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -33,6 +32,8 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 
 	jfsgateway "github.com/juicedata/juicefs/pkg/gateway"
@@ -85,6 +86,7 @@ func cmdGateway() *cli.Command {
 		},
 		&cli.StringFlag{
 			Name:  "refresh-iam-interval",
+			Value: "5m",
 			Usage: "interval to reload gateway IAM from configuration",
 		},
 	}
@@ -136,7 +138,7 @@ func gateway(c *cli.Context) error {
 
 	metaAddr := c.Args().Get(0)
 	listenAddr := c.Args().Get(1)
-	conf, jfs := initForSvc(c, "s3gateway", metaAddr)
+	conf, jfs := initForSvc(c, "s3gateway", metaAddr, listenAddr)
 
 	umask, err := strconv.ParseUint(c.String("umask"), 8, 16)
 	if err != nil {
@@ -198,12 +200,12 @@ func gateway2(ctx *mcli.Context) error {
 	return nil
 }
 
-func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.FileSystem) {
+func initForSvc(c *cli.Context, mp string, metaUrl, listenAddr string) (*vfs.Config, *fs.FileSystem) {
 	removePassword(metaUrl)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
 	if c.Bool("background") {
-		if err := makeDaemonForSvc(c, metaCli, metaUrl); err != nil {
+		if err := makeDaemonForSvc(c, metaCli, metaUrl, listenAddr); err != nil {
 			logger.Fatalf("make daemon: %s", err)
 		}
 	}
@@ -246,6 +248,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 		if err := metaCli.CloseSession(); err != nil {
 			logger.Fatalf("close session failed: %s", err)
 		}
+		object.Shutdown(blob)
 		os.Exit(0)
 	}()
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
