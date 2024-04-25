@@ -461,3 +461,19 @@ $ juicefs fsck redis://localhost --path /d --sync-dir-stat
 2023/06/07 16:01:08.401972 juicefs[228547] <INFO>: Meta address: redis://localhost [interface.go:494]
 2023/06/07 16:01:08.404041 juicefs[228547] <INFO>: Ping redis latency: 85.566µs [redis.go:3569]
 ```
+
+## compact {#compact}
+
+`juicefs compact` 是 v1.2 版本中新增的功能，它是一个用来处理因为覆盖写而产生的碎片数据的工具。它将随机写产生的大量不连续的 slice 进行合并或清理，从而提升文件系统的读性能。
+
+相比于 `juicefs gc` 是对整个文件系统进行垃圾回收和碎片整理，`juicefs compact` 只处理因为覆盖写而产生的碎片数据，而不会处理对象泄漏、待清理对象等问题。而且，`juicefs compact` 只会处理指定目录下的碎片数据，不会处理整个文件系统。
+
+```shell
+juicefs compact /mnt/jfs/foo
+```
+
+另外，可以使用 `-p, --threads` 选项指定并发线程数，以加快处理速度。默认值为 10，可以根据实际情况调整。
+
+```shell
+juicefs compact /mnt/jfs/foo -p 20
+```
