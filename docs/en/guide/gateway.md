@@ -1,7 +1,7 @@
 ---
 title: JuiceFS S3 Gateway
 sidebar_position: 5
-description: JuiceFS S3 Gateway allows the JuiceFS file system to be accessed externally using the S3 protocol. This enables applications to access files stored on JuiceFS through Amazon S3 SDKs. 
+description: JuiceFS S3 Gateway allows the JuiceFS file system to be accessed externally using the S3 protocol. This enables applications to access files stored on JuiceFS through Amazon S3 SDKs.
 ---
 
 JuiceFS S3 Gateway is one of the various access methods supported by JuiceFS. It allows the JuiceFS file system to be accessed externally using the S3 protocol. This enables applications to access files stored on JuiceFS using Amazon S3 SDKs.
@@ -632,7 +632,7 @@ To use notification destinations in `namespace` and `access` formats:
     ```Shell
     $ mc admin config get myminio notify_redis
     notify_redis:1 address="127.0.0.1:6379/1" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0"
-   
+
     # Effective after restart
     $ mc admin config set myminio notify_redis:1 queue_limit="1000"
     Successfully applied new settings.
@@ -737,7 +737,7 @@ The following steps show how to use the notification destination in `namespace` 
     ```Shell
     KEY:
     notify_mysql[:name]  Publish bucket notifications to the MySQL database. When multiple MySQL server endpoints are required, you can add a user-specified "name" to each configuration, for example, "notify_mysql:myinstance."
-   
+
     ARGS:
     dsn_string*  (string)             MySQL data source name connection string, for example, "<user>:<password>@tcp(<host>:<port>)/<database>".
     table*       (string)             Name of the database table to store/update events. The table is automatically created.
