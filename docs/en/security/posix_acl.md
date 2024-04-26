@@ -1,4 +1,6 @@
 ---
+title: POSIX ACL
+description: This article introduces the POSIX ACL feature supported by JuiceFS and how to enable and use ACL permissions.
 sidebar_position: 1
 ---
 # POSIX ACL

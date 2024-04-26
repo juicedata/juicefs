@@ -1,4 +1,6 @@
 ---
+ti tle: POSIX ACL
+description: 本文介绍了 JuiceFS 支持的 POSIX ACL 功能，以及如何启用和使用 ACL 权限。
 sidebar_position: 3
 ---
 # POSIX ACL
