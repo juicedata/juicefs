@@ -13,7 +13,7 @@ Version 1.2 supports POSIX ACL. For detailed rules, please refer to:
 
 <!-- markdownlint-disable MD044 enhanced-proper-names -->
 
-Currently, once ACL is enabled, it cannot be disabled.  
+Currently, once ACL is enabled, it cannot be disabled.
 Therefore, the --enable-acl flag is associated with the volume.
 
 ### Enable ACL for new volumes
