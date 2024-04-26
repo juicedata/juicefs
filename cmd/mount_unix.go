@@ -388,7 +388,7 @@ func getFuserMountVersion() string {
 }
 
 func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {
-	rawOpts, mt, noxattr, noacl := genFuseOptExt(c, format.Name)
+	rawOpts, mt, noxattr, noacl := genFuseOptExt(c, format)
 	options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl))
 	vfsConf.FuseOpts = &options
 }
@@ -469,13 +469,12 @@ func prepareMp(mp string) {
 	}
 }
 
-func genFuseOptExt(c *cli.Context, name string) (fuseOpt string, mt int, noxattr, noacl bool) {
+func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int, noxattr, noacl bool) {
 	enableXattr := c.Bool("enable-xattr")
-	// todo: wait for the implementation of acl
-	if c.Bool("enable-acl") {
+	if format.EnableACL {
 		enableXattr = true
 	}
-	return genFuseOpt(c, name), 1, !enableXattr, !c.Bool("enable-acl")
+	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL
 }
 
 func shutdownGraceful(mp string) {
