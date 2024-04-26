@@ -51,6 +51,7 @@ COMMANDS:
      rmr       Remove directories recursively
      sync      Sync between two storages
      clone     clone a file or directory without copying the underlying data
+     compact   Trigger compaction of chunks
 
 GLOBAL OPTIONS:
    --verbose, --debug, -v  enable debug log (default: false)
@@ -976,3 +977,22 @@ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2
 |Items|Description|
 |-|-|
 |`--preserve, -p`|By default, the executor's UID and GID are used for the clone result, and the mode is recalculated based on the user's umask. Use this option to preserve the UID, GID, and mode of the file.|
+
+### `juicefs compact` <VersionAdd>1.2</VersionAdd> {#compact}
+
+Performs fragmentation optimization, merging, or cleaning of non-contiguous slices in the given directory to improve read performance. For detailed information, refer to [「Status Check and Maintenance」](../administration/status_check_and_maintenance.md).
+
+#### Overview
+
+```shell
+juicefs compact [command options] PATH
+
+# Perform fragmentation optimization on the specified directory
+juicefs compact /mnt/jfs
+```
+
+#### Parameters
+
+| Item | Description |
+|-|-|
+| `--threads, -p` | Number of threads to concurrently execute tasks (default: 10) |

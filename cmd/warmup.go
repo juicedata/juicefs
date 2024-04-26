@@ -189,8 +189,7 @@ func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads ui
 func warmup(ctx *cli.Context) error {
 	setup(ctx, 0)
 
-	evict := ctx.Bool("evict")
-	check := ctx.Bool("check")
+	evict, check := ctx.Bool("evict"), ctx.Bool("check")
 	if evict && check {
 		logger.Fatalf("--check and --evict can't be used together")
 	}
@@ -264,7 +263,7 @@ func warmup(ctx *cli.Context) error {
 	start := len(mp)
 	batch := make([]string, 0, batchMax)
 	progress := utils.NewProgress(background)
-	dspin := progress.AddDoubleSpinner(action.String())
+	dspin := progress.AddDoubleSpinnerTwo(fmt.Sprintf("%s file", action), fmt.Sprintf("%s size", action))
 	total := &vfs.CacheResponse{}
 	for _, path := range paths {
 		if mp == "/" {

@@ -51,6 +51,7 @@ COMMANDS:
      rmr       Remove directories recursively
      sync      Sync between two storages
      clone     clone a file or directory without copying the underlying data
+     compact   Trigger compaction of chunks
 
 GLOBAL OPTIONS:
    --verbose, --debug, -v  enable debug log (default: false)
@@ -975,3 +976,22 @@ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2
 |项 | 说明|
 |-|-|
 |`--preserve, -p`|克隆时默认使用当前用户的 UID 和 GID，而 mode 则使用当前用户的 umask 重新计算获得。如果启用该选项，则保留文件的 UID、GID 和 mode。|
+
+### `juicefs compact` <VersionAdd>1.2</VersionAdd> {#compact}
+
+对给定的目录执行碎片整理，合并或清理不连续的 slice，从而提升读性能。详细介绍参考[「状态检查和维护」](../administration/status_check_and_maintenance.md)。
+
+#### 概览
+
+```shell
+juicefs compact [command options] PATH
+
+# 对给定目录执行碎片整理
+juicefs compact /mnt/jfs
+```
+
+#### 参数
+
+|项 | 说明|
+|-|-|
+|`--threads, -p`| 并发执行任务的线程数（默认：10） |

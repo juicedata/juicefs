@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sync"
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -95,6 +96,7 @@ func putFd(via *net.UnixConn, msg []byte, fds ...int) error {
 	return syscall.Sendmsg(socket, msg, rights, nil, 0)
 }
 
+var fuseMu sync.Mutex
 var fuseFd int = 0
 var fuseSetting = []byte("FUSE")
 var serverAddress string = fmt.Sprintf("/tmp/fuse_fd_comm.%d", os.Getpid())
@@ -102,32 +104,41 @@ var serverAddress string = fmt.Sprintf("/tmp/fuse_fd_comm.%d", os.Getpid())
 func handleFDRequest(conn *net.UnixConn) {
 	defer conn.Close()
 	var fds = []int{0}
+	fuseMu.Lock()
 	if fuseFd > 0 {
 		fds = append(fds, fuseFd)
+		logger.Debugf("send FUSE fd: %d", fuseFd)
 	}
 	err := putFd(conn, fuseSetting, fds...)
 	if err != nil {
+		fuseMu.Unlock()
 		logger.Errorf("send fuse fds: %s", err)
 		return
 	}
+	if fuseFd > 0 {
+		_ = syscall.Close(fuseFd)
+		fuseFd = -1
+	}
+	fuseMu.Unlock()
+
 	var msg []byte
 	msg, fds, err = getFd(conn, 1)
 	if err != nil {
 		logger.Debugf("recv fuse fds: %s", err)
 		return
 	}
-	if string(msg) == "CLOSE" {
-		_ = syscall.Close(fds[0])
-		if fuseFd > 0 {
-			_ = syscall.Close(fuseFd)
-		}
-		fuseFd = -1
-	} else if fuseFd <= 0 && len(fds) == 1 {
+	fuseMu.Lock()
+	if string(msg) != "CLOSE" && fuseFd <= 0 && len(fds) == 1 {
+		logger.Debugf("recv FUSE fd: %d", fds[0])
 		fuseFd = fds[0]
 		fuseSetting = msg
 	} else {
+		for _, fd := range fds {
+			_ = syscall.Close(fd)
+		}
 		logger.Debugf("msg: %s fds: %+v", string(msg), fds)
 	}
+	fuseMu.Unlock()
 }
 
 func serveFuseFD(path string) {
@@ -153,31 +164,30 @@ func serveFuseFD(path string) {
 
 func getFuseFd(path string) (int, []byte) {
 	if !utils.Exists(path) {
-		return 0, nil
+		return -1, nil
 	}
 	conn, err := net.Dial("unix", path)
 	if err != nil {
 		logger.Warnf("dial %s: %s", path, err)
-		return 0, nil
+		return -1, nil
 	}
 	defer conn.Close()
 	msg, fds, err := getFd(conn.(*net.UnixConn), 2)
 	if err != nil {
 		logger.Warnf("recv fds: %s", err)
-		return 0, nil
+		return -1, nil
 	}
-	syscall.Close(fds[0])
+	_ = syscall.Close(fds[0])
 	if len(fds) > 1 {
-		err = putFd(conn.(*net.UnixConn), []byte("CLOSE"), 0) // close it
-		if err != nil {
-			logger.Warnf("close FUSE: %s", err)
-		}
+		// for old version
+		_ = putFd(conn.(*net.UnixConn), []byte("CLOSE"), 0) // close it
+		logger.Debugf("recv FUSE fd: %d", fds[1])
 		return fds[1], msg
 	}
 	return 0, nil
 }
 
-func sendFuseFd(path string, msg string, fd int) error {
+func sendFuseFd(path string, msg []byte, fd int) error {
 	conn, err := net.Dial("unix", path)
 	if err != nil {
 		return err
@@ -191,5 +201,6 @@ func sendFuseFd(path string, msg string, fd int) error {
 	for _, fd := range fds {
 		_ = syscall.Close(fd)
 	}
-	return putFd(conn.(*net.UnixConn), []byte(msg), fd)
+	logger.Debugf("send FUSE fd: %d", fd)
+	return putFd(conn.(*net.UnixConn), msg, fd)
 }

@@ -57,6 +57,9 @@ const (
 func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concurrent int, resp *CacheResponse) {
 	logger.Infof("start to %s %d paths with %d workers", action, len(paths), concurrent)
 
+	if resp == nil {
+		resp = &CacheResponse{}
+	}
 	start := time.Now()
 	todo := make(chan _file, 10*concurrent)
 	wg := sync.WaitGroup{}
@@ -74,7 +77,7 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 					continue
 				}
 
-				iter := newSliceIterator(ctx, v.Meta, f.ino, f.size)
+				iter := newSliceIterator(ctx, v.Meta, f.ino, f.size, resp)
 				var handler sliceHandler
 				switch action {
 				case WarmupCache:
@@ -98,9 +101,7 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 						if err != nil {
 							return err
 						}
-						if resp != nil {
-							atomic.AddUint64(&resp.MissBytes, missBytes)
-						}
+						atomic.AddUint64(&resp.MissBytes, missBytes)
 						return nil
 					}
 				}
@@ -111,11 +112,7 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 					logger.Errorf("%s error : %s", action, err)
 				}
 
-				if resp != nil {
-					atomic.AddUint64(&resp.FileCount, 1)
-					atomic.AddUint64(&resp.SliceCount, iter.stat.count)
-					atomic.AddUint64(&resp.TotalBytes, iter.stat.bytes)
-				}
+				atomic.AddUint64(&resp.FileCount, 1)
 			}
 		}()
 	}
@@ -247,17 +244,12 @@ func (v *VFS) walkDir(ctx meta.Context, inode Ino, todo chan _file) {
 	}
 }
 
-type sliceIterStat struct {
-	count uint64
-	bytes uint64
-}
-
 type sliceIterator struct {
 	ctx      meta.Context
 	mClient  meta.Meta
 	ino      Ino
 	chunkCnt uint32
-	stat     sliceIterStat
+	stat     *CacheResponse
 
 	err            error
 	nextChunkIndex uint32
@@ -302,8 +294,8 @@ func (iter *sliceIterator) Iterate(handler sliceHandler) error {
 	}
 	for iter.hasNext() {
 		s := iter.next()
-		iter.stat.count++
-		iter.stat.bytes += uint64(s.Size)
+		atomic.AddUint64(&iter.stat.SliceCount, 1)
+		atomic.AddUint64(&iter.stat.TotalBytes, uint64(s.Size))
 		if err := handler(s); err != nil {
 			return fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
 		}
@@ -311,16 +303,12 @@ func (iter *sliceIterator) Iterate(handler sliceHandler) error {
 	return iter.err
 }
 
-func (iter *sliceIterator) Stat() sliceIterStat {
-	return iter.stat
-}
-
-func newSliceIterator(ctx meta.Context, mClient meta.Meta, ino Ino, size uint64) *sliceIterator {
+func newSliceIterator(ctx meta.Context, mClient meta.Meta, ino Ino, size uint64, stat *CacheResponse) *sliceIterator {
 	return &sliceIterator{
 		ctx:     ctx,
 		mClient: mClient,
 		ino:     ino,
-		stat:    sliceIterStat{},
+		stat:    stat,
 
 		nextSliceIndex: 0,
 		nextChunkIndex: 0,

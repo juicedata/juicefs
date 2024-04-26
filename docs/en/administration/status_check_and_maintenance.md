@@ -228,3 +228,21 @@ Scanned slices bytes: 36.81 MiB (38597789 Bytes)
 As you can see from the results, the `juicefs fsck` scan found a file corruption in the file system due to a missing data block.
 
 Although the result indicates that the file in the backend storage is corrupted, it is still necessary to check if the file is accessible at the mount point, because JuiceFS will cache the recently accessed file data locally, and the version of the file before the corruption can be re-uploaded with the cached file data block to avoid losing data if it is already cached locally. You can look for cached data in the cache directory (i.e. the path corresponding to the `--cache-dir` option) based on the path of the block output from the `juicefs fsck` command, e.g. the path of the missing block in the above example is `0/1/1063_0_2693747`.
+
+## compact {#compact}
+
+The `juicefs compact` command is a new feature introduced in version v1.2. It is a tool used to handle the fragmented data caused by overwrite operations. This tool merges or cleans up the large amounts of non-contiguous slices created by random write, thereby improving the read performance of the file system.
+
+Unlike `juicefs gc`, which performs garbage collection and fragment cleaning for the entire file system, `juicefs compact` only handles the fragmented data caused by overwrite operations and does not handle object leaks or pending cleanup objects. Additionally, `juicefs compact` will only handle the fragmented data within a specified directory and will not handle the entire file system.
+
+You can use the following command to execute `juicefs compact`:
+
+```shell
+juicefs compact /mnt/jfs/foo
+```
+
+You can also specify the number of concurrent threads using the `-p` or `--threads` option to speed up processing. The default value is 10, but you can adjust it based on your actual situation.
+
+```shell
+juicefs compact /mnt/jfs/foo -p 20
+```
