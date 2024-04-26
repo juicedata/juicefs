@@ -419,8 +419,11 @@ func (m *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 		if old > value-diff {
 			return nil
 		} else {
-			changed = true
-			return tx.Set(Background, name, value, 0).Err()
+			err = tx.Set(Background, name, value, 0).Err()
+			if err == nil {
+				changed = true
+			}
+			return err
 		}
 	}, name)
 
