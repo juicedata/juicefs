@@ -11,7 +11,7 @@
     "KeyEncrypted": true,
     "TrashDays": 1,
     "MetaVersion": 1,
-    "EnableACL": true
+    "EnableAcl": true
   },
   "Counters": {
     "usedSpace": 115392512,
