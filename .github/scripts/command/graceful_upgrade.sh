@@ -69,17 +69,17 @@ test_update_non_fuse_option(){
     JFS_RSA_PASSPHRASE=12345678 ./juicefs format $META_URL myjfs --encrypt-rsa-key my-priv-key.pem
     JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs
     echo abc | tee /tmp/jfs/test
-    sleep 1s
+    # sleep 1s
     JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs --read-only
     echo abc | tee /tmp/jfs/test && (echo "should not write read-only file system" && exit 1) || true
-    sleep 1s
+    # sleep 1s
     JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs 
     echo abc | tee /tmp/jfs/test
     ps -ef | grep juicefs | grep mount | grep -v grep || true
     count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
     [[ $count -ne 2 ]] && echo "mount process count should be 2, count=$count" && exit 1 || true
     umount /tmp/jfs
-    sleep 1s
+    # sleep 1s
     ps -ef | grep juicefs | grep mount | grep -v grep || true
     count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
     [[ $count -ne 0 ]] && echo "mount process count should be 0, count=$count" && exit 1 || true
@@ -90,14 +90,14 @@ test_update_on_failure(){
     JFS_RSA_PASSPHRASE=12345678 ./juicefs format $META_URL myjfs --encrypt-rsa-key my-priv-key.pem
     JFS_RSA_PASSPHRASE=12345678 ./juicefs mount -d $META_URL /tmp/jfs
     echo abc | tee /tmp/jfs/test
-    sleep 1s
+    # sleep 1s
     JFS_RSA_PASSPHRASE=abc123xx ./juicefs mount -d $META_URL /tmp/jfs || true
     echo abc | tee /tmp/jfs/test
     ps -ef | grep juicefs | grep mount | grep -v grep || true
     count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
     [[ $count -ne 2 ]] && echo "mount process count should be 2, count=$count" && exit 1 || true
     umount /tmp/jfs
-    sleep 1s
+    # sleep 1s
     ps -ef | grep juicefs | grep mount | grep -v grep || true
     count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
     [[ $count -ne 0 ]] && echo "mount process count should be 0, count=$count" && exit 1 || true
@@ -107,7 +107,7 @@ test_update_on_fio(){
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /tmp/jfs --buffer-size 300
-    sleep 1s
+    # sleep 1s
     fio -name=fio -filename=/tmp/jfs/testfile -direct=1 -iodepth 16 -ioengine=libaio \
         -rw=randwrite -bs=4k -size=100M -numjobs=4 -runtime=30 -group_reporting >fio.log 2>&1 &
     fio_pid=$!
@@ -117,7 +117,7 @@ test_update_on_fio(){
         ./juicefs mount -d $META_URL /tmp/jfs --buffer-size $((i+300))
         wait_command_success "ps -ef | grep juicefs | grep mount | grep \"buffer-size $((i+300))\" | wc -l" 2
         echo abc | tee /tmp/jfs/test
-        sleep 3s
+        # sleep 3s
     done
     kill -9 $fio_pid > /dev/null 2>&1 || true
     # umount_jfs /tmp/jfs $META_URL
@@ -132,10 +132,10 @@ test_update_fuse_option(){
     ./juicefs mount -d $META_URL /tmp/jfs --enable-xattr
     setfattr -n user.test -v "juicedata" /tmp/jfs
     getfattr -n user.test /tmp/jfs | grep juicedata
-    sleep 1s
+    # sleep 1s
     ./juicefs mount -d $META_URL /tmp/jfs
     getfattr -n user.test /tmp/jfs && exit 1 || true
-    sleep 1s
+    # sleep 1s
     ./juicefs mount -d $META_URL /tmp/jfs --enable-xattr
     getfattr -n user.test /tmp/jfs | grep juicedata
     count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
@@ -145,7 +145,7 @@ test_update_fuse_option(){
     count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
     [[ $count -ne 2 ]] && echo "mount process count should be 2, count=$count" && exit 1 || true
     umount /tmp/jfs
-    sleep 1s
+    # sleep 1s
     ps -ef | grep juicefs | grep mount | grep -v grep || true
     count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
     [[ $count -ne 0 ]] && echo "mount process count should be 0, count=$count" && exit 1 || true
@@ -164,12 +164,12 @@ test_update_from_old_version(){
     grep "hello" /tmp/jfs/test
     echo world | tee /tmp/jfs/test 
     ./juicefs umount /tmp/jfs
-    sleep 1s
+    # sleep 1s
     ps -ef | grep juicefs | grep mount | grep -v grep || true
     count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
     [[ $count -ne 1 ]] && echo "mount process count should be 1" && exit 1 || true
     ./juicefs umount /tmp/jfs
-    sleep 1s
+    # sleep 1s
     ps -ef | grep juicefs | grep mount | grep -v grep || true
     count=$(ps -ef | grep juicefs | grep mount | grep -v grep | wc -l)
     [[ $count -ne 0 ]] && echo "mount process count should be 0" && exit 1 || true
@@ -191,7 +191,7 @@ test_update_on_fstab(){
         mount /tmp/jfs
         wait_command_success "ps -ef | grep juicefs | grep /tmp/jfs | grep -v grep | wc -l" 2
         # cat /tmp/jfs/.config
-        sleep 3s
+        # sleep 3s
     done
 }
 
