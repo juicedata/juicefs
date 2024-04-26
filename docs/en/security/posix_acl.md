@@ -51,4 +51,4 @@ For more detailed rules and guidelines on POSIX ACLs, please refer to:
 ## Notes
 
 * ACL permission checks require a [Linux kernel 4.9](https://lkml.iu.edu/hypermail/linux/kernel/1610.0/01531.html) or later;
-* Enabling ACL may incur additional performance overhead; however, for scenarios with low ACL update frequency, memory caching optimization can reduce the impact.
+* Enabling ACL will have an additional performance impact. However, due to memory cache optimization, most usage scenarios experience relatively low performance degradation.
