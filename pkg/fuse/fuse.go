@@ -448,8 +448,8 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	opt.SingleThreaded = false
 	opt.MaxBackground = 50
 	opt.EnableLocks = true
-	opt.EnableAcl = conf.Format.EnableACL
-	opt.DontUmask = conf.Format.EnableACL
+	opt.EnableAcl = conf.Format.EnableAcl
+	opt.DontUmask = conf.Format.EnableAcl
 	opt.DisableXAttrs = !xattrs
 	opt.EnableIoctl = ioctl
 	opt.MaxWrite = 1 << 20

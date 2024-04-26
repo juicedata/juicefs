@@ -247,11 +247,11 @@ func config(ctx *cli.Context) error {
 				clientVer = true
 			}
 		case "enable-acl":
-			if enableACL := ctx.Bool(flag); enableACL != format.EnableACL {
+			if enableACL := ctx.Bool(flag); enableACL != format.EnableAcl {
 				if enableACL {
-					msg.WriteString(fmt.Sprintf("%s: %v -> %v\n", flag, format.EnableACL, true))
+					msg.WriteString(fmt.Sprintf("%s: %v -> %v\n", flag, format.EnableAcl, true))
 					msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", "min-client-version", format.MinClientVersion, "1.2.0-A"))
-					format.EnableACL = true
+					format.EnableAcl = true
 					format.MinClientVersion = "1.2.0-A"
 					clientVer = true
 				} else {

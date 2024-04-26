@@ -94,7 +94,7 @@ type Format struct {
 	MinClientVersion string `json:",omitempty"`
 	MaxClientVersion string `json:",omitempty"`
 	DirStats         bool   `json:",omitempty"`
-	EnableACL        bool
+	EnableAcl        bool
 }
 
 func (f *Format) update(old *Format, force bool) error {

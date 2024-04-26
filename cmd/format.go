@@ -444,9 +444,9 @@ func format(c *cli.Context) error {
 			DirStats:         true,
 			MetaVersion:      meta.MaxVersion,
 			MinClientVersion: "1.1.0-A",
-			EnableACL:        c.Bool("enable-acl"),
+			EnableAcl:        c.Bool("enable-acl"),
 		}
-		if format.EnableACL {
+		if format.EnableAcl {
 			format.MinClientVersion = "1.2.0-A"
 		}
 

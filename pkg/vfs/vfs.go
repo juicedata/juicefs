@@ -1050,7 +1050,7 @@ func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags ui
 
 	aclType := GetACLType(name)
 	if aclType != acl.TypeNone {
-		if !v.Conf.Format.EnableACL {
+		if !v.Conf.Format.EnableAcl {
 			err = syscall.ENOTSUP
 			return
 		}
@@ -1089,7 +1089,7 @@ func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []
 
 	aclType := GetACLType(name)
 	if aclType != acl.TypeNone {
-		if !v.Conf.Format.EnableACL {
+		if !v.Conf.Format.EnableAcl {
 			err = syscall.ENOTSUP
 			return
 		}
@@ -1142,7 +1142,7 @@ func (v *VFS) RemoveXattr(ctx Context, ino Ino, name string) (err syscall.Errno)
 
 	aclType := GetACLType(name)
 	if aclType != acl.TypeNone {
-		if !v.Conf.Format.EnableACL {
+		if !v.Conf.Format.EnableAcl {
 			err = syscall.ENOTSUP
 			return
 		}

@@ -471,10 +471,10 @@ func prepareMp(mp string) {
 
 func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int, noxattr, noacl bool) {
 	enableXattr := c.Bool("enable-xattr")
-	if format.EnableACL {
+	if format.EnableAcl {
 		enableXattr = true
 	}
-	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL
+	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableAcl
 }
 
 func shutdownGraceful(mp string) {

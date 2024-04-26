@@ -468,7 +468,7 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 }
 
 func (m *dbMeta) cacheACLs(ctx Context) error {
-	if !m.getFormat().EnableACL {
+	if !m.getFormat().EnableAcl {
 		return nil
 	}
 	return m.roTxn(func(s *xorm.Session) error {

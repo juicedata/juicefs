@@ -216,7 +216,7 @@ func testAccess(t *testing.T, m Meta) {
 
 func testACL(t *testing.T, m Meta) {
 	format := testFormat()
-	format.EnableACL = true
+	format.EnableAcl = true
 
 	if err := m.Init(format, false); err != nil {
 		t.Fatalf("test acl failed: %s", err)

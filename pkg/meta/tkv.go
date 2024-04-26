@@ -489,7 +489,7 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 }
 
 func (m *kvMeta) cacheACLs(ctx Context) error {
-	if !m.getFormat().EnableACL {
+	if !m.getFormat().EnableAcl {
 		return nil
 	}
 
