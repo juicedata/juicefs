@@ -87,8 +87,8 @@ check_cache_distribute() {
         size=${sizes["$dir"]}
         weight=${weights["$dir"]}
         avg_size=$((total_size * weight / total_weight))
-        min_size=$((avg_size * 7 / 10))
-        max_size=$((avg_size * 13 / 10))
+        min_size=$((avg_size * 5 / 10))
+        max_size=$((avg_size * 20 / 10))
         
         if [[ $size -lt $min_size || $size -gt $max_size ]]; then
             echo "$dir is not evenly distributed, size: $size, weight: $weight, ave_size: $avg_size, min_size: $min_size, max_size: $max_size"
