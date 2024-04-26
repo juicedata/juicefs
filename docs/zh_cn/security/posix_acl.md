@@ -1,9 +1,8 @@
 ---
-ti tle: POSIX ACL
+title: POSIX ACL
 description: 本文介绍了 JuiceFS 支持的 POSIX ACL 功能，以及如何启用和使用 ACL 权限。
 sidebar_position: 3
 ---
-# POSIX ACL
 
 POSIX ACL（Portable Operating System Interface for Unix - Access Control List）是 Unix-like 操作系统中的一种访问控制机制，可以对文件和目录的访问权限进行更细粒度的控制。
 
