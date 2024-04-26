@@ -51,4 +51,4 @@ setfacl -m u:alice:rw- /mnt/jfs/file
 ## 注意事项
 
 - ACL 权限检测需要 [Linux kernel 4.9](https://lkml.iu.edu/hypermail/linux/kernel/1610.0/01531.html) 及以上版本；
-- 启用 ACL 可能会引起额外的性能影响。然而，对于 ACL 变化频率较低的场景，内存缓存优化会降低影响。
+- 启用 ACL 会有额外的性能影响。但因为有内存缓存优化, 大部分使用场景性能损耗都较低, 可参考[压测结果](https://juicefs.com/zh-cn/blog/release-notes/juicefs-v12-beta-1-acl#03-%E6%80%A7%E8%83%BD)。
