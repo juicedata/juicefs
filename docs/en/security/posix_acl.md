@@ -47,7 +47,7 @@ For more detailed rules and guidelines on POSIX ACLs, please refer to:
 
 * [POSIX Access Control Lists on Linux](https://www.usenix.org/legacy/publications/library/proceedings/usenix03/tech/freenix03/full_papers/gruenbacher/gruenbacher_html/main.html)
 * [setfacl](https://linux.die.net/man/1/setfacl)
-* [JuiceFS ACL Functionality: A Detailed Explanation of Fine-Grained Permission Control](https://juicefs.com/en/blog/release-notes/juicefs-v12-beta-1-acl)
+* [JuiceFS ACL Functionality: A Detailed Explanation of Fine-Grained Permission Control](https://juicefs.com/en/blog/release-notes/juicefs-12-beta-1)
 
 ## Notes
 
