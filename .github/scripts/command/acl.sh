@@ -41,6 +41,8 @@ test_modify_acl_config()
     ./juicefs mount -d $META_URL /tmp/jfs
     setfacl -m u:root:rw /tmp/jfs/test
     ./juicefs config $META_URL --enable-acl
+    umount_jfs /tmp/jfs $META_URL
+    ./juicefs mount -d $META_URL /tmp/jfs
     setfacl -m u:root:rw /tmp/jfs/test
     ./juicefs config $META_URL --enable-acl False 
     ./juicefs config $META_URL | grep EnableACL | grep "true" || (echo "EnableACL should be true" && exit 1) 
