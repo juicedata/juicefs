@@ -511,9 +511,6 @@ func shutdownGraceful(mp string) {
 }
 
 func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
-	if runtime.GOOS != "linux" {
-		return false
-	}
 	var ino uint64
 	var err error
 	err = utils.WithTimeout(func() error {
@@ -695,12 +692,12 @@ func launchMount(mp string, conf *vfs.Config) error {
 	increaseRlimit()
 	if runtime.GOOS == "linux" {
 		adjustOOMKiller(-1000)
-		if canShutdownGracefully(mp, conf) {
-			shutdownGraceful(mp)
-		}
-		os.Setenv("_FUSE_FD_COMM", serverAddress)
-		serveFuseFD(serverAddress)
 	}
+	if canShutdownGracefully(mp, conf) {
+		shutdownGraceful(mp)
+	}
+	os.Setenv("_FUSE_FD_COMM", serverAddress)
+	serveFuseFD(serverAddress)
 
 	path, err := os.Executable()
 	if err != nil {
