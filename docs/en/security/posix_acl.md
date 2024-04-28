@@ -1,54 +1,54 @@
 ---
+title: POSIX ACL
+description: This article introduces the POSIX ACL feature supported by JuiceFS and how to enable and use ACL permissions.
 sidebar_position: 1
 ---
 
-# POSIX ACL
+POSIX ACL (Portable Operating System Interface for Unix - Access Control List) is a type of access control mechanism in Unix-like operating systems that allows for finer-grained control over file and directory access permissions.
 
-Version 1.2 supports POSIX ACL. For detailed rules, please refer to:
+## Versions and Compatibility Requirements
 
-- [POSIX Access Control Lists on Linux](https://www.usenix.org/legacy/publications/library/proceedings/usenix03/tech/freenix03/full_papers/gruenbacher/gruenbacher_html/main.html)
-- [setfacl](https://linux.die.net/man/1/setfacl)
+* JuiceFS supports POSIX ACL from version 1.2 onwards;
+* All versions of the client can mount volumes without ACL enabled, regardless of whether they were created by a new or old version of the client;
+* Once ACL is enabled, it cannot be disabled; therefore, the `--enable-acl` option is tied to the volume.
+
+:::caution
+If you plan to use ACL functionality, it is recommended to upgrade all clients to the latest version to avoid potential issues with older versions affecting the accuracy of ACLs.
+:::
+
+## Enabling ACL
+
+As mentioned earlier, you can enable ACL when creating a new volume or on an existing volume using a new version of the client.
+
+### Creating a New Volume and Enabling ACL
+
+```shell
+juicefs format --enable-acl sqlite3://myjfs.db myjfs
+```
+
+### Enabling ACL on an Existing Volume
+
+Use the `config` command to enable ACL functionality on an existing volume:
+
+```
+juicefs config --enable-acl sqlite3://myjfs.db
+```
 
 ## Usage
 
-<!-- markdownlint-disable MD044 enhanced-proper-names -->
+To set ACL permissions for a file or directory, you can use the `setfacl` command, for example:
 
-Currently, once ACL is enabled, it cannot be disabled.
-Therefore, the --enable-acl flag is associated with the volume.
-
-### Enable ACL for new volumes
-
-```shell
-juicefs format sqlite3://myjfs.db myjfs --enable-acl
+```
+setfacl -m u:alice:rw- /mnt/jfs/file
 ```
 
-### Enable ACl for existing volumes
+For more detailed rules and guidelines on POSIX ACLs, please refer to:
 
-- Upgrade all old client to v1.2 and remount it.
-- Use the following command with v1.2 client to change the volume configuration.
+* [POSIX Access Control Lists on Linux](https://www.usenix.org/legacy/publications/library/proceedings/usenix03/tech/freenix03/full_papers/gruenbacher/gruenbacher_html/main.html)
+* [setfacl](https://linux.die.net/man/1/setfacl)
+* [JuiceFS ACL Functionality: A Detailed Explanation of Fine-Grained Permission Control](https://juicefs.com/en/blog/release-notes/juicefs-12-beta-1)
 
-```shell
-juicefs config sqlite3://myjfs.db --enable-acl
-```
+## Notes
 
-<!-- markdownlint-enable MD044 enhanced-proper-names -->
-
-## Compatibility
-
-- New client versions are compatible with old volume versions.
-- Old client versions are compatible with new volume versions (without ACL enabled).
-
-:::caution Note
-If ACL is enabled, it is recommended that all clients to be upgraded.
-If an old client mounts a new volume (without ACL enabled),
-and ACL is subsequently enabled on the volume,
-operations by the old client may impact the correctness of ACL.
-:::
-
-## Others
-
-- ACL permission checks are supported only in Linux kernel 4.9 and higher versions. You can refer to this [documentation](https://lkml.iu.edu/hypermail/linux/kernel/1610.0/01531.html) for more details.
-- Enabling ACL increases the minimum client version requirement to v1.2.
-- Enabling ACL may have additional performance implications.
-For scenarios with infrequent ACL changes,
-the impact is minimal with memory cache optimization.
+* ACL permission checks require a [Linux kernel 4.9](https://lkml.iu.edu/hypermail/linux/kernel/1610.0/01531.html) or later;
+* Enabling ACL will have an additional performance impact. However, due to memory cache optimization, most usage scenarios experience relatively low performance degradation.
