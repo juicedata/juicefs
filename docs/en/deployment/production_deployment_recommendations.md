@@ -6,11 +6,11 @@ description: This article is intended as a reference for users who are about to 
 
 # Production Deployment Recommendations
 
-This article aims to give some recommendations when deploying JuiceFS to a production environment, so please read the following in advance and carefully.
+This document provides deployment recommendations for JuiceFS community edition in production environments, focusing on monitoring metric collection, automatic metadata backup, trash configuration, background tasks of clients, client log rolling, and command-line auto-completion, to ensure the stability and reliability of the file system.
 
 ## Metrics Collection and Visualization
 
-Be sure to collect and visualize the monitoring metrics for your JuiceFS client through Grafana, as described in this [documentation](../administration/monitoring.md).
+It is necessary to collect monitoring metrics from JuiceFS clients and visualize them using Grafana, allowing for real-time monitoring of file system performance and health status, as described in this [documentation](../administration/monitoring.md).
 
 ## Automatic Metadata Backup
 
@@ -46,6 +46,8 @@ However, when the trash is enabled, it may also bring some side effects. If the 
 Please refer to this [documentation](../security/trash.md) for more information about the trash.
 
 ## Client Background Tasks
+
+The JuiceFS file system maintains background tasks through clients, which can automatically execute cleaning tasks such as deleting pending files and objects, purging expired files and fragments from the trash, and terminating long-stalled client sessions, etc.
 
 All clients of the same JuiceFS volume share a set of background tasks during runtime. Each task is executed at regular intervals, and which client will be chosen is random. The background tasks include
 
