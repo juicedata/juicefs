@@ -70,8 +70,7 @@ juicefs format \
 1. 下载 `JuiceFS`到 Colab 实例上
 
    ```shell
-   ! curl -L -o juicefs.tar.gz https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta2/juicefs-1.0.0-beta2-linux-amd64.tar.gz
-   ! tar -xf juicefs.tar.gz
+   ! curl -sSL https://d.juicefs.com/install | sh -
    ```
 
 2. 设置 Google Cloud 凭证
@@ -91,7 +90,7 @@ juicefs format \
 4. 挂载 JuiceFS file system `myvolumn` 到 `mnt` 目录上。
 
    ```shell
-   ! GOOGLE_APPLICATION_CREDENTIALS=/content/.config/application_default_credentials.json nohup ./juicefs mount  "postgres://postgres:mushroom1@localhost:5432/juicefs?sslmode=disable" mnt > juicefs.log &
+   ! GOOGLE_APPLICATION_CREDENTIALS=/content/.config/application_default_credentials.json nohup juicefs mount  "postgres://postgres:mushroom1@localhost:5432/juicefs?sslmode=disable" mnt > juicefs.log &
    ```
 
 现在你应该可以像使用本地文件系统一样使用 `mnt` 目录了。
