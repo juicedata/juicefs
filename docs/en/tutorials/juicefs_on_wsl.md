@@ -54,30 +54,10 @@ Using JuiceFS in WSL means using JuiceFS on a Linux system, and here is an examp
 
 ### Install the client
 
-Install the JuiceFS client on the Linux subsystem by executing the following command in sequence.
-
-1. Get the latest version number
+Install the JuiceFS client on the Linux subsystem by executing the following command.
 
    ```shell
-   JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
-   ```
-
-2. Download the client to the current directory
-
-   ```shell
-   wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
-   ```
-
-3. Unzip the installation package
-
-   ```shell
-   tar -zxf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
-   ```
-
-4. Install
-
-   ```shell
-   sudo install juicefs /usr/local/bin
+   curl -sSL https://d.juicefs.com/install | sh -
    ```
 
 ### Creating a file system
