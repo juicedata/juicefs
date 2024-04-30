@@ -1,32 +1,36 @@
 ---
-title: POSIX ACL
-description: This article introduces the POSIX ACL feature supported by JuiceFS and how to enable and use ACL permissions.
+title: POSIX ACLs
+description: Learn about POSIX ACL support in JuiceFS and how to enable and use ACL permissions.
 sidebar_position: 1
 ---
 
-POSIX ACL (Portable Operating System Interface for Unix - Access Control List) is a type of access control mechanism in Unix-like operating systems that allows for finer-grained control over file and directory access permissions.
+POSIX ACL (Portable Operating System Interface for Unix - Access Control Lists) is an access control mechanism in Unix-like operating systems that allows for fine-grained control over file and directory access permissions.
 
-## Versions and Compatibility Requirements
+This document introduces how to enable and use POSIX ACL permissions in JuiceFS.
 
-* JuiceFS supports POSIX ACL from version 1.2 onwards;
-* All versions of the client can mount volumes without ACL enabled, regardless of whether they were created by a new or old version of the client;
-* Once ACL is enabled, it cannot be disabled; therefore, the `--enable-acl` option is tied to the volume.
+## Versions and compatibility requirements
+
+* Since version 1.2, JuiceFS has supported POSIX ACLs.
+* All client versions can mount volumes without ACLs enabled, regardless of their creation by new or old client versions.
+* Once ACLs are enabled, they cannot be disabled. Therefore, the `--enable-acl` option is tied to the volume.
 
 :::caution
 If you plan to use ACL functionality, it is recommended to upgrade all clients to the latest version to avoid potential issues with older versions affecting the accuracy of ACLs.
 :::
 
-## Enabling ACL
+## Enable ACLs
 
-As mentioned earlier, you can enable ACL when creating a new volume or on an existing volume using a new version of the client.
+As mentioned earlier, you can enable ACLs when creating a new volume or on an existing volume using a new version of the client.
 
-### Creating a New Volume and Enabling ACL
+### Create a new volume and enable ACLs
+
+Execute the following command to create a new volume and enable ACLs:
 
 ```shell
 juicefs format --enable-acl sqlite3://myjfs.db myjfs
 ```
 
-### Enabling ACL on an Existing Volume
+### Enable ACLs on an existing volume
 
 Use the `config` command to enable ACL functionality on an existing volume:
 
@@ -42,13 +46,13 @@ To set ACL permissions for a file or directory, you can use the `setfacl` comman
 setfacl -m u:alice:rw- /mnt/jfs/file
 ```
 
-For more detailed rules and guidelines on POSIX ACLs, please refer to:
+For detailed rules, guidelines, and implementation of POSIX ACLs, see:
 
 * [POSIX Access Control Lists on Linux](https://www.usenix.org/legacy/publications/library/proceedings/usenix03/tech/freenix03/full_papers/gruenbacher/gruenbacher_html/main.html)
 * [setfacl](https://linux.die.net/man/1/setfacl)
-* [JuiceFS ACL Functionality: A Detailed Explanation of Fine-Grained Permission Control](https://juicefs.com/en/blog/release-notes/juicefs-12-beta-1)
+* [How We Optimized ACL Implementation for Minimal Performance Impact](https://juicefs.com/en/blog/engineering/access-control-list)
 
 ## Notes
 
-* ACL permission checks require a [Linux kernel 4.9](https://lkml.iu.edu/hypermail/linux/kernel/1610.0/01531.html) or later;
-* Enabling ACL will have an additional performance impact. However, due to memory cache optimization, most usage scenarios experience relatively low performance degradation.
+* ACL permission checks require [Linux kernel 4.9](https://lkml.iu.edu/hypermail/linux/kernel/1610.0/01531.html) or later.
+* Enabling ACLs may impact performance. However, due to memory cache optimization, most usage scenarios experience minimal performance degradation.
