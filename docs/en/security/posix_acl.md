@@ -4,7 +4,7 @@ description: Learn about POSIX ACL support in JuiceFS and how to enable and use 
 sidebar_position: 1
 ---
 
-POSIX ACL (Portable Operating System Interface for Unix - Access Control Lists) is an access control mechanism in Unix-like operating systems that allows for fine-grained control over file and directory access permissions.
+POSIX ACLs (Portable Operating System Interface for Unix - Access Control Lists) are an access control mechanism in Unix-like operating systems that allows for finer-grained control over file and directory access permissions.
 
 This document introduces how to enable and use POSIX ACL permissions in JuiceFS.
 
