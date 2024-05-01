@@ -409,10 +409,11 @@ func (m *redisMeta) incrCounter(name string, value int64) (int64, error) {
 
 func (m *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 	var changed bool
+	ctx := Background
 	name = m.prefix + name
-	err := m.txn(Background, func(tx *redis.Tx) error {
+	err := m.txn(ctx, func(tx *redis.Tx) error {
 		changed = false
-		old, err := tx.Get(Background, name).Int64()
+		old, err := tx.Get(ctx, name).Int64()
 		if err != nil && err != redis.Nil {
 			return err
 		}
@@ -420,7 +421,11 @@ func (m *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 			return nil
 		} else {
 			changed = true
-			return tx.Set(Background, name, value, 0).Err()
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Set(ctx, name, value, 0)
+				return nil
+			})
+			return err
 		}
 	}, name)
 
@@ -1185,7 +1190,11 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 		}
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
-		return tx.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0).Err()
+		_, e = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
+			return nil
+		})
+		return e
 	}, m.inodeKey(inode))
 	atime = attr.Atime
 	return
@@ -3268,7 +3277,11 @@ func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 				attr.Nlink++
 			}
 		}
-		return tx.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0).Err()
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
+			return nil
+		})
+		return err
 	}, m.inodeKey(inode), m.entryKey(inode)))
 }
 
@@ -3325,10 +3338,13 @@ func (m *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte
 			} else if !ok {
 				return ENOATTR
 			}
-			_, err := m.rdb.HSet(ctx, key, name, value).Result()
+			_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.HSet(ctx, key, name, value)
+				return nil
+			})
 			return err
 		default: // XattrCreateOrReplace
-			_, err := m.rdb.HSet(ctx, key, name, value).Result()
+			_, err := tx.HSet(ctx, key, name, value).Result()
 			return err
 		}
 	}, key))
@@ -4336,7 +4352,10 @@ func (m *redisMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Ti
 		}
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
-		if err = tx.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0).Err(); err == nil {
+		if _, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
+			return nil
+		}); err == nil {
 			updated = true
 		}
 		return err
