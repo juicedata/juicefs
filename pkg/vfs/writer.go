@@ -301,6 +301,9 @@ func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Er
 			time.Sleep(time.Millisecond * 100)
 		}
 	}
+	if f.err != 0 {
+		return f.err
+	}
 
 	s := time.Now()
 	f.Lock()
