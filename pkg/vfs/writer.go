@@ -199,6 +199,9 @@ func (c *chunkWriter) commitThread() {
 			var ss = meta.Slice{Id: s.id, Size: s.length, Off: s.soff, Len: s.slen}
 			err = f.w.m.Write(meta.Background, f.inode, c.indx, s.off, ss, s.lastMod)
 			f.w.reader.Invalidate(f.inode, uint64(c.indx)*meta.ChunkSize+uint64(s.off), uint64(ss.Len))
+			if err != 0 { // Remove uploaded slices if failed to check into meta
+				s.writer.Abort()
+			}
 		}
 
 		f.Lock()

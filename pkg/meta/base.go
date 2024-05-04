@@ -2091,6 +2091,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 		m.of.InvalidateChunk(inode, indx)
 	} else {
 		logger.Warnf("compact %d %d: %s", inode, indx, err)
+		// TODO: should also delete slice `id`?
 	}
 
 	if force {
