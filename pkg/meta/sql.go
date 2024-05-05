@@ -3260,7 +3260,7 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 	n := &node{Inode: inode}
 	ok, err := s.Get(n)
 	if err != nil {
-		return err
+		return err // Ignore NotFound error?
 	}
 	attr := &Attr{Typ: typ, Nlink: 1}
 	if !ok {

@@ -2744,6 +2744,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalInc
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			logger.Warnf("inode %d not found", inode)
+			return nil
 		}
 
 		attr := &Attr{Nlink: 1}
