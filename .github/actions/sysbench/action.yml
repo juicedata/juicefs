@@ -52,6 +52,5 @@ runs:
         runtime=$((end-start))
         echo "cost $runtime seconds"
         cd -
-        export MYSQL_PASSWORD=${{inputs.mysql_password}}
         version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
-        .github/scripts/save_benchmark.sh --name ${{inputs.name}} --result $runtime --meta ${{inputs.meta}} --storage ${{inputs.storage}} --extra ${{inputs.compress}}
+        AWS_ACCESS_KEY_ID=${{AWS_ACCESS_KEY_ID}} AWS_SECRET_ACCESS_KEY=${{AWS_SECRET_ACCESS_KEY}} .github/scripts/save_benchmark.sh --name ${{inputs.name}} --result $runtime --meta ${{inputs.meta}} --storage ${{inputs.storage}} --extra ${{inputs.compress}}
