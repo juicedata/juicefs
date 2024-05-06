@@ -13,8 +13,12 @@ inputs:
     description: 'file test mode'
     required: true
     default: 'seqrd'
-  mysql_password:
-    description: 'mysql password'
+  awk_access_key_id:
+    description: 'aws access key id'
+    required: true
+    default: ''
+  awk_access_key_secret:
+    description: 'aws access key secret'
     required: true
     default: ''
   meta:
@@ -53,4 +57,4 @@ runs:
         echo "cost $runtime seconds"
         cd -
         version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
-        AWS_ACCESS_KEY_ID=${{AWS_ACCESS_KEY_ID}} AWS_SECRET_ACCESS_KEY=${{AWS_SECRET_ACCESS_KEY}} .github/scripts/save_benchmark.sh --name ${{inputs.name}} --result $runtime --meta ${{inputs.meta}} --storage ${{inputs.storage}} --extra ${{inputs.compress}}
+        AWS_ACCESS_KEY_ID=${{inputs.aws_access_key_id}} AWS_SECRET_ACCESS_KEY=${{inputs.aws_access_key_secret}} .github/scripts/save_benchmark.sh --name ${{inputs.name}} --result $runtime --meta ${{inputs.meta}} --storage ${{inputs.storage}} --extra ${{inputs.compress}}
