@@ -54,30 +54,10 @@ WSL 安装完成以后，即可在开始菜单找到新安装的 Linux 发行版
 
 ### 安装客户端
 
-依次执行命令，在 Linux 子系统中安装 JuiceFS 客户端：
-
-1. 获取最新的版本号
+执行命令，在 Linux 子系统中安装 JuiceFS 客户端：
 
    ```shell
-   JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
-   ```
-
-2. 下载客户端到当前目录
-
-   ```shell
-   wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
-   ```
-
-3. 解压安装包
-
-   ```shell
-   tar -zxf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
-   ```
-
-4. 安装客户端
-
-   ```shell
-   sudo install juicefs /usr/local/bin
+   curl -sSL https://d.juicefs.com/install | sh -
    ```
 
 ### 创建文件系统

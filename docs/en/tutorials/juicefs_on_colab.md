@@ -106,8 +106,7 @@ Note that the follow commands are run in Colab environment so there is a `!` mar
 1. Download `juicefs` to Colab runtime instance
 
    ```shell
-   ! curl -L -o juicefs.tar.gz https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta2/juicefs-1.0.0-beta2-linux-amd64.tar.gz
-   ! tar -xf juicefs.tar.gz
+   ! curl -sSL https://d.juicefs.com/install | sh -
    ```
 
 2. Set up Google Cloud credentials
@@ -127,7 +126,7 @@ Note that the follow commands are run in Colab environment so there is a `!` mar
 4. Mount JuiceFS file system `myvolumn` onto folder `mnt`
 
    ```shell
-   ! GOOGLE_APPLICATION_CREDENTIALS=/content/.config/application_default_credentials.json nohup ./juicefs mount  "postgres://postgres:mushroom1@localhost:5432/juicefs?sslmode=disable" mnt > juicefs.log &
+   ! GOOGLE_APPLICATION_CREDENTIALS=/content/.config/application_default_credentials.json nohup juicefs mount  "postgres://postgres:mushroom1@localhost:5432/juicefs?sslmode=disable" mnt > juicefs.log &
    ```
 
 Now you should be able to use the folder `mnt` as if it is a local file system folder to write and read folders and files

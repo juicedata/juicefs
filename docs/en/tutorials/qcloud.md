@@ -77,27 +77,13 @@ Tencent Cloud COS needs to be accessed through API, you need to prepare the acce
 
 ## Installation
 
-Here we are using Ubuntu Server 20.04 64-bit system, and the latest version of the client can be downloaded by running the following commands. You can also choose another version by visiting the [JuiceFS GitHub Releases](https://github.com/juicedata/juicefs/releases) page.
+Here we are using Ubuntu Server 20.04 64-bit system, and the latest version of the client can be installed by running the following command.
 
 ```shell
-JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+curl -sSL https://d.juicefs.com/install | sh -
 ```
 
-```shell
-wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
-```
-
-After downloading, unzip the program into the `juice` folder.
-
-```shell
-mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
-```
-
-Install the JuiceFS client to `/usr/local/bin` :
-
-```shell
-sudo install juice/juicefs /usr/local/bin
-```
+You can also choose another version by visiting the [JuiceFS GitHub Releases](https://github.com/juicedata/juicefs/releases) page.
 
 Execute the command and see the help message `juicefs` returned, which means the client installation is successful.
 

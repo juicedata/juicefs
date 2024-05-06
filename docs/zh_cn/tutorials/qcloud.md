@@ -87,27 +87,13 @@ JuiceFS 会将所有的数据都存储到对象存储中，它支持几乎所有
 
 ## 安装
 
-我当前使用的是 Ubuntu Server 20.04 64 位系统，依次执行以下命令可以下载最新版本客户端。你也可以访问 [JuiceFS GitHub Releases](https://github.com/juicedata/juicefs/releases) 页面选择其他版本。
+我当前使用的是 Ubuntu Server 20.04 64 位系统，执行以下命令可以安装最新版本客户端。
 
 ```shell
-JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+curl -sSL https://d.juicefs.com/install | sh -
 ```
 
-```shell
-wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
-```
-
-下载完成以后，解压程序到 `juice` 文件夹：
-
-```shell
-mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
-```
-
-将 JuiceFS 客户端安装到 `/usr/local/bin` ：
-
-```shell
-sudo install juice/juicefs /usr/local/bin
-```
+你也可以访问 [JuiceFS GitHub Releases](https://github.com/juicedata/juicefs/releases) 页面选择其他版本。
 
 执行命令，看到返回 `juicefs` 的命令帮助信息，代表客户端安装成功。
 

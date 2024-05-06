@@ -60,30 +60,10 @@ Redis 的访问地址可以从控制台的 `Connection Details` 中找到，如�
 
 ### 1. 安装 JuiceFS 客户端
 
-我们当前使用的是 Ubuntu Server 20.04，依次执行以下命令即可安装最新版本客户端。
-
-检测当前系统信息并设置临时的环境变量：
+我们当前使用的是 Ubuntu Server 20.04，执行以下命令即可安装最新版本客户端。
 
 ```shell
-JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
-```
-
-下载适配当前系统的最新版客户端软件包：
-
-```shell
-wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
-```
-
-解压安装包：
-
-```shell
-mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
-```
-
-将客户端安装到 `/usr/local/bin` ：
-
-```shell
-sudo install juice/juicefs /usr/local/bin
+curl -sSL https://d.juicefs.com/install | sh -
 ```
 
 执行命令，看到返回 `juicefs` 的命令帮助信息，代表客户端安装成功。

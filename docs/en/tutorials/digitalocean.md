@@ -60,30 +60,10 @@ The access address of the Redis can be found in the `Connection Details` of the 
 
 ### 1. Install JuiceFS client
 
-We currently using Ubuntu Server 20.04, execute the following commands in sequence to install the latest version of the client.
-
-Check current system and set temporary environment variable:
+We currently using Ubuntu Server 20.04, execute the following command to install the latest version of the client.
 
 ```shell
-JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
-```
-
-Download the latest version of the client software package adapted to the current system:
-
-```shell
-wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
-```
-
-Unzip the installation package:
-
-```shell
-mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
-```
-
-Install the client to `/usr/local/bin`:
-
-```shell
-sudo install juice/juicefs /usr/local/bin
+curl -sSL https://d.juicefs.com/install | sh -
 ```
 
 Execute the command and see the command help information returned to `juicefs`, which means that the client is installed successfully.
