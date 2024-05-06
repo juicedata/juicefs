@@ -455,9 +455,15 @@ func insideContainer() bool {
 		return true
 	}
 	mountinfo, err := os.Open("/proc/1/mountinfo")
-	if os.IsNotExist(err) {
-		return false
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		} else {
+			logger.Warnf("Open /proc/1/mountinfo: %s", err)
+			return false
+		}
 	}
+	defer mountinfo.Close()
 	scanner := bufio.NewScanner(mountinfo)
 	for scanner.Scan() {
 		line := scanner.Text()
