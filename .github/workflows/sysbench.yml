@@ -6,15 +6,15 @@ on:
       - 'main'
       - 'release-**'
     paths:
-      - 'sysbench.yml'
-      - 'sysbench/action.yml'
+      - '**/sysbench.yml'
+      - '**/sysbench/action.yml'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
     paths:
-      - 'sysbench.yml'
-      - 'sysbench/action.yml'
+      - '**/sysbench.yml'
+      - '**/sysbench/action.yml'
   schedule:
     - cron:  '30 20 * * *'
   workflow_dispatch:
