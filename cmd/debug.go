@@ -122,7 +122,16 @@ func copyFile(srcPath, destPath string, requireRootPrivileges bool) error {
 }
 
 func getCmdMount(mp string) (uid, pid, cmd string, err error) {
-	psArgs := []string{"/bin/sh", "-c", fmt.Sprintf("ps -ef | grep -v grep | grep mount | grep %s", mp)}
+	content, err := readConfig(mp)
+	if err != nil {
+		logger.Warnf("failed to read config file: %v", err)
+	}
+	cfg := vfs.Config{}
+	if err := json.Unmarshal(content, &cfg); err != nil {
+		logger.Warnf("failed to unmarshal config file: %v", err)
+	}
+
+	psArgs := []string{"/bin/sh", "-c", fmt.Sprintf("ps -f --pid %d", cfg.Pid)}
 	ret, err := exec.Command(psArgs[0], psArgs[1:]...).CombinedOutput()
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to execute command `%s`: %v", strings.Join(psArgs, " "), err)
@@ -150,7 +159,7 @@ func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 	if cmd == "" {
 		return "", "", "", fmt.Errorf("no mount command found for %s", mp)
 	}
-	return uid, pid, cmd, nil
+	return uid, strconv.Itoa(cfg.Pid), cmd, nil
 }
 
 var logArg = regexp.MustCompile(`--log(\s*=?\s*)(\S+)`)
