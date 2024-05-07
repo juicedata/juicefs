@@ -151,7 +151,7 @@ func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 					return "", "", "", fmt.Errorf("find more than one mount process for %s", mp)
 				}
 				cmd = strings.Join(fields[7:], " ")
-				uid, pid = strings.TrimSpace(fields[0]), strings.TrimSpace(fields[1])
+				uid, _ = strings.TrimSpace(fields[0]), strings.TrimSpace(fields[1])
 				find = true
 			}
 		}
