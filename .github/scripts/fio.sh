@@ -101,4 +101,4 @@ echo bandwidth is $bandwidth
 meta=$(echo $meta_url | awk -F: '{print $1}')
 echo meta is $meta
 [[ -z "$meta" ]] && echo "meta is empty" && exit 1
-.github/scripts/save_benchmark.sh --name $name --result $bandwidth --meta $meta --storage $storage minio
+.github/scripts/save_benchmark.sh --category fio --name $name --result $bandwidth --meta $meta --storage minio
