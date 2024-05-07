@@ -126,6 +126,9 @@ jobs:
           echo "fio_job=$fio_job" >> $GITHUB_OUTPUT
 
       - name: Fio Benchmark 
+        env:
+          AWS_ACCESS_KEY_ID: ${{secrets.CI_AWS_ACCESS_KEY_ID}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
         run: |
           # set -o pipefail
           echo "Fio Benchmark"

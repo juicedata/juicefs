@@ -4,6 +4,10 @@ save_benchmark(){
     while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
+            --category)
+                category="$2"
+                shift
+                ;;
             --name)
                 name="$2"
                 shift
@@ -39,6 +43,7 @@ save_benchmark(){
     created_date=$(date +"%Y-%m-%d")
     cat <<EOF > result.json
     {
+        "category": "$category",
         "name": "$name",
         "result": "$result",
         "meta": "$meta",
@@ -54,7 +59,7 @@ save_benchmark(){
     }
 EOF
     cat result.json
-    # AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_ACCESS_KEY_SECRET=$AWS_ACCESS_KEY_SECRET ./juicefs sync --force-update result.json s3://juicefs-ci-aws.s3.us-east-1.amazonaws.com/ci-report/fio-test/$created_date/$name
+    AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY ./juicefs sync --force-update result.json s3://juicefs-ci-aws.s3.us-east-1.amazonaws.com/ci-report/$category/$name/$created_date/$meta-$storage.json
 }
 
 save_benchmark $@
