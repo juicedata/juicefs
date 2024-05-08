@@ -28,9 +28,7 @@ on:
 jobs:
   fio_benchmark:
     timeout-minutes: 30
-    if: github.repository == 'juicedata/juicefs'
     runs-on: [ubuntu-20.04]
-
     strategy:
       fail-fast: false
       matrix:
