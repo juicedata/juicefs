@@ -110,16 +110,18 @@ func copyFileOnWindows(srcPath, destPath string) error {
 }
 
 func copyFile(srcPath, destPath string, requireRootPrivileges bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
 	if runtime.GOOS == "windows" {
-		return copyFileOnWindows(srcPath, destPath)
+		return utils.WithTimeout(func() error {
+			return copyFileOnWindows(srcPath, destPath)
+		}, 3*time.Second)
 	}
 
 	var copyArgs []string
 	if requireRootPrivileges {
 		copyArgs = append(copyArgs, "sudo")
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("cat %s > %s", srcPath, destPath))
 	return exec.CommandContext(ctx, copyArgs[0], copyArgs[1:]...).Run()
 }
