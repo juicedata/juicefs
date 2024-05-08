@@ -17,9 +17,11 @@
 package chunk
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -300,8 +302,12 @@ func TestCheckPath(t *testing.T) {
 	}
 }
 
-func shutdownStore(s *cacheStore) {
-	atomic.StoreUint32(&s.ioErrCnt, uint32(maxIOErrors))
+func shutdownStore(s diskCache) {
+	if c, ok := s.(*cacheStore); ok {
+		atomic.StoreUint32(&c.ioErrCnt, uint32(maxIOErrors))
+		atomic.StoreUint32(&c.ioCnt, uint32(maxIOErrors))
+		c.tryShutdown()
+	}
 }
 
 func TestCacheManager(t *testing.T) {
@@ -311,6 +317,10 @@ func TestCacheManager(t *testing.T) {
 	defer os.RemoveAll("/tmp/diskCache0")
 	defer os.RemoveAll("/tmp/diskCache1")
 	defer os.RemoveAll("/tmp/diskCache2")
+
+	checkInterval = 3600 // never check
+	numTriesToRestore = 1
+
 	manager := newCacheManager(&conf, nil, nil)
 	require.True(t, !manager.isEmpty())
 
@@ -318,25 +328,40 @@ func TestCacheManager(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, 3, m.length())
 
+	// case: io err
+	cs := m.getStore("random").(*cacheStore)
+	m.Lock()
+	atomic.StoreUint32(&cs.ioErrCnt, uint32(maxIOErrors)-1)
+	atomic.StoreUint32(&cs.ioCnt, uint32(maxIOErrors)*2)
+	cs.tryShutdown()
+	require.True(t, cs.available())
+
+	atomic.StoreUint32(&cs.ioCnt, uint32(maxIOErrors)-1)
+	cs.tryShutdown()
+	require.False(t, cs.available())
+	m.Unlock()
+
 	// case: key rehash after store removal
-	k1 := "k1"
-	p1 := NewPage([]byte{1, 2, 3})
+	k1 := "key1"
+	s1 := m.getStore(k1)
+	data := []byte{1, 2, 3}
+	p1 := NewPage(data)
 	defer p1.Release()
 	m.cache(k1, p1, true)
-
-	s1 := m.getStore(k1)
-	require.NotNil(t, s1)
 
 	m.Lock()
 	shutdownStore(s1)
 	m.Unlock()
 	time.Sleep(3 * time.Second)
-
-	rc, _ := m.load(k1)
-	require.Nil(t, rc)
-
+	require.Equal(t, 1, m.length())
 	s2 := m.getStore(k1)
 	require.NotNil(t, s2)
+	_, err := m.load(k1)
+	require.True(t, errors.Is(err, errNotCached))
+
+	// case: restore cache
+	m.restore(cs)
+	require.Equal(t, 2, m.length())
 
 	// case: remove all store
 	m.Lock()
@@ -346,4 +371,63 @@ func TestCacheManager(t *testing.T) {
 	m.Unlock()
 	time.Sleep(3 * time.Second)
 	require.True(t, m.isEmpty())
+}
+
+func testRestoreCache(t *testing.T, dir string, shutdown int) {
+	conf := defaultConf
+	conf.CacheDir = dir
+	dirs := strings.Split(dir, ":")
+	require.True(t, len(dirs) >= shutdown)
+	defer func() {
+		for _, dir := range dirs {
+			os.RemoveAll(dir)
+		}
+	}()
+	conf.AutoCreate = true
+
+	checkInterval, numTriesToRestore = 1, 1
+	manager := newCacheManager(&conf, nil, nil)
+	m, _ := manager.(*cacheManager)
+	require.Equal(t, m.length(), len(dirs))
+
+	genKey := func(id, indx int) string {
+		return fmt.Sprintf("chunks/%v/%v/%v_%v_%v", id/1000/1000, id/1000, id, indx, 3)
+	}
+
+	// cache
+	p := NewPage([]byte{1, 2, 3})
+	defer p.Release()
+	for i := 0; i < len(dirs)*100; i++ {
+		m.cache(genKey(i+1, 0), p, true)
+	}
+
+	// shutdown
+	m.Lock()
+	cnt := 0
+	for _, s := range m.storeMap {
+		shutdownStore(s)
+		cnt++
+		if cnt >= shutdown {
+			break
+		}
+	}
+	m.Unlock()
+
+	// wait for restore
+	time.Sleep(3 * time.Second)
+	require.Equal(t, len(dirs), m.length())
+}
+
+func TestRestoreCache(t *testing.T) {
+	genDir := func(num int) string {
+		dirs := make([]string, 0, num)
+		for i := 0; i < num; i++ {
+			dirs = append(dirs, fmt.Sprintf("/tmp/diskCache%d", i))
+		}
+		return strings.Join(dirs, ":")
+	}
+
+	testRestoreCache(t, genDir(1), 1)
+	testRestoreCache(t, genDir(10), 5)
+	testRestoreCache(t, genDir(20), 10)
 }
