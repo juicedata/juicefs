@@ -15,7 +15,6 @@ jobs:
   fio_benchmark:
     if: github.repository == 'juicedata/juicefs'
     runs-on: [ubuntu-20.04]
-
     strategy:
       fail-fast: false
       matrix:
