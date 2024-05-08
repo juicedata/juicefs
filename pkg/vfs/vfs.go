@@ -678,6 +678,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 				openAccessLog(fh)
 			}
 			n = readAccessLog(fh, buf)
+			return
 		} else {
 			defer func() { logit(ctx, "read", err, "(%d,%d,%d,%d): %d", ino, size, off, fh, n) }()
 			h.Lock()
