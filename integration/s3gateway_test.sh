@@ -1926,7 +1926,7 @@ function test_object_tagging(){
 
     # put object with object tagging
     if [ $rv -eq 0 ]; then
-        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key /datafile-1-kB --tagging 'TagSet=[{Key=k1,Value=v1},{Key=k2,Value=v2}]'"
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key /datafile-1-kB --tagging k1=v1&k2=v2"
         out=$($function 2>&1)
         rv=$?
     else
@@ -1941,15 +1941,16 @@ function test_object_tagging(){
       rv=$?
     fi
     if [ $rv -eq 0 ]; then
-      tagSet=$(echo "$out" | jq -r .TagSet | jq -c)
-      if [ "$tagSet" != '[{"Key":"'\''TagSet","Value":"[{Key=k1,Value=v1},{Key=k2,Value=v2}]'\''"}]' ]; then
+      tagSet=$(echo "$out" | jq -r .TagSet | jq 'sort_by(.Key)' | jq -c)
+      if [ "$tagSet" != '[{"Key":"k1","Value":"v1"},{"Key":"k2","Value":"v2"}]' ]; then
             log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+            rv=1
       fi
     fi
 
     # overwrite object tagging
     if [ $rv -eq 0 ]; then
-        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key /datafile-1-kB --tagging 'TagSet=[{Key=key1,Value=value1},{Key=key2,Value=value2}]'"
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key /datafile-1-kB --tagging key1=value1&key2=value2"
         out=$($function 2>&1)
         rv=$?
     else
@@ -1964,9 +1965,10 @@ function test_object_tagging(){
       rv=$?
     fi
     if [ $rv -eq 0 ]; then
-      tagSet=$(echo "$out" | jq -r .TagSet | jq -c)
-      if [ "$tagSet" != '[{"Key":"'\''TagSet","Value":"[{Key=key1,Value=value1},{Key=key2,Value=value2}]'\''"}]' ]; then
+      tagSet=$(echo "$out" | jq -r .TagSet | jq 'sort_by(.Key)' | jq -c)
+      if [ "$tagSet" != '[{"Key":"key1","Value":"value1"},{"Key":"key2","Value":"value2"}]' ]; then
             log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+            rv=1
       fi
     fi
 
@@ -1980,14 +1982,14 @@ function test_object_tagging(){
     if [ $rv -eq 0 ]; then
       tagSet=$(echo "$out" | jq -r .TagSet | jq -c)
       if [ "$tagSet" != '' ]; then
-        echo aaaa
             log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+            rv=1
       fi
     fi
 
     # create multipart upload with object tagging
     if [ $rv -eq 0 ]; then
-      function="${AWS} s3api create-multipart-upload  --bucket ${bucket_name} --key /datafile-1-kB --tagging 'TagSet=[{Key=k1,Value=v1},{Key=k2,Value=v2}]'"
+      function="${AWS} s3api create-multipart-upload  --bucket ${bucket_name} --key /datafile-1-kB --tagging k1=v1&k2=v2"
       out=$($function)
       rv=$?
       upload_id=$(echo "$out" | jq -r .UploadId)
@@ -2042,13 +2044,14 @@ function test_object_tagging(){
           rv=$?
     fi
     if [ $rv -eq 0 ]; then
-      tagSet=$(echo "$out" | jq -r .TagSet | jq -c)
-      if [ "$tagSet" != '[{"Key":"'\''TagSet","Value":"[{Key=k1,Value=v1},{Key=k2,Value=v2}]'\''"}]' ]; then
+      tagSet=$(echo "$out" | jq -r .TagSet | jq 'sort_by(.Key)' | jq -c)
+      if [ "$tagSet" != '[{"Key":"k1","Value":"v1"},{"Key":"k2","Value":"v2"}]' ]; then
             log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+            rv=1
       fi
     fi
 
-    #  overwrite object
+    # overwrite object
     if [ $rv -eq 0 ]; then
         function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key /datafile-1-kB"
         out=$($function 2>&1)
@@ -2056,6 +2059,45 @@ function test_object_tagging(){
     else
         # if make bucket fails, $bucket_name has the error output
         out="${bucket_name}"
+    fi
+
+    # check object tagging
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api get-object-tagging  --bucket ${bucket_name} --key /datafile-1-kB"
+      out=$($function 2>&1)
+      rv=$?
+    fi
+    # check object tagging
+    if [ $rv -eq 0 ]; then
+      tagSet=$(echo "$out" | jq -r .TagSet | jq -c)
+      if [ "$tagSet" != "[]" ]; then
+            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+            rv=1
+      fi
+    fi
+
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key /datafile-1-kB --tagging key1=value1&key2=value2"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # check object tagging
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api get-object-tagging  --bucket ${bucket_name} --key /datafile-1-kB"
+      out=$($function 2>&1)
+      rv=$?
+    fi
+    if [ $rv -eq 0 ]; then
+      tagSet=$(echo "$out" | jq -r .TagSet | jq 'sort_by(.Key)' | jq -c)
+      if [ "$tagSet" != '[{"Key":"key1","Value":"value1"},{"Key":"key2","Value":"value2"}]' ]; then
+            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+            rv=1
+      fi
     fi
 
     # copy object with tagging-directive COPY
@@ -2078,16 +2120,17 @@ function test_object_tagging(){
       rv=$?
     fi
     if [ $rv -eq 0 ]; then
-      tagSet=$(echo "$out" | jq -r .TagSet | jq -c)
-      if [ "$tagSet" != '[{"Key":"'\''TagSet","Value":"[{Key=k1,Value=v1},{Key=k2,Value=v2}]'\''"}]' ]; then
+      tagSet=$(echo "$out" | jq -r .TagSet | jq 'sort_by(.Key)' | jq -c)
+      if [ "$tagSet" != '[{"Key":"key1","Value":"value1"},{"Key":"key2","Value":"value2"}]' ]; then
             log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+            rv=1
       fi
     fi
 
 
     # copy object with tagging-directive REPLACE
     if [ $rv -eq 0 ]; then
-       function="${AWS} s3api copy-object --bucket ${bucket_name} --key datafile-1-kB-copy --copy-source ${bucket_name}/datafile-1-kB --tagging "key=value"  --tagging-directive REPLACE"
+       function="${AWS} s3api copy-object --bucket ${bucket_name} --key datafile-1-kB-copy --copy-source ${bucket_name}/datafile-1-kB --tagging key=value  --tagging-directive REPLACE"
        out=$($function)
        rv=$?
        hash2=$(echo "$out" | jq -r .CopyObjectResult.ETag | sed -e 's/^"//' -e 's/"$//')
@@ -2105,9 +2148,10 @@ function test_object_tagging(){
       rv=$?
     fi
     if [ $rv -eq 0 ]; then
-      tagSet=$(echo "$out" | jq -r .TagSet | jq -c)
+      tagSet=$(echo "$out" | jq -r .TagSet | jq 'sort_by(.Key)' | jq -c)
       if [ "$tagSet" != '[{"Key":"key","Value":"value"}]' ]; then
             log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+            rv=1
       fi
     fi
 
