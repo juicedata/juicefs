@@ -750,8 +750,8 @@ function test_multipart_upload() {
       test_function=${function}
       out=$($function)
       rv=$?
-      keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
-      if [ $keys != "afilebfilebfiledocuments/report1.pdfdocuments/report2.pdfebookphotos/2021/a2.pngphotos/2021/a3.pngphotos/2022/a4.png" ]; then
+      keys=$(echo "$out" | jq -r '.Uploads | map(.Key) | join(",")')
+      if [ $keys != "afile,bfile,bfile,documents/report1.pdf,documents/report2.pdf,ebook,photos/2021/a2.png,photos/2021/a3.png,photos/2022/a4.png" ]; then
        rv=1
        out="list-multipart-uploads failed"
       fi
@@ -762,8 +762,8 @@ function test_multipart_upload() {
       test_function=${function}
       out=$($function)
       rv=$?
-      keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
-      if [ $keys != "bfilebfiledocuments/report1.pdfdocuments/report2.pdfebookphotos/2021/a2.pngphotos/2021/a3.pngphotos/2022/a4.png" ]; then
+      keys=$(echo "$out" | jq -r '.Uploads | map(.Key) | join(",")')
+      if [ $keys != "bfile,bfile,documents/report1.pdf,documents/report2.pdf,ebook,photos/2021/a2.png,photos/2021/a3.png,photos/2022/a4.png" ]; then
        rv=1
        out="list-multipart-upload failed"
       fi
@@ -774,13 +774,13 @@ function test_multipart_upload() {
       test_function=${function}
       out=$($function)
       rv=$?
-      keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
-      if [ $keys != "afilebfilebfileebook" ]; then
+      keys=$(echo "$out" | jq -r '.Uploads | map(.Key) | join(",")')
+      if [ $keys != "bfile,bfile,ebook" ]; then
        rv=1
        out="list-multipart-uploads failed"
       fi
-      keys=$(echo "$out" | jq 'foreach .CommonPrefixes[] as $CommonPrefix (null; . + $CommonPrefix.Prefix)')
-      if [ $keys != "documents/photos/" ]; then
+      keys=$(echo "$out" | jq -r '.CommonPrefixes | map(.Prefix) | join(",")')
+      if [ $keys != "documents/,photos/" ]; then
        rv=1
        out="list-multipart-uploads failed"
       fi
@@ -791,8 +791,8 @@ function test_multipart_upload() {
         test_function=${function}
         out=$($function)
         rv=$?
-        keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
-        if [ $keys != "afilebfilebfileebook" ]; then
+        keys=$(echo "$out" | jq -r '.Uploads | map(.Key) | join(",")')
+        if [ $keys != "afile,bfile,bfile,ebook" ]; then
          rv=1
          out="list-multipart-uploads failed"
         fi
@@ -808,8 +808,8 @@ function test_multipart_upload() {
       test_function=${function}
       out=$($function)
       rv=$?
-      keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
-        if [ $keys != "documents/report1.pdfdocuments/report2.pdf" ]; then
+      keys=$(echo "$out" | jq -r '.Uploads | map(.Key) | join(",")')
+        if [ $keys != "documents/report1.pdf,documents/report2.pdf" ]; then
          rv=1
          out="list-multipart-upload failed"
         fi
@@ -1902,7 +1902,7 @@ function test_get_object_error(){
         if [ $? -eq 255 ] || [ $? -eq 254 ];then
             rv=0
         fi
-        if [[ "$out" =~ "The specified key does not exist" ]];then
+        if ! [[ "$out" =~ "The specified key does not exist" ]];then
             log_failure "$(get_duration "$start_time")" "${function}" "${out}"
             rv=1
         fi
@@ -2027,6 +2027,7 @@ function test_object_tagging(){
         # Use saved etags to complete the multipart transaction
         function="${AWS} s3api complete-multipart-upload --multipart-upload file:///tmp/multipart --bucket ${bucket_name} --key /datafile-1-kB --upload-id ${upload_id}"
         out=$($function)
+        rm -rf /tmp/multipart
         rv=$?
         finalETag=$(echo "$out" | jq -r .ETag | sed -e 's/^"//' -e 's/"$//')
         if [ "${finalETag}" == "" ]; then
@@ -2148,7 +2149,7 @@ main() {
     test_serverside_encryption_error && \
     # test_worm_bucket && \
     # test_legal_hold
-    test_get_object_error
+    test_get_object_error &&  \
     test_object_tagging
     return $?
 }
