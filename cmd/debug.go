@@ -122,6 +122,7 @@ func copyFile(srcPath, destPath string, requireRootPrivileges bool) error {
 }
 
 func getCmdMount(mp string) (uid, pid, cmd string, err error) {
+	var tmpPid string
 	_ = utils.WithTimeout(func() error {
 		content, err := readConfig(mp)
 		if err != nil {
@@ -132,13 +133,14 @@ func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 			logger.Warnf("failed to unmarshal config file: %v", err)
 		}
 		if cfg.Pid != 0 {
-			pid = strconv.Itoa(cfg.Pid)
+			tmpPid = strconv.Itoa(cfg.Pid)
 		}
 		return nil
 	}, time.Second)
 
 	var psArgs []string
-	if pid != "" {
+	if tmpPid != "" {
+		pid = tmpPid
 		psArgs = []string{"/bin/sh", "-c", fmt.Sprintf("ps -f --pid %s", pid)}
 	} else {
 		psArgs = []string{"/bin/sh", "-c", fmt.Sprintf("ps -ef | grep -v grep | grep mount | grep %s", mp)}
