@@ -35,5 +35,15 @@ class TestCommand(unittest.TestCase):
         state.config(capacity=1, enable_acl=True, encrypt_secret=True, force=False, inodes=81, trash_days=0, user='root', yes=True)
         state.teardown()
 
+    def skip_test_clone_4832(self):
+        #SEE https://github.com/juicedata/juicefs/issues/4834
+        state = JuicefsCommandMachine()
+        folders_0 = state.init_folders()
+        state.chmod(entry=folders_0, mode=2427, user='root')
+        folders_1 = state.mkdir(mode=2931, parent=folders_0, subdir='vhjp', umask=369, user='root')
+        state.chmod(entry=folders_1, mode=1263, user='root')
+        state.clone(entry=folders_1, new_entry_name='tbim', parent=folders_0, preserve=False, user='user1')
+        state.teardown()
+
 if __name__ == '__main__':
     unittest.main()
