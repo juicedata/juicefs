@@ -35,5 +35,11 @@ class TestCommand(unittest.TestCase):
         state.config(capacity=1, enable_acl=True, encrypt_secret=True, force=False, inodes=81, trash_days=0, user='root', yes=True)
         state.teardown()
 
+    def test_dump(self):
+        state = JuicefsCommandMachine()
+        v1 = state.init_folders()
+        state.dump_load_dump(fast=True, folder=v1, keep_secret_key=True, skip_trash=False, threads=10, user='root')
+        state.teardown()
+        
 if __name__ == '__main__':
     unittest.main()

@@ -50,9 +50,9 @@ class JuicefsCommandMachine(JuicefsMachine):
     MP2 = '/tmp/jfs2'
     ROOT_DIR1=os.path.join(MP1, 'fsrand')
     ROOT_DIR2=os.path.join(MP2, 'fsrand')
-    EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file', 'config']
+    EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file', 'config', 'dump_load_dump', 'dump']
     # EXCLUDE_RULES = []
-    INCLUDE_RULES = ['dump_load_dump', 'mkdir', 'create_file', 'set_xattr']
+    INCLUDE_RULES = ['dump_load_dump', 'mkdir', 'create_file', 'set_xattr', 'dump']
     cmd1 = CommandOperation('cmd1', MP1, ROOT_DIR1)
     cmd2 = CommandOperation('cmd2', MP2, ROOT_DIR2)
     fsop1 = FsOperation('fs1', ROOT_DIR1)
@@ -257,7 +257,7 @@ if __name__ == '__main__':
     settings.register_profile("dev", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, 
-        phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
+        phases=[Phase.reuse, Phase.generate, Phase.target, Phase.explain])
     profile = os.environ.get('PROFILE', 'dev')
     settings.load_profile(profile)
     
