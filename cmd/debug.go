@@ -113,14 +113,14 @@ func copyFile(srcPath, destPath string, requireRootPrivileges bool) error {
 	if runtime.GOOS == "windows" {
 		return utils.WithTimeout(func() error {
 			return copyFileOnWindows(srcPath, destPath)
-		}, time.Second)
+		}, 3*time.Second)
 	}
 
 	var copyArgs []string
 	if requireRootPrivileges {
 		copyArgs = append(copyArgs, "sudo")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("cat %s > %s", srcPath, destPath))
 	return exec.CommandContext(ctx, copyArgs[0], copyArgs[1:]...).Run()
@@ -141,7 +141,7 @@ func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 			tmpPid = strconv.Itoa(cfg.Pid)
 		}
 		return nil
-	}, time.Second)
+	}, 3*time.Second)
 
 	var psArgs []string
 	if tmpPid != "" {
@@ -220,7 +220,7 @@ func getPprofPort(pid, amp string, requireRootPrivileges bool) (int, error) {
 			logger.Warnf("failed to unmarshal config file: %v", err)
 		}
 		return nil
-	}, time.Second)
+	}, 3*time.Second)
 
 	if cfg.Port != nil {
 		if len(strings.Split(cfg.Port.DebugAgent, ":")) >= 2 {
@@ -313,7 +313,7 @@ func getRequest(url string, timeout time.Duration) ([]byte, error) {
 // check pprof service status
 func checkPort(port int, amp string) error {
 	url := fmt.Sprintf("http://localhost:%d/debug/pprof/cmdline?debug=1", port)
-	resp, err := getRequest(url, time.Second)
+	resp, err := getRequest(url, 3*time.Second)
 	if err != nil {
 		return fmt.Errorf("error checking pprof alive: %v", err)
 	}
