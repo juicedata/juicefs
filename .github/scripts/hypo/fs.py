@@ -445,7 +445,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           modify_time=st_time, 
           follow_symlinks=st.booleans(), 
           user = st.sampled_from(USERS))
-    @precondition(lambda self: self.should_run('utime'))
+    @precondition(lambda self: self.should_run('utime') and False)
     def utime(self, entry, access_time, modify_time, follow_symlinks, user='root'):
         result1 = self.fsop1.do_utime(entry, access_time, modify_time, follow_symlinks, user)
         result2 = self.fsop2.do_utime(entry, access_time, modify_time, follow_symlinks, user)

@@ -61,7 +61,12 @@ class S3Client():
             return Exception(f'code:{e.code} message:{e.message}')
         elif isinstance(e, subprocess.CalledProcessError):
             self.logger.info(f'{action} {kwargs} failed: {e.output.decode()}')
-            return Exception(f'returncode:{e.returncode} output:{e.output.decode()}')
+            try:
+                output = json.loads(e.output.decode())
+                message = output.get('error', {}).get('message', 'error message not found')
+                return Exception(f'returncode:{e.returncode} {message}')
+            except ValueError as ve:
+                return Exception(f'returncode:{e.returncode} output:{e.output.decode()}')
         else:
             self.logger.info(f'{action} {kwargs} failed: {e}')
             return e
