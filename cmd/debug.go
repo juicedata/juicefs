@@ -20,6 +20,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -110,15 +111,19 @@ func copyFileOnWindows(srcPath, destPath string) error {
 
 func copyFile(srcPath, destPath string, requireRootPrivileges bool) error {
 	if runtime.GOOS == "windows" {
-		return copyFileOnWindows(srcPath, destPath)
+		return utils.WithTimeout(func() error {
+			return copyFileOnWindows(srcPath, destPath)
+		}, 3*time.Second)
 	}
 
 	var copyArgs []string
 	if requireRootPrivileges {
 		copyArgs = append(copyArgs, "sudo")
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("cat %s > %s", srcPath, destPath))
-	return exec.Command(copyArgs[0], copyArgs[1:]...).Run()
+	return exec.CommandContext(ctx, copyArgs[0], copyArgs[1:]...).Run()
 }
 
 func getCmdMount(mp string) (uid, pid, cmd string, err error) {
@@ -136,7 +141,7 @@ func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 			tmpPid = strconv.Itoa(cfg.Pid)
 		}
 		return nil
-	}, time.Second)
+	}, 3*time.Second)
 
 	var psArgs []string
 	if tmpPid != "" {
@@ -205,14 +210,18 @@ func closeFile(file *os.File) {
 }
 
 func getPprofPort(pid, amp string, requireRootPrivileges bool) (int, error) {
-	content, err := readConfig(amp)
-	if err != nil {
-		logger.Warnf("failed to read config file: %v", err)
-	}
 	cfg := vfs.Config{}
-	if err := json.Unmarshal(content, &cfg); err != nil {
-		logger.Warnf("failed to unmarshal config file: %v", err)
-	}
+	_ = utils.WithTimeout(func() error {
+		content, err := readConfig(amp)
+		if err != nil {
+			logger.Warnf("failed to read config file: %v", err)
+		}
+		if err := json.Unmarshal(content, &cfg); err != nil {
+			logger.Warnf("failed to unmarshal config file: %v", err)
+		}
+		return nil
+	}, 3*time.Second)
+
 	if cfg.Port != nil {
 		if len(strings.Split(cfg.Port.DebugAgent, ":")) >= 2 {
 			if port, err := strconv.Atoi(strings.Split(cfg.Port.DebugAgent, ":")[1]); err != nil {
@@ -273,8 +282,14 @@ func getPprofPort(pid, amp string, requireRootPrivileges bool) (int, error) {
 	return listenPort, nil
 }
 
-func getRequest(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+func getRequest(url string, timeout time.Duration) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating GET request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error GET request: %v", err)
 	}
@@ -298,7 +313,7 @@ func getRequest(url string) ([]byte, error) {
 // check pprof service status
 func checkPort(port int, amp string) error {
 	url := fmt.Sprintf("http://localhost:%d/debug/pprof/cmdline?debug=1", port)
-	resp, err := getRequest(url)
+	resp, err := getRequest(url, 3*time.Second)
 	if err != nil {
 		return fmt.Errorf("error checking pprof alive: %v", err)
 	}
@@ -320,8 +335,8 @@ type metricItem struct {
 	name, url string
 }
 
-func reqAndSaveMetric(name string, metric metricItem, outDir string) error {
-	resp, err := getRequest(metric.url)
+func reqAndSaveMetric(name string, metric metricItem, outDir string, timeout time.Duration) error {
+	resp, err := getRequest(metric.url, timeout)
 	if err != nil {
 		return fmt.Errorf("error getting metric: %v", err)
 	}
@@ -443,15 +458,17 @@ func collectPprof(ctx *cli.Context, cmd string, pid string, amp string, requireR
 	for name, metric := range metrics {
 		wg.Add(1)
 		go func(name string, metric metricItem) {
+			timeout := 3 * time.Second
 			defer wg.Done()
-
 			if name == "profile" {
 				logger.Infof("Profile metrics are being sampled, sampling duration: %ds", profile)
+				timeout = time.Duration(profile+5) * time.Second
 			}
 			if name == "trace" {
 				logger.Infof("Trace metrics are being sampled, sampling duration: %ds", trace)
+				timeout = time.Duration(trace+5) * time.Second
 			}
-			if err := reqAndSaveMetric(name, metric, pprofOutDir); err != nil {
+			if err := reqAndSaveMetric(name, metric, pprofOutDir, timeout); err != nil {
 				logger.Errorf("Failed to get and save metric %s: %v", name, err)
 			}
 		}(name, metric)
@@ -481,7 +498,9 @@ func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDi
 	}
 	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("tail -n %d %s > %s", limit, logPath, retLogPath))
 	logger.Infof("The last %d lines of %s will be collected", limit, logPath)
-	return exec.Command(copyArgs[0], copyArgs[1:]...).Run()
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return exec.CommandContext(timeoutCtx, copyArgs[0], copyArgs[1:]...).Run()
 }
 
 func collectSysInfo(ctx *cli.Context, currDir string) error {
