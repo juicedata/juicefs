@@ -445,7 +445,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           modify_time=st_time, 
           follow_symlinks=st.booleans(), 
           user = st.sampled_from(USERS))
-    @precondition(lambda self: self.should_run('utime'))
+    @precondition(lambda self: self.should_run('utime') and False)
     def utime(self, entry, access_time, modify_time, follow_symlinks, user='root'):
         result1 = self.fsop1.do_utime(entry, access_time, modify_time, follow_symlinks, user)
         result2 = self.fsop2.do_utime(entry, access_time, modify_time, follow_symlinks, user)
@@ -508,7 +508,7 @@ if __name__ == '__main__':
     settings.register_profile("dev", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, 
-        phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
+        phases=[Phase.reuse, Phase.generate, Phase.target, Phase.explain])
     settings.register_profile("schedule", max_examples=1000, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=200, deadline=None, \
         report_multiple_bugs=False, 

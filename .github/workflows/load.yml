@@ -35,7 +35,7 @@ jobs:
           if [ "${{github.event_name}}" == "schedule"  ] || [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
             echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
           else
-            echo 'meta_matrix=["redis", "mysql"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["redis", "mysql", "tikv"]' >> $GITHUB_OUTPUT
             # echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           fi
     outputs:
@@ -86,13 +86,8 @@ jobs:
 
       - name: Load and dump with small directory
         timeout-minutes: 30
-        env:
-          AWS_ACCESS_KEY_ID: ${{secrets.CI_AWS_ACCESS_KEY_ID}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
-          META: ${{matrix.meta}}
-          START_META: true
         run: |
-          sudo -E .github/scripts/command/load_dump_bench.sh test_load_dump_with_small_dir
+          sudo AWS_ACCESS_KEY_ID=${{secrets.CI_AWS_ACCESS_KEY_ID}} AWS_SECRET_ACCESS_KEY=${{secrets.CI_AWS_ACCESS_KEY_SECRET}} META=${{matrix.meta}} START_META=true .github/scripts/command/load_dump_bench.sh test_load_dump_with_small_dir
 
       - name: Load and dump with big directory
         timeout-minutes: 30
