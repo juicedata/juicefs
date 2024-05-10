@@ -120,7 +120,7 @@ class CommandOperation:
     def do_info(self, entry, strict=True, user='root', raw=True, recuisive=False):
         abs_path = os.path.join(self.root_dir, entry)
         try:
-            cmd = f'sudo -u {user} ./juicefs info {abs_path}'
+            cmd = f'sudo -u {user} ./juicefs info --log-level error {abs_path}'
             if raw:
                 cmd += ' --raw'
             if recuisive:
@@ -140,7 +140,7 @@ class CommandOperation:
     def do_rmr(self, entry, user='root'):
         abspath = os.path.join(self.root_dir, entry)
         try:
-            result = self.run_cmd(f'sudo -u {user} ./juicefs rmr {abspath}')
+            result = self.run_cmd(f'sudo -u {user} ./juicefs rmr --log-level error {abspath}')
             if '<ERROR>:' in result:
                 return self.handleException(Exception(result), 'do_rmr', abspath)
         except subprocess.CalledProcessError as e:
@@ -175,7 +175,7 @@ class CommandOperation:
         return self.clean_dump(result)
 
     def get_dump_cmd(self, meta_url, subdir, fast, skip_trash, keep_secret_key, threads, user='root'):
-        cmd = f'sudo -u {user} ./juicefs dump {meta_url} '
+        cmd = f'sudo -u {user} ./juicefs dump --log-level error {meta_url} '
         cmd += f' --subdir /{subdir}' if subdir != '' else ''
         cmd += f' --fast' if fast else ''
         cmd += f' --skip-trash' if skip_trash else ''
@@ -227,7 +227,7 @@ class CommandOperation:
     def do_warmup(self, entry, user='root'):
         abspath = os.path.join(self.root_dir, entry)
         try:
-            self.run_cmd(f'sudo -u {user} ./juicefs warmup {abspath}')
+            self.run_cmd(f'sudo -u {user} ./juicefs warmup --log-level error {abspath}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_warmup', abspath)
         self.stats.success('do_warmup')
@@ -236,7 +236,7 @@ class CommandOperation:
 
     def do_gc(self, compact:bool,  delete:bool, user:str='root'):
         try:
-            cmd = f'sudo -u {user} ./juicefs gc {self.meta_url}'
+            cmd = f'sudo -u {user} ./juicefs gc --log-level error {self.meta_url}'
             if compact:
                 cmd += ' --compact'
             if delete:
@@ -252,7 +252,7 @@ class CommandOperation:
         abspath = os.path.join(self.root_dir, entry)
         dest_abspath = os.path.join(self.root_dir, parent, new_entry_name)
         try:
-            cmd = f'sudo -u {user} ./juicefs clone {abspath} {dest_abspath}'
+            cmd = f'sudo -u {user} ./juicefs clone --log-level error {abspath} {dest_abspath}'
             if preserve:
                 cmd += ' --preserve'
             self.run_cmd(cmd)
@@ -265,7 +265,7 @@ class CommandOperation:
     def do_fsck(self, entry, repair=False, recuisive=False, user='root'):
         abspath = os.path.join(self.root_dir, entry)
         try:
-            cmd = f'sudo -u {user} ./juicefs fsck {self.meta_url} --path {abspath}'
+            cmd = f'sudo -u {user} ./juicefs fsck --log-level error {self.meta_url} --path {abspath}'
             if repair:
                 cmd += ' --repair'
             if recuisive:
@@ -327,7 +327,7 @@ class CommandOperation:
     def do_compact(self, entry, threads, user):
         path = os.path.join(self.root_dir, entry)
         try:
-            self.run_cmd(f'sudo -u {user} ./juicefs compact {path} --threads {threads}')
+            self.run_cmd(f'sudo -u {user} ./juicefs compact --log-level error {path} --threads {threads}')
         except subprocess.CalledProcessError as e:
             return self.handleException(e, 'do_compact', path, user=user)
         self.stats.success('do_compact')
