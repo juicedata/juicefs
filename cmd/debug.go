@@ -179,14 +179,18 @@ func closeFile(file *os.File) {
 }
 
 func getPprofPort(pid, amp string, requireRootPrivileges bool) (int, error) {
-	content, err := readConfig(amp)
-	if err != nil {
-		logger.Warnf("failed to read config file: %v", err)
-	}
 	cfg := vfs.Config{}
-	if err := json.Unmarshal(content, &cfg); err != nil {
-		logger.Warnf("failed to unmarshal config file: %v", err)
-	}
+	_ = utils.WithTimeout(func() error {
+		content, err := readConfig(amp)
+		if err != nil {
+			logger.Warnf("failed to read config file: %v", err)
+		}
+		if err := json.Unmarshal(content, &cfg); err != nil {
+			logger.Warnf("failed to unmarshal config file: %v", err)
+		}
+		return nil
+	}, time.Second)
+
 	if cfg.Port != nil {
 		if len(strings.Split(cfg.Port.DebugAgent, ":")) >= 2 {
 			if port, err := strconv.Atoi(strings.Split(cfg.Port.DebugAgent, ":")[1]); err != nil {
