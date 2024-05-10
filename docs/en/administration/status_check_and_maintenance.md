@@ -1,17 +1,18 @@
 ---
 title: Status Check & Maintenance
 sidebar_position: 4
+description: This document introduces JuiceFS' status check and maintenance tools to help you ensure file system reliability and integrity.
 ---
 
-Any kind of storage system needs to be checked and maintained regularly after it is put into use, so that potential problems can be found and fixed as early as possible to ensure reliable operation of the file system and the integrity and consistency of the stored data.
+Any storage system needs regular checks and maintenance after it is put into use to promptly identify and address potential issues, ensuring the reliability of the file system and the integrity and consistency of stored data.
 
-JuiceFS provides a series of tools to check and maintain the file system, not only to help us understand the basic information of the file system and its operation status, but also to help us detect and fix potential problems more easily.
+JuiceFS provides a series of tools to check and maintain the file system. These tools not only help you understand the basic information of the file system and its operational status, but also help you detect and fix potential problems more easily.
 
 ## status
 
-`juicefs status` is used to review basic information about a JuiceFS file system and the status of all active sessions (including mounts, SDK accesses, S3 gateways, WebDAV connections).
+The `juicefs status` command reviews basic information about a JuiceFS file system and the status of all active sessions, including mounts, SDK accesses, S3 Gateway, and WebDAV connections.
 
-The basic information of the file system includes name, UUID, storage type, bucket, trash status, etc.
+The basic information of the file system includes name, UUID, storage type, bucket, and Trash status.
 
 ```shell
 juicefs status redis://xxx.cache.amazonaws.com:6379/1
@@ -61,17 +62,19 @@ juicefs status --session 2 redis://xxx.cache.amazonaws.com:6379/1
 }
 ```
 
-Depending on the status of the session, the message may also include.
+Depending on the status of the session, the message may also include:
 
-- Sustained inodes: These are files that have been deleted, but because they have been opened in this session, they will be held temporarily until the file is closed.
-- Flocks: BSD lock information about the file that locked by this session
-- Plocks: POSIX lock Information about the file that locked by this session
+- Sustained inodes: These are files that have been deleted but remain open in the current session, temporarily retained until they are closed.
+- Flocks: BSD lock information about the file locked by this session.
+- Plocks: POSIX lock information about the file locked by this session.
 
 ## info
 
-`juicefs info` is used to check the metadata information of the specified file or directory, which includes the object path on the object storage for each block corresponding to that file.
+The `juicefs info` command checks the metadata information of the specified file or directory, including the object path on the object storage for each block corresponding to that file.
 
-### Checking the metadata of a file
+### Check file metadata
+
+This command checks the metadata of a file:
 
 ```shell
 $ juicefs info mnt/luggage-6255515.jpg
@@ -91,7 +94,7 @@ objects:
 +------------+------------------------------+--------+--------+--------+
 ```
 
-### Checking the metadata of a directory
+### Check directory metadata
 
 This command checks only one level of directories by default:
 
@@ -121,9 +124,9 @@ $ juicefs info -r ./mnt
    path: /
 ```
 
-### Checking metadata with inode
+### Check metadata with inodes
 
-You can also perform reverse lookup on the file path and data block information via inode, but you need to enter the mount point directory.
+You can also perform reverse lookup on the file path and data block information via inodes, but you need to enter the mount point directory.
 
 ```shell
 ~     $ cd mnt
@@ -146,23 +149,23 @@ objects:
 
 ## gc
 
-`juicefs gc` is designed to handle "object leak" and run compaction on data fragments created by file overwrites. It scans metadata and compare with object storage to find or clean up any object storage blocks that need processing.
+The `juicefs gc` command handles "object leaks" and runs compaction on data fragments created by file overwrites. It scans metadata and compares it with object storage to find or clean up any object storage blocks that need processing.
 
 :::info
-**Object leak** is a situation where a block of data is in the object storage, but there is no corresponding record in the metadata engine. Object leak are rare and can be caused by program bugs, unanticipated problems with the metadata engine or object storage, power outages, network disconnections, etc.
+An **object leak** is a situation where a block of data is in the object storage, but there is no corresponding record in the metadata engine. Object leaks are rare and can be caused by program bugs, unanticipated problems with the metadata engine or object storage, power outages, and network disconnections.
 :::
 
 :::tip
-Temporary intermediate files may be produced when files are uploaded to the object storage, and they will be cleaned up after the writing is complete. To avoid intermediate files being misclassified as leaked objects, `juicefs gc` skips files uploaded in the last 1 hour by default. The skipped time range (in seconds) can be adjusted via the `JFS_GC_SKIPPEDTIME` environment variable. For example, to set skip the last 2 hours of files: `export JFS_GC_SKIPPEDTIME=7200`.
+Temporary intermediate files may be produced when files are uploaded to the object storage. After the writing is complete, they will be cleaned up. To avoid intermediate files being misclassified as leaked objects, `juicefs gc` skips files uploaded in the last 1 hour by default. The skipped time range (in seconds) can be adjusted via the `JFS_GC_SKIPPEDTIME` environment variable. For example, to set skip the last 2 hours of files: `export JFS_GC_SKIPPEDTIME=7200`.
 :::
 
 :::tip
-Because the `juicefs gc` command scans all objects in the object storage, there is some overhead in executing this command for file system with large amounts of data.
+Because the `juicefs gc` command scans all objects in the object storage, there is some overhead in executing this command for file systems with large amounts of data.
 :::
 
 ### Scan for leaked objects
 
-Although object leak almost never occur, you can still perform the appropriate routine checks as needed, and by default `juicefs gc` only performs scans:
+Although object leaks almost never occur, you can still perform the appropriate routine checks as needed. By default, `juicefs gc` only performs scans:
 
 ```shell
 $ juicefs gc sqlite3://myjfs.db
@@ -182,7 +185,7 @@ Skipped objects bytes: 0.00 b   (0 Bytes)
 
 ### Purge leaked objects
 
-When the `juicefs gc` command scans for "leaked objects", you can purge them with the `--delete` option. The client starts 10 threads by default to perform the purge operation, you can adjust the number of threads with the `--threads, -p` option.
+When the `juicefs gc` command scans for "leaked objects", you can purge them with the `--delete` option. The client starts 10 threads by default to perform the purge operation. You can adjust the number of threads with the `--threads, -p` option.
 
 ```shell
 $ juicefs gc sqlite3://myjfs.db --delete
@@ -201,11 +204,11 @@ Skipped objects bytes: 0.00 b    (0 Bytes)
 2022/11/10 10:49:31.493682 juicefs[24086] <INFO>: scanned 103 objects, 92 valid, 11 leaked (13494874 bytes), 0 skipped (0 bytes) [gc.go:306]
 ```
 
-You can then run `juicefs gc` again to check if the purge was successful.
+Then, you can run `juicefs gc` again to check if the purge was successful.
 
 ## fsck
 
-`juicefs fsck` is a tool that performs block-by-block comparison with metadata, mainly to fix various problems that may occur and can be fixed within the file system. It can help you find cases where records exist in the metadata engine but there is no corresponding data block in the object storage, and it can also check if the file attribute information exists.
+The `juicefs fsck` tool performs block-by-block comparison with metadata, mainly to fix various problems that may occur and can be fixed within the file system. It can help you find cases where records exist in the metadata engine but there is no corresponding data block in the object storage. It can also check if the file attribute information exists.
 
 ```shell {5}
 $ juicefs fsck sqlite3://myjfs2.db
@@ -227,13 +230,13 @@ Scanned slices bytes: 36.81 MiB (38597789 Bytes)
 
 As you can see from the results, the `juicefs fsck` scan found a file corruption in the file system due to a missing data block.
 
-Although the result indicates that the file in the backend storage is corrupted, it is still necessary to check if the file is accessible at the mount point, because JuiceFS will cache the recently accessed file data locally, and the version of the file before the corruption can be re-uploaded with the cached file data block to avoid losing data if it is already cached locally. You can look for cached data in the cache directory (i.e. the path corresponding to the `--cache-dir` option) based on the path of the block output from the `juicefs fsck` command, e.g. the path of the missing block in the above example is `0/1/1063_0_2693747`.
+Although the result indicates that the file in the backend storage is corrupted, it is still necessary to check if the file is accessible at the mount point. This is because JuiceFS caches the recently accessed file data locally, and the version of the file before the corruption can be re-uploaded with the cached file data block to avoid losing data if it is already cached locally. You can look for cached data in the cache directory (the path corresponding to the `--cache-dir` option) based on the path of the block output from the `juicefs fsck` command. For example, the path of the missing block in the above example is `0/1/1063_0_2693747`.
 
 ## compact {#compact}
 
-The `juicefs compact` command is a new feature introduced in version v1.2. It is a tool used to handle the fragmented data caused by overwrite operations. This tool merges or cleans up the large amounts of non-contiguous slices created by random write, thereby improving the read performance of the file system.
+The `juicefs compact` command is a new feature introduced in version v1.2. It is a tool used to handle the fragmented data caused by overwrite operations. This tool merges or cleans up the large amounts of non-contiguous slices created by random writes, thereby improving the read performance of the file system.
 
-Unlike `juicefs gc`, which performs garbage collection and fragment cleaning for the entire file system, `juicefs compact` only handles the fragmented data caused by overwrite operations and does not handle object leaks or pending cleanup objects. Additionally, `juicefs compact` will only handle the fragmented data within a specified directory and will not handle the entire file system.
+Unlike `juicefs gc`, which performs garbage collection and fragment cleaning for the entire file system, `juicefs compact` only handles the fragmented data caused by overwrite operations and does not handle object leaks or pending cleanup objects. Additionally, `juicefs compact` only handles the fragmented data within a specified directory and does not handle the entire file system.
 
 You can use the following command to execute `juicefs compact`:
 
