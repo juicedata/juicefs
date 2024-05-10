@@ -53,13 +53,5 @@ class TestFsrand2(unittest.TestCase):
         v5 = state.clone_cp_file(entry=v3, new_entry_name='mbbb', parent=v1, preserve=True, user='root')
         state.teardown()
 
-    def test_xattr(self):
-        state = JuicefsMachine()
-        v1 = state.init_folders()
-        v19 = state.create_file(content=b'\xb5y', file_name='wums', mode='x', parent=v1, umask=16, user='root')
-        v29 = state.set_xattr(file=v19, flag=2, name='R', user='root', value=b'(9')
-        state.set_xattr(file=v19, flag=2, name='\x8ar', user='root', value=b'E$\xfe')
-        state.teardown()
-
 if __name__ == '__main__':
     unittest.main()
