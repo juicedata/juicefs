@@ -113,14 +113,14 @@ func copyFile(srcPath, destPath string, requireRootPrivileges bool) error {
 	if runtime.GOOS == "windows" {
 		return utils.WithTimeout(func() error {
 			return copyFileOnWindows(srcPath, destPath)
-		}, 3*time.Second)
+		}, time.Second)
 	}
 
 	var copyArgs []string
 	if requireRootPrivileges {
 		copyArgs = append(copyArgs, "sudo")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("cat %s > %s", srcPath, destPath))
 	return exec.CommandContext(ctx, copyArgs[0], copyArgs[1:]...).Run()
@@ -282,7 +282,7 @@ func getRequest(url string, timeout time.Duration) ([]byte, error) {
 // check pprof service status
 func checkPort(port int, amp string) error {
 	url := fmt.Sprintf("http://localhost:%d/debug/pprof/cmdline?debug=1", port)
-	resp, err := getRequest(url, 3*time.Second)
+	resp, err := getRequest(url, time.Second)
 	if err != nil {
 		return fmt.Errorf("error checking pprof alive: %v", err)
 	}
