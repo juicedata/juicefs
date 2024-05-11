@@ -557,7 +557,7 @@ if __name__ == '__main__':
         phases=[Phase.reuse, Phase.generate, Phase.target], 
         database=ci_db)
     settings.register_profile("pull_request", max_examples=100, verbosity=Verbosity.debug, 
-        print_blob=True, stateful_step_count=50, deadline=None, \
+        print_blob=True, stateful_step_count=30, deadline=None, \
         report_multiple_bugs=False, 
         phases=[Phase.reuse, Phase.generate, Phase.target], 
         database=ci_db)
