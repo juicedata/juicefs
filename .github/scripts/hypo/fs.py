@@ -15,6 +15,7 @@ except ImportError:
 from hypothesis import HealthCheck, assume, reproduce_failure, strategies as st, settings, Verbosity
 from hypothesis.stateful import rule, precondition, RuleBasedStateMachine, Bundle, initialize, multiple, consumes
 from hypothesis import Phase, seed
+from hypothesis.database import DirectoryBasedExampleDatabase
 from strategy import *
 from fs_op import FsOperation
 import random
@@ -505,6 +506,7 @@ class JuicefsMachine(RuleBasedStateMachine):
 if __name__ == '__main__':
     MAX_EXAMPLE=int(os.environ.get('MAX_EXAMPLE', '100'))
     STEP_COUNT=int(os.environ.get('STEP_COUNT', '50'))
+    ci_db = DirectoryBasedExampleDatabase(".hypothesis/examples")    
     settings.register_profile("dev", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, 
@@ -512,17 +514,27 @@ if __name__ == '__main__':
     settings.register_profile("schedule", max_examples=1000, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=200, deadline=None, \
         report_multiple_bugs=False, 
-        phases=[Phase.reuse, Phase.generate, Phase.target])
-    settings.register_profile("pull_request", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
-        print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
+        phases=[Phase.reuse, Phase.generate, Phase.target], 
+        database=ci_db)
+    settings.register_profile("pull_request", max_examples=100, verbosity=Verbosity.debug, 
+        print_blob=True, stateful_step_count=50, deadline=None, \
         report_multiple_bugs=False, 
-        phases=[Phase.reuse, Phase.generate, Phase.target])
+        phases=[Phase.reuse, Phase.generate, Phase.target], 
+        database=ci_db)
     settings.register_profile("generate", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, \
         phases=[Phase.generate, Phase.target])
     
-    profile = os.environ.get('PROFILE', 'dev')
+    if os.environ.get('CI'):
+        event_name = os.environ.get('GITHUB_EVENT_NAME')
+        if event_name == 'schedule':
+            profile = 'schedule'
+        else:
+            profile = 'pull_request'
+    else:
+        profile = os.environ.get('PROFILE', 'dev')
+
     settings.load_profile(profile)
     juicefs_machine = JuicefsMachine.TestCase()
     juicefs_machine.runTest()

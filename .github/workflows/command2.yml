@@ -103,14 +103,7 @@ jobs:
       - name: Run All
         timeout-minutes: 60
         run: |
-          if [ "${{ github.event_name }}" == "schedule" ]; then
-            MAX_EXAMPLE=500
-            STEP_COUNT=200
-          else
-            MAX_EXAMPLE=100
-            STEP_COUNT=50
-          fi
-          sudo MAX_EXAMPLE=$MAX_EXAMPLE STEP_COUNT=$STEP_COUNT META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all
+          sudo LOG_LEVEL=WARNING META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all
       
       - name: Upload example database
         uses: actions/upload-artifact@v3
