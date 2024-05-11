@@ -78,7 +78,7 @@ jobs:
       - name: Run Example
         timeout-minutes: 60
         run: |
-          sudo META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_examples
+          sudo -E META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_examples
       
       - name: Remove unused software
         run: |
@@ -103,7 +103,7 @@ jobs:
       - name: Run All
         timeout-minutes: 60
         run: |
-          sudo LOG_LEVEL=WARNING META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all
+          sudo -E LOG_LEVEL=WARNING META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all
       
       - name: Upload example database
         uses: actions/upload-artifact@v3
