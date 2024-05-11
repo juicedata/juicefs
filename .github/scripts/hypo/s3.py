@@ -562,13 +562,16 @@ if __name__ == '__main__':
         phases=[Phase.reuse, Phase.generate, Phase.target], 
         database=ci_db)
     if os.environ.get('CI'):
+        print('CI is true')
         event_name = os.environ.get('GITHUB_EVENT_NAME')
+        print(f'event_name is {event_name}')
         if event_name == 'schedule':
             profile = 'schedule'
         else:
             profile = 'pull_request'
     else:
         profile = os.environ.get('PROFILE', 'dev')
+    print(f'profile is {profile}')
     settings.load_profile(profile)
     
     s3machine = S3Machine.TestCase()
