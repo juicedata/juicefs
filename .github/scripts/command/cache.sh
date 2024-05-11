@@ -110,23 +110,23 @@ test_disk_failover()
     dd if=/dev/urandom of=/tmp/test_failover bs=1M count=$TEST_FILE_SIZE
     cp /tmp/test_failover /tmp/jfs/test_failover
     ./juicefs warmup /tmp/jfs/test_failover
-    du -sh /var/jfsCache?
+    du -sh /var/jfsCache? || true
     ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
     check_warmup_log check.log
     check_cache_distribute $TEST_FILE_SIZE /var/jfsCache1 /var/jfsCache2 /var/jfsCache3
     ./juicefs warmup --evict /tmp/jfs/test_failover
-    du -sh /var/jfsCache?
+    du -sh /var/jfsCache? || true
     ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
     check_evict_log check.log
     mv cache.db cache.db.bak
     # /etc/init.d/redis-server stop
     # sleep 10
     ./juicefs warmup /tmp/jfs/test_failover
-    du -sh /var/jfsCache2 /var/jfsCache3
+    du -sh /var/jfsCache2 /var/jfsCache3 || true
     ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
     sleep 10
     ./juicefs warmup /tmp/jfs/test_failover
-    du -sh /var/jfsCache2 /var/jfsCache3
+    du -sh /var/jfsCache2 /var/jfsCache3 || true
     ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
     check_warmup_log check.log
     check_cache_distribute $TEST_FILE_SIZE /var/jfsCache2 /var/jfsCache3
@@ -149,7 +149,7 @@ test_mount_same_disk_after_failure()
     dd if=/dev/urandom of=/tmp/test_failover bs=1M count=$TEST_FILE_SIZE
     cp /tmp/test_failover /tmp/jfs/test_failover
     ./juicefs warmup /tmp/jfs/test_failover
-    du -sh /var/jfsCache?
+    du -sh /var/jfsCache? || true
     ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
     check_warmup_log check.log
     check_cache_distribute $TEST_FILE_SIZE /var/jfsCache1 /var/jfsCache2 /var/jfsCache3
@@ -163,7 +163,7 @@ test_mount_same_disk_after_failure()
     # timeout 30s bash -c 'until nc -zv localhost 6379; do sleep 1; done'
     ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache2:/var/jfsCache3:/var/jfsCache1
     echo "sleep 3s to wait to build cache in memory " && sleep 3
-    du -sh /var/jfsCache1 /var/jfsCache2 /var/jfsCache3
+    du -sh /var/jfsCache1 /var/jfsCache2 /var/jfsCache3 || true
     ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
     check_warmup_log check.log
     echo stop minio && docker stop minio
@@ -183,7 +183,7 @@ skip_test_rebalance_after_disk_failure_and_replace()
     dd if=/dev/urandom of=/tmp/test_failover bs=1M count=$TEST_FILE_SIZE
     cp /tmp/test_failover /tmp/jfs/test_failover
     ./juicefs warmup /tmp/jfs/test_failover
-    du -sh /var/jfsCache?
+    du -sh /var/jfsCache? || true
     ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
     check_warmup_log check.log
     check_cache_distribute $TEST_FILE_SIZE /var/jfsCache1 /var/jfsCache2 /var/jfsCache3

@@ -55,7 +55,7 @@ test_total_inodes(){
     sleep $((HEARTBEAT_INTERVAL+1))
     set +x
     for i in {1001..2000}; do
-        echo $i | tee /jfs/test$i > /dev/null || (df -i /jfs && ls /jfs/ -l | wc-l  && exit 1)
+        echo $i | tee /jfs/test$i > /dev/null || (df -i /jfs && ls /jfs/ -l | wc -l  && exit 1)
     done
     set -x
     sleep $VOLUME_QUOTA_FLUSH_INTERVAL
