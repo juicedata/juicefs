@@ -52,25 +52,25 @@ This step needs to be done only once, and you can choose to execute it on any ma
 2. Use [`cloud_sql_proxy`](https://cloud.google.com/sql/docs/mysql/connect-admin-proxy) to open a port (in
 this case, 5432) locally to expose your cloud Postgres service to your local machine:
 
-```shell
-gcloud auth application-default login
+    ```shell
+    gcloud auth application-default login
 
-# Or set up the json key file via GOOGLE_APPLICATION_CREDENTIALS=/path/to/key
+    # Or set up the json key file via GOOGLE_APPLICATION_CREDENTIALS=/path/to/key
 
-cloud_sql_proxy -instances=juicefs-learning:europe-west1:juicefs-sql-example-1=tcp:0.0.0.0:5432
-```
+    cloud_sql_proxy -instances=juicefs-learning:europe-west1:juicefs-sql-example-1=tcp:0.0.0.0:5432
+    ```
 
 3. Use the following command to create a new file system named `myvolume` using the `juicefs format` command. Later, you can mount this file system on any other machines or instances where you have access to your cloud resources.
 
-You can download `juicefs` [here](https://github.com/juicedata/juicefs/releases).
+    You can download `juicefs` [here](https://github.com/juicedata/juicefs/releases).
 
-```shell
-juicefs format \
-    --storage gs \
-    --bucket gs://juicefs-bucket-example-1 \
-    "postgres://postgres:mushroom1@localhost:5432/juicefs?sslmode=disable" \
-    myvolume
-```
+    ```shell
+    juicefs format \
+        --storage gs \
+        --bucket gs://juicefs-bucket-example-1 \
+        "postgres://postgres:mushroom1@localhost:5432/juicefs?sslmode=disable" \
+        myvolume
+    ```
 
 Note that this step is only required once on any machine you prefer to work on.
 
