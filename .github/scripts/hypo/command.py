@@ -28,6 +28,7 @@ except ImportError:
 from hypothesis import HealthCheck, assume, strategies as st, settings, Verbosity
 from hypothesis.stateful import rule, precondition, RuleBasedStateMachine, Bundle, initialize, multiple
 from hypothesis import Phase, seed
+from hypothesis.database import DirectoryBasedExampleDatabase
 import random
 from common import run_cmd
 from strategy import *
@@ -254,11 +255,31 @@ class JuicefsCommandMachine(JuicefsMachine):
 if __name__ == '__main__':
     MAX_EXAMPLE=int(os.environ.get('MAX_EXAMPLE', '100'))
     STEP_COUNT=int(os.environ.get('STEP_COUNT', '50'))
+    ci_db = DirectoryBasedExampleDatabase(".hypothesis/examples")    
     settings.register_profile("dev", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, 
         phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
-    profile = os.environ.get('PROFILE', 'dev')
+    settings.register_profile("schedule", max_examples=500, verbosity=Verbosity.debug, 
+        print_blob=True, stateful_step_count=200, deadline=None, \
+        report_multiple_bugs=False, 
+        phases=[Phase.reuse, Phase.generate, Phase.target], 
+        database=ci_db)
+    settings.register_profile("pull_request", max_examples=100, verbosity=Verbosity.debug, 
+        print_blob=True, stateful_step_count=50, deadline=None, \
+        report_multiple_bugs=False, 
+        phases=[Phase.reuse, Phase.generate, Phase.target], 
+        database=ci_db)
+    
+    if os.environ.get('CI'):
+        event_name = os.environ.get('GITHUB_EVENT_NAME')
+        if event_name == 'schedule':
+            profile = 'schedule'
+        else:
+            profile = 'pull_request'
+    else:
+        profile = os.environ.get('PROFILE', 'dev')
+    print(f'profile is {profile}')
     settings.load_profile(profile)
     
     juicefs_machine = JuicefsCommandMachine.TestCase()

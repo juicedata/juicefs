@@ -101,11 +101,26 @@ jobs:
 
       - name: Test with example
         run: |
-          sudo python3 .github/scripts/hypo/s3_test.py
+          sudo -E python3 .github/scripts/hypo/s3_test.py
+        
+      - name: Download example database
+        uses: dawidd6/action-download-artifact@v2.24.3
+        with:
+          name: hypothesis-example-db
+          path: .hypothesis/examples
+          if_no_artifact_found: warn
+          workflow_conclusion: completed
 
       - name: Test randomly
         run: |
-          sudo LOG_LEVEL=WARNING python3 .github/scripts/hypo/s3.py
+          sudo -E LOG_LEVEL=WARNING python3 .github/scripts/hypo/s3.py
+
+      - name: Upload example database
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: hypothesis-example-db
+          path: .hypothesis/examples
 
       - name: check log
         if: always()
