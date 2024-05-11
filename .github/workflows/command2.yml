@@ -91,6 +91,15 @@ jobs:
             echo "after remove unused software"
             sudo df -h
           fi
+
+      - name: Download example database
+        uses: dawidd6/action-download-artifact@v2.24.3
+        with:
+          name: hypothesis-example-db
+          path: .hypothesis/examples
+          if_no_artifact_found: warn
+          workflow_conclusion: completed
+
       - name: Run All
         timeout-minutes: 60
         run: |
@@ -102,7 +111,14 @@ jobs:
             STEP_COUNT=50
           fi
           sudo MAX_EXAMPLE=$MAX_EXAMPLE STEP_COUNT=$STEP_COUNT META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all
-  
+      
+      - name: Upload example database
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: hypothesis-example-db
+          path: .hypothesis/examples
+
       - name: Log
         if: always()
         run: |
