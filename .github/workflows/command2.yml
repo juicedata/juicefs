@@ -78,7 +78,7 @@ jobs:
       - name: Run Example
         timeout-minutes: 60
         run: |
-          sudo -E META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_examples
+          sudo META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_examples
       
       - name: Remove unused software
         run: |

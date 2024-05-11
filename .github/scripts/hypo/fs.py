@@ -534,7 +534,7 @@ if __name__ == '__main__':
             profile = 'pull_request'
     else:
         profile = os.environ.get('PROFILE', 'dev')
-
+    print(f'profile is {profile}')
     settings.load_profile(profile)
     juicefs_machine = JuicefsMachine.TestCase()
     juicefs_machine.runTest()

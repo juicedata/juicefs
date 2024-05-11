@@ -562,9 +562,7 @@ if __name__ == '__main__':
         phases=[Phase.reuse, Phase.generate, Phase.target], 
         database=ci_db)
     if os.environ.get('CI'):
-        print('CI is true')
         event_name = os.environ.get('GITHUB_EVENT_NAME')
-        print(f'event_name is {event_name}')
         if event_name == 'schedule':
             profile = 'schedule'
         else:
