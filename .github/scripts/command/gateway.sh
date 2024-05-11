@@ -14,12 +14,20 @@ export MINIO_REFRESH_IAM_INTERVAL=10s
 prepare_test()
 {
     umount_jfs /tmp/jfs $META_URL
-    lsof -i :9001 | awk 'NR!=1 {print $2}' | xargs -r kill -9 || true
-    lsof -i :9002 | awk 'NR!=1 {print $2}' | xargs -r kill -9 || true
+    kill_gateway 9001
+    kill_gateway 9002
     python3 .github/scripts/flush_meta.py $META_URL
     rm -rf /var/jfs/myjfs || true
     rm -rf /var/jfsCache/myjfs || true
 }
+
+kill_gateway() {
+    port=$1
+    lsof -i:$port || true
+    lsof -t -i :$port | xargs -r kill -9 || true
+}
+
+trap 'kill_gateway 9001; kill_gateway 9002' EXIT
 
 start_two_gateway()
 {
