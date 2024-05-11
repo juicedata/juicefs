@@ -419,6 +419,7 @@ func genFuseOpt(c *cli.Context, name string) string {
 
 func prepareMp(mp string) {
 	var fi os.FileInfo
+	var ino uint64
 	err := utils.WithTimeout(func() error {
 		var err error
 		fi, err = os.Stat(mp)
@@ -438,7 +439,7 @@ func prepareMp(mp string) {
 			}
 		}
 	} else if err == nil {
-		ino, _ := utils.GetFileInode(mp)
+		ino, _ = utils.GetFileInode(mp)
 		if ino <= uint64(meta.RootInode) && fi.Size() == 0 {
 			// a broken mount point, umount it
 			logger.Infof("mountpoint %s is broken (ino=%d, size=%d), umount it", mp, ino, fi.Size())
@@ -447,6 +448,9 @@ func prepareMp(mp string) {
 	}
 
 	if os.Getuid() == 0 {
+		return
+	}
+	if ino == uint64(meta.RootInode) {
 		return
 	}
 	switch runtime.GOOS {
