@@ -5,16 +5,20 @@ on:
     branches:
       - 'main'
       - 'release-*'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**.c'
+      - '**.go'
+      - 'Makefile'
+      - 'integrationtests.yml'
   pull_request:
     branches:
       - 'main'
       - 'release-*'
     paths-ignore:
-      - 'docs/**'
-      - '**.md'
+      - '**.c'
+      - '**.go'
+      - 'Makefile'
+      - 'integrationtests.yml'
   workflow_dispatch:
     inputs:
       debug:
@@ -24,32 +28,75 @@ on:
         default: false
 
 jobs:
+  build-matrix:
+    runs-on: ubuntu-20.04
+    steps:
+      - id: set-matrix
+        run: |
+          echo "github.event_name is ${{github.event_name}}"
+          echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
+          if [ "${{github.event_name}}" == "schedule"  ]; then
+            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
+          elif [ "${{github.event_name}}" == "pull_request"  ]; then
+            echo 'meta_matrix=["redis", "mysql", "tikv"]' >> $GITHUB_OUTPUT
+          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
+            echo 'meta_matrix=["redis", "mysql", "tikv"]' >> $GITHUB_OUTPUT
+          else
+            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+          fi
+    outputs:
+      meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
+
   integrationtests:
     timeout-minutes: 60
     runs-on: ubuntu-20.04
+    needs: build-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        # [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badger', 'mariadb', 'fdb']
+        meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
-      - name: Build
-        timeout-minutes: 10
-        uses: ./.github/actions/build
-
-      - name: Run Redis
+      - name: Set Variable
+        id: vars
         run: |
-          sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
+          else
+            echo "target=juicefs" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build
+        uses: ./.github/actions/build
+        with: 
+          target: ${{steps.vars.outputs.target}}
+
+      - name: Prepare meta db
+        run: | 
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format  redis://127.0.0.1:6379/1 pics
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo ./juicefs format $meta_url --trash-days 0 pics
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
-
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo ./juicefs mount -d $meta_url /jfs --no-usage-report &
+          stat /jfs/.accesslog
+  
       - name: make secfs.test
         run: |
           sudo .github/scripts/apt_install.sh  libacl1-dev
