@@ -97,11 +97,7 @@ jobs:
           # sudo mkdir /var/jfs
           # sudo chmod 777 /var/jfs
           sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr
-          sleep 5
-          if [ ! -f /tmp/jfs/.accesslog ]; then
-            echo "<FATAL>: mount failed"
-            exit 1
-          fi
+          stat /tmp/jfs/.accesslog
 
       - name: Test
         run: |

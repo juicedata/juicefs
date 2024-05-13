@@ -92,7 +92,6 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo ./juicefs mount -d $meta_url /jfs --no-usage-report --enable-xattr
-          sleep 5s
           stat /jfs/.accesslog
 
       - name: Fslock Test
@@ -128,7 +127,7 @@ jobs:
           sudo touch /jfs/fsx.out
           sudo rm -f /tmp/fsx.out
           sudo ln -s /jfs/fsx.out /tmp/fsx.out
-          sudo secfs.test/tools/bin/fsx -d 120 -p $duration -F 10000000 /tmp/fsx.out
+          sudo secfs.test/tools/bin/fsx -d $duration -p 10000 -F 10000000 /tmp/fsx.out
           # sudo secfs.test/tools/bin/fsx -d 180 -p 10000 -F 100000 /jfs/fsx.out
 
       - name: Fsracer Test
