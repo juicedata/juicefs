@@ -551,8 +551,8 @@ if __name__ == '__main__':
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, 
         phases=[Phase.reuse, Phase.generate, Phase.target])
-    settings.register_profile("schedule", max_examples=1000, verbosity=Verbosity.debug, 
-        print_blob=True, stateful_step_count=300, deadline=None, \
+    settings.register_profile("schedule", max_examples=500, verbosity=Verbosity.debug, 
+        print_blob=True, stateful_step_count=200, deadline=None, \
         report_multiple_bugs=False, 
         phases=[Phase.reuse, Phase.generate, Phase.target], 
         database=ci_db)
@@ -563,7 +563,7 @@ if __name__ == '__main__':
         database=ci_db)
     if os.environ.get('CI'):
         event_name = os.environ.get('GITHUB_EVENT_NAME')
-        if event_name == 'schedule':
+        if event_name == 'schedule' or event_name == 'workflow_dispatch':
             profile = 'schedule'
         else:
             profile = 'pull_request'

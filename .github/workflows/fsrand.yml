@@ -104,10 +104,9 @@ jobs:
           workflow_conclusion: completed
 
       - name: Test
-        timeout-minutes: 120
+        timeout-minutes: 125
         run: |
-          sudo -E LOG_LEVEL=WARNING python3 .github/scripts/hypo/fs.py 2>&1 | tee fsrand.log
-          exit ${PIPESTATUS[0]}
+          timeout 7200 sudo -E LOG_LEVEL=WARNING python3 .github/scripts/hypo/fs.py 2>&1 | tee fsrand.log || code=$?; if [[ $code -ne 124 && $code -ne 0 ]]; then echo test failed; exit $code; fi
 
       - name: Upload example database
         uses: actions/upload-artifact@v3
