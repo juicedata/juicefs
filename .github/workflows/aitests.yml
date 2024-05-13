@@ -61,9 +61,9 @@ jobs:
       - name: Juicefs Mount
         run: |
           if [ "${{matrix.type}}" == "normal" ]; then
-            sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
+            sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report
           elif [ "${{matrix.type}}" == "cache" ]; then
-            sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --cache-size 3072 --no-usage-report &
+            sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --cache-size 3072 --no-usage-report
           else
             echo "matrix.type error: ${{matrix.type}} "
           fi

@@ -64,10 +64,10 @@ jobs:
         run: |
           if [ "${{matrix.type}}" = "limitcache" ]; then
             echo "mount: type is limitcache"
-            sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs  --cache-size 3072 --no-usage-report &
+            sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs  --cache-size 3072 --no-usage-report
           elif [ "${{matrix.type}}" = "normal" ]; then
             echo "mount: type is normal"
-            sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs  --no-usage-report &
+            sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs  --no-usage-report
           elif [ "${{matrix.type}}" = "local" ]; then
             echo "mount: type is local"
             sudo mkdir -p /data/jfs/
