@@ -88,7 +88,7 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs mount -d $meta_url /jfs --no-usage-report &
+          sudo ./juicefs mount -d $meta_url /jfs --no-usage-report
 
       - name: Install Sysbench
         run: |

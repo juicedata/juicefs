@@ -77,7 +77,7 @@ jobs:
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs  --no-usage-report --cache-size 1024 --max-deletes 50 &
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs  --no-usage-report --cache-size 1024 --max-deletes 50
 
       - name: Install Dependency
         run: |
