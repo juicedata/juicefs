@@ -95,6 +95,7 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo ./juicefs mount -d $meta_url /jfs --no-usage-report --enable-xattr
+          sleep 5s
           stat /jfs/.accesslog
   
       - name: make secfs.test
