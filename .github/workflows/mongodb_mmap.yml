@@ -48,7 +48,7 @@ jobs:
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --cache-size 3072 --no-usage-report &
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --cache-size 3072 --no-usage-report
 
       - name: Set up Mongodb
         run: |
