@@ -8,6 +8,7 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
+      - '.github/**'
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
@@ -34,15 +35,12 @@ jobs:
       - id: set-matrix
         run: |
           echo "github.event_name is ${{github.event_name}}"
-          echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
-          if [ "${{github.event_name}}" == "schedule"  ]; then
+          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch" ]]; then
             echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
-          elif [ "${{github.event_name}}" == "pull_request"  ]; then
-            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
-          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
+          elif [[ "${{github.event_name}}" == "pull_request" || "${{github.event_name}}" == "push"  ]]; then
             echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           else
-            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+            echo 'event name is not supported' && exit 1
           fi
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
@@ -100,12 +98,8 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           # sudo mkdir /var/jfs
           # sudo chmod 777 /var/jfs
-          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report &
-          sleep 5
-          if [ ! -f /tmp/jfs/.accesslog ]; then
-            echo "<FATAL>: mount failed"
-            exit 1
-          fi
+          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report 
+          stat /tmp/jfs/.accesslog
 
       - name: Pjdfstest
         run: |

@@ -5,9 +5,6 @@ ltmain.sh
 *.rej
 .deps
 .dirstamp
-fstests/secfs.test
-fstests/flock
-!fstests/Makefile
 jfs
 *.rdb
 .release-env

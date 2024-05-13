@@ -1,24 +1,24 @@
-name: "integrationtests"
+name: "xattr"
 
 on:
   push:
     branches:
       - 'main'
-      - 'release-*'
+      - 'release-**'
     paths:
-      - '**.c'
       - '**.go'
-      - 'Makefile'
-      - 'integrationtests.yml'
+      - '**.c'
+      - '**/xattr.yml'
   pull_request:
     branches:
       - 'main'
-      - 'release-*'
+      - 'release-**'
     paths:
-      - '**.c'
       - '**.go'
-      - 'Makefile'
-      - 'integrationtests.yml'
+      - '**.c'
+      - '**/xattr.yml'
+  schedule:
+    - cron:  '0 19 * * *'
   workflow_dispatch:
     inputs:
       debug:
@@ -34,26 +34,29 @@ jobs:
       - id: set-matrix
         run: |
           echo "github.event_name is ${{github.event_name}}"
-          echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
-          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch"  ]]; then
-            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
-          elif [[ "${{github.event_name}}" == "pull_request" ||  "${{github.event_name}}" == "push" ]]; then
-            echo 'meta_matrix=["redis", "mysql"]' >> $GITHUB_OUTPUT
+          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch" ]]; then
+            echo 'meta_matrix=["sqlite3", "redis", "mysql", "postgres", "badger", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
+          elif [[ "${{github.event_name}}" == "pull_request" || "${{github.event_name}}" == "push"  ]]; then
+            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           else
-            echo "event_name is not supported" && exit 1
+            echo 'event name is not supported' && exit 1
           fi
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
 
-  integrationtests:
-    timeout-minutes: 120
-    runs-on: ubuntu-20.04
+  xattr:
     needs: build-matrix
     strategy:
       fail-fast: false
       matrix:
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
+    runs-on: ubuntu-20.04
+
     steps:
+      - uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: '5.34'
+
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -91,61 +94,27 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs mount -d $meta_url /jfs --no-usage-report --enable-xattr
-          stat /jfs/.accesslog
+          # sudo mkdir /var/jfs
+          # sudo chmod 777 /var/jfs
+          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr
+          stat /tmp/jfs/.accesslog
 
-      - name: Fslock Test
-        timeout-minutes: 5
+      - name: Test
         run: |
-          cd /jfs/
-          git clone https://github.com/danjacques/gofslock.git
-          cd gofslock && git checkout cc7f001fe0e7df1710adc8f0cd9e9d6d21fdb3a9
-          go test -v ./fslock/...
-          stat /jfs/
+          git clone https://github.com/iustin/pyxattr.git
+          cd pyxattr
+          pip3 install pytest
+          pip3 install pyxattr
+          stat /tmp/jfs/
+          TEST_DIR=/tmp/jfs/ python3 -m pytest tests
 
-      - name: flock test
-        timeout-minutes: 5
-        run: |
-          git clone https://github.com/gofrs/flock.git
-          mkdir /jfs/tmp
-          cd flock && go mod init github.com/gofrs/flock.git && go mod tidy && TMPDIR=/jfs/tmp go test .
-
-      - name: make secfs.test
-        run: |
-          sudo .github/scripts/apt_install.sh  libacl1-dev
-          git clone https://github.com/billziss-gh/secfs.test.git
-          make -C secfs.test
-  
-      - name: Fsx Test
-        timeout-minutes: 15
-        run: |
-          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch"  ]] ; then
-            duration=900
-          else
-            duration=300
-          fi
-          sudo touch /jfs/fsx.out
-          sudo rm -f /tmp/fsx.out
-          sudo ln -s /jfs/fsx.out /tmp/fsx.out
-          sudo secfs.test/tools/bin/fsx -d $duration -p 10000 -F 10000000 /tmp/fsx.out
-          # sudo secfs.test/tools/bin/fsx -d 180 -p 10000 -F 100000 /jfs/fsx.out
-
-      - name: Fsracer Test
-        timeout-minutes: 15
-        shell: 'script -q -e -c "bash {0}"'
-        run: |
-          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch"  ]] ; then
-            duration=900
-          else
-            duration=300
-          fi
-          sudo secfs.test/tools/bin/fsracer $duration /jfs
-  
       - name: log
         if: always()
-        run: |
-          tail -300 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+        run: | 
+          if [ -f /var/log/juicefs.log ]; then
+            tail -300 /var/log/juicefs.log
+            grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          fi
 
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
@@ -154,7 +123,7 @@ jobs:
 
   success-all-test:
     runs-on: ubuntu-latest
-    needs: [integrationtests]
+    needs: [xattr]
     if: always()
     steps:
       - uses: technote-space/workflow-conclusion-action@v3
