@@ -65,6 +65,7 @@ jobs:
           sudo secfs.test/tools/bin/fsx -d 60 -p 10000 -F 100000 /jfs/fsx.out
 
       - name: Fsracer Test
+        shell: 'script -q -e -c "bash {0}"'
         run: |
           secfs.test/tools/bin/fsracer 60 /jfs
   
