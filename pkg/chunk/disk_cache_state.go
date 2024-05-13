@@ -23,9 +23,16 @@ var (
 )
 
 var (
-	errCacheDown           = errors.New("cache down")
-	errUnstableConcurrency = fmt.Errorf("exceed max concurrency %d for unstable disk cache", maxConcurrencyForUnstable)
+	errCacheDown       = errors.New("cache down")
+	errUnstableCoLimit = fmt.Errorf("exceed concurrency %d limit for unstable disk cache", maxConcurrencyForUnstable)
 )
+
+var diskStateNames = map[int]string{
+	dcUnknown:  "unknown",
+	dcNormal:   "normal",
+	dcUnstable: "unstable",
+	dcDown:     "down",
+}
 
 const (
 	dcUnknown = iota
@@ -147,7 +154,7 @@ func (dc *unstableDC) onIOSucc() {
 	atomic.AddUint32(&dc.ioCnt, 1)
 }
 
-func testCacheKey(id, size int) string {
+func probeCacheKey(id, size int) string {
 	return fmt.Sprintf("%s/%02X/%v/%v_%v_%v", probeDir, id%256, id/1000/1000, id, 0, size)
 }
 
@@ -187,14 +194,9 @@ func (dc *unstableDC) probe() {
 		case <-dc.stopCh:
 			return
 		default:
-			start := time.Now()
 			cnt++
-			key := testCacheKey(cnt, len(data))
-			dc.cache.cache(key, page, true)
-			if _, err := dc.cache.load(key); err != nil {
-				dc.cache.remove(key)
-			}
-
+			start := time.Now()
+			dc.doProbe(probeCacheKey(cnt, len(data)), page)
 			diff := probeDur - time.Since(start)
 			if diff > 0 {
 				time.Sleep(diff)
@@ -203,12 +205,19 @@ func (dc *unstableDC) probe() {
 	}
 }
 
+func (dc *unstableDC) doProbe(key string, page *Page) {
+	dc.cache.cache(key, page, true)
+	if _, err := dc.cache.load(key); err != nil {
+		dc.cache.remove(key)
+	}
+}
+
 func (dc *unstableDC) beforeCacheOp() { dc.concurrency.Add(1) }
 func (dc *unstableDC) afterCacheOp()  { dc.concurrency.Add(-1) }
 
 func (dc *unstableDC) checkCacheOp() error {
 	if dc.concurrency.Load() >= maxConcurrencyForUnstable {
-		return errUnstableConcurrency
+		return errUnstableCoLimit
 	}
 	return nil
 }
@@ -223,7 +232,8 @@ func (dc *downDC) checkCacheOp() error { return errCacheDown }
 func (cache *cacheStore) event(eventType int) {
 	cache.stateLock.Lock()
 	defer cache.stateLock.Unlock()
-	switch cache.state.state() {
+	state := cache.state.state()
+	switch state {
 	case dcNormal:
 		if eventType == eventToUnstable {
 			cache.state.stop()
@@ -239,6 +249,7 @@ func (cache *cacheStore) event(eventType int) {
 			cache.state = newDCState(dcDown, cache)
 		}
 	}
+	logger.Warnf("disk cache state change from %s to %s", diskStateNames[state], diskStateNames[cache.state.state()])
 }
 
 func getEnvs() {
