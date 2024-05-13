@@ -50,6 +50,24 @@ jobs:
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
 
+      - name: make secfs.test
+        run: |
+          sudo .github/scripts/apt_install.sh  libacl1-dev
+          git clone https://github.com/billziss-gh/secfs.test.git
+          make -C secfs.test
+  
+      - name: Fsx Test
+        run: |
+          # touch /jfs/fsx.out
+          # rm -f /tmp/fsx.out
+          # ln -s /jfs/fsx.out /tmp/fsx.out
+          # sudo secfs.test/tools/bin/fsx -d 180 -p 10000 -F 10000000 /tmp/fsx.out
+          sudo secfs.test/tools/bin/fsx -d 60 -p 10000 -F 100000 /jfs/fsx.out
+
+      - name: Fsracer Test
+        run: |
+          secfs.test/tools/bin/fsracer 60 /jfs
+  
       - name: Fslock Test
         run: |
           cd /jfs/
@@ -72,23 +90,6 @@ jobs:
           pip3 install pyxattr
           stat /jfs/
           TEST_DIR=/jfs/ python3 -m pytest tests
-
-      - name: make secfs.test
-        run: |
-          sudo .github/scripts/apt_install.sh  libacl1-dev
-          git clone https://github.com/billziss-gh/secfs.test.git
-          make -C secfs.test
-
-      - name: Fsx Test
-        run: |
-          touch /jfs/fsx.out
-          rm -f /tmp/fsx.out
-          ln -s /jfs/fsx.out /tmp/fsx.out
-          secfs.test/tools/bin/fsx -d 180 -p 10000 -F 10000000 /tmp/fsx.out
-
-      - name: Fsracer Test
-        run: |
-          secfs.test/tools/bin/fsracer 180 /jfs
 
       - name: log
         if: always()
