@@ -35,14 +35,12 @@ jobs:
         run: |
           echo "github.event_name is ${{github.event_name}}"
           echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
-          if [ "${{github.event_name}}" == "schedule"  ]; then
+          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch"  ]]; then
             echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
-          elif [ "${{github.event_name}}" == "pull_request"  ]; then
-            echo 'meta_matrix=["redis", "mysql", "tikv"]' >> $GITHUB_OUTPUT
-          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
+          elif [[ "${{github.event_name}}" == "pull_request" ||  "${{github.event_name}}" == "push" ]; then
             echo 'meta_matrix=["redis", "mysql", "tikv"]' >> $GITHUB_OUTPUT
           else
-            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+            echo "event_name is not supported" && exit 1
           fi
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
@@ -54,7 +52,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badger', 'mariadb', 'fdb']
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
     steps:
       - name: Checkout
@@ -105,19 +102,32 @@ jobs:
           make -C secfs.test
   
       - name: Fsx Test
+        timeout-minutes: 15
         run: |
-          # sudo touch /jfs/fsx.out
-          # sudo rm -f /tmp/fsx.out
-          # sudo ln -s /jfs/fsx.out /tmp/fsx.out
-          # sudo secfs.test/tools/bin/fsx -d 180 -p 10000 -F 10000000 /tmp/fsx.out
-          sudo secfs.test/tools/bin/fsx -d 60 -p 10000 -F 100000 /jfs/fsx.out
+          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch"  ]] ; then
+            duration=600
+          else
+            duration=120
+          fi
+          sudo touch /jfs/fsx.out
+          sudo rm -f /tmp/fsx.out
+          sudo ln -s /jfs/fsx.out /tmp/fsx.out
+          sudo secfs.test/tools/bin/fsx -d 120 -p $duration -F 10000000 /tmp/fsx.out
+          # sudo secfs.test/tools/bin/fsx -d 180 -p 10000 -F 100000 /jfs/fsx.out
 
       - name: Fsracer Test
+        timeout-minutes: 15
         shell: 'script -q -e -c "bash {0}"'
         run: |
-          sudo secfs.test/tools/bin/fsracer 60 /jfs
+          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch"  ]] ; then
+            duration=600
+          else
+            duration=120
+          fi
+          sudo secfs.test/tools/bin/fsracer $duration /jfs
   
       - name: Fslock Test
+        timeout-minutes: 5
         run: |
           cd /jfs/
           git clone https://github.com/danjacques/gofslock.git
@@ -126,12 +136,14 @@ jobs:
           stat /jfs/
 
       - name: flock test
+        timeout-minutes: 5
         run: |
           git clone https://github.com/gofrs/flock.git
           mkdir /jfs/tmp
           cd flock && go mod init github.com/gofrs/flock.git && go mod tidy && TMPDIR=/jfs/tmp go test .
         
       - name: Pyxattr Test
+        timeout-minutes: 15
         run: |
           git clone https://github.com/iustin/pyxattr.git
           cd pyxattr
