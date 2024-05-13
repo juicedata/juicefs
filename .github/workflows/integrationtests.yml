@@ -9,14 +9,12 @@ on:
       - 'docs/**'
       - '**.md'
   pull_request:
-    #The branches below must be a subset of the branches above
     branches:
       - 'main'
       - 'release-*'
     paths-ignore:
       - 'docs/**'
       - '**.md'
-      - '.github/**'
   workflow_dispatch:
     inputs:
       debug:
@@ -39,10 +37,6 @@ jobs:
         timeout-minutes: 10
         uses: ./.github/actions/build
 
-      - name: Copy
-        run: |
-          cp juicefs /tmp/mount.juicefs
-
       - name: Run Redis
         run: |
           sudo docker run -d --name redis -v redis-data:/data  \
@@ -64,7 +58,12 @@ jobs:
           go test -v ./fslock/...
           stat /jfs/
 
-
+      - name: flock test
+        run: |
+          git clone https://github.com/gofrs/flock.git
+          mkdir /jfs/tmp
+          cd flock && go mod init github.com/gofrs/flock.git && go mod tidy && TMPDIR=/jfs/tmp go test .
+        
       - name: Pyxattr Test
         run: |
           git clone https://github.com/iustin/pyxattr.git
@@ -74,26 +73,22 @@ jobs:
           stat /jfs/
           TEST_DIR=/jfs/ python3 -m pytest tests
 
-
-      - name: Fstests
+      - name: make secfs.test
         run: |
-          sudo .github/scripts/apt_install.sh  libacl1-dev attr
-          sudo DURATION=60 make -C fstests fsx
-          sudo make -C fstests xattrs
-          sudo make -C fstests flock
+          sudo .github/scripts/apt_install.sh  libacl1-dev
+          git clone https://github.com/billziss-gh/secfs.test.git
+          make -C secfs.test
 
-
-      - name: Fsracer
-        #https://github.com/gfx/example-github-actions-with-tty
-        shell: 'script -q -e -c "bash {0}"'
+      - name: Fsx Test
         run: |
-          sudo DURATION=60 make -C fstests fsracer
+          touch /jfs/fsx.out
+          rm -f /tmp/fsx.out
+          ln -s /jfs/fsx.out /tmp/fsx.out
+          secfs.test/tools/bin/fsx -d 180 -p 10000 -F 10000000 /tmp/fsx.out
 
-      - name: MountJuiceFSTest
+      - name: Fsracer Test
         run: |
-          sudo /tmp/mount.juicefs redis://127.0.0.1:6379/1 /tmp/mount-jfs
-          [ `stat --format "%i" /tmp/mount-jfs` -eq 1 ]
-
+          secfs.test/tools/bin/fsracer 180 /jfs
 
       - name: log
         if: always()
