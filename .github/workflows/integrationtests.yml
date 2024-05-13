@@ -58,9 +58,9 @@ jobs:
   
       - name: Fsx Test
         run: |
-          touch /jfs/fsx.out
-          rm -f /tmp/fsx.out
-          ln -s /jfs/fsx.out /tmp/fsx.out
+          sudo touch /jfs/fsx.out
+          sudo rm -f /tmp/fsx.out
+          sudo ln -s /jfs/fsx.out /tmp/fsx.out
           sudo secfs.test/tools/bin/fsx -d 180 -p 10000 -F 10000000 /tmp/fsx.out
           # sudo secfs.test/tools/bin/fsx -d 60 -p 10000 -F 100000 /jfs/fsx.out
 
