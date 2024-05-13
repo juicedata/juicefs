@@ -87,7 +87,11 @@ func httpRequest(url string, body []byte) (ans []byte, err error) {
 	return io.ReadAll(resp.Body)
 }
 
+var sendStatMu sync.Mutex
+
 func sendStats(addr string) {
+	sendStatMu.Lock()
+	defer sendStatMu.Unlock()
 	var r Stat
 	r.Skipped = skipped.Current()
 	r.SkippedBytes = skippedBytes.Current()
