@@ -1184,28 +1184,46 @@ func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeou
 	start := time.Now()
 	deadline := start.Add(timeout.Timeout())
 	lockStr := "write"
+
+	var getLockFunc func() bool
+	var unlockFunc func()
+	var getLock bool
 	if ltype == meta.F_RDLCK {
+		getLockFunc = j.localLock.TryRLock
+		unlockFunc = j.localLock.RUnlock
 		lockStr = "read"
+	} else {
+		getLockFunc = j.localLock.TryLock
+		unlockFunc = j.localLock.Unlock
 	}
+
 	for {
-		var getLock bool
-		if ltype == meta.F_RDLCK {
-			getLock = j.localLock.TryRLock()
-		} else if !j.localLock.TryLock() {
-			getLock = j.localLock.TryLock()
-		}
+		getLock = getLockFunc()
 		if getLock {
-			if errno := j.meta.Flock(mctx, j.inode, j.owner, ltype, false); errno != 0 && !errors.Is(errno, syscall.EAGAIN) {
+			break
+		}
+		if time.Now().After(deadline) {
+			timeout.LogFailure()
+			logger.Errorf("get %s lock timed out ino:%d", lockStr, j.inode)
+			return ctx, minio.OperationTimedOut{}
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	for {
+		if errno := j.meta.Flock(mctx, j.inode, j.owner, ltype, false); errno != 0 {
+			if !errors.Is(errno, syscall.EAGAIN) {
 				logger.Errorf("failed to get %s lock for inode %d by owner %d, error : %s", lockStr, j.inode, j.owner, errno)
-			} else {
-				timeout.LogSuccess(time.Since(start))
-				return ctx, nil
 			}
+		} else {
+			timeout.LogSuccess(time.Since(start))
+			return ctx, nil
 		}
 
 		if time.Now().After(deadline) {
+			unlockFunc()
 			timeout.LogFailure()
-			logger.Errorf("get write lock timed out ino:%d", j.inode)
+			logger.Errorf("get %s lock timed out ino:%d", lockStr, j.inode)
 			return ctx, minio.OperationTimedOut{}
 		}
 		time.Sleep(5 * time.Millisecond)
@@ -1227,7 +1245,12 @@ func (j *jfsFLock) GetRLock(ctx context.Context, timeout *minio.DynamicTimeout) 
 }
 
 func (j *jfsFLock) RUnlock() {
-	j.Unlock()
+	if j.inode == 0 {
+		return
+	}
+	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
+		logger.Errorf("failed to release lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
+	}
 	j.localLock.RUnlock()
 }
 
