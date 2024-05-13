@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -61,7 +60,7 @@ func testDiskCacheState(t *testing.T, cacheNum int) {
 
 	// case: normal -> unstable
 	s1 := m.getStore(k1)
-	for i := 0; i <= int(maxConcurrencyForUnstable); i++ {
+	for i := 0; i <= int(numIOErrToUnstable); i++ {
 		s1.state.onIOErr()
 	}
 	require.Equal(t, dcUnstable, s1.state.state())
@@ -71,19 +70,14 @@ func testDiskCacheState(t *testing.T, cacheNum int) {
 	require.GreaterOrEqual(t, atomic.LoadUint32(&s1.state.(*unstableDC).ioCnt), uint32(1))
 
 	// case: unstable concurrency limit
-	wg := sync.WaitGroup{}
-	coNum := 100 * maxConcurrencyForUnstable
-	errs := make([]error, coNum)
-	for i := 0; i < int(coNum); i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			_, err := m.load(k1)
-			errs[idx] = err
-		}(i)
+	for i := 0; i < int(maxConcurrencyForUnstable); i++ {
+		s1.state.beforeCacheOp()
 	}
-	wg.Wait()
-	assert.Contains(t, errs, errUnstableCoLimit)
+	_, err := m.load(k1)
+	assert.Equal(t, errUnstableCoLimit, err)
+	for i := 0; i < int(maxConcurrencyForUnstable); i++ {
+		s1.state.afterCacheOp()
+	}
 
 	// case: unstable -> normal
 	tickDurForUnstable = time.Second
