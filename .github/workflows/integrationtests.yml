@@ -58,11 +58,11 @@ jobs:
   
       - name: Fsx Test
         run: |
-          # touch /jfs/fsx.out
-          # rm -f /tmp/fsx.out
-          # ln -s /jfs/fsx.out /tmp/fsx.out
-          # sudo secfs.test/tools/bin/fsx -d 180 -p 10000 -F 10000000 /tmp/fsx.out
-          sudo secfs.test/tools/bin/fsx -d 60 -p 10000 -F 100000 /jfs/fsx.out
+          touch /jfs/fsx.out
+          rm -f /tmp/fsx.out
+          ln -s /jfs/fsx.out /tmp/fsx.out
+          sudo secfs.test/tools/bin/fsx -d 180 -p 10000 -F 10000000 /tmp/fsx.out
+          # sudo secfs.test/tools/bin/fsx -d 60 -p 10000 -F 100000 /jfs/fsx.out
 
       - name: Fsracer Test
         shell: 'script -q -e -c "bash {0}"'
