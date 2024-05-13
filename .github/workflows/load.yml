@@ -4,16 +4,20 @@ on:
     branches:
       - 'main'
       - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**.go'
+      - 'Makefile'
+      - '**/load.yml'
+      - '.github/scripts/command/load_dump_bench.sh'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**.go'
+      - 'Makefile'
+      - '**/load.yml'
+      - '.github/scripts/command/load_dump_bench.sh'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:

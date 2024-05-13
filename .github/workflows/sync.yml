@@ -5,16 +5,25 @@ on:
     branches:
       - 'main'
       - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**.go'
+      - 'Makefile'
+      - '**/sync.yml'
+      - '.github/scripts/sync/**'
+      - '.github/scripts/hypo/sync.py'
+      - '.github/scripts/hypo/sync_test.py'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**.go'
+      - 'Makefile'
+      - '**/sync.yml'
+      - '.github/scripts/sync/**'
+      - '.github/scripts/hypo/sync.py'
+      - '.github/scripts/hypo/sync_test.py'
+      
   schedule:
     - cron:  '30 20 * * *'
 
