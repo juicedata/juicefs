@@ -18,8 +18,10 @@ var (
 	tickDurForNormal                   = 1 * time.Minute
 	tickDurForUnstable                 = 1 * time.Minute
 
-	probeDur = 100 * time.Millisecond
-	probeDir = "probe"
+	probeDur  = 100 * time.Millisecond
+	probeDir  = "probe"
+	probeData = []byte{1, 2, 3}
+	probeBuff = make([]byte, 3)
 )
 
 var (
@@ -184,8 +186,7 @@ func (dc *unstableDC) tick() {
 }
 
 func (dc *unstableDC) probe() {
-	data := []byte{1, 2, 3}
-	page := NewPage(data)
+	page := NewPage(probeData)
 	defer page.Release()
 	cnt := 0
 
@@ -196,7 +197,7 @@ func (dc *unstableDC) probe() {
 		default:
 			cnt++
 			start := time.Now()
-			dc.doProbe(probeCacheKey(cnt, len(data)), page)
+			dc.doProbe(probeCacheKey(cnt, len(probeData)), page)
 			diff := probeDur - time.Since(start)
 			if diff > 0 {
 				time.Sleep(diff)
@@ -207,9 +208,13 @@ func (dc *unstableDC) probe() {
 
 func (dc *unstableDC) doProbe(key string, page *Page) {
 	dc.cache.cache(key, page, true)
-	if _, err := dc.cache.load(key); err != nil {
-		dc.cache.remove(key)
+	reader, err := dc.cache.load(key)
+	if err != nil {
+		return
 	}
+	defer reader.Close()
+	reader.ReadAt(probeBuff, 0)
+	dc.cache.remove(key)
 }
 
 func (dc *unstableDC) beforeCacheOp() { dc.concurrency.Add(1) }
@@ -254,22 +259,39 @@ func (cache *cacheStore) event(eventType int) {
 
 func getEnvs() {
 	if os.Getenv("JFS_MAX_IO_DURATION") != "" {
-		dur, _ := strconv.Atoi(os.Getenv("JFS_MAX_IO_DURATION"))
-		maxIODur = time.Duration(dur) * time.Second
-		logger.Infof("set maxIODur to %d", maxIODur)
+		dur, err := time.ParseDuration(os.Getenv("JFS_MAX_IO_DURATION"))
+		if err != nil {
+			logger.Errorf("parse JFS_MAX_IO_DURATION error: %v", err)
+		} else {
+			maxIODur = dur
+		}
+		logger.Infof("set maxIODur to %v", maxIODur)
 	}
 	if os.Getenv("JFS_MAX_IO_ERR_PERCENTAGE") != "" {
-		percentage, _ := strconv.ParseFloat(os.Getenv("JFS_MAX_IO_ERR_PERCENTAGE"), 64)
-		maxIOErrPercentageToNormal = 1 - percentage
+		percentage, err := strconv.ParseFloat(os.Getenv("JFS_MAX_IO_ERR_PERCENTAGE"), 64)
+		if err != nil {
+			logger.Errorf("parse JFS_MAX_IO_ERR_PERCENTAGE error: %v", err)
+		} else {
+			maxIOErrPercentageToNormal = percentage
+		}
 		logger.Infof("set maxIOErrPercentageToNormal to %f", maxIOErrPercentageToNormal)
 	}
 	if os.Getenv("JFS_MAX_DURATION_TO_DOWN") != "" {
-		dur, _ := strconv.Atoi(os.Getenv("JFS_MAX_DURATION_TO_DOWN"))
-		maxDurToDown = time.Duration(dur) * time.Minute
-		logger.Infof("set maxDurToDown to %d minutes", maxDurToDown)
+		dur, err := time.ParseDuration(os.Getenv("JFS_MAX_DURATION_TO_DOWN"))
+		if err != nil {
+			logger.Errorf("parse JFS_MAX_DURATION_TO_DOWN error: %v", err)
+		} else {
+			maxDurToDown = dur
+		}
+		logger.Infof("set maxDurToDown to %v", maxDurToDown)
 	}
 	if os.Getenv("JFS_MAX_CONCURRENCY_FOR_UNSTABLE") != "" {
-		maxConcurrencyForUnstable, _ = strconv.ParseInt(os.Getenv("JFS_MAX_CONCURRENCY_FOR_UNSTABLE"), 10, 64)
+		co, err := strconv.ParseInt(os.Getenv("JFS_MAX_CONCURRENCY_FOR_UNSTABLE"), 10, 64)
+		if err != nil {
+			logger.Errorf("parse JFS_MAX_CONCURRENCY_FOR_UNSTABLE error: %v", err)
+		} else {
+			maxConcurrencyForUnstable = co
+		}
 		logger.Infof("set maxConcurrencyForUnstable to %d", maxConcurrencyForUnstable)
 	}
 }
