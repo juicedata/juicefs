@@ -667,12 +667,12 @@ func installHandler(mp string, v *vfs.VFS, blob object.ObjectStorage) {
 			logger.Infof("Received signal %s, exiting...", sig.String())
 			if sig == syscall.SIGHUP {
 				path := fmt.Sprintf("/tmp/state%d.json", os.Getppid())
+				fuse.Shutdown()
 				if err := v.FlushAll(path); err == nil {
-					fuse.Shutdown()
-					err = v.FlushAll(path)
-					if err != nil {
-						logger.Fatalf("flush buffered data failed: %s", err)
-					}
+					//err = v.FlushAll(path)
+					//if err != nil {
+					//	logger.Fatalf("flush buffered data failed: %s", err)
+					//}
 					object.Shutdown(blob)
 					logger.Warnf("exit with code 1")
 					os.Exit(1)

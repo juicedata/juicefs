@@ -316,7 +316,26 @@ func (v *VFS) dumpAllHandles(path string) (err error) {
 	vfsState.Handler = make(map[uint64]saveHandle)
 	for ino, hs := range v.handles {
 		if ino == logInode {
-			continue // will be recovered
+			for _, h := range hs {
+				readers[h.fh].Lock()
+				last := readers[h.fh].last
+				close(readers[h.fh].buffer)
+				logger.Infof("dump log handle counter %d", len(readers[h.fh].buffer))
+				for bytes := range readers[h.fh].buffer {
+					last = append(last, bytes...)
+				}
+				logger.Infof("dump log handle %d data %d", h.fh, len(last))
+				readers[h.fh].Unlock()
+				if len(last) == 0 {
+					continue
+				}
+				s := saveHandle{
+					Inode: uint64(h.inode),
+					Data:  hex.EncodeToString(last),
+				}
+				vfsState.Handler[h.fh] = s
+			}
+			continue
 		}
 		if ino == controlInode {
 			// the job is lost, can't be recovered
@@ -383,6 +402,18 @@ func (v *VFS) loadAllHandles(path string) error {
 		data, err := hex.DecodeString(s.Data)
 		if err != nil {
 			logger.Warnf("decode data for inode %d: %s", s.Inode, err)
+		}
+		if s.Inode == logInode {
+			logger.Infof("load log handler fh %d %d", fh, len(data))
+			f := &handle{inode: logInode, fh: fh, flags: syscall.O_RDONLY}
+			f.cond = utils.NewCond(f)
+			v.handles[logInode] = append(v.handles[logInode], f)
+			if v.handleIno[fh] == 0 {
+				v.handleIno[fh] = logInode
+			}
+			openAccessLog(fh)
+			readers[fh].last = data
+			continue
 		}
 		h := &handle{
 			inode:      Ino(s.Inode),
