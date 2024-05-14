@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -1170,11 +1171,18 @@ type jfsFLock struct {
 	owner     uint64
 	meta      meta.Meta
 	localLock sync.RWMutex
+	locked    int32
 }
 
 func (j *jfsFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
 	return j.getFlockWithTimeOut(ctx, meta.F_WRLCK, timeout)
 }
+
+const (
+	noLock    = 0
+	readLock  = 1
+	writeLock = 2
+)
 
 func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeout *minio.DynamicTimeout) (context.Context, error) {
 	if j.inode == 0 {
@@ -1185,16 +1193,31 @@ func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeou
 	deadline := start.Add(timeout.Timeout())
 	lockStr := "write"
 
-	var getLockFunc func() bool
+	var lockFunc func() bool
 	var unlockFunc func()
 	var getLock bool
+	var lockFlag int32
 	if ltype == meta.F_RDLCK {
-		getLockFunc = j.localLock.TryRLock
+		lockFunc = j.localLock.TryRLock
 		unlockFunc = j.localLock.RUnlock
 		lockStr = "read"
+		lockFlag = readLock
 	} else {
-		getLockFunc = j.localLock.TryLock
+		lockFunc = j.localLock.TryLock
 		unlockFunc = j.localLock.Unlock
+		lockFlag = writeLock
+	}
+
+	getLockFunc := func() bool {
+		locked := lockFunc()
+		if locked {
+			atomic.StoreInt32(&j.locked, lockFlag)
+		}
+		return locked
+	}
+	freeLockFunc := func() {
+		unlockFunc()
+		atomic.StoreInt32(&j.locked, noLock)
 	}
 
 	for {
@@ -1212,7 +1235,7 @@ func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeou
 
 	for {
 		if errno := j.meta.Flock(mctx, j.inode, j.owner, ltype, false); errno != 0 {
-			if !errors.Is(errno, syscall.EAGAIN) {
+			if !errors.Is(errno, syscall.EAGAIN) && !errors.Is(errno, syscall.EWOULDBLOCK) {
 				logger.Errorf("failed to get %s lock for inode %d by owner %d, error : %s", lockStr, j.inode, j.owner, errno)
 			}
 		} else {
@@ -1221,7 +1244,7 @@ func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeou
 		}
 
 		if time.Now().After(deadline) {
-			unlockFunc()
+			freeLockFunc()
 			timeout.LogFailure()
 			logger.Errorf("get %s lock timed out ino:%d", lockStr, j.inode)
 			return ctx, minio.OperationTimedOut{}
@@ -1234,10 +1257,12 @@ func (j *jfsFLock) Unlock() {
 	if j.inode == 0 {
 		return
 	}
-	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
-		logger.Errorf("failed to release lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
+	if atomic.CompareAndSwapInt32(&j.locked, writeLock, noLock) {
+		if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
+			logger.Errorf("failed to release lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
+		}
+		j.localLock.Unlock()
 	}
-	j.localLock.Unlock()
 }
 
 func (j *jfsFLock) GetRLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
@@ -1248,10 +1273,12 @@ func (j *jfsFLock) RUnlock() {
 	if j.inode == 0 {
 		return
 	}
-	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
-		logger.Errorf("failed to release lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
+	if atomic.CompareAndSwapInt32(&j.locked, readLock, noLock) {
+		if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
+			logger.Errorf("failed to release lock for inode %d by owner %d, error : %s", j.inode, j.owner, errno)
+		}
+		j.localLock.RUnlock()
 	}
-	j.localLock.RUnlock()
 }
 
 func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker {
