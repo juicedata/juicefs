@@ -213,7 +213,7 @@ func (dc *unstableDC) doProbe(key string, page *Page) {
 		return
 	}
 	defer reader.Close()
-	reader.ReadAt(probeBuff, 0)
+	_, _ = reader.ReadAt(probeBuff, 0)
 	dc.cache.remove(key)
 }
 
