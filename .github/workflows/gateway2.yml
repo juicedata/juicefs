@@ -46,7 +46,7 @@ jobs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
 
   gateway:
-    timeout-minutes: 60
+    timeout-minutes: 90
     needs: build-matrix
     strategy:
       fail-fast: false
@@ -112,6 +112,7 @@ jobs:
           workflow_conclusion: completed
 
       - name: Test randomly
+        timeout-minutes: 65
         run: |
           timeout 3600 sudo -E LOG_LEVEL=WARNING python3 .github/scripts/hypo/s3.py 2>&1 | tee result.log || code=$?; if [[ $code -ne 124 && $code -ne 0 ]]; then echo test failed; exit $code; fi
           
