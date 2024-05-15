@@ -270,7 +270,7 @@ func (cache *cacheStore) event(eventType int) {
 			cache.state = newDCState(dcDown, cache)
 		}
 	}
-	logger.Warnf("disk cache %s state change from %s to %s", cache.dir, diskStateNames[state], diskStateNames[cache.state.state()])
+	logger.Infof("disk cache %s state change from %s to %s", cache.dir, diskStateNames[state], diskStateNames[cache.state.state()])
 }
 
 func getEnvs() {
