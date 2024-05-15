@@ -4212,14 +4212,15 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	return err
 }
 
-func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, attr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno {
+func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, originAttr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		a, err := tx.Get(ctx, m.inodeKey(srcIno)).Bytes()
 		if err != nil {
 			return err
 		}
-		m.parseAttr(a, attr)
-		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
+		m.parseAttr(a, originAttr)
+		attr := *originAttr
+		if eno := m.Access(ctx, srcIno, MODE_MASK_R, &attr); eno != 0 {
 			return eno
 		}
 		attr.Parent = parent
@@ -4268,7 +4269,7 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 		}
 
 		_, err = tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
-			p.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
+			p.Set(ctx, m.inodeKey(ino), m.marshal(&attr), 0)
 			p.IncrBy(ctx, m.usedSpaceKey(), align4K(attr.Length))
 			p.Incr(ctx, m.totalInodesKey())
 			if len(srcXattr) > 0 {
