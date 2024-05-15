@@ -315,33 +315,32 @@ func (v *VFS) dumpAllHandles(path string) (err error) {
 	var vfsState state
 	vfsState.Handler = make(map[uint64]saveHandle)
 	for ino, hs := range v.handles {
-		if ino == logInode {
-			for _, h := range hs {
-				readers[h.fh].Lock()
-				last := readers[h.fh].last
-				close(readers[h.fh].buffer)
-				logger.Infof("dump log handle counter %d", len(readers[h.fh].buffer))
-				for bytes := range readers[h.fh].buffer {
-					last = append(last, bytes...)
-				}
-				logger.Infof("dump log handle %d data %d", h.fh, len(last))
-				readers[h.fh].Unlock()
-				if len(last) == 0 {
-					continue
-				}
-				s := saveHandle{
-					Inode: uint64(h.inode),
-					Data:  hex.EncodeToString(last),
-				}
-				vfsState.Handler[h.fh] = s
-			}
-			continue
-		}
 		if ino == controlInode {
 			// the job is lost, can't be recovered
 			continue
 		}
 		for _, h := range hs {
+			h.Lock()
+			if ino == logInode {
+				readerLock.RLock()
+				reader := readers[h.fh]
+				readerLock.RUnlock()
+				if reader == nil {
+					continue
+				}
+				reader.Lock()
+			OUTER:
+				for {
+					select {
+					case line := <-reader.buffer:
+						reader.last = append(reader.last, line...)
+					default:
+						break OUTER
+					}
+				}
+				h.data = reader.last
+				reader.Unlock()
+			}
 			var length uint64
 			if h.writer != nil {
 				length = h.writer.GetLength()
@@ -361,6 +360,7 @@ func (v *VFS) dumpAllHandles(path string) (err error) {
 				Off:        h.off,
 				Data:       hex.EncodeToString(h.data),
 			}
+			h.Unlock()
 			vfsState.Handler[h.fh] = s
 		}
 	}
@@ -403,18 +403,6 @@ func (v *VFS) loadAllHandles(path string) error {
 		if err != nil {
 			logger.Warnf("decode data for inode %d: %s", s.Inode, err)
 		}
-		if s.Inode == logInode {
-			logger.Infof("load log handler fh %d %d", fh, len(data))
-			f := &handle{inode: logInode, fh: fh, flags: syscall.O_RDONLY}
-			f.cond = utils.NewCond(f)
-			v.handles[logInode] = append(v.handles[logInode], f)
-			if v.handleIno[fh] == 0 {
-				v.handleIno[fh] = logInode
-			}
-			openAccessLog(fh)
-			readers[fh].last = data
-			continue
-		}
 		h := &handle{
 			inode:      Ino(s.Inode),
 			fh:         fh,
@@ -422,9 +410,16 @@ func (v *VFS) loadAllHandles(path string) error {
 			locks:      s.UseLocks,
 			flockOwner: s.FlockOwner,
 			off:        s.Off,
-			data:       data,
 		}
 		h.cond = utils.NewCond(h)
+		v.handles[h.inode] = append(v.handles[h.inode], h)
+		v.handleIno[fh] = h.inode
+		if s.Inode == logInode {
+			openAccessLog(fh)
+			readers[fh].last = data
+			continue
+		}
+		h.data = data
 		switch s.Flags & O_ACCMODE {
 		case syscall.O_RDONLY:
 			h.reader = v.reader.Open(h.inode, s.Length)
@@ -434,8 +429,6 @@ func (v *VFS) loadAllHandles(path string) error {
 			h.reader = v.reader.Open(h.inode, s.Length)
 			h.writer = v.writer.Open(h.inode, s.Length)
 		}
-		v.handles[h.inode] = append(v.handles[h.inode], h)
-		v.handleIno[fh] = h.inode
 	}
 	if len(v.handleIno) > 0 {
 		logger.Infof("load %d handles from %s", len(v.handleIno), path)

@@ -108,7 +108,6 @@ func closeAccessLog(fh uint64) {
 func readAccessLog(fh uint64, buf []byte) int {
 	readerLock.RLock()
 	r, ok := readers[fh]
-	logger.Infof("readAccessLog %d last %d buff %d", fh, len(r.last), len(buf))
 	readerLock.RUnlock()
 	if !ok {
 		return 0
@@ -134,10 +133,8 @@ func readAccessLog(fh uint64, buf []byte) int {
 			if n == 0 {
 				n = copy(buf, "#\n")
 			}
-			logger.Infof("last length: %d /%s/ buff %d", len(r.last), string(r.last), len(buf))
 			return n
 		}
 	}
-	logger.Infof("last length: %d /%s/ buff %d", len(r.last), string(r.last), len(buf))
 	return n
 }
