@@ -1143,4 +1143,36 @@ public class JuiceFileSystemTest extends TestCase {
     assertTrue(fileStatuses[0].getPermission().getAclBit());
     assertTrue(fileStatuses[0].hasAcl());
   }
+
+  public void testRenameAccessControlException() throws Exception {
+    Path d1 = new Path("/renameAccessControlExceptionDir1");
+    Path d2 = new Path("/renameAccessControlExceptionDir2");
+    Path p = new Path(d1, "file");
+    FileSystem user1Fs = createNewFs(cfg, "user1", new String[]{"group1"});
+
+    user1Fs.mkdirs(d1);
+    user1Fs.mkdirs(d2);
+    user1Fs.create(p).close();
+    user1Fs.setPermission(d1, new FsPermission((short) 0000));
+    user1Fs.setPermission(d2, new FsPermission((short) 0777));
+    try {
+      user1Fs.rename(p, d2);
+    } catch (AccessControlException e) {
+      assertTrue(e.getMessage().contains("renameAccessControlExceptionDir1"));
+    }
+
+    user1Fs.setPermission(d1, new FsPermission((short) 0777));
+    user1Fs.setPermission(d2, new FsPermission((short) 000));
+    try {
+      user1Fs.rename(p, d2);
+    } catch (AccessControlException e) {
+      assertTrue(e.getMessage().contains("renameAccessControlExceptionDir2"));
+    }
+
+    // clean
+    user1Fs.setPermission(d1, new FsPermission((short) 0777));
+    user1Fs.setPermission(d2, new FsPermission((short) 0777));
+    user1Fs.delete(d1, true);
+    user1Fs.delete(d2, true);
+  }
 }
