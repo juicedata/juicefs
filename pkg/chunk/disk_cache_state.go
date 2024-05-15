@@ -1,3 +1,19 @@
+/*
+ * JuiceFS, Copyright 2024 Juicedata, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package chunk
 
 import (
@@ -11,14 +27,14 @@ import (
 
 var (
 	numIOErrToUnstable         uint32  = 3                // from normal to unstable
-	minIOSuccToNormal          uint32  = 3 * 60           // from unstable to normal
+	minIOSuccToNormal          uint32  = 60               // from unstable to normal
 	maxIOErrPercentageToNormal float64 = 0                // from unstable to normal
 	maxDurToDown                       = 30 * time.Minute // from unstable to down
 	maxConcurrencyForUnstable  int64   = 10
 	tickDurForNormal                   = 1 * time.Minute
 	tickDurForUnstable                 = 1 * time.Minute
 
-	probeDur  = 100 * time.Millisecond
+	probeDur  = 500 * time.Millisecond
 	probeDir  = "probe"
 	probeData = []byte{1, 2, 3}
 	probeBuff = make([]byte, 3)
@@ -254,7 +270,7 @@ func (cache *cacheStore) event(eventType int) {
 			cache.state = newDCState(dcDown, cache)
 		}
 	}
-	logger.Warnf("disk cache state change from %s to %s", diskStateNames[state], diskStateNames[cache.state.state()])
+	logger.Warnf("disk cache %s state change from %s to %s", cache.dir, diskStateNames[state], diskStateNames[cache.state.state()])
 }
 
 func getEnvs() {
