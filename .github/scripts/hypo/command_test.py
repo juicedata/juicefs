@@ -35,7 +35,7 @@ class TestCommand(unittest.TestCase):
         state.config(capacity=1, enable_acl=True, encrypt_secret=True, force=False, inodes=81, trash_days=0, user='root', yes=True)
         state.teardown()
 
-    def skip_test_clone_4832(self):
+    def test_clone_4834(self):
         #SEE https://github.com/juicedata/juicefs/issues/4834
         state = JuicefsCommandMachine()
         folders_0 = state.init_folders()
