@@ -1409,6 +1409,10 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
     if (r == ENOENT || r == EEXIST)
       return false;
+    if (r == EACCESS) {
+      this.access(makeQualified(src).getParent(), FsAction.WRITE.or(FsAction.EXECUTE));
+      this.access(makeQualified(dst).getParent(), FsAction.WRITE.or(FsAction.EXECUTE));
+    }
     if (r < 0)
       throw error(r, src);
     return true;
