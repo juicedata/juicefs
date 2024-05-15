@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -301,7 +300,10 @@ func TestCheckPath(t *testing.T) {
 }
 
 func shutdownStore(s *cacheStore) {
-	atomic.StoreUint32(&s.ioErrCnt, uint32(maxIOErrors))
+	s.stateLock.Lock()
+	defer s.stateLock.Unlock()
+	s.state.stop()
+	s.state = newDCState(dcDown, s)
 }
 
 func TestCacheManager(t *testing.T) {
