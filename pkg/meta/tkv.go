@@ -3398,14 +3398,15 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	})
 }
 
-func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, attr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno {
+func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, originAttr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno {
 	return errno(m.txn(func(tx *kvTxn) error {
 		a := tx.get(m.inodeKey(srcIno))
 		if a == nil {
 			return syscall.ENOENT
 		}
-		m.parseAttr(a, attr)
-		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
+		m.parseAttr(a, originAttr)
+		attr := *originAttr
+		if eno := m.Access(ctx, srcIno, MODE_MASK_R, &attr); eno != 0 {
 			return eno
 		}
 		attr.Parent = parent
@@ -3455,7 +3456,7 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			}
 		}
 
-		tx.set(m.inodeKey(ino), m.marshal(attr))
+		tx.set(m.inodeKey(ino), m.marshal(&attr))
 		prefix := m.xattrKey(srcIno, "")
 		tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
 			tx.set(m.xattrKey(ino, string(k[len(prefix):])), v)
