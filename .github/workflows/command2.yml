@@ -103,7 +103,7 @@ jobs:
       - name: Run All
         timeout-minutes: 70
         run: |
-          timeout 3600 sudo -E LOG_LEVEL=WARNING META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all 2>&1 | tee result.log || code=$?; if [[ $code -ne 124 && $code -ne 0 ]]; then echo test failed; exit $code; fi
+          timeout 3600 sudo -E LOG_LEVEL=WARNING META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all || code=$?; if [[ $code -ne 124 && $code -ne 0 ]]; then echo test failed; exit $code; fi
       
       - name: Upload example database
         uses: actions/upload-artifact@v3
@@ -118,11 +118,6 @@ jobs:
           echo "juicefs log"
           sudo tail -n 1000 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
-      
-      - name: Check result.log
-        if: always()
-        run: | 
-          tail -500 result.log
           
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
