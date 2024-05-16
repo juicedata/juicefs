@@ -1,6 +1,7 @@
 ---
 title: Data Synchronization
 sidebar_position: 7
+description: Learn how to use the data sync tool in JuiceFS.
 ---
 
 [`juicefs sync`](../reference/command_reference.md#sync) is a powerful data migration tool, which can copy data across all supported storages including object storage, JuiceFS itself, and local file systems, you can freely copy data between any of these systems. In addition, it supports remote directories through SSH, HDFS, WebDAV, etc. while providing advanced features such as  incremental synchronization, and pattern matching (like rsync), and distributed syncing.
@@ -204,6 +205,93 @@ juicefs sync --include 'pic/' --include '4.png' --exclude '*' /mnt/jfs/ s3://ABC
 :::info NOTICE
 The earlier options have higher priorities than the latter ones. Thus, the `--include` options should come before `--exclude`. Otherwise, all the `--include` options such as `--include 'pic/' --include '4.png'` which appear later than `--exclude '*'` will be ignored.
 :::
+
+### Filtering modes
+
+Filtering modes determine how multiple filtering patterns decide whether to synchronize a path. The `sync` command supports two filtering modes: one-time filtering and layered filtering. By default, the `sync` command uses the layered filtering mode. You can use the `--match-full-path` parameter to switch to one-time filtering mode.
+
+#### One-time filtering
+
+In one-time filtering, the full path of an object is matched against multiple patterns in sequence.
+
+![One-time filtering](../images/one-time-filtering.png)
+
+For example, given the `a1./b1/c1.txt` object and the `inclusion`/`exclusion` rule `--include a*.txt, --include c1.txt, --exclude c*.txt`, the string `a1/b1/c1.txt` is matched against the three patterns `--include a*.txt`, `--inlude c1.txt`, and `--exclude c*.txt` in sequence.
+
+The specific steps are as follows:
+
+1. `a1/b1/c1.txt` matches against `--include a*.txt`, which fails to match.
+2. `a1/b1/c1.txt` is matched against `--inlude c1.txt`, which succeeds according to the matching rules. The final matching result for `a1/b1/c1.txt` is "sync."
+
+The subsequent rule `--exclude c*.txt` would also match based on the suffix. But according to the sequential nature of `include`/`exclude` parameters, once a pattern is matched, no further patterns are evaluated. Therefore, the final result for matching `a1/b1/c1.txt` is determined by the `--inlude c1.txt` rule, which is "sync."
+
+Here are some examples of `exclude`/`include` rules in the one-time filtering mode:
+
++ `--exclude *.o` excludes all files matching the pattern `*.o`.
++ `--exclude /foo**` excludes any file or directory in the root named `foo`.
++ `--exclude **foo/**` excludes all directories ending with `foo`.
++ `--exclude /foo/*/bar` excludes any `bar` file located two levels down within the `foo` directory in the root.
++ `--exclude /foo/**/bar` excludes any file named `bar` located within any level of the `foo` directory in the root. (`**` matches any number of directory levels)
++ Using `--include */ --include *.c --exclude *` includes only directories and `c` source files, excluding all other files and directories.
++ Using `--include foo/bar.c --exclude *` includes only the `foo` directory and `foo/bar.c`.
+
+One-time filtering is easy to understand and use. It is recommended in most cases.
+
+#### Layered filtering
+
+![Layered filtering](../images/layered-filtering.png)
+
+Layered filtering breaks down the object's path into sequential subpaths according to its layers. For example, the layer sequence for the path `a1/b1/c1.txt` is `a1`, `a1/b1`, and `a1/b1/c1.txt`.
+
+Each element in this sequence is treated as the original path in a one-time filtering process. During one-time filtering, if a pattern matches and it is an `exclude` rule, it immediately returns "Exclude" as the result for the entire layered filtering of the object. If the pattern matches and it is an `include` rule, it skips the remaining rules for the current layer and proceeds to the next layer of filtering.
+
+If no rules match at a given level, the filtering proceeds to the next layer. If all layers are processed without any match, the default action "sync" is returned.
+
+For example, given the object `a1/b1/c1.txt` and the rules `--include a*.txt`, `--include c1.txt`, `--exclude c*.txt`, the layered filtering process for this example with the subpath sequence `a1`, `a1/b1`, and `a1/b1/c1.txt` will be as follows:
+
+1. At the first layer, the path `a1` is evaluated against the rules `--include a*.txt`, `--inlude c1.txt`, and `--exclude c*.txt`. None of these rules match, so it proceeds to the next layer.
+
+2. At the second layer, the path `a1/b1` is evaluated against the same rules. Again, no rules match, so it proceeds to the next layer.
+
+3. At the third layer, the path `a1/b1/c1.txt` is evaluated. The rule `--include c1.txt` matches. The behavior of this pattern is "sync." In layered filtering, if the filtering result for a level is "sync," it directly proceeds to the next layer of filtering.
+
+4. There are no more layers. All layers of filtering have been completed, so the default behavior is "sync."
+
+In the example above, the match was successful at the last layer. Besides this, there are two other scenarios:
+
+- If a match occurs before the last layer, and it is an `exclude` pattern, the result is "exclude" for the entire filtering. If it is an `include` pattern, it proceeds to the next layer of filtering.
+- If all layers are completed without any matches, the default behavior is "sync."
+
+In summary, layered filtering sequentially applies one-time filtering from the top layer to the bottom. Each layer of filtering can result in either "exclude," which is final, or "sync," which requires proceeding to the next layer.
+
+Here are some examples of layered filtering with `exclude`/`include` rules:
+
++ `--exclude *.o` excludes all files matching "*.o".
++ `--exclude /foo` excludes files or directories with the root directory name "foo" during transfer.
++ `--exclude foo/` excludes all directories named "foo".
++ `--exclude /foo/*/bar` excludes "bar" files under the "foo" directory, up to two layers deep from the root directory.
++ `--exclude /foo/**/bar` excludes "bar" files under the "foo" directory recursively at any layer from the root directory. ("**" matches any number of directory levels)
++ Using `--include */ --include *.c --exclude *` includes all directories and `c` source code files, excluding all other files and directories.
++ Using `--include foo/ --include foo/bar.c --exclude *` includes only the "foo" directory and "foo/bar.c" file. (The "foo" directory must be explicitly included, or it is excluded by the `--exclude *` rule.)
++ For `dir_name/***`, it matches all files at all layers under the `dir_name` directory. Note that each subpath element is recursively traversed from top to bottom, so `include`/`exclude` matching rules apply recursively to each full path element. For example, to include `/foo/bar/baz`, both `/foo` and `/foo/bar` should not be excluded. When a file is found to be transferred, the exclusion matching pattern short-circuits the exclusion traversal at that file's directory layer. If a parent directory is excluded, deeper include pattern matching is ineffective. This is crucial when using trailing `*`. For example, the following example will not work as expected:
+
+    ```
+    --include='/some/path/this-file-will-not-be-found' 
+    --include='/file-is-included' 
+    --exclude='*'
+    ```
+
+    Due to the `*` rule excluding the parent directory `some`, it will fail. One solution is to request the inclusion of all directory structures by using a single rule like `--include */`, which must be placed before other `--include*` rules. Another solution is to add specific inclusion rules for all parent directories that need to be accessed. For example, the following rules can work correctly:
+
+    ```
+    --include /some/
+    --include /some/path/
+    --include /some/path/this-file-is-found
+    --include /file-also-included
+    --exclude *
+    ```
+
+Understanding and using layered filtering can be quite complex. However, it is mostly compatible with rsync's `include`/`exclude` parameters. Therefore, it is generally recommended to use it in scenarios compatible with rsync behavior.
 
 ### Directory Structure and File Permissions
 
