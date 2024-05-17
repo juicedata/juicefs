@@ -71,6 +71,8 @@ jobs:
           cd sdk/java
           sudo mvn test -B
           sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
+          expect=$(git rev-parse --short HEAD | cut -b 1-7)
+          ls /tmp/libjfs* | grep $expect
 
       - name: Send Slack Notification
         if: failure()
