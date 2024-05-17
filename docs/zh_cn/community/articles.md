@@ -8,6 +8,9 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## AI
 
+- [大模型存储实践：性能、成本与多云](https://juicefs.com/zh-cn/blog/solutions/large-model-storage-performance-multi-cloud)，2024-04-07，苏锐
+- [知乎：多云架构下大模型训练，如何保障存储稳定性](https://juicefs.com/zh-cn/blog/user-stories/data-storage-multi-cloud-zhihu-model-training-juicefs)，2024-03-28，王新
+- [BentoML：如何使用 JuiceFS 加速大模型加载](https://juicefs.com/zh-cn/blog/user-stories/bentoml-use-juicefs-accelerate-large-model-loading)，2024-02-21，管锡鹏
 - [韩国国民搜索 NAVER：为 AI 平台引入存储方案 JuiceFS](https://juicefs.com/zh-cn/blog/user-stories/naver-storage-solution-juicefs-ai-platforms)，2023-12-28，Nam Kyung-wan@NAVER
 - [机器人行业数据闭环实践：从对象存储到 JuiceFS](https://juicefs.com/zh-cn/blog/user-stories/data-object-storag--to-juicefs)，2023-12-13，宋巨超@刻行
 - [JuiceFS 在自动驾驶行业多云架构中的实践](https://juicefs.com/zh-cn/blog/user-stories/data-storage-multi-cloud-autonomous-driving-juicefs)，2023-10-27
@@ -88,6 +91,15 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 教程、使用指南、评测及其他
 
+- [详解 JuiceFS sync 新功能，选择性同步增强与多场景性能优化](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-sync)，2024-05-15，执剑
+- [平滑升级功能详解，不停服即可更新](https://juicefs.com/zh-cn/blog/engineering/smooth-upgrade)，2024-05-07，执剑
+- [JuiceFS v1.2-beta 1: ACL 功能全解析，更精细的权限控制](https://juicefs.com/zh-cn/blog/release-notes/juicefs-v12-beta-1-acl)，2024-04-26，黄杰烽
+- [JuiceFS v1.2-beta1，Gateway 升级，多用户场景权限管理更灵活](https://juicefs.com/zh-cn/blog/release-notes/juicefs-v12-beta1-gateway)，2024-04-22，执剑
+- [如何使用 Grafana 监控文件系统状态](https://juicefs.com/zh-cn/blog/usage-tips/use-grafana-monitor-file-system-status)，2024-04-12，于鸿儒
+- [在 Google Colab 中使用 JuiceFS](https://juicefs.com/zh-cn/blog/community/google-colab-juicefs)，2024-03-22，Jet
+- [从 HPC 到 AI：探索文件系统的发展及性能评估](https://juicefs.com/zh-cn/blog/user-stories/hpc-ai-file-systems-performance-development)，2024-03-06，鲁蔚征
+- [千卡利用率超 98%，详解 JuiceFS 在权威 AI 测试中的实现策略](https://juicefs.com/zh-cn/blog/engineering/juicefs-mlperf-test)，2024-02-28，莫飞虎
+- [极限挑战：使用 Go 打造百亿级文件系统的实践之旅](https://juicefs.com/zh-cn/blog/engineering/go-build-billion-file-system)，2024-02-02，Sandy
 - [详解新功能 JuiceFS CSI Dashboard：简化云上环境的问题排查流程](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-csi-dashboard)，2023-12-29，李晨曦
 - [Kubernetes 数据持久化：从零开始使用 JuiceFS CSI Driver](https://juicefs.com/zh-cn/blog/usage-tips/kubernetes-juicefs-csi-driver)，2023-12-11，于鸿儒
 - [JuiceFS 用户必备的 6 个技巧](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-user-skills)，2023-11-22，于鸿儒
