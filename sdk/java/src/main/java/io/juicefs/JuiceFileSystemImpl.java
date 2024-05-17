@@ -82,7 +82,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       prop.load(in);
       return prop.getProperty("git.commit.id.abbrev");
     } catch (IOException e) {
-      LOG.warn("Failed to load juicefs.version", e);
+      LOG.warn("Failed to load juicefs-ver.properties", e);
       return "unknown";
     }
   }

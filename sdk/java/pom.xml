@@ -11,7 +11,6 @@
 	<properties>
 		<hadoop.version>3.1.4</hadoop.version>
 		<argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true -Djava.library.path=${project.basedir}/../mount/libjfs:${java.library.path} -Djdk.attach.allowAttachSelf=true</argLine>
-		<git-ver></git-ver>
 	</properties>
 
 	<developers>
