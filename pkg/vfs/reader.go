@@ -269,8 +269,8 @@ func (s *sliceReader) delete() {
 	} else {
 		s.file.last = s.prev
 	}
+	atomic.AddInt64(&readBufferUsed, -int64(cap(s.page.Data)))
 	s.page.Release()
-	atomic.AddInt64(&readBufferUsed, -int64(s.block.len))
 }
 
 type session struct {
@@ -327,7 +327,7 @@ func (f *fileReader) newSlice(block *frange) *sliceReader {
 	*(f.last) = s
 	f.last = &(s.next)
 	go s.run()
-	atomic.AddInt64(&readBufferUsed, int64(s.block.len))
+	atomic.AddInt64(&readBufferUsed, int64(cap(s.page.Data)))
 	return s
 }
 
