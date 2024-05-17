@@ -74,6 +74,18 @@ import java.util.regex.Pattern;
 public class JuiceFileSystemImpl extends FileSystem {
 
   public static final Logger LOG = LoggerFactory.getLogger(JuiceFileSystemImpl.class);
+  public static final String gitVer = loadVersion();
+
+  static String loadVersion() {
+    try (InputStream in = JuiceFileSystemImpl.class.getClassLoader().getResourceAsStream("juicefs-ver.properties")) {
+      Properties prop = new Properties();
+      prop.load(in);
+      return prop.getProperty("git.commit.id.abbrev");
+    } catch (IOException e) {
+      LOG.warn("Failed to load juicefs.version", e);
+      return "unknown";
+    }
+  }
 
   private Path workingDir;
   private String name;
@@ -611,11 +623,10 @@ public class JuiceFileSystemImpl extends FileSystem {
     LibraryLoader<Libjfs> libjfsLibraryLoader = LibraryLoader.create(Libjfs.class);
     libjfsLibraryLoader.failImmediately();
 
-    int soVer = 7;
     String osId = "so";
     String archId = "amd64";
     String resourceFormat = "libjfs-%s.%s.gz";
-    String nameFormat = "libjfs-%s.%d.%s";
+    String nameFormat = "libjfs-%s.%s.%s";
 
     File dir = new File("/tmp");
     String os = System.getProperty("os.name");
@@ -631,7 +642,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
 
     String resource = String.format(resourceFormat, archId, osId);
-    String name = String.format(nameFormat, archId, soVer, osId);
+    String name = String.format(nameFormat, archId, gitVer, osId);
 
     File libFile = new File(dir, name);
 
