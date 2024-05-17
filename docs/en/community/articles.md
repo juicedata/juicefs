@@ -12,8 +12,11 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 ### AI, machine learning, and deep learning
 
 - [LLM Storage: Performance, Cost, and Multi-Cloud Architecture](https://juicefs.com/en/blog/solutions/llm-storage-performance-cost-multi-cloud), 2024-04-09, Sui Su
-- [How Zhihu Ensures Stable Storage for LLM Training in Multi-Cloud Architecture](https://juicefs.com/en/blog/user-stories/ai-storage-llm-training-multi-cloud), 2024-04-03, Xin Wang
-- [BentoML Reduced LLM Loading Time from 20+ to a Few Minutes with JuiceFS](https://juicefs.com/en/blog/user-stories/accelerate-large-language-model-loading), 2024-02-29, Xipeng Guan
+- [How Zhihu Ensures Stable Storage for LLM Training in Multi-Cloud Architecture](https://juicefs.com/en/blog/user-stories/ai-storage-llm-training-multi-cloud), 2024-04-03, Xin Wang @ Zhihu
+- [BentoML Reduced LLM Loading Time from 20+ to a Few Minutes with JuiceFS](https://juicefs.com/en/blog/user-stories/accelerate-large-language-model-loading), 2024-02-29, Xipeng Guan @ BentoML
+- [coScene Chose JuiceFS over Alluxio to Tackle Object Storage Drawbacks](https://juicefs.com/en/blog/user-stories/juicefs-vs-alluxio-ai-robot-storage), 2024-01-24, Juchao Song @ coScene
+- [NAVER, Korea's No.1 Search Engine, Chose JuiceFS over Alluxio for AI Storage](https://juicefs.com/en/blog/user-stories/juicefs-vs-alluxio-ai-storage-naver), 2024-01-17, Nam Kyung-wan @ NAVER
+- [Building an Easy-to-Operate AI Training Platform: SmartMore's Storage Selection & Best Practices](https://juicefs.com/en/blog/user-stories/ai-training-storage-selection-seaweedfs-juicefs), 2023-12-14, Jichuan Sun @ SmartMore
 - [A Leading Self-Driving Company Chose JuiceFS over Amazon S3 and Alluxio in the Multi-Cloud Architecture](https://juicefs.com/en/blog/user-stories/data-storage-multi-cloud-autonomous-driving-juicefs), 2023-11-09
 - [Building a Cloud-Native File Storage Platform to Host 5B+ Files in AI Training & More](https://juicefs.com/en/blog/user-stories/cloud-native-file-storage-platform-ai-training), 2023-10-12, Jiapeng Sun @ Xiaomi
 - [Choosing JuiceFS over s3fs and Alluxio for Our Ultra-Heterogeneous Computing Cluster](https://juicefs.com/en/blog/user-stories/high-performance-scale-out-heterogeneous-computing-power-cluster-storage), 2023-06-09, Chen Hong @ Zhejiang Lab
@@ -22,6 +25,7 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Big data
 
+- [From Object Storage to K8s+JuiceFS: 85% Storage Cost Cut, HDFS-Level Performance](https://juicefs.com/en/blog/user-stories/object-storage-kubernetes-hdfs), 2024-02-07, Experienced JuiceFS user
 - [From Hadoop to Cloud: Why and How to Decouple Storage and Compute in Big Data Platforms](https://juicefs.com/en/blog/solutions/hadoop-cloud-decouple-storage-compute-big-data), 2023-11-01
 - [Costs Cut & Ops Efficiency Boosted: Switching to a Big Data Storage-Compute Decoupled Architecture](https://juicefs.com/en/blog/user-stories/storage-compute-decoupled-architecture-cloud-native-big-data), 2023-09-28, Ming Li @ DMALL
 - [50%+ Cut in Both Storage & Compute Costs: Designing NetEase Games' Cloud Big Data Platform](https://juicefs.com/en/blog/user-stories/cut-storage-compute-costs-cloud-big-data-platform), 2023-09-14, Weihong Ke @ NetEase Games
@@ -54,8 +58,13 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 - [How to Monitor the JuiceFS File System with Grafana Cloud](https://juicefs.com/en/blog/usage-tips/monitor-file-system-grafana-cloud), 2024-04-18, Herald Yu
 - [How to Persist Data in Google Colab Using JuiceFS](https://juicefs.com/en/blog/usage-tips/colab-persist-data), 2024-03-27, Jet
 - [98% GPU Utilization Achieved in 1k GPU-Scale AI Training Using Distributed Cache](https://juicefs.com/en/blog/engineering/ai-gpu-utilization-mlperf-benchmark), 2024-03-07, Feihu Mo
-- [A Deep Dive into the Design of Directory Quotas in JuiceFS](https://juicefs.com/en/blog/engineering/design-juicefs-directory-quotas), 2023-10-26, Sandy
+- [How a Distributed File System in Go Reduced Memory Usage by 90%](https://juicefs.com/en/blog/engineering/reduce-metadata-memory-usage), 2024-02-22, Sandy
+- [K8s Data Persistence: Getting Started with JuiceFS CSI Driver](https://juicefs.com/en/blog/usage-tips/kubernetes-data-persistence-juicefs), 2023-12-28, Herald Yu
+- [How We Achieved a 40x Performance Boost in Metadata Backup and Recovery](https://juicefs.com/en/blog/engineering/increase-performance-metadata-backup-recovery), 2023-12-20, Jian Zhi
+- [How to Build a Ceph Cluster and Integrate with the JuiceFS File System](https://juicefs.com/en/blog/usage-tips/build-ceph-cluster-integrate-juicefs-file-system), 2023-12-07, Yifu Liu
+- [6 Essential Tips for JuiceFS Users](https://juicefs.com/en/blog/usage-tips/juicefs-user-tips-distributed-file-storage-system), 2023-11-23, Herald Yu
 - [What's New in JuiceFS Enterprise Edition 5.0](https://juicefs.com/en/blog/release-notes/juicefs-enterprise-edition-v5), 2023-11-20
+- [A Deep Dive into the Design of Directory Quotas in JuiceFS](https://juicefs.com/en/blog/engineering/design-juicefs-directory-quotas), 2023-10-26, Sandy
 - [Configuring Samba and NFS on JuiceFS to Unlock Unlimited Cloud Storage](https://juicefs.com/en/blog/usage-tips/scalable-cloud-storage-samba-nfs-shares-juicefs), 2023-08-29, Herald Yu
 - [How to Store and Share AI Models for Stable Diffusion in the Cloud](https://juicefs.com/en/blog/usage-tips/share-store-model-data-stable-diffusion-cloud), 2023-07-19, Herald Yu
 - [JuiceFS Enterprise Edition: Architecture, Features, and Community Edition Comparison](https://juicefs.com/en/blog/solutions/juicefs-enterprise-edition-features-vs-community-edition), 2023-06-06, Changjian Gao
