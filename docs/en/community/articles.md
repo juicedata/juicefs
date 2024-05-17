@@ -11,6 +11,9 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### AI, machine learning, and deep learning
 
+- [LLM Storage: Performance, Cost, and Multi-Cloud Architecture](https://juicefs.com/en/blog/solutions/llm-storage-performance-cost-multi-cloud), 2024-04-09, Sui Su
+- [How Zhihu Ensures Stable Storage for LLM Training in Multi-Cloud Architecture](https://juicefs.com/en/blog/user-stories/ai-storage-llm-training-multi-cloud), 2024-04-03, Xin Wang
+- [BentoML Reduced LLM Loading Time from 20+ to a Few Minutes with JuiceFS](https://juicefs.com/en/blog/user-stories/accelerate-large-language-model-loading), 2024-02-29, Xipeng Guan
 - [A Leading Self-Driving Company Chose JuiceFS over Amazon S3 and Alluxio in the Multi-Cloud Architecture](https://juicefs.com/en/blog/user-stories/data-storage-multi-cloud-autonomous-driving-juicefs), 2023-11-09
 - [Building a Cloud-Native File Storage Platform to Host 5B+ Files in AI Training & More](https://juicefs.com/en/blog/user-stories/cloud-native-file-storage-platform-ai-training), 2023-10-12, Jiapeng Sun @ Xiaomi
 - [Choosing JuiceFS over s3fs and Alluxio for Our Ultra-Heterogeneous Computing Cluster](https://juicefs.com/en/blog/user-stories/high-performance-scale-out-heterogeneous-computing-power-cluster-storage), 2023-06-09, Chen Hong @ Zhejiang Lab
@@ -44,6 +47,13 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Tutorial, guide, and best practice
 
+- [Data Sync in JuiceFS 1.2: Enhanced Selective Sync and Performance Optimizations](https://juicefs.com/en/blog/usage-tips/data-sync), 2024-05-16, Jian Zhi
+- [Smooth Upgrade: Implementation and Usage](https://juicefs.com/en/blog/engineering/smooth-upgrade), 2024-05-08, Jian Zhi
+- [How We Optimized ACL Implementation for Minimal Performance Impact](https://juicefs.com/en/blog/engineering/access-control-list), 2024-04-30, Jiefeng Huang
+- [JuiceFS 1.2: Gateway Upgrade, Enhanced Multi-User Permission Management](https://juicefs.com/en/blog/release-notes/juicefs-12-beta-1), 2024-04-22, Jian Zhi
+- [How to Monitor the JuiceFS File System with Grafana Cloud](https://juicefs.com/en/blog/usage-tips/monitor-file-system-grafana-cloud), 2024-04-18, Herald Yu
+- [How to Persist Data in Google Colab Using JuiceFS](https://juicefs.com/en/blog/usage-tips/colab-persist-data), 2024-03-27, Jet
+- [98% GPU Utilization Achieved in 1k GPU-Scale AI Training Using Distributed Cache](https://juicefs.com/en/blog/engineering/ai-gpu-utilization-mlperf-benchmark), 2024-03-07, Feihu Mo
 - [A Deep Dive into the Design of Directory Quotas in JuiceFS](https://juicefs.com/en/blog/engineering/design-juicefs-directory-quotas), 2023-10-26, Sandy
 - [What's New in JuiceFS Enterprise Edition 5.0](https://juicefs.com/en/blog/release-notes/juicefs-enterprise-edition-v5), 2023-11-20
 - [Configuring Samba and NFS on JuiceFS to Unlock Unlimited Cloud Storage](https://juicefs.com/en/blog/usage-tips/scalable-cloud-storage-samba-nfs-shares-juicefs), 2023-08-29, Herald Yu
