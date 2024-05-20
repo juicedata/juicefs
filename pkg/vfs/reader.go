@@ -169,12 +169,10 @@ func (s *sliceReader) run() {
 	inode := f.inode
 	f.Unlock()
 
-	f.Lock()
-	length := f.length
-	f.Unlock()
 	var slices []meta.Slice
 	err := f.r.m.Read(meta.Background, inode, indx, &slices)
 	f.Lock()
+	length := f.length
 	if s.state != BUSY || f.err != 0 || f.closing {
 		s.done(0, 0)
 	}
