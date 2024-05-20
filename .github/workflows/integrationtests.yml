@@ -19,6 +19,8 @@ on:
       - '**.go'
       - 'Makefile'
       - 'integrationtests.yml'
+  schedule:
+    - cron:  '0 19 * * *'
   workflow_dispatch:
     inputs:
       debug:
