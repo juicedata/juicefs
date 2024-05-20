@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import re
 import subprocess
 try: 
     __import__('xattr')
@@ -66,7 +67,9 @@ class S3Client():
                 message = output.get('error', {}).get('message', 'error message not found')
                 return Exception(f'returncode:{e.returncode} {message}')
             except ValueError as ve:
-                return Exception(f'returncode:{e.returncode} output:{e.output.decode()}')
+                output = e.output.decode()
+                output = re.sub(r'\b\d+\.\d+\b|\b\d+\b', '***', output)
+                return Exception(f'returncode:{e.returncode} output:{output}')
         else:
             self.logger.info(f'{action} {kwargs} failed: {e}')
             return e
