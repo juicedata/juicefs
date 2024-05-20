@@ -103,7 +103,7 @@ jobs:
       - name: Run All
         timeout-minutes: 70
         run: |
-          timeout 3600 sudo -E LOG_LEVEL=WARNING META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all || code=$?; if [[ $code -ne 124 && $code -ne 0 ]]; then echo test failed; exit $code; fi
+          sudo -E LOG_LEVEL=WARNING META1=redis META2=${{matrix.meta}} timeout 3600 .github/scripts/command/random.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo failed with $code && exit $code; fi
       
       - name: Upload example database
         uses: actions/upload-artifact@v3

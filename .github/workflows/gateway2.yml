@@ -114,8 +114,8 @@ jobs:
       - name: Test randomly
         timeout-minutes: 65
         run: |
-          timeout 3600 sudo -E LOG_LEVEL=WARNING python3 .github/scripts/hypo/s3.py 2>&1 | tee result.log || code=$?; if [[ $code -ne 124 && $code -ne 0 ]]; then echo test failed; exit $code; fi
-          
+          sudo -E LOG_LEVEL=WARNING timeout 3600 python3 .github/scripts/hypo/s3.py || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo test failed with $code && exit $code; fi
+
       - name: Upload example database
         uses: actions/upload-artifact@v3
         if: always()
