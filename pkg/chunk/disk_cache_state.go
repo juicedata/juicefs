@@ -46,10 +46,11 @@ var (
 )
 
 var diskStateNames = map[int]string{
-	dcUnknown:  "unknown",
-	dcNormal:   "normal",
-	dcUnstable: "unstable",
-	dcDown:     "down",
+	dcUnknown:   "unknown",
+	dcNormal:    "normal",
+	dcUnstable:  "unstable",
+	dcDown:      "down",
+	dcUnchanged: "unchanged",
 }
 
 const (
@@ -57,6 +58,7 @@ const (
 	dcNormal
 	dcUnstable
 	dcDown
+	dcUnchanged
 )
 
 const (
@@ -93,6 +95,8 @@ func newDCState(state int, cs *cacheStore) dcState {
 		s = &unstableDC{}
 	case dcDown:
 		s = &downDC{}
+	case dcUnchanged:
+		s = &unchangedDC{}
 	}
 	s.init(cs)
 	s.tick()
@@ -114,6 +118,12 @@ func (dc *baseDC) tick()               {}
 func (dc *baseDC) checkCacheOp() error { return nil }
 func (dc *baseDC) beforeCacheOp()      {}
 func (dc *baseDC) afterCacheOp()       {}
+
+type unchangedDC struct {
+	baseDC
+}
+
+func (dc *unchangedDC) state() int { return dcUnchanged }
 
 type normalDC struct {
 	baseDC

@@ -130,7 +130,11 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingP
 		opTs:          make(map[time.Duration]func() error),
 	}
 	c.stateLock = sync.Mutex{}
-	c.state = newDCState(dcNormal, c)
+	if config.Writeback {
+		c.state = newDCState(dcUnchanged, c)
+	} else {
+		c.state = newDCState(dcNormal, c)
+	}
 
 	c.createDir(c.dir)
 	br, fr := c.curFreeRatio()
