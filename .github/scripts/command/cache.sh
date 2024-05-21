@@ -105,7 +105,7 @@ test_disk_failover()
     mount_jfsCache1
     rm -rf /var/jfsCache2 /var/jfsCache3
     ./juicefs format $META_URL myjfs --trash-days 0
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3
+    JFS_MAX_CONCURRENCY_FOR_UNSTABLE=70 ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3
     rm -rf /tmp/test_failover
     dd if=/dev/urandom of=/tmp/test_failover bs=1M count=$TEST_FILE_SIZE
     cp /tmp/test_failover /tmp/jfs/test_failover
@@ -119,12 +119,11 @@ test_disk_failover()
     ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
     check_evict_log check.log
     mv cache.db cache.db.bak
-    # /etc/init.d/redis-server stop
-    # sleep 10
     ./juicefs warmup /tmp/jfs/test_failover
-    du -sh /var/jfsCache2 /var/jfsCache3 || true
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    sleep 10
+    sleep 75s
+    # du -sh /var/jfsCache2 /var/jfsCache3 || true
+    # ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
+    # sleep 10
     ./juicefs warmup /tmp/jfs/test_failover
     du -sh /var/jfsCache2 /var/jfsCache3 || true
     ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
