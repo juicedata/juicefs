@@ -9,7 +9,7 @@ on:
       - '**.c'
       - '**.go'
       - 'Makefile'
-      - 'integrationtests.yml'
+      - '**/integrationtests.yml'
   pull_request:
     branches:
       - 'main'
@@ -18,7 +18,7 @@ on:
       - '**.c'
       - '**.go'
       - 'Makefile'
-      - 'integrationtests.yml'
+      - '**/integrationtests.yml'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:
@@ -40,7 +40,7 @@ jobs:
           if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch"  ]]; then
             echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
           elif [[ "${{github.event_name}}" == "pull_request" ||  "${{github.event_name}}" == "push" ]]; then
-            echo 'meta_matrix=["redis", "mysql"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["redis", "mysql", "tikv"]' >> $GITHUB_OUTPUT
           else
             echo "event_name is not supported" && exit 1
           fi
