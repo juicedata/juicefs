@@ -9,7 +9,7 @@ on:
       - '**.c'
       - '**.go'
       - 'Makefile'
-      - 'integrationtests.yml'
+      - '**/integrationtests.yml'
   pull_request:
     branches:
       - 'main'
@@ -18,7 +18,7 @@ on:
       - '**.c'
       - '**.go'
       - 'Makefile'
-      - 'integrationtests.yml'
+      - '**/integrationtests.yml'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:
