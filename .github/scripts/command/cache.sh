@@ -14,10 +14,6 @@ prepare_test()
     rm -rf /var/jfs/myjfs || true
     rm -rf /var/jfsCache/myjfs || true
 }
-	# minRetryBackoff := query.duration("min-retry-backoff", "min_retry_backoff", time.Millisecond*20)
-	# maxRetryBackoff := query.duration("max-retry-backoff", "max_retry_backoff", time.Second*10)
-	# readTimeout := query.duration("read-timeout", "read_timeout", time.Second*30)
-	# writeTimeout := query.duration("write-timeout", "write_timeout", time.Second*5)
 
 mount_jfsCache1(){
     /etc/init.d/redis-server start
@@ -26,7 +22,7 @@ mount_jfsCache1(){
     rm -rf /var/jfsCache1
     redis-cli flushall
     rm -rf /var/jfs/test
-    ./juicefs format "redis://localhost/1?read-timeout=3&write-timeout=1" test --trash-days 0
+    ./juicefs format "redis://localhost/1?read-timeout=3&write-timeout=1&max-retry-backoff=3" test --trash-days 0
     ./juicefs mount redis://localhost/1 /var/jfsCache1 -d --log /tmp/juicefs.log
     trap "echo umount /var/jfsCache1 && umount -l /var/jfsCache1" EXIT
 }
@@ -111,6 +107,7 @@ test_disk_failover()
 {
     prepare_test
     mount_jfsCache1
+    rm -rf /var/log/juicefs.log
     rm -rf /var/jfsCache2 /var/jfsCache3
     ./juicefs format $META_URL myjfs --trash-days 0
     JFS_MAX_DURATION_TO_DOWN=10s ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1
@@ -120,8 +117,7 @@ test_disk_failover()
     ./juicefs warmup /tmp/jfs/test_failover
     ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
     check_warmup_log check.log 50
-    echo sleep to wait state change to down
-    for i in {30..1}; do printf "\r$i "; sleep 1; done;
+    wait_disk_down 60
     ./juicefs warmup /tmp/jfs/test_failover
     ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
     check_warmup_log check.log 98
@@ -130,6 +126,22 @@ test_disk_failover()
     compare_md5sum /tmp/test_failover /tmp/jfs/test_failover
     docker start minio && sleep 3
 }
+
+wait_disk_down()
+{
+    timeout=$1
+    for i in $(seq 1 $timeout); do
+        if grep -q "state change from unstable to down" /var/log/juicefs.log; then
+            echo "state changed from unstable to down"
+            return
+        else
+            echo "\rWait for state change to down, $i"
+            sleep 1
+            count=$((count+1))
+        fi
+    done
+    echo "Wait for state change to down timeout" && exit 1
+}   
 
 test_mount_same_disk_after_failure()
 {
