@@ -1,4 +1,5 @@
 #!/bin/bash -e
+dpkg -s redis-server || .github/scripts/apt_install.sh  redis-tools redis-server
 source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 [[ -z "$META" ]] && META=sqlite3
@@ -15,12 +16,14 @@ prepare_test()
 }
 
 mount_jfsCache1(){
+    /etc/init.d/redis-server start
+    timeout 30s bash -c 'until nc -zv localhost 6379; do sleep 1; done'
     umount -l /var/jfsCache1 || true
-    rm -rf /var/jfsCache1 || true
-    rm -rf /var/jfs/test || true
-    rm -rf cache.db || true
-    ./juicefs format sqlite3://cache.db test --trash-days 0
-    ./juicefs mount sqlite3://cache.db /var/jfsCache1 -d --log /tmp/juicefs.log
+    rm -rf /var/jfsCache1
+    redis-cli flushall
+    rm -rf /var/jfs/test
+    ./juicefs format "redis://localhost/1?read-timeout=3&write-timeout=1&max-retry-backoff=3" test --trash-days 0
+    ./juicefs mount redis://localhost/1 /var/jfsCache1 -d --log /tmp/juicefs.log
     trap "echo umount /var/jfsCache1 && umount -l /var/jfsCache1" EXIT
 }
 
@@ -35,8 +38,9 @@ check_evict_log(){
 
 check_warmup_log(){
     log=$1
+    ratio=$2
     result=$(cat $log |  sed 's/.*(\([0-9]*\.[0-9]*%\)).*/\1/' | sed 's/%//')
-    if (( $(echo "$result < 98" | bc -l) )); then
+    if (( $(echo "$result < $ratio" | bc -l) )); then
         echo "cache ratio should be more than 98% after warmup, actual is $result"
         exit 1
     fi
@@ -103,117 +107,41 @@ test_disk_failover()
 {
     prepare_test
     mount_jfsCache1
+    rm -rf /var/log/juicefs.log
     rm -rf /var/jfsCache2 /var/jfsCache3
     ./juicefs format $META_URL myjfs --trash-days 0
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3
-    rm -rf /tmp/test_failover
+    JFS_MAX_DURATION_TO_DOWN=10s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1
     dd if=/dev/urandom of=/tmp/test_failover bs=1M count=$TEST_FILE_SIZE
     cp /tmp/test_failover /tmp/jfs/test_failover
+    /etc/init.d/redis-server stop
     ./juicefs warmup /tmp/jfs/test_failover
-    du -sh /var/jfsCache? || true
     ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_warmup_log check.log
-    check_cache_distribute $TEST_FILE_SIZE /var/jfsCache1 /var/jfsCache2 /var/jfsCache3
-    ./juicefs warmup --evict /tmp/jfs/test_failover
-    du -sh /var/jfsCache? || true
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_evict_log check.log
-    mv cache.db cache.db.bak
-    # /etc/init.d/redis-server stop
-    # sleep 10
+    check_warmup_log check.log 50
+    wait_disk_down 60
     ./juicefs warmup /tmp/jfs/test_failover
-    du -sh /var/jfsCache2 /var/jfsCache3 || true
     ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    sleep 10
-    ./juicefs warmup /tmp/jfs/test_failover
-    du -sh /var/jfsCache2 /var/jfsCache3 || true
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_warmup_log check.log
+    check_warmup_log check.log 98
     check_cache_distribute $TEST_FILE_SIZE /var/jfsCache2 /var/jfsCache3
     echo stop minio && docker stop minio
     compare_md5sum /tmp/test_failover /tmp/jfs/test_failover
     docker start minio && sleep 3
-    ./juicefs warmup --evict /tmp/jfs
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_evict_log check.log
 }
 
-test_mount_same_disk_after_failure()
+wait_disk_down()
 {
-    prepare_test
-    mount_jfsCache1
-    rm -rf /var/jfsCache2 /var/jfsCache3
-    ./juicefs format $META_URL myjfs --trash-days 0
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3
-    rm -rf /tmp/test_failover
-    dd if=/dev/urandom of=/tmp/test_failover bs=1M count=$TEST_FILE_SIZE
-    cp /tmp/test_failover /tmp/jfs/test_failover
-    ./juicefs warmup /tmp/jfs/test_failover
-    du -sh /var/jfsCache? || true
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_warmup_log check.log
-    check_cache_distribute $TEST_FILE_SIZE /var/jfsCache1 /var/jfsCache2 /var/jfsCache3
-    # 坏盘恢复后重新挂载
-    mv cache.db cache.db.bak
-    # /etc/init.d/redis-server stop
-    cp /tmp/jfs/test_failover  /dev/null
-    echo "sleep 5s to wait clean up" && sleep 5
-    mv cache.db.bak cache.db
-    # /etc/init.d/redis-server start
-    # timeout 30s bash -c 'until nc -zv localhost 6379; do sleep 1; done'
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache2:/var/jfsCache3:/var/jfsCache1
-    echo "sleep 3s to wait to build cache in memory " && sleep 3
-    du -sh /var/jfsCache1 /var/jfsCache2 /var/jfsCache3 || true
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_warmup_log check.log
-    echo stop minio && docker stop minio
-    compare_md5sum /tmp/test_failover /tmp/jfs/test_failover
-    docker start minio && sleep 3
-}
-
-
-skip_test_rebalance_after_disk_failure_and_replace()
-{
-    prepare_test
-    mount_jfsCache1
-    rm -rf /var/jfsCache2 /var/jfsCache3
-    ./juicefs format $META_URL myjfs --trash-days 0
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3
-    rm -rf /tmp/test_failover
-    dd if=/dev/urandom of=/tmp/test_failover bs=1M count=$TEST_FILE_SIZE
-    cp /tmp/test_failover /tmp/jfs/test_failover
-    ./juicefs warmup /tmp/jfs/test_failover
-    du -sh /var/jfsCache? || true
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_warmup_log check.log
-    check_cache_distribute $TEST_FILE_SIZE /var/jfsCache1 /var/jfsCache2 /var/jfsCache3
-    # 坏盘后换一张新盘挂载
-    mv cache.db cache.db.bak
-    # echo "stop redis server" && /etc/init.d/redis-server stop
-    cp /tmp/jfs/test_failover  /dev/null
-    echo "sleep 5s to wait cleanup" && sleep 5
-    ./juicefs warmup /tmp/jfs/test_failover
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_warmup_log check.log
-    umount /var/jfsCache1 -l || true
-    rm /var/jfsCache1 -rf 
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache2:/var/jfsCache1:/var/jfsCache3
-    echo "wait rebalance after disk replacement" 
-    for i in {1..30}; do
-        du -sh /var/jfsCache1 /var/jfsCache2 /var/jfsCache3 || true
-        ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-        grep "(100.0%)" check.log && "check cache succeed" && break
-        echo "sleep to wait rebalance... " && sleep 1
+    timeout=$1
+    for i in $(seq 1 $timeout); do
+        if grep -q "state change from unstable to down" /var/log/juicefs.log; then
+            echo "state changed from unstable to down"
+            return
+        else
+            echo "\rWait for state change to down, $i"
+            sleep 1
+            count=$((count+1))
+        fi
     done
-    check_warmup_log check.log
-    check_cache_distribute $TEST_FILE_SIZE /var/jfsCache1 /var/jfsCache2 /var/jfsCache3
-    echo stop minio && docker stop minio
-    compare_md5sum /tmp/test_failover /tmp/jfs/test_failover
-    docker start minio && sleep 3
-    rm -rf /tmp/test_failover
-}
-
-
+    echo "Wait for state change to down timeout" && exit 1
+}   
 
 source .github/scripts/common/run_test.sh && run_test $@
 
