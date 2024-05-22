@@ -233,7 +233,7 @@ jobs:
       - name: Test Cache
         timeout-minutes: 30
         run: |
-          if [ "${{matrix.meta}}" == "redis" ]; then
+          if [[ "${{matrix.meta}}" == "mysql" || "${{matrix.meta}}" == "tikv" ]]; then
             sudo META=${{matrix.meta}} .github/scripts/command/cache.sh
           fi
 
