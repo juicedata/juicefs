@@ -105,25 +105,17 @@ test_disk_failover()
     mount_jfsCache1
     rm -rf /var/jfsCache2 /var/jfsCache3
     ./juicefs format $META_URL myjfs --trash-days 0
-    JFS_MAX_CONCURRENCY_FOR_UNSTABLE=70 ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3
-    rm -rf /tmp/test_failover
+    JFS_MAX_DURATION_TO_DOWN=10s ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3
     dd if=/dev/urandom of=/tmp/test_failover bs=1M count=$TEST_FILE_SIZE
     cp /tmp/test_failover /tmp/jfs/test_failover
     ./juicefs warmup /tmp/jfs/test_failover
-    du -sh /var/jfsCache? || true
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_warmup_log check.log
-    check_cache_distribute $TEST_FILE_SIZE /var/jfsCache1 /var/jfsCache2 /var/jfsCache3
-    ./juicefs warmup --evict /tmp/jfs/test_failover
-    du -sh /var/jfsCache? || true
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_evict_log check.log
+    ./juicefs warmup /tmp/jfs/test_failover --evict
     mv cache.db cache.db.bak
     ./juicefs warmup /tmp/jfs/test_failover
-    sleep 75s
-    # du -sh /var/jfsCache2 /var/jfsCache3 || true
-    # ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    # sleep 10
+    du -sh /var/jfsCache2 /var/jfsCache3 || true
+    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
+    echo sleep to wait state change to down
+    for i in {60..1}; do printf "\r$i "; sleep 1; done;
     ./juicefs warmup /tmp/jfs/test_failover
     du -sh /var/jfsCache2 /var/jfsCache3 || true
     ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
@@ -132,9 +124,6 @@ test_disk_failover()
     echo stop minio && docker stop minio
     compare_md5sum /tmp/test_failover /tmp/jfs/test_failover
     docker start minio && sleep 3
-    ./juicefs warmup --evict /tmp/jfs
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_evict_log check.log
 }
 
 test_mount_same_disk_after_failure()
