@@ -105,6 +105,11 @@ jobs:
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/gateway.sh
       
+      - name: Test Debug
+        timeout-minutes: 30
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/debug.sh
+      
       - name: Test Info
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/info.sh
