@@ -229,7 +229,7 @@ class S3Machine(RuleBasedStateMachine):
         result2 = self.client2.do_remove_object(bucket_name, object_name, alias)
         assert self.equal(result1, result2), f'\033[31mremove_object:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
-            return object_name
+            return obj
         else:
             return multiple()
         
