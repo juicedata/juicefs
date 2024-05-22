@@ -1,4 +1,5 @@
 #!/bin/bash -e
+dpkg -s redis-server || .github/scripts/apt_install.sh  redis-tools redis-server
 source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 [[ -z "$META" ]] && META=sqlite3
