@@ -24,7 +24,7 @@ mount_jfsCache1(){
     rm -rf /var/jfs/test
     ./juicefs format "redis://localhost/1?read-timeout=3&write-timeout=1&max-retry-backoff=3" test --trash-days 0
     ./juicefs mount redis://localhost/1 /var/jfsCache1 -d --log /tmp/juicefs.log
-    # trap "echo umount /var/jfsCache1 && umount -l /var/jfsCache1" EXIT
+    trap "echo umount /var/jfsCache1 && umount -l /var/jfsCache1" EXIT
 }
 
 check_evict_log(){
