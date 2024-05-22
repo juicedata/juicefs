@@ -134,6 +134,7 @@ func sendStats(addr string) {
 }
 
 func startManager(config *Config, tasks <-chan object.Object) (string, error) {
+	batch := utils.GetEnvInt("JFS_CLUSTER_MAX_BATCH_OBJECTS", 100)
 	http.HandleFunc("/fetch", func(w http.ResponseWriter, req *http.Request) {
 		var objs []object.Object
 		obj, ok := <-tasks
@@ -143,16 +144,13 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 		}
 		objs = append(objs, obj)
 	LOOP:
-		for {
+		for len(objs) < batch {
 			select {
 			case obj = <-tasks:
 				if obj == nil {
 					break LOOP
 				}
 				objs = append(objs, obj)
-				if len(objs) > 100 {
-					break LOOP
-				}
 			default:
 				break LOOP
 			}

@@ -280,3 +280,13 @@ func Duration(s string) time.Duration {
 	}
 	return d + time.Hour*time.Duration(v*24)
 }
+
+func GetEnvInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if i, e := strconv.Atoi(v); e == nil {
+			return i
+		}
+		logger.Warnf("Invalid value for %s: %s, using default: %d", key, v, def)
+	}
+	return def
+}
