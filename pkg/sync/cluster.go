@@ -33,6 +33,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/oliverisaac/shellescape"
 
 	"github.com/juicedata/juicefs/pkg/object"
@@ -136,23 +137,23 @@ func sendStats(addr string) {
 func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 	http.HandleFunc("/fetch", func(w http.ResponseWriter, req *http.Request) {
 		var objs []object.Object
+		var total int64
 		obj, ok := <-tasks
 		if !ok {
 			_, _ = w.Write([]byte("[]"))
 			return
 		}
 		objs = append(objs, obj)
+		total += obj.Size()
 	LOOP:
-		for {
+		for len(objs) < 100 && total < 400<<20 {
 			select {
 			case obj = <-tasks:
 				if obj == nil {
 					break LOOP
 				}
 				objs = append(objs, obj)
-				if len(objs) > 100 {
-					break LOOP
-				}
+				total += obj.Size()
 			default:
 				break LOOP
 			}
@@ -162,7 +163,7 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		logger.Debugf("send %d objects to %s", len(objs), req.RemoteAddr)
+		logger.Debugf("send %d objects(%s) to %s", len(objs), humanize.IBytes(uint64(total)), req.RemoteAddr)
 		_, _ = w.Write(d)
 	})
 	http.HandleFunc("/stats", func(w http.ResponseWriter, req *http.Request) {
