@@ -239,7 +239,6 @@ class S3Machine(RuleBasedStateMachine):
     )
     @precondition(lambda self: 'stat_object' not in self.EXCLUDE_RULES)
     def stat_object(self, obj:str, alias=ROOT_ALIAS):
-        print(f'obj is {obj}')
         bucket_name = obj.split(':')[0]
         object_name = obj.split(':')[1]
         result1 = self.client1.do_stat_object(bucket_name, object_name, alias)
