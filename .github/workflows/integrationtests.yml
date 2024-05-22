@@ -119,7 +119,7 @@ jobs:
           make -C secfs.test
   
       - name: Fsx Test
-        timeout-minutes: 15
+        timeout-minutes: 16
         run: |
           if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch"  ]] ; then
             duration=900
@@ -130,10 +130,9 @@ jobs:
           sudo rm -f /tmp/fsx.out
           sudo ln -s /jfs/fsx.out /tmp/fsx.out
           sudo secfs.test/tools/bin/fsx -d $duration -p 10000 -F 10000000 /tmp/fsx.out
-          # sudo secfs.test/tools/bin/fsx -d 180 -p 10000 -F 100000 /jfs/fsx.out
 
       - name: Fsracer Test
-        timeout-minutes: 15
+        timeout-minutes: 16
         shell: 'script -q -e -c "bash {0}"'
         run: |
           if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch"  ]] ; then
