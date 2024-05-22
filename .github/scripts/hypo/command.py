@@ -51,7 +51,7 @@ class JuicefsCommandMachine(JuicefsMachine):
     MP2 = '/tmp/jfs2'
     ROOT_DIR1=os.path.join(MP1, 'fsrand')
     ROOT_DIR2=os.path.join(MP2, 'fsrand')
-    EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file', 'config', 'set_xattr']
+    EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file', 'config']
     # EXCLUDE_RULES = []
     INCLUDE_RULES = ['dump_load_dump', 'mkdir', 'create_file', 'set_xattr', 'dump']
     cmd1 = CommandOperation('cmd1', MP1, ROOT_DIR1)
