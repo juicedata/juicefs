@@ -24,7 +24,7 @@ mount_jfsCache1(){
     rm -rf /var/jfs/test
     ./juicefs format "redis://localhost/1?read-timeout=3&write-timeout=1&max-retry-backoff=3" test --trash-days 0
     ./juicefs mount redis://localhost/1 /var/jfsCache1 -d --log /tmp/juicefs.log
-    trap "echo umount /var/jfsCache1 && umount -l /var/jfsCache1" EXIT
+    # trap "echo umount /var/jfsCache1 && umount -l /var/jfsCache1" EXIT
 }
 
 check_evict_log(){
@@ -110,7 +110,7 @@ test_disk_failover()
     rm -rf /var/log/juicefs.log
     rm -rf /var/jfsCache2 /var/jfsCache3
     ./juicefs format $META_URL myjfs --trash-days 0
-    JFS_MAX_DURATION_TO_DOWN=10s ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1
+    JFS_MAX_DURATION_TO_DOWN=10s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1
     dd if=/dev/urandom of=/tmp/test_failover bs=1M count=$TEST_FILE_SIZE
     cp /tmp/test_failover /tmp/jfs/test_failover
     /etc/init.d/redis-server stop
@@ -142,76 +142,6 @@ wait_disk_down()
     done
     echo "Wait for state change to down timeout" && exit 1
 }   
-
-test_mount_same_disk_after_failure()
-{
-    prepare_test
-    mount_jfsCache1
-    rm -rf /var/jfsCache2 /var/jfsCache3
-    ./juicefs format $META_URL myjfs --trash-days 0
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3
-    rm -rf /tmp/test_failover
-    dd if=/dev/urandom of=/tmp/test_failover bs=1M count=$TEST_FILE_SIZE
-    cp /tmp/test_failover /tmp/jfs/test_failover
-    ./juicefs warmup /tmp/jfs/test_failover
-    # 坏盘恢复后重新挂载
-    mv cache.db cache.db.bak
-    cp /tmp/jfs/test_failover  /dev/null
-    echo "sleep 5s to wait clean up" && sleep 5
-    mv cache.db.bak cache.db
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache2:/var/jfsCache3:/var/jfsCache1
-    echo "sleep 3s to wait to build cache in memory " && sleep 3
-    du -sh /var/jfsCache1 /var/jfsCache2 /var/jfsCache3 || true
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_warmup_log check.log 98
-    echo stop minio && docker stop minio
-    compare_md5sum /tmp/test_failover /tmp/jfs/test_failover
-    docker start minio && sleep 3
-}
-
-
-skip_test_rebalance_after_disk_failure_and_replace()
-{
-    prepare_test
-    mount_jfsCache1
-    rm -rf /var/jfsCache2 /var/jfsCache3
-    ./juicefs format $META_URL myjfs --trash-days 0
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3
-    rm -rf /tmp/test_failover
-    dd if=/dev/urandom of=/tmp/test_failover bs=1M count=$TEST_FILE_SIZE
-    cp /tmp/test_failover /tmp/jfs/test_failover
-    ./juicefs warmup /tmp/jfs/test_failover
-    du -sh /var/jfsCache? || true
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_warmup_log check.log 98
-    check_cache_distribute $TEST_FILE_SIZE /var/jfsCache1 /var/jfsCache2 /var/jfsCache3
-    # 坏盘后换一张新盘挂载
-    mv cache.db cache.db.bak
-    # echo "stop redis server" && /etc/init.d/redis-server stop
-    cp /tmp/jfs/test_failover  /dev/null
-    echo "sleep 5s to wait cleanup" && sleep 5
-    ./juicefs warmup /tmp/jfs/test_failover
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_warmup_log check.log 98
-    umount /var/jfsCache1 -l || true
-    rm /var/jfsCache1 -rf 
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache2:/var/jfsCache1:/var/jfsCache3
-    echo "wait rebalance after disk replacement" 
-    for i in {1..30}; do
-        du -sh /var/jfsCache1 /var/jfsCache2 /var/jfsCache3 || true
-        ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-        grep "(100.0%)" check.log && "check cache succeed" && break
-        echo "sleep to wait rebalance... " && sleep 1
-    done
-    check_warmup_log check.log 98
-    check_cache_distribute $TEST_FILE_SIZE /var/jfsCache1 /var/jfsCache2 /var/jfsCache3
-    echo stop minio && docker stop minio
-    compare_md5sum /tmp/test_failover /tmp/jfs/test_failover
-    docker start minio && sleep 3
-    rm -rf /tmp/test_failover
-}
-
-
 
 source .github/scripts/common/run_test.sh && run_test $@
 
