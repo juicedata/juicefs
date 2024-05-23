@@ -177,6 +177,28 @@ test_user_svcacct_add()
     ./mc admin user svcacct rm gateway1_user1 12345678
 }
 
+test_user_admin_svcacct_add()
+{
+    prepare_test
+    start_two_gateway
+    ./mc admin user add gateway1 user1 admin123
+    ./mc admin policy set gateway1 readwrite user=user1
+    ./mc admin user svcacct add gateway1 user1 --access-key 12345678 --secret-key 12345678
+    ./mc admin user svcacct info gateway1 12345678
+    ./mc admin user svcacct set gateway1 12345678 --secret-key 12345678910
+    ./mc alias set svcacct1 http://127.0.0.1:9001 12345678 12345678910
+    ./mc mb svcacct1/test1
+    if ./mc cp mc svcacct1/test1/file1
+    then
+      echo "amdin user can do svcacct "
+    else
+      echo "the svcacct user has no read and write permission"
+      exit 1
+    fi
+    ./mc admin user svcacct disable gateway1 12345678
+    ./mc admin user svcacct rm gateway1 12345678
+}
+
 test_user_sts()
 {
     prepare_test
