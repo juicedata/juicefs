@@ -34,8 +34,8 @@ import random
 @seed(random.randint(10000, 1000000))
 @hypothesis.settings(
     verbosity=Verbosity.debug, 
-    max_examples=10, 
-    stateful_step_count=10, 
+    max_examples=100, 
+    stateful_step_count=30, 
     deadline=None, 
     report_multiple_bugs=False, 
     phases=[Phase.explicit, Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
