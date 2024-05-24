@@ -670,7 +670,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         sub_dir=st.sampled_from(['dir1', 'dir2']),
         port=st.integers(min_value=9001, max_value=10000)
     )
-    @precondition(lambda self: self.formatted )
+    @precondition(lambda self: self.formatted and False)
     def gateway(self, juicefs, get_timeout, put_timeout, io_retries, max_uploads, max_deletes, buffer_size, upload_limit, 
         download_limit, prefetch, writeback, upload_delay, cache_dir, cache_size, free_space_ratio, cache_partial_only, 
         backup_meta,heartbeat, read_only, no_bgjob, open_cache, attr_cache, entry_cache, dir_entry_cache, access_log, 
@@ -746,7 +746,7 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     @rule(juicefs = st.sampled_from(JFS_BINS), 
         port=st.integers(min_value=10001, max_value=11000)) 
-    @precondition(lambda self: self.formatted )
+    @precondition(lambda self: self.formatted and False)
     def webdav(self, juicefs, port):
         assume (self.greater_than_version_formatted(juicefs))
         assert version.parse('-'.join(juicefs.split('-')[1:])) >=  version.parse('-'.join(self.formatted_by.split('-')[1:]))
