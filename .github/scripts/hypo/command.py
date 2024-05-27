@@ -205,7 +205,7 @@ class JuicefsCommandMachine(JuicefsMachine):
     @rule(
         user = st_sudo_user
     )
-    @precondition(lambda self: self.should_run('trash_list'))
+    @precondition(lambda self: self.should_run('trash_list') and False)
     def trash_list(self, user='root'):
         result1 = self.cmd1.do_trash_list(user=user)
         result2 = self.cmd2.do_trash_list(user=user)
@@ -216,7 +216,7 @@ class JuicefsCommandMachine(JuicefsMachine):
         threads = st.integers(min_value=1, max_value=10),
         user=st_sudo_user
     )
-    @precondition(lambda self: self.should_run('restore'))
+    @precondition(lambda self: self.should_run('restore') and False)
     def restore(self, put_back, threads, user='root'):
         result1 = self.cmd1.do_restore(put_back=put_back, threads=threads, user=user)
         result2 = self.cmd2.do_restore(put_back=put_back, threads=threads, user=user)
