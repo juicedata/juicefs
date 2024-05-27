@@ -114,26 +114,8 @@ prepare_test(){
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9 || true
-    MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005 &
-    wait_gateway_ready
+    MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005 -d
     ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
-}
-
-wait_gateway_ready(){
-    timeout=30
-    for i in $(seq 1 $timeout); do
-        if [[ -z $(lsof -i :9005) ]]; then
-            echo "$i Waiting for port 9005 to be ready..."
-            sleep 1
-        else
-            echo "gateway is now ready on port 9005"
-            break
-        fi
-    done
-    if [[ -z $(lsof -i :9005) ]]; then
-        echo "gateway is not ready after $timeout seconds"
-        exit 1
-    fi
 }
 
 source .github/scripts/common/run_test.sh && run_test $@
