@@ -24,6 +24,7 @@ class CommandOperation:
     stats = Statistics()
     def __init__(self, name, mp, root_dir):
         self.logger = common.setup_logger(f'./{name}.log', name, os.environ.get('LOG_LEVEL', 'INFO'))
+        self.name = name
         self.mp = mp
         self.root_dir = root_dir
         self.meta_url = self.get_meta_url(mp)
@@ -166,12 +167,16 @@ class CommandOperation:
         abspath = os.path.join(self.root_dir, folder)
         subdir = os.path.relpath(abspath, self.mp)
         try:
+            # compact before dump to avoid slice difference
+            self.do_compact(folder)
             cmd=self.get_dump_cmd(self.meta_url, subdir, fast, skip_trash, keep_secret_key, threads, user)
             result = self.run_cmd(cmd, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as e:
             return self.handleException(e,  'do_dump', abspath)
         self.stats.success('do_dump')
         self.logger.info(f'do_dump {abspath} succeed')
+        # with open(f'dump_{self.name}.json', 'w') as f:
+        #     f.write(self.clean_dump(result))
         return self.clean_dump(result)
 
     def get_dump_cmd(self, meta_url, subdir, fast, skip_trash, keep_secret_key, threads, user='root'):
@@ -324,7 +329,7 @@ class CommandOperation:
         self.logger.info(f'do_trash_restore succeed')
         return restored_path
     
-    def do_compact(self, entry, threads, user):
+    def do_compact(self, entry, threads=5, user='root'):
         path = os.path.join(self.root_dir, entry)
         try:
             self.run_cmd(f'sudo -u {user} ./juicefs compact --log-level error {path} --threads {threads}')
