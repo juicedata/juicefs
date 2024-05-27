@@ -138,7 +138,7 @@ jobs:
         shell: bash
         run: | 
           if [ -f "/home/runner/.juicefs/juicefs.log" ]; then
-            cat /home/runner/.juicefs/juicefs.log
+            tail -1000 /home/runner/.juicefs/juicefs.log
             grep "<FATAL>:" /home/runner/.juicefs/juicefs.log && exit 1 || true
           fi
 
