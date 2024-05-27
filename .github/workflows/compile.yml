@@ -1,0 +1,175 @@
+name: "compile"
+
+on:
+  push:
+    branches:
+    - main
+    - release**
+    paths:
+    - '**/compile.yml'
+  pull_request:
+    branches:
+    - main
+    - release**
+    paths:
+    - '**/compile.yml'
+  schedule:
+    - cron:  '0 20 * * *'
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+jobs:
+  build-matrix:
+    runs-on: ubuntu-20.04
+    steps:
+      - id: set-matrix
+        run: |
+          echo "github.event_name is ${{github.event_name}}"
+          echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
+          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch"  ]]; then
+            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "postgres", "badger", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
+          elif [[ "${{github.event_name}}" == "pull_request" ||  "${{github.event_name}}" == "push" ]]; then
+            echo 'meta_matrix=["redis", "mysql", "tikv"]' >> $GITHUB_OUTPUT
+          else
+            echo "event_name is not supported" && exit 1
+          fi
+    outputs:
+      meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
+
+  compile:
+    timeout-minutes: 120
+    needs: build-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Set Variable
+        id: vars
+        run: |
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
+          else
+            echo "target=juicefs" >> $GITHUB_OUTPUT
+          fi
+  
+      - name: Build
+        timeout-minutes: 10
+        uses: ./.github/actions/build
+        with: 
+          target: ${{steps.vars.outputs.target}}
+      
+      - name: Remove unused software
+        timeout-minutes: 10
+        run: |
+          echo "before remove unused software"
+          sudo df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          echo "after remove unused software"
+          sudo df -h
+
+      - name: Prepare meta db
+        run: | 
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+
+      - name: Juicefs Format
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo ./juicefs format $meta_url --trash-days 0 pics
+
+      - name: Juicefs Mount
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo ./juicefs mount -d $meta_url /jfs --no-usage-report
+          stat /jfs/.accesslog
+  
+      - name: Build Redis
+        timeout-minutes: 10
+        working-directory: /jfs
+        run: |
+          wget -O /tmp/redis.tar.gz https://github.com/redis/redis/archive/refs/tags/6.0.16.tar.gz
+          mkdir redis
+          tar -xvf /tmp/redis.tar.gz -C redis --strip-components 1
+          make -C redis
+ 
+      - name: Install Depenency for Kernel
+        run: |
+          sudo apt-get install bison flex libelf-dev bc -y
+
+      - name: Build Kernel
+        timeout-minutes: 90
+        working-directory: /jfs
+        run: |
+          wget -O /tmp/linux.tar.gz https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.9.tar.gz
+          mkdir linux
+          tar xzf /tmp//linux.tar.gz -C linux --strip-components 1
+          make -C linux defconfig
+          make -C linux -j`grep -c processor /proc/cpuinfo`
+          
+      - name: Build Spack
+        if: false
+        run: |
+          git clone https://github.com/spack/spack.git
+          source spack/share/spack/setup-env.sh
+          spack --version
+          spack bootstrap now
+          spack compiler find 
+          spack compilers
+          spack config get config > ~/.spack/config.yaml 
+          sed -i '/build_stage:/,+2d' ~/.spack/config.yaml
+          echo -e "build_stage:\n  - /jfs/spack-stage" >> ~/.spack/config.yaml
+          spack install spack
+
+      - name: Log
+        if: always()
+        run: |
+          echo "juicefs log"
+          sudo tail -n 1000 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [compile]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
+      - name: Send Slack Notification
+        if: failure() && github.event_name != 'workflow_dispatch'
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Success
+        if: success() 
+        run: echo "All Done"
