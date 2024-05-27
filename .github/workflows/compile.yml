@@ -107,6 +107,7 @@ jobs:
         working-directory: /jfs
         run: |
           wget -O /tmp/redis.tar.gz https://github.com/redis/redis/archive/refs/tags/6.0.16.tar.gz
+          mkdir redis
           tar -xvf /tmp/redis.tar.gz -C redis --strip-components 1
           make -C redis
  
@@ -119,6 +120,7 @@ jobs:
         working-directory: /jfs
         run: |
           wget -O /tmp/linux.tar.gz https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.9.tar.gz
+          mkdir linux
           tar xzf /tmp//linux.tar.gz -C linux --strip-components 1
           make -C linux defconfig
           make -C linux -j`grep -c processor /proc/cpuinfo`
