@@ -89,7 +89,7 @@ jobs:
       - name: Test randomly
         timeout-minutes: 65
         run: |
-          sudo -E LOG_LEVEL=WARNING timeout 3600 python3 .github/scripts/command/gateway2.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo test failed with $code && exit $code; fi
+          sudo -E LOG_LEVEL=WARNING timeout 3600 .github/scripts/command/gateway2.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo test failed with $code && exit $code; fi
 
       - name: Upload example database
         uses: actions/upload-artifact@v3
