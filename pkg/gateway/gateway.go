@@ -932,7 +932,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	var total uint64
 	for _, part := range parts {
 		p := n.ppath(bucket, uploadID, strconv.Itoa(part.PartNumber))
-		copied, eno := n.fs.CopyFileRange(mctx, p, 0, tmp, total, 1<<30)
+		copied, eno := n.fs.CopyFileRange(mctx, p, 0, tmp, total, 5<<30)
 		if eno != 0 {
 			err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 			logger.Errorf("merge parts: %s", err)
