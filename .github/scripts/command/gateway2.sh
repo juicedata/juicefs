@@ -30,11 +30,13 @@ prepare_test()
 
 test_run_example()
 {
+    prepare_test
     python3 .github/scripts/hypo/s3_test.py
 }
 
 test_run_all()
 {
+    prepare_test
     python3 .github/scripts/hypo/s3.py
 }
 
