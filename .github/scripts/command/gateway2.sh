@@ -12,7 +12,7 @@ if ! docker ps --filter "name=minio_old$" | grep minio_old; then
     docker run -d -p 9000:9000 --name minio_old -e "MINIO_ACCESS_KEY=minioadmin" -e "MINIO_SECRET_KEY=minioadmin" minio/minio:RELEASE.2021-04-22T15-44-28Z server /tmp/minio_old
 fi
 
-timeout 30 bash -c 'counter=0; until lsof -i:9004; do echo -ne "wait port ready in $counter\r" && ((counter++)) && sleep 1; done'
+timeout 30 bash -c 'counter=0; until lsof -i:9000; do echo -ne "wait port ready in $counter\r" && ((counter++)) && sleep 1; done'
 
 [[ -n $CI ]] && trap 'kill_gateway 9005;' EXIT
 kill_gateway() {
