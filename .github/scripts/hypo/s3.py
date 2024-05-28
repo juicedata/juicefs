@@ -30,7 +30,7 @@ class S3Machine(RuleBasedStateMachine):
     group_policies = Bundle('group_policy')
     PREFIX1 = 'minio'
     PREFIX2 = 'juice'
-    URL1 = 'localhost:9004'
+    URL1 = 'localhost:9000'
     URL2 = 'localhost:9005'
     URL3 = 'localhost:9006'
     client1 = S3Client(prefix=PREFIX1, url=URL1)
