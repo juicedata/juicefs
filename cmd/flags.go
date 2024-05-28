@@ -218,6 +218,10 @@ func dataCacheFlags() []cli.Flag {
 			Name:  "cache-partial-only",
 			Usage: "cache only random/small read",
 		},
+		&cli.BoolFlag{
+			Name:  "cache-on-write",
+			Usage: "cache blocks after uploading",
+		},
 		&cli.StringFlag{
 			Name:  "verify-cache-checksum",
 			Value: "full",
