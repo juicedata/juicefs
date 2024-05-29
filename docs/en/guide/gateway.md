@@ -200,14 +200,14 @@ An example of adding a user:
 
 ```Shell
 # Add a new user.
-$ mc admin user add myminio user1 admin123
+$ mc admin user add myjfs user1 admin123
 
 # List current users.
-$ mc admin user list myminio
+$ mc admin user list myjfs
 enabled    user1
 
 # List current users in JSON format.
-$ mc admin user list myminio --json
+$ mc admin user list myjfs --json
 {
  "status": "success",
  "accessKey": "user1",
@@ -391,10 +391,10 @@ For example, to set a user as a read-only user:
 
 ```Shell
 # Set user1 as a read-only user.
-$ mc admin policy set myminio readonly user=user1
+$ mc admin policy set myjfs readonly user=user1
 
 # Check user policy.
-$ mc admin user list myminio
+$ mc admin user list myjfs
 enabled    user1                 readonly
 ```
 
@@ -416,13 +416,13 @@ POLICYFILE:
 
 EXAMPLES:
   1. Add a new canned policy 'writeonly'.
-     $ mc admin policy add myminio writeonly /tmp/writeonly.json
+     $ mc admin policy add myjfs writeonly /tmp/writeonly.json
 ```
 
 The policy file to be added here must be in JSON format with [IAM-compatible](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies.html) syntax, and no more than 2,048 characters. This syntax allows for more fine-grained access control. If you are unfamiliar with this, you can first use the following command to see the simple policies and then modify them accordingly.
 
 ```Shell
-$ mc admin policy info myminio readonly
+$ mc admin policy info myjfs readonly
 {
  "Version": "2012-10-17",
  "Statement": [
@@ -574,12 +574,16 @@ To reduce dependencies, JuiceFS S3 Gateway has cut support for certain event des
 - Webhooks
 
 ```Shell
-$ mc admin config get myminio | grep notify
+$ mc admin config get myjfs | grep notify
 notify_webhook        publish bucket notifications to webhook endpoints
 notify_mysql          publish bucket notifications to MySQL databases
 notify_postgres       publish bucket notifications to Postgres databases
 notify_redis          publish bucket notifications to Redis datastores
 ```
+
+:::note
+Here, assuming the JuiceFS file system name is 'images', enable the S3 Gateway service, define its alias as 'myjfs' in mc. For the S3 Gateway, the JuiceFS file system name 'images' serves as a bucket name.
+:::
 
 #### Use Redis to publish events
 
@@ -602,15 +606,15 @@ To use notification destinations in `namespace` and `access` formats:
 
     ```Shell
     # Command-line parameters
-    # mc admin config set myminio notify_redis[:name] address="xxx" format="namespace|access" key="xxxx" password="xxxx" queue_dir="" queue_limit="0"
+    # mc admin config set myjfs notify_redis[:name] address="xxx" format="namespace|access" key="xxxx" password="xxxx" queue_dir="" queue_limit="0"
     # An example
-    $ mc admin config set myminio notify_redis:1 address="127.0.0.1:6379/1" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0"
+    $ mc admin config set myjfs notify_redis:1 address="127.0.0.1:6379/1" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0"
     ```
 
-    You can use `mc admin config get myminio notify_redis` to view the configuration options. Different types of destinations have different configuration options. For Redis type, it has the following configuration options:
+    You can use `mc admin config get myjfs notify_redis` to view the configuration options. Different types of destinations have different configuration options. For Redis type, it has the following configuration options:
 
     ```Shell
-    $ mc admin config get myminio notify_redis
+    $ mc admin config get myjfs notify_redis
     notify_redis enable=off format=namespace address= key= password= queue_dir= queue_limit=0
     ```
 
@@ -630,14 +634,14 @@ To use notification destinations in `namespace` and `access` formats:
     The gateway supports persistent event storage. Persistent storage backs up events when the Redis broker is offline and replays events when the broker comes back online. You can set the directory for event storage using the `queue_dir` field and the maximum limit for storage using `queue_limit`. For example, you can set `queue_dir` to `/home/events`, and you can set `queue_limit` to 1,000. By default, `queue_limit` is 100,000. Before updating the configuration, you can use the `mc admin config get` command to get the current configuration.
 
     ```Shell
-    $ mc admin config get myminio notify_redis
+    $ mc admin config get myjfs notify_redis
     notify_redis:1 address="127.0.0.1:6379/1" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0"
 
     # Effective after restart
-    $ mc admin config set myminio notify_redis:1 queue_limit="1000"
+    $ mc admin config set myjfs notify_redis:1 queue_limit="1000"
     Successfully applied new settings.
-    Please restart your server 'mc admin service restart myminio'.
-    # Note that you cannot use `mc admin service restart myminio` to restart. JuiceFS S3 Gateway does not currently support this functionality. You need to manually restart JuiceFS S3 Gateway when prompted after configuring with `mc`.
+    Please restart your server 'mc admin service restart myjfs'.
+    # Note that you cannot use `mc admin service restart myjfs` to restart. JuiceFS S3 Gateway does not currently support this functionality. You need to manually restart JuiceFS S3 Gateway when prompted after configuring with `mc`.
     ```
 
     After using the `mc admin config set` command to update the configuration, restart JuiceFS S3 Gateway to apply the changes. JuiceFS S3 Gateway will output a line similar to `SQS ARNs: arn:minio:sqs::1:redis`.
@@ -650,12 +654,11 @@ To use notification destinations in `namespace` and `access` formats:
 
     To configure bucket notifications, you need to use the Amazon Resource Name (ARN) information outputted by the gateway in the previous steps. See more information about [ARNs](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
-    You can use the `mc` tool to add these configuration details. Assuming the gateway service alias is myminio, you can execute the following script:
+    You can use the `mc` tool to add these configuration details. Assuming the gateway service alias is myjfs, you can execute the following script:
 
     ```Shell
-    mc mb myminio/images
-    mc event add myminio/images arn:minio:sqs::1:redis --suffix .jpg
-    mc event list myminio/images
+    mc event add myjfs/images arn:minio:sqs::1:redis --suffix .jpg
+    mc event list myjfs/images
     arn:minio:sqs::1:redis   s3:ObjectCreated:*,s3:ObjectRemoved:*,s3:ObjectAccessed:*   Filter: suffix=".jpg"
     ```
 
@@ -672,7 +675,7 @@ To use notification destinations in `namespace` and `access` formats:
     Upload a file named `myphoto.jpg` to the `images` bucket.
 
     ```Shell
-    mc cp myphoto.jpg myminio/images
+    mc cp myphoto.jpg myjfs/images
     ```
 
     In the previous terminal, you can see the operations performed by the gateway on Redis:
@@ -722,13 +725,13 @@ The following steps show how to use the notification destination in `namespace` 
     Use the `mc admin config set` command to configure MySQL as the event notification destination.
 
     ```Shell
-    mc admin config set myminio notify_mysql:myinstance table="minio_images" dsn_string="root:123456@tcp(172.17.0.1:3306)/miniodb"
+    mc admin config set myjfs notify_mysql:myinstance table="minio_images" dsn_string="root:123456@tcp(172.17.0.1:3306)/miniodb"
     ```
 
-    You can use `mc admin config get myminio notify_mysql` to view the configuration options. Different destination types have different configuration options. For MySQL type, the following configuration options are available:
+    You can use `mc admin config get myjfs notify_mysql` to view the configuration options. Different destination types have different configuration options. For MySQL type, the following configuration options are available:
 
     ```shell
-    $ mc admin config get myminio notify_mysql
+    $ mc admin config get myjfs notify_mysql
     format=namespace dsn_string= table= queue_dir= queue_limit=0 max_open_connections=2
     ```
 
@@ -754,14 +757,14 @@ The following steps show how to use the notification destination in `namespace` 
     Before updating the configuration, you can use the `mc admin config get` command to get the current configuration.
 
     ```Shell
-    $ mc admin config get myminio/ notify_mysql
+    $ mc admin config get myjfs/ notify_mysql
     notify_mysql:myinstance enable=off format=namespace host= port= username= password= database= dsn_string= table= queue_dir= queue_limit=0
     ```
 
     Update the MySQL notification configuration using the `mc admin config set` command with the `dsn_string` parameter:
 
     ```Shell
-    mc admin config set myminio notify_mysql:myinstance table="minio_images" dsn_string="root:xxxx@tcp(127.0.0.1:3306)/miniodb"
+    mc admin config set myjfs notify_mysql:myinstance table="minio_images" dsn_string="root:xxxx@tcp(127.0.0.1:3306)/miniodb"
     ```
 
     You can add multiple MySQL server endpoints as needed, by providing the identifier of the MySQL instance (for example, "myinstance") and the configuration parameter information for each instance.
@@ -774,15 +777,13 @@ The following steps show how to use the notification destination in `namespace` 
 
     To configure bucket notifications, you need to use the ARN information outputted by MinIO in previous steps. See more information about [ARNs](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
-    Assuming the gateway service alias is myminio, you can execute the following script:
+    Assuming the gateway service alias is myjfs, you can execute the following script:
 
     ```Shell
-    # Create a bucket named 'images' in myminio.
-    mc mb myminio/images
     # Add notification configuration to the 'images' bucket using the MySQL ARN. The --suffix parameter is used to filter events.
-    mc event add myminio/images arn:minio:sqs::myinstance:mysql --suffix .jpg
+    mc event add myjfs/images arn:minio:sqs::myinstance:mysql --suffix .jpg
     # Print the notification configuration on the 'images' bucket.
-    mc event list myminio/images
+    mc event list myjfs/images
     arn:minio:sqs::myinstance:mysql s3:ObjectCreated:*,s3:ObjectRemoved:*,s3:ObjectAccessed:* Filter: suffix=”.jpg”
     ```
 
@@ -791,7 +792,7 @@ The following steps show how to use the notification destination in `namespace` 
     Open a new terminal and upload a JPEG image to the `images` bucket:
 
     ```Shell
-    mc cp myphoto.jpg myminio/images
+    mc cp myphoto.jpg myjfs/images
     ```
 
     Open a MySQL terminal and list all records in the `minio_images` table. You will find a newly inserted record.
@@ -825,17 +826,15 @@ The method of publishing events using PostgreSQL is similar to publishing MinIO 
     Use the `mc admin config set` command to update the configuration. The endpoint here is the service that listens for webhook notifications. Save the configuration file and restart the MinIO service to apply the changes. Note that when restarting MinIO, this endpoint must be up and accessible.
 
     ```Shell
-    mc admin config set myminio notify_webhook:1 queue_limit="0"  endpoint="http://localhost:3000" queue_dir=""
+    mc admin config set myjfs notify_webhook:1 queue_limit="0"  endpoint="http://localhost:3000" queue_dir=""
     ```
 
 2. Enable bucket notifications.
 
-    Now you can enable event notifications on a bucket named "images." When a file is uploaded to the bucket, an event is triggered. Here, the ARN value is `arn:minio:sqs::1:webhook`. See more information about [ARNs](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
+    Now you can enable event notifications. When a file is uploaded to the bucket, an event is triggered. Here, the ARN value is `arn:minio:sqs::1:webhook`. See more information about [ARNs](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
     ```Shell
-    mc mb myminio/images
-    mc mb myminio/images-thumbnail
-    mc event add myminio/images arn:minio:sqs::1:webhook --event put --suffix .jpg
+    mc event add myjfs/images arn:minio:sqs::1:webhook --event put --suffix .jpg
     ```
 
 3. Use Thumbnailer to verify.
@@ -860,13 +859,13 @@ The method of publishing events using PostgreSQL is similar to publishing MinIO 
     Next, configure the MinIO server to send messages to this URL (mentioned in step 1) and set up bucket notifications using `mc` (mentioned in step 2). Then upload an image to the gateway server:
 
     ```Shell
-    mc cp ~/images.jpg myminio/images
+    mc cp ~/images.jpg myjfs/images
     .../images.jpg:  8.31 KB / 8.31 KB ┃▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┃ 100.00% 59.42 KB/s 0s
     ```
 
     After a moment, use `mc ls` to check the content of the bucket. You will see a thumbnail.
 
     ```Shell
-    mc ls myminio/images-thumbnail
+    mc ls myjfs/images-thumbnail
     [2017-02-08 11:39:40 IST]   992B images-thumbnail.jpg
     ```
