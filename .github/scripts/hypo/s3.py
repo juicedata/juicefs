@@ -16,11 +16,6 @@ from s3_op import S3Client
 from s3_strategy import *
 from s3_contant import *
 import common
-# minio client: https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z
-# minio server: minio/minio:RELEASE.2021-04-22T15-44-28Z
-# docker run -d -p 9000:9000 --name minio -e "MINIO_ACCESS_KEY=minioadmin" -e "MINIO_SECRET_KEY=minioadmin" minio/minio:RELEASE.2021-04-22T15-44-28Z server /data
-# ./juicefs format sqlite3://test.db gateway
-# MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway sqlite3://test.db localhost:9005 --multi-buckets --keep-etag
 
 SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
 @seed(SEED)

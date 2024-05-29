@@ -74,34 +74,9 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}
 
-      - name: Prepare meta db
-        run: | 
-          chmod +x .github/scripts/start_meta_engine.sh
-          source .github/scripts/start_meta_engine.sh
-          start_meta_engine ${{matrix.meta}}
-          meta_url=$(get_meta_url ${{matrix.meta}})
-          create_database $meta_url
-
-      - name: Juicefs Format
-        run: |
-          source .github/scripts/start_meta_engine.sh
-          meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs format $meta_url --trash-days 0 pics
-
-      - name: Start Gateway
-        run: |
-          source .github/scripts/start_meta_engine.sh
-          meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $meta_url localhost:9005 --multi-buckets --keep-etag -d
-          
-      - name: Start minio
-        run: |
-          sudo wget -q https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-22T17-40-00Z -O /usr/local/bin/mc && sudo chmod +x /usr/local/bin/mc
-          sudo docker run -d -p 9000:9000 --name minio -e "MINIO_ACCESS_KEY=minioadmin" -e "MINIO_SECRET_KEY=minioadmin" minio/minio:RELEASE.2021-04-22T15-44-28Z server /data
-
       - name: Test with example
         run: |
-          sudo -E python3 .github/scripts/hypo/s3_test.py
+          sudo -E .github/scripts/command/gateway2.sh test_run_example
         
       - name: Download example database
         uses: dawidd6/action-download-artifact@v2.24.3
@@ -114,7 +89,7 @@ jobs:
       - name: Test randomly
         timeout-minutes: 65
         run: |
-          sudo -E LOG_LEVEL=WARNING timeout 3600 python3 .github/scripts/hypo/s3.py || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo test failed with $code && exit $code; fi
+          sudo -E LOG_LEVEL=WARNING timeout 3600 .github/scripts/command/gateway2.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo test failed with $code && exit $code; fi
 
       - name: Upload example database
         uses: actions/upload-artifact@v3
