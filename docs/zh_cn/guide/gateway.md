@@ -790,7 +790,7 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
 
 1. 配置 webhook 到 S3 网关
 
-   S3 网关支持持久事件存储。持久存储将在 webhook 离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 queue_dir 字段设置，存储的最大限制可以通过 queue_limit 设置。例如，/home/events，并且 queue_limit 可以设置为 1000。默认情况下 queue_limit 是 100000。
+   S3 网关支持持久事件存储。持久存储将在 webhook 离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 `queue_dir` 字段设置，存储的最大限制可以通过 `queue_limit` 设置。例如，`/home/events`，并且 `queue_limit` 可以设置为 1000。默认情况下 `queue_limit` 是 100000。
 
     ```Shell
     KEY:
