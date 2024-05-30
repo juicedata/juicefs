@@ -292,7 +292,7 @@ func (v *VFS) Flock(ctx Context, ino Ino, fh uint64, owner uint64, typ uint32, b
 	}
 	h.addOp(ctx)
 	defer h.removeOp(ctx)
-	err = v.Meta.Flock(ctx, ino, owner, typ, block)
+	err = v.Meta.Flock(ctx, ino, owner^fh, typ, block)
 	if err == 0 {
 		h.Lock()
 		if typ == syscall.F_UNLCK {
