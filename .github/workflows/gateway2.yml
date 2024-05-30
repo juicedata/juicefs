@@ -76,7 +76,13 @@ jobs:
 
       - name: Test with example
         run: |
-          sudo -E .github/scripts/command/gateway2.sh test_run_example
+          if [[ ${{matrix.meta}} == "tikv" ]]; then
+            subdir=true
+          else
+            subdir=false
+          fi
+          sudo -E SUBDIR=$subdir .github/scripts/command/gateway2.sh test_run_example
+          
         
       - name: Download example database
         uses: dawidd6/action-download-artifact@v2.24.3
@@ -89,7 +95,12 @@ jobs:
       - name: Test randomly
         timeout-minutes: 65
         run: |
-          sudo -E LOG_LEVEL=WARNING timeout 3600 .github/scripts/command/gateway2.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo test failed with $code && exit $code; fi
+          if [[ ${{matrix.meta}} == "tikv" ]]; then
+            subdir=true
+          else
+            subdir=false
+          fi
+          sudo -E LOG_LEVEL=WARNING SUBDIR=$subdir timeout 3600 .github/scripts/command/gateway2.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo test failed with $code && exit $code; fi
 
       - name: Upload example database
         uses: actions/upload-artifact@v3

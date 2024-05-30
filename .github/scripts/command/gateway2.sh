@@ -1,7 +1,8 @@
 #!/bin/bash -e
 source .github/scripts/common/common.sh
 
-[[ -z "$META" ]] && META=redis
+[[ -z "$META" ]] && META=sqlite3
+[[ -z "$SUBDIR" ]] && SUBDIR=false
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
@@ -28,8 +29,16 @@ prepare_test()
     python3 .github/scripts/flush_meta.py $META_URL
     rm -rf /var/jfs/myjfs || true
     ./juicefs format $META_URL myjfs  --trash-days 0
-    # ./juicefs mount -d $META_URL /tmp/jfs
-    MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005 --multi-buckets --keep-etag -d
+    ./juicefs mount -d $META_URL /tmp/jfs
+    if [ "$SUBDIR" = true ]; then
+        echo "start gateway with subdir"
+        mkdir /tmp/jfs/subdir
+        MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway \
+            $META_URL localhost:9005 --multi-buckets --keep-etag -d --subdir /subdir
+    else
+        MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway \
+            $META_URL localhost:9005 --multi-buckets --keep-etag -d
+    fi
 }
 
 test_run_example()
