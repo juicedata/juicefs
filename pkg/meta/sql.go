@@ -2774,17 +2774,19 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return
 	}
 	skipped := skipSome(ss)
-	var first, last *slice
-	if skipped > 0 {
-		first, last = ss[0], ss[skipped-1]
-	}
-	ss = ss[skipped:]
-	pos, size, slices := compactChunk(ss)
-	if len(ss) < 2 || size == 0 {
+	compacted := ss[skipped:]
+	pos, size, slices := compactChunk(compacted)
+	if len(compacted) < 2 || size == 0 {
 		return
 	}
-	if first != nil && last != nil && pos+size > first.pos && last.pos+last.len > pos {
-		panic(fmt.Sprintf("invalid compaction: skipped slices [%+v, %+v], pos %d, size %d", *first, *last, pos, size))
+	for _, s := range ss[:skipped] {
+		if pos+size > s.pos && s.pos+s.len > pos {
+			var sstring string
+			for _, s := range ss {
+				sstring += fmt.Sprintf("\n%+v", *s)
+			}
+			panic(fmt.Sprintf("invalid compaction skipped %d, pos %d, size %d; slices: %s", skipped, pos, size, sstring))
+		}
 	}
 
 	var id uint64
@@ -2792,18 +2794,18 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if st != 0 {
 		return
 	}
-	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
+	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(compacted), size)
 	err = m.newMsg(CompactChunk, slices, id)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
-			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
+			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(compacted), err)
 		}
 		return
 	}
 	var buf []byte
 	trash := m.toTrash(0)
 	if trash {
-		for _, s := range ss {
+		for _, s := range compacted {
 			if s.id > 0 {
 				buf = append(buf, m.encodeDelayedSlice(s.id, s.size)...)
 			}
@@ -2835,7 +2837,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 				}
 			}
 		} else {
-			for _, s_ := range ss {
+			for _, s_ := range compacted {
 				if s_.id == 0 {
 					continue
 				}
@@ -2871,7 +2873,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	} else if err == nil {
 		m.of.InvalidateChunk(inode, indx)
 		if !trash {
-			for _, s := range ss {
+			for _, s := range compacted {
 				if s.id == 0 {
 					continue
 				}
