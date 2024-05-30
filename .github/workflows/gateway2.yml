@@ -33,12 +33,8 @@ jobs:
         run: |
           echo "github.event_name is ${{github.event_name}}"
           echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
-          if [ "${{github.event_name}}" == "schedule"  ]; then
+          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch" ]]; then
             echo 'meta_matrix=["mysql", "redis", "tikv"]' >> $GITHUB_OUTPUT
-          elif [ "${{github.event_name}}" == "pull_request"  ]; then
-            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
-          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
-            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           else
             echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           fi
@@ -76,7 +72,13 @@ jobs:
 
       - name: Test with example
         run: |
-          sudo -E .github/scripts/command/gateway2.sh test_run_example
+          if [[ ${{matrix.meta}} == "tikv" ]]; then
+            subdir=true
+          else
+            subdir=false
+          fi
+          sudo -E SUBDIR=$subdir .github/scripts/command/gateway2.sh test_run_example
+          
         
       - name: Download example database
         uses: dawidd6/action-download-artifact@v2.24.3
@@ -89,7 +91,12 @@ jobs:
       - name: Test randomly
         timeout-minutes: 65
         run: |
-          sudo -E LOG_LEVEL=WARNING timeout 3600 .github/scripts/command/gateway2.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo test failed with $code && exit $code; fi
+          if [[ ${{matrix.meta}} == "tikv" ]]; then
+            subdir=true
+          else
+            subdir=false
+          fi
+          sudo -E LOG_LEVEL=WARNING SUBDIR=$subdir timeout 3600 .github/scripts/command/gateway2.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo test failed with $code && exit $code; fi
 
       - name: Upload example database
         uses: actions/upload-artifact@v3
