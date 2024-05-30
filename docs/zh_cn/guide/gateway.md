@@ -44,7 +44,9 @@ JuiceFS S3 网关的常见的使用场景有：
     juicefs gateway redis://localhost:6379/1 localhost:9000
     ```
 
-   `gateway` 子命令至少需要提供两个参数，第一个是元数据引擎的 URL，第二个是 S3 网关监听的地址和端口。你可以根据需要在 `gateway` 子命令中添加[其他选项](../reference/command_reference.md#gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
+   `gateway` 子命令至少需要提供两个参数，第一个是元数据引擎的 URL，第二个是 S3 网关监听的地址和端口。
+   
+   S3 Gateway 默认没有启用[多桶支持](#多桶支持)，可以添加 `--multi-buckets` 选项开启。还可以添加[其他选项](../reference/command_reference.md#gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
 
     ```shell
     juicefs gateway --cache-size 20480 redis://localhost:6379/1 localhost:9000
@@ -817,8 +819,11 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
     在这里，ARN 的值是 `arn:minio:sqs::1:webhook`。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
     ```Shell
+    mc mb myjfs/images-thumbnail
     mc event add myjfs/images arn:minio:sqs::1:webhook --event put --suffix .jpg
     ```
+
+    如果 mc 报告无法创建 Bucket，请检查 S3 Gateway 是否启用了[多桶支持](#多桶支持)。
 
 3. 采用 Thumbnailer 进行验证
 

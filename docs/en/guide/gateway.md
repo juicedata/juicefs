@@ -42,7 +42,9 @@ Common application scenarios for JuiceFS S3 Gateway include:
     juicefs gateway redis://localhost:6379/1 localhost:9000
     ```
 
-    The `gateway` subcommand requires at least two parameters: the database URL for storing metadata and the address/port for JuiceFS S3 Gateway to listen on. To optimize JuiceFS S3 Gateway, you can add [other options](../reference/command_reference.md#gateway) to `gateway` subcommands as needed. For example, you can set the default local cache to 20 GiB.
+    The `gateway` subcommand requires at least two parameters: the database URL for storing metadata and the address/port for JuiceFS S3 Gateway to listen on. 
+
+    By default, [Multi-bucket support](#multi-bucket-support) is not enabled. You can enable it by adding the `--multi-buckets` option. Additionally, you can add [other options](../reference/command_reference.md#gateway) to `gateway` subcommands as needed. For example, you can set the default local cache to 20 GiB.
 
     ```shell
     juicefs gateway --cache-size 20480 redis://localhost:6379/1 localhost:9000
@@ -834,8 +836,11 @@ The method of publishing events using PostgreSQL is similar to publishing MinIO 
     Now you can enable event notifications. When a file is uploaded to the bucket, an event is triggered. Here, the ARN value is `arn:minio:sqs::1:webhook`. See more information about [ARNs](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
     ```Shell
+    mc mb myjfs/images-thumbnail
     mc event add myjfs/images arn:minio:sqs::1:webhook --event put --suffix .jpg
     ```
+
+    If the command report cannot create a bucket, please check if the S3 Gateway has enabled [Multi-bucket support](#multi-bucket-support).
 
 3. Use Thumbnailer to verify.
 
