@@ -564,7 +564,7 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 				v.invalidateAttr(ino)
 			}
 			if locks&1 != 0 {
-				_ = v.Meta.Flock(ctx, ino, owner, F_UNLCK, false)
+				_ = v.Meta.Flock(ctx, ino, owner^fh, F_UNLCK, false)
 			}
 		}
 		_ = v.Meta.Close(ctx, ino)
