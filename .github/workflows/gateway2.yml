@@ -33,12 +33,8 @@ jobs:
         run: |
           echo "github.event_name is ${{github.event_name}}"
           echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
-          if [ "${{github.event_name}}" == "schedule"  ]; then
+          if [ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch" ]; then
             echo 'meta_matrix=["mysql", "redis", "tikv"]' >> $GITHUB_OUTPUT
-          elif [ "${{github.event_name}}" == "pull_request"  ]; then
-            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
-          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
-            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           else
             echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           fi
