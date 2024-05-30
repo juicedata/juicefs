@@ -45,7 +45,7 @@ JuiceFS S3 网关的常见的使用场景有：
     ```
 
    `gateway` 子命令至少需要提供两个参数，第一个是元数据引擎的 URL，第二个是 S3 网关监听的地址和端口。
-   
+
    S3 Gateway 默认没有启用[多桶支持](#多桶支持)，可以添加 `--multi-buckets` 选项开启。还可以添加[其他选项](../reference/command_reference.md#gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
 
     ```shell
