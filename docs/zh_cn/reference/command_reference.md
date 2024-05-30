@@ -885,13 +885,13 @@ juicefs sync oss://mybucket.oss-cn-shanghai.aliyuncs.com s3://mybucket.s3.us-eas
 # 从 S3 直接同步到 JuiceFS
 juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://META-URL/
 
-# 源端: a1/b1, a2/b2, aaa/b1   目标端: empty   同步结果: aaa/b1
+# 源端：a1/b1, a2/b2, aaa/b1   目标端：empty   同步结果：aaa/b1
 juicefs sync --exclude='a?/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://META-URL/
 
-# 源端: a1/b1, a2/b2, aaa/b1   目标端: empty   同步结果: a1/b1, aaa/b1
+# 源端：a1/b1, a2/b2, aaa/b1   目标端：empty   同步结果：a1/b1, aaa/b1
 juicefs sync --include='a1/b1' --exclude='a[1-9]/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://META-URL/
 
-# 源端: a1/b1, a2/b2, aaa/b1, b1, b2  目标端: empty   同步结果: b2
+# 源端：a1/b1, a2/b2, aaa/b1, b1, b2  目标端：empty   同步结果：b2
 juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://META-URL/
 ```
 
