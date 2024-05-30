@@ -2043,17 +2043,19 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 		ss = ss[:maxCompactSlices]
 	}
 	skipped := skipSome(ss)
-	var first, last *slice
-	if skipped > 0 {
-		first, last = ss[0], ss[skipped-1]
-	}
 	compacted := ss[skipped:]
 	pos, size, slices := compactChunk(compacted)
 	if len(compacted) < 2 || size == 0 {
 		return
 	}
-	if first != nil && last != nil && pos+size > first.pos && last.pos+last.len > pos {
-		panic(fmt.Sprintf("invalid compaction: skipped slices [%+v, %+v], pos %d, size %d", *first, *last, pos, size))
+	for _, s := range ss[:skipped] {
+		if pos+size > s.pos && s.pos+s.len > pos {
+			var sstring string
+			for _, s := range ss {
+				sstring += fmt.Sprintf("\n%+v", *s)
+			}
+			panic(fmt.Sprintf("invalid compaction skipped %d, pos %d, size %d; slices: %s", skipped, pos, size, sstring))
+		}
 	}
 
 	var id uint64
