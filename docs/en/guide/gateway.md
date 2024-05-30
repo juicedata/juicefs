@@ -584,7 +584,7 @@ notify_redis          publish bucket notifications to Redis datastores
 ```
 
 :::note
-Here, assuming the JuiceFS file system name is 'images', enable the S3 Gateway service, define its alias as 'myjfs' in mc. For the S3 Gateway, the JuiceFS file system name 'images' serves as a bucket name.
+Here, assuming the JuiceFS file system name is 'images', enable the S3 Gateway service and define its alias as 'myjfs' in mc. For the S3 Gateway, the JuiceFS file system name 'images' serves as a bucket name.
 :::
 
 #### Use Redis to publish events
