@@ -1304,6 +1304,26 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	if len(slices) != 1 || slices[0].Len != 3<<20 {
 		t.Fatalf("inode %d should be compacted, but have %d slices, size %d", inode, len(slices), slices[0].Len)
 	}
+
+	m.NewSlice(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 2, 0, Slice{Id: sliceId, Size: 2338508, Len: 2338508}, time.Now())
+	m.NewSlice(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 2, 8829056, Slice{Id: sliceId, Size: 1074933, Len: 1074933}, time.Now())
+	m.NewSlice(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 2, 7663608, Slice{Id: sliceId, Size: 41480, Len: 4148}, time.Now())
+	_ = m.Fallocate(ctx, inode, fallocZeroRange, 2*ChunkSize+4515328, 3152428, nil)
+	_ = m.Fallocate(ctx, inode, fallocZeroRange, 2*ChunkSize+4515328, 2607724, nil)
+	if c, ok := m.(compactor); ok {
+		c.compactChunk(inode, 2, true)
+	}
+	if st := m.Read(ctx, inode, 2, &slices); st != 0 {
+		t.Fatalf("read 1: %s", st)
+	}
+	// compact twice: 4515328+2607724-2338508 = 4784544; 8829056+1074933-2338508-4784544=2780937
+	if len(slices) != 3 || slices[0].Len != 2338508 || slices[1].Len != 4784544 || slices[2].Len != 2780937 {
+		t.Fatalf("inode %d should be compacted, but have %d slices, size %d,%d,%d",
+			inode, len(slices), slices[0].Len, slices[1].Len, slices[2].Len)
+	}
 }
 
 func testConcurrentWrite(t *testing.T, m Meta) {
