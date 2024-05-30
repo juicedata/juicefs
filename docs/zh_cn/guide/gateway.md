@@ -44,7 +44,9 @@ JuiceFS S3 网关的常见的使用场景有：
     juicefs gateway redis://localhost:6379/1 localhost:9000
     ```
 
-   `gateway` 子命令至少需要提供两个参数，第一个是元数据引擎的 URL，第二个是 S3 网关监听的地址和端口。你可以根据需要在 `gateway` 子命令中添加[其他选项](../reference/command_reference.md#gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
+   `gateway` 子命令至少需要提供两个参数，第一个是元数据引擎的 URL，第二个是 S3 网关监听的地址和端口。
+
+   S3 Gateway 默认没有启用[多桶支持](#多桶支持)，可以添加 `--multi-buckets` 选项开启。还可以添加[其他选项](../reference/command_reference.md#gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
 
     ```shell
     juicefs gateway --cache-size 20480 redis://localhost:6379/1 localhost:9000
@@ -198,14 +200,14 @@ COMMANDS:
 
 ```Shell
 # 添加新用户
-$ mc admin user add myminio user1 admin123
+$ mc admin user add myjfs user1 admin123
 
 # 查看当前用户
-$ mc admin user list myminio
+$ mc admin user list myjfs
 enabled    user1
 
 # 查看当前用户
-$ mc admin user list myminio --json
+$ mc admin user list myjfs --json
 {
  "status": "success",
  "accessKey": "user1",
@@ -389,10 +391,10 @@ S3 网关内置了以下 4 种常用的策略：
 
 ```Shell
 # 设置 user1 为只读
-$ mc admin policy set myminio readonly user=user1
+$ mc admin policy set myjfs readonly user=user1
 
 # 查看用户策略
-$ mc admin user list myminio
+$ mc admin user list myjfs
 enabled    user1                 readonly
 ```
 
@@ -414,13 +416,13 @@ POLICYFILE:
 
 EXAMPLES:
   1. Add a new canned policy 'writeonly'.
-     $ mc admin policy add myminio writeonly /tmp/writeonly.json
+     $ mc admin policy add myjfs writeonly /tmp/writeonly.json
 ```
 
 这里要添加的策略文件必须是一个 JSON 格式的文件，具有[IAM 兼容](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies.html)的语法，且不超过 2048 个字符。该语法可以实现更为精细化的访问控制，如果不熟悉，可以先用下面的命令查看内置的简单策略并在此基础上加以更改。
 
 ```Shell
-$ mc admin policy info myminio readonly
+$ mc admin policy info myjfs readonly
 {
  "Version": "2012-10-17",
  "Statement": [
@@ -570,12 +572,16 @@ JuiceFS S3 网关为了减少依赖，裁剪了部分支持的事件目标类型
 - WebHooks
 
 ```Shell
-$ mc admin config get myminio | grep notify
+$ mc admin config get myjfs | grep notify
 notify_webhook        publish bucket notifications to webhook endpoints
 notify_mysql          publish bucket notifications to MySQL databases
 notify_postgres       publish bucket notifications to Postgres databases
 notify_redis          publish bucket notifications to Redis datastores
 ```
+
+:::note
+这里假设 JuiceFS 文件系统名为 `images`，启用 S3 Gateway 服务，在 mc 中定义它的别名为 `myjfs`。对于 S3 Gateway 而言，JuiceFS 文件系统名 `images` 就是一个存储桶名。
+:::
 
 #### 使用 Redis 发布事件
 
@@ -593,15 +599,15 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
 
     ```Shell
     # 命令行参数
-    # mc admin config set myminio notify_redis[:name] address="xxx" format="namespace|access" key="xxxx" password="xxxx" queue_dir="" queue_limit="0"
+    # mc admin config set myjfs notify_redis[:name] address="xxx" format="namespace|access" key="xxxx" password="xxxx" queue_dir="" queue_limit="0"
     # 具体举例
-    $ mc admin config set myminio notify_redis:1 address="127.0.0.1:6379/1" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0"
+    $ mc admin config set myjfs notify_redis:1 address="127.0.0.1:6379/1" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0"
     ```
 
-   你可以通过 `mc admin config get myminio notify_redis` 来查看有哪些配置项，不同类型的目标其配置项也不同，针对 Redis 类型，其有以下配置项：
+   你可以通过 `mc admin config get myjfs notify_redis` 来查看有哪些配置项，不同类型的目标其配置项也不同，针对 Redis 类型，其有以下配置项：
 
     ```Shell
-    $ mc admin config get myminio notify_redis
+    $ mc admin config get myjfs notify_redis
     notify_redis enable=off format=namespace address= key= password= queue_dir= queue_limit=0
     ```
 
@@ -621,14 +627,14 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
    S3 网关支持持久事件存储。持久存储将在 Redis broker 离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 queue_dir 字段设置，存储的最大限制可以通过 queue_limit 设置。例如，queue_dir 可以设置为/home/events, 并且 queue_limit 可以设置为 1000. 默认情况下 queue_limit 是 100000。在更新配置前，可以通过 mc admin config get 命令获取当前配置。
 
     ```Shell
-    $ mc admin config get myminio notify_redis
+    $ mc admin config get myjfs notify_redis
     notify_redis:1 address="127.0.0.1:6379/1" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0"
 
     # 重启后生效
-    $ mc admin config set myminio notify_redis:1 queue_limit="1000"
+    $ mc admin config set myjfs notify_redis:1 queue_limit="1000"
     Successfully applied new settings.
-    Please restart your server 'mc admin service restart myminio'.
-    # 注意这里无法使用 mc admin service restart myminio 重启，JuiceFS S3 网关暂不支持该功能，当使用 mc 配置后出现该提醒时需要手动重启 JuiceFS Gateway
+    Please restart your server 'mc admin service restart myjfs'.
+    # 注意这里无法使用 mc admin service restart myjfs 重启，JuiceFS S3 网关暂不支持该功能，当使用 mc 配置后出现该提醒时需要手动重启 JuiceFS Gateway
     ```
 
    使用 mc admin config set 命令更新配置后，重启 JuiceFS S3 网关让配置生效。如果一切顺利，JuiceFS S3 网关会在启动时输出一行信息，类似 `SQS ARNs: arn:minio:sqs::1:redis`
@@ -641,12 +647,11 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
 
    要配置这种存储桶通知，我们需要用到前面步骤 S3 网关输出的 ARN 信息。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-   使用 mc 这个工具，这些配置信息很容易就能添加上。假设 S3 网关服务别名叫 myminio，可执行下列脚本：
+   使用 mc 为文件系统启用事件通知：
 
     ```Shell
-    mc mb myminio/images
-    mc event add myminio/images arn:minio:sqs::1:redis --suffix .jpg
-    mc event list myminio/images
+    mc event add myjfs/images arn:minio:sqs::1:redis --suffix .jpg
+    mc event list myjfs/images
     arn:minio:sqs::1:redis   s3:ObjectCreated:*,s3:ObjectRemoved:*,s3:ObjectAccessed:*   Filter: suffix=".jpg"
     ```
 
@@ -663,7 +668,7 @@ Redis 事件目标支持两种格式：`namespace` 和 `access`。
    上传一个名为 myphoto.jpg 的文件到 images 存储桶。
 
     ```Shell
-    mc cp myphoto.jpg myminio/images
+    mc cp myphoto.jpg myjfs/images
     ```
 
    在上一个终端中，你将看到 S3 网关在 Redis 上执行的操作：
@@ -703,13 +708,13 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
    使用 `mc admin config set` 命令配置 MySQL 为事件通知的目标
 
     ```Shell
-    mc admin config set myminio notify_mysql:myinstance table="minio_images" dsn_string="root:123456@tcp(172.17.0.1:3306)/miniodb"
+    mc admin config set myjfs notify_mysql:myinstance table="minio_images" dsn_string="root:123456@tcp(172.17.0.1:3306)/miniodb"
     ```
 
-   你可以通过 `mc admin config get myminio notify_mysql` 来查看有哪些配置项，不同类型的目标其配置项也不同，针对 MySQL 类型，其有以下配置项：
+   你可以通过 `mc admin config get myjfs notify_mysql` 来查看有哪些配置项，不同类型的目标其配置项也不同，针对 MySQL 类型，其有以下配置项：
 
     ```shell
-    $ mc admin config get myminio notify_mysql
+    $ mc admin config get myjfs notify_mysql
     format=namespace dsn_string= table= queue_dir= queue_limit=0 max_open_connections=2
     ```
 
@@ -735,14 +740,14 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
    更新配置前，可以使用 `mc admin config get` 命令获取当前配置：
 
     ```Shell
-    $ mc admin config get myminio/ notify_mysql
+    $ mc admin config get myjfs/ notify_mysql
     notify_mysql:myinstance enable=off format=namespace host= port= username= password= database= dsn_string= table= queue_dir= queue_limit=0
     ```
 
    使用带有 dsn_string 参数的 `mc admin config set` 的命令更新 MySQL 的通知配置：
 
     ```Shell
-    mc admin config set myminio notify_mysql:myinstance table="minio_images" dsn_string="root:xxxx@tcp(127.0.0.1:3306)/miniodb"
+    mc admin config set myjfs notify_mysql:myinstance table="minio_images" dsn_string="root:xxxx@tcp(127.0.0.1:3306)/miniodb"
     ```
 
    请注意，根据你的需要，你可以添加任意多个 MySQL server endpoint，只要提供 MySQL 实例的标识符（如上例中的"myinstance"）和每个实例配置参数的信息即可。
@@ -755,15 +760,13 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
 
    要配置这种存储桶通知，我们需要用到前面步骤 MinIO 输出的 ARN 信息。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-   假设 S3 网关服务别名叫 myminio，可执行下列脚本：
+   假设 S3 网关服务别名叫 myjfs，可执行下列脚本：
 
     ```Shell
-    # 在我的 minio 中创建名为`images`的存储桶
-    mc mb myminio/images
     # 使用 MySQL ARN 在“images”存储桶上添加通知配置。--suffix 参数用于过滤事件。
-    mc event add myminio/images arn:minio:sqs::myinstance:mysql --suffix .jpg
+    mc event add myjfs/images arn:minio:sqs::myinstance:mysql --suffix .jpg
     # 在“images”存储桶上打印出通知配置。
-    mc event list myminio/images
+    mc event list myjfs/images
     arn:minio:sqs::myinstance:mysql s3:ObjectCreated:*,s3:ObjectRemoved:*,s3:ObjectAccessed:* Filter: suffix=”.jpg”
     ```
 
@@ -772,7 +775,7 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
    打开一个新的 terminal 终端并上传一张 JPEG 图片到 images 存储桶。
 
     ```Shell
-    mc cp myphoto.jpg myminio/images
+    mc cp myphoto.jpg myjfs/images
     ```
 
    打开一个 MySQL 终端列出表 minio_images 中所有的记录，将会发现一条刚插入的记录。
@@ -789,7 +792,7 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
 
 1. 配置 webhook 到 S3 网关
 
-   S3 网关支持持久事件存储。持久存储将在 webhook 离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 queue_dir 字段设置，存储的最大限制可以通过 queue_limit 设置。例如， /home/events，并且 queue_limit 可以设置为 1000。默认情况下 queue_limit 是 100000。
+   S3 网关支持持久事件存储。持久存储将在 webhook 离线时备份事件，并在 broker 恢复在线时重播事件。事件存储的目录可以通过 `queue_dir` 字段设置，存储的最大限制可以通过 `queue_limit` 设置。例如，`/home/events`，并且 `queue_limit` 可以设置为 1000。默认情况下 `queue_limit` 是 100000。
 
     ```Shell
     KEY:
@@ -808,18 +811,19 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
    用 `mc admin config set` 命令更新配置，这里的 endpoint 是监听 webhook 通知的服务地址。保存配置文件并重启 MinIO 服务让配配置生效。注意，在重启 MinIO 时，这个 endpoint 必须是启动并且可访问到。
 
     ```Shell
-    mc admin config set myminio notify_webhook:1 queue_limit="0"  endpoint="http://localhost:3000" queue_dir=""
+    mc admin config set myjfs notify_webhook:1 queue_limit="0"  endpoint="http://localhost:3000" queue_dir=""
     ```
 
 2. 启用 bucket 通知
 
-   我们现在可以在一个叫 images 的存储桶上开启事件通知，一旦上有文件上传到存储桶中，事件将被触发。在这里，ARN 的值是 `arn:minio:sqs::1:webhook`。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
+    在这里，ARN 的值是 `arn:minio:sqs::1:webhook`。更多有关 ARN 的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
     ```Shell
-    mc mb myminio/images
-    mc mb myminio/images-thumbnail
-    mc event add myminio/images arn:minio:sqs::1:webhook --event put --suffix .jpg
+    mc mb myjfs/images-thumbnail
+    mc event add myjfs/images arn:minio:sqs::1:webhook --event put --suffix .jpg
     ```
+
+    如果 mc 报告无法创建 Bucket，请检查 S3 Gateway 是否启用了[多桶支持](#多桶支持)。
 
 3. 采用 Thumbnailer 进行验证
 
@@ -841,13 +845,13 @@ MySQL 通知目标支持两种格式：`namespace` 和 `access`。
    下一步，配置 MinIO server，让其发送消息到这个 URL（第一步提到的），并使用 mc 来设置存储桶通知（第二步提到的）。然后上传一张图片到 S3 网关 server：
 
     ```Shell
-    mc cp ~/images.jpg myminio/images
+    mc cp ~/images.jpg myjfs/images
     .../images.jpg:  8.31 KB / 8.31 KB ┃▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┃ 100.00% 59.42 KB/s 0s
     ```
 
    稍等片刻，然后使用 mc ls 检查存储桶的内容，你将看到有个缩略图出现了。
 
     ```Shell
-    mc ls myminio/images-thumbnail
+    mc ls myjfs/images-thumbnail
     [2017-02-08 11:39:40 IST]   992B images-thumbnail.jpg
     ```

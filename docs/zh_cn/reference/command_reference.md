@@ -470,7 +470,8 @@ juicefs profile /mnt/jfs
 
 # 重放访问日志
 cat /mnt/jfs/.accesslog > /tmp/jfs.alog
-# 一段时间后按 Ctrl-C 停止 “cat” 命令
+
+# 一段时间后按 Ctrl-C 停止 "cat" 命令
 juicefs profile /tmp/jfs.alog
 
 # 分析访问日志并立即打印总统计数据
@@ -782,7 +783,7 @@ juicefs webdav redis://localhost localhost:9007
 ```shell
 juicefs bench [command options] PATH
 
-# 使用4个线程运行基准测试
+# 使用 4 个线程运行基准测试
 juicefs bench /mnt/jfs -p 4
 
 # 只运行小文件的基准测试
@@ -884,13 +885,13 @@ juicefs sync oss://mybucket.oss-cn-shanghai.aliyuncs.com s3://mybucket.s3.us-eas
 # 从 S3 直接同步到 JuiceFS
 juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://META-URL/
 
-# 源端: a1/b1,a2/b2,aaa/b1   目标端: empty   同步结果: aaa/b1
+# 源端：a1/b1, a2/b2, aaa/b1   目标端：empty   同步结果：aaa/b1
 juicefs sync --exclude='a?/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://META-URL/
 
-# 源端: a1/b1,a2/b2,aaa/b1   目标端: empty   同步结果: a1/b1,aaa/b1
+# 源端：a1/b1, a2/b2, aaa/b1   目标端：empty   同步结果：a1/b1, aaa/b1
 juicefs sync --include='a1/b1' --exclude='a[1-9]/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://META-URL/
 
-# 源端: a1/b1,a2/b2,aaa/b1,b1,b2  目标端: empty   同步结果: b2
+# 源端：a1/b1, a2/b2, aaa/b1, b1, b2  目标端：empty   同步结果：b2
 juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://META-URL/
 ```
 
