@@ -182,7 +182,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 	if cfg.MinSize > cfg.MaxSize {
 		logger.Fatal("min-size should not be larger than max-size")
 	}
-	if cfg.MinAge > cfg.MaxAge {
+	if cfg.MaxAge > 0 && cfg.MinAge > cfg.MaxAge {
 		logger.Fatal("min-age should not be larger than max-age")
 	}
 	if cfg.Threads <= 0 {
