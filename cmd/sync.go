@@ -136,7 +136,7 @@ func selectionFlags() []cli.Flag {
 			Usage: "skip files older than `DURATION`",
 		},
 		&cli.StringFlag{
-			Name:  "max-age",
+			Name:  "min-age",
 			Usage: "skip files newer than `DURATION`",
 		},
 		&cli.Int64Flag{
