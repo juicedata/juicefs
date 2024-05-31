@@ -41,6 +41,7 @@ func ParseBytesStr(key, str string, unit byte) uint64 {
 	if err == nil {
 		var shift int
 		switch unit {
+		case 'B':
 		case 'k', 'K':
 			shift = 10
 		case 'm', 'M':
@@ -59,7 +60,7 @@ func ParseBytesStr(key, str string, unit byte) uint64 {
 		val *= float64(uint64(1) << shift)
 	}
 	if err != nil {
-		logger.Fatalf("Invalid value \"%s\" for \"%s\"", str, key)
+		logger.Fatalf("Invalid value \"%s\" for \"%s\": %s", str, key, err)
 	}
 	return uint64(val)
 }
