@@ -774,10 +774,8 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 }
 
 func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, config *Config) error {
-	if len(config.rules) > 0 {
-		srckeys = filter(srckeys, config.rules, config)
-		dstkeys = filter(dstkeys, config.rules, config)
-	}
+	srckeys = filter(srckeys, config.rules, config)
+	dstkeys = filter(dstkeys, config.rules, config)
 	var dstobj object.Object
 	for obj := range srckeys {
 		if obj == nil {

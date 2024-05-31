@@ -105,6 +105,7 @@ func TestSync(t *testing.T) {
 		DeleteDst: false,
 		Exclude:   []string{"c*"},
 		Include:   []string{"a[1-9]", "a*"},
+		MaxSize:   math.MaxInt64,
 		Verbose:   false,
 		Quiet:     true,
 	}
@@ -192,6 +193,7 @@ func TestSyncIncludeAndExclude(t *testing.T) {
 		Verbose:   false,
 		Limit:     -1,
 		Quiet:     true,
+		MaxSize:   math.MaxInt64,
 		Exclude:   []string{"1"},
 	}
 	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
@@ -330,6 +332,7 @@ func TestSyncLink(t *testing.T) {
 		Quiet:       true,
 		Limit:       -1,
 		ForceUpdate: true,
+		MaxSize:     math.MaxInt64,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
@@ -385,6 +388,7 @@ func TestSyncLinkWithOutFollow(t *testing.T) {
 		Quiet:       true,
 		ForceUpdate: true,
 		Limit:       -1,
+		MaxSize:     math.MaxInt64,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
@@ -419,6 +423,7 @@ func TestSingleLink(t *testing.T) {
 		Links:       true,
 		Quiet:       true,
 		Limit:       -1,
+		MaxSize:     math.MaxInt64,
 		ForceUpdate: true,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
@@ -455,6 +460,7 @@ func TestSyncCheckAllLink(t *testing.T) {
 		Links:    true,
 		Quiet:    true,
 		Limit:    -1,
+		MaxSize:  math.MaxInt64,
 		CheckAll: true,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
@@ -493,6 +499,7 @@ func TestSyncCheckNewLink(t *testing.T) {
 		Links:    true,
 		Quiet:    true,
 		Limit:    -1,
+		MaxSize:  math.MaxInt64,
 		CheckNew: true,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
@@ -546,6 +553,7 @@ func TestLimits(t *testing.T) {
 		Threads: 50,
 		Update:  true,
 		Perms:   true,
+		MaxSize: math.MaxInt64,
 	}
 	setConfig := func(config *Config, subC subConfig) {
 		config.Limit = subC.limit
