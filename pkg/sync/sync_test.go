@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
 )
@@ -105,6 +106,7 @@ func TestSync(t *testing.T) {
 		DeleteDst: false,
 		Exclude:   []string{"c*"},
 		Include:   []string{"a[1-9]", "a*"},
+		MaxSize:   math.MaxInt64,
 		Verbose:   false,
 		Quiet:     true,
 	}
@@ -192,6 +194,7 @@ func TestSyncIncludeAndExclude(t *testing.T) {
 		Verbose:   false,
 		Limit:     -1,
 		Quiet:     true,
+		MaxSize:   math.MaxInt64,
 		Exclude:   []string{"1"},
 	}
 	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
@@ -330,6 +333,7 @@ func TestSyncLink(t *testing.T) {
 		Quiet:       true,
 		Limit:       -1,
 		ForceUpdate: true,
+		MaxSize:     math.MaxInt64,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
@@ -385,6 +389,7 @@ func TestSyncLinkWithOutFollow(t *testing.T) {
 		Quiet:       true,
 		ForceUpdate: true,
 		Limit:       -1,
+		MaxSize:     math.MaxInt64,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
@@ -419,6 +424,7 @@ func TestSingleLink(t *testing.T) {
 		Links:       true,
 		Quiet:       true,
 		Limit:       -1,
+		MaxSize:     math.MaxInt64,
 		ForceUpdate: true,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
@@ -455,6 +461,7 @@ func TestSyncCheckAllLink(t *testing.T) {
 		Links:    true,
 		Quiet:    true,
 		Limit:    -1,
+		MaxSize:  math.MaxInt64,
 		CheckAll: true,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
@@ -493,6 +500,7 @@ func TestSyncCheckNewLink(t *testing.T) {
 		Links:    true,
 		Quiet:    true,
 		Limit:    -1,
+		MaxSize:  math.MaxInt64,
 		CheckNew: true,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
@@ -546,6 +554,7 @@ func TestLimits(t *testing.T) {
 		Threads: 50,
 		Update:  true,
 		Perms:   true,
+		MaxSize: math.MaxInt64,
 	}
 	setConfig := func(config *Config, subC subConfig) {
 		config.Limit = subC.limit
@@ -736,5 +745,33 @@ func TestParseFilterRule(t *testing.T) {
 		if got := parseIncludeRules(c.args); !reflect.DeepEqual(got, c.rules) {
 			t.Errorf("parseIncludeRules(%+v) = %v, want %v", c.args, got, c.rules)
 		}
+	}
+}
+
+type mockObject struct {
+	size  int64
+	mtime time.Time
+}
+
+func (o *mockObject) Key() string          { return "" }
+func (o *mockObject) IsDir() bool          { return false }
+func (o *mockObject) IsSymlink() bool      { return false }
+func (o *mockObject) Size() int64          { return o.size }
+func (o *mockObject) Mtime() time.Time     { return o.mtime }
+func (o *mockObject) StorageClass() string { return "" }
+
+func TestFilterSizeAndAge(t *testing.T) {
+	config := &Config{
+		MaxSize: 100,
+		MinSize: 10,
+		MaxAge:  time.Second * 100,
+		MinAge:  time.Second * 10,
+	}
+	now := time.Now()
+	if !filterKey(&mockObject{10, now.Add(-time.Second * 15)}, now, nil, config) {
+		t.Fatalf("filterKey failed")
+	}
+	if filterKey(&mockObject{200, now.Add(-time.Second * 200)}, now, nil, config) {
+		t.Fatalf("filterKey should fail")
 	}
 }
