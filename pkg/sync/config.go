@@ -17,8 +17,10 @@
 package sync
 
 import (
+	"math"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
@@ -56,6 +58,10 @@ type Config struct {
 	Quiet          bool
 	CheckAll       bool
 	CheckNew       bool
+	MaxSize        int64
+	MinSize        int64
+	MaxAge         time.Duration
+	MinAge         time.Duration
 	Env            map[string]string
 
 	rules          []rule
@@ -164,7 +170,14 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Quiet:          c.Bool("quiet"),
 		CheckAll:       c.Bool("check-all"),
 		CheckNew:       c.Bool("check-new"),
+		MaxSize:        int64(utils.ParseBytes(c, "max-size", 'B')),
+		MinSize:        int64(utils.ParseBytes(c, "min-size", 'B')),
+		MaxAge:         utils.Duration(c.String("max-age")),
+		MinAge:         utils.Duration(c.String("min-age")),
 		Env:            make(map[string]string),
+	}
+	if !c.IsSet("max-size") {
+		cfg.MaxSize = math.MaxInt64
 	}
 	if cfg.Threads <= 0 {
 		logger.Warnf("threads should be larger than 0, reset it to 1")

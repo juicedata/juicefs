@@ -915,6 +915,9 @@ func parseIncludeRules(args []string) (rules []rule) {
 
 func filter(keys <-chan object.Object, rules []rule, config *Config) <-chan object.Object {
 	r := make(chan object.Object)
+	now := time.Now()
+	maxMtime := now.Add(-config.MaxAge)
+	minMtime := now.Add(-config.MinAge)
 	go func() {
 		for o := range keys {
 			if o == nil {
@@ -922,16 +925,27 @@ func filter(keys <-chan object.Object, rules []rule, config *Config) <-chan obje
 				r <- nil
 				break
 			}
-			var ok bool
-			if config.MatchFullPath {
-				ok = matchFullPath(rules, o.Key())
-			} else {
-				ok = matchLeveledPath(rules, o.Key())
+			var ok bool = true
+			if !o.IsDir() && !o.IsSymlink() {
+				ok = o.Size() >= int64(config.MinSize) && o.Size() <= int64(config.MaxSize)
+				if ok && config.MaxAge > 0 {
+					ok = o.Mtime().After(maxMtime)
+				}
+				if ok && config.MinAge > 0 {
+					ok = o.Mtime().Before(minMtime)
+				}
+			}
+			if ok {
+				if config.MatchFullPath {
+					ok = matchFullPath(rules, o.Key())
+				} else {
+					ok = matchLeveledPath(rules, o.Key())
+				}
 			}
 			if ok {
 				r <- o
 			} else {
-				logger.Debugf("exclude %s", o.Key())
+				logger.Debugf("exclude %s size: %d, mtime: %s", o.Key(), o.Size(), o.Mtime())
 			}
 		}
 		close(r)

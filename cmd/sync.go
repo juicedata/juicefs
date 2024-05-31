@@ -123,6 +123,22 @@ func selectionFlags() []cli.Flag {
 			Name:  "match-full-path",
 			Usage: "match filters again the full path",
 		},
+		&cli.StringFlag{
+			Name:  "max-size",
+			Usage: "skip files larger than `SIZE`",
+		},
+		&cli.StringFlag{
+			Name:  "min-size",
+			Usage: "skip files smaller than `SIZE`",
+		},
+		&cli.StringFlag{
+			Name:  "max-age",
+			Usage: "skip files older than `DURATION`",
+		},
+		&cli.StringFlag{
+			Name:  "max-age",
+			Usage: "skip files newer than `DURATION`",
+		},
 		&cli.Int64Flag{
 			Name:  "limit",
 			Usage: "limit the number of objects that will be processed (-1 is unlimited, 0 is to process nothing)",
