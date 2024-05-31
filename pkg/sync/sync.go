@@ -911,11 +911,30 @@ func parseIncludeRules(args []string) (rules []rule) {
 	return
 }
 
+func filterKey(o object.Object, now time.Time, rules []rule, config *Config) bool {
+	var ok bool = true
+	if !o.IsDir() && !o.IsSymlink() {
+		ok = o.Size() >= int64(config.MinSize) && o.Size() <= int64(config.MaxSize)
+		if ok && config.MaxAge > 0 {
+			ok = o.Mtime().After(now.Add(-config.MaxAge))
+		}
+		if ok && config.MinAge > 0 {
+			ok = o.Mtime().Before(now.Add(-config.MinAge))
+		}
+	}
+	if ok {
+		if config.MatchFullPath {
+			ok = matchFullPath(rules, o.Key())
+		} else {
+			ok = matchLeveledPath(rules, o.Key())
+		}
+	}
+	return ok
+}
+
 func filter(keys <-chan object.Object, rules []rule, config *Config) <-chan object.Object {
 	r := make(chan object.Object)
 	now := time.Now()
-	maxMtime := now.Add(-config.MaxAge)
-	minMtime := now.Add(-config.MinAge)
 	go func() {
 		for o := range keys {
 			if o == nil {
@@ -923,24 +942,7 @@ func filter(keys <-chan object.Object, rules []rule, config *Config) <-chan obje
 				r <- nil
 				break
 			}
-			var ok bool = true
-			if !o.IsDir() && !o.IsSymlink() {
-				ok = o.Size() >= int64(config.MinSize) && o.Size() <= int64(config.MaxSize)
-				if ok && config.MaxAge > 0 {
-					ok = o.Mtime().After(maxMtime)
-				}
-				if ok && config.MinAge > 0 {
-					ok = o.Mtime().Before(minMtime)
-				}
-			}
-			if ok {
-				if config.MatchFullPath {
-					ok = matchFullPath(rules, o.Key())
-				} else {
-					ok = matchLeveledPath(rules, o.Key())
-				}
-			}
-			if ok {
+			if filterKey(o, now, rules, config) {
 				r <- o
 			} else {
 				logger.Debugf("exclude %s size: %d, mtime: %s", o.Key(), o.Size(), o.Mtime())

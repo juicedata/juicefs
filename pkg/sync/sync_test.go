@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
 )
@@ -744,5 +745,33 @@ func TestParseFilterRule(t *testing.T) {
 		if got := parseIncludeRules(c.args); !reflect.DeepEqual(got, c.rules) {
 			t.Errorf("parseIncludeRules(%+v) = %v, want %v", c.args, got, c.rules)
 		}
+	}
+}
+
+type mockObject struct {
+	size  int64
+	mtime time.Time
+}
+
+func (o *mockObject) Key() string          { return "" }
+func (o *mockObject) IsDir() bool          { return false }
+func (o *mockObject) IsSymlink() bool      { return false }
+func (o *mockObject) Size() int64          { return o.size }
+func (o *mockObject) Mtime() time.Time     { return o.mtime }
+func (o *mockObject) StorageClass() string { return "" }
+
+func TestFilterSizeAndAge(t *testing.T) {
+	config := &Config{
+		MaxSize: 100,
+		MinSize: 10,
+		MaxAge:  time.Second * 100,
+		MinAge:  time.Second * 10,
+	}
+	now := time.Now()
+	if !filterKey(&mockObject{10, now.Add(-time.Second * 15)}, now, nil, config) {
+		t.Fatalf("filterKey failed")
+	}
+	if filterKey(&mockObject{200, now.Add(-time.Second * 200)}, now, nil, config) {
+		t.Fatalf("filterKey should fail")
 	}
 }
