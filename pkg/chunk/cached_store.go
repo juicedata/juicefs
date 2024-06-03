@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/compress"
@@ -40,9 +41,7 @@ const chunkSize = 1 << 26 // 64M
 const pageSize = 1 << 16  // 64K
 const SlowRequest = time.Second * time.Duration(10)
 
-var (
-	logger = utils.GetLogger("juicefs")
-)
+var logger = utils.GetLogger("juicefs")
 
 type pendingItem struct {
 	key       string
@@ -131,11 +130,13 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		start := time.Now()
 		r, err := s.store.bcache.load(key)
 		if err == nil {
+			s.store.cacheReaders.Add(1)
 			n, err = r.ReadAt(p, int64(boff))
 			if !s.store.conf.OSCache {
 				dropOSCache(r)
 			}
 			_ = r.Close()
+			s.store.cacheReaders.Add(-1)
 			if err == nil {
 				s.store.cacheHits.Add(1)
 				s.store.cacheHitBytes.Add(float64(n))
@@ -151,6 +152,8 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 
 	s.store.cacheMiss.Add(1)
 	s.store.cacheMissBytes.Add(float64(len(p)))
+	s.store.objectReaders.Add(1)
+	defer s.store.objectReaders.Add(-1)
 
 	if s.store.seekable && boff > 0 && len(p) <= blockSize/4 {
 		if s.store.downLimit != nil {
@@ -664,6 +667,8 @@ type cachedStore struct {
 	objectDataBytes     *prometheus.CounterVec
 	stageBlockDelay     prometheus.Counter
 	stageBlockErrors    prometheus.Counter
+	cacheReaders        atomic.Int64
+	objectReaders       atomic.Int64
 }
 
 func logRequest(typeStr, key, param, reqID string, err error, used time.Duration) {
@@ -921,6 +926,20 @@ func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 		func() float64 {
 			return float64(len(store.currentUpload))
 		}))
+	reg.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name:        "store_readers",
+		Help:        "number of storage readers",
+		ConstLabels: prometheus.Labels{"storage": "cache"},
+	}, func() float64 {
+		return float64(store.cacheReaders.Load())
+	}))
+	reg.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name:        "store_readers",
+		Help:        "number of storage readers",
+		ConstLabels: prometheus.Labels{"storage": "object"},
+	}, func() float64 {
+		return float64(store.objectReaders.Load())
+	}))
 }
 
 func (store *cachedStore) shouldCache(size int) bool {
