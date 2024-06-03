@@ -212,6 +212,18 @@ func cacheDirPathToAbs(c *cli.Context) {
 			}
 		}
 	}
+
+	if rpAcLog := c.String("access-log"); rpAcLog != "" {
+		ap, err := filepath.Abs(rpAcLog)
+		if err == nil && ap != rpAcLog {
+			for i, a := range os.Args {
+				if a == rpAcLog || a == "--access-log="+rpAcLog {
+					os.Args[i] = a[:len(a)-len(rpAcLog)] + ap
+					break
+				}
+			}
+		}
+	}
 }
 
 func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config) {
