@@ -206,62 +206,73 @@ func isFlag(flags []cli.Flag, option string) (bool, bool) {
 	return false, false
 }
 
-func reorderOptions(app *cli.App, args []string) []string {
-	var newArgs = []string{args[0]}
-	var others []string
-	globalFlags := append(app.Flags, cli.VersionFlag)
-	for i := 1; i < len(args); i++ {
+// parseFlags parses flags from args, returns all matched flags and the rest of args
+func parseFlags(flags []cli.Flag, args []string) (matchedFlags, others []string) {
+	for i := 0; i < len(args); i++ {
 		option := args[i]
-		if ok, hasValue := isFlag(globalFlags, option); ok {
-			newArgs = append(newArgs, option)
-			if hasValue {
+		if ok, nextIsValue := isFlag(flags, option); ok {
+			matchedFlags = append(matchedFlags, option)
+			if nextIsValue {
 				i++
 				if i >= len(args) {
-					logger.Fatalf("option %s requires value", option)
+					break
 				}
-				newArgs = append(newArgs, args[i])
+				matchedFlags = append(matchedFlags, args[i])
 			}
 		} else {
 			others = append(others, option)
 		}
 	}
-	// no command
+	return
+}
+
+func getCommand(cmds []*cli.Command, others []string) (cmd *cli.Command) {
 	if len(others) == 0 {
-		return newArgs
+		return
 	}
 	cmdName := others[0]
-	var cmd *cli.Command
-	for _, c := range app.Commands {
-		if c.Name == cmdName {
+	for _, c := range cmds {
+		if c.HasName(cmdName) {
 			cmd = c
 			break
 		}
 	}
-	if cmd == nil {
-		// can't recognize the command, skip it
-		return append(newArgs, others...)
-	}
+	return
+}
 
-	newArgs = append(newArgs, cmdName)
-	args, others = others[1:], nil
-	// -h is valid for all the commands
-	cmdFlags := append(cmd.Flags, cli.HelpFlag)
-	for i := 0; i < len(args); i++ {
-		option := args[i]
-		if ok, hasValue := isFlag(cmdFlags, option); ok {
-			newArgs = append(newArgs, option)
-			if hasValue && len(args[i+1:]) > 0 {
-				i++
-				newArgs = append(newArgs, args[i])
-			}
-		} else {
-			if strings.HasPrefix(option, "-") && !utils.StringContains(args, "--generate-bash-completion") {
-				logger.Fatalf("unknown option: %s", option)
-			}
-			others = append(others, option)
+// recursivelyParseCommand parses subcommands recursively
+// returns the ordered parsed args, unused flags and the rest of args
+func recursivelyParseCommand(cmds []*cli.Command, flags, others []string) ([]string, []string, []string) {
+	var matchedFlags, args []string
+	cmd := getCommand(cmds, others)
+	if cmd != nil {
+		matchedFlags, others = parseFlags(cmd.Flags, others[1:])
+		flags = append(flags, matchedFlags...)
+
+		args, flags, others = recursivelyParseCommand(cmd.Subcommands, flags, others)
+		matchedFlags, flags = parseFlags(cmd.Flags, flags)
+
+		args = append(append([]string{cmd.Name}, matchedFlags...), args...)
+	}
+	return args, flags, others
+}
+
+func reorderOptions(app *cli.App, args []string) []string {
+	cmd := args[0]
+	helpFlags, args := parseFlags([]cli.Flag{cli.HelpFlag}, args[1:])
+
+	globalFlags := append(app.Flags, cli.VersionFlag)
+	flags, others := parseFlags(globalFlags, args)
+
+	args, flags, others = recursivelyParseCommand(app.Commands, flags, others)
+	args = append([]string{cmd}, append(flags, args...)...)
+
+	for _, arg := range others {
+		if strings.HasPrefix(arg, "-") && !utils.StringContains(others, "--generate-bash-completion") {
+			logger.Fatalf("unknown option: %s for current command", arg)
 		}
 	}
-	return append(newArgs, others...)
+	return append(append(args, helpFlags...), others...)
 }
 
 // Check number of positional arguments, set logger level and setup agent if needed
