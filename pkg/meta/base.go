@@ -1648,22 +1648,23 @@ func (m *baseMeta) touchAtime(ctx Context, inode Ino, attr *Attr) {
 	}
 }
 
-func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr syscall.Errno) {
+func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (st syscall.Errno) {
 	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
 		return syscall.EROFS
 	}
 	defer func() {
-		if rerr == 0 {
+		if st == 0 {
 			m.touchAtime(ctx, inode, attr)
 		}
 	}()
 	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
 		return 0
 	}
-	var err syscall.Errno
 	// attr may be valid, see fs.Open()
 	if attr != nil && !attr.Full {
-		err = m.GetAttr(ctx, inode, attr)
+		if st = m.GetAttr(ctx, inode, attr); st != 0 {
+			return
+		}
 	}
 	var mmask uint8 = 0
 	switch flags & (syscall.O_RDONLY | syscall.O_WRONLY | syscall.O_RDWR) {
@@ -1674,7 +1675,7 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr 
 	case syscall.O_RDWR:
 		mmask = MODE_MASK_R | MODE_MASK_W
 	}
-	if rerr = m.Access(ctx, inode, mmask, attr); rerr != 0 {
+	if st = m.Access(ctx, inode, mmask, attr); st != 0 {
 		return
 	}
 
@@ -1691,10 +1692,8 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr 
 			return syscall.EPERM
 		}
 	}
-	if err == 0 {
-		m.of.Open(inode, attr)
-	}
-	return err
+	m.of.Open(inode, attr)
+	return 0
 }
 
 func (m *baseMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
