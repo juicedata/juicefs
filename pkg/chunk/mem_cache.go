@@ -102,13 +102,14 @@ func (c *memcache) delete(key string, p *Page) {
 	delete(c.pages, key)
 }
 
-func (c *memcache) remove(key string) {
+func (c *memcache) remove(key string) bool {
 	c.Lock()
 	defer c.Unlock()
 	if item, ok := c.pages[key]; ok {
 		c.delete(key, item.page)
 		logger.Debugf("remove %s from cache", key)
 	}
+	return false
 }
 
 func (c *memcache) load(key string) (ReadCloser, error) {
