@@ -110,12 +110,12 @@ test_sync_list_object_symlink(){
     prepare_test
     cd /jfs
     mkdir dir1
-    mkdir dir2
-    echo abc > dir2/afile
-    ln -s dir2/afile dir1/symlink_dir
+    mkdir -p dir2/src_dir
+    echo abc > dir2/src_dir/afile
+    ln -s ./../dir2/src_dir dir1/symlink_dir
     cd -
-    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/dir1 minio://minioadmin:minioadmin@localhost:9000/myjfs/dir3/
-    ./mc cat myminio/myjfs/def | grep abc || (echo "content should be abc" && exit 1)
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/dir1/ minio://minioadmin:minioadmin@localhost:9000/myjfs/dir3/
+    ./mc cat myminio/myjfs/dir3/symlink_dir/afile | grep abc || (echo "content should be abc" && exit 1)
 }
 
 prepare_test(){
