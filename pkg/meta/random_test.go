@@ -48,15 +48,15 @@ type tQuota struct {
 }
 
 type tNode struct {
-	name  string
-	inode Ino
-	_type uint8
-	mode  uint16
-	uid   uint32
-	gid   uint32
-	// atime    uint32
-	// mtime    uint32
-	// ctime    uint32
+	name     string
+	inode    Ino
+	_type    uint8
+	mode     uint16
+	uid      uint32
+	gid      uint32
+	atime    int64
+	mtime    int64
+	ctime    int64
 	iflags   uint8
 	length   uint64
 	parents  []*tNode
@@ -1740,6 +1740,147 @@ func (m *fsMachine) StatFS(t *rapid.T) {
 	total2, avail2, iused2, iavail2 := m.statfs(m.meta.GetFormat())
 	if totalsize != total2 || availspace != avail2 || iused != iused2 || iavail != iavail2 {
 		t.Fatalf("expect %d %d %d %d but got %d %d %d %d", total2, avail2, iused2, iavail2, totalsize, availspace, iused, iavail)
+	}
+}
+
+func (m *fsMachine) amtime(inode Ino, flag uint16, atime, mtime int64, oattr *Attr) syscall.Errno {
+	n := m.nodes[inode]
+	if n == nil {
+		return syscall.ENOENT
+	}
+
+	changed := false
+	if flag&SetAttrAtime != 0 {
+		n.atime = atime
+		changed = changed || oattr.Atime != atime
+	}
+	if flag&SetAttrMtime != 0 {
+		n.mtime = mtime
+		changed = changed || oattr.Mtime != mtime
+	}
+
+	if changed {
+		if n.uid == 0 && m.ctx.Uid() != 0 {
+			return syscall.EPERM
+		}
+		if ok := n.access(m.ctx, MODE_MASK_W); !ok && n.uid != m.ctx.Uid() {
+			return syscall.EACCES
+		}
+	}
+	// TODO ctime
+	return 0
+}
+
+func (m *fsMachine) SetAmtime(t *rapid.T) {
+	inode := m.pickNode(t)
+
+	oattr := &Attr{}
+	if st := m.meta.GetAttr(m.ctx, inode, oattr); st != 0 {
+		return
+	}
+
+	atime := rapid.Int64Range(0, 1e8).Draw(t, "atime")
+	mtime := rapid.Int64Range(0, 1e8).Draw(t, "mtime")
+	var flag uint16
+	attr := &Attr{
+		Atime: atime,
+		Mtime: mtime,
+	}
+
+	if atime > 0 {
+		flag |= SetAttrAtime
+	}
+	if mtime > 0 {
+		flag |= SetAttrMtime
+	}
+	st2 := m.amtime(inode, flag, atime, mtime, oattr)
+	st := m.meta.SetAttr(m.ctx, inode, flag, 0, attr)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+
+	if st == 0 {
+		// validate time only here
+		node := m.nodes[inode]
+		if flag&SetAttrAtime != 0 && attr.Atime != node.atime {
+			t.Fatalf("expect %d but got %d", node.atime, attr.Atime)
+		}
+		if flag&SetAttrMtime != 0 && attr.Mtime != node.mtime {
+			t.Fatalf("expect %d but got %d", node.mtime, attr.Mtime)
+		}
+	}
+}
+
+func (m *fsMachine) chmod(inode Ino, mode uint16) syscall.Errno {
+	n := m.nodes[inode]
+	if n == nil {
+		return syscall.ENOENT
+	}
+	if n.accACL != nil {
+		n.accACL.SetMode(mode)
+		n.mode = mode&07000 | n.accACL.GetMode()
+	} else {
+		if m.ctx.Uid() != 0 && m.ctx.Uid() != n.uid &&
+			(n.mode&01777 != mode&01777 || mode&02000 > n.mode&02000 || mode&04000 > n.mode&04000) {
+			return syscall.EPERM
+		}
+		n.mode = mode
+	}
+	// n.ctime = m.ctx.ts
+	return 0
+}
+
+func (m *fsMachine) Chmod(t *rapid.T) {
+	inode := m.pickNode(t)
+	mode := rapid.Uint16Range(0, 01777).Draw(t, "mode")
+	st := m.meta.SetAttr(m.ctx, inode, SetAttrMode, 0, &Attr{Mode: mode})
+	st2 := m.chmod(inode, mode)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
+
+func (m *fsMachine) chown(inode Ino, flag uint16, uid, gid uint32) syscall.Errno {
+	n := m.nodes[inode]
+	if n == nil {
+		return syscall.ENOENT
+	}
+	if flag&SetAttrUID != 0 && n.uid != uid {
+		if m.ctx.Uid() != 0 {
+			return syscall.EPERM
+		}
+		n.uid = uid
+	}
+	if flag&SetAttrGID != 0 {
+		if m.ctx.Uid() != 0 && m.ctx.Uid() != n.uid {
+			return syscall.EPERM
+		}
+		if n.gid != gid {
+			if m.ctx.CheckPermission() && m.ctx.Uid() != 0 && !containsGid(m.ctx, gid) {
+				return syscall.EPERM
+			}
+			n.gid = gid
+		}
+	}
+	// n.ctime = m.ctx.ts
+	return 0
+}
+
+func (m *fsMachine) Chown(t *rapid.T) {
+	inode := m.pickNode(t)
+	uid := rapid.Uint32Range(0, 10).Draw(t, "uid")
+	gid := rapid.Uint32Range(0, 10).Draw(t, "gid")
+	var flag uint16
+	if uid < 10 {
+		flag |= SetAttrUID
+	}
+	if gid < 10 {
+		flag |= SetAttrGID
+	}
+	st := m.meta.SetAttr(m.ctx, inode, flag, 0, &Attr{Uid: uid, Gid: gid})
+	st2 := m.chown(inode, flag, uid, gid)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
 	}
 }
 
