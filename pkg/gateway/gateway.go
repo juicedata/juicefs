@@ -303,6 +303,14 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 			if root && len(fi.Name()) == len(metaBucket) && fi.Name() == metaBucket {
 				continue
 			}
+			if stat, ok := fi.(*fs.FileStat); ok && stat.IsSymlink() {
+				var err syscall.Errno
+				p := n.path(bucket, prefixDir, fi.Name())
+				if fi, err = n.fs.Stat(mctx, p); err != 0 {
+					logger.Errorf("stat %s: %s", p, err)
+					continue
+				}
+			}
 			if fi.IsDir() {
 				entries = append(entries, fi.Name()+sep)
 			} else {

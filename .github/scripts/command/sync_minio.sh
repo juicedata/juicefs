@@ -79,11 +79,12 @@ test_sync_external_link(){
     [ -z $(./mc cat myminio/myjfs/hello) ]
 }
 
+# list object should be skipped when encountering a loop symlink
 test_sync_loop_symlink(){
     prepare_test
     touch hello
     ln -s hello /jfs/hello
-    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ && exit 1 || true
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/
     rm -rf /jfs/hello
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/
 }
@@ -105,6 +106,18 @@ test_sync_deep_symlink(){
     for i in {1..40}; do
         ./mc cat myminio/myjfs/symlink_$i | grep "^hello$"
     done
+}
+
+test_sync_list_object_symlink(){
+    prepare_test
+    cd /jfs
+    mkdir dir1
+    mkdir -p dir2/src_dir
+    echo abc > dir2/src_dir/afile
+    ln -s ./../dir2/src_dir dir1/symlink_dir
+    cd -
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/dir1/ minio://minioadmin:minioadmin@localhost:9000/myjfs/dir3/
+    ./mc cat myminio/myjfs/dir3/symlink_dir/afile | grep abc || (echo "content should be abc" && exit 1)
 }
 
 prepare_test(){
