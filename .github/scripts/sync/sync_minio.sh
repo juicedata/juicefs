@@ -105,6 +105,18 @@ test_sync_deep_symlink(){
     done
 }
 
+test_sync_list_object_symlink(){
+    prepare_test
+    cd /jfs
+    mkdir dir1
+    mkdir dir2
+    echo abc > dir2/afile
+    ln -s dir2/afile dir1/symlink_dir
+    cd -
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/dir1 minio://minioadmin:minioadmin@localhost:9000/myjfs/dir3/
+    ./mc cat myminio/myjfs/def | grep abc || (echo "content should be abc" && exit 1)
+}
+
 prepare_test(){
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
