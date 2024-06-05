@@ -333,8 +333,9 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 			}
 			if stat, ok := fi.(*fs.FileStat); ok && stat.IsSymlink() {
 				var err syscall.Errno
-				if fi, err = n.fs.Stat(mctx, n.path(bucket, prefixDir, fi.Name())); err != 0 {
-					logger.Errorf("stat %s: %s", n.path(bucket, prefixDir, fi.Name()), err)
+				p := n.path(bucket, prefixDir, fi.Name())
+				if fi, err = n.fs.Stat(mctx, p); err != 0 {
+					logger.Errorf("stat %s: %s", p, err)
 					continue
 				}
 			}

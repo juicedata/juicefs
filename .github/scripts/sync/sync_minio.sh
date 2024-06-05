@@ -79,11 +79,12 @@ test_sync_external_link(){
     [ -z $(./mc cat myminio/myjfs/hello) ]
 }
 
+# list object should be skipped when encountering a loop symlink
 test_sync_loop_symlink(){
     prepare_test
     touch hello
     ln -s hello /jfs/hello
-    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ && exit 1 || true
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/
     rm -rf /jfs/hello
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/
 }
