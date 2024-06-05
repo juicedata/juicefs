@@ -163,6 +163,14 @@ For example, to set a refresh interval of 1 minute:
 juicefs gateway xxxx xxxx    --refresh-iam-interval 1m
 ```
 
+### Multiple Gateway Instances
+
+The distributed nature of JuiceFS allows for multiple JuiceFS S3 gateway instances to be started on different nodes simultaneously, which can improve the availability and performance of the S3 gateways. In this scenario, each instance of the S3 gateway will independently handle requests, but all will access the same JuiceFS file system. It's important to note the following:
+
+1. Ensure that all instances are started with the same user at initialization; use the same UID and GID for all instances.
+2. The IAM refresh time between nodes can vary, but it must be ensured that this interval is not too short to avoid putting excessive pressure on JuiceFS.
+3. Addresses and ports listened by each instance can be freely configured. If multiple instances are started on the same machine, ensure that there is no conflict in port numbers.
+
 ## Advanced features
 
 The core feature of JuiceFS S3 Gateway is to provide the S3 API. Now, the support for the S3 protocol is comprehensive. Version 1.2 supports IAM and bucket event notifications.
