@@ -225,7 +225,7 @@ $ mc admin user list myjfs --json
 
 #### 服务账户
 
-`mc admin user svcacct` 命令支持服务账户的管理，允许为某个用户添加服务账户，每个服务账户都与用户身份相关联，并继承附加到其父用户或父用户所属组的策略。每个访问密钥还支持可选的内联策略，可进一步限制对父用户可用的操作和资源子集的访问。
+服务账户（service accounts）的作用是为现有用户创建一个相同权限的副本，让不同的应用可以使用独立的访问密钥。服务账户的权限继承自父用户，可以通过 `mc admin user svcacct` 命令管理。
 
 ```
 $ mc admin user svcacct -h
@@ -244,6 +244,18 @@ COMMANDS:
   enable   Enable a service account
   disable  Disable a services account
 ```
+
+:::tip 提示
+服务账户会从主账户继承权限并保持与主账户权限一致，而且服务账户不可以直接附加权限策略。
+:::
+
+比如，现在有一个名为 `user1` 的用户，通过以下命令为它创建一个名为 `svcacct1` 的服务账户：
+
+```Shell
+mc admin user svcacct add myjfs user1 --access-key svcacct1 --secret-key 123456abc
+```
+
+如果 `user1` 用户为只读权限，那么 `svcacct1` 也是只读权限。如果想让 `svcacct1` 拥有其他权限，则需要调整 `user1` 的权限。
 
 #### AssumeRole 安全令牌服务
 

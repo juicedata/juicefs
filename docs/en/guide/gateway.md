@@ -225,11 +225,11 @@ $ mc admin user list myjfs --json
 }
 ```
 
-#### Service accounts
+### Service Accounts
 
-The `mc admin user svcacct` command supports service account management. This allows you to add service accounts for a user. Each service account is associated with a user identity and inherits policies attached to its parent user or the group to which the parent user belongs. Each access key supports optional inline policies that can further restrict access to operations and resources subsets available to the parent user.
+Service accounts are used to create a copy of an existing user with the same permissions, allowing different applications to use separate access keys. The privileges for service accounts inherit from their parent users. They can be managed using the command:
 
-```
+```Shell
 $ mc admin user svcacct -h
 NAME:
   mc admin user svcacct - manage service accounts
@@ -246,6 +246,18 @@ COMMANDS:
   enable   Enable a service account
   disable  Disable a services account
 ```
+
+:::tip
+Service accounts inherit privileges from their parent users and cannot be directly attached with policy.
+:::
+
+For example, let's say there is an existing user named `user1`. You can create a service account called `svcacct1` for it as follows:
+
+```Shell
+mc admin user svcacct add myjfs user1 --access-key svcacct1 --secret-key 123456abc
+```
+
+If the parent user, `user1`, has read-only permissions, then so will `svcacct1`. To grant different permissions to `svcacct1`, you would need to adjust the privileges of the parent user.
 
 #### AssumeRole security token service
 
