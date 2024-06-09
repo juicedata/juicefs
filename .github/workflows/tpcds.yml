@@ -74,13 +74,13 @@ jobs:
         working-directory: /tmp
         run: |
           curl https://dlcdn.apache.org/spark/ > a.html
-          spark_version=$(grep -o 'spark-[0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}' a.html | uniq | sort -r | head -1 | awk -F- '{print $2}')
+          spark_version=$(grep -oP '(?<=href=")spark-[^/]+(?=/")' a.html | grep -v preview | tail -1)
           echo "spark_version is $spark_version"
-          wget -q https://dlcdn.apache.org/spark/spark-$spark_version/spark-$spark_version-bin-hadoop3.tgz
-          tar -zxf spark-$spark_version-bin-hadoop3.tgz
-          ln -s spark-$spark_version-bin-hadoop3 spark
-          cp ~/work/juicefs/juicefs/sdk/java/target/juicefs-hadoop*jar /tmp/spark/jars
-          cp ~/work/juicefs/juicefs/.github/workflows/resources/core-site.xml /tmp/spark/conf
+          wget -q https://dlcdn.apache.org/spark/$spark_version/$spark_version-bin-hadoop3.tgz
+          tar -zxf $spark_version-bin-hadoop3.tgz
+          ln -s $spark_version-bin-hadoop3 spark
+          cp ~/work/jfs/jfs/sdk/java/target/juicefs-hadoop*jar /tmp/spark/jars
+          cp ~/work/jfs/jfs/.github/workflows/resources/core-site.xml /tmp/spark/conf
           export PATH=$PATH:/tmp/spark/bin:/tmp/spark/sbin
           echo /tmp/spark/bin >> $GITHUB_PATH
           echo /tmp/spark/sbin >> $GITHUB_PATH
