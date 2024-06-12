@@ -543,7 +543,11 @@ func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
 		logger.Infof("different volume %s != %s, mount on top of it", oldConf.Format.Name, newConf.Format.Name)
 		return false
 	}
-	if oldConf.FuseOpts != nil && !reflect.DeepEqual(oldConf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions()) {
+	if oldConf.FuseOpts == nil {
+		logger.Infof("Old client has no FUSE options, mount on top of it")
+		return false
+	}
+	if !reflect.DeepEqual(oldConf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions()) {
 		logger.Infof("different options, mount on top of it: %v != %v", oldConf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions())
 		return false
 	}
