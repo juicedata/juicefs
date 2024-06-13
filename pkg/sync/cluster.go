@@ -189,6 +189,7 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 		if ip == "" {
 			return "", fmt.Errorf("no local ip found")
 		}
+		addr = ip
 	}
 
 	if !strings.Contains(addr, ":") {
