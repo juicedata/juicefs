@@ -1258,3 +1258,56 @@ juicefs format  \
 - `--bucket` is used to set the server address and storage path in the format `[sftp://]<IP/Domain>:[port]:<Path>`. Note that the directory name should end with `/`, and the port number is optionally defaulted to `22`, e.g. `192.168.1.11:22:myjfs/`.
 - `--access-key` set the username of the remote server
 - `--secret-key` set the password of the remote server
+
+### NFS {#nfs}
+
+NFS - Network File System, is a commonly used file-sharing service in Unix-like operating systems. It allows computers within a network to access remote files as if they were local files.
+
+JuiceFS supports using NFS as the underlying storage to build a file system, offering two usage methods: local mount and direct mode.
+
+#### Local Mount
+
+JuiceFS v1.1 and earlier versions only support using NFS as underlying storage via local mount. This method requires mounting the directory on the NFS server locally first, and then using it as a local disk to create the JuiceFS file system.
+
+For example, first mount the `/srv/data` directory from the remote NFS server `192.168.1.11` to the local `/mnt/data` directory, and then access it in `file` mode.
+
+```shell
+$ sudo mount -t nfs 192.168.1.11:/srv/data /mnt/data
+$ sudo juicefs format \
+    --storage file \
+    --bucket /mnt/data \
+    ... \
+    redis://localhost:6379/1 myjfs
+```
+
+From JuiceFS's perspective, the locally mounted NFS is still a local disk, so the `--storage` option is set to `file`.
+
+Similarly, because the underlying storage can only be accessed on the mounted device, to share access across multiple devices, you need to mount the NFS share on each device separately, or provide external access through network-based methods such as WebDAV or S3 Gateway.
+
+#### Direct Mode
+
+JuiceFS v1.2 and later versions support using NFS as the underlying storage in direct mode. This method does not require pre-mounting the NFS directory locally but accesses the shared directory directly through the built-in NFS protocol in the JuiceFS client.
+
+For example, the remote server's `/etc/exports` configuration file exports the following NFS share:
+
+```
+/srv/data    192.168.1.0/24(rw,sync,no_subtree_check)
+```
+
+You can directly use the JuiceFS client to connect to the `/srv/data` directory on the NFS server to create the file system:
+
+```shell
+$ sudo juicefs format  \
+    --storage nfs \
+    --bucket 192.168.1.11:/srv/data \
+    ... \
+    redis://localhost:6379/1 myjfs
+```
+
+In direct mode, the `--storage` option is set to `nfs`, and the `--bucket` option is set to the NFS server address and shared directory. The JuiceFS client will directly connect to the directory on the NFS server to read and write data.
+
+**A few considerations:**
+
+1. JuiceFS direct mode currently only supports the NFSv3 protocol.
+2. The JuiceFS client needs permission to access the NFS shared directory.
+3. NFS by default enables the `root_squash` feature, which maps root access to the NFS share to the `nobody` user by default. To avoid permission issues with NFS shares, you can set the owner of the shared directory to `nobody:nogroup` or configure the NFS share with the `no_root_squash` option to disable permission squashing.
