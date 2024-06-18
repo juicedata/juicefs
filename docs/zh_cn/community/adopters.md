@@ -74,9 +74,9 @@ slug: /adopters
 | [米哈游](https://www.mihoyo.com)                        | Production | 共享文件存储           |       |
 | [人民大学](http://www.ruc.edu.cn)                        | Production | AI         |       |
 | [中山大学](https://www.sysu.edu.cn)                        | Production | AI           |       |
-| [成都电子科技大学](https://www.uestc.edu.cn)                        | Production | AI     |       |    
+| [成都电子科技大学](https://www.uestc.edu.cn)                        | Production | AI     |       |
 | [酷家乐](https://www.kujiale.com)                        | Production | AI        |       |
-| [驭势科技](https://www.uisee.com)                        | Production | AI        |       | 
+| [驭势科技](https://www.uisee.com)                        | Production | AI        |       |
 | [腾讯](https://www.tencent.com)                        | Production | AI         |       |
 | [TP-LINK](https://www.tp-link.com)                        | Production | AI      |       |
 | [安克创新](https://cn.anker-in.com)                        | Production | AI      |       |
