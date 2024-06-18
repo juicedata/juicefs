@@ -1354,6 +1354,10 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (st sy
 	switch flags & (syscall.O_RDONLY | syscall.O_WRONLY | syscall.O_RDWR) {
 	case syscall.O_RDONLY:
 		mmask = MODE_MASK_R
+		// 0x20 means O_FMODE_EXEC
+		if (flags & 0x20) != 0 {
+			mmask = MODE_MASK_X
+		}
 	case syscall.O_WRONLY:
 		mmask = MODE_MASK_W
 	case syscall.O_RDWR:
@@ -2610,7 +2614,7 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		}
 	}
 	if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
-		if ctx.Uid() != 0 {
+		if ctx.CheckPermission() && ctx.Uid() != 0 {
 			return nil, syscall.EPERM
 		}
 		dirtyAttr.Uid = attr.Uid

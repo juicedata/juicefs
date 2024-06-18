@@ -1282,7 +1282,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if pattr.Parent > TrashInode {
 			return syscall.ENOENT
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
 		if (pn.Flags & FlagImmutable) != 0 {
