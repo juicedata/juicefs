@@ -4,8 +4,8 @@ on:
   push:
     tags:
       - v*
-    paths:
-      - '**/release.yml'
+    branches:
+      - 'debug_publish_jar'
 jobs:
   releaser:
     runs-on: ubuntu-20.04
@@ -35,8 +35,8 @@ jobs:
         run: |-
           echo 'GITHUB_TOKEN=${{secrets.GH_PERSONAL_ACCESS_TOKEN}}' > .release-env
 
-      - name: goreleaser release
-        run: make release
+#      - name: goreleaser release
+#        run: make release
 
       - name: Cache local Maven repository
         id: cache-maven
