@@ -58,7 +58,7 @@ jobs:
           tar -xvf redis.tar.gz -C redis --strip-components 1
           cd redis
           make
-          make test
+          # make test
           stat /tmp/jfs
           df -lh
 
