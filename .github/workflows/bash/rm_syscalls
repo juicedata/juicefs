@@ -39,6 +39,14 @@ ioctl_sg01 ioctl_sg01
 fanotify16 fanotify16
 fanotify18 fanotify18
 fanotify19 fanotify19
+keyctl01 keyctl01
+keyctl02 keyctl02
+keyctl03 keyctl03
+keyctl04 keyctl04
+keyctl05 keyctl05
+keyctl06 keyctl06
+keyctl07 keyctl07
+keyctl08 keyctl08
 lchown01_16 lchown01_16
 lchown02_16 lchown02_16
 lchown03_16 lchown03_16
