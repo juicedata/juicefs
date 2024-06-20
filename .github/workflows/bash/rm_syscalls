@@ -146,3 +146,4 @@ getxattr05 getxattr05
 finit_module02 finit_module02
 msgstress03 msgstress03
 kill11 kill11
+keyctl05 keyctl05
