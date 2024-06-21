@@ -61,6 +61,17 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Remove unused software
+        timeout-minutes: 10
+        run: |
+          echo "before remove unused software"
+          sudo df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          echo "after remove unused software"
+          sudo df -h
+          
       - name: Set Variable
         id: vars
         run: |
