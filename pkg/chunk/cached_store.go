@@ -1042,12 +1042,12 @@ func (store *cachedStore) scanDelayedStaging() {
 	store.pendingMutex.Lock()
 	defer store.pendingMutex.Unlock()
 	for _, item := range store.pendingKeys {
-		store.pendingMutex.Unlock()
 		if !item.uploading && item.ts.Before(cutoff) {
 			item.uploading = true
+			store.pendingMutex.Unlock()
 			store.pendingCh <- item
+			store.pendingMutex.Lock()
 		}
-		store.pendingMutex.Lock()
 	}
 }
 
@@ -1064,6 +1064,37 @@ func (store *cachedStore) canUpload() bool {
 	h := time.Now().Hour()
 	return store.startHour < store.endHour && h >= store.startHour && h < store.endHour ||
 		store.startHour > store.endHour && (h >= store.startHour || h < store.endHour)
+}
+
+// Flush as much as possible
+func (store *cachedStore) flushStaging() {
+	store.pendingMutex.Lock()
+	pending := len(store.pendingKeys)
+	store.pendingMutex.Unlock()
+	if pending == 0 {
+		return
+	}
+
+	logger.Infof("Waiting for at most %d staging files to be uploaded", pending)
+	store.scanDelayedStaging()
+	for len(store.pendingCh) > 0 || store.stageUploading() {
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func (store *cachedStore) stageUploading() bool {
+	store.pendingMutex.Lock()
+	defer store.pendingMutex.Unlock()
+	for _, item := range store.pendingKeys {
+		if item.uploading {
+			return true
+		}
+	}
+	return false
+}
+
+func (store *cachedStore) Close() {
+	store.flushStaging()
 }
 
 func (store *cachedStore) NewReader(id uint64, length int) Reader {
