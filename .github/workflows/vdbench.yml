@@ -1,16 +1,35 @@
 name: "vdbench"
 
 on:
+  push:
+    branches:
+      - 'main'
+      - 'release-*'
+    paths:
+      - '**/vdbench.yml'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-*'
+    paths:
+      - '**/vdbench.yml'
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
   
 jobs:
   vdbench:
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'fdb']
+        meta: [ 'redis', 'mysql', 'fdb', 'tikv']
     runs-on: ubuntu-20.04
 
     steps:        
@@ -28,7 +47,19 @@ jobs:
             echo "target=juicefs" >> $GITHUB_OUTPUT
           fi
 
+      - name: Remove unused software
+        timeout-minutes: 10
+        run: |
+          echo "before remove unused software"
+          sudo df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          echo "after remove unused software"
+          sudo df -h
+
       - name: Build
+        timeout-minutes: 10
         uses: ./.github/actions/build
         with: 
           target: ${{steps.vars.outputs.target}}    
@@ -48,67 +79,45 @@ jobs:
           chmod +x mc 
           wget -q https://s.juicefs.com/static/bench/vdbench50407.zip
           unzip vdbench50407.zip -d vdbench
-          
-      - name: Start minio
-        run: |
-          docker run -d -p 19000:9000 --name minio \
-                      -e "MINIO_ACCESS_KEY=minioadmin" \
-                      -e "MINIO_SECRET_KEY=minioadmin" \
-                      -v /tmp/data:/data \
-                      -v /tmp/config:/root/.minio \
-                      minio/minio server /data
-          sleep 5
-      - name: vdbench-big 
+
+      - name: vdbench-long-run
         shell: bash
-        run: | 
-          source .github/scripts/start_meta_engine.sh
-          meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs format $meta_url vdbench-big --storage minio --bucket http://127.0.0.1:19000/mypics --access-key minioadmin --secret-key minioadmin 
-          ./juicefs mount -d $meta_url /tmp/vdbench --no-usage-report
-          vdbench/vdbench -f .github/workflows/resources/vdbench_big_file.conf
-
-      - uses: actions/upload-artifact@v3
-        with:
-          name: output-big
-          path: output
-
-      - name: Clean
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          rm /var/jfsCache/ -rf || true
-          if [ -d /tmp/vdbench ]; then
-            ./juicefs umount /tmp/vdbench || true
-          fi
-          uuid=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || true
-          if [ -n "$uuid" ];then
-            sudo ./juicefs destroy --yes $meta_url $uuid
-          fi
-
-      - name: vdbench-small
-        run: |
-          source .github/scripts/start_meta_engine.sh
-          meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs format $meta_url vdbench-small --storage minio --bucket http://127.0.0.1:19000/mypics --access-key minioadmin --secret-key minioadmin 
-          ./juicefs mount -d $meta_url /tmp/vdbench --no-usage-report
-          vdbench/vdbench -f .github/workflows/resources/vdbench_small_file.conf
+          ./juicefs format $meta_url vdbench-long-run --trash-days 0
+          ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --cache-size 1024 --max-deletes 50
+          vdbench/vdbench -f .github/workflows/resources/vdbench_long_run.conf -jn
 
       - uses: actions/upload-artifact@v3
         with:
-          name: output-small
+          name: output-long-run
           path: output
+
+      - name: check vdbench log
+        if: always()
+        run: |
+          grep -i "java.lang.RuntimeException" output/errorlog.html && exit 1 || true
+          if ! grep -q "Vdbench execution completed successfully" output/logfile.html; then
+            echo "vdbench not completed succeed"
+            exit 1
+          fi
 
       - name: log
-        if: ${{ always() }}
-        shell: bash
+        if: always()
         run: | 
           tail -300 ~/.juicefs/juicefs.log
           grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
-          
+ 
       - name: Send Slack Notification
-        if: ${{ failure() }}
+        if: failure()
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"          
 
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1

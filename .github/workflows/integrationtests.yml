@@ -5,18 +5,22 @@ on:
     branches:
       - 'main'
       - 'release-*'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**.c'
+      - '**.go'
+      - 'Makefile'
+      - '**/integrationtests.yml'
   pull_request:
-    #The branches below must be a subset of the branches above
     branches:
       - 'main'
       - 'release-*'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
-      - '.github/**'
+    paths:
+      - '**.c'
+      - '**.go'
+      - 'Makefile'
+      - '**/integrationtests.yml'
+  schedule:
+    - cron:  '0 19 * * *'
   workflow_dispatch:
     inputs:
       debug:
@@ -26,36 +30,74 @@ on:
         default: false
 
 jobs:
-  integrationtests:
-    timeout-minutes: 60
+  build-matrix:
     runs-on: ubuntu-20.04
+    steps:
+      - id: set-matrix
+        run: |
+          echo "github.event_name is ${{github.event_name}}"
+          echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
+          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch"  ]]; then
+            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
+          elif [[ "${{github.event_name}}" == "pull_request" ||  "${{github.event_name}}" == "push" ]]; then
+            echo 'meta_matrix=["redis", "mysql", "tikv"]' >> $GITHUB_OUTPUT
+          else
+            echo "event_name is not supported" && exit 1
+          fi
+    outputs:
+      meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
+
+  integrationtests:
+    timeout-minutes: 120
+    runs-on: ubuntu-20.04
+    needs: build-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
+      - name: Set Variable
+        id: vars
+        run: |
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
+          else
+            echo "target=juicefs" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build
         uses: ./.github/actions/build
+        with: 
+          target: ${{steps.vars.outputs.target}}
 
-      - name: Copy
-        run: |
-          cp juicefs /tmp/mount.juicefs
-
-      - name: Run Redis
-        run: |
-          sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
+      - name: Prepare meta db
+        run: | 
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format  redis://127.0.0.1:6379/1 pics
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo ./juicefs format $meta_url --trash-days 0 pics
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo ./juicefs mount -d $meta_url /jfs --no-usage-report --enable-xattr
+          stat /jfs/.accesslog
 
       - name: Fslock Test
+        timeout-minutes: 5
         run: |
           cd /jfs/
           git clone https://github.com/danjacques/gofslock.git
@@ -63,52 +105,73 @@ jobs:
           go test -v ./fslock/...
           stat /jfs/
 
-
-      - name: Pyxattr Test
+      - name: flock test
+        timeout-minutes: 5
         run: |
-          git clone https://github.com/iustin/pyxattr.git
-          cd pyxattr
-          pip3 install pytest
-          pip3 install pyxattr
-          stat /jfs/
-          TEST_DIR=/jfs/ python3 -m pytest tests
+          git clone https://github.com/gofrs/flock.git
+          mkdir /jfs/tmp
+          cd flock && go mod init github.com/gofrs/flock.git && go mod tidy && TMPDIR=/jfs/tmp go test .
 
-
-      - name: Fstests
+      - name: make secfs.test
         run: |
-          sudo .github/scripts/apt_install.sh  libacl1-dev attr
-          sudo DURATION=60 make -C fstests fsx
-          sudo make -C fstests xattrs
-          sudo make -C fstests flock
+          sudo .github/scripts/apt_install.sh  libacl1-dev
+          git clone https://github.com/billziss-gh/secfs.test.git
+          make -C secfs.test
+  
+      - name: Fsx Test
+        timeout-minutes: 16
+        run: |
+          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch"  ]] ; then
+            duration=900
+          else
+            duration=300
+          fi
+          sudo touch /jfs/fsx.out
+          sudo rm -f /tmp/fsx.out
+          sudo ln -s /jfs/fsx.out /tmp/fsx.out
+          sudo secfs.test/tools/bin/fsx -d $duration -p 10000 -F 10000000 /tmp/fsx.out
 
-
-      - name: Fsracer
-        #https://github.com/gfx/example-github-actions-with-tty
+      - name: Fsracer Test
+        timeout-minutes: 16
         shell: 'script -q -e -c "bash {0}"'
         run: |
-          sudo DURATION=60 make -C fstests fsracer
-
-      - name: MountJuiceFSTest
-        run: |
-          sudo /tmp/mount.juicefs redis://127.0.0.1:6379/1 /tmp/mount-jfs
-          [ `stat --format "%i" /tmp/mount-jfs` -eq 1 ]
-
-
+          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch"  ]] ; then
+            duration=900
+          else
+            duration=300
+          fi
+          sudo secfs.test/tools/bin/fsracer $duration /jfs
+  
       - name: log
-        if: ${{ always() }}
+        if: always()
         run: |
           tail -300 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
 
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [integrationtests]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
       - name: Send Slack Notification
-        if: ${{ failure() }}
+        if: failure() && github.event_name != 'workflow_dispatch'
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
-
-      - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
-        timeout-minutes: 60
-        uses: lhotari/action-upterm@v1
+      - name: Success
+        if: success() 
+        run: echo "All Done"
