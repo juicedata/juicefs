@@ -94,6 +94,11 @@ jobs:
           name: output-long-run
           path: output
 
+      - name: check free disk space
+        if: always()
+        run: |
+          df -h
+          
       - name: check vdbench log
         if: always()
         run: |
