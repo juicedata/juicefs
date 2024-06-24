@@ -418,7 +418,7 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 			etag, _ := n.fs.GetXattr(mctx, n.path(bucket, object), s3Etag)
 			info.ETag = string(etag)
 		}
-		return obj, jfsToObjectErr(ctx, eno, bucket, object)
+		return *info, jfsToObjectErr(ctx, eno, bucket, object)
 	}
 
 	if maxKeys == 0 {
