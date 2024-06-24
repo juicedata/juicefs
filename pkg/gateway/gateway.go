@@ -312,14 +312,14 @@ func (n *jfsObjects) isLeaf(bucket, leafPath string) bool {
 }
 
 func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
-	return func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
+	return func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []*minio.Entry, delayIsLeaf bool) {
 		f, eno := n.fs.Open(mctx, n.path(bucket, prefixDir), 0)
 		if eno != 0 {
 			return fs.IsNotExist(eno), nil, false
 		}
 		defer f.Close(mctx)
 		if fi, _ := f.Stat(); fi.(*fs.FileStat).Atime() == 0 && prefixEntry == "" {
-			entries = append(entries, "")
+			entries = append(entries, &minio.Entry{Name: ""})
 		}
 
 		fis, eno := f.Readdir(mctx, 0)
@@ -331,6 +331,16 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 			if root && (fi.Name() == metaBucket || fi.Name() == minio.MinioMetaBucket) {
 				continue
 			}
+			entry := &minio.Entry{Name: fi.Name(),
+				Info: &minio.ObjectInfo{
+					Bucket:  bucket,
+					Name:    fi.Name(),
+					ModTime: fi.ModTime(),
+					Size:    fi.Size(),
+					IsDir:   fi.IsDir(),
+					AccTime: fi.ModTime(),
+				},
+			}
 			if stat, ok := fi.(*fs.FileStat); ok && stat.IsSymlink() {
 				var err syscall.Errno
 				p := n.path(bucket, prefixDir, fi.Name())
@@ -340,10 +350,10 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 				}
 			}
 			if fi.IsDir() {
-				entries = append(entries, fi.Name()+sep)
-			} else {
-				entries = append(entries, fi.Name())
+				entry.Name += sep
+				entry.Info.Size = 0
 			}
+			entries = append(entries, entry)
 		}
 		if len(entries) == 0 {
 			return true, nil, false
@@ -368,40 +378,45 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	if err := n.checkBucket(ctx, bucket); err != nil {
 		return loi, err
 	}
-	getObjectInfo := func(ctx context.Context, bucket, object string) (obj minio.ObjectInfo, err error) {
+	getObjectInfo := func(ctx context.Context, bucket, object string, info *minio.ObjectInfo) (obj minio.ObjectInfo, err error) {
+		if info != nil && info.Size > 0 {
+			info.Name = object
+			return *info, nil
+		}
 		fi, eno := n.fs.Stat(mctx, n.path(bucket, object))
 		if eno == 0 {
-			var etag []byte
-			if n.gConf.KeepEtag && !fi.IsDir() {
-				etag, _ = n.fs.GetXattr(mctx, n.path(bucket, object), s3Etag)
-			}
 			size := fi.Size()
 			if fi.IsDir() {
 				size = 0
 			}
-			obj = minio.ObjectInfo{
+			info = &minio.ObjectInfo{
 				Bucket:  bucket,
-				Name:    object,
 				ModTime: fi.ModTime(),
 				Size:    size,
 				IsDir:   fi.IsDir(),
 				AccTime: fi.ModTime(),
-				ETag:    string(etag),
 			}
 		}
 
 		// replace links to external file systems with empty files
 		if eno == syscall.ENOTSUP {
 			now := time.Now()
-			obj = minio.ObjectInfo{
+			info = &minio.ObjectInfo{
 				Bucket:  bucket,
-				Name:    object,
 				ModTime: now,
 				Size:    0,
 				IsDir:   false,
 				AccTime: now,
 			}
 			eno = 0
+		}
+		if info == nil {
+			return obj, jfsToObjectErr(ctx, eno, bucket, object)
+		}
+		info.Name = object
+		if n.gConf.KeepEtag && !strings.HasSuffix(object, sep) {
+			etag, _ := n.fs.GetXattr(mctx, n.path(bucket, object), s3Etag)
+			info.ETag = string(etag)
 		}
 		return obj, jfsToObjectErr(ctx, eno, bucket, object)
 	}
@@ -1304,7 +1319,10 @@ func (n *jfsObjects) ListObjectVersions(ctx context.Context, bucket, prefix, mar
 	return loi, minio.NotImplemented{}
 }
 
-func (n *jfsObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object string) (oi minio.ObjectInfo, e error) {
+func (n *jfsObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object string, info *minio.ObjectInfo) (oi minio.ObjectInfo, e error) {
+	if info != nil {
+		// TODO: reuse the info
+	}
 	return n.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
 }
 
