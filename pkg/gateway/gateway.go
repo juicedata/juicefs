@@ -1320,9 +1320,6 @@ func (n *jfsObjects) ListObjectVersions(ctx context.Context, bucket, prefix, mar
 }
 
 func (n *jfsObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object string, info *minio.ObjectInfo) (oi minio.ObjectInfo, e error) {
-	if info != nil {
-		// TODO: reuse the info
-	}
 	return n.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
 }
 
