@@ -792,13 +792,13 @@ juicefs bench /mnt/jfs --big-file-size 0
 
 #### Options
 
-|Items|Description|
-|-|-|
-|`--block-size=1`|block size in MiB (default: 1)|
-|`--big-file-size=1024`|size of big file in MiB (default: 1024)|
-|`--small-file-size=0.1`|size of small file in MiB (default: 0.1)|
-|`--small-file-count=100`|number of small files (default: 100)|
-|`--threads=1, -p 1`|number of concurrent threads (default: 1)|
+| Items                    | Description                               |
+|--------------------------|-------------------------------------------|
+| `--block-size=1`         | block size in MiB (default: 1)            |
+| `--big-file-size=1024`   | size of big file in MiB (default: 1024)   |
+| `--small-file-size=128`  | size of small file in KiB (default: 128)  |
+| `--small-file-count=100` | number of small files (default: 100)      |
+| `--threads=1, -p 1`      | number of concurrent threads (default: 1) |
 
 ### `juicefs objbench` {#objbench}
 

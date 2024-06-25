@@ -792,13 +792,13 @@ juicefs bench /mnt/jfs --big-file-size 0
 
 #### 参数
 
-|项 | 说明|
-|-|-|
-|`--block-size=1`|块大小；单位为 MiB (默认：1)|
-|`--big-file-size=1024`|大文件大小；单位为 MiB (默认：1024)|
-|`--small-file-size=0.1`|小文件大小；单位为 KiB (默认：128)|
-|`--small-file-count=100`|小文件数量 (默认：100)|
-|`--threads=1, -p 1`|并发线程数 (默认：1)|
+| 项                        | 说明|
+|--------------------------|-|
+| `--block-size=1`         |块大小；单位为 MiB (默认：1)|
+| `--big-file-size=1024`   |大文件大小；单位为 MiB (默认：1024)|
+| `--small-file-size=128`  |小文件大小；单位为 KiB (默认：128)|
+| `--small-file-count=100` |小文件数量 (默认：100)|
+| `--threads=1, -p 1`      |并发线程数 (默认：1)|
 
 ### `juicefs objbench` {#objbench}
 
