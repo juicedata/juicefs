@@ -456,6 +456,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	opt.MaxReadAhead = 1 << 20
 	opt.DirectMount = true
 	opt.AllowOther = os.Getuid() == 0
+	opt.OtherCaps |= fuse.CAP_ASYNC_DIO
 
 	if opt.EnableAcl && conf.NonDefaultPermission {
 		logger.Warnf("it is recommended to turn on 'default-permissions' when enable acl")

@@ -42,7 +42,7 @@ Common application scenarios for JuiceFS S3 Gateway include:
     juicefs gateway redis://localhost:6379/1 localhost:9000
     ```
 
-    The `gateway` subcommand requires at least two parameters: the database URL for storing metadata and the address/port for JuiceFS S3 Gateway to listen on.
+    The `gateway` subcommand requires at least two parameters: the database URL for storing metadata and the address/port for JuiceFS S3 Gateway to listen on. Since version 1.2, JuiceFS supports running services in the background with options such as `--background` or `-d`, allowing them to operate as background processes.
 
     By default, [Multi-bucket support](#multi-bucket-support) is not enabled. You can enable it by adding the `--multi-buckets` option. Additionally, you can add [other options](../reference/command_reference.md#gateway) to `gateway` subcommands as needed. For example, you can set the default local cache to 20 GiB.
 
@@ -163,6 +163,14 @@ For example, to set a refresh interval of 1 minute:
 juicefs gateway xxxx xxxx    --refresh-iam-interval 1m
 ```
 
+### Multiple Gateway Instances
+
+The distributed nature of JuiceFS allows for multiple JuiceFS S3 gateway instances to be started on different nodes simultaneously, which can improve the availability and performance of the S3 gateways. In this scenario, each instance of the S3 gateway will independently handle requests, but all will access the same JuiceFS file system. It's important to note the following:
+
+1. Ensure that all instances are started with the same user at initialization; use the same UID and GID for all instances.
+2. The IAM refresh time between nodes can vary, but it must be ensured that this interval is not too short to avoid putting excessive pressure on JuiceFS.
+3. Addresses and ports listened by each instance can be freely configured. If multiple instances are started on the same machine, ensure that there is no conflict in port numbers.
+
 ## Advanced features
 
 The core feature of JuiceFS S3 Gateway is to provide the S3 API. Now, the support for the S3 protocol is comprehensive. Version 1.2 supports IAM and bucket event notifications.
@@ -217,11 +225,11 @@ $ mc admin user list myjfs --json
 }
 ```
 
-#### Service accounts
+### Service Accounts
 
-The `mc admin user svcacct` command supports service account management. This allows you to add service accounts for a user. Each service account is associated with a user identity and inherits policies attached to its parent user or the group to which the parent user belongs. Each access key supports optional inline policies that can further restrict access to operations and resources subsets available to the parent user.
+Service accounts are used to create a copy of an existing user with the same permissions, allowing different applications to use separate access keys. The privileges for service accounts inherit from their parent users. They can be managed using the command:
 
-```
+```Shell
 $ mc admin user svcacct -h
 NAME:
   mc admin user svcacct - manage service accounts
@@ -238,6 +246,18 @@ COMMANDS:
   enable   Enable a service account
   disable  Disable a services account
 ```
+
+:::tip
+Service accounts inherit privileges from their parent users and cannot be directly attached with policy.
+:::
+
+For example, let's say there is an existing user named `user1`. You can create a service account called `svcacct1` for it as follows:
+
+```Shell
+mc admin user svcacct add myjfs user1 --access-key svcacct1 --secret-key 123456abc
+```
+
+If the parent user, `user1`, has read-only permissions, then so will `svcacct1`. To grant different permissions to `svcacct1`, you would need to adjust the privileges of the parent user.
 
 #### AssumeRole security token service
 

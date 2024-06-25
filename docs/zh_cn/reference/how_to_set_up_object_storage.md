@@ -1217,31 +1217,53 @@ juicefs format  \
 
 ### NFS {#nfs}
 
-网络文件系统 (Network File System) 简称 NFS，其客户端主机可以访问服务器端文件，并且其过程与访问本地存储时一样。它基于开放网络运算远程过程调用（ONC RPC）系统：一个开放、标准的 RFC 系统，任何人或组织都可以依据标准实现它。
+NFS - Network File System，即网络文件系统，是类 Unix 操作系统中很常用的文件共享服务，它可以让网络内的计算机能够像访问本地文件一样访问远程文件。
 
-在 JuiceFS 稳定版本中（<=v1.1.x），只能通过本地挂载的方式使用 NFS 作为对象存储。例如，先把远程 NFS 服务器 `192.168.1.11` 上的 `/srv/data` 目录挂载到本地的 `/mnt/data` 目录，然后再使用 `file` 模式访问。
+JuiceFS 支持使用 NFS 作为底层存储来构建文件系统，提供两种使用方式：本地挂载和直连模式。
+
+#### 本地挂载
+
+JuiceFS v1.1 及之前的版本仅支持本地挂载的方式使用 NFS 作为底层存储，这种方式需要先在本地挂载 NFS 服务器上的目录，然后以本地磁盘的方式使用它来创建 JuiceFS 文件系统。
+
+例如，先把远程 NFS 服务器 `192.168.1.11` 上的 `/srv/data` 目录挂载到本地的 `/mnt/data` 目录，然后再使用 `file` 模式访问。
 
 ```shell
-$ mount -t nfs 192.168.1.11:/srv/data /mnt/data
-$ juicefs format  \
+$ sudo mount -t nfs 192.168.1.11:/srv/data /mnt/data
+$ sudo juicefs format \
     --storage file \
     --bucket /mnt/data \
     ...
     redis://localhost:6379/1 myjfs
 ```
 
+从 JuiceFS 的角度来看，本地挂载的 NFS 仍然是本地磁盘，所以 `--storage` 选项设置为 `file`。
+
+同理，由于底层存储只能在挂载的设备上访问，所以要在多台设备上共享访问，则需要在每台设备上分别挂载 NFS 共享，或通过 WebDAV、S3 Gateway 等基于网络的方式来提供外部访问。
+
 #### 直连模式
 
-在 JuiceFS 的待发布版本（v1.2.x）中，我们支持了 NFSv3 协议直连作为对象存储。例如，同样使用远程 NFS 服务器 `192.168.1.11` 上的 `/srv/data` 作为数据存储目录：
+JuiceFS v1.2 及以上版本支持直连模式使用 NFS 作为底层存储，这种方式不需要在本地挂载预先挂载 NFS 目录，而是直接通过 JuiceFS 客户端内置的 NFS 协议访问共享目录。
+
+例如，远程服务器 `/etc/exports` 配置文件导出了下面的 NFS 共享：
+
+```
+/srv/data    192.168.1.0/24(rw,sync,no_subtree_check)
+```
+
+可以直接使用 JuiceFS 客户端连接 NFS 服务器上的 `/srv/data` 目录来创建文件系统：
 
 ```shell
-$ juicefs format  \
+$ sudo juicefs format  \
     --storage nfs \
     --bucket 192.168.1.11:/srv/data \
     ...
     redis://localhost:6379/1 myjfs
 ```
 
-:::note 注意
-NFSv3 不支持账户密码验证，请确保 format 和 mount 进程的 UID/GID 有对远程数据目录的读写权限。
-:::
+在直连模式下，`--storage` 选项设置为 `nfs`，`--bucket` 选项设置为 NFS 服务器的地址和共享目录，JuiceFS 客户端会直接连接 NFS 服务器上的目录来读写数据。
+
+**几个注意事项：**
+
+1. JuiceFS 直连 NFS 模式目前仅支持 NFSv3 协议
+2. JuiceFS 客户端需要有访问 NFS 共享目录的权限
+3. NFS 默认会启用 `root_squash` 功能，当以 root 身份访问 NFS 共享时默认会被挤压成 nobody 用户。为了避免无权 NFS 共享的问题，可以将共享目录的所有者设置为 `nobody:nogroup`，或者为 NFS 共享配置 `no_root_squash` 选项来关闭权限挤压。

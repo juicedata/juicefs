@@ -44,7 +44,7 @@ JuiceFS S3 网关的常见的使用场景有：
     juicefs gateway redis://localhost:6379/1 localhost:9000
     ```
 
-   `gateway` 子命令至少需要提供两个参数，第一个是元数据引擎的 URL，第二个是 S3 网关监听的地址和端口。
+   `gateway` 子命令至少需要提供两个参数，第一个是元数据引擎的 URL，第二个是 S3 网关监听的地址和端口。JuiceFS v1.2 开始支持后台启动，可以使用 `--background` 或 `-d` 选项将 S3 网关作为后台服务运行。
 
    S3 Gateway 默认没有启用[多桶支持](#多桶支持)，可以添加 `--multi-buckets` 选项开启。还可以添加[其他选项](../reference/command_reference.md#gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
 
@@ -163,6 +163,14 @@ export MINIO_DOMAIN=mydomain.com
 juicefs gateway xxxx xxxx    --refresh-iam-interval 1m
 ```
 
+### 多 Gateway 实例
+
+JuiceFS 的分布式特性使得可以在多个节点上同时启动多个 S3 网关实例，这样可以提高 S3 网关的可用性和性能。在这种情况下，每个 S3 网关实例都会独立地处理请求，但是它们都会访问同一个 JuiceFS 文件系统。在这种情况下，需要注意以下几点：
+
+1. 需要保证所有实例在启动时使用相同的用户，其 UID 和 GID 相同；
+2. 节点之间 IAM 刷新时间可以不同，但是需要保证 IAM 刷新时间不要太短，以免对 JuiceFS 造成过大的压力；
+3. 每个实例的监听的地址和端口可以自由设置，如果在同一台机器上启动多个实例，需要确保端口不冲突。
+
 ## 高级功能
 
 JuiceFS S3 网关的核心功能是对外提供 S3 接口，目前对 S3 协议的支持已经比较完善。在 v1.2 版本中，我们又添加了对身份和访问控制（IAM）和桶事件通知的支持。
@@ -217,7 +225,7 @@ $ mc admin user list myjfs --json
 
 #### 服务账户
 
-`mc admin user svcacct` 命令支持服务账户的管理，允许为某个用户添加服务账户，每个服务账户都与用户身份相关联，并继承附加到其父用户或父用户所属组的策略。每个访问密钥还支持可选的内联策略，可进一步限制对父用户可用的操作和资源子集的访问。
+服务账户（service accounts）的作用是为现有用户创建一个相同权限的副本，让不同的应用可以使用独立的访问密钥。服务账户的权限继承自父用户，可以通过 `mc admin user svcacct` 命令管理。
 
 ```
 $ mc admin user svcacct -h
@@ -236,6 +244,18 @@ COMMANDS:
   enable   Enable a service account
   disable  Disable a services account
 ```
+
+:::tip 提示
+服务账户会从主账户继承权限并保持与主账户权限一致，而且服务账户不可以直接附加权限策略。
+:::
+
+比如，现在有一个名为 `user1` 的用户，通过以下命令为它创建一个名为 `svcacct1` 的服务账户：
+
+```Shell
+mc admin user svcacct add myjfs user1 --access-key svcacct1 --secret-key 123456abc
+```
+
+如果 `user1` 用户为只读权限，那么 `svcacct1` 也是只读权限。如果想让 `svcacct1` 拥有其他权限，则需要调整 `user1` 的权限。
 
 #### AssumeRole 安全令牌服务
 

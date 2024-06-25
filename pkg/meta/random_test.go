@@ -32,6 +32,7 @@ import (
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 )
 
 type tSlice struct {
@@ -48,15 +49,15 @@ type tQuota struct {
 }
 
 type tNode struct {
-	name  string
-	inode Ino
-	_type uint8
-	mode  uint16
-	uid   uint32
-	gid   uint32
-	// atime    uint32
-	// mtime    uint32
-	// ctime    uint32
+	name     string
+	inode    Ino
+	_type    uint8
+	mode     uint16
+	uid      uint32
+	gid      uint32
+	atime    int64
+	mtime    int64
+	ctime    int64
 	iflags   uint8
 	length   uint64
 	parents  []*tNode
@@ -66,9 +67,10 @@ type tNode struct {
 	target   string
 	xattrs   map[string][]byte
 	quota    *tQuota
-
-	accACL *aclAPI.Rule
-	defACL *aclAPI.Rule
+	flocks   map[ownerKey]byte
+	plocks   map[ownerKey][]plockRecord
+	accACL   *aclAPI.Rule
+	defACL   *aclAPI.Rule
 }
 
 func (n *tNode) accessMode(uid uint32, gids []uint32) uint8 {
@@ -116,10 +118,12 @@ func (n *tNode) stickyAccess(child *tNode, uid uint32) bool {
 type fsMachine struct {
 	nodes map[Ino]*tNode
 	meta  Meta
+	sid   uint64
 	ctx   Context
 }
 
 func (m *fsMachine) Init(t *rapid.T) {
+	m.sid = rapid.Uint64().Draw(t, "sid")
 	m.nodes = make(map[Ino]*tNode)
 	m.nodes[1] = &tNode{
 		_type:    TypeDirectory,
@@ -135,6 +139,7 @@ func (m *fsMachine) Init(t *rapid.T) {
 	if err := m.meta.Init(testFormat(), true); err != nil {
 		t.Fatalf("initialize failed: %s", err)
 	}
+	m.meta.getBase().sid = m.sid
 	registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
 	registerer := prometheus.WrapRegistererWithPrefix("juicefs_",
 		prometheus.WrapRegistererWith(prometheus.Labels{"mp": "virtual-mp", "vol_name": "test-vol"}, registry))
@@ -1743,7 +1748,394 @@ func (m *fsMachine) StatFS(t *rapid.T) {
 	}
 }
 
+func (m *fsMachine) amtime(inode Ino, flag uint16, atime, mtime int64, oattr *Attr) syscall.Errno {
+	n := m.nodes[inode]
+	if n == nil {
+		return syscall.ENOENT
+	}
+
+	changed := false
+	if flag&SetAttrAtime != 0 {
+		n.atime = atime
+		changed = changed || oattr.Atime != atime
+	}
+	if flag&SetAttrMtime != 0 {
+		n.mtime = mtime
+		changed = changed || oattr.Mtime != mtime
+	}
+
+	if changed {
+		if n.uid == 0 && m.ctx.Uid() != 0 {
+			return syscall.EPERM
+		}
+		if ok := n.access(m.ctx, MODE_MASK_W); !ok && n.uid != m.ctx.Uid() {
+			return syscall.EACCES
+		}
+	}
+	// TODO ctime
+	return 0
+}
+
+func (m *fsMachine) SetAmtime(t *rapid.T) {
+	inode := m.pickNode(t)
+
+	oattr := &Attr{}
+	if st := m.meta.GetAttr(m.ctx, inode, oattr); st != 0 {
+		return
+	}
+
+	atime := rapid.Int64Range(0, 1e8).Draw(t, "atime")
+	mtime := rapid.Int64Range(0, 1e8).Draw(t, "mtime")
+	var flag uint16
+	attr := &Attr{
+		Atime: atime,
+		Mtime: mtime,
+	}
+
+	if atime > 0 {
+		flag |= SetAttrAtime
+	}
+	if mtime > 0 {
+		flag |= SetAttrMtime
+	}
+	st2 := m.amtime(inode, flag, atime, mtime, oattr)
+	st := m.meta.SetAttr(m.ctx, inode, flag, 0, attr)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+
+	if st == 0 {
+		// validate time only here
+		node := m.nodes[inode]
+		if flag&SetAttrAtime != 0 && attr.Atime != node.atime {
+			t.Fatalf("expect %d but got %d", node.atime, attr.Atime)
+		}
+		if flag&SetAttrMtime != 0 && attr.Mtime != node.mtime {
+			t.Fatalf("expect %d but got %d", node.mtime, attr.Mtime)
+		}
+	}
+}
+
+func (m *fsMachine) chmod(inode Ino, mode uint16) syscall.Errno {
+	n := m.nodes[inode]
+	if n == nil {
+		return syscall.ENOENT
+	}
+	if n.accACL != nil {
+		n.accACL.SetMode(mode)
+		n.mode = mode&07000 | n.accACL.GetMode()
+	} else {
+		if m.ctx.Uid() != 0 && m.ctx.Uid() != n.uid &&
+			(n.mode&01777 != mode&01777 || mode&02000 > n.mode&02000 || mode&04000 > n.mode&04000) {
+			return syscall.EPERM
+		}
+		n.mode = mode
+	}
+	// n.ctime = m.ctx.ts
+	return 0
+}
+
+func (m *fsMachine) Chmod(t *rapid.T) {
+	inode := m.pickNode(t)
+	mode := rapid.Uint16Range(0, 01777).Draw(t, "mode")
+	st := m.meta.SetAttr(m.ctx, inode, SetAttrMode, 0, &Attr{Mode: mode})
+	st2 := m.chmod(inode, mode)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
+
+func (m *fsMachine) chown(inode Ino, flag uint16, uid, gid uint32) syscall.Errno {
+	n := m.nodes[inode]
+	if n == nil {
+		return syscall.ENOENT
+	}
+	if flag&SetAttrUID != 0 && n.uid != uid {
+		if m.ctx.Uid() != 0 {
+			return syscall.EPERM
+		}
+		n.uid = uid
+	}
+	if flag&SetAttrGID != 0 {
+		if m.ctx.Uid() != 0 && m.ctx.Uid() != n.uid {
+			return syscall.EPERM
+		}
+		if n.gid != gid {
+			if m.ctx.CheckPermission() && m.ctx.Uid() != 0 && !containsGid(m.ctx, gid) {
+				return syscall.EPERM
+			}
+			n.gid = gid
+		}
+	}
+	// n.ctime = m.ctx.ts
+	return 0
+}
+
+func (m *fsMachine) Chown(t *rapid.T) {
+	inode := m.pickNode(t)
+	uid := rapid.Uint32Range(0, 10).Draw(t, "uid")
+	gid := rapid.Uint32Range(0, 10).Draw(t, "gid")
+	var flag uint16
+	if uid < 10 {
+		flag |= SetAttrUID
+	}
+	if gid < 10 {
+		flag |= SetAttrGID
+	}
+	st := m.meta.SetAttr(m.ctx, inode, flag, 0, &Attr{Uid: uid, Gid: gid})
+	st2 := m.chown(inode, flag, uid, gid)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
+
+func (m *fsMachine) flock(inode Ino, owner uint64, typ uint32) syscall.Errno {
+	n := m.nodes[inode]
+	if n == nil {
+		return syscall.ENOENT
+	}
+	// m.openfiles[inode] = true
+	if n.flocks == nil {
+		n.flocks = make(map[ownerKey]byte)
+	}
+	lowner := ownerKey{Sid: m.sid, Owner: owner}
+	switch typ {
+	case F_UNLCK:
+		delete(n.flocks, lowner)
+	case F_RDLCK:
+		for o, l := range n.flocks {
+			if l == 'W' && o != lowner {
+				return syscall.EAGAIN
+			}
+		}
+		n.flocks[lowner] = 'R'
+	case F_WRLCK:
+		for o := range n.flocks {
+			if o == lowner {
+				continue
+			}
+			return syscall.EAGAIN
+		}
+		n.flocks[lowner] = 'W'
+	default:
+		return syscall.EINVAL
+	}
+	return 0
+}
+
+func (m *fsMachine) Flock(t *rapid.T) {
+	inode := m.pickNode(t)
+	owner := rapid.Uint64().Draw(t, "owner")
+	typ := rapid.Uint32Range(0, 3).Draw(t, "typ")
+	st := m.flock(inode, owner, typ)
+	st2 := m.meta.Flock(m.ctx, inode, owner, typ, false)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+
+	if st == 0 {
+		plocks1, flocks1, err1 := m.meta.ListLocks(m.ctx, inode)
+		plocks2, flocks2, err2 := m.listLocks(inode)
+		if err1 != nil && err2 == nil || err1 == nil && err2 != nil {
+			t.Fatalf("expect %s but got %s", err2, err1)
+		}
+		if err1 == nil {
+			sort.Slice(flocks1, func(i, j int) bool {
+				return flocks1[i].Owner < flocks1[j].Owner
+			})
+			sort.Slice(flocks2, func(i, j int) bool {
+				return flocks2[i].Owner < flocks2[j].Owner
+			})
+			if !reflect.DeepEqual(flocks1, flocks2) {
+				t.Fatalf("expect %+v but got %+v", flocks2, flocks1)
+			}
+			sort.Slice(plocks1, func(i, j int) bool {
+				if plocks1[i].Owner != plocks1[j].Owner {
+					return plocks1[i].Owner < plocks1[j].Owner
+				}
+				if plocks1[i].Start != plocks1[j].Start {
+					return plocks1[i].Start < plocks1[j].Start
+				}
+				return plocks1[i].End < plocks1[j].End
+			})
+			sort.Slice(plocks2, func(i, j int) bool {
+				if plocks2[i].Owner != plocks2[j].Owner {
+					return plocks2[i].Owner < plocks2[j].Owner
+				}
+				if plocks2[i].Start != plocks2[j].Start {
+					return plocks2[i].Start < plocks2[j].Start
+				}
+				return plocks2[i].End < plocks2[j].End
+			})
+			if !reflect.DeepEqual(plocks1, plocks2) {
+				t.Fatalf("expect %+v but got %+v", plocks2, plocks1)
+			}
+		}
+	}
+}
+
+func (m *fsMachine) listLocks(inode Ino) ([]PLockItem, []FLockItem, error) {
+	var flocks []FLockItem
+	var plocks []PLockItem
+	n := m.nodes[inode]
+	if n == nil {
+		return plocks, flocks, syscall.ENOENT
+	}
+	for o, l := range n.flocks {
+		flocks = append(flocks, FLockItem{ownerKey: ownerKey{
+			Sid:   o.Sid,
+			Owner: o.Owner,
+		}, Type: string(l)})
+	}
+	for o, ls := range n.plocks {
+		for _, l := range ls {
+			plocks = append(plocks, PLockItem{ownerKey: ownerKey{
+				Sid:   o.Sid,
+				Owner: o.Owner,
+			}, plockRecord: l})
+		}
+	}
+	return plocks, flocks, nil
+}
+
+func (m *fsMachine) ListLocks(t *rapid.T) {
+	inode := m.pickNode(t)
+	plocks1, flocks1, err1 := m.meta.ListLocks(m.ctx, inode)
+	plocks2, flocks2, err2 := m.listLocks(inode)
+	if err1 != nil && err2 == nil || err1 == nil && err2 != nil {
+		t.Fatalf("expect %s but got %s", err2, err1)
+	}
+	if err1 == nil {
+		// sort flocks by owner
+		sort.Slice(flocks1, func(i, j int) bool {
+			return flocks1[i].Owner < flocks1[j].Owner
+		})
+		sort.Slice(flocks2, func(i, j int) bool {
+			return flocks2[i].Owner < flocks2[j].Owner
+		})
+		if !reflect.DeepEqual(flocks1, flocks2) {
+			t.Fatalf("expect %+v but got %+v", flocks2, flocks1)
+		}
+		// sort plocks by owner
+		sort.Slice(plocks1, func(i, j int) bool {
+			return plocks1[i].Owner < plocks1[j].Owner
+		})
+		sort.Slice(plocks2, func(i, j int) bool {
+			return plocks2[i].Owner < plocks2[j].Owner
+		})
+		if !reflect.DeepEqual(plocks1, plocks2) {
+			t.Fatalf("expect %+v but got %+v", plocks2, plocks1)
+		}
+	}
+}
+
+func (m *fsMachine) getlk(inode Ino, owner uint64, ltype *uint32, start *uint64, end *uint64, pid *uint32) syscall.Errno {
+	if *ltype == F_UNLCK {
+		*start = 0
+		*end = 0
+		*pid = 0
+		return 0
+	}
+	n := m.nodes[inode]
+	if n == nil {
+		return syscall.ENOENT
+	}
+	for o, ls := range n.plocks {
+		for _, l := range ls {
+			if o.Owner != owner && (*ltype == F_WRLCK || l.Type == F_WRLCK) && *end >= l.Start && *start <= l.End {
+				*ltype = l.Type
+				*start = l.Start
+				*end = l.End
+				if o.Sid == m.sid {
+					*pid = l.Pid
+				} else {
+					*pid = 0
+				}
+				return 0
+			}
+		}
+	}
+	*ltype = F_UNLCK
+	*start = 0
+	*end = 0
+	*pid = 0
+	return 0
+}
+
+func (m *fsMachine) Getlk(t *rapid.T) {
+	inode := m.pickNode(t)
+	owner := rapid.Uint64().Draw(t, "owner")
+	ltype := rapid.Uint32Range(0, 2).Draw(t, "ltype")
+	start := rapid.Uint64Range(0, 500<<20).Draw(t, "start")
+	length := rapid.Uint64Range(1, 500<<20).Draw(t, "len")
+	end := start + length - 1
+
+	var pid1, pid2 uint32
+	ftype1, ftype2 := ltype, ltype
+	fstart1, fstart2 := start, start
+	fend1, fend2 := end, end
+	st := m.getlk(inode, owner, &ftype1, &fstart1, &fend1, &pid1)
+	st2 := m.meta.Getlk(m.ctx, inode, owner, &ftype2, &fstart2, &fend2, &pid2)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+	if st == 0 && ltype != F_UNLCK && (ftype1 == F_UNLCK && ftype2 != F_UNLCK || ftype1 != F_UNLCK && ftype2 == F_UNLCK) {
+		t.Fatalf("status not right, %d %d", ftype1, ftype2)
+	}
+}
+
+func (m *fsMachine) setlk(inode Ino, owner uint64, ltype uint32, start uint64, end uint64, pid uint32) syscall.Errno {
+	n := m.nodes[inode]
+	if n == nil {
+		return syscall.ENOENT
+	}
+	if ltype != F_UNLCK {
+		// m.openfiles[inode] = true
+	}
+	if n.plocks == nil {
+		n.plocks = make(map[ownerKey][]plockRecord)
+	}
+	lowner := ownerKey{Sid: m.sid, Owner: owner}
+	if ltype == F_UNLCK {
+		if n.plocks[lowner] == nil {
+			return 0
+		}
+	} else {
+		for o, ls := range n.plocks {
+			for _, l := range ls {
+				if o != lowner && (ltype == F_WRLCK || l.Type == F_WRLCK) && end >= l.Start && start <= l.End {
+					return syscall.EAGAIN
+				}
+			}
+		}
+	}
+	ls := updateLocks(n.plocks[lowner], plockRecord{ltype, pid, start, end})
+	if len(ls) == 0 {
+		delete(n.plocks, lowner)
+	} else {
+		n.plocks[lowner] = ls
+	}
+	return 0
+}
+
+func (m *fsMachine) Setlk(t *rapid.T) {
+	inode := m.pickNode(t)
+	owner := rapid.Uint64().Draw(t, "owner")
+	ltype := rapid.Uint32Range(0, 2).Draw(t, "ltype")
+	start := rapid.Uint64Range(0, 500<<20).Draw(t, "start")
+	len := rapid.Uint64Range(1, 500<<20).Draw(t, "len")
+	pid := rapid.Uint32Range(1, 10000).Draw(t, "pid")
+	var end = start + len - 1
+	st := m.meta.Setlk(m.ctx, inode, owner, false, ltype, start, end, pid)
+	st2 := m.setlk(inode, owner, ltype, start, end, pid)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
+
 func TestFSOps(t *testing.T) {
+	logger.SetLevel(logrus.ErrorLevel)
+	defer logger.SetLevel(logrus.InfoLevel)
 	flag.Set("timeout", "10s")
 	flag.Set("rapid.steps", "200")
 	flag.Set("rapid.checks", "5000")

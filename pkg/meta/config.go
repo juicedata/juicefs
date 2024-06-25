@@ -64,7 +64,7 @@ func (c *Config) SelfCheck() {
 		c.Heartbeat = time.Second
 	}
 	if c.Heartbeat > time.Minute*10 {
-		logger.Warnf("heartbeat shouldd not be greater than 10 minutes")
+		logger.Warnf("heartbeat should not be greater than 10 minutes")
 		c.Heartbeat = time.Minute * 10
 	}
 }
