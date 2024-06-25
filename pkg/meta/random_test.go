@@ -191,7 +191,7 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 		return syscall.EINVAL
 	}
 
-	if !p.access(m.ctx, MODE_MASK_W) {
+	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
 		return syscall.EACCES
 	}
 	if p.children[name] != nil {
@@ -348,7 +348,7 @@ func (m *fsMachine) symlink(parent Ino, name string, inode Ino, target string) s
 	if fsnodes_namecheck(name) != 0 {
 		return syscall.EINVAL
 	}
-	if !p.access(m.ctx, MODE_MASK_W) {
+	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
 		return syscall.EACCES
 	}
 	if p.children[name] != nil {
