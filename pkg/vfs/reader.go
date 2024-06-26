@@ -683,6 +683,7 @@ type dataReader struct {
 	readAheadTotal uint64
 	maxRequests    int
 	maxRetries     uint32
+	emptyBlock     []byte
 }
 
 func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader {
@@ -703,6 +704,7 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 		readAheadMax:   uint64(readAheadMax),
 		maxRequests:    readAheadMax/conf.Chunk.BlockSize*readSessions + 1,
 		maxRetries:     uint32(conf.Meta.Retries),
+		emptyBlock:     make([]byte, conf.Chunk.BlockSize),
 	}
 	go r.checkReadBuffer()
 	return r
@@ -793,10 +795,7 @@ func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.P
 	buf := page.Data
 	read := 0
 	if s.Id == 0 {
-		for read < len(buf) {
-			buf[read] = 0
-			read++
-		}
+		copy(buf, r.emptyBlock)
 		return nil
 	}
 
