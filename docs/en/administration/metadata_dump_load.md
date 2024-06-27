@@ -60,6 +60,10 @@ It is worth mentioning that the time cost of backup will increase with the numbe
 
 For reference, when using Redis as the metadata engine, backing up the metadata for one million files takes about 1 minute and consumes about 1GB of memory.
 
+:::caution
+   When using `--read-only` mount, metadata will not be automatically backed up.
+:::
+
 #### Automatic backup policy
 
 Although automatic metadata backup becomes a default action for clients, backup conflicts do not occur when multiple hosts share the same file system mount.
