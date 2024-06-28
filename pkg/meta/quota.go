@@ -206,6 +206,13 @@ func (m *baseMeta) doFlushDirStat() {
 	}
 }
 
+func (m *baseMeta) flushStats() {
+	for {
+		time.Sleep(time.Second)
+		m.en.doFlushStats()
+	}
+}
+
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) syscall.Errno {
 	if space <= 0 && inodes <= 0 {
 		return 0
