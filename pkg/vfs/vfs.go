@@ -1268,6 +1268,7 @@ func (v *VFS) FlushAll(path string) (err error) {
 		return err
 	}
 	if path == "" {
+		v.Store.Close()
 		return nil
 	}
 	return v.dumpAllHandles(path)
