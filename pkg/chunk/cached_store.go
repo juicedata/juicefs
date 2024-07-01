@@ -213,21 +213,22 @@ func (s *rSlice) Remove() error {
 		return nil
 	}
 
+	var err error
 	lastIndx := (s.length - 1) / s.store.conf.BlockSize
 	for i := 0; i <= lastIndx; i++ {
 		// there could be multiple clients try to remove the same chunk in the same time,
 		// any of them should succeed if any blocks is removed
 		key := s.key(i)
 		s.store.removePending(key)
-		s.store.bcache.remove(key)
-	}
-
-	var err error
-	for i := 0; i <= lastIndx; i++ {
-		if e := s.delete(i); e != nil {
-			err = e
+		inStage := s.store.bcache.remove(key)
+		if !inStage { // Avoid expensive object deletion if the block is still in staging
+			if e := s.delete(i); e != nil {
+				err = e
+				logger.Warnf("Failed to delete block %s: %s", s.key(i), e)
+			}
 		}
 	}
+
 	return err
 }
 
