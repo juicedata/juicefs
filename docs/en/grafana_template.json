@@ -1907,7 +1907,7 @@
               }
             ]
           },
-          "unit": "percent"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -2006,7 +2006,7 @@
               }
             ]
           },
-          "unit": "percent"
+          "unit": "binBps"
         },
         "overrides": []
       },
