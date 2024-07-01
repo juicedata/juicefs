@@ -459,19 +459,21 @@ func (f *fileReader) need(block *frange) bool {
 func (f *fileReader) cleanupRequests(block *frange) {
 	now := time.Now()
 	var cnt int
-	f.visit(func(s *sliceReader) {
+	f.visit(func(s *sliceReader) bool {
 		if !s.state.valid() ||
 			!block.overlap(s.block) && (s.lastAccess.Add(time.Second*30).Before(now) || !f.need(s.block)) {
 			s.drop()
 		} else if !block.overlap(s.block) {
 			cnt++
 		}
+		return true
 	})
-	f.visit(func(s *sliceReader) {
+	f.visit(func(s *sliceReader) bool {
 		if !block.overlap(s.block) && cnt > f.r.maxRequests {
 			s.drop()
 			cnt--
 		}
+		return cnt > f.r.maxRequests
 	})
 }
 
@@ -484,10 +486,11 @@ func (f *fileReader) releaseIdleBuffer() {
 	if used > int64(f.r.readAheadTotal) {
 		idle /= time.Duration(used / int64(f.r.readAheadTotal))
 	}
-	f.visit(func(s *sliceReader) {
+	f.visit(func(s *sliceReader) bool {
 		if !s.state.valid() || s.lastAccess.Add(idle).Before(now) || !f.need(s.block) {
 			s.drop()
 		}
+		return true
 	})
 }
 
@@ -501,7 +504,7 @@ func (f *fileReader) splitRange(block *frange) []uint64 {
 		}
 		return false
 	}
-	f.visit(func(s *sliceReader) {
+	f.visit(func(s *sliceReader) bool {
 		if s.state.valid() {
 			if block.contain(s.block.off) && !contain(s.block.off) {
 				ranges = append(ranges, s.block.off)
@@ -510,6 +513,7 @@ func (f *fileReader) splitRange(block *frange) []uint64 {
 				ranges = append(ranges, s.block.end())
 			}
 		}
+		return true
 	})
 	sort.Slice(ranges, func(i, j int) bool {
 		return ranges[i] < ranges[j]
@@ -519,7 +523,7 @@ func (f *fileReader) splitRange(block *frange) []uint64 {
 
 // protected by f
 func (f *fileReader) readAhead(block *frange) {
-	f.visit(func(r *sliceReader) {
+	f.visit(func(r *sliceReader) bool {
 		if r.state.valid() && r.block.off <= block.off && r.block.end() > block.off {
 			if r.state == READY && block.len > f.r.blockSize && r.block.off == block.off && r.block.off%f.r.blockSize == 0 {
 				// next block is ready, reduce readahead by a block
@@ -532,6 +536,7 @@ func (f *fileReader) readAhead(block *frange) {
 			}
 			block.off = r.block.end()
 		}
+		return true
 	})
 	if block.len > 0 && block.off < f.length && uint64(atomic.LoadInt64(&readBufferUsed)) < f.r.readAheadTotal {
 		if block.len < f.r.blockSize {
@@ -555,13 +560,15 @@ func (f *fileReader) prepareRequests(ranges []uint64) []*req {
 	for i := 0; i < edges-1; i++ {
 		var added bool
 		b := frange{ranges[i], ranges[i+1] - ranges[i]}
-		f.visit(func(s *sliceReader) {
+		f.visit(func(s *sliceReader) bool {
 			if !added && s.state.valid() && s.block.include(&b) {
 				s.refs++
 				s.lastAccess = time.Now()
 				reqs = append(reqs, &req{frange{ranges[i] - s.block.off, b.len}, s})
 				added = true
+				return false
 			}
+			return true
 		})
 		if !added {
 			for b.len > 0 {
@@ -655,19 +662,22 @@ func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, sys
 	return f.waitForIO(ctx, reqs, buf)
 }
 
-func (f *fileReader) visit(fn func(s *sliceReader)) {
+func (f *fileReader) visit(fn func(s *sliceReader) bool) {
 	var next *sliceReader
 	for s := f.slices; s != nil; s = next {
 		next = s.next
-		fn(s)
+		if !fn(s) {
+			break
+		}
 	}
 }
 
 func (f *fileReader) Close(ctx meta.Context) {
 	f.Lock()
 	f.closing = true
-	f.visit(func(s *sliceReader) {
+	f.visit(func(s *sliceReader) bool {
 		s.drop()
+		return true
 	})
 	f.release()
 	f.Unlock()
@@ -765,10 +775,11 @@ func (r *dataReader) visit(inode Ino, fn func(*fileReader)) {
 func (r *dataReader) Truncate(inode Ino, length uint64) {
 	r.visit(inode, func(f *fileReader) {
 		if length < f.length {
-			f.visit(func(s *sliceReader) {
+			f.visit(func(s *sliceReader) bool {
 				if s.block.off+s.block.len > length {
 					s.invalidate()
 				}
+				return true
 			})
 		}
 		f.length = length
@@ -781,10 +792,11 @@ func (r *dataReader) Invalidate(inode Ino, off, length uint64) {
 		if off+length > f.length {
 			f.length = off + length
 		}
-		f.visit(func(s *sliceReader) {
+		f.visit(func(s *sliceReader) bool {
 			if b.overlap(s.block) {
 				s.invalidate()
 			}
+			return true
 		})
 	})
 }
