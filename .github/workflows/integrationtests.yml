@@ -108,6 +108,7 @@ jobs:
       - name: flock test
         timeout-minutes: 5
         run: |
+          rm -rf flock
           git clone https://github.com/gofrs/flock.git
           mkdir /jfs/tmp
           cd flock && go mod init github.com/gofrs/flock.git && go mod tidy && TMPDIR=/jfs/tmp go test .
