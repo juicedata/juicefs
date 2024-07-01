@@ -522,6 +522,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			CacheEviction:     jConf.CacheEviction,
 			CacheScanInterval: utils.Duration(jConf.CacheScanInterval),
 			CacheExpire:       utils.Duration(jConf.CacheExpire),
+			OSCache:           true,
 			MaxUpload:         jConf.MaxUploads,
 			MaxRetries:        jConf.IORetries,
 			UploadLimit:       utils.ParseMbpsStr("upload-limit", jConf.UploadLimit) * 1e6 / 8,

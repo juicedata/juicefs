@@ -354,6 +354,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheEviction:     c.String("cache-eviction"),
 		CacheScanInterval: utils.Duration(c.String("cache-scan-interval")),
 		CacheExpire:       utils.Duration(c.String("cache-expire")),
+		OSCache:           os.Getenv("JFS_DROP_OSCACHE") == "",
 		AutoCreate:        true,
 	}
 	if chunkConf.UploadLimit == 0 {
