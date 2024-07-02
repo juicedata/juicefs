@@ -341,7 +341,7 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 		return err
 	}
 	if !bytes.Equal(data, data2) {
-		return fmt.Errorf("Read wrong data")
+		return fmt.Errorf("read wrong data: expected %x, got %x", data, data2)
 	}
 	err = store.Delete(key)
 	if err != nil {
@@ -362,6 +362,7 @@ func test(store object.ObjectStorage) error {
 		if err == nil {
 			break
 		}
+		logger.Warnf("Test storage %s failed: %s, tries: %d", store, err, i+1)
 		time.Sleep(time.Second * time.Duration(i*3+1))
 	}
 	if err == nil {
