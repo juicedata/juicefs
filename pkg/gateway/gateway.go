@@ -209,6 +209,7 @@ func (n *jfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelet
 }
 
 func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, options minio.BucketOptions) error {
+	var umask uint16
 	if bucket != minio.MinioMetaBucket {
 		if err := n.isValidBucketName(bucket); err != nil {
 			return err
@@ -216,8 +217,12 @@ func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 		if !n.gConf.MultiBucket {
 			return nil
 		}
+		umask = n.gConf.Umask
+	} else {
+		umask = 000
 	}
-	eno := n.fs.Mkdir(mctx, n.path(bucket), 0777, n.gConf.Umask)
+
+	eno := n.fs.Mkdir(mctx, n.path(bucket), 0777, umask)
 	metadata := minio.NewBucketMetadata(bucket)
 	if err := metadata.Save(ctx, n); err != nil {
 		return err
@@ -541,16 +546,22 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	if err = n.checkBucket(ctx, dstBucket); err != nil {
 		return
 	}
+	var dstUmask uint16
+	if dstBucket == minio.MinioMetaBucket {
+		dstUmask = 000
+	} else {
+		dstUmask = n.gConf.Umask
+	}
 	dst := n.path(dstBucket, dstObject)
 	src := n.path(srcBucket, srcObject)
 	if minio.IsStringEqual(src, dst) {
 		return n.GetObjectInfo(ctx, srcBucket, srcObject, minio.ObjectOptions{})
 	}
 	tmp := n.tpath(dstBucket, "tmp", minio.MustGetUUID())
-	f, eno := n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
+	f, eno := n.fs.Create(mctx, tmp, 0666, dstUmask)
 	if eno == syscall.ENOENT {
-		_ = n.mkdirAll(ctx, path.Dir(tmp))
-		f, eno = n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
+		_ = n.mkdirAll(ctx, path.Dir(tmp), dstUmask)
+		f, eno = n.fs.Create(mctx, tmp, 0666, dstUmask)
 	}
 	if eno != 0 {
 		logger.Errorf("create %s: %s", tmp, eno)
@@ -569,7 +580,7 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	}
 	eno = n.fs.Rename(mctx, tmp, dst, 0)
 	if eno == syscall.ENOENT {
-		if err = n.mkdirAll(ctx, path.Dir(dst)); err != nil {
+		if err = n.mkdirAll(ctx, path.Dir(dst), dstUmask); err != nil {
 			logger.Errorf("mkdirAll %s: %s", path.Dir(dst), err)
 			err = jfsToObjectErr(ctx, err, dstBucket, dstObject)
 			return
@@ -712,19 +723,19 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 	}, nil
 }
 
-func (n *jfsObjects) mkdirAll(ctx context.Context, p string) error {
+func (n *jfsObjects) mkdirAll(ctx context.Context, p string, umask uint16) error {
 	if fi, eno := n.fs.Stat(mctx, p); eno == 0 {
 		if !fi.IsDir() {
 			return fmt.Errorf("%s is not directory", p)
 		}
 		return nil
 	}
-	eno := n.fs.Mkdir(mctx, p, 0777, n.gConf.Umask)
+	eno := n.fs.Mkdir(mctx, p, 0777, umask)
 	if eno != 0 && fs.IsNotExist(eno) {
-		if err := n.mkdirAll(ctx, path.Dir(p)); err != nil {
+		if err := n.mkdirAll(ctx, path.Dir(p), umask); err != nil {
 			return err
 		}
-		eno = n.fs.Mkdir(mctx, p, 0777, n.gConf.Umask)
+		eno = n.fs.Mkdir(mctx, p, 0777, umask)
 	}
 	if eno != 0 && fs.IsExist(eno) {
 		eno = 0
@@ -736,11 +747,17 @@ func (n *jfsObjects) mkdirAll(ctx context.Context, p string) error {
 }
 
 func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (err error) {
+	var umask uint16
+	if bucket == minio.MinioMetaBucket {
+		umask = 000
+	} else {
+		umask = n.gConf.Umask
+	}
 	tmpname := n.tpath(bucket, "tmp", minio.MustGetUUID())
-	f, eno := n.fs.Create(mctx, tmpname, 0666, n.gConf.Umask)
+	f, eno := n.fs.Create(mctx, tmpname, 0666, umask)
 	if eno == syscall.ENOENT {
-		_ = n.mkdirAll(ctx, path.Dir(tmpname))
-		f, eno = n.fs.Create(mctx, tmpname, 0666, n.gConf.Umask)
+		_ = n.mkdirAll(ctx, path.Dir(tmpname), umask)
+		f, eno = n.fs.Create(mctx, tmpname, 0666, umask)
 	}
 	if eno != 0 {
 		logger.Errorf("create %s: %s", tmpname, eno)
@@ -778,7 +795,7 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 	}
 	eno = n.fs.Rename(mctx, tmpname, object, 0)
 	if eno == syscall.ENOENT {
-		if err = n.mkdirAll(ctx, path.Dir(object)); err != nil {
+		if err = n.mkdirAll(ctx, path.Dir(object), umask); err != nil {
 			logger.Errorf("mkdirAll %s: %s", path.Dir(object), err)
 			err = jfsToObjectErr(ctx, err, bucket, object)
 			return
@@ -795,10 +812,15 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
-
+	var umask uint16
+	if bucket == minio.MinioMetaBucket {
+		umask = 000
+	} else {
+		umask = n.gConf.Umask
+	}
 	p := n.path(bucket, object)
 	if strings.HasSuffix(object, sep) {
-		if err = n.mkdirAll(ctx, p); err != nil {
+		if err = n.mkdirAll(ctx, p, umask); err != nil {
 			err = jfsToObjectErr(ctx, err, bucket, object)
 			return
 		}
@@ -855,7 +877,7 @@ func (n *jfsObjects) NewMultipartUpload(ctx context.Context, bucket string, obje
 	}
 	uploadID = minio.MustGetUUID()
 	p := n.upath(bucket, uploadID)
-	err = n.mkdirAll(ctx, p)
+	err = n.mkdirAll(ctx, p, n.gConf.Umask)
 	if err == nil {
 		eno := n.fs.SetXattr(mctx, p, uploadKeyName, []byte(object), 0)
 		if eno != 0 {
@@ -1087,7 +1109,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	name := n.path(bucket, object)
 	eno = n.fs.Rename(mctx, tmp, name, 0)
 	if eno == syscall.ENOENT {
-		if err = n.mkdirAll(ctx, path.Dir(name)); err != nil {
+		if err = n.mkdirAll(ctx, path.Dir(name), n.gConf.Umask); err != nil {
 			logger.Errorf("mkdirAll %s: %s", path.Dir(name), err)
 			_ = n.fs.Delete(mctx, tmp)
 			err = jfsToObjectErr(ctx, err, bucket, object, uploadID)
@@ -1291,7 +1313,7 @@ func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker 
 		return &jfsFLock{}
 	}
 	if errors.Is(errno, syscall.ENOENT) {
-		if file, errno = n.fs.Create(mctx, lockfile, 0666, n.gConf.Umask); errno != 0 {
+		if file, errno = n.fs.Create(mctx, lockfile, 0777, 000); errno != 0 {
 			if errors.Is(errno, syscall.EEXIST) {
 				if file, errno = n.fs.Open(mctx, lockfile, vfs.MODE_MASK_W); errno != 0 {
 					logger.Errorf("failed to open the file to be locked: %s error %s", lockfile, errno)
