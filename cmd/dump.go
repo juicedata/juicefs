@@ -18,10 +18,12 @@ package cmd
 
 import (
 	"compress/gzip"
+	"errors"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/DataDog/zstd"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/urfave/cli/v2"
 )
@@ -78,15 +80,12 @@ func dumpMeta(m meta.Meta, dst string, threads int, keepSecret, fast, skipTrash 
 		w = os.Stdout
 	} else {
 		tmp := dst + ".tmp"
-		fp, e := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		fp, e := os.Create(tmp)
 		if e != nil {
 			return e
 		}
 		defer func() {
-			e := fp.Close()
-			if err == nil {
-				err = e
-			}
+			err = errors.Join(err, fp.Close())
 			if err == nil {
 				err = os.Rename(tmp, dst)
 			} else {
@@ -95,14 +94,15 @@ func dumpMeta(m meta.Meta, dst string, threads int, keepSecret, fast, skipTrash 
 		}()
 
 		if strings.HasSuffix(dst, ".gz") {
-			zw := gzip.NewWriter(fp)
+			w, _ = gzip.NewWriterLevel(fp, gzip.BestSpeed)
 			defer func() {
-				e := zw.Close()
-				if err == nil {
-					err = e
-				}
+				err = errors.Join(err, w.Close())
 			}()
-			w = zw
+		} else if strings.HasSuffix(dst, ".zstd") {
+			w = zstd.NewWriterLevel(fp, zstd.BestSpeed)
+			defer func() {
+				err = errors.Join(err, w.Close())
+			}()
 		} else {
 			w = fp
 		}
