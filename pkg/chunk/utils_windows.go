@@ -33,6 +33,8 @@ func getAtime(fi os.FileInfo) time.Time {
 	}
 }
 
+func dropOSCache(r ReadCloser) {}
+
 func getNlink(fi os.FileInfo) int {
 	return 1
 }

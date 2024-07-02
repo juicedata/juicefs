@@ -20,6 +20,8 @@ import (
 	"os"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 func getAtime(fi os.FileInfo) time.Time {
@@ -27,4 +29,12 @@ func getAtime(fi os.FileInfo) time.Time {
 		return time.Unix(sst.Atim.Unix())
 	}
 	return fi.ModTime()
+}
+
+func dropOSCache(r ReadCloser) {
+	if cf, ok := r.(*cacheFile); ok {
+		_ = unix.Fadvise(int(cf.Fd()), 0, 0, unix.FADV_DONTNEED)
+	} else if f, ok := r.(*os.File); ok {
+		_ = unix.Fadvise(int(f.Fd()), 0, 0, unix.FADV_DONTNEED)
+	}
 }

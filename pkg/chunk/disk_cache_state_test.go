@@ -71,7 +71,7 @@ func testDiskCacheState(t *testing.T, cacheNum int) {
 	page := NewPage(data)
 	defer page.Release()
 	k1 := probeCacheKey(0, len(data))
-	m.cache(k1, page, true)
+	m.cache(k1, page, true, false)
 	time.Sleep(time.Second)
 
 	// case: normal -> unstable

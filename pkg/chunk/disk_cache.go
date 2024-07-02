@@ -68,8 +68,9 @@ type cacheItem struct {
 }
 
 type pendingFile struct {
-	key  string
-	page *Page
+	key       string
+	page      *Page
+	dropCache bool
 }
 
 type cacheStore struct {
@@ -389,7 +390,7 @@ func (cache *cacheStore) removeStage(key string) error {
 	return err
 }
 
-func (cache *cacheStore) cache(key string, p *Page, force bool) {
+func (cache *cacheStore) cache(key string, p *Page, force, dropCache bool) {
 	cache.state.beforeCacheOp()
 	defer cache.state.afterCacheOp()
 	if cache.state.checkCacheOp() != nil {
@@ -412,11 +413,11 @@ func (cache *cacheStore) cache(key string, p *Page, force bool) {
 	cache.pages[key] = p
 	atomic.AddInt64(&cache.totalPages, int64(cap(p.Data)))
 	select {
-	case cache.pending <- pendingFile{key, p}:
+	case cache.pending <- pendingFile{key, p, dropCache}:
 	default:
 		if force {
 			cache.Unlock()
-			cache.pending <- pendingFile{key, p}
+			cache.pending <- pendingFile{key, p, dropCache}
 			cache.Lock()
 		} else {
 			// does not have enough bandwidth to write it into disk, discard it
@@ -438,7 +439,7 @@ func (cache *cacheStore) curFreeRatio() (float32, float32) {
 	return float32(free) / float32(total), float32(ffree) / float32(files)
 }
 
-func (cache *cacheStore) flushPage(path string, data []byte) (err error) {
+func (cache *cacheStore) flushPage(path string, data []byte, dropCache bool) (err error) {
 	if !cache.available() {
 		return errCacheDown
 	}
@@ -479,6 +480,9 @@ func (cache *cacheStore) flushPage(path string, data []byte) (err error) {
 			_ = f.Close()
 			return
 		}
+	}
+	if dropCache {
+		dropOSCache(f)
 	}
 	if err = cache.closeFile(f); err != nil {
 		logger.Warnf("Close cache file %s failed: %s", tmp, err)
@@ -633,7 +637,7 @@ func (cache *cacheStore) flush() {
 	for {
 		w := <-cache.pending
 		path := cache.cachePath(w.key)
-		if cache.capacity > 0 && cache.flushPage(path, w.page.Data) == nil {
+		if cache.capacity > 0 && cache.flushPage(path, w.page.Data, w.dropCache) == nil {
 			cache.add(w.key, int32(len(w.page.Data)), uint32(time.Now().Unix()))
 		}
 		cache.Lock()
@@ -688,7 +692,7 @@ func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string,
 	}
 	stagingBlocks.Add(1)
 	defer stagingBlocks.Add(-1)
-	err := cache.flushPage(stagingPath, data)
+	err := cache.flushPage(stagingPath, data, false)
 	if err == nil {
 		cache.m.stageBlocks.Add(1)
 		cache.m.stageBlockBytes.Add(float64(len(data)))
@@ -999,7 +1003,7 @@ func expandDir(pattern string) []string {
 }
 
 type CacheManager interface {
-	cache(key string, p *Page, force bool)
+	cache(key string, p *Page, force, dropCache bool)
 	remove(key string)
 	load(key string) (ReadCloser, error)
 	uploaded(key string, size int)
@@ -1153,10 +1157,10 @@ func (m *cacheManager) stats() (int64, int64) {
 	return cnt, used
 }
 
-func (m *cacheManager) cache(key string, p *Page, force bool) {
+func (m *cacheManager) cache(key string, p *Page, force, dropCache bool) {
 	store := m.getStore(key)
 	if store != nil {
-		store.cache(key, p, force)
+		store.cache(key, p, force, dropCache)
 	}
 }
 

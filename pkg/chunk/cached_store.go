@@ -132,6 +132,9 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		r, err := s.store.bcache.load(key)
 		if err == nil {
 			n, err = r.ReadAt(p, int64(boff))
+			if !s.store.conf.OSCache {
+				dropOSCache(r)
+			}
 			_ = r.Close()
 			if err == nil {
 				s.store.cacheHits.Add(1)
@@ -382,7 +385,7 @@ func (store *cachedStore) upload(key string, block *Page, s *wSlice) error {
 	defer buf.Release()
 	if sync && blen < store.conf.BlockSize {
 		// block will be freed after written into disk
-		store.bcache.cache(key, block, false)
+		store.bcache.cache(key, block, false, false)
 	}
 	n, err := store.compressor.Compress(buf.Data, block.Data)
 	block.Release()
@@ -536,6 +539,7 @@ type Config struct {
 	CacheEviction     string
 	CacheScanInterval time.Duration
 	CacheExpire       time.Duration
+	OSCache           bool
 	FreeSpace         float32
 	AutoCreate        bool
 	Compress          string
@@ -742,7 +746,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 			used, tried)
 	}
 	if cache {
-		store.bcache.cache(key, page, forceCache)
+		store.bcache.cache(key, page, forceCache, !store.conf.OSCache)
 	}
 	return nil
 }

@@ -233,7 +233,7 @@ func (dc *unstableDC) probe() {
 }
 
 func (dc *unstableDC) doProbe(key string, page *Page) {
-	dc.cache.cache(key, page, true)
+	dc.cache.cache(key, page, true, false)
 	reader, err := dc.cache.load(key)
 	if err != nil {
 		return
