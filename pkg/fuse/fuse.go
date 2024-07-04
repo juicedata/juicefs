@@ -456,7 +456,6 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	opt.MaxReadAhead = 1 << 20
 	opt.DirectMount = true
 	opt.AllowOther = os.Getuid() == 0
-	opt.OtherCaps |= fuse.CAP_ASYNC_DIO
 
 	if opt.EnableAcl && conf.NonDefaultPermission {
 		logger.Warnf("it is recommended to turn on 'default-permissions' when enable acl")
@@ -476,6 +475,8 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 			opt.Debug = true
 		} else if n == "writeback_cache" {
 			opt.EnableWriteback = true
+		} else if n == "async_dio" {
+			opt.OtherCaps |= fuse.CAP_ASYNC_DIO
 		} else if strings.TrimSpace(n) != "" {
 			opt.Options = append(opt.Options, strings.TrimSpace(n))
 		}
