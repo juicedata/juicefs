@@ -3,18 +3,12 @@ try:
     __import__("hypothesis")
 except ImportError:
     subprocess.check_call(["pip", "install", "hypothesis"])
-from datetime import datetime
 import json
 import os
 from pickle import FALSE
 import platform
-import shutil
-import sys
 from termios import TIOCPKT_DOSTOP
 import time
-import unittest
-from xmlrpc.client import boolean
-import hypothesis
 from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
 from hypothesis import Phase, Verbosity, assume, settings, strategies as st
 from hypothesis import seed
