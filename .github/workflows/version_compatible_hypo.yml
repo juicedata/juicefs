@@ -114,6 +114,7 @@ jobs:
           mv ${{matrix.old_ref}}/juicefs juicefs-$old_version
           export OLD_JFS_BIN="juicefs-$old_version"
           python3 .github/scripts/hypo/testVersionCompatible.py 2>&1 | tee result.log
+          exit ${PIPESTATUS[0]}
       
       - name: Display result log
         if: always()
