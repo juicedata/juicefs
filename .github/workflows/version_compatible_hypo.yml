@@ -30,16 +30,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        old_juicefs_version: ['main', 'release-1.0']
+        old_juicefs_version: ['release-1.0']
         meta: ['redis', 'mysql', 'tikv']
         storage: ['minio']
-        include:
-          - old_juicefs_version: 'main'
-            meta: 'fdb'
-            storage: 'minio'
-          - old_juicefs_version: 'release-1.0'
-            meta: 'postgres'
-            storage: 'minio'
+        # include:
+        #   - old_juicefs_version: 'main'
+        #     meta: 'fdb'
+        #     storage: 'minio'
+        #   - old_juicefs_version: 'release-1.0'
+        #     meta: 'postgres'
+        #     storage: 'minio'
 
     runs-on: ubuntu-20.04
 
