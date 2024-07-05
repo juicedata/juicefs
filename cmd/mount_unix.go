@@ -43,12 +43,13 @@ import (
 	"time"
 
 	"github.com/juicedata/godaemon"
+	"github.com/urfave/cli/v2"
+
 	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
-	"github.com/urfave/cli/v2"
 )
 
 func showThreadStack(agentAddr string) {
@@ -432,8 +433,11 @@ func prepareMp(mp string) {
 		if err2 != nil {
 			if os.IsExist(err2) || strings.Contains(err2.Error(), "timeout after 3s") {
 				// a broken mount point, umount it
-				logger.Infof("mountpoint %s is broken: %s, umount it", mp, err)
-				_ = doUmount(mp, true)
+				if superConn := os.Getenv("JFS_SUPER_COMM"); superConn == "" {
+					// if get fuse fd from SUPER_COMM, do not umount
+					logger.Infof("mountpoint %s is broken: %s, umount it", mp, err)
+					_ = doUmount(mp, true)
+				}
 			} else {
 				logger.Fatalf("create %s: %s", mp, err2)
 			}
@@ -442,8 +446,11 @@ func prepareMp(mp string) {
 		ino, _ = utils.GetFileInode(mp)
 		if ino <= uint64(meta.RootInode) && fi.Size() == 0 {
 			// a broken mount point, umount it
-			logger.Infof("mountpoint %s is broken (ino=%d, size=%d), umount it", mp, ino, fi.Size())
-			_ = doUmount(mp, true)
+			if superConn := os.Getenv("JFS_SUPER_COMM"); superConn == "" {
+				// if get fuse fd from SUPER_COMM, do not umount
+				logger.Infof("mountpoint %s is broken (ino=%d, size=%d), umount it", mp, ino, fi.Size())
+				_ = doUmount(mp, true)
+			}
 		}
 	}
 
@@ -522,8 +529,11 @@ func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
 		return err
 	}, time.Second*3)
 	if err != nil {
-		logger.Warnf("get inode of %s: %s", mp, err)
-		_ = doUmount(mp, true)
+		if superConn := os.Getenv("JFS_SUPER_COMM"); superConn == "" {
+			logger.Warnf("get inode of %s: %s", mp, err)
+			// if get fuse fd from SUPER_COMM, do not umount
+			_ = doUmount(mp, true)
+		}
 		return false
 	} else if ino != 1 {
 		return false
