@@ -16,8 +16,9 @@ import unittest
 from xmlrpc.client import boolean
 import hypothesis
 from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
-from hypothesis import Phase, Verbosity, assume, strategies as st
+from hypothesis import Phase, Verbosity, assume, settings, strategies as st
 from hypothesis import seed
+from hypothesis.database import DirectoryBasedExampleDatabase
 from packaging import version
 import subprocess
 try:
@@ -27,18 +28,10 @@ except ImportError:
 from minio import Minio
 import uuid
 from utils import *
-from fsrand import *
 from cmptree import *
 import random
-
-@seed(random.randint(10000, 1000000))
-@hypothesis.settings(
-    verbosity=Verbosity.debug, 
-    max_examples=100, 
-    stateful_step_count=30, 
-    deadline=None, 
-    report_multiple_bugs=False, 
-    phases=[Phase.explicit, Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
+SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
+@seed(SEED)
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
     MAX_CLIENT_VERSIONS = ['1.2.0', '2.0.0']
@@ -54,7 +47,6 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     def __init__(self):
         super(JuicefsMachine, self).__init__()
-        print(f"seed is: {self._hypothesis_internal_use_seed}")
         self.run_id = uuid.uuid4().hex
         print(f'\ninit with run_id: {self.run_id}')
         with open(os.path.expanduser('~/command.log'), 'a') as f:
@@ -470,36 +462,6 @@ class JuicefsMachine(RuleBasedStateMachine):
         assert str(result) == str(data)
         print('write and read succeed')
     
-    def write_rand_files(self, path, seed):
-        count = 50
-        if os.path.isdir(path):
-            shutil.rmtree(path)
-        os.mkdir(path)
-        fsrand = FsRandomizer(path, count, seed)
-        fsrand.stdout = sys.stdout
-        fsrand.stderr = sys.stderr
-        fsrand.verbose = False
-        fsrand.randomize()
-
-    # @rule()
-    @precondition(lambda self: self.mounted )
-    def write_rand_files_and_compare(self):
-        start = time.time()
-        assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
-        assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
-        seed = int(time.time())
-        self.write_rand_files(JuicefsMachine.MOUNT_POINT+'fsrand', seed)
-        self.write_rand_files('/tmp/fsrand', seed)
-        tcmp = TreeComparator(JuicefsMachine.MOUNT_POINT+'fsrand', '/tmp/fsrand')
-        tcmp.compare()
-        res = len(tcmp.left_only) + len(tcmp.right_only) + \
-            len(tcmp.common_funny) + len(tcmp.funny_files) + len(tcmp.diff_files)
-        if res > 0:
-            raise Exception("compare failed")
-        os.system(f"rm -rf {JuicefsMachine.MOUNT_POINT}/fsrand")
-        os.system(f"rm -rf /tmp/fsrand")
-        print('write_rand_files_and_compare execution time:', time.time()-start, 'seconds')
-
     @rule(juicefs = st.sampled_from(JFS_BINS))
     @precondition(lambda self: self.formatted )
     def dump(self, juicefs):
@@ -779,7 +741,34 @@ class JuicefsMachine(RuleBasedStateMachine):
         return True
 
 
-TestJuiceFS = JuicefsMachine.TestCase
-
-if __name__ == "__main__":
-    unittest.main(failfast=True)
+if __name__ == '__main__':
+    MAX_EXAMPLE=int(os.environ.get('MAX_EXAMPLE', '100'))
+    STEP_COUNT=int(os.environ.get('STEP_COUNT', '50'))
+    ci_db = DirectoryBasedExampleDatabase(".hypothesis/examples")    
+    settings.register_profile("dev", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
+        print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
+        report_multiple_bugs=False, 
+        phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
+    settings.register_profile("schedule", max_examples=500, verbosity=Verbosity.debug, 
+        print_blob=True, stateful_step_count=200, deadline=None, \
+        report_multiple_bugs=False, 
+        phases=[Phase.reuse, Phase.generate, Phase.target], 
+        database=ci_db)
+    settings.register_profile("pull_request", max_examples=100, verbosity=Verbosity.debug, 
+        print_blob=True, stateful_step_count=50, deadline=None, \
+        report_multiple_bugs=False, 
+        phases=[Phase.reuse, Phase.generate, Phase.target], 
+        database=ci_db)
+    
+    if os.environ.get('CI'):
+        event_name = os.environ.get('GITHUB_EVENT_NAME')
+        if event_name == 'schedule':
+            profile = 'schedule'
+        else:
+            profile = 'pull_request'
+    else:
+        profile = os.environ.get('PROFILE', 'dev')
+    print(f'profile is {profile}')
+    settings.load_profile(profile)
+    juicefs_machine = JuicefsMachine.TestCase()
+    juicefs_machine.runTest()
