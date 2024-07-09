@@ -218,9 +218,11 @@ func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 		}
 	}
 	eno := n.fs.Mkdir(mctx, n.path(bucket), 0777, n.gConf.Umask)
-	metadata := minio.NewBucketMetadata(bucket)
-	if err := metadata.Save(ctx, n); err != nil {
-		return err
+	if eno == 0 {
+		metadata := minio.NewBucketMetadata(bucket)
+		if err := metadata.Save(ctx, n); err != nil {
+			return err
+		}
 	}
 	return jfsToObjectErr(ctx, eno, bucket)
 }
