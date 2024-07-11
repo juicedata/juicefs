@@ -34,7 +34,7 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 在企业空间中点击进去应用管理，选择「应用仓库」，点击创建按钮添加 JuiceFS CSI 仓库，填写：
 
 - 仓库名称：`juicefs-csi-driver`
-- Index URL：`https://juicedata.github.io/juicefs-csi-driver/`
+- Index URL：`https://juicedata.github.io/charts/`
 
 ![kubesphere_app_shop](../images/kubesphere_app_shop.png)
 
