@@ -241,25 +241,15 @@ The `object` stands for object storage related metrics, when cache is enabled, p
 
 ## Get runtime information using pprof {#runtime-information}
 
-By default, JuiceFS clients will listen to a TCP port locally via [pprof](https://pkg.go.dev/net/http/pprof) to get runtime information such as Goroutine stack information, CPU performance statistics, memory allocation statistics. You can see the specific port number that the current JuiceFS client is listening on by using the system command (e.g. `lsof`):
-
-:::tip
-If you mount JuiceFS as the root user, you need to add `sudo` before the `lsof` command.
-:::
+By default, JuiceFS clients will listen to a TCP port locally via [pprof](https://pkg.go.dev/net/http/pprof) to get runtime information such as Goroutine stack information, CPU performance statistics, memory allocation statistics. You can view the specific port number that the current JuiceFS client is listening to through the `.config` file under the mount point:
 
 ```bash
-lsof -i -nP | grep LISTEN | grep juicefs
+# Assume the mount point is /jfs
+$ cat /jfs/.config | grep 'DebugAgent'
+  "DebugAgent": "127.0.0.1:6064",
 ```
 
-```shell
-# pprof listen prot
-juicefs   19371 user    6u  IPv4 0xa2f1748ad05b5427      0t0  TCP 127.0.0.1:6061 (LISTEN)
-
-# Prometheus API listen port
-juicefs   19371 user   11u  IPv4 0xa2f1748ad05cbde7      0t0  TCP 127.0.0.1:9567 (LISTEN)
-```
-
-By default, pprof listens on port numbers ranging from 6060 to 6099. That's why the actual port number in the above example is 6061. Once you get the listening port number, you can view all the available runtime information by accessing `http://localhost:<port>/debug/pprof`, and some important runtime information will be shown as follows:
+The default port number range that pprof listens to starts from 6060 and ends at 6099. From the above example, you can see that the actual port number is 6064. Once you get the listening port number, you can view all the available runtime information by accessing `http://localhost:<port>/debug/pprof`, and some important runtime information will be shown as follows:
 
 - Goroutine stack information: `http://localhost:<port>/debug/pprof/goroutine?debug=1`
 - CPU performance statistics: `http://localhost:<port>/debug/pprof/profile?seconds=30`
