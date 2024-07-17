@@ -32,7 +32,7 @@ type badgerTxn struct {
 	c *badger.DB
 }
 
-func (tx *badgerTxn) get(key []byte) []byte {
+func (tx *badgerTxn) Get(key []byte) []byte {
 	item, err := tx.t.Get(key)
 	if err == badger.ErrKeyNotFound {
 		return nil
@@ -47,15 +47,15 @@ func (tx *badgerTxn) get(key []byte) []byte {
 	return value
 }
 
-func (tx *badgerTxn) gets(keys ...[]byte) [][]byte {
+func (tx *badgerTxn) Gets(keys ...[]byte) [][]byte {
 	values := make([][]byte, len(keys))
 	for i, key := range keys {
-		values[i] = tx.get(key)
+		values[i] = tx.Get(key)
 	}
 	return values
 }
 
-func (tx *badgerTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
+func (tx *badgerTxn) Scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
 	var prefix bool
 	var options = badger.IteratorOptions{}
 	if bytes.Equal(nextKey(begin), end) {
@@ -84,7 +84,7 @@ func (tx *badgerTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []
 	}
 }
 
-func (tx *badgerTxn) exist(prefix []byte) bool {
+func (tx *badgerTxn) Exist(prefix []byte) bool {
 	it := tx.t.NewIterator(badger.IteratorOptions{
 		Prefix:       prefix,
 		PrefetchSize: 1,
@@ -94,7 +94,7 @@ func (tx *badgerTxn) exist(prefix []byte) bool {
 	return it.Valid()
 }
 
-func (tx *badgerTxn) set(key, value []byte) {
+func (tx *badgerTxn) Set(key, value []byte) {
 	err := tx.t.Set(key, value)
 	if err == badger.ErrTxnTooBig {
 		logger.Warn("Current transaction is too big, commit it")
@@ -109,22 +109,22 @@ func (tx *badgerTxn) set(key, value []byte) {
 	}
 }
 
-func (tx *badgerTxn) append(key []byte, value []byte) {
-	list := append(tx.get(key), value...)
-	tx.set(key, list)
+func (tx *badgerTxn) Append(key []byte, value []byte) {
+	list := append(tx.Get(key), value...)
+	tx.Set(key, list)
 }
 
-func (tx *badgerTxn) incrBy(key []byte, value int64) int64 {
-	buf := tx.get(key)
+func (tx *badgerTxn) IncrBy(key []byte, value int64) int64 {
+	buf := tx.Get(key)
 	newCounter := parseCounter(buf)
 	if value != 0 {
 		newCounter += value
-		tx.set(key, packCounter(newCounter))
+		tx.Set(key, packCounter(newCounter))
 	}
 	return newCounter
 }
 
-func (tx *badgerTxn) delete(key []byte) {
+func (tx *badgerTxn) Delete(key []byte) {
 	if err := tx.t.Delete(key); err != nil {
 		panic(err)
 	}
@@ -135,15 +135,15 @@ type badgerClient struct {
 	ticker *time.Ticker
 }
 
-func (c *badgerClient) name() string {
+func (c *badgerClient) Name() string {
 	return "badger"
 }
 
-func (c *badgerClient) shouldRetry(err error) bool {
+func (c *badgerClient) ShouldRetry(err error) bool {
 	return err == badger.ErrConflict
 }
 
-func (c *badgerClient) txn(f func(*kvTxn) error, retry int) (err error) {
+func (c *badgerClient) Txn(f func(*KvTxn) error, retry int) (err error) {
 	t := c.client.NewTransaction(true)
 	defer t.Discard()
 	defer func() {
@@ -157,7 +157,7 @@ func (c *badgerClient) txn(f func(*kvTxn) error, retry int) (err error) {
 		}
 	}()
 	tx := &badgerTxn{t, c.client}
-	err = f(&kvTxn{tx, retry})
+	err = f(&KvTxn{tx, retry})
 	if err != nil {
 		return err
 	}
@@ -165,7 +165,7 @@ func (c *badgerClient) txn(f func(*kvTxn) error, retry int) (err error) {
 	return tx.t.Commit()
 }
 
-func (c *badgerClient) scan(prefix []byte, handler func(key []byte, value []byte)) error {
+func (c *badgerClient) Scan(prefix []byte, handler func(key []byte, value []byte)) error {
 	tx := c.client.NewTransaction(false)
 	defer tx.Discard()
 	it := tx.NewIterator(badger.IteratorOptions{
@@ -185,7 +185,7 @@ func (c *badgerClient) scan(prefix []byte, handler func(key []byte, value []byte
 	return nil
 }
 
-func (c *badgerClient) reset(prefix []byte) error {
+func (c *badgerClient) Reset(prefix []byte) error {
 	if prefix == nil {
 		return c.client.DropAll()
 	} else {
@@ -193,14 +193,14 @@ func (c *badgerClient) reset(prefix []byte) error {
 	}
 }
 
-func (c *badgerClient) close() error {
+func (c *badgerClient) Close() error {
 	c.ticker.Stop()
 	return c.client.Close()
 }
 
-func (c *badgerClient) gc() {}
+func (c *badgerClient) Gc() {}
 
-func newBadgerClient(addr string) (tkvClient, error) {
+func newBadgerClient(addr string) (TkvClient, error) {
 	opt := badger.DefaultOptions(addr)
 	opt.Logger = utils.GetLogger("badger")
 	opt.MetricsEnabled = false
@@ -220,5 +220,6 @@ func newBadgerClient(addr string) (tkvClient, error) {
 
 func init() {
 	Register("badger", newKVMeta)
-	drivers["badger"] = newBadgerClient
+	// drivers["badger"] = newBadgerClient
+	RegisterKvDriver("badger", newBadgerClient)
 }

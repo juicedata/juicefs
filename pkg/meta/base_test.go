@@ -2347,8 +2347,8 @@ func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
 			return err
 		})
 	case *kvMeta:
-		err = m.txn(func(tx *kvTxn) error {
-			tx.set(m.inodeKey(inode), m.marshal(attr))
+		err = m.txn(func(tx *KvTxn) error {
+			tx.Set(m.inodeKey(inode), m.marshal(attr))
 			return nil
 		})
 	}
@@ -2814,16 +2814,16 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
 		removedItem = append(removedItem, m.detachedKey(cloneDstIno))
-		m.txn(func(tx *kvTxn) error {
+		m.txn(func(tx *KvTxn) error {
 			for _, key := range removedItem {
-				if buf := tx.get(key.([]byte)); buf != nil {
+				if buf := tx.Get(key.([]byte)); buf != nil {
 					t.Fatalf("has keys not removed: %v", removedItem)
 				}
 			}
-			tx.set(m.detachedKey(dNode1), m.packInt64(time.Now().Add(-1*time.Minute).Unix()))
-			tx.set(m.detachedKey(dNode2), m.packInt64(time.Now().Add(-5*time.Minute).Unix()))
-			tx.set(m.detachedKey(dNode3), m.packInt64(time.Now().Add(-48*time.Hour).Unix()))
-			tx.set(m.detachedKey(dNode4), m.packInt64(time.Now().Add(-48*time.Hour).Unix()))
+			tx.Set(m.detachedKey(dNode1), m.packInt64(time.Now().Add(-1*time.Minute).Unix()))
+			tx.Set(m.detachedKey(dNode2), m.packInt64(time.Now().Add(-5*time.Minute).Unix()))
+			tx.Set(m.detachedKey(dNode3), m.packInt64(time.Now().Add(-48*time.Hour).Unix()))
+			tx.Set(m.detachedKey(dNode4), m.packInt64(time.Now().Add(-48*time.Hour).Unix()))
 			return nil
 		})
 

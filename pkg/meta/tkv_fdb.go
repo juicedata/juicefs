@@ -28,7 +28,8 @@ import (
 
 func init() {
 	Register("fdb", newKVMeta)
-	drivers["fdb"] = newFdbClient
+	// drivers["fdb"] = newFdbClient
+	KvDriverRegister("fdb", newFdbClient)
 }
 
 type fdbTxn struct {
@@ -56,7 +57,7 @@ func newFdbClient(addr string) (tkvClient, error) {
 	return withPrefix(&fdbClient{db}, append([]byte(u.Query().Get("prefix")), 0xFD)), nil
 }
 
-func (c *fdbClient) name() string {
+func (c *fdbClient) Name() string {
 	return "fdb"
 }
 
@@ -103,7 +104,7 @@ func (c *fdbClient) scan(prefix []byte, handler func(key, value []byte)) error {
 	}
 }
 
-func (c *fdbClient) reset(prefix []byte) error {
+func (c *fdbClient) Reset(prefix []byte) error {
 	_, err := c.client.Transact(func(t fdb.Transaction) (interface{}, error) {
 		t.ClearRange(fdb.KeyRange{
 			Begin: fdb.Key(prefix),
@@ -118,17 +119,17 @@ func (c *fdbClient) close() error {
 	return nil
 }
 
-func (c *fdbClient) shouldRetry(err error) bool {
+func (c *fdbClient) ShouldRetry(err error) bool {
 	return false
 }
 
-func (c *fdbClient) gc() {}
+func (c *fdbClient) Gc() {}
 
 func (tx *fdbTxn) get(key []byte) []byte {
 	return tx.Get(fdb.Key(key)).MustGet()
 }
 
-func (tx *fdbTxn) gets(keys ...[]byte) [][]byte {
+func (tx *fdbTxn) Gets(keys ...[]byte) [][]byte {
 	fut := make([]fdb.FutureByteSlice, len(keys))
 	for i, key := range keys {
 		fut[i] = tx.Get(fdb.Key(key))
@@ -140,7 +141,7 @@ func (tx *fdbTxn) gets(keys ...[]byte) [][]byte {
 	return ret
 }
 
-func (tx *fdbTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
+func (tx *fdbTxn) Scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
 	it := tx.GetRange(fdb.KeyRange{Begin: fdb.Key(begin), End: fdb.Key(end)},
 		fdb.RangeOptions{Mode: fdb.StreamingModeWantAll}).Iterator()
 	for it.Advance() {
@@ -151,27 +152,27 @@ func (tx *fdbTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byt
 	}
 }
 
-func (tx *fdbTxn) exist(prefix []byte) bool {
+func (tx *fdbTxn) Exist(prefix []byte) bool {
 	return tx.GetRange(
 		fdb.KeyRange{Begin: fdb.Key(prefix), End: fdb.Key(nextKey(prefix))},
 		fdb.RangeOptions{Mode: fdb.StreamingModeWantAll},
 	).Iterator().Advance()
 }
 
-func (tx *fdbTxn) set(key, value []byte) {
+func (tx *fdbTxn) Set(key, value []byte) {
 	tx.Set(fdb.Key(key), value)
 }
 
-func (tx *fdbTxn) append(key []byte, value []byte) {
+func (tx *fdbTxn) Append(key []byte, value []byte) {
 	tx.AppendIfFits(fdb.Key(key), fdb.Key(value))
 }
 
-func (tx *fdbTxn) incrBy(key []byte, value int64) int64 {
+func (tx *fdbTxn) IncrBy(key []byte, value int64) int64 {
 	tx.Add(fdb.Key(key), packCounter(value))
 	// TODO: don't return new value if not needed
 	return parseCounter(tx.Get(fdb.Key(key)).MustGet())
 }
 
-func (tx *fdbTxn) delete(key []byte) {
+func (tx *fdbTxn) Delete(key []byte) {
 	tx.Clear(fdb.Key(key))
 }
