@@ -151,7 +151,7 @@ func watchdog(ctx context.Context, mp string) {
 					if err == nil {
 						logger.Infof("watching %s, pid %d", mp, conf.Pid)
 						pid = conf.Pid
-						agentAddr = conf.DebugAgent
+						agentAddr = conf.Port.DebugAgent
 					} else {
 						logger.Warnf("load config: %s", err)
 						continue

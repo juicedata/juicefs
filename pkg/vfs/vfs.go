@@ -126,12 +126,11 @@ type Config struct {
 	RootSquash           *RootSquash `json:",omitempty"`
 	NonDefaultPermission bool        `json:",omitempty"`
 
-	Pid        int
-	PPid       int
-	DebugAgent string
-	CommPath   string       `json:",omitempty"`
-	StatePath  string       `json:",omitempty"`
-	FuseOpts   *FuseOptions `json:",omitempty"`
+	Pid       int
+	PPid      int
+	CommPath  string       `json:",omitempty"`
+	StatePath string       `json:",omitempty"`
+	FuseOpts  *FuseOptions `json:",omitempty"`
 }
 
 type RootSquash struct {
