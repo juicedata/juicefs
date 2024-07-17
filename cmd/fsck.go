@@ -167,6 +167,8 @@ func fsck(ctx *cli.Context) error {
 	sliceBSpin := progress.AddByteSpinner("Scanned slices")
 	lostDSpin := progress.AddDoubleSpinner("Lost blocks")
 	brokens := make(map[meta.Ino]string)
+	failedDSpin := progress.AddDoubleSpinner("Failed blocks")
+	failed := make(map[meta.Ino]string)
 	for inode, ss := range slices {
 		if delfiles[inode] {
 			skippedSlices.IncrBy(len(ss))
@@ -189,7 +191,11 @@ func fsck(ctx *cli.Context) error {
 					}
 					if _, err := blob.Head(objKey); err != nil {
 						var path string
-						if path, ok = brokens[inode]; !ok {
+						if _, ok = brokens[inode]; ok {
+							path = brokens[inode]
+						} else if _, ok = failed[inode]; ok {
+							path = failed[inode]
+						} else {
 							if ps := m.GetPaths(meta.Background, inode); len(ps) > 0 {
 								path = ps[0]
 							} else {
@@ -199,8 +205,12 @@ func fsck(ctx *cli.Context) error {
 						if errors.Is(err, os.ErrNotExist) {
 							brokens[inode] = path
 							lostDSpin.IncrInt64(int64(sz))
+							logger.Errorf("cannot find block %s for file %s err: %s", objKey, path, err)
+						} else {
+							failed[inode] = path
+							failedDSpin.IncrInt64(int64(sz))
+							logger.Errorf("read object storage block %s for file %s err: %s", objKey, path, err)
 						}
-						logger.Errorf("find block %s for file %s err: %s", objKey, path, err)
 					}
 				}
 			}
@@ -217,6 +227,18 @@ func fsck(ctx *cli.Context) error {
 		msg += fmt.Sprintf("%13s: PATH\n", "INODE")
 		var fileList []string
 		for i, p := range brokens {
+			fileList = append(fileList, fmt.Sprintf("%13d: %s", i, p))
+		}
+		sort.Strings(fileList)
+		msg += strings.Join(fileList, "\n")
+		logger.Fatal(msg)
+	}
+
+	if lc, lb := failedDSpin.Current(); lc > 0 {
+		msg := fmt.Sprintf("%d objects failed read from object storage (%d bytes), %d files:\n", lc, lb, len(failed))
+		msg += fmt.Sprintf("%13s: PATH\n", "INODE")
+		var fileList []string
+		for i, p := range failed {
 			fileList = append(fileList, fmt.Sprintf("%13d: %s", i, p))
 		}
 		sort.Strings(fileList)
