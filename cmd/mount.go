@@ -383,7 +383,7 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 		registerer.MustRegister(vfs.LastBackupDurationG)
 		go vfs.Backup(m, blob, vfsConf.BackupMeta, vfsConf.BackupSkipTrash)
 	} else {
-		logger.Warnf("Backup meta is disabled")
+		logger.Warnf("Metadata backup is disabled")
 	}
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
