@@ -69,6 +69,7 @@ require (
 	github.com/vmware/go-nfs-client v0.0.0-20190605212624-d43b92724c1b
 	github.com/volcengine/ve-tos-golang-sdk/v2 v2.5.3
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a
+	go.etcd.io/bbolt v1.3.3
 	go.etcd.io/etcd v3.3.27+incompatible
 	go.etcd.io/etcd/client/v3 v3.5.9
 	go.uber.org/automaxprocs v1.5.2

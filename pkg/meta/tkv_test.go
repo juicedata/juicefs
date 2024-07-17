@@ -51,6 +51,15 @@ func TestBadgerClient(t *testing.T) {
 	testMeta(t, m)
 }
 
+func TestBBoltClient(t *testing.T) {
+	os.Remove("./bbolt")
+	m, err := newKVMeta("bbolt", "bbolt", testConfig())
+	if err != nil || m.Name() != "bbolt" {
+		t.Fatalf("create meta: %s", err)
+	}
+	testMeta(t, m)
+}
+
 func TestEtcdClient(t *testing.T) { //skip mutate
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
