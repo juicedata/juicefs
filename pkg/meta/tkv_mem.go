@@ -29,12 +29,13 @@ import (
 
 func init() {
 	Register("memkv", newKVMeta)
-	drivers["memkv"] = newMockClient
+	// drivers["memkv"] = newMockClient
+	RegisterKvDriver("memkv", newMockClient)
 }
 
 const settingPath = "/tmp/juicefs.memkv.setting.json"
 
-func newMockClient(addr string) (tkvClient, error) {
+func newMockClient(addr string) (TkvClient, error) {
 	client := &memKV{items: btree.New(2), temp: &kvItem{}}
 	if d, err := os.ReadFile(settingPath); err == nil {
 		var buffer map[string][]byte
@@ -53,7 +54,7 @@ type memTxn struct {
 	buffer   map[string][]byte
 }
 
-func (tx *memTxn) get(key []byte) []byte {
+func (tx *memTxn) Get(key []byte) []byte {
 	k := string(key)
 	if v, ok := tx.buffer[k]; ok {
 		return v
@@ -70,15 +71,15 @@ func (tx *memTxn) get(key []byte) []byte {
 	}
 }
 
-func (tx *memTxn) gets(keys ...[]byte) [][]byte {
+func (tx *memTxn) Gets(keys ...[]byte) [][]byte {
 	values := make([][]byte, len(keys))
 	for i, key := range keys {
-		values[i] = tx.get(key)
+		values[i] = tx.Get(key)
 	}
 	return values
 }
 
-func (tx *memTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
+func (tx *memTxn) Scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
 	tx.store.Lock()
 	defer tx.store.Unlock()
 	tx.store.items.AscendGreaterOrEqual(&kvItem{key: string(begin)}, func(i btree.Item) bool {
@@ -112,7 +113,7 @@ func nextKey(key []byte) []byte {
 	return next
 }
 
-func (tx *memTxn) exist(prefix []byte) bool {
+func (tx *memTxn) Exist(prefix []byte) bool {
 	var ret bool
 	tx.store.Lock()
 	defer tx.store.Unlock()
@@ -127,26 +128,26 @@ func (tx *memTxn) exist(prefix []byte) bool {
 	return ret
 }
 
-func (tx *memTxn) set(key, value []byte) {
+func (tx *memTxn) Set(key, value []byte) {
 	tx.buffer[string(key)] = value
 }
 
-func (tx *memTxn) append(key []byte, value []byte) {
-	new := append(tx.get(key), value...)
-	tx.set(key, new)
+func (tx *memTxn) Append(key []byte, value []byte) {
+	new := append(tx.Get(key), value...)
+	tx.Set(key, new)
 }
 
-func (tx *memTxn) incrBy(key []byte, value int64) int64 {
-	buf := tx.get(key)
+func (tx *memTxn) IncrBy(key []byte, value int64) int64 {
+	buf := tx.Get(key)
 	new := parseCounter(buf)
 	if value != 0 {
 		new += value
-		tx.set(key, packCounter(new))
+		tx.Set(key, packCounter(new))
 	}
 	return new
 }
 
-func (tx *memTxn) delete(key []byte) {
+func (tx *memTxn) Delete(key []byte) {
 	tx.buffer[string(key)] = nil
 }
 
@@ -166,11 +167,11 @@ type memKV struct {
 	temp  *kvItem
 }
 
-func (c *memKV) name() string {
+func (c *memKV) Name() string {
 	return "memkv"
 }
 
-func (c *memKV) shouldRetry(err error) bool {
+func (c *memKV) ShouldRetry(err error) bool {
 	return strings.Contains(err.Error(), "write conflict")
 }
 
@@ -198,13 +199,13 @@ func (c *memKV) set(key string, value []byte) {
 	}
 }
 
-func (c *memKV) txn(f func(*kvTxn) error, retry int) error {
+func (c *memKV) Txn(f func(*KvTxn) error, retry int) error {
 	tx := &memTxn{
 		store:    c,
 		observed: make(map[string]int),
 		buffer:   make(map[string][]byte),
 	}
-	if err := f(&kvTxn{tx, retry}); err != nil {
+	if err := f(&KvTxn{tx, retry}); err != nil {
 		return err
 	}
 
@@ -233,7 +234,7 @@ func (c *memKV) txn(f func(*kvTxn) error, retry int) error {
 	return nil
 }
 
-func (c *memKV) scan(prefix []byte, handler func(key []byte, value []byte)) error {
+func (c *memKV) Scan(prefix []byte, handler func(key []byte, value []byte)) error {
 	c.Lock()
 	snap := c.items.Clone()
 	c.Unlock()
@@ -250,7 +251,7 @@ func (c *memKV) scan(prefix []byte, handler func(key []byte, value []byte)) erro
 	return nil
 }
 
-func (c *memKV) reset(prefix []byte) error {
+func (c *memKV) Reset(prefix []byte) error {
 	if len(prefix) == 0 {
 		c.Lock()
 		c.items = btree.New(2)
@@ -258,15 +259,15 @@ func (c *memKV) reset(prefix []byte) error {
 		c.Unlock()
 		return nil
 	}
-	return c.txn(func(kt *kvTxn) error {
-		return c.scan(prefix, func(key, value []byte) {
-			kt.delete(key)
+	return c.Txn(func(kt *KvTxn) error {
+		return c.Scan(prefix, func(key, value []byte) {
+			kt.Delete(key)
 		})
 	}, 0)
 }
 
-func (c *memKV) close() error {
+func (c *memKV) Close() error {
 	return nil
 }
 
-func (c *memKV) gc() {}
+func (c *memKV) Gc() {}

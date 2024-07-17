@@ -41,7 +41,7 @@ type etcdTxn struct {
 	buffer   map[string][]byte
 }
 
-func (tx *etcdTxn) get(key []byte) []byte {
+func (tx *etcdTxn) Get(key []byte) []byte {
 	k := string(key)
 	if v, ok := tx.buffer[k]; ok {
 		return v
@@ -75,11 +75,11 @@ func min(a, b int) int {
 	return b
 }
 
-func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
+func (tx *etcdTxn) Gets(keys ...[]byte) [][]byte {
 	if len(keys) > 128 {
 		var rs = make([][]byte, 0, len(keys))
 		for i := 0; i < len(keys); i += 128 {
-			rs = append(rs, tx.gets(keys[i:min(i+128, len(keys))]...)...)
+			rs = append(rs, tx.Gets(keys[i:min(i+128, len(keys))]...)...)
 		}
 		return rs
 	}
@@ -114,7 +114,7 @@ func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
 	return values
 }
 
-func (tx *etcdTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
+func (tx *etcdTxn) Scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
 	opts := []etcd.OpOption{etcd.WithRange(string(end))}
 	if keysOnly {
 		opts = append(opts, etcd.WithKeysOnly())
@@ -131,7 +131,7 @@ func (tx *etcdTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []by
 	}
 }
 
-func (tx *etcdTxn) exist(prefix []byte) bool {
+func (tx *etcdTxn) Exist(prefix []byte) bool {
 	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(), etcd.WithCountOnly())
 	if err != nil {
 		panic(fmt.Errorf("get prefix %v with count only: %s", string(prefix), err))
@@ -139,7 +139,7 @@ func (tx *etcdTxn) exist(prefix []byte) bool {
 	return resp.Count > 0
 }
 
-func (tx *etcdTxn) set(key, value []byte) {
+func (tx *etcdTxn) Set(key, value []byte) {
 	tx.buffer[string(key)] = value
 	if len(tx.buffer) >= 128 {
 		err := tx.commmit()
@@ -151,22 +151,22 @@ func (tx *etcdTxn) set(key, value []byte) {
 	}
 }
 
-func (tx *etcdTxn) append(key []byte, value []byte) {
-	new := append(tx.get(key), value...)
-	tx.set(key, new)
+func (tx *etcdTxn) Append(key []byte, value []byte) {
+	new := append(tx.Get(key), value...)
+	tx.Set(key, new)
 }
 
-func (tx *etcdTxn) incrBy(key []byte, value int64) int64 {
-	buf := tx.get(key)
+func (tx *etcdTxn) IncrBy(key []byte, value int64) int64 {
+	buf := tx.Get(key)
 	new := parseCounter(buf)
 	if value != 0 {
 		new += value
-		tx.set(key, packCounter(new))
+		tx.Set(key, packCounter(new))
 	}
 	return new
 }
 
-func (tx *etcdTxn) delete(key []byte) {
+func (tx *etcdTxn) Delete(key []byte) {
 	tx.buffer[string(key)] = nil
 }
 
@@ -204,15 +204,15 @@ type etcdClient struct {
 	kv     etcd.KV
 }
 
-func (c *etcdClient) name() string {
+func (c *etcdClient) Name() string {
 	return "etcd"
 }
 
-func (c *etcdClient) shouldRetry(err error) bool {
+func (c *etcdClient) ShouldRetry(err error) bool {
 	return errors.Is(err, conflicted)
 }
 
-func (c *etcdClient) txn(f func(*kvTxn) error, retry int) (err error) {
+func (c *etcdClient) Txn(f func(*KvTxn) error, retry int) (err error) {
 	ctx := context.Background()
 	tx := &etcdTxn{
 		ctx,
@@ -230,7 +230,7 @@ func (c *etcdClient) txn(f func(*kvTxn) error, retry int) (err error) {
 			}
 		}
 	}()
-	err = f(&kvTxn{tx, retry})
+	err = f(&KvTxn{tx, retry})
 	if err != nil {
 		return err
 	}
@@ -242,7 +242,7 @@ func (c *etcdClient) txn(f func(*kvTxn) error, retry int) (err error) {
 
 var conflicted = errors.New("conflicted transaction")
 
-func (c *etcdClient) scan(prefix []byte, handler func(key []byte, value []byte)) error {
+func (c *etcdClient) Scan(prefix []byte, handler func(key []byte, value []byte)) error {
 	var start = prefix
 	var end = string(nextKey(prefix))
 	resp, err := c.client.Get(context.Background(), "anything")
@@ -276,16 +276,16 @@ func (c *etcdClient) scan(prefix []byte, handler func(key []byte, value []byte))
 	return nil
 }
 
-func (c *etcdClient) reset(prefix []byte) error {
+func (c *etcdClient) Reset(prefix []byte) error {
 	_, err := c.kv.Delete(context.Background(), string(prefix), etcd.WithPrefix())
 	return err
 }
 
-func (c *etcdClient) close() error {
+func (c *etcdClient) Close() error {
 	return c.client.Close()
 }
 
-func (c *etcdClient) gc() {}
+func (c *etcdClient) Gc() {}
 
 func buildTlsConfig(u *url.URL) (*tls.Config, error) {
 	var tsinfo transport.TLSInfo
@@ -301,7 +301,7 @@ func buildTlsConfig(u *url.URL) (*tls.Config, error) {
 	return nil, nil
 }
 
-func newEtcdClient(addr string) (tkvClient, error) {
+func newEtcdClient(addr string) (TkvClient, error) {
 	if !strings.Contains(addr, "://") {
 		addr = "http://" + addr
 	}
@@ -338,5 +338,6 @@ func newEtcdClient(addr string) (tkvClient, error) {
 
 func init() {
 	Register("etcd", newKVMeta)
-	drivers["etcd"] = newEtcdClient
+	// drivers["etcd"] = newEtcdClient
+	RegisterKvDriver("etcd", newEtcdClient)
 }

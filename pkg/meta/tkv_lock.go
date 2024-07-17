@@ -56,8 +56,8 @@ func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 	var err error
 	lkey := lockOwner{m.sid, owner}
 	for {
-		err = m.txn(func(tx *kvTxn) error {
-			v := tx.get(ikey)
+		err = m.txn(func(tx *KvTxn) error {
+			v := tx.Get(ikey)
 			ls := unmarshalFlock(v)
 			switch ltype {
 			case F_UNLCK:
@@ -79,9 +79,9 @@ func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 				return syscall.EINVAL
 			}
 			if len(ls) == 0 {
-				tx.delete(ikey)
+				tx.Delete(ikey)
 			} else {
-				tx.set(ikey, marshalFlock(ls))
+				tx.Set(ikey, marshalFlock(ls))
 			}
 			return nil
 		}, inode)
@@ -171,8 +171,8 @@ func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 	lock := plockRecord{ltype, pid, start, end}
 	lkey := lockOwner{m.sid, owner}
 	for {
-		err = m.txn(func(tx *kvTxn) error {
-			owners := unmarshalPlock(tx.get(ikey))
+		err = m.txn(func(tx *KvTxn) error {
+			owners := unmarshalPlock(tx.Get(ikey))
 			if ltype == F_UNLCK {
 				records := owners[lkey]
 				ls := loadLocks(records)
@@ -201,9 +201,9 @@ func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 				owners[lkey] = dumpLocks(ls)
 			}
 			if len(owners) == 0 {
-				tx.delete(ikey)
+				tx.Delete(ikey)
 			} else {
-				tx.set(ikey, marshalPlock(owners))
+				tx.Set(ikey, marshalPlock(owners))
 			}
 			return nil
 		}, inode)

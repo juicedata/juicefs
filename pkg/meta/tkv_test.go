@@ -62,9 +62,9 @@ func TestEtcdClient(t *testing.T) { //skip mutate
 	testMeta(t, m)
 }
 
-func testTKV(t *testing.T, c tkvClient) {
-	txn := func(f func(kt *kvTxn)) {
-		if err := c.txn(func(kt *kvTxn) error {
+func testTKV(t *testing.T, c TkvClient) {
+	txn := func(f func(kt *KvTxn)) {
+		if err := c.Txn(func(kt *KvTxn) error {
 			f(kt)
 			return nil
 		}, 0); err != nil {
@@ -72,47 +72,47 @@ func testTKV(t *testing.T, c tkvClient) {
 		}
 	}
 	// basic
-	err := c.reset(nil)
+	err := c.Reset(nil)
 	if err != nil {
 		t.Fatalf("reset: %s", err)
 	}
 	var hasKey bool
-	txn(func(kt *kvTxn) { hasKey = kt.exist(nil) })
+	txn(func(kt *KvTxn) { hasKey = kt.Exist(nil) })
 	if hasKey {
 		t.Fatalf("has key after reset")
 	}
 	k := []byte("k")
 	v := []byte("value")
 
-	txn(func(kt *kvTxn) {
-		kt.set(k, v)
-		kt.append(k, v)
+	txn(func(kt *KvTxn) {
+		kt.Set(k, v)
+		kt.Append(k, v)
 	})
 	var r []byte
-	txn(func(kt *kvTxn) { r = kt.get(k) })
+	txn(func(kt *KvTxn) { r = kt.Get(k) })
 	if !bytes.Equal(r, []byte("valuevalue")) {
 		t.Fatalf("expect 'valuevalue', but got %v", string(r))
 	}
-	txn(func(kt *kvTxn) {
-		kt.set([]byte("k2"), v)
-		kt.set([]byte("v"), k)
+	txn(func(kt *KvTxn) {
+		kt.Set([]byte("k2"), v)
+		kt.Set([]byte("v"), k)
 	})
 	var ks [][]byte
-	txn(func(kt *kvTxn) { ks = kt.gets([]byte("k1"), []byte("k2")) })
+	txn(func(kt *KvTxn) { ks = kt.Gets([]byte("k1"), []byte("k2")) })
 	if ks[0] != nil || string(ks[1]) != "value" {
 		t.Fatalf("gets k1,k2: %+v != %+v", ks, [][]byte{nil, []byte("value")})
 	}
 
 	var keys [][]byte
-	c.scan([]byte("k"), func(key, value []byte) {
+	c.Scan([]byte("k"), func(key, value []byte) {
 		keys = append(keys, key)
 	})
 	if len(keys) != 2 || string(keys[0]) != "k" || string(keys[1]) != "k2" {
 		t.Fatalf("keys: %+v", keys)
 	}
 	keys = keys[:0]
-	txn(func(kt *kvTxn) {
-		kt.scan([]byte("a"), []byte("z"), true, func(k, v []byte) bool {
+	txn(func(kt *KvTxn) {
+		kt.Scan([]byte("a"), []byte("z"), true, func(k, v []byte) bool {
 			if len(k) == 1 {
 				keys = append(keys, k)
 			}
@@ -123,8 +123,8 @@ func testTKV(t *testing.T, c tkvClient) {
 		t.Fatalf("keys: %+v", keys)
 	}
 	keys = keys[:0]
-	txn(func(kt *kvTxn) {
-		kt.scan([]byte("k"), []byte("l"), true, func(k, v []byte) bool {
+	txn(func(kt *KvTxn) {
+		kt.Scan([]byte("k"), []byte("l"), true, func(k, v []byte) bool {
 			keys = append(keys, k)
 			return true
 		})
@@ -133,8 +133,8 @@ func testTKV(t *testing.T, c tkvClient) {
 		t.Fatalf("keys: %+v", keys)
 	}
 	keys = keys[:0]
-	txn(func(kt *kvTxn) {
-		kt.scan([]byte("a"), []byte("z"), true, func(k, v []byte) bool {
+	txn(func(kt *KvTxn) {
+		kt.Scan([]byte("a"), []byte("z"), true, func(k, v []byte) bool {
 			keys = append(keys, k)
 			return true
 		})
@@ -143,8 +143,8 @@ func testTKV(t *testing.T, c tkvClient) {
 		t.Fatalf("keys: %+v", keys)
 	}
 	values := make(map[string][]byte)
-	txn(func(kt *kvTxn) {
-		kt.scan([]byte("k"), nextKey([]byte("k")), false, func(k, v []byte) bool {
+	txn(func(kt *KvTxn) {
+		kt.Scan([]byte("k"), nextKey([]byte("k")), false, func(k, v []byte) bool {
 			if len(v) == 5 {
 				values[string(k)] = v
 			}
@@ -155,8 +155,8 @@ func testTKV(t *testing.T, c tkvClient) {
 		t.Fatalf("scan values: %+v", values)
 	}
 	values = make(map[string][]byte)
-	txn(func(kt *kvTxn) {
-		kt.scan([]byte("k2"), []byte("v"),
+	txn(func(kt *KvTxn) {
+		kt.Scan([]byte("k2"), []byte("v"),
 			false, func(k, v []byte) bool {
 				values[string(k)] = v
 				return true
@@ -167,22 +167,22 @@ func testTKV(t *testing.T, c tkvClient) {
 	}
 
 	// exists
-	txn(func(kt *kvTxn) { hasKey = kt.exist([]byte("k")) })
+	txn(func(kt *KvTxn) { hasKey = kt.Exist([]byte("k")) })
 	if !hasKey {
 		t.Fatalf("has key k*")
 	}
-	txn(func(kt *kvTxn) {
+	txn(func(kt *KvTxn) {
 		for _, key := range keys {
-			kt.delete(key)
+			kt.Delete(key)
 		}
 	})
-	txn(func(kt *kvTxn) { r = kt.get(k) })
+	txn(func(kt *KvTxn) { r = kt.Get(k) })
 	if r != nil {
 		t.Fatalf("expect nil, but got %v", string(r))
 	}
 	keys = keys[:0]
-	txn(func(kt *kvTxn) {
-		kt.scan([]byte("a"), []byte("z"), true, func(k, v []byte) bool {
+	txn(func(kt *KvTxn) {
+		kt.Scan([]byte("a"), []byte("z"), true, func(k, v []byte) bool {
 			keys = append(keys, k)
 			return true
 		})
@@ -190,29 +190,29 @@ func testTKV(t *testing.T, c tkvClient) {
 	if len(keys) != 0 {
 		t.Fatalf("no keys: %+v", keys)
 	}
-	txn(func(kt *kvTxn) { hasKey = kt.exist(nil) })
+	txn(func(kt *KvTxn) { hasKey = kt.Exist(nil) })
 	if hasKey {
 		t.Fatalf("has not keys")
 	}
 
 	// counters
 	var count int64
-	c.txn(func(tx *kvTxn) error {
-		count = tx.incrBy([]byte("counter"), -1)
+	c.Txn(func(tx *KvTxn) error {
+		count = tx.IncrBy([]byte("counter"), -1)
 		return nil
 	}, 0)
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
 	}
-	c.txn(func(tx *kvTxn) error {
-		count = tx.incrBy([]byte("counter"), 0)
+	c.Txn(func(tx *KvTxn) error {
+		count = tx.IncrBy([]byte("counter"), 0)
 		return nil
 	}, 0)
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
 	}
-	c.txn(func(tx *kvTxn) error {
-		count = tx.incrBy([]byte("counter"), 2)
+	c.Txn(func(tx *KvTxn) error {
+		count = tx.IncrBy([]byte("counter"), 2)
 		return nil
 	}, 0)
 	if count != 1 {
@@ -221,12 +221,12 @@ func testTKV(t *testing.T, c tkvClient) {
 
 	// key with zeros
 	k = []byte("k\x001")
-	txn(func(kt *kvTxn) {
-		kt.set(k, v)
+	txn(func(kt *KvTxn) {
+		kt.Set(k, v)
 	})
 	var v2 []byte
-	txn(func(kt *kvTxn) {
-		v2 = kt.get(k)
+	txn(func(kt *KvTxn) {
+		v2 = kt.Get(k)
 	})
 	if !bytes.Equal(v2, v) {
 		t.Fatalf("expect %v but got %v", v, v2)
@@ -235,18 +235,18 @@ func testTKV(t *testing.T, c tkvClient) {
 	// scan many key-value pairs
 	keys = make([][]byte, 0, 100000)
 	for i := 0; i < 1000; i++ {
-		txn(func(kt *kvTxn) {
+		txn(func(kt *KvTxn) {
 			for j := 0; j < 100; j++ {
 				k := []byte(fmt.Sprintf("Key_%d_%d", i, j))
 				v := []byte(fmt.Sprintf("Value_%d_%d", i, j))
-				kt.set(k, v)
+				kt.Set(k, v)
 				keys = append(keys, k)
 			}
 		})
 	}
 	kvs := make([][]byte, 0, 200000)
-	txn(func(kt *kvTxn) {
-		kt.scan([]byte("A"), []byte("Z"), false, func(k, v []byte) bool {
+	txn(func(kt *KvTxn) {
+		kt.Scan([]byte("A"), []byte("Z"), false, func(k, v []byte) bool {
 			kvs = append(kvs, k, v)
 			return true
 		})

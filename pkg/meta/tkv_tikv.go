@@ -40,11 +40,11 @@ import (
 
 func init() {
 	Register("tikv", newKVMeta)
-	drivers["tikv"] = newTikvClient
-
+	// drivers["tikv"] = newTikvClient
+	RegisterKvDriver("tikv", newTikvClient)
 }
 
-func newTikvClient(addr string) (tkvClient, error) {
+func newTikvClient(addr string) (TkvClient, error) {
 	var plvl string // TiKV (PingCap) uses uber-zap logging, make it less verbose
 	switch logger.Level {
 	case logrus.TraceLevel:
@@ -92,11 +92,11 @@ func newTikvClient(addr string) (tkvClient, error) {
 }
 
 type tikvTxn struct {
-	*tikv.KVTxn
+	ti *tikv.KVTxn
 }
 
-func (tx *tikvTxn) get(key []byte) []byte {
-	value, err := tx.Get(context.TODO(), key)
+func (tx *tikvTxn) Get(key []byte) []byte {
+	value, err := tx.ti.Get(context.TODO(), key)
 	if tikverr.IsErrNotFound(err) {
 		return nil
 	}
@@ -106,8 +106,8 @@ func (tx *tikvTxn) get(key []byte) []byte {
 	return value
 }
 
-func (tx *tikvTxn) gets(keys ...[]byte) [][]byte {
-	ret, err := tx.BatchGet(context.TODO(), keys)
+func (tx *tikvTxn) Gets(keys ...[]byte) [][]byte {
+	ret, err := tx.ti.BatchGet(context.TODO(), keys)
 	if err != nil {
 		panic(err)
 	}
@@ -118,8 +118,8 @@ func (tx *tikvTxn) gets(keys ...[]byte) [][]byte {
 	return values
 }
 
-func (tx *tikvTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
-	it, err := tx.Iter(begin, end)
+func (tx *tikvTxn) Scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
+	it, err := tx.ti.Iter(begin, end)
 	if err != nil {
 		panic(err)
 	}
@@ -131,8 +131,8 @@ func (tx *tikvTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []by
 	}
 }
 
-func (tx *tikvTxn) exist(prefix []byte) bool {
-	it, err := tx.Iter(prefix, nextKey(prefix))
+func (tx *tikvTxn) Exist(prefix []byte) bool {
+	it, err := tx.ti.Iter(prefix, nextKey(prefix))
 	if err != nil {
 		panic(err)
 	}
@@ -140,29 +140,29 @@ func (tx *tikvTxn) exist(prefix []byte) bool {
 	return it.Valid()
 }
 
-func (tx *tikvTxn) set(key, value []byte) {
-	if err := tx.Set(key, value); err != nil {
+func (tx *tikvTxn) Set(key, value []byte) {
+	if err := tx.ti.Set(key, value); err != nil {
 		panic(err)
 	}
 }
 
-func (tx *tikvTxn) append(key []byte, value []byte) {
-	new := append(tx.get(key), value...)
-	tx.set(key, new)
+func (tx *tikvTxn) Append(key []byte, value []byte) {
+	new := append(tx.Get(key), value...)
+	tx.Set(key, new)
 }
 
-func (tx *tikvTxn) incrBy(key []byte, value int64) int64 {
-	buf := tx.get(key)
+func (tx *tikvTxn) IncrBy(key []byte, value int64) int64 {
+	buf := tx.Get(key)
 	new := parseCounter(buf)
 	if value != 0 {
 		new += value
-		tx.set(key, packCounter(new))
+		tx.Set(key, packCounter(new))
 	}
 	return new
 }
 
-func (tx *tikvTxn) delete(key []byte) {
-	if err := tx.Delete(key); err != nil {
+func (tx *tikvTxn) Delete(key []byte) {
+	if err := tx.ti.Delete(key); err != nil {
 		panic(err)
 	}
 }
@@ -172,15 +172,15 @@ type tikvClient struct {
 	gcInterval time.Duration
 }
 
-func (c *tikvClient) name() string {
+func (c *tikvClient) Name() string {
 	return "tikv"
 }
 
-func (c *tikvClient) shouldRetry(err error) bool {
+func (c *tikvClient) ShouldRetry(err error) bool {
 	return strings.Contains(err.Error(), "write conflict") || strings.Contains(err.Error(), "TxnLockNotFound")
 }
 
-func (c *tikvClient) txn(f func(*kvTxn) error, retry int) (err error) {
+func (c *tikvClient) Txn(f func(*KvTxn) error, retry int) (err error) {
 	tx, err := c.client.Begin()
 	if err != nil {
 		return err
@@ -195,7 +195,7 @@ func (c *tikvClient) txn(f func(*kvTxn) error, retry int) (err error) {
 			}
 		}
 	}()
-	if err = f(&kvTxn{&tikvTxn{tx}, retry}); err != nil {
+	if err = f(&KvTxn{&tikvTxn{tx}, retry}); err != nil {
 		return err
 	}
 	if !tx.IsReadOnly() {
@@ -206,7 +206,7 @@ func (c *tikvClient) txn(f func(*kvTxn) error, retry int) (err error) {
 	return err
 }
 
-func (c *tikvClient) scan(prefix []byte, handler func(key, value []byte)) error {
+func (c *tikvClient) Scan(prefix []byte, handler func(key, value []byte)) error {
 	ts, err := c.client.CurrentTimestamp("global")
 	if err != nil {
 		return err
@@ -229,16 +229,16 @@ func (c *tikvClient) scan(prefix []byte, handler func(key, value []byte)) error 
 	return nil
 }
 
-func (c *tikvClient) reset(prefix []byte) error {
+func (c *tikvClient) Reset(prefix []byte) error {
 	_, err := c.client.DeleteRange(context.Background(), prefix, nextKey(prefix), 1)
 	return err
 }
 
-func (c *tikvClient) close() error {
+func (c *tikvClient) Close() error {
 	return c.client.Close()
 }
 
-func (c *tikvClient) gc() {
+func (c *tikvClient) Gc() {
 	if c.gcInterval == 0 {
 		return
 	}
