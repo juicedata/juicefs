@@ -94,7 +94,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   private int minBufferSize;
   private int cacheReplica;
   private boolean fileChecksumEnabled;
-  private Libjfs lib = loadLibrary();
+  private static Libjfs lib = loadLibrary();
 
   private long handle;
   private UserGroupInformation ugi;
