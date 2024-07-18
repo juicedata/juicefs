@@ -168,7 +168,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 
 |项 | 说明|
 |-|-|
-|`--block-size=4096`|块大小，单位为 KiB，默认 4096。4M 是一个较好的默认值，不少对象存储（比如 S3）都将 4M 设为内部的块大小，因此将 JuiceFS block size 设为相同大小，往往也能获得更好的性能。|
+|`--block-size=4M`|块大小，单位为 KiB，默认 4M。4M 是一个较好的默认值，不少对象存储（比如 S3）都将 4M 设为内部的块大小，因此将 JuiceFS block size 设为相同大小，往往也能获得更好的性能。|
 |`--compress=none`|压缩算法，支持 `lz4`、`zstd`、`none`（默认），启用压缩将不可避免地对性能产生一定影响。这两种压缩算法中，`lz4` 提供更好的性能，但压缩比要逊于 `zstd`，他们的具体性能差别具体需要读者自行搜索了解。|
 |`--encrypt-rsa-key=value`|RSA 私钥的路径，查看[数据加密](../security/encryption.md)以了解更多。|
 |`--encrypt-algo=aes256gcm-rsa`|加密算法 (aes256gcm-rsa, chacha20-rsa) (默认："aes256gcm-rsa")|
@@ -389,6 +389,7 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 |`--keep-secret-key` <VersionAdd>1.1</VersionAdd>|导出对象存储认证信息，默认为 `false`。由于是明文导出，使用时注意数据安全。如果导出文件不包含对象存储认证信息，后续的导入完成后，需要用 [`juicefs config`](#config) 重新配置对象存储认证信息。|
 |`--fast` <VersionAdd>1.2</VersionAdd>|使用更多内存来加速导出。|
 |`--skip-trash` <VersionAdd>1.2</VersionAdd>|跳过回收站中的文件和目录。|
+|`--threads` <VersionAdd>1.2</VersionAdd>|并发线程数，默认 10。|
 
 ### `juicefs load` {#load}
 
@@ -640,6 +641,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--no-bgjob`|禁用后台任务，默认为 false，也就是说客户端会默认运行后台任务。后台任务包含：<br/><ul><li>清理回收站中过期的文件（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupDeletedFiles` 和 `cleanupTrash`）</li><li>清理引用计数为 0 的 Slice（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupSlices`）</li><li>清理过期的客户端会话（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `CleanStaleSessions`）</li></ul>特别地，与[企业版](https://juicefs.com/docs/zh/cloud/guide/background-job)不同，社区版碎片合并（Compaction）不受该选项的影响，而是随着文件读写操作，自动判断是否需要合并，然后异步执行（以 Redis 为例，在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/redis.go) 中搜索 `compactChunk`）|
 |`--atime-mode=noatime` <VersionAdd>1.1</VersionAdd>|控制如何更新 atime（文件最后被访问的时间）。支持以下模式：<br/><ul><li>`noatime`（默认）：仅在文件创建和主动调用 `SetAttr` 时设置，平时访问与修改文件不影响 atime 值。考虑到更新 atime 需要运行额外的事务，对性能有影响，因此默认关闭。</li><li>`relatime`：仅在 mtime（文件内容修改时间）或 ctime（文件元数据修改时间）比 atime 新，或者 atime 超过 24 小时没有更新时进行更新。</li><li>`strictatime`：持续更新 atime</li></ul>|
 |`--skip-dir-nlink value` <VersionAdd>1.1</VersionAdd>|跳过更新目录 nlink 前的重试次数 (仅用于 TKV, 0 代表永不跳过) (默认：20)|
+|`--skip-dir-mtime` <VersionAdd>1.2</VersionAdd> |如果 mtime 差异小于该值（默认值：100ms），则跳过更新目录的属性。|
 
 #### 元数据缓存参数 {#mount-metadata-cache-options}
 
@@ -665,6 +667,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--io-retries=10`|网络异常时的重试次数 (默认：10)|
 |`--max-uploads=20`|上传并发度，默认为 20。对于粒度为 4M 的写入模式，20 并发已经是很高的默认值，在这样的写入模式下，提高写并发往往需要伴随增大 `--buffer-size`, 详见「[读写缓冲区](../guide/cache.md#buffer-size)」。但面对百 K 级别的小随机写，并发量大的时候很容易产生阻塞等待，造成写入速度恶化。如果无法改善应用写模式，对其进行合并，那么需要考虑采用更高的写并发，避免排队等待。|
 |`--max-deletes=10`|删除对象的连接数 (默认：10)|
+|`--max-stage-write=0`|允许写入暂存文件的线程数量，其他请求将直接上传（此选项仅在启用 'writeback' 模式时有效）（默认值：0）|
 |`--upload-limit=0`|上传带宽限制，单位为 Mbps (默认：0)|
 |`--download-limit=0`|下载带宽限制，单位为 Mbps (默认：0)|
 
@@ -676,9 +679,11 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--prefetch=1`|并发预读 N 个块 (默认：1)。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
 |`--writeback`|后台异步上传对象，默认为 false。阅读[「客户端写缓存」](../guide/cache.md#client-write-cache)了解更多。|
 |`--upload-delay=0`|启用 `--writeback` 后，可以使用该选项控制数据延迟上传到对象存储，默认为 0 秒，相当于写入后立刻上传。该选项也支持 `s`（秒）、`m`（分）、`h`（时）这些单位。如果在等待的时间内数据被应用删除，则无需再上传到对象存储。如果数据只是临时落盘，可以考虑用该选项节约资源。阅读[「客户端写缓存」](../guide/cache.md#client-write-cache)了解更多。|
+|`--upload-hours` <VersionAdd>1.2</VersionAdd> |(开始时间，结束时间) 一天中可以上传延迟块的时间段|
 |`--cache-dir=value`|本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`$HOME/.juicefs/cache` 或 `/var/jfsCache`)。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
 |`--cache-mode value` <VersionAdd>1.1</VersionAdd>|缓存块的文件权限 (默认："0600")|
 |`--cache-size=102400`|缓存对象的总大小；单位为 MiB (默认：102400)。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
+|`--cache-expire=0`|选项中设置的时间长度内未被访问的缓存块将自动清除（值为 0 表示从不过期）（默认值：0 秒）|
 |`--free-space-ratio=0.1`|最小剩余空间比例，默认为 0.1。如果启用了[「客户端写缓存」](../guide/cache.md#client-write-cache)，则该参数还控制着写缓存占用空间。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
 |`--cache-partial-only`|仅缓存随机小块读，默认为 false。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
 |`--verify-cache-checksum=full` <VersionAdd>1.1</VersionAdd>|缓存数据一致性检查级别，启用 Checksum 校验后，生成缓存文件时会对数据切分做 Checksum 并记录于文件末尾，供读缓存时进行校验。支持以下级别：<br/><ul><li>`none`：禁用一致性检查，如果本地数据被篡改，将会读到错误数据；</li><li>`full`（默认）：读完整数据块时才校验，适合顺序读场景；</li><li>`shrink`：对读范围内的切片数据进行校验，校验范围不包含读边界所在的切片（可以理解为开区间），适合随机读场景；</li><li>`extend`：对读范围内的切片数据进行校验，校验范围同时包含读边界所在的切片（可以理解为闭区间），因此将带来一定程度的读放大，适合对正确性有极致要求的随机读场景。</li></ul>|
@@ -738,11 +743,54 @@ juicefs gateway redis://localhost localhost:9000
 | `--background, -d`<VersionAdd>1.2</VersionAdd> | 后台运行 (默认：false)                                                                    |
 |`ADDRESS`|S3 网关地址和监听的端口，例如：`localhost:9000`|
 |`--access-log=path`|访问日志的路径|
-|`--no-banner`|禁用 MinIO 的启动信息 (默认：false)|
+|`--no-banner`| 禁用 MinIO 的启动信息 (默认：false) |
+|`--no-bgjob`| 禁用后台任务（清理、备份等）|
+|`--no-usage-report`| 禁用使用量报告 (默认：false)|
+| `--storage` | 对象存储类型（例如 S3、gs、oss、cos）（默认：file）|
+| `--storage-class` | 当前客户端写入数据的存储类型 |
+|`--bucket`| 自定义对象存储 Endpoint |
 |`--multi-buckets`|使用第一级目录作为存储桶 (默认：false)|
+|`--subdir`| 将子目录挂载为根目录 |
 |`--keep-etag`|保留对象上传时的 ETag (默认：false)|
 |`--umask=022`|新文件和新目录的 umask 的八进制格式 (默认值：022)|
 | `--domain value`<VersionAdd>1.2</VersionAdd>   |虚拟主机样式请求的域|
+| `--download-limit` | 下载带宽限制，单位为 Mbps |
+| `--get-timeout` | 下载对象的超时时间（默认：60秒） |
+| `--free-space-ratio` | 最小剩余空间比例 (默认值: 0.1) |
+| `--heartbeat` | 发送心跳的间隔；建议所有客户端使用相同的心跳值（默认：12秒） |
+| `--io-retries` | 网络异常时的重试次数（默认：10） |
+| `--verify-cache-checksum` | 校验和级别（none、full、shrink、extend）（默认值：full） |
+| `--read-only` | 仅允许查找/读取操作 |
+| `--max-deletes` | 删除对象的连接数（默认：10） |
+| `--max-uploads` | 上传并发度（默认：20） |
+| `--put-timeout` | 上传对象的超时时间（默认：60秒） |
+| `--upload-limit` | 上传带宽限制，单位为 Mbps |
+| `--upload-delay` | 延迟上传块的时间间隔（默认值：0秒）|
+| `--upload-hours` <VersionAdd>1.2</VersionAdd> | (start,end) 一天中可以上传延迟块的起始和结束时间 |
+|`--atime-mode`| 何时更新 atime，支持的模式包括：noatime、relatime、strictatime（默认：noatime）|
+|`--backup-meta`| 自动备份元数据到对象存储的间隔时间（0 表示禁用备份）（默认值：1小时）|
+|`--backup-skip-trash` <VersionAdd>1.2</VersionAdd>|备份元数据时跳过回收站中的文件|
+|`--writeback`| 后台上传块 |
+|`--prefetch`| 并发预读 N 个块（默认：1）|
+|`--buffer-size`| 读/写缓冲区的总大小，单位为 MiB（默认值：300M）|
+|`--cache-mode`| 缓存块的文件权限（默认值：0600）|
+|`--cache-dir`| 缓存的块超过此选项指定的时间未被访问将自动逐出（0 表示永不）（默认值：0s）|
+|`--cache-eviction`| 缓存淘汰策略（none 或 2-random）（默认值：2-random）|
+|`--cache-expire` <VersionAdd>1.2</VersionAdd>| 缓存的块超过此选项指定的时间未被访问将自动过期（0 表示永不）（默认值：0s）|
+|`--cache-partial-only`| 仅缓存随机/小块读取 |
+|`--cache-scan-interval`| 扫描缓存目录重建内存索引的间隔时间（默认值：1小时）|
+|`--cache-size`| 缓存对象的总大小，单位为 MiB（默认值：100G）|
+|`--attr-cache`| 属性缓存过期时间，默认为 1s。|
+|`--entry-cache`| 文件项缓存过期时间，默认为 1s。|
+|`--dir-entry-cache`| 目录项缓存超时时间（默认：1.0秒）|
+|`--open-cache`| 打开的文件的缓存过期时间，默认为 0s，代表关闭该特性。|
+|`--open-cache-limit`| 最大缓存打开文件数（软限制，0表示无限制）（默认值：10000）|
+|`--consul`| 用于注册的 Consul 地址（默认值：127.0.0.1:8500）|
+|`--custom-labels` <VersionAdd>1.2</VersionAdd>| 监控指标自定义标签 |
+|`--object-tag` <VersionAdd>1.2</VersionAdd> | 启用对象标签 API |
+|`--refresh-iam-interval` <VersionAdd>1.2</VersionAdd>| 重新加载网关 IAM 配置的间隔时间（默认值：5分钟）|
+|`--skip-dir-mtime` <VersionAdd>1.2</VersionAdd>|如果目录的 mtime 差异小于此值，则跳过更新目录的属性（默认值：100ms）|
+|`--skip-dir-nlink` | 跳过更新目录 nlink 前的重试次数（默认值：20）|
 
 ### `juicefs webdav` {#webdav}
 

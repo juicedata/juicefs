@@ -18,7 +18,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.1.0
+   1.2.0
 
 COMMANDS:
    ADMIN:
@@ -168,7 +168,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 
 |Items|Description|
 |-|-|
-|`--block-size=4096`|size of block in KiB (default: 4096). 4M is usually a better default value because many object storage services use 4M as their internal block size, thus using the same block size in JuiceFS usually yields better performance.|
+|`--block-size=4M`|size of block in KiB (default: 4M). 4M is usually a better default value because many object storage services use 4M as their internal block size, thus using the same block size in JuiceFS usually yields better performance.|
 |`--compress=none`|compression algorithm, choose from `lz4`, `zstd`, `none` (default). Enabling compression will inevitably affect performance. Among the two supported algorithms, `lz4` offers a better performance, while `zstd` comes with a higher compression ratio, Google for their detailed comparison.|
 |`--encrypt-rsa-key=value`|A path to RSA private key (PEM)|
 |`--encrypt-algo=aes256gcm-rsa`|encrypt algorithm (aes256gcm-rsa, chacha20-rsa) (default: "aes256gcm-rsa")|
@@ -389,6 +389,7 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 |`--keep-secret-key` <VersionAdd>1.1</VersionAdd> |Export object storage authentication information, the default is `false`. Since it is exported in plain text, pay attention to data security when using it. If the export file does not contain object storage authentication information, you need to use [`juicefs config`](#config) to reconfigure object storage authentication information after the subsequent import is completed.|
 |`--fast` <VersionAdd>1.2</VersionAdd>|Use more memory to speedup dump.|
 |`--skip-trash` <VersionAdd>1.2</VersionAdd>|Skip files and directories in trash.|
+|`--threads` <VersionAdd>1.2</VersionAdd>|number of threads to dump metadata. (default: 10)|
 
 ### `juicefs load` {#load}
 
@@ -615,6 +616,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`-d, --background`|run in background (default: false)|
 |`--no-syslog`|disable syslog (default: false)|
 |`--log=path`|path of log file when running in background (default: `$HOME/.juicefs/juicefs.log` or `/var/log/juicefs.log`)|
+|`--force`|force to mount even if the mount point is already mounted by the same filesystem.|
 |`--update-fstab` <VersionAdd>1.1</VersionAdd> |add / update entry in `/etc/fstab`, will create a symlink from `/sbin/mount.juicefs` to JuiceFS executable if not existing (default: false)|
 
 #### FUSE related options {#mount-fuse-options}
@@ -639,6 +641,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--no-bgjob`|Disable background jobs, default to false, which means clients by default carry out background jobs, including:<br/><ul><li>Clean up expired files in Trash (look for `cleanupDeletedFiles`, `cleanupTrash` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))</li><li>Delete slices that's not referenced (look for `cleanupSlices` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))</li><li>Clean up stale client sessions (look for `CleanStaleSessions` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))</li></ul>Note that compaction isn't affected by this option, it happens automatically with file reads and writes, client will check if compaction is in need, and run in background (take Redis for example, look for `compactChunk` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/redis.go)).|
 |`--atime-mode=noatime` <VersionAdd>1.1</VersionAdd> |Control atime (last time the file was accessed) behavior, support the following modes:<br/><ul><li>`noatime` (default): set when the file is created or when `SetAttr` is explicitly called. Accessing and modifying the file will not affect atime, tracking atime comes at a performance cost, so this is the default behavior</li><li>`relatime`: update inode access times relative to mtime (last time when the file data was modified) or ctime (last time when file metadata was changed). Only update atime if atime was earlier than the current mtime or ctime, or the file's atime is more than 1 day old</li><li>`strictatime`: always update atime on access</li></ul>|
 |`--skip-dir-nlink value` <VersionAdd>1.1</VersionAdd> |number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never) (default: 20)|
+|`--skip-dir-mtime` <VersionAdd>1.2</VersionAdd> |skip updating attribute of a directory if the mtime difference is smaller than this value (default: 100ms)|
 
 #### Metadata cache related options {#mount-metadata-cache-options}
 
@@ -664,6 +667,7 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |`--io-retries=10`|number of retries after network failure (default: 10)|
 |`--max-uploads=20`|Upload concurrency, defaults to 20. This is already a reasonably high value for 4M writes, with such write pattern, increasing upload concurrency usually demands higher `--buffer-size`, learn more at [Read/Write Buffer](../guide/cache.md#buffer-size). But for random writes around 100K, 20 might not be enough and can cause congestion at high load, consider using a larger upload concurrency, or try to consolidate small writes in the application end. |
 |`--max-deletes=10`|number of threads to delete objects (default: 10)|
+|`--max-stage-write=0`|number of threads allowed to write staged files, other requests will be uploaded directly (this option is only effective when 'writeback' mode is enabled) (default: 0)|
 |`--upload-limit=0`|bandwidth limit for upload in Mbps (default: 0)|
 |`--download-limit=0`|bandwidth limit for download in Mbps (default: 0)|
 
@@ -675,9 +679,11 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |`--prefetch=1`|prefetch N blocks in parallel (default: 1), see [Client read data cache](../guide/cache.md#client-read-cache)|
 |`--writeback`|upload objects in background (default: false), see [Client write data cache](../guide/cache.md#client-write-cache)|
 |`--upload-delay=0`|When `--writeback` is enabled, you can use this option to add a delay to object storage upload, default to 0, meaning that upload will begin immediately after write. Different units are supported, including `s` (second), `m` (minute), `h` (hour). If files are deleted during this delay, upload will be skipped entirely, when using JuiceFS for temporary storage, use this option to reduce resource usage. Refer to [Client write data cache](../guide/cache.md#client-write-cache).|
+|`--upload-hours` <VersionAdd>1.2</VersionAdd> |(start,end) hour of a day between which the delayed blocks can be uploaded|
 |`--cache-dir=value`|directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `$HOME/.juicefs/cache` or `/var/jfsCache`), see [Client read data cache](../guide/cache.md#client-read-cache)|
 |`--cache-mode value` <VersionAdd>1.1</VersionAdd> |file permissions for cached blocks (default: "0600")|
 |`--cache-size=102400`|size of cached object for read in MiB (default: 102400), see [Client read data cache](../guide/cache.md#client-read-cache)|
+|`--cache-expire=0`|cached blocks not accessed for longer than this option will be automatically evicted (0 means never) (default: 0s)|
 |`--free-space-ratio=0.1`|min free space ratio (default: 0.1), if [Client write data cache](../guide/cache.md#client-write-cache) is enabled, this option also controls write cache size, see [Client read data cache](../guide/cache.md#client-read-cache)|
 |`--cache-partial-only`|cache random/small read only (default: false), see [Client read data cache](../guide/cache.md#client-read-cache)|
 |`--verify-cache-checksum value` <VersionAdd>1.1</VersionAdd> |Checksum level for cache data. After enabled, checksum will be calculated on divided parts of the cache blocks and stored on disks, which are used for verification during reads. The following strategies are supported:<br/><ul><li>`none`: Disable checksum verification, if local cache data is tampered, bad data will be read;</li><li>`full` (default): Perform verification when reading the full block, use this for sequential read scenarios;</li><li>`shrink`: Perform verification on parts that's fully included within the read range, use this for random read scenarios;</li><li>`extend`: Perform verification on parts that fully include the read range, this causes read amplifications and is only used for random read scenarios demanding absolute data integrity.</li></ul>|
@@ -738,10 +744,55 @@ Apart from options listed below, this command shares options with `juicefs mount
 |`--access-log=path`|path for JuiceFS access log.|
 | `--background, -d`<VersionAdd>1.2</VersionAdd> | run in background (default: false)                                                               |
 |`--no-banner`|disable MinIO startup information (default: false)|
+|`--no-bgjob`| disable background jobs (clean-up, backup, etc.) |
+|`--no-usage-report`| do not send usage report (default: false)|
+| `--storage` | object storage type (e.g. S3, gs, oss, cos) (default: file) |
+| `--storage-class` | the storage class for data written by current client |
+|`--bucket`|customized endpoint to access object store|
 |`--multi-buckets`|use top level of directories as buckets (default: false)|
+|`--subdir`| mount a sub-directory as root directory |
 |`--keep-etag`|save the ETag for uploaded objects (default: false)|
 |`--umask=022`|umask for new file and directory in octal (default: 022)|
 | `--domain value`<VersionAdd>1.2</VersionAdd>   |domain for virtual-host-style requests|
+| `--download-limit` | bandwidth limit for download in Mbps |
+| `--get-timeout` | the timeout to download an object (default: 60s) |
+| `--free-space-ratio` | min free space (ratio) (default: 0.1) |
+| `--heartbeat` | interval to send heartbeat; it's recommended that all clients use the same heartbeat value (default: 12s) |
+| `--io-retries` | number of retries after network failure (default: 10) |
+| `--verify-cache-checksum` | checksum level (none, full, shrink, extend) (default: full) |
+| `--read-only` | allow lookup/read operations only |
+| `--max-deletes` | number of threads to delete objects (default: 10) |
+| `--max-uploads` | upload concurrency (default: 20) |
+| `--put-timeout` | the timeout to upload an object (default: 60s) |
+| `--upload-limit` | bandwidth limit for upload in Mbps |
+| `--upload-delay` | delayed duration for uploading blocks (default: 0s) |
+| `--upload-hours` <VersionAdd>1.2</VersionAdd> | (start,end) hour of a day between which the delayed blocks can be uploaded |
+|`--atime-mode`|when to update atime, supported mode includes: noatime, relatime, strictatime (default: noatime)|
+|`--backup-meta`| interval to automatically backup metadata in the object storage (0 means disable backup) (default: 1h) |
+|`--backup-skip-trash` <VersionAdd>1.2</VersionAdd>| skip files in trash when backup metadata |
+|`--writeback`| upload blocks in background |
+|`--prefetch`| prefetch N blocks in parallel (default: 1)|
+|`--buffer-size`| total read/write buffering in MiB (default: 300M)|
+|`--cache-mode`| file permissions for cached blocks (default: 0600) |
+|`--cache-dir`| cached blocks not accessed for longer than this option will be automatically evicted (0 means never) (default: 0s) |
+|`--cache-eviction`| cache eviction policy (none or 2-random) (default: 2-random) |
+|`--cache-expire` <VersionAdd>1.2</VersionAdd>| cached blocks not accessed for longer than this option will be automatically evicted (0 means never) (default: 0s) |
+|`--cache-partial-only`| cache random/small read only |
+|`--cache-scan-interval`| interval to scan cache-dir to rebuild in-memory index (default: 1h) |
+|`--cache-size`| size of cached object for read in MiB (default: 100G) |
+|`--attr-cache`| attributes cache timeout (default: 1.0s) |
+|`--entry-cache`| file entry cache timeout (default: 1.0s) |
+|`--dir-entry-cache`| dir entry cache timeout (default: 1.0s) |
+|`--open-cache`| open file cache timeout (default: 0s) |
+|`--open-cache-limit`| max number of open files to cache (soft limit, 0 means unlimited) (default: 10000) |
+|`--consul`| Consul address to register (default: 127.0.0.1:8500) |
+|`--metrics`| address to export metrics (default: 127.0.0.1:9567) |
+|`--custom-labels` <VersionAdd>1.2</VersionAdd>| custom labels for metrics |
+|`--object-tag` <VersionAdd>1.2</VersionAdd> | enable object tagging API |
+|`--object-lock` <VersionAdd>1.2</VersionAdd> | enable object lock API |
+|`--refresh-iam-interval` <VersionAdd>1.2</VersionAdd>| interval to reload gateway IAM from configuration (default: 5m) |
+|`--skip-dir-mtime` <VersionAdd>1.2</VersionAdd>| skip updating attribute of a directory if the mtime difference is smaller than this value (default: 100ms) |
+|`--skip-dir-nlink` | number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never) (default: 20) |
 
 ### `juicefs webdav` {#webdav}
 
