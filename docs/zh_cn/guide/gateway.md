@@ -136,6 +136,7 @@ $ mc ls juicefs/jfs
 ```shell
 juicefs gateway redis://localhost:6379/1 localhost:9000 --multi-buckets
 ```
+
 <iframe src="//player.bilibili.com/player.html?isOutside=true&aid=1056147201&bvid=BV1LH4y1A73s&cid=1618197063&p=1&autoplay=0" width="100%" height="360" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"> </iframe>
 
 ### 保留 etag
