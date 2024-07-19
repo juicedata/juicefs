@@ -119,7 +119,9 @@ func (g *gs) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCl
 func (g *gs) Put(key string, data io.Reader, getters ...AttrGetter) error {
 	writer := g.client.Bucket(g.bucket).Object(key).NewWriter(ctx)
 	writer.StorageClass = g.sc
-	_, err := io.Copy(writer, data)
+	buf := bufPool.Get().(*[]byte)
+	defer bufPool.Put(buf)
+	_, err := io.CopyBuffer(writer, data, *buf)
 	if err != nil {
 		return err
 	}
