@@ -946,6 +946,8 @@ juicefs warmup -f /tmp/filelist.txt
 |`--file=value, -f value`|指定一个包含一组路径的文件（每一行为一个文件路径）。|
 |`--threads=50, -p 50`|并发的工作线程数，默认 50。如果带宽不足导致下载失败，需要减少并发度，控制下载速度。|
 |`--background, -b`|后台运行（默认：false）|
+|`--check` <VersionAdd>1.2</VersionAdd> | 检查数据块是否已缓存 |
+|`--evict` <VersionAdd>1.2</VersionAdd> | 逐出已缓存的块 |
 
 ### `juicefs rmr` {#rmr}
 
@@ -1005,8 +1007,14 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |项 | 说明|
 |-|-|
 |`--start=KEY, -s KEY, --end=KEY, -e KEY`|提供 KEY 范围，来指定对象存储的 List 范围。|
+|`--end KEY, -e KEY`| 同步的最后一个 `KEY` |
 |`--exclude=PATTERN`|排除匹配 `PATTERN` 的 Key。|
 |`--include=PATTERN`|不排除匹配 `PATTERN` 的 Key，需要与 `--exclude` 选项配合使用。|
+|`--match-full-path` <VersionAdd>1.2</VersionAdd>|匹配完整路径（默认值：false）|
+|`--max-size SIZE` <VersionAdd>1.2</VersionAdd>|跳过大小大于 SIZE 的文件|
+|`--min-size SIZE` <VersionAdd>1.2</VersionAdd>|跳过大小小于 SIZE 的文件|
+|`--max-age=DURATION` <VersionAdd>1.2</VersionAdd>|跳过早于 DURATION 的文件|
+|`--min-age=DURATION` <VersionAdd>1.2</VersionAdd>|跳过晚于 DURATION 的文件|
 |`--limit=-1`|限制将要处理的对象的数量，默认为 -1 表示不限制|
 |`--update, -u`|当源文件更新时（`mtime` 更新），覆盖已存在的文件，默认为 false。|
 |`--force-update, -f`|强制覆盖已存在的文件，默认为 false。|
@@ -1020,6 +1028,7 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--dirs`|同步目录（包括空目录）。|
 |`--perms`|保留权限设置，默认为 false。|
 |`--links, -l`|将符号链接复制为符号链接，默认为 false，此时会查找并同步符号链接所指向的文件。|
+|`--inplace` <VersionAdd>1.2</VersionAdd>|直接将文件放置到目标位置，而不是先下载到临时文件再原子性地重命名（默认值：false）|
 |`--delete-src, --deleteSrc`|如果目标存储已经存在，删除源存储的对象。与 rsync 不同，为保数据安全，首次执行时不会删除源存储文件，只有拷贝成功后再次运行时，扫描确认目标存储已经存在相关文件，才会删除源存储文件。|
 |`--delete-dst, --deleteDst`|删除目标存储下的不相关对象。|
 |`--check-all`|校验源路径和目标路径中所有文件的数据完整性，默认为 false。校验方式是基于字节流对比，因此也将带来相应的开销。|

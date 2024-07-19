@@ -949,6 +949,8 @@ juicefs warmup -f /tmp/filelist.txt
 |`--file=path, -f path`|file containing a list of paths (each line is a file path)|
 |`--threads=50, -p 50`|number of concurrent workers, default to 50. Reduce this number in low bandwidth environment to avoid download timeouts|
 |`--background, -b`|run in background (default: false)|
+|`--check` <VersionAdd>1.2</VersionAdd> | check whether the data blocks are cached or not |
+|`--evict` <VersionAdd>1.2</VersionAdd> | evict cached blocks |
 
 ### `juicefs rmr` {#rmr}
 
@@ -1008,8 +1010,14 @@ In which:
 |Items|Description|
 |-|-|
 |`--start=KEY, -s KEY, --end=KEY, -e KEY`|Provide object storage key range for syncing.|
+|`--end KEY, -e KEY`| the last `KEY` to sync |
 |`--exclude=PATTERN`|Exclude keys matching PATTERN.|
 |`--include=PATTERN`|Include keys matching PATTERN, need to be used with `--exclude`.|
+|`--match-full-path` <VersionAdd>1.2</VersionAdd>|match filters again the full path (default: false)|
+|`--max-size SIZE` <VersionAdd>1.2</VersionAdd>|skip files larger than SIZE|
+|`--min-size SIZE` <VersionAdd>1.2</VersionAdd>|skip files smaller than SIZE|
+|`--max-age=DURATION` <VersionAdd>1.2</VersionAdd>|skip files older than DURATION|
+|`--min-age=DURATION` <VersionAdd>1.2</VersionAdd>|skip files newer than DURATION|
 |`--limit=-1`|Limit the number of objects that will be processed, default to -1 which means unlimited.|
 |`--update, -u`|Update existing files if the source files' `mtime` is newer, default to false.|
 |`--force-update, -f`|Always update existing file, default to false.|
@@ -1023,6 +1031,7 @@ In which:
 |`--dirs`|Sync empty directories as well.|
 |`--perms`|Preserve permissions, default to false.|
 |`--links, -l`|Copy symlinks as symlinks default to false.|
+|`--inplace` <VersionAdd>1.2</VersionAdd>|put directly to destination file instead of atomic download to temp/rename (default: false)|
 |`--delete-src, --deleteSrc`|Delete objects that already exist in destination. Different from rsync, files won't be deleted at the first run, instead they will be deleted at the next run, after files are successfully copied to the destination.|
 |`--delete-dst, --deleteDst`|Delete extraneous objects from destination.|
 |`--check-all`|Verify the integrity of all files in source and destination, default to false. Comparison is done on byte streams, which comes at a performance cost.|
@@ -1046,6 +1055,13 @@ In which:
 |-|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 |`--manager-addr=ADDR`| The listening address of the Manager node in distributed synchronization mode in the format: `<IP>:[port]`. If not specified, it listens on a random port. If this option is omitted, it listens on a random local IPv4 address and a random port. |
 |`--worker=ADDR,ADDR`| Worker node addresses used in distributed syncing, comma separated.                                                                                                                                                               |
+
+#### Metrics related options {#sync-metircs-related-options}
+
+|Items|Description|
+|-|-|
+|`--metrics value` <VersionAdd>1.2</VersionAdd>|address to export metrics (default: "127.0.0.1:9567")|
+|`--consul value` <VersionAdd>1.2</VersionAdd>|Consul address to register (default: "127.0.0.1:8500")|
 
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 
