@@ -964,6 +964,7 @@ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage=s3 http
 |`--storage=file`|Object storage type (e.g. `s3`, `gs`, `oss`, `cos`) (default: `file`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)|
 |`--access-key=value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
 |`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
+|`--session-token value`|session token for object storage|
 |`--block-size=4096`|size of each IO block in KiB (default: 4096)|
 |`--big-object-size=1024`|size of each big object in MiB (default: 1024)|
 |`--small-object-size=128`|size of each small object in KiB (default: 128)|
@@ -999,8 +1000,8 @@ juicefs warmup -f /tmp/filelist.txt
 |`--file=path, -f path`|file containing a list of paths (each line is a file path)|
 |`--threads=50, -p 50`|number of concurrent workers, default to 50. Reduce this number in low bandwidth environment to avoid download timeouts|
 |`--background, -b`|run in background (default: false)|
-|`--check` <VersionAdd>1.2</VersionAdd> | check whether the data blocks are cached or not |
 |`--evict` <VersionAdd>1.2</VersionAdd> | evict cached blocks |
+|`--check` <VersionAdd>1.2</VersionAdd> | check whether the data blocks are cached or not |
 
 ### `juicefs rmr` {#rmr}
 
@@ -1101,10 +1102,10 @@ In which:
 
 #### Cluster related options {#sync-cluster-related-options}
 
-|Items| Description                                                                                                                                                                                                                       |
-|-|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|Items| Description|
+|-|-|
 |`--manager-addr=ADDR`| The listening address of the Manager node in distributed synchronization mode in the format: `<IP>:[port]`. If not specified, it listens on a random port. If this option is omitted, it listens on a random local IPv4 address and a random port. |
-|`--worker=ADDR,ADDR`| Worker node addresses used in distributed syncing, comma separated.                                                                                                                                                               |
+|`--worker=ADDR,ADDR`| Worker node addresses used in distributed syncing, comma separated. |
 
 #### Metrics related options {#sync-metircs-related-options}
 

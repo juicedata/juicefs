@@ -964,6 +964,7 @@ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage=s3 http
 |`--storage=file`|对象存储类型 (例如 `s3`、`gs`、`oss`、`cos`) (默认：`file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
 |`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
+|`--session-token value`|对象存储的会话令牌|
 |`--block-size=4096`|每个 IO 块的大小（以 KiB 为单位）（默认值：4096）|
 |`--big-object-size=1024`|大文件的大小（以 MiB 为单位）（默认值：1024）|
 |`--small-object-size=128`|每个小文件的大小（以 KiB 为单位）（默认值：128）|
@@ -999,8 +1000,8 @@ juicefs warmup -f /tmp/filelist.txt
 |`--file=value, -f value`|指定一个包含一组路径的文件（每一行为一个文件路径）。|
 |`--threads=50, -p 50`|并发的工作线程数，默认 50。如果带宽不足导致下载失败，需要减少并发度，控制下载速度。|
 |`--background, -b`|后台运行（默认：false）|
-|`--check` <VersionAdd>1.2</VersionAdd> | 检查数据块是否已缓存 |
 |`--evict` <VersionAdd>1.2</VersionAdd> | 逐出已缓存的块 |
+|`--check` <VersionAdd>1.2</VersionAdd> | 检查数据块是否已缓存 |
 
 ### `juicefs rmr` {#rmr}
 
@@ -1105,6 +1106,16 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |-|-|
 |`--manager-addr=ADDR`| 分布式同步模式中，Manager 节点的监听地址，格式：`<IP>:[port]`，如果不写端口，则监听随机端口。如果没有该参数，则监听本机随机的 IPv4 地址与随机端口。|
 |`--worker=ADDR,ADDR`| 分布式同步模式中，工作节点列表，使用逗号分隔。|
+
+#### 监控相关参数 {#sync-metrics-related-options}
+
+|项 | 说明|
+|-|-|
+|项 | 说明|
+|-|-|
+|`--metrics value` <VersionAdd>1.2</VersionAdd>|导出指标的地址（默认值："127.0.0.1:9567"）|
+|`--consul value` <VersionAdd>1.2</VersionAdd>|用于注册的 Consul 地址（默认值："127.0.0.1:8500"）|
+
 
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 
