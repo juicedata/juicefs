@@ -749,16 +749,16 @@ juicefs gateway redis://localhost localhost:9000
 |`--umask=022`|新文件和新目录的 umask 的八进制格式 (默认值：022)|
 |`--object-tag` <VersionAdd>1.2</VersionAdd> | 启用对象标签 API |
 | `--domain value`<VersionAdd>1.2</VersionAdd>   |虚拟主机样式请求的域|
-|`--refresh-iam-interval` <VersionAdd>1.2</VersionAdd>| 重新加载网关 IAM 配置的间隔时间（默认值：5分钟）|
+|`--refresh-iam-interval` <VersionAdd>1.2</VersionAdd>| 重新加载网关 IAM 配置的间隔时间（默认值：5 分钟）|
 
 #### 元数据相关选项 {#gateway-metadata-options}
 
 |项 | 说明|
 |-|-|
 |`--subdir`| 将子目录挂载为根目录 |
-|`--backup-meta`| 自动备份元数据到对象存储的间隔时间（0 表示禁用备份）（默认值：1小时）|
+|`--backup-meta`| 自动备份元数据到对象存储的间隔时间（0 表示禁用备份）（默认值：1 小时）|
 |`--backup-skip-trash` <VersionAdd>1.2</VersionAdd>|备份元数据时跳过回收站中的文件|
-| `--heartbeat` | 发送心跳的间隔；建议所有客户端使用相同的心跳值（默认：12秒） |
+| `--heartbeat` | 发送心跳的间隔；建议所有客户端使用相同的心跳值（默认：12 秒） |
 | `--read-only` | 仅允许查找/读取操作 |
 |`--no-bgjob`| 禁用后台任务（清理、备份等）|
 |`--atime-mode`| 何时更新 atime，支持的模式包括：noatime、relatime、strictatime（默认：noatime）|
@@ -771,9 +771,9 @@ juicefs gateway redis://localhost localhost:9000
 |-|-|
 |`--attr-cache`| 属性缓存过期时间，默认为 1s。|
 |`--entry-cache`| 文件项缓存过期时间，默认为 1s。|
-|`--dir-entry-cache`| 目录项缓存超时时间（默认：1.0秒）|
+|`--dir-entry-cache`| 目录项缓存超时时间（默认：1.0 秒）|
 |`--open-cache`| 打开的文件的缓存过期时间，默认为 0s，代表关闭该特性。|
-|`--open-cache-limit`| 最大缓存打开文件数（软限制，0表示无限制）（默认值：10000）|
+|`--open-cache-limit`| 最大缓存打开文件数（软限制，0 表示无限制）（默认值：10000）|
 
 #### 数据存储参数 {#gateway-data-storage-options}
 
@@ -782,8 +782,8 @@ juicefs gateway redis://localhost localhost:9000
 | `--storage` | 对象存储类型（例如 S3、gs、oss、cos）（默认：file）|
 |`--bucket`| 自定义对象存储 Endpoint |
 | `--storage-class` | 当前客户端写入数据的存储类型 |
-| `--get-timeout` | 下载对象的超时时间（默认：60秒） |
-| `--put-timeout` | 上传对象的超时时间（默认：60秒） |
+| `--get-timeout` | 下载对象的超时时间（默认：60 秒） |
+| `--put-timeout` | 上传对象的超时时间（默认：60 秒） |
 | `--io-retries` | 网络异常时的重试次数（默认：10） |
 | `--max-uploads` | 上传并发度（默认：20） |
 | `--max-stage-write` <VersionAdd>1.2</VersionAdd> | 允许写入暂存文件的线程数量，其他请求将直接上传（此选项仅在启用 'writeback' 模式时有效）（默认值：0） |
@@ -798,16 +798,16 @@ juicefs gateway redis://localhost localhost:9000
 |`--buffer-size`| 读/写缓冲区的总大小，单位为 MiB（默认值：300M）|
 |`--prefetch`| 并发预读 N 个块（默认：1）|
 |`--writeback`| 后台上传块 |
-| `--upload-delay` | 延迟上传块的时间间隔（默认值：0秒）|
+| `--upload-delay` | 延迟上传块的时间间隔（默认值：0 秒）|
 | `--upload-hours` <VersionAdd>1.2</VersionAdd> | (start,end) 一天中可以上传延迟块的起始和结束时间 |
 |`--cache-dir`| 缓存的块超过此选项指定的时间未被访问将自动逐出（0 表示永不）（默认值：0s）|
 |`--cache-mode`| 缓存块的文件权限（默认值：0600）|
 |`--cache-size`| 缓存对象的总大小，单位为 MiB（默认值：100G）|
-| `--free-space-ratio` | 最小剩余空间比例 (默认值: 0.1) |
+| `--free-space-ratio` | 最小剩余空间比例 (默认值：0.1) |
 |`--cache-partial-only`| 仅缓存随机/小块读取 |
 | `--verify-cache-checksum` | 校验和级别（none、full、shrink、extend）（默认值：full） |
 |`--cache-eviction`| 缓存淘汰策略（none 或 2-random）（默认值：2-random）|
-|`--cache-scan-interval`| 扫描缓存目录重建内存索引的间隔时间（默认值：1小时）|
+|`--cache-scan-interval`| 扫描缓存目录重建内存索引的间隔时间（默认值：1 小时）|
 |`--cache-expire` <VersionAdd>1.2</VersionAdd>| 缓存的块超过此选项指定的时间未被访问将自动过期（0 表示永不）（默认值：0s）|
 
 #### 监控相关参数 {#gateway-metrics-options}
@@ -853,9 +853,9 @@ juicefs webdav redis://localhost localhost:9007
 |项 | 说明|
 |-|-|
 |`--subdir`| 将子目录挂载为根目录 |
-|`--backup-meta`| 自动备份元数据到对象存储的间隔时间（0 表示禁用备份）（默认值：1小时）|
+|`--backup-meta`| 自动备份元数据到对象存储的间隔时间（0 表示禁用备份）（默认值：1 小时）|
 |`--backup-skip-trash` <VersionAdd>1.2</VersionAdd>| 备份元数据时跳过回收站中的文件 |
-| `--heartbeat` | 发送心跳的间隔；建议所有客户端使用相同的心跳值（默认：12秒） |
+| `--heartbeat` | 发送心跳的间隔；建议所有客户端使用相同的心跳值（默认：12 秒） |
 | `--read-only` | 仅允许查找/读取操作 |
 |`--no-bgjob`| 禁用后台任务（清理、备份等）|
 |`--atime-mode`| 何时更新 atime，支持的模式包括：noatime、relatime、strictatime（默认：noatime）|
@@ -868,9 +868,9 @@ juicefs webdav redis://localhost localhost:9007
 |-|-|
 |`--attr-cache`| 属性缓存过期时间，默认为 1s。|
 |`--entry-cache`| 文件项缓存过期时间，默认为 1s。|
-|`--dir-entry-cache`| 目录项缓存超时时间（默认：1.0秒）|
+|`--dir-entry-cache`| 目录项缓存超时时间（默认：1.0 秒）|
 |`--open-cache`| 打开的文件的缓存过期时间，默认为 0s，代表关闭该特性。|
-|`--open-cache-limit`| 最大缓存打开文件数（软限制，0表示无限制）（默认值：10000）|
+|`--open-cache-limit`| 最大缓存打开文件数（软限制，0 表示无限制）（默认值：10000）|
 
 #### 数据存储参数 {#webdav-data-storage-options}
 
@@ -879,8 +879,8 @@ juicefs webdav redis://localhost localhost:9007
 | `--storage` | 对象存储类型（例如 S3、gs、oss、cos）（默认：file）|
 |`--bucket`| 自定义对象存储 Endpoint |
 | `--storage-class` | 当前客户端写入数据的存储类型 |
-| `--get-timeout` | 下载对象的超时时间（默认：60秒） |
-| `--put-timeout` | 上传对象的超时时间（默认：60秒） |
+| `--get-timeout` | 下载对象的超时时间（默认：60 秒） |
+| `--put-timeout` | 上传对象的超时时间（默认：60 秒） |
 | `--io-retries` | 网络异常时的重试次数（默认：10） |
 | `--max-uploads` | 上传并发度（默认：20） |
 | `--max-stage-write` <VersionAdd>1.2</VersionAdd> | 允许写入暂存文件的线程数量，其他请求将直接上传（此选项仅在启用 'writeback' 模式时有效）（默认值：0） |
@@ -895,16 +895,16 @@ juicefs webdav redis://localhost localhost:9007
 |`--buffer-size`| 读/写缓冲区的总大小，单位为 MiB（默认值：300M）|
 |`--prefetch`| 并发预读 N 个块（默认：1）|
 |`--writeback`| 后台上传块 |
-| `--upload-delay` | 延迟上传块的时间间隔（默认值：0秒） |
+| `--upload-delay` | 延迟上传块的时间间隔（默认值：0 秒） |
 | `--upload-hours` <VersionAdd>1.2</VersionAdd> | (start,end) 一天中可以上传延迟块的起始和结束时间 |
 |`--cache-dir`| 缓存的块超过此选项指定的时间未被访问将自动逐出（0 表示永不）（默认值：0s）|
 |`--cache-mode`| 缓存块的文件权限（默认值：0600）|
 |`--cache-size`| 缓存对象的总大小，单位为 MiB（默认值：100G）|
-| `--free-space-ratio` | 最小剩余空间比例 (默认值: 0.1) |
+| `--free-space-ratio` | 最小剩余空间比例 (默认值：0.1) |
 |`--cache-partial-only`| 仅缓存随机/小块读取 |
 | `--verify-cache-checksum` | 校验和级别（none、full、shrink、extend）（默认值：full） |
 |`--cache-eviction`| 缓存淘汰策略（none 或 2-random）（默认值：2-random）|
-|`--cache-scan-interval`| 扫描缓存目录重建内存索引的间隔时间（默认值：1小时）|
+|`--cache-scan-interval`| 扫描缓存目录重建内存索引的间隔时间（默认值：1 小时）|
 |`--cache-expire` <VersionAdd>1.2</VersionAdd>| 缓存的块超过此选项指定的时间未被访问将自动过期（0 表示永不）（默认值：0s）|
 
 #### 监控相关参数 {#webdav-metrics-options}
