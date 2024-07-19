@@ -233,11 +233,11 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--capacity value`|limit for space in GiB|
 |`--inodes value`|limit for number of inodes|
 |`--trash-days value`|number of days after which removed files will be permanently deleted|
+|`--enable-acl` <VersionAdd>1.2</VersionAdd>|enable POSIX ACL(irreversible), min-client-version will be set to v1.2|
 |`--encrypt-secret`|encrypt the secret key if it was previously stored in plain format (default: false)|
 |`--min-client-version value` <VersionAdd>1.1</VersionAdd> |minimum client version allowed to connect|
 |`--max-client-version value` <VersionAdd>1.1</VersionAdd> |maximum client version allowed to connect|
 |`--dir-stats` <VersionAdd>1.1</VersionAdd> |enable dir stats, which is necessary for fast summary and dir quota (default: false)|
-|`--enable-acl` <VersionAdd>1.2</VersionAdd>|enable POSIX ACL(irreversible), min-client-version will be set to v1.2|
 
 ### `juicefs quota` <VersionAdd>1.1</VersionAdd> {#quota}
 
@@ -319,8 +319,8 @@ juicefs gc redis://localhost --delete
 
 |Items|Description|
 |-|-|
-|`--delete`|delete leaked objects (default: false)|
 |`--compact`|compact all chunks with more than 1 slices (default: false).|
+|`--delete`|delete leaked objects (default: false)|
 |`--threads=10`|number of threads to delete leaked objects (default: 10)|
 
 ### `juicefs fsck` {#fsck}
@@ -387,9 +387,9 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 |`FILE`|Export file path, if not specified, it will be exported to standard output. If the filename ends with `.gz`, it will be automatically compressed.|
 |`--subdir=path`|Only export metadata for the specified subdirectory.|
 |`--keep-secret-key` <VersionAdd>1.1</VersionAdd> |Export object storage authentication information, the default is `false`. Since it is exported in plain text, pay attention to data security when using it. If the export file does not contain object storage authentication information, you need to use [`juicefs config`](#config) to reconfigure object storage authentication information after the subsequent import is completed.|
+|`--threads` <VersionAdd>1.2</VersionAdd>|number of threads to dump metadata. (default: 10)|
 |`--fast` <VersionAdd>1.2</VersionAdd>|Use more memory to speedup dump.|
 |`--skip-trash` <VersionAdd>1.2</VersionAdd>|Skip files and directories in trash.|
-|`--threads` <VersionAdd>1.2</VersionAdd>|number of threads to dump metadata. (default: 10)|
 
 ### `juicefs load` {#load}
 
@@ -537,8 +537,8 @@ juicefs debug --out-dir=/var/log --limit=1000 /mnt/jfs
 |Items|Description|
 |-|-|
 |`--out-dir=./debug/`|The output directory of the results, automatically created if the directory does not exist (default: `./debug/`)|
-|`--stats-sec=5`|The number of seconds to sample .stats file (default: 5)|
 |`--limit=value`|The number of log entries collected, from newest to oldest, if not specified, all entries will be collected|
+|`--stats-sec=5`|The number of seconds to sample .stats file (default: 5)|
 |`--trace-sec=5`|The number of seconds to sample trace metrics (default: 5)|
 |`--profile-sec=30`|The number of seconds to sample profile metrics (default: 30)|
 
@@ -660,14 +660,14 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |Items|Description|
 |-|-|
 |`--storage=file`|Object storage type (e.g. `s3`, `gs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types).|
-|`--storage-class value` <VersionAdd>1.1</VersionAdd> |the storage class for data written by current client|
 |`--bucket=value`|customized endpoint to access object storage|
+|`--storage-class value` <VersionAdd>1.1</VersionAdd> |the storage class for data written by current client|
 |`--get-timeout=60`|the max number of seconds to download an object (default: 60)|
 |`--put-timeout=60`|the max number of seconds to upload an object (default: 60)|
 |`--io-retries=10`|number of retries after network failure (default: 10)|
 |`--max-uploads=20`|Upload concurrency, defaults to 20. This is already a reasonably high value for 4M writes, with such write pattern, increasing upload concurrency usually demands higher `--buffer-size`, learn more at [Read/Write Buffer](../guide/cache.md#buffer-size). But for random writes around 100K, 20 might not be enough and can cause congestion at high load, consider using a larger upload concurrency, or try to consolidate small writes in the application end. |
-|`--max-deletes=10`|number of threads to delete objects (default: 10)|
 |`--max-stage-write=0`|number of threads allowed to write staged files, other requests will be uploaded directly (this option is only effective when 'writeback' mode is enabled) (default: 0)|
+|`--max-deletes=10`|number of threads to delete objects (default: 10)|
 |`--upload-limit=0`|bandwidth limit for upload in Mbps (default: 0)|
 |`--download-limit=0`|bandwidth limit for download in Mbps (default: 0)|
 
@@ -683,12 +683,12 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |`--cache-dir=value`|directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `$HOME/.juicefs/cache` or `/var/jfsCache`), see [Client read data cache](../guide/cache.md#client-read-cache)|
 |`--cache-mode value` <VersionAdd>1.1</VersionAdd> |file permissions for cached blocks (default: "0600")|
 |`--cache-size=102400`|size of cached object for read in MiB (default: 102400), see [Client read data cache](../guide/cache.md#client-read-cache)|
-|`--cache-expire=0`|cached blocks not accessed for longer than this option will be automatically evicted (0 means never) (default: 0s)|
 |`--free-space-ratio=0.1`|min free space ratio (default: 0.1), if [Client write data cache](../guide/cache.md#client-write-cache) is enabled, this option also controls write cache size, see [Client read data cache](../guide/cache.md#client-read-cache)|
 |`--cache-partial-only`|cache random/small read only (default: false), see [Client read data cache](../guide/cache.md#client-read-cache)|
 |`--verify-cache-checksum value` <VersionAdd>1.1</VersionAdd> |Checksum level for cache data. After enabled, checksum will be calculated on divided parts of the cache blocks and stored on disks, which are used for verification during reads. The following strategies are supported:<br/><ul><li>`none`: Disable checksum verification, if local cache data is tampered, bad data will be read;</li><li>`full` (default): Perform verification when reading the full block, use this for sequential read scenarios;</li><li>`shrink`: Perform verification on parts that's fully included within the read range, use this for random read scenarios;</li><li>`extend`: Perform verification on parts that fully include the read range, this causes read amplifications and is only used for random read scenarios demanding absolute data integrity.</li></ul>|
 |`--cache-eviction value` <VersionAdd>1.1</VersionAdd> |cache eviction policy (none or 2-random) (default: "2-random")|
 |`--cache-scan-interval value` <VersionAdd>1.1</VersionAdd> |interval (in seconds) to scan cache-dir to rebuild in-memory index (default: "3600")|
+|`--cache-expire=0`|cached blocks not accessed for longer than this option will be automatically evicted (0 means never) (default: 0s)|
 
 #### Metrics related options {#mount-metrics-options}
 

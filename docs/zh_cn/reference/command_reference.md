@@ -233,11 +233,11 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--capacity value`|容量配额，单位为 GiB|
 |`--inodes value`|文件数配额|
 |`--trash-days value`|文件被自动清理前在回收站内保留的天数|
+|`--enable-acl` <VersionAdd>1.2</VersionAdd>|开启 POSIX ACL(不支持关闭), 同时允许连接的最小客户端版本会提升到 v1.2|
 |`--encrypt-secret`|如果密钥之前以原格式存储，则加密密钥 (默认值：false)|
 |`--min-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最小客户端版本|
 |`--max-client-version value` <VersionAdd>1.1</VersionAdd>|允许连接的最大客户端版本|
 |`--dir-stats` <VersionAdd>1.1</VersionAdd>|开启目录统计，这是快速汇总和目录配额所必需的 (默认值：false)|
-|`--enable-acl` <VersionAdd>1.2</VersionAdd>|开启 POSIX ACL(不支持关闭), 同时允许连接的最小客户端版本会提升到 v1.2|
 
 ### `juicefs quota` <VersionAdd>1.1</VersionAdd> {#quota}
 
@@ -319,8 +319,8 @@ juicefs gc redis://localhost --delete
 
 |项 | 说明|
 |-|-|
-|`--delete`|删除泄漏的对象，以及因不完整的 `clone` 命令而产生泄漏的元数据。|
 |`--compact`|对所有文件执行碎片合并。|
+|`--delete`|删除泄漏的对象，以及因不完整的 `clone` 命令而产生泄漏的元数据。|
 |`--threads=10`|并发线程数，默认为 10。|
 
 ### `juicefs fsck` {#fsck}
@@ -387,9 +387,9 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 |`FILE`|导出文件路径，如果不指定，则会导出到标准输出。如果文件名以 `.gz` 结尾，将会自动压缩。|
 |`--subdir=path`|只导出指定子目录的元数据。|
 |`--keep-secret-key` <VersionAdd>1.1</VersionAdd>|导出对象存储认证信息，默认为 `false`。由于是明文导出，使用时注意数据安全。如果导出文件不包含对象存储认证信息，后续的导入完成后，需要用 [`juicefs config`](#config) 重新配置对象存储认证信息。|
+|`--threads` <VersionAdd>1.2</VersionAdd>|并发线程数，默认 10。|
 |`--fast` <VersionAdd>1.2</VersionAdd>|使用更多内存来加速导出。|
 |`--skip-trash` <VersionAdd>1.2</VersionAdd>|跳过回收站中的文件和目录。|
-|`--threads` <VersionAdd>1.2</VersionAdd>|并发线程数，默认 10。|
 
 ### `juicefs load` {#load}
 
@@ -666,8 +666,8 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--put-timeout=60`|上传一个对象的超时时间；单位为秒 (默认：60)|
 |`--io-retries=10`|网络异常时的重试次数 (默认：10)|
 |`--max-uploads=20`|上传并发度，默认为 20。对于粒度为 4M 的写入模式，20 并发已经是很高的默认值，在这样的写入模式下，提高写并发往往需要伴随增大 `--buffer-size`, 详见「[读写缓冲区](../guide/cache.md#buffer-size)」。但面对百 K 级别的小随机写，并发量大的时候很容易产生阻塞等待，造成写入速度恶化。如果无法改善应用写模式，对其进行合并，那么需要考虑采用更高的写并发，避免排队等待。|
-|`--max-deletes=10`|删除对象的连接数 (默认：10)|
 |`--max-stage-write=0`|允许写入暂存文件的线程数量，其他请求将直接上传（此选项仅在启用 'writeback' 模式时有效）（默认值：0）|
+|`--max-deletes=10`|删除对象的连接数 (默认：10)|
 |`--upload-limit=0`|上传带宽限制，单位为 Mbps (默认：0)|
 |`--download-limit=0`|下载带宽限制，单位为 Mbps (默认：0)|
 
@@ -683,12 +683,12 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--cache-dir=value`|本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`$HOME/.juicefs/cache` 或 `/var/jfsCache`)。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
 |`--cache-mode value` <VersionAdd>1.1</VersionAdd>|缓存块的文件权限 (默认："0600")|
 |`--cache-size=102400`|缓存对象的总大小；单位为 MiB (默认：102400)。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
-|`--cache-expire=0`|选项中设置的时间长度内未被访问的缓存块将自动清除（值为 0 表示从不过期）（默认值：0 秒）|
 |`--free-space-ratio=0.1`|最小剩余空间比例，默认为 0.1。如果启用了[「客户端写缓存」](../guide/cache.md#client-write-cache)，则该参数还控制着写缓存占用空间。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
 |`--cache-partial-only`|仅缓存随机小块读，默认为 false。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
 |`--verify-cache-checksum=full` <VersionAdd>1.1</VersionAdd>|缓存数据一致性检查级别，启用 Checksum 校验后，生成缓存文件时会对数据切分做 Checksum 并记录于文件末尾，供读缓存时进行校验。支持以下级别：<br/><ul><li>`none`：禁用一致性检查，如果本地数据被篡改，将会读到错误数据；</li><li>`full`（默认）：读完整数据块时才校验，适合顺序读场景；</li><li>`shrink`：对读范围内的切片数据进行校验，校验范围不包含读边界所在的切片（可以理解为开区间），适合随机读场景；</li><li>`extend`：对读范围内的切片数据进行校验，校验范围同时包含读边界所在的切片（可以理解为闭区间），因此将带来一定程度的读放大，适合对正确性有极致要求的随机读场景。</li></ul>|
 |`--cache-eviction value` <VersionAdd>1.1</VersionAdd>|缓存逐出策略 (none 或 2-random) (默认值："2-random")|
 |`--cache-scan-interval value` <VersionAdd>1.1</VersionAdd>|扫描缓存目录重建内存索引的间隔 (以秒为单位) (默认："3600")|
+|`--cache-expire=0`|选项中设置的时间长度内未被访问的缓存块将自动清除（值为 0 表示从不过期）（默认值：0 秒）|
 
 #### 监控相关参数 {#mount-metrics-options}
 
@@ -1056,6 +1056,13 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 
 快速在同一挂载点下克隆目录或者文件，只拷贝元数据但不拷贝数据块，因此拷贝速度非常快。更多介绍详见[「克隆文件或目录」](../guide/clone.md)。
+
+#### 监控相关参数 {#sync-metircs-related-options}
+
+|Items|Description|
+|-|-|
+| `--metrics value` <VersionAdd>1.2</VersionAdd> | 导出指标的地址（默认值："127.0.0.1:9567"） |
+| `--consul value` <VersionAdd>1.2</VersionAdd> | 用于注册的 Consul 地址（默认值："127.0.0.1:8500"） |
 
 #### 概览
 
