@@ -218,9 +218,11 @@ func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 		}
 	}
 	eno := n.fs.Mkdir(mctx, n.path(bucket), 0777, n.gConf.Umask)
-	metadata := minio.NewBucketMetadata(bucket)
-	if err := metadata.Save(ctx, n); err != nil {
-		return err
+	if eno == 0 {
+		metadata := minio.NewBucketMetadata(bucket)
+		if err := metadata.Save(ctx, n); err != nil {
+			return err
+		}
 	}
 	return jfsToObjectErr(ctx, eno, bucket)
 }
@@ -1200,6 +1202,9 @@ func (j *jfsFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (
 }
 
 func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeout *minio.DynamicTimeout) (context.Context, error) {
+	if os.Getenv("JUICEFS_META_READ_ONLY") != "" {
+		return ctx, nil
+	}
 	if j.inode == 0 {
 		logger.Warnf("failed to get lock")
 		return ctx, nil
@@ -1254,7 +1259,7 @@ func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeou
 }
 
 func (j *jfsFLock) Unlock() {
-	if j.inode == 0 {
+	if j.inode == 0 || os.Getenv("JUICEFS_META_READ_ONLY") != "" {
 		return
 	}
 	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
@@ -1268,7 +1273,7 @@ func (j *jfsFLock) GetRLock(ctx context.Context, timeout *minio.DynamicTimeout) 
 }
 
 func (j *jfsFLock) RUnlock() {
-	if j.inode == 0 {
+	if j.inode == 0 || os.Getenv("JUICEFS_META_READ_ONLY") != "" {
 		return
 	}
 	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
@@ -1278,6 +1283,9 @@ func (j *jfsFLock) RUnlock() {
 }
 
 func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker {
+	if os.Getenv("JUICEFS_META_READ_ONLY") != "" {
+		return &jfsFLock{}
+	}
 	if len(objects) != 1 {
 		panic(fmt.Errorf("jfsObjects.NewNSLock: the length of the objects parameter must be 1, current %s", objects))
 	}

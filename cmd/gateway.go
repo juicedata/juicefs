@@ -158,12 +158,16 @@ func gateway(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
-	if _, err := jfsGateway.GetBucketInfo(context.Background(), minio.MinioMetaBucket); errors.As(err, &minio.BucketNotFound{}) {
-		if err := jfsGateway.MakeBucketWithLocation(context.Background(), minio.MinioMetaBucket, minio.BucketOptions{}); err != nil {
-			logger.Fatalf("init MinioMetaBucket error %s: %s", minio.MinioMetaBucket, err)
+	if c.IsSet("read-only") {
+		os.Setenv("JUICEFS_META_READ_ONLY", "1")
+	} else {
+		if _, err := jfsGateway.GetBucketInfo(context.Background(), minio.MinioMetaBucket); errors.As(err, &minio.BucketNotFound{}) {
+			if err := jfsGateway.MakeBucketWithLocation(context.Background(), minio.MinioMetaBucket, minio.BucketOptions{}); err != nil {
+				logger.Fatalf("init MinioMetaBucket error %s: %s", minio.MinioMetaBucket, err)
+			}
 		}
 	}
+
 	args := []string{"server", "--address", listenAddr, "--anonymous"}
 	if c.Bool("no-banner") {
 		args = append(args, "--quiet")
