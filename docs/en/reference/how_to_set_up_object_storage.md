@@ -34,7 +34,7 @@ When executing the `juicefs format` or `juicefs mount` command, you can set some
 
 ## Enable data sharding {#enable-data-sharding}
 
-When creating a file system, multiple buckets can be defined as the underlying storage of the file system through the [`--shards`](../reference/command_reference.md#format-data-format-options) option. In this way, the system will distribute the files to multiple buckets based on the hashed value of the file name. Data sharding technology can distribute the load of concurrent writing of large-scale data to multiple buckets, thereby improving the writing performance.
+When creating a file system, multiple buckets can be defined as the underlying storage of the file system through the [`--shards`](../reference/command_reference.mdx#format-data-format-options) option. In this way, the system will distribute the files to multiple buckets based on the hashed value of the file name. Data sharding technology can distribute the load of concurrent writing of large-scale data to multiple buckets, thereby improving the writing performance.
 
 The following are points to note when using the data sharding function:
 
@@ -116,7 +116,7 @@ Creating a file system using an internal Endpoint ensures better performance and
 
 ## Storage class <VersionAdd>1.1</VersionAdd> {#storage-class}
 
-Object storage usually supports multiple storage classes, such as standard storage, infrequent access storage, and archive storage. Different storage classes will have different prices and availability, you can set the default storage class with the [`--storage-class`](../reference/command_reference.md#format-data-storage-options) option when creating the JuiceFS file system, or set a new storage class with the [`--storage-class`](../reference/command_reference.md#mount-data-storage-options) option when mounting the JuiceFS file system. Please refer to the user manual of the object storage you are using to see how to set the value of the `--storage-class` option (such as [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html#AmazonS3-PutObject-request-header-StorageClass)).
+Object storage usually supports multiple storage classes, such as standard storage, infrequent access storage, and archive storage. Different storage classes will have different prices and availability, you can set the default storage class with the [`--storage-class`](../reference/command_reference.mdx#format-data-storage-options) option when creating the JuiceFS file system, or set a new storage class with the [`--storage-class`](../reference/command_reference.mdx#mount-data-storage-options) option when mounting the JuiceFS file system. Please refer to the user manual of the object storage you are using to see how to set the value of the `--storage-class` option (such as [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html#AmazonS3-PutObject-request-header-StorageClass)).
 
 :::note
 When using certain storage classes (such as archive and deep archive), the data cannot be accessed immediately, and the data needs to be restored in advance and accessed after a period of time.

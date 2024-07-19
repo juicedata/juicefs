@@ -40,7 +40,7 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 
 #### 方法二：应用模板
 
-先在 JuiceFS CSI Driver 仓库下载 chart 压缩包：<https://github.com/juicedata/juicefs-csi-driver/releases> 。
+先在 JuiceFS CSI Driver 仓库下载 chart 压缩包：[https://github.com/juicedata/juicefs-csi-driver/releases](https://github.com/juicedata/juicefs-csi-driver/releases)。
 
 在「企业空间」中点击进入「应用管理」，选择「应用模板」，点击「创建」，上传 chart 压缩包：
 

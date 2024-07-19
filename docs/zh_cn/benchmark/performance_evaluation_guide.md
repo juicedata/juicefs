@@ -34,7 +34,7 @@ JuiceFS v1.0+ 默认启用了回收站，基准测试会在文件系统中创建
 
 ### `juicefs bench`
 
-[`juicefs bench`](../reference/command_reference.md#bench) 命令可以帮助你快速完成单机性能测试，通过测试结果判断环境配置和性能表现是否正常。假设你已经把 JuiceFS 挂载到了测试机器的 `/mnt/jfs` 位置（如果在 JuiceFS 初始化、挂载方面需要帮助，请参考[创建文件系统](../getting-started/standalone.md#juicefs-format)），执行以下命令即可（推荐 `-p` 参数设置为测试机器的 CPU 核数）：
+[`juicefs bench`](../reference/command_reference.mdx#bench) 命令可以帮助你快速完成单机性能测试，通过测试结果判断环境配置和性能表现是否正常。假设你已经把 JuiceFS 挂载到了测试机器的 `/mnt/jfs` 位置（如果在 JuiceFS 初始化、挂载方面需要帮助，请参考[创建文件系统](../getting-started/standalone.md#juicefs-format)），执行以下命令即可（推荐 `-p` 参数设置为测试机器的 CPU 核数）：
 
 ```bash
 juicefs bench /mnt/jfs -p 4
@@ -79,7 +79,7 @@ Amazon EFS 的性能与容量线性相关（[参考官方文档](https://docs.aw
 
 ### `juicefs objbench`
 
-[`juicefs objbench`](../reference/command_reference.md#objbench) 命令可以运行一些关于对象存储的测试，用以评估其作为 JuiceFS 的后端存储时的运行情况。以测试 Amazon S3 为例：
+[`juicefs objbench`](../reference/command_reference.mdx#objbench) 命令可以运行一些关于对象存储的测试，用以评估其作为 JuiceFS 的后端存储时的运行情况。以测试 Amazon S3 为例：
 
 ```bash
 juicefs objbench \

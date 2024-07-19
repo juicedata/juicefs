@@ -34,7 +34,7 @@ JuiceFS v1.0+ has Trash enabled by default, which means the benchmark tools will
 
 ### `juicefs bench`
 
-The [`juicefs bench`](../reference/command_reference.md#bench) command can help you do a quick performance test on a standalone machine. With the test results, it is easy to evaluate if your environment configuration and JuiceFS performance are normal. Assuming you have mounted JuiceFS to `/mnt/jfs` on your server, execute the following command for this test (the `-p` option is recommended to set to the number of CPU cores on the server). If you need help with initializing or mounting JuiceFS, please refer to [Create a File System](../getting-started/standalone.md#juicefs-format).
+The [`juicefs bench`](../reference/command_reference.mdx#bench) command can help you do a quick performance test on a standalone machine. With the test results, it is easy to evaluate if your environment configuration and JuiceFS performance are normal. Assuming you have mounted JuiceFS to `/mnt/jfs` on your server, execute the following command for this test (the `-p` option is recommended to set to the number of CPU cores on the server). If you need help with initializing or mounting JuiceFS, please refer to [Create a File System](../getting-started/standalone.md#juicefs-format).
 
 ```bash
 juicefs bench /mnt/jfs -p 4
@@ -79,7 +79,7 @@ The data above is from [AWS official documentation](https://docs.aws.amazon.com/
 
 ### `juicefs objbench`
 
-The [`juicefs objbench`](../reference/command_reference.md#objbench) command can run some tests on object storage to evaluate how well it performs as a backend storage for JuiceFS. Take testing Amazon S3 as an example:
+The [`juicefs objbench`](../reference/command_reference.mdx#objbench) command can run some tests on object storage to evaluate how well it performs as a backend storage for JuiceFS. Take testing Amazon S3 as an example:
 
 ```bash
 juicefs objbench \

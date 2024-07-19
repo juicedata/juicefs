@@ -13,7 +13,7 @@ JuiceFS 对大文件会做多级拆分（[JuiceFS 如何存储文件](../introdu
 
 ![internals-write](../images/internals-write.png)
 
-用 [`juicefs stats`](../reference/command_reference.md#stats) 命令记录的指标图，可以直观地看到实时性能数据：
+用 [`juicefs stats`](../reference/command_reference.mdx#stats) 命令记录的指标图，可以直观地看到实时性能数据：
 
 ![internals-stats](../images/internals-stats.png)
 
@@ -32,7 +32,7 @@ JuiceFS 对大文件会做多级拆分（[JuiceFS 如何存储文件](../introdu
 
 由于写请求写入客户端内存缓冲区即可返回，因此通常来说 JuiceFS 的 Write 时延非常低（几十微秒级别），真正上传到对象存储的动作由内部自动触发，比如单个 Slice 过大，Slice 数量过多，或者仅仅是在缓冲区停留时间过长等，或应用主动触发，比如关闭文件、调用 `fsync` 等。
 
-缓冲区中的数据只有在被持久化后才能释放，因此当写入并发较大时，如果缓冲区大小不足（默认 300MiB，通过 [`--buffer-size`](../reference/command_reference.md#mount) 调节），或者对象存储性能不佳，读写缓冲区将持续被占用而导致写阻塞。缓冲区大小可以在指标图的 usage.buf 一列中看到。当使用量超过阈值时，JuiceFS Client 会主动为 Write 添加约 10ms 等待时间以减缓写入速度；若已用量超过阈值两倍，则会导致写入暂停直至缓冲区得到释放。因此，在观察到 Write 时延上升以及 Buffer 长时间超过阈值时，通常需要尝试设置更大的 `--buffer-size`。另外，增大上传并发度（[`--max-uploads`](../reference/command_reference.md#mount)，默认 20）也能提升写入到对象存储的带宽，从而加快缓冲区的释放。
+缓冲区中的数据只有在被持久化后才能释放，因此当写入并发较大时，如果缓冲区大小不足（默认 300MiB，通过 [`--buffer-size`](../reference/command_reference.mdx#mount) 调节），或者对象存储性能不佳，读写缓冲区将持续被占用而导致写阻塞。缓冲区大小可以在指标图的 usage.buf 一列中看到。当使用量超过阈值时，JuiceFS Client 会主动为 Write 添加约 10ms 等待时间以减缓写入速度；若已用量超过阈值两倍，则会导致写入暂停直至缓冲区得到释放。因此，在观察到 Write 时延上升以及 Buffer 长时间超过阈值时，通常需要尝试设置更大的 `--buffer-size`。另外，增大上传并发度（[`--max-uploads`](../reference/command_reference.mdx#mount)，默认 20）也能提升写入到对象存储的带宽，从而加快缓冲区的释放。
 
 ### 随机写 {#random-write}
 
@@ -52,7 +52,7 @@ JuiceFS 支持随机写，包括通过 mmap 等进行的随机写。
 
 ## 读取流程 {#workflow-of-read}
 
-JuiceFS 支持顺序读和随机读（包括基于 mmap 的随机读），在处理读请求时会通过对象存储的 `GetObject` 接口完整读取 Block 对应的对象，也有可能仅仅读取对象中一定范围的数据（比如通过 [S3 API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html) 的 `Range` 参数限定读取范围）。与此同时异步地进行预读（通过 [`--prefetch`](../reference/command_reference.md#mount) 参数控制预读并发度），预读会将整个对象存储块下载到本地缓存目录，以备后用（如指标图中的第 2 阶段，blockcache 有很高的写入带宽）。显然，在顺序读时，这些提前获取的数据都会被后续的请求访问到，缓存命中率非常高，因此也能充分发挥出对象存储的读取性能。数据流如下图所示：
+JuiceFS 支持顺序读和随机读（包括基于 mmap 的随机读），在处理读请求时会通过对象存储的 `GetObject` 接口完整读取 Block 对应的对象，也有可能仅仅读取对象中一定范围的数据（比如通过 [S3 API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html) 的 `Range` 参数限定读取范围）。与此同时异步地进行预读（通过 [`--prefetch`](../reference/command_reference.mdx#mount) 参数控制预读并发度），预读会将整个对象存储块下载到本地缓存目录，以备后用（如指标图中的第 2 阶段，blockcache 有很高的写入带宽）。显然，在顺序读时，这些提前获取的数据都会被后续的请求访问到，缓存命中率非常高，因此也能充分发挥出对象存储的读取性能。数据流如下图所示：
 
 ![internals-read](../images/internals-read.png)
 

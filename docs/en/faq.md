@@ -47,14 +47,14 @@ JuiceFS already supported many object storage, please check [the list](reference
 
 The first reason is that you may have enabled the trash feature. In order to ensure data security, the trash is enabled by default. The deleted files are actually placed in the trash and are not actually deleted, so the size of the object storage will not change. trash retention time can be specified with `juicefs format` or modified with `juicefs config`. Please refer to the ["Trash"](security/trash.md) documentation for more information.
 
-The second reason is that JuiceFS deletes the data in the object storage asynchronously, so the space change of the object storage will be slower. If you need to immediately clean up the data in the object store that needs to be deleted, you can try running the [`juicefs gc`](reference/command_reference.md#gc) command.
+The second reason is that JuiceFS deletes the data in the object storage asynchronously, so the space change of the object storage will be slower. If you need to immediately clean up the data in the object store that needs to be deleted, you can try running the [`juicefs gc`](reference/command_reference.mdx#gc) command.
 
 ### Why is file system data size different from object storage usage? {#size-inconsistency}
 
-* ["Random write in JuiceFS"](#random-write) produces data fragments, causing higher storage usage for object storage, especially after a large number of overwrites in a short period of time, many fragments will be generated. These fragments continue to occupy space in object storage until they are compacted and released. You shouldn't worry about this because JuiceFS checks for file compaction with every read/write, and cleans up in the client background job. Alternatively, you can manually trigger merges and garbage collection with [`juicefs gc --compact --delete`](./reference/command_reference.md#gc).
+* ["Random write in JuiceFS"](#random-write) produces data fragments, causing higher storage usage for object storage, especially after a large number of overwrites in a short period of time, many fragments will be generated. These fragments continue to occupy space in object storage until they are compacted and released. You shouldn't worry about this because JuiceFS checks for file compaction with every read/write, and cleans up in the client background job. Alternatively, you can manually trigger merges and garbage collection with [`juicefs gc --compact --delete`](./reference/command_reference.mdx#gc).
 * If [Trash](./security/trash.md) is enabled, deleted files will be kept for a specified period of time, and then be garbage collected (all carried out in client background job).
 * After data fragments are compacted, stale slices will be kept inside Trash as well (not visible to user), following the same expiration settings. To delete this type of data, read [Trash and stale slices](./security/trash.md#gc).
-* If compression is enabled (the `--compress` parameter in the [`format`](./reference/command_reference.md#format) command, disabled by default), object storage usage may be smaller than the actual file size (depending on the compression ratio of different types of files).
+* If compression is enabled (the `--compress` parameter in the [`format`](./reference/command_reference.mdx#format) command, disabled by default), object storage usage may be smaller than the actual file size (depending on the compression ratio of different types of files).
 * Different [storage class](reference/how_to_set_up_object_storage.md#storage-class) of the object storage may calculate storage usage differently. The cloud service provider may set the minimum billable size for some storage classes. For example, the [minimum billable size](https://www.alibabacloud.com/help/en/object-storage-service/latest/storage-fees) for Alibaba Cloud OSS IA storage is 64KB. If a file is smaller than 64KB, it will be calculated as 64KB.
 * For self-hosted object storage services, for example MinIO, actual data usage is affected by [storage class settings](https://github.com/minio/minio/blob/master/docs/erasure/storage-class/README.md).
 
@@ -68,7 +68,7 @@ As of the release of JuiceFS 1.0, this feature is not supported.
 
 ### Is it possible to bind multiple different object storages to a single file system (e.g. one file system with Amazon S3, GCS and OSS at the same time)?
 
-No. However, you can set up multiple buckets associated with the same object storage service when creating a file system, thus solving the problem of limiting the number of individual bucket objects, for example, multiple S3 Buckets can be associated with a single file system. Please refer to [`--shards`](./reference/command_reference.md#format) option for details.
+No. However, you can set up multiple buckets associated with the same object storage service when creating a file system, thus solving the problem of limiting the number of individual bucket objects, for example, multiple S3 Buckets can be associated with a single file system. Please refer to [`--shards`](./reference/command_reference.mdx#format) option for details.
 
 ## Performance Related Questions
 
@@ -80,7 +80,7 @@ JuiceFS is built with multiple layers of caching (invalidated automatically), on
 
 ### Does JuiceFS support random read/write? How? {#random-write}
 
-Yes, including those issued using mmap. Currently JuiceFS is optimized for sequential reading/writing, and optimized for random reading/writing is work in progress. If you want better random read performance, it's best to turn off compression ([`--compress none`](reference/command_reference.md#format)).
+Yes, including those issued using mmap. Currently JuiceFS is optimized for sequential reading/writing, and optimized for random reading/writing is work in progress. If you want better random read performance, it's best to turn off compression ([`--compress none`](reference/command_reference.mdx#format)).
 
 JuiceFS does not store the original file in the object storage, but splits it into data blocks using a fixed size (4MiB by default), then uploads it to the object storage, and stores the ID of the data block in the metadata engine. When random write happens, the original metadata is marked stale, and then JuiceFS Client uploads the **new data block** to the object storage, then update the metadata accordingly.
 
@@ -90,7 +90,7 @@ Read [JuiceFS Internals](development/internals.md) and [Data Processing Flow](in
 
 ### How to copy a large number of small files into JuiceFS quickly?
 
-You could mount JuiceFS with [`--writeback` option](reference/command_reference.md#mount), which will write the small files into local disks first, then upload them to object storage in background, this could speedup coping many small files into JuiceFS.
+You could mount JuiceFS with [`--writeback` option](reference/command_reference.mdx#mount), which will write the small files into local disks first, then upload them to object storage in background, this could speedup coping many small files into JuiceFS.
 
 See ["Write Cache in Client"](guide/cache.md#client-write-cache) for more information.
 

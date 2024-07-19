@@ -34,7 +34,7 @@ juicefs format --storage s3 \
 
 ## 配置数据分片（Sharding） {#enable-data-sharding}
 
-创建文件系统时，可以通过 [`--shards`](../reference/command_reference.md#format-data-format-options) 选项定义多个 Bucket 作为文件系统的底层存储。这样一来，系统会根据文件名哈希值将文件分散到多个 Bucket 中。数据分片技术可以将大规模数据并发写的负载分散到多个 Bucket 中，从而提高写入性能。
+创建文件系统时，可以通过 [`--shards`](../reference/command_reference.mdx#format-data-format-options) 选项定义多个 Bucket 作为文件系统的底层存储。这样一来，系统会根据文件名哈希值将文件分散到多个 Bucket 中。数据分片技术可以将大规模数据并发写的负载分散到多个 Bucket 中，从而提高写入性能。
 
 启用数据分片功能需要注意以下事项：
 
@@ -116,7 +116,7 @@ JuiceFS 对这种区分内网外地址的对象存储服务也做了灵活的支
 
 ## 存储类 <VersionAdd>1.1</VersionAdd> {#storage-class}
 
-对象存储通常支持多种存储类，如标准存储、低频访问存储、归档存储。不同的存储类会有不同的价格及服务可用性，你可以在创建 JuiceFS 文件系统时通过 [`--storage-class`](../reference/command_reference.md#format-data-storage-options) 选项设置默认的存储类，或者在挂载 JuiceFS 文件系统时通过 [`--storage-class`](../reference/command_reference.md#mount-data-storage-options) 选项设置一个新的存储类。请查阅你所使用的对象存储的用户手册了解应该如何设置 `--storage-class` 选项的值（如 [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html#AmazonS3-PutObject-request-header-StorageClass)）。
+对象存储通常支持多种存储类，如标准存储、低频访问存储、归档存储。不同的存储类会有不同的价格及服务可用性，你可以在创建 JuiceFS 文件系统时通过 [`--storage-class`](../reference/command_reference.mdx#format-data-storage-options) 选项设置默认的存储类，或者在挂载 JuiceFS 文件系统时通过 [`--storage-class`](../reference/command_reference.mdx#mount-data-storage-options) 选项设置一个新的存储类。请查阅你所使用的对象存储的用户手册了解应该如何设置 `--storage-class` 选项的值（如 [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html#AmazonS3-PutObject-request-header-StorageClass)）。
 
 :::note 注意
 当使用某些存储类（如归档、深度归档）时，数据无法立即访问，需要提前恢复数据并等待一段时间之后才能访问。

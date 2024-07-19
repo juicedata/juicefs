@@ -8,7 +8,7 @@ JuiceFS 文件系统为用户提供多种访问方式，FUSE 是其中较为常�
 
 本指南介绍 JuiceFS 常用的 FUSE 挂载选项，有两种添加挂载选项的方式：
 
-1. 手动执行 [`juicefs mount`](../reference/command_reference.md#mount) 命令时，通过 `-o` 选项指定，多个选项使用半角逗号分隔。
+1. 手动执行 [`juicefs mount`](../reference/command_reference.mdx#mount) 命令时，通过 `-o` 选项指定，多个选项使用半角逗号分隔。
 
    ```bash
    juicefs mount -d -o allow_other,writeback_cache sqlite3://myjfs.db ~/jfs

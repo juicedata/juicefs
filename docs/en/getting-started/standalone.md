@@ -24,7 +24,7 @@ Once installed successfully, executing the `juicefs` command in the terminal wil
 
 ### Basic concept
 
-The JuiceFS client provides a command [`format`](../reference/command_reference.md#format) to create a file system as follows:
+The JuiceFS client provides a command [`format`](../reference/command_reference.mdx#format) to create a file system as follows:
 
 ```shell
 juicefs format [command options] META-URL NAME
@@ -68,7 +68,7 @@ Since no storage-related options are specified in this example, the local disk i
 
 ### Basic concept
 
-The JuiceFS client provides a command [`mount`](../reference/command_reference.md#mount) to mount file systems in the following format:
+The JuiceFS client provides a command [`mount`](../reference/command_reference.mdx#mount) to mount file systems in the following format:
 
 ```shell
 juicefs mount [command options] META-URL MOUNTPOINT

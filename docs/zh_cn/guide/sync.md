@@ -3,7 +3,7 @@ title: 数据同步
 sidebar_position: 7
 ---
 
-[`juicefs sync`](../reference/command_reference.md#sync) 是强大的数据同步工具，可以在所有支持的存储之间并发同步或迁移数据，包括对象存储、JuiceFS、本地文件系统，你可以在这三者之间以任意方向和搭配进行数据同步。除此之外，还支持同步通过 SSH 访问远程目录、HDFS、WebDAV 等，同时提供增量同步、模式匹配（类似 rsync）、分布式同步等高级功能。
+[`juicefs sync`](../reference/command_reference.mdx#sync) 是强大的数据同步工具，可以在所有支持的存储之间并发同步或迁移数据，包括对象存储、JuiceFS、本地文件系统，你可以在这三者之间以任意方向和搭配进行数据同步。除此之外，还支持同步通过 SSH 访问远程目录、HDFS、WebDAV 等，同时提供增量同步、模式匹配（类似 rsync）、分布式同步等高级功能。
 
 ## 基本用法
 
@@ -17,7 +17,7 @@ juicefs sync [command options] SRC DST
 
 - `SRC` 代表数据源地址及路径
 - `DST` 代表目标地址及路径
-- `[command options]` 代表可选的同步选项，详情查看[命令参考](../reference/command_reference.md#sync)。
+- `[command options]` 代表可选的同步选项，详情查看[命令参考](../reference/command_reference.mdx#sync)。
 
 地址格式均为：
 
@@ -147,7 +147,7 @@ myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1
 
 ### 增量同步与全量同步 {#incremental-and-full-synchronization}
 
-`juicefs sync` 默认以增量同步方式工作，对于已存在的文件，仅在文件大小不一样时，才再次同步进行覆盖。在此基础上，还可以指定 [`--update`](../reference/command_reference.md#sync)，在源文件 `mtime` 更新时进行覆盖。如果你的场景对正确性有着极致要求，可以指定 [`--check-new`](../reference/command_reference.md#sync) 或 [`--check-all`](../reference/command_reference.md#sync)，来对两边的文件进行字节流比对，确保数据一致。
+`juicefs sync` 默认以增量同步方式工作，对于已存在的文件，仅在文件大小不一样时，才再次同步进行覆盖。在此基础上，还可以指定 [`--update`](../reference/command_reference.mdx#sync)，在源文件 `mtime` 更新时进行覆盖。如果你的场景对正确性有着极致要求，可以指定 [`--check-new`](../reference/command_reference.mdx#sync) 或 [`--check-all`](../reference/command_reference.mdx#sync)，来对两边的文件进行字节流比对，确保数据一致。
 
 如需全量同步，即不论目标路径上是否存在相同的文件都重新同步，可以使用 `--force-update` 或 `-f`。例如，将 [对象存储 A](#required-storages) 的 `movies` 目录全量同步到 [JuiceFS 文件系统](#required-storages)：
 
@@ -243,8 +243,8 @@ juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 + 对于 `dir_name/***` 来说，它将匹配 dir_name 下的所有层次的文件。注意，每个子路径元素会自顶向下逐层，被访问因此 `include/exclude` 匹配模式会对每个子路径元素的全路径名进行递归 (例如，要包含 `/foo/bar/baz`，则`/foo`和`/foo/bar`必须不能被排除)。实际上，排除匹配模式在发现有文件要传输时，此文件所在目录层次的排除遍历会被短路。如果排除了某个父目录，则更深层次的 include 模式匹配将无效，这在使用尾随`*`时尤为重要。例如，下面的例子不会正常工作：
 
   ```
-  --include='/some/path/this-file-will-not-be-found' 
-  --include='/file-is-included' 
+  --include='/some/path/this-file-will-not-be-found'
+  --include='/file-is-included'
   --exclude='*'
   ```
 
