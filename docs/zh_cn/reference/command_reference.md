@@ -819,6 +819,49 @@ juicefs webdav redis://localhost localhost:9007
 | `--log value`<VersionAdd>1.2</VersionAdd>      | WebDAV 日志路径                                                                              |
 |`--access-log=path`|访问日志的路径|
 | `--background, -d`<VersionAdd>1.2</VersionAdd> | 后台运行 (默认：false)                                                                          |
+|`--no-bgjob`| 禁用后台任务（清理、备份等）|
+|`--no-usage-report`| 不发送使用量报告（默认：false）|
+| `--storage` | 对象存储类型（例如 S3、gs、oss、cos）（默认：file）|
+| `--storage-class` | 当前客户端写入数据的存储类型 |
+|`--bucket`| 自定义对象存储 Endpoint |
+|`--subdir`| 将子目录挂载为根目录 |
+| `--download-limit` | 下载带宽限制，单位为 Mbps |
+| `--get-timeout` | 下载对象的超时时间（默认：60秒） |
+| `--free-space-ratio` | 最小剩余空间比例（默认值：0.1） |
+| `--heartbeat` | 发送心跳的间隔；建议所有客户端使用相同的心跳值（默认：12秒） |
+| `--io-retries` | 网络异常时的重试次数（默认：10） |
+| `--verify-cache-checksum` | 校验和级别（none、full、shrink、extend）（默认值：full） |
+| `--read-only` | 仅允许查找/读取操作 |
+| `--max-deletes` | 删除对象的连接数（默认：10） |
+| `--max-uploads` | 并发上传线程数（默认：20） |
+| `--max-stage-write` <VersionAdd>1.2</VersionAdd> | 允许写入暂存文件的线程数，其他请求将直接上传（仅在启用 'writeback' 模式时有效）（默认值：0） |
+| `--put-timeout` | 上传对象的超时时间（默认：60秒） |
+| `--upload-limit` | 上传带宽限制，单位为 Mbps |
+| `--upload-delay` | 延迟上传块的时间间隔（默认值：0秒） |
+| `--upload-hours` <VersionAdd>1.2</VersionAdd> | 一天中可以上传延迟块的起始和结束时间 |
+|`--atime-mode`| 何时更新 atime，支持的模式包括：noatime、relatime、strictatime（默认：noatime）|
+|`--backup-meta`| 自动备份元数据到对象存储的间隔时间（0 表示禁用备份）（默认值：1小时）|
+|`--backup-skip-trash` <VersionAdd>1.2</VersionAdd>| 备份元数据时跳过回收站中的文件 |
+|`--writeback`| 后台上传块 |
+|`--prefetch`| 并发预读 N 个块（默认：1）|
+|`--buffer-size`| 读/写缓冲区的总大小，单位为 MiB（默认值：300M）|
+|`--cache-mode`| 缓存块的文件权限（默认值：0600）|
+|`--cache-dir`| 缓存的块超过此选项指定的时间未被访问将自动逐出（0 表示永不）（默认值：0s）|
+|`--cache-eviction`| 缓存淘汰策略（none 或 2-random）（默认值：2-random）|
+|`--cache-expire` <VersionAdd>1.2</VersionAdd>| 缓存的块超过此选项指定的时间未被访问将自动过期（0 表示永不）（默认值：0s）|
+|`--cache-partial-only`| 仅缓存随机/小块读取 |
+|`--cache-scan-interval`| 扫描缓存目录重建内存索引的间隔时间（默认值：1小时）|
+|`--cache-size`| 缓存对象的总大小，单位为 MiB（默认值：100G）|
+|`--attr-cache`| 属性缓存过期时间，默认为 1s。|
+|`--entry-cache`| 文件项缓存过期时间，默认为 1s。|
+|`--dir-entry-cache`| 目录项缓存超时时间（默认：1.0秒）|
+|`--open-cache`| 打开的文件的缓存过期时间，默认为 0s，代表关闭该特性。|
+|`--open-cache-limit`| 最大缓存打开文件数（软限制，0表示无限制）（默认值：10000）|
+|`--consul`| 用于注册的 Consul 地址（默认值：127.0.0.1:8500）|
+|`--metrics`| 导出指标的地址（默认值：127.0.0.1:9567）|
+|`--custom-labels` <VersionAdd>1.2</VersionAdd>| 监控指标自定义标签 |
+|`--skip-dir-mtime` <VersionAdd>1.2</VersionAdd>| 如果目录的 mtime 差异小于此值，则跳过更新目录的属性（默认值：100ms）|
+|`--skip-dir-nlink` | 跳过更新目录 nlink 前的重试次数（默认值：20）|
 
 ## 工具 {#tool}
 

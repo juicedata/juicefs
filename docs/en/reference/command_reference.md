@@ -821,6 +821,49 @@ Apart from options listed below, this command shares options with `juicefs mount
 | `--log value`<VersionAdd>1.2</VersionAdd>      | path for WebDAV log|
 |`--access-log=path`|path for JuiceFS access log.|
 | `--background, -d`<VersionAdd>1.2</VersionAdd> | run in background (default: false)|
+|`--no-bgjob`| disable background jobs (clean-up, backup, etc.) |
+|`--no-usage-report`| do not send usage report (default: false)|
+| `--storage` | object storage type (e.g. S3, gs, oss, cos) (default: file) |
+| `--storage-class` | the storage class for data written by current client |
+|`--bucket`|customized endpoint to access object store|
+|`--subdir`| mount a sub-directory as root directory |
+| `--download-limit` | bandwidth limit for download in Mbps |
+| `--get-timeout` | the timeout to download an object (default: 60s) |
+| `--free-space-ratio` | min free space (ratio) (default: 0.1) |
+| `--heartbeat` | interval to send heartbeat; it's recommended that all clients use the same heartbeat value (default: 12s) |
+| `--io-retries` | number of retries after network failure (default: 10) |
+| `--verify-cache-checksum` | checksum level (none, full, shrink, extend) (default: full) |
+| `--read-only` | allow lookup/read operations only |
+| `--max-deletes` | number of threads to delete objects (default: 10) |
+| `--max-uploads` | upload concurrency (default: 20) |
+| `--max-stage-write` <VersionAdd>1.2</VersionAdd> | number of threads allowed to write staged files, other requests will be uploaded directly (this option is only effective when 'writeback' mode is enabled) (default: 0) |
+| `--put-timeout` | the timeout to upload an object (default: 60s) |
+| `--upload-limit` | bandwidth limit for upload in Mbps |
+| `--upload-delay` | delayed duration for uploading blocks (default: 0s) |
+| `--upload-hours` <VersionAdd>1.2</VersionAdd> | (start,end) hour of a day between which the delayed blocks can be uploaded |
+|`--atime-mode`|when to update atime, supported mode includes: noatime, relatime, strictatime (default: noatime)|
+|`--backup-meta`| interval to automatically backup metadata in the object storage (0 means disable backup) (default: 1h) |
+|`--backup-skip-trash` <VersionAdd>1.2</VersionAdd>| skip files in trash when backup metadata |
+|`--writeback`| upload blocks in background |
+|`--prefetch`| prefetch N blocks in parallel (default: 1)|
+|`--buffer-size`| total read/write buffering in MiB (default: 300M)|
+|`--cache-mode`| file permissions for cached blocks (default: 0600) |
+|`--cache-dir`| cached blocks not accessed for longer than this option will be automatically evicted (0 means never) (default: 0s) |
+|`--cache-eviction`| cache eviction policy (none or 2-random) (default: 2-random) |
+|`--cache-expire` <VersionAdd>1.2</VersionAdd>| cached blocks not accessed for longer than this option will be automatically evicted (0 means never) (default: 0s) |
+|`--cache-partial-only`| cache random/small read only |
+|`--cache-scan-interval`| interval to scan cache-dir to rebuild in-memory index (default: 1h) |
+|`--cache-size`| size of cached object for read in MiB (default: 100G) |
+|`--attr-cache`| attributes cache timeout (default: 1.0s) |
+|`--entry-cache`| file entry cache timeout (default: 1.0s) |
+|`--dir-entry-cache`| dir entry cache timeout (default: 1.0s) |
+|`--open-cache`| open file cache timeout (default: 0s) |
+|`--open-cache-limit`| max number of open files to cache (soft limit, 0 means unlimited) (default: 10000) |
+|`--consul`| Consul address to register (default: 127.0.0.1:8500) |
+|`--metrics`| address to export metrics (default: 127.0.0.1:9567) |
+|`--custom-labels` <VersionAdd>1.2</VersionAdd>| custom labels for metrics |
+|`--skip-dir-mtime` <VersionAdd>1.2</VersionAdd>| skip updating attribute of a directory if the mtime difference is smaller than this value (default: 100ms) |
+|`--skip-dir-nlink` | number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never) (default: 20) |
 
 ## Tool {#tool}
 
