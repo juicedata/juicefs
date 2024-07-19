@@ -819,7 +819,6 @@ juicefs gateway redis://localhost localhost:9000
 |`--consul`| 用于注册的 Consul 地址（默认值：127.0.0.1:8500）|
 |`--no-usage-report`| 禁用使用量报告 (默认：false)|
 
-
 ### `juicefs webdav` {#webdav}
 
 启动一个 WebDAV 服务，阅读[「配置 WebDAV 服务」](../deployment/webdav.md)以了解更多。
@@ -1115,7 +1114,6 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |-|-|
 |`--metrics value` <VersionAdd>1.2</VersionAdd>|导出指标的地址（默认值："127.0.0.1:9567"）|
 |`--consul value` <VersionAdd>1.2</VersionAdd>|用于注册的 Consul 地址（默认值："127.0.0.1:8500"）|
-
 
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 
