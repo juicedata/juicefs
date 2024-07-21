@@ -181,7 +181,7 @@ type Attr struct {
 
 其中几个需要说明的字段：
 
-- Atime/Atimensec：参考 [`--atime-mode`](../reference/command_reference.mdx#mount)
+- Atime/Atimensec：参考 [`--atime-mode`](../reference/command_reference.mdx#mount-metadata-options)
 - Nlink：
   - 目录文件：初始值为 2（'.' 和 '..'），每有一个子目录 Nlink 值加 1
   - 其他文件：初始值为 1，每创建一个硬链接 Nlink 值加 1

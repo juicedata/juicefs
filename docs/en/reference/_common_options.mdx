@@ -1,4 +1,4 @@
-#### Metadata related options {#metadata-options}
+#### Metadata related options {#mount-metadata-options}
 
 |Items|Description|
 |-|-|
@@ -12,7 +12,7 @@
 |`--skip-dir-nlink=20` <VersionAdd>1.1</VersionAdd> |number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never) (default: 20)|
 |`--skip-dir-mtime=100ms` <VersionAdd>1.2</VersionAdd>|skip updating attribute of a directory if the mtime difference is smaller than this value (default: 100ms)|
 
-#### Metadata cache related options {#metadata-cache-options}
+#### Metadata cache related options {#mount-metadata-cache-options}
 
 For metadata cache description and usage, refer to [Kernel metadata cache](../guide/cache.md#kernel-metadata-cache) and [Client memory metadata cache](../guide/cache.md#client-memory-metadata-cache).
 
@@ -24,7 +24,7 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |`--open-cache=0`|open file cache timeout in seconds (0 means disable this feature) (default: 0)|
 |`--open-cache-limit value` <VersionAdd>1.1</VersionAdd> |max number of open files to cache (soft limit, 0 means unlimited) (default: 10000)|
 
-#### Data storage related options {#data-storage-options}
+#### Data storage related options {#mount-data-storage-options}
 
 |Items|Description|
 |-|-|
@@ -40,7 +40,7 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |`--upload-limit=0`|bandwidth limit for upload in Mbps (default: 0)|
 |`--download-limit=0`|bandwidth limit for download in Mbps (default: 0)|
 
-#### Data cache related options {#data-cache-options}
+#### Data cache related options {#mount-data-cache-options}
 
 |Items|Description|
 |-|-|
@@ -59,7 +59,7 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |`--cache-scan-interval=1h` <VersionAdd>1.1</VersionAdd> |interval (in seconds) to scan cache-dir to rebuild in-memory index (default: "1h")|
 |`--cache-expire=0` <VersionAdd>1.2</VersionAdd>|Cache blocks that have not been accessed for more than the set time will be automatically cleared (even if the value of `--cache-eviction` is `none`, these cache blocks will be deleted), in seconds, a value of 0 means never expires (default: 0)|
 
-#### Metrics related options {#metrics-options}
+#### Metrics related options {#mount-metrics-options}
 
 ||Items|Description|
 |-|-|

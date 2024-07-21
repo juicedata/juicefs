@@ -90,7 +90,7 @@ Read [JuiceFS Internals](development/internals.md) and [Data Processing Flow](in
 
 ### How to copy a large number of small files into JuiceFS quickly?
 
-You could mount JuiceFS with [`--writeback` option](reference/command_reference.mdx#mount), which will write the small files into local disks first, then upload them to object storage in background, this could speedup coping many small files into JuiceFS.
+You could mount JuiceFS with [`--writeback` option](reference/command_reference.mdx#mount-data-cache-options), which will write the small files into local disks first, then upload them to object storage in background, this could speedup coping many small files into JuiceFS.
 
 See ["Write Cache in Client"](guide/cache.md#client-write-cache) for more information.
 

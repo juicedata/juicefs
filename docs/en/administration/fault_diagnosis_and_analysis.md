@@ -142,9 +142,7 @@ This command collects the following information:
 6. Go pprof information
 7. JuiceFS logs (defaulting to the last 5000 lines)
 
-By default, a `debug` directory is created in the current directory, and the collected information is saved in that directory.
-
-Here's an example:
+By default, a `debug` directory is created in the current directory, and the collected information is saved in that directory. Here's an example:
 
 ```shell
 $ juicefs debug /tmp/mountpoint
@@ -211,7 +209,7 @@ Metrics description:
 
 - `cpu`: CPU usage of the process.
 - `mem`: Physical memory used by the process.
-- `buf`: Current [buffer size](../guide/cache.md#buffer-size), if this value is constantly close to (or even exceeds) the configured [`--buffer-size`](../reference/command_reference.mdx#mount), you should increase buffer size or decrease application workload.
+- `buf`: Current [buffer size](../guide/cache.md#buffer-size), if this value is constantly close to (or even exceeds) the configured [`--buffer-size`](../reference/command_reference.mdx#mount-data-cache-options), you should increase buffer size or decrease application workload.
 - `cache`: Internal metric, ignore this.
 
 #### `fuse`

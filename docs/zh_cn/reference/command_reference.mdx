@@ -473,7 +473,6 @@ juicefs profile /mnt/jfs
 
 # 重放访问日志
 cat /mnt/jfs/.accesslog > /tmp/jfs.alog
-
 # 一段时间后按 Ctrl-C 停止 "cat" 命令
 juicefs profile /tmp/jfs.alog
 
@@ -632,6 +631,17 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`-o value`|其他 FUSE 选项，详见 [FUSE 挂载选项](../reference/fuse_mount_options.md)|
 
 <CommonOptions />
+
+<!-- 注意：下面这段 HTML 的用途仅仅是为了在检查坏链时不要报错（因为这些标题都在 _common_options.mdx 文件里），在实际页面中不会显示。请不要删除，也不要移动位置（必须放在 <CommonOptions /> 这一行下面）。 -->
+<div style={{ display: 'none' }}>
+
+#### {#mount-metadata-options}
+#### {#mount-metadata-cache-options}
+#### {#mount-data-storage-options}
+#### {#mount-data-cache-options}
+#### {#mount-metrics-options}
+
+</div>
 
 ### `juicefs umount` {#umount}
 

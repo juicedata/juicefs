@@ -32,7 +32,7 @@ JuiceFS 对大文件会做多级拆分（[JuiceFS 如何存储文件](../introdu
 
 由于写请求写入客户端内存缓冲区即可返回，因此通常来说 JuiceFS 的 Write 时延非常低（几十微秒级别），真正上传到对象存储的动作由内部自动触发，比如单个 Slice 过大，Slice 数量过多，或者仅仅是在缓冲区停留时间过长等，或应用主动触发，比如关闭文件、调用 `fsync` 等。
 
-缓冲区中的数据只有在被持久化后才能释放，因此当写入并发较大时，如果缓冲区大小不足（默认 300MiB，通过 [`--buffer-size`](../reference/command_reference.mdx#mount) 调节），或者对象存储性能不佳，读写缓冲区将持续被占用而导致写阻塞。缓冲区大小可以在指标图的 usage.buf 一列中看到。当使用量超过阈值时，JuiceFS Client 会主动为 Write 添加约 10ms 等待时间以减缓写入速度；若已用量超过阈值两倍，则会导致写入暂停直至缓冲区得到释放。因此，在观察到 Write 时延上升以及 Buffer 长时间超过阈值时，通常需要尝试设置更大的 `--buffer-size`。另外，增大上传并发度（[`--max-uploads`](../reference/command_reference.mdx#mount)，默认 20）也能提升写入到对象存储的带宽，从而加快缓冲区的释放。
+缓冲区中的数据只有在被持久化后才能释放，因此当写入并发较大时，如果缓冲区大小不足（默认 300MiB，通过 [`--buffer-size`](../reference/command_reference.mdx#mount-data-cache-options) 调节），或者对象存储性能不佳，读写缓冲区将持续被占用而导致写阻塞。缓冲区大小可以在指标图的 usage.buf 一列中看到。当使用量超过阈值时，JuiceFS Client 会主动为 Write 添加约 10ms 等待时间以减缓写入速度；若已用量超过阈值两倍，则会导致写入暂停直至缓冲区得到释放。因此，在观察到 Write 时延上升以及 Buffer 长时间超过阈值时，通常需要尝试设置更大的 `--buffer-size`。另外，增大上传并发度（[`--max-uploads`](../reference/command_reference.mdx#mount-data-storage-options)，默认 20）也能提升写入到对象存储的带宽，从而加快缓冲区的释放。
 
 ### 随机写 {#random-write}
 

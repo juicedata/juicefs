@@ -23,7 +23,7 @@ juicefs config META-URL --trash-days=7
 juicefs config META-URL --trash-days=0
 ```
 
-另外，回收站自动清理依赖 JuiceFS 客户端的后台任务，为了保证后台任务能够正常执行，需要至少 1 个在线的挂载点，并且在挂载文件系统时不可以使用 [`--no-bgjob`](../reference/command_reference.mdx#mount) 参数。
+另外，回收站自动清理依赖 JuiceFS 客户端的后台任务，为了保证后台任务能够正常执行，需要至少 1 个在线的挂载点，并且在挂载文件系统时不可以使用 [`--no-bgjob`](../reference/command_reference.mdx#mount-metadata-options) 参数。
 
 ## 恢复文件 {#recover}
 

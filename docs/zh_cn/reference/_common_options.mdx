@@ -1,4 +1,4 @@
-#### 元数据相关参数 {#metadata-options}
+#### 元数据相关参数 {#mount-metadata-options}
 
 |项 | 说明|
 |-|-|
@@ -12,7 +12,7 @@
 |`--skip-dir-nlink=20` <VersionAdd>1.1</VersionAdd>|跳过更新目录 nlink 前的重试次数 (仅用于 TKV, 0 代表永不跳过) (默认：20)|
 |`--skip-dir-mtime=100ms` <VersionAdd>1.2</VersionAdd>|如果 mtime 差异小于该值（默认值：100ms），则跳过更新目录的属性。|
 
-#### 元数据缓存参数 {#metadata-cache-options}
+#### 元数据缓存参数 {#mount-metadata-cache-options}
 
 元数据缓存的介绍和使用，详见[「内核元数据缓存」](../guide/cache.md#kernel-metadata-cache)及[「客户端内存元数据缓存」](../guide/cache.md#client-memory-metadata-cache)。
 
@@ -24,7 +24,7 @@
 |`--open-cache=0`|打开的文件的缓存过期时间，单位为秒，默认为 0，代表关闭该特性。|
 |`--open-cache-limit=value` <VersionAdd>1.1</VersionAdd>|允许缓存的最大文件个数 (软限制，0 代表不限制) (默认：10000)|
 
-#### 数据存储参数 {#data-storage-options}
+#### 数据存储参数 {#mount-data-storage-options}
 
 |项 | 说明|
 |-|-|
@@ -40,7 +40,7 @@
 |`--upload-limit=0`|上传带宽限制，单位为 Mbps (默认：0)|
 |`--download-limit=0`|下载带宽限制，单位为 Mbps (默认：0)|
 
-#### 数据缓存相关参数 {#data-cache-options}
+#### 数据缓存相关参数 {#mount-data-cache-options}
 
 |项 | 说明|
 |-|-|
@@ -59,7 +59,7 @@
 |`--cache-scan-interval=1h` <VersionAdd>1.1</VersionAdd>|扫描缓存目录重建内存索引的间隔（以秒为单位）（默认值：1h）|
 |`--cache-expire=0` <VersionAdd>1.2</VersionAdd>|超过设置的时间未被访问的缓存块将会被自动清除（即使 `--cache-eviction` 的值为 `none`，这些缓存块也会被删除），单位为秒，值为 0 表示永不过期（默认值：0）|
 
-#### 监控相关参数 {#metrics-options}
+#### 监控相关参数 {#mount-metrics-options}
 
 |项 | 说明|
 |-|-|
