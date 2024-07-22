@@ -95,7 +95,7 @@ $ ./juicefs summary /mnt/jfs/pjdfstest/
 :::note 说明
 目录统计只计算每个目录的单层用量，如果要查看递归统计用量，需要使用 `juicefs info -r`，对于大目录，遍历汇总可能带来很大的开销。如需持续查看某些特定目录的总用量，可参考目录配额通过[设置空配额](./quota.md#limit-capacity-and-inodes-of-directory)的方式统计目录总用量。
 
-与社区版不同，JuiceFS 企业版的目录大小已经进行了[递归统计](/docs/zh/cloud/guide/view_storage_usage)，可以直接用 `ls -lh` 看到递归统计的目录总大小。
+与社区版不同，JuiceFS 企业版的目录大小已经进行了[递归统计](/docs/zh/cloud/guide/quota#file-directory-size)，可以直接用 `ls -lh` 看到递归统计的目录总大小。
 :::
 
 ## 故障和修复 {#troubleshooting}

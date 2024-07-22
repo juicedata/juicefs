@@ -77,7 +77,7 @@ JuiceFS passed most of the file system related tests.
    cd /opt/ltp
    ```
 
-   The test definition files are located under `runtest`. To speed up testing, we delete some pressure cases and unrelated cases in `fs` and `syscalls` (refer to [Appendix](#Appendix), modified files are saved as `fs-jfs` and `syscalls-jfs`), then execute:
+   The test definition files are located under `runtest`. To speed up testing, we delete some pressure cases and unrelated cases in `fs` and `syscalls` (refer to [Appendix](#appendix), modified files are saved as `fs-jfs` and `syscalls-jfs`), then execute:
 
    ```bash
    ./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
