@@ -333,6 +333,13 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 			if root && (fi.Name() == metaBucket || fi.Name() == minio.MinioMetaBucket) {
 				continue
 			}
+			if stat, ok := fi.(*fs.FileStat); ok && stat.IsSymlink() {
+				p := n.path(bucket, prefixDir, fi.Name())
+				if _, err := n.fs.Stat(mctx, p); err != 0 {
+					logger.Errorf("stat %s: %s", p, err)
+					continue
+				}
+			}
 			entry := &minio.Entry{Name: fi.Name(),
 				Info: &minio.ObjectInfo{
 					Bucket:  bucket,
@@ -343,14 +350,7 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 					AccTime: fi.ModTime(),
 				},
 			}
-			if stat, ok := fi.(*fs.FileStat); ok && stat.IsSymlink() {
-				var err syscall.Errno
-				p := n.path(bucket, prefixDir, fi.Name())
-				if fi, err = n.fs.Stat(mctx, p); err != 0 {
-					logger.Errorf("stat %s: %s", p, err)
-					continue
-				}
-			}
+
 			if fi.IsDir() {
 				entry.Name += sep
 				entry.Info.Size = 0
