@@ -381,41 +381,44 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 		return loi, err
 	}
 	getObjectInfo := func(ctx context.Context, bucket, object string, info *minio.ObjectInfo) (obj minio.ObjectInfo, err error) {
-		if info != nil && info.Size > 0 {
-			info.Name = object
-			return *info, nil
-		}
-		fi, eno := n.fs.Stat(mctx, n.path(bucket, object))
-		if eno == 0 {
-			size := fi.Size()
-			if fi.IsDir() {
-				size = 0
+		var eno syscall.Errno
+		if info == nil {
+			var fi *fs.FileStat
+			fi, eno = n.fs.Stat(mctx, n.path(bucket, object))
+			if eno == 0 {
+				size := fi.Size()
+				if fi.IsDir() {
+					size = 0
+				}
+				info = &minio.ObjectInfo{
+					Bucket:  bucket,
+					Name:    object,
+					ModTime: fi.ModTime(),
+					Size:    size,
+					IsDir:   fi.IsDir(),
+					AccTime: fi.ModTime(),
+				}
 			}
-			info = &minio.ObjectInfo{
-				Bucket:  bucket,
-				ModTime: fi.ModTime(),
-				Size:    size,
-				IsDir:   fi.IsDir(),
-				AccTime: fi.ModTime(),
+
+			// replace links to external file systems with empty files
+			if errors.Is(eno, syscall.ENOTSUP) {
+				now := time.Now()
+				info = &minio.ObjectInfo{
+					Bucket:  bucket,
+					Name:    object,
+					ModTime: now,
+					Size:    0,
+					IsDir:   false,
+					AccTime: now,
+				}
+				eno = 0
 			}
 		}
 
-		// replace links to external file systems with empty files
-		if eno == syscall.ENOTSUP {
-			now := time.Now()
-			info = &minio.ObjectInfo{
-				Bucket:  bucket,
-				ModTime: now,
-				Size:    0,
-				IsDir:   false,
-				AccTime: now,
-			}
-			eno = 0
-		}
 		if info == nil {
 			return obj, jfsToObjectErr(ctx, eno, bucket, object)
 		}
-		info.Name = object
+
 		if n.gConf.KeepEtag && !strings.HasSuffix(object, sep) {
 			etag, _ := n.fs.GetXattr(mctx, n.path(bucket, object), s3Etag)
 			info.ETag = string(etag)
