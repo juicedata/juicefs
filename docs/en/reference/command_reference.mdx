@@ -8,6 +8,8 @@ description: Descriptions, usage and examples of all commands and options includ
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+import CommonOptions from './_common_options.mdx';
+
 Running `juicefs` by itself and it will print all available commands. In addition, you can add `-h/--help` flag after each command to get more information, e.g., `juicefs format -h`.
 
 ```
@@ -18,7 +20,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.1.0
+   1.2.0
 
 COMMANDS:
    ADMIN:
@@ -168,7 +170,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 
 |Items|Description|
 |-|-|
-|`--block-size=4096`|size of block in KiB (default: 4096). 4M is usually a better default value because many object storage services use 4M as their internal block size, thus using the same block size in JuiceFS usually yields better performance.|
+|`--block-size=4M`|size of block in KiB (default: 4M). 4M is usually a better default value because many object storage services use 4M as their internal block size, thus using the same block size in JuiceFS usually yields better performance.|
 |`--compress=none`|compression algorithm, choose from `lz4`, `zstd`, `none` (default). Enabling compression will inevitably affect performance. Among the two supported algorithms, `lz4` offers a better performance, while `zstd` comes with a higher compression ratio, Google for their detailed comparison.|
 |`--encrypt-rsa-key=value`|A path to RSA private key (PEM)|
 |`--encrypt-algo=aes256gcm-rsa`|encrypt algorithm (aes256gcm-rsa, chacha20-rsa) (default: "aes256gcm-rsa")|
@@ -233,11 +235,11 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--capacity value`|limit for space in GiB|
 |`--inodes value`|limit for number of inodes|
 |`--trash-days value`|number of days after which removed files will be permanently deleted|
+|`--enable-acl` <VersionAdd>1.2</VersionAdd>|enable [POSIX ACL](../security/posix_acl.md) (irreversible), at the same time, the minimum client version allowed to connect will be upgraded to v1.2|
 |`--encrypt-secret`|encrypt the secret key if it was previously stored in plain format (default: false)|
 |`--min-client-version value` <VersionAdd>1.1</VersionAdd> |minimum client version allowed to connect|
 |`--max-client-version value` <VersionAdd>1.1</VersionAdd> |maximum client version allowed to connect|
 |`--dir-stats` <VersionAdd>1.1</VersionAdd> |enable dir stats, which is necessary for fast summary and dir quota (default: false)|
-|`--enable-acl` <VersionAdd>1.2</VersionAdd>|enable POSIX ACL(irreversible), min-client-version will be set to v1.2|
 
 ### `juicefs quota` <VersionAdd>1.1</VersionAdd> {#quota}
 
@@ -319,8 +321,8 @@ juicefs gc redis://localhost --delete
 
 |Items|Description|
 |-|-|
-|`--delete`|delete leaked objects (default: false)|
 |`--compact`|compact all chunks with more than 1 slices (default: false).|
+|`--delete`|delete leaked objects (default: false)|
 |`--threads=10`|number of threads to delete leaked objects (default: 10)|
 
 ### `juicefs fsck` {#fsck}
@@ -387,6 +389,7 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 |`FILE`|Export file path, if not specified, it will be exported to standard output. If the filename ends with `.gz`, it will be automatically compressed.|
 |`--subdir=path`|Only export metadata for the specified subdirectory.|
 |`--keep-secret-key` <VersionAdd>1.1</VersionAdd> |Export object storage authentication information, the default is `false`. Since it is exported in plain text, pay attention to data security when using it. If the export file does not contain object storage authentication information, you need to use [`juicefs config`](#config) to reconfigure object storage authentication information after the subsequent import is completed.|
+|`--threads=10` <VersionAdd>1.2</VersionAdd>|number of threads to dump metadata. (default: 10)|
 |`--fast` <VersionAdd>1.2</VersionAdd>|Use more memory to speedup dump.|
 |`--skip-trash` <VersionAdd>1.2</VersionAdd>|Skip files and directories in trash.|
 
@@ -536,8 +539,8 @@ juicefs debug --out-dir=/var/log --limit=1000 /mnt/jfs
 |Items|Description|
 |-|-|
 |`--out-dir=./debug/`|The output directory of the results, automatically created if the directory does not exist (default: `./debug/`)|
-|`--stats-sec=5`|The number of seconds to sample .stats file (default: 5)|
 |`--limit=value`|The number of log entries collected, from newest to oldest, if not specified, all entries will be collected|
+|`--stats-sec=5`|The number of seconds to sample .stats file (default: 5)|
 |`--trace-sec=5`|The number of seconds to sample trace metrics (default: 5)|
 |`--profile-sec=30`|The number of seconds to sample profile metrics (default: 30)|
 
@@ -615,6 +618,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`-d, --background`|run in background (default: false)|
 |`--no-syslog`|disable syslog (default: false)|
 |`--log=path`|path of log file when running in background (default: `$HOME/.juicefs/juicefs.log` or `/var/log/juicefs.log`)|
+|`--force`|force to mount even if the mount point is already mounted by the same filesystem.|
 |`--update-fstab` <VersionAdd>1.1</VersionAdd> |add / update entry in `/etc/fstab`, will create a symlink from `/sbin/mount.juicefs` to JuiceFS executable if not existing (default: false)|
 
 #### FUSE related options {#mount-fuse-options}
@@ -627,71 +631,18 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--prefix-internal` <VersionAdd>1.1</VersionAdd> |add '.jfs' prefix to all internal files (default: false)|
 |`-o value`|other FUSE options, see [FUSE Mount Options](../reference/fuse_mount_options.md)|
 
-#### Metadata related options {#mount-metadata-options}
+<CommonOptions />
 
-|Items|Description|
-|-|-|
-|`--subdir=value`|mount a sub-directory as root (default: "")|
-|`--backup-meta=3600`|interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup) (default: "3600")|
-|`--backup-skip-trash` <VersionAdd>1.2</VersionAdd>|skip files and directories in trash when backup metadata.|
-|`--heartbeat=12`|interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value (default: "12")|
-|`--read-only`|allow lookup/read operations only (default: false)|
-|`--no-bgjob`|Disable background jobs, default to false, which means clients by default carry out background jobs, including:<br/><ul><li>Clean up expired files in Trash (look for `cleanupDeletedFiles`, `cleanupTrash` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))</li><li>Delete slices that's not referenced (look for `cleanupSlices` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))</li><li>Clean up stale client sessions (look for `CleanStaleSessions` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))</li></ul>Note that compaction isn't affected by this option, it happens automatically with file reads and writes, client will check if compaction is in need, and run in background (take Redis for example, look for `compactChunk` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/redis.go)).|
-|`--atime-mode=noatime` <VersionAdd>1.1</VersionAdd> |Control atime (last time the file was accessed) behavior, support the following modes:<br/><ul><li>`noatime` (default): set when the file is created or when `SetAttr` is explicitly called. Accessing and modifying the file will not affect atime, tracking atime comes at a performance cost, so this is the default behavior</li><li>`relatime`: update inode access times relative to mtime (last time when the file data was modified) or ctime (last time when file metadata was changed). Only update atime if atime was earlier than the current mtime or ctime, or the file's atime is more than 1 day old</li><li>`strictatime`: always update atime on access</li></ul>|
-|`--skip-dir-nlink value` <VersionAdd>1.1</VersionAdd> |number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never) (default: 20)|
+<!-- Note: The purpose of the following HTML is only to avoid reporting errors when checking for broken links (because these headers are in the "_common_options.mdx" file), and will not be displayed on the actual page. Please do not delete or move it (must be placed below the "<CommonOptions />" line). -->
+<div style={{ display: 'none' }}>
 
-#### Metadata cache related options {#mount-metadata-cache-options}
+#### {#mount-metadata-options}
+#### {#mount-metadata-cache-options}
+#### {#mount-data-storage-options}
+#### {#mount-data-cache-options}
+#### {#mount-metrics-options}
 
-For metadata cache description and usage, refer to [Kernel metadata cache](../guide/cache.md#kernel-metadata-cache) and [Client memory metadata cache](../guide/cache.md#client-memory-metadata-cache).
-
-|Items|Description|
-|-|-|
-|`--attr-cache=1`|attributes cache timeout in seconds (default: 1), read [Kernel metadata cache](../guide/cache.md#kernel-metadata-cache)|
-|`--entry-cache=1`|file entry cache timeout in seconds (default: 1), read [Kernel metadata cache](../guide/cache.md#kernel-metadata-cache)|
-|`--dir-entry-cache=1`|dir entry cache timeout in seconds (default: 1), read [Kernel metadata cache](../guide/cache.md#kernel-metadata-cache)|
-|`--open-cache=0`|open file cache timeout in seconds (0 means disable this feature) (default: 0)|
-|`--open-cache-limit value` <VersionAdd>1.1</VersionAdd> |max number of open files to cache (soft limit, 0 means unlimited) (default: 10000)|
-
-#### Data storage related options {#mount-data-storage-options}
-
-|Items|Description|
-|-|-|
-|`--storage=file`|Object storage type (e.g. `s3`, `gs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types).|
-|`--storage-class value` <VersionAdd>1.1</VersionAdd> |the storage class for data written by current client|
-|`--bucket=value`|customized endpoint to access object storage|
-|`--get-timeout=60`|the max number of seconds to download an object (default: 60)|
-|`--put-timeout=60`|the max number of seconds to upload an object (default: 60)|
-|`--io-retries=10`|number of retries after network failure (default: 10)|
-|`--max-uploads=20`|Upload concurrency, defaults to 20. This is already a reasonably high value for 4M writes, with such write pattern, increasing upload concurrency usually demands higher `--buffer-size`, learn more at [Read/Write Buffer](../guide/cache.md#buffer-size). But for random writes around 100K, 20 might not be enough and can cause congestion at high load, consider using a larger upload concurrency, or try to consolidate small writes in the application end. |
-|`--max-deletes=10`|number of threads to delete objects (default: 10)|
-|`--upload-limit=0`|bandwidth limit for upload in Mbps (default: 0)|
-|`--download-limit=0`|bandwidth limit for download in Mbps (default: 0)|
-
-#### Data cache related options {#mount-data-cache-options}
-
-|Items|Description|
-|-|-|
-|`--buffer-size=300`|total read/write buffering in MiB (default: 300), see [Read/Write buffer](../guide/cache.md#buffer-size)|
-|`--prefetch=1`|prefetch N blocks in parallel (default: 1), see [Client read data cache](../guide/cache.md#client-read-cache)|
-|`--writeback`|upload objects in background (default: false), see [Client write data cache](../guide/cache.md#client-write-cache)|
-|`--upload-delay=0`|When `--writeback` is enabled, you can use this option to add a delay to object storage upload, default to 0, meaning that upload will begin immediately after write. Different units are supported, including `s` (second), `m` (minute), `h` (hour). If files are deleted during this delay, upload will be skipped entirely, when using JuiceFS for temporary storage, use this option to reduce resource usage. Refer to [Client write data cache](../guide/cache.md#client-write-cache).|
-|`--cache-dir=value`|directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `$HOME/.juicefs/cache` or `/var/jfsCache`), see [Client read data cache](../guide/cache.md#client-read-cache)|
-|`--cache-mode value` <VersionAdd>1.1</VersionAdd> |file permissions for cached blocks (default: "0600")|
-|`--cache-size=102400`|size of cached object for read in MiB (default: 102400), see [Client read data cache](../guide/cache.md#client-read-cache)|
-|`--free-space-ratio=0.1`|min free space ratio (default: 0.1), if [Client write data cache](../guide/cache.md#client-write-cache) is enabled, this option also controls write cache size, see [Client read data cache](../guide/cache.md#client-read-cache)|
-|`--cache-partial-only`|cache random/small read only (default: false), see [Client read data cache](../guide/cache.md#client-read-cache)|
-|`--verify-cache-checksum value` <VersionAdd>1.1</VersionAdd> |Checksum level for cache data. After enabled, checksum will be calculated on divided parts of the cache blocks and stored on disks, which are used for verification during reads. The following strategies are supported:<br/><ul><li>`none`: Disable checksum verification, if local cache data is tampered, bad data will be read;</li><li>`full` (default): Perform verification when reading the full block, use this for sequential read scenarios;</li><li>`shrink`: Perform verification on parts that's fully included within the read range, use this for random read scenarios;</li><li>`extend`: Perform verification on parts that fully include the read range, this causes read amplifications and is only used for random read scenarios demanding absolute data integrity.</li></ul>|
-|`--cache-eviction value` <VersionAdd>1.1</VersionAdd> |cache eviction policy (none or 2-random) (default: "2-random")|
-|`--cache-scan-interval value` <VersionAdd>1.1</VersionAdd> |interval (in seconds) to scan cache-dir to rebuild in-memory index (default: "3600")|
-
-#### Metrics related options {#mount-metrics-options}
-
-||Items|Description|
-|-|-|
-|`--metrics=127.0.0.1:9567`|address to export metrics (default: `127.0.0.1:9567`)|
-|`--custom-labels`|custom labels for metrics, format: `key1:value1;key2:value2` (default: "")|
-|`--consul=127.0.0.1:8500`|Consul address to register (default: `127.0.0.1:8500`)|
-|`--no-usage-report`|do not send usage report (default: false)|
+</div>
 
 ### `juicefs umount` {#umount}
 
@@ -728,20 +679,22 @@ juicefs gateway redis://localhost localhost:9000
 
 #### Options
 
-Apart from options listed below, this command shares options with `juicefs mount`, be sure to refer to [`mount`](#mount) as well.
-
 |Items|Description|
 |-|-|
-| `--log value`<VersionAdd>1.2</VersionAdd>      | path for gateway log                                                                                   |
 |`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md) for details.|
 |`ADDRESS`|S3 gateway address and listening port, for example: `localhost:9000`|
+|`--log value` <VersionAdd>1.2</VersionAdd>|path for gateway log|
 |`--access-log=path`|path for JuiceFS access log.|
-| `--background, -d`<VersionAdd>1.2</VersionAdd> | run in background (default: false)                                                               |
+|`--background, -d` <VersionAdd>1.2</VersionAdd>|run in background (default: false)|
 |`--no-banner`|disable MinIO startup information (default: false)|
 |`--multi-buckets`|use top level of directories as buckets (default: false)|
 |`--keep-etag`|save the ETag for uploaded objects (default: false)|
 |`--umask=022`|umask for new file and directory in octal (default: 022)|
-| `--domain value`<VersionAdd>1.2</VersionAdd>   |domain for virtual-host-style requests|
+|`--object-tag` <VersionAdd>1.2</VersionAdd>|enable object tagging API|
+|`--domain value` <VersionAdd>1.2</VersionAdd>|domain for virtual-host-style requests|
+|`--refresh-iam-interval=5m` <VersionAdd>1.2</VersionAdd>|interval to reload gateway IAM from configuration (default: 5m)|
+
+<CommonOptions />
 
 ### `juicefs webdav` {#webdav}
 
@@ -757,19 +710,19 @@ juicefs webdav redis://localhost localhost:9007
 
 #### Options
 
-Apart from options listed below, this command shares options with `juicefs mount`, be sure to refer to [`mount`](#mount) as well.
-
 |Items|Description|
 |-|-|
 |`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md) for details.|
 |`ADDRESS`|WebDAV address and listening port, for example: `localhost:9007`.|
-|`--cert-file` <VersionAdd>1.1</VersionAdd> |certificate file for HTTPS|
-|`--key-file` <VersionAdd>1.1</VersionAdd> |key file for HTTPS|
+|`--cert-file` <VersionAdd>1.1</VersionAdd>|certificate file for HTTPS|
+|`--key-file` <VersionAdd>1.1</VersionAdd>|key file for HTTPS|
 |`--gzip`|compress served files via gzip (default: false)|
 |`--disallowList`|disallow list a directory (default: false)|
-| `--log value`<VersionAdd>1.2</VersionAdd>      | path for WebDAV log|
-|`--access-log=path`|path for JuiceFS access log.|
-| `--background, -d`<VersionAdd>1.2</VersionAdd> | run in background (default: false)|
+|`--log value` <VersionAdd>1.2</VersionAdd>|path for WebDAV log|
+|`--access-log=path`|path for JuiceFS access log|
+|`--background, -d` <VersionAdd>1.2</VersionAdd>|run in background (default: false)|
+
+<CommonOptions />
 
 ## Tool {#tool}
 
@@ -820,6 +773,7 @@ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage=s3 http
 |`--storage=file`|Object storage type (e.g. `s3`, `gs`, `oss`, `cos`) (default: `file`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)|
 |`--access-key=value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
 |`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
+|`--session-token value` <VersionAdd>1.0</VersionAdd>|session token for object storage|
 |`--block-size=4096`|size of each IO block in KiB (default: 4096)|
 |`--big-object-size=1024`|size of each big object in MiB (default: 1024)|
 |`--small-object-size=128`|size of each small object in KiB (default: 128)|
@@ -855,6 +809,8 @@ juicefs warmup -f /tmp/filelist.txt
 |`--file=path, -f path`|file containing a list of paths (each line is a file path)|
 |`--threads=50, -p 50`|number of concurrent workers, default to 50. Reduce this number in low bandwidth environment to avoid download timeouts|
 |`--background, -b`|run in background (default: false)|
+|`--evict` <VersionAdd>1.2</VersionAdd>|evict cached blocks|
+|`--check` <VersionAdd>1.2</VersionAdd>|check whether the data blocks are cached or not|
 
 ### `juicefs rmr` {#rmr}
 
@@ -914,8 +870,14 @@ In which:
 |Items|Description|
 |-|-|
 |`--start=KEY, -s KEY, --end=KEY, -e KEY`|Provide object storage key range for syncing.|
+|`--end KEY, -e KEY`| the last `KEY` to sync |
 |`--exclude=PATTERN`|Exclude keys matching PATTERN.|
 |`--include=PATTERN`|Include keys matching PATTERN, need to be used with `--exclude`.|
+|`--match-full-path` <VersionAdd>1.2</VersionAdd>|match filters again the full path (default: false)|
+|`--max-size-SIZE` <VersionAdd>1.2</VersionAdd>|skip files larger than `SIZE`|
+|`--min-size-SIZE` <VersionAdd>1.2</VersionAdd>|skip files smaller than `SIZE`|
+|`--max-age=DURATION` <VersionAdd>1.2</VersionAdd>|Skip files whose last modification time exceeds `DURATION`, in seconds. For example, `--max-age=3600` means to synchronize only files that have been modified within 1 hour.|
+|`--min-age=DURATION` <VersionAdd>1.2</VersionAdd>|Skip files whose last modification time is no more than `DURATION`, in seconds. For example, `--min-age=3600` means to synchronize only files whose last modification time is more than 1 hour from the current time.|
 |`--limit=-1`|Limit the number of objects that will be processed, default to -1 which means unlimited.|
 |`--update, -u`|Update existing files if the source files' `mtime` is newer, default to false.|
 |`--force-update, -f`|Always update existing file, default to false.|
@@ -929,6 +891,7 @@ In which:
 |`--dirs`|Sync empty directories as well.|
 |`--perms`|Preserve permissions, default to false.|
 |`--links, -l`|Copy symlinks as symlinks default to false.|
+|`--inplace` <VersionAdd>1.2</VersionAdd>|When a file in the source path is modified, directly modify the file with the same name in the destination path instead of first writing a temporary file in the destination path and then atomically renaming the temporary file to the real file name. This option only makes sense when the `--update` option is enabled and the storage system of the destination path supports in-place modification of files (such as JuiceFS, HDFS, NFS). That is to say, if the storage system of the destination path is object storage, enable this option is invalid. (default: false)|
 |`--delete-src, --deleteSrc`|Delete objects that already exist in destination. Different from rsync, files won't be deleted at the first run, instead they will be deleted at the next run, after files are successfully copied to the destination.|
 |`--delete-dst, --deleteDst`|Delete extraneous objects from destination.|
 |`--check-all`|Verify the integrity of all files in source and destination, default to false. Comparison is done on byte streams, which comes at a performance cost.|
@@ -948,10 +911,17 @@ In which:
 
 #### Cluster related options {#sync-cluster-related-options}
 
-|Items| Description                                                                                                                                                                                                                       |
-|-|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|Items| Description|
+|-|-|
 |`--manager-addr=ADDR`| The listening address of the Manager node in distributed synchronization mode in the format: `<IP>:[port]`. If not specified, it listens on a random port. If this option is omitted, it listens on a random local IPv4 address and a random port. |
-|`--worker=ADDR,ADDR`| Worker node addresses used in distributed syncing, comma separated.                                                                                                                                                               |
+|`--worker=ADDR,ADDR`| Worker node addresses used in distributed syncing, comma separated. |
+
+#### Metrics related options {#sync-metircs-related-options}
+
+|Items|Description|
+|-|-|
+|`--metrics value` <VersionAdd>1.2</VersionAdd>|address to export metrics (default: "127.0.0.1:9567")|
+|`--consul value` <VersionAdd>1.2</VersionAdd>|Consul address to register (default: "127.0.0.1:8500")|
 
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 

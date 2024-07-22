@@ -90,7 +90,7 @@ Grafana 仪表盘如下图：
 
 ### FUSE 挂载 {#mount-point}
 
-当通过 [`juicefs mount`](../reference/command_reference.md#mount) 命令挂载 JuiceFS 文件系统后，可以通过 `http://localhost:9567/metrics` 这个地址收集监控指标，你也可以通过 `--metrics` 选项自定义。如：
+当通过 [`juicefs mount`](../reference/command_reference.mdx#mount) 命令挂载 JuiceFS 文件系统后，可以通过 `http://localhost:9567/metrics` 这个地址收集监控指标，你也可以通过 `--metrics` 选项自定义。如：
 
 ```shell
 juicefs mount --metrics localhost:9567 ...

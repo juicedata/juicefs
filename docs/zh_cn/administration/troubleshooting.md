@@ -98,8 +98,8 @@ $ ls -l /usr/bin/fusermount
 
 首先，在网速慢的时候，JuiceFS 客户端上传／下载文件容易超时（类似上方的错误日志），这种情况下可以考虑：
 
-* 降低上传并发度，比如 [`--max-uploads=1`](../reference/command_reference.md#mount)，避免上传超时。
-* 降低读写缓冲区大小，比如 [`--buffer-size=64`](../reference/command_reference.md#mount) 或者更小。当带宽充裕时，增大读写缓冲区能提升并发性能。但在低带宽场景下使用过大的读写缓冲区，`flush` 的上传时间会很长，因此容易超时。
+* 降低上传并发度，比如 [`--max-uploads=1`](../reference/command_reference.mdx#mount-data-storage-options)，避免上传超时。
+* 降低读写缓冲区大小，比如 [`--buffer-size=64`](../reference/command_reference.mdx#mount-data-cache-options) 或者更小。当带宽充裕时，增大读写缓冲区能提升并发性能。但在低带宽场景下使用过大的读写缓冲区，`flush` 的上传时间会很长，因此容易超时。
 * 默认 GET／PUT 请求超时时间为 60 秒，因此增大 `--get-timeout` 以及 `--put-timeout`，可以改善读写超时的情况。
 
 此外，低带宽环境下需要慎用[「客户端写缓存」](../guide/cache.md#client-write-cache)特性。先简单介绍一下 JuiceFS 的后台任务设计：每个 JuiceFS 客户端默认都启用后台任务，后台任务中会执行碎片合并（compaction）、异步删除等工作，而如果节点网络状况太差，则会降低系统整体性能。更糟的是如果该节点还启用了客户端写缓存，则容易出现碎片合并后上传缓慢，导致其他节点无法读取该文件的危险情况：
@@ -111,7 +111,7 @@ $ ls -l /usr/bin/fusermount
 <WARNING>: fail to read sliceId 1771585458 (off:4194304, size:4194304, clen: 37746372): get chunks/0/0/1_0_4194304: oss: service returned error: StatusCode=404, ErrorCode=NoSuchKey, ErrorMessage="The specified key does not exist.", RequestId=62E8FB058C0B5C3134CB80B6
 ```
 
-为了避免此类问题，我们推荐在低带宽节点上禁用后台任务，也就是为挂载命令添加 [`--no-bgjob`](../reference/command_reference.md#mount) 参数。
+为了避免此类问题，我们推荐在低带宽节点上禁用后台任务，也就是为挂载命令添加 [`--no-bgjob`](../reference/command_reference.mdx#mount-metadata-options) 参数。
 
 ### 警告日志：找不到对象存储块 {#warning-log-block-not-found-in-object-storage}
 

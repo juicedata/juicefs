@@ -11,7 +11,7 @@ JuiceFS enables the trash feature by default, files deleted will be moved in a h
 
 When using `juicefs format` command to initialize JuiceFS volume, users are allowed to specify `--trash-days <val>` to set the number of days which files are kept in the `.trash` directory. Within this period, user-removed files are not actually purged, so the file system usage shown in the output of `df` command will not decrease, and the blocks in the object storage will still exist.
 
-To control the expiration settings, use the [`--trash-days`](../reference/command_reference.md#format) option which is available for both `juicefs format` and `juicefs config`:
+To control the expiration settings, use the [`--trash-days`](../reference/command_reference.mdx#format) option which is available for both `juicefs format` and `juicefs config`:
 
 ```shell
 # Creating a new file system
@@ -24,7 +24,7 @@ juicefs config META-URL --trash-days=7
 juicefs config META-URL --trash-days=0
 ```
 
-In addition, the automatic cleaning of the trash relies on the background job of the JuiceFS client. To ensure that the background job can be executed properly, at least one online mount point is required, and the [`--no-bgjob`](../reference/command_reference.md#mount) parameter should not be used when mounting the file system.
+In addition, the automatic cleaning of the trash relies on the background job of the JuiceFS client. To ensure that the background job can be executed properly, at least one online mount point is required, and the [`--no-bgjob`](../reference/command_reference.mdx#mount-metadata-options) parameter should not be used when mounting the file system.
 
 ## Recover files {#recover}
 
@@ -36,7 +36,7 @@ If you have found the desired files in Trash, you can recover them using `mv`:
 mv .trash/2022-11-30-10/[parent inode]-[file inode]-[file name] .
 ```
 
-Files within the Trash directory lost all their directory structure information, and are stored in a "flatten" style, however the parent directory inode is preserved in the file name, if you have forgotten the file name, look for parent directory inode using [`juicefs info`](../reference/command_reference.md#info), and then track down the desired files.
+Files within the Trash directory lost all their directory structure information, and are stored in a "flatten" style, however the parent directory inode is preserved in the file name, if you have forgotten the file name, look for parent directory inode using [`juicefs info`](../reference/command_reference.mdx#info), and then track down the desired files.
 
 Assuming the mount point being `/jfs`, and you've accidentally deleted `/jfs/data/config.json`, but you cannot directly recover this `config.json` because you've forgotten its name, use the following procedure to locate the parent directory inode, and then locate the corresponding trash files.
 
@@ -81,7 +81,7 @@ $ tree .trash/2023-08-14-05
 └── 16-18-config.json
 ```
 
-To resolve such inconvenience, JuiceFS v1.1 provides the [`restore`](../reference/command_reference.md#restore) subcommand to quickly restore deleted files, while preserving its original directory structure. Run this procedure as follows:
+To resolve such inconvenience, JuiceFS v1.1 provides the [`restore`](../reference/command_reference.mdx#restore) subcommand to quickly restore deleted files, while preserving its original directory structure. Run this procedure as follows:
 
 ```shell
 # Run the restore command to reconstruct directory structure within the Trash
@@ -107,7 +107,7 @@ juicefs restore $META_URL 2023-08-14-05 --put-back
 
 When files in the trash directory reach their expiration time, they will be automatically cleaned up. It is important to note that the file cleaning is performed by the background job of the JuiceFS client, which is scheduled to run every hour by default. Therefore, when there are a large number of expired files, the cleaning speed of the object storage may not be as fast as expected, and it may take some time to see the change in storage capacity.
 
-If you want to permanently delete files before their expiration time, you need to have `root` privileges and use [`juicefs rmr`](../reference/command_reference.md#rmr) or the system's built-in `rm` command to delete the files in the `.trash` directory, so that storage space can be immediately released.
+If you want to permanently delete files before their expiration time, you need to have `root` privileges and use [`juicefs rmr`](../reference/command_reference.mdx#rmr) or the system's built-in `rm` command to delete the files in the `.trash` directory, so that storage space can be immediately released.
 
 For example, to permanently delete a directory in the trash:
 
@@ -121,7 +121,7 @@ If you want to delete expired files more quickly, you can mount multiple mount p
 
 Apart from user deleted files, there's another type of data which also resides in Trash, which isn't directly visible from the `.trash` directory, they are stale slices created by file edits and overwrites. Read more in [How JuiceFS stores files](../introduction/architecture.md#how-juicefs-store-files). To sum up, if applications constantly delete or overwrite files, object storage usage will exceed file system usage.
 
-Although stale slices cannot be browsed or manipulated, you can use [`juicefs status`](../reference/command_reference.md#status) to observe its scale:
+Although stale slices cannot be browsed or manipulated, you can use [`juicefs status`](../reference/command_reference.mdx#status) to observe its scale:
 
 ```shell
 # The Trash Slices field displayed below is the number of stale slices

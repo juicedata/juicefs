@@ -38,7 +38,7 @@ Besides the features covered by pjdfstest, JuiceFS provides:
 - POSIX traditional record locks (fcntl).
 
 :::note
-POSIX record locks are classified as **traditional locks** ("process-associated") and **OFD locks** (Open file description locks), and their locking operation commands are `F_SETLK` and `F_OFD_SETLK` respectively. Due to the implementation of the FUSE kernel module, JuiceFS currently only supports traditional record locks. More details can be found at: <https://man7.org/linux/man-pages/man2/fcntl.2.html>.
+POSIX record locks are classified as **traditional locks** ("process-associated") and **OFD locks** (Open file description locks), and their locking operation commands are `F_SETLK` and `F_OFD_SETLK` respectively. Due to the implementation of the FUSE kernel module, JuiceFS currently only supports traditional record locks. More details can be found at: [https://man7.org/linux/man-pages/man2/fcntl.2.html](https://man7.org/linux/man-pages/man2/fcntl.2.html).
 :::
 
 ## LTP

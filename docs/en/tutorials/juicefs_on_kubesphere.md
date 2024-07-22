@@ -39,7 +39,7 @@ Click in the workspace to enter the application management, select "App Reposito
 
 #### Method two: Application Template
 
-Download the chart compressed package from the JuiceFS CSI Driver warehouse: <https://github.com/juicedata/juicefs-csi-driver/releases>.
+Download the chart compressed package from the JuiceFS CSI Driver warehouse: [https://github.com/juicedata/juicefs-csi-driver/releases](https://github.com/juicedata/juicefs-csi-driver/releases).
 
 In the "Workspace", click to enter the "App Management", select "App Templates", click "create", upload the chart compression package:
 

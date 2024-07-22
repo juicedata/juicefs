@@ -10,7 +10,7 @@ slug: /metadata_dump_load
 - JuiceFS v1.0.4 开始支持通过 `load` 命令恢复加密的元数据备份
 :::
 
-JuiceFS 支持[多种元数据引擎](../reference/how_to_set_up_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 [`dump`](../reference/command_reference.md#dump) 命令允许将所有元数据以统一格式写入到 JSON 文件进行备份。同时，JuiceFS 也提供了 [`load`](../reference/command_reference.md#load) 命令，允许将备份恢复或迁移到任意元数据存储引擎。这个导出导入流程也可以用来将 JuiceFS 社区版文件系统迁移到企业版（参考[企业版文档](https://juicefs.com/docs/zh/cloud/metadata_dump_load)），反之亦然。
+JuiceFS 支持[多种元数据引擎](../reference/how_to_set_up_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 [`dump`](../reference/command_reference.mdx#dump) 命令允许将所有元数据以统一格式写入到 JSON 文件进行备份。同时，JuiceFS 也提供了 [`load`](../reference/command_reference.mdx#load) 命令，允许将备份恢复或迁移到任意元数据存储引擎。这个导出导入流程也可以用来将 JuiceFS 社区版文件系统迁移到企业版（参考[企业版文档](https://juicefs.com/docs/zh/cloud/metadata_dump_load)），反之亦然。
 
 ## 元数据备份 {#backup}
 
@@ -81,7 +81,7 @@ JuiceFS 会按照以下规则定期清理备份：
 
 ## 元数据恢复与迁移 {#recovery-and-migration}
 
-使用 [`load`](../reference/command_reference.md#load) 命令可以将 `dump` 命令导出的元数据恢复到一个空数据库中，比如：
+使用 [`load`](../reference/command_reference.mdx#load) 命令可以将 `dump` 命令导出的元数据恢复到一个空数据库中，比如：
 
 ```shell
 juicefs load redis://192.168.1.6:6379/1 meta-dump.json
@@ -111,7 +111,7 @@ juicefs load redis://192.168.1.6:6379/1 meta-dump.json
 juicefs dump redis://192.168.1.6:6379/1 | juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs
 ```
 
-需要注意的是，由于 `dump` 导出的备份中默认排除了对象存储的 API 访问密钥，不论恢复还是迁移元数据，完成操作后都需要使用 [`juicefs config`](../reference/command_reference.md#config) 命令把文件系统关联的对象存储的认证信息再添加回去，例如：
+需要注意的是，由于 `dump` 导出的备份中默认排除了对象存储的 API 访问密钥，不论恢复还是迁移元数据，完成操作后都需要使用 [`juicefs config`](../reference/command_reference.mdx#config) 命令把文件系统关联的对象存储的认证信息再添加回去，例如：
 
 ```shell
 juicefs config --secret-key xxxxx mysql://user:password@(192.168.1.6:3306)/juicefs

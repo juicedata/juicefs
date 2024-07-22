@@ -13,7 +13,7 @@ Sequential writes are optimized, requiring only one continuously growing slice a
 
 ![internals-write](../images/internals-write.png)
 
-Use [`juicefs stats`](../reference/command_reference.md#stats) to obtain real-time performance monitoring metrics.
+Use [`juicefs stats`](../reference/command_reference.mdx#stats) to obtain real-time performance monitoring metrics.
 
 ![internals-stats](../images/internals-stats.png)
 
@@ -32,7 +32,7 @@ When JuiceFS uploads objects smaller than the block size, it simultaneously writ
 
 Write operations are immediately committed to the client buffer, resulting in very low write latency (typically just a few microseconds). The actual upload to the object storage is automatically triggered internally when certain conditions are met, such as when the size or number of slices exceeds their limit, or data stays in the buffer for too long. Explicit calls, such as closing a file or invoking `fsync`, can also trigger uploading.
 
-The client buffer is only released after the data stored inside is uploaded. In scenarios with high write concurrency, if the buffer size (configured using [`--buffer-size`](../reference/command_reference.md#mount)) is not big enough, or the object storage's performance insufficient, write blocking may occur, because the buffer cannot be released timely. The real-time buffer usage is shown in the `usage.buf` field in the metrics figure. To slow things down, The JuiceFS client introduces a 10 ms delay to every write when the buffer usage exceeds the threshold. If the buffer usage is over twice the threshold, new writes are completely suspended until the buffer is released. Therefore, if the write latency keeps increasing or the buffer usage has exceeded the threshold for a long while, you should increase `--buffer-size`. Also consider increasing the maximum number of upload concurrency ([`--max-uploads`](../reference/command_reference.md#mount), defaults to 20), which improves the upload bandwidth, thus boosting buffer release.
+The client buffer is only released after the data stored inside is uploaded. In scenarios with high write concurrency, if the buffer size (configured using [`--buffer-size`](../reference/command_reference.mdx#mount-data-cache-options)) is not big enough, or the object storage's performance insufficient, write blocking may occur, because the buffer cannot be released timely. The real-time buffer usage is shown in the `usage.buf` field in the metrics figure. To slow things down, The JuiceFS client introduces a 10 ms delay to every write when the buffer usage exceeds the threshold. If the buffer usage is over twice the threshold, new writes are completely suspended until the buffer is released. Therefore, if the write latency keeps increasing or the buffer usage has exceeded the threshold for a long while, you should increase `--buffer-size`. Also consider increasing the maximum number of upload concurrency ([`--max-uploads`](../reference/command_reference.mdx#mount-data-storage-options), defaults to 20), which improves the upload bandwidth, thus boosting buffer release.
 
 ### Random writes {#random-write}
 
@@ -52,7 +52,7 @@ Learn more in [Client Write Cache](../guide/cache.md#client-write-cache).
 
 ## Data reading process {#workflow-of-read}
 
-JuiceFS supports sequential reads and random reads (including mmap-based random reads). During read requests, the object corresponding to the block is completely read through the `GetObject` API of the object storage, or only a certain range of data in the object may be read (e.g., the read range is limited by the `Range` parameter of [S3 API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html)). Meanwhile, prefetching is performed (controlled by the [`--prefetch`](../reference/command_reference.md#mount) option) to download the complete data block into the local cache directory, as shown in the `blockcache` write speed in the second stage of the above metrics figure. This is very good for sequential reads as all cached data is utilized, maximizing the object storage access efficiency. The dataflow is illustrated in the figure below:
+JuiceFS supports sequential reads and random reads (including mmap-based random reads). During read requests, the object corresponding to the block is completely read through the `GetObject` API of the object storage, or only a certain range of data in the object may be read (e.g., the read range is limited by the `Range` parameter of [S3 API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html)). Meanwhile, prefetching is performed (controlled by the [`--prefetch`](../reference/command_reference.mdx#mount) option) to download the complete data block into the local cache directory, as shown in the `blockcache` write speed in the second stage of the above metrics figure. This is very good for sequential reads as all cached data is utilized, maximizing the object storage access efficiency. The dataflow is illustrated in the figure below:
 
 ![internals-read](../images/internals-read.png)
 

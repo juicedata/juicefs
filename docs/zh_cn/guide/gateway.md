@@ -46,7 +46,7 @@ JuiceFS S3 网关的常见的使用场景有：
 
    `gateway` 子命令至少需要提供两个参数，第一个是元数据引擎的 URL，第二个是 S3 网关监听的地址和端口。JuiceFS v1.2 开始支持后台启动，可以使用 `--background` 或 `-d` 选项将 S3 网关作为后台服务运行。
 
-   S3 Gateway 默认没有启用[多桶支持](#多桶支持)，可以添加 `--multi-buckets` 选项开启。还可以添加[其他选项](../reference/command_reference.md#gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
+   S3 Gateway 默认没有启用[多桶支持](#多桶支持)，可以添加 `--multi-buckets` 选项开启。还可以添加[其他选项](../reference/command_reference.mdx#gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
 
     ```shell
     juicefs gateway --cache-size 20480 redis://localhost:6379/1 localhost:9000
@@ -149,8 +149,8 @@ juicefs gateway redis://localhost:6379/1 localhost:9000 --multi-buckets
 
 ### 启用虚拟主机风格请求
 
-默认情况下，S3 网关支持格式为 <http://mydomain.com/bucket/object> 的路径类型请求。
-`MINIO_DOMAIN` 环境变量被用来启用虚拟主机类型请求。如果请求的`Host`头信息匹配 `(.+).mydomain.com`，则匹配的模式 `$1` 被用作 bucket，并且路径被用作 object.
+默认情况下，S3 网关支持格式为 `http://mydomain.com/bucket/object` 的路径类型请求。`MINIO_DOMAIN` 环境变量被用来启用虚拟主机类型请求。如果请求的 `Host` 头信息匹配 `(.+).mydomain.com`，则匹配的模式 `$1` 被用作 bucket，并且路径被用作 object.
+
 示例：
 
 ```shell

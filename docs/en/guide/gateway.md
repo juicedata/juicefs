@@ -44,7 +44,7 @@ Common application scenarios for JuiceFS S3 Gateway include:
 
     The `gateway` subcommand requires at least two parameters: the database URL for storing metadata and the address/port for JuiceFS S3 Gateway to listen on. Since version 1.2, JuiceFS supports running services in the background with options such as `--background` or `-d`, allowing them to operate as background processes.
 
-    By default, [Multi-bucket support](#multi-bucket-support) is not enabled. You can enable it by adding the `--multi-buckets` option. Additionally, you can add [other options](../reference/command_reference.md#gateway) to `gateway` subcommands as needed. For example, you can set the default local cache to 20 GiB.
+    By default, [Multi-bucket support](#multi-bucket-support) is not enabled. You can enable it by adding the `--multi-buckets` option. Additionally, you can add [other options](../reference/command_reference.mdx#gateway) to `gateway` subcommands as needed. For example, you can set the default local cache to 20 GiB.
 
     ```shell
     juicefs gateway --cache-size 20480 redis://localhost:6379/1 localhost:9000

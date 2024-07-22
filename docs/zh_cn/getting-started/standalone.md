@@ -23,7 +23,7 @@ curl -sSL https://d.juicefs.com/install | sh -
 
 ### 基本概念
 
-创建文件系统使用客户端提供的 [`format`](../reference/command_reference.md#format) 命令，一般格式为：
+创建文件系统使用客户端提供的 [`format`](../reference/command_reference.mdx#format) 命令，一般格式为：
 
 ```shell
 juicefs format [command options] META-URL NAME
@@ -67,7 +67,7 @@ juicefs format sqlite3://myjfs.db myjfs
 
 ### 基本概念
 
-挂载文件系统使用客户端提供的 [`mount`](../reference/command_reference.md#mount) 命令，一般格式为：
+挂载文件系统使用客户端提供的 [`mount`](../reference/command_reference.mdx#mount) 命令，一般格式为：
 
 ```shell
 juicefs mount [command options] META-URL MOUNTPOINT

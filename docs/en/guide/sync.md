@@ -4,7 +4,7 @@ sidebar_position: 7
 description: Learn how to use the data sync tool in JuiceFS.
 ---
 
-[`juicefs sync`](../reference/command_reference.md#sync) is a powerful data migration tool, which can copy data across all supported storages including object storage, JuiceFS itself, and local file systems, you can freely copy data between any of these systems. In addition, it supports remote directories through SSH, HDFS, WebDAV, etc. while providing advanced features such as  incremental synchronization, and pattern matching (like rsync), and distributed syncing.
+[`juicefs sync`](../reference/command_reference.mdx#sync) is a powerful data migration tool, which can copy data across all supported storages including object storage, JuiceFS itself, and local file systems, you can freely copy data between any of these systems. In addition, it supports remote directories through SSH, HDFS, WebDAV, etc. while providing advanced features such as  incremental synchronization, and pattern matching (like rsync), and distributed syncing.
 
 ## Basic Usage
 
@@ -20,7 +20,7 @@ Arguments:
 
 - `SRC` is the source data address or path;
 - `DST` is the destination address or path;
-- `[command options]` are synchronization options. See [command reference](../reference/command_reference.md#sync) for more details.
+- `[command options]` are synchronization options. See [command reference](../reference/command_reference.mdx#sync) for more details.
 
 Address format:
 
@@ -276,8 +276,8 @@ Here are some examples of layered filtering with `exclude`/`include` rules:
 + For `dir_name/***`, it matches all files at all layers under the `dir_name` directory. Note that each subpath element is recursively traversed from top to bottom, so `include`/`exclude` matching rules apply recursively to each full path element. For example, to include `/foo/bar/baz`, both `/foo` and `/foo/bar` should not be excluded. When a file is found to be transferred, the exclusion matching pattern short-circuits the exclusion traversal at that file's directory layer. If a parent directory is excluded, deeper include pattern matching is ineffective. This is crucial when using trailing `*`. For example, the following example will not work as expected:
 
     ```
-    --include='/some/path/this-file-will-not-be-found' 
-    --include='/file-is-included' 
+    --include='/some/path/this-file-will-not-be-found'
+    --include='/file-is-included'
     --exclude='*'
     ```
 
