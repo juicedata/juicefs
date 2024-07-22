@@ -334,8 +334,9 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 				continue
 			}
 			if stat, ok := fi.(*fs.FileStat); ok && stat.IsSymlink() {
+				var err syscall.Errno
 				p := n.path(bucket, prefixDir, fi.Name())
-				if _, err := n.fs.Stat(mctx, p); err != 0 {
+				if fi, err = n.fs.Stat(mctx, p); err != 0 {
 					logger.Errorf("stat %s: %s", p, err)
 					continue
 				}
@@ -392,7 +393,6 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 				}
 				info = &minio.ObjectInfo{
 					Bucket:  bucket,
-					Name:    object,
 					ModTime: fi.ModTime(),
 					Size:    size,
 					IsDir:   fi.IsDir(),
@@ -405,7 +405,6 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 				now := time.Now()
 				info = &minio.ObjectInfo{
 					Bucket:  bucket,
-					Name:    object,
 					ModTime: now,
 					Size:    0,
 					IsDir:   false,
@@ -418,7 +417,7 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 		if info == nil {
 			return obj, jfsToObjectErr(ctx, eno, bucket, object)
 		}
-
+		info.Name = object
 		if n.gConf.KeepEtag && !strings.HasSuffix(object, sep) {
 			etag, _ := n.fs.GetXattr(mctx, n.path(bucket, object), s3Etag)
 			info.ETag = string(etag)
