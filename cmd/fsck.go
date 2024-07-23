@@ -64,6 +64,7 @@ $ juicefs fsck redis://localhost --path /d1/d2 --recursive`,
 			&cli.BoolFlag{
 				Name:    "recursive",
 				Aliases: []string{"r"},
+				Value:   true,
 				Usage:   "recursively check or repair",
 			},
 			&cli.BoolFlag{
