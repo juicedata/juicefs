@@ -93,4 +93,4 @@ For details about the logrotate configuration, see this [link](https://linux.die
 
 ## Command line auto-completion
 
-JuiceFS provides command line auto-completion scripts for Bash and Zsh to facilitate the use of `juicefs` commands. For details, see this [document](../reference/command_reference.mdx#Auto-completion) for details.
+JuiceFS provides command line auto-completion scripts for Bash and Zsh to facilitate the use of `juicefs` commands. For details, see this [document](../reference/command_reference.mdx#auto-completion) for details.

@@ -8,6 +8,7 @@ description: JuiceFS 客户端的所有命令及选项的说明、用法和示�
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+<!-- 特别提示：由于 mount、gateway 和 webdav 命令存在很多公共选项，为了简化文档维护，我们已经将这些公共选项统一写在 _common_options.mdx 文件中，如需更新相关内容，请查看该文件。 -->
 import CommonOptions from './_common_options.mdx';
 
 在终端输入 `juicefs` 并执行，就能看到所有可用的命令。在每个子命令后面添加 `-h/--help` 并运行，就能获得该命令的详细帮助信息，例如 `juicefs format -h`。
