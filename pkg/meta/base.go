@@ -121,6 +121,8 @@ type engine interface {
 	doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno
 	doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno
 	cacheACLs(ctx Context) error
+
+	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -1749,12 +1751,158 @@ func (m *baseMeta) walk(ctx Context, inode Ino, p string, attr *Attr, walkFn met
 	return 0
 }
 
-func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool, statAll bool) error {
+func (m *baseMeta) GetMetaChecker(ctx Context, repair, statAll bool) func(Ino, string, *Attr) error {
+	format := m.GetFormat()
+	return func(inode Ino, path string, attr *Attr) error {
+		var err error
+		if attr.Typ != TypeDirectory {
+			return err
+		}
+
+		var attrBroken, statBroken bool
+		if attr.Full {
+			nlink, st := m.countDirNlink(ctx, inode)
+			if st == syscall.ENOENT {
+				return err
+			}
+			if st != 0 {
+				return errors.Errorf("count nlink for inode %d: %v", inode, st)
+			}
+			if attr.Nlink != nlink {
+				logger.Warnf("nlink of %s should be %d, but got %d", path, nlink, attr.Nlink)
+				attrBroken = true
+			}
+		} else {
+			logger.Warnf("attribute of %s is missing", path)
+			attrBroken = true
+		}
+
+		if attrBroken {
+			if repair {
+				if !attr.Full {
+					now := time.Now().Unix()
+					attr.Mode = 0644
+					attr.Uid = ctx.Uid()
+					attr.Gid = ctx.Gid()
+					attr.Atime = now
+					attr.Mtime = now
+					attr.Ctime = now
+					attr.Length = 4 << 10
+				}
+				if st1 := m.en.doRepair(ctx, inode, attr); st1 == 0 || st1 == syscall.ENOENT {
+					logger.Debugf("Path %s (inode %d) is successfully repaired", path, inode)
+				} else {
+					err = errors.Errorf("repair path %s inode %d: %s", path, inode, st1)
+				}
+			} else {
+				err = errors.Errorf("Path %s (inode %d) can be repaired, please re-run with '--path %s --repair' to fix it", path, inode, path)
+			}
+		}
+
+		if format.DirStats {
+			stat, st := m.en.doGetDirStat(ctx, inode, false)
+			if st == syscall.ENOENT {
+				return err
+			}
+			if st != 0 {
+				return errors.Errorf("get dir stat for inode %d: %v", inode, st)
+			}
+			if stat == nil || stat.space < 0 || stat.inodes < 0 {
+				logger.Warnf("usage stat of %s is missing or broken", path)
+				statBroken = true
+			}
+
+			if !repair && statAll {
+				s, st := m.calcDirStat(ctx, inode)
+				if st != 0 {
+					return errors.Errorf("calc dir stat for inode %d: %v", inode, st)
+				}
+				if stat.space != s.space || stat.inodes != s.inodes {
+					logger.Warnf("usage stat of %s should be %v, but got %v", path, s, stat)
+					statBroken = true
+				}
+			}
+
+			if repair {
+				if statBroken || statAll {
+					if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 || st == syscall.ENOENT {
+						logger.Debugf("Stat of path %s (inode %d) is successfully synced", path, inode)
+					} else {
+						err = errors.Errorf("sync stat of path %s inode %d: %s", path, inode, st)
+					}
+				}
+			} else if statBroken {
+				err = errors.Errorf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair --sync-dir-stat' to fix it", path, inode, path)
+			}
+		}
+		return err
+	}
+}
+
+func (m *baseMeta) Check(ctx Context, fpath string, recursive bool, threads uint, metaChecker func(Ino, string, *Attr) error, dataChecker func(Ino, []Slice) error, progress *utils.Progress) error {
+	if metaChecker == nil && dataChecker == nil {
+		return nil
+	} else if metaChecker == nil && dataChecker != nil {
+		var sliceCSpin *utils.Bar
+		if progress != nil {
+			sliceCSpin = progress.AddCountSpinner("Listed slices")
+		}
+		var showProgress func()
+		if sliceCSpin != nil {
+			showProgress = sliceCSpin.Increment
+		}
+
+		slices := make(map[Ino][]Slice)
+		r := m.en.ListSlices(ctx, slices, false, showProgress)
+		if r != 0 {
+			return errors.Errorf("list all slices: %s", r)
+		}
+		if sliceCSpin != nil {
+			sliceCSpin.Done()
+		}
+
+		var delfilesSpin *utils.Bar
+		if progress != nil {
+			delfilesSpin = progress.AddCountSpinner("Deleted files")
+		}
+		delfiles := make(map[Ino]bool)
+		err := m.ScanDeletedObject(ctx, nil, nil, nil, func(ino Ino, size uint64, ts int64) (clean bool, err error) {
+			if delfilesSpin != nil {
+				delfilesSpin.Increment()
+			}
+			delfiles[ino] = true
+			return false, nil
+		})
+		if err != nil {
+			logger.Warnf("scan deleted objects: %s", err)
+		}
+		if delfilesSpin != nil {
+			delfilesSpin.Done()
+		}
+
+		var skippedSlices *utils.Bar
+		if progress != nil {
+			skippedSlices = progress.AddCountSpinner("Skipped slices")
+		}
+		for inode, ss := range slices {
+			if delfiles[inode] {
+				if skippedSlices != nil {
+					skippedSlices.IncrBy(len(ss))
+				}
+				continue
+			}
+			dataChecker(inode, ss)
+		}
+		if skippedSlices != nil {
+			skippedSlices.Done()
+		}
+	}
+
 	var attr Attr
 	var inode = RootInode
 	var parent = RootInode
 	attr.Typ = TypeDirectory
-	if fpath == "/" {
+	if fpath == "/" || fpath == "" {
 		if st := m.GetAttr(ctx, inode, &attr); st != 0 && st != syscall.ENOENT {
 			logger.Errorf("GetAttr inode %d: %s", inode, st)
 			return st
@@ -1766,8 +1914,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 		for i, name := range ps {
 			parent = inode
 			if st := m.Lookup(ctx, parent, name, &inode, &attr, false); st != 0 {
-				logger.Errorf("Lookup parent %d name %s: %s", parent, name, st)
-				return st
+				return errors.Errorf("Lookup parent %s name %s err: %s", parent, name, st)
 			}
 			if !attr.Full && i < len(ps)-1 {
 				// missing attribute
@@ -1805,117 +1952,42 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 		}
 	}()
 
-	format, err := m.Load(false)
-	if err != nil {
-		return errors.Wrap(err, "load meta format")
-	}
-	if statAll && !format.DirStats {
-		logger.Warn("dir stats is disabled, flag '--sync-dir-stat' will be ignored")
-	}
-
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
+	for i := 0; i < int(threads); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for e := range nodes {
-				inode := e.inode
-				path := e.path
-				attr := e.attr
-				if attr.Typ != TypeDirectory {
-					// TODO
-					continue
-				}
-
-				var attrBroken, statBroken bool
-				if attr.Full {
-					nlink, st := m.countDirNlink(ctx, inode)
-					if st == syscall.ENOENT {
-						continue
-					}
-					if st != 0 {
-						hasError = true
-						logger.Errorf("Count nlink for inode %d: %s", inode, st)
-						continue
-					}
-					if attr.Nlink != nlink {
-						logger.Warnf("nlink of %s should be %d, but got %d", path, nlink, attr.Nlink)
-						attrBroken = true
-					}
-				} else {
-					logger.Warnf("attribute of %s is missing", path)
-					attrBroken = true
-				}
-
-				if attrBroken {
-					if repair {
-						if !attr.Full {
-							now := time.Now().Unix()
-							attr.Mode = 0644
-							attr.Uid = ctx.Uid()
-							attr.Gid = ctx.Gid()
-							attr.Atime = now
-							attr.Mtime = now
-							attr.Ctime = now
-							attr.Length = 4 << 10
-						}
-						if st1 := m.en.doRepair(ctx, inode, attr); st1 == 0 || st1 == syscall.ENOENT {
-							logger.Debugf("Path %s (inode %d) is successfully repaired", path, inode)
-						} else {
-							hasError = true
-							logger.Errorf("Repair path %s inode %d: %s", path, inode, st1)
-						}
-					} else {
-						logger.Warnf("Path %s (inode %d) can be repaired, please re-run with '--path %s --repair' to fix it", path, inode, path)
+				if metaChecker != nil {
+					if err := metaChecker(e.inode, e.path, e.attr); err != nil {
+						logger.Error(err)
 						hasError = true
 					}
 				}
-
-				if format.DirStats {
-					stat, st := m.en.doGetDirStat(ctx, inode, false)
-					if st == syscall.ENOENT {
-						continue
-					}
-					if st != 0 {
-						hasError = true
-						logger.Errorf("get dir stat for inode %d: %v", inode, st)
-						continue
-					}
-					if stat == nil || stat.space < 0 || stat.inodes < 0 {
-						logger.Warnf("usage stat of %s is missing or broken", path)
-						statBroken = true
-					}
-
-					if !repair && statAll {
-						s, st := m.calcDirStat(ctx, inode)
+				if attr.Typ == TypeFile && dataChecker != nil {
+					chunkCnt := uint32((e.attr.Length + ChunkSize - 1) / ChunkSize)
+					for i := uint32(0); i < chunkCnt; i++ {
+						ss, st := m.en.doRead(ctx, e.inode, i)
 						if st != 0 {
+							logger.Errorf("path %s read inode %d chunk %d: %s", e.path, e.inode, i, st)
 							hasError = true
-							logger.Errorf("calc dir stat for inode %d: %v", inode, st)
-							continue
 						}
-						if stat.space != s.space || stat.inodes != s.inodes {
-							logger.Warnf("usage stat of %s should be %v, but got %v", path, s, stat)
-							statBroken = true
-						}
-					}
-
-					if repair {
-						if statBroken || statAll {
-							if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 || st == syscall.ENOENT {
-								logger.Debugf("Stat of path %s (inode %d) is successfully synced", path, inode)
-							} else {
-								hasError = true
-								logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, st)
+						slices := make([]Slice, 0, len(ss))
+						for _, s := range ss {
+							if s.id > 0 {
+								slices = append(slices, Slice{Id: s.id, Size: s.size})
 							}
 						}
-					} else if statBroken {
-						logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair --sync-dir-stat' to fix it", path, inode, path)
-						hasError = true
+						if err := dataChecker(e.inode, slices); err != nil {
+							logger.Error(err)
+							hasError = true
+						}
 					}
 				}
 			}
 		}()
 	}
+
 	wg.Wait()
 	if hasError {
 		return errors.New("some errors occurred, please check the log of fsck")

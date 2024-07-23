@@ -52,12 +52,14 @@ $ juicefs fsck redis://localhost --path /d1/d2 --repair
 $ juicefs fsck redis://localhost --path /d1/d2 --recursive`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:  "path",
-				Usage: "absolute path within JuiceFS to check",
+				Name:  "check",
+				Value: "both",
+				Usage: `check "meta", "data" or "both", default is "both"`,
 			},
-			&cli.BoolFlag{
-				Name:  "repair",
-				Usage: "repair specified path if it's broken",
+			&cli.StringFlag{
+				Name:  "path",
+				Value: "/",
+				Usage: "absolute path within JuiceFS to check",
 			},
 			&cli.BoolFlag{
 				Name:    "recursive",
@@ -65,158 +67,186 @@ $ juicefs fsck redis://localhost --path /d1/d2 --recursive`,
 				Usage:   "recursively check or repair",
 			},
 			&cli.BoolFlag{
+				Name:  "repair",
+				Usage: "repair specified path if it's broken (Note: repair attr and stat only)",
+			},
+			&cli.BoolFlag{
 				Name:  "sync-dir-stat",
 				Usage: "sync stat of all directories, even if they are existed and not broken (NOTE: it may take a long time for huge trees)",
+			},
+			&cli.UintFlag{
+				Name:  "threads",
+				Value: 20,
+				Usage: "number of concurrent threads",
 			},
 		},
 	}
 }
 
+const (
+	checkMetaFlag = 1 << iota
+	checkDataFlag
+)
+
 func fsck(ctx *cli.Context) error {
 	setup(ctx, 1)
+	removePassword(ctx.Args().Get(0))
+
+	var flag int
+	switch ctx.String("check") {
+	case "meta":
+		flag = checkMetaFlag
+	case "data":
+		flag = checkDataFlag
+	case "both":
+		flag = checkMetaFlag | checkDataFlag
+	default:
+		logger.Fatalf("invalid check flag: %s", ctx.String("check"))
+	}
+
 	if ctx.Bool("repair") && ctx.String("path") == "" {
 		logger.Fatalf("Please provide the path to repair with `--path` option")
 	}
-	removePassword(ctx.Args().Get(0))
+
+	path := ctx.String("path")
+	if path != "" {
+		if !strings.HasPrefix(path, "/") {
+			logger.Fatalf("File path should be the absolute path within JuiceFS")
+		}
+	}
+
 	m := meta.NewClient(ctx.Args().Get(0), nil)
 	format, err := m.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
+
+	if ctx.Bool("sync-dir-stat") && !format.DirStats {
+		logger.Warn("dir stats is disabled, flag '--sync-dir-stat' will be ignored")
+	}
+
+	threads := ctx.Uint("threads")
+	if threads == 0 {
+		threads = 20
+		logger.Warnf("threads number set to %d", threads)
+	}
+
 	var c = meta.NewContext(0, 0, []uint32{0})
-	if p := ctx.String("path"); p != "" {
-		if !strings.HasPrefix(p, "/") {
-			logger.Fatalf("File path should be the absolute path within JuiceFS")
-		}
-		return m.Check(c, p, ctx.Bool("repair"), ctx.Bool("recursive"), ctx.Bool("sync-dir-stat"))
-	}
-
-	chunkConf := chunk.Config{
-		BlockSize:  format.BlockSize * 1024,
-		Compress:   format.Compression,
-		GetTimeout: time.Second * 60,
-		PutTimeout: time.Second * 60,
-		MaxUpload:  20,
-		BufferSize: 300 << 20,
-		CacheDir:   "memory",
-	}
-
-	blob, err := createStorage(*format)
-	if err != nil {
-		logger.Fatalf("object storage: %s", err)
-	}
-	logger.Infof("Data use %s", blob)
-	blob = object.WithPrefix(blob, "chunks/")
-	objs, err := osync.ListAll(blob, "", "", "", true)
-	if err != nil {
-		logger.Fatalf("list all blocks: %s", err)
-	}
-
-	// Find all blocks in object storage
 	progress := utils.NewProgress(false)
-	blockDSpin := progress.AddDoubleSpinner("Found blocks")
-	var blocks = make(map[string]int64)
-	for obj := range objs {
-		if obj == nil {
-			break // failed listing
-		}
-		if obj.IsDir() {
-			continue
-		}
 
-		logger.Debugf("found block %s", obj.Key())
-		parts := strings.Split(obj.Key(), "/")
-		if len(parts) != 3 {
-			continue
-		}
-		name := parts[2]
-		blocks[name] = obj.Size()
-		blockDSpin.IncrInt64(obj.Size())
-	}
-	blockDSpin.Done()
-	if progress.Quiet {
-		c, b := blockDSpin.Current()
-		logger.Infof("Found %d blocks (%d bytes)", c, b)
+	var metaChecker func(meta.Ino, string, *meta.Attr) error
+	if flag&checkMetaFlag != 0 {
+		metaChecker = m.GetMetaChecker(c, ctx.Bool("repair"), ctx.Bool("sync-dir-stat"))
 	}
 
-	// List all slices in metadata engine
-	sliceCSpin := progress.AddCountSpinner("Listed slices")
-	slices := make(map[meta.Ino][]meta.Slice)
-	r := m.ListSlices(c, slices, false, sliceCSpin.Increment)
-	if r != 0 {
-		logger.Fatalf("list all slices: %s", r)
-	}
-	sliceCSpin.Done()
-	delfilesSpin := progress.AddCountSpinner("Deleted files")
-	delfiles := make(map[meta.Ino]bool)
-	err = m.ScanDeletedObject(c, nil, nil, nil, func(ino meta.Ino, size uint64, ts int64) (clean bool, err error) {
-		delfilesSpin.Increment()
-		delfiles[ino] = true
-		return false, nil
-	})
-	if err != nil {
-		logger.Warnf("scan deleted objects: %s", err)
-	}
-	delfilesSpin.Done()
-
-	// Scan all slices to find lost blocks
-	skippedSlices := progress.AddCountSpinner("Skipped slices")
-	sliceCBar := progress.AddCountBar("Scanned slices", sliceCSpin.Current())
-	sliceBSpin := progress.AddByteSpinner("Scanned slices")
-	lostDSpin := progress.AddDoubleSpinner("Lost blocks")
+	var dataChecker func(meta.Ino, []meta.Slice) error
 	brokens := make(map[meta.Ino]string)
-	for inode, ss := range slices {
-		if delfiles[inode] {
-			skippedSlices.IncrBy(len(ss))
-			continue
-		}
-		for _, s := range ss {
-			n := (s.Size - 1) / uint32(chunkConf.BlockSize)
-			for i := uint32(0); i <= n; i++ {
-				sz := chunkConf.BlockSize
-				if i == n {
-					sz = int(s.Size) - int(i)*chunkConf.BlockSize
-				}
-				key := fmt.Sprintf("%d_%d_%d", s.Id, i, sz)
-				if _, ok := blocks[key]; !ok {
-					var objKey string
-					if format.HashPrefix {
-						objKey = fmt.Sprintf("%02X/%v/%s", s.Id%256, s.Id/1000/1000, key)
-					} else {
-						objKey = fmt.Sprintf("%v/%v/%s", s.Id/1000/1000, s.Id/1000, key)
-					}
-					if _, err := blob.Head(objKey); err != nil {
-						if _, ok := brokens[inode]; !ok {
-							if ps := m.GetPaths(meta.Background, inode); len(ps) > 0 {
-								brokens[inode] = ps[0]
-							} else {
-								brokens[inode] = fmt.Sprintf("inode:%d", inode)
-							}
-						}
-						logger.Errorf("can't find block %s for file %s: %s", objKey, brokens[inode], err)
-						lostDSpin.IncrInt64(int64(sz))
-					}
-				}
+	if flag&checkDataFlag != 0 {
+		sliceCBar := progress.AddCountBar("Scanned slices", 0)
+		sliceBSpin := progress.AddByteSpinner("Scanned slices")
+		lostDSpin := progress.AddDoubleSpinner("Lost blocks")
+		defer func() {
+			if progress.Quiet {
+				logger.Infof("Used by %d slices (%d bytes)", sliceCBar.Current(), sliceBSpin.Current())
 			}
-			sliceCBar.Increment()
-			sliceBSpin.IncrInt64(int64(s.Size))
+			if lc, lb := lostDSpin.Current(); lc > 0 {
+				msg := fmt.Sprintf("%d objects are lost (%d bytes), %d broken files:\n", lc, lb, len(brokens))
+				msg += fmt.Sprintf("%13s: PATH\n", "INODE")
+				var fileList []string
+				for i, p := range brokens {
+					fileList = append(fileList, fmt.Sprintf("%13d: %s", i, p))
+				}
+				sort.Strings(fileList)
+				msg += strings.Join(fileList, "\n")
+				logger.Fatal(msg)
+			}
+		}()
+
+		chunkConf := chunk.Config{
+			BlockSize:  format.BlockSize * 1024,
+			Compress:   format.Compression,
+			GetTimeout: time.Second * 60,
+			PutTimeout: time.Second * 60,
+			MaxUpload:  20,
+			BufferSize: 300 << 20,
+			CacheDir:   "memory",
 		}
-	}
-	progress.Done()
-	if progress.Quiet {
-		logger.Infof("Used by %d slices (%d bytes)", sliceCBar.Current(), sliceBSpin.Current())
-	}
-	if lc, lb := lostDSpin.Current(); lc > 0 {
-		msg := fmt.Sprintf("%d objects are lost (%d bytes), %d broken files:\n", lc, lb, len(brokens))
-		msg += fmt.Sprintf("%13s: PATH\n", "INODE")
-		var fileList []string
-		for i, p := range brokens {
-			fileList = append(fileList, fmt.Sprintf("%13d: %s", i, p))
+
+		blob, err := createStorage(*format)
+		if err != nil {
+			logger.Fatalf("object storage: %s", err)
 		}
-		sort.Strings(fileList)
-		msg += strings.Join(fileList, "\n")
-		logger.Fatal(msg)
+		logger.Infof("Data use %s", blob)
+		blob = object.WithPrefix(blob, "chunks/")
+		objs, err := osync.ListAll(blob, "", "", "", true)
+		if err != nil {
+			logger.Fatalf("list all blocks: %s", err)
+		}
+
+		// Find all blocks in object storage
+		blockDSpin := progress.AddDoubleSpinner("Found blocks")
+		var blocks = make(map[string]int64)
+		for obj := range objs {
+			if obj == nil {
+				break // failed listing
+			}
+			if obj.IsDir() {
+				continue
+			}
+
+			logger.Debugf("found block %s", obj.Key())
+			parts := strings.Split(obj.Key(), "/")
+			if len(parts) != 3 {
+				continue
+			}
+			name := parts[2]
+			blocks[name] = obj.Size()
+			blockDSpin.IncrInt64(obj.Size())
+		}
+		blockDSpin.Done()
+		if progress.Quiet {
+			c, b := blockDSpin.Current()
+			logger.Infof("Found %d blocks (%d bytes)", c, b)
+		}
+
+		dataChecker = func(inode meta.Ino, ss []meta.Slice) error {
+			sliceCBar.IncrTotal(int64(len(ss)))
+			for _, s := range ss {
+				n := (s.Size - 1) / uint32(chunkConf.BlockSize)
+				for i := uint32(0); i <= n; i++ {
+					sz := chunkConf.BlockSize
+					if i == n {
+						sz = int(s.Size) - int(i)*chunkConf.BlockSize
+					}
+					key := fmt.Sprintf("%d_%d_%d", s.Id, i, sz)
+					if _, ok := blocks[key]; !ok {
+						var objKey string
+						if format.HashPrefix {
+							objKey = fmt.Sprintf("%02X/%v/%s", s.Id%256, s.Id/1000/1000, key)
+						} else {
+							objKey = fmt.Sprintf("%v/%v/%s", s.Id/1000/1000, s.Id/1000, key)
+						}
+						if _, err := blob.Head(objKey); err != nil {
+							if _, ok := brokens[inode]; !ok {
+								if ps := m.GetPaths(meta.Background, inode); len(ps) > 0 {
+									brokens[inode] = ps[0]
+								} else {
+									brokens[inode] = fmt.Sprintf("inode:%d", inode)
+								}
+							}
+							logger.Errorf("can't find block %s for file %s: %s", objKey, brokens[inode], err)
+							lostDSpin.IncrInt64(int64(sz))
+						}
+					}
+				}
+				sliceCBar.Increment()
+				sliceBSpin.IncrInt64(int64(s.Size))
+			}
+			return nil
+		}
 	}
 
-	return nil
+	err = m.Check(c, path, ctx.Bool("recursive"), threads, metaChecker, dataChecker, progress)
+	progress.Done()
+	return err
 }
