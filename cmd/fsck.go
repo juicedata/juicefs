@@ -109,10 +109,11 @@ func fsck(ctx *cli.Context) error {
 	}
 
 	path := ctx.String("path")
-	if path != "" {
-		if !strings.HasPrefix(path, "/") {
-			logger.Fatalf("File path should be the absolute path within JuiceFS")
-		}
+	if path == "" {
+		path = "/"
+	}
+	if !strings.HasPrefix(path, "/") {
+		logger.Fatalf("File path should be the absolute path within JuiceFS")
 	}
 
 	m := meta.NewClient(ctx.Args().Get(0), nil)
@@ -204,10 +205,6 @@ func fsck(ctx *cli.Context) error {
 			blockDSpin.IncrInt64(obj.Size())
 		}
 		blockDSpin.Done()
-		if progress.Quiet {
-			c, b := blockDSpin.Current()
-			logger.Infof("Found %d blocks (%d bytes)", c, b)
-		}
 
 		dataChecker = func(inode meta.Ino, ss []meta.Slice) error {
 			sliceCBar.IncrTotal(int64(len(ss)))
@@ -246,6 +243,7 @@ func fsck(ctx *cli.Context) error {
 		}
 	}
 
+	defer logger.Infof("Check %s [%s] finished, check log for more details", path, ctx.String("check"))
 	err = m.Check(c, path, ctx.Bool("recursive"), threads, metaChecker, dataChecker, progress)
 	progress.Done()
 	return err

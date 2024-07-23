@@ -1891,11 +1891,14 @@ func (m *baseMeta) Check(ctx Context, fpath string, recursive bool, threads uint
 				}
 				continue
 			}
-			dataChecker(inode, ss)
+			if err := dataChecker(inode, ss); err != nil {
+				logger.Error(err)
+			}
 		}
 		if skippedSlices != nil {
 			skippedSlices.Done()
 		}
+		return nil
 	}
 
 	var attr Attr
@@ -1957,19 +1960,19 @@ func (m *baseMeta) Check(ctx Context, fpath string, recursive bool, threads uint
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for e := range nodes {
+			for n := range nodes {
 				if metaChecker != nil {
-					if err := metaChecker(e.inode, e.path, e.attr); err != nil {
+					if err := metaChecker(n.inode, n.path, n.attr); err != nil {
 						logger.Error(err)
 						hasError = true
 					}
 				}
-				if attr.Typ == TypeFile && dataChecker != nil {
-					chunkCnt := uint32((e.attr.Length + ChunkSize - 1) / ChunkSize)
+				if n.attr.Typ == TypeFile && dataChecker != nil {
+					chunkCnt := uint32((n.attr.Length + ChunkSize - 1) / ChunkSize)
 					for i := uint32(0); i < chunkCnt; i++ {
-						ss, st := m.en.doRead(ctx, e.inode, i)
+						ss, st := m.en.doRead(ctx, n.inode, i)
 						if st != 0 {
-							logger.Errorf("path %s read inode %d chunk %d: %s", e.path, e.inode, i, st)
+							logger.Errorf("path %s read inode %d chunk %d: %s", n.path, n.inode, i, st)
 							hasError = true
 						}
 						slices := make([]Slice, 0, len(ss))
@@ -1978,7 +1981,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, recursive bool, threads uint
 								slices = append(slices, Slice{Id: s.id, Size: s.size})
 							}
 						}
-						if err := dataChecker(e.inode, slices); err != nil {
+						if err := dataChecker(n.inode, slices); err != nil {
 							logger.Error(err)
 							hasError = true
 						}
