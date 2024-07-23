@@ -54,7 +54,7 @@ $ juicefs fsck redis://localhost --path /d1/d2 --recursive`,
 			&cli.StringFlag{
 				Name:  "check",
 				Value: "both",
-				Usage: `check "meta", "data" or "both", default is "both"`,
+				Usage: `check "meta", "data" or "both"`,
 			},
 			&cli.StringFlag{
 				Name:  "path",
