@@ -115,6 +115,7 @@ func fsck(ctx *cli.Context) error {
 	if !strings.HasPrefix(path, "/") {
 		logger.Fatalf("File path should be the absolute path within JuiceFS")
 	}
+	defer logger.Infof("Check %s [%s] finished, check log for more details", path, ctx.String("check"))
 
 	m := meta.NewClient(ctx.Args().Get(0), nil)
 	format, err := m.Load(true)
@@ -159,7 +160,7 @@ func fsck(ctx *cli.Context) error {
 				}
 				sort.Strings(fileList)
 				msg += strings.Join(fileList, "\n")
-				logger.Fatal(msg)
+				logger.Error(msg)
 			}
 		}()
 
@@ -179,32 +180,34 @@ func fsck(ctx *cli.Context) error {
 		}
 		logger.Infof("Data use %s", blob)
 		blob = object.WithPrefix(blob, "chunks/")
-		objs, err := osync.ListAll(blob, "", "", "", true)
-		if err != nil {
-			logger.Fatalf("list all blocks: %s", err)
-		}
 
-		// Find all blocks in object storage
-		blockDSpin := progress.AddDoubleSpinner("Found blocks")
 		var blocks = make(map[string]int64)
-		for obj := range objs {
-			if obj == nil {
-				break // failed listing
-			}
-			if obj.IsDir() {
-				continue
+		if path != "/" {
+			objs, err := osync.ListAll(blob, "", "", "", true)
+			if err != nil {
+				logger.Fatalf("list all blocks: %s", err)
 			}
 
-			logger.Debugf("found block %s", obj.Key())
-			parts := strings.Split(obj.Key(), "/")
-			if len(parts) != 3 {
-				continue
+			// Find all blocks in object storage
+			blockDSpin := progress.AddDoubleSpinner("Found blocks")
+			for obj := range objs {
+				if obj == nil {
+					break // failed listing
+				}
+				if obj.IsDir() {
+					continue
+				}
+
+				parts := strings.Split(obj.Key(), "/")
+				if len(parts) != 3 {
+					continue
+				}
+				name := parts[2]
+				blocks[name] = obj.Size()
+				blockDSpin.IncrInt64(obj.Size())
 			}
-			name := parts[2]
-			blocks[name] = obj.Size()
-			blockDSpin.IncrInt64(obj.Size())
+			blockDSpin.Done()
 		}
-		blockDSpin.Done()
 
 		dataChecker = func(inode meta.Ino, ss []meta.Slice) error {
 			sliceCBar.IncrTotal(int64(len(ss)))
@@ -243,7 +246,6 @@ func fsck(ctx *cli.Context) error {
 		}
 	}
 
-	defer logger.Infof("Check %s [%s] finished, check log for more details", path, ctx.String("check"))
 	err = m.Check(c, path, ctx.Bool("recursive"), threads, metaChecker, dataChecker, progress)
 	progress.Done()
 	return err
