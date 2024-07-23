@@ -74,7 +74,7 @@ slug: /adopters
 | [米哈游](https://www.mihoyo.com)                        | Production | 共享文件存储           |       |
 | [人民大学](http://www.ruc.edu.cn)                        | Production | AI         |       |
 | [中山大学](https://www.sysu.edu.cn)                        | Production | AI           |  [基于 JuiceFS 构建高校 AI 存储方案：高并发、系统稳定、运维简单](https://juicefs.com/zh-cn/blog/user-stories/juicefs-vs-nfs-ai-storage)|
-| [成都电子科技大学](https://www.uestc.edu.cn)                        | Production | AI     |       |
+| [电子科技大学](https://www.uestc.edu.cn)                        | Production | AI     |       |
 | [酷家乐](https://www.kujiale.com)                        | Production | AI        |       |
 | [驭势科技](https://www.uisee.com)                        | Production | AI        |       |
 | [腾讯](https://www.tencent.com)                        | Production | AI         |       |
