@@ -95,7 +95,7 @@ $ ./juicefs summary /mnt/jfs/pjdfstest/
 :::note
 Directory stats only stores single directory usage, to get a recursive sum, you'll need to use `juicefs info -r`, this could be a costly operation for large directories, if you need to frequently get the total stats for particular directories, consider [setting an empty quota](./quota.md#limit-capacity-and-inodes-of-directory) on such directories, to achieve recursive stats this way.
 
-Different from Community Edition, JuiceFS Enterprise Edition already put a [recursive sum](/docs/cloud/guide/view_storage_usage) on directory stats, you can directly view the total usage by running `ls -lh`.
+Different from Community Edition, JuiceFS Enterprise Edition already put a [recursive sum](/docs/cloud/guide/quota#file-directory-size) on directory stats, you can directly view the total usage by running `ls -lh`.
 :::
 
 ## Troubleshooting {#troubleshooting}
