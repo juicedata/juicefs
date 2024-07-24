@@ -100,6 +100,7 @@ var fuseMu sync.Mutex
 var fuseFd int = 0
 var fuseSetting = []byte("FUSE")
 var serverAddress string = fmt.Sprintf("/tmp/fuse_fd_comm.%d", os.Getpid())
+var csiCommPath = os.Getenv("JFS_SUPER_COMM")
 
 func handleFDRequest(conn *net.UnixConn) {
 	defer conn.Close()
@@ -132,10 +133,10 @@ func handleFDRequest(conn *net.UnixConn) {
 		logger.Debugf("recv FUSE fd: %d", fds[0])
 		fuseFd = fds[0]
 		fuseSetting = msg
-		if superConn := os.Getenv("JFS_SUPER_COMM"); superConn != "" {
-			err = sendFuseFdToSuper(superConn, fuseSetting, fuseFd)
+		if csiCommPath != "" {
+			err = sendFuseFd(csiCommPath, fuseSetting, fuseFd)
 			if err != nil {
-				logger.Warnf("send fd to JFS_SUPER_COMM: %v", err)
+				logger.Warnf("send fd to %s: %v", csiCommPath, err)
 			}
 		}
 	} else {
@@ -148,8 +149,8 @@ func handleFDRequest(conn *net.UnixConn) {
 }
 
 func serveFuseFD(path string) {
-	if superConn := os.Getenv("JFS_SUPER_COMM"); superConn != "" {
-		fd, fSetting := getFuseFdFromSuper(superConn)
+	if csiCommPath != "" {
+		fd, fSetting := getFuseFd(csiCommPath)
 		if fd > 0 {
 			fuseFd, fuseSetting = fd, fSetting
 		}
@@ -172,47 +173,6 @@ func serveFuseFD(path string) {
 			go handleFDRequest(conn.(*net.UnixConn))
 		}
 	}()
-}
-
-func getFuseFdFromSuper(path string) (int, []byte) {
-	if !utils.Exists(path) {
-		return -1, nil
-	}
-	conn, err := net.Dial("unix", path)
-	if err != nil {
-		logger.Warnf("dial %s: %s", path, err)
-		return -1, nil
-	}
-	defer conn.Close()
-	msg, fds, err := getFd(conn.(*net.UnixConn), 2)
-	if err != nil {
-		logger.Warnf("recv fds: %s", err)
-		return -1, nil
-	}
-	if len(fds) > 1 {
-		_ = putFd(conn.(*net.UnixConn), msg, fds[1])
-		logger.Debugf("recv FUSE fd from super: %d", fds[1])
-		return fds[1], msg
-	}
-	return 0, nil
-}
-
-func sendFuseFdToSuper(path string, msg []byte, fd int) error {
-	if !utils.Exists(path) {
-		return nil
-	}
-	conn, err := net.Dial("unix", path)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	_, _, err = getFd(conn.(*net.UnixConn), 2)
-	if err != nil {
-		logger.Warnf("recv fds: %s", err)
-		return err
-	}
-	logger.Debugf("send FUSE fd to super: %d", fd)
-	return putFd(conn.(*net.UnixConn), msg, fd)
 }
 
 func getFuseFd(path string) (int, []byte) {

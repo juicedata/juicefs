@@ -419,6 +419,12 @@ func genFuseOpt(c *cli.Context, name string) string {
 }
 
 func prepareMp(mp string) {
+	if csiCommPath != "" {
+		_ = utils.WithTimeout(func() error {
+			return os.MkdirAll(mp, 0777)
+		}, time.Second*3)
+		return
+	}
 	var fi os.FileInfo
 	var ino uint64
 	err := utils.WithTimeout(func() error {
@@ -433,11 +439,8 @@ func prepareMp(mp string) {
 		if err2 != nil {
 			if os.IsExist(err2) || strings.Contains(err2.Error(), "timeout after 3s") {
 				// a broken mount point, umount it
-				if superConn := os.Getenv("JFS_SUPER_COMM"); superConn == "" {
-					// if get fuse fd from SUPER_COMM, do not umount
-					logger.Infof("mountpoint %s is broken: %s, umount it", mp, err)
-					_ = doUmount(mp, true)
-				}
+				logger.Infof("mountpoint %s is broken: %s, umount it", mp, err)
+				_ = doUmount(mp, true)
 			} else {
 				logger.Fatalf("create %s: %s", mp, err2)
 			}
@@ -446,11 +449,8 @@ func prepareMp(mp string) {
 		ino, _ = utils.GetFileInode(mp)
 		if ino <= uint64(meta.RootInode) && fi.Size() == 0 {
 			// a broken mount point, umount it
-			if superConn := os.Getenv("JFS_SUPER_COMM"); superConn == "" {
-				// if get fuse fd from SUPER_COMM, do not umount
-				logger.Infof("mountpoint %s is broken (ino=%d, size=%d), umount it", mp, ino, fi.Size())
-				_ = doUmount(mp, true)
-			}
+			logger.Infof("mountpoint %s is broken (ino=%d, size=%d), umount it", mp, ino, fi.Size())
+			_ = doUmount(mp, true)
 		}
 	}
 
@@ -522,6 +522,9 @@ func shutdownGraceful(mp string) {
 }
 
 func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
+	if csiCommPath != "" {
+		return false
+	}
 	var ino uint64
 	var err error
 	err = utils.WithTimeout(func() error {
@@ -529,11 +532,8 @@ func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
 		return err
 	}, time.Second*3)
 	if err != nil {
-		if superConn := os.Getenv("JFS_SUPER_COMM"); superConn == "" {
-			logger.Warnf("get inode of %s: %s", mp, err)
-			// if get fuse fd from SUPER_COMM, do not umount
-			_ = doUmount(mp, true)
-		}
+		logger.Warnf("get inode of %s: %s", mp, err)
+		_ = doUmount(mp, true)
 		return false
 	} else if ino != 1 {
 		return false
