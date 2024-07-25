@@ -420,9 +420,6 @@ func genFuseOpt(c *cli.Context, name string) string {
 
 func prepareMp(mp string) {
 	if csiCommPath != "" {
-		_ = utils.WithTimeout(func() error {
-			return os.MkdirAll(mp, 0777)
-		}, time.Second*3)
 		return
 	}
 	var fi os.FileInfo
