@@ -87,7 +87,7 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Others
 
-- [From HPC to AI: Evolution and Performance Evaluation of File Systems](https://juicefs.com/en/blog/user-stories/hpc-ai-file-system), 2024-05-23, Weizheng Lu @ Renmin University of China 
+- [From HPC to AI: Evolution and Performance Evaluation of File Systems](https://juicefs.com/en/blog/user-stories/hpc-ai-file-system), 2024-05-23, Weizheng Lu @ Renmin University of China
 - [Is POSIX Really Unsuitable for Object Stores? A Data-Backed Answer](https://juicefs.com/en/blog/community/posix-object-store-suitable-file-system), 2023-11-16, Herald Yu
 - [Comparative Analysis of Major Distributed File System Architectures: GFS vs. Tectonic vs. JuiceFS](https://juicefs.com/en/blog/engineering/compare-distributed-file-system-architectures-gfs-tectonic-juicefs), 2023-10-20, Changjian Gao
 - [JuiceFS vs. SeaweedFS](https://juicefs.com/docs/community/comparison/juicefs_vs_seaweedfs), 2023-09-31, Yifu Liu
