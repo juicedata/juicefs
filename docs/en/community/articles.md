@@ -11,10 +11,6 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### AI, machine learning, and deep learning
 
-- [vivo Migrated from GlusterFS to a Distributed File System for AI Training](https://juicefs.com/en/blog/user-stories/improve-ai-training), 2024-07-18, Yige Peng @ vivo
-- [iSEE Lab Stores 500M+ Files on JuiceFS Replacing NFS](https://juicefs.com/en/blog/user-stories/deep-learning-ai-storage), 2024-07-03, Guohao Xu @ Sun Yat-sen University
-- [Beike Loads AI Models 20x Faster with Hybrid Cloud Storage](https://juicefs.com/en/blog/user-stories/ai-model-accelerate), 2024-06-26, Tianqing Wang @ Beike
-- [Low-Cost Read/Write Separation: Jerry Builds a Primary-Replica ClickHouse Architecture](https://juicefs.com/en/blog/user-stories/read-write-separation), 2024-05-29, Tao Ma @ Jerry
 - [LLM Storage: Performance, Cost, and Multi-Cloud Architecture](https://juicefs.com/en/blog/solutions/llm-storage-performance-cost-multi-cloud), 2024-04-09, Sui Su
 - [How Zhihu Ensures Stable Storage for LLM Training in Multi-Cloud Architecture](https://juicefs.com/en/blog/user-stories/ai-storage-llm-training-multi-cloud), 2024-04-03, Xin Wang @ Zhihu
 - [BentoML Reduced LLM Loading Time from 20+ to a Few Minutes with JuiceFS](https://juicefs.com/en/blog/user-stories/accelerate-large-language-model-loading), 2024-02-29, Xipeng Guan @ BentoML
@@ -55,11 +51,6 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Tutorial, guide, and best practice
 
-- [Empowering NAS for AI Training with JuiceFS Direct-Mode NFS](https://juicefs.com/en/blog/usage-tips/direct-nfs)，2024-07-25，Herald Yu
-- [How to Deploy SeaweedFS+TiKV for Using JuiceFS](https://juicefs.com/en/blog/usage-tips/seaweedfs-tikv), 2024-07-11, Jinhao Yang @ SmartMore
-- [JuiceFS 1.2: Introducing Enterprise-Grade Permission Management and Smooth Upgrades](https://juicefs.com/en/blog/release-notes/juicefs-12), 2024-06-20
-- [JuiceFS S3 Gateway: IAM and Bucket Event Notifications](https://juicefs.com/en/blog/usage-tips/s3-gateway), 2024-06-13, Herald Yu
-- [Managing POSIX ACL Permissions in JuiceFS](https://juicefs.com/en/blog/usage-tips/manage-acl), 2024-06-06, Herald Yu
 - [Data Sync in JuiceFS 1.2: Enhanced Selective Sync and Performance Optimizations](https://juicefs.com/en/blog/usage-tips/data-sync), 2024-05-16, Jian Zhi
 - [Smooth Upgrade: Implementation and Usage](https://juicefs.com/en/blog/engineering/smooth-upgrade), 2024-05-08, Jian Zhi
 - [How We Optimized ACL Implementation for Minimal Performance Impact](https://juicefs.com/en/blog/engineering/access-control-list), 2024-04-30, Jiefeng Huang
@@ -87,7 +78,6 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Others
 
-- [From HPC to AI: Evolution and Performance Evaluation of File Systems](https://juicefs.com/en/blog/user-stories/hpc-ai-file-system), 2024-05-23, Weizheng Lu @ Renmin University of China 
 - [Is POSIX Really Unsuitable for Object Stores? A Data-Backed Answer](https://juicefs.com/en/blog/community/posix-object-store-suitable-file-system), 2023-11-16, Herald Yu
 - [Comparative Analysis of Major Distributed File System Architectures: GFS vs. Tectonic vs. JuiceFS](https://juicefs.com/en/blog/engineering/compare-distributed-file-system-architectures-gfs-tectonic-juicefs), 2023-10-20, Changjian Gao
 - [JuiceFS vs. SeaweedFS](https://juicefs.com/docs/community/comparison/juicefs_vs_seaweedfs), 2023-09-31, Yifu Liu
