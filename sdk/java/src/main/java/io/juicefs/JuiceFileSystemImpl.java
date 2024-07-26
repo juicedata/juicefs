@@ -1003,6 +1003,21 @@ public class JuiceFileSystemImpl extends FileSystem {
       }
     }
 
+    public synchronized void skipNBytes(long n) throws IOException {
+      if (buf == null) {
+        throw new IOException("stream was closed");
+      }
+
+      if (n <= 0) {
+        return;
+      }
+
+      long np = position + n;
+      if (np > fileLen) {
+        throw new EOFException(String.format("Unable to skip %s bytes (position=%s, fileSize=%s): %s", n, position, fileLen, np));
+      }
+      position = np;
+    }
     @Override
     public synchronized long skip(long n) throws IOException {
       if (n < 0)

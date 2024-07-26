@@ -31,6 +31,7 @@ import org.apache.hadoop.security.UserGroupInformation;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -448,6 +449,20 @@ public class JuiceFileSystemTest extends TestCase {
      * System.out.printf("Array read %d throughput %f MB/s\n", total,
      * total/1024.0/1024.0/used*1000);
      */
+  }
+
+  public void testInputStreamSkipNBytes() throws Exception {
+    Path f = new Path("/test-skipnbytes");
+    try (FSDataOutputStream out = fs.create(f)) {
+      out.writeBytes("hello juicefs");
+    }
+    Class<JuiceFileSystemImpl.FileInputStream> inputStreamClass = JuiceFileSystemImpl.FileInputStream.class;
+    Method skipNBytes = inputStreamClass.getMethod("skipNBytes", long.class);
+    try (FSDataInputStream in = fs.open(f)) {
+      skipNBytes.invoke(in.getWrappedStream(), 6);
+      String s = IOUtils.toString(in);
+      assertEquals("juicefs", s);
+    }
   }
 
   public void testReadStats() throws IOException {
