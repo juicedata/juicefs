@@ -8,6 +8,9 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## AI
 
+- [基于 JuiceFS 构建高校 AI 存储方案：高并发、系统稳定、运维简单](https://juicefs.com/zh-cn/blog/user-stories/juicefs-vs-nfs-ai-storage)，2024-06-26，徐国昊@中山大学
+- [贝壳找房：为 AI 平台打造混合多云的存储加速底座](https://juicefs.com/zh-cn/blog/user-stories/beike-ai-platform-multi-cloud-storage)，2024-06-12，王天庆@贝壳找房
+- [北美科技企业 Jerry：基于 JuiceFS 构建 ClickHouse 主从架构](https://juicefs.com/zh-cn/blog/user-stories/jerry-clickhouse-read-write-separation-juicefs-primary-replica-architecture)，2024-05-17，马涛@Jerry
 - [大模型存储实践：性能、成本与多云](https://juicefs.com/zh-cn/blog/solutions/large-model-storage-performance-multi-cloud)，2024-04-07，苏锐
 - [知乎：多云架构下大模型训练，如何保障存储稳定性](https://juicefs.com/zh-cn/blog/user-stories/data-storage-multi-cloud-zhihu-model-training-juicefs)，2024-03-28，王新
 - [BentoML：如何使用 JuiceFS 加速大模型加载](https://juicefs.com/zh-cn/blog/user-stories/bentoml-use-juicefs-accelerate-large-model-loading)，2024-02-21，管锡鹏
@@ -91,6 +94,12 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 教程、使用指南、评测及其他
 
+- [一文详解 JuiceFS 读性能：预读、预取、缓存、FUSE 和对象存储](https://juicefs.com/zh-cn/blog/engineering/juicefs-read-performance)，2024-07-26，莫飞虎
+- [JuiceFS 直连 NFS 新功能介绍，赋能 NAS 进行 AI 训练](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-nfs-nas-ai)，2024-07-19，于鸿儒
+- [SeaweedFS + TiKV 部署保姆级教程](https://juicefs.com/zh-cn/blog/usage-tips/seaweedfs-tikv)，2024-07-12，杨进豪@思谋科技
+- [JuiceFS 社区版 v1.2 发布，新增企业级权限管理、平滑升级功能](https://juicefs.com/zh-cn/blog/release-notes/juicefs-v12)，2024-06-21
+- [JuiceFS S3 Gateway 新功能上手指南](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-s3-gateway)，2024-06-05，于鸿儒
+- [JuiceFS POSIX ACL 权限管理上手指南](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-posix-acl-permission-management-guide)，2024-05-23，于鸿儒
 - [详解 JuiceFS sync 新功能，选择性同步增强与多场景性能优化](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-sync)，2024-05-15，执剑
 - [平滑升级功能详解，不停服即可更新](https://juicefs.com/zh-cn/blog/engineering/smooth-upgrade)，2024-05-07，执剑
 - [JuiceFS v1.2-beta 1: ACL 功能全解析，更精细的权限控制](https://juicefs.com/zh-cn/blog/release-notes/juicefs-v12-beta-1-acl)，2024-04-26，黄杰烽
