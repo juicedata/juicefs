@@ -146,7 +146,7 @@ func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 	var psArgs []string
 	if tmpPid != "" {
 		pid = tmpPid
-		psArgs = []string{"/bin/sh", "-c", fmt.Sprintf("ps -f --pid %s", pid)}
+		psArgs = []string{"/bin/sh", "-c", fmt.Sprintf("ps -f -p %s", pid)}
 	} else {
 		psArgs = []string{"/bin/sh", "-c", fmt.Sprintf("ps -ef | grep -v grep | grep mount | grep %s", mp)}
 	}
