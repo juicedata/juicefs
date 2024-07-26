@@ -9,7 +9,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 ## AI
 
 - [基于 JuiceFS 构建高校 AI 存储方案：高并发、系统稳定、运维简单](https://juicefs.com/zh-cn/blog/user-stories/juicefs-vs-nfs-ai-storage)，2024-06-26，徐国昊@中山大学
-- [贝壳找房: 为 AI 平台打造混合多云的存储加速底座](https://juicefs.com/zh-cn/blog/user-stories/beike-ai-platform-multi-cloud-storage)，2024-06-12，王天庆@贝壳找房
+- [贝壳找房：为 AI 平台打造混合多云的存储加速底座](https://juicefs.com/zh-cn/blog/user-stories/beike-ai-platform-multi-cloud-storage)，2024-06-12，王天庆@贝壳找房
 - [北美科技企业 Jerry：基于 JuiceFS 构建 ClickHouse 主从架构](https://juicefs.com/zh-cn/blog/user-stories/jerry-clickhouse-read-write-separation-juicefs-primary-replica-architecture)，2024-05-17，马涛@Jerry
 - [大模型存储实践：性能、成本与多云](https://juicefs.com/zh-cn/blog/solutions/large-model-storage-performance-multi-cloud)，2024-04-07，苏锐
 - [知乎：多云架构下大模型训练，如何保障存储稳定性](https://juicefs.com/zh-cn/blog/user-stories/data-storage-multi-cloud-zhihu-model-training-juicefs)，2024-03-28，王新
