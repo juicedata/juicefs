@@ -56,7 +56,7 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 ### Tutorial, guide, and best practice
 
 - [Empowering NAS for AI Training with JuiceFS Direct-Mode NFS](https://juicefs.com/en/blog/usage-tips/direct-nfs)，2024-07-25，Herald Yu
-- [How to Deploy SeaweedFS+TiKV for Using JuiceFS][https://juicefs.com/en/blog/usage-tips/seaweedfs-tikv], 2024-07-11, Jinhao Yang @ SmartMore
+- [How to Deploy SeaweedFS+TiKV for Using JuiceFS](https://juicefs.com/en/blog/usage-tips/seaweedfs-tikv), 2024-07-11, Jinhao Yang @ SmartMore
 - [JuiceFS 1.2: Introducing Enterprise-Grade Permission Management and Smooth Upgrades](https://juicefs.com/en/blog/release-notes/juicefs-12), 2024-06-20
 - [JuiceFS S3 Gateway: IAM and Bucket Event Notifications](https://juicefs.com/en/blog/usage-tips/s3-gateway), 2024-06-13, Herald Yu
 - [Managing POSIX ACL Permissions in JuiceFS](https://juicefs.com/en/blog/usage-tips/manage-acl), 2024-06-06, Herald Yu
