@@ -280,6 +280,10 @@ func metaFlags() []cli.Flag {
 			Value: "100ms",
 			Usage: "skip updating attribute of a directory if the mtime difference is smaller than this value",
 		},
+		&cli.BoolFlag{
+			Name:  "sort-dir",
+			Usage: "sort entries within a directory by name",
+		},
 	})
 }
 

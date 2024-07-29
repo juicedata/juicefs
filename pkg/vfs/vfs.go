@@ -430,17 +430,23 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 		if err != 0 {
 			return
 		}
-		h.children = inodes
 		if ino == rootID && !v.Conf.HideInternal {
 			// add internal nodes
 			for _, node := range internalNodes[1:] {
-				h.children = append(h.children, &meta.Entry{
+				inodes = append(inodes, &meta.Entry{
 					Inode: node.inode,
 					Name:  []byte(node.name),
 					Attr:  node.attr,
 				})
 			}
 		}
+		if v.Conf.Meta.SortDir {
+			sort.SliceStable(inodes[2:], func(i, j int) bool {
+				return string(inodes[i+2].Name) < string(inodes[j+2].Name)
+			})
+		}
+		h.children = inodes
+
 		index := make(map[string]int)
 		for i, e := range inodes {
 			index[string(e.Name)] = i

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -38,10 +39,13 @@ import (
 
 // nolint:errcheck
 
-func createTestVFS() (*VFS, object.ObjectStorage) {
+func createTestVFS(applyMetaConfOption func(metaConfig *meta.Config)) (*VFS, object.ObjectStorage) {
 	mp := "/jfs"
 	metaConf := meta.DefaultConf()
 	metaConf.MountPoint = mp
+	if applyMetaConfOption != nil {
+		applyMetaConfOption(metaConf)
+	}
 	m := meta.NewClient("memkv://", metaConf)
 	format := &meta.Format{
 		Name:        "test",
@@ -78,7 +82,7 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 }
 
 func TestVFSBasic(t *testing.T) {
-	v, _ := createTestVFS()
+	v, _ := createTestVFS(nil)
 	ctx := NewLogContext(meta.NewContext(10, 1, []uint32{2, 3}))
 
 	if st, e := v.StatFS(ctx, 1); e != 0 {
@@ -187,7 +191,7 @@ func TestVFSBasic(t *testing.T) {
 }
 
 func TestVFSIO(t *testing.T) {
-	v, _ := createTestVFS()
+	v, _ := createTestVFS(nil)
 	ctx := NewLogContext(meta.Background)
 	fe, fh, e := v.Create(ctx, 1, "file", 0755, 0, syscall.O_RDWR)
 	if e != 0 {
@@ -352,7 +356,7 @@ func TestVFSIO(t *testing.T) {
 }
 
 func TestVFSXattrs(t *testing.T) {
-	v, _ := createTestVFS()
+	v, _ := createTestVFS(nil)
 	ctx := NewLogContext(meta.Background)
 	fe, e := v.Mkdir(ctx, 1, "xattrs", 0755, 0)
 	if e != 0 {
@@ -494,7 +498,7 @@ func TestSetattrStr(t *testing.T) {
 }
 
 func TestVFSLocks(t *testing.T) {
-	v, _ := createTestVFS()
+	v, _ := createTestVFS(nil)
 	ctx := NewLogContext(meta.Background)
 	fe, fh, e := v.Create(ctx, 1, "flock", 0644, 0, syscall.O_RDWR)
 	if e != 0 {
@@ -595,7 +599,7 @@ func TestVFSLocks(t *testing.T) {
 }
 
 func TestInternalFile(t *testing.T) {
-	v, _ := createTestVFS()
+	v, _ := createTestVFS(nil)
 	ctx := NewLogContext(meta.Background)
 	// list internal files
 	fh, _ := v.Opendir(ctx, 1, 0)
@@ -865,7 +869,7 @@ func TestInternalFile(t *testing.T) {
 }
 
 func TestReaddirCache(t *testing.T) {
-	v, _ := createTestVFS()
+	v, _ := createTestVFS(nil)
 	ctx := NewLogContext(meta.Background)
 	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
 	if st != 0 {
@@ -930,6 +934,36 @@ func TestReaddirCache(t *testing.T) {
 		name := fmt.Sprintf("d%d", i)
 		if _, ok := files[name]; !ok {
 			t.Fatalf("dir %s should be added", name)
+		}
+	}
+}
+
+func TestVFSReadDirSort(t *testing.T) {
+	v, _ := createTestVFS(func(metaConfig *meta.Config) {
+		metaConfig.SortDir = true
+	})
+	ctx := NewLogContext(meta.Background)
+	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
+	if st != 0 {
+		t.Fatalf("mkdir testdir: %s", st)
+	}
+	parent := entry.Inode
+	for i := 0; i < 100; i++ {
+		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
+	}
+	fh, _ := v.Opendir(ctx, parent, 0)
+	defer v.Releasedir(ctx, parent, fh)
+	entries1, _, _ := v.Readdir(ctx, parent, 60, 10, fh, true)
+	sorted := slices.IsSortedFunc(entries1, func(i, j *meta.Entry) int {
+		return strings.Compare(string(i.Name), string(j.Name))
+	})
+	if !sorted {
+		t.Fatalf("read dir result should sorted")
+	}
+	entries2, _, _ := v.Readdir(ctx, parent, 60, 10, fh, true)
+	for i := 0; i < len(entries1); i++ {
+		if string(entries1[i].Name) != string(entries2[i].Name) {
+			t.Fatalf("read dir result should be same")
 		}
 	}
 }
