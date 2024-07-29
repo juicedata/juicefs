@@ -952,7 +952,6 @@ func TestVFSReadDirSort(t *testing.T) {
 		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
 	}
 	fh, _ := v.Opendir(ctx, parent, 0)
-	defer v.Releasedir(ctx, parent, fh)
 	entries1, _, _ := v.Readdir(ctx, parent, 60, 10, fh, true)
 	sorted := slices.IsSortedFunc(entries1, func(i, j *meta.Entry) int {
 		return strings.Compare(string(i.Name), string(j.Name))
@@ -960,10 +959,14 @@ func TestVFSReadDirSort(t *testing.T) {
 	if !sorted {
 		t.Fatalf("read dir result should sorted")
 	}
+	v.Releasedir(ctx, parent, fh)
+
+	fh2, _ := v.Opendir(ctx, parent, 0)
 	entries2, _, _ := v.Readdir(ctx, parent, 60, 10, fh, true)
 	for i := 0; i < len(entries1); i++ {
 		if string(entries1[i].Name) != string(entries2[i].Name) {
 			t.Fatalf("read dir result should be same")
 		}
 	}
+	v.Releasedir(ctx, parent, fh2)
 }
