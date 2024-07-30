@@ -49,6 +49,7 @@ type Config struct {
 	DirStatFlushPeriod time.Duration
 	SkipDirMtime       time.Duration
 	Sid                uint64
+	SortDir            bool
 }
 
 func DefaultConf() *Config {
