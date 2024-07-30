@@ -28,17 +28,20 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ceph/go-ceph/rados"
 )
 
 type ceph struct {
 	DefaultObjectStorage
-	name string
-	conn *rados.Conn
-	free chan *rados.IOContext
+	name    string
+	indx    uint64
+	size    uint64
+	clients []*radosClient
 }
 
 func (c *ceph) String() string {
@@ -46,11 +49,22 @@ func (c *ceph) String() string {
 }
 
 func (c *ceph) Shutdown() {
-	c.conn.Shutdown()
+	for _, cli := range c.clients {
+		cli.conn.Shutdown()
+	}
+}
+
+func (c *ceph) getClient() *radosClient {
+	if len(c.clients) == 1 {
+		return c.clients[0]
+	}
+	n := atomic.AddUint64(&c.indx, 1)
+	return c.clients[n%c.size]
 }
 
 func (c *ceph) Create() error {
-	names, err := c.conn.ListPools()
+	cli := c.getClient()
+	names, err := cli.conn.ListPools()
 	if err != nil {
 		return err
 	}
@@ -59,15 +73,21 @@ func (c *ceph) Create() error {
 			return nil
 		}
 	}
-	return c.conn.MakePool(c.name)
+	return cli.conn.MakePool(c.name)
 }
 
-func (c *ceph) newContext() (*rados.IOContext, error) {
+type radosClient struct {
+	pool string
+	conn *rados.Conn
+	free chan *rados.IOContext
+}
+
+func (c *radosClient) newContext() (*rados.IOContext, error) {
 	select {
 	case ctx := <-c.free:
 		return ctx, nil
 	default:
-		ctx, err := c.conn.OpenIOContext(c.name)
+		ctx, err := c.conn.OpenIOContext(c.pool)
 		if err == nil {
 			_ = ctx.SetPoolFullTry()
 		}
@@ -75,7 +95,7 @@ func (c *ceph) newContext() (*rados.IOContext, error) {
 	}
 }
 
-func (c *ceph) release(ctx *rados.IOContext) {
+func (c *radosClient) release(ctx *rados.IOContext) {
 	select {
 	case c.free <- ctx:
 	default:
@@ -83,7 +103,7 @@ func (c *ceph) release(ctx *rados.IOContext) {
 	}
 }
 
-func (c *ceph) do(f func(ctx *rados.IOContext) error) (err error) {
+func (c *radosClient) do(f func(ctx *rados.IOContext) error) (err error) {
 	ctx, err := c.newContext()
 	if err != nil {
 		return err
@@ -98,7 +118,7 @@ func (c *ceph) do(f func(ctx *rados.IOContext) error) (err error) {
 }
 
 type cephReader struct {
-	c     *ceph
+	cli   *radosClient
 	ctx   *rados.IOContext
 	key   string
 	off   int64
@@ -125,21 +145,26 @@ func (r *cephReader) Read(buf []byte) (n int, err error) {
 
 func (r *cephReader) Close() error {
 	if r.ctx != nil {
-		r.c.release(r.ctx)
+		r.cli.release(r.ctx)
 		r.ctx = nil
 	}
 	return nil
 }
 
 func (c *ceph) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	if _, err := c.Head(key); err != nil {
-		return nil, err
-	}
-	ctx, err := c.newContext()
+	cli := c.getClient()
+	ctx, err := cli.newContext()
 	if err != nil {
 		return nil, err
 	}
-	return &cephReader{c, ctx, key, off, limit}, nil
+	if _, err = ctx.Stat(key); err != nil {
+		ctx.Destroy()
+		if err == rados.ErrNotFound {
+			err = os.ErrNotExist
+		}
+		return nil, err
+	}
+	return &cephReader{cli, ctx, key, off, limit}, nil
 }
 
 var cephPool = sync.Pool{
@@ -150,7 +175,7 @@ var cephPool = sync.Pool{
 
 func (c *ceph) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	// ceph default osd_max_object_size = 128M
-	return c.do(func(ctx *rados.IOContext) error {
+	return c.getClient().do(func(ctx *rados.IOContext) error {
 		if b, ok := in.(*bytes.Reader); ok {
 			v := reflect.ValueOf(b)
 			data := v.Elem().Field(0).Bytes()
@@ -186,7 +211,7 @@ func (c *ceph) Put(key string, in io.Reader, getters ...AttrGetter) error {
 }
 
 func (c *ceph) Delete(key string, getters ...AttrGetter) error {
-	err := c.do(func(ctx *rados.IOContext) error {
+	err := c.getClient().do(func(ctx *rados.IOContext) error {
 		return ctx.Delete(key)
 	})
 	if err == rados.ErrNotFound {
@@ -197,7 +222,7 @@ func (c *ceph) Delete(key string, getters ...AttrGetter) error {
 
 func (c *ceph) Head(key string) (Object, error) {
 	var o *obj
-	err := c.do(func(ctx *rados.IOContext) error {
+	err := c.getClient().do(func(ctx *rados.IOContext) error {
 		stat, err := ctx.Stat(key)
 		if err != nil {
 			return err
@@ -212,7 +237,8 @@ func (c *ceph) Head(key string) (Object, error) {
 }
 
 func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
-	ctx, err := c.newContext()
+	cli := c.getClient()
+	ctx, err := cli.newContext()
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +260,7 @@ func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan Object, e
 	}
 	// the keys are not ordered, sort them first
 	sort.Strings(keys)
-	c.release(ctx)
+	cli.release(ctx)
 
 	var objs = make(chan Object, 1000)
 	var concurrent = 20
@@ -247,7 +273,7 @@ func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan Object, e
 		conds[j] = sync.NewCond(&ms[j])
 		if j < len(keys) {
 			go func(j int) {
-				ctx, err := c.newContext()
+				ctx, err := c.getClient().newContext()
 				if err != nil {
 					logger.Errorf("new context: %s", err)
 					errs[j] = err
@@ -318,38 +344,55 @@ func newCeph(endpoint, cluster, user, token string) (ObjectStorage, error) {
 		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)
 	}
 	name := uri.Host
-	conn, err := rados.NewConnWithClusterAndUser(cluster, user)
-	if err != nil {
-		return nil, fmt.Errorf("Can't create connection to cluster %s for user %s: %s", cluster, user, err)
-	}
-	if opt := os.Getenv("CEPH_ADMIN_SOCKET"); opt != "none" {
-		if opt == "" {
-			opt = "$run_dir/jfs-$cluster-$name-$pid.asok"
-		}
-		if err = conn.SetConfigOption("admin_socket", opt); err != nil {
-			logger.Warnf("Failed to set admin_socket to %s: %s", opt, err)
+	var size int
+	if ssize := os.Getenv("JFS_NUM_CEPH_CLIENTS"); ssize != "" {
+		if size, err = strconv.Atoi(ssize); err != nil {
+			return nil, fmt.Errorf("Invalid number of Ceph clients: %s", ssize)
 		}
 	}
-	if opt := os.Getenv("CEPH_LOG_FILE"); opt != "none" {
-		if opt == "" {
-			opt = "/var/log/ceph/jfs-$cluster-$name.log"
-		}
-		if err = conn.SetConfigOption("log_file", opt); err != nil {
-			logger.Warnf("Failed to set log_file to %s: %s", opt, err)
-		}
+	if size < 1 {
+		size = 1
 	}
-	if os.Getenv("JFS_NO_CHECK_OBJECT_STORAGE") == "" {
-		if err := conn.ReadDefaultConfigFile(); err != nil {
-			return nil, fmt.Errorf("Can't read default config file: %s", err)
+	clis := make([]*radosClient, size)
+	for i := range clis {
+		conn, err := rados.NewConnWithClusterAndUser(cluster, user)
+		if err != nil {
+			return nil, fmt.Errorf("Can't create connection to cluster %s for user %s: %s", cluster, user, err)
 		}
-		if err := conn.Connect(); err != nil {
-			return nil, fmt.Errorf("Can't connect to cluster %s: %s", cluster, err)
+		if opt := os.Getenv("CEPH_ADMIN_SOCKET"); opt != "none" {
+			if opt == "" {
+				opt = fmt.Sprintf("$run_dir/jfs-$cluster-$name-$pid-%d.asok", i)
+			} else {
+				opt += "." + strconv.Itoa(i)
+			}
+			if err = conn.SetConfigOption("admin_socket", opt); err != nil {
+				logger.Warnf("Failed to set admin_socket to %s: %s", opt, err)
+			}
 		}
+		if opt := os.Getenv("CEPH_LOG_FILE"); opt != "none" {
+			if opt == "" {
+				opt = fmt.Sprintf("/var/log/ceph/jfs-$cluster-$name-%d.log", i)
+			} else {
+				opt += "." + strconv.Itoa(i)
+			}
+			if err = conn.SetConfigOption("log_file", opt); err != nil {
+				logger.Warnf("Failed to set log_file to %s: %s", opt, err)
+			}
+		}
+		if os.Getenv("JFS_NO_CHECK_OBJECT_STORAGE") == "" {
+			if err := conn.ReadDefaultConfigFile(); err != nil {
+				return nil, fmt.Errorf("Can't read default config file: %s", err)
+			}
+			if err := conn.Connect(); err != nil {
+				return nil, fmt.Errorf("Can't connect to cluster %s: %s", cluster, err)
+			}
+		}
+		clis[i] = &radosClient{name, conn, make(chan *rados.IOContext, 50)}
 	}
 	return &ceph{
-		name: name,
-		conn: conn,
-		free: make(chan *rados.IOContext, 50),
+		name:    name,
+		size:    uint64(size),
+		clients: clis,
 	}, nil
 }
 
