@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -146,7 +145,11 @@ type davFile struct {
 }
 
 const webdavDeadProps = "webdav-dead-props"
-const webdavDelimiter = "|"
+
+type localProperty struct {
+	N xml.Name        `json:"name"`
+	P webdav.Property `json:"property"`
+}
 
 func (f *davFile) DeadProps() (map[xml.Name]webdav.Property, error) {
 	if !f.config.EnableProppatch {
@@ -159,17 +162,14 @@ func (f *davFile) DeadProps() (map[xml.Name]webdav.Property, error) {
 		}
 		return nil, econv(err)
 	}
-	var localProperty map[string]webdav.Property
-	if err := json.Unmarshal(result, &localProperty); err != nil {
+
+	var lProperty []localProperty
+	if err := json.Unmarshal(result, &lProperty); err != nil {
 		return nil, econv(err)
 	}
 	var property = make(map[xml.Name]webdav.Property)
-	for k, p := range localProperty {
-		split := strings.Split(k, webdavDelimiter)
-		if len(split) != 2 {
-			return nil, fmt.Errorf("webdav: invalid DeadProps key %s", k)
-		}
-		property[xml.Name{Space: split[0], Local: split[1]}] = p
+	for _, p := range lProperty {
+		property[p.N] = p.P
 	}
 	return property, nil
 }
@@ -198,10 +198,9 @@ func (f *davFile) Patch(patches []webdav.Proppatch) ([]webdav.Propstat, error) {
 	}
 
 	if deadProps != nil {
-		var property = make(map[string]webdav.Property)
+		var property []localProperty
 		for name, p := range deadProps {
-			key := fmt.Sprintf("%s%s%s", name.Space, webdavDelimiter, name.Local)
-			property[key] = p
+			property = append(property, localProperty{N: name, P: p})
 		}
 
 		jsonData, err := json.Marshal(&property)
