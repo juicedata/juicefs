@@ -19,6 +19,10 @@ package fs
 import (
 	"compress/gzip"
 	"context"
+	"encoding/json"
+	"encoding/xml"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -117,7 +121,7 @@ func (hfs *webdavFS) OpenFile(ctx context.Context, name string, flag int, perm o
 			return nil, err
 		}
 	}
-	return &davFile{f}, econv(err)
+	return &davFile{f, hfs.ctx, hfs.fs}, econv(err)
 }
 
 func (hfs *webdavFS) RemoveAll(ctx context.Context, name string) error {
@@ -135,6 +139,73 @@ func (hfs *webdavFS) Stat(ctx context.Context, name string) (os.FileInfo, error)
 
 type davFile struct {
 	*File
+	mctx meta.Context
+	fs   *FileSystem
+}
+
+const webdavDeadProps = "webdav-dead-props"
+const webdavDelimiter = "|"
+
+func (f *davFile) DeadProps() (map[xml.Name]webdav.Property, error) {
+	result, err := f.fs.GetXattr(f.mctx, f.path, webdavDeadProps)
+	if err != 0 {
+		if errors.Is(err, meta.ENOATTR) {
+			return nil, nil
+		}
+		return nil, econv(err)
+	}
+	var localProperty map[string]webdav.Property
+	if err := json.Unmarshal(result, &localProperty); err != nil {
+		return nil, econv(err)
+	}
+	var property = make(map[xml.Name]webdav.Property)
+	for k, p := range localProperty {
+		split := strings.Split(k, webdavDelimiter)
+		if len(split) != 2 {
+			return nil, fmt.Errorf("webdav: invalid DeadProps key %s", k)
+		}
+		property[xml.Name{Space: split[0], Local: split[1]}] = p
+	}
+	return property, nil
+}
+
+func (f *davFile) Patch(patches []webdav.Proppatch) ([]webdav.Propstat, error) {
+	pstat := webdav.Propstat{Status: http.StatusOK}
+	deadProps, err := f.DeadProps()
+	if err != nil {
+		return nil, err
+	}
+	for _, patch := range patches {
+		for _, p := range patch.Props {
+			pstat.Props = append(pstat.Props, webdav.Property{XMLName: p.XMLName})
+			if patch.Remove && deadProps != nil {
+				delete(deadProps, p.XMLName)
+				continue
+			}
+			if deadProps == nil {
+				deadProps = map[xml.Name]webdav.Property{}
+			}
+			deadProps[p.XMLName] = p
+		}
+	}
+
+	if deadProps != nil {
+		var property = make(map[string]webdav.Property)
+		for name, p := range deadProps {
+			key := fmt.Sprintf("%s%s%s", name.Space, webdavDelimiter, name.Local)
+			property[key] = p
+		}
+
+		jsonData, err := json.Marshal(&property)
+		if err != nil {
+			return nil, err
+		}
+		errno := f.fs.SetXattr(f.mctx, f.path, webdavDeadProps, jsonData, 0)
+		if errno != 0 {
+			return nil, econv(errno)
+		}
+	}
+	return []webdav.Propstat{pstat}, nil
 }
 
 func (f *davFile) Seek(offset int64, whence int) (int64, error) {
