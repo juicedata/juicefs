@@ -86,9 +86,10 @@ func econv(err error) error {
 }
 
 type webdavFS struct {
-	ctx   meta.Context
-	fs    *FileSystem
-	umask uint16
+	ctx    meta.Context
+	fs     *FileSystem
+	umask  uint16
+	config WebdavConfig
 }
 
 func (hfs *webdavFS) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
@@ -121,7 +122,7 @@ func (hfs *webdavFS) OpenFile(ctx context.Context, name string, flag int, perm o
 			return nil, err
 		}
 	}
-	return &davFile{f, hfs.ctx, hfs.fs}, econv(err)
+	return &davFile{f, hfs.ctx, hfs.fs, hfs.config}, econv(err)
 }
 
 func (hfs *webdavFS) RemoveAll(ctx context.Context, name string) error {
@@ -139,14 +140,18 @@ func (hfs *webdavFS) Stat(ctx context.Context, name string) (os.FileInfo, error)
 
 type davFile struct {
 	*File
-	mctx meta.Context
-	fs   *FileSystem
+	mctx   meta.Context
+	fs     *FileSystem
+	config WebdavConfig
 }
 
 const webdavDeadProps = "webdav-dead-props"
 const webdavDelimiter = "|"
 
 func (f *davFile) DeadProps() (map[xml.Name]webdav.Property, error) {
+	if !f.config.EnableProppatch {
+		return nil, nil
+	}
 	result, err := f.fs.GetXattr(f.mctx, f.path, webdavDeadProps)
 	if err != 0 {
 		if errors.Is(err, meta.ENOATTR) {
@@ -170,6 +175,9 @@ func (f *davFile) DeadProps() (map[xml.Name]webdav.Property, error) {
 }
 
 func (f *davFile) Patch(patches []webdav.Proppatch) ([]webdav.Propstat, error) {
+	if !f.config.EnableProppatch {
+		return nil, nil
+	}
 	pstat := webdav.Propstat{Status: http.StatusOK}
 	deadProps, err := f.DeadProps()
 	if err != nil {
@@ -237,13 +245,14 @@ func (f *davFile) Close() error {
 }
 
 type WebdavConfig struct {
-	Addr         string
-	DisallowList bool
-	EnableGzip   bool
-	Username     string
-	Password     string
-	CertFile     string
-	KeyFile      string
+	Addr            string
+	DisallowList    bool
+	EnableProppatch bool
+	EnableGzip      bool
+	Username        string
+	Password        string
+	CertFile        string
+	KeyFile         string
 }
 
 type indexHandler struct {
@@ -317,12 +326,18 @@ func (h *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "400 Bad Request", http.StatusBadRequest)
 		return
 	}
+
+	if !h.EnableProppatch && r.Method == "PROPPATCH" {
+		http.Error(w, "The PROPPATCH method is not currently enabled,please add the --enable-proppatch parameter and run it again", http.StatusNotImplemented)
+		return
+	}
+
 	h.Handler.ServeHTTP(w, r)
 }
 
 func StartHTTPServer(fs *FileSystem, config WebdavConfig) {
 	ctx := meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
-	hfs := &webdavFS{ctx, fs, uint16(utils.GetUmask())}
+	hfs := &webdavFS{ctx, fs, uint16(utils.GetUmask()), config}
 	srv := &webdav.Handler{
 		FileSystem: hfs,
 		LockSystem: webdav.NewMemLS(),

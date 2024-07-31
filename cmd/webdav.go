@@ -46,6 +46,10 @@ func cmdWebDav() *cli.Command {
 			Name:  "disallowList",
 			Usage: "disallow list a directory",
 		},
+		&cli.BoolFlag{
+			Name:  "enable-proppatch",
+			Usage: "enable proppatch method support",
+		},
 		&cli.StringFlag{
 			Name:  "log",
 			Usage: "path for WebDAV log",
@@ -83,13 +87,14 @@ func webdav(c *cli.Context) error {
 	listenAddr := c.Args().Get(1)
 	_, jfs := initForSvc(c, "webdav", metaUrl, listenAddr)
 	fs.StartHTTPServer(jfs, fs.WebdavConfig{
-		Addr:         listenAddr,
-		DisallowList: c.Bool("disallowList"),
-		EnableGzip:   c.Bool("gzip"),
-		Username:     os.Getenv("WEBDAV_USER"),
-		Password:     os.Getenv("WEBDAV_PASSWORD"),
-		CertFile:     c.String("cert-file"),
-		KeyFile:      c.String("key-file"),
+		Addr:            listenAddr,
+		DisallowList:    c.Bool("disallowList"),
+		EnableGzip:      c.Bool("gzip"),
+		Username:        os.Getenv("WEBDAV_USER"),
+		Password:        os.Getenv("WEBDAV_PASSWORD"),
+		CertFile:        c.String("cert-file"),
+		KeyFile:         c.String("key-file"),
+		EnableProppatch: c.Bool("enable-proppatch"),
 	})
 	return jfs.Meta().CloseSession()
 }
