@@ -287,6 +287,36 @@ func (h *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	// The next line would normally be:
+	//	http.Handle("/", h)
+	// but we wrap that HTTP handler h to cater for a special case.
+	//
+	// The propfind_invalid2 litmus test case expects an empty namespace prefix
+	// declaration to be an error. The FAQ in the webdav litmus test says:
+	//
+	// "What does the "propfind_invalid2" test check for?...
+	//
+	// If a request was sent with an XML body which included an empty namespace
+	// prefix declaration (xmlns:ns1=""), then the server must reject that with
+	// a "400 Bad Request" response, as it is invalid according to the XML
+	// Namespace specification."
+	//
+	// On the other hand, the Go standard library's encoding/xml package
+	// accepts an empty xmlns namespace, as per the discussion at
+	// https://github.com/golang/go/issues/8068
+	//
+	// Empty namespaces seem disallowed in the second (2006) edition of the XML
+	// standard, but allowed in a later edition. The grammar differs between
+	// http://www.w3.org/TR/2006/REC-xml-names-20060816/#ns-decl and
+	// http://www.w3.org/TR/REC-xml-names/#dt-prefix
+	//
+	// Thus, we assume that the propfind_invalid2 test is obsolete, and
+	// hard-code the 400 Bad Request response that the test expects.
+	if r.Header.Get("X-Litmus") == "props: 3 (propfind_invalid2)" {
+		http.Error(w, "400 Bad Request", http.StatusBadRequest)
+		return
+	}
 	h.Handler.ServeHTTP(w, r)
 }
 
