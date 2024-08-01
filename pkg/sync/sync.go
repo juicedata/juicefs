@@ -564,8 +564,9 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 			if num == n-1 {
 				sz = size - int64(num)*partSize
 			}
-			parts[num], err = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort)
-			errs <- err
+			var copyErr error
+			parts[num], copyErr = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort)
+			errs <- copyErr
 		}(i)
 	}
 
