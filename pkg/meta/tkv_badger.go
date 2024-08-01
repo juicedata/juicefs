@@ -203,6 +203,7 @@ func (c *badgerClient) gc() {}
 func newBadgerClient(addr string) (tkvClient, error) {
 	opt := badger.DefaultOptions(addr)
 	opt.Logger = utils.GetLogger("badger")
+	opt.MetricsEnabled = false
 	client, err := badger.Open(opt)
 	if err != nil {
 		return nil, err
