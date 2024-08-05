@@ -2250,6 +2250,7 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		return err
 	}, inode)
 	if err == nil && newSpace < 0 {
+		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, n.Length, false)
 	}
 	return err
