@@ -17,7 +17,7 @@ slug: /adopters
 | [地平线](https://horizon.ai)   | 汽车，AI     |         |
 | [卓驭科技](https://www.zyt.com/zh)  | 汽车，AI  |        |
 | [理想汽车](https://www.lixiang.com)   | 汽车，大数据，AI  | [JuiceFS 在理想汽车的使用和展望](https://juicefs.com/zh-cn/blog/li-auto-with-juicefs)，<br />[理想汽车：从 Hadoop 到云原生的演进与思考](https://juicefs.com/zh-cn/blog/liauto-case-hadoop-cloudnatrive)  |
-| [蔚来汽车](https://www.nio.cn)  | 汽车，AI储   |         |
+| [蔚来汽车](https://www.nio.cn)  | 汽车，AI  |         |
 | [上汽集团](https://www.saicmotor.com/chinese)   | 汽车，AI  | [上汽云 x JuiceFS：iGear 用了这个小魔法，模型训练速度提升 300%](https://juicefs.com/zh-cn/blog/performance-boost-3x-on-igear-platform)      |
 | [Plus.AI](https://plus.ai) | 汽车，AI  |
 | [五菱汽车](https://wuling.com)   | 汽车，大数据     |          |
@@ -69,7 +69,7 @@ slug: /adopters
 | [一面数据](https://www.yimian.com.cn)    | 大数据   | [一面数据：Hadoop 迁移云上架构设计与实践](https://juicefs.com/zh-cn/blog/yimiancase)    |
 | [携程旅行](https://www.ctrip.com)   |  互联网服务，大数据   | [突破存储数据量限制，JuiceFS 在携程海量冷数据场景下的实践](https://juicefs.com/zh-cn/blog/xiecheng-case)    |
 | [同程旅行](https://ly.com)   |  互联网服务，共享文件存储  |            |
-| [贝壳](https://ke.com)   |  互联网服务，AI  |  [贝壳找房: 为 AI 平台打造混合多云的存储加速底座](https://juicefs.com/zh-cn/blog/user-stories/beike-ai-platform-multi-cloud-storage)        |
+| [贝壳](https://ke.com)   |  互联网服务，AI  |  [贝壳找房：为 AI 平台打造混合多云的存储加速底座](https://juicefs.com/zh-cn/blog/user-stories/beike-ai-platform-multi-cloud-storage)        |
 | [Jerry](https://getjerry.com)  | 互联网服务，大数据  ｜ [北美科技企业 Jerry：基于 JuiceFS 构建 ClickHouse 主从架构](https://juicefs.com/zh-cn/blog/user-stories/jerry-clickhouse-read-write-separation-juicefs-primary-replica-architecture)  |
 | [航天宏图](https://www.piesat.cn)   |  遥感，共享文件存储    |                |
 | [天桐互动](https://www.kuaidianyuedu.com)   |  AI，共享文件存储  |             |
