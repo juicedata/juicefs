@@ -11,7 +11,7 @@ slug: /adopters
 | [中山大学](https://www.sysu.edu.cn)   |  大学，AI   |  [基于 JuiceFS 构建高校 AI 存储方案：高并发、系统稳定、运维简单](https://juicefs.com/zh-cn/blog/user-stories/juicefs-vs-nfs-ai-storage)  |
 | [电子科技大学](https://www.uestc.edu.cn)    |  大学，AI   |       |
 | [Character.AI](https://character.ai) | GenerativeAI |              |
-| [BentoML](https://bentoml.com)   ｜ GenerativeAI   |  [BentoML：如何使用 JuiceFS 加速大模型加载](https://juicefs.com/zh-cn/blog/user-stories/bentoml-use-juicefs-accelerate-large-model-loading)          |
+| [BentoML](https://bentoml.com)   | GenerativeAI   |  [BentoML：如何使用 JuiceFS 加速大模型加载](https://juicefs.com/zh-cn/blog/user-stories/bentoml-use-juicefs-accelerate-large-model-loading)          |
 | [NAVER](https://www.naver.com)  | 互联网服务，AI  |  [韩国国民搜索 NAVER：为 AI 平台引入存储方案 JuiceFS](https://juicefs.com/zh-cn/blog/user-stories/naver-storage-solution-juicefs-ai-platforms)  |
 | [云知声](https://www.unisound.com)     |  AI  | [AI 场景存储优化：云知声超算平台基于 JuiceFS 的存储实践](https://juicefs.com/zh-cn/blog/juicefs-support-ai-storage-at-unisound)    |
 | [地平线](https://horizon.ai)   | 汽车，AI     |         |
@@ -70,7 +70,7 @@ slug: /adopters
 | [携程旅行](https://www.ctrip.com)   |  互联网服务，大数据   | [突破存储数据量限制，JuiceFS 在携程海量冷数据场景下的实践](https://juicefs.com/zh-cn/blog/xiecheng-case)    |
 | [同程旅行](https://ly.com)   |  互联网服务，共享文件存储  |            |
 | [贝壳](https://ke.com)   |  互联网服务，AI  |  [贝壳找房：为 AI 平台打造混合多云的存储加速底座](https://juicefs.com/zh-cn/blog/user-stories/beike-ai-platform-multi-cloud-storage)        |
-| [Jerry](https://getjerry.com)  | 互联网服务，大数据  ｜ [北美科技企业 Jerry：基于 JuiceFS 构建 ClickHouse 主从架构](https://juicefs.com/zh-cn/blog/user-stories/jerry-clickhouse-read-write-separation-juicefs-primary-replica-architecture)  |
+| [Jerry](https://getjerry.com)  | 互联网服务，大数据  | [北美科技企业 Jerry：基于 JuiceFS 构建 ClickHouse 主从架构](https://juicefs.com/zh-cn/blog/user-stories/jerry-clickhouse-read-write-separation-juicefs-primary-replica-architecture)  |
 | [航天宏图](https://www.piesat.cn)   |  遥感，共享文件存储    |                |
 | [天桐互动](https://www.kuaidianyuedu.com)   |  AI，共享文件存储  |             |
 | [视源股份](http://www.cvte.com)   |  共享文件存储  |         |
