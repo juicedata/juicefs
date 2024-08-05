@@ -393,9 +393,6 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 }
 
 func doCopySingle0(src, dst object.ObjectStorage, key string, size int64) error {
-	if limiter != nil {
-		limiter.Wait(size)
-	}
 	concurrent <- 1
 	defer func() {
 		<-concurrent
@@ -432,6 +429,9 @@ type withProgress struct {
 }
 
 func (w *withProgress) Read(b []byte) (int, error) {
+	if limiter != nil {
+		limiter.Wait(int64(len(b)))
+	}
 	n, err := w.r.Read(b)
 	copiedBytes.IncrInt64(int64(n))
 	return n, err
