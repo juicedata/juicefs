@@ -197,6 +197,10 @@ func parseFuseFd(mountPoint string) (fd int) {
 }
 
 func checkMountpoint(name, mp, logPath string, background bool) {
+	if parseFuseFd(mp) > 0 {
+		logger.Infof("\033[92mOK\033[0m, %s is ready, special mount point %s", name, mp)
+		return
+	}
 	mountTimeOut := 10 // default 10 seconds
 	interval := 500    // check every 500 Millisecond
 	if tStr, ok := os.LookupEnv("JFS_MOUNT_TIMEOUT"); ok {
@@ -207,10 +211,6 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 		}
 	}
 	for i := 0; i < mountTimeOut*1000/interval; i++ {
-		if parseFuseFd(mp) > 0 {
-			logger.Infof("\033[92mOK\033[0m, %s is ready, special mount point %s", name, mp)
-			return
-		}
 		time.Sleep(time.Duration(interval) * time.Millisecond)
 		st, err := os.Stat(mp)
 		if err == nil {
