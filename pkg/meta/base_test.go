@@ -2720,6 +2720,62 @@ func testQuota(t *testing.T, m Meta) {
 		}
 	}
 
+	getUsedInodes := func(path string) int64 {
+		m.getBase().doFlushQuotas()
+		qs := make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, path, qs, false, false); err != nil {
+			t.Fatalf("HandleQuota list: %s", err)
+		}
+		return qs[path].UsedInodes
+	}
+
+	// unlink opened file
+	var nInode Ino
+	if st := m.Lookup(ctx, parent, "f2", &nInode, &attr, false); st != 0 {
+		t.Fatalf("Lookup quota/d2/f2: %s", st)
+	}
+
+	if st := m.Open(ctx, nInode, 0, &attr); st != 0 {
+		t.Fatalf("Open quota/d2/f2: %s", st)
+	}
+
+	if st := m.Unlink(ctx, parent, "f2"); st != 0 {
+		t.Fatalf("Unlink quota/d2/f2 err: %s", st)
+	}
+
+	if st := m.Close(ctx, nInode); st != 0 {
+		t.Fatalf("Close quota/d2/f2: %s", st)
+	}
+
+	if used := getUsedInodes("/quota"); used != 5 {
+		t.Fatalf("used inodes of /quota should be 5, but got %d", used)
+	}
+
+	// rename opened file
+	if st := m.Lookup(ctx, inode, "f22", &nInode, &attr, false); st != 0 {
+		t.Fatalf("Lookup quota/d2/d22/f22: %s", st)
+	}
+
+	if st := m.Open(ctx, nInode, 0, &attr); st != 0 {
+		t.Fatalf("Open quota/d2/d22/f22: %s", st)
+	}
+
+	if st := m.Rename(ctx, inode, "f22", inode, "f23", 0, &nInode, nil); st != 0 {
+		t.Fatalf("Rename quota/d2/d22/f22 to quota/d2/d22/f23 err: %s", st)
+	}
+
+	if st := m.Close(ctx, nInode); st != 0 {
+		t.Fatalf("Close quota/d2/d22/f23: %s", st)
+	}
+
+	if used := getUsedInodes("/quota"); used != 5 {
+		t.Fatalf("used inodes of /quota should be 5, but got %d", used)
+	}
+
+	if st := m.Create(ctx, parent, "f3", 0644, 0, 0, &nInode, &attr); st != 0 {
+		t.Fatalf("Create quota/d2/f3: %s", st)
+	}
+
 	if err := m.HandleQuota(ctx, QuotaDel, "/quota/d1", nil, false, false); err != nil {
 		t.Fatalf("HandleQuota del /quota/d1: %s", err)
 	}
@@ -2736,8 +2792,8 @@ func testQuota(t *testing.T, m Meta) {
 		}
 	}
 	m.getBase().loadQuotas()
-	if st := m.Create(ctx, parent, "f3", 0644, 0, 0, nil, &attr); st != syscall.EDQUOT {
-		t.Fatalf("Create quota/d22/f3: %s", st)
+	if st := m.Create(ctx, parent, "f4", 0644, 0, 0, nil, &attr); st != syscall.EDQUOT {
+		t.Fatalf("Create quota/d22/f4: %s", st)
 	}
 }
 
