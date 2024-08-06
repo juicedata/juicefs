@@ -182,6 +182,20 @@ func watchdog(ctx context.Context, mp string) {
 	}
 }
 
+// parseFuseFd checks if `mountPoint` is the special form /dev/fd/N (with N >= 0),
+// and returns N in this case. Returns -1 otherwise.
+func parseFuseFd(mountPoint string) (fd int) {
+	dir, file := path.Split(mountPoint)
+	if dir != "/dev/fd/" {
+		return -1
+	}
+	fd, err := strconv.Atoi(file)
+	if err != nil || fd <= 0 {
+		return -1
+	}
+	return fd
+}
+
 func checkMountpoint(name, mp, logPath string, background bool) {
 	mountTimeOut := 10 // default 10 seconds
 	interval := 500    // check every 500 Millisecond
@@ -193,6 +207,10 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 		}
 	}
 	for i := 0; i < mountTimeOut*1000/interval; i++ {
+		if parseFuseFd(mp) > 0 {
+			logger.Infof("\033[92mOK\033[0m, %s is ready, special mount point %s", name, mp)
+			return
+		}
 		time.Sleep(time.Duration(interval) * time.Millisecond)
 		st, err := os.Stat(mp)
 		if err == nil {
