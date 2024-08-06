@@ -43,12 +43,13 @@ import (
 	"time"
 
 	"github.com/juicedata/godaemon"
+	"github.com/urfave/cli/v2"
+
 	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
-	"github.com/urfave/cli/v2"
 )
 
 func showThreadStack(agentAddr string) {
@@ -418,6 +419,9 @@ func genFuseOpt(c *cli.Context, name string) string {
 }
 
 func prepareMp(mp string) {
+	if csiCommPath != "" {
+		return
+	}
 	var fi os.FileInfo
 	var ino uint64
 	err := utils.WithTimeout(func() error {
@@ -515,6 +519,9 @@ func shutdownGraceful(mp string) {
 }
 
 func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
+	if csiCommPath != "" {
+		return false
+	}
 	var ino uint64
 	var err error
 	err = utils.WithTimeout(func() error {

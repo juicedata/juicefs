@@ -100,6 +100,7 @@ var fuseMu sync.Mutex
 var fuseFd int = 0
 var fuseSetting = []byte("FUSE")
 var serverAddress string = fmt.Sprintf("/tmp/fuse_fd_comm.%d", os.Getpid())
+var csiCommPath = os.Getenv("JFS_SUPER_COMM")
 
 func handleFDRequest(conn *net.UnixConn) {
 	defer conn.Close()
@@ -132,6 +133,12 @@ func handleFDRequest(conn *net.UnixConn) {
 		logger.Debugf("recv FUSE fd: %d", fds[0])
 		fuseFd = fds[0]
 		fuseSetting = msg
+		if csiCommPath != "" {
+			err = sendFuseFd(csiCommPath, fuseSetting, fuseFd)
+			if err != nil {
+				logger.Warnf("send fd to %s: %v", csiCommPath, err)
+			}
+		}
 	} else {
 		for _, fd := range fds {
 			_ = syscall.Close(fd)
@@ -142,6 +149,12 @@ func handleFDRequest(conn *net.UnixConn) {
 }
 
 func serveFuseFD(path string) {
+	if csiCommPath != "" {
+		fd, fSetting := getFuseFd(csiCommPath)
+		if fd > 0 {
+			fuseFd, fuseSetting = fd, fSetting
+		}
+	}
 	_ = os.Remove(path)
 	sock, err := net.Listen("unix", path)
 	if err != nil {
