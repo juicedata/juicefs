@@ -2252,7 +2252,6 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	if err == nil && newSpace < 0 {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, n.Length, false)
-		m.updateDirQuota(Background, n.Parent, newSpace, -1)
 	}
 	return err
 }
