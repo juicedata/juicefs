@@ -921,30 +921,27 @@ func (m *dbMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.newInodes, inodes)
 }
 
-func (m *dbMeta) flushStats() {
+func (m *dbMeta) doFlushStats() {
 	var inttype = "BIGINT"
 	if m.Name() == "mysql" {
 		inttype = "SIGNED"
 	}
-	for {
-		newSpace := atomic.LoadInt64(&m.newSpace)
-		newInodes := atomic.LoadInt64(&m.newInodes)
-		if newSpace != 0 || newInodes != 0 {
-			err := m.txn(func(s *xorm.Session) error {
-				_, err := s.Exec(fmt.Sprintf("UPDATE jfs_counter SET value=value+ CAST((CASE name WHEN 'usedSpace' THEN %d ELSE %d END) AS %s) WHERE name='usedSpace' OR name='totalInodes' ", newSpace, newInodes, inttype))
-				return err
-			})
-			if err != nil && !strings.Contains(err.Error(), "attempt to write a readonly database") {
-				logger.Warnf("update stats: %s", err)
-			}
-			if err == nil {
-				atomic.AddInt64(&m.newSpace, -newSpace)
-				atomic.AddInt64(&m.usedSpace, newSpace)
-				atomic.AddInt64(&m.newInodes, -newInodes)
-				atomic.AddInt64(&m.usedInodes, newInodes)
-			}
+	newSpace := atomic.LoadInt64(&m.newSpace)
+	newInodes := atomic.LoadInt64(&m.newInodes)
+	if newSpace != 0 || newInodes != 0 {
+		err := m.txn(func(s *xorm.Session) error {
+			_, err := s.Exec(fmt.Sprintf("UPDATE jfs_counter SET value=value+ CAST((CASE name WHEN 'usedSpace' THEN %d ELSE %d END) AS %s) WHERE name='usedSpace' OR name='totalInodes' ", newSpace, newInodes, inttype))
+			return err
+		})
+		if err != nil && !strings.Contains(err.Error(), "attempt to write a readonly database") {
+			logger.Warnf("update stats: %s", err)
 		}
-		time.Sleep(time.Second)
+		if err == nil {
+			atomic.AddInt64(&m.newSpace, -newSpace)
+			atomic.AddInt64(&m.usedSpace, newSpace)
+			atomic.AddInt64(&m.newInodes, -newInodes)
+			atomic.AddInt64(&m.usedInodes, newInodes)
+		}
 	}
 }
 

@@ -56,7 +56,7 @@ type engine interface {
 	// Set counter name to value if old <= value - diff.
 	setIfSmall(name string, value, diff int64) (bool, error)
 	updateStats(space int64, inodes int64)
-	flushStats()
+	doFlushStats()
 
 	doLoad() ([]byte, error)
 
@@ -399,7 +399,7 @@ func (m *baseMeta) NewSession(record bool) error {
 	}
 
 	m.loadQuotas()
-	go m.en.flushStats()
+	go m.flushStats()
 	go m.flushDirStat()
 	go m.flushQuotas()
 
@@ -521,6 +521,7 @@ func (m *baseMeta) CloseSession() error {
 	if m.conf.ReadOnly {
 		return nil
 	}
+	m.en.doFlushStats()
 	m.doFlushDirStat()
 	m.doFlushQuotas()
 	m.sesMu.Lock()
