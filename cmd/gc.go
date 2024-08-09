@@ -110,6 +110,16 @@ func gc(ctx *cli.Context) error {
 	if (delete || compact) && threads <= 0 {
 		logger.Fatal("threads should be greater than 0 to delete or compact objects")
 	}
+	maxMtime := time.Now().Add(time.Hour * -1)
+	strDuration := os.Getenv("JFS_GC_SKIPPEDTIME")
+	if strDuration != "" {
+		iDuration, err := strconv.Atoi(strDuration)
+		if err == nil {
+			maxMtime = time.Now().Add(time.Second * -1 * time.Duration(iDuration))
+		} else {
+			logger.Errorf("parse JFS_GC_SKIPPEDTIME=%s: %s", strDuration, err)
+		}
+	}
 
 	var wg sync.WaitGroup
 	var delSpin *utils.Bar
@@ -262,16 +272,6 @@ func gc(ctx *cli.Context) error {
 	compacted := progress.AddDoubleSpinnerTwo("Compacted objects", "Compacted data")
 	leaked := progress.AddDoubleSpinnerTwo("Leaked objects", "Leaked data")
 	skipped := progress.AddDoubleSpinnerTwo("Skipped objects", "Skipped data")
-	maxMtime := time.Now().Add(time.Hour * -1)
-	strDuration := os.Getenv("JFS_GC_SKIPPEDTIME")
-	if strDuration != "" {
-		iDuration, err := strconv.Atoi(strDuration)
-		if err == nil {
-			maxMtime = time.Now().Add(time.Second * -1 * time.Duration(iDuration))
-		} else {
-			logger.Errorf("parse JFS_GC_SKIPPEDTIME=%s: %s", strDuration, err)
-		}
-	}
 
 	var leakedObj = make(chan string, 10240)
 	for i := 0; i < threads; i++ {
