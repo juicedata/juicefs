@@ -19,8 +19,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/version"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"net/url"
@@ -28,15 +26,19 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/redis/go-redis/v9"
-	. "github.com/smartystreets/goconvey/convey"
 	"github.com/urfave/cli/v2"
 )
 
@@ -46,54 +48,50 @@ const testVolume = "test"
 
 // gomonkey may encounter the problem of insufficient permissions under mac, please solve it by viewing this link https://github.com/agiledragon/gomonkey/issues/70
 func Test_exposeMetrics(t *testing.T) {
-	Convey("Test_exposeMetrics", t, func() {
-		Convey("Test_exposeMetrics", func() {
-			addr := "redis://127.0.0.1:6379/12"
-			client := meta.NewClient(addr, nil)
-			format := &meta.Format{
-				Name:      "test",
-				BlockSize: 4096,
-				Capacity:  1 << 30,
-				DirStats:  true,
-			}
-			_ = client.Init(format, true)
-			var appCtx *cli.Context
-			stringPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "String", func(_ *cli.Context, arg string) string {
-				switch arg {
-				case "metrics":
-					return "127.0.0.1:9567"
-				case "consul":
-					return "127.0.0.1:8500"
-				case "custom-labels":
-					return "key1:value1"
-				default:
-					return ""
-				}
-			})
-			isSetPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "IsSet", func(_ *cli.Context, arg string) bool {
-				switch arg {
-				case "custom-labels":
-					return true
-				default:
-					return false
-				}
-			})
-			defer stringPatches.Reset()
-			defer isSetPatches.Reset()
-			ResetHttp()
-			registerer, registry := wrapRegister(appCtx, "test", "test")
-			metricsAddr := exposeMetrics(appCtx, registerer, registry)
-			client.InitMetrics(registerer)
-			vfs.InitMetrics(registerer)
-			u := url.URL{Scheme: "http", Host: metricsAddr, Path: "/metrics"}
-			resp, err := http.Get(u.String())
-			So(err, ShouldBeNil)
-			all, err := io.ReadAll(resp.Body)
-			So(err, ShouldBeNil)
-			So(string(all), ShouldNotBeBlank)
-			So(string(all), ShouldContainSubstring, `key1="value1"`)
-		})
+	addr := "redis://127.0.0.1:6379/12"
+	client := meta.NewClient(addr, nil)
+	format := &meta.Format{
+		Name:      "test",
+		BlockSize: 4096,
+		Capacity:  1 << 30,
+		DirStats:  true,
+	}
+	_ = client.Init(format, true)
+	var appCtx *cli.Context
+	stringPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "String", func(_ *cli.Context, arg string) string {
+		switch arg {
+		case "metrics":
+			return "127.0.0.1:9567"
+		case "consul":
+			return "127.0.0.1:8500"
+		case "custom-labels":
+			return "key1:value1"
+		default:
+			return ""
+		}
 	})
+	isSetPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "IsSet", func(_ *cli.Context, arg string) bool {
+		switch arg {
+		case "custom-labels":
+			return true
+		default:
+			return false
+		}
+	})
+	defer stringPatches.Reset()
+	defer isSetPatches.Reset()
+	ResetHttp()
+	registerer, registry := wrapRegister(appCtx, "test", "test")
+	metricsAddr := exposeMetrics(appCtx, registerer, registry)
+	client.InitMetrics(registerer)
+	vfs.InitMetrics(registerer)
+	u := url.URL{Scheme: "http", Host: metricsAddr, Path: "/metrics"}
+	resp, err := http.Get(u.String())
+	require.Nil(t, err)
+	all, err := io.ReadAll(resp.Body)
+	require.Nil(t, err)
+	require.NotEmpty(t, all)
+	require.Contains(t, string(all), `key1="value1"`)
 }
 
 func ResetHttp() {
@@ -107,7 +105,14 @@ func resetTestMeta() *redis.Client { // using Redis
 	return rdb
 }
 
+var mountLock sync.Mutex
+
 func mountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraMountOpts []string) {
+	// wait for last mount exit
+	for !mountLock.TryLock() {
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	_ = resetTestMeta()
 	testDir := t.TempDir()
 	if bucket != nil {
@@ -130,6 +135,7 @@ func mountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraMoun
 		mountArgs = append(mountArgs, extraMountOpts...)
 	}
 	go func() {
+		defer mountLock.Unlock()
 		if err := Main(mountArgs); err != nil {
 			t.Errorf("mount failed: %s", err)
 		}
@@ -140,7 +146,7 @@ func mountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraMoun
 		t.Fatalf("get file inode failed: %s", err)
 	}
 	if inode != 1 {
-		t.Fatalf("mount failed: inode of %s is not 1", testMountPoint)
+		t.Fatalf("mount failed: inode of %s got %d, expect 1", testMountPoint, inode)
 	} else {
 		t.Logf("mount %s success", testMountPoint)
 	}
@@ -206,6 +212,11 @@ func TestUmount(t *testing.T) {
 }
 
 func tryMountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraMountOpts []string) error {
+	// wait for last mount exit
+	for !mountLock.TryLock() {
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	_ = resetTestMeta()
 	testDir := t.TempDir()
 	if bucket != nil {
@@ -227,8 +238,10 @@ func tryMountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraM
 		mountArgs = append(mountArgs, extraMountOpts...)
 	}
 
+	os.Setenv("JFS_SUPERVISOR", "test")
 	errChan := make(chan error, 1)
 	go func() {
+		defer mountLock.Unlock()
 		errChan <- Main(mountArgs)
 	}()
 
@@ -245,7 +258,7 @@ func tryMountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraM
 		return fmt.Errorf("get file inode failed: %w", err)
 	}
 	if inode != 1 {
-		return fmt.Errorf("mount failed: inode of %s is not 1", testMountPoint)
+		return fmt.Errorf("mount failed: inode of %s is %d, expect 1", testMountPoint, inode)
 	}
 	t.Logf("mount %s success", testMountPoint)
 	return nil
