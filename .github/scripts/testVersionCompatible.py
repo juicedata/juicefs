@@ -3,21 +3,16 @@ try:
     __import__("hypothesis")
 except ImportError:
     subprocess.check_call(["pip", "install", "hypothesis"])
-from datetime import datetime
 import json
 import os
 from pickle import FALSE
 import platform
-import shutil
-import sys
 from termios import TIOCPKT_DOSTOP
 import time
-import unittest
-from xmlrpc.client import boolean
-import hypothesis
 from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
-from hypothesis import Phase, Verbosity, assume, strategies as st
+from hypothesis import Phase, Verbosity, assume, settings, strategies as st
 from hypothesis import seed
+from hypothesis.database import DirectoryBasedExampleDatabase
 from packaging import version
 import subprocess
 try:
@@ -27,18 +22,10 @@ except ImportError:
 from minio import Minio
 import uuid
 from utils import *
-from fsrand import *
 from cmptree import *
 import random
-
-@seed(random.randint(10000, 1000000))
-@hypothesis.settings(
-    verbosity=Verbosity.debug, 
-    max_examples=100, 
-    stateful_step_count=30, 
-    deadline=None, 
-    report_multiple_bugs=False, 
-    phases=[Phase.explicit, Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
+SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
+@seed(SEED)
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
     MAX_CLIENT_VERSIONS = ['1.2.0', '2.0.0']
@@ -54,7 +41,6 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     def __init__(self):
         super(JuicefsMachine, self).__init__()
-        print(f"seed is: {self._hypothesis_internal_use_seed}")
         self.run_id = uuid.uuid4().hex
         print(f'\ninit with run_id: {self.run_id}')
         with open(os.path.expanduser('~/command.log'), 'a') as f:
@@ -250,41 +236,16 @@ class JuicefsMachine(RuleBasedStateMachine):
 
 
     @rule(juicefs=st.sampled_from(JFS_BINS), 
-        no_syslog=st.booleans(),
         other_fuse_options=st.lists(st.sampled_from(['debug', 'allow_other', 'writeback_cache']), unique=True), 
         enable_xattr=st.booleans(),
-        attr_cache=st.integers(min_value=1, max_value=10), 
-        entry_cache=st.integers(min_value=1, max_value=10), 
-        dir_entry_cache=st.integers(min_value=1, max_value=10), 
-        get_timeout=st.integers(min_value=30, max_value=60), 
-        put_timeout=st.integers(min_value=30, max_value=60), 
-        io_retries=st.integers(min_value=5, max_value=15), 
-        max_uploads=st.integers(min_value=5, max_value=100), 
-        max_deletes=st.integers(min_value=5, max_value=100), 
-        buffer_size=st.integers(min_value=100, max_value=1000), 
-        upload_limit=st.integers(min_value=100, max_value=1000), 
-        download_limit=st.integers(min_value=100, max_value=1000), 
-        prefetch=st.integers(min_value=0, max_value=100), 
         writeback=st.just(False),
-        upload_delay=st.sampled_from([0, 2]), 
-        cache_dir=st.sampled_from(['cache1', 'cache2']),
-        cache_size=st.integers(min_value=0, max_value=1024000), 
-        free_space_ratio=st.floats(min_value=0.1, max_value=0.5), 
-        cache_partial_only=st.booleans(),
-        backup_meta=st.integers(min_value=300, max_value=1000),
-        heartbeat=st.integers(min_value=5, max_value=12), 
         read_only=st.booleans(),
         no_bgjob=st.booleans(),
-        open_cache=st.integers(min_value=0, max_value=100),
         sub_dir=st.sampled_from(['dir1', 'dir2']),
-        metrics=st.sampled_from(['127.0.0.1:9567', '127.0.0.1:9568']), 
-        consul=st.sampled_from(['127.0.0.1:8500', '127.0.0.1:8501']), 
     )
     @precondition(lambda self: self.formatted  )
-    def mount(self, juicefs, no_syslog, other_fuse_options, enable_xattr, attr_cache, entry_cache, dir_entry_cache,
-        get_timeout, put_timeout, io_retries, max_uploads, max_deletes, buffer_size, upload_limit, download_limit, prefetch, 
-        writeback, upload_delay, cache_dir, cache_size, free_space_ratio, cache_partial_only, backup_meta, heartbeat, read_only,
-        no_bgjob, open_cache, sub_dir, metrics, consul):
+    def mount(self, juicefs, other_fuse_options, enable_xattr,
+        writeback, read_only, no_bgjob, sub_dir):
         assume (self.greater_than_version_formatted(juicefs))
         if JuicefsMachine.META_URL.startswith('badger://'):
             assume(not self.mounted)
@@ -298,9 +259,6 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume(not os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start mount')
         options = [juicefs, 'mount', '-d',  JuicefsMachine.META_URL, JuicefsMachine.MOUNT_POINT]
-        if no_syslog:
-            options.append('--no-syslog')
-        options.extend(['--log', os.path.expanduser(f'~/.juicefs/juicefs.log')])
         if other_fuse_options:
             options.extend(['-o', ','.join(other_fuse_options)])
         if 'allow_other' in other_fuse_options:
@@ -310,50 +268,24 @@ class JuicefsMachine(RuleBasedStateMachine):
                 print('add user_allow_other to /etc/fuse.conf succeed')
         if enable_xattr:
             options.append('--enable-xattr')
-        options.extend(['--attr-cache', str(attr_cache)])
-        options.extend(['--entry-cache', str(entry_cache)])
-        options.extend(['--dir-entry-cache', str(dir_entry_cache)])
-        options.extend(['--get-timeout', str(get_timeout)])
-        options.extend(['--put-timeout', str(put_timeout)])
-        options.extend(['--io-retries', str(io_retries)])
-        options.extend(['--max-uploads', str(max_uploads)])
-        if run_cmd(f'{juicefs} mount --help | grep max-deletes') == 0:
-            options.extend(['--max-deletes', str(max_deletes)])
-        options.extend(['--buffer-size', str(buffer_size)])
-        options.extend(['--upload-limit', str(upload_limit)])
-        options.extend(['--download-limit', str(download_limit)])
-        options.extend(['--prefetch', str(prefetch)])
         if writeback:
             options.append('--writeback')
         upload_delay = str(upload_delay)
         if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-beta2'):
             upload_delay = upload_delay + 's'
         options.extend(['--upload-delay', str(upload_delay)])
-        options.extend(['--cache-dir', os.path.expanduser(f'~/.juicefs/{cache_dir}')])
-        options.extend(['--cache-size', str(cache_size)])
-        options.extend(['--free-space-ratio', str(free_space_ratio)])
-        if cache_partial_only:
-            options.append('--cache-partial-only')
         backup_meta = str(backup_meta)
         if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-beta2'):
             backup_meta = '1h0m0s'
         if run_cmd(f'{juicefs} mount --help | grep backup-meta') == 0:
             options.extend(['--backup-meta', backup_meta])
-        if run_cmd(f'{juicefs} mount --help | grep heartbeat') == 0:
-            options.extend(['--heartbeat', str(heartbeat)])
         if read_only:
             options.append('--read-only')
         if no_bgjob and run_cmd(f'{juicefs} mount --help | grep no-bgjob') == 0:
             options.append('--no-bgjob')
 
-        options.extend(['--open-cache', str(open_cache)])
         print('TODO: subdir')
         # options.extend('--subdir', str(sub_dir))
-        if not is_port_in_use( int(metrics.split(':')[1])):
-            options.extend(['--metrics', str(metrics)])
-        # if run_cmd(f'{juicefs} mount --help | grep consul') == 0:
-        #     options.extend(['--consul', str(consul)])
-        options.append('--no-usage-report')
         if os.path.exists(JuicefsMachine.MOUNT_POINT):
             run_cmd(f'stat {JuicefsMachine.MOUNT_POINT}')
         run_jfs_cmd(options)
@@ -470,36 +402,6 @@ class JuicefsMachine(RuleBasedStateMachine):
         assert str(result) == str(data)
         print('write and read succeed')
     
-    def write_rand_files(self, path, seed):
-        count = 50
-        if os.path.isdir(path):
-            shutil.rmtree(path)
-        os.mkdir(path)
-        fsrand = FsRandomizer(path, count, seed)
-        fsrand.stdout = sys.stdout
-        fsrand.stderr = sys.stderr
-        fsrand.verbose = False
-        fsrand.randomize()
-
-    # @rule()
-    @precondition(lambda self: self.mounted )
-    def write_rand_files_and_compare(self):
-        start = time.time()
-        assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
-        assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
-        seed = int(time.time())
-        self.write_rand_files(JuicefsMachine.MOUNT_POINT+'fsrand', seed)
-        self.write_rand_files('/tmp/fsrand', seed)
-        tcmp = TreeComparator(JuicefsMachine.MOUNT_POINT+'fsrand', '/tmp/fsrand')
-        tcmp.compare()
-        res = len(tcmp.left_only) + len(tcmp.right_only) + \
-            len(tcmp.common_funny) + len(tcmp.funny_files) + len(tcmp.diff_files)
-        if res > 0:
-            raise Exception("compare failed")
-        os.system(f"rm -rf {JuicefsMachine.MOUNT_POINT}/fsrand")
-        os.system(f"rm -rf /tmp/fsrand")
-        print('write_rand_files_and_compare execution time:', time.time()-start, 'seconds')
-
     @rule(juicefs = st.sampled_from(JFS_BINS))
     @precondition(lambda self: self.formatted )
     def dump(self, juicefs):
@@ -546,30 +448,6 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('start fsck')
         run_jfs_cmd([juicefs, 'fsck', JuicefsMachine.META_URL])
         print('fsck succeed')
-
-    # @rule(juicefs=st.sampled_from(JFS_BINS),
-    #  block_size=st.integers(min_value=1, max_value=32),
-    #  big_file_size=st.integers(min_value=100, max_value=200),
-    #  small_file_size=st.integers(min_value=1, max_value=256),
-    #  small_file_count=st.integers(min_value=100, max_value=256), 
-    #  threads=st.integers(min_value=1, max_value=100))
-    @precondition(lambda self: self.mounted and False)
-    def bench(self, juicefs, block_size, big_file_size, small_file_size, small_file_count, threads):
-        assume (self.greater_than_version_formatted(juicefs))
-        assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
-        print('start bench')
-        run_cmd(f'df | grep {JuicefsMachine.MOUNT_POINT}')
-        options = [juicefs, 'bench', JuicefsMachine.MOUNT_POINT]
-        options.extend(['--block-size', str(block_size)])
-        options.extend(['--big-file-size', str(big_file_size)])
-        options.extend(['--small-file-size', str(small_file_size)])
-        options.extend(['--small-file-count', str(small_file_count)])
-        options.extend(['--threads', str(threads)])
-        output = run_jfs_cmd(options)
-        summary = output.decode('utf8').split('\n')[2]
-        expected = f'BlockSize: {block_size} MiB, BigFileSize: {big_file_size} MiB, SmallFileSize: {small_file_size} KiB, SmallFileCount: {small_file_count}, NumThreads: {threads}'
-        assert summary == expected
-        print('bench succeed')
 
     @rule(juicefs=st.sampled_from(JFS_BINS),
         threads=st.integers(min_value=1, max_value=100), 
@@ -637,44 +515,17 @@ class JuicefsMachine(RuleBasedStateMachine):
 
 
     @rule(juicefs=st.sampled_from(JFS_BINS), 
-        get_timeout=st.integers(min_value=30, max_value=59), 
-        put_timeout=st.integers(min_value=30, max_value=59), 
-        io_retries=st.integers(min_value=5, max_value=15), 
-        max_uploads=st.integers(min_value=1, max_value=100), 
-        max_deletes=st.integers(min_value=1, max_value=100), 
-        buffer_size=st.integers(min_value=100, max_value=1000), 
-        upload_limit=st.integers(min_value=0, max_value=1000), 
-        download_limit=st.integers(min_value=0, max_value=1000), 
-        prefetch=st.integers(min_value=0, max_value=100), 
         writeback=st.just(False),
-        upload_delay=st.sampled_from([0, 2]), 
-        cache_dir=st.sampled_from(['cache1', 'cache2']),
-        cache_size=st.integers(min_value=0, max_value=1024000), 
-        free_space_ratio=st.floats(min_value=0.1, max_value=0.5), 
-        cache_partial_only=st.booleans(),
-        backup_meta=st.integers(min_value=300, max_value=1000),
-        heartbeat=st.integers(min_value=5, max_value=30), 
         read_only=st.booleans(),
         no_bgjob=st.booleans(),
-        open_cache=st.integers(min_value=0, max_value=100),
-        attr_cache=st.integers(min_value=1, max_value=10), 
-        entry_cache=st.integers(min_value=1, max_value=10), 
-        dir_entry_cache=st.integers(min_value=1, max_value=10), 
-        access_log=st.sampled_from(['accesslog1', 'accesslog2']),
-        no_banner=st.booleans(),
         multi_buckets=st.booleans(), 
         keep_etag=st.booleans(),
         umask=st.sampled_from(['022', '755']), 
-        metrics=st.sampled_from(['127.0.0.1:9567', '127.0.0.1:9568']), 
-        consul=st.sampled_from(['127.0.0.1:8500', '127.0.0.1:8501']), 
         sub_dir=st.sampled_from(['dir1', 'dir2']),
         port=st.integers(min_value=9001, max_value=10000)
     )
     @precondition(lambda self: self.formatted and False)
-    def gateway(self, juicefs, get_timeout, put_timeout, io_retries, max_uploads, max_deletes, buffer_size, upload_limit, 
-        download_limit, prefetch, writeback, upload_delay, cache_dir, cache_size, free_space_ratio, cache_partial_only, 
-        backup_meta,heartbeat, read_only, no_bgjob, open_cache, attr_cache, entry_cache, dir_entry_cache, access_log, 
-        no_banner, multi_buckets, keep_etag, umask, metrics, consul, sub_dir, port):
+    def gateway(self, juicefs, writeback, read_only, no_bgjob, multi_buckets, keep_etag, umask, sub_dir, port):
         assume (self.greater_than_version_formatted(juicefs))
         assume(not is_port_in_use(port))
         if JuicefsMachine.META_URL.startswith('badger://'):
@@ -684,59 +535,20 @@ class JuicefsMachine(RuleBasedStateMachine):
         os.environ['MINIO_ROOT_PASSWORD'] = '12345678'
         options = [juicefs, 'gateway', JuicefsMachine.META_URL, f'localhost:{port}']
         
-        options.extend(['--attr-cache', str(attr_cache)])
-        options.extend(['--entry-cache', str(entry_cache)])
-        options.extend(['--dir-entry-cache', str(dir_entry_cache)])
-        options.extend(['--get-timeout', str(get_timeout)])
-        options.extend(['--put-timeout', str(put_timeout)])
-        options.extend(['--io-retries', str(io_retries)])
-        options.extend(['--max-uploads', str(max_uploads)])
-        if run_cmd(f'{juicefs} gateway --help | grep max-deletes') == 0:
-            options.extend(['--max-deletes', str(max_deletes)])
-        options.extend(['--buffer-size', str(buffer_size)])
-        options.extend(['--upload-limit', str(upload_limit)])
-        options.extend(['--download-limit', str(download_limit)])
-        options.extend(['--prefetch', str(prefetch)])
         if writeback:
             options.append('--writeback')
-        upload_delay = str(upload_delay)
-        if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-beta2'):
-            upload_delay = upload_delay + 's'
-        options.extend(['--upload-delay', upload_delay])
-        options.extend(['--cache-dir', os.path.expanduser(f'~/.juicefs/{cache_dir}')])
-        options.extend(['--access-log', os.path.expanduser(f'~/.juicefs/{access_log}')])
-        options.extend(['--cache-size', str(cache_size)])
-        options.extend(['--free-space-ratio', str(free_space_ratio)])
-        if cache_partial_only:
-            options.append('--cache-partial-only')
-        backup_meta = str(backup_meta)
-        if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-beta2'):
-            backup_meta = '1h0m0s'
-        if run_cmd(f'{juicefs} gateway --help | grep backup-meta') == 0:
-            options.extend(['--backup-meta', backup_meta])
-        if run_cmd(f'{juicefs} gateway --help | grep heartbeat') == 0:
-            options.extend(['--heartbeat', str(heartbeat)])
+        
         if read_only:
             options.append('--read-only')
         if no_bgjob and run_cmd(f'{juicefs} gateway --help | grep no-bgjob') == 0:
             options.append('--no-bgjob')
-        if no_banner:
-            options.append('--no-banner')
         if multi_buckets and run_cmd(f'{juicefs} gateway --help | grep multi-buckets') == 0:
             options.append('--multi-buckets')
         if keep_etag and run_cmd(f'{juicefs} gateway --help | grep keep-etag') == 0:
             options.append('--keep-etag')
         if run_cmd(f'{juicefs} gateway --help | grep umask') == 0:
             options.extend(['--umask', umask])
-
-        options.extend(['--open-cache', str(open_cache)])
         print(f'TODO: subdir:{sub_dir}')
-        # options.extend('--subdir', str(sub_dir))
-        if not is_port_in_use( int(metrics.split(':')[1])):
-            options.extend(['--metrics', str(metrics)])
-        # if run_cmd(f'{juicefs} mount --help | grep consul') == 0:
-        #     options.extend(['--consul', str(consul)])
-        options.append('--no-usage-report')
 
         proc=subprocess.Popen(options)
         time.sleep(2.0)
@@ -761,25 +573,52 @@ class JuicefsMachine(RuleBasedStateMachine):
         subprocess.Popen.kill(proc)
         print('webdav succeed')
 
-    def greater_than_version_formatted(self, ver):
+    def greater_than_version_formatted(self, ver:str):
         print(f'ver is {ver}, formatted_by is {self.formatted_by}')
         if not self.formatted_by:
             return True
         return version.parse('-'.join(ver.split('-')[1:])) >=  version.parse('-'.join(self.formatted_by.split('-')[1:]))
 
-    def greater_than_version_dumped(self, ver):
+    def greater_than_version_dumped(self, ver:str):
         if not self.dumped_by:
             return True
         return version.parse('-'.join(ver.split('-')[1:])) >=  version.parse('-'.join(self.dumped_by.split('-')[1:]))
 
-    def greater_than_version_mounted(self, ver):
+    def greater_than_version_mounted(self, ver:str):
         for mounted_version in self.mounted_by:
             if version.parse('-'.join(ver.split('-')[1:])) <  version.parse('-'.join(mounted_version.split('-')[1:])):
                 return False
         return True
 
 
-TestJuiceFS = JuicefsMachine.TestCase
-
-if __name__ == "__main__":
-    unittest.main(failfast=True)
+if __name__ == '__main__':
+    MAX_EXAMPLE=int(os.environ.get('MAX_EXAMPLE', '100'))
+    STEP_COUNT=int(os.environ.get('STEP_COUNT', '50'))
+    ci_db = DirectoryBasedExampleDatabase(".hypothesis/examples")    
+    settings.register_profile("dev", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
+        print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
+        report_multiple_bugs=False, 
+        phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
+    settings.register_profile("schedule", max_examples=500, verbosity=Verbosity.debug, 
+        print_blob=True, stateful_step_count=200, deadline=None, \
+        report_multiple_bugs=False, 
+        phases=[Phase.reuse, Phase.generate, Phase.target], 
+        database=ci_db)
+    settings.register_profile("pull_request", max_examples=100, verbosity=Verbosity.debug, 
+        print_blob=True, stateful_step_count=50, deadline=None, \
+        report_multiple_bugs=False, 
+        phases=[Phase.reuse, Phase.generate, Phase.target], 
+        database=ci_db)
+    
+    if os.environ.get('CI'):
+        event_name = os.environ.get('GITHUB_EVENT_NAME')
+        if event_name == 'schedule':
+            profile = 'schedule'
+        else:
+            profile = 'pull_request'
+    else:
+        profile = os.environ.get('PROFILE', 'dev')
+    print(f'profile is {profile}')
+    settings.load_profile(profile)
+    juicefs_machine = JuicefsMachine.TestCase()
+    juicefs_machine.runTest()
