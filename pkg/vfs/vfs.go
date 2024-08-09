@@ -19,6 +19,7 @@ package vfs
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 	"sort"
@@ -58,7 +59,6 @@ type FuseOptions struct {
 	MaxBackground            int
 	MaxWrite                 int
 	MaxReadAhead             int
-	MaxPages                 int
 	IgnoreSecurityLabels     bool // ignoring labels should be provided as a fusermount mount option.
 	RememberInodes           bool
 	FsName                   string
@@ -66,13 +66,18 @@ type FuseOptions struct {
 	SingleThreaded           bool
 	DisableXAttrs            bool
 	Debug                    bool
+	Logger                   *log.Logger `json:"-"`
 	EnableLocks              bool
+	EnableSymlinkCaching     bool `json:",omitempty"`
 	ExplicitDataCacheControl bool
+	SyncRead                 bool `json:",omitempty"`
 	DirectMount              bool
+	DirectMountStrict        bool `json:",omitempty"`
 	DirectMountFlags         uintptr
 	EnableAcl                bool
+	DisableReadDirPlus       bool `json:",omitempty"`
 	EnableWriteback          bool
-	EnableIoctl              bool
+	EnableIoctl              bool `json:",omitempty"`
 	DontUmask                bool
 	OtherCaps                uint32
 	NoAllocForRead           bool

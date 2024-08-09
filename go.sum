@@ -501,8 +501,8 @@ github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83 h1:RyHTka3jCnTaUqfRYjlwcQlr53aasmkvHEbYLXthqr8=
 github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83/go.mod h1:1CNUng3PtjQMtRzJO4FMXBQvkGtuYRxxiR9xMa7jMwI=
-github.com/juicedata/go-fuse/v2 v2.1.1-0.20240425033113-7c40cb5eb3e9 h1:9oZoY+S86+VLhIohjC4Vx9MVdB/eYtqs0sWHylpc6jc=
-github.com/juicedata/go-fuse/v2 v2.1.1-0.20240425033113-7c40cb5eb3e9/go.mod h1:B1nGE/6RBFyBRC1RRnf23UpwCdyJ31eukw34oAKukAc=
+github.com/juicedata/go-fuse/v2 v2.1.1-0.20240809072820-d78c97ed7b7a h1:Rzopfv1+KpROzMWd6NVAs1wTjr5bc5ZdzIhIs0u5XBc=
+github.com/juicedata/go-fuse/v2 v2.1.1-0.20240809072820-d78c97ed7b7a/go.mod h1:xKwi1cF7nXAOBCXujD5ie0ZKsxc8GGSA1rlMJc+8IJs=
 github.com/juicedata/go-nfs-client v0.0.0-20231018052507-dbca444fa7e8 h1:mVVipCbohnzKZPiHGzFncLKEJZpypqjpGr4End2PP48=
 github.com/juicedata/go-nfs-client v0.0.0-20231018052507-dbca444fa7e8/go.mod h1:xOMqi3lOrcGe9uZLnSzgaq94Vc3oz6VPCNDLJUnXpKs=
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d h1:kpQMvNZJKGY3PTt7OSoahYc4nM0HY67SvK0YyS0GLwA=
@@ -639,6 +639,8 @@ github.com/mitchellh/mapstructure v1.4.1/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RR
 github.com/mitchellh/mapstructure v1.4.3 h1:OVowDSCllw/YjdLkam3/sm7wEtOy59d8ndGgCcyj8cs=
 github.com/mitchellh/mapstructure v1.4.3/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/mmcloughlin/avo v0.0.0-20201105074841-5d2f697d268f/go.mod h1:6aKT4zZIrpGqB3RpFU14ByCSSyKY6LfJz4J/JJChHfI=
+github.com/moby/sys/mountinfo v0.6.2 h1:BzJjoreD5BMFNmD9Rus6gdd1pLuecOFPt8wC+Vygl78=
+github.com/moby/sys/mountinfo v0.6.2/go.mod h1:IJb6JQeOklcdMU9F5xQ8ZALD+CUr5VlGpwtX+VE0rpI=
 github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
