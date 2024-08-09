@@ -46,7 +46,7 @@ func cmdObjbench() *cli.Command {
 		Action:    objbench,
 		Category:  "TOOL",
 		Usage:     "Run benchmarks on an object storage",
-		ArgsUsage: "BUCKET",
+		ArgsUsage: "ENDPOINT",
 		Description: `
 Run basic benchmarks on the target object storage to test if it works as expected.
 
