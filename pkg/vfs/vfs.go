@@ -58,7 +58,6 @@ type FuseOptions struct {
 	MaxBackground            int
 	MaxWrite                 int
 	MaxReadAhead             int
-	MaxPages                 int
 	IgnoreSecurityLabels     bool // ignoring labels should be provided as a fusermount mount option.
 	RememberInodes           bool
 	FsName                   string
@@ -71,8 +70,8 @@ type FuseOptions struct {
 	DirectMount              bool
 	DirectMountFlags         uintptr
 	EnableAcl                bool
-	EnableWriteback          bool
-	EnableIoctl              bool
+	EnableWriteback          bool `json:"Writeback"`
+	EnableIoctl              bool `json:",omitempty"`
 	DontUmask                bool
 	OtherCaps                uint32
 	NoAllocForRead           bool
