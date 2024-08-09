@@ -74,10 +74,14 @@ jobs:
           scoop install minio@2021-12-10T23-03-39Z
           scoop install runasti
 
+      - name: Download winsw
+        run: |
+          wget  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -O winsw.exe
+          ls winsw.exe
+
       - name: Start Redis
         run: |
-          wget  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -O redis-service.exe
-          ls redis-service.exe
+          copy winsw.exe redis-service.exe
           echo  "<service>"   >> redis-service.xml
           echo  "<id>redisredis</id>"  >> redis-service.xml
           echo  "<name>redisredis</name>"  >> redis-service.xml
@@ -90,7 +94,7 @@ jobs:
 
       - name: Start Minio
         run: |
-          wget  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -O minio-service.exe
+          copy winsw.exe minio-service.exe
           mkdir "C:\tmp"
           echo  "<service>"   >> minio-service.xml
           echo  "<id>MinIO</id>"  >> minio-service.xml
@@ -114,7 +118,7 @@ jobs:
       - name: Juicefs Mount
         run: |
           echo "C:\Program Files (x86)\WinFsp\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          wget  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -O juicefs-service.exe
+          copy winsw.exe juicefs-service.exe
           echo  "<service>"   >> juicefs-service.xml
           echo  "<id>jfs</id>"  >> juicefs-service.xml
           echo  "<name>jfs</name>"  >> juicefs-service.xml
@@ -127,6 +131,7 @@ jobs:
           net start jfs
           mkdir "Z:\dir"
           echo "hello" > "Z:\dir\hello.txt"
+          cat "Z:\dir\hello.txt"
 
       #there is go-fuse compile error with unit test
       #- name: Unit Test
