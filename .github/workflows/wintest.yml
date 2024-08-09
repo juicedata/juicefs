@@ -129,9 +129,14 @@ jobs:
           echo  "</service>"  >> juicefs-service.xml
           .\juicefs-service.exe install
           net start jfs
+
+      - name: Test Juicefs
+        run: |
           mkdir "Z:\dir"
+          dir "Z:\dir"
           echo "hello" > "Z:\dir\hello.txt"
-          cat "Z:\dir\hello.txt"
+          dir "Z:\dir\hello.txt"
+          type "Z:\dir\hello.txt"
 
       #there is go-fuse compile error with unit test
       #- name: Unit Test
