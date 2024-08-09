@@ -789,6 +789,15 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.SetXattr(ctx, inode, "a", []byte("v5"), 5); st != syscall.EINVAL {
 		t.Fatalf("setxattr: %s", st)
 	}
+	if st := m.SetXattr(ctx, inode, "R", []byte("value"), 0); st != 0 {
+		t.Fatalf("setxattr special: %s", st)
+	}
+	if st := m.SetXattr(ctx, inode, "\x8ar", []byte("E$\xfe"), XattrCreate); st != 0 {
+		t.Fatalf("setxattr special: %s", st)
+	}
+	if st := m.GetXattr(ctx, inode, "\x8ar", &value); st != 0 || string(value) != "E$\xfe" {
+		t.Fatalf("getxattr special: %s", st)
+	}
 
 	var totalspace, availspace, iused, iavail uint64
 	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
