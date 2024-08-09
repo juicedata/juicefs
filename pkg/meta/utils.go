@@ -428,6 +428,8 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 			continue
 		}
 		select {
+		case <-ctx.Done():
+			return syscall.EINTR
 		case err := <-errCh:
 			// TODO: cancel others
 			return err
@@ -517,8 +519,9 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 		}
 		child.Dirs++
 		select {
+		case <-ctx.Done():
+			return syscall.EINTR
 		case err = <-errCh:
-			// TODO: cancel context
 			return err
 		case concurrent <- struct{}{}:
 			wg.Add(1)
