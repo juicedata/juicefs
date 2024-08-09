@@ -501,7 +501,9 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		return fmt.Errorf("fuse: %s", err)
 	}
 	defer func() {
-		_ = fssrv.Unmount()
+		if runtime.GOOS == "darwin" {
+			_ = fssrv.Unmount()
+		}
 	}()
 
 	if runtime.GOOS == "linux" {
