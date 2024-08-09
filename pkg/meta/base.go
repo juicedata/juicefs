@@ -361,9 +361,9 @@ func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, spac
 		m.updateDirQuota(ctx, parent, space, 0)
 	} else {
 		go func() {
-			for p := range m.en.doGetParents(ctx, inode) {
-				m.updateDirStat(ctx, p, length, space, 0)
-				m.updateDirQuota(ctx, p, space, 0)
+			for p, v := range m.en.doGetParents(ctx, inode) {
+				m.updateDirStat(ctx, p, length*int64(v), space*int64(v), 0)
+				m.updateDirQuota(ctx, p, space*int64(v), 0)
 			}
 		}()
 	}
