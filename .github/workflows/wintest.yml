@@ -1,20 +1,21 @@
-name: "test jfs on windows"
+name: "wintest"
 
 on:
   push:
     branches:
+      - 'main'
       - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**/wintest.yml'
   pull_request:
-    #The branches below must be a subset of the branches above
     branches:
+      - 'main'
       - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**/wintest.yml'
   workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 0'
 
 jobs:
   wintest:
@@ -26,6 +27,7 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 'oldstable'
+          cache: true
 
       - name: Checkout
         uses: actions/checkout@v3
@@ -40,17 +42,7 @@ jobs:
         with:
           sdk-version: 18362
 
-      - name: Cache WinFsp
-        id: Cache-WinFsp
-        uses: actions/cache@v3
-        with:
-          path: 'C:\wfsp\'
-          key: ${{ runner.os }}-winfsp-key
-          restore-keys: |
-            ${{ runner.os }}-winfsp
-
       - name: Download WinFsp
-        if: steps.Cache-WinFsp.outputs.cache-hit != 'true'
         run: |
           choco install wget
           mkdir "C:\wfsp\"
@@ -82,6 +74,7 @@ jobs:
           scoop install redis
           scoop install minio@2021-12-10T23-03-39Z
           scoop install runasti
+
       - name: Start Redis
         run: |
           wget  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -O redis-service.exe
@@ -110,15 +103,6 @@ jobs:
           echo  "</service>"  >> minio-service.xml
           .\minio-service.exe install
           net start MinIO
-
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~\AppData\Local\go-build
-            ~\go\pkg\mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
 
       - name: Build Juicefs
         run: |
