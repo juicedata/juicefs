@@ -98,7 +98,7 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTra
 	}
 	defer os.Remove(fp.Name())
 	defer fp.Close()
-	zw := gzip.NewWriter(fp)
+	zw, _ := gzip.NewWriterLevel(fp, gzip.BestSpeed)
 	var threads = 2
 	if m.Name() == "tikv" {
 		threads = 10
