@@ -2407,7 +2407,8 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 	dirAttr.Nlink = 0
 	setAttr(t, m, d4Inode, dirAttr)
 
-	if err := m.Check(Background, "/check", false, false, false); err == nil {
+	metaChecker := m.GetMetaChecker(Background, false, false)
+	if err := m.Check(Background, "/check", false, 20, metaChecker, nil, nil); err == nil {
 		t.Fatal("check should fail")
 	}
 	if st := m.GetAttr(Background, checkInode, dirAttr); st != 0 {
@@ -2417,7 +2418,8 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 		t.Fatalf("checkInode nlink should is 0 now: %d", dirAttr.Nlink)
 	}
 
-	if err := m.Check(Background, "/check", true, false, false); err != nil {
+	metaChecker = m.GetMetaChecker(Background, true, false)
+	if err := m.Check(Background, "/check", false, 20, metaChecker, nil, nil); err != nil {
 		t.Fatalf("check: %s", err)
 	}
 	if st := m.GetAttr(Background, checkInode, dirAttr); st != 0 {
@@ -2427,7 +2429,7 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 		t.Fatalf("checkInode nlink should is 3 now: %d", dirAttr.Nlink)
 	}
 
-	if err := m.Check(Background, "/check/d1/d2", true, false, false); err != nil {
+	if err := m.Check(Background, "/check/d1/d2", false, 20, metaChecker, nil, nil); err != nil {
 		t.Fatalf("check: %s", err)
 	}
 	if st := m.GetAttr(Background, d2Inode, dirAttr); st != 0 {
@@ -2444,7 +2446,7 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 	}
 
 	if m.Name() != "etcd" {
-		if err := m.Check(Background, "/", true, true, false); err != nil {
+		if err := m.Check(Background, "/", true, 20, metaChecker, nil, nil); err != nil {
 			t.Fatalf("check: %s", err)
 		}
 		for _, ino := range []Ino{checkInode, d1Inode, d2Inode, d3Inode} {

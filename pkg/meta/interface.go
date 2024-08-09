@@ -430,8 +430,11 @@ type Meta interface {
 	Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno
 	// GetPaths returns all paths of an inode
 	GetPaths(ctx Context, inode Ino) []string
-	// Check integrity of an absolute path and repair it if asked
-	Check(ctx Context, fpath string, repair bool, recursive bool, statAll bool) error
+	// GetMetaChecker returns a function to check metadata
+	GetMetaChecker(ctx Context, repair, statAll bool) func(Ino, string, *Attr) error
+	// Check meta and data integrity of an absolute path
+	Check(ctx Context, fpath string, recursive bool, threads uint, metaChecker func(Ino, string, *Attr) error, dataChecker func(Ino, []Slice) error, progress *utils.Progress) error
+
 	// Change root to a directory specified by subdir
 	Chroot(ctx Context, subdir string) syscall.Errno
 	// chroot set the root directory by inode
