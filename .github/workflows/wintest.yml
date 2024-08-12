@@ -34,9 +34,11 @@ jobs:
           fetch-depth: 1
 
       - name: Setup MSBuild.exe
+        if: false
         uses: microsoft/setup-msbuild@v1.0.3
 
       - name: Change Winsdk Version
+        if: false
         uses: GuillaumeFalourd/setup-windows10-sdk-action@v1
         with:
           sdk-version: 18362
