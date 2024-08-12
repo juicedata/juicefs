@@ -76,7 +76,7 @@ jobs:
 
       - name: Download winsw
         run: |
-          wget  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -O winsw.exe
+          wget https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe -O winsw.exe
           ls winsw.exe
 
       - name: Start Redis
@@ -120,15 +120,15 @@ jobs:
           echo "C:\Program Files (x86)\WinFsp\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           copy winsw.exe juicefs-service.exe
           echo  "<service>"   >> juicefs-service.xml
-          echo  "<id>jfs</id>"  >> juicefs-service.xml
-          echo  "<name>jfs</name>"  >> juicefs-service.xml
-          echo  "<description>jfs</description>"  >> juicefs-service.xml
+          echo  "<id>juicefs</id>"  >> juicefs-service.xml
+          echo  "<name>juicefs</name>"  >> juicefs-service.xml
+          echo  "<description>juicefs</description>"  >> juicefs-service.xml
           echo  "<executable>$PWD\juicefs.exe</executable>"  >> juicefs-service.xml
           echo  "<arguments>mount redis://127.0.0.1:6379/1 Z: --no-usage-report</arguments>"  >> juicefs-service.xml
           echo  "<logmode>rotate</logmode>"  >> juicefs-service.xml
           echo  "</service>"  >> juicefs-service.xml
           .\juicefs-service.exe install
-          net start jfs
+          net start juicefs
 
       - name: Test Juicefs
         run: |
