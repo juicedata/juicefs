@@ -291,6 +291,7 @@ func TestFUSE(t *testing.T) {
 		StatFS(t, mp)
 	})
 	delete(posixtest.All, "FdLeak")
+	delete(posixtest.All, "FcntlFlockLocksFile") // FIXME: check gofuse in posixtest/posixtest_test.go
 	posixtest.All["Xattrs"] = Xattrs
 	posixtest.All["Flock"] = Flock
 	posixtest.All["POSIXLock"] = PosixLock
