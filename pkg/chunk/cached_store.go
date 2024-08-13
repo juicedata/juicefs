@@ -945,31 +945,31 @@ func parseObjOrigSize(key string) int {
 	return l
 }
 
-func (store *cachedStore) uploadStagingFile(key string, stagingPath string) error {
+func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	store.currentUpload <- true
 	defer func() {
 		<-store.currentUpload
 	}()
 
 	if !store.canUpload() {
-		return nil
+		return
 	}
 	store.pendingMutex.Lock()
 	item, ok := store.pendingKeys[key]
 	store.pendingMutex.Unlock()
 	if !ok {
 		logger.Debugf("Key %s is not needed, drop it", key)
-		return nil
+		return
 	}
 	blen := parseObjOrigSize(key)
 	f, err := openCacheFile(stagingPath, blen, store.conf.CacheChecksum)
 	if err != nil {
 		if store.isPendingValid(key) {
 			logger.Errorf("Open staging file %s: %s", stagingPath, err)
-			return err
+		} else {
+			logger.Debugf("Key %s is not needed, drop it", key)
 		}
-		logger.Debugf("Key %s is not needed, drop it", key)
-		return nil
+		return
 	}
 	block := NewOffPage(blen)
 	_, err = f.ReadAt(block.Data, 0)
@@ -977,12 +977,12 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) erro
 	if err != nil {
 		block.Release()
 		logger.Errorf("Read staging file %s: %s", stagingPath, err)
-		return err
+		return
 	}
 	if !store.isPendingValid(key) {
 		block.Release()
 		logger.Debugf("Key %s is not needed, drop it", key)
-		return nil
+		return
 	}
 
 	store.stageBlockDelay.Add(time.Since(item.ts).Seconds())
@@ -997,8 +997,9 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) erro
 				logger.Warnf("failed to remove stage %s, in upload staging file", stagingPath)
 			}
 		}
+	} else {
+		item.uploading = false
 	}
-	return err
 }
 
 func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.Time, force bool) bool {
@@ -1056,14 +1057,7 @@ func (store *cachedStore) scanDelayedStaging() {
 
 func (store *cachedStore) uploader() {
 	for it := range store.pendingCh {
-		if err := store.uploadStagingFile(it.key, it.fpath); err != nil {
-			store.pendingMutex.Lock()
-			item, ok := store.pendingKeys[it.key]
-			store.pendingMutex.Unlock()
-			if ok {
-				item.uploading = false
-			}
-		}
+		store.uploadStagingFile(it.key, it.fpath)
 	}
 }
 
