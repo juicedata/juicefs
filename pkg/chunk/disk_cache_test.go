@@ -291,6 +291,12 @@ func TestCheckPath(t *testing.T) {
 		{path: "chunks/111_/2222/3333_3333_3333", expected: false},
 		{path: "chunks/111/22_22/3333_3333_3333", expected: false},
 		{path: "chunks/111/22_22/3333_3333_3333", expected: false},
+		{path: "chunks/dd/222/3333_3333_0", expected: true}, // hash prefix
+		{path: "chunks/FF/222/3333_3333_0", expected: true}, // hash prefix
+		{path: "chunks/5D/222/3333_3333_0", expected: true}, // hash prefix
+		{path: "chunks/D1/222/3333_3333_0", expected: true}, // hash prefix
+		{path: "chunks/5DD/222/3333_3333_0", expected: false},
+		{path: "chunks/111D/222/3333_3333_0", expected: false},
 	}
 	for _, c := range cases {
 		if res := pathReg.MatchString(c.path); res != c.expected {
