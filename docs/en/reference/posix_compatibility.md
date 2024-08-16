@@ -10,7 +10,6 @@ JuiceFS ensures POSIX compatibility by using [pjdfstest](https://github.com/pjd/
 ## Pjdfstest
 
 Pjdfstest is a test suite that helps to test POSIX system calls. JuiceFS passed all of its latest 8,813 tests:
-813 tests:
 
 ```
 All tests successful.
