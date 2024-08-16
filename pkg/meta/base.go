@@ -1739,6 +1739,9 @@ func (m *baseMeta) walk(ctx Context, inode Ino, p string, attr *Attr, walkFn met
 		return st
 	}
 	for _, entry := range entries {
+		if ctx.Canceled() {
+			return syscall.EINTR
+		}
 		if !entry.Attr.Full {
 			entry.Attr.Parent = inode
 		}
@@ -2135,6 +2138,9 @@ func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 		// calc chunk index in local
 		chunkCnt := uint32((fAttr.Length + ChunkSize - 1) / ChunkSize)
 		for i := uint32(0); i < chunkCnt; i++ {
+			if ctx.Canceled() {
+				return
+			}
 			preFunc()
 			chunkChan <- cchunk{inode: fIno, indx: i}
 		}
