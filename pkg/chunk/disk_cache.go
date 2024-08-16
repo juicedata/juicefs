@@ -385,6 +385,8 @@ func (cache *cacheStore) removeStage(key string) error {
 	}
 	// ignore ENOENT error
 	if err != nil && os.IsNotExist(err) {
+		cache.m.stageBlocks.Sub(1)
+		cache.m.stageBlockBytes.Sub(float64(parseObjOrigSize(key)))
 		return nil
 	}
 	return err
