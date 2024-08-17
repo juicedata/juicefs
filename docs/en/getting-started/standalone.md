@@ -32,7 +32,7 @@ juicefs format [command options] META-URL NAME
 
 To format a file system, three types of information are required:
 
-- **[command options]**: Specifies the storage medium for the file system. By default, the **local disk** is used with the path set to `"$HOME/.juicefs/local"`, `"/var/jfs"`, or `"C:/jfs/local"`.
+- **[command options]**: Specifies the storage medium for the file system. By default, the **local disk** is used with the path set to `"$HOME/.juicefs/local"`(on darwin/macOS), `"/var/jfs"`(on Linux), or `"C:/jfs/local"`(on Windows).
 - **META-URL**: Defines the metadata engine, typically a URL or the file path of a database.
 - **NAME**: The name of the file system.
 
