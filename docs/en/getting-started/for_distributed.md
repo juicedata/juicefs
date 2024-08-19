@@ -71,7 +71,6 @@ Redis versions lower than 6.0 do not have a username, so omit the `<username>` p
 :::
 
 ### 4. Create a file system
- 
 To create a file system that supports cross-network, multi-server simultaneous mounts with shared read/write access using object storage and a Redis database, run:
 
 ```shell
