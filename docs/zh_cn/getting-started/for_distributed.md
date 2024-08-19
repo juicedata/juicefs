@@ -175,8 +175,6 @@ juicefs bench ~/jfs
 juicefs umount ~/jfs
 ```
 
-#### 卸载失败
-
 如果执行命令后，文件系统卸载失败，提示 `Device or resource busy`：
 
 ```shell
