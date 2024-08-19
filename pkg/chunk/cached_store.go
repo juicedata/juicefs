@@ -1115,7 +1115,7 @@ func (store *cachedStore) EvictCache(id uint64, length uint32) error {
 	r := sliceForRead(id, int(length), store)
 	keys := r.keys()
 	for _, k := range keys {
-		store.bcache.remove(k)
+		store.bcache.removeReadCache(k)
 	}
 	return nil
 }

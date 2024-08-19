@@ -561,6 +561,33 @@ func (cache *cacheStore) remove(key string) {
 		return
 	}
 
+	path := cache.doRemove(key)
+	if path != "" {
+		if err := cache.removeFile(path); err != nil && !os.IsNotExist(err) {
+			logger.Warnf("remove %s failed: %s", path, err)
+		}
+		if err := cache.removeStage(key); err != nil && !os.IsNotExist(err) {
+			logger.Warnf("remove stage %s failed: %s", cache.stagePath(key), err)
+		}
+	}
+}
+
+func (cache *cacheStore) removeReadCache(key string) {
+	cache.state.beforeCacheOp()
+	defer cache.state.afterCacheOp()
+	if cache.state.checkCacheOp() != nil {
+		return
+	}
+
+	path := cache.doRemove(key)
+	if path != "" {
+		if err := cache.removeFile(path); err != nil && !os.IsNotExist(err) {
+			logger.Warnf("remove %s failed: %s", path, err)
+		}
+	}
+}
+
+func (cache *cacheStore) doRemove(key string) string {
 	cache.Lock()
 	delete(cache.pages, key)
 	path := cache.cachePath(key)
@@ -574,14 +601,7 @@ func (cache *cacheStore) remove(key string) {
 		path = "" // not existed
 	}
 	cache.Unlock()
-	if path != "" {
-		if err := cache.removeFile(path); err != nil && !os.IsNotExist(err) {
-			logger.Warnf("remove %s failed: %s", path, err)
-		}
-		if err := cache.removeStage(key); err != nil && !os.IsNotExist(err) {
-			logger.Warnf("remove %s failed: %s", cache.stagePath(key), err)
-		}
-	}
+	return path
 }
 
 func (cache *cacheStore) load(key string) (ReadCloser, error) {
@@ -1005,6 +1025,7 @@ func expandDir(pattern string) []string {
 type CacheManager interface {
 	cache(key string, p *Page, force, dropCache bool)
 	remove(key string)
+	removeReadCache(key string) // remove read cache only
 	load(key string) (ReadCloser, error)
 	uploaded(key string, size int)
 	stage(key string, data []byte, keepCache bool) (string, error)
@@ -1189,6 +1210,13 @@ func (m *cacheManager) remove(key string) {
 	store := m.getStore(key)
 	if store != nil {
 		store.remove(key)
+	}
+}
+
+func (m *cacheManager) removeReadCache(key string) {
+	store := m.getStore(key)
+	if store != nil {
+		store.removeReadCache(key)
 	}
 }
 

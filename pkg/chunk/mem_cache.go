@@ -111,6 +111,10 @@ func (c *memcache) remove(key string) {
 	}
 }
 
+func (c *memcache) removeReadCache(key string) {
+	c.remove(key)
+}
+
 func (c *memcache) load(key string) (ReadCloser, error) {
 	c.Lock()
 	defer c.Unlock()
