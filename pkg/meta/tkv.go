@@ -40,6 +40,8 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
+const DefaultCap = 4096
+
 type kvtxn interface {
 	get(key []byte) []byte
 	gets(keys ...[]byte) [][]byte
@@ -3755,4 +3757,148 @@ func (m *kvMeta) loadDumpedACLs(ctx Context) error {
 		tx.set(m.counterKey(aclCounter), packCounter(int64(maxId)))
 		return nil
 	})
+}
+
+type kvEntryScanner struct {
+	cache       []*Entry
+	cnt         int
+	m           *kvMeta
+	defaultCap  int
+	parentInode Ino
+	plus        bool
+	bgChan      chan []*Entry
+}
+
+func (m *kvMeta) NewMetaEntryScanner(inode Ino, plus bool) EntryScanner {
+	c := &kvEntryScanner{
+		cache:       make([]*Entry, 0),
+		cnt:         0,
+		m:           m,
+		parentInode: inode,
+		defaultCap:  DefaultCap,
+		plus:        plus,
+		bgChan:      nil,
+	}
+	c.GetData(0)
+	return c
+}
+
+func (sc *kvEntryScanner) Valid() bool {
+	return true
+}
+
+func (sc *kvEntryScanner) Close() {
+	if sc.bgChan != nil {
+		_ = <-sc.bgChan
+		sc.cache = nil
+		sc.cnt = 0
+		sc.bgChan = nil
+	}
+}
+
+func (sc *kvEntryScanner) scanEntries(startKey, endKey []byte, limit int) ([]*Entry, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	entries := make([]*Entry, 0)
+	prefix := len(sc.m.entryKey(sc.parentInode, ""))
+	err := sc.m.client.txn(func(tx *kvTxn) error {
+		var cnt int = 0
+		tx.scan(startKey, endKey, false, func(name, buf []byte) bool {
+
+			typ, ino := sc.m.parseEntry(buf)
+			if len(name) == prefix {
+				logger.Errorf("Corrupt entry with empty name: inode %d parent %d", ino, sc.parentInode)
+				return false
+			}
+			entries = append(entries, &Entry{
+				Inode: ino,
+				Name:  []byte(name)[prefix:],
+				Attr:  &Attr{Typ: typ},
+			})
+			cnt++
+			return cnt < limit
+		})
+		return nil
+	}, 0)
+	return entries, err
+}
+
+func (sc *kvEntryScanner) fillAttr(entries []*Entry) (err error) {
+	if len(entries) == 0 {
+		return nil
+	}
+	var keys = make([][]byte, len(entries))
+	for i, e := range entries {
+		keys[i] = sc.m.inodeKey(e.Inode)
+	}
+	var rs [][]byte
+	err = sc.m.client.txn(func(tx *kvTxn) error {
+		rs = tx.gets(keys...)
+		return nil
+	}, 0)
+	if err != nil {
+		return err
+	}
+	for j, re := range rs {
+		if re != nil {
+			sc.m.parseAttr(re, entries[j].Attr)
+		}
+	}
+	return err
+}
+
+func (sc *kvEntryScanner) GetData(start int) ([]*Entry, syscall.Errno) {
+	if sc.bgChan == nil {
+		sc.bgChan = make(chan []*Entry, 1)
+		go sc.fetchEntries()
+	}
+	if start < sc.cnt-len(sc.cache) {
+		// back to index 0, when 'start' not in the cache
+		_ = <-sc.bgChan
+		sc.cnt = 0
+		sc.cache = make([]*Entry, 0)
+		go sc.fetchEntries()
+	}
+	for start >= sc.cnt {
+		// forward to start
+		if sc.cache = <-sc.bgChan; sc.cache == nil {
+			logger.Errorf("Failed to prefetch")
+			sc.bgChan = nil
+			return sc.cache, syscall.EIO
+		} else if len(sc.cache) == 0 {
+			sc.bgChan = nil
+			return sc.cache, 0
+		}
+		sc.cnt += len(sc.cache)
+		go sc.fetchEntries()
+	}
+
+	// start must be in the cache
+	return sc.cache[start-(sc.cnt-len(sc.cache)):], 0
+}
+
+func (sc *kvEntryScanner) fetchEntries() {
+	var startKey []byte
+	if len(sc.cache) == 0 {
+		startKey = sc.m.entryKey(sc.parentInode, "")
+	} else {
+		last_entry := sc.cache[len(sc.cache)-1]
+		startKey = nextKey(sc.m.entryKey(sc.parentInode, string(last_entry.Name)))
+	}
+	endKey := nextKey(sc.m.entryKey(sc.parentInode, ""))
+	entries, err := sc.scanEntries(startKey, endKey, sc.defaultCap)
+
+	if err != nil {
+		sc.bgChan <- nil
+		return
+	}
+
+	if sc.plus {
+		if err = sc.fillAttr(entries); err != nil {
+			sc.bgChan <- nil
+			return
+		}
+	}
+	sc.bgChan <- entries
 }

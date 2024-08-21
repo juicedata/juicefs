@@ -236,6 +236,7 @@ type dbMeta struct {
 	snap *dbSnap
 
 	noReadOnlyTxn bool
+	*MockMetaEntryScannerGen
 }
 
 var _ Meta = &dbMeta{}

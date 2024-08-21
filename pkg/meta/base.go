@@ -121,6 +121,8 @@ type engine interface {
 	doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno
 	doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno
 	cacheACLs(ctx Context) error
+
+	NewMetaEntryScanner(Ino, bool) EntryScanner
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -2807,4 +2809,98 @@ func inGroup(ctx Context, gid uint32) bool {
 		}
 	}
 	return false
+}
+
+type EntryScanner interface {
+	GetData(int) ([]*Entry, syscall.Errno)
+	Valid() bool
+	Close()
+}
+
+type mockScanner struct{}
+
+func (b *mockScanner) GetData(int) ([]*Entry, syscall.Errno) {
+	return nil, 0
+}
+
+func (b *mockScanner) Close() {
+}
+
+func (b *mockScanner) Valid() bool {
+	return false
+}
+
+type MockMetaEntryScannerGen struct{}
+
+func (b *MockMetaEntryScannerGen) NewMetaEntryScanner(inode Ino, plus bool) EntryScanner {
+	return &mockScanner{}
+}
+
+type baseEntrySanner struct {
+	c              EntryScanner
+	specialEntries []*Entry
+}
+
+func (sc *baseEntrySanner) Valid() bool {
+	return sc.c.Valid()
+}
+func (sc *baseEntrySanner) Close() {
+	sc.c.Close()
+}
+func (sc *baseEntrySanner) GetData(start int) ([]*Entry, syscall.Errno) {
+	if !sc.Valid() {
+		return nil, 0
+	}
+	res := make([]*Entry, 0)
+	if len(sc.specialEntries) > start {
+		res = append(res, sc.specialEntries[start:]...)
+		start = len(sc.specialEntries)
+	}
+	if entries, err := sc.c.GetData(start - len(sc.specialEntries)); err != 0 {
+		return make([]*Entry, 0), err
+	} else {
+		res = append(res, entries...)
+	}
+	return res, 0
+}
+
+func (m *baseMeta) NewBaseEntryScanner(ctx Context, inode Ino, plus uint8) (mc EntryScanner, rerr syscall.Errno) {
+	var attr Attr
+	defer func() {
+		if rerr == 0 {
+			m.touchAtime(ctx, inode, &attr)
+		}
+	}()
+	inode = m.checkRoot(inode)
+	if err := m.GetAttr(ctx, inode, &attr); err != 0 {
+		return &mockScanner{}, err
+	}
+	var mmask uint8 = MODE_MASK_R
+	if plus != 0 {
+		mmask |= MODE_MASK_X
+	}
+	if st := m.Access(ctx, inode, mmask, &attr); st != 0 {
+		return &mockScanner{}, st
+	}
+	if inode == m.root {
+		attr.Parent = m.root
+	}
+	entries := make([]*Entry, 0)
+	entries = []*Entry{
+		{
+			Inode: inode,
+			Name:  []byte("."),
+			Attr:  &Attr{Typ: TypeDirectory},
+		},
+	}
+	entries = append(entries, &Entry{
+		Inode: attr.Parent,
+		Name:  []byte(".."),
+		Attr:  &Attr{Typ: TypeDirectory},
+	})
+	mc = &baseEntrySanner{
+		c:              m.en.NewMetaEntryScanner(inode, (plus == 1)),
+		specialEntries: entries,
+	}
+	return mc, 0
 }

@@ -39,6 +39,7 @@ type handle struct {
 	readAt   time.Time
 	readOff  int
 	index    map[string]int
+	sc 		 meta.EntryScanner
 
 	// for file
 	flags      uint32
@@ -219,6 +220,9 @@ func (v *VFS) releaseHandle(inode Ino, fh uint64) {
 	hs := v.handles[inode]
 	for i, f := range hs {
 		if f.fh == fh {
+			if hs[i].sc != nil {
+				hs[i].sc.Close()
+			}
 			if i+1 < len(hs) {
 				hs[i] = hs[len(hs)-1]
 			}

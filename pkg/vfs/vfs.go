@@ -425,6 +425,23 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 	h.Lock()
 	defer h.Unlock()
 
+	if h.sc == nil {
+		if plus {
+			h.sc, err = v.Meta.NewBaseEntryScanner(ctx, ino, 1)
+		} else {
+			h.sc, err = v.Meta.NewBaseEntryScanner(ctx, ino, 0)
+		}
+	}
+	if h.sc.Valid() && err == 0 {
+		h.readAt = time.Now()
+		if rentries, rerr := h.sc.GetData(off); rerr != 0 {
+			return
+		} else {
+			entries = rentries
+		}
+		return
+	}
+
 	if h.children == nil || off == 0 {
 		var inodes []*meta.Entry
 		h.readAt = time.Now()
