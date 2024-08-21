@@ -106,7 +106,6 @@ func (o FuseOptions) StripOptions() FuseOptions {
 	// ignore there options because they cannot be configured by users
 	o.Name = ""
 	o.MaxBackground = 0
-	o.MaxWrite = 0
 	o.MaxReadAhead = 0
 	o.DirectMount = false
 	o.DontUmask = false
