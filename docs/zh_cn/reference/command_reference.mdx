@@ -869,10 +869,10 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |项 | 说明|
 |-|-|
 |`--start=KEY, -s KEY, --end=KEY, -e KEY`|提供 KEY 范围，来指定对象存储的 List 范围。|
-|`--end KEY, -e KEY`| 同步的最后一个 `KEY` |
-|`--exclude=PATTERN`|排除匹配 `PATTERN` 的 Key。|
-|`--include=PATTERN`|不排除匹配 `PATTERN` 的 Key，需要与 `--exclude` 选项配合使用。|
-|`--match-full-path` <VersionAdd>1.2</VersionAdd>|匹配完整路径（默认值：false）|
+|`--end KEY, -e KEY`|同步的最后一个 `KEY`|
+|`--exclude=PATTERN`|排除匹配 `PATTERN` 的 Key。参考[「过滤」](../guide/sync.md#filtering)文档了解如何使用。|
+|`--include=PATTERN`|不排除匹配 `PATTERN` 的 Key，需要与 `--exclude` 选项配合使用。参考[「过滤」](../guide/sync.md#filtering)文档了解如何使用。|
+|`--match-full-path` <VersionAdd>1.2</VersionAdd>|使用「完整路径过滤模式」，默认为 false。参考[「过滤模式」](../guide/sync.md#filtering-mode)文档了解如何使用。|
 |`--max-size=SIZE` <VersionAdd>1.2</VersionAdd>|跳过大小大于 `SIZE` 的文件，单位字节|
 |`--min-size=SIZE` <VersionAdd>1.2</VersionAdd>|跳过大小小于 `SIZE` 的文件，单位字节|
 |`--max-age=DURATION` <VersionAdd>1.2</VersionAdd>|跳过最后修改时间超过 `DURATION` 的文件，单位秒。例如 `--max-age=3600` 表示仅同步在 1 小时内被修改过的文件。|
