@@ -179,7 +179,7 @@ Matching rules refer to giving a path and a pattern, and then determining whethe
 
 In addition, there are some matching rules to note:
 
-- If the matching pattern does not contain special characters, it will completely match the file name in the path. For example, `foo` can match `foo` and `xx/foo`, but does not match `foo1` (cannot match prefix) and `2foo ` (cannot match suffix) and `foo/xx` (`foo` is not a directory);
+- If the matching pattern does not contain special characters, it will completely match the file name in the path. For example, `foo` can match `foo` and `xx/foo`, but does not match `foo1` (cannot match prefix) and `2foo` (cannot match suffix) and `foo/xx` (`foo` is not a directory);
 - If the matching pattern ends with `/`, it will only match directories, not ordinary files;
 - If the matching pattern starts with `/`, it means matching the full path (the path does not need to start with `/`), so `/foo` matches the `foo` file at the root of the transfer.
 

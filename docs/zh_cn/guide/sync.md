@@ -1,6 +1,7 @@
 ---
 title: 数据同步
 sidebar_position: 7
+description: 了解如何使用 JuiceFS 中的数据同步工具。
 ---
 
 [`juicefs sync`](../reference/command_reference.mdx#sync) 是强大的数据同步工具，可以在所有支持的存储之间并发同步或迁移数据，包括对象存储、JuiceFS、本地文件系统，你可以在这三者之间以任意方向和搭配进行数据同步。除此之外，还支持同步通过 SSH 访问远程目录、HDFS、WebDAV 等，同时提供增量同步、模式匹配（类似 rsync）、分布式同步等高级功能。
