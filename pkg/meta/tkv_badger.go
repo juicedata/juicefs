@@ -28,8 +28,10 @@ import (
 )
 
 type badgerTxn struct {
-	t *badger.Txn
-	c *badger.DB
+	t       *badger.Txn
+	c       *badger.DB
+	batch   *badger.WriteBatch
+	maxSize int
 }
 
 func (tx *badgerTxn) get(key []byte) []byte {
@@ -95,14 +97,10 @@ func (tx *badgerTxn) exist(prefix []byte) bool {
 }
 
 func (tx *badgerTxn) set(key, value []byte) {
-	err := tx.t.Set(key, value)
-	if err == badger.ErrTxnTooBig {
-		logger.Warn("Current transaction is too big, commit it")
-		if er := tx.t.Commit(); er != nil {
-			panic(er)
-		}
-		tx.t = tx.c.NewTransaction(true)
-		err = tx.t.Set(key, value)
+	err := tx.batch.Set(key, value)
+	if err == badger.ErrTxnTooBig || err == badger.ErrConflict || tx.batch.Count() >= tx.maxSize {
+		tx.commitBatch()
+		err = tx.batch.Set(key, value)
 	}
 	if err != nil {
 		panic(err)
@@ -125,9 +123,22 @@ func (tx *badgerTxn) incrBy(key []byte, value int64) int64 {
 }
 
 func (tx *badgerTxn) delete(key []byte) {
-	if err := tx.t.Delete(key); err != nil {
+	err := tx.batch.Delete(key)
+	if err == badger.ErrTxnTooBig || err == badger.ErrConflict || tx.batch.Count() >= tx.maxSize {
+		tx.commitBatch()
+		err = tx.batch.Delete(key)
+	}
+	if err != nil {
 		panic(err)
 	}
+}
+
+func (tx *badgerTxn) commitBatch() {
+	err := tx.batch.Flush()
+	if err != nil {
+		panic(err)
+	}
+	tx.batch = tx.c.NewWriteBatch()
 }
 
 type badgerClient struct {
@@ -156,12 +167,13 @@ func (c *badgerClient) txn(f func(*kvTxn) error, retry int) (err error) {
 			}
 		}
 	}()
-	tx := &badgerTxn{t, c.client}
+	tx := &badgerTxn{t: t, c: c.client, batch: c.client.NewWriteBatch(), maxSize: 1000}
 	err = f(&kvTxn{tx, retry})
 	if err != nil {
 		return err
 	}
 	// tx could be committed
+	tx.commitBatch()
 	return tx.t.Commit()
 }
 
