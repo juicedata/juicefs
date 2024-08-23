@@ -2437,12 +2437,6 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 }
 
 func (m *baseMeta) Clone(ctx Context, srcIno, parent Ino, name string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
-	if isTrash(parent) {
-		return syscall.EPERM
-	}
-	if parent == RootInode && name == TrashName {
-		return syscall.EPERM
-	}
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}

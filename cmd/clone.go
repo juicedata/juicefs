@@ -18,15 +18,14 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/urfave/cli/v2"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
-
-	"github.com/juicedata/juicefs/pkg/meta"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/urfave/cli/v2"
 )
 
 func cmdClone() *cli.Command {
@@ -71,6 +70,10 @@ func clone(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("lookup inode for %s: %s", srcPath, err)
 	}
+	srcParentIno, err := utils.GetFileInode(filepath.Dir(srcAbsPath))
+	if err != nil {
+		return fmt.Errorf("lookup inode for %s: %s", filepath.Dir(srcAbsPath), err)
+	}
 	dst := ctx.Args().Get(1)
 	if strings.HasSuffix(dst, string(filepath.Separator)) {
 		dst = filepath.Join(dst, filepath.Base(srcPath))
@@ -105,6 +108,9 @@ func clone(ctx *cli.Context) error {
 	dstParentIno, err := utils.GetFileInode(dstParent)
 	if err != nil {
 		return fmt.Errorf("lookup inode for %s: %s", dstParent, err)
+	}
+	if meta.Ino(srcIno) >= meta.TrashInode || meta.Ino(srcParentIno) >= meta.TrashInode || meta.Ino(dstParentIno) >= meta.TrashInode || (meta.Ino(dstParentIno) == meta.RootInode && dstName == meta.TrashName) {
+		logger.Fatalf("the clone command does not support the trash directory")
 	}
 	var cmode uint8
 	umask := utils.GetUmask()
