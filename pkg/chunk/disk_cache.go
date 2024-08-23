@@ -554,45 +554,13 @@ func (cache *cacheStore) getPathFromKey(k cacheKey) string {
 	}
 }
 
-func (cache *cacheStore) remove(key string) {
+func (cache *cacheStore) remove(key string, staging bool) {
 	cache.state.beforeCacheOp()
 	defer cache.state.afterCacheOp()
 	if cache.state.checkCacheOp() != nil {
 		return
 	}
 
-	path := cache.doRemove(key)
-	if path != "" {
-		if err := cache.removeFile(path); err != nil && !os.IsNotExist(err) {
-			logger.Warnf("remove %s failed: %s", path, err)
-		}
-		if err := cache.removeStage(key); err != nil && !os.IsNotExist(err) {
-			logger.Warnf("remove stage %s failed: %s", cache.stagePath(key), err)
-		}
-	}
-}
-
-func (cache *cacheStore) removeReadCache(key string) {
-	cache.state.beforeCacheOp()
-	defer cache.state.afterCacheOp()
-	if cache.state.checkCacheOp() != nil {
-		return
-	}
-
-	// skip stage
-	if utils.Exists(cache.stagePath(key)) {
-		return
-	}
-
-	path := cache.doRemove(key)
-	if path != "" {
-		if err := cache.removeFile(path); err != nil && !os.IsNotExist(err) {
-			logger.Warnf("remove %s failed: %s", path, err)
-		}
-	}
-}
-
-func (cache *cacheStore) doRemove(key string) string {
 	cache.Lock()
 	delete(cache.pages, key)
 	path := cache.cachePath(key)
@@ -600,13 +568,27 @@ func (cache *cacheStore) doRemove(key string) string {
 	if it, ok := cache.keys[k]; ok {
 		if it.size > 0 {
 			cache.used -= int64(it.size + 4096)
+			delete(cache.keys, k)
+		} else if !staging {
+			path = "" // for staging block
+		} else {
+			delete(cache.keys, k)
 		}
-		delete(cache.keys, k)
 	} else if cache.scanned {
 		path = "" // not existed
 	}
 	cache.Unlock()
-	return path
+
+	if path != "" {
+		if err := cache.removeFile(path); err != nil && !os.IsNotExist(err) {
+			logger.Warnf("remove %s failed: %s", path, err)
+		}
+		if staging {
+			if err := cache.removeStage(key); err != nil && !os.IsNotExist(err) {
+				logger.Warnf("remove stage %s failed: %s", cache.stagePath(key), err)
+			}
+		}
+	}
 }
 
 func (cache *cacheStore) load(key string) (ReadCloser, error) {
@@ -672,7 +654,7 @@ func (cache *cacheStore) flush() {
 		cache.Unlock()
 		w.page.Release()
 		if !ok {
-			cache.remove(w.key)
+			cache.remove(w.key, false)
 		}
 	}
 }
@@ -1029,8 +1011,7 @@ func expandDir(pattern string) []string {
 
 type CacheManager interface {
 	cache(key string, p *Page, force, dropCache bool)
-	remove(key string)
-	removeReadCache(key string) // remove read cache only
+	remove(key string, staging bool)
 	load(key string) (ReadCloser, error)
 	uploaded(key string, size int)
 	stage(key string, data []byte, keepCache bool) (string, error)
@@ -1211,17 +1192,10 @@ func (m *cacheManager) load(key string) (ReadCloser, error) {
 	return r, err
 }
 
-func (m *cacheManager) remove(key string) {
+func (m *cacheManager) remove(key string, staging bool) {
 	store := m.getStore(key)
 	if store != nil {
-		store.remove(key)
-	}
-}
-
-func (m *cacheManager) removeReadCache(key string) {
-	store := m.getStore(key)
-	if store != nil {
-		store.removeReadCache(key)
+		store.remove(key, staging)
 	}
 }
 
