@@ -579,6 +579,11 @@ func (cache *cacheStore) removeReadCache(key string) {
 		return
 	}
 
+	// skip stage
+	if utils.Exists(cache.stagePath(key)) {
+		return
+	}
+
 	path := cache.doRemove(key)
 	if path != "" {
 		if err := cache.removeFile(path); err != nil && !os.IsNotExist(err) {
