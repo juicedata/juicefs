@@ -550,7 +550,7 @@ func (cache *cacheStore) getPathFromKey(k cacheKey) string {
 	}
 }
 
-func (cache *cacheStore) remove(key string) {
+func (cache *cacheStore) remove(key string, staging bool) {
 	cache.state.beforeCacheOp()
 	defer cache.state.afterCacheOp()
 	if cache.state.checkCacheOp() != nil {
@@ -564,18 +564,25 @@ func (cache *cacheStore) remove(key string) {
 	if it, ok := cache.keys[k]; ok {
 		if it.size > 0 {
 			cache.used -= int64(it.size + 4096)
+			delete(cache.keys, k)
+		} else if !staging {
+			path = "" // for staging block
+		} else {
+			delete(cache.keys, k)
 		}
-		delete(cache.keys, k)
 	} else if cache.scanned {
 		path = "" // not existed
 	}
 	cache.Unlock()
+
 	if path != "" {
 		if err := cache.removeFile(path); err != nil && !os.IsNotExist(err) {
 			logger.Warnf("remove %s failed: %s", path, err)
 		}
-		if err := cache.removeStage(key); err != nil && !os.IsNotExist(err) {
-			logger.Warnf("remove %s failed: %s", cache.stagePath(key), err)
+		if staging {
+			if err := cache.removeStage(key); err != nil && !os.IsNotExist(err) {
+				logger.Warnf("remove stage %s failed: %s", cache.stagePath(key), err)
+			}
 		}
 	}
 }
@@ -643,7 +650,7 @@ func (cache *cacheStore) flush() {
 		cache.Unlock()
 		w.page.Release()
 		if !ok {
-			cache.remove(w.key)
+			cache.remove(w.key, false)
 		}
 	}
 }
@@ -1000,7 +1007,7 @@ func expandDir(pattern string) []string {
 
 type CacheManager interface {
 	cache(key string, p *Page, force bool)
-	remove(key string)
+	remove(key string, staging bool)
 	load(key string) (ReadCloser, error)
 	uploaded(key string, size int)
 	stage(key string, data []byte, keepCache bool) (string, error)
@@ -1181,10 +1188,10 @@ func (m *cacheManager) load(key string) (ReadCloser, error) {
 	return r, err
 }
 
-func (m *cacheManager) remove(key string) {
+func (m *cacheManager) remove(key string, staging bool) {
 	store := m.getStore(key)
 	if store != nil {
-		store.remove(key)
+		store.remove(key, staging)
 	}
 }
 

@@ -219,7 +219,7 @@ func (s *rSlice) Remove() error {
 		// any of them should succeed if any blocks is removed
 		key := s.key(i)
 		s.store.removePending(key)
-		s.store.bcache.remove(key)
+		s.store.bcache.remove(key, true)
 	}
 
 	var err error
@@ -1108,7 +1108,7 @@ func (store *cachedStore) EvictCache(id uint64, length uint32) error {
 	r := sliceForRead(id, int(length), store)
 	keys := r.keys()
 	for _, k := range keys {
-		store.bcache.remove(k)
+		store.bcache.remove(k, false)
 	}
 	return nil
 }
