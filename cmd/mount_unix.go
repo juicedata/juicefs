@@ -49,6 +49,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
@@ -572,6 +573,10 @@ func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
 	if oldConf.Format.Name != newConf.Format.Name {
 		logger.Infof("different volume %s != %s, mount on top of it", oldConf.Format.Name, newConf.Format.Name)
 		return false
+	}
+	oldVersion := version.Parse(oldConf.Version)
+	if ret, _ := version.CompareVersions(oldVersion, version.Parse("1.2.0")); ret <= 0 {
+		oldConf.FuseOpts.MaxWrite = 128 * 1024
 	}
 	if oldConf.FuseOpts != nil && !reflect.DeepEqual(oldConf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions()) {
 		logger.Infof("different options, mount on top of it: %v != %v", oldConf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions())
