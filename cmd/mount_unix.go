@@ -49,6 +49,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
@@ -313,6 +314,11 @@ func fuseFlags() []cli.Flag {
 			Hidden: true,
 		},
 		&cli.StringFlag{
+			Name:  "max-write",
+			Usage: "maximum write size for fuse request",
+			Value: "128K",
+		},
+		&cli.StringFlag{
 			Name:  "o",
 			Usage: "other FUSE options",
 		},
@@ -407,8 +413,8 @@ func getFuserMountVersion() string {
 }
 
 func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {
-	rawOpts, mt, noxattr, noacl := genFuseOptExt(c, format)
-	options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl))
+	rawOpts, mt, noxattr, noacl, maxWrite := genFuseOptExt(c, format)
+	options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl, maxWrite))
 	vfsConf.FuseOpts = &options
 }
 
@@ -495,12 +501,12 @@ func prepareMp(mp string) {
 	}
 }
 
-func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int, noxattr, noacl bool) {
+func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int, noxattr, noacl bool, maxWrite int) {
 	enableXattr := c.Bool("enable-xattr")
 	if format.EnableACL {
 		enableXattr = true
 	}
-	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL
+	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL, int(utils.ParseBytes(c, "max-write", 'B'))
 }
 
 func shutdownGraceful(mp string) {
@@ -567,6 +573,10 @@ func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
 	if oldConf.Format.Name != newConf.Format.Name {
 		logger.Infof("different volume %s != %s, mount on top of it", oldConf.Format.Name, newConf.Format.Name)
 		return false
+	}
+	oldVersion := version.Parse(oldConf.Version)
+	if ret, _ := version.CompareVersions(oldVersion, version.Parse("1.2.0")); ret <= 0 {
+		oldConf.FuseOpts.MaxWrite = 128 * 1024
 	}
 	if oldConf.FuseOpts != nil && !reflect.DeepEqual(oldConf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions()) {
 		logger.Infof("different options, mount on top of it: %v != %v", oldConf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions())
