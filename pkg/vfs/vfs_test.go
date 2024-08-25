@@ -900,6 +900,7 @@ func TestReaddirCache(t *testing.T) {
 		_ = v.Rename(ctx, parent, fmt.Sprintf("d%d", i), parent, fmt.Sprintf("d%d", i+10), 0)
 		delete(files, fmt.Sprintf("d%d", i))
 	}
+	off = 0
 	for {
 		entries, _, _ := v.Readdir(ctx, parent, 20, off, fh, true)
 		if len(entries) == 0 {
@@ -965,6 +966,65 @@ func TestVFSReadDirSort(t *testing.T) {
 	entries2, _, _ := v.Readdir(ctx, parent, 60, 10, fh, true)
 	for i := 0; i < len(entries1); i++ {
 		if string(entries1[i].Name) != string(entries2[i].Name) {
+			t.Fatalf("read dir result should be same")
+		}
+	}
+	v.Releasedir(ctx, parent, fh2)
+}
+
+func TestVFSReadDirSteaming(t *testing.T) {
+	v, _ := createTestVFS(func(metaConfig *meta.Config) {
+		metaConfig.StreamingReadDir = true
+	})
+	ctx := NewLogContext(meta.Background)
+	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
+	if st != 0 {
+		t.Fatalf("mkdir testdir: %s", st)
+	}
+	parent := entry.Inode
+	for i := 0; i < meta.DefaultCap+40; i++ {
+		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
+	}
+	fh, _ := v.Opendir(ctx, parent, 0)
+
+	entries1, _, _ := v.Readdir(ctx, parent, 60, 10, fh, true)
+	sorted := slices.IsSortedFunc(entries1, func(i, j *meta.Entry) int {
+		return strings.Compare(string(i.Name), string(j.Name))
+	})
+	if !sorted {
+		t.Fatalf("streaming read dir result must be sorted")
+	}
+
+	if entries1 == nil {
+		t.Fatalf("read dir result should not be nil")
+	}
+	if len(entries1) != meta.DefaultCap-10+2 {
+		// cache index begin at 0, but there also has two special child '.' and '..'
+		// thus, the result should be meta.DefaultCap - off(10) + 2
+		t.Fatalf("streaming read dir result should be %d, but got %d", meta.DefaultCap-10+2, len(entries1))
+	}
+	entries2, _, _ := v.Readdir(ctx, parent, 60, meta.DefaultCap+2, fh, true)
+	if entries2 == nil {
+		t.Fatalf("read dir result should not be nil")
+	}
+	if len(entries2) != 40 {
+		t.Fatalf("streaming read dir result should be 40, but got %d", len(entries2))
+	}
+
+	entries3, _, _ := v.Readdir(ctx, parent, 60, meta.DefaultCap+40+2, fh, true)
+	if entries3 == nil {
+		t.Fatalf("read dir result should not be nil")
+	}
+	if len(entries3) != 0 {
+		t.Fatalf("streaming read dir result should be 0, but got %d", len(entries3))
+	}
+
+	v.Releasedir(ctx, parent, fh)
+
+	fh2, _ := v.Opendir(ctx, parent, 0)
+	entries4, _, _ := v.Readdir(ctx, parent, 60, 10, fh, true)
+	for i := 0; i < len(entries1); i++ {
+		if string(entries1[i].Name) != string(entries4[i].Name) {
 			t.Fatalf("read dir result should be same")
 		}
 	}

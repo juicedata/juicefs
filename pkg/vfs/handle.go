@@ -272,6 +272,10 @@ func (v *VFS) invalidateDirHandle(parent Ino, name string, inode Ino, attr *Attr
 	v.hanleM.Unlock()
 	for _, h := range hs {
 		h.Lock()
+		if h.sc != nil {
+			h.sc.Close()
+			h.sc = nil
+		}
 		if h.children != nil && h.index != nil {
 			if inode > 0 {
 				h.children = append(h.children, &meta.Entry{

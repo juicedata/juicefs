@@ -3779,7 +3779,6 @@ func (m *kvMeta) NewMetaEntryScanner(inode Ino, plus bool) EntryScanner {
 		plus:        plus,
 		bgChan:      nil,
 	}
-	c.GetData(0)
 	return c
 }
 
@@ -3790,7 +3789,7 @@ func (sc *kvEntryScanner) Valid() bool {
 func (sc *kvEntryScanner) Close() {
 	if sc.bgChan != nil {
 		_ = <-sc.bgChan
-		sc.cache = nil
+		sc.cache = make([]*Entry, 0)
 		sc.cnt = 0
 		sc.bgChan = nil
 	}

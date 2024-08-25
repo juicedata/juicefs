@@ -425,20 +425,32 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 	h.Lock()
 	defer h.Unlock()
 
-	if h.sc == nil {
+	if v.Conf.Meta.StreamingReadDir && h.sc == nil {
+		inter := make([]*meta.Entry, 0)
+		if ino == rootID && !v.Conf.HideInternal {
+			// add internal nodes
+			for _, node := range internalNodes[1:] {
+				inter = append(inter, &meta.Entry{
+					Inode: node.inode,
+					Name:  []byte(node.name),
+					Attr:  node.attr,
+				})
+			}
+		}
 		if plus {
-			h.sc, err = v.Meta.NewBaseEntryScanner(ctx, ino, 1)
+			h.sc, err = v.Meta.NewBaseEntryScanner(ctx, ino, 1, inter)
 		} else {
-			h.sc, err = v.Meta.NewBaseEntryScanner(ctx, ino, 0)
+			h.sc, err = v.Meta.NewBaseEntryScanner(ctx, ino, 0, inter)
 		}
 	}
-	if h.sc.Valid() && err == 0 {
+	if v.Conf.Meta.StreamingReadDir && h.sc.Valid() && err == 0 {
 		h.readAt = time.Now()
 		if rentries, rerr := h.sc.GetData(off); rerr != 0 {
 			return
 		} else {
 			entries = rentries
 		}
+		logger.Infof("readdir: %d entries streaming, off=%d", len(entries), off)
 		return
 	}
 

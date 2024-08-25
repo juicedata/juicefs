@@ -2864,7 +2864,7 @@ func (sc *baseEntrySanner) GetData(start int) ([]*Entry, syscall.Errno) {
 	return res, 0
 }
 
-func (m *baseMeta) NewBaseEntryScanner(ctx Context, inode Ino, plus uint8) (mc EntryScanner, rerr syscall.Errno) {
+func (m *baseMeta) NewBaseEntryScanner(ctx Context, inode Ino, plus uint8, InternalEntries []*Entry) (mc EntryScanner, rerr syscall.Errno) {
 	var attr Attr
 	defer func() {
 		if rerr == 0 {
@@ -2898,6 +2898,7 @@ func (m *baseMeta) NewBaseEntryScanner(ctx Context, inode Ino, plus uint8) (mc E
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
+	entries = append(entries, InternalEntries...)
 	mc = &baseEntrySanner{
 		c:              m.en.NewMetaEntryScanner(inode, (plus == 1)),
 		specialEntries: entries,
