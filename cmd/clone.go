@@ -109,20 +109,18 @@ func clone(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("lookup inode for %s: %s", dstParent, err)
 	}
-	if meta.Ino(srcIno) >= meta.TrashInode || meta.Ino(srcParentIno) >= meta.TrashInode || meta.Ino(dstParentIno) >= meta.TrashInode || (meta.Ino(dstParentIno) == meta.RootInode && dstName == meta.TrashName) {
-		logger.Fatalf("the clone command does not support the trash directory")
-	}
 	var cmode uint8
 	umask := utils.GetUmask()
 	if ctx.Bool("preserve") {
 		cmode |= meta.CLONE_MODE_PRESERVE_ATTR
 	}
 	headerSize := 4 + 4
-	contentSize := 8 + 8 + 1 + uint32(len(dstName)) + 2 + 1
+	contentSize := 8 + 8 + 8 + 1 + uint32(len(dstName)) + 2 + 1
 	wb := utils.NewBuffer(uint32(headerSize) + contentSize)
 	wb.Put32(meta.Clone)
 	wb.Put32(contentSize)
 	wb.Put64(srcIno)
+	wb.Put64(srcParentIno)
 	wb.Put64(dstParentIno)
 	wb.Put8(uint8(len(dstName)))
 	wb.Put([]byte(dstName))
