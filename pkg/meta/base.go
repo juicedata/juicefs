@@ -2437,15 +2437,16 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 }
 
 func (m *baseMeta) Clone(ctx Context, srcIno, srcParentIno, parent Ino, name string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
+
+	if isTrash(srcIno) || isTrash(srcParentIno) || isTrash(parent) || (parent == RootInode && name == TrashName) {
+		return syscall.EPERM
+	}
+
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
 	if name == "" {
 		return syscall.ENOENT
-	}
-
-	if isTrash(srcIno) || isTrash(srcParentIno) || isTrash(parent) || (parent == RootInode && name == TrashName) {
-		return syscall.EPERM
 	}
 
 	defer m.timeit("Clone", time.Now())
