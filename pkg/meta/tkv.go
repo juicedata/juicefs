@@ -1354,6 +1354,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		}
 		m.updateStats(newSpace, newInode)
 	}
+	if err == nil && _type == TypeSymlink {
+		m.symlinks.Delete(inode)
+	}
 	return errno(err)
 }
 

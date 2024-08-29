@@ -692,6 +692,23 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.ReadLink(ctx, parent, &target1); st != syscall.EINVAL {
 		t.Fatalf("readlink d: %s", st)
 	}
+
+	// case: symlink cache
+	if st := m.Unlink(ctx, 1, "s"); st != 0 {
+		t.Fatalf("unlink s: %s", st)
+	}
+	if st := m.ReadLink(ctx, inode, &target1); st == 0 {
+		t.Fatalf("readlink s should fail")
+	}
+
+	// restore symlink
+	if st := m.Symlink(ctx, 1, "s", "/f", &inode, attr); st != 0 {
+		t.Fatalf("symlink s -> /f: %s", st)
+	}
+	if attr.Mode&0777 != 0777 {
+		t.Fatalf("mode of symlink should be 0777")
+	}
+
 	if st := m.Lookup(ctx, 1, "f", &inode, attr, true); st != 0 {
 		t.Fatalf("lookup f: %s", st)
 	}

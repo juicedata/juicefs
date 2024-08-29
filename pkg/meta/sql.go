@@ -1565,6 +1565,9 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	if err == nil && attr != nil {
 		m.parseAttr(&n, attr)
 	}
+	if err == nil && n.Type == TypeSymlink {
+		m.symlinks.Delete(n.Inode)
+	}
 	return errno(err)
 }
 

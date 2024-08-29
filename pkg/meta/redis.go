@@ -1485,6 +1485,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		}
 		m.updateStats(newSpace, newInode)
 	}
+	if err == nil && _type == TypeSymlink {
+		m.symlinks.Delete(inode)
+	}
 	return errno(err)
 }
 
