@@ -134,7 +134,7 @@ func (w *webdav) Put(key string, in io.Reader, getters ...AttrGetter) error {
 		return nil
 	}
 	if strings.HasSuffix(key, dirSuffix) {
-		return w.c.MkdirAll(key, 0)
+		return nil
 	}
 	return w.c.WriteStream(key, in, 0)
 }
