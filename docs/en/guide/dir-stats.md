@@ -1,17 +1,18 @@
 ---
 title: Directory Statistics
 sidebar_position: 5
+description: Learn how to enable, check, and troubleshoot directory statistics in JuiceFS version 1.1.0 and later. 
 ---
 
-From JuiceFS v1.1.0, directory statistics is enabled by default when formatting a new volume (existing ones will stay disabled, you'll have to enable it explicitly). Directory stats accelerates `quota`, `info` and the `summary` subcommands, but comes with a minor performance cost.
+From JuiceFS v1.1.0, the directory statistics feature is enabled by default when formatting a new volume. For existing volumes, this feature is disabled by default and must be enabled manually. The directory statistics feature accelerates the `quota`, `info` and `summary` subcommands, but it comes with a minor performance cost.
 
 :::tip
-The usage statistic relies on the mount process, please do not enable this feature until all writable mount processes are upgraded to v1.1.0.
+Directory statistics rely on the mount process. Ensure all writable mount processes are upgraded to v1.1.0 before enabling this feature.
 :::
 
-## Enable directory stats {#enable-directory-stats}
+## Enable directory statistics {#enable-directory-stats}
 
-Run `juicefs config $URL --dir-stats` to enable directory stats, after that, you can run `juicefs config $URL` to verify:
+Run `juicefs config $URL --dir-stats` to enable directory statistics. After that, run `juicefs config $URL` to confirm the change:
 
 ```shell
 $ juicefs config redis://localhost
@@ -31,7 +32,7 @@ $ juicefs config redis://localhost
 }
 ```
 
-Upon seeing `"DirStats": true`, directory stats is successfully enabled, if you'd like to disable it:
+If `"DirStats": true` appears, the directory statistics feature is successfully enabled. To disable it:
 
 ```shell
 $ juicefs config redis://localhost --dir-stats=false
@@ -41,12 +42,12 @@ $ juicefs config redis://localhost --dir-stats=false
 ```
 
 :::tip
-The [directory quota](./quota.md#directory-quota) functionality depends on directory stats, that's why setting a quota automatically enables directory stats. To disable directory stats for such volume, you'll need to remove all quotas.
+The [directory quota](./quota.md#directory-quota) functionality depends on directory statistics, so setting a quota automatically enables directory statistics. To disable directory statistics for such volumes, you need to remove all quotas.
 :::
 
-## Check directory stats {#check-directory-stats}
+## Check directory statistics {#check-directory-stats}
 
-Use `juicefs info $PATH` to check stats for a single directory:
+Use `juicefs info $PATH` to check statistics for a single directory:
 
 ```shell
 $ juicefs info /mnt/jfs/pjdfstest/
@@ -73,7 +74,7 @@ Run `juicefs info -r $PATH` to recursively sum up:
    path: /pjdfstest
 ```
 
-You can also use `juicefs summary $PATH` to list all directory stats:
+You can also use `juicefs summary $PATH` to list all directory statistics:
 
 ```shell
 $ ./juicefs summary /mnt/jfs/pjdfstest/
@@ -93,16 +94,16 @@ $ ./juicefs summary /mnt/jfs/pjdfstest/
 ```
 
 :::note
-Directory stats only stores single directory usage, to get a recursive sum, you'll need to use `juicefs info -r`, this could be a costly operation for large directories, if you need to frequently get the total stats for particular directories, consider [setting an empty quota](./quota.md#limit-capacity-and-inodes-of-directory) on such directories, to achieve recursive stats this way.
+Directory statistics only track usage for individual directories. To get a recursive sum, use `juicefs info -r`. This could be a costly operation for large directories. If you need to frequently get the total statistics for particular directories, consider [setting an empty quota](./quota.md#limit-capacity-and-inodes-of-directory) for such directories to achieve recursive statistics.
 
-Different from Community Edition, JuiceFS Enterprise Edition already put a [recursive sum](/docs/cloud/guide/quota#file-directory-size) on directory stats, you can directly view the total usage by running `ls -lh`.
+Unlike the Community Edition, JuiceFS Enterprise Edition provides a [recursive sum](/docs/cloud/guide/quota#file-directory-size) in directory statistics. You can directly view the total usage by running `ls -lh`.
 :::
 
-## Troubleshooting {#troubleshooting}
+## Troubleshoot {#troubleshooting}
 
-Directory stats is calculated asynchronously, and can potentially produce inaccurate results when clients run into problems, `juicefs info`, `juicefs summary` and `juicefs quota` all provide a `--strict` option to run in strict mode, which bypasses directory stats, as opposed to the default fast mode.
+Directory statistics are calculated asynchronously and can potentially produce inaccurate results when clients run into problems. `juicefs info`, `juicefs summary`, and `juicefs quota` all provide a `--strict` option to run in strict mode. This bypasses directory statistics, unlike the default fast mode.
 
-When strict mode and fast mode produces different results, use `juicefs fsck` to fix things up:
+When strict mode and fast mode produce different results, use `juicefs fsck` to diagnose:
 
 ```shell
 $ juicefs info -r /jfs/d
@@ -127,7 +128,7 @@ $ juicefs info -r --strict /jfs/d
    size: 1.00 GiB (1073745920 Bytes)
    path: /d
 
-# Check directory stats for /d
+# Check directory statistics for /d
 $ juicefs fsck sqlite3://test.db --path /d --sync-dir-stat
 2023/05/31 17:14:34.700239 juicefs[32667] <INFO>: Meta address: sqlite3://test.db [interface.go:494]
 [xorm] [info]  2023/05/31 17:14:34.700291 PING DATABASE sqlite3
@@ -135,14 +136,14 @@ $ juicefs fsck sqlite3://test.db --path /d --sync-dir-stat
 2023/05/31 17:14:34.701577 juicefs[32667] <WARNING>: Stat of path /d (inode 2) should be synced, please re-run with '--path /d --repair --sync-dir-stat' to fix it [base.go:2025]
 2023/05/31 17:14:34.701615 juicefs[32667] <FATAL>: some errors occurred, please check the log of fsck [main.go:31]
 
-# Fix directory stats for /d
+# Fix directory statistics for /d
 $ juicefs fsck -v sqlite3://test.db --path /d --sync-dir-stat --repair
 2023/05/31 17:14:43.445153 juicefs[32721] <DEBUG>: maxprocs: Leaving GOMAXPROCS=8: CPU quota undefined [maxprocs.go:47]
 2023/05/31 17:14:43.445289 juicefs[32721] <INFO>: Meta address: sqlite3://test.db [interface.go:494]
 [xorm] [info]  2023/05/31 17:14:43.445350 PING DATABASE sqlite3
 2023/05/31 17:14:43.462374 juicefs[32721] <DEBUG>: Stat of path /d (inode 2) is successfully synced [base.go:2018]
 
-# Verify that stats has been fixed
+# Verify that statistics have been fixed
 $ juicefs info -r /jfs/d
 /jfs/d: 1                            3.3/s
 /jfs/d: 1.0 GiB (1073745920 Bytes)   3.3 GiB/s
