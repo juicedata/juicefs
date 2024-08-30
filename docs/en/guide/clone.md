@@ -12,7 +12,7 @@ The clone result is purely a metadata copy, meaning all files still refer to the
 
 Note that system tools like disk-free or disk-usage (`df`, `du`) show the space used by the cloned data, but the underlying object storage space remains unchanged since the blocks are not duplicated. Cloning replicates metadata, so it will occupy the same metadata engine storage space as the original.
 
-**Cloning impacts both file system storage space, inodes and metadata engine storage space.** Be cautious when cloning large directories.
+**Cloning impacts file system storage space, inodes, and metadata engine storage space.** Be cautious when cloning large directories.
 
 ```shell
 juicefs clone SRC DST
