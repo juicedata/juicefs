@@ -443,14 +443,13 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 			h.sc, err = v.Meta.NewBaseEntryScanner(ctx, ino, 0, inter)
 		}
 	}
-	if v.Conf.Meta.StreamingReadDir && h.sc.Valid() && err == 0 {
+	if err == 0 && v.Conf.Meta.StreamingReadDir && h.sc.Valid() {
 		h.readAt = time.Now()
 		if rentries, rerr := h.sc.GetData(off); rerr != 0 {
 			return
 		} else {
 			entries = rentries
 		}
-		logger.Infof("readdir: %d entries streaming, off=%d", len(entries), off)
 		return
 	}
 

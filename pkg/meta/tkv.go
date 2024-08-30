@@ -386,37 +386,67 @@ func (m *kvMeta) get(key []byte) ([]byte, error) {
 	return value, err
 }
 
-func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
-	var keys [][]byte
-	err := m.client.txn(func(tx *kvTxn) error {
-		tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
-			keys = append(keys, k)
-			return true
-		})
+func (m *kvMeta) fillAttr(entries []*Entry) (err error) {
+	if len(entries) == 0 {
+		return nil
+	}
+	var keys = make([][]byte, len(entries))
+	for i, e := range entries {
+		keys[i] = m.inodeKey(e.Inode)
+	}
+	var rs [][]byte
+	err = m.client.txn(func(tx *kvTxn) error {
+		rs = tx.gets(keys...)
 		return nil
 	}, 0)
+	if err != nil {
+		return err
+	}
+	for j, re := range rs {
+		if re != nil {
+			m.parseAttr(re, entries[j].Attr)
+		}
+	}
+	return err
+}
+
+func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
+	keys, _, err := m.doScanKV(prefix, nextKey(prefix), -1, nil)
 	return keys, err
 }
 
 func (m *kvMeta) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) (map[string][]byte, error) {
-	if limit == 0 {
-		return nil, nil
+	keys, vals, err := m.doScanKV(prefix, nextKey(prefix), limit, filter)
+	if err != nil {
+		return nil, err
 	}
-	values := make(map[string][]byte)
+	valsMap := make(map[string][]byte)
+	for i := range keys {
+		valsMap[string(keys[i])] = vals[i]
+	}
+	return valsMap, nil
+}
+
+func (m *kvMeta) doScanKV(startKey, endKey []byte, limit int, filter func(k, v []byte) bool) ([][]byte, [][]byte, error) {
+	if limit == 0 {
+		return nil, nil, nil
+	}
+	keys := make([][]byte, 0)
+	vals := make([][]byte, 0)
 	err := m.client.txn(func(tx *kvTxn) error {
 		var c int
-		tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
+		tx.scan(startKey, endKey, false, func(k, v []byte) bool {
 			if filter == nil || filter(k, v) {
-				values[string(k)] = v
+				keys = append(keys, k)
+				vals = append(vals, v)
 				c++
 			}
 			return limit < 0 || c < limit
 		})
 		return nil
 	}, 0)
-	return values, err
+	return keys, vals, err
 }
-
 func (m *kvMeta) doInit(format *Format, force bool) error {
 	body, err := m.get(m.fmtKey("setting"))
 	if err != nil {
@@ -1798,30 +1828,10 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	}
 
 	if plus != 0 && len(*entries) != 0 {
-		fillAttr := func(es []*Entry) error {
-			var keys = make([][]byte, len(es))
-			for i, e := range es {
-				keys[i] = m.inodeKey(e.Inode)
-			}
-			var rs [][]byte
-			err := m.client.txn(func(tx *kvTxn) error {
-				rs = tx.gets(keys...)
-				return nil
-			}, 0)
-			if err != nil {
-				return err
-			}
-			for j, re := range rs {
-				if re != nil {
-					m.parseAttr(re, es[j].Attr)
-				}
-			}
-			return nil
-		}
 		batchSize := 4096
 		nEntries := len(*entries)
 		if nEntries <= batchSize {
-			err = fillAttr(*entries)
+			err = m.fillAttr(*entries)
 		} else {
 			indexCh := make(chan []*Entry, 10)
 			var wg sync.WaitGroup
@@ -1830,7 +1840,7 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 				go func() {
 					defer wg.Done()
 					for es := range indexCh {
-						if e := fillAttr(es); e != nil {
+						if e := m.fillAttr(es); e != nil {
 							err = e
 							break
 						}
@@ -3766,7 +3776,9 @@ type kvEntryScanner struct {
 	defaultCap  int
 	parentInode Ino
 	plus        bool
-	bgChan      chan []*Entry
+
+	fetched     []*Entry
+	wg 	 sync.WaitGroup
 }
 
 func (m *kvMeta) NewMetaEntryScanner(inode Ino, plus bool) EntryScanner {
@@ -3777,8 +3789,10 @@ func (m *kvMeta) NewMetaEntryScanner(inode Ino, plus bool) EntryScanner {
 		parentInode: inode,
 		defaultCap:  DefaultCap,
 		plus:        plus,
-		bgChan:      nil,
 	}
+
+	c.wg.Add(1)
+	go c.fetchEntries()
 	return c
 }
 
@@ -3787,90 +3801,32 @@ func (sc *kvEntryScanner) Valid() bool {
 }
 
 func (sc *kvEntryScanner) Close() {
-	if sc.bgChan != nil {
-		_ = <-sc.bgChan
-		sc.cache = make([]*Entry, 0)
-		sc.cnt = 0
-		sc.bgChan = nil
-	}
-}
-
-func (sc *kvEntryScanner) scanEntries(startKey, endKey []byte, limit int) ([]*Entry, error) {
-	if limit <= 0 {
-		return nil, nil
-	}
-	entries := make([]*Entry, 0)
-	prefix := len(sc.m.entryKey(sc.parentInode, ""))
-	err := sc.m.client.txn(func(tx *kvTxn) error {
-		var cnt int = 0
-		tx.scan(startKey, endKey, false, func(name, buf []byte) bool {
-
-			typ, ino := sc.m.parseEntry(buf)
-			if len(name) == prefix {
-				logger.Errorf("Corrupt entry with empty name: inode %d parent %d", ino, sc.parentInode)
-				return false
-			}
-			entries = append(entries, &Entry{
-				Inode: ino,
-				Name:  []byte(name)[prefix:],
-				Attr:  &Attr{Typ: typ},
-			})
-			cnt++
-			return cnt < limit
-		})
-		return nil
-	}, 0)
-	return entries, err
-}
-
-func (sc *kvEntryScanner) fillAttr(entries []*Entry) (err error) {
-	if len(entries) == 0 {
-		return nil
-	}
-	var keys = make([][]byte, len(entries))
-	for i, e := range entries {
-		keys[i] = sc.m.inodeKey(e.Inode)
-	}
-	var rs [][]byte
-	err = sc.m.client.txn(func(tx *kvTxn) error {
-		rs = tx.gets(keys...)
-		return nil
-	}, 0)
-	if err != nil {
-		return err
-	}
-	for j, re := range rs {
-		if re != nil {
-			sc.m.parseAttr(re, entries[j].Attr)
-		}
-	}
-	return err
+	sc.wg.Wait()
 }
 
 func (sc *kvEntryScanner) GetData(start int) ([]*Entry, syscall.Errno) {
-	if sc.bgChan == nil {
-		sc.bgChan = make(chan []*Entry, 1)
+	doGetData := func() {
+		sc.wg.Wait()
+		sc.cache = sc.fetched
+		sc.wg.Add(1)
 		go sc.fetchEntries()
 	}
 	if start < sc.cnt-len(sc.cache) {
 		// back to index 0, when 'start' not in the cache
-		_ = <-sc.bgChan
+		doGetData()
 		sc.cnt = 0
 		sc.cache = make([]*Entry, 0)
-		go sc.fetchEntries()
 	}
 	for start >= sc.cnt {
 		// forward to start
-		if sc.cache = <-sc.bgChan; sc.cache == nil {
-			logger.Errorf("Failed to prefetch")
-			sc.bgChan = nil
-			return sc.cache, syscall.EIO
+		doGetData()
+		if sc.cache == nil {
+			logger.Errorf("fetch entries error, start: %d cnt: %d", start, sc.cnt)
+			return nil, syscall.EIO
 		} else if len(sc.cache) == 0 {
-			sc.bgChan = nil
 			return sc.cache, 0
 		}
 		sc.cnt += len(sc.cache)
-		go sc.fetchEntries()
 	}
 
 	// start must be in the cache
@@ -3878,7 +3834,9 @@ func (sc *kvEntryScanner) GetData(start int) ([]*Entry, syscall.Errno) {
 }
 
 func (sc *kvEntryScanner) fetchEntries() {
+	defer sc.wg.Done()
 	var startKey []byte
+	prefixLen := len(sc.m.entryKey(sc.parentInode, ""))
 	if len(sc.cache) == 0 {
 		startKey = sc.m.entryKey(sc.parentInode, "")
 	} else {
@@ -3886,18 +3844,27 @@ func (sc *kvEntryScanner) fetchEntries() {
 		startKey = nextKey(sc.m.entryKey(sc.parentInode, string(last_entry.Name)))
 	}
 	endKey := nextKey(sc.m.entryKey(sc.parentInode, ""))
-	entries, err := sc.scanEntries(startKey, endKey, sc.defaultCap)
-
-	if err != nil {
-		sc.bgChan <- nil
+	var entries []*Entry = make([]*Entry, 0)
+	if keys, vals, err := sc.m.doScanKV(startKey, endKey, sc.defaultCap, nil); err != nil {
+		sc.fetched = nil
 		return
-	}
-
-	if sc.plus {
-		if err = sc.fillAttr(entries); err != nil {
-			sc.bgChan <- nil
-			return
+	} else {
+		for i := range vals {
+			name := keys[i]
+			buf := vals[i]
+			typ, ino := sc.m.parseEntry(buf)
+			entries = append(entries, &Entry{
+				Inode: ino,
+				Name:  []byte(name)[prefixLen:],
+				Attr:  &Attr{Typ: typ},
+			})
 		}
 	}
-	sc.bgChan <- entries
+	if entries != nil && sc.plus {
+		if err := sc.m.fillAttr(entries); err != nil {
+			sc.fetched = nil
+		}
+	}
+	sc.fetched = entries
 }
+

@@ -973,6 +973,8 @@ func TestVFSReadDirSort(t *testing.T) {
 }
 
 func TestVFSReadDirSteaming(t *testing.T) {
+	const n = 5
+
 	v, _ := createTestVFS(func(metaConfig *meta.Config) {
 		metaConfig.StreamingReadDir = true
 	})
@@ -982,7 +984,8 @@ func TestVFSReadDirSteaming(t *testing.T) {
 		t.Fatalf("mkdir testdir: %s", st)
 	}
 	parent := entry.Inode
-	for i := 0; i < meta.DefaultCap+40; i++ {
+
+	for i := 0; i < n*meta.DefaultCap+40 ; i++ {
 		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
 	}
 	fh, _ := v.Opendir(ctx, parent, 0)
@@ -1003,15 +1006,15 @@ func TestVFSReadDirSteaming(t *testing.T) {
 		// thus, the result should be meta.DefaultCap - off(10) + 2
 		t.Fatalf("streaming read dir result should be %d, but got %d", meta.DefaultCap-10+2, len(entries1))
 	}
-	entries2, _, _ := v.Readdir(ctx, parent, 60, meta.DefaultCap+2, fh, true)
+	entries2, _, _ := v.Readdir(ctx, parent, meta.DefaultCap, meta.DefaultCap+2, fh, true)
 	if entries2 == nil {
 		t.Fatalf("read dir result should not be nil")
 	}
-	if len(entries2) != 40 {
-		t.Fatalf("streaming read dir result should be 40, but got %d", len(entries2))
+	if len(entries2) != meta.DefaultCap{
+		t.Fatalf("streaming read dir result should be %d, but got %d", meta.DefaultCap, len(entries2))
 	}
 
-	entries3, _, _ := v.Readdir(ctx, parent, 60, meta.DefaultCap+40+2, fh, true)
+	entries3, _, _ := v.Readdir(ctx, parent, meta.DefaultCap, n*meta.DefaultCap+40+2, fh, true)
 	if entries3 == nil {
 		t.Fatalf("read dir result should not be nil")
 	}
@@ -1019,14 +1022,11 @@ func TestVFSReadDirSteaming(t *testing.T) {
 		t.Fatalf("streaming read dir result should be 0, but got %d", len(entries3))
 	}
 
-	v.Releasedir(ctx, parent, fh)
-
-	fh2, _ := v.Opendir(ctx, parent, 0)
 	entries4, _, _ := v.Readdir(ctx, parent, 60, 10, fh, true)
 	for i := 0; i < len(entries1); i++ {
 		if string(entries1[i].Name) != string(entries4[i].Name) {
 			t.Fatalf("read dir result should be same")
 		}
 	}
-	v.Releasedir(ctx, parent, fh2)
+	v.Releasedir(ctx, parent, fh)
 }

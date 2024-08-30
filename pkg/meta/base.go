@@ -1547,40 +1547,50 @@ func (m *baseMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 	return st
 }
 
-func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) (rerr syscall.Errno) {
+func (m *baseMeta) getDotEntries(ctx Context, inode Ino, plus uint8) ([]*Entry, syscall.Errno) {
 	var attr Attr
-	defer func() {
-		if rerr == 0 {
-			m.touchAtime(ctx, inode, &attr)
-		}
-	}()
+
 	inode = m.checkRoot(inode)
 	if err := m.GetAttr(ctx, inode, &attr); err != 0 {
-		return err
+		return nil, err
 	}
-	defer m.timeit("Readdir", time.Now())
 	var mmask uint8 = MODE_MASK_R
 	if plus != 0 {
 		mmask |= MODE_MASK_X
 	}
 	if st := m.Access(ctx, inode, mmask, &attr); st != 0 {
-		return st
+		return nil, st
 	}
 	if inode == m.root {
 		attr.Parent = m.root
 	}
-	*entries = []*Entry{
+	entries := []*Entry{
 		{
 			Inode: inode,
 			Name:  []byte("."),
 			Attr:  &Attr{Typ: TypeDirectory},
 		},
 	}
-	*entries = append(*entries, &Entry{
+	entries = append(entries, &Entry{
 		Inode: attr.Parent,
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
+	return entries, 0
+}
+
+func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) (rerr syscall.Errno) {
+	defer m.timeit("Readdir", time.Now())
+	defer func() {
+		if rerr == 0 {
+			m.touchAtime(ctx, inode, nil)
+		}
+	}()
+	if dotEntries, err := m.getDotEntries(ctx, inode, plus); err != 0 {
+		return err
+	} else {
+		*entries = dotEntries
+	}
 	st := m.en.doReaddir(ctx, inode, plus, entries, -1)
 	if st == syscall.ENOENT && inode == TrashInode {
 		st = 0
@@ -2838,6 +2848,7 @@ func (b *MockMetaEntryScannerGen) NewMetaEntryScanner(inode Ino, plus bool) Entr
 
 type baseEntrySanner struct {
 	c              EntryScanner
+	m              *baseMeta
 	specialEntries []*Entry
 }
 
@@ -2848,6 +2859,7 @@ func (sc *baseEntrySanner) Close() {
 	sc.c.Close()
 }
 func (sc *baseEntrySanner) GetData(start int) ([]*Entry, syscall.Errno) {
+	defer sc.m.timeit("ScanEntries", time.Now())
 	if !sc.Valid() {
 		return nil, 0
 	}
@@ -2865,42 +2877,19 @@ func (sc *baseEntrySanner) GetData(start int) ([]*Entry, syscall.Errno) {
 }
 
 func (m *baseMeta) NewBaseEntryScanner(ctx Context, inode Ino, plus uint8, InternalEntries []*Entry) (mc EntryScanner, rerr syscall.Errno) {
-	var attr Attr
 	defer func() {
-		if rerr == 0 {
-			m.touchAtime(ctx, inode, &attr)
+		if rerr != 0 {
+			m.touchAtime(ctx, inode, nil)
 		}
 	}()
-	inode = m.checkRoot(inode)
-	if err := m.GetAttr(ctx, inode, &attr); err != 0 {
+	entries, err := m.getDotEntries(ctx, inode, plus)
+	if err != 0 {
 		return &mockScanner{}, err
 	}
-	var mmask uint8 = MODE_MASK_R
-	if plus != 0 {
-		mmask |= MODE_MASK_X
-	}
-	if st := m.Access(ctx, inode, mmask, &attr); st != 0 {
-		return &mockScanner{}, st
-	}
-	if inode == m.root {
-		attr.Parent = m.root
-	}
-	entries := make([]*Entry, 0)
-	entries = []*Entry{
-		{
-			Inode: inode,
-			Name:  []byte("."),
-			Attr:  &Attr{Typ: TypeDirectory},
-		},
-	}
-	entries = append(entries, &Entry{
-		Inode: attr.Parent,
-		Name:  []byte(".."),
-		Attr:  &Attr{Typ: TypeDirectory},
-	})
 	entries = append(entries, InternalEntries...)
 	mc = &baseEntrySanner{
 		c:              m.en.NewMetaEntryScanner(inode, (plus == 1)),
+		m:              m,
 		specialEntries: entries,
 	}
 	return mc, 0
