@@ -175,9 +175,11 @@ type baseMeta struct {
 	dirParents map[Ino]Ino    // directory inode -> parent inode
 	dirQuotas  map[Ino]*Quota // directory inode -> quota
 
-	freeMu     sync.Mutex
-	freeInodes freeID
-	freeSlices freeID
+	freeMu          sync.Mutex
+	freeInodes      freeID
+	freeSlices      freeID
+	prefetchMu      sync.Mutex
+	prefetchedInode uint64
 
 	usedSpaceG  prometheus.Gauge
 	usedInodesG prometheus.Gauge
@@ -948,12 +950,20 @@ func (m *baseMeta) nextInode() (Ino, error) {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeInodes.next >= m.freeInodes.maxid {
-		v, err := m.en.incrCounter("nextInode", inodeBatch)
-		if err != nil {
-			return 0, err
+		m.prefetchMu.Lock() // Wait until prefetchInodes() is done
+		nextLimit := m.prefetchedInode
+		m.prefetchMu.Unlock()
+		if nextLimit <= m.freeInodes.maxid {
+			v, err := m.en.incrCounter("nextInode", inodeBatch)
+			if err != nil {
+				return 0, err
+			}
+			nextLimit = uint64(v)
+		} else {
+			logger.Debugf("Prefetch hit, next limit: %d", nextLimit)
 		}
-		m.freeInodes.next = uint64(v) - inodeBatch
-		m.freeInodes.maxid = uint64(v)
+		m.freeInodes.next = nextLimit - inodeBatch
+		m.freeInodes.maxid = nextLimit
 	}
 	n := m.freeInodes.next
 	m.freeInodes.next++
@@ -961,7 +971,24 @@ func (m *baseMeta) nextInode() (Ino, error) {
 		n = m.freeInodes.next
 		m.freeInodes.next++
 	}
+	if m.freeInodes.maxid-m.freeInodes.next < uint64(utils.JitterIt(inodeBatch*0.1)) {
+		go m.prefetchInodes()
+	}
 	return Ino(n), nil
+}
+
+func (m *baseMeta) prefetchInodes() {
+	m.prefetchMu.Lock()
+	defer m.prefetchMu.Unlock()
+	if m.prefetchedInode > m.freeInodes.maxid {
+		return // Someone else has done the job
+	}
+	v, err := m.en.incrCounter("nextInode", inodeBatch)
+	if err == nil {
+		m.prefetchedInode = uint64(v)
+	} else {
+		logger.Warnf("prefetchInodes: %s, current limit: %d", err, m.freeInodes.maxid)
+	}
 }
 
 func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
