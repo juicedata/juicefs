@@ -240,7 +240,7 @@ func (dc *unstableDC) doProbe(key string, page *Page) {
 	}
 	defer reader.Close()
 	_, _ = reader.ReadAt(probeBuff, 0)
-	dc.cache.remove(key)
+	dc.cache.remove(key, false)
 }
 
 func (dc *unstableDC) beforeCacheOp() { dc.concurrency.Add(1) }

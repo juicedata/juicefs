@@ -19,6 +19,7 @@ package vfs
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 	"sort"
@@ -58,7 +59,6 @@ type FuseOptions struct {
 	MaxBackground            int
 	MaxWrite                 int
 	MaxReadAhead             int
-	MaxPages                 int
 	IgnoreSecurityLabels     bool // ignoring labels should be provided as a fusermount mount option.
 	RememberInodes           bool
 	FsName                   string
@@ -66,13 +66,18 @@ type FuseOptions struct {
 	SingleThreaded           bool
 	DisableXAttrs            bool
 	Debug                    bool
+	Logger                   *log.Logger `json:"-"`
 	EnableLocks              bool
+	EnableSymlinkCaching     bool `json:",omitempty"`
 	ExplicitDataCacheControl bool
+	SyncRead                 bool `json:",omitempty"`
 	DirectMount              bool
+	DirectMountStrict        bool `json:",omitempty"`
 	DirectMountFlags         uintptr
 	EnableAcl                bool
+	DisableReadDirPlus       bool `json:",omitempty"`
 	EnableWriteback          bool
-	EnableIoctl              bool
+	EnableIoctl              bool `json:",omitempty"`
 	DontUmask                bool
 	OtherCaps                uint32
 	NoAllocForRead           bool
@@ -101,7 +106,6 @@ func (o FuseOptions) StripOptions() FuseOptions {
 	// ignore there options because they cannot be configured by users
 	o.Name = ""
 	o.MaxBackground = 0
-	o.MaxWrite = 0
 	o.MaxReadAhead = 0
 	o.DirectMount = false
 	o.DontUmask = false
@@ -739,7 +743,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 	}
 
 	// there could be read operation for write-only if kernel writeback is enabled
-	if !v.Conf.FuseOpts.EnableWriteback && !hasReadPerm(h.flags) {
+	if v.Conf.FuseOpts != nil && !v.Conf.FuseOpts.EnableWriteback && !hasReadPerm(h.flags) {
 		err = syscall.EBADF
 		return
 	}

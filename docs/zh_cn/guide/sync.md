@@ -1,13 +1,14 @@
 ---
 title: 数据同步
 sidebar_position: 7
+description: 了解如何使用 JuiceFS 中的数据同步工具。
 ---
 
 [`juicefs sync`](../reference/command_reference.mdx#sync) 是强大的数据同步工具，可以在所有支持的存储之间并发同步或迁移数据，包括对象存储、JuiceFS、本地文件系统，你可以在这三者之间以任意方向和搭配进行数据同步。除此之外，还支持同步通过 SSH 访问远程目录、HDFS、WebDAV 等，同时提供增量同步、模式匹配（类似 rsync）、分布式同步等高级功能。
 
-## 基本用法
+## 基本用法 {#basic-usage}
 
-### 命令格式
+### 命令格式 {#command-syntax}
 
 ```shell
 juicefs sync [command options] SRC DST
@@ -77,7 +78,7 @@ juicefs sync ./te ~/mnt/ab
 - **ACCESS_KEY**：`ABCDEFG`
 - **SECRET_KEY**：`HIJKLMN`
 
-### 对象存储与 JuiceFS 之间同步
+### 对象存储与 JuiceFS 之间同步 {#synchronize-between-object-storage-and-juicefs}
 
 将 [对象存储 A](#required-storages) 的 `movies` 目录同步到 [JuiceFS 文件系统](#required-storages)：
 
@@ -97,7 +98,7 @@ juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync /mnt/jfs/images/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/images/
 ```
 
-### 对象存储与对象存储之间同步
+### 对象存储与对象存储之间同步 {#synchronize-between-object-storages}
 
 将 [对象存储 A](#required-storages) 的全部数据同步到 [对象存储 B](#required-storages)：
 
@@ -105,7 +106,7 @@ juicefs sync /mnt/jfs/images/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.co
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
 ```
 
-### 本地及服务器之间同步
+### 本地及服务器之间同步 {#synchronize-between-local-and-remote-servers}
 
 对于本地计算机上的目录之间拷贝文件，直接指定数据源与目标端的路径即可，比如将 `/media/` 目录同步到 `/backup/` 目录：
 
@@ -123,7 +124,7 @@ juicefs sync /media/ "username:password"@192.168.1.100:/backup/
 
 当使用 SFTP/SSH 协议时，如果没有指定密码，执行 sync 任务时会提示输入密码。如果希望显式指定用户名和密码，则需要用半角引号把用户名和密码括起来，用户名和密码之间用半角冒号分隔。
 
-### 无挂载点同步 <VersionAdd>1.1</VersionAdd>
+### 无挂载点同步 <VersionAdd>1.1</VersionAdd> {#sync-without-mount-point}
 
 在两个存储系统之间同步数据，如果其中一方是 JuiceFS，推荐直接使用 `jfs://` 协议头，而不是先挂载 JuiceFS，再访问本地目录。这样便能跳过挂载点，直接读取或写入数据，在大规模场景下，绕过 FUSE 挂载点将能节约资源开销以及提升数据同步性能。
 
@@ -131,7 +132,7 @@ juicefs sync /media/ "username:password"@192.168.1.100:/backup/
 myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ jfs://myfs/movies/
 ```
 
-## 高级用法
+## 高级用法 {#advanced-usage}
 
 ### 观测 {#observation}
 
@@ -158,115 +159,118 @@ juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
 
-### 过滤 {#filter-matching}
+### 过滤 {#filtering}
 
-你可以通过参数 `--exclude` 和 `--include` 来提供多个字符串模式来过滤将要同步的路径，`--exclude` 表示不同步匹配上的路径，`--include` 表示同步匹配上的路径。当不提供任何规则时，默认会同步所有发现的路径。
-当有多个过滤模式时，它会按照提供的顺序进行匹配尝试，并依照第一个匹配上的模式来决定是否同步某个路径，所有模式都不能匹配上时则要同步该路径。通过多个规则的按序组合实现任意集合的同步。
+你可以通过选项 `--exclude` 和 `--include` 来提供多个匹配模式来过滤将要同步的路径，`--exclude` 选项表示不同步匹配的路径，`--include` 选项表示同步匹配的路径。当不提供任何规则时，默认会同步所有扫描到的文件。当有多个匹配模式时，将会根据你使用的[「过滤模式」](#filtering-mode)，按照提供的匹配模式的顺序进行匹配尝试，最终决定是否要同步某个文件。
 
-#### 匹配规则
+:::tip
+当提供多个匹配模式时，取决于你具体使用的「过滤模式」，对于判断是否要同步某个文件可能会变得很困难。此时建议加上 `--dry` 选项提前查看要同步的具体文件是否符合预期，如果不符合预期则需要调整匹配模式。
+:::
 
-匹配规则指的是给定一个路径与一个模式，如何确定该路径能否匹配上该模式。
-模式可以包含一下特殊字符（类似 shell 通配符）：
+#### 匹配规则 {#matching-rules}
 
-+ 单个`*`匹配任意路径元素，但在遇到 `/` 终止匹配。
-+ `**` 匹配任意路径元素，包括 `/`。
-+ `?`匹配任意非 `/` 的单个字符。
-+ `[`表示字符类匹配，例如`[a-z]` 匹配任意小写字母。`[^abc]` 匹配`a` `b` `c` 外的任意字符
-  一个模式需要跟路径的包括最底层在内的若干层级进行完整匹配，比如 `foo` 匹配 `foo`和 `xx/foo`，但不匹配 `foo1` 、`2foo` 和 `foo/xx`。
-  当匹配模式以 `/` 结尾，将只匹配目录，而不匹配普通文件。
-  如果匹配模式以 `/` 开头，则表示匹配完整路径（路径不需要以 `/` 开头），因此 `/foo` 匹配的是传输中根目录的 `foo` 文件。
+匹配规则指的是给定一个路径与一个模式，然后确定该路径能否匹配上该模式。模式可以包含一些特殊字符（类似 shell 通配符）：
 
-#### 过滤模式
++ 单个 `*` 匹配任意字符，但在遇到 `/` 时终止匹配；
++ `**` 匹配任意字符，包括 `/`；
++ `?` 匹配任意非 `/` 的单个字符；
++ `[...]` 匹配一组字符，例如 `[a-z]` 匹配任意小写字母；
++ `[^...]` 不匹配一组字符，例如 `[^abc]` 匹配除 `a`、`b`、`c` 外的任意字符。
 
-过滤模式是指如何根据多个过滤模式来决定是否同步某个路径。`sync` 命令支持一次性和逐级两种过滤模式。默认情况下，`sync` 命令使用逐层过滤模式，可以通过 `--match-full-path` 参数来使用一次性过滤模式。
+此外，还有一些匹配规则需要注意：
 
-##### 一次过滤模式
+- 如果匹配模式中不包含特殊字符，将会完整匹配路径中的文件名。比如 `foo` 可以匹配 `foo` 和 `xx/foo`，但不匹配 `foo1`（无法前缀匹配）、`2foo`（无法后缀匹配）和 `foo/xx`（`foo` 不是目录）；
+- 如果匹配模式以 `/` 结尾，将只匹配目录，而不匹配普通文件；
+- 如果匹配模式以 `/` 开头，则表示匹配完整路径（路径不需要以 `/` 开头），因此 `/foo` 匹配的是传输中根目录的 `foo` 文件。
 
-![一次性过滤示例图](../images/sync-single-layer-filtration.svg)
+以下是一些匹配模式的例子：
 
-一次性过滤是指针对待匹配的对象，直接将其全路径与多个模式进行依次匹配。
++ `--exclude '*.o'` 将排除所有文件名能匹配 `*.o` 的文件；
++ `--exclude '/foo/*/bar'` 将排除根目录中名为 `foo` 的目录向下「两层」的目录中名为 `bar` 的文件；
++ `--exclude '/foo/**/bar'` 将排除根目录中名为 `foo` 的目录向下「任意层级」的目录中名为 `bar` 的文件。
 
-例如现有对象 `a1/b1/c1.txt` 和 `include/exclude` 规则 `--include a*.txt --inlude c1.txt --exclude c*.txt`。直接将 `a1/b1/c1.txt` 这个字符串与 `--include a*.txt` ，`--inlude c1.txt` ，`--exclude c*.txt` 三个模式进行依次匹配。
-具体步骤：
+#### 过滤模式 {#filtering-mode}
 
-1. `a1/b1/c1.txt` 与 `--include a*.txt` 尝试匹配，结果是未匹配
-2. 尝试下一个规则 `a1/b1/c1.txt` 与 `--inlude c1.txt` 尝试匹配，此时根据匹配规则，将会匹配成功。直接返回 `a1/b1/c1.txt` 的最终匹配结果为“同步”。
+过滤模式是指如何根据多个匹配规则来决定是否同步某个路径。`sync` 命令支持「完整路径过滤」和「逐层过滤」两种模式。默认情况下，`sync` 命令使用逐层过滤模式，可以通过 `--match-full-path` 选项来使用完整路径过滤模式。由于完整路径过滤模式的工作流程更容易理解，因此推荐优先使用完整路径过滤模式。
 
-后续的 `--exclude c*.txt` 虽然根据后缀匹配规则也能匹配上，但是根据 `include/exclude` 参数的顺序性规则，一旦匹配上一个某个模式得到单层匹配的结果后，后续的模式将不再尝试匹配。所以匹配结果是`--inlude c1.txt` 模式的行为——“同步”。
+##### 完整路径过滤模式（推荐） <VersionAdd>1.2.0</VersionAdd> {#full-path-filtering-mode}
 
-以下是一些 `exclude/include` 规则一次性过滤模式的例子：
+完整路径过滤模式是指对于待匹配的对象，直接将其「全路径」与多个模式依次进行匹配，一旦某个匹配模式匹配成功将会直接返回结果（「同步」或者「排除」），忽略后续的匹配模式。
 
-+ `--exclude *.o` 将排除所有文件名能匹配 `*.o` 的文件。
-+ `--exclude /foo**` 将排除传输中根目录名为 `foo` 的文件或目录。
-+ `--exclude **foo/**` 将排除所有以 `foo` 结尾的目录。
-+ `--exclude /foo/*/bar` 将排除传输中根目录下 `foo` 目录再向下两层的 `bar` 文件。
-+ `--exclude /foo/**/bar` 将排除传输中根目录下 `foo` 目录再向下递归任意层次后名为 `bar` 的文件。( `**` 匹配任意多个层次的目录)
-+ 同时使用 `--include */ --include *.c --exclude *` 将只包含所有目录和 C 源码文件，除此之外的所有文件和目录都被排除。
-+ 同时使用 `--include foo/bar.c --exclude *` 将只包含 `foo` 目录和 `foo/bar.c`。
+下面是完整路径过滤模式的工作流程图：
 
-一次性过滤模式是一种理解与使用都较为简单的模式，一般情况下推荐大家使用这种模式。
+![完整路径过滤模式流程图](../images/sync-full-path-filtering-mode-flow-chart.svg)
 
-##### 逐层过滤模式
+例如有一个路径为 `a1/b1/c1.txt` 的文件，以及 3 个匹配模式 `--include 'a*.txt' --inlude 'c1.txt' --exclude 'c*.txt'`。在完整路径过滤模式下，会直接将 `a1/b1/c1.txt` 这个字符串与匹配模式依次进行匹配。具体步骤为：
 
-![逐层过滤示例图](../images/sync-hierarchical-filtration.svg)
+1. 尝试将 `a1/b1/c1.txt` 与 `--include 'a*.txt'` 匹配，结果是不匹配。因为 `*` 不能匹配 `/` 字符，参见[「匹配规则」](#matching-rules)；
+2. 尝试将 `a1/b1/c1.txt` 与 `--inlude 'c1.txt'` 匹配，此时根据匹配规则将会匹配成功。后续的 `--exclude 'c*.txt'` 虽然根据匹配规则也能匹配上，但是根据完整路径过滤模式的逻辑，一旦匹配上某个模式，后续的模式将不再尝试匹配。所以最终的匹配结果是「同步」。
 
-逐层过滤的核心是先将待匹配的对象路径按照路径层级逐层增加的子路径元素依次组成序列，比如原始路径为 `a1/b1/c1.txt` 的对象层级过滤的序列就是 `a1`,`a1/b1`,`a1/b1/c1.txt`。
-然后将这这个序列中的每个元素都当成一次性过滤中的原始路径，依次执行“一次性过滤”。“一次性过滤”中如过匹配上了某个模式，如果该模式是 exclude 模式，则直接返回“排除”行为作为整个层级匹配原始对象的结果，
-如果该模式是 include 模式，则跳过本层级的后续待匹配的模式直接进入下一层级的过滤。
-如过某层的所有规则都未匹配，则进入下一层级过滤，如果所有层级都执行完毕则返回默认的行为——“同步”。
+以下是更多示例：
 
-例如现有对象 `a1/b1/c1.txt` 和 `--include a*.txt`, `--inlude c1.txt`, `--exclude c*.txt`，可以结合逐层过滤图片分析步骤，在这个例子中子路径序列就分别是 `a1`,`a1/b1`,`a1/b1/c1.txt`。
-该例子的逐层过滤具体步骤：
++ `--exclude '/foo**'` 将排除所有根目录名为 `foo` 的文件或目录；
++ `--exclude '**foo/**'` 将排除所有以 `foo` 结尾的目录；
++ `--include '*/' --include '*.c' --exclude '*'` 将只包含所有目录和后缀名为 `.c` 的文件，除此之外的所有文件和目录都会被排除；
++ `--include 'foo/bar.c' --exclude '*'` 将只包含 `foo` 目录和 `foo/bar.c` 文件。
 
-1. 第一层级 `a1`，一次性过滤的路径是 `a1`，模式序列是 `--include a*.txt`, `--inlude c1.txt`, `--exclude c*.txt`，根据匹配规则，结果将会是本层内全部未匹配。继续下一层级。
-2. 第二层级 `a1/b1`，一次性过滤的路径是 `a1/b1`，模式序列是 `--include a*.txt`, `--inlude c1.txt`, `--exclude c*.txt`，根据匹配规则，结果将会是本层内全部未匹配。继续下一层级。
-3. 第三层级的一次性过滤，一次性过滤的路径是 `a1/b1/c1.txt`，模式序列是 `--include a*.txt`, `--inlude c1.txt`, `--exclude c*.txt`，根据匹配规则，结果将会是匹配上 `--inlude c1.txt` 模式。
-该模式的行为是“同步”，逐层过滤中，逐层过滤结果如果是“同步”则将直接进入下一层过滤。
-4. 没有下一层级了，所有过滤层级都已经执行完毕，所以返回默认的行为——“同步”。
+##### 逐层过滤模式 {#layer-by-layer-filtering-mode}
 
-上面的例子是到层级最后一层才匹配成功，除此之外还有两种情况：
+逐层过滤模式的核心是先将完整路径按照目录层级拆分，并逐层组合成多个字符串序列。比如完整路径为 `a1/b1/c1.txt`，组成的序列就是 `a1`、`a1/b1`、`a1/b1/c1.txt`。然后将这个序列中的每个元素都当成完整路径过滤模式中的路径，依次执行[「完整路径过滤」](#full-path-filtering-mode)。
 
-1. 匹配未到最后一层，在某层提前匹配成功，此时如果是 exclude 模式则直接返回“排除”作为整个层级过滤的最终结果，如果是 include 模式则直接进入下一层过滤。
-2. 所有过滤层级都已经执行完毕，但都未匹配上，此时也将会返回默认的行为作为最终结果——“同步”。
+如果某个元素匹配上了某个模式，则会有两种处理逻辑：
 
-一句话讲，层级过滤就是路径层级由高到低的一次性过滤的按序执行，层级过滤的每层过滤只有两种结果，要么直接得到“排除”最终结果，要么进入下一层过滤，得到“同步”结果的唯一方式是执行完所有过滤层级。
+- 如果该模式是 exclude 模式，则直接返回「排除」行为，作为最终的匹配结果；
+- 如果该模式是 include 模式，则跳过本层级的后续待匹配的模式，直接进入下一层级。
 
-以下是一些 exclude/include 规则层级过滤模式的例子：
+如果某层的所有模式都未匹配，则进入下一层级。**如果所有层级匹配完毕后都没有返回「排除」，则返回默认的行为——即「同步」。**
 
-+ `--exclude *.o`将排除所有文件名能匹配"*.o"的文件。
-+ `--exclude /foo`将排除传输中根目录名为"foo"的文件或目录。
-+ `--exclude foo/`将排除所有名为"foo"的目录。
-+ `--exclude /foo/*/bar` 将排除传输中根目录下"foo"目录再向下两层的"bar"文件。
-+ `--exclude /foo/**/bar` 将排除传输中根目录下"foo"目录再向下递归任意层次后名为"bar"的文件。("**"匹配任意多个层次的目录)
-+ 同时使用`--include */ --include *.c --exclude *` 将只包含所有目录和 C 源码文件，除此之外的所有文件和目录都被排除。
-+ 同时使用 `--include foo/ --include foo/bar.c --exclude *` 将只包含"foo"目录和"foo/bar.c"。("foo"目录必须显式包含，否则将被排除规则`--exclude *`排除掉)
-+ 对于 `dir_name/***` 来说，它将匹配 dir_name 下的所有层次的文件。注意，每个子路径元素会自顶向下逐层，被访问因此 `include/exclude` 匹配模式会对每个子路径元素的全路径名进行递归 (例如，要包含 `/foo/bar/baz`，则`/foo`和`/foo/bar`必须不能被排除)。实际上，排除匹配模式在发现有文件要传输时，此文件所在目录层次的排除遍历会被短路。如果排除了某个父目录，则更深层次的 include 模式匹配将无效，这在使用尾随`*`时尤为重要。例如，下面的例子不会正常工作：
+下面是逐层过滤模式的工作流程图：
 
-  ```
-  --include='/some/path/this-file-will-not-be-found'
-  --include='/file-is-included'
-  --exclude='*'
-  ```
+![逐层过滤模式流程图](../images/sync-layer-by-layer-filtering-mode-flow-chart.svg)
 
-  由于父目录 `some` 被规则`*`所排除，所以会失败。一种解决方式是请求包含层次结构中的所有目录，只需使用一个规则`--include */`(需放在`--include*`规则的前面) 即可，另一解决方式是为所有需要被访问的父目录增加特定包含规则。例如，下面的规则可以正常工作：
+例如有一个路径为 `a1/b1/c1.txt` 的文件，以及 3 个匹配模式 `--include 'a*.txt' --inlude 'c1.txt' --exclude 'c*.txt'`。在逐层过滤模式中，组成的序列就是 `a1`、`a1/b1`、`a1/b1/c1.txt`。具体匹配步骤为：
 
-  ```
-  --include /some/
-  --include /some/path/
-  --include /some/path/this-file-is-found
-  --include /file-also-included
-  --exclude *
+1. 第一层级的路径为 `a1`，根据匹配模式，结果是全部未匹配。进入下一层级；
+2. 第二层级的路径为 `a1/b1`，根据匹配模式，结果是全部未匹配。进入下一层级；
+3. 第三层级的路径为 `a1/b1/c1.txt`，根据匹配模式，将会匹配上 `--inlude 'c1.txt'` 模式。该模式的行为是「同步」，进入下一层级；
+4. 由于没有下一层级了，所以最终返回的行为是「同步」。
+
+上面的例子是到最后一层才匹配成功，除此之外可能还有两种情况：
+
+- 在最后一层之前匹配成功，且匹配模式是 exclude 模式，则直接返回「排除」行为作为最终结果，跳过后续的所有层级；
+- 所有层级都已经匹配完毕，但都未匹配上，此时也将会返回「同步」行为。
+
+一句话讲，逐层过滤模式就是按路径层级由高到低依次执行完整路径过滤，每层过滤只有两种结果：要么直接得到「排除」作为最终结果，要么进入下一层级。得到「同步」结果的唯一方式就是执行完所有过滤层级。
+
+以下是更多示例：
+
++ `--exclude /foo` 将排除所有根目录名为 `foo` 的文件或目录；
++ `--exclude foo/` 将排除所有名为 `foo` 的目录；
++ 对于 `dir_name/.../.../...` 这种多级目录来说，将按照目录层级匹配 `dir_name` 下的所有路径。如果某个文件的父目录被「排除」了，那即使加上了这个文件的 include 规则，也不会同步这个文件。如果想要同步这个文件就必须保证它的「所有父目录」都不要被排除。例如，下面的例子中 `/some/path/this-file-will-not-be-synced` 文件将不会被同步，因为它的父目录 `some` 已经被规则 `--exclude '*'` 所排除：
+
+  ```shell
+  --include '/some/path/this-file-will-not-be-synced' \
+  --exclude '*'
   ```
 
-逐层过滤的行为无论是理解还是使用都较为复杂，但是基本兼容 rsync 的 `include/exclude` 参数，所以一般推荐在兼容 rsync 行为的场景下采用。
+  一种解决方式是包含目录层级中的所有目录，也就是使用 `--include '*/'` 规则（需放在 `--exclude '*'` 规则的前面）；另一种解决方式是为所有父目录增加 include 规则，例如：
 
-### 目录结构与文件权限
+  ```shell
+  --include '/some/' \
+  --include '/some/path/' \
+  --include '/some/path/this-file-will-be-synced' \
+  --exclude '*'
+  ```
+
+逐层过滤模式的行为无论是理解还是使用都较为复杂，但是基本兼容 rsync 的 `--include/--exclude` 选项，所以一般推荐在需要兼容 rsync 行为的场景下使用。
+
+### 目录结构与文件权限 {#directory-structure-and-file-permissions}
 
 默认情况下，sync 命令只同步文件对象以及包含文件对象的目录，空目录不会被同步。如需同步空目录，可以使用 `--dirs` 选项。
 
 另外，在 local、SFTP、HDFS 等文件系统之间同步时，如需保持文件权限，可以使用 `--perms` 选项。
 
-### 拷贝符号链接
+### 拷贝符号链接 {#copy-symbolic-links}
 
 JuiceFS `sync` 在**本地目录之间**同步时，支持通过设置 `--links` 选项开启遇到符号链时同步其自身而不是其指向的对象的功能。同步后的符号链接指向的路径为源符号链接中存储的原始路径，无论该路径在同步前后是否可达都不会被转换。
 
@@ -311,9 +315,9 @@ juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa
 
 当前主机与两个 Worker 主机 `bob@192.168.1.20` 和 `tom@192.168.8.10` 将共同分担两个对象存储之间的数据同步任务。
 
-## 场景应用
+## 场景应用 {#application-scenarios}
 
-### 数据异地容灾备份
+### 数据异地容灾备份 {#geo-disaster-recovery-backup}
 
 异地容灾备份针对的是文件本身，因此应将 JuiceFS 中存储的文件同步到其他的对象存储，例如，将 [JuiceFS 文件系统](#required-storages) 中的文件同步到 [对象存储 A](#required-storages)：
 
@@ -326,7 +330,7 @@ juicefs sync /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 
 同步以后，在 [对象存储 A](#required-storages) 中可以直接看到所有的文件。
 
-### 建立 JuiceFS 数据副本
+### 建立 JuiceFS 数据副本 {#build-a-juicefs-data-copy}
 
 与面向文件本身的容灾备份不同，建立 JuiceFS 数据副本的目的是为 JuiceFS 的数据存储建立一个内容和结构完全相同的镜像，当使用中的对象存储发生了故障，可以通过修改配置切换到数据副本继续工作。需要注意这里仅复制了 JuiceFS 文件系统的数据，并没有复制元数据，元数据引擎的数据备份依然需要。
 

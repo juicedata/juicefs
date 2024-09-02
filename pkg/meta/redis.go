@@ -697,7 +697,7 @@ func (m *redisMeta) updateStats(space int64, inodes int64) {
 }
 
 // redisMeta updates the usage in each transaction
-func (m *redisMeta) flushStats() {}
+func (m *redisMeta) doFlushStats() {}
 
 func (m *redisMeta) handleLuaResult(op string, res interface{}, err error, returnedIno *int64, returnedAttr *string) syscall.Errno {
 	if err != nil {

@@ -56,7 +56,7 @@ type engine interface {
 	// Set counter name to value if old <= value - diff.
 	setIfSmall(name string, value, diff int64) (bool, error)
 	updateStats(space int64, inodes int64)
-	flushStats()
+	doFlushStats()
 
 	doLoad() ([]byte, error)
 
@@ -399,7 +399,7 @@ func (m *baseMeta) NewSession(record bool) error {
 	}
 
 	m.loadQuotas()
-	go m.en.flushStats()
+	go m.flushStats()
 	go m.flushDirStat()
 	go m.flushQuotas()
 
@@ -521,6 +521,7 @@ func (m *baseMeta) CloseSession() error {
 	if m.conf.ReadOnly {
 		return nil
 	}
+	m.en.doFlushStats()
 	m.doFlushDirStat()
 	m.doFlushQuotas()
 	m.sesMu.Lock()
@@ -1739,6 +1740,9 @@ func (m *baseMeta) walk(ctx Context, inode Ino, p string, attr *Attr, walkFn met
 		return st
 	}
 	for _, entry := range entries {
+		if ctx.Canceled() {
+			return syscall.EINTR
+		}
 		if !entry.Attr.Full {
 			entry.Attr.Parent = inode
 		}
@@ -2135,6 +2139,9 @@ func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 		// calc chunk index in local
 		chunkCnt := uint32((fAttr.Length + ChunkSize - 1) / ChunkSize)
 		for i := uint32(0); i < chunkCnt; i++ {
+			if ctx.Canceled() {
+				return
+			}
 			preFunc()
 			chunkChan <- cchunk{inode: fIno, indx: i}
 		}

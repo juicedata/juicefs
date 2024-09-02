@@ -222,7 +222,7 @@ func (s *rSlice) Remove() error {
 		// any of them should succeed if any blocks is removed
 		key := s.key(i)
 		s.store.removePending(key)
-		s.store.bcache.remove(key)
+		s.store.bcache.remove(key, true)
 	}
 
 	var err error
@@ -951,9 +951,6 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		<-store.currentUpload
 	}()
 
-	if !store.canUpload() {
-		return
-	}
 	store.pendingMutex.Lock()
 	item, ok := store.pendingKeys[key]
 	store.pendingMutex.Unlock()
@@ -961,6 +958,14 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		logger.Debugf("Key %s is not needed, drop it", key)
 		return
 	}
+	defer func() {
+		item.uploading = false
+	}()
+
+	if !store.canUpload() {
+		return
+	}
+
 	blen := parseObjOrigSize(key)
 	f, err := openCacheFile(stagingPath, blen, store.conf.CacheChecksum)
 	if err != nil {
@@ -997,8 +1002,6 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 				logger.Warnf("failed to remove stage %s, in upload staging file", stagingPath)
 			}
 		}
-	} else {
-		item.uploading = false
 	}
 }
 
@@ -1112,7 +1115,7 @@ func (store *cachedStore) EvictCache(id uint64, length uint32) error {
 	r := sliceForRead(id, int(length), store)
 	keys := r.keys()
 	for _, k := range keys {
-		store.bcache.remove(k)
+		store.bcache.remove(k, false)
 	}
 	return nil
 }
