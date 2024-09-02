@@ -411,7 +411,14 @@ func (m *kvMeta) fillAttr(entries []*Entry) (err error) {
 }
 
 func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
-	keys, _, err := m.doScanKV(prefix, nextKey(prefix), -1, nil)
+	var keys [][]byte
+	err := m.client.txn(func(tx *kvTxn) error {
+		tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
+			keys = append(keys, k)
+			return true
+		})
+		return nil
+	}, 0)
 	return keys, err
 }
 
@@ -3771,20 +3778,22 @@ func (m *kvMeta) loadDumpedACLs(ctx Context) error {
 
 type kvEntryScanner struct {
 	cache       []*Entry
+	initEntries []*Entry
 	cnt         int
 	m           *kvMeta
 	defaultCap  int
 	parentInode Ino
 	plus        bool
 
-	fetched     []*Entry
-	wg 	 sync.WaitGroup
+	fetched []*Entry
+	wg      sync.WaitGroup
 }
 
-func (m *kvMeta) NewMetaEntryScanner(inode Ino, plus bool) EntryScanner {
+func NewMetaEntryScanner(m *kvMeta, inode Ino, plus bool, initEntries []*Entry) EntryScanner {
 	c := &kvEntryScanner{
-		cache:       make([]*Entry, 0),
 		cnt:         0,
+		cache:       make([]*Entry, 0),
+		initEntries: initEntries,
 		m:           m,
 		parentInode: inode,
 		defaultCap:  DefaultCap,
@@ -3811,12 +3820,22 @@ func (sc *kvEntryScanner) GetData(start int) ([]*Entry, syscall.Errno) {
 		sc.wg.Add(1)
 		go sc.fetchEntries()
 	}
+
+	res := make([]*Entry, 0)
+	if start >= len(sc.initEntries) {
+		start -= len(sc.initEntries)
+	} else {
+		res = sc.initEntries[start:]
+		start = 0
+	}
+
 	if start < sc.cnt-len(sc.cache) {
 		// back to index 0, when 'start' not in the cache
 		doGetData()
 		sc.cnt = 0
 		sc.cache = make([]*Entry, 0)
 	}
+
 	for start >= sc.cnt {
 		// forward to start
 		doGetData()
@@ -3830,7 +3849,8 @@ func (sc *kvEntryScanner) GetData(start int) ([]*Entry, syscall.Errno) {
 	}
 
 	// start must be in the cache
-	return sc.cache[start-(sc.cnt-len(sc.cache)):], 0
+	res = append(res, sc.cache[start-(sc.cnt-len(sc.cache)):]...)
+	return res, 0
 }
 
 func (sc *kvEntryScanner) fetchEntries() {
@@ -3863,8 +3883,8 @@ func (sc *kvEntryScanner) fetchEntries() {
 	if entries != nil && sc.plus {
 		if err := sc.m.fillAttr(entries); err != nil {
 			sc.fetched = nil
+			return
 		}
 	}
 	sc.fetched = entries
 }
-

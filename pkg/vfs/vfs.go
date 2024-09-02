@@ -425,32 +425,35 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 	h.Lock()
 	defer h.Unlock()
 
-	if v.Conf.Meta.StreamingReadDir && h.sc == nil {
-		inter := make([]*meta.Entry, 0)
-		if ino == rootID && !v.Conf.HideInternal {
-			// add internal nodes
-			for _, node := range internalNodes[1:] {
-				inter = append(inter, &meta.Entry{
-					Inode: node.inode,
-					Name:  []byte(node.name),
-					Attr:  node.attr,
-				})
+	if v.Conf.Meta.StreamingReadDir {
+		if h.sc == nil {
+			var inodes []*meta.Entry = make([]*meta.Entry, 0)
+			if ino == rootID && !v.Conf.HideInternal {
+				// add internal nodes
+				for _, node := range internalNodes[1:] {
+					inodes = append(inodes, &meta.Entry{
+						Inode: node.inode,
+						Name:  []byte(node.name),
+						Attr:  node.attr,
+					})
+				}
+			}
+			var readPlus uint8 = 1
+			if !plus {
+				readPlus = 0
+			}
+			if h.sc, err = v.Meta.NewEntryScanner(ctx, ino, readPlus, inodes); err != 0 {
+				return
 			}
 		}
-		if plus {
-			h.sc, err = v.Meta.NewBaseEntryScanner(ctx, ino, 1, inter)
-		} else {
-			h.sc, err = v.Meta.NewBaseEntryScanner(ctx, ino, 0, inter)
-		}
-	}
-	if err == 0 && v.Conf.Meta.StreamingReadDir && h.sc.Valid() {
-		h.readAt = time.Now()
-		if rentries, rerr := h.sc.GetData(off); rerr != 0 {
+		if h.sc.Valid() {
+			if entries, err = h.sc.GetData(off); err != 0 {
+				return
+			}
+			readAt = time.Now()
+			logger.Debugf("readdir: %d entries streaming, off=%d", len(entries), off)
 			return
-		} else {
-			entries = rentries
 		}
-		return
 	}
 
 	if h.children == nil || off == 0 {

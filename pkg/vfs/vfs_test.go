@@ -985,7 +985,7 @@ func TestVFSReadDirSteaming(t *testing.T) {
 	}
 	parent := entry.Inode
 
-	for i := 0; i < n*meta.DefaultCap+40 ; i++ {
+	for i := 0; i < n*meta.DefaultCap+40; i++ {
 		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
 	}
 	fh, _ := v.Opendir(ctx, parent, 0)
@@ -1001,7 +1001,7 @@ func TestVFSReadDirSteaming(t *testing.T) {
 	if entries1 == nil {
 		t.Fatalf("read dir result should not be nil")
 	}
-	if len(entries1) != meta.DefaultCap-10+2 {
+	if len(entries1) != meta.DefaultCap+2-10 {
 		// cache index begin at 0, but there also has two special child '.' and '..'
 		// thus, the result should be meta.DefaultCap - off(10) + 2
 		t.Fatalf("streaming read dir result should be %d, but got %d", meta.DefaultCap-10+2, len(entries1))
@@ -1010,7 +1010,7 @@ func TestVFSReadDirSteaming(t *testing.T) {
 	if entries2 == nil {
 		t.Fatalf("read dir result should not be nil")
 	}
-	if len(entries2) != meta.DefaultCap{
+	if len(entries2) != meta.DefaultCap {
 		t.Fatalf("streaming read dir result should be %d, but got %d", meta.DefaultCap, len(entries2))
 	}
 
@@ -1025,8 +1025,24 @@ func TestVFSReadDirSteaming(t *testing.T) {
 	entries4, _, _ := v.Readdir(ctx, parent, 60, 10, fh, true)
 	for i := 0; i < len(entries1); i++ {
 		if string(entries1[i].Name) != string(entries4[i].Name) {
-			t.Fatalf("read dir result should be same")
+			t.Fatalf("read dir result should be same, index %d, entries1 %s, entries4 %s", i, entries1[i].Name, entries4[i].Name)
 		}
+	}
+
+	entrie5, _, _ := v.Readdir(ctx, parent, 60, 0, fh, true)
+	if entrie5 == nil {
+		t.Fatalf("read dir result should not be nil")
+	}
+	if len(entrie5) != meta.DefaultCap+2 {
+		t.Fatalf("streaming read dir result should be %d, but got %d", meta.DefaultCap+2, len(entrie5))
+	}
+	if string(entrie5[0].Name) != "." || string(entrie5[1].Name) != ".." {
+		t.Fatalf("streaming read dir result should contains '.' and '..'")
+	}
+
+	entrie6, _, _ := v.Readdir(ctx, parent, 60, 1, fh, true)
+	if len(entrie6) != meta.DefaultCap+1 {
+		t.Fatalf("streaming read dir result should be %d, but got %d", meta.DefaultCap+1, len(entrie6))
 	}
 	v.Releasedir(ctx, parent, fh)
 }

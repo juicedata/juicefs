@@ -121,8 +121,6 @@ type engine interface {
 	doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno
 	doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno
 	cacheACLs(ctx Context) error
-
-	NewMetaEntryScanner(Ino, bool) EntryScanner
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -1580,7 +1578,6 @@ func (m *baseMeta) getDotEntries(ctx Context, inode Ino, plus uint8) ([]*Entry, 
 }
 
 func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) (rerr syscall.Errno) {
-	defer m.timeit("Readdir", time.Now())
 	defer func() {
 		if rerr == 0 {
 			m.touchAtime(ctx, inode, nil)
@@ -1591,6 +1588,7 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	} else {
 		*entries = dotEntries
 	}
+	defer m.timeit("Readdir", time.Now())
 	st := m.en.doReaddir(ctx, inode, plus, entries, -1)
 	if st == syscall.ENOENT && inode == TrashInode {
 		st = 0
@@ -2827,70 +2825,22 @@ type EntryScanner interface {
 	Close()
 }
 
-type mockScanner struct{}
-
-func (b *mockScanner) GetData(int) ([]*Entry, syscall.Errno) {
-	return nil, 0
-}
-
-func (b *mockScanner) Close() {
-}
-
-func (b *mockScanner) Valid() bool {
-	return false
-}
-
-type MockMetaEntryScannerGen struct{}
-
-func (b *MockMetaEntryScannerGen) NewMetaEntryScanner(inode Ino, plus bool) EntryScanner {
-	return &mockScanner{}
-}
-
-type baseEntrySanner struct {
-	c              EntryScanner
-	m              *baseMeta
-	specialEntries []*Entry
-}
-
-func (sc *baseEntrySanner) Valid() bool {
-	return sc.c.Valid()
-}
-func (sc *baseEntrySanner) Close() {
-	sc.c.Close()
-}
-func (sc *baseEntrySanner) GetData(start int) ([]*Entry, syscall.Errno) {
-	defer sc.m.timeit("ScanEntries", time.Now())
-	if !sc.Valid() {
-		return nil, 0
-	}
-	res := make([]*Entry, 0)
-	if len(sc.specialEntries) > start {
-		res = append(res, sc.specialEntries[start:]...)
-		start = len(sc.specialEntries)
-	}
-	if entries, err := sc.c.GetData(start - len(sc.specialEntries)); err != 0 {
-		return make([]*Entry, 0), err
-	} else {
-		res = append(res, entries...)
-	}
-	return res, 0
-}
-
-func (m *baseMeta) NewBaseEntryScanner(ctx Context, inode Ino, plus uint8, InternalEntries []*Entry) (mc EntryScanner, rerr syscall.Errno) {
+func (m *baseMeta) NewEntryScanner(ctx Context, inode Ino, plus uint8, InternalEntries []*Entry) (mc EntryScanner, rerr syscall.Errno) {
 	defer func() {
 		if rerr != 0 {
 			m.touchAtime(ctx, inode, nil)
 		}
 	}()
-	entries, err := m.getDotEntries(ctx, inode, plus)
-	if err != 0 {
-		return &mockScanner{}, err
+	entries, rerr := m.getDotEntries(ctx, inode, plus)
+	if rerr != 0 {
+		return nil, rerr
 	}
 	entries = append(entries, InternalEntries...)
-	mc = &baseEntrySanner{
-		c:              m.en.NewMetaEntryScanner(inode, (plus == 1)),
-		m:              m,
-		specialEntries: entries,
+	km, ok := m.en.(*kvMeta)
+	if !ok {
+		logger.Errorf("streaming readdir only support kvMeta")
+		return nil, syscall.ENOSYS
 	}
+	mc = NewMetaEntryScanner(km, inode, plus == 1, entries)
 	return mc, 0
 }

@@ -88,7 +88,6 @@ type redisMeta struct {
 	prefix     string
 	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
 	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
-	*MockMetaEntryScannerGen
 }
 
 var _ Meta = &redisMeta{}

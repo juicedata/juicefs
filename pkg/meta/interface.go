@@ -457,7 +457,7 @@ type Meta interface {
 	SetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
 	GetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
 
-	NewBaseEntryScanner(ctx Context, inode Ino, plus uint8, InternalEntries []*Entry) (sc EntryScanner, rerr syscall.Errno)
+	NewEntryScanner(ctx Context, inode Ino, plus uint8, InternalEntries []*Entry) (sc EntryScanner, rerr syscall.Errno)
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)
