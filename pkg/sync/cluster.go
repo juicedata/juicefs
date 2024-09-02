@@ -254,11 +254,13 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			}
 			rpath := filepath.Join("/tmp", filepath.Base(path))
 			cmd := exec.Command("rsync", "-au", path, host+":"+rpath)
-			err = cmd.Run()
+			output, err := cmd.CombinedOutput()
+			logger.Debugf("exec: %s,err: %s", cmd.String(), string(output))
 			if err != nil {
 				// fallback to scp
 				cmd = exec.Command("scp", path, host+":"+rpath)
-				err = cmd.Run()
+				output, err = cmd.CombinedOutput()
+				logger.Debugf("exec: %s,err: %s", cmd.String(), string(output))
 			}
 			if err != nil {
 				logger.Errorf("copy itself to %s: %s", host, err)
