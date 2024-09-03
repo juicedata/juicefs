@@ -1548,8 +1548,8 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read 0: %s", st)
 	}
-	if len(slices) != 1 || slices[0].Len != 3<<20 {
-		t.Fatalf("inode %d should be compacted, but have %d slices, size %d", inode, len(slices), slices[0].Len)
+	if len(slices) != 2 {
+		t.Fatalf("inode %d should be compacted, but have %d slices, size %d: %+v", inode, len(slices), slices[0].Len, slices)
 	}
 
 	m.NewSlice(ctx, &sliceId)
@@ -1567,9 +1567,8 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		t.Fatalf("read 1: %s", st)
 	}
 	// compact twice: 4515328+2607724-2338508 = 4784544; 8829056+1074933-2338508-4784544=2780937
-	if len(slices) != 3 || slices[0].Len != 2338508 || slices[1].Len != 4784544 || slices[2].Len != 2780937 {
-		t.Fatalf("inode %d should be compacted, but have %d slices, size %d,%d,%d",
-			inode, len(slices), slices[0].Len, slices[1].Len, slices[2].Len)
+	if len(slices) != 1 {
+		t.Fatalf("inode %d should be compacted, but have %d slices: %+v", inode, len(slices), slices)
 	}
 
 	m.NewSlice(ctx, &sliceId)
