@@ -332,6 +332,9 @@ func TestCacheManager(t *testing.T) {
 	defer p1.Release()
 	m.cache(k1, p1, true, false)
 
+	exist := m.exist(k1)
+	require.True(t, exist)
+
 	s1 := m.getStore(k1)
 	require.NotNil(t, s1)
 

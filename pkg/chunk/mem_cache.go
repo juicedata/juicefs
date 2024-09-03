@@ -103,6 +103,9 @@ func (c *memcache) delete(key string, p *Page) {
 }
 
 func (c *memcache) remove(key string, staging bool) {
+	if c.capacity == 0 {
+		return
+	}
 	c.Lock()
 	defer c.Unlock()
 	if item, ok := c.pages[key]; ok {
@@ -112,6 +115,9 @@ func (c *memcache) remove(key string, staging bool) {
 }
 
 func (c *memcache) load(key string) (ReadCloser, error) {
+	if c.capacity == 0 {
+		return nil, errors.New("not found")
+	}
 	c.Lock()
 	defer c.Unlock()
 	if item, ok := c.pages[key]; ok {
@@ -119,6 +125,16 @@ func (c *memcache) load(key string) (ReadCloser, error) {
 		return NewPageReader(item.page), nil
 	}
 	return nil, errors.New("not found")
+}
+
+func (c *memcache) exist(key string) bool {
+	if c.capacity == 0 {
+		return false
+	}
+	c.Lock()
+	_, ok := c.pages[key]
+	c.Unlock()
+	return ok
 }
 
 // locked

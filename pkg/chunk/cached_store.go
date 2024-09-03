@@ -819,6 +819,9 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		if size == 0 || size > store.conf.BlockSize {
 			return
 		}
+		if store.bcache.exist(key) {
+			return
+		}
 		p := NewOffPage(size)
 		defer p.Release()
 		_ = store.load(key, p, true, true)

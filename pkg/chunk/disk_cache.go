@@ -631,6 +631,28 @@ func (cache *cacheStore) load(key string) (ReadCloser, error) {
 	return f, err
 }
 
+func (cache *cacheStore) exist(key string) bool {
+	cache.Lock()
+	if _, ok := cache.pages[key]; ok {
+		cache.Unlock()
+		return true
+	}
+	if cache.scanned {
+		k := cache.getCacheKey(key)
+		exist := cache.keys[k].atime > 0
+		cache.Unlock()
+		return exist
+	}
+	cache.Unlock()
+
+	var err error
+	err = cache.checkErr(func() error {
+		_, err = os.Stat(cache.cachePath(key))
+		return err
+	})
+	return err == nil
+}
+
 func (cache *cacheStore) cachePath(key string) string {
 	return filepath.Join(cache.dir, cacheDir, key)
 }
@@ -1013,6 +1035,7 @@ type CacheManager interface {
 	cache(key string, p *Page, force, dropCache bool)
 	remove(key string, staging bool)
 	load(key string) (ReadCloser, error)
+	exist(key string) bool
 	uploaded(key string, size int)
 	stage(key string, data []byte, keepCache bool) (string, error)
 	removeStage(key string) error
@@ -1190,6 +1213,14 @@ func (m *cacheManager) load(key string) (ReadCloser, error) {
 		}
 	}
 	return r, err
+}
+
+func (m *cacheManager) exist(key string) bool {
+	store := m.getStore(key)
+	if store == nil {
+		return false
+	}
+	return store.exist(key)
 }
 
 func (m *cacheManager) remove(key string, staging bool) {
