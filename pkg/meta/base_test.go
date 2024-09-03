@@ -41,6 +41,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testConfig() *Config {
@@ -3189,4 +3190,29 @@ func testAtime(t *testing.T, m Meta) {
 			t.Fatalf("Test %s: expected %v, got %v", name, exp, ret)
 		}
 	}
+}
+
+func TestSymlinkCache(t *testing.T) {
+	cache := newSymlinkCache(10000)
+
+	job := make(chan Ino)
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for ino := range job {
+				cache.Store(ino, []byte(fmt.Sprintf("file%d", ino)))
+			}
+		}()
+	}
+
+	for i := 0; i < 10000; i++ {
+		job <- Ino(i)
+	}
+	close(job)
+	wg.Wait()
+
+	cache.doClean()
+	require.Equal(t, int32(8000), cache.size.Load())
 }
