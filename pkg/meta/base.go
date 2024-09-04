@@ -178,11 +178,11 @@ type baseMeta struct {
 	dirParents map[Ino]Ino    // directory inode -> parent inode
 	dirQuotas  map[Ino]*Quota // directory inode -> quota
 
-	freeMu          sync.Mutex
-	freeInodes      freeID
-	freeSlices      freeID
-	prefetchMu      sync.Mutex
-	prefetchedInode uint64
+	freeMu           sync.Mutex
+	freeInodes       freeID
+	freeSlices       freeID
+	prefetchMu       sync.Mutex
+	prefetchedInodes freeID
 
 	usedSpaceG  prometheus.Gauge
 	usedInodesG prometheus.Gauge
@@ -953,20 +953,21 @@ func (m *baseMeta) nextInode() (Ino, error) {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeInodes.next >= m.freeInodes.maxid {
+
 		m.prefetchMu.Lock() // Wait until prefetchInodes() is done
-		nextLimit := m.prefetchedInode
+		if m.prefetchedInodes.maxid > m.freeInodes.maxid {
+			m.freeInodes = m.prefetchedInodes
+			m.prefetchedInodes = freeID{}
+		}
 		m.prefetchMu.Unlock()
-		if nextLimit <= m.freeInodes.maxid {
-			v, err := m.en.incrCounter("nextInode", inodeBatch)
+
+		if m.freeInodes.next >= m.freeInodes.maxid { // Prefetch missed, try again
+			nextInodes, err := m.allocateInodes()
 			if err != nil {
 				return 0, err
 			}
-			nextLimit = uint64(v)
-		} else {
-			logger.Debugf("Prefetch hit, next limit: %d", nextLimit)
+			m.freeInodes = nextInodes
 		}
-		m.freeInodes.next = nextLimit - inodeBatch
-		m.freeInodes.maxid = nextLimit
 	}
 	n := m.freeInodes.next
 	m.freeInodes.next++
@@ -983,15 +984,23 @@ func (m *baseMeta) nextInode() (Ino, error) {
 func (m *baseMeta) prefetchInodes() {
 	m.prefetchMu.Lock()
 	defer m.prefetchMu.Unlock()
-	if m.prefetchedInode > m.freeInodes.maxid {
+	if m.prefetchedInodes.maxid > m.freeInodes.maxid {
 		return // Someone else has done the job
 	}
-	v, err := m.en.incrCounter("nextInode", inodeBatch)
+	nextInodes, err := m.allocateInodes()
 	if err == nil {
-		m.prefetchedInode = uint64(v)
+		m.prefetchedInodes = nextInodes
 	} else {
-		logger.Warnf("prefetchInodes: %s, current limit: %d", err, m.freeInodes.maxid)
+		logger.Warnf("Failed to prefetch inodes: %s, current limit: %d", err, m.freeInodes.maxid)
 	}
+}
+
+func (m *baseMeta) allocateInodes() (freeID, error) {
+	v, err := m.en.incrCounter("nextInode", inodeBatch)
+	if err != nil {
+		return freeID{}, err
+	}
+	return freeID{next: uint64(v) - inodeBatch, maxid: uint64(v)}, nil
 }
 
 func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
