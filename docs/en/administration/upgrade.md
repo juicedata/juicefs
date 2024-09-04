@@ -8,6 +8,8 @@ Upgrade methods vary with different JuiceFS clients.
 
 ## Mount point
 
+### Normal upgrade
+
 The JuiceFS client only has one binary file. So to upgrade the new version, you only need to replace the old one with the new one.
 
 - **Use pre-compiled client**: Refer to [Install the pre-compiled client](../getting-started/installation.md#install-the-pre-compiled-client) for details.
@@ -18,6 +20,42 @@ For the file system that has been mounted using the old version of JuiceFS clien
 
 When unmounting the file system, make sure that no application is accessing it. Otherwise the unmount will fail. Do not forcibly unmount the file system, as it may cause the application unable to continue to access it as expected.
 :::
+
+### Smooth Upgrade
+
+Starting from version v1.2, JuiceFS supports the smooth upgrade feature, which allows you to mount JuiceFS again at the same mount point to achieve a seamless client upgrade. In addition, this feature can also be used to dynamically adjust mount parameters.
+
+Here are two common scenarios for illustration:
+
+1. Client Upgrade
+   For example, if there is a `juicefs mount` process `juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d`, and you want to deploy a new JuiceFS client without unmounting the mount point, you can perform the following steps:
+
+   ```shell
+    # 1. Backup the current binary
+    cp juicefs juicefs.bak
+   
+    # 2. Download the new binary to overwrite the current juicefs binary
+   
+    # 3. Execute the juicefs mount command again to complete the smooth upgrade
+    juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d
+    ```
+
+2. Dynamically Adjust Mount Parameters
+
+For example, if there is a `juicefs mount` process `juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d`, and you want to adjust the log level to debug without unmounting the mount point, you can execute the following command:
+
+```shell
+# Adjust the log level
+juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs --debug -d
+```
+
+Some notes:
+
+1. The smooth upgrade requires that the JuiceFS client versions of both the old and new processes are at least v1.2.
+
+2. The FUSE parameters in the new mount parameters should be consistent with the old mount parameters, otherwise the smooth upgrade will continue to overwrite the mount at the current mount point.
+
+3. When `enable-xattr` is turned on, the smooth upgrade will continue to overwrite the mount at the current mount point.
 
 ## Kubernetes CSI Driver
 
