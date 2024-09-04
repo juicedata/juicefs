@@ -40,9 +40,10 @@ import (
 )
 
 const (
-	inodeBatch   = 1 << 10
-	sliceIdBatch = 4 << 10
-	nlocks       = 1024
+	inodeBatch     = 1 << 10
+	sliceIdBatch   = 4 << 10
+	nlocks         = 1024
+	maxSymCacheNum = int32(10000)
 )
 
 var maxCompactSlices = 1000
@@ -144,6 +145,47 @@ type cchunk struct {
 	slices int
 }
 
+type symlinkCache struct {
+	*sync.Map
+	size atomic.Int32
+	cap  int32
+}
+
+func newSymlinkCache(cap int32) *symlinkCache {
+	return &symlinkCache{
+		Map: &sync.Map{},
+		cap: cap,
+	}
+}
+
+func (symCache *symlinkCache) Store(inode Ino, path []byte) {
+	if _, loaded := symCache.Swap(inode, path); !loaded {
+		symCache.size.Add(1)
+	}
+}
+
+func (symCache *symlinkCache) clean() {
+	for {
+		time.Sleep(time.Minute)
+		symCache.doClean()
+	}
+}
+
+func (symCache *symlinkCache) doClean() {
+	if symCache.size.Load() < int32(float64(symCache.cap)*0.75) {
+		return
+	}
+
+	todo := symCache.size.Load() / 5
+	cnt := int32(0)
+	symCache.Range(func(key, value interface{}) bool {
+		symCache.Delete(key)
+		symCache.size.Add(-1)
+		cnt++
+		return cnt < todo
+	})
+}
+
 type baseMeta struct {
 	sync.Mutex
 	addr string
@@ -159,7 +201,7 @@ type baseMeta struct {
 	compacting   map[uint64]bool
 	maxDeleting  chan struct{}
 	dslices      chan Slice // slices to delete
-	symlinks     *sync.Map
+	symlinks     *symlinkCache
 	msgCallbacks *msgCallbacks
 	reloadCb     []func(*Format)
 	umounting    bool
@@ -200,7 +242,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
 		maxDeleting:  make(chan struct{}, 100),
-		symlinks:     &sync.Map{},
+		symlinks:     newSymlinkCache(maxSymCacheNum),
 		fsStat:       new(fsStat),
 		dirStats:     make(map[Ino]dirStat),
 		dirParents:   make(map[Ino]Ino),
@@ -417,6 +459,7 @@ func (m *baseMeta) NewSession(record bool) error {
 		go m.cleanupDeletedFiles()
 		go m.cleanupSlices()
 		go m.cleanupTrash()
+		go m.symlinks.clean()
 	}
 	return nil
 }
