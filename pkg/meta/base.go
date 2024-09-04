@@ -45,8 +45,11 @@ const (
 	nlocks       = 1024
 )
 
-var maxCompactSlices = 1000
-var maxSlices = 2500
+var (
+	maxCompactSlices  = 1000
+	maxSlices         = 2500
+	inodeNeedPrefetch = uint64(utils.JitterIt(inodeBatch * 0.1)) // Add jitter to reduce probability of txn conflicts
+)
 
 type engine interface {
 	// Get the value of counter name.
@@ -971,7 +974,7 @@ func (m *baseMeta) nextInode() (Ino, error) {
 		n = m.freeInodes.next
 		m.freeInodes.next++
 	}
-	if m.freeInodes.maxid-m.freeInodes.next < uint64(utils.JitterIt(inodeBatch*0.1)) {
+	if m.freeInodes.maxid-m.freeInodes.next == inodeNeedPrefetch {
 		go m.prefetchInodes()
 	}
 	return Ino(n), nil
