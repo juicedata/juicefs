@@ -258,7 +258,7 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			logger.Debugf("exec: %s,err: %s", cmd.String(), string(output))
 			if err != nil {
 				// fallback to scp
-				cmd = exec.Command("scp", path, host+":"+rpath)
+				cmd = exec.Command("scp", "-o", "StrictHostKeyChecking=no", path, host+":"+rpath)
 				output, err = cmd.CombinedOutput()
 				logger.Debugf("exec: %s,err: %s", cmd.String(), string(output))
 			}
