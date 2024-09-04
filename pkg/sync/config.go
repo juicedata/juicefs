@@ -35,6 +35,7 @@ type Config struct {
 	Update         bool
 	ForceUpdate    bool
 	Perms          bool
+	FailFast       bool
 	Dry            bool
 	DeleteSrc      bool
 	DeleteDst      bool
@@ -151,6 +152,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Perms:          c.Bool("perms"),
 		Dirs:           c.Bool("dirs"),
 		Dry:            c.Bool("dry"),
+		FailFast:       c.Bool("fail-fast"),
 		DeleteSrc:      c.Bool("delete-src"),
 		DeleteDst:      c.Bool("delete-dst"),
 		Exclude:        c.StringSlice("exclude"),

@@ -204,6 +204,10 @@ func syncActionFlags() []cli.Flag {
 			Usage: "verify integrity of newly copied files",
 		},
 		&cli.BoolFlag{
+			Name:  "fail-fast",
+			Usage: "exit as soon as the transfer encounters an error",
+		},
+		&cli.BoolFlag{
 			Name:  "dry",
 			Usage: "don't copy file",
 		},

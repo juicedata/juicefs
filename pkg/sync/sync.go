@@ -1282,8 +1282,55 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if config.DeleteSrc || config.DeleteDst {
 		deleted = progress.AddCountSpinner("Deleted objects")
 	}
+
+	syncExitFunc := func() error {
+		pending.SetCurrent(0)
+		total := handled.GetTotal()
+		progress.Done()
+
+		if config.Manager == "" {
+			msg := fmt.Sprintf("Found: %d, skipped: %d (%s), copied: %d (%s)",
+				total, skipped.Current(), formatSize(skippedBytes.Current()), copied.Current(), formatSize(copiedBytes.Current()))
+			if checked != nil {
+				msg += fmt.Sprintf(", checked: %d (%s)", checked.Current(), formatSize(checkedBytes.Current()))
+			}
+			if deleted != nil {
+				msg += fmt.Sprintf(", deleted: %d", deleted.Current())
+			}
+			if failed != nil {
+				msg += fmt.Sprintf(", failed: %d", failed.Current())
+			}
+			if total-handled.Current() > 0 {
+				msg += fmt.Sprintf(", lost: %d", total-handled.Current())
+			}
+			logger.Info(msg)
+		} else {
+			sendStats(config.Manager)
+			logger.Debugf("This worker process has already completed its task")
+		}
+		if failed != nil {
+			if n := failed.Current(); n > 0 || total > handled.Current() {
+				return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
+			}
+		}
+		return nil
+	}
+
 	if !config.Dry {
 		failed = progress.AddCountSpinner("Failed objects")
+		if config.FailFast {
+			go func() {
+				for {
+					if failed.Current() > 0 {
+						logger.Infof("A transmission error occurred and the quick exit process began")
+						if syncExitFunc() != nil {
+							os.Exit(1)
+						}
+					}
+					time.Sleep(time.Millisecond * 100)
+				}
+			}()
+		}
 	}
 	go func() {
 		for {
@@ -1337,36 +1384,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	wg.Wait()
-	pending.SetCurrent(0)
-	total := handled.GetTotal()
-	progress.Done()
-
-	if config.Manager == "" {
-		msg := fmt.Sprintf("Found: %d, skipped: %d (%s), copied: %d (%s)",
-			total, skipped.Current(), formatSize(skippedBytes.Current()), copied.Current(), formatSize(copiedBytes.Current()))
-		if checked != nil {
-			msg += fmt.Sprintf(", checked: %d (%s)", checked.Current(), formatSize(checkedBytes.Current()))
-		}
-		if deleted != nil {
-			msg += fmt.Sprintf(", deleted: %d", deleted.Current())
-		}
-		if failed != nil {
-			msg += fmt.Sprintf(", failed: %d", failed.Current())
-		}
-		if total-handled.Current() > 0 {
-			msg += fmt.Sprintf(", lost: %d", total-handled.Current())
-		}
-		logger.Info(msg)
-	} else {
-		sendStats(config.Manager)
-		logger.Debugf("This worker process has already completed its task")
-	}
-	if failed != nil {
-		if n := failed.Current(); n > 0 || total > handled.Current() {
-			return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
-		}
-	}
-	return nil
+	return syncExitFunc()
 }
 
 func initSyncMetrics(config *Config) {
