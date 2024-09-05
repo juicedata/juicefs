@@ -109,7 +109,7 @@ public class JuiceFileSystem extends FilterFileSystem {
   public String getScheme() {
     StackTraceElement[] elements = Thread.currentThread().getStackTrace();
     if (elements[2].getClassName().equals("org.apache.flink.runtime.fs.hdfs.HadoopRecoverableWriter") &&
-            elements[2].getMethodName().equals("<init>")) {
+        (elements[2].getMethodName().equals("<init>") || elements[2].getMethodName().equals("checkSupportedFSSchemes"))) {
       return "hdfs";
     }
     return fs.getScheme();

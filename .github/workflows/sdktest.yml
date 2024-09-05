@@ -71,6 +71,7 @@ jobs:
           cd sdk/java
           sudo mvn test -B
           sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
+          sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true -Dflink.version=1.17.2 -Dtest=io.juicefs.JuiceFileSystemTest#testFlinkHadoopRecoverableWriter 
           expect=$(git rev-parse --short HEAD | cut -b 1-7)
           ls /tmp/libjfs* | grep $expect
 
