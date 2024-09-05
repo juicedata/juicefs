@@ -1318,11 +1318,11 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	if !config.Dry {
 		failed = progress.AddCountSpinner("Failed objects")
-		if config.FailFast {
+		if config.MaxFailure > 0 {
 			go func() {
 				for {
-					if failed.Current() > 0 {
-						logger.Infof("A transmission error occurred and the quick exit process began")
+					if failed.Current() >= config.MaxFailure {
+						logger.Infof("%d transmission error occurred and the quick exit process began", config.MaxFailure)
 						if syncExitFunc() != nil {
 							os.Exit(1)
 						}
