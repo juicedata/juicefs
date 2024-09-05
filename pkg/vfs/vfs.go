@@ -710,7 +710,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 
 	defer func() {
 		readSizeHistogram.Observe(float64(n))
-		logit(ctx, "read", err, "(%d,%d,%d): (%d)", ino, size, off, n)
+		logit(ctx, "read", err, "(%d,%d,%d,%d): (%d)", ino, size, off, fh, n)
 	}()
 	h := v.findHandle(ino, fh)
 	if h == nil {
