@@ -1322,7 +1322,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			go func() {
 				for {
 					if failed.Current() >= config.MaxFailure {
-						logger.Infof("%d transmission error occurred and the quick exit process began", config.MaxFailure)
+						logger.Infof("the maximum error limit of %d was reached, triggering the quick exit process", config.MaxFailure)
 						if syncExitFunc() != nil {
 							os.Exit(1)
 						}
