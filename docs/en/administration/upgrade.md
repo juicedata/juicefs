@@ -28,7 +28,7 @@ Starting from version v1.2, JuiceFS supports the smooth upgrade feature, which a
 Here are two common scenarios for illustration:
 
 - Client upgrade
-   For example, if there is a `juicefs mount` process `juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d`, and you want to deploy a new JuiceFS client without unmounting the mount point, you can perform the following steps:
+    For example, if you have a `juicefs mount` process like `juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d` and want to upgrade to a new JuiceFS client without unmounting, perform the following steps:
 
     ```shell
     # 1. Backup the current binary
