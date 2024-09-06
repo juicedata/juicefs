@@ -42,7 +42,7 @@ Here are two common scenarios for illustration:
 
 - Dynamically adjusting mount parameters
 
-For example, if there is a `juicefs mount` process `juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d`, and you want to adjust the log level to debug without unmounting the mount point, you can execute the following command:
+    For example, if you have a `juicefs mount` process like `juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d` and want to adjust the log level to debug without unmounting, execute the following command:
 
 ```shell
 # Adjust the log level
