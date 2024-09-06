@@ -184,11 +184,18 @@ func skipSome(chunk []*slice) (int, int) {
 	var skipped int
 	var total = len(chunk)
 	_, size, _ := compactChunk(chunk)
+OUT:
 	for skipped+1 < total {
 		_, size1, _ := compactChunk(chunk[skipped+1:])
 		reduced := size - size1
-		if size1 == 0 || reduced < chunk[skipped].len || reduced*5 < size || reduced < 2<<20 {
+		pos, length := chunk[skipped].pos, chunk[skipped].len
+		if size1 == 0 || reduced < length || reduced*5 < size || reduced < 2<<20 {
 			break
+		}
+		for _, s := range chunk[skipped+1:] {
+			if s.id == 0 && pos+length > s.pos && s.pos+s.len > pos {
+				break OUT
+			}
 		}
 		size = size1
 		skipped++
