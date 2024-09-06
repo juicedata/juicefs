@@ -180,11 +180,11 @@ func compactChunk(ss []*slice) (uint32, uint32, []Slice) {
 	return pos, size, chunk
 }
 
-func skipSome(chunk []*slice) int {
+func skipSome(chunk []*slice) (int, int) {
 	var skipped int
 	var total = len(chunk)
 	_, size, _ := compactChunk(chunk)
-	for skipped < total {
+	for skipped+1 < total {
 		_, size1, _ := compactChunk(chunk[skipped+1:])
 		reduced := size - size1
 		if size1 == 0 || reduced < chunk[skipped].len || reduced*5 < size || reduced < 2<<20 {
@@ -193,5 +193,18 @@ func skipSome(chunk []*slice) int {
 		size = size1
 		skipped++
 	}
-	return skipped
+	tail := total
+	for skipped+1 < tail {
+		if chunk[tail-1].id == 0 {
+			break
+		}
+		_, size1, _ := compactChunk(chunk[skipped : tail-1])
+		reduced := size - size1
+		if size1 == 0 || reduced < chunk[tail-1].len || reduced*5 < size || reduced < 2<<20 {
+			break
+		}
+		size = size1
+		tail--
+	}
+	return skipped, tail
 }
