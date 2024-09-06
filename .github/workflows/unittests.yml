@@ -9,6 +9,7 @@ on:
       - 'docs/**'
       - '**.md'
       - '**.java'
+      - '**/pom.xml'
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
@@ -20,6 +21,7 @@ on:
       - '.github/**'
       - '!.github/workflows/unittests.yml'
       - '**.java'
+      - '**/pom.xml'
   workflow_dispatch:
     inputs:
       debug:
