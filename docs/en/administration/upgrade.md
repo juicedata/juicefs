@@ -21,7 +21,7 @@ For the file system that has been mounted using the old version of JuiceFS clien
 When unmounting the file system, make sure that no application is accessing it. Otherwise the unmount will fail. Do not forcibly unmount the file system, as it may cause the application unable to continue to access it as expected.
 :::
 
-### Smooth Upgrade
+### Smooth upgrade
 
 Starting from version v1.2, JuiceFS supports the smooth upgrade feature, which allows you to mount JuiceFS again at the same mount point to achieve a seamless client upgrade. In addition, this feature can also be used to dynamically adjust mount parameters.
 
