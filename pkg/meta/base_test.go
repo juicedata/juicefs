@@ -1541,14 +1541,14 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	_ = m.Write(ctx, inode, 0, uint32(0), Slice{Id: sliceId, Size: 1 << 20, Len: 64 << 10}, time.Now())
 	m.NewSlice(ctx, &sliceId)
 	_ = m.Write(ctx, inode, 0, uint32(128<<10), Slice{Id: sliceId, Size: 2 << 20, Len: 128 << 10}, time.Now())
-	_ = m.Write(ctx, inode, 0, uint32(0), Slice{Id: 0, Size: 1 << 20, Len: 1 << 20}, time.Now())
+	_ = m.Fallocate(ctx, inode, fallocZeroRange, 0, 1<<20, nil)
 	if c, ok := m.(compactor); ok {
 		c.compactChunk(inode, 0, false, true)
 	}
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read 0: %s", st)
 	}
-	if len(slices) != 3 || slices[0].Len != 589824 || slices[1].Len != 458752 || slices[2].Len != 2097152 {
+	if len(slices) != 2 || slices[0].Len != 1048576 || slices[1].Len != 2097152 {
 		t.Fatalf("inode %d should be compacted, but have %d slices: %+v", inode, len(slices), slices)
 	}
 
