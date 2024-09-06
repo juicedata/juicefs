@@ -49,7 +49,7 @@ Here are two common scenarios for illustration:
 juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs --debug -d
     ```
 
-Some notes:
+Notes:
 
 - Smooth upgrades require both old and new JuiceFS client versions to be v1.2 or higher.
 
