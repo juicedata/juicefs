@@ -53,7 +53,7 @@ Notes:
 
 - Smooth upgrades require both old and new JuiceFS client versions to be v1.2 or higher.
 
-2. The FUSE parameters in the new mount parameters should be consistent with the old mount parameters, otherwise the smooth upgrade will continue to overwrite the mount at the current mount point.
+- The FUSE parameters in the new mount parameters should be consistent with the old mount parameters, otherwise the smooth upgrade will overwrite the mount at the current mount point.
 
 - When `enable-xattr` is enabled, smooth upgrade will overwrite the mount at the current mount point.
 
