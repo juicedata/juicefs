@@ -40,7 +40,7 @@ Here are two common scenarios for illustration:
     juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d
     ```
 
-2. Dynamically Adjust Mount Parameters
+- Dynamically adjusting mount parameters
 
 For example, if there is a `juicefs mount` process `juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d`, and you want to adjust the log level to debug without unmounting the mount point, you can execute the following command:
 
