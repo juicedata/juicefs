@@ -8,6 +8,7 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
+      - '**.java'
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
@@ -18,6 +19,7 @@ on:
       - '**.md'
       - '.github/**'
       - '!.github/workflows/unittests.yml'
+      - '**.java'
   workflow_dispatch:
     inputs:
       debug:

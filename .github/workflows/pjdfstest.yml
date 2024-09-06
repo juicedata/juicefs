@@ -9,6 +9,7 @@ on:
       - 'docs/**'
       - '**.md'
       - '.github/**'
+      - '**.java'
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
@@ -18,6 +19,7 @@ on:
       - 'docs/**'
       - '**.md'
       - '.github/**'
+      - '**.java'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:
