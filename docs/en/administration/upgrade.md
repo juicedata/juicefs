@@ -30,7 +30,7 @@ Here are two common scenarios for illustration:
 - Client upgrade
    For example, if there is a `juicefs mount` process `juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs -d`, and you want to deploy a new JuiceFS client without unmounting the mount point, you can perform the following steps:
 
-   ```shell
+    ```shell
     # 1. Backup the current binary
     cp juicefs juicefs.bak
    
