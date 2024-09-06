@@ -47,7 +47,7 @@ Here are two common scenarios for illustration:
 ```shell
 # Adjust the log level
 juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs --debug -d
-```
+    ```
 
 Some notes:
 
