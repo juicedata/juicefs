@@ -55,7 +55,7 @@ Some notes:
 
 2. The FUSE parameters in the new mount parameters should be consistent with the old mount parameters, otherwise the smooth upgrade will continue to overwrite the mount at the current mount point.
 
-3. When `enable-xattr` is turned on, the smooth upgrade will continue to overwrite the mount at the current mount point.
+- When `enable-xattr` is enabled, smooth upgrade will overwrite the mount at the current mount point.
 
 ## Kubernetes CSI Driver
 
