@@ -51,7 +51,7 @@ juicefs mount redis://127.0.0.1:6379/0 /mnt/jfs --debug -d
 
 Some notes:
 
-1. The smooth upgrade requires that the JuiceFS client versions of both the old and new processes are at least v1.2.
+- Smooth upgrades require both old and new JuiceFS client versions to be v1.2 or higher.
 
 2. The FUSE parameters in the new mount parameters should be consistent with the old mount parameters, otherwise the smooth upgrade will continue to overwrite the mount at the current mount point.
 
