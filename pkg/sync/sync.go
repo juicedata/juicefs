@@ -18,6 +18,7 @@ package sync
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -614,93 +615,108 @@ func copyData(src, dst object.ObjectStorage, key string, size int64) error {
 	return err
 }
 
-func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *Config) {
-	for obj := range tasks {
-		key := obj.Key()
-		switch obj.Size() {
-		case markDeleteSrc:
-			deleteObj(src, key, config.Dry)
-		case markDeleteDst:
-			deleteObj(dst, key, config.Dry)
-		case markCopyPerms:
-			if config.Dry {
-				logger.Debugf("Will copy permissions for %s", key)
-			} else {
-				copyPerms(dst, obj, config)
+func worker(ctx context.Context, cancel context.CancelFunc, tasks <-chan object.Object, src, dst object.ObjectStorage, config *Config) {
+	for {
+		select {
+		case <-ctx.Done():
+			// cancel
+			return
+		case obj, ok := <-tasks:
+			if !ok {
+				// closed
+				return
 			}
-			copied.Increment()
-		case markChecksum:
-			if config.Dry {
-				logger.Debugf("Will compare checksum for %s", key)
-				checked.Increment()
-				break
+			if config.MaxFailure > 0 && failed.Current() >= config.MaxFailure {
+				logger.Infof("the maximum error limit of %d was reached, triggering the quick exit process", config.MaxFailure)
+				cancel()
+				return
 			}
-			obj = obj.(*withSize).Object
-			if equal, err := checkSum(src, dst, key, obj, config); err != nil {
-				failed.Increment()
-				break
-			} else if equal {
-				if config.DeleteSrc {
-					deleteObj(src, key, false)
-				} else if config.Perms {
-					if o, e := dst.Head(key); e == nil {
-						if needCopyPerms(obj, o) {
-							copyPerms(dst, obj, config)
-							copied.Increment()
-						} else {
-							skipped.Increment()
-							skippedBytes.IncrInt64(obj.Size())
-						}
-					} else {
-						logger.Warnf("Failed to head object %s: %s", key, e)
-						failed.Increment()
-					}
+			key := obj.Key()
+			switch obj.Size() {
+			case markDeleteSrc:
+				deleteObj(src, key, config.Dry)
+			case markDeleteDst:
+				deleteObj(dst, key, config.Dry)
+			case markCopyPerms:
+				if config.Dry {
+					logger.Debugf("Will copy permissions for %s", key)
 				} else {
-					skipped.Increment()
-					skippedBytes.IncrInt64(obj.Size())
-				}
-				break
-			}
-			// checkSum not equal, copy the object
-			fallthrough
-		default:
-			if config.Dry {
-				logger.Debugf("Will copy %s (%d bytes)", obj.Key(), obj.Size())
-				copied.Increment()
-				copiedBytes.IncrInt64(obj.Size())
-				break
-			}
-			var err error
-			if config.Links && obj.IsSymlink() {
-				if err = copyLink(src, dst, key); err != nil {
-					logger.Errorf("copy link failed: %s", err)
-				}
-			} else {
-				err = copyData(src, dst, key, obj.Size())
-			}
-
-			if err == nil && (config.CheckAll || config.CheckNew) {
-				var equal bool
-				if equal, err = checkSum(src, dst, key, obj, config); err == nil && !equal {
-					err = fmt.Errorf("checksums of copied object %s don't match", key)
-				}
-			}
-			if err == nil {
-				if mc, ok := dst.(object.MtimeChanger); ok {
-					if err = mc.Chtimes(obj.Key(), obj.Mtime()); err != nil && !errors.Is(err, utils.ENOTSUP) {
-						logger.Warnf("Update mtime of %s: %s", key, err)
-					}
-				}
-				if config.Perms {
 					copyPerms(dst, obj, config)
 				}
 				copied.Increment()
-			} else {
-				failed.Increment()
-				logger.Errorf("Failed to copy object %s: %s", key, err)
+			case markChecksum:
+				if config.Dry {
+					logger.Debugf("Will compare checksum for %s", key)
+					checked.Increment()
+					break
+				}
+				obj = obj.(*withSize).Object
+				if equal, err := checkSum(src, dst, key, obj, config); err != nil {
+					failed.Increment()
+					break
+				} else if equal {
+					if config.DeleteSrc {
+						deleteObj(src, key, false)
+					} else if config.Perms {
+						if o, e := dst.Head(key); e == nil {
+							if needCopyPerms(obj, o) {
+								copyPerms(dst, obj, config)
+								copied.Increment()
+							} else {
+								skipped.Increment()
+								skippedBytes.IncrInt64(obj.Size())
+							}
+						} else {
+							logger.Warnf("Failed to head object %s: %s", key, e)
+							failed.Increment()
+						}
+					} else {
+						skipped.Increment()
+						skippedBytes.IncrInt64(obj.Size())
+					}
+					break
+				}
+				// checkSum not equal, copy the object
+				fallthrough
+			default:
+				if config.Dry {
+					logger.Debugf("Will copy %s (%d bytes)", obj.Key(), obj.Size())
+					copied.Increment()
+					copiedBytes.IncrInt64(obj.Size())
+					break
+				}
+				var err error
+				if config.Links && obj.IsSymlink() {
+					if err = copyLink(src, dst, key); err != nil {
+						logger.Errorf("copy link failed: %s", err)
+					}
+				} else {
+					err = copyData(src, dst, key, obj.Size())
+				}
+
+				if err == nil && (config.CheckAll || config.CheckNew) {
+					var equal bool
+					if equal, err = checkSum(src, dst, key, obj, config); err == nil && !equal {
+						err = fmt.Errorf("checksums of copied object %s don't match", key)
+					}
+				}
+				if err == nil {
+					if mc, ok := dst.(object.MtimeChanger); ok {
+						if err = mc.Chtimes(obj.Key(), obj.Mtime()); err != nil && !errors.Is(err, utils.ENOTSUP) {
+							logger.Warnf("Update mtime of %s: %s", key, err)
+						}
+					}
+					if config.Perms {
+						copyPerms(dst, obj, config)
+					}
+					copied.Increment()
+				} else {
+					failed.Increment()
+					logger.Errorf("Failed to copy object %s: %s", key, err)
+				}
 			}
+			handled.Increment()
 		}
-		handled.Increment()
 	}
 }
 
@@ -1282,55 +1298,8 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if config.DeleteSrc || config.DeleteDst {
 		deleted = progress.AddCountSpinner("Deleted objects")
 	}
-
-	syncExitFunc := func() error {
-		pending.SetCurrent(0)
-		total := handled.GetTotal()
-		progress.Done()
-
-		if config.Manager == "" {
-			msg := fmt.Sprintf("Found: %d, skipped: %d (%s), copied: %d (%s)",
-				total, skipped.Current(), formatSize(skippedBytes.Current()), copied.Current(), formatSize(copiedBytes.Current()))
-			if checked != nil {
-				msg += fmt.Sprintf(", checked: %d (%s)", checked.Current(), formatSize(checkedBytes.Current()))
-			}
-			if deleted != nil {
-				msg += fmt.Sprintf(", deleted: %d", deleted.Current())
-			}
-			if failed != nil {
-				msg += fmt.Sprintf(", failed: %d", failed.Current())
-			}
-			if total-handled.Current() > 0 {
-				msg += fmt.Sprintf(", lost: %d", total-handled.Current())
-			}
-			logger.Info(msg)
-		} else {
-			sendStats(config.Manager)
-			logger.Debugf("This worker process has already completed its task")
-		}
-		if failed != nil {
-			if n := failed.Current(); n > 0 || total > handled.Current() {
-				return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
-			}
-		}
-		return nil
-	}
-
 	if !config.Dry {
 		failed = progress.AddCountSpinner("Failed objects")
-		if config.MaxFailure > 0 {
-			go func() {
-				for {
-					if failed.Current() >= config.MaxFailure {
-						logger.Infof("the maximum error limit of %d was reached, triggering the quick exit process", config.MaxFailure)
-						if syncExitFunc() != nil {
-							os.Exit(1)
-						}
-					}
-					time.Sleep(time.Millisecond * 100)
-				}
-			}()
-		}
 	}
 	go func() {
 		for {
@@ -1340,11 +1309,12 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}()
 
 	initSyncMetrics(config)
+	ctx, cancel := context.WithCancel(context.TODO())
 	for i := 0; i < config.Threads; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			worker(tasks, src, dst, config)
+			worker(ctx, cancel, tasks, src, dst, config)
 		}()
 	}
 
@@ -1384,7 +1354,36 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	wg.Wait()
-	return syncExitFunc()
+	pending.SetCurrent(0)
+	total := handled.GetTotal()
+	progress.Done()
+
+	if config.Manager == "" {
+		msg := fmt.Sprintf("Found: %d, skipped: %d (%s), copied: %d (%s)",
+			total, skipped.Current(), formatSize(skippedBytes.Current()), copied.Current(), formatSize(copiedBytes.Current()))
+		if checked != nil {
+			msg += fmt.Sprintf(", checked: %d (%s)", checked.Current(), formatSize(checkedBytes.Current()))
+		}
+		if deleted != nil {
+			msg += fmt.Sprintf(", deleted: %d", deleted.Current())
+		}
+		if failed != nil {
+			msg += fmt.Sprintf(", failed: %d", failed.Current())
+		}
+		if total-handled.Current() > 0 {
+			msg += fmt.Sprintf(", lost: %d", total-handled.Current())
+		}
+		logger.Info(msg)
+	} else {
+		sendStats(config.Manager)
+		logger.Debugf("This worker process has already completed its task")
+	}
+	if failed != nil {
+		if n := failed.Current(); n > 0 || total > handled.Current() {
+			return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
+		}
+	}
+	return nil
 }
 
 func initSyncMetrics(config *Config) {
