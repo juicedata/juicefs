@@ -584,6 +584,29 @@ func TestS3(t *testing.T) { //skip mutate
 	testStorage(t, s)
 }
 
+func TestS3WithQuery(t *testing.T) {
+	o, err := newS3("abucket.10.9.113.34:9000/?disable-content-md5=true&disable-checksum=true&disable-100-continue=true", "", "", "")
+	if err != nil {
+		t.Fatalf("parse S3 url: %s", err)
+	}
+	s3 := o.(*s3client)
+	if s3.s3.Config.S3DisableContentMD5Validation == nil || *s3.s3.Config.S3DisableContentMD5Validation != true {
+		t.Fatalf("disable-content-md5 should be true")
+	}
+	if s3.disableChecksum != true {
+		t.Fatalf("disable-checksum should be true")
+	}
+	if s3.bucket != "abucket" {
+		t.Fatalf("bucket should be abucket")
+	}
+	if s3.s3.Endpoint != "http://10.9.113.34:9000" {
+		t.Fatalf("endpoint should be http://10.9.113.34:9000")
+	}
+	if s3.s3.Config.S3Disable100Continue == nil || *s3.s3.Config.S3Disable100Continue != true {
+		t.Fatalf("disable-100-continue should be true")
+	}
+}
+
 func TestOracleCompileRegexp(t *testing.T) {
 	ep := "axntujn0ebj1.compat.objectstorage.ap-singapore-1.oraclecloud.com"
 	oracleCompile := regexp.MustCompile(oracleCompileRegexp)

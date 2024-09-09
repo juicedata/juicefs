@@ -448,7 +448,6 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 			endpoint = fmt.Sprintf("https://%s", endpoint)
 		}
 	}
-	endpoint = strings.Trim(endpoint, "/")
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err.Error())
@@ -460,9 +459,10 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		ep         string
 	)
 
-	if uri.Path != "" {
+	path := strings.Trim(uri.Path, "/")
+	if path != "" {
 		// [ENDPOINT]/[BUCKET]
-		pathParts := strings.Split(uri.Path, "/")
+		pathParts := strings.Split(path, "/")
 		bucketName = pathParts[1]
 		if strings.Contains(uri.Host, ".amazonaws.com") {
 			// standard s3
