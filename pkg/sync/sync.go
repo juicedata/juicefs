@@ -1310,7 +1310,6 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	initSyncMetrics(config)
 	ctx, cancel := context.WithCancel(context.TODO())
-	defer cancel()
 	for i := 0; i < config.Threads; i++ {
 		wg.Add(1)
 		go func() {
