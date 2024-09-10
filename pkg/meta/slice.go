@@ -154,64 +154,91 @@ func buildSlice(ss []*slice) []Slice {
 	return chunk
 }
 
-func compactChunk(ss []*slice) (uint32, uint32, []Slice) {
-	var chunk = buildSlice(ss)
-	var pos uint32
-	n := len(chunk)
-	for n > 1 {
-		if chunk[0].Id == 0 {
-			pos += chunk[0].Len
-			chunk = chunk[1:]
-			n--
-		} else if chunk[n-1].Id == 0 {
-			chunk = chunk[:n-1]
-			n--
-		} else {
-			break
-		}
-	}
-	if n == 1 && chunk[0].Id == 0 {
-		chunk[0].Len = 1
-	}
-	var size uint32
-	for _, c := range chunk {
-		size += c.Len
-	}
-	return pos, size, chunk
+func interact(pos uint32, a Slice, b *slice) bool {
+	return pos+a.Len > b.pos && b.pos+b.len > pos
 }
 
-func skipSome(chunk []*slice) (int, int) {
-	var skipped int
-	var total = len(chunk)
-	_, size, _ := compactChunk(chunk)
-OUT:
-	for skipped+1 < total {
-		_, size1, _ := compactChunk(chunk[skipped+1:])
-		reduced := size - size1
-		pos, length := chunk[skipped].pos, chunk[skipped].len
-		if size1 == 0 || reduced < length || reduced*5 < size || reduced < 2<<20 {
+func compactChunk(slices []*slice, skip int) (uint32, uint32, uint32, []Slice) {
+	var pos uint32
+	ss := buildSlice(slices[skip:])
+	if len(ss) > 0 && ss[0].Id == 0 && ss[0].Size > 0 {
+		pos += ss[0].Len
+		ss = ss[1:]
+	}
+	var head, tail int
+HEAD:
+	for ; head < len(ss)-1; head++ {
+		if ss[head].Id > 0 {
 			break
 		}
-		for _, s := range chunk[skipped+1:] {
-			if s.id == 0 && pos+length > s.pos && s.pos+s.len > pos {
-				break OUT
+		for _, s := range slices[:skip] {
+			if interact(pos, ss[head], s) { // FIXME: shrink zero slice
+				break HEAD
 			}
 		}
-		size = size1
-		skipped++
+		pos += ss[head].Len
 	}
-	tail := total
-	for skipped+1 < tail {
-		if chunk[tail-1].id == 0 {
+	ss = ss[head:]
+TAIL:
+	for tail = len(ss); tail > 1; tail-- {
+		if ss[tail-1].Id > 0 {
 			break
 		}
-		_, size1, _ := compactChunk(chunk[skipped : tail-1])
-		reduced := size - size1
-		if size1 == 0 || reduced < chunk[tail-1].len || reduced*5 < size || reduced < 2<<20 {
+		for _, s := range slices[:skip] {
+			if interact(pos, ss[tail-1], s) {
+				break TAIL
+			}
+		}
+	}
+	ss = ss[:tail]
+	var write, delete uint32
+	for _, c := range ss {
+		write += c.Len
+	}
+	for _, s := range slices[skip:] {
+		if s.id > 0 {
+			delete += s.size
+		}
+	}
+	return write, delete, pos, ss
+}
+
+func skipSome(slices []*slice) (int, int) {
+	var head, tail int
+	write, delete, _, _ := compactChunk(slices, 0)
+OUT:
+	for ; head < len(slices); head++ {
+		var p uint32
+		ss := buildSlice(slices[head:])
+		if len(ss) > 0 && ss[0].Id == 0 && ss[0].Size > 0 { // padding
+			p += ss[0].Len
+			ss = ss[1:]
+		}
+		for _, c := range ss {
+			if c.Id == 0 && c.Size > 0 && interact(p, c, slices[head]) {
+				break OUT
+			}
+			p += c.Len
+		}
+
+		write1, delete1, _, _ := compactChunk(slices, head+1)
+		reduced := write - write1
+		// saved := delete - delete1
+		if write < delete && (write1 == 0 || reduced < slices[head].len || reduced*5 < write || reduced < 2<<20) {
 			break
 		}
-		size = size1
-		tail--
+		write = write1
+		delete = delete1
 	}
-	return skipped, tail
+	for tail = len(slices); tail > head; tail-- {
+		write1, delete1, _, _ := compactChunk(slices[:tail-1], head)
+		reduced := write - write1
+		// saved := delete - delete1
+		if write < delete && (write1 == 0 || reduced < slices[tail-1].len || reduced*5 < write || reduced < 2<<20) {
+			break
+		}
+		write = write1
+		delete = delete1
+	}
+	return head, tail
 }

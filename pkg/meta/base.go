@@ -2052,7 +2052,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	skipped, tail := skipSome(ss)
 	ss = ss[:tail]
 	compacted := ss[skipped:]
-	pos, size, slices := compactChunk(compacted)
+	size, _, pos, slices := compactChunk(ss, skipped)
 	if len(compacted) < 2 || size == 0 {
 		return
 	}
