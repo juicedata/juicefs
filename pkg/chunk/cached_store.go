@@ -854,7 +854,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 	store.gcJobs = make(chan gcJob, 10)
 	go func() {
 		for job := range store.gcJobs {
-			store.Remove(job.id, job.length)
+			_ = store.Remove(job.id, job.length)
 		}
 	}()
 
