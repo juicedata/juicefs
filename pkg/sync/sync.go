@@ -1323,9 +1323,8 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				for {
 					if failed.Current() >= config.MaxFailure {
 						logger.Infof("the maximum error limit of %d was reached, triggering the quick exit process", config.MaxFailure)
-						if syncExitFunc() != nil {
-							os.Exit(1)
-						}
+						_ = syncExitFunc()
+						os.Exit(1)
 					}
 					time.Sleep(time.Millisecond * 100)
 				}
