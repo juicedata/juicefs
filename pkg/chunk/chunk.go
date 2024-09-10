@@ -38,6 +38,7 @@ type ChunkStore interface {
 	NewReader(id uint64, length int) Reader
 	NewWriter(id uint64) Writer
 	Remove(id uint64, length int) error
+	TryRemove(id uint64, length int)
 	FillCache(id uint64, length uint32) error
 	EvictCache(id uint64, length uint32) error
 	CheckCache(id uint64, length uint32) (uint64, error)

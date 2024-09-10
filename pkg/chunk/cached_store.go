@@ -637,6 +637,11 @@ func (c *Config) parseHours() (start, end int, err error) {
 	return
 }
 
+type gcJob struct {
+	id     uint64
+	length int
+}
+
 type cachedStore struct {
 	storage       object.ObjectStorage
 	bcache        CacheManager
@@ -653,6 +658,7 @@ type cachedStore struct {
 	seekable      bool
 	upLimit       *ratelimit.Bucket
 	downLimit     *ratelimit.Bucket
+	gcJobs        chan gcJob
 
 	cacheHits           prometheus.Counter
 	cacheMiss           prometheus.Counter
@@ -844,6 +850,14 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 			}
 		}()
 	}
+
+	store.gcJobs = make(chan gcJob, 10)
+	go func() {
+		for job := range store.gcJobs {
+			store.Remove(job.id, job.length)
+		}
+	}()
+
 	store.regMetrics(reg)
 	return store
 }
@@ -1084,6 +1098,10 @@ func (store *cachedStore) NewWriter(id uint64) Writer {
 func (store *cachedStore) Remove(id uint64, length int) error {
 	r := sliceForRead(id, length, store)
 	return r.Remove()
+}
+
+func (store *cachedStore) TryRemove(id uint64, length int) {
+	store.gcJobs <- gcJob{id, length}
 }
 
 func (store *cachedStore) FillCache(id uint64, length uint32) error {
