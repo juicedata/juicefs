@@ -2052,8 +2052,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	skipped, tail := skipSome(ss)
 	ss = ss[:tail]
 	compacted := ss[skipped:]
-	size, deleted, wslices, rslices := compactChunk(ss)
-	if len(compacted) < 2 || size == 0 {
+	if len(compacted) < 2 {
 		return
 	}
 
@@ -2061,6 +2060,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	if st = m.NewSlice(Background, &id); st != 0 {
 		return
 	}
+	size, deleted, wslices, rslices := compactChunk(compacted)
 	for _, s := range wslices {
 		if s.size > 0 {
 			s.id = id
