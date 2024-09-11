@@ -104,7 +104,7 @@ type engine interface {
 	doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno
 	doTruncate(ctx Context, inode Ino, flags uint8, length uint64, delta *dirStat, attr *Attr, skipPermCheck bool) syscall.Errno
 	doFallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, delta *dirStat, attr *Attr) syscall.Errno
-	doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno
+	doCompactChunk(inode Ino, indx uint32, origin []byte, dslices, wslices []*slice, skipped int, delayed []byte) syscall.Errno
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
@@ -2052,7 +2052,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	skipped, tail := skipSome(ss)
 	ss = ss[:tail]
 	compacted := ss[skipped:]
-	size, _, pos, slices := compactChunk(ss, skipped)
+	size, deleted, wslices, rslices := compactChunk(ss)
 	if len(compacted) < 2 || size == 0 {
 		return
 	}
@@ -2061,8 +2061,13 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	if st = m.NewSlice(Background, &id); st != 0 {
 		return
 	}
-	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(compacted), size)
-	err := m.newMsg(CompactChunk, slices, id)
+	for _, s := range wslices {
+		if s.size > 0 {
+			s.id = id
+		}
+	}
+	logger.Debugf("compact %d:%d: skipped %d slices, will compact %d slices (%d bytes), write %d bytes", inode, indx, skipped, len(compacted), deleted, size)
+	err := m.newMsg(CompactChunk, rslices, id)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
 			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(compacted), err)
@@ -2084,7 +2089,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	for _, s := range ss {
 		origin = append(origin, marshalSlice(s.pos, s.id, s.size, s.off, s.len)...)
 	}
-	st = m.en.doCompactChunk(inode, indx, origin, compacted, skipped, pos, id, size, dsbuf)
+	st = m.en.doCompactChunk(inode, indx, origin, compacted, wslices, skipped, dsbuf)
 	if st == syscall.EINVAL {
 		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, id, size)
 		m.deleteSlice(id, size)

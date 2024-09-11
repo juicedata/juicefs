@@ -2753,7 +2753,17 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	return count, nil
 }
 
-func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno {
+func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, dslices, wslices []*slice, skipped int, delayed []byte) syscall.Errno {
+	var id uint64
+	var size uint32
+	var wbuf []byte
+	for _, s := range wslices {
+		wbuf = append(wbuf, marshalSlice(s.pos, s.id, s.size, s.off, s.len)...)
+		if s.id > 0 {
+			id, size = s.id, s.size
+			break
+		}
+	}
 	st := errno(m.txn(func(s *xorm.Session) error {
 		var c2 = chunk{Inode: inode, Indx: indx}
 		_, err := s.ForUpdate().MustCols("indx").Get(&c2)
@@ -2765,7 +2775,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 			return syscall.EINVAL
 		}
 
-		c2.Slices = append(append(c2.Slices[:skipped*sliceBytes], marshalSlice(pos, id, size, 0, size)...), c2.Slices[len(origin):]...)
+		c2.Slices = append(append(c2.Slices[:skipped*sliceBytes], wbuf...), c2.Slices[len(origin):]...)
 		if _, err := s.Where("Inode = ? AND indx = ?", inode, indx).Update(c2); err != nil {
 			return err
 		}
@@ -2780,7 +2790,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 				}
 			}
 		} else {
-			for _, s_ := range ss {
+			for _, s_ := range dslices {
 				if s_.id == 0 {
 					continue
 				}
@@ -2813,7 +2823,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 			return mustInsert(s, &sliceRef{id, size, 0})
 		})
 	} else if st == 0 && delayed == nil {
-		for _, s := range ss {
+		for _, s := range dslices {
 			if s.id == 0 {
 				continue
 			}
