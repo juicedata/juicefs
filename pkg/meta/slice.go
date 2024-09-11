@@ -154,97 +154,72 @@ func buildSlice(ss []*slice) []Slice {
 	return chunk
 }
 
-func compactChunk(slices []*slice) (uint32, uint32, []*slice, []Slice) {
-	var pos uint32
+func compactChunk(slices []*slice) (uint32, uint32, uint32, uint32, []Slice) {
+	var pos uint32 = ChunkSize
+	for _, s := range slices {
+		if s.pos < pos {
+			pos = s.pos
+			if pos == 0 {
+				break
+			}
+		}
+	}
 	ss := buildSlice(slices)
-	if len(ss) > 0 && ss[0].Id == 0 && ss[0].Size > 0 {
-		pos += ss[0].Len
+	if pos > 0 && len(ss) > 0 {
+		// remove left padding
 		ss = ss[1:]
 	}
 
 	var head, tail uint32
 	trimmed := ss
-	for len(trimmed) > 1 {
-		if trimmed[0].Id == 0 {
-			head += trimmed[0].Len
-			trimmed = trimmed[1:]
-		} else {
-			break
-		}
+	for len(trimmed) > 0 && trimmed[0].Id == 0 {
+		head += trimmed[0].Len
+		trimmed = trimmed[1:]
 	}
-	for n := len(trimmed); n > 1; n-- {
-		if trimmed[n-1].Id == 0 {
-			tail += trimmed[n-1].Len
-			trimmed = trimmed[:n-1]
-		} else {
-			break
-		}
+	for n := len(trimmed); n > 0 && trimmed[n-1].Id == 0; n-- {
+		tail += trimmed[n-1].Len
+		trimmed = trimmed[:n-1]
 	}
-	if len(trimmed) == 1 && trimmed[0].Id == 0 {
-		head += trimmed[0].Len - 1
-		trimmed[0].Len = 1
+	if len(trimmed) == 0 {
+		tail = head - 1
+		head = 0
+		trimmed = []Slice{{Len: 1}}
 	}
-	var size, deleted uint32
+	var size uint32
 	for _, c := range trimmed {
 		size += c.Len
 	}
-	del := make(map[uint64]struct{})
-	for _, s := range slices {
-		if _, ok := del[s.id]; ok || s.id == 0 {
-			continue
-		}
-		del[s.id] = struct{}{}
-		deleted += s.size
-	}
-	var wslices []*slice
-	if head > 0 {
-		wslices = append(wslices, &slice{pos: pos, len: head})
-		pos += head
-	}
-	wslices = append(wslices, &slice{pos: pos, size: size, len: size})
-	if tail > 0 {
-		wslices = append(wslices, &slice{pos: pos + size, len: tail})
-	}
+	return pos, head, size, tail, trimmed
+}
 
-	return size, deleted, wslices, trimmed
+func shouldSkip(s *slice, rest []*slice, lastWrite uint32) (bool, uint32) {
+	pos, head, write, tail, _ := compactChunk(rest)
+	if pos < s.pos+s.len && s.pos < pos+head+write+tail {
+		return false, 0 // overlap
+	}
+	reduced := lastWrite - write
+	if write == 0 || reduced*5 < lastWrite || reduced < 2<<20 || reduced < s.size {
+		return false, 0
+	}
+	return true, write
 }
 
 func skipSome(slices []*slice) (int, int) {
 	var head, tail int
-	write, deleted, _, _ := compactChunk(slices)
-OUT:
+	_, _, lastWrite, _, _ := compactChunk(slices)
 	for ; head < len(slices)-1; head++ {
-		var p uint32
-		ss := buildSlice(slices[head:])
-		if len(ss) > 0 && ss[0].Id == 0 && ss[0].Size > 0 { // padding
-			p += ss[0].Len
-			ss = ss[1:]
-		}
-		for _, c := range ss {
-			if c.Id == 0 && c.Size > 0 && p+c.Len > slices[head].pos && slices[head].pos+slices[head].len > p {
-				break OUT
-			}
-			p += c.Len
-		}
-
-		write1, delete1, _, _ := compactChunk(slices[head+1:])
-		reduced := write - write1
-		// saved := delete - delete1
-		if write < deleted && (write1 == 0 || reduced < slices[head].len || reduced*5 < write || reduced < 2<<20) {
+		skip, write := shouldSkip(slices[head], slices[head+1:], lastWrite)
+		if !skip {
 			break
 		}
-		write = write1
-		deleted = delete1
+		lastWrite = write
 	}
 	for tail = len(slices); tail > head+1; tail-- {
-		write1, delete1, _, _ := compactChunk(slices[:tail-1])
-		reduced := write - write1
-		// saved := delete - delete1
-		if write < deleted && (write1 == 0 || reduced < slices[tail-1].len || reduced*5 < write || reduced < 2<<20) {
+		skip, write := shouldSkip(slices[tail-1], slices[:tail-1], lastWrite)
+		if !skip {
 			break
 		}
-		write = write1
-		deleted = delete1
+		lastWrite = write
 	}
 	return head, tail
 }

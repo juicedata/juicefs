@@ -2060,11 +2060,14 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	if st = m.NewSlice(Background, &id); st != 0 {
 		return
 	}
-	size, deleted, wslices, rslices := compactChunk(compacted)
-	for _, s := range wslices {
-		if s.size > 0 {
-			s.id = id
-		}
+	pos, headSize, size, tailSize, rslices := compactChunk(compacted)
+	logger.Infof("compact %d slices into %d, %d, %d %+v", len(ss), headSize, size, tailSize, rslices)
+	if len(rslices) < 1 {
+		return
+	}
+	var deleted uint32
+	for _, s := range compacted {
+		deleted += s.size
 	}
 	logger.Debugf("compact %d:%d: skipped %d slices, will compact %d slices (%d bytes), write %d bytes", inode, indx, skipped, len(compacted), deleted, size)
 	err := m.newMsg(CompactChunk, rslices, id)
@@ -2089,6 +2092,14 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	for _, s := range ss {
 		origin = append(origin, marshalSlice(s.pos, s.id, s.size, s.off, s.len)...)
 	}
+	var wslices []*slice
+	if headSize > 0 {
+		wslices = append(wslices, &slice{pos: pos, len: headSize})
+	}
+	wslices = append(wslices, &slice{id: id, size: size, pos: pos + headSize, len: size})
+	if tailSize > 0 {
+		wslices = append(wslices, &slice{pos: pos + headSize + size, len: tailSize})
+	}
 	st = m.en.doCompactChunk(inode, indx, origin, compacted, wslices, skipped, dsbuf)
 	if st == syscall.EINVAL {
 		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, id, size)
@@ -2099,7 +2110,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 		logger.Warnf("compact %d %d: %s", inode, indx, err)
 	}
 
-	if force {
+	if force && (skipped > 0 || len(ss) > maxCompactSlices/2) {
 		m.Lock()
 		delete(m.compacting, k)
 		m.Unlock()
