@@ -291,20 +291,6 @@ func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 	return buckets, nil
 }
 
-func (n *jfsObjects) isObjectDir(ctx context.Context, bucket, object string) bool {
-	f, eno := n.fs.Open(mctx, n.path(bucket, object), 0)
-	if eno != 0 {
-		return false
-	}
-	defer f.Close(mctx)
-
-	fis, err := f.Readdir(mctx, 0)
-	if err != 0 {
-		return false
-	}
-	return len(fis) == 0
-}
-
 func (n *jfsObjects) isLeafDir(bucket, leafPath string) bool {
 	return false
 }
