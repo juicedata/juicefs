@@ -205,7 +205,7 @@ func (c *chunkWriter) commitThread() {
 		if err != 0 {
 			if err == syscall.ENOENT {
 				f.Unlock()
-				f.w.store.Remove(s.id, int(s.length))
+				_ = f.w.store.Remove(s.id, int(s.length))
 				f.Lock()
 			} else if err != syscall.ENOSPC && err != syscall.EDQUOT {
 				logger.Warnf("write inode:%d error: %s", f.inode, err)
