@@ -174,6 +174,7 @@ func compactChunk(ss []*slice) (uint32, uint32, []Slice) {
 func skipSome(chunk []*slice) int {
 	var skipped int
 	var total = len(chunk)
+OUT:
 	for skipped < total {
 		ss := chunk[skipped:]
 		pos, size, c := compactChunk(ss)
@@ -188,6 +189,11 @@ func skipSome(chunk []*slice) int {
 		if !isFirst(pos, c[0]) {
 			// it's not the first slice, compact it
 			break
+		}
+		for _, s := range ss[1:] {
+			if *s == *first {
+				break OUT
+			}
 		}
 		skipped++
 	}
