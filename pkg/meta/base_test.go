@@ -1571,6 +1571,21 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		t.Fatalf("inode %d should be compacted, but have %d slices, size %d,%d,%d",
 			inode, len(slices), slices[0].Len, slices[1].Len, slices[2].Len)
 	}
+
+	m.NewSlice(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 3, 0, Slice{Id: sliceId, Size: 2338508, Len: 2338508}, time.Now())
+	_ = m.CopyFileRange(ctx, inode, 3*ChunkSize, inode, 4*ChunkSize, 2338508, 0, nil, nil)
+	_ = m.Fallocate(ctx, inode, fallocZeroRange, 4*ChunkSize, ChunkSize, nil)
+	_ = m.CopyFileRange(ctx, inode, 3*ChunkSize, inode, 4*ChunkSize, 2338508, 0, nil, nil)
+	if c, ok := m.(compactor); ok {
+		c.compactChunk(inode, 4, false, true)
+	}
+	if st := m.Read(ctx, inode, 4, &slices); st != 0 {
+		t.Fatalf("read inode %d chunk 4: %s", inode, st)
+	}
+	if len(slices) != 1 || slices[0].Len != 2338508 {
+		t.Fatalf("inode %d should be compacted, but have %d slices, size %d", inode, len(slices), slices[0].Len)
+	}
 }
 
 func testConcurrentWrite(t *testing.T, m Meta) {
