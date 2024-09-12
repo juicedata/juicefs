@@ -1101,7 +1101,10 @@ func (store *cachedStore) Remove(id uint64, length int) error {
 }
 
 func (store *cachedStore) TryRemove(id uint64, length int) {
-	store.gcJobs <- gcJob{id, length}
+	select {
+	case store.gcJobs <- gcJob{id, length}:
+	default:
+	}
 }
 
 func (store *cachedStore) FillCache(id uint64, length uint32) error {
