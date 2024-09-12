@@ -306,7 +306,7 @@ func (n *jfsObjects) isObjectDir(ctx context.Context, bucket, object string) boo
 }
 
 func (n *jfsObjects) isLeafDir(bucket, leafPath string) bool {
-	return n.isObjectDir(context.Background(), bucket, leafPath)
+	return false
 }
 
 func (n *jfsObjects) isLeaf(bucket, leafPath string) bool {
