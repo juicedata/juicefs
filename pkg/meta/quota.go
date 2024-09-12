@@ -283,9 +283,9 @@ func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
 }
 
 // get inode of the first parent (or myself) with quota
-func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) Ino {
+func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) (Ino, *Quota) {
 	if !m.getFormat().DirStats {
-		return 0
+		return 0, nil
 	}
 	var q *Quota
 	var st syscall.Errno
@@ -294,7 +294,7 @@ func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) Ino {
 		q = m.dirQuotas[inode]
 		m.quotaMu.RUnlock()
 		if q != nil {
-			return inode
+			return inode, q
 		}
 		if inode <= RootInode {
 			break
@@ -305,7 +305,7 @@ func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) Ino {
 			break
 		}
 	}
-	return 0
+	return 0, nil
 }
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bool {
