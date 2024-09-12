@@ -1957,6 +1957,25 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 	}, m.inodeKey(parent), m.entryKey(parent), m.inodeKey(inode)))
 }
 
+func (m *redisMeta) fillAttr(ctx Context, es []*Entry) error {
+	var keys = make([]string, len(es))
+	for i, e := range es {
+		keys[i] = m.inodeKey(e.Inode)
+	}
+	rs, err := m.rdb.MGet(ctx, keys...).Result()
+	if err != nil {
+		return err
+	}
+	for j, re := range rs {
+		if re != nil {
+			if a, ok := re.(string); ok {
+				m.parseAttr([]byte(a), es[j].Attr)
+			}
+		}
+	}
+	return nil
+}
+
 func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
 	var stop = errors.New("stop")
 	err := m.hscan(ctx, m.entryKey(inode), func(keys []string) error {
@@ -1988,28 +2007,10 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 	}
 
 	if plus != 0 && len(*entries) != 0 {
-		fillAttr := func(es []*Entry) error {
-			var keys = make([]string, len(es))
-			for i, e := range es {
-				keys[i] = m.inodeKey(e.Inode)
-			}
-			rs, err := m.rdb.MGet(ctx, keys...).Result()
-			if err != nil {
-				return err
-			}
-			for j, re := range rs {
-				if re != nil {
-					if a, ok := re.(string); ok {
-						m.parseAttr([]byte(a), es[j].Attr)
-					}
-				}
-			}
-			return nil
-		}
 		batchSize := 4096
 		nEntries := len(*entries)
 		if nEntries <= batchSize {
-			err = fillAttr(*entries)
+			err = m.fillAttr(ctx, *entries)
 		} else {
 			indexCh := make(chan []*Entry, 10)
 			var wg sync.WaitGroup
@@ -2018,7 +2019,7 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 				go func() {
 					defer wg.Done()
 					for es := range indexCh {
-						e := fillAttr(es)
+						e := m.fillAttr(ctx, es)
 						if e != nil {
 							err = e
 							break
@@ -4554,4 +4555,66 @@ func (m *redisMeta) loadDumpedACLs(ctx Context) error {
 		}
 		return tx.Set(ctx, m.prefix+aclCounter, maxId, 0).Err()
 	}, m.inodeKey(RootInode))
+}
+
+func (m *redisMeta) getDirFetcher(ctx Context) dirFetcher {
+	return func(inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error) {
+		min := func(a, b int64) int64 {
+			if a < b {
+				return a
+			}
+			return b
+		}
+
+		var iCursor uint64
+		var preKeys []string
+		if cursor == nil || cursor.(uint64) == 0 {
+			left := int64(offset)
+			for left > 0 {
+				keys, c, err := m.rdb.HScan(ctx, m.entryKey(inode), iCursor, "*", min(4096, left)).Result() // returns n keys (>= count)
+				if err != nil {
+					return 0, nil, err
+				}
+				left -= int64(len(keys) / 2)
+				if left < 0 {
+					preKeys = append(preKeys, keys[len(keys)+int(left*2):]...)
+				}
+				if c == 0 {
+					return 0, nil, nil // the end
+				}
+				iCursor = c
+			}
+		} else {
+			iCursor = cursor.(uint64)
+		}
+
+		keys, c, err := m.rdb.HScan(ctx, m.entryKey(inode), iCursor, "*", int64(limit)).Result()
+		if err != nil {
+			return 0, nil, err
+		}
+
+		keys = append(keys, preKeys...)
+		var entries []*Entry
+		if len(keys) > 0 {
+			newEntries := make([]Entry, len(keys)/2)
+			newAttrs := make([]Attr, len(keys)/2)
+			for i := 0; i < len(keys); i += 2 {
+				typ, ino := m.parseEntry([]byte(keys[i+1]))
+				if keys[i] == "" {
+					logger.Errorf("Corrupt entry with empty name: inode %d parent %d", ino, inode)
+					continue
+				}
+				ent := &newEntries[i/2]
+				ent.Inode = ino
+				ent.Name = []byte(keys[i])
+				ent.Attr = &newAttrs[i/2]
+				ent.Attr.Typ = typ
+				entries = append(entries, ent)
+			}
+			if plus {
+				m.fillAttr(ctx, entries)
+			}
+		}
+		return c, entries, nil
+	}
 }

@@ -284,6 +284,11 @@ func metaFlags() []cli.Flag {
 			Name:  "sort-dir",
 			Usage: "sort entries within a directory by name",
 		},
+		&cli.BoolFlag{
+			Name:  "readdir-stream",
+			Value: false,
+			Usage: "enable streaming readdir",
+		},
 	})
 }
 

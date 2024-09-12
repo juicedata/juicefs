@@ -424,6 +424,30 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 	h.Lock()
 	defer h.Unlock()
 
+	if v.Conf.Meta.ReaddirStream {
+		if h.dirStream == nil {
+			var inodes []*meta.Entry
+			if ino == rootID && !v.Conf.HideInternal {
+				for _, node := range internalNodes[1:] {
+					inodes = append(inodes, &meta.Entry{
+						Inode: node.inode,
+						Name:  []byte(node.name),
+						Attr:  node.attr,
+					})
+				}
+			}
+			if h.dirStream, err = v.Meta.NewDirStream(ctx, ino, plus, inodes); err != 0 {
+				return
+			}
+		}
+		if entries, err = h.dirStream.List(off); err != 0 {
+			return
+		}
+		readAt = time.Now()
+		logger.Debugf("readdir: [%d:%d] %d entries, offset=%d", ino, fh, len(entries), off)
+		return
+	}
+
 	if h.children == nil || off == 0 {
 		var inodes []*meta.Entry
 		h.readAt = time.Now()

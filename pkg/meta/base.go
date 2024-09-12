@@ -47,6 +47,7 @@ const (
 )
 
 var (
+	DirBatchNum       = 4096
 	maxCompactSlices  = 1000
 	maxSlices         = 2500
 	inodeNeedPrefetch = uint64(utils.JitterIt(inodeBatch * 0.1)) // Add jitter to reduce probability of txn conflicts
@@ -125,8 +126,11 @@ type engine interface {
 	doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno
 	doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno
 	cacheACLs(ctx Context) error
+
+	getDirFetcher(ctx Context) dirFetcher
 }
 
+type dirFetcher func(inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error)
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
 type pendingSliceScan func(id uint64, size uint32) (clean bool, err error)
 type trashFileScan func(inode Ino, size uint64, ts time.Time) (clean bool, err error)
@@ -2888,4 +2892,159 @@ func inGroup(ctx Context, gid uint32) bool {
 		}
 	}
 	return false
+}
+
+type DirStream interface {
+	List(offset int) ([]*Entry, syscall.Errno)
+	Close()
+}
+
+func (m *baseMeta) NewDirStream(ctx Context, inode Ino, plus bool, initEntries []*Entry) (DirStream, syscall.Errno) {
+	var attr Attr
+	var st syscall.Errno
+	defer func() {
+		if st == 0 {
+			m.touchAtime(ctx, inode, &attr)
+		}
+	}()
+
+	inode = m.checkRoot(inode)
+	if st = m.GetAttr(ctx, inode, &attr); st != 0 {
+		return nil, st
+	}
+	defer m.timeit("NewDirStream", time.Now())
+	var mmask uint8 = MODE_MASK_R
+	if plus {
+		mmask |= MODE_MASK_X
+	}
+
+	if st = m.Access(ctx, inode, mmask, &attr); st != 0 {
+		return nil, st
+	}
+	if inode == m.root {
+		attr.Parent = m.root
+	}
+
+	initEntries = append(initEntries, &Entry{
+		Inode: inode,
+		Name:  []byte("."),
+		Attr:  &Attr{Typ: TypeDirectory},
+	}, &Entry{
+		Inode: attr.Parent,
+		Name:  []byte(".."),
+		Attr:  &Attr{Typ: TypeDirectory},
+	})
+	return newDirStream(inode, plus, initEntries, m.en.getDirFetcher(ctx)), 0
+}
+
+type dirBatch struct {
+	err     error
+	offset  int
+	cursor  interface{}
+	entries []*Entry
+}
+
+func (b *dirBatch) in(offset int) bool {
+	return b.offset <= offset && offset < b.offset+len(b.entries)
+}
+
+type dirStream struct {
+	sync.Mutex
+	inode        Ino
+	plus         bool
+	initEntries  []*Entry
+	fetcher      dirFetcher
+	curr         *dirBatch
+	next         *dirBatch
+	prefetchLock sync.Mutex
+	prefetchWG   sync.WaitGroup
+}
+
+func newDirStream(inode Ino, plus bool, entries []*Entry, fetcher dirFetcher) *dirStream {
+	// TODO limit goroutine num ?
+	s := &dirStream{
+		initEntries: entries,
+		inode:       inode,
+		plus:        plus,
+		fetcher:     fetcher,
+	}
+	return s
+}
+
+func (s *dirStream) fetch(offset int) (*dirBatch, error) {
+	s.prefetchWG.Wait()
+	var batch *dirBatch
+	if s.next != nil && s.next.err == nil && s.next.offset == offset {
+		batch, s.next = s.next, nil
+	}
+
+	if batch == nil {
+		s.prefetch(offset, true)
+		s.prefetchWG.Wait()
+		batch, s.next = s.next, nil
+	}
+
+	if err := batch.err; err != nil {
+		return nil, err
+	}
+
+	return batch, nil
+}
+
+func (s *dirStream) prefetch(offset int, reset bool) {
+	if !reset && s.next != nil {
+		return
+	}
+	if !s.prefetchLock.TryLock() {
+		return
+	}
+	s.prefetchWG.Add(1)
+	go func() {
+		defer func() {
+			s.prefetchLock.Unlock()
+			s.prefetchWG.Done()
+		}()
+		var cursor interface{}
+		if !reset && s.curr != nil {
+			cursor = s.curr.cursor
+		}
+		logger.Debugf("do prefetch %d reset %v", offset, reset)
+		nextCursor, entries, err := s.fetcher(s.inode, cursor, offset, DirBatchNum, s.plus)
+		if err != nil {
+			s.next = &dirBatch{err: err}
+			return
+		}
+		s.next = &dirBatch{offset: offset, entries: entries, cursor: nextCursor}
+	}()
+}
+
+func (s *dirStream) List(offset int) ([]*Entry, syscall.Errno) {
+	s.Lock()
+	defer s.Unlock()
+
+	if offset < len(s.initEntries) {
+		return s.initEntries[offset:], 0
+	}
+	offset -= len(s.initEntries)
+
+	var err error
+	if s.curr == nil || !s.curr.in(offset) {
+		s.curr, err = s.fetch(offset)
+	}
+
+	if err != nil {
+		return nil, errno(err)
+	}
+
+	// reach end
+	if len(s.curr.entries) == 0 {
+		return []*Entry{}, 0
+	}
+
+	s.prefetch(s.curr.offset+len(s.curr.entries), false)
+	return s.curr.entries[offset-s.curr.offset:], 0
+}
+
+func (s *dirStream) Close() {
+	s.prefetchWG.Wait()
 }

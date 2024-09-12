@@ -4446,3 +4446,42 @@ func (m *dbMeta) loadDumpedACLs(ctx Context) error {
 		return nil
 	})
 }
+
+func (m *dbMeta) getDirFetcher(ctx Context) dirFetcher {
+	return func(inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error) {
+		var entries []*Entry
+		err := m.roTxn(func(s *xorm.Session) error {
+			s = s.Table(&edge{})
+			if plus {
+				s = s.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
+			}
+			s = s.Limit(limit, offset)
+			var nodes []namedNode
+			if err := s.Find(&nodes, &edge{Parent: inode}); err != nil {
+				return err
+			}
+			for _, n := range nodes {
+				if len(n.Name) == 0 {
+					logger.Errorf("Corrupt entry with empty name: inode %d parent %d", n.Inode, inode)
+					continue
+				}
+				entry := &Entry{
+					Inode: n.Inode,
+					Name:  n.Name,
+					Attr:  &Attr{},
+				}
+				if plus {
+					m.parseAttr(&n.node, entry.Attr)
+				} else {
+					entry.Attr.Typ = n.Type
+				}
+				entries = append(entries, entry)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, entries, err
+	}
+}

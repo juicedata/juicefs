@@ -415,6 +415,26 @@ func (m *kvMeta) scanValues(prefix []byte, limit int, filter func(k, v []byte) b
 	return values, err
 }
 
+func (m *kvMeta) scan(startKey, endKey []byte, limit int, filter func(k, v []byte) bool) ([][]byte, [][]byte, error) {
+	if limit == 0 {
+		return nil, nil, nil
+	}
+	var keys, vals [][]byte
+	err := m.client.txn(func(tx *kvTxn) error {
+		var c int
+		tx.scan(startKey, endKey, false, func(k, v []byte) bool {
+			if filter == nil || filter(k, v) {
+				keys = append(keys, k)
+				vals = append(vals, v)
+				c++
+			}
+			return limit < 0 || c < limit
+		})
+		return nil
+	}, 0)
+	return keys, vals, err
+}
+
 func (m *kvMeta) doInit(format *Format, force bool) error {
 	body, err := m.get(m.fmtKey("setting"))
 	if err != nil {
@@ -1775,6 +1795,30 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 	}, parent))
 }
 
+func (m *kvMeta) fillAttr(entries []*Entry) (err error) {
+	if len(entries) == 0 {
+		return nil
+	}
+	var keys = make([][]byte, len(entries))
+	for i, e := range entries {
+		keys[i] = m.inodeKey(e.Inode)
+	}
+	var rs [][]byte
+	err = m.client.txn(func(tx *kvTxn) error {
+		rs = tx.gets(keys...)
+		return nil
+	}, 0)
+	if err != nil {
+		return err
+	}
+	for j, re := range rs {
+		if re != nil {
+			m.parseAttr(re, entries[j].Attr)
+		}
+	}
+	return err
+}
+
 func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
 	// TODO: handle big directory
 	vals, err := m.scanValues(m.entryKey(inode, ""), limit, nil)
@@ -1796,30 +1840,10 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	}
 
 	if plus != 0 && len(*entries) != 0 {
-		fillAttr := func(es []*Entry) error {
-			var keys = make([][]byte, len(es))
-			for i, e := range es {
-				keys[i] = m.inodeKey(e.Inode)
-			}
-			var rs [][]byte
-			err := m.client.txn(func(tx *kvTxn) error {
-				rs = tx.gets(keys...)
-				return nil
-			}, 0)
-			if err != nil {
-				return err
-			}
-			for j, re := range rs {
-				if re != nil {
-					m.parseAttr(re, es[j].Attr)
-				}
-			}
-			return nil
-		}
 		batchSize := 4096
 		nEntries := len(*entries)
 		if nEntries <= batchSize {
-			err = fillAttr(*entries)
+			err = m.fillAttr(*entries)
 		} else {
 			indexCh := make(chan []*Entry, 10)
 			var wg sync.WaitGroup
@@ -1828,7 +1852,7 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 				go func() {
 					defer wg.Done()
 					for es := range indexCh {
-						if e := fillAttr(es); e != nil {
+						if e := m.fillAttr(es); e != nil {
 							err = e
 							break
 						}
@@ -3755,4 +3779,62 @@ func (m *kvMeta) loadDumpedACLs(ctx Context) error {
 		tx.set(m.counterKey(aclCounter), packCounter(int64(maxId)))
 		return nil
 	})
+}
+
+func (m *kvMeta) getDirFetcher(ctx Context) dirFetcher {
+	return func(inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error) {
+		var startKey []byte
+		total := limit
+		if cursor == nil {
+			startKey = m.entryKey(inode, "")
+
+			// should not happen
+			if offset > 0 {
+				total += offset
+			}
+		} else {
+			startKey = nextKey(m.entryKey(inode, cursor.(string)))
+		}
+		endKey := nextKey(m.entryKey(inode, ""))
+
+		keys, vals, err := m.scan(startKey, endKey, total, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// skip offset
+		if total > limit && offset <= len(keys) {
+			keys, vals = keys[offset:], vals[offset:]
+		}
+
+		prefix := len(m.entryKey(inode, ""))
+		var entries []*Entry
+		var name []byte
+		var typ uint8
+		var ino Ino
+		for i, buf := range vals {
+			name = keys[i]
+			typ, ino = m.parseEntry(buf)
+			if len(name) == prefix {
+				logger.Errorf("Corrupt entry with empty name: inode %d parent %d", ino, inode)
+				continue
+			}
+			entries = append(entries, &Entry{
+				Inode: ino,
+				Name:  []byte(name)[prefix:],
+				Attr:  &Attr{Typ: typ},
+			})
+		}
+
+		if plus {
+			if err = m.fillAttr(entries); err != nil {
+				return nil, nil, err
+			}
+		}
+
+		if len(entries) == 0 {
+			return nil, nil, nil
+		}
+		return string(entries[len(entries)-1].Name), entries, nil
+	}
 }
