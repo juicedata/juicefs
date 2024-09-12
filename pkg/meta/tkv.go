@@ -2317,7 +2317,17 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	return count, nil
 }
 
-func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno {
+func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, dslices, wslices []*slice, skipped int, delayed []byte) syscall.Errno {
+	var id uint64
+	var size uint32
+	var wbuf []byte
+	for _, s := range wslices {
+		wbuf = append(wbuf, marshalSlice(s.pos, s.id, s.size, s.off, s.len)...)
+		if s.id > 0 {
+			id, size = s.id, s.size
+			break
+		}
+	}
 	st := errno(m.txn(func(tx *kvTxn) error {
 		buf2 := tx.get(m.chunkKey(inode, indx))
 		if len(buf2) < len(buf) || !bytes.Equal(buf, buf2[:len(buf)]) {
@@ -2325,7 +2335,7 @@ func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice,
 			return syscall.EINVAL
 		}
 
-		buf2 = append(append(buf2[:skipped*sliceBytes], marshalSlice(pos, id, size, 0, size)...), buf2[len(buf):]...)
+		buf2 = append(append(buf2[:skipped*sliceBytes], wbuf...), buf2[len(buf):]...)
 		tx.set(m.chunkKey(inode, indx), buf2)
 		// create the key to tracking it
 		tx.set(m.sliceKey(id, size), make([]byte, 8))
@@ -2334,7 +2344,7 @@ func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice,
 				tx.set(m.delSliceKey(time.Now().Unix(), id), delayed)
 			}
 		} else {
-			for _, s := range ss {
+			for _, s := range dslices {
 				if s.id > 0 {
 					tx.incrBy(m.sliceKey(s.id, s.size), -1)
 				}
@@ -2364,7 +2374,7 @@ func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice,
 		m.cleanupZeroRef(id, size)
 		if delayed == nil {
 			var refs int64
-			for _, s := range ss {
+			for _, s := range dslices {
 				if s.id > 0 && m.client.txn(func(tx *kvTxn) error {
 					refs = tx.incrBy(m.sliceKey(s.id, s.size), 0)
 					return nil

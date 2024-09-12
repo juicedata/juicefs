@@ -154,51 +154,72 @@ func buildSlice(ss []*slice) []Slice {
 	return chunk
 }
 
-func compactChunk(ss []*slice) (uint32, uint32, []Slice) {
-	var chunk = buildSlice(ss)
-	var pos uint32
-	n := len(chunk)
-	for n > 1 {
-		if chunk[0].Id == 0 {
-			pos += chunk[0].Len
-			chunk = chunk[1:]
-			n--
-		} else if chunk[n-1].Id == 0 {
-			chunk = chunk[:n-1]
-			n--
-		} else {
-			break
+func compactChunk(slices []*slice) (uint32, uint32, uint32, uint32, []Slice) {
+	var pos uint32 = ChunkSize
+	for _, s := range slices {
+		if s.pos < pos {
+			pos = s.pos
+			if pos == 0 {
+				break
+			}
 		}
 	}
-	if n == 1 && chunk[0].Id == 0 {
-		chunk[0].Len = 1
+	ss := buildSlice(slices)
+	if pos > 0 && len(ss) > 0 {
+		// remove left padding
+		ss = ss[1:]
+	}
+
+	var head, tail uint32
+	trimmed := ss
+	for len(trimmed) > 0 && trimmed[0].Id == 0 {
+		head += trimmed[0].Len
+		trimmed = trimmed[1:]
+	}
+	for n := len(trimmed); n > 0 && trimmed[n-1].Id == 0; n-- {
+		tail += trimmed[n-1].Len
+		trimmed = trimmed[:n-1]
+	}
+	if len(trimmed) == 0 {
+		tail = head - 1
+		head = 0
+		trimmed = []Slice{{Len: 1}}
 	}
 	var size uint32
-	for _, c := range chunk {
+	for _, c := range trimmed {
 		size += c.Len
 	}
-	return pos, size, chunk
+	return pos, head, size, tail, trimmed
 }
 
-func skipSome(chunk []*slice) int {
-	var skipped int
-	var total = len(chunk)
-	for skipped < total {
-		ss := chunk[skipped:]
-		pos, size, c := compactChunk(ss)
-		first := ss[0]
-		if first.len < (1<<20) || first.len*5 < size || size == 0 {
-			// it's too small
-			break
-		}
-		isFirst := func(pos uint32, s Slice) bool {
-			return pos == first.pos && s.Id == first.id && s.Off == first.off && s.Len == first.len
-		}
-		if !isFirst(pos, c[0]) {
-			// it's not the first slice, compact it
-			break
-		}
-		skipped++
+func shouldSkip(s *slice, rest []*slice, lastWrite uint32) (bool, uint32) {
+	pos, head, write, tail, _ := compactChunk(rest)
+	if pos < s.pos+s.len && s.pos < pos+head+write+tail {
+		return false, 0 // overlap
 	}
-	return skipped
+	reduced := lastWrite - write
+	if write == 0 || reduced*5 < lastWrite || reduced < 2<<20 || reduced < s.size {
+		return false, 0
+	}
+	return true, write
+}
+
+func skipSome(slices []*slice) (int, int) {
+	var head, tail int
+	_, _, lastWrite, _, _ := compactChunk(slices)
+	for ; head < len(slices)-1; head++ {
+		skip, write := shouldSkip(slices[head], slices[head+1:], lastWrite)
+		if !skip {
+			break
+		}
+		lastWrite = write
+	}
+	for tail = len(slices); tail > head+1; tail-- {
+		skip, write := shouldSkip(slices[tail-1], slices[:tail-1], lastWrite)
+		if !skip {
+			break
+		}
+		lastWrite = write
+	}
+	return head, tail
 }

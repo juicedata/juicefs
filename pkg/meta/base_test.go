@@ -1543,15 +1543,15 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	_ = m.Write(ctx, inode, 0, uint32(0), Slice{Id: sliceId, Size: 1 << 20, Len: 64 << 10}, time.Now())
 	m.NewSlice(ctx, &sliceId)
 	_ = m.Write(ctx, inode, 0, uint32(128<<10), Slice{Id: sliceId, Size: 2 << 20, Len: 128 << 10}, time.Now())
-	_ = m.Write(ctx, inode, 0, uint32(0), Slice{Id: 0, Size: 1 << 20, Len: 1 << 20}, time.Now())
+	_ = m.Fallocate(ctx, inode, fallocZeroRange, 0, 1<<20, nil)
 	if c, ok := m.(compactor); ok {
 		c.compactChunk(inode, 0, false, true)
 	}
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read 0: %s", st)
 	}
-	if len(slices) != 1 || slices[0].Len != 3<<20 {
-		t.Fatalf("inode %d should be compacted, but have %d slices, size %d", inode, len(slices), slices[0].Len)
+	if len(slices) != 2 || slices[0].Len != 1048576 || slices[1].Len != 2097152 {
+		t.Fatalf("inode %d should be compacted, but have %d slices: %+v", inode, len(slices), slices)
 	}
 
 	m.NewSlice(ctx, &sliceId)
@@ -1568,10 +1568,24 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	if st := m.Read(ctx, inode, 2, &slices); st != 0 {
 		t.Fatalf("read 1: %s", st)
 	}
-	// compact twice: 4515328+2607724-2338508 = 4784544; 8829056+1074933-2338508-4784544=2780937
-	if len(slices) != 3 || slices[0].Len != 2338508 || slices[1].Len != 4784544 || slices[2].Len != 2780937 {
-		t.Fatalf("inode %d should be compacted, but have %d slices, size %d,%d,%d",
-			inode, len(slices), slices[0].Len, slices[1].Len, slices[2].Len)
+	// 8829056 - 2338508 = 6490548
+	if len(slices) != 3 || slices[0].Len != 2338508 || slices[1].Len != 6490548 || slices[2].Len != 1074933 {
+		t.Fatalf("inode %d should be compacted, but have %d slices: %+v", inode, len(slices), slices)
+	}
+
+	m.NewSlice(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 3, 0, Slice{Id: sliceId, Size: 2338508, Len: 2338508}, time.Now())
+	_ = m.CopyFileRange(ctx, inode, 3*ChunkSize, inode, 4*ChunkSize, 2338508, 0, nil, nil)
+	_ = m.Fallocate(ctx, inode, fallocZeroRange, 4*ChunkSize, ChunkSize, nil)
+	_ = m.CopyFileRange(ctx, inode, 3*ChunkSize, inode, 4*ChunkSize, 2338508, 0, nil, nil)
+	if c, ok := m.(compactor); ok {
+		c.compactChunk(inode, 4, false, true)
+	}
+	if st := m.Read(ctx, inode, 4, &slices); st != 0 {
+		t.Fatalf("read inode %d chunk 4: %s", inode, st)
+	}
+	if len(slices) != 1 || slices[0].Len != 2338508 {
+		t.Fatalf("inode %d should be compacted, but have %d slices, size %d", inode, len(slices), slices[0].Len)
 	}
 }
 

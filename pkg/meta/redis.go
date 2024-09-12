@@ -2837,10 +2837,18 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	return count, err
 }
 
-func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno {
+func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, dslices, wslices []*slice, skipped int, delayed []byte) syscall.Errno {
+	var id uint64
+	var size uint32
+	for _, s := range wslices {
+		if s.id > 0 {
+			id, size = s.id, s.size
+			break
+		}
+	}
 	var rs []*redis.IntCmd // trash disabled: check reference of slices
 	if delayed == nil {
-		rs = make([]*redis.IntCmd, len(ss))
+		rs = make([]*redis.IntCmd, len(dslices))
 	}
 	key := m.chunkKey(inode, indx)
 	ctx := Background
@@ -2861,7 +2869,10 @@ func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.LTrim(ctx, key, int64(n), -1)
-			pipe.LPush(ctx, key, marshalSlice(pos, id, size, 0, size))
+			for i := len(wslices); i > 0; i-- {
+				s := wslices[i-1]
+				pipe.LPush(ctx, key, marshalSlice(s.pos, s.id, s.size, s.off, s.len))
+			}
 			for i := skipped; i > 0; i-- {
 				pipe.LPush(ctx, key, origin[(i-1)*sliceBytes:i*sliceBytes])
 			}
@@ -2871,7 +2882,7 @@ func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*
 					pipe.HSet(ctx, m.delSlices(), fmt.Sprintf("%d_%d", id, time.Now().Unix()), delayed)
 				}
 			} else {
-				for i, s := range ss {
+				for i, s := range dslices {
 					if s.id > 0 {
 						rs[i] = pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.id, s.size), -1)
 					}
@@ -2896,7 +2907,7 @@ func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*
 	} else if st == 0 {
 		m.cleanupZeroRef(m.sliceKey(id, size))
 		if delayed == nil {
-			for i, s := range ss {
+			for i, s := range dslices {
 				if s.id > 0 && rs[i].Err() == nil && rs[i].Val() < 0 {
 					m.deleteSlice(s.id, s.size)
 				}
