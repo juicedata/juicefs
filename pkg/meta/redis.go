@@ -4612,7 +4612,9 @@ func (m *redisMeta) getDirFetcher(ctx Context) dirFetcher {
 				entries = append(entries, ent)
 			}
 			if plus {
-				m.fillAttr(ctx, entries)
+				if err = m.fillAttr(ctx, entries); err != nil {
+					return 0, nil, err
+				}
 			}
 		}
 		return c, entries, nil
