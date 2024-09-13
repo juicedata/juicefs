@@ -48,4 +48,4 @@ JuiceFS 是开源软件，你可以在 [GitHub](https://github.com/juicedata/jui
 * **视频**：我们在 [Bilibili 频道](https://space.bilibili.com/1206844881)提供了丰富的视频教程。
 * **加入社群**：欢迎加入我们的[微信用户组](https://juicefs.com/zh-cn/wechat-user-group)（中文）或者 [Slack](https://go.juicefs.com/slack)（英文），与 JuiceFS 用户共同探讨。
 * **Office Hours**：每月第 2 周的星期三 16:00-17:00（UTC+8）在线上举行，Juicedata 工程师将为你实时答疑解惑。请加入微信用户组获取最新活动信息。
-* **AI 助手**：如果你遇到了任何问题，欢迎使用「Ask AI」功能（右下角）求助 AI 助手。
+* **AI 助手**：如果你遇到了任何问题，欢迎使用「Ask AI」功能（右下角）求助 AI 助手。AI 助手的知识库来源于文档以及 GitHub 中的相关内容。

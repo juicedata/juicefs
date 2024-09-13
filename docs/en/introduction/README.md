@@ -42,4 +42,4 @@ JuiceFS is an open-source software available on [GitHub](https://github.com/juic
 
 * **Use case**: For more use cases of similar scenarios, please visit [User Stories](https://juicefs.com/en/blog/user-stories).
 * **Join the community**: Welcome to join [Slack](https://go.juicefs.com/slack) to discuss with JuiceFS users.
-* **AI assistant**: If you encounter any problems, you are welcome to use the "Ask AI" feature (lower right corner) to ask for help from the AI ​​assistant.
+* **AI assistant**: If you encounter any problems, you are welcome to use the "Ask AI" feature (lower right corner) to ask for help from the AI ​​assistant. The knowledge base of the AI ​​assistant comes from documentation and related content in GitHub.
