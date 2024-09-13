@@ -5,7 +5,9 @@ slug: /faq
 
 ## My question is not answered in the documentations
 
-Try searching using different keywords (top right corner), if that doesn't help, reach our community at [JuiceFS Community](https://juicefs.com/en/community).
+Please try to use the "Ask AI" feature (lower right corner) first. If the AI assistant's answer helps you or gives you the wrong answer, you are welcome to give your feedback in the answer. Or use the document search feature (top right corner) and try searching with different keywords.
+
+If the above methods still fail to solve your problem, you can join the [JuiceFS Community](https://juicefs.com/en/community) for help.
 
 ## General Questions
 
