@@ -43,4 +43,5 @@ type ChunkStore interface {
 	CheckCache(id uint64, length uint32) (uint64, error)
 	UsedMemory() int64
 	UpdateLimit(upload, download int64)
+	Close()
 }
