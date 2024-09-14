@@ -624,7 +624,7 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 	}
 	ino = m.checkRoot(ino)
 	var usage, q *Quota
-	for ino > RootInode {
+	for ino >= RootInode {
 		ino, q = m.getQuotaParent(ctx, ino)
 		if q == nil {
 			break
@@ -644,6 +644,15 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 			if li < *iavail {
 				*iavail = li
 			}
+		}
+		if ino == RootInode {
+			break
+		}
+		if parent, st := m.getDirParent(ctx, ino); st != 0 {
+			logger.Warnf("Get directory parent of inode %d: %s", ino, st)
+			break
+		} else {
+			ino = parent
 		}
 	}
 	if usage != nil {

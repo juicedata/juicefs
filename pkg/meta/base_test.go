@@ -837,6 +837,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}, false, false); err != nil {
 		t.Fatalf("set quota: %s", err)
 	}
+	base.loadQuotas()
 	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
@@ -852,6 +853,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}, false, false); err != nil {
 		t.Fatalf("set quota: %s", err)
 	}
+	base.loadQuotas()
 	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
@@ -867,6 +869,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}, false, false); err != nil {
 		t.Fatalf("set quota: %s", err)
 	}
+	base.loadQuotas()
 	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
@@ -882,7 +885,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}, false, false); err != nil {
 		t.Fatalf("set quota: %s", err)
 	}
-
+	base.loadQuotas()
 	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
