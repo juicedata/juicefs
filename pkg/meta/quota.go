@@ -63,6 +63,17 @@ func (q *Quota) update(space, inodes int64) {
 	atomic.AddInt64(&q.newInodes, inodes)
 }
 
+func (q *Quota) snap() Quota {
+	return Quota{
+		MaxSpace:   atomic.LoadInt64(&q.MaxSpace),
+		MaxInodes:  atomic.LoadInt64(&q.MaxInodes),
+		UsedSpace:  atomic.LoadInt64(&q.UsedSpace),
+		UsedInodes: atomic.LoadInt64(&q.UsedInodes),
+		newSpace:   atomic.LoadInt64(&q.newSpace),
+		newInodes:  atomic.LoadInt64(&q.newInodes),
+	}
+}
+
 // not thread safe
 func (q *Quota) sanitize() {
 	if q.UsedSpace < 0 {

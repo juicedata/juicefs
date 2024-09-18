@@ -623,15 +623,16 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 		return st
 	}
 	ino = m.checkRoot(ino)
-	var usage, q *Quota
+	var usage, quota *Quota
 	for ino >= RootInode {
-		ino, q = m.getQuotaParent(ctx, ino)
-		if q == nil {
+		ino, quota = m.getQuotaParent(ctx, ino)
+		if quota == nil {
 			break
 		}
+		q := quota.snap()
 		q.sanitize()
 		if usage == nil {
-			usage = q
+			usage = &q
 		}
 		if q.MaxSpace > 0 {
 			ls := uint64(q.MaxSpace - q.UsedSpace)
