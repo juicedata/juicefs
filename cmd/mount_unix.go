@@ -53,6 +53,8 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
+var mountPid int
+
 func showThreadStack(agentAddr string) {
 	if agentAddr == "" {
 		return
@@ -224,10 +226,15 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 		_ = os.Stdout.Sync()
 	}
 	_, _ = os.Stdout.WriteString("\n")
+	mountDesc := "mount process is not started yet"
+	if mountPid != 0 {
+		mountDesc = fmt.Sprintf("tried to kill mount process %d", mountPid)
+		_ = syscall.Kill(mountPid, syscall.SIGABRT) // Kill and show stack trace
+	}
 	if background {
-		logger.Fatalf("The mount point is not ready in %d seconds, please check the log (%s) or re-mount in foreground", mountTimeOut, logPath)
+		logger.Fatalf("The mount point is not ready in %d seconds (%s), please check the log (%s) or re-mount in foreground", mountTimeOut, mountDesc, logPath)
 	} else {
-		logger.Fatalf("The mount point is not ready in %d seconds, exit it", mountTimeOut)
+		logger.Fatalf("The mount point is not ready in %d seconds (%s), exit it", mountTimeOut, mountDesc)
 	}
 }
 
@@ -759,6 +766,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 			}
 		}
 
+		mountPid = 0
 		cmd := exec.Command(path, os.Args[1:]...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
@@ -770,6 +778,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 			continue
 		}
 		os.Unsetenv("_FUSE_STATE_PATH")
+		mountPid = cmd.Process.Pid
 
 		ctx, cancel := context.WithCancel(context.TODO())
 		go watchdog(ctx, mp)
@@ -790,6 +799,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 				logger.Info("transfer FUSE session to others")
 				return nil
 			}
+			logger.Errorf("mount process %d: %s, will restart in 1 second", mountPid, err)
 			time.Sleep(time.Second)
 		}
 	}
