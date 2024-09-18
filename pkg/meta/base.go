@@ -623,31 +623,16 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 		return st
 	}
 	ino = m.checkRoot(ino)
-	if ino == RootInode {
-		return 0
-	}
-	if st := m.Access(ctx, ino, MODE_MASK_R&MODE_MASK_X, nil); st != 0 {
-		return st
-	}
-	var usage *Quota
-	var attr Attr
-	for root := ino; root >= RootInode; root = attr.Parent {
-		if st := m.GetAttr(ctx, root, &attr); st != 0 {
-			return st
+	var usage, quota *Quota
+	for ino >= RootInode {
+		ino, quota = m.getQuotaParent(ctx, ino)
+		if quota == nil {
+			break
 		}
-		if root == RootInode {
-			attr.Parent = 0
-		}
-		q, err := m.en.doGetQuota(ctx, root)
-		if err != nil {
-			return errno(err)
-		}
-		if q == nil {
-			continue
-		}
+		q := quota.snap()
 		q.sanitize()
 		if usage == nil {
-			usage = q
+			usage = &q
 		}
 		if q.MaxSpace > 0 {
 			ls := uint64(q.MaxSpace - q.UsedSpace)
@@ -661,12 +646,20 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 				*iavail = li
 			}
 		}
+		if ino == RootInode {
+			break
+		}
+		if parent, st := m.getDirParent(ctx, ino); st != 0 {
+			logger.Warnf("Get directory parent of inode %d: %s", ino, st)
+			break
+		} else {
+			ino = parent
+		}
 	}
-	if usage == nil {
-		return 0
+	if usage != nil {
+		*totalspace = uint64(usage.UsedSpace) + *availspace
+		*iused = uint64(usage.UsedInodes)
 	}
-	*totalspace = uint64(usage.UsedSpace) + *availspace
-	*iused = uint64(usage.UsedInodes)
 	return 0
 }
 
@@ -1313,12 +1306,12 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	parentDst = m.checkRoot(parentDst)
 	var quotaSrc, quotaDst Ino
 	if !isTrash(parentSrc) {
-		quotaSrc = m.getQuotaParent(ctx, parentSrc)
+		quotaSrc, _ = m.getQuotaParent(ctx, parentSrc)
 	}
 	if parentSrc == parentDst {
 		quotaDst = quotaSrc
 	} else {
-		quotaDst = m.getQuotaParent(ctx, parentDst)
+		quotaDst, _ = m.getQuotaParent(ctx, parentDst)
 	}
 	var space, inodes int64
 	if quotaSrc != quotaDst {
