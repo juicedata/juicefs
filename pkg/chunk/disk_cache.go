@@ -211,6 +211,11 @@ func (cache *cacheStore) checkErr(f func() error) error {
 	if !cache.available() {
 		return errCacheDown
 	}
+	cache.state.beforeCacheOp()
+	defer cache.state.afterCacheOp()
+	if err := cache.state.checkCacheOp(); err != nil {
+		return err
+	}
 
 	start := utils.Clock()
 	cache.opMu.Lock()
@@ -373,11 +378,6 @@ func (cache *cacheStore) refreshCacheKeys() {
 }
 
 func (cache *cacheStore) removeStage(key string) error {
-	cache.state.beforeCacheOp()
-	defer cache.state.afterCacheOp()
-	if err := cache.state.checkCacheOp(); err != nil {
-		return err
-	}
 	var err error
 	if err = cache.removeFile(cache.stagePath(key)); err == nil {
 		cache.m.stageBlocks.Sub(1)
@@ -391,11 +391,6 @@ func (cache *cacheStore) removeStage(key string) error {
 }
 
 func (cache *cacheStore) cache(key string, p *Page, force, dropCache bool) {
-	cache.state.beforeCacheOp()
-	defer cache.state.afterCacheOp()
-	if cache.state.checkCacheOp() != nil {
-		return
-	}
 	if cache.capacity == 0 {
 		return
 	}
@@ -555,12 +550,6 @@ func (cache *cacheStore) getPathFromKey(k cacheKey) string {
 }
 
 func (cache *cacheStore) remove(key string, staging bool) {
-	cache.state.beforeCacheOp()
-	defer cache.state.afterCacheOp()
-	if cache.state.checkCacheOp() != nil {
-		return
-	}
-
 	cache.Lock()
 	delete(cache.pages, key)
 	path := cache.cachePath(key)
@@ -592,12 +581,6 @@ func (cache *cacheStore) remove(key string, staging bool) {
 }
 
 func (cache *cacheStore) load(key string) (ReadCloser, error) {
-	cache.state.beforeCacheOp()
-	defer cache.state.afterCacheOp()
-	if err := cache.state.checkCacheOp(); err != nil {
-		return nil, err
-	}
-
 	cache.Lock()
 	defer cache.Unlock()
 	if p, ok := cache.pages[key]; ok {
@@ -685,12 +668,6 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 
 func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string, error) {
 	stagingPath := cache.stagePath(key)
-
-	cache.state.beforeCacheOp()
-	defer cache.state.afterCacheOp()
-	if err := cache.state.checkCacheOp(); err != nil {
-		return stagingPath, err
-	}
 	if cache.stageFull {
 		return stagingPath, errStageFull
 	}
