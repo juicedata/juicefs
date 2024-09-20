@@ -546,7 +546,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			} else if equal {
 				if config.DeleteSrc {
 					deleteObj(src, key, false)
-				} else if config.Perms {
+				} else if config.Perms && (!obj.IsSymlink() || !config.Links) {
 					if o, e := dst.Head(key); e == nil {
 						if needCopyPerms(obj, o) {
 							copyPerms(dst, obj, config)
