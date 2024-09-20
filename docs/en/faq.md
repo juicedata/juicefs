@@ -3,11 +3,11 @@ title: FAQ
 slug: /faq
 ---
 
-## My question is not answered in the documentations
+## My question is not answered in the documentation
 
-Please try to use the "Ask AI" feature (lower right corner) first. If the AI assistant's answer helps you or gives you the wrong answer, you are welcome to give your feedback in the answer. Or use the document search feature (top right corner) and try searching with different keywords.
+If you can't find an answer in the documentation, please try using the "Ask AI" feature (bottom right corner). If the AI assistant's answer helps you or provides a wrong answer, feel free to leave feedback on the response. Alternatively, use the document search feature (top right corner) and try searching with different keywords.
 
-If the above methods still fail to solve your problem, you can join the [JuiceFS Community](https://juicefs.com/en/community) for help.
+If these methods still do not resolve your question, you can join the [JuiceFS Community](https://juicefs.com/en/community) for further assistance.
 
 ## General Questions
 
