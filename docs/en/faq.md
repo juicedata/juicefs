@@ -5,7 +5,7 @@ slug: /faq
 
 ## My question is not answered in the documentation
 
-If you can't find an answer in the documentation, please try using the "Ask AI" feature (bottom right corner). If the AI assistant's answer helps you or provides a wrong answer, feel free to leave feedback on the response. Alternatively, use the document search feature (top right corner) and try searching with different keywords.
+If you can't find an answer in the documentation, please try using the "Ask AI" feature (in the bottom right corner). If the AI assistant's answer helps you or provides a wrong answer, feel free to leave feedback on the response. Alternatively, use the document search feature (in the top right corner) and try searching with different keywords.
 
 If these methods still do not resolve your question, you can join the [JuiceFS Community](https://juicefs.com/en/community) for further assistance.
 
