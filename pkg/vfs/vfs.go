@@ -1224,10 +1224,10 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	if statePath == "" {
 		statePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 	}
-
 	if err := v.loadAllHandles(statePath); err != nil && !os.IsNotExist(err) {
 		logger.Errorf("load state from %s: %s", statePath, err)
 	}
+	_ = os.Rename(statePath, statePath+".bak")
 
 	go v.cleanupModified()
 	initVFSMetrics(v, writer, reader, registerer)
