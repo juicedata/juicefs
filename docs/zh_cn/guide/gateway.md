@@ -382,6 +382,10 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 
 请参考 MinIO 官方[示例程序](https://github.com/minio/minio/blob/master/docs/sts/assume-role.go)
 
+:::note 注意
+环境变量设置的超级用户无法使用 AssumeRole API，只有通过 `mc admin user add` 添加的用户才能使用 AssumeRole API。
+:::
+
 #### 权限管理
 
 默认新创建的用户是没有任何权限的，需要使用 `mc admin policy` 为其赋权后才可使用。该命令支持权限的增删改查以及为用户添加删除更新权限。

@@ -380,6 +380,10 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 
 See the [MinIO official example program](https://github.com/minio/minio/blob/master/docs/sts/assume-role.go).
 
+:::note
+Superusers who are set by environment variables cannot use AssumeRole apis; only users who are added by 'mc admin user add' can use AssumeRole apis.
+:::
+
 #### Permission management
 
 By default, newly created users have no permissions and need to be granted permissions using `mc admin policy` before they can be used. This command supports adding, deleting, updating, and listing policies, as well as adding, deleting, and updating permissions for users.
