@@ -20,47 +20,29 @@ import (
 	"fmt"
 	"testing"
 
-	. "github.com/smartystreets/goconvey/convey"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDebug(t *testing.T) {
 	mountTemp(t, nil, nil, nil)
 	defer umountTemp(t)
-	Convey("TestDebug", t, func() {
-		Convey("Mount point does not exist", func() {
-			mp := "/jfs/test/mp"
-			So(Main([]string{"", "debug", mp}), ShouldNotBeNil)
-		})
 
-		Convey("Directory is not a mount point", func() {
-			mp := "./"
-			So(Main([]string{"", "debug", mp}), ShouldNotBeNil)
-		})
+	require.NotNil(t, Main([]string{"", "debug", "/jfs/test/mp"}), "mount point does not exist")
+	require.NotNil(t, Main([]string{"", "debug", "./"}), "directory is not a mount point")
+	require.NotNil(t, Main([]string{"", "debug", "--out-dir", "./debug_test.go", testMountPoint}), "specify a file as out dir")
 
-	})
-
-	Convey("TestDebug_OutDir", t, func() {
-		Convey("Specify a file as out dir", func() {
-			So(Main([]string{"", "debug", "--out-dir", "./debug_test.go", testMountPoint}), ShouldNotBeNil)
-		})
-	})
-
-	Convey("TestDebug_LogArg", t, func() {
-		cases := []struct {
-			arg string
-			val string
-		}{
-			{"--log /var/log/jfs.log", "/var/log/jfs.log"},
-			{"--log=/var/log/jfs.log", "/var/log/jfs.log"},
-			{"--log   =   /var/log/jfs.log", "/var/log/jfs.log"},
-			{"--log=    /var/log/jfs.log", "/var/log/jfs.log"},
-			{"--log    =/var/log/jfs.log", "/var/log/jfs.log"},
-			{"--log      /var/log/jfs.log", "/var/log/jfs.log"},
-		}
-		for i, c := range cases {
-			Convey(fmt.Sprintf("valid log arg %d", i), func() {
-				So(logArg.FindStringSubmatch(c.arg)[2] == c.val, ShouldBeTrue)
-			})
-		}
-	})
+	cases := []struct {
+		arg string
+		val string
+	}{
+		{"--log /var/log/jfs.log", "/var/log/jfs.log"},
+		{"--log=/var/log/jfs.log", "/var/log/jfs.log"},
+		{"--log   =   /var/log/jfs.log", "/var/log/jfs.log"},
+		{"--log=    /var/log/jfs.log", "/var/log/jfs.log"},
+		{"--log    =/var/log/jfs.log", "/var/log/jfs.log"},
+		{"--log      /var/log/jfs.log", "/var/log/jfs.log"},
+	}
+	for i, c := range cases {
+		require.True(t, logArg.FindStringSubmatch(c.arg)[2] == c.val, fmt.Sprintf("valid log arg %d", i))
+	}
 }

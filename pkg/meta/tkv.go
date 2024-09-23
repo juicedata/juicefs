@@ -518,25 +518,22 @@ func (m *kvMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.newInodes, inodes)
 }
 
-func (m *kvMeta) flushStats() {
-	for {
-		if space := atomic.LoadInt64(&m.newSpace); space != 0 {
-			if v, err := m.incrCounter(usedSpace, space); err == nil {
-				atomic.AddInt64(&m.newSpace, -space)
-				atomic.StoreInt64(&m.usedSpace, v)
-			} else {
-				logger.Warnf("Update space stats: %s", err)
-			}
+func (m *kvMeta) doFlushStats() {
+	if space := atomic.LoadInt64(&m.newSpace); space != 0 {
+		if v, err := m.incrCounter(usedSpace, space); err == nil {
+			atomic.AddInt64(&m.newSpace, -space)
+			atomic.StoreInt64(&m.usedSpace, v)
+		} else {
+			logger.Warnf("Update space stats: %s", err)
 		}
-		if inodes := atomic.LoadInt64(&m.newInodes); inodes != 0 {
-			if v, err := m.incrCounter(totalInodes, inodes); err == nil {
-				atomic.AddInt64(&m.newInodes, -inodes)
-				atomic.StoreInt64(&m.usedInodes, v)
-			} else {
-				logger.Warnf("Update inodes stats: %s", err)
-			}
+	}
+	if inodes := atomic.LoadInt64(&m.newInodes); inodes != 0 {
+		if v, err := m.incrCounter(totalInodes, inodes); err == nil {
+			atomic.AddInt64(&m.newInodes, -inodes)
+			atomic.StoreInt64(&m.usedInodes, v)
+		} else {
+			logger.Warnf("Update inodes stats: %s", err)
 		}
-		time.Sleep(time.Second)
 	}
 }
 
@@ -1091,25 +1088,25 @@ func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(tx *kvTxn) error {
 		var pattr Attr
-		a := tx.get(m.inodeKey(parent))
-		if a == nil {
+		rs := tx.gets(m.inodeKey(parent), m.entryKey(parent, name))
+		if rs[0] == nil {
 			return syscall.ENOENT
 		}
-		m.parseAttr(a, &pattr)
+		m.parseAttr(rs[0], &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
 		if pattr.Parent > TrashInode {
 			return syscall.ENOENT
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
 		if (pattr.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
 
-		buf := tx.get(m.entryKey(parent, name))
+		buf := rs[1]
 		var foundIno Ino
 		var foundType uint8
 		if buf != nil {
@@ -1121,7 +1118,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 		if foundIno != 0 {
 			if _type == TypeFile || _type == TypeDirectory {
-				a = tx.get(m.inodeKey(foundIno))
+				a := tx.get(m.inodeKey(foundIno))
 				if a != nil {
 					m.parseAttr(a, attr)
 				} else {
@@ -1874,7 +1871,6 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	if err == nil && newSpace < 0 {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length, false)
-		m.updateDirQuota(Background, attr.Parent, newSpace, -1)
 	}
 	return err
 }

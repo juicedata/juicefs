@@ -316,6 +316,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 	case meta.Clone:
 		done := make(chan struct{})
 		srcIno := Ino(r.Get64())
+		srcParentIno := Ino(r.Get64())
 		dstParentIno := Ino(r.Get64())
 		dstName := string(r.Get(int(r.Get8())))
 		umask := r.Get16()
@@ -323,7 +324,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		var count, total uint64
 		var eno syscall.Errno
 		go func() {
-			if eno = v.Meta.Clone(ctx, srcIno, dstParentIno, dstName, cmode, umask, &count, &total); eno != 0 {
+			if eno = v.Meta.Clone(ctx, srcParentIno, srcIno, dstParentIno, dstName, cmode, umask, &count, &total); eno != 0 {
 				logger.Errorf("clone failed srcIno:%d,dstParentIno:%d,dstName:%s,cmode:%d,umask:%d,eno:%v", srcIno, dstParentIno, dstName, cmode, umask, eno)
 			}
 			close(done)

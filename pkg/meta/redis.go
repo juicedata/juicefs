@@ -697,7 +697,7 @@ func (m *redisMeta) updateStats(space int64, inodes int64) {
 }
 
 // redisMeta updates the usage in each transaction
-func (m *redisMeta) flushStats() {}
+func (m *redisMeta) doFlushStats() {}
 
 func (m *redisMeta) handleLuaResult(op string, res interface{}, err error, returnedIno *int64, returnedAttr *string) syscall.Errno {
 	if err != nil {
@@ -1214,7 +1214,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		if pattr.Parent > TrashInode {
 			return syscall.ENOENT
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
 		if (pattr.Flags & FlagImmutable) != 0 {
@@ -2190,7 +2190,6 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	if err == nil && newSpace < 0 {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length, false)
-		m.updateDirQuota(Background, attr.Parent, newSpace, -1)
 	}
 	return err
 }

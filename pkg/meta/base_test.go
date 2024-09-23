@@ -22,6 +22,7 @@ package meta
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -40,6 +41,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testConfig() *Config {
@@ -835,6 +837,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}, false, false); err != nil {
 		t.Fatalf("set quota: %s", err)
 	}
+	base.loadQuotas()
 	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
@@ -850,6 +853,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}, false, false); err != nil {
 		t.Fatalf("set quota: %s", err)
 	}
+	base.loadQuotas()
 	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
@@ -865,6 +869,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}, false, false); err != nil {
 		t.Fatalf("set quota: %s", err)
 	}
+	base.loadQuotas()
 	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
@@ -880,7 +885,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}, false, false); err != nil {
 		t.Fatalf("set quota: %s", err)
 	}
-
+	base.loadQuotas()
 	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
@@ -1570,6 +1575,21 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	if len(slices) != 3 || slices[0].Len != 2338508 || slices[1].Len != 4784544 || slices[2].Len != 2780937 {
 		t.Fatalf("inode %d should be compacted, but have %d slices, size %d,%d,%d",
 			inode, len(slices), slices[0].Len, slices[1].Len, slices[2].Len)
+	}
+
+	m.NewSlice(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 3, 0, Slice{Id: sliceId, Size: 2338508, Len: 2338508}, time.Now())
+	_ = m.CopyFileRange(ctx, inode, 3*ChunkSize, inode, 4*ChunkSize, 2338508, 0, nil, nil)
+	_ = m.Fallocate(ctx, inode, fallocZeroRange, 4*ChunkSize, ChunkSize, nil)
+	_ = m.CopyFileRange(ctx, inode, 3*ChunkSize, inode, 4*ChunkSize, 2338508, 0, nil, nil)
+	if c, ok := m.(compactor); ok {
+		c.compactChunk(inode, 4, false, true)
+	}
+	if st := m.Read(ctx, inode, 4, &slices); st != 0 {
+		t.Fatalf("read inode %d chunk 4: %s", inode, st)
+	}
+	if len(slices) != 1 || slices[0].Len != 2338508 {
+		t.Fatalf("inode %d should be compacted, but have %d slices, size %d", inode, len(slices), slices[0].Len)
 	}
 }
 
@@ -2663,7 +2683,7 @@ func testClone(t *testing.T, m Meta) {
 	var count, total uint64
 	var cmode uint8
 	cmode |= CLONE_MODE_PRESERVE_ATTR
-	if eno := m.Clone(Background, dir1, cloneDir, cloneDstName, cmode, 022, &count, &total); eno != 0 {
+	if eno := m.Clone(Background, cloneDir, dir1, cloneDir, cloneDstName, cmode, 022, &count, &total); eno != 0 {
 		t.Fatalf("clone: %s", eno)
 	}
 	var entries1 []*Entry
@@ -2711,7 +2731,7 @@ func testClone(t *testing.T, m Meta) {
 	if iused-iused2 != 8 {
 		t.Fatalf("added inodes: %d", iused-iused2)
 	}
-	if eno := m.Clone(Background, dir1, cloneDir, "no_preserve", 0, 022, &count, &total); eno != 0 {
+	if eno := m.Clone(Background, RootInode, dir1, cloneDir, "no_preserve", 0, 022, &count, &total); eno != 0 {
 		t.Fatalf("clone: %s", eno)
 	}
 	var d2 Ino
@@ -2840,7 +2860,12 @@ func testClone(t *testing.T, m Meta) {
 	if len(nodes) != 2 {
 		t.Fatalf("find detached nodes error: %v", nodes)
 	}
-
+	if eno := m.Clone(Background, RootInode, TrashInode, cloneDir, "xxx", 0, 022, &count, &total); !errors.Is(eno, syscall.EPERM) {
+		t.Fatalf("cloning trash files are not supported")
+	}
+	if eno := m.Clone(Background, TrashInode+1, 1000, cloneDir, "xxx", 0, 022, &count, &total); !errors.Is(eno, syscall.EPERM) {
+		t.Fatalf("cloning files in the trash is not supported")
+	}
 }
 
 func checkEntryTree(t *testing.T, m Meta, srcIno, dstIno Ino, walkFunc func(srcEntry, dstEntry *Entry, dstIno Ino)) {
@@ -2991,6 +3016,62 @@ func testQuota(t *testing.T, m Meta) {
 		}
 	}
 
+	getUsedInodes := func(path string) int64 {
+		m.getBase().doFlushQuotas()
+		qs := make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, path, qs, false, false); err != nil {
+			t.Fatalf("HandleQuota list: %s", err)
+		}
+		return qs[path].UsedInodes
+	}
+
+	// unlink opened file
+	var nInode Ino
+	if st := m.Lookup(ctx, parent, "f2", &nInode, &attr, false); st != 0 {
+		t.Fatalf("Lookup quota/d2/f2: %s", st)
+	}
+
+	if st := m.Open(ctx, nInode, 0, &attr); st != 0 {
+		t.Fatalf("Open quota/d2/f2: %s", st)
+	}
+
+	if st := m.Unlink(ctx, parent, "f2"); st != 0 {
+		t.Fatalf("Unlink quota/d2/f2 err: %s", st)
+	}
+
+	if st := m.Close(ctx, nInode); st != 0 {
+		t.Fatalf("Close quota/d2/f2: %s", st)
+	}
+
+	if used := getUsedInodes("/quota"); used != 5 {
+		t.Fatalf("used inodes of /quota should be 5, but got %d", used)
+	}
+
+	// rename opened file
+	if st := m.Lookup(ctx, inode, "f22", &nInode, &attr, false); st != 0 {
+		t.Fatalf("Lookup quota/d2/d22/f22: %s", st)
+	}
+
+	if st := m.Open(ctx, nInode, 0, &attr); st != 0 {
+		t.Fatalf("Open quota/d2/d22/f22: %s", st)
+	}
+
+	if st := m.Rename(ctx, inode, "f22", inode, "f23", 0, &nInode, nil); st != 0 {
+		t.Fatalf("Rename quota/d2/d22/f22 to quota/d2/d22/f23 err: %s", st)
+	}
+
+	if st := m.Close(ctx, nInode); st != 0 {
+		t.Fatalf("Close quota/d2/d22/f23: %s", st)
+	}
+
+	if used := getUsedInodes("/quota"); used != 5 {
+		t.Fatalf("used inodes of /quota should be 5, but got %d", used)
+	}
+
+	if st := m.Create(ctx, parent, "f3", 0644, 0, 0, &nInode, &attr); st != 0 {
+		t.Fatalf("Create quota/d2/f3: %s", st)
+	}
+
 	if err := m.HandleQuota(ctx, QuotaDel, "/quota/d1", nil, false, false); err != nil {
 		t.Fatalf("HandleQuota del /quota/d1: %s", err)
 	}
@@ -3007,8 +3088,8 @@ func testQuota(t *testing.T, m Meta) {
 		}
 	}
 	m.getBase().loadQuotas()
-	if st := m.Create(ctx, parent, "f3", 0644, 0, 0, nil, &attr); st != syscall.EDQUOT {
-		t.Fatalf("Create quota/d22/f3: %s", st)
+	if st := m.Create(ctx, parent, "f4", 0644, 0, 0, nil, &attr); st != syscall.EDQUOT {
+		t.Fatalf("Create quota/d22/f4: %s", st)
 	}
 }
 
@@ -3127,4 +3208,29 @@ func testAtime(t *testing.T, m Meta) {
 			t.Fatalf("Test %s: expected %v, got %v", name, exp, ret)
 		}
 	}
+}
+
+func TestSymlinkCache(t *testing.T) {
+	cache := newSymlinkCache(10000)
+
+	job := make(chan Ino)
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for ino := range job {
+				cache.Store(ino, []byte(fmt.Sprintf("file%d", ino)))
+			}
+		}()
+	}
+
+	for i := 0; i < 10000; i++ {
+		job <- Ino(i)
+	}
+	close(job)
+	wg.Wait()
+
+	cache.doClean()
+	require.Equal(t, int32(8000), cache.size.Load())
 }

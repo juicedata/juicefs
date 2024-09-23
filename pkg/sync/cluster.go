@@ -204,6 +204,7 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 		if ip == "" {
 			return "", fmt.Errorf("no local ip found")
 		}
+		addr = ip
 	}
 
 	if !strings.Contains(addr, ":") {
@@ -253,11 +254,13 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			}
 			rpath := filepath.Join("/tmp", filepath.Base(path))
 			cmd := exec.Command("rsync", "-au", path, host+":"+rpath)
-			err = cmd.Run()
+			output, err := cmd.CombinedOutput()
+			logger.Debugf("exec: %s,err: %s", cmd.String(), string(output))
 			if err != nil {
 				// fallback to scp
-				cmd = exec.Command("scp", path, host+":"+rpath)
-				err = cmd.Run()
+				cmd = exec.Command("scp", "-o", "StrictHostKeyChecking=no", path, host+":"+rpath)
+				output, err = cmd.CombinedOutput()
+				logger.Debugf("exec: %s,err: %s", cmd.String(), string(output))
 			}
 			if err != nil {
 				logger.Errorf("copy itself to %s: %s", host, err)

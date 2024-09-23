@@ -2,13 +2,14 @@
 title: POSIX Compatibility
 sidebar_position: 6
 slug: /posix_compatibility
+description: Learn how JuiceFS ensures POSIX compatibility through testing with pjdfstest and LTP.
 ---
 
-JuiceFS ensures POSIX compatibility with the help of pjdfstest and LTP.
+JuiceFS ensures POSIX compatibility by using [pjdfstest](https://github.com/pjd/pjdfstest) and [Linux Test Project (LTP)](https://github.com/linux-test-project/ltp) for testing.
 
 ## Pjdfstest
 
-[Pjdfstest](https://github.com/pjd/pjdfstest) is a test suite that helps to test POSIX system calls. JuiceFS passed all of its latest 8813 tests:
+Pjdfstest is a test suite that helps to test POSIX system calls. JuiceFS passed all of its latest 8,813 tests:
 
 ```
 All tests successful.
@@ -22,15 +23,14 @@ Result: PASS
 ```
 
 :::note
-When testing pjdfstest, the JuiceFS trash bin needs to be turned off because the delete behavior of the pjdfstest test is delete directly instead of entering the trash bin. And the JuiceFS trash bin is enabled by default.
-Turn off trash bin command: `juicefs config <meta-url> --trash-days 0`
+When running pjdfstest, you must disable the JuiceFS trash, because the test deletes files directly rather than moving them to the trash. The JuiceFS trash is enabled by default. To disable it, run `juicefs config <meta-url> --trash-days 0`.
 :::
 
 Besides the features covered by pjdfstest, JuiceFS provides:
 
-- Close-to-open consistency. Once a file is closed, it is guaranteed to view the written data in the following open and read. Within the same mount point, all the written data can be read immediately.
-- Rename and all other metadata operations are atomic, which are guaranteed by transaction of metadata engines.
-- Open files remain accessible after unlink from same mount point.
+- Close-to-open consistency. It ensures that once a file is written and closed, the written data is accessible in the following open and read operations. Within the same mount point, all written data can be read immediately.
+- Rename and all other metadata operations are atomic, guaranteed by the transactional nature of metadata engines.
+- Open files remain accessible after being unlinked from the same mount point.
 - Mmap (tested with FSx).
 - Fallocate with punch hole support.
 - Extended attributes (xattr).
@@ -38,30 +38,30 @@ Besides the features covered by pjdfstest, JuiceFS provides:
 - POSIX traditional record locks (fcntl).
 
 :::note
-POSIX record locks are classified as **traditional locks** ("process-associated") and **OFD locks** (Open file description locks), and their locking operation commands are `F_SETLK` and `F_OFD_SETLK` respectively. Due to the implementation of the FUSE kernel module, JuiceFS currently only supports traditional record locks. More details can be found at: <https://man7.org/linux/man-pages/man2/fcntl.2.html>.
+POSIX record locks are classified as **traditional locks** ("process-associated") and **OFD locks** (open file description locks). Their locking operation commands are `F_SETLK` and `F_OFD_SETLK` respectively. Due to the implementation of the FUSE kernel module, JuiceFS currently only supports traditional record locks. More details can be found at: [https://man7.org/linux/man-pages/man2/fcntl.2.html](https://man7.org/linux/man-pages/man2/fcntl.2.html).
 :::
 
 ## LTP
 
-[LTP](https://github.com/linux-test-project/ltp) (Linux Test Project) is a joint project developed and maintained by IBM, Cisco, Fujitsu and others.
+LTP is a joint project developed and maintained by IBM, Cisco, Fujitsu, and others.
 
-> The project goal is to deliver tests to the open source community that validate the reliability, robustness, and stability of Linux.
+> The project goal is to deliver tests to the open source community that validates the reliability, robustness, and stability of Linux.
 >
 > The LTP testsuite contains a collection of tools for testing the Linux kernel and related features. Our goal is to improve the Linux kernel and system libraries by bringing test automation to the testing effort.
 
 JuiceFS passed most of the file system related tests.
 
-### Test Environment
+### Test environment
 
 - Host: Amazon EC2: c5d.xlarge (4C 8G)
 - OS: Ubuntu 20.04.1 LTS (Kernel `5.4.0-1029-aws`)
 - Object storage: Amazon S3
 - JuiceFS version: 0.17-dev (2021-09-16 292f2b65)
 
-### Test Steps
+### Test steps
 
-1. Download LTP [release](https://github.com/linux-test-project/ltp/releases/download/20210524/ltp-full-20210524.tar.bz2) from GitHub
-2. Unarchive, compile and install:
+1. Download the LTP [release](https://github.com/linux-test-project/ltp/releases/download/20210524/ltp-full-20210524.tar.bz2) from GitHub.
+2. Unarchive, compile, and install LTP:
 
    ```bash
    tar -jvxf ltp-full-20210524.tar.bz2
@@ -71,19 +71,19 @@ JuiceFS passed most of the file system related tests.
    make install
    ```
 
-3. Change directory to `/opt/ltp` since test tools are installed here:
+3. Change the directory to `/opt/ltp` where the test tools are installed:
 
    ```bash
    cd /opt/ltp
    ```
 
-   The test definition files are located under `runtest`. To speed up testing, we delete some pressure cases and unrelated cases in `fs` and `syscalls` (refer to [Appendix](#Appendix), modified files are saved as `fs-jfs` and `syscalls-jfs`), then execute:
+   The test definition files are located under `runtest`. To speed up testing, we delete some pressure cases and unrelated cases in `fs` and `syscalls` (refer to [Appendix](#appendix), modified files are saved as `fs-jfs` and `syscalls-jfs`), then execute:
 
    ```bash
    ./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
    ```
 
-### Test Result
+### Test result
 
 ```bash
 Testcase                                           Result     Exit Value
@@ -108,11 +108,11 @@ Machine Architecture: x86_64
 
 Here are causes of the skipped and failed tests:
 
-- fcntl17, fcntl17_64: it requires file system to automatically detect deadlock when trying to add POSIX locks. JuiceFS doesn't support it yet.
-- getxattr05: need extended ACL, which is not supported yet.
-- ioctl_loop05, ioctl_ns07, setxattr03: need `ioctl`, which is not supported yet.
-- lseek11: require `lseek` to handle SEEK_DATA and SEEK_HOLE flags. JuiceFS however uses kernel general function, which doesn't support these two flags.
-- open14, openat03: need `open` to handle O_TMPFILE flag. JuiceFS can do nothing with it since it's not supported by FUSE.
+- fcntl17, fcntl17_64: These tests require the file system to automatically detect deadlocks when trying to add POSIX locks. JuiceFS does not support it yet.
+- getxattr05: This test requires extended ACLs, which are not yet supported by JuiceFS.
+- ioctl_loop05, ioctl_ns07, setxattr03: These tests require `ioctl`, which is not yet supported by JuiceFS.
+- lseek11: This test requires `lseek` to handle `SEEK_DATA` and `SEEK_HOLE` flags. JuiceFS uses a kernel general function, which does not support these two flags.
+- open14, openat03: These tests require `open` to handle the `O_TMPFILE` flag. It is not supported by FUSE and thus not by JuiceFS.
 
 ### Appendix
 

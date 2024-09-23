@@ -203,6 +203,11 @@ func syncActionFlags() []cli.Flag {
 			Name:  "check-new",
 			Usage: "verify integrity of newly copied files",
 		},
+		&cli.Int64Flag{
+			Name:  "max-failure",
+			Value: -1,
+			Usage: "max number of allowed failed files (-1 for unlimited)",
+		},
 		&cli.BoolFlag{
 			Name:  "dry",
 			Usage: "don't copy file",

@@ -360,10 +360,11 @@ func readStats(mp string) map[string]float64 {
 	for _, line := range lines {
 		fields := strings.Fields(line)
 		if len(fields) == 2 {
-			stats[fields[0]], err = strconv.ParseFloat(fields[1], 64)
+			v, err := strconv.ParseFloat(fields[1], 64)
 			if err != nil {
 				logger.Warnf("parse %s: %s", fields[1], err)
 			}
+			stats[fields[0]] += v
 		}
 	}
 	return stats

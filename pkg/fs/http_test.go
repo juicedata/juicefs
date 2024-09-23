@@ -29,7 +29,7 @@ import (
 
 func TestWebdav(t *testing.T) {
 	jfs := createTestFS(t)
-	webdavFS := &webdavFS{meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())}), jfs, uint16(utils.GetUmask())}
+	webdavFS := &webdavFS{meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())}), jfs, uint16(utils.GetUmask()), WebdavConfig{EnableProppatch: true}}
 	ctx := context.Background()
 	_, err := webdavFS.Stat(ctx, "/")
 	if err != nil {

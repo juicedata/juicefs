@@ -27,7 +27,7 @@ used_memory_dataset: 13439673592
 used_memory_dataset_perc: 70.12%
 ```
 
-Among them, `used_memory_rss` is the total memory size actually used by Redis, which includes not only the size of data stored in Redis (that is, `used_memory_dataset` above) but also some Redis [system overhead](https://redis.io/commands/memory-stats) (that is, `used_memory_overhead` above). As mentioned earlier that the metadata of each file occupies about 300 bytes, this is actually calculated by `used_memory_dataset`. If you find that the metadata of a single file in your JuiceFS file system occupies much more than 300 bytes, you can try to run [`juicefs gc`](../../reference/command_reference.md#gc) command to clean up possible redundant data.
+Among them, `used_memory_rss` is the total memory size actually used by Redis, which includes not only the size of data stored in Redis (that is, `used_memory_dataset` above) but also some Redis [system overhead](https://redis.io/commands/memory-stats) (that is, `used_memory_overhead` above). As mentioned earlier that the metadata of each file occupies about 300 bytes, this is actually calculated by `used_memory_dataset`. If you find that the metadata of a single file in your JuiceFS file system occupies much more than 300 bytes, you can try to run [`juicefs gc`](../../reference/command_reference.mdx#gc) command to clean up possible redundant data.
 
 ## High availability
 
@@ -124,7 +124,7 @@ After generating the AOF or RDB backup file, you can restore the data by copying
 
 If both AOF and RDB persistence are enabled, Redis will use the AOF file first on starting to recover the data because AOF is guaranteed to be the most complete data.
 
-After recovering Redis data, you can continue to use the JuiceFS file system via the new Redis address. It is recommended to run [`juicefs fsck`](../../reference/command_reference.md#fsck) command to check the integrity of the file system data.
+After recovering Redis data, you can continue to use the JuiceFS file system via the new Redis address. It is recommended to run [`juicefs fsck`](../../reference/command_reference.mdx#fsck) command to check the integrity of the file system data.
 
 ## Recommended Managed Redis Service
 

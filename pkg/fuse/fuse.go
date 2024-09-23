@@ -452,7 +452,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	opt.DontUmask = conf.Format.EnableACL
 	opt.DisableXAttrs = !xattrs
 	opt.EnableIoctl = ioctl
-	opt.MaxWrite = 1 << 20
+	opt.MaxWrite = conf.FuseOpts.MaxWrite
 	opt.MaxReadAhead = 1 << 20
 	opt.DirectMount = true
 	opt.AllowOther = os.Getuid() == 0
@@ -475,6 +475,8 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 			opt.Debug = true
 		} else if n == "writeback_cache" {
 			opt.EnableWriteback = true
+		} else if n == "async_dio" {
+			opt.OtherCaps |= fuse.CAP_ASYNC_DIO
 		} else if strings.TrimSpace(n) != "" {
 			opt.Options = append(opt.Options, strings.TrimSpace(n))
 		}
@@ -498,6 +500,12 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		}
 		return fmt.Errorf("fuse: %s", err)
 	}
+	defer func() {
+		if runtime.GOOS == "darwin" {
+			_ = fssrv.Unmount()
+		}
+	}()
+
 	if runtime.GOOS == "linux" {
 		v.InvalidateEntry = func(parent Ino, name string) syscall.Errno {
 			return syscall.Errno(fssrv.EntryNotify(uint64(parent), name))
@@ -509,7 +517,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	return nil
 }
 
-func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool) fuse.MountOptions {
+func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, maxWrite int) fuse.MountOptions {
 	var opt fuse.MountOptions
 	opt.FsName = "JuiceFS:" + conf.Format.Name
 	opt.Name = "juicefs"
@@ -519,7 +527,7 @@ func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool) f
 	opt.DisableXAttrs = noxattr
 	opt.EnableAcl = !noacl
 	opt.IgnoreSecurityLabels = noacl
-	opt.MaxWrite = 1 << 20
+	opt.MaxWrite = maxWrite
 	opt.MaxReadAhead = 1 << 20
 	opt.DirectMount = true
 	opt.DontUmask = true
@@ -529,6 +537,8 @@ func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool) f
 			opt.AllowOther = true
 		} else if strings.HasPrefix(n, "fsname=") {
 			opt.FsName = n[len("fsname="):]
+		} else if n == "writeback_cache" {
+			opt.EnableWriteback = true
 		} else if n == "debug" {
 			opt.Debug = true
 			log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)

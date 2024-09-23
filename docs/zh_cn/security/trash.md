@@ -10,7 +10,7 @@ sidebar_position: 2
 
 JuiceFS 默认开启回收站功能，你删除的文件会被保存在文件系统根目录下的 `.trash` 目录内，保留指定时间后才将数据真正清理。在清理到来之前，通过 `df -h` 命令看到的文件系统使用量并不会减少，对象存储中的对象也会依然存在。
 
-不论你正在用 `format` 命令初始化文件系统，还是用 `config` 命令调整已有的文件系统，都可以用 [`--trash-days`](../reference/command_reference.md#format) 参数来指定回收站保留时长：
+不论你正在用 `format` 命令初始化文件系统，还是用 `config` 命令调整已有的文件系统，都可以用 [`--trash-days`](../reference/command_reference.mdx#format) 参数来指定回收站保留时长：
 
 ```shell
 # 初始化新的文件系统
@@ -23,7 +23,7 @@ juicefs config META-URL --trash-days=7
 juicefs config META-URL --trash-days=0
 ```
 
-另外，回收站自动清理依赖 JuiceFS 客户端的后台任务，为了保证后台任务能够正常执行，需要至少 1 个在线的挂载点，并且在挂载文件系统时不可以使用 [`--no-bgjob`](../reference/command_reference.md#mount) 参数。
+另外，回收站自动清理依赖 JuiceFS 客户端的后台任务，为了保证后台任务能够正常执行，需要至少 1 个在线的挂载点，并且在挂载文件系统时不可以使用 [`--no-bgjob`](../reference/command_reference.mdx#mount-metadata-options) 参数。
 
 ## 恢复文件 {#recover}
 
@@ -35,7 +35,7 @@ juicefs config META-URL --trash-days=0
 mv .trash/2022-11-30-10/[parent inode]-[file inode]-[file name] .
 ```
 
-被删除的文件会完全丢失其目录结构，在回收站中“平铺”存储，但会在文件名保留父目录的 inode，如果你确实忘记了被误删的文件名，可以使用 [`juicefs info`](../reference/command_reference.md#info) 命令先找出父目录的 inode，然后顺藤摸瓜地定位到误删文件。
+被删除的文件会完全丢失其目录结构，在回收站中“平铺”存储，但会在文件名保留父目录的 inode，如果你确实忘记了被误删的文件名，可以使用 [`juicefs info`](../reference/command_reference.mdx#info) 命令先找出父目录的 inode，然后顺藤摸瓜地定位到误删文件。
 
 假设挂载点为 `/jfs`，你误删了 `/jfs/data/config.json`，但无法直接通过 `config.json` 文件名来操作恢复文件（因为你忘了），可以用下方流程反查父目录 inode，然后在回收站中定位文件：
 
@@ -80,7 +80,7 @@ $ tree .trash/2023-08-14-05
 └── 16-18-config.json
 ```
 
-正因如此，JuiceFS v1.1 提供了 [`restore`](../reference/command_reference.md#restore) 子命令来快速恢复大量误删的文件，以上方目录结构为例，恢复操作如下：
+正因如此，JuiceFS v1.1 提供了 [`restore`](../reference/command_reference.mdx#restore) 子命令来快速恢复大量误删的文件，以上方目录结构为例，恢复操作如下：
 
 ```shell
 # 先运行 restore 命令，在回收站内重建目录结构
@@ -106,7 +106,7 @@ juicefs restore $META_URL 2023-08-14-05 --put-back
 
 当回收站中的文件到了过期时间，会被自动清理。需要注意的是，文件清理由 JuiceFS 客户端的后台任务（background job，也称 bgjob）执行，默认每小时清理一次，因此面对大量文件过期时，对象存储的清理速度未必和你期望的一样快，可能需要一些时间才能看到存储容量变化。
 
-如果你希望在过期时间到来之前彻底删除文件，需要使用 root 用户身份，用 [`juicefs rmr`](../reference/command_reference.md#rmr) 或系统自带的 `rm` 命令来删除回收站目录 `.trash` 中的文件，这样就能立刻释放存储空间。
+如果你希望在过期时间到来之前彻底删除文件，需要使用 root 用户身份，用 [`juicefs rmr`](../reference/command_reference.mdx#rmr) 或系统自带的 `rm` 命令来删除回收站目录 `.trash` 中的文件，这样就能立刻释放存储空间。
 
 例如，彻底删除回收站中某个目录：
 
@@ -120,7 +120,7 @@ juicefs rmr .trash/2022-11-30-10/
 
 在回收站里，除了因用户操作而产生的文件，还存在另一类对用户不可见的数据——覆写产生的文件碎片。关于文件碎片是怎么产生的，可以详细阅读[「JuiceFS 如何存储文件」](../introduction/architecture.md#how-juicefs-store-files)。总而言之，如果应用经常删除文件或者频繁覆盖写文件，会导致对象存储使用量远大于文件系统用量。
 
-虽然失效的文件碎片不能直接浏览、操作，但你可以通过 [`juicefs status`](../reference/command_reference.md#status) 命令来简单观测其规模：
+虽然失效的文件碎片不能直接浏览、操作，但你可以通过 [`juicefs status`](../reference/command_reference.mdx#status) 命令来简单观测其规模：
 
 ```shell
 # 下方 Trash Slices 就是失效的文件碎片统计

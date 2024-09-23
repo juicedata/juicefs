@@ -146,7 +146,7 @@ func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 	var psArgs []string
 	if tmpPid != "" {
 		pid = tmpPid
-		psArgs = []string{"/bin/sh", "-c", fmt.Sprintf("ps -f --pid %s", pid)}
+		psArgs = []string{"/bin/sh", "-c", fmt.Sprintf("ps -f -p %s", pid)}
 	} else {
 		psArgs = []string{"/bin/sh", "-c", fmt.Sprintf("ps -ef | grep -v grep | grep mount | grep %s", mp)}
 	}
@@ -526,10 +526,13 @@ func collectSysInfo(ctx *cli.Context, currDir string) error {
 func collectSpecialFile(ctx *cli.Context, amp string, currDir string, requireRootPrivileges bool, wg *sync.WaitGroup) error {
 	prefixed := true
 	configName := ".jfs.config"
-	if !utils.Exists(filepath.Join(amp, configName)) {
-		configName = ".config"
-		prefixed = false
-	}
+	_ = utils.WithTimeout(func() error {
+		if !utils.Exists(filepath.Join(amp, configName)) {
+			configName = ".config"
+			prefixed = false
+		}
+		return nil
+	}, 3*time.Second)
 	if err := copyFile(filepath.Join(amp, configName), filepath.Join(currDir, "config.txt"), requireRootPrivileges); err != nil {
 		return fmt.Errorf("failed to get volume config %s: %v", configName, err)
 	}
@@ -586,6 +589,7 @@ func debug(ctx *cli.Context) error {
 	}
 
 	uid, pid, cmd, err := getCmdMount(amp)
+	logger.Infof("mount point:%s pid:%s uid:%s", amp, pid, uid)
 	if err != nil {
 		return fmt.Errorf("failed to get mount command: %v", err)
 	}

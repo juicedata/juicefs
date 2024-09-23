@@ -39,23 +39,23 @@ func newPrefetcher(parallel int, fetch func(string)) *prefetcher {
 
 func (p *prefetcher) do() {
 	for key := range p.pending {
+		p.op(key)
+
 		p.Lock()
-		if _, ok := p.busy[key]; !ok {
-			p.busy[key] = true
-			p.Unlock()
-
-			p.op(key)
-
-			p.Lock()
-			delete(p.busy, key)
-		}
+		delete(p.busy, key)
 		p.Unlock()
 	}
 }
 
 func (p *prefetcher) fetch(key string) {
+	p.Lock()
+	defer p.Unlock()
+	if _, ok := p.busy[key]; ok {
+		return
+	}
 	select {
 	case p.pending <- key:
+		p.busy[key] = true
 	default:
 	}
 }

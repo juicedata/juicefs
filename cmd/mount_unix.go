@@ -43,13 +43,17 @@ import (
 	"time"
 
 	"github.com/juicedata/godaemon"
+	"github.com/urfave/cli/v2"
+
 	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
-	"github.com/urfave/cli/v2"
 )
+
+var mountPid int
 
 func showThreadStack(agentAddr string) {
 	if agentAddr == "" {
@@ -151,7 +155,7 @@ func watchdog(ctx context.Context, mp string) {
 					if err == nil {
 						logger.Infof("watching %s, pid %d", mp, conf.Pid)
 						pid = conf.Pid
-						agentAddr = conf.DebugAgent
+						agentAddr = conf.Port.DebugAgent
 					} else {
 						logger.Warnf("load config: %s", err)
 						continue
@@ -181,7 +185,25 @@ func watchdog(ctx context.Context, mp string) {
 	}
 }
 
+// parseFuseFd checks if `mountPoint` is the special form /dev/fd/N (with N >= 0),
+// and returns N in this case. Returns -1 otherwise.
+func parseFuseFd(mountPoint string) (fd int) {
+	dir, file := path.Split(mountPoint)
+	if dir != "/dev/fd/" {
+		return -1
+	}
+	fd, err := strconv.Atoi(file)
+	if err != nil || fd <= 0 {
+		return -1
+	}
+	return fd
+}
+
 func checkMountpoint(name, mp, logPath string, background bool) {
+	if parseFuseFd(mp) > 0 {
+		logger.Infof("\033[92mOK\033[0m, %s with special mount point %s", name, mp)
+		return
+	}
 	mountTimeOut := 10 // default 10 seconds
 	interval := 500    // check every 500 Millisecond
 	if tStr, ok := os.LookupEnv("JFS_MOUNT_TIMEOUT"); ok {
@@ -204,10 +226,15 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 		_ = os.Stdout.Sync()
 	}
 	_, _ = os.Stdout.WriteString("\n")
+	mountDesc := "mount process is not started yet"
+	if mountPid != 0 {
+		mountDesc = fmt.Sprintf("tried to kill mount process %d", mountPid)
+		_ = syscall.Kill(mountPid, syscall.SIGABRT) // Kill and show stack trace
+	}
 	if background {
-		logger.Fatalf("The mount point is not ready in %d seconds, please check the log (%s) or re-mount in foreground", mountTimeOut, logPath)
+		logger.Fatalf("The mount point is not ready in %d seconds (%s), please check the log (%s) or re-mount in foreground", mountTimeOut, mountDesc, logPath)
 	} else {
-		logger.Fatalf("The mount point is not ready in %d seconds, exit it", mountTimeOut)
+		logger.Fatalf("The mount point is not ready in %d seconds (%s), exit it", mountTimeOut, mountDesc)
 	}
 }
 
@@ -292,6 +319,11 @@ func fuseFlags() []cli.Flag {
 			Name:   "non-default-permission",
 			Usage:  "disable `default_permissions` option, only for testing",
 			Hidden: true,
+		},
+		&cli.StringFlag{
+			Name:  "max-write",
+			Usage: "maximum write size for fuse request",
+			Value: "128K",
 		},
 		&cli.StringFlag{
 			Name:  "o",
@@ -388,8 +420,8 @@ func getFuserMountVersion() string {
 }
 
 func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {
-	rawOpts, mt, noxattr, noacl := genFuseOptExt(c, format)
-	options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl))
+	rawOpts, mt, noxattr, noacl, maxWrite := genFuseOptExt(c, format)
+	options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl, maxWrite))
 	vfsConf.FuseOpts = &options
 }
 
@@ -418,6 +450,9 @@ func genFuseOpt(c *cli.Context, name string) string {
 }
 
 func prepareMp(mp string) {
+	if csiCommPath != "" {
+		return
+	}
 	var fi os.FileInfo
 	var ino uint64
 	err := utils.WithTimeout(func() error {
@@ -473,12 +508,12 @@ func prepareMp(mp string) {
 	}
 }
 
-func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int, noxattr, noacl bool) {
+func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int, noxattr, noacl bool, maxWrite int) {
 	enableXattr := c.Bool("enable-xattr")
 	if format.EnableACL {
 		enableXattr = true
 	}
-	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL
+	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL, int(utils.ParseBytes(c, "max-write", 'B'))
 }
 
 func shutdownGraceful(mp string) {
@@ -515,6 +550,9 @@ func shutdownGraceful(mp string) {
 }
 
 func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
+	if csiCommPath != "" {
+		return false
+	}
 	var ino uint64
 	var err error
 	err = utils.WithTimeout(func() error {
@@ -542,6 +580,10 @@ func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
 	if oldConf.Format.Name != newConf.Format.Name {
 		logger.Infof("different volume %s != %s, mount on top of it", oldConf.Format.Name, newConf.Format.Name)
 		return false
+	}
+	oldVersion := version.Parse(oldConf.Version)
+	if ret, _ := version.CompareVersions(oldVersion, version.Parse("1.2.0")); ret <= 0 {
+		oldConf.FuseOpts.MaxWrite = 128 * 1024
 	}
 	if oldConf.FuseOpts != nil && !reflect.DeepEqual(oldConf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions()) {
 		logger.Infof("different options, mount on top of it: %v != %v", oldConf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions())
@@ -724,6 +766,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 			}
 		}
 
+		mountPid = 0
 		cmd := exec.Command(path, os.Args[1:]...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
@@ -735,6 +778,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 			continue
 		}
 		os.Unsetenv("_FUSE_STATE_PATH")
+		mountPid = cmd.Process.Pid
 
 		ctx, cancel := context.WithCancel(context.TODO())
 		go watchdog(ctx, mp)
@@ -755,6 +799,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 				logger.Info("transfer FUSE session to others")
 				return nil
 			}
+			logger.Errorf("mount process %d: %s, will restart in 1 second", mountPid, err)
 			time.Sleep(time.Second)
 		}
 	}

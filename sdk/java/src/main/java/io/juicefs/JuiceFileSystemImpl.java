@@ -94,7 +94,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   private int minBufferSize;
   private int cacheReplica;
   private boolean fileChecksumEnabled;
-  private Libjfs lib = loadLibrary();
+  private static Libjfs lib = loadLibrary();
 
   private long handle;
   private UserGroupInformation ugi;
@@ -1003,6 +1003,21 @@ public class JuiceFileSystemImpl extends FileSystem {
       }
     }
 
+    public synchronized void skipNBytes(long n) throws IOException {
+      if (buf == null) {
+        throw new IOException("stream was closed");
+      }
+
+      if (n <= 0) {
+        return;
+      }
+
+      long np = position + n;
+      if (np > fileLen) {
+        throw new EOFException(String.format("Unable to skip %s bytes (position=%s, fileSize=%s): %s", n, position, fileLen, np));
+      }
+      position = np;
+    }
     @Override
     public synchronized long skip(long n) throws IOException {
       if (n < 0)

@@ -63,6 +63,17 @@ func (q *Quota) update(space, inodes int64) {
 	atomic.AddInt64(&q.newInodes, inodes)
 }
 
+func (q *Quota) snap() Quota {
+	return Quota{
+		MaxSpace:   atomic.LoadInt64(&q.MaxSpace),
+		MaxInodes:  atomic.LoadInt64(&q.MaxInodes),
+		UsedSpace:  atomic.LoadInt64(&q.UsedSpace),
+		UsedInodes: atomic.LoadInt64(&q.UsedInodes),
+		newSpace:   atomic.LoadInt64(&q.newSpace),
+		newInodes:  atomic.LoadInt64(&q.newInodes),
+	}
+}
+
 // not thread safe
 func (q *Quota) sanitize() {
 	if q.UsedSpace < 0 {
@@ -169,9 +180,9 @@ func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, spac
 		m.updateDirQuota(ctx, parent, space, 0)
 	} else {
 		go func() {
-			for p := range m.en.doGetParents(ctx, inode) {
-				m.updateDirStat(ctx, p, length, space, 0)
-				m.updateDirQuota(ctx, p, space, 0)
+			for p, v := range m.en.doGetParents(ctx, inode) {
+				m.updateDirStat(ctx, p, length*int64(v), space*int64(v), 0)
+				m.updateDirQuota(ctx, p, space*int64(v), 0)
 			}
 		}()
 	}
@@ -203,6 +214,13 @@ func (m *baseMeta) doFlushDirStat() {
 	err := m.en.doUpdateDirStat(Background, stats)
 	if err != nil {
 		logger.Errorf("update dir stat failed: %v", err)
+	}
+}
+
+func (m *baseMeta) flushStats() {
+	for {
+		time.Sleep(time.Second)
+		m.en.doFlushStats()
 	}
 }
 
@@ -276,9 +294,9 @@ func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
 }
 
 // get inode of the first parent (or myself) with quota
-func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) Ino {
+func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) (Ino, *Quota) {
 	if !m.getFormat().DirStats {
-		return 0
+		return 0, nil
 	}
 	var q *Quota
 	var st syscall.Errno
@@ -287,7 +305,7 @@ func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) Ino {
 		q = m.dirQuotas[inode]
 		m.quotaMu.RUnlock()
 		if q != nil {
-			return inode
+			return inode, q
 		}
 		if inode <= RootInode {
 			break
@@ -298,7 +316,7 @@ func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) Ino {
 			break
 		}
 	}
-	return 0
+	return 0, nil
 }
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bool {

@@ -46,7 +46,7 @@ func cmdObjbench() *cli.Command {
 		Action:    objbench,
 		Category:  "TOOL",
 		Usage:     "Run benchmarks on an object storage",
-		ArgsUsage: "BUCKET",
+		ArgsUsage: "ENDPOINT",
 		Description: `
 Run basic benchmarks on the target object storage to test if it works as expected.
 
@@ -146,6 +146,13 @@ func objbench(ctx *cli.Context) error {
 	endpoint := ctx.Args().First()
 	storageType := strings.ToLower(ctx.String("storage"))
 	if storageType == "file" {
+		if strings.Contains(endpoint, "://") {
+			warn("The bucket \"%s\" doesn't look like a file path.", endpoint)
+			warn("Did you forget to specify the `--storage <type>`?")
+			if !userConfirmed() {
+				return errors.New("Aborted")
+			}
+		}
 		var err error
 		if endpoint, err = filepath.Abs(endpoint); err != nil {
 			logger.Fatalf("invalid path: %s", err)

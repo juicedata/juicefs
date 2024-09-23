@@ -393,9 +393,6 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 }
 
 func doCopySingle0(src, dst object.ObjectStorage, key string, size int64) error {
-	if limiter != nil {
-		limiter.Wait(size)
-	}
 	concurrent <- 1
 	defer func() {
 		<-concurrent
@@ -432,6 +429,9 @@ type withProgress struct {
 }
 
 func (w *withProgress) Read(b []byte) (int, error) {
+	if limiter != nil {
+		limiter.Wait(int64(len(b)))
+	}
 	n, err := w.r.Read(b)
 	copiedBytes.IncrInt64(int64(n))
 	return n, err
@@ -564,8 +564,9 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 			if num == n-1 {
 				sz = size - int64(num)*partSize
 			}
-			parts[num], err = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort)
-			errs <- err
+			var copyErr error
+			parts[num], copyErr = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort)
+			errs <- copyErr
 		}(i)
 	}
 
@@ -641,7 +642,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			} else if equal {
 				if config.DeleteSrc {
 					deleteObj(src, key, false)
-				} else if config.Perms {
+				} else if config.Perms && (!obj.IsSymlink() || !config.Links) {
 					if o, e := dst.Head(key); e == nil {
 						if needCopyPerms(obj, o) {
 							copyPerms(dst, obj, config)
@@ -1281,8 +1282,54 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if config.DeleteSrc || config.DeleteDst {
 		deleted = progress.AddCountSpinner("Deleted objects")
 	}
+
+	syncExitFunc := func() error {
+		pending.SetCurrent(0)
+		total := handled.GetTotal()
+		progress.Done()
+
+		if config.Manager == "" {
+			msg := fmt.Sprintf("Found: %d, skipped: %d (%s), copied: %d (%s)",
+				total, skipped.Current(), formatSize(skippedBytes.Current()), copied.Current(), formatSize(copiedBytes.Current()))
+			if checked != nil {
+				msg += fmt.Sprintf(", checked: %d (%s)", checked.Current(), formatSize(checkedBytes.Current()))
+			}
+			if deleted != nil {
+				msg += fmt.Sprintf(", deleted: %d", deleted.Current())
+			}
+			if failed != nil {
+				msg += fmt.Sprintf(", failed: %d", failed.Current())
+			}
+			if total-handled.Current() > 0 {
+				msg += fmt.Sprintf(", lost: %d", total-handled.Current())
+			}
+			logger.Info(msg)
+		} else {
+			sendStats(config.Manager)
+			logger.Debugf("This worker process has already completed its task")
+		}
+		if failed != nil {
+			if n := failed.Current(); n > 0 || total > handled.Current() {
+				return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
+			}
+		}
+		return nil
+	}
+
 	if !config.Dry {
 		failed = progress.AddCountSpinner("Failed objects")
+		if config.MaxFailure > 0 {
+			go func() {
+				for {
+					if failed.Current() >= config.MaxFailure {
+						logger.Infof("the maximum error limit of %d was reached, triggering the quick exit process", config.MaxFailure)
+						_ = syncExitFunc()
+						os.Exit(1)
+					}
+					time.Sleep(time.Millisecond * 100)
+				}
+			}()
+		}
 	}
 	go func() {
 		for {
@@ -1336,36 +1383,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	wg.Wait()
-	pending.SetCurrent(0)
-	total := handled.GetTotal()
-	progress.Done()
-
-	if config.Manager == "" {
-		msg := fmt.Sprintf("Found: %d, skipped: %d (%s), copied: %d (%s)",
-			total, skipped.Current(), formatSize(skippedBytes.Current()), copied.Current(), formatSize(copiedBytes.Current()))
-		if checked != nil {
-			msg += fmt.Sprintf(", checked: %d (%s)", checked.Current(), formatSize(checkedBytes.Current()))
-		}
-		if deleted != nil {
-			msg += fmt.Sprintf(", deleted: %d", deleted.Current())
-		}
-		if failed != nil {
-			msg += fmt.Sprintf(", failed: %d", failed.Current())
-		}
-		if total-handled.Current() > 0 {
-			msg += fmt.Sprintf(", lost: %d", total-handled.Current())
-		}
-		logger.Info(msg)
-	} else {
-		sendStats(config.Manager)
-		logger.Debugf("This worker process has already completed its task")
-	}
-	if failed != nil {
-		if n := failed.Current(); n > 0 || total > handled.Current() {
-			return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
-		}
-	}
-	return nil
+	return syncExitFunc()
 }
 
 func initSyncMetrics(config *Config) {

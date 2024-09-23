@@ -40,13 +40,17 @@ import (
 )
 
 const (
-	inodeBatch   = 1 << 10
-	sliceIdBatch = 4 << 10
-	nlocks       = 1024
+	inodeBatch     = 1 << 10
+	sliceIdBatch   = 4 << 10
+	nlocks         = 1024
+	maxSymCacheNum = int32(10000)
 )
 
-var maxCompactSlices = 1000
-var maxSlices = 2500
+var (
+	maxCompactSlices  = 1000
+	maxSlices         = 2500
+	inodeNeedPrefetch = uint64(utils.JitterIt(inodeBatch * 0.1)) // Add jitter to reduce probability of txn conflicts
+)
 
 type engine interface {
 	// Get the value of counter name.
@@ -56,7 +60,7 @@ type engine interface {
 	// Set counter name to value if old <= value - diff.
 	setIfSmall(name string, value, diff int64) (bool, error)
 	updateStats(space int64, inodes int64)
-	flushStats()
+	doFlushStats()
 
 	doLoad() ([]byte, error)
 
@@ -144,6 +148,47 @@ type cchunk struct {
 	slices int
 }
 
+type symlinkCache struct {
+	*sync.Map
+	size atomic.Int32
+	cap  int32
+}
+
+func newSymlinkCache(cap int32) *symlinkCache {
+	return &symlinkCache{
+		Map: &sync.Map{},
+		cap: cap,
+	}
+}
+
+func (symCache *symlinkCache) Store(inode Ino, path []byte) {
+	if _, loaded := symCache.Swap(inode, path); !loaded {
+		symCache.size.Add(1)
+	}
+}
+
+func (symCache *symlinkCache) clean() {
+	for {
+		time.Sleep(time.Minute)
+		symCache.doClean()
+	}
+}
+
+func (symCache *symlinkCache) doClean() {
+	if symCache.size.Load() < int32(float64(symCache.cap)*0.75) {
+		return
+	}
+
+	todo := symCache.size.Load() / 5
+	cnt := int32(0)
+	symCache.Range(func(key, value interface{}) bool {
+		symCache.Delete(key)
+		symCache.size.Add(-1)
+		cnt++
+		return cnt < todo
+	})
+}
+
 type baseMeta struct {
 	sync.Mutex
 	addr string
@@ -159,7 +204,7 @@ type baseMeta struct {
 	compacting   map[uint64]bool
 	maxDeleting  chan struct{}
 	dslices      chan Slice // slices to delete
-	symlinks     *sync.Map
+	symlinks     *symlinkCache
 	msgCallbacks *msgCallbacks
 	reloadCb     []func(*Format)
 	umounting    bool
@@ -175,9 +220,11 @@ type baseMeta struct {
 	dirParents map[Ino]Ino    // directory inode -> parent inode
 	dirQuotas  map[Ino]*Quota // directory inode -> quota
 
-	freeMu     sync.Mutex
-	freeInodes freeID
-	freeSlices freeID
+	freeMu           sync.Mutex
+	freeInodes       freeID
+	freeSlices       freeID
+	prefetchMu       sync.Mutex
+	prefetchedInodes freeID
 
 	usedSpaceG  prometheus.Gauge
 	usedInodesG prometheus.Gauge
@@ -200,7 +247,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
 		maxDeleting:  make(chan struct{}, 100),
-		symlinks:     &sync.Map{},
+		symlinks:     newSymlinkCache(maxSymCacheNum),
 		fsStat:       new(fsStat),
 		dirStats:     make(map[Ino]dirStat),
 		dirParents:   make(map[Ino]Ino),
@@ -399,7 +446,7 @@ func (m *baseMeta) NewSession(record bool) error {
 	}
 
 	m.loadQuotas()
-	go m.en.flushStats()
+	go m.flushStats()
 	go m.flushDirStat()
 	go m.flushQuotas()
 
@@ -417,6 +464,7 @@ func (m *baseMeta) NewSession(record bool) error {
 		go m.cleanupDeletedFiles()
 		go m.cleanupSlices()
 		go m.cleanupTrash()
+		go m.symlinks.clean()
 	}
 	return nil
 }
@@ -521,6 +569,7 @@ func (m *baseMeta) CloseSession() error {
 	if m.conf.ReadOnly {
 		return nil
 	}
+	m.en.doFlushStats()
 	m.doFlushDirStat()
 	m.doFlushQuotas()
 	m.sesMu.Lock()
@@ -574,31 +623,16 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 		return st
 	}
 	ino = m.checkRoot(ino)
-	if ino == RootInode {
-		return 0
-	}
-	if st := m.Access(ctx, ino, MODE_MASK_R&MODE_MASK_X, nil); st != 0 {
-		return st
-	}
-	var usage *Quota
-	var attr Attr
-	for root := ino; root >= RootInode; root = attr.Parent {
-		if st := m.GetAttr(ctx, root, &attr); st != 0 {
-			return st
+	var usage, quota *Quota
+	for ino >= RootInode {
+		ino, quota = m.getQuotaParent(ctx, ino)
+		if quota == nil {
+			break
 		}
-		if root == RootInode {
-			attr.Parent = 0
-		}
-		q, err := m.en.doGetQuota(ctx, root)
-		if err != nil {
-			return errno(err)
-		}
-		if q == nil {
-			continue
-		}
+		q := quota.snap()
 		q.sanitize()
 		if usage == nil {
-			usage = q
+			usage = &q
 		}
 		if q.MaxSpace > 0 {
 			ls := uint64(q.MaxSpace - q.UsedSpace)
@@ -612,12 +646,20 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 				*iavail = li
 			}
 		}
+		if ino == RootInode {
+			break
+		}
+		if parent, st := m.getDirParent(ctx, ino); st != 0 {
+			logger.Warnf("Get directory parent of inode %d: %s", ino, st)
+			break
+		} else {
+			ino = parent
+		}
 	}
-	if usage == nil {
-		return 0
+	if usage != nil {
+		*totalspace = uint64(usage.UsedSpace) + *availspace
+		*iused = uint64(usage.UsedInodes)
 	}
-	*totalspace = uint64(usage.UsedSpace) + *availspace
-	*iused = uint64(usage.UsedInodes)
 	return 0
 }
 
@@ -947,12 +989,21 @@ func (m *baseMeta) nextInode() (Ino, error) {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeInodes.next >= m.freeInodes.maxid {
-		v, err := m.en.incrCounter("nextInode", inodeBatch)
-		if err != nil {
-			return 0, err
+
+		m.prefetchMu.Lock() // Wait until prefetchInodes() is done
+		if m.prefetchedInodes.maxid > m.freeInodes.maxid {
+			m.freeInodes = m.prefetchedInodes
+			m.prefetchedInodes = freeID{}
 		}
-		m.freeInodes.next = uint64(v) - inodeBatch
-		m.freeInodes.maxid = uint64(v)
+		m.prefetchMu.Unlock()
+
+		if m.freeInodes.next >= m.freeInodes.maxid { // Prefetch missed, try again
+			nextInodes, err := m.allocateInodes()
+			if err != nil {
+				return 0, err
+			}
+			m.freeInodes = nextInodes
+		}
 	}
 	n := m.freeInodes.next
 	m.freeInodes.next++
@@ -960,7 +1011,32 @@ func (m *baseMeta) nextInode() (Ino, error) {
 		n = m.freeInodes.next
 		m.freeInodes.next++
 	}
+	if m.freeInodes.maxid-m.freeInodes.next == inodeNeedPrefetch {
+		go m.prefetchInodes()
+	}
 	return Ino(n), nil
+}
+
+func (m *baseMeta) prefetchInodes() {
+	m.prefetchMu.Lock()
+	defer m.prefetchMu.Unlock()
+	if m.prefetchedInodes.maxid > m.freeInodes.maxid {
+		return // Someone else has done the job
+	}
+	nextInodes, err := m.allocateInodes()
+	if err == nil {
+		m.prefetchedInodes = nextInodes
+	} else {
+		logger.Warnf("Failed to prefetch inodes: %s, current limit: %d", err, m.freeInodes.maxid)
+	}
+}
+
+func (m *baseMeta) allocateInodes() (freeID, error) {
+	v, err := m.en.incrCounter("nextInode", inodeBatch)
+	if err != nil {
+		return freeID{}, err
+	}
+	return freeID{next: uint64(v) - inodeBatch, maxid: uint64(v)}, nil
 }
 
 func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
@@ -1230,12 +1306,12 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	parentDst = m.checkRoot(parentDst)
 	var quotaSrc, quotaDst Ino
 	if !isTrash(parentSrc) {
-		quotaSrc = m.getQuotaParent(ctx, parentSrc)
+		quotaSrc, _ = m.getQuotaParent(ctx, parentSrc)
 	}
 	if parentSrc == parentDst {
 		quotaDst = quotaSrc
 	} else {
-		quotaDst = m.getQuotaParent(ctx, parentDst)
+		quotaDst, _ = m.getQuotaParent(ctx, parentDst)
 	}
 	var space, inodes int64
 	if quotaSrc != quotaDst {
@@ -1332,33 +1408,38 @@ func (m *baseMeta) touchAtime(ctx Context, inode Ino, attr *Attr) {
 	}
 }
 
-func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr syscall.Errno) {
+func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (st syscall.Errno) {
 	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
 		return syscall.EROFS
 	}
 	defer func() {
-		if rerr == 0 {
+		if st == 0 {
 			m.touchAtime(ctx, inode, attr)
 		}
 	}()
 	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
 		return 0
 	}
-	var err syscall.Errno
 	// attr may be valid, see fs.Open()
 	if attr != nil && !attr.Full {
-		err = m.GetAttr(ctx, inode, attr)
+		if st = m.GetAttr(ctx, inode, attr); st != 0 {
+			return
+		}
 	}
 	var mmask uint8 = 0
 	switch flags & (syscall.O_RDONLY | syscall.O_WRONLY | syscall.O_RDWR) {
 	case syscall.O_RDONLY:
 		mmask = MODE_MASK_R
+		// 0x20 means O_FMODE_EXEC
+		if (flags & 0x20) != 0 {
+			mmask = MODE_MASK_X
+		}
 	case syscall.O_WRONLY:
 		mmask = MODE_MASK_W
 	case syscall.O_RDWR:
 		mmask = MODE_MASK_R | MODE_MASK_W
 	}
-	if rerr = m.Access(ctx, inode, mmask, attr); rerr != 0 {
+	if st = m.Access(ctx, inode, mmask, attr); st != 0 {
 		return
 	}
 
@@ -1375,10 +1456,8 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr 
 			return syscall.EPERM
 		}
 	}
-	if err == 0 {
-		m.of.Open(inode, attr)
-	}
-	return err
+	m.of.Open(inode, attr)
+	return 0
 }
 
 func (m *baseMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
@@ -1736,6 +1815,9 @@ func (m *baseMeta) walk(ctx Context, inode Ino, p string, attr *Attr, walkFn met
 		return st
 	}
 	for _, entry := range entries {
+		if ctx.Canceled() {
+			return syscall.EINTR
+		}
 		if !entry.Attr.Full {
 			entry.Attr.Parent = inode
 		}
@@ -2132,6 +2214,9 @@ func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 		// calc chunk index in local
 		chunkCnt := uint32((fAttr.Length + ChunkSize - 1) / ChunkSize)
 		for i := uint32(0); i < chunkCnt; i++ {
+			if ctx.Canceled() {
+				return
+			}
 			preFunc()
 			chunkChan <- cchunk{inode: fIno, indx: i}
 		}
@@ -2426,13 +2511,12 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 	return eg.Wait()
 }
 
-func (m *baseMeta) Clone(ctx Context, srcIno, parent Ino, name string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
-	if isTrash(parent) {
+func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
+
+	if isTrash(srcIno) || isTrash(srcParentIno) || isTrash(parent) || (parent == RootInode && name == TrashName) {
 		return syscall.EPERM
 	}
-	if parent == RootInode && name == TrashName {
-		return syscall.EPERM
-	}
+
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
@@ -2611,7 +2695,7 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		}
 	}
 	if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
-		if ctx.Uid() != 0 {
+		if ctx.CheckPermission() && ctx.Uid() != 0 {
 			return nil, syscall.EPERM
 		}
 		dirtyAttr.Uid = attr.Uid

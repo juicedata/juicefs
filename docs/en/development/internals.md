@@ -178,7 +178,7 @@ type Attr struct {
 
 There are a few fields that need clarification.
 
-- Atime/Atimensec: See [`--atime-mode`](../reference/command_reference.md#mount)
+- Atime/Atimensec: See [`--atime-mode`](../reference/command_reference.mdx#mount-metadata-options)
 - Nlink
   - Directory file: initial value is 2 ('.' and '..'), add 1 for each subdirectory
   - Other files: initial value is 1, add 1 for each hard link created
@@ -730,7 +730,7 @@ type flock struct {
 }
 ```
 
-#### Plock {tkv-plock}
+#### Plock {#tkv-plock}
 
 ```
 P${inode} -> plocks

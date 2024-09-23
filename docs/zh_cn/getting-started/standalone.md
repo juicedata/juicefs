@@ -23,7 +23,7 @@ curl -sSL https://d.juicefs.com/install | sh -
 
 ### 基本概念
 
-创建文件系统使用客户端提供的 [`format`](../reference/command_reference.md#format) 命令，一般格式为：
+创建文件系统使用客户端提供的 [`format`](../reference/command_reference.mdx#format) 命令，一般格式为：
 
 ```shell
 juicefs format [command options] META-URL NAME
@@ -31,7 +31,7 @@ juicefs format [command options] META-URL NAME
 
 可见，格式化文件系统需要提供 3 种信息：
 
-- **[command options]**：设定文件系统的存储介质，留空则**默认使用本地磁盘**作为存储介质，路径为 `"$HOME/.juicefs/local"`，`"/var/jfs"` 或 `"C:/jfs/local"`；
+- **[command options]**：设定文件系统的存储介质，留空则**默认使用本地磁盘**作为存储介质，路径为 `"$HOME/.juicefs/local"`(darwin/macOS)，`"/var/jfs"`(Linux) 或 `"C:/jfs/local"`(Windows)；
 - **META-URL**：用来设置元数据存储，即数据库相关的信息，通常是数据库的 URL 或文件路径；
 - **NAME**：是文件系统的名称。
 
@@ -67,7 +67,7 @@ juicefs format sqlite3://myjfs.db myjfs
 
 ### 基本概念
 
-挂载文件系统使用客户端提供的 [`mount`](../reference/command_reference.md#mount) 命令，一般格式为：
+挂载文件系统使用客户端提供的 [`mount`](../reference/command_reference.mdx#mount) 命令，一般格式为：
 
 ```shell
 juicefs mount [command options] META-URL MOUNTPOINT

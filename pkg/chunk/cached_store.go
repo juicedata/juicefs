@@ -132,6 +132,9 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		r, err := s.store.bcache.load(key)
 		if err == nil {
 			n, err = r.ReadAt(p, int64(boff))
+			if !s.store.conf.OSCache {
+				dropOSCache(r)
+			}
 			_ = r.Close()
 			if err == nil {
 				s.store.cacheHits.Add(1)
@@ -219,7 +222,7 @@ func (s *rSlice) Remove() error {
 		// any of them should succeed if any blocks is removed
 		key := s.key(i)
 		s.store.removePending(key)
-		s.store.bcache.remove(key)
+		s.store.bcache.remove(key, true)
 	}
 
 	var err error
@@ -382,7 +385,7 @@ func (store *cachedStore) upload(key string, block *Page, s *wSlice) error {
 	defer buf.Release()
 	if sync && blen < store.conf.BlockSize {
 		// block will be freed after written into disk
-		store.bcache.cache(key, block, false)
+		store.bcache.cache(key, block, false, false)
 	}
 	n, err := store.compressor.Compress(buf.Data, block.Data)
 	block.Release()
@@ -536,6 +539,7 @@ type Config struct {
 	CacheEviction     string
 	CacheScanInterval time.Duration
 	CacheExpire       time.Duration
+	OSCache           bool
 	FreeSpace         float32
 	AutoCreate        bool
 	Compress          string
@@ -742,7 +746,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 			used, tried)
 	}
 	if cache {
-		store.bcache.cache(key, page, forceCache)
+		store.bcache.cache(key, page, forceCache, !store.conf.OSCache)
 	}
 	return nil
 }
@@ -947,9 +951,6 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		<-store.currentUpload
 	}()
 
-	if !store.canUpload() {
-		return
-	}
 	store.pendingMutex.Lock()
 	item, ok := store.pendingKeys[key]
 	store.pendingMutex.Unlock()
@@ -957,6 +958,14 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		logger.Debugf("Key %s is not needed, drop it", key)
 		return
 	}
+	defer func() {
+		item.uploading = false
+	}()
+
+	if !store.canUpload() {
+		return
+	}
+
 	blen := parseObjOrigSize(key)
 	f, err := openCacheFile(stagingPath, blen, store.conf.CacheChecksum)
 	if err != nil {
@@ -993,8 +1002,6 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 				logger.Warnf("failed to remove stage %s, in upload staging file", stagingPath)
 			}
 		}
-	} else {
-		item.uploading = false
 	}
 }
 
@@ -1108,7 +1115,7 @@ func (store *cachedStore) EvictCache(id uint64, length uint32) error {
 	r := sliceForRead(id, int(length), store)
 	keys := r.keys()
 	for _, k := range keys {
-		store.bcache.remove(k)
+		store.bcache.remove(k, false)
 	}
 	return nil
 }

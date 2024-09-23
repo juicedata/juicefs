@@ -18,15 +18,14 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/urfave/cli/v2"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
-
-	"github.com/juicedata/juicefs/pkg/meta"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/urfave/cli/v2"
 )
 
 func cmdClone() *cli.Command {
@@ -71,6 +70,10 @@ func clone(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("lookup inode for %s: %s", srcPath, err)
 	}
+	srcParentIno, err := utils.GetFileInode(filepath.Dir(srcAbsPath))
+	if err != nil {
+		return fmt.Errorf("lookup inode for %s: %s", filepath.Dir(srcAbsPath), err)
+	}
 	dst := ctx.Args().Get(1)
 	if strings.HasSuffix(dst, string(filepath.Separator)) {
 		dst = filepath.Join(dst, filepath.Base(srcPath))
@@ -112,11 +115,12 @@ func clone(ctx *cli.Context) error {
 		cmode |= meta.CLONE_MODE_PRESERVE_ATTR
 	}
 	headerSize := 4 + 4
-	contentSize := 8 + 8 + 1 + uint32(len(dstName)) + 2 + 1
+	contentSize := 8 + 8 + 8 + 1 + uint32(len(dstName)) + 2 + 1
 	wb := utils.NewBuffer(uint32(headerSize) + contentSize)
 	wb.Put32(meta.Clone)
 	wb.Put32(contentSize)
 	wb.Put64(srcIno)
+	wb.Put64(srcParentIno)
 	wb.Put64(dstParentIno)
 	wb.Put8(uint8(len(dstName)))
 	wb.Put([]byte(dstName))

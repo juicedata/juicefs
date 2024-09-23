@@ -70,7 +70,7 @@ func (c *memcache) stats() (int64, int64) {
 	return int64(len(c.pages)), c.used
 }
 
-func (c *memcache) cache(key string, p *Page, force bool) {
+func (c *memcache) cache(key string, p *Page, force, dropCache bool) {
 	if c.capacity == 0 {
 		return
 	}
@@ -102,7 +102,7 @@ func (c *memcache) delete(key string, p *Page) {
 	delete(c.pages, key)
 }
 
-func (c *memcache) remove(key string) {
+func (c *memcache) remove(key string, staging bool) {
 	c.Lock()
 	defer c.Unlock()
 	if item, ok := c.pages[key]; ok {

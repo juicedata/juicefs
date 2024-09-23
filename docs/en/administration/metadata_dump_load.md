@@ -10,7 +10,7 @@ slug: /metadata_dump_load
 - JuiceFS v1.0.4 starts to support importing an encrypted backup.
 :::
 
-JuiceFS supports [multiple metadata engines](../reference/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.md#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.md#load) command to restore or migrate backups to any metadata storage engine. This dump / load process can also be used to migrate a community edition file system to enterprise edition (read [enterprise docs](https://juicefs.com/docs/cloud/metadata_dump_load) for more), and vice versa.
+JuiceFS supports [multiple metadata engines](../reference/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.mdx#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.mdx#load) command to restore or migrate backups to any metadata storage engine. This dump / load process can also be used to migrate a community edition file system to enterprise edition (read [enterprise docs](https://juicefs.com/docs/cloud/administration/metadata_dump_load) for more), and vice versa.
 
 ## Metadata backup {#backup}
 
@@ -60,6 +60,10 @@ It is worth mentioning that the time cost of backup will increase with the numbe
 
 For reference, when using Redis as the metadata engine, backing up the metadata for one million files takes about 1 minute and consumes about 1GB of memory.
 
+:::caution
+   When using `--read-only` mount, metadata will not be automatically backed up.
+:::
+
 #### Automatic backup policy
 
 Although automatic metadata backup becomes a default action for clients, backup conflicts do not occur when multiple hosts share the same file system mount.
@@ -77,7 +81,7 @@ JuiceFS periodically cleans up backups according to the following rules.
 
 ## Metadata recovery and migration {#recovery-and-migration}
 
-Use the [`load`](../reference/command_reference.md#load) command to restore the metadata dump file into an empty database, for example:
+Use the [`load`](../reference/command_reference.mdx#load) command to restore the metadata dump file into an empty database, for example:
 
 ```shell
 juicefs load redis://192.168.1.6:6379 meta-dump.json
@@ -107,7 +111,7 @@ It is also possible to migrate directly through the system's pipe:
 juicefs dump redis://192.168.1.6:6379 | juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs
 ```
 
-Note that since the API access key for object storage is excluded by default from the backup, when loading metadata, you need to use the [`juicefs config`](../reference/command_reference.md#config) command to reconfigure the object storage credentials. For example:
+Note that since the API access key for object storage is excluded by default from the backup, when loading metadata, you need to use the [`juicefs config`](../reference/command_reference.mdx#config) command to reconfigure the object storage credentials. For example:
 
 ```shell
 juicefs config --secret-key xxxxx mysql://user:password@(192.168.1.6:3306)/juicefs

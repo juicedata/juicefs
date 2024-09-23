@@ -311,6 +311,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf.Subdir = c.String("subdir")
 	conf.SkipDirMtime = utils.Duration(c.String("skip-dir-mtime"))
 	conf.Sid, _ = strconv.ParseUint(os.Getenv("_JFS_META_SID"), 10, 64)
+	conf.SortDir = c.Bool("sort-dir")
 
 	atimeMode := c.String("atime-mode")
 	if atimeMode != meta.RelAtime && atimeMode != meta.StrictAtime && atimeMode != meta.NoAtime {
@@ -354,6 +355,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheEviction:     c.String("cache-eviction"),
 		CacheScanInterval: utils.Duration(c.String("cache-scan-interval")),
 		CacheExpire:       utils.Duration(c.String("cache-expire")),
+		OSCache:           os.Getenv("JFS_DROP_OSCACHE") == "",
 		AutoCreate:        true,
 	}
 	if chunkConf.UploadLimit == 0 {
@@ -381,6 +383,8 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 		registerer.MustRegister(vfs.LastBackupTimeG)
 		registerer.MustRegister(vfs.LastBackupDurationG)
 		go vfs.Backup(m, blob, vfsConf.BackupMeta, vfsConf.BackupSkipTrash)
+	} else {
+		logger.Warnf("Metadata backup is disabled")
 	}
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
@@ -567,7 +571,7 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("Invalid daemon stage: %d", stage)
 	}
 	supervisor := os.Getenv("JFS_SUPERVISOR")
-	if supervisor != "" {
+	if supervisor != "" || runtime.GOOS == "windows" {
 		stage = 3
 	}
 

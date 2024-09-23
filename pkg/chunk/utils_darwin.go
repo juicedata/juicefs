@@ -29,3 +29,5 @@ func getAtime(fi os.FileInfo) time.Time {
 		return fi.ModTime()
 	}
 }
+
+func dropOSCache(r ReadCloser) {}

@@ -16,7 +16,7 @@ JuiceFS 客户端在运行过程中会输出日志用于故障诊断，日志等
 
 ### 挂载点
 
-当挂载 JuiceFS 文件系统时加上了 [`-d` 选项](../reference/command_reference.md#mount)（表示后台运行），日志会同时输出到系统日志和本地日志文件，取决于挂载文件系统时的运行用户，本地日志文件的路径稍有区别。root 用户对应的日志文件路径是 `/var/log/juicefs.log`，非 root 用户的日志文件路径是 `$HOME/.juicefs/juicefs.log`，具体请参见 [`--log` 选项](../reference/command_reference.md#mount)。
+当挂载 JuiceFS 文件系统时加上了 [`-d` 选项](../reference/command_reference.mdx#mount)（表示后台运行），日志会同时输出到系统日志和本地日志文件，取决于挂载文件系统时的运行用户，本地日志文件的路径稍有区别。root 用户对应的日志文件路径是 `/var/log/juicefs.log`，非 root 用户的日志文件路径是 `$HOME/.juicefs/juicefs.log`，具体请参见 [`--log` 选项](../reference/command_reference.mdx#mount)。
 
 取决于你使用的操作系统，你可以通过不同的命令获取系统日志或直接读取本地日志文件：
 
@@ -118,7 +118,7 @@ kubectl -n kube-system exec juicefs-1.2.3.4-pvc-d4b8fb4f-2c0b-48e8-a2dc-53079943
 
 ### S3 网关
 
-需要在启动 S3 网关时新增 [`--access-log` 选项](../reference/command_reference.md#gateway)，指定访问日志输出的路径，默认 S3 网关不输出访问日志。
+需要在启动 S3 网关时新增 [`--access-log` 选项](../reference/command_reference.mdx#gateway)，指定访问日志输出的路径，默认 S3 网关不输出访问日志。
 
 ### Hadoop Java SDK
 
@@ -175,7 +175,7 @@ JuiceFS 客户端提供 `profile` 和 `stats` 两个子命令来对性能数据�
 
 ### `juicefs profile` {#profile}
 
-[`juicefs profile`](../reference/command_reference.md#profile) 会对[「文件系统访问日志」](#access-log)进行汇总，运行 `juicefs profile MOUNTPOINT` 命令，便能看到根据最新访问日志获取的各个文件系统操作的实时统计信息：
+[`juicefs profile`](../reference/command_reference.mdx#profile) 会对[「文件系统访问日志」](#access-log)进行汇总，运行 `juicefs profile MOUNTPOINT` 命令，便能看到根据最新访问日志获取的各个文件系统操作的实时统计信息：
 
 ![JuiceFS-profiling](../images/juicefs-profiling.gif)
 
@@ -199,7 +199,7 @@ juicefs profile /tmp/juicefs.accesslog --uid 12345
 
 ### `juicefs stats` {#stats}
 
-[`juicefs stats`](../reference/command_reference.md#stats) 命令通过读取 JuiceFS 客户端的监控数据，以类似 Linux `dstat` 工具的形式实时打印各个指标的每秒变化情况：
+[`juicefs stats`](../reference/command_reference.mdx#stats) 命令通过读取 JuiceFS 客户端的监控数据，以类似 Linux `dstat` 工具的形式实时打印各个指标的每秒变化情况：
 
 ![juicefs_stats_watcher](../images/juicefs_stats_watcher.png)
 
@@ -209,7 +209,7 @@ juicefs profile /tmp/juicefs.accesslog --uid 12345
 
 - `cpu`：进程的 CPU 使用率。
 - `mem`：进程的物理内存使用量。
-- `buf`：进程已使用的[读写缓冲区](../guide/cache.md#buffer-size)大小，如果该数值逼近甚至超过客户端所设置的 [`--buffer-size`](../reference/command_reference.md#mount)，说明读写缓冲区空间不足，需要视情况扩大，或者降低应用读写负载。
+- `buf`：进程已使用的[读写缓冲区](../guide/cache.md#buffer-size)大小，如果该数值逼近甚至超过客户端所设置的 [`--buffer-size`](../reference/command_reference.mdx#mount-data-cache-options)，说明读写缓冲区空间不足，需要视情况扩大，或者降低应用读写负载。
 - `cache`：内部指标，无需关注。
 
 #### `fuse`
@@ -239,25 +239,15 @@ juicefs profile /tmp/juicefs.accesslog --uid 12345
 
 ## 用 pprof 获取运行时信息 {#runtime-information}
 
-JuiceFS 客户端默认会通过 [pprof](https://pkg.go.dev/net/http/pprof) 在本地监听一个 TCP 端口用以获取运行时信息，如 Goroutine 堆栈信息、CPU 性能统计、内存分配统计。你可以通过系统命令（如 `lsof`）查看当前 JuiceFS 客户端监听的具体端口号：
-
-:::tip 提示
-如果 JuiceFS 是通过 root 用户挂载，那么需要在 `lsof` 命令前加上 `sudo`。
-:::
-
-```bash
-lsof -i -nP | grep LISTEN | grep juicefs
-```
+JuiceFS 客户端默认会通过 [pprof](https://pkg.go.dev/net/http/pprof) 在本地监听一个 TCP 端口用以获取运行时信息，如 Goroutine 堆栈信息、CPU 性能统计、内存分配统计。你可以通过挂载点下的 `.config` 文件查看当前 JuiceFS 客户端监听的具体端口号：
 
 ```shell
-# pprof 监听端口
-juicefs   19371 user    6u  IPv4 0xa2f1748ad05b5427      0t0  TCP 127.0.0.1:6061 (LISTEN)
-
-# Prometheus API 监听端口
-juicefs   19371 user   11u  IPv4 0xa2f1748ad05cbde7      0t0  TCP 127.0.0.1:9567 (LISTEN)
+# 假设挂载点是 /jfs
+$ cat /jfs/.config | grep 'DebugAgent'
+  "DebugAgent": "127.0.0.1:6064",
 ```
 
-默认 pprof 监听的端口号范围是从 6060 开始至 6099 结束，因此上面示例中对应的实际端口号是 6061。在获取到监听端口号以后就可以通过 `http://localhost:<port>/debug/pprof` 地址查看所有可供查询的运行时信息，一些重要的运行时信息如下：
+默认 pprof 监听的端口号范围是从 6060 开始至 6099 结束，从上面的示例中可以看到实际的端口号是 6064。在获取到监听端口号以后就可以通过 `http://localhost:<port>/debug/pprof` 地址查看所有可供查询的运行时信息，一些重要的运行时信息如下：
 
 - Goroutine 堆栈信息：`http://localhost:<port>/debug/pprof/goroutine?debug=1`
 - CPU 性能统计：`http://localhost:<port>/debug/pprof/profile?seconds=30`
@@ -284,7 +274,7 @@ curl 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pb.gz
 juicefs debug /mnt/jfs
 ```
 
-关于 `juicefs debug` 命令的更多信息，请查看[命令参考](../reference/command_reference.md#debug)。
+关于 `juicefs debug` 命令的更多信息，请查看[命令参考](../reference/command_reference.mdx#debug)。
 :::
 
 如果你安装了 `go` 命令，那么可以通过 `go tool pprof` 命令直接分析，例如分析 CPU 性能统计：

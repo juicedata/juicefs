@@ -19,6 +19,7 @@ package vfs
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 	"sort"
@@ -58,7 +59,6 @@ type FuseOptions struct {
 	MaxBackground            int
 	MaxWrite                 int
 	MaxReadAhead             int
-	MaxPages                 int
 	IgnoreSecurityLabels     bool // ignoring labels should be provided as a fusermount mount option.
 	RememberInodes           bool
 	FsName                   string
@@ -66,13 +66,18 @@ type FuseOptions struct {
 	SingleThreaded           bool
 	DisableXAttrs            bool
 	Debug                    bool
+	Logger                   *log.Logger `json:"-"`
 	EnableLocks              bool
+	EnableSymlinkCaching     bool `json:",omitempty"`
 	ExplicitDataCacheControl bool
+	SyncRead                 bool `json:",omitempty"`
 	DirectMount              bool
+	DirectMountStrict        bool `json:",omitempty"`
 	DirectMountFlags         uintptr
 	EnableAcl                bool
+	DisableReadDirPlus       bool `json:",omitempty"`
 	EnableWriteback          bool
-	EnableIoctl              bool
+	EnableIoctl              bool `json:",omitempty"`
 	DontUmask                bool
 	OtherCaps                uint32
 	NoAllocForRead           bool
@@ -101,7 +106,6 @@ func (o FuseOptions) StripOptions() FuseOptions {
 	// ignore there options because they cannot be configured by users
 	o.Name = ""
 	o.MaxBackground = 0
-	o.MaxWrite = 0
 	o.MaxReadAhead = 0
 	o.DirectMount = false
 	o.DontUmask = false
@@ -126,12 +130,11 @@ type Config struct {
 	RootSquash           *RootSquash `json:",omitempty"`
 	NonDefaultPermission bool        `json:",omitempty"`
 
-	Pid        int
-	PPid       int
-	DebugAgent string
-	CommPath   string       `json:",omitempty"`
-	StatePath  string       `json:",omitempty"`
-	FuseOpts   *FuseOptions `json:",omitempty"`
+	Pid       int
+	PPid      int
+	CommPath  string       `json:",omitempty"`
+	StatePath string       `json:",omitempty"`
+	FuseOpts  *FuseOptions `json:",omitempty"`
 }
 
 type RootSquash struct {
@@ -431,17 +434,23 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 		if err != 0 {
 			return
 		}
-		h.children = inodes
 		if ino == rootID && !v.Conf.HideInternal {
 			// add internal nodes
 			for _, node := range internalNodes[1:] {
-				h.children = append(h.children, &meta.Entry{
+				inodes = append(inodes, &meta.Entry{
 					Inode: node.inode,
 					Name:  []byte(node.name),
 					Attr:  node.attr,
 				})
 			}
 		}
+		if v.Conf.Meta.SortDir {
+			sort.SliceStable(inodes[2:], func(i, j int) bool {
+				return string(inodes[i+2].Name) < string(inodes[j+2].Name)
+			})
+		}
+		h.children = inodes
+
 		index := make(map[string]int)
 		for i, e := range inodes {
 			index[string(e.Name)] = i
@@ -701,7 +710,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 
 	defer func() {
 		readSizeHistogram.Observe(float64(n))
-		logit(ctx, "read", err, "(%d,%d,%d): (%d)", ino, size, off, n)
+		logit(ctx, "read", err, "(%d,%d,%d,%d): (%d)", ino, size, off, fh, n)
 	}()
 	h := v.findHandle(ino, fh)
 	if h == nil {
@@ -734,7 +743,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 	}
 
 	// there could be read operation for write-only if kernel writeback is enabled
-	if !v.Conf.FuseOpts.EnableWriteback && !hasReadPerm(h.flags) {
+	if v.Conf.FuseOpts != nil && !v.Conf.FuseOpts.EnableWriteback && !hasReadPerm(h.flags) {
 		err = syscall.EBADF
 		return
 	}
@@ -1215,10 +1224,10 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	if statePath == "" {
 		statePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 	}
-
 	if err := v.loadAllHandles(statePath); err != nil && !os.IsNotExist(err) {
 		logger.Errorf("load state from %s: %s", statePath, err)
 	}
+	_ = os.Rename(statePath, statePath+".bak")
 
 	go v.cleanupModified()
 	initVFSMetrics(v, writer, reader, registerer)

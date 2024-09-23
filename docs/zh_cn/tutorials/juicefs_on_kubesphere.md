@@ -34,13 +34,13 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 在企业空间中点击进去应用管理，选择「应用仓库」，点击创建按钮添加 JuiceFS CSI 仓库，填写：
 
 - 仓库名称：`juicefs-csi-driver`
-- Index URL：`https://juicedata.github.io/juicefs-csi-driver/`
+- Index URL：`https://juicedata.github.io/charts/`
 
 ![kubesphere_app_shop](../images/kubesphere_app_shop.png)
 
 #### 方法二：应用模板
 
-先在 JuiceFS CSI Driver 仓库下载 chart 压缩包：<https://github.com/juicedata/juicefs-csi-driver/releases> 。
+先在 JuiceFS CSI Driver 仓库下载 chart 压缩包：[https://github.com/juicedata/juicefs-csi-driver/releases](https://github.com/juicedata/juicefs-csi-driver/releases)。
 
 在「企业空间」中点击进入「应用管理」，选择「应用模板」，点击「创建」，上传 chart 压缩包：
 

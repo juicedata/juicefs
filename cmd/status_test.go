@@ -22,41 +22,35 @@ import (
 	"testing"
 
 	"github.com/agiledragon/gomonkey/v2"
-
-	. "github.com/smartystreets/goconvey/convey"
 )
 
 func TestStatus(t *testing.T) {
-	Convey("TestStatus", t, func() {
-		Convey("TestStatus", func() {
-			tmpFile, err := os.CreateTemp("/tmp", "")
-			if err != nil {
-				t.Fatalf("create temporary file: %s", err)
-			}
-			defer tmpFile.Close()
-			defer os.Remove(tmpFile.Name())
+	tmpFile, err := os.CreateTemp("/tmp", "")
+	if err != nil {
+		t.Fatalf("create temporary file: %s", err)
+	}
+	defer tmpFile.Close()
+	defer os.Remove(tmpFile.Name())
 
-			mountTemp(t, nil, nil, nil)
-			defer umountTemp(t)
+	mountTemp(t, nil, nil, nil)
+	defer umountTemp(t)
 
-			// mock os.Stdout
-			patches := gomonkey.ApplyGlobalVar(os.Stdout, *tmpFile)
-			defer patches.Reset()
+	// mock os.Stdout
+	patches := gomonkey.ApplyGlobalVar(os.Stdout, *tmpFile)
+	defer patches.Reset()
 
-			if err = Main([]string{"", "status", testMeta}); err != nil {
-				t.Fatalf("status failed: %s", err)
-			}
-			content, err := os.ReadFile(tmpFile.Name())
-			if err != nil {
-				t.Fatalf("read file failed: %s", err)
-			}
-			s := sections{}
-			if err = json.Unmarshal(content, &s); err != nil {
-				t.Fatalf("json unmarshal failed: %s", err)
-			}
-			if s.Setting.Name != testVolume || s.Setting.Storage != "file" {
-				t.Fatalf("setting is not as expected: %+v", s.Setting)
-			}
-		})
-	})
+	if err = Main([]string{"", "status", testMeta}); err != nil {
+		t.Fatalf("status failed: %s", err)
+	}
+	content, err := os.ReadFile(tmpFile.Name())
+	if err != nil {
+		t.Fatalf("read file failed: %s", err)
+	}
+	s := sections{}
+	if err = json.Unmarshal(content, &s); err != nil {
+		t.Fatalf("json unmarshal failed: %s", err)
+	}
+	if s.Setting.Name != testVolume || s.Setting.Storage != "file" {
+		t.Fatalf("setting is not as expected: %+v", s.Setting)
+	}
 }
