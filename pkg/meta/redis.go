@@ -117,6 +117,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	certFile := query.pop("tls-cert-file")
 	keyFile := query.pop("tls-key-file")
 	caCertFile := query.pop("tls-ca-cert-file")
+	tlsServerName := query.pop("tls-server-name")
 	u.RawQuery = values.Encode()
 
 	hosts := u.Host
@@ -125,7 +126,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		return nil, fmt.Errorf("redis parse %s: %s", uri, err)
 	}
 	if opt.TLSConfig != nil {
-		opt.TLSConfig.ServerName = "" // use the host of each connection as ServerName
+		opt.TLSConfig.ServerName = tlsServerName // use the host of each connection as ServerName
 		opt.TLSConfig.InsecureSkipVerify = skipVerify != ""
 		if certFile != "" {
 			cert, err := tls.LoadX509KeyPair(certFile, keyFile)
