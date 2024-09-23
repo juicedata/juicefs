@@ -211,19 +211,39 @@ func (c *tikvClient) scan(prefix []byte, handler func(key, value []byte)) error 
 	if err != nil {
 		return err
 	}
+	end := nextKey(prefix)
 	snap := c.client.GetSnapshot(ts)
 	snap.SetScanBatchSize(10240)
 	snap.SetNotFillCache(true)
 	snap.SetPriority(txnutil.PriorityLow)
-	it, err := snap.Iter(prefix, nextKey(prefix))
+	it, err := snap.Iter(prefix, end)
 	if err != nil {
 		return err
 	}
 	defer it.Close()
+	var lastKey []byte
 	for it.Valid() {
 		handler(it.Key(), it.Value())
+		lastKey = it.Key()
 		if err = it.Next(); err != nil {
-			return err
+			if _, ok := err.(*tikverr.ErrGCTooEarly); !ok {
+				logger.Warnf("scan next key: %s", err)
+				return err
+			}
+			it.Close()
+			// restart scan
+			ts, err = c.client.CurrentTimestamp("global")
+			if err != nil {
+				return err
+			}
+			snap = c.client.GetSnapshot(ts)
+			snap.SetScanBatchSize(10240)
+			snap.SetNotFillCache(true)
+			snap.SetPriority(txnutil.PriorityLow)
+			it, err = snap.Iter(nextKey(lastKey), end)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
