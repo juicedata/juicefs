@@ -381,7 +381,7 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 See the [MinIO official example program](https://github.com/minio/minio/blob/master/docs/sts/assume-role.go).
 
 :::note
-Superusers who are set by environment variables cannot use AssumeRole apis; only users who are added by 'mc admin user add' can use AssumeRole apis.
+Superusers defined by environment variables cannot use AssumeRole APIs; only users added by `mc admin user add` can use AssumeRole APIs.
 :::
 
 #### Permission management
