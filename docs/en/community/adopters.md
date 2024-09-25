@@ -64,5 +64,6 @@ slug: /adopters
 | [coSence](https://www.coscene.io)  | Robotics, AI pipeline  | [coScene Chose JuiceFS over Alluxio to Tackle Object Storage Drawbacks](https://juicefs.com/en/blog/user-stories/juicefs-vs-alluxio-ai-robot-storage)          |
 | [DP Technology](https://www.dp.tech)   | BioTech, AI pipeline  | [AI & HPC Workloads on Hybrid Cloud: Storage Challenges and Solutions](https://juicefs.com/en/blog/user-stories/storage-architectures-for-ai-hpc-in-hybridmulti-cloud)   |
 | [Gene Way](https://www.geneway.cn)    | BioTech, File sharing  |              |
+| [CoCalc]([https://cocalc.com](https://doc.cocalc.com/cloud_file_system.html) | Data Science, AI, Education, Cloud GPU's |   |
 
 You are welcome to share your experience after using JuiceFS, either by submitting a Pull Request directly to this list, or by contacting us at [`hello@juicedata.io`](mailto:hello@juicedata.io).
