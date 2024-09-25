@@ -2574,17 +2574,17 @@ func (m *kvMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 	var rs []int64
 	for _, key := range keys {
 		if len(key) != klen {
+			logger.Warnf("Invalid key %x, expected length %d", key, klen) // Should not happen
 			continue
 		}
 		var clean bool
 		err = m.txn(func(tx *kvTxn) error {
-			ss := ss[:0]
-			rs := rs[:0]
+			ss, rs = ss[:0], rs[:0]
 			v := tx.get(key)
 			if len(v) == 0 {
 				return nil
 			}
-			b := utils.ReadBuffer([]byte(key)[1:])
+			b := utils.ReadBuffer(key[1:])
 			ts := b.Get64()
 			m.decodeDelayedSlices(v, &ss)
 			clean, err = scan(ss, int64(ts))
