@@ -503,7 +503,7 @@ func (cache *cacheStore) createDir(dir string) {
 			_ = os.Mkdir(dir, mode)
 			// umask may remove some permissions
 			return os.Chmod(dir, mode)
-		} else if strings.HasPrefix(dir, cache.dir) && err == nil && st.Mode() != mode {
+		} else if strings.HasPrefix(dir, cache.dir) && err == nil && st.Mode().Perm() != mode.Perm() { // check permission only
 			changeMode(dir, st, mode)
 		}
 		return err
