@@ -185,7 +185,7 @@ func (cache *cacheStore) createLockFile() {
 		return nil
 	})
 	if err != nil {
-		logger.Panicf("create lock file %s: %s", lockfile, err)
+		logger.Warnf("create lock file %s: %s", lockfile, err)
 	}
 }
 
@@ -500,7 +500,10 @@ func (cache *cacheStore) createDir(dir string) {
 			if filepath.Dir(dir) != dir {
 				cache.createDir(filepath.Dir(dir))
 			}
-			_ = os.Mkdir(dir, mode)
+			if err = os.Mkdir(dir, mode); err != nil {
+				logger.Warnf("create cache dir %s: %s", dir, err)
+				return err
+			}
 			// umask may remove some permissions
 			return os.Chmod(dir, mode)
 		} else if strings.HasPrefix(dir, cache.dir) && err == nil && st.Mode().Perm() != mode.Perm() { // check permission only
