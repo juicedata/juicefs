@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/DataDog/zstd"
 	"github.com/juicedata/juicefs/pkg/object"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -121,6 +122,9 @@ func load(ctx *cli.Context) error {
 			if err != nil {
 				return err
 			}
+			defer r.Close()
+		} else if strings.HasSuffix(src, ".zstd") {
+			r = zstd.NewReader(fp)
 			defer r.Close()
 		} else {
 			r = fp
