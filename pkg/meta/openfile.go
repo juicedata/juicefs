@@ -199,6 +199,10 @@ func (o *openfiles) ReadChunk(ino Ino, indx uint32) ([]Slice, bool) {
 	if !ok {
 		return nil, false
 	}
+	if time.Since(time.Unix(of.lastCheck, 0)) >= o.expire {
+		of.invalidateChunk()
+		return nil, false
+	}
 	if indx == 0 {
 		return of.first, of.first != nil
 	} else {
@@ -222,6 +226,7 @@ func (o *openfiles) CacheChunk(ino Ino, indx uint32, cs []Slice) {
 		}
 		of.chunks[indx] = cs
 	}
+	of.lastCheck = time.Now().Unix()
 }
 
 func (o *openfiles) InvalidateChunk(ino Ino, indx uint32) {
