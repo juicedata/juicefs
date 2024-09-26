@@ -18,11 +18,10 @@ package cmd
 
 import (
 	"fmt"
-	"sort"
-
 	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"sort"
 
 	"github.com/urfave/cli/v2"
 )
@@ -78,6 +77,10 @@ $ juicefs quota delete redis://localhost --path /dir1`,
 			&cli.StringFlag{
 				Name:  "path",
 				Usage: "full path of the directory within the volume",
+			},
+			&cli.BoolFlag{
+				Name:  "create",
+				Usage: "create the directory if not exists",
 			},
 			&cli.StringFlag{
 				Name:  "capacity",
@@ -144,7 +147,7 @@ func quota(c *cli.Context) error {
 		strict = c.Bool("strict")
 		repair = c.Bool("repair")
 	}
-	if err := m.HandleQuota(meta.Background, cmd, dpath, qs, strict, repair); err != nil {
+	if err := m.HandleQuota(meta.Background, cmd, dpath, qs, strict, repair, c.Bool("create")); err != nil {
 		return err
 	} else if len(qs) == 0 {
 		return nil

@@ -18,7 +18,10 @@ package meta
 
 import (
 	"fmt"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"os"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -411,11 +414,33 @@ func (m *baseMeta) doFlushQuotas() {
 	}
 }
 
-func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool) error {
-	var inode Ino
+func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool, create bool) error {
+	var inode Ino = 1
 	if cmd != QuotaList {
-		if st := m.resolve(ctx, dpath, &inode); st != 0 {
-			return st
+		var ctx = NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
+		umask := utils.GetUmask()
+		p := dpath
+		for p != "" {
+			ps := strings.SplitN(p, "/", 2)
+			if ps[0] != "" {
+				var attr Attr
+				var tmpInode Ino
+				r := m.en.doLookup(ctx, inode, ps[0], &tmpInode, &attr)
+				if errors.Is(r, syscall.ENOENT) && create {
+					r = m.Mkdir(ctx, inode, ps[0], 0777, uint16(umask), 0, &tmpInode, &attr)
+				}
+				if r != 0 {
+					return r
+				}
+				if attr.Typ != TypeDirectory {
+					return fmt.Errorf("%s is not a directory", ps[0])
+				}
+				inode = tmpInode
+			}
+			if len(ps) == 1 {
+				break
+			}
+			p = ps[1]
 		}
 		if isTrash(inode) {
 			return errors.New("no quota for any trash directory")
