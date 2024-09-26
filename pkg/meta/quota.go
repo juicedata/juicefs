@@ -412,10 +412,9 @@ func (m *baseMeta) doFlushQuotas() {
 }
 
 func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool, create bool) error {
-	var inode Ino = 1
-	var st syscall.Errno
+	var inode Ino
 	if cmd != QuotaList {
-		if inode, st = m.resolve(ctx, dpath, &inode, create); st != 0 {
+		if st := m.resolve(ctx, dpath, &inode, create); st != 0 {
 			return fmt.Errorf("resolve dir %s: %s", dpath, st)
 		}
 		if isTrash(inode) {

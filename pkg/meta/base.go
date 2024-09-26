@@ -2032,31 +2032,30 @@ func (m *baseMeta) chroot(inode Ino) {
 	m.root = inode
 }
 
-func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino, create bool) (Ino, syscall.Errno) {
+func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino, create bool) syscall.Errno {
 	var attr Attr
-	var root = RootInode
+	*inode = RootInode
 	umask := utils.GetUmask()
 	for dpath != "" {
 		ps := strings.SplitN(dpath, "/", 2)
 		if ps[0] != "" {
-			r := m.en.doLookup(ctx, root, ps[0], inode, &attr)
+			r := m.en.doLookup(ctx, *inode, ps[0], inode, &attr)
 			if errors.Is(r, syscall.ENOENT) && create {
-				r = m.Mkdir(ctx, root, ps[0], 0777, uint16(umask), 0, inode, &attr)
+				r = m.Mkdir(ctx, *inode, ps[0], 0777, uint16(umask), 0, inode, &attr)
 			}
 			if r != 0 {
-				return 0, r
+				return r
 			}
 			if attr.Typ != TypeDirectory {
-				return 0, syscall.ENOTDIR
+				return syscall.ENOTDIR
 			}
-			root = *inode
 		}
 		if len(ps) == 1 {
 			break
 		}
 		dpath = ps[1]
 	}
-	return root, 0
+	return 0
 }
 
 func (m *baseMeta) getFormat() *Format {
