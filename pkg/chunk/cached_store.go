@@ -335,20 +335,20 @@ func (store *cachedStore) put(key string, p *Page) error {
 	var (
 		reqID string
 		sc    = object.DefaultStorageClass
-		st    = time.Now()
 	)
-	err := utils.WithTimeout(func() error {
+	return utils.WithTimeout(func() error {
 		defer p.Release()
-		return store.storage.Put(key, bytes.NewReader(p.Data), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+		st := time.Now()
+		err := store.storage.Put(key, bytes.NewReader(p.Data), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+		used := time.Since(st)
+		logRequest("PUT", key, "", reqID, err, used)
+		store.objectDataBytes.WithLabelValues("PUT", sc).Add(float64(len(p.Data)))
+		store.objectReqsHistogram.WithLabelValues("PUT", sc).Observe(used.Seconds())
+		if err != nil {
+			store.objectReqErrors.Add(1)
+		}
+		return err
 	}, store.conf.PutTimeout)
-	used := time.Since(st)
-	logRequest("PUT", key, "", reqID, err, used)
-	store.objectDataBytes.WithLabelValues("PUT", sc).Add(float64(len(p.Data)))
-	store.objectReqsHistogram.WithLabelValues("PUT", sc).Observe(used.Seconds())
-	if err != nil {
-		store.objectReqErrors.Add(1)
-	}
-	return err
 }
 
 func (store *cachedStore) delete(key string) error {
