@@ -2392,7 +2392,7 @@ func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 	})
 }
 
-func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {
+func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
 	if delete {
 		m.doCleanupSlices()
 	}
@@ -2421,10 +2421,22 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 			}
 		}
 	}
+
+	if scanPending {
+		// slice refs: Kccccccccnnnn
+		klen = 1 + 8 + 4
+		result, _ = m.scanValues(m.fmtKey("K"), -1, func(k, v []byte) bool {
+			return len(k) == klen && len(v) == 8 && parseCounter(v) < 0
+		})
+		for k := range result {
+			rb := utils.FromBuffer([]byte(k)[1:])
+			slices[0] = append(slices[0], Slice{Id: rb.Get64(), Size: rb.Get32()})
+		}
+	}
+
 	if m.getFormat().TrashDays == 0 {
 		return 0
 	}
-
 	return errno(m.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
 		slices[1] = append(slices[1], ss...)
 		if showProgress != nil {

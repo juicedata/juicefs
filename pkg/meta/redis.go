@@ -3041,7 +3041,7 @@ func (m *redisMeta) hscan(ctx context.Context, key string, f func([]string) erro
 	return nil
 }
 
-func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {
+func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
 	m.cleanupLeakedInodes(delete)
 	m.cleanupLeakedChunks(delete)
 	m.cleanupOldSliceRefs(delete)
@@ -3083,10 +3083,33 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 		}
 		return nil
 	})
-	if err != nil || m.getFormat().TrashDays == 0 {
+	if err != nil {
+		logger.Warnf("scan chunks: %s", err)
 		return errno(err)
 	}
 
+	if scanPending {
+		_ = m.hscan(Background, m.sliceRefs(), func(keys []string) error {
+			for i := 0; i < len(keys); i += 2 {
+				key, val := keys[i], keys[i+1]
+				if strings.HasPrefix(val, "-") { // < 0
+					ps := strings.Split(key, "_")
+					if len(ps) == 2 {
+						id, _ := strconv.ParseUint(ps[0][1:], 10, 64)
+						size, _ := strconv.ParseUint(ps[1], 10, 32)
+						if id > 0 && size > 0 {
+							slices[0] = append(slices[0], Slice{Id: id, Size: uint32(size)})
+						}
+					}
+				}
+			}
+			return nil
+		})
+	}
+
+	if m.getFormat().TrashDays == 0 {
+		return 0
+	}
 	return errno(m.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
 		slices[1] = append(slices[1], ss...)
 		if showProgress != nil {
