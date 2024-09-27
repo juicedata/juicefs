@@ -1958,6 +1958,9 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 }
 
 func (m *redisMeta) fillAttr(ctx Context, es []*Entry) error {
+	if len(es) == 0 {
+		return nil
+	}
 	var keys = make([]string, len(es))
 	for i, e := range es {
 		keys[i] = m.inodeKey(e.Inode)
@@ -4557,51 +4560,76 @@ func (m *redisMeta) loadDumpedACLs(ctx Context) error {
 	}, m.inodeKey(RootInode))
 }
 
-func (m *redisMeta) getDirFetcher(ctx Context) dirFetcher {
-	return func(inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error) {
-		min := func(a, b int64) int64 {
-			if a < b {
-				return a
-			}
-			return b
-		}
+func (m *redisMeta) newDirStream(inode Ino, plus bool, entries []*Entry) DirStream {
+	return &redisDirStream{
+		en:          m,
+		inode:       inode,
+		plus:        plus,
+		initEntries: entries,
+	}
+}
 
-		var iCursor uint64
-		var preKeys []string
-		if cursor == nil || cursor.(uint64) == 0 {
-			left := int64(offset)
-			for left > 0 {
-				keys, c, err := m.rdb.HScan(ctx, m.entryKey(inode), iCursor, "*", min(4096, left)).Result() // returns n keys (>= count)
-				if err != nil {
-					return 0, nil, err
-				}
-				left -= int64(len(keys) / 2)
-				if left < 0 {
-					preKeys = append(preKeys, keys[len(keys)+int(left*2):]...)
-				}
-				if c == 0 {
-					return 0, nil, nil // the end
-				}
-				iCursor = c
-			}
-		} else {
-			iCursor = cursor.(uint64)
-		}
+type redisDirStream struct {
+	sync.Mutex
+	inode       Ino
+	plus        bool
+	en          *redisMeta
+	initEntries []*Entry
+	entries     []*Entry
+	indexes     map[string]int
+	readOff     int
+}
 
-		keys, c, err := m.rdb.HScan(ctx, m.entryKey(inode), iCursor, "*", int64(limit)).Result()
-		if err != nil {
-			return 0, nil, err
-		}
+func (s *redisDirStream) Close() {
+	s.Lock()
+	s.entries = nil
+	s.readOff = 0
+	s.Unlock()
+}
 
-		keys = append(keys, preKeys...)
+func (s *redisDirStream) Delete(name string) {
+	s.Lock()
+	defer s.Unlock()
+
+	if len(s.entries) == 0 {
+		return
+	}
+
+	if idx, ok := s.indexes[name]; ok && idx >= s.readOff {
+		s.entries[idx] = s.entries[len(s.entries)-1]
+		s.indexes[string(s.entries[idx].Name)] = idx
+		s.entries = s.entries[:len(s.entries)-1]
+	}
+}
+
+func (s *redisDirStream) Insert(inode Ino, name string, attr *Attr) {
+	s.Lock()
+	defer s.Unlock()
+
+	if len(s.entries) == 0 {
+		return
+	}
+
+	s.entries = append(s.entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
+	s.indexes[name] = len(s.entries) - 1
+}
+
+func (s *redisDirStream) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
+	if offset < len(s.initEntries) {
+		return s.initEntries[offset:], 0
+	}
+	offset -= len(s.initEntries)
+
+	s.Lock()
+	if s.entries == nil {
 		var entries []*Entry
-		if len(keys) > 0 {
+		err := s.en.hscan(ctx, s.en.entryKey(s.inode), func(keys []string) error {
 			newEntries := make([]Entry, len(keys)/2)
 			newAttrs := make([]Attr, len(keys)/2)
 			for i := 0; i < len(keys); i += 2 {
-				typ, ino := m.parseEntry([]byte(keys[i+1]))
+				typ, ino := s.en.parseEntry([]byte(keys[i+1]))
 				if keys[i] == "" {
-					logger.Errorf("Corrupt entry with empty name: inode %d parent %d", ino, inode)
+					logger.Errorf("Corrupt entry with empty name: inode %d parent %d", ino, s.inode)
 					continue
 				}
 				ent := &newEntries[i/2]
@@ -4611,12 +4639,41 @@ func (m *redisMeta) getDirFetcher(ctx Context) dirFetcher {
 				ent.Attr.Typ = typ
 				entries = append(entries, ent)
 			}
-			if plus {
-				if err = m.fillAttr(ctx, entries); err != nil {
-					return 0, nil, err
-				}
+			return nil
+		})
+		if err != nil {
+			return nil, errno(err)
+		}
+
+		if s.en.conf.SortDir {
+			sort.Slice(entries, func(i, j int) bool {
+				return string(entries[i].Name) < string(entries[j].Name)
+			})
+		}
+		if s.plus {
+			if err := s.en.fillAttr(ctx, entries); err != nil {
+				return nil, errno(err)
 			}
 		}
-		return c, entries, nil
+		s.entries = entries
+
+		indexes := make(map[string]int, len(entries))
+		for i, e := range entries {
+			indexes[string(e.Name)] = i
+		}
+		s.indexes = indexes
 	}
+	s.Unlock()
+
+	size := len(s.entries) - offset
+	if size > DirBatchNum {
+		size = DirBatchNum
+	}
+	entries := s.entries[offset : offset+size]
+	s.Read(offset + size)
+	return entries, 0
+}
+
+func (s *redisDirStream) Read(offset int) {
+	s.readOff = offset - len(s.initEntries)
 }

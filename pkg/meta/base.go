@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -127,10 +128,9 @@ type engine interface {
 	doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno
 	cacheACLs(ctx Context) error
 
-	getDirFetcher(ctx Context) dirFetcher
+	newDirStream(inode Ino, plus bool, entries []*Entry) DirStream
 }
 
-type dirFetcher func(inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error)
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
 type pendingSliceScan func(id uint64, size uint32) (clean bool, err error)
 type trashFileScan func(inode Ino, size uint64, ts time.Time) (clean bool, err error)
@@ -2895,7 +2895,10 @@ func inGroup(ctx Context, gid uint32) bool {
 }
 
 type DirStream interface {
-	List(offset int) ([]*Entry, syscall.Errno)
+	List(ctx Context, offset int) ([]*Entry, syscall.Errno)
+	Insert(inode Ino, name string, attr *Attr)
+	Delete(name string)
+	Read(offset int)
 	Close()
 }
 
@@ -2934,117 +2937,126 @@ func (m *baseMeta) NewDirStream(ctx Context, inode Ino, plus bool, initEntries [
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
-	return newDirStream(inode, plus, initEntries, m.en.getDirFetcher(ctx)), 0
+
+	return m.en.newDirStream(inode, plus, initEntries), 0
 }
 
 type dirBatch struct {
-	err     error
+	isEnd   bool
 	offset  int
 	cursor  interface{}
+	maxName []byte
 	entries []*Entry
+	indexes map[string]int
 }
 
-func (b *dirBatch) in(offset int) bool {
-	return b.offset <= offset && offset < b.offset+len(b.entries)
+func (b *dirBatch) contain(offset int) bool {
+	if b == nil {
+		return false
+	}
+	return b.offset <= offset && offset < b.offset+len(b.entries) || (len(b.entries) == 0 && b.offset == offset)
 }
+
+func (b *dirBatch) predecessor(offset int) bool {
+	return b.offset+len(b.entries) == offset
+}
+
+type dirFetcher func(ctx Context, inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error)
 
 type dirStream struct {
 	sync.Mutex
-	inode        Ino
-	plus         bool
-	initEntries  []*Entry
-	fetcher      dirFetcher
-	curr         *dirBatch
-	next         *dirBatch
-	prefetchLock sync.Mutex
-	prefetchWG   sync.WaitGroup
+	inode       Ino
+	plus        bool
+	initEntries []*Entry
+	batch       *dirBatch
+	fetcher     dirFetcher
+	readOff     int
 }
 
-func newDirStream(inode Ino, plus bool, entries []*Entry, fetcher dirFetcher) *dirStream {
-	// TODO limit goroutine num ?
-	s := &dirStream{
-		initEntries: entries,
-		inode:       inode,
-		plus:        plus,
-		fetcher:     fetcher,
+func (s *dirStream) fetch(ctx Context, offset int) (*dirBatch, error) {
+	var cursor interface{}
+	if s.batch != nil && s.batch.predecessor(offset) {
+		if s.batch.isEnd {
+			return s.batch, nil
+		}
+		cursor = s.batch.cursor
 	}
-	return s
-}
-
-func (s *dirStream) fetch(offset int) (*dirBatch, error) {
-	s.prefetchWG.Wait()
-	var batch *dirBatch
-	if s.next != nil && s.next.err == nil && s.next.offset == offset {
-		batch, s.next = s.next, nil
-	}
-
-	if batch == nil {
-		s.prefetch(offset, true)
-		s.prefetchWG.Wait()
-		batch, s.next = s.next, nil
-	}
-
-	if err := batch.err; err != nil {
+	nextCursor, entries, err := s.fetcher(ctx, s.inode, cursor, offset, DirBatchNum, s.plus)
+	if err != nil {
 		return nil, err
 	}
-
-	return batch, nil
+	if entries == nil {
+		entries = []*Entry{}
+		nextCursor = cursor
+	}
+	isEnd := false
+	if len(entries) < DirBatchNum {
+		isEnd = true
+	}
+	indexes := make(map[string]int, len(entries))
+	maxName := []byte("")
+	for i, e := range entries {
+		indexes[string(e.Name)] = i
+		if bytes.Compare(e.Name, maxName) > 0 {
+			maxName = e.Name
+		}
+	}
+	return &dirBatch{isEnd: isEnd, offset: offset, cursor: nextCursor, entries: entries, indexes: indexes, maxName: maxName}, nil
 }
 
-func (s *dirStream) prefetch(offset int, reset bool) {
-	if !reset && s.next != nil {
-		return
-	}
-	if !s.prefetchLock.TryLock() {
-		return
-	}
-	s.prefetchWG.Add(1)
-	go func() {
-		defer func() {
-			s.prefetchLock.Unlock()
-			s.prefetchWG.Done()
-		}()
-		var cursor interface{}
-		if !reset && s.curr != nil {
-			cursor = s.curr.cursor
-		}
-		logger.Debugf("do prefetch %d reset %v", offset, reset)
-		nextCursor, entries, err := s.fetcher(s.inode, cursor, offset, DirBatchNum, s.plus)
-		if err != nil {
-			s.next = &dirBatch{err: err}
-			return
-		}
-		s.next = &dirBatch{offset: offset, entries: entries, cursor: nextCursor}
-	}()
-}
-
-func (s *dirStream) List(offset int) ([]*Entry, syscall.Errno) {
-	s.Lock()
-	defer s.Unlock()
-
+func (s *dirStream) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
 	if offset < len(s.initEntries) {
 		return s.initEntries[offset:], 0
 	}
 	offset -= len(s.initEntries)
 
 	var err error
-	if s.curr == nil || !s.curr.in(offset) {
-		s.curr, err = s.fetch(offset)
+	s.Lock()
+	defer s.Unlock()
+	if !s.batch.contain(offset) {
+		s.batch, err = s.fetch(ctx, offset)
 	}
 
 	if err != nil {
 		return nil, errno(err)
 	}
 
-	// reach end
-	if len(s.curr.entries) == 0 {
-		return []*Entry{}, 0
+	s.Read(s.batch.offset + len(s.batch.entries))
+	return s.batch.entries[offset-s.batch.offset:], 0
+}
+
+func (s *dirStream) delete(name string) {
+	if s.batch == nil || len(s.batch.entries) == 0 {
+		return
 	}
 
-	s.prefetch(s.curr.offset+len(s.curr.entries), false)
-	return s.curr.entries[offset-s.curr.offset:], 0
+	if idx, ok := s.batch.indexes[name]; ok && idx >= s.readOff {
+		s.batch.entries[idx] = s.batch.entries[len(s.batch.entries)-1]
+		delete(s.batch.indexes, name)
+		s.batch.indexes[string(s.batch.entries[idx].Name)] = idx
+		s.batch.entries = s.batch.entries[:len(s.batch.entries)-1]
+	}
+}
+
+func (s *dirStream) Insert(inode Ino, name string, attr *Attr) {
+	s.Lock()
+	defer s.Unlock()
+	if s.batch == nil {
+		return
+	}
+	if s.batch.isEnd || bytes.Compare([]byte(name), s.batch.maxName) < 0 {
+		s.batch.entries = append(s.batch.entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
+		s.batch.indexes[name] = len(s.batch.entries) - 1
+	}
+}
+
+func (s *dirStream) Read(offset int) {
+	s.readOff = offset - len(s.initEntries)
 }
 
 func (s *dirStream) Close() {
-	s.prefetchWG.Wait()
+	s.Lock()
+	s.batch = nil
+	s.readOff = 0
+	s.Unlock()
 }

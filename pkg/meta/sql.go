@@ -4447,19 +4447,66 @@ func (m *dbMeta) loadDumpedACLs(ctx Context) error {
 	})
 }
 
-func (m *dbMeta) getDirFetcher(ctx Context) dirFetcher {
-	return func(inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error) {
+type dbDirStream struct {
+	dirStream
+}
+
+func (s *dbDirStream) Insert(inode Ino, name string, attr *Attr) {
+	s.Lock()
+	defer s.Unlock()
+	if s.batch == nil {
+		return
+	}
+	if s.batch.isEnd || bytes.Compare([]byte(name), s.batch.maxName) < 0 {
+		s.batch.entries = append(s.batch.entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
+		s.batch.indexes[name] = len(s.batch.entries) - 1
+	}
+}
+
+func (s *dbDirStream) Delete(name string) {
+	s.Lock()
+	defer s.Unlock()
+
+	s.dirStream.delete(name)
+	if s.batch != nil && !s.batch.isEnd && bytes.Compare(s.batch.maxName, []byte(name)) > 0 && s.batch.cursor != nil {
+		s.batch.cursor = s.batch.cursor.(int) - 1
+	}
+}
+
+func (m *dbMeta) newDirStream(inode Ino, plus bool, entries []*Entry) DirStream {
+	return &dbDirStream{
+		dirStream: dirStream{
+			inode:       inode,
+			plus:        plus,
+			initEntries: entries,
+			fetcher:     m.getDirFetcher(),
+		},
+	}
+}
+
+func (m *dbMeta) getDirFetcher() dirFetcher {
+	return func(ctx Context, inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error) {
 		var entries []*Entry
 		err := m.roTxn(func(s *xorm.Session) error {
-			s = s.Table(&edge{})
-			if plus {
-				s = s.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
+			iCursor := offset
+			if cursor != nil {
+				iCursor = cursor.(int)
 			}
-			s = s.Limit(limit, offset)
-			var nodes []namedNode
-			if err := s.Find(&nodes, &edge{Parent: inode}); err != nil {
+
+			var ids []int64
+			if err := s.Table(&edge{}).Cols("id").Where("parent = ?", inode).Limit(limit, iCursor).Find(&ids); err != nil {
 				return err
 			}
+
+			s = s.Table(&edge{}).Cols("jfs_edge.inode", "jfs_edge.name", "jfs_edge.type").In("jfs_edge.id", ids).OrderBy("jfs_edge.name")
+			if true {
+				s = s.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
+			}
+			var nodes []namedNode
+			if err := s.Find(&nodes); err != nil {
+				return err
+			}
+
 			for _, n := range nodes {
 				if len(n.Name) == 0 {
 					logger.Errorf("Corrupt entry with empty name: inode %d parent %d", n.Inode, inode)
@@ -4482,6 +4529,6 @@ func (m *dbMeta) getDirFetcher(ctx Context) dirFetcher {
 		if err != nil {
 			return nil, nil, err
 		}
-		return nil, entries, err
+		return offset + len(entries), entries, nil
 	}
 }

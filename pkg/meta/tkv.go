@@ -3781,14 +3781,34 @@ func (m *kvMeta) loadDumpedACLs(ctx Context) error {
 	})
 }
 
-func (m *kvMeta) getDirFetcher(ctx Context) dirFetcher {
-	return func(inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error) {
+type kvDirStream struct {
+	dirStream
+}
+
+func (s *kvDirStream) Delete(name string) {
+	s.Lock()
+	defer s.Unlock()
+	s.dirStream.delete(name)
+}
+
+func (m *kvMeta) newDirStream(inode Ino, plus bool, entries []*Entry) DirStream {
+	return &kvDirStream{
+		dirStream: dirStream{
+			inode:       inode,
+			plus:        plus,
+			initEntries: entries,
+			fetcher:     m.getDirFetcher(),
+		},
+	}
+}
+
+func (m *kvMeta) getDirFetcher() dirFetcher {
+	return func(ctx Context, inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error) {
 		var startKey []byte
 		total := limit
 		if cursor == nil {
 			startKey = m.entryKey(inode, "")
 
-			// should not happen
 			if offset > 0 {
 				total += offset
 			}

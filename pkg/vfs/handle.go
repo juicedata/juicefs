@@ -35,10 +35,6 @@ type handle struct {
 	fh    uint64
 
 	// for dir
-	children  []*meta.Entry
-	readAt    time.Time
-	readOff   int
-	index     map[string]int
 	dirStream meta.DirStream
 
 	// for file
@@ -274,29 +270,10 @@ func (v *VFS) invalidateDirHandle(parent Ino, name string, inode Ino, attr *Attr
 	for _, h := range hs {
 		h.Lock()
 		if h.dirStream != nil {
-			h.dirStream.Close()
-			h.dirStream = nil
-		}
-		if h.children != nil && h.index != nil {
 			if inode > 0 {
-				h.children = append(h.children, &meta.Entry{
-					Inode: inode,
-					Name:  []byte(name),
-					Attr:  attr,
-				})
-				h.index[name] = len(h.children) - 1
+				h.dirStream.Insert(inode, name, attr)
 			} else {
-				i, ok := h.index[name]
-				if ok {
-					delete(h.index, name)
-					h.children[i].Inode = 0 // invalid
-					if i >= h.readOff {
-						// not read yet, remove it
-						h.children[i] = h.children[len(h.children)-1]
-						h.index[string(h.children[i].Name)] = i
-						h.children = h.children[:len(h.children)-1]
-					}
-				}
+				h.dirStream.Delete(name)
 			}
 		}
 		h.Unlock()

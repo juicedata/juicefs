@@ -424,69 +424,27 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 	h.Lock()
 	defer h.Unlock()
 
-	if v.Conf.Meta.ReaddirStream {
-		if h.dirStream == nil {
-			var inodes []*meta.Entry
-			if ino == rootID && !v.Conf.HideInternal {
-				for _, node := range internalNodes[1:] {
-					inodes = append(inodes, &meta.Entry{
-						Inode: node.inode,
-						Name:  []byte(node.name),
-						Attr:  node.attr,
-					})
-				}
-			}
-			if h.dirStream, err = v.Meta.NewDirStream(ctx, ino, plus, inodes); err != 0 {
-				return
-			}
-		}
-		if entries, err = h.dirStream.List(off); err != 0 {
-			return
-		}
-		readAt = time.Now()
-		logger.Debugf("readdir: [%d:%d] %d entries, offset=%d", ino, fh, len(entries), off)
-		return
-	}
-
-	if h.children == nil || off == 0 {
-		var inodes []*meta.Entry
-		h.readAt = time.Now()
-		err = v.Meta.Readdir(ctx, ino, 1, &inodes)
-		if err == syscall.EACCES {
-			err = v.Meta.Readdir(ctx, ino, 0, &inodes)
-		}
-		if err != 0 {
-			return
-		}
+	start := time.Now()
+	if h.dirStream == nil {
+		var initEntries []*meta.Entry
 		if ino == rootID && !v.Conf.HideInternal {
-			// add internal nodes
 			for _, node := range internalNodes[1:] {
-				inodes = append(inodes, &meta.Entry{
+				initEntries = append(initEntries, &meta.Entry{
 					Inode: node.inode,
 					Name:  []byte(node.name),
 					Attr:  node.attr,
 				})
 			}
 		}
-		if v.Conf.Meta.SortDir {
-			sort.SliceStable(inodes[2:], func(i, j int) bool {
-				return string(inodes[i+2].Name) < string(inodes[j+2].Name)
-			})
+		if h.dirStream, err = v.Meta.NewDirStream(ctx, ino, plus, initEntries); err != 0 {
+			return
 		}
-		h.children = inodes
-
-		index := make(map[string]int)
-		for i, e := range inodes {
-			index[string(e.Name)] = i
-		}
-		h.index = index
 	}
-	if off < len(h.children) {
-		entries = h.children[off:]
-		// we don't know how much of them will be sent, assume all of them
-		h.readOff = len(h.children) - 1
+	if entries, err = h.dirStream.List(ctx, off); err != 0 {
+		return
 	}
-	readAt = h.readAt
+	readAt = start
+	logger.Debugf("readdir: [%d:%d] %d entries, offset=%d", ino, fh, len(entries), off)
 	return
 }
 
@@ -497,7 +455,9 @@ func (v *VFS) UpdateReaddirOffset(ctx Context, ino Ino, fh uint64, off int) {
 	}
 	h.Lock()
 	defer h.Unlock()
-	h.readOff = off
+	if h.dirStream != nil {
+		h.dirStream.Read(off)
+	}
 }
 
 func (v *VFS) Releasedir(ctx Context, ino Ino, fh uint64) int {

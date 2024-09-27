@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"reflect"
 	"slices"
 	"strings"
@@ -873,26 +874,49 @@ func TestInternalFile(t *testing.T) {
 }
 
 func TestReaddirCache(t *testing.T) {
-	v, _ := createTestVFS(nil, "")
+	for _, metaUri := range []string{"", "sqlite3://", "redis://127.0.0.1:6379/2"} {
+		testReaddirCache(t, metaUri, 20)
+		testReaddirCache(t, metaUri, 4096)
+	}
+}
+
+func testReaddirCache(t *testing.T, metaUri string, batchNum int) {
+	old := meta.DirBatchNum
+	meta.DirBatchNum = batchNum
+	defer func() {
+		meta.DirBatchNum = old
+	}()
+
+	v, _ := createTestVFS(nil, metaUri)
 	ctx := NewLogContext(meta.Background)
+
 	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
 	if st != 0 {
 		t.Fatalf("mkdir testdir: %s", st)
 	}
 	parent := entry.Inode
-	for i := 0; i < 100; i++ {
+	for i := 0; i <= 100; i++ {
 		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
 	}
+
+	defer func() {
+		for i := 0; i <= 120; i++ {
+			_ = v.Rmdir(ctx, parent, fmt.Sprintf("d%d", i))
+		}
+		_ = v.Rmdir(ctx, 1, "testdir")
+	}()
+
 	fh, _ := v.Opendir(ctx, parent, 0)
-	_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", 100), 0777, 022)
 	defer v.Releasedir(ctx, parent, fh)
-	var off = 20
+	initNum, num := 2, 20
 	var files = make(map[string]bool)
 	// read first 20
-	entries, _, _ := v.Readdir(ctx, parent, 20, 0, fh, true)
-	for _, e := range entries[:off] {
+	entries, _, _ := v.Readdir(ctx, parent, 20, initNum, fh, true)
+	for _, e := range entries[:num] {
 		files[string(e.Name)] = true
 	}
+
+	off := num + initNum
 	v.UpdateReaddirOffset(ctx, parent, fh, off)
 	for i := 0; i < 100; i += 10 {
 		name := fmt.Sprintf("d%d", i)
@@ -943,9 +967,15 @@ func TestReaddirCache(t *testing.T) {
 }
 
 func TestVFSReadDirSort(t *testing.T) {
+	for _, metaUri := range []string{"", "sqlite3://", "redis://127.0.0.1:6379/2"} {
+		testVFSReadDirSort(t, metaUri)
+	}
+}
+
+func testVFSReadDirSort(t *testing.T, metaUri string) {
 	v, _ := createTestVFS(func(metaConfig *meta.Config) {
 		metaConfig.SortDir = true
-	}, "")
+	}, metaUri)
 	ctx := NewLogContext(meta.Background)
 	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
 	if st != 0 {
@@ -955,6 +985,12 @@ func TestVFSReadDirSort(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
 	}
+	defer func() {
+		for i := 0; i < 100; i++ {
+			_ = v.Rmdir(ctx, parent, fmt.Sprintf("d%d", i))
+		}
+		_ = v.Rmdir(ctx, 1, "testdir")
+	}()
 	fh, _ := v.Opendir(ctx, parent, 0)
 	entries1, _, _ := v.Readdir(ctx, parent, 60, 10, fh, true)
 	sorted := slices.IsSortedFunc(entries1, func(i, j *meta.Entry) int {
@@ -975,12 +1011,10 @@ func TestVFSReadDirSort(t *testing.T) {
 	v.Releasedir(ctx, parent, fh2)
 }
 
-func testVFSReaddirStreaming(t *testing.T, metaUri string) {
+func testReaddirStreaming(t *testing.T, metaUri string) {
 	n, extra := 5, 40
 
-	v, _ := createTestVFS(func(metaConfig *meta.Config) {
-		metaConfig.ReaddirStream = true
-	}, metaUri)
+	v, _ := createTestVFS(nil, metaUri)
 	ctx := NewLogContext(meta.Background)
 
 	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
@@ -1004,16 +1038,6 @@ func testVFSReaddirStreaming(t *testing.T, metaUri string) {
 	entries1, _, _ := v.Readdir(ctx, parent, 0, 0, fh, true)
 	require.NotNil(t, entries1)
 	require.Equal(t, 2, len(entries1)) // init entries: "." and ".."
-
-	/*
-		sorted only supported in kv meta
-		sorted := slices.IsSortedFunc(entries1, func(i, j *meta.Entry) int {
-			return strings.Compare(string(i.Name), string(j.Name))
-		})
-		if !sorted {
-			t.Fatalf("streaming read dir result must be sorted")
-		}
-	*/
 
 	entries2, _, _ := v.Readdir(ctx, parent, 0, 2, fh, true)
 	require.NotNil(t, entries2)
@@ -1028,7 +1052,7 @@ func testVFSReaddirStreaming(t *testing.T, metaUri string) {
 	require.NotNil(t, entries4)
 	require.Equal(t, 0, len(entries4))
 
-	// skip-style readdir, should not happen?
+	// skip-style readdir
 	entries5, _, _ := v.Readdir(ctx, parent, 0, n*meta.DirBatchNum+2, fh, true)
 	require.NotNil(t, entries5)
 	require.Equal(t, extra, len(entries5))
@@ -1036,17 +1060,34 @@ func testVFSReaddirStreaming(t *testing.T, metaUri string) {
 	entries6, _, _ := v.Readdir(ctx, parent, 0, 2, fh, true)
 	require.Equal(t, len(entries2), len(entries6))
 	for i := 0; i < len(entries2); i++ {
-		require.Equal(t, string(entries2[i].Name), string(entries6[i].Name))
+		require.Equal(t, entries2[i].Inode, entries6[i].Inode)
+	}
+
+	// dir seak
+	entries7, _, _ := v.Readdir(ctx, parent, 0, n*meta.DirBatchNum+2-20, fh, true)
+	require.True(t, reflect.DeepEqual(entries5, entries7[20:]))
+}
+
+func TestReadDirSteaming(t *testing.T) {
+	for _, metaUri := range []string{"", "sqlite3://", "redis://127.0.0.1:6379/2"} {
+		testReaddirStreaming(t, metaUri)
 	}
 }
 
-func testVFSRedisReaddirStreaming(t *testing.T) {
-	// redis batch num is random number, which >= meta.DirBatchNum
-	n, extra := 5, 4
+func TestReaddir(t *testing.T) {
+	extra := rand.Intn(meta.DirBatchNum)
+	for _, metaUri := range []string{"", "sqlite3://", "redis://127.0.0.1:6379/2"} {
+		testReaddir(t, metaUri, 20, 0)
+		testReaddir(t, metaUri, 20, 5)
+		testReaddir(t, metaUri, 4*meta.DirBatchNum, 0)
+		testReaddir(t, metaUri, 4*meta.DirBatchNum, extra)
+		testReaddir(t, metaUri, 5*meta.DirBatchNum+extra, 0)
+		testReaddir(t, metaUri, 5*meta.DirBatchNum+extra, 2*meta.DirBatchNum)
+	}
+}
 
-	v, _ := createTestVFS(func(metaConfig *meta.Config) {
-		metaConfig.ReaddirStream = true
-	}, "redis://127.0.0.1:6379/2")
+func testReaddir(t *testing.T, metaUri string, dirNum int, offset int) {
+	v, _ := createTestVFS(nil, metaUri)
 	ctx := NewLogContext(meta.Background)
 
 	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
@@ -1055,11 +1096,11 @@ func testVFSRedisReaddirStreaming(t *testing.T) {
 	}
 
 	parent := entry.Inode
-	for i := 0; i < n*meta.DirBatchNum+extra; i++ {
+	for i := 0; i < dirNum; i++ {
 		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
 	}
 	defer func() {
-		for i := 0; i < n*meta.DirBatchNum+extra; i++ {
+		for i := 0; i < dirNum; i++ {
 			_ = v.Rmdir(ctx, parent, fmt.Sprintf("d%d", i))
 		}
 		v.Rmdir(ctx, 1, "testdir")
@@ -1067,35 +1108,22 @@ func testVFSRedisReaddirStreaming(t *testing.T) {
 
 	fh, _ := v.Opendir(ctx, parent, 0)
 	defer v.Releasedir(ctx, parent, fh)
-	entries1, _, _ := v.Readdir(ctx, parent, 0, 0, fh, true)
-	require.NotNil(t, entries1)
-	require.Equal(t, 2, len(entries1)) // init entries: "." and ".."
 
-	entries2, _, _ := v.Readdir(ctx, parent, 0, 2, fh, true)
-	require.NotNil(t, entries2)
-	require.LessOrEqual(t, meta.DirBatchNum, len(entries2))
+	readAll := func(ctx Context, parent Ino, fh uint64, off int) []*meta.Entry {
+		var entries []*meta.Entry
+		for {
+			ents, _, st := v.Readdir(ctx, parent, 0, off, fh, true)
+			require.Equal(t, st, syscall.Errno(0))
+			if len(ents) == 0 {
+				break
+			}
+			off += len(ents)
+			entries = append(entries, ents...)
+		}
+		return entries
+	}
 
-	entries3, _, _ := v.Readdir(ctx, parent, 0, 2+len(entries2), fh, true)
-	require.NotNil(t, entries3)
-	require.LessOrEqual(t, meta.DirBatchNum, len(entries3))
-
-	// reach the end
-	entries4, _, _ := v.Readdir(ctx, parent, 0, n*meta.DirBatchNum+extra+2, fh, true)
-	require.NotNil(t, entries4)
-	require.Equal(t, 0, len(entries4))
-
-	// skip-style readdir, should not happen?
-	entries5, _, _ := v.Readdir(ctx, parent, 0, n*meta.DirBatchNum+2, fh, true)
-	require.NotNil(t, entries5)
-	require.Equal(t, extra, len(entries5))
-
-	entries2, _, _ = v.Readdir(ctx, parent, 0, 2, fh, true)
-	require.NotNil(t, entries2)
-	require.LessOrEqual(t, meta.DirBatchNum, len(entries2))
-}
-
-func TestVFSReadDirSteaming(t *testing.T) {
-	testVFSReaddirStreaming(t, "memkv://")
-	testVFSReaddirStreaming(t, "sqlite3://")
-	testVFSRedisReaddirStreaming(t)
+	entriesOne := readAll(ctx, parent, fh, offset)
+	entriesTwo := readAll(ctx, parent, fh, offset)
+	require.True(t, reflect.DeepEqual(entriesOne, entriesTwo))
 }

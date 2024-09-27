@@ -50,7 +50,6 @@ type Config struct {
 	SkipDirMtime       time.Duration
 	Sid                uint64
 	SortDir            bool
-	ReaddirStream      bool
 }
 
 func DefaultConf() *Config {
