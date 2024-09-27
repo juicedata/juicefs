@@ -1671,9 +1671,6 @@ func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, f
 	switch flags {
 	case 0, XattrCreate, XattrReplace:
 	default:
-		if runtime.GOOS == "darwin" && flags == XattrNoSecurity {
-			break
-		}
 		return syscall.EINVAL
 	}
 

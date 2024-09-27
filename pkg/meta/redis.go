@@ -3343,7 +3343,7 @@ func (m *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte
 				return nil
 			})
 			return err
-		default: // XattrCreateOrReplace XattrNoSecurity
+		default: // XattrCreateOrReplace
 			_, err := tx.HSet(ctx, key, name, value).Result()
 			return err
 		}
