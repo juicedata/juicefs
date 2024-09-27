@@ -497,6 +497,9 @@ func (cache *cacheStore) createDir(dir string) {
 		var st os.FileInfo
 		var err error
 		if st, err = os.Stat(dir); os.IsNotExist(err) {
+			if len(dir) > 1 && strings.HasSuffix(dir, string(filepath.Separator)) {
+				dir = dir[:len(dir)-1] // CacheManager appends "/" to dir, remove it so that `filepath.Dir` returns the parent dir
+			}
 			if filepath.Dir(dir) != dir {
 				cache.createDir(filepath.Dir(dir))
 			}
