@@ -4498,9 +4498,11 @@ func (m *dbMeta) getDirFetcher() dirFetcher {
 				return err
 			}
 
-			s = s.Table(&edge{}).Cols("jfs_edge.inode", "jfs_edge.name", "jfs_edge.type").In("jfs_edge.id", ids).OrderBy("jfs_edge.name")
-			if true {
-				s = s.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
+			s = s.Table(&edge{}).In("jfs_edge.id", ids).OrderBy("jfs_edge.name")
+			if plus {
+				s = s.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode").Cols("jfs_edge.name", "jfs_node.*")
+			} else {
+				s = s.Cols("jfs_edge.inode", "jfs_edge.name", "jfs_edge.type")
 			}
 			var nodes []namedNode
 			if err := s.Find(&nodes); err != nil {
