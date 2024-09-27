@@ -30,4 +30,5 @@ const (
 	XattrCreateOrReplace = 0
 	XattrCreate          = 1
 	XattrReplace         = 2
+	XattrNoSecurity      = 8
 )
