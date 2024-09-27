@@ -3828,7 +3828,7 @@ func (m *kvMeta) getDirFetcher() dirFetcher {
 		}
 
 		prefix := len(m.entryKey(inode, ""))
-		var entries []*Entry
+		entries := make([]*Entry, 0, len(keys))
 		var name []byte
 		var typ uint8
 		var ino Ino

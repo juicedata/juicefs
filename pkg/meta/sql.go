@@ -4486,7 +4486,7 @@ func (m *dbMeta) newDirStream(inode Ino, plus bool, entries []*Entry) DirStream 
 
 func (m *dbMeta) getDirFetcher() dirFetcher {
 	return func(ctx Context, inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error) {
-		var entries []*Entry
+		entries := make([]*Entry, 0, limit)
 		err := m.roTxn(func(s *xorm.Session) error {
 			iCursor := offset
 			if cursor != nil {
