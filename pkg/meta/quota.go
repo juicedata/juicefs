@@ -411,11 +411,11 @@ func (m *baseMeta) doFlushQuotas() {
 	}
 }
 
-func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool) error {
+func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool, create bool) error {
 	var inode Ino
 	if cmd != QuotaList {
-		if st := m.resolve(ctx, dpath, &inode); st != 0 {
-			return st
+		if st := m.resolve(ctx, dpath, &inode, create); st != 0 {
+			return fmt.Errorf("resolve dir %s: %s", dpath, st)
 		}
 		if isTrash(inode) {
 			return errors.New("no quota for any trash directory")
