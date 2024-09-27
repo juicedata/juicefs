@@ -687,11 +687,14 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	if store.downLimit != nil && !compressed {
 		store.downLimit.Wait(int64(len(page.Data)))
 	}
-	err = errors.New("Not downloaded")
-	var in io.ReadCloser
-	tried := 0
-	start := time.Now()
-	var p *Page
+	var (
+		in    io.ReadCloser
+		n     int
+		p     *Page
+		reqID string
+		sc    = object.DefaultStorageClass
+		start = time.Now()
+	)
 	if compressed {
 		c := NewOffPage(needed)
 		defer c.Release()
@@ -700,24 +703,10 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 		p = page
 	}
 	p.Acquire()
-	var n int
-	var (
-		reqID string
-		sc    = object.DefaultStorageClass
-	)
 	err = utils.WithTimeout(func() error {
 		defer p.Release()
-		// it will be retried outside
-		for err != nil && tried < 2 {
-			time.Sleep(time.Second * time.Duration(tried*tried))
-			if tried > 0 {
-				logger.Warnf("GET %s: %s; retrying", key, err)
-				store.objectReqErrors.Add(1)
-				start = time.Now()
-			}
-			in, err = store.storage.Get(key, 0, -1, object.WithRequestID(&reqID), object.WithStorageClass(&sc))
-			tried++
-		}
+		// it will be retried in the upper layer.
+		in, err = store.storage.Get(key, 0, -1, object.WithRequestID(&reqID), object.WithStorageClass(&sc))
 		if err == nil {
 			n, err = io.ReadFull(in, p.Data)
 			_ = in.Close()
@@ -742,8 +731,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 		n, err = store.compressor.Decompress(page.Data, p.Data[:n])
 	}
 	if err != nil || n < len(page.Data) {
-		return fmt.Errorf("read %s fully: %s (%d < %d) after %s (tried %d)", key, err, n, len(page.Data),
-			used, tried)
+		return fmt.Errorf("read %s fully: %v (%d < %d) after %s", key, err, n, len(page.Data), used)
 	}
 	if cache {
 		store.bcache.cache(key, page, forceCache, !store.conf.OSCache)
