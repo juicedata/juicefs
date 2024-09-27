@@ -3805,16 +3805,18 @@ func (m *kvMeta) newDirStream(inode Ino, plus bool, entries []*Entry) DirStream 
 func (m *kvMeta) getDirFetcher() dirFetcher {
 	return func(ctx Context, inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error) {
 		var startKey []byte
-		total := limit
+		sCursor := ""
+		var total int
 		if cursor == nil {
-			startKey = m.entryKey(inode, "")
-
 			if offset > 0 {
 				total += offset
 			}
 		} else {
-			startKey = nextKey(m.entryKey(inode, cursor.(string)))
+			limit += 1 // skip the cursor
+			sCursor = cursor.(string)
 		}
+		total += limit
+		startKey = m.entryKey(inode, sCursor)
 		endKey := nextKey(m.entryKey(inode, ""))
 
 		keys, vals, err := m.scan(startKey, endKey, total, nil)
@@ -3822,7 +3824,10 @@ func (m *kvMeta) getDirFetcher() dirFetcher {
 			return nil, nil, err
 		}
 
-		// skip offset
+		if cursor != nil {
+			keys, vals = keys[1:], vals[1:]
+		}
+
 		if total > limit && offset <= len(keys) {
 			keys, vals = keys[offset:], vals[offset:]
 		}
