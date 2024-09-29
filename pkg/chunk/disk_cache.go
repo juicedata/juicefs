@@ -496,17 +496,12 @@ func (cache *cacheStore) createDir(dir string) {
 		mode := cache.mode | (readmode >> 2) | (readmode >> 1)
 		var st os.FileInfo
 		var err error
+		dir = filepath.Clean(dir)
 		if st, err = os.Stat(dir); os.IsNotExist(err) {
-			if len(dir) > 1 && strings.HasSuffix(dir, string(filepath.Separator)) {
-				dir = dir[:len(dir)-1] // CacheManager appends "/" to dir, remove it so that `filepath.Dir` returns the parent dir
-			}
 			if filepath.Dir(dir) != dir {
 				cache.createDir(filepath.Dir(dir))
 			}
-			if err = os.Mkdir(dir, mode); err != nil {
-				logger.Warnf("create cache dir %s: %s", dir, err)
-				return err
-			}
+			_ = os.Mkdir(dir, mode)
 			// umask may remove some permissions
 			return os.Chmod(dir, mode)
 		} else if strings.HasPrefix(dir, cache.dir) && err == nil && st.Mode().Perm() != mode.Perm() { // check permission only
