@@ -1073,7 +1073,7 @@ func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags ui
 		v.invalidateAttr(ino)
 	} else {
 		// ignore NoSecurity flag
-		if (flags & meta.XattrNoSecurity) != 0 {
+		if runtime.GOOS == "darwin" && (flags&meta.XattrNoSecurity) != 0 {
 			flags &= ^uint32(meta.XattrNoSecurity)
 		}
 		err = v.Meta.SetXattr(ctx, ino, name, value, flags)
