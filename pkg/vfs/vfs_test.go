@@ -1037,7 +1037,7 @@ func testReaddirStreaming(t *testing.T, metaUri string) {
 	defer v.Releasedir(ctx, parent, fh)
 	entries1, _, _ := v.Readdir(ctx, parent, 0, 0, fh, true)
 	require.NotNil(t, entries1)
-	require.Equal(t, 2, len(entries1)) // init entries: "." and ".."
+	require.Equal(t, 2+meta.DirBatchNum, len(entries1)) // init entries: "." and ".."
 
 	entries2, _, _ := v.Readdir(ctx, parent, 0, 2, fh, true)
 	require.NotNil(t, entries2)

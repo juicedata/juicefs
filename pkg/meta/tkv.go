@@ -3792,7 +3792,7 @@ func (s *kvDirStream) Delete(name string) {
 }
 
 func (m *kvMeta) newDirStream(inode Ino, plus bool, entries []*Entry) DirStream {
-	return &kvDirStream{
+	s := &kvDirStream{
 		dirStream: dirStream{
 			inode:       inode,
 			plus:        plus,
@@ -3800,6 +3800,8 @@ func (m *kvMeta) newDirStream(inode Ino, plus bool, entries []*Entry) DirStream 
 			fetcher:     m.getDirFetcher(),
 		},
 	}
+	s.batch, _ = s.fetch(Background, 0)
+	return s
 }
 
 func (m *kvMeta) getDirFetcher() dirFetcher {

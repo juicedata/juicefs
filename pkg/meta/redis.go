@@ -4615,10 +4615,13 @@ func (s *redisDirStream) Insert(inode Ino, name string, attr *Attr) {
 }
 
 func (s *redisDirStream) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
+	var prefix []*Entry
 	if offset < len(s.initEntries) {
-		return s.initEntries[offset:], 0
+		prefix = s.initEntries[offset:]
+		offset = 0
+	} else {
+		offset -= len(s.initEntries)
 	}
-	offset -= len(s.initEntries)
 
 	s.Lock()
 	if s.entries == nil {
@@ -4669,8 +4672,11 @@ func (s *redisDirStream) List(ctx Context, offset int) ([]*Entry, syscall.Errno)
 	if size > DirBatchNum {
 		size = DirBatchNum
 	}
+	s.readOff = offset + size
 	entries := s.entries[offset : offset+size]
-	s.Read(offset + size)
+	if len(prefix) > 0 {
+		entries = append(prefix, entries...)
+	}
 	return entries, 0
 }
 

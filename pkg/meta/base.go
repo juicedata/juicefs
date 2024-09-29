@@ -3005,10 +3005,13 @@ func (s *dirStream) fetch(ctx Context, offset int) (*dirBatch, error) {
 }
 
 func (s *dirStream) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
+	var prefix []*Entry
 	if offset < len(s.initEntries) {
-		return s.initEntries[offset:], 0
+		prefix = s.initEntries[offset:]
+		offset = 0
+	} else {
+		offset -= len(s.initEntries)
 	}
-	offset -= len(s.initEntries)
 
 	var err error
 	s.Lock()
@@ -3021,7 +3024,10 @@ func (s *dirStream) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
 		return nil, errno(err)
 	}
 
-	s.Read(s.batch.offset + len(s.batch.entries))
+	s.readOff = s.batch.offset + len(s.batch.entries)
+	if len(prefix) > 0 {
+		return append(prefix, s.batch.entries...), 0
+	}
 	return s.batch.entries[offset-s.batch.offset:], 0
 }
 
