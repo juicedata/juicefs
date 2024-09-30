@@ -4451,37 +4451,40 @@ type dbDirHandler struct {
 	dirHandler
 }
 
-func (s *dbDirHandler) Insert(inode Ino, name string, attr *Attr) {
-	s.Lock()
-	defer s.Unlock()
-	if s.batch == nil {
+func (h *dbDirHandler) Insert(inode Ino, name string, attr *Attr) {
+	h.Lock()
+	defer h.Unlock()
+	if h.batch == nil {
 		return
 	}
-	if s.batch.isEnd || bytes.Compare([]byte(name), s.batch.maxName) < 0 {
-		s.batch.entries = append(s.batch.entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
-		s.batch.indexes[name] = len(s.batch.entries) - 1
+	if h.batch.isEnd || bytes.Compare([]byte(name), h.batch.maxName) < 0 {
+		h.batch.entries = append(h.batch.entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
+		h.batch.indexes[name] = len(h.batch.entries) - 1
 	}
 }
 
-func (s *dbDirHandler) Delete(name string) {
-	s.Lock()
-	defer s.Unlock()
+func (h *dbDirHandler) Delete(name string) {
+	h.Lock()
+	defer h.Unlock()
 
-	s.dirHandler.delete(name)
-	if s.batch != nil && !s.batch.isEnd && bytes.Compare(s.batch.maxName, []byte(name)) > 0 && s.batch.cursor != nil {
-		s.batch.cursor = s.batch.cursor.(int) - 1
+	h.dirHandler.delete(name)
+	if h.batch != nil && !h.batch.isEnd && bytes.Compare(h.batch.maxName, []byte(name)) > 0 && h.batch.cursor != nil {
+		h.batch.cursor = h.batch.cursor.(int) - 1
 	}
 }
 
 func (m *dbMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler {
-	return &dbDirHandler{
+	h := &dbDirHandler{
 		dirHandler: dirHandler{
 			inode:       inode,
 			plus:        plus,
 			initEntries: entries,
 			fetcher:     m.getDirFetcher(),
+			batchNum:    DirBatchNum["db"],
 		},
 	}
+	h.batch, _ = h.fetch(Background, 0)
+	return h
 }
 
 func (m *dbMeta) getDirFetcher() dirFetcher {

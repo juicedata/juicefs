@@ -4566,6 +4566,7 @@ func (m *redisMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHan
 		inode:       inode,
 		plus:        plus,
 		initEntries: entries,
+		batchNum:    DirBatchNum["redis"],
 	}
 }
 
@@ -4578,6 +4579,7 @@ type redisDirHandler struct {
 	entries     []*Entry
 	indexes     map[string]int
 	readOff     int
+	batchNum    int
 }
 
 func (s *redisDirHandler) Close() {
@@ -4676,8 +4678,8 @@ func (s *redisDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno
 	s.Unlock()
 
 	size := len(s.entries) - offset
-	if size > DirBatchNum {
-		size = DirBatchNum
+	if size > s.batchNum {
+		size = s.batchNum
 	}
 	s.readOff = offset + size
 	entries := s.entries[offset : offset+size]

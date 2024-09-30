@@ -874,15 +874,20 @@ func TestInternalFile(t *testing.T) {
 }
 
 func TestReaddirCache(t *testing.T) {
-	for _, metaUri := range []string{"", "sqlite3://", "redis://127.0.0.1:6379/2"} {
-		testReaddirCache(t, metaUri, 20)
-		testReaddirCache(t, metaUri, 4096)
+	engines := map[string]string{
+		"kv":    "",
+		"db":    "sqlite3://",
+		"redis": "redis://127.0.0.1:6379/2",
+	}
+	for typ, metaUri := range engines {
+		testReaddirCache(t, metaUri, typ, 20)
+		testReaddirCache(t, metaUri, typ, 4096)
 	}
 }
 
-func testReaddirCache(t *testing.T, metaUri string, batchNum int) {
+func testReaddirCache(t *testing.T, metaUri string, typ string, batchNum int) {
 	old := meta.DirBatchNum
-	meta.DirBatchNum = batchNum
+	meta.DirBatchNum[typ] = batchNum
 	defer func() {
 		meta.DirBatchNum = old
 	}()
@@ -1011,7 +1016,13 @@ func testVFSReadDirSort(t *testing.T, metaUri string) {
 	v.Releasedir(ctx, parent, fh2)
 }
 
-func testReaddirBatch(t *testing.T, metaUri string) {
+func testReaddirBatch(t *testing.T, metaUri string, typ string, batchNum int) {
+	old := meta.DirBatchNum
+	meta.DirBatchNum[typ] = batchNum
+	defer func() {
+		meta.DirBatchNum = old
+	}()
+
 	n, extra := 5, 40
 
 	v, _ := createTestVFS(nil, metaUri)
@@ -1023,11 +1034,11 @@ func testReaddirBatch(t *testing.T, metaUri string) {
 	}
 
 	parent := entry.Inode
-	for i := 0; i < n*meta.DirBatchNum+extra; i++ {
+	for i := 0; i < n*batchNum+extra; i++ {
 		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
 	}
 	defer func() {
-		for i := 0; i < n*meta.DirBatchNum+extra; i++ {
+		for i := 0; i < n*batchNum+extra; i++ {
 			_ = v.Rmdir(ctx, parent, fmt.Sprintf("d%d", i))
 		}
 		v.Rmdir(ctx, 1, "testdir")
@@ -1037,23 +1048,23 @@ func testReaddirBatch(t *testing.T, metaUri string) {
 	defer v.Releasedir(ctx, parent, fh)
 	entries1, _, _ := v.Readdir(ctx, parent, 0, 0, fh, true)
 	require.NotNil(t, entries1)
-	require.Equal(t, 2+meta.DirBatchNum, len(entries1)) // init entries: "." and ".."
+	require.Equal(t, 2+batchNum, len(entries1)) // init entries: "." and ".."
 
 	entries2, _, _ := v.Readdir(ctx, parent, 0, 2, fh, true)
 	require.NotNil(t, entries2)
-	require.Equal(t, meta.DirBatchNum, len(entries2))
+	require.Equal(t, batchNum, len(entries2))
 
-	entries3, _, _ := v.Readdir(ctx, parent, 0, 2+meta.DirBatchNum, fh, true)
+	entries3, _, _ := v.Readdir(ctx, parent, 0, 2+batchNum, fh, true)
 	require.NotNil(t, entries3)
-	require.Equal(t, meta.DirBatchNum, len(entries3))
+	require.Equal(t, batchNum, len(entries3))
 
 	// reach the end
-	entries4, _, _ := v.Readdir(ctx, parent, 0, n*meta.DirBatchNum+extra+2, fh, true)
+	entries4, _, _ := v.Readdir(ctx, parent, 0, n*batchNum+extra+2, fh, true)
 	require.NotNil(t, entries4)
 	require.Equal(t, 0, len(entries4))
 
 	// skip-style readdir
-	entries5, _, _ := v.Readdir(ctx, parent, 0, n*meta.DirBatchNum+2, fh, true)
+	entries5, _, _ := v.Readdir(ctx, parent, 0, n*batchNum+2, fh, true)
 	require.NotNil(t, entries5)
 	require.Equal(t, extra, len(entries5))
 
@@ -1064,25 +1075,37 @@ func testReaddirBatch(t *testing.T, metaUri string) {
 	}
 
 	// dir seak
-	entries7, _, _ := v.Readdir(ctx, parent, 0, n*meta.DirBatchNum+2-20, fh, true)
+	entries7, _, _ := v.Readdir(ctx, parent, 0, n*batchNum+2-20, fh, true)
 	require.True(t, reflect.DeepEqual(entries5, entries7[20:]))
 }
 
 func TestReadDirSteaming(t *testing.T) {
-	for _, metaUri := range []string{"", "sqlite3://", "redis://127.0.0.1:6379/2"} {
-		testReaddirBatch(t, metaUri)
+	engines := map[string]string{
+		"kv":    "",
+		"db":    "sqlite3://",
+		"redis": "redis://127.0.0.1:6379/2",
+	}
+	for typ, metaUri := range engines {
+		testReaddirBatch(t, metaUri, typ, 100)
+		testReaddirBatch(t, metaUri, typ, 4096)
 	}
 }
 
 func TestReaddir(t *testing.T) {
-	extra := rand.Intn(meta.DirBatchNum)
-	for _, metaUri := range []string{"", "sqlite3://", "redis://127.0.0.1:6379/2"} {
+	engines := map[string]string{
+		"kv":    "",
+		"db":    "sqlite3://",
+		"redis": "redis://127.0.0.1:6379/2",
+	}
+	for typ, metaUri := range engines {
+		batchNum := meta.DirBatchNum[typ]
+		extra := rand.Intn(batchNum)
 		testReaddir(t, metaUri, 20, 0)
 		testReaddir(t, metaUri, 20, 5)
-		testReaddir(t, metaUri, 4*meta.DirBatchNum, 0)
-		testReaddir(t, metaUri, 4*meta.DirBatchNum, extra)
-		testReaddir(t, metaUri, 5*meta.DirBatchNum+extra, 0)
-		testReaddir(t, metaUri, 5*meta.DirBatchNum+extra, 2*meta.DirBatchNum)
+		testReaddir(t, metaUri, 2*batchNum, 0)
+		testReaddir(t, metaUri, 2*batchNum, extra)
+		testReaddir(t, metaUri, 4*batchNum, 0)
+		testReaddir(t, metaUri, 4*batchNum, 2*batchNum+extra)
 	}
 }
 

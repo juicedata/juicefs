@@ -48,7 +48,11 @@ const (
 )
 
 var (
-	DirBatchNum       = 4096
+	DirBatchNum = map[string]int{
+		"redis": 4096,
+		"kv":    4096,
+		"db":    40960,
+	}
 	maxCompactSlices  = 1000
 	maxSlices         = 2500
 	inodeNeedPrefetch = uint64(utils.JitterIt(inodeBatch * 0.1)) // Add jitter to reduce probability of txn conflicts
@@ -2971,17 +2975,18 @@ type dirHandler struct {
 	batch       *dirBatch
 	fetcher     dirFetcher
 	readOff     int
+	batchNum    int
 }
 
-func (s *dirHandler) fetch(ctx Context, offset int) (*dirBatch, error) {
+func (h *dirHandler) fetch(ctx Context, offset int) (*dirBatch, error) {
 	var cursor interface{}
-	if s.batch != nil && s.batch.predecessor(offset) {
-		if s.batch.isEnd {
-			return s.batch, nil
+	if h.batch != nil && h.batch.predecessor(offset) {
+		if h.batch.isEnd {
+			return h.batch, nil
 		}
-		cursor = s.batch.cursor
+		cursor = h.batch.cursor
 	}
-	nextCursor, entries, err := s.fetcher(ctx, s.inode, cursor, offset, DirBatchNum, s.plus)
+	nextCursor, entries, err := h.fetcher(ctx, h.inode, cursor, offset, h.batchNum, h.plus)
 	if err != nil {
 		return nil, err
 	}
@@ -2990,7 +2995,7 @@ func (s *dirHandler) fetch(ctx Context, offset int) (*dirBatch, error) {
 		nextCursor = cursor
 	}
 	isEnd := false
-	if len(entries) < DirBatchNum {
+	if len(entries) < h.batchNum {
 		isEnd = true
 	}
 	indexes := make(map[string]int, len(entries))
@@ -3004,70 +3009,70 @@ func (s *dirHandler) fetch(ctx Context, offset int) (*dirBatch, error) {
 	return &dirBatch{isEnd: isEnd, offset: offset, cursor: nextCursor, entries: entries, indexes: indexes, maxName: maxName}, nil
 }
 
-func (s *dirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
+func (h *dirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
 	var prefix []*Entry
-	if offset < len(s.initEntries) {
-		prefix = s.initEntries[offset:]
+	if offset < len(h.initEntries) {
+		prefix = h.initEntries[offset:]
 		offset = 0
 	} else {
-		offset -= len(s.initEntries)
+		offset -= len(h.initEntries)
 	}
 
 	var err error
-	s.Lock()
-	defer s.Unlock()
-	if !s.batch.contain(offset) {
-		s.batch, err = s.fetch(ctx, offset)
+	h.Lock()
+	defer h.Unlock()
+	if !h.batch.contain(offset) {
+		h.batch, err = h.fetch(ctx, offset)
 	}
 
 	if err != nil {
 		return nil, errno(err)
 	}
 
-	s.readOff = s.batch.offset + len(s.batch.entries)
+	h.readOff = h.batch.offset + len(h.batch.entries)
 	if len(prefix) > 0 {
-		return append(prefix, s.batch.entries...), 0
+		return append(prefix, h.batch.entries...), 0
 	}
-	return s.batch.entries[offset-s.batch.offset:], 0
+	return h.batch.entries[offset-h.batch.offset:], 0
 }
 
-func (s *dirHandler) delete(name string) {
-	if s.batch == nil || len(s.batch.entries) == 0 {
+func (h *dirHandler) delete(name string) {
+	if h.batch == nil || len(h.batch.entries) == 0 {
 		return
 	}
 
-	if idx, ok := s.batch.indexes[name]; ok && idx >= s.readOff {
-		delete(s.batch.indexes, name)
-		if n := len(s.batch.entries); n == 1 {
-			s.batch.entries = s.batch.entries[:0]
+	if idx, ok := h.batch.indexes[name]; ok && idx >= h.readOff {
+		delete(h.batch.indexes, name)
+		if n := len(h.batch.entries); n == 1 {
+			h.batch.entries = h.batch.entries[:0]
 		} else {
-			s.batch.entries[idx] = s.batch.entries[n-1]
-			s.batch.indexes[string(s.batch.entries[idx].Name)] = idx
-			s.batch.entries = s.batch.entries[:n-1]
+			h.batch.entries[idx] = h.batch.entries[n-1]
+			h.batch.indexes[string(h.batch.entries[idx].Name)] = idx
+			h.batch.entries = h.batch.entries[:n-1]
 		}
 	}
 }
 
-func (s *dirHandler) Insert(inode Ino, name string, attr *Attr) {
-	s.Lock()
-	defer s.Unlock()
-	if s.batch == nil {
+func (h *dirHandler) Insert(inode Ino, name string, attr *Attr) {
+	h.Lock()
+	defer h.Unlock()
+	if h.batch == nil {
 		return
 	}
-	if s.batch.isEnd || bytes.Compare([]byte(name), s.batch.maxName) < 0 {
+	if h.batch.isEnd || bytes.Compare([]byte(name), h.batch.maxName) < 0 {
 		// TODO: not sorted
-		s.batch.entries = append(s.batch.entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
-		s.batch.indexes[name] = len(s.batch.entries) - 1
+		h.batch.entries = append(h.batch.entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
+		h.batch.indexes[name] = len(h.batch.entries) - 1
 	}
 }
 
-func (s *dirHandler) Read(offset int) {
-	s.readOff = offset - len(s.initEntries)
+func (h *dirHandler) Read(offset int) {
+	h.readOff = offset - len(h.initEntries)
 }
 
-func (s *dirHandler) Close() {
-	s.Lock()
-	s.batch = nil
-	s.readOff = 0
-	s.Unlock()
+func (h *dirHandler) Close() {
+	h.Lock()
+	h.batch = nil
+	h.readOff = 0
+	h.Unlock()
 }

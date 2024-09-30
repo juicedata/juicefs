@@ -3785,10 +3785,10 @@ type kvDirHandler struct {
 	dirHandler
 }
 
-func (s *kvDirHandler) Delete(name string) {
-	s.Lock()
-	defer s.Unlock()
-	s.dirHandler.delete(name)
+func (h *kvDirHandler) Delete(name string) {
+	h.Lock()
+	defer h.Unlock()
+	h.dirHandler.delete(name)
 }
 
 func (m *kvMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler {
@@ -3798,6 +3798,7 @@ func (m *kvMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandle
 			plus:        plus,
 			initEntries: entries,
 			fetcher:     m.getDirFetcher(),
+			batchNum:    DirBatchNum["kv"],
 		},
 	}
 	s.batch, _ = s.fetch(Background, 0)
