@@ -4596,9 +4596,15 @@ func (s *redisDirStream) Delete(name string) {
 	}
 
 	if idx, ok := s.indexes[name]; ok && idx >= s.readOff {
-		s.entries[idx] = s.entries[len(s.entries)-1]
-		s.indexes[string(s.entries[idx].Name)] = idx
-		s.entries = s.entries[:len(s.entries)-1]
+		delete(s.indexes, name)
+		if n := len(s.entries); n == 1 {
+			s.entries = s.entries[:0]
+		} else {
+			// TODO: not sorted
+			s.entries[idx] = s.entries[n-1]
+			s.indexes[string(s.entries[idx].Name)] = idx
+			s.entries = s.entries[:n-1]
+		}
 	}
 }
 
@@ -4610,6 +4616,7 @@ func (s *redisDirStream) Insert(inode Ino, name string, attr *Attr) {
 		return
 	}
 
+	// TODO: not sorted
 	s.entries = append(s.entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
 	s.indexes[name] = len(s.entries) - 1
 }

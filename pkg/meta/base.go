@@ -3037,10 +3037,14 @@ func (s *dirStream) delete(name string) {
 	}
 
 	if idx, ok := s.batch.indexes[name]; ok && idx >= s.readOff {
-		s.batch.entries[idx] = s.batch.entries[len(s.batch.entries)-1]
 		delete(s.batch.indexes, name)
-		s.batch.indexes[string(s.batch.entries[idx].Name)] = idx
-		s.batch.entries = s.batch.entries[:len(s.batch.entries)-1]
+		if n := len(s.batch.entries); n == 1 {
+			s.batch.entries = s.batch.entries[:0]
+		} else {
+			s.batch.entries[idx] = s.batch.entries[n-1]
+			s.batch.indexes[string(s.batch.entries[idx].Name)] = idx
+			s.batch.entries = s.batch.entries[:n-1]
+		}
 	}
 }
 
@@ -3051,6 +3055,7 @@ func (s *dirStream) Insert(inode Ino, name string, attr *Attr) {
 		return
 	}
 	if s.batch.isEnd || bytes.Compare([]byte(name), s.batch.maxName) < 0 {
+		// TODO: not sorted
 		s.batch.entries = append(s.batch.entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
 		s.batch.indexes[name] = len(s.batch.entries) - 1
 	}
