@@ -36,6 +36,7 @@ type handle struct {
 
 	// for dir
 	dirStream meta.DirStream
+	readAt    time.Time
 
 	// for file
 	flags      uint32

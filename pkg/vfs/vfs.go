@@ -424,7 +424,6 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 	h.Lock()
 	defer h.Unlock()
 
-	start := time.Now()
 	if h.dirStream == nil {
 		var initEntries []*meta.Entry
 		if ino == rootID && !v.Conf.HideInternal {
@@ -436,6 +435,7 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 				})
 			}
 		}
+		h.readAt = time.Now()
 		if h.dirStream, err = v.Meta.NewDirStream(ctx, ino, plus, initEntries); err != 0 {
 			return
 		}
@@ -443,7 +443,7 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 	if entries, err = h.dirStream.List(ctx, off); err != 0 {
 		return
 	}
-	readAt = start
+	readAt = h.readAt
 	logger.Debugf("readdir: [%d:%d] %d entries, offset=%d", ino, fh, len(entries), off)
 	return
 }
