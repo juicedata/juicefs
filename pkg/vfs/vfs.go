@@ -424,7 +424,11 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 	h.Lock()
 	defer h.Unlock()
 
-	if h.dirStream == nil {
+	if h.dirStream == nil || off == 0 {
+		if h.dirStream != nil {
+			h.dirStream.Close()
+			h.dirStream = nil
+		}
 		var initEntries []*meta.Entry
 		if ino == rootID && !v.Conf.HideInternal {
 			for _, node := range internalNodes[1:] {
