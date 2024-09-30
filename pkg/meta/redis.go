@@ -4599,14 +4599,13 @@ func (s *redisDirHandler) Delete(name string) {
 
 	if idx, ok := s.indexes[name]; ok && idx >= s.readOff {
 		delete(s.indexes, name)
-		if n := len(s.entries); n == 1 {
-			s.entries = s.entries[:0]
-		} else {
-			// TODO: not sorted
+		n := len(s.entries)
+		if idx < n-1 {
+			// TODO: sorted
 			s.entries[idx] = s.entries[n-1]
 			s.indexes[string(s.entries[idx].Name)] = idx
-			s.entries = s.entries[:n-1]
 		}
+		s.entries = s.entries[:n-1]
 	}
 }
 
@@ -4618,7 +4617,7 @@ func (s *redisDirHandler) Insert(inode Ino, name string, attr *Attr) {
 		return
 	}
 
-	// TODO: not sorted
+	// TODO: sorted
 	s.entries = append(s.entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
 	s.indexes[name] = len(s.entries) - 1
 }
