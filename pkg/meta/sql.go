@@ -4447,11 +4447,11 @@ func (m *dbMeta) loadDumpedACLs(ctx Context) error {
 	})
 }
 
-type dbDirStream struct {
-	dirStream
+type dbDirHandler struct {
+	dirHandler
 }
 
-func (s *dbDirStream) Insert(inode Ino, name string, attr *Attr) {
+func (s *dbDirHandler) Insert(inode Ino, name string, attr *Attr) {
 	s.Lock()
 	defer s.Unlock()
 	if s.batch == nil {
@@ -4463,19 +4463,19 @@ func (s *dbDirStream) Insert(inode Ino, name string, attr *Attr) {
 	}
 }
 
-func (s *dbDirStream) Delete(name string) {
+func (s *dbDirHandler) Delete(name string) {
 	s.Lock()
 	defer s.Unlock()
 
-	s.dirStream.delete(name)
+	s.dirHandler.delete(name)
 	if s.batch != nil && !s.batch.isEnd && bytes.Compare(s.batch.maxName, []byte(name)) > 0 && s.batch.cursor != nil {
 		s.batch.cursor = s.batch.cursor.(int) - 1
 	}
 }
 
-func (m *dbMeta) newDirStream(inode Ino, plus bool, entries []*Entry) DirStream {
-	return &dbDirStream{
-		dirStream: dirStream{
+func (m *dbMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler {
+	return &dbDirHandler{
+		dirHandler: dirHandler{
 			inode:       inode,
 			plus:        plus,
 			initEntries: entries,

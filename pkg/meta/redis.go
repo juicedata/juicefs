@@ -4560,8 +4560,8 @@ func (m *redisMeta) loadDumpedACLs(ctx Context) error {
 	}, m.inodeKey(RootInode))
 }
 
-func (m *redisMeta) newDirStream(inode Ino, plus bool, entries []*Entry) DirStream {
-	return &redisDirStream{
+func (m *redisMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler {
+	return &redisDirHandler{
 		en:          m,
 		inode:       inode,
 		plus:        plus,
@@ -4569,7 +4569,7 @@ func (m *redisMeta) newDirStream(inode Ino, plus bool, entries []*Entry) DirStre
 	}
 }
 
-type redisDirStream struct {
+type redisDirHandler struct {
 	sync.Mutex
 	inode       Ino
 	plus        bool
@@ -4580,14 +4580,14 @@ type redisDirStream struct {
 	readOff     int
 }
 
-func (s *redisDirStream) Close() {
+func (s *redisDirHandler) Close() {
 	s.Lock()
 	s.entries = nil
 	s.readOff = 0
 	s.Unlock()
 }
 
-func (s *redisDirStream) Delete(name string) {
+func (s *redisDirHandler) Delete(name string) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -4608,7 +4608,7 @@ func (s *redisDirStream) Delete(name string) {
 	}
 }
 
-func (s *redisDirStream) Insert(inode Ino, name string, attr *Attr) {
+func (s *redisDirHandler) Insert(inode Ino, name string, attr *Attr) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -4621,7 +4621,7 @@ func (s *redisDirStream) Insert(inode Ino, name string, attr *Attr) {
 	s.indexes[name] = len(s.entries) - 1
 }
 
-func (s *redisDirStream) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
+func (s *redisDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
 	var prefix []*Entry
 	if offset < len(s.initEntries) {
 		prefix = s.initEntries[offset:]
@@ -4687,6 +4687,6 @@ func (s *redisDirStream) List(ctx Context, offset int) ([]*Entry, syscall.Errno)
 	return entries, 0
 }
 
-func (s *redisDirStream) Read(offset int) {
+func (s *redisDirHandler) Read(offset int) {
 	s.readOff = offset - len(s.initEntries)
 }

@@ -128,7 +128,7 @@ type engine interface {
 	doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno
 	cacheACLs(ctx Context) error
 
-	newDirStream(inode Ino, plus bool, entries []*Entry) DirStream
+	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -2894,7 +2894,7 @@ func inGroup(ctx Context, gid uint32) bool {
 	return false
 }
 
-type DirStream interface {
+type DirHandler interface {
 	List(ctx Context, offset int) ([]*Entry, syscall.Errno)
 	Insert(inode Ino, name string, attr *Attr)
 	Delete(name string)
@@ -2902,7 +2902,7 @@ type DirStream interface {
 	Close()
 }
 
-func (m *baseMeta) NewDirStream(ctx Context, inode Ino, plus bool, initEntries []*Entry) (DirStream, syscall.Errno) {
+func (m *baseMeta) NewDirHandler(ctx Context, inode Ino, plus bool, initEntries []*Entry) (DirHandler, syscall.Errno) {
 	var attr Attr
 	var st syscall.Errno
 	defer func() {
@@ -2915,7 +2915,7 @@ func (m *baseMeta) NewDirStream(ctx Context, inode Ino, plus bool, initEntries [
 	if st = m.GetAttr(ctx, inode, &attr); st != 0 {
 		return nil, st
 	}
-	defer m.timeit("NewDirStream", time.Now())
+	defer m.timeit("NewDirHandler", time.Now())
 	var mmask uint8 = MODE_MASK_R
 	if plus {
 		mmask |= MODE_MASK_X
@@ -2938,7 +2938,7 @@ func (m *baseMeta) NewDirStream(ctx Context, inode Ino, plus bool, initEntries [
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
 
-	return m.en.newDirStream(inode, plus, initEntries), 0
+	return m.en.newDirHandler(inode, plus, initEntries), 0
 }
 
 type dirBatch struct {
@@ -2963,7 +2963,7 @@ func (b *dirBatch) predecessor(offset int) bool {
 
 type dirFetcher func(ctx Context, inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error)
 
-type dirStream struct {
+type dirHandler struct {
 	sync.Mutex
 	inode       Ino
 	plus        bool
@@ -2973,7 +2973,7 @@ type dirStream struct {
 	readOff     int
 }
 
-func (s *dirStream) fetch(ctx Context, offset int) (*dirBatch, error) {
+func (s *dirHandler) fetch(ctx Context, offset int) (*dirBatch, error) {
 	var cursor interface{}
 	if s.batch != nil && s.batch.predecessor(offset) {
 		if s.batch.isEnd {
@@ -3004,7 +3004,7 @@ func (s *dirStream) fetch(ctx Context, offset int) (*dirBatch, error) {
 	return &dirBatch{isEnd: isEnd, offset: offset, cursor: nextCursor, entries: entries, indexes: indexes, maxName: maxName}, nil
 }
 
-func (s *dirStream) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
+func (s *dirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
 	var prefix []*Entry
 	if offset < len(s.initEntries) {
 		prefix = s.initEntries[offset:]
@@ -3031,7 +3031,7 @@ func (s *dirStream) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
 	return s.batch.entries[offset-s.batch.offset:], 0
 }
 
-func (s *dirStream) delete(name string) {
+func (s *dirHandler) delete(name string) {
 	if s.batch == nil || len(s.batch.entries) == 0 {
 		return
 	}
@@ -3048,7 +3048,7 @@ func (s *dirStream) delete(name string) {
 	}
 }
 
-func (s *dirStream) Insert(inode Ino, name string, attr *Attr) {
+func (s *dirHandler) Insert(inode Ino, name string, attr *Attr) {
 	s.Lock()
 	defer s.Unlock()
 	if s.batch == nil {
@@ -3061,11 +3061,11 @@ func (s *dirStream) Insert(inode Ino, name string, attr *Attr) {
 	}
 }
 
-func (s *dirStream) Read(offset int) {
+func (s *dirHandler) Read(offset int) {
 	s.readOff = offset - len(s.initEntries)
 }
 
-func (s *dirStream) Close() {
+func (s *dirHandler) Close() {
 	s.Lock()
 	s.batch = nil
 	s.readOff = 0

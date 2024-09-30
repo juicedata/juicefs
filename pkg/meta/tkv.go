@@ -3781,19 +3781,19 @@ func (m *kvMeta) loadDumpedACLs(ctx Context) error {
 	})
 }
 
-type kvDirStream struct {
-	dirStream
+type kvDirHandler struct {
+	dirHandler
 }
 
-func (s *kvDirStream) Delete(name string) {
+func (s *kvDirHandler) Delete(name string) {
 	s.Lock()
 	defer s.Unlock()
-	s.dirStream.delete(name)
+	s.dirHandler.delete(name)
 }
 
-func (m *kvMeta) newDirStream(inode Ino, plus bool, entries []*Entry) DirStream {
-	s := &kvDirStream{
-		dirStream: dirStream{
+func (m *kvMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler {
+	s := &kvDirHandler{
+		dirHandler: dirHandler{
 			inode:       inode,
 			plus:        plus,
 			initEntries: entries,

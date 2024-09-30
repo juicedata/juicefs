@@ -35,8 +35,8 @@ type handle struct {
 	fh    uint64
 
 	// for dir
-	dirStream meta.DirStream
-	readAt    time.Time
+	dirHandler meta.DirHandler
+	readAt     time.Time
 
 	// for file
 	flags      uint32
@@ -217,9 +217,9 @@ func (v *VFS) releaseHandle(inode Ino, fh uint64) {
 	hs := v.handles[inode]
 	for i, f := range hs {
 		if f.fh == fh {
-			if hs[i].dirStream != nil {
-				hs[i].dirStream.Close()
-				hs[i].dirStream = nil
+			if hs[i].dirHandler != nil {
+				hs[i].dirHandler.Close()
+				hs[i].dirHandler = nil
 			}
 			if i+1 < len(hs) {
 				hs[i] = hs[len(hs)-1]
@@ -270,11 +270,11 @@ func (v *VFS) invalidateDirHandle(parent Ino, name string, inode Ino, attr *Attr
 	v.hanleM.Unlock()
 	for _, h := range hs {
 		h.Lock()
-		if h.dirStream != nil {
+		if h.dirHandler != nil {
 			if inode > 0 {
-				h.dirStream.Insert(inode, name, attr)
+				h.dirHandler.Insert(inode, name, attr)
 			} else {
-				h.dirStream.Delete(name)
+				h.dirHandler.Delete(name)
 			}
 		}
 		h.Unlock()

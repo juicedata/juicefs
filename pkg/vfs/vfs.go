@@ -424,10 +424,10 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 	h.Lock()
 	defer h.Unlock()
 
-	if h.dirStream == nil || off == 0 {
-		if h.dirStream != nil {
-			h.dirStream.Close()
-			h.dirStream = nil
+	if h.dirHandler == nil || off == 0 {
+		if h.dirHandler != nil {
+			h.dirHandler.Close()
+			h.dirHandler = nil
 		}
 		var initEntries []*meta.Entry
 		if ino == rootID && !v.Conf.HideInternal {
@@ -440,11 +440,11 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 			}
 		}
 		h.readAt = time.Now()
-		if h.dirStream, err = v.Meta.NewDirStream(ctx, ino, plus, initEntries); err != 0 {
+		if h.dirHandler, err = v.Meta.NewDirHandler(ctx, ino, plus, initEntries); err != 0 {
 			return
 		}
 	}
-	if entries, err = h.dirStream.List(ctx, off); err != 0 {
+	if entries, err = h.dirHandler.List(ctx, off); err != 0 {
 		return
 	}
 	readAt = h.readAt
@@ -459,8 +459,8 @@ func (v *VFS) UpdateReaddirOffset(ctx Context, ino Ino, fh uint64, off int) {
 	}
 	h.Lock()
 	defer h.Unlock()
-	if h.dirStream != nil {
-		h.dirStream.Read(off)
+	if h.dirHandler != nil {
+		h.dirHandler.Read(off)
 	}
 }
 

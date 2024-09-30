@@ -1011,7 +1011,7 @@ func testVFSReadDirSort(t *testing.T, metaUri string) {
 	v.Releasedir(ctx, parent, fh2)
 }
 
-func testReaddirStreaming(t *testing.T, metaUri string) {
+func testReaddirBatch(t *testing.T, metaUri string) {
 	n, extra := 5, 40
 
 	v, _ := createTestVFS(nil, metaUri)
@@ -1070,7 +1070,7 @@ func testReaddirStreaming(t *testing.T, metaUri string) {
 
 func TestReadDirSteaming(t *testing.T) {
 	for _, metaUri := range []string{"", "sqlite3://", "redis://127.0.0.1:6379/2"} {
-		testReaddirStreaming(t, metaUri)
+		testReaddirBatch(t, metaUri)
 	}
 }
 
