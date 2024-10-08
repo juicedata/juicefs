@@ -35,10 +35,8 @@ type handle struct {
 	fh    uint64
 
 	// for dir
-	children []*meta.Entry
-	readAt   time.Time
-	readOff  int
-	index    map[string]int
+	dirHandler meta.DirHandler
+	readAt     time.Time
 
 	// for file
 	flags      uint32
@@ -219,6 +217,10 @@ func (v *VFS) releaseHandle(inode Ino, fh uint64) {
 	hs := v.handles[inode]
 	for i, f := range hs {
 		if f.fh == fh {
+			if hs[i].dirHandler != nil {
+				hs[i].dirHandler.Close()
+				hs[i].dirHandler = nil
+			}
 			if i+1 < len(hs) {
 				hs[i] = hs[len(hs)-1]
 			}
@@ -268,26 +270,11 @@ func (v *VFS) invalidateDirHandle(parent Ino, name string, inode Ino, attr *Attr
 	v.hanleM.Unlock()
 	for _, h := range hs {
 		h.Lock()
-		if h.children != nil && h.index != nil {
+		if h.dirHandler != nil {
 			if inode > 0 {
-				h.children = append(h.children, &meta.Entry{
-					Inode: inode,
-					Name:  []byte(name),
-					Attr:  attr,
-				})
-				h.index[name] = len(h.children) - 1
+				h.dirHandler.Insert(inode, name, attr)
 			} else {
-				i, ok := h.index[name]
-				if ok {
-					delete(h.index, name)
-					h.children[i].Inode = 0 // invalid
-					if i >= h.readOff {
-						// not read yet, remove it
-						h.children[i] = h.children[len(h.children)-1]
-						h.index[string(h.children[i].Name)] = i
-						h.children = h.children[:len(h.children)-1]
-					}
-				}
+				h.dirHandler.Delete(name)
 			}
 		}
 		h.Unlock()

@@ -4460,3 +4460,94 @@ func (m *dbMeta) loadDumpedACLs(ctx Context) error {
 		return nil
 	})
 }
+
+type dbDirHandler struct {
+	dirHandler
+}
+
+func (h *dbDirHandler) Insert(inode Ino, name string, attr *Attr) {
+	h.Lock()
+	defer h.Unlock()
+	if h.batch == nil {
+		return
+	}
+	if h.batch.isEnd || bytes.Compare([]byte(name), h.batch.maxName) < 0 {
+		h.batch.entries = append(h.batch.entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
+		h.batch.indexes[name] = len(h.batch.entries) - 1
+	}
+}
+
+func (h *dbDirHandler) Delete(name string) {
+	h.Lock()
+	defer h.Unlock()
+
+	h.dirHandler.delete(name)
+	if h.batch != nil && !h.batch.isEnd && bytes.Compare(h.batch.maxName, []byte(name)) > 0 && h.batch.cursor != nil {
+		h.batch.cursor = h.batch.cursor.(int) - 1
+	}
+}
+
+func (m *dbMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler {
+	h := &dbDirHandler{
+		dirHandler: dirHandler{
+			inode:       inode,
+			plus:        plus,
+			initEntries: entries,
+			fetcher:     m.getDirFetcher(),
+			batchNum:    DirBatchNum["db"],
+		},
+	}
+	h.batch, _ = h.fetch(Background, 0)
+	return h
+}
+
+func (m *dbMeta) getDirFetcher() dirFetcher {
+	return func(ctx Context, inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error) {
+		entries := make([]*Entry, 0, limit)
+		err := m.roTxn(func(s *xorm.Session) error {
+			iCursor := offset
+			if cursor != nil {
+				iCursor = cursor.(int)
+			}
+
+			var ids []int64
+			if err := s.Table(&edge{}).Cols("id").Where("parent = ?", inode).Limit(limit, iCursor).Find(&ids); err != nil {
+				return err
+			}
+
+			s = s.Table(&edge{}).In("jfs_edge.id", ids).OrderBy("jfs_edge.name")
+			if plus {
+				s = s.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode").Cols("jfs_edge.name", "jfs_node.*")
+			} else {
+				s = s.Cols("jfs_edge.inode", "jfs_edge.name", "jfs_edge.type")
+			}
+			var nodes []namedNode
+			if err := s.Find(&nodes); err != nil {
+				return err
+			}
+
+			for _, n := range nodes {
+				if len(n.Name) == 0 {
+					logger.Errorf("Corrupt entry with empty name: inode %d parent %d", n.Inode, inode)
+					continue
+				}
+				entry := &Entry{
+					Inode: n.Inode,
+					Name:  n.Name,
+					Attr:  &Attr{},
+				}
+				if plus {
+					m.parseAttr(&n.node, entry.Attr)
+				} else {
+					entry.Attr.Typ = n.Type
+				}
+				entries = append(entries, entry)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		return offset + len(entries), entries, nil
+	}
+}

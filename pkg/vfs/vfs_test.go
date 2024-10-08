@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"reflect"
 	"slices"
 	"strings"
@@ -34,19 +35,23 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 )
 
 // nolint:errcheck
 
-func createTestVFS(applyMetaConfOption func(metaConfig *meta.Config)) (*VFS, object.ObjectStorage) {
+func createTestVFS(applyMetaConfOption func(metaConfig *meta.Config), metaUri string) (*VFS, object.ObjectStorage) {
 	mp := "/jfs"
 	metaConf := meta.DefaultConf()
 	metaConf.MountPoint = mp
 	if applyMetaConfOption != nil {
 		applyMetaConfOption(metaConf)
 	}
-	m := meta.NewClient("memkv://", metaConf)
+	if metaUri == "" {
+		metaUri = "memkv://"
+	}
+	m := meta.NewClient(metaUri, metaConf)
 	format := &meta.Format{
 		Name:        "test",
 		UUID:        uuid.New().String(),
@@ -82,7 +87,7 @@ func createTestVFS(applyMetaConfOption func(metaConfig *meta.Config)) (*VFS, obj
 }
 
 func TestVFSBasic(t *testing.T) {
-	v, _ := createTestVFS(nil)
+	v, _ := createTestVFS(nil, "")
 	ctx := NewLogContext(meta.NewContext(10, 1, []uint32{2, 3}))
 
 	if st, e := v.StatFS(ctx, 1); e != 0 {
@@ -191,7 +196,7 @@ func TestVFSBasic(t *testing.T) {
 }
 
 func TestVFSIO(t *testing.T) {
-	v, _ := createTestVFS(nil)
+	v, _ := createTestVFS(nil, "")
 	ctx := NewLogContext(meta.Background)
 	fe, fh, e := v.Create(ctx, 1, "file", 0755, 0, syscall.O_RDWR)
 	if e != 0 {
@@ -356,7 +361,7 @@ func TestVFSIO(t *testing.T) {
 }
 
 func TestVFSXattrs(t *testing.T) {
-	v, _ := createTestVFS(nil)
+	v, _ := createTestVFS(nil, "")
 	ctx := NewLogContext(meta.Background)
 	fe, e := v.Mkdir(ctx, 1, "xattrs", 0755, 0)
 	if e != 0 {
@@ -498,7 +503,7 @@ func TestSetattrStr(t *testing.T) {
 }
 
 func TestVFSLocks(t *testing.T) {
-	v, _ := createTestVFS(nil)
+	v, _ := createTestVFS(nil, "")
 	ctx := NewLogContext(meta.Background)
 	fe, fh, e := v.Create(ctx, 1, "flock", 0644, 0, syscall.O_RDWR)
 	if e != 0 {
@@ -599,7 +604,7 @@ func TestVFSLocks(t *testing.T) {
 }
 
 func TestInternalFile(t *testing.T) {
-	v, _ := createTestVFS(nil)
+	v, _ := createTestVFS(nil, "")
 	ctx := NewLogContext(meta.Background)
 	// list internal files
 	fh, _ := v.Opendir(ctx, 1, 0)
@@ -869,26 +874,54 @@ func TestInternalFile(t *testing.T) {
 }
 
 func TestReaddirCache(t *testing.T) {
-	v, _ := createTestVFS(nil)
+	engines := map[string]string{
+		"kv":    "",
+		"db":    "sqlite3://",
+		"redis": "redis://127.0.0.1:6379/2",
+	}
+	for typ, metaUri := range engines {
+		testReaddirCache(t, metaUri, typ, 20)
+		testReaddirCache(t, metaUri, typ, 4096)
+	}
+}
+
+func testReaddirCache(t *testing.T, metaUri string, typ string, batchNum int) {
+	old := meta.DirBatchNum
+	meta.DirBatchNum[typ] = batchNum
+	defer func() {
+		meta.DirBatchNum = old
+	}()
+
+	v, _ := createTestVFS(nil, metaUri)
 	ctx := NewLogContext(meta.Background)
+
 	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
 	if st != 0 {
 		t.Fatalf("mkdir testdir: %s", st)
 	}
 	parent := entry.Inode
-	for i := 0; i < 100; i++ {
+	for i := 0; i <= 100; i++ {
 		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
 	}
+
+	defer func() {
+		for i := 0; i <= 120; i++ {
+			_ = v.Rmdir(ctx, parent, fmt.Sprintf("d%d", i))
+		}
+		_ = v.Rmdir(ctx, 1, "testdir")
+	}()
+
 	fh, _ := v.Opendir(ctx, parent, 0)
-	_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", 100), 0777, 022)
 	defer v.Releasedir(ctx, parent, fh)
-	var off = 20
+	initNum, num := 2, 20
 	var files = make(map[string]bool)
 	// read first 20
-	entries, _, _ := v.Readdir(ctx, parent, 20, 0, fh, true)
-	for _, e := range entries[:off] {
+	entries, _, _ := v.Readdir(ctx, parent, 20, initNum, fh, true)
+	for _, e := range entries[:num] {
 		files[string(e.Name)] = true
 	}
+
+	off := num + initNum
 	v.UpdateReaddirOffset(ctx, parent, fh, off)
 	for i := 0; i < 100; i += 10 {
 		name := fmt.Sprintf("d%d", i)
@@ -939,9 +972,15 @@ func TestReaddirCache(t *testing.T) {
 }
 
 func TestVFSReadDirSort(t *testing.T) {
+	for _, metaUri := range []string{"", "sqlite3://", "redis://127.0.0.1:6379/2"} {
+		testVFSReadDirSort(t, metaUri)
+	}
+}
+
+func testVFSReadDirSort(t *testing.T, metaUri string) {
 	v, _ := createTestVFS(func(metaConfig *meta.Config) {
 		metaConfig.SortDir = true
-	})
+	}, metaUri)
 	ctx := NewLogContext(meta.Background)
 	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
 	if st != 0 {
@@ -951,6 +990,12 @@ func TestVFSReadDirSort(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
 	}
+	defer func() {
+		for i := 0; i < 100; i++ {
+			_ = v.Rmdir(ctx, parent, fmt.Sprintf("d%d", i))
+		}
+		_ = v.Rmdir(ctx, 1, "testdir")
+	}()
 	fh, _ := v.Opendir(ctx, parent, 0)
 	entries1, _, _ := v.Readdir(ctx, parent, 60, 10, fh, true)
 	sorted := slices.IsSortedFunc(entries1, func(i, j *meta.Entry) int {
@@ -969,4 +1014,139 @@ func TestVFSReadDirSort(t *testing.T) {
 		}
 	}
 	v.Releasedir(ctx, parent, fh2)
+}
+
+func testReaddirBatch(t *testing.T, metaUri string, typ string, batchNum int) {
+	old := meta.DirBatchNum
+	meta.DirBatchNum[typ] = batchNum
+	defer func() {
+		meta.DirBatchNum = old
+	}()
+
+	n, extra := 5, 40
+
+	v, _ := createTestVFS(nil, metaUri)
+	ctx := NewLogContext(meta.Background)
+
+	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
+	if st != 0 {
+		t.Fatalf("mkdir testdir: %s", st)
+	}
+
+	parent := entry.Inode
+	for i := 0; i < n*batchNum+extra; i++ {
+		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
+	}
+	defer func() {
+		for i := 0; i < n*batchNum+extra; i++ {
+			_ = v.Rmdir(ctx, parent, fmt.Sprintf("d%d", i))
+		}
+		v.Rmdir(ctx, 1, "testdir")
+	}()
+
+	fh, _ := v.Opendir(ctx, parent, 0)
+	defer v.Releasedir(ctx, parent, fh)
+	entries1, _, _ := v.Readdir(ctx, parent, 0, 0, fh, true)
+	require.NotNil(t, entries1)
+	require.Equal(t, 2+batchNum, len(entries1)) // init entries: "." and ".."
+
+	entries2, _, _ := v.Readdir(ctx, parent, 0, 2, fh, true)
+	require.NotNil(t, entries2)
+	require.Equal(t, batchNum, len(entries2))
+
+	entries3, _, _ := v.Readdir(ctx, parent, 0, 2+batchNum, fh, true)
+	require.NotNil(t, entries3)
+	require.Equal(t, batchNum, len(entries3))
+
+	// reach the end
+	entries4, _, _ := v.Readdir(ctx, parent, 0, n*batchNum+extra+2, fh, true)
+	require.NotNil(t, entries4)
+	require.Equal(t, 0, len(entries4))
+
+	// skip-style readdir
+	entries5, _, _ := v.Readdir(ctx, parent, 0, n*batchNum+2, fh, true)
+	require.NotNil(t, entries5)
+	require.Equal(t, extra, len(entries5))
+
+	entries6, _, _ := v.Readdir(ctx, parent, 0, 2, fh, true)
+	require.Equal(t, len(entries2), len(entries6))
+	for i := 0; i < len(entries2); i++ {
+		require.Equal(t, entries2[i].Inode, entries6[i].Inode)
+	}
+
+	// dir seak
+	entries7, _, _ := v.Readdir(ctx, parent, 0, n*batchNum+2-20, fh, true)
+	require.True(t, reflect.DeepEqual(entries5, entries7[20:]))
+}
+
+func TestReadDirSteaming(t *testing.T) {
+	engines := map[string]string{
+		"kv":    "",
+		"db":    "sqlite3://",
+		"redis": "redis://127.0.0.1:6379/2",
+	}
+	for typ, metaUri := range engines {
+		testReaddirBatch(t, metaUri, typ, 100)
+		testReaddirBatch(t, metaUri, typ, 4096)
+	}
+}
+
+func TestReaddir(t *testing.T) {
+	engines := map[string]string{
+		"kv":    "",
+		"db":    "sqlite3://",
+		"redis": "redis://127.0.0.1:6379/2",
+	}
+	for typ, metaUri := range engines {
+		batchNum := meta.DirBatchNum[typ]
+		extra := rand.Intn(batchNum)
+		testReaddir(t, metaUri, 20, 0)
+		testReaddir(t, metaUri, 20, 5)
+		testReaddir(t, metaUri, 2*batchNum, 0)
+		testReaddir(t, metaUri, 2*batchNum, extra)
+		testReaddir(t, metaUri, 4*batchNum, 0)
+		testReaddir(t, metaUri, 4*batchNum, 2*batchNum+extra)
+	}
+}
+
+func testReaddir(t *testing.T, metaUri string, dirNum int, offset int) {
+	v, _ := createTestVFS(nil, metaUri)
+	ctx := NewLogContext(meta.Background)
+
+	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
+	if st != 0 {
+		t.Fatalf("mkdir testdir: %s", st)
+	}
+
+	parent := entry.Inode
+	for i := 0; i < dirNum; i++ {
+		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
+	}
+	defer func() {
+		for i := 0; i < dirNum; i++ {
+			_ = v.Rmdir(ctx, parent, fmt.Sprintf("d%d", i))
+		}
+		v.Rmdir(ctx, 1, "testdir")
+	}()
+
+	fh, _ := v.Opendir(ctx, parent, 0)
+	defer v.Releasedir(ctx, parent, fh)
+
+	readAll := func(ctx Context, parent Ino, fh uint64, off int) []*meta.Entry {
+		var entries []*meta.Entry
+		for {
+			ents, _, st := v.Readdir(ctx, parent, 0, off, fh, true)
+			require.Equal(t, st, syscall.Errno(0))
+			if len(ents) == 0 {
+				break
+			}
+			off += len(ents)
+			entries = append(entries, ents...)
+		}
+		return entries
+	}
+
+	entriesOne := readAll(ctx, parent, fh, offset)
+	entriesTwo := readAll(ctx, parent, fh, offset)
+	require.True(t, reflect.DeepEqual(entriesOne, entriesTwo))
 }

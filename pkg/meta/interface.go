@@ -376,6 +376,8 @@ type Meta interface {
 	Link(ctx Context, inodeSrc, parent Ino, name string, attr *Attr) syscall.Errno
 	// Readdir returns all entries for given directory, which include attributes if plus is true.
 	Readdir(ctx Context, inode Ino, wantattr uint8, entries *[]*Entry) syscall.Errno
+	// NewDirHandler returns a stream for directory entries.
+	NewDirHandler(ctx Context, inode Ino, plus bool, initEntries []*Entry) (DirHandler, syscall.Errno)
 	// Create creates a file in a directory with given name.
 	Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno
 	// Open checks permission on a node and track it as open.

@@ -1958,6 +1958,28 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 	}, m.inodeKey(parent), m.entryKey(parent), m.inodeKey(inode)))
 }
 
+func (m *redisMeta) fillAttr(ctx Context, es []*Entry) error {
+	if len(es) == 0 {
+		return nil
+	}
+	var keys = make([]string, len(es))
+	for i, e := range es {
+		keys[i] = m.inodeKey(e.Inode)
+	}
+	rs, err := m.rdb.MGet(ctx, keys...).Result()
+	if err != nil {
+		return err
+	}
+	for j, re := range rs {
+		if re != nil {
+			if a, ok := re.(string); ok {
+				m.parseAttr([]byte(a), es[j].Attr)
+			}
+		}
+	}
+	return nil
+}
+
 func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
 	var stop = errors.New("stop")
 	err := m.hscan(ctx, m.entryKey(inode), func(keys []string) error {
@@ -1989,28 +2011,10 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 	}
 
 	if plus != 0 && len(*entries) != 0 {
-		fillAttr := func(es []*Entry) error {
-			var keys = make([]string, len(es))
-			for i, e := range es {
-				keys[i] = m.inodeKey(e.Inode)
-			}
-			rs, err := m.rdb.MGet(ctx, keys...).Result()
-			if err != nil {
-				return err
-			}
-			for j, re := range rs {
-				if re != nil {
-					if a, ok := re.(string); ok {
-						m.parseAttr([]byte(a), es[j].Attr)
-					}
-				}
-			}
-			return nil
-		}
 		batchSize := 4096
 		nEntries := len(*entries)
 		if nEntries <= batchSize {
-			err = fillAttr(*entries)
+			err = m.fillAttr(ctx, *entries)
 		} else {
 			indexCh := make(chan []*Entry, 10)
 			var wg sync.WaitGroup
@@ -2019,7 +2023,7 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 				go func() {
 					defer wg.Done()
 					for es := range indexCh {
-						e := fillAttr(es)
+						e := m.fillAttr(ctx, es)
 						if e != nil {
 							err = e
 							break
@@ -4578,4 +4582,136 @@ func (m *redisMeta) loadDumpedACLs(ctx Context) error {
 		}
 		return tx.Set(ctx, m.prefix+aclCounter, maxId, 0).Err()
 	}, m.inodeKey(RootInode))
+}
+
+func (m *redisMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler {
+	return &redisDirHandler{
+		en:          m,
+		inode:       inode,
+		plus:        plus,
+		initEntries: entries,
+		batchNum:    DirBatchNum["redis"],
+	}
+}
+
+type redisDirHandler struct {
+	sync.Mutex
+	inode       Ino
+	plus        bool
+	en          *redisMeta
+	initEntries []*Entry
+	entries     []*Entry
+	indexes     map[string]int
+	readOff     int
+	batchNum    int
+}
+
+func (s *redisDirHandler) Close() {
+	s.Lock()
+	s.entries = nil
+	s.readOff = 0
+	s.Unlock()
+}
+
+func (s *redisDirHandler) Delete(name string) {
+	s.Lock()
+	defer s.Unlock()
+
+	if len(s.entries) == 0 {
+		return
+	}
+
+	if idx, ok := s.indexes[name]; ok && idx >= s.readOff {
+		delete(s.indexes, name)
+		n := len(s.entries)
+		if idx < n-1 {
+			// TODO: sorted
+			s.entries[idx] = s.entries[n-1]
+			s.indexes[string(s.entries[idx].Name)] = idx
+		}
+		s.entries = s.entries[:n-1]
+	}
+}
+
+func (s *redisDirHandler) Insert(inode Ino, name string, attr *Attr) {
+	s.Lock()
+	defer s.Unlock()
+
+	if len(s.entries) == 0 {
+		return
+	}
+
+	// TODO: sorted
+	s.entries = append(s.entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
+	s.indexes[name] = len(s.entries) - 1
+}
+
+func (s *redisDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
+	var prefix []*Entry
+	if offset < len(s.initEntries) {
+		prefix = s.initEntries[offset:]
+		offset = 0
+	} else {
+		offset -= len(s.initEntries)
+	}
+
+	s.Lock()
+	if s.entries == nil {
+		var entries []*Entry
+		err := s.en.hscan(ctx, s.en.entryKey(s.inode), func(keys []string) error {
+			newEntries := make([]Entry, len(keys)/2)
+			newAttrs := make([]Attr, len(keys)/2)
+			for i := 0; i < len(keys); i += 2 {
+				typ, ino := s.en.parseEntry([]byte(keys[i+1]))
+				if keys[i] == "" {
+					logger.Errorf("Corrupt entry with empty name: inode %d parent %d", ino, s.inode)
+					continue
+				}
+				ent := &newEntries[i/2]
+				ent.Inode = ino
+				ent.Name = []byte(keys[i])
+				ent.Attr = &newAttrs[i/2]
+				ent.Attr.Typ = typ
+				entries = append(entries, ent)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, errno(err)
+		}
+
+		if s.en.conf.SortDir {
+			sort.Slice(entries, func(i, j int) bool {
+				return string(entries[i].Name) < string(entries[j].Name)
+			})
+		}
+		if s.plus {
+			if err := s.en.fillAttr(ctx, entries); err != nil {
+				return nil, errno(err)
+			}
+		}
+		s.entries = entries
+
+		indexes := make(map[string]int, len(entries))
+		for i, e := range entries {
+			indexes[string(e.Name)] = i
+		}
+		s.indexes = indexes
+	}
+	s.Unlock()
+
+	size := len(s.entries) - offset
+	if size > s.batchNum {
+		size = s.batchNum
+	}
+	s.readOff = offset + size
+	entries := s.entries[offset : offset+size]
+	if len(prefix) > 0 {
+		entries = append(prefix, entries...)
+	}
+	return entries, 0
+}
+
+func (s *redisDirHandler) Read(offset int) {
+	s.readOff = offset - len(s.initEntries)
 }
