@@ -187,7 +187,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 
 	block, err := s.store.group.Execute(key, func() (*Page, error) {
 		tmp := page
-		if boff > 0 || len(p) < blockSize {
+		if boff > 0 || (!s.store.seekable && len(p) < blockSize) { // Need full block
 			tmp = NewOffPage(blockSize)
 		} else {
 			tmp.Acquire()
@@ -709,6 +709,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 		in, err = store.storage.Get(key, 0, -1, object.WithRequestID(&reqID), object.WithStorageClass(&sc))
 		if err == nil {
 			n, err = io.ReadFull(in, p.Data)
+			_, _ = io.Copy(io.Discard, in) // Drain response body to reuse connection
 			_ = in.Close()
 		}
 		if compressed && err == io.ErrUnexpectedEOF {
