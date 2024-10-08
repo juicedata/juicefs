@@ -886,14 +886,14 @@ func TestReaddirCache(t *testing.T) {
 }
 
 func testReaddirCache(t *testing.T, metaUri string, typ string, batchNum int) {
+	v, _ := createTestVFS(nil, metaUri)
+	ctx := NewLogContext(meta.Background)
+
 	old := meta.DirBatchNum
 	meta.DirBatchNum[typ] = batchNum
 	defer func() {
 		meta.DirBatchNum = old
 	}()
-
-	v, _ := createTestVFS(nil, metaUri)
-	ctx := NewLogContext(meta.Background)
 
 	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
 	if st != 0 {
@@ -1017,16 +1017,16 @@ func testVFSReadDirSort(t *testing.T, metaUri string) {
 }
 
 func testReaddirBatch(t *testing.T, metaUri string, typ string, batchNum int) {
+	n, extra := 5, 40
+
+	v, _ := createTestVFS(nil, metaUri)
+	ctx := NewLogContext(meta.Background)
+
 	old := meta.DirBatchNum
 	meta.DirBatchNum[typ] = batchNum
 	defer func() {
 		meta.DirBatchNum = old
 	}()
-
-	n, extra := 5, 40
-
-	v, _ := createTestVFS(nil, metaUri)
-	ctx := NewLogContext(meta.Background)
 
 	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
 	if st != 0 {

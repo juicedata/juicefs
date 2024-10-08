@@ -286,6 +286,10 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 		addr = recoveryMysqlPwd(addr)
 	}
 
+	if driver == "sqlite3" {
+		DirBatchNum["db"] = 4096 // SQLITE_MAX_VARIABLE_NUMBER limit
+	}
+
 	engine, err := xorm.NewEngine(driver, addr)
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
@@ -4511,11 +4515,12 @@ func (m *dbMeta) getDirFetcher() dirFetcher {
 			}
 
 			var ids []int64
+			// sorted by (parent, name) index
 			if err := s.Table(&edge{}).Cols("id").Where("parent = ?", inode).Limit(limit, iCursor).Find(&ids); err != nil {
 				return err
 			}
 
-			s = s.Table(&edge{}).In("jfs_edge.id", ids).OrderBy("jfs_edge.name")
+			s = s.Table(&edge{}).In("jfs_edge.id", ids).OrderBy("jfs_edge.name") // need to sorted by name, otherwise the cursor will be invalid
 			if plus {
 				s = s.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode").Cols("jfs_edge.name", "jfs_node.*")
 			} else {
