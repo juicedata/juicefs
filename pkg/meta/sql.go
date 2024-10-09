@@ -4513,21 +4513,13 @@ func (m *dbMeta) getDirFetcher() dirFetcher {
 			if cursor != nil {
 				iCursor = cursor.(int)
 			}
-
-			var ids []int64
-			// sorted by (parent, name) index
-			if err := s.Table(&edge{}).Cols("id").Where("parent = ?", inode).Limit(limit, iCursor).Find(&ids); err != nil {
-				return err
-			}
-
-			s = s.Table(&edge{}).In("jfs_edge.id", ids).OrderBy("jfs_edge.name") // need to sorted by name, otherwise the cursor will be invalid
+			s = s.Table(&edge{})
 			if plus {
-				s = s.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode").Cols("jfs_edge.name", "jfs_node.*")
-			} else {
-				s = s.Cols("jfs_edge.inode", "jfs_edge.name", "jfs_edge.type")
+				s = s.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
 			}
+			s = s.Limit(limit, iCursor)
 			var nodes []namedNode
-			if err := s.Find(&nodes); err != nil {
+			if err := s.Find(&nodes, &edge{Parent: inode}); err != nil {
 				return err
 			}
 
