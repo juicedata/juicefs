@@ -85,7 +85,7 @@ func GetHttpClient() *http.Client {
 
 func cleanup(response *http.Response) {
 	if response != nil && response.Body != nil {
-		_, _ = io.ReadAll(response.Body)
+		_, _ = io.Copy(io.Discard, response.Body)
 		_ = response.Body.Close()
 	}
 }
