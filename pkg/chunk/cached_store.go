@@ -156,6 +156,14 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		if s.store.downLimit != nil {
 			s.store.downLimit.Wait(int64(len(p)))
 		}
+		fullPage, err := s.store.group.TryPiggyback(key)
+		if fullPage != nil {
+			defer fullPage.Release()
+			if err == nil { // piggybacked a full read
+				n = copy(p, fullPage.Data[boff:])
+				return n, nil
+			}
+		}
 		// partial read
 		st := time.Now()
 		var (
@@ -163,7 +171,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 			sc    = object.DefaultStorageClass
 		)
 		page.Acquire()
-		err := utils.WithTimeout(func() error {
+		err = utils.WithTimeout(func() error {
 			defer page.Release()
 			in, err := s.store.storage.Get(key, int64(boff), int64(len(p)), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
 			if err == nil {
@@ -762,7 +770,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		seekable:      compressor.CompressBound(0) == 0,
 		pendingCh:     make(chan *pendingItem, 100*config.MaxUpload),
 		pendingKeys:   make(map[string]*pendingItem),
-		group:         &Controller{},
+		group:         NewController(),
 	}
 	if config.UploadLimit > 0 {
 		// there are overheads coming from HTTP/TCP/IP
@@ -809,7 +817,15 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		}
 		p := NewOffPage(size)
 		defer p.Release()
-		_ = store.load(key, p, true, true)
+		block, err := store.group.Execute(key, func() (*Page, error) { // dedup requests with full read
+			p.Acquire()
+			err := store.load(key, p, false, false) // delay writing cache until singleflight ends to prevent blocking waiters
+			return p, err
+		})
+		defer block.Release()
+		if err == nil && block == p {
+			store.bcache.cache(key, block, true, !store.conf.OSCache)
+		}
 	})
 
 	if store.conf.CacheDir != "memory" && store.conf.Writeback {
