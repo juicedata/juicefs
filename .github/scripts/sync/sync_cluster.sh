@@ -118,7 +118,11 @@ skip_test_sync_between_oss(){
 check_sync_log(){
     grep "<FATAL>" sync.log && exit 1 || true
     file_count=$1
-    file_copied=$(tail -1 sync.log  | sed 's/.*copied: \([0-9]*\).*/\1/' )
+    if tail -1 sync.log | grep -q "close session"; then
+      file_copied=$(tail -2 sync.log | grep head -n 1  | sed 's/.*copied: \([0-9]*\).*/\1/' )
+    else
+      file_copied=$(tail -1 sync.log  | sed 's/.*copied: \([0-9]*\).*/\1/' )
+    fi
     if [ "$file_copied" != "$file_count" ]; then
         echo "file_copied not equal, $file_copied, $file_count"
         exit 1
