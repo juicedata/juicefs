@@ -373,6 +373,10 @@ func getDefaultChunkConf(format *meta.Format) *chunk.Config {
 	return chunkConf
 }
 
+func (j *juiceFS) Shutdown() {
+	_ = j.jfs.Meta().CloseSession()
+}
+
 func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {
 	metaUrl := os.Getenv(endpoint)
 	if metaUrl == "" {
