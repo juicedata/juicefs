@@ -65,6 +65,12 @@ func testStore(t *testing.T, store ChunkStore) {
 	} else if string(p.Data[:n]) != "world" {
 		t.Fatalf("not expected: %s", string(p.Data[:n]))
 	}
+	p = NewPage(make([]byte, 5))
+	if n, err := reader.ReadAt(context.Background(), p, 0); n != 5 || err != nil {
+		t.Fatalf("read failed: %d %s", n, err)
+	} else if string(p.Data[:n]) != "hello" {
+		t.Fatalf("not expected: %s", string(p.Data[:n]))
+	}
 	p = NewPage(make([]byte, 20))
 	if n, err := reader.ReadAt(context.Background(), p, offset); n != 11 || err != nil && err != io.EOF {
 		t.Fatalf("read failed: %d %s", n, err)
