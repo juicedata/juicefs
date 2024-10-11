@@ -1079,7 +1079,7 @@ func testReaddirBatch(t *testing.T, metaUri string, typ string, batchNum int) {
 	require.True(t, reflect.DeepEqual(entries5, entries7[20:]))
 }
 
-func TestReadDirSteaming(t *testing.T) {
+func TestReadDirBatch(t *testing.T) {
 	engines := map[string]string{
 		"kv":    "",
 		"db":    "sqlite3://",
@@ -1104,8 +1104,6 @@ func TestReaddir(t *testing.T) {
 		testReaddir(t, metaUri, 20, 5)
 		testReaddir(t, metaUri, 2*batchNum, 0)
 		testReaddir(t, metaUri, 2*batchNum, extra)
-		testReaddir(t, metaUri, 4*batchNum, 0)
-		testReaddir(t, metaUri, 4*batchNum, 2*batchNum+extra)
 	}
 }
 

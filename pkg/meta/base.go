@@ -2947,7 +2947,6 @@ type dirBatch struct {
 	isEnd   bool
 	offset  int
 	cursor  interface{}
-	maxName []byte
 	entries []*Entry
 	indexes map[string]int
 }
@@ -2993,14 +2992,10 @@ func (h *dirHandler) fetch(ctx Context, offset int) (*dirBatch, error) {
 		nextCursor = cursor
 	}
 	indexes := make(map[string]int, len(entries))
-	maxName := []byte("")
 	for i, e := range entries {
 		indexes[string(e.Name)] = i
-		if bytes.Compare(e.Name, maxName) > 0 {
-			maxName = e.Name
-		}
 	}
-	return &dirBatch{isEnd: len(entries) < h.batchNum, offset: offset, cursor: nextCursor, entries: entries, indexes: indexes, maxName: maxName}, nil
+	return &dirBatch{isEnd: len(entries) < h.batchNum, offset: offset, cursor: nextCursor, entries: entries, indexes: indexes}, nil
 }
 
 func (h *dirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
@@ -3030,7 +3025,9 @@ func (h *dirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
 	return h.batch.entries[offset-h.batch.offset:], 0
 }
 
-func (h *dirHandler) delete(name string) {
+func (h *dirHandler) Delete(name string) {
+	h.Lock()
+	defer h.Unlock()
 	if h.batch == nil || len(h.batch.entries) == 0 {
 		return
 	}
@@ -3053,7 +3050,7 @@ func (h *dirHandler) Insert(inode Ino, name string, attr *Attr) {
 	if h.batch == nil {
 		return
 	}
-	if h.batch.isEnd || bytes.Compare([]byte(name), h.batch.maxName) < 0 {
+	if h.batch.isEnd || bytes.Compare([]byte(name), h.batch.cursor.([]byte)) < 0 {
 		// TODO: sorted
 		h.batch.entries = append(h.batch.entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
 		h.batch.indexes[name] = len(h.batch.entries) - 1

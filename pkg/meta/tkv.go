@@ -3797,12 +3797,6 @@ type kvDirHandler struct {
 	dirHandler
 }
 
-func (h *kvDirHandler) Delete(name string) {
-	h.Lock()
-	defer h.Unlock()
-	h.dirHandler.delete(name)
-}
-
 func (m *kvMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler {
 	s := &kvDirHandler{
 		dirHandler: dirHandler{

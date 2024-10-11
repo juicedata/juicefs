@@ -4469,28 +4469,6 @@ type dbDirHandler struct {
 	dirHandler
 }
 
-func (h *dbDirHandler) Insert(inode Ino, name string, attr *Attr) {
-	h.Lock()
-	defer h.Unlock()
-	if h.batch == nil {
-		return
-	}
-	if h.batch.isEnd || bytes.Compare([]byte(name), h.batch.maxName) < 0 {
-		h.batch.entries = append(h.batch.entries, &Entry{Inode: inode, Name: []byte(name), Attr: attr})
-		h.batch.indexes[name] = len(h.batch.entries) - 1
-	}
-}
-
-func (h *dbDirHandler) Delete(name string) {
-	h.Lock()
-	defer h.Unlock()
-
-	h.dirHandler.delete(name)
-	if h.batch != nil && !h.batch.isEnd && bytes.Compare(h.batch.maxName, []byte(name)) > 0 && h.batch.cursor != nil {
-		h.batch.cursor = h.batch.cursor.(int) - 1
-	}
-}
-
 func (m *dbMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler {
 	h := &dbDirHandler{
 		dirHandler: dirHandler{
@@ -4509,14 +4487,31 @@ func (m *dbMeta) getDirFetcher() dirFetcher {
 	return func(ctx Context, inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error) {
 		entries := make([]*Entry, 0, limit)
 		err := m.roTxn(func(s *xorm.Session) error {
-			iCursor := offset
+			var name []byte
 			if cursor != nil {
-				iCursor = cursor.(int)
+				name = cursor.([]byte)
+			} else {
+				if offset > 0 {
+					var edges []edge
+					if err := s.Table(&edge{}).Where("parent = ?", inode).Limit(1, offset-1).Find(&edges); err != nil {
+						return err
+					}
+					if len(edges) < 1 {
+						return nil
+					}
+					name = edges[0].Name
+				}
 			}
 
 			var ids []int64
+			var err error
 			// sorted by (parent, name) index
-			if err := s.Table(&edge{}).Cols("id").Where("parent = ?", inode).Limit(limit, iCursor).Find(&ids); err != nil {
+			if name == nil {
+				err = s.Table(&edge{}).Cols("id").Where("parent = ?", inode).Limit(limit).Find(&ids)
+			} else {
+				err = s.Table(&edge{}).Cols("id").Where("parent = ? and name > ?", inode, name).Limit(limit).Find(&ids)
+			}
+			if err != nil {
 				return err
 			}
 
@@ -4553,6 +4548,9 @@ func (m *dbMeta) getDirFetcher() dirFetcher {
 		if err != nil {
 			return nil, nil, err
 		}
-		return offset + len(entries), entries, nil
+		if len(entries) == 0 {
+			return nil, nil, nil
+		}
+		return entries[len(entries)-1].Name, entries, nil
 	}
 }
