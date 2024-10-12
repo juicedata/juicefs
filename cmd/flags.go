@@ -174,7 +174,6 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "max-readahead",
-			Value: "32M",
 			Usage: "max buffering for read ahead in MiB",
 		},
 		&cli.IntFlag{
