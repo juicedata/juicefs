@@ -702,7 +702,7 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 		readAheadTotal = int(conf.Chunk.BufferSize / 10 * 8) // 80% of total buffer
 	}
 	if conf.Chunk.Readahead > 0 {
-		readAheadMax = conf.Chunk.Readahead
+		readAheadMax = utils.Min(conf.Chunk.Readahead, readAheadTotal)
 	}
 	r := &dataReader{
 		m:              m,

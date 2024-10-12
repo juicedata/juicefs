@@ -172,6 +172,11 @@ func dataCacheFlags() []cli.Flag {
 			Value: "300M",
 			Usage: "total read/write buffering in MiB",
 		},
+		&cli.StringFlag{
+			Name:  "max-readahead",
+			Value: "32M",
+			Usage: "max buffering for read ahead in MiB",
+		},
 		&cli.IntFlag{
 			Name:  "prefetch",
 			Value: 1,
