@@ -418,7 +418,7 @@ func (f *fileReader) checkReadahead(block *frange) int {
 	seqdata := ses.total
 	readahead := ses.readahead
 	used := uint64(atomic.LoadInt64(&readBufferUsed))
-	if readahead == 0 && (block.off == 0 || seqdata > block.len) { // begin with read-ahead turned on
+	if readahead == 0 && f.r.blockSize <= f.r.readAheadMax && (block.off == 0 || seqdata > block.len) { // begin with read-ahead turned on
 		ses.readahead = f.r.blockSize
 	} else if readahead < f.r.readAheadMax && seqdata >= readahead && f.r.readAheadTotal-used > readahead*4 {
 		ses.readahead *= 2
