@@ -30,11 +30,14 @@ type Controller struct {
 	rs map[string]*request
 }
 
+func NewController() *Controller {
+	return &Controller{
+		rs: make(map[string]*request),
+	}
+}
+
 func (con *Controller) Execute(key string, fn func() (*Page, error)) (*Page, error) {
 	con.Lock()
-	if con.rs == nil {
-		con.rs = make(map[string]*request)
-	}
 	if c, ok := con.rs[key]; ok {
 		c.dups++
 		con.Unlock()
@@ -59,4 +62,16 @@ func (con *Controller) Execute(key string, fn func() (*Page, error)) (*Page, err
 	c.wg.Done()
 
 	return c.val, c.err
+}
+
+func (con *Controller) TryPiggyback(key string) (*Page, error) {
+	con.Lock()
+	if c, ok := con.rs[key]; ok {
+		c.dups++
+		con.Unlock()
+		c.wg.Wait()
+		return c.val, c.err
+	}
+	con.Unlock()
+	return nil, nil
 }
