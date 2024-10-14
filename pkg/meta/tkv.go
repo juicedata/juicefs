@@ -3797,12 +3797,6 @@ type kvDirHandler struct {
 	dirHandler
 }
 
-func (h *kvDirHandler) Delete(name string) {
-	h.Lock()
-	defer h.Unlock()
-	h.dirHandler.delete(name)
-}
-
 func (m *kvMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler {
 	s := &kvDirHandler{
 		dirHandler: dirHandler{
@@ -3828,7 +3822,7 @@ func (m *kvMeta) getDirFetcher() dirFetcher {
 			}
 		} else {
 			limit += 1 // skip the cursor
-			sCursor = cursor.(string)
+			sCursor = string(cursor.([]byte))
 		}
 		total += limit
 		startKey = m.entryKey(inode, sCursor)
@@ -3875,6 +3869,6 @@ func (m *kvMeta) getDirFetcher() dirFetcher {
 		if len(entries) == 0 {
 			return nil, nil, nil
 		}
-		return string(entries[len(entries)-1].Name), entries, nil
+		return entries[len(entries)-1].Name, entries, nil
 	}
 }
