@@ -715,7 +715,7 @@ func (cache *cacheStore) cleanupFull() {
 		if toFree > cache.used {
 			goal = 0
 		} else if cache.used-toFree < goal {
-			goal = cache.used - toFree
+			goal = (cache.used - toFree) * 95 / 100
 		}
 	}
 	if fr < cache.freeRatio {
@@ -724,7 +724,7 @@ func (cache *cacheStore) cleanupFull() {
 		if toFree > len(cache.keys) {
 			num = 0
 		} else {
-			num = len(cache.keys) - toFree
+			num = (len(cache.keys) - toFree) * 99 / 100
 		}
 	}
 
