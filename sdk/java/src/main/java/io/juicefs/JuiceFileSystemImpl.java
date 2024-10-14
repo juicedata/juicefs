@@ -316,6 +316,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     return makeQualified(path).toUri().getPath();
   }
 
+  @Override
   public String getScheme() {
     return uri.getScheme();
   }
@@ -810,6 +811,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     return res;
   }
 
+  @Override
   public BlockLocation[] getFileBlockLocations(FileStatus file, long start, long len) throws IOException {
     if (file == null) {
       return null;
@@ -1693,6 +1695,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
   }
 
+  @Override
   public void setXAttr(Path path, String name, byte[] value, EnumSet<XAttrSetFlag> flag) throws IOException {
     Pointer buf = Memory.allocate(Runtime.getRuntime(lib), value.length);
     buf.put(0, value, 0, value.length);
@@ -1710,6 +1713,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       throw error(r, path);
   }
 
+  @Override
   public byte[] getXAttr(Path path, String name) throws IOException {
     Pointer buf;
     int bufsize = 16 << 10;
@@ -1728,10 +1732,12 @@ public class JuiceFileSystemImpl extends FileSystem {
     return value;
   }
 
+  @Override
   public Map<String, byte[]> getXAttrs(Path path) throws IOException {
     return getXAttrs(path, listXAttrs(path));
   }
 
+  @Override
   public Map<String, byte[]> getXAttrs(Path path, List<String> names) throws IOException {
     Map<String, byte[]> result = new HashMap<String, byte[]>();
     for (String n : names) {
@@ -1743,6 +1749,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     return result;
   }
 
+  @Override
   public List<String> listXAttrs(Path path) throws IOException {
     Pointer buf;
     int bufsize = 1024;
@@ -1768,6 +1775,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     return result;
   }
 
+  @Override
   public void removeXAttr(Path path, String name) throws IOException {
     int r = lib.jfs_removeXattr(Thread.currentThread().getId(), handle, normalizePath(path), name);
     if (r == ENOATTR || r == ENODATA) {
