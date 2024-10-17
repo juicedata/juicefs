@@ -25,15 +25,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 
-	"github.com/juicedata/juicefs/pkg/metric"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/sync"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/urfave/cli/v2"
 )
 
@@ -263,6 +258,10 @@ func clusterFlags() []cli.Flag {
 			Name:  "manager-addr",
 			Usage: "the IP address to communicate with workers",
 		},
+		&cli.StringFlag{
+			Name:  "mq-addr",
+			Usage: "the address of the message queue",
+		},
 	})
 }
 
@@ -434,74 +433,11 @@ func isS3PathType(endpoint string) bool {
 }
 
 func doSync(c *cli.Context) error {
-	setup(c, 2)
+	setup(c, -1)
 	if c.IsSet("include") && !c.IsSet("exclude") {
 		logger.Warnf("The include option needs to be used with the exclude option, otherwise the result of the current sync may not match your expectations")
 	}
 	config := sync.NewConfigFromCli(c)
 
-	if config.Manager != "" {
-		logger.Debugf("worker process start")
-	}
-	// Windows support `\` and `/` as its separator, Unix only use `/`
-	srcURL := c.Args().Get(0)
-	dstURL := c.Args().Get(1)
-	removePassword(srcURL, dstURL)
-	if runtime.GOOS == "windows" {
-		if !strings.Contains(srcURL, "://") {
-			srcURL = strings.Replace(srcURL, "\\", "/", -1)
-		}
-		if !strings.Contains(dstURL, "://") {
-			dstURL = strings.Replace(dstURL, "\\", "/", -1)
-		}
-	}
-	if strings.HasSuffix(srcURL, "/") != strings.HasSuffix(dstURL, "/") {
-		logger.Fatalf("SRC and DST should both end with path separator or not!")
-	}
-	src, err := createSyncStorage(srcURL, config)
-	if err != nil {
-		return err
-	}
-	dst, err := createSyncStorage(dstURL, config)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		object.Shutdown(src)
-		object.Shutdown(dst)
-	}()
-	if config.StorageClass != "" {
-		if os, ok := dst.(object.SupportStorageClass); ok {
-			err := os.SetStorageClass(config.StorageClass)
-			if err != nil {
-				logger.Errorf("set storage class %s: %s", config.StorageClass, err)
-			}
-		}
-	}
-
-	if config.Manager == "" && !config.Dry {
-		var srcPath, dstPath string
-		if strings.HasPrefix(src.String(), "file://") {
-			srcPath = src.String()
-		}
-		if strings.HasPrefix(dst.String(), "file://") {
-			dstPath = dst.String()
-		}
-		srcPath = utils.RemovePassword(srcPath)
-		dstPath = utils.RemovePassword(dstPath)
-		registry := prometheus.NewRegistry()
-		config.Registerer = prometheus.WrapRegistererWithPrefix("juicefs_sync_",
-			prometheus.WrapRegistererWith(prometheus.Labels{"cmd": "sync", "pid": strconv.Itoa(os.Getpid())}, registry))
-		config.Registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-		config.Registerer.MustRegister(collectors.NewGoCollector())
-		metricsAddr := exposeMetrics(c, config.Registerer, registry)
-		if c.IsSet("consul") {
-			metadata := make(map[string]string)
-			metadata["src"] = srcPath
-			metadata["dst"] = dstPath
-			metadata["pid"] = strconv.Itoa(os.Getpid())
-			metric.RegisterToConsul(c.String("consul"), metricsAddr, metadata)
-		}
-	}
-	return sync.Sync(src, dst, config)
+	return sync.Sync(config)
 }

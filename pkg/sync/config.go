@@ -50,6 +50,7 @@ type Config struct {
 	Limit          int64
 	Manager        string
 	Workers        []string
+	MqAddr         string
 	ManagerAddr    string
 	ListThreads    int
 	ListDepth      int
@@ -165,6 +166,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Limit:          c.Int64("limit"),
 		Workers:        c.StringSlice("worker"),
 		ManagerAddr:    c.String("manager-addr"),
+		MqAddr:         c.String("mq-addr"),
 		Manager:        c.String("manager"),
 		BWLimit:        utils.ParseMbps(c, "bwlimit"),
 		NoHTTPS:        c.Bool("no-https"),

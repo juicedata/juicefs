@@ -23,11 +23,17 @@ import (
 
 type Object interface {
 	Key() string
+	SrcPrefix() string
+	DstPrefix() string
 	Size() int64
 	Mtime() time.Time
 	IsDir() bool
 	IsSymlink() bool
 	StorageClass() string
+	SrcAlias() string
+	DstAlias() string
+	TaskId() string
+	DstKey() string
 }
 
 type obj struct {
@@ -38,12 +44,30 @@ type obj struct {
 	sc    string
 }
 
+func (o *obj) SrcPrefix() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (o *obj) DstPrefix() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (o *obj) DstKey() string {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (o *obj) Key() string          { return o.key }
 func (o *obj) Size() int64          { return o.size }
 func (o *obj) Mtime() time.Time     { return o.mtime }
 func (o *obj) IsDir() bool          { return o.isDir }
 func (o *obj) IsSymlink() bool      { return false }
 func (o *obj) StorageClass() string { return o.sc }
+func (o *obj) SrcAlias() string     { return "" }
+func (o *obj) DstAlias() string     { return "" }
+func (o *obj) TaskId() string       { return "" }
 
 type MultipartUpload struct {
 	MinPartSize int

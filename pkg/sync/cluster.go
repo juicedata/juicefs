@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dustin/go-humanize"
+	"github.com/oliverisaac/shellescape"
 	"io"
 	"net"
 	"net/http"
@@ -31,10 +33,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
-
-	"github.com/dustin/go-humanize"
-	"github.com/oliverisaac/shellescape"
 
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -343,31 +341,4 @@ func unmarshalObjects(d []byte) ([]object.Object, error) {
 		objs = append(objs, object.UnmarshalObject(m))
 	}
 	return objs, nil
-}
-
-func fetchJobs(tasks chan<- object.Object, config *Config) {
-	for {
-		url := fmt.Sprintf("http://%s/fetch", config.Manager)
-		ans, err := httpRequest(url, nil)
-		if err != nil {
-			logger.Errorf("fetch jobs: %s", err)
-			time.Sleep(time.Second)
-			continue
-		}
-		var jobs []object.Object
-		jobs, err = unmarshalObjects(ans)
-		if err != nil {
-			logger.Errorf("Unmarshal %s: %s", string(ans), err)
-			time.Sleep(time.Second)
-			continue
-		}
-		logger.Debugf("got %d jobs", len(jobs))
-		if len(jobs) == 0 {
-			break
-		}
-		for _, obj := range jobs {
-			tasks <- obj
-		}
-	}
-	close(tasks)
 }

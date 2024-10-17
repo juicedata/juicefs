@@ -188,7 +188,25 @@ type jObj struct {
 	fi  *fs.FileStat
 }
 
-func (o *jObj) Key() string { return o.key }
+func (o *jObj) SrcPrefix() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (o *jObj) DstPrefix() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (o *jObj) DstKey() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (o *jObj) DstAlias() string { return "" }
+func (o *jObj) SrcAlias() string { return "" }
+func (o *jObj) TaskId() string   { return "" }
+func (o *jObj) Key() string      { return o.key }
 func (o *jObj) Size() int64 {
 	if o.fi.IsDir() {
 		return 0

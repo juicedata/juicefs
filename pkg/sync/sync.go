@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"os"
 	"path"
@@ -614,10 +615,25 @@ func copyData(src, dst object.ObjectStorage, key string, size int64) error {
 	return err
 }
 
-func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *Config) {
+func worker(tasks <-chan object.Object, config *Config) {
 	for obj := range tasks {
+		logger.Infof("Handling %s", obj.Key())
+		src, err := provider.GetProvider(obj.SrcAlias())
+		if err != nil {
+			logger.Errorf("Failed to get provider %s: %s", obj.SrcAlias(), err)
+			continue
+		}
+		dst, err := provider.GetProvider(obj.DstAlias())
+		if err != nil {
+			logger.Errorf("Failed to get provider %s: %s", obj.DstAlias(), err)
+			continue
+		}
+		src = object.WithPrefix(src, obj.SrcPrefix())
+		dst = object.WithPrefix(dst, obj.DstPrefix())
+
 		key := obj.Key()
-		switch obj.Size() {
+		size := obj.Size()
+		switch size {
 		case markDeleteSrc:
 			deleteObj(src, key, config.Dry)
 		case markDeleteDst:
@@ -1236,21 +1252,26 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	return nil
 }
 
+var mq MQ
+var provider ObjectProvider
+var syncConfig *Config
+
 // Sync syncs all the keys between to object storage
-func Sync(src, dst object.ObjectStorage, config *Config) error {
-	if strings.HasPrefix(src.String(), "file://") && strings.HasPrefix(dst.String(), "file://") {
-		major, minor := utils.GetKernelVersion()
-		// copy_file_range() system call first appeared in Linux 4.5, and reworked in 5.3
-		// Go requires kernel >= 5.3 to use copy_file_range(), see:
-		// https://github.com/golang/go/blob/go1.17.11/src/internal/poll/copy_file_range_linux.go#L58-L66
-		if major > 5 || (major == 5 && minor >= 3) {
-			d1 := utils.GetDev(src.String()[7:]) // remove prefix "file://"
-			d2 := utils.GetDev(dst.String()[7:])
-			if d1 != -1 && d1 == d2 {
-				object.TryCFR = true
-			}
-		}
-	}
+func Sync(config *Config) error {
+	syncConfig = config
+	//if strings.HasPrefix(src.String(), "file://") && strings.HasPrefix(dst.String(), "file://") {
+	//	major, minor := utils.GetKernelVersion()
+	//	// copy_file_range() system call first appeared in Linux 4.5, and reworked in 5.3
+	//	// Go requires kernel >= 5.3 to use copy_file_range(), see:
+	//	// https://github.com/golang/go/blob/go1.17.11/src/internal/poll/copy_file_range_linux.go#L58-L66
+	//	if major > 5 || (major == 5 && minor >= 3) {
+	//		d1 := utils.GetDev(src.String()[7:]) // remove prefix "file://"
+	//		d2 := utils.GetDev(dst.String()[7:])
+	//		if d1 != -1 && d1 == d2 {
+	//			object.TryCFR = true
+	//		}
+	//	}
+	//}
 
 	if config.Inplace {
 		object.PutInplace = true
@@ -1339,48 +1360,37 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}()
 
 	initSyncMetrics(config)
+	var err error
+	if config.MqAddr != "" {
+		mq, err = newMQ(config.MqAddr)
+		if err != nil {
+			return err
+		}
+		if err = mq.register(uuid.New().String()); err != nil {
+			logger.Errorf("register to mq failed: %s", err)
+			return err
+		}
+		provider = ObjectProvider{
+			ObjMap: make(map[string]object.ObjectStorage),
+			mq:     mq,
+		}
+	}
 	for i := 0; i < config.Threads; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			worker(tasks, src, dst, config)
+			worker(tasks, config)
 		}()
 	}
 
-	if len(config.Exclude) > 0 {
-		config.rules = parseIncludeRules(os.Args)
-	}
-
-	if config.Manager == "" {
-		if len(config.Workers) > 0 {
-			addr, err := startManager(config, tasks)
-			if err != nil {
-				return err
+	go func() {
+		for {
+			if err := mq.fetchJob(tasks); err != nil {
+				logger.Errorf("fetch job failed: %s", err)
+				continue
 			}
-			launchWorker(addr, config, &wg)
 		}
-		logger.Infof("Syncing from %s to %s", src, dst)
-		if config.Start != "" {
-			logger.Infof("first key: %q", config.Start)
-		}
-		if config.End != "" {
-			logger.Infof("last key: %q", config.End)
-		}
-		config.concurrentList = make(chan int, config.ListThreads)
-		err := startProducer(tasks, src, dst, "", config)
-		if err != nil {
-			return err
-		}
-		close(tasks)
-	} else {
-		go fetchJobs(tasks, config)
-		go func() {
-			for {
-				sendStats(config.Manager)
-				time.Sleep(time.Second)
-			}
-		}()
-	}
+	}()
 
 	wg.Wait()
 	return syncExitFunc()
