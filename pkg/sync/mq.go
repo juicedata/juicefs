@@ -253,7 +253,7 @@ func (p *ObjectProvider) GetProvider(alias string) (object.ObjectStorage, error)
 		if err != nil {
 			return nil, err
 		}
-		storage, err := object.CreateStorage(info.Type, info.Endpoint, info.AccessKey, info.SecretKey, "")
+		storage, err = object.CreateStorage(info.Type, info.Endpoint, info.AccessKey, info.SecretKey, "")
 		if err != nil {
 			return nil, err
 		}
@@ -283,14 +283,16 @@ func (t *TaskInfo) Key() string {
 
 func (t *TaskInfo) SrcPrefix() string {
 	if t.KeyO != "" {
-		return path.Dir(t.KeyO)
+		if !strings.HasSuffix(path.Dir(t.KeyO), "/") {
+			return path.Dir(t.KeyO) + "/"
+		}
 	}
 	return "/"
 }
 
 func (t *TaskInfo) DstPrefix() string {
-	if t.DstKeyO != "" {
-		return path.Dir(t.DstKeyO)
+	if !strings.HasSuffix(path.Dir(t.DstKeyO), "/") {
+		return path.Dir(t.DstKeyO) + "/"
 	}
 	return "/"
 }
@@ -433,20 +435,24 @@ func (r *redisMQ) fetchJob(taskCh chan<- object.Object) error {
 				logger.Errorf("parse time %s: %s", message.Values["mtime"], err)
 				continue
 			}
-
-			taskCh <- &withSize{
-				Object: &TaskInfo{
-					TaskIdO: message.ID,
-					KeyO:    message.Values["key"].(string),
-					DstKeyO: message.Values["dstKey"].(string),
-					SizeO:   size,
-					MtimeO:  t,
-					IsDirO:  parseBool,
-					ScO:     message.Values["sc"].(string),
-					SrcType: message.Values["srcAlias"].(string),
-					DstType: message.Values["dstAlias"].(string),
-				},
-				nsize: op,
+			tInfo := &TaskInfo{
+				TaskIdO: message.ID,
+				KeyO:    message.Values["key"].(string),
+				DstKeyO: message.Values["dstKey"].(string),
+				SizeO:   size,
+				MtimeO:  t,
+				IsDirO:  parseBool,
+				ScO:     message.Values["sc"].(string),
+				SrcType: message.Values["srcAlias"].(string),
+				DstType: message.Values["dstAlias"].(string),
+			}
+			if op != 0 {
+				taskCh <- &withSize{
+					Object: tInfo,
+					nsize:  op,
+				}
+			} else {
+				taskCh <- tInfo
 			}
 		}
 	}

@@ -618,18 +618,18 @@ func copyData(src, dst object.ObjectStorage, key string, size int64) error {
 func worker(tasks <-chan object.Object, config *Config) {
 	for obj := range tasks {
 		logger.Infof("Handling %s", obj.Key())
-		src, err := provider.GetProvider(obj.SrcAlias())
+		srcO, err := provider.GetProvider(obj.SrcAlias())
 		if err != nil {
 			logger.Errorf("Failed to get provider %s: %s", obj.SrcAlias(), err)
 			continue
 		}
-		dst, err := provider.GetProvider(obj.DstAlias())
+		dstO, err := provider.GetProvider(obj.DstAlias())
 		if err != nil {
 			logger.Errorf("Failed to get provider %s: %s", obj.DstAlias(), err)
 			continue
 		}
-		src = object.WithPrefix(src, obj.SrcPrefix())
-		dst = object.WithPrefix(dst, obj.DstPrefix())
+		src := object.WithPrefix(srcO, obj.SrcPrefix())
+		dst := object.WithPrefix(dstO, obj.DstPrefix())
 
 		key := obj.Key()
 		size := obj.Size()

@@ -477,6 +477,10 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 			}
 		}()
 	}
+	err = o.bucket.PutObject("afile", strings.NewReader("test"))
+	if err != nil {
+		return nil, fmt.Errorf("Cannot access bucket %s: %s", bucketName, err)
+	}
 	return o, nil
 }
 
