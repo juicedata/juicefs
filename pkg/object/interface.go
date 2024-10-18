@@ -23,8 +23,7 @@ import (
 
 type Object interface {
 	Key() string
-	SrcPrefix() string
-	DstPrefix() string
+	DstKey() string
 	Size() int64
 	Mtime() time.Time
 	IsDir() bool
@@ -33,7 +32,6 @@ type Object interface {
 	SrcAlias() string
 	DstAlias() string
 	TaskId() string
-	DstKey() string
 }
 
 type obj struct {

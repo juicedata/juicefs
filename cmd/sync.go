@@ -262,6 +262,14 @@ func clusterFlags() []cli.Flag {
 			Name:  "mq-addr",
 			Usage: "the address of the message queue",
 		},
+		&cli.StringFlag{
+			Name:  "group",
+			Usage: "the consumer group name of the message queue",
+		},
+		&cli.StringFlag{
+			Name:  "consumer",
+			Usage: "the consumer name of the message queue",
+		},
 	})
 }
 

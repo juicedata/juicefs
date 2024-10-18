@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"io"
 	"os"
 	"path"
@@ -217,13 +216,14 @@ func needCopyPerms(o1, o2 object.Object) bool {
 func copyPerms(dst object.ObjectStorage, obj object.Object, config *Config) {
 	start := time.Now()
 	key := obj.Key()
+	dstKey := obj.DstKey()
 	fi := obj.(object.File)
 	// chmod needs to be executed after chown, because chown will change setuid setgid to be invalid.
-	if err := dst.(object.FileSystem).Chown(key, fi.Owner(), fi.Group()); err != nil {
+	if err := dst.(object.FileSystem).Chown(dstKey, fi.Owner(), fi.Group()); err != nil {
 		logger.Warnf("Chown %s to (%s,%s): %s", key, fi.Owner(), fi.Group(), err)
 	}
 	if !fi.IsSymlink() || !config.Links {
-		if err := dst.(object.FileSystem).Chmod(key, fi.Mode()); err != nil {
+		if err := dst.(object.FileSystem).Chmod(dstKey, fi.Mode()); err != nil {
 			logger.Warnf("Chmod %s to %o: %s", key, fi.Mode(), err)
 		}
 	}
@@ -231,6 +231,7 @@ func copyPerms(dst object.ObjectStorage, obj object.Object, config *Config) {
 }
 
 func doCheckSum(src, dst object.ObjectStorage, key string, obj object.Object, config *Config, equal *bool) error {
+	dstKey := obj.DstKey()
 	if obj.IsSymlink() && config.Links && (config.CheckAll || config.CheckNew) {
 		var srcLink, dstLink string
 		var err error
@@ -265,7 +266,7 @@ func doCheckSum(src, dst object.ObjectStorage, key string, obj object.Object, co
 			return fmt.Errorf("src get: %s", err)
 		}
 		defer in.Close()
-		in2, err := dst.Get(key, offset, length)
+		in2, err := dst.Get(dstKey, offset, length)
 		if err != nil {
 			return fmt.Errorf("dest get: %s", err)
 		}
@@ -354,7 +355,7 @@ func inMap(obj object.ObjectStorage, m map[string]struct{}) bool {
 	return ok
 }
 
-func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
+func doCopySingle(src, dst object.ObjectStorage, key string, dstKey string, size int64) error {
 	if size > maxBlock && !inMap(dst, readInMem) && !inMap(src, fastStreamRead) {
 		var err error
 		var in io.Reader
@@ -367,7 +368,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 			// download the object into disk
 			if f, err = os.CreateTemp("", "rep"); err != nil {
 				logger.Warnf("create temp file: %s", err)
-				return doCopySingle0(src, dst, key, size)
+				return doCopySingle0(src, dst, key, dstKey, size)
 			}
 			_ = os.Remove(f.Name()) // will be deleted after Close()
 			defer f.Close()
@@ -379,7 +380,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 			}
 		}
 		if err == nil {
-			err = dst.Put(key, in)
+			err = dst.Put(dstKey, in)
 		}
 		if err != nil {
 			if _, e := src.Head(key); os.IsNotExist(e) {
@@ -390,10 +391,10 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 		}
 		return err
 	}
-	return doCopySingle0(src, dst, key, size)
+	return doCopySingle0(src, dst, key, dstKey, size)
 }
 
-func doCopySingle0(src, dst object.ObjectStorage, key string, size int64) error {
+func doCopySingle0(src, dst object.ObjectStorage, key string, dstKey string, size int64) error {
 	concurrent <- 1
 	defer func() {
 		<-concurrent
@@ -422,7 +423,7 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64) error 
 		}
 	}
 	defer in.Close()
-	return dst.Put(key, &withProgress{in})
+	return dst.Put(dstKey, &withProgress{in})
 }
 
 type withProgress struct {
@@ -438,7 +439,7 @@ func (w *withProgress) Read(b []byte) (int, error) {
 	return n, err
 }
 
-func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64, key, uploadID string, num int) (*object.Part, error) {
+func doUploadPart(src, dst object.ObjectStorage, srckey string, dstKey string, off, size int64, key, uploadID string, num int) (*object.Part, error) {
 	if limiter != nil {
 		limiter.Wait(size)
 	}
@@ -458,7 +459,7 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 			return err
 		}
 		// PartNumber starts from 1
-		part, err = dst.UploadPart(key, uploadID, num+1, data)
+		part, err = dst.UploadPart(dstKey, uploadID, num+1, data)
 		return err
 	})
 	if err != nil {
@@ -482,7 +483,7 @@ func choosePartSize(upload *object.MultipartUpload, size int64) int64 {
 	return partSize
 }
 
-func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upload *object.MultipartUpload, num int, abort chan struct{}) (*object.Part, error) {
+func doCopyRange(src, dst object.ObjectStorage, key string, dstKey string, off, size int64, upload *object.MultipartUpload, num int, abort chan struct{}) (*object.Part, error) {
 	select {
 	case <-abort:
 		return nil, fmt.Errorf("aborted")
@@ -494,10 +495,10 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 
 	limits := dst.Limits()
 	if size <= 32<<20 || !limits.IsSupportUploadPartCopy {
-		return doUploadPart(src, dst, key, off, size, key, upload.UploadID, num)
+		return doUploadPart(src, dst, key, dstKey, off, size, key, upload.UploadID, num)
 	}
 
-	tmpkey := fmt.Sprintf("%s.part%d", key, num)
+	tmpkey := fmt.Sprintf("%s.part%d", dstKey, num)
 	var up *object.MultipartUpload
 	var err error
 	err = try(3, func() error {
@@ -524,7 +525,7 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 			return nil, fmt.Errorf("aborted")
 		default:
 		}
-		parts[i], err = doUploadPart(src, dst, key, off+int64(i)*partSize, sz, tmpkey, up.UploadID, i)
+		parts[i], err = doUploadPart(src, dst, key, dstKey, off+int64(i)*partSize, sz, tmpkey, up.UploadID, i)
 		if err != nil {
 			dst.AbortUpload(tmpkey, up.UploadID)
 			return nil, fmt.Errorf("range(%d,%d): %s", off, size, err)
@@ -538,14 +539,14 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 	}
 	var part *object.Part
 	err = try(3, func() error {
-		part, err = dst.UploadPartCopy(key, upload.UploadID, num+1, tmpkey, 0, size)
+		part, err = dst.UploadPartCopy(dstKey, upload.UploadID, num+1, tmpkey, 0, size)
 		return err
 	})
 	_ = dst.Delete(tmpkey)
 	return part, err
 }
 
-func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload) error {
+func doCopyMultiple(src, dst object.ObjectStorage, key string, dstKey string, size int64, upload *object.MultipartUpload) error {
 	limits := dst.Limits()
 	if size > limits.MaxPartSize*int64(upload.MaxCount) {
 		return fmt.Errorf("object size %d is too large to copy", size)
@@ -566,7 +567,7 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 				sz = size - int64(num)*partSize
 			}
 			var copyErr error
-			parts[num], copyErr = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort)
+			parts[num], copyErr = doCopyRange(src, dst, key, dstKey, int64(num)*partSize, sz, upload, num, abort)
 			errs <- copyErr
 		}(i)
 	}
@@ -578,37 +579,37 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 		}
 	}
 	if err == nil {
-		err = try(3, func() error { return dst.CompleteUpload(key, upload.UploadID, parts) })
+		err = try(3, func() error { return dst.CompleteUpload(dstKey, upload.UploadID, parts) })
 	}
 	if err != nil {
-		dst.AbortUpload(key, upload.UploadID)
+		dst.AbortUpload(dstKey, upload.UploadID)
 		return fmt.Errorf("multipart: %s", err)
 	}
 	return nil
 }
 
-func copyData(src, dst object.ObjectStorage, key string, size int64) error {
+func copyData(src, dst object.ObjectStorage, key string, dstKey string, size int64) error {
 	start := time.Now()
 	var err error
 	if size < maxBlock {
-		err = try(3, func() error { return doCopySingle(src, dst, key, size) })
+		err = try(3, func() error { return doCopySingle(src, dst, key, dstKey, size) })
 	} else {
 		var upload *object.MultipartUpload
-		if upload, err = dst.CreateMultipartUpload(key); err == nil {
-			err = doCopyMultiple(src, dst, key, size, upload)
+		if upload, err = dst.CreateMultipartUpload(dstKey); err == nil {
+			err = doCopyMultiple(src, dst, key, dstKey, size, upload)
 		} else if err == utils.ENOTSUP {
-			err = try(3, func() error { return doCopySingle(src, dst, key, size) })
+			err = try(3, func() error { return doCopySingle(src, dst, key, dstKey, size) })
 		} else { // other error retry
 			if err = try(2, func() error {
-				upload, err = dst.CreateMultipartUpload(key)
+				upload, err = dst.CreateMultipartUpload(dstKey)
 				return err
 			}); err == nil {
-				err = doCopyMultiple(src, dst, key, size, upload)
+				err = doCopyMultiple(src, dst, key, dstKey, size, upload)
 			}
 		}
 	}
 	if err == nil {
-		logger.Debugf("Copied data of %s (%d bytes) in %s", key, size, time.Since(start))
+		logger.Debugf("Copied data of %s->%s (%d bytes) in %s", key, dstKey, size, time.Since(start))
 	} else {
 		logger.Errorf("Failed to copy data of %s in %s: %s", key, time.Since(start), err)
 	}
@@ -617,27 +618,28 @@ func copyData(src, dst object.ObjectStorage, key string, size int64) error {
 
 func worker(tasks <-chan object.Object, config *Config) {
 	for obj := range tasks {
-		logger.Infof("Handling %s", obj.Key())
-		srcO, err := provider.GetProvider(obj.SrcAlias())
+		status, err := mq.getTaskStatus(obj.TaskId())
+		status.StartTime = time.Now()
+		logger.Debugf("Handling %s, %s->%s  size: %d", obj.TaskId(), obj.Key(), obj.DstKey(), obj.Size())
+		src, err := provider.GetProvider(obj.SrcAlias())
 		if err != nil {
 			logger.Errorf("Failed to get provider %s: %s", obj.SrcAlias(), err)
 			continue
 		}
-		dstO, err := provider.GetProvider(obj.DstAlias())
+		dst, err := provider.GetProvider(obj.DstAlias())
 		if err != nil {
 			logger.Errorf("Failed to get provider %s: %s", obj.DstAlias(), err)
 			continue
 		}
-		src := object.WithPrefix(srcO, obj.SrcPrefix())
-		dst := object.WithPrefix(dstO, obj.DstPrefix())
 
 		key := obj.Key()
+		dstKey := obj.DstKey()
 		size := obj.Size()
 		switch size {
 		case markDeleteSrc:
 			deleteObj(src, key, config.Dry)
 		case markDeleteDst:
-			deleteObj(dst, key, config.Dry)
+			deleteObj(dst, dstKey, config.Dry)
 		case markCopyPerms:
 			if config.Dry {
 				logger.Debugf("Will copy permissions for %s", key)
@@ -653,6 +655,8 @@ func worker(tasks <-chan object.Object, config *Config) {
 			}
 			obj = obj.(*withSize).Object
 			if equal, err := checkSum(src, dst, key, obj, config); err != nil {
+				status.ExitCode = "1"
+				status.Message = fmt.Sprintf("failed to checkSum object %s: %s", key, err)
 				failed.Increment()
 				break
 			} else if equal {
@@ -668,6 +672,8 @@ func worker(tasks <-chan object.Object, config *Config) {
 							skippedBytes.IncrInt64(obj.Size())
 						}
 					} else {
+						status.ExitCode = "1"
+						status.Message = fmt.Sprintf("failed to head object %s: %s", key, e)
 						logger.Warnf("Failed to head object %s: %s", key, e)
 						failed.Increment()
 					}
@@ -688,11 +694,11 @@ func worker(tasks <-chan object.Object, config *Config) {
 			}
 			var err error
 			if config.Links && obj.IsSymlink() {
-				if err = copyLink(src, dst, key); err != nil {
+				if err = copyLink(src, dst, key, dstKey); err != nil {
 					logger.Errorf("copy link failed: %s", err)
 				}
 			} else {
-				err = copyData(src, dst, key, obj.Size())
+				err = copyData(src, dst, key, dstKey, obj.Size())
 			}
 
 			if err == nil && (config.CheckAll || config.CheckNew) {
@@ -703,7 +709,7 @@ func worker(tasks <-chan object.Object, config *Config) {
 			}
 			if err == nil {
 				if mc, ok := dst.(object.MtimeChanger); ok {
-					if err = mc.Chtimes(obj.Key(), obj.Mtime()); err != nil && !errors.Is(err, utils.ENOTSUP) {
+					if err = mc.Chtimes(obj.DstKey(), obj.Mtime()); err != nil && !errors.Is(err, utils.ENOTSUP) {
 						logger.Warnf("Update mtime of %s: %s", key, err)
 					}
 				}
@@ -712,24 +718,39 @@ func worker(tasks <-chan object.Object, config *Config) {
 				}
 				copied.Increment()
 			} else {
+				status.ExitCode = "1"
+				status.Message = err.Error()
 				failed.Increment()
 				logger.Errorf("Failed to copy object %s: %s", key, err)
 			}
+		}
+		status.EndTime = time.Now()
+		if status.ExitCode == "" {
+			status.ExitCode = "0"
+			status.Message = "success"
+		}
+
+		if err = mq.ackTask(status.TaskId); err != nil {
+			logger.Errorf("Failed to ack task %s: %s", status.TaskId, err)
+		}
+
+		if err = mq.updateTaskStatus(status); err != nil {
+			logger.Errorf("Failed to update task %s status: %s", status.TaskId, err)
 		}
 		handled.Increment()
 	}
 }
 
-func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) error {
+func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string, dstKey string) error {
 	if p, err := src.(object.SupportSymlink).Readlink(key); err != nil {
 		return err
 	} else {
-		if err := dst.Delete(key); err != nil {
-			logger.Debugf("Deleted %s from %s ", key, dst)
+		if err := dst.Delete(dstKey); err != nil {
+			logger.Debugf("Deleted %s from %s ", dstKey, dst)
 			return err
 		}
 		// TODO: use relative path based on option
-		return dst.(object.SupportSymlink).Symlink(p, key)
+		return dst.(object.SupportSymlink).Symlink(p, dstKey)
 	}
 }
 
@@ -1253,7 +1274,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 }
 
 var mq MQ
-var provider ObjectProvider
+var provider storageProvider
 var syncConfig *Config
 
 // Sync syncs all the keys between to object storage
@@ -1296,13 +1317,10 @@ func Sync(config *Config) error {
 	pending = progress.AddCountSpinner("Pending objects")
 	copied = progress.AddCountSpinner("Copied objects")
 	copiedBytes = progress.AddByteSpinner("Copied bytes")
-	if config.CheckAll || config.CheckNew {
-		checked = progress.AddCountSpinner("Checked objects")
-		checkedBytes = progress.AddByteSpinner("Checked bytes")
-	}
-	if config.DeleteSrc || config.DeleteDst {
-		deleted = progress.AddCountSpinner("Deleted objects")
-	}
+
+	checked = progress.AddCountSpinner("Checked objects")
+	checkedBytes = progress.AddByteSpinner("Checked bytes")
+	deleted = progress.AddCountSpinner("Deleted objects")
 
 	syncExitFunc := func() error {
 		pending.SetCurrent(0)
@@ -1366,11 +1384,11 @@ func Sync(config *Config) error {
 		if err != nil {
 			return err
 		}
-		if err = mq.register(uuid.New().String()); err != nil {
+		if err = mq.register(); err != nil {
 			logger.Errorf("register to mq failed: %s", err)
 			return err
 		}
-		provider = ObjectProvider{
+		provider = storageProvider{
 			ObjMap: make(map[string]object.ObjectStorage),
 			mq:     mq,
 		}
@@ -1385,13 +1403,13 @@ func Sync(config *Config) error {
 
 	go func() {
 		for {
-			if err := mq.fetchJob(tasks); err != nil {
-				logger.Errorf("fetch job failed: %s", err)
+			if err := mq.fetchTask(tasks); err != nil {
+				logger.Errorf("fetch task failed: %s", err)
 				continue
 			}
+			time.Sleep(time.Second)
 		}
 	}()
-
 	wg.Wait()
 	return syncExitFunc()
 }
