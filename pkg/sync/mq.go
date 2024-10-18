@@ -53,10 +53,11 @@ type TaskStatus struct {
 	DstAlias     string
 	Operate      int
 
-	StartTime time.Time
-	EndTime   time.Time
-	ExitCode  string
-	Message   string
+	EnqueueTime time.Time
+	StartTime   time.Time
+	EndTime     time.Time
+	ExitCode    string
+	Message     string
 }
 
 type StorageInfo struct {
