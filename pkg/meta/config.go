@@ -78,6 +78,9 @@ type Format struct {
 	Bucket           string
 	AccessKey        string `json:",omitempty"`
 	SecretKey        string `json:",omitempty"`
+	CaCerts          string `json:",omitempty"`
+	SslCert          string `json:",omitempty"`
+	SslKey           string `json:",omitempty"`
 	SessionToken     string `json:",omitempty"`
 	BlockSize        int
 	Compression      string `json:",omitempty"`

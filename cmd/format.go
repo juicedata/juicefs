@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -140,6 +141,18 @@ func formatStorageFlags() []cli.Flag {
 			Name:  "storage-class",
 			Usage: "the default storage class",
 		},
+		&cli.StringFlag{
+			Name:  "ca-certs",
+			Usage: "Path to SSL CA certificate file",
+		},
+		&cli.StringFlag{
+			Name:  "ssl-cert",
+			Usage: "Path to client own SSL certificate file",
+		},
+		&cli.StringFlag{
+			Name:  "ssl-key",
+			Usage: "Path to client own SSL certificate private key file",
+		},
 	})
 }
 
@@ -234,6 +247,28 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 			u.RawQuery = values.Encode()
 			format.Bucket = u.String()
 		}
+	}
+
+	// Configure client TLS when params are provided
+	if format.CaCerts != "" && format.SslCert != "" && format.SslKey != "" {
+
+		clientTLSCert, err := tls.LoadX509KeyPair(format.SslCert, format.SslKey)
+		if err != nil {
+			return nil, fmt.Errorf("error loading certificate and key file: %s", err.Error())
+		}
+
+		certPool := x509.NewCertPool()
+		caCertPEM, err := os.ReadFile(format.CaCerts)
+		if err != nil {
+			return nil, fmt.Errorf("error loading CA cert file: %s", err.Error())
+		}
+
+		if certAdded := certPool.AppendCertsFromPEM(caCertPEM); !certAdded {
+			return nil, fmt.Errorf("error appending CA cert to pool: %s", err.Error())
+		}
+
+		object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig.RootCAs = certPool
+		object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
 	}
 
 	if format.Shards > 1 {
@@ -399,6 +434,12 @@ func format(c *cli.Context) error {
 					logger.Warnf("decrypt secrets: %s", err)
 				}
 				format.SecretKey = c.String(flag)
+			case "ca-certs":
+				format.CaCerts = c.String(flag)
+			case "ssl-cert":
+				format.SslCert = c.String(flag)
+			case "ssl-key":
+				format.SslKey = c.String(flag)
 			case "session-token":
 				encrypted = format.KeyEncrypted
 				if err := format.Decrypt(); err != nil && strings.Contains(err.Error(), "secret was removed") {
@@ -431,6 +472,9 @@ func format(c *cli.Context) error {
 			Bucket:           c.String("bucket"),
 			AccessKey:        c.String("access-key"),
 			SecretKey:        c.String("secret-key"),
+			CaCerts:          c.String("ca-certs"),
+			SslCert:          c.String("ssl-cert"),
+			SslKey:           c.String("ssl-key"),
 			SessionToken:     c.String("session-token"),
 			EncryptKey:       loadEncrypt(c.String("encrypt-rsa-key")),
 			EncryptAlgo:      c.String("encrypt-algo"),
