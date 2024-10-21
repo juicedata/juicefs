@@ -534,7 +534,6 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 	awsConfig := &aws.Config{
 		Region:     &region,
 		DisableSSL: aws.Bool(!ssl),
-		HTTPClient: httpClient,
 	}
 
 	disable100Continue := strings.EqualFold(uri.Query().Get("disable-100-continue"), "true")
@@ -567,7 +566,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		return nil, fmt.Errorf("Fail to create aws session: %s", err)
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &s3client{bucket: bucketName, s3: s3.New(ses), ses: ses, disableChecksum: disableChecksum}, nil
+	return &s3client{bucket: bucketName, s3: s3.New(ses, aws.NewConfig().WithHTTPClient(httpClient)), ses: ses, disableChecksum: disableChecksum}, nil
 }
 
 func init() {
