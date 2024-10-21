@@ -901,12 +901,12 @@ func testReaddirCache(t *testing.T, metaUri string, typ string, batchNum int) {
 	}
 	parent := entry.Inode
 	for i := 0; i <= 100; i++ {
-		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
+		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%03d", i), 0777, 022)
 	}
 
 	defer func() {
 		for i := 0; i <= 120; i++ {
-			_ = v.Rmdir(ctx, parent, fmt.Sprintf("d%d", i))
+			_ = v.Rmdir(ctx, parent, fmt.Sprintf("d%03d", i))
 		}
 		_ = v.Rmdir(ctx, 1, "testdir")
 	}()
@@ -922,16 +922,28 @@ func testReaddirCache(t *testing.T, metaUri string, typ string, batchNum int) {
 	}
 
 	off := num + initNum
+	{
+		entries, _, _ = v.Readdir(ctx, parent, 20, off, fh, true) // read next 20
+		v.UpdateReaddirOffset(ctx, parent, fh, off+1)             // but readdir buffer is too full to return all entries
+		name := fmt.Sprintf("d%03d", off+2)
+		_ = v.Rmdir(ctx, parent, name)
+		entries, _, _ = v.Readdir(ctx, parent, 20, off, fh, true) // should only get 19 entries
+		for _, e := range entries {
+			if string(e.Name) == name {
+				t.Fatalf("dir %s should be deleted", name)
+			}
+		}
+	}
 	v.UpdateReaddirOffset(ctx, parent, fh, off)
 	for i := 0; i < 100; i += 10 {
-		name := fmt.Sprintf("d%d", i)
+		name := fmt.Sprintf("d%03d", i)
 		_ = v.Rmdir(ctx, parent, name)
 		delete(files, name)
 	}
 	for i := 100; i < 110; i++ {
-		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
-		_ = v.Rename(ctx, parent, fmt.Sprintf("d%d", i), parent, fmt.Sprintf("d%d", i+10), 0)
-		delete(files, fmt.Sprintf("d%d", i))
+		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%03d", i), 0777, 022)
+		_ = v.Rename(ctx, parent, fmt.Sprintf("d%03d", i), parent, fmt.Sprintf("d%03d", i+10), 0)
+		delete(files, fmt.Sprintf("d%03d", i))
 	}
 	for {
 		entries, _, _ := v.Readdir(ctx, parent, 20, off, fh, true)
@@ -952,19 +964,19 @@ func testReaddirCache(t *testing.T, metaUri string, typ string, batchNum int) {
 		v.UpdateReaddirOffset(ctx, parent, fh, off)
 	}
 	for i := 0; i < 100; i += 10 {
-		name := fmt.Sprintf("d%d", i)
+		name := fmt.Sprintf("d%03d", i)
 		if _, ok := files[name]; ok {
 			t.Fatalf("dir %s should be deleted", name)
 		}
 	}
 	for i := 100; i < 110; i++ {
-		name := fmt.Sprintf("d%d", i)
+		name := fmt.Sprintf("d%03d", i)
 		if _, ok := files[name]; ok {
 			t.Fatalf("dir %s should be deleted", name)
 		}
 	}
 	for i := 110; i < 120; i++ {
-		name := fmt.Sprintf("d%d", i)
+		name := fmt.Sprintf("d%03d", i)
 		if _, ok := files[name]; !ok {
 			t.Fatalf("dir %s should be added", name)
 		}
