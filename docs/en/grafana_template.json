@@ -24,6 +24,119 @@
   "panels": [
     {
       "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "uptime"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-YlBl"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 31,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "10.2.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P3DC81DD2E812B130"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sort(max(juicefs_uptime{vol_name=\"$name\"}) by (instance, juicefs_version))",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Uptime",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "includeByName": {},
+            "indexByName": {},
+            "renameByName": {
+              "Value": "uptime",
+              "instance": "",
+              "juicefs_version": "version"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
         "uid": "$datasource"
       },
       "description": "",
@@ -86,7 +199,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 0
+        "y": 7
       },
       "id": 2,
       "options": {
@@ -186,7 +299,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 0
+        "y": 7
       },
       "id": 4,
       "options": {
@@ -285,7 +398,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 0
+        "y": 7
       },
       "id": 5,
       "options": {
@@ -385,7 +498,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 6
+        "y": 13
       },
       "id": 8,
       "options": {
@@ -484,7 +597,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 6
+        "y": 13
       },
       "id": 7,
       "options": {
@@ -595,7 +708,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 6
+        "y": 13
       },
       "id": 18,
       "options": {
@@ -693,7 +806,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 12
+        "y": 19
       },
       "id": 13,
       "options": {
@@ -790,7 +903,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 12
+        "y": 19
       },
       "id": 14,
       "options": {
@@ -888,7 +1001,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 12
+        "y": 19
       },
       "id": 20,
       "options": {
@@ -984,7 +1097,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 18
+        "y": 25
       },
       "id": 15,
       "options": {
@@ -1093,7 +1206,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 18
+        "y": 25
       },
       "id": 17,
       "options": {
@@ -1215,7 +1328,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 18
+        "y": 25
       },
       "id": 16,
       "options": {
@@ -1312,7 +1425,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 24
+        "y": 31
       },
       "id": 10,
       "options": {
@@ -1410,7 +1523,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 24
+        "y": 31
       },
       "id": 11,
       "options": {
@@ -1507,7 +1620,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 24
+        "y": 31
       },
       "id": 21,
       "options": {
@@ -1605,7 +1718,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 30
+        "y": 37
       },
       "id": 22,
       "options": {
@@ -1704,7 +1817,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 30
+        "y": 37
       },
       "id": 23,
       "options": {
@@ -1803,7 +1916,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 30
+        "y": 37
       },
       "id": 24,
       "options": {
@@ -1915,7 +2028,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 36
+        "y": 43
       },
       "id": 25,
       "options": {
@@ -2014,7 +2127,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 36
+        "y": 43
       },
       "id": 26,
       "options": {
@@ -2113,7 +2226,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 36
+        "y": 43
       },
       "id": 27,
       "options": {
@@ -2212,7 +2325,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 42
+        "y": 49
       },
       "id": 28,
       "options": {
@@ -2307,7 +2420,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 42
+        "y": 49
       },
       "id": 29,
       "options": {
@@ -2403,7 +2516,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 42
+        "y": 49
       },
       "id": 30,
       "options": {
