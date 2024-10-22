@@ -39,9 +39,7 @@ func (s *space) String() string {
 }
 
 func (s *space) Limits() Limits {
-	return Limits{
-		IsSupportMultipartUpload: true,
-	}
+	return s.s3client.Limits()
 }
 
 func newSpace(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
