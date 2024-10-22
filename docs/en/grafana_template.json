@@ -426,7 +426,7 @@
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "Sessions",
+          "legendFormat": "{{juicefs_version}}",
           "range": true,
           "refId": "A"
         }
