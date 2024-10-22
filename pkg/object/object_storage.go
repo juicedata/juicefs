@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"plugin"
 	"strings"
 	"sync"
 	"time"
@@ -56,7 +57,7 @@ type onlyWriter struct {
 }
 
 type file struct {
-	obj
+	Obj
 	owner     string
 	group     string
 	mode      os.FileMode
@@ -70,9 +71,9 @@ func (f *file) IsSymlink() bool   { return f.isSymlink }
 
 func MarshalObject(o Object) map[string]interface{} {
 	m := make(map[string]interface{})
-	m["key"] = o.Key()
+	m["Key_"] = o.Key()
 	m["size"] = o.Size()
-	m["mtime"] = o.Mtime().UnixNano()
+	m["Mtime_"] = o.Mtime().UnixNano()
 	m["isdir"] = o.IsDir()
 	if f, ok := o.(File); ok {
 		m["mode"] = f.Mode()
@@ -84,12 +85,12 @@ func MarshalObject(o Object) map[string]interface{} {
 }
 
 func UnmarshalObject(m map[string]interface{}) Object {
-	mtime := time.Unix(0, int64(m["mtime"].(float64)))
-	o := obj{
-		key:   m["key"].(string),
-		size:  int64(m["size"].(float64)),
-		mtime: mtime,
-		isDir: m["isdir"].(bool)}
+	mtime := time.Unix(0, int64(m["Mtime_"].(float64)))
+	o := Obj{
+		Key_:   m["Key_"].(string),
+		Size_:  int64(m["size"].(float64)),
+		Mtime_: mtime,
+		IsDir_: m["isdir"].(bool)}
 	if _, ok := m["mode"]; ok {
 		f := file{o, m["owner"].(string), m["group"].(string), os.FileMode(m["mode"].(float64)), m["isSymlink"].(bool)}
 		return &f
@@ -103,7 +104,7 @@ type FileSystem interface {
 	Chown(path string, owner, group string) error
 }
 
-var notSupported = utils.ENOTSUP
+var NotSupported = utils.ENOTSUP
 
 type DefaultObjectStorage struct{}
 
@@ -116,29 +117,29 @@ func (s DefaultObjectStorage) Limits() Limits {
 }
 
 func (s DefaultObjectStorage) Head(key string) (Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (s DefaultObjectStorage) Copy(dst, src string) error {
-	return notSupported
+	return NotSupported
 }
 
 func (s DefaultObjectStorage) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (s DefaultObjectStorage) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (s DefaultObjectStorage) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (s DefaultObjectStorage) AbortUpload(key string, uploadID string) {}
 
 func (s DefaultObjectStorage) CompleteUpload(key string, uploadID string, parts []*Part) error {
-	return notSupported
+	return NotSupported
 }
 
 func (s DefaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string, error) {
@@ -146,11 +147,11 @@ func (s DefaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string
 }
 
 func (s DefaultObjectStorage) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (s DefaultObjectStorage) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 type Creator func(bucket, accessKey, secretKey, token string) (ObjectStorage, error)
@@ -161,12 +162,33 @@ func Register(name string, register Creator) {
 	storages[name] = register
 }
 
+func getPluginStorage(name, endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+	p, err := plugin.Open("/Users/zhijian/GolandProjects/juicefs/pkg/plugins/oss_plugin.so")
+	if err != nil {
+		return nil, err
+	}
+	newFunc, err := p.Lookup("NewStorage")
+	if err != nil {
+		return nil, err
+	}
+	storage, err := newFunc.(func(string, string, string, string, string) (ObjectStorage, error))(name, endpoint, accessKey, secretKey, token)
+	if err == nil {
+		return storage, nil
+	}
+	return nil, fmt.Errorf("invalid storage: %s", err)
+}
+
 func CreateStorage(name, endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	f, ok := storages[name]
 	if ok {
 		logger.Debugf("Creating %s storage at endpoint %s", name, endpoint)
 		return f(endpoint, accessKey, secretKey, token)
 	}
+	storage, err := getPluginStorage(name, endpoint, accessKey, secretKey, token)
+	if err == nil {
+		return storage, nil
+	}
+	fmt.Println("err:", err)
 	return nil, fmt.Errorf("invalid storage: %s", name)
 }
 

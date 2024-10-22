@@ -71,7 +71,7 @@ func (g *gluster) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 	}
 	owner, group := getOwnerGroup(fi)
 	return &file{
-		obj{
+		Obj{
 			key,
 			size,
 			fi.ModTime(),
@@ -200,7 +200,7 @@ func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 
 func (g *gluster) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	var dir string = prefix
 	var objs []Object
@@ -250,7 +250,7 @@ func (g *gluster) List(prefix, marker, delimiter string, limit int64, followLink
 }
 
 func (g *gluster) Chtimes(path string, mtime time.Time) error {
-	return notSupported
+	return NotSupported
 }
 
 func (g *gluster) Chmod(path string, mode os.FileMode) error {
@@ -258,7 +258,7 @@ func (g *gluster) Chmod(path string, mode os.FileMode) error {
 }
 
 func (g *gluster) Chown(path string, owner, group string) error {
-	return notSupported
+	return NotSupported
 }
 
 func newGluster(endpoint, ak, sk, token string) (ObjectStorage, error) {

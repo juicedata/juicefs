@@ -2238,7 +2238,7 @@ func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, sli
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			rpush = pipe.RPush(ctx, m.chunkKey(inode, indx), marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len))
 			// most of chunk are used by single inode, so use that as the default (1 == not exists)
-			// pipe.Incr(ctx, r.sliceKey(slice.ID, slice.Size))
+			// pipe.Incr(ctx, r.sliceKey(slice.ID, slice.Size_))
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
 			if delta.space > 0 {
 				pipe.IncrBy(ctx, m.usedSpaceKey(), delta.space)

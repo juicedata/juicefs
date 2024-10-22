@@ -32,10 +32,10 @@ import (
 )
 
 var resolver = dnscache.New(time.Minute)
-var httpClient *http.Client
+var HttpClient *http.Client
 
 func init() {
-	httpClient = &http.Client{
+	HttpClient = &http.Client{
 		Transport: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
 			TLSHandshakeTimeout:   time.Second * 20,
@@ -80,7 +80,7 @@ func init() {
 }
 
 func GetHttpClient() *http.Client {
-	return httpClient
+	return HttpClient
 }
 
 func cleanup(response *http.Response) {
@@ -123,7 +123,7 @@ func (s *RestfulStorage) request(method, key string, body io.Reader, headers map
 		req.Header.Add(key, headers[key])
 	}
 	s.signer(req, s.accessKey, s.secretKey, s.signName)
-	return httpClient.Do(req)
+	return HttpClient.Do(req)
 }
 
 func parseError(resp *http.Response) error {
@@ -152,7 +152,7 @@ func (s *RestfulStorage) Head(key string) (Object, error) {
 		return nil, fmt.Errorf("cannot get last modified time")
 	}
 	mtime, _ := time.Parse(time.RFC1123, lastModified)
-	return &obj{
+	return &Obj{
 		key,
 		resp.ContentLength,
 		mtime,
@@ -240,7 +240,7 @@ func (s *RestfulStorage) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (s *RestfulStorage) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 var _ ObjectStorage = &RestfulStorage{}

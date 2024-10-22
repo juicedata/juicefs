@@ -57,7 +57,7 @@ func WithStorageClass(sc *string) AttrGetter {
 	}
 }
 
-func applyGetters(getters ...AttrGetter) ResponseAttrs {
+func ApplyGetters(getters ...AttrGetter) ResponseAttrs {
 	var attrs ResponseAttrs
 	for _, getter := range getters {
 		getter(&attrs)

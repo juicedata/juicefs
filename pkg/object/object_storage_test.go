@@ -119,10 +119,10 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		if scPut != sc {
 			t.Fatalf("Storage class should be %q, got %q", sc, scPut)
 		}
-		if resp, err := s.List("", "测试编码文件", "", 1, true); err != nil && err != notSupported {
+		if resp, err := s.List("", "测试编码文件", "", 1, true); err != nil && err != NotSupported {
 			t.Logf("List testEncodeFile Failed: %s", err)
 		} else if len(resp) == 1 && resp[0].Key() != key {
-			t.Logf("List testEncodeFile Failed: expect key %s, but got %s", key, resp[0].Key())
+			t.Logf("List testEncodeFile Failed: expect Key_ %s, but got %s", key, resp[0].Key())
 		}
 	}
 	_ = s.Delete(key)
@@ -181,20 +181,20 @@ func testStorage(t *testing.T, s ObjectStorage) {
 				t.Fatalf("List should return 2 keys, but got %d", len(objs))
 			}
 			if objs[0].Key() != "" {
-				t.Fatalf("First key should be empty string, but got %s", objs[0].Key())
+				t.Fatalf("First Key_ should be empty string, but got %s", objs[0].Key())
 			}
 			if objs[0].Size() != 0 {
 				t.Fatalf("First object size should be 0, but got %d", objs[0].Size())
 			}
 			if objs[1].Key() != "test" {
-				t.Fatalf("Second key should be test, but got %s", objs[1].Key())
+				t.Fatalf("Second Key_ should be test, but got %s", objs[1].Key())
 			}
 			if !strings.Contains(s.String(), "encrypted") && objs[1].Size() != 5 {
-				t.Fatalf("Size of first key shold be 5, but got %v", objs[1].Size())
+				t.Fatalf("Size_ of first Key_ shold be 5, but got %v", objs[1].Size())
 			}
 			now := time.Now()
 			if objs[1].Mtime().Before(now.Add(-30*time.Second)) || objs[1].Mtime().After(now.Add(time.Second*30)) {
-				t.Fatalf("Mtime of key should be within 10 seconds, but got %s", objs[1].Mtime().Sub(now))
+				t.Fatalf("Mtime of Key_ should be within 10 seconds, but got %s", objs[1].Mtime().Sub(now))
 			}
 		} else {
 			t.Fatalf("list failed: %s", err2.Error())
@@ -213,14 +213,14 @@ func testStorage(t *testing.T, s ObjectStorage) {
 				t.Fatalf("List should return 1 keys, but got %d", len(objs))
 			}
 			if objs[0].Key() != "test" {
-				t.Fatalf("First key should be test, but got %s", objs[0].Key())
+				t.Fatalf("First Key_ should be test, but got %s", objs[0].Key())
 			}
 			if !strings.Contains(s.String(), "encrypted") && objs[0].Size() != 5 {
-				t.Fatalf("Size of first key shold be 5, but got %v", objs[0].Size())
+				t.Fatalf("Size_ of first Key_ shold be 5, but got %v", objs[0].Size())
 			}
 			now := time.Now()
 			if objs[0].Mtime().Before(now.Add(-30*time.Second)) || objs[0].Mtime().After(now.Add(time.Second*30)) {
-				t.Fatalf("Mtime of key should be within 10 seconds, but got %s", objs[0].Mtime().Sub(now))
+				t.Fatalf("Mtime of Key_ should be within 10 seconds, but got %s", objs[0].Mtime().Sub(now))
 			}
 		} else {
 			t.Fatalf("list failed: %s", err2.Error())
@@ -274,7 +274,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 	if obs, err := s.List("", "", "/", 10, true); err != nil {
-		if !errors.Is(err, notSupported) {
+		if !errors.Is(err, NotSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
 			t.Logf("list with delimiter is not supported")
@@ -294,13 +294,13 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		keys := []string{"a/", "a1", "b/", "c/", "test"}
 		for i, o := range obs {
 			if o.Key() != keys[i] {
-				t.Fatalf("should get key %s but got %s", keys[i], o.Key())
+				t.Fatalf("should get Key_ %s but got %s", keys[i], o.Key())
 			}
 		}
 	}
 
 	if obs, err := s.List("a", "", "/", 10, true); err != nil {
-		if !errors.Is(err, notSupported) {
+		if !errors.Is(err, NotSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		}
 	} else {
@@ -310,13 +310,13 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		keys := []string{"a/", "a1"}
 		for i, o := range obs {
 			if o.Key() != keys[i] {
-				t.Fatalf("should get key %s but got %s", keys[i], o.Key())
+				t.Fatalf("should get Key_ %s but got %s", keys[i], o.Key())
 			}
 		}
 	}
 
 	if obs, err := s.List("a/", "", "/", 10, true); err != nil {
-		if !errors.Is(err, notSupported) {
+		if !errors.Is(err, NotSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
 			t.Logf("list with delimiter is not supported")
@@ -336,7 +336,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		keys := []string{"a/a", "a/a1", "a/b/"}
 		for i, o := range obs {
 			if o.Key() != keys[i] {
-				t.Fatalf("should get key %s but got %s", keys[i], o.Key())
+				t.Fatalf("should get Key_ %s but got %s", keys[i], o.Key())
 			}
 		}
 	}
@@ -399,7 +399,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	dstKey := "test-copy"
 	defer s.Delete(dstKey)
 	err = s.Copy(fmt.Sprintf("%s%s", prefix, dstKey), fmt.Sprintf("%stest", prefix))
-	if err != nil && err != notSupported {
+	if err != nil && err != NotSupported {
 		t.Fatalf("copy failed: %s", err.Error())
 	}
 	if err == nil {
@@ -618,13 +618,18 @@ func TestOVHCompileRegexp(t *testing.T) {
 }
 
 func TestOSS(t *testing.T) { //skip mutate
-	if os.Getenv("ALICLOUD_ACCESS_KEY_ID") == "" {
-		t.SkipNow()
+	//if os.Getenv("ALICLOUD_ACCESS_KEY_ID") == "" {
+	//	t.SkipNow()
+	//}
+	//s, _ := newOSS(os.Getenv("ALICLOUD_ENDPOINT"),
+	//	os.Getenv("ALICLOUD_ACCESS_KEY_ID"),
+	//	os.Getenv("ALICLOUD_ACCESS_KEY_SECRET"), "")
+	s, err := CreateStorage("oss-plugin", "", "", "", "")
+	if err != nil {
+		t.Fatalf("create OSS: %s", err)
 	}
-	s, _ := newOSS(os.Getenv("ALICLOUD_ENDPOINT"),
-		os.Getenv("ALICLOUD_ACCESS_KEY_ID"),
-		os.Getenv("ALICLOUD_ACCESS_KEY_SECRET"), "")
 	testStorage(t, s)
+
 }
 
 func TestUFile(t *testing.T) { //skip mutate
@@ -894,9 +899,9 @@ func TestMarsharl(t *testing.T) {
 	}
 	o2 := UnmarshalObject(m2)
 	if math.Abs(float64(o2.Mtime().UnixNano()-o.Mtime().UnixNano())) > 1000 {
-		t.Fatalf("mtime %s != %s", o2.Mtime(), o.Mtime())
+		t.Fatalf("Mtime_ %s != %s", o2.Mtime(), o.Mtime())
 	}
-	o2.(*file).mtime = o.Mtime()
+	o2.(*file).Mtime_ = o.Mtime()
 	if !reflect.DeepEqual(o, o2) {
 		t.Fatalf("%+v != %+v", o2, o)
 	}

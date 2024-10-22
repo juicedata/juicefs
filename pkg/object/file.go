@@ -90,7 +90,7 @@ func toFile(key string, fi fs.FileInfo, isSymlink bool, ownerGetter func(fs.File
 	}
 	owner, group := ownerGetter(fi)
 	return &file{
-		obj{
+		Obj{
 			key,
 			size,
 			fi.ModTime(),
@@ -270,7 +270,7 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 
 func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	var dir string = d.root + prefix
 	var objs []Object

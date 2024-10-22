@@ -88,8 +88,8 @@ func (s *sqlStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	b := blob{Key: []byte(key), Data: d, Size: int64(len(d)), Modified: now}
 	if name := s.db.DriverName(); name == "postgres" || name == "pgx" {
 		var r sql.Result
-		r, err = s.db.Exec("INSERT INTO jfs_blob(key, size,modified, data) VALUES(?, ?, ?,? ) "+
-			"ON CONFLICT (key) DO UPDATE SET size=?,data=?", []byte(key), b.Size, now, d, b.Size, d)
+		r, err = s.db.Exec("INSERT INTO jfs_blob(Key_, size,modified, data) VALUES(?, ?, ?,? ) "+
+			"ON CONFLICT (Key_) DO UPDATE SET size=?,data=?", []byte(key), b.Size, now, d, b.Size, d)
 		if err == nil {
 			n, err = r.RowsAffected()
 		}
@@ -107,14 +107,14 @@ func (s *sqlStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
 
 func (s *sqlStore) Head(key string) (Object, error) {
 	var b = blob{Key: []byte(key)}
-	ok, err := s.db.Cols("key", "modified", "size").Get(&b)
+	ok, err := s.db.Cols("Key_", "modified", "size").Get(&b)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
 		return nil, os.ErrNotExist
 	}
-	return &obj{
+	return &Obj{
 		key,
 		b.Size,
 		b.Modified,
@@ -134,21 +134,21 @@ func (s *sqlStore) List(prefix, marker, delimiter string, limit int64, followLin
 	}
 	// todo
 	if delimiter != "" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	var bs []blob
-	err := s.db.Where("`key` > ?", []byte(marker)).Limit(int(limit)).Cols("`key`", "size", "modified").OrderBy("`key`").Find(&bs)
+	err := s.db.Where("`Key_` > ?", []byte(marker)).Limit(int(limit)).Cols("`Key_`", "size", "modified").OrderBy("`Key_`").Find(&bs)
 	if err != nil {
 		return nil, err
 	}
 	var objs []Object
 	for _, b := range bs {
 		if strings.HasPrefix(string(b.Key), prefix) {
-			objs = append(objs, &obj{
-				key:   string(b.Key),
-				size:  b.Size,
-				mtime: b.Modified,
-				isDir: strings.HasSuffix(string(b.Key), "/"),
+			objs = append(objs, &Obj{
+				Key_:   string(b.Key),
+				Size_:  b.Size,
+				Mtime_: b.Modified,
+				IsDir_: strings.HasSuffix(string(b.Key), "/"),
 			})
 		} else {
 			break

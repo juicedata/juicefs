@@ -70,7 +70,7 @@ func (h *hdfsclient) Head(key string) (Object, error) {
 func (h *hdfsclient) toFile(key string, info os.FileInfo) *file {
 	hinfo := info.(*hdfs.FileInfo)
 	f := &file{
-		obj{
+		Obj{
 			key,
 			info.Size(),
 			info.ModTime(),
@@ -94,9 +94,9 @@ func (h *hdfsclient) toFile(key string, info os.FileInfo) *file {
 		f.mode |= os.ModeSticky
 	}
 	if info.IsDir() {
-		f.size = 0
-		if !strings.HasSuffix(f.key, "/") && f.key != "" {
-			f.key += "/"
+		f.Size_ = 0
+		if !strings.HasSuffix(f.Key_, "/") && f.Key_ != "" {
+			f.Key_ += "/"
 		}
 	}
 	return f
@@ -188,7 +188,7 @@ func (h *hdfsclient) Delete(key string, getters ...AttrGetter) error {
 
 func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	dir := h.path(prefix)
 	var objs []Object

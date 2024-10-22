@@ -44,7 +44,7 @@ func (b *bunnyClient) String() string {
 	return fmt.Sprintf("bunny://%v", b.endpoint)
 }
 
-// Get the data for the given object specified by key.
+// Get the data for the given object specified by Key_.
 func (b *bunnyClient) Get(key string, off int64, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	var end int64
 	if limit == -1 {
@@ -59,7 +59,7 @@ func (b *bunnyClient) Get(key string, off int64, limit int64, getters ...AttrGet
 	return io.NopCloser(bytes.NewReader(body)), nil
 }
 
-// Put data read from a reader to an object specified by key.
+// Put data read from a reader to an object specified by Key_.
 func (b *bunnyClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	content, readErr := io.ReadAll(in)
 	if readErr != nil {
@@ -79,7 +79,7 @@ func (b *bunnyClient) Delete(key string, getters ...AttrGetter) error {
 
 func (b *bunnyClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	var output []Object
 	var dir = prefix
@@ -128,7 +128,7 @@ func parseObjectMetadata(object bunny.Object) Object {
 	if object.IsDirectory && !strings.HasSuffix(key, "/") {
 		key = key + "/"
 	}
-	return &obj{
+	return &Obj{
 		key,
 		int64(object.Length),
 		lastChanged,

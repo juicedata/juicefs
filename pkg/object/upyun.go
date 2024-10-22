@@ -53,7 +53,7 @@ func (u *up) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
-	return &obj{
+	return &Obj{
 		key,
 		info.Size,
 		info.Time,
@@ -100,7 +100,7 @@ func (u *up) Copy(dst, src string) error {
 
 func (u *up) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	if u.listing == nil {
 		listing := make(chan *upyun.FileInfo, limit)
@@ -122,7 +122,7 @@ func (u *up) List(prefix, marker, delimiter string, limit int64, followLink bool
 		}
 		key := prefix + "/" + fi.Name
 		if !fi.IsDir && key > marker {
-			objs = append(objs, &obj{key, fi.Size, fi.Time, strings.HasSuffix(key, "/"), ""})
+			objs = append(objs, &Obj{key, fi.Size, fi.Time, strings.HasSuffix(key, "/"), ""})
 		}
 	}
 	if len(objs) > 0 {
@@ -152,7 +152,7 @@ func newUpyun(endpoint, user, passwd, token string) (ObjectStorage, error) {
 		cfg.Hosts["v0.api.upyun.com"] = strings.SplitN(uri.Host, ".", 2)[1]
 	}
 	upYun := upyun.NewUpYun(cfg)
-	upYun.SetHTTPClient(httpClient)
+	upYun.SetHTTPClient(HttpClient)
 	return &up{c: upYun}, nil
 }
 

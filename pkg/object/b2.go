@@ -73,7 +73,7 @@ func (c *b2client) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
-	return &obj{
+	return &Obj{
 		f.Name,
 		f.ContentLength,
 		time.Unix(f.UploadTimestamp/1000, 0),
@@ -139,7 +139,7 @@ func (c *b2client) List(prefix, marker, delimiter string, limit int64, followLin
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		f := resp.Files[i]
-		objs[i] = &obj{
+		objs[i] = &Obj{
 			f.Name,
 			f.ContentLength,
 			time.Unix(f.UploadTimestamp/1000, 0),

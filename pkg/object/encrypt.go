@@ -66,7 +66,7 @@ func ExportRsaPrivateKeyToPem(key *rsa.PrivateKey, passphrase string) string {
 func ParseRsaPrivateKeyFromPem(enc []byte, passphrase []byte) (*rsa.PrivateKey, error) {
 	block, _ := pem.Decode(enc)
 	if block == nil {
-		return nil, errors.New("failed to parse PEM block containing the key")
+		return nil, errors.New("failed to parse PEM block containing the Key_")
 	}
 	buf := block.Bytes
 	if len(passphrase) != 0 {
@@ -103,7 +103,7 @@ func ParseRsaPrivateKeyFromPem(enc []byte, passphrase []byte) (*rsa.PrivateKey, 
 	if priv, ok := key.(*rsa.PrivateKey); ok {
 		return priv, nil
 	}
-	return nil, fmt.Errorf("is not RSA private key")
+	return nil, fmt.Errorf("is not RSA private Key_")
 }
 
 func ParseRsaPrivateKeyFromPath(path, passphrase string) (*rsa.PrivateKey, error) {
@@ -115,7 +115,7 @@ func ParseRsaPrivateKeyFromPath(path, passphrase string) (*rsa.PrivateKey, error
 		block, _ := pem.Decode(b)
 		// nolint:staticcheck
 		if block != nil && strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
-			return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
+			return nil, fmt.Errorf("passphrase is required to private Key_, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
 		}
 	}
 	return ParseRsaPrivateKeyFromPem(b, []byte(passphrase))
@@ -206,7 +206,7 @@ func (e *dataEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {
 
 	key, err := e.keyEncryptor.Decrypt(cipherkey)
 	if err != nil {
-		return nil, errors.New("decryt key: " + err.Error())
+		return nil, errors.New("decryt Key_: " + err.Error())
 	}
 	aead, err := e.aead(key)
 	if err != nil {

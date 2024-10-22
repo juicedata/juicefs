@@ -72,7 +72,7 @@ func (q *qingstor) Head(key string) (Object, error) {
 			return nil, os.ErrNotExist
 		}
 	}
-	return &obj{
+	return &Obj{
 		key,
 		*r.ContentLength,
 		*r.LastModified,
@@ -89,7 +89,7 @@ func (q *qingstor) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 	}
 	output, err := q.bucket.GetObject(key, input)
 	if output != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.StringValue(output.RequestID))
 		if output.XQSStorageClass != nil {
 			attrs.SetStorageClass(*output.XQSStorageClass)
@@ -156,7 +156,7 @@ func (q *qingstor) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	}
 	out, err := q.bucket.PutObject(key, input)
 	if out != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.StringValue(out.RequestID)).SetStorageClass(q.sc)
 	}
 	if err != nil {
@@ -189,7 +189,7 @@ func (q *qingstor) Copy(dst, src string) error {
 func (q *qingstor) Delete(key string, getters ...AttrGetter) error {
 	output, err := q.bucket.DeleteObject(key)
 	if output != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.StringValue(output.RequestID))
 	}
 	return err
@@ -216,7 +216,7 @@ func (q *qingstor) List(prefix, marker, delimiter string, limit int64, followLin
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		k := out.Keys[i]
-		objs[i] = &obj{
+		objs[i] = &Obj{
 			*k.Key,
 			*k.Size,
 			time.Unix(int64(*k.Modified), 0),
@@ -226,7 +226,7 @@ func (q *qingstor) List(prefix, marker, delimiter string, limit int64, followLin
 	}
 	if delimiter != "" {
 		for _, p := range out.CommonPrefixes {
-			objs = append(objs, &obj{*p, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &Obj{*p, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -234,7 +234,7 @@ func (q *qingstor) List(prefix, marker, delimiter string, limit int64, followLin
 }
 
 func (q *qingstor) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (q *qingstor) CreateMultipartUpload(key string) (*MultipartUpload, error) {
@@ -351,7 +351,7 @@ func newQingStor(endpoint, accessKey, secretKey, token string) (ObjectStorage, e
 	} else {
 		conf.Port = 443
 	}
-	conf.Connection = httpClient
+	conf.Connection = HttpClient
 	qsService, _ := qs.Init(conf)
 	bucket, _ := qsService.Bucket(bucketName, zone)
 	return &qingstor{bucket: bucket}, nil

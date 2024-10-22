@@ -84,7 +84,7 @@ func (q *bosclient) Head(key string) (Object, error) {
 		return nil, err
 	}
 	mtime, _ := time.Parse(time.RFC1123, r.LastModified)
-	return &obj{
+	return &Obj{
 		key,
 		r.ContentLength,
 		mtime,
@@ -106,7 +106,7 @@ func (q *bosclient) Get(key string, off, limit int64, getters ...AttrGetter) (io
 	if err != nil {
 		return nil, err
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(r.StorageClass)
 	return r.Body, nil
 }
@@ -125,7 +125,7 @@ func (q *bosclient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 		args.StorageClass = q.sc
 	}
 	_, err = q.c.PutObject(q.bucket, key, body, args)
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(q.sc)
 	return err
 }
@@ -161,11 +161,11 @@ func (q *bosclient) List(prefix, marker, delimiter string, limit int64, followLi
 	for i := 0; i < n; i++ {
 		k := out.Contents[i]
 		mod, _ := time.Parse("2006-01-02T15:04:05Z", k.LastModified)
-		objs[i] = &obj{k.Key, int64(k.Size), mod, strings.HasSuffix(k.Key, "/"), k.StorageClass}
+		objs[i] = &Obj{k.Key, int64(k.Size), mod, strings.HasSuffix(k.Key, "/"), k.StorageClass}
 	}
 	if delimiter != "" {
 		for _, p := range out.CommonPrefixes {
-			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &Obj{p.Prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

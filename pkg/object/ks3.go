@@ -90,7 +90,7 @@ func (s *ks3) Head(key string) (Object, error) {
 	} else {
 		sc = "STANDARD"
 	}
-	return &obj{
+	return &Obj{
 		key,
 		*r.ContentLength,
 		*r.LastModified,
@@ -112,7 +112,7 @@ func (s *ks3) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadC
 	}
 	resp, err := s.s3.GetObject(params)
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws2.StringValue(resp.Metadata[s3RequestIDKey]))
 		attrs.SetStorageClass(aws2.StringValue(resp.Metadata[s3StorageClassHdr]))
 	}
@@ -145,7 +145,7 @@ func (s *ks3) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	}
 	resp, err := s.s3.PutObject(params)
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws2.StringValue(resp.Metadata[s3RequestIDKey])).SetStorageClass(s.sc)
 	}
 	return err
@@ -171,7 +171,7 @@ func (s *ks3) Delete(key string, getters ...AttrGetter) error {
 	}
 	resp, err := s.s3.DeleteObject(&param)
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws2.StringValue(resp.Metadata[s3RequestIDKey]))
 	}
 	if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
@@ -201,9 +201,9 @@ func (s *ks3) List(prefix, marker, delimiter string, limit int64, followLink boo
 		o := resp.Contents[i]
 		oKey, err := url.QueryUnescape(*o.Key)
 		if err != nil {
-			return nil, errors.WithMessagef(err, "failed to decode key %s", *o.Key)
+			return nil, errors.WithMessagef(err, "failed to decode Key_ %s", *o.Key)
 		}
-		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass}
+		objs[i] = &Obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -211,7 +211,7 @@ func (s *ks3) List(prefix, marker, delimiter string, limit int64, followLink boo
 			if err != nil {
 				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
-			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &Obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -219,7 +219,7 @@ func (s *ks3) List(prefix, marker, delimiter string, limit int64, followLink boo
 }
 
 func (s *ks3) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (s *ks3) CreateMultipartUpload(key string) (*MultipartUpload, error) {
@@ -361,17 +361,17 @@ func newKS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	var err error
 	accessKey, err = url.PathUnescape(accessKey)
 	if err != nil {
-		return nil, fmt.Errorf("unescape access key: %s", err)
+		return nil, fmt.Errorf("unescape access Key_: %s", err)
 	}
 	secretKey, err = url.PathUnescape(secretKey)
 	if err != nil {
-		return nil, fmt.Errorf("unescape secret key: %s", err)
+		return nil, fmt.Errorf("unescape secret Key_: %s", err)
 	}
 	awsConfig := &aws.Config{
 		Region:           region,
 		Endpoint:         strings.SplitN(uri.Host, ".", 2)[1],
 		DisableSSL:       !ssl,
-		HTTPClient:       httpClient,
+		HTTPClient:       HttpClient,
 		S3ForcePathStyle: pathStyle,
 		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
 	}

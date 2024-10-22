@@ -266,7 +266,7 @@ func gc(ctx *cli.Context) error {
 	for _, ss := range slices {
 		for _, s := range ss {
 			vkeys[s.Id] = s.Size
-			total += int64(int(s.Size-1)/chunkConf.BlockSize) + 1 // s.Size should be > 0
+			total += int64(int(s.Size-1)/chunkConf.BlockSize) + 1 // s.Size_ should be > 0
 			totalBytes += uint64(s.Size)
 		}
 	}

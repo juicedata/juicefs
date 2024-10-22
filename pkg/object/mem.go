@@ -52,14 +52,14 @@ func (m *memStore) Head(key string) (Object, error) {
 	defer m.Unlock()
 	// Minimum length is 1.
 	if key == "" {
-		return nil, errors.New("object key cannot be empty")
+		return nil, errors.New("object Key_ cannot be empty")
 	}
 	o, ok := m.objects[key]
 	if !ok {
 		return nil, os.ErrNotExist
 	}
 	f := &file{
-		obj{
+		Obj{
 			key,
 			int64(len(o.data)),
 			o.mtime,
@@ -79,7 +79,7 @@ func (m *memStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 	defer m.Unlock()
 	// Minimum length is 1.
 	if key == "" {
-		return nil, errors.New("object key cannot be empty")
+		return nil, errors.New("object Key_ cannot be empty")
 	}
 	d, ok := m.objects[key]
 	if !ok {
@@ -100,7 +100,7 @@ func (m *memStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	defer m.Unlock()
 	// Minimum length is 1.
 	if key == "" {
-		return errors.New("object key cannot be empty")
+		return errors.New("object Key_ cannot be empty")
 	}
 	_, ok := m.objects[key]
 	if ok {
@@ -146,7 +146,7 @@ func (m *memStore) List(prefix, marker, delimiter string, limit int64, followLin
 						continue
 					}
 					f := &file{
-						obj{
+						Obj{
 							prefix + commonPrefix,
 							0,
 							time.Unix(0, 0),
@@ -165,7 +165,7 @@ func (m *memStore) List(prefix, marker, delimiter string, limit int64, followLin
 			}
 
 			f := &file{
-				obj{
+				Obj{
 					k,
 					int64(len(o.data)),
 					o.mtime,

@@ -39,7 +39,7 @@ func (s *wasabi) String() string {
 }
 
 func (s *wasabi) SetStorageClass(_ string) error {
-	return notSupported
+	return NotSupported
 }
 
 func newWasabi(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
@@ -61,7 +61,7 @@ func newWasabi(endpoint, accessKey, secretKey, token string) (ObjectStorage, err
 		Endpoint:         &endpoint,
 		DisableSSL:       aws.Bool(!ssl),
 		S3ForcePathStyle: aws.Bool(false),
-		HTTPClient:       httpClient,
+		HTTPClient:       HttpClient,
 		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
 	}
 

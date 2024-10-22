@@ -154,7 +154,7 @@ func quota(c *cli.Context) error {
 	}
 
 	result := make([][]string, 1, len(qs)+1)
-	result[0] = []string{"Path", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
+	result[0] = []string{"Path", "Size_", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
 	paths := make([]string, 0, len(qs))
 	for p := range qs {
 		paths = append(paths, p)

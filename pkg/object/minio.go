@@ -40,7 +40,7 @@ func (m *minio) String() string {
 }
 
 func (m *minio) SetStorageClass(_ string) error {
-	return notSupported
+	return NotSupported
 }
 
 func (m *minio) Limits() Limits {
@@ -74,7 +74,7 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		Endpoint:         &uri.Host,
 		DisableSSL:       aws.Bool(!ssl),
 		S3ForcePathStyle: aws.Bool(defaultPathStyle()),
-		HTTPClient:       httpClient,
+		HTTPClient:       HttpClient,
 	}
 	if accessKey == "" {
 		accessKey = os.Getenv("MINIO_ACCESS_KEY")

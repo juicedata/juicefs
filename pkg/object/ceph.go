@@ -155,7 +155,7 @@ func (c *ceph) Put(key string, in io.Reader, getters ...AttrGetter) error {
 			v := reflect.ValueOf(b)
 			data := v.Elem().Field(0).Bytes()
 			if len(data) == 0 {
-				return notSupported
+				return NotSupported
 			}
 			// If the data exceeds 90M, ceph will report an error: 'rados: ret=-90, Message too long'
 			if len(data) < 85<<20 {
@@ -196,13 +196,13 @@ func (c *ceph) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (c *ceph) Head(key string) (Object, error) {
-	var o *obj
+	var o *Obj
 	err := c.do(func(ctx *rados.IOContext) error {
 		stat, err := ctx.Stat(key)
 		if err != nil {
 			return err
 		}
-		o = &obj{key, int64(stat.Size), stat.ModTime, strings.HasSuffix(key, "/"), ""}
+		o = &Obj{key, int64(stat.Size), stat.ModTime, strings.HasSuffix(key, "/"), ""}
 		return nil
 	})
 	if err == rados.ErrNotFound {
@@ -259,14 +259,14 @@ func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan Object, e
 					st, err := ctx.Stat(key)
 					if err != nil {
 						if errors.Is(err, rados.ErrNotFound) {
-							logger.Debugf("Skip non-existent key: %s", key)
+							logger.Debugf("Skip non-existent Key_: %s", key)
 							results[j] = nil
 						} else {
-							logger.Errorf("Stat key %s: %s", key, err)
+							logger.Errorf("Stat Key_ %s: %s", key, err)
 							errs[j] = err
 						}
 					} else {
-						results[j] = &obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/"), ""}
+						results[j] = &Obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/"), ""}
 					}
 
 					ms[j].Lock()

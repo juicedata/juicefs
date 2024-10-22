@@ -156,7 +156,7 @@ func (f *sftpStore) String() string {
 	return fmt.Sprintf("sftp://%s@%s:%s", f.config.User, f.host, f.root)
 }
 
-// always preserve suffix `/` for directory key
+// always preserve suffix `/` for directory Key_
 func (f *sftpStore) path(key string) string {
 	return f.root + key
 }
@@ -345,7 +345,7 @@ func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followL
 		}
 	}
 	ff := &file{
-		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
+		Obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
 		owner,
 		group,
 		fi.Mode(),
@@ -353,16 +353,16 @@ func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followL
 	}
 	if fi.IsDir() {
 		if key != "" && !strings.HasSuffix(key, "/") {
-			ff.key += "/"
+			ff.Key_ += "/"
 		}
-		ff.size = 0
+		ff.Size_ = 0
 	}
 	return ff
 }
 
 func (f *sftpStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 
 	c, err := f.getSftpConnection()
@@ -479,11 +479,11 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 	if privateKeyPath := os.Getenv("SSH_PRIVATE_KEY_PATH"); privateKeyPath != "" {
 		key, err := os.ReadFile(privateKeyPath)
 		if err != nil {
-			return nil, fmt.Errorf("unable to read private key, error: %v", err)
+			return nil, fmt.Errorf("unable to read private Key_, error: %v", err)
 		}
 		signer, err := ssh.ParsePrivateKey(key)
 		if err != nil {
-			return nil, fmt.Errorf("unable to parse private key, error: %v", err)
+			return nil, fmt.Errorf("unable to parse private Key_, error: %v", err)
 		}
 		signers = append(signers, signer)
 	} else {
@@ -499,7 +499,7 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 				if err == nil {
 					signers = append(signers, signer)
 				} else {
-					logger.Debugf("load private key %s: %s", filepath.Join(home, "id_"+a), err)
+					logger.Debugf("load private Key_ %s: %s", filepath.Join(home, "id_"+a), err)
 				}
 			}
 		}

@@ -238,7 +238,7 @@ func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
 	owner, group := n.getOwnerGroup(fi)
 	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
 	ff := &file{
-		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
+		Obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
 		owner,
 		group,
 		fi.Mode(),
@@ -246,9 +246,9 @@ func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
 	}
 	if fi.IsDir() {
 		if key != "" && !strings.HasSuffix(key, "/") {
-			ff.key += "/"
+			ff.Key_ += "/"
 		}
-		ff.size = 0
+		ff.Size_ = 0
 	}
 	return ff
 }
@@ -296,7 +296,7 @@ func (n *nfsStore) readDirSorted(dir string, followLink bool) ([]*nfsEntry, erro
 
 func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	dir := prefix
 	var objs []Object
@@ -419,7 +419,7 @@ func (n *nfsStore) Readlink(name string) (string, error) {
 }
 
 func (n *nfsStore) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (n *nfsStore) findOwnerGroup(attr *nfs.Fattr) (string, string) {

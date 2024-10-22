@@ -76,7 +76,7 @@ func (t *tikv) Head(key string) (Object, error) {
 	if err == nil && data == nil {
 		return nil, os.ErrNotExist
 	}
-	return &obj{
+	return &Obj{
 		key,
 		int64(len(data)),
 		time.Now(),
@@ -91,7 +91,7 @@ func (t *tikv) Delete(key string, getters ...AttrGetter) error {
 
 func (t *tikv) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	if marker == "" {
 		marker = prefix
@@ -99,7 +99,7 @@ func (t *tikv) List(prefix, marker, delimiter string, limit int64, followLink bo
 	if limit > int64(rawkv.MaxRawKVScanLimit) {
 		limit = int64(rawkv.MaxRawKVScanLimit)
 	}
-	// TODO: key only
+	// TODO: Key_ only
 	keys, vs, err := t.c.Scan(context.TODO(), []byte(marker), nil, int(limit))
 	if err != nil {
 		return nil, err
@@ -107,8 +107,8 @@ func (t *tikv) List(prefix, marker, delimiter string, limit int64, followLink bo
 	var objs = make([]Object, len(keys))
 	mtime := time.Now()
 	for i, k := range keys {
-		// FIXME: mtime
-		objs[i] = &obj{string(k), int64(len(vs[i])), mtime, strings.HasSuffix(string(k), "/"), ""}
+		// FIXME: Mtime_
+		objs[i] = &Obj{string(k), int64(len(vs[i])), mtime, strings.HasSuffix(string(k), "/"), ""}
 	}
 	return objs, nil
 }
@@ -150,7 +150,7 @@ func newTiKV(endpoint, accesskey, secretkey, token string) (ObjectStorage, error
 	c, err := rawkv.NewClient(context.TODO(), pds, config.NewSecurity(
 		q.Get("ca"),
 		q.Get("cert"),
-		q.Get("key"),
+		q.Get("Key_"),
 		strings.Split(q.Get("verify-cn"), ",")))
 
 	if err != nil {

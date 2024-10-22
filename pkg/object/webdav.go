@@ -54,7 +54,7 @@ func (w *webdav) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
-	return &obj{
+	return &Obj{
 		key,
 		info.Size(),
 		info.ModTime(),
@@ -107,7 +107,7 @@ func (w *webdav) Get(key string, off, limit int64, getters ...AttrGetter) (io.Re
 	} else {
 		req.Header.Add("Range", fmt.Sprintf("bytes=%d-", off))
 	}
-	resp, err := httpClient.Do(req)
+	resp, err := HttpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +177,7 @@ func (w webDAVFile) Name() string {
 
 func (w *webdav) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 
 	root := "/" + prefix
@@ -217,7 +217,7 @@ func (w *webdav) List(prefix, marker, delimiter string, limit int64, followLink 
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
-		objs = append(objs, &obj{
+		objs = append(objs, &Obj{
 			key,
 			info.Size(),
 			info.ModTime(),
@@ -244,7 +244,7 @@ func newWebDAV(endpoint, user, passwd, token string) (ObjectStorage, error) {
 	}
 	uri.User = url.UserPassword(user, passwd)
 	c := gowebdav.NewClient(uri.String(), user, passwd)
-	c.SetTransport(httpClient.Transport)
+	c.SetTransport(HttpClient.Transport)
 	return &webdav{endpoint: uri, c: c}, nil
 }
 

@@ -72,7 +72,7 @@ func (s *scsClient) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &obj{key: key, size: om.ContentLength, mtime: mtime, isDir: strings.HasSuffix(key, "/")}, nil
+	return &Obj{Key_: key, Size_: om.ContentLength, Mtime_: mtime, IsDir_: strings.HasSuffix(key, "/")}, nil
 }
 
 func (s *scsClient) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
@@ -119,16 +119,16 @@ func (s *scsClient) List(prefix, marker, delimiter string, limit int64, followLi
 	for i := 0; i < n; i++ {
 		ob := list.Contents[i]
 		mtime, _ := time.Parse(time.RFC1123, ob.LastModified)
-		objs[i] = &obj{
-			key:   ob.Name,
-			size:  ob.Size,
-			mtime: mtime,
-			isDir: strings.HasSuffix(ob.Name, "/"),
+		objs[i] = &Obj{
+			Key_:   ob.Name,
+			Size_:  ob.Size,
+			Mtime_: mtime,
+			IsDir_: strings.HasSuffix(ob.Name, "/"),
 		}
 	}
 	if delimiter != "" {
 		for _, p := range list.CommonPrefixes {
-			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &Obj{p.Prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -173,7 +173,7 @@ func (s *scsClient) CompleteUpload(key string, uploadID string, parts []*Part) e
 }
 
 func (s *scsClient) ListUploads(marker string) ([]*PendingPart, string, error) {
-	return nil, "", notSupported
+	return nil, "", NotSupported
 }
 
 func newSCS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

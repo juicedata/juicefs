@@ -82,7 +82,7 @@ func (c *etcdClient) Head(key string) (Object, error) {
 	}
 	for _, p := range resp.Kvs {
 		if string(p.Key) == key {
-			return &obj{
+			return &Obj{
 				key,
 				int64(len(p.Value)),
 				time.Now(),
@@ -113,7 +113,7 @@ func genNextKey(key string) string {
 
 func (c *etcdClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	if marker == "" {
 		marker = prefix
@@ -134,7 +134,7 @@ func (c *etcdClient) List(prefix, marker, delimiter string, limit int64, followL
 		if !strings.HasPrefix(k, prefix) {
 			break
 		}
-		objs = append(objs, &obj{
+		objs = append(objs, &Obj{
 			k,
 			int64(len(kv.Value)),
 			time.Now(),
@@ -150,7 +150,7 @@ func buildTlsConfig(u *url.URL) (*tls.Config, error) {
 	q := u.Query()
 	tsinfo.CAFile = q.Get("cacert")
 	tsinfo.CertFile = q.Get("cert")
-	tsinfo.KeyFile = q.Get("key")
+	tsinfo.KeyFile = q.Get("Key_")
 	tsinfo.ServerName = q.Get("server-name")
 	tsinfo.InsecureSkipVerify = q.Get("insecure-skip-verify") != ""
 	if tsinfo.CAFile != "" || tsinfo.CertFile != "" || tsinfo.KeyFile != "" || tsinfo.ServerName != "" {
