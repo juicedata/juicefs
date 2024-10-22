@@ -1643,11 +1643,13 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(juicefs_go_goroutines) by (instance,mp)",
+          "editorMode": "code",
+          "expr": "sum(juicefs_go_goroutines{vol_name=\"$name\"}) by (instance,mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "{{instance}}:{{mp}}",
+          "range": true,
           "refId": "A"
         }
       ],
