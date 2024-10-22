@@ -124,7 +124,12 @@
               "Time": true
             },
             "includeByName": {},
-            "indexByName": {},
+            "indexByName": {
+              "Time": 0,
+              "Value": 3,
+              "instance": 1,
+              "juicefs_version": 2
+            },
             "renameByName": {
               "Value": "uptime",
               "instance": "",
