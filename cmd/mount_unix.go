@@ -785,6 +785,9 @@ func launchMount(mp string, conf *vfs.Config) error {
 		go func() {
 			for {
 				sig := <-signalChan
+				if sig == nil {
+					return
+				}
 				logger.Infof("received signal %s, propagating to child process %d...", sig.String(), mountPid)
 				if err := cmd.Process.Signal(sig); err != nil {
 					logger.Errorf("send signal %s to %d: %s", sig.String(), mountPid, err)
@@ -796,6 +799,8 @@ func launchMount(mp string, conf *vfs.Config) error {
 		go watchdog(ctx, mp)
 		err = cmd.Wait()
 		cancel()
+		signal.Stop(signalChan)
+		close(signalChan)
 		if err == nil {
 			return nil
 		} else {
