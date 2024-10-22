@@ -49,6 +49,9 @@ func (s *scsClient) String() string {
 func (s *scsClient) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,
+		MinPartSize:              5 << 20,
+		MaxPartSize:              5 << 30, // guess
+		MaxPartCount:             2048,
 	}
 }
 
