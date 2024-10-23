@@ -412,7 +412,7 @@ func (cache *cacheStore) cache(key string, p *Page, force, dropCache bool) {
 	default:
 		if force {
 			cache.Unlock()
-			cache.pending <- pendingFile{key, p, dropCache}
+			cache.flushFile(pendingFile{key, p, dropCache}) // Write directly and concurrently
 			cache.Lock()
 		} else {
 			// does not have enough bandwidth to write it into disk, discard it
@@ -627,19 +627,23 @@ func (cache *cacheStore) stagePath(key string) string {
 func (cache *cacheStore) flush() {
 	for {
 		w := <-cache.pending
-		path := cache.cachePath(w.key)
-		if cache.capacity > 0 && cache.flushPage(path, w.page.Data, w.dropCache) == nil {
-			cache.add(w.key, int32(len(w.page.Data)), uint32(time.Now().Unix()))
-		}
-		cache.Lock()
-		_, ok := cache.pages[w.key]
-		delete(cache.pages, w.key)
-		atomic.AddInt64(&cache.totalPages, -int64(cap(w.page.Data)))
-		cache.Unlock()
-		w.page.Release()
-		if !ok {
-			cache.remove(w.key, false)
-		}
+		cache.flushFile(w)
+	}
+}
+
+func (cache *cacheStore) flushFile(w pendingFile) {
+	path := cache.cachePath(w.key)
+	if cache.capacity > 0 && cache.flushPage(path, w.page.Data, w.dropCache) == nil {
+		cache.add(w.key, int32(len(w.page.Data)), uint32(time.Now().Unix()))
+	}
+	cache.Lock()
+	_, ok := cache.pages[w.key]
+	delete(cache.pages, w.key)
+	cache.Unlock()
+	atomic.AddInt64(&cache.totalPages, -int64(cap(w.page.Data)))
+	w.page.Release()
+	if !ok {
+		cache.remove(w.key, false)
 	}
 }
 
