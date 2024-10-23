@@ -264,13 +264,15 @@ func (s *s3client) List(prefix, marker, delimiter string, limit int64, followLin
 	return objs, nil
 }
 
-func (s *s3client) ListV2(prefix, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *s3client) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := s3.ListObjectsV2Input{
-		Bucket:            &s.bucket,
-		Prefix:            &prefix,
-		ContinuationToken: &token,
-		MaxKeys:           &limit,
-		EncodingType:      aws.String("url"),
+		Bucket:       &s.bucket,
+		Prefix:       &prefix,
+		MaxKeys:      &limit,
+		EncodingType: aws.String("url"),
+	}
+	if marker != "" {
+		param.ContinuationToken = &marker
 	}
 	if delimiter != "" {
 		param.Delimiter = &delimiter
@@ -286,9 +288,6 @@ func (s *s3client) ListV2(prefix, token, delimiter string, limit int64, followLi
 		oKey, err := url.QueryUnescape(*o.Key)
 		if err != nil {
 			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
-		}
-		if !strings.HasPrefix(oKey, prefix) || oKey < token {
-			return nil, false, "", fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, token)
 		}
 		var sc = DefaultStorageClass
 		if o.StorageClass != nil {
@@ -312,7 +311,15 @@ func (s *s3client) ListV2(prefix, token, delimiter string, limit int64, followLi
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, *resp.IsTruncated, *resp.NextContinuationToken, nil
+	var isTruncated bool
+	if resp.IsTruncated != nil {
+		isTruncated = *resp.IsTruncated
+	}
+	var nextMarker string
+	if resp.NextContinuationToken != nil {
+		nextMarker = *resp.NextContinuationToken
+	}
+	return objs, isTruncated, nextMarker, nil
 }
 
 func (s *s3client) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
