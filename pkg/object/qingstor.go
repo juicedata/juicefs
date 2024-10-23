@@ -196,6 +196,11 @@ func (q *qingstor) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (q *qingstor) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+	objs, _, _, err := q.ListV2(prefix, marker, delimiter, limit, followLink)
+	return objs, err
+}
+
+func (q *qingstor) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -210,7 +215,7 @@ func (q *qingstor) List(prefix, marker, delimiter string, limit int64, followLin
 	}
 	out, err := q.bucket.ListObjects(input)
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	n := len(out.Keys)
 	objs := make([]Object, n)
@@ -230,7 +235,7 @@ func (q *qingstor) List(prefix, marker, delimiter string, limit int64, followLin
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, nil
+	return objs, *out.HasMore, *out.NextMarker, nil
 }
 
 func (q *qingstor) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {

@@ -205,6 +205,11 @@ func (s *obsClient) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (s *obsClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+	objs, _, _, err := s.ListV2(prefix, marker, delimiter, limit, followLink)
+	return objs, err
+}
+
+func (s *obsClient) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	input := &obs.ListObjectsInput{
 		Bucket: s.bucket,
 		Marker: marker,
@@ -215,7 +220,7 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64, followLi
 	input.EncodingType = "url"
 	resp, err := s.c.ListObjects(input)
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	n := len(resp.Contents)
 	objs := make([]Object, n)
@@ -228,13 +233,13 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64, followLi
 		for _, p := range resp.CommonPrefixes {
 			prefix, err := obs.UrlDecode(p)
 			if err != nil {
-				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", p)
+				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", p)
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, nil
+	return objs, resp.IsTruncated, resp.NextMarker, nil
 }
 
 func (s *obsClient) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
