@@ -407,14 +407,14 @@ func (cache *cacheStore) cache(key string, p *Page, force, dropCache bool) {
 	p.Acquire()
 	cache.pages[key] = p
 	atomic.AddInt64(&cache.totalPages, int64(cap(p.Data)))
-	select {
-	case cache.pending <- pendingFile{key, p, dropCache}:
-	default:
-		if force {
-			cache.Unlock()
-			cache.flushFile(pendingFile{key, p, dropCache}) // Write directly and concurrently
-			cache.Lock()
-		} else {
+	if force {
+		cache.Unlock()
+		cache.flushFile(pendingFile{key, p, dropCache}) // Write directly and concurrently
+		cache.Lock()
+	} else {
+		select {
+		case cache.pending <- pendingFile{key, p, dropCache}:
+		default:
 			// does not have enough bandwidth to write it into disk, discard it
 			logger.Debugf("Caching queue is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
 			cache.m.cacheDrops.Add(1)
