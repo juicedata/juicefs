@@ -32,6 +32,9 @@ juicefs format --storage s3 \
 
 When executing the `juicefs format` or `juicefs mount` command, you can set some special options in the form of URL parameters in the `--bucket` option, such as `tls-insecure-skip-verify=true` in `https://myjuicefs.s3.us-east-2.amazonaws.com?tls-insecure-skip-verify=true` is to skip the certificate verification of HTTPS requests.
 
+Client certificates are also supported as they are commonly used for mTLS connections, for example:
+`https://myjuicefs.s3.us-east-2.amazonaws.com?ca-certs=./path/to/ca&ssl-cert=./path/to/cert&ssl-key=./path/to/privatekey`
+
 ## Enable data sharding {#enable-data-sharding}
 
 When creating a file system, multiple buckets can be defined as the underlying storage of the file system through the [`--shards`](../reference/command_reference.mdx#format-data-format-options) option. In this way, the system will distribute the files to multiple buckets based on the hashed value of the file name. Data sharding technology can distribute the load of concurrent writing of large-scale data to multiple buckets, thereby improving the writing performance.
