@@ -238,30 +238,15 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		}
 
 		// Configure client TLS when params are provided
-		caCerts := values.Get("ca-certs")
-		if os.Getenv("JFS_CA_CERTS") != "" {
-			caCerts = os.Getenv("JFS_CA_CERTS")
-		}
+		if values.Get("ca-certs") != "" && values.Get("ssl-cert") != "" && values.Get("ssl-key") != "" {
 
-		sslCert := values.Get("ssl-cert")
-		if os.Getenv("JFS_SSL_CERT") != "" {
-			sslCert = os.Getenv("JFS_SSL_CERT")
-		}
-
-		sslKey := values.Get("ssl-key")
-		if os.Getenv("JFS_SSL_KEY") != "" {
-			sslKey = os.Getenv("JFS_SSL_KEY")
-		}
-
-		if caCerts != "" && sslCert != "" && sslKey != "" {
-
-			clientTLSCert, err := tls.LoadX509KeyPair(sslCert, sslKey)
+			clientTLSCert, err := tls.LoadX509KeyPair(values.Get("ssl-cert"), values.Get("ssl-key"))
 			if err != nil {
 				return nil, fmt.Errorf("error loading certificate and key file: %s", err.Error())
 			}
 
 			certPool := x509.NewCertPool()
-			caCertPEM, err := os.ReadFile(caCerts)
+			caCertPEM, err := os.ReadFile(values.Get("ca-certs"))
 			if err != nil {
 				return nil, fmt.Errorf("error loading CA cert file: %s", err.Error())
 			}
