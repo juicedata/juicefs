@@ -135,6 +135,11 @@ func (t *tosClient) Head(key string) (Object, error) {
 }
 
 func (t *tosClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+	objs, _, _, err := t.ListV2(prefix, marker, delimiter, limit, followLink)
+	return objs, err
+}
+
+func (t *tosClient) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	resp, err := t.client.ListObjectsV2(context.Background(), &tos.ListObjectsV2Input{
 		Bucket: t.bucket,
 		ListObjectsInput: tos.ListObjectsInput{
@@ -145,14 +150,14 @@ func (t *tosClient) List(prefix, marker, delimiter string, limit int64, followLi
 		},
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	n := len(resp.Contents)
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
 		if !strings.HasPrefix(o.Key, prefix) || o.Key < marker {
-			return nil, fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", o.Key, prefix, marker)
+			return nil, false, "", fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", o.Key, prefix, marker)
 		}
 		objs[i] = &obj{
 			o.Key,
@@ -168,7 +173,7 @@ func (t *tosClient) List(prefix, marker, delimiter string, limit int64, followLi
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, nil
+	return objs, resp.IsTruncated, resp.NextMarker, nil
 }
 
 func (t *tosClient) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {

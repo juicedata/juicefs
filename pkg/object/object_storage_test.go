@@ -273,6 +273,47 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put("a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
+
+	if obs, more, nextMarker, err := s.ListV2("", "", "", 4, true); err != nil {
+		if !errors.Is(err, notSupported) {
+			t.Fatalf("listv2: %s", err)
+		} else {
+			t.Logf("listv2 is not supported")
+		}
+	} else {
+		if len(obs) != 4 {
+			t.Fatalf("list should return 4 results but got %d", len(obs))
+		}
+		keys := []string{"a/", "a1", "b/", "c/"}
+		for i, o := range obs {
+			if o.Key() != keys[i] {
+				t.Fatalf("should get key %s but got %s", keys[i], o.Key())
+			}
+		}
+		if !more {
+			t.Fatalf("should have more results")
+		}
+		if nextMarker == "" {
+			t.Fatalf("next marker should not be empty")
+		}
+		obs, more, nextMarker, err := s.ListV2("", nextMarker, "", 4, true)
+		if err != nil {
+			t.Fatalf("list with marker: %s", err)
+		}
+		if len(obs) != 1 {
+			t.Fatalf("list should return 1 results but got %d", len(obs))
+		}
+		if obs[0].Key() != "test" {
+			t.Fatalf("should get key test but got %s", obs[0].Key())
+		}
+		if more {
+			t.Fatalf("should no more results")
+		}
+		if nextMarker != "" {
+			t.Fatalf("next marker should not be empty")
+		}
+	}
+
 	if obs, err := s.List("", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)

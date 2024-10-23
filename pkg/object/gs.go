@@ -171,14 +171,19 @@ func (g *gs) List(prefix, marker, delimiter string, limit int64, followLink bool
 		// last page
 		return nil, nil
 	}
+	objs, _, nextToken, err := g.ListV2(prefix, g.pageToken, delimiter, limit, followLink)
+	g.pageToken = nextToken
+	return objs, err
+}
+
+func (g *gs) ListV2(prefix, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	objectIterator := g.getClient().Bucket(g.bucket).Objects(ctx, &storage.Query{Prefix: prefix, Delimiter: delimiter})
-	pager := iterator.NewPager(objectIterator, int(limit), g.pageToken)
+	pager := iterator.NewPager(objectIterator, int(limit), token)
 	var entries []*storage.ObjectAttrs
 	nextPageToken, err := pager.NextPage(&entries)
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
-	g.pageToken = nextPageToken
 	n := len(entries)
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
@@ -192,7 +197,7 @@ func (g *gs) List(prefix, marker, delimiter string, limit int64, followLink bool
 	if delimiter != "" {
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, nil
+	return objs, nextPageToken != "", nextPageToken, nil
 }
 
 func (g *gs) SetStorageClass(sc string) error {

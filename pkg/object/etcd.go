@@ -112,8 +112,13 @@ func genNextKey(key string) string {
 }
 
 func (c *etcdClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+	objs, _, _, err := c.ListV2(prefix, marker, delimiter, limit, followLink)
+	return objs, err
+}
+
+func (c *etcdClient) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 	if marker == "" {
 		marker = prefix
@@ -126,7 +131,7 @@ func (c *etcdClient) List(prefix, marker, delimiter string, limit int64, followL
 	}
 	resp, err := c.client.Get(context.Background(), marker, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("get start %v: %s", marker, err)
+		return nil, false, "", fmt.Errorf("get start %v: %s", marker, err)
 	}
 	var objs []Object
 	for _, kv := range resp.Kvs {
@@ -142,7 +147,11 @@ func (c *etcdClient) List(prefix, marker, delimiter string, limit int64, followL
 			"",
 		})
 	}
-	return objs, nil
+	var nextMarker string
+	if resp.More && len(objs) > 0 {
+		nextMarker = objs[len(objs)-1].Key()
+	}
+	return objs, resp.More, nextMarker, nil
 }
 
 func buildTlsConfig(u *url.URL) (*tls.Config, error) {

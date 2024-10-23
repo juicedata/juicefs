@@ -137,10 +137,6 @@ func (b *wasb) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	if delimiter != "" {
-		return nil, notSupported
-	}
-	// todo
 	if marker != "" {
 		if b.marker == "" {
 			// last page
@@ -148,13 +144,21 @@ func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bo
 		}
 		marker = b.marker
 	}
+	objs, _, nextMarker, err := b.ListV2(prefix, marker, delimiter, limit, followLink)
+	b.marker = nextMarker
+	return objs, err
+}
+
+func (b *wasb) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	if delimiter != "" {
+		return nil, false, "", notSupported
+	}
 
 	limit32 := int32(limit)
-
 	pager := b.azblobCli.NewListBlobsFlatPager(b.cName, &azblob.ListBlobsFlatOptions{Prefix: &prefix, Marker: &marker, MaxResults: &(limit32)})
 	page, err := pager.NextPage(ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	if pager.More() {
 		b.marker = *page.NextMarker
@@ -177,7 +181,11 @@ func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bo
 			string(*blob.Properties.AccessTier),
 		}
 	}
-	return objs, nil
+	var nextMarker string
+	if pager.More() {
+		nextMarker = *page.NextMarker
+	}
+	return objs, pager.More(), nextMarker, nil
 }
 
 func (b *wasb) SetStorageClass(sc string) error {

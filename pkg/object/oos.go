@@ -53,14 +53,19 @@ func (s *oos) Create() error {
 }
 
 func (s *oos) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+	objs, _, _, err := s.ListV2(prefix, marker, delimiter, limit, followLink)
+	return objs, err
+}
+
+func (s *oos) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
-	objs, err := s.s3client.List(prefix, marker, delimiter, limit, followLink)
+	objs, hasMore, nextMarker, err := s.s3client.ListV2(prefix, marker, delimiter, limit, followLink)
 	if marker != "" && len(objs) > 0 && objs[0].Key() == marker {
 		objs = objs[1:]
 	}
-	return objs, err
+	return objs, hasMore, nextMarker, err
 }
 
 func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

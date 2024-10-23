@@ -145,6 +145,11 @@ func (q *qiniu) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (q *qiniu) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+	objs, _, _, err := q.ListV2(prefix, marker, delimiter, limit, followLink)
+	return objs, err
+}
+
+func (q *qiniu) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -152,7 +157,7 @@ func (q *qiniu) List(prefix, marker, delimiter string, limit int64, followLink b
 		q.marker = ""
 	} else if q.marker == "" {
 		// last page
-		return nil, nil
+		return nil, false, "", nil
 	}
 	entries, prefixes, markerOut, hasNext, err := q.bm.ListFiles(q.bucket, prefix, delimiter, q.marker, int(limit))
 	for err == nil && len(entries) == 0 && hasNext {
@@ -164,7 +169,7 @@ func (q *qiniu) List(prefix, marker, delimiter string, limit int64, followLink b
 		err = nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	n := len(entries)
 	objs := make([]Object, n)
@@ -179,7 +184,7 @@ func (q *qiniu) List(prefix, marker, delimiter string, limit int64, followLink b
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, nil
+	return objs, hasNext, markerOut, nil
 }
 
 func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

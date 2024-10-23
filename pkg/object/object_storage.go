@@ -149,6 +149,10 @@ func (s DefaultObjectStorage) List(prefix, marker, delimiter string, limit int64
 	return nil, notSupported
 }
 
+func (s DefaultObjectStorage) ListV2(prefix, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	return nil, false, "", notSupported
+}
+
 func (s DefaultObjectStorage) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
