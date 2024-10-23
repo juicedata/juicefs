@@ -728,7 +728,8 @@ func installHandler(mp string, v *vfs.VFS, blob object.ObjectStorage) {
 				if err := v.FlushAll(""); err != nil {
 					logger.Errorf("flush all: %s", err)
 				}
-				logger.Fatalf("exit after received %s,but umount not finished after 30 seconds, force exit", sig)
+				logger.Errorf("exit after receiving signal %s, but umount does not finish in 30 seconds, force exit", sig)
+				os.Exit(meta.UmountCode)
 			}()
 			go func() { _ = doUmount(mp, true) }()
 		}
