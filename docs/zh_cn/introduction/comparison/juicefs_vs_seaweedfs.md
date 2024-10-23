@@ -61,7 +61,7 @@ SeaweedFS 中数据写入和读取流程：
 1. 在开始写入数据之前，客户端向 Master Server 发起写入申请。
 2. SeaweedFS 根据当前的数据量返回一个 File ID，这个 ID 由 <volume id, file key, file cookie> 三部分构成。在写入的过程中，一并被写入的还有基础的元数据信息（文件长度与 Chunk 等信息）。
 3. 当写入完成之后，调用者需要在一个外部系统（例如 MySQL）中对该文件与返回的 File ID 进行关联保存。
-4. 在读取数据时，由于 Volume的索引信息已被加载入内存，可以通过File ID 直接获取文件位置（偏移）的所有信息，因此可以高效地将文件的内容读取出来。
+4. 在读取数据时，由于 Volume 的索引信息已被加载入内存，可以通过 File ID 直接获取文件位置（偏移）的所有信息，因此可以高效地将文件的内容读取出来。
 
 在上述的底层存储服务之上，SeaweedFS 提供了一个名为 Filer 的组件，他对接 Volume Server 与 Master Server，对外提供丰富的功能与特性，如 POSIX 支持、WebDAV、S3 API。与 JuiceFS 相同，Filer 也需要对接一个外部数据库以保存元数据信息。
 
