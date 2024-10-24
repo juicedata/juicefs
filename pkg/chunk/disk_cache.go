@@ -146,7 +146,7 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingP
 		c.dir, humanize.IBytes(uint64(c.capacity)), int(c.freeRatio*100), humanize.FtoaWithDigits(float64((1-br)*100), 1), humanize.FtoaWithDigits(float64((1-fr)*100), 1), pendingPages)
 	c.createLockFile()
 	go c.checkLockFile()
-	go c.flush()
+	go c.flusher()
 	go c.checkFreeSpace()
 	if c.cacheExpire > 0 {
 		go c.cleanupExpire()
@@ -412,7 +412,7 @@ func (cache *cacheStore) cache(key string, p *Page, force, dropCache bool) {
 	default:
 		if force {
 			cache.Unlock()
-			cache.pending <- pendingFile{key, p, dropCache}
+			cache.flushFile(pendingFile{key, p, dropCache}) // Write directly and concurrently
 			cache.Lock()
 		} else {
 			// does not have enough bandwidth to write it into disk, discard it
@@ -624,22 +624,25 @@ func (cache *cacheStore) stagePath(key string) string {
 }
 
 // flush cached block into disk
-func (cache *cacheStore) flush() {
-	for {
-		w := <-cache.pending
-		path := cache.cachePath(w.key)
-		if cache.capacity > 0 && cache.flushPage(path, w.page.Data, w.dropCache) == nil {
-			cache.add(w.key, int32(len(w.page.Data)), uint32(time.Now().Unix()))
-		}
-		cache.Lock()
-		_, ok := cache.pages[w.key]
-		delete(cache.pages, w.key)
-		atomic.AddInt64(&cache.totalPages, -int64(cap(w.page.Data)))
-		cache.Unlock()
-		w.page.Release()
-		if !ok {
-			cache.remove(w.key, false)
-		}
+func (cache *cacheStore) flusher() {
+	for w := range cache.pending {
+		cache.flushFile(w)
+	}
+}
+
+func (cache *cacheStore) flushFile(w pendingFile) {
+	path := cache.cachePath(w.key)
+	if cache.capacity > 0 && cache.flushPage(path, w.page.Data, w.dropCache) == nil {
+		cache.add(w.key, int32(len(w.page.Data)), uint32(time.Now().Unix()))
+	}
+	cache.Lock()
+	_, ok := cache.pages[w.key]
+	delete(cache.pages, w.key)
+	cache.Unlock()
+	atomic.AddInt64(&cache.totalPages, -int64(cap(w.page.Data)))
+	w.page.Release()
+	if !ok {
+		cache.remove(w.key, false)
 	}
 }
 
