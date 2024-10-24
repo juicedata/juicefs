@@ -146,7 +146,7 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingP
 		c.dir, humanize.IBytes(uint64(c.capacity)), int(c.freeRatio*100), humanize.FtoaWithDigits(float64((1-br)*100), 1), humanize.FtoaWithDigits(float64((1-fr)*100), 1), pendingPages)
 	c.createLockFile()
 	go c.checkLockFile()
-	go c.flush()
+	go c.flusher()
 	go c.checkFreeSpace()
 	if c.cacheExpire > 0 {
 		go c.cleanupExpire()
@@ -624,9 +624,8 @@ func (cache *cacheStore) stagePath(key string) string {
 }
 
 // flush cached block into disk
-func (cache *cacheStore) flush() {
-	for {
-		w := <-cache.pending
+func (cache *cacheStore) flusher() {
+	for w := range cache.pending {
 		cache.flushFile(w)
 	}
 }
