@@ -59,9 +59,9 @@ In terms of data access, SeaweedFS implements a similar approach to Haystack. A 
 Data write and read process in SeaweedFS:
 
 1. Before a write operation, the client initiates a write request to the master server.
-2. SeaweedFS returns a File ID (composed of Volume ID and offset) based on the current data volume. During the writing process, basic metadata information such as file length and chunk details is also written together with the data.
+2. SeaweedFS returns a File ID based on the current data volume. This ID is composed of three parts: \<volume id, file key, file cookie\>. During the writing process, basic metadata information such as file length and chunk details is also written together with the data.
 3. After the write is completed, the caller needs to associate the file with the returned File ID and store this mapping in an external system such as MySQL.
-4. During a read operation, since the File ID already contains all the necessary information to compute the file's location (offset), the file content can be efficiently retrieved.
+4. When reading data, since the volume index is already loaded in memory, the system can use the File ID to quickly retrieve all necessary information about the file's location (offset). This enables efficient file reading.
 
 On top of the underlying storage services, SeaweedFS offers a component called filer, which interfaces with the volume server and the master server. It provides features like POSIX support, WebDAV, and the S3 API. Like JuiceFS, the filer needs to connect to an external database to store metadata information.
 
