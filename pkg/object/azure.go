@@ -69,7 +69,7 @@ func (b *wasb) Head(key string) (Object, error) {
 		return nil, err
 	}
 
-	return &obj{
+	return &Obj{
 		key,
 		*properties.ContentLength,
 		*properties.LastModified,
@@ -83,7 +83,7 @@ func (b *wasb) Get(key string, off, limit int64, getters ...AttrGetter) (io.Read
 	if err != nil {
 		return nil, err
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	// TODO fire another property request to get the actual storage class
 	attrs.SetRequestID(aws.StringValue(download.RequestID)).SetStorageClass(b.sc)
 	return download.Body, err
@@ -104,7 +104,7 @@ func (b *wasb) Put(key string, data io.Reader, getters ...AttrGetter) error {
 		options.AccessTier = str2Tier(b.sc)
 	}
 	resp, err := b.azblobCli.UploadStream(ctx, b.cName, key, data, &options)
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetRequestID(aws.StringValue(resp.RequestID)).SetStorageClass(b.sc)
 	return err
 }
@@ -131,14 +131,14 @@ func (b *wasb) Delete(key string, getters ...AttrGetter) error {
 			err = nil
 		}
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetRequestID(aws.StringValue(resp.RequestID))
 	return err
 }
 
 func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	// todo
 	if marker != "" {
@@ -169,7 +169,7 @@ func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bo
 	for i := 0; i < n; i++ {
 		blob := page.Segment.BlobItems[i]
 		mtime := blob.Properties.LastModified
-		objs[i] = &obj{
+		objs[i] = &Obj{
 			*blob.Name,
 			*blob.Properties.ContentLength,
 			*mtime,

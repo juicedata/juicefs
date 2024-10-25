@@ -119,7 +119,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		if scPut != sc {
 			t.Fatalf("Storage class should be %q, got %q", sc, scPut)
 		}
-		if resp, err := s.List("", "测试编码文件", "", 1, true); err != nil && err != notSupported {
+		if resp, err := s.List("", "测试编码文件", "", 1, true); err != nil && err != NotSupported {
 			t.Logf("List testEncodeFile Failed: %s", err)
 		} else if len(resp) == 1 && resp[0].Key() != key {
 			t.Logf("List testEncodeFile Failed: expect key %s, but got %s", key, resp[0].Key())
@@ -274,7 +274,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 	if obs, err := s.List("", "", "/", 10, true); err != nil {
-		if !errors.Is(err, notSupported) {
+		if !errors.Is(err, NotSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
 			t.Logf("list with delimiter is not supported")
@@ -300,7 +300,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 
 	if obs, err := s.List("a", "", "/", 10, true); err != nil {
-		if !errors.Is(err, notSupported) {
+		if !errors.Is(err, NotSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		}
 	} else {
@@ -316,7 +316,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 
 	if obs, err := s.List("a/", "", "/", 10, true); err != nil {
-		if !errors.Is(err, notSupported) {
+		if !errors.Is(err, NotSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
 			t.Logf("list with delimiter is not supported")
@@ -399,7 +399,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	dstKey := "test-copy"
 	defer s.Delete(dstKey)
 	err = s.Copy(fmt.Sprintf("%s%s", prefix, dstKey), fmt.Sprintf("%stest", prefix))
-	if err != nil && err != notSupported {
+	if err != nil && err != NotSupported {
 		t.Fatalf("copy failed: %s", err.Error())
 	}
 	if err == nil {
@@ -618,13 +618,17 @@ func TestOVHCompileRegexp(t *testing.T) {
 }
 
 func TestOSS(t *testing.T) { //skip mutate
-	if os.Getenv("ALICLOUD_ACCESS_KEY_ID") == "" {
-		t.SkipNow()
+	//if os.Getenv("ALICLOUD_ACCESS_KEY_ID") == "" {
+	//	t.SkipNow()
+	//}
+	//s, _ := newOSS(os.Getenv("ALICLOUD_ENDPOINT"),
+	//	os.Getenv("ALICLOUD_ACCESS_KEY_ID"),
+	//	os.Getenv("ALICLOUD_ACCESS_KEY_SECRET"), "")
+	storage, err := CreateStorage("oss-plugin", "", "", "", "")
+	if err != nil {
+		t.Fatalf("create oss storage failed: %s", err)
 	}
-	s, _ := newOSS(os.Getenv("ALICLOUD_ENDPOINT"),
-		os.Getenv("ALICLOUD_ACCESS_KEY_ID"),
-		os.Getenv("ALICLOUD_ACCESS_KEY_SECRET"), "")
-	testStorage(t, s)
+	testStorage(t, storage)
 }
 
 func TestUFile(t *testing.T) { //skip mutate
@@ -896,7 +900,7 @@ func TestMarsharl(t *testing.T) {
 	if math.Abs(float64(o2.Mtime().UnixNano()-o.Mtime().UnixNano())) > 1000 {
 		t.Fatalf("mtime %s != %s", o2.Mtime(), o.Mtime())
 	}
-	o2.(*file).mtime = o.Mtime()
+	o2.(*File).Mtime_ = o.Mtime()
 	if !reflect.DeepEqual(o, o2) {
 		t.Fatalf("%+v != %+v", o2, o)
 	}

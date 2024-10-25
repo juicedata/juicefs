@@ -250,7 +250,7 @@ func (d *dragonfly) Head(key string) (Object, error) {
 		return nil, err
 	}
 
-	return &obj{
+	return &Obj{
 		key,
 		int64(contentLength),
 		lastModifiedTime,
@@ -291,7 +291,7 @@ func (d *dragonfly) Get(key string, off, limit int64, getters ...AttrGetter) (io
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("bad response status %s", resp.Status)
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(resp.Header.Get(HeaderDragonflyObjectMetaStorageClass))
 
 	return resp.Body, nil
@@ -490,7 +490,7 @@ func (d *dragonfly) List(prefix, marker, delimiter string, limit int64, followLi
 
 	objs := make([]Object, 0, len(objectMetadatas.Metadatas))
 	for _, meta := range objectMetadatas.Metadatas {
-		objs = append(objs, &obj{
+		objs = append(objs, &Obj{
 			meta.Key,
 			meta.ContentLength,
 			meta.LastModifiedTime,
@@ -501,7 +501,7 @@ func (d *dragonfly) List(prefix, marker, delimiter string, limit int64, followLi
 
 	if delimiter != "" {
 		for _, o := range objectMetadatas.CommonPrefixes {
-			objs = append(objs, &obj{o, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &Obj{o, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -570,7 +570,7 @@ func newDragonfly(endpoint, accessKey, secretKey, token string) (ObjectStorage, 
 		mode:        mode,
 		maxReplicas: maxReplicas,
 		bucket:      bucket,
-		client:      httpClient,
+		client:      HttpClient,
 	}, nil
 }
 

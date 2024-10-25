@@ -58,8 +58,8 @@ func (m *memStore) Head(key string) (Object, error) {
 	if !ok {
 		return nil, os.ErrNotExist
 	}
-	f := &file{
-		obj{
+	f := &File{
+		Obj{
 			key,
 			int64(len(o.data)),
 			o.mtime,
@@ -145,8 +145,8 @@ func (m *memStore) List(prefix, marker, delimiter string, limit int64, followLin
 					if _, ok := commonPrefixsMap[commonPrefix]; ok {
 						continue
 					}
-					f := &file{
-						obj{
+					f := &File{
+						Obj{
 							prefix + commonPrefix,
 							0,
 							time.Unix(0, 0),
@@ -164,8 +164,8 @@ func (m *memStore) List(prefix, marker, delimiter string, limit int64, followLin
 				}
 			}
 
-			f := &file{
-				obj{
+			f := &File{
+				Obj{
 					k,
 					int64(len(o.data)),
 					o.mtime,

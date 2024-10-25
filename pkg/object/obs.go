@@ -97,7 +97,7 @@ func (s *obsClient) Head(key string) (Object, error) {
 	default:
 		sc = string(r.StorageClass)
 	}
-	return &obj{
+	return &Obj{
 		key,
 		r.ContentLength,
 		r.LastModified,
@@ -119,7 +119,7 @@ func (s *obsClient) Get(key string, off, limit int64, getters ...AttrGetter) (io
 		resp, err = s.c.GetObject(params)
 	}
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.RequestId).SetStorageClass(string(resp.StorageClass))
 	}
 	if err != nil {
@@ -139,8 +139,8 @@ func (s *obsClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	if b, ok := in.(io.ReadSeeker); ok {
 		var err error
 		h := md5.New()
-		buf := bufPool.Get().(*[]byte)
-		defer bufPool.Put(buf)
+		buf := BufPool.Get().(*[]byte)
+		defer BufPool.Put(buf)
 		vlen, err = io.CopyBuffer(h, in, *buf)
 		if err != nil {
 			return err
@@ -175,7 +175,7 @@ func (s *obsClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
 	}
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.RequestId).SetStorageClass(s.sc)
 	}
 	return err
@@ -198,7 +198,7 @@ func (s *obsClient) Delete(key string, getters ...AttrGetter) error {
 	params.Key = key
 	resp, err := s.c.DeleteObject(&params)
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.RequestId)
 	}
 	return err
@@ -222,7 +222,7 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64, followLi
 	for i := 0; i < n; i++ {
 		// Obs SDK listObjects method already decodes the object key.
 		o := resp.Contents[i]
-		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/"), string(o.StorageClass)}
+		objs[i] = &Obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/"), string(o.StorageClass)}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -230,7 +230,7 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64, followLi
 			if err != nil {
 				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", p)
 			}
-			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &Obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -238,7 +238,7 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64, followLi
 }
 
 func (s *obsClient) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (s *obsClient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
@@ -409,7 +409,7 @@ func newOBS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	// Empty proxy url string has no effect
 	// there is a bug in the retry of PUT (did not call Seek(0,0) before retry), so disable the retry here
 	c, err := obs.New(accessKey, secretKey, endpoint, obs.WithSecurityToken(token),
-		obs.WithProxyUrl(urlString), obs.WithMaxRetryCount(0), obs.WithHttpTransport(httpClient.Transport.(*http.Transport)))
+		obs.WithProxyUrl(urlString), obs.WithMaxRetryCount(0), obs.WithHttpTransport(HttpClient.Transport.(*http.Transport)))
 	if err != nil {
 		return nil, fmt.Errorf("fail to initialize OBS: %q", err)
 	}

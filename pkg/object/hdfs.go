@@ -67,10 +67,10 @@ func (h *hdfsclient) Head(key string) (Object, error) {
 	return h.toFile(key, info), nil
 }
 
-func (h *hdfsclient) toFile(key string, info os.FileInfo) *file {
+func (h *hdfsclient) toFile(key string, info os.FileInfo) *File {
 	hinfo := info.(*hdfs.FileInfo)
-	f := &file{
-		obj{
+	f := &File{
+		Obj{
 			key,
 			info.Size(),
 			info.ModTime(),
@@ -82,21 +82,21 @@ func (h *hdfsclient) toFile(key string, info os.FileInfo) *file {
 		info.Mode(),
 		false,
 	}
-	if f.owner == superuser {
-		f.owner = "root"
+	if f.Owner_ == superuser {
+		f.Owner_ = "root"
 	}
-	if f.group == supergroup {
-		f.group = "root"
+	if f.Group_ == supergroup {
+		f.Group_ = "root"
 	}
 	// stickybit from HDFS is different than golang
-	if f.mode&01000 != 0 {
-		f.mode &= ^os.FileMode(01000)
-		f.mode |= os.ModeSticky
+	if f.Mode_&01000 != 0 {
+		f.Mode_ &= ^os.FileMode(01000)
+		f.Mode_ |= os.ModeSticky
 	}
 	if info.IsDir() {
-		f.size = 0
-		if !strings.HasSuffix(f.key, "/") && f.key != "" {
-			f.key += "/"
+		f.Size_ = 0
+		if !strings.HasSuffix(f.Key_, "/") && f.Key_ != "" {
+			f.Key_ += "/"
 		}
 	}
 	return f
@@ -124,7 +124,7 @@ func (h *hdfsclient) Get(key string, off, limit int64, getters ...AttrGetter) (i
 
 func (h *hdfsclient) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
 	p := h.path(key)
-	if strings.HasSuffix(p, dirSuffix) {
+	if strings.HasSuffix(p, DirSuffix) {
 		return h.c.MkdirAll(p, 0777&^h.umask)
 	}
 	var tmp string
@@ -156,8 +156,8 @@ func (h *hdfsclient) Put(key string, in io.Reader, getters ...AttrGetter) (err e
 			return err
 		}
 	}
-	buf := bufPool.Get().(*[]byte)
-	defer bufPool.Put(buf)
+	buf := BufPool.Get().(*[]byte)
+	defer BufPool.Put(buf)
 	_, err = io.CopyBuffer(f, in, *buf)
 	if err != nil {
 		_ = f.Close()
@@ -188,14 +188,14 @@ func (h *hdfsclient) Delete(key string, getters ...AttrGetter) error {
 
 func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	dir := h.path(prefix)
 	var objs []Object
-	if !strings.HasSuffix(dir, dirSuffix) {
+	if !strings.HasSuffix(dir, DirSuffix) {
 		dir = path.Dir(dir)
-		if !strings.HasSuffix(dir, dirSuffix) {
-			dir += dirSuffix
+		if !strings.HasSuffix(dir, DirSuffix) {
+			dir += DirSuffix
 		}
 	} else if marker == "" {
 		obj, err := h.Head(prefix)

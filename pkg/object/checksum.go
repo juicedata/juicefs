@@ -25,19 +25,19 @@ import (
 	"strconv"
 )
 
-const checksumAlgr = "Crc32c"
+const ChecksumAlgr = "Crc32c"
 
 var crc32c = crc32.MakeTable(crc32.Castagnoli)
 
-func generateChecksum(in io.ReadSeeker) string {
+func GenerateChecksum(in io.ReadSeeker) string {
 	if b, ok := in.(*bytes.Reader); ok {
 		v := reflect.ValueOf(b)
 		data := v.Elem().Field(0).Bytes()
 		return strconv.Itoa(int(crc32.Update(0, crc32c, data)))
 	}
 	var hash uint32
-	crcBuffer := bufPool.Get().(*[]byte)
-	defer bufPool.Put(crcBuffer)
+	crcBuffer := BufPool.Get().(*[]byte)
+	defer BufPool.Put(crcBuffer)
 	defer func() { _, _ = in.Seek(0, io.SeekStart) }()
 	for {
 		n, err := in.Read(*crcBuffer)
@@ -69,7 +69,7 @@ func (c *checksumReader) Read(buf []byte) (n int, err error) {
 	return
 }
 
-func verifyChecksum(in io.ReadCloser, checksum string, contentLength int64) io.ReadCloser {
+func VerifyChecksum(in io.ReadCloser, checksum string, contentLength int64) io.ReadCloser {
 	if checksum == "" {
 		return in
 	}

@@ -76,7 +76,7 @@ func (t *tikv) Head(key string) (Object, error) {
 	if err == nil && data == nil {
 		return nil, os.ErrNotExist
 	}
-	return &obj{
+	return &Obj{
 		key,
 		int64(len(data)),
 		time.Now(),
@@ -91,7 +91,7 @@ func (t *tikv) Delete(key string, getters ...AttrGetter) error {
 
 func (t *tikv) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	if marker == "" {
 		marker = prefix
@@ -108,7 +108,7 @@ func (t *tikv) List(prefix, marker, delimiter string, limit int64, followLink bo
 	mtime := time.Now()
 	for i, k := range keys {
 		// FIXME: mtime
-		objs[i] = &obj{string(k), int64(len(vs[i])), mtime, strings.HasSuffix(string(k), "/"), ""}
+		objs[i] = &Obj{string(k), int64(len(vs[i])), mtime, strings.HasSuffix(string(k), "/"), ""}
 	}
 	return objs, nil
 }

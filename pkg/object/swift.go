@@ -98,9 +98,9 @@ func (s *swiftOSS) List(prefix, marker, delimiter string, limit int64, followLin
 	for i, o := range objects {
 		// https://docs.openstack.org/swift/latest/api/pseudo-hierarchical-folders-directories.html
 		if delimiter != "" && o.PseudoDirectory {
-			objs[i] = &obj{o.SubDir, 0, time.Unix(0, 0), true, ""}
+			objs[i] = &Obj{o.SubDir, 0, time.Unix(0, 0), true, ""}
 		} else {
-			objs[i] = &obj{o.Name, o.Bytes, o.LastModified, strings.HasSuffix(o.Name, "/"), ""}
+			objs[i] = &Obj{o.Name, o.Bytes, o.LastModified, strings.HasSuffix(o.Name, "/"), ""}
 		}
 	}
 	return objs, nil
@@ -111,7 +111,7 @@ func (s *swiftOSS) Head(key string) (Object, error) {
 	if err == swift.ObjectNotFound {
 		err = os.ErrNotExist
 	}
-	return &obj{
+	return &Obj{
 		key,
 		object.Bytes,
 		object.LastModified,
@@ -147,7 +147,7 @@ func newSwiftOSS(endpoint, username, apiKey, token string) (ObjectStorage, error
 		ApiKey:    apiKey,
 		AuthToken: token,
 		AuthUrl:   authURL,
-		Transport: httpClient.Transport.(*http.Transport),
+		Transport: HttpClient.Transport.(*http.Transport),
 	}
 	err = conn.Authenticate(context.Background())
 	if err != nil {

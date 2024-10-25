@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	dirSuffix = "/"
+	DirSuffix = "/"
 )
 
 var TryCFR bool // try copy_file_range
@@ -68,7 +68,7 @@ func (d *filestore) String() string {
 }
 
 func (d *filestore) path(key string) string {
-	if strings.HasSuffix(d.root, dirSuffix) {
+	if strings.HasSuffix(d.root, DirSuffix) {
 		return filepath.Join(d.root, key)
 	}
 	return filepath.Clean(d.root + key)
@@ -80,17 +80,17 @@ func (d *filestore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return toFile(key, fi, false, getOwnerGroup), nil
+	return toFile(key, fi, false, GetOwnerGroup), nil
 }
 
-func toFile(key string, fi fs.FileInfo, isSymlink bool, ownerGetter func(fs.FileInfo) (string, string)) *file {
+func toFile(key string, fi fs.FileInfo, isSymlink bool, ownerGetter func(fs.FileInfo) (string, string)) *File {
 	size := fi.Size()
 	if fi.IsDir() {
 		size = 0
 	}
 	owner, group := ownerGetter(fi)
-	return &file{
-		obj{
+	return &File{
+		Obj{
 			key,
 			size,
 			fi.ModTime(),
@@ -139,7 +139,7 @@ func (d *filestore) Get(key string, off, limit int64, getters ...AttrGetter) (io
 func (d *filestore) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
 	p := d.path(key)
 
-	if strings.HasSuffix(key, dirSuffix) || key == "" && strings.HasSuffix(d.root, dirSuffix) {
+	if strings.HasSuffix(key, DirSuffix) || key == "" && strings.HasSuffix(d.root, DirSuffix) {
 		return os.MkdirAll(p, os.FileMode(0777))
 	}
 
@@ -172,8 +172,8 @@ func (d *filestore) Put(key string, in io.Reader, getters ...AttrGetter) (err er
 	if TryCFR {
 		_, err = io.Copy(f, in)
 	} else {
-		buf := bufPool.Get().(*[]byte)
-		defer bufPool.Put(buf)
+		buf := BufPool.Get().(*[]byte)
+		defer BufPool.Put(buf)
 		_, err = io.CopyBuffer(onlyWriter{f}, in, *buf)
 	}
 	if err != nil {
@@ -207,25 +207,25 @@ func (d *filestore) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-type mEntry struct {
+type MEntry struct {
 	os.FileInfo
 	name      string
 	fi        os.FileInfo
 	isSymlink bool
 }
 
-func (m *mEntry) Name() string {
+func (m *MEntry) Name() string {
 	return m.name
 }
 
-func (m *mEntry) Info() os.FileInfo {
+func (m *MEntry) Info() os.FileInfo {
 	if m.fi != nil {
 		return m.fi
 	}
 	return m.FileInfo
 }
 
-func (m *mEntry) IsDir() bool {
+func (m *MEntry) IsDir() bool {
 	if m.fi != nil {
 		return m.fi.IsDir()
 	}
@@ -234,7 +234,7 @@ func (m *mEntry) IsDir() bool {
 
 // readDirSorted reads the directory named by dir and returns
 // a sorted list of directory entries.
-func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
+func readDirSorted(dir string, followLink bool) ([]*MEntry, error) {
 	f, err := os.Open(dir)
 	if err != nil {
 		return nil, err
@@ -245,23 +245,23 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 		return nil, err
 	}
 
-	mEntries := make([]*mEntry, len(entries))
+	mEntries := make([]*MEntry, len(entries))
 	for i, e := range entries {
 		if e.IsDir() {
-			mEntries[i] = &mEntry{e, e.Name() + dirSuffix, nil, false}
+			mEntries[i] = &MEntry{e, e.Name() + DirSuffix, nil, false}
 		} else if !e.Mode().IsRegular() && followLink {
 			fi, err := os.Stat(filepath.Join(dir, e.Name()))
 			if err != nil {
-				mEntries[i] = &mEntry{e, e.Name(), nil, true}
+				mEntries[i] = &MEntry{e, e.Name(), nil, true}
 				continue
 			}
 			name := e.Name()
 			if fi.IsDir() {
-				name = e.Name() + dirSuffix
+				name = e.Name() + DirSuffix
 			}
-			mEntries[i] = &mEntry{e, name, fi, false}
+			mEntries[i] = &MEntry{e, name, fi, false}
 		} else {
-			mEntries[i] = &mEntry{e, e.Name(), nil, !e.Mode().IsRegular()}
+			mEntries[i] = &MEntry{e, e.Name(), nil, !e.Mode().IsRegular()}
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
@@ -270,14 +270,14 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 
 func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	var dir string = d.root + prefix
 	var objs []Object
-	if !strings.HasSuffix(dir, dirSuffix) {
+	if !strings.HasSuffix(dir, DirSuffix) {
 		dir = path.Dir(dir)
-		if !strings.HasSuffix(dir, dirSuffix) {
-			dir += dirSuffix
+		if !strings.HasSuffix(dir, DirSuffix) {
+			dir += DirSuffix
 		}
 	} else if marker == "" {
 		obj, err := d.Head(prefix)
@@ -313,7 +313,7 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 			continue
 		}
 		info := e.Info()
-		f := toFile(key, info, e.isSymlink, getOwnerGroup)
+		f := toFile(key, info, e.isSymlink, GetOwnerGroup)
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break

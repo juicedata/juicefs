@@ -84,7 +84,7 @@ func (s *ibmcos) Get(key string, off, limit int64, getters ...AttrGetter) (io.Re
 	}
 	var reqID string
 	resp, err := s.s3.GetObjectWithContext(ctx, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetRequestID(reqID)
 	if err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ func (s *ibmcos) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	}
 	var reqID string
 	_, err := s.s3.PutObjectWithContext(ctx, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetRequestID(reqID).SetStorageClass(s.sc)
 	return err
 }
@@ -149,7 +149,7 @@ func (s *ibmcos) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
-	return &obj{
+	return &Obj{
 		key,
 		*r.ContentLength,
 		*r.LastModified,
@@ -165,7 +165,7 @@ func (s *ibmcos) Delete(key string, getters ...AttrGetter) error {
 	}
 	var reqID string
 	_, err := s.s3.DeleteObjectWithContext(ctx, &param, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetRequestID(reqID)
 	return err
 }
@@ -193,7 +193,7 @@ func (s *ibmcos) List(prefix, marker, delimiter string, limit int64, followLink 
 		if err != nil {
 			return nil, errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
-		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass}
+		objs[i] = &Obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -201,7 +201,7 @@ func (s *ibmcos) List(prefix, marker, delimiter string, limit int64, followLink 
 			if err != nil {
 				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
-			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &Obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -209,7 +209,7 @@ func (s *ibmcos) List(prefix, marker, delimiter string, limit int64, followLink 
 }
 
 func (s *ibmcos) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (s *ibmcos) CreateMultipartUpload(key string) (*MultipartUpload, error) {
@@ -244,7 +244,7 @@ func (s *ibmcos) UploadPart(key string, uploadID string, num int, body []byte) (
 }
 
 func (s *ibmcos) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (s *ibmcos) AbortUpload(key string, uploadID string) {

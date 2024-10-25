@@ -212,7 +212,7 @@ func (f *sftpStore) Put(key string, in io.Reader, getters ...AttrGetter) (err er
 	defer f.putSftpConnection(&c, err)
 
 	p := f.path(key)
-	if strings.HasSuffix(p, dirSuffix) {
+	if strings.HasSuffix(p, DirSuffix) {
 		return c.sftpClient.MkdirAll(p)
 	}
 	if err := c.sftpClient.MkdirAll(filepath.Dir(p)); err != nil {
@@ -238,8 +238,8 @@ func (f *sftpStore) Put(key string, in io.Reader, getters ...AttrGetter) (err er
 	if err != nil {
 		return err
 	}
-	buf := bufPool.Get().(*[]byte)
-	defer bufPool.Put(buf)
+	buf := BufPool.Get().(*[]byte)
+	defer BufPool.Put(buf)
 	_, err = io.CopyBuffer(ff, in, *buf)
 	if err != nil {
 		_ = ff.Close()
@@ -315,7 +315,7 @@ func (f *sftpStore) Delete(key string, getters ...AttrGetter) error {
 		return err
 	}
 	defer f.putSftpConnection(&c, err)
-	err = c.sftpClient.Remove(strings.TrimRight(f.path(key), dirSuffix))
+	err = c.sftpClient.Remove(strings.TrimRight(f.path(key), DirSuffix))
 	if err != nil && os.IsNotExist(err) {
 		err = nil
 	}
@@ -336,7 +336,7 @@ func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo, f
 }
 
 func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followLink bool) Object {
-	owner, group := getOwnerGroup(fi)
+	owner, group := GetOwnerGroup(fi)
 	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
 	if isSymlink && c != nil && followLink {
 		if fi2, err := c.Stat(f.root + key); err == nil {
@@ -344,8 +344,8 @@ func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followL
 			isSymlink = false
 		}
 	}
-	ff := &file{
-		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
+	ff := &File{
+		Obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
 		owner,
 		group,
 		fi.Mode(),
@@ -353,16 +353,16 @@ func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followL
 	}
 	if fi.IsDir() {
 		if key != "" && !strings.HasSuffix(key, "/") {
-			ff.key += "/"
+			ff.Key_ += "/"
 		}
-		ff.size = 0
+		ff.Size_ = 0
 	}
 	return ff
 }
 
 func (f *sftpStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 
 	c, err := f.getSftpConnection()
@@ -375,8 +375,8 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64, followLi
 	dir := f.path(prefix)
 	if !strings.HasSuffix(dir, "/") {
 		dir = filepath.Dir(dir)
-		if !strings.HasSuffix(dir, dirSuffix) {
-			dir += dirSuffix
+		if !strings.HasSuffix(dir, DirSuffix) {
+			dir += DirSuffix
 		}
 	} else if marker == "" {
 		obj, err := f.Head(prefix)
@@ -459,8 +459,8 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 		root = strings.Replace(root, "\\", "/", -1)
 	}
 	// append suffix `/` removed by filepath.Clean()
-	if strings.HasSuffix(endpoint[idx+1:], dirSuffix) {
-		root = root + dirSuffix
+	if strings.HasSuffix(endpoint[idx+1:], DirSuffix) {
+		root = root + DirSuffix
 	}
 
 	if username == "" {

@@ -19,8 +19,12 @@ package object
 import (
 	"context"
 	"fmt"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"io"
 	"os"
+	"path"
+	"plugin"
 	"strings"
 	"sync"
 	"time"
@@ -44,7 +48,7 @@ type SupportSymlink interface {
 	Readlink(name string) (string, error)
 }
 
-type File interface {
+type FileItf interface {
 	Object
 	Owner() string
 	Group() string
@@ -55,18 +59,18 @@ type onlyWriter struct {
 	io.Writer
 }
 
-type file struct {
-	obj
-	owner     string
-	group     string
-	mode      os.FileMode
-	isSymlink bool
+type File struct {
+	Obj
+	Owner_     string
+	Group_     string
+	Mode_      os.FileMode
+	IsSymlink_ bool
 }
 
-func (f *file) Owner() string     { return f.owner }
-func (f *file) Group() string     { return f.group }
-func (f *file) Mode() os.FileMode { return f.mode }
-func (f *file) IsSymlink() bool   { return f.isSymlink }
+func (f *File) Owner() string     { return f.Owner_ }
+func (f *File) Group() string     { return f.Group_ }
+func (f *File) Mode() os.FileMode { return f.Mode_ }
+func (f *File) IsSymlink() bool   { return f.IsSymlink_ }
 
 func MarshalObject(o Object) map[string]interface{} {
 	m := make(map[string]interface{})
@@ -74,7 +78,7 @@ func MarshalObject(o Object) map[string]interface{} {
 	m["size"] = o.Size()
 	m["mtime"] = o.Mtime().UnixNano()
 	m["isdir"] = o.IsDir()
-	if f, ok := o.(File); ok {
+	if f, ok := o.(FileItf); ok {
 		m["mode"] = f.Mode()
 		m["owner"] = f.Owner()
 		m["group"] = f.Group()
@@ -85,13 +89,13 @@ func MarshalObject(o Object) map[string]interface{} {
 
 func UnmarshalObject(m map[string]interface{}) Object {
 	mtime := time.Unix(0, int64(m["mtime"].(float64)))
-	o := obj{
-		key:   m["key"].(string),
-		size:  int64(m["size"].(float64)),
-		mtime: mtime,
-		isDir: m["isdir"].(bool)}
+	o := Obj{
+		Key_:   m["key"].(string),
+		Size_:  int64(m["size"].(float64)),
+		Mtime_: mtime,
+		IsDir_: m["isdir"].(bool)}
 	if _, ok := m["mode"]; ok {
-		f := file{o, m["owner"].(string), m["group"].(string), os.FileMode(m["mode"].(float64)), m["isSymlink"].(bool)}
+		f := File{o, m["owner"].(string), m["group"].(string), os.FileMode(m["mode"].(float64)), m["isSymlink"].(bool)}
 		return &f
 	}
 	return &o
@@ -103,7 +107,7 @@ type FileSystem interface {
 	Chown(path string, owner, group string) error
 }
 
-var notSupported = utils.ENOTSUP
+var NotSupported = utils.ENOTSUP
 
 type DefaultObjectStorage struct{}
 
@@ -116,29 +120,29 @@ func (s DefaultObjectStorage) Limits() Limits {
 }
 
 func (s DefaultObjectStorage) Head(key string) (Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (s DefaultObjectStorage) Copy(dst, src string) error {
-	return notSupported
+	return NotSupported
 }
 
 func (s DefaultObjectStorage) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (s DefaultObjectStorage) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (s DefaultObjectStorage) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (s DefaultObjectStorage) AbortUpload(key string, uploadID string) {}
 
 func (s DefaultObjectStorage) CompleteUpload(key string, uploadID string, parts []*Part) error {
-	return notSupported
+	return NotSupported
 }
 
 func (s DefaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string, error) {
@@ -146,11 +150,11 @@ func (s DefaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string
 }
 
 func (s DefaultObjectStorage) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (s DefaultObjectStorage) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 type Creator func(bucket, accessKey, secretKey, token string) (ObjectStorage, error)
@@ -166,11 +170,28 @@ func CreateStorage(name, endpoint, accessKey, secretKey, token string) (ObjectSt
 	if ok {
 		logger.Debugf("Creating %s storage at endpoint %s", name, endpoint)
 		return f(endpoint, accessKey, secretKey, token)
+	} else {
+		loadDir := os.Getenv("JUICEFS_PLUGIN_LOAD_PATH")
+		if loadDir == "" {
+			return nil, fmt.Errorf("invalid storage: %s", name)
+		}
+		soPath := path.Join(loadDir, fmt.Sprintf("%s_plugin.so", name))
+		logger.Infof("Loading plugin %s", soPath)
+		p, err := plugin.Open(soPath)
+		if err != nil {
+			logger.Errorf("open plugin %s: %s", soPath, err)
+			return nil, err
+		}
+		newFunc, err := p.Lookup(fmt.Sprintf("New%s", cases.Title(language.English).String(name)))
+		if err != nil {
+			logger.Errorf("lookup NewStorage in %s: %s", soPath, err)
+			return nil, err
+		}
+		return newFunc.(func(string, string, string, string) (ObjectStorage, error))(endpoint, accessKey, secretKey, token)
 	}
-	return nil, fmt.Errorf("invalid storage: %s", name)
 }
 
-var bufPool = sync.Pool{
+var BufPool = sync.Pool{
 	New: func() interface{} {
 		// Default io.Copy uses 32KB buffer, here we choose a larger one (1MiB io-size increases throughput by ~20%)
 		buf := make([]byte, 1<<20)

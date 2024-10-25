@@ -256,7 +256,7 @@ func (j *juiceFS) List(prefix, marker, delimiter string, limit int64, followLink
 	return objs, nil
 }
 
-type mEntry struct {
+type MEntry struct {
 	fi        *fs.FileStat
 	name      string
 	isSymlink bool
@@ -264,7 +264,7 @@ type mEntry struct {
 
 // readDirSorted reads the directory named by dirname and returns
 // a sorted list of directory entries.
-func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, syscall.Errno) {
+func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*MEntry, syscall.Errno) {
 	f, err := j.jfs.Open(ctx, dirname, 0)
 	if err != 0 {
 		return nil, err
@@ -274,24 +274,24 @@ func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, sys
 	if err != 0 {
 		return nil, err
 	}
-	mEntries := make([]*mEntry, len(entries))
+	mEntries := make([]*MEntry, len(entries))
 	for i, e := range entries {
 		fi := fs.AttrToFileInfo(e.Inode, e.Attr)
 		if fi.IsDir() {
-			mEntries[i] = &mEntry{fi, string(e.Name) + dirSuffix, false}
+			mEntries[i] = &MEntry{fi, string(e.Name) + dirSuffix, false}
 		} else if fi.IsSymlink() && followLink {
 			fi2, err := j.jfs.Stat(ctx, path.Join(dirname, string(e.Name)))
 			if err != 0 {
-				mEntries[i] = &mEntry{fi, string(e.Name), true}
+				mEntries[i] = &MEntry{fi, string(e.Name), true}
 				continue
 			}
 			name := string(e.Name)
 			if fi2.IsDir() {
 				name += dirSuffix
 			}
-			mEntries[i] = &mEntry{fi2, name, false}
+			mEntries[i] = &MEntry{fi2, name, false}
 		} else {
-			mEntries[i] = &mEntry{fi, string(e.Name), fi.IsSymlink()}
+			mEntries[i] = &MEntry{fi, string(e.Name), fi.IsSymlink()}
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].name < mEntries[j].name })

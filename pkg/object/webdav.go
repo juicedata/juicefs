@@ -54,7 +54,7 @@ func (w *webdav) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
-	return &obj{
+	return &Obj{
 		key,
 		info.Size(),
 		info.ModTime(),
@@ -107,7 +107,7 @@ func (w *webdav) Get(key string, off, limit int64, getters ...AttrGetter) (io.Re
 	} else {
 		req.Header.Add("Range", fmt.Sprintf("bytes=%d-", off))
 	}
-	resp, err := httpClient.Do(req)
+	resp, err := HttpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (w *webdav) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	if key == "" {
 		return nil
 	}
-	if strings.HasSuffix(key, dirSuffix) {
+	if strings.HasSuffix(key, DirSuffix) {
 		return w.c.MkdirAll(key, 0)
 	}
 	return w.c.WriteStream(key, in, 0)
@@ -177,16 +177,16 @@ func (w webDAVFile) Name() string {
 
 func (w *webdav) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 
 	root := "/" + prefix
 	var objs []Object
-	if !strings.HasSuffix(root, dirSuffix) {
+	if !strings.HasSuffix(root, DirSuffix) {
 		// If the root is not ends with `/`, we'll list the directory root resides.
 		root = path.Dir(root)
-		if !strings.HasSuffix(root, dirSuffix) {
-			root += dirSuffix
+		if !strings.HasSuffix(root, DirSuffix) {
+			root += DirSuffix
 		}
 	}
 
@@ -204,7 +204,7 @@ func (w *webdav) List(prefix, marker, delimiter string, limit int64, followLink 
 	sortedInfos := make([]os.FileInfo, len(infos))
 	for idx, o := range infos {
 		if o.IsDir() {
-			sortedInfos[idx] = &webDAVFile{name: o.Name() + dirSuffix, FileInfo: o}
+			sortedInfos[idx] = &webDAVFile{name: o.Name() + DirSuffix, FileInfo: o}
 		} else {
 			sortedInfos[idx] = o
 		}
@@ -217,7 +217,7 @@ func (w *webdav) List(prefix, marker, delimiter string, limit int64, followLink 
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
-		objs = append(objs, &obj{
+		objs = append(objs, &Obj{
 			key,
 			info.Size(),
 			info.ModTime(),
@@ -244,7 +244,7 @@ func newWebDAV(endpoint, user, passwd, token string) (ObjectStorage, error) {
 	}
 	uri.User = url.UserPassword(user, passwd)
 	c := gowebdav.NewClient(uri.String(), user, passwd)
-	c.SetTransport(httpClient.Transport)
+	c.SetTransport(HttpClient.Transport)
 	return &webdav{endpoint: uri, c: c}, nil
 }
 

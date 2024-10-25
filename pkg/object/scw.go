@@ -75,7 +75,7 @@ func newScw(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		Endpoint:         &endpoint,
 		DisableSSL:       aws.Bool(!ssl),
 		S3ForcePathStyle: aws.Bool(false),
-		HTTPClient:       httpClient,
+		HTTPClient:       HttpClient,
 		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
 	}
 

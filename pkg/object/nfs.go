@@ -157,7 +157,7 @@ func (n *nfsStore) mkdirAll(p string) error {
 
 func (n *nfsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
 	p := n.path(key)
-	if strings.HasSuffix(p, dirSuffix) {
+	if strings.HasSuffix(p, DirSuffix) {
 		return n.mkdirAll(p)
 	}
 	var tmp string
@@ -192,8 +192,8 @@ func (n *nfsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err err
 		return err
 	}
 
-	buf := bufPool.Get().(*[]byte)
-	defer bufPool.Put(buf)
+	buf := BufPool.Get().(*[]byte)
+	defer BufPool.Put(buf)
 	_, err = io.CopyBuffer(ff, in, *buf)
 	if err != nil {
 		_ = ff.Close()
@@ -237,8 +237,8 @@ func (n *nfsStore) Delete(key string, getters ...AttrGetter) error {
 func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
 	owner, group := n.getOwnerGroup(fi)
 	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
-	ff := &file{
-		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
+	ff := &File{
+		Obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
 		owner,
 		group,
 		fi.Mode(),
@@ -246,9 +246,9 @@ func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
 	}
 	if fi.IsDir() {
 		if key != "" && !strings.HasSuffix(key, "/") {
-			ff.key += "/"
+			ff.Key_ += "/"
 		}
-		ff.size = 0
+		ff.Size_ = 0
 	}
 	return ff
 }
@@ -266,7 +266,7 @@ func (n *nfsStore) readDirSorted(dir string, followLink bool) ([]*nfsEntry, erro
 	nfsEntries := make([]*nfsEntry, len(entries))
 	for i, e := range entries {
 		if e.IsDir() {
-			nfsEntries[i] = &nfsEntry{e, e.Name() + dirSuffix, nil, false}
+			nfsEntries[i] = &nfsEntry{e, e.Name() + DirSuffix, nil, false}
 		} else if e.Attr.Attr.Type == nfs.NF3Lnk && followLink {
 			// follow symlink
 			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, true}
@@ -283,7 +283,7 @@ func (n *nfsStore) readDirSorted(dir string, followLink bool) ([]*nfsEntry, erro
 			}
 			name := e.Name()
 			if fi.IsDir() {
-				name = e.Name() + dirSuffix
+				name = e.Name() + DirSuffix
 			}
 			nfsEntries[i] = &nfsEntry{e, name, fi, false}
 		} else {
@@ -296,14 +296,14 @@ func (n *nfsStore) readDirSorted(dir string, followLink bool) ([]*nfsEntry, erro
 
 func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	dir := prefix
 	var objs []Object
-	if dir != "" && !strings.HasSuffix(dir, dirSuffix) {
+	if dir != "" && !strings.HasSuffix(dir, DirSuffix) {
 		dir = path.Dir(dir)
-		if !strings.HasSuffix(dir, dirSuffix) {
-			dir += dirSuffix
+		if !strings.HasSuffix(dir, DirSuffix) {
+			dir += DirSuffix
 		}
 	} else if marker == "" {
 		obj, err := n.Head(dir)
@@ -419,7 +419,7 @@ func (n *nfsStore) Readlink(name string) (string, error) {
 }
 
 func (n *nfsStore) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (n *nfsStore) findOwnerGroup(attr *nfs.Fattr) (string, string) {

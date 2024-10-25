@@ -107,7 +107,7 @@ func (g *gs) Head(key string) (Object, error) {
 		return nil, err
 	}
 
-	return &obj{
+	return &Obj{
 		key,
 		attrs.Size,
 		attrs.Updated,
@@ -122,7 +122,7 @@ func (g *gs) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCl
 		return nil, err
 	}
 	// TODO fire another attr request to get the actual storage class
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(g.sc)
 	return reader, nil
 }
@@ -136,13 +136,13 @@ func (g *gs) Put(key string, data io.Reader, getters ...AttrGetter) error {
 	// This is especially important if you are uploading many small objects concurrently.
 	writer.ChunkSize = 5 << 20
 
-	buf := bufPool.Get().(*[]byte)
-	defer bufPool.Put(buf)
+	buf := BufPool.Get().(*[]byte)
+	defer BufPool.Put(buf)
 	_, err := io.CopyBuffer(writer, data, *buf)
 	if err != nil {
 		return err
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(g.sc)
 	return writer.Close()
 }
@@ -184,9 +184,9 @@ func (g *gs) List(prefix, marker, delimiter string, limit int64, followLink bool
 	for i := 0; i < n; i++ {
 		item := entries[i]
 		if delimiter != "" && item.Prefix != "" {
-			objs[i] = &obj{item.Prefix, 0, time.Unix(0, 0), true, item.StorageClass}
+			objs[i] = &Obj{item.Prefix, 0, time.Unix(0, 0), true, item.StorageClass}
 		} else {
-			objs[i] = &obj{item.Name, item.Size, item.Updated, strings.HasSuffix(item.Name, "/"), item.StorageClass}
+			objs[i] = &Obj{item.Name, item.Size, item.Updated, strings.HasSuffix(item.Name, "/"), item.StorageClass}
 		}
 	}
 	if delimiter != "" {

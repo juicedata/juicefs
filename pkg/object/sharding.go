@@ -70,7 +70,7 @@ func (s *sharded) Put(key string, body io.Reader, getters ...AttrGetter) error {
 }
 
 func (s *sharded) Copy(dst, src string) error {
-	return notSupported
+	return NotSupported
 }
 
 func (s *sharded) Delete(key string, getters ...AttrGetter) error {
@@ -78,7 +78,7 @@ func (s *sharded) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (s *sharded) SetStorageClass(sc string) error {
-	var err = notSupported
+	var err = NotSupported
 	for _, o := range s.stores {
 		if os, ok := o.(SupportStorageClass); ok {
 			err = os.SetStorageClass(sc)
@@ -93,7 +93,7 @@ const maxResults = 10000
 func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-chan Object, error) {
 	if ch, err := store.ListAll(prefix, marker, followLink); err == nil {
 		return ch, nil
-	} else if !errors.Is(err, notSupported) {
+	} else if !errors.Is(err, NotSupported) {
 		return nil, err
 	}
 
@@ -101,7 +101,7 @@ func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-cha
 	out := make(chan Object, maxResults)
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
 	objs, err := store.List(prefix, marker, "", maxResults, followLink)
-	if err == notSupported {
+	if err == NotSupported {
 		return ListAllWithDelimiter(store, prefix, marker, "", followLink)
 	}
 	if err != nil {

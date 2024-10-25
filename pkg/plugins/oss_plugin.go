@@ -1,28 +1,13 @@
-//go:build !nooss
-// +build !nooss
-
-/*
- * JuiceFS, Copyright 2018 Juicedata, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-package object
+package main
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"io"
 	"net"
 	"net/http"
@@ -32,9 +17,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
+
+var logger = utils.GetLogger("juicefs")
 
 const ossDefaultRegionID = "cn-hangzhou"
 
@@ -48,8 +33,8 @@ func (o *ossClient) String() string {
 	return fmt.Sprintf("oss://%s/", o.bucket.BucketName)
 }
 
-func (o *ossClient) Limits() Limits {
-	return Limits{
+func (o *ossClient) Limits() object.Limits {
+	return object.Limits{
 		IsSupportMultipartUpload: true,
 		IsSupportUploadPartCopy:  true,
 		MinPartSize:              100 << 10,
@@ -57,7 +42,10 @@ func (o *ossClient) Limits() Limits {
 		MaxPartCount:             10000,
 	}
 }
-
+func isExists(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, s3.ErrCodeBucketAlreadyExists) || strings.Contains(msg, s3.ErrCodeBucketAlreadyOwnedByYou)
+}
 func (o *ossClient) Create() error {
 	var option []oss.Option
 	if o.sc != "" {
@@ -82,7 +70,7 @@ func (o *ossClient) checkError(err error) error {
 	return err
 }
 
-func (o *ossClient) Head(key string) (Object, error) {
+func (o *ossClient) Head(key string) (object.Object, error) {
 	var r http.Header
 	var err error
 	if o.sc != "" {
@@ -104,7 +92,7 @@ func (o *ossClient) Head(key string) (Object, error) {
 	contentLength := r.Get("Content-Length")
 	mtime, _ := time.Parse(time.RFC1123, lastModified)
 	size, _ := strconv.ParseInt(contentLength, 10, 64)
-	return &Obj{
+	return &object.Obj{
 		key,
 		size,
 		mtime,
@@ -113,7 +101,7 @@ func (o *ossClient) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (o *ossClient) Get(key string, off, limit int64, getters ...AttrGetter) (resp io.ReadCloser, err error) {
+func (o *ossClient) Get(key string, off, limit int64, getters ...object.AttrGetter) (resp io.ReadCloser, err error) {
 	var respHeader http.Header
 	if off > 0 || limit > 0 {
 		var r string
@@ -131,22 +119,22 @@ func (o *ossClient) Get(key string, off, limit int64, getters ...AttrGetter) (re
 				length = -1
 				logger.Warnf("failed to parse content-length %s: %s", resp.(*oss.Response).Headers.Get(oss.HTTPHeaderContentLength), err)
 			}
-			resp = VerifyChecksum(resp,
-				resp.(*oss.Response).Headers.Get(oss.HTTPHeaderOssMetaPrefix+ChecksumAlgr),
+			resp = object.VerifyChecksum(resp,
+				resp.(*oss.Response).Headers.Get(oss.HTTPHeaderOssMetaPrefix+object.ChecksumAlgr),
 				length)
 		}
 	}
-	attrs := ApplyGetters(getters...)
+	attrs := object.ApplyGetters(getters...)
 	attrs.SetRequestID(respHeader.Get(oss.HTTPHeaderOssRequestID))
 	attrs.SetStorageClass(respHeader.Get(oss.HTTPHeaderOssStorageClass))
 	err = o.checkError(err)
 	return
 }
 
-func (o *ossClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (o *ossClient) Put(key string, in io.Reader, getters ...object.AttrGetter) error {
 	var option []oss.Option
 	if ins, ok := in.(io.ReadSeeker); ok {
-		option = append(option, oss.Meta(ChecksumAlgr, GenerateChecksum(ins)))
+		option = append(option, oss.Meta(object.ChecksumAlgr, object.GenerateChecksum(ins)))
 	}
 	if o.sc != "" {
 		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.sc)))
@@ -154,7 +142,7 @@ func (o *ossClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	var respHeader http.Header
 	option = append(option, oss.GetResponseHeader(&respHeader))
 	err := o.bucket.PutObject(key, in, option...)
-	attrs := ApplyGetters(getters...)
+	attrs := object.ApplyGetters(getters...)
 	attrs.SetRequestID(respHeader.Get(oss.HTTPHeaderOssRequestID)).SetStorageClass(o.sc)
 	return o.checkError(err)
 }
@@ -168,15 +156,15 @@ func (o *ossClient) Copy(dst, src string) error {
 	return o.checkError(err)
 }
 
-func (o *ossClient) Delete(key string, getters ...AttrGetter) error {
+func (o *ossClient) Delete(key string, getters ...object.AttrGetter) error {
 	var respHeader http.Header
 	err := o.bucket.DeleteObject(key, oss.GetResponseHeader(&respHeader))
-	attrs := ApplyGetters(getters...)
+	attrs := object.ApplyGetters(getters...)
 	attrs.SetRequestID(respHeader.Get(oss.HTTPHeaderOssRequestID))
 	return o.checkError(err)
 }
 
-func (o *ossClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (o *ossClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]object.Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -186,25 +174,25 @@ func (o *ossClient) List(prefix, marker, delimiter string, limit int64, followLi
 		return nil, err
 	}
 	n := len(result.Objects)
-	objs := make([]Object, n)
+	objs := make([]object.Object, n)
 	for i := 0; i < n; i++ {
 		o := result.Objects[i]
-		objs[i] = &Obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/"), o.StorageClass}
+		objs[i] = &object.Obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/"), o.StorageClass}
 	}
 	if delimiter != "" {
 		for _, o := range result.CommonPrefixes {
-			objs = append(objs, &Obj{o, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &object.Obj{o, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }
 
-func (o *ossClient) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
-	return nil, NotSupported
+func (o *ossClient) ListAll(prefix, marker string, followLink bool) (<-chan object.Object, error) {
+	return nil, object.NotSupported
 }
 
-func (o *ossClient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (o *ossClient) CreateMultipartUpload(key string) (*object.MultipartUpload, error) {
 	var option []oss.Option
 	if o.sc != "" {
 		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.sc)))
@@ -213,10 +201,10 @@ func (o *ossClient) CreateMultipartUpload(key string) (*MultipartUpload, error) 
 	if o.checkError(err) != nil {
 		return nil, err
 	}
-	return &MultipartUpload{UploadID: r.UploadID, MinPartSize: 4 << 20, MaxCount: 10000}, nil
+	return &object.MultipartUpload{UploadID: r.UploadID, MinPartSize: 4 << 20, MaxCount: 10000}, nil
 }
 
-func (o *ossClient) UploadPart(key string, uploadID string, num int, data []byte) (*Part, error) {
+func (o *ossClient) UploadPart(key string, uploadID string, num int, data []byte) (*object.Part, error) {
 	initResult := oss.InitiateMultipartUploadResult{
 		Key:      key,
 		UploadID: uploadID,
@@ -225,16 +213,16 @@ func (o *ossClient) UploadPart(key string, uploadID string, num int, data []byte
 	if o.checkError(err) != nil {
 		return nil, err
 	}
-	return &Part{Num: num, ETag: r.ETag}, nil
+	return &object.Part{Num: num, ETag: r.ETag}, nil
 }
 
-func (o *ossClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (o *ossClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*object.Part, error) {
 	initMultipartResult := oss.InitiateMultipartUploadResult{Bucket: o.bucket.BucketName, Key: key, UploadID: uploadID}
 	partCopy, err := o.bucket.UploadPartCopy(initMultipartResult, o.bucket.BucketName, srcKey, off, size, num)
 	if o.checkError(err) != nil {
 		return nil, err
 	}
-	return &Part{Num: num, ETag: partCopy.ETag}, nil
+	return &object.Part{Num: num, ETag: partCopy.ETag}, nil
 }
 
 func (o *ossClient) AbortUpload(key string, uploadID string) {
@@ -245,7 +233,7 @@ func (o *ossClient) AbortUpload(key string, uploadID string) {
 	_ = o.bucket.AbortMultipartUpload(initResult)
 }
 
-func (o *ossClient) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (o *ossClient) CompleteUpload(key string, uploadID string, parts []*object.Part) error {
 	initResult := oss.InitiateMultipartUploadResult{
 		Key:      key,
 		UploadID: uploadID,
@@ -259,14 +247,14 @@ func (o *ossClient) CompleteUpload(key string, uploadID string, parts []*Part) e
 	return o.checkError(err)
 }
 
-func (o *ossClient) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (o *ossClient) ListUploads(marker string) ([]*object.PendingPart, string, error) {
 	result, err := o.bucket.ListMultipartUploads(oss.KeyMarker(marker))
 	if o.checkError(err) != nil {
 		return nil, "", err
 	}
-	parts := make([]*PendingPart, len(result.Uploads))
+	parts := make([]*object.PendingPart, len(result.Uploads))
 	for i, u := range result.Uploads {
-		parts[i] = &PendingPart{u.Key, u.UploadID, u.Initiated}
+		parts[i] = &object.PendingPart{u.Key, u.UploadID, u.Initiated}
 	}
 	return parts, result.NextKeyMarker, nil
 }
@@ -290,7 +278,7 @@ func fetch(url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := HttpClient.Do(req)
+	resp, err := object.HttpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +385,7 @@ func autoOSSEndpoint(bucketName, accessKey, secretKey, securityToken string) (st
 	return fmt.Sprintf("https://%s.aliyuncs.com", bucketLocation), nil
 }
 
-func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewOss(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -449,7 +437,7 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		logger.Debugf("Use endpoint %q", domain)
 	}
 
-	client, err := oss.New(domain, accessKey, secretKey, oss.SecurityToken(token), oss.HTTPClient(HttpClient))
+	client, err := oss.New(domain, accessKey, secretKey, oss.SecurityToken(token), oss.HTTPClient(object.HttpClient))
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create OSS client with endpoint %s: %s", endpoint, err)
 	}
@@ -461,7 +449,7 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	client.Config.HTTPTimeout.HeaderTimeout = time.Second * 5    // 60s
 	client.Config.HTTPTimeout.LongTimeout = time.Second * 30     // 300s
 	client.Config.IsEnableCRC = false                            // CRC64ECMA is much slower than CRC32C
-	client.Config.UserAgent = UserAgent
+	client.Config.UserAgent = object.UserAgent
 
 	bucket, err := client.Bucket(bucketName)
 	if err != nil {
@@ -478,8 +466,4 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		}()
 	}
 	return o, nil
-}
-
-func init() {
-	//Register("oss", newOSS)
 }

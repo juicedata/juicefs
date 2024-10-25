@@ -78,7 +78,7 @@ func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		Region:           &region,
 		DisableSSL:       aws.Bool(!ssl),
 		S3ForcePathStyle: aws.Bool(defaultPathStyle()),
-		HTTPClient:       httpClient,
+		HTTPClient:       HttpClient,
 		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
 	}
 

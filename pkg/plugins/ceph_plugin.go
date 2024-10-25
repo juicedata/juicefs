@@ -1,6 +1,3 @@
-//go:build ceph
-// +build ceph
-
 /*
  * JuiceFS, Copyright 2020 Juicedata, Inc.
  *
@@ -17,12 +14,13 @@
  * limitations under the License.
  */
 
-package object
+package main
 
 import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/juicedata/juicefs/pkg/object"
 	"io"
 	"net/url"
 	"os"
@@ -35,7 +33,7 @@ import (
 )
 
 type ceph struct {
-	DefaultObjectStorage
+	object.DefaultObjectStorage
 	name string
 	conn *rados.Conn
 	free chan *rados.IOContext
@@ -131,7 +129,7 @@ func (r *cephReader) Close() error {
 	return nil
 }
 
-func (c *ceph) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (c *ceph) Get(key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
 	if _, err := c.Head(key); err != nil {
 		return nil, err
 	}
@@ -148,14 +146,14 @@ var cephPool = sync.Pool{
 	},
 }
 
-func (c *ceph) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (c *ceph) Put(key string, in io.Reader, getters ...object.AttrGetter) error {
 	// ceph default osd_max_object_size = 128M
 	return c.do(func(ctx *rados.IOContext) error {
 		if b, ok := in.(*bytes.Reader); ok {
 			v := reflect.ValueOf(b)
 			data := v.Elem().Field(0).Bytes()
 			if len(data) == 0 {
-				return NotSupported
+				return object.NotSupported
 			}
 			// If the data exceeds 90M, ceph will report an error: 'rados: ret=-90, Message too long'
 			if len(data) < 85<<20 {
@@ -185,7 +183,7 @@ func (c *ceph) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	})
 }
 
-func (c *ceph) Delete(key string, getters ...AttrGetter) error {
+func (c *ceph) Delete(key string, getters ...object.AttrGetter) error {
 	err := c.do(func(ctx *rados.IOContext) error {
 		return ctx.Delete(key)
 	})
@@ -195,14 +193,14 @@ func (c *ceph) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (c *ceph) Head(key string) (Object, error) {
-	var o *Obj
+func (c *ceph) Head(key string) (object.Object, error) {
+	var o *object.Obj
 	err := c.do(func(ctx *rados.IOContext) error {
 		stat, err := ctx.Stat(key)
 		if err != nil {
 			return err
 		}
-		o = &Obj{key, int64(stat.Size), stat.ModTime, strings.HasSuffix(key, "/"), ""}
+		o = &object.Obj{key, int64(stat.Size), stat.ModTime, strings.HasSuffix(key, "/"), ""}
 		return nil
 	})
 	if err == rados.ErrNotFound {
@@ -211,7 +209,7 @@ func (c *ceph) Head(key string) (Object, error) {
 	return o, err
 }
 
-func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan object.Object, error) {
 	ctx, err := c.newContext()
 	if err != nil {
 		return nil, err
@@ -236,12 +234,12 @@ func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan Object, e
 	sort.Strings(keys)
 	c.release(ctx)
 
-	var objs = make(chan Object, 1000)
+	var objs = make(chan object.Object, 1000)
 	var concurrent = 20
 	ms := make([]sync.Mutex, concurrent)
 	conds := make([]*sync.Cond, concurrent)
 	ready := make([]bool, concurrent)
-	results := make([]Object, concurrent)
+	results := make([]object.Object, concurrent)
 	errs := make([]error, concurrent)
 	for j := 0; j < concurrent; j++ {
 		conds[j] = sync.NewCond(&ms[j])
@@ -266,7 +264,7 @@ func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan Object, e
 							errs[j] = err
 						}
 					} else {
-						results[j] = &Obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/"), ""}
+						results[j] = &object.Obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/"), ""}
 					}
 
 					ms[j].Lock()
@@ -309,7 +307,7 @@ func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan Object, e
 	return objs, nil
 }
 
-func newCeph(endpoint, cluster, user, token string) (ObjectStorage, error) {
+func NewCeph(endpoint, cluster, user, token string) (object.ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("ceph://%s", endpoint)
 	}
@@ -351,8 +349,4 @@ func newCeph(endpoint, cluster, user, token string) (ObjectStorage, error) {
 		conn: conn,
 		free: make(chan *rados.IOContext, 50),
 	}, nil
-}
-
-func init() {
-	Register("ceph", newCeph)
 }

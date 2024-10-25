@@ -29,7 +29,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func getOwnerGroup(info os.FileInfo) (string, string) {
+func GetOwnerGroup(info os.FileInfo) (string, string) {
 	var owner, group string
 	switch st := info.Sys().(type) {
 	case *syscall.Stat_t:

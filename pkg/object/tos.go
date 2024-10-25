@@ -73,7 +73,7 @@ func (t *tosClient) Get(key string, off, limit int64, getters ...AttrGetter) (io
 		Range:  rangeStr, // When Range and RangeStart & RangeEnd appear together, range is preferred
 	})
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.RequestID).SetStorageClass(string(resp.StorageClass))
 	}
 	if err != nil {
@@ -96,7 +96,7 @@ func (t *tosClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 		Content: in,
 	})
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.RequestID).SetStorageClass(t.sc)
 	}
 	return err
@@ -108,7 +108,7 @@ func (t *tosClient) Delete(key string, getters ...AttrGetter) error {
 		Key:    key,
 	})
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.RequestID)
 	}
 	return err
@@ -125,7 +125,7 @@ func (t *tosClient) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
-	return &obj{
+	return &Obj{
 		key,
 		head.ContentLength,
 		head.LastModified,
@@ -154,7 +154,7 @@ func (t *tosClient) List(prefix, marker, delimiter string, limit int64, followLi
 		if !strings.HasPrefix(o.Key, prefix) || o.Key < marker {
 			return nil, fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", o.Key, prefix, marker)
 		}
-		objs[i] = &obj{
+		objs[i] = &Obj{
 			o.Key,
 			o.Size,
 			o.LastModified,
@@ -164,7 +164,7 @@ func (t *tosClient) List(prefix, marker, delimiter string, limit int64, followLi
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
-			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &Obj{p.Prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -172,7 +172,7 @@ func (t *tosClient) List(prefix, marker, delimiter string, limit int64, followLi
 }
 
 func (t *tosClient) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (t *tosClient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
@@ -290,7 +290,7 @@ func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		hostParts[1]+"."+hostParts[2],
 		tos.WithRegion(strings.TrimSuffix(hostParts[1], "tos-")),
 		tos.WithCredentials(credentials),
-		tos.WithEnableVerifySSL(httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify))
+		tos.WithEnableVerifySSL(HttpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify))
 	if err != nil {
 		return nil, err
 	}

@@ -60,7 +60,7 @@ func newSpace(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		Endpoint:         &endpoint,
 		DisableSSL:       aws.Bool(!ssl),
 		S3ForcePathStyle: aws.Bool(false),
-		HTTPClient:       httpClient,
+		HTTPClient:       HttpClient,
 		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
 	}
 

@@ -50,7 +50,7 @@ func (q *qiniu) String() string {
 }
 
 func (q *qiniu) SetStorageClass(_ string) error {
-	return notSupported
+	return NotSupported
 }
 
 func (q *qiniu) Limits() Limits {
@@ -73,7 +73,7 @@ func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
 			req.Header.Add("Range", fmt.Sprintf("bytes=%d-", off))
 		}
 	}
-	resp, err := httpClient.Do(req)
+	resp, err := HttpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (q *qiniu) Head(key string) (Object, error) {
 	}
 
 	mtime := time.Unix(0, r.PutTime*100)
-	return &obj{
+	return &Obj{
 		key,
 		r.Fsize,
 		mtime,
@@ -133,7 +133,7 @@ func (q *qiniu) Copy(dst, src string) error {
 }
 
 func (q *qiniu) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (q *qiniu) Delete(key string, getters ...AttrGetter) error {
@@ -171,11 +171,11 @@ func (q *qiniu) List(prefix, marker, delimiter string, limit int64, followLink b
 	for i := 0; i < n; i++ {
 		entry := entries[i]
 		mtime := entry.PutTime / 10000000
-		objs[i] = &obj{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/"), ""}
+		objs[i] = &Obj{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/"), ""}
 	}
 	if delimiter != "" {
 		for _, p := range prefixes {
-			objs = append(objs, &obj{p, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &Obj{p, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -210,7 +210,7 @@ func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		Region:           &region,
 		DisableSSL:       aws.Bool(uri.Scheme == "http"),
 		S3ForcePathStyle: aws.Bool(true),
-		HTTPClient:       httpClient,
+		HTTPClient:       HttpClient,
 	}
 	ses, err := session.NewSession(awsConfig)
 	if err != nil {

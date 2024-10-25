@@ -156,7 +156,7 @@ func (t *redisStore) ListAll(prefix, marker string, followLink bool) (<-chan Obj
 						}
 					}
 					// FIXME: mtime
-					objs <- &obj{keyList[start:end][idx], size, now, strings.HasSuffix(keyList[start:end][idx], "/"), ""}
+					objs <- &Obj{keyList[start:end][idx], size, now, strings.HasSuffix(keyList[start:end][idx], "/"), ""}
 				}
 			}
 		}
@@ -169,7 +169,7 @@ func (t *redisStore) Head(key string) (Object, error) {
 	if err == redis.Nil {
 		return nil, os.ErrNotExist
 	}
-	return &obj{
+	return &Obj{
 		key,
 		int64(len(data)),
 		time.Now(),

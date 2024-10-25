@@ -37,21 +37,21 @@ func (s *withPrefix) SetStorageClass(sc string) error {
 	if o, ok := s.os.(SupportStorageClass); ok {
 		return o.SetStorageClass(sc)
 	}
-	return notSupported
+	return NotSupported
 }
 
 func (s *withPrefix) Symlink(oldName, newName string) error {
 	if w, ok := s.os.(SupportSymlink); ok {
 		return w.Symlink(oldName, s.prefix+newName)
 	}
-	return notSupported
+	return NotSupported
 }
 
 func (s *withPrefix) Readlink(name string) (string, error) {
 	if w, ok := s.os.(SupportSymlink); ok {
 		return w.Readlink(s.prefix + name)
 	}
-	return "", notSupported
+	return "", NotSupported
 }
 
 func (p *withPrefix) String() string {
@@ -67,7 +67,7 @@ func (p *withPrefix) Create() error {
 }
 
 type withFile struct {
-	File
+	FileItf
 	key string
 }
 
@@ -87,11 +87,11 @@ func (p *withPrefix) updateKey(o Object) Object {
 	}
 	key = key[len(p.prefix):]
 	switch po := o.(type) {
-	case *obj:
-		po.key = key
-	case *file:
-		po.key = key
-	case File:
+	case *Obj:
+		po.Key_ = key
+	case *File:
+		po.Key_ = key
+	case FileItf:
 		o = &withFile{po, key}
 	case Object:
 		o = &withObj{po, key}
@@ -162,21 +162,21 @@ func (p *withPrefix) Chmod(path string, mode os.FileMode) error {
 	if fs, ok := p.os.(FileSystem); ok {
 		return fs.Chmod(p.prefix+path, mode)
 	}
-	return notSupported
+	return NotSupported
 }
 
 func (p *withPrefix) Chown(path string, owner, group string) error {
 	if fs, ok := p.os.(FileSystem); ok {
 		return fs.Chown(p.prefix+path, owner, group)
 	}
-	return notSupported
+	return NotSupported
 }
 
 func (p *withPrefix) Chtimes(key string, mtime time.Time) error {
 	if fs, ok := p.os.(FileSystem); ok {
 		return fs.Chtimes(p.prefix+key, mtime)
 	}
-	return notSupported
+	return NotSupported
 }
 
 func (p *withPrefix) CreateMultipartUpload(key string) (*MultipartUpload, error) {

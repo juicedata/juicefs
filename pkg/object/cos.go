@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	cosChecksumKey        = "x-cos-meta-" + checksumAlgr
+	cosChecksumKey        = "x-cos-meta-" + ChecksumAlgr
 	cosRequestIDKey       = "X-Cos-Request-Id"
 	cosStorageClassHeader = "X-Cos-Storage-Class"
 )
@@ -97,7 +97,7 @@ func (c *COS) Head(key string) (Object, error) {
 		// This header is returned only if the object is not STANDARD storage class.
 		sc = "STANDARD"
 	}
-	return &obj{key, size, mtime, strings.HasSuffix(key, "/"), sc}, nil
+	return &Obj{key, size, mtime, strings.HasSuffix(key, "/"), sc}, nil
 }
 
 func (c *COS) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
@@ -116,10 +116,10 @@ func (c *COS) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadC
 			length = -1
 			logger.Warnf("failed to parse content-length %s: %s", resp.Header.Get("Content-Length"), err)
 		}
-		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey), length)
+		resp.Body = VerifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey), length)
 	}
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey)).SetStorageClass(resp.Header.Get(cosStorageClassHeader))
 	}
 	return resp.Body, nil
@@ -129,7 +129,7 @@ func (c *COS) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	var options cos.ObjectPutOptions
 	if ins, ok := in.(io.ReadSeeker); ok {
 		header := http.Header(map[string][]string{
-			cosChecksumKey: {generateChecksum(ins)},
+			cosChecksumKey: {GenerateChecksum(ins)},
 		})
 		options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{XCosMetaXXX: &header}
 	}
@@ -141,7 +141,7 @@ func (c *COS) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	}
 	resp, err := c.c.Object.Put(ctx, key, in, &options)
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey)).SetStorageClass(c.sc)
 	}
 	return err
@@ -160,7 +160,7 @@ func (c *COS) Copy(dst, src string) error {
 func (c *COS) Delete(key string, getters ...AttrGetter) error {
 	resp, err := c.c.Object.Delete(ctx, key)
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey))
 	}
 	return err
@@ -193,7 +193,7 @@ func (c *COS) List(prefix, marker, delimiter string, limit int64, followLink boo
 		if err != nil {
 			return nil, errors.WithMessagef(err, "failed to decode key %s", o.Key)
 		}
-		objs[i] = &obj{key, int64(o.Size), t, strings.HasSuffix(key, "/"), o.StorageClass}
+		objs[i] = &Obj{key, int64(o.Size), t, strings.HasSuffix(key, "/"), o.StorageClass}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -201,7 +201,7 @@ func (c *COS) List(prefix, marker, delimiter string, limit int64, followLink boo
 			if err != nil {
 				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", p)
 			}
-			objs = append(objs, &obj{key, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &Obj{key, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -209,7 +209,7 @@ func (c *COS) List(prefix, marker, delimiter string, limit int64, followLink boo
 }
 
 func (c *COS) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
-	return nil, notSupported
+	return nil, NotSupported
 }
 
 func (c *COS) CreateMultipartUpload(key string) (*MultipartUpload, error) {
@@ -331,7 +331,7 @@ func newCOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 			SecretID:     accessKey,
 			SecretKey:    secretKey,
 			SessionToken: token,
-			Transport:    httpClient.Transport,
+			Transport:    HttpClient.Transport,
 		},
 	})
 	client.UserAgent = UserAgent

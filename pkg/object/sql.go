@@ -114,7 +114,7 @@ func (s *sqlStore) Head(key string) (Object, error) {
 	if !ok {
 		return nil, os.ErrNotExist
 	}
-	return &obj{
+	return &Obj{
 		key,
 		b.Size,
 		b.Modified,
@@ -134,7 +134,7 @@ func (s *sqlStore) List(prefix, marker, delimiter string, limit int64, followLin
 	}
 	// todo
 	if delimiter != "" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	var bs []blob
 	err := s.db.Where("`key` > ?", []byte(marker)).Limit(int(limit)).Cols("`key`", "size", "modified").OrderBy("`key`").Find(&bs)
@@ -144,11 +144,11 @@ func (s *sqlStore) List(prefix, marker, delimiter string, limit int64, followLin
 	var objs []Object
 	for _, b := range bs {
 		if strings.HasPrefix(string(b.Key), prefix) {
-			objs = append(objs, &obj{
-				key:   string(b.Key),
-				size:  b.Size,
-				mtime: b.Modified,
-				isDir: strings.HasSuffix(string(b.Key), "/"),
+			objs = append(objs, &Obj{
+				Key_:   string(b.Key),
+				Size_:  b.Size,
+				Mtime_: b.Modified,
+				IsDir_: strings.HasSuffix(string(b.Key), "/"),
 			})
 		} else {
 			break

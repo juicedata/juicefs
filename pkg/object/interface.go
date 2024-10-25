@@ -30,20 +30,20 @@ type Object interface {
 	StorageClass() string
 }
 
-type obj struct {
-	key   string
-	size  int64
-	mtime time.Time
-	isDir bool
-	sc    string
+type Obj struct {
+	Key_   string
+	Size_  int64
+	Mtime_ time.Time
+	IsDir_ bool
+	Sc_    string
 }
 
-func (o *obj) Key() string          { return o.key }
-func (o *obj) Size() int64          { return o.size }
-func (o *obj) Mtime() time.Time     { return o.mtime }
-func (o *obj) IsDir() bool          { return o.isDir }
-func (o *obj) IsSymlink() bool      { return false }
-func (o *obj) StorageClass() string { return o.sc }
+func (o *Obj) Key() string          { return o.Key_ }
+func (o *Obj) Size() int64          { return o.Size_ }
+func (o *Obj) Mtime() time.Time     { return o.Mtime_ }
+func (o *Obj) IsDir() bool          { return o.IsDir_ }
+func (o *Obj) IsSymlink() bool      { return false }
+func (o *Obj) StorageClass() string { return o.Sc_ }
 
 type MultipartUpload struct {
 	MinPartSize int

@@ -1,6 +1,3 @@
-//go:build gluster
-// +build gluster
-
 /*
  * JuiceFS, Copyright 2023 Juicedata, Inc.
  *
@@ -17,11 +14,12 @@
  * limitations under the License.
  */
 
-package object
+package main
 
 import (
 	"bytes"
 	"fmt"
+	"github.com/juicedata/juicefs/pkg/object"
 	"io"
 	"io/fs"
 	"net/url"
@@ -38,7 +36,7 @@ import (
 )
 
 type gluster struct {
-	DefaultObjectStorage
+	object.DefaultObjectStorage
 	name string
 	indx uint64
 	vols []*gfapi.Volume
@@ -56,7 +54,7 @@ func (g *gluster) vol() *gfapi.Volume {
 	return g.vols[n%uint64(len(g.vols))]
 }
 
-func (g *gluster) Head(key string) (Object, error) {
+func (g *gluster) Head(key string) (object.Object, error) {
 	fi, err := g.vol().Stat(key)
 	if err != nil {
 		return nil, err
@@ -64,14 +62,14 @@ func (g *gluster) Head(key string) (Object, error) {
 	return g.toFile(key, fi, false), nil
 }
 
-func (g *gluster) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
+func (g *gluster) toFile(key string, fi fs.FileInfo, isSymlink bool) *object.File {
 	size := fi.Size()
 	if fi.IsDir() {
 		size = 0
 	}
-	owner, group := GetOwnerGroup(fi)
-	return &file{
-		Obj{
+	owner, group := object.GetOwnerGroup(fi)
+	return &object.File{
+		object.Obj{
 			key,
 			size,
 			fi.ModTime(),
@@ -110,9 +108,9 @@ func (g *gluster) Get(key string, off, limit int64, getters ...AttrGetter) (io.R
 	return f, nil
 }
 
-func (g *gluster) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (g *gluster) Put(key string, in io.Reader, getters ...object.AttrGetter) error {
 	v := g.vol()
-	if strings.HasSuffix(key, DirSuffix) {
+	if strings.HasSuffix(key, object.DirSuffix) {
 		return v.MkdirAll(key, os.FileMode(0777))
 	}
 	f, err := v.OpenFile(key, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
@@ -131,8 +129,8 @@ func (g *gluster) Put(key string, in io.Reader, getters ...AttrGetter) error {
 		}
 	}()
 
-	buf := BufPool.Get().(*[]byte)
-	defer BufPool.Put(buf)
+	buf := object.BufPool.Get().(*[]byte)
+	defer object.BufPool.Put(buf)
 	_, err = io.CopyBuffer(f, in, *buf)
 	if err != nil {
 		_ = f.Close()
@@ -146,7 +144,7 @@ func (g *gluster) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	return err
 }
 
-func (g *gluster) Delete(key string, getters ...AttrGetter) error {
+func (g *gluster) Delete(key string, getters ...object.AttrGetter) error {
 	v := g.vol()
 	err := v.Unlink(key)
 	if err != nil && strings.Contains(err.Error(), "is a directory") {
@@ -160,7 +158,7 @@ func (g *gluster) Delete(key string, getters ...AttrGetter) error {
 
 // readDirSorted reads the directory named by dirname and returns
 // a sorted list of directory entries.
-func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*MEntry, error) {
+func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
 	v := g.vol()
 	f, err := v.Open(dirname)
 	if err != nil {
@@ -172,42 +170,42 @@ func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*MEntry, err
 		return nil, err
 	}
 
-	mEntries := make([]*MEntry, 0, len(entries))
+	mEntries := make([]*object.MEntry, 0, len(entries))
 	for _, e := range entries {
 		name := e.Name()
 		if name == "." || name == ".." {
 			continue
 		}
 		if e.IsDir() {
-			mEntries = append(mEntries, &MEntry{nil, name + DirSuffix, e, false})
+			mEntries = append(mEntries, &mEntry{nil, name + dirSuffix, e, false})
 		} else if !e.Mode().IsRegular() && followLink {
 			fi, err := v.Stat(filepath.Join(dirname, name))
 			if err != nil {
-				mEntries = append(mEntries, &MEntry{nil, name, e, true})
+				mEntries = append(mEntries, &mEntry{nil, name, e, true})
 				continue
 			}
 			if fi.IsDir() {
-				name += DirSuffix
+				name += dirSuffix
 			}
-			mEntries = append(mEntries, &MEntry{nil, name, fi, false})
+			mEntries = append(mEntries, &mEntry{nil, name, fi, false})
 		} else {
-			mEntries = append(mEntries, &MEntry{nil, name, e, !e.Mode().IsRegular()})
+			mEntries = append(mEntries, &mEntry{nil, name, e, !e.Mode().IsRegular()})
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
 	return mEntries, err
 }
 
-func (g *gluster) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (g *gluster) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]object.Object, error) {
 	if delimiter != "/" {
-		return nil, NotSupported
+		return nil, object.NotSupported
 	}
 	var dir string = prefix
-	var objs []Object
-	if !strings.HasSuffix(dir, DirSuffix) {
+	var objs []object.Object
+	if !strings.HasSuffix(dir, dirSuffix) {
 		dir = path.Dir(dir)
-		if !strings.HasSuffix(dir, DirSuffix) {
-			dir += DirSuffix
+		if !strings.HasSuffix(dir, dirSuffix) {
+			dir += dirSuffix
 		}
 	} else if marker == "" {
 		obj, err := g.Head(prefix)
@@ -250,7 +248,7 @@ func (g *gluster) List(prefix, marker, delimiter string, limit int64, followLink
 }
 
 func (g *gluster) Chtimes(path string, mtime time.Time) error {
-	return NotSupported
+	return object.NotSupported
 }
 
 func (g *gluster) Chmod(path string, mode os.FileMode) error {
@@ -258,10 +256,10 @@ func (g *gluster) Chmod(path string, mode os.FileMode) error {
 }
 
 func (g *gluster) Chown(path string, owner, group string) error {
-	return NotSupported
+	return object.NotSupported
 }
 
-func newGluster(endpoint, ak, sk, token string) (ObjectStorage, error) {
+func newGluster(endpoint, ak, sk, token string) (object.ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("gluster://%s", endpoint)
 	}
@@ -330,8 +328,4 @@ func newGluster(endpoint, ak, sk, token string) (ObjectStorage, error) {
 		ostore.vols[i] = v
 	}
 	return &ostore, nil
-}
-
-func init() {
-	Register("gluster", newGluster)
 }

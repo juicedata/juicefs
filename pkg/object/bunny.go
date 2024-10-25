@@ -79,14 +79,14 @@ func (b *bunnyClient) Delete(key string, getters ...AttrGetter) error {
 
 func (b *bunnyClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, NotSupported
 	}
 	var output []Object
 	var dir = prefix
-	if !strings.HasSuffix(dir, dirSuffix) { // If no Directory list in parent directory
+	if !strings.HasSuffix(dir, DirSuffix) { // If no Directory list in parent directory
 		dir = path.Dir(dir)
-		if !strings.HasSuffix(dir, dirSuffix) {
-			dir += dirSuffix
+		if !strings.HasSuffix(dir, DirSuffix) {
+			dir += DirSuffix
 		}
 	}
 
@@ -128,7 +128,7 @@ func parseObjectMetadata(object bunny.Object) Object {
 	if object.IsDirectory && !strings.HasSuffix(key, "/") {
 		key = key + "/"
 	}
-	return &obj{
+	return &Obj{
 		key,
 		int64(object.Length),
 		lastChanged,
