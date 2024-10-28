@@ -1075,6 +1075,25 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		total += copied
 	}
 
+	// Calculate s3 compatible md5sum for complete multipart.
+	s3MD5 := minio.ComputeCompleteMultipartMD5(parts)
+	if n.gConf.KeepEtag {
+		eno = n.fs.SetXattr(mctx, tmp, s3Etag, []byte(s3MD5), 0)
+		if eno != 0 {
+			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", tmp, s3Etag, s3MD5, 0)
+		}
+	}
+
+	var tagStr []byte
+	if n.gConf.ObjTag {
+		var eno syscall.Errno
+		if tagStr, eno = n.fs.GetXattr(mctx, n.upath(bucket, uploadID), s3Tags); eno != 0 && eno != meta.ENOATTR {
+			logger.Errorf("get object tags error, path: %s, error: %s", n.upath(bucket, uploadID), eno)
+		} else if eno = n.fs.SetXattr(mctx, tmp, s3Tags, tagStr, 0); eno != 0 {
+			logger.Errorf("set object tags error, path: %s, tags: %s, error: %s", tmp, string(tagStr), eno)
+		}
+	}
+
 	name := n.path(bucket, object)
 	eno = n.fs.Rename(mctx, tmp, name, 0)
 	if eno == syscall.ENOENT {
@@ -1098,25 +1117,6 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		_ = n.fs.Delete(mctx, name)
 		err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 		return
-	}
-
-	// Calculate s3 compatible md5sum for complete multipart.
-	s3MD5 := minio.ComputeCompleteMultipartMD5(parts)
-	if n.gConf.KeepEtag {
-		eno = n.fs.SetXattr(mctx, name, s3Etag, []byte(s3MD5), 0)
-		if eno != 0 {
-			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", name, s3Etag, s3MD5, 0)
-		}
-	}
-
-	var tagStr []byte
-	if n.gConf.ObjTag {
-		var eno syscall.Errno
-		if tagStr, eno = n.fs.GetXattr(mctx, n.upath(bucket, uploadID), s3Tags); eno != 0 && eno != meta.ENOATTR {
-			logger.Errorf("get object tags error, path: %s, error: %s", n.upath(bucket, uploadID), eno)
-		} else if eno = n.fs.SetXattr(mctx, name, s3Tags, tagStr, 0); eno != 0 {
-			logger.Errorf("set object tags error, path: %s, tags: %s, error: %s", name, string(tagStr), eno)
-		}
 	}
 
 	// remove parts
