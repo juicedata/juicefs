@@ -637,7 +637,7 @@ func (f *fileReader) waitForSpliceIO(ctx meta.Context, reqs []*req, size int) (*
 		}
 	}
 
-	p, err := utils.GetPipe(size)
+	p, err := utils.NewPipe(size)
 	if err != nil {
 		logger.Errorf("GetPipe: %s", err)
 		return nil, syscall.EIO
@@ -655,7 +655,7 @@ func (f *fileReader) waitForSpliceIO(ctx meta.Context, reqs []*req, size int) (*
 			_, err = p.Write(s.page.Data[req.off:req.end()])
 			if err != nil {
 				logger.Errorf("Pipe write: %s", err)
-				p.Release()
+				// p.Release()
 				return nil, syscall.EIO
 			}
 		}
@@ -677,33 +677,37 @@ func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, sys
 	if offset >= f.length || size == 0 {
 		return 0, 0
 	}
-	block := &frange{offset, size}
-	if block.end() > f.length {
-		block.len = f.length - block.off
+	if offset+size > f.length {
+		size = f.length - offset
 	}
+	return int(size), 0
+	// block := &frange{offset, size}
+	// if block.end() > f.length {
+	// 	block.len = f.length - block.off
+	// }
 
-	f.cleanupRequests(block)
-	var lastBS uint64 = 32 << 10
-	if block.off+lastBS > f.length {
-		lastblock := frange{f.length - lastBS, lastBS}
-		if f.length < lastBS {
-			lastblock = frange{0, f.length}
-		}
-		f.readAhead(&lastblock)
-	}
-	ranges := f.splitRange(block)
-	reqs := f.prepareRequests(ranges)
-	defer func() {
-		for _, req := range reqs {
-			s := req.s
-			s.refs--
-			if s.refs == 0 && s.state == INVALID {
-				s.delete()
-			}
-		}
-	}()
-	f.checkReadahead(block)
-	return f.waitForIO(ctx, reqs, buf)
+	// f.cleanupRequests(block)
+	// var lastBS uint64 = 32 << 10
+	// if block.off+lastBS > f.length {
+	// 	lastblock := frange{f.length - lastBS, lastBS}
+	// 	if f.length < lastBS {
+	// 		lastblock = frange{0, f.length}
+	// 	}
+	// 	f.readAhead(&lastblock)
+	// }
+	// ranges := f.splitRange(block)
+	// reqs := f.prepareRequests(ranges)
+	// defer func() {
+	// 	for _, req := range reqs {
+	// 		s := req.s
+	// 		s.refs--
+	// 		if s.refs == 0 && s.state == INVALID {
+	// 			s.delete()
+	// 		}
+	// 	}
+	// }()
+	// f.checkReadahead(block)
+	// return f.waitForIO(ctx, reqs, buf)
 }
 
 // size is the max of what fuse wants, fdata.Size is the length of data
@@ -720,33 +724,37 @@ func (f *fileReader) SpliceRead(ctx meta.Context, offset uint64, size int) (*uti
 	if offset >= f.length || size == 0 {
 		return nil, 0
 	}
-	block := &frange{offset, uint64(size)}
-	if block.end() > f.length {
-		block.len = f.length - block.off
+	if offset+uint64(size) > f.length {
+		size = int(f.length - offset)
 	}
+	return utils.SubPipe(dummyPipe, size), 0
+	// block := &frange{offset, uint64(size)}
+	// if block.end() > f.length {
+	// 	block.len = f.length - block.off
+	// }
 
-	f.cleanupRequests(block)
-	var lastBS uint64 = 32 << 10
-	if block.off+lastBS > f.length {
-		lastblock := frange{f.length - lastBS, lastBS}
-		if f.length < lastBS {
-			lastblock = frange{0, f.length}
-		}
-		f.readAhead(&lastblock)
-	}
-	ranges := f.splitRange(block)
-	reqs := f.prepareRequests(ranges)
-	defer func() {
-		for _, req := range reqs {
-			s := req.s
-			s.refs--
-			if s.refs == 0 && s.state == INVALID {
-				s.delete()
-			}
-		}
-	}()
-	f.checkReadahead(block)
-	return f.waitForSpliceIO(ctx, reqs, size)
+	// f.cleanupRequests(block)
+	// var lastBS uint64 = 32 << 10
+	// if block.off+lastBS > f.length {
+	// 	lastblock := frange{f.length - lastBS, lastBS}
+	// 	if f.length < lastBS {
+	// 		lastblock = frange{0, f.length}
+	// 	}
+	// 	f.readAhead(&lastblock)
+	// }
+	// ranges := f.splitRange(block)
+	// reqs := f.prepareRequests(ranges)
+	// defer func() {
+	// 	for _, req := range reqs {
+	// 		s := req.s
+	// 		s.refs--
+	// 		if s.refs == 0 && s.state == INVALID {
+	// 			s.delete()
+	// 		}
+	// 	}
+	// }()
+	// f.checkReadahead(block)
+	// return f.waitForSpliceIO(ctx, reqs, size)
 }
 
 func (f *fileReader) visit(fn func(s *sliceReader) bool) {
@@ -916,44 +924,47 @@ func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.P
 }
 
 func (r *dataReader) Read(ctx context.Context, page *chunk.Page, slices []meta.Slice, offset uint32) int {
-	if len(slices) > 16 {
-		return r.readManySlices(ctx, page, slices, offset)
-	}
-	read := 0
-	var pos uint32
-	errs := make(chan error, 10)
-	waits := 0
-	buf := page.Data
-	size := len(buf)
-	for i := 0; i < len(slices); i++ {
-		if read < size && offset < pos+slices[i].Len {
-			toread := utils.Min(size-read, int(pos+slices[i].Len-offset))
-			go func(s *meta.Slice, p *chunk.Page, off, pos uint32) {
-				defer p.Release()
-				errs <- r.readSlice(ctx, s, p, int(off))
-			}(&slices[i], page.Slice(read, toread), offset-pos, pos)
-			read += toread
-			offset += uint32(toread)
-			waits++
+	return len(page.Data)
+	/*
+		if len(slices) > 16 {
+			return r.readManySlices(ctx, page, slices, offset)
 		}
-		pos += slices[i].Len
-	}
-	for read < size {
-		buf[read] = 0
-		read++
-	}
-	var err error
-	// wait for all goroutine to return, otherwise they may access invalid memory
-	for waits > 0 {
-		if e := <-errs; e != nil {
-			err = e
+		read := 0
+		var pos uint32
+		errs := make(chan error, 10)
+		waits := 0
+		buf := page.Data
+		size := len(buf)
+		for i := 0; i < len(slices); i++ {
+			if read < size && offset < pos+slices[i].Len {
+				toread := utils.Min(size-read, int(pos+slices[i].Len-offset))
+				go func(s *meta.Slice, p *chunk.Page, off, pos uint32) {
+					defer p.Release()
+					errs <- r.readSlice(ctx, s, p, int(off))
+				}(&slices[i], page.Slice(read, toread), offset-pos, pos)
+				read += toread
+				offset += uint32(toread)
+				waits++
+			}
+			pos += slices[i].Len
 		}
-		waits--
-	}
-	if err != nil {
-		return 0
-	}
-	return read
+		for read < size {
+			buf[read] = 0
+			read++
+		}
+		var err error
+		// wait for all goroutine to return, otherwise they may access invalid memory
+		for waits > 0 {
+			if e := <-errs; e != nil {
+				err = e
+			}
+			waits--
+		}
+		if err != nil {
+			return 0
+		}
+		return read
+	*/
 }
 
 func (r *dataReader) readManySlices(ctx context.Context, page *chunk.Page, slices []meta.Slice, offset uint32) int {

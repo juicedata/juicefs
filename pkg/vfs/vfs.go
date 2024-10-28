@@ -759,7 +759,7 @@ func (v *VFS) SpliceRead(ctx Context, ino Ino, size int, off uint64, fh uint64) 
 		if p != nil {
 			readSizeHistogram.Observe(float64(p.Size()))
 		}
-		logit(ctx, "sread", err, "(%d,%d,%d,%d): (%d)", ino, size, off, fh, size)
+		logit(ctx, "sread", err, "(%d,%d,%d,%d): (%d)", ino, size, off, fh, p.Size())
 	}()
 	h := v.findHandle(ino, fh)
 	if h == nil {
@@ -1242,6 +1242,8 @@ type VFS struct {
 	registry       *prometheus.Registry
 }
 
+var dummyPipe *utils.Pipe
+
 func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer prometheus.Registerer, registry *prometheus.Registry) *VFS {
 	reader := NewDataReader(conf, m, store)
 	writer := NewDataWriter(conf, m, store, reader)
@@ -1284,6 +1286,15 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 
 	go v.cleanupModified()
 	initVFSMetrics(v, writer, reader, registerer)
+
+	if conf.TryZeroCopy {
+		p, err := utils.NewPipe(8 << 20)
+		if err != nil {
+			logger.Fatalf("create pipe: %s", err)
+		}
+		_, _ = p.Write(make([]byte, 5<<20))
+		dummyPipe = p
+	}
 	return v
 }
 

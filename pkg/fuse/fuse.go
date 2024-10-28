@@ -261,7 +261,7 @@ func (fs *fileSystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) 
 		if p == nil { // FIXME: return value?
 			return nil, 0
 		}
-		return fuse.ReadResultFd(p.ReadFd(), 0, p.Size(), p.Release), 0
+		return fuse.ReadResultFd(p.ReadFd(), 0, p.Size(), nil), 0
 	} else {
 		n, err := fs.v.Read(ctx, inode, buf, in.Offset, in.Fh)
 		if err != 0 {
