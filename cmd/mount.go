@@ -272,10 +272,15 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		PrefixInternal:  c.Bool("prefix-internal"),
 		Pid:             os.Getpid(),
 		PPid:            os.Getppid(),
+		TryZeroCopy:     os.Getenv("JFS_ZERO_COPY") != "",
 	}
 	skip_check := os.Getenv("SKIP_BACKUP_META_CHECK") == "true"
 	if !skip_check && cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
 		logger.Fatalf("backup-meta should not be less than 5 minutes: %s", cfg.BackupMeta)
+	}
+	if cfg.TryZeroCopy && !utils.TrySplice() {
+		logger.Warnf("Test splice failed")
+		cfg.TryZeroCopy = false
 	}
 	return cfg
 }

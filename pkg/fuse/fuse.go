@@ -251,11 +251,24 @@ func (fs *fileSystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Op
 func (fs *fileSystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (fuse.ReadResult, fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	n, err := fs.v.Read(ctx, Ino(in.NodeId), buf, in.Offset, in.Fh)
-	if err != 0 {
-		return nil, fuse.Status(err)
+	inode := Ino(in.NodeId)
+	if fs.conf.TryZeroCopy && !vfs.IsSpecialNode(inode) {
+		p, err := fs.v.SpliceRead(ctx, inode, len(buf), in.Offset, in.Fh)
+		if err != 0 {
+			return nil, fuse.Status(err)
+		}
+		// offset > file length, or len(buf) == 0
+		if p == nil { // FIXME: return value?
+			return nil, 0
+		}
+		return fuse.ReadResultFd(p.ReadFd(), 0, p.Size(), p.Release), 0
+	} else {
+		n, err := fs.v.Read(ctx, inode, buf, in.Offset, in.Fh)
+		if err != 0 {
+			return nil, fuse.Status(err)
+		}
+		return fuse.ReadResultData(buf[:n]), 0
 	}
-	return fuse.ReadResultData(buf[:n]), 0
 }
 
 func (fs *fileSystem) Release(cancel <-chan struct{}, in *fuse.ReleaseIn) {

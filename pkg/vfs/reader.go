@@ -68,6 +68,7 @@ func (m sstate) String() string {
 
 type FileReader interface {
 	Read(ctx meta.Context, off uint64, buf []byte) (int, syscall.Errno)
+	SpliceRead(ctx meta.Context, off uint64, size int) (*utils.Pipe, syscall.Errno)
 	GetLength() uint64
 	Close(ctx meta.Context)
 }
@@ -619,6 +620,49 @@ func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, 
 	return n, 0
 }
 
+func (f *fileReader) waitForSpliceIO(ctx meta.Context, reqs []*req, size int) (*utils.Pipe, syscall.Errno) {
+	start := time.Now()
+	for _, req := range reqs {
+		s := req.s
+		for s.state != READY && uint64(s.currentPos) < s.block.len {
+			if s.cond.WaitWithTimeout(time.Second) {
+				if ctx.Canceled() {
+					logger.Warnf("read %d interrupted after %d", f.inode, time.Since(start))
+					return nil, syscall.EINTR
+				}
+			}
+			if f.shouldStop() {
+				return nil, f.err
+			}
+		}
+	}
+
+	p, err := utils.GetPipe(size)
+	if err != nil {
+		logger.Errorf("GetPipe: %s", err)
+		return nil, syscall.EIO
+	}
+	for _, req := range reqs {
+		s := req.s
+		if req.off < s.block.len && s.block.off+req.off < f.length {
+			if req.end() > s.block.len {
+				logger.Warnf("not enough bytes (%d < %d), restart read", s.block.len, req.end())
+				return nil, syscall.EAGAIN
+			}
+			if s.block.off+req.end() > f.length {
+				req.len = f.length - s.block.off - req.off
+			}
+			_, err = p.Write(s.page.Data[req.off:req.end()])
+			if err != nil {
+				logger.Errorf("Pipe write: %s", err)
+				p.Release()
+				return nil, syscall.EIO
+			}
+		}
+	}
+	return p, 0
+}
+
 func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, syscall.Errno) {
 	f.Lock()
 	defer f.Unlock()
@@ -660,6 +704,49 @@ func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, sys
 	}()
 	f.checkReadahead(block)
 	return f.waitForIO(ctx, reqs, buf)
+}
+
+// size is the max of what fuse wants, fdata.Size is the length of data
+func (f *fileReader) SpliceRead(ctx meta.Context, offset uint64, size int) (*utils.Pipe, syscall.Errno) {
+	f.Lock()
+	defer f.Unlock()
+	f.acquire()
+	defer f.release()
+
+	if f.err != 0 || f.closing {
+		return nil, f.err
+	}
+
+	if offset >= f.length || size == 0 {
+		return nil, 0
+	}
+	block := &frange{offset, uint64(size)}
+	if block.end() > f.length {
+		block.len = f.length - block.off
+	}
+
+	f.cleanupRequests(block)
+	var lastBS uint64 = 32 << 10
+	if block.off+lastBS > f.length {
+		lastblock := frange{f.length - lastBS, lastBS}
+		if f.length < lastBS {
+			lastblock = frange{0, f.length}
+		}
+		f.readAhead(&lastblock)
+	}
+	ranges := f.splitRange(block)
+	reqs := f.prepareRequests(ranges)
+	defer func() {
+		for _, req := range reqs {
+			s := req.s
+			s.refs--
+			if s.refs == 0 && s.state == INVALID {
+				s.delete()
+			}
+		}
+	}()
+	f.checkReadahead(block)
+	return f.waitForSpliceIO(ctx, reqs, size)
 }
 
 func (f *fileReader) visit(fn func(s *sliceReader) bool) {

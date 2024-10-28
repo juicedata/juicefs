@@ -129,6 +129,7 @@ type Config struct {
 	HideInternal         bool
 	RootSquash           *RootSquash `json:",omitempty"`
 	NonDefaultPermission bool        `json:",omitempty"`
+	TryZeroCopy          bool        `json:",omitempty"`
 
 	Pid       int
 	PPid      int
@@ -745,6 +746,66 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 	n, err = h.reader.Read(ctx, off, buf)
 	for err == syscall.EAGAIN {
 		n, err = h.reader.Read(ctx, off, buf)
+	}
+	if err == syscall.ENOENT {
+		err = syscall.EBADF
+	}
+	h.removeOp(ctx)
+	return
+}
+
+func (v *VFS) SpliceRead(ctx Context, ino Ino, size int, off uint64, fh uint64) (p *utils.Pipe, err syscall.Errno) {
+	defer func() {
+		if p != nil {
+			readSizeHistogram.Observe(float64(p.Size()))
+		}
+		logit(ctx, "sread", err, "(%d,%d,%d,%d): (%d)", ino, size, off, fh, size)
+	}()
+	h := v.findHandle(ino, fh)
+	if h == nil {
+		err = syscall.EBADF
+		return
+	}
+	if h.flags&O_RECOVERED != 0 {
+		// recovered
+		var attr Attr
+		err = v.Meta.Open(ctx, ino, syscall.O_RDONLY, &attr)
+		if err != 0 {
+			v.releaseHandle(ino, fh)
+			err = syscall.EBADF
+			return
+		}
+		h.Lock()
+		v.UpdateLength(ino, &attr)
+		h.flags = syscall.O_RDONLY
+		h.reader = v.reader.Open(h.inode, attr.Length)
+		h.Unlock()
+	}
+
+	if off >= maxFileSize || off+uint64(size) >= maxFileSize {
+		err = syscall.EFBIG
+		return
+	}
+	if h.reader == nil {
+		err = syscall.EBADF
+		return
+	}
+
+	// there could be read operation for write-only if kernel writeback is enabled
+	if v.Conf.FuseOpts != nil && !v.Conf.FuseOpts.EnableWriteback && !hasReadPerm(h.flags) {
+		err = syscall.EBADF
+		return
+	}
+	if !h.Rlock(ctx) {
+		err = syscall.EINTR
+		return
+	}
+	defer h.Runlock()
+
+	_ = v.writer.Flush(ctx, ino)
+	p, err = h.reader.SpliceRead(ctx, off, size)
+	for err == syscall.EAGAIN {
+		p, err = h.reader.SpliceRead(ctx, off, size)
 	}
 	if err == syscall.ENOENT {
 		err = syscall.EBADF
