@@ -726,7 +726,7 @@ func (n *jfsObjects) mkdirAll(ctx context.Context, p string) error {
 	return eno
 }
 
-func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions, objTagging map[string]string) (err error) {
+func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions, applyObjTaggingFunc func(tmpName string)) (err error) {
 	tmpname := n.tpath(bucket, "tmp", minio.MustGetUUID())
 	f, eno := n.fs.Create(mctx, tmpname, 0666, n.gConf.Umask)
 	if eno == syscall.ENOENT {
@@ -767,11 +767,8 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 	if err != nil {
 		return
 	}
-	for k, v := range objTagging {
-		if errno := n.fs.SetXattr(mctx, tmpname, k, []byte(v), 0); errno != 0 {
-			logger.Errorf("set xattr error, path: %s(%s),xattr: %s,value: %s,flags: %d", tmpname, object, k, v, 0)
-		}
-	}
+
+	applyObjTaggingFunc(tmpname)
 
 	eno = n.fs.Rename(mctx, tmpname, object, 0)
 	if eno == syscall.ENOENT {
@@ -793,7 +790,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 		return
 	}
 	var tagStr string
-	var etag string
+	var etag = r.MD5CurrentHexString()
 	p := n.path(bucket, object)
 	if strings.HasSuffix(object, sep) {
 		if err = n.mkdirAll(ctx, p); err != nil {
@@ -811,18 +808,23 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 		// if the put object is a directory, set its atime to 0
 		n.setFileAtime(p, 0)
 	} else {
-		var objTagging = make(map[string]string)
-		etag = r.MD5CurrentHexString()
-		if n.gConf.KeepEtag && !strings.HasSuffix(object, sep) {
-			objTagging[s3Etag] = etag
-		}
-		// tags: key1=value1&key2=value2&key3=value3
-		if n.gConf.ObjTag && opts.UserDefined != nil {
-			if tagStr = opts.UserDefined[xhttp.AmzObjectTagging]; tagStr != "" {
-				objTagging[s3Tags] = tagStr
+		if err = n.putObject(ctx, bucket, p, r, opts, func(tmpName string) {
+			etag = r.MD5CurrentHexString()
+			if n.gConf.KeepEtag && !strings.HasSuffix(object, sep) {
+				if eno := n.fs.SetXattr(mctx, tmpName, s3Etag, []byte(etag), 0); eno != 0 {
+					logger.Errorf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", tmpName, s3Etag, etag, 0)
+				}
 			}
-		}
-		if err = n.putObject(ctx, bucket, p, r, opts, objTagging); err != nil {
+			// tags: key1=value1&key2=value2&key3=value3
+			var tagStr string
+			if n.gConf.ObjTag && opts.UserDefined != nil {
+				if tagStr = opts.UserDefined[xhttp.AmzObjectTagging]; tagStr != "" {
+					if eno := n.fs.SetXattr(mctx, tmpName, s3Tags, []byte(tagStr), 0); eno != 0 {
+						logger.Errorf("set object tags error, path: %s,value: %s error: %s", tmpName, tagStr, eno)
+					}
+				}
+			}
+		}); err != nil {
 			return
 		}
 	}
@@ -1025,8 +1027,13 @@ func (n *jfsObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 		return
 	}
 	p := n.ppath(bucket, uploadID, strconv.Itoa(partID))
-	etag := r.MD5CurrentHexString()
-	if err = n.putObject(ctx, bucket, p, r, opts, map[string]string{s3Etag: etag}); err != nil {
+	var etag string
+	if err = n.putObject(ctx, bucket, p, r, opts, func(tmpName string) {
+		etag = r.MD5CurrentHexString()
+		if n.fs.SetXattr(mctx, tmpName, s3Etag, []byte(etag), 0) != 0 {
+			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", tmpName, s3Etag, etag, 0)
+		}
+	}); err != nil {
 		err = jfsToObjectErr(ctx, err, bucket, object)
 		return
 	}
