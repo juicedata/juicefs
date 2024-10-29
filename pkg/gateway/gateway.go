@@ -790,7 +790,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 		return
 	}
 	var tagStr string
-	var etag = r.MD5CurrentHexString()
+	var etag string
 	p := n.path(bucket, object)
 	if strings.HasSuffix(object, sep) {
 		if err = n.mkdirAll(ctx, p); err != nil {
@@ -1096,6 +1096,13 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		var eno syscall.Errno
 		if tagStr, eno = n.fs.GetXattr(mctx, n.upath(bucket, uploadID), s3Tags); eno != 0 && eno != meta.ENOATTR {
 			logger.Errorf("get object tags error, path: %s, error: %s", n.upath(bucket, uploadID), eno)
+		} else if eno = n.fs.SetXattr(mctx, tmp, s3Tags, tagStr, 0); eno != 0 {
+			logger.Errorf("set object tags error, path: %s, tags: %s, error: %s", tmp, string(tagStr), eno)
+		}
+		if tagStr, eno = n.fs.GetXattr(mctx, n.upath(bucket, uploadID), s3Tags); eno != 0 {
+			if eno != meta.ENOATTR {
+				logger.Errorf("get object tags error, path: %s, error: %s", n.upath(bucket, uploadID), eno)
+			}
 		} else if eno = n.fs.SetXattr(mctx, tmp, s3Tags, tagStr, 0); eno != 0 {
 			logger.Errorf("set object tags error, path: %s, tags: %s, error: %s", tmp, string(tagStr), eno)
 		}
