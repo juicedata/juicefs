@@ -816,7 +816,6 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 				}
 			}
 			// tags: key1=value1&key2=value2&key3=value3
-			var tagStr string
 			if n.gConf.ObjTag && opts.UserDefined != nil {
 				if tagStr = opts.UserDefined[xhttp.AmzObjectTagging]; tagStr != "" {
 					if eno := n.fs.SetXattr(mctx, tmpName, s3Tags, []byte(tagStr), 0); eno != 0 {
