@@ -430,7 +430,6 @@ type apiInfo struct {
 	count     int
 	startKey  int
 	getResult func(cost float64) []string
-	after     func(blob object.ObjectStorage)
 }
 
 type benchMarkObj struct {
@@ -480,9 +479,6 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 	var wg sync.WaitGroup
 	pool := make(chan struct{}, bm.threads)
 	count := api.count
-	if api.count != 0 {
-		count = api.count
-	}
 	bar := bm.progressBar.AddCountBar(api.title, int64(count))
 	var err error
 	start := time.Now()
@@ -503,9 +499,6 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 	wg.Wait()
 	bar.Done()
 	line := api.getResult(time.Since(start).Seconds())
-	if api.after != nil {
-		api.after(bm.blob)
-	}
 	if err != nil {
 		logger.Errorf("%s test failed: %s", api.name, err)
 		return []string{api.title, failed, failed}
