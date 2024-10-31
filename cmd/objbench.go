@@ -253,11 +253,6 @@ func objbench(ctx *cli.Context) error {
 			count:    bCount,
 			title:    "download objects",
 			startKey: sCount,
-			after: func(blob object.ObjectStorage) {
-				for i := sCount; i < sCount+bCount; i++ {
-					_ = blob.Delete(strconv.Itoa(i))
-				}
-			},
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
@@ -274,7 +269,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("list", float64(sCount)*100/cost, float64(threads)*cost*10, 2, colorful)
+					line[1], line[2] = colorize("list", float64(sCount+bCount)*100/cost, float64(threads)*cost*10, 2, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/op"
 				}
@@ -334,12 +329,12 @@ func objbench(ctx *cli.Context) error {
 			},
 		}, {
 			name:  "delete",
-			count: sCount,
+			count: sCount + bCount,
 			title: "delete objects",
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("delete", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("delete", float64(sCount+bCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
