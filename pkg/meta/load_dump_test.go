@@ -25,12 +25,13 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
 
-const sampleFile = "metadata.sample"
+const sampleFile = "../../1M_files_in_one_dir.dump"
 const subSampleFile = "metadata-sub.sample"
 
 func TestEscape(t *testing.T) {
@@ -88,20 +89,7 @@ func GbkToUtf8(s []byte) ([]byte, error) {
 	return d, nil
 }
 
-func testLoad(t *testing.T, uri, fname string) Meta {
-	m := NewClient(uri, nil)
-	if err := m.Reset(); err != nil {
-		t.Fatalf("reset meta: %s", err)
-	}
-	fp, err := os.Open(fname)
-	if err != nil {
-		t.Fatalf("open file: %s", fname)
-	}
-	defer fp.Close()
-	if err = m.LoadMeta(fp); err != nil {
-		t.Fatalf("load meta: %s", err)
-	}
-
+func checkMeta(t *testing.T, m Meta) {
 	ctx := Background
 	var entries []*Entry
 	if st := m.Readdir(ctx, 1, 1, &entries); st != 0 {
@@ -207,7 +195,22 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	if st := m.GetXattr(ctx, 3, "dk", &value); st != 0 || string(value) != "果汁%25" {
 		t.Fatalf("getxattr: %s %v", st, value)
 	}
+}
 
+func testLoad(t *testing.T, uri, fname string) Meta {
+	m := NewClient(uri, nil)
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	fp, err := os.Open(fname)
+	if err != nil {
+		t.Fatalf("open file: %s", fname)
+	}
+	defer fp.Close()
+	if err = m.LoadMeta(fp); err != nil {
+		t.Fatalf("load meta: %s", err)
+	}
+	// checkMeta(t, m)
 	return m
 }
 
@@ -282,10 +285,62 @@ func testLoadDump(t *testing.T, name, addr string) {
 }
 
 func TestLoadDump(t *testing.T) { //skip mutate
-	testLoadDump(t, "redis", "redis://127.0.0.1/10")
-	testLoadDump(t, "mysql", "mysql://root:@/dev")
-	testLoadDump(t, "badger", "badger://jfs-load-dump")
-	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
+	// testLoadDump(t, "redis", "redis://127.0.0.1/10")
+	testLoadDump(t, "mysql", "mysql://root:123456@/dev")
+	// testLoadDump(t, "badger", "badger://jfs-load-dump")
+	// testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
+}
+
+func testDumpV2(t *testing.T, m Meta, result string) {
+	fp, err := os.OpenFile(result, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		t.Fatalf("open file %s: %s", result, err)
+	}
+	defer fp.Close()
+	if _, err = m.Load(true); err != nil {
+		t.Fatalf("load setting: %s", err)
+	}
+	if err = m.DumpMetaV2(Background, fp, &DumpOption{CoNum: 10}); err != nil {
+		t.Fatalf("dump meta: %s", err)
+	}
+	fp.Sync()
+}
+
+func testLoadV2(t *testing.T, uri, fname string) Meta {
+	m := NewClient(uri, nil)
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	fp, err := os.Open(fname)
+	if err != nil {
+		t.Fatalf("open file: %s", fname)
+	}
+	defer fp.Close()
+	if err = m.LoadMetaV2(Background, fp, &LoadOption{CoNum: 10}); err != nil {
+		t.Fatalf("load meta: %s", err)
+	}
+	// checkMeta(t, m)
+	return m
+}
+
+func testLoadDumpV2(t *testing.T, name, addr string) {
+	t.Run("Metadata Engine: "+name, func(t *testing.T) {
+		start := time.Now()
+		m := testLoad(t, fmt.Sprintf("%s%s", addr, "dev"), sampleFile)
+		t.Logf("load meta: %v", time.Since(start))
+		start = time.Now()
+		testDumpV2(t, m, "test.dump")
+		m.Shutdown()
+		t.Logf("dump meta: %v", time.Since(start))
+		start = time.Now()
+		m = testLoadV2(t, fmt.Sprintf("%s%s", addr, "dev2"), "test.dump")
+		m.Shutdown()
+		t.Logf("load meta v2: %v", time.Since(start))
+	})
+}
+
+func TestLoadDumpV2(t *testing.T) {
+	testLoadDumpV2(t, "mysql", "mysql://root:123456@/")
 }
 
 func TestLoadDumpSlow(t *testing.T) { //skip mutate

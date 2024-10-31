@@ -48,6 +48,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/protobuf/proto"
 )
 
 /*
@@ -3544,6 +3545,7 @@ func (m *redisMeta) checkServerConfig() {
 }
 
 func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
+	logger.Infof("Dump entries: %+v", es)
 	ctx := Background
 	var keys []string
 	for _, e := range es {
@@ -3656,6 +3658,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 				}
 			case TypeDirectory:
 				keys, cursor, err := dr[i].Result()
+				logger.Infof("inode %d, cursor %d, keys %d err %v", inode, cursor, len(keys), err)
 				if err != nil {
 					return err
 				}
@@ -4714,4 +4717,75 @@ func (s *redisDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno
 
 func (s *redisDirHandler) Read(offset int) {
 	s.readOff = offset - len(s.initEntries)
+}
+
+func (m *redisMeta) DumpMetaV2(ctx Context, w io.WriteSeeker, opt *DumpOption) (err error) {
+	opt = opt.check()
+
+	bak := newBakFormat()
+	bak.seekForWrite(w)
+
+	type result struct {
+		seg segWriter
+		msg proto.Message
+	}
+
+	ch := make(chan *result, 100)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(ch)
+		for _, seg := range []iDumpSeg{
+			newFormatDS(bak, m.getFormat(), opt.KeepSecret),
+			newCounterDS(bak),
+			newSustainedDS(bak),
+			newDelFileDS(bak),
+			newAclDS(bak),
+		} {
+			rows := seg.newData()
+			if err := queryAll(rows); err != nil {
+				logger.Errorf("query %s err: %v", seg, err)
+				ctx.Cancel()
+				return
+			}
+			msg := seg.encode(rows)
+			if msg == nil {
+				continue
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- &result{seg, msg}:
+			}
+		}
+	}()
+
+	finished := false
+	for !finished {
+		select {
+		case <-ctx.Done():
+			wg.Wait()
+			return ctx.Err()
+		case res, ok := <-ch:
+			if !ok {
+				finished = true
+				break
+			}
+			if err := res.seg.write(w, res.msg); err != nil {
+				logger.Errorf("write %s err: %v", res.seg, err)
+				ctx.Cancel()
+				wg.Wait()
+				return err
+			}
+			res.seg.release(res.msg)
+		}
+	}
+
+	wg.Wait()
+	return bak.writeHeader(w)
+}
+
+func (m *redisMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
+	return nil
 }

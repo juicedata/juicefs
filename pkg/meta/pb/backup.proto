@@ -1,0 +1,190 @@
+syntax = "proto3";
+package pb;
+option go_package = "./pb";
+
+/*
+1. install protocol buffer compiler
+2. install Go protoc plugin (protoc-gen-go)
+3. exec: protoc --go_out=pkg/meta pkg/meta/pb/backup.proto in main directory
+*/
+
+message Format {
+  string name = 1;
+  string uuid = 2;
+  string storage = 3;
+  string storage_class = 4;
+  string bucket = 5;
+  string access_key = 6;
+  string secret_key = 7;
+  string session_token = 8;
+  int32 block_size = 9;
+  string compression = 10;
+  int32 shards = 11;
+  bool hash_prefix = 12;
+  uint64 capacity = 13;
+  uint64 inodes = 14;
+  string encrypt_key = 15;
+  string encrypt_algo = 16;
+  bool key_encrypted = 17;
+  int64 upload_limit = 18; // Mbps
+  int64 download_limit = 19; // Mbps
+  int32 trash_days = 20;
+  int32 meta_version = 21;
+  string min_client_version = 22;
+  string max_client_version = 23;
+  bool dir_stats = 24;
+  bool enable_acl = 25;
+}
+
+message Counters {
+  int64 usedSpace = 1;
+  int64 usedInodes = 2;
+  int64 nextInode = 3;
+  int64 nextChunk = 4;
+  int64 nextSession = 5;
+  int64 nextTrash = 6;
+}
+
+message Sustained {
+  uint64 sid = 1;
+  repeated uint64 inodes = 2;
+}
+
+message Sustaineds {
+  repeated Sustained sustaineds = 1;
+}
+
+message DelFile {
+  uint64 inode = 1;
+  uint64 length = 2;
+  int64 expire = 3;
+}
+
+message DelFiles {
+  repeated DelFile files = 1;
+}
+
+message Quota {
+  uint64 inode = 1;
+  int64 maxSpace = 2;
+  int64 maxInodes = 3;
+  int64 usedSpace = 4;
+  int64 usedInodes = 5;
+}
+
+message QuotaBatch {
+  repeated Quota batch = 1;
+}
+
+message Stat {
+  uint64 inode = 1;
+  int64 dataLength = 2;
+  int64 usedSpace = 3;
+  int64 usedInodes = 4;
+}
+
+message StatBatch {
+  repeated Stat batch = 1;
+}
+
+message Edge {
+  uint64 parent = 1;
+  uint64 inode = 2;
+  bytes name = 3;
+  uint32 type = 4;
+}
+
+message EdgeBatch {
+  repeated Edge batch = 1;
+}
+
+message Node {
+  uint64 inode = 1;
+  uint32 type = 2;   
+  uint32 flags = 3; 
+  uint32 mode = 4;
+  uint32 uid = 5;
+  uint32 gid = 6;
+  int64 atime = 7;
+  int64 mtime = 8;
+  int64 ctime = 9;
+  int32 atime_nsec = 10;
+  int32 mtime_nsec = 11;
+  int32 ctime_nsec = 12;
+  uint32 nlink = 13;
+  uint64 length = 14;
+  uint32 rdev = 15;
+  uint64 parent = 16;
+  uint32 access_acl_id = 17;
+  uint32 default_acl_id = 18;
+}
+
+message NodeBatch {
+  repeated Node batch = 1;
+}
+
+message Slice {
+  uint64 id   = 1;
+  uint32 pos  = 2;
+  uint32 size = 3;
+  uint32 off  = 4;
+  uint32 len  = 5;
+}
+
+message Chunk {
+  uint64 inode = 1;
+  uint32 index = 2;
+  repeated Slice slices = 3;
+}
+
+message ChunkBatch {
+  repeated Chunk batch = 1;
+}
+
+message SliceRef {
+  uint64 id   = 1;
+  uint32 size = 2;
+  int64 refs  = 3;
+}
+
+message SliceRefBatch {
+  repeated SliceRef batch = 1;
+}
+
+message Symlink {
+  uint64 inode = 1;
+  bytes target = 2;
+}
+
+message SymlinkBatch {
+  repeated Symlink batch = 1;
+}
+
+message Xattr {
+  uint64 inode = 1;
+  string name = 2;
+  bytes value = 3;
+}
+
+message XattrBatch {
+  repeated Xattr batch = 1;
+}
+
+message AclEntry {
+  uint32 id   = 1;
+  uint32 perm = 2; 
+}
+
+message Acl {
+  uint32 id     = 1;
+  uint32 owner  = 2; 
+  uint32 group  = 3; 
+  uint32 other  = 4; 
+  uint32 mask   = 5; 
+  repeated AclEntry users  = 6;
+  repeated AclEntry groups = 7;
+}
+
+message Acls {
+  repeated Acl acls = 1;
+}

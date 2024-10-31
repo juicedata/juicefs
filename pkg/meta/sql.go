@@ -355,7 +355,7 @@ func (m *dbMeta) syncTable(beans ...interface{}) error {
 	return err
 }
 
-func (m *dbMeta) doInit(format *Format, force bool) error {
+func (m *dbMeta) syncAllTables() error {
 	if err := m.syncTable(new(setting), new(counter)); err != nil {
 		return fmt.Errorf("create table setting, counter: %s", err)
 	}
@@ -383,7 +383,13 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 	if err := m.syncTable(new(acl)); err != nil {
 		return fmt.Errorf("create table acl: %s", err)
 	}
+	return nil
+}
 
+func (m *dbMeta) doInit(format *Format, force bool) error {
+	if err := m.syncAllTables(); err != nil {
+		return err
+	}
 	var s = setting{Name: "format"}
 	var ok bool
 	err := m.roTxn(func(ses *xorm.Session) (err error) {
@@ -3870,7 +3876,20 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}, aclMaxId *uin
 	chs[0] <- n
 }
 
-func (m *dbMeta) LoadMeta(r io.Reader) error {
+func (m *dbMeta) getTxnBatchNum() int {
+	switch m.Name() {
+	case "sqlite3":
+		return 999 / MaxFieldsCountOfTable
+	case "mysql":
+		return 65535 / MaxFieldsCountOfTable
+	case "postgres":
+		return 1000
+	default:
+		return 1000
+	}
+}
+
+func (m *dbMeta) checkAddr() error {
 	tables, err := m.db.DBMetas()
 	if err != nil {
 		return err
@@ -3880,41 +3899,20 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		if !strings.Contains(addr, "://") {
 			addr = fmt.Sprintf("%s://%s", m.Name(), addr)
 		}
-		return fmt.Errorf("Database %s is not empty", addr)
+		return fmt.Errorf("database %s is not empty", addr)
 	}
-	if err = m.syncTable(new(setting), new(counter)); err != nil {
-		return fmt.Errorf("create table setting, counter: %s", err)
+	return nil
+}
+
+func (m *dbMeta) LoadMeta(r io.Reader) error {
+	if err := m.checkAddr(); err != nil {
+		return err
 	}
-	if err = m.syncTable(new(node), new(edge), new(symlink), new(xattr)); err != nil {
-		return fmt.Errorf("create table node, edge, symlink, xattr: %s", err)
+	if err := m.syncAllTables(); err != nil {
+		return err
 	}
-	if err = m.syncTable(new(chunk), new(sliceRef), new(delslices)); err != nil {
-		return fmt.Errorf("create table chunk, chunk_ref, delslices: %s", err)
-	}
-	if err = m.syncTable(new(session2), new(sustained), new(delfile)); err != nil {
-		return fmt.Errorf("create table session2, sustaind, delfile: %s", err)
-	}
-	if err = m.syncTable(new(flock), new(plock), new(dirQuota)); err != nil {
-		return fmt.Errorf("create table flock, plock, dirQuota: %s", err)
-	}
-	if err := m.syncTable(new(dirStats)); err != nil {
-		return fmt.Errorf("create table dirStats: %s", err)
-	}
-	if err := m.syncTable(new(detachedNode)); err != nil {
-		return fmt.Errorf("create table detachedNode: %s", err)
-	}
-	if err = m.syncTable(new(acl)); err != nil {
-		return fmt.Errorf("create table acl: %s", err)
-	}
-	var batch int
-	switch m.Name() {
-	case "sqlite3":
-		batch = 999 / MaxFieldsCountOfTable
-	case "mysql":
-		batch = 65535 / MaxFieldsCountOfTable
-	case "postgres":
-		batch = 1000
-	}
+
+	batch := m.getTxnBatchNum()
 	chs := make([]chan interface{}, 6) // node, edge, chunk, chunkRef, xattr, others
 	insert := func(index int, beans []interface{}) error {
 		return m.txn(func(s *xorm.Session) error {
