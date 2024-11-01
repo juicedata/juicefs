@@ -366,10 +366,6 @@ func objbench(ctx *cli.Context) error {
 	}
 	progress.Done()
 
-	for i := bCount; i < bCount*2; i++ {
-		_ = bm.delete(strconv.Itoa(i), 0)
-	}
-
 	fmt.Printf("Benchmark finished! block-size: %s, big-object-size: %s, small-object-size: %s, small-objects: %d, NumThreads: %d\n",
 		humanize.IBytes(uint64(bSize)), humanize.IBytes(uint64(fsize)), humanize.IBytes(uint64(smallBSize)), sCount, threads)
 
