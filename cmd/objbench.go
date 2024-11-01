@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -119,7 +120,7 @@ var (
 type warning error
 
 var groupName string
-var bCount, sCount int
+var listCount, bCount, sCount int
 
 func objbench(ctx *cli.Context) error {
 	setup(ctx, 1)
@@ -171,6 +172,10 @@ func objbench(ctx *cli.Context) error {
 	}()
 	bCount = int(math.Ceil(float64(fsize) / float64(bSize)))
 	sCount = int(ctx.Uint("small-objects"))
+	listCount = sCount + bCount
+	if listCount > 1000 {
+		listCount = 1000
+	}
 	threads := int(ctx.Uint("threads"))
 	colorful := utils.SupportANSIColor(os.Stdout.Fd())
 	progress := utils.NewProgress(false)
@@ -270,20 +275,20 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("list", float64(sCount+bCount)*float64(threads)/cost, float64(threads)*cost*10, 2, colorful)
+					line[1], line[2] = colorize("list", float64(listCount)*float64(threads)/cost, cost*1000, 2, colorful)
 					line[1] += " objects/s"
-					line[2] += " ms/op"
+					line[2] += fmt.Sprintf(" ms/ %d objects", listCount)
 				}
 				return line
 			},
 		}, {
 			name:  "head",
-			count: sCount,
+			count: sCount + bCount,
 			title: "head objects",
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("head", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("head", float64(sCount+bCount)/cost, float64(threads)*cost*1000/float64(sCount+bCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -291,12 +296,12 @@ func objbench(ctx *cli.Context) error {
 			},
 		}, {
 			name:  "chtimes",
-			count: sCount,
+			count: sCount + bCount,
 			title: "update mtime",
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chtimes", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("chtimes", float64(sCount+bCount)/cost, float64(threads)*cost*1000/float64(sCount+bCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -304,12 +309,12 @@ func objbench(ctx *cli.Context) error {
 			},
 		}, {
 			name:  "chmod",
-			count: sCount,
+			count: sCount + bCount,
 			title: "change permissions",
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chmod", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("chmod", float64(sCount+bCount)/cost, float64(threads)*cost*1000/float64(sCount+bCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -317,12 +322,12 @@ func objbench(ctx *cli.Context) error {
 			},
 		}, {
 			name:  "chown",
-			count: sCount,
+			count: sCount + bCount,
 			title: "change owner/group",
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chown", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("chown", float64(sCount+bCount)/cost, float64(threads)*cost*1000/float64(sCount+bCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -335,7 +340,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("delete", float64(sCount+bCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("delete", float64(sCount+bCount)/cost, float64(threads)*cost*1000/float64(sCount+bCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -478,12 +483,12 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 	count := api.count
 	var bar *utils.Bar
 	if api.name == "list" {
-		bar = bm.progressBar.AddCountBar(api.title, int64(bCount+sCount)*int64(count))
+		bar = bm.progressBar.AddCountBar(api.title, int64(listCount)*int64(count))
 	} else {
 		bar = bm.progressBar.AddCountBar(api.title, int64(count))
 	}
 	var err error
-	start := time.Now()
+	var duration int64
 	for i := api.startKey; i < api.startKey+count; i++ {
 		pool <- struct{}{}
 		wg.Add(1)
@@ -492,11 +497,13 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 				<-pool
 				wg.Done()
 			}()
+			start := time.Now()
 			if e := fn(strconv.Itoa(key), api.startKey); e != nil {
 				err = e
 			}
+			atomic.AddInt64(&duration, time.Since(start).Milliseconds())
 			if api.name == "list" {
-				bar.IncrInt64(int64(bCount + sCount))
+				bar.IncrInt64(int64(listCount))
 			} else {
 				bar.Increment()
 			}
@@ -504,7 +511,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 	}
 	wg.Wait()
 	bar.Done()
-	line := api.getResult(time.Since(start).Seconds())
+	line := api.getResult(float64(duration) / float64(bm.threads) / 1000)
 	if err != nil {
 		logger.Errorf("%s test failed: %s", api.name, err)
 		return []string{api.title, failed, failed}
@@ -613,7 +620,7 @@ func (bm *benchMarkObj) head(key string, startKey int) error {
 }
 
 func (bm *benchMarkObj) list(key string, startKey int) error {
-	result, err := osync.ListAll(bm.blob, "", "", "", true)
+	result, err := osync.ListAll(bm.blob, "", "0", "999", true)
 	for range result {
 	}
 	return err
