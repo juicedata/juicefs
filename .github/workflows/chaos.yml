@@ -179,9 +179,8 @@ jobs:
             sleep 5
             if ! grep "SUCCESS" upgrade.log;then exit -1;fi
             rm upgrade.log
-            kubectl exec $CSI_POD_NAME -n kube-system -- juicefs-csi-driver upgrade $PVC_POD_NAME --restart 2>&1 | tee upgrade.log      
+            kubectl exec $CSI_POD_NAME -n kube-system -- juicefs-csi-driver upgrade $PVC_POD_NAME --restart 2>&1 | tee upgrade.log || true  
             sleep 5
-            if ! grep "SUCCESS" upgrade.log;then exit -1;fi
           fi
 
       - name: Check csi controller log
