@@ -119,6 +119,7 @@ var (
 type warning error
 
 var groupName string
+var bCount, sCount int
 
 func objbench(ctx *cli.Context) error {
 	setup(ctx, 1)
@@ -168,8 +169,8 @@ func objbench(ctx *cli.Context) error {
 	defer func() {
 		_ = blobOrigin.Delete(prefix)
 	}()
-	bCount := int(math.Ceil(float64(fsize) / float64(bSize)))
-	sCount := int(ctx.Uint("small-objects"))
+	bCount = int(math.Ceil(float64(fsize) / float64(bSize)))
+	sCount = int(ctx.Uint("small-objects"))
 	threads := int(ctx.Uint("threads"))
 	colorful := utils.SupportANSIColor(os.Stdout.Fd())
 	progress := utils.NewProgress(false)
@@ -242,7 +243,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("put", float64(bSize>>20*bCount)/cost, float64(threads)*cost*1000/float64(bCount), 2, colorful)
+					line[1], line[2] = colorize("put", float64(bSize)/1024/1024*float64(bCount)/cost, float64(threads)*cost*1000/float64(bCount), 2, colorful)
 					line[1] += " MiB/s"
 					line[2] += " ms/object"
 				}
@@ -256,7 +257,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("get", float64(bSize>>20*bCount)/cost, float64(threads)*cost*1000/float64(bCount), 2, colorful)
+					line[1], line[2] = colorize("get", float64(bSize)/1024/1024*float64(bCount)/cost, float64(threads)*cost*1000/float64(bCount), 2, colorful)
 					line[1] += " MiB/s"
 					line[2] += " ms/object"
 				}
@@ -265,11 +266,11 @@ func objbench(ctx *cli.Context) error {
 		}, {
 			name:  "list",
 			title: "list objects",
-			count: 100,
+			count: threads,
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("list", float64(sCount+bCount)*100/cost, float64(threads)*cost*10, 2, colorful)
+					line[1], line[2] = colorize("list", float64(sCount+bCount)*float64(threads)/cost, float64(threads)*cost*10, 2, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/op"
 				}
@@ -475,7 +476,12 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 	var wg sync.WaitGroup
 	pool := make(chan struct{}, bm.threads)
 	count := api.count
-	bar := bm.progressBar.AddCountBar(api.title, int64(count))
+	var bar *utils.Bar
+	if api.name == "list" {
+		bar = bm.progressBar.AddCountBar(api.title, int64(bCount+sCount)*int64(count))
+	} else {
+		bar = bm.progressBar.AddCountBar(api.title, int64(count))
+	}
 	var err error
 	start := time.Now()
 	for i := api.startKey; i < api.startKey+count; i++ {
@@ -489,7 +495,11 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 			if e := fn(strconv.Itoa(key), api.startKey); e != nil {
 				err = e
 			}
-			bar.Increment()
+			if api.name == "list" {
+				bar.IncrInt64(int64(bCount + sCount))
+			} else {
+				bar.Increment()
+			}
 		}(i)
 	}
 	wg.Wait()
