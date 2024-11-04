@@ -5,9 +5,8 @@ on:
     branches:
       - 'release-**'
       - 'main'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**/chaos.yml'
   pull_request:
     branches:
       - 'main'
