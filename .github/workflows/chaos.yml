@@ -201,13 +201,15 @@ jobs:
 
       - name: Check mount point pod
         if: always()
-        run: | 
+        run: |
           POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicefs-chart-testing-control-plane-pvc)
           echo POD_NAME is $POD_NAME
-          kubectl -n kube-system describe po $POD_NAME
-          kubectl logs -n kube-system $POD_NAME > juicefs.log
-          cat juicefs.log
-          grep "<FATAL>:" juicefs.log && exit 1 || true
+          for pod in $POD_NAME;do
+            kubectl -n kube-system describe po $pod
+            kubectl logs -n kube-system $pod > juicefs.log
+            cat juicefs.log
+            grep "<FATAL>:" juicefs.log && exit 1 || true
+          done
 
       - name: Check vdbench log
         if: always()
