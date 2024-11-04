@@ -171,13 +171,13 @@ func (g *gs) List(prefix, marker, delimiter string, limit int64, followLink bool
 		// last page
 		return nil, nil
 	}
-	objs, _, nextToken, err := g.ListV2(prefix, g.pageToken, delimiter, limit, followLink)
+	objs, _, nextToken, err := g.ListV2(prefix, marker, g.pageToken, delimiter, limit, followLink)
 	g.pageToken = nextToken
 	return objs, err
 }
 
-func (g *gs) ListV2(prefix, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
-	objectIterator := g.getClient().Bucket(g.bucket).Objects(ctx, &storage.Query{Prefix: prefix, Delimiter: delimiter})
+func (g *gs) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	objectIterator := g.getClient().Bucket(g.bucket).Objects(ctx, &storage.Query{Prefix: prefix, Delimiter: delimiter, StartOffset: start})
 	pager := iterator.NewPager(objectIterator, int(limit), token)
 	var entries []*storage.ObjectAttrs
 	nextPageToken, err := pager.NextPage(&entries)

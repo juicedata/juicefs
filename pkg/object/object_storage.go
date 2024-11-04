@@ -18,6 +18,7 @@ package object
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -149,7 +150,7 @@ func (s DefaultObjectStorage) List(prefix, marker, delimiter string, limit int64
 	return nil, notSupported
 }
 
-func (s DefaultObjectStorage) ListV2(prefix, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s DefaultObjectStorage) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	return nil, false, "", notSupported
 }
 
@@ -184,14 +185,18 @@ var bufPool = sync.Pool{
 
 type listThread struct {
 	sync.Mutex
-	cond    *utils.Cond
-	ready   bool
-	err     error
-	entries []Object
+	cond      *utils.Cond
+	ready     bool
+	err       error
+	entries   []Object
+	nextToken string
 }
 
 func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
-	entries, err := store.List(prefix, "", "/", 1e9, followLink)
+
+	var entries []Object
+	var err error
+	entries, _, _, err = ListWrap(store, prefix, start, "", "/", 1e9, followLink)
 	if err != nil {
 		logger.Errorf("list %s: %s", prefix, err)
 		return nil, err
@@ -218,8 +223,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 					if !entries[i].IsDir() || key == prefix {
 						continue
 					}
-
-					t.entries, t.err = store.List(key, "\x00", "/", 1e9, followLink) // exclude itself
+					t.entries, _, t.nextToken, t.err = ListWrap(store, key, "\x00", t.nextToken, "/", 1e9, followLink) // exclude itself
 					t.Lock()
 					t.ready = true
 					t.cond.Signal()
@@ -280,4 +284,19 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 		}
 	}()
 	return listed, nil
+}
+
+func ListWrap(store ObjectStorage, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	var objs []Object
+	var err error
+	var nextToken string
+	var hasMore bool
+	objs, hasMore, nextToken, err = store.ListV2(prefix, start, token, delimiter, limit, followLink)
+	if errors.Is(err, notSupported) {
+		objs, err = store.List(prefix, start, delimiter, limit, followLink)
+		if len(objs) != 0 {
+			hasMore = true
+		}
+	}
+	return objs, hasMore, nextToken, err
 }

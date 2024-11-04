@@ -148,16 +148,16 @@ func (q *bosclient) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (q *bosclient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	objs, _, _, err := q.ListV2(prefix, marker, delimiter, limit, followLink)
+	objs, _, _, err := q.ListV2(prefix, marker, "", delimiter, limit, followLink)
 	return objs, err
 }
 
-func (q *bosclient) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (q *bosclient) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
 	limit_ := int(limit)
-	out, err := q.c.SimpleListObjects(q.bucket, prefix, limit_, marker, delimiter)
+	out, err := q.c.SimpleListObjects(q.bucket, prefix, limit_, start, delimiter)
 	if err != nil {
 		return nil, false, "", err
 	}

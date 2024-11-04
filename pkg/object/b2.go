@@ -151,6 +151,10 @@ func (c *b2client) List(prefix, marker, delimiter string, limit int64, followLin
 	return objs, nil
 }
 
+func (c *b2client) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	return nil, false, "", notSupported
+}
+
 // TODO: support multipart upload using S3 client
 
 func newB2(endpoint, keyID, applicationKey, token string) (ObjectStorage, error) {

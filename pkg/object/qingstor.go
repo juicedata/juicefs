@@ -196,18 +196,18 @@ func (q *qingstor) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (q *qingstor) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	objs, _, _, err := q.ListV2(prefix, marker, delimiter, limit, followLink)
+	objs, _, _, err := q.ListV2(prefix, marker, "", delimiter, limit, followLink)
 	return objs, err
 }
 
-func (q *qingstor) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (q *qingstor) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
 	limit_ := int(limit)
 	input := &qs.ListObjectsInput{
 		Prefix: &prefix,
-		Marker: &marker,
+		Marker: &start,
 		Limit:  &limit_,
 	}
 	if delimiter != "" {

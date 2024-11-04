@@ -177,16 +177,20 @@ func (o *ossClient) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (o *ossClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	objs, _, _, err := o.ListV2(prefix, marker, delimiter, limit, followLink)
+	objs, _, _, err := o.ListV2(prefix, marker, "", delimiter, limit, followLink)
 	return objs, err
 }
 
-func (o *ossClient) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (o *ossClient) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
-	result, err := o.bucket.ListObjects(oss.Prefix(prefix),
-		oss.Marker(marker), oss.Delimiter(delimiter), oss.MaxKeys(int(limit)))
+	result, err := o.bucket.ListObjectsV2(
+		oss.Prefix(prefix),
+		oss.StartAfter(start),
+		oss.ContinuationToken(token),
+		oss.Delimiter(delimiter),
+		oss.MaxKeys(int(limit)))
 	if o.checkError(err) != nil {
 		return nil, false, "", err
 	}
@@ -202,7 +206,7 @@ func (o *ossClient) ListV2(prefix, marker, delimiter string, limit int64, follow
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, result.IsTruncated, result.NextMarker, nil
+	return objs, result.IsTruncated, result.NextContinuationToken, nil
 }
 
 func (o *ossClient) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {

@@ -145,15 +145,15 @@ func (q *qiniu) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (q *qiniu) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	objs, _, _, err := q.ListV2(prefix, marker, delimiter, limit, followLink)
+	objs, _, _, err := q.ListV2(prefix, marker, "", delimiter, limit, followLink)
 	return objs, err
 }
 
-func (q *qiniu) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (q *qiniu) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
-	if marker == "" {
+	if start == "" {
 		q.marker = ""
 	} else if q.marker == "" {
 		// last page

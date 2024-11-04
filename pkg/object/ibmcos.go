@@ -171,15 +171,15 @@ func (s *ibmcos) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (s *ibmcos) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	objs, _, _, err := s.ListV2(prefix, marker, delimiter, limit, followLink)
+	objs, _, _, err := s.ListV2(prefix, marker, "", delimiter, limit, followLink)
 	return objs, err
 }
 
-func (s *ibmcos) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *ibmcos) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := s3.ListObjectsInput{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
-		Marker:       &marker,
+		Marker:       &start,
 		MaxKeys:      &limit,
 		EncodingType: aws.String("url"),
 	}

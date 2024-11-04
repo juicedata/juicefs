@@ -144,18 +144,18 @@ func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bo
 		}
 		marker = b.marker
 	}
-	objs, _, nextMarker, err := b.ListV2(prefix, marker, delimiter, limit, followLink)
+	objs, _, nextMarker, err := b.ListV2(prefix, marker, "", delimiter, limit, followLink)
 	b.marker = nextMarker
 	return objs, err
 }
 
-func (b *wasb) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (b *wasb) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}
 
 	limit32 := int32(limit)
-	pager := b.azblobCli.NewListBlobsFlatPager(b.cName, &azblob.ListBlobsFlatOptions{Prefix: &prefix, Marker: &marker, MaxResults: &(limit32)})
+	pager := b.azblobCli.NewListBlobsFlatPager(b.cName, &azblob.ListBlobsFlatOptions{Prefix: &prefix, Marker: &start, MaxResults: &(limit32)})
 	page, err := pager.NextPage(ctx)
 	if err != nil {
 		return nil, false, "", err

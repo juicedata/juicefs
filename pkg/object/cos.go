@@ -167,14 +167,14 @@ func (c *COS) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (c *COS) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	objs, _, _, err := c.ListV2(prefix, marker, delimiter, limit, followLink)
+	objs, _, _, err := c.ListV2(prefix, marker, "", delimiter, limit, followLink)
 	return objs, err
 }
 
-func (c *COS) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (c *COS) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := cos.BucketGetOptions{
 		Prefix:       prefix,
-		Marker:       marker,
+		Marker:       start,
 		MaxKeys:      int(limit),
 		Delimiter:    delimiter,
 		EncodingType: "url",

@@ -137,11 +137,11 @@ func (p *withPrefix) List(prefix, marker, delimiter string, limit int64, followL
 	return objs, err
 }
 
-func (p *withPrefix) ListV2(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
-	if marker != "" {
-		marker = p.prefix + marker
+func (p *withPrefix) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	if start != "" {
+		start = p.prefix + start
 	}
-	objs, hasMore, nextMarker, err := p.os.ListV2(p.prefix+prefix, marker, delimiter, limit, followLink)
+	objs, hasMore, nextMarker, err := p.os.ListV2(p.prefix+prefix, start, token, delimiter, limit, followLink)
 	for i, o := range objs {
 		objs[i] = p.updateKey(o)
 	}
