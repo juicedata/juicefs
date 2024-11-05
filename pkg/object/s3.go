@@ -220,13 +220,19 @@ func (s *s3client) List(prefix, marker, delimiter string, limit int64, followLin
 
 func (s *s3client) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := s3.ListObjectsV2Input{
-		Bucket:            &s.bucket,
-		Prefix:            &prefix,
-		MaxKeys:           &limit,
-		EncodingType:      aws.String("url"),
-		ContinuationToken: aws.String(token),
-		Delimiter:         aws.String(delimiter),
-		StartAfter:        aws.String(start),
+		Bucket:       &s.bucket,
+		Prefix:       &prefix,
+		MaxKeys:      &limit,
+		EncodingType: aws.String("url"),
+	}
+	if token != "" {
+		param.ContinuationToken = aws.String(token)
+	}
+	if delimiter != "" {
+		param.Delimiter = aws.String(delimiter)
+	}
+	if start != "" {
+		param.StartAfter = aws.String(start)
 	}
 	resp, err := s.s3.ListObjectsV2(&param)
 	if err != nil {
