@@ -172,7 +172,7 @@ func (t *tosClient) ListV2(prefix, start, token, delimiter string, limit int64, 
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, resp.IsTruncated, resp.ContinuationToken, nil
+	return objs, resp.IsTruncated, resp.NextContinuationToken, nil
 }
 
 func (t *tosClient) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
