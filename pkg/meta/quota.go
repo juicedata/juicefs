@@ -220,8 +220,14 @@ func (m *baseMeta) doFlushDirStat() {
 func (m *baseMeta) flushStats() {
 	for {
 		time.Sleep(time.Second)
-		m.en.doFlushStats()
+		m.doFlushStats()
 	}
+}
+
+func (m *baseMeta) doFlushStats() {
+	m.fsStatsLock.Lock()
+	m.en.doFlushStats()
+	m.fsStatsLock.Unlock()
 }
 
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) syscall.Errno {

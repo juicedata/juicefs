@@ -221,6 +221,8 @@ type baseMeta struct {
 
 	dirStatsLock sync.Mutex
 	dirStats     map[Ino]dirStat
+
+	fsStatsLock sync.Mutex
 	*fsStat
 
 	parentMu   sync.Mutex     // protect dirParents
@@ -577,7 +579,7 @@ func (m *baseMeta) CloseSession() error {
 	if m.conf.ReadOnly {
 		return nil
 	}
-	m.en.doFlushStats()
+	m.doFlushStats()
 	m.doFlushDirStat()
 	m.doFlushQuotas()
 	m.sesMu.Lock()
