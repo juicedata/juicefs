@@ -150,6 +150,15 @@ func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bo
 }
 
 func (b *wasb) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+
+	if start != "" {
+		if b.marker == "" {
+			// last page
+			return nil, false, "", nil
+		}
+		start = b.marker
+	}
+
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}
