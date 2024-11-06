@@ -78,10 +78,16 @@ func gc(ctx *cli.Context) error {
 	removePassword(ctx.Args().Get(0))
 	metaConf := meta.DefaultConf()
 	metaConf.MaxDeletes = ctx.Int("threads")
+	metaConf.NoBGJob = true
 	m := meta.NewClient(ctx.Args().Get(0), metaConf)
 	format, err := m.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
+	}
+	if err = m.NewSession(false); err == nil { // To sync all stats periodically
+		defer m.CloseSession() //nolint:errcheck
+	} else {
+		logger.Fatalf("create session: %v", err)
 	}
 
 	chunkConf := *getDefaultChunkConf(format)
