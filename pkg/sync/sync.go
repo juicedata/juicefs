@@ -1100,16 +1100,15 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 	var total []object.Object
 	var objs []object.Object
 	var err error
-	var hasMore bool
 	var nextToken string
 	var marker string
 
 	for {
-		objs, hasMore, nextToken, err = object.ListWrap(store, prefix, marker, nextToken, "/", maxResults, followLink)
+		objs, _, nextToken, err = object.ListWrap(store, prefix, marker, nextToken, "/", maxResults, followLink)
 		if err != nil {
 			return nil, err
 		}
-		if !hasMore {
+		if len(objs) == 0 {
 			break
 		}
 		total = append(total, objs...)
