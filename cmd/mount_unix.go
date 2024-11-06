@@ -790,7 +790,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 					return
 				}
 				logger.Infof("received signal %s, propagating to child process %d...", sig.String(), mountPid)
-				if err := cmd.Process.Signal(sig); err != nil {
+				if err := cmd.Process.Signal(sig); err != nil && !errors.Is(err, os.ErrProcessDone) {
 					logger.Errorf("send signal %s to %d: %s", sig.String(), mountPid, err)
 				}
 			}
