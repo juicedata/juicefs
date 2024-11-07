@@ -90,7 +90,7 @@ func testList(t *testing.T, s ObjectStorage) {
 	}
 	t.Logf("Data is ready")
 	var duration time.Duration
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 100; i++ {
 		start := time.Now()
 		objs, _, _, err := ListWrap(s, "", "", "", "/", 1000, true)
 		since := time.Since(start)
