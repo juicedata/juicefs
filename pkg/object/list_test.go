@@ -104,5 +104,5 @@ func testList(t *testing.T, s ObjectStorage) {
 		}
 		t.Logf("list %d done", i)
 	}
-	t.Logf("average list took %s", duration/10)
+	t.Logf("average list took %s", duration/100)
 }
