@@ -137,12 +137,15 @@ func (b *wasb) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+	logger.Infof("Listv1 %s marker %s delimiter %s", prefix, marker, delimiter)
 	if marker != "" {
 		if b.marker == "" {
 			// last page
+			logger.Infof("last page")
 			return nil, nil
 		}
 		marker = b.marker
+		logger.Infof("start from %s", b.marker)
 	}
 	objs, _, nextMarker, err := b.ListV2(prefix, marker, "", delimiter, limit, followLink)
 	b.marker = nextMarker
@@ -150,12 +153,14 @@ func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bo
 }
 
 func (b *wasb) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
-
+	logger.Infof("Listv2 %s marker %s delimiter %s", prefix, start, delimiter)
 	if start != "" {
 		if b.marker == "" {
+			logger.Infof("last page")
 			// last page
 			return nil, false, "", nil
 		}
+		logger.Infof("start from %s", b.marker)
 		start = b.marker
 	}
 

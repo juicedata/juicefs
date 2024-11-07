@@ -60,6 +60,7 @@ func get(s ObjectStorage, k string, off, limit int64, getters ...AttrGetter) (st
 }
 
 func listAll(s ObjectStorage, prefix, marker string, limit int64, followLink bool) ([]Object, error) {
+	logger.Infof("listAll %s %s %s %d %v", s, prefix, marker, limit, followLink)
 	ch, err := ListAll(s, prefix, marker, followLink)
 	if err == nil {
 		objs := make([]Object, 0)
@@ -279,7 +280,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("listv2: %s", err)
 		} else {
-			t.Logf("listv2 is not supported")
+			t.Logf("listv2 with delimiter is not supported")
 		}
 	} else {
 		if len(obs) != 4 {
@@ -1077,6 +1078,7 @@ func TestDragonfly(t *testing.T) { //skip mutate
 // }
 
 func TestMain(m *testing.M) {
+	os.Setenv("JUICEFS_ENV_FILE_FOR_TEST", "/Users/zhijian/GolandProjects/juicefs/aksk.txt")
 	if envFile := os.Getenv("JUICEFS_ENV_FILE_FOR_TEST"); envFile != "" {
 		// schema: S3 AWS_ENDPOINT=xxxxx
 		if _, err := os.Stat(envFile); err == nil {
