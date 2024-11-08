@@ -644,7 +644,7 @@ func mount(c *cli.Context) error {
 		}
 		if blob != nil {
 			// test storage at startup to fail fast instead of throwing EIO in the middle of user's workload
-			if !metaConf.ReadOnly && !metaConf.NoBGJob {
+			if c.Bool("check-storage") && !metaConf.ReadOnly && !metaConf.NoBGJob {
 				start := time.Now()
 				if err = test(blob); err != nil {
 					logger.Errorf("Object storage test failed: %s", err)

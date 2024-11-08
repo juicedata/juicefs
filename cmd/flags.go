@@ -145,6 +145,11 @@ func storageFlags() []cli.Flag {
 			Name:  "download-limit",
 			Usage: "bandwidth limit for download in Mbps",
 		},
+		&cli.BoolFlag{
+			Name: "check-storage",
+			// AK/SK should have been checked before creating volume, here checks client access to the storage
+			Usage: "test storage before mounting to expose access issues early",
+		},
 	})
 }
 

@@ -362,7 +362,7 @@ func test(store object.ObjectStorage) error {
 		if err == nil {
 			break
 		}
-		logger.Warnf("Test storage %s failed: %s, tries: %d", store, err, i+1)
+		logger.Warnf("Test storage %s failed: %s, tries: #%d", store, err, i+1)
 		time.Sleep(time.Second * time.Duration(i*3+1))
 	}
 	if err == nil {
