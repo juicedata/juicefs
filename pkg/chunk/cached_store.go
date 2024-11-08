@@ -391,7 +391,7 @@ func (store *cachedStore) upload(key string, block *Page, s *wSlice) error {
 		buf.Acquire()
 	}
 	defer buf.Release()
-	if sync && blen < store.conf.BlockSize {
+	if sync && (blen < store.conf.BlockSize || store.conf.CacheLargeWrite) {
 		// block will be freed after written into disk
 		store.bcache.cache(key, block, false, false)
 	}
@@ -568,6 +568,7 @@ type Config struct {
 	GetTimeout        time.Duration
 	PutTimeout        time.Duration
 	CacheFullBlock    bool
+	CacheLargeWrite   bool
 	BufferSize        uint64
 	Readahead         int
 	Prefetch          int
