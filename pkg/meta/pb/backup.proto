@@ -50,8 +50,8 @@ message Sustained {
   repeated uint64 inodes = 2;
 }
 
-message Sustaineds {
-  repeated Sustained sustaineds = 1;
+message SustainedList {
+  repeated Sustained list = 1;
 }
 
 message DelFile {
@@ -60,8 +60,47 @@ message DelFile {
   int64 expire = 3;
 }
 
-message DelFiles {
-  repeated DelFile files = 1;
+message DelFileList {
+  repeated DelFile list = 1;
+}
+
+message SliceRef {
+  uint64 id   = 1;
+  uint32 size = 2;
+  int64 refs  = 3;
+}
+
+message SliceRefList {
+  repeated SliceRef list = 1;
+}
+
+message AclEntry {
+  uint32 id   = 1;
+  uint32 perm = 2; 
+}
+
+message Acl {
+  uint32 id     = 1;
+  uint32 owner  = 2; 
+  uint32 group  = 3; 
+  uint32 other  = 4; 
+  uint32 mask   = 5; 
+  repeated AclEntry users  = 6;
+  repeated AclEntry groups = 7;
+}
+
+message AclList {
+  repeated Acl list = 1;
+}
+
+message Xattr {
+  uint64 inode = 1;
+  string name = 2;
+  bytes value = 3;
+}
+
+message XattrList {
+  repeated Xattr list = 1;
 }
 
 message Quota {
@@ -72,8 +111,8 @@ message Quota {
   int64 usedInodes = 5;
 }
 
-message QuotaBatch {
-  repeated Quota batch = 1;
+message QuotaList {
+  repeated Quota list = 1;
 }
 
 message Stat {
@@ -83,8 +122,8 @@ message Stat {
   int64 usedInodes = 4;
 }
 
-message StatBatch {
-  repeated Stat batch = 1;
+message StatList {
+  repeated Stat list = 1;
 }
 
 message Edge {
@@ -94,8 +133,8 @@ message Edge {
   uint32 type = 4;
 }
 
-message EdgeBatch {
-  repeated Edge batch = 1;
+message EdgeList {
+  repeated Edge list = 1;
 }
 
 message Node {
@@ -119,8 +158,8 @@ message Node {
   uint32 default_acl_id = 18;
 }
 
-message NodeBatch {
-  repeated Node batch = 1;
+message NodeList {
+  repeated Node list = 1;
 }
 
 message Slice {
@@ -137,18 +176,8 @@ message Chunk {
   repeated Slice slices = 3;
 }
 
-message ChunkBatch {
-  repeated Chunk batch = 1;
-}
-
-message SliceRef {
-  uint64 id   = 1;
-  uint32 size = 2;
-  int64 refs  = 3;
-}
-
-message SliceRefBatch {
-  repeated SliceRef batch = 1;
+message ChunkList {
+  repeated Chunk list = 1;
 }
 
 message Symlink {
@@ -156,35 +185,6 @@ message Symlink {
   bytes target = 2;
 }
 
-message SymlinkBatch {
-  repeated Symlink batch = 1;
-}
-
-message Xattr {
-  uint64 inode = 1;
-  string name = 2;
-  bytes value = 3;
-}
-
-message XattrBatch {
-  repeated Xattr batch = 1;
-}
-
-message AclEntry {
-  uint32 id   = 1;
-  uint32 perm = 2; 
-}
-
-message Acl {
-  uint32 id     = 1;
-  uint32 owner  = 2; 
-  uint32 group  = 3; 
-  uint32 other  = 4; 
-  uint32 mask   = 5; 
-  repeated AclEntry users  = 6;
-  repeated AclEntry groups = 7;
-}
-
-message Acls {
-  repeated Acl acls = 1;
+message SymlinkList {
+  repeated Symlink list = 1;
 }

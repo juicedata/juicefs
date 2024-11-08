@@ -3872,11 +3872,3 @@ func (m *kvMeta) getDirFetcher() dirFetcher {
 		return entries[len(entries)-1].Name, entries, nil
 	}
 }
-
-func (m *kvMeta) DumpMetaV2(ctx Context, w io.WriteSeeker, opt *DumpOption) (err error) {
-	return nil
-}
-
-func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
-	return nil
-}

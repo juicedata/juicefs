@@ -27,11 +27,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
 
-const sampleFile = "../../1M_files_in_one_dir.dump"
+// const sampleFile = "../../1M_files_in_one_dir.dump"
+const sampleFile = "metadata.sample"
 const subSampleFile = "metadata-sub.sample"
 
 func TestEscape(t *testing.T) {
@@ -323,24 +325,26 @@ func testLoadV2(t *testing.T, uri, fname string) Meta {
 	return m
 }
 
-func testLoadDumpV2(t *testing.T, name, addr string) {
+func testLoadDumpV2(t *testing.T, name, addr1, addr2 string) {
 	t.Run("Metadata Engine: "+name, func(t *testing.T) {
 		start := time.Now()
-		m := testLoad(t, fmt.Sprintf("%s%s", addr, "dev"), sampleFile)
+		m := testLoad(t, addr1, sampleFile)
 		t.Logf("load meta: %v", time.Since(start))
 		start = time.Now()
 		testDumpV2(t, m, "test.dump")
 		m.Shutdown()
 		t.Logf("dump meta: %v", time.Since(start))
 		start = time.Now()
-		m = testLoadV2(t, fmt.Sprintf("%s%s", addr, "dev2"), "test.dump")
+		m = testLoadV2(t, addr2, "test.dump")
 		m.Shutdown()
 		t.Logf("load meta v2: %v", time.Since(start))
 	})
 }
 
 func TestLoadDumpV2(t *testing.T) {
-	testLoadDumpV2(t, "mysql", "mysql://root:123456@/")
+	logger.SetLevel(logrus.DebugLevel)
+	testLoadDumpV2(t, "mysql", "mysql://root:123456@/dev", "mysql://root:123456@/dev2")
+	// testLoadDumpV2(t, "redis", "redis://127.0.0.1:6379/2", "redis://127.0.0.1:6379/3")
 }
 
 func TestLoadDumpSlow(t *testing.T) { //skip mutate

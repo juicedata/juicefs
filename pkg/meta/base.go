@@ -133,6 +133,9 @@ type engine interface {
 	cacheACLs(ctx Context) error
 
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
+
+	BuildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg
+	BuildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -991,6 +994,10 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		}
 	}()
 	return m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr)
+}
+
+func (m *baseMeta) currMaxInode() Ino {
+	return Ino(m.freeInodes.next)
 }
 
 func (m *baseMeta) nextInode() (Ino, error) {
