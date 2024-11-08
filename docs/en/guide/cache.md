@@ -150,7 +150,7 @@ Below are some important options for cache configuration (see [`juicefs mount`](
 
 * `--prefetch`
 
-  Prefetch N blocks concurrently (default to 1), prefetch mechanism works like this: when reading a block at arbitrary position, the whole block is asynchronously scheduled for download. Prefetch often improves random read performance, but if your scenario cannot effectively utilize prefetched data (for example, reading large files randomly and sparsely), prefetch will bring read amplification, consider set to 0 to disable it.
+  Concurrent prefetch of N (1 by default) blocks. Prefetching refers to randomly reading a segment of a file's block, and the client asynchronously downloads the entire object storage block. Prefetching can often improve the performance of random reads. However, if the file access pattern in your scenario cannot effectively utilize the prefetched data (for example, reading large files randomly and sparsely), prefetching may lead to noticeable read amplification. In such cases, you can set it to 0 to disable the prefetch feature.
 
   JuiceFS is equipped with another internal similar mechanism called "readahead": when doing sequential reads, client will download nearby blocks in advance, improving sequential performance. The concurrency of readahead is affected by the size of ["Read/Write Buffer"](#buffer-size), the larger the read-write buffer, the higher the concurrency.
 
