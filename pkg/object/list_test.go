@@ -82,8 +82,8 @@ func TestList(t *testing.T) {
 }
 
 func testList(t *testing.T, s ObjectStorage) {
-	prefix := "list-test/"
-	s = WithPrefix(s, prefix)
+	commPrefix := "list-test/"
+	s = WithPrefix(s, commPrefix)
 	parallel := 100
 
 	var ch = make(chan struct{}, parallel)
