@@ -15,11 +15,13 @@ import (
 var name string
 var delimiter string
 var prefix string
+var limit int64
 
 func init() {
 	flag.StringVar(&name, "name", "", "name of object storage")
 	flag.StringVar(&delimiter, "delimiter", "", "use delimiter")
 	flag.StringVar(&prefix, "prefix", "", "prefix")
+	flag.Int64Var(&limit, "limit", 1000, "limit")
 }
 func TestList(t *testing.T) {
 	var s ObjectStorage
@@ -117,14 +119,14 @@ func testList(t *testing.T, s ObjectStorage) {
 	var duration time.Duration
 	for i := 0; i < 5; i++ {
 		start := time.Now()
-		objs, err := listAll(s, prefix, "", 10000*10000, true)
+		objs, err := listAll(s, prefix, "", limit, true)
 		since := time.Since(start)
 		t.Logf("list %d took %s", i, since)
 		duration += since
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Logf(" %d list return 1000 results but got %d", i, len(objs))
+		t.Logf(" %d list return %d results", i, len(objs))
 	}
 	t.Logf("name=%s prefix=%s delimite= %s average list took %s", name, prefix, delimiter, duration/5)
 }
