@@ -109,11 +109,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 	marker := start
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
 
-	var objs []object.Object
-	var nextToken string
-	var err error
-	var hasMore bool
-	objs, hasMore, nextToken, err = object.ListV2(store, prefix, marker, "", "", maxResults, followLink)
+	objs, hasMore, nextToken, err := object.ListV2(store, prefix, marker, "", "", maxResults, followLink)
 	if errors.Is(err, utils.ENOTSUP) {
 		return object.ListAllWithDelimiter(store, prefix, start, end, followLink)
 	}
@@ -126,7 +122,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 		lastkey := ""
 		first := true
 	END:
-		for hasMore {
+		for {
 			for _, obj := range objs {
 				key := obj.Key()
 				if !first && key <= lastkey {
@@ -145,21 +141,24 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 			// Corner case: the func parameter `marker` is an empty string("") and exactly
 			// one object which key is an empty string("") returned by the List() method.
 			if lastkey == "" {
-				break END
+				break
+			}
+			if !hasMore {
+				break
 			}
 
 			marker = lastkey
 			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
-
-			objs, hasMore, nextToken, err = object.ListV2(store, prefix, marker, nextToken, "", maxResults, followLink)
+			var nextToken2 string
+			objs, hasMore, nextToken2, err = object.ListV2(store, prefix, marker, nextToken, "", maxResults, followLink)
 			count := 0
 			for err != nil && count < 3 {
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
 				// slow down
 				time.Sleep(time.Millisecond * 100)
 
-				objs, hasMore, nextToken, err = object.ListV2(store, prefix, marker, nextToken, "", maxResults, followLink)
+				objs, hasMore, nextToken2, err = object.ListV2(store, prefix, marker, nextToken, "", maxResults, followLink)
 				count++
 			}
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
@@ -169,6 +168,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 				logger.Errorf("Fail to list after %s: %s", marker, err.Error())
 				break
 			}
+			nextToken = nextToken2
 			if len(objs) > 0 && objs[0].Key() == marker {
 				// workaround from a object store that is not compatible to S3.
 				objs = objs[1:]
@@ -1109,12 +1109,11 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 		if err != nil {
 			return nil, err
 		}
-		if !hasMore {
-			break
+		if len(objs) > 0 {
+			total = append(total, objs...)
+			marker = objs[len(objs)-1].Key()
 		}
-		total = append(total, objs...)
-		marker = objs[len(objs)-1].Key()
-		if marker == "" {
+		if !hasMore {
 			break
 		}
 	}

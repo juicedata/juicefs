@@ -53,8 +53,7 @@ func (s *oos) Create() error {
 }
 
 func (s *oos) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	objs, _, _, err := s.ListV2(prefix, marker, "", delimiter, limit, followLink)
-	return objs, err
+	return s.hasV2.List(s, prefix, marker, delimiter, limit, followLink)
 }
 
 func (s *oos) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
@@ -67,6 +66,7 @@ func (s *oos) ListV2(prefix, start, token, delimiter string, limit int64, follow
 	}
 	return objs, hasMore, nextMarker, err
 }
+
 func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)

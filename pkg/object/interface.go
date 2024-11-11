@@ -94,7 +94,7 @@ type ObjectStorage interface {
 	// List returns a list of objects.
 	List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error)
 	// List returns a list of objects using ListObjectV2.
-	ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error)
+	ListV2(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error)
 	// ListAll returns all the objects as an channel.
 	ListAll(prefix, marker string, followLink bool) (<-chan Object, error)
 

@@ -181,8 +181,7 @@ func (s *ks3) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (s *ks3) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	objs, _, _, err := s.ListV2(prefix, marker, "", delimiter, limit, followLink)
-	return objs, err
+	return retryListV2(s, prefix, marker, delimiter, limit, followLink)
 }
 
 func (s *ks3) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {

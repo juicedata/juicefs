@@ -145,25 +145,17 @@ func (q *qiniu) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (q *qiniu) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	objs, _, _, err := q.ListV2(prefix, marker, "", delimiter, limit, followLink)
-	return objs, err
+	return q.hasV2.List(q, prefix, marker, delimiter, limit, followLink)
 }
 
 func (q *qiniu) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
-	if start == "" {
-		q.marker = ""
-	} else if q.marker == "" {
-		// last page
-		return nil, false, "", nil
+	if token == "" {
+		token = start
 	}
-	entries, prefixes, markerOut, hasNext, err := q.bm.ListFiles(q.bucket, prefix, delimiter, q.marker, int(limit))
-	for err == nil && len(entries) == 0 && hasNext {
-		entries, prefixes, markerOut, hasNext, err = q.bm.ListFiles(q.bucket, prefix, delimiter, markerOut, int(limit))
-	}
-	q.marker = markerOut
+	entries, prefixes, markerOut, hasNext, err := q.bm.ListFiles(q.bucket, prefix, delimiter, token, int(limit))
 	if len(entries) > 0 || err == io.EOF {
 		// ignore error if returned something
 		err = nil

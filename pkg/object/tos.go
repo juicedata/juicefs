@@ -36,6 +36,7 @@ import (
 )
 
 type tosClient struct {
+	hasV2
 	bucket string
 	sc     string
 	client *tos.ClientV2
@@ -135,8 +136,7 @@ func (t *tosClient) Head(key string) (Object, error) {
 }
 
 func (t *tosClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	objs, _, _, err := t.ListV2(prefix, marker, "", delimiter, limit, followLink)
-	return objs, err
+	return t.hasV2.List(t, prefix, marker, delimiter, limit, followLink)
 }
 
 func (t *tosClient) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {

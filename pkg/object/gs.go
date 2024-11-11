@@ -40,12 +40,12 @@ import (
 
 type gs struct {
 	DefaultObjectStorage
-	clients   []*storage.Client
-	index     uint64
-	bucket    string
-	region    string
-	pageToken string
-	sc        string
+	hasV2
+	clients []*storage.Client
+	index   uint64
+	bucket  string
+	region  string
+	sc      string
 }
 
 func (g *gs) String() string {
@@ -167,13 +167,7 @@ func (g *gs) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (g *gs) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	if marker != "" && g.pageToken == "" {
-		// last page
-		return nil, nil
-	}
-	objs, _, nextToken, err := g.ListV2(prefix, marker, g.pageToken, delimiter, limit, followLink)
-	g.pageToken = nextToken
-	return objs, err
+	return g.hasV2.List(g, prefix, marker, delimiter, limit, followLink)
 }
 
 func (g *gs) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {

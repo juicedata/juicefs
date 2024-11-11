@@ -33,8 +33,8 @@ import (
 
 type b2client struct {
 	DefaultObjectStorage
-	bucket     *backblaze.Bucket
-	nextMarker string
+	hasV2
+	bucket *backblaze.Bucket
 }
 
 func (c *b2client) String() string {
@@ -123,36 +123,35 @@ func (c *b2client) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (c *b2client) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+	return c.hasV2.List(c, prefix, marker, delimiter, limit, followLink)
+}
+
+func (c *b2client) ListV2(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
-	if marker == "" && c.nextMarker != "" {
-		marker = c.nextMarker
-		c.nextMarker = ""
-	}
-	resp, err := c.bucket.ListFileNamesWithPrefix(marker, int(limit), prefix, delimiter)
+
+	resp, err := c.bucket.ListFileNamesWithPrefix(token, int(limit), prefix, delimiter)
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 
 	n := len(resp.Files)
-	objs := make([]Object, n)
+	objs := make([]Object, 0, n)
 	for i := 0; i < n; i++ {
+		if resp.Files[i].Name <= startAfter {
+			continue
+		}
 		f := resp.Files[i]
-		objs[i] = &obj{
+		objs = append(objs, &obj{
 			f.Name,
 			f.ContentLength,
 			time.Unix(f.UploadTimestamp/1000, 0),
 			strings.HasSuffix(f.Name, "/"),
 			"",
-		}
+		})
 	}
-	c.nextMarker = resp.NextFileName
-	return objs, nil
-}
-
-func (c *b2client) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
-	return nil, false, "", notSupported
+	return objs, resp.NextFileName != "", resp.NextFileName, nil
 }
 
 // TODO: support multipart upload using S3 client

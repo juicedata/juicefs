@@ -112,8 +112,7 @@ func genNextKey(key string) string {
 }
 
 func (c *etcdClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	objs, _, _, err := c.ListV2(prefix, marker, "", delimiter, limit, followLink)
-	return objs, err
+	return retryListV2(c, prefix, marker, delimiter, limit, followLink)
 }
 
 func (c *etcdClient) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {

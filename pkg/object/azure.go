@@ -39,11 +39,11 @@ import (
 
 type wasb struct {
 	DefaultObjectStorage
+	hasV2
 	container *container.Client
 	azblobCli *azblob.Client
 	sc        string
 	cName     string
-	marker    string
 }
 
 func (b *wasb) String() string {
@@ -137,25 +137,16 @@ func (b *wasb) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	if marker != "" {
-		if b.marker == "" {
-			// last page
-			return nil, nil
-		}
-		marker = b.marker
-	}
-	objs, _, nextMarker, err := b.ListV2(prefix, "", marker, delimiter, limit, followLink)
-	b.marker = nextMarker
-	return objs, err
+	return b.hasV2.List(b, prefix, marker, delimiter, limit, followLink)
 }
 
-func (b *wasb) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (b *wasb) ListV2(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}
 
 	limit32 := int32(limit)
-	pager := b.azblobCli.NewListBlobsFlatPager(b.cName, &azblob.ListBlobsFlatOptions{Prefix: &prefix, Marker: &token, MaxResults: &(limit32)})
+	pager := b.azblobCli.NewListBlobsFlatPager(b.cName, &azblob.ListBlobsFlatOptions{Prefix: &prefix, Marker: &token, MaxResults: &limit32})
 	page, err := pager.NextPage(ctx)
 	if err != nil {
 		return nil, false, "", err
@@ -167,7 +158,7 @@ func (b *wasb) ListV2(prefix, start, token, delimiter string, limit int64, follo
 	objs := make([]Object, 0, n)
 	for i := 0; i < n; i++ {
 		blob := page.Segment.BlobItems[i]
-		if *blob.Name <= start {
+		if *blob.Name <= startAfter {
 			continue
 		}
 		mtime := blob.Properties.LastModified
@@ -179,19 +170,13 @@ func (b *wasb) ListV2(prefix, start, token, delimiter string, limit int64, follo
 			string(*blob.Properties.AccessTier),
 		})
 	}
+
 	var nextMarker string
 	var hasMore bool
-
 	if pager.More() {
 		nextMarker = *page.NextMarker
 		hasMore = true
 	}
-	var objsContent []Object
-	for limit-int64(len(objs)) > 0 && hasMore {
-		objsContent, hasMore, nextMarker, err = b.ListV2(prefix, start, nextMarker, delimiter, limit-int64(len(objs)), followLink)
-		objs = append(objs, objsContent...)
-	}
-
 	return objs, hasMore, nextMarker, nil
 }
 

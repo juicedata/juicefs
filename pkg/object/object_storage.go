@@ -194,10 +194,7 @@ type listThread struct {
 }
 
 func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
-
-	var entries []Object
-	var err error
-	entries, _, _, err = ListV2(store, prefix, start, "", "/", 1e9, followLink)
+	entries, _, _, err := ListV2(store, prefix, start, "", "/", 1e9, followLink)
 	if err != nil {
 		logger.Errorf("list %s: %s", prefix, err)
 		return nil, err
@@ -287,16 +284,45 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 	return listed, nil
 }
 
+type hasV2 struct {
+	noMore     bool
+	nextMarker string
+}
+
+func (v *hasV2) List(v2 ObjectStorage, prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+	if marker != "" {
+		if v.noMore {
+			return nil, nil
+		}
+	} else {
+		v.nextMarker = ""
+	}
+	objs, hasMore, nextMarker, err := v2.ListV2(prefix, marker, v.nextMarker, delimiter, limit, followLink)
+	for err == nil && len(objs) == 0 && hasMore {
+		objs, hasMore, nextMarker, err = v2.ListV2(prefix, marker, nextMarker, delimiter, limit, followLink)
+	}
+	if err == nil {
+		v.noMore = !hasMore
+		v.nextMarker = nextMarker
+	}
+	return objs, err
+}
+
+func retryListV2(blob ObjectStorage, prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+	objs, hasMore, nextMarker, err := blob.ListV2(prefix, marker, "", delimiter, limit, followLink)
+	for err == nil && len(objs) == 0 && hasMore {
+		objs, hasMore, nextMarker, err = blob.ListV2(prefix, nextMarker, "", delimiter, limit, followLink)
+	}
+	return objs, err
+}
+
 func ListV2(store ObjectStorage, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
-	var objs []Object
-	var err error
-	var nextToken string
-	var hasMore bool
-	objs, hasMore, nextToken, err = store.ListV2(prefix, start, token, delimiter, limit, followLink)
+	objs, hasMore, nextToken, err := store.ListV2(prefix, start, token, delimiter, limit, followLink)
 	if errors.Is(err, notSupported) {
 		objs, err = store.List(prefix, start, delimiter, limit, followLink)
 		if len(objs) != 0 {
 			hasMore = true
+			nextToken = objs[len(objs)-1].Key()
 		}
 	}
 	return objs, hasMore, nextToken, err

@@ -148,8 +148,7 @@ func (q *bosclient) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (q *bosclient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	objs, _, _, err := q.ListV2(prefix, marker, "", delimiter, limit, followLink)
-	return objs, err
+	return retryListV2(q, prefix, marker, delimiter, limit, followLink)
 }
 
 func (q *bosclient) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
