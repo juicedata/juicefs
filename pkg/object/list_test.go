@@ -117,7 +117,7 @@ func testList(t *testing.T, s ObjectStorage) {
 	var duration time.Duration
 	for i := 0; i < 5; i++ {
 		start := time.Now()
-		objs, err := listAll(s, prefix, "", 10000, true)
+		objs, err := listAll(s, prefix, "", 10000*10000, true)
 		since := time.Since(start)
 		t.Logf("list %d took %s", i, since)
 		duration += since
