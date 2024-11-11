@@ -14,10 +14,12 @@ import (
 
 var name string
 var delimiter string
+var prefix string
 
 func init() {
 	flag.StringVar(&name, "name", "", "name of object storage")
 	flag.StringVar(&delimiter, "delimiter", "", "use delimiter")
+	flag.StringVar(&prefix, "prefix", "", "prefix")
 }
 func TestList(t *testing.T) {
 	var s ObjectStorage
@@ -80,29 +82,31 @@ func TestList(t *testing.T) {
 }
 
 func testList(t *testing.T, s ObjectStorage) {
-	prefix := "listV2-test/"
+	prefix := "list-test/"
 	s = WithPrefix(s, prefix)
-	batch := 10000
 	parallel := 100
-	number := batch * parallel
-	_, err := s.Head(fmt.Sprintf("%d_file", number-1))
+
+	var ch = make(chan struct{}, parallel)
+	_, err := s.Head("999_dir/999_file")
 	if errors.Is(err, os.ErrNotExist) {
 		progress := utils.NewProgress(false)
-		bar := progress.AddCountBar("make data", int64(number))
+		bar := progress.AddCountBar("make data", int64(1000000))
 		start := time.Now()
 		var wg sync.WaitGroup
-		for i := 0; i < parallel; i++ {
+		for i := 0; i < 1000; i++ {
+			ch <- struct{}{}
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()
-				for j := id * batch; j < (id+1)*batch; j++ {
-					_ = s.Put(fmt.Sprintf("%d_dir/%d/%d/%d/%d/%d_file", j, j, j, j, j, j), bytes.NewReader([]byte("a")))
-					_ = s.Put(fmt.Sprintf("%d_file", j), bytes.NewReader([]byte("a")))
+				for j := 0; j < 1000; j++ {
+					_ = s.Put(fmt.Sprintf("%d_dir/%d_file", i, j), bytes.NewReader([]byte("a")))
 					bar.Increment()
 				}
+				<-ch
 			}(i)
 		}
 		wg.Wait()
+		close(ch)
 		bar.Done()
 		progress.Done()
 		t.Logf("make data took %s", time.Since(start))
@@ -111,7 +115,7 @@ func testList(t *testing.T, s ObjectStorage) {
 	var duration time.Duration
 	for i := 0; i < 100; i++ {
 		start := time.Now()
-		objs, _, _, err := ListWrap(s, "", "", "", delimiter, 1000, true)
+		objs, _, _, err := ListWrap(s, prefix, "", "", delimiter, 1000, true)
 		since := time.Since(start)
 		t.Logf("list %d took %s", i, since)
 		duration += since
@@ -123,5 +127,5 @@ func testList(t *testing.T, s ObjectStorage) {
 		}
 		t.Logf("list %d done", i)
 	}
-	t.Logf("name=%s delimite= %s average list took %s", name, delimiter, duration/100)
+	t.Logf("name=%s prefix=%s delimite= %s average list took %s", name, prefix, delimiter, duration/100)
 }
