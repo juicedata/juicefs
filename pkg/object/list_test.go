@@ -104,7 +104,10 @@ func testList(t *testing.T, s ObjectStorage) {
 					<-ch
 				}()
 				for j := 0; j < 2000; j++ {
-					_ = s.Put(fmt.Sprintf("%d_dir/%d_file", i, j), bytes.NewReader([]byte("a")))
+					err = s.Put(fmt.Sprintf("%d_dir/%d_file", i, j), bytes.NewReader([]byte("a")))
+					if err != nil {
+						t.Fatal(err)
+					}
 					bar.Increment()
 				}
 			}(i)
