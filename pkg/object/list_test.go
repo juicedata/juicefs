@@ -87,13 +87,13 @@ func testList(t *testing.T, s ObjectStorage) {
 	parallel := 100
 
 	var ch = make(chan struct{}, parallel)
-	_, err := s.Head("999_dir/1999_file")
+	_, err := s.Head("1199_dir/1999_file")
 	if errors.Is(err, os.ErrNotExist) {
 		progress := utils.NewProgress(false)
 		bar := progress.AddCountBar("make data", int64(1000*2000))
 		start := time.Now()
 		var wg sync.WaitGroup
-		for i := 0; i < 1000; i++ {
+		for i := 0; i < 1200; i++ {
 			ch <- struct{}{}
 			wg.Add(1)
 			go func(id int) {
