@@ -2,7 +2,6 @@ package object
 
 import (
 	"bytes"
-	"errors"
 	"flag"
 	"fmt"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -16,12 +15,14 @@ var name string
 var delimiter string
 var prefix string
 var limit int64
+var makeData bool
 
 func init() {
 	flag.StringVar(&name, "name", "", "name of object storage")
 	flag.StringVar(&delimiter, "delimiter", "", "use delimiter")
 	flag.StringVar(&prefix, "prefix", "", "prefix")
 	flag.Int64Var(&limit, "limit", 1000, "limit")
+	flag.BoolVar(&makeData, "make data", false, "make data")
 }
 func TestList(t *testing.T) {
 	var s ObjectStorage
@@ -89,8 +90,7 @@ func testList(t *testing.T, s ObjectStorage) {
 	parallel := 100
 
 	var ch = make(chan struct{}, parallel)
-	_, err := s.Head("1199_dir/1999_file")
-	if errors.Is(err, os.ErrNotExist) {
+	if makeData {
 		progress := utils.NewProgress(false)
 		bar := progress.AddCountBar("make data", int64(1200*2000))
 		start := time.Now()
