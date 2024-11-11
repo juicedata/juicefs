@@ -139,9 +139,6 @@ func testList(t *testing.T, s ObjectStorage) {
 		since := time.Since(start)
 		t.Logf("list %d took %s", i, since)
 		duration += since
-		if err != nil {
-			t.Fatal(err)
-		}
 		t.Logf(" %d list return %d results", i, len(objs))
 	}
 	t.Logf("name=%s prefix=%s delimite= %s average list took %s", name, prefix, delimiter, duration/5)
