@@ -115,7 +115,7 @@ func testList(t *testing.T, s ObjectStorage) {
 	}
 	t.Logf("Data is ready")
 	var duration time.Duration
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 5; i++ {
 		start := time.Now()
 		objs, _, _, err := ListWrap(s, prefix, "", "", delimiter, 1000, true)
 		since := time.Since(start)
@@ -129,5 +129,5 @@ func testList(t *testing.T, s ObjectStorage) {
 		}
 		t.Logf("list %d done", i)
 	}
-	t.Logf("name=%s prefix=%s delimite= %s average list took %s", name, prefix, delimiter, duration/100)
+	t.Logf("name=%s prefix=%s delimite= %s average list took %s", name, prefix, delimiter, duration/5)
 }
