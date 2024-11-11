@@ -104,8 +104,7 @@ func testList(t *testing.T, s ObjectStorage) {
 					<-ch
 				}()
 				for j := 0; j < 2000; j++ {
-					err = s.Put(fmt.Sprintf("%d_dir/%d_file", i, j), bytes.NewReader([]byte("a")))
-					if err != nil {
+					if err := s.Put(fmt.Sprintf("%d_dir/%d_file", i, j), bytes.NewReader([]byte("a"))); err != nil {
 						t.Fatal(err)
 					}
 					bar.Increment()
@@ -127,7 +126,11 @@ func testList(t *testing.T, s ObjectStorage) {
 		var token string
 		for {
 			var objs1 []Object
+			var err error
 			objs1, hasMore, token, err = ListWrap(s, prefix, "", token, delimiter, limit, true)
+			if err != nil {
+				t.Fatal("list err", err)
+			}
 			objs = append(objs, objs1...)
 			if !hasMore {
 				break
