@@ -90,7 +90,7 @@ func testList(t *testing.T, s ObjectStorage) {
 	_, err := s.Head("1199_dir/1999_file")
 	if errors.Is(err, os.ErrNotExist) {
 		progress := utils.NewProgress(false)
-		bar := progress.AddCountBar("make data", int64(1000*2000))
+		bar := progress.AddCountBar("make data", int64(1200*2000))
 		start := time.Now()
 		var wg sync.WaitGroup
 		for i := 0; i < 1200; i++ {
