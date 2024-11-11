@@ -117,17 +117,14 @@ func testList(t *testing.T, s ObjectStorage) {
 	var duration time.Duration
 	for i := 0; i < 5; i++ {
 		start := time.Now()
-		objs, _, _, err := ListWrap(s, prefix, "", "", delimiter, 1000, true)
+		objs, err := listAll(s, prefix, "", 10000, true)
 		since := time.Since(start)
 		t.Logf("list %d took %s", i, since)
 		duration += since
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(objs) != 1000 {
-			t.Logf("list should return 1000 results but got %d", len(objs))
-		}
-		t.Logf("list %d done", i)
+		t.Logf(" %d list return 1000 results but got %d", i, len(objs))
 	}
 	t.Logf("name=%s prefix=%s delimite= %s average list took %s", name, prefix, delimiter, duration/5)
 }
