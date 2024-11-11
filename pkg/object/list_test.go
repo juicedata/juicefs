@@ -22,7 +22,7 @@ func init() {
 	flag.StringVar(&delimiter, "delimiter", "", "use delimiter")
 	flag.StringVar(&prefix, "prefix", "", "prefix")
 	flag.Int64Var(&limit, "limit", 1000, "limit")
-	flag.BoolVar(&makeData, "make data", false, "make data")
+	flag.BoolVar(&makeData, "makedata", false, "make data")
 }
 func TestList(t *testing.T) {
 	var s ObjectStorage
