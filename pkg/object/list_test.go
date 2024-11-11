@@ -119,7 +119,17 @@ func testList(t *testing.T, s ObjectStorage) {
 	var duration time.Duration
 	for i := 0; i < 5; i++ {
 		start := time.Now()
-		objs, err := listAll(s, prefix, "", limit, true)
+		var hasMore bool
+		var objs []Object
+		var token string
+		for {
+			var objs1 []Object
+			objs1, hasMore, token, err = ListWrap(s, prefix, "", token, delimiter, limit, true)
+			objs = append(objs, objs1...)
+			if !hasMore {
+				break
+			}
+		}
 		since := time.Since(start)
 		t.Logf("list %d took %s", i, since)
 		duration += since
