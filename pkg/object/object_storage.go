@@ -190,13 +190,14 @@ type listThread struct {
 	err       error
 	entries   []Object
 	nextToken string
+	hasMore   bool
 }
 
 func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
 
 	var entries []Object
 	var err error
-	entries, _, _, err = ListWrap(store, prefix, start, "", "/", 1e9, followLink)
+	entries, _, _, err = ListV2(store, prefix, start, "", "/", 1e9, followLink)
 	if err != nil {
 		logger.Errorf("list %s: %s", prefix, err)
 		return nil, err
@@ -223,7 +224,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 					if !entries[i].IsDir() || key == prefix {
 						continue
 					}
-					t.entries, _, t.nextToken, t.err = ListWrap(store, key, "\x00", t.nextToken, "/", 1e9, followLink) // exclude itself
+					t.entries, t.hasMore, t.nextToken, t.err = ListV2(store, key, "\x00", t.nextToken, "/", 1e9, followLink) // exclude itself
 					t.Lock()
 					t.ready = true
 					t.cond.Signal()
@@ -286,7 +287,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 	return listed, nil
 }
 
-func ListWrap(store ObjectStorage, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func ListV2(store ObjectStorage, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	var objs []Object
 	var err error
 	var nextToken string

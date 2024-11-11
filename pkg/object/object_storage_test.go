@@ -120,7 +120,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		if scPut != sc {
 			t.Fatalf("Storage class should be %q, got %q", sc, scPut)
 		}
-		if resp, _, _, err := ListWrap(s, "测试编码文件", "", "", "", 1, true); err != nil && err != notSupported {
+		if resp, _, _, err := ListV2(s, "测试编码文件", "", "", "", 1, true); err != nil && err != notSupported {
 			t.Logf("List testEncodeFile Failed: %s", err)
 		} else if len(resp) == 1 && resp[0].Key() != key {
 			t.Logf("List testEncodeFile Failed: expect key %s, but got %s", key, resp[0].Key())
@@ -315,7 +315,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	if obs, _, _, err := ListWrap(s, "", "", "", "/", 10, true); err != nil {
+	if obs, _, _, err := ListV2(s, "", "", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
@@ -341,7 +341,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	if obs, _, _, err := ListWrap(s, "a", "", "", "/", 10, true); err != nil {
+	if obs, _, _, err := ListV2(s, "a", "", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		}
@@ -357,7 +357,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	if obs, _, _, err := ListWrap(s, "a/", "", "", "/", 10, true); err != nil {
+	if obs, _, _, err := ListV2(s, "a/", "", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {

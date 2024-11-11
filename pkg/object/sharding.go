@@ -103,7 +103,8 @@ func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-cha
 	var objs []Object
 	var err error
 	var nextToken string
-	objs, _, nextToken, err = ListWrap(store, prefix, marker, "", "", maxResults, followLink)
+	var hasMore bool
+	objs, hasMore, nextToken, err = ListV2(store, prefix, marker, "", "", maxResults, followLink)
 	if errors.Is(err, notSupported) {
 		return ListAllWithDelimiter(store, prefix, marker, "", followLink)
 	}
@@ -117,7 +118,7 @@ func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-cha
 		lastkey := ""
 		first := true
 	END:
-		for len(objs) > 0 {
+		for hasMore {
 			for _, obj := range objs {
 				key := obj.Key()
 				if !first && key <= lastkey {
@@ -139,12 +140,12 @@ func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-cha
 			marker = lastkey
 			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
-			objs, _, nextToken, err = ListWrap(store, prefix, marker, nextToken, "", maxResults, followLink)
+			objs, hasMore, nextToken, err = ListV2(store, prefix, marker, nextToken, "", maxResults, followLink)
 			for err != nil {
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
 				// slow down
 				time.Sleep(time.Millisecond * 100)
-				objs, _, nextToken, err = ListWrap(store, prefix, marker, nextToken, "", maxResults, followLink)
+				objs, hasMore, nextToken, err = ListV2(store, prefix, marker, nextToken, "", maxResults, followLink)
 			}
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
 		}

@@ -144,57 +144,55 @@ func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bo
 		}
 		marker = b.marker
 	}
-	objs, _, nextMarker, err := b.ListV2(prefix, marker, "", delimiter, limit, followLink)
+	objs, _, nextMarker, err := b.ListV2(prefix, "", marker, delimiter, limit, followLink)
 	b.marker = nextMarker
 	return objs, err
 }
 
 func (b *wasb) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
-
-	if start != "" {
-		if b.marker == "" {
-			// last page
-			return nil, false, "", nil
-		}
-		start = b.marker
-	}
-
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}
 
 	limit32 := int32(limit)
-	pager := b.azblobCli.NewListBlobsFlatPager(b.cName, &azblob.ListBlobsFlatOptions{Prefix: &prefix, Marker: &start, MaxResults: &(limit32)})
+	pager := b.azblobCli.NewListBlobsFlatPager(b.cName, &azblob.ListBlobsFlatOptions{Prefix: &prefix, Marker: &token, MaxResults: &(limit32)})
 	page, err := pager.NextPage(ctx)
 	if err != nil {
 		return nil, false, "", err
-	}
-	if pager.More() {
-		b.marker = *page.NextMarker
-	} else {
-		b.marker = ""
 	}
 	var n int
 	if page.Segment != nil {
 		n = len(page.Segment.BlobItems)
 	}
-	objs := make([]Object, n)
+	objs := make([]Object, 0, n)
 	for i := 0; i < n; i++ {
 		blob := page.Segment.BlobItems[i]
+		if *blob.Name <= start {
+			continue
+		}
 		mtime := blob.Properties.LastModified
-		objs[i] = &obj{
+		objs = append(objs, &obj{
 			*blob.Name,
 			*blob.Properties.ContentLength,
 			*mtime,
 			strings.HasSuffix(*blob.Name, "/"),
 			string(*blob.Properties.AccessTier),
-		}
+		})
 	}
 	var nextMarker string
+	var hasMore bool
+
 	if pager.More() {
 		nextMarker = *page.NextMarker
+		hasMore = true
 	}
-	return objs, pager.More(), nextMarker, nil
+	var objsContent []Object
+	for limit-int64(len(objs)) > 0 && hasMore {
+		objsContent, hasMore, nextMarker, err = b.ListV2(prefix, start, nextMarker, delimiter, limit-int64(len(objs)), followLink)
+		objs = append(objs, objsContent...)
+	}
+
+	return objs, hasMore, nextMarker, nil
 }
 
 func (b *wasb) SetStorageClass(sc string) error {
