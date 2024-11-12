@@ -337,7 +337,7 @@ var ks3Regions = map[string]string{
 	"sgp":          "SINGAPORE",
 }
 
-func newKS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewKS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -384,5 +384,5 @@ func newKS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 }
 
 func init() {
-	Register("ks3", newKS3)
+	Register("ks3", NewKS3)
 }

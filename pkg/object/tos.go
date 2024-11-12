@@ -279,7 +279,7 @@ func (t *tosClient) SetStorageClass(sc string) error {
 	return nil
 }
 
-func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -302,5 +302,5 @@ func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 }
 
 func init() {
-	Register("tos", newTOS)
+	Register("tos", NewTOS)
 }

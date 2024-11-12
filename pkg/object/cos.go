@@ -304,7 +304,7 @@ func autoCOSEndpoint(bucketName, accessKey, secretKey, token string) (string, er
 	return "", fmt.Errorf("bucket %q doesn't exist", bucketName)
 }
 
-func newCOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewCOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -343,5 +343,5 @@ func newCOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 }
 
 func init() {
-	Register("cos", newCOS)
+	Register("cos", NewCOS)
 }

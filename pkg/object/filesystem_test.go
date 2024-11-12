@@ -46,7 +46,7 @@ func testKeysEqual(objs []Object, expectedKeys []string) error {
 func TestDisk2(t *testing.T) {
 	diskPath := "/tmp/abc/"
 	_ = os.RemoveAll(diskPath)
-	s, _ := newDisk(diskPath, "", "", "")
+	s, _ := NewDisk(diskPath, "", "", "")
 	s = WithPrefix(s, "prefix/")
 	testFileSystem(t, s)
 }
@@ -55,7 +55,7 @@ func TestSftp2(t *testing.T) { //skip mutate
 	if os.Getenv("SFTP_HOST") == "" {
 		t.SkipNow()
 	}
-	sftp, err := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"), "")
+	sftp, err := NewSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"), "")
 	if err != nil {
 		t.Fatalf("sftp: %s", err)
 	}
@@ -74,7 +74,7 @@ func TestNFS2(t *testing.T) { //skip mutate
 	if os.Getenv("NFS_ADDR") == "" {
 		t.SkipNow()
 	}
-	b, err := newNFSStore(os.Getenv("NFS_ADDR"), os.Getenv("NFS_ACCESS_KEY"), os.Getenv("NFS_SECRET_KEY"), "")
+	b, err := NewNFSStore(os.Getenv("NFS_ADDR"), os.Getenv("NFS_ACCESS_KEY"), os.Getenv("NFS_SECRET_KEY"), "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -67,7 +67,7 @@ func (s *oos) ListV2(prefix, start, token, delimiter string, limit int64, follow
 	return objs, hasMore, nextMarker, err
 }
 
-func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -100,5 +100,5 @@ func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 }
 
 func init() {
-	Register("oos", newOOS)
+	Register("oos", NewOOS)
 }

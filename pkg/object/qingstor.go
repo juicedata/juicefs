@@ -327,7 +327,7 @@ func (q *qingstor) SetStorageClass(sc string) error {
 	return nil
 }
 
-func newQingStor(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewQingStor(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -362,5 +362,5 @@ func newQingStor(endpoint, accessKey, secretKey, token string) (ObjectStorage, e
 }
 
 func init() {
-	Register("qingstor", newQingStor)
+	Register("qingstor", NewQingStor)
 }

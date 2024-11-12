@@ -334,7 +334,7 @@ func (d *filestore) Chown(key string, owner, group string) error {
 	return os.Lchown(p, uid, gid)
 }
 
-func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {
+func NewDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {
 	// For Windows, the path looks like /C:/a/b/c/
 	if runtime.GOOS == "windows" {
 		root = strings.TrimPrefix(root, "/")
@@ -343,5 +343,5 @@ func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {
 }
 
 func init() {
-	Register("file", newDisk)
+	Register("file", NewDisk)
 }

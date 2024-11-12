@@ -176,7 +176,7 @@ func (s *scsClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return nil, "", notSupported
 }
 
-func newSCS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewSCS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -202,5 +202,5 @@ func newSCS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 }
 
 func init() {
-	Register("scs", newSCS)
+	Register("scs", NewSCS)
 }
