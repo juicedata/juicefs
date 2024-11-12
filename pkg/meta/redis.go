@@ -2088,7 +2088,7 @@ func (m *redisMeta) doCleanStaleSession(sid uint64) error {
 	key = m.sustained(sid)
 	if inodes, err := m.rdb.SMembers(ctx, key).Result(); err == nil {
 		for _, sinode := range inodes {
-			inode, _ := strconv.ParseInt(sinode, 10, 0)
+			inode, _ := strconv.ParseUint(sinode, 10, 64)
 			if err = m.doDeleteSustainedInode(sid, Ino(inode)); err != nil {
 				logger.Warnf("Delete sustained inode %d of sid %d: %s", inode, sid, err)
 				fail = true
@@ -2633,7 +2633,7 @@ func (m *redisMeta) cleanupLeakedChunks(delete bool) {
 			if len(ps) != 2 {
 				continue
 			}
-			ino, _ := strconv.ParseInt(ps[0][prefix+1:], 10, 0)
+			ino, _ := strconv.ParseUint(ps[0][prefix+1:], 10, 64)
 			ikeys = append(ikeys, k)
 			rs = append(rs, p.Exists(ctx, m.inodeKey(Ino(ino))))
 		}
@@ -2653,7 +2653,7 @@ func (m *redisMeta) cleanupLeakedChunks(delete bool) {
 					logger.Infof("found leaked chunk %s", key)
 					if delete {
 						ps := strings.Split(key, "_")
-						ino, _ := strconv.ParseInt(ps[0][prefix+1:], 10, 0)
+						ino, _ := strconv.ParseUint(ps[0][prefix+1:], 10, 64)
 						indx, _ := strconv.Atoi(ps[1])
 						_ = m.deleteChunk(Ino(ino), uint32(indx))
 					}
@@ -2792,10 +2792,10 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 				logger.Warnf("Invalid key %s", key)
 				continue
 			}
-			if ts, e := strconv.ParseInt(ps[1], 10, 64); e != nil {
+			if ts, e := strconv.ParseUint(ps[1], 10, 64); e != nil {
 				logger.Warnf("Invalid key %s", key)
 				continue
-			} else if ts >= edge {
+			} else if ts >= uint64(edge) {
 				continue
 			}
 
