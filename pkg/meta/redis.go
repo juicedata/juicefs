@@ -2950,7 +2950,7 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 	cutoff := time.Now().Add(time.Hour * -1)
 	prefix := len(m.prefix)
 
-	_ = m.scan(ctx, "d*", func(keys []string) error {
+	_ = m.scan(ctx, "d[0-9]+", func(keys []string) error {
 		for _, key := range keys {
 			ino, _ := strconv.Atoi(key[prefix+1:])
 			var entries []*Entry
