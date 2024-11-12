@@ -131,11 +131,16 @@ func testList(s object.ObjectStorage) {
 		for {
 			var objs1 []object.Object
 			var err error
-			objs1, hasMore, token, err = object.ListV2(s, prefix, "", token, delimiter, 1000, true)
+			var lastKey string
+			if len(objs) > 0 {
+				lastKey = objs[len(objs)-1].Key()
+			}
+			objs1, hasMore, token, err = object.ListV2(s, prefix, lastKey, token, delimiter, 1000, true)
 			if err != nil {
 				logger.Fatal("list err", err)
 			}
 			objs = append(objs, objs1...)
+			logger.Infof("list return %d results", len(objs1))
 			if !hasMore {
 				break
 			}
