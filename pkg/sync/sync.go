@@ -1113,7 +1113,7 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 			total = append(total, objs...)
 			marker = objs[len(objs)-1].Key()
 		}
-		if !hasMore {
+		if !hasMore || marker == "" {
 			break
 		}
 	}
