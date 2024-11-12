@@ -436,7 +436,7 @@ func (n *nfsStore) getOwnerGroup(info os.FileInfo) (string, string) {
 	return "", ""
 }
 
-func newNFSStore(addr, username, pass, token string) (ObjectStorage, error) {
+func NewNFSStore(addr, username, pass, token string) (ObjectStorage, error) {
 	if username == "" {
 		u, err := user.Current()
 		if err != nil {
@@ -470,5 +470,5 @@ func newNFSStore(addr, username, pass, token string) (ObjectStorage, error) {
 }
 
 func init() {
-	Register("nfs", newNFSStore)
+	Register("nfs", NewNFSStore)
 }

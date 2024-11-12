@@ -304,7 +304,7 @@ func (s *ibmcos) SetStorageClass(sc string) error {
 	return nil
 }
 
-func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage, error) {
+func NewIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -326,5 +326,5 @@ func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage
 }
 
 func init() {
-	Register("ibmcos", newIBMCOS)
+	Register("ibmcos", NewIBMCOS)
 }

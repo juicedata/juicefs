@@ -205,7 +205,7 @@ func (g *gs) SetStorageClass(sc string) error {
 	return nil
 }
 
-func newGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("gs://%s", endpoint)
 	}
@@ -242,5 +242,5 @@ func newGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 }
 
 func init() {
-	Register("gs", newGS)
+	Register("gs", NewGS)
 }

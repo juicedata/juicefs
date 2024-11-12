@@ -44,7 +44,7 @@ func (s *space) Limits() Limits {
 	}
 }
 
-func newSpace(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewSpace(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -73,5 +73,5 @@ func newSpace(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 }
 
 func init() {
-	Register("space", newSpace)
+	Register("space", NewSpace)
 }

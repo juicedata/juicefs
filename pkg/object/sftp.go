@@ -445,7 +445,7 @@ func unescape(original string) string {
 	}
 }
 
-func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
+func NewSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 	idx := strings.LastIndex(endpoint, ":")
 	host, port, err := net.SplitHostPort(endpoint[:idx])
 	if err != nil && strings.Contains(err.Error(), "missing port") {
@@ -562,5 +562,5 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 }
 
 func init() {
-	Register("sftp", newSftp)
+	Register("sftp", NewSftp)
 }

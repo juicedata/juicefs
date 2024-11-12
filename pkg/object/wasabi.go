@@ -42,7 +42,7 @@ func (s *wasabi) SetStorageClass(_ string) error {
 	return notSupported
 }
 
-func newWasabi(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewWasabi(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -74,5 +74,5 @@ func newWasabi(endpoint, accessKey, secretKey, token string) (ObjectStorage, err
 }
 
 func init() {
-	Register("wasabi", newWasabi)
+	Register("wasabi", NewWasabi)
 }

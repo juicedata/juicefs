@@ -53,7 +53,7 @@ func (m *minio) Limits() Limits {
 	}
 }
 
-func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}
@@ -104,5 +104,5 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 }
 
 func init() {
-	Register("minio", newMinio)
+	Register("minio", NewMinio)
 }

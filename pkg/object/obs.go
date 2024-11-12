@@ -367,7 +367,7 @@ func autoOBSEndpoint(bucketName, accessKey, secretKey, token string) (string, er
 	return "", fmt.Errorf("bucket %q does not exist", bucketName)
 }
 
-func newOBS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewOBS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -430,5 +430,5 @@ func newOBS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 }
 
 func init() {
-	Register("obs", newOBS)
+	Register("obs", NewOBS)
 }

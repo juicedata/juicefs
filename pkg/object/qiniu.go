@@ -187,7 +187,7 @@ func (q *qiniu) ListV2(prefix, start, token, delimiter string, limit int64, foll
 	return objs, hasNext, markerOut, nil
 }
 
-func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -249,5 +249,5 @@ func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 }
 
 func init() {
-	Register("qiniu", newQiniu)
+	Register("qiniu", NewQiniu)
 }

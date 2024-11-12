@@ -49,7 +49,7 @@ func (s *eos) Limits() Limits {
 	}
 }
 
-func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -91,5 +91,5 @@ func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 }
 
 func init() {
-	Register("eos", newEos)
+	Register("eos", NewEos)
 }

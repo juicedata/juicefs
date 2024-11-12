@@ -406,7 +406,7 @@ func autoOSSEndpoint(bucketName, accessKey, secretKey, securityToken string) (st
 	return fmt.Sprintf("https://%s.aliyuncs.com", bucketLocation), nil
 }
 
-func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -490,5 +490,5 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 }
 
 func init() {
-	Register("oss", newOSS)
+	Register("oss", NewOSS)
 }

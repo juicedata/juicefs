@@ -233,7 +233,7 @@ func autoWasbEndpoint(containerName, accountName, scheme string, credential *azb
 	return endpoint, nil
 }
 
-func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, error) {
+func NewWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -274,5 +274,5 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 }
 
 func init() {
-	Register("wasb", newWasb)
+	Register("wasb", NewWasb)
 }

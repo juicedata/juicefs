@@ -52,7 +52,7 @@ func (j *jss) Copy(dst, src string) error {
 	return err
 }
 
-func newJSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewJSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -81,5 +81,5 @@ func newJSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 }
 
 func init() {
-	Register("jss", newJSS)
+	Register("jss", NewJSS)
 }

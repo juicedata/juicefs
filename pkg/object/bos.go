@@ -259,7 +259,7 @@ func autoBOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 	}
 }
 
-func newBOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewBOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -296,5 +296,5 @@ func newBOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 }
 
 func init() {
-	Register("bos", newBOS)
+	Register("bos", NewBOS)
 }

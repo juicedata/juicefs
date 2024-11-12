@@ -595,7 +595,7 @@ func TestMem(t *testing.T) {
 
 func TestDisk(t *testing.T) {
 	_ = os.RemoveAll("/tmp/abc/")
-	s, _ := newDisk("/tmp/abc/", "", "", "")
+	s, _ := NewDisk("/tmp/abc/", "", "", "")
 	testStorage(t, s)
 }
 
@@ -603,7 +603,7 @@ func TestQingStor(t *testing.T) { //skip mutate
 	if os.Getenv("QY_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	s, _ := newQingStor(os.Getenv("QY_ENDPOINT"),
+	s, _ := NewQingStor(os.Getenv("QY_ENDPOINT"),
 		os.Getenv("QY_ACCESS_KEY"), os.Getenv("QY_SECRET_KEY"), "")
 	testStorage(t, s)
 
@@ -611,7 +611,7 @@ func TestQingStor(t *testing.T) { //skip mutate
 	if os.Getenv("PRIVATE_QY_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	s2, _ := newQingStor("http://test.jn1.is.shanhe.com",
+	s2, _ := NewQingStor("http://test.jn1.is.shanhe.com",
 		os.Getenv("PRIVATE_QY_ACCESS_KEY"), os.Getenv("PRIVATE_QY_SECRET_KEY"), "")
 	testStorage(t, s2)
 }
@@ -620,7 +620,7 @@ func TestS3(t *testing.T) { //skip mutate
 	if os.Getenv("AWS_ACCESS_KEY_ID") == "" {
 		t.SkipNow()
 	}
-	s, _ := newS3(os.Getenv("AWS_ENDPOINT"),
+	s, _ := NewS3(os.Getenv("AWS_ENDPOINT"),
 		os.Getenv("AWS_ACCESS_KEY_ID"),
 		os.Getenv("AWS_SECRET_ACCESS_KEY"),
 		os.Getenv("AWS_SESSION_TOKEN"))
@@ -664,7 +664,7 @@ func TestOSS(t *testing.T) { //skip mutate
 	if os.Getenv("ALICLOUD_ACCESS_KEY_ID") == "" {
 		t.SkipNow()
 	}
-	s, _ := newOSS(os.Getenv("ALICLOUD_ENDPOINT"),
+	s, _ := NewOSS(os.Getenv("ALICLOUD_ENDPOINT"),
 		os.Getenv("ALICLOUD_ACCESS_KEY_ID"),
 		os.Getenv("ALICLOUD_ACCESS_KEY_SECRET"), "")
 	testStorage(t, s)
@@ -674,7 +674,7 @@ func TestUFile(t *testing.T) { //skip mutate
 	if os.Getenv("UCLOUD_PUBLIC_KEY") == "" {
 		t.SkipNow()
 	}
-	ufile, _ := newUFile(os.Getenv("UCLOUD_ENDPOINT"),
+	ufile, _ := NewUFile(os.Getenv("UCLOUD_ENDPOINT"),
 		os.Getenv("UCLOUD_PUBLIC_KEY"), os.Getenv("UCLOUD_PRIVATE_KEY"), "")
 	testStorage(t, ufile)
 }
@@ -683,7 +683,7 @@ func TestGS(t *testing.T) { //skip mutate
 	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
 		t.SkipNow()
 	}
-	gs, _ := newGS(os.Getenv("GOOGLE_ENDPOINT"), "", "", "")
+	gs, _ := NewGS(os.Getenv("GOOGLE_ENDPOINT"), "", "", "")
 	testStorage(t, gs)
 }
 
@@ -691,7 +691,7 @@ func TestQiniu(t *testing.T) { //skip mutate
 	if os.Getenv("QINIU_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	qiniu, _ := newQiniu(os.Getenv("QINIU_ENDPOINT"),
+	qiniu, _ := NewQiniu(os.Getenv("QINIU_ENDPOINT"),
 		os.Getenv("QINIU_ACCESS_KEY"), os.Getenv("QINIU_SECRET_KEY"), "")
 	testStorage(t, qiniu)
 	//qiniu, _ = newQiniu("https://test.cn-north-1-s3.qiniu.com",
@@ -703,7 +703,7 @@ func TestKS3(t *testing.T) { //skip mutate
 	if os.Getenv("KS3_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	ks3, _ := newKS3(os.Getenv("KS3_ENDPOINT"),
+	ks3, _ := NewKS3(os.Getenv("KS3_ENDPOINT"),
 		os.Getenv("KS3_ACCESS_KEY"), os.Getenv("KS3_SECRET_KEY"), "")
 	testStorage(t, ks3)
 }
@@ -712,7 +712,7 @@ func TestCOS(t *testing.T) { //skip mutate
 	if os.Getenv("COS_SECRETID") == "" {
 		t.SkipNow()
 	}
-	cos, _ := newCOS(
+	cos, _ := NewCOS(
 		os.Getenv("COS_ENDPOINT"),
 		os.Getenv("COS_SECRETID"), os.Getenv("COS_SECRETKEY"), "")
 	testStorage(t, cos)
@@ -723,7 +723,7 @@ func TestAzure(t *testing.T) { //skip mutate
 		t.SkipNow()
 	}
 	//https://containersName.core.windows.net
-	abs, _ := newWasb(os.Getenv("AZURE_ENDPOINT"),
+	abs, _ := NewWasb(os.Getenv("AZURE_ENDPOINT"),
 		os.Getenv("AZURE_STORAGE_ACCOUNT"), os.Getenv("AZURE_STORAGE_KEY"), "")
 	testStorage(t, abs)
 }
@@ -732,7 +732,7 @@ func TestJSS(t *testing.T) { //skip mutate
 	if os.Getenv("JSS_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	jss, _ := newJSS(os.Getenv("JSS_ENDPOINT"),
+	jss, _ := NewJSS(os.Getenv("JSS_ENDPOINT"),
 		os.Getenv("JSS_ACCESS_KEY"), os.Getenv("JSS_SECRET_KEY"), "")
 	testStorage(t, jss)
 }
@@ -741,7 +741,7 @@ func TestB2(t *testing.T) { //skip mutate
 	if os.Getenv("B2_ACCOUNT_ID") == "" {
 		t.SkipNow()
 	}
-	b, err := newB2(os.Getenv("B2_ENDPOINT"), os.Getenv("B2_ACCOUNT_ID"), os.Getenv("B2_APP_KEY"), "")
+	b, err := NewB2(os.Getenv("B2_ENDPOINT"), os.Getenv("B2_ACCOUNT_ID"), os.Getenv("B2_APP_KEY"), "")
 	if err != nil {
 		t.Fatalf("create B2: %s", err)
 	}
@@ -752,7 +752,7 @@ func TestSpace(t *testing.T) { //skip mutate
 	if os.Getenv("SPACE_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	b, _ := newSpace(os.Getenv("SPACE_ENDPOINT"), os.Getenv("SPACE_ACCESS_KEY"), os.Getenv("SPACE_SECRET_KEY"), "")
+	b, _ := NewSpace(os.Getenv("SPACE_ENDPOINT"), os.Getenv("SPACE_ACCESS_KEY"), os.Getenv("SPACE_SECRET_KEY"), "")
 	testStorage(t, b)
 }
 
@@ -760,7 +760,7 @@ func TestBOS(t *testing.T) { //skip mutate
 	if os.Getenv("BDCLOUD_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	b, _ := newBOS(os.Getenv("BDCLOUD_ENDPOINT"),
+	b, _ := NewBOS(os.Getenv("BDCLOUD_ENDPOINT"),
 		os.Getenv("BDCLOUD_ACCESS_KEY"), os.Getenv("BDCLOUD_SECRET_KEY"), "")
 	testStorage(t, b)
 }
@@ -769,7 +769,7 @@ func TestSftp(t *testing.T) { //skip mutate
 	if os.Getenv("SFTP_HOST") == "" {
 		t.SkipNow()
 	}
-	b, _ := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"), "")
+	b, _ := NewSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"), "")
 	testStorage(t, b)
 }
 
@@ -777,7 +777,7 @@ func TestOBS(t *testing.T) { //skip mutate
 	if os.Getenv("HWCLOUD_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	b, _ := newOBS(os.Getenv("HWCLOUD_ENDPOINT"),
+	b, _ := NewOBS(os.Getenv("HWCLOUD_ENDPOINT"),
 		os.Getenv("HWCLOUD_ACCESS_KEY"), os.Getenv("HWCLOUD_SECRET_KEY"), "")
 	testStorage(t, b)
 }
@@ -786,7 +786,7 @@ func TestNFS(t *testing.T) { //skip mutate
 	if os.Getenv("NFS_ADDR") == "" {
 		t.SkipNow()
 	}
-	b, err := newNFSStore(os.Getenv("NFS_ADDR"), os.Getenv("NFS_ACCESS_KEY"), os.Getenv("NFS_SECRET_KEY"), "")
+	b, err := NewNFSStore(os.Getenv("NFS_ADDR"), os.Getenv("NFS_ACCESS_KEY"), os.Getenv("NFS_SECRET_KEY"), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -832,7 +832,7 @@ func TestOOS(t *testing.T) { //skip mutate
 	if os.Getenv("OOS_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	b, _ := newOOS(os.Getenv("OOS_ENDPOINT"),
+	b, _ := NewOOS(os.Getenv("OOS_ENDPOINT"),
 		os.Getenv("OOS_ACCESS_KEY"), os.Getenv("OOS_SECRET_KEY"), "")
 	testStorage(t, b)
 }
@@ -849,7 +849,7 @@ func TestMinIO(t *testing.T) {
 	if os.Getenv("MINIO_TEST_BUCKET") == "" {
 		t.SkipNow()
 	}
-	b, _ := newMinio(os.Getenv("MINIO_TEST_BUCKET"), os.Getenv("MINIO_ACCESS_KEY"), os.Getenv("MINIO_SECRET_KEY"), "")
+	b, _ := NewMinio(os.Getenv("MINIO_TEST_BUCKET"), os.Getenv("MINIO_ACCESS_KEY"), os.Getenv("MINIO_SECRET_KEY"), "")
 	testStorage(t, b)
 }
 
@@ -1016,7 +1016,7 @@ func TestEOS(t *testing.T) { //skip mutate
 	if os.Getenv("EOS_ENDPOINT") == "" {
 		t.SkipNow()
 	}
-	s, _ := newEos(os.Getenv("EOS_ENDPOINT"), os.Getenv("EOS_ACCESS_KEY"), os.Getenv("EOS_SECRET_KEY"), "")
+	s, _ := NewEos(os.Getenv("EOS_ENDPOINT"), os.Getenv("EOS_ACCESS_KEY"), os.Getenv("EOS_SECRET_KEY"), "")
 	testStorage(t, s)
 }
 
@@ -1024,7 +1024,7 @@ func TestWASABI(t *testing.T) { //skip mutate
 	if os.Getenv("WASABI_ENDPOINT") == "" {
 		t.SkipNow()
 	}
-	s, _ := newWasabi(os.Getenv("WASABI_ENDPOINT"), os.Getenv("WASABI_ACCESS_KEY"), os.Getenv("WASABI_SECRET_KEY"), "")
+	s, _ := NewWasabi(os.Getenv("WASABI_ENDPOINT"), os.Getenv("WASABI_ACCESS_KEY"), os.Getenv("WASABI_SECRET_KEY"), "")
 	testStorage(t, s)
 }
 
@@ -1032,7 +1032,7 @@ func TestSCS(t *testing.T) { //skip mutate
 	if os.Getenv("SCS_ENDPOINT") == "" {
 		t.SkipNow()
 	}
-	s, _ := newSCS(os.Getenv("SCS_ENDPOINT"), os.Getenv("SCS_ACCESS_KEY"), os.Getenv("SCS_SECRET_KEY"), "")
+	s, _ := NewSCS(os.Getenv("SCS_ENDPOINT"), os.Getenv("SCS_ACCESS_KEY"), os.Getenv("SCS_SECRET_KEY"), "")
 	testStorage(t, s)
 }
 
@@ -1040,7 +1040,7 @@ func TestIBMCOS(t *testing.T) { //skip mutate
 	if os.Getenv("IBMCOS_ENDPOINT") == "" {
 		t.SkipNow()
 	}
-	s, _ := newIBMCOS(os.Getenv("IBMCOS_ENDPOINT"), os.Getenv("IBMCOS_ACCESS_KEY"), os.Getenv("IBMCOS_SECRET_KEY"), "")
+	s, _ := NewIBMCOS(os.Getenv("IBMCOS_ENDPOINT"), os.Getenv("IBMCOS_ACCESS_KEY"), os.Getenv("IBMCOS_SECRET_KEY"), "")
 	testStorage(t, s)
 }
 
@@ -1048,7 +1048,7 @@ func TestTOS(t *testing.T) { //skip mutate
 	if os.Getenv("TOS_ENDPOINT") == "" {
 		t.SkipNow()
 	}
-	tos, err := newTOS(os.Getenv("TOS_ENDPOINT"), os.Getenv("TOS_ACCESS_KEY"), os.Getenv("TOS_SECRET_KEY"), "")
+	tos, err := NewTOS(os.Getenv("TOS_ENDPOINT"), os.Getenv("TOS_ACCESS_KEY"), os.Getenv("TOS_SECRET_KEY"), "")
 	if err != nil {
 		t.Fatalf("create: %s", err)
 	}

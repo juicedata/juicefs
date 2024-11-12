@@ -455,7 +455,7 @@ func defaultPathStyle() bool {
 var oracleCompileRegexp = `.*\.compat.objectstorage\.(.*)\.oraclecloud\.com`
 var OVHCompileRegexp = `^s3\.(\w*)(\.\w*)?\.cloud\.ovh\.net$`
 
-func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func NewS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		if len(strings.Split(endpoint, ".")) > 1 && !strings.HasSuffix(endpoint, ".amazonaws.com") {
 			endpoint = fmt.Sprintf("http://%s", endpoint)
@@ -585,5 +585,5 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 }
 
 func init() {
-	Register("s3", newS3)
+	Register("s3", NewS3)
 }
