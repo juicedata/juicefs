@@ -67,7 +67,7 @@ public class RangerPermissionChecker {
 
   private final Set<String> groups;
 
-  private String rangerCacheDir;
+  private final String rangerCacheDir;
 
   private final RangerBasePlugin rangerPlugin;
 
