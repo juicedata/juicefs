@@ -18,18 +18,16 @@ var makeData bool
 var parallel int64
 var commPrefix string
 
-func init() {
+var logger = utils.GetLogger("juicefs")
+
+func main() {
 	flag.StringVar(&name, "name", "", "name of object storage")
 	flag.StringVar(&delimiter, "delimiter", "", "use delimiter")
 	flag.StringVar(&prefix, "prefix", "", "prefix")
 	flag.StringVar(&commPrefix, "commPrefix", "list-prefix/", "commPrefix")
 	flag.BoolVar(&makeData, "makedata", false, "make data")
 	flag.Int64Var(&parallel, "parallel", 100, "parallel")
-}
-
-var logger = utils.GetLogger("juicefs")
-
-func main() {
+	flag.Parse()
 	var s object.ObjectStorage
 	var err error
 	switch name {
