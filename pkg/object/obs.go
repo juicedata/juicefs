@@ -75,7 +75,13 @@ func (s *obsClient) Create() error {
 	}
 	return err
 }
-
+func getStorageClassStr(sc obs.StorageClassType) string {
+	if sc == "" {
+		return string(obs.StorageClassStandard)
+	} else {
+		return string(sc)
+	}
+}
 func (s *obsClient) Head(key string) (Object, error) {
 	params := &obs.GetObjectMetadataInput{
 		Bucket: s.bucket,
@@ -88,21 +94,13 @@ func (s *obsClient) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
-	var sc string
-	switch r.StorageClass {
-	case "":
-		sc = string(obs.StorageClassStandard)
-	case obs.StorageClassWarm:
-		sc = string("STANDARD_IA")
-	default:
-		sc = string(r.StorageClass)
-	}
+
 	return &obj{
 		key,
 		r.ContentLength,
 		r.LastModified,
 		strings.HasSuffix(key, "/"),
-		sc,
+		getStorageClassStr(r.StorageClass),
 	}, nil
 }
 
@@ -120,7 +118,7 @@ func (s *obsClient) Get(key string, off, limit int64, getters ...AttrGetter) (io
 	}
 	if resp != nil {
 		attrs := applyGetters(getters...)
-		attrs.SetRequestID(resp.RequestId).SetStorageClass(string(resp.StorageClass))
+		attrs.SetRequestID(resp.RequestId).SetStorageClass(getStorageClassStr(resp.StorageClass))
 	}
 	if err != nil {
 		return nil, err
@@ -176,7 +174,7 @@ func (s *obsClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	}
 	if resp != nil {
 		attrs := applyGetters(getters...)
-		attrs.SetRequestID(resp.RequestId).SetStorageClass(s.sc)
+		attrs.SetRequestID(resp.RequestId).SetStorageClass(getStorageClassStr(resp.StorageClass))
 	}
 	return err
 }

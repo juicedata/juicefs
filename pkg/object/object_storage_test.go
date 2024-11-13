@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 	"io"
 	"math"
 	"os"
@@ -85,6 +86,8 @@ func setStorageClass(o ObjectStorage) string {
 			sc = string(oss.StorageIA)
 		case *tosClient:
 			sc = string(enum.StorageClassIa)
+		case *obsClient:
+			sc = string(obs.StorageClassStandard)
 		}
 		err := osc.SetStorageClass(sc)
 		if err != nil {
@@ -297,7 +300,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		if nextMarker == "" {
 			t.Fatalf("next marker should not be empty")
 		}
-		obs, more, nextMarker, err := s.ListV2("", "", nextMarker, "/", 4, true)
+		obs, more, nextMarker, err := s.ListV2("", obs[len(obs)-1].Key(), nextMarker, "/", 4, true)
 		if err != nil {
 			t.Fatalf("list with marker: %s", err)
 		}

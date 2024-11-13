@@ -148,12 +148,9 @@ func (q *qiniu) List(prefix, marker, delimiter string, limit int64, followLink b
 	return q.hasV2.List(q, prefix, marker, delimiter, limit, followLink)
 }
 
-func (q *qiniu) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (q *qiniu) ListV2(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
-	}
-	if token == "" {
-		token = start
 	}
 	entries, prefixes, markerOut, hasNext, err := q.bm.ListFiles(q.bucket, prefix, delimiter, token, int(limit))
 	if len(entries) > 0 || err == io.EOF {
@@ -164,14 +161,20 @@ func (q *qiniu) ListV2(prefix, start, token, delimiter string, limit int64, foll
 		return nil, false, "", err
 	}
 	n := len(entries)
-	objs := make([]Object, n)
+	objs := make([]Object, 0, n)
 	for i := 0; i < n; i++ {
 		entry := entries[i]
+		if entry.Key <= startAfter {
+			continue
+		}
 		mtime := entry.PutTime / 10000000
-		objs[i] = &obj{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/"), ""}
+		objs = append(objs, &obj{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/"), ""})
 	}
 	if delimiter != "" {
 		for _, p := range prefixes {
+			if p <= startAfter {
+				continue
+			}
 			objs = append(objs, &obj{p, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
