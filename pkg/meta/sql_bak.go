@@ -2,6 +2,7 @@ package meta
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,10 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 	"xorm.io/xorm"
+)
+
+var (
+	sqlBatchSize = 40960
 )
 
 func (m *dbMeta) BuildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
@@ -43,25 +48,31 @@ func (m *dbMeta) BuildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
 				[]*sync.Pool{{New: func() interface{} { return &pb.Chunk{} }}, {New: func() interface{} { return &pb.Slice{} }}}},
 		}
 	case SegTypeEdge:
-		return &sqlEdgeDBS{dumpedBatchSeg{dumpedSeg{typ: SegTypeEdge, meta: m}, []*sync.Pool{{New: func() interface{} { return &pb.Edge{} }}}}}
+		return &sqlEdgeDBS{dumpedBatchSeg{dumpedSeg{typ: SegTypeEdge, meta: m}, []*sync.Pool{{New: func() interface{} { return &pb.Edge{} }}}}, sync.Mutex{}}
+	case SegTypeParent:
+		return &sqlParentDS{dumpedSeg{typ: SegTypeEdge, meta: m}}
 	case SegTypeSymlink:
 		return &sqlSymlinkDBS{dumpedBatchSeg{dumpedSeg{typ: SegTypeSymlink, meta: m}, []*sync.Pool{{New: func() interface{} { return &pb.Symlink{} }}}}}
 	}
 	return nil
 }
 
-var (
-	lsNodePool  = &sync.Pool{New: func() interface{} { return &node{} }}
-	lsChkPool   = &sync.Pool{New: func() interface{} { return &chunk{} }}
-	lsSlicePool = &sync.Pool{New: func() interface{} { return make([]byte, 0, sliceBytes*10) }}
-	lsEdgePool  = &sync.Pool{New: func() interface{} { return &edge{} }}
-	lsSymPool   = &sync.Pool{New: func() interface{} { return &symlink{} }}
-)
+func (m *dbMeta) buildLoadedPools(typ int) []*sync.Pool {
+	loadedPoolOnce.Do(func() {
+		loadedPools = map[int][]*sync.Pool{
+			SegTypeNode:    {{New: func() interface{} { return &node{} }}},
+			SegTypeChunk:   {{New: func() interface{} { return &chunk{} }}, {New: func() interface{} { return make([]byte, 0, sliceBytes*10) }}},
+			SegTypeEdge:    {{New: func() interface{} { return &edge{} }}},
+			SegTypeSymlink: {{New: func() interface{} { return &symlink{} }}},
+		}
+	})
+	return loadedPools[typ]
+}
 
 func (m *dbMeta) BuildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
 	switch typ {
 	case SegTypeFormat:
-		return &formatLS{loadedSeg{typ: typ}}
+		return &sqlFormatLS{loadedSeg{typ: typ, meta: m}}
 	case SegTypeCounter:
 		return &sqlCounterLS{loadedSeg{typ: typ, meta: m}}
 	case SegTypeSustained:
@@ -79,13 +90,15 @@ func (m *dbMeta) BuildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
 	case SegTypeStat:
 		return &sqlStatLS{loadedSeg{typ: typ, meta: m}}
 	case SegTypeNode:
-		return &sqlNodeLS{loadedSeg{typ: typ, meta: m}, lsNodePool}
+		return &sqlNodeLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
 	case SegTypeChunk:
-		return &sqlChunkLS{loadedSeg{typ: typ, meta: m}, lsChkPool, lsSlicePool}
+		return &sqlChunkLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
 	case SegTypeEdge:
-		return &sqlEdgeLS{loadedSeg{typ: typ, meta: m}, lsEdgePool}
+		return &sqlEdgeLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
+	case SegTypeParent:
+		return &sqlParentLS{loadedSeg{typ: typ, meta: m}}
 	case SegTypeSymlink:
-		return &sqlSymlinkLS{loadedSeg{typ: typ, meta: m}, lsSymPool}
+		return &sqlSymlinkLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
 	}
 	return nil
 }
@@ -105,13 +118,10 @@ type sqlCounterDS struct {
 	dumpedSeg
 }
 
-func (m *dbMeta) newCounterDS() iDumpedSeg {
-	return &sqlCounterDS{dumpedSeg: dumpedSeg{typ: SegTypeCounter, meta: m}}
-}
-
 func (s *sqlCounterDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+	meta := s.meta.(*dbMeta)
 	var rows []counter
-	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
+	if err := meta.roTxn(func(s *xorm.Session) error {
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -192,14 +202,13 @@ func (s *sqlSliceRefDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResul
 	eg.SetLimit(opt.CoNum)
 
 	taskFinished := false
-	limit := 40960
 	psrs := &pb.SliceRefList{List: make([]*pb.SliceRef, 0, 1024)}
-	for start := 0; !taskFinished; start += limit {
+	for start := 0; !taskFinished; start += sqlBatchSize {
 		nStart := start
 		eg.Go(func() error {
 			var rows []sliceRef
 			if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
-				return s.Where("refs > 1").Limit(limit, nStart).Find(&rows)
+				return s.Where("refs > 1").Limit(sqlBatchSize, nStart).Find(&rows)
 			}); err != nil {
 				taskFinished = true
 				return err
@@ -371,12 +380,11 @@ func sqlQueryBatch(ctx Context, s iDumpedSeg, opt *DumpOption, ch chan *dumpedRe
 	eg.SetLimit(opt.CoNum)
 
 	taskFinished := false
-	limit := 40960
 	sum := int64(0)
-	for start := 0; !taskFinished; start += limit {
+	for start := 0; !taskFinished; start += sqlBatchSize {
 		nStart := start
 		eg.Go(func() error {
-			msg, err := query(ctx, limit, nStart, &sum)
+			msg, err := query(ctx, sqlBatchSize, nStart, &sum)
 			if err != nil {
 				taskFinished = true
 				return err
@@ -512,6 +520,7 @@ func (s *sqlChunkDBS) release(msg proto.Message) {
 
 type sqlEdgeDBS struct {
 	dumpedBatchSeg
+	lock sync.Mutex
 }
 
 func (s *sqlEdgeDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
@@ -519,6 +528,18 @@ func (s *sqlEdgeDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) 
 }
 
 func (s *sqlEdgeDBS) doQuery(ctx Context, limit, start int, sum *int64) (proto.Message, error) {
+	// TODO: optimize parents
+	var parents map[uint64][]uint64
+	s.lock.Lock()
+	val := ctx.Value("parents")
+	if val == nil {
+		parents = make(map[uint64][]uint64)
+		ctx.WithValue("parents", parents)
+	} else {
+		parents = val.(map[uint64][]uint64)
+	}
+	s.lock.Unlock()
+
 	var rows []edge
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Limit(limit, start).Find(&rows)
@@ -538,6 +559,10 @@ func (s *sqlEdgeDBS) doQuery(ctx Context, limit, start int, sum *int64) (proto.M
 		pe.Inode = uint64(e.Inode)
 		pe.Name = e.Name
 		pe.Type = uint32(e.Type)
+
+		s.lock.Lock()
+		parents[uint64(e.Inode)] = append(parents[uint64(e.Inode)], uint64(e.Parent))
+		s.lock.Unlock()
 		pes.List = append(pes.List, pe)
 	}
 	atomic.AddInt64(sum, int64(len(pes.List)))
@@ -550,6 +575,51 @@ func (s *sqlEdgeDBS) release(msg proto.Message) {
 		s.pools[0].Put(pe)
 	}
 	pes.List = nil
+}
+
+type sqlParentDS struct {
+	dumpedSeg
+}
+
+func (s *sqlParentDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+	val := ctx.Value("parents")
+	if val == nil {
+		return nil
+	}
+
+	parents := val.(map[uint64][]uint64)
+	pls := &pb.ParentList{
+		List: make([]*pb.Parent, 0, sqlBatchSize),
+	}
+	st := make(map[uint64]int64)
+	for inode, ps := range parents {
+		if len(ps) > 1 {
+			for k := range st {
+				delete(st, k)
+			}
+			for _, p := range ps {
+				st[p] = st[p] + 1
+			}
+			for parent, cnt := range st {
+				pls.List = append(pls.List, &pb.Parent{Inode: inode, Parent: parent, Cnt: cnt})
+			}
+		}
+		if len(pls.List) >= sqlBatchSize {
+			if err := dumpResult(ctx, ch, &dumpedResult{s, pls}); err != nil {
+				return err
+			}
+			pls = &pb.ParentList{
+				List: make([]*pb.Parent, 0, sqlBatchSize),
+			}
+		}
+	}
+
+	if len(pls.List) > 0 {
+		if err := dumpResult(ctx, ch, &dumpedResult{s, pls}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type sqlSymlinkDBS struct {
@@ -645,6 +715,21 @@ func (m *dbMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) (err erro
 
 	wg.Wait()
 	return bak.WriteFooter(w)
+}
+
+type sqlFormatLS struct {
+	loadedSeg
+}
+
+func (s *sqlFormatLS) insert(ctx Context, msg proto.Message) error {
+	format := UnmarshalFormatPB(msg.(*pb.Format))
+	fData, _ := json.MarshalIndent(*format, "", "")
+	return s.meta.(*dbMeta).insertSQL([]interface{}{
+		&setting{
+			Name:  "format",
+			Value: string(fData),
+		},
+	})
 }
 
 type sqlCounterLS struct {
@@ -796,7 +881,7 @@ func (s *sqlStatLS) insert(ctx Context, msg proto.Message) error {
 
 type sqlNodeLS struct {
 	loadedSeg
-	pool *sync.Pool
+	pools []*sync.Pool
 }
 
 func (s *sqlNodeLS) insert(ctx Context, msg proto.Message) error {
@@ -804,7 +889,7 @@ func (s *sqlNodeLS) insert(ctx Context, msg proto.Message) error {
 	rows := make([]interface{}, 0, len(nodes.List))
 	var pn *node
 	for _, n := range nodes.List {
-		pn = s.pool.Get().(*node)
+		pn = s.pools[0].Get().(*node)
 		pn.Inode = Ino(n.Inode)
 		pn.Type = uint8(n.Type)
 		pn.Flags = uint8(n.Flags)
@@ -827,7 +912,7 @@ func (s *sqlNodeLS) insert(ctx Context, msg proto.Message) error {
 	}
 	err := s.meta.(*dbMeta).insertSQL(rows)
 	for _, n := range rows {
-		s.pool.Put(n)
+		s.pools[0].Put(n)
 	}
 	logger.Debugf("insert %s total num %d", s, len(rows))
 	return err
@@ -835,8 +920,7 @@ func (s *sqlNodeLS) insert(ctx Context, msg proto.Message) error {
 
 type sqlChunkLS struct {
 	loadedSeg
-	chunkPool *sync.Pool
-	slicePool *sync.Pool
+	pools []*sync.Pool
 }
 
 func (s *sqlChunkLS) insert(ctx Context, msg proto.Message) error {
@@ -844,13 +928,13 @@ func (s *sqlChunkLS) insert(ctx Context, msg proto.Message) error {
 	rows := make([]interface{}, 0, len(chunks.List))
 	var pc *chunk
 	for _, c := range chunks.List {
-		pc = s.chunkPool.Get().(*chunk)
+		pc = s.pools[0].Get().(*chunk)
 		pc.Id = 0
 		pc.Inode = Ino(c.Inode)
 		pc.Indx = c.Index
 
 		n := len(c.Slices) * sliceBytes
-		pc.Slices = s.slicePool.Get().([]byte)[:0]
+		pc.Slices = s.pools[1].Get().([]byte)[:0]
 		if cap(pc.Slices) < n {
 			pc.Slices = make([]byte, 0, n)
 		}
@@ -868,8 +952,8 @@ func (s *sqlChunkLS) insert(ctx Context, msg proto.Message) error {
 
 	for _, chk := range rows {
 		c := chk.(*chunk)
-		s.slicePool.Put(c.Slices)
-		s.chunkPool.Put(c)
+		s.pools[1].Put(c.Slices)
+		s.pools[0].Put(c)
 	}
 	logger.Debugf("insert %s total num %d", s, len(rows))
 	return err
@@ -877,7 +961,7 @@ func (s *sqlChunkLS) insert(ctx Context, msg proto.Message) error {
 
 type sqlEdgeLS struct {
 	loadedSeg
-	pool *sync.Pool
+	pools []*sync.Pool
 }
 
 func (s *sqlEdgeLS) insert(ctx Context, msg proto.Message) error {
@@ -885,7 +969,7 @@ func (s *sqlEdgeLS) insert(ctx Context, msg proto.Message) error {
 	rows := make([]interface{}, 0, len(edges.List))
 	var pe *edge
 	for _, e := range edges.List {
-		pe = s.pool.Get().(*edge)
+		pe = s.pools[0].Get().(*edge)
 		pe.Id = 0
 		pe.Parent = Ino(e.Parent)
 		pe.Inode = Ino(e.Inode)
@@ -896,15 +980,23 @@ func (s *sqlEdgeLS) insert(ctx Context, msg proto.Message) error {
 
 	err := s.meta.(*dbMeta).insertSQL(rows)
 	for _, e := range rows {
-		s.pool.Put(e)
+		s.pools[0].Put(e)
 	}
 	logger.Debugf("insert %s total num %d", s, len(rows))
 	return err
 }
 
+type sqlParentLS struct {
+	loadedSeg
+}
+
+func (s *sqlParentLS) insert(ctx Context, msg proto.Message) error {
+	return nil // No need for SQL, skip.
+}
+
 type sqlSymlinkLS struct {
 	loadedSeg
-	pool *sync.Pool
+	pools []*sync.Pool
 }
 
 func (s *sqlSymlinkLS) insert(ctx Context, msg proto.Message) error {
@@ -912,7 +1004,7 @@ func (s *sqlSymlinkLS) insert(ctx Context, msg proto.Message) error {
 	rows := make([]interface{}, 0, len(symlinks.List))
 	var ps *symlink
 	for _, sl := range symlinks.List {
-		ps = s.pool.Get().(*symlink)
+		ps = s.pools[0].Get().(*symlink)
 		ps.Inode = Ino(sl.Inode)
 		ps.Target = sl.Target
 		rows = append(rows, ps)
@@ -920,7 +1012,7 @@ func (s *sqlSymlinkLS) insert(ctx Context, msg proto.Message) error {
 
 	err := s.meta.(*dbMeta).insertSQL(rows)
 	for _, sl := range rows {
-		s.pool.Put(sl)
+		s.pools[0].Put(sl)
 	}
 	logger.Debugf("insert %s total num %d", s, len(rows))
 	return err
@@ -951,6 +1043,7 @@ func (m *dbMeta) insertSQL(beans []interface{}) error {
 
 func (m *dbMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	opt = opt.check()
+	// TODO: pre check
 	if err := m.checkAddr(); err != nil {
 		return err
 	}
@@ -984,21 +1077,6 @@ func (m *dbMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 					ctx.Cancel()
 					return
 				}
-				/*
-						rows, bs := task.decoder.decode(task.msg), batchSize
-						for len(rows) > 0 {
-							if len(rows) < bs {
-								bs = len(rows)
-							}
-							if err := insert(rows[:bs]); err != nil {
-								logger.Errorf("Write %d beans: %s", len(rows), err)
-								ctx.Cancel()
-								return
-							}
-							task.decoder.release(rows[:bs])
-							rows = rows[bs:]
-					}
-				*/
 			}
 		}
 	}

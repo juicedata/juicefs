@@ -126,17 +126,6 @@ message StatList {
   repeated Stat list = 1;
 }
 
-message Edge {
-  uint64 parent = 1;
-  uint64 inode = 2;
-  bytes name = 3;
-  uint32 type = 4;
-}
-
-message EdgeList {
-  repeated Edge list = 1;
-}
-
 message Node {
   uint64 inode = 1;
   uint32 type = 2;   
@@ -160,6 +149,28 @@ message Node {
 
 message NodeList {
   repeated Node list = 1;
+}
+
+message Edge {
+  uint64 parent = 1;
+  uint64 inode = 2;
+  bytes name = 3;
+  uint32 type = 4;
+}
+
+message EdgeList {
+  repeated Edge list = 1;
+}
+
+// for redis and tikv only
+message Parent {
+  uint64 inode = 1;
+  uint64 parent = 2 ;
+  int64 cnt = 3;
+}
+
+message ParentList {
+  repeated Parent list = 1;
 }
 
 message Slice {

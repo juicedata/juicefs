@@ -8,7 +8,9 @@ import (
 	"io"
 	"sync"
 
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -34,6 +36,7 @@ const (
 	SegTypeNode
 	SegTypeChunk
 	SegTypeEdge
+	SegTypeParent // for redis/tkv only
 	SegTypeSymlink
 	SegTypeMax
 )
@@ -57,6 +60,7 @@ func init() {
 		SegTypeNode:      proto.MessageName(&pb.NodeList{}),
 		SegTypeChunk:     proto.MessageName(&pb.ChunkList{}),
 		SegTypeEdge:      proto.MessageName(&pb.EdgeList{}),
+		SegTypeParent:    proto.MessageName(&pb.ParentList{}),
 		SegTypeSymlink:   proto.MessageName(&pb.SymlinkList{}),
 	}
 
@@ -285,48 +289,7 @@ type formatDS struct {
 }
 
 func (s *formatDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
-	f := s.f
-	msg := &pb.Format{
-		Name:             f.Name,
-		Uuid:             f.UUID,
-		Storage:          f.Storage,
-		StorageClass:     f.StorageClass,
-		Bucket:           f.Bucket,
-		AccessKey:        f.AccessKey,
-		SecretKey:        f.SecretKey,
-		SessionToken:     f.SessionToken,
-		BlockSize:        int32(f.BlockSize),
-		Compression:      f.Compression,
-		Shards:           int32(f.Shards),
-		HashPrefix:       f.HashPrefix,
-		Capacity:         f.Capacity,
-		Inodes:           f.Inodes,
-		EncryptKey:       f.EncryptKey,
-		EncryptAlgo:      f.EncryptAlgo,
-		KeyEncrypted:     f.KeyEncrypted,
-		UploadLimit:      f.UploadLimit,
-		DownloadLimit:    f.DownloadLimit,
-		TrashDays:        int32(f.TrashDays),
-		MetaVersion:      int32(f.MetaVersion),
-		MinClientVersion: f.MinClientVersion,
-		MaxClientVersion: f.MaxClientVersion,
-		DirStats:         f.DirStats,
-		EnableAcl:        f.EnableACL,
-	}
-
-	if !s.keepSecret {
-		removeKey := func(key *string, name string) {
-			if *key == "" {
-				*key = "remove"
-				logger.Warnf("%s is removed for the sake of safety", name)
-			}
-		}
-		removeKey(&msg.SecretKey, "Secret Key")
-		removeKey(&msg.SessionToken, "Session Token")
-		removeKey(&msg.EncryptKey, "Encrypt Key")
-	}
-
-	return dumpResult(ctx, ch, &dumpedResult{s, msg})
+	return dumpResult(ctx, ch, &dumpedResult{s, MarshalFormatPB(s.f, s.keepSecret)})
 }
 
 type dumpedBatchSeg struct {
@@ -364,17 +327,9 @@ func (opt *LoadOption) check() *LoadOption {
 	return opt
 }
 
-type segDecoder interface {
-	decode(proto.Message) []interface{}
-	release(rows []interface{})
-}
-
 type iLoadedSeg interface {
 	String() string
 	insert(ctx Context, msg proto.Message) error
-
-	newMsg() proto.Message
-	segDecoder
 }
 
 type loadedSeg struct {
@@ -385,10 +340,134 @@ type loadedSeg struct {
 
 func (s *loadedSeg) String() string { return string(SegType2Name[s.typ]) }
 
-func (s *loadedSeg) release(rows []interface{}) {}
+var loadedPoolOnce sync.Once
+var loadedPools = make(map[int][]*sync.Pool)
 
-type formatLS struct {
-	loadedSeg
+// Message Marshal/Unmarshal
+
+func MarshalFormatPB(f *Format, keepSecret bool) *pb.Format {
+	msg := &pb.Format{
+		Name:             f.Name,
+		Uuid:             f.UUID,
+		Storage:          f.Storage,
+		StorageClass:     f.StorageClass,
+		Bucket:           f.Bucket,
+		AccessKey:        f.AccessKey,
+		SecretKey:        f.SecretKey,
+		SessionToken:     f.SessionToken,
+		BlockSize:        int32(f.BlockSize),
+		Compression:      f.Compression,
+		Shards:           int32(f.Shards),
+		HashPrefix:       f.HashPrefix,
+		Capacity:         f.Capacity,
+		Inodes:           f.Inodes,
+		EncryptKey:       f.EncryptKey,
+		EncryptAlgo:      f.EncryptAlgo,
+		KeyEncrypted:     f.KeyEncrypted,
+		UploadLimit:      f.UploadLimit,
+		DownloadLimit:    f.DownloadLimit,
+		TrashDays:        int32(f.TrashDays),
+		MetaVersion:      int32(f.MetaVersion),
+		MinClientVersion: f.MinClientVersion,
+		MaxClientVersion: f.MaxClientVersion,
+		DirStats:         f.DirStats,
+		EnableAcl:        f.EnableACL,
+	}
+
+	if !keepSecret {
+		removeKey := func(key *string, name string) {
+			if *key == "" {
+				*key = "remove"
+				logger.Warnf("%s is removed for the sake of safety", name)
+			}
+		}
+		removeKey(&msg.SecretKey, "Secret Key")
+		removeKey(&msg.SessionToken, "Session Token")
+		removeKey(&msg.EncryptKey, "Encrypt Key")
+	}
+	return msg
 }
 
-func (s *formatLS) insert(ctx Context, msg proto.Message) error { return nil }
+func UnmarshalFormatPB(msg *pb.Format) *Format {
+	return &Format{
+		Name:             msg.Name,
+		UUID:             msg.Uuid,
+		Storage:          msg.Storage,
+		StorageClass:     msg.StorageClass,
+		Bucket:           msg.Bucket,
+		AccessKey:        msg.AccessKey,
+		SecretKey:        msg.SecretKey,
+		SessionToken:     msg.SessionToken,
+		BlockSize:        int(msg.BlockSize),
+		Compression:      msg.Compression,
+		Shards:           int(msg.Shards),
+		HashPrefix:       msg.HashPrefix,
+		Capacity:         msg.Capacity,
+		Inodes:           msg.Inodes,
+		EncryptKey:       msg.EncryptKey,
+		EncryptAlgo:      msg.EncryptAlgo,
+		KeyEncrypted:     msg.KeyEncrypted,
+		UploadLimit:      msg.UploadLimit,
+		DownloadLimit:    msg.DownloadLimit,
+		TrashDays:        int(msg.TrashDays),
+		MetaVersion:      int(msg.MetaVersion),
+		MinClientVersion: msg.MinClientVersion,
+		MaxClientVersion: msg.MaxClientVersion,
+		DirStats:         msg.DirStats,
+		EnableACL:        msg.EnableAcl,
+	}
+}
+
+func UnmarshalAclPB(msg *pb.Acl) []byte {
+	w := utils.NewBuffer(uint32(16 + (len(msg.Users)+len(msg.Groups))*6))
+	w.Put16(uint16(msg.Owner))
+	w.Put16(uint16(msg.Group))
+	w.Put16(uint16(msg.Mask))
+	w.Put16(uint16(msg.Other))
+	w.Put32(uint32(len(msg.Users)))
+	for _, user := range msg.Users {
+		w.Put32(user.Id)
+		w.Put16(uint16(user.Perm))
+	}
+	w.Put32(uint32(len(msg.Groups)))
+	for _, group := range msg.Groups {
+		w.Put32(group.Id)
+		w.Put16(uint16(group.Perm))
+	}
+	return w.Bytes()
+}
+
+const (
+	BakNodeSizeWithoutAcl = 71
+	BakNodeSize           = 79
+)
+
+func UnmarshalNodePB(msg *pb.Node, sPool, bPool *sync.Pool) []byte {
+	var buff []byte
+	if msg.AccessAclId|msg.DefaultAclId != aclAPI.None {
+		buff = bPool.Get().([]byte)
+	} else {
+		buff = sPool.Get().([]byte)
+	}
+
+	w := utils.FromBuffer(buff)
+	w.Put8(uint8(msg.Flags))
+	w.Put16((uint16(msg.Type) << 12) | (uint16(msg.Mode) & 0xfff))
+	w.Put32(msg.Uid)
+	w.Put32(msg.Gid)
+	w.Put64(uint64(msg.Atime))
+	w.Put32(uint32(msg.AtimeNsec))
+	w.Put64(uint64(msg.Mtime))
+	w.Put32(uint32(msg.MtimeNsec))
+	w.Put64(uint64(msg.Ctime))
+	w.Put32(uint32(msg.CtimeNsec))
+	w.Put32(msg.Nlink)
+	w.Put64(msg.Length)
+	w.Put32(msg.Rdev)
+	w.Put64(msg.Parent)
+	if msg.AccessAclId|msg.DefaultAclId != aclAPI.None {
+		w.Put32(msg.AccessAclId)
+		w.Put32(msg.DefaultAclId)
+	}
+	return w.Bytes()
+}

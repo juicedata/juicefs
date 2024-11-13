@@ -65,7 +65,7 @@ import (
 
 	Removed files: delfiles -> [$inode:$length -> seconds]
 	detached nodes: detachedNodes -> [$inode -> seconds]
-	Slices refs: k$sliceId_$size -> refcount
+	Slices refs: sliceRef -> {k$sliceId_$size -> refcount}
 
 	Dir data length:   dirDataLength -> { $inode -> length }
 	Dir used space:    dirUsedSpace -> { $inode -> usedSpace }
