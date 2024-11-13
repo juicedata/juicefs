@@ -24,6 +24,7 @@ func init() {
 	flag.StringVar(&prefix, "prefix", "", "prefix")
 	flag.BoolVar(&makeData, "makedata", false, "make data")
 	flag.Int64Var(&parallel, "parallel", 100, "parallel")
+	flag.StringVar(&commPrefix, "commPrefix", "list-prefix/", "common prefix")
 }
 
 var logger = utils.GetLogger("juicefs")
