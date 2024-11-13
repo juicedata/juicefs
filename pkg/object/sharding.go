@@ -126,11 +126,6 @@ func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-cha
 				out <- obj
 				first = false
 			}
-			// Corner case: the func parameter `marker` is an empty string("") and exactly
-			// one object which key is an empty string("") returned by the List() method.
-			if lastkey == "" {
-				break
-			}
 			if !hasMore {
 				break
 			}

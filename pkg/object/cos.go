@@ -179,12 +179,6 @@ func (c *COS) ListV2(prefix, start, token, delimiter string, limit int64, follow
 		EncodingType: "url",
 	}
 	resp, _, err := c.c.Bucket.Get(ctx, &param)
-	for err == nil && len(resp.Contents) == 0 && len(resp.CommonPrefixes) == 0 && resp.IsTruncated {
-		if param.Marker, err = cos.DecodeURIComponent(resp.NextMarker); err != nil {
-			return nil, false, "", errors.WithMessagef(err, "failed to decode nextMarker %s", resp.NextMarker)
-		}
-		resp, _, err = c.c.Bucket.Get(ctx, &param)
-	}
 	if err != nil {
 		return nil, false, "", err
 	}

@@ -321,8 +321,8 @@ func ListV2(store ObjectStorage, prefix, start, token, delimiter string, limit i
 	if errors.Is(err, notSupported) {
 		objs, err = store.List(prefix, start, delimiter, limit, followLink)
 		if len(objs) != 0 {
-			hasMore = true
 			nextToken = objs[len(objs)-1].Key()
+			hasMore = nextToken != ""
 		}
 	}
 	return objs, hasMore, nextToken, err

@@ -138,11 +138,6 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 				out <- obj
 				first = false
 			}
-			// Corner case: the func parameter `marker` is an empty string("") and exactly
-			// one object which key is an empty string("") returned by the List() method.
-			if lastkey == "" {
-				break
-			}
 			if !hasMore {
 				break
 			}
@@ -1113,7 +1108,7 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 			total = append(total, objs...)
 			marker = objs[len(objs)-1].Key()
 		}
-		if !hasMore || marker == "" {
+		if !hasMore {
 			break
 		}
 	}
