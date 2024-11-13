@@ -30,6 +30,7 @@ func init() {
 var logger = utils.GetLogger("juicefs")
 
 func main() {
+	flag.Parse()
 	var s object.ObjectStorage
 	var err error
 	switch name {
@@ -133,7 +134,11 @@ func testList(s object.ObjectStorage) {
 		for {
 			var objs1 []object.Object
 			var err error
-			objs1, hasMore, token, err = object.ListWrap(s, prefix, "", token, delimiter, 1000, true)
+			var lastKey string
+			if len(objs) > 0 {
+				lastKey = objs[len(objs)-1].Key()
+			}
+			objs1, hasMore, token, err = object.ListWrap(s, prefix, lastKey, token, delimiter, 1000, true)
 			if err != nil {
 				logger.Fatal("list err", err)
 			}
