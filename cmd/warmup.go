@@ -235,7 +235,7 @@ func warmup(ctx *cli.Context) error {
 		}
 		if len(batch) >= batchMax {
 			sendCommand(controller, batch, threads, background, dspin)
-			batch = batch[0:]
+			batch = batch[:0]
 		}
 	}
 	if len(batch) > 0 {
