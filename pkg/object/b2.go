@@ -33,7 +33,6 @@ import (
 
 type b2client struct {
 	DefaultObjectStorage
-	hasV2
 	bucket *backblaze.Bucket
 }
 
@@ -122,11 +121,7 @@ func (c *b2client) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (c *b2client) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return c.hasV2.List(c, prefix, marker, delimiter, limit, followLink)
-}
-
-func (c *b2client) ListV2(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (c *b2client) List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}

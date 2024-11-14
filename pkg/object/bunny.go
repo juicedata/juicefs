@@ -77,7 +77,7 @@ func (b *bunnyClient) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (b *bunnyClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (b *bunnyClient) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, notSupported
 	}

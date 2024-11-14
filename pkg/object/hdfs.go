@@ -186,9 +186,9 @@ func (h *hdfsclient) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (h *hdfsclient) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 	dir := h.path(prefix)
 	var objs []Object
@@ -201,9 +201,9 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followL
 		obj, err := h.Head(prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return nil, nil
+				return nil, false, "", nil
 			}
-			return nil, err
+			return nil, false, "", err
 		}
 		objs = append(objs, obj)
 	}
@@ -216,12 +216,12 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followL
 	if err != nil {
 		if os.IsPermission(err) {
 			logger.Warnf("skip %s: %s", dir, err)
-			return nil, nil
+			return nil, false, "", nil
 		}
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, false, "", nil
 		}
-		return nil, err
+		return nil, false, "", err
 	}
 
 	// make sure they are ordered in full path
@@ -252,7 +252,8 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followL
 			break
 		}
 	}
-	return objs, nil
+	hasMore, nextMarker := generateListResult(objs)
+	return objs, hasMore, nextMarker, nil
 }
 
 func (h *hdfsclient) Chtimes(key string, mtime time.Time) error {

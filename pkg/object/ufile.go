@@ -222,11 +222,7 @@ type uFileListObjectsOutput struct {
 	CommonPrefixes []*CommonPrefixesItem `json:"CommonPrefixes,omitempty"`
 }
 
-func (u *ufile) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return retryListV2(u, prefix, marker, delimiter, limit, followLink)
-}
-
-func (u *ufile) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (u *ufile) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	query := url.Values{}
 	query.Add("prefix", prefix)
 	query.Add("marker", start)
@@ -255,12 +251,12 @@ func (u *ufile) ListV2(prefix, start, token, delimiter string, limit int64, foll
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	// This is a bug in ufile, NextMarker is not the last one after sorting.
-	var lastKey string
-	if len(objs) > 0 {
-		lastKey = objs[len(objs)-1].Key()
-	}
-	return objs, out.IsTruncated, lastKey, nil
+	//// This is a bug in ufile, NextMarker is not the last one after sorting.
+	//var lastKey string
+	//if len(objs) > 0 {
+	//	lastKey = objs[len(objs)-1].Key()
+	//}
+	return objs, out.IsTruncated, out.NextMarker, nil
 }
 
 type ufileCreateMultipartUploadResult struct {

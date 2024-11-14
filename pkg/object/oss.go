@@ -39,7 +39,6 @@ import (
 const ossDefaultRegionID = "cn-hangzhou"
 
 type ossClient struct {
-	hasV2
 	client *oss.Client
 	bucket *oss.Bucket
 	sc     string
@@ -177,11 +176,7 @@ func (o *ossClient) Delete(key string, getters ...AttrGetter) error {
 	return o.checkError(err)
 }
 
-func (o *ossClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return o.hasV2.List(o, prefix, marker, delimiter, limit, followLink)
-}
-
-func (o *ossClient) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (o *ossClient) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}

@@ -166,11 +166,7 @@ func (c *COS) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (c *COS) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return retryListV2(c, prefix, marker, delimiter, limit, followLink)
-}
-
-func (c *COS) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (c *COS) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := cos.BucketGetOptions{
 		Prefix:       prefix,
 		Marker:       start,

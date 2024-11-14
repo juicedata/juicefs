@@ -198,9 +198,9 @@ func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 	return mEntries, err
 }
 
-func (g *gluster) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (g *gluster) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 	var dir string = prefix
 	var objs []Object
@@ -213,9 +213,9 @@ func (g *gluster) List(prefix, marker, delimiter string, limit int64, followLink
 		obj, err := g.Head(prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return nil, nil
+				return nil, false, "", nil
 			}
-			return nil, err
+			return nil, false, "", err
 		}
 		objs = append(objs, obj)
 	}
@@ -223,12 +223,12 @@ func (g *gluster) List(prefix, marker, delimiter string, limit int64, followLink
 	if err != nil {
 		if os.IsPermission(err) {
 			logger.Warnf("skip %s: %s", dir, err)
-			return nil, nil
+			return nil, false, "", nil
 		}
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, false, "", nil
 		}
-		return nil, err
+		return nil, false, "", err
 	}
 	for _, e := range entries {
 		p := filepath.Join(dir, e.Name())
@@ -246,7 +246,8 @@ func (g *gluster) List(prefix, marker, delimiter string, limit int64, followLink
 			break
 		}
 	}
-	return objs, nil
+	hasMore, nextMarker := generateListResult(objs)
+	return objs, hasMore, nextMarker, nil
 }
 
 func (g *gluster) Chtimes(path string, mtime time.Time) error {

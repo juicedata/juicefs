@@ -202,11 +202,7 @@ func (s *obsClient) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (s *obsClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return retryListV2(s, prefix, marker, delimiter, limit, followLink)
-}
-
-func (s *obsClient) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *obsClient) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	input := &obs.ListObjectsInput{
 		Bucket: s.bucket,
 		Marker: start,

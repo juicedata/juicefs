@@ -147,11 +147,7 @@ func (q *bosclient) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (q *bosclient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return retryListV2(q, prefix, marker, delimiter, limit, followLink)
-}
-
-func (q *bosclient) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (q *bosclient) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}

@@ -170,11 +170,7 @@ func (s *ibmcos) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (s *ibmcos) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return retryListV2(s, prefix, marker, delimiter, limit, followLink)
-}
-
-func (s *ibmcos) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *ibmcos) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := s3.ListObjectsInput{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,

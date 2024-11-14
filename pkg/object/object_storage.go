@@ -18,7 +18,6 @@ package object
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -146,11 +145,7 @@ func (s DefaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string
 	return nil, "", nil
 }
 
-func (s DefaultObjectStorage) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return nil, notSupported
-}
-
-func (s DefaultObjectStorage) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s DefaultObjectStorage) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	return nil, false, "", notSupported
 }
 
@@ -194,7 +189,7 @@ type listThread struct {
 }
 
 func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
-	entries, _, _, err := ListV2(store, prefix, start, "", "/", 1e9, followLink)
+	entries, _, _, err := store.List(prefix, start, "", "/", 1e9, followLink)
 	if err != nil {
 		logger.Errorf("list %s: %s", prefix, err)
 		return nil, err
@@ -221,7 +216,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 					if !entries[i].IsDir() || key == prefix {
 						continue
 					}
-					t.entries, t.hasMore, t.nextToken, t.err = ListV2(store, key, "\x00", t.nextToken, "/", 1e9, followLink) // exclude itself
+					t.entries, t.hasMore, t.nextToken, t.err = store.List(key, "\x00", t.nextToken, "/", 1e9, followLink) // exclude itself
 					t.Lock()
 					t.ready = true
 					t.cond.Signal()
@@ -284,46 +279,10 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 	return listed, nil
 }
 
-type hasV2 struct {
-	noMore     bool
-	nextMarker string
-}
-
-func (v *hasV2) List(v2 ObjectStorage, prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	if marker != "" {
-		if v.noMore {
-			return nil, nil
-		}
-	} else {
-		v.nextMarker = ""
+func generateListResult(objs []Object) (bool, string) {
+	var nextMarker string
+	if len(objs) > 0 {
+		nextMarker = objs[len(objs)-1].Key()
 	}
-	objs, hasMore, nextMarker, err := v2.ListV2(prefix, marker, v.nextMarker, delimiter, limit, followLink)
-	for err == nil && len(objs) == 0 && hasMore {
-		objs, hasMore, nextMarker, err = v2.ListV2(prefix, marker, nextMarker, delimiter, limit, followLink)
-	}
-	if err == nil {
-		v.noMore = !hasMore
-		v.nextMarker = nextMarker
-	}
-	return objs, err
-}
-
-func retryListV2(blob ObjectStorage, prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	objs, hasMore, nextMarker, err := blob.ListV2(prefix, marker, "", delimiter, limit, followLink)
-	for err == nil && len(objs) == 0 && hasMore {
-		objs, hasMore, nextMarker, err = blob.ListV2(prefix, nextMarker, "", delimiter, limit, followLink)
-	}
-	return objs, err
-}
-
-func ListV2(store ObjectStorage, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
-	objs, hasMore, nextToken, err := store.ListV2(prefix, start, token, delimiter, limit, followLink)
-	if errors.Is(err, notSupported) {
-		objs, err = store.List(prefix, start, delimiter, limit, followLink)
-		if len(objs) != 0 {
-			nextToken = objs[len(objs)-1].Key()
-			hasMore = nextToken != ""
-		}
-	}
-	return objs, hasMore, nextToken, err
+	return nextMarker != "", nextMarker
 }

@@ -39,7 +39,6 @@ import (
 
 type wasb struct {
 	DefaultObjectStorage
-	hasV2
 	container *container.Client
 	azblobCli *azblob.Client
 	sc        string
@@ -136,11 +135,7 @@ func (b *wasb) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return b.hasV2.List(b, prefix, marker, delimiter, limit, followLink)
-}
-
-func (b *wasb) ListV2(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (b *wasb) List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}

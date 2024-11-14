@@ -126,22 +126,11 @@ func (p *withPrefix) Delete(key string, getters ...AttrGetter) error {
 	return p.os.Delete(p.prefix+key, getters...)
 }
 
-func (p *withPrefix) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	if marker != "" {
-		marker = p.prefix + marker
-	}
-	objs, err := p.os.List(p.prefix+prefix, marker, delimiter, limit, followLink)
-	for i, o := range objs {
-		objs[i] = p.updateKey(o)
-	}
-	return objs, err
-}
-
-func (p *withPrefix) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (p *withPrefix) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if start != "" {
 		start = p.prefix + start
 	}
-	objs, hasMore, nextMarker, err := p.os.ListV2(p.prefix+prefix, start, token, delimiter, limit, followLink)
+	objs, hasMore, nextMarker, err := p.os.List(p.prefix+prefix, start, token, delimiter, limit, followLink)
 	for i, o := range objs {
 		objs[i] = p.updateKey(o)
 	}

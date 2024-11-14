@@ -100,7 +100,7 @@ func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-cha
 	startTime := time.Now()
 	out := make(chan Object, maxResults)
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
-	objs, hasMore, nextToken, err := ListV2(store, prefix, marker, "", "", maxResults, followLink)
+	objs, hasMore, nextToken, err := store.List(prefix, marker, "", "", maxResults, followLink)
 	if errors.Is(err, notSupported) {
 		return ListAllWithDelimiter(store, prefix, marker, "", followLink)
 	}
@@ -134,12 +134,12 @@ func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-cha
 			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
 			var nextToken2 string
-			objs, hasMore, nextToken2, err = ListV2(store, prefix, marker, nextToken, "", maxResults, followLink)
+			objs, hasMore, nextToken2, err = store.List(prefix, marker, nextToken, "", maxResults, followLink)
 			for err != nil {
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
 				// slow down
 				time.Sleep(time.Millisecond * 100)
-				objs, hasMore, nextToken, err = ListV2(store, prefix, marker, nextToken, "", maxResults, followLink)
+				objs, hasMore, nextToken, err = store.List(prefix, marker, nextToken, "", maxResults, followLink)
 			}
 			nextToken = nextToken2
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))

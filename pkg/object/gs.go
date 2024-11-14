@@ -40,7 +40,6 @@ import (
 
 type gs struct {
 	DefaultObjectStorage
-	hasV2
 	clients []*storage.Client
 	index   uint64
 	bucket  string
@@ -62,10 +61,9 @@ func (g *gs) getClient() *storage.Client {
 
 func (g *gs) Create() error {
 	// check if the bucket is already exists
-	if objs, err := g.List("", "", "", 1, true); err == nil && len(objs) > 0 {
+	if objs, _, _, err := g.List("", "", "", "", 1, true); err == nil && len(objs) > 0 {
 		return nil
 	}
-
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
 	if projectID == "" {
 		projectID, _ = metadata.ProjectID()
@@ -166,11 +164,7 @@ func (g *gs) Delete(key string, getters ...AttrGetter) error {
 	return nil
 }
 
-func (g *gs) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return g.hasV2.List(g, prefix, marker, delimiter, limit, followLink)
-}
-
-func (g *gs) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (g *gs) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	objectIterator := g.getClient().Bucket(g.bucket).Objects(ctx, &storage.Query{Prefix: prefix, Delimiter: delimiter, StartOffset: start})
 	pager := iterator.NewPager(objectIterator, int(limit), token)
 	var entries []*storage.ObjectAttrs

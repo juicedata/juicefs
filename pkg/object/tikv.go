@@ -89,9 +89,9 @@ func (t *tikv) Delete(key string, getters ...AttrGetter) error {
 	return t.c.Delete(context.TODO(), []byte(key))
 }
 
-func (t *tikv) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (t *tikv) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 	if marker == "" {
 		marker = prefix
@@ -102,7 +102,7 @@ func (t *tikv) List(prefix, marker, delimiter string, limit int64, followLink bo
 	// TODO: key only
 	keys, vs, err := t.c.Scan(context.TODO(), []byte(marker), nil, int(limit))
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	var objs = make([]Object, len(keys))
 	mtime := time.Now()
@@ -110,7 +110,8 @@ func (t *tikv) List(prefix, marker, delimiter string, limit int64, followLink bo
 		// FIXME: mtime
 		objs[i] = &obj{string(k), int64(len(vs[i])), mtime, strings.HasSuffix(string(k), "/"), ""}
 	}
-	return objs, nil
+	hasMore, nextMarker := generateListResult(objs)
+	return objs, hasMore, nextMarker, nil
 }
 
 func newTiKV(endpoint, accesskey, secretkey, token string) (ObjectStorage, error) {

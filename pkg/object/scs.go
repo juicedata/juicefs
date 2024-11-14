@@ -96,18 +96,18 @@ func (s *scsClient) Delete(key string, getters ...AttrGetter) error {
 	return s.b.Delete(key)
 }
 
-func (s *scsClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (s *scsClient) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if marker != "" {
 		if s.marker == "" {
 			// last page
-			return nil, nil
+			return nil, false, "", nil
 		}
 		marker = s.marker
 	}
 	list, err := s.b.List(delimiter, prefix, marker, limit)
 	if err != nil {
 		s.marker = ""
-		return nil, err
+		return nil, false, "", err
 	}
 	s.marker = list.NextMarker
 	n := len(list.Contents)
@@ -132,7 +132,8 @@ func (s *scsClient) List(prefix, marker, delimiter string, limit int64, followLi
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, nil
+	hasMore, nextMarker := generateListResult(objs)
+	return objs, hasMore, nextMarker, nil
 }
 
 func (s *scsClient) CreateMultipartUpload(key string) (*MultipartUpload, error) {

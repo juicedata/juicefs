@@ -144,11 +144,7 @@ func (q *qiniu) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (q *qiniu) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return q.hasV2.List(q, prefix, marker, delimiter, limit, followLink)
-}
-
-func (q *qiniu) ListV2(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (q *qiniu) List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}

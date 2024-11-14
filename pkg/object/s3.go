@@ -56,7 +56,6 @@ var disableSha256Func = func(r *request.Request) {
 }
 
 type s3client struct {
-	hasV2
 	bucket          string
 	sc              string
 	s3              *s3.S3
@@ -84,7 +83,7 @@ func isExists(err error) bool {
 }
 
 func (s *s3client) Create() error {
-	if _, err := s.List("", "", "", 1, true); err == nil {
+	if _, _, _, err := s.List("", "", "", "", 1, true); err == nil {
 		return nil
 	}
 	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
@@ -214,11 +213,7 @@ func (s *s3client) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (s *s3client) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return s.hasV2.List(s, prefix, marker, delimiter, limit, followLink)
-}
-
-func (s *s3client) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *s3client) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := s3.ListObjectsV2Input{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
