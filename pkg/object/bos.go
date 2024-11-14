@@ -34,8 +34,6 @@ import (
 	"github.com/baidubce/bce-sdk-go/services/bos/api"
 )
 
-const bosDefaultRegion = "bj"
-
 type bosclient struct {
 	DefaultObjectStorage
 	bucket string
