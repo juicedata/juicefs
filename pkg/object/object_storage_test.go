@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/baidubce/bce-sdk-go/services/bos/api"
 	"io"
 	"math"
 	"os"
@@ -85,11 +86,14 @@ func setStorageClass(o ObjectStorage) string {
 			sc = string(oss.StorageIA)
 		case *tosClient:
 			sc = string(enum.StorageClassIa)
+		case *bosclient:
+			sc = api.STORAGE_CLASS_STANDARD
 		}
 		err := osc.SetStorageClass(sc)
 		if err != nil {
 			sc = ""
 		}
+		return sc
 	}
 	return ""
 }
