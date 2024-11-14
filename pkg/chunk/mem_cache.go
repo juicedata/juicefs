@@ -21,6 +21,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/dustin/go-humanize"
 )
 
 type memItem struct {
@@ -30,20 +32,22 @@ type memItem struct {
 
 type memcache struct {
 	sync.Mutex
-	capacity int64
-	used     int64
-	pages    map[string]memItem
-	eviction string
+	capacity    int64
+	used        int64
+	pages       map[string]memItem
+	eviction    string
+	cacheExpire time.Duration
 
 	metrics *cacheManagerMetrics
 }
 
 func newMemStore(config *Config, metrics *cacheManagerMetrics) *memcache {
 	c := &memcache{
-		capacity: int64(config.CacheSize),
-		pages:    make(map[string]memItem),
-		eviction: config.CacheEviction,
-		metrics:  metrics,
+		capacity:    int64(config.CacheSize),
+		pages:       make(map[string]memItem),
+		eviction:    config.CacheEviction,
+		cacheExpire: config.CacheExpire,
+		metrics:     metrics,
 	}
 	runtime.SetFinalizer(c, func(c *memcache) {
 		for _, p := range c.pages {
@@ -51,6 +55,9 @@ func newMemStore(config *Config, metrics *cacheManagerMetrics) *memcache {
 		}
 		c.pages = nil
 	})
+	if c.cacheExpire > 0 {
+		go c.cleanupExpire()
+	}
 	return c
 }
 
@@ -143,6 +150,36 @@ func (c *memcache) cleanup() {
 				break
 			}
 		}
+	}
+}
+
+func (c *memcache) cleanupExpire() {
+	var interval = time.Minute
+	if c.cacheExpire < time.Minute {
+		interval = c.cacheExpire
+	}
+	for {
+		var freed int64
+		var cnt, deleted int
+		cutoff := time.Now().Add(-c.cacheExpire)
+		c.Lock()
+		for k, v := range c.pages {
+			cnt++
+			if cnt > 1e3 {
+				break
+			}
+			if v.atime.Before(cutoff) {
+				deleted++
+				freed += int64(cap(v.page.Data))
+				c.metrics.cacheEvicts.Add(1)
+				c.delete(k, v.page)
+			}
+		}
+		c.Unlock()
+		if deleted > 0 {
+			logger.Debugf("Expired cache blocks: %d blocks (%s), remaining: %d blocks (%s)", deleted, humanize.IBytes(uint64(freed)), len(c.pages), humanize.IBytes(uint64(c.used)))
+		}
+		time.Sleep(interval * time.Duration((cnt+1-deleted)/(cnt+1)))
 	}
 }
 
