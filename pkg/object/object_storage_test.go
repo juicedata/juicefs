@@ -285,42 +285,38 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Logf("list is not supported")
 		}
 	} else {
-		var keys []string
-		switch s.(*withPrefix).os.(type) {
-		case FileSystem:
-			keys = []string{"", "a/", "a1", "b/"}
-		default:
-			keys = []string{"a/", "a1", "b/", "c/"}
-		}
-		if len(obs) != 4 {
-			t.Fatalf("list should return 4 results but got %d", len(obs))
-		}
-		for i, o := range obs {
-			if o.Key() != keys[i] {
-				t.Fatalf("should get key %s but got %s", keys[i], o.Key())
+		if _, ok := s.(*withPrefix).os.(FileSystem); !ok {
+			keys := []string{"a/", "a1", "b/", "c/"}
+			if len(obs) != 4 {
+				t.Fatalf("list should return 4 results but got %d", len(obs))
 			}
-		}
-		if !more {
-			t.Fatalf("should have more results")
-		}
-		if nextMarker == "" {
-			t.Fatalf("next marker should not be empty")
-		}
-		obs, more, nextMarker, err = s.List("", obs[len(obs)-1].Key(), nextMarker, "/", 4, true)
-		if err != nil {
-			t.Fatalf("list with marker: %s", err)
-		}
-		if len(obs) != 1 {
-			t.Fatalf("list should return 1 results but got %d", len(obs))
-		}
-		if obs[0].Key() != "test" {
-			t.Fatalf("should get key test but got %s", obs[0].Key())
-		}
-		if more {
-			t.Fatalf("should no more results")
-		}
-		if nextMarker != "" {
-			t.Fatalf("next marker should not be empty")
+			for i, o := range obs {
+				if o.Key() != keys[i] {
+					t.Fatalf("should get key %s but got %s", keys[i], o.Key())
+				}
+			}
+			if !more {
+				t.Fatalf("should have more results")
+			}
+			if nextMarker == "" {
+				t.Fatalf("next marker should not be empty")
+			}
+			obs, more, nextMarker, err = s.List("", obs[len(obs)-1].Key(), nextMarker, "/", 4, true)
+			if err != nil {
+				t.Fatalf("list with marker: %s", err)
+			}
+			if len(obs) != 1 {
+				t.Fatalf("list should return 1 results but got %d", len(obs))
+			}
+			if obs[0].Key() != "test" {
+				t.Fatalf("should get key test but got %s", obs[0].Key())
+			}
+			if more {
+				t.Fatalf("should no more results")
+			}
+			if nextMarker != "" {
+				t.Fatalf("next marker should not be empty")
+			}
 		}
 	}
 
