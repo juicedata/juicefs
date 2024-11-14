@@ -311,6 +311,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			if obs[0].Key() != "test" {
 				t.Fatalf("should get key test but got %s", obs[0].Key())
 			}
+			_, more, nextMarker, err = s.List("", obs[len(obs)-1].Key(), nextMarker, "/", 4, true)
 			if more {
 				t.Fatalf("should no more results")
 			}
