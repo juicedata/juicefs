@@ -246,8 +246,7 @@ func (g *gluster) List(prefix, marker, token, delimiter string, limit int64, fol
 			break
 		}
 	}
-	hasMore, nextMarker := generateListResult(objs, limit)
-	return objs, hasMore, nextMarker, nil
+	return generateListResult(objs, limit)
 }
 
 func (g *gluster) Chtimes(path string, mtime time.Time) error {
