@@ -110,8 +110,7 @@ func (t *tikv) List(prefix, marker, token, delimiter string, limit int64, follow
 		// FIXME: mtime
 		objs[i] = &obj{string(k), int64(len(vs[i])), mtime, strings.HasSuffix(string(k), "/"), ""}
 	}
-	hasMore, nextMarker := generateListResult(objs, limit)
-	return objs, hasMore, nextMarker, nil
+	return generateListResult(objs, limit)
 }
 
 func newTiKV(endpoint, accesskey, secretkey, token string) (ObjectStorage, error) {

@@ -411,8 +411,7 @@ func (f *sftpStore) List(prefix, marker, token, delimiter string, limit int64, f
 			break
 		}
 	}
-	hasMore, nextMarker := generateListResult(objs, limit)
-	return objs, hasMore, nextMarker, nil
+	return generateListResult(objs, limit)
 }
 
 func sshInteractive(user, instruction string, questions []string, echos []bool) (answers []string, err error) {

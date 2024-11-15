@@ -319,8 +319,7 @@ func (d *filestore) List(prefix, marker, token, delimiter string, limit int64, f
 			break
 		}
 	}
-	hasMore, nextMarker := generateListResult(objs, limit)
-	return objs, hasMore, nextMarker, err
+	return generateListResult(objs, limit)
 }
 
 func (d *filestore) Chmod(key string, mode os.FileMode) error {

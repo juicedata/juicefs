@@ -252,8 +252,7 @@ func (h *hdfsclient) List(prefix, marker, token, delimiter string, limit int64, 
 			break
 		}
 	}
-	hasMore, nextMarker := generateListResult(objs, limit)
-	return objs, hasMore, nextMarker, nil
+	return generateListResult(objs, limit)
 }
 
 func (h *hdfsclient) Chtimes(key string, mtime time.Time) error {

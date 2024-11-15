@@ -154,8 +154,7 @@ func (s *sqlStore) List(prefix, marker, token, delimiter string, limit int64, fo
 			break
 		}
 	}
-	hasMore, nextMarker := generateListResult(objs, limit)
-	return objs, hasMore, nextMarker, nil
+	return generateListResult(objs, limit)
 }
 
 func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {

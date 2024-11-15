@@ -228,8 +228,7 @@ func (w *webdav) List(prefix, marker, token, delimiter string, limit int64, foll
 			break
 		}
 	}
-	hasMore, nextMarker := generateListResult(objs, limit)
-	return objs, hasMore, nextMarker, nil
+	return generateListResult(objs, limit)
 }
 
 func newWebDAV(endpoint, user, passwd, token string) (ObjectStorage, error) {

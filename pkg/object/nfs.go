@@ -340,8 +340,7 @@ func (n *nfsStore) List(prefix, marker, token, delimiter string, limit int64, fo
 			break
 		}
 	}
-	hasMore, nextMarker := generateListResult(objs, limit)
-	return objs, hasMore, nextMarker, nil
+	return generateListResult(objs, limit)
 }
 
 func (n *nfsStore) setAttr(path string, attrSet func(attr *nfs.Fattr) nfs.Sattr3) error {

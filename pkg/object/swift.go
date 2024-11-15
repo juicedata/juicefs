@@ -103,8 +103,7 @@ func (s *swiftOSS) List(prefix, marker, token, delimiter string, limit int64, fo
 			objs[i] = &obj{o.Name, o.Bytes, o.LastModified, strings.HasSuffix(o.Name, "/"), ""}
 		}
 	}
-	hasMore, nextMarker := generateListResult(objs, limit)
-	return objs, hasMore, nextMarker, nil
+	return generateListResult(objs, limit)
 }
 
 func (s *swiftOSS) Head(key string) (Object, error) {

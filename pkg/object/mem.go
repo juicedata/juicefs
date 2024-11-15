@@ -186,8 +186,7 @@ func (m *memStore) List(prefix, marker, token, delimiter string, limit int64, fo
 	if int64(len(objs)) > limit {
 		objs = objs[:limit]
 	}
-	hasMore, nextMarker := generateListResult(objs, limit)
-	return objs, hasMore, nextMarker, nil
+	return generateListResult(objs, limit)
 }
 
 func newMem(endpoint, accesskey, secretkey, token string) (ObjectStorage, error) {

@@ -167,12 +167,10 @@ func (b *wasb) List(prefix, startAfter, token, delimiter string, limit int64, fo
 	}
 
 	var nextMarker string
-	var hasMore bool
 	if pager.More() {
 		nextMarker = *page.NextMarker
-		hasMore = true
 	}
-	return objs, hasMore, nextMarker, nil
+	return objs, pager.More(), nextMarker, nil
 }
 
 func (b *wasb) SetStorageClass(sc string) error {
