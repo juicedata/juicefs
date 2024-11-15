@@ -294,9 +294,9 @@ func (n *nfsStore) readDirSorted(dir string, followLink bool) ([]*nfsEntry, erro
 	return nfsEntries, err
 }
 
-func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (n *nfsStore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 	dir := prefix
 	var objs []Object
@@ -309,9 +309,9 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 		obj, err := n.Head(dir)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return nil, nil
+				return nil, false, "", nil
 			}
-			return nil, err
+			return nil, false, "", err
 		}
 		objs = append(objs, obj)
 	}
@@ -319,12 +319,12 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 	if err != nil {
 		if os.IsPermission(err) || errors.Is(err, nfs.NFS3Error(nfs.NFS3ErrAcces)) {
 			logger.Warnf("skip %s: %s", dir, err)
-			return nil, nil
+			return nil, false, "", nil
 		}
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, false, "", nil
 		}
-		return nil, err
+		return nil, false, "", err
 	}
 	for _, e := range entries {
 		p := path.Join(dir, e.Name())
@@ -340,7 +340,7 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 			break
 		}
 	}
-	return objs, nil
+	return generateListResult(objs, limit)
 }
 
 func (n *nfsStore) setAttr(path string, attrSet func(attr *nfs.Fattr) nfs.Sattr3) error {

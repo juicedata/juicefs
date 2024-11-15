@@ -98,9 +98,9 @@ func (u *up) Copy(dst, src string) error {
 	})
 }
 
-func (u *up) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (u *up) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 	if u.listing == nil {
 		listing := make(chan *upyun.FileInfo, limit)
@@ -125,11 +125,10 @@ func (u *up) List(prefix, marker, delimiter string, limit int64, followLink bool
 			objs = append(objs, &obj{key, fi.Size, fi.Time, strings.HasSuffix(key, "/"), ""})
 		}
 	}
-	if len(objs) > 0 {
-		return objs, nil
+	if len(objs) == 0 {
+		u.listing = nil
 	}
-	u.listing = nil
-	return nil, u.err
+	return generateListResult(objs, limit)
 }
 
 func newUpyun(endpoint, user, passwd, token string) (ObjectStorage, error) {

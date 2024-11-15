@@ -83,7 +83,7 @@ func isExists(err error) bool {
 }
 
 func (s *s3client) Create() error {
-	if _, err := s.List("", "", "", 1, true); err == nil {
+	if _, _, _, err := s.List("", "", "", "", 1, true); err == nil {
 		return nil
 	}
 	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
@@ -213,20 +213,25 @@ func (s *s3client) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (s *s3client) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	param := s3.ListObjectsInput{
+func (s *s3client) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	param := s3.ListObjectsV2Input{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
-		Marker:       &marker,
 		MaxKeys:      &limit,
 		EncodingType: aws.String("url"),
 	}
-	if delimiter != "" {
-		param.Delimiter = &delimiter
+	if start != "" {
+		param.StartAfter = aws.String(start)
 	}
-	resp, err := s.s3.ListObjects(&param)
+	if token != "" {
+		param.ContinuationToken = aws.String(token)
+	}
+	if delimiter != "" {
+		param.Delimiter = aws.String(delimiter)
+	}
+	resp, err := s.s3.ListObjectsV2(&param)
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	n := len(resp.Contents)
 	objs := make([]Object, n)
@@ -234,10 +239,10 @@ func (s *s3client) List(prefix, marker, delimiter string, limit int64, followLin
 		o := resp.Contents[i]
 		oKey, err := url.QueryUnescape(*o.Key)
 		if err != nil {
-			return nil, errors.WithMessagef(err, "failed to decode key %s", *o.Key)
+			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
-		if !strings.HasPrefix(oKey, prefix) || oKey < marker {
-			return nil, fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, marker)
+		if !strings.HasPrefix(oKey, prefix) || oKey < start {
+			return nil, false, "", fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, start)
 		}
 		var sc = DefaultStorageClass
 		if o.StorageClass != nil {
@@ -255,13 +260,21 @@ func (s *s3client) List(prefix, marker, delimiter string, limit int64, followLin
 		for _, p := range resp.CommonPrefixes {
 			prefix, err := url.QueryUnescape(*p.Prefix)
 			if err != nil {
-				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
+				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, nil
+	var isTruncated bool
+	if resp.IsTruncated != nil {
+		isTruncated = *resp.IsTruncated
+	}
+	var nextMarker string
+	if resp.NextContinuationToken != nil {
+		nextMarker = *resp.NextContinuationToken
+	}
+	return objs, isTruncated, nextMarker, nil
 }
 
 func (s *s3client) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {

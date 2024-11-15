@@ -173,11 +173,11 @@ func (s *ibmcos) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (s *ibmcos) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (s *ibmcos) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := s3.ListObjectsInput{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
-		Marker:       &marker,
+		Marker:       &start,
 		MaxKeys:      &limit,
 		EncodingType: aws.String("url"),
 	}
@@ -186,7 +186,7 @@ func (s *ibmcos) List(prefix, marker, delimiter string, limit int64, followLink 
 	}
 	resp, err := s.s3.ListObjects(&param)
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	n := len(resp.Contents)
 	objs := make([]Object, n)
@@ -194,7 +194,7 @@ func (s *ibmcos) List(prefix, marker, delimiter string, limit int64, followLink 
 		o := resp.Contents[i]
 		oKey, err := url.QueryUnescape(*o.Key)
 		if err != nil {
-			return nil, errors.WithMessagef(err, "failed to decode key %s", *o.Key)
+			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
 		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass}
 	}
@@ -202,13 +202,13 @@ func (s *ibmcos) List(prefix, marker, delimiter string, limit int64, followLink 
 		for _, p := range resp.CommonPrefixes {
 			prefix, err := url.QueryUnescape(*p.Prefix)
 			if err != nil {
-				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
+				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, nil
+	return objs, *resp.IsTruncated, *resp.NextMarker, nil
 }
 
 func (s *ibmcos) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {

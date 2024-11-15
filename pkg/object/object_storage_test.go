@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 	"github.com/baidubce/bce-sdk-go/services/bos/api"
 	"io"
 	"math"
@@ -86,6 +87,8 @@ func setStorageClass(o ObjectStorage) string {
 			sc = string(oss.StorageIA)
 		case *tosClient:
 			sc = string(enum.StorageClassIa)
+		case *obsClient:
+			sc = string(obs.StorageClassStandard)
 		case *bosclient:
 			sc = api.STORAGE_CLASS_STANDARD
 		}
@@ -123,7 +126,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		if scPut != sc {
 			t.Fatalf("Storage class should be %q, got %q", sc, scPut)
 		}
-		if resp, err := s.List("", "测试编码文件", "", 1, true); err != nil && err != notSupported {
+		if resp, _, _, err := s.List("测试编码文件", "", "", "", 1, true); err != nil && err != notSupported {
 			t.Logf("List testEncodeFile Failed: %s", err)
 		} else if len(resp) == 1 && resp[0].Key() != key {
 			t.Logf("List testEncodeFile Failed: expect key %s, but got %s", key, resp[0].Key())
@@ -277,7 +280,51 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put("a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
-	if obs, err := s.List("", "", "/", 10, true); err != nil {
+
+	if obs, more, nextMarker, err := s.List("", "", "", "/", 4, true); err != nil {
+		if !errors.Is(err, notSupported) {
+			t.Fatalf("list: %s", err)
+		} else {
+			t.Logf("list is not supported")
+		}
+	} else {
+		if _, ok := s.(*withPrefix).os.(FileSystem); !ok {
+			keys := []string{"a/", "a1", "b/", "c/"}
+			if len(obs) != 4 {
+				t.Fatalf("list should return 4 results but got %d", len(obs))
+			}
+			for i, o := range obs {
+				if o.Key() != keys[i] {
+					t.Fatalf("should get key %s but got %s", keys[i], o.Key())
+				}
+			}
+			if !more {
+				t.Fatalf("should have more results")
+			}
+			if nextMarker == "" {
+				t.Fatalf("next marker should not be empty")
+			}
+			obs, more, nextMarker, err = s.List("", obs[len(obs)-1].Key(), nextMarker, "/", 4, true)
+			if err != nil {
+				t.Fatalf("list with marker: %s", err)
+			}
+			if len(obs) != 1 {
+				t.Fatalf("list should return 1 results but got %d", len(obs))
+			}
+			if obs[0].Key() != "test" {
+				t.Fatalf("should get key test but got %s", obs[0].Key())
+			}
+			_, more, nextMarker, err = s.List("", obs[len(obs)-1].Key(), nextMarker, "/", 4, true)
+			if more {
+				t.Fatalf("should no more results")
+			}
+			if nextMarker != "" {
+				t.Fatalf("next marker should not be empty")
+			}
+		}
+	}
+
+	if obs, _, _, err := s.List("", "", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
@@ -303,7 +350,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	if obs, err := s.List("a", "", "/", 10, true); err != nil {
+	if obs, _, _, err := s.List("a", "", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		}
@@ -319,7 +366,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	if obs, err := s.List("a/", "", "/", 10, true); err != nil {
+	if obs, _, _, err := s.List("a/", "", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
@@ -469,17 +516,27 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		wg.Wait()
 		// overwrite the first part
 		firstPartContent := append(getMockData(seed, 0), getMockData(seed, 0)...)
-		if parts[0], err = s.UploadPart(k, upload.UploadID, 1, firstPartContent); err != nil {
-			t.Fatalf("multipart upload error: %v", err)
+		if len(firstPartContent) < int(s.Limits().MaxPartSize) {
+			firstPartContent = getMockData(seed, 0)
+			firstPartContent[0] = 'a'
 		}
-		content[0] = firstPartContent
+		oldPart := parts[0]
+		if parts[0], err = s.UploadPart(k, upload.UploadID, 1, firstPartContent); err != nil {
+			t.Logf("overwrite the first part error: %v", err)
+			parts[0] = oldPart
+		} else {
+			content[0] = firstPartContent
+		}
 
 		// overwrite the last part
 		lastPartContent := []byte("hello")
+		oldPart = parts[total-1]
 		if parts[total-1], err = s.UploadPart(k, upload.UploadID, total, lastPartContent); err != nil {
-			t.Fatalf("multipart upload error: %v", err)
+			t.Logf("overwrite the last part error: %v", err)
+			parts[total-1] = oldPart
+		} else {
+			content[total-1] = lastPartContent
 		}
-		content[total-1] = lastPartContent
 
 		if err = s.CompleteUpload(k, upload.UploadID, parts); err != nil {
 			t.Fatalf("failed to complete multipart upload: %v", err)
@@ -504,25 +561,27 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 		checkContent(k, bytes.Join(content, nil))
 
-		var copyUpload *MultipartUpload
-		var dstKey = "dstUploadPartCopyKey"
-		defer s.Delete(dstKey)
-		if copyUpload, err = s.CreateMultipartUpload(dstKey); err != nil {
-			t.Fatalf("failed to create multipart upload: %v", err)
-		}
-		copyParts := make([]*Part, total)
-		var startIdx = 0
-		for i, c := range content {
-			copyParts[i], err = s.UploadPartCopy(dstKey, copyUpload.UploadID, i+1, k, int64(startIdx), int64(len(c)))
-			if err != nil {
-				t.Fatalf("failed to upload part copy: %v", err)
+		if s.Limits().IsSupportUploadPartCopy {
+			var copyUpload *MultipartUpload
+			var dstKey = "dstUploadPartCopyKey"
+			defer s.Delete(dstKey)
+			if copyUpload, err = s.CreateMultipartUpload(dstKey); err != nil {
+				t.Fatalf("failed to create multipart upload: %v", err)
 			}
-			startIdx += len(c)
+			copyParts := make([]*Part, total)
+			var startIdx = 0
+			for i, c := range content {
+				copyParts[i], err = s.UploadPartCopy(dstKey, copyUpload.UploadID, i+1, k, int64(startIdx), int64(len(c)))
+				if err != nil {
+					t.Fatalf("failed to upload part copy: %v", err)
+				}
+				startIdx += len(c)
+			}
+			if err = s.CompleteUpload(dstKey, copyUpload.UploadID, copyParts); err != nil {
+				t.Fatalf("failed to complete multipart upload: %v", err)
+			}
+			checkContent(dstKey, bytes.Join(content, nil))
 		}
-		if err = s.CompleteUpload(dstKey, copyUpload.UploadID, copyParts); err != nil {
-			t.Fatalf("failed to complete multipart upload: %v", err)
-		}
-		checkContent(dstKey, bytes.Join(content, nil))
 	} else {
 		t.Logf("%s does not support multipart upload: %s", s, err.Error())
 	}

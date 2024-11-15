@@ -145,14 +145,14 @@ func (q *bosclient) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (q *bosclient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (q *bosclient) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
 	limit_ := int(limit)
-	out, err := q.c.SimpleListObjects(q.bucket, prefix, limit_, marker, delimiter)
+	out, err := q.c.SimpleListObjects(q.bucket, prefix, limit_, start, delimiter)
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	n := len(out.Contents)
 	objs := make([]Object, n)
@@ -167,7 +167,7 @@ func (q *bosclient) List(prefix, marker, delimiter string, limit int64, followLi
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, nil
+	return objs, out.IsTruncated, out.NextMarker, nil
 }
 
 func (q *bosclient) CreateMultipartUpload(key string) (*MultipartUpload, error) {

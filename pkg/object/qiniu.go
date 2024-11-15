@@ -144,42 +144,38 @@ func (q *qiniu) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (q *qiniu) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (q *qiniu) List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
-	if marker == "" {
-		q.marker = ""
-	} else if q.marker == "" {
-		// last page
-		return nil, nil
-	}
-	entries, prefixes, markerOut, hasNext, err := q.bm.ListFiles(q.bucket, prefix, delimiter, q.marker, int(limit))
-	for err == nil && len(entries) == 0 && hasNext {
-		entries, prefixes, markerOut, hasNext, err = q.bm.ListFiles(q.bucket, prefix, delimiter, markerOut, int(limit))
-	}
-	q.marker = markerOut
+	entries, prefixes, markerOut, hasNext, err := q.bm.ListFiles(q.bucket, prefix, delimiter, token, int(limit))
 	if len(entries) > 0 || err == io.EOF {
 		// ignore error if returned something
 		err = nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	n := len(entries)
-	objs := make([]Object, n)
+	objs := make([]Object, 0, n)
 	for i := 0; i < n; i++ {
 		entry := entries[i]
+		if entry.Key <= startAfter {
+			continue
+		}
 		mtime := entry.PutTime / 10000000
-		objs[i] = &obj{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/"), ""}
+		objs = append(objs, &obj{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/"), ""})
 	}
 	if delimiter != "" {
 		for _, p := range prefixes {
+			if p <= startAfter {
+				continue
+			}
 			objs = append(objs, &obj{p, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, nil
+	return objs, hasNext, markerOut, nil
 }
 
 func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

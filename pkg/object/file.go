@@ -268,9 +268,9 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 	return mEntries, err
 }
 
-func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (d *filestore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 	var dir string = d.root + prefix
 	var objs []Object
@@ -283,9 +283,9 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 		obj, err := d.Head(prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return nil, nil
+				return nil, false, "", nil
 			}
-			return nil, err
+			return nil, false, "", err
 		}
 		objs = append(objs, obj)
 	}
@@ -293,12 +293,12 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 	if err != nil {
 		if os.IsPermission(err) {
 			logger.Warnf("skip %s: %s", dir, err)
-			return nil, nil
+			return nil, false, "", nil
 		}
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, false, "", nil
 		}
-		return nil, err
+		return nil, false, "", err
 	}
 	for _, e := range entries {
 		p := path.Join(dir, e.Name())
@@ -319,7 +319,7 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 			break
 		}
 	}
-	return objs, nil
+	return generateListResult(objs, limit)
 }
 
 func (d *filestore) Chmod(key string, mode os.FileMode) error {

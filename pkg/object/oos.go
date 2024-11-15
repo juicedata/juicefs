@@ -48,22 +48,22 @@ func (s *oos) Limits() Limits {
 }
 
 func (s *oos) Create() error {
-	_, err := s.List("", "", "", 1, true)
+	_, _, _, err := s.List("", "", "", "", 1, true)
 	if err != nil {
 		return fmt.Errorf("please create bucket %s manually", s.s3client.bucket)
 	}
 	return err
 }
 
-func (s *oos) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (s *oos) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
-	objs, err := s.s3client.List(prefix, marker, delimiter, limit, followLink)
-	if marker != "" && len(objs) > 0 && objs[0].Key() == marker {
+	objs, hasMore, nextMarker, err := s.s3client.List(prefix, start, token, delimiter, limit, followLink)
+	if start != "" && len(objs) > 0 && objs[0].Key() == start {
 		objs = objs[1:]
 	}
-	return objs, err
+	return objs, hasMore, nextMarker, err
 }
 
 func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
