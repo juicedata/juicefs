@@ -190,10 +190,6 @@ func (m *memStore) List(prefix, marker, token, delimiter string, limit int64, fo
 	return objs, hasMore, nextMarker, nil
 }
 
-func (m *memStore) ListV2(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
-	return nil, false, "", notSupported
-}
-
 func newMem(endpoint, accesskey, secretkey, token string) (ObjectStorage, error) {
 	store := &memStore{name: endpoint}
 	store.objects = make(map[string]*mobj)

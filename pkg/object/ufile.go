@@ -251,12 +251,12 @@ func (u *ufile) List(prefix, start, token, delimiter string, limit int64, follow
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	//// This is a bug in ufile, NextMarker is not the last one after sorting.
-	//var lastKey string
-	//if len(objs) > 0 {
-	//	lastKey = objs[len(objs)-1].Key()
-	//}
-	return objs, out.IsTruncated, out.NextMarker, nil
+	// This is a bug in ufile, NextMarker is not the last one after sorting.
+	var lastKey string
+	if len(objs) > 0 {
+		lastKey = objs[len(objs)-1].Key()
+	}
+	return objs, out.IsTruncated, lastKey, nil
 }
 
 type ufileCreateMultipartUploadResult struct {
