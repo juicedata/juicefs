@@ -319,7 +319,7 @@ type Meta interface {
 	// NewSession creates or update client session.
 	NewSession(record bool) error
 	// CloseSession does cleanup and close the session.
-	CloseSession() error
+	CloseSession(clean bool) error
 	// GetSession retrieves information of session with sid
 	GetSession(sid uint64, detail bool) (*Session, error)
 	// ListSessions returns all client sessions.

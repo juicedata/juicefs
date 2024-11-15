@@ -85,7 +85,7 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("load setting: %s", err)
 	}
 	if err = m.NewSession(false); err == nil { // To sync all stats periodically
-		defer m.CloseSession() //nolint:errcheck
+		defer m.CloseSession(true) //nolint:errcheck
 	} else {
 		logger.Fatalf("create session: %v", err)
 	}

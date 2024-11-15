@@ -96,5 +96,5 @@ func webdav(c *cli.Context) error {
 		KeyFile:         c.String("key-file"),
 		EnableProppatch: c.Bool("enable-proppatch"),
 	})
-	return jfs.Meta().CloseSession()
+	return jfs.Meta().CloseSession(true)
 }

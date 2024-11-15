@@ -698,7 +698,7 @@ func adjustOOMKiller(score int) {
 	}
 }
 
-func installHandler(mp string, v *vfs.VFS, blob object.ObjectStorage) {
+func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorage) {
 	// Go will catch all the signals
 	signal.Ignore(syscall.SIGPIPE)
 	signalChan := make(chan os.Signal, 10)
@@ -715,6 +715,7 @@ func installHandler(mp string, v *vfs.VFS, blob object.ObjectStorage) {
 					if err != nil {
 						logger.Fatalf("flush buffered data failed: %s", err)
 					}
+					_ = m.CloseSession(false)
 					object.Shutdown(blob)
 					logger.Warnf("exit with code 1")
 					os.Exit(1)
