@@ -109,8 +109,7 @@ func (b *bunnyClient) List(prefix, marker, token, delimiter string, limit int64,
 		}
 	}
 
-	hasMore, nextMarker := generateListResult(output, limit)
-	return output, hasMore, nextMarker, nil
+	return generateListResult(output, limit)
 }
 
 // The Object Path returned by the Bunny API contains the Storage Zone Name, which this function removes
