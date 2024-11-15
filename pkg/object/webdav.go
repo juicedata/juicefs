@@ -228,7 +228,7 @@ func (w *webdav) List(prefix, marker, token, delimiter string, limit int64, foll
 			break
 		}
 	}
-	hasMore, nextMarker := generateListResult(objs)
+	hasMore, nextMarker := generateListResult(objs, limit)
 	return objs, hasMore, nextMarker, nil
 }
 

@@ -279,10 +279,10 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 	return listed, nil
 }
 
-func generateListResult(objs []Object) (bool, string) {
+func generateListResult(objs []Object, limit int64) (bool, string) {
 	var nextMarker string
 	if len(objs) > 0 {
 		nextMarker = objs[len(objs)-1].Key()
 	}
-	return nextMarker != "", nextMarker
+	return len(objs) == int(limit), nextMarker
 }

@@ -506,7 +506,7 @@ func (d *dragonfly) List(prefix, marker, token, delimiter string, limit int64, f
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 
-	hasMore, nextMarker := generateListResult(objs)
+	hasMore, nextMarker := generateListResult(objs, limit)
 	return objs, hasMore, nextMarker, err
 }
 

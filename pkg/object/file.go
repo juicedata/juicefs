@@ -319,7 +319,7 @@ func (d *filestore) List(prefix, marker, token, delimiter string, limit int64, f
 			break
 		}
 	}
-	hasMore, nextMarker := generateListResult(objs)
+	hasMore, nextMarker := generateListResult(objs, limit)
 	return objs, hasMore, nextMarker, err
 }
 
