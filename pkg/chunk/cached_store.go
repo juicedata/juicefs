@@ -391,7 +391,7 @@ func (store *cachedStore) upload(key string, block *Page, s *wSlice) error {
 		buf.Acquire()
 	}
 	defer buf.Release()
-	if sync && blen < store.conf.BlockSize {
+	if sync && (blen < store.conf.BlockSize || store.conf.CacheLargeWrite) {
 		// block will be freed after written into disk
 		store.bcache.cache(key, block, false, false)
 	}
@@ -447,7 +447,11 @@ func (s *wSlice) upload(indx int) {
 			panic(fmt.Sprintf("block length does not match: %v != %v", off, blen))
 		}
 		if s.store.conf.Writeback {
-			stagingPath, err := s.store.bcache.stage(key, block.Data, s.store.shouldCache(blen))
+			stagingPath := "unknown"
+			err := utils.WithTimeout(func() (err error) { // In case it hangs for more than 5 minutes(see fileWriter.flush), fallback to uploading directly to avoid `EIO`
+				stagingPath, err = s.store.bcache.stage(key, block.Data, s.store.shouldCache(blen))
+				return err
+			}, s.store.conf.PutTimeout)
 			if err != nil {
 				if !errors.Is(err, errStageConcurrency) {
 					s.store.stageBlockErrors.Add(1)
@@ -564,6 +568,7 @@ type Config struct {
 	GetTimeout        time.Duration
 	PutTimeout        time.Duration
 	CacheFullBlock    bool
+	CacheLargeWrite   bool
 	BufferSize        uint64
 	Readahead         int
 	Prefetch          int

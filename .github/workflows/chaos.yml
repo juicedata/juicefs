@@ -4,9 +4,15 @@ on:
   push:
     branches:
       - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+      - 'main'
+    paths:
+      - '**/chaos.yml'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - '**/chaos.yml'
   workflow_dispatch:
     inputs:
       debug:
@@ -70,11 +76,12 @@ jobs:
 
       - name: Build And Load CSI Docker Image
         run: |
-          docker build -f .github/scripts/chaos/juicefs.Dockerfile -t juicedata/mount:ci .
+          version=`./juicefs version |awk '{print $3}' | cut -d '-' -f1`
+          docker build -f .github/scripts/chaos/juicefs.Dockerfile -t juicedata/mount:ce-v${version} .
           helm repo add juicefs https://juicedata.github.io/charts/
           helm repo update
-          kind load docker-image juicedata/mount:ci --name chart-testing
-
+          kind load docker-image juicedata/mount:ce-v${version} --name chart-testing
+          
       - name: Install JuiceFS CSI Driver
         run: |
           CHART_VERSION=$(helm search repo juicefs/juicefs-csi-driver --versions | grep juicefs | head -1 | awk -F" " '{print $2}')
@@ -91,7 +98,9 @@ jobs:
           kubectl apply -f .github/scripts/chaos/minio.yaml
 
       - name: Mount Juicefs 
-        run: | 
+        run: |
+          version=`./juicefs version |awk '{print $3}' | cut -d '-' -f1`
+          sed -i "s/mount:ci/mount:ce-v$version/" .github/scripts/chaos/sc.yaml
           kubectl apply -f .github/scripts/chaos/sc.yaml
           kubectl apply -f .github/scripts/chaos/pvc.yaml
 
@@ -153,6 +162,38 @@ jobs:
               exit 1
             fi
           done
+      
+      - name: Check mount pod
+        if: always()
+        run: |
+          POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicefs-chart-testing-control-plane-pvc)
+          echo POD_NAME is $POD_NAME
+          for pod in $POD_NAME;do
+            kubectl -n kube-system describe po $pod
+            kubectl logs -n kube-system $pod > juicefs.log
+            cat juicefs.log
+            grep "<FATAL>:" juicefs.log && exit 1 || true
+          done
+
+      - name: Mount pod upgrade
+        timeout-minutes: 5
+        run: |
+          chaos=${{matrix.chaos}}
+          skip_conditions=("minio-io")
+          if [[ "${skip_conditions[*]}" =~ "$chaos" ]]; then
+            echo "skip mount pod upgrade"
+            exit 0
+          else
+            CSI_POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicefs-csi-node)  
+            PVC_POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicefs-chart-testing-control-plane-pvc)
+            kubectl exec $CSI_POD_NAME -n kube-system -- juicefs-csi-driver upgrade $PVC_POD_NAME 2>&1 | tee upgrade.log
+            sleep 5
+            if ! grep "SUCCESS" upgrade.log;then exit -1;fi
+            rm upgrade.log
+            kubectl exec $CSI_POD_NAME -n kube-system -- juicefs-csi-driver upgrade $PVC_POD_NAME --restart 2>&1 | tee upgrade.log || true  
+            sleep 5
+          fi
+          kubectl delete -f .github/scripts/chaos/workflow.yaml
 
       - name: Check csi controller log
         if: always()
@@ -173,13 +214,15 @@ jobs:
 
       - name: Check mount point pod
         if: always()
-        run: | 
-          POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicefs-chart-testing-control-plane-pvc)
+        run: |
+          POD_NAME=$(kubectl get pods -n kube-system | grep juicefs-chart-testing-control-plane-pvc | grep Running | awk '{print $1}')
           echo POD_NAME is $POD_NAME
-          kubectl -n kube-system describe po $POD_NAME
-          kubectl logs -n kube-system $POD_NAME > juicefs.log
-          cat juicefs.log
-          grep "<FATAL>:" juicefs.log && exit 1 || true
+          for pod in $POD_NAME;do
+            kubectl -n kube-system describe po $pod
+            kubectl logs -n kube-system $pod > juicefs.log
+            cat juicefs.log
+            grep "<FATAL>:" juicefs.log && exit 1 || true
+          done
 
       - name: Check vdbench log
         if: always()

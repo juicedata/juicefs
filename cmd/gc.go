@@ -78,21 +78,20 @@ func gc(ctx *cli.Context) error {
 	removePassword(ctx.Args().Get(0))
 	metaConf := meta.DefaultConf()
 	metaConf.MaxDeletes = ctx.Int("threads")
+	metaConf.NoBGJob = true
 	m := meta.NewClient(ctx.Args().Get(0), metaConf)
 	format, err := m.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
-
-	chunkConf := chunk.Config{
-		BlockSize:  format.BlockSize * 1024,
-		Compress:   format.Compression,
-		GetTimeout: time.Second * 60,
-		PutTimeout: time.Second * 60,
-		MaxUpload:  20,
-		BufferSize: 300 << 20,
-		CacheDir:   "memory",
+	if err = m.NewSession(false); err == nil { // To sync all stats periodically
+		defer m.CloseSession() //nolint:errcheck
+	} else {
+		logger.Fatalf("create session: %v", err)
 	}
+
+	chunkConf := *getDefaultChunkConf(format)
+	chunkConf.CacheDir = "memory"
 
 	blob, err := createStorage(*format)
 	if err != nil {

@@ -728,7 +728,8 @@ func installHandler(mp string, v *vfs.VFS, blob object.ObjectStorage) {
 				if err := v.FlushAll(""); err != nil {
 					logger.Errorf("flush all: %s", err)
 				}
-				logger.Fatalf("exit after received %s,but umount not finished after 30 seconds, force exit", sig)
+				logger.Errorf("exit after receiving signal %s, but umount does not finish in 30 seconds, force exit", sig)
+				os.Exit(meta.UmountCode)
 			}()
 			go func() { _ = doUmount(mp, true) }()
 		}
@@ -780,10 +781,27 @@ func launchMount(mp string, conf *vfs.Config) error {
 		os.Unsetenv("_FUSE_STATE_PATH")
 		mountPid = cmd.Process.Pid
 
+		signalChan := make(chan os.Signal, 10)
+		signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+		go func() {
+			for {
+				sig := <-signalChan
+				if sig == nil {
+					return
+				}
+				logger.Infof("received signal %s, propagating to child process %d...", sig.String(), mountPid)
+				if err := cmd.Process.Signal(sig); err != nil && !errors.Is(err, os.ErrProcessDone) {
+					logger.Errorf("send signal %s to %d: %s", sig.String(), mountPid, err)
+				}
+			}
+		}()
+
 		ctx, cancel := context.WithCancel(context.TODO())
 		go watchdog(ctx, mp)
 		err = cmd.Wait()
 		cancel()
+		signal.Stop(signalChan)
+		close(signalChan)
 		if err == nil {
 			return nil
 		} else {

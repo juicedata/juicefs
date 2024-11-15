@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -216,6 +217,7 @@ func fixObjectSize(s uint64) uint64 {
 }
 
 func createStorage(format meta.Format) (object.ObjectStorage, error) {
+
 	if err := format.Decrypt(); err != nil {
 		return nil, fmt.Errorf("format decrypt: %s", err)
 	}
@@ -233,6 +235,28 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 			values.Del("tls-insecure-skip-verify")
 			u.RawQuery = values.Encode()
 			format.Bucket = u.String()
+		}
+
+		// Configure client TLS when params are provided
+		if values.Get("ca-certs") != "" && values.Get("ssl-cert") != "" && values.Get("ssl-key") != "" {
+
+			clientTLSCert, err := tls.LoadX509KeyPair(values.Get("ssl-cert"), values.Get("ssl-key"))
+			if err != nil {
+				return nil, fmt.Errorf("error loading certificate and key file: %s", err.Error())
+			}
+
+			certPool := x509.NewCertPool()
+			caCertPEM, err := os.ReadFile(values.Get("ca-certs"))
+			if err != nil {
+				return nil, fmt.Errorf("error loading CA cert file: %s", err.Error())
+			}
+
+			if certAdded := certPool.AppendCertsFromPEM(caCertPEM); !certAdded {
+				return nil, fmt.Errorf("error appending CA cert to pool")
+			}
+
+			object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig.RootCAs = certPool
+			object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
 		}
 	}
 
@@ -317,7 +341,7 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 		return err
 	}
 	if !bytes.Equal(data, data2) {
-		return fmt.Errorf("Read wrong data")
+		return fmt.Errorf("read wrong data: expected %x, got %x", data, data2)
 	}
 	err = store.Delete(key)
 	if err != nil {
@@ -338,6 +362,7 @@ func test(store object.ObjectStorage) error {
 		if err == nil {
 			break
 		}
+		logger.Warnf("Test storage %s failed: %s, tries: #%d", store, err, i+1)
 		time.Sleep(time.Second * time.Duration(i*3+1))
 	}
 	if err == nil {

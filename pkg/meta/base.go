@@ -221,6 +221,8 @@ type baseMeta struct {
 
 	dirStatsLock sync.Mutex
 	dirStats     map[Ino]dirStat
+
+	fsStatsLock sync.Mutex
 	*fsStat
 
 	parentMu   sync.Mutex     // protect dirParents
@@ -577,7 +579,7 @@ func (m *baseMeta) CloseSession() error {
 	if m.conf.ReadOnly {
 		return nil
 	}
-	m.en.doFlushStats()
+	m.doFlushStats()
 	m.doFlushDirStat()
 	m.doFlushQuotas()
 	m.sesMu.Lock()
@@ -3032,7 +3034,7 @@ func (h *dirHandler) Delete(name string) {
 		return
 	}
 
-	if idx, ok := h.batch.indexes[name]; ok && idx >= h.readOff {
+	if idx, ok := h.batch.indexes[name]; ok && idx+h.batch.offset >= h.readOff {
 		delete(h.batch.indexes, name)
 		n := len(h.batch.entries)
 		if idx < n-1 {
@@ -3058,7 +3060,7 @@ func (h *dirHandler) Insert(inode Ino, name string, attr *Attr) {
 }
 
 func (h *dirHandler) Read(offset int) {
-	h.readOff = offset - len(h.initEntries)
+	h.readOff = offset - len(h.initEntries) // TODO: what if fuse only reads one entry?
 }
 
 func (h *dirHandler) Close() {
