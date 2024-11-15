@@ -241,6 +241,9 @@ func (s *s3client) List(prefix, start, token, delimiter string, limit int64, fol
 		if err != nil {
 			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
+		if !strings.HasPrefix(oKey, prefix) || oKey < start {
+			return nil, false, "", fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, start)
+		}
 		var sc = DefaultStorageClass
 		if o.StorageClass != nil {
 			sc = *o.StorageClass
