@@ -34,8 +34,6 @@ import (
 	"github.com/baidubce/bce-sdk-go/services/bos/api"
 )
 
-const bosDefaultRegion = "bj"
-
 type bosclient struct {
 	DefaultObjectStorage
 	bucket string
@@ -227,12 +225,12 @@ func (q *bosclient) ListUploads(marker string) ([]*PendingPart, string, error) {
 }
 
 func autoBOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
-	region := bosDefaultRegion
+	region := bce.DEFAULT_REGION
 	if r := os.Getenv("BDCLOUD_DEFAULT_REGION"); r != "" {
 		region = r
 	}
 
-	endpoint := fmt.Sprintf("https://%s.bcebos.com", region)
+	endpoint := fmt.Sprintf("https://%s.%s.bcebos.com", bucketName, region)
 	bosCli, err := bos.NewClient(accessKey, secretKey, endpoint)
 	if err != nil {
 		return "", err
@@ -241,7 +239,7 @@ func autoBOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 	if location, err := bosCli.GetBucketLocation(bucketName); err != nil {
 		return "", err
 	} else {
-		return fmt.Sprintf("%s.bcebos.com", location), nil
+		return fmt.Sprintf("%s.%s.bcebos.com", bucketName, location), nil
 	}
 }
 
@@ -254,17 +252,16 @@ func newBOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		return nil, fmt.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
-	bucketName := hostParts[0]
-	if len(hostParts) > 1 {
-		endpoint = fmt.Sprintf("%s://%s", uri.Scheme, hostParts[1])
+	if len(hostParts) != 2 {
+		return nil, fmt.Errorf("Invalid endpoint: %v", endpoint)
 	}
-
+	bucketName := hostParts[0]
 	if accessKey == "" {
 		accessKey = os.Getenv("BDCLOUD_ACCESS_KEY")
 		secretKey = os.Getenv("BDCLOUD_SECRET_KEY")
 	}
 
-	if len(hostParts) == 1 {
+	if hostParts[1] == "bcebos.com" {
 		if endpoint, err = autoBOSEndpoint(bucketName, accessKey, secretKey); err != nil {
 			return nil, fmt.Errorf("Fail to get location of bucket %q: %s", bucketName, err)
 		}

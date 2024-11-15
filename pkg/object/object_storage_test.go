@@ -35,6 +35,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/baidubce/bce-sdk-go/services/bos/api"
+
 	"github.com/colinmarc/hdfs/v2/hadoopconf"
 
 	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
@@ -78,7 +80,7 @@ func setStorageClass(o ObjectStorage) string {
 		s.sc = string(blob2.AccessTierCool)
 		return s.sc
 	case *bosclient:
-		s.sc = "STANDARD_IA"
+		s.sc = api.STORAGE_CLASS_STANDARD
 		return s.sc
 	case *COS:
 		s.sc = "STANDARD_IA"
