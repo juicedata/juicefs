@@ -125,12 +125,10 @@ func (u *up) List(prefix, marker, token, delimiter string, limit int64, followLi
 			objs = append(objs, &obj{key, fi.Size, fi.Time, strings.HasSuffix(key, "/"), ""})
 		}
 	}
-	if len(objs) > 0 {
-		hasMore, nextMarker := generateListResult(objs, limit)
-		return objs, hasMore, nextMarker, nil
+	if len(objs) == 0 {
+		u.listing = nil
 	}
-	u.listing = nil
-	return nil, false, "", u.err
+	return generateListResult(objs, limit)
 }
 
 func newUpyun(endpoint, user, passwd, token string) (ObjectStorage, error) {
