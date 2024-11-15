@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
+	"github.com/baidubce/bce-sdk-go/services/bos/api"
 	"io"
 	"math"
 	"os"
@@ -88,6 +89,8 @@ func setStorageClass(o ObjectStorage) string {
 			sc = string(enum.StorageClassIa)
 		case *obsClient:
 			sc = string(obs.StorageClassStandard)
+		case *bosclient:
+			sc = api.STORAGE_CLASS_STANDARD
 		}
 		err := osc.SetStorageClass(sc)
 		if err != nil {
