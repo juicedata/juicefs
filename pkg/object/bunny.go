@@ -79,7 +79,7 @@ func (b *bunnyClient) Delete(key string, getters ...AttrGetter) error {
 
 func (b *bunnyClient) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 	var output []Object
 	var dir = prefix
@@ -95,7 +95,7 @@ func (b *bunnyClient) List(prefix, marker, token, delimiter string, limit int64,
 		if os.IsNotExist(err) {
 			err = nil
 		}
-		return nil, err
+		return nil, false, "", err
 	}
 
 	for _, o := range listedObjects {
@@ -109,7 +109,8 @@ func (b *bunnyClient) List(prefix, marker, token, delimiter string, limit int64,
 		}
 	}
 
-	return output, nil
+	hasMore, nextMarker := generateListResult(output, limit)
+	return output, hasMore, nextMarker, nil
 }
 
 // The Object Path returned by the Bunny API contains the Storage Zone Name, which this function removes

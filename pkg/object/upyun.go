@@ -126,7 +126,8 @@ func (u *up) List(prefix, marker, token, delimiter string, limit int64, followLi
 		}
 	}
 	if len(objs) > 0 {
-		return objs, true, objs[len(objs)-1].Key(), nil
+		hasMore, nextMarker := generateListResult(objs, limit)
+		return objs, hasMore, nextMarker, nil
 	}
 	u.listing = nil
 	return nil, false, "", u.err
