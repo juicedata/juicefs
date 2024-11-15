@@ -257,7 +257,7 @@ func (j *juiceFS) List(prefix, marker, token, delimiter string, limit int64, fol
 	if len(objs) > 0 {
 		nextMarker = objs[len(objs)-1].Key()
 	}
-	return objs, nextMarker != "", nextMarker, nil
+	return objs, len(objs) == int(limit), nextMarker, nil
 }
 
 type mEntry struct {
