@@ -70,8 +70,8 @@ func grantAccess() error {
 		return errors.Errorf("fail to find device cgroup")
 	}
 
-	deviceListPath := path.Join("/sys/fs/cgroup/devices", deviceCgroup, "/devices.list")
-	deviceAllowPath := path.Join("/sys/fs/cgroup/devices", deviceCgroup, "/devices.allow")
+	deviceListPath := path.Join("/sys/fs/cgroup/devices" + deviceCgroup, "/devices.list")
+	deviceAllowPath := path.Join("/sys/fs/cgroup/devices" + deviceCgroup, "/devices.allow")
 
 	// check if fuse is already allowed
 	deviceListFile, err := os.OpenFile(deviceListPath, os.O_RDONLY, 0)
