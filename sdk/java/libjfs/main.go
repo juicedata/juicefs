@@ -704,9 +704,6 @@ func jfs_term(pid int, h int64) int {
 					activefs[name] = ws[:len(ws)-1]
 				} else {
 					_ = w.Flush()
-					if err := w.Meta().CloseSession(); err != nil {
-						logger.Warnf("close session failed: %s", err)
-					}
 					// don't close the filesystem, so it can be re-used later
 					// w.Close()
 					// delete(activefs, name)
