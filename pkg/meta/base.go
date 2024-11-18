@@ -999,10 +999,6 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 	return m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr)
 }
 
-func (m *baseMeta) currMaxInode() Ino {
-	return Ino(m.freeInodes.next)
-}
-
 func (m *baseMeta) nextInode() (Ino, error) {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
@@ -3175,12 +3171,10 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	}
 
 	bak := NewBakFormat()
-	finished := false
-	for !finished {
+	for {
 		seg, err := bak.ReadSegment(r)
 		if err != nil {
 			if errors.Is(err, ErrBakEOF) {
-				finished = true
 				close(taskCh)
 				break
 			}

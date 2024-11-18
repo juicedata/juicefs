@@ -1,3 +1,20 @@
+/*
+ * JuiceFS, Copyright 2021 Juicedata, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// nolint:SA6002
 package meta
 
 import (
@@ -438,32 +455,32 @@ func (s *kvMixDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) erro
 }
 
 func (s *kvMixDS) release(msg proto.Message) {
-	switch msg.(type) {
+	switch list := msg.(type) {
 	case *pb.NodeList:
-		for _, node := range msg.(*pb.NodeList).List {
+		for _, node := range list.List {
 			s.pools[0].Put(node)
 		}
 	case *pb.EdgeList:
-		for _, edge := range msg.(*pb.EdgeList).List {
+		for _, edge := range list.List {
 			s.pools[1].Put(edge)
 		}
 	case *pb.ChunkList:
-		for _, chunk := range msg.(*pb.ChunkList).List {
+		for _, chunk := range list.List {
 			for _, slice := range chunk.Slices {
 				s.pools[2].Put(slice)
 			}
 			s.pools[3].Put(chunk)
 		}
 	case *pb.SymlinkList:
-		for _, symlink := range msg.(*pb.SymlinkList).List {
+		for _, symlink := range list.List {
 			s.pools[4].Put(symlink)
 		}
 	case *pb.XattrList:
-		for _, xattr := range msg.(*pb.XattrList).List {
+		for _, xattr := range list.List {
 			s.pools[5].Put(xattr)
 		}
 	case *pb.ParentList:
-		for _, parent := range msg.(*pb.ParentList).List {
+		for _, parent := range list.List {
 			s.pools[6].Put(parent)
 		}
 	}

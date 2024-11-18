@@ -166,7 +166,7 @@ func (h *BakFooter) Marshal() ([]byte, error) {
 }
 
 func (h *BakFooter) Unmarshal(r io.ReadSeeker) error {
-	r.Seek(BakFooterSize, io.SeekEnd)
+	_, _ = r.Seek(BakFooterSize, io.SeekEnd)
 	data := make([]byte, BakFooterSize)
 	n, err := r.Read(data)
 	if err != nil && n != int(BakFooterSize) {
