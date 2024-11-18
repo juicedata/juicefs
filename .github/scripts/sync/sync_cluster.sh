@@ -119,7 +119,7 @@ check_sync_log(){
     grep "<FATAL>" sync.log && exit 1 || true
     file_count=$1
     if tail -1 sync.log | grep -q "close session"; then
-      file_copied=$(tail -n 2 sync.log | head -n 1  | sed 's/.*copied: \([0-9]*\).*/\1/' )
+      file_copied=$(tail -n 3 sync.log | head -n 1  | sed 's/.*copied: \([0-9]*\).*/\1/' )
     else
       file_copied=$(tail -1 sync.log  | sed 's/.*copied: \([0-9]*\).*/\1/' )
     fi
