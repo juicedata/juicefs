@@ -698,7 +698,7 @@ func mount(c *cli.Context) error {
 		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
 	})
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
-	installHandler(mp, v, blob)
+	installHandler(metaCli, mp, v, blob)
 	v.UpdateFormat = updateFormat(c)
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	mountMain(v, c)

@@ -72,4 +72,4 @@ func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {}
 
 func launchMount(mp string, conf *vfs.Config) error { return nil }
 
-func installHandler(mp string, v *vfs.VFS, blob object.ObjectStorage) {}
+func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorage) {}
