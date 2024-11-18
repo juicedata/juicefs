@@ -701,9 +701,9 @@ func (s *kvNodeLS) load(ctx Context, msg proto.Message) error {
 			tx.set(m.inodeKey(Ino(pn.Inode)), buff)
 
 			if pn.AccessAclId|pn.DefaultAclId != aclAPI.None {
-				s.pools[1].Put(buff)
+				s.pools[1].Put(buff) // nolint:staticcheck
 			} else {
-				s.pools[0].Put(buff)
+				s.pools[0].Put(buff) // nolint:staticcheck
 			}
 		}
 		return nil
@@ -729,7 +729,7 @@ func (s *kvChunkLS) load(ctx Context, msg proto.Message) error {
 				MarshalSlicePB(slice, buff[i*sliceBytes:])
 			}
 			tx.set(m.chunkKey(Ino(chk.Inode), chk.Index), buff[:size])
-			s.pools[0].Put(buff)
+			s.pools[0].Put(buff) // nolint:staticcheck
 		}
 		return nil
 	})
@@ -748,7 +748,7 @@ func (s *kvEdgeLS) load(ctx Context, msg proto.Message) error {
 			buff := s.pools[0].Get().([]byte)
 			MarshalEdgePB(edge, buff)
 			tx.set(m.entryKey(Ino(edge.Parent), string(edge.Name)), buff)
-			s.pools[0].Put(buff)
+			s.pools[0].Put(buff) // nolint:staticcheck
 		}
 		return nil
 	})

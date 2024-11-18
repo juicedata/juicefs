@@ -1064,7 +1064,7 @@ func (s *redisChunkLS) load(ctx Context, msg proto.Message) error {
 				return err
 			} else if ok {
 				for _, buff := range cache {
-					s.pools[0].Put(buff)
+					s.pools[0].Put(buff) // nolint:staticcheck
 				}
 				cache = cache[:0]
 			}
@@ -1074,7 +1074,7 @@ func (s *redisChunkLS) load(ctx Context, msg proto.Message) error {
 		return err
 	}
 	for _, buff := range cache {
-		s.pools[0].Put(buff)
+		s.pools[0].Put(buff) // nolint:staticcheck
 	}
 	return nil
 }
@@ -1100,7 +1100,7 @@ func (s *redisEdgeLS) load(ctx Context, msg proto.Message) error {
 				return err
 			} else if ok {
 				for _, buff := range cache {
-					s.pools[0].Put(buff)
+					s.pools[0].Put(buff) // nolint:staticcheck
 				}
 				cache = cache[:0]
 			}
@@ -1112,7 +1112,7 @@ func (s *redisEdgeLS) load(ctx Context, msg proto.Message) error {
 	}
 
 	for _, buff := range cache {
-		s.pools[0].Put(buff)
+		s.pools[0].Put(buff) // nolint:staticcheck
 	}
 	return nil
 }

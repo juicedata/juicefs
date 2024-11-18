@@ -902,7 +902,7 @@ func (s *sqlChunkLS) load(ctx Context, msg proto.Message) error {
 
 	for _, chk := range rows {
 		c := chk.(*chunk)
-		s.pools[1].Put(c.Slices)
+		s.pools[1].Put(c.Slices) // nolint:staticcheck
 		s.pools[0].Put(c)
 	}
 	logger.Debugf("insert %s num %d", s, len(rows))
