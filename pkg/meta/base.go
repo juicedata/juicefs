@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"reflect"
@@ -38,6 +39,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -134,8 +136,9 @@ type engine interface {
 
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 
-	BuildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg
-	BuildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg
+	buildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg
+	buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg
+	prepareLoad(ctx Context) error
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -3073,4 +3076,127 @@ func (h *dirHandler) Close() {
 	h.batch = nil
 	h.readOff = 0
 	h.Unlock()
+}
+
+func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) (err error) {
+	opt = opt.check()
+
+	bak := NewBakFormat()
+	ch := make(chan *dumpedResult, 100)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		var err error
+		defer func() {
+			if err != nil {
+				ctx.Cancel()
+			} else {
+				close(ch)
+			}
+			wg.Done()
+		}()
+
+		for typ := SegTypeFormat; typ < SegTypeMax; typ++ {
+			seg := m.en.buildDumpedSeg(typ, opt)
+			if seg != nil {
+				if err = seg.dump(ctx, opt, ch); err != nil {
+					logger.Errorf("dump %s err: %v", seg, err)
+					return
+				}
+			}
+		}
+	}()
+
+	finished := false
+	for !finished {
+		select {
+		case <-ctx.Done():
+			wg.Wait()
+			return ctx.Err()
+		case res, ok := <-ch:
+			if !ok {
+				finished = true
+				break
+			}
+			if err := bak.WriteSegment(w, &BakSegment{Val: res.msg}); err != nil {
+				logger.Errorf("write %s err: %v", res.seg, err)
+				ctx.Cancel()
+				wg.Wait()
+				return err
+			}
+			res.seg.release(res.msg)
+		}
+	}
+
+	wg.Wait()
+	return bak.WriteFooter(w)
+}
+
+func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
+	opt = opt.check()
+
+	if err := m.en.prepareLoad(ctx); err != nil {
+		return err
+	}
+
+	type task struct {
+		msg proto.Message
+		seg iLoadedSeg
+	}
+
+	var wg sync.WaitGroup
+	taskCh := make(chan *task, 100)
+
+	workerFunc := func(ctx Context, taskCh <-chan *task) {
+		defer wg.Done()
+		finished := false
+		for !finished {
+			select {
+			case <-ctx.Done():
+				return
+			case task, ok := <-taskCh:
+				if !ok {
+					finished = true
+					break
+				}
+
+				if err := task.seg.load(ctx, task.msg); err != nil {
+					logger.Errorf("failed to insert %s: %s", task.seg, err)
+					ctx.Cancel()
+					return
+				}
+			}
+		}
+	}
+
+	for i := 0; i < opt.CoNum; i++ {
+		wg.Add(1)
+		go workerFunc(ctx, taskCh)
+	}
+
+	bak := NewBakFormat()
+	finished := false
+	for !finished {
+		seg, err := bak.ReadSegment(r)
+		if err != nil {
+			if errors.Is(err, ErrBakEOF) {
+				finished = true
+				close(taskCh)
+				break
+			}
+			ctx.Cancel()
+			wg.Wait()
+			return err
+		}
+
+		ls := m.en.buildLoadedSeg(int(seg.Typ), opt)
+		select {
+		case <-ctx.Done():
+			wg.Wait()
+			return ctx.Err()
+		case taskCh <- &task{seg.Val, ls}:
+		}
+	}
+	wg.Wait()
+	return nil
 }

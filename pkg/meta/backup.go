@@ -38,6 +38,7 @@ const (
 	SegTypeEdge
 	SegTypeParent // for redis/tkv only
 	SegTypeSymlink
+	SegTypeMix // for tkv only
 	SegTypeMax
 )
 
@@ -68,6 +69,8 @@ func init() {
 	for k, v := range SegType2Name {
 		SegName2Type[v] = k
 	}
+
+	SegType2Name[SegTypeMix] = "kv.Mix"
 }
 
 func CreateMessageByName(name protoreflect.FullName) (proto.Message, error) {
@@ -269,7 +272,7 @@ type segReleaser interface {
 
 type iDumpedSeg interface {
 	String() string
-	query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error
+	dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error
 	segReleaser
 }
 
@@ -288,8 +291,8 @@ type formatDS struct {
 	keepSecret bool
 }
 
-func (s *formatDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
-	return dumpResult(ctx, ch, &dumpedResult{s, MarshalFormatPB(s.f, s.keepSecret)})
+func (s *formatDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+	return dumpResult(ctx, ch, &dumpedResult{s, ConvertFormatToPB(s.f, s.keepSecret)})
 }
 
 type dumpedBatchSeg struct {
@@ -329,7 +332,7 @@ func (opt *LoadOption) check() *LoadOption {
 
 type iLoadedSeg interface {
 	String() string
-	insert(ctx Context, msg proto.Message) error
+	load(ctx Context, msg proto.Message) error
 }
 
 type loadedSeg struct {
@@ -340,12 +343,9 @@ type loadedSeg struct {
 
 func (s *loadedSeg) String() string { return string(SegType2Name[s.typ]) }
 
-var loadedPoolOnce sync.Once
-var loadedPools = make(map[int][]*sync.Pool)
-
 // Message Marshal/Unmarshal
 
-func MarshalFormatPB(f *Format, keepSecret bool) *pb.Format {
+func ConvertFormatToPB(f *Format, keepSecret bool) *pb.Format {
 	msg := &pb.Format{
 		Name:             f.Name,
 		Uuid:             f.UUID,
@@ -388,7 +388,7 @@ func MarshalFormatPB(f *Format, keepSecret bool) *pb.Format {
 	return msg
 }
 
-func UnmarshalFormatPB(msg *pb.Format) *Format {
+func ConvertFormatFromPB(msg *pb.Format) *Format {
 	return &Format{
 		Name:             msg.Name,
 		UUID:             msg.Uuid,
@@ -418,7 +418,7 @@ func UnmarshalFormatPB(msg *pb.Format) *Format {
 	}
 }
 
-func UnmarshalAclPB(msg *pb.Acl) []byte {
+func MarshalAclPB(msg *pb.Acl) []byte {
 	w := utils.NewBuffer(uint32(16 + (len(msg.Users)+len(msg.Groups))*6))
 	w.Put16(uint16(msg.Owner))
 	w.Put16(uint16(msg.Group))
@@ -437,19 +437,41 @@ func UnmarshalAclPB(msg *pb.Acl) []byte {
 	return w.Bytes()
 }
 
+func UnmarshalAclPB(buff []byte) *pb.Acl {
+	acl := &pb.Acl{}
+	rb := utils.ReadBuffer(buff)
+	acl.Owner = uint32(rb.Get16())
+	acl.Group = uint32(rb.Get16())
+	acl.Mask = uint32(rb.Get16())
+	acl.Other = uint32(rb.Get16())
+
+	var entry *pb.AclEntry
+	uCnt := rb.Get32()
+	acl.Users = make([]*pb.AclEntry, 0, uCnt)
+	for i := 0; i < int(uCnt); i++ {
+		entry = &pb.AclEntry{}
+		entry.Id = rb.Get32()
+		entry.Perm = uint32(rb.Get16())
+		acl.Users = append(acl.Users, entry)
+	}
+
+	gCnt := rb.Get32()
+	acl.Groups = make([]*pb.AclEntry, 0, gCnt)
+	for i := 0; i < int(gCnt); i++ {
+		entry = &pb.AclEntry{}
+		entry.Id = rb.Get32()
+		entry.Perm = uint32(rb.Get16())
+		acl.Groups = append(acl.Groups, entry)
+	}
+	return acl
+}
+
 const (
 	BakNodeSizeWithoutAcl = 71
 	BakNodeSize           = 79
 )
 
-func UnmarshalNodePB(msg *pb.Node, sPool, bPool *sync.Pool) []byte {
-	var buff []byte
-	if msg.AccessAclId|msg.DefaultAclId != aclAPI.None {
-		buff = bPool.Get().([]byte)
-	} else {
-		buff = sPool.Get().([]byte)
-	}
-
+func MarshalNodePB(msg *pb.Node, buff []byte) {
 	w := utils.FromBuffer(buff)
 	w.Put8(uint8(msg.Flags))
 	w.Put16((uint16(msg.Type) << 12) | (uint16(msg.Mode) & 0xfff))
@@ -469,5 +491,54 @@ func UnmarshalNodePB(msg *pb.Node, sPool, bPool *sync.Pool) []byte {
 		w.Put32(msg.AccessAclId)
 		w.Put32(msg.DefaultAclId)
 	}
-	return w.Bytes()
+}
+
+func UnmarshalNodePB(buff []byte, node *pb.Node) {
+	rb := utils.FromBuffer(buff)
+	node.Flags = uint32(rb.Get8())
+	node.Mode = uint32(rb.Get16())
+	node.Type = node.Mode >> 12
+	node.Mode &= 0777
+	node.Uid = rb.Get32()
+	node.Gid = rb.Get32()
+	node.Atime = int64(rb.Get64())
+	node.AtimeNsec = int32(rb.Get32())
+	node.Mtime = int64(rb.Get64())
+	node.MtimeNsec = int32(rb.Get32())
+	node.Ctime = int64(rb.Get64())
+	node.CtimeNsec = int32(rb.Get32())
+	node.Nlink = rb.Get32()
+	node.Length = rb.Get64()
+	node.Rdev = rb.Get32()
+	if rb.Left() >= 8 {
+		node.Parent = rb.Get64()
+	}
+	if rb.Left() >= 8 {
+		node.AccessAclId = rb.Get32()
+		node.DefaultAclId = rb.Get32()
+	}
+}
+
+func MarshalSlicePB(msg *pb.Slice, buff []byte) {
+	w := utils.FromBuffer(buff)
+	w.Put32(msg.Pos)
+	w.Put64(msg.Id)
+	w.Put32(msg.Size)
+	w.Put32(msg.Off)
+	w.Put32(msg.Len)
+}
+
+func UnmarshalSlicePB(buff []byte, slice *pb.Slice) {
+	rb := utils.ReadBuffer(buff)
+	slice.Pos = rb.Get32()
+	slice.Id = rb.Get64()
+	slice.Size = rb.Get32()
+	slice.Off = rb.Get32()
+	slice.Len = rb.Get32()
+}
+
+func MarshalEdgePB(msg *pb.Edge, buff []byte) {
+	w := utils.FromBuffer(buff)
+	w.Put8(uint8(msg.Type))
+	w.Put64(msg.Inode)
 }

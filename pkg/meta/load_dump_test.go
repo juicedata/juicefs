@@ -212,7 +212,7 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	if err = m.LoadMeta(fp); err != nil {
 		t.Fatalf("load meta: %s", err)
 	}
-	// checkMeta(t, m)
+	checkMeta(t, m)
 	return m
 }
 
@@ -321,7 +321,7 @@ func testLoadV2(t *testing.T, uri, fname string) Meta {
 	if err = m.LoadMetaV2(Background, fp, &LoadOption{CoNum: 10}); err != nil {
 		t.Fatalf("load meta: %s", err)
 	}
-	// checkMeta(t, m)
+	checkMeta(t, m)
 	return m
 }
 
@@ -331,20 +331,44 @@ func testLoadDumpV2(t *testing.T, name, addr1, addr2 string) {
 		m := testLoad(t, addr1, sampleFile)
 		t.Logf("load meta: %v", time.Since(start))
 		start = time.Now()
-		testDumpV2(t, m, "test.dump")
+		testDumpV2(t, m, fmt.Sprintf("%s.dump", name))
 		m.Shutdown()
-		t.Logf("dump meta: %v", time.Since(start))
+		t.Logf("dump meta v2: %v", time.Since(start))
 		start = time.Now()
-		m = testLoadV2(t, addr2, "test.dump")
+		m = testLoadV2(t, addr2, fmt.Sprintf("%s.dump", name))
 		m.Shutdown()
 		t.Logf("load meta v2: %v", time.Since(start))
 	})
 }
 
+func testLoadOtherEngine(t *testing.T, src, dst, dstAddr string) {
+	t.Run(fmt.Sprintf("Load %s to %s", src, dst), func(t *testing.T) {
+		m := testLoadV2(t, dstAddr, fmt.Sprintf("%s.dump", src))
+		m.Shutdown()
+	})
+}
+
 func TestLoadDumpV2(t *testing.T) {
 	logger.SetLevel(logrus.DebugLevel)
-	testLoadDumpV2(t, "mysql", "mysql://root:123456@/dev", "mysql://root:123456@/dev2")
-	// testLoadDumpV2(t, "redis", "redis://127.0.0.1:6379/2", "redis://127.0.0.1:6379/3")
+
+	engines := map[string][]string{
+		"mysql": {"mysql://root:123456@/dev", "mysql://root:123456@/dev2"},
+		"redis": {"redis://127.0.0.1:6379/2", "redis://127.0.0.1:6379/3"},
+		"tikv":  {"tikv://127.0.0.1:2379/jfs-load-dump-1", "tikv://127.0.0.1:2379/jfs-load-dump-2"},
+	}
+
+	for name, addrs := range engines {
+		testLoadDumpV2(t, name, addrs[0], addrs[1])
+	}
+
+	for src := range engines {
+		for dst, dstAddr := range engines {
+			if src == dst {
+				continue
+			}
+			testLoadOtherEngine(t, src, dst, dstAddr[1])
+		}
+	}
 }
 
 func TestLoadDumpSlow(t *testing.T) { //skip mutate

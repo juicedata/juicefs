@@ -1,11 +1,9 @@
 package meta
 
 import (
-	"encoding/binary"
+	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"sync/atomic"
 
@@ -20,7 +18,7 @@ var (
 	sqlBatchSize = 40960
 )
 
-func (m *dbMeta) BuildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
+func (m *dbMeta) buildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
 	switch typ {
 	case SegTypeFormat:
 		return &formatDS{dumpedSeg{typ: typ}, m.getFormat(), opt.KeepSecret}
@@ -57,19 +55,22 @@ func (m *dbMeta) BuildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
 	return nil
 }
 
+var sqlLoadedPoolOnce sync.Once
+var sqlLoadedPools = make(map[int][]*sync.Pool)
+
 func (m *dbMeta) buildLoadedPools(typ int) []*sync.Pool {
-	loadedPoolOnce.Do(func() {
-		loadedPools = map[int][]*sync.Pool{
+	sqlLoadedPoolOnce.Do(func() {
+		sqlLoadedPools = map[int][]*sync.Pool{
 			SegTypeNode:    {{New: func() interface{} { return &node{} }}},
-			SegTypeChunk:   {{New: func() interface{} { return &chunk{} }}, {New: func() interface{} { return make([]byte, 0, sliceBytes*10) }}},
+			SegTypeChunk:   {{New: func() interface{} { return &chunk{} }}, {New: func() interface{} { return make([]byte, sliceBytes*10) }}},
 			SegTypeEdge:    {{New: func() interface{} { return &edge{} }}},
 			SegTypeSymlink: {{New: func() interface{} { return &symlink{} }}},
 		}
 	})
-	return loadedPools[typ]
+	return sqlLoadedPools[typ]
 }
 
-func (m *dbMeta) BuildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
+func (m *dbMeta) buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
 	switch typ {
 	case SegTypeFormat:
 		return &sqlFormatLS{loadedSeg{typ: typ, meta: m}}
@@ -118,7 +119,7 @@ type sqlCounterDS struct {
 	dumpedSeg
 }
 
-func (s *sqlCounterDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlCounterDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	meta := s.meta.(*dbMeta)
 	var rows []counter
 	if err := meta.roTxn(func(s *xorm.Session) error {
@@ -144,7 +145,7 @@ type sqlSustainedDS struct {
 	dumpedSeg
 }
 
-func (s *sqlSustainedDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlSustainedDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	var rows []sustained
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Find(&rows)
@@ -166,7 +167,7 @@ func (s *sqlSustainedDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResu
 	if err := dumpResult(ctx, ch, &dumpedResult{s, pss}); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, len(ss))
+	logger.Debugf("dump %s num %d", s, len(ss))
 	return nil
 }
 
@@ -174,7 +175,7 @@ type sqlDelFileDS struct {
 	dumpedSeg
 }
 
-func (s *sqlDelFileDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlDelFileDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	var rows []delfile
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Find(&rows)
@@ -188,7 +189,7 @@ func (s *sqlDelFileDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult
 	if err := dumpResult(ctx, ch, &dumpedResult{s, delFiles}); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, len(delFiles.List))
+	logger.Debugf("dump %s num %d", s, len(delFiles.List))
 	return nil
 }
 
@@ -197,7 +198,7 @@ type sqlSliceRefDS struct {
 	pools []*sync.Pool
 }
 
-func (s *sqlSliceRefDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlSliceRefDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	eg, _ := errgroup.WithContext(ctx)
 	eg.SetLimit(opt.CoNum)
 
@@ -208,7 +209,7 @@ func (s *sqlSliceRefDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResul
 		eg.Go(func() error {
 			var rows []sliceRef
 			if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
-				return s.Where("refs > 1").Limit(sqlBatchSize, nStart).Find(&rows)
+				return s.Where("refs != 1").Limit(sqlBatchSize, nStart).Find(&rows) // skip default refs
 			}); err != nil {
 				taskFinished = true
 				return err
@@ -236,7 +237,7 @@ func (s *sqlSliceRefDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResul
 	if err := dumpResult(ctx, ch, &dumpedResult{s, psrs}); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, len(psrs.List))
+	logger.Debugf("dump %s num %d", s, len(psrs.List))
 	return nil
 }
 
@@ -252,7 +253,7 @@ type sqlAclDS struct {
 	dumpedSeg
 }
 
-func (s *sqlAclDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlAclDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	var rows []acl
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Find(&rows)
@@ -281,7 +282,7 @@ func (s *sqlAclDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) er
 	if err := dumpResult(ctx, ch, &dumpedResult{s, acls}); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, len(acls.List))
+	logger.Debugf("dump %s num %d", s, len(acls.List))
 	return nil
 }
 
@@ -289,7 +290,7 @@ type sqlXattrDS struct {
 	dumpedSeg
 }
 
-func (s *sqlXattrDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlXattrDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	var rows []xattr
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Find(&rows)
@@ -312,7 +313,7 @@ func (s *sqlXattrDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) 
 		})
 	}
 
-	logger.Debugf("dump %s total num %d", s, len(pxs.List))
+	logger.Debugf("dump %s num %d", s, len(pxs.List))
 	return dumpResult(ctx, ch, &dumpedResult{s, pxs})
 }
 
@@ -320,7 +321,7 @@ type sqlQuotaDS struct {
 	dumpedSeg
 }
 
-func (s *sqlQuotaDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlQuotaDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	var rows []dirQuota
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Find(&rows)
@@ -342,7 +343,7 @@ func (s *sqlQuotaDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) 
 			UsedInodes: q.UsedInodes,
 		})
 	}
-	logger.Debugf("dump %s total num %d", s, len(pqs.List))
+	logger.Debugf("dump %s num %d", s, len(pqs.List))
 	return dumpResult(ctx, ch, &dumpedResult{s, pqs})
 }
 
@@ -350,7 +351,7 @@ type sqlStatDS struct {
 	dumpedSeg
 }
 
-func (s *sqlStatDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlStatDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	var rows []dirStats
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Find(&rows)
@@ -371,12 +372,12 @@ func (s *sqlStatDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) e
 			UsedSpace:  st.UsedSpace,
 		})
 	}
-	logger.Debugf("dump %s total num %d", s, len(pss.List))
+	logger.Debugf("dump %s num %d", s, len(pss.List))
 	return dumpResult(ctx, ch, &dumpedResult{s, pss})
 }
 
-func sqlQueryBatch(ctx Context, s iDumpedSeg, opt *DumpOption, ch chan *dumpedResult, query func(ctx Context, limit, start int, sum *int64) (proto.Message, error)) error {
-	eg, nCtx := errgroup.WithContext(ctx)
+func sqlQueryBatch(ctx Context, s iDumpedSeg, opt *DumpOption, ch chan *dumpedResult, query func(ctx context.Context, limit, start int, sum *int64) (proto.Message, error)) error {
+	eg, egCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(opt.CoNum)
 
 	taskFinished := false
@@ -384,7 +385,7 @@ func sqlQueryBatch(ctx Context, s iDumpedSeg, opt *DumpOption, ch chan *dumpedRe
 	for start := 0; !taskFinished; start += sqlBatchSize {
 		nStart := start
 		eg.Go(func() error {
-			msg, err := query(ctx, sqlBatchSize, nStart, &sum)
+			msg, err := query(egCtx, sqlBatchSize, nStart, &sum)
 			if err != nil {
 				taskFinished = true
 				return err
@@ -393,14 +394,14 @@ func sqlQueryBatch(ctx Context, s iDumpedSeg, opt *DumpOption, ch chan *dumpedRe
 				taskFinished = true
 				return nil // finished
 			}
-			return dumpResult(nCtx, ch, &dumpedResult{s, msg})
+			return dumpResult(egCtx, ch, &dumpedResult{s, msg})
 		})
 	}
 	if err := eg.Wait(); err != nil {
 		logger.Errorf("query %s err: %v", s, err)
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, sum)
+	logger.Debugf("dump %s num %d", s, sum)
 	return nil
 }
 
@@ -408,11 +409,11 @@ type sqlNodeDBS struct {
 	dumpedBatchSeg
 }
 
-func (s *sqlNodeDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlNodeDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	return sqlQueryBatch(ctx, s, opt, ch, s.doQuery)
 }
 
-func (s *sqlNodeDBS) doQuery(ctx Context, limit, start int, sum *int64) (proto.Message, error) {
+func (s *sqlNodeDBS) doQuery(ctx context.Context, limit, start int, sum *int64) (proto.Message, error) {
 	var rows []node
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Limit(limit, start).Find(&rows)
@@ -464,11 +465,11 @@ type sqlChunkDBS struct {
 	dumpedBatchSeg
 }
 
-func (s *sqlChunkDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlChunkDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	return sqlQueryBatch(ctx, s, opt, ch, s.doQuery)
 }
 
-func (s *sqlChunkDBS) doQuery(ctx Context, limit, start int, sum *int64) (proto.Message, error) {
+func (s *sqlChunkDBS) doQuery(ctx context.Context, limit, start int, sum *int64) (proto.Message, error) {
 	var rows []chunk
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Limit(limit, start).Find(&rows)
@@ -492,12 +493,7 @@ func (s *sqlChunkDBS) doQuery(ctx Context, limit, start int, sum *int64) (proto.
 		var ps *pb.Slice
 		for i := 0; i < n; i++ {
 			ps = s.pools[1].Get().(*pb.Slice)
-			rb := utils.ReadBuffer(c.Slices[i*sliceBytes:])
-			ps.Pos = rb.Get32()
-			ps.Id = rb.Get64()
-			ps.Size = rb.Get32()
-			ps.Off = rb.Get32()
-			ps.Len = rb.Get32()
+			UnmarshalSlicePB(c.Slices[i*sliceBytes:], ps)
 			pc.Slices = append(pc.Slices, ps)
 		}
 		pcs.List = append(pcs.List, pc)
@@ -523,21 +519,15 @@ type sqlEdgeDBS struct {
 	lock sync.Mutex
 }
 
-func (s *sqlEdgeDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlEdgeDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+	ctx.WithValue("parents", make(map[uint64][]uint64))
 	return sqlQueryBatch(ctx, s, opt, ch, s.doQuery)
 }
 
-func (s *sqlEdgeDBS) doQuery(ctx Context, limit, start int, sum *int64) (proto.Message, error) {
+func (s *sqlEdgeDBS) doQuery(ctx context.Context, limit, start int, sum *int64) (proto.Message, error) {
 	// TODO: optimize parents
-	var parents map[uint64][]uint64
 	s.lock.Lock()
-	val := ctx.Value("parents")
-	if val == nil {
-		parents = make(map[uint64][]uint64)
-		ctx.WithValue("parents", parents)
-	} else {
-		parents = val.(map[uint64][]uint64)
-	}
+	parents := ctx.Value("parents").(map[uint64][]uint64)
 	s.lock.Unlock()
 
 	var rows []edge
@@ -581,7 +571,7 @@ type sqlParentDS struct {
 	dumpedSeg
 }
 
-func (s *sqlParentDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlParentDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	val := ctx.Value("parents")
 	if val == nil {
 		return nil
@@ -626,11 +616,11 @@ type sqlSymlinkDBS struct {
 	dumpedBatchSeg
 }
 
-func (s *sqlSymlinkDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlSymlinkDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	return sqlQueryBatch(ctx, s, opt, ch, s.doQuery)
 }
 
-func (s *sqlSymlinkDBS) doQuery(ctx Context, limit, start int, sum *int64) (proto.Message, error) {
+func (s *sqlSymlinkDBS) doQuery(ctx context.Context, limit, start int, sum *int64) (proto.Message, error) {
 	var rows []symlink
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Limit(limit, start).Find(&rows)
@@ -662,67 +652,12 @@ func (s *sqlSymlinkDBS) release(msg proto.Message) {
 	pss.List = nil
 }
 
-func (m *dbMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) (err error) {
-	opt = opt.check()
-
-	bak := NewBakFormat()
-	ch := make(chan *dumpedResult, 100)
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		var err error
-		defer func() {
-			if err != nil {
-				ctx.Cancel()
-			} else {
-				close(ch)
-			}
-			wg.Done()
-		}()
-
-		for typ := SegTypeFormat; typ < SegTypeMax; typ++ {
-			seg := m.BuildDumpedSeg(typ, opt)
-			if seg == nil {
-				logger.Warnf("skip dump segment %d", typ)
-				continue
-			}
-			if err = seg.query(ctx, opt, ch); err != nil {
-				return
-			}
-		}
-	}()
-
-	finished := false
-	for !finished {
-		select {
-		case <-ctx.Done():
-			wg.Wait()
-			return ctx.Err()
-		case res, ok := <-ch:
-			if !ok {
-				finished = true
-				break
-			}
-			if err := bak.WriteSegment(w, &BakSegment{Val: res.msg}); err != nil {
-				logger.Errorf("write %s err: %v", res.seg, err)
-				ctx.Cancel()
-				wg.Wait()
-				return err
-			}
-			res.seg.release(res.msg)
-		}
-	}
-
-	wg.Wait()
-	return bak.WriteFooter(w)
-}
-
 type sqlFormatLS struct {
 	loadedSeg
 }
 
-func (s *sqlFormatLS) insert(ctx Context, msg proto.Message) error {
-	format := UnmarshalFormatPB(msg.(*pb.Format))
+func (s *sqlFormatLS) load(ctx Context, msg proto.Message) error {
+	format := ConvertFormatFromPB(msg.(*pb.Format))
 	fData, _ := json.MarshalIndent(*format, "", "")
 	return s.meta.(*dbMeta).insertSQL([]interface{}{
 		&setting{
@@ -736,7 +671,7 @@ type sqlCounterLS struct {
 	loadedSeg
 }
 
-func (s *sqlCounterLS) insert(ctx Context, msg proto.Message) error {
+func (s *sqlCounterLS) load(ctx Context, msg proto.Message) error {
 	counters := msg.(*pb.Counters)
 	fields := getSQLCounterFields(counters)
 
@@ -752,7 +687,7 @@ type sqlSustainedLS struct {
 	loadedSeg
 }
 
-func (s *sqlSustainedLS) insert(ctx Context, msg proto.Message) error {
+func (s *sqlSustainedLS) load(ctx Context, msg proto.Message) error {
 	sustaineds := msg.(*pb.SustainedList)
 	rows := make([]interface{}, 0, len(sustaineds.List))
 	for _, s := range sustaineds.List {
@@ -760,7 +695,7 @@ func (s *sqlSustainedLS) insert(ctx Context, msg proto.Message) error {
 			rows = append(rows, sustained{Sid: s.Sid, Inode: Ino(inode)})
 		}
 	}
-	logger.Debugf("insert %s total num %d", s, len(rows))
+	logger.Debugf("insert %s num %d", s, len(rows))
 	return s.meta.(*dbMeta).insertSQL(rows)
 }
 
@@ -768,13 +703,13 @@ type sqlDelFileLS struct {
 	loadedSeg
 }
 
-func (s *sqlDelFileLS) insert(ctx Context, msg proto.Message) error {
+func (s *sqlDelFileLS) load(ctx Context, msg proto.Message) error {
 	delfiles := msg.(*pb.DelFileList)
 	rows := make([]interface{}, 0, len(delfiles.List))
 	for _, f := range delfiles.List {
 		rows = append(rows, &delfile{Inode: Ino(f.Inode), Length: f.Length, Expire: f.Expire})
 	}
-	logger.Debugf("insert %s total num %d", s, len(rows))
+	logger.Debugf("insert %s num %d", s, len(rows))
 	return s.meta.(*dbMeta).insertSQL(rows)
 }
 
@@ -782,13 +717,13 @@ type sqlSliceRefLS struct {
 	loadedSeg
 }
 
-func (s *sqlSliceRefLS) insert(ctx Context, msg proto.Message) error {
+func (s *sqlSliceRefLS) load(ctx Context, msg proto.Message) error {
 	srs := msg.(*pb.SliceRefList)
 	rows := make([]interface{}, 0, len(srs.List))
 	for _, sr := range srs.List {
 		rows = append(rows, &sliceRef{Id: sr.Id, Size: sr.Size, Refs: int(sr.Refs)})
 	}
-	logger.Debugf("insert %s total num %d", s, len(rows))
+	logger.Debugf("insert %s num %d", s, len(rows))
 	return s.meta.(*dbMeta).insertSQL(rows)
 }
 
@@ -796,7 +731,7 @@ type sqlAclLS struct {
 	loadedSeg
 }
 
-func (s *sqlAclLS) insert(ctx Context, msg proto.Message) error {
+func (s *sqlAclLS) load(ctx Context, msg proto.Message) error {
 	acls := msg.(*pb.AclList)
 	rows := make([]interface{}, 0, len(acls.List))
 	for _, a := range acls.List {
@@ -822,7 +757,7 @@ func (s *sqlAclLS) insert(ctx Context, msg proto.Message) error {
 		ba.NamedGroups = w.Bytes()
 		rows = append(rows, ba)
 	}
-	logger.Debugf("insert %s total num %d", s, len(rows))
+	logger.Debugf("insert %s num %d", s, len(rows))
 	return s.meta.(*dbMeta).insertSQL(rows)
 }
 
@@ -830,13 +765,13 @@ type sqlXattrLS struct {
 	loadedSeg
 }
 
-func (s *sqlXattrLS) insert(ctx Context, msg proto.Message) error {
+func (s *sqlXattrLS) load(ctx Context, msg proto.Message) error {
 	xattrs := msg.(*pb.XattrList)
 	rows := make([]interface{}, 0, len(xattrs.List))
 	for _, x := range xattrs.List {
 		rows = append(rows, &xattr{Inode: Ino(x.Inode), Name: x.Name, Value: x.Value})
 	}
-	logger.Debugf("insert %s total num %d", s, len(rows))
+	logger.Debugf("insert %s num %d", s, len(rows))
 	return s.meta.(*dbMeta).insertSQL(rows)
 }
 
@@ -844,7 +779,7 @@ type sqlQuotaLS struct {
 	loadedSeg
 }
 
-func (s *sqlQuotaLS) insert(ctx Context, msg proto.Message) error {
+func (s *sqlQuotaLS) load(ctx Context, msg proto.Message) error {
 	quotas := msg.(*pb.QuotaList)
 	rows := make([]interface{}, 0, len(quotas.List))
 	for _, q := range quotas.List {
@@ -856,7 +791,7 @@ func (s *sqlQuotaLS) insert(ctx Context, msg proto.Message) error {
 			UsedInodes: q.UsedInodes,
 		})
 	}
-	logger.Debugf("insert %s total num %d", s, len(rows))
+	logger.Debugf("insert %s num %d", s, len(rows))
 	return s.meta.(*dbMeta).insertSQL(rows)
 }
 
@@ -864,7 +799,7 @@ type sqlStatLS struct {
 	loadedSeg
 }
 
-func (s *sqlStatLS) insert(ctx Context, msg proto.Message) error {
+func (s *sqlStatLS) load(ctx Context, msg proto.Message) error {
 	stats := msg.(*pb.StatList)
 	rows := make([]interface{}, 0, len(stats.List))
 	for _, st := range stats.List {
@@ -875,7 +810,7 @@ func (s *sqlStatLS) insert(ctx Context, msg proto.Message) error {
 			UsedSpace:  st.UsedSpace,
 		})
 	}
-	logger.Debugf("insert %s total num %d", s, len(rows))
+	logger.Debugf("insert %s num %d", s, len(rows))
 	return s.meta.(*dbMeta).insertSQL(rows)
 }
 
@@ -884,7 +819,7 @@ type sqlNodeLS struct {
 	pools []*sync.Pool
 }
 
-func (s *sqlNodeLS) insert(ctx Context, msg proto.Message) error {
+func (s *sqlNodeLS) load(ctx Context, msg proto.Message) error {
 	nodes := msg.(*pb.NodeList)
 	rows := make([]interface{}, 0, len(nodes.List))
 	var pn *node
@@ -914,7 +849,7 @@ func (s *sqlNodeLS) insert(ctx Context, msg proto.Message) error {
 	for _, n := range rows {
 		s.pools[0].Put(n)
 	}
-	logger.Debugf("insert %s total num %d", s, len(rows))
+	logger.Debugf("insert %s num %d", s, len(rows))
 	return err
 }
 
@@ -923,7 +858,7 @@ type sqlChunkLS struct {
 	pools []*sync.Pool
 }
 
-func (s *sqlChunkLS) insert(ctx Context, msg proto.Message) error {
+func (s *sqlChunkLS) load(ctx Context, msg proto.Message) error {
 	chunks := msg.(*pb.ChunkList)
 	rows := make([]interface{}, 0, len(chunks.List))
 	var pc *chunk
@@ -934,18 +869,14 @@ func (s *sqlChunkLS) insert(ctx Context, msg proto.Message) error {
 		pc.Indx = c.Index
 
 		n := len(c.Slices) * sliceBytes
-		pc.Slices = s.pools[1].Get().([]byte)[:0]
-		if cap(pc.Slices) < n {
-			pc.Slices = make([]byte, 0, n)
+		pc.Slices = s.pools[1].Get().([]byte)
+		if len(pc.Slices) < n {
+			pc.Slices = make([]byte, n)
 		}
-		for _, s := range c.Slices {
-			// keep BigEndian order for slices, same as in slice.go
-			pc.Slices = binary.BigEndian.AppendUint32(pc.Slices, s.Pos)
-			pc.Slices = binary.BigEndian.AppendUint64(pc.Slices, s.Id)
-			pc.Slices = binary.BigEndian.AppendUint32(pc.Slices, s.Size)
-			pc.Slices = binary.BigEndian.AppendUint32(pc.Slices, s.Off)
-			pc.Slices = binary.BigEndian.AppendUint32(pc.Slices, s.Len)
+		for i, s := range c.Slices {
+			MarshalSlicePB(s, pc.Slices[i*sliceBytes:])
 		}
+		pc.Slices = pc.Slices[:n]
 		rows = append(rows, pc)
 	}
 	err := s.meta.(*dbMeta).insertSQL(rows)
@@ -955,7 +886,7 @@ func (s *sqlChunkLS) insert(ctx Context, msg proto.Message) error {
 		s.pools[1].Put(c.Slices)
 		s.pools[0].Put(c)
 	}
-	logger.Debugf("insert %s total num %d", s, len(rows))
+	logger.Debugf("insert %s num %d", s, len(rows))
 	return err
 }
 
@@ -964,7 +895,7 @@ type sqlEdgeLS struct {
 	pools []*sync.Pool
 }
 
-func (s *sqlEdgeLS) insert(ctx Context, msg proto.Message) error {
+func (s *sqlEdgeLS) load(ctx Context, msg proto.Message) error {
 	edges := msg.(*pb.EdgeList)
 	rows := make([]interface{}, 0, len(edges.List))
 	var pe *edge
@@ -982,7 +913,7 @@ func (s *sqlEdgeLS) insert(ctx Context, msg proto.Message) error {
 	for _, e := range rows {
 		s.pools[0].Put(e)
 	}
-	logger.Debugf("insert %s total num %d", s, len(rows))
+	logger.Debugf("insert %s num %d", s, len(rows))
 	return err
 }
 
@@ -990,7 +921,7 @@ type sqlParentLS struct {
 	loadedSeg
 }
 
-func (s *sqlParentLS) insert(ctx Context, msg proto.Message) error {
+func (s *sqlParentLS) load(ctx Context, msg proto.Message) error {
 	return nil // No need for SQL, skip.
 }
 
@@ -999,7 +930,7 @@ type sqlSymlinkLS struct {
 	pools []*sync.Pool
 }
 
-func (s *sqlSymlinkLS) insert(ctx Context, msg proto.Message) error {
+func (s *sqlSymlinkLS) load(ctx Context, msg proto.Message) error {
 	symlinks := msg.(*pb.SymlinkList)
 	rows := make([]interface{}, 0, len(symlinks.List))
 	var ps *symlink
@@ -1014,7 +945,7 @@ func (s *sqlSymlinkLS) insert(ctx Context, msg proto.Message) error {
 	for _, sl := range rows {
 		s.pools[0].Put(sl)
 	}
-	logger.Debugf("insert %s total num %d", s, len(rows))
+	logger.Debugf("insert %s num %d", s, len(rows))
 	return err
 }
 
@@ -1041,74 +972,12 @@ func (m *dbMeta) insertSQL(beans []interface{}) error {
 	return nil
 }
 
-func (m *dbMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
-	opt = opt.check()
-	// TODO: pre check
+func (m *dbMeta) prepareLoad(ctx Context) error {
 	if err := m.checkAddr(); err != nil {
 		return err
 	}
 	if err := m.syncAllTables(); err != nil {
 		return err
 	}
-
-	type task struct {
-		msg proto.Message
-		seg iLoadedSeg
-	}
-
-	var wg sync.WaitGroup
-	taskCh := make(chan *task, 100)
-
-	workerFunc := func(ctx Context, taskCh <-chan *task) {
-		defer wg.Done()
-		finished := false
-		for !finished {
-			select {
-			case <-ctx.Done():
-				return
-			case task, ok := <-taskCh:
-				if !ok {
-					finished = true
-					break
-				}
-
-				if err := task.seg.insert(ctx, task.msg); err != nil {
-					logger.Errorf("failed to insert %s: %s", task.seg, err)
-					ctx.Cancel()
-					return
-				}
-			}
-		}
-	}
-
-	for i := 0; i < opt.CoNum; i++ {
-		wg.Add(1)
-		go workerFunc(ctx, taskCh)
-	}
-
-	bak := NewBakFormat()
-	finished := false
-	for !finished {
-		seg, err := bak.ReadSegment(r)
-		if err != nil {
-			if errors.Is(err, ErrBakEOF) {
-				finished = true
-				close(taskCh)
-				break
-			}
-			ctx.Cancel()
-			wg.Wait()
-			return err
-		}
-
-		ls := m.BuildLoadedSeg(int(seg.Typ), opt)
-		select {
-		case <-ctx.Done():
-			wg.Wait()
-			return ctx.Err()
-		case taskCh <- &task{seg.Val, ls}:
-		}
-	}
-	wg.Wait()
 	return nil
 }

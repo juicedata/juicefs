@@ -5,15 +5,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
@@ -23,7 +21,7 @@ var (
 	redisBatchSize = 10000
 )
 
-func (m *redisMeta) BuildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
+func (m *redisMeta) buildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
 	switch typ {
 	case SegTypeFormat:
 		return &formatDS{dumpedSeg{typ: typ}, m.getFormat(), opt.KeepSecret}
@@ -34,7 +32,7 @@ func (m *redisMeta) BuildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
 	case SegTypeDelFile:
 		return &redisDelFileDS{dumpedSeg{typ: typ, meta: m}}
 	case SegTypeSliceRef:
-		return &redisSliceRefDS{dumpedSeg{typ: typ, meta: m}, []*sync.Pool{{New: func() interface{} { return &pb.SliceRef{} }}}}
+		return &redisSliceRefDS{dumpedSeg{typ: typ, meta: m}}
 	case SegTypeAcl:
 		return &redisAclDS{dumpedSeg{typ: typ, meta: m}}
 	case SegTypeXattr:
@@ -60,16 +58,21 @@ func (m *redisMeta) BuildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
 	return nil
 }
 
+var redisLoadedPoolOnce sync.Once
+var redisLoadedPools = make(map[int][]*sync.Pool)
+
 func (m *redisMeta) buildLoadedPools(typ int) []*sync.Pool {
-	loadedPoolOnce.Do(func() {
-		loadedPools = map[int][]*sync.Pool{
-			SegTypeNode: {{New: func() interface{} { return make([]byte, BakNodeSizeWithoutAcl) }}, {New: func() interface{} { return make([]byte, BakNodeSize) }}},
+	redisLoadedPoolOnce.Do(func() {
+		redisLoadedPools = map[int][]*sync.Pool{
+			SegTypeNode:  {{New: func() interface{} { return make([]byte, BakNodeSizeWithoutAcl) }}, {New: func() interface{} { return make([]byte, BakNodeSize) }}},
+			SegTypeChunk: {{New: func() interface{} { return make([]byte, sliceBytes) }}},
+			SegTypeEdge:  {{New: func() interface{} { return make([]byte, 9) }}},
 		}
 	})
-	return loadedPools[typ]
+	return redisLoadedPools[typ]
 }
 
-func (m *redisMeta) BuildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
+func (m *redisMeta) buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
 	switch typ {
 	case SegTypeFormat:
 		return &redisFormatLS{loadedSeg{typ: typ, meta: m}}
@@ -92,9 +95,9 @@ func (m *redisMeta) BuildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
 	case SegTypeNode:
 		return &redisNodeLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
 	case SegTypeChunk:
-		return &redisChunkLS{loadedSeg{typ: typ, meta: m}}
+		return &redisChunkLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
 	case SegTypeEdge:
-		return &redisEdgeLS{loadedSeg{typ: typ, meta: m}}
+		return &redisEdgeLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
 	case SegTypeParent:
 		return &redisParentLS{loadedSeg{typ: typ, meta: m}}
 	case SegTypeSymlink:
@@ -126,18 +129,18 @@ func execPipe(ctx context.Context, pipe redis.Pipeliner) error {
 	return err
 }
 
-func tryExecPipe(ctx context.Context, pipe redis.Pipeliner) error {
+func tryExecPipe(ctx context.Context, pipe redis.Pipeliner) (bool, error) {
 	if pipe.Len() < redisBatchSize {
-		return nil
+		return false, nil
 	}
-	return execPipe(ctx, pipe)
+	return true, execPipe(ctx, pipe)
 }
 
 type redisCounterDS struct {
 	dumpedSeg
 }
 
-func (s *redisCounterDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisCounterDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	counters := &pb.Counters{}
 	fieldMap := getRedisCounterFields(meta.prefix, counters)
@@ -173,7 +176,7 @@ type redisSustainedDS struct {
 	dumpedSeg
 }
 
-func (s *redisSustainedDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisSustainedDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	keys, err := meta.rdb.ZRange(ctx, meta.allSessions(), 0, -1).Result()
 	if err != nil {
@@ -203,7 +206,7 @@ func (s *redisSustainedDS) query(ctx Context, opt *DumpOption, ch chan *dumpedRe
 	if err := dumpResult(ctx, ch, &dumpedResult{s, pss}); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, len(pss.List))
+	logger.Debugf("dump %s num %d", s, len(pss.List))
 	return nil
 }
 
@@ -211,7 +214,7 @@ type redisDelFileDS struct {
 	dumpedSeg
 }
 
-func (s *redisDelFileDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisDelFileDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	zs, err := meta.rdb.ZRangeWithScores(ctx, meta.delfiles(), 0, -1).Result()
 	if err != nil {
@@ -232,16 +235,15 @@ func (s *redisDelFileDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResu
 	if err := dumpResult(ctx, ch, &dumpedResult{s, delFiles}); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, len(delFiles.List))
+	logger.Debugf("dump %s num %d", s, len(delFiles.List))
 	return nil
 }
 
 type redisSliceRefDS struct {
 	dumpedSeg
-	pools []*sync.Pool
 }
 
-func (s *redisSliceRefDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisSliceRefDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	sls := &pb.SliceRefList{List: make([]*pb.SliceRef, 0, 1024)}
 	var key string
@@ -272,7 +274,7 @@ func (s *redisSliceRefDS) query(ctx Context, opt *DumpOption, ch chan *dumpedRes
 	if err := dumpResult(ctx, ch, &dumpedResult{s, sls}); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, len(sls.List))
+	logger.Debugf("dump %s num %d", s, len(sls.List))
 	return nil
 }
 
@@ -280,7 +282,7 @@ type redisAclDS struct {
 	dumpedSeg
 }
 
-func (s *redisAclDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisAclDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	vals, err := meta.rdb.HGetAll(ctx, meta.aclKey()).Result()
 	if err != nil {
@@ -290,40 +292,15 @@ func (s *redisAclDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) 
 	acls := &pb.AclList{List: make([]*pb.Acl, 0, len(vals))}
 	for k, v := range vals {
 		id, _ := strconv.ParseUint(k, 10, 32)
-		acl := &pb.Acl{
-			Id: uint32(id),
-		}
-
-		rb := utils.ReadBuffer([]byte(v))
-		acl.Owner = uint32(rb.Get16())
-		acl.Group = uint32(rb.Get16())
-		acl.Mask = uint32(rb.Get16())
-		acl.Other = uint32(rb.Get16())
-
-		uCnt := rb.Get32()
-		acl.Users = make([]*pb.AclEntry, 0, uCnt)
-		for i := 0; i < int(uCnt); i++ {
-			acl.Users = append(acl.Users, &pb.AclEntry{
-				Id:   rb.Get32(),
-				Perm: uint32(rb.Get16()),
-			})
-		}
-
-		gCnt := rb.Get32()
-		acl.Groups = make([]*pb.AclEntry, 0, gCnt)
-		for i := 0; i < int(gCnt); i++ {
-			acl.Groups = append(acl.Groups, &pb.AclEntry{
-				Id:   rb.Get32(),
-				Perm: uint32(rb.Get16()),
-			})
-		}
+		acl := UnmarshalAclPB([]byte(v))
+		acl.Id = uint32(id)
 		acls.List = append(acls.List, acl)
 	}
 
 	if err := dumpResult(ctx, ch, &dumpedResult{s, acls}); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, len(acls.List))
+	logger.Debugf("dump %s num %d", s, len(acls.List))
 	return nil
 }
 
@@ -331,7 +308,7 @@ type redisXattrDS struct {
 	dumpedSeg
 }
 
-func (s *redisXattrDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisXattrDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	xattrs := &pb.XattrList{List: make([]*pb.Xattr, 0, 128)}
 	if err := meta.scan(ctx, "x*", func(keys []string) error {
@@ -369,7 +346,7 @@ func (s *redisXattrDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult
 	if err := dumpResult(ctx, ch, &dumpedResult{s, xattrs}); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, len(xattrs.List))
+	logger.Debugf("dump %s num %d", s, len(xattrs.List))
 	return nil
 }
 
@@ -377,7 +354,7 @@ type redisQuotaDS struct {
 	dumpedSeg
 }
 
-func (s *redisQuotaDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisQuotaDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 
 	quotas := make(map[Ino]*pb.Quota)
@@ -445,7 +422,7 @@ func (s *redisQuotaDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult
 	if err := dumpResult(ctx, ch, &dumpedResult{s, pqs}); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, len(pqs.List))
+	logger.Debugf("dump %s num %d", s, len(pqs.List))
 	return nil
 }
 
@@ -453,7 +430,7 @@ type redisStatDS struct {
 	dumpedSeg
 }
 
-func (s *redisStatDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisStatDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 
 	stats := make(map[Ino]*pb.Stat)
@@ -518,7 +495,7 @@ func (s *redisStatDS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult)
 	if err := dumpResult(ctx, ch, &dumpedResult{s, pss}); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, len(pss.List))
+	logger.Debugf("dump %s num %d", s, len(pss.List))
 	return nil
 }
 
@@ -526,16 +503,16 @@ type redisNodeDBS struct {
 	dumpedBatchSeg
 }
 
-func (s *redisNodeDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisNodeDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
-	eg, nCtx := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(opt.CoNum)
 	var sum int64
 
-	_ = meta.scan(nCtx, "i*", func(iKeys []string) error {
+	if err := meta.scan(egCtx, "i*", func(iKeys []string) error {
 		tKeys := iKeys
 		eg.Go(func() error {
-			vals, err := meta.rdb.MGet(nCtx, tKeys...).Result()
+			vals, err := meta.rdb.MGet(egCtx, tKeys...).Result()
 			if err != nil {
 				return err
 			}
@@ -549,43 +526,23 @@ func (s *redisNodeDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult
 				}
 				inode, _ = strconv.ParseUint(tKeys[idx][len(meta.prefix)+1:], 10, 64)
 				node := s.pools[0].Get().(*pb.Node)
-				rb := utils.FromBuffer([]byte(v.(string)))
 				node.Inode = inode
-				node.Flags = uint32(rb.Get8())
-				node.Mode = uint32(rb.Get16())
-				node.Type = node.Mode >> 12
-				node.Mode &= 0777
-				node.Uid = rb.Get32()
-				node.Gid = rb.Get32()
-				node.Atime = int64(rb.Get64())
-				node.AtimeNsec = int32(rb.Get32())
-				node.Mtime = int64(rb.Get64())
-				node.MtimeNsec = int32(rb.Get32())
-				node.Ctime = int64(rb.Get64())
-				node.CtimeNsec = int32(rb.Get32())
-				node.Nlink = rb.Get32()
-				node.Length = rb.Get64()
-				node.Rdev = rb.Get32()
-				if rb.Left() >= 8 {
-					node.Parent = rb.Get64()
-				}
-				if rb.Left() >= 8 {
-					node.AccessAclId = rb.Get32()
-					node.DefaultAclId = rb.Get32()
-				}
+				UnmarshalNodePB([]byte(v.(string)), node)
 				pnb.List = append(pnb.List, node)
 			}
 			atomic.AddInt64(&sum, int64(len(pnb.List)))
-			return dumpResult(nCtx, ch, &dumpedResult{s, pnb})
+			return dumpResult(egCtx, ch, &dumpedResult{s, pnb})
 		})
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	if err := eg.Wait(); err != nil {
 		return err
 	}
 
-	logger.Debugf("dump %s total num %d", s, sum)
+	logger.Debugf("dump %s num %d", s, sum)
 	return nil
 }
 
@@ -601,14 +558,14 @@ type redisChunkDBS struct {
 	dumpedBatchSeg
 }
 
-func (s *redisChunkDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisChunkDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	type chk struct {
 		inode uint64
 		index uint32
 	}
 
 	meta := s.meta.(*redisMeta)
-	eg, nCtx := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(opt.CoNum)
 	var sum int64
 
@@ -616,7 +573,7 @@ func (s *redisChunkDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResul
 		New: func() any { return new(chk) },
 	}
 
-	_ = meta.scan(nCtx, "c*", func(cKeys []string) error {
+	if err := meta.scan(egCtx, "c*", func(cKeys []string) error {
 		pipe := meta.rdb.Pipeline()
 		chks := make([]*chk, 0, redisBatchSize)
 
@@ -627,7 +584,7 @@ func (s *redisChunkDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResul
 			}
 			ino, _ := strconv.ParseUint(ps[0][len(meta.prefix)+1:], 10, 64)
 			idx, _ := strconv.ParseUint(ps[1], 10, 32)
-			pipe.LRange(ctx, meta.chunkKey(Ino(ino), uint32(idx)), 0, -1)
+			pipe.LRange(egCtx, meta.chunkKey(Ino(ino), uint32(idx)), 0, -1)
 			c := cPool.Get().(*chk)
 			c.inode, c.index = ino, uint32(idx)
 			chks = append(chks, c)
@@ -635,7 +592,7 @@ func (s *redisChunkDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResul
 
 		tPipe, tChks := pipe, chks
 		eg.Go(func() error {
-			cmds, err := tPipe.Exec(nCtx)
+			cmds, err := tPipe.Exec(egCtx)
 			if err != nil {
 				logger.Errorf("chunk pipeline exec err: %v", err)
 				return err
@@ -665,27 +622,24 @@ func (s *redisChunkDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResul
 						continue
 					}
 					ps = s.pools[1].Get().(*pb.Slice)
-					rb := utils.ReadBuffer([]byte(val))
-					ps.Pos = rb.Get32()
-					ps.Id = rb.Get64()
-					ps.Size = rb.Get32()
-					ps.Off = rb.Get32()
-					ps.Len = rb.Get32()
+					UnmarshalSlicePB([]byte(val), ps)
 					pc.Slices = append(pc.Slices, ps)
 				}
 				pcs.List = append(pcs.List, pc)
 			}
 
 			atomic.AddInt64(&sum, int64(len(pcs.List)))
-			return dumpResult(nCtx, ch, &dumpedResult{s, pcs})
+			return dumpResult(egCtx, ch, &dumpedResult{s, pcs})
 		})
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	if err := eg.Wait(); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, sum)
+	logger.Debugf("dump %s num %d", s, sum)
 	return nil
 }
 
@@ -705,14 +659,14 @@ type redisEdgeDBS struct {
 	dumpedBatchSeg
 }
 
-func (s *redisEdgeDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisEdgeDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
-	eg, nCtx := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(opt.CoNum)
 	var sum int64
 
 	// TODO merge small dirs?
-	_ = meta.scan(nCtx, "d[0-9]*", func(pKeys []string) error {
+	if err := meta.scan(egCtx, "d[0-9]*", func(pKeys []string) error {
 		for _, pKey := range pKeys {
 			parent, _ := strconv.ParseUint(pKey[len(meta.prefix)+1:], 10, 64)
 			eg.Go(func() error {
@@ -720,7 +674,7 @@ func (s *redisEdgeDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult
 					List: make([]*pb.Edge, 0, redisBatchSize),
 				}
 				var pe *pb.Edge
-				err := meta.hscan(nCtx, meta.entryKey(Ino(parent)), func(keys []string) error {
+				err := meta.hscan(egCtx, meta.entryKey(Ino(parent)), func(keys []string) error {
 					for i := 0; i < len(keys); i += 2 {
 						pe = s.pools[0].Get().(*pb.Edge)
 						pe.Parent = parent
@@ -735,16 +689,18 @@ func (s *redisEdgeDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult
 					return err
 				}
 				atomic.AddInt64(&sum, int64(len(pes.List)))
-				return dumpResult(nCtx, ch, &dumpedResult{s, pes})
+				return dumpResult(egCtx, ch, &dumpedResult{s, pes})
 			})
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	if err := eg.Wait(); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, sum)
+	logger.Debugf("dump %s num %d", s, sum)
 	return nil
 }
 
@@ -760,7 +716,7 @@ type redisParentDBS struct {
 	dumpedSeg
 }
 
-func (s *redisParentDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisParentDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	// TODO: optimize?
 	meta := s.meta.(*redisMeta)
 	pls := &pb.ParentList{
@@ -803,7 +759,7 @@ func (s *redisParentDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResu
 	if err := dumpResult(ctx, ch, &dumpedResult{s, pls}); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, len(pls.List))
+	logger.Debugf("dump %s num %d", s, len(pls.List))
 	return nil
 }
 
@@ -811,16 +767,16 @@ type redisSymlinkDBS struct {
 	dumpedBatchSeg
 }
 
-func (s *redisSymlinkDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisSymlinkDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
-	eg, nCtx := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(opt.CoNum)
 	var sum int64
 
-	_ = meta.scan(nCtx, "s[0-9]*", func(sKeys []string) error {
+	if err := meta.scan(egCtx, "s[0-9]*", func(sKeys []string) error {
 		tKeys := sKeys
 		eg.Go(func() error {
-			vals, err := meta.rdb.MGet(nCtx, tKeys...).Result()
+			vals, err := meta.rdb.MGet(egCtx, tKeys...).Result()
 			if err != nil {
 				return err
 			}
@@ -835,15 +791,17 @@ func (s *redisSymlinkDBS) query(ctx Context, opt *DumpOption, ch chan *dumpedRes
 				pss.List = append(pss.List, ps)
 			}
 			atomic.AddInt64(&sum, int64(len(pss.List)))
-			return dumpResult(nCtx, ch, &dumpedResult{s, pss})
+			return dumpResult(egCtx, ch, &dumpedResult{s, pss})
 		})
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	if err := eg.Wait(); err != nil {
 		return err
 	}
-	logger.Debugf("dump %s total num %d", s, sum)
+	logger.Debugf("dump %s num %d", s, sum)
 	return nil
 }
 
@@ -855,69 +813,13 @@ func (s *redisSymlinkDBS) release(msg proto.Message) {
 	pss.List = nil
 }
 
-func (m *redisMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) (err error) {
-	opt = opt.check()
-
-	bak := NewBakFormat()
-	ch := make(chan *dumpedResult, 100)
-	wg := &sync.WaitGroup{}
-
-	wg.Add(1)
-	go func() {
-		var err error
-		defer func() {
-			if err != nil {
-				ctx.Cancel()
-			} else {
-				close(ch)
-			}
-			wg.Done()
-		}()
-
-		for typ := SegTypeFormat; typ <= SegTypeSymlink; typ++ {
-			seg := m.BuildDumpedSeg(typ, opt)
-			if seg == nil {
-				logger.Warnf("skip dump segment %d", typ)
-				continue
-			}
-			if err = seg.query(ctx, opt, ch); err != nil {
-				return
-			}
-		}
-	}()
-
-	finished := false
-	for !finished {
-		select {
-		case <-ctx.Done():
-			wg.Wait()
-			return ctx.Err()
-		case res, ok := <-ch:
-			if !ok {
-				finished = true
-				break
-			}
-			if err := bak.WriteSegment(w, &BakSegment{Val: res.msg}); err != nil {
-				logger.Errorf("write %s err: %v", res.seg, err)
-				ctx.Cancel()
-				wg.Wait()
-				return err
-			}
-			res.seg.release(res.msg)
-		}
-	}
-
-	wg.Wait()
-	return bak.WriteFooter(w)
-}
-
 type redisFormatLS struct {
 	loadedSeg
 }
 
-func (s *redisFormatLS) insert(ctx Context, msg proto.Message) error {
+func (s *redisFormatLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
-	format := UnmarshalFormatPB(msg.(*pb.Format))
+	format := ConvertFormatFromPB(msg.(*pb.Format))
 	fData, _ := json.MarshalIndent(*format, "", "")
 	return meta.rdb.Set(ctx, meta.setting(), fData, 0).Err()
 }
@@ -926,10 +828,11 @@ type redisCounterLS struct {
 	loadedSeg
 }
 
-func (s *redisCounterLS) insert(ctx Context, msg proto.Message) error {
+func (s *redisCounterLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
 	cs := make(map[string]interface{})
-	for k, v := range getRedisCounterFields(meta.prefix, msg.(*pb.Counters)) {
+	fields := getRedisCounterFields(meta.prefix, msg.(*pb.Counters))
+	for k, v := range fields {
 		if k == meta.prefix+"nextinode" || k == meta.prefix+"nextchunk" {
 			cs[k] = *v - 1
 		} else {
@@ -943,7 +846,7 @@ type redisSustainedLS struct {
 	loadedSeg
 }
 
-func (s *redisSustainedLS) insert(ctx Context, msg proto.Message) error {
+func (s *redisSustainedLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
 	pss := msg.(*pb.SustainedList)
 	pipe := meta.rdb.Pipeline()
@@ -961,7 +864,7 @@ type redisDelFileLS struct {
 	loadedSeg
 }
 
-func (s *redisDelFileLS) insert(ctx Context, msg proto.Message) error {
+func (s *redisDelFileLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
 	pds := msg.(*pb.DelFileList)
 	mbs := make([]redis.Z, 0, len(pds.List))
@@ -978,7 +881,7 @@ type redisSliceRefLS struct {
 	loadedSeg
 }
 
-func (s *redisSliceRefLS) insert(ctx Context, msg proto.Message) error {
+func (s *redisSliceRefLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
 	ps := msg.(*pb.SliceRefList)
 
@@ -993,7 +896,7 @@ type redisAclLS struct {
 	loadedSeg
 }
 
-func (s *redisAclLS) insert(ctx Context, msg proto.Message) error {
+func (s *redisAclLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
 	pas := msg.(*pb.AclList)
 
@@ -1003,7 +906,7 @@ func (s *redisAclLS) insert(ctx Context, msg proto.Message) error {
 		if pa.Id > maxId {
 			maxId = pa.Id
 		}
-		acls[strconv.FormatUint(uint64(pa.Id), 10)] = UnmarshalAclPB(pa)
+		acls[strconv.FormatUint(uint64(pa.Id), 10)] = MarshalAclPB(pa)
 	}
 	if err := meta.rdb.HSet(ctx, meta.aclKey(), acls).Err(); err != nil {
 		return err
@@ -1015,7 +918,7 @@ type redisXattrLS struct {
 	loadedSeg
 }
 
-func (s *redisXattrLS) insert(ctx Context, msg proto.Message) error {
+func (s *redisXattrLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
 	pxs := msg.(*pb.XattrList)
 	pipe := meta.rdb.Pipeline()
@@ -1038,7 +941,7 @@ type redisQuotaLS struct {
 	loadedSeg
 }
 
-func (s *redisQuotaLS) insert(ctx Context, msg proto.Message) error {
+func (s *redisQuotaLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
 	pqs := msg.(*pb.QuotaList)
 	pipe := meta.rdb.Pipeline()
@@ -1057,7 +960,7 @@ type redisStatLS struct {
 	loadedSeg
 }
 
-func (s *redisStatLS) insert(ctx Context, msg proto.Message) error {
+func (s *redisStatLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
 	pss := msg.(*pb.StatList)
 	pipe := meta.rdb.Pipeline()
@@ -1077,74 +980,129 @@ type redisNodeLS struct {
 	pools []*sync.Pool
 }
 
-func (s *redisNodeLS) insert(ctx Context, msg proto.Message) error {
+func (s *redisNodeLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
 	pns := msg.(*pb.NodeList)
 	nodes := make(map[string]interface{}, redisBatchSize)
+
+	mset := func(nodes map[string]interface{}) error {
+		if err := meta.rdb.MSet(ctx, nodes).Err(); err != nil {
+			return err
+		}
+		for k, buff := range nodes {
+			if len(buff.([]byte)) == BakNodeSize {
+				s.pools[1].Put(buff)
+			} else {
+				s.pools[0].Put(buff)
+			}
+			delete(nodes, k)
+		}
+		return nil
+	}
+
 	for _, pn := range pns.List {
-		nodes[meta.inodeKey(Ino(pn.Inode))] = UnmarshalNodePB(pn, s.pools[0], s.pools[1])
+		var buff []byte
+		if pn.AccessAclId|pn.DefaultAclId != aclAPI.None {
+			buff = s.pools[1].Get().([]byte)
+		} else {
+			buff = s.pools[0].Get().([]byte)
+		}
+		MarshalNodePB(pn, buff)
+		nodes[meta.inodeKey(Ino(pn.Inode))] = buff
 
 		if len(nodes) >= redisBatchSize {
-			if err := meta.rdb.MSet(ctx, nodes).Err(); err != nil {
+			if err := mset(nodes); err != nil {
 				return err
-			}
-			for k := range nodes {
-				delete(nodes, k)
 			}
 		}
 	}
-	return meta.rdb.MSet(ctx, nodes).Err()
+	return mset(nodes)
 }
 
 type redisChunkLS struct {
 	loadedSeg
+	pools []*sync.Pool
 }
 
-func (s *redisChunkLS) insert(ctx Context, msg proto.Message) error {
+func (s *redisChunkLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
 	pcs := msg.(*pb.ChunkList)
 
 	pipe := meta.rdb.Pipeline()
+	cache := make([][]byte, 0, redisBatchSize)
 	for idx, chk := range pcs.List {
 		slices := make([]string, 0, len(chk.Slices))
 		for _, slice := range chk.Slices {
-			slices = append(slices, string(marshalSlice(slice.Pos, slice.Id, slice.Size, slice.Off, slice.Len)))
+			sliceBuff := s.pools[0].Get().([]byte)
+			MarshalSlicePB(slice, sliceBuff)
+			cache = append(cache, sliceBuff)
+			slices = append(slices, string(sliceBuff))
 		}
 		pipe.RPush(ctx, meta.chunkKey(Ino(chk.Inode), chk.Index), slices)
 
 		if idx%100 == 0 {
-			if err := tryExecPipe(ctx, pipe); err != nil {
+			if ok, err := tryExecPipe(ctx, pipe); err != nil {
 				return err
+			} else if ok {
+				for _, buff := range cache {
+					s.pools[0].Put(buff)
+				}
+				cache = cache[:0]
 			}
 		}
 	}
-	return execPipe(ctx, pipe)
+	if err := execPipe(ctx, pipe); err != nil {
+		return err
+	}
+	for _, buff := range cache {
+		s.pools[0].Put(buff)
+	}
+	return nil
 }
 
 type redisEdgeLS struct {
 	loadedSeg
+	pools []*sync.Pool
 }
 
-func (s *redisEdgeLS) insert(ctx Context, msg proto.Message) error {
+func (s *redisEdgeLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
 	pes := msg.(*pb.EdgeList)
 	pipe := meta.rdb.Pipeline()
-	for idx, pe := range pes.List {
-		pipe.HSet(ctx, meta.entryKey(Ino(pe.Parent)), pe.Name, meta.packEntry(uint8(pe.Type), Ino(pe.Inode)))
+
+	cache := make([][]byte, 0, redisBatchSize)
+	for idx, edge := range pes.List {
+		buff := s.pools[0].Get().([]byte)
+		MarshalEdgePB(edge, buff)
+		cache = append(cache, buff)
+		pipe.HSet(ctx, meta.entryKey(Ino(edge.Parent)), edge.Name, buff)
 		if idx%100 == 0 {
-			if err := tryExecPipe(ctx, pipe); err != nil {
+			if ok, err := tryExecPipe(ctx, pipe); err != nil {
 				return err
+			} else if ok {
+				for _, buff := range cache {
+					s.pools[0].Put(buff)
+				}
+				cache = cache[:0]
 			}
 		}
 	}
-	return execPipe(ctx, pipe)
+
+	if err := execPipe(ctx, pipe); err != nil {
+		return err
+	}
+
+	for _, buff := range cache {
+		s.pools[0].Put(buff)
+	}
+	return nil
 }
 
 type redisParentLS struct {
 	loadedSeg
 }
 
-func (s *redisParentLS) insert(ctx Context, msg proto.Message) error {
+func (s *redisParentLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
 	pls := msg.(*pb.ParentList)
 	pipe := meta.rdb.Pipeline()
@@ -1158,7 +1116,7 @@ type redisSymlinkLS struct {
 	loadedSeg
 }
 
-func (s *redisSymlinkLS) insert(ctx Context, msg proto.Message) error {
+func (s *redisSymlinkLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
 	pss := msg.(*pb.SymlinkList)
 
@@ -1178,10 +1136,7 @@ func (s *redisSymlinkLS) insert(ctx Context, msg proto.Message) error {
 	return meta.rdb.MSet(ctx, syms).Err()
 }
 
-func (m *redisMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
-	opt = opt.check()
-
-	// TODO engine check
+func (m *redisMeta) prepareLoad(ctx Context) error {
 	if _, ok := m.rdb.(*redis.ClusterClient); ok {
 		err := m.scan(ctx, "*", func(keys []string) error {
 			return fmt.Errorf("found key with same prefix: %s", keys[0])
@@ -1198,65 +1153,5 @@ func (m *redisMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error 
 			return fmt.Errorf("Database redis://%s is not empty", m.addr)
 		}
 	}
-
-	type task struct {
-		msg proto.Message
-		seg iLoadedSeg
-	}
-
-	var wg sync.WaitGroup
-	taskCh := make(chan *task, 100)
-
-	workerFunc := func(ctx Context, taskCh <-chan *task) {
-		defer wg.Done()
-		finished := false
-		for !finished {
-			select {
-			case <-ctx.Done():
-				return
-			case task, ok := <-taskCh:
-				if !ok {
-					finished = true
-					break
-				}
-
-				if err := task.seg.insert(ctx, task.msg); err != nil {
-					logger.Errorf("failed to insert %s: %s", task.seg, err)
-					ctx.Cancel()
-					return
-				}
-			}
-		}
-	}
-
-	for i := 0; i < opt.CoNum; i++ {
-		wg.Add(1)
-		go workerFunc(ctx, taskCh)
-	}
-
-	bak := NewBakFormat()
-	finished := false
-	for !finished {
-		seg, err := bak.ReadSegment(r)
-		if err != nil {
-			if errors.Is(err, ErrBakEOF) {
-				finished = true
-				close(taskCh)
-				break
-			}
-			ctx.Cancel()
-			wg.Wait()
-			return err
-		}
-
-		ls := m.BuildLoadedSeg(int(seg.Typ), opt)
-		select {
-		case <-ctx.Done():
-			wg.Wait()
-			return ctx.Err()
-		case taskCh <- &task{seg.Val, ls}:
-		}
-	}
-	wg.Wait()
 	return nil
 }
