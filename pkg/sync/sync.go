@@ -108,8 +108,9 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 
 	marker := start
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
-	objs, err := store.List(prefix, marker, "", maxResults, followLink)
-	if err == utils.ENOTSUP {
+
+	objs, hasMore, nextToken, err := store.List(prefix, marker, "", "", maxResults, followLink)
+	if errors.Is(err, utils.ENOTSUP) {
 		return object.ListAllWithDelimiter(store, prefix, start, end, followLink)
 	}
 	if err != nil {
@@ -121,7 +122,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 		lastkey := ""
 		first := true
 	END:
-		for len(objs) > 0 {
+		for {
 			for _, obj := range objs {
 				key := obj.Key()
 				if !first && key <= lastkey {
@@ -137,22 +138,22 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 				out <- obj
 				first = false
 			}
-			// Corner case: the func parameter `marker` is an empty string("") and exactly
-			// one object which key is an empty string("") returned by the List() method.
-			if lastkey == "" {
-				break END
+			if !hasMore {
+				break
 			}
 
 			marker = lastkey
 			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
-			objs, err = store.List(prefix, marker, "", maxResults, followLink)
+			var nextToken2 string
+			objs, hasMore, nextToken2, err = store.List(prefix, marker, nextToken, "", maxResults, followLink)
 			count := 0
 			for err != nil && count < 3 {
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
 				// slow down
 				time.Sleep(time.Millisecond * 100)
-				objs, err = store.List(prefix, marker, "", maxResults, followLink)
+
+				objs, hasMore, nextToken2, err = store.List(prefix, marker, nextToken, "", maxResults, followLink)
 				count++
 			}
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
@@ -162,6 +163,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 				logger.Errorf("Fail to list after %s: %s", marker, err.Error())
 				break
 			}
+			nextToken = nextToken2
 			if len(objs) > 0 && objs[0].Key() == marker {
 				// workaround from a object store that is not compatible to S3.
 				objs = objs[1:]
@@ -1092,18 +1094,21 @@ func matchLeveledPath(rules []rule, key string) bool {
 
 func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.Object, followLink bool) (chan object.Object, error) {
 	var total []object.Object
+	var objs []object.Object
+	var err error
+	var nextToken string
 	var marker string
+	var hasMore bool
 	for {
-		objs, err := store.List(prefix, marker, "/", maxResults, followLink)
+		objs, hasMore, nextToken, err = store.List(prefix, marker, nextToken, "/", maxResults, followLink)
 		if err != nil {
 			return nil, err
 		}
-		if len(objs) == 0 {
-			break
+		if len(objs) > 0 {
+			total = append(total, objs...)
+			marker = objs[len(objs)-1].Key()
 		}
-		total = append(total, objs...)
-		marker = objs[len(objs)-1].Key()
-		if marker == "" {
+		if !hasMore {
 			break
 		}
 	}

@@ -129,7 +129,7 @@ func (m *memStore) Delete(key string, getters ...AttrGetter) error {
 	return nil
 }
 
-func (m *memStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (m *memStore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -186,7 +186,7 @@ func (m *memStore) List(prefix, marker, delimiter string, limit int64, followLin
 	if int64(len(objs)) > limit {
 		objs = objs[:limit]
 	}
-	return objs, nil
+	return generateListResult(objs, limit)
 }
 
 func newMem(endpoint, accesskey, secretkey, token string) (ObjectStorage, error) {

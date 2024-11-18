@@ -239,8 +239,8 @@ func (s *RestfulStorage) Delete(key string, getters ...AttrGetter) error {
 	return nil
 }
 
-func (s *RestfulStorage) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return nil, notSupported
+func (s *RestfulStorage) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	return nil, false, "", notSupported
 }
 
 var _ ObjectStorage = &RestfulStorage{}

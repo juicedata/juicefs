@@ -576,12 +576,7 @@ func (m *baseMeta) CleanStaleSessions() {
 }
 
 func (m *baseMeta) CloseSession() error {
-	if m.conf.ReadOnly {
-		return nil
-	}
-	m.doFlushStats()
-	m.doFlushDirStat()
-	m.doFlushQuotas()
+	m.FlushSession()
 	m.sesMu.Lock()
 	m.umounting = true
 	m.sesMu.Unlock()
@@ -591,6 +586,16 @@ func (m *baseMeta) CloseSession() error {
 	}
 	logger.Infof("close session %d: %v", m.sid, err)
 	return err
+}
+
+func (m *baseMeta) FlushSession() {
+	if m.conf.ReadOnly {
+		return
+	}
+	m.doFlushStats()
+	m.doFlushDirStat()
+	m.doFlushQuotas()
+	logger.Infof("flush session %d:", m.sid)
 }
 
 func (m *baseMeta) Init(format *Format, force bool) error {

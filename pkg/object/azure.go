@@ -43,7 +43,6 @@ type wasb struct {
 	azblobCli *azblob.Client
 	sc        string
 	cName     string
-	marker    string
 }
 
 func (b *wasb) String() string {
@@ -136,48 +135,42 @@ func (b *wasb) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (b *wasb) List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
-		return nil, notSupported
-	}
-	// todo
-	if marker != "" {
-		if b.marker == "" {
-			// last page
-			return nil, nil
-		}
-		marker = b.marker
+		return nil, false, "", notSupported
 	}
 
 	limit32 := int32(limit)
-
-	pager := b.azblobCli.NewListBlobsFlatPager(b.cName, &azblob.ListBlobsFlatOptions{Prefix: &prefix, Marker: &marker, MaxResults: &(limit32)})
+	pager := b.azblobCli.NewListBlobsFlatPager(b.cName, &azblob.ListBlobsFlatOptions{Prefix: &prefix, Marker: &token, MaxResults: &limit32})
 	page, err := pager.NextPage(ctx)
 	if err != nil {
-		return nil, err
-	}
-	if pager.More() {
-		b.marker = *page.NextMarker
-	} else {
-		b.marker = ""
+		return nil, false, "", err
 	}
 	var n int
 	if page.Segment != nil {
 		n = len(page.Segment.BlobItems)
 	}
-	objs := make([]Object, n)
+	objs := make([]Object, 0, n)
 	for i := 0; i < n; i++ {
 		blob := page.Segment.BlobItems[i]
+		if *blob.Name <= startAfter {
+			continue
+		}
 		mtime := blob.Properties.LastModified
-		objs[i] = &obj{
+		objs = append(objs, &obj{
 			*blob.Name,
 			*blob.Properties.ContentLength,
 			*mtime,
 			strings.HasSuffix(*blob.Name, "/"),
 			string(*blob.Properties.AccessTier),
-		}
+		})
 	}
-	return objs, nil
+
+	var nextMarker string
+	if pager.More() {
+		nextMarker = *page.NextMarker
+	}
+	return objs, pager.More(), nextMarker, nil
 }
 
 func (b *wasb) SetStorageClass(sc string) error {

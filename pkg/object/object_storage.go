@@ -145,8 +145,8 @@ func (s DefaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string
 	return nil, "", nil
 }
 
-func (s DefaultObjectStorage) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	return nil, notSupported
+func (s DefaultObjectStorage) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	return nil, false, "", notSupported
 }
 
 func (s DefaultObjectStorage) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
@@ -180,14 +180,16 @@ var bufPool = sync.Pool{
 
 type listThread struct {
 	sync.Mutex
-	cond    *utils.Cond
-	ready   bool
-	err     error
-	entries []Object
+	cond      *utils.Cond
+	ready     bool
+	err       error
+	entries   []Object
+	nextToken string
+	hasMore   bool
 }
 
 func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
-	entries, err := store.List(prefix, "", "/", 1e9, followLink)
+	entries, _, _, err := store.List(prefix, start, "", "/", 1e9, followLink)
 	if err != nil {
 		logger.Errorf("list %s: %s", prefix, err)
 		return nil, err
@@ -214,8 +216,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 					if !entries[i].IsDir() || key == prefix {
 						continue
 					}
-
-					t.entries, t.err = store.List(key, "\x00", "/", 1e9, followLink) // exclude itself
+					t.entries, t.hasMore, t.nextToken, t.err = store.List(key, "\x00", t.nextToken, "/", 1e9, followLink) // exclude itself
 					t.Lock()
 					t.ready = true
 					t.cond.Signal()
@@ -276,4 +277,12 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 		}
 	}()
 	return listed, nil
+}
+
+func generateListResult(objs []Object, limit int64) ([]Object, bool, string, error) {
+	var nextMarker string
+	if len(objs) > 0 {
+		nextMarker = objs[len(objs)-1].Key()
+	}
+	return objs, len(objs) == int(limit), nextMarker, nil
 }

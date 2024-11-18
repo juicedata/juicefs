@@ -644,6 +644,16 @@ func mount(c *cli.Context) error {
 			}
 		}
 		if blob != nil {
+			// test storage at startup to fail fast instead of throwing EIO in the middle of user's workload
+			if c.Bool("check-storage") {
+				start := time.Now()
+				if err = test(blob); err != nil {
+					logger.Errorf("Object storage test failed: %s", err)
+					return err
+				} else {
+					logger.Infof("Object storage test passed in %s", time.Since(start))
+				}
+			}
 			object.Shutdown(blob)
 		}
 		var foreground bool
@@ -688,7 +698,7 @@ func mount(c *cli.Context) error {
 		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
 	})
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
-	installHandler(mp, v, blob)
+	installHandler(metaCli, mp, v, blob)
 	v.UpdateFormat = updateFormat(c)
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	mountMain(v, c)

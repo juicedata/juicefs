@@ -12,7 +12,7 @@ require (
 	github.com/agiledragon/gomonkey/v2 v2.6.0
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.7+incompatible
 	github.com/aws/aws-sdk-go v1.44.262
-	github.com/baidubce/bce-sdk-go v0.9.150
+	github.com/baidubce/bce-sdk-go v0.9.200
 	github.com/billziss-gh/cgofuse v1.5.0
 	github.com/ceph/go-ceph v0.18.0
 	github.com/colinmarc/hdfs/v2 v2.3.0
@@ -66,7 +66,7 @@ require (
 	github.com/vbauerster/mpb/v7 v7.0.3
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	github.com/vmware/go-nfs-client v0.0.0-20190605212624-d43b92724c1b
-	github.com/volcengine/ve-tos-golang-sdk/v2 v2.5.3
+	github.com/volcengine/ve-tos-golang-sdk/v2 v2.7.0
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a
 	go.etcd.io/etcd v3.3.27+incompatible
 	go.etcd.io/etcd/client/v3 v3.5.9

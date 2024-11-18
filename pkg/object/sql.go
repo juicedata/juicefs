@@ -128,18 +128,18 @@ func (s *sqlStore) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (s *sqlStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (s *sqlStore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if marker == "" {
 		marker = prefix
 	}
 	// todo
 	if delimiter != "" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 	var bs []blob
 	err := s.db.Where("`key` > ?", []byte(marker)).Limit(int(limit)).Cols("`key`", "size", "modified").OrderBy("`key`").Find(&bs)
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	var objs []Object
 	for _, b := range bs {
@@ -154,7 +154,7 @@ func (s *sqlStore) List(prefix, marker, delimiter string, limit int64, followLin
 			break
 		}
 	}
-	return objs, nil
+	return generateListResult(objs, limit)
 }
 
 func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {

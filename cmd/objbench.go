@@ -949,7 +949,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		if err := blob.Put(key, bytes.NewReader([]byte("1"))); err != nil {
 			return fmt.Errorf("put encode file failed: %s", err)
 		} else {
-			if resp, err := blob.List("", "测试编码文件", "", 1, true); err != nil && err != utils.ENOTSUP {
+			if resp, _, _, err := blob.List("", "测试编码文件", "", "", 1, true); err != nil && err != utils.ENOTSUP {
 				return fmt.Errorf("list encode file failed %s", err)
 			} else if len(resp) == 1 && resp[0].Key() != key {
 				return fmt.Errorf("list encode file failed: expect key %s, but got %s", key, resp[0].Key())

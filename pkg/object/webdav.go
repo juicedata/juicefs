@@ -175,9 +175,9 @@ func (w webDAVFile) Name() string {
 	return w.name
 }
 
-func (w *webdav) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (w *webdav) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 
 	root := "/" + prefix
@@ -194,12 +194,12 @@ func (w *webdav) List(prefix, marker, delimiter string, limit int64, followLink 
 	if err != nil {
 		if gowebdav.IsErrCode(err, http.StatusForbidden) {
 			logger.Warnf("skip %s: %s", root, err)
-			return nil, nil
+			return nil, false, "", nil
 		}
 		if gowebdav.IsErrNotFound(err) {
-			return nil, nil
+			return nil, false, "", nil
 		}
-		return nil, err
+		return nil, false, "", err
 	}
 	sortedInfos := make([]os.FileInfo, len(infos))
 	for idx, o := range infos {
@@ -228,7 +228,7 @@ func (w *webdav) List(prefix, marker, delimiter string, limit int64, followLink 
 			break
 		}
 	}
-	return objs, nil
+	return generateListResult(objs, limit)
 }
 
 func newWebDAV(endpoint, user, passwd, token string) (ObjectStorage, error) {
