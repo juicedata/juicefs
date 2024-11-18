@@ -320,6 +320,8 @@ type Meta interface {
 	NewSession(record bool) error
 	// CloseSession does cleanup and close the session.
 	CloseSession() error
+	// FlushSession flushes the status to meta service.
+	FlushSession()
 	// GetSession retrieves information of session with sid
 	GetSession(sid uint64, detail bool) (*Session, error)
 	// ListSessions returns all client sessions.
