@@ -249,7 +249,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl, listenAddr string) (*vfs.Con
 	go func() {
 		sig := <-signalChan
 		logger.Infof("Received signal %s, exiting...", sig.String())
-		if err := metaCli.CloseSession(true); err != nil {
+		if err := metaCli.CloseSession(); err != nil {
 			logger.Fatalf("close session failed: %s", err)
 		}
 		object.Shutdown(blob)

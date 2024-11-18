@@ -420,7 +420,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if err = m.NewSession(true); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
-	defer m.CloseSession(true)
+	defer m.CloseSession()
 	ses, err := m.ListSessions()
 	if err != nil || len(ses) != 1 {
 		t.Fatalf("list sessions %+v: %s", ses, err)
@@ -1807,7 +1807,7 @@ func testCloseSession(t *testing.T, m Meta) {
 			t.Fatalf("incorrect session: flock %d plock %d sustained %d", len(s.Flocks), len(s.Plocks), len(s.Sustained))
 		}
 	}
-	if err = m.CloseSession(true); err != nil {
+	if err = m.CloseSession(); err != nil {
 		t.Fatalf("close session: %s", err)
 	}
 	if _, err = m.GetSession(sid, true); err == nil {
@@ -2086,7 +2086,7 @@ func testReadOnly(t *testing.T, m Meta) {
 	if err := m.NewSession(true); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
-	defer m.CloseSession(true)
+	defer m.CloseSession()
 
 	var inode Ino
 	var attr = &Attr{}
@@ -2942,7 +2942,7 @@ func testQuota(t *testing.T, m Meta) {
 	if err := m.NewSession(true); err != nil {
 		t.Fatalf("New session: %s", err)
 	}
-	defer m.CloseSession(true)
+	defer m.CloseSession()
 	ctx := Background
 	var inode, parent Ino
 	var attr Attr

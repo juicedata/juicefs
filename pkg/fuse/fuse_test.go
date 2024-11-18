@@ -115,7 +115,7 @@ func mount(url, mp string) {
 	if err != nil {
 		log.Fatalf("fuse server err: %s\n", err)
 	}
-	_ = m.CloseSession(true)
+	_ = m.CloseSession()
 }
 
 func umount(mp string, force bool) {

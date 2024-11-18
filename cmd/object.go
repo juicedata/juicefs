@@ -378,7 +378,7 @@ func getDefaultChunkConf(format *meta.Format) *chunk.Config {
 }
 
 func (j *juiceFS) Shutdown() {
-	_ = j.jfs.Meta().CloseSession(true)
+	_ = j.jfs.Meta().CloseSession()
 }
 
 func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {

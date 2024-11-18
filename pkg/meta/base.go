@@ -575,7 +575,7 @@ func (m *baseMeta) CleanStaleSessions() {
 	}
 }
 
-func (m *baseMeta) CloseSession(clean bool) error {
+func (m *baseMeta) CloseSession() error {
 	if m.conf.ReadOnly {
 		return nil
 	}
@@ -586,10 +586,10 @@ func (m *baseMeta) CloseSession(clean bool) error {
 	m.umounting = true
 	m.sesMu.Unlock()
 	var err error
-	if m.sid > 0 && clean {
+	if m.sid > 0 {
 		err = m.en.doCleanStaleSession(m.sid)
-		logger.Infof("close session %d: %v", m.sid, err)
 	}
+	logger.Infof("close session %d: %v", m.sid, err)
 	return err
 }
 
