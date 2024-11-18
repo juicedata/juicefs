@@ -1,8 +1,6 @@
 //go:build !noredis
 // +build !noredis
 
-//nolint:SA6002
-
 /*
  * JuiceFS, Copyright 2020 Juicedata, Inc.
  *

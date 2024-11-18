@@ -17,8 +17,6 @@
  * limitations under the License.
  */
 
-// nolint:SA6002
-
 package meta
 
 import (

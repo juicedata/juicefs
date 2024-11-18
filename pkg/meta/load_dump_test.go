@@ -287,10 +287,10 @@ func testLoadDump(t *testing.T, name, addr string) {
 }
 
 func TestLoadDump(t *testing.T) { //skip mutate
-	// testLoadDump(t, "redis", "redis://127.0.0.1/10")
+	testLoadDump(t, "redis", "redis://127.0.0.1/10")
 	testLoadDump(t, "mysql", "mysql://root:123456@/dev")
-	// testLoadDump(t, "badger", "badger://jfs-load-dump")
-	// testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
+	testLoadDump(t, "badger", "badger://jfs-load-dump")
+	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
 }
 
 func testDumpV2(t *testing.T, m Meta, result string) {
@@ -352,8 +352,8 @@ func TestLoadDumpV2(t *testing.T) {
 	logger.SetLevel(logrus.DebugLevel)
 
 	engines := map[string][]string{
-		"mysql": {"mysql://root:123456@/dev", "mysql://root:123456@/dev2"},
-		"redis": {"redis://127.0.0.1:6379/2", "redis://127.0.0.1:6379/3"},
+		"mysql": {"mysql://root:@/dev", "mysql://root:@/dev2"},
+		"redis": {"redis://127.0.0.1:7001/2", "redis://127.0.0.1:7001/3"},
 		"tikv":  {"tikv://127.0.0.1:2379/jfs-load-dump-1", "tikv://127.0.0.1:2379/jfs-load-dump-2"},
 	}
 
