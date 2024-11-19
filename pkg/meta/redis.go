@@ -3545,7 +3545,6 @@ func (m *redisMeta) checkServerConfig() {
 }
 
 func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
-	logger.Infof("Dump entries: %+v", es)
 	ctx := Background
 	var keys []string
 	for _, e := range es {
@@ -3658,7 +3657,6 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 				}
 			case TypeDirectory:
 				keys, cursor, err := dr[i].Result()
-				logger.Infof("inode %d, cursor %d, keys %d err %v", inode, cursor, len(keys), err)
 				if err != nil {
 					return err
 				}

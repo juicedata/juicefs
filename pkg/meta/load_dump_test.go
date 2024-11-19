@@ -32,7 +32,6 @@ import (
 	"golang.org/x/text/transform"
 )
 
-// const sampleFile = "../../1M_files_in_one_dir.dump"
 const sampleFile = "metadata.sample"
 const subSampleFile = "metadata-sub.sample"
 
@@ -288,7 +287,7 @@ func testLoadDump(t *testing.T, name, addr string) {
 
 func TestLoadDump(t *testing.T) { //skip mutate
 	testLoadDump(t, "redis", "redis://127.0.0.1/10")
-	testLoadDump(t, "mysql", "mysql://root:123456@/dev")
+	testLoadDump(t, "mysql", "mysql://root:@/dev")
 	testLoadDump(t, "badger", "badger://jfs-load-dump")
 	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
 }
