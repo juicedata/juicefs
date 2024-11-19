@@ -873,6 +873,7 @@ func (fs *FileSystem) Flush() error {
 	if buffer != nil {
 		buffer <- "" // flush
 	}
+	fs.Meta().FlushSession()
 	return nil
 }
 
