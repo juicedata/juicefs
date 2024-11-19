@@ -137,6 +137,9 @@ func getRedisCounterFields(prefix string, c *pb.Counters) map[string]*int64 {
 }
 
 func execPipe(ctx context.Context, pipe redis.Pipeliner) error {
+	if pipe.Len() == 0 {
+		return nil
+	}
 	cmds, err := pipe.Exec(ctx)
 	if err != nil {
 		for i, cmd := range cmds {
@@ -893,6 +896,9 @@ func (s *redisDelFileLS) load(ctx Context, msg proto.Message) error {
 			Member: meta.toDelete(Ino(pd.Inode), pd.Length),
 		})
 	}
+	if len(mbs) == 0 {
+		return nil
+	}
 	return meta.rdb.ZAdd(ctx, meta.delfiles(), mbs...).Err()
 }
 
@@ -907,6 +913,9 @@ func (s *redisSliceRefLS) load(ctx Context, msg proto.Message) error {
 	slices := make(map[string]interface{})
 	for _, p := range ps.List {
 		slices[meta.sliceKey(p.Id, p.Size)] = strconv.Itoa(int(p.Refs - 1))
+	}
+	if len(slices) == 0 {
+		return nil
 	}
 	return meta.rdb.HSet(ctx, meta.sliceRefs(), slices).Err()
 }
@@ -926,6 +935,9 @@ func (s *redisAclLS) load(ctx Context, msg proto.Message) error {
 			maxId = pa.Id
 		}
 		acls[strconv.FormatUint(uint64(pa.Id), 10)] = MarshalAclPB(pa)
+	}
+	if len(acls) == 0 {
+		return nil
 	}
 	if err := meta.rdb.HSet(ctx, meta.aclKey(), acls).Err(); err != nil {
 		return err
@@ -1005,6 +1017,9 @@ func (s *redisNodeLS) load(ctx Context, msg proto.Message) error {
 	nodes := make(map[string]interface{}, redisBatchSize)
 
 	mset := func(nodes map[string]interface{}) error {
+		if len(nodes) == 0 {
+			return nil
+		}
 		if err := meta.rdb.MSet(ctx, nodes).Err(); err != nil {
 			return err
 		}
@@ -1151,6 +1166,9 @@ func (s *redisSymlinkLS) load(ctx Context, msg proto.Message) error {
 				delete(syms, k)
 			}
 		}
+	}
+	if len(syms) == 0 {
+		return nil
 	}
 	return meta.rdb.MSet(ctx, syms).Err()
 }
