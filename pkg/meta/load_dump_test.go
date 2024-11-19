@@ -352,7 +352,7 @@ func TestLoadDumpV2(t *testing.T) {
 
 	engines := map[string][]string{
 		"mysql": {"mysql://root:@/dev", "mysql://root:@/dev2"},
-		"redis": {"redis://127.0.0.1:7001/2", "redis://127.0.0.1:7001/3"},
+		"redis": {"redis://127.0.0.1:6379/2", "redis://127.0.0.1:6379/3"},
 		"tikv":  {"tikv://127.0.0.1:2379/jfs-load-dump-1", "tikv://127.0.0.1:2379/jfs-load-dump-2"},
 	}
 
