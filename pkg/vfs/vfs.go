@@ -27,6 +27,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -474,10 +475,17 @@ func (v *VFS) Releasedir(ctx Context, ino Ino, fh uint64) int {
 	return 0
 }
 
+const O_TMPFILE = 020000000
+
 func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32) (entry *meta.Entry, fh uint64, err syscall.Errno) {
 	defer func() {
 		logit(ctx, "create", err, "(%d,%s,%s:0%04o):%s [fh:%d]", parent, name, smode(mode), mode, (*Entry)(entry), fh)
 	}()
+	// O_TMPFILE support
+	doUnlink := runtime.GOOS == "linux" && flags&O_TMPFILE != 0
+	if doUnlink {
+		name = fmt.Sprintf("tmpfile_%s", uuid.New().String())
+	}
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
 		return
@@ -498,6 +506,16 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 		fh = v.newFileHandle(inode, attr.Length, flags)
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 		v.invalidateDirHandle(parent, name, inode, attr)
+
+		if doUnlink {
+			if flags&syscall.O_EXCL != 0 {
+				attr.Flags |= meta.FlagTmpFile
+				if err = v.Meta.SetAttr(ctx, inode, uint16(meta.SetAttrFlag), 0, attr); err != 0 {
+					logger.Warnf("set flag for tmpfile %d failed: %s", inode, err)
+				}
+			}
+			err = v.Unlink(ctx, parent, name)
+		}
 	}
 	return
 }

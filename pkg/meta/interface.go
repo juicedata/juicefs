@@ -93,6 +93,7 @@ const (
 const (
 	FlagImmutable = 1 << iota
 	FlagAppend
+	FlagTmpFile
 )
 
 const (
