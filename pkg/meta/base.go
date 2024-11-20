@@ -1180,6 +1180,9 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if attr.Typ == TypeDirectory {
 		return syscall.EPERM
 	}
+	if attr.Flags&FlagTmpFile != 0 {
+		return syscall.ENOENT
+	}
 	if m.checkDirQuota(ctx, parent, align4K(attr.Length), 1) {
 		return syscall.EDQUOT
 	}
