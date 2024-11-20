@@ -2794,7 +2794,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 			}
 		}
 		return nil
-	}))
+	}, inode))
 	// there could be false-negative that the compaction is successful, double-check
 	if st != 0 && st != syscall.EINVAL {
 		var ok bool

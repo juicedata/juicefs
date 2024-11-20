@@ -2365,7 +2365,7 @@ func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice,
 			}
 		}
 		return nil
-	}))
+	}, inode)) // less conflicts with `write`
 	// there could be false-negative that the compaction is successful, double-check
 	if st != 0 && st != syscall.EINVAL {
 		refs, e := m.get(m.sliceKey(id, size))
