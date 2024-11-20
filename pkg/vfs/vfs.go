@@ -506,16 +506,16 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 		fh = v.newFileHandle(inode, attr.Length, flags)
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 		v.invalidateDirHandle(parent, name, inode, attr)
-	}
 
-	if doUnlink {
-		if flags&syscall.O_EXCL != 0 {
-			attr.Flags |= meta.FlagTmpFile
-			if err = v.Meta.SetAttr(ctx, inode, uint16(meta.SetAttrFlag), 0, attr); err != 0 {
-				return
+		if doUnlink {
+			if flags&syscall.O_EXCL != 0 {
+				attr.Flags |= meta.FlagTmpFile
+				if err = v.Meta.SetAttr(ctx, inode, uint16(meta.SetAttrFlag), 0, attr); err != 0 {
+					logger.Warnf("set flag for tmpfile %d failed: %s", inode, err)
+				}
 			}
+			err = v.Unlink(ctx, parent, name)
 		}
-		err = v.Unlink(ctx, parent, name)
 	}
 	return
 }
