@@ -41,38 +41,44 @@ var (
 )
 
 func (m *redisMeta) buildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
+	ds := dumpedSeg{typ: typ, meta: m, opt: opt}
 	switch typ {
 	case SegTypeFormat:
-		return &formatDS{dumpedSeg{typ: typ}, m.getFormat(), opt.KeepSecret}
+		return &formatDS{ds}
 	case SegTypeCounter:
-		return &redisCounterDS{dumpedSeg{typ: typ, meta: m}}
+		return &redisCounterDS{ds}
 	case SegTypeSustained:
-		return &redisSustainedDS{dumpedSeg{typ: typ, meta: m}}
+		return &redisSustainedDS{ds}
 	case SegTypeDelFile:
-		return &redisDelFileDS{dumpedSeg{typ: typ, meta: m}}
+		return &redisDelFileDS{ds}
 	case SegTypeSliceRef:
-		return &redisSliceRefDS{dumpedSeg{typ: typ, meta: m}}
+		return &redisSliceRefDS{ds}
 	case SegTypeAcl:
-		return &redisAclDS{dumpedSeg{typ: typ, meta: m}}
+		return &redisAclDS{ds}
 	case SegTypeXattr:
-		return &redisXattrDS{dumpedSeg{typ: typ, meta: m}}
+		return &redisXattrDS{ds}
 	case SegTypeQuota:
-		return &redisQuotaDS{dumpedSeg{typ: typ, meta: m}}
+		return &redisQuotaDS{ds}
 	case SegTypeStat:
-		return &redisStatDS{dumpedSeg{typ: typ, meta: m}}
+		return &redisStatDS{ds}
 	case SegTypeNode:
-		return &redisNodeDBS{dumpedBatchSeg{dumpedSeg{typ: SegTypeNode, meta: m}, []*sync.Pool{{New: func() interface{} { return &pb.Node{} }}}}}
+		return &redisNodeDBS{dumpedBatchSeg{ds, []*sync.Pool{{New: func() interface{} { return &pb.Node{} }}}}}
 	case SegTypeChunk:
 		return &redisChunkDBS{
-			dumpedBatchSeg{dumpedSeg{typ: SegTypeChunk, meta: m},
-				[]*sync.Pool{{New: func() interface{} { return &pb.Chunk{} }}, {New: func() interface{} { return &pb.Slice{} }}}},
+			dumpedBatchSeg{
+				ds,
+				[]*sync.Pool{
+					{New: func() interface{} { return &pb.Chunk{} }},
+					{New: func() interface{} { return &pb.Slice{} }},
+				},
+			},
 		}
 	case SegTypeEdge:
-		return &redisEdgeDBS{dumpedBatchSeg{dumpedSeg{typ: SegTypeEdge, meta: m}, []*sync.Pool{{New: func() interface{} { return &pb.Edge{} }}}}}
+		return &redisEdgeDBS{dumpedBatchSeg{ds, []*sync.Pool{{New: func() interface{} { return &pb.Edge{} }}}}}
 	case SegTypeParent:
-		return &redisParentDBS{dumpedSeg{typ: SegTypeParent, meta: m}}
+		return &redisParentDBS{ds}
 	case SegTypeSymlink:
-		return &redisSymlinkDBS{dumpedBatchSeg{dumpedSeg{typ: SegTypeSymlink, meta: m}, []*sync.Pool{{New: func() interface{} { return &pb.Symlink{} }}}}}
+		return &redisSymlinkDBS{dumpedBatchSeg{ds, []*sync.Pool{{New: func() interface{} { return &pb.Symlink{} }}}}}
 	}
 	return nil
 }
@@ -162,7 +168,7 @@ type redisCounterDS struct {
 	dumpedSeg
 }
 
-func (s *redisCounterDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisCounterDS) dump(ctx Context, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	counters := &pb.Counters{}
 	fieldMap := getRedisCounterFields(meta.prefix, counters)
@@ -198,7 +204,7 @@ type redisSustainedDS struct {
 	dumpedSeg
 }
 
-func (s *redisSustainedDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisSustainedDS) dump(ctx Context, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	keys, err := meta.rdb.ZRange(ctx, meta.allSessions(), 0, -1).Result()
 	if err != nil {
@@ -236,7 +242,7 @@ type redisDelFileDS struct {
 	dumpedSeg
 }
 
-func (s *redisDelFileDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisDelFileDS) dump(ctx Context, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	zs, err := meta.rdb.ZRangeWithScores(ctx, meta.delfiles(), 0, -1).Result()
 	if err != nil {
@@ -265,7 +271,7 @@ type redisSliceRefDS struct {
 	dumpedSeg
 }
 
-func (s *redisSliceRefDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisSliceRefDS) dump(ctx Context, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	sls := &pb.SliceRefList{List: make([]*pb.SliceRef, 0, 1024)}
 	var key string
@@ -304,7 +310,7 @@ type redisAclDS struct {
 	dumpedSeg
 }
 
-func (s *redisAclDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisAclDS) dump(ctx Context, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	vals, err := meta.rdb.HGetAll(ctx, meta.aclKey()).Result()
 	if err != nil {
@@ -330,7 +336,7 @@ type redisXattrDS struct {
 	dumpedSeg
 }
 
-func (s *redisXattrDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisXattrDS) dump(ctx Context, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	xattrs := &pb.XattrList{List: make([]*pb.Xattr, 0, 128)}
 	if err := meta.scan(ctx, "x*", func(keys []string) error {
@@ -376,7 +382,7 @@ type redisQuotaDS struct {
 	dumpedSeg
 }
 
-func (s *redisQuotaDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisQuotaDS) dump(ctx Context, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 
 	quotas := make(map[Ino]*pb.Quota)
@@ -452,7 +458,7 @@ type redisStatDS struct {
 	dumpedSeg
 }
 
-func (s *redisStatDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisStatDS) dump(ctx Context, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 
 	stats := make(map[Ino]*pb.Stat)
@@ -525,10 +531,10 @@ type redisNodeDBS struct {
 	dumpedBatchSeg
 }
 
-func (s *redisNodeDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisNodeDBS) dump(ctx Context, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	eg, egCtx := errgroup.WithContext(ctx)
-	eg.SetLimit(opt.CoNum)
+	eg.SetLimit(s.opt.CoNum)
 	var sum int64
 
 	if err := meta.scan(egCtx, "i*", func(iKeys []string) error {
@@ -580,7 +586,7 @@ type redisChunkDBS struct {
 	dumpedBatchSeg
 }
 
-func (s *redisChunkDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisChunkDBS) dump(ctx Context, ch chan *dumpedResult) error {
 	type chk struct {
 		inode uint64
 		index uint32
@@ -588,7 +594,7 @@ func (s *redisChunkDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult
 
 	meta := s.meta.(*redisMeta)
 	eg, egCtx := errgroup.WithContext(ctx)
-	eg.SetLimit(opt.CoNum)
+	eg.SetLimit(s.opt.CoNum)
 	var sum int64
 
 	cPool := &sync.Pool{
@@ -681,10 +687,10 @@ type redisEdgeDBS struct {
 	dumpedBatchSeg
 }
 
-func (s *redisEdgeDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisEdgeDBS) dump(ctx Context, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	eg, egCtx := errgroup.WithContext(ctx)
-	eg.SetLimit(opt.CoNum)
+	eg.SetLimit(s.opt.CoNum)
 	var sum int64
 
 	// TODO merge small dirs?
@@ -738,7 +744,7 @@ type redisParentDBS struct {
 	dumpedSeg
 }
 
-func (s *redisParentDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisParentDBS) dump(ctx Context, ch chan *dumpedResult) error {
 	// TODO: optimize?
 	meta := s.meta.(*redisMeta)
 	pls := &pb.ParentList{
@@ -789,10 +795,10 @@ type redisSymlinkDBS struct {
 	dumpedBatchSeg
 }
 
-func (s *redisSymlinkDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *redisSymlinkDBS) dump(ctx Context, ch chan *dumpedResult) error {
 	meta := s.meta.(*redisMeta)
 	eg, egCtx := errgroup.WithContext(ctx)
-	eg.SetLimit(opt.CoNum)
+	eg.SetLimit(s.opt.CoNum)
 	var sum int64
 
 	if err := meta.scan(egCtx, "s[0-9]*", func(sKeys []string) error {

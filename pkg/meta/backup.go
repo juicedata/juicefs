@@ -28,13 +28,13 @@ const (
 	SegTypeCounter
 	SegTypeSustained
 	SegTypeDelFile
-	SegTypeSliceRef
 	SegTypeAcl
 	SegTypeXattr
 	SegTypeQuota
 	SegTypeStat
 	SegTypeNode
 	SegTypeChunk
+	SegTypeSliceRef
 	SegTypeEdge
 	SegTypeParent // for redis/tkv only
 	SegTypeSymlink
@@ -272,7 +272,7 @@ type segReleaser interface {
 
 type iDumpedSeg interface {
 	String() string
-	dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error
+	dump(ctx Context, ch chan *dumpedResult) error
 	segReleaser
 }
 
@@ -280,6 +280,7 @@ type dumpedSeg struct {
 	iDumpedSeg
 	typ  int
 	meta Meta
+	opt  *DumpOption
 }
 
 func (s *dumpedSeg) String() string            { return string(SegType2Name[s.typ]) }
@@ -287,12 +288,11 @@ func (s *dumpedSeg) release(msg proto.Message) {}
 
 type formatDS struct {
 	dumpedSeg
-	f          *Format
-	keepSecret bool
 }
 
-func (s *formatDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
-	return dumpResult(ctx, ch, &dumpedResult{s, ConvertFormatToPB(s.f, s.keepSecret)})
+func (s *formatDS) dump(ctx Context, ch chan *dumpedResult) error {
+	f := s.meta.GetFormat()
+	return dumpResult(ctx, ch, &dumpedResult{s, ConvertFormatToPB(&f, s.opt.KeepSecret)})
 }
 
 type dumpedBatchSeg struct {

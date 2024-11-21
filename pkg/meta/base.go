@@ -3095,7 +3095,7 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) (err er
 		for typ := SegTypeFormat; typ < SegTypeMax; typ++ {
 			seg := m.en.buildDumpedSeg(typ, opt)
 			if seg != nil {
-				if err = seg.dump(ctx, opt, ch); err != nil {
+				if err = seg.dump(ctx, ch); err != nil {
 					logger.Errorf("dump %s err: %v", seg, err)
 					return
 				}

@@ -39,21 +39,23 @@ func (m *kvMeta) getBatchNum() int {
 }
 
 func (m *kvMeta) buildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
+	ds := dumpedSeg{typ: typ, meta: m, opt: opt}
 	switch typ {
 	case SegTypeFormat:
-		return &formatDS{dumpedSeg{typ: typ}, m.getFormat(), opt.KeepSecret}
+		return &formatDS{ds}
 	case SegTypeCounter:
-		return &kvCounterDS{dumpedSeg{typ: typ, meta: m}}
+		return &kvCounterDS{ds}
 	case SegTypeSustained:
-		return &kvSustainedDS{dumpedSeg{typ: typ, meta: m}}
+		return &kvSustainedDS{ds}
 	case SegTypeDelFile:
-		return &kvDelFileDS{dumpedSeg{typ: typ, meta: m}}
+		return &kvDelFileDS{ds}
 	case SegTypeSliceRef:
-		return &kvSliceRefDS{dumpedSeg{typ: typ, meta: m}}
+		return &kvSliceRefDS{ds}
 	case SegTypeAcl:
-		return &kvAclDS{dumpedSeg{typ: typ, meta: m}}
+		return &kvAclDS{ds}
 	case SegTypeMix:
-		return &kvMixDS{dumpedSeg{typ: typ, meta: m},
+		return &kvMixDS{
+			ds,
 			[]*sync.Pool{
 				{New: func() interface{} { return &pb.Node{} }},
 				{New: func() interface{} { return &pb.Edge{} }},
@@ -65,9 +67,9 @@ func (m *kvMeta) buildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
 			},
 		}
 	case SegTypeQuota:
-		return &kvQuotaDS{dumpedSeg{typ: typ, meta: m}}
+		return &kvQuotaDS{ds}
 	case SegTypeStat:
-		return &kvStatDS{dumpedSeg{typ: typ, meta: m}}
+		return &kvStatDS{ds}
 	}
 	return nil
 }
@@ -135,7 +137,7 @@ func getKVCounterFields(c *pb.Counters) map[string]*int64 {
 	}
 }
 
-func (s *kvCounterDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *kvCounterDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
 	msg := &pb.Counters{}
 	if err := m.txn(func(tx *kvTxn) error {
@@ -167,7 +169,7 @@ type kvSustainedDS struct {
 	dumpedSeg
 }
 
-func (s *kvSustainedDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *kvSustainedDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
 	keys, err := m.scanKeys(m.fmtKey("SS"))
 	if err != nil {
@@ -200,7 +202,7 @@ type kvDelFileDS struct {
 	dumpedSeg
 }
 
-func (s *kvDelFileDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *kvDelFileDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
 	vals, err := m.scanValues(m.fmtKey("D"), -1, nil)
 	if err != nil {
@@ -224,7 +226,7 @@ type kvSliceRefDS struct {
 	dumpedSeg
 }
 
-func (s *kvSliceRefDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *kvSliceRefDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
 	vals, err := m.scanValues(m.fmtKey("K"), -1, nil)
 	if err != nil {
@@ -249,7 +251,7 @@ type kvAclDS struct {
 	dumpedSeg
 }
 
-func (s *kvAclDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *kvAclDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
 	vals, err := m.scanValues(m.fmtKey("R"), -1, nil)
 	if err != nil {
@@ -275,7 +277,7 @@ type kvMixDS struct {
 	pools []*sync.Pool
 }
 
-func (s *kvMixDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *kvMixDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
 	kvBatchSize := m.getBatchNum()
 	var lists = map[int]proto.Message{
@@ -306,10 +308,15 @@ func (s *kvMixDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) erro
 		typ  int
 		elem proto.Message
 	}
-	entryCh := make(chan *entry, kvBatchSize)
+	entryCh := make(chan *entry, kvBatchSize*s.opt.CoNum)
+	entryPool := &sync.Pool{
+		New: func() interface{} {
+			return &entry{}
+		},
+	}
 
 	eg, egCtx := errgroup.WithContext(ctx)
-	eg.SetLimit(opt.CoNum)
+	eg.SetLimit(s.opt.CoNum)
 
 	var wg sync.WaitGroup
 	var err error // final error
@@ -318,6 +325,7 @@ func (s *kvMixDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) erro
 	go func() {
 		defer wg.Done()
 		finished := false
+		var n int
 		for !finished {
 			select {
 			case <-ctx.Done():
@@ -327,7 +335,6 @@ func (s *kvMixDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) erro
 					finished = true
 					break
 				}
-				var n int
 				switch e.typ {
 				case SegTypeNode:
 					lists[SegTypeNode].(*pb.NodeList).List = append(lists[SegTypeNode].(*pb.NodeList).List, e.elem.(*pb.Node))
@@ -364,7 +371,7 @@ func (s *kvMixDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) erro
 	}()
 
 	nextInode := uint64(ctx.Value("nextInode").(int64))
-	offset := nextInode / uint64(opt.CoNum)
+	offset := nextInode/uint64(s.opt.CoNum) + 1
 	for left := uint64(1); left < nextInode; left += offset {
 		right := left + offset
 		right = utils.Min64(right, nextInode)
@@ -375,6 +382,7 @@ func (s *kvMixDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) erro
 		m.encodeInode(Ino(right), end[1:])
 		eg.Go(func() error {
 			return m.txn(func(tx *kvTxn) error {
+				var ent *entry
 				tx.scan(start, end, false, func(k, v []byte) bool {
 					if egCtx.Err() != nil {
 						return false
@@ -389,7 +397,9 @@ func (s *kvMixDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) erro
 						node.Inode = uint64(ino)
 						UnmarshalNodePB(v, node)
 						sums[SegTypeNode].Add(1)
-						entryCh <- &entry{typ: SegTypeNode, elem: node}
+						ent = entryPool.Get().(*entry)
+						ent.typ, ent.elem = SegTypeNode, node
+						entryCh <- ent
 					case 'D':
 						edge := s.pools[1].Get().(*pb.Edge)
 						edge.Parent = uint64(ino)
@@ -397,7 +407,9 @@ func (s *kvMixDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) erro
 						typ, inode := m.parseEntry(v)
 						edge.Type, edge.Inode = uint32(typ), uint64(inode)
 						sums[SegTypeEdge].Add(1)
-						entryCh <- &entry{typ: SegTypeEdge, elem: edge}
+						ent = entryPool.Get().(*entry)
+						ent.typ, ent.elem = SegTypeEdge, edge
+						entryCh <- ent
 					case 'C':
 						n := len(v) / sliceBytes
 						chk := s.pools[2].Get().(*pb.Chunk)
@@ -411,27 +423,35 @@ func (s *kvMixDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) erro
 							chk.Slices = append(chk.Slices, ps)
 						}
 						sums[SegTypeChunk].Add(1)
-						entryCh <- &entry{typ: SegTypeChunk, elem: chk}
+						ent = entryPool.Get().(*entry)
+						ent.typ, ent.elem = SegTypeChunk, chk
+						entryCh <- ent
 					case 'S':
 						sym := s.pools[4].Get().(*pb.Symlink)
 						sym.Inode = uint64(ino)
 						sym.Target = unescape(string(v))
 						sums[SegTypeSymlink].Add(1)
-						entryCh <- &entry{typ: SegTypeSymlink, elem: sym}
+						ent = entryPool.Get().(*entry)
+						ent.typ, ent.elem = SegTypeSymlink, sym
+						entryCh <- ent
 					case 'X':
 						xattr := s.pools[5].Get().(*pb.Xattr)
 						xattr.Inode = uint64(ino)
 						xattr.Name = string(k[10:])
 						xattr.Value = v
 						sums[SegTypeXattr].Add(1)
-						entryCh <- &entry{typ: SegTypeXattr, elem: xattr}
+						ent = entryPool.Get().(*entry)
+						ent.typ, ent.elem = SegTypeXattr, xattr
+						entryCh <- ent
 					case 'P':
 						parent := s.pools[6].Get().(*pb.Parent)
 						parent.Inode = uint64(ino)
 						parent.Parent = uint64(m.decodeInode(k[10:]))
 						parent.Cnt = parseCounter(v)
 						sums[SegTypeParent].Add(1)
-						entryCh <- &entry{typ: SegTypeParent, elem: parent}
+						ent = entryPool.Get().(*entry)
+						ent.typ, ent.elem = SegTypeParent, parent
+						entryCh <- ent
 					}
 					return true
 				})
@@ -489,7 +509,7 @@ type kvQuotaDS struct {
 	dumpedSeg
 }
 
-func (s *kvQuotaDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *kvQuotaDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
 	vals, err := m.scanValues(m.fmtKey("QD"), -1, nil)
 	if err != nil {
@@ -515,7 +535,7 @@ type kvStatDS struct {
 	dumpedSeg
 }
 
-func (s *kvStatDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *kvStatDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
 	vals, err := m.scanValues(m.fmtKey("U"), -1, nil)
 	if err != nil {

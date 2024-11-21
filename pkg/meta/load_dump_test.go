@@ -401,3 +401,88 @@ func TestLoadDump_MemKV(t *testing.T) {
 		testLoadSub(t, "memkv://user:pass@test/jfs", subSampleFile)
 	})
 }
+
+func BenchmarkLoadDumpV2(b *testing.B) {
+	logrus.SetLevel(logrus.DebugLevel)
+	b.ReportAllocs()
+	engines := map[string]string{
+		"mysql": "mysql://root:@/dev",
+		"redis": "redis://127.0.0.1:6379/2",
+		// "tikv": "tikv://127.0.0.1:2379/jfs-load-dump-1",
+	}
+
+	sample := "../../1M_files_in_one_dir.dump"
+	for name, addr := range engines {
+		m := NewClient(addr, nil)
+		defer func() {
+			m.Reset()
+			m.Shutdown()
+		}()
+		b.Run("Load "+name, func(b *testing.B) {
+			if err := m.Reset(); err != nil {
+				b.Fatalf("reset meta: %s", err)
+			}
+			fp, err := os.Open(sample)
+			if err != nil {
+				b.Fatalf("open file: %s", sample)
+			}
+			defer fp.Close()
+
+			b.ResetTimer()
+			if err = m.LoadMeta(fp); err != nil {
+				b.Fatalf("load meta: %s", err)
+			}
+		})
+
+		b.Run("Dump "+name, func(b *testing.B) {
+			path := fmt.Sprintf("%s.v1.dump", name)
+			fp, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+			if err != nil {
+				b.Fatalf("open file %s: %s", path, err)
+			}
+			defer fp.Close()
+			if _, err = m.Load(true); err != nil {
+				b.Fatalf("load setting: %s", err)
+			}
+
+			b.ResetTimer()
+			if err = m.DumpMeta(fp, RootInode, 10, true, true, false); err != nil {
+				b.Fatalf("dump meta: %s", err)
+			}
+			fp.Sync()
+		})
+
+		// TODO tikv需要部署一个额外集群, 不同磁盘, 才能提高性能
+		b.Run("DumpV2 "+name, func(b *testing.B) {
+			path := fmt.Sprintf("%s.v2.dump", name)
+			fp, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+			if err != nil {
+				b.Fatalf("open file %s: %s", path, err)
+			}
+			defer fp.Close()
+
+			b.ResetTimer()
+			if err = m.DumpMetaV2(Background, fp, &DumpOption{CoNum: 5}); err != nil {
+				b.Fatalf("dump meta: %s", err)
+			}
+			fp.Sync()
+		})
+
+		b.Run("LoadV2 "+name, func(b *testing.B) {
+			path := fmt.Sprintf("%s.v2.dump", name)
+			if err := m.Reset(); err != nil {
+				b.Fatalf("reset meta: %s", err)
+			}
+			fp, err := os.Open(path)
+			if err != nil {
+				b.Fatalf("open file: %s", path)
+			}
+			defer fp.Close()
+
+			b.ResetTimer()
+			if err = m.LoadMetaV2(Background, fp, &LoadOption{CoNum: 10}); err != nil {
+				b.Fatalf("load meta: %s", err)
+			}
+		})
+	}
+}

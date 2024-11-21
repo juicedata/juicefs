@@ -38,38 +38,44 @@ var (
 )
 
 func (m *dbMeta) buildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
+	ds := dumpedSeg{typ: typ, meta: m, opt: opt}
 	switch typ {
 	case SegTypeFormat:
-		return &formatDS{dumpedSeg{typ: typ}, m.getFormat(), opt.KeepSecret}
+		return &formatDS{ds}
 	case SegTypeCounter:
-		return &sqlCounterDS{dumpedSeg{typ: typ, meta: m}}
+		return &sqlCounterDS{ds}
 	case SegTypeSustained:
-		return &sqlSustainedDS{dumpedSeg{typ: typ, meta: m}}
+		return &sqlSustainedDS{ds}
 	case SegTypeDelFile:
-		return &sqlDelFileDS{dumpedSeg{typ: typ, meta: m}}
+		return &sqlDelFileDS{ds}
 	case SegTypeSliceRef:
-		return &sqlSliceRefDS{dumpedSeg{typ: typ, meta: m}, []*sync.Pool{{New: func() interface{} { return &pb.SliceRef{} }}}}
+		return &sqlSliceRefDS{ds, []*sync.Pool{{New: func() interface{} { return &pb.SliceRef{} }}}}
 	case SegTypeAcl:
-		return &sqlAclDS{dumpedSeg{typ: typ, meta: m}}
+		return &sqlAclDS{ds}
 	case SegTypeXattr:
-		return &sqlXattrDS{dumpedSeg{typ: typ, meta: m}}
+		return &sqlXattrDS{ds}
 	case SegTypeQuota:
-		return &sqlQuotaDS{dumpedSeg{typ: typ, meta: m}}
+		return &sqlQuotaDS{ds}
 	case SegTypeStat:
-		return &sqlStatDS{dumpedSeg{typ: typ, meta: m}}
+		return &sqlStatDS{ds}
 	case SegTypeNode:
-		return &sqlNodeDBS{dumpedBatchSeg{dumpedSeg{typ: SegTypeNode, meta: m}, []*sync.Pool{{New: func() interface{} { return &pb.Node{} }}}}}
+		return &sqlNodeDBS{dumpedBatchSeg{ds, []*sync.Pool{{New: func() interface{} { return &pb.Node{} }}}}}
 	case SegTypeChunk:
 		return &sqlChunkDBS{
-			dumpedBatchSeg{dumpedSeg{typ: SegTypeChunk, meta: m},
-				[]*sync.Pool{{New: func() interface{} { return &pb.Chunk{} }}, {New: func() interface{} { return &pb.Slice{} }}}},
+			dumpedBatchSeg{
+				ds,
+				[]*sync.Pool{
+					{New: func() interface{} { return &pb.Chunk{} }},
+					{New: func() interface{} { return &pb.Slice{} }},
+				},
+			},
 		}
 	case SegTypeEdge:
-		return &sqlEdgeDBS{dumpedBatchSeg{dumpedSeg{typ: SegTypeEdge, meta: m}, []*sync.Pool{{New: func() interface{} { return &pb.Edge{} }}}}, sync.Mutex{}}
+		return &sqlEdgeDBS{dumpedBatchSeg{ds, []*sync.Pool{{New: func() interface{} { return &pb.Edge{} }}}}, sync.Mutex{}}
 	case SegTypeParent:
-		return &sqlParentDS{dumpedSeg{typ: SegTypeEdge, meta: m}}
+		return &sqlParentDS{ds}
 	case SegTypeSymlink:
-		return &sqlSymlinkDBS{dumpedBatchSeg{dumpedSeg{typ: SegTypeSymlink, meta: m}, []*sync.Pool{{New: func() interface{} { return &pb.Symlink{} }}}}}
+		return &sqlSymlinkDBS{dumpedBatchSeg{ds, []*sync.Pool{{New: func() interface{} { return &pb.Symlink{} }}}}}
 	}
 	return nil
 }
@@ -138,7 +144,7 @@ type sqlCounterDS struct {
 	dumpedSeg
 }
 
-func (s *sqlCounterDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlCounterDS) dump(ctx Context, ch chan *dumpedResult) error {
 	meta := s.meta.(*dbMeta)
 	var rows []counter
 	if err := meta.roTxn(func(s *xorm.Session) error {
@@ -164,7 +170,7 @@ type sqlSustainedDS struct {
 	dumpedSeg
 }
 
-func (s *sqlSustainedDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlSustainedDS) dump(ctx Context, ch chan *dumpedResult) error {
 	var rows []sustained
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Find(&rows)
@@ -194,7 +200,7 @@ type sqlDelFileDS struct {
 	dumpedSeg
 }
 
-func (s *sqlDelFileDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlDelFileDS) dump(ctx Context, ch chan *dumpedResult) error {
 	var rows []delfile
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Find(&rows)
@@ -217,9 +223,9 @@ type sqlSliceRefDS struct {
 	pools []*sync.Pool
 }
 
-func (s *sqlSliceRefDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlSliceRefDS) dump(ctx Context, ch chan *dumpedResult) error {
 	eg, _ := errgroup.WithContext(ctx)
-	eg.SetLimit(opt.CoNum)
+	eg.SetLimit(s.opt.CoNum)
 
 	taskFinished := false
 	psrs := &pb.SliceRefList{List: make([]*pb.SliceRef, 0, 1024)}
@@ -272,7 +278,7 @@ type sqlAclDS struct {
 	dumpedSeg
 }
 
-func (s *sqlAclDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlAclDS) dump(ctx Context, ch chan *dumpedResult) error {
 	var rows []acl
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Find(&rows)
@@ -309,7 +315,7 @@ type sqlXattrDS struct {
 	dumpedSeg
 }
 
-func (s *sqlXattrDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlXattrDS) dump(ctx Context, ch chan *dumpedResult) error {
 	var rows []xattr
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Find(&rows)
@@ -340,7 +346,7 @@ type sqlQuotaDS struct {
 	dumpedSeg
 }
 
-func (s *sqlQuotaDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlQuotaDS) dump(ctx Context, ch chan *dumpedResult) error {
 	var rows []dirQuota
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Find(&rows)
@@ -370,7 +376,7 @@ type sqlStatDS struct {
 	dumpedSeg
 }
 
-func (s *sqlStatDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlStatDS) dump(ctx Context, ch chan *dumpedResult) error {
 	var rows []dirStats
 	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
 		return s.Find(&rows)
@@ -428,8 +434,8 @@ type sqlNodeDBS struct {
 	dumpedBatchSeg
 }
 
-func (s *sqlNodeDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
-	return sqlQueryBatch(ctx, s, opt, ch, s.doQuery)
+func (s *sqlNodeDBS) dump(ctx Context, ch chan *dumpedResult) error {
+	return sqlQueryBatch(ctx, s, s.opt, ch, s.doQuery)
 }
 
 func (s *sqlNodeDBS) doQuery(ctx context.Context, limit, start int, sum *int64) (proto.Message, error) {
@@ -484,8 +490,8 @@ type sqlChunkDBS struct {
 	dumpedBatchSeg
 }
 
-func (s *sqlChunkDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
-	return sqlQueryBatch(ctx, s, opt, ch, s.doQuery)
+func (s *sqlChunkDBS) dump(ctx Context, ch chan *dumpedResult) error {
+	return sqlQueryBatch(ctx, s, s.opt, ch, s.doQuery)
 }
 
 func (s *sqlChunkDBS) doQuery(ctx context.Context, limit, start int, sum *int64) (proto.Message, error) {
@@ -538,9 +544,9 @@ type sqlEdgeDBS struct {
 	lock sync.Mutex
 }
 
-func (s *sqlEdgeDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlEdgeDBS) dump(ctx Context, ch chan *dumpedResult) error {
 	ctx.WithValue("parents", make(map[uint64][]uint64))
-	return sqlQueryBatch(ctx, s, opt, ch, s.doQuery)
+	return sqlQueryBatch(ctx, s, s.opt, ch, s.doQuery)
 }
 
 func (s *sqlEdgeDBS) doQuery(ctx context.Context, limit, start int, sum *int64) (proto.Message, error) {
@@ -590,7 +596,7 @@ type sqlParentDS struct {
 	dumpedSeg
 }
 
-func (s *sqlParentDS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
+func (s *sqlParentDS) dump(ctx Context, ch chan *dumpedResult) error {
 	val := ctx.Value("parents")
 	if val == nil {
 		return nil
@@ -635,8 +641,8 @@ type sqlSymlinkDBS struct {
 	dumpedBatchSeg
 }
 
-func (s *sqlSymlinkDBS) dump(ctx Context, opt *DumpOption, ch chan *dumpedResult) error {
-	return sqlQueryBatch(ctx, s, opt, ch, s.doQuery)
+func (s *sqlSymlinkDBS) dump(ctx Context, ch chan *dumpedResult) error {
+	return sqlQueryBatch(ctx, s, s.opt, ch, s.doQuery)
 }
 
 func (s *sqlSymlinkDBS) doQuery(ctx context.Context, limit, start int, sum *int64) (proto.Message, error) {
