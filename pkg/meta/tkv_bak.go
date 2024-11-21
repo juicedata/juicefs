@@ -804,7 +804,14 @@ func (s *kvSymlinkLS) load(ctx Context, msg proto.Message) error {
 	})
 }
 
-func (m *kvMeta) prepareLoad(ctx Context) error {
+func (m *kvMeta) prepareLoad(ctx Context, opt *LoadOption) error {
+	opt.check()
+	// concurrent load is not supported , may cause lots of txn conflicts.
+	// TODO: use one txn for all load goroutines,
+	// and enable tkv client TxnLocalLatches to avoid conflict,
+	// but a large transaction may cause other issues.
+	opt.CoNum = 1
+
 	var exist bool
 	err := m.txn(func(tx *kvTxn) error {
 		exist = tx.exist(m.fmtKey())

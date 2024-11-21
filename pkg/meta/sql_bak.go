@@ -997,7 +997,8 @@ func (m *dbMeta) insertSQL(beans []interface{}) error {
 	return nil
 }
 
-func (m *dbMeta) prepareLoad(ctx Context) error {
+func (m *dbMeta) prepareLoad(ctx Context, opt *LoadOption) error {
+	opt.check()
 	if err := m.checkAddr(); err != nil {
 		return err
 	}

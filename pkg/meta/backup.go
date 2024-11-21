@@ -320,14 +320,10 @@ type LoadOption struct {
 	CoNum int
 }
 
-func (opt *LoadOption) check() *LoadOption {
-	if opt == nil {
-		opt = &LoadOption{}
-	}
+func (opt *LoadOption) check() {
 	if opt.CoNum < 1 {
 		opt.CoNum = 1
 	}
-	return opt
 }
 
 type iLoadedSeg interface {

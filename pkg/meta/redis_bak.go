@@ -1179,7 +1179,8 @@ func (s *redisSymlinkLS) load(ctx Context, msg proto.Message) error {
 	return meta.rdb.MSet(ctx, syms).Err()
 }
 
-func (m *redisMeta) prepareLoad(ctx Context) error {
+func (m *redisMeta) prepareLoad(ctx Context, opt *LoadOption) error {
+	opt.check()
 	if _, ok := m.rdb.(*redis.ClusterClient); ok {
 		err := m.scan(ctx, "*", func(keys []string) error {
 			return fmt.Errorf("found key with same prefix: %s", keys[0])

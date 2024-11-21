@@ -138,7 +138,7 @@ type engine interface {
 
 	buildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg
 	buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg
-	prepareLoad(ctx Context) error
+	prepareLoad(ctx Context, opt *LoadOption) error
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -3129,9 +3129,10 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) (err er
 }
 
 func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
-	opt = opt.check()
-
-	if err := m.en.prepareLoad(ctx); err != nil {
+	if opt == nil {
+		opt = &LoadOption{}
+	}
+	if err := m.en.prepareLoad(ctx, opt); err != nil {
 		return err
 	}
 
