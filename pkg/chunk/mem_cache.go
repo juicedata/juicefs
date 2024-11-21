@@ -161,8 +161,8 @@ func (c *memcache) cleanupExpire() {
 	for {
 		var freed int64
 		var cnt, deleted int
-		cutoff := time.Now().Add(-c.cacheExpire)
 		c.Lock()
+		cutoff := time.Now().Add(-c.cacheExpire)
 		for k, v := range c.pages {
 			cnt++
 			if cnt > 1e3 {
