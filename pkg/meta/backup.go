@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
+	"xorm.io/xorm"
 )
 
 const (
@@ -281,6 +282,7 @@ type dumpedSeg struct {
 	typ  int
 	meta Meta
 	opt  *DumpOption
+	txn  *bTxn
 }
 
 func (s *dumpedSeg) String() string            { return string(SegType2Name[s.typ]) }
@@ -537,4 +539,69 @@ func MarshalEdgePB(msg *pb.Edge, buff []byte) {
 	w := utils.FromBuffer(buff)
 	w.Put8(uint8(msg.Type))
 	w.Put64(msg.Inode)
+}
+
+// transaction
+
+type bTxnOption struct {
+	useless      bool
+	readOnly     bool
+	maxRetry     int
+	maxStmtRetry int
+}
+
+type txMaxRetryKey struct{}
+
+type bTxn struct {
+	en  engine
+	opt *bTxnOption
+	obj interface{} // real transaction object for different engine
+}
+
+func newBakTxn(en engine, tOpt *bTxnOption, coNum int) *bTxn {
+	if tOpt == nil {
+		tOpt = &bTxnOption{
+			readOnly:     true,
+			maxRetry:     1,
+			maxStmtRetry: 3,
+		}
+	}
+
+	switch en.(type) {
+	case *redisMeta:
+		tOpt.useless = true
+	case *dbMeta:
+		// only use same txn when coNum == 1 for sql
+		if coNum > 1 {
+			tOpt.useless = true
+		}
+	}
+
+	txn := &bTxn{
+		en:  en,
+		opt: tOpt,
+	}
+
+	return txn
+}
+
+func (et *bTxn) exec(ctx Context, f func(Context, *bTxn) error) error {
+	if et.opt.useless {
+		return f(ctx, et)
+	}
+
+	ctx.WithValue(txMaxRetryKey{}, et.opt.maxRetry)
+	switch m := et.en.(type) {
+	case *dbMeta:
+		return m.roTxn(ctx, func(sess *xorm.Session) error {
+			et.obj = sess
+			return f(ctx, et)
+		})
+	case *kvMeta:
+		return m.roTxn(ctx, func(tx *kvTxn) error {
+			et.obj = tx
+			return f(ctx, et)
+		})
+	}
+	return fmt.Errorf("unsupported meta type %T", et.en)
 }

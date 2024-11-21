@@ -17,11 +17,13 @@
 package meta
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
@@ -38,8 +40,8 @@ func (m *kvMeta) getBatchNum() int {
 	return batch
 }
 
-func (m *kvMeta) buildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
-	ds := dumpedSeg{typ: typ, meta: m, opt: opt}
+func (m *kvMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *bTxn) iDumpedSeg {
+	ds := dumpedSeg{typ: typ, meta: m, opt: opt, txn: txn}
 	switch typ {
 	case SegTypeFormat:
 		return &formatDS{ds}
@@ -122,8 +124,24 @@ func (m *kvMeta) buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
 	return nil
 }
 
-type kvCounterDS struct {
-	dumpedSeg
+func (m *kvMeta) execStmt(ctx context.Context, txn *bTxn, f func(*kvTxn) error) error {
+	if txn.opt.useless {
+		return m.roTxn(ctx, func(tx *kvTxn) error {
+			return f(tx)
+		})
+	}
+
+	var err error
+	cnt := 0
+	for cnt < txn.opt.maxStmtRetry {
+		err = f(txn.obj.(*kvTxn))
+		if err == nil || !m.shouldRetry(err) {
+			break
+		}
+		cnt++
+		time.Sleep(time.Duration(cnt) * time.Microsecond)
+	}
+	return err
 }
 
 func getKVCounterFields(c *pb.Counters) map[string]*int64 {
@@ -137,15 +155,17 @@ func getKVCounterFields(c *pb.Counters) map[string]*int64 {
 	}
 }
 
+type kvCounterDS struct {
+	dumpedSeg
+}
+
 func (s *kvCounterDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
-	msg := &pb.Counters{}
-	if err := m.txn(func(tx *kvTxn) error {
+	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
+		msg := &pb.Counters{}
 		fields := getKVCounterFields(msg)
-
 		names := make([]string, 0, len(fields))
 		keys := make([][]byte, 0, len(fields))
-
 		for name := range fields {
 			names = append(names, name)
 			keys = append(keys, m.counterKey(name))
@@ -157,12 +177,10 @@ func (s *kvCounterDS) dump(ctx Context, ch chan *dumpedResult) error {
 			}
 		}
 		ctx.WithValue("nextInode", msg.NextInode)
-		return nil
-	}); err != nil {
-		return nil
-	}
-	logger.Debugf("dump counters %+v", msg)
-	return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: msg})
+
+		logger.Debugf("dump counters %+v", msg)
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: msg})
+	})
 }
 
 type kvSustainedDS struct {
@@ -171,31 +189,34 @@ type kvSustainedDS struct {
 
 func (s *kvSustainedDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
-	keys, err := m.scanKeys(m.fmtKey("SS"))
-	if err != nil {
-		return err
-	}
-	sids := make(map[uint64][]uint64)
-	for _, key := range keys {
-		b := utils.FromBuffer([]byte(key[2:])) // "SS"
-		if b.Len() != 16 {
-			return fmt.Errorf("invalid sustainedKey: %s", key)
-		}
-		sid := b.Get64()
-		inode := uint64(m.decodeInode(b.Get(8)))
-		sids[sid] = append(sids[sid], inode)
-	}
-	msg := &pb.SustainedList{
-		List: make([]*pb.Sustained, 0, len(keys)),
-	}
-	for sid, inodes := range sids {
-		msg.List = append(msg.List, &pb.Sustained{
-			Sid:    sid,
-			Inodes: inodes,
+	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
+		sids := make(map[uint64][]uint64)
+		cnt := 0
+		tx.scan(m.fmtKey("SS"), nextKey(m.fmtKey("SS")), true, func(k, v []byte) bool {
+			b := utils.FromBuffer([]byte(k[2:])) // "SS"
+			if b.Len() != 16 {
+				logger.Warnf("invalid sustainedKey: %s", k)
+				return true
+			}
+			sid := b.Get64()
+			inode := uint64(m.decodeInode(b.Get(8)))
+			sids[sid] = append(sids[sid], inode)
+			cnt++
+			return true
 		})
-	}
-	logger.Debugf("dump %s num: %d", s, len(msg.List))
-	return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: msg})
+
+		msg := &pb.SustainedList{
+			List: make([]*pb.Sustained, 0, cnt),
+		}
+		for sid, inodes := range sids {
+			msg.List = append(msg.List, &pb.Sustained{
+				Sid:    sid,
+				Inodes: inodes,
+			})
+		}
+		logger.Debugf("dump %s num: %d", s, len(msg.List))
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: msg})
+	})
 }
 
 type kvDelFileDS struct {
@@ -204,22 +225,22 @@ type kvDelFileDS struct {
 
 func (s *kvDelFileDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
-	vals, err := m.scanValues(m.fmtKey("D"), -1, nil)
-	if err != nil {
-		return err
-	}
-	list := &pb.DelFileList{List: make([]*pb.DelFile, 0, len(vals))}
-	for k, v := range vals {
-		b := utils.FromBuffer([]byte(k[1:])) // "D"
-		if b.Len() != 16 {
-			logger.Warnf("invalid delfileKey: %s", k)
-			continue
-		}
-		inode := m.decodeInode(b.Get(8))
-		list.List = append(list.List, &pb.DelFile{Inode: uint64(inode), Length: b.Get64(), Expire: m.parseInt64(v)})
-	}
-	logger.Debugf("dump %s num: %d", s, len(list.List))
-	return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: list})
+	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
+		list := &pb.DelFileList{List: make([]*pb.DelFile, 0, 16)}
+		tx.scan(m.fmtKey("D"), nextKey(m.fmtKey("D")), false, func(k, v []byte) bool {
+			b := utils.FromBuffer([]byte(k[1:])) // "D"
+			if b.Len() != 16 {
+				logger.Warnf("invalid delfileKey: %s", k)
+				return true
+			}
+			inode := m.decodeInode(b.Get(8))
+			list.List = append(list.List, &pb.DelFile{Inode: uint64(inode), Length: b.Get64(), Expire: m.parseInt64(v)})
+			return true
+		})
+
+		logger.Debugf("dump %s num: %d", s, len(list.List))
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: list})
+	})
 }
 
 type kvSliceRefDS struct {
@@ -228,23 +249,22 @@ type kvSliceRefDS struct {
 
 func (s *kvSliceRefDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
-	vals, err := m.scanValues(m.fmtKey("K"), -1, nil)
-	if err != nil {
-		return err
-	}
-	list := &pb.SliceRefList{List: make([]*pb.SliceRef, 0, len(vals))}
-	for k, v := range vals {
-		b := utils.FromBuffer([]byte(k[1:])) // "K"
-		if b.Len() != 12 {
-			logger.Warnf("invalid sliceRefKey: %s", k)
-			continue
-		}
-		id := b.Get64()
-		size := b.Get32()
-		list.List = append(list.List, &pb.SliceRef{Id: id, Size: size, Refs: parseCounter(v) + 1})
-	}
-	logger.Debugf("dump %s num: %d", s, len(list.List))
-	return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: list})
+	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
+		list := &pb.SliceRefList{List: make([]*pb.SliceRef, 0, 1024)}
+		tx.scan(m.fmtKey("K"), nextKey(m.fmtKey("K")), false, func(k, v []byte) bool {
+			b := utils.FromBuffer([]byte(k[1:])) // "K"
+			if b.Len() != 12 {
+				logger.Warnf("invalid sliceRefKey: %s", k)
+				return true
+			}
+			id := b.Get64()
+			size := b.Get32()
+			list.List = append(list.List, &pb.SliceRef{Id: id, Size: size, Refs: parseCounter(v) + 1})
+			return true
+		})
+		logger.Debugf("dump %s num: %d", s, len(list.List))
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: list})
+	})
 }
 
 type kvAclDS struct {
@@ -253,23 +273,22 @@ type kvAclDS struct {
 
 func (s *kvAclDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
-	vals, err := m.scanValues(m.fmtKey("R"), -1, nil)
-	if err != nil {
-		return err
-	}
-	list := &pb.AclList{List: make([]*pb.Acl, 0, len(vals))}
-	for k, v := range vals {
-		b := utils.FromBuffer([]byte(k[1:])) // "R"
-		if b.Len() != 4 {
-			logger.Warnf("invalid aclKey: %s", k)
-			continue
-		}
-		acl := UnmarshalAclPB(v)
-		acl.Id = b.Get32()
-		list.List = append(list.List, acl)
-	}
-	logger.Debugf("dump %s num: %d", s, len(list.List))
-	return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: list})
+	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
+		list := &pb.AclList{List: make([]*pb.Acl, 0, 16)}
+		tx.scan(m.fmtKey("R"), nextKey(m.fmtKey("R")), false, func(k, v []byte) bool {
+			b := utils.FromBuffer([]byte(k[1:])) // "R"
+			if b.Len() != 4 {
+				logger.Warnf("invalid aclKey: %s", k)
+				return true
+			}
+			acl := UnmarshalAclPB(v)
+			acl.Id = b.Get32()
+			list.List = append(list.List, acl)
+			return true
+		})
+		logger.Debugf("dump %s num: %d", s, len(list.List))
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: list})
+	})
 }
 
 type kvMixDS struct {
@@ -308,7 +327,7 @@ func (s *kvMixDS) dump(ctx Context, ch chan *dumpedResult) error {
 		typ  int
 		elem proto.Message
 	}
-	entryCh := make(chan *entry, kvBatchSize*s.opt.CoNum)
+	entryCh := make(chan *entry, kvBatchSize*s.opt.CoNum*2)
 	entryPool := &sync.Pool{
 		New: func() interface{} {
 			return &entry{}
@@ -381,7 +400,7 @@ func (s *kvMixDS) dump(ctx Context, ch chan *dumpedResult) error {
 		m.encodeInode(Ino(left), start[1:])
 		m.encodeInode(Ino(right), end[1:])
 		eg.Go(func() error {
-			return m.txn(func(tx *kvTxn) error {
+			return m.execStmt(egCtx, s.txn, func(tx *kvTxn) error {
 				var ent *entry
 				tx.scan(start, end, false, func(k, v []byte) bool {
 					if egCtx.Err() != nil {
@@ -511,24 +530,22 @@ type kvQuotaDS struct {
 
 func (s *kvQuotaDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
-	vals, err := m.scanValues(m.fmtKey("QD"), -1, nil)
-	if err != nil {
-		return err
-	}
-
-	ql := &pb.QuotaList{}
-	for k, v := range vals {
-		q := &pb.Quota{}
-		q.Inode = uint64(m.decodeInode([]byte(k)[2:]))
-		b := utils.FromBuffer(v)
-		q.MaxSpace = int64(b.Get64())
-		q.MaxInodes = int64(b.Get64())
-		q.UsedSpace = int64(b.Get64())
-		q.UsedInodes = int64(b.Get64())
-		ql.List = append(ql.List, q)
-	}
-	logger.Debugf("dump %s num: %d", s, len(ql.List))
-	return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: ql})
+	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
+		ql := &pb.QuotaList{List: make([]*pb.Quota, 0, 16)}
+		tx.scan(m.fmtKey("QD"), nextKey(m.fmtKey("QD")), false, func(k, v []byte) bool {
+			q := &pb.Quota{}
+			q.Inode = uint64(m.decodeInode([]byte(k)[2:]))
+			b := utils.FromBuffer(v)
+			q.MaxSpace = int64(b.Get64())
+			q.MaxInodes = int64(b.Get64())
+			q.UsedSpace = int64(b.Get64())
+			q.UsedInodes = int64(b.Get64())
+			ql.List = append(ql.List, q)
+			return true
+		})
+		logger.Debugf("dump %s num: %d", s, len(ql.List))
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: ql})
+	})
 }
 
 type kvStatDS struct {
@@ -537,23 +554,21 @@ type kvStatDS struct {
 
 func (s *kvStatDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
-	vals, err := m.scanValues(m.fmtKey("U"), -1, nil)
-	if err != nil {
-		return err
-	}
-
-	sl := &pb.StatList{}
-	for k, v := range vals {
-		s := &pb.Stat{}
-		s.Inode = uint64(m.decodeInode([]byte(k)[1:]))
-		b := utils.FromBuffer(v)
-		s.DataLength = int64(b.Get64())
-		s.UsedSpace = int64(b.Get64())
-		s.UsedInodes = int64(b.Get64())
-		sl.List = append(sl.List, s)
-	}
-	logger.Debugf("dump %s num: %d", s, len(sl.List))
-	return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: sl})
+	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
+		sl := &pb.StatList{List: make([]*pb.Stat, 0, 16)}
+		tx.scan(m.fmtKey("U"), nextKey(m.fmtKey("U")), false, func(k, v []byte) bool {
+			s := &pb.Stat{}
+			s.Inode = uint64(m.decodeInode([]byte(k)[1:]))
+			b := utils.FromBuffer(v)
+			s.DataLength = int64(b.Get64())
+			s.UsedSpace = int64(b.Get64())
+			s.UsedInodes = int64(b.Get64())
+			sl.List = append(sl.List, s)
+			return true
+		})
+		logger.Debugf("dump %s num: %d", s, len(sl.List))
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: sl})
+	})
 }
 
 type kvFormatLS struct {

@@ -19,6 +19,7 @@ package meta
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -799,6 +800,39 @@ func (m *kvMeta) ListSessions() ([]*Session, error) {
 
 func (m *kvMeta) shouldRetry(err error) bool {
 	return m.client.shouldRetry(err)
+}
+
+func (m *kvMeta) roTxn(ctx context.Context, f func(*kvTxn) error) error {
+	start := time.Now()
+	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
+
+	var maxRetry int
+	val := ctx.Value(txMaxRetryKey{})
+	if val == nil {
+		maxRetry = 50
+	} else {
+		maxRetry = val.(int)
+	}
+
+	var lastErr error
+	for i := 0; i < maxRetry; i++ {
+		err := m.client.txn(f, i)
+		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
+			err = nil
+		}
+		if err != nil && m.shouldRetry(err) {
+			m.txRestart.Add(1)
+			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
+			lastErr = err
+			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
+			continue
+		} else if err == nil && i > 1 {
+			logger.Warnf("Transaction succeeded after %d tries (%s), error: %s", i+1, time.Since(start), lastErr)
+		}
+		return err
+	}
+	logger.Warnf("Already tried 50 times, returning: %s", lastErr)
+	return lastErr
 }
 
 func (m *kvMeta) txn(f func(tx *kvTxn) error, inodes ...Ino) error {

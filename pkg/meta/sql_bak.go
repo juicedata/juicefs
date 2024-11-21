@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -37,8 +38,8 @@ var (
 	sqlBatchSize = 40960
 )
 
-func (m *dbMeta) buildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
-	ds := dumpedSeg{typ: typ, meta: m, opt: opt}
+func (m *dbMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *bTxn) iDumpedSeg {
+	ds := dumpedSeg{typ: typ, meta: m, opt: opt, txn: txn}
 	switch typ {
 	case SegTypeFormat:
 		return &formatDS{ds}
@@ -129,6 +130,26 @@ func (m *dbMeta) buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
 	return nil
 }
 
+func (m *dbMeta) execStmt(ctx context.Context, txn *bTxn, f func(*xorm.Session) error) error {
+	if txn.opt.useless {
+		return m.roTxn(ctx, func(s *xorm.Session) error {
+			return f(s)
+		})
+	}
+
+	var err error
+	cnt := 0
+	for cnt < txn.opt.maxStmtRetry {
+		err = f(txn.obj.(*xorm.Session))
+		if err == nil || !m.shouldRetry(err) {
+			break
+		}
+		cnt++
+		time.Sleep(time.Duration(cnt) * time.Microsecond)
+	}
+	return err
+}
+
 func getSQLCounterFields(c *pb.Counters) map[string]*int64 {
 	return map[string]*int64{
 		usedSpace:     &c.UsedSpace,
@@ -147,7 +168,8 @@ type sqlCounterDS struct {
 func (s *sqlCounterDS) dump(ctx Context, ch chan *dumpedResult) error {
 	meta := s.meta.(*dbMeta)
 	var rows []counter
-	if err := meta.roTxn(func(s *xorm.Session) error {
+	if err := meta.execStmt(ctx, s.txn, func(s *xorm.Session) error {
+		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -172,7 +194,8 @@ type sqlSustainedDS struct {
 
 func (s *sqlSustainedDS) dump(ctx Context, ch chan *dumpedResult) error {
 	var rows []sustained
-	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
+	if err := s.meta.(*dbMeta).execStmt(ctx, s.txn, func(s *xorm.Session) error {
+		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -202,7 +225,8 @@ type sqlDelFileDS struct {
 
 func (s *sqlDelFileDS) dump(ctx Context, ch chan *dumpedResult) error {
 	var rows []delfile
-	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
+	if err := s.meta.(*dbMeta).execStmt(ctx, s.txn, func(s *xorm.Session) error {
+		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -233,16 +257,12 @@ func (s *sqlSliceRefDS) dump(ctx Context, ch chan *dumpedResult) error {
 		nStart := start
 		eg.Go(func() error {
 			var rows []sliceRef
-			if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
+			if err := s.meta.(*dbMeta).execStmt(ctx, s.txn, func(s *xorm.Session) error {
+				rows = rows[:0]
 				return s.Where("refs != 1").Limit(sqlBatchSize, nStart).Find(&rows) // skip default refs
-			}); err != nil {
+			}); err != nil || len(rows) == 0 {
 				taskFinished = true
 				return err
-			}
-
-			if len(rows) == 0 {
-				taskFinished = true
-				return nil
 			}
 			var psr *pb.SliceRef
 			for _, sr := range rows {
@@ -280,7 +300,8 @@ type sqlAclDS struct {
 
 func (s *sqlAclDS) dump(ctx Context, ch chan *dumpedResult) error {
 	var rows []acl
-	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
+	if err := s.meta.(*dbMeta).execStmt(ctx, s.txn, func(s *xorm.Session) error {
+		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -317,7 +338,8 @@ type sqlXattrDS struct {
 
 func (s *sqlXattrDS) dump(ctx Context, ch chan *dumpedResult) error {
 	var rows []xattr
-	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
+	if err := s.meta.(*dbMeta).execStmt(ctx, s.txn, func(s *xorm.Session) error {
+		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -348,7 +370,8 @@ type sqlQuotaDS struct {
 
 func (s *sqlQuotaDS) dump(ctx Context, ch chan *dumpedResult) error {
 	var rows []dirQuota
-	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
+	if err := s.meta.(*dbMeta).execStmt(ctx, s.txn, func(s *xorm.Session) error {
+		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -378,7 +401,8 @@ type sqlStatDS struct {
 
 func (s *sqlStatDS) dump(ctx Context, ch chan *dumpedResult) error {
 	var rows []dirStats
-	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
+	if err := s.meta.(*dbMeta).execStmt(ctx, s.txn, func(s *xorm.Session) error {
+		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -440,7 +464,8 @@ func (s *sqlNodeDBS) dump(ctx Context, ch chan *dumpedResult) error {
 
 func (s *sqlNodeDBS) doQuery(ctx context.Context, limit, start int, sum *int64) (proto.Message, error) {
 	var rows []node
-	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
+	if err := s.meta.(*dbMeta).execStmt(ctx, s.txn, func(s *xorm.Session) error {
+		rows = rows[:0]
 		return s.Limit(limit, start).Find(&rows)
 	}); err != nil {
 		return nil, err
@@ -496,7 +521,8 @@ func (s *sqlChunkDBS) dump(ctx Context, ch chan *dumpedResult) error {
 
 func (s *sqlChunkDBS) doQuery(ctx context.Context, limit, start int, sum *int64) (proto.Message, error) {
 	var rows []chunk
-	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
+	if err := s.meta.(*dbMeta).execStmt(ctx, s.txn, func(s *xorm.Session) error {
+		rows = rows[:0]
 		return s.Limit(limit, start).Find(&rows)
 	}); err != nil {
 		return nil, err
@@ -556,7 +582,8 @@ func (s *sqlEdgeDBS) doQuery(ctx context.Context, limit, start int, sum *int64) 
 	s.lock.Unlock()
 
 	var rows []edge
-	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
+	if err := s.meta.(*dbMeta).execStmt(ctx, s.txn, func(s *xorm.Session) error {
+		rows = rows[:0]
 		return s.Limit(limit, start).Find(&rows)
 	}); err != nil {
 		return nil, err
@@ -647,7 +674,8 @@ func (s *sqlSymlinkDBS) dump(ctx Context, ch chan *dumpedResult) error {
 
 func (s *sqlSymlinkDBS) doQuery(ctx context.Context, limit, start int, sum *int64) (proto.Message, error) {
 	var rows []symlink
-	if err := s.meta.(*dbMeta).roTxn(func(s *xorm.Session) error {
+	if err := s.meta.(*dbMeta).execStmt(ctx, s.txn, func(s *xorm.Session) error {
+		rows = rows[:0]
 		return s.Limit(limit, start).Find(&rows)
 	}); err != nil {
 		return nil, err

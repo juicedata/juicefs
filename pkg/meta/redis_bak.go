@@ -40,8 +40,8 @@ var (
 	redisBatchSize = 10000
 )
 
-func (m *redisMeta) buildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg {
-	ds := dumpedSeg{typ: typ, meta: m, opt: opt}
+func (m *redisMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *bTxn) iDumpedSeg {
+	ds := dumpedSeg{typ: typ, meta: m, opt: opt, txn: txn}
 	switch typ {
 	case SegTypeFormat:
 		return &formatDS{ds}

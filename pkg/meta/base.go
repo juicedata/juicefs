@@ -136,7 +136,7 @@ type engine interface {
 
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 
-	buildDumpedSeg(typ int, opt *DumpOption) iDumpedSeg
+	buildDumpedSeg(typ int, opt *DumpOption, txn *bTxn) iDumpedSeg
 	buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg
 	prepareLoad(ctx Context, opt *LoadOption) error
 }
@@ -3074,7 +3074,7 @@ func (h *dirHandler) Close() {
 	h.Unlock()
 }
 
-func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) (err error) {
+func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 	opt = opt.check()
 
 	bak := NewBakFormat()
@@ -3082,24 +3082,24 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) (err er
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		var err error
-		defer func() {
-			if err != nil {
-				ctx.Cancel()
-			} else {
-				close(ch)
-			}
-			wg.Done()
-		}()
+		defer wg.Done()
 
-		for typ := SegTypeFormat; typ < SegTypeMax; typ++ {
-			seg := m.en.buildDumpedSeg(typ, opt)
-			if seg != nil {
-				if err = seg.dump(ctx, ch); err != nil {
-					logger.Errorf("dump %s err: %v", seg, err)
-					return
+		txn := newBakTxn(m.en, nil, opt.CoNum)
+		err := txn.exec(ctx, func(ctx Context, txn *bTxn) error {
+			for typ := SegTypeFormat; typ < SegTypeMax; typ++ {
+				seg := m.en.buildDumpedSeg(typ, opt, txn)
+				if seg != nil {
+					if err := seg.dump(ctx, ch); err != nil {
+						return fmt.Errorf("dump %s err: %w", seg, err)
+					}
 				}
 			}
+			return nil
+		})
+		if err != nil {
+			ctx.Cancel()
+		} else {
+			close(ch)
 		}
 	}()
 

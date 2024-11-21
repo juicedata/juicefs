@@ -22,6 +22,7 @@ package meta
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -392,7 +393,7 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 	}
 	var s = setting{Name: "format"}
 	var ok bool
-	err := m.roTxn(func(ses *xorm.Session) (err error) {
+	err := m.roTxn(Background, func(ses *xorm.Session) (err error) {
 		ok, err = ses.Get(&s)
 		return err
 	})
@@ -481,7 +482,7 @@ func (m *dbMeta) cacheACLs(ctx Context) error {
 	if !m.getFormat().EnableACL {
 		return nil
 	}
-	return m.roTxn(func(s *xorm.Session) error {
+	return m.roTxn(ctx, func(s *xorm.Session) error {
 		return s.Table(&acl{}).Iterate(new(acl), func(idx int, bean interface{}) error {
 			a := bean.(*acl)
 			m.aclCache.Put(a.Id, a.toRule())
@@ -499,7 +500,7 @@ func (m *dbMeta) Reset() error {
 }
 
 func (m *dbMeta) doLoad() (data []byte, err error) {
-	err = m.roTxn(func(ses *xorm.Session) error {
+	err = m.roTxn(Background, func(ses *xorm.Session) error {
 		if ok, err := ses.IsTableExist(&setting{}); err != nil {
 			return err
 		} else if !ok {
@@ -591,7 +592,7 @@ func (m *dbMeta) getSession(row interface{}, detail bool) (*Session, error) {
 			frows []flock
 			prows []plock
 		)
-		err := m.roTxn(func(ses *xorm.Session) error {
+		err := m.roTxn(Background, func(ses *xorm.Session) error {
 			if err := ses.Find(&srows, &sustained{Sid: s.Sid}); err != nil {
 				return fmt.Errorf("find sustained %d: %s", s.Sid, err)
 			}
@@ -625,7 +626,7 @@ func (m *dbMeta) getSession(row interface{}, detail bool) (*Session, error) {
 }
 
 func (m *dbMeta) GetSession(sid uint64, detail bool) (s *Session, err error) {
-	err = m.roTxn(func(ses *xorm.Session) error {
+	err = m.roTxn(Background, func(ses *xorm.Session) error {
 		if ok, err := ses.IsTableExist(&session2{}); err != nil {
 			return err
 		} else if ok {
@@ -655,7 +656,7 @@ func (m *dbMeta) GetSession(sid uint64, detail bool) (s *Session, err error) {
 
 func (m *dbMeta) ListSessions() ([]*Session, error) {
 	var sessions []*Session
-	err := m.roTxn(func(ses *xorm.Session) error {
+	err := m.roTxn(Background, func(ses *xorm.Session) error {
 		if ok, err := ses.IsTableExist(&session2{}); err != nil {
 			return err
 		} else if ok {
@@ -696,7 +697,7 @@ func (m *dbMeta) ListSessions() ([]*Session, error) {
 }
 
 func (m *dbMeta) getCounter(name string) (v int64, err error) {
-	err = m.roTxn(func(s *xorm.Session) error {
+	err = m.roTxn(Background, func(s *xorm.Session) error {
 		c := counter{Name: name}
 		_, err := s.Get(&c)
 		if err == nil {
@@ -833,7 +834,7 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 	return lastErr
 }
 
-func (m *dbMeta) roTxn(f func(s *xorm.Session) error) error {
+func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error {
 	start := time.Now()
 	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
 	s := m.db.NewSession()
@@ -844,8 +845,15 @@ func (m *dbMeta) roTxn(f func(s *xorm.Session) error) error {
 		opt.Isolation = sql.LevelRepeatableRead
 	}
 
+	var maxRetry int
+	val := ctx.Value(txMaxRetryKey{})
+	if val == nil {
+		maxRetry = 50
+	} else {
+		maxRetry = val.(int)
+	}
 	var lastErr error
-	for i := 0; i < 50; i++ {
+	for i := 0; i < maxRetry; i++ {
 		err := s.BeginTx(&opt)
 		if err != nil && opt.ReadOnly && (strings.Contains(err.Error(), "READ") || strings.Contains(err.Error(), "driver does not support read-only transactions")) {
 			logger.Warnf("the database does not support read-only transaction")
@@ -956,7 +964,7 @@ func (m *dbMeta) doFlushStats() {
 }
 
 func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
-	return errno(m.roTxn(func(s *xorm.Session) error {
+	return errno(m.roTxn(ctx, func(s *xorm.Session) error {
 		s = s.Table(&edge{})
 		nn := namedNode{node: node{Parent: parent}, Name: []byte(name)}
 		var exist bool
@@ -980,7 +988,7 @@ func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 }
 
 func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
-	return errno(m.roTxn(func(s *xorm.Session) error {
+	return errno(m.roTxn(ctx, func(s *xorm.Session) error {
 		var n = node{Inode: inode}
 		ok, err := s.Get(&n)
 		if err != nil {
@@ -1223,7 +1231,7 @@ func (m *dbMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 
 func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, target []byte, err error) {
 	if noatime {
-		err = m.roTxn(func(s *xorm.Session) error {
+		err = m.roTxn(ctx, func(s *xorm.Session) error {
 			var l = symlink{Inode: inode}
 			ok, err := s.Get(&l)
 			if err == nil && ok {
@@ -2095,7 +2103,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 }
 
 func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
-	return errno(m.roTxn(func(s *xorm.Session) error {
+	return errno(m.roTxn(ctx, func(s *xorm.Session) error {
 		s = s.Table(&edge{})
 		if plus != 0 {
 			s = s.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
@@ -2146,7 +2154,7 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 	}
 
 	var sus []sustained
-	err = m.roTxn(func(ses *xorm.Session) error {
+	err = m.roTxn(Background, func(ses *xorm.Session) error {
 		sus = nil
 		return ses.Find(&sus, &sustained{Sid: sid})
 	})
@@ -2182,7 +2190,7 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 
 func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	var sids []uint64
-	_ = m.roTxn(func(ses *xorm.Session) error {
+	_ = m.roTxn(Background, func(ses *xorm.Session) error {
 		var ss []session2
 		err := ses.Where("Expire < ?", time.Now().Unix()).Limit(limit, 0).Find(&ss)
 		if err != nil {
@@ -2199,7 +2207,7 @@ func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 		return sids, nil
 	}
 
-	err := m.roTxn(func(ses *xorm.Session) error {
+	err := m.roTxn(Background, func(ses *xorm.Session) error {
 		if ok, err := ses.IsTableExist(&session{}); err != nil {
 			return err
 		} else if ok {
@@ -2265,7 +2273,7 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 
 func (m *dbMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno) {
 	var c = chunk{Inode: inode, Indx: indx}
-	if err := m.roTxn(func(s *xorm.Session) error {
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
 		_, err := s.MustCols("indx").Get(&c)
 		return err
 	}); err != nil {
@@ -2480,7 +2488,7 @@ func (m *dbMeta) getParents(s *xorm.Session, inode, parent Ino) []Ino {
 
 func (m *dbMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	var rows []edge
-	if err := m.roTxn(func(s *xorm.Session) error {
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
 		rows = nil
 		return s.Find(&rows, &edge{Inode: inode})
 	}); err != nil {
@@ -2568,7 +2576,7 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, sys
 	st := dirStats{Inode: ino}
 	var exist bool
 	var err error
-	if err = m.roTxn(func(s *xorm.Session) error {
+	if err = m.roTxn(ctx, func(s *xorm.Session) error {
 		exist, err = s.Get(&st)
 		return err
 	}); err != nil {
@@ -2607,7 +2615,7 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, sys
 
 func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {
 	files := make(map[Ino]uint64)
-	err := m.roTxn(func(s *xorm.Session) error {
+	err := m.roTxn(Background, func(s *xorm.Session) error {
 		var ds []delfile
 		err := s.Where("expire < ?", ts).Limit(limit, 0).Find(&ds)
 		if err != nil {
@@ -2623,7 +2631,7 @@ func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 
 func (m *dbMeta) doCleanupSlices() {
 	var cks []sliceRef
-	_ = m.roTxn(func(s *xorm.Session) error {
+	_ = m.roTxn(Background, func(s *xorm.Session) error {
 		cks = nil
 		return s.Where("refs <= 0").Find(&cks)
 	})
@@ -2672,7 +2680,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 			continue
 		}
 		var ref = sliceRef{Id: s.id}
-		err := m.roTxn(func(s *xorm.Session) error {
+		err := m.roTxn(Background, func(s *xorm.Session) error {
 			ok, err := s.Get(&ref)
 			if err == nil && !ok {
 				err = errors.New("not found")
@@ -2688,7 +2696,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 
 func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	var indexes []chunk
-	_ = m.roTxn(func(s *xorm.Session) error {
+	_ = m.roTxn(Background, func(s *xorm.Session) error {
 		indexes = nil
 		return s.Cols("indx").Find(&indexes, &chunk{Inode: inode})
 	})
@@ -2712,7 +2720,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	var result []delslices
 	var batch int = 1e6
 	for {
-		_ = m.roTxn(func(s *xorm.Session) error {
+		_ = m.roTxn(Background, func(s *xorm.Session) error {
 			result = result[:0]
 			return s.Where("deleted < ?", edge).Limit(batch, 0).Find(&result)
 		})
@@ -2743,7 +2751,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 			}
 			for _, s := range ss {
 				var ref = sliceRef{Id: s.Id}
-				err := m.roTxn(func(s *xorm.Session) error {
+				err := m.roTxn(Background, func(s *xorm.Session) error {
 					ok, err := s.Get(&ref)
 					if err == nil && !ok {
 						err = errors.New("not found")
@@ -2804,7 +2812,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 	// there could be false-negative that the compaction is successful, double-check
 	if st != 0 && st != syscall.EINVAL {
 		var ok bool
-		if err := m.roTxn(func(s *xorm.Session) error {
+		if err := m.roTxn(Background, func(s *xorm.Session) error {
 			var e error
 			ok, e = s.Get(&sliceRef{Id: id})
 			return e
@@ -2829,7 +2837,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 			}
 			var ref = sliceRef{Id: s.id}
 			var ok bool
-			err := m.roTxn(func(s *xorm.Session) error {
+			err := m.roTxn(Background, func(s *xorm.Session) error {
 				var e error
 				ok, e = s.Get(&ref)
 				return e
@@ -2849,7 +2857,7 @@ func dup(b []byte) []byte {
 }
 
 func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {
-	return m.roTxn(func(s *xorm.Session) error {
+	return m.roTxn(ctx, func(s *xorm.Session) error {
 		return s.Table(&chunk{}).Iterate(new(chunk), func(idx int, bean interface{}) error {
 			c := bean.(*chunk)
 			if len(c.Slices) > sliceBytes {
@@ -2865,7 +2873,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, de
 	if delete {
 		m.doCleanupSlices()
 	}
-	err := m.roTxn(func(s *xorm.Session) error {
+	err := m.roTxn(ctx, func(s *xorm.Session) error {
 		var cs []chunk
 		err := s.Find(&cs)
 		if err != nil {
@@ -2893,7 +2901,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, de
 	}
 
 	if scanPending {
-		_ = m.roTxn(func(s *xorm.Session) error {
+		_ = m.roTxn(ctx, func(s *xorm.Session) error {
 			var cks []sliceRef
 			err := s.Where("refs <= 0").Find(&cks)
 			if err != nil {
@@ -2926,7 +2934,7 @@ func (m *dbMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 	}
 	var dss []delslices
 
-	err := m.roTxn(func(tx *xorm.Session) error {
+	err := m.roTxn(ctx, func(tx *xorm.Session) error {
 		if ok, err := tx.IsTableExist(&delslices{}); err != nil {
 			return err
 		} else if !ok {
@@ -2971,7 +2979,7 @@ func (m *dbMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 		if clean {
 			for _, s := range ss {
 				var ref = sliceRef{Id: s.Id}
-				err := m.roTxn(func(tx *xorm.Session) error {
+				err := m.roTxn(ctx, func(tx *xorm.Session) error {
 					ok, err := tx.Get(&ref)
 					if err == nil && !ok {
 						err = errors.New("not found")
@@ -2992,7 +3000,7 @@ func (m *dbMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
 		return nil
 	}
 	var refs []sliceRef
-	err := m.roTxn(func(tx *xorm.Session) error {
+	err := m.roTxn(ctx, func(tx *xorm.Session) error {
 		if ok, err := tx.IsTableExist(&sliceRef{}); err != nil {
 			return err
 		} else if !ok {
@@ -3023,7 +3031,7 @@ func (m *dbMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	}
 
 	var dfs []delfile
-	err := m.roTxn(func(s *xorm.Session) error {
+	err := m.roTxn(ctx, func(s *xorm.Session) error {
 		if ok, err := s.IsTableExist(&delfile{}); err != nil {
 			return err
 		} else if !ok {
@@ -3089,7 +3097,7 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
 	defer m.timeit("GetXattr", time.Now())
 	inode = m.checkRoot(inode)
-	return errno(m.roTxn(func(s *xorm.Session) error {
+	return errno(m.roTxn(ctx, func(s *xorm.Session) error {
 		var x = xattr{Inode: inode, Name: name}
 		ok, err := s.Get(&x)
 		if err != nil {
@@ -3106,7 +3114,7 @@ func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
 	defer m.timeit("ListXattr", time.Now())
 	inode = m.checkRoot(inode)
-	return errno(m.roTxn(func(s *xorm.Session) error {
+	return errno(m.roTxn(ctx, func(s *xorm.Session) error {
 		var xs []xattr
 		err := s.Where("inode = ?", inode).Find(&xs, &xattr{Inode: inode})
 		if err != nil {
@@ -3178,7 +3186,7 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 
 func (m *dbMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	var quota *Quota
-	return quota, m.roTxn(func(s *xorm.Session) error {
+	return quota, m.roTxn(ctx, func(s *xorm.Session) error {
 		q := dirQuota{Inode: inode}
 		ok, e := s.Get(&q)
 		if e == nil && ok {
@@ -3243,7 +3251,7 @@ func (m *dbMeta) doDelQuota(ctx Context, inode Ino) error {
 
 func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	var rows []dirQuota
-	err := m.roTxn(func(s *xorm.Session) error {
+	err := m.roTxn(ctx, func(s *xorm.Session) error {
 		rows = rows[:0]
 		return s.Find(&rows)
 	})
@@ -3476,7 +3484,7 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 		conds[c] = sync.NewCond(&ms[c])
 		if c < len(entries) {
 			go func(c int) {
-				_ = m.roTxn(func(s *xorm.Session) error {
+				_ = m.roTxn(Background, func(s *xorm.Session) error {
 					for i := c; i < len(entries) && err == nil; i += threads {
 						e := entries[i]
 						er := m.dumpEntry(s, e.Attr.Inode, 0, e, showProgress)
@@ -3652,7 +3660,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	progress := utils.NewProgress(false)
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
-	return m.roTxn(func(s *xorm.Session) error {
+	return m.roTxn(Background, func(s *xorm.Session) error {
 		if root == RootInode && fast {
 			defer func() { m.snap = nil }()
 			bar := progress.AddCountBar("Snapshot keys", 0)
@@ -4164,7 +4172,7 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 
 func (m *dbMeta) doFindDetachedNodes(t time.Time) []Ino {
 	var inodes []Ino
-	err := m.roTxn(func(s *xorm.Session) error {
+	err := m.roTxn(Background, func(s *xorm.Session) error {
 		var nodes []detachedNode
 		err := s.Where("added < ?", t.Unix()).Find(&nodes)
 		for _, n := range nodes {
@@ -4412,7 +4420,7 @@ func (m *dbMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 }
 
 func (m *dbMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno {
-	return errno(m.roTxn(func(s *xorm.Session) error {
+	return errno(m.roTxn(ctx, func(s *xorm.Session) error {
 		if aclId == aclAPI.None {
 			attr := &Attr{}
 			n := &node{Inode: ino}
@@ -4484,7 +4492,7 @@ func (m *dbMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandle
 func (m *dbMeta) getDirFetcher() dirFetcher {
 	return func(ctx Context, inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error) {
 		entries := make([]*Entry, 0, limit)
-		err := m.roTxn(func(s *xorm.Session) error {
+		err := m.roTxn(Background, func(s *xorm.Session) error {
 			var name []byte
 			if cursor != nil {
 				name = cursor.([]byte)

@@ -406,9 +406,9 @@ func BenchmarkLoadDumpV2(b *testing.B) {
 	logrus.SetLevel(logrus.DebugLevel)
 	b.ReportAllocs()
 	engines := map[string]string{
-		// "mysql": "mysql://root:@/dev",
-		// "redis": "redis://127.0.0.1:6379/2",
-		"tikv": "tikv://127.0.0.1:2379/jfs-load-dump-1",
+		"mysql": "mysql://root:@/dev",
+		"redis": "redis://127.0.0.1:6379/2",
+		"tikv":  "tikv://127.0.0.1:2379/jfs-load-dump-1",
 	}
 
 	sample := "../../1M_files_in_one_dir.dump"
@@ -461,7 +461,7 @@ func BenchmarkLoadDumpV2(b *testing.B) {
 			defer fp.Close()
 
 			b.ResetTimer()
-			if err = m.DumpMetaV2(Background, fp, &DumpOption{CoNum: 1}); err != nil {
+			if err = m.DumpMetaV2(Background, fp, &DumpOption{CoNum: 10}); err != nil {
 				b.Fatalf("dump meta: %s", err)
 			}
 			fp.Sync()
