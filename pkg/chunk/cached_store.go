@@ -93,6 +93,29 @@ func (s *rSlice) keys() []string {
 	return keys
 }
 
+func (s *rSlice) readFromCache(key string, p []byte, boff int) (n int, err error) {
+	start := time.Now()
+	r, err := s.store.bcache.load(key)
+	if err == nil {
+		n, err = r.ReadAt(p, int64(boff))
+		if !s.store.conf.OSCache {
+			dropOSCache(r)
+		}
+		_ = r.Close()
+		if err == nil {
+			s.store.cacheHits.Add(1)
+			s.store.cacheHitBytes.Add(float64(n))
+			s.store.cacheReadHist.Observe(time.Since(start).Seconds())
+			return n, nil
+		}
+		if f, ok := r.(*os.File); ok {
+			logger.Warnf("Remove partial cached block %s: %d %s", f.Name(), n, err)
+			_ = os.Remove(f.Name())
+		}
+	}
+	return 0, err
+}
+
 func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err error) {
 	p := page.Data
 	if len(p) == 0 {
@@ -128,24 +151,13 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 
 	key := s.key(indx)
 	if s.store.conf.CacheSize > 0 {
-		start := time.Now()
-		r, err := s.store.bcache.load(key)
-		if err == nil {
-			n, err = r.ReadAt(p, int64(boff))
-			if !s.store.conf.OSCache {
-				dropOSCache(r)
-			}
-			_ = r.Close()
-			if err == nil {
-				s.store.cacheHits.Add(1)
-				s.store.cacheHitBytes.Add(float64(n))
-				s.store.cacheReadHist.Observe(time.Since(start).Seconds())
-				return n, nil
-			}
-			if f, ok := r.(*os.File); ok {
-				logger.Warnf("remove partial cached block %s: %d %s", f.Name(), n, err)
-				_ = os.Remove(f.Name())
-			}
+		if err := utils.WithTimeout(func() error { // Fast fallback to object storage when disk hangs.
+			n, err = s.readFromCache(key, p, boff)
+			return err
+		}, s.store.conf.GetTimeout); err == nil {
+			return n, nil
+		} else if errors.Is(err, utils.ErrFuncTimeout) {
+			logger.Warnf("Failed to read cache %s, %v", key, err)
 		}
 	}
 
