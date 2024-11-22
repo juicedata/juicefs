@@ -40,7 +40,7 @@ func (m *kvMeta) getBatchNum() int {
 	return batch
 }
 
-func (m *kvMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *bTxn) iDumpedSeg {
+func (m *kvMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg {
 	ds := dumpedSeg{typ: typ, meta: m, opt: opt, txn: txn}
 	switch typ {
 	case SegTypeFormat:
@@ -124,8 +124,16 @@ func (m *kvMeta) buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
 	return nil
 }
 
-func (m *kvMeta) execStmt(ctx context.Context, txn *bTxn, f func(*kvTxn) error) error {
-	if txn.opt.useless {
+func (m *kvMeta) execETxn(ctx Context, txn *eTxn, f func(Context, *eTxn) error) error {
+	ctx.WithValue(txMaxRetryKey{}, txn.opt.maxRetry)
+	return m.roTxn(ctx, func(tx *kvTxn) error {
+		txn.obj = tx
+		return f(ctx, txn)
+	})
+}
+
+func (m *kvMeta) execStmt(ctx context.Context, txn *eTxn, f func(*kvTxn) error) error {
+	if txn.opt.notUsed {
 		return m.roTxn(ctx, func(tx *kvTxn) error {
 			return f(tx)
 		})

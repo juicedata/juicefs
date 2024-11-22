@@ -136,7 +136,8 @@ type engine interface {
 
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 
-	buildDumpedSeg(typ int, opt *DumpOption, txn *bTxn) iDumpedSeg
+	execETxn(ctx Context, txn *eTxn, fn func(ctx Context, txn *eTxn) error) error
+	buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg
 	buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg
 	prepareLoad(ctx Context, opt *LoadOption) error
 }
@@ -3084,8 +3085,16 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 	go func() {
 		defer wg.Done()
 
-		txn := newBakTxn(m.en, nil, opt.CoNum)
-		err := txn.exec(ctx, func(ctx Context, txn *bTxn) error {
+		txn := &eTxn{
+			en: m.en,
+			opt: &bTxnOption{
+				coNum:        opt.CoNum,
+				readOnly:     true,
+				maxRetry:     1,
+				maxStmtRetry: 3,
+			},
+		}
+		err := m.en.execETxn(ctx, txn, func(ctx Context, txn *eTxn) error {
 			for typ := SegTypeFormat; typ < SegTypeMax; typ++ {
 				seg := m.en.buildDumpedSeg(typ, opt, txn)
 				if seg != nil {

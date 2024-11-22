@@ -38,7 +38,7 @@ var (
 	sqlBatchSize = 40960
 )
 
-func (m *dbMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *bTxn) iDumpedSeg {
+func (m *dbMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg {
 	ds := dumpedSeg{typ: typ, meta: m, opt: opt, txn: txn}
 	switch typ {
 	case SegTypeFormat:
@@ -130,8 +130,21 @@ func (m *dbMeta) buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
 	return nil
 }
 
-func (m *dbMeta) execStmt(ctx context.Context, txn *bTxn, f func(*xorm.Session) error) error {
-	if txn.opt.useless {
+func (m *dbMeta) execETxn(ctx Context, txn *eTxn, f func(Context, *eTxn) error) error {
+	if txn.opt.coNum > 1 {
+		// only use same txn when coNum == 1 for sql
+		txn.opt.notUsed = true
+		return f(ctx, txn)
+	}
+	ctx.WithValue(txMaxRetryKey{}, txn.opt.maxRetry)
+	return m.roTxn(ctx, func(sess *xorm.Session) error {
+		txn.obj = sess
+		return f(ctx, txn)
+	})
+}
+
+func (m *dbMeta) execStmt(ctx context.Context, txn *eTxn, f func(*xorm.Session) error) error {
+	if txn.opt.notUsed {
 		return m.roTxn(ctx, func(s *xorm.Session) error {
 			return f(s)
 		})

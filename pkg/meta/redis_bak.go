@@ -40,7 +40,7 @@ var (
 	redisBatchSize = 10000
 )
 
-func (m *redisMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *bTxn) iDumpedSeg {
+func (m *redisMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg {
 	ds := dumpedSeg{typ: typ, meta: m, opt: opt, txn: txn}
 	switch typ {
 	case SegTypeFormat:
@@ -140,6 +140,11 @@ func getRedisCounterFields(prefix string, c *pb.Counters) map[string]*int64 {
 		prefix + "nextsession": &c.NextSession,
 		prefix + "nexttrash":   &c.NextTrash,
 	}
+}
+
+func (m *redisMeta) execETxn(ctx Context, txn *eTxn, f func(Context, *eTxn) error) error {
+	txn.opt.notUsed = true
+	return f(ctx, txn)
 }
 
 func execPipe(ctx context.Context, pipe redis.Pipeliner) error {

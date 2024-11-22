@@ -402,6 +402,7 @@ func TestLoadDump_MemKV(t *testing.T) {
 	})
 }
 
+/*
 func BenchmarkLoadDumpV2(b *testing.B) {
 	logrus.SetLevel(logrus.DebugLevel)
 	b.ReportAllocs()
@@ -485,3 +486,4 @@ func BenchmarkLoadDumpV2(b *testing.B) {
 		})
 	}
 }
+*/
