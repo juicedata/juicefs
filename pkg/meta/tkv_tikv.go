@@ -119,7 +119,10 @@ func (tx *tikvTxn) gets(keys ...[]byte) [][]byte {
 }
 
 func (tx *tikvTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
-	tx.GetSnapshot().SetKeyOnly(keysOnly)
+	snap := tx.GetSnapshot()
+	snap.SetScanBatchSize(10240)
+	snap.SetNotFillCache(true)
+	snap.SetKeyOnly(keysOnly)
 	it, err := tx.Iter(begin, end)
 	if err != nil {
 		panic(err)
