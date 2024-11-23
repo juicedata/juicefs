@@ -2322,17 +2322,8 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 	}
 	m.Unlock()
 
-	st := m.en.doLookup(Background, TrashInode, name, trash, nil)
-	if st == syscall.ENOENT {
-		next, err := m.en.incrCounter("nextTrash", 1)
-		if err == nil {
-			*trash = TrashInode + Ino(next)
-			attr := Attr{Typ: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: TrashInode, Full: true}
-			st = m.en.doMknod(Background, TrashInode, name, TypeDirectory, 0555, 0, "", trash, &attr)
-		} else {
-			st = errno(err)
-		}
-	}
+	st := m.ensureTrash(name, trash)
+	go m.preCreateTrash()
 
 	m.Lock()
 	if st != 0 && st != syscall.EEXIST {
@@ -2344,6 +2335,35 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 		m.subTrash.inode = *trash
 		m.subTrash.name = name
 		st = 0
+	}
+	return st
+}
+
+func (m *baseMeta) preCreateTrash() {
+	utils.SleepWithJitter(10 * time.Second) // Avoid txn conflicts caused by concurrent creation
+	name := time.Now().Add(time.Hour).UTC().Format("2006-01-02-15")
+	var nextTrash Ino
+	if st := m.ensureTrash(name, &nextTrash); st != 0 {
+		logger.Warnf("Create next trash %s: %s", name, st)
+	} else {
+		logger.Debugf("Created next trash %s, inode %d", name, nextTrash)
+	}
+}
+
+func (m *baseMeta) ensureTrash(name string, trash *Ino) syscall.Errno {
+	st := m.en.doLookup(Background, TrashInode, name, trash, nil)
+	if st == syscall.ENOENT {
+		next, err := m.en.incrCounter("nextTrash", 1)
+		if err == nil {
+			*trash = TrashInode + Ino(next)
+			attr := Attr{Typ: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: TrashInode, Full: true}
+			st = m.en.doMknod(Background, TrashInode, name, TypeDirectory, 0555, 0, "", trash, &attr)
+			if st == syscall.EEXIST {
+				st = 0
+			}
+		} else {
+			st = errno(err)
+		}
 	}
 	return st
 }
