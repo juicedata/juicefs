@@ -23,7 +23,7 @@ JuiceFS currently supports the following network-based databases.
 - **Key-value databases**: Redis, TiKV, etcd, and FoundationDB
 - **Relational databases**: PostgreSQL, MySQL, MariaDB, and the distributed relational database OceanBase
 
-Different databases have different performance and stability. For example, Redis is an in-memory key-value database with excellent performance but relatively weak reliability, while PostgreSQL is a more reliable relational database with lower performance than in-memory databases.
+Different databases have different performance and stability. For example, Redis is an in-memory key-value database with excellent performance but relatively weak reliability, while PostgreSQL is a more reliable relational database with lower performance than in-memory databases. As a distributed relational database, OceanBase not only performs well in performance, especially in high-concurrency scenarios, but also provides excellent reliability and high availability through its strong consistency transaction support and three-copy architecture. It also has linear scalability, making it an ideal choice for JuiceFS in large-scale metadata management.
 
 A detailed guide on database selection will be available soon.
 
