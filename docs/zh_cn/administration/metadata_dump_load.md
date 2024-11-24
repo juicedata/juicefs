@@ -34,7 +34,7 @@ juicefs dump redis://192.168.1.6:6379/1 meta-dump.json
 
 `juicefs dump` 的价值在于它能将完整的元数据信息以统一的 JSON 格式导出，便于管理和保存，而且不同的元数据存储引擎都可以识别并导入。
 
-在实际应用中，`dump` 命令与数据库自带的备份工具应该共同使用，相辅相成。比如，Redis 有 [Redis RDB](https://redis.io/topics/persistence#backing-up-redis-data)，MySQL 有 [`mysqldump`](https://dev.mysql.com/doc/mysql-backup-excerpt/5.7/en/mysqldump-sql-format.html) 等。
+在实际应用中，`dump` 命令与数据库自带的备份工具应该共同使用，相辅相成。比如，Redis 有 [Redis RDB](https://redis.io/topics/persistence#backing-up-redis-data)，MySQL 有 [`mysqldump`](https://dev.mysql.com/doc/mysql-backup-excerpt/5.7/en/mysqldump-sql-format.html)，OceanBase 有 [`OBDumper`](https://www.oceanbase.com/docs/community-obloaderdumper-cn-10000000002035965) 等。
 
 ### 自动备份 {#backup-automatically}
 

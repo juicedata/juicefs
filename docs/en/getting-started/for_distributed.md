@@ -7,7 +7,7 @@ description: This article will guide you through building a distributed, shared-
 
 [The previous document](./standalone.md) introduces how to create a file system that can be mounted on any host using an *object storage* and an *SQLite* database. Since object storage is accessible by any computer with privileges on the network, you can also access the same JuiceFS file system on different computers by simply copying the SQLite database file to any computer that needs to access the storage.
 
-However, this approach does not guarantee real-time file availability when the file system is shared. Since SQLite is a single file database that cannot be accessed by multiple computers at the same time, a database that supports network access is needed, such as Redis, PostgreSQL, or MySQL. This allows a file system to be mounted and read by multiple computers in a distributed environment.
+However, this approach does not guarantee real-time file availability when the file system is shared. Since SQLite is a single file database that cannot be accessed by multiple computers at the same time, a database that supports network access is needed, such as Redis, PostgreSQL, MySQL, or OceanBase. This allows a file system to be mounted and read by multiple computers in a distributed environment.
 
 In this document, a multi-user *cloud database* will be used to replace the single-user *SQLite* database used in the previous document. This aims to implement a distributed file system that can be mounted on any computer on the network for reading and writing.
 
@@ -21,7 +21,7 @@ A *network database* is one that allows multiple users to access it simultaneous
 JuiceFS currently supports the following network-based databases.
 
 - **Key-value databases**: Redis, TiKV, etcd, and FoundationDB
-- **Relational databases**: PostgreSQL, MySQL, and MariaDB
+- **Relational databases**: PostgreSQL, MySQL, MariaDB, and the distributed relational database OceanBase
 
 Different databases have different performance and stability. For example, Redis is an in-memory key-value database with excellent performance but relatively weak reliability, while PostgreSQL is a more reliable relational database with lower performance than in-memory databases.
 

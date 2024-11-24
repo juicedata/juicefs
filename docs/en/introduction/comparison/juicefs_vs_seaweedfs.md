@@ -70,7 +70,7 @@ On top of the underlying storage services, SeaweedFS offers a component called f
 JuiceFS adopts an architecture that separates data and metadata storage:
 
 - File data is split and stored in object storage systems such as Amazon S3.
-- Metadata is stored in a user-selected database such as Redis or MySQL.
+- Metadata is stored in a user-selected database such as Redis, MySQL, or even a distributed database such as OceanBase.
 
 The client connects to the metadata engine for metadata services and writes actual data to object storage, achieving distributed file systems with strong consistency .
 
@@ -89,7 +89,7 @@ Both SeaweedFS and JuiceFS support storing file system metadata in external data
 
 ### Atomic operations
 
-JuiceFS ensures strict atomicity for every operation, which requires strong transaction capabilities from the metadata engine like Redis and MySQL. As a result, JuiceFS supports fewer databases.
+JuiceFS ensures strict atomicity for every operation, which requires strong transaction capabilities from the metadata engine like Redis and MySQL. As a result, JuiceFS supports fewer databases. If you need to use a distributed database, OceanBase is an ideal choice.
 
 SeaweedFS provides weaker atomicity guarantees for operations. It only uses transactions of some databases (SQL, ArangoDB, and TiKV) during rename operations, with a lower requirement for database transaction capabilities. Additionally, during the rename operation, SeaweedFS does not lock the original directory or file during the metadata copying process. This may result in data loss under high loads.
 

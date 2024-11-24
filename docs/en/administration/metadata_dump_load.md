@@ -34,7 +34,7 @@ By default, the `dump` command starts from the root directory `/` and iterates r
 
 The value of `juicefs dump` is that it can export complete metadata information in a uniform JSON format for easy management and preservation, and it can be recognized and imported by different metadata storage engines.
 
-In practice, the `dump` command should be used in conjunction with the backup tool that comes with the database to complement each other, such as [Redis RDB](https://redis.io/topics/persistence#backing-up-redis-data) and [`mysqldump`](https://dev.mysql.com/doc/mysql-backup-excerpt/5.7/en/mysqldump-sql-format.html), etc.
+In practice, the `dump` command should be used in conjunction with the backup tool that comes with the database to complement each other, such as [Redis RDB](https://redis.io/topics/persistence#backing-up-redis-data), [`mysqldump`](https://dev.mysql.com/doc/mysql-backup-excerpt/5.7/en/mysqldump-sql-format.html), [`OceanBase OBDumper`](https://en.oceanbase.com/docs/common-oceanbase-database-10000000001273361), etc.
 
 ### Automatic backup {#backup-automatically}
 

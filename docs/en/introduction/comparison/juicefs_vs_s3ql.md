@@ -15,7 +15,7 @@ Similar to JuiceFS, S3QL is also an open source network file system driven by ob
 
 ## Differences
 
-- S3QL only supports SQLite. But JuiceFS supports more databases, such as Redis, TiKV, MySQL, PostgreSQL, and SQLite.
+- S3QL only supports SQLite. But JuiceFS supports more databases, such as Redis, TiKV, MySQL, PostgreSQL, SQLite, and supports high-performance distributed databases such as OceanBase to meet the needs of more scenarios.
 - S3QL has no distributed capability and **does not** support multi-host shared mounting. JuiceFS is a typical distributed file system. When using a network-based database, it supports multi-host distributed mount read and write.
 - S3QL commits a data block to S3 when it has not been accessed for more than a few seconds. After a file closed or even fsynced, it is only guaranteed to stay in system memory, which may result in data loss if node fails. JuiceFS ensures high data durability, uploading all blocks synchronously when a file is closed.
 - S3QL provides data deduplication. Only one copy of the same data is stored, which can reduce the storage usage, but it will also increase the performance overhead of the system. JuiceFS pays more attention to performance, and it is too expensive to perform deduplication on large-scale data, so this function is temporarily not provided.
@@ -23,7 +23,7 @@ Similar to JuiceFS, S3QL is also an open source network file system driven by ob
 |                           | **S3QL**              | **JuiceFS**                   |
 | :------------------------ | :-------------------- | :---------------------------- |
 | Project status            | Active development    | Active development            |
-| Metadata engine           | SQLite                | Redis, MySQL, SQLite, TiKV    |
+| Metadata engine           | SQLite                | Redis, MySQL, OceanBase, SQLite, TiKV    |
 | Storage engine            | Object Storage, Local | Object Storage, WebDAV, Local |
 | Operating system          | Unix-like             | Linux, macOS, Windows         |
 | Compression algorithm     | LZMA, bzip2, gzip     | LZ4, zstd                     |
@@ -70,7 +70,7 @@ JuiceFS is developed in Go and can be used directly by downloading the pre-compi
 
 ### Create and Mount a file system
 
-Both S3QL and JuiceFS use database to store metadata. S3QL only supports SQLite databases, while JuiceFS supports databases such as Redis, TiKV, MySQL, MariaDB, PostgreSQL, and SQLite.
+Both S3QL and JuiceFS use database to store metadata. S3QL only supports SQLite databases, while JuiceFS supports databases such as SQLite, Redis, TiKV, MySQL, MariaDB, PostgreSQL, and OceanBase.
 
 Here we create a file system using S3QL and JuiceFS separately with locally created MinIO as object storage:
 
@@ -115,4 +115,4 @@ JuiceFS only sets the object storage API access key when creating a file system,
 
 **S3QL** adopts the storage structure of object storage + SQLite. Storing data in blocks can not only improve the read and write efficiency of the file but also reduce the resource overhead when the file is modified. The advanced features such as snapshots, data deduplication, and data retention, as well as the default data compression and data encryption make S3QL very suitable for individuals to store files in cloud storage at a lower cost and with higher security.
 
-**JuiceFS** supports object storage, HDFS, WebDAV, and local disks as data storage engines, and supports popular databases such as Redis, TiKV, MySQL, MariaDB, PostgreSQL, and SQLite as metadata storage engines. It provides a standard POSIX file system interface through FUSE and a Java API, which can directly replace HDFS to provide storage for Hadoop. At the same time, it also provides [Kubernetes CSI Driver](https://github.com/juicedata/juicefs-csi-driver), which can be used as the storage layer of Kubernetes for data persistent storage. JuiceFS is a file system designed for enterprise-level distributed data storage scenarios. It is widely used in various scenarios such as big data analysis, machine learning, container shared storage, data sharing, and backup.
+**JuiceFS** supports object storage, HDFS, WebDAV, and local disks as data storage engines, and supports popular databases such as SQLite, Redis, TiKV, MySQL, MariaDB, PostgreSQL, and OceanBase as metadata storage engines. It provides a standard POSIX file system interface through FUSE and a Java API, which can directly replace HDFS to provide storage for Hadoop. At the same time, it also provides [Kubernetes CSI Driver](https://github.com/juicedata/juicefs-csi-driver), which can be used as the storage layer of Kubernetes for data persistent storage. JuiceFS is a file system designed for enterprise-level distributed data storage scenarios. It is widely used in various scenarios such as big data analysis, machine learning, container shared storage, data sharing, and backup.

@@ -32,9 +32,9 @@ JuiceFS can be installed on all operating systems provided by Tencent Cloud CVM.
 
 ### 2. Database
 
-JuiceFS will store all the metadata corresponding to the data in a separate database, and the supported databases are Redis, MySQL, PostgreSQL, TiKV and SQLite.
+JuiceFS will store all the metadata corresponding to the data in a separate database, and the supported databases are Redis, MySQL, PostgreSQL, TiKV, SQLite and OceanBase.
 
-Depending on the database type, the performance and reliability of metadata varies. For example, Redis runs entirely on memory, which provides the ultimate performance, but is difficult to operate and maintain, and has relatively low reliability. SQLite is a single-file relational database with low performance and is not suitable for large-scale data storage, but it is configuration-free and suitable for scenarios with small amounts of data storage.
+Depending on the database type, the performance and reliability of metadata varies. For example, Redis runs entirely on memory, which provides the ultimate performance, but is difficult to operate and maintain, and has relatively low reliability. SQLite is a single-file relational database with low performance and is not suitable for large-scale data storage, but it is configuration-free and suitable for scenarios with small amounts of data storage. In contrast, OceanBase is a distributed relational database that can ensure data consistency and high reliability while providing high performance. It is particularly suitable for scenarios with high requirements for transaction consistency and distributed capabilities, making JuiceFS more efficient and stable when processing large-scale metadata.
 
 If you are just evaluating the capabilities of JuiceFS, you can manually build the database for use in the CVM. When you want to use JuiceFS in a production environment, the cloud database service of Tencent Cloud is usually a better choice if you don't have a professional database operation and maintenance team.
 
@@ -42,12 +42,12 @@ Of course, you can also use cloud database services provided on other cloud plat
 
 If you must access the database through the public network, you can enhance the security of your data by strictly limiting the IP addresses that are allowed to access the database through the whitelist feature provided by the cloud database console. On the other hand, if you cannot connect to the cloud database through the public network, then you can check the whitelist of the database.
 
-|    Database     |                          Redis                          |                      MySQL/PostgreSQL                       |                            SQLite                            |
-| :-------------: | :-----------------------------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
-| **Performance** |                          High                           |                            Medium                            |                             Low                              |
-| **Management**  |                          High                           |                            Medium                            |                             Low                              |
-| **Reliability** |                           Low                           |                            Medium                            |                             Low                              |
-|  **Scenario**   | Massive data, distributed high-frequency read and write | Massive data, distributed low and medium frequency read and write | Low frequency read and write in single machine for small amount of data |
+|    Database     |                          Redis                          |                      MySQL/PostgreSQL                       |                            SQLite                            |                          OceanBase                          |
+| :-------------: | :-----------------------------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
+| **Performance** |                          High                           |                            Medium                            |                             Low                              |                          High                           |
+| **Management**  |                          High                           |                            Medium                            |                             Low                              |                            Medium                            |
+| **Reliability** |                           Low                           |                            Medium                            |                             Low                              |                          High                           |
+|  **Scenario**   | Massive data, distributed high-frequency read and write | Massive data, distributed low and medium frequency read and write | Low frequency read and write in single machine for small amount of data | Distributed scenarios, strong transaction consistency, and high reliability requirements |
 
 **This article uses the TencentDB for Redis, which is accessed through a VPC private network interacting with the CVM:**
 

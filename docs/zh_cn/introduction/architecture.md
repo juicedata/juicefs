@@ -24,7 +24,7 @@ JuiceFS 文件系统由三个部分组成：
 - 常规文件系统的元数据：文件名、文件大小、权限信息、创建修改时间、目录结构、文件属性、符号链接、文件锁等。
 - 文件数据的索引：文件的数据分配和引用计数、客户端会话等。
 
-JuiceFS 采用多引擎设计，目前已支持 Redis、TiKV、MySQL/MariaDB、PostgreSQL、SQLite 等作为元数据服务引擎，也将陆续实现更多元数据存储引擎。欢迎[提交 Issue](https://github.com/juicedata/juicefs/issues) 反馈你的需求。
+JuiceFS 采用多引擎设计，目前已支持 Redis、TiKV、MySQL/MariaDB、PostgreSQL、SQLite 等作为元数据服务引擎，并新增支持分布式关系型数据库 [OceanBase](https://www.oceanbase.com/docs/common-oceanbase-database-cn-1000000001574662)，为高并发、大规模场景提供更强的性能与可靠性保障。未来，JuiceFS 还将陆续实现更多元数据存储引擎。欢迎[提交 Issue](https://github.com/juicedata/juicefs/issues) 反馈你的需求。
 
 ## JuiceFS 如何存储文件 {#how-juicefs-store-files}
 

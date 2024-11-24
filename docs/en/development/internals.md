@@ -15,7 +15,7 @@ High level concepts:
 - File system: i.e. JuiceFS Volume, represents a separate namespace. Files can be moved freely within the same file system, while data copies are required between different file systems.
 - Metadata engine: A supported database instance of your choice, that stores and manages file system metadata. There are three categories of metadata engines currently supported by JuiceFS.
   - Redis: Redis and various protocol-compatible services
-  - SQL: MySQL, PostgreSQL, SQLite, etc.
+  - SQL: MySQL, OceanBase, PostgreSQL, SQLite, etc.
   - TKV: TiKV, BadgerDB, etc.
 - Datastore: Object storage service that stores and manages file system data, such as Amazon S3, Aliyun OSS, etc. It can also be served by other storage systems that are compatible with object storage semantics, such as local file systems, Ceph RADOS, TiKV, etc.
 - Client: can be in various forms, such as mount process, S3 gateway, WebDAV server, Java SDK, etc.

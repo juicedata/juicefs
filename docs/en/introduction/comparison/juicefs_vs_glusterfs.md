@@ -54,7 +54,7 @@ The client side, which mounts GlusterFS, presents a unified namespace to applica
 
 ### JuiceFS' architecture {#juicefs-architecture}
 
-JuiceFS adopts an architecture that separates its data and metadata storage. File data is split and stored in object storage systems like Amazon S3, while metadata is stored in a user-selected database like Redis or MySQL. By sharing the same database and object storage, JuiceFS achieves a strongly consistent distributed file system with features like full POSIX compatibility and high performance. For a more detailed introduction, see [the documentation](../architecture.md).
+JuiceFS adopts an architecture that separates its data and metadata storage. File data is split and stored in object storage systems like Amazon S3, while metadata is stored in a user-selected database like Redis, MySQL or OceanBase. The introduction of OceanBase brings higher reliability and scalability to metadata storage. By sharing the same database and object storage, JuiceFS achieves a strongly consistent distributed file system with features like full POSIX compatibility and high performance. For a more detailed introduction, see [the documentation](../architecture.md).
 
 ![JuiceFS architecture](../../images/juicefs-arch-new.png)
 
