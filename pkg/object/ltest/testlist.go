@@ -102,12 +102,12 @@ func testList(s object.ObjectStorage) {
 		start := time.Now()
 		var wg sync.WaitGroup
 		for i := 0; i < 1200; i++ {
-			ch <- struct{}{}
 			wg.Add(1)
+			ch <- struct{}{}
 			go func(id int) {
 				defer func() {
-					wg.Done()
 					<-ch
+					wg.Done()
 				}()
 				for j := 0; j < 2000; j++ {
 					if err := s.Put(fmt.Sprintf("%d_dir/%d_file", i, j), bytes.NewReader([]byte("a"))); err != nil {
