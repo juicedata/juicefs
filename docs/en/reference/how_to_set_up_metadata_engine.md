@@ -368,6 +368,56 @@ juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs?tls=true" /mnt/jfs
 
 For more examples of MariaDB database address format, please refer to [Go-MySQL-Driver](https://github.com/Go-SQL-Driver/MySQL/#examples).
 
+## OceanBase
+
+[OceanBase](https://en.oceanbase.com/) is a self-developed distributed relational database designed for processing massive data and high-concurrency transactions. It features high performance, strong consistency, and high availability. With its unique multi-replica architecture and elastic scalability, OceanBase meets financial-grade reliability requirements while remaining compatible with mainstream database protocols. It supports complex queries and transactional processing, making it ideal for critical business scenarios in finance, telecommunications, and the internet. OceanBase ensures data consistency while offering excellent scalability and cost efficiency, enabling enterprises to transition seamlessly from single-node to distributed architectures.
+
+Because OceanBase is highly compatible with MySQL, there is no difference in usage, the parameters and settings are exactly the same.
+
+For example:
+
+```shell
+juicefs format \
+    --storage s3 \
+    ... \
+    "mysql://user:mypassword@(192.168.1.6:2883)/juicefs" \
+    pics
+```
+
+```shell
+juicefs mount -d "mysql://user:mypassword@(192.168.1.6:2883)/juicefs" /mnt/jfs
+```
+
+Passing passwords through environment variables is also the same:
+
+```shell
+export META_PASSWORD="mypassword"
+juicefs format \
+    --storage s3 \
+    ... \
+    "mysql://user@(192.168.1.6:2883)/juicefs" \
+    pics
+```
+
+```shell
+juicefs mount -d "mysql://user@(192.168.1.6:2883)/juicefs" /mnt/jfs
+```
+
+To connect to a TLS enabled MariaDB server, pass the `tls=true` parameter (or `tls=skip-verify` if using a self-signed certificate):
+
+```shell
+export META_PASSWORD="mypassword"
+juicefs format \
+    --storage s3 \
+    ... \
+    "mysql://user@(192.168.1.6:2883)/juicefs?tls=true" \
+    pics
+```
+
+```shell
+juicefs mount -d "mysql://user@(192.168.1.6:2883)/juicefs?tls=true" /mnt/jfs
+```
+
 ## SQLite
 
 [SQLite](https://sqlite.org) is a widely used small, fast, single-file, reliable and full-featured SQL database engine.
