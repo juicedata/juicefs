@@ -59,10 +59,6 @@ public class RangerPermissionChecker {
 
   private final JuiceFileSystemImpl superGroupFileSystem;
 
-  private final String name;
-
-  private final String scheme;
-
   private final String user;
 
   private final Set<String> groups;
@@ -73,11 +69,8 @@ public class RangerPermissionChecker {
 
   private static final String RANGER_SERVICE_TYPE = "hdfs";
 
-  public RangerPermissionChecker(JuiceFileSystemImpl superGroupFileSystem, RangerConfig config, String scheme,
-                                 String name, String user, String group) {
+  public RangerPermissionChecker(JuiceFileSystemImpl superGroupFileSystem, RangerConfig config, String user, String group) {
     this.superGroupFileSystem = superGroupFileSystem;
-    this.name = name;
-    this.scheme = scheme;
     this.user = user;
     this.groups = Arrays.stream(group.split(",")).collect(Collectors.toSet());
 
@@ -107,37 +100,39 @@ public class RangerPermissionChecker {
         null, null, buildRangerPolicyEngineOptions(startRangerRefresher));
   }
 
-  public void checkPermission(Path path, boolean checkOwner, FsAction ancestorAccess, FsAction parentAccess,
-                              FsAction access, String operationName) throws IOException {
+  public boolean checkPermission(Path path, boolean checkOwner, FsAction ancestorAccess, FsAction parentAccess,
+                                 FsAction access, String operationName) throws IOException {
     RangerPermissionContext context = new RangerPermissionContext(user, groups, operationName);
     PathObj obj = path2Obj(path);
 
-    if (obj.parent.getPermission().getStickyBit() && access != null && parentAccess != null
-        && parentAccess.implies(FsAction.WRITE) && obj.parent != null && obj.current != null) {
+    boolean fallback = true;
+    AuthzStatus authzStatus = AuthzStatus.ALLOW;
+
+    if (access != null && parentAccess != null
+        && parentAccess.implies(FsAction.WRITE) && obj.parent != null && obj.current != null && obj.parent.getPermission().getStickyBit()) {
       if (!StringUtils.equals(obj.parent.getOwner(), user) && !StringUtils.equals(obj.current.getOwner(), user)) {
-        throw new AccessControlException(
-            assembleExceptionMessage(user, access.toString(), toPathString(obj.current.getPath())));
+        authzStatus = AuthzStatus.NOT_DETERMINED;
       }
     }
 
-    if (ancestorAccess != null && obj.ancestor != null) {
-      if (!isAccessAllowed(obj.ancestor, ancestorAccess, context)) {
-        throw new AccessControlException(
-            assembleExceptionMessage(user, ancestorAccess.toString(), toPathString(obj.ancestor.getPath())));
+    if (authzStatus == AuthzStatus.ALLOW && ancestorAccess != null && obj.ancestor != null) {
+      authzStatus = isAccessAllowed(obj.ancestor, ancestorAccess, context);
+      if (checkResult(authzStatus, user, ancestorAccess.toString(), toPathString(obj.ancestor.getPath()))) {
+        return fallback;
       }
     }
 
-    if (parentAccess != null && obj.parent != null) {
-      if (!isAccessAllowed(obj.parent, parentAccess, context)) {
-        throw new AccessControlException(
-            assembleExceptionMessage(user, parentAccess.toString(), toPathString(obj.parent.getPath())));
+    if (authzStatus == AuthzStatus.ALLOW && parentAccess != null && obj.parent != null) {
+      authzStatus = isAccessAllowed(obj.parent, parentAccess, context);
+      if (checkResult(authzStatus, user, parentAccess.toString(), toPathString(obj.parent.getPath()))) {
+        return fallback;
       }
     }
 
-    if (access != null && obj.current != null) {
-      if (!isAccessAllowed(obj.current, access, context)) {
-        throw new AccessControlException(
-            assembleExceptionMessage(user, access.toString(), toPathString(obj.current.getPath())));
+    if (authzStatus == AuthzStatus.ALLOW && access != null && obj.current != null) {
+      authzStatus = isAccessAllowed(obj.current, access, context);
+      if (checkResult(authzStatus, user, access.toString(), toPathString(obj.current.getPath()))) {
+        return fallback;
       }
     }
 
@@ -152,6 +147,8 @@ public class RangerPermissionChecker {
                 toPathString(obj.current.getPath())));
       }
     }
+    // check access by ranger success
+    return !fallback;
   }
 
   public void cleanUp() {
@@ -161,6 +158,14 @@ public class RangerPermissionChecker {
       LOG.warn("Error when clean up ranger plugin threads.", e);
     }
     LockFileChecker.cleanUp(rangerCacheDir);
+  }
+
+  private static boolean checkResult(AuthzStatus authzStatus, String user, String action, String path) throws AccessControlException {
+    if (authzStatus == AuthzStatus.DENY) {
+      throw new AccessControlException(assembleExceptionMessage(user, action, path));
+    } else {
+      return authzStatus == AuthzStatus.NOT_DETERMINED;
+    }
   }
 
   private static String assembleExceptionMessage(String user, String action, String path) {
@@ -180,30 +185,45 @@ public class RangerPermissionChecker {
     return FsAction.EXECUTE.toString();
   }
 
-  private boolean isAccessAllowed(FileStatus file, FsAction access, RangerPermissionContext context) {
-
+  private AuthzStatus isAccessAllowed(FileStatus file, FsAction access, RangerPermissionContext context) {
     String path = toPathString(file.getPath());
-    String schemePath = scheme + "://" + name + path;
     Set<String> accessTypes = fsAction2ActionMapper.getOrDefault(access, new HashSet<>());
     String pathOwner = file.getOwner();
+    AuthzStatus authzStatus = null;
     for (String accessType : accessTypes) {
-      RangerJfsAccessRequest request = new RangerJfsAccessRequest(schemePath, pathOwner, accessType,
-          context.operationName, user, context.userGroups);
+      RangerJfsAccessRequest request = new RangerJfsAccessRequest(path, pathOwner, accessType, context.operationName, user, context.userGroups);
       LOG.debug(request.toString());
-      boolean tmpRes = false;
+
+      RangerAccessResult result = null;
       try {
-        RangerAccessResult result = rangerPlugin.isAccessAllowed(request);
-        tmpRes = result.getIsAllowed();
-        LOG.debug(result.toString());
+        result = rangerPlugin.isAccessAllowed(request);
+        if (result != null) {
+          LOG.debug(result.toString());
+        }
       } catch (Throwable e) {
         throw new RuntimeException("Check Permission Error. ", e);
       }
-      if (!tmpRes) {
-        return false;
+
+      if (result == null || !result.getIsAccessDetermined()) {
+        authzStatus = AuthzStatus.NOT_DETERMINED;
+      } else if (!result.getIsAllowed()) {
+        authzStatus = AuthzStatus.DENY;
+        break;
+      } else {
+        if (!AuthzStatus.NOT_DETERMINED.equals(authzStatus)) {
+          authzStatus = AuthzStatus.ALLOW;
+        }
       }
+
     }
-    return true;
+    if (authzStatus == null) {
+      authzStatus = AuthzStatus.NOT_DETERMINED;
+    }
+    return authzStatus;
   }
+
+  private enum AuthzStatus {ALLOW, DENY, NOT_DETERMINED}
+  ;
 
   private static String toPathString(Path path) {
     return path.toUri().getPath();

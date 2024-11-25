@@ -1,0 +1,37 @@
+{
+  "op": "add_or_update",
+  "serviceName": "cl1_hadoop",
+  "tagVersion": 2,
+  "tagDefinitions": {},
+  "tags": {
+    "2": {
+      "type": "TmpdirTag",
+      "owner": 0,
+      "attributes": {},
+      "id": 2,
+      "isEnabled": true,
+      "version": 1
+    }
+  },
+  "serviceResources": [
+    {
+      "resourceElements": {
+        "path": {
+          "values": [
+            "/tmp/tmpdir6"
+          ],
+          "isExcludes": false,
+          "isRecursive": true
+        }
+      },
+      "id": 2,
+      "isEnabled": true,
+      "version": 2
+    }
+  ],
+  "resourceToTagIds": {
+    "2": [
+      2
+    ]
+  }
+}

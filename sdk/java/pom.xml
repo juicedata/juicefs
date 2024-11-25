@@ -82,10 +82,6 @@
 							<pattern>com.google.common</pattern>
 							<shadedPattern>io.juicefs.shaded.com.google.common</shadedPattern>
 						</relocation>
-						<relocation>
-							<pattern>com.google.common</pattern>
-							<shadedPattern>io.juicefs.shaded.com.google.common</shadedPattern>
-						</relocation>
 					</relocations>
 				</configuration>
 			</plugin>
