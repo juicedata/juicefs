@@ -103,7 +103,7 @@ SeaweedFS 支持在多个集群之间进行文件系统数据复制，存在两�
 
 这两种模式都是通过传递 changelog 再应用的机制实现了不同集群数据间的一致性，对于每一条 changelog，其中会有一个签名信息以保证同一个修改不会被循环多次。
 
-JuiceFS 社区版没有实现变更日志，但可以自行使用元数据引擎和对象存储自身的数据复制能力，灵活实现文件系统镜像功能。例如，结合 [MySQL](https://dev.mysql.com/doc/refman/8.0/en/replication.html) 或 [Redis](https://redis.io/docs/management/replication) 的数据复制与 [S3 的对象复制功能](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/replication.html)，就能脱离 JuiceFS 实现类似 SeaweedFS 的 Active-Passive 模式；如果选择 [OceanBase](https://www.oceanbase.com/docs/common-oceanbase-database-cn-1000000001574662) 作为元数据引擎，则凭借其出色的分布式事务能力、高可用和高性能，可以更高效地实现复杂的分布式复制场景，同时简化一致性问题的处理。
+JuiceFS 社区版没有实现变更日志，但可以自行使用元数据引擎和对象存储自身的数据复制能力，灵活实现文件系统镜像功能。例如，结合 [MySQL](https://dev.mysql.com/doc/refman/8.0/en/replication.html) 或 [Redis](https://redis.io/docs/management/replication) 的数据复制与 [S3 的对象复制功能](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/replication.html)，就能脱离 JuiceFS 实现类似 SeaweedFS 的 Active-Passive 模式；如果选择 [OceanBase](https://www.oceanbase.com/docs/common-oceanbase-database-cn-1000000001574662) 作为元数据引擎，则凭借其出色的分布式事务能力、高可用和高性能，可以更高效地实现复杂的分布式复制场景，同时简化一致性问题的处理。最重要的是OceanBase有着非常成熟的[集群高可用部署方案](https://www.oceanbase.com/docs/common-oceanbase-database-cn-1000000001573565)，可以实现Active-Active的模式。
 
 顺带一提，JuiceFS 企业版的元数据引擎也是基于变更日志实现，支持[数据复制](https://juicefs.com/docs/zh/cloud/guide/replication)、[镜像文件](https://juicefs.com/docs/zh/cloud/guide/mirror)系统，可以点击对应文档链接以了解更多。
 
