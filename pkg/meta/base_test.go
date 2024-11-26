@@ -1331,7 +1331,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	_ = m.Fallocate(ctx, inode, fallocZeroRange, 4*ChunkSize, ChunkSize, nil)
 	_ = m.CopyFileRange(ctx, inode, 3*ChunkSize, inode, 4*ChunkSize, 2338508, 0, nil, nil)
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 4, false, true)
+		c.compactChunk(inode, 4, true)
 	}
 	if st := m.Read(ctx, inode, 4, &slices); st != 0 {
 		t.Fatalf("read inode %d chunk 4: %s", inode, st)
