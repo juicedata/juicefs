@@ -61,13 +61,14 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 	}
 	const timeFormat = "2006/01/02 15:04:05.000000"
 	timestamp := e.Time.Format(timeFormat)
-	str := fmt.Sprintf("%s%v %s[%d] <%v>: %v [%s:%d]",
+	str := fmt.Sprintf("%s%v %s[%d] <%v>: %v [%s@%s:%d]",
 		l.logid,
 		timestamp,
 		l.name,
 		os.Getpid(),
 		lvlStr,
 		strings.TrimRight(e.Message, "\n"),
+		methodName(e.Caller.Function),
 		path.Base(e.Caller.File),
 		e.Caller.Line)
 
@@ -78,6 +79,34 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 		str += "\n"
 	}
 	return []byte(str), nil
+}
+
+// Returns a human-readable method name, removing internal markers added by Go
+func methodName(fullFuncName string) string {
+	firstSlash := strings.Index(fullFuncName, "/")
+	if firstSlash != -1 && firstSlash < len(fullFuncName)-1 {
+		fullFuncName = fullFuncName[firstSlash+1:]
+	}
+	lastDot := strings.LastIndex(fullFuncName, ".")
+	if lastDot == -1 || lastDot == len(fullFuncName)-1 {
+		return fullFuncName
+	}
+	method := fullFuncName[lastDot+1:]
+	// avoid func1
+	if strings.HasPrefix(method, "func") && method[4] >= '0' && method[4] <= '9' {
+		candidate := methodName(fullFuncName[:lastDot])
+		if candidate != "" {
+			method = candidate
+		}
+	}
+	// aoid init.3
+	if len(method) == 1 && method[0] >= '0' && method[0] <= '9' {
+		candidate := methodName(fullFuncName[:lastDot])
+		if candidate != "" {
+			method = candidate
+		}
+	}
+	return method
 }
 
 // for aws.Logger
