@@ -59,12 +59,16 @@ func showThreadStack(agentAddr string) {
 	if agentAddr == "" {
 		return
 	}
-	resp, err := http.Get(fmt.Sprintf("http://%s/debug/pprof/goroutine?debug=2", agentAddr))
+	client := http.Client{
+		Timeout: 10 * time.Second,
+	}
+	resp, err := client.Get(fmt.Sprintf("http://%s/debug/pprof/goroutine?debug=2", agentAddr))
 	if err != nil {
 		logger.Warnf("list goroutine from %s: %s", agentAddr, err)
 	} else {
 		grs, _ := io.ReadAll(resp.Body)
 		logger.Infof("list goroutines from %s:\n%s", agentAddr, string(grs))
+		_ = resp.Body.Close()
 	}
 }
 
