@@ -343,6 +343,9 @@ func (s *loadedSeg) String() string { return string(SegType2Name[s.typ]) }
 // Message Marshal/Unmarshal
 
 func ConvertFormatToPB(f *Format, keepSecret bool) *pb.Format {
+	if !keepSecret {
+		f.RemoveSecret()
+	}
 	msg := &pb.Format{
 		Name:             f.Name,
 		Uuid:             f.UUID,
@@ -369,18 +372,6 @@ func ConvertFormatToPB(f *Format, keepSecret bool) *pb.Format {
 		MaxClientVersion: f.MaxClientVersion,
 		DirStats:         f.DirStats,
 		EnableAcl:        f.EnableACL,
-	}
-
-	if !keepSecret {
-		removeKey := func(key *string, name string) {
-			if *key == "" {
-				*key = "remove"
-				logger.Warnf("%s is removed for the sake of safety", name)
-			}
-		}
-		removeKey(&msg.SecretKey, "Secret Key")
-		removeKey(&msg.SessionToken, "Session Token")
-		removeKey(&msg.EncryptKey, "Encrypt Key")
 	}
 	return msg
 }
@@ -488,6 +479,16 @@ func MarshalNodePB(msg *pb.Node, buff []byte) {
 		w.Put32(msg.AccessAclId)
 		w.Put32(msg.DefaultAclId)
 	}
+}
+
+func ResetNodePB(msg *pb.Node) {
+	if msg == nil {
+		return
+	}
+	// fields that maybe not set in UnmarshalNodePB
+	msg.Parent = 0
+	msg.AccessAclId = 0
+	msg.DefaultAclId = 0
 }
 
 func UnmarshalNodePB(buff []byte, node *pb.Node) {

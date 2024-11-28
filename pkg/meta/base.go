@@ -3112,25 +3112,24 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 		}
 	}()
 
-	finished := false
-	for !finished {
+	var res *dumpedResult
+	for {
 		select {
 		case <-ctx.Done():
 			wg.Wait()
 			return ctx.Err()
-		case res, ok := <-ch:
-			if !ok {
-				finished = true
-				break
-			}
-			if err := bak.WriteSegment(w, &BakSegment{Val: res.msg}); err != nil {
-				logger.Errorf("write %s err: %v", res.seg, err)
-				ctx.Cancel()
-				wg.Wait()
-				return err
-			}
-			res.seg.release(res.msg)
+		case res = <-ch:
 		}
+		if res == nil {
+			break
+		}
+		if err := bak.WriteSegment(w, &BakSegment{Val: res.msg}); err != nil {
+			logger.Errorf("write %s err: %v", res.seg, err)
+			ctx.Cancel()
+			wg.Wait()
+			return err
+		}
+		res.seg.release(res.msg)
 	}
 
 	wg.Wait()
@@ -3155,22 +3154,20 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 
 	workerFunc := func(ctx Context, taskCh <-chan *task) {
 		defer wg.Done()
-		finished := false
-		for !finished {
+		var task *task
+		for {
 			select {
 			case <-ctx.Done():
 				return
-			case task, ok := <-taskCh:
-				if !ok {
-					finished = true
-					break
-				}
-
-				if err := task.seg.load(ctx, task.msg); err != nil {
-					logger.Errorf("failed to insert %s: %s", task.seg, err)
-					ctx.Cancel()
-					return
-				}
+			case task = <-taskCh:
+			}
+			if task == nil {
+				break
+			}
+			if err := task.seg.load(ctx, task.msg); err != nil {
+				logger.Errorf("failed to insert %s: %s", task.seg, err)
+				ctx.Cancel()
+				return
 			}
 		}
 	}

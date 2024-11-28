@@ -448,13 +448,9 @@ func sqlQueryBatch(ctx Context, s iDumpedSeg, opt *DumpOption, ch chan *dumpedRe
 		nStart := start
 		eg.Go(func() error {
 			msg, err := query(egCtx, sqlBatchSize, nStart, &sum)
-			if err != nil {
+			if err != nil || msg == nil {
 				taskFinished = true
 				return err
-			}
-			if msg == nil {
-				taskFinished = true
-				return nil // finished
 			}
 			return dumpResult(egCtx, ch, &dumpedResult{s, msg})
 		})
@@ -518,8 +514,9 @@ func (s *sqlNodeDBS) doQuery(ctx context.Context, limit, start int, sum *int64) 
 
 func (s *sqlNodeDBS) release(msg proto.Message) {
 	pns := msg.(*pb.NodeList)
-	for _, pn := range pns.List {
-		s.pools[0].Put(pn)
+	for _, node := range pns.List {
+		ResetNodePB(node)
+		s.pools[0].Put(node)
 	}
 	pns.List = nil
 }

@@ -581,8 +581,9 @@ func (s *redisNodeDBS) dump(ctx Context, ch chan *dumpedResult) error {
 
 func (s *redisNodeDBS) release(msg proto.Message) {
 	pns := msg.(*pb.NodeList)
-	for _, pn := range pns.List {
-		s.pools[0].Put(pn)
+	for _, node := range pns.List {
+		ResetNodePB(node)
+		s.pools[0].Put(node)
 	}
 	pns.List = nil
 }

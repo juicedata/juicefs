@@ -351,43 +351,42 @@ func (s *kvMixDS) dump(ctx Context, ch chan *dumpedResult) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		finished := false
 		var n int
-		for !finished {
+		var e *entry
+		for {
 			select {
 			case <-ctx.Done():
 				return
-			case e, ok := <-entryCh:
-				if !ok {
-					finished = true
-					break
+			case e = <-entryCh:
+			}
+			if e == nil {
+				break
+			}
+			switch e.typ {
+			case SegTypeNode:
+				lists[SegTypeNode].(*pb.NodeList).List = append(lists[SegTypeNode].(*pb.NodeList).List, e.elem.(*pb.Node))
+				n = len(lists[SegTypeNode].(*pb.NodeList).List)
+			case SegTypeEdge:
+				lists[SegTypeEdge].(*pb.EdgeList).List = append(lists[SegTypeEdge].(*pb.EdgeList).List, e.elem.(*pb.Edge))
+				n = len(lists[SegTypeEdge].(*pb.EdgeList).List)
+			case SegTypeChunk:
+				lists[SegTypeChunk].(*pb.ChunkList).List = append(lists[SegTypeChunk].(*pb.ChunkList).List, e.elem.(*pb.Chunk))
+				n = len(lists[SegTypeChunk].(*pb.ChunkList).List)
+			case SegTypeSymlink:
+				lists[SegTypeSymlink].(*pb.SymlinkList).List = append(lists[SegTypeSymlink].(*pb.SymlinkList).List, e.elem.(*pb.Symlink))
+				n = len(lists[SegTypeSymlink].(*pb.SymlinkList).List)
+			case SegTypeXattr:
+				lists[SegTypeXattr].(*pb.XattrList).List = append(lists[SegTypeXattr].(*pb.XattrList).List, e.elem.(*pb.Xattr))
+				n = len(lists[SegTypeXattr].(*pb.XattrList).List)
+			case SegTypeParent:
+				lists[SegTypeParent].(*pb.ParentList).List = append(lists[SegTypeParent].(*pb.ParentList).List, e.elem.(*pb.Parent))
+				n = len(lists[SegTypeParent].(*pb.ParentList).List)
+			}
+			if n >= kvBatchSize {
+				if err = dumpResult(ctx, ch, &dumpedResult{seg: s, msg: lists[e.typ]}); err != nil {
+					return
 				}
-				switch e.typ {
-				case SegTypeNode:
-					lists[SegTypeNode].(*pb.NodeList).List = append(lists[SegTypeNode].(*pb.NodeList).List, e.elem.(*pb.Node))
-					n = len(lists[SegTypeNode].(*pb.NodeList).List)
-				case SegTypeEdge:
-					lists[SegTypeEdge].(*pb.EdgeList).List = append(lists[SegTypeEdge].(*pb.EdgeList).List, e.elem.(*pb.Edge))
-					n = len(lists[SegTypeEdge].(*pb.EdgeList).List)
-				case SegTypeChunk:
-					lists[SegTypeChunk].(*pb.ChunkList).List = append(lists[SegTypeChunk].(*pb.ChunkList).List, e.elem.(*pb.Chunk))
-					n = len(lists[SegTypeChunk].(*pb.ChunkList).List)
-				case SegTypeSymlink:
-					lists[SegTypeSymlink].(*pb.SymlinkList).List = append(lists[SegTypeSymlink].(*pb.SymlinkList).List, e.elem.(*pb.Symlink))
-					n = len(lists[SegTypeSymlink].(*pb.SymlinkList).List)
-				case SegTypeXattr:
-					lists[SegTypeXattr].(*pb.XattrList).List = append(lists[SegTypeXattr].(*pb.XattrList).List, e.elem.(*pb.Xattr))
-					n = len(lists[SegTypeXattr].(*pb.XattrList).List)
-				case SegTypeParent:
-					lists[SegTypeParent].(*pb.ParentList).List = append(lists[SegTypeParent].(*pb.ParentList).List, e.elem.(*pb.Parent))
-					n = len(lists[SegTypeParent].(*pb.ParentList).List)
-				}
-				if n >= kvBatchSize {
-					if err = dumpResult(ctx, ch, &dumpedResult{seg: s, msg: lists[e.typ]}); err != nil {
-						return
-					}
-					lists[e.typ] = lists[e.typ].ProtoReflect().New().Interface()
-				}
+				lists[e.typ] = lists[e.typ].ProtoReflect().New().Interface()
 			}
 		}
 		for _, list := range lists {
@@ -504,6 +503,7 @@ func (s *kvMixDS) release(msg proto.Message) {
 	switch list := msg.(type) {
 	case *pb.NodeList:
 		for _, node := range list.List {
+			ResetNodePB(node)
 			s.pools[0].Put(node)
 		}
 	case *pb.EdgeList:
