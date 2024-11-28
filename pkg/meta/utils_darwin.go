@@ -17,5 +17,4 @@ const (
 	XattrCreateOrReplace = 0
 	XattrCreate          = sys.XATTR_CREATE
 	XattrReplace         = sys.XATTR_REPLACE
-	XattrNoSecurity      = sys.XATTR_NOSECURITY
 )
