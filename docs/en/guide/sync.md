@@ -4,7 +4,7 @@ sidebar_position: 9
 description: Learn how to use juicefs sync for efficient data synchronization across supported storage systems, including object storage, JuiceFS, and local file systems.
 ---
 
-[`juicefs sync`](../reference/command_reference.md#sync) is a powerful data synchronization tool that can copy data across all supported storage systems, including object storage, JuiceFS, and local file systems. You can freely copy data between any of these systems. It also supports syncing remote directories accessed via SSH, HDFS, and WebDAV. Advanced features include incremental synchronization, pattern matching (like rsync), and distributed syncing.
+[`juicefs sync`](../reference/command_reference.mdx#sync) is a powerful data synchronization tool that can copy data across all supported storage systems, including object storage, JuiceFS, and local file systems. You can freely copy data between any of these systems. It also supports syncing remote directories accessed via SSH, HDFS, and WebDAV. Advanced features include incremental synchronization, pattern matching (like rsync), and distributed syncing.
 
 :::tip Mixing Community and Enterprise Editions
 `juicefs sync` shares code between Community and Enterprise Editions. Therefore, even when you use different editions of the JuiceFS client, `sync` works normally. The only exception is when the [`jfs://`](#sync-without-fuse) protocol header is involved. Due to the different metadata engine implementations in the Community and Enterprise Editions, clients from different editions cannot be mixed when using the `jfs://` protocol header.
