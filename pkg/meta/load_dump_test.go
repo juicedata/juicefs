@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
@@ -166,6 +167,48 @@ func checkMeta(t *testing.T, m Meta) {
 		t.Fatalf("expect the flags euqal 128, but actual is: %d", attr.Flags)
 	}
 
+	if attr.AccessACL == 0 || attr.DefaultACL == 0 {
+		t.Fatalf("expect ACL not 0, but actual is: %d, %d", attr.AccessACL, attr.DefaultACL)
+	}
+
+	ar := &aclAPI.Rule{}
+	if st := m.GetFacl(ctx, 2, aclAPI.TypeAccess, ar); st != 0 {
+		t.Fatalf("get access acl: %s", st)
+	}
+	ar2 := &aclAPI.Rule{
+		Owner: 6,
+		Group: 4,
+		Mask:  4,
+		Other: 4,
+		NamedUsers: []aclAPI.Entry{
+			{Id: 1, Perm: 6},
+			{Id: 2, Perm: 7},
+		},
+		NamedGroups: nil,
+	}
+	if !bytes.Equal(ar.Encode(), ar2.Encode()) {
+		t.Fatalf("access acl: %v != %v", ar, ar2)
+	}
+
+	dr := &aclAPI.Rule{}
+	if st := m.GetFacl(ctx, 2, aclAPI.TypeDefault, dr); st != 0 {
+		t.Fatalf("get default acl: %s", st)
+	}
+	dr2 := &aclAPI.Rule{
+		Owner:      7,
+		Group:      5,
+		Mask:       5,
+		Other:      5,
+		NamedUsers: nil,
+		NamedGroups: []aclAPI.Entry{
+			{Id: 3, Perm: 6},
+			{Id: 4, Perm: 7},
+		},
+	}
+	if !bytes.Equal(dr.Encode(), dr2.Encode()) {
+		t.Fatalf("default acl: %v != %v", dr, dr2)
+	}
+
 	var slices []Slice
 	if st := m.Read(ctx, 2, 0, &slices); st != 0 {
 		t.Fatalf("read chunk: %s", st)
@@ -292,7 +335,10 @@ func TestLoadDump(t *testing.T) { //skip mutate
 	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
 }
 
-func testDumpV2(t *testing.T, m Meta, result string) {
+func testDumpV2(t *testing.T, m Meta, result string, opt *DumpOption) {
+	if opt == nil {
+		opt = &DumpOption{CoNum: 10, KeepSecret: true}
+	}
 	fp, err := os.OpenFile(result, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		t.Fatalf("open file %s: %s", result, err)
@@ -301,7 +347,7 @@ func testDumpV2(t *testing.T, m Meta, result string) {
 	if _, err = m.Load(true); err != nil {
 		t.Fatalf("load setting: %s", err)
 	}
-	if err = m.DumpMetaV2(Background, fp, &DumpOption{CoNum: 10}); err != nil {
+	if err = m.DumpMetaV2(Background, fp, opt); err != nil {
 		t.Fatalf("dump meta: %s", err)
 	}
 	fp.Sync()
@@ -320,6 +366,9 @@ func testLoadV2(t *testing.T, uri, fname string) Meta {
 	if err = m.LoadMetaV2(Background, fp, &LoadOption{CoNum: 10}); err != nil {
 		t.Fatalf("load meta: %s", err)
 	}
+	if _, err := m.Load(true); err != nil {
+		t.Fatalf("load setting: %s", err)
+	}
 	checkMeta(t, m)
 	return m
 }
@@ -330,7 +379,7 @@ func testLoadDumpV2(t *testing.T, name, addr1, addr2 string) {
 		m := testLoad(t, addr1, sampleFile)
 		t.Logf("load meta: %v", time.Since(start))
 		start = time.Now()
-		testDumpV2(t, m, fmt.Sprintf("%s.dump", name))
+		testDumpV2(t, m, fmt.Sprintf("%s.dump", name), nil)
 		m.Shutdown()
 		t.Logf("dump meta v2: %v", time.Since(start))
 		start = time.Now()
@@ -400,6 +449,22 @@ func TestLoadDump_MemKV(t *testing.T) {
 		_ = os.Remove(settingPath)
 		testLoadSub(t, "memkv://user:pass@test/jfs", subSampleFile)
 	})
+}
+
+func TestSecret(t *testing.T) {
+	m := testLoad(t, "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test.db"), sampleFile)
+
+	testDumpV2(t, m, "sqlite-secret.dump", &DumpOption{CoNum: 10, KeepSecret: true})
+	m2 := testLoadV2(t, "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test-secret.db"), "sqlite-secret.dump")
+	if m2.GetFormat().EncryptKey != m.GetFormat().EncryptKey {
+		t.Fatalf("encrypt key not valid: %s", m2.GetFormat().EncryptKey)
+	}
+
+	testDumpV2(t, m, "sqlite-non-secret.dump", &DumpOption{CoNum: 10, KeepSecret: false})
+	m3 := testLoadV2(t, "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test-non-secret.db"), "sqlite-non-secret.dump")
+	if m3.GetFormat().EncryptKey != "removed" {
+		t.Fatalf("encrypt key not valid: %s", m2.GetFormat().EncryptKey)
+	}
 }
 
 /*
