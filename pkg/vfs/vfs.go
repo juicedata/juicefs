@@ -1082,6 +1082,9 @@ func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags ui
 		if runtime.GOOS == "darwin" && (flags&meta.XattrNoSecurity) != 0 {
 			flags &= ^uint32(meta.XattrNoSecurity)
 		}
+		if runtime.GOOS == "darwin" && (flags&meta.XattrNoFollow) != 0 {
+			flags &= ^uint32(meta.XattrNoFollow)
+		}
 		err = v.Meta.SetXattr(ctx, ino, name, value, flags)
 	}
 	return
