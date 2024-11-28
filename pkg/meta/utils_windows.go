@@ -31,5 +31,7 @@ const (
 	XattrCreate          = 1
 	XattrReplace         = 2
 	XattrNoSecurity      = 8
+	XattrNODEFAULT       = 10
 	XattrNoFollow        = 16
+	XattrSHOWCOMPRESSION = 20
 )
