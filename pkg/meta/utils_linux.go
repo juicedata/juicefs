@@ -18,4 +18,5 @@ const (
 	XattrCreate          = sys.XATTR_CREATE
 	XattrReplace         = sys.XATTR_REPLACE
 	XattrNoSecurity      = 8
+	XattrNoFollow        = 16
 )
