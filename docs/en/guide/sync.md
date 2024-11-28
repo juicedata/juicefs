@@ -1,6 +1,6 @@
 ---
 title: Data Synchronization
-sidebar_position: 9
+sidebar_position: 7
 description: Learn how to use juicefs sync for efficient data synchronization across supported storage systems, including object storage, JuiceFS, and local file systems.
 ---
 
