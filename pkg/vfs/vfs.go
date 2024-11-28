@@ -903,6 +903,8 @@ const (
 	xattrMaxSize = 65536
 )
 
+var macSupportFlags = meta.XattrCreateOrReplace | meta.XattrCreate | meta.XattrReplace
+
 func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags uint32) (err syscall.Errno) {
 	defer func() { logit(ctx, "setxattr (%d,%s,%d,%d): %s", ino, name, len(value), flags, strerr(err)) }()
 	if IsSpecialNode(ino) {
@@ -933,9 +935,9 @@ func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags ui
 		err = syscall.ENOTSUP
 		return
 	}
-	// ignore NoSecurity flag
-	if runtime.GOOS == "darwin" && (flags&meta.XattrNoSecurity) != 0 {
-		flags &= ^uint32(meta.XattrNoSecurity)
+	// only retain supported flags
+	if runtime.GOOS == "darwin" {
+		flags &= uint32(macSupportFlags)
 	}
 	err = v.Meta.SetXattr(ctx, ino, name, value, flags)
 	return
