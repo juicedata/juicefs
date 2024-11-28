@@ -4,7 +4,7 @@ sidebar_position: 7
 description: Learn how to use juicefs sync for efficient data synchronization across supported storage systems, including object storage, JuiceFS, and local file systems.
 ---
 
-[`juicefs sync`](../reference/command_reference.mdx#sync) is a powerful data synchronization tool that can copy data across all supported storage systems, including object storage, JuiceFS, and local file systems. You can freely copy data between any of these systems. It also supports syncing remote directories accessed via SSH, HDFS, and WebDAV. Advanced features include incremental synchronization, pattern matching (like rsync), and distributed syncing.
+[`juicefs sync`](../reference/command_reference.mdxx#sync) is a powerful data synchronization tool that can copy data across all supported storage systems, including object storage, JuiceFS, and local file systems. You can freely copy data between any of these systems. It also supports syncing remote directories accessed via SSH, HDFS, and WebDAV. Advanced features include incremental synchronization, pattern matching (like rsync), and distributed syncing.
 
 :::tip Mixing Community and Enterprise Editions
 `juicefs sync` shares code between Community and Enterprise Editions. Therefore, even when you use different editions of the JuiceFS client, `sync` works normally. The only exception is when the [`jfs://`](#sync-without-fuse) protocol header is involved. Due to the different metadata engine implementations in the Community and Enterprise Editions, clients from different editions cannot be mixed when using the `jfs://` protocol header.
@@ -139,13 +139,13 @@ One solution is to include all directories in the directory hierarchy by using t
 
 ### Sync without a mount point <VersionAdd>1.1</VersionAdd> {#sync-without-fuse}
 
-For data synchronization that involves JuiceFS, it is recommended to use the `jfs://` protocol instead of mounting JuiceFS and accessing its local directory. This approach bypasses the FUSE mount point and accesses JuiceFS directly. This process still requires the client configuration file. You should prepare it in advance using [`juicefs auth`](../reference/command_reference.md#auth). In large-scale scenarios, bypassing the FUSE mount point can save precious resources and improve data synchronization performance. When using the `jfs://` protocol, you can pass mounting parameters from `juicefs mount` to improve transfer performance, such as `--max-downloads`, `--max-uploads`, and `--buffer-size`.
+For data synchronization that involves JuiceFS, it is recommended to use the `jfs://` protocol instead of mounting JuiceFS and accessing its local directory. This approach bypasses the FUSE mount point and accesses JuiceFS directly. This process still requires the client configuration file. You should prepare it in advance using [`juicefs auth`](../reference/command_reference.mdx#auth). In large-scale scenarios, bypassing the FUSE mount point can save precious resources and improve data synchronization performance. When using the `jfs://` protocol, you can pass mounting parameters from `juicefs mount` to improve transfer performance, such as `--max-downloads`, `--max-uploads`, and `--buffer-size`.
 
 ### Incremental and full synchronization {#incremental-and-full-synchronization}
 
-By default, `juicefs sync` performs incremental synchronization. It only overwrites files if their sizes are different. You can also use [`--update`](../reference/command_reference.md#sync) to overwrite files when the `mtime` of the source file has been updated. For scenarios with higher demand for data integrity, use [`--check-new`](../reference/command_reference.md#sync) or [`--check-all`](../reference/command_reference.md#sync) to perform byte-by-byte comparison between the source and the destination.
+By default, `juicefs sync` performs incremental synchronization. It only overwrites files if their sizes are different. You can also use [`--update`](../reference/command_reference.mdx#sync) to overwrite files when the `mtime` of the source file has been updated. For scenarios with higher demand for data integrity, use [`--check-new`](../reference/command_reference.mdx#sync) or [`--check-all`](../reference/command_reference.mdx#sync) to perform byte-by-byte comparison between the source and the destination.
 
-For full synchronization (where all files are synchronized regardless of their presence on the destination path), use [`--force-update`](../reference/command_reference.md#sync).
+For full synchronization (where all files are synchronized regardless of their presence on the destination path), use [`--force-update`](../reference/command_reference.mdx#sync).
 
 ### Directory structure and file permissions {#directory-structure-and-file-permissions}
 
@@ -172,7 +172,7 @@ Compaction traffic can be monitored using `juicefs_compact_bytes`, available in 
 
 * When the destination is a JuiceFS file system, use the `jfs://` protocol, because it bypasses the FUSE mount point (reducing overhead) and is already optimized for file fragmentation problems. See the next point for details.
 
-* If you must use a FUSE mount point for data synchronization, for large file transfers, it is recommended to add the [`--flush-wait=60s`](../reference/command_reference.md#object-storage-options) option. This effectively helps reduce the number of slices and mitigates write amplification. For more information, see [troubleshooting write amplification](https://github.com/juicedata/docs/pull/administration/troubleshooting.md#write-amplification).
+* If you must use a FUSE mount point for data synchronization, for large file transfers, it is recommended to add the [`--flush-wait=60s`](../reference/command_reference.mdx#object-storage-options) option. This effectively helps reduce the number of slices and mitigates write amplification. For more information, see [troubleshooting write amplification](https://github.com/juicedata/docs/pull/administration/troubleshooting.md#write-amplification).
 
 * When the destination is a JuiceFS file system, ensure the destination has sufficient available [buffer](https://github.com/juicedata/docs/pull/662/cache.md#buffer-size) capacity. Each write file handler must have at least 4MB of reserved memory. This means the `--buffer-size` should be at least 4 times the `--threads` value. If higher write concurrency is needed, consider setting it to 8 or 12 times the value. Depending on the destination file system's deployment model, you will use different methods to configure buffer size:
 
@@ -230,7 +230,7 @@ When using `sync` to transfer large files, the progress bar might move slowly or
 
 If you notice the progress bar is not changing, use the methods below for monitoring and troubleshooting:
 
-* Add the [`--verbose` or `--debug`](../reference/command_reference.md#global-options) option to the `juicefs sync` command to print debug logs.
+* Add the [`--verbose` or `--debug`](../reference/command_reference.mdx#global-options) option to the `juicefs sync` command to print debug logs.
 
 * If either end is a JuiceFS mount point:
 
