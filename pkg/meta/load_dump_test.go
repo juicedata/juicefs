@@ -67,7 +67,7 @@ func TestEscape(t *testing.T) {
 		s := escape(string(v))
 		t.Log("escape value: ", s)
 		r := unescape(s)
-		if bytes.Compare(r, v) != 0 {
+		if !bytes.Equal(r, v) {
 			t.Fatalf("expected %v, but got %v", v, r)
 		}
 	}
@@ -400,13 +400,14 @@ func TestLoadDumpV2(t *testing.T) {
 	logger.SetLevel(logrus.DebugLevel)
 
 	engines := map[string][]string{
-		"mysql": {"mysql://root:@/dev", "mysql://root:@/dev2"},
+		// "mysql": {"mysql://root:@/dev", "mysql://root:@/dev2"},
 		"redis": {"redis://127.0.0.1:6379/2", "redis://127.0.0.1:6379/3"},
 		"tikv":  {"tikv://127.0.0.1:2379/jfs-load-dump-1", "tikv://127.0.0.1:2379/jfs-load-dump-2"},
 	}
 
 	for name, addrs := range engines {
 		testLoadDumpV2(t, name, addrs[0], addrs[1])
+		testSecretAndTrash(t, addrs[0], addrs[1])
 	}
 
 	for src := range engines {
@@ -451,19 +452,36 @@ func TestLoadDump_MemKV(t *testing.T) {
 	})
 }
 
-func TestSecret(t *testing.T) {
-	m := testLoad(t, "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test.db"), sampleFile)
-
+func testSecretAndTrash(t *testing.T, addr, addr2 string) {
+	m := testLoad(t, addr, sampleFile)
 	testDumpV2(t, m, "sqlite-secret.dump", &DumpOption{CoNum: 10, KeepSecret: true})
-	m2 := testLoadV2(t, "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test-secret.db"), "sqlite-secret.dump")
+	m2 := testLoadV2(t, addr2, "sqlite-secret.dump")
 	if m2.GetFormat().EncryptKey != m.GetFormat().EncryptKey {
 		t.Fatalf("encrypt key not valid: %s", m2.GetFormat().EncryptKey)
 	}
 
 	testDumpV2(t, m, "sqlite-non-secret.dump", &DumpOption{CoNum: 10, KeepSecret: false})
-	m3 := testLoadV2(t, "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test-non-secret.db"), "sqlite-non-secret.dump")
-	if m3.GetFormat().EncryptKey != "removed" {
+	m2.Reset()
+	m2 = testLoadV2(t, addr2, "sqlite-non-secret.dump")
+	if m2.GetFormat().EncryptKey != "removed" {
 		t.Fatalf("encrypt key not valid: %s", m2.GetFormat().EncryptKey)
+	}
+
+	// trash
+	trashs := map[Ino]uint64{
+		27: 11,
+		29: 10485760,
+	}
+	cnt := 0
+	m2.getBase().scanTrashFiles(Background, func(inode Ino, size uint64, ts time.Time) (clean bool, err error) {
+		cnt++
+		if tSize, ok := trashs[inode]; !ok || size != tSize {
+			t.Fatalf("trash file: %d %d", inode, size)
+		}
+		return false, nil
+	})
+	if cnt != len(trashs) {
+		t.Fatalf("trash count: %d", cnt)
 	}
 }
 

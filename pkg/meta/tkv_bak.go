@@ -185,6 +185,7 @@ func (s *kvCounterDS) dump(ctx Context, ch chan *dumpedResult) error {
 			}
 		}
 		ctx.WithValue("nextInode", msg.NextInode)
+		ctx.WithValue("nextTrash", msg.NextTrash)
 
 		logger.Debugf("dump counters %+v", msg)
 		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: msg})
@@ -304,6 +305,16 @@ type kvMixDS struct {
 	pools []*sync.Pool
 }
 
+func splitRange(nextInode, nextTrash uint64, CoNum int) [][2]uint64 {
+	offset := nextInode/uint64(CoNum) + 1
+	var rs [][2]uint64
+	for left := uint64(RootInode); left < nextInode; left += offset {
+		rs = append(rs, [2]uint64{left, utils.Min64(left+offset, nextInode)})
+	}
+	rs = append(rs, [2]uint64{uint64(TrashInode), nextTrash})
+	return rs
+}
+
 func (s *kvMixDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
 	kvBatchSize := m.getBatchNum()
@@ -397,11 +408,12 @@ func (s *kvMixDS) dump(ctx Context, ch chan *dumpedResult) error {
 	}()
 
 	nextInode := uint64(ctx.Value("nextInode").(int64))
-	offset := nextInode/uint64(s.opt.CoNum) + 1
-	for left := uint64(1); left < nextInode; left += offset {
-		right := left + offset
-		right = utils.Min64(right, nextInode)
+	nextTrash := uint64(ctx.Value("nextTrash").(int64))
+	rs := splitRange(nextInode, nextTrash, s.opt.CoNum)
 
+	var left, right uint64
+	for _, r := range rs {
+		left, right = r[0], r[1]
 		start, end := make([]byte, 9), make([]byte, 9)
 		start[0], end[0] = 'A', 'A'
 		m.encodeInode(Ino(left), start[1:])
