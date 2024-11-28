@@ -1147,6 +1147,10 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				*inode = foundIno
 			}
 			return syscall.EEXIST
+		} else if parent == TrashInode { // user's inode is allocated by prefetch, trash inode is allocated on demand
+			key := m.counterKey("nextTrash")
+			next := tx.incrBy(key, 1)
+			*inode = TrashInode + Ino(next)
 		}
 
 		mode &= 07777

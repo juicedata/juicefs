@@ -701,26 +701,30 @@ func (m *dbMeta) getCounter(name string) (v int64, err error) {
 	return
 }
 
-func (m *dbMeta) incrCounter(name string, value int64) (int64, error) {
-	var v int64
-	err := m.txn(func(s *xorm.Session) error {
-		var c = counter{Name: name}
-		ok, err := s.ForUpdate().Get(&c)
-		if err != nil {
-			return err
-		}
-		v = c.Value + value
-		if value > 0 {
-			c.Value = v
-			if ok {
-				_, err = s.Cols("value").Update(&c, &counter{Name: name})
-			} else {
-				err = mustInsert(s, &c)
-			}
-		}
+func (m *dbMeta) incrCounter(name string, value int64) (v int64, err error) {
+	err = m.txn(func(s *xorm.Session) error {
+		v, err = m.incrSessionCounter(s, name, value)
 		return err
 	})
-	return v, err
+	return
+}
+
+func (m *dbMeta) incrSessionCounter(s *xorm.Session, name string, value int64) (v int64, err error) {
+	var c = counter{Name: name}
+	ok, err := s.ForUpdate().Get(&c)
+	if err != nil {
+		return
+	}
+	v = c.Value + value
+	if value > 0 {
+		c.Value = v
+		if ok {
+			_, err = s.Cols("value").Update(&c, &counter{Name: name})
+		} else {
+			err = mustInsert(s, &c)
+		}
+	}
+	return
 }
 
 func (m *dbMeta) setIfSmall(name string, value, diff int64) (bool, error) {
@@ -1317,6 +1321,12 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				*inode = foundIno
 			}
 			return syscall.EEXIST
+		} else if parent == TrashInode {
+			if next, err := m.incrSessionCounter(s, "nextTrash", 1); err != nil {
+				return err
+			} else {
+				*inode = TrashInode + Ino(next)
+			}
 		}
 
 		n := node{Inode: *inode}

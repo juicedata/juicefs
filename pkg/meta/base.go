@@ -2324,14 +2324,8 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 
 	st := m.en.doLookup(Background, TrashInode, name, trash, nil)
 	if st == syscall.ENOENT {
-		next, err := m.en.incrCounter("nextTrash", 1)
-		if err == nil {
-			*trash = TrashInode + Ino(next)
-			attr := Attr{Typ: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: TrashInode, Full: true}
-			st = m.en.doMknod(Background, TrashInode, name, TypeDirectory, 0555, 0, "", trash, &attr)
-		} else {
-			st = errno(err)
-		}
+		attr := Attr{Typ: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: TrashInode, Full: true}
+		st = m.en.doMknod(Background, TrashInode, name, TypeDirectory, 0555, 0, "", trash, &attr)
 	}
 
 	m.Lock()

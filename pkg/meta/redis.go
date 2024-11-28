@@ -603,6 +603,10 @@ func (m *redisMeta) usedSpaceKey() string {
 	return m.prefix + usedSpace
 }
 
+func (m *redisMeta) nextTrashKey() string {
+	return m.prefix + "nextTrash"
+}
+
 func (m *redisMeta) dirDataLengthKey() string {
 	return m.prefix + "dirDataLength"
 }
@@ -1202,6 +1206,10 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 }
 
 func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
+	watchKeys := []string{m.inodeKey(parent), m.entryKey(parent)}
+	if parent == TrashInode {
+		watchKeys = append(watchKeys, m.nextTrashKey())
+	}
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		var pattr Attr
 		a, err := tx.Get(ctx, m.inodeKey(parent)).Bytes()
@@ -1248,6 +1256,12 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				*inode = foundIno
 			}
 			return syscall.EEXIST
+		} else if parent == TrashInode {
+			if next, err := tx.IncrBy(ctx, m.nextTrashKey(), 1).Result(); err != nil {
+				return err
+			} else {
+				*inode = TrashInode + Ino(next)
+			}
 		}
 
 		mode &= 07777
@@ -1340,7 +1354,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			return nil
 		})
 		return err
-	}, m.inodeKey(parent), m.entryKey(parent)))
+	}, watchKeys...))
 }
 
 func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
