@@ -697,6 +697,10 @@ func (m *redisMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.usedInodes, inodes)
 }
 
+func (m *redisMeta) doSyncUsedSpace() error {
+	return nil
+}
+
 // redisMeta updates the usage in each transaction
 func (m *redisMeta) doFlushStats() {}
 

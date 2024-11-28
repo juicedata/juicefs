@@ -2746,6 +2746,22 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	return quotas, nil
 }
 
+func (m *kvMeta) doSyncUsedSpace() error {
+	var usedSpace int64
+	prefix := m.fmtKey("U")
+	err := m.client.txn(func(tx *kvTxn) error {
+		tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
+			usedSpace += m.parseInt64(v)
+			return true
+		})
+		return nil
+	}, 0)
+	if err != nil {
+		return err
+	}
+	return m.setValue(m.counterKey("usedSpace"), packCounter(usedSpace))
+}
+
 func (m *kvMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
 	return m.txn(func(tx *kvTxn) error {
 		keys := make([][]byte, 0, len(quotas))

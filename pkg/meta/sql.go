@@ -925,6 +925,13 @@ func (m *dbMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.newInodes, inodes)
 }
 
+func (m *dbMeta) doSyncUsedSpace() error {
+	return m.txn(func(s *xorm.Session) error {
+		_, err := s.Exec("UPDATE jfs_counter SET value=(SELECT SUM(used_space) FROM jfs_dir_stats) WHERE name='usedSpace'")
+		return err
+	})
+}
+
 func (m *dbMeta) doFlushStats() {
 	var inttype = "BIGINT"
 	if m.Name() == "mysql" {

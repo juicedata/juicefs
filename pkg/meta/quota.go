@@ -229,6 +229,9 @@ func (m *baseMeta) doFlushStats() {
 	m.en.doFlushStats()
 	m.fsStatsLock.Unlock()
 }
+func (m *baseMeta) syncUsedSpace() error {
+	return m.en.doSyncUsedSpace()
+}
 
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) syscall.Errno {
 	if space <= 0 && inodes <= 0 {
