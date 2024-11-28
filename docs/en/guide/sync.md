@@ -76,7 +76,7 @@ Below is the workflow of full path filtering mode:
 ![Full path filtering workflow](../images/sync-full-path-filtering-mode-flow-chart.svg)
 
 For example, consider a file located at `a1/b1/c1.txt` and three matching patterns `--include 'a*.txt' --include 'c1.txt' --exclude 'c*.txt'`. In full path filtering mode:
-The string `a1/b1/c1.txt` is first matched against `--include 'a*.txt'`. This fails because `*` does not match the `/` character  (see [matching rules](#matching-rules)).
+The string `a1/b1/c1.txt` is first matched against `--include 'a*.txt'`. This fails because `*` does not match the `/` character (see [matching rules](#matching-rules)).
 `a1/b1/c1.txt` is then matched against `--include 'c1.txt'`, which succeeds. According to the mode's logic, subsequent patterns, such as `--exclude 'c*.txt'`, are ignored once a match is found. This file will be handled by the `sync` command.
 
 Here are some more examples:
