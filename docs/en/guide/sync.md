@@ -137,7 +137,7 @@ One solution is to include all directories in the directory hierarchy by using t
 
 ## Sync behavior {#sync-behavior}
 
-### Sync without a mount point {#sync-without-fuse}
+### Sync without a mount point <VersionAdd>1.1</VersionAdd> {#sync-without-fuse}
 
 For data synchronization that involves JuiceFS, it is recommended to use the `jfs://` protocol instead of mounting JuiceFS and accessing its local directory. This approach bypasses the FUSE mount point and accesses JuiceFS directly. This process still requires the client configuration file. You should prepare it in advance using [`juicefs auth`](../reference/command_reference.md#auth). In large-scale scenarios, bypassing the FUSE mount point can save precious resources and improve data synchronization performance. When using the `jfs://` protocol, you can pass mounting parameters from `juicefs mount` to improve transfer performance, such as `--max-downloads`, `--max-uploads`, and `--buffer-size`.
 
