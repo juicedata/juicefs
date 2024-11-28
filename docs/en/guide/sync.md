@@ -67,7 +67,7 @@ Here are some examples of matching patterns:
 
 The `sync` command supports two filtering modes: *full path filtering* and *layer-by-layer filtering*. Both use `--include` and `--exclude` to filter files, but their behaviors are different. By default, `sync` employs the layer-by-layer filtering mode, which is more complicated but resembles rsync's usage. Therefore, it is only recommended for users familiar with rsync. For most people, `--match-full-path` is recommended because it is much easier to understand.
 
-### Full path filtering (recommended) {#full-path-filtering-mode}
+### Full path filtering (recommended) <VersionAdd>1.2.0</VersionAdd> {#full-path-filtering-mode}
 
 Since 5.0.18, JuiceFS Enterprise Edition supports the `--match-full-path` option. This mode directly matches the full path of an object against all specified filters sequentially. Once a pattern matches, the result is returned (either "include" or "exclude"), and subsequent patterns are ignored.
 
