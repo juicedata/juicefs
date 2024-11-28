@@ -1206,10 +1206,6 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 }
 
 func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
-	watchKeys := []string{m.inodeKey(parent), m.entryKey(parent)}
-	if parent == TrashInode {
-		watchKeys = append(watchKeys, m.nextTrashKey())
-	}
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		var pattr Attr
 		a, err := tx.Get(ctx, m.inodeKey(parent)).Bytes()
@@ -1257,7 +1253,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			}
 			return syscall.EEXIST
 		} else if parent == TrashInode {
-			if next, err := tx.IncrBy(ctx, m.nextTrashKey(), 1).Result(); err != nil {
+			if next, err := tx.Incr(ctx, m.nextTrashKey()).Result(); err != nil { // Some inode will be wasted if conflict happens
 				return err
 			} else {
 				*inode = TrashInode + Ino(next)
@@ -1354,7 +1350,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			return nil
 		})
 		return err
-	}, watchKeys...))
+	}, m.inodeKey(parent), m.entryKey(parent)))
 }
 
 func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
