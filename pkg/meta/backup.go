@@ -155,7 +155,7 @@ type BakFooter struct {
 
 func (h *BakFooter) Marshal() ([]byte, error) {
 	buff := bytes.NewBuffer(make([]byte, 0, BakFooterSize))
-	if err := binary.Write(buff, binary.LittleEndian, h); err != nil {
+	if err := binary.Write(buff, binary.BigEndian, h); err != nil {
 		return nil, err
 	}
 	data := buff.Bytes()
@@ -174,7 +174,7 @@ func (h *BakFooter) Unmarshal(r io.ReadSeeker) error {
 	}
 
 	buff := bytes.NewBuffer(data)
-	return binary.Read(buff, binary.LittleEndian, h)
+	return binary.Read(buff, binary.BigEndian, h)
 }
 
 type BakSegment struct {
@@ -199,7 +199,7 @@ func (s *BakSegment) Marshal() ([]byte, error) {
 	s.Typ = uint32(typ)
 
 	buf := bytes.NewBuffer(nil)
-	if err := binary.Write(buf, binary.LittleEndian, s.Typ); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, s.Typ); err != nil {
 		return nil, fmt.Errorf("failed to write segment %s type: %v", s, err)
 	}
 	data, err := proto.Marshal(s.Val)
@@ -207,7 +207,7 @@ func (s *BakSegment) Marshal() ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal segment %s message: %v", s, err)
 	}
 	s.Len = uint32(len(data))
-	if err := binary.Write(buf, binary.LittleEndian, s.Len); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, s.Len); err != nil {
 		return nil, fmt.Errorf("failed to write segment %s length: %v", s, err)
 	}
 	if n, err := buf.Write(data); err != nil || n != len(data) {
@@ -217,7 +217,7 @@ func (s *BakSegment) Marshal() ([]byte, error) {
 }
 
 func (s *BakSegment) Unmarshal(r io.Reader) error {
-	if err := binary.Read(r, binary.LittleEndian, &s.Typ); err != nil {
+	if err := binary.Read(r, binary.BigEndian, &s.Typ); err != nil {
 		return fmt.Errorf("failed to read segment type: %v", err)
 	}
 
@@ -229,7 +229,7 @@ func (s *BakSegment) Unmarshal(r io.Reader) error {
 		return fmt.Errorf("segment type %d is unknown", s.Typ)
 	}
 
-	if err := binary.Read(r, binary.LittleEndian, &s.Len); err != nil {
+	if err := binary.Read(r, binary.BigEndian, &s.Len); err != nil {
 		return fmt.Errorf("failed to read segment %s length: %v", s, err)
 	}
 
