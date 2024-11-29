@@ -603,6 +603,10 @@ func (m *redisMeta) usedSpaceKey() string {
 	return m.prefix + usedSpace
 }
 
+func (m *redisMeta) nextTrashKey() string {
+	return m.prefix + "nextTrash"
+}
+
 func (m *redisMeta) dirDataLengthKey() string {
 	return m.prefix + "dirDataLength"
 }
@@ -1248,6 +1252,12 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				*inode = foundIno
 			}
 			return syscall.EEXIST
+		} else if parent == TrashInode {
+			if next, err := tx.Incr(ctx, m.nextTrashKey()).Result(); err != nil { // Some inode will be wasted if conflict happens
+				return err
+			} else {
+				*inode = TrashInode + Ino(next)
+			}
 		}
 
 		mode &= 07777
