@@ -39,10 +39,8 @@ public class RangerPermissionCheckerTest extends TestCase {
   public void setUp() throws Exception {
     cfg = new Configuration();
     cfg.addResource(JuiceFileSystemTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
-    cfg.set("juicefs.permission.check", "true");
-    cfg.set("juicefs.permission.check.service", "ranger");
-    cfg.set("juicefs.ranger.rest-url", "http://localhost");
-    cfg.set("juicefs.ranger.service-name", "cl1_hadoop");
+    cfg.set("juicefs.ranger-rest-url", "http://localhost");
+    cfg.set("juicefs.ranger-service-name", "cl1_hadoop");
     // set superuser
     cfg.set("juicefs.superuser", UserGroupInformation.getCurrentUser().getShortUserName());
     fs = FileSystem.newInstance(cfg);
@@ -51,6 +49,45 @@ public class RangerPermissionCheckerTest extends TestCase {
 
   public void tearDown() throws Exception {
     fs.close();
+  }
+
+  public void testRangerCheckerInitFailed() throws Exception {
+    Configuration cfg1 = new Configuration();
+    cfg1.addResource(JuiceFileSystemTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
+    cfg1.set("juicefs.superuser", UserGroupInformation.getCurrentUser().getShortUserName());
+    cfg1.setQuietMode(false);
+
+    FileSystem fs1 = FileSystem.newInstance(cfg1);
+
+    final Path file = new Path("/tmp/tmpdir/data-file2");
+    FSDataOutputStream out = fs1.create(file);
+    for (int i = 0; i < 1024; ++i) {
+      out.write(("data" + i + "\n").getBytes("UTF-8"));
+      out.flush();
+    }
+    out.close();
+
+    fs1.setPermission(file, new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE));
+
+    // Now try to read the file as unknown user "bob" - ranger should allow this user, but now should not be allowed
+    UserGroupInformation ugi = UserGroupInformation.createUserForTesting("bob", new String[]{});
+    ugi.doAs(new PrivilegedExceptionAction<Void>() {
+      public Void run() throws Exception {
+        FileSystem fs = FileSystem.get(cfg1);
+        try {
+          fs.open(file);
+          Assert.fail("Failure expected on an incorrect permission");
+        } catch (AccessControlException ex) {
+          Assert.assertTrue(AccessControlException.class.getName().equals(ex.getClass().getName()));
+        }
+
+        fs.close();
+        return null;
+      }
+    });
+
+    fs1.delete(file);
+    fs1.close();
   }
 
   public void testRead() throws Exception {
@@ -67,6 +104,8 @@ public class RangerPermissionCheckerTest extends TestCase {
       out.flush();
     }
     out.close();
+
+    fs.setPermission(file, new FsPermission(FsAction.READ_WRITE, FsAction.READ_WRITE, FsAction.NONE));
 
     // Now try to write to the file as "bob" - this should be allowed (by the policy - user)
     UserGroupInformation ugi = UserGroupInformation.createUserForTesting("bob", new String[]{});
@@ -125,7 +164,12 @@ public class RangerPermissionCheckerTest extends TestCase {
     }
     out.close();
 
+    fs.setPermission(file, new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE));
+
     Path parentDir = new Path("/tmp/tmpdir3");
+
+    fs.setPermission(parentDir, new FsPermission(FsAction.ALL, FsAction.READ_EXECUTE, FsAction.NONE));
+
 
     // Try to read the directory as "bob" - this should be allowed (by the policy - user)
     UserGroupInformation ugi = UserGroupInformation.createUserForTesting("bob", new String[]{});
@@ -249,6 +293,8 @@ public class RangerPermissionCheckerTest extends TestCase {
     }
     out.close();
 
+    fs.setPermission(file, new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE));
+
     // Now try to read the file as "bob" - this should be allowed (by the policy - user)
     UserGroupInformation ugi = UserGroupInformation.createUserForTesting("bob", new String[]{});
     ugi.doAs(new PrivilegedExceptionAction<Void>() {
@@ -340,6 +386,8 @@ public class RangerPermissionCheckerTest extends TestCase {
     }
     out.close();
 
+    fs.setPermission(file, new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE));
+
     // Now try to read the file as "bob" - this should be allowed (by the policy - user)
     UserGroupInformation ugi = UserGroupInformation.createUserForTesting("bob", new String[]{});
     ugi.doAs(new PrivilegedExceptionAction<Void>() {
@@ -399,6 +447,8 @@ public class RangerPermissionCheckerTest extends TestCase {
 
     createFile(subdirName, 1);
     createFile(subdirName, 2);
+
+    fs.setPermission(new Path(dirName), new FsPermission(FsAction.READ_WRITE, FsAction.READ, FsAction.NONE));
 
     UserGroupInformation ugi = UserGroupInformation.createUserForTesting("bob", new String[]{});
     ugi.doAs(new PrivilegedExceptionAction<Void>() {

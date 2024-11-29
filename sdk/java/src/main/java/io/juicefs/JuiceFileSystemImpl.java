@@ -367,7 +367,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     minBufferSize = conf.getInt("juicefs.min-buffer-size", 128 << 10);
     cacheReplica = Integer.parseInt(getConf(conf, "cache-replica", "1"));
     fileChecksumEnabled = Boolean.parseBoolean(getConf(conf, "file.checksum", "false"));
-    permissionCheckEnabled = Boolean.parseBoolean(getConf(conf, "permission.check", "false"));
+    permissionCheckEnabled = getConf(conf, "ranger-rest-url", null) != null;
 
     this.ugi = UserGroupInformation.getCurrentUser();
     user = ugi.getShortUserName();
@@ -523,21 +523,18 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   private RangerConfig checkAndGetRangerParams(Configuration conf) throws RuntimeException, IOException {
-    if (!"ranger".equalsIgnoreCase(getConf(conf, "permission.check.service", "ranger"))) {
-      throw new IOException("illegal value. The parameter 'juicefs.permission.check.service' currently only supports 'ranger'. ");
-    }
-    String rangerRestUrl = getConf(conf, "ranger.rest-url", "");
+    String rangerRestUrl = getConf(conf, "ranger-rest-url", "");
     if (!rangerRestUrl.startsWith("http")) {
-      throw new IOException("illegal value for parameter 'juicefs.ranger.rest-url': " + rangerRestUrl);
+      throw new IOException("illegal value for parameter 'juicefs.ranger-rest-url': " + rangerRestUrl);
     }
 
-    String serviceName = getConf(conf, "ranger.service-name", "");
+    String serviceName = getConf(conf, "ranger-service-name", "");
     if (serviceName.isEmpty()) {
-      throw new IOException("illegal value for parameter 'juicefs.ranger.service-name': " + serviceName);
+      throw new IOException("illegal value for parameter 'juicefs.ranger-service-name': " + serviceName);
     }
 
-    String cacheDir = getConf(conf, "ranger.cache-dir", System.getProperty("java.io.tmpdir") + "/" + UUID.randomUUID());
-    String pollIntervalMs = getConf(conf, "ranger.poll-interval-ms", "30000");
+    String cacheDir = getConf(conf, "ranger-cache-dir", System.getProperty("java.io.tmpdir") + "/" + UUID.randomUUID());
+    String pollIntervalMs = getConf(conf, "ranger-poll-interval-ms", "30000");
 
     return new RangerConfig(rangerRestUrl, serviceName, cacheDir, pollIntervalMs);
   }
