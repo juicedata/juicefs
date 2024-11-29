@@ -350,6 +350,33 @@
 				</exclusion>
 			</exclusions>
 		</dependency>
+		<dependency>
+			<groupId>org.apache.ranger</groupId>
+			<artifactId>ranger-plugins-common</artifactId>
+			<version>2.3.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>*</groupId>
+					<artifactId>*</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.ranger</groupId>
+			<artifactId>ranger-plugins-audit</artifactId>
+			<version>2.3.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>*</groupId>
+					<artifactId>*</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.httpcomponents</groupId>
+			<artifactId>httpclient</artifactId>
+			<version>4.5.13</version>
+		</dependency>
 	</dependencies>
 
 	<distributionManagement>
