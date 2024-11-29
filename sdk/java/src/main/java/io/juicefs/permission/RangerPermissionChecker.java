@@ -1,5 +1,5 @@
 /*
- * JuiceFS, Copyright 2020 Juicedata, Inc.
+ * JuiceFS, Copyright 2024 Juicedata, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -223,6 +223,7 @@ public class RangerPermissionChecker {
   }
 
   private enum AuthzStatus {ALLOW, DENY, NOT_DETERMINED}
+
   ;
 
   private static String toPathString(Path path) {
@@ -233,18 +234,7 @@ public class RangerPermissionChecker {
 
     FileStatus current = getIfExist(path);
     FileStatus parent = getIfExist(path.getParent());
-    FileStatus ancestor = null;
-    if (parent != null) {
-      ancestor = parent;
-    } else {
-      path = path.getParent();
-      FileStatus tmp = null;
-      while (path != null && tmp == null) {
-        tmp = getIfExist(path);
-        path = path.getParent();
-      }
-      ancestor = tmp;
-    }
+    FileStatus ancestor = getAncestor(path);
 
     return new PathObj(ancestor, parent, current);
   }
@@ -257,6 +247,19 @@ public class RangerPermissionChecker {
     } catch (FileNotFoundException ignored) {
     }
     return null;
+  }
+
+  public FileStatus getAncestor(Path path) throws IOException {
+    if (path.getParent() != null) {
+      return getIfExist(path.getParent());
+    }
+    path = path.getParent();
+    FileStatus tmp = null;
+    while (path != null && tmp == null) {
+      tmp = getIfExist(path);
+      path = path.getParent();
+    }
+    return tmp;
   }
 
   public static class PathObj {

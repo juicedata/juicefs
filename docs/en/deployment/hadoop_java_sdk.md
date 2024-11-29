@@ -741,6 +741,58 @@ JuiceFS can use local disk as a cache to accelerate data access, the following d
 
 ![parquet](../images/spark_sql_parquet.png)
 
+## Permission control by Apache Ranger
+
+JuiceFS currently supports path permission control by integrating with Apache Ranger's HDFS module.
+
+### 1. Configurations
+
+| Configuration                      | Default Value | Description                                                                                                                                                                                                                                                                                                                                                                                 |
+|------------------------------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `juicefs.permission.check`         | `false`       | Whether to enable permission control, default not enabled                                                                                                                                                                                                                                                                                                                        |
+| `juicefs.permission.check.service` | `ranger`      | Permission control service, currently only supports`ranger`                                                                                                                                                                                                                                                                                                                      |
+| `juicefs.ranger.rest-url`          |               | `ranger`'s http link url, required                                                                                                                                                                                                                                                                                                                                               |
+| `juicefs.ranger.service-name`      |               | `ranger`'s `service name` in `HDFS` module, required                                                                                                                                                                                                                                                                                                                             |
+| `juicefs.ranger.cache-dir`         |               | `ranger`'s policies cache path. By default, a `UUID` path hierarchy is added under the environment variable `java.io.tmpdir` to prevent multitasking from interfering with each other. After configuring a fixed directory, multiple tasks will share the cache, and only one JuiceFS is responsible for cache refreshing, to reduce the pressure on connecting to `Ranger Admin`. |
+| `juicefs.ranger.poll-interval-ms`  | `30000`       | `ranger`'s interval to refresh cache, default is 30s                                                                                                                                                                                                                                                                                                                             |
+
+
+### 2. Dependencies
+
+Considering the complexity of the authentication environment and the possibility of dependency conflicts, the Jar packages related to Ranger authentication (such as `ranger-plugins-common-2.3.0.jar`, `ranger-plugins-audit-2.3.0.jar`, etc.) and their dependencies have not been included in the JuiceFS SDK.
+
+If occurred the `ClassNotFound` error when use, it is recommended to import it into the relevant directory (such as `$SPARK-HOME/jars`)
+
+Some dependencies may need：
+
+```shell
+ranger-plugins-common-2.3.0.jar
+ranger-plugins-audit-2.3.0.jar
+gethostname4j-1.0.0.jar
+jackson-jaxrs-1.9.13.jar
+jersey-client-1.19.jar
+jersey-core-1.19.jar
+jna-5.7.0.jar
+```
+
+### 3. Tips
+
+#### 3.1 Ranger version
+
+The code is tested on `Ranger2.3` and `Ranger2.4`. As no other features are used except for `HDFS` module authentication, theoretically all other versions are applicable.
+
+#### 3.2 Ranger Audit
+
+Currently, only support authentication function, and the `Ranger Audit` is disabled.
+
+#### 3.3 Ranger's other parameters
+
+To improve usage efficiency, currently only support some **CORE** parameters of Ranger.
+
+#### 3.4 Security tips
+
+Due to the complete open source of the project, it is unavoidable for users to disrupt permission control by replacing parameters such as `juicefs.ranger.rest-url`. If stricter control is required, it is recommended to compile the code independently and solve the problem by encrypting relevant security parameters.
+
 ## FAQ
 
 ### 1. `Class io.juicefs.JuiceFileSystem not found` exception

@@ -1347,7 +1347,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite, int bufferSize,
                                    short replication, long blockSize, Progressable progress) throws IOException {
     if (needCheckPermission() && !checkAncestorAccess(f, FsAction.WRITE, "create")) {
-      if (!overwrite || !exists(f)) {
+      if (!overwrite || !superGroupFileSystem.exists(f)) {
         return superGroupFileSystem.create(f, permission, overwrite, bufferSize, replication, blockSize, progress);
       } else if (!checkPathAccess(f, FsAction.WRITE, "create")) {
         return superGroupFileSystem.create(f, permission, overwrite, bufferSize, replication, blockSize, progress);
@@ -1389,7 +1389,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, EnumSet<CreateFlag> flag,
                                                int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
     if (needCheckPermission() && !checkAncestorAccess(f, FsAction.WRITE, "createNonRecursive")) {
-      if (!flag.contains(CreateFlag.OVERWRITE) || !exists(f)) {
+      if (!flag.contains(CreateFlag.OVERWRITE) || !superGroupFileSystem.exists(f)) {
         return superGroupFileSystem.createNonRecursive(f, permission, flag, bufferSize, replication, blockSize, progress);
       } else if (!checkPathAccess(f, FsAction.WRITE, "createNonRecursive")) {
         return superGroupFileSystem.createNonRecursive(f, permission, flag, bufferSize, replication, blockSize, progress);
@@ -1491,19 +1491,13 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public void concat(final Path dst, final Path[] srcs) throws IOException {
     if (needCheckPermission()) {
-      if (!checkParentPathAccess(dst.getParent(), FsAction.WRITE, "concat") && !checkPathAccess(dst, FsAction.WRITE, "concat")) {
-        boolean fallback = false;
-        for (Path src : srcs) {
-          if (checkPathAccess(src, FsAction.READ, "concat")) {
-            fallback = true;
-            break;
-          }
-        }
-        if (!fallback) {
-          superGroupFileSystem.concat(dst, srcs);
-          return;
-        }
+      access(dst.getParent(), FsAction.WRITE);
+      access(dst, FsAction.WRITE);
+      for (Path src : srcs) {
+        access(src, FsAction.READ);
       }
+      superGroupFileSystem.concat(dst, srcs);
+      return;
     }
     statistics.incrementWriteOps(1);
     if (srcs.length == 0) {
@@ -1546,12 +1540,13 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public boolean rename(Path src, Path dst) throws IOException {
     if (needCheckPermission()) {
-      if (!exists(src)) {
+      if (!superGroupFileSystem.exists(src)) {
         return false;
       }
-      if (!checkParentPathAccess(src, FsAction.WRITE, "rename") && !checkAncestorAccess(dst, FsAction.WRITE, "rename")) {
-        return superGroupFileSystem.rename(src, dst);
-      }
+      access(src.getParent(), FsAction.WRITE);
+      Path dstAncestor = rangerPermissionChecker.getAncestor(dst).getPath();
+      access(dstAncestor, FsAction.WRITE);
+      return superGroupFileSystem.rename(src, dst);
     }
     statistics.incrementWriteOps(1);
     String srcStr = makeQualified(src).toUri().getPath();
