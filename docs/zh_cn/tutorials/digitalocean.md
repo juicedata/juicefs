@@ -36,7 +36,7 @@ JuiceFS 使用对象存储来存储所有的数据，在 DigitalOcean 上使用 
 
 ### 3. 数据库
 
-与一般的文件系统不同，JuiceFS 将数据所对应的所有元数据都存储在独立的数据库，存储的数据规模越大性能越出色。目前，JuiceFS 支持 Redis、TiKV、MySQL/MariaDB、PostgreSQL、SQLite 等常见数据库，并支持 OceanBase 等高性能分布式数据库，持续优化对更多数据库的支持。如果你需要的数据库暂未支持，请提交 [Issue](https://github.com/juicedata/juicefs/issues) 反馈。
+与一般的文件系统不同，JuiceFS 将数据所对应的所有元数据都存储在独立的数据库，存储的数据规模越大性能越出色。目前，JuiceFS 支持 Redis、TiKV、MySQL/MariaDB、PostgreSQL、SQLite 等常见数据库，同时也在持续开发对其他数据库的支持。如果你需要的数据库暂未支持，请提交 [Issue](https://github.com/juicedata/juicefs/issues) 反馈。
 
 在性能、规模和可靠性等方面，每种数据库都有各自的优缺点，你应该根据实际的场景需要进行选择。
 

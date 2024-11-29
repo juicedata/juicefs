@@ -24,7 +24,7 @@ The JuiceFS file system consists of three parts:
 - Common file system metadata: file name, size, permission information, creation and modification time, directory structure, file attribute, symbolic link, file lock.
 - JuiceFS-specific metadata: file data mapping, reference counting, client session, etc.
 
-JuiceFS supports a variety of common databases as the metadata engine, like Redis, TiKV, MySQL/MariaDB, PostgreSQL, SQLite, etc, and newly supports distributed relational database [OceanBase](https://en.oceanbase.com/docs/common-oceanbase-database-10000000001717225), providing stronger performance and reliability guarantees for high-concurrency and large-scale scenarios. In the future, JuiceFS will continue to implement more metadata storage engines. [Submit an issue](https://github.com/juicedata/juicefs/issues) if your favorite database is not supported.
+JuiceFS supports a variety of common databases as the metadata engine, like Redis, TiKV, MySQL/MariaDB, PostgreSQL, and SQLite, and the list is still expanding. [Submit an issue](https://github.com/juicedata/juicefs/issues) if your favorite database is not supported.
 
 ## How JuiceFS stores files {#how-juicefs-store-files}
 

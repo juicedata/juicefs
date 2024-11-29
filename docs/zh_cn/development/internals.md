@@ -18,7 +18,7 @@ slug: /internals
 - 文件系统（File System）：即 JuiceFS Volume，代表一个独立的命名空间。文件在同文件系统内可自由移动，不同文件系统之间则需要数据拷贝；
 - 元数据引擎（Metadata Engine）：用来存储和管理文件系统元数据的组件，通常由支持事务的数据库担任。目前已支持的元数据引擎共有三大类：
   - Redis：Redis 及各种协议兼容的服务；
-  - SQL：MySQL、OceanBase、PostgreSQL、SQLite 等；
+  - SQL：MySQL、PostgreSQL、SQLite 等；
   - TKV：TiKV、BadgerDB、etcd 等。
 - 数据存储：用来存储和管理文件系统数据的组件，通常由对象存储担任，如 Amazon S3、Aliyun OSS 等；也可由能兼容对象存储语义的其他存储系统担任，如本地文件系统、Ceph RADOS、TiKV 等；
 - JuiceFS 客户端（JuiceFS Client）：有多种形式，如挂载进程、S3 网关、WebDAV 服务器、Java SDK 等；

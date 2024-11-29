@@ -36,7 +36,7 @@ In addition, you also need to create `Spaces access keys` in the API menu, which
 
 ### 3. Database
 
-Unlike normal file systems, JuiceFS stores all metadata corresponding to the data in a separate database, and the larger the size of the stored data, the better the performance. Currently, JuiceFS supports common databases such as Redis, TiKV, MySQL/MariaDB, PostgreSQL, SQLite, and also OceanBase, a high-performance distributed database. Support for additional databases is under continuous development. If the database you need is not supported at the moment, please submit [issue](https://github.com/juicedata/juicefs/issues) feedback.
+Unlike normal file systems, JuiceFS stores all metadata corresponding to the data in a separate database, and the larger the size of the stored data, the better the performance. Currently, JuiceFS supports common databases such as Redis, TiKV, MySQL/MariaDB, PostgreSQL, SQLite, etc., while support for other databases is under continuous development. If the database you need is not supported at the moment, please submit [issue](https://github.com/juicedata/juicefs/issues) feedback.
 
 Each database has its own advantages and disadvantages in terms of performance, size and reliability, and you should choose according to the actual needs of the scenario.
 

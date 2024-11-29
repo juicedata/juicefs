@@ -174,4 +174,4 @@ juicefs mount sqlite3://myjfs.db ~/jfs
 
 进一步的，该文件系统的所有数据都存储在云端的对象存储，因此可以把 `myjfs.db` 数据库复制到其他安装了 JuiceFS 客户端的计算机上进行挂载和读写。也就是说，任何一台计算机只要能够读取到存储了元数据的数据库，那么它就能够挂载读写该文件系统。
 
-很显然，SQLite 这种单文件数据库很难实现被多台计算机同时访问。如果把 SQLite 改为 Redis、PostgreSQL、MySQL、OceanBase 等能够通过网络被多台计算机同时读写访问的数据库，那么就可以实现 JuiceFS 文件系统的分布式挂载读写。
+很显然，SQLite 这种单文件数据库很难实现被多台计算机同时访问。如果把 SQLite 改为 Redis、PostgreSQL、MySQL 等能够通过网络被多台计算机同时读写访问的数据库，那么就可以实现 JuiceFS 文件系统的分布式挂载读写。

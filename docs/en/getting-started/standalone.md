@@ -175,4 +175,4 @@ Compared with using local disks, the combination of SQLite and object storage is
 
 Further, all the data of the file system is stored in the cloud-based object storage. Therefore, the `myjfs.db` database can be copied to other computers where JuiceFS clients are installed for mounting, reading, and writing. That is, any computer that can read the metadata database can mount and read/write the file system.
 
-Obviously, it is difficult for a single file database like SQLite to be accessed by multiple computers at the same time. If SQLite is replaced by databases like Redis, PostgreSQL, MySQL, and OceanBase, which can be accessed by multiple computers at the same time through the network, it is possible to achieve distributed reads and writes on the JuiceFS file system.
+Obviously, it is difficult for a single file database like SQLite to be accessed by multiple computers at the same time. If SQLite is replaced by databases like Redis, PostgreSQL, and MySQL, which can be accessed by multiple computers at the same time through the network, it is possible to achieve distributed reads and writes on the JuiceFS file system.

@@ -70,7 +70,7 @@ On top of the underlying storage services, SeaweedFS offers a component called f
 JuiceFS adopts an architecture that separates data and metadata storage:
 
 - File data is split and stored in object storage systems such as Amazon S3.
-- Metadata is stored in a user-selected database such as Redis, MySQL, or even a distributed database such as OceanBase.
+- Metadata is stored in a user-selected database such as Redis or MySQL.
 
 The client connects to the metadata engine for metadata services and writes actual data to object storage, achieving distributed file systems with strong consistency .
 
@@ -89,7 +89,7 @@ Both SeaweedFS and JuiceFS support storing file system metadata in external data
 
 ### Atomic operations
 
-JuiceFS ensures strict atomicity for every operation, which requires strong transaction capabilities from the metadata engine like Redis and MySQL. As a result, JuiceFS supports fewer databases. If you need to use a distributed database, OceanBase is an ideal choice.
+JuiceFS ensures strict atomicity for every operation, which requires strong transaction capabilities from the metadata engine like Redis and MySQL. As a result, JuiceFS supports fewer databases.
 
 SeaweedFS provides weaker atomicity guarantees for operations. It only uses transactions of some databases (SQL, ArangoDB, and TiKV) during rename operations, with a lower requirement for database transaction capabilities. Additionally, during the rename operation, SeaweedFS does not lock the original directory or file during the metadata copying process. This may result in data loss under high loads.
 
@@ -104,7 +104,7 @@ SeaweedFS supports file system data replication between multiple clusters. It of
 
 Both modes achieve consistency between different cluster data by transmitting and applying changelog. Each changelog has a signature to ensure that the same message is applied only once.
 
-The JuiceFS Community Edition does not implement a changelog, but it can use its inherent data replication capabilities from the metadata engine and object storage to achieve file system mirroring. For example, both [MySQL](https://dev.mysql.com/doc/refman/8.0/en/replication.html) and [Redis](https://redis.io/docs/management/replication) only support data replication. When combined with [S3's object replication feature](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html), either of them can enable a setup similar to SeaweedFS' Active-Passive mode without relying on JuiceFS. If you choose [OceanBase](https://en.oceanbase.com/docs/common-oceanbase-database-10000000001717225) as the metadata engine, with its excellent distributed transaction capabilities, high availability, and high performance, you can more efficiently implement complex distributed replication scenarios while simplifying the handling of consistency issues. The most important thing is that OceanBase has a very mature [HA deployment solutions for OceanBase clusters](https://en.oceanbase.com/docs/common-oceanbase-database-10000000001714448) that can implement the Active-Active model.
+The JuiceFS Community Edition does not implement a changelog, but it can use its inherent data replication capabilities from the metadata engine and object storage to achieve file system mirroring. For example, both [MySQL](https://dev.mysql.com/doc/refman/8.0/en/replication.html) and [Redis](https://redis.io/docs/management/replication) only support data replication. When combined with [S3's object replication feature](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html), either of them can enable a setup similar to SeaweedFS' Active-Passive mode without relying on JuiceFS.
 
 It's worth noting that the JuiceFS Enterprise Edition implements the metadata engine based on changelog. It supports [data replication](https://juicefs.com/docs/cloud/guide/replication) and [mirror file system](https://juicefs.com/docs/cloud/guide/mirror).
 

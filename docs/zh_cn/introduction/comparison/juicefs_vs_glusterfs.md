@@ -54,7 +54,7 @@ GlusterFS 采用的是全分布式的架构，没有中心化节点。GlusterFS 
 
 ### JuiceFS 的架构 {#juicefs-architecture}
 
-JuiceFS 采用「数据」与「元数据」分离存储的架构，文件数据本身会被切分保存在对象存储（如 Amazon S3）当中，而元数据则是会被保存在用户自行选择的数据库里（如 Redis、MySQL、OceanBase），其中，OceanBase 的引入为元数据存储带来了更高的可靠性和扩展性。通过共享同一个份数据库与对象存储，JuiceFS 实现了一个强一致性保证的分布式文件系统，同时还具有「POSIX 完全兼容」、「高性能」等诸多特性。更详细的介绍参见[文档](../architecture.md)。
+JuiceFS 采用「数据」与「元数据」分离存储的架构，文件数据本身会被切分保存在对象存储（如 Amazon S3）当中，而元数据则是会被保存在用户自行选择的数据库里（如 Redis、MySQL）。通过共享同一个份数据库与对象存储，JuiceFS 实现了一个强一致性保证的分布式文件系统，同时还具有「POSIX 完全兼容」、「高性能」等诸多特性。更详细的介绍参见[文档](../architecture.md)。
 
 ![JuiceFS 架构](../../images/juicefs-arch-new.png)
 

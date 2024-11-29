@@ -70,7 +70,7 @@ SeaweedFS 中数据写入和读取流程：
 JuiceFS 采用元数据与数据分离存储的架构：
 
 - 文件数据本身会被切分保存在对象存储（如 S3）当中
-- 元数据被保存在元数据引擎中，元数据引擎是一个由用户自行选择数据库，如 Redis、MySQL，甚至是分布式数据库如 OceanBase。
+- 元数据被保存在元数据引擎中，元数据引擎是一个由用户自行选择数据库，如 Redis、MySQL。
 
 客户端连接元数据引擎获取元数据服务，然后将实际数据写入对象存储，实现强一致性分布式文件系统。
 
@@ -89,7 +89,7 @@ SeaweedFS 与 JuiceFS 都支持通过外部数据库以存储文件系统的元�
 
 ### 原子性操作
 
-* JuiceFS 严格确保每一项操作的原子性，因此对于元数据引擎（例如 Redis、MySQL）的事务能力有着较强的要求，支持的数据库种类相对较少。如果需要使用分布式数据库，OceanBase 是一个理想的选择。
+* JuiceFS 严格确保每一项操作的原子性，因此对于元数据引擎（例如 Redis、MySQL）的事务能力有着较强的要求，因此支持的数据库更少。
 * SeaweedFS 则对操作的原子性保证较弱，目前而言 SeaweedFS 仅在执行 `rename` 操作时启用了部分数据库（SQL、ArangoDB 和 TiKV）的事务，因此对于数据库的事务能力要求较低。同时，由于 SeaweedFS 在 `rename` 操作中拷贝元数据时，未对原目录或文件进行加锁，高负载下可能造成数据丢失。
 
 ### 变更日志以及相关功能
@@ -103,7 +103,7 @@ SeaweedFS 支持在多个集群之间进行文件系统数据复制，存在两�
 
 这两种模式都是通过传递 changelog 再应用的机制实现了不同集群数据间的一致性，对于每一条 changelog，其中会有一个签名信息以保证同一个修改不会被循环多次。
 
-JuiceFS 社区版没有实现变更日志，但可以自行使用元数据引擎和对象存储自身的数据复制能力，灵活实现文件系统镜像功能。例如，结合 [MySQL](https://dev.mysql.com/doc/refman/8.0/en/replication.html) 或 [Redis](https://redis.io/docs/management/replication) 的数据复制与 [S3 的对象复制功能](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/replication.html)，就能脱离 JuiceFS 实现类似 SeaweedFS 的 Active-Passive 模式；如果选择 [OceanBase](https://www.oceanbase.com/docs/common-oceanbase-database-cn-1000000001574662) 作为元数据引擎，则凭借其出色的分布式事务能力、高可用和高性能，可以更高效地实现复杂的分布式复制场景，同时简化一致性问题的处理。最重要的是OceanBase有着非常成熟的[集群高可用部署方案](https://www.oceanbase.com/docs/common-oceanbase-database-cn-1000000001573565)，可以实现Active-Active的模式。
+JuiceFS 社区版没有实现变更日志，但可以自行使用元数据引擎和对象存储自身的数据复制能力实现文件系统镜像功能，比方说 [MySQL](https://dev.mysql.com/doc/refman/8.0/en/replication.html) 或 [Redis](https://redis.io/docs/management/replication) 仅支持数据复制，配合上 [S3 的复制对象功能](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/replication.html)，就能脱离 JuiceFS 实现类似 SeaweedFS 的 Active-Passive 模式。
 
 顺带一提，JuiceFS 企业版的元数据引擎也是基于变更日志实现，支持[数据复制](https://juicefs.com/docs/zh/cloud/guide/replication)、[镜像文件](https://juicefs.com/docs/zh/cloud/guide/mirror)系统，可以点击对应文档链接以了解更多。
 

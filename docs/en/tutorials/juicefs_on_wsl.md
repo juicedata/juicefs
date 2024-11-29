@@ -62,7 +62,7 @@ Install the JuiceFS client on the Linux subsystem by executing the following com
 
 ### Creating a file system
 
-JuiceFS is a distributed file system with data and metadata separated, usually using object storage as data storage and Redis, PostgreSQL, MySQL or OceanBase as metadata storage. It is assumed here that the following materials have been prepared.
+JuiceFS is a distributed file system with data and metadata separated, usually using object storage as data storage and Redis, PostgreSQL or MySQL as metadata storage. It is assumed here that the following materials have been prepared.
 
 #### Object Storage
 
