@@ -11,7 +11,7 @@ The metadata is stored completely independently. Retrieval and processing of fil
 
 This design can effectively reduce the cost of the object storage in terms of the number of requests. It also allows users to significantly experience the performance improvement brought by JuiceFS.
 
-![JuiceFS-arch-new](../images/juicefs-arch-new.png)
+![JuiceFS-arch-new](../images/juicefs-aliyun.png)
 
 This document introduces how to use JuiceFS on Alibaba Cloud.
 
