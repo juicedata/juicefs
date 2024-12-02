@@ -573,7 +573,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     LibraryLoader<Libjfs> libjfsLibraryLoader = LibraryLoader.create(Libjfs.class);
     libjfsLibraryLoader.failImmediately();
 
-    int soVer = 20;
+    int soVer = 22;
     String osId = "so";
     String archId = "amd64";
     String resourceFormat = "libjfs-%s.%s.gz";
