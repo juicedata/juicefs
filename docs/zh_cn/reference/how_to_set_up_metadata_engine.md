@@ -236,6 +236,10 @@ juicefs format \
 
 [MySQL](https://www.mysql.com) 是受欢迎的开源关系型数据库之一，常被作为 Web 应用程序的首选数据库。
 
+>[MariaDB](https://mariadb.org) 是 MySQL 的一个开源分支，由 MySQL 原始开发者维护并保持开源，与 MySQL 高度兼容，在设置元数据引擎方法上也没有任何差别。
+>
+>[OceanBase](https://www.oceanbase.com/)是一款自主研发的分布式关系型数据库，专为处理海量数据和高并发事务而设计，具备高性能、强一致性和高可用性的特点。同时，OceanBase与 MySQL 高度兼容，在设置元数据引擎方法上也没有任何差别。
+
 ### 创建文件系统
 
 使用 MySQL 作为元数据存储引擎时，需要提前手动创建数据库，通常使用以下格式访问数据库：
@@ -331,58 +335,6 @@ juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs?tls=true" /
 ```
 
 更多 MySQL 数据库的地址格式示例，[点此查看](https://github.com/Go-SQL-Driver/MySQL/#examples)。
-
-## MariaDB
-
-[MariaDB](https://mariadb.org) 是 MySQL 的一个开源分支，由 MySQL 原始开发者维护并保持开源。
-
-MariaDB 与 MySQL 高度兼容，在使用上也没有任何差别，同样需要提前创建数据库，创建和挂载文件系统时，保持与 MySQL 相同的语法。
-
-例如：
-
-```shell
-juicefs format \
-    --storage s3 \
-    ... \
-    "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" \
-    pics
-```
-
-```shell
-juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mnt/jfs
-```
-
-通过环境变量传递密码的方式也完全一致：
-
-```shell
-export META_PASSWORD="mypassword"
-juicefs format \
-    --storage s3 \
-    ... \
-    "mysql://user@(192.168.1.6:3306)/juicefs" \
-    pics
-```
-
-```shell
-juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
-```
-
-要连接到启用 TLS 的 MySQL 服务器，请传递 `tls=true` 参数（或 `tls=skip-verify` 如果使用自签名证书）：
-
-```shell
-export META_PASSWORD="mypassword"
-juicefs format \
-    --storage s3 \
-    ... \
-    "mysql://user@(192.168.1.6:3306)/juicefs?tls=true" \
-    pics
-```
-
-```shell
-juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs?tls=true" /mnt/jfs
-```
-
-更多 MariaDB 数据库的地址格式示例，[点此查看](https://github.com/Go-SQL-Driver/MySQL/#examples)。
 
 ## SQLite
 
