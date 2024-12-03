@@ -987,7 +987,10 @@ func (n *jfsObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 	for _, entry := range entries {
 		num, er := strconv.Atoi(string(entry.Name))
 		if er == nil && num > partNumberMarker {
-			etag, _ := n.fs.GetXattr(mctx, n.ppath(bucket, uploadID, string(entry.Name)), s3Etag)
+			var etag []byte
+			if n.gConf.KeepEtag {
+				etag, _ = n.fs.GetXattr(mctx, n.ppath(bucket, uploadID, string(entry.Name)), s3Etag)
+			}
 			result.Parts = append(result.Parts, minio.PartInfo{
 				PartNumber:   num,
 				Size:         int64(entry.Attr.Length),
@@ -1027,7 +1030,7 @@ func (n *jfsObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	var etag string
 	if err = n.putObject(ctx, bucket, p, r, opts, func(tmpName string) {
 		etag = r.MD5CurrentHexString()
-		if n.fs.SetXattr(mctx, tmpName, s3Etag, []byte(etag), 0) != 0 {
+		if n.gConf.KeepEtag && n.fs.SetXattr(mctx, tmpName, s3Etag, []byte(etag), 0) != 0 {
 			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", tmpName, s3Etag, etag, 0)
 		}
 	}); err != nil {
