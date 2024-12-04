@@ -48,6 +48,7 @@ type hdfsclient struct {
 	c              *hdfs.Client
 	dfsReplication int
 	umask          os.FileMode
+	hdfsTimeout    time.Duration
 }
 
 func (h *hdfsclient) String() string {
@@ -164,7 +165,17 @@ func (h *hdfsclient) Put(key string, in io.Reader, getters ...AttrGetter) (err e
 		return err
 	}
 	err = f.Close()
-	if err != nil && !IsErrReplicating(err) {
+	start := time.Now()
+	for {
+		err = f.Close()
+		if IsErrReplicating(err) && start.Add(h.hdfsTimeout).After(time.Now()) {
+			time.Sleep(200 * time.Millisecond)
+			continue
+		} else {
+			break
+		}
+	}
+	if err != nil {
 		return err
 	}
 	if !PutInplace {
@@ -328,6 +339,12 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 			umask = uint16(x)
 		}
 	}
+	var hdfsTimeout = 120000 * time.Millisecond
+	if v, found := conf["ipc.client.rpc-timeout.ms"]; found {
+		if x, err := strconv.Atoi(v); err == nil {
+			hdfsTimeout = time.Duration(x) * time.Millisecond
+		}
+	}
 
 	return &hdfsclient{
 		addr:           strings.Join(rpcAddr, ","),
@@ -335,6 +352,7 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		c:              c,
 		dfsReplication: replication,
 		umask:          os.FileMode(umask),
+		hdfsTimeout:    hdfsTimeout,
 	}, nil
 }
 
