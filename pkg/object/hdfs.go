@@ -175,7 +175,11 @@ func (h *hdfsclient) Put(key string, in io.Reader, getters ...AttrGetter) (err e
 
 func IsErrReplicating(err error) bool {
 	pe, ok := err.(*os.PathError)
-	return ok && pe.Err == hdfs.ErrReplicating
+	if ok && pe.Err == hdfs.ErrReplicating {
+		logger.Warnf("close: %s", err)
+		return true
+	}
+	return false
 }
 
 func (h *hdfsclient) Delete(key string, getters ...AttrGetter) error {
