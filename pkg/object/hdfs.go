@@ -48,7 +48,8 @@ type hdfsclient struct {
 	c              *hdfs.Client
 	dfsReplication int
 	umask          os.FileMode
-	hdfsTimeout    time.Duration
+	closeTimeout   time.Duration
+	closeMaxDelay  time.Duration
 }
 
 func (h *hdfsclient) String() string {
@@ -166,10 +167,12 @@ func (h *hdfsclient) Put(key string, in io.Reader, getters ...AttrGetter) (err e
 	}
 	err = f.Close()
 	start := time.Now()
+	sleeptime := 400 * time.Millisecond
 	for {
 		err = f.Close()
-		if IsErrReplicating(err) && start.Add(h.hdfsTimeout).After(time.Now()) {
-			time.Sleep(200 * time.Millisecond)
+		if IsErrReplicating(err) && start.Add(h.closeTimeout).After(time.Now()) {
+			time.Sleep(sleeptime)
+			sleeptime = min(2*sleeptime, h.closeMaxDelay)
 			continue
 		} else {
 			break
@@ -182,6 +185,13 @@ func (h *hdfsclient) Put(key string, in io.Reader, getters ...AttrGetter) (err e
 		err = h.c.Rename(tmp, p)
 	}
 	return err
+}
+
+func min(a, b time.Duration) time.Duration {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func IsErrReplicating(err error) bool {
@@ -339,10 +349,16 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 			umask = uint16(x)
 		}
 	}
-	var hdfsTimeout = 120000 * time.Millisecond
+	var closeTimeout = 120 * time.Second
 	if v, found := conf["ipc.client.rpc-timeout.ms"]; found {
 		if x, err := strconv.Atoi(v); err == nil {
-			hdfsTimeout = time.Duration(x) * time.Millisecond
+			closeTimeout = time.Duration(x) * time.Millisecond
+		}
+	}
+	var closeMaxDelay = 60 * time.Second
+	if v, found := conf["dfs.client.block.write.locateFollowingBlock.max.delay.ms"]; found {
+		if x, err := strconv.Atoi(v); err == nil {
+			closeMaxDelay = time.Duration(x) * time.Millisecond
 		}
 	}
 
@@ -352,7 +368,8 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		c:              c,
 		dfsReplication: replication,
 		umask:          os.FileMode(umask),
-		hdfsTimeout:    hdfsTimeout,
+		closeTimeout:   closeTimeout,
+		closeMaxDelay:  closeMaxDelay,
 	}, nil
 }
 
