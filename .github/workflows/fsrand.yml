@@ -96,7 +96,7 @@ jobs:
           sudo -E python3 .github/scripts/hypo/acl_test.py
 
       - name: Download example database
-        uses: dawidd6/action-download-artifact@v2.24.3
+        uses: dawidd6/action-download-artifact@v6
         with:
           name: hypothesis-example-db
           path: .hypothesis/examples
