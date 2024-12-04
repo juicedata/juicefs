@@ -697,8 +697,62 @@ func (m *redisMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.usedInodes, inodes)
 }
 
-func (m *redisMeta) doSyncUsedSpace() error {
-	return nil
+func (m *redisMeta) doSyncUsedSpace(ctx Context) error {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	var used int64
+	if err := m.hscan(ctx, m.dirUsedSpaceKey(), func(keys []string) error {
+		for i := 0; i < len(keys); i += 2 {
+			v, err := strconv.ParseInt(keys[i+1], 10, 64)
+			if err != nil {
+				logger.Warnf("invalid used space: %s->%s", keys[i], keys[i+1])
+				continue
+			}
+			used += v
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	var inoKeys []string
+	if err := m.scan(ctx, m.prefix+"session*", func(keys []string) error {
+		for i := 0; i < len(keys); i += 2 {
+			key := keys[i]
+			if key == "sessions" {
+				continue
+			}
+
+			inodes, err := m.rdb.SMembers(ctx, key).Result()
+			if err != nil {
+				logger.Warnf("SMembers %s: %s", key, err)
+				continue
+			}
+			for _, sinode := range inodes {
+				ino, err := strconv.ParseInt(sinode, 10, 64)
+				if err != nil {
+					logger.Warnf("invalid sustained: %s->%s", key, sinode)
+					continue
+				}
+				inoKeys = append(inoKeys, m.inodeKey(Ino(ino)))
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	values, err := m.rdb.MGet(ctx, inoKeys...).Result()
+	if err != nil {
+		return err
+	}
+	var attr Attr
+	for _, value := range values {
+		m.parseAttr([]byte(value.(string)), &attr)
+		used += align4K(attr.Length)
+	}
+	return m.rdb.Set(ctx, m.usedSpaceKey(), strconv.FormatInt(used, 10), 0).Err()
 }
 
 // redisMeta updates the usage in each transaction

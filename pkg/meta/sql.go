@@ -30,6 +30,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -925,9 +926,35 @@ func (m *dbMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.newInodes, inodes)
 }
 
-func (m *dbMeta) doSyncUsedSpace() error {
+func (m *dbMeta) doSyncUsedSpace(ctx Context) error {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	var used int64
+	if err := m.roTxn(func(s *xorm.Session) error {
+		total, err := s.SumInt(&dirStats{}, "used_space")
+		used += total
+		return err
+	}); err != nil {
+		return err
+	}
+	if err := m.roTxn(func(s *xorm.Session) error {
+		queryMap, err := s.QueryString("SELECT SUM(length) FROM jfs_node WHERE inode IN (SELECT inode FROM jfs_sustained)")
+		if err != nil {
+			return err
+		}
+		value, err := strconv.ParseInt(queryMap[0]["SUM(length)"], 10, 64)
+		if err != nil {
+			return err
+		}
+		used += align4K(uint64(value))
+		return nil
+	}); err != nil {
+		return err
+	}
+
 	return m.txn(func(s *xorm.Session) error {
-		_, err := s.Exec("UPDATE jfs_counter SET value=(SELECT SUM(used_space) FROM jfs_dir_stats) WHERE name='usedSpace'")
+		_, err := s.Update(&counter{Value: used}, &counter{Name: usedSpace})
 		return err
 	})
 }

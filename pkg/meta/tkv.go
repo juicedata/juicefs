@@ -2746,20 +2746,44 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	return quotas, nil
 }
 
-func (m *kvMeta) doSyncUsedSpace() error {
-	var usedSpace int64
-	prefix := m.fmtKey("U")
-	err := m.client.txn(func(tx *kvTxn) error {
+func (m *kvMeta) doSyncUsedSpace(ctx Context) error {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	var used int64
+	if err := m.client.txn(func(tx *kvTxn) error {
+		prefix := m.fmtKey("U")
 		tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
-			usedSpace += m.parseInt64(v)
+			stat := m.parseDirStat(v)
+			used += stat.space
 			return true
 		})
 		return nil
-	}, 0)
+	}, 0); err != nil {
+		return err
+	}
+	// need add sustained file size
+	vals, err := m.scanKeys(m.fmtKey("SS"))
 	if err != nil {
 		return err
 	}
-	return m.setValue(m.counterKey("usedSpace"), packCounter(usedSpace))
+	var attr Attr
+	for _, k := range vals {
+		b := utils.FromBuffer(k[2:])
+		if b.Len() != 16 {
+			logger.Warnf("Invalid sustainedKey: %v", k)
+			continue
+		}
+		_ = b.Get64()
+		inode := m.decodeInode(b.Get(8))
+		if eno := m.doGetAttr(ctx, inode, &attr); eno != 0 {
+			logger.Warnf("Get attr of inode %d: %s", inode, eno)
+			continue
+		}
+		used += align4K(attr.Length)
+	}
+
+	return m.setValue(m.counterKey(usedSpace), packCounter(used))
 }
 
 func (m *kvMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
