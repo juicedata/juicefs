@@ -165,7 +165,6 @@ func (h *hdfsclient) Put(key string, in io.Reader, getters ...AttrGetter) (err e
 		_ = f.Close()
 		return err
 	}
-	err = f.Close()
 	start := time.Now()
 	sleeptime := 400 * time.Millisecond
 	for {
