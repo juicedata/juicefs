@@ -1,7 +1,22 @@
+/*
+ * JuiceFS, Copyright 2024 Juicedata, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package meta
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -11,7 +26,6 @@ import (
 	"unsafe"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
-	"github.com/juicedata/juicefs/pkg/utils"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -39,7 +53,7 @@ const (
 	SegTypeEdge
 	SegTypeParent // for redis/tkv only
 	SegTypeSymlink
-	SegTypeMix // for tkv only
+	SegTypeMix // for redis/tkv only
 	SegTypeMax
 )
 
@@ -107,14 +121,9 @@ func (f *BakFormat) WriteSegment(w io.Writer, seg *BakSegment) error {
 		return nil
 	}
 
-	data, err := seg.Marshal()
+	n, err := seg.Marshal(w)
 	if err != nil {
 		return fmt.Errorf("failed to marshal segment %s: %v", seg, err)
-	}
-
-	n, err := w.Write(data)
-	if err != nil && n != len(data) {
-		return fmt.Errorf("failed to write segment %s: err %v, write len %d, expect len %d", seg, err, n, len(data))
 	}
 
 	name := seg.String()
@@ -219,33 +228,35 @@ func (s *BakSegment) String() string {
 	return string(proto.MessageName(s.Val).Name())
 }
 
-func (s *BakSegment) Marshal() ([]byte, error) {
+func (s *BakSegment) Marshal(w io.Writer) (int, error) {
 	if s == nil || s.Val == nil {
-		return nil, fmt.Errorf("segment %s is nil", s)
+		return 0, fmt.Errorf("segment %s is nil", s)
 	}
 
 	typ, ok := SegName2Type[proto.MessageName(s.Val)]
 	if !ok {
-		return nil, fmt.Errorf("segment type %d is unknown", typ)
+		return 0, fmt.Errorf("segment type %d is unknown", typ)
 	}
 	s.Typ = uint32(typ)
 
-	buf := bytes.NewBuffer(nil)
-	if err := binary.Write(buf, binary.BigEndian, s.Typ); err != nil {
-		return nil, fmt.Errorf("failed to write segment %s type: %v", s, err)
+	if err := binary.Write(w, binary.BigEndian, s.Typ); err != nil {
+		return 0, fmt.Errorf("failed to write segment type %s : %w", s, err)
 	}
+
 	data, err := proto.Marshal(s.Val)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal segment %s message: %v", s, err)
+		return 0, fmt.Errorf("failed to marshal segment message %s : %w", s, err)
 	}
 	s.Len = uint64(len(data))
-	if err := binary.Write(buf, binary.BigEndian, s.Len); err != nil {
-		return nil, fmt.Errorf("failed to write segment %s length: %v", s, err)
+	if err := binary.Write(w, binary.BigEndian, s.Len); err != nil {
+		return 0, fmt.Errorf("failed to write segment length %s: %w", s, err)
 	}
-	if n, err := buf.Write(data); err != nil || n != len(data) {
-		return nil, fmt.Errorf("failed to write segment %s: err %v, write len %d, expect len %d", s, err, n, len(data))
+
+	if n, err := w.Write(data); err != nil || n != len(data) {
+		return 0, fmt.Errorf("failed to write segment data %s: err %w, write len %d, expect len %d", s, err, n, len(data))
 	}
-	return buf.Bytes(), nil
+
+	return binary.Size(s.Typ) + binary.Size(s.Len) + len(data), nil
 }
 
 func (s *BakSegment) Unmarshal(r io.Reader) error {
@@ -275,7 +286,7 @@ func (s *BakSegment) Unmarshal(r io.Reader) error {
 		return fmt.Errorf("failed to create message %s: %v", name, err)
 	}
 	if err = proto.Unmarshal(data, msg); err != nil {
-		return fmt.Errorf("failed to unmarshal segment msg: %v", err)
+		return fmt.Errorf("failed to unmarshal segment msg %s: %v", name, err)
 	}
 	s.Val = msg
 	return nil
@@ -386,12 +397,6 @@ func ConvertFormatToPB(f *Format, keepSecret bool) *pb.Format {
 	return &pb.Format{
 		Data: data,
 	}
-}
-
-func MarshalEdgePB(msg *pb.Edge, buff []byte) {
-	w := utils.FromBuffer(buff)
-	w.Put8(uint8(msg.Type))
-	w.Put64(msg.Inode)
 }
 
 // transaction
