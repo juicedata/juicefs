@@ -1,0 +1,823 @@
+/*
+ * JuiceFS, Copyright 2021 Juicedata, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package meta
+
+import (
+	"context"
+	"encoding/binary"
+	"fmt"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
+)
+
+func (m *kvMeta) getBatchNum() int {
+	batch := 10240
+	if m.Name() == "etcd" {
+		batch = 128
+	}
+	return batch
+}
+
+func (m *kvMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg {
+	ds := dumpedSeg{typ: typ, meta: m, opt: opt, txn: txn}
+	switch typ {
+	case SegTypeFormat:
+		return &formatDS{ds}
+	case SegTypeCounter:
+		return &kvCounterDS{ds}
+	case SegTypeSustained:
+		return &kvSustainedDS{ds}
+	case SegTypeDelFile:
+		return &kvDelFileDS{ds}
+	case SegTypeSliceRef:
+		return &kvSliceRefDS{ds}
+	case SegTypeAcl:
+		return &kvAclDS{ds}
+	case SegTypeMix:
+		return &kvMixDS{
+			ds,
+			[]*sync.Pool{
+				{New: func() interface{} { return &pb.Node{} }},
+				{New: func() interface{} { return &pb.Edge{} }},
+				{New: func() interface{} { return &pb.Chunk{} }},
+				{New: func() interface{} { return &pb.Symlink{} }},
+				{New: func() interface{} { return &pb.Xattr{} }},
+				{New: func() interface{} { return &pb.Parent{} }},
+			},
+		}
+	case SegTypeQuota:
+		return &kvQuotaDS{ds}
+	case SegTypeStat:
+		return &kvStatDS{ds}
+	}
+	return nil
+}
+
+var kvLoadedPoolOnce sync.Once
+var kvLoadedPools = make(map[int][]*sync.Pool)
+
+func (m *kvMeta) buildLoadedPools(typ int) []*sync.Pool {
+	kvLoadedPoolOnce.Do(func() {
+		kvLoadedPools = map[int][]*sync.Pool{
+			SegTypeEdge: {{New: func() interface{} { return make([]byte, 9) }}},
+		}
+	})
+	return kvLoadedPools[typ]
+}
+
+func (m *kvMeta) buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
+	switch typ {
+	case SegTypeFormat:
+		return &kvFormatLS{loadedSeg{typ: typ, meta: m}}
+	case SegTypeCounter:
+		return &kvCounterLS{loadedSeg{typ: typ, meta: m}}
+	case SegTypeSustained:
+		return &kvSustainedLS{loadedSeg{typ: typ, meta: m}}
+	case SegTypeDelFile:
+		return &kvDelFileLS{loadedSeg{typ: typ, meta: m}}
+	case SegTypeSliceRef:
+		return &kvSliceRefLS{loadedSeg{typ: typ, meta: m}}
+	case SegTypeAcl:
+		return &kvAclLS{loadedSeg{typ: typ, meta: m}}
+	case SegTypeXattr:
+		return &kvXattrLS{loadedSeg{typ: typ, meta: m}}
+	case SegTypeQuota:
+		return &kvQuotaLS{loadedSeg{typ: typ, meta: m}}
+	case SegTypeStat:
+		return &kvStatLS{loadedSeg{typ: typ, meta: m}}
+	case SegTypeNode:
+		return &kvNodeLS{loadedSeg{typ: typ, meta: m}}
+	case SegTypeChunk:
+		return &kvChunkLS{loadedSeg{typ: typ, meta: m}}
+	case SegTypeEdge:
+		return &kvEdgeLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
+	case SegTypeParent:
+		return &kvParentLS{loadedSeg{typ: typ, meta: m}}
+	case SegTypeSymlink:
+		return &kvSymlinkLS{loadedSeg{typ: typ, meta: m}}
+	}
+	return nil
+}
+
+func (m *kvMeta) execETxn(ctx Context, txn *eTxn, f func(Context, *eTxn) error) error {
+	ctx.WithValue(txMaxRetryKey{}, txn.opt.maxRetry)
+	return m.roTxn(ctx, func(tx *kvTxn) error {
+		txn.obj = tx
+		return f(ctx, txn)
+	})
+}
+
+func (m *kvMeta) execStmt(ctx context.Context, txn *eTxn, f func(*kvTxn) error) error {
+	if txn.opt.notUsed {
+		return m.roTxn(ctx, func(tx *kvTxn) error {
+			return f(tx)
+		})
+	}
+
+	var err error
+	cnt := 0
+	for cnt < txn.opt.maxStmtRetry {
+		err = f(txn.obj.(*kvTxn))
+		if err == nil || !m.shouldRetry(err) {
+			break
+		}
+		cnt++
+		time.Sleep(time.Duration(cnt) * time.Microsecond)
+	}
+	return err
+}
+
+func getKVCounterFields(c *pb.Counters) map[string]*int64 {
+	return map[string]*int64{
+		usedSpace:     &c.UsedSpace,
+		totalInodes:   &c.UsedInodes,
+		"nextInode":   &c.NextInode,
+		"nextChunk":   &c.NextChunk,
+		"nextSession": &c.NextSession,
+		"nextTrash":   &c.NextTrash,
+	}
+}
+
+type kvCounterDS struct {
+	dumpedSeg
+}
+
+func (s *kvCounterDS) dump(ctx Context, ch chan *dumpedResult) error {
+	m := s.meta.(*kvMeta)
+	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
+		msg := &pb.Counters{}
+		fields := getKVCounterFields(msg)
+		names := make([]string, 0, len(fields))
+		keys := make([][]byte, 0, len(fields))
+		for name := range fields {
+			names = append(names, name)
+			keys = append(keys, m.counterKey(name))
+		}
+		vals := tx.gets(keys...)
+		for i, r := range vals {
+			if r != nil {
+				*(fields[names[i]]) = parseCounter(r)
+			}
+		}
+		ctx.WithValue("nextInode", msg.NextInode)
+		ctx.WithValue("nextTrash", msg.NextTrash)
+
+		logger.Debugf("dump counters %+v", msg)
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: msg})
+	})
+}
+
+type kvSustainedDS struct {
+	dumpedSeg
+}
+
+func (s *kvSustainedDS) dump(ctx Context, ch chan *dumpedResult) error {
+	m := s.meta.(*kvMeta)
+	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
+		sids := make(map[uint64][]uint64)
+		cnt := 0
+		tx.scan(m.fmtKey("SS"), nextKey(m.fmtKey("SS")), true, func(k, v []byte) bool {
+			b := utils.FromBuffer([]byte(k[2:])) // "SS"
+			if b.Len() != 16 {
+				logger.Warnf("invalid sustainedKey: %s", k)
+				return true
+			}
+			sid := b.Get64()
+			inode := uint64(m.decodeInode(b.Get(8)))
+			sids[sid] = append(sids[sid], inode)
+			cnt++
+			return true
+		})
+
+		msg := &pb.SustainedList{
+			List: make([]*pb.Sustained, 0, cnt),
+		}
+		for sid, inodes := range sids {
+			msg.List = append(msg.List, &pb.Sustained{
+				Sid:    sid,
+				Inodes: inodes,
+			})
+		}
+		logger.Debugf("dump %s num: %d", s, len(msg.List))
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: msg})
+	})
+}
+
+type kvDelFileDS struct {
+	dumpedSeg
+}
+
+func (s *kvDelFileDS) dump(ctx Context, ch chan *dumpedResult) error {
+	m := s.meta.(*kvMeta)
+	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
+		list := &pb.DelFileList{List: make([]*pb.DelFile, 0, 16)}
+		tx.scan(m.fmtKey("D"), nextKey(m.fmtKey("D")), false, func(k, v []byte) bool {
+			b := utils.FromBuffer([]byte(k[1:])) // "D"
+			if b.Len() != 16 {
+				logger.Warnf("invalid delfileKey: %s", k)
+				return true
+			}
+			inode := m.decodeInode(b.Get(8))
+			list.List = append(list.List, &pb.DelFile{Inode: uint64(inode), Length: b.Get64(), Expire: m.parseInt64(v)})
+			return true
+		})
+
+		logger.Debugf("dump %s num: %d", s, len(list.List))
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: list})
+	})
+}
+
+type kvSliceRefDS struct {
+	dumpedSeg
+}
+
+func (s *kvSliceRefDS) dump(ctx Context, ch chan *dumpedResult) error {
+	m := s.meta.(*kvMeta)
+	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
+		list := &pb.SliceRefList{List: make([]*pb.SliceRef, 0, 1024)}
+		tx.scan(m.fmtKey("K"), nextKey(m.fmtKey("K")), false, func(k, v []byte) bool {
+			b := utils.FromBuffer([]byte(k[1:])) // "K"
+			if b.Len() != 12 {
+				logger.Warnf("invalid sliceRefKey: %s", k)
+				return true
+			}
+			id := b.Get64()
+			size := b.Get32()
+			list.List = append(list.List, &pb.SliceRef{Id: id, Size: size, Refs: parseCounter(v) + 1})
+			return true
+		})
+		logger.Debugf("dump %s num: %d", s, len(list.List))
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: list})
+	})
+}
+
+type kvAclDS struct {
+	dumpedSeg
+}
+
+func (s *kvAclDS) dump(ctx Context, ch chan *dumpedResult) error {
+	m := s.meta.(*kvMeta)
+	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
+		acls := &pb.AclList{List: make([]*pb.Acl, 0, 16)}
+		tx.scan(m.fmtKey("R"), nextKey(m.fmtKey("R")), false, func(k, v []byte) bool {
+			b := utils.FromBuffer([]byte(k[1:])) // "R"
+			if b.Len() != 4 {
+				logger.Warnf("invalid aclKey: %s", k)
+				return true
+			}
+			acls.List = append(acls.List, &pb.Acl{Id: b.Get32(), Data: v})
+			return true
+		})
+		logger.Debugf("dump %s num: %d", s, len(acls.List))
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: acls})
+	})
+}
+
+type kvMixDS struct {
+	dumpedSeg
+	pools []*sync.Pool
+}
+
+func splitRange(nextInode, nextTrash uint64, CoNum int) [][2]uint64 {
+	offset := nextInode/uint64(CoNum) + 1
+	var rs [][2]uint64
+	for left := uint64(RootInode); left < nextInode; left += offset {
+		rs = append(rs, [2]uint64{left, utils.Min64(left+offset, nextInode)})
+	}
+	rs = append(rs, [2]uint64{uint64(TrashInode), nextTrash})
+	return rs
+}
+
+func (s *kvMixDS) dump(ctx Context, ch chan *dumpedResult) error {
+	m := s.meta.(*kvMeta)
+	kvBatchSize := m.getBatchNum()
+	var lists = map[int]proto.Message{
+		SegTypeNode:    &pb.NodeList{List: make([]*pb.Node, 0, kvBatchSize)},
+		SegTypeEdge:    &pb.EdgeList{List: make([]*pb.Edge, 0, kvBatchSize)},
+		SegTypeChunk:   &pb.ChunkList{List: make([]*pb.Chunk, 0, kvBatchSize)},
+		SegTypeSymlink: &pb.SymlinkList{List: make([]*pb.Symlink, 0, kvBatchSize)},
+		SegTypeXattr:   &pb.XattrList{List: make([]*pb.Xattr, 0, kvBatchSize)},
+		SegTypeParent:  &pb.ParentList{List: make([]*pb.Parent, 0, kvBatchSize)},
+	}
+	var sums = map[int]*atomic.Uint64{
+		SegTypeNode:    {},
+		SegTypeEdge:    {},
+		SegTypeChunk:   {},
+		SegTypeSymlink: {},
+		SegTypeXattr:   {},
+		SegTypeParent:  {},
+	}
+	printSums := func(sums map[int]*atomic.Uint64) string {
+		var p string
+		for typ, sum := range sums {
+			p += fmt.Sprintf("dump %s num: %d\n", SegType2Name[typ], sum.Load())
+		}
+		return p
+	}
+
+	type entry struct {
+		typ  int
+		elem proto.Message
+	}
+	entryCh := make(chan *entry, kvBatchSize*s.opt.CoNum*2)
+	entryPool := &sync.Pool{
+		New: func() interface{} {
+			return &entry{}
+		},
+	}
+
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(s.opt.CoNum)
+
+	var wg sync.WaitGroup
+	var err error // final error
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var n int
+		var e *entry
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e = <-entryCh:
+			}
+			if e == nil {
+				break
+			}
+			switch e.typ {
+			case SegTypeNode:
+				lists[SegTypeNode].(*pb.NodeList).List = append(lists[SegTypeNode].(*pb.NodeList).List, e.elem.(*pb.Node))
+				n = len(lists[SegTypeNode].(*pb.NodeList).List)
+			case SegTypeEdge:
+				lists[SegTypeEdge].(*pb.EdgeList).List = append(lists[SegTypeEdge].(*pb.EdgeList).List, e.elem.(*pb.Edge))
+				n = len(lists[SegTypeEdge].(*pb.EdgeList).List)
+			case SegTypeChunk:
+				lists[SegTypeChunk].(*pb.ChunkList).List = append(lists[SegTypeChunk].(*pb.ChunkList).List, e.elem.(*pb.Chunk))
+				n = len(lists[SegTypeChunk].(*pb.ChunkList).List)
+			case SegTypeSymlink:
+				lists[SegTypeSymlink].(*pb.SymlinkList).List = append(lists[SegTypeSymlink].(*pb.SymlinkList).List, e.elem.(*pb.Symlink))
+				n = len(lists[SegTypeSymlink].(*pb.SymlinkList).List)
+			case SegTypeXattr:
+				lists[SegTypeXattr].(*pb.XattrList).List = append(lists[SegTypeXattr].(*pb.XattrList).List, e.elem.(*pb.Xattr))
+				n = len(lists[SegTypeXattr].(*pb.XattrList).List)
+			case SegTypeParent:
+				lists[SegTypeParent].(*pb.ParentList).List = append(lists[SegTypeParent].(*pb.ParentList).List, e.elem.(*pb.Parent))
+				n = len(lists[SegTypeParent].(*pb.ParentList).List)
+			}
+			if n >= kvBatchSize {
+				if err = dumpResult(ctx, ch, &dumpedResult{seg: s, msg: lists[e.typ]}); err != nil {
+					return
+				}
+				lists[e.typ] = lists[e.typ].ProtoReflect().New().Interface()
+			}
+		}
+		for _, list := range lists {
+			if err = dumpResult(ctx, ch, &dumpedResult{seg: s, msg: list}); err != nil {
+				return
+			}
+		}
+	}()
+
+	nextInode := uint64(ctx.Value("nextInode").(int64))
+	nextTrash := uint64(ctx.Value("nextTrash").(int64))
+	rs := splitRange(nextInode, nextTrash, s.opt.CoNum)
+
+	var left, right uint64
+	for _, r := range rs {
+		left, right = r[0], r[1]
+		start, end := make([]byte, 9), make([]byte, 9)
+		start[0], end[0] = 'A', 'A'
+		m.encodeInode(Ino(left), start[1:])
+		m.encodeInode(Ino(right), end[1:])
+		eg.Go(func() error {
+			return m.execStmt(egCtx, s.txn, func(tx *kvTxn) error {
+				var ent *entry
+				tx.scan(start, end, false, func(k, v []byte) bool {
+					if egCtx.Err() != nil {
+						return false
+					}
+					if len(k) <= 9 || k[0] != 'A' {
+						return true
+					}
+					ino := m.decodeInode(k[1:9])
+					switch k[9] {
+					case 'I':
+						node := s.pools[0].Get().(*pb.Node)
+						node.Inode = uint64(ino)
+						node.Data = v
+						sums[SegTypeNode].Add(1)
+						ent = entryPool.Get().(*entry)
+						ent.typ, ent.elem = SegTypeNode, node
+						entryCh <- ent
+					case 'D':
+						edge := s.pools[1].Get().(*pb.Edge)
+						edge.Parent = uint64(ino)
+						edge.Name = k[10:]
+						typ, inode := m.parseEntry(v)
+						edge.Type, edge.Inode = uint32(typ), uint64(inode)
+						sums[SegTypeEdge].Add(1)
+						ent = entryPool.Get().(*entry)
+						ent.typ, ent.elem = SegTypeEdge, edge
+						entryCh <- ent
+					case 'C':
+						chk := s.pools[2].Get().(*pb.Chunk)
+						chk.Inode = uint64(ino)
+						chk.Index = binary.BigEndian.Uint32(k[10:])
+						chk.Slices = v
+						sums[SegTypeChunk].Add(1)
+						ent = entryPool.Get().(*entry)
+						ent.typ, ent.elem = SegTypeChunk, chk
+						entryCh <- ent
+					case 'S':
+						sym := s.pools[3].Get().(*pb.Symlink)
+						sym.Inode = uint64(ino)
+						sym.Target = unescape(string(v))
+						sums[SegTypeSymlink].Add(1)
+						ent = entryPool.Get().(*entry)
+						ent.typ, ent.elem = SegTypeSymlink, sym
+						entryCh <- ent
+					case 'X':
+						xattr := s.pools[4].Get().(*pb.Xattr)
+						xattr.Inode = uint64(ino)
+						xattr.Name = string(k[10:])
+						xattr.Value = v
+						sums[SegTypeXattr].Add(1)
+						ent = entryPool.Get().(*entry)
+						ent.typ, ent.elem = SegTypeXattr, xattr
+						entryCh <- ent
+					case 'P':
+						parent := s.pools[5].Get().(*pb.Parent)
+						parent.Inode = uint64(ino)
+						parent.Parent = uint64(m.decodeInode(k[10:]))
+						parent.Cnt = parseCounter(v)
+						sums[SegTypeParent].Add(1)
+						ent = entryPool.Get().(*entry)
+						ent.typ, ent.elem = SegTypeParent, parent
+						entryCh <- ent
+					}
+					return true
+				})
+				return nil
+			})
+		})
+	}
+
+	if iErr := eg.Wait(); iErr != nil {
+		ctx.Cancel()
+		wg.Wait()
+		return iErr
+	}
+
+	close(entryCh)
+	wg.Wait()
+
+	logger.Debugf("dump %s num: %s", s, printSums(sums))
+	return err
+}
+
+func (s *kvMixDS) release(msg proto.Message) {
+	switch list := msg.(type) {
+	case *pb.NodeList:
+		for _, node := range list.List {
+			s.pools[0].Put(node)
+		}
+	case *pb.EdgeList:
+		for _, edge := range list.List {
+			s.pools[1].Put(edge)
+		}
+	case *pb.ChunkList:
+		for _, chunk := range list.List {
+			s.pools[2].Put(chunk)
+		}
+	case *pb.SymlinkList:
+		for _, symlink := range list.List {
+			s.pools[3].Put(symlink)
+		}
+	case *pb.XattrList:
+		for _, xattr := range list.List {
+			s.pools[4].Put(xattr)
+		}
+	case *pb.ParentList:
+		for _, parent := range list.List {
+			s.pools[5].Put(parent)
+		}
+	}
+}
+
+type kvQuotaDS struct {
+	dumpedSeg
+}
+
+func (s *kvQuotaDS) dump(ctx Context, ch chan *dumpedResult) error {
+	m := s.meta.(*kvMeta)
+	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
+		ql := &pb.QuotaList{List: make([]*pb.Quota, 0, 16)}
+		tx.scan(m.fmtKey("QD"), nextKey(m.fmtKey("QD")), false, func(k, v []byte) bool {
+			q := &pb.Quota{}
+			q.Inode = uint64(m.decodeInode([]byte(k)[2:]))
+			b := utils.FromBuffer(v)
+			q.MaxSpace = int64(b.Get64())
+			q.MaxInodes = int64(b.Get64())
+			q.UsedSpace = int64(b.Get64())
+			q.UsedInodes = int64(b.Get64())
+			ql.List = append(ql.List, q)
+			return true
+		})
+		logger.Debugf("dump %s num: %d", s, len(ql.List))
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: ql})
+	})
+}
+
+type kvStatDS struct {
+	dumpedSeg
+}
+
+func (s *kvStatDS) dump(ctx Context, ch chan *dumpedResult) error {
+	m := s.meta.(*kvMeta)
+	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
+		sl := &pb.StatList{List: make([]*pb.Stat, 0, 16)}
+		tx.scan(m.fmtKey("U"), nextKey(m.fmtKey("U")), false, func(k, v []byte) bool {
+			s := &pb.Stat{}
+			s.Inode = uint64(m.decodeInode([]byte(k)[1:]))
+			b := utils.FromBuffer(v)
+			s.DataLength = int64(b.Get64())
+			s.UsedSpace = int64(b.Get64())
+			s.UsedInodes = int64(b.Get64())
+			sl.List = append(sl.List, s)
+			return true
+		})
+		logger.Debugf("dump %s num: %d", s, len(sl.List))
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: sl})
+	})
+}
+
+type kvFormatLS struct {
+	loadedSeg
+}
+
+func (s *kvFormatLS) load(ctx Context, msg proto.Message) error {
+	m := s.meta.(*kvMeta)
+	return m.txn(func(tx *kvTxn) error {
+		tx.set(m.fmtKey("setting"), msg.(*pb.Format).Data)
+		return nil
+	})
+}
+
+type kvCounterLS struct {
+	loadedSeg
+}
+
+func (s *kvCounterLS) load(ctx Context, msg proto.Message) error {
+	m := s.meta.(*kvMeta)
+	return m.txn(func(tx *kvTxn) error {
+		fields := getKVCounterFields(msg.(*pb.Counters))
+		for k, v := range fields {
+			tx.set(m.counterKey(k), packCounter(*v))
+		}
+		return nil
+	})
+}
+
+type kvSustainedLS struct {
+	loadedSeg
+}
+
+func (s *kvSustainedLS) load(ctx Context, msg proto.Message) error {
+	m := s.meta.(*kvMeta)
+	return m.txn(func(tx *kvTxn) error {
+		list := msg.(*pb.SustainedList)
+		for _, sustained := range list.List {
+			for _, inode := range sustained.Inodes {
+				tx.set(m.sustainedKey(sustained.Sid, Ino(inode)), []byte{1})
+			}
+		}
+		return nil
+	})
+}
+
+type kvDelFileLS struct {
+	loadedSeg
+}
+
+func (s *kvDelFileLS) load(ctx Context, msg proto.Message) error {
+	m := s.meta.(*kvMeta)
+	return m.txn(func(tx *kvTxn) error {
+		list := msg.(*pb.DelFileList)
+		for _, f := range list.List {
+			tx.set(m.delfileKey(Ino(f.Inode), f.Length), m.packInt64(f.Expire))
+		}
+		return nil
+	})
+}
+
+type kvSliceRefLS struct {
+	loadedSeg
+}
+
+func (s *kvSliceRefLS) load(ctx Context, msg proto.Message) error {
+	m := s.meta.(*kvMeta)
+	return m.txn(func(tx *kvTxn) error {
+		list := msg.(*pb.SliceRefList)
+		for _, r := range list.List {
+			tx.set(m.sliceKey(r.Id, r.Size), packCounter(r.Refs-1))
+		}
+		return nil
+	})
+}
+
+type kvAclLS struct {
+	loadedSeg
+}
+
+func (s *kvAclLS) load(ctx Context, msg proto.Message) error {
+	m := s.meta.(*kvMeta)
+	return m.txn(func(tx *kvTxn) error {
+		var maxId uint32 = 0
+		list := msg.(*pb.AclList)
+		for _, acl := range list.List {
+			if acl.Id > maxId {
+				maxId = acl.Id
+			}
+			tx.set(m.aclKey(acl.Id), acl.Data)
+		}
+		tx.set(m.counterKey(aclCounter), packCounter(int64(maxId)))
+		return nil
+	})
+}
+
+type kvXattrLS struct {
+	loadedSeg
+}
+
+func (s *kvXattrLS) load(ctx Context, msg proto.Message) error {
+	m := s.meta.(*kvMeta)
+	return m.txn(func(tx *kvTxn) error {
+		list := msg.(*pb.XattrList)
+		for _, xattr := range list.List {
+			tx.set(m.xattrKey(Ino(xattr.Inode), xattr.Name), xattr.Value)
+		}
+		return nil
+	})
+}
+
+type kvQuotaLS struct {
+	loadedSeg
+}
+
+func (s *kvQuotaLS) load(ctx Context, msg proto.Message) error {
+	m := s.meta.(*kvMeta)
+	return m.txn(func(tx *kvTxn) error {
+		list := msg.(*pb.QuotaList)
+		for _, q := range list.List {
+			b := utils.NewBuffer(32)
+			b.Put64(uint64(q.MaxSpace))
+			b.Put64(uint64(q.MaxInodes))
+			b.Put64(uint64(q.UsedSpace))
+			b.Put64(uint64(q.UsedInodes))
+			tx.set(m.dirQuotaKey(Ino(q.Inode)), b.Bytes())
+		}
+		return nil
+	})
+}
+
+type kvStatLS struct {
+	loadedSeg
+}
+
+func (s *kvStatLS) load(ctx Context, msg proto.Message) error {
+	m := s.meta.(*kvMeta)
+	return m.txn(func(tx *kvTxn) error {
+		list := msg.(*pb.StatList)
+		for _, s := range list.List {
+			b := utils.NewBuffer(24)
+			b.Put64(uint64(s.DataLength))
+			b.Put64(uint64(s.UsedSpace))
+			b.Put64(uint64(s.UsedInodes))
+			tx.set(m.dirStatKey(Ino(s.Inode)), b.Bytes())
+		}
+		return nil
+	})
+}
+
+type kvNodeLS struct {
+	loadedSeg
+}
+
+func (s *kvNodeLS) load(ctx Context, msg proto.Message) error {
+	m := s.meta.(*kvMeta)
+	return m.txn(func(tx *kvTxn) error {
+		list := msg.(*pb.NodeList)
+		for _, pn := range list.List {
+			tx.set(m.inodeKey(Ino(pn.Inode)), pn.Data)
+		}
+		return nil
+	})
+}
+
+type kvChunkLS struct {
+	loadedSeg
+}
+
+func (s *kvChunkLS) load(ctx Context, msg proto.Message) error {
+	m := s.meta.(*kvMeta)
+	return m.txn(func(tx *kvTxn) error {
+		list := msg.(*pb.ChunkList)
+		for _, chk := range list.List {
+			tx.set(m.chunkKey(Ino(chk.Inode), chk.Index), chk.Slices)
+		}
+		return nil
+	})
+}
+
+type kvEdgeLS struct {
+	loadedSeg
+	pools []*sync.Pool
+}
+
+func (s *kvEdgeLS) load(ctx Context, msg proto.Message) error {
+	m := s.meta.(*kvMeta)
+	return m.txn(func(tx *kvTxn) error {
+		list := msg.(*pb.EdgeList)
+		for _, edge := range list.List {
+			buff := s.pools[0].Get().([]byte)
+			MarshalEdgePB(edge, buff)
+			tx.set(m.entryKey(Ino(edge.Parent), string(edge.Name)), buff)
+			s.pools[0].Put(buff) // nolint:staticcheck
+		}
+		return nil
+	})
+}
+
+type kvParentLS struct {
+	loadedSeg
+}
+
+func (s *kvParentLS) load(ctx Context, msg proto.Message) error {
+	m := s.meta.(*kvMeta)
+	return m.txn(func(tx *kvTxn) error {
+		list := msg.(*pb.ParentList)
+		for _, parent := range list.List {
+			tx.set(m.parentKey(Ino(parent.Inode), Ino(parent.Parent)), packCounter(parent.Cnt))
+		}
+		return nil
+	})
+}
+
+type kvSymlinkLS struct {
+	loadedSeg
+}
+
+func (s *kvSymlinkLS) load(ctx Context, msg proto.Message) error {
+	m := s.meta.(*kvMeta)
+	return m.txn(func(tx *kvTxn) error {
+		list := msg.(*pb.SymlinkList)
+		for _, symlink := range list.List {
+			tx.set(m.symKey(Ino(symlink.Inode)), symlink.Target)
+		}
+		return nil
+	})
+}
+
+func (m *kvMeta) prepareLoad(ctx Context, opt *LoadOption) error {
+	opt.check()
+	// concurrent load is not supported , may cause lots of txn conflicts.
+	// TODO: use one txn for all load goroutines,
+	// and enable tkv client TxnLocalLatches to avoid conflict,
+	// but a large transaction may cause other issues.
+	opt.CoNum = 1
+
+	var exist bool
+	err := m.txn(func(tx *kvTxn) error {
+		exist = tx.exist(m.fmtKey())
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if exist {
+		return fmt.Errorf("database %s://%s is not empty", m.Name(), m.addr)
+	}
+	return nil
+}
