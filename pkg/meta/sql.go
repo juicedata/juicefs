@@ -166,7 +166,7 @@ type symlink struct {
 type xattr struct {
 	Id    int64  `xorm:"pk bigserial"`
 	Inode Ino    `xorm:"unique(name) notnull"`
-	Name  string `xorm:"unique(name) notnull"`
+	Name  []byte `xorm:"unique(name) varbinary(255) notnull"`
 	Value []byte `xorm:"blob notnull"`
 }
 
@@ -3094,7 +3094,7 @@ func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 	defer m.timeit("GetXattr", time.Now())
 	inode = m.checkRoot(inode)
 	return errno(m.roTxn(func(s *xorm.Session) error {
-		var x = xattr{Inode: inode, Name: name}
+		var x = xattr{Inode: inode, Name: []byte(name)}
 		ok, err := s.Get(&x)
 		if err != nil {
 			return err
@@ -3138,8 +3138,8 @@ func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 
 func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
-		var k = &xattr{Inode: inode, Name: name}
-		var x = xattr{Inode: inode, Name: name, Value: value}
+		var k = &xattr{Inode: inode, Name: []byte(name)}
+		var x = xattr{Inode: inode, Name: []byte(name), Value: value}
 		ok, err := s.ForUpdate().Get(k)
 		if err != nil {
 			return err
@@ -3169,7 +3169,7 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 
 func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
-		n, err := s.Delete(&xattr{Inode: inode, Name: name})
+		n, err := s.Delete(&xattr{Inode: inode, Name: []byte(name)})
 		if err != nil {
 			return err
 		} else if n == 0 {
@@ -3305,7 +3305,7 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 	if len(rows) > 0 {
 		xattrs := make([]*DumpedXattr, 0, len(rows))
 		for _, x := range rows {
-			xattrs = append(xattrs, &DumpedXattr{x.Name, string(x.Value)})
+			xattrs = append(xattrs, &DumpedXattr{string(x.Name), string(x.Value)})
 		}
 		sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
 		e.Xattrs = xattrs
@@ -3399,7 +3399,7 @@ func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 	if ok && len(rows) > 0 {
 		xattrs := make([]*DumpedXattr, 0, len(rows))
 		for _, x := range rows {
-			xattrs = append(xattrs, &DumpedXattr{x.Name, string(x.Value)})
+			xattrs = append(xattrs, &DumpedXattr{string(x.Name), string(x.Value)})
 		}
 		sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
 		e.Xattrs = xattrs
@@ -3872,7 +3872,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}, aclMaxId *uin
 		chs[5] <- &symlink{inode, symL}
 	}
 	for _, x := range e.Xattrs {
-		chs[4] <- &xattr{Inode: inode, Name: x.Name, Value: unescape(x.Value)}
+		chs[4] <- &xattr{Inode: inode, Name: []byte(x.Name), Value: unescape(x.Value)}
 	}
 
 	n.AccessACLId = m.saveACL(loadACL(e.AccessACL), aclMaxId)
