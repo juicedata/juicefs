@@ -35,7 +35,7 @@ import (
 )
 
 var (
-	sqlBatchSize = 40960
+	sqlDumpBatchSize = 40960
 )
 
 func (m *dbMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg {
@@ -265,13 +265,13 @@ func (s *sqlSliceRefDS) dump(ctx Context, ch chan *dumpedResult) error {
 
 	taskFinished := false
 	psrs := &pb.SliceRefList{List: make([]*pb.SliceRef, 0, 1024)}
-	for start := 0; !taskFinished; start += sqlBatchSize {
+	for start := 0; !taskFinished; start += sqlDumpBatchSize {
 		nStart := start
 		eg.Go(func() error {
 			var rows []sliceRef
 			if err := s.meta.(*dbMeta).execStmt(ctx, s.txn, func(s *xorm.Session) error {
 				rows = rows[:0]
-				return s.Where("refs != 1").Limit(sqlBatchSize, nStart).Find(&rows) // skip default refs
+				return s.Where("refs != 1").Limit(sqlDumpBatchSize, nStart).Find(&rows) // skip default refs
 			}); err != nil || len(rows) == 0 {
 				taskFinished = true
 				return err
@@ -431,10 +431,10 @@ func sqlQueryBatch(ctx Context, s iDumpedSeg, opt *DumpOption, ch chan *dumpedRe
 
 	taskFinished := false
 	sum := int64(0)
-	for start := 0; !taskFinished; start += sqlBatchSize {
+	for start := 0; !taskFinished; start += sqlDumpBatchSize {
 		nStart := start
 		eg.Go(func() error {
-			msg, err := query(egCtx, sqlBatchSize, nStart, &sum)
+			msg, err := query(egCtx, sqlDumpBatchSize, nStart, &sum)
 			if err != nil || msg == nil {
 				taskFinished = true
 				return err
@@ -602,7 +602,7 @@ func (s *sqlParentDS) dump(ctx Context, ch chan *dumpedResult) error {
 
 	parents := val.(map[uint64][]uint64)
 	pls := &pb.ParentList{
-		List: make([]*pb.Parent, 0, sqlBatchSize),
+		List: make([]*pb.Parent, 0, sqlDumpBatchSize),
 	}
 	st := make(map[uint64]int64)
 	for inode, ps := range parents {
@@ -617,12 +617,12 @@ func (s *sqlParentDS) dump(ctx Context, ch chan *dumpedResult) error {
 				pls.List = append(pls.List, &pb.Parent{Inode: inode, Parent: parent, Cnt: cnt})
 			}
 		}
-		if len(pls.List) >= sqlBatchSize {
+		if len(pls.List) >= sqlDumpBatchSize {
 			if err := dumpResult(ctx, ch, &dumpedResult{s, pls}); err != nil {
 				return err
 			}
 			pls = &pb.ParentList{
-				List: make([]*pb.Parent, 0, sqlBatchSize),
+				List: make([]*pb.Parent, 0, sqlDumpBatchSize),
 			}
 		}
 	}
@@ -681,7 +681,7 @@ type sqlFormatLS struct {
 }
 
 func (s *sqlFormatLS) load(ctx Context, msg proto.Message) error {
-	return s.meta.(*dbMeta).insertSQL([]interface{}{
+	return s.meta.(*dbMeta).insertRows([]interface{}{
 		&setting{
 			Name:  "format",
 			Value: string(msg.(*pb.Format).Data),
@@ -702,7 +702,7 @@ func (s *sqlCounterLS) load(ctx Context, msg proto.Message) error {
 		rows = append(rows, counter{Name: name, Value: *field})
 	}
 	logger.Debugf("insert counters %+v", rows)
-	return s.meta.(*dbMeta).insertSQL(rows)
+	return s.meta.(*dbMeta).insertRows(rows)
 }
 
 type sqlSustainedLS struct {
@@ -718,7 +718,7 @@ func (s *sqlSustainedLS) load(ctx Context, msg proto.Message) error {
 		}
 	}
 	logger.Debugf("insert %s num %d", s, len(rows))
-	return s.meta.(*dbMeta).insertSQL(rows)
+	return s.meta.(*dbMeta).insertRows(rows)
 }
 
 type sqlDelFileLS struct {
@@ -732,7 +732,7 @@ func (s *sqlDelFileLS) load(ctx Context, msg proto.Message) error {
 		rows = append(rows, &delfile{Inode: Ino(f.Inode), Length: f.Length, Expire: f.Expire})
 	}
 	logger.Debugf("insert %s num %d", s, len(rows))
-	return s.meta.(*dbMeta).insertSQL(rows)
+	return s.meta.(*dbMeta).insertRows(rows)
 }
 
 type sqlSliceRefLS struct {
@@ -746,7 +746,7 @@ func (s *sqlSliceRefLS) load(ctx Context, msg proto.Message) error {
 		rows = append(rows, &sliceRef{Id: sr.Id, Size: sr.Size, Refs: int(sr.Refs)})
 	}
 	logger.Debugf("insert %s num %d", s, len(rows))
-	return s.meta.(*dbMeta).insertSQL(rows)
+	return s.meta.(*dbMeta).insertRows(rows)
 }
 
 type sqlAclLS struct {
@@ -764,7 +764,7 @@ func (s *sqlAclLS) load(ctx Context, msg proto.Message) error {
 		rows = append(rows, acl)
 	}
 	logger.Debugf("insert %s num %d", s, len(rows))
-	return s.meta.(*dbMeta).insertSQL(rows)
+	return s.meta.(*dbMeta).insertRows(rows)
 }
 
 type sqlXattrLS struct {
@@ -778,7 +778,7 @@ func (s *sqlXattrLS) load(ctx Context, msg proto.Message) error {
 		rows = append(rows, &xattr{Inode: Ino(x.Inode), Name: x.Name, Value: x.Value})
 	}
 	logger.Debugf("insert %s num %d", s, len(rows))
-	return s.meta.(*dbMeta).insertSQL(rows)
+	return s.meta.(*dbMeta).insertRows(rows)
 }
 
 type sqlQuotaLS struct {
@@ -798,7 +798,7 @@ func (s *sqlQuotaLS) load(ctx Context, msg proto.Message) error {
 		})
 	}
 	logger.Debugf("insert %s num %d", s, len(rows))
-	return s.meta.(*dbMeta).insertSQL(rows)
+	return s.meta.(*dbMeta).insertRows(rows)
 }
 
 type sqlStatLS struct {
@@ -817,7 +817,7 @@ func (s *sqlStatLS) load(ctx Context, msg proto.Message) error {
 		})
 	}
 	logger.Debugf("insert %s num %d", s, len(rows))
-	return s.meta.(*dbMeta).insertSQL(rows)
+	return s.meta.(*dbMeta).insertRows(rows)
 }
 
 type sqlNodeLS struct {
@@ -840,7 +840,7 @@ func (s *sqlNodeLS) load(ctx Context, msg proto.Message) error {
 		m.parseNode(attr, pn)
 		rows = append(rows, pn)
 	}
-	err := s.meta.(*dbMeta).insertSQL(rows)
+	err := s.meta.(*dbMeta).insertRows(rows)
 	for _, n := range rows {
 		s.pools[0].Put(n)
 	}
@@ -865,7 +865,7 @@ func (s *sqlChunkLS) load(ctx Context, msg proto.Message) error {
 		pc.Slices = c.Slices
 		rows = append(rows, pc)
 	}
-	err := s.meta.(*dbMeta).insertSQL(rows)
+	err := s.meta.(*dbMeta).insertRows(rows)
 
 	for _, chk := range rows {
 		s.pools[0].Put(chk)
@@ -893,7 +893,7 @@ func (s *sqlEdgeLS) load(ctx Context, msg proto.Message) error {
 		rows = append(rows, pe)
 	}
 
-	err := s.meta.(*dbMeta).insertSQL(rows)
+	err := s.meta.(*dbMeta).insertRows(rows)
 	for _, e := range rows {
 		s.pools[0].Put(e)
 	}
@@ -925,7 +925,7 @@ func (s *sqlSymlinkLS) load(ctx Context, msg proto.Message) error {
 		rows = append(rows, ps)
 	}
 
-	err := s.meta.(*dbMeta).insertSQL(rows)
+	err := s.meta.(*dbMeta).insertRows(rows)
 	for _, sl := range rows {
 		s.pools[0].Put(sl)
 	}
@@ -933,7 +933,7 @@ func (s *sqlSymlinkLS) load(ctx Context, msg proto.Message) error {
 	return err
 }
 
-func (m *dbMeta) insertSQL(beans []interface{}) error {
+func (m *dbMeta) insertRows(beans []interface{}) error {
 	insert := func(rows []interface{}) error {
 		return m.txn(func(s *xorm.Session) error {
 			n, err := s.Insert(rows...)
