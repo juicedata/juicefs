@@ -21,12 +21,12 @@ package meta
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"golang.org/x/sync/errgroup"
@@ -67,7 +67,6 @@ func (m *dbMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg 
 				ds,
 				[]*sync.Pool{
 					{New: func() interface{} { return &pb.Chunk{} }},
-					{New: func() interface{} { return &pb.Slice{} }},
 				},
 			},
 		}
@@ -321,22 +320,10 @@ func (s *sqlAclDS) dump(ctx Context, ch chan *dumpedResult) error {
 	}
 	acls := &pb.AclList{List: make([]*pb.Acl, 0, len(rows))}
 	for _, row := range rows {
-		acl := &pb.Acl{
-			Id:    row.Id,
-			Owner: uint32(row.Owner),
-			Group: uint32(row.Group),
-			Other: uint32(row.Other),
-			Mask:  uint32(row.Mask),
-		}
-		r := utils.ReadBuffer(row.NamedUsers)
-		for r.HasMore() {
-			acl.Users = append(acl.Users, &pb.AclEntry{Id: r.Get32(), Perm: uint32(r.Get16())})
-		}
-		r = utils.ReadBuffer(row.NamedGroups)
-		for r.HasMore() {
-			acl.Groups = append(acl.Groups, &pb.AclEntry{Id: r.Get32(), Perm: uint32(r.Get16())})
-		}
-		acls.List = append(acls.List, acl)
+		acls.List = append(acls.List, &pb.Acl{
+			Id:   row.Id,
+			Data: row.toRule().Encode(),
+		})
 	}
 	if err := dumpResult(ctx, ch, &dumpedResult{s, acls}); err != nil {
 		return err
@@ -473,7 +460,8 @@ func (s *sqlNodeDBS) dump(ctx Context, ch chan *dumpedResult) error {
 
 func (s *sqlNodeDBS) doQuery(ctx context.Context, limit, start int, sum *int64) (proto.Message, error) {
 	var rows []node
-	if err := s.meta.(*dbMeta).execStmt(ctx, s.txn, func(s *xorm.Session) error {
+	m := s.meta.(*dbMeta)
+	if err := m.execStmt(ctx, s.txn, func(s *xorm.Session) error {
 		rows = rows[:0]
 		return s.Limit(limit, start).Find(&rows)
 	}); err != nil {
@@ -486,26 +474,12 @@ func (s *sqlNodeDBS) doQuery(ctx context.Context, limit, start int, sum *int64) 
 		List: make([]*pb.Node, 0, len(rows)),
 	}
 	var pn *pb.Node
+	attr := &Attr{}
 	for _, n := range rows {
 		pn = s.pools[0].Get().(*pb.Node)
 		pn.Inode = uint64(n.Inode)
-		pn.Type = uint32(n.Type)
-		pn.Flags = uint32(n.Flags)
-		pn.Mode = uint32(n.Mode)
-		pn.Uid = n.Uid
-		pn.Gid = n.Gid
-		pn.Atime = n.Atime
-		pn.Mtime = n.Mtime
-		pn.Ctime = n.Ctime
-		pn.AtimeNsec = int32(n.Atimensec)
-		pn.MtimeNsec = int32(n.Mtimensec)
-		pn.CtimeNsec = int32(n.Ctimensec)
-		pn.Nlink = n.Nlink
-		pn.Length = n.Length
-		pn.Rdev = n.Rdev
-		pn.Parent = uint64(n.Parent)
-		pn.AccessAclId = n.AccessACLId
-		pn.DefaultAclId = n.DefaultACLId
+		m.parseAttr(&n, attr)
+		pn.Data = m.marshal(attr)
 		pns.List = append(pns.List, pn)
 	}
 	atomic.AddInt64(sum, int64(len(pns.List)))
@@ -515,7 +489,6 @@ func (s *sqlNodeDBS) doQuery(ctx context.Context, limit, start int, sum *int64) 
 func (s *sqlNodeDBS) release(msg proto.Message) {
 	pns := msg.(*pb.NodeList)
 	for _, node := range pns.List {
-		ResetNodePB(node)
 		s.pools[0].Put(node)
 	}
 	pns.List = nil
@@ -548,15 +521,7 @@ func (s *sqlChunkDBS) doQuery(ctx context.Context, limit, start int, sum *int64)
 		pc = s.pools[0].Get().(*pb.Chunk)
 		pc.Inode = uint64(c.Inode)
 		pc.Index = c.Indx
-
-		n := len(c.Slices) / sliceBytes
-		pc.Slices = make([]*pb.Slice, 0, n)
-		var ps *pb.Slice
-		for i := 0; i < n; i++ {
-			ps = s.pools[1].Get().(*pb.Slice)
-			UnmarshalSlicePB(c.Slices[i*sliceBytes:], ps)
-			pc.Slices = append(pc.Slices, ps)
-		}
+		pc.Slices = c.Slices
 		pcs.List = append(pcs.List, pc)
 	}
 	atomic.AddInt64(sum, int64(len(pcs.List)))
@@ -566,10 +531,6 @@ func (s *sqlChunkDBS) doQuery(ctx context.Context, limit, start int, sum *int64)
 func (s *sqlChunkDBS) release(msg proto.Message) {
 	pcs := msg.(*pb.ChunkList)
 	for _, pc := range pcs.List {
-		for _, ps := range pc.Slices {
-			s.pools[1].Put(ps)
-		}
-		pc.Slices = nil
 		s.pools[0].Put(pc)
 	}
 	pcs.List = nil
@@ -720,12 +681,10 @@ type sqlFormatLS struct {
 }
 
 func (s *sqlFormatLS) load(ctx Context, msg proto.Message) error {
-	format := ConvertFormatFromPB(msg.(*pb.Format))
-	fData, _ := json.MarshalIndent(*format, "", "")
 	return s.meta.(*dbMeta).insertSQL([]interface{}{
 		&setting{
 			Name:  "format",
-			Value: string(fData),
+			Value: string(msg.(*pb.Format).Data),
 		},
 	})
 }
@@ -797,28 +756,12 @@ type sqlAclLS struct {
 func (s *sqlAclLS) load(ctx Context, msg proto.Message) error {
 	acls := msg.(*pb.AclList)
 	rows := make([]interface{}, 0, len(acls.List))
-	for _, a := range acls.List {
-		ba := &acl{}
-		ba.Id = a.Id
-		ba.Owner = uint16(a.Owner)
-		ba.Group = uint16(a.Group)
-		ba.Mask = uint16(a.Mask)
-		ba.Other = uint16(a.Other)
-
-		w := utils.NewBuffer(uint32(len(a.Users) * 6))
-		for _, u := range a.Users {
-			w.Put32(u.Id)
-			w.Put16(uint16(u.Perm))
-		}
-		ba.NamedUsers = w.Bytes()
-
-		w = utils.NewBuffer(uint32(len(a.Groups) * 6))
-		for _, g := range a.Groups {
-			w.Put32(g.Id)
-			w.Put16(uint16(g.Perm))
-		}
-		ba.NamedGroups = w.Bytes()
-		rows = append(rows, ba)
+	for _, pa := range acls.List {
+		rule := &aclAPI.Rule{}
+		rule.Decode(pa.Data)
+		acl := newSQLAcl(rule)
+		acl.Id = pa.Id
+		rows = append(rows, acl)
 	}
 	logger.Debugf("insert %s num %d", s, len(rows))
 	return s.meta.(*dbMeta).insertSQL(rows)
@@ -884,28 +827,17 @@ type sqlNodeLS struct {
 
 func (s *sqlNodeLS) load(ctx Context, msg proto.Message) error {
 	nodes := msg.(*pb.NodeList)
+	m := s.meta.(*dbMeta)
+	b := m.getBase()
 	rows := make([]interface{}, 0, len(nodes.List))
 	var pn *node
+	attr := &Attr{}
 	for _, n := range nodes.List {
 		pn = s.pools[0].Get().(*node)
 		pn.Inode = Ino(n.Inode)
-		pn.Type = uint8(n.Type)
-		pn.Flags = uint8(n.Flags)
-		pn.Mode = uint16(n.Mode)
-		pn.Uid = n.Uid
-		pn.Gid = n.Gid
-		pn.Atime = n.Atime
-		pn.Mtime = n.Mtime
-		pn.Ctime = n.Ctime
-		pn.Atimensec = int16(n.AtimeNsec)
-		pn.Mtimensec = int16(n.MtimeNsec)
-		pn.Ctimensec = int16(n.CtimeNsec)
-		pn.Nlink = n.Nlink
-		pn.Length = n.Length
-		pn.Rdev = n.Rdev
-		pn.Parent = Ino(n.Parent)
-		pn.AccessACLId = n.AccessAclId
-		pn.DefaultACLId = n.DefaultAclId
+		attr.Parent, attr.AccessACL, attr.DefaultACL = 0, 0, 0
+		b.parseAttr(n.Data, attr)
+		m.parseNode(attr, pn)
 		rows = append(rows, pn)
 	}
 	err := s.meta.(*dbMeta).insertSQL(rows)
@@ -930,24 +862,13 @@ func (s *sqlChunkLS) load(ctx Context, msg proto.Message) error {
 		pc.Id = 0
 		pc.Inode = Ino(c.Inode)
 		pc.Indx = c.Index
-
-		n := len(c.Slices) * sliceBytes
-		pc.Slices = s.pools[1].Get().([]byte)
-		if len(pc.Slices) < n {
-			pc.Slices = make([]byte, n)
-		}
-		for i, s := range c.Slices {
-			MarshalSlicePB(s, pc.Slices[i*sliceBytes:])
-		}
-		pc.Slices = pc.Slices[:n]
+		pc.Slices = c.Slices
 		rows = append(rows, pc)
 	}
 	err := s.meta.(*dbMeta).insertSQL(rows)
 
 	for _, chk := range rows {
-		c := chk.(*chunk)
-		s.pools[1].Put(c.Slices) // nolint:staticcheck
-		s.pools[0].Put(c)
+		s.pools[0].Put(chk)
 	}
 	logger.Debugf("insert %s num %d", s, len(rows))
 	return err

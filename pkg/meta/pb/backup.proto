@@ -9,31 +9,7 @@ option go_package = "./pb";
 */
 
 message Format {
-  string name = 1;
-  string uuid = 2;
-  string storage = 3;
-  string storage_class = 4;
-  string bucket = 5;
-  string access_key = 6;
-  string secret_key = 7;
-  string session_token = 8;
-  int32 block_size = 9;
-  string compression = 10;
-  int32 shards = 11;
-  bool hash_prefix = 12;
-  uint64 capacity = 13;
-  uint64 inodes = 14;
-  string encrypt_key = 15;
-  string encrypt_algo = 16;
-  bool key_encrypted = 17;
-  int64 upload_limit = 18; // Mbps
-  int64 download_limit = 19; // Mbps
-  int32 trash_days = 20;
-  int32 meta_version = 21;
-  string min_client_version = 22;
-  string max_client_version = 23;
-  bool dir_stats = 24;
-  bool enable_acl = 25;
+  bytes data = 1; // meta.Format's json format
 }
 
 message Counters {
@@ -74,19 +50,9 @@ message SliceRefList {
   repeated SliceRef list = 1;
 }
 
-message AclEntry {
-  uint32 id   = 1;
-  uint32 perm = 2; 
-}
-
 message Acl {
-  uint32 id     = 1;
-  uint32 owner  = 2; 
-  uint32 group  = 3; 
-  uint32 other  = 4; 
-  uint32 mask   = 5; 
-  repeated AclEntry users  = 6;
-  repeated AclEntry groups = 7;
+  uint32 id = 1;
+  bytes data = 2; // acl.Rule's binary format
 }
 
 message AclList {
@@ -128,23 +94,7 @@ message StatList {
 
 message Node {
   uint64 inode = 1;
-  uint32 type = 2;   
-  uint32 flags = 3; 
-  uint32 mode = 4;
-  uint32 uid = 5;
-  uint32 gid = 6;
-  int64 atime = 7;
-  int64 mtime = 8;
-  int64 ctime = 9;
-  int32 atime_nsec = 10;
-  int32 mtime_nsec = 11;
-  int32 ctime_nsec = 12;
-  uint32 nlink = 13;
-  uint64 length = 14;
-  uint32 rdev = 15;
-  uint64 parent = 16;
-  uint32 access_acl_id = 17;
-  uint32 default_acl_id = 18;
+  bytes data = 2; // meta.Attr's binary format
 }
 
 message NodeList {
@@ -173,18 +123,10 @@ message ParentList {
   repeated Parent list = 1;
 }
 
-message Slice {
-  uint64 id   = 1;
-  uint32 pos  = 2;
-  uint32 size = 3;
-  uint32 off  = 4;
-  uint32 len  = 5;
-}
-
 message Chunk {
   uint64 inode = 1;
   uint32 index = 2;
-  repeated Slice slices = 3;
+  bytes slices = 3; // array of meta.slice
 }
 
 message ChunkList {
@@ -198,4 +140,14 @@ message Symlink {
 
 message SymlinkList {
   repeated Symlink list = 1;
+}
+
+message Footer {
+  message SegInfo {
+    repeated uint64 offset = 1;
+  }
+
+  uint32 magic = 1;
+  uint32 version = 2;
+  map<string, SegInfo> infos = 3;
 }

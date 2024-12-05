@@ -19,13 +19,11 @@ package meta
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"golang.org/x/sync/errgroup"
@@ -62,7 +60,6 @@ func (m *kvMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg 
 				{New: func() interface{} { return &pb.Node{} }},
 				{New: func() interface{} { return &pb.Edge{} }},
 				{New: func() interface{} { return &pb.Chunk{} }},
-				{New: func() interface{} { return &pb.Slice{} }},
 				{New: func() interface{} { return &pb.Symlink{} }},
 				{New: func() interface{} { return &pb.Xattr{} }},
 				{New: func() interface{} { return &pb.Parent{} }},
@@ -82,9 +79,7 @@ var kvLoadedPools = make(map[int][]*sync.Pool)
 func (m *kvMeta) buildLoadedPools(typ int) []*sync.Pool {
 	kvLoadedPoolOnce.Do(func() {
 		kvLoadedPools = map[int][]*sync.Pool{
-			SegTypeNode:  {{New: func() interface{} { return make([]byte, BakNodeSizeWithoutAcl) }}, {New: func() interface{} { return make([]byte, BakNodeSize) }}},
-			SegTypeChunk: {{New: func() interface{} { return make([]byte, sliceBytes*10) }}},
-			SegTypeEdge:  {{New: func() interface{} { return make([]byte, 9) }}},
+			SegTypeEdge: {{New: func() interface{} { return make([]byte, 9) }}},
 		}
 	})
 	return kvLoadedPools[typ]
@@ -111,9 +106,9 @@ func (m *kvMeta) buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
 	case SegTypeStat:
 		return &kvStatLS{loadedSeg{typ: typ, meta: m}}
 	case SegTypeNode:
-		return &kvNodeLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
+		return &kvNodeLS{loadedSeg{typ: typ, meta: m}}
 	case SegTypeChunk:
-		return &kvChunkLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
+		return &kvChunkLS{loadedSeg{typ: typ, meta: m}}
 	case SegTypeEdge:
 		return &kvEdgeLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
 	case SegTypeParent:
@@ -283,20 +278,18 @@ type kvAclDS struct {
 func (s *kvAclDS) dump(ctx Context, ch chan *dumpedResult) error {
 	m := s.meta.(*kvMeta)
 	return m.execStmt(ctx, s.txn, func(tx *kvTxn) error {
-		list := &pb.AclList{List: make([]*pb.Acl, 0, 16)}
+		acls := &pb.AclList{List: make([]*pb.Acl, 0, 16)}
 		tx.scan(m.fmtKey("R"), nextKey(m.fmtKey("R")), false, func(k, v []byte) bool {
 			b := utils.FromBuffer([]byte(k[1:])) // "R"
 			if b.Len() != 4 {
 				logger.Warnf("invalid aclKey: %s", k)
 				return true
 			}
-			acl := UnmarshalAclPB(v)
-			acl.Id = b.Get32()
-			list.List = append(list.List, acl)
+			acls.List = append(acls.List, &pb.Acl{Id: b.Get32(), Data: v})
 			return true
 		})
-		logger.Debugf("dump %s num: %d", s, len(list.List))
-		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: list})
+		logger.Debugf("dump %s num: %d", s, len(acls.List))
+		return dumpResult(ctx, ch, &dumpedResult{seg: s, msg: acls})
 	})
 }
 
@@ -433,7 +426,7 @@ func (s *kvMixDS) dump(ctx Context, ch chan *dumpedResult) error {
 					case 'I':
 						node := s.pools[0].Get().(*pb.Node)
 						node.Inode = uint64(ino)
-						UnmarshalNodePB(v, node)
+						node.Data = v
 						sums[SegTypeNode].Add(1)
 						ent = entryPool.Get().(*entry)
 						ent.typ, ent.elem = SegTypeNode, node
@@ -449,23 +442,16 @@ func (s *kvMixDS) dump(ctx Context, ch chan *dumpedResult) error {
 						ent.typ, ent.elem = SegTypeEdge, edge
 						entryCh <- ent
 					case 'C':
-						n := len(v) / sliceBytes
 						chk := s.pools[2].Get().(*pb.Chunk)
 						chk.Inode = uint64(ino)
 						chk.Index = binary.BigEndian.Uint32(k[10:])
-						chk.Slices = make([]*pb.Slice, 0, n)
-						var ps *pb.Slice
-						for i := 0; i < n; i++ {
-							ps = s.pools[3].Get().(*pb.Slice)
-							UnmarshalSlicePB(v[i*sliceBytes:], ps)
-							chk.Slices = append(chk.Slices, ps)
-						}
+						chk.Slices = v
 						sums[SegTypeChunk].Add(1)
 						ent = entryPool.Get().(*entry)
 						ent.typ, ent.elem = SegTypeChunk, chk
 						entryCh <- ent
 					case 'S':
-						sym := s.pools[4].Get().(*pb.Symlink)
+						sym := s.pools[3].Get().(*pb.Symlink)
 						sym.Inode = uint64(ino)
 						sym.Target = unescape(string(v))
 						sums[SegTypeSymlink].Add(1)
@@ -473,7 +459,7 @@ func (s *kvMixDS) dump(ctx Context, ch chan *dumpedResult) error {
 						ent.typ, ent.elem = SegTypeSymlink, sym
 						entryCh <- ent
 					case 'X':
-						xattr := s.pools[5].Get().(*pb.Xattr)
+						xattr := s.pools[4].Get().(*pb.Xattr)
 						xattr.Inode = uint64(ino)
 						xattr.Name = string(k[10:])
 						xattr.Value = v
@@ -482,7 +468,7 @@ func (s *kvMixDS) dump(ctx Context, ch chan *dumpedResult) error {
 						ent.typ, ent.elem = SegTypeXattr, xattr
 						entryCh <- ent
 					case 'P':
-						parent := s.pools[6].Get().(*pb.Parent)
+						parent := s.pools[5].Get().(*pb.Parent)
 						parent.Inode = uint64(ino)
 						parent.Parent = uint64(m.decodeInode(k[10:]))
 						parent.Cnt = parseCounter(v)
@@ -515,7 +501,6 @@ func (s *kvMixDS) release(msg proto.Message) {
 	switch list := msg.(type) {
 	case *pb.NodeList:
 		for _, node := range list.List {
-			ResetNodePB(node)
 			s.pools[0].Put(node)
 		}
 	case *pb.EdgeList:
@@ -524,22 +509,19 @@ func (s *kvMixDS) release(msg proto.Message) {
 		}
 	case *pb.ChunkList:
 		for _, chunk := range list.List {
-			for _, slice := range chunk.Slices {
-				s.pools[2].Put(slice)
-			}
-			s.pools[3].Put(chunk)
+			s.pools[2].Put(chunk)
 		}
 	case *pb.SymlinkList:
 		for _, symlink := range list.List {
-			s.pools[4].Put(symlink)
+			s.pools[3].Put(symlink)
 		}
 	case *pb.XattrList:
 		for _, xattr := range list.List {
-			s.pools[5].Put(xattr)
+			s.pools[4].Put(xattr)
 		}
 	case *pb.ParentList:
 		for _, parent := range list.List {
-			s.pools[6].Put(parent)
+			s.pools[5].Put(parent)
 		}
 	}
 }
@@ -597,10 +579,8 @@ type kvFormatLS struct {
 
 func (s *kvFormatLS) load(ctx Context, msg proto.Message) error {
 	m := s.meta.(*kvMeta)
-	format := ConvertFormatFromPB(msg.(*pb.Format))
-	fData, _ := json.MarshalIndent(*format, "", "")
 	return m.txn(func(tx *kvTxn) error {
-		tx.set(m.fmtKey("setting"), fData)
+		tx.set(m.fmtKey("setting"), msg.(*pb.Format).Data)
 		return nil
 	})
 }
@@ -674,10 +654,15 @@ type kvAclLS struct {
 func (s *kvAclLS) load(ctx Context, msg proto.Message) error {
 	m := s.meta.(*kvMeta)
 	return m.txn(func(tx *kvTxn) error {
+		var maxId uint32 = 0
 		list := msg.(*pb.AclList)
 		for _, acl := range list.List {
-			tx.set(m.aclKey(acl.Id), MarshalAclPB(acl))
+			if acl.Id > maxId {
+				maxId = acl.Id
+			}
+			tx.set(m.aclKey(acl.Id), acl.Data)
 		}
+		tx.set(m.counterKey(aclCounter), packCounter(int64(maxId)))
 		return nil
 	})
 }
@@ -738,7 +723,6 @@ func (s *kvStatLS) load(ctx Context, msg proto.Message) error {
 
 type kvNodeLS struct {
 	loadedSeg
-	pools []*sync.Pool
 }
 
 func (s *kvNodeLS) load(ctx Context, msg proto.Message) error {
@@ -746,20 +730,7 @@ func (s *kvNodeLS) load(ctx Context, msg proto.Message) error {
 	return m.txn(func(tx *kvTxn) error {
 		list := msg.(*pb.NodeList)
 		for _, pn := range list.List {
-			var buff []byte
-			if pn.AccessAclId|pn.DefaultAclId != aclAPI.None {
-				buff = s.pools[1].Get().([]byte)
-			} else {
-				buff = s.pools[0].Get().([]byte)
-			}
-			MarshalNodePB(pn, buff)
-			tx.set(m.inodeKey(Ino(pn.Inode)), buff)
-
-			if pn.AccessAclId|pn.DefaultAclId != aclAPI.None {
-				s.pools[1].Put(buff) // nolint:staticcheck
-			} else {
-				s.pools[0].Put(buff) // nolint:staticcheck
-			}
+			tx.set(m.inodeKey(Ino(pn.Inode)), pn.Data)
 		}
 		return nil
 	})
@@ -767,7 +738,6 @@ func (s *kvNodeLS) load(ctx Context, msg proto.Message) error {
 
 type kvChunkLS struct {
 	loadedSeg
-	pools []*sync.Pool
 }
 
 func (s *kvChunkLS) load(ctx Context, msg proto.Message) error {
@@ -775,16 +745,7 @@ func (s *kvChunkLS) load(ctx Context, msg proto.Message) error {
 	return m.txn(func(tx *kvTxn) error {
 		list := msg.(*pb.ChunkList)
 		for _, chk := range list.List {
-			size := len(chk.Slices) * sliceBytes
-			buff := s.pools[0].Get().([]byte)
-			if len(buff) < size {
-				buff = make([]byte, size)
-			}
-			for i, slice := range chk.Slices {
-				MarshalSlicePB(slice, buff[i*sliceBytes:])
-			}
-			tx.set(m.chunkKey(Ino(chk.Inode), chk.Index), buff[:size])
-			s.pools[0].Put(buff) // nolint:staticcheck
+			tx.set(m.chunkKey(Ino(chk.Inode), chk.Index), chk.Slices)
 		}
 		return nil
 	})

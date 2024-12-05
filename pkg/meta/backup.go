@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"sync"
+	"unsafe"
 
-	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"google.golang.org/protobuf/proto"
@@ -17,9 +18,9 @@ import (
 )
 
 const (
-	BakMagic      = 0x747083
-	BakVersion    = 1
-	BakFooterSize = 4096
+	BakMagic   = 0x747083
+	BakVersion = 1
+	BakEOS     = BakMagic // end of segments
 )
 
 const (
@@ -83,16 +84,20 @@ func CreateMessageByName(name protoreflect.FullName) (proto.Message, error) {
 
 var ErrBakEOF = fmt.Errorf("reach backup EOF")
 
+// BakFormat: BakSegment... + BakEOF + BakFooter
 type BakFormat struct {
-	// BakSegment...
-	Footer BakFooter
+	Offset uint64
+	Footer *BakFooter
 }
 
 func NewBakFormat() *BakFormat {
 	return &BakFormat{
-		Footer: BakFooter{
-			Magic:   BakMagic,
-			Version: BakVersion,
+		Footer: &BakFooter{
+			Msg: &pb.Footer{
+				Magic:   BakMagic,
+				Version: BakVersion,
+				Infos:   make(map[string]*pb.Footer_SegInfo),
+			},
 		},
 	}
 }
@@ -111,18 +116,32 @@ func (f *BakFormat) WriteSegment(w io.Writer, seg *BakSegment) error {
 	if err != nil && n != len(data) {
 		return fmt.Errorf("failed to write segment %s: err %v, write len %d, expect len %d", seg, err, n, len(data))
 	}
+
+	name := seg.String()
+	info, ok := f.Footer.Msg.Infos[name]
+	if !ok {
+		info = &pb.Footer_SegInfo{Offset: []uint64{}}
+		f.Footer.Msg.Infos[name] = info
+	}
+
+	info.Offset = append(info.Offset, f.Offset)
+	f.Offset += uint64(n)
 	return nil
 }
 
 func (f *BakFormat) ReadSegment(r io.Reader) (*BakSegment, error) {
 	seg := &BakSegment{}
 	if err := seg.Unmarshal(r); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal segment: %w", err)
+		return nil, err
 	}
 	return seg, nil
 }
 
 func (f *BakFormat) WriteFooter(w io.Writer) error {
+	if err := f.writeEOS(w); err != nil {
+		return err
+	}
+
 	data, err := f.Footer.Marshal()
 	if err != nil {
 		return err
@@ -134,52 +153,65 @@ func (f *BakFormat) WriteFooter(w io.Writer) error {
 	return nil
 }
 
+func (f *BakFormat) writeEOS(w io.Writer) error {
+	if n, err := w.Write(binary.BigEndian.AppendUint32(nil, BakEOS)); err != nil && n != 4 {
+		return fmt.Errorf("failed to write EOS: err %w, write len %d, expect len 4", err, n)
+	}
+	return nil
+}
+
 func (f *BakFormat) ReadFooter(r io.ReadSeeker) (*BakFooter, error) {
 	footer := &BakFooter{}
 	if err := footer.Unmarshal(r); err != nil {
 		return nil, err
 	}
-	if footer.Magic != BakMagic {
-		return nil, fmt.Errorf("invalid magic number %d, expect %d", footer.Magic, BakMagic)
+	if footer.Msg.Magic != BakMagic {
+		return nil, fmt.Errorf("invalid magic number %d, expect %d", footer.Msg.Magic, BakMagic)
 	}
-	// TODO checksum
 	return footer, nil
 }
 
 type BakFooter struct {
-	Magic    uint32
-	Version  uint32
-	Checksum uint32
-	_        [BakFooterSize - 12]byte
+	Msg *pb.Footer
+	Len uint64
 }
 
 func (h *BakFooter) Marshal() ([]byte, error) {
-	buff := bytes.NewBuffer(make([]byte, 0, BakFooterSize))
-	if err := binary.Write(buff, binary.BigEndian, h); err != nil {
-		return nil, err
+	data, err := proto.Marshal(h.Msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal footer: %w", err)
 	}
-	data := buff.Bytes()
-	if len(data) != BakFooterSize {
-		return nil, fmt.Errorf("footer size is %d, expect %d", len(data), BakFooterSize)
-	}
+
+	h.Len = uint64(len(data))
+	data = binary.BigEndian.AppendUint64(data, h.Len)
 	return data, nil
 }
 
 func (h *BakFooter) Unmarshal(r io.ReadSeeker) error {
-	_, _ = r.Seek(BakFooterSize, io.SeekEnd)
-	data := make([]byte, BakFooterSize)
-	n, err := r.Read(data)
-	if err != nil && n != int(BakFooterSize) {
-		return fmt.Errorf("failed to read footer: err %v, read len %d, expect len %d", err, n, BakFooterSize)
+	lenSize := int64(unsafe.Sizeof(h.Len))
+	_, _ = r.Seek(lenSize, io.SeekEnd)
+
+	data := make([]byte, lenSize)
+	if n, err := r.Read(data); err != nil && n != int(lenSize) {
+		return fmt.Errorf("failed to read footer length: err %w, read len %d, expect len %d", err, n, lenSize)
 	}
 
-	buff := bytes.NewBuffer(data)
-	return binary.Read(buff, binary.BigEndian, h)
+	h.Len = binary.BigEndian.Uint64(data)
+	_, _ = r.Seek(int64(h.Len)+lenSize, io.SeekEnd)
+	data = make([]byte, h.Len)
+	if n, err := r.Read(data); err != nil && n != int(h.Len) {
+		return fmt.Errorf("failed to read footer: err %w, read len %d, expect len %d", err, n, h.Len)
+	}
+
+	if err := proto.Unmarshal(data, h.Msg); err != nil {
+		return fmt.Errorf("failed to unmarshal footer: %w", err)
+	}
+	return nil
 }
 
 type BakSegment struct {
 	Typ uint32
-	Len uint32
+	Len uint64
 	Val proto.Message
 }
 
@@ -206,7 +238,7 @@ func (s *BakSegment) Marshal() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal segment %s message: %v", s, err)
 	}
-	s.Len = uint32(len(data))
+	s.Len = uint64(len(data))
 	if err := binary.Write(buf, binary.BigEndian, s.Len); err != nil {
 		return nil, fmt.Errorf("failed to write segment %s length: %v", s, err)
 	}
@@ -346,193 +378,14 @@ func ConvertFormatToPB(f *Format, keepSecret bool) *pb.Format {
 	if !keepSecret {
 		f.RemoveSecret()
 	}
-	msg := &pb.Format{
-		Name:             f.Name,
-		Uuid:             f.UUID,
-		Storage:          f.Storage,
-		StorageClass:     f.StorageClass,
-		Bucket:           f.Bucket,
-		AccessKey:        f.AccessKey,
-		SecretKey:        f.SecretKey,
-		SessionToken:     f.SessionToken,
-		BlockSize:        int32(f.BlockSize),
-		Compression:      f.Compression,
-		Shards:           int32(f.Shards),
-		HashPrefix:       f.HashPrefix,
-		Capacity:         f.Capacity,
-		Inodes:           f.Inodes,
-		EncryptKey:       f.EncryptKey,
-		EncryptAlgo:      f.EncryptAlgo,
-		KeyEncrypted:     f.KeyEncrypted,
-		UploadLimit:      f.UploadLimit,
-		DownloadLimit:    f.DownloadLimit,
-		TrashDays:        int32(f.TrashDays),
-		MetaVersion:      int32(f.MetaVersion),
-		MinClientVersion: f.MinClientVersion,
-		MaxClientVersion: f.MaxClientVersion,
-		DirStats:         f.DirStats,
-		EnableAcl:        f.EnableACL,
+	data, err := json.MarshalIndent(f, "", "")
+	if err != nil {
+		logger.Errorf("failed to marshal format %s: %v", f.Name, err)
+		return nil
 	}
-	return msg
-}
-
-func ConvertFormatFromPB(msg *pb.Format) *Format {
-	return &Format{
-		Name:             msg.Name,
-		UUID:             msg.Uuid,
-		Storage:          msg.Storage,
-		StorageClass:     msg.StorageClass,
-		Bucket:           msg.Bucket,
-		AccessKey:        msg.AccessKey,
-		SecretKey:        msg.SecretKey,
-		SessionToken:     msg.SessionToken,
-		BlockSize:        int(msg.BlockSize),
-		Compression:      msg.Compression,
-		Shards:           int(msg.Shards),
-		HashPrefix:       msg.HashPrefix,
-		Capacity:         msg.Capacity,
-		Inodes:           msg.Inodes,
-		EncryptKey:       msg.EncryptKey,
-		EncryptAlgo:      msg.EncryptAlgo,
-		KeyEncrypted:     msg.KeyEncrypted,
-		UploadLimit:      msg.UploadLimit,
-		DownloadLimit:    msg.DownloadLimit,
-		TrashDays:        int(msg.TrashDays),
-		MetaVersion:      int(msg.MetaVersion),
-		MinClientVersion: msg.MinClientVersion,
-		MaxClientVersion: msg.MaxClientVersion,
-		DirStats:         msg.DirStats,
-		EnableACL:        msg.EnableAcl,
+	return &pb.Format{
+		Data: data,
 	}
-}
-
-func MarshalAclPB(msg *pb.Acl) []byte {
-	w := utils.NewBuffer(uint32(16 + (len(msg.Users)+len(msg.Groups))*6))
-	w.Put16(uint16(msg.Owner))
-	w.Put16(uint16(msg.Group))
-	w.Put16(uint16(msg.Mask))
-	w.Put16(uint16(msg.Other))
-	w.Put32(uint32(len(msg.Users)))
-	for _, user := range msg.Users {
-		w.Put32(user.Id)
-		w.Put16(uint16(user.Perm))
-	}
-	w.Put32(uint32(len(msg.Groups)))
-	for _, group := range msg.Groups {
-		w.Put32(group.Id)
-		w.Put16(uint16(group.Perm))
-	}
-	return w.Bytes()
-}
-
-func UnmarshalAclPB(buff []byte) *pb.Acl {
-	acl := &pb.Acl{}
-	rb := utils.ReadBuffer(buff)
-	acl.Owner = uint32(rb.Get16())
-	acl.Group = uint32(rb.Get16())
-	acl.Mask = uint32(rb.Get16())
-	acl.Other = uint32(rb.Get16())
-
-	var entry *pb.AclEntry
-	uCnt := rb.Get32()
-	acl.Users = make([]*pb.AclEntry, 0, uCnt)
-	for i := 0; i < int(uCnt); i++ {
-		entry = &pb.AclEntry{}
-		entry.Id = rb.Get32()
-		entry.Perm = uint32(rb.Get16())
-		acl.Users = append(acl.Users, entry)
-	}
-
-	gCnt := rb.Get32()
-	acl.Groups = make([]*pb.AclEntry, 0, gCnt)
-	for i := 0; i < int(gCnt); i++ {
-		entry = &pb.AclEntry{}
-		entry.Id = rb.Get32()
-		entry.Perm = uint32(rb.Get16())
-		acl.Groups = append(acl.Groups, entry)
-	}
-	return acl
-}
-
-const (
-	BakNodeSizeWithoutAcl = 71
-	BakNodeSize           = 79
-)
-
-func MarshalNodePB(msg *pb.Node, buff []byte) {
-	w := utils.FromBuffer(buff)
-	w.Put8(uint8(msg.Flags))
-	w.Put16((uint16(msg.Type) << 12) | (uint16(msg.Mode) & 0xfff))
-	w.Put32(msg.Uid)
-	w.Put32(msg.Gid)
-	w.Put64(uint64(msg.Atime))
-	w.Put32(uint32(msg.AtimeNsec))
-	w.Put64(uint64(msg.Mtime))
-	w.Put32(uint32(msg.MtimeNsec))
-	w.Put64(uint64(msg.Ctime))
-	w.Put32(uint32(msg.CtimeNsec))
-	w.Put32(msg.Nlink)
-	w.Put64(msg.Length)
-	w.Put32(msg.Rdev)
-	w.Put64(msg.Parent)
-	if msg.AccessAclId|msg.DefaultAclId != aclAPI.None {
-		w.Put32(msg.AccessAclId)
-		w.Put32(msg.DefaultAclId)
-	}
-}
-
-func ResetNodePB(msg *pb.Node) {
-	if msg == nil {
-		return
-	}
-	// fields that maybe not set in UnmarshalNodePB
-	msg.Parent = 0
-	msg.AccessAclId = 0
-	msg.DefaultAclId = 0
-}
-
-func UnmarshalNodePB(buff []byte, node *pb.Node) {
-	rb := utils.FromBuffer(buff)
-	node.Flags = uint32(rb.Get8())
-	node.Mode = uint32(rb.Get16())
-	node.Type = node.Mode >> 12
-	node.Mode &= 0777
-	node.Uid = rb.Get32()
-	node.Gid = rb.Get32()
-	node.Atime = int64(rb.Get64())
-	node.AtimeNsec = int32(rb.Get32())
-	node.Mtime = int64(rb.Get64())
-	node.MtimeNsec = int32(rb.Get32())
-	node.Ctime = int64(rb.Get64())
-	node.CtimeNsec = int32(rb.Get32())
-	node.Nlink = rb.Get32()
-	node.Length = rb.Get64()
-	node.Rdev = rb.Get32()
-	if rb.Left() >= 8 {
-		node.Parent = rb.Get64()
-	}
-	if rb.Left() >= 8 {
-		node.AccessAclId = rb.Get32()
-		node.DefaultAclId = rb.Get32()
-	}
-}
-
-func MarshalSlicePB(msg *pb.Slice, buff []byte) {
-	w := utils.FromBuffer(buff)
-	w.Put32(msg.Pos)
-	w.Put64(msg.Id)
-	w.Put32(msg.Size)
-	w.Put32(msg.Off)
-	w.Put32(msg.Len)
-}
-
-func UnmarshalSlicePB(buff []byte, slice *pb.Slice) {
-	rb := utils.ReadBuffer(buff)
-	slice.Pos = rb.Get32()
-	slice.Id = rb.Get64()
-	slice.Size = rb.Get32()
-	slice.Off = rb.Get32()
-	slice.Len = rb.Get32()
 }
 
 func MarshalEdgePB(msg *pb.Edge, buff []byte) {

@@ -22,14 +22,12 @@ package meta
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 
-	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
@@ -69,7 +67,7 @@ func (m *redisMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedS
 				ds,
 				[]*sync.Pool{
 					{New: func() interface{} { return &pb.Chunk{} }},
-					{New: func() interface{} { return &pb.Slice{} }},
+					{New: func() interface{} { return make([]byte, 8*sliceBytes) }},
 				},
 			},
 		}
@@ -89,9 +87,7 @@ var redisLoadedPools = make(map[int][]*sync.Pool)
 func (m *redisMeta) buildLoadedPools(typ int) []*sync.Pool {
 	redisLoadedPoolOnce.Do(func() {
 		redisLoadedPools = map[int][]*sync.Pool{
-			SegTypeNode:  {{New: func() interface{} { return make([]byte, BakNodeSizeWithoutAcl) }}, {New: func() interface{} { return make([]byte, BakNodeSize) }}},
-			SegTypeChunk: {{New: func() interface{} { return make([]byte, sliceBytes) }}},
-			SegTypeEdge:  {{New: func() interface{} { return make([]byte, 9) }}},
+			SegTypeEdge: {{New: func() interface{} { return make([]byte, 9) }}},
 		}
 	})
 	return redisLoadedPools[typ]
@@ -118,9 +114,9 @@ func (m *redisMeta) buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
 	case SegTypeStat:
 		return &redisStatLS{loadedSeg{typ: typ, meta: m}}
 	case SegTypeNode:
-		return &redisNodeLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
+		return &redisNodeLS{loadedSeg{typ: typ, meta: m}}
 	case SegTypeChunk:
-		return &redisChunkLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
+		return &redisChunkLS{loadedSeg{typ: typ, meta: m}}
 	case SegTypeEdge:
 		return &redisEdgeLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
 	case SegTypeParent:
@@ -325,9 +321,10 @@ func (s *redisAclDS) dump(ctx Context, ch chan *dumpedResult) error {
 	acls := &pb.AclList{List: make([]*pb.Acl, 0, len(vals))}
 	for k, v := range vals {
 		id, _ := strconv.ParseUint(k, 10, 32)
-		acl := UnmarshalAclPB([]byte(v))
-		acl.Id = uint32(id)
-		acls.List = append(acls.List, acl)
+		acls.List = append(acls.List, &pb.Acl{
+			Id:   uint32(id),
+			Data: []byte(v),
+		})
 	}
 
 	if err := dumpResult(ctx, ch, &dumpedResult{s, acls}); err != nil {
@@ -560,7 +557,7 @@ func (s *redisNodeDBS) dump(ctx Context, ch chan *dumpedResult) error {
 				inode, _ = strconv.ParseUint(tKeys[idx][len(meta.prefix)+1:], 10, 64)
 				node := s.pools[0].Get().(*pb.Node)
 				node.Inode = inode
-				UnmarshalNodePB([]byte(v.(string)), node)
+				node.Data = []byte(v.(string))
 				pnb.List = append(pnb.List, node)
 			}
 			atomic.AddInt64(&sum, int64(len(pnb.List)))
@@ -582,7 +579,6 @@ func (s *redisNodeDBS) dump(ctx Context, ch chan *dumpedResult) error {
 func (s *redisNodeDBS) release(msg proto.Message) {
 	pns := msg.(*pb.NodeList)
 	for _, node := range pns.List {
-		ResetNodePB(node)
 		s.pools[0].Put(node)
 	}
 	pns.List = nil
@@ -649,15 +645,19 @@ func (s *redisChunkDBS) dump(ctx Context, ch chan *dumpedResult) error {
 				pc := s.pools[0].Get().(*pb.Chunk)
 				pc.Inode = tChks[k].inode
 				pc.Index = tChks[k].index
-				var ps *pb.Slice
-				for _, val := range vals {
+
+				pc.Slices = s.pools[1].Get().([]byte)
+				if len(pc.Slices) < len(vals)*sliceBytes {
+					pc.Slices = make([]byte, len(vals)*sliceBytes)
+				}
+				pc.Slices = pc.Slices[:len(vals)*sliceBytes]
+
+				for i, val := range vals {
 					if len(val) != sliceBytes {
 						logger.Errorf("corrupt slice: len=%d, val=%v", len(val), []byte(val))
 						continue
 					}
-					ps = s.pools[1].Get().(*pb.Slice)
-					UnmarshalSlicePB([]byte(val), ps)
-					pc.Slices = append(pc.Slices, ps)
+					copy(pc.Slices[i*sliceBytes:], []byte(val))
 				}
 				pcs.List = append(pcs.List, pc)
 			}
@@ -853,9 +853,7 @@ type redisFormatLS struct {
 
 func (s *redisFormatLS) load(ctx Context, msg proto.Message) error {
 	meta := s.meta.(*redisMeta)
-	format := ConvertFormatFromPB(msg.(*pb.Format))
-	fData, _ := json.MarshalIndent(*format, "", "")
-	return meta.rdb.Set(ctx, meta.setting(), fData, 0).Err()
+	return meta.rdb.Set(ctx, meta.setting(), msg.(*pb.Format).Data, 0).Err()
 }
 
 type redisCounterLS struct {
@@ -946,7 +944,7 @@ func (s *redisAclLS) load(ctx Context, msg proto.Message) error {
 		if pa.Id > maxId {
 			maxId = pa.Id
 		}
-		acls[strconv.FormatUint(uint64(pa.Id), 10)] = MarshalAclPB(pa)
+		acls[strconv.FormatUint(uint64(pa.Id), 10)] = pa.Data
 	}
 	if len(acls) == 0 {
 		return nil
@@ -1020,7 +1018,6 @@ func (s *redisStatLS) load(ctx Context, msg proto.Message) error {
 
 type redisNodeLS struct {
 	loadedSeg
-	pools []*sync.Pool
 }
 
 func (s *redisNodeLS) load(ctx Context, msg proto.Message) error {
@@ -1035,27 +1032,14 @@ func (s *redisNodeLS) load(ctx Context, msg proto.Message) error {
 		if err := meta.rdb.MSet(ctx, nodes).Err(); err != nil {
 			return err
 		}
-		for k, buff := range nodes {
-			if len(buff.([]byte)) == BakNodeSize {
-				s.pools[1].Put(buff)
-			} else {
-				s.pools[0].Put(buff)
-			}
+		for k := range nodes {
 			delete(nodes, k)
 		}
 		return nil
 	}
 
 	for _, pn := range pns.List {
-		var buff []byte
-		if pn.AccessAclId|pn.DefaultAclId != aclAPI.None {
-			buff = s.pools[1].Get().([]byte)
-		} else {
-			buff = s.pools[0].Get().([]byte)
-		}
-		MarshalNodePB(pn, buff)
-		nodes[meta.inodeKey(Ino(pn.Inode))] = buff
-
+		nodes[meta.inodeKey(Ino(pn.Inode))] = pn.Data
 		if len(nodes) >= redisBatchSize {
 			if err := mset(nodes); err != nil {
 				return err
@@ -1067,7 +1051,6 @@ func (s *redisNodeLS) load(ctx Context, msg proto.Message) error {
 
 type redisChunkLS struct {
 	loadedSeg
-	pools []*sync.Pool
 }
 
 func (s *redisChunkLS) load(ctx Context, msg proto.Message) error {
@@ -1075,35 +1058,20 @@ func (s *redisChunkLS) load(ctx Context, msg proto.Message) error {
 	pcs := msg.(*pb.ChunkList)
 
 	pipe := meta.rdb.Pipeline()
-	cache := make([][]byte, 0, redisBatchSize)
 	for idx, chk := range pcs.List {
 		slices := make([]string, 0, len(chk.Slices))
-		for _, slice := range chk.Slices {
-			sliceBuff := s.pools[0].Get().([]byte)
-			MarshalSlicePB(slice, sliceBuff)
-			cache = append(cache, sliceBuff)
-			slices = append(slices, string(sliceBuff))
+		for off := 0; off < len(chk.Slices); off += sliceBytes {
+			slices = append(slices, string(chk.Slices[off:off+sliceBytes]))
 		}
 		pipe.RPush(ctx, meta.chunkKey(Ino(chk.Inode), chk.Index), slices)
 
 		if idx%100 == 0 {
-			if ok, err := tryExecPipe(ctx, pipe); err != nil {
+			if _, err := tryExecPipe(ctx, pipe); err != nil {
 				return err
-			} else if ok {
-				for _, buff := range cache {
-					s.pools[0].Put(buff) // nolint:staticcheck
-				}
-				cache = cache[:0]
 			}
 		}
 	}
-	if err := execPipe(ctx, pipe); err != nil {
-		return err
-	}
-	for _, buff := range cache {
-		s.pools[0].Put(buff) // nolint:staticcheck
-	}
-	return nil
+	return execPipe(ctx, pipe)
 }
 
 type redisEdgeLS struct {
