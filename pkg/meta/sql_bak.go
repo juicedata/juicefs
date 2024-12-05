@@ -50,7 +50,7 @@ func (m *dbMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg 
 	case SegTypeDelFile:
 		return &sqlDelFileDS{ds}
 	case SegTypeSliceRef:
-		return &sqlSliceRefDS{ds, []*sync.Pool{{New: func() interface{} { return &pb.SliceRef{} }}}}
+		return &sqlSliceRefDS{dumpedBatchSeg{ds, []*sync.Pool{{New: func() interface{} { return &pb.SliceRef{} }}}}}
 	case SegTypeAcl:
 		return &sqlAclDS{ds}
 	case SegTypeXattr:
@@ -62,14 +62,7 @@ func (m *dbMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg 
 	case SegTypeNode:
 		return &sqlNodeDBS{dumpedBatchSeg{ds, []*sync.Pool{{New: func() interface{} { return &pb.Node{} }}}}}
 	case SegTypeChunk:
-		return &sqlChunkDBS{
-			dumpedBatchSeg{
-				ds,
-				[]*sync.Pool{
-					{New: func() interface{} { return &pb.Chunk{} }},
-				},
-			},
-		}
+		return &sqlChunkDBS{dumpedBatchSeg{ds, []*sync.Pool{{New: func() interface{} { return &pb.Chunk{} }}}}}
 	case SegTypeEdge:
 		return &sqlEdgeDBS{dumpedBatchSeg{ds, []*sync.Pool{{New: func() interface{} { return &pb.Edge{} }}}}, sync.Mutex{}}
 	case SegTypeParent:
@@ -87,7 +80,7 @@ func (m *dbMeta) buildLoadedPools(typ int) []*sync.Pool {
 	sqlLoadedPoolOnce.Do(func() {
 		sqlLoadedPools = map[int][]*sync.Pool{
 			SegTypeNode:    {{New: func() interface{} { return &node{} }}},
-			SegTypeChunk:   {{New: func() interface{} { return &chunk{} }}, {New: func() interface{} { return make([]byte, sliceBytes*10) }}},
+			SegTypeChunk:   {{New: func() interface{} { return &chunk{} }}},
 			SegTypeEdge:    {{New: func() interface{} { return &edge{} }}},
 			SegTypeSymlink: {{New: func() interface{} { return &symlink{} }}},
 		}
@@ -255,8 +248,7 @@ func (s *sqlDelFileDS) dump(ctx Context, ch chan *dumpedResult) error {
 }
 
 type sqlSliceRefDS struct {
-	dumpedSeg
-	pools []*sync.Pool
+	dumpedBatchSeg
 }
 
 func (s *sqlSliceRefDS) dump(ctx Context, ch chan *dumpedResult) error {
