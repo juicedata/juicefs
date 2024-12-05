@@ -571,6 +571,12 @@ However, in a multi-server gateway setup, the situation is slightly different. T
 
 Currently, JuiceFS S3 Gateway's cache refresh strategy involves forcibly updating the in-memory cache every 5 minutes (certain operations also trigger cache update operations). This ensures that configuration changes take effect within a maximum of 5 minutes in a multi-server setup. You can adjust this time by using the `--refresh-iam-interval` parameter. If immediate effect on a specific gateway is required, you can manually restart it.
 
+### Generate a pre-signed URL
+
+The JuiceFS S3 gateway supports the use of the `mc share` command to manage the pre-signed urls of objects on the MinIO bucket for downloading and uploading objects.
+
+Please refer to the `mc share` usage help document [here](https://min.io/docs/minio/linux/reference/minio-mc/mc-share.html#description).
+
 ### Bucket event notifications
 
 You can use bucket event notifications to monitor events happening on objects within a storage bucket and trigger certain actions in response.
