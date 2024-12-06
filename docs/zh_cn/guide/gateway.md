@@ -571,6 +571,14 @@ JuiceFS S3 网关的所有管理 API 的更新操作都会立即生效并且持�
 
 目前 JuiceFS S3 网关的缓存刷新策略是每 5 分钟强制更新内存缓存（部分操作也会触发缓存更新操作），这样保证多机情况下配置生效最长不会超过 5 分钟，可以通过 `--refresh-iam-interval` 参数来调整该时间。如果希望某个 S3 网关立即生效，可以尝试手动将其重启。
 
+### 生成预签名 URL
+
+JuiceFS S3 网关支持使用 `mc share` 命令来管理 MinIO 存储桶上对象的预签名 URL，用于下载和上传对象。
+
+`mc share` 使用详情请参考 [这里](https://minio.org.cn/docs/minio/linux/reference/minio-mc/mc-share.html#)
+
+```Shell
+
 ### 桶事件通知
 
 桶事件通知功能可以用来监视存储桶中对象上发生的事件，从而触发一些行为。
