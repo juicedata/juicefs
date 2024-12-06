@@ -36,7 +36,7 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/json-iterator/go v1.1.12
 	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
-	github.com/juicedata/gogfapi v0.0.0-20230626071140-fc28e5537825
+	github.com/juicedata/gogfapi v0.0.0-20241204082332-ecd102647f80
 	github.com/juju/ratelimit v1.0.2
 	github.com/ks3sdklib/aws-sdk-go v1.2.2
 	github.com/l0wl3vel/bunny-storage-go-sdk v0.0.10
@@ -75,7 +75,7 @@ require (
 	golang.org/x/crypto v0.21.0
 	golang.org/x/net v0.23.0
 	golang.org/x/oauth2 v0.7.0
-	golang.org/x/sync v0.2.0
+	golang.org/x/sync v0.9.0
 	golang.org/x/sys v0.18.0
 	golang.org/x/term v0.18.0
 	golang.org/x/text v0.14.0

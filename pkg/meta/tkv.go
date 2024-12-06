@@ -19,6 +19,7 @@ package meta
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -801,6 +802,10 @@ func (m *kvMeta) shouldRetry(err error) bool {
 	return m.client.shouldRetry(err)
 }
 
+func (m *kvMeta) roTxn(ctx context.Context, f func(*kvTxn) error) error {
+	return nil
+}
+
 func (m *kvMeta) txn(f func(tx *kvTxn) error, inodes ...Ino) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
@@ -1147,6 +1152,10 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				*inode = foundIno
 			}
 			return syscall.EEXIST
+		} else if parent == TrashInode { // user's inode is allocated by prefetch, trash inode is allocated on demand
+			key := m.counterKey("nextTrash")
+			next := tx.incrBy(key, 1)
+			*inode = TrashInode + Ino(next)
 		}
 
 		mode &= 07777

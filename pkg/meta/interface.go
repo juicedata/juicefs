@@ -455,6 +455,9 @@ type Meta interface {
 	DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) error
 	LoadMeta(r io.Reader) error
 
+	DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) (err error)
+	LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error
+
 	// getBase return the base engine.
 	getBase() *baseMeta
 	InitMetrics(registerer prometheus.Registerer)

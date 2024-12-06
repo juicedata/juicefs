@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"reflect"
@@ -38,6 +39,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -134,6 +136,11 @@ type engine interface {
 	cacheACLs(ctx Context) error
 
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
+
+	execETxn(ctx Context, txn *eTxn, fn func(ctx Context, txn *eTxn) error) error
+	buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg
+	buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg
+	prepareLoad(ctx Context, opt *LoadOption) error
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -605,18 +612,22 @@ func (m *baseMeta) Init(format *Format, force bool) error {
 
 func (m *baseMeta) cleanupDeletedFiles() {
 	for {
-		utils.SleepWithJitter(time.Minute)
-		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(time.Minute.Seconds())*9/10); err != nil {
+		utils.SleepWithJitter(time.Hour)
+		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter lastCleanupFiles: %s", err)
 		} else if ok {
-			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 10000)
+			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 6e5)
 			if err != nil {
 				logger.Warnf("scan deleted files: %s", err)
 				continue
 			}
+			start := time.Now()
 			for inode, length := range files {
 				logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
 				m.en.doDeleteFileData(inode, length)
+				if time.Since(start) > 50*time.Minute { // Yield my time slice to avoid conflicts with other clients
+					break
+				}
 			}
 		}
 	}
@@ -2331,14 +2342,8 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 
 	st := m.en.doLookup(Background, TrashInode, name, trash, nil)
 	if st == syscall.ENOENT {
-		next, err := m.en.incrCounter("nextTrash", 1)
-		if err == nil {
-			*trash = TrashInode + Ino(next)
-			attr := Attr{Typ: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: TrashInode, Full: true}
-			st = m.en.doMknod(Background, TrashInode, name, TypeDirectory, 0555, 0, "", trash, &attr)
-		} else {
-			st = errno(err)
-		}
+		attr := Attr{Typ: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: TrashInode, Full: true}
+		st = m.en.doMknod(Background, TrashInode, name, TypeDirectory, 0555, 0, "", trash, &attr)
 	}
 
 	m.Lock()
@@ -3083,4 +3088,131 @@ func (h *dirHandler) Close() {
 	h.batch = nil
 	h.readOff = 0
 	h.Unlock()
+}
+
+func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
+	opt = opt.check()
+
+	bak := NewBakFormat()
+	ch := make(chan *dumpedResult, 100)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		txn := &eTxn{
+			en: m.en,
+			opt: &bTxnOption{
+				coNum:        opt.CoNum,
+				readOnly:     true,
+				maxRetry:     1,
+				maxStmtRetry: 3,
+			},
+		}
+		err := m.en.execETxn(ctx, txn, func(ctx Context, txn *eTxn) error {
+			for typ := SegTypeFormat; typ < SegTypeMax; typ++ {
+				seg := m.en.buildDumpedSeg(typ, opt, txn)
+				if seg != nil {
+					if err := seg.dump(ctx, ch); err != nil {
+						return fmt.Errorf("dump %s err: %w", seg, err)
+					}
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			ctx.Cancel()
+		} else {
+			close(ch)
+		}
+	}()
+
+	var res *dumpedResult
+	for {
+		select {
+		case <-ctx.Done():
+			wg.Wait()
+			return ctx.Err()
+		case res = <-ch:
+		}
+		if res == nil {
+			break
+		}
+		if err := bak.WriteSegment(w, &BakSegment{Val: res.msg}); err != nil {
+			logger.Errorf("write %s err: %v", res.seg, err)
+			ctx.Cancel()
+			wg.Wait()
+			return err
+		}
+		res.seg.release(res.msg)
+	}
+
+	wg.Wait()
+	return bak.WriteFooter(w)
+}
+
+func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
+	if opt == nil {
+		opt = &LoadOption{}
+	}
+	if err := m.en.prepareLoad(ctx, opt); err != nil {
+		return err
+	}
+
+	type task struct {
+		msg proto.Message
+		seg iLoadedSeg
+	}
+
+	var wg sync.WaitGroup
+	taskCh := make(chan *task, 100)
+
+	workerFunc := func(ctx Context, taskCh <-chan *task) {
+		defer wg.Done()
+		var task *task
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case task = <-taskCh:
+			}
+			if task == nil {
+				break
+			}
+			if err := task.seg.load(ctx, task.msg); err != nil {
+				logger.Errorf("failed to insert %s: %s", task.seg, err)
+				ctx.Cancel()
+				return
+			}
+		}
+	}
+
+	for i := 0; i < opt.CoNum; i++ {
+		wg.Add(1)
+		go workerFunc(ctx, taskCh)
+	}
+
+	bak := NewBakFormat()
+	for {
+		seg, err := bak.ReadSegment(r)
+		if err != nil {
+			if errors.Is(err, ErrBakEOF) {
+				close(taskCh)
+				break
+			}
+			ctx.Cancel()
+			wg.Wait()
+			return err
+		}
+
+		ls := m.en.buildLoadedSeg(int(seg.Typ), opt)
+		select {
+		case <-ctx.Done():
+			wg.Wait()
+			return ctx.Err()
+		case taskCh <- &task{seg.Val, ls}:
+		}
+	}
+	wg.Wait()
+	return nil
 }

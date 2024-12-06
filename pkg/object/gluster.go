@@ -162,7 +162,7 @@ func (g *gluster) Delete(key string, getters ...AttrGetter) error {
 // a sorted list of directory entries.
 func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
 	v := g.vol()
-	f, err := v.Open(dirname)
+	f, err := v.OpenDir(dirname)
 	if err != nil {
 		return nil, err
 	}

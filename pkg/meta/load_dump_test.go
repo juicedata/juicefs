@@ -25,7 +25,10 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"time"
 
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
@@ -64,7 +67,7 @@ func TestEscape(t *testing.T) {
 		s := escape(string(v))
 		t.Log("escape value: ", s)
 		r := unescape(s)
-		if bytes.Compare(r, v) != 0 {
+		if !bytes.Equal(r, v) {
 			t.Fatalf("expected %v, but got %v", v, r)
 		}
 	}
@@ -88,20 +91,7 @@ func GbkToUtf8(s []byte) ([]byte, error) {
 	return d, nil
 }
 
-func testLoad(t *testing.T, uri, fname string) Meta {
-	m := NewClient(uri, nil)
-	if err := m.Reset(); err != nil {
-		t.Fatalf("reset meta: %s", err)
-	}
-	fp, err := os.Open(fname)
-	if err != nil {
-		t.Fatalf("open file: %s", fname)
-	}
-	defer fp.Close()
-	if err = m.LoadMeta(fp); err != nil {
-		t.Fatalf("load meta: %s", err)
-	}
-
+func checkMeta(t *testing.T, m Meta) {
 	ctx := Background
 	var entries []*Entry
 	if st := m.Readdir(ctx, 1, 1, &entries); st != 0 {
@@ -177,6 +167,48 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 		t.Fatalf("expect the flags euqal 128, but actual is: %d", attr.Flags)
 	}
 
+	if attr.AccessACL == 0 || attr.DefaultACL == 0 {
+		t.Fatalf("expect ACL not 0, but actual is: %d, %d", attr.AccessACL, attr.DefaultACL)
+	}
+
+	ar := &aclAPI.Rule{}
+	if st := m.GetFacl(ctx, 2, aclAPI.TypeAccess, ar); st != 0 {
+		t.Fatalf("get access acl: %s", st)
+	}
+	ar2 := &aclAPI.Rule{
+		Owner: 6,
+		Group: 4,
+		Mask:  4,
+		Other: 4,
+		NamedUsers: []aclAPI.Entry{
+			{Id: 1, Perm: 6},
+			{Id: 2, Perm: 7},
+		},
+		NamedGroups: nil,
+	}
+	if !bytes.Equal(ar.Encode(), ar2.Encode()) {
+		t.Fatalf("access acl: %v != %v", ar, ar2)
+	}
+
+	dr := &aclAPI.Rule{}
+	if st := m.GetFacl(ctx, 2, aclAPI.TypeDefault, dr); st != 0 {
+		t.Fatalf("get default acl: %s", st)
+	}
+	dr2 := &aclAPI.Rule{
+		Owner:      7,
+		Group:      5,
+		Mask:       5,
+		Other:      5,
+		NamedUsers: nil,
+		NamedGroups: []aclAPI.Entry{
+			{Id: 3, Perm: 6},
+			{Id: 4, Perm: 7},
+		},
+	}
+	if !bytes.Equal(dr.Encode(), dr2.Encode()) {
+		t.Fatalf("default acl: %v != %v", dr, dr2)
+	}
+
 	var slices []Slice
 	if st := m.Read(ctx, 2, 0, &slices); st != 0 {
 		t.Fatalf("read chunk: %s", st)
@@ -207,7 +239,22 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	if st := m.GetXattr(ctx, 3, "dk", &value); st != 0 || string(value) != "果汁%25" {
 		t.Fatalf("getxattr: %s %v", st, value)
 	}
+}
 
+func testLoad(t *testing.T, uri, fname string) Meta {
+	m := NewClient(uri, nil)
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	fp, err := os.Open(fname)
+	if err != nil {
+		t.Fatalf("open file: %s", fname)
+	}
+	defer fp.Close()
+	if err = m.LoadMeta(fp); err != nil {
+		t.Fatalf("load meta: %s", err)
+	}
+	checkMeta(t, m)
 	return m
 }
 
@@ -288,6 +335,91 @@ func TestLoadDump(t *testing.T) { //skip mutate
 	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
 }
 
+func testDumpV2(t *testing.T, m Meta, result string, opt *DumpOption) {
+	if opt == nil {
+		opt = &DumpOption{CoNum: 10, KeepSecret: true}
+	}
+	fp, err := os.OpenFile(result, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		t.Fatalf("open file %s: %s", result, err)
+	}
+	defer fp.Close()
+	if _, err = m.Load(true); err != nil {
+		t.Fatalf("load setting: %s", err)
+	}
+	if err = m.DumpMetaV2(Background, fp, opt); err != nil {
+		t.Fatalf("dump meta: %s", err)
+	}
+	fp.Sync()
+}
+
+func testLoadV2(t *testing.T, uri, fname string) Meta {
+	m := NewClient(uri, nil)
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	fp, err := os.Open(fname)
+	if err != nil {
+		t.Fatalf("open file: %s", fname)
+	}
+	defer fp.Close()
+	if err = m.LoadMetaV2(Background, fp, &LoadOption{CoNum: 10}); err != nil {
+		t.Fatalf("load meta: %s", err)
+	}
+	if _, err := m.Load(true); err != nil {
+		t.Fatalf("load setting: %s", err)
+	}
+	checkMeta(t, m)
+	return m
+}
+
+func testLoadDumpV2(t *testing.T, name, addr1, addr2 string) {
+	t.Run("Metadata Engine: "+name, func(t *testing.T) {
+		start := time.Now()
+		m := testLoad(t, addr1, sampleFile)
+		t.Logf("load meta: %v", time.Since(start))
+		start = time.Now()
+		testDumpV2(t, m, fmt.Sprintf("%s.dump", name), nil)
+		m.Shutdown()
+		t.Logf("dump meta v2: %v", time.Since(start))
+		start = time.Now()
+		m = testLoadV2(t, addr2, fmt.Sprintf("%s.dump", name))
+		m.Shutdown()
+		t.Logf("load meta v2: %v", time.Since(start))
+	})
+}
+
+func testLoadOtherEngine(t *testing.T, src, dst, dstAddr string) {
+	t.Run(fmt.Sprintf("Load %s to %s", src, dst), func(t *testing.T) {
+		m := testLoadV2(t, dstAddr, fmt.Sprintf("%s.dump", src))
+		m.Shutdown()
+	})
+}
+
+func TestLoadDumpV2(t *testing.T) {
+	logger.SetLevel(logrus.DebugLevel)
+
+	engines := map[string][]string{
+		"mysql": {"mysql://root:@/dev", "mysql://root:@/dev2"},
+		// "redis": {"redis://127.0.0.1:6379/2", "redis://127.0.0.1:6379/3"},
+		// "tikv":  {"tikv://127.0.0.1:2379/jfs-load-dump-1", "tikv://127.0.0.1:2379/jfs-load-dump-2"},
+	}
+
+	for name, addrs := range engines {
+		testLoadDumpV2(t, name, addrs[0], addrs[1])
+		testSecretAndTrash(t, addrs[0], addrs[1])
+	}
+
+	for src := range engines {
+		for dst, dstAddr := range engines {
+			if src == dst {
+				continue
+			}
+			testLoadOtherEngine(t, src, dst, dstAddr[1])
+		}
+	}
+}
+
 func TestLoadDumpSlow(t *testing.T) { //skip mutate
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
@@ -319,3 +451,122 @@ func TestLoadDump_MemKV(t *testing.T) {
 		testLoadSub(t, "memkv://user:pass@test/jfs", subSampleFile)
 	})
 }
+
+func testSecretAndTrash(t *testing.T, addr, addr2 string) {
+	m := testLoad(t, addr, sampleFile)
+	testDumpV2(t, m, "sqlite-secret.dump", &DumpOption{CoNum: 10, KeepSecret: true})
+	m2 := testLoadV2(t, addr2, "sqlite-secret.dump")
+	if m2.GetFormat().EncryptKey != m.GetFormat().EncryptKey {
+		t.Fatalf("encrypt key not valid: %s", m2.GetFormat().EncryptKey)
+	}
+
+	testDumpV2(t, m, "sqlite-non-secret.dump", &DumpOption{CoNum: 10, KeepSecret: false})
+	m2.Reset()
+	m2 = testLoadV2(t, addr2, "sqlite-non-secret.dump")
+	if m2.GetFormat().EncryptKey != "removed" {
+		t.Fatalf("encrypt key not valid: %s", m2.GetFormat().EncryptKey)
+	}
+
+	// trash
+	trashs := map[Ino]uint64{
+		27: 11,
+		29: 10485760,
+	}
+	cnt := 0
+	m2.getBase().scanTrashFiles(Background, func(inode Ino, size uint64, ts time.Time) (clean bool, err error) {
+		cnt++
+		if tSize, ok := trashs[inode]; !ok || size != tSize {
+			t.Fatalf("trash file: %d %d", inode, size)
+		}
+		return false, nil
+	})
+	if cnt != len(trashs) {
+		t.Fatalf("trash count: %d", cnt)
+	}
+}
+
+/*
+func BenchmarkLoadDumpV2(b *testing.B) {
+	logrus.SetLevel(logrus.DebugLevel)
+	b.ReportAllocs()
+	engines := map[string]string{
+		"mysql": "mysql://root:@/dev",
+		"redis": "redis://127.0.0.1:6379/2",
+		"tikv":  "tikv://127.0.0.1:2379/jfs-load-dump-1",
+	}
+
+	sample := "../../1M_files_in_one_dir.dump"
+	for name, addr := range engines {
+		m := NewClient(addr, nil)
+		defer func() {
+			m.Reset()
+			m.Shutdown()
+		}()
+		b.Run("Load "+name, func(b *testing.B) {
+			if err := m.Reset(); err != nil {
+				b.Fatalf("reset meta: %s", err)
+			}
+			fp, err := os.Open(sample)
+			if err != nil {
+				b.Fatalf("open file: %s", sample)
+			}
+			defer fp.Close()
+
+			b.ResetTimer()
+			if err = m.LoadMeta(fp); err != nil {
+				b.Fatalf("load meta: %s", err)
+			}
+		})
+
+		b.Run("Dump "+name, func(b *testing.B) {
+			path := fmt.Sprintf("%s.v1.dump", name)
+			fp, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+			if err != nil {
+				b.Fatalf("open file %s: %s", path, err)
+			}
+			defer fp.Close()
+			if _, err = m.Load(true); err != nil {
+				b.Fatalf("load setting: %s", err)
+			}
+
+			b.ResetTimer()
+			if err = m.DumpMeta(fp, RootInode, 10, true, true, false); err != nil {
+				b.Fatalf("dump meta: %s", err)
+			}
+			fp.Sync()
+		})
+
+		b.Run("DumpV2 "+name, func(b *testing.B) {
+			path := fmt.Sprintf("%s.v2.dump", name)
+			fp, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+			if err != nil {
+				b.Fatalf("open file %s: %s", path, err)
+			}
+			defer fp.Close()
+
+			b.ResetTimer()
+			if err = m.DumpMetaV2(Background, fp, &DumpOption{CoNum: 10}); err != nil {
+				b.Fatalf("dump meta: %s", err)
+			}
+			fp.Sync()
+		})
+
+		b.Run("LoadV2 "+name, func(b *testing.B) {
+			path := fmt.Sprintf("%s.v2.dump", name)
+			if err := m.Reset(); err != nil {
+				b.Fatalf("reset meta: %s", err)
+			}
+			fp, err := os.Open(path)
+			if err != nil {
+				b.Fatalf("open file: %s", path)
+			}
+			defer fp.Close()
+
+			b.ResetTimer()
+			if err = m.LoadMetaV2(Background, fp, &LoadOption{CoNum: 10}); err != nil {
+				b.Fatalf("load meta: %s", err)
+			}
+		})
+	}
+}
+*/
