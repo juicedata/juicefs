@@ -238,7 +238,7 @@ juicefs format \
 
 >[MariaDB](https://mariadb.org) 是 MySQL 的一个开源分支，由 MySQL 原始开发者维护并保持开源，与 MySQL 高度兼容，在设置元数据引擎方法上也没有任何差别。
 >
->[OceanBase](https://www.oceanbase.com/)是一款自主研发的分布式关系型数据库，专为处理海量数据和高并发事务而设计，具备高性能、强一致性和高可用性的特点。同时，OceanBase与 MySQL 高度兼容，在设置元数据引擎方法上也没有任何差别。
+>[OceanBase](https://www.oceanbase.com)是一款自主研发的分布式关系型数据库，专为处理海量数据和高并发事务而设计，具备高性能、强一致性和高可用性的特点。同时，OceanBase 与 MySQL 高度兼容，在设置元数据引擎方法上也没有任何差别。
 
 ### 创建文件系统
 

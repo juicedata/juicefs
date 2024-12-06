@@ -577,7 +577,6 @@ JuiceFS S3 网关支持使用 `mc share` 命令来管理 MinIO 存储桶上对�
 
 `mc share` 使用详情请参考 [这里](https://minio.org.cn/docs/minio/linux/reference/minio-mc/mc-share.html#)
 
-
 ```Shell
 
 ### 桶事件通知
