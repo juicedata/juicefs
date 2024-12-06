@@ -949,14 +949,14 @@ func (m *dbMeta) doSyncUsedSpace(ctx Context) error {
 		return syscall.EROFS
 	}
 	var used int64
-	if err := m.roTxn(func(s *xorm.Session) error {
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
 		total, err := s.SumInt(&dirStats{}, "used_space")
 		used += total
 		return err
 	}); err != nil {
 		return err
 	}
-	if err := m.roTxn(func(s *xorm.Session) error {
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
 		queryResultMap, err := s.QueryString("SELECT length FROM jfs_node WHERE inode IN (SELECT inode FROM jfs_sustained)")
 		if err != nil {
 			return err
