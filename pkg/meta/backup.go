@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"reflect"
 	"sync"
 	"unsafe"
 
@@ -129,11 +130,12 @@ func (f *BakFormat) WriteSegment(w io.Writer, seg *BakSegment) error {
 	name := seg.String()
 	info, ok := f.Footer.Msg.Infos[name]
 	if !ok {
-		info = &pb.Footer_SegInfo{Offset: []uint64{}}
+		info = &pb.Footer_SegInfo{Offset: []uint64{}, Num: 0}
 		f.Footer.Msg.Infos[name] = info
 	}
 
 	info.Offset = append(info.Offset, f.Offset)
+	info.Num += seg.Num()
 	f.Offset += uint64(n)
 	return nil
 }
@@ -177,6 +179,7 @@ func (f *BakFormat) ReadFooter(r io.ReadSeeker) (*BakFooter, error) {
 	if footer.Msg.Magic != BakMagic {
 		return nil, fmt.Errorf("invalid magic number %d, expect %d", footer.Msg.Magic, BakMagic)
 	}
+	f.Footer = footer
 	return footer, nil
 }
 
@@ -198,7 +201,7 @@ func (h *BakFooter) Marshal() ([]byte, error) {
 
 func (h *BakFooter) Unmarshal(r io.ReadSeeker) error {
 	lenSize := int64(unsafe.Sizeof(h.Len))
-	_, _ = r.Seek(lenSize, io.SeekEnd)
+	_, _ = r.Seek(-lenSize, io.SeekEnd)
 
 	data := make([]byte, lenSize)
 	if n, err := r.Read(data); err != nil && n != int(lenSize) {
@@ -206,12 +209,13 @@ func (h *BakFooter) Unmarshal(r io.ReadSeeker) error {
 	}
 
 	h.Len = binary.BigEndian.Uint64(data)
-	_, _ = r.Seek(int64(h.Len)+lenSize, io.SeekEnd)
+	_, _ = r.Seek(-int64(h.Len)-lenSize, io.SeekEnd)
 	data = make([]byte, h.Len)
 	if n, err := r.Read(data); err != nil && n != int(h.Len) {
 		return fmt.Errorf("failed to read footer: err %w, read len %d, expect len %d", err, n, h.Len)
 	}
 
+	h.Msg = &pb.Footer{}
 	if err := proto.Unmarshal(data, h.Msg); err != nil {
 		return fmt.Errorf("failed to unmarshal footer: %w", err)
 	}
@@ -226,6 +230,25 @@ type BakSegment struct {
 
 func (s *BakSegment) String() string {
 	return string(proto.MessageName(s.Val).Name())
+}
+
+func (s *BakSegment) Num() uint64 {
+	switch v := s.Val.(type) {
+	case *pb.Format:
+		return 1
+	case *pb.Counters:
+		return 6
+	default:
+		val := reflect.ValueOf(v)
+		if val.Kind() == reflect.Ptr {
+			val = val.Elem()
+		}
+		field := val.FieldByName("List")
+		if field.IsValid() && field.Kind() == reflect.Slice {
+			return uint64(field.Len())
+		}
+		return 0
+	}
 }
 
 func (s *BakSegment) Marshal(w io.Writer) (int, error) {
@@ -304,7 +327,7 @@ func (opt *DumpOption) check() *DumpOption {
 		opt = &DumpOption{}
 	}
 	if opt.CoNum < 1 {
-		opt.CoNum = 1
+		opt.CoNum = 10
 	}
 	return opt
 }
@@ -366,7 +389,7 @@ type LoadOption struct {
 
 func (opt *LoadOption) check() {
 	if opt.CoNum < 1 {
-		opt.CoNum = 1
+		opt.CoNum = 10
 	}
 }
 
@@ -406,7 +429,6 @@ type txMaxRetryKey struct{}
 type bTxnOption struct {
 	coNum        int
 	notUsed      bool
-	readOnly     bool
 	maxRetry     int
 	maxStmtRetry int
 }

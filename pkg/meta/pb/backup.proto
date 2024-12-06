@@ -145,6 +145,7 @@ message SymlinkList {
 message Footer {
   message SegInfo {
     repeated uint64 offset = 1;
+    uint64 num = 2;
   }
 
   uint32 magic = 1;
