@@ -743,15 +743,25 @@ func (m *redisMeta) doSyncUsedSpace(ctx Context) error {
 		return err
 	}
 
-	values, err := m.rdb.MGet(ctx, inoKeys...).Result()
-	if err != nil {
-		return err
+	batch := 1000
+	for i := 0; i < len(inoKeys); i += batch {
+		end := i + batch
+		if end > len(inoKeys) {
+			end = len(inoKeys)
+		}
+		values, err := m.rdb.MGet(ctx, inoKeys[i:end]...).Result()
+		if err != nil {
+			return err
+		}
+		var attr Attr
+		for _, v := range values {
+			if v != nil {
+				m.parseAttr([]byte(v.(string)), &attr)
+				used += align4K(attr.Length)
+			}
+		}
 	}
-	var attr Attr
-	for _, value := range values {
-		m.parseAttr([]byte(value.(string)), &attr)
-		used += align4K(attr.Length)
-	}
+
 	return m.rdb.Set(ctx, m.usedSpaceKey(), strconv.FormatInt(used, 10), 0).Err()
 }
 

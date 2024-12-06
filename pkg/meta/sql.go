@@ -939,15 +939,15 @@ func (m *dbMeta) doSyncUsedSpace(ctx Context) error {
 		return err
 	}
 	if err := m.roTxn(func(s *xorm.Session) error {
-		queryResultMap, err := s.QueryString("SELECT SUM(length) FROM jfs_node WHERE inode IN (SELECT inode FROM jfs_sustained)")
+		queryResultMap, err := s.QueryString("SELECT length FROM jfs_node WHERE inode IN (SELECT inode FROM jfs_sustained)")
 		if err != nil {
 			return err
 		}
-		// SUM(length) may return empty string if there is no record
-		if v := queryResultMap[0]["SUM(length)"]; v != "" {
-			value, err := strconv.ParseInt(v, 10, 64)
+		for _, v := range queryResultMap {
+			value, err := strconv.ParseInt(v["length"], 10, 64)
 			if err != nil {
-				return err
+				logger.Warnf("parse sustained length: %s err: %s", v["length"], err)
+				continue
 			}
 			used += align4K(uint64(value))
 		}
