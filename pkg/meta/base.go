@@ -137,8 +137,8 @@ type engine interface {
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 
 	execETxn(ctx Context, txn *eTxn, fn func(ctx Context, txn *eTxn) error) error
-	buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg
-	buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg
+	dump(ctx Context, typ int, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error
+	load(ctx Context, typ int, opt *LoadOption, val proto.Message) error
 	prepareLoad(ctx Context, opt *LoadOption) error
 }
 
@@ -3100,16 +3100,14 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 		}
 		err := m.en.execETxn(ctx, txn, func(ctx Context, txn *eTxn) error {
 			for typ := SegTypeFormat; typ < SegTypeMax; typ++ {
-				seg := m.en.buildDumpedSeg(typ, opt, txn)
-				if seg != nil {
-					if err := seg.dump(ctx, ch); err != nil {
-						return fmt.Errorf("dump %s err: %w", seg, err)
-					}
+				if err := m.en.dump(ctx, typ, opt, txn, ch); err != nil {
+					return fmt.Errorf("dump %d err: %w", typ, err)
 				}
 			}
 			return nil
 		})
 		if err != nil {
+			logger.Errorf("dump meta err: %v", err)
 			ctx.Cancel()
 		} else {
 			close(ch)
@@ -3127,13 +3125,16 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 		if res == nil {
 			break
 		}
-		if err := bak.WriteSegment(w, &BakSegment{Val: res.msg}); err != nil {
-			logger.Errorf("write %s err: %v", res.seg, err)
+		seg := &BakSegment{Val: res.msg}
+		if err := bak.WriteSegment(w, seg); err != nil {
+			logger.Errorf("write %d err: %v", seg.Typ, err)
 			ctx.Cancel()
 			wg.Wait()
 			return err
 		}
-		res.seg.release(res.msg)
+		if res.release != nil {
+			res.release(res.msg)
+		}
 	}
 
 	wg.Wait()
@@ -3149,8 +3150,8 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	}
 
 	type task struct {
+		typ int
 		msg proto.Message
-		seg iLoadedSeg
 	}
 
 	var wg sync.WaitGroup
@@ -3168,8 +3169,9 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			if task == nil {
 				break
 			}
-			if err := task.seg.load(ctx, task.msg); err != nil {
-				logger.Errorf("failed to insert %s: %s", task.seg, err)
+			err := m.en.load(ctx, task.typ, opt, task.msg)
+			if err != nil {
+				logger.Errorf("failed to insert %d: %s", task.typ, err)
 				ctx.Cancel()
 				return
 			}
@@ -3194,12 +3196,11 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			return err
 		}
 
-		ls := m.en.buildLoadedSeg(int(seg.Typ), opt)
 		select {
 		case <-ctx.Done():
 			wg.Wait()
 			return ctx.Err()
-		case taskCh <- &task{seg.Val, ls}:
+		case taskCh <- &task{int(seg.Typ), seg.Val}:
 		}
 	}
 	wg.Wait()

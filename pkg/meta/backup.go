@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sync"
 	"unsafe"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
@@ -57,35 +56,14 @@ const (
 	SegTypeMax
 )
 
-var (
-	SegType2Name map[int]protoreflect.FullName
-	SegName2Type map[protoreflect.FullName]int
-)
-
-func init() {
-	SegType2Name = map[int]protoreflect.FullName{
-		SegTypeFormat:    proto.MessageName(&pb.Format{}),
-		SegTypeCounter:   proto.MessageName(&pb.Counters{}),
-		SegTypeSustained: proto.MessageName(&pb.SustainedList{}),
-		SegTypeDelFile:   proto.MessageName(&pb.DelFileList{}),
-		SegTypeSliceRef:  proto.MessageName(&pb.SliceRefList{}),
-		SegTypeAcl:       proto.MessageName(&pb.AclList{}),
-		SegTypeXattr:     proto.MessageName(&pb.XattrList{}),
-		SegTypeQuota:     proto.MessageName(&pb.QuotaList{}),
-		SegTypeStat:      proto.MessageName(&pb.StatList{}),
-		SegTypeNode:      proto.MessageName(&pb.NodeList{}),
-		SegTypeChunk:     proto.MessageName(&pb.ChunkList{}),
-		SegTypeEdge:      proto.MessageName(&pb.EdgeList{}),
-		SegTypeParent:    proto.MessageName(&pb.ParentList{}),
-		SegTypeSymlink:   proto.MessageName(&pb.SymlinkList{}),
+func getMessageNameFromType(typ int) protoreflect.FullName {
+	if typ == SegTypeFormat {
+		return proto.MessageName(&pb.Format{})
+	} else if typ < SegTypeMax {
+		return proto.MessageName(&pb.Batch{})
+	} else {
+		return ""
 	}
-
-	SegName2Type = make(map[protoreflect.FullName]int)
-	for k, v := range SegType2Name {
-		SegName2Type[v] = k
-	}
-
-	SegType2Name[SegTypeMix] = "kv.Mix"
 }
 
 func CreateMessageByName(name protoreflect.FullName) (proto.Message, error) {
@@ -233,16 +211,44 @@ func (s *BakSegment) Marshal(w io.Writer) (int, error) {
 		return 0, fmt.Errorf("segment %s is nil", s)
 	}
 
-	typ, ok := SegName2Type[proto.MessageName(s.Val)]
-	if !ok {
-		return 0, fmt.Errorf("segment type %d is unknown", typ)
+	switch v := s.Val.(type) {
+	case *pb.Format:
+		s.Typ = uint32(SegTypeFormat)
+	case *pb.Batch:
+		if v.Counters != nil {
+			s.Typ = uint32(SegTypeCounter)
+		} else if v.Sustained != nil {
+			s.Typ = uint32(SegTypeSustained)
+		} else if v.Delfiles != nil {
+			s.Typ = uint32(SegTypeDelFile)
+		} else if v.Acls != nil {
+			s.Typ = uint32(SegTypeAcl)
+		} else if v.Xattrs != nil {
+			s.Typ = uint32(SegTypeXattr)
+		} else if v.Quotas != nil {
+			s.Typ = uint32(SegTypeQuota)
+		} else if v.Dirstats != nil {
+			s.Typ = uint32(SegTypeStat)
+		} else if v.Nodes != nil {
+			s.Typ = uint32(SegTypeNode)
+		} else if v.Chunks != nil {
+			s.Typ = uint32(SegTypeChunk)
+		} else if v.SliceRefs != nil {
+			s.Typ = uint32(SegTypeSliceRef)
+		} else if v.Edges != nil {
+			s.Typ = uint32(SegTypeEdge)
+		} else if v.Symlinks != nil {
+			s.Typ = uint32(SegTypeSymlink)
+		} else if v.Parents != nil {
+			s.Typ = uint32(SegTypeParent)
+		} else {
+			return 0, fmt.Errorf("unknown batch type %s", s)
+		}
 	}
-	s.Typ = uint32(typ)
 
 	if err := binary.Write(w, binary.BigEndian, s.Typ); err != nil {
 		return 0, fmt.Errorf("failed to write segment type %s : %w", s, err)
 	}
-
 	data, err := proto.Marshal(s.Val)
 	if err != nil {
 		return 0, fmt.Errorf("failed to marshal segment message %s : %w", s, err)
@@ -264,18 +270,17 @@ func (s *BakSegment) Unmarshal(r io.Reader) error {
 		return fmt.Errorf("failed to read segment type: %v", err)
 	}
 
-	name, ok := SegType2Name[int(s.Typ)]
-	if !ok {
-		if s.Typ == BakMagic {
-			return ErrBakEOF
-		}
+	if s.Typ == BakMagic {
+		return ErrBakEOF
+	}
+	name := getMessageNameFromType(int(s.Typ))
+	if name == "" {
 		return fmt.Errorf("segment type %d is unknown", s.Typ)
 	}
 
 	if err := binary.Read(r, binary.BigEndian, &s.Len); err != nil {
 		return fmt.Errorf("failed to read segment %s length: %v", s, err)
 	}
-
 	data := make([]byte, s.Len)
 	n, err := r.Read(data)
 	if err != nil && n != int(s.Len) {
@@ -309,44 +314,14 @@ func (opt *DumpOption) check() *DumpOption {
 	return opt
 }
 
-type segReleaser interface {
-	release(msg proto.Message)
-}
-
-type iDumpedSeg interface {
-	String() string
-	dump(ctx Context, ch chan *dumpedResult) error
-	segReleaser
-}
-
-type dumpedSeg struct {
-	iDumpedSeg
-	typ  int
-	meta Meta
-	opt  *DumpOption
-	txn  *eTxn
-}
-
-func (s *dumpedSeg) String() string            { return string(SegType2Name[s.typ]) }
-func (s *dumpedSeg) release(msg proto.Message) {}
-
-type formatDS struct {
-	dumpedSeg
-}
-
-func (s *formatDS) dump(ctx Context, ch chan *dumpedResult) error {
-	f := s.meta.GetFormat()
-	return dumpResult(ctx, ch, &dumpedResult{s, ConvertFormatToPB(&f, s.opt.KeepSecret)})
-}
-
-type dumpedBatchSeg struct {
-	dumpedSeg
-	pools []*sync.Pool
+func (m *baseMeta) dumpFormat(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+	f := m.GetFormat()
+	return dumpResult(ctx, ch, &dumpedResult{msg: convertFormatToPB(&f, opt.KeepSecret)})
 }
 
 type dumpedResult struct {
-	seg segReleaser
-	msg proto.Message
+	msg     proto.Message
+	release func(m proto.Message)
 }
 
 func dumpResult(ctx context.Context, ch chan *dumpedResult, res *dumpedResult) error {
@@ -354,8 +329,8 @@ func dumpResult(ctx context.Context, ch chan *dumpedResult, res *dumpedResult) e
 	case <-ctx.Done():
 		return ctx.Err()
 	case ch <- res:
+		return nil
 	}
-	return nil
 }
 
 // Load Segment...
@@ -370,22 +345,9 @@ func (opt *LoadOption) check() {
 	}
 }
 
-type iLoadedSeg interface {
-	String() string
-	load(ctx Context, msg proto.Message) error
-}
-
-type loadedSeg struct {
-	iLoadedSeg
-	typ  int
-	meta Meta
-}
-
-func (s *loadedSeg) String() string { return string(SegType2Name[s.typ]) }
-
 // Message Marshal/Unmarshal
 
-func ConvertFormatToPB(f *Format, keepSecret bool) *pb.Format {
+func convertFormatToPB(f *Format, keepSecret bool) *pb.Format {
 	if !keepSecret {
 		f.RemoveSecret()
 	}

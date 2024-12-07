@@ -16,11 +16,13 @@
 
 package meta
 
-func (m *kvMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg {
+import "google.golang.org/protobuf/proto"
+
+func (m *kvMeta) dump(ctx Context, typ int, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
 	return nil
 }
 
-func (m *kvMeta) buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
+func (m *kvMeta) load(ctx Context, typ int, opt *LoadOption, val proto.Message) error {
 	return nil
 }
 

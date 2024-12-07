@@ -18,6 +18,7 @@ package meta
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -347,7 +348,7 @@ func testDumpV2(t *testing.T, m Meta, result string, opt *DumpOption) {
 	if _, err = m.Load(true); err != nil {
 		t.Fatalf("load setting: %s", err)
 	}
-	if err = m.DumpMetaV2(Background, fp, opt); err != nil {
+	if err = m.DumpMetaV2(WrapContext(context.Background()), fp, opt); err != nil {
 		t.Fatalf("dump meta: %s", err)
 	}
 	fp.Sync()
@@ -363,7 +364,7 @@ func testLoadV2(t *testing.T, uri, fname string) Meta {
 		t.Fatalf("open file: %s", fname)
 	}
 	defer fp.Close()
-	if err = m.LoadMetaV2(Background, fp, &LoadOption{CoNum: 10}); err != nil {
+	if err = m.LoadMetaV2(WrapContext(context.Background()), fp, &LoadOption{CoNum: 10}); err != nil {
 		t.Fatalf("load meta: %s", err)
 	}
 	if _, err := m.Load(true); err != nil {
@@ -400,7 +401,8 @@ func TestLoadDumpV2(t *testing.T) {
 	logger.SetLevel(logrus.DebugLevel)
 
 	engines := map[string][]string{
-		"mysql": {"mysql://root:@/dev", "mysql://root:@/dev2"},
+		"sqlite3": {"sqlite3://dev.db", "sqlite3://dev2.db"},
+		// "mysql": {"mysql://root:@/dev", "mysql://root:@/dev2"},
 		// "redis": {"redis://127.0.0.1:6379/2", "redis://127.0.0.1:6379/3"},
 		// "tikv":  {"tikv://127.0.0.1:2379/jfs-load-dump-1", "tikv://127.0.0.1:2379/jfs-load-dump-2"},
 	}
