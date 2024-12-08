@@ -301,22 +301,30 @@ func (s *BakSegment) Unmarshal(r io.Reader) error {
 
 type DumpOption struct {
 	KeepSecret bool
-	CoNum      int
+	Threads    int
 }
 
 func (opt *DumpOption) check() *DumpOption {
 	if opt == nil {
 		opt = &DumpOption{}
 	}
-	if opt.CoNum < 1 {
-		opt.CoNum = 1
+	if opt.Threads < 1 {
+		opt.Threads = 1
 	}
 	return opt
 }
 
 func (m *baseMeta) dumpFormat(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
 	f := m.GetFormat()
-	return dumpResult(ctx, ch, &dumpedResult{msg: convertFormatToPB(&f, opt.KeepSecret)})
+	if !opt.KeepSecret {
+		f.RemoveSecret()
+	}
+	data, err := json.MarshalIndent(f, "", "")
+	if err != nil {
+		logger.Errorf("failed to marshal format %s: %v", f.Name, err)
+		return nil
+	}
+	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Format{Data: data}})
 }
 
 type dumpedResult struct {
@@ -336,28 +344,12 @@ func dumpResult(ctx context.Context, ch chan *dumpedResult, res *dumpedResult) e
 // Load Segment...
 
 type LoadOption struct {
-	CoNum int
+	threads int
 }
 
 func (opt *LoadOption) check() {
-	if opt.CoNum < 1 {
-		opt.CoNum = 1
-	}
-}
-
-// Message Marshal/Unmarshal
-
-func convertFormatToPB(f *Format, keepSecret bool) *pb.Format {
-	if !keepSecret {
-		f.RemoveSecret()
-	}
-	data, err := json.MarshalIndent(f, "", "")
-	if err != nil {
-		logger.Errorf("failed to marshal format %s: %v", f.Name, err)
-		return nil
-	}
-	return &pb.Format{
-		Data: data,
+	if opt.threads < 1 {
+		opt.threads = 1
 	}
 }
 
@@ -366,7 +358,7 @@ func convertFormatToPB(f *Format, keepSecret bool) *pb.Format {
 type txMaxRetryKey struct{}
 
 type bTxnOption struct {
-	coNum        int
+	threads      int
 	notUsed      bool
 	readOnly     bool
 	maxRetry     int

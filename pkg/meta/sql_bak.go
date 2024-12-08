@@ -29,6 +29,7 @@ import (
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 	"xorm.io/xorm"
@@ -76,7 +77,7 @@ func (m *dbMeta) dump(ctx Context, typ int, opt *DumpOption, txn *eTxn, ch chan 
 }
 
 func (m *dbMeta) execETxn(ctx Context, txn *eTxn, f func(Context, *eTxn) error) error {
-	if txn.opt.coNum > 1 {
+	if txn.opt.threads > 1 {
 		// only use same txn when coNum == 1 for sql
 		txn.opt.notUsed = true
 		return f(ctx, txn)
@@ -108,186 +109,17 @@ func (m *dbMeta) execStmt(ctx context.Context, txn *eTxn, f func(*xorm.Session) 
 	return err
 }
 
-func (m *dbMeta) dumpCounters(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
-	var rows []counter
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
-		rows = rows[:0]
-		return s.Find(&rows)
-	}); err != nil {
-		return err
-	}
-	var counters = make([]*pb.Counter, 0, len(rows))
-	for _, row := range rows {
-		counters = append(counters, &pb.Counter{Key: row.Name, Value: row.Value})
-	}
-	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Counters: counters}})
-}
-
-func (m *dbMeta) dumpSustained(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
-	var rows []sustained
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
-		rows = rows[:0]
-		return s.Find(&rows)
-	}); err != nil {
-		return err
-	}
-	ss := make(map[uint64][]uint64)
-	for _, row := range rows {
-		ss[row.Sid] = append(ss[row.Sid], uint64(row.Inode))
-	}
-	sustained := make([]*pb.Sustained, 0, len(rows))
-	for k, v := range ss {
-		sustained = append(sustained, &pb.Sustained{Sid: k, Inodes: v})
-	}
-	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Sustained: sustained}})
-}
-
-func (m *dbMeta) dumpDelFiles(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
-	var rows []delfile
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
-		rows = rows[:0]
-		return s.Find(&rows)
-	}); err != nil {
-		return err
-	}
-	delFiles := make([]*pb.DelFile, 0, sqlDumpBatchSize)
-	for _, row := range rows {
-		delFiles = append(delFiles, &pb.DelFile{Inode: uint64(row.Inode), Length: row.Length, Expire: row.Expire})
-		if len(delFiles) >= sqlDumpBatchSize {
-			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Delfiles: delFiles}}); err != nil {
-				return err
-			}
-			delFiles = delFiles[:0]
-		}
-	}
-	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Delfiles: delFiles}})
-}
-
-func (m *dbMeta) dumpSliceRef(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
-	var rows []sliceRef
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
-		rows = rows[:0]
-		return s.Where("refs != 1").Find(&rows) // skip default refs
-	}); err != nil {
-		return err
-	}
-	sliceRefs := make([]*pb.SliceRef, 0, sqlDumpBatchSize)
-	for _, sr := range rows {
-		sliceRefs = append(sliceRefs, &pb.SliceRef{Id: sr.Id, Size: sr.Size, Refs: int64(sr.Refs)})
-		if len(sliceRefs) >= sqlDumpBatchSize {
-			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{SliceRefs: sliceRefs}}); err != nil {
-				return err
-			}
-			sliceRefs = sliceRefs[:0]
-		}
-	}
-	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{SliceRefs: sliceRefs}})
-}
-
-func (m *dbMeta) dumpACL(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
-	var rows []acl
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
-		rows = rows[:0]
-		return s.Find(&rows)
-	}); err != nil {
-		return err
-	}
-	acls := make([]*pb.Acl, 0, len(rows))
-	for _, row := range rows {
-		acls = append(acls, &pb.Acl{
-			Id:   row.Id,
-			Data: row.toRule().Encode(),
-		})
-	}
-	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Acls: acls}})
-}
-
-func (m *dbMeta) dumpXattr(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
-	var rows []xattr
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
-		rows = rows[:0]
-		return s.Find(&rows)
-	}); err != nil {
-		return err
-	}
-	xattrs := make([]*pb.Xattr, 0, sqlDumpBatchSize)
-	for _, x := range rows {
-		xattrs = append(xattrs, &pb.Xattr{
-			Inode: uint64(x.Inode),
-			Name:  x.Name,
-			Value: x.Value,
-		})
-		if len(xattrs) >= sqlDumpBatchSize {
-			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Xattrs: xattrs}}); err != nil {
-				return err
-			}
-			xattrs = xattrs[:0]
-		}
-	}
-	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Xattrs: xattrs}})
-}
-
-func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
-	var rows []dirQuota
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
-		rows = rows[:0]
-		return s.Find(&rows)
-	}); err != nil {
-		return err
-	}
-	quotas := make([]*pb.Quota, 0, len(rows))
-	for _, q := range rows {
-		quotas = append(quotas, &pb.Quota{
-			Inode:      uint64(q.Inode),
-			MaxSpace:   q.MaxSpace,
-			MaxInodes:  q.MaxInodes,
-			UsedSpace:  q.UsedSpace,
-			UsedInodes: q.UsedInodes,
-		})
-	}
-	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Quotas: quotas}})
-}
-
-func (m *dbMeta) dumpDirStat(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
-	var rows []dirStats
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
-		rows = rows[:0]
-		return s.Find(&rows)
-	}); err != nil {
-		return err
-	}
-	dirStats := make([]*pb.Stat, 0, sqlDumpBatchSize)
-	for _, st := range rows {
-		dirStats = append(dirStats, &pb.Stat{
-			Inode:      uint64(st.Inode),
-			DataLength: st.DataLength,
-			UsedInodes: st.UsedInodes,
-			UsedSpace:  st.UsedSpace,
-		})
-		if len(dirStats) >= sqlDumpBatchSize {
-			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Dirstats: dirStats}}); err != nil {
-				return err
-			}
-			dirStats = dirStats[:0]
-		}
-	}
-	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Dirstats: dirStats}})
-}
-
-func sqlQueryBatch(ctx Context, opt *DumpOption, ch chan *dumpedResult, query func(ctx context.Context, limit, start int) (int, error)) error {
+func sqlQueryBatch(ctx Context, opt *DumpOption, ch chan *dumpedResult, maxId uint64, query func(ctx context.Context, start, end uint64) (int, error)) error {
 	eg, egCtx := errgroup.WithContext(ctx)
-	eg.SetLimit(opt.CoNum)
+	eg.SetLimit(opt.Threads)
 
-	taskFinished := false
 	sum := int64(0)
-	for start := 0; !taskFinished; start += sqlDumpBatchSize {
-		nStart := start
+	batch := uint64(sqlDumpBatchSize) * 10
+	for id := uint64(0); id <= maxId; id += batch {
+		startId := id
 		eg.Go(func() error {
-			n, err := query(egCtx, sqlDumpBatchSize, nStart)
+			n, err := query(egCtx, startId, startId+batch)
 			atomic.AddInt64(&sum, int64(n))
-			if n == 0 {
-				taskFinished = true
-			}
 			return err
 		})
 	}
@@ -301,11 +133,45 @@ func (m *dbMeta) dumpNodes(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dum
 			pool.Put(s)
 		}
 	}
-	return sqlQueryBatch(ctx, opt, ch, func(ctx context.Context, limit, start int) (int, error) {
+
+	var rows []node
+	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		rows = rows[:0]
+		return s.Where("inode >= ?", TrashInode).Find(&rows)
+	}); err != nil {
+		return err
+	}
+	nodes := make([]*pb.Node, 0, len(rows))
+	var attr Attr
+	for _, n := range rows {
+		pn := pool.Get().(*pb.Node)
+		pn.Inode = uint64(n.Inode)
+		m.parseAttr(&n, &attr)
+		pn.Data = m.marshal(&attr)
+		nodes = append(nodes, pn)
+	}
+	if err := dumpResult(ctx, ch, &dumpedResult{&pb.Batch{Nodes: nodes}, release}); err != nil {
+		return errors.Wrap(err, "dump trash nodes")
+	}
+
+	var maxInode uint64
+	err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		var row node
+		ok, err := s.Select("max(inode) as inode").Where("inode < ?", TrashInode).Get(&row)
+		if ok {
+			maxInode = uint64(row.Inode)
+		}
+		return err
+	})
+	if err != nil {
+		return errors.Wrap(err, "max inode")
+	}
+
+	return sqlQueryBatch(ctx, opt, ch, maxInode, func(ctx context.Context, start, end uint64) (int, error) {
 		var rows []node
 		if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
 			rows = rows[:0]
-			return s.Limit(limit, start).Find(&rows)
+			return s.Where("inode >= ? AND inode < ?", start, end).Find(&rows)
 		}); err != nil {
 			return 0, err
 		}
@@ -329,11 +195,25 @@ func (m *dbMeta) dumpChunks(ctx Context, opt *DumpOption, txn *eTxn, ch chan *du
 			pool.Put(s)
 		}
 	}
-	return sqlQueryBatch(ctx, opt, ch, func(ctx context.Context, limit, start int) (int, error) {
+
+	var maxId uint64
+	err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		var row chunk
+		ok, err := s.Select("MAX(id) as id").Get(&row)
+		if ok {
+			maxId = uint64(row.Id)
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	return sqlQueryBatch(ctx, opt, ch, maxId, func(ctx context.Context, start, end uint64) (int, error) {
 		var rows []chunk
 		if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
 			rows = rows[:0]
-			return s.Limit(limit, start).Find(&rows)
+			return s.Where("id >= ? AND id < ?", start, end).Find(&rows)
 		}); err != nil {
 			return 0, err
 		}
@@ -350,19 +230,33 @@ func (m *dbMeta) dumpChunks(ctx Context, opt *DumpOption, txn *eTxn, ch chan *du
 }
 
 func (m *dbMeta) dumpEdges(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
-	var mu sync.Mutex
-	dumpParents := make(map[uint64][]uint64)
 	pool := sync.Pool{New: func() interface{} { return &pb.Edge{} }}
 	release := func(p proto.Message) {
 		for _, s := range p.(*pb.Batch).Edges {
 			pool.Put(s)
 		}
 	}
-	err := sqlQueryBatch(ctx, opt, ch, func(ctx context.Context, limit, start int) (int, error) {
+
+	var maxId uint64
+	err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		var row edge
+		ok, err := s.Select("MAX(id) as id").Get(&row)
+		if ok {
+			maxId = uint64(row.Id)
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	var mu sync.Mutex
+	dumpParents := make(map[uint64][]uint64)
+	err = sqlQueryBatch(ctx, opt, ch, maxId, func(ctx context.Context, start, end uint64) (int, error) {
 		var rows []edge
 		if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
 			rows = rows[:0]
-			return s.Limit(limit, start).Find(&rows)
+			return s.Where("id >= ? AND id < ?", start, end).Find(&rows)
 		}); err != nil {
 			return 0, err
 		}
@@ -409,29 +303,191 @@ func (m *dbMeta) dumpEdges(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dum
 }
 
 func (m *dbMeta) dumpSymlinks(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
-	pool := sync.Pool{New: func() interface{} { return &pb.Symlink{} }}
-	release := func(p proto.Message) {
-		for _, s := range p.(*pb.Batch).Symlinks {
-			pool.Put(s)
+	var rows []symlink
+	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		rows = rows[:0]
+		return s.Find(&rows)
+	}); err != nil {
+		return err
+	}
+
+	symlinks := make([]*pb.Symlink, 0, min(len(rows), sqlDumpBatchSize))
+	for _, r := range rows {
+		symlinks = append(symlinks, &pb.Symlink{Inode: uint64(r.Inode), Target: r.Target})
+		if len(symlinks) >= sqlDumpBatchSize {
+			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Symlinks: symlinks}}); err != nil {
+				return err
+			}
+			symlinks = symlinks[:0]
 		}
 	}
-	return sqlQueryBatch(ctx, opt, ch, func(ctx context.Context, limit, start int) (int, error) {
-		var rows []symlink
-		if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
-			rows = rows[:0]
-			return s.Limit(limit, start).Find(&rows)
-		}); err != nil {
-			return 0, err
+	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Symlinks: symlinks}})
+}
+
+func (m *dbMeta) dumpCounters(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+	var rows []counter
+	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		rows = rows[:0]
+		return s.Find(&rows)
+	}); err != nil {
+		return err
+	}
+	var counters = make([]*pb.Counter, 0, len(rows))
+	for _, row := range rows {
+		counters = append(counters, &pb.Counter{Key: row.Name, Value: row.Value})
+	}
+	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Counters: counters}})
+}
+
+func (m *dbMeta) dumpSustained(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+	var rows []sustained
+	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		rows = rows[:0]
+		return s.Find(&rows)
+	}); err != nil {
+		return err
+	}
+	ss := make(map[uint64][]uint64)
+	for _, row := range rows {
+		ss[row.Sid] = append(ss[row.Sid], uint64(row.Inode))
+	}
+	sustained := make([]*pb.Sustained, 0, len(rows))
+	for k, v := range ss {
+		sustained = append(sustained, &pb.Sustained{Sid: k, Inodes: v})
+	}
+	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Sustained: sustained}})
+}
+
+func (m *dbMeta) dumpDelFiles(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+	var rows []delfile
+	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		rows = rows[:0]
+		return s.Find(&rows)
+	}); err != nil {
+		return err
+	}
+	delFiles := make([]*pb.DelFile, 0, min(sqlDumpBatchSize, len(rows)))
+	for _, row := range rows {
+		delFiles = append(delFiles, &pb.DelFile{Inode: uint64(row.Inode), Length: row.Length, Expire: row.Expire})
+		if len(delFiles) >= sqlDumpBatchSize {
+			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Delfiles: delFiles}}); err != nil {
+				return err
+			}
+			delFiles = delFiles[:0]
 		}
-		symlinks := make([]*pb.Symlink, 0, len(rows))
-		for _, r := range rows {
-			s := pool.Get().(*pb.Symlink)
-			s.Inode = uint64(r.Inode)
-			s.Target = r.Target
-			symlinks = append(symlinks, s)
+	}
+	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Delfiles: delFiles}})
+}
+
+func (m *dbMeta) dumpSliceRef(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+	var rows []sliceRef
+	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		rows = rows[:0]
+		return s.Where("refs != 1").Find(&rows) // skip default refs
+	}); err != nil {
+		return err
+	}
+	sliceRefs := make([]*pb.SliceRef, 0, min(sqlDumpBatchSize, len(rows)))
+	for _, sr := range rows {
+		sliceRefs = append(sliceRefs, &pb.SliceRef{Id: sr.Id, Size: sr.Size, Refs: int64(sr.Refs)})
+		if len(sliceRefs) >= sqlDumpBatchSize {
+			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{SliceRefs: sliceRefs}}); err != nil {
+				return err
+			}
+			sliceRefs = sliceRefs[:0]
 		}
-		return len(rows), dumpResult(ctx, ch, &dumpedResult{&pb.Batch{Symlinks: symlinks}, release})
-	})
+	}
+	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{SliceRefs: sliceRefs}})
+}
+
+func (m *dbMeta) dumpACL(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+	var rows []acl
+	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		rows = rows[:0]
+		return s.Find(&rows)
+	}); err != nil {
+		return err
+	}
+	acls := make([]*pb.Acl, 0, len(rows))
+	for _, row := range rows {
+		acls = append(acls, &pb.Acl{
+			Id:   row.Id,
+			Data: row.toRule().Encode(),
+		})
+	}
+	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Acls: acls}})
+}
+
+func (m *dbMeta) dumpXattr(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+	var rows []xattr
+	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		rows = rows[:0]
+		return s.Find(&rows)
+	}); err != nil {
+		return err
+	}
+	xattrs := make([]*pb.Xattr, 0, min(sqlDumpBatchSize, len(rows)))
+	for _, x := range rows {
+		xattrs = append(xattrs, &pb.Xattr{
+			Inode: uint64(x.Inode),
+			Name:  x.Name,
+			Value: x.Value,
+		})
+		if len(xattrs) >= sqlDumpBatchSize {
+			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Xattrs: xattrs}}); err != nil {
+				return err
+			}
+			xattrs = xattrs[:0]
+		}
+	}
+	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Xattrs: xattrs}})
+}
+
+func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+	var rows []dirQuota
+	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		rows = rows[:0]
+		return s.Find(&rows)
+	}); err != nil {
+		return err
+	}
+	quotas := make([]*pb.Quota, 0, len(rows))
+	for _, q := range rows {
+		quotas = append(quotas, &pb.Quota{
+			Inode:      uint64(q.Inode),
+			MaxSpace:   q.MaxSpace,
+			MaxInodes:  q.MaxInodes,
+			UsedSpace:  q.UsedSpace,
+			UsedInodes: q.UsedInodes,
+		})
+	}
+	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Quotas: quotas}})
+}
+
+func (m *dbMeta) dumpDirStat(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+	var rows []dirStats
+	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		rows = rows[:0]
+		return s.Find(&rows)
+	}); err != nil {
+		return err
+	}
+	dirStats := make([]*pb.Stat, 0, min(sqlDumpBatchSize, len(rows)))
+	for _, st := range rows {
+		dirStats = append(dirStats, &pb.Stat{
+			Inode:      uint64(st.Inode),
+			DataLength: st.DataLength,
+			UsedInodes: st.UsedInodes,
+			UsedSpace:  st.UsedSpace,
+		})
+		if len(dirStats) >= sqlDumpBatchSize {
+			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Dirstats: dirStats}}); err != nil {
+				return err
+			}
+			dirStats = dirStats[:0]
+		}
+	}
+	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Dirstats: dirStats}})
 }
 
 func (m *dbMeta) load(ctx Context, typ int, opt *LoadOption, val proto.Message) error {
@@ -440,6 +496,14 @@ func (m *dbMeta) load(ctx Context, typ int, opt *LoadOption, val proto.Message) 
 		return m.loadFormat(ctx, val)
 	case SegTypeCounter:
 		return m.loadCounters(ctx, val)
+	case SegTypeNode:
+		return m.loadNodes(ctx, val)
+	case SegTypeChunk:
+		return m.loadChunks(ctx, val)
+	case SegTypeEdge:
+		return m.loadEdges(ctx, val)
+	case SegTypeSymlink:
+		return m.loadSymlinks(ctx, val)
 	case SegTypeSustained:
 		return m.loadSustained(ctx, val)
 	case SegTypeDelFile:
@@ -454,15 +518,7 @@ func (m *dbMeta) load(ctx Context, typ int, opt *LoadOption, val proto.Message) 
 		return m.loadQuota(ctx, val)
 	case SegTypeStat:
 		return m.loadDirStats(ctx, val)
-	case SegTypeNode:
-		return m.loadNodes(ctx, val)
-	case SegTypeChunk:
-		return m.loadChunks(ctx, val)
-	case SegTypeEdge:
-		return m.loadEdges(ctx, val)
-	case SegTypeSymlink:
-		return m.loadSymlinks(ctx, val)
-	case SegTypeParent:
+	case SegTypeParent, SegTypeMix:
 		return nil // skip
 	default:
 		logger.Warnf("skip segment type %d", typ)
@@ -483,6 +539,60 @@ func (m *dbMeta) loadCounters(ctx Context, msg proto.Message) error {
 	var rows []interface{}
 	for _, c := range msg.(*pb.Batch).Counters {
 		rows = append(rows, counter{Name: c.Key, Value: c.Value})
+	}
+	return m.insertRows(rows)
+}
+
+func (m *dbMeta) loadNodes(ctx Context, msg proto.Message) error {
+	nodes := msg.(*pb.Batch).Nodes
+	b := m.getBase()
+	rows := make([]interface{}, 0, len(nodes))
+	ns := make([]node, len(nodes))
+	attr := &Attr{}
+	for i, n := range nodes {
+		pn := &ns[i]
+		pn.Inode = Ino(n.Inode)
+		b.parseAttr(n.Data, attr)
+		m.parseNode(attr, pn)
+		rows = append(rows, pn)
+	}
+	return m.insertRows(rows)
+}
+
+func (m *dbMeta) loadChunks(ctx Context, msg proto.Message) error {
+	chunks := msg.(*pb.Batch).Chunks
+	rows := make([]interface{}, 0, len(chunks))
+	cs := make([]chunk, len(chunks))
+	for i, c := range chunks {
+		pc := &cs[i]
+		pc.Inode = Ino(c.Inode)
+		pc.Indx = c.Index
+		pc.Slices = c.Slices
+		rows = append(rows, pc)
+	}
+	return m.insertRows(rows)
+}
+
+func (m *dbMeta) loadEdges(ctx Context, msg proto.Message) error {
+	edges := msg.(*pb.Batch).Edges
+	rows := make([]interface{}, 0, len(edges))
+	es := make([]edge, len(edges))
+	for i, e := range edges {
+		pe := &es[i]
+		pe.Parent = Ino(e.Parent)
+		pe.Inode = Ino(e.Inode)
+		pe.Name = e.Name
+		pe.Type = uint8(e.Type)
+		rows = append(rows, pe)
+	}
+	return m.insertRows(rows)
+}
+
+func (m *dbMeta) loadSymlinks(ctx Context, msg proto.Message) error {
+	symlinks := msg.(*pb.Batch).Symlinks
+	rows := make([]interface{}, 0, len(symlinks))
+	for _, sl := range symlinks {
+		rows = append(rows, &symlink{Ino(sl.Inode), sl.Target})
 	}
 	return m.insertRows(rows)
 }
@@ -567,79 +677,18 @@ func (m *dbMeta) loadDirStats(ctx Context, msg proto.Message) error {
 	return m.insertRows(rows)
 }
 
-func (m *dbMeta) loadNodes(ctx Context, msg proto.Message) error {
-	nodes := msg.(*pb.Batch).Nodes
-	b := m.getBase()
-	rows := make([]interface{}, 0, len(nodes))
-	pool := make([]node, len(nodes))
-	attr := &Attr{}
-	for i, n := range nodes {
-		pn := &pool[i]
-		pn.Inode = Ino(n.Inode)
-		attr.Parent, attr.AccessACL, attr.DefaultACL = 0, 0, 0
-		b.parseAttr(n.Data, attr)
-		m.parseNode(attr, pn)
-		rows = append(rows, pn)
-	}
-	return m.insertRows(rows)
-}
-
-func (m *dbMeta) loadChunks(ctx Context, msg proto.Message) error {
-	chunks := msg.(*pb.Batch).Chunks
-	rows := make([]interface{}, 0, len(chunks))
-	cs := make([]chunk, len(chunks))
-	for i, c := range chunks {
-		pc := &cs[i]
-		pc.Inode = Ino(c.Inode)
-		pc.Indx = c.Index
-		pc.Slices = c.Slices
-		rows = append(rows, pc)
-	}
-	return m.insertRows(rows)
-}
-
-func (m *dbMeta) loadEdges(ctx Context, msg proto.Message) error {
-	edges := msg.(*pb.Batch).Edges
-	rows := make([]interface{}, 0, len(edges))
-	es := make([]edge, len(edges))
-	for i, e := range edges {
-		pe := &es[i]
-		pe.Parent = Ino(e.Parent)
-		pe.Inode = Ino(e.Inode)
-		pe.Name = e.Name
-		pe.Type = uint8(e.Type)
-		rows = append(rows, pe)
-	}
-	return m.insertRows(rows)
-}
-
-func (m *dbMeta) loadSymlinks(ctx Context, msg proto.Message) error {
-	symlinks := msg.(*pb.Batch).Symlinks
-	rows := make([]interface{}, 0, len(symlinks))
-	for _, sl := range symlinks {
-		ps := &symlink{}
-		ps.Inode = Ino(sl.Inode)
-		ps.Target = sl.Target
-		rows = append(rows, ps)
-	}
-	return m.insertRows(rows)
-}
-
 func (m *dbMeta) insertRows(beans []interface{}) error {
-	insert := func(rows []interface{}) error {
-		return m.txn(func(s *xorm.Session) error {
-			n, err := s.Insert(rows...)
-			if err == nil && int(n) != len(rows) {
+	batch := m.getTxnBatchNum()
+	for len(beans) > 0 {
+		bs := utils.Min(batch, len(beans))
+		err := m.txn(func(s *xorm.Session) error {
+			n, err := s.Insert(beans[:bs]...)
+			if err == nil && int(n) != bs {
 				err = fmt.Errorf("only %d records inserted", n)
 			}
 			return err
 		})
-	}
-
-	batch := m.getTxnBatchNum()
-	for len(beans) > 0 {
-		bs := utils.Min(batch, len(beans))
-		if err := insert(beans[:bs]); err != nil {
+		if err != nil {
 			logger.Errorf("Write %d beans: %s", bs, err)
 			return err
 		}

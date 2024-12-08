@@ -3092,7 +3092,7 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 		txn := &eTxn{
 			en: m.en,
 			opt: &bTxnOption{
-				coNum:        opt.CoNum,
+				threads:      opt.Threads,
 				readOnly:     true,
 				maxRetry:     1,
 				maxStmtRetry: 3,
@@ -3178,7 +3178,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		}
 	}
 
-	for i := 0; i < opt.CoNum; i++ {
+	for i := 0; i < opt.threads; i++ {
 		wg.Add(1)
 		go workerFunc(ctx, taskCh)
 	}

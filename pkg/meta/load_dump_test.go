@@ -338,7 +338,7 @@ func TestLoadDump(t *testing.T) { //skip mutate
 
 func testDumpV2(t *testing.T, m Meta, result string, opt *DumpOption) {
 	if opt == nil {
-		opt = &DumpOption{CoNum: 10, KeepSecret: true}
+		opt = &DumpOption{Threads: 10, KeepSecret: true}
 	}
 	fp, err := os.OpenFile(result, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
@@ -364,7 +364,7 @@ func testLoadV2(t *testing.T, uri, fname string) Meta {
 		t.Fatalf("open file: %s", fname)
 	}
 	defer fp.Close()
-	if err = m.LoadMetaV2(WrapContext(context.Background()), fp, &LoadOption{CoNum: 10}); err != nil {
+	if err = m.LoadMetaV2(WrapContext(context.Background()), fp, &LoadOption{threads: 10}); err != nil {
 		t.Fatalf("load meta: %s", err)
 	}
 	if _, err := m.Load(true); err != nil {
@@ -456,13 +456,13 @@ func TestLoadDump_MemKV(t *testing.T) {
 
 func testSecretAndTrash(t *testing.T, addr, addr2 string) {
 	m := testLoad(t, addr, sampleFile)
-	testDumpV2(t, m, "sqlite-secret.dump", &DumpOption{CoNum: 10, KeepSecret: true})
+	testDumpV2(t, m, "sqlite-secret.dump", &DumpOption{Threads: 10, KeepSecret: true})
 	m2 := testLoadV2(t, addr2, "sqlite-secret.dump")
 	if m2.GetFormat().EncryptKey != m.GetFormat().EncryptKey {
 		t.Fatalf("encrypt key not valid: %s", m2.GetFormat().EncryptKey)
 	}
 
-	testDumpV2(t, m, "sqlite-non-secret.dump", &DumpOption{CoNum: 10, KeepSecret: false})
+	testDumpV2(t, m, "sqlite-non-secret.dump", &DumpOption{Threads: 10, KeepSecret: false})
 	m2.Reset()
 	m2 = testLoadV2(t, addr2, "sqlite-non-secret.dump")
 	if m2.GetFormat().EncryptKey != "removed" {
@@ -483,7 +483,7 @@ func testSecretAndTrash(t *testing.T, addr, addr2 string) {
 		return false, nil
 	})
 	if cnt != len(trashs) {
-		t.Fatalf("trash count: %d", cnt)
+		t.Fatalf("trash count: %d != %d", cnt, len(trashs))
 	}
 }
 
