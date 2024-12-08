@@ -40,19 +40,19 @@ const (
 	SegTypeUnknown = iota
 	SegTypeFormat
 	SegTypeCounter
-	SegTypeSustained
-	SegTypeDelFile
-	SegTypeAcl
-	SegTypeXattr
-	SegTypeQuota
-	SegTypeStat
 	SegTypeNode
+	SegTypeEdge
 	SegTypeChunk
 	SegTypeSliceRef
-	SegTypeEdge
-	SegTypeParent // for redis/tkv only
 	SegTypeSymlink
-	SegTypeMix // for redis/tkv only
+	SegTypeSustained
+	SegTypeDelFile
+	SegTypeXattr
+	SegTypeAcl
+	SegTypeStat
+	SegTypeQuota
+	SegTypeParent // for redis/tkv only
+	SegTypeMix    // for redis/tkv only
 	SegTypeMax
 )
 
