@@ -3097,7 +3097,6 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 			en: m.en,
 			opt: &bTxnOption{
 				coNum:        opt.CoNum,
-				readOnly:     true,
 				maxRetry:     1,
 				maxStmtRetry: 3,
 			},
@@ -3185,7 +3184,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		go workerFunc(ctx, taskCh)
 	}
 
-	bak := NewBakFormat()
+	bak := &BakFormat{}
 	for {
 		seg, err := bak.ReadSegment(r)
 		if err != nil {

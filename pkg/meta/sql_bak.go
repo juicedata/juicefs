@@ -35,7 +35,7 @@ import (
 )
 
 var (
-	sqlDumpBatchSize = 40960
+	sqlDumpBatchSize = 100000
 )
 
 func (m *dbMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg {
@@ -89,35 +89,36 @@ func (m *dbMeta) buildLoadedPools(typ int) []*sync.Pool {
 }
 
 func (m *dbMeta) buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
+	ls := loadedSeg{typ: typ, meta: m}
 	switch typ {
 	case SegTypeFormat:
-		return &sqlFormatLS{loadedSeg{typ: typ, meta: m}}
+		return &sqlFormatLS{ls}
 	case SegTypeCounter:
-		return &sqlCounterLS{loadedSeg{typ: typ, meta: m}}
+		return &sqlCounterLS{ls}
 	case SegTypeSustained:
-		return &sqlSustainedLS{loadedSeg{typ: typ, meta: m}}
+		return &sqlSustainedLS{ls}
 	case SegTypeDelFile:
-		return &sqlDelFileLS{loadedSeg{typ: typ, meta: m}}
+		return &sqlDelFileLS{ls}
 	case SegTypeSliceRef:
-		return &sqlSliceRefLS{loadedSeg{typ: typ, meta: m}}
+		return &sqlSliceRefLS{ls}
 	case SegTypeAcl:
-		return &sqlAclLS{loadedSeg{typ: typ, meta: m}}
+		return &sqlAclLS{ls}
 	case SegTypeXattr:
-		return &sqlXattrLS{loadedSeg{typ: typ, meta: m}}
+		return &sqlXattrLS{ls}
 	case SegTypeQuota:
-		return &sqlQuotaLS{loadedSeg{typ: typ, meta: m}}
+		return &sqlQuotaLS{ls}
 	case SegTypeStat:
-		return &sqlStatLS{loadedSeg{typ: typ, meta: m}}
+		return &sqlStatLS{ls}
 	case SegTypeNode:
-		return &sqlNodeLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
+		return &sqlNodeLS{ls, m.buildLoadedPools(typ)}
 	case SegTypeChunk:
-		return &sqlChunkLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
+		return &sqlChunkLS{ls, m.buildLoadedPools(typ)}
 	case SegTypeEdge:
-		return &sqlEdgeLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
+		return &sqlEdgeLS{ls, m.buildLoadedPools(typ)}
 	case SegTypeParent:
-		return &sqlParentLS{loadedSeg{typ: typ, meta: m}}
+		return &sqlParentLS{ls}
 	case SegTypeSymlink:
-		return &sqlSymlinkLS{loadedSeg{typ: typ, meta: m}, m.buildLoadedPools(typ)}
+		return &sqlSymlinkLS{ls, m.buildLoadedPools(typ)}
 	}
 	return nil
 }
