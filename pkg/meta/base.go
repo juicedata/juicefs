@@ -611,18 +611,22 @@ func (m *baseMeta) Init(format *Format, force bool) error {
 
 func (m *baseMeta) cleanupDeletedFiles() {
 	for {
-		utils.SleepWithJitter(time.Minute)
-		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(time.Minute.Seconds())*9/10); err != nil {
+		utils.SleepWithJitter(time.Hour)
+		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter lastCleanupFiles: %s", err)
 		} else if ok {
-			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 10000)
+			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 6e5)
 			if err != nil {
 				logger.Warnf("scan deleted files: %s", err)
 				continue
 			}
+			start := time.Now()
 			for inode, length := range files {
 				logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
 				m.en.doDeleteFileData(inode, length)
+				if time.Since(start) > 50*time.Minute { // Yield my time slice to avoid conflicts with other clients
+					break
+				}
 			}
 		}
 	}
@@ -3093,7 +3097,6 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 			en: m.en,
 			opt: &bTxnOption{
 				threads:      opt.Threads,
-				readOnly:     true,
 				maxRetry:     1,
 				maxStmtRetry: 3,
 			},
@@ -3183,7 +3186,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		go workerFunc(ctx, taskCh)
 	}
 
-	bak := NewBakFormat()
+	bak := &BakFormat{}
 	for {
 		seg, err := bak.ReadSegment(r)
 		if err != nil {

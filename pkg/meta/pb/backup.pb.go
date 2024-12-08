@@ -1059,6 +1059,7 @@ type Footer_SegInfo struct {
 	unknownFields protoimpl.UnknownFields
 
 	Offset []uint64 `protobuf:"varint,1,rep,packed,name=offset,proto3" json:"offset,omitempty"`
+	Num    uint64   `protobuf:"varint,2,opt,name=num,proto3" json:"num,omitempty"`
 }
 
 func (x *Footer_SegInfo) Reset() {
@@ -1096,6 +1097,13 @@ func (x *Footer_SegInfo) GetOffset() []uint64 {
 		return x.Offset
 	}
 	return nil
+}
+
+func (x *Footer_SegInfo) GetNum() uint64 {
+	if x != nil {
+		return x.Num
+	}
+	return 0
 }
 
 var File_pkg_meta_pb_backup_proto protoreflect.FileDescriptor

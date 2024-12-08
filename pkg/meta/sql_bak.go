@@ -36,7 +36,7 @@ import (
 )
 
 var (
-	sqlDumpBatchSize = 40960
+	sqlDumpBatchSize = 100000
 )
 
 func (m *dbMeta) dump(ctx Context, typ int, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {

@@ -107,11 +107,12 @@ func (f *BakFormat) WriteSegment(w io.Writer, seg *BakSegment) error {
 	name := seg.String()
 	info, ok := f.Footer.Msg.Infos[name]
 	if !ok {
-		info = &pb.Footer_SegInfo{Offset: []uint64{}}
+		info = &pb.Footer_SegInfo{Offset: []uint64{}, Num: 0}
 		f.Footer.Msg.Infos[name] = info
 	}
 
 	info.Offset = append(info.Offset, f.Offset)
+	info.Num += seg.Num()
 	f.Offset += uint64(n)
 	return nil
 }
@@ -155,6 +156,7 @@ func (f *BakFormat) ReadFooter(r io.ReadSeeker) (*BakFooter, error) {
 	if footer.Msg.Magic != BakMagic {
 		return nil, fmt.Errorf("invalid magic number %d, expect %d", footer.Msg.Magic, BakMagic)
 	}
+	f.Footer = footer
 	return footer, nil
 }
 
@@ -176,7 +178,7 @@ func (h *BakFooter) Marshal() ([]byte, error) {
 
 func (h *BakFooter) Unmarshal(r io.ReadSeeker) error {
 	lenSize := int64(unsafe.Sizeof(h.Len))
-	_, _ = r.Seek(lenSize, io.SeekEnd)
+	_, _ = r.Seek(-lenSize, io.SeekEnd)
 
 	data := make([]byte, lenSize)
 	if n, err := r.Read(data); err != nil && n != int(lenSize) {
@@ -184,12 +186,13 @@ func (h *BakFooter) Unmarshal(r io.ReadSeeker) error {
 	}
 
 	h.Len = binary.BigEndian.Uint64(data)
-	_, _ = r.Seek(int64(h.Len)+lenSize, io.SeekEnd)
+	_, _ = r.Seek(-int64(h.Len)-lenSize, io.SeekEnd)
 	data = make([]byte, h.Len)
 	if n, err := r.Read(data); err != nil && n != int(h.Len) {
 		return fmt.Errorf("failed to read footer: err %w, read len %d, expect len %d", err, n, h.Len)
 	}
 
+	h.Msg = &pb.Footer{}
 	if err := proto.Unmarshal(data, h.Msg); err != nil {
 		return fmt.Errorf("failed to unmarshal footer: %w", err)
 	}
@@ -204,6 +207,44 @@ type BakSegment struct {
 
 func (s *BakSegment) String() string {
 	return string(proto.MessageName(s.Val).Name())
+}
+
+func (s *BakSegment) Num() uint64 {
+	switch s.Typ {
+	case SegTypeFormat:
+		return 1
+	default:
+		b := s.Val.(*pb.Batch)
+		switch s.Typ {
+		case SegTypeCounter:
+			return uint64(len(b.Counters))
+		case SegTypeNode:
+			return uint64(len(b.Nodes))
+		case SegTypeEdge:
+			return uint64(len(b.Edges))
+		case SegTypeChunk:
+			return uint64(len(b.Chunks))
+		case SegTypeSliceRef:
+			return uint64(len(b.SliceRefs))
+		case SegTypeSymlink:
+			return uint64(len(b.Symlinks))
+		case SegTypeSustained:
+			return uint64(len(b.Sustained))
+		case SegTypeDelFile:
+			return uint64(len(b.Delfiles))
+		case SegTypeXattr:
+			return uint64(len(b.Xattrs))
+		case SegTypeAcl:
+			return uint64(len(b.Acls))
+		case SegTypeStat:
+			return uint64(len(b.Dirstats))
+		case SegTypeQuota:
+			return uint64(len(b.Quotas))
+		case SegTypeParent:
+			return uint64(len(b.Parents))
+		}
+		return 0
+	}
 }
 
 func (s *BakSegment) Marshal(w io.Writer) (int, error) {
@@ -309,7 +350,7 @@ func (opt *DumpOption) check() *DumpOption {
 		opt = &DumpOption{}
 	}
 	if opt.Threads < 1 {
-		opt.Threads = 1
+		opt.Threads = 10
 	}
 	return opt
 }
@@ -349,7 +390,7 @@ type LoadOption struct {
 
 func (opt *LoadOption) check() {
 	if opt.threads < 1 {
-		opt.threads = 1
+		opt.threads = 10
 	}
 }
 
@@ -360,7 +401,6 @@ type txMaxRetryKey struct{}
 type bTxnOption struct {
 	threads      int
 	notUsed      bool
-	readOnly     bool
 	maxRetry     int
 	maxStmtRetry int
 }
