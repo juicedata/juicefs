@@ -455,33 +455,33 @@ func (m *dbMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedResu
 
 func (m *dbMeta) load(ctx Context, typ int, opt *LoadOption, val proto.Message) error {
 	switch typ {
-	case SegTypeFormat:
+	case segTypeFormat:
 		return m.loadFormat(ctx, val)
-	case SegTypeCounter:
+	case segTypeCounter:
 		return m.loadCounters(ctx, val)
-	case SegTypeNode:
+	case segTypeNode:
 		return m.loadNodes(ctx, val)
-	case SegTypeChunk:
+	case segTypeChunk:
 		return m.loadChunks(ctx, val)
-	case SegTypeEdge:
+	case segTypeEdge:
 		return m.loadEdges(ctx, val)
-	case SegTypeSymlink:
+	case segTypeSymlink:
 		return m.loadSymlinks(ctx, val)
-	case SegTypeSustained:
+	case segTypeSustained:
 		return m.loadSustained(ctx, val)
-	case SegTypeDelFile:
+	case segTypeDelFile:
 		return m.loadDelFiles(ctx, val)
-	case SegTypeSliceRef:
+	case segTypeSliceRef:
 		return m.loadSliceRefs(ctx, val)
-	case SegTypeAcl:
+	case segTypeAcl:
 		return m.loadAcl(ctx, val)
-	case SegTypeXattr:
+	case segTypeXattr:
 		return m.loadXattrs(ctx, val)
-	case SegTypeQuota:
+	case segTypeQuota:
 		return m.loadQuota(ctx, val)
-	case SegTypeStat:
+	case segTypeStat:
 		return m.loadDirStats(ctx, val)
-	case SegTypeParent, SegTypeMix:
+	case segTypeParent, segTypeMix:
 		return nil // skip
 	default:
 		logger.Warnf("skip segment type %d", typ)

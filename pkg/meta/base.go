@@ -3085,7 +3085,7 @@ func (h *dirHandler) Close() {
 func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 	opt = opt.check()
 
-	bak := NewBakFormat()
+	bak := newBakFormat()
 	ch := make(chan *dumpedResult, 100)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -3111,9 +3111,9 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 		if res == nil {
 			break
 		}
-		seg := &BakSegment{Val: res.msg}
-		if err := bak.WriteSegment(w, seg); err != nil {
-			logger.Errorf("write %d err: %v", seg.Typ, err)
+		seg := &bakSegment{val: res.msg}
+		if err := bak.writeSegment(w, seg); err != nil {
+			logger.Errorf("write %d err: %v", seg.typ, err)
 			ctx.Cancel()
 			wg.Wait()
 			return err
@@ -3124,7 +3124,7 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 	}
 
 	wg.Wait()
-	return bak.WriteFooter(w)
+	return bak.writeFooter(w)
 }
 
 func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
@@ -3169,11 +3169,11 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		go workerFunc(ctx, taskCh)
 	}
 
-	bak := &BakFormat{}
+	bak := &bakFormat{}
 	for {
-		seg, err := bak.ReadSegment(r)
+		seg, err := bak.readSegment(r)
 		if err != nil {
-			if errors.Is(err, ErrBakEOF) {
+			if errors.Is(err, errBakEOF) {
 				close(taskCh)
 				break
 			}
@@ -3186,7 +3186,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		case <-ctx.Done():
 			wg.Wait()
 			return ctx.Err()
-		case taskCh <- &task{int(seg.Typ), seg.Val}:
+		case taskCh <- &task{int(seg.typ), seg.val}:
 		}
 	}
 	wg.Wait()

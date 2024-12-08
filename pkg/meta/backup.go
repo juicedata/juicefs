@@ -37,36 +37,38 @@ const (
 )
 
 const (
-	SegTypeUnknown = iota
-	SegTypeFormat
-	SegTypeCounter
-	SegTypeNode
-	SegTypeEdge
-	SegTypeChunk
-	SegTypeSliceRef
-	SegTypeSymlink
-	SegTypeSustained
-	SegTypeDelFile
-	SegTypeXattr
-	SegTypeAcl
-	SegTypeStat
-	SegTypeQuota
-	SegTypeParent // for redis/tkv only
-	SegTypeMix    // for redis/tkv only
-	SegTypeMax
+	segTypeUnknown = iota
+	segTypeFormat
+	segTypeCounter
+	segTypeNode
+	segTypeEdge
+	segTypeChunk
+	segTypeSliceRef
+	segTypeSymlink
+	segTypeSustained
+	segTypeDelFile
+	segTypeXattr
+	segTypeAcl
+	segTypeStat
+	segTypeQuota
+	segTypeParent // for redis/tkv only
+	segTypeMix    // for redis/tkv only
+	segTypeMax
 )
 
+var errBakEOF = fmt.Errorf("reach backup EOF")
+
 func getMessageNameFromType(typ int) protoreflect.FullName {
-	if typ == SegTypeFormat {
+	if typ == segTypeFormat {
 		return proto.MessageName(&pb.Format{})
-	} else if typ < SegTypeMax {
+	} else if typ < segTypeMax {
 		return proto.MessageName(&pb.Batch{})
 	} else {
 		return ""
 	}
 }
 
-func CreateMessageByName(name protoreflect.FullName) (proto.Message, error) {
+func createMessageByName(name protoreflect.FullName) (proto.Message, error) {
 	typ, err := protoregistry.GlobalTypes.FindMessageByName(name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find message %s's type: %v", name, err)
@@ -74,18 +76,16 @@ func CreateMessageByName(name protoreflect.FullName) (proto.Message, error) {
 	return typ.New().Interface(), nil
 }
 
-var ErrBakEOF = fmt.Errorf("reach backup EOF")
-
-// BakFormat: BakSegment... + BakEOF + BakFooter
-type BakFormat struct {
-	Offset uint64
-	Footer *BakFooter
+// bakFormat: BakSegment... + BakEOF + BakFooter
+type bakFormat struct {
+	pos    uint64
+	footer *bakFooter
 }
 
-func NewBakFormat() *BakFormat {
-	return &BakFormat{
-		Footer: &BakFooter{
-			Msg: &pb.Footer{
+func newBakFormat() *bakFormat {
+	return &bakFormat{
+		footer: &bakFooter{
+			msg: &pb.Footer{
 				Magic:   BakMagic,
 				Version: BakVersion,
 				Infos:   make(map[string]*pb.Footer_SegInfo),
@@ -94,7 +94,7 @@ func NewBakFormat() *BakFormat {
 	}
 }
 
-func (f *BakFormat) WriteSegment(w io.Writer, seg *BakSegment) error {
+func (f *bakFormat) writeSegment(w io.Writer, seg *bakSegment) error {
 	if seg == nil {
 		return nil
 	}
@@ -105,32 +105,32 @@ func (f *BakFormat) WriteSegment(w io.Writer, seg *BakSegment) error {
 	}
 
 	name := seg.String()
-	info, ok := f.Footer.Msg.Infos[name]
+	info, ok := f.footer.msg.Infos[name]
 	if !ok {
 		info = &pb.Footer_SegInfo{Offset: []uint64{}, Num: 0}
-		f.Footer.Msg.Infos[name] = info
+		f.footer.msg.Infos[name] = info
 	}
 
-	info.Offset = append(info.Offset, f.Offset)
-	info.Num += seg.Num()
-	f.Offset += uint64(n)
+	info.Offset = append(info.Offset, f.pos)
+	info.Num += seg.num()
+	f.pos += uint64(n)
 	return nil
 }
 
-func (f *BakFormat) ReadSegment(r io.Reader) (*BakSegment, error) {
-	seg := &BakSegment{}
+func (f *bakFormat) readSegment(r io.Reader) (*bakSegment, error) {
+	seg := &bakSegment{}
 	if err := seg.Unmarshal(r); err != nil {
 		return nil, err
 	}
 	return seg, nil
 }
 
-func (f *BakFormat) WriteFooter(w io.Writer) error {
+func (f *bakFormat) writeFooter(w io.Writer) error {
 	if err := f.writeEOS(w); err != nil {
 		return err
 	}
 
-	data, err := f.Footer.Marshal()
+	data, err := f.footer.Marshal()
 	if err != nil {
 		return err
 	}
@@ -141,43 +141,43 @@ func (f *BakFormat) WriteFooter(w io.Writer) error {
 	return nil
 }
 
-func (f *BakFormat) writeEOS(w io.Writer) error {
+func (f *bakFormat) writeEOS(w io.Writer) error {
 	if n, err := w.Write(binary.BigEndian.AppendUint32(nil, BakEOS)); err != nil && n != 4 {
 		return fmt.Errorf("failed to write EOS: err %w, write len %d, expect len 4", err, n)
 	}
 	return nil
 }
 
-func (f *BakFormat) ReadFooter(r io.ReadSeeker) (*BakFooter, error) {
-	footer := &BakFooter{}
+func (f *bakFormat) readFooter(r io.ReadSeeker) (*bakFooter, error) {
+	footer := &bakFooter{}
 	if err := footer.Unmarshal(r); err != nil {
 		return nil, err
 	}
-	if footer.Msg.Magic != BakMagic {
-		return nil, fmt.Errorf("invalid magic number %d, expect %d", footer.Msg.Magic, BakMagic)
+	if footer.msg.Magic != BakMagic {
+		return nil, fmt.Errorf("invalid magic number %d, expect %d", footer.msg.Magic, BakMagic)
 	}
-	f.Footer = footer
+	f.footer = footer
 	return footer, nil
 }
 
-type BakFooter struct {
-	Msg *pb.Footer
-	Len uint64
+type bakFooter struct {
+	msg *pb.Footer
+	len uint64
 }
 
-func (h *BakFooter) Marshal() ([]byte, error) {
-	data, err := proto.Marshal(h.Msg)
+func (h *bakFooter) Marshal() ([]byte, error) {
+	data, err := proto.Marshal(h.msg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal footer: %w", err)
 	}
 
-	h.Len = uint64(len(data))
-	data = binary.BigEndian.AppendUint64(data, h.Len)
+	h.len = uint64(len(data))
+	data = binary.BigEndian.AppendUint64(data, h.len)
 	return data, nil
 }
 
-func (h *BakFooter) Unmarshal(r io.ReadSeeker) error {
-	lenSize := int64(unsafe.Sizeof(h.Len))
+func (h *bakFooter) Unmarshal(r io.ReadSeeker) error {
+	lenSize := int64(unsafe.Sizeof(h.len))
 	_, _ = r.Seek(-lenSize, io.SeekEnd)
 
 	data := make([]byte, lenSize)
@@ -185,117 +185,117 @@ func (h *BakFooter) Unmarshal(r io.ReadSeeker) error {
 		return fmt.Errorf("failed to read footer length: err %w, read len %d, expect len %d", err, n, lenSize)
 	}
 
-	h.Len = binary.BigEndian.Uint64(data)
-	_, _ = r.Seek(-int64(h.Len)-lenSize, io.SeekEnd)
-	data = make([]byte, h.Len)
-	if n, err := r.Read(data); err != nil && n != int(h.Len) {
-		return fmt.Errorf("failed to read footer: err %w, read len %d, expect len %d", err, n, h.Len)
+	h.len = binary.BigEndian.Uint64(data)
+	_, _ = r.Seek(-int64(h.len)-lenSize, io.SeekEnd)
+	data = make([]byte, h.len)
+	if n, err := r.Read(data); err != nil && n != int(h.len) {
+		return fmt.Errorf("failed to read footer: err %w, read len %d, expect len %d", err, n, h.len)
 	}
 
-	h.Msg = &pb.Footer{}
-	if err := proto.Unmarshal(data, h.Msg); err != nil {
+	h.msg = &pb.Footer{}
+	if err := proto.Unmarshal(data, h.msg); err != nil {
 		return fmt.Errorf("failed to unmarshal footer: %w", err)
 	}
 	return nil
 }
 
-type BakSegment struct {
-	Typ uint32
-	Len uint64
-	Val proto.Message
+type bakSegment struct {
+	typ uint32
+	len uint64
+	val proto.Message
 }
 
-func (s *BakSegment) String() string {
-	return string(proto.MessageName(s.Val).Name())
+func (s *bakSegment) String() string {
+	return string(proto.MessageName(s.val).Name())
 }
 
-func (s *BakSegment) Num() uint64 {
-	switch s.Typ {
-	case SegTypeFormat:
+func (s *bakSegment) num() uint64 {
+	switch s.typ {
+	case segTypeFormat:
 		return 1
 	default:
-		b := s.Val.(*pb.Batch)
-		switch s.Typ {
-		case SegTypeCounter:
+		b := s.val.(*pb.Batch)
+		switch s.typ {
+		case segTypeCounter:
 			return uint64(len(b.Counters))
-		case SegTypeNode:
+		case segTypeNode:
 			return uint64(len(b.Nodes))
-		case SegTypeEdge:
+		case segTypeEdge:
 			return uint64(len(b.Edges))
-		case SegTypeChunk:
+		case segTypeChunk:
 			return uint64(len(b.Chunks))
-		case SegTypeSliceRef:
+		case segTypeSliceRef:
 			return uint64(len(b.SliceRefs))
-		case SegTypeSymlink:
+		case segTypeSymlink:
 			return uint64(len(b.Symlinks))
-		case SegTypeSustained:
+		case segTypeSustained:
 			return uint64(len(b.Sustained))
-		case SegTypeDelFile:
+		case segTypeDelFile:
 			return uint64(len(b.Delfiles))
-		case SegTypeXattr:
+		case segTypeXattr:
 			return uint64(len(b.Xattrs))
-		case SegTypeAcl:
+		case segTypeAcl:
 			return uint64(len(b.Acls))
-		case SegTypeStat:
+		case segTypeStat:
 			return uint64(len(b.Dirstats))
-		case SegTypeQuota:
+		case segTypeQuota:
 			return uint64(len(b.Quotas))
-		case SegTypeParent:
+		case segTypeParent:
 			return uint64(len(b.Parents))
 		}
 		return 0
 	}
 }
 
-func (s *BakSegment) Marshal(w io.Writer) (int, error) {
-	if s == nil || s.Val == nil {
+func (s *bakSegment) Marshal(w io.Writer) (int, error) {
+	if s == nil || s.val == nil {
 		return 0, fmt.Errorf("segment %s is nil", s)
 	}
 
-	switch v := s.Val.(type) {
+	switch v := s.val.(type) {
 	case *pb.Format:
-		s.Typ = uint32(SegTypeFormat)
+		s.typ = uint32(segTypeFormat)
 	case *pb.Batch:
 		if v.Counters != nil {
-			s.Typ = uint32(SegTypeCounter)
+			s.typ = uint32(segTypeCounter)
 		} else if v.Sustained != nil {
-			s.Typ = uint32(SegTypeSustained)
+			s.typ = uint32(segTypeSustained)
 		} else if v.Delfiles != nil {
-			s.Typ = uint32(SegTypeDelFile)
+			s.typ = uint32(segTypeDelFile)
 		} else if v.Acls != nil {
-			s.Typ = uint32(SegTypeAcl)
+			s.typ = uint32(segTypeAcl)
 		} else if v.Xattrs != nil {
-			s.Typ = uint32(SegTypeXattr)
+			s.typ = uint32(segTypeXattr)
 		} else if v.Quotas != nil {
-			s.Typ = uint32(SegTypeQuota)
+			s.typ = uint32(segTypeQuota)
 		} else if v.Dirstats != nil {
-			s.Typ = uint32(SegTypeStat)
+			s.typ = uint32(segTypeStat)
 		} else if v.Nodes != nil {
-			s.Typ = uint32(SegTypeNode)
+			s.typ = uint32(segTypeNode)
 		} else if v.Chunks != nil {
-			s.Typ = uint32(SegTypeChunk)
+			s.typ = uint32(segTypeChunk)
 		} else if v.SliceRefs != nil {
-			s.Typ = uint32(SegTypeSliceRef)
+			s.typ = uint32(segTypeSliceRef)
 		} else if v.Edges != nil {
-			s.Typ = uint32(SegTypeEdge)
+			s.typ = uint32(segTypeEdge)
 		} else if v.Symlinks != nil {
-			s.Typ = uint32(SegTypeSymlink)
+			s.typ = uint32(segTypeSymlink)
 		} else if v.Parents != nil {
-			s.Typ = uint32(SegTypeParent)
+			s.typ = uint32(segTypeParent)
 		} else {
 			return 0, fmt.Errorf("unknown batch type %s", s)
 		}
 	}
 
-	if err := binary.Write(w, binary.BigEndian, s.Typ); err != nil {
+	if err := binary.Write(w, binary.BigEndian, s.typ); err != nil {
 		return 0, fmt.Errorf("failed to write segment type %s : %w", s, err)
 	}
-	data, err := proto.Marshal(s.Val)
+	data, err := proto.Marshal(s.val)
 	if err != nil {
 		return 0, fmt.Errorf("failed to marshal segment message %s : %w", s, err)
 	}
-	s.Len = uint64(len(data))
-	if err := binary.Write(w, binary.BigEndian, s.Len); err != nil {
+	s.len = uint64(len(data))
+	if err := binary.Write(w, binary.BigEndian, s.len); err != nil {
 		return 0, fmt.Errorf("failed to write segment length %s: %w", s, err)
 	}
 
@@ -303,38 +303,38 @@ func (s *BakSegment) Marshal(w io.Writer) (int, error) {
 		return 0, fmt.Errorf("failed to write segment data %s: err %w, write len %d, expect len %d", s, err, n, len(data))
 	}
 
-	return binary.Size(s.Typ) + binary.Size(s.Len) + len(data), nil
+	return binary.Size(s.typ) + binary.Size(s.len) + len(data), nil
 }
 
-func (s *BakSegment) Unmarshal(r io.Reader) error {
-	if err := binary.Read(r, binary.BigEndian, &s.Typ); err != nil {
+func (s *bakSegment) Unmarshal(r io.Reader) error {
+	if err := binary.Read(r, binary.BigEndian, &s.typ); err != nil {
 		return fmt.Errorf("failed to read segment type: %v", err)
 	}
 
-	if s.Typ == BakMagic {
-		return ErrBakEOF
+	if s.typ == BakMagic {
+		return errBakEOF
 	}
-	name := getMessageNameFromType(int(s.Typ))
+	name := getMessageNameFromType(int(s.typ))
 	if name == "" {
-		return fmt.Errorf("segment type %d is unknown", s.Typ)
+		return fmt.Errorf("segment type %d is unknown", s.typ)
 	}
 
-	if err := binary.Read(r, binary.BigEndian, &s.Len); err != nil {
+	if err := binary.Read(r, binary.BigEndian, &s.len); err != nil {
 		return fmt.Errorf("failed to read segment %s length: %v", s, err)
 	}
-	data := make([]byte, s.Len)
+	data := make([]byte, s.len)
 	n, err := r.Read(data)
-	if err != nil && n != int(s.Len) {
-		return fmt.Errorf("failed to read segment value: err %v, read len %d, expect len %d", err, n, s.Len)
+	if err != nil && n != int(s.len) {
+		return fmt.Errorf("failed to read segment value: err %v, read len %d, expect len %d", err, n, s.len)
 	}
-	msg, err := CreateMessageByName(name)
+	msg, err := createMessageByName(name)
 	if err != nil {
 		return fmt.Errorf("failed to create message %s: %v", name, err)
 	}
 	if err = proto.Unmarshal(data, msg); err != nil {
 		return fmt.Errorf("failed to unmarshal segment msg %s: %v", name, err)
 	}
-	s.Val = msg
+	s.val = msg
 	return nil
 }
 
