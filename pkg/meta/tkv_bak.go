@@ -18,20 +18,12 @@ package meta
 
 import "google.golang.org/protobuf/proto"
 
-func (m *kvMeta) dump(ctx Context, typ int, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+func (m *kvMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	return nil
 }
 
 func (m *kvMeta) load(ctx Context, typ int, opt *LoadOption, val proto.Message) error {
 	return nil
-}
-
-func (m *kvMeta) execETxn(ctx Context, txn *eTxn, f func(Context, *eTxn) error) error {
-	ctx.WithValue(txMaxRetryKey{}, txn.opt.maxRetry)
-	return m.roTxn(ctx, func(tx *kvTxn) error {
-		txn.obj = tx
-		return f(ctx, txn)
-	})
 }
 
 func (m *kvMeta) prepareLoad(ctx Context, opt *LoadOption) error {

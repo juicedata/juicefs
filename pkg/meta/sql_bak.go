@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
@@ -39,77 +38,40 @@ var (
 	sqlDumpBatchSize = 100000
 )
 
-func (m *dbMeta) dump(ctx Context, typ int, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
-	switch typ {
-	case SegTypeFormat:
-		return m.dumpFormat(ctx, opt, txn, ch)
-	case SegTypeCounter:
-		return m.dumpCounters(ctx, opt, txn, ch)
-	case SegTypeSustained:
-		return m.dumpSustained(ctx, opt, txn, ch)
-	case SegTypeDelFile:
-		return m.dumpDelFiles(ctx, opt, txn, ch)
-	case SegTypeSliceRef:
-		return m.dumpSliceRef(ctx, opt, txn, ch)
-	case SegTypeAcl:
-		return m.dumpACL(ctx, opt, txn, ch)
-	case SegTypeXattr:
-		return m.dumpXattr(ctx, opt, txn, ch)
-	case SegTypeQuota:
-		return m.dumpQuota(ctx, opt, txn, ch)
-	case SegTypeStat:
-		return m.dumpDirStat(ctx, opt, txn, ch)
-	case SegTypeNode:
-		return m.dumpNodes(ctx, opt, txn, ch)
-	case SegTypeChunk:
-		return m.dumpChunks(ctx, opt, txn, ch)
-	case SegTypeEdge:
-		return m.dumpEdges(ctx, opt, txn, ch)
-	case SegTypeParent:
-		return nil // included in dumpEdges
-	case SegTypeSymlink:
-		return m.dumpSymlinks(ctx, opt, txn, ch)
-	case SegTypeMix:
-		return nil
-	default:
-		return fmt.Errorf("unknown segment type %d", typ)
+func (m *dbMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
+	var dumps = []func(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error{
+		m.dumpFormat,
+		m.dumpCounters,
+		m.dumpNodes,
+		m.dumpChunks,
+		m.dumpEdges,
+		m.dumpSymlinks,
+		m.dumpSustained,
+		m.dumpDelFiles,
+		m.dumpSliceRef,
+		m.dumpACL,
+		m.dumpXattr,
+		m.dumpQuota,
+		m.dumpDirStat,
 	}
-}
-
-func (m *dbMeta) execETxn(ctx Context, txn *eTxn, f func(Context, *eTxn) error) error {
-	if txn.opt.threads > 1 {
-		// only use same txn when coNum == 1 for sql
-		txn.opt.notUsed = true
-		return f(ctx, txn)
-	}
-	ctx.WithValue(txMaxRetryKey{}, txn.opt.maxRetry)
-	return m.roTxn(ctx, func(sess *xorm.Session) error {
-		txn.obj = sess
-		return f(ctx, txn)
-	})
-}
-
-func (m *dbMeta) execStmt(ctx context.Context, txn *eTxn, f func(*xorm.Session) error) error {
-	if txn.opt.notUsed {
-		return m.roTxn(ctx, func(s *xorm.Session) error {
-			return f(s)
+	ctx.WithValue(txMaxRetryKey{}, 3)
+	if opt.Threads == 1 {
+		// use same session for all dumps
+		_ = m.roTxn(ctx, func(sess *xorm.Session) error {
+			ctx.WithValue(txSessionKey{}, sess)
+			return nil
 		})
 	}
-
-	var err error
-	cnt := 0
-	for cnt < txn.opt.maxStmtRetry {
-		err = f(txn.obj.(*xorm.Session))
-		if err == nil || !m.shouldRetry(err) {
-			break
+	for _, f := range dumps {
+		err := f(ctx, opt, ch)
+		if err != nil {
+			return err
 		}
-		cnt++
-		time.Sleep(time.Duration(cnt) * time.Microsecond)
 	}
-	return err
+	return nil
 }
 
-func sqlQueryBatch(ctx Context, opt *DumpOption, ch chan *dumpedResult, maxId uint64, query func(ctx context.Context, start, end uint64) (int, error)) error {
+func sqlQueryBatch(ctx Context, opt *DumpOption, maxId uint64, query func(ctx context.Context, start, end uint64) (int, error)) error {
 	eg, egCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(opt.Threads)
 
@@ -123,10 +85,11 @@ func sqlQueryBatch(ctx Context, opt *DumpOption, ch chan *dumpedResult, maxId ui
 			return err
 		})
 	}
+	logger.Debugf("dump %d rows", sum)
 	return eg.Wait()
 }
 
-func (m *dbMeta) dumpNodes(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+func (m *dbMeta) dumpNodes(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	pool := sync.Pool{New: func() interface{} { return &pb.Node{} }}
 	release := func(p proto.Message) {
 		for _, s := range p.(*pb.Batch).Nodes {
@@ -135,7 +98,7 @@ func (m *dbMeta) dumpNodes(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dum
 	}
 
 	var rows []node
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
 		rows = rows[:0]
 		return s.Where("inode >= ?", TrashInode).Find(&rows)
 	}); err != nil {
@@ -155,7 +118,7 @@ func (m *dbMeta) dumpNodes(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dum
 	}
 
 	var maxInode uint64
-	err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+	err := m.roTxn(ctx, func(s *xorm.Session) error {
 		var row node
 		ok, err := s.Select("max(inode) as inode").Where("inode < ?", TrashInode).Get(&row)
 		if ok {
@@ -167,9 +130,9 @@ func (m *dbMeta) dumpNodes(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dum
 		return errors.Wrap(err, "max inode")
 	}
 
-	return sqlQueryBatch(ctx, opt, ch, maxInode, func(ctx context.Context, start, end uint64) (int, error) {
+	return sqlQueryBatch(ctx, opt, maxInode, func(ctx context.Context, start, end uint64) (int, error) {
 		var rows []node
-		if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		if err := m.roTxn(ctx, func(s *xorm.Session) error {
 			rows = rows[:0]
 			return s.Where("inode >= ? AND inode < ?", start, end).Find(&rows)
 		}); err != nil {
@@ -188,7 +151,7 @@ func (m *dbMeta) dumpNodes(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dum
 	})
 }
 
-func (m *dbMeta) dumpChunks(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+func (m *dbMeta) dumpChunks(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	pool := sync.Pool{New: func() interface{} { return &pb.Chunk{} }}
 	release := func(p proto.Message) {
 		for _, s := range p.(*pb.Batch).Chunks {
@@ -197,7 +160,7 @@ func (m *dbMeta) dumpChunks(ctx Context, opt *DumpOption, txn *eTxn, ch chan *du
 	}
 
 	var maxId uint64
-	err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+	err := m.roTxn(ctx, func(s *xorm.Session) error {
 		var row chunk
 		ok, err := s.Select("MAX(id) as id").Get(&row)
 		if ok {
@@ -209,9 +172,9 @@ func (m *dbMeta) dumpChunks(ctx Context, opt *DumpOption, txn *eTxn, ch chan *du
 		return err
 	}
 
-	return sqlQueryBatch(ctx, opt, ch, maxId, func(ctx context.Context, start, end uint64) (int, error) {
+	return sqlQueryBatch(ctx, opt, maxId, func(ctx context.Context, start, end uint64) (int, error) {
 		var rows []chunk
-		if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		if err := m.roTxn(ctx, func(s *xorm.Session) error {
 			rows = rows[:0]
 			return s.Where("id >= ? AND id < ?", start, end).Find(&rows)
 		}); err != nil {
@@ -229,7 +192,7 @@ func (m *dbMeta) dumpChunks(ctx Context, opt *DumpOption, txn *eTxn, ch chan *du
 	})
 }
 
-func (m *dbMeta) dumpEdges(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+func (m *dbMeta) dumpEdges(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	pool := sync.Pool{New: func() interface{} { return &pb.Edge{} }}
 	release := func(p proto.Message) {
 		for _, s := range p.(*pb.Batch).Edges {
@@ -238,7 +201,7 @@ func (m *dbMeta) dumpEdges(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dum
 	}
 
 	var maxId uint64
-	err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+	err := m.roTxn(ctx, func(s *xorm.Session) error {
 		var row edge
 		ok, err := s.Select("MAX(id) as id").Get(&row)
 		if ok {
@@ -252,9 +215,9 @@ func (m *dbMeta) dumpEdges(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dum
 
 	var mu sync.Mutex
 	dumpParents := make(map[uint64][]uint64)
-	err = sqlQueryBatch(ctx, opt, ch, maxId, func(ctx context.Context, start, end uint64) (int, error) {
+	err = sqlQueryBatch(ctx, opt, maxId, func(ctx context.Context, start, end uint64) (int, error) {
 		var rows []edge
-		if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+		if err := m.roTxn(ctx, func(s *xorm.Session) error {
 			rows = rows[:0]
 			return s.Where("id >= ? AND id < ?", start, end).Find(&rows)
 		}); err != nil {
@@ -302,9 +265,9 @@ func (m *dbMeta) dumpEdges(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dum
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Parents: parents}})
 }
 
-func (m *dbMeta) dumpSymlinks(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+func (m *dbMeta) dumpSymlinks(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []symlink
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
 		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
@@ -324,9 +287,9 @@ func (m *dbMeta) dumpSymlinks(ctx Context, opt *DumpOption, txn *eTxn, ch chan *
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Symlinks: symlinks}})
 }
 
-func (m *dbMeta) dumpCounters(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+func (m *dbMeta) dumpCounters(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []counter
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
 		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
@@ -339,9 +302,9 @@ func (m *dbMeta) dumpCounters(ctx Context, opt *DumpOption, txn *eTxn, ch chan *
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Counters: counters}})
 }
 
-func (m *dbMeta) dumpSustained(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+func (m *dbMeta) dumpSustained(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []sustained
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
 		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
@@ -358,9 +321,9 @@ func (m *dbMeta) dumpSustained(ctx Context, opt *DumpOption, txn *eTxn, ch chan 
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Sustained: sustained}})
 }
 
-func (m *dbMeta) dumpDelFiles(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+func (m *dbMeta) dumpDelFiles(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []delfile
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
 		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
@@ -379,9 +342,9 @@ func (m *dbMeta) dumpDelFiles(ctx Context, opt *DumpOption, txn *eTxn, ch chan *
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Delfiles: delFiles}})
 }
 
-func (m *dbMeta) dumpSliceRef(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+func (m *dbMeta) dumpSliceRef(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []sliceRef
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
 		rows = rows[:0]
 		return s.Where("refs != 1").Find(&rows) // skip default refs
 	}); err != nil {
@@ -400,9 +363,9 @@ func (m *dbMeta) dumpSliceRef(ctx Context, opt *DumpOption, txn *eTxn, ch chan *
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{SliceRefs: sliceRefs}})
 }
 
-func (m *dbMeta) dumpACL(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+func (m *dbMeta) dumpACL(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []acl
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
 		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
@@ -418,9 +381,9 @@ func (m *dbMeta) dumpACL(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpe
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Acls: acls}})
 }
 
-func (m *dbMeta) dumpXattr(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+func (m *dbMeta) dumpXattr(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []xattr
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
 		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
@@ -443,9 +406,9 @@ func (m *dbMeta) dumpXattr(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dum
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Xattrs: xattrs}})
 }
 
-func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []dirQuota
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
 		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
@@ -464,9 +427,9 @@ func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dum
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Quotas: quotas}})
 }
 
-func (m *dbMeta) dumpDirStat(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+func (m *dbMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []dirStats
-	if err := m.execStmt(ctx, txn, func(s *xorm.Session) error {
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
 		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {

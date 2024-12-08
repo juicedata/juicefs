@@ -355,7 +355,7 @@ func (opt *DumpOption) check() *DumpOption {
 	return opt
 }
 
-func (m *baseMeta) dumpFormat(ctx Context, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error {
+func (m *baseMeta) dumpFormat(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	f := m.GetFormat()
 	if !opt.KeepSecret {
 		f.RemoveSecret()
@@ -373,7 +373,7 @@ type dumpedResult struct {
 	release func(m proto.Message)
 }
 
-func dumpResult(ctx context.Context, ch chan *dumpedResult, res *dumpedResult) error {
+func dumpResult(ctx context.Context, ch chan<- *dumpedResult, res *dumpedResult) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -396,17 +396,5 @@ func (opt *LoadOption) check() {
 
 // transaction
 
+type txSessionKey struct{}
 type txMaxRetryKey struct{}
-
-type bTxnOption struct {
-	threads      int
-	notUsed      bool
-	maxRetry     int
-	maxStmtRetry int
-}
-
-type eTxn struct {
-	en  engine
-	opt *bTxnOption
-	obj interface{} // real transaction object for different engine
-}

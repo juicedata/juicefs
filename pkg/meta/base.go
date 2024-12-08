@@ -136,8 +136,7 @@ type engine interface {
 
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 
-	execETxn(ctx Context, txn *eTxn, fn func(ctx Context, txn *eTxn) error) error
-	dump(ctx Context, typ int, opt *DumpOption, txn *eTxn, ch chan *dumpedResult) error
+	dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error
 	load(ctx Context, typ int, opt *LoadOption, val proto.Message) error
 	prepareLoad(ctx Context, opt *LoadOption) error
 }
@@ -3092,23 +3091,7 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-
-		txn := &eTxn{
-			en: m.en,
-			opt: &bTxnOption{
-				threads:      opt.Threads,
-				maxRetry:     1,
-				maxStmtRetry: 3,
-			},
-		}
-		err := m.en.execETxn(ctx, txn, func(ctx Context, txn *eTxn) error {
-			for typ := SegTypeFormat; typ < SegTypeMax; typ++ {
-				if err := m.en.dump(ctx, typ, opt, txn, ch); err != nil {
-					return fmt.Errorf("dump %d err: %w", typ, err)
-				}
-			}
-			return nil
-		})
+		err := m.en.dump(ctx, opt, ch)
 		if err != nil {
 			logger.Errorf("dump meta err: %v", err)
 			ctx.Cancel()
