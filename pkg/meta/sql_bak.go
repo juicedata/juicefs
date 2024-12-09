@@ -34,6 +34,10 @@ import (
 	"xorm.io/xorm"
 )
 
+var (
+	sqlDumpBatchSize = 100000
+)
+
 func (m *dbMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var dumps = []func(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error{
 		m.dumpFormat,
@@ -71,7 +75,7 @@ func sqlQueryBatch(ctx Context, opt *DumpOption, maxId uint64, query func(ctx co
 	eg.SetLimit(opt.Threads)
 
 	sum := int64(0)
-	batch := uint64(sqlDumpBatchSize) * 10
+	batch := uint64(sqlDumpBatchSize)
 	for id := uint64(0); id <= maxId; id += batch {
 		startId := id
 		eg.Go(func() error {
