@@ -19,17 +19,14 @@
 
 package meta
 
-func (m *redisMeta) buildDumpedSeg(typ int, opt *DumpOption, txn *eTxn) iDumpedSeg {
+import "google.golang.org/protobuf/proto"
+
+func (m *redisMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	return nil
 }
 
-func (m *redisMeta) buildLoadedSeg(typ int, opt *LoadOption) iLoadedSeg {
+func (m *redisMeta) load(ctx Context, typ int, opt *LoadOption, val proto.Message) error {
 	return nil
-}
-
-func (m *redisMeta) execETxn(ctx Context, txn *eTxn, f func(Context, *eTxn) error) error {
-	txn.opt.notUsed = true
-	return f(ctx, txn)
 }
 
 func (m *redisMeta) prepareLoad(ctx Context, opt *LoadOption) error {

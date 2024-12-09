@@ -19,7 +19,6 @@ package meta
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -800,10 +799,6 @@ func (m *kvMeta) ListSessions() ([]*Session, error) {
 
 func (m *kvMeta) shouldRetry(err error) bool {
 	return m.client.shouldRetry(err)
-}
-
-func (m *kvMeta) roTxn(ctx context.Context, f func(*kvTxn) error) error {
-	return nil
 }
 
 func (m *kvMeta) txn(f func(tx *kvTxn) error, inodes ...Ino) error {
