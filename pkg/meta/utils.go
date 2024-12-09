@@ -40,6 +40,9 @@ const (
 	legacySessions = "sessions"
 )
 
+// counters key should be lowercase for redis/tkv
+var counters = []string{usedSpace, totalInodes, "nextInode", "nextChunk", "nextSession", "nextTrash"}
+
 const (
 	// fallocate
 	fallocKeepSize  = 0x01

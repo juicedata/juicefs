@@ -65,7 +65,7 @@ import (
 
 	Removed files: delfiles -> [$inode:$length -> seconds]
 	detached nodes: detachedNodes -> [$inode -> seconds]
-	Slices refs: k$sliceId_$size -> refcount
+	Slices refs: sliceRef -> {k$sliceId_$size -> refcount}
 
 	Dir data length:   dirDataLength -> { $inode -> length }
 	Dir used space:    dirUsedSpace -> { $inode -> usedSpace }
@@ -73,6 +73,7 @@ import (
 	Quota:             dirQuota -> { $inode -> {maxSpace, maxInodes} }
 	Quota used space:  dirQuotaUsedSpace -> { $inode -> usedSpace }
 	Quota used inodes: dirQuotaUsedInodes -> { $inode -> usedInodes }
+	Acl: acl -> { $acl_id -> acl }
 
 	Redis features:
 	  Sorted Set: 1.2+
@@ -605,6 +606,10 @@ func (m *redisMeta) usedSpaceKey() string {
 
 func (m *redisMeta) nextTrashKey() string {
 	return m.prefix + "nextTrash"
+}
+
+func (m *redisMeta) counterKey(name string) string {
+	return m.prefix + name
 }
 
 func (m *redisMeta) dirDataLengthKey() string {
