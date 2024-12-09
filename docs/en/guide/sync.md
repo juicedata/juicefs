@@ -352,4 +352,4 @@ S3 Gateway comes to rescue in these circumstances: deploy a gateway in the sourc
 
 ![sync via gateway](../images/sync-via-gateway.svg)
 
-Read [S3 Gateway](../deployment/s3_gateway.md) to learn its deployment and use.
+Read [S3 Gateway](../guide/gateway.md) to learn its deployment and use.

@@ -119,7 +119,7 @@ uid=1201(alice) gid=500(staff) groups=500(staff)
 
 - Kubernetes CSI 驱动：通过 Kubernetes CSI 驱动的方式将 JuiceFS 作为 Kubernetes 集群的存储层，详情请参考[「JuiceFS CSI 驱动」](deployment/how_to_use_on_kubernetes.md)。
 - Hadoop Java SDK：方便在 Hadoop 体系中使用兼容 HDFS 接口的 Java 客户端访问 JuiceFS。详情请参考[「Hadoop 使用 JuiceFS」](deployment/hadoop_java_sdk.md)。
-- S3 网关：通过 S3 协议访问 JuiceFS，详情请参考[「配置 JuiceFS S3 网关」](deployment/s3_gateway.md)。
+- S3 网关：通过 S3 协议访问 JuiceFS，详情请参考[「配置 JuiceFS S3 网关」](./guide/gateway.md)。
 - Docker Volume 插件：在 Docker 中方便使用 JuiceFS 的方式，详情请参考[「Docker 使用 JuiceFS」](deployment/juicefs_on_docker.md)。
 - WebDAV 网关：通过 WebDAV 协议访问 JuiceFS
 

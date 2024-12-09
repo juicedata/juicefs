@@ -23,50 +23,52 @@ JuiceFS S3 网关的常见的使用场景有：
 
 ## 快速开始
 
-1. 创建文件系统
+启动 S3 网关需要一个已经创建完毕的 JuiceFS 文件系统，如果尚不存在，请参考[文档](../getting-started/standalone.md)来创建。下方假定元数据引擎 URL 为 `redis://localhost:6379/1`。
 
-   首先，你需要创建一个 JuiceFS 文件系统。如果你还没有创建 JuiceFS 文件系统，请参考[创建 JuiceFS 文件系统](../getting-started/standalone.md)。
+由于网关基于 MinIO 开发，因此需要先设置 `MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD` 两个环境变量，他们会成为访问 S3 API 时认证身份用的 Access Key 和 Secret Key，是拥有最高权限的管理员凭证。
 
-2. 启动 S3 网关
+```shell
+export MINIO_ROOT_USER=admin
+export MINIO_ROOT_PASSWORD=12345678
 
-   在开启功能之前，需要先设置 `MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD` 两个环境变量，即访问 S3 API 时认证身份用的 Access Key 和 Secret Key。这对凭证我们称为管理员凭证，拥有最高权限。例如：
+# Windows 用户请改用 set 命令设置环境变量
+set MINIO_ROOT_USER=admin
+```
 
-    ```shell
-    export MINIO_ROOT_USER=admin
-    export MINIO_ROOT_PASSWORD=12345678
-    ```
+注意，`MINIO_ROOT_USER` 的长度至少 3 个字符， `MINIO_ROOT_PASSWORD` 的长度至少 8 个字符，如果未能正确设置，将会遭遇类似 `MINIO_ROOT_USER should be specified as an environment variable with at least 3 characters` 的报错，注意排查。
 
-   注意，`MINIO_ROOT_USER` 的长度至少 3 个字符， `MINIO_ROOT_PASSWORD` 的长度至少 8 个字符（Windows 用户请改用 `set` 命令设置环境变量，例如：`set MINIO_ROOT_USER=admin`）。
+启动 S3 网关：
 
-   然后，使用 `juicefs gateway` 命令启动 S3 网关。例如：
+```shell
+# 第一个参数是元数据引擎的 URL，第二个是 S3 网关监听的地址和端口
+juicefs gateway redis://localhost:6379/1 localhost:9000
 
-    ```shell
-    juicefs gateway redis://localhost:6379/1 localhost:9000
-    ```
+# 从 v1.2 开始，S3 网关支持后台启动，追加 --background 或 -d 参数均可
+# 后台运行场景下，使用 --log 指定日志输出文件路径
+juicefs gateway redis://localhost:6379 localhost:9000 -d --log=/var/log/juicefs-s3-gateway.log
+```
 
-   `gateway` 子命令至少需要提供两个参数，第一个是元数据引擎的 URL，第二个是 S3 网关监听的地址和端口。JuiceFS v1.2 开始支持后台启动，可以使用 `--background` 或 `-d` 选项将 S3 网关作为后台服务运行。
+S3 Gateway 默认没有启用[多桶支持](#多桶支持)，可以添加 `--multi-buckets` 选项开启。还可以添加[其他选项](../reference/command_reference.mdx#gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
 
-   S3 Gateway 默认没有启用[多桶支持](#多桶支持)，可以添加 `--multi-buckets` 选项开启。还可以添加[其他选项](../reference/command_reference.mdx#gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
+```shell
+juicefs gateway --cache-size 20480 redis://localhost:6379/1 localhost:9000
+```
 
-    ```shell
-    juicefs gateway --cache-size 20480 redis://localhost:6379/1 localhost:9000
-    ```
+在这个例子中，我们假设 JuiceFS 文件系统使用的是本地的 Redis 数据库。当 S3 网关启用时，在**当前主机**上可以使用 `http://localhost:9000` 这个地址访问到 S3 网关的管理界面。
 
-   在这个例子中，我们假设 JuiceFS 文件系统使用的是本地的 Redis 数据库。当 S3 网关启用时，在**当前主机**上可以使用 `http://localhost:9000` 这个地址访问到 S3 网关的管理界面。
+![S3-gateway-file-manager](../images/s3-gateway-file-manager.jpg)
 
-   ![S3-gateway-file-manager](../images/s3-gateway-file-manager.jpg)
+如果你希望通过局域网或互联网上的其他主机访问 S3 网关，则需要调整监听地址，例如：
 
-   如果你希望通过局域网或互联网上的其他主机访问 S3 网关，则需要调整监听地址，例如：
+```shell
+juicefs gateway redis://localhost:6379/1 0.0.0.0:9000
+```
 
-    ```shell
-    juicefs gateway redis://localhost:6379/1 0.0.0.0:9000
-    ```
+这样一来，S3 网关将会默认接受所有网络请求。不同的位置的 S3 客户端可以使用不同的地址访问 S3 网关，例如：
 
-   这样一来，S3 网关将会默认接受所有网络请求。不同的位置的 S3 客户端可以使用不同的地址访问 S3 网关，例如：
-
-   - S3 网关所在主机中的第三方客户端可以使用 `http://127.0.0.1:9000` 或 `http://localhost:9000` 进行访问；
-   - 与 S3 网关所在主机处于同一局域网的第三方客户端可以使用 `http://192.168.1.8:9000` 访问（假设启用 S3 网关的主机内网 IP 地址为 192.168.1.8）；
-   - 通过互联网访问 S3 网关可以使用 `http://110.220.110.220:9000` 访问（假设启用 S3 网关的主机公网 IP 地址为 110.220.110.220）。
+- S3 网关所在主机中的第三方客户端可以使用 `http://127.0.0.1:9000` 或 `http://localhost:9000` 进行访问；
+- 与 S3 网关所在主机处于同一局域网的第三方客户端可以使用 `http://192.168.1.8:9000` 访问（假设启用 S3 网关的主机内网 IP 地址为 192.168.1.8）；
+- 通过互联网访问 S3 网关可以使用 `http://110.220.110.220:9000` 访问（假设启用 S3 网关的主机公网 IP 地址为 110.220.110.220）。
 
 <iframe src="//player.bilibili.com/player.html?isOutside=true&aid=1706122101&bvid=BV1fT421r72r&cid=1618194316&p=1&autoplay=0" width="100%" height="360" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"> </iframe>
 
@@ -174,6 +176,94 @@ JuiceFS 的分布式特性使得可以在多个节点上同时启动多个 S3 �
 1. 需要保证所有实例在启动时使用相同的用户，其 UID 和 GID 相同；
 2. 节点之间 IAM 刷新时间可以不同，但是需要保证 IAM 刷新时间不要太短，以免对 JuiceFS 造成过大的压力；
 3. 每个实例的监听的地址和端口可以自由设置，如果在同一台机器上启动多个实例，需要确保端口不冲突。
+
+### 以守护进程的形式运行
+
+S3 网关 可以通过以下配置以 Linux 守护进程的形式在后台运行。
+
+```shell
+cat > /lib/systemd/system/juicefs-gateway.service<<EOF
+[Unit]
+Description=Juicefs S3 Gateway
+Requires=network.target
+After=multi-user.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+Environment="MINIO_ROOT_USER=admin"
+Environment="MINIO_ROOT_PASSWORD=12345678"
+ExecStart=/usr/local/bin/juicefs gateway redis://localhost:6379 localhost:9000
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+设置进程开机自启动
+
+```shell
+systemctl daemon-reload
+systemctl enable juicefs-gateway --now
+systemctl status juicefs-gateway
+```
+
+检阅进程的日志
+
+```bash
+journalctl -xefu juicefs-gateway.service
+```
+
+### 在 Kubernetes 上部署 S3 网关 {#deploy-in-kubernetes}
+
+安装需要 Helm 3.1.0 及以上版本，请参照 [Helm 文档](https://helm.sh/zh/docs/intro/install)进行安装。
+
+```shell
+helm repo add juicefs https://juicedata.github.io/charts/
+helm repo update
+```
+
+Helm chart 同时支持 JuiceFS 社区版和企业版，通过填写 values 中不同的字段来区分具体使用的版本，默认的 [values](https://github.com/juicedata/charts/blob/main/charts/juicefs-s3-gateway/values.yaml) 使用了社区版 JuiceFS 客户端镜像：
+
+```yaml title="values-mycluster.yaml"
+secret:
+  name: "<name>"
+  metaurl: "<meta-url>"
+  storage: "<storage-type>"
+  accessKey: "<access-key>"
+  secretKey: "<secret-key>"
+  bucket: "<bucket>"
+```
+
+:::tip
+别忘了把上方的 `values-mycluster.yaml` 纳入 Git 项目（或者其他的源码管理方式）管理起来，这样一来，就算 values 的配置不断变化，也能对其进行追溯和回滚。
+:::
+
+填写完毕保存，就可以使用下方命令部署了：
+
+```shell
+# 不论是初次安装，还是后续调整配置重新上线，都可以使用下方命令
+helm upgrade --install -f values-mycluster.yaml s3-gateway juicefs/juicefs-s3-gateway
+```
+
+部署完毕以后，按照输出文本的提示，获取 Kubernetes Service 的地址，并测试是否可以正常访问。
+
+```shell
+$ kubectl -n kube-system get svc -l app.kubernetes.io/name=juicefs-s3-gateway
+NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
+```
+
+部署完成后，会启动一个名为 `juicefs-s3-gateway` 的 Deploy。用下方命令查看部署的 Pod：
+
+```sh
+$ kubectl -n kube-system get po -l app.kubernetes.io/name=juicefs-s3-gateway
+NAME                                  READY   STATUS    RESTARTS   AGE
+juicefs-s3-gateway-5c69d574cc-t92b6   1/1     Running   0          136m
+```
 
 ## 高级功能
 

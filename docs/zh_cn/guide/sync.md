@@ -352,4 +352,4 @@ juicefs sync cos://ABCDEFG:HIJKLMN@ccc-125000.cos.ap-beijing.myqcloud.com oss://
 
 ![sync via gateway](../images/sync-via-gateway.svg)
 
-阅读[「S3 网关」](../deployment/s3_gateway.md)学习如何使用和部署 S3 网关。
+阅读[「S3 网关」](./gateway.md)学习如何使用和部署 S3 网关。

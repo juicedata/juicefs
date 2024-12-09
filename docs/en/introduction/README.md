@@ -15,7 +15,7 @@ JuiceFS provides rich APIs for various forms of data management, analysis, archi
 
 - **POSIX Compatible**: JuiceFS can be used like a local file system, making it easy to integrate with existing applications.
 - **HDFS Compatible**: JuiceFS is fully compatible with the [HDFS API](../deployment/hadoop_java_sdk.md), which can enhance metadata performance.
-- **S3 Compatible**: JuiceFS provides an [S3 gateway](../deployment/s3_gateway.md) to implement an S3-compatible access interface.
+- **S3 Compatible**: JuiceFS provides an [S3 gateway](../guide/gateway.md) to implement an S3-compatible access interface.
 - **Cloud-Native**: It is easy to use JuiceFS in Kubernetes via the [CSI Driver](../deployment/how_to_use_on_kubernetes.md).
 - **Distributed**: Each file system can be mounted on thousands of servers at the same time with high-performance concurrent reads and writes and shared data.
 - **Strong Consistency**: Any changes committed to files are immediately visible on all servers.

@@ -103,7 +103,7 @@ Alluxio 没有通过 POSIX 兼容性测试。[京东](https://www.slideshare.net
 
 ### S3
 
-JuiceFS 实现了 [S3 网关](../../deployment/s3_gateway.md)，因此如果有需要，可以通过 S3 API 直接访问文件系统，也能使用 s3cmd、AWS CLI、MinIO Client（mc）等工具直接管理文件系统。
+JuiceFS 实现了 [S3 网关](../../guide/gateway.md)，因此如果有需要，可以通过 S3 API 直接访问文件系统，也能使用 s3cmd、AWS CLI、MinIO Client（mc）等工具直接管理文件系统。
 
 Alluxio 也支持大部分 S3 API，详见[文档](https://docs.alluxio.io/os/user/stable/cn/api/S3-API.html)。
 

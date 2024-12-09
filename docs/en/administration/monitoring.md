@@ -121,13 +121,13 @@ See [CSI Driver documentation](https://juicefs.com/docs/csi/administration/going
 This feature needs to run JuiceFS client version 0.17.1 and above.
 :::
 
-The [JuiceFS S3 Gateway](../deployment/s3_gateway.md) will provide monitoring metrics at the address `http://localhost:9567/metrics` by default, or you can customize it with the `-metrics` option. For example:
+The [JuiceFS S3 Gateway](../guide/gateway.md) will provide monitoring metrics at the address `http://localhost:9567/metrics` by default, or you can customize it with the `-metrics` option. For example:
 
 ```shell
 juicefs gateway --metrics localhost:9567 ...
 ```
 
-If you are deploying JuiceFS S3 Gateway [in Kubernetes](../deployment/s3_gateway.md#deploy-in-kubernetes), you can refer to the Prometheus configuration in the [Kubernetes](#kubernetes) section to collect monitoring metrics (the difference is mainly in the regular expression for the label `__meta_kubernetes_pod_label_app_kubernetes_io_name`), e.g.:
+If you are deploying JuiceFS S3 Gateway [in Kubernetes](../guide/gateway.md#deploy-in-kubernetes), you can refer to the Prometheus configuration in the [Kubernetes](#kubernetes) section to collect monitoring metrics (the difference is mainly in the regular expression for the label `__meta_kubernetes_pod_label_app_kubernetes_io_name`), e.g.:
 
 ```yaml {6-8}
 scrape_configs:
