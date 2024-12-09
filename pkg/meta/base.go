@@ -123,6 +123,7 @@ type engine interface {
 	// @trySync: try sync dir stat if broken or not existed
 	doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, syscall.Errno)
 	doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno)
+	doSyncUsedSpace(ctx Context) error
 
 	scanTrashSlices(Context, trashSliceScan) error
 	scanPendingSlices(Context, pendingSliceScan) error
@@ -2024,6 +2025,12 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 		}()
 	}
 	wg.Wait()
+	if fpath == "/" && repair && recursive && statAll {
+		if err := m.syncUsedSpace(ctx); err != nil {
+			logger.Errorf("Sync used space: %s", err)
+			hasError = true
+		}
+	}
 	if hasError {
 		return errors.New("some errors occurred, please check the log of fsck")
 	}

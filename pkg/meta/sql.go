@@ -31,6 +31,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -946,6 +947,42 @@ func (m *dbMeta) parseNode(attr *Attr, n *node) {
 func (m *dbMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.newSpace, space)
 	atomic.AddInt64(&m.newInodes, inodes)
+}
+
+func (m *dbMeta) doSyncUsedSpace(ctx Context) error {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	var used int64
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
+		total, err := s.SumInt(&dirStats{}, "used_space")
+		used += total
+		return err
+	}); err != nil {
+		return err
+	}
+	if err := m.roTxn(ctx, func(s *xorm.Session) error {
+		queryResultMap, err := s.QueryString("SELECT length FROM jfs_node WHERE inode IN (SELECT inode FROM jfs_sustained)")
+		if err != nil {
+			return err
+		}
+		for _, v := range queryResultMap {
+			value, err := strconv.ParseInt(v["length"], 10, 64)
+			if err != nil {
+				logger.Warnf("parse sustained length: %s err: %s", v["length"], err)
+				continue
+			}
+			used += align4K(uint64(value))
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return m.txn(func(s *xorm.Session) error {
+		_, err := s.Update(&counter{Value: used}, &counter{Name: usedSpace})
+		return err
+	})
 }
 
 func (m *dbMeta) doFlushStats() {
