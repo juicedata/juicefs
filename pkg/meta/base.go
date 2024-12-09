@@ -3164,7 +3164,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		}
 	}
 
-	for i := 0; i < opt.threads; i++ {
+	for i := 0; i < opt.Threads; i++ {
 		wg.Add(1)
 		go workerFunc(ctx, taskCh)
 	}

@@ -338,11 +338,10 @@ func (s *bakSegment) Unmarshal(r io.Reader) error {
 	return nil
 }
 
-// Dump Segment
-
 type DumpOption struct {
 	KeepSecret bool
 	Threads    int
+	BatchSize  int
 }
 
 func (opt *DumpOption) check() *DumpOption {
@@ -351,6 +350,9 @@ func (opt *DumpOption) check() *DumpOption {
 	}
 	if opt.Threads < 1 {
 		opt.Threads = 10
+	}
+	if opt.BatchSize < 1 {
+		opt.BatchSize = 10000
 	}
 	return opt
 }
@@ -382,15 +384,13 @@ func dumpResult(ctx context.Context, ch chan<- *dumpedResult, res *dumpedResult)
 	}
 }
 
-// Load Segment...
-
 type LoadOption struct {
-	threads int
+	Threads int
 }
 
 func (opt *LoadOption) check() {
-	if opt.threads < 1 {
-		opt.threads = 10
+	if opt.Threads < 1 {
+		opt.Threads = 10
 	}
 }
 

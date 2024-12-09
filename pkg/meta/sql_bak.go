@@ -34,10 +34,6 @@ import (
 	"xorm.io/xorm"
 )
 
-var (
-	sqlDumpBatchSize = 100000
-)
-
 func (m *dbMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var dumps = []func(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error{
 		m.dumpFormat,
@@ -57,10 +53,9 @@ func (m *dbMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) err
 	ctx.WithValue(txMaxRetryKey{}, 3)
 	if opt.Threads == 1 {
 		// use same session for all dumps
-		_ = m.roTxn(ctx, func(sess *xorm.Session) error {
-			ctx.WithValue(txSessionKey{}, sess)
-			return nil
-		})
+		sess := m.db.NewSession()
+		defer sess.Close()
+		ctx.WithValue(txSessionKey{}, sess)
 	}
 	for _, f := range dumps {
 		err := f(ctx, opt, ch)
