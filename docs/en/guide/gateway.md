@@ -23,48 +23,52 @@ Common application scenarios for JuiceFS S3 Gateway include:
 
 ## Quick start
 
-1. Create a JuiceFS file system by following the steps in [this document](../getting-started/standalone.md).
+S3 Gateway is used to serve an existing JuiceFS Volume, if you don't already have one, you can create a JuiceFS file system following the steps in [this document](../getting-started/standalone.md).
 
-2. Start JuiceFS S3 Gateway.
+Gateway is based on MinIO, so you must set the `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` environment variables. They serve as the access key and secret key for authentication when you access the S3 API. These credentials are administrator credentials with the highest privileges.
 
-    Before enabling the gateway, set the `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` environment variables. They serve as the access key and secret key for authentication when you access the S3 API. These credentials are called administrator credentials, with the highest privileges. For example:
+```shell
+export MINIO_ROOT_USER=admin
+export MINIO_ROOT_PASSWORD=12345678
 
-    ```shell
-    export MINIO_ROOT_USER=admin
-    export MINIO_ROOT_PASSWORD=12345678
-    ```
+# Use "set" on Windows
+set MINIO_ROOT_USER=admin
+```
 
-    Note that `MINIO_ROOT_USER` must be at least 3 characters long, and `MINIO_ROOT_PASSWORD` must be at least 8 characters long. Windows users must use the `set` command to set environment variables, for example, `set MINIO_ROOT_USER=admin`.
+Note that `MINIO_ROOT_USER` must be at least 3 characters long, and `MINIO_ROOT_PASSWORD` must be at least 8 characters long. If the value did not meet this requirement, the gateway service will complain `MINIO_ROOT_USER should be specified as an environment variable with at least 3 characters`.
 
-    Then, use the `juicefs gateway` command to start JuiceFS S3 Gateway. For example:
+Start the gateway:
 
-    ```shell
-    juicefs gateway redis://localhost:6379/1 localhost:9000
-    ```
+```shell
+# The first argument is metadata engine URL, second argument is the address/port for JuiceFS S3 Gateway to listen on
+juicefs gateway redis://localhost:6379/1 localhost:9000
 
-    The `gateway` subcommand requires at least two parameters: the database URL for storing metadata and the address/port for JuiceFS S3 Gateway to listen on. Since version 1.2, JuiceFS supports running services in the background with options such as `--background` or `-d`, allowing them to operate as background processes.
+# Since v1.2, JuiceFS supports running services in the background, using --background or -d
+# When running in background, use --log to specify the log path
+juicefs gateway redis://localhost:6379 localhost:9000 -d --log=/var/log/juicefs-s3-gateway.log
+```
 
-    By default, [Multi-bucket support](#multi-bucket-support) is not enabled. You can enable it by adding the `--multi-buckets` option. Additionally, you can add [other options](../reference/command_reference.mdx#gateway) to `gateway` subcommands as needed. For example, you can set the default local cache to 20 GiB.
+By default, [Multi-bucket support](#multi-bucket-support) is not enabled. You can enable it by adding the `--multi-buckets` option. Additionally, you can add [other options](../reference/command_reference.mdx#gateway) to `gateway` subcommands as needed. For example, you can set the default local cache to 20 GiB.
 
-    ```shell
-    juicefs gateway --cache-size 20480 redis://localhost:6379/1 localhost:9000
-    ```
+```shell
+juicefs gateway --cache-size 20480 redis://localhost:6379/1 localhost:9000
+```
 
-    This example assumes that the JuiceFS file system uses a local Redis database. When JuiceFS S3 Gateway is enabled, you can access the gateway's management interface at `http://localhost:9000` on the **current host**.
+This example assumes that the JuiceFS file system uses a local Redis database. When JuiceFS S3 Gateway is enabled, you can access the gateway's management interface at `http://localhost:9000` on the **current host**.
 
-    ![S3-gateway-file-manager](../images/s3-gateway-file-manager.jpg)
+![S3-gateway-file-manager](../images/s3-gateway-file-manager.jpg)
 
-    To allow access to JuiceFS S3 Gateway from other hosts on the local network or the internet, adjust the listen address. For example:
+To allow access to JuiceFS S3 Gateway from other hosts on the local network or the internet, adjust the listen address. For example:
 
-    ```shell
-    juicefs gateway redis://localhost:6379/1 0.0.0.0:9000
-    ```
+```shell
+juicefs gateway redis://localhost:6379/1 0.0.0.0:9000
+```
 
-    This configuration makes JuiceFS S3 Gateway accept requests from all networks by default. Different S3 clients can access JuiceFS S3 Gateway using different addresses. For example:
+This configuration makes JuiceFS S3 Gateway accept requests from all networks by default. Different S3 clients can access JuiceFS S3 Gateway using different addresses. For example:
 
-    - Third-party clients on the same host as JuiceFS S3 Gateway can use `http://127.0.0.1:9000` or `http://localhost:9000` for access.
-    - Third-party clients on the same local network as the JuiceFS S3 Gateway host can use `http://192.168.1.8:9000` for access (assuming the JuiceFS S3 Gateway host's internal IP address is `192.168.1.8`).
-    - Using `http://110.220.110.220:9000` to access JuiceFS S3 Gateway over the internet (assuming the JuiceFS S3 Gateway host's public IP address is `110.220.110.220`).
+- Third-party clients on the same host as JuiceFS S3 Gateway can use `http://127.0.0.1:9000` or `http://localhost:9000` for access.
+- Third-party clients on the same local network as the JuiceFS S3 Gateway host can use `http://192.168.1.8:9000` for access (assuming the JuiceFS S3 Gateway host's internal IP address is `192.168.1.8`).
+- Using `http://110.220.110.220:9000` to access JuiceFS S3 Gateway over the internet (assuming the JuiceFS S3 Gateway host's public IP address is `110.220.110.220`).
 
 ## Access JuiceFS S3 Gateway
 
@@ -170,6 +174,100 @@ The distributed nature of JuiceFS allows for multiple JuiceFS S3 gateway instanc
 1. Ensure that all instances are started with the same user at initialization; use the same UID and GID for all instances.
 2. The IAM refresh time between nodes can vary, but it must be ensured that this interval is not too short to avoid putting excessive pressure on JuiceFS.
 3. Addresses and ports listened by each instance can be freely configured. If multiple instances are started on the same machine, ensure that there is no conflict in port numbers.
+
+### Run as a daemon service
+
+The S3 gateway can be configured as a systemd unit.
+
+```shell
+cat > /lib/systemd/system/juicefs-gateway.service<<EOF
+[Unit]
+Description=Juicefs S3 Gateway
+Requires=network.target
+After=multi-user.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+Environment="MINIO_ROOT_USER=admin"
+Environment="MINIO_ROOT_PASSWORD=12345678"
+ExecStart=/usr/local/bin/juicefs gateway redis://localhost:6379 localhost:9000
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+To enable the service at startup
+
+```shell
+systemctl daemon-reload
+systemctl enable juicefs-gateway --now
+systemctl status juicefs-gateway
+```
+
+To inspect logs
+
+```bash
+journalctl -xefu juicefs-gateway.service
+```
+
+### Deploy S3 Gateway in Kubernetes {#deploy-kubernetes}
+
+Installation requires Helm 3.1.0 and above, refer to the [Helm Installation Guide](https://helm.sh/docs/intro/install).
+
+```shell
+helm repo add juicefs https://juicedata.github.io/charts/
+helm repo update
+```
+
+Our Helm chart simultaneously support JuiceFS Community and Enterprise edition, distinguished by populating different fields in the [values file](https://github.com/juicedata/charts/blob/main/charts/juicefs-s3-gateway/values.yaml).
+
+```yaml title="values-mycluster.yaml"
+secret:
+  name: "myjfs"
+  # If the token field is populated, installation will be treated as enterprise edition
+  token: "xxx"
+  accessKey: "xxx"
+  secretKey: "xxx"
+```
+
+If you want to deploy Ingress, append the following content and write the corresponding Ingress cofiguration:
+
+```yaml title="values-mycluster.yaml"
+ingress:
+  enabled: true
+```
+
+:::tip
+Don't forget to include the `values-mycluster.yaml` into your Git project (or using other source code management systems), so that all changes on the values file can be traced and rolled back.
+:::
+
+Once the values file is ready, run the following command to deploy:
+
+```shell
+# Below command can be used both to carry out the initial installation, and future upgrades
+helm upgrade --install -f values-mycluster.yaml s3-gateway juicefs/juicefs-s3-gateway
+```
+
+After installation, follow the output instructions to get the Kubernetes Service address, and verify if it's working.
+
+```shell
+$ kubectl -n kube-system get svc -l app.kubernetes.io/name=juicefs-s3-gateway
+NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
+```
+
+The deployment will launch a Deploy named `juicefs-s3-gateway`, run this command to check pod status:
+
+```sh
+$ kubectl -n kube-system get po -l app.kubernetes.io/name=juicefs-s3-gateway
+NAME                                  READY   STATUS    RESTARTS   AGE
+juicefs-s3-gateway-5c69d574cc-t92b6   1/1     Running   0          136m
+```
 
 ## Advanced features
 
