@@ -215,7 +215,7 @@ To inspect logs
 journalctl -xefu juicefs-gateway.service
 ```
 
-### Deploy S3 Gateway in Kubernetes {#deploy-kubernetes}
+### Deploy S3 Gateway in Kubernetes {#deploy-in-kubernetes}
 
 Installation requires Helm 3.1.0 and above, refer to the [Helm Installation Guide](https://helm.sh/docs/intro/install).
 

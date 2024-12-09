@@ -217,7 +217,7 @@ systemctl status juicefs-gateway
 journalctl -xefu juicefs-gateway.service
 ```
 
-### 在 Kubernetes 上部署 S3 网关 {#deploy-kubernetes}
+### 在 Kubernetes 上部署 S3 网关 {#deploy-in-kubernetes}
 
 安装需要 Helm 3.1.0 及以上版本，请参照 [Helm 文档](https://helm.sh/zh/docs/intro/install)进行安装。
 
