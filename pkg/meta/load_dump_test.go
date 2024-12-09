@@ -364,7 +364,7 @@ func testLoadV2(t *testing.T, uri, fname string) Meta {
 		t.Fatalf("open file: %s", fname)
 	}
 	defer fp.Close()
-	if err = m.LoadMetaV2(WrapContext(context.Background()), fp, &LoadOption{threads: 10}); err != nil {
+	if err = m.LoadMetaV2(WrapContext(context.Background()), fp, &LoadOption{Threads: 10}); err != nil {
 		t.Fatalf("load meta: %s", err)
 	}
 	if _, err := m.Load(true); err != nil {

@@ -76,7 +76,7 @@ func createMessageByName(name protoreflect.FullName) (proto.Message, error) {
 	return typ.New().Interface(), nil
 }
 
-// bakFormat: BakSegment... + BakEOF + BakFooter
+// bakFormat: BakSegment... + BakEOS + BakFooter
 type bakFormat struct {
 	pos    uint64
 	footer *bakFooter
@@ -148,7 +148,7 @@ func (f *bakFormat) writeEOS(w io.Writer) error {
 	return nil
 }
 
-func (f *bakFormat) readFooter(r io.ReadSeeker) (*bakFooter, error) {
+func (f *bakFormat) readFooter(r io.ReadSeeker) (*bakFooter, error) { // nolint:unused
 	footer := &bakFooter{}
 	if err := footer.Unmarshal(r); err != nil {
 		return nil, err
