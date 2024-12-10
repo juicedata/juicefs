@@ -30,6 +30,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
@@ -61,79 +62,17 @@ func (m *redisMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) 
 	return nil
 }
 
-func (m *redisMeta) load(ctx Context, typ int, opt *LoadOption, val proto.Message) error {
-	switch typ {
-	case segTypeFormat:
-		return m.loadFormat(ctx, val)
-	case segTypeCounter:
-		return m.loadCounters(ctx, val)
-	case segTypeNode:
-		return m.loadNodes(ctx, val)
-	case segTypeChunk:
-		return m.loadChunks(ctx, val)
-	case segTypeEdge:
-		return m.loadEdges(ctx, val)
-	case segTypeSymlink:
-		return m.loadSymlinks(ctx, val)
-	case segTypeSustained:
-		return m.loadSustained(ctx, val)
-	case segTypeDelFile:
-		return m.loadDelFiles(ctx, val)
-	case segTypeSliceRef:
-		return m.loadSliceRefs(ctx, val)
-	case segTypeAcl:
-		return m.loadAcl(ctx, val)
-	case segTypeXattr:
-		return m.loadXattrs(ctx, val)
-	case segTypeQuota:
-		return m.loadQuota(ctx, val)
-	case segTypeStat:
-		return m.loadDirStats(ctx, val)
-	case segTypeParent:
-		return m.loadParents(ctx, val)
-	default:
-		logger.Warnf("skip segment type %d", typ)
-		return nil
-	}
-}
-
-func execPipe(ctx context.Context, pipe redis.Pipeliner) error {
-	if pipe.Len() == 0 {
-		return nil
-	}
-	cmds, err := pipe.Exec(ctx)
-	if err != nil {
-		for i, cmd := range cmds {
-			if cmd.Err() != nil {
-				return fmt.Errorf("failed command %d %+v: %w", i, cmd, cmd.Err())
-			}
-		}
-	}
-	return err
-}
-
 func (m *redisMeta) dumpCounters(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
-	oKeys := make([]string, 0, len(counters))
-	keys := make([]string, 0, len(counters))
-	for _, key := range counters {
-		oKeys = append(oKeys, strings.ToLower(key))
-		keys = append(keys, m.counterKey(strings.ToLower(key)))
-	}
-	rs, err := m.rdb.MGet(ctx, keys...).Result()
-	if err != nil {
-		return err
-	}
-
-	counters := make([]*pb.Counter, 0, len(keys))
-	var cnt int64
-	for i, r := range rs {
-		if r != nil {
-			cnt, _ = strconv.ParseInt(r.(string), 10, 64)
-			if oKeys[i] == "nextInode" || oKeys[i] == "nextChunk" {
-				cnt++ // Redis nextInode/nextChunk is one smaller than db
-			}
-			counters = append(counters, &pb.Counter{Key: oKeys[i], Value: cnt})
+	counters := make([]*pb.Counter, 0, len(counterNames))
+	for _, name := range counterNames {
+		cnt, err := m.getCounter(name)
+		if err != nil {
+			return errors.Wrapf(err, "get counter %s", name)
 		}
+		if name == "nextInode" || name == "nextChunk" {
+			cnt++ // Redis nextInode/nextChunk is one smaller than db
+		}
+		counters = append(counters, &pb.Counter{Key: name, Value: cnt})
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Counters: counters}})
 }
@@ -312,6 +251,12 @@ func (m *redisMeta) dumpDelFiles(ctx Context, opt *DumpOption, ch chan<- *dumped
 		inode, _ := strconv.ParseUint(parts[0], 10, 64)
 		length, _ := strconv.ParseUint(parts[1], 10, 64)
 		delFiles = append(delFiles, &pb.DelFile{Inode: inode, Length: length, Expire: int64(z.Score)})
+		if len(delFiles) >= redisBatchSize {
+			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Delfiles: delFiles}}); err != nil {
+				return err
+			}
+			delFiles = delFiles[:0]
+		}
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Delfiles: delFiles}})
 }
@@ -336,6 +281,12 @@ func (m *redisMeta) dumpSliceRef(ctx Context, opt *DumpOption, ch chan<- *dumped
 					size, _ := strconv.ParseUint(ps[1], 10, 32)
 					sr := &pb.SliceRef{Id: id, Size: uint32(size), Refs: int64(val) + 1} // Redis sliceRef is one smaller than sql
 					sliceRefs = append(sliceRefs, sr)
+					if len(sliceRefs) >= redisBatchSize {
+						if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{SliceRefs: sliceRefs}}); err != nil {
+							return err
+						}
+						sliceRefs = sliceRefs[:0]
+					}
 				}
 			}
 		}
@@ -486,6 +437,12 @@ func (m *redisMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedR
 	ss := make([]*pb.Stat, 0, len(stats))
 	for _, s := range stats {
 		ss = append(ss, s)
+		if len(ss) >= redisBatchSize {
+			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Dirstats: ss}}); err != nil {
+				return err
+			}
+			ss = ss[:0]
+		}
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Dirstats: ss}})
 }
@@ -550,6 +507,7 @@ func (m *redisMeta) dumpChunks(ctx context.Context, ch chan<- *dumpedResult, key
 	for _, key := range keys {
 		ps := strings.Split(key, "_")
 		if len(ps) != 2 {
+			logger.Warnf("invalid chunk key: %s", key)
 			continue
 		}
 		ino, _ := strconv.ParseUint(ps[0][len(m.prefix)+1:], 10, 64)
@@ -637,13 +595,18 @@ func (m *redisMeta) dumpXattrs(ctx context.Context, ch chan<- *dumpedResult, key
 			return err
 		}
 
-		if len(res) > 0 {
-			for k, v := range res {
-				xattr = pools[0].Get().(*pb.Xattr)
-				xattr.Inode = inode
-				xattr.Name = k
-				xattr.Value = []byte(v)
-				xattrs = append(xattrs, xattr)
+		for k, v := range res {
+			xattr = pools[0].Get().(*pb.Xattr)
+			xattr.Inode = inode
+			xattr.Name = k
+			xattr.Value = []byte(v)
+			xattrs = append(xattrs, xattr)
+			if len(xattrs) >= redisBatchSize {
+				if err := dumpResult(ctx, ch, &dumpedResult{&pb.Batch{Xattrs: xattrs}, rel}); err != nil {
+					return err
+				}
+				sum.Add(uint64(len(xattrs)))
+				xattrs = xattrs[:0]
 			}
 		}
 	}
@@ -670,21 +633,70 @@ func (m *redisMeta) dumpParents(ctx context.Context, ch chan<- *dumpedResult, ke
 			return err
 		}
 
-		if len(res) > 0 {
-			for k, v := range res {
-				pp = pools[0].Get().(*pb.Parent)
-				parent, _ := strconv.ParseUint(k, 10, 64)
-				cnt, _ := strconv.ParseInt(v, 10, 64)
+		for k, v := range res {
+			pp = pools[0].Get().(*pb.Parent)
+			parent, _ := strconv.ParseUint(k, 10, 64)
+			cnt, _ := strconv.ParseInt(v, 10, 64)
 
-				pp.Inode = inode
-				pp.Parent = parent
-				pp.Cnt = cnt
-				parents = append(parents, pp)
-			}
+			pp.Inode = inode
+			pp.Parent = parent
+			pp.Cnt = cnt
+			parents = append(parents, pp)
 		}
 	}
 	sum.Add(uint64(len(parents)))
 	return dumpResult(ctx, ch, &dumpedResult{&pb.Batch{Parents: parents}, rel})
+}
+
+func (m *redisMeta) load(ctx Context, typ int, opt *LoadOption, val proto.Message) error {
+	switch typ {
+	case segTypeFormat:
+		return m.loadFormat(ctx, val)
+	case segTypeCounter:
+		return m.loadCounters(ctx, val)
+	case segTypeNode:
+		return m.loadNodes(ctx, val)
+	case segTypeChunk:
+		return m.loadChunks(ctx, val)
+	case segTypeEdge:
+		return m.loadEdges(ctx, val)
+	case segTypeSymlink:
+		return m.loadSymlinks(ctx, val)
+	case segTypeSustained:
+		return m.loadSustained(ctx, val)
+	case segTypeDelFile:
+		return m.loadDelFiles(ctx, val)
+	case segTypeSliceRef:
+		return m.loadSliceRefs(ctx, val)
+	case segTypeAcl:
+		return m.loadAcl(ctx, val)
+	case segTypeXattr:
+		return m.loadXattrs(ctx, val)
+	case segTypeQuota:
+		return m.loadQuota(ctx, val)
+	case segTypeStat:
+		return m.loadDirStats(ctx, val)
+	case segTypeParent:
+		return m.loadParents(ctx, val)
+	default:
+		logger.Warnf("skip segment type %d", typ)
+		return nil
+	}
+}
+
+func execPipe(ctx context.Context, pipe redis.Pipeliner) error {
+	if pipe.Len() == 0 {
+		return nil
+	}
+	cmds, err := pipe.Exec(ctx)
+	if err != nil {
+		for i, cmd := range cmds {
+			if cmd.Err() != nil {
+				return fmt.Errorf("failed command %d %+v: %w", i, cmd, cmd.Err())
+			}
+		}
+	}
+	return err
 }
 
 func (m *redisMeta) loadFormat(ctx Context, msg proto.Message) error {

@@ -387,7 +387,7 @@ func (m *redisMeta) doNewSession(sinfo []byte, update bool) error {
 }
 
 func (m *redisMeta) getCounter(name string) (int64, error) {
-	v, err := m.rdb.Get(Background, m.prefix+name).Int64()
+	v, err := m.rdb.Get(Background, m.counterKey(name)).Int64()
 	if err == redis.Nil {
 		err = nil
 	}
@@ -398,15 +398,14 @@ func (m *redisMeta) incrCounter(name string, value int64) (int64, error) {
 	if m.conf.ReadOnly {
 		return 0, syscall.EROFS
 	}
+	key := m.counterKey(name)
 	if name == "nextInode" || name == "nextChunk" {
 		// for nextinode, nextchunk
 		// the current one is already used
-		v, err := m.rdb.IncrBy(Background, m.prefix+strings.ToLower(name), value).Result()
+		v, err := m.rdb.IncrBy(Background, key, value).Result()
 		return v + 1, err
-	} else if name == "nextSession" {
-		name = "nextsession"
 	}
-	return m.rdb.IncrBy(Background, m.prefix+name, value).Result()
+	return m.rdb.IncrBy(Background, key, value).Result()
 }
 
 func (m *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
@@ -609,6 +608,9 @@ func (m *redisMeta) nextTrashKey() string {
 }
 
 func (m *redisMeta) counterKey(name string) string {
+	if name == "nextInode" || name == "nextChunk" || name == "nextSession" {
+		name = strings.ToLower(name)
+	}
 	return m.prefix + name
 }
 
