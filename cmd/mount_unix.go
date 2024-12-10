@@ -739,9 +739,9 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 			go func() {
 				if err := doUmount(mp, true); err != nil {
 					logger.Warnf("Umount failed: %s", err)
+					time.Sleep(time.Second * 30)
+					os.Exit(meta.UmountCode) // Just in case the above watchdog thread hangs
 				}
-				time.Sleep(time.Second * 30)
-				os.Exit(meta.UmountCode) // Just in case the above watchdog thread hangs
 			}()
 		}
 	}()
