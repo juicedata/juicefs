@@ -480,7 +480,7 @@ func (m *dbMeta) load(ctx Context, typ int, opt *LoadOption, val proto.Message) 
 		return m.loadQuota(ctx, val)
 	case segTypeStat:
 		return m.loadDirStats(ctx, val)
-	case segTypeParent, segTypeMix:
+	case segTypeParent:
 		return nil // skip
 	default:
 		logger.Warnf("skip segment type %d", typ)

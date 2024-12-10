@@ -52,7 +52,6 @@ const (
 	segTypeStat
 	segTypeQuota
 	segTypeParent // for redis/tkv only
-	segTypeMix    // for redis/tkv only
 	segTypeMax
 )
 

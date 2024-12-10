@@ -16,7 +16,12 @@
 
 package meta
 
-import "google.golang.org/protobuf/proto"
+import (
+	"fmt"
+	"sync/atomic"
+
+	"google.golang.org/protobuf/proto"
+)
 
 func (m *kvMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	return nil
@@ -28,4 +33,12 @@ func (m *kvMeta) load(ctx Context, typ int, opt *LoadOption, val proto.Message) 
 
 func (m *kvMeta) prepareLoad(ctx Context, opt *LoadOption) error {
 	return nil
+}
+
+func printSums(sums map[int]*atomic.Uint64) string {
+	var p string
+	for typ, sum := range sums {
+		p += fmt.Sprintf("%s num: %d\n", getMessageNameFromType(typ), sum.Load())
+	}
+	return p
 }
