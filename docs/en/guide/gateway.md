@@ -578,7 +578,7 @@ USAGE:
 
 COMMANDS:
   add      Add users to a new or existing group
-  remove   Remove group or members from a group
+  remove   Remove a group or its members
   info     Display group info
   list     Display a list of groups
   enable   Enable a group
