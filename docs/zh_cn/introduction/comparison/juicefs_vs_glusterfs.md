@@ -127,7 +127,7 @@ JuiceFS 不直接支持，需要挂载后[通过 Samba 导出](../../deployment/
 
 GlusterFS 通过 [`gluster-swift`](https://github.com/gluster/gluster-swift) 项目支持，但其最近更新停留在 2017 年 11 月。
 
-JuiceFS 通过 [S3 网关](../../deployment/s3_gateway.md)支持。
+JuiceFS 通过 [S3 网关](../../guide/gateway.md)支持。
 
 ### HDFS 兼容性 {#hdfs-compatibility}
 
