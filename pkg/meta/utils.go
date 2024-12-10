@@ -40,6 +40,8 @@ const (
 	legacySessions = "sessions"
 )
 
+var counterNames = []string{usedSpace, totalInodes, "nextInode", "nextChunk", "nextSession", "nextTrash"}
+
 const (
 	// fallocate
 	fallocKeepSize  = 0x01

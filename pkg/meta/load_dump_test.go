@@ -403,7 +403,7 @@ func TestLoadDumpV2(t *testing.T) {
 	engines := map[string][]string{
 		"sqlite3": {"sqlite3://dev.db", "sqlite3://dev2.db"},
 		// "mysql": {"mysql://root:@/dev", "mysql://root:@/dev2"},
-		// "redis": {"redis://127.0.0.1:6379/2", "redis://127.0.0.1:6379/3"},
+		"redis": {"redis://127.0.0.1:6379/2", "redis://127.0.0.1:6379/3"},
 		// "tikv":  {"tikv://127.0.0.1:2379/jfs-load-dump-1", "tikv://127.0.0.1:2379/jfs-load-dump-2"},
 	}
 
@@ -547,7 +547,7 @@ func BenchmarkLoadDumpV2(b *testing.B) {
 			defer fp.Close()
 
 			b.ResetTimer()
-			if err = m.DumpMetaV2(Background, fp, &DumpOption{CoNum: 10}); err != nil {
+			if err = m.DumpMetaV2(Background, fp, &DumpOption{Threads: 10}); err != nil {
 				b.Fatalf("dump meta: %s", err)
 			}
 			fp.Sync()
@@ -565,7 +565,7 @@ func BenchmarkLoadDumpV2(b *testing.B) {
 			defer fp.Close()
 
 			b.ResetTimer()
-			if err = m.LoadMetaV2(Background, fp, &LoadOption{CoNum: 10}); err != nil {
+			if err = m.LoadMetaV2(Background, fp, &LoadOption{Threads: 10}); err != nil {
 				b.Fatalf("load meta: %s", err)
 			}
 		})
