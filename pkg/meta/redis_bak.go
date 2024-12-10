@@ -718,30 +718,16 @@ func (m *redisMeta) loadCounters(ctx Context, msg proto.Message) error {
 
 func (m *redisMeta) loadNodes(ctx Context, msg proto.Message) error {
 	batch := msg.(*pb.Batch)
-	nodes := make(map[string]interface{}, redisBatchSize)
-
-	mset := func(nodes map[string]interface{}) error {
-		if len(nodes) == 0 {
-			return nil
-		}
-		if err := m.rdb.MSet(ctx, nodes).Err(); err != nil {
-			return err
-		}
-		for k := range nodes {
-			delete(nodes, k)
-		}
-		return nil
-	}
-
+	pipe := m.rdb.Pipeline()
 	for _, pn := range batch.Nodes {
-		nodes[m.inodeKey(Ino(pn.Inode))] = pn.Data
-		if len(nodes) >= redisBatchSize {
-			if err := mset(nodes); err != nil {
+		pipe.Set(ctx, m.inodeKey(Ino(pn.Inode)), pn.Data, 0)
+		if pipe.Len() >= redisPipeLimit {
+			if err := execPipe(ctx, pipe); err != nil {
 				return err
 			}
 		}
 	}
-	return mset(nodes)
+	return execPipe(ctx, pipe)
 }
 
 func (m *redisMeta) loadEdges(ctx Context, msg proto.Message) error {

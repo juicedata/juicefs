@@ -40,7 +40,6 @@ const (
 	legacySessions = "sessions"
 )
 
-// counterNames key should be lowercase for redis/tkv
 var counterNames = []string{usedSpace, totalInodes, "nextInode", "nextChunk", "nextSession", "nextTrash"}
 
 const (
