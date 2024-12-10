@@ -736,7 +736,13 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 				logger.Errorf("exit after receiving signal %s, but umount does not finish in 30 seconds, force exit", sig)
 				os.Exit(meta.UmountCode)
 			}()
-			go func() { _ = doUmount(mp, true) }()
+			go func() {
+				if err := doUmount(mp, true); err != nil {
+					logger.Warnf("Umount failed: %s", err)
+				}
+				time.Sleep(time.Second * 30)
+				os.Exit(meta.UmountCode) // Just in case the above watchdog thread hangs
+			}()
 		}
 	}()
 }
