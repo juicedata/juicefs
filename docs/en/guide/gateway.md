@@ -294,14 +294,14 @@ USAGE:
   mc admin user COMMAND [COMMAND FLAGS | -h] [ARGUMENTS...]
 
 COMMANDS:
-  add      Add a new user
-  disable  Disable a user
-  enable   Enable a user
-  remove   Remove a user
-  list     List all users
-  info     Display info of a user
-  policy   Export user policies in JSON format
-  svcacct  Manage service accounts
+  add      add a new user
+  disable  disable user
+  enable   enable user
+  remove   remove user
+  list     list all users
+  info     display info of a user
+  policy   export user policies in JSON format
+  svcacct  manage service accounts
 ```
 
 An example of adding a user:
@@ -336,11 +336,11 @@ USAGE:
   mc admin user svcacct COMMAND [COMMAND FLAGS | -h] [ARGUMENTS...]
 
 COMMANDS:
-  add      Add a new service account
+  add      add a new service account
   ls       List services accounts
   rm       Remove a service account
   info     Get a service account info
-  set      Edit an existing service account
+  set      edit an existing service account
   enable   Enable a service account
   disable  Disable a services account
 ```
@@ -495,13 +495,13 @@ USAGE:
   mc admin policy COMMAND [COMMAND FLAGS | -h] [ARGUMENTS...]
 
 COMMANDS:
-  add     Add a new policy
-  remove  Remove a policy
-  list    List all policies
-  info    Show info on a policy
-  set     Set IAM policy on a user or group
-  unset   Unset an IAM policy for a user or group
-  update  Attach a new IAM policy to a user or group
+  add     add new policy
+  remove  remove policy
+  list    list all policies
+  info    show info on a policy
+  set     set IAM policy on a user or group
+  unset   unset an IAM policy for a user or group
+  update  Attach new IAM policy to a user or group
 ```
 
 The gateway includes the following common policies:
@@ -577,12 +577,12 @@ USAGE:
   mc admin group COMMAND [COMMAND FLAGS | -h] [ARGUMENTS...]
 
 COMMANDS:
-  add      Add users to a new or existing group
-  remove   Remove a group or its members
-  info     Display group info
-  list     Display a list of groups
-  enable   Enable a group
-  disable  Disable a group
+  add      add users to a new or existing group
+  remove   remove group or members from a group
+  info     display group info
+  list     display list of groups
+  enable   enable a group
+  disable  disable a group
 ```
 
 #### Anonymous access management
@@ -607,19 +607,19 @@ FILE:
   A valid S3 policy JSON filepath.
 
 EXAMPLES:
-  1. Set a bucket to "download" on Amazon S3 cloud storage.
+  1. Set bucket to "download" on Amazon S3 cloud storage.
      $ mc policy set download s3/burningman2011
 
-  2. Set a bucket to "public" on Amazon S3 cloud storage.
+  2. Set bucket to "public" on Amazon S3 cloud storage.
      $ mc policy set public s3/shared
 
-  3. Set a bucket to "upload" on Amazon S3 cloud storage.
+  3. Set bucket to "upload" on Amazon S3 cloud storage.
      $ mc policy set upload s3/incoming
 
-  4. Apply a "public" policy to a specific bucket prefix on Amazon S3 cloud storage.
+  4. Set policy to "public" for bucket with prefix on Amazon S3 cloud storage.
      $ mc policy set public s3/public-commons/images
 
-  5. Assign a custom policy to a bucket on Amazon S3 cloud storage using a JSON file.
+  5. Set a custom prefix based bucket policy on Amazon S3 cloud storage using a JSON file.
      $ mc policy set-json /path/to/policy.json s3/public-commons/images
 
   6. Get bucket permissions.
@@ -699,10 +699,10 @@ To reduce dependencies, JuiceFS S3 Gateway has cut support for certain event des
 
 ```Shell
 $ mc admin config get myjfs | grep notify
-notify_webhook        Publish bucket notifications to webhook endpoints
-notify_mysql          Publish bucket notifications to MySQL databases
-notify_postgres       Publish bucket notifications to Postgres databases
-notify_redis          Publish bucket notifications to Redis datastores
+notify_webhook        publish bucket notifications to webhook endpoints
+notify_mysql          publish bucket notifications to MySQL databases
+notify_postgres       publish bucket notifications to Postgres databases
+notify_redis          publish bucket notifications to Redis datastores
 ```
 
 :::note
