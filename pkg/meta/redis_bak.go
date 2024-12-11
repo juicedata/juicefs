@@ -241,8 +241,8 @@ func (m *redisMeta) dumpDelFiles(ctx Context, opt *DumpOption, ch chan<- *dumped
 		return err
 	}
 
-	delFiles := make([]*pb.DelFile, 0, len(zs))
-	for _, z := range zs {
+	delFiles := make([]*pb.DelFile, 0, utils.Min(len(zs), redisBatchSize))
+	for i, z := range zs {
 		parts := strings.Split(z.Member.(string), ":")
 		if len(parts) != 2 {
 			logger.Warnf("invalid delfile string: %s", z.Member.(string))
@@ -255,7 +255,7 @@ func (m *redisMeta) dumpDelFiles(ctx Context, opt *DumpOption, ch chan<- *dumped
 			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Delfiles: delFiles}}); err != nil {
 				return err
 			}
-			delFiles = delFiles[:0]
+			delFiles = make([]*pb.DelFile, 0, utils.Min(len(zs)-i-1, redisBatchSize))
 		}
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Delfiles: delFiles}})
@@ -285,7 +285,7 @@ func (m *redisMeta) dumpSliceRef(ctx Context, opt *DumpOption, ch chan<- *dumped
 						if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{SliceRefs: sliceRefs}}); err != nil {
 							return err
 						}
-						sliceRefs = sliceRefs[:0]
+						sliceRefs = make([]*pb.SliceRef, 0, 1024)
 					}
 				}
 			}
@@ -434,14 +434,16 @@ func (m *redisMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedR
 		}
 	}
 
-	ss := make([]*pb.Stat, 0, len(stats))
+	ss := make([]*pb.Stat, 0, utils.Min(len(stats), redisBatchSize))
+	cnt := 0
 	for _, s := range stats {
+		cnt++
 		ss = append(ss, s)
 		if len(ss) >= redisBatchSize {
 			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Dirstats: ss}}); err != nil {
 				return err
 			}
-			ss = ss[:0]
+			ss = make([]*pb.Stat, 0, utils.Min(len(stats)-cnt, redisBatchSize))
 		}
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Dirstats: ss}})
@@ -601,13 +603,6 @@ func (m *redisMeta) dumpXattrs(ctx context.Context, ch chan<- *dumpedResult, key
 			xattr.Name = k
 			xattr.Value = []byte(v)
 			xattrs = append(xattrs, xattr)
-			if len(xattrs) >= redisBatchSize {
-				if err := dumpResult(ctx, ch, &dumpedResult{&pb.Batch{Xattrs: xattrs}, rel}); err != nil {
-					return err
-				}
-				sum.Add(uint64(len(xattrs)))
-				xattrs = xattrs[:0]
-			}
 		}
 	}
 	sum.Add(uint64(len(xattrs)))
