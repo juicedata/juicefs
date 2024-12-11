@@ -98,7 +98,6 @@ func (m *dbMeta) dumpNodes(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 
 	var rows []node
 	if err := m.roTxn(ctx, func(s *xorm.Session) error {
-		rows = rows[:0]
 		return s.Where("inode >= ?", TrashInode).Find(&rows)
 	}); err != nil {
 		return err
@@ -132,7 +131,6 @@ func (m *dbMeta) dumpNodes(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 	return sqlQueryBatch(ctx, opt, maxInode, func(ctx context.Context, start, end uint64) (int, error) {
 		var rows []node
 		if err := m.roTxn(ctx, func(s *xorm.Session) error {
-			rows = rows[:0]
 			return s.Where("inode >= ? AND inode < ?", start, end).Find(&rows)
 		}); err != nil {
 			return 0, err
@@ -174,7 +172,6 @@ func (m *dbMeta) dumpChunks(ctx Context, opt *DumpOption, ch chan<- *dumpedResul
 	return sqlQueryBatch(ctx, opt, maxId, func(ctx context.Context, start, end uint64) (int, error) {
 		var rows []chunk
 		if err := m.roTxn(ctx, func(s *xorm.Session) error {
-			rows = rows[:0]
 			return s.Where("id >= ? AND id < ?", start, end).Find(&rows)
 		}); err != nil {
 			return 0, err
@@ -217,7 +214,6 @@ func (m *dbMeta) dumpEdges(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 	err = sqlQueryBatch(ctx, opt, maxId, func(ctx context.Context, start, end uint64) (int, error) {
 		var rows []edge
 		if err := m.roTxn(ctx, func(s *xorm.Session) error {
-			rows = rows[:0]
 			return s.Where("id >= ? AND id < ?", start, end).Find(&rows)
 		}); err != nil {
 			return 0, err
@@ -267,7 +263,6 @@ func (m *dbMeta) dumpEdges(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 func (m *dbMeta) dumpSymlinks(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []symlink
 	if err := m.roTxn(ctx, func(s *xorm.Session) error {
-		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -289,7 +284,6 @@ func (m *dbMeta) dumpSymlinks(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 func (m *dbMeta) dumpCounters(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []counter
 	if err := m.roTxn(ctx, func(s *xorm.Session) error {
-		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -304,7 +298,6 @@ func (m *dbMeta) dumpCounters(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 func (m *dbMeta) dumpSustained(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []sustained
 	if err := m.roTxn(ctx, func(s *xorm.Session) error {
-		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -323,7 +316,6 @@ func (m *dbMeta) dumpSustained(ctx Context, opt *DumpOption, ch chan<- *dumpedRe
 func (m *dbMeta) dumpDelFiles(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []delfile
 	if err := m.roTxn(ctx, func(s *xorm.Session) error {
-		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -344,7 +336,6 @@ func (m *dbMeta) dumpDelFiles(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 func (m *dbMeta) dumpSliceRef(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []sliceRef
 	if err := m.roTxn(ctx, func(s *xorm.Session) error {
-		rows = rows[:0]
 		return s.Where("refs != 1").Find(&rows) // skip default refs
 	}); err != nil {
 		return err
@@ -365,7 +356,6 @@ func (m *dbMeta) dumpSliceRef(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 func (m *dbMeta) dumpACL(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []acl
 	if err := m.roTxn(ctx, func(s *xorm.Session) error {
-		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -383,7 +373,6 @@ func (m *dbMeta) dumpACL(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) 
 func (m *dbMeta) dumpXattr(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []xattr
 	if err := m.roTxn(ctx, func(s *xorm.Session) error {
-		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -408,7 +397,6 @@ func (m *dbMeta) dumpXattr(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []dirQuota
 	if err := m.roTxn(ctx, func(s *xorm.Session) error {
-		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -429,7 +417,6 @@ func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 func (m *dbMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []dirStats
 	if err := m.roTxn(ctx, func(s *xorm.Session) error {
-		rows = rows[:0]
 		return s.Find(&rows)
 	}); err != nil {
 		return err
