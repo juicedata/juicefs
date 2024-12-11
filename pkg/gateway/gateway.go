@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -1172,6 +1173,7 @@ func (n *jfsObjects) cleanup() {
 			if errno != 0 {
 				continue
 			}
+			deleted := 0
 			entries, _ := f.ReaddirPlus(mctx, 0)
 			for _, entry := range entries {
 				if _, err := uuid.Parse(string(entry.Name)); err != nil {
@@ -1183,11 +1185,42 @@ func (n *jfsObjects) cleanup() {
 						logger.Errorf("failed to delete expired temporary files path: %s,", p)
 					} else {
 						logger.Infof("delete expired temporary files path: %s, mtime: %s", p, time.Unix(entry.Attr.Mtime, 0).Format(time.RFC3339))
+						deleted += 1
+					}
+				}
+			}
+			f.Close(mctx)
+			if deleted == len(entries) { // try to clean up to .sys if all files are deleted
+				dir = strings.TrimRight(dir, "/")
+				for {
+					if errno := n.rmEmptyDir(mctx, dir); errno != 0 {
+						break
+					}
+					dir = filepath.Dir(dir)
+					if !strings.HasPrefix(dir, metaBucket) {
+						break
 					}
 				}
 			}
 		}
 	}
+}
+
+func (n *jfsObjects) rmEmptyDir(ctx meta.Context, dir string) syscall.Errno {
+	f, errno := n.fs.Open(ctx, dir, 0)
+	if errno != 0 { // reopen to avoid reading from dir cache
+		logger.Warnf("Failed to open %s: %v", dir, errno)
+		return errno
+	}
+	defer f.Close(ctx)
+	if entries, errno := f.ReaddirPlus(ctx, 0); errno == 0 && len(entries) == 0 {
+		if errno = n.fs.Delete(ctx, dir); errno != 0 {
+			logger.Warnf("Failed to delete empty %s: %v", dir, errno)
+			return errno
+		}
+		return 0
+	}
+	return syscall.ENOTEMPTY
 }
 
 type jfsFLock struct {
