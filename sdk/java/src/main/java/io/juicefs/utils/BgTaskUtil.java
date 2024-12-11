@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -28,88 +29,113 @@ import java.util.concurrent.TimeUnit;
 public class BgTaskUtil {
   private static final Logger LOG = LoggerFactory.getLogger(BgTaskUtil.class);
 
-  private static BgTaskUtil staticFieldForGc = new BgTaskUtil();
+  private static final Map<String, ScheduledExecutorService> bgThreadForName = new ConcurrentHashMap<>(); // volName -> threadpool
+  private static final Map<String, Object> tasks = new ConcurrentHashMap<>(); // volName|taskName -> running
+  private static final Map<String, Set<Long>> runningInstance = new ConcurrentHashMap<>();
 
-  private BgTaskUtil() {
+  public static Map<String, ScheduledExecutorService> getBgThreadForName() {
+    return bgThreadForName;
   }
 
-  private static final ScheduledExecutorService threadPool = Executors.newScheduledThreadPool(2, r -> {
-    Thread thread = new Thread(r, "Background Task");
-    thread.setDaemon(true);
-    return thread;
-  });
-  // use timer to run trash emptier because it will occupy a thread
-  private static final List<Timer> timers = new ArrayList<>();
-  private static final List<FileSystem> fileSystems = new ArrayList<>();
-  private static final Set<String> runningBgTask = new HashSet<>();
-
-  public interface Task {
-    void run() throws Exception;
+  public static Map<String, Set<Long>> getRunningInstance() {
+    return runningInstance;
   }
 
-  public static void startScheduleTask(String name, String type, Task task, long initialDelay, long period, TimeUnit unit) {
-    synchronized (runningBgTask) {
-      if (isRunning(name, type)) {
-        return;
+  public static void register(String volName, long handle) {
+    if (handle <= 0) {
+      return;
+    }
+    LOG.debug("register instance for {}({})", volName, handle);
+    runningInstance.compute(volName, (k, v) -> {
+      if (v == null) {
+        LOG.debug("init resources for {}", volName);
+        Set<Long> handles = new HashSet<>();
+        handles.add(handle);
+        return handles;
       }
-      threadPool.scheduleAtFixedRate(() -> {
+      v.add(handle);
+      return v;
+    });
+  }
+
+  public static void unregister(String volName, long handle, Runnable cleanupTask) {
+    if (handle <= 0) {
+      return;
+    }
+    LOG.debug("unregister instance for {}({})", volName, handle);
+    runningInstance.computeIfPresent(volName, (k, handles) -> {
+      boolean removed = handles.remove(handle);
+      if (!removed) {
+        return handles;
+      }
+      if (handles.size() == 0) {
+        LOG.debug("clean resources for {}", volName);
+        ScheduledExecutorService pool = bgThreadForName.remove(volName);
+        if (pool != null) {
+          pool.shutdownNow();
+        }
+        stopTrashEmptier(volName);
+        tasks.entrySet().removeIf(e -> e.getKey().startsWith(volName + "|"));
+        cleanupTask.run();
+        return null;
+      }
+      return handles;
+    });
+  }
+
+
+  public static void putTask(String volName, String taskName, Runnable task, long delay, long period, TimeUnit unit) {
+    tasks.compute(volName + "|" + taskName, (k, v) -> {
+      if (v == null) {
+        LOG.debug("start task {}|{}", volName, taskName);
+        task.run();
+        // build background task thread for volume name
+        ScheduledExecutorService pool = bgThreadForName.computeIfAbsent(volName,
+            n -> Executors.newScheduledThreadPool(1, r -> {
+              Thread thread = new Thread(r, "JuiceFS Background Task");
+              thread.setDaemon(true);
+              return thread;
+            })
+        );
+        pool.scheduleAtFixedRate(task, delay, period, unit);
+        return new Object();
+      }
+      return v;
+    });
+
+  }
+
+  static class TrashEmptyTask {
+    FileSystem fs;
+    ScheduledExecutorService thread;
+
+    public TrashEmptyTask(FileSystem fs, ScheduledExecutorService thread) {
+      this.fs = fs;
+      this.thread = thread;
+    }
+  }
+
+  public static void startTrashEmptier(String name, FileSystem fs, Runnable emptierTask, long delay, TimeUnit unit) {
+    tasks.computeIfAbsent(name + "|" + "Trash emptier", k -> {
+      LOG.debug("start trash emptier for {}", name);
+      ScheduledExecutorService thread = Executors.newScheduledThreadPool(1);
+      thread.schedule(emptierTask, delay, unit);
+      return new TrashEmptyTask(fs, thread);
+    });
+  }
+
+  private static void stopTrashEmptier(String name) {
+    tasks.computeIfPresent(name + "|" + "Trash emptier", (k, v) -> {
+      if (v instanceof TrashEmptyTask) {
+        LOG.debug("close trash emptier for {}", name);
+        ((TrashEmptyTask) v).thread.shutdownNow();
         try {
-          LOG.debug("Background task started for {} {}", name, type);
-          task.run();
-        } catch (Exception e) {
-          LOG.warn("Background task failed for {} {}", name, type, e);
-          synchronized (runningBgTask) {
-            runningBgTask.remove(genKey(name, type));
-          }
-          throw new RuntimeException(e);
+          ((TrashEmptyTask) v).fs.close();
+        } catch (IOException e) {
+          LOG.warn("close failed", e);
         }
-      }, initialDelay, period, unit);
-      runningBgTask.add(genKey(name, type));
-    }
-  }
-
-
-  public static void startTrashEmptier(String name, String type, FileSystem fs, Runnable emptierTask, long delay) {
-    synchronized (runningBgTask) {
-      if (isRunning(name, type)) {
-        return;
       }
-      Timer timer = new Timer("trash emptier", true);
-      timer.schedule(new TimerTask() {
-        @Override
-        public void run() {
-          emptierTask.run();
-        }
-      }, delay);
-      runningBgTask.add(genKey(name, type));
-      timers.add(timer);
-      fileSystems.add(fs);
-    }
-  }
-
-  public static boolean isRunning(String name, String type) {
-    synchronized (runningBgTask) {
-      return runningBgTask.contains(genKey(name, type));
-    }
-  }
-
-  private static String genKey(String name, String type) {
-    return name + "|" + type;
-  }
-
-  @Override
-  protected void finalize() {
-    threadPool.shutdownNow();
-    for (Timer timer : timers) {
-      timer.cancel();
-      timer.purge();
-    }
-    for (FileSystem fs : fileSystems) {
-      try {
-        fs.close();
-      } catch (IOException e) {
-        LOG.warn("close trash emptier fs failed", e);
-      }
-    }
+      return null;
+    });
   }
 }

@@ -43,8 +43,6 @@ public class JuiceFileSystem extends FilterFileSystem {
   private static boolean fileChecksumEnabled = false;
   private static boolean distcpPatched = false;
 
-  private FileSystem emptierFs;
-
   static {
     PatchUtil.patchBefore("org.apache.flink.runtime.fs.hdfs.HadoopRecoverableFsDataOutputStream",
             "waitUntilLeaseIsRevoked",
@@ -69,24 +67,19 @@ public class JuiceFileSystem extends FilterFileSystem {
     super.initialize(uri, conf);
     fileChecksumEnabled = Boolean.parseBoolean(getConf(conf, "file.checksum", "false"));
     if (!Boolean.parseBoolean(getConf(conf, "disable-trash-emptier", "false"))) {
-      startTrashEmptier(uri, conf);
-    }
-  }
-
-  private void startTrashEmptier(URI uri, final Configuration conf) throws IOException {
-    if (BgTaskUtil.isRunning(uri.getHost(), "Trash emptier")) {
-      return;
-    }
-    try {
-      UserGroupInformation superUser = UserGroupInformation.createRemoteUser(getConf(conf, "superuser", "hdfs"));
-      emptierFs = superUser.doAs((PrivilegedExceptionAction<FileSystem>) () -> {
-        JuiceFileSystemImpl fs = new JuiceFileSystemImpl();
-        fs.initialize(uri, conf);
-        return fs;
-      });
-      BgTaskUtil.startTrashEmptier(uri.getHost(), "Trash emptier", emptierFs, new Trash(emptierFs, conf).getEmptier(), TimeUnit.MINUTES.toMillis(10));
-    } catch (Exception e) {
-      throw new IOException("start trash failed!",e);
+      try {
+        Configuration newConf = new Configuration(conf);
+        newConf.setBoolean("juicefs.internal-bg-task", true);
+        UserGroupInformation superUser = UserGroupInformation.createRemoteUser(getConf(conf, "superuser", "hdfs"));
+        FileSystem emptierFs = superUser.doAs((PrivilegedExceptionAction<FileSystem>) () -> {
+          JuiceFileSystemImpl fs = new JuiceFileSystemImpl();
+          fs.initialize(uri, newConf);
+          return fs;
+        });
+        BgTaskUtil.startTrashEmptier(uri.getHost(), emptierFs, new Trash(emptierFs, conf).getEmptier(), 10, TimeUnit.MINUTES);
+      } catch (Exception e) {
+        LOG.warn("start trash emptier for {} failed", uri.getHost(), e);
+      }
     }
   }
 
