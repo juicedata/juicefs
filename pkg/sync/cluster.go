@@ -306,17 +306,20 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 				return
 			}
 			logger.Infof("launch a worker on %s", host)
+			var finished = make(chan struct{})
 			go func() {
 				r := bufio.NewReader(stderr)
 				for {
 					line, err := r.ReadString('\n')
 					if err != nil || len(line) == 0 {
+						finished <- struct{}{}
 						return
 					}
 					println(host, line[:len(line)-1])
 				}
 			}()
 			err = cmd.Wait()
+			<-finished
 			if err != nil {
 				logger.Errorf("%s: %s", host, err)
 			}
