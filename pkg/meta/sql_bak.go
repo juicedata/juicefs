@@ -254,7 +254,7 @@ func (m *dbMeta) dumpEdges(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Parents: parents}}); err != nil {
 				return err
 			}
-			parents = parents[:0]
+			parents = make([]*pb.Parent, 0, sqlDumpBatchSize)
 		}
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Parents: parents}})
@@ -269,13 +269,13 @@ func (m *dbMeta) dumpSymlinks(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 	}
 
 	symlinks := make([]*pb.Symlink, 0, min(len(rows), sqlDumpBatchSize))
-	for _, r := range rows {
+	for i, r := range rows {
 		symlinks = append(symlinks, &pb.Symlink{Inode: uint64(r.Inode), Target: r.Target})
 		if len(symlinks) >= sqlDumpBatchSize {
 			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Symlinks: symlinks}}); err != nil {
 				return err
 			}
-			symlinks = symlinks[:0]
+			symlinks = make([]*pb.Symlink, 0, min(len(rows)-i-1, sqlDumpBatchSize))
 		}
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Symlinks: symlinks}})
@@ -321,13 +321,13 @@ func (m *dbMeta) dumpDelFiles(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 		return err
 	}
 	delFiles := make([]*pb.DelFile, 0, min(sqlDumpBatchSize, len(rows)))
-	for _, row := range rows {
+	for i, row := range rows {
 		delFiles = append(delFiles, &pb.DelFile{Inode: uint64(row.Inode), Length: row.Length, Expire: row.Expire})
 		if len(delFiles) >= sqlDumpBatchSize {
 			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Delfiles: delFiles}}); err != nil {
 				return err
 			}
-			delFiles = delFiles[:0]
+			delFiles = make([]*pb.DelFile, 0, min(sqlDumpBatchSize, len(rows)-i-1))
 		}
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Delfiles: delFiles}})
@@ -341,13 +341,13 @@ func (m *dbMeta) dumpSliceRef(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 		return err
 	}
 	sliceRefs := make([]*pb.SliceRef, 0, min(sqlDumpBatchSize, len(rows)))
-	for _, sr := range rows {
+	for i, sr := range rows {
 		sliceRefs = append(sliceRefs, &pb.SliceRef{Id: sr.Id, Size: sr.Size, Refs: int64(sr.Refs)})
 		if len(sliceRefs) >= sqlDumpBatchSize {
 			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{SliceRefs: sliceRefs}}); err != nil {
 				return err
 			}
-			sliceRefs = sliceRefs[:0]
+			sliceRefs = make([]*pb.SliceRef, 0, min(sqlDumpBatchSize, len(rows)-i-1))
 		}
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{SliceRefs: sliceRefs}})
@@ -378,7 +378,7 @@ func (m *dbMeta) dumpXattr(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 		return err
 	}
 	xattrs := make([]*pb.Xattr, 0, min(sqlDumpBatchSize, len(rows)))
-	for _, x := range rows {
+	for i, x := range rows {
 		xattrs = append(xattrs, &pb.Xattr{
 			Inode: uint64(x.Inode),
 			Name:  x.Name,
@@ -388,7 +388,7 @@ func (m *dbMeta) dumpXattr(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Xattrs: xattrs}}); err != nil {
 				return err
 			}
-			xattrs = xattrs[:0]
+			xattrs = make([]*pb.Xattr, 0, min(sqlDumpBatchSize, len(rows)-i-1))
 		}
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Xattrs: xattrs}})
@@ -422,7 +422,7 @@ func (m *dbMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedResu
 		return err
 	}
 	dirStats := make([]*pb.Stat, 0, min(sqlDumpBatchSize, len(rows)))
-	for _, st := range rows {
+	for i, st := range rows {
 		dirStats = append(dirStats, &pb.Stat{
 			Inode:      uint64(st.Inode),
 			DataLength: st.DataLength,
@@ -433,7 +433,7 @@ func (m *dbMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedResu
 			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Dirstats: dirStats}}); err != nil {
 				return err
 			}
-			dirStats = dirStats[:0]
+			dirStats = make([]*pb.Stat, 0, min(sqlDumpBatchSize, len(rows)-i-1))
 		}
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Dirstats: dirStats}})
