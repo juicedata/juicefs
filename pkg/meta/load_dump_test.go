@@ -404,7 +404,7 @@ func TestLoadDumpV2(t *testing.T) {
 		"sqlite3": {"sqlite3://dev.db", "sqlite3://dev2.db"},
 		// "mysql": {"mysql://root:@/dev", "mysql://root:@/dev2"},
 		"redis": {"redis://127.0.0.1:6379/2", "redis://127.0.0.1:6379/3"},
-		// "tikv":  {"tikv://127.0.0.1:2379/jfs-load-dump-1", "tikv://127.0.0.1:2379/jfs-load-dump-2"},
+		"tikv":  {"tikv://127.0.0.1:2379/jfs-load-dump-1", "tikv://127.0.0.1:2379/jfs-load-dump-2"},
 	}
 
 	for name, addrs := range engines {
@@ -494,7 +494,7 @@ func BenchmarkLoadDumpV2(b *testing.B) {
 	engines := map[string]string{
 		"mysql": "mysql://root:@/dev",
 		"redis": "redis://127.0.0.1:6379/2",
-		"tikv":  "tikv://127.0.0.1:2379/jfs-load-dump-1",
+		"tikv": "tikv://127.0.0.1:2379/jfs-load-dump-1",
 	}
 
 	sample := "../../1M_files_in_one_dir.dump"
@@ -551,6 +551,22 @@ func BenchmarkLoadDumpV2(b *testing.B) {
 				b.Fatalf("dump meta: %s", err)
 			}
 			fp.Sync()
+
+			b.StopTimer()
+			bak := &bakFormat{}
+			fp2, err := os.Open(path)
+			if err != nil {
+				b.Fatalf("open file: %s", path)
+			}
+			defer fp2.Close()
+			footer, err := bak.readFooter(fp2)
+			if err != nil {
+				b.Fatalf("read footer: %s", err)
+			}
+			for name, info := range footer.msg.Infos {
+				b.Logf("segment: %s, num: %d", name, info.Num)
+			}
+			b.StartTimer()
 		})
 
 		b.Run("LoadV2 "+name, func(b *testing.B) {

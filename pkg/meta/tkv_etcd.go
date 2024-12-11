@@ -212,8 +212,11 @@ func (c *etcdClient) shouldRetry(err error) bool {
 	return errors.Is(err, conflicted)
 }
 
-func (c *etcdClient) txn(f func(*kvTxn) error, retry int) (err error) {
-	ctx := context.Background()
+func (c *etcdClient) config(key string) interface{} {
+	return nil
+}
+
+func (c *etcdClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
 	tx := &etcdTxn{
 		ctx,
 		c.kv,

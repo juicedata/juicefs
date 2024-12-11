@@ -2367,7 +2367,7 @@ func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
 			return err
 		})
 	case *kvMeta:
-		err = m.txn(func(tx *kvTxn) error {
+		err = m.txn(Background, func(tx *kvTxn) error {
 			tx.set(m.inodeKey(inode), m.marshal(attr))
 			return nil
 		})
@@ -2834,7 +2834,7 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
 		removedItem = append(removedItem, m.detachedKey(cloneDstIno))
-		m.txn(func(tx *kvTxn) error {
+		m.txn(Background, func(tx *kvTxn) error {
 			for _, key := range removedItem {
 				if buf := tx.get(key.([]byte)); buf != nil {
 					t.Fatalf("has keys not removed: %v", removedItem)
