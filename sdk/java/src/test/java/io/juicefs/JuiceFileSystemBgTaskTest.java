@@ -20,8 +20,8 @@ public class JuiceFileSystemBgTaskTest extends TestCase {
     conf.addResource(JuiceFileSystemTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
     conf.set(FS_TRASH_INTERVAL_KEY, "6");
     conf.set(FS_TRASH_CHECKPOINT_INTERVAL_KEY, "2");
-    conf.set("juicefs.users", "jfs://dev/etc/users");
-    conf.set("juicefs.groups", "jfs://dev/etc/groups");
+    conf.set("juicefs.users", "jfs://dev/users");
+    conf.set("juicefs.groups", "jfs://dev/groups");
     conf.set("juicefs.discover-nodes-url", "jfs://dev/etc/nodes");
     int threads = 100;
     int instances = 1000;
@@ -32,7 +32,7 @@ public class JuiceFileSystemBgTaskTest extends TestCase {
         try (JuiceFileSystem jfs = new JuiceFileSystem()) {
           jfs.initialize(URI.create("jfs://dev/"), conf);
           if (ThreadLocalRandom.current().nextInt(10)%2==0) {
-            jfs.getFileBlockLocations(jfs.getFileStatus(new Path("jfs://dev/etc/users")), 0, 1000);
+            jfs.getFileBlockLocations(jfs.getFileStatus(new Path("jfs://dev/users")), 0, 1000);
           }
         } catch (Exception e) {
           fail("unexpected exception");
