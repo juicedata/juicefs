@@ -529,6 +529,8 @@ func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool) f
 			opt.AllowOther = true
 		} else if strings.HasPrefix(n, "fsname=") {
 			opt.FsName = n[len("fsname="):]
+		} else if n == "writeback_cache" {
+			opt.EnableWriteback = true
 		} else if n == "debug" {
 			opt.Debug = true
 			log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
