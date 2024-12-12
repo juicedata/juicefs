@@ -29,9 +29,9 @@ import java.util.concurrent.TimeUnit;
 public class BgTaskUtil {
   private static final Logger LOG = LoggerFactory.getLogger(BgTaskUtil.class);
 
-  private static final Map<String, ScheduledExecutorService> bgThreadForName = new ConcurrentHashMap<>(); // volName -> threadpool
-  private static final Map<String, Object> tasks = new ConcurrentHashMap<>(); // volName|taskName -> running
-  private static final Map<String, Set<Long>> runningInstance = new ConcurrentHashMap<>();
+  private static final Map<String, ScheduledExecutorService> bgThreadForName = new HashMap<>(); // volName -> threadpool
+  private static final Map<String, Object> tasks = new HashMap<>(); // volName|taskName -> running
+  private static final Map<String, Set<Long>> runningInstance = new HashMap<>();
 
   public static Map<String, ScheduledExecutorService> getBgThreadForName() {
     return bgThreadForName;
@@ -45,29 +45,30 @@ public class BgTaskUtil {
     if (handle <= 0) {
       return;
     }
-    LOG.debug("register instance for {}({})", volName, handle);
-    runningInstance.compute(volName, (k, v) -> {
-      if (v == null) {
-        LOG.debug("init resources for {}", volName);
-        Set<Long> handles = new HashSet<>();
-        handles.add(handle);
-        return handles;
+    synchronized (runningInstance) {
+      LOG.debug("register instance for {}({})", volName, handle);
+      if (!runningInstance.containsKey(volName)) {
+        runningInstance.put(volName, new HashSet<>());
+      } else {
+        runningInstance.get(volName).add(handle);
       }
-      v.add(handle);
-      return v;
-    });
+    }
   }
 
   public static void unregister(String volName, long handle, Runnable cleanupTask) {
     if (handle <= 0) {
       return;
     }
-    LOG.debug("unregister instance for {}({})", volName, handle);
-    runningInstance.computeIfPresent(volName, (k, handles) -> {
+    synchronized (runningInstance) {
+      if (!runningInstance.containsKey(volName)) {
+        return;
+      }
+      Set<Long> handles = runningInstance.get(volName);
       boolean removed = handles.remove(handle);
       if (!removed) {
-        return handles;
+        return;
       }
+      LOG.debug("unregister instance for {}({})", volName, handle);
       if (handles.size() == 0) {
         LOG.debug("clean resources for {}", volName);
         ScheduledExecutorService pool = bgThreadForName.remove(volName);
@@ -77,17 +78,21 @@ public class BgTaskUtil {
         stopTrashEmptier(volName);
         tasks.entrySet().removeIf(e -> e.getKey().startsWith(volName + "|"));
         cleanupTask.run();
-        return null;
+        runningInstance.remove(volName);
       }
-      return handles;
-    });
+    }
+  }
+
+  public  interface Task {
+    void run() throws IOException;
   }
 
 
-  public static void putTask(String volName, String taskName, Runnable task, long delay, long period, TimeUnit unit) {
-    tasks.compute(volName + "|" + taskName, (k, v) -> {
-      if (v == null) {
-        LOG.debug("start task {}|{}", volName, taskName);
+  public static void putTask(String volName, String taskName, Task task, long delay, long period, TimeUnit unit) throws IOException {
+    synchronized (tasks) {
+      String key = volName + "|" + taskName;
+      if (!tasks.containsKey(key)) {
+        LOG.debug("start task {}", key);
         task.run();
         // build background task thread for volume name
         ScheduledExecutorService pool = bgThreadForName.computeIfAbsent(volName,
@@ -97,12 +102,16 @@ public class BgTaskUtil {
               return thread;
             })
         );
-        pool.scheduleAtFixedRate(task, delay, period, unit);
-        return new Object();
+        pool.scheduleAtFixedRate(()->{
+          try {
+            task.run();
+          } catch (IOException e) {
+            LOG.warn("run {} failed", key, e);
+          }
+        }, delay, period, unit);
+        tasks.put(key, new Object());
       }
-      return v;
-    });
-
+    }
   }
 
   static class TrashEmptyTask {
@@ -116,16 +125,21 @@ public class BgTaskUtil {
   }
 
   public static void startTrashEmptier(String name, FileSystem fs, Runnable emptierTask, long delay, TimeUnit unit) {
-    tasks.computeIfAbsent(name + "|" + "Trash emptier", k -> {
-      LOG.debug("start trash emptier for {}", name);
-      ScheduledExecutorService thread = Executors.newScheduledThreadPool(1);
-      thread.schedule(emptierTask, delay, unit);
-      return new TrashEmptyTask(fs, thread);
-    });
+    synchronized (tasks) {
+      String key = name + "|" + "Trash emptier";
+      if (!tasks.containsKey(key)) {
+        LOG.debug("start trash emptier for {}", name);
+        ScheduledExecutorService thread = Executors.newScheduledThreadPool(1);
+        thread.schedule(emptierTask, delay, unit);
+        tasks.put(key, new TrashEmptyTask(fs, thread));
+      }
+    }
   }
 
   private static void stopTrashEmptier(String name) {
-    tasks.computeIfPresent(name + "|" + "Trash emptier", (k, v) -> {
+    synchronized (tasks) {
+      String key = name + "|" + "Trash emptier";
+      Object v = tasks.remove(key);
       if (v instanceof TrashEmptyTask) {
         LOG.debug("close trash emptier for {}", name);
         ((TrashEmptyTask) v).thread.shutdownNow();
@@ -135,7 +149,6 @@ public class BgTaskUtil {
           LOG.warn("close failed", e);
         }
       }
-      return null;
-    });
+    }
   }
 }

@@ -668,6 +668,7 @@ public class JuiceFileSystemTest extends TestCase {
     writeFile(fs, groups1, "group1:3001:user1\n");
     writeFile(fs, users2, "user2:2001\n");
     writeFile(fs, groups2, "group2:3001:user2\n");
+    fs.close();
 
     Configuration conf = new Configuration(cfg);
     conf.set("juicefs.users", users1.toUri().getPath());
@@ -954,10 +955,12 @@ public class JuiceFileSystemTest extends TestCase {
 
     writeFile(fs, users, "tom:2001\n");
     writeFile(fs, groups, "groupa:3001:tom\ngroupb:3002:tom");
+    fs.close();
 
     Configuration conf = new Configuration(cfg);
     conf.set("juicefs.users", users.toUri().getPath());
     conf.set("juicefs.groups", groups.toUri().getPath());
+    conf.set("juicefs.debug", "true");
 
     FileSystem superFs = createNewFs(conf, "hdfs", new String[]{"hadoop"});
     Path testDir = new Path("/test_multi_group/d1");
