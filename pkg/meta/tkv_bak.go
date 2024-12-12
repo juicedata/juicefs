@@ -17,14 +17,18 @@
 package meta
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
+	"sort"
 	"sync"
 	"sync/atomic"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
@@ -61,45 +65,11 @@ func (m *kvMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) err
 }
 
 func (m *kvMeta) load(ctx Context, typ int, opt *LoadOption, val proto.Message) error {
-	switch typ {
-	case segTypeFormat:
-		return m.loadFormat(ctx, val)
-	case segTypeCounter:
-		return m.loadCounters(ctx, val)
-	case segTypeNode:
-		return m.loadNodes(ctx, val)
-	case segTypeChunk:
-		return m.loadChunks(ctx, val)
-	case segTypeEdge:
-		return m.loadEdges(ctx, val)
-	case segTypeSymlink:
-		return m.loadSymlinks(ctx, val)
-	case segTypeSustained:
-		return m.loadSustained(ctx, val)
-	case segTypeDelFile:
-		return m.loadDelFiles(ctx, val)
-	case segTypeSliceRef:
-		return m.loadSliceRefs(ctx, val)
-	case segTypeAcl:
-		return m.loadAcl(ctx, val)
-	case segTypeXattr:
-		return m.loadXattrs(ctx, val)
-	case segTypeQuota:
-		return m.loadQuota(ctx, val)
-	case segTypeStat:
-		return m.loadDirStats(ctx, val)
-	case segTypeParent:
-		return m.loadParents(ctx, val)
-	default:
-		logger.Warnf("skip segment type %d", typ)
-		return nil
-	}
+	return errors.New("not implemented, use kvMeta.LoadMetaV2 instead")
 }
 
 func (m *kvMeta) prepareLoad(ctx Context, opt *LoadOption) error {
 	opt.check()
-	opt.Threads = 1
-	logger.Infof("concurrent load is currently not supported , may cause lots of txn conflicts.")
 
 	var exist bool
 	err := m.txn(ctx, func(tx *kvTxn) error {
@@ -468,189 +438,267 @@ func (m *kvMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedResu
 	})
 }
 
-func (m *kvMeta) loadFormat(ctx Context, msg proto.Message) error {
-	return m.txn(ctx, func(tx *kvTxn) error {
-		tx.set(m.fmtKey("setting"), msg.(*pb.Format).Data)
+func (m *kvMeta) insertKVs(ctx context.Context, pairs []*pair, threads int) error {
+	if len(pairs) == 0 {
 		return nil
-	})
-}
-
-func (m *kvMeta) loadCounters(ctx Context, msg proto.Message) error {
-	return m.txn(ctx, func(tx *kvTxn) error {
-		for _, counter := range msg.(*pb.Batch).Counters {
-			tx.set(m.counterKey(counter.Key), packCounter(counter.Value))
-		}
-		return nil
-	})
-}
-
-func (m *kvMeta) insertKVs(ctx context.Context, keys [][]byte, values [][]byte) error {
-	maxSize, maxNum := 5<<20, 10240
-	if m.Name() == "etcd" {
-		maxNum = 128
 	}
-	n := len(keys)
+
+	sort.Slice(pairs, func(i, j int) bool {
+		return bytes.Compare(pairs[i].key, pairs[j].key) < 0
+	})
+
+	maxSize, maxNum := 5<<20, m.maxTxnBatchNum()
+	n := len(pairs)
 	last, num, size := 0, 0, 0
-	for i := 0; i < n; i++ {
+
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(threads)
+
+	for i, pair := range pairs {
 		num++
-		size += len(keys[i]) + len(values[i])
+		size += len(pair.key) + len(pair.value)
 		if num >= maxNum || size >= maxSize || i >= n-1 {
-			if err := m.txn(ctx, func(tx *kvTxn) error {
-				for j := last; j <= i; j++ {
-					tx.set(keys[j], values[j])
-				}
-				return nil
-			}); err != nil {
-				return err
-			}
+			ePairs := pairs[last : i+1]
 			num, size, last = 0, 0, i+1
+			eg.Go(func() error {
+				return m.txn(egCtx, func(tx *kvTxn) error {
+					for _, ep := range ePairs {
+						tx.set(ep.key, ep.value)
+					}
+					return nil
+				})
+			})
 		}
 	}
-	return nil
+	return eg.Wait()
 }
 
-func (m *kvMeta) loadNodes(ctx Context, msg proto.Message) error {
+func (m *kvMeta) loadFormat(ctx Context, msg proto.Message, pairs *[]*pair) {
+	*pairs = append(*pairs, &pair{m.fmtKey("setting"), msg.(*pb.Format).Data})
+}
+
+func (m *kvMeta) loadCounters(ctx Context, msg proto.Message, pairs *[]*pair) {
+	for _, counter := range msg.(*pb.Batch).Counters {
+		*pairs = append(*pairs, &pair{m.counterKey(counter.Key), packCounter(counter.Value)})
+	}
+}
+
+func (m *kvMeta) loadNodes(ctx Context, msg proto.Message, pairs *[]*pair) {
 	batch := msg.(*pb.Batch)
-	keys, vals := make([][]byte, 0, len(batch.Nodes)), make([][]byte, 0, len(batch.Nodes))
 	for _, pn := range batch.Nodes {
-		keys = append(keys, m.inodeKey(Ino(pn.Inode)))
-		vals = append(vals, pn.Data)
+		*pairs = append(*pairs, &pair{m.inodeKey(Ino(pn.Inode)), pn.Data})
 	}
-	return m.insertKVs(ctx, keys, vals)
 }
 
-func (m *kvMeta) loadChunks(ctx Context, msg proto.Message) error {
+func (m *kvMeta) loadChunks(ctx Context, msg proto.Message, pairs *[]*pair) {
 	batch := msg.(*pb.Batch)
-	keys, vals := make([][]byte, 0, len(batch.Chunks)), make([][]byte, 0, len(batch.Chunks))
 	for _, chk := range batch.Chunks {
-		keys = append(keys, m.chunkKey(Ino(chk.Inode), chk.Index))
-		vals = append(vals, chk.Slices)
+		*pairs = append(*pairs, &pair{m.chunkKey(Ino(chk.Inode), chk.Index), chk.Slices})
 	}
-	return m.insertKVs(ctx, keys, vals)
 }
 
-func (m *kvMeta) loadEdges(ctx Context, msg proto.Message) error {
+func (m *kvMeta) loadEdges(ctx Context, msg proto.Message, pairs *[]*pair) {
 	batch := msg.(*pb.Batch)
-	keys, vals := make([][]byte, 0, len(batch.Edges)), make([][]byte, 0, len(batch.Edges))
 	for _, edge := range batch.Edges {
 		buff := utils.NewBuffer(9)
 		buff.Put8(uint8(edge.Type))
 		buff.Put64(edge.Inode)
-		keys = append(keys, m.entryKey(Ino(edge.Parent), string(edge.Name)))
-		vals = append(vals, buff.Bytes())
+		*pairs = append(*pairs, &pair{m.entryKey(Ino(edge.Parent), string(edge.Name)), buff.Bytes()})
 	}
-	return m.insertKVs(ctx, keys, vals)
 }
 
-func (m *kvMeta) loadSymlinks(ctx Context, msg proto.Message) error {
+func (m *kvMeta) loadSymlinks(ctx Context, msg proto.Message, pairs *[]*pair) {
 	batch := msg.(*pb.Batch)
-	keys, vals := make([][]byte, 0, len(batch.Symlinks)), make([][]byte, 0, len(batch.Symlinks))
 	for _, symlink := range batch.Symlinks {
-		keys = append(keys, m.symKey(Ino(symlink.Inode)))
-		vals = append(vals, []byte(symlink.Target))
+		*pairs = append(*pairs, &pair{m.symKey(Ino(symlink.Inode)), []byte(symlink.Target)})
 	}
-	return m.insertKVs(ctx, keys, vals)
 }
 
-func (m *kvMeta) loadSustained(ctx Context, msg proto.Message) error {
+func (m *kvMeta) loadSustained(ctx Context, msg proto.Message, pairs *[]*pair) {
 	batch := msg.(*pb.Batch)
-	var keys, vals [][]byte
 	for _, sustained := range batch.Sustained {
 		for _, inode := range sustained.Inodes {
-			keys = append(keys, m.sustainedKey(sustained.Sid, Ino(inode)))
-			vals = append(vals, []byte{1})
+			*pairs = append(*pairs, &pair{m.sustainedKey(sustained.Sid, Ino(inode)), []byte{1}})
 		}
 	}
-	return m.insertKVs(ctx, keys, vals)
 }
 
-func (m *kvMeta) loadDelFiles(ctx Context, msg proto.Message) error {
+func (m *kvMeta) loadDelFiles(ctx Context, msg proto.Message, pairs *[]*pair) {
 	batch := msg.(*pb.Batch)
-	keys, vals := make([][]byte, 0, len(batch.Delfiles)), make([][]byte, 0, len(batch.Delfiles))
 	for _, f := range batch.Delfiles {
-		keys = append(keys, m.delfileKey(Ino(f.Inode), f.Length))
-		vals = append(vals, m.packInt64(f.Expire))
+		*pairs = append(*pairs, &pair{m.delfileKey(Ino(f.Inode), f.Length), m.packInt64(f.Expire)})
 	}
-	return m.insertKVs(ctx, keys, vals)
 }
 
-func (m *kvMeta) loadSliceRefs(ctx Context, msg proto.Message) error {
+func (m *kvMeta) loadSliceRefs(ctx Context, msg proto.Message, pairs *[]*pair) {
 	batch := msg.(*pb.Batch)
-	keys, vals := make([][]byte, 0, len(batch.SliceRefs)), make([][]byte, 0, len(batch.SliceRefs))
 	for _, r := range batch.SliceRefs {
-		keys = append(keys, m.sliceKey(r.Id, r.Size))
-		vals = append(vals, packCounter(r.Refs-1))
+		*pairs = append(*pairs, &pair{m.sliceKey(r.Id, r.Size), packCounter(r.Refs - 1)})
 	}
-	return m.insertKVs(ctx, keys, vals)
 }
 
-func (m *kvMeta) loadAcl(ctx Context, msg proto.Message) error {
+func (m *kvMeta) loadAcl(ctx Context, msg proto.Message, pairs *[]*pair) {
 	batch := msg.(*pb.Batch)
-	keys, vals := make([][]byte, 0, len(batch.Acls)), make([][]byte, 0, len(batch.Acls))
 	var maxId uint32 = 0
+	if val := ctx.Value("maxAclId"); val != nil {
+		maxId = val.(uint32)
+	}
 	for _, acl := range batch.Acls {
 		if acl.Id > maxId {
 			maxId = acl.Id
 		}
-		keys = append(keys, m.aclKey(acl.Id))
-		vals = append(vals, acl.Data)
+		*pairs = append(*pairs, &pair{m.aclKey(acl.Id), acl.Data})
 	}
+	ctx.WithValue("maxAclId", maxId)
 
-	if err := m.insertKVs(ctx, keys, vals); err != nil {
-		return err
-	}
-
+	/* TODO in outside block
 	return m.txn(ctx, func(tx *kvTxn) error {
 		tx.set(m.counterKey(aclCounter), packCounter(int64(maxId)))
 		return nil
 	})
+	*/
 }
 
-func (m *kvMeta) loadXattrs(ctx Context, msg proto.Message) error {
+func (m *kvMeta) loadXattrs(ctx Context, msg proto.Message, pairs *[]*pair) {
 	batch := msg.(*pb.Batch)
-	keys, vals := make([][]byte, 0, len(batch.Xattrs)), make([][]byte, 0, len(batch.Xattrs))
 	for _, xattr := range batch.Xattrs {
-		keys = append(keys, m.xattrKey(Ino(xattr.Inode), xattr.Name))
-		vals = append(vals, xattr.Value)
+		*pairs = append(*pairs, &pair{m.xattrKey(Ino(xattr.Inode), xattr.Name), xattr.Value})
 	}
-	return m.insertKVs(ctx, keys, vals)
 }
 
-func (m *kvMeta) loadQuota(ctx Context, msg proto.Message) error {
+func (m *kvMeta) loadQuota(ctx Context, msg proto.Message, pairs *[]*pair) {
 	batch := msg.(*pb.Batch)
-	keys, vals := make([][]byte, 0, len(batch.Quotas)), make([][]byte, 0, len(batch.Quotas))
 	for _, q := range batch.Quotas {
 		b := utils.NewBuffer(32)
 		b.Put64(uint64(q.MaxSpace))
 		b.Put64(uint64(q.MaxInodes))
 		b.Put64(uint64(q.UsedSpace))
 		b.Put64(uint64(q.UsedInodes))
-		keys = append(keys, m.dirQuotaKey(Ino(q.Inode)))
-		vals = append(vals, b.Bytes())
+		*pairs = append(*pairs, &pair{m.dirQuotaKey(Ino(q.Inode)), b.Bytes()})
 	}
-	return m.insertKVs(ctx, keys, vals)
 }
 
-func (m *kvMeta) loadDirStats(ctx Context, msg proto.Message) error {
+func (m *kvMeta) loadDirStats(ctx Context, msg proto.Message, pairs *[]*pair) {
 	batch := msg.(*pb.Batch)
-	keys, vals := make([][]byte, 0, len(batch.Dirstats)), make([][]byte, 0, len(batch.Dirstats))
 	for _, s := range batch.Dirstats {
 		b := utils.NewBuffer(24)
 		b.Put64(uint64(s.DataLength))
 		b.Put64(uint64(s.UsedSpace))
 		b.Put64(uint64(s.UsedInodes))
-		keys = append(keys, m.dirStatKey(Ino(s.Inode)))
-		vals = append(vals, b.Bytes())
+		*pairs = append(*pairs, &pair{m.dirStatKey(Ino(s.Inode)), b.Bytes()})
 	}
-	return m.insertKVs(ctx, keys, vals)
 }
 
-func (m *kvMeta) loadParents(ctx Context, msg proto.Message) error {
+func (m *kvMeta) loadParents(ctx Context, msg proto.Message, pairs *[]*pair) {
 	batch := msg.(*pb.Batch)
-	keys, vals := make([][]byte, 0, len(batch.Parents)), make([][]byte, 0, len(batch.Parents))
 	for _, parent := range batch.Parents {
-		keys = append(keys, m.parentKey(Ino(parent.Inode), Ino(parent.Parent)))
-		vals = append(vals, packCounter(parent.Cnt))
+		*pairs = append(*pairs, &pair{m.parentKey(Ino(parent.Inode), Ino(parent.Parent)), packCounter(parent.Cnt)})
 	}
-	return m.insertKVs(ctx, keys, vals)
+}
+
+func (m *kvMeta) maxTxnBatchNum() int {
+	if m.Name() == "etcd" {
+		return 128
+	}
+	return 10240
+}
+
+func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
+	if opt == nil {
+		opt = &LoadOption{}
+	}
+	if err := m.en.prepareLoad(ctx, opt); err != nil {
+		return err
+	}
+
+	type task struct {
+		typ int
+		msg proto.Message
+	}
+	taskCh := make(chan *task, 100)
+
+	var wg sync.WaitGroup
+	workerFunc := func(ctx Context, taskCh <-chan *task) {
+		defer wg.Done()
+		var task *task
+		maxNum := m.maxTxnBatchNum() * opt.Threads
+		pairs := make([]*pair, 0, maxNum)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case task = <-taskCh:
+			}
+			if task == nil {
+				if err := m.insertKVs(ctx, pairs, opt.Threads); err != nil {
+					logger.Errorf("insert kvs failed: %v", err)
+				}
+				break
+			}
+			switch task.typ {
+			case segTypeFormat:
+				m.loadFormat(ctx, task.msg, &pairs)
+			case segTypeCounter:
+				m.loadCounters(ctx, task.msg, &pairs)
+			case segTypeNode:
+				m.loadNodes(ctx, task.msg, &pairs)
+			case segTypeEdge:
+				m.loadEdges(ctx, task.msg, &pairs)
+			case segTypeChunk:
+				m.loadChunks(ctx, task.msg, &pairs)
+			case segTypeSymlink:
+				m.loadSymlinks(ctx, task.msg, &pairs)
+			case segTypeXattr:
+				m.loadXattrs(ctx, task.msg, &pairs)
+			case segTypeParent:
+				m.loadParents(ctx, task.msg, &pairs)
+			case segTypeSustained:
+				m.loadSustained(ctx, task.msg, &pairs)
+			case segTypeDelFile:
+				m.loadDelFiles(ctx, task.msg, &pairs)
+			case segTypeSliceRef:
+				m.loadSliceRefs(ctx, task.msg, &pairs)
+			case segTypeAcl:
+				m.loadAcl(ctx, task.msg, &pairs)
+			case segTypeQuota:
+				m.loadQuota(ctx, task.msg, &pairs)
+			case segTypeStat:
+				m.loadDirStats(ctx, task.msg, &pairs)
+			}
+			if len(pairs) >= maxNum {
+				if err := m.insertKVs(ctx, pairs, opt.Threads); err != nil {
+					logger.Errorf("insert kvs failed: %v", err)
+					ctx.Cancel()
+					return
+				}
+				pairs = make([]*pair, 0, maxNum)
+			}
+		}
+	}
+
+	wg.Add(1)
+	go workerFunc(ctx, taskCh)
+
+	bak := &bakFormat{}
+	for {
+		seg, err := bak.readSegment(r)
+		if err != nil {
+			if errors.Is(err, errBakEOF) {
+				close(taskCh)
+				break
+			}
+			ctx.Cancel()
+			wg.Wait()
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			wg.Wait()
+			return ctx.Err()
+		case taskCh <- &task{int(seg.typ), seg.val}:
+		}
+	}
+	wg.Wait()
+	return nil
 }
