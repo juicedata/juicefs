@@ -825,7 +825,7 @@ func (m *redisMeta) loadSliceRefs(ctx Context, msg proto.Message) error {
 }
 
 var loadLock sync.Mutex
-var maxAclId uint32 = 0
+var maxAclId uint32
 
 func (m *redisMeta) loadAcl(ctx Context, msg proto.Message) error {
 	batch := msg.(*pb.Batch)
@@ -842,8 +842,7 @@ func (m *redisMeta) loadAcl(ctx Context, msg proto.Message) error {
 		return nil
 	}
 
-	err := m.rdb.HSet(ctx, m.aclKey(), acls).Err()
-	if err != nil {
+	if err := m.rdb.HSet(ctx, m.aclKey(), acls).Err(); err != nil {
 		return err
 	}
 	return m.rdb.Set(ctx, m.counterKey(aclCounter), maxAclId, 0).Err()
