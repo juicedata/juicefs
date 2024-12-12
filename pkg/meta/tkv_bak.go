@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -128,7 +127,7 @@ func (m *kvMeta) dumpCounters(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 	return m.txn(ctx, func(tx *kvTxn) error {
 		counters := make([]*pb.Counter, 0, len(counterNames))
 		for _, name := range counterNames {
-			val := tx.get(m.counterKey(strings.ToLower(name)))
+			val := tx.get(m.counterKey(name))
 			counters = append(counters, &pb.Counter{Key: name, Value: parseCounter(val)})
 		}
 		return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Counters: counters}})
@@ -479,7 +478,7 @@ func (m *kvMeta) loadFormat(ctx Context, msg proto.Message) error {
 func (m *kvMeta) loadCounters(ctx Context, msg proto.Message) error {
 	return m.txn(ctx, func(tx *kvTxn) error {
 		for _, counter := range msg.(*pb.Batch).Counters {
-			tx.set(m.counterKey(strings.ToLower(counter.Key)), packCounter(counter.Value))
+			tx.set(m.counterKey(counter.Key), packCounter(counter.Value))
 		}
 		return nil
 	})

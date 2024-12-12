@@ -608,7 +608,7 @@ func (m *redisMeta) nextTrashKey() string {
 }
 
 func (m *redisMeta) counterKey(name string) string {
-	if name == "nextInode" || name == "nextChunk" || name == "nextSession" || name == "nextTrash" {
+	if name == "nextInode" || name == "nextChunk" || name == "nextSession" {
 		name = strings.ToLower(name)
 	}
 	return m.prefix + name
