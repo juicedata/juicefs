@@ -403,8 +403,9 @@ func TestLoadDumpV2(t *testing.T) {
 	engines := map[string][]string{
 		"sqlite3": {"sqlite3://dev.db", "sqlite3://dev2.db"},
 		// "mysql": {"mysql://root:@/dev", "mysql://root:@/dev2"},
-		"redis": {"redis://127.0.0.1:6379/2", "redis://127.0.0.1:6379/3"},
-		"tikv":  {"tikv://127.0.0.1:2379/jfs-load-dump-1", "tikv://127.0.0.1:2379/jfs-load-dump-2"},
+		"redis":  {"redis://127.0.0.1:6379/2", "redis://127.0.0.1:6379/3"},
+		"badger": {"badger://" + path.Join(t.TempDir(), "jfs-load-duimp-testdb-bk1"), "badger://" + path.Join(t.TempDir(), "jfs-load-duimp-testdb-bk2")},
+		// "tikv":  {"tikv://127.0.0.1:2379/jfs-load-dump-1", "tikv://127.0.0.1:2379/jfs-load-dump-2"},
 	}
 
 	for name, addrs := range engines {
@@ -461,9 +462,9 @@ func testSecretAndTrash(t *testing.T, addr, addr2 string) {
 	if m2.GetFormat().EncryptKey != m.GetFormat().EncryptKey {
 		t.Fatalf("encrypt key not valid: %s", m2.GetFormat().EncryptKey)
 	}
-
 	testDumpV2(t, m, "sqlite-non-secret.dump", &DumpOption{Threads: 10, KeepSecret: false})
-	m2.Reset()
+	m2.Shutdown()
+
 	m2 = testLoadV2(t, addr2, "sqlite-non-secret.dump")
 	if m2.GetFormat().EncryptKey != "removed" {
 		t.Fatalf("encrypt key not valid: %s", m2.GetFormat().EncryptKey)
@@ -485,6 +486,9 @@ func testSecretAndTrash(t *testing.T, addr, addr2 string) {
 	if cnt != len(trashs) {
 		t.Fatalf("trash count: %d != %d", cnt, len(trashs))
 	}
+
+	m.Shutdown()
+	m2.Shutdown()
 }
 
 /*

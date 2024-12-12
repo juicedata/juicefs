@@ -50,6 +50,9 @@ func (m *kvMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) err
 		m.dumpDirStat,
 	}
 	ts := m.client.config("startTS")
+	if ts == nil && m.Name() == "tikv" {
+		return errors.New("failed to get startTS, which is required for TiKV to ensure consistency")
+	}
 	if ts != nil {
 		logger.Infof("dump kv with startTS: %d", ts.(uint64))
 		ctx.WithValue(txSessionKey{}, ts)
