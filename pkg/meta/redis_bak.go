@@ -825,39 +825,28 @@ func (m *redisMeta) loadSliceRefs(ctx Context, msg proto.Message) error {
 }
 
 var loadLock sync.Mutex
+var maxAclId uint32 = 0
 
 func (m *redisMeta) loadAcl(ctx Context, msg proto.Message) error {
-	if msg == nil {
-		loadLock.Lock()
-		defer loadLock.Unlock()
-		if val := ctx.Value("maxAclId"); val != nil {
-			return m.rdb.Set(ctx, m.counterKey(aclCounter), val.(uint32), 0).Err()
-		}
-		return nil
-	}
-
-	var maxId uint32 = 0
-	loadLock.Lock()
-	if val := ctx.Value("maxAclId"); val != nil {
-		maxId = val.(uint32)
-	}
-	loadLock.Unlock()
-
 	batch := msg.(*pb.Batch)
 	acls := make(map[string]interface{}, len(batch.Acls))
 	for _, pa := range batch.Acls {
-		if pa.Id > maxId {
-			maxId = pa.Id
+		loadLock.Lock()
+		if pa.Id > maxAclId {
+			maxAclId = pa.Id
 		}
+		loadLock.Unlock()
 		acls[strconv.FormatUint(uint64(pa.Id), 10)] = pa.Data
 	}
 	if len(acls) == 0 {
 		return nil
 	}
-	loadLock.Lock()
-	ctx.WithValue("maxAclId", maxId)
-	loadLock.Unlock()
-	return m.rdb.HSet(ctx, m.aclKey(), acls).Err()
+
+	err := m.rdb.HSet(ctx, m.aclKey(), acls).Err()
+	if err != nil {
+		return err
+	}
+	return m.rdb.Set(ctx, m.counterKey(aclCounter), maxAclId, 0).Err()
 }
 
 func (m *redisMeta) loadXattrs(ctx Context, msg proto.Message) error {

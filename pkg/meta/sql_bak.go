@@ -576,9 +576,6 @@ func (m *dbMeta) loadSliceRefs(ctx Context, msg proto.Message) error {
 }
 
 func (m *dbMeta) loadAcl(ctx Context, msg proto.Message) error {
-	if msg == nil {
-		return nil
-	}
 	acls := msg.(*pb.Batch).Acls
 	rows := make([]interface{}, 0, len(acls))
 	for _, pa := range acls {
