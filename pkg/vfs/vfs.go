@@ -528,6 +528,8 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 			logit(ctx, "open", err, "(%d,%#x)", ino, flags)
 		}
 	}()
+
+	logger.Infof("open ino: %d, flags: %d", ino, flags)
 	var attr = &Attr{}
 	if IsSpecialNode(ino) {
 		if ino != controlInode && (flags&O_ACCMODE) != syscall.O_RDONLY {
@@ -660,6 +662,7 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 }
 
 func hasReadPerm(flag uint32) bool {
+	logger.Infof("hasReadPerm flag: %d", flag)
 	return (flag & O_ACCMODE) != syscall.O_WRONLY
 }
 
