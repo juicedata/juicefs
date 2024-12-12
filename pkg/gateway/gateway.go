@@ -1186,6 +1186,7 @@ func (n *jfsObjects) cleanup() {
 					}
 				}
 			}
+			_ = f.Close(mctx)
 		}
 	}
 }
