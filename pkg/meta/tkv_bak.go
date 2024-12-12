@@ -550,13 +550,6 @@ func (m *kvMeta) loadAcl(ctx Context, msg proto.Message, pairs *[]*pair) {
 		*pairs = append(*pairs, &pair{m.aclKey(acl.Id), acl.Data})
 	}
 	ctx.WithValue("maxAclId", maxId)
-
-	/* TODO in outside block
-	return m.txn(ctx, func(tx *kvTxn) error {
-		tx.set(m.counterKey(aclCounter), packCounter(int64(maxId)))
-		return nil
-	})
-	*/
 }
 
 func (m *kvMeta) loadXattrs(ctx Context, msg proto.Message, pairs *[]*pair) {
@@ -632,6 +625,15 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			if task == nil {
 				if err := m.insertKVs(ctx, pairs, opt.Threads); err != nil {
 					logger.Errorf("insert kvs failed: %v", err)
+				}
+
+				if val := ctx.Value("maxAclId"); val != nil {
+					if err := m.txn(ctx, func(tx *kvTxn) error {
+						tx.set(m.counterKey(aclCounter), packCounter(int64(val.(uint32))))
+						return nil
+					}); err != nil {
+						logger.Errorf("update maxAclId failed: %v", err)
+					}
 				}
 				break
 			}
