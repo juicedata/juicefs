@@ -125,7 +125,7 @@ func dump(ctx *cli.Context) error {
 	if _, err := m.Load(true); err != nil {
 		return err
 	}
-	if st := m.Chroot(meta.Background, metaConf.Subdir); st != 0 {
+	if st := m.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
 		return st
 	}
 

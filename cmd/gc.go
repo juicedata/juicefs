@@ -188,7 +188,7 @@ func gc(ctx *cli.Context) error {
 			}
 			return err
 		})
-		if st := m.CompactAll(meta.Background, ctx.Int("threads"), bar); st == 0 {
+		if st := m.CompactAll(meta.Background(), ctx.Int("threads"), bar); st == 0 {
 			if progress.Quiet {
 				c, b := spin.Current()
 				logger.Infof("Compacted %d chunks (%d slices, %d bytes).", bar.Current(), c, b)

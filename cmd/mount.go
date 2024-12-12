@@ -679,7 +679,7 @@ func mount(c *cli.Context) error {
 		vfsConf.StatePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 	}
 
-	if st := metaCli.Chroot(meta.Background, metaConf.Subdir); st != 0 {
+	if st := metaCli.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
 		return st
 	}
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards

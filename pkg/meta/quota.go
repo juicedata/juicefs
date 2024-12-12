@@ -211,7 +211,7 @@ func (m *baseMeta) doFlushDirStat() {
 	stats := m.dirStats
 	m.dirStats = make(map[Ino]dirStat)
 	m.dirStatsLock.Unlock()
-	err := m.en.doUpdateDirStat(Background, stats)
+	err := m.en.doUpdateDirStat(Background(), stats)
 	if err != nil {
 		logger.Errorf("update dir stat failed: %v", err)
 	}
@@ -259,7 +259,7 @@ func (m *baseMeta) loadQuotas() {
 	if !m.getFormat().DirStats {
 		return
 	}
-	quotas, err := m.en.doLoadQuotas(Background)
+	quotas, err := m.en.doLoadQuotas(Background())
 	if err == nil {
 		m.quotaMu.Lock()
 		for ino := range m.dirQuotas {
@@ -402,7 +402,7 @@ func (m *baseMeta) doFlushQuotas() {
 		return
 	}
 
-	if err := m.en.doFlushQuotas(Background, stageMap); err != nil {
+	if err := m.en.doFlushQuotas(Background(), stageMap); err != nil {
 		logger.Warnf("Flush quotas: %s", err)
 	} else {
 		m.quotaMu.RLock()
