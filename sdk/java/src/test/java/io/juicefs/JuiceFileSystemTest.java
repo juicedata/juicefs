@@ -75,6 +75,7 @@ public class JuiceFileSystemTest extends TestCase {
 
   public void tearDown() throws Exception {
     fs.close();
+    FileSystem.closeAll();
   }
 
   public void testFsStatus() throws IOException {
