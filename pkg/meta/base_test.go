@@ -1167,7 +1167,7 @@ func testLocks(t *testing.T, m Meta) {
 		t.Fatalf("flock unlock: %s", st)
 	}
 	if r, ok := m.(*redisMeta); ok {
-		ms, err := r.rdb.SMembers(context.Background()(), r.lockedKey(r.sid)).Result()
+		ms, err := r.rdb.SMembers(context.Background(), r.lockedKey(r.sid)).Result()
 		if err != nil {
 			t.Fatalf("Smember %s: %s", r.lockedKey(r.sid), err)
 		}
@@ -1249,7 +1249,7 @@ func testLocks(t *testing.T, m Meta) {
 	}
 
 	if r, ok := m.(*redisMeta); ok {
-		ms, err := r.rdb.SMembers(context.Background()(), r.lockedKey(r.sid)).Result()
+		ms, err := r.rdb.SMembers(context.Background(), r.lockedKey(r.sid)).Result()
 		if err != nil {
 			t.Fatalf("Smember %s: %s", r.lockedKey(r.sid), err)
 		}
