@@ -29,7 +29,17 @@ func isMySQLDuplicateEntryErr(err error) bool {
 	}
 	return false
 }
-
+func setTransationIsolation(dns string) (string, error) {
+	cfg, err := mysql.ParseDSN(dns)
+	if err != nil {
+		return "", err
+	}
+	if cfg.Params == nil {
+		cfg.Params = make(map[string]string)
+	}
+	cfg.Params["transaction_isolation"] = "'repeatable-read'"
+	return cfg.FormatDSN(), nil
+}
 func init() {
 	dupErrorCheckers = append(dupErrorCheckers, isMySQLDuplicateEntryErr)
 	Register("mysql", newSQLMeta)

@@ -286,6 +286,10 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	// escaping is not necessary for mysql password https://github.com/go-sql-driver/mysql#password
 	if driver == "mysql" {
 		addr = recoveryMysqlPwd(addr)
+		var err error
+		if addr, err = setTransationIsolation(addr); err != nil {
+			return nil, err
+		}
 	}
 
 	if driver == "sqlite3" {
@@ -852,7 +856,6 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 	var opt sql.TxOptions
 	if !m.noReadOnlyTxn {
 		opt.ReadOnly = true
-		opt.Isolation = sql.LevelRepeatableRead
 	}
 
 	var maxRetry int
