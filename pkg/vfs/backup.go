@@ -43,7 +43,7 @@ var (
 
 // Backup metadata periodically in the object storage
 func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skipTrash bool) {
-	ctx := meta.Background
+	ctx := meta.Background()
 	key := "lastBackup"
 	for {
 		utils.SleepWithJitter(interval / 10)

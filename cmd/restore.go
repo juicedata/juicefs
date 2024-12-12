@@ -66,7 +66,7 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 		}()
 	}
 	logger.Infof("restore files in %s ...", hour)
-	ctx := meta.Background
+	ctx := meta.Background()
 	var parent meta.Ino
 	var attr meta.Attr
 	err := m.Lookup(ctx, meta.TrashInode, hour, &parent, &attr, false)
@@ -75,7 +75,7 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 		return
 	}
 	var entries []*meta.Entry
-	err = m.Readdir(meta.Background, parent, 0, &entries)
+	err = m.Readdir(meta.Background(), parent, 0, &entries)
 	if err != 0 {
 		logger.Errorf("list %s: %s", hour, err)
 		return

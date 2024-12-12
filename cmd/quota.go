@@ -18,10 +18,11 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
+
 	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"sort"
 
 	"github.com/urfave/cli/v2"
 )
@@ -147,7 +148,7 @@ func quota(c *cli.Context) error {
 		strict = c.Bool("strict")
 		repair = c.Bool("repair")
 	}
-	if err := m.HandleQuota(meta.Background, cmd, dpath, qs, strict, repair, c.Bool("create")); err != nil {
+	if err := m.HandleQuota(meta.Background(), cmd, dpath, qs, strict, repair, c.Bool("create")); err != nil {
 		return err
 	} else if len(qs) == 0 {
 		return nil
