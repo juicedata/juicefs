@@ -859,9 +859,9 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 其中：
 
 - `NAME`：JuiceFS 支持的数据存储类型，比如 `s3`、`oss`，完整列表见[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)。
-- `ACCESS_KEY` 和 `SECRET_KEY`：访问数据存储所需的密钥信息，参考[文档](../reference/how_to_set_up_object_storage.md#aksk)。
-- `TOKEN` 用来访问对象存储的 token，部分对象存储支持使用临时的 token 以获得有限时间的权限
-- `BUCKET[.ENDPOINT]`：数据存储服务的访问地址，不同存储类型格式可能不同，详见[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)。
+- `ACCESS_KEY` 和 `SECRET_KEY`：访问数据存储所需的密钥信息，特殊字符需要进行 [URL 转义](https://www.w3schools.com/tags/ref_urlencode.ASP)并替换，比如 `/` 需要被替换为 `%2F`。另外，如果不清楚如何获取对象存储的 AKSK，参考[这里](../reference/how_to_set_up_object_storage.md#aksk)。
+- `TOKEN` 用来访问对象存储的 token，部分对象存储支持使用临时的 token 以获得有限时间的权限。
+- `BUCKET[.ENDPOINT]`：数据存储服务的访问地址，不同存储类型格式可能不同（MinIO 目前仅支持路径风格），详见[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)。
 - `[/PREFIX]`：可选，源路径和目标路径的前缀，可用于限定只同步某些路径中的数据。
 
 #### 选择条件相关参数 {#sync-selection-related-options}

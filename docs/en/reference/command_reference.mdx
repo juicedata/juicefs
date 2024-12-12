@@ -861,8 +861,8 @@ As shown in the examples, the format of both source (`SRC`) and destination (`DS
 In which:
 
 - `NAME`: JuiceFS supported data storage types like `s3`, `oss`, refer to [this document](../reference/how_to_set_up_object_storage.md#supported-object-storage) for a full list.
-- `ACCESS_KEY` and `SECRET_KEY`: The credential required to access the data storage, refer to [this document](../reference/how_to_set_up_object_storage.md#aksk).
-- `TOKEN` token used to access the object storage, as some object storage supports the use of temporary token to obtain permission for a limited time
+- `ACCESS_KEY` and `SECRET_KEY`: The credential required to access the data storage, special characters need to be [URL encoded](https://www.w3schools.com/tags/ref_urlencode.ASP), e.g. `/` must be substituted with `%2F`. If you are not familiar with AKSK management, refer to [this document](../reference/how_to_set_up_object_storage.md#aksk).
+- `TOKEN` token used to access the object storage, as some object storage supports the use of temporary token to obtain permission for a limited time.
 - `BUCKET[.ENDPOINT]`: The access address of the data storage service. The format may be different for different storage types, and refer to [the document](../reference/how_to_set_up_object_storage.md#supported-object-storage).
 - `[/PREFIX]`: Optional, a prefix for the source and destination paths that can be used to limit synchronization of data only in certain paths.
 
