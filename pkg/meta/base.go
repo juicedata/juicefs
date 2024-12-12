@@ -3160,9 +3160,6 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			case task = <-taskCh:
 			}
 			if task == nil {
-				if err := m.en.load(ctx, segTypeAcl, opt, nil); err != nil { // insert max acl id
-					logger.Errorf("failed to insert acl id: %s", err)
-				}
 				break
 			}
 			err := m.en.load(ctx, task.typ, opt, task.msg)
@@ -3200,5 +3197,10 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		}
 	}
 	wg.Wait()
+
+	// insert max acl id
+	if err := m.en.load(ctx, segTypeAcl, opt, nil); err != nil {
+		logger.Errorf("failed to insert acl id: %s", err)
+	}
 	return nil
 }
