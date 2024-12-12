@@ -103,6 +103,8 @@ func envList() []string {
 		"HADOOP_USER_NAME",
 		"HADOOP_SUPER_USER",
 		"HADOOP_SUPER_GROUP",
+		"HADOOP_CONF_DIR",
+		"HADOOP_HOME",
 		"KRB5_CONFIG",
 		"KRB5CCNAME",
 
