@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/acl"
 	"io"
 	"os"
 	"path"
@@ -30,6 +29,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/acl"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -1056,7 +1057,7 @@ func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 	}
 	err = f.wdata.Write(ctx, uint64(offset), b)
 	if err != 0 {
-		_ = f.wdata.Close(meta.Background)
+		_ = f.wdata.Close(meta.Background())
 		f.wdata = nil
 		return
 	}
@@ -1104,11 +1105,11 @@ func (f *File) Close(ctx meta.Context) (err syscall.Errno) {
 			rdata := f.rdata
 			f.rdata = nil
 			time.AfterFunc(time.Second, func() {
-				rdata.Close(meta.Background)
+				rdata.Close(meta.Background())
 			})
 		}
 		if f.wdata != nil {
-			err = f.wdata.Close(meta.Background)
+			err = f.wdata.Close(meta.Background())
 			f.wdata = nil
 		}
 		_ = f.fs.m.Close(ctx, f.inode)

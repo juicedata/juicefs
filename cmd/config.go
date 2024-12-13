@@ -278,7 +278,7 @@ func config(ctx *cli.Context) error {
 		}
 		if quota {
 			var totalSpace, availSpace, iused, iavail uint64
-			_ = m.StatFS(meta.Background, meta.RootInode, &totalSpace, &availSpace, &iused, &iavail)
+			_ = m.StatFS(meta.Background(), meta.RootInode, &totalSpace, &availSpace, &iused, &iavail)
 			usedSpace := totalSpace - availSpace
 			if format.Capacity > 0 && usedSpace >= format.Capacity ||
 				format.Inodes > 0 && iused >= format.Inodes {
@@ -297,7 +297,7 @@ func config(ctx *cli.Context) error {
 		}
 		if originDirStats && !format.DirStats {
 			qs := make(map[string]*meta.Quota)
-			err := m.HandleQuota(meta.Background, meta.QuotaList, "", qs, false, false, false)
+			err := m.HandleQuota(meta.Background(), meta.QuotaList, "", qs, false, false, false)
 			if err != nil {
 				return errors.Wrap(err, "list quotas")
 			}

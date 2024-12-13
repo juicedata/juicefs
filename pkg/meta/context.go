@@ -34,7 +34,9 @@ type Context interface {
 	CheckPermission() bool
 }
 
-var Background Context = WrapContext(context.Background())
+func Background() Context {
+	return WrapContext(context.Background())
+}
 
 type wrapContext struct {
 	context.Context

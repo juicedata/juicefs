@@ -322,7 +322,7 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 	go func() {
 		for {
 			var totalSpace, availSpace, iused, iavail uint64
-			err := m.StatFS(Background, m.root, &totalSpace, &availSpace, &iused, &iavail)
+			err := m.StatFS(Background(), m.root, &totalSpace, &availSpace, &iused, &iavail)
 			if err == 0 {
 				m.usedSpaceG.Set(float64(totalSpace - availSpace))
 				m.usedInodesG.Set(float64(iused))
@@ -435,7 +435,7 @@ func (m *baseMeta) newSessionInfo() []byte {
 func (m *baseMeta) NewSession(record bool) error {
 	go m.refresh()
 
-	if err := m.en.cacheACLs(Background); err != nil {
+	if err := m.en.cacheACLs(Background()); err != nil {
 		return err
 	}
 
@@ -2150,7 +2150,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 		m.Unlock()
 	}()
 
-	ss, st := m.en.doRead(Background, inode, indx)
+	ss, st := m.en.doRead(Background(), inode, indx)
 	if st != 0 {
 		return
 	}
@@ -2181,7 +2181,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	}
 
 	var id uint64
-	if st = m.NewSlice(Background, &id); st != 0 {
+	if st = m.NewSlice(Background(), &id); st != 0 {
 		return
 	}
 	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(compacted), size)
@@ -2339,10 +2339,10 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 	}
 	m.Unlock()
 
-	st := m.en.doLookup(Background, TrashInode, name, trash, nil)
+	st := m.en.doLookup(Background(), TrashInode, name, trash, nil)
 	if st == syscall.ENOENT {
 		attr := Attr{Typ: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: TrashInode, Full: true}
-		st = m.en.doMknod(Background, TrashInode, name, TypeDirectory, 0555, 0, "", trash, &attr)
+		st = m.en.doMknod(Background(), TrashInode, name, TypeDirectory, 0555, 0, "", trash, &attr)
 	}
 
 	m.Lock()
@@ -2371,7 +2371,7 @@ func (m *baseMeta) trashEntry(parent, inode Ino, name string) string {
 func (m *baseMeta) cleanupTrash() {
 	for {
 		utils.SleepWithJitter(time.Hour)
-		if st := m.en.doGetAttr(Background, TrashInode, nil); st != 0 {
+		if st := m.en.doGetAttr(Background(), TrashInode, nil); st != 0 {
 			if st != syscall.ENOENT {
 				logger.Warnf("getattr inode %d: %s", TrashInode, st)
 			}
@@ -2389,7 +2389,7 @@ func (m *baseMeta) cleanupTrash() {
 
 func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func()) {
 	for _, inode := range m.en.doFindDetachedNodes(edge) {
-		if eno := m.en.doCleanupDetachedNode(Background, inode); eno != 0 {
+		if eno := m.en.doCleanupDetachedNode(Background(), inode); eno != 0 {
 			logger.Errorf("cleanupDetachedNode: remove detached tree (%d) error: %s", inode, eno)
 		} else {
 			if increProgress != nil {
@@ -2506,7 +2506,7 @@ func (m *baseMeta) doCleanupTrash(days int, force bool) {
 	if force {
 		edge = time.Now()
 	}
-	m.CleanupTrashBefore(Background, edge, nil)
+	m.CleanupTrashBefore(Background(), edge, nil)
 }
 
 func (m *baseMeta) cleanupDelayedSlices(days int) {

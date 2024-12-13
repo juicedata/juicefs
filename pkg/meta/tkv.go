@@ -3087,7 +3087,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		threshold := 0.1
 		var cnt int
 
-		if err = m.cacheACLs(Background); err != nil {
+		if err = m.cacheACLs(Background()); err != nil {
 			return err
 		}
 
@@ -3427,7 +3427,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 
-	if err = m.loadDumpedACLs(Background); err != nil {
+	if err = m.loadDumpedACLs(Background()); err != nil {
 		return err
 	}
 
@@ -3452,8 +3452,8 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 
 	// update nlinks and parents for hardlinks
 	st := make(map[Ino]int64)
-	defer m.loadDumpedQuotas(Background, dm.Quotas)
-	return m.txn(Background, func(tx *kvTxn) error {
+  defer m.loadDumpedQuotas(Background(), dm.Quotas)
+  return m.txn(Background(), func(tx *kvTxn) error {
 		for i, ps := range parents {
 			if len(ps) > 1 {
 				a := tx.get(m.inodeKey(i))
@@ -3853,7 +3853,7 @@ func (m *kvMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandle
 			batchNum:    DirBatchNum["kv"],
 		},
 	}
-	s.batch, _ = s.fetch(Background, 0)
+	s.batch, _ = s.fetch(Background(), 0)
 	return s
 }
 

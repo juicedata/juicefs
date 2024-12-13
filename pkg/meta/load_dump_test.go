@@ -18,7 +18,6 @@ package meta
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -93,7 +92,7 @@ func GbkToUtf8(s []byte) ([]byte, error) {
 }
 
 func checkMeta(t *testing.T, m Meta) {
-	ctx := Background
+	ctx := Background()
 	var entries []*Entry
 	if st := m.Readdir(ctx, 1, 1, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
@@ -274,7 +273,7 @@ func testLoadSub(t *testing.T, uri, fname string) {
 	}
 
 	var entries []*Entry
-	if st := m.Readdir(Background, 1, 0, &entries); st != 0 {
+	if st := m.Readdir(Background(), 1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	} else if len(entries) != 4 {
 		t.Fatalf("entries: %d", len(entries))
@@ -321,7 +320,7 @@ func testLoadDump(t *testing.T, name, addr string) {
 		conf := DefaultConf()
 		conf.Subdir = "d1"
 		m = NewClient(addr, conf)
-		_ = m.Chroot(Background, "d1")
+		_ = m.Chroot(Background(), "d1")
 		testDump(t, m, 1, subSampleFile, "test_subdir.dump")
 		testDump(t, m, 0, sampleFile, "test.dump")
 		_ = m.Shutdown()
@@ -348,7 +347,7 @@ func testDumpV2(t *testing.T, m Meta, result string, opt *DumpOption) {
 	if _, err = m.Load(true); err != nil {
 		t.Fatalf("load setting: %s", err)
 	}
-	if err = m.DumpMetaV2(WrapContext(context.Background()), fp, opt); err != nil {
+	if err = m.DumpMetaV2(Background(), fp, opt); err != nil {
 		t.Fatalf("dump meta: %s", err)
 	}
 	fp.Sync()
@@ -364,7 +363,7 @@ func testLoadV2(t *testing.T, uri, fname string) Meta {
 		t.Fatalf("open file: %s", fname)
 	}
 	defer fp.Close()
-	if err = m.LoadMetaV2(WrapContext(context.Background()), fp, &LoadOption{Threads: 10}); err != nil {
+	if err = m.LoadMetaV2(Background(), fp, &LoadOption{Threads: 10}); err != nil {
 		t.Fatalf("load meta: %s", err)
 	}
 	if _, err := m.Load(true); err != nil {
@@ -444,7 +443,7 @@ func TestLoadDump_MemKV(t *testing.T) {
 		_ = os.Remove(settingPath)
 		m := testLoad(t, "memkv://user:pass@test/jfs", sampleFile)
 		if kvm, ok := m.(*kvMeta); ok { // memkv will be empty if created again
-			if st := kvm.Chroot(Background, "d1"); st != 0 {
+			if st := kvm.Chroot(Background(), "d1"); st != 0 {
 				t.Fatalf("Chroot to subdir d1: %s", st)
 			}
 		}
@@ -476,7 +475,7 @@ func testSecretAndTrash(t *testing.T, addr, addr2 string) {
 		29: 10485760,
 	}
 	cnt := 0
-	m2.getBase().scanTrashFiles(Background, func(inode Ino, size uint64, ts time.Time) (clean bool, err error) {
+	m2.getBase().scanTrashFiles(Background(), func(inode Ino, size uint64, ts time.Time) (clean bool, err error) {
 		cnt++
 		if tSize, ok := trashs[inode]; !ok || size != tSize {
 			t.Fatalf("trash file: %d %d", inode, size)
@@ -551,7 +550,7 @@ func BenchmarkLoadDumpV2(b *testing.B) {
 			defer fp.Close()
 
 			b.ResetTimer()
-			if err = m.DumpMetaV2(Background, fp, &DumpOption{Threads: 10}); err != nil {
+			if err = m.DumpMetaV2(Background(), fp, &DumpOption{Threads: 10}); err != nil {
 				b.Fatalf("dump meta: %s", err)
 			}
 			fp.Sync()
@@ -585,7 +584,7 @@ func BenchmarkLoadDumpV2(b *testing.B) {
 			defer fp.Close()
 
 			b.ResetTimer()
-			if err = m.LoadMetaV2(Background, fp, &LoadOption{Threads: 10}); err != nil {
+			if err = m.LoadMetaV2(Background(), fp, &LoadOption{Threads: 10}); err != nil {
 				b.Fatalf("load meta: %s", err)
 			}
 		})

@@ -394,7 +394,7 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 	}
 	var s = setting{Name: "format"}
 	var ok bool
-	err := m.roTxn(Background, func(ses *xorm.Session) (err error) {
+	err := m.roTxn(Background(), func(ses *xorm.Session) (err error) {
 		ok, err = ses.Get(&s)
 		return err
 	})
@@ -501,7 +501,7 @@ func (m *dbMeta) Reset() error {
 }
 
 func (m *dbMeta) doLoad() (data []byte, err error) {
-	err = m.roTxn(Background, func(ses *xorm.Session) error {
+	err = m.roTxn(Background(), func(ses *xorm.Session) error {
 		if ok, err := ses.IsTableExist(&setting{}); err != nil {
 			return err
 		} else if !ok {
@@ -593,7 +593,7 @@ func (m *dbMeta) getSession(row interface{}, detail bool) (*Session, error) {
 			frows []flock
 			prows []plock
 		)
-		err := m.roTxn(Background, func(ses *xorm.Session) error {
+		err := m.roTxn(Background(), func(ses *xorm.Session) error {
 			if err := ses.Find(&srows, &sustained{Sid: s.Sid}); err != nil {
 				return fmt.Errorf("find sustained %d: %s", s.Sid, err)
 			}
@@ -627,7 +627,7 @@ func (m *dbMeta) getSession(row interface{}, detail bool) (*Session, error) {
 }
 
 func (m *dbMeta) GetSession(sid uint64, detail bool) (s *Session, err error) {
-	err = m.roTxn(Background, func(ses *xorm.Session) error {
+	err = m.roTxn(Background(), func(ses *xorm.Session) error {
 		if ok, err := ses.IsTableExist(&session2{}); err != nil {
 			return err
 		} else if ok {
@@ -657,7 +657,7 @@ func (m *dbMeta) GetSession(sid uint64, detail bool) (s *Session, err error) {
 
 func (m *dbMeta) ListSessions() ([]*Session, error) {
 	var sessions []*Session
-	err := m.roTxn(Background, func(ses *xorm.Session) error {
+	err := m.roTxn(Background(), func(ses *xorm.Session) error {
 		if ok, err := ses.IsTableExist(&session2{}); err != nil {
 			return err
 		} else if ok {
@@ -698,7 +698,7 @@ func (m *dbMeta) ListSessions() ([]*Session, error) {
 }
 
 func (m *dbMeta) getCounter(name string) (v int64, err error) {
-	err = m.roTxn(Background, func(s *xorm.Session) error {
+	err = m.roTxn(Background(), func(s *xorm.Session) error {
 		c := counter{Name: name}
 		_, err := s.Get(&c)
 		if err == nil {
@@ -2206,7 +2206,7 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 	}
 
 	var sus []sustained
-	err = m.roTxn(Background, func(ses *xorm.Session) error {
+	err = m.roTxn(Background(), func(ses *xorm.Session) error {
 		sus = nil
 		return ses.Find(&sus, &sustained{Sid: sid})
 	})
@@ -2242,7 +2242,7 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 
 func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	var sids []uint64
-	_ = m.roTxn(Background, func(ses *xorm.Session) error {
+	_ = m.roTxn(Background(), func(ses *xorm.Session) error {
 		var ss []session2
 		err := ses.Where("Expire < ?", time.Now().Unix()).Limit(limit, 0).Find(&ss)
 		if err != nil {
@@ -2259,7 +2259,7 @@ func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 		return sids, nil
 	}
 
-	err := m.roTxn(Background, func(ses *xorm.Session) error {
+	err := m.roTxn(Background(), func(ses *xorm.Session) error {
 		if ok, err := ses.IsTableExist(&session{}); err != nil {
 			return err
 		} else if ok {
@@ -2667,7 +2667,7 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, sys
 
 func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {
 	files := make(map[Ino]uint64)
-	err := m.roTxn(Background, func(s *xorm.Session) error {
+	err := m.roTxn(Background(), func(s *xorm.Session) error {
 		var ds []delfile
 		err := s.Where("expire < ?", ts).Limit(limit, 0).Find(&ds)
 		if err != nil {
@@ -2683,7 +2683,7 @@ func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 
 func (m *dbMeta) doCleanupSlices() {
 	var cks []sliceRef
-	_ = m.roTxn(Background, func(s *xorm.Session) error {
+	_ = m.roTxn(Background(), func(s *xorm.Session) error {
 		cks = nil
 		return s.Where("refs <= 0").Find(&cks)
 	})
@@ -2732,7 +2732,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 			continue
 		}
 		var ref = sliceRef{Id: s.id}
-		err := m.roTxn(Background, func(s *xorm.Session) error {
+		err := m.roTxn(Background(), func(s *xorm.Session) error {
 			ok, err := s.Get(&ref)
 			if err == nil && !ok {
 				err = errors.New("not found")
@@ -2748,7 +2748,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 
 func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	var indexes []chunk
-	_ = m.roTxn(Background, func(s *xorm.Session) error {
+	_ = m.roTxn(Background(), func(s *xorm.Session) error {
 		indexes = nil
 		return s.Cols("indx").Find(&indexes, &chunk{Inode: inode})
 	})
@@ -2772,7 +2772,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	var result []delslices
 	var batch int = 1e6
 	for {
-		_ = m.roTxn(Background, func(s *xorm.Session) error {
+		_ = m.roTxn(Background(), func(s *xorm.Session) error {
 			result = result[:0]
 			return s.Where("deleted < ?", edge).Limit(batch, 0).Find(&result)
 		})
@@ -2803,7 +2803,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 			}
 			for _, s := range ss {
 				var ref = sliceRef{Id: s.Id}
-				err := m.roTxn(Background, func(s *xorm.Session) error {
+				err := m.roTxn(Background(), func(s *xorm.Session) error {
 					ok, err := s.Get(&ref)
 					if err == nil && !ok {
 						err = errors.New("not found")
@@ -2864,7 +2864,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 	// there could be false-negative that the compaction is successful, double-check
 	if st != 0 && st != syscall.EINVAL {
 		var ok bool
-		if err := m.roTxn(Background, func(s *xorm.Session) error {
+		if err := m.roTxn(Background(), func(s *xorm.Session) error {
 			var e error
 			ok, e = s.Get(&sliceRef{Id: id})
 			return e
@@ -2889,7 +2889,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 			}
 			var ref = sliceRef{Id: s.id}
 			var ok bool
-			err := m.roTxn(Background, func(s *xorm.Session) error {
+			err := m.roTxn(Background(), func(s *xorm.Session) error {
 				var e error
 				ok, e = s.Get(&ref)
 				return e
@@ -3536,7 +3536,7 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 		conds[c] = sync.NewCond(&ms[c])
 		if c < len(entries) {
 			go func(c int) {
-				_ = m.roTxn(Background, func(s *xorm.Session) error {
+				_ = m.roTxn(Background(), func(s *xorm.Session) error {
 					for i := c; i < len(entries) && err == nil; i += threads {
 						e := entries[i]
 						er := m.dumpEntry(s, e.Attr.Inode, 0, e, showProgress)
@@ -3712,7 +3712,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	progress := utils.NewProgress(false)
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
-	return m.roTxn(Background, func(s *xorm.Session) error {
+	return m.roTxn(Background(), func(s *xorm.Session) error {
 		if root == RootInode && fast {
 			defer func() { m.snap = nil }()
 			bar := progress.AddCountBar("Snapshot keys", 0)
@@ -4020,8 +4020,8 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	m.loadDumpedQuotas(Background, dm.Quotas)
-	if err = m.loadDumpedACLs(Background); err != nil {
+	m.loadDumpedQuotas(Background(), dm.Quotas)
+	if err = m.loadDumpedACLs(Background()); err != nil {
 		return err
 	}
 
@@ -4224,7 +4224,7 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 
 func (m *dbMeta) doFindDetachedNodes(t time.Time) []Ino {
 	var inodes []Ino
-	err := m.roTxn(Background, func(s *xorm.Session) error {
+	err := m.roTxn(Background(), func(s *xorm.Session) error {
 		var nodes []detachedNode
 		err := s.Where("added < ?", t.Unix()).Find(&nodes)
 		for _, n := range nodes {
@@ -4537,14 +4537,14 @@ func (m *dbMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandle
 			batchNum:    DirBatchNum["db"],
 		},
 	}
-	h.batch, _ = h.fetch(Background, 0)
+	h.batch, _ = h.fetch(Background(), 0)
 	return h
 }
 
 func (m *dbMeta) getDirFetcher() dirFetcher {
 	return func(ctx Context, inode Ino, cursor interface{}, offset, limit int, plus bool) (interface{}, []*Entry, error) {
 		entries := make([]*Entry, 0, limit)
-		err := m.roTxn(Background, func(s *xorm.Session) error {
+		err := m.roTxn(Background(), func(s *xorm.Session) error {
 			var name []byte
 			if cursor != nil {
 				name = cursor.([]byte)
