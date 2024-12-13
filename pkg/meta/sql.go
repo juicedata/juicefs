@@ -856,7 +856,6 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 	if v := ctx.Value(txSessionKey{}); v != nil {
 		s = v.(*xorm.Session)
 	} else {
-		s = m.db.NewSession()
 		s = m.spool.Get().(*xorm.Session)
 		defer m.spool.Put(s)
 	}
