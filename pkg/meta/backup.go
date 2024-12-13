@@ -57,14 +57,17 @@ const (
 
 var errBakEOF = fmt.Errorf("reach backup EOF")
 
-func getMessageNameFromType(typ int) protoreflect.FullName {
+func getMessageFromType(typ int) (proto.Message, error) {
+	var name protoreflect.FullName
 	if typ == segTypeFormat {
-		return proto.MessageName(&pb.Format{})
+		name = proto.MessageName(&pb.Format{})
 	} else if typ < segTypeMax {
-		return proto.MessageName(&pb.Batch{})
-	} else {
-		return ""
+		name = proto.MessageName(&pb.Batch{})
 	}
+	if name == "" {
+		return nil, fmt.Errorf("unknown message type %d", typ)
+	}
+	return createMessageByName(name)
 }
 
 func createMessageByName(name protoreflect.FullName) (proto.Message, error) {
@@ -128,16 +131,7 @@ func (f *bakFormat) writeFooter(w io.Writer) error {
 	if err := f.writeEOS(w); err != nil {
 		return err
 	}
-
-	data, err := f.footer.Marshal()
-	if err != nil {
-		return err
-	}
-	n, err := w.Write(data)
-	if err != nil && n != len(data) {
-		return fmt.Errorf("failed to write footer: err %v, write len %d, expect len %d", err, n, len(data))
-	}
-	return nil
+	return f.footer.Marshal(w)
 }
 
 func (f *bakFormat) writeEOS(w io.Writer) error {
@@ -164,15 +158,21 @@ type bakFooter struct {
 	len uint64
 }
 
-func (h *bakFooter) Marshal() ([]byte, error) {
+func (h *bakFooter) Marshal(w io.Writer) error {
 	data, err := proto.Marshal(h.msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal footer: %w", err)
+		return fmt.Errorf("failed to marshal footer: %w", err)
+	}
+
+	if n, err := w.Write(data); err != nil && n != len(data) {
+		return fmt.Errorf("failed to write footer data: err %w, write len %d, expect len %d", err, n, len(data))
 	}
 
 	h.len = uint64(len(data))
-	data = binary.BigEndian.AppendUint64(data, h.len)
-	return data, nil
+	if n, err := w.Write(binary.BigEndian.AppendUint64(nil, h.len)); err != nil && n != 8 {
+		return fmt.Errorf("failed to write footer length: err %w, write len %d, expect len 8", err, n)
+	}
+	return nil
 }
 
 func (h *bakFooter) Unmarshal(r io.ReadSeeker) error {
@@ -205,7 +205,7 @@ type bakSegment struct {
 }
 
 func (s *bakSegment) String() string {
-	return string(proto.MessageName(s.val).Name())
+	return fmt.Sprintf("type-%d", s.typ)
 }
 
 func (s *bakSegment) num() uint64 {
@@ -310,12 +310,8 @@ func (s *bakSegment) Unmarshal(r io.Reader) error {
 		return fmt.Errorf("failed to read segment type: %v", err)
 	}
 
-	if s.typ == BakMagic {
+	if s.typ == BakEOS {
 		return errBakEOF
-	}
-	name := getMessageNameFromType(int(s.typ))
-	if name == "" {
-		return fmt.Errorf("segment type %d is unknown", s.typ)
 	}
 
 	if err := binary.Read(r, binary.BigEndian, &s.len); err != nil {
@@ -326,12 +322,13 @@ func (s *bakSegment) Unmarshal(r io.Reader) error {
 	if err != nil && n != int(s.len) {
 		return fmt.Errorf("failed to read segment value: err %v, read len %d, expect len %d", err, n, s.len)
 	}
-	msg, err := createMessageByName(name)
+
+	msg, err := getMessageFromType(int(s.typ))
 	if err != nil {
-		return fmt.Errorf("failed to create message %s: %v", name, err)
+		return fmt.Errorf("failed to create message by type %d: %w", s.typ, err)
 	}
 	if err = proto.Unmarshal(data, msg); err != nil {
-		return fmt.Errorf("failed to unmarshal segment msg %s: %v", name, err)
+		return fmt.Errorf("failed to unmarshal segment msg %d: %w", s.typ, err)
 	}
 	s.val = msg
 	return nil
