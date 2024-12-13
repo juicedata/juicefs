@@ -18,7 +18,6 @@ package io.juicefs.utils;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import sun.net.www.protocol.http.Handler;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -39,8 +38,6 @@ public abstract class NodesFetcher {
   protected File cacheFolder = new File("/tmp/.juicefs");
   protected File cacheFile;
   private String jfsName;
-
-  private static Handler handler = new Handler();
 
   public NodesFetcher(String jfsName) {
     this.jfsName = jfsName;
@@ -121,7 +118,7 @@ public abstract class NodesFetcher {
 
     HttpURLConnection con = null;
     try {
-      con = (HttpURLConnection) new URL(null, url, handler).openConnection();
+      con = (HttpURLConnection) new URL(url).openConnection();
       con.setConnectTimeout(timeout * 1000);
       con.setReadTimeout(timeout * 1000);
 
