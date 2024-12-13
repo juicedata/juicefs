@@ -379,7 +379,7 @@ func (m *kvMeta) parseQuota(buf []byte) *Quota {
 
 func (m *kvMeta) get(key []byte) ([]byte, error) {
 	var value []byte
-	err := m.client.txn(Background, func(tx *kvTxn) error {
+	err := m.client.txn(Background(), func(tx *kvTxn) error {
 		value = tx.get(key)
 		return nil
 	}, 0)
@@ -388,7 +388,7 @@ func (m *kvMeta) get(key []byte) ([]byte, error) {
 
 func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
 	var keys [][]byte
-	err := m.client.txn(Background, func(tx *kvTxn) error {
+	err := m.client.txn(Background(), func(tx *kvTxn) error {
 		tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
 			keys = append(keys, k)
 			return true
@@ -403,7 +403,7 @@ func (m *kvMeta) scanValues(prefix []byte, limit int, filter func(k, v []byte) b
 		return nil, nil
 	}
 	values := make(map[string][]byte)
-	err := m.client.txn(Background, func(tx *kvTxn) error {
+	err := m.client.txn(Background(), func(tx *kvTxn) error {
 		var c int
 		tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
 			if filter == nil || filter(k, v) {
@@ -422,7 +422,7 @@ func (m *kvMeta) scan(startKey, endKey []byte, limit int, filter func(k, v []byt
 		return nil, nil, nil
 	}
 	var keys, vals [][]byte
-	err := m.client.txn(Background, func(tx *kvTxn) error {
+	err := m.client.txn(Background(), func(tx *kvTxn) error {
 		var c int
 		tx.scan(startKey, endKey, false, func(k, v []byte) bool {
 			if filter == nil || filter(k, v) {
@@ -453,7 +453,7 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 			// remove dir stats as they are outdated
 			var keys [][]byte
 			prefix := m.fmtKey("U")
-			err := m.client.txn(Background, func(tx *kvTxn) error {
+			err := m.client.txn(Background(), func(tx *kvTxn) error {
 				tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
 					if len(k) == 9 {
 						keys = append(keys, k)
@@ -491,7 +491,7 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		Length: 4 << 10,
 		Parent: 1,
 	}
-	return m.txn(Background, func(tx *kvTxn) error {
+	return m.txn(Background(), func(tx *kvTxn) error {
 		if format.TrashDays > 0 {
 			buf := tx.get(m.inodeKey(TrashInode))
 			if buf == nil {
@@ -570,7 +570,7 @@ func (m *kvMeta) doNewSession(sinfo []byte, update bool) error {
 }
 
 func (m *kvMeta) doRefreshSession() error {
-	return m.txn(Background, func(tx *kvTxn) error {
+	return m.txn(Background(), func(tx *kvTxn) error {
 		buf := tx.get(m.sessionKey(m.sid))
 		if buf == nil {
 			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
@@ -589,7 +589,7 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 			ls := unmarshalFlock(v)
 			for o := range ls {
 				if o.sid == sid {
-					if err = m.txn(Background, func(tx *kvTxn) error {
+					if err = m.txn(Background(), func(tx *kvTxn) error {
 						v := tx.get([]byte(k))
 						ls := unmarshalFlock(v)
 						delete(ls, o)
@@ -616,7 +616,7 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 			ls := unmarshalPlock(v)
 			for o := range ls {
 				if o.sid == sid {
-					if err = m.txn(Background, func(tx *kvTxn) error {
+					if err = m.txn(Background(), func(tx *kvTxn) error {
 						v := tx.get([]byte(k))
 						ls := unmarshalPlock(v)
 						delete(ls, o)
@@ -835,7 +835,7 @@ func (m *kvMeta) txn(ctx context.Context, f func(tx *kvTxn) error, inodes ...Ino
 }
 
 func (m *kvMeta) setValue(key, value []byte) error {
-	return m.txn(Background, func(tx *kvTxn) error {
+	return m.txn(Background(), func(tx *kvTxn) error {
 		tx.set(key, value)
 		return nil
 	})
@@ -849,7 +849,7 @@ func (m *kvMeta) getCounter(name string) (int64, error) {
 func (m *kvMeta) incrCounter(name string, value int64) (int64, error) {
 	var new int64
 	key := m.counterKey(name)
-	err := m.txn(Background, func(tx *kvTxn) error {
+	err := m.txn(Background(), func(tx *kvTxn) error {
 		new = tx.incrBy(key, value)
 		return nil
 	})
@@ -859,7 +859,7 @@ func (m *kvMeta) incrCounter(name string, value int64) (int64, error) {
 func (m *kvMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 	var changed bool
 	key := m.counterKey(name)
-	err := m.txn(Background, func(tx *kvTxn) error {
+	err := m.txn(Background(), func(tx *kvTxn) error {
 		changed = false
 		if m.parseInt64(tx.get(key)) > value-diff {
 			return nil
@@ -877,7 +877,7 @@ func (m *kvMeta) deleteKeys(keys ...[]byte) error {
 	if len(keys) == 0 {
 		return nil
 	}
-	return m.txn(Background, func(tx *kvTxn) error {
+	return m.txn(Background(), func(tx *kvTxn) error {
 		for _, key := range keys {
 			tx.delete(key)
 		}
@@ -1810,7 +1810,7 @@ func (m *kvMeta) fillAttr(entries []*Entry) (err error) {
 		keys[i] = m.inodeKey(e.Inode)
 	}
 	var rs [][]byte
-	err = m.client.txn(Background, func(tx *kvTxn) error {
+	err = m.client.txn(Background(), func(tx *kvTxn) error {
 		rs = tx.gets(keys...)
 		return nil
 	}, 0)
@@ -1885,7 +1885,7 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	var attr Attr
 	var newSpace int64
-	err := m.txn(Background, func(tx *kvTxn) error {
+	err := m.txn(Background(), func(tx *kvTxn) error {
 		newSpace = 0
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
@@ -2236,7 +2236,7 @@ func (m *kvMeta) doCleanupSlices() {
 func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 	key := m.chunkKey(inode, indx)
 	var todel []*slice
-	err := m.txn(Background, func(tx *kvTxn) error {
+	err := m.txn(Background(), func(tx *kvTxn) error {
 		todel = todel[:0]
 		buf := tx.get(key)
 		slices := readSliceBuf(buf)
@@ -2261,7 +2261,7 @@ func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 }
 
 func (m *kvMeta) cleanupZeroRef(id uint64, size uint32) {
-	_ = m.txn(Background, func(tx *kvTxn) error {
+	_ = m.txn(Background(), func(tx *kvTxn) error {
 		v := tx.incrBy(m.sliceKey(id, size), 0)
 		if v != 0 {
 			return syscall.EINVAL
@@ -2296,7 +2296,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	var keys [][]byte
 	var batch int = 1e5
 	for {
-		if err := m.client.txn(Background, func(tx *kvTxn) error {
+		if err := m.client.txn(Background(), func(tx *kvTxn) error {
 			keys = keys[:0]
 			var c int
 			tx.scan(m.delSliceKey(0, 0), m.delSliceKey(edge, 0),
@@ -2314,7 +2314,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 		}
 
 		for _, key := range keys {
-			if err := m.txn(Background, func(tx *kvTxn) error {
+			if err := m.txn(Background(), func(tx *kvTxn) error {
 				ss, rs = ss[:0], rs[:0]
 				buf := tx.get(key)
 				if len(buf) == 0 {
@@ -2348,7 +2348,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 }
 
 func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno {
-	st := errno(m.txn(Background, func(tx *kvTxn) error {
+	st := errno(m.txn(Background(), func(tx *kvTxn) error {
 		buf2 := tx.get(m.chunkKey(inode, indx))
 		if len(buf2) < len(buf) || !bytes.Equal(buf, buf2[:len(buf)]) {
 			logger.Infof("chunk %d:%d was changed %d -> %d", inode, indx, len(buf), len(buf2))
@@ -2386,7 +2386,7 @@ func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice,
 	}
 
 	if st == syscall.EINVAL {
-		_ = m.txn(Background, func(tx *kvTxn) error {
+		_ = m.txn(Background(), func(tx *kvTxn) error {
 			tx.incrBy(m.sliceKey(id, size), -1)
 			return nil
 		})
@@ -2395,7 +2395,7 @@ func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice,
 		if delayed == nil {
 			var refs int64
 			for _, s := range ss {
-				if s.id > 0 && m.client.txn(Background, func(tx *kvTxn) error {
+				if s.id > 0 && m.client.txn(Background(), func(tx *kvTxn) error {
 					refs = tx.incrBy(m.sliceKey(s.id, s.size), 0)
 					return nil
 				}, 0) == nil && refs < 0 {
@@ -2818,7 +2818,7 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
 }
 
 func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
-	return m.client.txn(Background, func(tx *kvTxn) error {
+	return m.client.txn(Background(), func(tx *kvTxn) error {
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			logger.Warnf("inode %d not found", inode)
@@ -3192,7 +3192,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	tree.Name = "FSTree"
 
 	var rs [][]byte
-	err = m.txn(Background, func(tx *kvTxn) error {
+	err = m.txn(Background(), func(tx *kvTxn) error {
 		rs = tx.gets(m.counterKey(usedSpace),
 			m.counterKey(totalInodes),
 			m.counterKey("nextInode"),
@@ -3367,7 +3367,7 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair, aclMaxId *uint32) {
 
 func (m *kvMeta) LoadMeta(r io.Reader) error {
 	var exist bool
-	err := m.txn(Background, func(tx *kvTxn) error {
+	err := m.txn(Background(), func(tx *kvTxn) error {
 		exist = tx.exist(m.fmtKey())
 		return nil
 	})
@@ -3394,7 +3394,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 				buffer = append(buffer, p)
 				total += len(p.key) + len(p.value)
 				if len(buffer) >= batch || total > 5<<20 {
-					err := m.txn(Background, func(tx *kvTxn) error {
+					err := m.txn(Background(), func(tx *kvTxn) error {
 						for _, p := range buffer {
 							tx.set(p.key, p.value)
 						}
@@ -3408,7 +3408,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 				}
 			}
 			if len(buffer) > 0 {
-				err := m.txn(Background, func(tx *kvTxn) error {
+				err := m.txn(Background(), func(tx *kvTxn) error {
 					for _, p := range buffer {
 						tx.set(p.key, p.value)
 					}
@@ -3452,8 +3452,8 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 
 	// update nlinks and parents for hardlinks
 	st := make(map[Ino]int64)
-  defer m.loadDumpedQuotas(Background(), dm.Quotas)
-  return m.txn(Background(), func(tx *kvTxn) error {
+	defer m.loadDumpedQuotas(Background(), dm.Quotas)
+	return m.txn(Background(), func(tx *kvTxn) error {
 		for i, ps := range parents {
 			if len(ps) > 1 {
 				a := tx.get(m.inodeKey(i))

@@ -263,7 +263,7 @@ func (c *memKV) reset(prefix []byte) error {
 		c.Unlock()
 		return nil
 	}
-	return c.txn(Background, func(kt *kvTxn) error {
+	return c.txn(Background(), func(kt *kvTxn) error {
 		return c.scan(prefix, func(key, value []byte) {
 			kt.delete(key)
 		})
