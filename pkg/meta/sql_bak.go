@@ -21,7 +21,9 @@ package meta
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -54,11 +56,25 @@ func (m *dbMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) err
 		m.dumpQuota,
 		m.dumpDirStat,
 	}
+
 	ctx.WithValue(txMaxRetryKey{}, 3)
 	if opt.Threads == 1 {
-		// use same session for all dumps
+		// use same txn for all dumps
 		sess := m.db.NewSession()
 		defer sess.Close()
+
+		opt := sql.TxOptions{
+			Isolation: sql.LevelRepeatableRead,
+			ReadOnly:  true,
+		}
+		err := sess.BeginTx(&opt)
+		if err != nil && (strings.Contains(err.Error(), "READ") || strings.Contains(err.Error(), "driver does not support read-only transactions")) {
+			logger.Warnf("the database does not support read-only transaction")
+			opt = sql.TxOptions{} // use default level
+			if err = sess.BeginTx(&opt); err != nil {
+				return err
+			}
+		}
 		ctx.WithValue(txSessionKey{}, sess)
 	}
 	for _, f := range dumps {
@@ -68,6 +84,13 @@ func (m *dbMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) err
 		}
 	}
 	return nil
+}
+
+func (m *dbMeta) execTxn(ctx context.Context, f func(s *xorm.Session) error) error {
+	if val := ctx.Value(txSessionKey{}); val != nil {
+		return f(val.(*xorm.Session))
+	}
+	return m.roTxn(ctx, f)
 }
 
 func sqlQueryBatch(ctx Context, opt *DumpOption, maxId uint64, query func(ctx context.Context, start, end uint64) (int, error)) error {
@@ -97,7 +120,7 @@ func (m *dbMeta) dumpNodes(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 	}
 
 	var rows []node
-	if err := m.roTxn(ctx, func(s *xorm.Session) error {
+	if err := m.execTxn(ctx, func(s *xorm.Session) error {
 		return s.Where("inode >= ?", TrashInode).Find(&rows)
 	}); err != nil {
 		return err
@@ -116,7 +139,7 @@ func (m *dbMeta) dumpNodes(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 	}
 
 	var maxInode uint64
-	err := m.roTxn(ctx, func(s *xorm.Session) error {
+	err := m.execTxn(ctx, func(s *xorm.Session) error {
 		var row node
 		ok, err := s.Select("max(inode) as inode").Where("inode < ?", TrashInode).Get(&row)
 		if ok {
@@ -130,7 +153,7 @@ func (m *dbMeta) dumpNodes(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 
 	return sqlQueryBatch(ctx, opt, maxInode, func(ctx context.Context, start, end uint64) (int, error) {
 		var rows []node
-		if err := m.roTxn(ctx, func(s *xorm.Session) error {
+		if err := m.execTxn(ctx, func(s *xorm.Session) error {
 			return s.Where("inode >= ? AND inode < ?", start, end).Find(&rows)
 		}); err != nil {
 			return 0, err
@@ -157,7 +180,7 @@ func (m *dbMeta) dumpChunks(ctx Context, opt *DumpOption, ch chan<- *dumpedResul
 	}
 
 	var maxId uint64
-	err := m.roTxn(ctx, func(s *xorm.Session) error {
+	err := m.execTxn(ctx, func(s *xorm.Session) error {
 		var row chunk
 		ok, err := s.Select("MAX(id) as id").Get(&row)
 		if ok {
@@ -171,7 +194,7 @@ func (m *dbMeta) dumpChunks(ctx Context, opt *DumpOption, ch chan<- *dumpedResul
 
 	return sqlQueryBatch(ctx, opt, maxId, func(ctx context.Context, start, end uint64) (int, error) {
 		var rows []chunk
-		if err := m.roTxn(ctx, func(s *xorm.Session) error {
+		if err := m.execTxn(ctx, func(s *xorm.Session) error {
 			return s.Where("id >= ? AND id < ?", start, end).Find(&rows)
 		}); err != nil {
 			return 0, err
@@ -197,7 +220,7 @@ func (m *dbMeta) dumpEdges(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 	}
 
 	var maxId uint64
-	err := m.roTxn(ctx, func(s *xorm.Session) error {
+	err := m.execTxn(ctx, func(s *xorm.Session) error {
 		var row edge
 		ok, err := s.Select("MAX(id) as id").Get(&row)
 		if ok {
@@ -213,7 +236,7 @@ func (m *dbMeta) dumpEdges(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 	dumpParents := make(map[uint64][]uint64)
 	err = sqlQueryBatch(ctx, opt, maxId, func(ctx context.Context, start, end uint64) (int, error) {
 		var rows []edge
-		if err := m.roTxn(ctx, func(s *xorm.Session) error {
+		if err := m.execTxn(ctx, func(s *xorm.Session) error {
 			return s.Where("id >= ? AND id < ?", start, end).Find(&rows)
 		}); err != nil {
 			return 0, err
@@ -262,7 +285,7 @@ func (m *dbMeta) dumpEdges(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 
 func (m *dbMeta) dumpSymlinks(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []symlink
-	if err := m.roTxn(ctx, func(s *xorm.Session) error {
+	if err := m.execTxn(ctx, func(s *xorm.Session) error {
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -283,7 +306,7 @@ func (m *dbMeta) dumpSymlinks(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 
 func (m *dbMeta) dumpCounters(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []counter
-	if err := m.roTxn(ctx, func(s *xorm.Session) error {
+	if err := m.execTxn(ctx, func(s *xorm.Session) error {
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -292,12 +315,13 @@ func (m *dbMeta) dumpCounters(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 	for _, row := range rows {
 		counters = append(counters, &pb.Counter{Key: row.Name, Value: row.Value})
 	}
+	logger.Debugf("dump counters %+v", counters)
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Counters: counters}})
 }
 
 func (m *dbMeta) dumpSustained(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []sustained
-	if err := m.roTxn(ctx, func(s *xorm.Session) error {
+	if err := m.execTxn(ctx, func(s *xorm.Session) error {
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -315,7 +339,7 @@ func (m *dbMeta) dumpSustained(ctx Context, opt *DumpOption, ch chan<- *dumpedRe
 
 func (m *dbMeta) dumpDelFiles(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []delfile
-	if err := m.roTxn(ctx, func(s *xorm.Session) error {
+	if err := m.execTxn(ctx, func(s *xorm.Session) error {
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -335,7 +359,7 @@ func (m *dbMeta) dumpDelFiles(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 
 func (m *dbMeta) dumpSliceRef(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []sliceRef
-	if err := m.roTxn(ctx, func(s *xorm.Session) error {
+	if err := m.execTxn(ctx, func(s *xorm.Session) error {
 		return s.Where("refs != 1").Find(&rows) // skip default refs
 	}); err != nil {
 		return err
@@ -355,7 +379,7 @@ func (m *dbMeta) dumpSliceRef(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 
 func (m *dbMeta) dumpACL(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []acl
-	if err := m.roTxn(ctx, func(s *xorm.Session) error {
+	if err := m.execTxn(ctx, func(s *xorm.Session) error {
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -372,7 +396,7 @@ func (m *dbMeta) dumpACL(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) 
 
 func (m *dbMeta) dumpXattr(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []xattr
-	if err := m.roTxn(ctx, func(s *xorm.Session) error {
+	if err := m.execTxn(ctx, func(s *xorm.Session) error {
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -396,7 +420,7 @@ func (m *dbMeta) dumpXattr(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 
 func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []dirQuota
-	if err := m.roTxn(ctx, func(s *xorm.Session) error {
+	if err := m.execTxn(ctx, func(s *xorm.Session) error {
 		return s.Find(&rows)
 	}); err != nil {
 		return err
@@ -416,7 +440,7 @@ func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 
 func (m *dbMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []dirStats
-	if err := m.roTxn(ctx, func(s *xorm.Session) error {
+	if err := m.execTxn(ctx, func(s *xorm.Session) error {
 		return s.Find(&rows)
 	}); err != nil {
 		return err
