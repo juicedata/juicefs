@@ -48,7 +48,9 @@ public class BgTaskUtil {
     synchronized (runningInstance) {
       LOG.debug("register instance for {}({})", volName, handle);
       if (!runningInstance.containsKey(volName)) {
-        runningInstance.put(volName, new HashSet<>());
+        Set<Long> handles = new HashSet<>();
+        handles.add(handle);
+        runningInstance.put(volName, handles);
       } else {
         runningInstance.get(volName).add(handle);
       }

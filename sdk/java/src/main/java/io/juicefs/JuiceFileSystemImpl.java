@@ -450,7 +450,9 @@ public class JuiceFileSystemImpl extends FileSystem {
       throw new IOException("JuiceFS initialized failed for jfs://" + name);
     }
     boolean asBgTask = conf.getBoolean("juicefs.internal-bg-task", false);
-    if (!asBgTask) {
+    if (asBgTask) {
+      LOG.debug("background fs {}|({})", name, handle);
+    } else {
       BgTaskUtil.register(name, handle);
     }
     homeDirPrefix = conf.get("dfs.user.home.dir.prefix", "/user");

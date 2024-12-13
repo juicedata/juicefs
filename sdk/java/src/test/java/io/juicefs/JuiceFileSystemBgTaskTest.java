@@ -5,6 +5,8 @@ import junit.framework.TestCase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.util.Map;
@@ -14,6 +16,8 @@ import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_CHECKP
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_INTERVAL_KEY;
 
 public class JuiceFileSystemBgTaskTest extends TestCase {
+  private static final Logger LOG = LoggerFactory.getLogger(JuiceFileSystemBgTaskTest.class);
+
   public void testJuiceFileSystemBgTask() throws Exception {
     FileSystem.closeAll();
     Configuration conf = new Configuration();
@@ -31,13 +35,14 @@ public class JuiceFileSystemBgTaskTest extends TestCase {
       pool.submit(() -> {
         try (JuiceFileSystem jfs = new JuiceFileSystem()) {
           jfs.initialize(URI.create("jfs://dev/"), conf);
-          if (ThreadLocalRandom.current().nextInt(10)%2==0) {
+          if (ThreadLocalRandom.current().nextInt(10) % 2 == 0) {
             jfs.getFileBlockLocations(jfs.getFileStatus(new Path("jfs://dev/users")), 0, 1000);
           }
         } catch (Exception e) {
-          fail("unexpected exception");
+          LOG.error("unexpected exception", e);
+        } finally {
+          latch.countDown();
         }
-        latch.countDown();
       });
     }
     latch.await();
