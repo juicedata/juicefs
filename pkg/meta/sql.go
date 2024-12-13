@@ -234,8 +234,9 @@ type dirQuota struct {
 
 type dbMeta struct {
 	*baseMeta
-	db   *xorm.Engine
-	snap *dbSnap
+	db    *xorm.Engine
+	spool *sync.Pool
+	snap  *dbSnap
 
 	noReadOnlyTxn bool
 }
@@ -325,6 +326,15 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	m := &dbMeta{
 		baseMeta: newBaseMeta(addr, conf),
 		db:       engine,
+	}
+	m.spool = &sync.Pool{
+		New: func() interface{} {
+			s := engine.NewSession()
+			runtime.SetFinalizer(s, func(s *xorm.Session) {
+				_ = s.Close()
+			})
+			return s
+		},
 	}
 	m.en = m
 	return m, nil
@@ -847,7 +857,8 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 		s = v.(*xorm.Session)
 	} else {
 		s = m.db.NewSession()
-		defer s.Close()
+		s = m.spool.Get().(*xorm.Session)
+		defer m.spool.Put(s)
 	}
 	var opt sql.TxOptions
 	if !m.noReadOnlyTxn {
@@ -905,8 +916,8 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 func (m *dbMeta) simpleTxn(ctx context.Context, f func(s *xorm.Session) error) error {
 	start := time.Now()
 	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
-	s := m.db.NewSession()
-	defer s.Close()
+	s := m.spool.Get().(*xorm.Session)
+	defer m.spool.Put(s)
 
 	var maxRetry int = 50
 	var lastErr error
