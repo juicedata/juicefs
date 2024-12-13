@@ -75,7 +75,7 @@ func (m *dbMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) err
 				return err
 			}
 		}
-		defer sess.Rollback()
+		defer sess.Rollback() //nolint:errcheck
 		ctx.WithValue(txSessionKey{}, sess)
 	}
 	for _, f := range dumps {
