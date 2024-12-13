@@ -66,7 +66,8 @@ public class JuiceFileSystem extends FilterFileSystem {
   public void initialize(URI uri, Configuration conf) throws IOException {
     super.initialize(uri, conf);
     fileChecksumEnabled = Boolean.parseBoolean(getConf(conf, "file.checksum", "false"));
-    if (!Boolean.parseBoolean(getConf(conf, "disable-trash-emptier", "false"))) {
+    boolean asBgTask = conf.getBoolean("juicefs.internal-bg-task", false);
+    if (!asBgTask && !Boolean.parseBoolean(getConf(conf, "disable-trash-emptier", "false"))) {
       try {
         Configuration newConf = new Configuration(conf);
         newConf.setBoolean("juicefs.internal-bg-task", true);
