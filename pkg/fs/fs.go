@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/acl"
 	"io"
 	"os"
 	"path"
@@ -30,6 +29,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/acl"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -762,7 +763,9 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 		if len(name) == 0 {
 			continue
 		}
-		if parent == meta.RootInode && i == len(ss)-1 && vfs.IsSpecialName(name) {
+		isSpCtrlFile := i == len(ss)-1 && vfs.IsSpecialControlName(name)
+		isRootSpFile := parent == meta.RootInode && i == len(ss)-1 && vfs.IsSpecialName(name)
+		if isRootSpFile || isSpCtrlFile {
 			inode, attr := vfs.GetInternalNodeByName(name)
 			fi = AttrToFileInfo(inode, attr)
 			parent = inode

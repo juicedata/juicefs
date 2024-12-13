@@ -333,8 +333,10 @@ func bench(ctx *cli.Context) error {
 		purgeArgs = append(purgeArgs, "purge")
 	case "linux":
 		purgeArgs = append(purgeArgs, "/bin/sh", "-c", "echo 3 > /proc/sys/vm/drop_caches")
+	case "windows":
+		break
 	default:
-		logger.Fatal("Currently only support Linux/macOS")
+		logger.Fatal("Currently only support Linux/MacOS/Windows")
 	}
 
 	/* --- Prepare --- */
@@ -345,7 +347,7 @@ func bench(ctx *cli.Context) error {
 	}
 	mp, _ := findMountpoint(bm.tmpdir)
 	dropCaches := func() {
-		if os.Getenv("SKIP_DROP_CACHES") != "true" {
+		if os.Getenv("SKIP_DROP_CACHES") != "true" && runtime.GOOS != "windows" {
 			if err := exec.Command(purgeArgs[0], purgeArgs[1:]...).Run(); err != nil {
 				logger.Warnf("Failed to clean kernel caches: %s", err)
 			}

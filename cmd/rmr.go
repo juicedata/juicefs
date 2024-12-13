@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -59,10 +58,6 @@ func openController(dpath string) (*os.File, error) {
 
 func rmr(ctx *cli.Context) error {
 	setup(ctx, 1)
-	if runtime.GOOS == "windows" {
-		logger.Infof("Windows is not supported")
-		return nil
-	}
 	progress := utils.NewProgress(false)
 	spin := progress.AddCountSpinner("Removing entries")
 	for i := 0; i < ctx.Args().Len(); i++ {
