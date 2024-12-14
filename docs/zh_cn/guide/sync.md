@@ -133,7 +133,7 @@ juicefs sync --match-full-path --include='*' --exclude='**/tmpdir/**' s3://xxx/ 
   --exclude '*'
   ```
 
-## 存储协议 {#storage-systems}
+## 存储协议 {#storage-protocols}
 
 凡是 JuiceFS 支持的[存储系统](../reference/how_to_set_up_object_storage.md)，都可以使用 sync 命令来同步数据。特别一提，如果其中一端是 JuiceFS 文件系统，那么建议优先使用[无挂载点同步](#sync-without-mount-point)方式。
 
@@ -145,9 +145,15 @@ juicefs sync --match-full-path --include='*' --exclude='**/tmpdir/**' s3://xxx/ 
 myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ jfs://myfs/movies/
 ```
 
+当使用 `jfs://` 协议头时，可以传入 `juicefs mount` 的挂载参数来帮助提升传输性能，比如 `--max-downloads`, `--max-uploads`, `--buffer-size` 等，比方说在带宽充裕的情况下拷贝大文件，可以启用更大的读写缓冲区来提升性能：
+
+```shell
+myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ jfs://myfs/movies/ --buffer-size=1024
+```
+
 ### 对象存储与 JuiceFS 之间同步 {#synchronize-between-object-storage-and-juicefs}
 
-将 [对象存储 A](#required-storages) 的 `movies` 目录同步到 [JuiceFS 文件系统](#required-storages)：
+将对象存储的 `movies` 目录同步到 JuiceFS 文件系统：
 
 ```shell
 # 挂载 JuiceFS
@@ -156,7 +162,7 @@ juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
 
-将 [JuiceFS 文件系统](#required-storages) 的 `images` 目录同步到 [对象存储 A](#required-storages)：
+将 JuiceFS 文件系统的 `images` 目录同步到对象存储：
 
 ```shell
 # 挂载 JuiceFS
@@ -167,7 +173,7 @@ juicefs sync /mnt/jfs/images/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.co
 
 ### 对象存储与对象存储之间同步 {#synchronize-between-object-storages}
 
-将 [对象存储 A](#required-storages) 的全部数据同步到 [对象存储 B](#required-storages)：
+将对象存储的全部数据同步到另一个对象存储桶：
 
 ```shell
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
@@ -190,6 +196,64 @@ juicefs sync /media/ "username:password"@192.168.1.100:/backup/
 ```
 
 当使用 SFTP/SSH 协议时，如果没有指定密码，执行 sync 任务时会提示输入密码。如果希望显式指定用户名和密码，则需要用半角引号把用户名和密码括起来，用户名和密码之间用半角冒号分隔。
+
+## 同步行为
+
+### 增量同步与全量同步 {#incremental-and-full-synchronization}
+
+`juicefs sync` 默认以增量同步方式工作，对于已存在的文件，仅在文件大小不一样时，才再次同步进行覆盖。在此基础上，还可以指定 [`--update`](../reference/command_reference.mdx#sync)，在源文件 `mtime` 更新时进行覆盖。如果你的场景对正确性有着极致要求，可以指定 [`--check-new`](../reference/command_reference.mdx#sync) 或 [`--check-all`](../reference/command_reference.mdx#sync)，来对两边的文件进行字节流比对，确保数据一致。
+
+如需全量同步，即不论目标路径上是否存在相同的文件都重新同步，可以使用 `--force-update` 或 `-f`。例如，将对象存储的 `movies` 目录全量同步到 JuiceFS 文件系统：
+
+```shell
+# 挂载 JuiceFS
+juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
+# 执行全量同步
+juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
+```
+
+### 目录结构与文件权限 {#directory-structure-and-file-permissions}
+
+默认情况下，sync 命令只同步文件对象以及包含文件对象的目录，空目录不会被同步。如需同步空目录，可以使用 `--dirs` 选项。
+
+另外，在 local、SFTP、HDFS 等文件系统之间同步时，如需保持文件权限，可以使用 `--perms` 选项。
+
+### 拷贝符号链接 {#copy-symbolic-links}
+
+JuiceFS `sync` 在**本地目录之间**同步时，支持通过设置 `--links` 选项开启遇到符号链时同步其自身而不是其指向的对象的功能。同步后的符号链接指向的路径为源符号链接中存储的原始路径，无论该路径在同步前后是否可达都不会被转换。
+
+另外需要注意的几个细节
+
+1. 符号链接自身的 `mtime` 不会被拷贝；
+1. `--check-new` 和 `--perms` 选项的行为在遇到符号链接时会被忽略。
+
+### 数据同步与碎片合并 {#sync-and-compaction}
+
+对于顺序写场景，一定要尽力保证每个文件的写入都有最少 4M（默认块大小）的缓冲区可用，如果写并发太高，或者缓冲区设置太小，都会导致原本高效的“大块写”退化为“碎片化缓慢写”。叠加上 JuiceFS 的碎片合并，可能会带来严重的写放大问题。
+
+碎片合并情况可以通过 `juicefs_compact_size_histogram_bytes` 这个指标来观测。如果在 `sync` 期间碎片合并流量很高，说明需要进行相关调优。推荐实践和调优思路如下：
+
+* 如果对象存储的写带宽不足，慎用高并发（`--threads`），最好从默认值甚至更低的并发开始测起，谨慎增加到满意的速度；
+* 当目的地是 JuiceFS 文件系统的时候，推荐使用 `jfs://` 协议头，这种方式不需要 FUSE 挂载点，能减少资源开销，并且还提前针对碎片合并导致的写放大问题进行了优化（持久化间隔已经设置为每 60 秒一次，阅读下一点详细了解原理）；
+* 如果必须使用 FUSE 挂载点来同步数据，那么对于大文件同步场景，建议调整挂载参数 [`--flush-wait=60s`](../reference/command_reference.mdx#object-storage-options)，将默认 5 秒一次的持久化改为 60 秒，减少碎片量导致的写放大。详细阅读[写放大的排查](../administration/troubleshooting.md#write-amplification)以了解更多；
+* 如果目的地是 JuiceFS 文件系统，确保该文件系统的 JuiceFS 客户端有着充足的[读写缓冲区](./cache.md#buffer-size)，按照每个文件的写入都必须起码预留 4M 的写入空间，那么 `--buffer-size` 起码要大于等于 `--threads` 参数的 4 倍，如果希望进一步提高写入并发，那么建议使用 8 或 12 倍的并发量来设置缓冲区。特别注意，根据写入目的地使用的协议头不同，设置缓冲区的方法也不同：
+  * 目的地是 `jfs://` 协议头的文件系统，客户端进程就是 `juicefs sync` 命令本身，此时 `--buffer-size` 参数需要追加到 `juicefs sync` 命令里；
+  * 目的地是本地的 FUSE 挂载点，那么客户端进程是宿主机上运行的 `juicefs mount` 命令，此时 `--buffer-size` 参数追加到该挂载点的 `juicefs mount` 命令里。
+* 如果需要施加限速，那么加上了 `--bwlimit` 参数后，需要降低 `--threads`，避免过高的并发争抢带宽，产生类似的碎片化问题。每个对象存储的延迟和吞吐不尽相同，再次无法给出细致的调优计算流程，建议从更低的并发开始重新测试。
+
+### 删除特定文件
+
+模式匹配还可以实现删除存储系统中特定文件。诀窍是在本地创建一个空目录，将其作为 `SRC`。
+
+示范如下，谨慎起见，所有示范均添加了 `--dry --debug` 选项来空运行，不会实际删除任何文件，而是打印执行计划。验证成功后，去掉这两个选项便能实际执行。
+
+```shell
+mkdir empty-dir
+# 删除 mybucket 中所有对象，但保留后缀名为 .gz 的文件
+juicefs sync ./empty-dir/ s3://mybucket.s3.us-east-2.amazonaws.com/ --match-full-path --delete-dst --exclude='**.gz' --include='*' --dry --debug
+# 删除 mybucket 中所有后缀名为 .gz 的文件
+juicefs sync ./empty-dir/ s3://mybucket.s3.us-east-2.amazonaws.com/ --match-full-path --delete-dst --include='**.gz' --exclude='*' --dry --debug
+```
 
 ## 加速同步 {#accelerate-sync}
 
@@ -270,39 +334,11 @@ juicefs sync --worker host1,host2 /jfs-src /jfs-dst
 
 如果需要监控 `sync` 命令的进度，可以使用 [`--metrics`](../reference/command_reference.mdx#sync-metrics-related-options) 参数指定监控指标地址，默认为 `127.0.0.1:9567`。用 Prometheus 抓取这些指标，就能进行监控。
 
-### 增量同步与全量同步 {#incremental-and-full-synchronization}
-
-`juicefs sync` 默认以增量同步方式工作，对于已存在的文件，仅在文件大小不一样时，才再次同步进行覆盖。在此基础上，还可以指定 [`--update`](../reference/command_reference.mdx#sync)，在源文件 `mtime` 更新时进行覆盖。如果你的场景对正确性有着极致要求，可以指定 [`--check-new`](../reference/command_reference.mdx#sync) 或 [`--check-all`](../reference/command_reference.mdx#sync)，来对两边的文件进行字节流比对，确保数据一致。
-
-如需全量同步，即不论目标路径上是否存在相同的文件都重新同步，可以使用 `--force-update` 或 `-f`。例如，将 [对象存储 A](#required-storages) 的 `movies` 目录全量同步到 [JuiceFS 文件系统](#required-storages)：
-
-```shell
-# 挂载 JuiceFS
-juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
-# 执行全量同步
-juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
-```
-
-### 目录结构与文件权限 {#directory-structure-and-file-permissions}
-
-默认情况下，sync 命令只同步文件对象以及包含文件对象的目录，空目录不会被同步。如需同步空目录，可以使用 `--dirs` 选项。
-
-另外，在 local、SFTP、HDFS 等文件系统之间同步时，如需保持文件权限，可以使用 `--perms` 选项。
-
-### 拷贝符号链接 {#copy-symbolic-links}
-
-JuiceFS `sync` 在**本地目录之间**同步时，支持通过设置 `--links` 选项开启遇到符号链时同步其自身而不是其指向的对象的功能。同步后的符号链接指向的路径为源符号链接中存储的原始路径，无论该路径在同步前后是否可达都不会被转换。
-
-另外需要注意的几个细节
-
-1. 符号链接自身的 `mtime` 不会被拷贝；
-1. `--check-new` 和 `--perms` 选项的行为在遇到符号链接时会被忽略。
-
 ## 场景应用 {#application-scenarios}
 
 ### 数据异地容灾备份 {#geo-disaster-recovery-backup}
 
-异地容灾备份针对的是文件本身，因此应将 JuiceFS 中存储的文件同步到其他的对象存储，例如，将 [JuiceFS 文件系统](#required-storages) 中的文件同步到 [对象存储 A](#required-storages)：
+异地容灾备份针对的是文件本身，因此应将 JuiceFS 中存储的文件同步到其他的对象存储，例如，将 JuiceFS 文件系统中的文件同步到对象存储：
 
 ```shell
 # 挂载 JuiceFS
@@ -311,19 +347,15 @@ juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 ```
 
-同步以后，在 [对象存储 A](#required-storages) 中可以直接看到所有的文件。
-
 ### 建立 JuiceFS 数据副本 {#build-a-juicefs-data-copy}
 
 与面向文件本身的容灾备份不同，建立 JuiceFS 数据副本的目的是为 JuiceFS 的数据存储建立一个内容和结构完全相同的镜像，当使用中的对象存储发生了故障，可以通过修改配置切换到数据副本继续工作。需要注意这里仅复制了 JuiceFS 文件系统的数据，并没有复制元数据，元数据引擎的数据备份依然需要。
 
-这需要直接操作 JuiceFS 底层的对象存储，将它与目标对象存储之间进行同步。例如，要把 [对象存储 B](#required-storages) 作为 [JuiceFS 文件系统](#required-storages) 的数据副本：
+这需要直接操作 JuiceFS 底层的对象存储，将它与目标对象存储之间进行同步。例如，要把对象存储作为 JuiceFS 文件系统的数据副本：
 
 ```shell
 juicefs sync cos://ABCDEFG:HIJKLMN@ccc-125000.cos.ap-beijing.myqcloud.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
 ```
-
-同步以后，在 [对象存储 B](#required-storages) 中看到的与 [JuiceFS 使用的对象存储](#required-storages) 中的内容和结构完全一样。
 
 ### 使用 S3 网关进行跨区域数据同步 {#sync-across-region}
 

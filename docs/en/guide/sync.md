@@ -7,7 +7,7 @@ description: Learn how to use juicefs sync for efficient data synchronization ac
 [`juicefs sync`](../reference/command_reference.mdx#sync) is a powerful data synchronization tool that can copy data across all supported storage systems, including object storage, JuiceFS, and local file systems. You can freely copy data between any of these systems. It also supports syncing remote directories accessed via SSH, HDFS, and WebDAV. Advanced features include incremental synchronization, pattern matching (like rsync), and distributed syncing.
 
 :::tip Mixing Community and Enterprise Editions
-`juicefs sync` shares code between Community and Enterprise Editions. Therefore, even when you use different editions of the JuiceFS client, `sync` works normally. The only exception is when the [`jfs://`](#sync-without-fuse) protocol header is involved. Due to the different metadata engine implementations in the Community and Enterprise Editions, clients from different editions cannot be mixed when using the `jfs://` protocol header.
+`juicefs sync` shares code between Community and Enterprise Editions. Therefore, even when you use different editions of the JuiceFS client, `sync` works normally. The only exception is when the [`jfs://`](#sync-without-mount-point) protocol header is involved. Due to the different metadata engine implementations in the Community and Enterprise Editions, clients from different editions cannot be mixed when using the `jfs://` protocol header.
 :::
 
 `juicefs sync` works like this:
@@ -69,7 +69,7 @@ The `sync` command supports two filtering modes: *full path filtering* and *laye
 
 ### Full path filtering (recommended) <VersionAdd>1.2.0</VersionAdd> {#full-path-filtering-mode}
 
-Since 5.0.18, JuiceFS Enterprise Edition supports the `--match-full-path` option. This mode directly matches the full path of an object against all specified filters sequentially. Once a pattern matches, the result is returned (either "include" or "exclude"), and subsequent patterns are ignored.
+Since v1.2.0, JuiceFS supports the `--match-full-path` option. This mode directly matches the full path of an object against all specified filters sequentially. Once a pattern matches, the result is returned (either "include" or "exclude"), and subsequent patterns are ignored.
 
 Below is the workflow of full path filtering mode:
 
@@ -135,11 +135,71 @@ One solution is to include all directories in the directory hierarchy by using t
   --exclude '*'
   ```
 
+## Storage protocols {#storage-protocols}
+
+You can sync data between any [supported storage system](../reference/how_to_set_up_object_storage.md), but note that if one of the endpoint is a JuiceFS volume, it it then recommended to [sync without mount point](#sync-without-mount-point) since it runs without FUSE overhead.
+
+### Sync without mount point <VersionAdd>1.1</VersionAdd> {#sync-without-mount-point}
+
+For data migrations that involve JuiceFS, it's recommended use the `jfs://` protocol, rather than mount JuiceFS and access its local directory, which bypasses the FUSE mount point and access JuiceFS directly. Under large scale scenarios, bypassing FUSE can save precious resources and increase performance.
+
+```shell
+myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ jfs://myfs/movies/
+```
+
+When using the `jfs://` protocol, you can pass mounting parameters from `juicefs mount` to improve transfer performance, such as `--max-downloads`, `--max-uploads`, and `--buffer-size`, for example, when copying large files with abundant bandwidth, increase buffer size to raise performance:
+
+```shell
+myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ jfs://myfs/movies/ --buffer-size=1024
+```
+
+### Synchronize between object storage and JuiceFS {#synchronize-between-object-storage-and-juicefs}
+
+The following command synchronizes `movies` directory from object storage to JuiceFS.
+
+```shell
+# mount JuiceFS
+juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
+# synchronize
+juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
+```
+
+The following command synchronizes `images` directory from JuiceFS to object storage.
+
+```shell
+# mount JuiceFS
+juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
+# synchronization
+juicefs sync /mnt/jfs/images/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/images/
+```
+
+### Synchronize between object storages {#synchronize-between-object-storages}
+
+The following command synchronizes all of the data from object storage to another bucket.
+
+```shell
+juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
+```
+
+### Synchronize between local and remote servers {#synchronize-between-local-and-remote-servers}
+
+To copy files between directories on a local computer, simply specify the source and destination paths. For example, to synchronize the `/media/` directory with the `/backup/` directory:
+
+```shell
+juicefs sync /media/ /backup/
+```
+
+If you need to synchronize between servers, you can access the target server using the SFTP/SSH protocol. For example, to synchronize the local `/media/` directory with the `/backup/` directory on another server:
+
+```shell
+juicefs sync /media/ username@192.168.1.100:/backup/
+# Specify password (optional)
+juicefs sync /media/ "username:password"@192.168.1.100:/backup/
+```
+
+When using the SFTP/SSH protocol, if no password is specified, the sync task will prompt for the password. If you want to explicitly specify the username and password, you need to enclose them in double quotation marks, with a colon separating the username and password.
+
 ## Sync behavior {#sync-behavior}
-
-### Sync without a mount point <VersionAdd>1.1</VersionAdd> {#sync-without-fuse}
-
-For data synchronization that involves JuiceFS, it is recommended to use the `jfs://` protocol instead of mounting JuiceFS and accessing its local directory. This approach bypasses the FUSE mount point and accesses JuiceFS directly. This process still requires the client configuration file. You should prepare it in advance using [`juicefs auth`](../reference/command_reference.mdx#auth). In large-scale scenarios, bypassing the FUSE mount point can save precious resources and improve data synchronization performance. When using the `jfs://` protocol, you can pass mounting parameters from `juicefs mount` to improve transfer performance, such as `--max-downloads`, `--max-uploads`, and `--buffer-size`.
 
 ### Incremental and full synchronization {#incremental-and-full-synchronization}
 
@@ -166,7 +226,7 @@ Note:
 
 For sequential write scenarios, ensure each file write has at least a 4M (the default block size) buffer available. If the write concurrency is too high or the buffer size is too small, the client will not be able to maintain the desired "writing by large chunks" pattern. Instead, it could only write by small slices, which combined with compaction, could really deteriorate performance due to write amplification.
 
-Compaction traffic can be monitored using `juicefs_compact_bytes`, available in the JuiceFS Web Console and the object storage section of the on-prem Grafana. If compaction traffic is substantial during a `sync` operation, consider the following optimizations:
+Compaction can be monitored using `juicefs_compact_size_histogram_bytes`, If compaction traffic is substantial during a `sync` operation, consider the following optimizations:
 
 * If the object storage bandwidth is limited, avoid setting high concurrency (`--threads`). Instead, start with low concurrency and gradually increase it until you get the desired speed.
 
@@ -180,6 +240,20 @@ Compaction traffic can be monitored using `juicefs_compact_bytes`, available in 
   * When the destination is a FUSE mount point, the JuiceFS client runs as the `juicefs mount` process on the host machine. In this case, `--buffer-size` needs to be added directly to the mount command.
 
 * If you need to limit the bandwidth via `--bwlimit`, you must also lower the `--threads` value to avoid write fragmentation caused by concurrency congestion. Since storage systems come with different performance levels, exact calculations cannot be provided here. Therefore, it is recommended to start with low concurrency and adjust as needed.
+
+### Delete selected files
+
+Using filters, you can even delete files by pattern via `juicefs sync`, the trick is to create an empty directory and use it as `SRC`.
+
+Below are some examples which uses `--dry --debug` just to be cautious, they will not delete anything as long as `--dry` is specified, after the behavior is verified, remove the option to actually execute.
+
+```shell
+mkdir empty-dir
+# Delete all objects in mybucket except the .gz files
+juicefs sync ./empty-dir/ s3://mybucket.s3.us-east-2.amazonaws.com/ --match-full-path --delete-dst --exclude='**.gz' --include='*' --dry --debug
+# Delete all files ending with .gz in mybucket
+juicefs sync ./empty-dir/ s3://mybucket.s3.us-east-2.amazonaws.com/ --match-full-path --delete-dst --include='**.gz' --exclude='*' --dry --debug
+```
 
 ## Accelerate synchronization {#accelerate-sync}
 
@@ -252,7 +326,34 @@ If you notice the progress bar is not changing, use the methods below for monito
     curl -s localhost:6061/debug/pprof/goroutine?debug=1
     ```
 
-## Sync across regions using S3 Gateway {#sync-across-region}
+## Application scenarios {#application-scenarios}
+
+### Geo-disaster recovery backup {#geo-disaster-recovery-backup}
+
+Geo-disaster recovery backup backs up files, and thus the files stored in JuiceFS should be synchronized to other object storages. For example, synchronize files in [JuiceFS File System](#required-storages) to [Object Storage A](#required-storages):
+
+```shell
+# mount JuiceFS
+juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
+# synchronization
+juicefs sync /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
+```
+
+After sync, you can see all the files in [Object Storage A](#required-storages).
+
+### Build a JuiceFS data copy {#build-a-juicefs-data-copy}
+
+Unlike the file-oriented disaster recovery backup, the purpose of creating a copy of JuiceFS data is to establish a mirror with exactly the same content and structure as the JuiceFS data storage. When the object storage in use fails, you can switch to the data copy by modifying the configurations. Note that only the file data of the JuiceFS file system is replicated, and the metadata stored in the metadata engine still needs to be backed up.
+
+This requires manipulating the underlying object storage directly to synchronize it with the target object storage. For example, to take the [Object Storage B](#required-storages) as the data copy of the [JuiceFS File System](#required-storages):
+
+```shell
+juicefs sync cos://ABCDEFG:HIJKLMN@ccc-125000.cos.ap-beijing.myqcloud.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
+```
+
+After sync, the file content and hierarchy in the [Object Storage B](#required-storages) are exactly the same as the [underlying object storage of JuiceFS](#required-storages).
+
+### Sync across regions using S3 Gateway {#sync-across-region}
 
 When transferring a large number of small files across different regions via FUSE mount points, clients will inevitably talk to the metadata service in the opposite region via the public internet (or dedicated network connection with limited bandwidth). In such cases, metadata latency can become the bottleneck of the data transfer:
 
