@@ -272,21 +272,32 @@ func (j *juice) Open(path string, flags int) (e int, fh uint64) {
 func (j *juice) OpenEx(path string, fi *fuse.FileInfo_t) (e int) {
 	ctx := j.newContext()
 	defer trace(path, fi.Flags)(&e)
-	f, err := j.fs.Open(ctx, path, 0)
-	if err != 0 {
-		e = -fuse.ENOENT
-		return
+	ino := meta.Ino(0)
+	if strings.HasSuffix(path, "/.control") {
+		ino, _ = vfs.GetInternalNodeByName(".control")
+		if ino == 0 {
+			e = -fuse.ENOENT
+			return
+		}
+	} else {
+		f, err := j.fs.Open(ctx, path, 0)
+		if err != 0 {
+			e = -fuse.ENOENT
+			return
+		}
+		ino = f.Inode()
 	}
-	entry, fh, errno := j.vfs.Open(ctx, f.Inode(), uint32(fi.Flags))
+
+	entry, fh, errno := j.vfs.Open(ctx, ino, uint32(fi.Flags))
 	if errno == 0 {
 		fi.Fh = fh
-		if vfs.IsSpecialNode(f.Inode()) {
+		if vfs.IsSpecialNode(ino) {
 			fi.DirectIo = true
 		} else {
 			fi.KeepCache = entry.Attr.KeepCache
 		}
 		j.Lock()
-		j.handlers[fh] = f.Inode()
+		j.handlers[fh] = ino
 		j.Unlock()
 	}
 	e = -int(errno)
@@ -363,11 +374,37 @@ func (j *juice) reopen(p string, fh *uint64) meta.Ino {
 }
 
 // Getattr gets file attributes.
+func (j *juice) getAttrForControlFile(ctx vfs.LogContext, p string, stat *fuse.Stat_t, fh uint64) (e int) {
+	parentDir := path.Dir(p)
+	_, err := j.fs.Stat(ctx, parentDir)
+	if err != 0 {
+		e = -fuse.ENOENT
+		return
+	}
+
+	inode, attr := vfs.GetInternalNodeByName(".control")
+	if inode == 0 {
+		e = -fuse.ENOENT
+		return
+	}
+
+	j.vfs.UpdateLength(inode, attr)
+	attrToStat(inode, attr, stat)
+	return
+}
+
+// Getattr gets file attributes.
 func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 	ctx := j.newContext()
 	defer trace(p, fh)(stat, &e)
 	ino := j.h2i(&fh)
 	if ino == 0 {
+		// special case for .control file
+		if strings.HasSuffix(p, "/.control") {
+			j.getAttrForControlFile(ctx, p, stat, fh)
+			return
+		}
+
 		fi, err := j.fs.Stat(ctx, p)
 		if err != 0 {
 			e = -fuse.ENOENT
@@ -585,6 +622,7 @@ func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayCl
 	host := fuse.NewFileSystemHost(&jfs)
 	jfs.host = host
 	var options = "volname=" + conf.Format.Name
+	// create_umask 022 results in 755 for directories and 644 for files, see https://github.com/winfsp/sshfs-win/issues/14
 	options += ",ExactFileSystemName=JuiceFS,create_umask=022,ThreadCount=16"
 	options += ",DirInfoTimeout=1000,VolumeInfoTimeout=1000,KeepFileCache"
 	options += fmt.Sprintf(",FileInfoTimeout=%d", int(fileCacheTo*1000))
