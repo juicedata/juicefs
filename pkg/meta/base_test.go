@@ -545,7 +545,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Resolve(ctx2, 1, "/d1/d2", nil, nil); st != 0 && st != syscall.ENOTSUP {
 		t.Fatalf("resolve /d1/d2: %s", st)
 	}
-	if st := m.Remove(ctx, 1, "d1", nil); st != 0 {
+	if st := m.Remove(ctx, 1, "d1", false, nil); st != 0 {
 		t.Fatalf("Remove d1: %s", st)
 	}
 	attr.Atime = 2
@@ -1280,7 +1280,7 @@ func testResolve(t *testing.T, m Meta) {
 	}
 
 	defer func() {
-		if st := m.Remove(NewContext(0, 65534, []uint32{65534}), parent, "f", nil); st != 0 {
+		if st := m.Remove(NewContext(0, 65534, []uint32{65534}), parent, "f", false, nil); st != 0 {
 			t.Fatalf("remove /d/f by owner: %s", st)
 		}
 		if st := m.Rmdir(NewContext(0, 65534, []uint32{65534}), 1, "d"); st != 0 {
@@ -1312,7 +1312,7 @@ func testRemove(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "f", 0644, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
-	if st := m.Remove(ctx, 1, "f", nil); st != 0 {
+	if st := m.Remove(ctx, 1, "f", false, nil); st != 0 {
 		t.Fatalf("rmr f: %s", st)
 	}
 	if st := m.Mkdir(ctx, 1, "d", 0755, 0, 0, &parent, attr); st != 0 {
@@ -1341,7 +1341,7 @@ func testRemove(t *testing.T, m Meta) {
 	} else if len(entries) != 4099 {
 		t.Fatalf("entries: %d", len(entries))
 	}
-	if st := m.Remove(ctx, 1, "d", nil); st != 0 {
+	if st := m.Remove(ctx, 1, "d", false, nil); st != 0 {
 		t.Fatalf("rmr d: %s", st)
 	}
 }
@@ -1963,6 +1963,46 @@ func testTrash(t *testing.T, m Meta) {
 	if len(entries) != 9 {
 		t.Fatalf("entries: %d", len(entries))
 	}
+	// test Remove with skipTrash true/false
+	if st := m.Mkdir(ctx, 1, "d10", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d10: %s", st)
+	}
+	if st := m.Create(ctx, parent, "f10", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create d10/f10: %s", st)
+	}
+	if st := m.Mkdir(ctx, parent, "d10", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d10/d10: %s", st)
+	}
+	if st := m.Remove(ctx, 1, "d10", false, nil); st != 0 {
+		t.Fatalf("rmr d10: %s", st)
+	}
+	entries = entries[:0]
+	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
+		t.Fatalf("readdir: %s", st)
+	}
+	if len(entries) != 12 {
+		t.Fatalf("entries: %d", len(entries))
+	}
+	if st := m.Mkdir(ctx, 1, "d10", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d10: %s", st)
+	}
+	if st := m.Create(ctx, parent, "f10", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create d10/f10: %s", st)
+	}
+	if st := m.Mkdir(ctx, parent, "d10", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d10/d10: %s", st)
+	}
+	if st := m.Remove(ctx, 1, "d10", true, nil); st != 0 {
+		t.Fatalf("rmr d10: %s", st)
+	}
+	entries = entries[:0]
+	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
+		t.Fatalf("readdir: %s", st)
+	}
+	if len(entries) != 12 {
+		t.Fatalf("entries: %d", len(entries))
+	}
+
 	ctx2 := NewContext(1000, 1, []uint32{1})
 	if st := m.Unlink(ctx2, TrashInode+1, "d"); st != syscall.EPERM {
 		t.Fatalf("unlink d: %s", st)
@@ -2742,7 +2782,7 @@ func testClone(t *testing.T, m Meta) {
 	if noPreserveAttr.Mtimensec == cloneSrcAttr.Mtimensec {
 		t.Fatalf("clone: should not preserve mtime")
 	}
-	if eno := m.Remove(Background(), cloneDir, "no_preserve", nil); eno != 0 {
+	if eno := m.Remove(Background(), cloneDir, "no_preserve", false, nil); eno != 0 {
 		t.Fatalf("Rmdir: %s", eno)
 	}
 	// check attr
@@ -2764,7 +2804,7 @@ func testClone(t *testing.T, m Meta) {
 		t.Fatalf("should not delete slice")
 		return nil
 	})
-	if eno := m.Remove(Background(), cloneDir, "dir1", nil); eno != 0 {
+	if eno := m.Remove(Background(), cloneDir, "dir1", false, nil); eno != 0 {
 		t.Fatalf("Rmdir: %s", eno)
 	}
 
