@@ -120,10 +120,6 @@ func IsSpecialName(name string) bool {
 	return false
 }
 
-func IsSpecialControlName(name string) bool {
-	return name == ".control"
-}
-
 func getInternalNode(ino Ino) *internalNode {
 	for _, n := range internalNodes {
 		if ino == n.inode {

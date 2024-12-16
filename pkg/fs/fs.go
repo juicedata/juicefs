@@ -23,7 +23,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"runtime"
 	"runtime/trace"
 	"strconv"
 	"strings"
@@ -764,9 +763,7 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 		if len(name) == 0 {
 			continue
 		}
-		isWinSpCtrlFile := i == len(ss)-1 && runtime.GOOS == "windows" && vfs.IsSpecialControlName(name)
-		isRootSpFile := parent == meta.RootInode && i == len(ss)-1 && vfs.IsSpecialName(name)
-		if isRootSpFile || isWinSpCtrlFile {
+		if parent == meta.RootInode && i == len(ss)-1 && vfs.IsSpecialName(name) {
 			inode, attr := vfs.GetInternalNodeByName(name)
 			fi = AttrToFileInfo(inode, attr)
 			parent = inode
