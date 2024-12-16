@@ -856,8 +856,8 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 	if v := ctx.Value(txSessionKey{}); v != nil {
 		s = v.(*xorm.Session)
 	} else {
-		s = m.spool.Get().(*xorm.Session)
-		defer m.spool.Put(s)
+		s = m.db.NewSession()
+		defer s.Close()
 	}
 	var opt sql.TxOptions
 	if !m.noReadOnlyTxn {
