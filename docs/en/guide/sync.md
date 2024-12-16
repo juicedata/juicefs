@@ -232,8 +232,6 @@ Compaction can be monitored using `juicefs_compact_size_histogram_bytes`, If com
 
 * When the destination is a JuiceFS file system, use the `jfs://` protocol, because it bypasses the FUSE mount point (reducing overhead) and is already optimized for file fragmentation problems. See the next point for details.
 
-* If you must use a FUSE mount point for data synchronization, for large file transfers, it is recommended to add the [`--flush-wait=60s`](../reference/command_reference.mdx#object-storage-options) option. This effectively helps reduce the number of slices and mitigates write amplification. For more information, see [troubleshooting write amplification](https://github.com/juicedata/docs/pull/administration/troubleshooting.md#write-amplification).
-
 * When the destination is a JuiceFS file system, ensure the destination has sufficient available [buffer](https://github.com/juicedata/docs/pull/662/cache.md#buffer-size) capacity. Each write file handler must have at least 4MB of reserved memory. This means the `--buffer-size` should be at least 4 times the `--threads` value. If higher write concurrency is needed, consider setting it to 8 or 12 times the value. Depending on the destination file system's deployment model, you will use different methods to configure buffer size:
 
   * When the destination starts with the `jfs://` protocol, the JuiceFS client is part of the `juicefs sync` command itself. In this case, `--buffer-size` needs to be appended to the `juicefs sync` command.
@@ -296,6 +294,19 @@ juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa
 
 The synchronization workload between the two object storage services is shared by the manager machine and two workers, `bob@192.168.1.20` and `tom@192.168.8.10`.
 
+The above command demonstrates object → object sychronization, if you need to sync via FUSE mount points, then you need to mount the file system in all worker nodes, and then run the following command to achieve distributed sync:
+
+```shell
+# Source file system needs better read performance, increase its buffer-size
+parallel-ssh -h hosts.txt -i juicefs mount -d redis://10.10.0.8:6379/1 /jfs-src --buffer-size=1024 --cache-size=0
+
+# Destination file system needs better write performance
+parallel-ssh -h hosts.txt -i juicefs mount -d redis://10.10.0.8:6379/1 /jfs-dst --buffer-size=1024 --cache-size=0 --max-uploads=50
+
+# Copy data
+juicefs sync --worker host1,host2 /jfs-src /jfs-dst
+```
+
 ## Observation {#observation}
 
 When using `sync` to transfer large files, the progress bar might move slowly or get stuck. If this happens, you can observe the progress using other methods.
@@ -330,7 +341,7 @@ If you notice the progress bar is not changing, use the methods below for monito
 
 ### Geo-disaster recovery backup {#geo-disaster-recovery-backup}
 
-Geo-disaster recovery backup backs up files, and thus the files stored in JuiceFS should be synchronized to other object storages. For example, synchronize files in [JuiceFS File System](#required-storages) to [Object Storage A](#required-storages):
+Geo-disaster recovery backup backs up files, and thus the files stored in JuiceFS should be synchronized to other object storages. For example, synchronize files from JuiceFS to object storage:
 
 ```shell
 # mount JuiceFS
@@ -339,19 +350,15 @@ juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 ```
 
-After sync, you can see all the files in [Object Storage A](#required-storages).
-
 ### Build a JuiceFS data copy {#build-a-juicefs-data-copy}
 
 Unlike the file-oriented disaster recovery backup, the purpose of creating a copy of JuiceFS data is to establish a mirror with exactly the same content and structure as the JuiceFS data storage. When the object storage in use fails, you can switch to the data copy by modifying the configurations. Note that only the file data of the JuiceFS file system is replicated, and the metadata stored in the metadata engine still needs to be backed up.
 
-This requires manipulating the underlying object storage directly to synchronize it with the target object storage. For example, to take the [Object Storage B](#required-storages) as the data copy of the [JuiceFS File System](#required-storages):
+This requires manipulating the underlying object storage directly to synchronize it with the target object storage. For example, to take the object storage as the data copy of a JuiceFS volume:
 
 ```shell
 juicefs sync cos://ABCDEFG:HIJKLMN@ccc-125000.cos.ap-beijing.myqcloud.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
 ```
-
-After sync, the file content and hierarchy in the [Object Storage B](#required-storages) are exactly the same as the [underlying object storage of JuiceFS](#required-storages).
 
 ### Sync across regions using S3 Gateway {#sync-across-region}
 

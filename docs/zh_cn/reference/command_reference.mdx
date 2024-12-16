@@ -118,6 +118,17 @@ cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
 source /etc/bash_completion.d/juicefs
 ```
 
+## 全局选项 {#global-options}
+
+|项 | 说明|
+|-|-|
+|`-q` `--quiet`|仅显示警告及错误日志。|
+|`-v` `--verbose` `--debug`|开启调试日志。|
+|`--trace`|开启比 `--debug` 选项更详细的调试日志。|
+|`--no-agent`|关闭 pprof 代理。|
+|`--pyroscope`|配置 [Pyroscope](https://github.com/pyroscope-io/pyroscope) 地址，如 `http://localhost:4040`。|
+|`--no-color`|关闭日志的颜色。|
+
 ## 管理 {#admin}
 
 ### `juicefs format` {#format}

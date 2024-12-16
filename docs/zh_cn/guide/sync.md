@@ -234,8 +234,6 @@ JuiceFS `sync` 在**本地目录之间**同步时，支持通过设置 `--links`
 碎片合并情况可以通过 `juicefs_compact_size_histogram_bytes` 这个指标来观测。如果在 `sync` 期间碎片合并流量很高，说明需要进行相关调优。推荐实践和调优思路如下：
 
 * 如果对象存储的写带宽不足，慎用高并发（`--threads`），最好从默认值甚至更低的并发开始测起，谨慎增加到满意的速度；
-* 当目的地是 JuiceFS 文件系统的时候，推荐使用 `jfs://` 协议头，这种方式不需要 FUSE 挂载点，能减少资源开销，并且还提前针对碎片合并导致的写放大问题进行了优化（持久化间隔已经设置为每 60 秒一次，阅读下一点详细了解原理）；
-* 如果必须使用 FUSE 挂载点来同步数据，那么对于大文件同步场景，建议调整挂载参数 [`--flush-wait=60s`](../reference/command_reference.mdx#object-storage-options)，将默认 5 秒一次的持久化改为 60 秒，减少碎片量导致的写放大。详细阅读[写放大的排查](../administration/troubleshooting.md#write-amplification)以了解更多；
 * 如果目的地是 JuiceFS 文件系统，确保该文件系统的 JuiceFS 客户端有着充足的[读写缓冲区](./cache.md#buffer-size)，按照每个文件的写入都必须起码预留 4M 的写入空间，那么 `--buffer-size` 起码要大于等于 `--threads` 参数的 4 倍，如果希望进一步提高写入并发，那么建议使用 8 或 12 倍的并发量来设置缓冲区。特别注意，根据写入目的地使用的协议头不同，设置缓冲区的方法也不同：
   * 目的地是 `jfs://` 协议头的文件系统，客户端进程就是 `juicefs sync` 命令本身，此时 `--buffer-size` 参数需要追加到 `juicefs sync` 命令里；
   * 目的地是本地的 FUSE 挂载点，那么客户端进程是宿主机上运行的 `juicefs mount` 命令，此时 `--buffer-size` 参数追加到该挂载点的 `juicefs mount` 命令里。
@@ -296,14 +294,11 @@ juicefs sync --worker bob@192.168.1.21,tom@192.168.1.22 s3://ABCDEFG:HIJKLMN@aaa
 上方的示范中是对象存储 → 对象存储的数据同步，如果需要基于 FUSE 挂载点做数据同步，那么可以在所有节点挂载 JuiceFS，然后用类似下方的命令来进行分布式同步：
 
 ```shell
-# 在所有节点挂载 JuiceFS，以 parallel-ssh 为例，需要将配置文件复制到所有节点，然后挂载
-parallel-scp -h hosts.txt -r /root/.juicefs /root/.juicefs
-
 # 源文件系统需要更好的读性能，因此增大 buffer-size
-parallel-ssh -h hosts.txt -i juicefs mount jfs-src /jfs-src --buffer-size=1024 --cache-size=0
+parallel-ssh -h hosts.txt -i juicefs mount -d redis://10.10.0.8:6379/1 /jfs-src --buffer-size=1024 --cache-size=0
 
 # 目标文件系统需要更好的写性能
-parallel-ssh -h hosts.txt -i juicefs mount jfs-dst /jfs-dst --buffer-size=1024 --cache-size=0 --flush-wait=60 --max-uploads=50
+parallel-ssh -h hosts.txt -i juicefs mount -d redis://10.10.0.8:6379/1 /jfs-dst --buffer-size=1024 --cache-size=0 --max-uploads=50
 
 # 挂载完毕后，用下方命令拷贝数据
 juicefs sync --worker host1,host2 /jfs-src /jfs-dst

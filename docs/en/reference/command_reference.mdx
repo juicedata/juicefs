@@ -118,6 +118,18 @@ cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
 source /etc/bash_completion.d/juicefs
 ```
 
+## Global options {#global-options}
+
+|Items|Description|
+|-|-|
+|`-v` `--verbose` `--debug`|Enable debug logs.|
+|`-q` `--quiet`|Show only warning and error logs.|
+|`--trace`|Enable more detailed debug logs than the `--debug` option.|
+|`--no-agent`|Disable pprof agent.|
+|`--pyroscope`|Config [Pyroscope](https://github.com/pyroscope-io/pyroscope) address, e.g. `http://localhost:4040`.|
+|`--no-color`|Disable log color.|
+
+
 ## Admin {#admin}
 
 ### `juicefs format` {#format}
