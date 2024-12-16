@@ -1963,6 +1963,46 @@ func testTrash(t *testing.T, m Meta) {
 	if len(entries) != 9 {
 		t.Fatalf("entries: %d", len(entries))
 	}
+	// test Remove with skipTrash true/false
+	if st := m.Mkdir(ctx, 1, "d10", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d10: %s", st)
+	}
+	if st := m.Create(ctx, parent, "f10", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create d10/f10: %s", st)
+	}
+	if st := m.Mkdir(ctx, parent, "d10", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d10/d10: %s", st)
+	}
+	if st := m.Remove(ctx, 1, "d10", false, nil); st != 0 {
+		t.Fatalf("rmr d10: %s", st)
+	}
+	entries = entries[:0]
+	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
+		t.Fatalf("readdir: %s", st)
+	}
+	if len(entries) != 12 {
+		t.Fatalf("entries: %d", len(entries))
+	}
+	if st := m.Mkdir(ctx, 1, "d10", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d10: %s", st)
+	}
+	if st := m.Create(ctx, parent, "f10", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create d10/f10: %s", st)
+	}
+	if st := m.Mkdir(ctx, parent, "d10", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d10/d10: %s", st)
+	}
+	if st := m.Remove(ctx, 1, "d10", true, nil); st != 0 {
+		t.Fatalf("rmr d10: %s", st)
+	}
+	entries = entries[:0]
+	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
+		t.Fatalf("readdir: %s", st)
+	}
+	if len(entries) != 12 {
+		t.Fatalf("entries: %d", len(entries))
+	}
+
 	ctx2 := NewContext(1000, 1, []uint32{1})
 	if st := m.Unlink(ctx2, TrashInode+1, "d"); st != syscall.EPERM {
 		t.Fatalf("unlink d: %s", st)
