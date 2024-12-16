@@ -27,7 +27,8 @@ public class BgTaskUtilTest extends TestCase {
         String volName = volNames[ThreadLocalRandom.current().nextInt(100) % volNames.length];
         try {
           BgTaskUtil.register(volName, handle);
-          BgTaskUtil.startTrashEmptier(volName, FileSystem.get(URI.create("file:///"), new Configuration()), () -> {
+          BgTaskUtil.startTrashEmptier(volName, () -> {
+            LOG.info("tid {} running trash empiter for {}", Thread.currentThread().getId(), volName);
             while (true) {
               try {
                 Thread.sleep(100);

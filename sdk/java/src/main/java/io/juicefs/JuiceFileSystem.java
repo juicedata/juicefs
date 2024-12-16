@@ -68,19 +68,25 @@ public class JuiceFileSystem extends FilterFileSystem {
     fileChecksumEnabled = Boolean.parseBoolean(getConf(conf, "file.checksum", "false"));
     boolean asBgTask = conf.getBoolean("juicefs.internal-bg-task", false);
     if (!asBgTask && !Boolean.parseBoolean(getConf(conf, "disable-trash-emptier", "false"))) {
-      try {
-        Configuration newConf = new Configuration(conf);
-        newConf.setBoolean("juicefs.internal-bg-task", true);
-        UserGroupInformation superUser = UserGroupInformation.createRemoteUser(getConf(conf, "superuser", "hdfs"));
-        FileSystem emptierFs = superUser.doAs((PrivilegedExceptionAction<FileSystem>) () -> {
-          JuiceFileSystemImpl fs = new JuiceFileSystemImpl();
-          fs.initialize(uri, newConf);
-          return fs;
-        });
-        BgTaskUtil.startTrashEmptier(uri.getHost(), emptierFs, new Trash(emptierFs, conf).getEmptier(), 10, TimeUnit.MINUTES);
-      } catch (Exception e) {
-        LOG.warn("start trash emptier for {} failed", uri.getHost(), e);
-      }
+      BgTaskUtil.startTrashEmptier(uri.getHost(), () -> {
+        runTrashEmptier(uri, conf);
+      }, 10, TimeUnit.MINUTES);
+    }
+  }
+
+  private void runTrashEmptier(URI uri, final Configuration conf) {
+    try {
+      Configuration newConf = new Configuration(conf);
+      newConf.setBoolean("juicefs.internal-bg-task", true);
+      UserGroupInformation superUser = UserGroupInformation.createRemoteUser(getConf(conf, "superuser", "hdfs"));
+      FileSystem emptierFs = superUser.doAs((PrivilegedExceptionAction<FileSystem>) () -> {
+        JuiceFileSystemImpl fs = new JuiceFileSystemImpl();
+        fs.initialize(uri, newConf);
+        return fs;
+      });
+      new Trash(emptierFs, newConf).getEmptier().run();
+    } catch (Exception e) {
+      LOG.warn("run trash emptier for {} failed", uri.getHost(), e);
     }
   }
 

@@ -116,24 +116,14 @@ public class BgTaskUtil {
     }
   }
 
-  static class TrashEmptyTask {
-    FileSystem fs;
-    ScheduledExecutorService thread;
-
-    public TrashEmptyTask(FileSystem fs, ScheduledExecutorService thread) {
-      this.fs = fs;
-      this.thread = thread;
-    }
-  }
-
-  public static void startTrashEmptier(String name, FileSystem fs, Runnable emptierTask, long delay, TimeUnit unit) {
+  public static void startTrashEmptier(String name, Runnable emptierTask, long delay, TimeUnit unit) {
     synchronized (tasks) {
       String key = name + "|" + "Trash emptier";
       if (!tasks.containsKey(key)) {
-        LOG.debug("start trash emptier for {}", name);
+        LOG.debug("run trash emptier for {}", name);
         ScheduledExecutorService thread = Executors.newScheduledThreadPool(1);
         thread.schedule(emptierTask, delay, unit);
-        tasks.put(key, new TrashEmptyTask(fs, thread));
+        tasks.put(key, thread);
       }
     }
   }
@@ -142,14 +132,9 @@ public class BgTaskUtil {
     synchronized (tasks) {
       String key = name + "|" + "Trash emptier";
       Object v = tasks.remove(key);
-      if (v instanceof TrashEmptyTask) {
+      if (v instanceof ScheduledExecutorService) {
         LOG.debug("close trash emptier for {}", name);
-        ((TrashEmptyTask) v).thread.shutdownNow();
-        try {
-          ((TrashEmptyTask) v).fs.close();
-        } catch (IOException e) {
-          LOG.warn("close failed", e);
-        }
+        ((ScheduledExecutorService) v).shutdownNow();
       }
     }
   }
