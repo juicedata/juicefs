@@ -3176,7 +3176,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		go workerFunc(ctx, taskCh)
 	}
 
-	bak := &bakFormat{}
+	bak := &BakFormat{}
 	for {
 		seg, err := bak.readSegment(r)
 		if err != nil {
