@@ -66,6 +66,7 @@ func Main(args []string) error {
 			cmdRestore(),
 			cmdDump(),
 			cmdLoad(),
+			cmdBackup(),
 			cmdVersion(),
 			cmdStatus(),
 			cmdStats(),
