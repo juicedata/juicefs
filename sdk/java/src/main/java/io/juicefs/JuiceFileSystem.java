@@ -43,8 +43,6 @@ public class JuiceFileSystem extends FilterFileSystem {
   private static boolean fileChecksumEnabled = false;
   private static boolean distcpPatched = false;
 
-  private FileSystem emptierFs;
-
   static {
     PatchUtil.patchBefore("org.apache.flink.runtime.fs.hdfs.HadoopRecoverableFsDataOutputStream",
             "waitUntilLeaseIsRevoked",
@@ -68,25 +66,27 @@ public class JuiceFileSystem extends FilterFileSystem {
   public void initialize(URI uri, Configuration conf) throws IOException {
     super.initialize(uri, conf);
     fileChecksumEnabled = Boolean.parseBoolean(getConf(conf, "file.checksum", "false"));
-    if (!Boolean.parseBoolean(getConf(conf, "disable-trash-emptier", "false"))) {
-      startTrashEmptier(uri, conf);
+    boolean asBgTask = conf.getBoolean("juicefs.internal-bg-task", false);
+    if (!asBgTask && !Boolean.parseBoolean(getConf(conf, "disable-trash-emptier", "false"))) {
+      BgTaskUtil.startTrashEmptier(uri.getHost(), () -> {
+        runTrashEmptier(uri, conf);
+      }, 10, TimeUnit.MINUTES);
     }
   }
 
-  private void startTrashEmptier(URI uri, final Configuration conf) throws IOException {
-    if (BgTaskUtil.isRunning(uri.getHost(), "Trash emptier")) {
-      return;
-    }
+  private void runTrashEmptier(URI uri, final Configuration conf) {
     try {
+      Configuration newConf = new Configuration(conf);
+      newConf.setBoolean("juicefs.internal-bg-task", true);
       UserGroupInformation superUser = UserGroupInformation.createRemoteUser(getConf(conf, "superuser", "hdfs"));
-      emptierFs = superUser.doAs((PrivilegedExceptionAction<FileSystem>) () -> {
+      FileSystem emptierFs = superUser.doAs((PrivilegedExceptionAction<FileSystem>) () -> {
         JuiceFileSystemImpl fs = new JuiceFileSystemImpl();
-        fs.initialize(uri, conf);
+        fs.initialize(uri, newConf);
         return fs;
       });
-      BgTaskUtil.startTrashEmptier(uri.getHost(), "Trash emptier", emptierFs, new Trash(emptierFs, conf).getEmptier(), TimeUnit.MINUTES.toMillis(10));
+      new Trash(emptierFs, newConf).getEmptier().run();
     } catch (Exception e) {
-      throw new IOException("start trash failed!",e);
+      LOG.warn("run trash emptier for {} failed", uri.getHost(), e);
     }
   }
 

@@ -64,6 +64,8 @@ jobs:
           mkdir etc
           chmod 777 etc
           echo `hostname` > etc/nodes
+          echo "tom:3001" > users
+          echo "g1:2001:tom" > groups
 
       - name: Sdk Test
         run: |

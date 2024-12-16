@@ -75,6 +75,9 @@ var (
 	bridges      []*Bridge
 	pOnce        sync.Once
 	pushers      []*push.Pusher
+
+	userGroupCache = make(map[string]map[string][]string) // name -> (user -> groups)
+
 )
 
 const (
@@ -340,7 +343,16 @@ func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.F
 		logger.Infof("JuiceFileSystem created for user:%s group:%s", user, group)
 	}
 	w := &wrapper{jfs, nil, m, user, superuser, supergroup}
-	if w.isSuperuser(user, strings.Split(group, ",")) {
+	var gs []string
+	if userGroupCache[name] != nil {
+		gs = userGroupCache[name][user]
+	}
+	if gs == nil {
+		gs = strings.Split(group, ",")
+	}
+	group = strings.Join(gs, ",")
+	logger.Debugf("update groups of %s to %s", user, group)
+	if w.isSuperuser(user, gs) {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
 	} else {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(user), w.lookupGids(group))
@@ -603,11 +615,8 @@ func F(p int64) *wrapper {
 }
 
 //export jfs_update_uid_grouping
-func jfs_update_uid_grouping(h int64, uidstr *C.char, grouping *C.char) {
-	w := F(h)
-	if w == nil {
-		return
-	}
+func jfs_update_uid_grouping(cname, uidstr *C.char, grouping *C.char) {
+	name := C.GoString(cname)
 	var uids []pwent
 	if uidstr != nil {
 		for _, line := range strings.Split(C.GoString(uidstr), "\n") {
@@ -627,8 +636,9 @@ func jfs_update_uid_grouping(h int64, uidstr *C.char, grouping *C.char) {
 		logger.Debugf("Update uids mapping\n %s", buffer.String())
 	}
 
+	var userGroups = make(map[string][]string) // user -> groups
+
 	var gids []pwent
-	var groups []string
 	if grouping != nil {
 		for _, line := range strings.Split(C.GoString(grouping), "\n") {
 			fields := strings.Split(line, ":")
@@ -640,29 +650,32 @@ func jfs_update_uid_grouping(h int64, uidstr *C.char, grouping *C.char) {
 			gids = append(gids, pwent{uint32(gid), gname})
 			if len(fields) > 2 {
 				for _, user := range strings.Split(fields[len(fields)-1], ",") {
-					if strings.TrimSpace(user) == w.user {
-						groups = append(groups, gname)
-					}
+					userGroups[user] = append(userGroups[user], gname)
 				}
 			}
 		}
-		logger.Debugf("Update groups of %s to %s", w.user, strings.Join(groups, ","))
 		var buffer bytes.Buffer
 		for _, g := range gids {
 			buffer.WriteString(fmt.Sprintf("\t%v:%v\n", g.name, g.id))
 		}
 		logger.Debugf("Update gids mapping\n %s", buffer.String())
 	}
-	w.m.update(uids, gids, false)
 
-	if w.isSuperuser(w.user, groups) {
-		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
-	} else {
-		gids := w.ctx.Gids()
-		if len(groups) > 0 {
-			gids = w.lookupGids(strings.Join(groups, ","))
+	fslock.Lock()
+	defer fslock.Unlock()
+	userGroupCache[name] = userGroups
+	ws := activefs[name]
+	if len(ws) > 0 {
+		m := ws[0].m
+		m.update(uids, gids, false)
+		for _, w := range ws {
+			logger.Debugf("Update groups of %s to %s", w.user, strings.Join(userGroups[w.user], ","))
+			if w.isSuperuser(w.user, userGroups[w.user]) {
+				w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
+			} else {
+				w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), w.lookupGids(strings.Join(userGroups[w.user], ",")))
+			}
 		}
-		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), gids)
 	}
 }
 

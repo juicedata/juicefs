@@ -60,6 +60,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
@@ -110,12 +111,13 @@ public class JuiceFileSystemImpl extends FileSystem {
   private long handle;
   private UserGroupInformation ugi;
   private String homeDirPrefix = "/user";
-  private Map<String, String> cachedHosts = new HashMap<>(); // (ip, hostname)
-  private ConsistentHash<String> hash = new ConsistentHash<>(1, Collections.singletonList("localhost"));
+  private static final Map<String, Map<String, String>> cachedHostsForName = new ConcurrentHashMap<>(); // (name -> (ip -> hostname))
+  private static final Map<String, ConsistentHash<String>> hashForName = new ConcurrentHashMap<>(); // (name -> consistentHash)
+  private static final Map<String, FileStatus> lastFileStatus = new ConcurrentHashMap<>();
+
   private FsPermission uMask;
   private String hflushMethod;
 
-  private Map<String, FileStatus> lastFileStatus = new HashMap<>();
   private static final DirectBufferPool directBufferPool = new DirectBufferPool();
 
   private boolean metricsEnable = false;
@@ -143,7 +145,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   public static interface Libjfs {
     long jfs_init(String name, String jsonConf, String user, String group, String superuser, String supergroup);
 
-    void jfs_update_uid_grouping(long h, String uidstr, String grouping);
+    void jfs_update_uid_grouping(String name, String uidstr, String grouping);
 
     int jfs_term(long pid, long h);
 
@@ -384,7 +386,6 @@ public class JuiceFileSystemImpl extends FileSystem {
       groups.clear();
       groups.add(supergroup);
     }
-    String mountpoint = getConf(conf, "mountpoint", "");
 
     synchronized (JuiceFileSystemImpl.class) {
       if (callBack == null) {
@@ -448,10 +449,12 @@ public class JuiceFileSystemImpl extends FileSystem {
     if (handle <= 0) {
       throw new IOException("JuiceFS initialized failed for jfs://" + name);
     }
-
-    initCache(conf);
-    refreshCache(conf);
-
+    boolean asBgTask = conf.getBoolean("juicefs.internal-bg-task", false);
+    if (asBgTask) {
+      LOG.debug("background fs {}|({})", name, handle);
+    } else {
+      BgTaskUtil.register(name, handle);
+    }
     homeDirPrefix = conf.get("dfs.user.home.dir.prefix", "/user");
     this.workingDir = getHomeDirectory();
 
@@ -514,11 +517,13 @@ public class JuiceFileSystemImpl extends FileSystem {
       }
     }
 
-    String uidFile = getConf(conf, "users", null);
-    if (!isEmpty(uidFile) || !isEmpty(groupingFile)) {
-      updateUidAndGrouping(uidFile, groupingFile);
-      if (!isSuperGroupFileSystem) {
-        refreshUidAndGrouping(uidFile, groupingFile);
+    if (!asBgTask && !isSuperGroupFileSystem) {
+      // use juicefs.users and juicefs.groups for global mapping
+      String uidFile = getConf(conf, "users", null);
+      if (!isEmpty(uidFile) || !isEmpty(groupingFile)) {
+        BgTaskUtil.putTask(name, "Refresh guid", () -> {
+          updateUidAndGrouping(uidFile, groupingFile);
+        }, 1, 1, TimeUnit.MINUTES);
       }
     }
   }
@@ -574,38 +579,20 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   private String readFile(String file) throws IOException {
     Path path = new Path(file);
-    URI uri = path.toUri();
-    FileSystem fs;
-    try {
-      URI defaultUri = getDefaultUri(getConf());
-      if (uri.getScheme() == null) {
-        uri = defaultUri;
-      } else {
-        if (uri.getAuthority() == null && (uri.getScheme().equals(defaultUri.getScheme()))) {
-          uri = defaultUri;
-        }
-      }
-      if (getScheme().equals(uri.getScheme()) &&
-              (name != null && name.equals(uri.getAuthority()))) {
-        fs = this;
-      } else {
-        fs = path.getFileSystem(getConf());
-      }
-
-      FileStatus lastStatus = lastFileStatus.get(file);
+    FileStatus lastStatus = lastFileStatus.get(file);
+    Configuration newConf = new Configuration(getConf());
+    newConf.setBoolean("juicefs.internal-bg-task", true);
+    try (FileSystem fs = FileSystem.newInstance(path.toUri(), newConf)) {
       FileStatus status = fs.getFileStatus(path);
       if (lastStatus != null && status.getModificationTime() == lastStatus.getModificationTime()
-              && status.getLen() == lastStatus.getLen()) {
+          && status.getLen() == lastStatus.getLen()) {
         return null;
       }
-      FSDataInputStream in = fs.open(path);
-      String res = new BufferedReader(new InputStreamReader(in)).lines().collect(Collectors.joining("\n"));
-      in.close();
-      lastFileStatus.put(file, status);
-      return res;
-    } catch (IOException e) {
-      LOG.warn(String.format("read %s failed", file), e);
-      throw e;
+      try (FSDataInputStream in = fs.open(path)) {
+        String res = new BufferedReader(new InputStreamReader(in)).lines().collect(Collectors.joining("\n"));
+        lastFileStatus.put(file, status);
+        return res;
+      }
     }
   }
 
@@ -635,14 +622,8 @@ public class JuiceFileSystemImpl extends FileSystem {
       grouping = readFile(groupFile);
     }
 
-    lib.jfs_update_uid_grouping(handle, uidstr, grouping);
+    lib.jfs_update_uid_grouping(name, uidstr, grouping);
     groups = Arrays.stream(group.split(",")).collect(Collectors.toSet());
-  }
-
-  private void refreshUidAndGrouping(String uidFile, String groupFile) {
-    BgTaskUtil.startScheduleTask(name, "Refresh guid", () -> {
-      updateUidAndGrouping(uidFile, groupFile);
-    }, 1, 1, TimeUnit.MINUTES);
   }
 
   private void initializeStorageIds(Configuration conf) throws IOException {
@@ -834,22 +815,16 @@ public class JuiceFileSystemImpl extends FileSystem {
         }
 
         // if newCachedHosts are not changed, skip
-        if (!newCachedHosts.equals(cachedHosts)) {
+        if (!newCachedHosts.equals(cachedHostsForName.get(name))) {
           List<String> ips = new ArrayList<>(newCachedHosts.keySet());
           LOG.debug("update nodes to: " + String.join(",", ips));
-          this.hash = new ConsistentHash<>(100, ips);
-          this.cachedHosts = newCachedHosts;
+          hashForName.put(name, new ConsistentHash<>(100, ips));
+          cachedHostsForName.put(name, newCachedHosts);
         }
       }
     } catch (Throwable e) {
       LOG.warn("failed to discover nodes", e);
     }
-  }
-
-  private void refreshCache(Configuration conf) {
-    BgTaskUtil.startScheduleTask(name, "Node fetcher", () -> {
-      initCache(conf);
-    }, 10, 10, TimeUnit.MINUTES);
   }
 
   private List<String> discoverNodes(String urls) {
@@ -868,7 +843,13 @@ public class JuiceFileSystemImpl extends FileSystem {
     BlockLocation blockLocation;
     String[] ns = new String[cacheReplica];
     String[] hs = new String[cacheReplica];
-    String host = cachedHosts.getOrDefault(hash.get(code + "-" + index), "localhost");
+
+    Map<String, String> cachedHosts = cachedHostsForName.get(name);
+    ConsistentHash<String> hash = hashForName.get(name);
+    String host = "localhost";
+    if (cachedHosts != null && hash != null) {
+      host = cachedHosts.get(hash.get(code + "-" + index));
+    }
     ns[0] = host + ":50010";
     hs[0] = host;
     for (int i = 1; i < cacheReplica; i++) {
@@ -916,6 +897,11 @@ public class JuiceFileSystemImpl extends FileSystem {
       String[] host = new String[]{"localhost"};
       return new BlockLocation[]{new BlockLocation(name, host, 0L, file.getLen())};
     }
+
+    BgTaskUtil.putTask(name, "Node fetcher", () -> {
+      initCache(getConf());
+    }, 10, 10, TimeUnit.MINUTES);
+
     if (file.getLen() <= start + len) {
       len = file.getLen() - start;
     }
@@ -1872,6 +1858,12 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public void close() throws IOException {
     super.close();
+    BgTaskUtil.unregister(name, handle, () -> {
+      cachedHostsForName.clear();
+      hashForName.clear();
+      lastFileStatus.clear();
+    });
+    LOG.debug("close {}({})", name, handle);
     lib.jfs_term(Thread.currentThread().getId(), handle);
     if (metricsEnable) {
       JuiceFSInstrumentation.close();
