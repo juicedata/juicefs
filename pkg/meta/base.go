@@ -2439,7 +2439,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 			}
 			for _, se := range subEntries {
 				var c uint64
-				st = m.Remove(ctx, e.Inode, string(se.Name), &c)
+				st = m.Remove(ctx, e.Inode, string(se.Name), false, &c)
 				if st == 0 {
 					count += int(c)
 					if increProgress != nil {
