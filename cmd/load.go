@@ -65,16 +65,18 @@ func cmdLoad() *cli.Command {
 				Usage: "number of threads to load binary metadata, only works with --binary",
 			},
 		},
-		Usage:     "Load metadata from a previously dumped JSON file",
+		Usage:     "Load metadata from a previously dumped file",
 		ArgsUsage: "META-URL [FILE]",
 		Description: `
-Load metadata into an empty metadata engine.
+Load metadata into an empty metadata engine or show statistics of the backup file.
 
 WARNING: Do NOT use new engine and the old one at the same time, otherwise it will probably break
 consistency of the volume.
 
 Examples:
 $ juicefs load redis://localhost/1 meta-dump.json.gz
+$ juicefs load redis://localhost/1 meta-dump.bin --binary --threads 10
+$ juicefs load meta-dump.bin --binary --stat
 
 Details: https://juicefs.com/docs/community/metadata_dump_load`,
 	}

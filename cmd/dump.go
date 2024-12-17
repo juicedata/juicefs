@@ -33,10 +33,11 @@ func cmdDump() *cli.Command {
 		Name:      "dump",
 		Action:    dump,
 		Category:  "ADMIN",
-		Usage:     "Dump metadata into a JSON file",
+		Usage:     "Dump metadata into a file",
 		ArgsUsage: "META-URL [FILE]",
 		Description: `
-Dump metadata of the volume in JSON format so users are able to see its content in an easy way.
+Supports two formats: JSON format and binary format.
+1. Dump metadata of the volume in JSON format so users are able to see its content in an easy way.
 Output of this command can be loaded later into an empty database, serving as a method to backup
 metadata or to change metadata engine.
 
@@ -46,6 +47,11 @@ $ juicefs dump redis://localhost meta-dump.json.gz
 
 # Dump only a subtree of the volume to STDOUT
 $ juicefs dump redis://localhost --subdir /dir/in/jfs
+
+2. Binary format is more compact, faster, and memory-efficient.
+
+Examples:
+$ juicefs dump redis://localhost meta-dump.bin --binary
 
 Details: https://juicefs.com/docs/community/metadata_dump_load`,
 		Flags: []cli.Flag{
