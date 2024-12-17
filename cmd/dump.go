@@ -71,7 +71,7 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 			},
 			&cli.BoolFlag{
 				Name:  "fast",
-				Usage: "speedup dump by load all metadata into memory",
+				Usage: "speedup dump by load all metadata into memory (only works with JSON format and DB/KV engine)",
 			},
 			&cli.BoolFlag{
 				Name:  "skip-trash",
