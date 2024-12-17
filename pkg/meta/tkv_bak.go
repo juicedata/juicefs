@@ -684,7 +684,7 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	wg.Add(1)
 	go workerFunc(ctx, taskCh)
 
-	bak := &bakFormat{}
+	bak := &BakFormat{}
 	for {
 		seg, err := bak.readSegment(r)
 		if err != nil {
