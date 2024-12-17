@@ -3125,7 +3125,9 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 			wg.Wait()
 			return err
 		}
-		opt.Progress(seg.String(), int(seg.num()))
+		if opt.Progress != nil {
+			opt.Progress(seg.String(), int(seg.num()))
+		}
 		if res.release != nil {
 			res.release(res.msg)
 		}
@@ -3195,7 +3197,9 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			wg.Wait()
 			return ctx.Err()
 		case taskCh <- &task{int(seg.typ), seg.val}:
-			opt.Progress(seg.String(), int(seg.num()))
+			if opt.Progress != nil {
+				opt.Progress(seg.String(), int(seg.num()))
+			}
 		}
 	}
 	wg.Wait()
