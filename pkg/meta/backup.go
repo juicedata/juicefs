@@ -55,7 +55,7 @@ const (
 	segTypeMax
 )
 
-var segType2Name = map[int]string{
+var SegType2Name = map[int]string{
 	segTypeFormat:    "format",
 	segTypeCounter:   "counter",
 	segTypeNode:      "node",
@@ -222,10 +222,49 @@ type bakSegment struct {
 }
 
 func (s *bakSegment) String() string {
-	if name, ok := segType2Name[int(s.typ)]; ok {
+	if name, ok := SegType2Name[int(s.typ)]; ok {
 		return name
 	}
 	return fmt.Sprintf("type-%d", s.typ)
+}
+
+func newBakSegment(val proto.Message) *bakSegment {
+	s := &bakSegment{val: val}
+	switch v := s.val.(type) {
+	case *pb.Format:
+		s.typ = uint32(segTypeFormat)
+	case *pb.Batch:
+		if v.Counters != nil {
+			s.typ = uint32(segTypeCounter)
+		} else if v.Sustained != nil {
+			s.typ = uint32(segTypeSustained)
+		} else if v.Delfiles != nil {
+			s.typ = uint32(segTypeDelFile)
+		} else if v.Acls != nil {
+			s.typ = uint32(segTypeAcl)
+		} else if v.Xattrs != nil {
+			s.typ = uint32(segTypeXattr)
+		} else if v.Quotas != nil {
+			s.typ = uint32(segTypeQuota)
+		} else if v.Dirstats != nil {
+			s.typ = uint32(segTypeStat)
+		} else if v.Nodes != nil {
+			s.typ = uint32(segTypeNode)
+		} else if v.Chunks != nil {
+			s.typ = uint32(segTypeChunk)
+		} else if v.SliceRefs != nil {
+			s.typ = uint32(segTypeSliceRef)
+		} else if v.Edges != nil {
+			s.typ = uint32(segTypeEdge)
+		} else if v.Symlinks != nil {
+			s.typ = uint32(segTypeSymlink)
+		} else if v.Parents != nil {
+			s.typ = uint32(segTypeParent)
+		} else {
+			return nil
+		}
+	}
+	return s
 }
 
 func (s *bakSegment) num() uint64 {
@@ -269,41 +308,6 @@ func (s *bakSegment) num() uint64 {
 func (s *bakSegment) Marshal(w io.Writer) (int, error) {
 	if s == nil || s.val == nil {
 		return 0, fmt.Errorf("segment %s is nil", s)
-	}
-
-	switch v := s.val.(type) {
-	case *pb.Format:
-		s.typ = uint32(segTypeFormat)
-	case *pb.Batch:
-		if v.Counters != nil {
-			s.typ = uint32(segTypeCounter)
-		} else if v.Sustained != nil {
-			s.typ = uint32(segTypeSustained)
-		} else if v.Delfiles != nil {
-			s.typ = uint32(segTypeDelFile)
-		} else if v.Acls != nil {
-			s.typ = uint32(segTypeAcl)
-		} else if v.Xattrs != nil {
-			s.typ = uint32(segTypeXattr)
-		} else if v.Quotas != nil {
-			s.typ = uint32(segTypeQuota)
-		} else if v.Dirstats != nil {
-			s.typ = uint32(segTypeStat)
-		} else if v.Nodes != nil {
-			s.typ = uint32(segTypeNode)
-		} else if v.Chunks != nil {
-			s.typ = uint32(segTypeChunk)
-		} else if v.SliceRefs != nil {
-			s.typ = uint32(segTypeSliceRef)
-		} else if v.Edges != nil {
-			s.typ = uint32(segTypeEdge)
-		} else if v.Symlinks != nil {
-			s.typ = uint32(segTypeSymlink)
-		} else if v.Parents != nil {
-			s.typ = uint32(segTypeParent)
-		} else {
-			return 0, fmt.Errorf("unknown batch type %s", s)
-		}
 	}
 
 	if err := binary.Write(w, binary.BigEndian, s.typ); err != nil {
@@ -357,6 +361,7 @@ func (s *bakSegment) Unmarshal(r io.Reader) error {
 type DumpOption struct {
 	KeepSecret bool
 	Threads    int
+	Progress   func(name string, cnt int)
 }
 
 func (opt *DumpOption) check() *DumpOption {
@@ -397,7 +402,8 @@ func dumpResult(ctx context.Context, ch chan<- *dumpedResult, res *dumpedResult)
 }
 
 type LoadOption struct {
-	Threads int
+	Threads  int
+	Progress func(name string, cnt int)
 }
 
 func (opt *LoadOption) check() {

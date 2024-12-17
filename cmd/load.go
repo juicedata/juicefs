@@ -158,12 +158,22 @@ func load(ctx *cli.Context) error {
 	}
 
 	if ctx.Bool("binary") {
+		progress := utils.NewProgress(false)
+		bars := make(map[string]*utils.Bar)
+		for _, name := range meta.SegType2Name {
+			bars[name] = progress.AddCountSpinner(name)
+		}
+
 		opt := &meta.LoadOption{
 			Threads: ctx.Int("threads"),
+			Progress: func(name string, cnt int) {
+				bars[name].IncrBy(cnt)
+			},
 		}
 		if err := m.LoadMetaV2(meta.WrapContext(ctx.Context), r, opt); err != nil {
 			return err
 		}
+		progress.Done()
 	} else {
 		if err := m.LoadMeta(r); err != nil {
 			return err

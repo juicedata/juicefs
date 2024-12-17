@@ -25,6 +25,7 @@ import (
 
 	"github.com/DataDog/zstd"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
 )
 
@@ -118,9 +119,20 @@ func dumpMeta(m meta.Meta, dst string, threads int, keepSecret, fast, skipTrash,
 		}
 	}
 	if isBinary {
+		progress := utils.NewProgress(false)
+		defer progress.Done()
+
+		bars := make(map[string]*utils.Bar)
+		for _, name := range meta.SegType2Name {
+			bars[name] = progress.AddCountSpinner(name)
+		}
+
 		return m.DumpMetaV2(meta.Background(), w, &meta.DumpOption{
 			KeepSecret: keepSecret,
 			Threads:    threads,
+			Progress: func(name string, cnt int) {
+				bars[name].IncrBy(cnt)
+			},
 		})
 	}
 	return m.DumpMeta(w, 1, threads, keepSecret, fast, skipTrash)
