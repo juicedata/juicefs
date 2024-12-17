@@ -20,6 +20,7 @@ import (
 	"compress/gzip"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/DataDog/zstd"
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/olekukonko/tablewriter"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -49,6 +51,19 @@ func cmdLoad() *cli.Command {
 				Usage: "encrypt algorithm (aes256gcm-rsa, chacha20-rsa)",
 				Value: object.AES256GCM_RSA,
 			},
+			&cli.BoolFlag{
+				Name:  "binary",
+				Usage: "load metadata from a binary file (different from original JSON format)",
+			},
+			&cli.BoolFlag{
+				Name:  "stat",
+				Usage: "show statistics of the metadata binary file",
+			},
+			&cli.IntFlag{
+				Name:  "threads",
+				Value: 10,
+				Usage: "number of threads to load binary metadata, only works with --binary",
+			},
 		},
 		Usage:     "Load metadata from a previously dumped JSON file",
 		ArgsUsage: "META-URL [FILE]",
@@ -67,6 +82,11 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 
 func load(ctx *cli.Context) error {
 	setup(ctx, 1)
+
+	if ctx.Bool("binary") && ctx.Bool("stat") {
+		return statBak(ctx)
+	}
+
 	metaUri := ctx.Args().Get(0)
 	src := ctx.Args().Get(1)
 	removePassword(metaUri)
@@ -132,10 +152,20 @@ func load(ctx *cli.Context) error {
 	}
 	m := meta.NewClient(metaUri, nil)
 	if format, err := m.Load(false); err == nil {
-		return fmt.Errorf("Database %s is used by volume %s", utils.RemovePassword(metaUri), format.Name)
+		return fmt.Errorf("database %s is used by volume %s", utils.RemovePassword(metaUri), format.Name)
 	}
-	if err := m.LoadMeta(r); err != nil {
-		return err
+
+	if ctx.Bool("binary") {
+		opt := &meta.LoadOption{
+			Threads: ctx.Int("threads"),
+		}
+		if err := m.LoadMetaV2(meta.WrapContext(ctx.Context), r, opt); err != nil {
+			return err
+		}
+	} else {
+		if err := m.LoadMeta(r); err != nil {
+			return err
+		}
 	}
 	if format, err := m.Load(true); err == nil {
 		if format.SecretKey == "removed" {
@@ -145,5 +175,37 @@ func load(ctx *cli.Context) error {
 		return err
 	}
 	logger.Infof("Load metadata from %s succeed", src)
+	return nil
+}
+
+func statBak(ctx *cli.Context) error {
+	path := ctx.Args().Get(0)
+	if path == "" {
+		return errors.New("missing file path")
+	}
+
+	fp, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("failed to open file %s: %w", path, err)
+	}
+	bak := &meta.BakFormat{}
+	footer, err := bak.ReadFooter(fp)
+	if err != nil {
+		return fmt.Errorf("failed to read footer: %w", err)
+	}
+
+	fmt.Printf("Backup Version: %d\n", footer.Msg.Version)
+	data := make([][]string, 0, len(footer.Msg.Infos))
+	for name, info := range footer.Msg.Infos {
+		data = append(data, []string{name, fmt.Sprintf("%d", info.Num), fmt.Sprintf("%+v", info.Offset)})
+	}
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Name", "Num", "Offset in File"})
+
+	for _, v := range data {
+		table.Append(v)
+	}
+	table.Render()
 	return nil
 }

@@ -70,11 +70,15 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 				Name:  "skip-trash",
 				Usage: "skip files in trash",
 			},
+			&cli.BoolFlag{
+				Name:  "binary",
+				Usage: "dump metadata into a binary file (different from original JSON format, subdir/fast/skip-trash will be ignored)",
+			},
 		},
 	}
 }
 
-func dumpMeta(m meta.Meta, dst string, threads int, keepSecret, fast, skipTrash bool) (err error) {
+func dumpMeta(m meta.Meta, dst string, threads int, keepSecret, fast, skipTrash, isBinary bool) (err error) {
 	var w io.WriteCloser
 	if dst == "" {
 		w = os.Stdout
@@ -107,6 +111,12 @@ func dumpMeta(m meta.Meta, dst string, threads int, keepSecret, fast, skipTrash 
 			w = fp
 		}
 	}
+	if isBinary {
+		return m.DumpMetaV2(meta.Background(), w, &meta.DumpOption{
+			KeepSecret: keepSecret,
+			Threads:    threads,
+		})
+	}
 	return m.DumpMeta(w, 1, threads, keepSecret, fast, skipTrash)
 }
 
@@ -134,7 +144,8 @@ func dump(ctx *cli.Context) error {
 		logger.Warnf("Invalid threads number %d, reset to 1", threads)
 		threads = 1
 	}
-	err := dumpMeta(m, dst, threads, ctx.Bool("keep-secret-key"), ctx.Bool("fast"), ctx.Bool("skip-trash"))
+
+	err := dumpMeta(m, dst, threads, ctx.Bool("keep-secret-key"), ctx.Bool("fast"), ctx.Bool("skip-trash"), ctx.Bool("binary"))
 	if err == nil {
 		if dst == "" {
 			dst = "STDOUT"
