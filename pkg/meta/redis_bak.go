@@ -703,9 +703,9 @@ func (m *redisMeta) loadCounters(ctx Context, msg proto.Message) error {
 
 	for _, c := range msg.(*pb.Batch).Counters {
 		if c.Key == "nextInode" || c.Key == "nextChunk" {
-			cs[m.counterKey(strings.ToLower(c.Key))] = c.Value - 1
+			cs[m.counterKey(c.Key)] = c.Value - 1
 		} else {
-			cs[m.counterKey(strings.ToLower(c.Key))] = c.Value
+			cs[m.counterKey(c.Key)] = c.Value
 		}
 	}
 	return m.rdb.MSet(ctx, cs).Err()
