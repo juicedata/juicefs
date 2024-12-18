@@ -223,6 +223,9 @@ type uFileListObjectsOutput struct {
 }
 
 func (u *ufile) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	if delimiter != "" {
+		return nil, false, "", notSupported
+	}
 	query := url.Values{}
 	query.Add("prefix", prefix)
 	query.Add("marker", start)

@@ -24,8 +24,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 	"github.com/baidubce/bce-sdk-go/services/bos/api"
+	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 	"io"
 	"math"
 	"os"
@@ -91,6 +91,8 @@ func setStorageClass(o ObjectStorage) string {
 			sc = string(obs.StorageClassStandard)
 		case *bosclient:
 			sc = api.STORAGE_CLASS_STANDARD
+		case *scw:
+			sc = "ONEZONE_IA" // STANDARD, ONEZONE_IA, GLACIER
 		}
 		err := osc.SetStorageClass(sc)
 		if err != nil {
