@@ -126,7 +126,7 @@ func (c *b2client) List(prefix, startAfter, token, delimiter string, limit int64
 		limit = 1000
 	}
 
-	resp, err := c.bucket.ListFileNamesWithPrefix(token, int(limit), prefix, delimiter)
+	resp, err := c.bucket.ListFileNamesWithPrefix(startAfter, int(limit), prefix, delimiter)
 	if err != nil {
 		return nil, false, "", err
 	}
