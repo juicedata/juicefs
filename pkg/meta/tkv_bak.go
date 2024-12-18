@@ -702,6 +702,9 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			wg.Wait()
 			return ctx.Err()
 		case taskCh <- &task{int(seg.typ), seg.val}:
+			if opt.Progress != nil {
+				opt.Progress(seg.String(), int(seg.num()))
+			}
 		}
 	}
 	wg.Wait()
