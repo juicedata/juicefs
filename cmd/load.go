@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/DataDog/zstd"
@@ -209,12 +210,14 @@ func statBak(ctx *cli.Context) error {
 	fmt.Printf("Backup Version: %d\n", footer.Msg.Version)
 	data := make([][]string, 0, len(footer.Msg.Infos))
 	for name, info := range footer.Msg.Infos {
-		data = append(data, []string{name, fmt.Sprintf("%d", info.Num), fmt.Sprintf("%+v", info.Offset)})
+		data = append(data, []string{name, fmt.Sprintf("%d", info.Num)})
 	}
+	sort.Slice(data, func(i, j int) bool {
+		return data[i][0] < data[j][0]
+	})
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "Num", "Offset in File"})
-
+	table.SetHeader([]string{"Name", "Num"})
 	for _, v := range data {
 		table.Append(v)
 	}
