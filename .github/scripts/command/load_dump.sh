@@ -86,13 +86,11 @@ do_dump_load_with_fsrand(){
     do_dump_load_and_compare --fast --skip-trash
 }
 
-do_dump_load_with_fsrand_binary(){
-    trash_days=$1
+test_dump_load_with_fsrand_binary(){
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days $trash_days --enable-acl
     ./juicefs mount -d $META_URL /jfs --enable-xattr
     SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fs.py || true
-    # find /jfs/fsrand -mindepth 1 -maxdepth 1 ! -name "syly" -exec rm -rf {} \; 
     do_dump_load_and_compare_binary 
 }
 
