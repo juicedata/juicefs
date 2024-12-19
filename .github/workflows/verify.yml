@@ -61,6 +61,9 @@ jobs:
       run: |
         sudo .github/scripts/apt_install.sh g++-multilib gcc-mingw-w64
 
+    - name: Run go mod tidy
+      run: go mod tidy
+
     - name: Build linux target
       timeout-minutes: 10
       run: |
