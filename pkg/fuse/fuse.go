@@ -465,7 +465,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		logger.Infof("The format \"enable-acl\" flag will enable the xattrs feature.")
 		opt.DisableXAttrs = false
 	}
-	opt.IgnoreSecurityLabels = !opt.EnableAcl
+	opt.IgnoreSecurityLabels = false
 
 	for _, n := range strings.Split(options, ",") {
 		if n == "allow_other" || n == "allow_root" {
@@ -526,7 +526,7 @@ func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, m
 	opt.EnableLocks = true
 	opt.DisableXAttrs = noxattr
 	opt.EnableAcl = !noacl
-	opt.IgnoreSecurityLabels = noacl
+	opt.IgnoreSecurityLabels = false
 	opt.MaxWrite = maxWrite
 	opt.MaxReadAhead = 1 << 20
 	opt.DirectMount = true
