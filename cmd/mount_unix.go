@@ -308,6 +308,14 @@ func fuseFlags() []cli.Flag {
 			Usage: "enable extended attributes (xattr)",
 		},
 		&cli.BoolFlag{
+			Name:  "enable-cap",
+			Usage: "enable security.capability xattr",
+		},
+		&cli.BoolFlag{
+			Name:  "enable-selinux",
+			Usage: "enable security.selinux xattr",
+		},
+		&cli.BoolFlag{
 			Name:  "enable-ioctl",
 			Usage: "enable ioctl (support GETFLAGS/SETFLAGS only)",
 		},
