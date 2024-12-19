@@ -30,6 +30,10 @@ jobs:
           go-version: 'oldstable'
 
       - uses: actions/checkout@v3
+      
+      - name: Run go mod tidy
+        run: go mod tidy
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
@@ -60,6 +64,9 @@ jobs:
     - name: Install dependencies
       run: |
         sudo .github/scripts/apt_install.sh g++-multilib gcc-mingw-w64
+
+    - name: Run go mod tidy
+      run: go mod tidy
 
     - name: Build linux target
       timeout-minutes: 10

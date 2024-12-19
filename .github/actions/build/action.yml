@@ -1,12 +1,12 @@
-name: 'Build Action'
-description: 'Build action'
+name: "Build Action"
+description: "Build action"
 inputs:
   target:
-    description: 'build target: juicefs, juicefs.fdb etc'
+    description: "build target: juicefs, juicefs.fdb etc"
     required: true
-    default: 'juicefs'
+    default: "juicefs"
   useBeta:
-    description: 'use beta version of juicefs to skip build'
+    description: "use beta version of juicefs to skip build"
     required: true
     type: boolean
     default: false
@@ -15,7 +15,7 @@ runs:
   steps:
     - uses: actions/setup-go@v3
       with:
-        go-version: 'oldstable'
+        go-version: "oldstable"
         cache: true
 
     - name: Change go version for root user
@@ -29,6 +29,7 @@ runs:
         sudo ln -s $go_path $root_go_path
         go version
         sudo go version
+        go mod tidy
 
     - name: Install tools
       shell: bash
