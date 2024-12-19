@@ -1,0 +1,69 @@
+name: cancel_outdate_runs
+on:
+  pull_request:
+    branches:
+      - main
+      - release**
+env:
+  OSS_PREFIX: oss://juicefs-com-static
+
+jobs:
+  cancel-outdate-runs:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+        with :
+          fetch-depth: 1
+
+      - name: Install ossutils
+        timeout-minutes: 3
+        run: |
+          wget -O /usr/local/bin/ossutil64 https://gosspublic.alicdn.com/ossutil/1.7.9/ossutil64
+          chmod +x /usr/local/bin/ossutil64
+          ossutil64 config --access-key-id=${{secrets.OSS_KEY_ID}} --access-key-secret=${{ secrets.OSS_KEY_SECRET }} -e oss-cn-shanghai.aliyuncs.com
+
+      - name: Get previours head_sha from oss
+        timeout-minutes: 1
+        id: get_previous_head_sha
+        run: |
+          pr_number=${{ github.event.pull_request.number }}
+          echo "downloaded head_sha from https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/head_sha/${pr_number}"
+          ossutil64 cp -f ${OSS_PREFIX}/head_sha/${pr_number} previous_head_sha || echo "no previous head sha found"
+          if [ ! -f previous_head_sha ]; then
+            echo "no previous head sha found"
+            echo "::set-output name=exist::false"
+            exit 0
+          else
+            echo "::set-output name=exist::true"
+            previous_head_sha=$(cat previous_head_sha)
+            echo "previous head sha is ${previous_head_sha}"
+            echo "previous_head_sha=${previous_head_sha}" >> $GITHUB_ENV
+          fi
+
+      - name: Upload head_sha to oss
+        timeout-minutes: 3
+        run: |
+          pr_number=${{ github.event.pull_request.number }}
+          echo ${{ github.event.pull_request.head.sha }} > head_sha
+          ossutil64 cp -f head_sha "${OSS_PREFIX}/head_sha/${pr_number}"
+          echo "uploaded head_sha to https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/head_sha/${pr_number}"
+      
+      - name : Cancel Outdate Runs
+        uses: ./.github/actions/cancel-outdate-runs
+        with: 
+          per_page: 8
+          page: 1
+          head_sha: ${{ env.previous_head_sha }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait Runs Cancelled
+        run: |
+          sleep 10s
+
+      - name : Cancel Outdate Runs
+        uses: ./.github/actions/cancel-outdate-runs
+        with: 
+          per_page: 8
+          page: 1
+          head_sha: ${{ env.previous_head_sha }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
