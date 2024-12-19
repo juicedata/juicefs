@@ -18,6 +18,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -60,6 +61,7 @@ type Config struct {
 	KeepEtag    bool
 	Umask       uint16
 	ObjTag      bool
+	ObjMeta     bool
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -533,6 +535,12 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	}
 	dst := n.path(dstBucket, dstObject)
 	src := n.path(srcBucket, srcObject)
+
+	err = n.setObjMeta(dst, srcInfo.UserDefined)
+	if err != nil {
+		logger.Errorf("set object metadata error, path: %s error %s", dst, err)
+	}
+
 	if minio.IsStringEqual(src, dst) {
 		return n.GetObjectInfo(ctx, srcBucket, srcObject, minio.ObjectOptions{})
 	}
@@ -687,6 +695,16 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 			return minio.ObjectInfo{}, errno
 		}
 	}
+	objMeta, err := n.getObjMeta(n.path(bucket, object))
+	if err != nil {
+		return minio.ObjectInfo{}, err
+	}
+	if opts.UserDefined == nil {
+		opts.UserDefined = make(map[string]string)
+	}
+	for k, v := range objMeta {
+		opts.UserDefined[k] = v
+	}
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
@@ -829,6 +847,12 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 	if eno != 0 {
 		return objInfo, jfsToObjectErr(ctx, eno, bucket, object)
 	}
+
+	err = n.setObjMeta(p, opts.UserDefined)
+	if err != nil {
+		logger.Errorf("set object metadata error, path: %s error %s", p, err)
+	}
+
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
@@ -861,6 +885,10 @@ func (n *jfsObjects) NewMultipartUpload(ctx context.Context, bucket string, obje
 				}
 			}
 		}
+		err = n.setObjMeta(p, opts.UserDefined)
+		if err != nil {
+			logger.Errorf("set object metadata error, path: %s  error %s", p, err)
+		}
 	}
 	return
 }
@@ -870,6 +898,56 @@ const s3Etag = "s3-etag"
 
 // less than 64k ref: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#tag-restrictions
 const s3Tags = "s3-tags"
+
+// S3 object metadata
+const s3Meta = "s3-meta"
+const amzMeta = "x-amz-meta-"
+
+func (n *jfsObjects) getObjMeta(p string) (objMeta map[string]string, err error) {
+	if n.gConf.ObjMeta {
+		var errno syscall.Errno
+		var metadataStr []byte
+		if metadataStr, errno = n.fs.GetXattr(mctx, p, s3Meta); errno != 0 && errno != meta.ENOATTR {
+			return objMeta, errno
+		}
+		if len(metadataStr) > 0 {
+			var meta map[string]string
+			err = json.Unmarshal(metadataStr, &meta)
+			if err != nil {
+				return objMeta, err
+			}
+			objMeta = make(map[string]string, len(meta))
+			for k, v := range meta {
+				objMeta[amzMeta+k] = v
+			}
+		}
+	} else {
+		objMeta = make(map[string]string)
+	}
+	return objMeta, nil
+}
+
+func (n *jfsObjects) setObjMeta(p string, metadata map[string]string) error {
+	if n.gConf.ObjMeta && metadata != nil {
+		meta := make(map[string]string)
+		for k, v := range metadata {
+			k = strings.ToLower(k)
+			if strings.HasPrefix(k, amzMeta) {
+				meta[k[len(amzMeta):]] = v
+			}
+		}
+		if len(meta) > 0 {
+			s3MetadataValue, err := json.Marshal(meta)
+			if err != nil {
+				return err
+			}
+			if eno := n.fs.SetXattr(mctx, p, s3Meta, s3MetadataValue, 0); eno != 0 {
+				logger.Errorf("set object metadata error, path: %s,value: %s error: %s", p, string(s3Meta), eno)
+			}
+		}
+	}
+	return nil
+}
 
 func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi minio.ListMultipartsInfo, err error) {
 	if err = n.checkBucket(ctx, bucket); err != nil {
@@ -1125,17 +1203,27 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		return
 	}
 
+	var objMeta map[string]string
+	if n.gConf.ObjMeta {
+		if objMeta, err = n.getObjMeta(n.upath(bucket, uploadID)); err != nil {
+			logger.Errorf("get object meta error, path: %s, error: %s", n.upath(bucket, uploadID), err)
+		} else if err = n.setObjMeta(name, objMeta); err != nil {
+			logger.Errorf("set object meta error, path: %s, error: %s", name, err)
+		}
+	}
+
 	// remove parts
 	_ = n.fs.Rmr(mctx, n.upath(bucket, uploadID))
 	return minio.ObjectInfo{
-		Bucket:   bucket,
-		Name:     object,
-		ETag:     s3MD5,
-		ModTime:  fi.ModTime(),
-		Size:     fi.Size(),
-		IsDir:    fi.IsDir(),
-		AccTime:  fi.ModTime(),
-		UserTags: string(tagStr),
+		Bucket:      bucket,
+		Name:        object,
+		ETag:        s3MD5,
+		ModTime:     fi.ModTime(),
+		Size:        fi.Size(),
+		IsDir:       fi.IsDir(),
+		AccTime:     fi.ModTime(),
+		UserTags:    string(tagStr),
+		UserDefined: minio.CleanMetadata(opts.UserDefined),
 	}, nil
 }
 
