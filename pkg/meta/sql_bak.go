@@ -656,7 +656,7 @@ func (m *dbMeta) insertRows(beans []interface{}) error {
 	for len(beans) > 0 {
 		bs := utils.Min(batch, len(beans))
 		err := m.txn(func(s *xorm.Session) error {
-			n, err := s.Insert(beans[:bs]...)
+			n, err := s.Insert(beans[:bs])
 			if err == nil && int(n) != bs {
 				err = fmt.Errorf("only %d records inserted", n)
 			}
