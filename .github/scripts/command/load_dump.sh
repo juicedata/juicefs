@@ -91,7 +91,7 @@ test_dump_load_with_fsrand_binary(){
     ./juicefs format $META_URL myjfs --trash-days 1 --enable-acl
     ./juicefs mount -d $META_URL /jfs --enable-xattr
     SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fs.py || true
-    do_dump_load_and_compare_binary 
+    do_dump_load_and_compare_in_binary 
 }
 
 do_dump_load_and_compare()
