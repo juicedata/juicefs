@@ -236,9 +236,9 @@ Additional parameters can be appended to the metadata URL. More details can be s
 
 [MySQL](https://www.mysql.com) is one of the most popular open source relational databases, and is often preferred for web applications.
 
->[MariaDB](https://mariadb.org) is an open source branch of MySQL, maintained by the original developers of MySQL. Because MariaDB is highly compatible with MySQL, there is no difference in set up Meta engine, the parameters and settings are exactly the same.
+>[MariaDB](https://mariadb.org) is an open source branch of MySQL, maintained by the original developers of MySQL. With its high compatibility with MySQL, setting up the Meta engine in MariaDB uses the same parameters and configurations as MySQL.
 >
->[OceanBase](https://en.oceanbase.com) is a self-developed distributed relational database designed for processing massive data and high-concurrency transactions. It features high performance, strong consistency, and high availability. At the same time, OceanBase is highly compatible with MySQL, and there is no difference in the method of setting the metadata engine.
+>[OceanBase](https://en.oceanbase.com) is a self-developed distributed relational database designed for processing massive data and high-concurrency transactions. It features high performance, strong consistency, and high availability. OceanBase is also highly compatible with MySQL, allowing the metadata engine to be configured in the same way.
 
 ### Create a file system
 
