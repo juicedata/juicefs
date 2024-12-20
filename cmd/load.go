@@ -60,6 +60,10 @@ func cmdLoad() *cli.Command {
 				Name:  "stat",
 				Usage: "show statistics of the metadata binary file",
 			},
+			&cli.Int64Flag{
+				Name:  "offset",
+				Usage: "offset of binary backup's segment (works with --stat and --binary). Use -1 to show all offsets, or specify one for details",
+			},
 			&cli.IntFlag{
 				Name:  "threads",
 				Value: 10,
@@ -201,6 +205,21 @@ func statBak(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to open file %s: %w", path, err)
 	}
+	defer fp.Close()
+
+	if !ctx.IsSet("offset") {
+		return showBakSummary(ctx, fp, false)
+	}
+
+	offset := ctx.Int64("offset")
+	if offset == -1 {
+		return showBakSummary(ctx, fp, true)
+	}
+
+	return showBakDetail(ctx, fp, offset)
+}
+
+func showBakSummary(ctx *cli.Context, fp *os.File, withOffset bool) error {
 	bak := &meta.BakFormat{}
 	footer, err := bak.ReadFooter(fp)
 	if err != nil {
@@ -210,17 +229,41 @@ func statBak(ctx *cli.Context) error {
 	fmt.Printf("Backup Version: %d\n", footer.Msg.Version)
 	data := make([][]string, 0, len(footer.Msg.Infos))
 	for name, info := range footer.Msg.Infos {
-		data = append(data, []string{name, fmt.Sprintf("%d", info.Num)})
+		if withOffset {
+			data = append(data, []string{name, fmt.Sprintf("%d", info.Num), fmt.Sprintf("%d", info.Offset)})
+		} else {
+			data = append(data, []string{name, fmt.Sprintf("%d", info.Num)})
+		}
 	}
 	sort.Slice(data, func(i, j int) bool {
 		return data[i][0] < data[j][0]
 	})
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "Num"})
+	if withOffset {
+		table.SetHeader([]string{"Name", "Num", "Offset"})
+	} else {
+		table.SetHeader([]string{"Name", "Num"})
+	}
 	for _, v := range data {
 		table.Append(v)
 	}
 	table.Render()
+	return nil
+}
+
+func showBakDetail(ctx *cli.Context, fp *os.File, offset int64) error {
+	bak := &meta.BakFormat{}
+	if _, err := fp.Seek(offset, io.SeekStart); err != nil {
+		return err
+	}
+
+	seg, err := bak.ReadSegment(fp)
+	if err != nil {
+		return fmt.Errorf("failed to read segment: %w", err)
+	}
+
+	fmt.Printf("Segment: %s\n", seg.Name())
+	fmt.Printf("Value: %s\n", seg)
 	return nil
 }

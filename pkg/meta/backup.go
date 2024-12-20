@@ -25,6 +25,7 @@ import (
 	"unsafe"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -113,7 +114,7 @@ func newBakFormat() *BakFormat {
 	}
 }
 
-func (f *BakFormat) writeSegment(w io.Writer, seg *bakSegment) error {
+func (f *BakFormat) writeSegment(w io.Writer, seg *BakSegment) error {
 	if seg == nil {
 		return nil
 	}
@@ -123,7 +124,7 @@ func (f *BakFormat) writeSegment(w io.Writer, seg *bakSegment) error {
 		return fmt.Errorf("failed to marshal segment %s: %v", seg, err)
 	}
 
-	name := seg.String()
+	name := seg.Name()
 	info, ok := f.Footer.Msg.Infos[name]
 	if !ok {
 		info = &pb.Footer_SegInfo{Offset: []uint64{}, Num: 0}
@@ -136,8 +137,8 @@ func (f *BakFormat) writeSegment(w io.Writer, seg *bakSegment) error {
 	return nil
 }
 
-func (f *BakFormat) readSegment(r io.Reader) (*bakSegment, error) {
-	seg := &bakSegment{}
+func (f *BakFormat) ReadSegment(r io.Reader) (*BakSegment, error) {
+	seg := &BakSegment{}
 	if err := seg.Unmarshal(r); err != nil {
 		return nil, err
 	}
@@ -215,21 +216,25 @@ func (h *BakFooter) Unmarshal(r io.ReadSeeker) error {
 	return nil
 }
 
-type bakSegment struct {
+type BakSegment struct {
 	typ uint32
 	len uint64
 	val proto.Message
 }
 
-func (s *bakSegment) String() string {
+func (s *BakSegment) Name() string {
 	if name, ok := SegType2Name[int(s.typ)]; ok {
 		return name
 	}
 	return fmt.Sprintf("type-%d", s.typ)
 }
 
-func newBakSegment(val proto.Message) *bakSegment {
-	s := &bakSegment{val: val}
+func (s *BakSegment) String() string {
+	return protojson.Format(s.val)
+}
+
+func newBakSegment(val proto.Message) *BakSegment {
+	s := &BakSegment{val: val}
 	switch v := s.val.(type) {
 	case *pb.Format:
 		s.typ = uint32(segTypeFormat)
@@ -267,7 +272,7 @@ func newBakSegment(val proto.Message) *bakSegment {
 	return s
 }
 
-func (s *bakSegment) num() uint64 {
+func (s *BakSegment) num() uint64 {
 	switch s.typ {
 	case segTypeFormat:
 		return 1
@@ -305,7 +310,7 @@ func (s *bakSegment) num() uint64 {
 	}
 }
 
-func (s *bakSegment) Marshal(w io.Writer) (int, error) {
+func (s *BakSegment) Marshal(w io.Writer) (int, error) {
 	if s == nil || s.val == nil {
 		return 0, fmt.Errorf("segment %s is nil", s)
 	}
@@ -329,7 +334,7 @@ func (s *bakSegment) Marshal(w io.Writer) (int, error) {
 	return binary.Size(s.typ) + binary.Size(s.len) + len(data), nil
 }
 
-func (s *bakSegment) Unmarshal(r io.Reader) error {
+func (s *BakSegment) Unmarshal(r io.Reader) error {
 	if err := binary.Read(r, binary.BigEndian, &s.typ); err != nil {
 		return fmt.Errorf("failed to read segment type: %v", err)
 	}
