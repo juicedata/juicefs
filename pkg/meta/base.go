@@ -3126,7 +3126,7 @@ func (m *baseMeta) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
 			return err
 		}
 		if opt.Progress != nil {
-			opt.Progress(seg.String(), int(seg.num()))
+			opt.Progress(seg.Name(), int(seg.num()))
 		}
 		if res.release != nil {
 			res.release(res.msg)
@@ -3181,7 +3181,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 
 	bak := &BakFormat{}
 	for {
-		seg, err := bak.readSegment(r)
+		seg, err := bak.ReadSegment(r)
 		if err != nil {
 			if errors.Is(err, errBakEOF) {
 				close(taskCh)
@@ -3198,7 +3198,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			return ctx.Err()
 		case taskCh <- &task{int(seg.typ), seg.val}:
 			if opt.Progress != nil {
-				opt.Progress(seg.String(), int(seg.num()))
+				opt.Progress(seg.Name(), int(seg.num()))
 			}
 		}
 	}
