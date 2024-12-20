@@ -262,8 +262,12 @@ func expandPathForEmbedded(addr string) string {
 
 func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config) *vfs.Config {
 	cfg := &vfs.Config{
-		Meta:            metaConf,
-		Format:          *format,
+		Meta:   metaConf,
+		Format: *format,
+		Security: &vfs.SecurityConfig{
+			EnableCap:     c.Bool("enable-cap"),
+			EnableSELinux: c.Bool("enable-selinux"),
+		},
 		Version:         version.Version(),
 		Chunk:           chunkConf,
 		BackupMeta:      utils.Duration(c.String("backup-meta")),

@@ -113,10 +113,16 @@ func (o FuseOptions) StripOptions() FuseOptions {
 	return o
 }
 
+type SecurityConfig struct {
+	EnableCap     bool
+	EnableSELinux bool
+}
+
 type Config struct {
 	Meta                 *meta.Config
 	Format               meta.Format
 	Chunk                *chunk.Config
+	Security             *SecurityConfig
 	Port                 *Port
 	Version              string
 	AttrTimeout          time.Duration
@@ -1038,6 +1044,25 @@ const (
 
 var macSupportFlags = meta.XattrCreateOrReplace | meta.XattrCreate | meta.XattrReplace
 
+const (
+	_SECURITY_CAPABILITY  = "security.capability"
+	_SECURITY_SELINUX     = "security.selinux"
+	_SECURITY_ACL         = "system.posix_acl_access"
+	_SECURITY_ACL_DEFAULT = "system.posix_acl_default"
+)
+
+func isXattrEnabled(conf *Config, name string) bool {
+	switch name {
+	case _SECURITY_CAPABILITY:
+		return conf.Security != nil && conf.Security.EnableCap
+	case _SECURITY_SELINUX:
+		return conf.Security != nil && conf.Security.EnableSELinux
+	case _SECURITY_ACL, _SECURITY_ACL_DEFAULT:
+		return conf.Format.EnableACL
+	}
+	return true
+}
+
 func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags uint32) (err syscall.Errno) {
 	defer func() { logit(ctx, "setxattr", err, "(%d,%s,%d,%d)", ino, name, len(value), flags) }()
 	if IsSpecialNode(ino) {
@@ -1065,19 +1090,18 @@ func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags ui
 		return
 	}
 
-	aclType := GetACLType(name)
-	if aclType != acl.TypeNone {
-		if !v.Conf.Format.EnableACL {
-			err = syscall.ENOTSUP
-			return
-		}
+	if !isXattrEnabled(v.Conf, name) {
+		err = syscall.ENOTSUP
+		return
+	}
 
+	if typ, ok := aclTypes[name]; ok {
 		var rule *acl.Rule
 		rule, err = decodeACL(value)
 		if err != 0 {
 			return
 		}
-		err = v.Meta.SetFacl(ctx, ino, aclType, rule)
+		err = v.Meta.SetFacl(ctx, ino, typ, rule)
 		v.invalidateAttr(ino)
 	} else {
 		// only retain supported flags
@@ -1108,15 +1132,14 @@ func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []
 		return
 	}
 
-	aclType := GetACLType(name)
-	if aclType != acl.TypeNone {
-		if !v.Conf.Format.EnableACL {
-			err = syscall.ENOTSUP
-			return
-		}
+	if !isXattrEnabled(v.Conf, name) {
+		err = syscall.ENODATA
+		return
+	}
 
+	if typ, ok := aclTypes[name]; ok {
 		rule := &acl.Rule{}
-		if err = v.Meta.GetFacl(ctx, ino, aclType, rule); err != 0 {
+		if err = v.Meta.GetFacl(ctx, ino, typ, rule); err != 0 {
 			return nil, err
 		}
 		value = encodeACL(rule)
@@ -1161,13 +1184,13 @@ func (v *VFS) RemoveXattr(ctx Context, ino Ino, name string) (err syscall.Errno)
 		return
 	}
 
-	aclType := GetACLType(name)
-	if aclType != acl.TypeNone {
-		if !v.Conf.Format.EnableACL {
-			err = syscall.ENOTSUP
-			return
-		}
-		err = v.Meta.SetFacl(ctx, ino, aclType, acl.EmptyRule())
+	if !isXattrEnabled(v.Conf, name) {
+		err = syscall.ENOTSUP
+		return
+	}
+
+	if typ, ok := aclTypes[name]; ok {
+		err = v.Meta.SetFacl(ctx, ino, typ, acl.EmptyRule())
 	} else {
 		err = v.Meta.RemoveXattr(ctx, ino, name)
 	}
@@ -1441,12 +1464,7 @@ func decodeACL(buff []byte) (*acl.Rule, syscall.Errno) {
 	return n, 0
 }
 
-func GetACLType(name string) uint8 {
-	switch name {
-	case "system.posix_acl_access":
-		return acl.TypeAccess
-	case "system.posix_acl_default":
-		return acl.TypeDefault
-	}
-	return acl.TypeNone
+var aclTypes = map[string]uint8{
+	_SECURITY_ACL:         acl.TypeAccess,
+	_SECURITY_ACL_DEFAULT: acl.TypeDefault,
 }
