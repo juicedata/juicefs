@@ -441,7 +441,7 @@ func TestVFSXattrs(t *testing.T) {
 	if e := v.RemoveXattr(ctx, fe.Inode, ""); e != syscall.EINVAL {
 		t.Fatalf("removexattr test: %s", e)
 	}
-	if e := v.RemoveXattr(ctx, fe.Inode, "system.posix_acl_access"); e != syscall.ENODATA {
+	if e := v.RemoveXattr(ctx, fe.Inode, "system.posix_acl_access"); e != syscall.ENOTSUP {
 		t.Fatalf("removexattr test: %s", e)
 	}
 	if e := v.RemoveXattr(ctx, configInode, "test"); e != syscall.EPERM {
