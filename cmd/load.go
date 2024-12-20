@@ -30,7 +30,6 @@ import (
 
 	"github.com/DataDog/zstd"
 	"github.com/juicedata/juicefs/pkg/object"
-	"github.com/olekukonko/tablewriter"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -239,16 +238,22 @@ func showBakSummary(ctx *cli.Context, fp *os.File, withOffset bool) error {
 		return data[i][0] < data[j][0]
 	})
 
-	table := tablewriter.NewWriter(os.Stdout)
 	if withOffset {
-		table.SetHeader([]string{"Name", "Num", "Offset"})
+		fmt.Println(strings.Repeat("-", 34))
+		fmt.Printf("%-10s| %-10s| %-10s\n", "Name", "Num", "Offset")
+		fmt.Println(strings.Repeat("-", 34))
 	} else {
-		table.SetHeader([]string{"Name", "Num"})
+		fmt.Println(strings.Repeat("-", 23))
+		fmt.Printf("%-10s| %-10s\n", "Name", "Num")
+		fmt.Println(strings.Repeat("-", 23))
 	}
 	for _, v := range data {
-		table.Append(v)
+		fmt.Printf("%-10s| %-10s|", v[0], v[1])
+		if withOffset {
+			fmt.Printf(" %-10s", v[2])
+		}
+		fmt.Println()
 	}
-	table.Render()
 	return nil
 }
 
