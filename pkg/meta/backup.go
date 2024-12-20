@@ -230,7 +230,13 @@ func (s *BakSegment) Name() string {
 }
 
 func (s *BakSegment) String() string {
-	return protojson.Format(s.val)
+	switch s.val.(type) {
+	case *pb.Format:
+		return string(s.val.(*pb.Format).Data)
+	case *pb.Batch:
+		return protojson.Format(s.val)
+	}
+	return "unknown segment"
 }
 
 func newBakSegment(val proto.Message) *BakSegment {
