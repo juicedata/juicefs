@@ -2502,7 +2502,7 @@ func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {
 }
 
 func (m *baseMeta) doCleanupTrash(days int, force bool) {
-	edge := time.Now().Add(-time.Duration(24*days+1) * time.Hour)
+	edge := time.Now().Add(-time.Duration(24*days+2) * time.Hour)
 	if force {
 		edge = time.Now()
 	}
