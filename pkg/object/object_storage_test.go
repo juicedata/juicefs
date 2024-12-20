@@ -91,6 +91,8 @@ func setStorageClass(o ObjectStorage) string {
 			sc = string(obs.StorageClassStandard)
 		case *bosclient:
 			sc = api.STORAGE_CLASS_STANDARD
+		case *minio:
+			sc = "REDUCED_REDUNDANCY"
 		case *scw:
 			sc = "ONEZONE_IA" // STANDARD, ONEZONE_IA, GLACIER
 		}
