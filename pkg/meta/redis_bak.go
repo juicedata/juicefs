@@ -569,7 +569,10 @@ func (m *redisMeta) dumpSymlinks(ctx context.Context, ch chan<- *dumpedResult, k
 			continue
 		}
 		ps = pools[0].Get().(*pb.Symlink)
-		ps.Inode, _ = strconv.ParseUint(keys[idx][len(m.prefix)+1:], 10, 64)
+		ps.Inode, err = strconv.ParseUint(keys[idx][len(m.prefix)+1:], 10, 64)
+		if err != nil {
+			continue // key "setting"
+		}
 		ps.Target = unescape(v.(string))
 		syms = append(syms, ps)
 	}
