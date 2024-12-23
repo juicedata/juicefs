@@ -39,10 +39,6 @@ func (m *minio) String() string {
 	return fmt.Sprintf("minio://%s/%s/", *m.s3client.ses.Config.Endpoint, m.s3client.bucket)
 }
 
-func (m *minio) SetStorageClass(_ string) error {
-	return notSupported
-}
-
 func (m *minio) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,
