@@ -286,7 +286,14 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 
 	// escaping is not necessary for mysql password https://github.com/go-sql-driver/mysql#password
 	if driver == "mysql" {
+		fmt.Println("begin recorer addr : ", addr)
 		addr = recoveryMysqlPwd(addr)
+		fmt.Println("end recorer addr : ", addr)
+		var err error
+		if addr, err = setTransationIsolation(addr); err != nil {
+			return nil, err
+		}
+		fmt.Println(addr)
 	}
 
 	if driver == "sqlite3" {
@@ -308,6 +315,13 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 		engine.SetLogLevel(log.LOG_ERR)
 	default:
 		engine.SetLogLevel(log.LOG_OFF)
+	}
+
+	if driver == "pgx" {
+		_, err = engine.Exec("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+		if err != nil {
+			logger.Fatal(err)
+		}
 	}
 
 	start := time.Now()
@@ -337,6 +351,23 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 		},
 	}
 	m.en = m
+
+	if driver == "mysql" {
+		queryMap, err := engine.QueryString("show variables like 'transaction_isolation';")
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(queryMap)
+	} else if driver == "pgx" {
+		var isolationLevel string
+		s := engine.NewSession()
+		_, err = s.SQL("SELECT current_setting('transaction_isolation')").Get(&isolationLevel)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("Transaction Isolation Level:", isolationLevel)
+	}
+
 	return m, nil
 }
 
