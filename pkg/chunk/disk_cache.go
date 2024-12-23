@@ -615,6 +615,39 @@ func (cache *cacheStore) load(key string) (ReadCloser, error) {
 	return f, err
 }
 
+func (cache *cacheStore) exist(key string) (bool, error) {
+	cache.Lock()
+	defer cache.Unlock()
+	if _, ok := cache.pages[key]; ok {
+		return true, nil
+	}
+	k := cache.getCacheKey(key)
+	if cache.scanned && cache.keys[k].atime == 0 {
+		return false, errNotCached
+	}
+	cache.Unlock()
+	var err error
+	err = cache.checkErr(func() error {
+		_, err = os.Stat(cache.cachePath(key))
+		return err
+	})
+
+	cache.Lock()
+	if err == nil {
+		if it, ok := cache.keys[k]; ok {
+			// update atime
+			cache.keys[k] = cacheItem{it.size, uint32(time.Now().Unix())}
+		}
+		return true, nil
+	} else if it, ok := cache.keys[k]; ok {
+		if it.size > 0 {
+			cache.used -= int64(it.size + 4096)
+		}
+		delete(cache.keys, k)
+	}
+	return false, err
+}
+
 func (cache *cacheStore) cachePath(key string) string {
 	return filepath.Join(cache.dir, cacheDir, key)
 }
@@ -991,6 +1024,7 @@ type CacheManager interface {
 	cache(key string, p *Page, force, dropCache bool)
 	remove(key string, staging bool)
 	load(key string) (ReadCloser, error)
+	exist(key string) bool
 	uploaded(key string, size int)
 	stage(key string, data []byte, keepCache bool) (string, error)
 	removeStage(key string) error
@@ -1168,6 +1202,21 @@ func (m *cacheManager) load(key string) (ReadCloser, error) {
 		}
 	}
 	return r, err
+}
+
+func (m *cacheManager) exist(key string) bool {
+	store := m.getStore(key)
+	if store == nil {
+		return false
+	}
+	exited, err := m.getStore(key).exist(key)
+	if err == errNotCached {
+		legacy := m.getStoreLegacy(key)
+		if legacy != store && legacy != nil {
+			exited, _ = legacy.exist(key)
+		}
+	}
+	return exited
 }
 
 func (m *cacheManager) remove(key string, staging bool) {

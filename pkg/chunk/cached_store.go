@@ -1100,9 +1100,7 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 	keys := r.keys()
 	var err error
 	for _, k := range keys {
-		f, e := store.bcache.load(k)
-		if e == nil { // already cached
-			_ = f.Close()
+		if store.bcache.exist(k) { // already cached
 			continue
 		}
 		size := parseObjOrigSize(k)
@@ -1134,9 +1132,7 @@ func (store *cachedStore) CheckCache(id uint64, length uint32) (uint64, error) {
 	keys := r.keys()
 	missBytes := uint64(0)
 	for i, k := range keys {
-		tmpReader, err := store.bcache.load(k)
-		if err == nil {
-			_ = tmpReader.Close()
+		if store.bcache.exist(k) {
 			continue
 		}
 		missBytes += uint64(r.blockSize(i))
