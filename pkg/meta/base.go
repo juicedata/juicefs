@@ -813,6 +813,27 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 	return st
 }
 
+func (attr *Attr) reset() {
+	attr.Flags = 0
+	attr.Mode = 0
+	attr.Typ = 0
+	attr.Uid = 0
+	attr.Gid = 0
+	attr.Atime = 0
+	attr.Atimensec = 0
+	attr.Mtime = 0
+	attr.Mtimensec = 0
+	attr.Ctime = 0
+	attr.Ctimensec = 0
+	attr.Nlink = 0
+	attr.Length = 0
+	attr.Rdev = 0
+	attr.Parent = 0
+	attr.AccessACL = aclAPI.None
+	attr.DefaultACL = aclAPI.None
+	attr.Full = false
+}
+
 func (m *baseMeta) parseAttr(buf []byte, attr *Attr) {
 	if attr == nil || len(buf) == 0 {
 		return
