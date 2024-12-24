@@ -51,7 +51,7 @@ jobs:
         uses: ./.github/actions/mount-coverage-dir
         with:
           mount_point: schedule
-          subdir: schedule
+          subdir: juicefs/schedule
           access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
           secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
           token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
