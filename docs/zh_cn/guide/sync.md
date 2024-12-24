@@ -145,12 +145,6 @@ juicefs sync --match-full-path --include='*' --exclude='**/tmpdir/**' s3://xxx/ 
 myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ jfs://myfs/movies/
 ```
 
-当使用 `jfs://` 协议头时，可以传入 `juicefs mount` 的挂载参数来帮助提升传输性能，比如 `--max-downloads`, `--max-uploads`, `--buffer-size` 等，比方说在带宽充裕的情况下拷贝大文件，可以启用更大的读写缓冲区来提升性能：
-
-```shell
-myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ jfs://myfs/movies/ --buffer-size=1024
-```
-
 ### 对象存储与 JuiceFS 之间同步 {#synchronize-between-object-storage-and-juicefs}
 
 将对象存储的 `movies` 目录同步到 JuiceFS 文件系统：
