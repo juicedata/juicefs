@@ -106,6 +106,6 @@ func TestGc(t *testing.T) {
 	require.False(t, utils.Exists(leaked))
 
 	if err := Main([]string{"", "gc", testMeta}); err != nil {
-		t.Fatalf("gc failed: %s", err)
+		t.Fatalf("gc  failed: %s", err)
 	}
 }
