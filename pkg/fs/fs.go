@@ -525,6 +525,24 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, f
 	return
 }
 
+func (fs *FileSystem) Link(ctx meta.Context, src string, dst string) (err syscall.Errno) {
+	defer trace.StartRegion(context.TODO(), "fs.Link").End()
+	l := vfs.NewLogContext(ctx)
+	defer func() { fs.log(l, "Link (%s,%s): %s", src, dst, errstr(err)) }()
+
+	fi, err := fs.resolve(ctx, src, false)
+	if err != 0 {
+		return
+	}
+	pi, err := fs.resolve(ctx, parentDir(dst), true)
+	if err != 0 {
+		return
+	}
+	err = fs.m.Link(ctx, fi.inode, pi.inode, path.Base(dst), nil)
+	fs.invalidateEntry(pi.inode, path.Base(dst))
+	return
+}
+
 func (fs *FileSystem) Symlink(ctx meta.Context, target string, link string) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Symlink").End()
 	l := vfs.NewLogContext(ctx)
@@ -1068,6 +1086,29 @@ func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 	return len(b), 0
 }
 
+func (f *File) Truncate(ctx meta.Context, length uint64) (err syscall.Errno) {
+	defer trace.StartRegion(context.TODO(), "fs.Truncate").End()
+	f.Lock()
+	defer f.Unlock()
+	l := vfs.NewLogContext(ctx)
+	defer func() { f.fs.log(l, "Truncate (%s,%d): %s", f.path, length, errstr(err)) }()
+	if f.wdata != nil {
+		err = f.wdata.Flush(ctx)
+		if err != 0 {
+			return
+		}
+	}
+	err = f.fs.m.Truncate(ctx, f.inode, 0, length, nil, false)
+	if err == 0 {
+		f.fs.m.InvalidateChunkCache(ctx, f.inode, uint32(((length - 1) >> meta.ChunkBits)))
+		f.fs.writer.Truncate(f.inode, length)
+		f.fs.reader.Truncate(f.inode, length)
+		f.info.attr.Length = length
+		f.fs.invalidateAttr(f.inode)
+	}
+	return
+}
+
 func (f *File) Flush(ctx meta.Context) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Flush").End()
 	f.Lock()
@@ -1078,6 +1119,7 @@ func (f *File) Flush(ctx meta.Context) (err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Flush (%s): %s", f.path, errstr(err)) }()
 	err = f.wdata.Flush(ctx)
+	f.fs.invalidateAttr(f.inode)
 	return
 }
 
@@ -1091,6 +1133,7 @@ func (f *File) Fsync(ctx meta.Context) (err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Fsync (%s): %s", f.path, errstr(err)) }()
 	err = f.wdata.Flush(ctx)
+	f.fs.invalidateAttr(f.inode)
 	return
 }
 
@@ -1110,6 +1153,7 @@ func (f *File) Close(ctx meta.Context) (err syscall.Errno) {
 		}
 		if f.wdata != nil {
 			err = f.wdata.Close(meta.Background())
+			f.fs.invalidateAttr(f.inode)
 			f.wdata = nil
 		}
 		_ = f.fs.m.Close(ctx, f.inode)
