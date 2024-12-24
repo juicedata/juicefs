@@ -54,6 +54,7 @@ jobs:
           subdir: schedule
           access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
           secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
       
       - name: Determine lastdate dir
         timeout-minutes: 120
