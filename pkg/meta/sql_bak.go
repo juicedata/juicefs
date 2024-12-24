@@ -526,6 +526,7 @@ func (m *dbMeta) loadNodes(ctx Context, msg proto.Message) error {
 	for i, n := range nodes {
 		pn := &ns[i]
 		pn.Inode = Ino(n.Inode)
+		attr.reset()
 		b.parseAttr(n.Data, attr)
 		m.parseNode(attr, pn)
 		rows = append(rows, pn)
