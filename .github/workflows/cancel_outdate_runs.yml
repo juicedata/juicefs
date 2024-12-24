@@ -28,11 +28,11 @@ jobs:
         run: |
           echo get previous head sha from /jfs/${{ github.event.pull_request.number }}/head_sha
           previous_head_sha=/jfs/${{ github.event.pull_request.number }}/head_sha
-          if [ ! -f previous_head_sha ]; then
+          if [ ! -f ${previous_head_sha} ]; then
             echo "no previous head sha found"
             exit 0
           else
-            previous_head_sha=$(cat previous_head_sha)
+            previous_head_sha=$(cat ${previous_head_sha})
             echo "previous head sha is ${previous_head_sha}"
             echo "previous_head_sha=${previous_head_sha}" >> $GITHUB_ENV
           fi
