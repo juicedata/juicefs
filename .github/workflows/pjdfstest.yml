@@ -80,9 +80,9 @@ jobs:
         id: vars
         run: |
           if [ "${{matrix.meta}}" == "fdb" ]; then
-            echo "target=juicefs.fdb.cover" >> $GITHUB_OUTPUT
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
           else
-            echo "target=juicefs.cover" >> $GITHUB_OUTPUT
+            echo "target=juicefs" >> $GITHUB_OUTPUT
           fi
       
       - name: Build
@@ -110,7 +110,7 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           # sudo mkdir /var/jfs
           # sudo chmod 777 /var/jfs
-          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report 
+          sudo GOCOVERDIR=cover ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report 
           stat /tmp/jfs/.accesslog
 
       - name: Pjdfstest

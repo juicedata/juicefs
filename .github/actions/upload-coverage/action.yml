@@ -18,7 +18,7 @@ runs:
     - name: umount juicefs
       shell: bash
       run: |
-        umount /tmp/jfs
+        sudo umount /tmp/jfs || true
         sleep 3s
 
     - name: generate mount coverage report

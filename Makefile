@@ -25,7 +25,7 @@ juicefs: Makefile cmd/*.go pkg/*/*.go go.*
 
 juicefs.cover: Makefile cmd/*.go pkg/*/*.go go.*
 	go version
-	go build -ldflags="$(LDFLAGS)"  -cover -o juicefs.cover .
+	go build -ldflags="$(LDFLAGS)"  -cover -o juicefs .
 
 juicefs.lite: Makefile cmd/*.go pkg/*/*.go
 	go build -tags nogateway,nowebdav,nocos,nobos,nohdfs,noibmcos,noobs,nooss,noqingstor,noscs,nosftp,noswift,noupyun,noazure,nogs,noufile,nob2,nonfs,nodragonfly,nosqlite,nomysql,nopg,notikv,nobadger,noetcd \
@@ -38,7 +38,7 @@ juicefs.fdb: Makefile cmd/*.go pkg/*/*.go
 	go build -tags fdb -ldflags="$(LDFLAGS)"  -o juicefs.fdb .
 
 juicefs.fdb.cover: Makefile cmd/*.go pkg/*/*.go
-	go build -tags fdb -ldflags="$(LDFLAGS)" -cover -o juicefs.fdb.cover .
+	go build -tags fdb -ldflags="$(LDFLAGS)" -cover -o juicefs.fdb .
 
 juicefs.gluster: Makefile cmd/*.go pkg/*/*.go
 	go build -tags gluster -ldflags="$(LDFLAGS)"  -o juicefs.gluster .
