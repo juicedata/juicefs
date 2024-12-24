@@ -46,6 +46,15 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
       - name: Set environment variables
         run: |
           if [ "${{ matrix.storage }}" = "gluster" ]; then
@@ -65,7 +74,13 @@ jobs:
 
       - name: Test
         run: |
-          sudo STORAGE=${{matrix.storage}} .github/scripts/storage.sh
+          sudo GOCOVERDIR=$(pwd)/cover STORAGE=${{matrix.storage}} .github/scripts/storage.sh
+
+      - name: upload coverage report
+        timeout-minutes: 5
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}       
 
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
