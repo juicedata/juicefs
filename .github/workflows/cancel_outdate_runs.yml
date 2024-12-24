@@ -39,6 +39,7 @@ jobs:
       - name: Save head_sha 
         timeout-minutes: 1
         run: |
+          mkdir -p jfs/${{ github.event.pull_request.number }}
           echo ${{ github.event.pull_request.head.sha }} | tee jfs/${{ github.event.pull_request.number }}/head_sha
           echo save head_sha to jfs/${{ github.event.pull_request.number }}/head_sha
       
