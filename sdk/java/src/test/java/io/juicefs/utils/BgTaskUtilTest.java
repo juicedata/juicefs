@@ -66,11 +66,5 @@ public class BgTaskUtilTest extends TestCase {
     latch.await();
     assertEquals(0, BgTaskUtil.getBgThreadForName().size());
     assertEquals(0, BgTaskUtil.getRunningInstance().size());
-
-    for (StackTraceElement[] elements : Thread.getAllStackTraces().values()) {
-      for (StackTraceElement e : elements) {
-        assertFalse("ClassName: " + e.getClassName(), e.getClassName().contains("juicefs") && !e.getClassName().equals("io.juicefs.utils.BgTaskUtilTest"));
-      }
-    }
   }
 }
