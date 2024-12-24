@@ -24,11 +24,10 @@ runs:
     - name: generate mount coverage report
       shell: bash
       run: |
-        sudo mkdir -p cover/mount
-        echo "generate coverage percentage report for mount..."
-        sudo go tool covdata percent -i=cover/mount | sudo tee cover/mount/percent.txt
-        echo "generate coverage text report for mount..."
-        sudo go tool covdata textfmt -i=cover/mount -o cover/mount/cover.txt
-        echo "generate coverage html report for mount..."
-        sudo go tool cover -html=cover/mount/cover.txt -o cover/mount/cover.html
-        .github/scripts/upload_coverage_report.sh cover/mount/cover.html juicefs_${{github.workflow}}_${{github.run_id}}_mount.html ${{inputs.UPLOAD_TOKEN}}
+        echo "generate coverage percentage report"
+        sudo go tool covdata percent -i=cover/ | sudo tee cover/percent.txt
+        echo "generate coverage text report"
+        sudo go tool covdata textfmt -i=cover/ -o cover/cover.txt
+        echo "generate coverage html report"
+        sudo go tool cover -html=cover/cover.txt -o cover/cover.html
+        .github/scripts/upload_coverage_report.sh cover/cover.html juicefs_${{github.workflow}}_${{github.run_id}}.html ${{inputs.UPLOAD_TOKEN}}
