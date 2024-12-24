@@ -93,7 +93,7 @@ jobs:
           name=cover_${{matrix.test}}
           sudo go tool covdata percent -i=$coverdirs | sudo tee ${name}.percent
           echo "generated coverage percent report:" $(realpath ${name}.percent)
-          sudo go tool covdata textfmt -o ${name}.txt -i=$coverdirs 
+          sudo go tool covdata textfmt -i=$coverdirs -o ${name}.txt 
           echo "generated coverage report in text format:" $(realpath ${name}.txt)
           sudo go tool cover -html=${name}.txt -o ${name}.html
           echo "generated coverage report in html format:" $(realpath ${name}.html)
