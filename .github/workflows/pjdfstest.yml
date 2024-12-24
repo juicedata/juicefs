@@ -114,7 +114,6 @@ jobs:
           stat /tmp/jfs/.accesslog
 
       - name: Pjdfstest
-        if: false
         run: |
           sudo .github/scripts/apt_install.sh libtap-harness-archive-perl
           cd /tmp/jfs/
