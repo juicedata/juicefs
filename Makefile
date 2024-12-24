@@ -43,6 +43,9 @@ juicefs.fdb.cover: Makefile cmd/*.go pkg/*/*.go
 juicefs.gluster: Makefile cmd/*.go pkg/*/*.go
 	go build -tags gluster -ldflags="$(LDFLAGS)"  -o juicefs.gluster .
 
+juicefs.gluster.cover: Makefile cmd/*.go pkg/*/*.go
+	go build -tags gluster -ldflags="$(LDFLAGS)"  -cover -o juicefs.gluster .
+
 juicefs.all: Makefile cmd/*.go pkg/*/*.go
 	go build -tags ceph,fdb,gluster -ldflags="$(LDFLAGS)"  -o juicefs.all .
 
