@@ -26,6 +26,7 @@ jobs:
       - name: Get previous head_sha
         timeout-minutes: 1
         run: |
+          echo get previous head sha from /jfs/${{ github.event.pull_request.number }}/head_sha
           previous_head_sha=/jfs/${{ github.event.pull_request.number }}/head_sha
           if [ ! -f previous_head_sha ]; then
             echo "no previous head sha found"
@@ -39,9 +40,9 @@ jobs:
       - name: Save head_sha 
         timeout-minutes: 1
         run: |
-          mkdir -p jfs/${{ github.event.pull_request.number }}
-          echo ${{ github.event.pull_request.head.sha }} | tee jfs/${{ github.event.pull_request.number }}/head_sha
-          echo save head_sha to jfs/${{ github.event.pull_request.number }}/head_sha
+          mkdir -p /jfs/${{ github.event.pull_request.number }}
+          echo ${{ github.event.pull_request.head.sha }} | tee /jfs/${{ github.event.pull_request.number }}/head_sha
+          echo save head sha to /jfs/${{ github.event.pull_request.number }}/head_sha
       
       - name : Cancel Outdate Runs
         uses: ./.github/actions/cancel-outdate-runs
