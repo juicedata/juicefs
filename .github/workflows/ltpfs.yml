@@ -6,13 +6,13 @@ on:
       - 'main'
       - 'release-**'
     paths:
-      - 'ltpfs.yml'
+      - '**/ltpfs.yml'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
     paths:
-      - 'ltpfs.yml'
+      - '**/ltpfs.yml'
   schedule:
     - cron:  '30 20 * * *'
   workflow_dispatch:
