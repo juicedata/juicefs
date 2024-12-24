@@ -243,10 +243,12 @@ type baseMeta struct {
 	prefetchMu       sync.Mutex
 	prefetchedInodes freeID
 
-	usedSpaceG  prometheus.Gauge
-	usedInodesG prometheus.Gauge
-	txDist      prometheus.Histogram
-	txRestart   prometheus.Counter
+	usedSpaceG   prometheus.Gauge
+	usedInodesG  prometheus.Gauge
+	totalSpaceG  prometheus.Gauge
+	totalInodesG prometheus.Gauge
+	txDist       prometheus.Histogram
+	txRestart    prometheus.Counter
 	opDist      prometheus.Histogram
 	opCount     *prometheus.CounterVec
 	opDuration  *prometheus.CounterVec
@@ -280,6 +282,14 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		}),
 		usedInodesG: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "used_inodes",
+			Help: "Total used number of inodes.",
+		}),
+		totalSpaceG: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "total_space",
+			Help: "Total space in bytes.",
+		}),
+		totalInodesG: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "total_inodes",
 			Help: "Total number of inodes.",
 		}),
 		txDist: prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -313,6 +323,8 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 	}
 	reg.MustRegister(m.usedSpaceG)
 	reg.MustRegister(m.usedInodesG)
+	reg.MustRegister(m.totalSpaceG)
+	reg.MustRegister(m.totalInodesG)
 	reg.MustRegister(m.txDist)
 	reg.MustRegister(m.txRestart)
 	reg.MustRegister(m.opDist)
@@ -326,6 +338,8 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 			if err == 0 {
 				m.usedSpaceG.Set(float64(totalSpace - availSpace))
 				m.usedInodesG.Set(float64(iused))
+				m.totalSpaceG.Set(float64(totalSpace))
+				m.totalInodesG.Set(float64(iused + iavail))
 			}
 			utils.SleepWithJitter(time.Second * 10)
 		}
