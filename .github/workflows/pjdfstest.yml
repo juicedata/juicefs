@@ -67,15 +67,24 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
       - name: Set Variable
         id: vars
         run: |
           if [ "${{matrix.meta}}" == "fdb" ]; then
-            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
+            echo "target=juicefs.fdb.cover" >> $GITHUB_OUTPUT
           else
-            echo "target=juicefs" >> $GITHUB_OUTPUT
+            echo "target=juicefs.cover" >> $GITHUB_OUTPUT
           fi
-
+      
       - name: Build
         uses: ./.github/actions/build
         with: 
@@ -127,6 +136,12 @@ jobs:
             tail -300 /var/log/juicefs.log
             grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
           fi
+
+      - name: upload coverage report
+        timeout-minutes: 5
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
 
       - name: Send Slack Notification
         if: failure()

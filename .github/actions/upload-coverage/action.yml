@@ -1,0 +1,34 @@
+name: 'upload_coverage_report'
+description: 'upload coverage report to oss'
+inputs:
+  type: 
+    description: 'type of the test'
+    required: true
+    default: 'integration'
+    type: string
+
+  UPLOAD_TOKEN:
+    description: 'upload token'
+    required: true
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+    - name: umount juicefs
+      shell: bash
+      run: |
+        umount /tmp/jfs
+        sleep 3s
+
+    - name: generate mount coverage report
+      shell: bash
+      run: |
+        sudo mkdir -p cover/mount
+        echo "generate coverage percentage report for mount..."
+        sudo go tool covdata percent -i=cover/mount | sudo tee cover/mount/percent.txt
+        echo "generate coverage text report for mount..."
+        sudo go tool covdata textfmt -i=cover/mount -o cover/mount/cover.txt
+        echo "generate coverage html report for mount..."
+        sudo go tool cover -html=cover/mount/cover.txt -o cover/mount/cover.html
+        .github/scripts/upload_coverage_report.sh cover/mount/cover.html juicefs_${{github.workflow}}_${{github.run_id}}_mount.html ${{inputs.UPLOAD_TOKEN}}

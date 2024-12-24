@@ -21,7 +21,7 @@ jobs:
           sudo chmod +x /root/.juicefs/jfsmount
           sudo curl -s -L https://juicefs.com/static/juicefs -o /usr/local/bin/juicefs && sudo chmod +x /usr/local/bin/juicefs
           sudo juicefs auth ci-coverage --access-key ${{ secrets.CI_COVERAGE_AWS_AK }} --secret-key ${{ secrets.CI_COVERAGE_AWS_SK }} --token ${{ secrets.CI_COVERAGE_AWS_TOKEN }} --encrypt-keys
-          sudo juicefs mount ci-coverage --subdir cancel-outdate-runs /jfs --allow-other
+          sudo juicefs mount ci-coverage --subdir juicefs/cancel-outdate-runs /jfs --allow-other
             
       - name: Get previous head_sha
         timeout-minutes: 1
