@@ -20,7 +20,7 @@ jobs:
           sudo wget -q s.juicefs.com/static/Linux/mount -O /root/.juicefs/jfsmount 
           sudo chmod +x /root/.juicefs/jfsmount
           sudo curl -s -L https://juicefs.com/static/juicefs -o /usr/local/bin/juicefs && sudo chmod +x /usr/local/bin/juicefs
-          sudo juicefs auth ci-coverage --access-key ${{ secrets.CI_COVERAGE_AWS_AK }} --secret-key ${{ secrets.CI_COVERAGE_AWS_SK }} --token fd4771b83b58caa9c8d3bbdec446d3df1de42e87 --encrypt-keys
+          sudo juicefs auth ci-coverage --access-key ${{ secrets.CI_COVERAGE_AWS_AK }} --secret-key ${{ secrets.CI_COVERAGE_AWS_SK }} --token ${{ secrets.CI_COVERAGE_AWS_TOKEN }} --encrypt-keys
           sudo juicefs mount ci-coverage --subdir cancel-outdate-runs /jfs --allow-other
             
       - name: Get previous head_sha
