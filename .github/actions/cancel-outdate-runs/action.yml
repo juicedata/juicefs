@@ -1,0 +1,77 @@
+name: 'Cancel Outdate Runs'
+description: 'Cancel Outdate Runs'
+inputs:
+  head_sha:
+    description: 'head_sha triggers the workflow runs'
+    required: true
+    type: string
+  per_page:
+    description: 'Page size of runs to cancel'
+    required: true
+    type: number
+    default: 5
+  page:
+    description: 'Page number of runs to cancel'
+    required: true
+    type: number
+    default: 1
+  github_token:
+    description: 'GITHUB_TOKEN'
+    required: true
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+    - name: display parameters
+      shell: bash
+      run: |
+        echo "head_sha is ${{inputs.head_sha}}"
+        echo "per_page is ${{inputs.per_page}}"
+        echo "page is ${{inputs.page}}"
+        
+    - uses: octokit/request-action@v2.x
+      id: get_active_workflows
+      with:
+        route: GET /repos/${{github.repository}}/actions/runs?status=in_progress&event=pull_request&per_page=${{inputs.per_page}}&page=${{inputs.page}}&head_sha=${{inputs.head_sha}}
+      env:
+        GITHUB_TOKEN: ${{inputs.github_token}}
+
+    - name: display active workflows
+      shell: bash
+      env:
+        data: ${{ steps.get_active_workflows.outputs.data }}
+      run: |
+        echo "$data" | jq '.workflow_runs | map({id, head_sha, pull_request_number:.pull_requests[0].number})'
+    
+    - name: Extract workflow ids
+      shell: bash
+      id: extract_workflow_ids
+      env:
+        data: ${{ steps.get_active_workflows.outputs.data }}
+      run: |
+        echo pull_request_number is ${{ github.event.pull_request.number }}
+        echo head_sha is ${{ github.event.pull_request.head.sha }}
+        workflow_ids=$(echo "$data" | \
+          jq '.workflow_runs | map({id, head_sha, pull_request_number:.pull_requests[0].number})' | \
+          jq 'map(select( .pull_request_number == ${{ github.event.pull_request.number }} and .head_sha != "${{ github.event.pull_request.head.sha }}")) | map(.id)' | \
+          jq 'join(",")')
+        echo workflow_ids is $workflow_ids
+        echo 'WORKFLOW_IDS='$(echo $workflow_ids | tr -d '"') >> $GITHUB_ENV
+        
+    - name: Cancel active workflows
+      shell: bash
+      run: |
+        for i in ${WORKFLOW_IDS//,/ }
+        do
+          echo "Cancelling workflow with id: $i"
+          # use curl here as I have no idea how to use a github action in a loop
+          curl \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{inputs.github_token}}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/runs/$i/cancel
+        done
+
+
+        
