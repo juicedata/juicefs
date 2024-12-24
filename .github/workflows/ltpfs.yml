@@ -27,6 +27,15 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
       - name: Build
         timeout-minutes: 10
         uses: ./.github/actions/build
@@ -43,11 +52,11 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format --trash-days 0 redis://127.0.0.1:6379/1 pics
+          sudo GOCOVERDIR=$(pwd)/cover ./juicefs format --trash-days 0 redis://127.0.0.1:6379/1 pics
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report
+          sudo GOCOVERDIR=$(pwd)/cover ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report
 
       - name: LTP FS
         timeout-minutes: 50
@@ -77,6 +86,12 @@ jobs:
         if: always()
         run: |
           cat /opt/ltp/output/result.log.failed
+          
+      - name: upload coverage report
+        timeout-minutes: 5
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
 
       - name: Send Slack Notification
         if: failure()

@@ -38,6 +38,15 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
       - name: Set Variable
         id: vars
         run: |
@@ -85,8 +94,8 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs format $meta_url vdbench-long-run --trash-days 0
-          ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --cache-size 1024 --max-deletes 50
+          GOCOVERDIR=$(pwd)/cover ./juicefs format $meta_url vdbench-long-run --trash-days 0
+          GOCOVERDIR=$(pwd)/cover ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --cache-size 1024 --max-deletes 50
           vdbench/vdbench -f .github/workflows/resources/vdbench_long_run.conf -jn
 
       - uses: actions/upload-artifact@v3
@@ -108,7 +117,13 @@ jobs:
         run: | 
           tail -300 ~/.juicefs/juicefs.log
           grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
- 
+
+      - name: upload coverage report
+        timeout-minutes: 5
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }} 
+
       - name: Send Slack Notification
         if: failure()
         uses: juicedata/slack-notify-action@main
