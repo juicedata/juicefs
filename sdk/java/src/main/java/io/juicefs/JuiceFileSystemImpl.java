@@ -501,19 +501,12 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     String rangerRestUrl = getConf(conf, "ranger-rest-url", null);
     if (!isEmpty(rangerRestUrl) && !isSuperGroupFileSystem && !isBackGroundTask) {
-      try {
         RangerConfig rangerConfig = checkAndGetRangerParams(rangerRestUrl, conf);
         Configuration superConf = new Configuration(conf);
         superConf.set("juicefs.internal-bg-task", "true");
         superGroupFileSystem = new JuiceFileSystemImpl(true);
         superGroupFileSystem.initialize(uri, superConf);
         rangerPermissionChecker = RangerPermissionChecker.acquire(name, handle, superGroupFileSystem, rangerConfig);
-      } catch (Exception e) {
-        if (rangerPermissionChecker != null) {
-          rangerPermissionChecker.cleanUp();
-        }
-        throw new IOException("The initialization of the Permission Checker has failed. ", e);
-      }
     }
 
     if (!isBackGroundTask && !isSuperGroupFileSystem) {
@@ -1880,9 +1873,6 @@ public class JuiceFileSystemImpl extends FileSystem {
     lib.jfs_term(Thread.currentThread().getId(), handle);
     if (metricsEnable) {
       JuiceFSInstrumentation.close();
-    }
-    if (rangerPermissionChecker != null) {
-      rangerPermissionChecker.cleanUp();
     }
   }
 

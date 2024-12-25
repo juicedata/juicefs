@@ -72,23 +72,18 @@ public class RangerPermissionChecker {
     rangerPlugin.init();
   }
 
-  public static RangerPermissionChecker acquire(String volName, long handle, FileSystem superGroupFileSystem, RangerConfig config) throws Exception {
+  public static RangerPermissionChecker acquire(String volName, long handle, FileSystem superGroupFileSystem, RangerConfig config) throws IOException {
     synchronized (runningInstance) {
       if (!runningInstance.containsKey(volName)) {
         if (pcs.containsKey(volName)) {
           throw new IOException("RangerPermissionChecker for volume: " + volName + " is already created, but no running instance found.");
         }
-        try {
-          RangerPermissionChecker pc = new RangerPermissionChecker(superGroupFileSystem, config);
-          pcs.put(volName, pc);
-          Set<Long> handles = new HashSet<>();
-          handles.add(handle);
-          runningInstance.put(volName, handles);
-          return pc;
-        } catch (Exception e) {
-          LOG.error("Failed to create RangerPermissionChecker for volume: " + volName, e);
-          throw e;
-        }
+        RangerPermissionChecker pc = new RangerPermissionChecker(superGroupFileSystem, config);
+        pcs.put(volName, pc);
+        Set<Long> handles = new HashSet<>();
+        handles.add(handle);
+        runningInstance.put(volName, handles);
+        return pc;
       } else {
         RangerPermissionChecker pc = pcs.get(volName);
         if (pc == null) {
