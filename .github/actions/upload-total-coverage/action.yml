@@ -1,0 +1,42 @@
+name: 'upload_total_coverage_report'
+description: 'upload total coverage report of all jobs in workflow'
+inputs:
+  type: 
+    description: 'type of the test'
+    required: true
+    default: 'integration'
+    type: string
+
+  UPLOAD_TOKEN:
+    description: 'upload token'
+    required: true
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+    - name: generate coverage report
+      working-directory: cover
+      shell: bash
+      run: |
+        echo "current dir is $(pwd)"
+        coverdirs=""
+        for dir in $(find . -mindepth 1 -maxdepth 1 -type d -exec basename {} \;); do
+          coverdirs+="$dir/,"
+        done
+        coverdirs=${coverdirs%,}
+        echo coverdirs is $coverdirs
+        [[ -z "$coverdirs" ]] && echo "no coverage dir found" && exit 1
+        sudo go tool covdata percent -i=$coverdirs | sudo tee cover.percent
+        echo "generated coverage percent report:" $(realpath cover.percent)
+        sudo go tool covdata textfmt -o cover.txt -i=$coverdirs 
+        echo "generated coverage report in text format:" $(realpath cover.txt)
+        sudo go tool cover -html=cover.txt -o cover.html
+        echo "generated coverage report in html format:" $(realpath cover.html)
+        ls -l cover_*
+
+    - name: upload coverage report
+      shell: bash
+      run: |
+        .github/scripts/upload_coverage_report.sh cover/cover.html ${{github.workflow}}_${{github.run_id}}.html ${{inputs.UPLOAD_TOKEN}}
+        
