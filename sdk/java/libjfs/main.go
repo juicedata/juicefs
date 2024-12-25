@@ -828,7 +828,7 @@ func jfs_mkdirAll(pid int, h int64, cpath *C.char, mode, umask uint16) int {
 	if err == 0 && w.ctx.Uid() == 0 && w.user != w.superuser {
 		// belongs to supergroup
 		if err := setOwner(w, w.withPid(pid), path, w.user, ""); err != 0 {
-			logger.Errorf("change owner of %s to %s: %s", path, w.user, err)
+			logger.Errorf("change owner of %s to %s: %d", path, w.user, err)
 		}
 	}
 	return err
