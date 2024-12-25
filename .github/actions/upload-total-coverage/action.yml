@@ -33,7 +33,7 @@ runs:
         echo "generated coverage report in text format:" $(realpath cover.txt)
         sudo go tool cover -html=cover.txt -o cover.html
         echo "generated coverage report in html format:" $(realpath cover.html)
-        ls -l cover_*
+        ls -l cover*
 
     - name: upload coverage report
       shell: bash
