@@ -1432,6 +1432,36 @@ func jfs_concat(pid int, h int64, _dst *C.char, buf uintptr, bufsize int) int {
 	return r
 }
 
+// TODO: implement real clone
+
+//export jfs_clone
+func jfs_clone(pid int, h int64, _src *C.char, _dst *C.char) int {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	src := C.GoString(_src)
+	dst := C.GoString(_dst)
+	ctx := w.withPid(pid)
+	fi, err := w.Open(ctx, src, 0)
+	if err != 0 {
+		logger.Errorf("open %s: %s", src, err)
+		return errno(err)
+	}
+	defer fi.Close(ctx)
+	fo, err := w.Create(ctx, dst, 0666, 022)
+	if err != 0 {
+		logger.Errorf("create %s: %s", dst, err)
+		return errno(err)
+	}
+	defer fo.Close(ctx)
+	_, err = w.CopyFileRange(ctx, src, 0, dst, 0, 1<<63)
+	if err != 0 {
+		logger.Errorf("copy %s to %s: %s", src, dst, err)
+	}
+	return errno(err)
+}
+
 //export jfs_lseek
 func jfs_lseek(pid, fd int, offset int64, whence int) int64 {
 	filesLock.Lock()
