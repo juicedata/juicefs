@@ -35,7 +35,7 @@ jobs:
       fail-fast: false
       matrix:
         branch: ['main']
-        test: ['it']
+        test: ['ut', 'it', 'all']
           
     timeout-minutes: 60
     runs-on: ubuntu-22.04
@@ -76,11 +76,11 @@ jobs:
           coverdirs=""
           for dir in $(find . -mindepth 1 -maxdepth 1 -type d -exec basename {} \;); do
               if [[ ${{matrix.test}} == "ut" ]]; then
-                if [[ "$dir" == "unit-test" || "$dir" == "unit-random-test" ]]; then
+                if [[ "$dir" == "unittests" ]]; then
                   coverdirs+="$dir,"
                 fi
               elif [[ ${{matrix.test}} == "it" ]]; then
-                if [[ "$dir" != "unit-test" && "$dir" != "unit-random-test" ]]; then
+                if [[ "$dir" != "unittests" ]]; then
                   coverdirs+="$dir,"
                 fi
               elif [[ ${{matrix.test}} == "all" ]]; then
