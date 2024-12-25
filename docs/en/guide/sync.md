@@ -147,12 +147,6 @@ For data migrations that involve JuiceFS, it's recommended use the `jfs://` prot
 myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ jfs://myfs/movies/
 ```
 
-When using the `jfs://` protocol, you can pass mounting parameters from `juicefs mount` to improve transfer performance, such as `--max-downloads`, `--max-uploads`, and `--buffer-size`, for example, when copying large files with abundant bandwidth, increase buffer size to raise performance:
-
-```shell
-myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ jfs://myfs/movies/ --buffer-size=1024
-```
-
 ### Synchronize between object storage and JuiceFS {#synchronize-between-object-storage-and-juicefs}
 
 The following command synchronizes `movies` directory from object storage to JuiceFS.
