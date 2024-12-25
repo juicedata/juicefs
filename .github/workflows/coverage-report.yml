@@ -104,6 +104,7 @@ jobs:
         timeout-minutes: 10
         run: |
           echo "current dir is $(pwd)"
+          [[ ! -f "cover_${{matrix.test}}.html" ]] && echo "no coverage report found" && exit 0
           UPLOAD_PATH=${{github.workflow}}_${{github.run_id}}_${{matrix.test}}.html
           response=$(curl -w '%{http_code}' -s -o /dev/null --form 'file=@cover_${{matrix.test}}.html' https://juicefs.com/upload-file-u80sdvuke/${UPLOAD_PATH}?token=${{secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN}})
           if [ "$response" -eq 200 ]; then
