@@ -1215,6 +1215,19 @@ func jfs_chmod(pid int, h int64, cpath *C.char, mode C.mode_t) int {
 	return errno(f.Chmod(w.withPid(pid), uint16(mode)))
 }
 
+//export jfs_chown
+func jfs_chown(pid int, h int64, cpath *C.char, uid uint32, gid uint32) int {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	f, err := w.Open(w.withPid(pid), C.GoString(cpath), 0)
+	if err != 0 {
+		return errno(err)
+	}
+	return errno(f.Chown(w.withPid(pid), uid, gid))
+}
+
 //export jfs_utime
 func jfs_utime(pid int, h int64, cpath *C.char, mtime, atime int64) int {
 	w := F(h)
