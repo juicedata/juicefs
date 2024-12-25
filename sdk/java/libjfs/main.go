@@ -679,6 +679,20 @@ func jfs_update_uid_grouping(cname, uidstr *C.char, grouping *C.char) {
 	}
 }
 
+//export jfs_getGroups
+func jfs_getGroups(name, user string) string {
+	fslock.Lock()
+	defer fslock.Unlock()
+	userGroups := userGroupCache[name]
+	if userGroups != nil {
+		gs := userGroups[user]
+		if gs != nil {
+			return strings.Join(gs, ",")
+		}
+	}
+	return ""
+}
+
 //export jfs_term
 func jfs_term(pid int, h int64) int {
 	w := F(h)
