@@ -109,9 +109,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
           META: ${{matrix.meta}}
           START_META: false
-          GOCOVERDIR: $(pwd)/cover
         run: |
-          sudo -E .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir
+          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir
       
       - name: Load and dump subdir with big directory
         if: false
@@ -121,9 +120,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
           META: ${{matrix.meta}} 
           START_META: false 
-          GOCOVERDIR: $(pwd)/cover
         run: |
-          sudo -E .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir_subdir
+          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir_subdir
           
       - name: List big directory
         timeout-minutes: 30
@@ -132,9 +130,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
           META: ${{matrix.meta}} 
           START_META: false 
-          GOCOVERDIR: $(pwd)/cover
         run: | 
-          sudo -E .github/scripts/command/load_dump_bench.sh test_list_with_big_dir
+          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_list_with_big_dir
 
       - name: log
         if: always()
