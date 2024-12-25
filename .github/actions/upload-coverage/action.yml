@@ -1,5 +1,5 @@
 name: 'upload_coverage_report'
-description: 'upload coverage report to oss'
+description: 'upload coverage report of one job'
 inputs:
   type: 
     description: 'type of the test'
@@ -21,6 +21,16 @@ runs:
         sudo umount /tmp/jfs || true
         sleep 3s
 
+    - name: get job id
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        jobs=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs)
+        job_id=$(echo $jobs | jq -r '.jobs[] | select(.runner_name=="${{ runner.name }}") | select(.status=="in_progress") | .id')
+        echo Job ID is: ${job_id}
+        echo "job_id=$job_id" >> $GITHUB_ENV
+
     - name: generate mount coverage report
       shell: bash
       run: |
@@ -30,4 +40,4 @@ runs:
         sudo go tool covdata textfmt -i=cover/ -o cover/cover.txt
         echo "generate coverage html report"
         sudo go tool cover -html=cover/cover.txt -o cover/cover.html
-        .github/scripts/upload_coverage_report.sh cover/cover.html juicefs_${{github.workflow}}_${{github.run_id}}.html ${{inputs.UPLOAD_TOKEN}}
+        .github/scripts/upload_coverage_report.sh cover/cover.html juicefs_${{github.workflow}}_${{github.run_id}}_${job_id}.html ${{inputs.UPLOAD_TOKEN}}

@@ -42,14 +42,14 @@ runs:
           branch=${GITHUB_REF#refs/heads/} # 对于 schedule 和 workflow_dispatch
         fi
         echo input.subdir is ${{inputs.subdir}}
-        if [ -z "${{inputs.subdir}}" ]; then
-          if [[ "${{github.event_name}}" == "schedule" ]]; then
-            subdir=juicefs/schedule/$(date +"%Y%m%d")/${{github.workflow}}
-          else
-            subdir=juicefs/pr/$branch/${{github.workflow}}/${job_id}
-          fi
-        else
+        if [ -n "${{inputs.subdir}}" ]; then
           subdir=${{inputs.subdir}}
+        elif [[ "${{github.event_name}}" == "schedule" ]]; then
+          subdir=juicefs/schedule/$(date +"%Y%m%d")/${{github.workflow}}
+        elif [[ "${{github.job}}" == "success-all-test" ]]; then 
+          subdir=juicefs/pr/$branch/${{github.workflow}}/${{github.run_id}}
+        else
+          subdir=juicefs/pr/$branch/${{github.workflow}}/${{github.run_id}}/${job_id}        
         fi
         echo "subdir=$subdir"
         echo "subdir=$subdir" >> $GITHUB_ENV

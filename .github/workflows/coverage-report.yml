@@ -35,7 +35,7 @@ jobs:
       fail-fast: false
       matrix:
         branch: ['main']
-        test: ['it']
+        test: ['ut', 'it', 'all']
           
     timeout-minutes: 60
     runs-on: ubuntu-22.04
@@ -76,11 +76,11 @@ jobs:
           coverdirs=""
           for dir in $(find . -mindepth 1 -maxdepth 1 -type d -exec basename {} \;); do
               if [[ ${{matrix.test}} == "ut" ]]; then
-                if [[ "$dir" == "unit-test" || "$dir" == "unit-random-test" ]]; then
+                if [[ "$dir" == "unittests" ]]; then
                   coverdirs+="$dir,"
                 fi
               elif [[ ${{matrix.test}} == "it" ]]; then
-                if [[ "$dir" != "unit-test" && "$dir" != "unit-random-test" ]]; then
+                if [[ "$dir" != "unittests" ]]; then
                   coverdirs+="$dir,"
                 fi
               elif [[ ${{matrix.test}} == "all" ]]; then
@@ -89,7 +89,7 @@ jobs:
           done
           coverdirs=${coverdirs%,}
           echo coverdirs is $coverdirs
-          [[ -z "$coverdirs" ]] && echo "no coverage dir found" && exit 1
+          [[ -z "$coverdirs" ]] && echo "no coverage dir found" && exit 0
           name=cover_${{matrix.test}}
           sudo go tool covdata percent -i=$coverdirs | sudo tee ${name}.percent
           echo "generated coverage percent report:" $(realpath ${name}.percent)
@@ -104,6 +104,7 @@ jobs:
         timeout-minutes: 10
         run: |
           echo "current dir is $(pwd)"
+          [[ ! -f "cover_${{matrix.test}}.html" ]] && echo "no coverage report found" && exit 0
           UPLOAD_PATH=${{github.workflow}}_${{github.run_id}}_${{matrix.test}}.html
           response=$(curl -w '%{http_code}' -s -o /dev/null --form 'file=@cover_${{matrix.test}}.html' https://juicefs.com/upload-file-u80sdvuke/${UPLOAD_PATH}?token=${{secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN}})
           if [ "$response" -eq 200 ]; then
