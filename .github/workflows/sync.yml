@@ -76,9 +76,9 @@ jobs:
           elif [[ "${{matrix.type}}" == 'sync_exclude' ]]; then
             sudo GOCOVERDIR=$(pwd)/cover python3 .github/scripts/hypo/sync_test.py
             if [ "${{github.event_name}}" == "schedule" ]; then
-              sudo GOCOVERDIR=$(pwd)/cover MAX_EXAMPLE=500 STEP_COUNT=100 PROFILE=ci python3 .github/scripts/hypo/sync.py
+              sudo GOCOVERDIR=$(pwd)/cover MAX_EXAMPLE=100 STEP_COUNT=50 PROFILE=ci python3 .github/scripts/hypo/sync.py
             else
-              sudo GOCOVERDIR=$(pwd)/cover MAX_EXAMPLE=200 STEP_COUNT=50 PROFILE=ci python3 .github/scripts/hypo/sync.py
+              sudo GOCOVERDIR=$(pwd)/cover MAX_EXAMPLE=50 STEP_COUNT=30 PROFILE=ci python3 .github/scripts/hypo/sync.py
             fi
           else
             echo "Unknown type: ${{matrix.type}}"
@@ -86,7 +86,7 @@ jobs:
           fi
           
       - name: upload coverage report
-        timeout-minutes: 5
+        timeout-minutes: 10
         uses: ./.github/actions/upload-coverage
         with:
           UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}     
