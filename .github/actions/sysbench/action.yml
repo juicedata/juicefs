@@ -13,15 +13,15 @@ inputs:
     description: 'file test mode'
     required: true
     default: 'seqrd'
-  awk_access_key_id:
+  aws_access_key_id:
     description: 'aws access key id'
     required: true
     default: ''
-  awk_access_key_secret:
+  aws_access_key_secret:
     description: 'aws access key secret'
     required: true
     default: ''
-  awk_access_token:
+  aws_access_token:
     description: 'aws access token'
     required: true
     default: ''
