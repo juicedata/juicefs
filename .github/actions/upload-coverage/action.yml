@@ -1,12 +1,6 @@
 name: 'upload_coverage_report'
 description: 'upload coverage report of one job'
 inputs:
-  type: 
-    description: 'type of the test'
-    required: true
-    default: 'integration'
-    type: string
-
   UPLOAD_TOKEN:
     description: 'upload token'
     required: true
