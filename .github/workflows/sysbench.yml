@@ -100,8 +100,9 @@ jobs:
       - name: seq read 1M
         uses: ./.github/actions/sysbench
         with:
-          aws_access_key_id: ${{secrets.CI_AWS_ACCESS_KEY_ID}}
-          aws_access_key_secret: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
+          aws_access_key_id: ${{secrets.CI_COVERAGE_AWS_AK}}
+          aws_access_key_secret: ${{secrets.CI_COVERAGE_AWS_SK}}
+          awk_access_token: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
           file_num: 1000
           file_total_size: '1G'
           file_test_mode: 'seqrd'
@@ -113,8 +114,9 @@ jobs:
       - name: seq write 1M
         uses: ./.github/actions/sysbench
         with:
-          aws_access_key_id: ${{secrets.CI_AWS_ACCESS_KEY_ID}}
-          aws_access_key_secret: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
+          aws_access_key_id: ${{secrets.CI_COVERAGE_AWS_AK}}
+          aws_access_key_secret: ${{secrets.CI_COVERAGE_AWS_SK}}
+          awk_access_token: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
           file_num: 1000
           file_total_size: '1G'
           file_test_mode: 'seqwr'
@@ -126,8 +128,9 @@ jobs:
       - name: seq read 100K
         uses: ./.github/actions/sysbench
         with:
-          aws_access_key_id: ${{secrets.CI_AWS_ACCESS_KEY_ID}}
-          aws_access_key_secret: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
+          aws_access_key_id: ${{secrets.CI_COVERAGE_AWS_AK}}
+          aws_access_key_secret: ${{secrets.CI_COVERAGE_AWS_SK}}
+          awk_access_token: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
           file_num: 10000
           file_total_size: '1G'
           file_test_mode: 'seqrd'
@@ -139,8 +142,9 @@ jobs:
       - name: seq write 100K
         uses: ./.github/actions/sysbench
         with:
-          aws_access_key_id: ${{secrets.CI_AWS_ACCESS_KEY_ID}}
-          aws_access_key_secret: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
+          aws_access_key_id: ${{secrets.CI_COVERAGE_AWS_AK}}
+          aws_access_key_secret: ${{secrets.CI_COVERAGE_AWS_SK}}
+          awk_access_token: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
           file_num: 10000
           file_total_size: '1G'
           file_test_mode: 'seqwr'
@@ -152,8 +156,9 @@ jobs:
       - name: random readwrite 1M
         uses: ./.github/actions/sysbench
         with:
-          aws_access_key_id: ${{secrets.CI_AWS_ACCESS_KEY_ID}}
-          aws_access_key_secret: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
+          aws_access_key_id: ${{secrets.CI_COVERAGE_AWS_AK}}
+          aws_access_key_secret: ${{secrets.CI_COVERAGE_AWS_SK}}
+          awk_access_token: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
           file_num: 1000
           file_total_size: '1G'
           file_test_mode: 'rndrw'
@@ -165,8 +170,9 @@ jobs:
       - name: random readwrite 100K
         uses: ./.github/actions/sysbench
         with:
-          aws_access_key_id: ${{secrets.CI_AWS_ACCESS_KEY_ID}}
-          aws_access_key_secret: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
+          aws_access_key_id: ${{secrets.CI_COVERAGE_AWS_AK}}
+          aws_access_key_secret: ${{secrets.CI_COVERAGE_AWS_SK}}
+          awk_access_token: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
           file_num: 10000
           file_total_size: '1G'
           file_test_mode: 'rndrw'

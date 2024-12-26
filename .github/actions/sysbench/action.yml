@@ -21,6 +21,10 @@ inputs:
     description: 'aws access key secret'
     required: true
     default: ''
+  awk_access_token:
+    description: 'aws access token'
+    required: true
+    default: ''
   meta:
     description: 'meta'
     required: true
@@ -57,4 +61,4 @@ runs:
         echo "cost $runtime seconds"
         cd -
         version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
-        AWS_ACCESS_KEY_ID=${{inputs.aws_access_key_id}} AWS_SECRET_ACCESS_KEY=${{inputs.aws_access_key_secret}} .github/scripts/save_benchmark.sh --name ${{inputs.name}} --result $runtime --meta ${{inputs.meta}} --storage ${{inputs.storage}} --extra ${{inputs.compress}}
+        AWS_ACCESS_KEY=${{inputs.aws_access_key_id}} AWS_SECRET_KEY=${{inputs.aws_access_key_secret}} AWS_ACCESS_TOKEN=${{inputs.aws_access_token}} .github/scripts/save_benchmark.sh --name ${{inputs.name}} --result $runtime --meta ${{inputs.meta}} --storage ${{inputs.storage}} --extra ${{inputs.compress}}
