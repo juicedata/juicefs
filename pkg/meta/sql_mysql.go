@@ -44,6 +44,6 @@ func setMySQLTransactionIsolation(dns string) (string, error) {
 
 func init() {
 	dupErrorCheckers = append(dupErrorCheckers, isMySQLDuplicateEntryErr)
-	setTransactionIsolation = setMySQLTransationIsolation
+	setTransactionIsolation = setMySQLTransactionIsolation
 	Register("mysql", newSQLMeta)
 }
