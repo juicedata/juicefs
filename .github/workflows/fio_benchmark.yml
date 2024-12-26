@@ -16,7 +16,7 @@ on:
     - '**/fio_benchmark.yml'
     - '**/fio.sh'
   schedule:
-    - cron:  '0 0 * * *'
+    - cron:  '0 17 * * *'
   workflow_dispatch:
     inputs:
       debug:

@@ -23,10 +23,6 @@ on:
       - '.github/scripts/sync/**'
       - '.github/scripts/hypo/sync.py'
       - '.github/scripts/hypo/sync_test.py'
-      
-  schedule:
-    - cron:  '30 20 * * *'
-
   workflow_dispatch:
     inputs:
       debug:
@@ -34,6 +30,8 @@ on:
         description: "Run the build with tmate debugging enabled"
         required: false
         default: false
+  schedule:
+    - cron:  '0 17 * * *'
 
 jobs:
   sync:

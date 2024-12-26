@@ -29,7 +29,8 @@ on:
         description: "Run the build with tmate debugging enabled"
         required: false
         default: false
-
+  schedule:
+    - cron: '0 17 * * *'
 jobs:
   unittests:
     strategy:

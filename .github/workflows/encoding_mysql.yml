@@ -8,6 +8,8 @@ on:
       - 'docs/**'
       - '**.md'
   workflow_dispatch:
+  schedule:
+    - cron:  '0 17 * * *'
 
 jobs:
   mysql-encoding-test:
