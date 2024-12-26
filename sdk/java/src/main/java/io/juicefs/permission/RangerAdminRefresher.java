@@ -19,7 +19,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.apache.hadoop.fs.*;
 import org.apache.ranger.admin.client.RangerAdminClient;
-import org.apache.ranger.plugin.model.RangerServiceDef;
+import org.apache.ranger.plugin.contextenricher.RangerTagEnricher;
 import org.apache.ranger.plugin.service.RangerBasePlugin;
 import org.apache.ranger.plugin.util.RangerRoles;
 import org.apache.ranger.plugin.util.RangerServiceNotFoundException;
@@ -33,7 +33,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -62,14 +61,11 @@ public class RangerAdminRefresher {
   private final FileSystem fs;
   private final ScheduledExecutorService refreshThread;
 
-  protected String rangerTagClass;
-
   public RangerAdminRefresher(RangerBasePlugin plugIn, RangerAdminClient rangerAdmin, FileSystem fs, String rangerUrl, long pollingIntervalMs) {
 
     this.plugIn = plugIn;
     this.rangerAdmin = rangerAdmin;
     this.fs = fs;
-    String serviceType = plugIn.getServiceType();
     String serviceName = plugIn.getServiceName();
     URI uri = URI.create(rangerUrl);
     String rangerDirName = uri.getHost().replace(".", "_") + "_" + uri.getPort() + "_" + serviceName;
@@ -123,10 +119,24 @@ public class RangerAdminRefresher {
         LOG.warn("Load policies from ranger failed", e);
       }
       if (updateRules(policiesFromRanger, tagsFromRanger, rolesFromRanger)) {
-        LOG.info("Ranger rules has been updated, use new rules from ranger admin");
         if (checkUpdate) {
           try {
-            saveRangerRules(new RangerRules(policiesFromRanger, tagsFromRanger, rolesFromRanger));
+            ServicePolicies p = rangerRules != null ? rangerRules.getPolicies() : null;
+            ServiceTags t = rangerRules != null ? rangerRules.getTags() : null;
+            RangerRoles r = rangerRules != null ? rangerRules.getRoles() : null;
+            if (policiesFromRanger != null) {
+              LOG.info("ServicePolicies updated from Ranger Admin");
+              p = policiesFromRanger;
+            }
+            if (tagsFromRanger != null) {
+              LOG.info("ServiceTags updated from Ranger Admin");
+              t = tagsFromRanger;
+            }
+            if (rolesFromRanger != null) {
+              LOG.info("RangerRoles updated from Ranger Admin");
+              r = rolesFromRanger;
+            }
+            saveRangerRules(new RangerRules(p, t, r));
           } catch (IOException e) {
             LOG.warn("Save rules to juicefs failed", e);
           }
@@ -165,14 +175,17 @@ public class RangerAdminRefresher {
           return true;
         }
       }
-    } catch (IOException e) {
+    } catch (FileAlreadyExistsException ignored) {
+      return false;
+    }
+    catch (IOException e) {
       LOG.warn("Check update failed", e);
       return false;
     }
   }
 
   private void saveRangerRules(RangerRules rules) throws IOException {
-    String rulesJson = gson.toJson(rules);
+    String rulesJson = gson.toJson(rules, RangerRules.class);
     byte[] bytes = rulesJson.getBytes();
     try (FSDataOutputStream out = fs.create(rangerRulePath)) {
       out.write(bytes);
@@ -196,9 +209,6 @@ public class RangerAdminRefresher {
       String rulesJson = new String(bytes);
       RangerRules rangerRules = gson.fromJson(rulesJson, RangerRules.class);
       lastMtime = mtime;
-      rangerRules.getPolicies().getServiceDef().getResources().forEach(resource -> {
-       resource.setMatcher("org.apache.ranger.plugin.resourcematcher.RangerPathResourceMatcher");
-      });
       return rangerRules;
     }
   }
@@ -217,6 +227,10 @@ public class RangerAdminRefresher {
     if (newTags != null) {
       long tagVersion = newTags.getTagVersion() == null ? -1 : newTags.getTagVersion();
       if (lastKnownTagVersion != tagVersion) {
+        RangerTagEnricher tagEnricher = plugIn.getTagEnricher();
+        if (tagEnricher != null) {
+          tagEnricher.setServiceTags(newTags);
+        }
         lastKnownTagVersion = tagVersion;
         lastTagActivationTimeInMillis = System.currentTimeMillis();
         updated = true;
@@ -236,6 +250,5 @@ public class RangerAdminRefresher {
 
   public void stop() {
     refreshThread.shutdownNow();
-
   }
 }

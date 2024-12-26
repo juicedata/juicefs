@@ -93,8 +93,6 @@ public class JuiceFileSystemImpl extends FileSystem {
   private Path workingDir;
   private String name;
   private String user;
-//  private String group;
-//  private Set<String> groups;
   private String superuser;
   private String supergroup;
   private URI uri;
