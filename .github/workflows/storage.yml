@@ -17,9 +17,9 @@ on:
       - 'pkg/object/*.go'
       - '**/storage.yml'
       - '**/storage.sh'
-  schedule:
-    - cron:  '30 20 * * *'
   workflow_dispatch:
+  schedule:
+    - cron:  '0 17 * * *'
 
 jobs:
   storage:

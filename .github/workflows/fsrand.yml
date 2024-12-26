@@ -20,7 +20,7 @@ on:
     - '**/fs_test.py'
     - '**/acl_test.py'
   schedule:
-    - cron:  '0 16 * * 0'
+    - cron:  '0 17 * * 0'
   workflow_dispatch:
     inputs:
       debug:

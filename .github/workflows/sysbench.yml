@@ -15,10 +15,10 @@ on:
     paths:
       - '**/sysbench.yml'
       - '**/sysbench/action.yml'
-  schedule:
-    - cron:  '30 20 * * *'
   workflow_dispatch:
-
+  schedule:
+    - cron:  '0 17 * * *'
+    
 jobs:
   sysbench:
     timeout-minutes: 60

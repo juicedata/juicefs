@@ -20,7 +20,9 @@ on:
       - '.github/**'
       - '!.github/workflows/verify.yml'
   workflow_dispatch:
-
+  schedule:
+    - cron: '0 17 * * 0'
+    
 jobs:
   lint:
     runs-on: ubuntu-20.04
