@@ -67,6 +67,7 @@ EOF
     if [[ "$GITHUB_EVENT_NAME" == "schedule" || "$GITHUB_EVENT_NAME" == "workflow_dispatch"   ]]; then
         mount_jfs
         echo "save result.json to /ci-benchmark/$GITHUB_WORKFLOW/$name/$created_date/$meta-$storage.json"
+        mkdir -p /ci-benchmark/$GITHUB_WORKFLOW/$name/$created_date/
         cp result.json /ci-benchmark/$GITHUB_WORKFLOW/$name/$created_date/$meta-$storage.json
     fi
 }
