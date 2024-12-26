@@ -61,4 +61,4 @@ runs:
         echo "cost $runtime seconds"
         cd -
         version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
-        AWS_ACCESS_KEY=${{inputs.aws_access_key_id}} AWS_SECRET_KEY=${{inputs.aws_access_key_secret}} AWS_ACCESS_TOKEN=${{inputs.aws_access_token}} .github/scripts/save_benchmark.sh --name ${{inputs.name}} --result $runtime --meta ${{inputs.meta}} --storage ${{inputs.storage}} --extra ${{inputs.compress}}
+        sudo -E AWS_ACCESS_KEY=${{inputs.aws_access_key_id}} AWS_SECRET_KEY=${{inputs.aws_access_key_secret}} AWS_ACCESS_TOKEN=${{inputs.aws_access_token}} .github/scripts/save_benchmark.sh --name ${{inputs.name}} --result $runtime --meta ${{inputs.meta}} --storage ${{inputs.storage}} --extra ${{inputs.compress}}
