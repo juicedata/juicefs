@@ -800,6 +800,9 @@ func (m *dbMeta) shouldRetry(err error) bool {
 		logger.Warnf("transaction failed: %s, will retry it. please increase the max number of connections in your database, or use a connection pool.", msg)
 		return true
 	}
+	if strings.Contains(msg, "error 1020 (hy000)") {
+		return true
+	}
 	switch m.Name() {
 	case "sqlite3":
 		return errors.Is(err, errBusy) || strings.Contains(msg, "database is locked")
