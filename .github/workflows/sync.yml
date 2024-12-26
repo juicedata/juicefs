@@ -84,12 +84,6 @@ jobs:
             echo "Unknown type: ${{matrix.type}}"
             exit 1
           fi
-          
-      - name: upload coverage report
-        timeout-minutes: 10
-        uses: ./.github/actions/upload-coverage
-        with:
-          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}     
 
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
