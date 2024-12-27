@@ -11,7 +11,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [从 CephFS 到 JuiceFS：同程旅行亿级文件存储平台构建之路](https://juicefs.com/zh-cn/blog/user-stories/cephfs-vs-juicefs-draco-travel-file-storage)，2024-12-13，位传海@同程旅行
 - [vivo 轩辕文件系统：AI 计算平台存储性能优化实践](https://juicefs.com/zh-cn/blog/user-stories/vivo-ai)，2024-10-25，于相洋@vivo
 - [大模型存储选型 & JuiceFS 在关键环节性能详解](https://juicefs.com/zh-cn/blog/solutions/large-model-storage-performance-juicefs)，2024-10-09，李少杰
-- [MiniMax：如何基于 JuiceFS 构建高性能、低成本的大模型 AI 平台？](https://juicefs.com/zh-cn/blog/user-stories/minimax-juicefs-ai)，2024-08-30 
+- [MiniMax：如何基于 JuiceFS 构建高性能、低成本的大模型 AI 平台？](https://juicefs.com/zh-cn/blog/user-stories/minimax-juicefs-ai)，2024-08-30
 - [基于 JuiceFS 构建高校 AI 存储方案：高并发、系统稳定、运维简单](https://juicefs.com/zh-cn/blog/user-stories/juicefs-vs-nfs-ai-storage)，2024-06-26，徐国昊@中山大学
 - [贝壳找房：为 AI 平台打造混合多云的存储加速底座](https://juicefs.com/zh-cn/blog/user-stories/beike-ai-platform-multi-cloud-storage)，2024-06-12，王天庆@贝壳找房
 - [北美科技企业 Jerry：基于 JuiceFS 构建 ClickHouse 主从架构](https://juicefs.com/zh-cn/blog/user-stories/jerry-clickhouse-read-write-separation-juicefs-primary-replica-architecture)，2024-05-17，马涛@Jerry
