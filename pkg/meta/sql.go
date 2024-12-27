@@ -805,8 +805,9 @@ func (m *dbMeta) shouldRetry(err error) bool {
 		return errors.Is(err, errBusy) || strings.Contains(msg, "database is locked")
 	case "mysql":
 		// MySQL, MariaDB or TiDB
+		// error 1020 for MariaDB when conflict
 		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later") ||
-			strings.Contains(msg, "duplicate entry")
+			strings.Contains(msg, "duplicate entry") || strings.Contains(msg, "error 1020 (hy000)")
 	case "postgres":
 		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected") ||
 			strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "could not serialize access") ||
