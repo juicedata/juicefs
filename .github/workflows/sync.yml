@@ -12,6 +12,9 @@ on:
       - '.github/scripts/sync/**'
       - '.github/scripts/hypo/sync.py'
       - '.github/scripts/hypo/sync_test.py'
+      - '.github/actions/upload-coverage/action.yml'
+      - '.github/actions/mount-coverage-dir/action.yml'
+      - '.github/actions/upload-total-coverage/action.yml'
   pull_request:
     branches:
       - 'main'
@@ -23,6 +26,10 @@ on:
       - '.github/scripts/sync/**'
       - '.github/scripts/hypo/sync.py'
       - '.github/scripts/hypo/sync_test.py'
+      - '.github/actions/upload-coverage/action.yml'
+      - '.github/actions/mount-coverage-dir/action.yml'
+      - '.github/actions/upload-total-coverage/action.yml'
+      
   workflow_dispatch:
     inputs:
       debug:
