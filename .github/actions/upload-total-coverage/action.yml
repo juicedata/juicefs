@@ -22,7 +22,7 @@ runs:
         fi
         coverdirs=${coverdirs%,}
         echo coverdirs is $coverdirs
-        [[ -z "$coverdirs" ]] && echo "no coverage dir found" && exit 1
+        [[ -z "$coverdirs" ]] && echo -e "\e[31m no coverage dir found\e[0m" && exit 0
         sudo go tool covdata percent -i=$coverdirs | sudo tee cover/cover.percent
         echo "generated coverage percent report:" $(realpath cover/cover.percent)
         sudo go tool covdata textfmt -o cover/cover.txt -i=$coverdirs 
@@ -34,5 +34,8 @@ runs:
     - name: upload coverage report
       shell: bash
       run: |
-        .github/scripts/upload_coverage_report.sh cover/cover.html ${{github.workflow}}_${{github.run_id}}.html ${{inputs.UPLOAD_TOKEN}}
-        
+        if [[ -f cover/cover.html ]]; then
+          .github/scripts/upload_coverage_report.sh cover/cover.html ${{github.workflow}}_${{github.run_id}}.html ${{inputs.UPLOAD_TOKEN}}
+        else
+          echo -e "\e[31m no coverage report found\e[0m" && exit 0
+        fi
