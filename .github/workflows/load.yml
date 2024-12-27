@@ -97,18 +97,17 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}
 
-      - name: Load and dump with big directory
+      - name: Load and dump with small directory
         timeout-minutes: 30
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
           AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
           META: ${{matrix.meta}}
-          START_META: true
         run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir  
+          sudo -E GOCOVERDIR=$(pwd)/cover  START_META=true .github/scripts/command/load_dump_bench.sh test_load_dump_with_small_dir
 
-      - name: Load and dump with small directory
+      - name: Load and dump with big directory
         timeout-minutes: 30
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
@@ -117,8 +116,8 @@ jobs:
           META: ${{matrix.meta}}
           START_META: false
         run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover  START_META=true .github/scripts/command/load_dump_bench.sh test_load_dump_with_small_dir
-
+          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir  
+  
       - name: Load and dump subdir with big directory
         if: false
         timeout-minutes: 30
@@ -158,8 +157,8 @@ jobs:
           UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
           
       - name: Setup upterm session
-        # if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
-        if: failure()
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
