@@ -830,11 +830,7 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 		inodes = []Ino{1}
 	}
 
-	/*
-	For MySQL and PostgreSQL meta engine, use the engine lock for parent directory 
-        Value 0 pass by doMknod/Rename/Link/Unlink/Rmdir function call to void fuse lock
-	*/
-	if len(inodes) > 0 && (uint(inodes[0]) > 0 || !(m.Name() == "mysql" || m.Name() == "postgres")) {
+	if len(inodes) > 0 {
 		m.txLock(uint(inodes[0]))
 		defer m.txUnlock(uint(inodes[0]))
 	}
@@ -1388,12 +1384,10 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
-		//ok, err := s.ForUpdate().Get(&pn)
 		ok, err := s.Get(&pn)
-
-	        if err != nil {
-                        return err
-	        }
+		if err != nil {
+			return err
+		}
 		if !ok {
 			return syscall.ENOENT
 		}
@@ -1533,9 +1527,9 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 		if updateParent {
-			if updrow , err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", nlinkAdjust)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode}); err != nil || updrow != 1 {
+			if n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", nlinkAdjust)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode}); err != nil || n != 1 {
 				if nlinkAdjust != 0 && err == nil {
-					logger.Warnf("Update parent node affected rows = %d should be 1 for inode = %d .", updrow, pn.Inode)
+					logger.Warnf("Update parent node affected rows = %d should be 1 for inode = %d .", n, pn.Inode)
 					return syscall.ENOENT
 				}
 				return err
@@ -1543,7 +1537,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 		m.parseAttr(&n, attr)
 		return nil
-	}, 0, parent))
+	}))
 }
 
 func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
@@ -1560,7 +1554,6 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		opened = false
 		newSpace, newInode = 0, 0
 		var pn = node{Inode: parent}
-		//ok, err := s.ForUpdate().Get(&pn)
 		ok, err := s.Get(&pn)
 		if err != nil {
 			return err
@@ -1689,13 +1682,13 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				return err
 			}
 		}
-                if updateParent {
-                        if _ , err = s.Cols("mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode}); err != nil {
-                                return err
-                        }
-                }
+		if updateParent {
+			if _, err = s.Cols("mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode}); err != nil {
+				return err
+			}
+		}
 		return err
-	}, 0, parent)
+	})
 	if err == nil && trash == 0 {
 		if n.Type == TypeFile && n.Nlink == 0 {
 			m.fileDeleted(opened, isTrash(parent), n.Inode, n.Length)
@@ -1717,7 +1710,6 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 	}
 	err := m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
-		//ok, err := s.ForUpdate().Get(&pn)
 		ok, err := s.Get(&pn)
 		if err != nil {
 			return err
@@ -1817,15 +1809,15 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 			}
 		}
 		if !isTrash(parent) {
-			var updrow int64
-			updrow, err = s.SetExpr("nlink","nlink - 1").Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode})
-			if err == nil && updrow != 1 {
-				logger.Warnf("Update parent node affected rows = %d should be 1 for inode = %d .", updrow, pn.Inode)
-				return syscall.ENOENT
+			var n int64
+			n, err = s.SetExpr("nlink", "nlink - 1").Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode})
+			if err == nil && n != 1 {
+				logger.Warnf("Update parent node affected rows = %d should be 1 for inode = %d .", n, pn.Inode)
+				err = syscall.ENOENT
 			}
 		}
 		return err
-	}, 0, parent)
+	})
 	if err == nil && trash == 0 {
 		m.updateStats(-align4K(0), -1)
 	}
@@ -1847,17 +1839,17 @@ func (m *dbMeta) getNodesForUpdate(s *xorm.Session, nodes ...*node) error {
 	return nil
 }
 
-func (m *dbMeta) getNodesNoUpdate(s *xorm.Session, nodes ...*node) error {
-        for i := range nodes {
-                ok, err := s.Get(nodes[i])
-                if err != nil {
-                        return err
-                }
-                if !ok {
-                        return syscall.ENOENT
-                }
-        }
-        return nil
+func (m *dbMeta) getNodes(s *xorm.Session, nodes ...*node) error {
+	for i := range nodes {
+		ok, err := s.Get(nodes[i])
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return syscall.ENOENT
+		}
+	}
+	return nil
 }
 
 func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tInode *Ino, attr, tAttr *Attr) syscall.Errno {
@@ -1870,17 +1862,13 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dino Ino
 	var dn node
 	var newSpace, newInode int64
-	lockParent := parentSrc
-	if isTrash(lockParent) {
-		lockParent = parentDst
-	}
 	err := m.txn(func(s *xorm.Session) error {
 		opened = false
 		dino = 0
 		newSpace, newInode = 0, 0
 		var spn = node{Inode: parentSrc}
 		var dpn = node{Inode: parentDst}
-		err := m.getNodesNoUpdate(s, &spn, &dpn)
+		err := m.getNodes(s, &spn, &dpn)
 		if err != nil {
 			return err
 		}
@@ -2155,7 +2143,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 
 		if parentDst != parentSrc && !isTrash(parentSrc) && supdate {
 			if dupdate && dpn.Inode < spn.Inode {
-				if updrow, err := s.SetExpr("nlink",fmt.Sprintf("nlink + (%d)", dstnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&dpn, &node{Inode: parentDst}); err != nil || updrow != 1 {
+				if updrow, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", dstnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&dpn, &node{Inode: parentDst}); err != nil || updrow != 1 {
 					if dstnlink != 0 && err == nil {
 						logger.Warnf("Update parent node affected rows = %d should be 1 for inode = %d .", updrow, dpn.Inode)
 						return syscall.ENOENT
@@ -2165,26 +2153,26 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				dupdate = false
 			}
 
-			if updrow, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", srcnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&spn, &node{Inode: parentSrc}); err != nil || updrow != 1 {
+			if n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", srcnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&spn, &node{Inode: parentSrc}); err != nil || n != 1 {
 				if srcnlink != 0 && err == nil {
-					logger.Warnf("Update parent node affected rows = %d should be 1 for inode = %d .", updrow, spn.Inode)
-					return syscall.ENOENT
+					logger.Warnf("Update parent node affected rows = %d should be 1 for inode = %d .", n, spn.Inode)
+					err = syscall.ENOENT
 				}
 				return err
 			}
 		}
 
 		if dupdate {
-			if updrow, err := s.SetExpr("nlink",fmt.Sprintf("nlink + (%d)", dstnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&dpn, &node{Inode: parentDst}); err != nil || updrow != 1 {
+			if n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", dstnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&dpn, &node{Inode: parentDst}); err != nil || n != 1 {
 				if dstnlink != 0 && err == nil {
-					logger.Warnf("Update parent node affected rows = %d should be 1 for inode = %d .", updrow, dpn.Inode)
-					return syscall.ENOENT
+					logger.Warnf("Update parent node affected rows = %d should be 1 for inode = %d .", n, dpn.Inode)
+					err = syscall.ENOENT
 				}
 				return err
 			}
 		}
 		return err
-	}, 0, lockParent)
+	})
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
 			m.fileDeleted(opened, false, dino, dn.Length)
@@ -2197,13 +2185,11 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
-		//ok, err := s.ForUpdate().Get(&pn)
 		ok, err := s.Get(&pn)
 		if err != nil {
 			return err
 		}
 		if !ok {
-			//return fmt.Errorf("***** retry parent directory read *****")
 			return syscall.ENOENT
 		}
 		if pn.Type != TypeDirectory {
@@ -2264,15 +2250,14 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		if err == nil {
 			m.parseAttr(&n, attr)
 		}
-
-                if updateParent {
-                        if _ , err := s.Cols("mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: parent}); err != nil {
-                                return err
-                        }
-                }
+		if updateParent {
+			if _, err := s.Cols("mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: parent}); err != nil {
+				return err
+			}
+		}
 
 		return err
-	}, 0, parent))
+	}, inode))
 }
 
 func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
