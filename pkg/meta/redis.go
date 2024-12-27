@@ -2914,10 +2914,10 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 					r.deleteSlice(s.Id, s.Size)
 					count++
 				}
+				if time.Since(start) > 50*time.Minute {
+					return stop
+				}
 			}
-		}
-		if time.Since(start) > 50*time.Minute {
-			return stop
 		}
 		return nil
 	})
