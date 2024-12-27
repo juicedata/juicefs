@@ -844,6 +844,7 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 	conf.AttrTimeout = utils.Duration(c.String("attr-cache"))
 	conf.EntryTimeout = utils.Duration(c.String("entry-cache"))
 	conf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
+	conf.ReaddirCache = c.Bool("readdir-cache")
 	conf.NonDefaultPermission = c.Bool("non-default-permission")
 	rootSquash := c.String("root-squash")
 	if rootSquash != "" {

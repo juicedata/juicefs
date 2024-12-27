@@ -349,6 +349,10 @@ func metaCacheFlags(defaultEntryCache float64) []cli.Flag {
 			Value: "1.0s",
 			Usage: "dir entry cache timeout",
 		},
+		&cli.BoolFlag{
+			Name:  "readdir-cache",
+			Usage: "enable kernel caching of readdir entries, with timeout controlled by attr-cache flag",
+		},
 		&cli.StringFlag{
 			Name:  "open-cache",
 			Value: "0s",
