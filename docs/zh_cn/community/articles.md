@@ -90,7 +90,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 ## 数据共享
 
 - [Ollama + JuiceFS：一次拉取，到处运行](https://juicefs.com/zh-cn/blog/usage-tips/ollama-juicefs)，2024-09-09，朱唯唯
-- [Conda + JuiceFS ：增强 AI 开发环境共享能力](https://juicefs.com/zh-cn/blog/usage-tips/conda-juicefs-enhance-ai)，2024-12-04，于鸿儒
+- [Conda + JuiceFS：增强 AI 开发环境共享能力](https://juicefs.com/zh-cn/blog/usage-tips/conda-juicefs-enhance-ai)，2024-12-04，于鸿儒
 - [云上使用 Stable Diffusion，模型数据如何共享和存储？](https://juicefs.com/zh-cn/blog/usage-tips/share-store-model-data-stable-diffusion-cloud)，2023-06-16，于鸿儒
 - [基于 JuiceFS 搭建 Milvus 分布式集群](https://juicefs.com/blog/cn/posts/build-milvus-distributed-cluster-based-on-juicefs)
 - [如何解决 NAS 单点故障还顺便省了 90% 的成本？](https://juicefs.com/blog/cn/posts/modao-replace-nas-with-juicefs)
