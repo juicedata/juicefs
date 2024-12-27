@@ -1,5 +1,14 @@
 #/bin/bash -e
 
+mount_jfs(){
+    mkdir -p /root/.juicefs
+    wget -q s.juicefs.com/static/Linux/mount -O /root/.juicefs/jfsmount 
+    chmod +x /root/.juicefs/jfsmount
+    curl -s -L https://juicefs.com/static/juicefs -o /usr/local/bin/juicefs && sudo chmod +x /usr/local/bin/juicefs
+    juicefs auth ci-coverage --access-key $AWS_ACEESS_KEY --secret-key $AWS_SECRET_KEY --token $AWS_ACCESS_TOKEN --encrypt-keys
+    juicefs mount ci-coverage --subdir juicefs/ci-benchmark/ --allow-other /ci-benchmark
+}  
+
 save_benchmark(){
     while [[ $# -gt 0 ]]; do
         key="$1"
@@ -56,8 +65,10 @@ save_benchmark(){
 EOF
     cat result.json
     if [[ "$GITHUB_EVENT_NAME" == "schedule" || "$GITHUB_EVENT_NAME" == "workflow_dispatch"   ]]; then
-        echo "save benchmark"
-        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY ./juicefs sync --force-update result.json s3://juicefs-ci-aws.s3.us-east-1.amazonaws.com/ci-report/$GITHUB_WORKFLOW/$name/$created_date/$meta-$storage.json
+        mount_jfs
+        echo "save result.json to /ci-benchmark/$GITHUB_WORKFLOW/$name/$created_date/$meta-$storage.json"
+        mkdir -p /ci-benchmark/$GITHUB_WORKFLOW/$name/$created_date/
+        cp result.json /ci-benchmark/$GITHUB_WORKFLOW/$name/$created_date/$meta-$storage.json
     fi
 }
 
