@@ -16,6 +16,7 @@
 package io.juicefs.utils;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 
 public class ReflectionUtil {
   public static boolean hasMethod(String className, String method, String[] params) {
@@ -49,5 +50,12 @@ public class ReflectionUtil {
     } catch (NoSuchMethodException e) {
       return null;
     }
+  }
+
+  public static Object getField(String className, String field, Object obj) throws ClassNotFoundException, NoSuchFieldException, IllegalAccessException {
+    Class<?> clazz = Class.forName(className);
+    Field f = clazz.getDeclaredField(field);
+    f.setAccessible(true);
+    return f.get(obj);
   }
 }

@@ -82,6 +82,14 @@
 							<pattern>com.google.common</pattern>
 							<shadedPattern>io.juicefs.shaded.com.google.common</shadedPattern>
 						</relocation>
+						<relocation>
+							<pattern>org.apache.commons.lang</pattern>
+							<shadedPattern>io.juicefs.shaded.org.apache.commons.lang</shadedPattern>
+						</relocation>
+						<relocation>
+							<pattern>com.kstruct.gethostname4j</pattern>
+							<shadedPattern>io.juicefs.shaded.com.kstruct.gethostname4j</shadedPattern>
+						</relocation>
 					</relocations>
 				</configuration>
 			</plugin>
@@ -351,6 +359,11 @@
 			</exclusions>
 		</dependency>
 		<dependency>
+			<groupId>commons-lang</groupId>
+			<artifactId>commons-lang</artifactId>
+			<version>2.6</version>
+		</dependency>
+		<dependency>
 			<groupId>org.apache.ranger</groupId>
 			<artifactId>ranger-plugins-common</artifactId>
 			<version>2.3.0</version>
@@ -362,6 +375,21 @@
 			</exclusions>
 		</dependency>
 		<dependency>
+			<groupId>com.kstruct</groupId>
+			<artifactId>gethostname4j</artifactId>
+			<version>0.0.2</version>
+		</dependency>
+		<dependency>
+			<groupId>com.sun.jersey</groupId>
+			<artifactId>jersey-bundle</artifactId>
+			<version>1.19.3</version>
+		</dependency>
+		<dependency>
+			<groupId>org.codehaus.jackson</groupId>
+			<artifactId>jackson-jaxrs</artifactId>
+			<version>1.9.13</version>
+		</dependency>
+		<dependency>
 			<groupId>org.apache.ranger</groupId>
 			<artifactId>ranger-plugins-audit</artifactId>
 			<version>2.3.0</version>
@@ -371,11 +399,6 @@
 					<artifactId>*</artifactId>
 				</exclusion>
 			</exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.httpcomponents</groupId>
-			<artifactId>httpclient</artifactId>
-			<version>4.5.13</version>
 		</dependency>
 	</dependencies>
 
