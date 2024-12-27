@@ -823,7 +823,11 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 		inodes = []Ino{1}
 	}
 
-	if len(inodes) > 0 && !(m.Name() == "mysql" || m.Name() == "postgres") {
+	/*
+	For MySQL and PostgreSQL meta engine, use the engine lock for parent directory 
+        Value 0 pass by doMknod/Rename/Link/Unlink/Rmdir function call to void fuse lock
+	*/
+	if len(inodes) > 0 && (uint(inodes[0]) > 0 || !(m.Name() == "mysql" || m.Name() == "postgres")) {
 		m.txLock(uint(inodes[0]))
 		defer m.txUnlock(uint(inodes[0]))
 	}
@@ -909,7 +913,6 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 		}
 		return err
 	}
-	_ = s.Rollback()
 	logger.Warnf("Already tried %d times, returning: %s", maxRetry, lastErr)
 	return lastErr
 }
@@ -1533,7 +1536,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 		m.parseAttr(&n, attr)
 		return nil
-	}, parent))
+	}, 0, parent))
 }
 
 func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
@@ -1685,7 +1688,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
                         }
                 }
 		return err
-	}, parent)
+	}, 0, parent)
 	if err == nil && trash == 0 {
 		if n.Type == TypeFile && n.Nlink == 0 {
 			m.fileDeleted(opened, isTrash(parent), n.Inode, n.Length)
@@ -1815,7 +1818,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 			}
 		}
 		return err
-	}, parent)
+	}, 0, parent)
 	if err == nil && trash == 0 {
 		m.updateStats(-align4K(0), -1)
 	}
@@ -2174,7 +2177,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 		}
 		return err
-	}, lockParent)
+	}, 0, lockParent)
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
 			m.fileDeleted(opened, false, dino, dn.Length)
@@ -2262,7 +2265,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
                 }
 
 		return err
-	}, parent))
+	}, 0, parent))
 }
 
 func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
