@@ -13,7 +13,7 @@ runs:
       shell: bash
       run: |
         echo "current dir is $(pwd)"
-        if [[ "${{github.event}}" == "schedule" ]]; then
+        if [[ "${{github.event_name}}" == "schedule" ]]; then
           coverdirs="cover,"
         else
           for dir in $(find cover -mindepth 1 -maxdepth 1 -type d -exec basename {} \;); do
