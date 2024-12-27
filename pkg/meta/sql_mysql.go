@@ -30,7 +30,7 @@ func isMySQLDuplicateEntryErr(err error) bool {
 	return false
 }
 
-func setMySQLTransationIsolation(dns string) (string, error) {
+func setMySQLTransactionIsolation(dns string) (string, error) {
 	cfg, err := mysql.ParseDSN(dns)
 	if err != nil {
 		return "", err
@@ -44,6 +44,6 @@ func setMySQLTransationIsolation(dns string) (string, error) {
 
 func init() {
 	dupErrorCheckers = append(dupErrorCheckers, isMySQLDuplicateEntryErr)
-	setTransationIsolation = setMySQLTransationIsolation
+	setTransactionIsolation = setMySQLTransactionIsolation
 	Register("mysql", newSQLMeta)
 }

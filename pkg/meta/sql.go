@@ -266,7 +266,7 @@ func recoveryMysqlPwd(addr string) string {
 	return addr
 }
 
-var setTransationIsolation func(dns string) (string, error)
+var setTransactionIsolation func(dns string) (string, error)
 
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	var searchPath string
@@ -287,10 +287,10 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 
 	// escaping is not necessary for mysql password https://github.com/go-sql-driver/mysql#password
-	if driver == "mysql" && setTransationIsolation != nil {
+	if driver == "mysql" && setTransactionIsolation != nil {
 		addr = recoveryMysqlPwd(addr)
 		var err error
-		if addr, err = setTransationIsolation(addr); err != nil {
+		if addr, err = setTransactionIsolation(addr); err != nil {
 			return nil, err
 		}
 	}
