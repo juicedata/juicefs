@@ -17,23 +17,23 @@
 package io.juicefs.permission;
 
 import com.google.common.collect.Sets;
-import io.juicefs.JuiceFileSystemImpl;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.security.AccessControlException;
-import org.apache.ranger.authorization.hadoop.config.RangerPluginConfig;
 import org.apache.ranger.plugin.policyengine.RangerAccessResult;
-import org.apache.ranger.plugin.policyengine.RangerPolicyEngineOptions;
-import org.apache.ranger.plugin.service.RangerBasePlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * for auth checker
@@ -43,6 +43,9 @@ import java.util.stream.Collectors;
 public class RangerPermissionChecker {
 
   private static final Logger LOG = LoggerFactory.getLogger(RangerPermissionChecker.class);
+
+  private static final Map<String, RangerPermissionChecker> pcs = new ConcurrentHashMap<>();
+  private static final Map<String, Set<Long>> runningInstance = new HashMap<>();
 
   private final HashMap<FsAction, Set<String>> fsAction2ActionMapper = new HashMap<FsAction, Set<String>>() {
     {
@@ -57,51 +60,64 @@ public class RangerPermissionChecker {
     }
   };
 
-  private final JuiceFileSystemImpl superGroupFileSystem;
+  private final FileSystem superGroupFileSystem;
+  private final RangerJfsPlugin rangerPlugin;
 
-  private final String user;
-
-  private final Set<String> groups;
-
-  private final String rangerCacheDir;
-
-  private final RangerBasePlugin rangerPlugin;
-
-  private static final String RANGER_SERVICE_TYPE = "hdfs";
-
-  public RangerPermissionChecker(JuiceFileSystemImpl superGroupFileSystem, RangerConfig config, String user, String group) {
+  private RangerPermissionChecker(FileSystem superGroupFileSystem, RangerConfig config) {
     this.superGroupFileSystem = superGroupFileSystem;
-    this.user = user;
-    this.groups = Arrays.stream(group.split(",")).collect(Collectors.toSet());
-
-    this.rangerCacheDir = config.getCacheDir();
-    boolean startRangerRefresher = LockFileChecker.checkAndCreateLockFile(rangerCacheDir);
-
-    RangerPluginConfig rangerPluginContext = buildRangerPluginContext(RANGER_SERVICE_TYPE, config.getServiceName(), startRangerRefresher);
-    rangerPlugin = new RangerBasePlugin(rangerPluginContext);
-    rangerPlugin.getConfig().set("ranger.plugin.hdfs.policy.cache.dir", this.rangerCacheDir);
+    rangerPlugin = new RangerJfsPlugin(superGroupFileSystem, config.getServiceName(), config.getRangerRestUrl(), config.getPollIntervalMs());
     rangerPlugin.getConfig().set("ranger.plugin.hdfs.service.name", config.getServiceName());
     rangerPlugin.getConfig().set("ranger.plugin.hdfs.policy.rest.url", config.getRangerRestUrl());
+    rangerPlugin.getConfig().setIsFallbackSupported(true);
     rangerPlugin.init();
   }
 
-  protected RangerPolicyEngineOptions buildRangerPolicyEngineOptions(boolean startRangerRefresher) {
-    if (startRangerRefresher) {
-      return null;
+  public static RangerPermissionChecker acquire(String volName, long handle, FileSystem superGroupFileSystem, RangerConfig config) throws IOException {
+    synchronized (runningInstance) {
+      if (!runningInstance.containsKey(volName)) {
+        if (pcs.containsKey(volName)) {
+          throw new IOException("RangerPermissionChecker for volume: " + volName + " is already created, but no running instance found.");
+        }
+        RangerPermissionChecker pc = new RangerPermissionChecker(superGroupFileSystem, config);
+        pcs.put(volName, pc);
+        Set<Long> handles = new HashSet<>();
+        handles.add(handle);
+        runningInstance.put(volName, handles);
+        return pc;
+      } else {
+        RangerPermissionChecker pc = pcs.get(volName);
+        if (pc == null) {
+          throw new IOException("RangerPermissionChecker for volume: " + volName + " is already created, but no instance found.");
+        }
+        runningInstance.get(volName).add(handle);
+        return pc;
+      }
     }
-    LOG.info("Other JuiceFS Client is refreshing ranger policy, will close the refresher here.");
-    RangerPolicyEngineOptions options = new RangerPolicyEngineOptions();
-    options.disablePolicyRefresher = true;
-    return options;
   }
 
-  protected RangerPluginConfig buildRangerPluginContext(String serviceType, String serviceName, boolean startRangerRefresher) {
-    return new RangerPluginConfig(serviceType, serviceName, serviceName,
-        null, null, buildRangerPolicyEngineOptions(startRangerRefresher));
+  public static void release(String volName, long handle) {
+    if (handle <= 0) {
+      return;
+    }
+    synchronized (runningInstance) {
+      if (!runningInstance.containsKey(volName)) {
+        return;
+      }
+      Set<Long> handles = runningInstance.get(volName);
+      boolean removed = handles.remove(handle);
+      if (!removed) {
+        return;
+      }
+      if (handles.size() == 0) {
+        RangerPermissionChecker pc = pcs.remove(volName);
+        pc.cleanUp();
+        runningInstance.remove(volName);
+      }
+    }
   }
 
   public boolean checkPermission(Path path, boolean checkOwner, FsAction ancestorAccess, FsAction parentAccess,
-                                 FsAction access, String operationName) throws IOException {
+                                 FsAction access, String operationName, String user, Set<String> groups) throws IOException {
     RangerPermissionContext context = new RangerPermissionContext(user, groups, operationName);
     PathObj obj = path2Obj(path);
 
@@ -157,7 +173,11 @@ public class RangerPermissionChecker {
     } catch (Exception e) {
       LOG.warn("Error when clean up ranger plugin threads.", e);
     }
-    LockFileChecker.cleanUp(rangerCacheDir);
+    try {
+      superGroupFileSystem.close();
+    } catch (Exception e) {
+      LOG.warn("Error when close super group file system.", e);
+    }
   }
 
   private static boolean checkResult(AuthzStatus authzStatus, String user, String action, String path) throws AccessControlException {
@@ -191,19 +211,12 @@ public class RangerPermissionChecker {
     String pathOwner = file.getOwner();
     AuthzStatus authzStatus = null;
     for (String accessType : accessTypes) {
-      RangerJfsAccessRequest request = new RangerJfsAccessRequest(path, pathOwner, accessType, context.operationName, user, context.userGroups);
+      RangerJfsAccessRequest request = new RangerJfsAccessRequest(path, pathOwner, accessType, context.operationName, context.user, context.userGroups);
       LOG.debug(request.toString());
-
-      RangerAccessResult result = null;
-      try {
-        result = rangerPlugin.isAccessAllowed(request);
-        if (result != null) {
-          LOG.debug(result.toString());
-        }
-      } catch (Throwable e) {
-        throw new RuntimeException("Check Permission Error. ", e);
+      RangerAccessResult result = rangerPlugin.isAccessAllowed(request);
+      if (result != null) {
+        LOG.debug(result.toString());
       }
-
       if (result == null || !result.getIsAccessDetermined()) {
         authzStatus = AuthzStatus.NOT_DETERMINED;
       } else if (!result.getIsAllowed()) {
