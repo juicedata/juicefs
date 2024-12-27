@@ -71,7 +71,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [好未来：多云环境下基于 JuiceFS 建设低运维模型仓库](https://juicefs.com/zh-cn/blog/user-stories/multi-cloud-storage-juicefs-model-stroage)，2024-11-06，贺龙华@好未来
 - [小米云原生文件存储平台化实践：支撑 AI 训练、大模型、容器平台多项业务](https://juicefs.com/zh-cn/blog/user-stories/cloud-native-file-storage-platform-as-ai-training-large-models-container-platforms)，2023-09-22，孙佳朋@小米
 - [大模型训练：K8s 环境中数千节点存储最佳实践](https://juicefs.com/zh-cn/blog/usage-tips/large-model-storage-kubernetes)，2024-09-25，朱唯唯
-- [Clobotics 计算机视觉场景存储实践：多云架构、 POSIX 全兼容、低运维的统一存储](https://juicefs.com/zh-cn/blog/user-stories/clobotics-posix-multi-cloud-storage)，2024-08-30，Jonnas@Clobotics
+- [Clobotics 计算机视觉场景存储实践：多云架构、POSIX 全兼容、低运维的统一存储](https://juicefs.com/zh-cn/blog/user-stories/clobotics-posix-multi-cloud-storage)，2024-08-30，Jonnas@Clobotics
 - [JuiceFS 在多云架构中加速大模型推理](https://juicefs.com/zh-cn/blog/solutions/data-storage-multi-cloud-model-training-juicefs)，2024-08-23，高昌健
 - [如何在 Kubernetes 中使用 ClickHouse 和 JuiceFS](https://juicefs.com/zh-cn/blog/usage-tips/kubernetes-clickhouse-juicefs)，2024-08-02，Vitaliy Zakaznikov
 - [Kubernetes 数据持久化：从零开始使用 JuiceFS CSI Driver](https://juicefs.com/zh-cn/blog/usage-tips/kubernetes-juicefs-csi-driver)，2023-12-11，于鸿儒
