@@ -65,7 +65,7 @@ runs:
           sudo juicefs auth ci-coverage --access-key ${{ inputs.access_key }} --secret-key ${{ inputs.secret_key }} --token ${{inputs.token}} --encrypt-keys
           sudo juicefs mount ci-coverage --subdir ${subdir} ${{inputs.mount_point}} --allow-other
         else
-          echo "access_key, secret_key, token are required"
+          echo "no jfs secrets provided, use local dir instead of jfs"
           mkdir -p ${{inputs.mount_point}}
         fi
         
