@@ -17,7 +17,6 @@ umount_jfs()
     echo "umount_jfs $mp $meta_url"
     [[ ! -f $mp/.config ]] && return
     ls -l $mp/.config
-    ./juicefs status --log-level error $meta_url
     pids=$(./juicefs status --log-level error $meta_url 2>/dev/null |tee status.log| jq --arg mp "$mp" '.Sessions[] | select(.MountPoint == $mp) | .ProcessID')
     [[ -z "$pids" ]] && cat status.log && echo "pid is empty" && return
     echo "umount is $mp, pids is $pids"
