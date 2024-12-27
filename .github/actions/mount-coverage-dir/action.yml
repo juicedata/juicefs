@@ -61,7 +61,7 @@ runs:
         sudo wget -q s.juicefs.com/static/Linux/mount -O /root/.juicefs/jfsmount 
         sudo chmod +x /root/.juicefs/jfsmount
         sudo curl -s -L https://juicefs.com/static/juicefs -o /usr/local/bin/juicefs && sudo chmod +x /usr/local/bin/juicefs
-        if [[ -n "${{inputs.access_key}}" && -n "${{inputs.secret_key}}" && -n "${{inputs.token}}"]]; then
+        if [[ -n "${{inputs.access_key}}" && -n "${{inputs.secret_key}}" && -n "${{inputs.token}}" ]]; then
           sudo juicefs auth ci-coverage --access-key ${{ inputs.access_key }} --secret-key ${{ inputs.secret_key }} --token ${{inputs.token}} --encrypt-keys
           sudo juicefs mount ci-coverage --subdir ${subdir} ${{inputs.mount_point}} --allow-other
         else
