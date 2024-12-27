@@ -828,14 +828,9 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 		defer m.txUnlock(uint(inodes[0]))
 	}
 	var lastErr error
-
 	for i := 0; i < 50; i++ {
 		_, err := m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
-			myerr := f(s)
-			if myerr != nil {
-				_ = s.Rollback()
-			}
-			return nil, myerr
+			return nil, f(s)
 		})
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
