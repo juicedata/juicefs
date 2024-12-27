@@ -35,8 +35,10 @@ import (
 const (
 	// MaxVersion is the max of supported versions.
 	MaxVersion = 1
+	// ChunkBits is the size of a chunk.
+	ChunkBits = 26
 	// ChunkSize is size of a chunk
-	ChunkSize = 1 << 26 // 64M
+	ChunkSize = 1 << ChunkBits // 64M
 	// DeleteSlice is a message to delete a slice from object store.
 	DeleteSlice = 1000
 	// CompactChunk is a message to compact a chunk in object store.

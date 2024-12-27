@@ -1,0 +1,11 @@
+FROM centos:7
+
+RUN yum install -y make gcc python3 && \
+    curl -L https://static.juicefs.com/misc/go1.19.13.linux-arm64.tar.gz -o go1.19.13.linux-arm64.tar.gz && \
+    tar -C /usr/local -xzf go1.19.13.linux-arm64.tar.gz && \
+    rm go1.19.13.linux-arm64.tar.gz && \
+    ln -s /usr/local/go/bin/go /usr/bin/go && \
+    go version && \
+    python3 -m pip install --upgrade pip && \
+    python3 -m pip install --upgrade setuptools && \
+    pip install wheel
