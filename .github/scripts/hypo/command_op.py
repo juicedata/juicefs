@@ -129,7 +129,7 @@ class CommandOperation:
                 cmd += ' --recursive'
             if strict:
                 cmd += ' --strict'
-            result = self.run_cmd(cmd)
+            result = self.run_cmd(cmd, stderr=subprocess.DEVNULL)
             if '<ERROR>:' in result or "permission denied" in result:
                 return self.handleException(Exception(result), 'do_info', abs_path)
         except subprocess.CalledProcessError as e:
