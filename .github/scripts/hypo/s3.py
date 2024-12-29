@@ -332,7 +332,7 @@ class S3Machine(RuleBasedStateMachine):
         target = groups,    
         alias = aliases,
         group_name=st_group_name, 
-        members = st.lists(users, min_size=1, max_size=3, unique=True)
+        members = st.lists(users, min_size=1, max_size=3)
     )
     @precondition(lambda self: 'add_group' not in self.EXCLUDE_RULES)
     def add_group(self, group_name, members, alias=ROOT_ALIAS):
