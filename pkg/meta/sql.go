@@ -859,13 +859,8 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error {
 	start := time.Now()
 	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
-	var s *xorm.Session
-	if v := ctx.Value(txSessionKey{}); v != nil {
-		s = v.(*xorm.Session)
-	} else {
-		s = m.db.NewSession()
-		defer s.Close()
-	}
+	s := m.db.NewSession()
+	defer s.Close()
 	var opt sql.TxOptions
 	if !m.noReadOnlyTxn {
 		opt.ReadOnly = true
