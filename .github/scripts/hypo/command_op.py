@@ -95,17 +95,17 @@ class CommandOperation:
         filename = li[0].split(':')[0].strip()
         # assert li[0].strip().startswith('inode:'), f'parse_info: {li[0]} should start with inode:'
         # inode = li[0].split(':')[1].strip()
-        assert li[2].strip().startswith('files:'), f'parse_info: {li[1]} should start with files:'
+        assert li[2].strip().startswith('files:'), f'parse_info: {li[2]} should start with files:'
         files = li[2].split(':')[1].strip()   
-        assert li[3].strip().startswith('dirs:'), f'parse_info: {li[2]} should start with dirs:'  
+        assert li[3].strip().startswith('dirs:'), f'parse_info: {li[3]} should start with dirs:'  
         dirs = li[3].split(':')[1].strip()
-        assert li[4].strip().startswith('length:'), f'parse_info: {li[3]} should start with length:'
+        assert li[4].strip().startswith('length:'), f'parse_info: {li[4]} should start with length:'
         length = li[4].split(':')[1].strip()
         length = self.get_raw(length)
-        assert li[5].strip().startswith('size:'), f'parse_info: {li[4]} should start with size:'
+        assert li[5].strip().startswith('size:'), f'parse_info: {li[5]} should start with size:'
         size = li[5].split(':')[1].strip()
         size = self.get_raw(size)
-        assert li[6].strip().startswith('path'), f'parse_info: {li[5]} should start with path:'
+        assert li[6].strip().startswith('path'), f'parse_info: {li[6]} should start with path:'
         paths = []
         if li[6].strip().startswith('path:'):
             paths.append(li[6].split(':')[1].strip())
@@ -128,7 +128,7 @@ class CommandOperation:
                 cmd += ' --recursive'
             if strict:
                 cmd += ' --strict'
-            result = self.run_cmd(cmd)
+            result = self.run_cmd(cmd, stderr=subprocess.DEVNULL)
             if '<ERROR>:' in result or "permission denied" in result:
                 return self.handleException(Exception(result), 'do_info', abs_path)
         except subprocess.CalledProcessError as e:
