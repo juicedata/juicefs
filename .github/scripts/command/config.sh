@@ -39,7 +39,7 @@ test_config_max_client_version()
     ./juicefs mount $META_URL /jfs -d
 }
 
-test_confi_secret_key(){
+test_config_secret_key(){
     # # Consider command as failed when any component of the pipe fails:
     # https://stackoverflow.com/questions/1221833/pipe-output-and-capture-exit-status-in-bash
     prepare_test
@@ -48,7 +48,7 @@ test_confi_secret_key(){
     ./mc admin user add minio juicedata juicedata
     ./mc admin policy attach minio consoleAdmin --user juicedata
     ./juicefs format --storage minio --bucket http://localhost:9000/jfs-test --access-key juicedata --secret-key juicedata $meta_url myjfs
-    ./juicefs mount $META_URL /jfs -d --io-retries 1 --no-usage-report --heartbeat 5
+    ./juicefs mount $META_URL /jfs -d --io-retries 1 --no-usage-report --heartbeat 3
 
     ./mc admin user remove minio juicedata
     ./mc admin user add minio juicedata1 juicedata1
