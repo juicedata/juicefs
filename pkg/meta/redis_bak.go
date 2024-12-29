@@ -78,6 +78,7 @@ func (m *redisMeta) dumpCounters(ctx Context, opt *DumpOption, ch chan<- *dumped
 }
 
 func (m *redisMeta) dumpMix(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
+	logger.Warnf("please make sure the redis server is readonly, otherwise the dumped metadata will be inconsistent")
 	pools := map[int][]*sync.Pool{
 		segTypeNode:    {{New: func() interface{} { return &pb.Node{} }}},
 		segTypeEdge:    {{New: func() interface{} { return &pb.Edge{} }}},

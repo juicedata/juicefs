@@ -77,6 +77,9 @@ func (m *dbMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) err
 		}
 		defer sess.Rollback() //nolint:errcheck
 		ctx.WithValue(txSessionKey{}, sess)
+	} else {
+		logger.Warnf("dump database with %d threads, please make sure that it's readonly, "+
+			"otherwise the dumped metadata will be inconsistent", opt.Threads)
 	}
 	for _, f := range dumps {
 		err := f(ctx, opt, ch)
