@@ -2338,9 +2338,12 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 					m.deleteSlice(s.Id, s.Size)
 					count++
 				}
+				if time.Since(start) > 50*time.Minute {
+					return count, nil
+				}
 			}
 		}
-		if len(keys) < batch || time.Since(start) > 50*time.Minute {
+		if len(keys) < batch {
 			break
 		}
 	}

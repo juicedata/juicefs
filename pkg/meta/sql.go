@@ -2863,9 +2863,12 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 					m.deleteSlice(s.Id, s.Size)
 					count++
 				}
+				if time.Since(start) > 50*time.Minute {
+					return count, nil
+				}
 			}
 		}
-		if len(result) < batch || time.Since(start) > 50*time.Minute {
+		if len(result) < batch {
 			break
 		}
 	}
