@@ -1528,11 +1528,13 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 		if updateParent {
 			if n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", nlinkAdjust)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode}); err != nil || n != 1 {
-				if err == nil {
+				if nlinkAdjust != 0 && err == nil {
 					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", n, pn.Inode)
 					err = syscall.ENOENT
 				}
-				return err
+				if err != nil {
+					return err
+				}
 			}
 		}
 		m.parseAttr(&n, attr)
@@ -2139,27 +2141,37 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if parentDst != parentSrc && !isTrash(parentSrc) && supdate {
 			if dupdate && dpn.Inode < spn.Inode {
 				if n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", dstnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&dpn, &node{Inode: parentDst}); err != nil || n != 1 {
-					if err == nil {
+					if dstnlink != 0 && err == nil {
 						logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", n, dpn.Inode)
 						err = syscall.ENOENT
 					}
-					return err
+					if err != nil {
+						return err
+					}
 				}
 				dupdate = false
 			}
 
-			if _, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", srcnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&spn, &node{Inode: parentSrc}); err != nil {
-				return err
+			if n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", srcnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&spn, &node{Inode: parentSrc}); err != nil || n != 1 {
+				if srcnlink != 0 && err == nil {
+					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", n, spn.Inode)
+					err = syscall.ENOENT
+				}
+				if err != nil {
+					return err
+				}
 			}
 		}
 
 		if dupdate {
 			if n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", dstnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&dpn, &node{Inode: parentDst}); err != nil || n != 1 {
-				if err == nil {
+				if dstnlink != 0 && err == nil {
 					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", n, dpn.Inode)
 					err = syscall.ENOENT
 				}
-				return err
+				if err != nil {
+					return err
+				}
 			}
 		}
 		return err
