@@ -315,7 +315,6 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	default:
 		engine.SetLogLevel(log.LOG_OFF)
 	}
-
 	start := time.Now()
 	if err = engine.Ping(); err != nil {
 		return nil, fmt.Errorf("ping database: %s", err)
@@ -4601,7 +4600,7 @@ func (m *dbMeta) getDirFetcher() dirFetcher {
 			} else {
 				if offset > 0 {
 					var edges []edge
-					if err := s.Table(&edge{}).Where("parent = ?", inode).Limit(1, offset-1).Find(&edges); err != nil {
+					if err := s.Table(&edge{}).Where("parent = ?", inode).OrderBy("name").Limit(1, offset-1).Find(&edges); err != nil {
 						return err
 					}
 					if len(edges) < 1 {
@@ -4615,9 +4614,9 @@ func (m *dbMeta) getDirFetcher() dirFetcher {
 			var err error
 			// sorted by (parent, name) index
 			if name == nil {
-				err = s.Table(&edge{}).Cols("id").Where("parent = ?", inode).Limit(limit).Find(&ids)
+				err = s.Table(&edge{}).Cols("id").Where("parent = ?", inode).OrderBy("name").Limit(limit).Find(&ids)
 			} else {
-				err = s.Table(&edge{}).Cols("id").Where("parent = ? and name > ?", inode, name).Limit(limit).Find(&ids)
+				err = s.Table(&edge{}).Cols("id").Where("parent = ? and name > ?", inode, name).OrderBy("name").Limit(limit).Find(&ids)
 			}
 			if err != nil {
 				return err
