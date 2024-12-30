@@ -11,6 +11,11 @@ META_URL=$(get_meta_url $META)
 if ! docker ps --filter "name=minio_old$" | grep minio_old; then
     echo start minio_old
     docker run -d -p 9000:9000 --name minio_old -e "MINIO_ACCESS_KEY=minioadmin" -e "MINIO_SECRET_KEY=minioadmin" minio/minio:RELEASE.2021-04-22T15-44-28Z server /tmp/minio_old
+    while ! curl -s http://localhost:9000/minio/health/live > /dev/null; do
+        echo "Waiting for MinIO to be ready..."
+        sleep 1
+    done
+    echo "MinIO is ready."
 fi
 
 timeout 30 bash -c 'counter=0; until lsof -i:9000; do echo -ne "wait port ready in $counter\r" && ((counter++)) && sleep 1; done'
