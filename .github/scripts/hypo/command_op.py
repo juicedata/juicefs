@@ -91,6 +91,7 @@ class CommandOperation:
             return size.split(' ')[0]
 
     def parse_info(self, info: str):
+        print('info is', info)
         li = info.split('\n')
         filename = li[0].split(':')[0].strip()
         # assert li[0].strip().startswith('inode:'), f'parse_info: {li[0]} should start with inode:'
