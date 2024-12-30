@@ -34,4 +34,6 @@ runs:
         sudo go tool covdata textfmt -i=cover/ -o cover/cover.txt
         echo "generate coverage html report"
         sudo go tool cover -html=cover/cover.txt -o cover/cover.html
+        [[ -z "${{inputs.UPLOAD_TOKEN}}" ]] && echo "no upload token, skip upload" && exit 0 || true
         .github/scripts/upload_coverage_report.sh cover/cover.html juicefs_${{github.workflow}}_${{github.run_id}}_${job_id}.html ${{inputs.UPLOAD_TOKEN}}
+        
