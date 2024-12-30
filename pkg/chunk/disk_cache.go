@@ -422,7 +422,7 @@ func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string,
 		if cache.capacity > 0 && keepCache {
 			path := cache.cachePath(key)
 			cache.createDir(filepath.Dir(path))
-			if err := os.Link(stagingPath, path); err == nil {
+			if err = os.Link(stagingPath, path); err == nil {
 				cache.add(key, -int32(len(data)), uint32(time.Now().Unix()))
 			} else {
 				logger.Warnf("link %s to %s failed: %s", stagingPath, path, err)
