@@ -92,6 +92,8 @@ class CommandOperation:
 
     def parse_info(self, info: str):
         li = info.split('\n')
+        if "GOCOVERDIR" in li[0]:
+            li = li[1:]
         filename = li[0].split(':')[0].strip()
         # assert li[0].strip().startswith('inode:'), f'parse_info: {li[0]} should start with inode:'
         # inode = li[0].split(':')[1].strip()
@@ -128,7 +130,7 @@ class CommandOperation:
                 cmd += ' --recursive'
             if strict:
                 cmd += ' --strict'
-            result = self.run_cmd(cmd, stderr=subprocess.DEVNULL)
+            result = self.run_cmd(cmd)
             if '<ERROR>:' in result or "permission denied" in result:
                 return self.handleException(Exception(result), 'do_info', abs_path)
         except subprocess.CalledProcessError as e:
