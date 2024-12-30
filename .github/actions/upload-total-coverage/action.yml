@@ -34,6 +34,7 @@ runs:
     - name: upload coverage report
       shell: bash
       run: |
+        [[ -z "${{inputs.UPLOAD_TOKEN}}" ]] && echo -e "\e[31m no upload token, skip upload \e[0m" && exit 0 || true
         if [[ -f cover/cover.html ]]; then
           .github/scripts/upload_coverage_report.sh cover/cover.html ${{github.workflow}}_${{github.run_id}}.html ${{inputs.UPLOAD_TOKEN}}
         else
