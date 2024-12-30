@@ -98,7 +98,7 @@ start_meta_engine(){
     elif [ "$meta" == "redis" ]; then
         sudo .github/scripts/apt_install.sh  redis-tools redis-server
     elif [ "$meta" == "tikv" ]; then
-        install_tikv
+        retry install_tikv
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
     elif [ "$meta" == "mariadb" ]; then
