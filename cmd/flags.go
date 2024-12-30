@@ -351,7 +351,7 @@ func metaCacheFlags(defaultEntryCache float64) []cli.Flag {
 		},
 		&cli.BoolFlag{
 			Name:  "readdir-cache",
-			Usage: "enable kernel caching of readdir entries, with timeout controlled by attr-cache flag",
+			Usage: "enable kernel caching of readdir entries, with timeout controlled by attr-cache flag (require linux kernel 4.20+)",
 		},
 		&cli.StringFlag{
 			Name:  "open-cache",
