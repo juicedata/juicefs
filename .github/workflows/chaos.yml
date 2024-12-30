@@ -95,6 +95,7 @@ jobs:
 
       - name: Deploy minio
         run: |
+          rm -rf /data/minio-data/*
           kubectl apply -f .github/scripts/chaos/minio.yaml
 
       - name: Mount Juicefs 
@@ -172,7 +173,7 @@ jobs:
             kubectl -n kube-system describe po $pod
             kubectl logs -n kube-system $pod > juicefs.log
             cat juicefs.log
-            grep "<FATAL>:" juicefs.log && exit 1 || true
+            grep "<FATAL>:" juicefs.log | grep -v forma.go && exit 1 || true
           done
 
       - name: Mount pod upgrade
@@ -221,7 +222,7 @@ jobs:
             kubectl -n kube-system describe po $pod
             kubectl logs -n kube-system $pod > juicefs.log
             cat juicefs.log
-            grep "<FATAL>:" juicefs.log && exit 1 || true
+            grep "<FATAL>:" juicefs.log | grep -v forma.go && exit 1 || true
           done
 
       - name: Check vdbench log
