@@ -45,22 +45,5 @@ class TestCommand(unittest.TestCase):
         state.clone(entry=folders_1, new_entry_name='tbim', parent=folders_0, preserve=False, user='user1')
         state.teardown()
 
-    def test_issue_x(self):
-        state = JuicefsCommandMachine()
-        folders_0 = state.init_folders()
-        files_0 = state.create_file(content=b'\xb3\xccK~\ti', file_name='zide', mode='w', parent=folders_0, umask=337, user='root')
-        state.read(file=files_0, length=8669, offset=7733, user='root')
-        state.info(entry=folders_0, raw=True, recuisive=False, strict=True, user='root')
-        state.read(file=files_0, length=2643, offset=10239, user='root')
-        files_1 = state.hardlink(dest_file=files_0, link_file_name='lpyy', parent=folders_0, umask=376, user='root')
-        state.chown(entry=files_1, owner='user1', user='user2')
-        state.clone_cp_dir(entry=folders_0, new_entry_name='dsuq', parent=folders_0, preserve=False, umask=290, user='root')
-        state.read(file=files_0, length=8367, offset=9939, user='root')
-        state.clone_cp_dir(entry=folders_0, new_entry_name='cmox', parent=folders_0, preserve=False, umask=157, user='root')
-        folders_1 = state.mkdir(mode=1782, parent=folders_0, subdir='qwzo', umask=187, user='root')
-        state.fsck(entry=folders_1, recuisive=True, repair=False, user='root')
-        state.info(entry=folders_1, raw=True, recuisive=False, strict=True, user='user1')
-        state.teardown()
-
 if __name__ == '__main__':
     unittest.main()

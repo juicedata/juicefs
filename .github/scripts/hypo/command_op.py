@@ -91,7 +91,6 @@ class CommandOperation:
             return size.split(' ')[0]
 
     def parse_info(self, info: str):
-        print('info is', info)
         li = info.split('\n')
         if "GOCOVERDIR" in li[0]:
             li = li[1:]
