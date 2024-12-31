@@ -2238,6 +2238,8 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		if time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= m.conf.SkipDirMtime {
 			pn.Mtime = now / 1e3
 			pn.Ctime = now / 1e3
+                        pn.Mtimensec = int16(now % 1e3)
+                        pn.Ctimensec = int16(now % 1e3)
 			updateParent = true
 		}
 		n.Parent = 0
