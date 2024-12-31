@@ -83,7 +83,7 @@ type engine interface {
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices()
-	doCleanupDelayedSlices(edge int64) (int, error)
+	doCleanupDelayedSlices(ctx Context, edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
 
 	doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, attr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno
@@ -182,10 +182,17 @@ func (symCache *symlinkCache) Store(inode Ino, path []byte) {
 	}
 }
 
-func (symCache *symlinkCache) clean() {
+func (symCache *symlinkCache) clean(ctx Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
 	for {
-		time.Sleep(time.Minute)
-		symCache.doClean()
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			symCache.doClean()
+		}
 	}
 }
 
@@ -226,6 +233,10 @@ type baseMeta struct {
 	sesMu        sync.Mutex
 	aclCache     aclAPI.Cache
 
+	sessCtx  Context
+	sessWG   sync.WaitGroup
+	dSliceWG sync.WaitGroup
+
 	dirStatsLock sync.Mutex
 	dirStats     map[Ino]dirStat
 
@@ -249,9 +260,9 @@ type baseMeta struct {
 	totalInodesG prometheus.Gauge
 	txDist       prometheus.Histogram
 	txRestart    prometheus.Counter
-	opDist      prometheus.Histogram
-	opCount     *prometheus.CounterVec
-	opDuration  *prometheus.CounterVec
+	opDist       prometheus.Histogram
+	opCount      *prometheus.CounterVec
+	opDuration   *prometheus.CounterVec
 
 	en engine
 }
@@ -447,9 +458,11 @@ func (m *baseMeta) newSessionInfo() []byte {
 }
 
 func (m *baseMeta) NewSession(record bool) error {
-	go m.refresh()
+	m.sessCtx = Background()
+	ctx := m.sessCtx
+	go m.refresh(ctx)
 
-	if err := m.en.cacheACLs(Background()); err != nil {
+	if err := m.en.cacheACLs(ctx); err != nil {
 		return err
 	}
 
@@ -477,27 +490,56 @@ func (m *baseMeta) NewSession(record bool) error {
 	}
 
 	m.loadQuotas()
-	go m.flushStats()
-	go m.flushDirStat()
-	go m.flushQuotas()
 
-	if m.conf.MaxDeletes > 0 {
-		m.dslices = make(chan Slice, m.conf.MaxDeletes*10240)
-		for i := 0; i < m.conf.MaxDeletes; i++ {
-			go func() {
-				for s := range m.dslices {
-					m.deleteSlice_(s.Id, s.Size)
-				}
-			}()
-		}
-	}
+	m.sessWG.Add(3)
+	go m.flushStats(ctx)
+	go m.flushDirStat(ctx)
+	go m.flushQuotas(ctx)
+	m.startDeleteSliceTasks() // start MaxDeletes tasks
+
 	if !m.conf.NoBGJob {
-		go m.cleanupDeletedFiles()
-		go m.cleanupSlices()
-		go m.cleanupTrash()
-		go m.symlinks.clean()
+		m.sessWG.Add(4)
+		go m.cleanupDeletedFiles(ctx)
+		go m.cleanupSlices(ctx)
+		go m.cleanupTrash(ctx)
+		go m.symlinks.clean(ctx, &m.sessWG)
 	}
 	return nil
+}
+
+func (m *baseMeta) startDeleteSliceTasks() {
+	if m.conf.MaxDeletes <= 0 || m.dslices != nil {
+		return
+	}
+	m.sessWG.Add(m.conf.MaxDeletes)
+	m.dSliceWG.Add(m.conf.MaxDeletes)
+	m.dslices = make(chan Slice, m.conf.MaxDeletes*10240)
+	for i := 0; i < m.conf.MaxDeletes; i++ {
+		go func() {
+			defer m.sessWG.Done()
+			defer m.dSliceWG.Done()
+			for {
+				select {
+				case <-m.sessCtx.Done():
+					return
+				case s, ok := <-m.dslices:
+					if !ok {
+						return
+					}
+					m.deleteSlice_(s.Id, s.Size)
+				}
+			}
+		}()
+	}
+}
+
+func (m *baseMeta) stopDeleteSliceTasks() {
+	if m.conf.MaxDeletes <= 0 || m.dslices == nil {
+		return
+	}
+	close(m.dslices)
+	m.dSliceWG.Wait()
+	m.dslices = nil
 }
 
 func (m *baseMeta) expireTime() int64 {
@@ -516,8 +558,11 @@ func (m *baseMeta) OnReload(fn func(f *Format)) {
 
 const UmountCode = 11
 
-func (m *baseMeta) refresh() {
+func (m *baseMeta) refresh(ctx Context) {
 	for {
+		if ctx.Canceled() {
+			return
+		}
 		if m.conf.Heartbeat > 0 {
 			utils.SleepWithJitter(m.conf.Heartbeat)
 		} else { // use default value
@@ -575,18 +620,21 @@ func (m *baseMeta) refresh() {
 		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64((m.conf.Heartbeat * 9 / 10).Seconds())); err != nil {
 			logger.Warnf("checking counter lastCleanupSessions: %s", err)
 		} else if ok {
-			go m.CleanStaleSessions()
+			go m.CleanStaleSessions(ctx)
 		}
 	}
 }
 
-func (m *baseMeta) CleanStaleSessions() {
+func (m *baseMeta) CleanStaleSessions(ctx Context) {
 	sids, err := m.en.doFindStaleSessions(1000)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
 	}
 	for _, sid := range sids {
+		if ctx.Canceled() {
+			return
+		}
 		s, err := m.en.GetSession(sid, false)
 		if err != nil {
 			logger.Warnf("Get session info %d: %v", sid, err)
@@ -605,6 +653,9 @@ func (m *baseMeta) CloseSession() error {
 	if m.sid > 0 {
 		err = m.en.doCleanStaleSession(m.sid)
 	}
+	m.sessCtx.Cancel()
+	m.sessWG.Wait()
+	m.stopDeleteSliceTasks()
 	logger.Infof("close session %d: %v", m.sid, err)
 	return err
 }
@@ -623,9 +674,14 @@ func (m *baseMeta) Init(format *Format, force bool) error {
 	return m.en.doInit(format, force)
 }
 
-func (m *baseMeta) cleanupDeletedFiles() {
+func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
+	defer m.sessWG.Done()
 	for {
-		utils.SleepWithJitter(time.Hour)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(utils.JitterIt(time.Hour)):
+		}
 		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter lastCleanupFiles: %s", err)
 		} else if ok {
@@ -646,9 +702,14 @@ func (m *baseMeta) cleanupDeletedFiles() {
 	}
 }
 
-func (m *baseMeta) cleanupSlices() {
+func (m *baseMeta) cleanupSlices(ctx Context) {
+	defer m.sessWG.Done()
 	for {
-		utils.SleepWithJitter(time.Hour)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(utils.JitterIt(time.Hour)):
+		}
 		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter nextCleanupSlices: %s", err)
 		} else if ok {
@@ -2400,10 +2461,15 @@ func (m *baseMeta) trashEntry(parent, inode Ino, name string) string {
 	return s
 }
 
-func (m *baseMeta) cleanupTrash() {
+func (m *baseMeta) cleanupTrash(ctx Context) {
+	defer m.sessWG.Done()
 	for {
-		utils.SleepWithJitter(time.Hour)
-		if st := m.en.doGetAttr(Background(), TrashInode, nil); st != 0 {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(utils.JitterIt(time.Hour)):
+		}
+		if st := m.en.doGetAttr(ctx, TrashInode, nil); st != 0 {
 			if st != syscall.ENOENT {
 				logger.Warnf("getattr inode %d: %s", TrashInode, st)
 			}
@@ -2413,8 +2479,8 @@ func (m *baseMeta) cleanupTrash() {
 			logger.Warnf("checking counter lastCleanupTrash: %s", err)
 		} else if ok {
 			days := m.getFormat().TrashDays
-			go m.doCleanupTrash(days, false)
-			go m.cleanupDelayedSlices(days)
+			go m.doCleanupTrash(ctx, days, false)
+			go m.cleanupDelayedSlices(ctx, days)
 		}
 	}
 }
@@ -2451,6 +2517,9 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 	}()
 	batch := 1000000
 	for len(entries) > 0 {
+		if ctx.Canceled() {
+			return
+		}
 		e := entries[0]
 		ts, err := time.Parse("2006-01-02-15", string(e.Name))
 		if err != nil {
@@ -2533,19 +2602,19 @@ func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {
 	return nil
 }
 
-func (m *baseMeta) doCleanupTrash(days int, force bool) {
+func (m *baseMeta) doCleanupTrash(ctx Context, days int, force bool) {
 	edge := time.Now().Add(-time.Duration(24*days+2) * time.Hour)
 	if force {
 		edge = time.Now()
 	}
-	m.CleanupTrashBefore(Background(), edge, nil)
+	m.CleanupTrashBefore(ctx, edge, nil)
 }
 
-func (m *baseMeta) cleanupDelayedSlices(days int) {
+func (m *baseMeta) cleanupDelayedSlices(ctx Context, days int) {
 	now := time.Now()
 	edge := now.Unix() - int64(days)*24*3600
 	logger.Debugf("Cleanup delayed slices: started with edge %d", edge)
-	if count, err := m.en.doCleanupDelayedSlices(edge); err != nil {
+	if count, err := m.en.doCleanupDelayedSlices(ctx, edge); err != nil {
 		logger.Warnf("Cleanup delayed slices: deleted %d slices in %v, but got error: %s", count, time.Since(now), err)
 	} else if count > 0 {
 		logger.Infof("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))

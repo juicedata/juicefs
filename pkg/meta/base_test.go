@@ -35,13 +35,12 @@ import (
 	"testing"
 	"time"
 
-	"xorm.io/xorm"
-
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"xorm.io/xorm"
 )
 
 func testConfig() *Config {
@@ -429,7 +428,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if base.sid != ses[0].Sid {
 		t.Fatalf("my sid %d != registered sid %d", base.sid, ses[0].Sid)
 	}
-	go m.CleanStaleSessions()
+	go m.CleanStaleSessions(Background())
 
 	var parent, inode, dummyInode Ino
 	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &parent, attr); st != 0 {
@@ -1406,6 +1405,11 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	} else {
 		_ = m.Init(testFormat(), false)
 	}
+
+	if err := m.NewSession(false); err != nil {
+		t.Fatalf("new session: %v", err)
+	}
+	defer m.CloseSession()
 	var l sync.Mutex
 	deleted := make(map[uint64]int)
 	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
@@ -1500,15 +1504,16 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		if len(sliceMap[1]) < 200 {
 			t.Fatalf("list delayed slices %d is less than 200", len(sliceMap[1]))
 		}
-		m.(engine).doCleanupDelayedSlices(time.Now().Unix() + 1)
+		m.(engine).doCleanupDelayedSlices(ctx, time.Now().Unix()+1)
 	}
-	time.Sleep(time.Second * 3) // wait for all slices deleted
+	m.getBase().stopDeleteSliceTasks()
 	l.Lock()
 	deletes := len(deleted)
 	l.Unlock()
 	if deletes < 200 {
 		t.Fatalf("deleted slices %d is less than 200", deletes)
 	}
+	m.getBase().startDeleteSliceTasks()
 
 	// truncate to 0
 	if st := m.Truncate(ctx, inode, 0, 0, attr, false); st != 0 {
@@ -2013,7 +2018,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx2, TrashInode+1, "d", 1, "f", 0, &inode, attr); st != syscall.EPERM {
 		t.Fatalf("rename d -> f: %s", st)
 	}
-	m.getBase().doCleanupTrash(format.TrashDays, true)
+	m.getBase().doCleanupTrash(Background(), format.TrashDays, true)
 	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
 		t.Fatalf("getattr: %s", st)
 	}
@@ -2531,7 +2536,10 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Mkdir(Background(), RootInode, testDir, 0640, 022, 0, &testInode, nil); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
 	stat, st := m.GetDirStat(Background(), testInode)
 	checkResult := func(length, space, inodes int64) {
 		if st != 0 {
