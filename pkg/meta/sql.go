@@ -808,7 +808,7 @@ func (m *dbMeta) shouldRetry(err error) bool {
 		// error 1020 for MariaDB when conflict
 		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later") ||
 			strings.Contains(msg, "duplicate entry") || strings.Contains(msg, "error 1020 (hy000)") ||
-			strings.Contains(msg, "bad connection") || errors.Is(err, io.EOF) // could not send data to client: No buffer space available
+			strings.Contains(msg, "invalid connection") || strings.Contains(msg, "bad connection") || errors.Is(err, io.EOF) // could not send data to client: No buffer space available
 	case "postgres":
 		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected") ||
 			strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "could not serialize access") ||
@@ -2238,8 +2238,8 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		if time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= m.conf.SkipDirMtime {
 			pn.Mtime = now / 1e3
 			pn.Ctime = now / 1e3
-                        pn.Mtimensec = int16(now % 1e3)
-                        pn.Ctimensec = int16(now % 1e3)
+			pn.Mtimensec = int16(now % 1e3)
+			pn.Ctimensec = int16(now % 1e3)
 			updateParent = true
 		}
 		n.Parent = 0
@@ -2252,18 +2252,27 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(&n, node{Inode: inode}); err != nil {
 			return err
 		}
-		if err == nil {
-			m.parseAttr(&n, attr)
-		}
 		if updateParent {
 			if n, err := s.Cols("mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: parent}); err != nil || n == 0 {
-				if err == nil {
-					err = syscall.ENOENT
+				if err != nil {
+					return err
 				}
-				return err
+				if m.Name() == "mysql" {
+					// double check the parent
+					ok, err := s.Get(&node{Inode: parent})
+					if err != nil {
+						return err
+					}
+					if !ok {
+						return syscall.ENOENT
+					}
+				} else {
+					return syscall.ENOENT
+				}
 			}
 		}
 
+		m.parseAttr(&n, attr)
 		return err
 	}, inode))
 }
