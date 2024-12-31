@@ -25,11 +25,11 @@ slug: /integrations
 
 - [Terraform Provider for JuiceFS](https://github.com/toowoxx/terraform-provider-juicefs) by Toowoxx IT GmbH, an IT service company from Germany
 
-## Alfred workflow
+## Alfred
 
-An Alfred workflow to search documents of JuiceFS with instant results
+JuiceFS documents offers an Alfred workflow to search documents of JuiceFS with instant results
 
-![](../images/workflow-root.png)
+![JuiceFS Alfred Workflow](../images/workflow-root.png)
 
 Simply type your keyword into Alfred (default: jfs) and provide a query to see instant search results from JuiceFS documents.
 
@@ -39,7 +39,7 @@ Workflow of Alfred 5 version: [Latest Download](https://github.com/zwwhdls/juice
 
 ### Usage
 
-Search all documents of JuiceFS, including community, enterprise and csi:
+Search all documents of JuiceFS, including community, enterprise and CSI:
 
 ```
 # JuiceFS community documents
@@ -50,12 +50,12 @@ jfs ee <search>
 jfs csi <search>
 ```
 
-![](../images/workflow-demo.gif)
+![JuiceFS Alfred Workflow demo](../images/workflow-demo.gif)
 
 ## Workflow Variables
 
-- `API_KEY`: Api key for algolia which JuiceFS documents uses. Default value is ok.
+- `API_KEY`: API key for algolia which JuiceFS documents uses. Default value is ok.
 - `LANGUAGE`: Language of JuiceFS documents to search. Default is `en`.
 - `HITS_PER_PAGE`: Hits of each search. Default is `10`.
 
-![](../images/configuration.png)
+![JuiceFS Alfred Workflow configuration](../images/configuration.png)
