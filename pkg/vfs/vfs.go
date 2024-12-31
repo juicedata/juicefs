@@ -128,6 +128,7 @@ type Config struct {
 	AttrTimeout          time.Duration
 	DirEntryTimeout      time.Duration
 	EntryTimeout         time.Duration
+	ReaddirCache         bool
 	BackupMeta           time.Duration
 	BackupSkipTrash      bool
 	FastResolve          bool   `json:",omitempty"`
@@ -422,7 +423,7 @@ func (v *VFS) UpdateLength(inode Ino, attr *meta.Attr) {
 }
 
 func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plus bool) (entries []*meta.Entry, readAt time.Time, err syscall.Errno) {
-	defer func() { logit(ctx, "readdir", err, "(%d,%d,%d): (%d)", ino, size, off, len(entries)) }()
+	defer func() { logit(ctx, "readdir", err, "(%d,%d,%d,%t): (%d)", ino, size, off, plus, len(entries)) }()
 	h := v.findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF

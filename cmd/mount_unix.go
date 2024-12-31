@@ -844,6 +844,16 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 	conf.AttrTimeout = utils.Duration(c.String("attr-cache"))
 	conf.EntryTimeout = utils.Duration(c.String("entry-cache"))
 	conf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
+	conf.ReaddirCache = c.Bool("readdir-cache")
+	if conf.ReaddirCache {
+		if conf.AttrTimeout == 0 {
+			logger.Warnf("readdir-cache is enabled without attr-cache, it's performance may be affected")
+		}
+		major, minor := utils.GetKernelVersion()
+		if major < 4 || (major == 4 && minor < 20) {
+			logger.Warnf("readdir-cache requires kernel version 4.20 or higher, current version: %d.%d", major, minor)
+		}
+	}
 	conf.NonDefaultPermission = c.Bool("non-default-permission")
 	rootSquash := c.String("root-squash")
 	if rootSquash != "" {
