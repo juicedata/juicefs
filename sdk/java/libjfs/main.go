@@ -303,6 +303,7 @@ type javaConf struct {
 	Heartbeat         string `json:"heartbeat"`
 	CacheDir          string `json:"cacheDir"`
 	CacheSize         string `json:"cacheSize"`
+	CacheItems        int64  `json:"cacheItems"`
 	FreeSpace         string `json:"freeSpace"`
 	AutoCreate        bool   `json:"autoCreate"`
 	CacheFullBlock    bool   `json:"cacheFullBlock"`
@@ -543,6 +544,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			CacheDir:          jConf.CacheDir,
 			CacheMode:         0644, // all user can read cache
 			CacheSize:         utils.ParseBytesStr("cache-size", jConf.CacheSize, 'M'),
+			CacheItems:        jConf.CacheItems,
 			FreeSpace:         float32(freeSpaceRatio),
 			AutoCreate:        jConf.AutoCreate,
 			CacheFullBlock:    jConf.CacheFullBlock,

@@ -81,6 +81,7 @@ type cacheStore struct {
 	mode          os.FileMode
 	maxStageWrite int
 	capacity      int64
+	maxItems      int64
 	freeRatio     float32
 	hashPrefix    bool
 	scanInterval  time.Duration
@@ -105,7 +106,7 @@ type cacheStore struct {
 	stateLock sync.Mutex
 }
 
-func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
+func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize, maxItems int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
 	if config.CacheMode == 0 {
 		config.CacheMode = 0600 // only owner can read/write cache
 	}
@@ -117,6 +118,7 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingP
 		dir:           dir,
 		mode:          config.CacheMode,
 		capacity:      cacheSize,
+		maxItems:      maxItems,
 		maxStageWrite: config.MaxStageWrite,
 		freeRatio:     config.FreeSpace,
 		eviction:      config.CacheEviction,
@@ -142,8 +144,8 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingP
 	if br < c.freeRatio || fr < c.freeRatio {
 		logger.Warnf("not enough space (%d%%) or inodes (%d%%) for caching in %s: free ratio should be >= %d%%", int(br*100), int(fr*100), c.dir, int(c.freeRatio*100))
 	}
-	logger.Infof("Disk cache (%s): capacity (%s), free ratio %d%%, used ratio - [space %s%%, inode %s%%], max pending pages %d",
-		c.dir, humanize.IBytes(uint64(c.capacity)), int(c.freeRatio*100), humanize.FtoaWithDigits(float64((1-br)*100), 1), humanize.FtoaWithDigits(float64((1-fr)*100), 1), pendingPages)
+	logger.Infof("Disk cache (%s): used ratio - [space %s%%, inode %s%%]",
+		c.dir, humanize.FtoaWithDigits(float64((1-br)*100), 1), humanize.FtoaWithDigits(float64((1-fr)*100), 1))
 	c.createLockFile()
 	go c.checkLockFile()
 	go c.flush()
@@ -205,6 +207,10 @@ func (cache *cacheStore) checkLockFile() {
 
 func (c *cacheStore) available() bool {
 	return c.state.state() != dcDown
+}
+
+func (c *cacheStore) enabled() bool {
+	return c.capacity > 0 && c.maxItems > 0
 }
 
 func (cache *cacheStore) checkErr(f func() error) error {
@@ -391,7 +397,7 @@ func (cache *cacheStore) removeStage(key string) error {
 }
 
 func (cache *cacheStore) cache(key string, p *Page, force, dropCache bool) {
-	if cache.capacity == 0 {
+	if !cache.enabled() {
 		return
 	}
 	if cache.rawFull && cache.eviction == "none" {
@@ -661,7 +667,7 @@ func (cache *cacheStore) flush() {
 	for {
 		w := <-cache.pending
 		path := cache.cachePath(w.key)
-		if cache.capacity > 0 && cache.flushPage(path, w.page.Data, w.dropCache) == nil {
+		if cache.enabled() && cache.flushPage(path, w.page.Data, w.dropCache) == nil {
 			cache.add(w.key, int32(len(w.page.Data)), uint32(time.Now().Unix()))
 		}
 		cache.Lock()
@@ -694,7 +700,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 		cache.used += int64(size + 4096)
 	}
 
-	if cache.used > cache.capacity && cache.eviction != "none" {
+	if (cache.used > cache.capacity || int64(len(cache.keys)) > cache.maxItems) && cache.eviction != "none" {
 		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20)
 		cache.cleanupFull()
 	}
@@ -715,7 +721,7 @@ func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string,
 		cache.m.stageBlocks.Add(1)
 		cache.m.stageBlockBytes.Add(float64(len(data)))
 		cache.m.stageWriteBytes.Add(float64(len(data)))
-		if cache.capacity > 0 && keepCache {
+		if cache.enabled() && keepCache {
 			path := cache.cachePath(key)
 			cache.createDir(filepath.Dir(path))
 			if err = os.Link(stagingPath, path); err == nil {
@@ -739,7 +745,10 @@ func (cache *cacheStore) cleanupFull() {
 	}
 
 	goal := cache.capacity * 95 / 100
-	num := len(cache.keys) * 99 / 100
+	num := int64(len(cache.keys)) * 99 / 100
+	if num > cache.maxItems*99/100 {
+		num = cache.maxItems * 99 / 100
+	}
 	// make sure we have enough free space after cleanup
 	br, fr := cache.curFreeRatio()
 	if br < cache.freeRatio {
@@ -757,7 +766,7 @@ func (cache *cacheStore) cleanupFull() {
 		if toFree > len(cache.keys) {
 			num = 0
 		} else {
-			num = (len(cache.keys) - toFree) * 99 / 100
+			num = int64(len(cache.keys)-toFree) * 99 / 100
 		}
 	}
 
@@ -790,7 +799,7 @@ func (cache *cacheStore) cleanupFull() {
 			logger.Debugf("remove %s from cache, age: %ds", lastK, now-lastValue.atime)
 			cache.m.cacheEvicts.Add(1)
 			cnt = 0
-			if len(cache.keys) < num && cache.used < goal {
+			if int64(len(cache.keys)) <= num && cache.used <= goal {
 				break
 			}
 		}
@@ -1038,7 +1047,7 @@ type CacheManager interface {
 func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(key, path string, force bool) bool) CacheManager {
 	getEnvs()
 	metrics := newCacheManagerMetrics(reg)
-	if config.CacheDir == "memory" || config.CacheSize == 0 {
+	if config.CacheDir == "memory" || !config.CacheEnabled() {
 		return newMemStore(config, metrics)
 	}
 	var dirs []string
@@ -1061,6 +1070,7 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 	}
 	sort.Strings(dirs)
 	dirCacheSize := int64(config.CacheSize) / int64(len(dirs))
+	dirCacheItems := config.CacheItems / int64(len(dirs))
 	m := &cacheManager{
 		consistentMap: consistenthash.New(100, murmur3.Sum32),
 		storeMap:      make(map[string]*cacheStore, len(dirs)),
@@ -1071,7 +1081,7 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 	// 20% of buffer could be used for pending pages
 	pendingPages := int(config.BufferSize) * 2 / 10 / config.BlockSize / len(dirs)
 	for i, d := range dirs {
-		store := newCacheStore(metrics, strings.TrimSpace(d)+string(filepath.Separator), dirCacheSize, pendingPages, config, uploader)
+		store := newCacheStore(metrics, strings.TrimSpace(d)+string(filepath.Separator), dirCacheSize, dirCacheItems, pendingPages, config, uploader)
 		m.stores[i] = store
 		m.storeMap[store.id] = store
 		m.consistentMap.Add(store.id)

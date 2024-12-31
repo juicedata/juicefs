@@ -102,6 +102,7 @@ var defaultConf = Config{
 	CacheDir:          filepath.Join(os.TempDir(), "diskCache"),
 	CacheMode:         0600,
 	CacheSize:         10 << 20,
+	CacheItems:        1e9,
 	CacheChecksum:     CsNone,
 	CacheScanInterval: time.Second * 300,
 	MaxUpload:         1,
