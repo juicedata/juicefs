@@ -3388,7 +3388,7 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
 	})
 }
 
-func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry) error {
 	n := &node{Inode: inode}
 	ok, err := s.Get(n)
 	if err != nil {
@@ -3464,9 +3464,6 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 		err := s.Limit(1000, 0).Find(&edges, &edge{Parent: inode})
 		if err != nil {
 			return err
-		}
-		if showProgress != nil {
-			showProgress(int64(len(edges)), 0)
 		}
 		if len(edges) < 1000 {
 			e.Entries = make(map[string]*DumpedEntry, len(edges))
@@ -3547,7 +3544,7 @@ func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 	return e
 }
 
-func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, threads int, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, threads int, bar *utils.Bar) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -3569,9 +3566,6 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 			ce.Attr.Type = typeToString(edge.Type)
 			tree.Entries[name] = ce
 		}
-		if showProgress != nil {
-			showProgress(int64(len(edges))-1000, 0)
-		}
 	}
 	var entries []*DumpedEntry
 	for _, e := range tree.Entries {
@@ -3591,7 +3585,7 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 				_ = m.roTxn(Background(), func(s *xorm.Session) error {
 					for i := c; i < len(entries) && err == nil; i += threads {
 						e := entries[i]
-						er := m.dumpEntry(s, e.Attr.Inode, 0, e, showProgress)
+						er := m.dumpEntry(s, e.Attr.Inode, 0, e)
 						ms[c].Lock()
 						ready[c] = true
 						if er != nil {
@@ -3622,7 +3616,7 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 			return err
 		}
 		if e.Attr.Type == "directory" {
-			err = m.dumpDir(s, e.Attr.Inode, e, bw, depth+2, threads, showProgress)
+			err = m.dumpDir(s, e.Attr.Inode, e, bw, depth+2, threads, bar)
 		} else {
 			err = e.writeJSON(bw, depth+2)
 		}
@@ -3634,15 +3628,15 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 		if i != len(entries)-1 {
 			bwWrite(",")
 		}
-		if showProgress != nil {
-			showProgress(0, 1)
+		if bar != nil {
+			bar.Increment()
 		}
 	}
 	bwWrite(fmt.Sprintf("\n%s}\n%s}", strings.Repeat(jsonIndent, depth+1), strings.Repeat(jsonIndent, depth)))
 	return nil
 }
 
-func (m *dbMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *dbMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, bar *utils.Bar) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -3661,15 +3655,15 @@ func (m *dbMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dep
 
 		entry.Name = string(e.Name)
 		if e.Type == TypeDirectory {
-			_ = m.dumpDirFast(e.Inode, entry, bw, depth+2, showProgress)
+			_ = m.dumpDirFast(e.Inode, entry, bw, depth+2, bar)
 		} else {
 			_ = entry.writeJSON(bw, depth+2)
 		}
 		if i != len(edges)-1 {
 			bwWrite(",")
 		}
-		if showProgress != nil {
-			showProgress(0, 1)
+		if bar != nil {
+			bar.Increment()
 		}
 	}
 	bwWrite(fmt.Sprintf("\n%s}\n%s}", strings.Repeat(jsonIndent, depth+1), strings.Repeat(jsonIndent, depth)))
@@ -3784,7 +3778,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 					Type:  typeToString(TypeDirectory),
 				},
 			}
-			if err = m.dumpEntry(s, root, TypeDirectory, tree, nil); err != nil {
+			if err = m.dumpEntry(s, root, TypeDirectory, tree); err != nil {
 				return err
 			}
 			if root == 1 && !skipTrash {
@@ -3795,7 +3789,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 						Type:  typeToString(TypeDirectory),
 					},
 				}
-				if err = m.dumpEntry(s, TrashInode, TypeDirectory, trash, nil); err != nil {
+				if err = m.dumpEntry(s, TrashInode, TypeDirectory, trash); err != nil {
 					return err
 				}
 			}
@@ -3885,15 +3879,15 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			bar.IncrTotal(1)
 			bar.Increment()
 		}
-		showProgress := func(totalIncr, currentIncr int64) {
-			bar.IncrTotal(totalIncr)
-			bar.IncrInt64(currentIncr)
+		totalBean := &counter{Name: "totalInodes"}
+		if _, err := s.Get(totalBean); err != nil {
+			return err
 		}
+		bar.SetTotal(totalBean.Value)
 		if m.snap != nil {
-			_ = m.dumpDirFast(root, tree, bw, 1, showProgress)
+			_ = m.dumpDirFast(root, tree, bw, 1, bar)
 		} else {
-			showProgress(int64(len(tree.Entries)), 0)
-			if err = m.dumpDir(s, root, tree, bw, 1, threads, showProgress); err != nil {
+			if err = m.dumpDir(s, root, tree, bw, 1, threads, bar); err != nil {
 				logger.Errorf("dump dir %d failed: %s", root, err)
 				return fmt.Errorf("dump dir %d failed", root) // don't retry
 			}
@@ -3903,10 +3897,9 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 				return err
 			}
 			if m.snap != nil {
-				_ = m.dumpDirFast(TrashInode, trash, bw, 1, showProgress)
+				_ = m.dumpDirFast(TrashInode, trash, bw, 1, bar)
 			} else {
-				showProgress(int64(len(trash.Entries)), 0)
-				if err = m.dumpDir(s, TrashInode, trash, bw, 1, threads, showProgress); err != nil {
+				if err = m.dumpDir(s, TrashInode, trash, bw, 1, threads, bar); err != nil {
 					logger.Errorf("dump trash failed: %s", err)
 					return fmt.Errorf("dump trash failed") // don't retry
 				}
