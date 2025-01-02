@@ -806,8 +806,12 @@ func (m *dbMeta) shouldRetry(err error) bool {
 		// MySQL, MariaDB or TiDB
 		// error 1020 for MariaDB when conflict
 		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later") ||
-			strings.Contains(msg, "duplicate entry") || strings.Contains(msg, "error 1020 (hy000)")
+			strings.Contains(msg, "duplicate entry") || strings.Contains(msg, "error 1020 (hy000)") ||
+			strings.Contains(msg, "invalid connection") || strings.Contains(msg, "bad connection") || errors.Is(err, io.EOF) // could not send data to client: No buffer space available
 	case "postgres":
+		if e, ok := err.(interface{ SafeToRetry() bool }); ok {
+			return e.SafeToRetry()
+		}
 		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected") ||
 			strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "could not serialize access") ||
 			strings.Contains(msg, "bad connection") || errors.Is(err, io.EOF) // could not send data to client: No buffer space available
