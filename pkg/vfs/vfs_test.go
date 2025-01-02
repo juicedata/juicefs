@@ -74,7 +74,6 @@ func createTestVFS(applyMetaConfOption func(metaConfig *meta.Config), metaUri st
 			MaxUpload:  2,
 			BufferSize: 30 << 20,
 			CacheSize:  10 << 20,
-			CacheItems: 1e9,
 			CacheDir:   "memory",
 		},
 		FuseOpts: &FuseOptions{},

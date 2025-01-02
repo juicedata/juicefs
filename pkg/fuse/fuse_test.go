@@ -78,7 +78,6 @@ func mount(url, mp string) {
 		MaxUpload:  20,
 		BufferSize: 300 << 20,
 		CacheSize:  1024,
-		CacheItems: 1e9,
 		CacheDir:   "memory",
 	}
 

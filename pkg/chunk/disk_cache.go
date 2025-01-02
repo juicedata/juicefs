@@ -210,7 +210,11 @@ func (c *cacheStore) available() bool {
 }
 
 func (c *cacheStore) enabled() bool {
-	return c.capacity > 0 && c.maxItems > 0
+	return c.capacity > 0
+}
+
+func (c *cacheStore) full() bool {
+	return c.used > c.capacity || (c.maxItems != 0 && int64(len(c.pages)) > c.maxItems)
 }
 
 func (cache *cacheStore) checkErr(f func() error) error {
@@ -700,7 +704,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 		cache.used += int64(size + 4096)
 	}
 
-	if (cache.used > cache.capacity || int64(len(cache.keys)) > cache.maxItems) && cache.eviction != "none" {
+	if cache.full() && cache.eviction != "none" {
 		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20)
 		cache.cleanupFull()
 	}
@@ -746,7 +750,7 @@ func (cache *cacheStore) cleanupFull() {
 
 	goal := cache.capacity * 95 / 100
 	num := int64(len(cache.keys)) * 99 / 100
-	if num > cache.maxItems*99/100 {
+	if cache.maxItems != 0 && num > cache.maxItems * 99 / 100 {
 		num = cache.maxItems * 99 / 100
 	}
 	// make sure we have enough free space after cleanup
@@ -766,7 +770,7 @@ func (cache *cacheStore) cleanupFull() {
 		if toFree > len(cache.keys) {
 			num = 0
 		} else {
-			num = int64(len(cache.keys)-toFree) * 99 / 100
+			num = int64(len(cache.keys) - toFree) * 99 / 100
 		}
 	}
 

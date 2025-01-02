@@ -216,8 +216,8 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.Int64Flag{
 			Name:  "cache-items",
-			Value: 1e9, // should be enough for most disks
-			Usage: "max number of cached items",
+			Value: 0,
+			Usage: "max number of cached items (0 for unlimited)",
 		},
 		&cli.Float64Flag{
 			Name:  "free-space-ratio",

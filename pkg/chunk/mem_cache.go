@@ -99,7 +99,7 @@ func (c *memcache) cache(key string, p *Page, force, dropCache bool) {
 	p.Acquire()
 	c.pages[key] = memItem{time.Now(), p}
 	c.used += size
-	if c.full() {
+	if c.full() && c.eviction != "none" {
 		c.cleanup()
 	}
 }
@@ -169,11 +169,11 @@ func (c *memcache) cleanup() {
 }
 
 func (c *memcache) enabled() bool {
-	return c.capacity > 0 && c.maxItems > 0
+	return c.capacity > 0
 }
 
 func (c *memcache) full() bool {
-	return c.used > c.capacity || int64(len(c.pages)) > c.maxItems
+	return c.used > c.capacity || (c.maxItems != 0 && int64(len(c.pages)) > c.maxItems)
 }
 
 func (c *memcache) cleanupExpire() {

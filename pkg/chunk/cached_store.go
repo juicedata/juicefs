@@ -578,7 +578,7 @@ type Config struct {
 func (c *Config) SelfCheck(uuid string) {
 	if !c.CacheEnabled() {
 		if c.Writeback || c.Prefetch > 0 {
-			logger.Warnf("cache-size or cache-items is 0, writeback and prefetch will be disabled")
+			logger.Warnf("cache-size is 0, writeback and prefetch will be disabled")
 			c.Writeback = false
 			c.Prefetch = 0
 		}
@@ -652,7 +652,7 @@ func (c *Config) parseHours() (start, end int, err error) {
 }
 
 func (c *Config) CacheEnabled() bool {
-	return c.CacheSize > 0 && c.CacheItems > 0
+	return c.CacheSize > 0
 }
 
 type cachedStore struct {
