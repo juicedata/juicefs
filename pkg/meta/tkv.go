@@ -2820,7 +2820,7 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
 	})
 }
 
-func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 	return m.client.txn(Background(), func(tx *kvTxn) error {
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
@@ -2893,9 +2893,6 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalInc
 			if err != nil {
 				return err
 			}
-			if showProgress != nil {
-				showProgress(int64(len(e.Entries)), 0)
-			}
 			if len(vals) < 10000 {
 				e.Entries = make(map[string]*DumpedEntry, len(vals))
 				for k, value := range vals {
@@ -2913,7 +2910,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalInc
 	}, 0)
 }
 
-func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, threads int, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, threads int, bar *utils.Bar) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -2935,9 +2932,6 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, 
 			ce.Attr.Type = typeToString(typ)
 			tree.Entries[name] = ce
 		}
-		if showProgress != nil {
-			showProgress(int64(len(tree.Entries))-10000, 0)
-		}
 	}
 	var entries []*DumpedEntry
 	for _, e := range tree.Entries {
@@ -2956,7 +2950,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, 
 			go func(c int) {
 				for i := c; i < len(entries) && err == nil; i += threads {
 					e := entries[i]
-					er := m.dumpEntry(e.Attr.Inode, e, showProgress)
+					er := m.dumpEntry(e.Attr.Inode, e)
 					ms[c].Lock()
 					ready[c] = true
 					if er != nil {
@@ -2985,7 +2979,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, 
 			return err
 		}
 		if e.Attr.Type == "directory" {
-			err = m.dumpDir(e.Attr.Inode, e, bw, depth+2, threads, showProgress)
+			err = m.dumpDir(e.Attr.Inode, e, bw, depth+2, threads, bar)
 		} else {
 			err = e.writeJSON(bw, depth+2)
 		}
@@ -2997,15 +2991,15 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, 
 		if i != len(entries)-1 {
 			bwWrite(",")
 		}
-		if showProgress != nil {
-			showProgress(0, 1)
+		if bar != nil {
+			bar.Increment()
 		}
 	}
 	bwWrite(fmt.Sprintf("\n%s}\n%s}", strings.Repeat(jsonIndent, depth+1), strings.Repeat(jsonIndent, depth)))
 	return nil
 }
 
-func (m *kvMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *kvMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, bar *utils.Bar) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -3026,15 +3020,15 @@ func (m *kvMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dep
 		e.Name = name
 		inode := e.Attr.Inode
 		if e.Attr.Type == "directory" {
-			_ = m.dumpDirFast(inode, e, bw, depth+2, showProgress)
+			_ = m.dumpDirFast(inode, e, bw, depth+2, bar)
 		} else {
 			_ = e.writeJSON(bw, depth+2)
 		}
 		if i != len(entries)-1 {
 			bwWrite(",")
 		}
-		if showProgress != nil {
-			showProgress(0, 1)
+		if bar != nil {
+			bar.Increment()
 		}
 	}
 	bwWrite(fmt.Sprintf("\n%s}\n%s}", strings.Repeat(jsonIndent, depth+1), strings.Repeat(jsonIndent, depth)))
@@ -3070,7 +3064,8 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	progress := utils.NewProgress(false)
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
-
+	bInodes, _ := m.get(m.counterKey(totalInodes))
+	inodeTotal := parseCounter(bInodes)
 	if root == 1 && fast { // make snap
 		m.snap = make(map[Ino]*DumpedEntry)
 		defer func() {
@@ -3078,9 +3073,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		}()
 		bar := progress.AddCountBar("Scan keys", 0)
 		bUsed, _ := m.get(m.counterKey(usedSpace))
-		bInodes, _ := m.get(m.counterKey(totalInodes))
 		used := parseCounter(bUsed)
-		inodeTotal := parseCounter(bInodes)
 		var guessKeyTotal int64 = 3 // setting, nextInode, nextChunk
 		if inodeTotal > 0 {
 			guessKeyTotal += int64(math.Ceil((float64(used/inodeTotal/(64*1024*1024)) + float64(3)) * float64(inodeTotal)))
@@ -3173,7 +3166,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 				Type:  "directory",
 			},
 		}
-		if err = m.dumpEntry(root, tree, nil); err != nil {
+		if err = m.dumpEntry(root, tree); err != nil {
 			return err
 		}
 		if root == 1 && !skipTrash {
@@ -3183,7 +3176,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 					Type:  "directory",
 				},
 			}
-			if err = m.dumpEntry(TrashInode, trash, nil); err != nil {
+			if err = m.dumpEntry(TrashInode, trash); err != nil {
 				return err
 			}
 		}
@@ -3273,25 +3266,19 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		return err
 	}
 
-	bar := progress.AddCountBar("Dumped entries", 1) // with root
-	bar.Increment()
-	bar.SetTotal(int64(len(m.snap)))
+	bar := progress.AddCountBar("Dumped entries", inodeTotal) // with root
 	if trash != nil {
 		trash.Name = "Trash"
 		bar.IncrTotal(1)
 		bar.Increment()
 	}
-	showProgress := func(totalIncr, currentIncr int64) {
-		bar.IncrTotal(totalIncr)
-		bar.IncrInt64(currentIncr)
-	}
+
 	if m.snap != nil {
-		if err = m.dumpDirFast(root, tree, bw, 1, showProgress); err != nil {
+		if err = m.dumpDirFast(root, tree, bw, 1, bar); err != nil {
 			return err
 		}
 	} else {
-		showProgress(int64(len(tree.Entries)), 0)
-		if err = m.dumpDir(root, tree, bw, 1, threads, showProgress); err != nil {
+		if err = m.dumpDir(root, tree, bw, 1, threads, bar); err != nil {
 			return err
 		}
 	}
@@ -3300,12 +3287,11 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			return err
 		}
 		if m.snap != nil {
-			if err = m.dumpDirFast(TrashInode, trash, bw, 1, showProgress); err != nil {
+			if err = m.dumpDirFast(TrashInode, trash, bw, 1, bar); err != nil {
 				return err
 			}
 		} else {
-			showProgress(int64(len(tree.Entries)), 0)
-			if err = m.dumpDir(TrashInode, trash, bw, 1, threads, showProgress); err != nil {
+			if err = m.dumpDir(TrashInode, trash, bw, 1, threads, bar); err != nil {
 				return err
 			}
 		}
