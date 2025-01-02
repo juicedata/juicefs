@@ -214,7 +214,7 @@ func (c *cacheStore) enabled() bool {
 }
 
 func (c *cacheStore) full() bool {
-	return c.used > c.capacity || (c.maxItems != 0 && int64(len(c.pages)) > c.maxItems)
+	return c.used > c.capacity || (c.maxItems != 0 && int64(len(c.keys)) > c.maxItems)
 }
 
 func (cache *cacheStore) checkErr(f func() error) error {
