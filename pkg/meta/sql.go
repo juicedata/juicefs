@@ -795,7 +795,7 @@ func mustInsert(s *xorm.Session, beans ...interface{}) error {
 var errBusy error
 
 func (m *dbMeta) shouldRetry(err error) bool {
-	if m.Name() == "mysql" && err == syscall.EAGAIN {
+	if m.Name() == "mysql" && err == syscall.EBUSY {
 		// Retry transaction when parent node update return 0 rows in MySQL
 		return true
 	}
@@ -1538,7 +1538,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				if err == nil {
 					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, pn.Inode)
 					if m.Name() == "mysql" {
-						err = syscall.EAGAIN
+						err = syscall.EBUSY
 					} else {
 						err = syscall.ENOENT
 					}
@@ -1701,7 +1701,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				if err == nil {
 					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, pn.Inode)
 					if m.Name() == "mysql" {
-						err = syscall.EAGAIN
+						err = syscall.EBUSY
 					} else {
 						err = syscall.ENOENT
 					}
@@ -2166,7 +2166,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					if err == nil {
 						logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, dpn.Inode)
 						if m.Name() == "mysql" {
-							err = syscall.EAGAIN
+							err = syscall.EBUSY
 						} else {
 							err = syscall.ENOENT
 						}
@@ -2182,7 +2182,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				if err == nil {
 					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, spn.Inode)
 					if m.Name() == "mysql" {
-						err = syscall.EAGAIN
+						err = syscall.EBUSY
 					} else {
 						err = syscall.ENOENT
 					}
@@ -2198,7 +2198,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				if err == nil {
 					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, dpn.Inode)
 					if m.Name() == "mysql" {
-						err = syscall.EAGAIN
+						err = syscall.EBUSY
 					} else {
 						err = syscall.ENOENT
 					}
@@ -2291,7 +2291,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 				if err == nil {
 					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, pn.Inode)
 					if m.Name() == "mysql" {
-						err = syscall.EAGAIN
+						err = syscall.EBUSY
 					} else {
 						err = syscall.ENOENT
 					}
