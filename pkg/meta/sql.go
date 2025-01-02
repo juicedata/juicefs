@@ -795,6 +795,11 @@ func mustInsert(s *xorm.Session, beans ...interface{}) error {
 var errBusy error
 
 func (m *dbMeta) shouldRetry(err error) bool {
+	if m.Name() == "mysql" && err == syscall.EAGAIN {
+		// Retry transaction when parent node update return 0 rows in MySQL
+		return true
+	}
+
 	msg := strings.ToLower(err.Error())
 	if strings.Contains(msg, "too many connections") || strings.Contains(msg, "too many clients") {
 		logger.Warnf("transaction failed: %s, will retry it. please increase the max number of connections in your database, or use a connection pool.", msg)
@@ -1485,6 +1490,8 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			if updateParent || time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= m.conf.SkipDirMtime {
 				pn.Mtime = now / 1e3
 				pn.Ctime = now / 1e3
+				pn.Mtimensec = int16(now % 1e3)
+				pn.Ctimensec = int16(now % 1e3)
 				updateParent = true
 			}
 		}
@@ -1527,10 +1534,14 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 		if updateParent {
-			if n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", nlinkAdjust)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode}); err != nil || n != 1 {
-				if nlinkAdjust != 0 && err == nil {
-					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", n, pn.Inode)
-					err = syscall.ENOENT
+			if _n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", nlinkAdjust)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode}); err != nil || _n == 0 {
+				if err == nil {
+					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, pn.Inode)
+					if m.Name() == "mysql" {
+						err = syscall.EAGAIN
+					} else {
+						err = syscall.ENOENT
+					}
 				}
 				if err != nil {
 					return err
@@ -1685,8 +1696,19 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			}
 		}
 		if updateParent {
-			if _, err = s.Cols("mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode}); err != nil {
-				return err
+			var _n int64
+			if _n, err = s.Cols("mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode}); err != nil || _n == 0 {
+				if err == nil {
+					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, pn.Inode)
+					if m.Name() == "mysql" {
+						err = syscall.EAGAIN
+					} else {
+						err = syscall.ENOENT
+					}
+				}
+				if err != nil {
+					return err
+				}
 			}
 		}
 		return err
@@ -2140,10 +2162,14 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 
 		if parentDst != parentSrc && !isTrash(parentSrc) && supdate {
 			if dupdate && dpn.Inode < spn.Inode {
-				if n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", dstnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&dpn, &node{Inode: parentDst}); err != nil || n != 1 {
-					if dstnlink != 0 && err == nil {
-						logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", n, dpn.Inode)
-						err = syscall.ENOENT
+				if _n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", dstnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&dpn, &node{Inode: parentDst}); err != nil || _n == 0 {
+					if err == nil {
+						logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, dpn.Inode)
+						if m.Name() == "mysql" {
+							err = syscall.EAGAIN
+						} else {
+							err = syscall.ENOENT
+						}
 					}
 					if err != nil {
 						return err
@@ -2152,10 +2178,14 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				dupdate = false
 			}
 
-			if n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", srcnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&spn, &node{Inode: parentSrc}); err != nil || n != 1 {
-				if srcnlink != 0 && err == nil {
-					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", n, spn.Inode)
-					err = syscall.ENOENT
+			if _n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", srcnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&spn, &node{Inode: parentSrc}); err != nil || _n == 0 {
+				if err == nil {
+					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, spn.Inode)
+					if m.Name() == "mysql" {
+						err = syscall.EAGAIN
+					} else {
+						err = syscall.ENOENT
+					}
 				}
 				if err != nil {
 					return err
@@ -2164,10 +2194,14 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 
 		if dupdate {
-			if n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", dstnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&dpn, &node{Inode: parentDst}); err != nil || n != 1 {
-				if dstnlink != 0 && err == nil {
-					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", n, dpn.Inode)
-					err = syscall.ENOENT
+			if _n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", dstnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&dpn, &node{Inode: parentDst}); err != nil || _n == 0 {
+				if err == nil {
+					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, dpn.Inode)
+					if m.Name() == "mysql" {
+						err = syscall.EAGAIN
+					} else {
+						err = syscall.ENOENT
+					}
 				}
 				if err != nil {
 					return err
@@ -2253,21 +2287,17 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			return err
 		}
 		if updateParent {
-			if n, err := s.Cols("mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: parent}); err != nil || n == 0 {
+			if _n, err := s.Cols("mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: parent}); err != nil || _n == 0 {
+				if err == nil {
+					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, pn.Inode)
+					if m.Name() == "mysql" {
+						err = syscall.EAGAIN
+					} else {
+						err = syscall.ENOENT
+					}
+				}
 				if err != nil {
 					return err
-				}
-				if m.Name() == "mysql" {
-					// double check the parent
-					ok, err := s.Get(&node{Inode: parent})
-					if err != nil {
-						return err
-					}
-					if !ok {
-						return syscall.ENOENT
-					}
-				} else {
-					return syscall.ENOENT
 				}
 			}
 		}
