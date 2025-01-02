@@ -214,6 +214,11 @@ func dataCacheFlags() []cli.Flag {
 			Value: "100G",
 			Usage: "size of cached object for read in MiB",
 		},
+		&cli.Int64Flag{
+			Name:  "cache-items",
+			Value: 0,
+			Usage: "max number of cached items (0 for unlimited)",
+		},
 		&cli.Float64Flag{
 			Name:  "free-space-ratio",
 			Value: 0.1,

@@ -33,6 +33,7 @@ type memItem struct {
 type memcache struct {
 	sync.Mutex
 	capacity    int64
+	maxItems    int64
 	used        int64
 	pages       map[string]memItem
 	eviction    string
@@ -44,6 +45,7 @@ type memcache struct {
 func newMemStore(config *Config, metrics *cacheManagerMetrics) *memcache {
 	c := &memcache{
 		capacity:    int64(config.CacheSize),
+		maxItems:    config.CacheItems,
 		pages:       make(map[string]memItem),
 		eviction:    config.CacheEviction,
 		cacheExpire: config.CacheExpire,
@@ -78,12 +80,12 @@ func (c *memcache) stats() (int64, int64) {
 }
 
 func (c *memcache) cache(key string, p *Page, force, dropCache bool) {
-	if c.capacity == 0 {
+	if !c.enabled() {
 		return
 	}
 	c.Lock()
 	defer c.Unlock()
-	if c.used > c.capacity && c.eviction == "none" {
+	if c.full() && c.eviction == "none" {
 		logger.Debugf("Caching is full, drop %s (%d bytes)", key, len(p.Data))
 		c.metrics.cacheDrops.Add(1)
 		return
@@ -97,7 +99,7 @@ func (c *memcache) cache(key string, p *Page, force, dropCache bool) {
 	p.Acquire()
 	c.pages[key] = memItem{time.Now(), p}
 	c.used += size
-	if c.used > c.capacity {
+	if c.full() && c.eviction != "none" {
 		c.cleanup()
 	}
 }
@@ -129,7 +131,7 @@ func (c *memcache) load(key string) (ReadCloser, error) {
 }
 
 func (c *memcache) exist(key string) bool {
-	if c.capacity == 0 {
+	if !c.enabled() {
 		return false
 	}
 	c.Lock()
@@ -159,11 +161,19 @@ func (c *memcache) cleanup() {
 			c.metrics.cacheEvicts.Add(1)
 			c.delete(lastKey, lastValue.page)
 			cnt = 0
-			if c.used < c.capacity {
+			if !c.full() {
 				break
 			}
 		}
 	}
+}
+
+func (c *memcache) enabled() bool {
+	return c.capacity > 0
+}
+
+func (c *memcache) full() bool {
+	return c.used > c.capacity || (c.maxItems != 0 && int64(len(c.pages)) > c.maxItems)
 }
 
 func (c *memcache) cleanupExpire() {
