@@ -54,6 +54,7 @@ type Config struct {
 	ListThreads    int
 	ListDepth      int
 	BWLimit        int64
+	BufferSize     uint64
 	NoHTTPS        bool
 	Verbose        bool
 	Quiet          bool
@@ -175,6 +176,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		ManagerAddr:    c.String("manager-addr"),
 		Manager:        c.String("manager"),
 		BWLimit:        utils.ParseMbps(c, "bwlimit"),
+		BufferSize:     c.Uint64("buffer-size"),
 		NoHTTPS:        c.Bool("no-https"),
 		Verbose:        c.Bool("verbose"),
 		Quiet:          c.Bool("quiet"),

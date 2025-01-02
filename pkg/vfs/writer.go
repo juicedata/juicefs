@@ -302,6 +302,7 @@ func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Er
 		// slow down
 		time.Sleep(time.Millisecond * 10)
 		for f.w.usedBufferSize() > f.w.bufferSize*2 {
+			logger.Warnf("Used buffer is too large: %d, consider to enlarge the buffer size if need", f.w.usedBufferSize())
 			time.Sleep(time.Millisecond * 100)
 		}
 	}

@@ -245,6 +245,11 @@ func syncStorageFlags() []cli.Flag {
 			Name:  "bwlimit",
 			Usage: "limit bandwidth in Mbps (0 means unlimited)",
 		},
+		&cli.Uint64Flag{
+			Name:  "buffer-size",
+			Usage: "total read/write buffering in MiB",
+			Value: 300,
+		},
 	})
 }
 
@@ -363,6 +368,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		if os.Getenv(endpoint) != "" {
 			conf.Env[endpoint] = os.Getenv(endpoint)
 		}
+		jfsChunkStoreBufferSize = conf.BufferSize << 20
 	} else if name == "nfs" {
 		endpoint = u.Host + u.Path
 	} else if !conf.NoHTTPS && supportHTTPS(name, u.Host) {
