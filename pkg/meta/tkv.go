@@ -3071,6 +3071,8 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
 
+	bInodes, _ := m.get(m.counterKey(totalInodes))
+	inodeTotal := parseCounter(bInodes)
 	if root == 1 && fast { // make snap
 		m.snap = make(map[Ino]*DumpedEntry)
 		defer func() {
@@ -3078,9 +3080,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		}()
 		bar := progress.AddCountBar("Scan keys", 0)
 		bUsed, _ := m.get(m.counterKey(usedSpace))
-		bInodes, _ := m.get(m.counterKey(totalInodes))
 		used := parseCounter(bUsed)
-		inodeTotal := parseCounter(bInodes)
 		var guessKeyTotal int64 = 3 // setting, nextInode, nextChunk
 		if inodeTotal > 0 {
 			guessKeyTotal += int64(math.Ceil((float64(used/inodeTotal/(64*1024*1024)) + float64(3)) * float64(inodeTotal)))
@@ -3274,15 +3274,19 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	}
 
 	bar := progress.AddCountBar("Dumped entries", 1) // with root
+	if root == RootInode {
+		bar.SetTotal(inodeTotal)
+	}
 	bar.Increment()
-	bar.SetTotal(int64(len(m.snap)))
 	if trash != nil {
 		trash.Name = "Trash"
 		bar.IncrTotal(1)
 		bar.Increment()
 	}
 	showProgress := func(totalIncr, currentIncr int64) {
-		bar.IncrTotal(totalIncr)
+		if root != RootInode {
+			bar.IncrTotal(totalIncr)
+		}
 		bar.IncrInt64(currentIncr)
 	}
 	if m.snap != nil {
