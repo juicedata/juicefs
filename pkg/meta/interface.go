@@ -333,7 +333,7 @@ type Meta interface {
 	// ListLocks returns all locks of a inode.
 	ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error)
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
-	CleanStaleSessions()
+	CleanStaleSessions(ctx Context)
 	// CleanupTrashBefore deletes all files in trash before the given time.
 	CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int))
 	// CleanupDetachedNodesBefore deletes all detached nodes before the given time.

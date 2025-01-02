@@ -2915,14 +2915,14 @@ func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	})
 }
 
-func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
+func (m *dbMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
 	start := time.Now()
 	var count int
 	var ss []Slice
 	var result []delslices
 	var batch int = 1e6
 	for {
-		_ = m.simpleTxn(Background(), func(s *xorm.Session) error {
+		_ = m.simpleTxn(ctx, func(s *xorm.Session) error {
 			result = result[:0]
 			return s.Where("deleted < ?", edge).Limit(batch, 0).Find(&result)
 		})
@@ -2953,7 +2953,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 			}
 			for _, s := range ss {
 				var ref = sliceRef{Id: s.Id}
-				err := m.simpleTxn(Background(), func(s *xorm.Session) error {
+				err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 					ok, err := s.Get(&ref)
 					if err == nil && !ok {
 						err = errors.New("not found")

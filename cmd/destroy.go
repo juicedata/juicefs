@@ -130,7 +130,7 @@ func destroy(ctx *cli.Context) error {
 	}
 
 	if !ctx.Bool("force") {
-		m.CleanStaleSessions()
+		m.CleanStaleSessions(meta.Background())
 		sessions, err := m.ListSessions()
 		if err != nil {
 			logger.Fatalf("list sessions: %s", err)

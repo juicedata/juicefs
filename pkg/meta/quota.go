@@ -188,14 +188,22 @@ func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, spac
 	}
 }
 
-func (m *baseMeta) flushDirStat() {
+func (m *baseMeta) flushDirStat(ctx Context) {
+	defer m.sessWG.Done()
 	period := 1 * time.Second
 	if m.conf.DirStatFlushPeriod != 0 {
 		period = m.conf.DirStatFlushPeriod
 	}
+
+	ticker := time.NewTicker(period)
+	defer ticker.Stop()
 	for {
-		time.Sleep(period)
-		m.doFlushDirStat()
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.doFlushDirStat()
+		}
 	}
 }
 
@@ -217,10 +225,17 @@ func (m *baseMeta) doFlushDirStat() {
 	}
 }
 
-func (m *baseMeta) flushStats() {
+func (m *baseMeta) flushStats(ctx Context) {
+	defer m.sessWG.Done()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 	for {
-		time.Sleep(time.Second)
-		m.doFlushStats()
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.doFlushStats()
+		}
 	}
 }
 
@@ -229,6 +244,7 @@ func (m *baseMeta) doFlushStats() {
 	m.en.doFlushStats()
 	m.fsStatsLock.Unlock()
 }
+
 func (m *baseMeta) syncUsedSpace(ctx Context) error {
 	return m.en.doSyncUsedSpace(ctx)
 }
@@ -377,10 +393,17 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 	}
 }
 
-func (m *baseMeta) flushQuotas() {
+func (m *baseMeta) flushQuotas(ctx Context) {
+	defer m.sessWG.Done()
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
 	for {
-		time.Sleep(time.Second * 3)
-		m.doFlushQuotas()
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.doFlushQuotas()
+		}
 	}
 }
 
