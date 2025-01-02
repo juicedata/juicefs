@@ -4011,12 +4011,13 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 	root = m.checkRoot(root)
 	progress := utils.NewProgress(false)
 	bar := progress.AddCountBar("Dumped entries", 1) // with root
-	if root == RootInode {
+	useTotal := root == RootInode && !skipTrash
+	if useTotal {
 		bar.SetTotal(dm.Counters.UsedInodes)
 	}
 
 	showProgress := func(totalIncr, currentIncr int64) {
-		if root != RootInode {
+		if !useTotal {
 			bar.IncrTotal(totalIncr)
 		}
 		bar.IncrInt64(currentIncr)

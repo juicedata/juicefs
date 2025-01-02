@@ -3272,9 +3272,9 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	if err != nil {
 		return err
 	}
-
+	useTotal := root == RootInode && !skipTrash
 	bar := progress.AddCountBar("Dumped entries", 1) // with root
-	if root == RootInode {
+	if useTotal {
 		bar.SetTotal(inodeTotal)
 	}
 	bar.Increment()
@@ -3284,7 +3284,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		bar.Increment()
 	}
 	showProgress := func(totalIncr, currentIncr int64) {
-		if root != RootInode {
+		if !useTotal {
 			bar.IncrTotal(totalIncr)
 		}
 		bar.IncrInt64(currentIncr)
