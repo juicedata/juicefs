@@ -197,7 +197,7 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "upload-hours",
-			Usage: "(start,end) hour of a day between which the delayed blocks can be uploaded",
+			Usage: "(start-end) hour of a day between which the delayed blocks can be uploaded",
 		},
 		&cli.StringFlag{
 			Name:  "cache-dir",

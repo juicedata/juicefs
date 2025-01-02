@@ -634,7 +634,11 @@ func (c *Config) parseHours() (start, end int, err error) {
 	if c.UploadHours == "" {
 		return
 	}
-	ps := strings.Split(c.UploadHours, ",")
+	split := ","
+	if strings.Contains(c.UploadHours, "-") {
+		split = "-"
+	}
+	ps := strings.Split(c.UploadHours, split)
 	if len(ps) != 2 {
 		err = errors.New("unexpected number of fields")
 		return
