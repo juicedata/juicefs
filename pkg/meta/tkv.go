@@ -1863,8 +1863,8 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		if a == nil {
 			return nil
 		}
-		newSpace = -align4K(attr.Length)
 		m.parseAttr(a, &attr)
+		newSpace = -align4K(attr.Length)
 		tx.set(m.delfileKey(inode, attr.Length), m.packInt64(time.Now().Unix()))
 		tx.delete(m.inodeKey(inode))
 		tx.delete(m.sustainedKey(sid, inode))
