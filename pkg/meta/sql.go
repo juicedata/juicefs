@@ -837,15 +837,17 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 		inodes = []Ino{1}
 	}
 
-	if len(inodes) > 0 {
-		m.txLock(uint(inodes[0]))
-		defer m.txUnlock(uint(inodes[0]))
-	}
 	var lastErr error
 	for i := 0; i < 50; i++ {
+		if len(inodes) > 0 {
+			m.txLock(uint(inodes[0]))
+		}
 		_, err := m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
 			return nil, f(s)
 		})
+		if len(inodes) > 0 {
+			m.txUnlock(uint(inodes[0]))
+		}
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
 		}
