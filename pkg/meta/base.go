@@ -1754,11 +1754,7 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		return err
 	}
 	defer m.timeit("Readdir", time.Now())
-	var mmask uint8 = MODE_MASK_R
-	if plus != 0 {
-		mmask |= MODE_MASK_X
-	}
-	if st := m.Access(ctx, inode, mmask, &attr); st != 0 {
+	if st := m.Access(ctx, inode, MODE_MASK_R, &attr); st != 0 {
 		return st
 	}
 	if inode == m.root {
@@ -3040,12 +3036,7 @@ func (m *baseMeta) NewDirHandler(ctx Context, inode Ino, plus bool, initEntries 
 		return nil, st
 	}
 	defer m.timeit("NewDirHandler", time.Now())
-	var mmask uint8 = MODE_MASK_R
-	if plus {
-		mmask |= MODE_MASK_X
-	}
-
-	if st = m.Access(ctx, inode, mmask, &attr); st != 0 {
+	if st = m.Access(ctx, inode, MODE_MASK_R, &attr); st != 0 {
 		return nil, st
 	}
 	if inode == m.root {
