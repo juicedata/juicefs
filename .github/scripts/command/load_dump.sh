@@ -45,6 +45,7 @@ test_dump_with_keep_secret()
     prepare_test
     ./juicefs format $META_URL myjfs --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
     ./juicefs dump --keep-secret-key $META_URL dump.json --fast
+    cat dump.json
     python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json
     ./juicefs mount -d $META_URL /jfs
@@ -57,6 +58,7 @@ test_dump_without_keep_secret()
     prepare_test
     ./juicefs format $META_URL myjfs --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
     ./juicefs dump $META_URL dump.json --fast
+    cat dump.json
     python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json
     ./juicefs mount -d $META_URL /jfs && echo "mount should fail" && exit 1 || true
@@ -86,6 +88,14 @@ do_dump_load_with_fsrand(){
     do_dump_load_and_compare --fast --skip-trash
 }
 
+test_dump_load_with_fsrand_binary(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 1 --enable-acl
+    ./juicefs mount -d $META_URL /jfs --enable-xattr
+    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fs.py || true
+    do_dump_load_and_compare_in_binary 
+}
+
 do_dump_load_and_compare()
 {
     option=$@
@@ -94,6 +104,24 @@ do_dump_load_and_compare()
     rm -rf test2.db 
     ./juicefs load sqlite3://test2.db dump.json
     ./juicefs dump sqlite3://test2.db dump2.json $option
+    # compare_dump_json
+    ./juicefs mount -d sqlite3://test2.db /jfs2
+    diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
+    compare_stat_acl_xattr /jfs/fsrand /jfs2/fsrand
+    umount /jfs2
+}
+
+do_dump_load_and_compare_in_binary()
+{
+    option=$@
+    echo option is $option
+    ./juicefs dump $META_URL dump.bin $option --binary
+    rm -rf test2.db 
+    ./juicefs load sqlite3://test2.db dump.bin --binary --stat | tee dump.stat
+    ./juicefs load sqlite3://test2.db dump.bin --binary
+    ./juicefs dump sqlite3://test2.db dump2.bin $option
+    ./juicefs load sqlite3://test2.db dump2.bin --binary --stat | tee dump2.stat
+    diff dump.stat dump2.stat
     # compare_dump_json
     ./juicefs mount -d sqlite3://test2.db /jfs2
     diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
