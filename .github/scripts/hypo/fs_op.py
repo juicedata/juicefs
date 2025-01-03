@@ -29,7 +29,7 @@ class FsOperation:
     JFS_CONTROL_FILES=['.accesslog', '.config', '.stats']
     stats = Statistics()
     
-    def __init__(self, name, root_dir:str, mount_point=None, use_sdk:bool=False, is_jfs=False, volume_name=None):
+    def __init__(self, name, root_dir:str, mount_point=None, use_sdk:bool=False, is_jfs=False, volume_name=None, meta_url=None):
         self.logger =common.setup_logger(f'./{name}.log', name, os.environ.get('LOG_LEVEL', 'INFO'))
         self.root_dir = root_dir.rstrip('/')
         self.use_sdk = use_sdk
@@ -43,7 +43,10 @@ class FsOperation:
             self.mount_point = common.get_root(self.root_dir)
         self.client = None
         if use_sdk and self.is_jfs:
-            self.client = juicefs.Client(volume_name, conf_dir='deploy/docker', access_log="/tmp/jfs.log")
+            if meta_url:
+                self.client = juicefs.Client(volume_name, meta_url, access_log="/tmp/jfs.log")
+            else:
+                self.client = juicefs.Client(volume_name, conf_dir='deploy/docker', access_log="/tmp/jfs.log")
         self.client2 = None
 
     def get_client_for_rebalance(self):

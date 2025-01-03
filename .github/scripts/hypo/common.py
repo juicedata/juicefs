@@ -90,8 +90,10 @@ def get_volume_name(path):
     if os.path.isfile(file):
         with open(file, 'r') as f:
             config = json.load(f)
-            return config['Meta']['Volume']
-    raise Exception(f'get_volume_name: {file} not exist')
+            try :
+                return config['Meta']['Volume']
+            except KeyError:
+                return config['Format']['Name']
 
 def get_zones(dir):
     zones = []

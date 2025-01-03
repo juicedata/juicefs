@@ -29,6 +29,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     Xattrs = Bundle('xattrs')
     start = time.time()
     use_sdk = os.environ.get('USE_SDK', 'false').lower() == 'true'
+    meta_url = os.environ.get('META_URL')
     SUDO_USERS = ['root']
     if use_sdk:
         SUDO_USERS = ['root']
@@ -49,7 +50,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     ROOT_DIR2=os.environ.get('ROOT_DIR2', '/tmp/jfs/fsrand')
     if use_sdk:
         fsop1 = FsOperation(name='fs1', root_dir=ROOT_DIR1, use_sdk=use_sdk, is_jfs=False, volume_name=None)
-        fsop2 = FsOperation(name='fs2', root_dir=ROOT_DIR2, mount_point='/tmp/jfs', use_sdk=use_sdk, is_jfs=True, volume_name='test-volume')
+        fsop2 = FsOperation(name='fs2', root_dir=ROOT_DIR2, mount_point='/tmp/jfs', use_sdk=use_sdk, is_jfs=True, volume_name='test-volume', meta_url=meta_url)
     else:
         fsop1 = FsOperation(name='fs1', root_dir=ROOT_DIR1, is_jfs=common.is_jfs(ROOT_DIR1))
         fsop2 = FsOperation(name='fs2', root_dir=ROOT_DIR2, is_jfs=common.is_jfs(ROOT_DIR2))
