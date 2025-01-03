@@ -39,8 +39,7 @@ jobs:
           if [ "${{github.event_name}}" == "schedule"  ] || [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
             echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
           else
-            echo 'meta_matrix=["redis", "mysql", "tikv"]' >> $GITHUB_OUTPUT
-            # echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           fi
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
@@ -73,6 +72,15 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
       - name: Set Variable
         id: vars
         run: |
@@ -90,39 +98,48 @@ jobs:
 
       - name: Load and dump with small directory
         timeout-minutes: 30
+        env:
+          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
+          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
+          META: ${{matrix.meta}}
+          START_META: true
         run: |
-          sudo AWS_ACCESS_KEY_ID=${{secrets.CI_AWS_ACCESS_KEY_ID}} AWS_SECRET_ACCESS_KEY=${{secrets.CI_AWS_ACCESS_KEY_SECRET}} META=${{matrix.meta}} START_META=true .github/scripts/command/load_dump_bench.sh test_load_dump_with_small_dir
+          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_load_dump_with_small_dir
 
       - name: Load and dump with big directory
         timeout-minutes: 30
         env:
-          AWS_ACCESS_KEY_ID: ${{secrets.CI_AWS_ACCESS_KEY_ID}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
+          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
+          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
           META: ${{matrix.meta}}
           START_META: false
         run: |
-          sudo -E .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir
-      
+          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir  
+  
       - name: Load and dump subdir with big directory
         if: false
         timeout-minutes: 30
         env:
-          AWS_ACCESS_KEY_ID: ${{secrets.CI_AWS_ACCESS_KEY_ID}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
-          META: ${{matrix.meta}} 
+          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
+          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
+          META: ${{matrix.meta}}
           START_META: false 
         run: |
-          sudo -E .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir_subdir
+          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir_subdir
           
       - name: List big directory
         timeout-minutes: 30
         env:
-          AWS_ACCESS_KEY_ID: ${{secrets.CI_AWS_ACCESS_KEY_ID}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
-          META: ${{matrix.meta}} 
+          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
+          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
+          META: ${{matrix.meta}}
           START_META: false 
         run: | 
-          sudo -E .github/scripts/command/load_dump_bench.sh test_list_with_big_dir
+          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_list_with_big_dir
 
       - name: log
         if: always()
@@ -132,6 +149,12 @@ jobs:
             tail -300 ~/.juicefs/juicefs.log
             grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
           fi
+
+      - name: upload coverage report
+        timeout-minutes: 5
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
           
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)

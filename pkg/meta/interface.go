@@ -35,8 +35,10 @@ import (
 const (
 	// MaxVersion is the max of supported versions.
 	MaxVersion = 1
+	// ChunkBits is the size of a chunk.
+	ChunkBits = 26
 	// ChunkSize is size of a chunk
-	ChunkSize = 1 << 26 // 64M
+	ChunkSize = 1 << ChunkBits // 64M
 	// DeleteSlice is a message to delete a slice from object store.
 	DeleteSlice = 1000
 	// CompactChunk is a message to compact a chunk in object store.
@@ -93,7 +95,6 @@ const (
 const (
 	FlagImmutable = 1 << iota
 	FlagAppend
-	FlagTmpFile
 )
 
 const (
@@ -332,7 +333,7 @@ type Meta interface {
 	// ListLocks returns all locks of a inode.
 	ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error)
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
-	CleanStaleSessions()
+	CleanStaleSessions(ctx Context)
 	// CleanupTrashBefore deletes all files in trash before the given time.
 	CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int))
 	// CleanupDetachedNodesBefore deletes all detached nodes before the given time.
@@ -426,7 +427,7 @@ type Meta interface {
 	ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno
 	// Remove all files and directories recursively.
 	// count represents the number of attempted deletions of entries (even if failed).
-	Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno
+	Remove(ctx Context, parent Ino, name string, skipTrash bool, count *uint64) syscall.Errno
 	// Get summary of a node; for a directory it will accumulate all its child nodes
 	GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool) syscall.Errno
 	// GetTreeSummary returns a summary in tree structure
@@ -454,6 +455,9 @@ type Meta interface {
 	// Dump the tree under root, which may be modified by checkRoot
 	DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) error
 	LoadMeta(r io.Reader) error
+
+	DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error
+	LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error
 
 	// getBase return the base engine.
 	getBase() *baseMeta

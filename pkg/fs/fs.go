@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/acl"
 	"io"
 	"os"
 	"path"
@@ -30,6 +29,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/acl"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -501,7 +502,7 @@ func (fs *FileSystem) Rmr(ctx meta.Context, p string) (err syscall.Errno) {
 	if err != 0 {
 		return
 	}
-	err = fs.m.Remove(ctx, parent.inode, path.Base(p), nil)
+	err = fs.m.Remove(ctx, parent.inode, path.Base(p), false, nil)
 	fs.invalidateEntry(parent.inode, path.Base(p))
 	return
 }
@@ -521,6 +522,24 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, f
 	err = fs.m.Rename(ctx, oldfi.inode, path.Base(oldpath), newfi.inode, path.Base(newpath), flags, nil, nil)
 	fs.invalidateEntry(oldfi.inode, path.Base(oldpath))
 	fs.invalidateEntry(newfi.inode, path.Base(newpath))
+	return
+}
+
+func (fs *FileSystem) Link(ctx meta.Context, src string, dst string) (err syscall.Errno) {
+	defer trace.StartRegion(context.TODO(), "fs.Link").End()
+	l := vfs.NewLogContext(ctx)
+	defer func() { fs.log(l, "Link (%s,%s): %s", src, dst, errstr(err)) }()
+
+	fi, err := fs.resolve(ctx, src, false)
+	if err != 0 {
+		return
+	}
+	pi, err := fs.resolve(ctx, parentDir(dst), true)
+	if err != 0 {
+		return
+	}
+	err = fs.m.Link(ctx, fi.inode, pi.inode, path.Base(dst), nil)
+	fs.invalidateEntry(pi.inode, path.Base(dst))
 	return
 }
 
@@ -1056,7 +1075,7 @@ func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 	}
 	err = f.wdata.Write(ctx, uint64(offset), b)
 	if err != 0 {
-		_ = f.wdata.Close(meta.Background)
+		_ = f.wdata.Close(meta.Background())
 		f.wdata = nil
 		return
 	}
@@ -1065,6 +1084,29 @@ func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 	}
 	f.fs.writtenSizeHistogram.Observe(float64(len(b)))
 	return len(b), 0
+}
+
+func (f *File) Truncate(ctx meta.Context, length uint64) (err syscall.Errno) {
+	defer trace.StartRegion(context.TODO(), "fs.Truncate").End()
+	f.Lock()
+	defer f.Unlock()
+	l := vfs.NewLogContext(ctx)
+	defer func() { f.fs.log(l, "Truncate (%s,%d): %s", f.path, length, errstr(err)) }()
+	if f.wdata != nil {
+		err = f.wdata.Flush(ctx)
+		if err != 0 {
+			return
+		}
+	}
+	err = f.fs.m.Truncate(ctx, f.inode, 0, length, nil, false)
+	if err == 0 {
+		_ = f.fs.m.InvalidateChunkCache(ctx, f.inode, uint32(((length - 1) >> meta.ChunkBits)))
+		f.fs.writer.Truncate(f.inode, length)
+		f.fs.reader.Truncate(f.inode, length)
+		f.info.attr.Length = length
+		f.fs.invalidateAttr(f.inode)
+	}
+	return
 }
 
 func (f *File) Flush(ctx meta.Context) (err syscall.Errno) {
@@ -1077,6 +1119,7 @@ func (f *File) Flush(ctx meta.Context) (err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Flush (%s): %s", f.path, errstr(err)) }()
 	err = f.wdata.Flush(ctx)
+	f.fs.invalidateAttr(f.inode)
 	return
 }
 
@@ -1090,6 +1133,7 @@ func (f *File) Fsync(ctx meta.Context) (err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Fsync (%s): %s", f.path, errstr(err)) }()
 	err = f.wdata.Flush(ctx)
+	f.fs.invalidateAttr(f.inode)
 	return
 }
 
@@ -1104,11 +1148,12 @@ func (f *File) Close(ctx meta.Context) (err syscall.Errno) {
 			rdata := f.rdata
 			f.rdata = nil
 			time.AfterFunc(time.Second, func() {
-				rdata.Close(meta.Background)
+				rdata.Close(meta.Background())
 			})
 		}
 		if f.wdata != nil {
-			err = f.wdata.Close(meta.Background)
+			err = f.wdata.Close(meta.Background())
+			f.fs.invalidateAttr(f.inode)
 			f.wdata = nil
 		}
 		_ = f.fs.m.Close(ctx, f.inode)

@@ -175,6 +175,10 @@ func (q *qiniu) List(prefix, startAfter, token, delimiter string, limit int64, f
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
+	if len(objs) == 0 {
+		hasNext = false
+		markerOut = ""
+	}
 	return objs, hasNext, markerOut, nil
 }
 

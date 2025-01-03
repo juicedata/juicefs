@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -83,10 +82,6 @@ func cmdSummary() *cli.Command {
 
 func summary(ctx *cli.Context) error {
 	setup(ctx, 1)
-	if runtime.GOOS == "windows" {
-		logger.Infof("Windows is not supported")
-		return nil
-	}
 	var strict uint8
 	if ctx.Bool("strict") {
 		strict = 1

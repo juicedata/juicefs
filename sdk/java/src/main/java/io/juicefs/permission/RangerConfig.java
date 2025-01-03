@@ -18,21 +18,17 @@ package io.juicefs.permission;
 
 public class RangerConfig {
 
-  public RangerConfig(String rangerRestUrl, String serviceName, String cacheDir, String pollIntervalMs) {
+  public RangerConfig(String rangerRestUrl, String serviceName, long pollIntervalMs) {
     this.rangerRestUrl = rangerRestUrl;
     this.serviceName = serviceName;
     this.pollIntervalMs = pollIntervalMs;
-    this.cacheDir = cacheDir;
   }
 
   private String rangerRestUrl;
 
   private String serviceName;
 
-  private String pollIntervalMs = "30000";
-
-  private String cacheDir;
-
+  private long pollIntervalMs;
 
   public String getRangerRestUrl() {
     return rangerRestUrl;
@@ -50,20 +46,11 @@ public class RangerConfig {
     this.serviceName = serviceName;
   }
 
-
-  public String getCacheDir() {
-    return cacheDir;
-  }
-
-  public void setCacheDir(String cacheDir) {
-    this.cacheDir = cacheDir;
-  }
-
-  public String getPollIntervalMs() {
+  public long getPollIntervalMs() {
     return pollIntervalMs;
   }
 
-  public void setPollIntervalMs(String pollIntervalMs) {
+  public void setPollIntervalMs(long pollIntervalMs) {
     this.pollIntervalMs = pollIntervalMs;
   }
 

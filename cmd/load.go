@@ -20,10 +20,12 @@ import (
 	"compress/gzip"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/DataDog/zstd"
@@ -49,17 +51,36 @@ func cmdLoad() *cli.Command {
 				Usage: "encrypt algorithm (aes256gcm-rsa, chacha20-rsa)",
 				Value: object.AES256GCM_RSA,
 			},
+			&cli.BoolFlag{
+				Name:  "binary",
+				Usage: "load metadata from a binary file (different from original JSON format)",
+			},
+			&cli.BoolFlag{
+				Name:  "stat",
+				Usage: "show statistics of the metadata binary file",
+			},
+			&cli.Int64Flag{
+				Name:  "offset",
+				Usage: "offset of binary backup's segment (works with --stat and --binary). Use -1 to show all offsets, or specify one for details",
+			},
+			&cli.IntFlag{
+				Name:  "threads",
+				Value: 10,
+				Usage: "number of threads to load binary metadata, only works with --binary",
+			},
 		},
-		Usage:     "Load metadata from a previously dumped JSON file",
+		Usage:     "Load metadata from a previously dumped file",
 		ArgsUsage: "META-URL [FILE]",
 		Description: `
-Load metadata into an empty metadata engine.
+Load metadata into an empty metadata engine or show statistics of the backup file.
 
 WARNING: Do NOT use new engine and the old one at the same time, otherwise it will probably break
 consistency of the volume.
 
 Examples:
 $ juicefs load redis://localhost/1 meta-dump.json.gz
+$ juicefs load redis://localhost/1 meta-dump.bin --binary --threads 10
+$ juicefs load meta-dump.bin --binary --stat
 
 Details: https://juicefs.com/docs/community/metadata_dump_load`,
 	}
@@ -67,6 +88,11 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 
 func load(ctx *cli.Context) error {
 	setup(ctx, 1)
+
+	if ctx.Bool("binary") && ctx.Bool("stat") {
+		return statBak(ctx)
+	}
+
 	metaUri := ctx.Args().Get(0)
 	src := ctx.Args().Get(1)
 	removePassword(metaUri)
@@ -132,10 +158,30 @@ func load(ctx *cli.Context) error {
 	}
 	m := meta.NewClient(metaUri, nil)
 	if format, err := m.Load(false); err == nil {
-		return fmt.Errorf("Database %s is used by volume %s", utils.RemovePassword(metaUri), format.Name)
+		return fmt.Errorf("database %s is used by volume %s", utils.RemovePassword(metaUri), format.Name)
 	}
-	if err := m.LoadMeta(r); err != nil {
-		return err
+
+	if ctx.Bool("binary") {
+		progress := utils.NewProgress(false)
+		bars := make(map[string]*utils.Bar)
+		for _, name := range meta.SegType2Name {
+			bars[name] = progress.AddCountSpinner(name)
+		}
+
+		opt := &meta.LoadOption{
+			Threads: ctx.Int("threads"),
+			Progress: func(name string, cnt int) {
+				bars[name].IncrBy(cnt)
+			},
+		}
+		if err := m.LoadMetaV2(meta.WrapContext(ctx.Context), r, opt); err != nil {
+			return err
+		}
+		progress.Done()
+	} else {
+		if err := m.LoadMeta(r); err != nil {
+			return err
+		}
 	}
 	if format, err := m.Load(true); err == nil {
 		if format.SecretKey == "removed" {
@@ -145,5 +191,84 @@ func load(ctx *cli.Context) error {
 		return err
 	}
 	logger.Infof("Load metadata from %s succeed", src)
+	return nil
+}
+
+func statBak(ctx *cli.Context) error {
+	path := ctx.Args().Get(0)
+	if path == "" {
+		return errors.New("missing file path")
+	}
+
+	fp, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("failed to open file %s: %w", path, err)
+	}
+	defer fp.Close()
+
+	if !ctx.IsSet("offset") {
+		return showBakSummary(ctx, fp, false)
+	}
+
+	offset := ctx.Int64("offset")
+	if offset == -1 {
+		return showBakSummary(ctx, fp, true)
+	}
+
+	return showBakDetail(ctx, fp, offset)
+}
+
+func showBakSummary(ctx *cli.Context, fp *os.File, withOffset bool) error {
+	bak := &meta.BakFormat{}
+	footer, err := bak.ReadFooter(fp)
+	if err != nil {
+		return fmt.Errorf("failed to read footer: %w", err)
+	}
+
+	fmt.Printf("Backup Version: %d\n", footer.Msg.Version)
+	data := make([][]string, 0, len(footer.Msg.Infos))
+	for name, info := range footer.Msg.Infos {
+		if withOffset {
+			data = append(data, []string{name, fmt.Sprintf("%d", info.Num), fmt.Sprintf("%d", info.Offset)})
+		} else {
+			data = append(data, []string{name, fmt.Sprintf("%d", info.Num)})
+		}
+	}
+	sort.Slice(data, func(i, j int) bool {
+		return data[i][0] < data[j][0]
+	})
+
+	if withOffset {
+		fmt.Println(strings.Repeat("-", 34))
+		fmt.Printf("%-10s| %-10s| %-10s\n", "Name", "Num", "Offset")
+		fmt.Println(strings.Repeat("-", 34))
+	} else {
+		fmt.Println(strings.Repeat("-", 23))
+		fmt.Printf("%-10s| %-10s\n", "Name", "Num")
+		fmt.Println(strings.Repeat("-", 23))
+	}
+	for _, v := range data {
+		fmt.Printf("%-10s| %-10s|", v[0], v[1])
+		if withOffset {
+			fmt.Printf(" %-10s", v[2])
+		}
+		fmt.Println()
+	}
+	return nil
+}
+
+func showBakDetail(ctx *cli.Context, fp *os.File, offset int64) error {
+	bak := &meta.BakFormat{}
+	if _, err := fp.Seek(offset, io.SeekStart); err != nil {
+		return err
+	}
+
+	seg, err := bak.ReadSegment(fp)
+	if err != nil {
+		return fmt.Errorf("failed to read segment: %w", err)
+	}
+
+	fmt.Printf("Segment: %s\n", seg.Name())
+	fmt.Printf("Value: %s\n", seg)
 	return nil
 }

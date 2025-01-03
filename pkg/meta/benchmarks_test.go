@@ -116,8 +116,8 @@ func BenchmarkReadSliceBuf(b *testing.B) {
 }
 
 func prepareParent(m Meta, name string, inode *Ino) error {
-	ctx := Background
-	if err := m.Remove(ctx, 1, name, nil); err != 0 && err != syscall.ENOENT {
+	ctx := Background()
+	if err := m.Remove(ctx, 1, name, true, nil); err != 0 && err != syscall.ENOENT {
 		return fmt.Errorf("remove: %s", err)
 	}
 	if err := m.Mkdir(ctx, 1, name, 0755, 0, 0, inode, nil); err != 0 {
@@ -131,7 +131,7 @@ func benchMkdir(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchMkdir", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if err := m.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0755, 0, 0, &inode, nil); err != 0 {
@@ -145,7 +145,7 @@ func benchMvdir(b *testing.B, m Meta) { // rename dir
 	if err := prepareParent(m, "benchMvdir", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	if err := m.Mkdir(ctx, parent, "d0", 0755, 0, 0, &inode, nil); err != 0 {
 		b.Fatalf("mkdir: %s", err)
 	}
@@ -162,7 +162,7 @@ func benchRmdir(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchRmdir", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -181,7 +181,7 @@ func benchResolve(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchResolve", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	var child Ino = parent
 	for i := 0; i < 5; i++ {
 		if err := m.Mkdir(ctx, child, "d", 0755, 0, 0, &child, nil); err != 0 {
@@ -205,7 +205,7 @@ func benchReaddir(b *testing.B, m Meta, n int) {
 	if err := prepareParent(m, "benchReaddir", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	for j := 0; j < n; j++ {
 		if err := m.Create(ctx, parent, fmt.Sprintf("f%d", j), 0644, 022, 0, nil, nil); err != 0 {
 			b.Fatalf("create: %s", err)
@@ -229,7 +229,7 @@ func benchMknod(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchMknod", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if err := m.Mknod(ctx, parent, fmt.Sprintf("f%d", i), TypeFile, 0644, 022, 0, "", nil, nil); err != 0 {
@@ -243,7 +243,7 @@ func benchCreate(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchCreate", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if err := m.Create(ctx, parent, fmt.Sprintf("f%d", i), 0644, 022, 0, nil, nil); err != 0 {
@@ -257,7 +257,7 @@ func benchRename(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchRename", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	if err := m.Create(ctx, parent, "f0", 0644, 022, 0, nil, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
@@ -274,7 +274,7 @@ func benchUnlink(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchUnlink", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -293,7 +293,7 @@ func benchLookup(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchLookup", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	if err := m.Create(ctx, parent, "file", 0644, 022, 0, nil, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
@@ -312,7 +312,7 @@ func benchGetAttr(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchGetAttr", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	if err := m.Create(ctx, parent, "file", 0644, 022, 0, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
@@ -330,7 +330,7 @@ func benchSetAttr(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchSetAttr", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	if err := m.Create(ctx, parent, "file", 0644, 022, 0, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
@@ -349,7 +349,7 @@ func benchAccess(b *testing.B, m Meta) { // contains a Getattr
 	if err := prepareParent(m, "benchAccess", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	if err := m.Create(ctx, parent, "file", 0644, 022, 0, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
@@ -367,7 +367,7 @@ func benchSetXattr(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchSetXattr", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	if err := m.Create(ctx, parent, "fxattr", 0644, 022, 0, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
@@ -386,7 +386,7 @@ func benchGetXattr(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchGetXattr", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	if err := m.Create(ctx, parent, "fxattr", 0644, 022, 0, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
@@ -407,7 +407,7 @@ func benchRemoveXattr(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchRemoveXattr", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	if err := m.Create(ctx, parent, "fxattr", 0644, 022, 0, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
@@ -429,7 +429,7 @@ func benchListXattr(b *testing.B, m Meta, n int) {
 	if err := prepareParent(m, "benchListXattr", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	if err := m.Create(ctx, parent, "fxattr", 0644, 022, 0, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
@@ -452,7 +452,7 @@ func benchLink(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchLink", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	var inode Ino
 	if err := m.Create(ctx, parent, "source", 0644, 022, 0, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
@@ -470,7 +470,7 @@ func benchSymlink(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchSymlink", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	var inode Ino
 	if err := m.Create(ctx, parent, "source", 0644, 022, 0, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
@@ -489,7 +489,7 @@ func benchReadlink(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchReadlink", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	var inode Ino
 	if err := m.Create(ctx, parent, "source", 0644, 022, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
@@ -508,7 +508,7 @@ func benchReadlink(b *testing.B, m Meta) {
 */
 
 func benchNewChunk(b *testing.B, m Meta) {
-	ctx := Background
+	ctx := Background()
 	var sliceId uint64
 	for i := 0; i < b.N; i++ {
 		if err := m.NewSlice(ctx, &sliceId); err != 0 {
@@ -522,7 +522,7 @@ func benchWrite(b *testing.B, m Meta) {
 	if err := prepareParent(m, "benchWrite", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	var inode Ino
 	if err := m.Create(ctx, parent, "file", 0644, 022, 0, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
@@ -552,7 +552,7 @@ func benchRead(b *testing.B, m Meta, n int) {
 	if err := prepareParent(m, "benchRead", &parent); err != nil {
 		b.Fatal(err)
 	}
-	ctx := Background
+	ctx := Background()
 	var inode Ino
 	if err := m.Create(ctx, parent, "file", 0644, 022, 0, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)

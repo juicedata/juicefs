@@ -42,6 +42,10 @@ func (s *space) Limits() Limits {
 	return s.s3client.Limits()
 }
 
+func (s *space) SetStorageClass(sc string) error {
+	return notSupported
+}
+
 func newSpace(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)

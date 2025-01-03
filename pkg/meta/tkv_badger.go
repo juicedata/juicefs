@@ -21,6 +21,7 @@ package meta
 
 import (
 	"bytes"
+	"context"
 	"time"
 
 	badger "github.com/dgraph-io/badger/v4"
@@ -143,7 +144,11 @@ func (c *badgerClient) shouldRetry(err error) bool {
 	return err == badger.ErrConflict
 }
 
-func (c *badgerClient) txn(f func(*kvTxn) error, retry int) (err error) {
+func (c *badgerClient) config(key string) interface{} {
+	return nil
+}
+
+func (c *badgerClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
 	t := c.client.NewTransaction(true)
 	defer t.Discard()
 	defer func() {

@@ -61,7 +61,7 @@ runs:
           fi
         fi
         echo "start to build ${{inputs.target}}"
-        make ${{inputs.target}}
+        make ${{inputs.target}}.cover
         if ${{ inputs.useBeta }}; then
           echo "upload beta version"
           curl --upload-file ${{inputs.target}} https://juicefs-pub.oss-cn-hangzhou.aliyuncs.com/

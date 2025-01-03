@@ -25,7 +25,7 @@ import (
 
 func TestFill(t *testing.T) {
 	v, _ := createTestVFS(nil, "")
-	ctx := NewLogContext(meta.Background)
+	ctx := NewLogContext(meta.Background())
 	entry, _ := v.Mkdir(ctx, 1, "test", 0777, 022)
 	fe, fh, _ := v.Create(ctx, entry.Inode, "file", 0644, 0, uint32(os.O_WRONLY))
 	_ = v.Write(ctx, fe.Inode, []byte("hello"), 0, fh)
@@ -36,14 +36,14 @@ func TestFill(t *testing.T) {
 	_, _ = v.Symlink(ctx, "testfile", 1, "sym3")
 
 	// normal cases
-	v.cache(meta.Background, WarmupCache, []string{"/test/file", "/test", "/sym", "/"}, 2, nil)
+	v.cache(meta.Background(), WarmupCache, []string{"/test/file", "/test", "/sym", "/"}, 2, nil)
 
 	// remove chunk
 	var slices []meta.Slice
-	_ = v.Meta.Read(meta.Background, fe.Inode, 0, &slices)
+	_ = v.Meta.Read(meta.Background(), fe.Inode, 0, &slices)
 	for _, s := range slices {
 		_ = v.Store.Remove(s.Id, int(s.Size))
 	}
 	// bad cases
-	v.cache(meta.Background, WarmupCache, []string{"/test/file", "/sym2", "/sym3", "/.stats", "/not_exists"}, 2, nil)
+	v.cache(meta.Background(), WarmupCache, []string{"/test/file", "/sym2", "/sym3", "/.stats", "/not_exists"}, 2, nil)
 }

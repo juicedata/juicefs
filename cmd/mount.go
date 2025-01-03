@@ -262,8 +262,12 @@ func expandPathForEmbedded(addr string) string {
 
 func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config) *vfs.Config {
 	cfg := &vfs.Config{
-		Meta:            metaConf,
-		Format:          *format,
+		Meta:   metaConf,
+		Format: *format,
+		Security: &vfs.SecurityConfig{
+			EnableCap:     c.Bool("enable-cap"),
+			EnableSELinux: c.Bool("enable-selinux"),
+		},
 		Version:         version.Version(),
 		Chunk:           chunkConf,
 		BackupMeta:      utils.Duration(c.String("backup-meta")),
@@ -349,6 +353,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 
 		CacheDir:          c.String("cache-dir"),
 		CacheSize:         utils.ParseBytes(c, "cache-size", 'M'),
+		CacheItems:        c.Int64("cache-items"),
 		FreeSpace:         float32(c.Float64("free-space-ratio")),
 		CacheMode:         os.FileMode(cm),
 		CacheFullBlock:    !c.Bool("cache-partial-only"),
@@ -679,7 +684,7 @@ func mount(c *cli.Context) error {
 		vfsConf.StatePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 	}
 
-	if st := metaCli.Chroot(meta.Background, metaConf.Subdir); st != 0 {
+	if st := metaCli.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
 		return st
 	}
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards

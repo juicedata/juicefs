@@ -35,13 +35,12 @@ import (
 	"testing"
 	"time"
 
-	"xorm.io/xorm"
-
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"xorm.io/xorm"
 )
 
 func testConfig() *Config {
@@ -73,7 +72,7 @@ func TestKeyDB(t *testing.T) { //skip mutate
 			t.Fatalf("create meta: %s", err)
 		}
 		if r, ok := m.(*redisMeta); ok {
-			rawInfo, err := r.rdb.Info(Background).Result()
+			rawInfo, err := r.rdb.Info(Background()).Result()
 			if err != nil {
 				t.Fatalf("parse info: %s", err)
 			}
@@ -226,7 +225,7 @@ func testACL(t *testing.T, m Meta) {
 
 	defer m.getBase().aclCache.Clear()
 
-	ctx := Background
+	ctx := Background()
 	testDir := "test_dir"
 	var testDirIno Ino
 	attr1 := &Attr{}
@@ -398,7 +397,7 @@ func testACL(t *testing.T, m Meta) {
 
 func testMetaClient(t *testing.T, m Meta) {
 	m.OnMsg(DeleteSlice, func(args ...interface{}) error { return nil })
-	ctx := Background
+	ctx := Background()
 	var attr = &Attr{}
 	if st := m.GetAttr(ctx, 1, attr); st != 0 || attr.Mode != 0777 { // getattr of root always succeed
 		t.Fatalf("getattr root: %s", st)
@@ -429,7 +428,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if base.sid != ses[0].Sid {
 		t.Fatalf("my sid %d != registered sid %d", base.sid, ses[0].Sid)
 	}
-	go m.CleanStaleSessions()
+	go m.CleanStaleSessions(Background())
 
 	var parent, inode, dummyInode Ino
 	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &parent, attr); st != 0 {
@@ -545,7 +544,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Resolve(ctx2, 1, "/d1/d2", nil, nil); st != 0 && st != syscall.ENOTSUP {
 		t.Fatalf("resolve /d1/d2: %s", st)
 	}
-	if st := m.Remove(ctx, 1, "d1", nil); st != 0 {
+	if st := m.Remove(ctx, 1, "d1", false, nil); st != 0 {
 		t.Fatalf("Remove d1: %s", st)
 	}
 	attr.Atime = 2
@@ -972,7 +971,7 @@ func testMetaClient(t *testing.T, m Meta) {
 }
 
 func testStickyBit(t *testing.T, m Meta) {
-	ctx := Background
+	ctx := Background()
 	var sticky, normal, inode Ino
 	var attr = &Attr{}
 	m.Mkdir(ctx, 1, "tmp", 01777, 0, 0, &sticky, attr)
@@ -1038,7 +1037,7 @@ func testStickyBit(t *testing.T, m Meta) {
 }
 
 func testListLocks(t *testing.T, m Meta) {
-	ctx := Background
+	ctx := Background()
 	var inode Ino
 	var attr = &Attr{}
 	defer m.Unlink(ctx, 1, "f")
@@ -1112,7 +1111,7 @@ func testListLocks(t *testing.T, m Meta) {
 }
 
 func testLocks(t *testing.T, m Meta) {
-	ctx := Background
+	ctx := Background()
 	var inode Ino
 	var attr = &Attr{}
 	defer m.Unlink(ctx, 1, "f")
@@ -1280,7 +1279,7 @@ func testResolve(t *testing.T, m Meta) {
 	}
 
 	defer func() {
-		if st := m.Remove(NewContext(0, 65534, []uint32{65534}), parent, "f", nil); st != 0 {
+		if st := m.Remove(NewContext(0, 65534, []uint32{65534}), parent, "f", false, nil); st != 0 {
 			t.Fatalf("remove /d/f by owner: %s", st)
 		}
 		if st := m.Rmdir(NewContext(0, 65534, []uint32{65534}), 1, "d"); st != 0 {
@@ -1306,13 +1305,13 @@ func testResolve(t *testing.T, m Meta) {
 }
 
 func testRemove(t *testing.T, m Meta) {
-	ctx := Background
+	ctx := Background()
 	var inode, parent Ino
 	var attr = &Attr{}
 	if st := m.Create(ctx, 1, "f", 0644, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
-	if st := m.Remove(ctx, 1, "f", nil); st != 0 {
+	if st := m.Remove(ctx, 1, "f", false, nil); st != 0 {
 		t.Fatalf("rmr f: %s", st)
 	}
 	if st := m.Mkdir(ctx, 1, "d", 0755, 0, 0, &parent, attr); st != 0 {
@@ -1341,13 +1340,13 @@ func testRemove(t *testing.T, m Meta) {
 	} else if len(entries) != 4099 {
 		t.Fatalf("entries: %d", len(entries))
 	}
-	if st := m.Remove(ctx, 1, "d", nil); st != 0 {
+	if st := m.Remove(ctx, 1, "d", false, nil); st != 0 {
 		t.Fatalf("rmr d: %s", st)
 	}
 }
 
 func testCaseIncensi(t *testing.T, m Meta) {
-	ctx := Background
+	ctx := Background()
 	var inode Ino
 	var attr = &Attr{}
 	_ = m.Create(ctx, 1, "foo", 0755, 0, 0, &inode, attr)
@@ -1406,6 +1405,11 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	} else {
 		_ = m.Init(testFormat(), false)
 	}
+
+	if err := m.NewSession(false); err != nil {
+		t.Fatalf("new session: %v", err)
+	}
+	defer m.CloseSession()
 	var l sync.Mutex
 	deleted := make(map[uint64]int)
 	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
@@ -1418,7 +1422,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	m.OnMsg(CompactChunk, func(args ...interface{}) error {
 		return nil
 	})
-	ctx := Background
+	ctx := Background()
 	var inode Ino
 	var attr = &Attr{}
 	_ = m.Unlink(ctx, 1, "f")
@@ -1500,15 +1504,16 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		if len(sliceMap[1]) < 200 {
 			t.Fatalf("list delayed slices %d is less than 200", len(sliceMap[1]))
 		}
-		m.(engine).doCleanupDelayedSlices(time.Now().Unix() + 1)
+		m.(engine).doCleanupDelayedSlices(ctx, time.Now().Unix()+1)
 	}
-	time.Sleep(time.Second * 3) // wait for all slices deleted
+	m.getBase().stopDeleteSliceTasks()
 	l.Lock()
 	deletes := len(deleted)
 	l.Unlock()
 	if deletes < 200 {
 		t.Fatalf("deleted slices %d is less than 200", deletes)
 	}
+	m.getBase().startDeleteSliceTasks()
 
 	// truncate to 0
 	if st := m.Truncate(ctx, inode, 0, 0, attr, false); st != 0 {
@@ -1601,7 +1606,7 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 		return nil
 	})
 
-	ctx := Background
+	ctx := Background()
 	var inode Ino
 	var attr = &Attr{}
 	_ = m.Unlink(ctx, 1, "f")
@@ -1665,7 +1670,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	format.Capacity = 0
 	_ = m.Init(format, false)
 
-	ctx := Background
+	ctx := Background()
 	var inode Ino
 	var attr = &Attr{}
 	m.Unlink(ctx, 1, "f")
@@ -1725,7 +1730,7 @@ func testCopyFileRange(t *testing.T, m Meta) {
 		return nil
 	})
 
-	ctx := Background
+	ctx := Background()
 	var iin, iout Ino
 	var attr = &Attr{}
 	_ = m.Unlink(ctx, 1, "fin")
@@ -1779,7 +1784,7 @@ func testCloseSession(t *testing.T, m Meta) {
 		t.Fatalf("new session: %s", err)
 	}
 
-	ctx := Background
+	ctx := Background()
 	var inode Ino
 	var attr = &Attr{}
 	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
@@ -1844,7 +1849,7 @@ func testTrash(t *testing.T, m Meta) {
 			t.Fatalf("init: %v", err)
 		}
 	}()
-	ctx := Background
+	ctx := Background()
 	var inode, parent Ino
 	var attr = &Attr{}
 	if st := m.Create(ctx, 1, "f1", 0644, 022, 0, &inode, attr); st != 0 {
@@ -1963,6 +1968,46 @@ func testTrash(t *testing.T, m Meta) {
 	if len(entries) != 9 {
 		t.Fatalf("entries: %d", len(entries))
 	}
+	// test Remove with skipTrash true/false
+	if st := m.Mkdir(ctx, 1, "d10", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d10: %s", st)
+	}
+	if st := m.Create(ctx, parent, "f10", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create d10/f10: %s", st)
+	}
+	if st := m.Mkdir(ctx, parent, "d10", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d10/d10: %s", st)
+	}
+	if st := m.Remove(ctx, 1, "d10", false, nil); st != 0 {
+		t.Fatalf("rmr d10: %s", st)
+	}
+	entries = entries[:0]
+	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
+		t.Fatalf("readdir: %s", st)
+	}
+	if len(entries) != 12 {
+		t.Fatalf("entries: %d", len(entries))
+	}
+	if st := m.Mkdir(ctx, 1, "d10", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d10: %s", st)
+	}
+	if st := m.Create(ctx, parent, "f10", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create d10/f10: %s", st)
+	}
+	if st := m.Mkdir(ctx, parent, "d10", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d10/d10: %s", st)
+	}
+	if st := m.Remove(ctx, 1, "d10", true, nil); st != 0 {
+		t.Fatalf("rmr d10: %s", st)
+	}
+	entries = entries[:0]
+	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
+		t.Fatalf("readdir: %s", st)
+	}
+	if len(entries) != 12 {
+		t.Fatalf("entries: %d", len(entries))
+	}
+
 	ctx2 := NewContext(1000, 1, []uint32{1})
 	if st := m.Unlink(ctx2, TrashInode+1, "d"); st != syscall.EPERM {
 		t.Fatalf("unlink d: %s", st)
@@ -1973,14 +2018,14 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx2, TrashInode+1, "d", 1, "f", 0, &inode, attr); st != syscall.EPERM {
 		t.Fatalf("rename d -> f: %s", st)
 	}
-	m.getBase().doCleanupTrash(format.TrashDays, true)
+	m.getBase().doCleanupTrash(Background(), format.TrashDays, true)
 	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
 		t.Fatalf("getattr: %s", st)
 	}
 }
 
 func testParents(t *testing.T, m Meta) {
-	ctx := Background
+	ctx := Background()
 	var inode, parent Ino
 	var attr = &Attr{}
 	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
@@ -2050,7 +2095,7 @@ func testParents(t *testing.T, m Meta) {
 }
 
 func testOpenCache(t *testing.T, m Meta) {
-	ctx := Background
+	ctx := Background()
 	var inode Ino
 	var attr = &Attr{}
 	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
@@ -2082,7 +2127,7 @@ func testOpenCache(t *testing.T, m Meta) {
 }
 
 func testReadOnly(t *testing.T, m Meta) {
-	ctx := Background
+	ctx := Background()
 	if err := m.NewSession(true); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
@@ -2109,7 +2154,7 @@ func testReadOnly(t *testing.T, m Meta) {
 }
 
 func testConcurrentDir(t *testing.T, m Meta) {
-	ctx := Background
+	ctx := Background()
 	var g sync.WaitGroup
 	var err error
 	format, err := m.Load(false)
@@ -2180,7 +2225,7 @@ func testConcurrentDir(t *testing.T, m Meta) {
 }
 
 func testAttrFlags(t *testing.T, m Meta) {
-	ctx := Background
+	ctx := Background()
 	var attr = &Attr{}
 	var inode Ino
 	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, nil); st != 0 {
@@ -2340,8 +2385,8 @@ func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
 	var err error
 	switch m := m.(type) {
 	case *redisMeta:
-		err = m.txn(Background, func(tx *redis.Tx) error {
-			return tx.Set(Background, m.inodeKey(inode), m.marshal(attr), 0).Err()
+		err = m.txn(Background(), func(tx *redis.Tx) error {
+			return tx.Set(Background(), m.inodeKey(inode), m.marshal(attr), 0).Err()
 		}, m.inodeKey(inode))
 	case *dbMeta:
 		err = m.txn(func(s *xorm.Session) error {
@@ -2367,7 +2412,7 @@ func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
 			return err
 		})
 	case *kvMeta:
-		err = m.txn(func(tx *kvTxn) error {
+		err = m.txn(Background(), func(tx *kvTxn) error {
 			tx.set(m.inodeKey(inode), m.marshal(attr))
 			return nil
 		})
@@ -2380,83 +2425,83 @@ func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
 func testCheckAndRepair(t *testing.T, m Meta) {
 	var checkInode, d1Inode, d2Inode, d3Inode, d4Inode Ino
 	dirAttr := &Attr{Mode: 0644, Full: true, Typ: TypeDirectory, Nlink: 3}
-	if st := m.Mkdir(Background, RootInode, "check", 0640, 022, 0, &checkInode, dirAttr); st != 0 {
+	if st := m.Mkdir(Background(), RootInode, "check", 0640, 022, 0, &checkInode, dirAttr); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-	if st := m.Mkdir(Background, checkInode, "d1", 0640, 022, 0, &d1Inode, dirAttr); st != 0 {
+	if st := m.Mkdir(Background(), checkInode, "d1", 0640, 022, 0, &d1Inode, dirAttr); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-	if st := m.Mkdir(Background, d1Inode, "d2", 0640, 022, 0, &d2Inode, dirAttr); st != 0 {
+	if st := m.Mkdir(Background(), d1Inode, "d2", 0640, 022, 0, &d2Inode, dirAttr); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-	if st := m.Mkdir(Background, d2Inode, "d3", 0640, 022, 0, &d3Inode, dirAttr); st != 0 {
+	if st := m.Mkdir(Background(), d2Inode, "d3", 0640, 022, 0, &d3Inode, dirAttr); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-	if st := m.Mkdir(Background, d3Inode, "d4", 0640, 022, 0, &d4Inode, dirAttr); st != 0 {
+	if st := m.Mkdir(Background(), d3Inode, "d4", 0640, 022, 0, &d4Inode, dirAttr); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
 
-	if st := m.GetAttr(Background, checkInode, dirAttr); st != 0 {
+	if st := m.GetAttr(Background(), checkInode, dirAttr); st != 0 {
 		t.Fatalf("getattr: %s", st)
 	}
 	dirAttr.Nlink = 0
 	setAttr(t, m, checkInode, dirAttr)
 
-	if st := m.GetAttr(Background, d1Inode, dirAttr); st != 0 {
+	if st := m.GetAttr(Background(), d1Inode, dirAttr); st != 0 {
 		t.Fatalf("getattr: %s", st)
 	}
 	dirAttr.Nlink = 0
 	setAttr(t, m, d1Inode, dirAttr)
 
-	if st := m.GetAttr(Background, d2Inode, dirAttr); st != 0 {
+	if st := m.GetAttr(Background(), d2Inode, dirAttr); st != 0 {
 		t.Fatalf("getattr: %s", st)
 	}
 	dirAttr.Nlink = 0
 	setAttr(t, m, d2Inode, dirAttr)
 
-	if st := m.GetAttr(Background, d3Inode, dirAttr); st != 0 {
+	if st := m.GetAttr(Background(), d3Inode, dirAttr); st != 0 {
 		t.Fatalf("getattr: %s", st)
 	}
 	dirAttr.Nlink = 0
 	setAttr(t, m, d3Inode, dirAttr)
 
-	if st := m.GetAttr(Background, d4Inode, dirAttr); st != 0 {
+	if st := m.GetAttr(Background(), d4Inode, dirAttr); st != 0 {
 		t.Fatalf("getattr: %s", st)
 	}
 	dirAttr.Full = false
 	dirAttr.Nlink = 0
 	setAttr(t, m, d4Inode, dirAttr)
 
-	if err := m.Check(Background, "/check", false, false, false); err == nil {
+	if err := m.Check(Background(), "/check", false, false, false); err == nil {
 		t.Fatal("check should fail")
 	}
-	if st := m.GetAttr(Background, checkInode, dirAttr); st != 0 {
+	if st := m.GetAttr(Background(), checkInode, dirAttr); st != 0 {
 		t.Fatalf("getattr: %s", st)
 	}
 	if dirAttr.Nlink != 0 {
 		t.Fatalf("checkInode nlink should is 0 now: %d", dirAttr.Nlink)
 	}
 
-	if err := m.Check(Background, "/check", true, false, false); err != nil {
+	if err := m.Check(Background(), "/check", true, false, false); err != nil {
 		t.Fatalf("check: %s", err)
 	}
-	if st := m.GetAttr(Background, checkInode, dirAttr); st != 0 {
+	if st := m.GetAttr(Background(), checkInode, dirAttr); st != 0 {
 		t.Fatalf("getattr: %s", st)
 	}
 	if dirAttr.Nlink != 3 || dirAttr.Parent != RootInode {
 		t.Fatalf("checkInode nlink should is 3 now: %d", dirAttr.Nlink)
 	}
 
-	if err := m.Check(Background, "/check/d1/d2", true, false, false); err != nil {
+	if err := m.Check(Background(), "/check/d1/d2", true, false, false); err != nil {
 		t.Fatalf("check: %s", err)
 	}
-	if st := m.GetAttr(Background, d2Inode, dirAttr); st != 0 {
+	if st := m.GetAttr(Background(), d2Inode, dirAttr); st != 0 {
 		t.Fatalf("getattr: %s", st)
 	}
 	if dirAttr.Nlink != 3 || dirAttr.Parent != d1Inode {
 		t.Fatalf("d2Inode nlink should is 3 now: %d", dirAttr.Nlink)
 	}
-	if st := m.GetAttr(Background, d1Inode, dirAttr); st != 0 {
+	if st := m.GetAttr(Background(), d1Inode, dirAttr); st != 0 {
 		t.Fatalf("getattr: %s", st)
 	}
 	if dirAttr.Nlink != 0 || dirAttr.Parent != checkInode {
@@ -2464,18 +2509,18 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 	}
 
 	if m.Name() != "etcd" {
-		if err := m.Check(Background, "/", true, true, false); err != nil {
+		if err := m.Check(Background(), "/", true, true, false); err != nil {
 			t.Fatalf("check: %s", err)
 		}
 		for _, ino := range []Ino{checkInode, d1Inode, d2Inode, d3Inode} {
-			if st := m.GetAttr(Background, ino, dirAttr); st != 0 {
+			if st := m.GetAttr(Background(), ino, dirAttr); st != 0 {
 				t.Fatalf("getattr: %s", st)
 			}
 			if !dirAttr.Full || dirAttr.Nlink != 3 {
 				t.Fatalf("nlink should is 3 now: %d", dirAttr.Nlink)
 			}
 		}
-		if st := m.GetAttr(Background, d4Inode, dirAttr); st != 0 {
+		if st := m.GetAttr(Background(), d4Inode, dirAttr); st != 0 {
 			t.Fatalf("getattr: %s", st)
 		}
 		if !dirAttr.Full || dirAttr.Nlink != 2 || dirAttr.Parent != d3Inode {
@@ -2488,11 +2533,14 @@ func testDirStat(t *testing.T, m Meta) {
 	testDir := "testDirStat"
 	var testInode Ino
 	// test empty dir
-	if st := m.Mkdir(Background, RootInode, testDir, 0640, 022, 0, &testInode, nil); st != 0 {
+	if st := m.Mkdir(Background(), RootInode, testDir, 0640, 022, 0, &testInode, nil); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-
-	stat, st := m.GetDirStat(Background, testInode)
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+	stat, st := m.GetDirStat(Background(), testInode)
 	checkResult := func(length, space, inodes int64) {
 		if st != 0 {
 			t.Fatalf("get dir usage: %s", st)
@@ -2506,83 +2554,83 @@ func testDirStat(t *testing.T, m Meta) {
 
 	// test dir with file
 	var fileInode Ino
-	if st := m.Create(Background, testInode, "file", 0640, 022, 0, &fileInode, nil); st != 0 {
+	if st := m.Create(Background(), testInode, "file", 0640, 022, 0, &fileInode, nil); st != 0 {
 		t.Fatalf("create: %s", st)
 	}
 	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(0, align4K(0), 1)
 
 	// test dir with file and fallocate
-	if st := m.Fallocate(Background, fileInode, 0, 0, 4097, nil); st != 0 {
+	if st := m.Fallocate(Background(), fileInode, 0, 0, 4097, nil); st != 0 {
 		t.Fatalf("fallocate: %s", st)
 	}
 	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(4097, align4K(4097), 1)
 
 	// test dir with file and truncate
-	if st := m.Truncate(Background, fileInode, 0, 0, nil, false); st != 0 {
+	if st := m.Truncate(Background(), fileInode, 0, 0, nil, false); st != 0 {
 		t.Fatalf("truncate: %s", st)
 	}
 	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(0, align4K(0), 1)
 
 	// test dir with file and write
-	if st := m.Write(Background, fileInode, 0, 0, Slice{Id: 1, Size: 1 << 20, Off: 0, Len: 4097}, time.Now()); st != 0 {
+	if st := m.Write(Background(), fileInode, 0, 0, Slice{Id: 1, Size: 1 << 20, Off: 0, Len: 4097}, time.Now()); st != 0 {
 		t.Fatalf("write: %s", st)
 	}
 	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(4097, align4K(4097), 1)
 
 	// test dir with file and link
-	if st := m.Link(Background, fileInode, testInode, "file2", nil); st != 0 {
+	if st := m.Link(Background(), fileInode, testInode, "file2", nil); st != 0 {
 		t.Fatalf("link: %s", st)
 	}
 	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(2*4097, 2*align4K(4097), 2)
 
 	// test dir with subdir
 	var subInode Ino
-	if st := m.Mkdir(Background, testInode, "sub", 0640, 022, 0, &subInode, nil); st != 0 {
+	if st := m.Mkdir(Background(), testInode, "sub", 0640, 022, 0, &subInode, nil); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
 	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(2*4097, align4K(0)+2*align4K(4097), 3)
 
 	// test rename
-	if st := m.Rename(Background, testInode, "file2", subInode, "file", 0, nil, nil); st != 0 {
+	if st := m.Rename(Background(), testInode, "file2", subInode, "file", 0, nil, nil); st != 0 {
 		t.Fatalf("rename: %s", st)
 	}
 	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(4097, align4K(0)+align4K(4097), 2)
-	stat, st = m.GetDirStat(Background, subInode)
+	stat, st = m.GetDirStat(Background(), subInode)
 	checkResult(4097, align4K(4097), 1)
 
 	// test unlink
-	if st := m.Unlink(Background, testInode, "file"); st != 0 {
+	if st := m.Unlink(Background(), testInode, "file"); st != 0 {
 		t.Fatalf("unlink: %s", st)
 	}
-	if st := m.Unlink(Background, subInode, "file"); st != 0 {
+	if st := m.Unlink(Background(), subInode, "file"); st != 0 {
 		t.Fatalf("unlink: %s", st)
 	}
 	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(0, align4K(0), 1)
-	stat, st = m.GetDirStat(Background, subInode)
+	stat, st = m.GetDirStat(Background(), subInode)
 	checkResult(0, 0, 0)
 
 	// test rmdir
-	if st := m.Rmdir(Background, testInode, "sub"); st != 0 {
+	if st := m.Rmdir(Background(), testInode, "sub"); st != 0 {
 		t.Fatalf("rmdir: %s", st)
 	}
 	time.Sleep(500 * time.Millisecond)
-	stat, st = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(0, 0, 0)
 }
 
@@ -2599,83 +2647,83 @@ func testClone(t *testing.T, m Meta) {
 	//    ├── file1
 	//    └── file1Symlink -> file1
 	var cloneDir Ino
-	if eno := m.Mkdir(Background, RootInode, "cloneDir", 0777, 022, 0, &cloneDir, nil); eno != 0 {
+	if eno := m.Mkdir(Background(), RootInode, "cloneDir", 0777, 022, 0, &cloneDir, nil); eno != 0 {
 		t.Fatalf("mkdir: %s", eno)
 	}
 	var dir1 Ino
-	if eno := m.Mkdir(Background, cloneDir, "dir1", 0777, 022, 0, &dir1, nil); eno != 0 {
+	if eno := m.Mkdir(Background(), cloneDir, "dir1", 0777, 022, 0, &dir1, nil); eno != 0 {
 		t.Fatalf("mkdir: %s", eno)
 	}
 	var dir Ino
-	if eno := m.Mkdir(Background, cloneDir, "dir", 0777, 022, 0, &dir, nil); eno != 0 {
+	if eno := m.Mkdir(Background(), cloneDir, "dir", 0777, 022, 0, &dir, nil); eno != 0 {
 		t.Fatalf("mkdir: %s", eno)
 	}
 	var dir2 Ino
-	if eno := m.Mkdir(Background, dir1, "dir2", 0777, 022, 0, &dir2, nil); eno != 0 {
+	if eno := m.Mkdir(Background(), dir1, "dir2", 0777, 022, 0, &dir2, nil); eno != 0 {
 		t.Fatalf("mkdir: %s", eno)
 	}
 	var dir3 Ino
-	if eno := m.Mkdir(Background, dir2, "dir3", 0777, 022, 0, &dir3, nil); eno != 0 {
+	if eno := m.Mkdir(Background(), dir2, "dir3", 0777, 022, 0, &dir3, nil); eno != 0 {
 		t.Fatalf("mkdir: %s", eno)
 	}
 	var file1 Ino
-	if eno := m.Mknod(Background, dir1, "file1", TypeFile, 0777, 022, 0, "", &file1, nil); eno != 0 {
+	if eno := m.Mknod(Background(), dir1, "file1", TypeFile, 0777, 022, 0, "", &file1, nil); eno != 0 {
 		t.Fatalf("mknod: %s", eno)
 	}
 	var sliceId uint64
-	if st := m.NewSlice(Background, &sliceId); st != 0 {
+	if st := m.NewSlice(Background(), &sliceId); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(Background, file1, 0, 0, Slice{sliceId, 67108864, 0, 67108864}, time.Now()); st != 0 {
+	if st := m.Write(Background(), file1, 0, 0, Slice{sliceId, 67108864, 0, 67108864}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 
 	var file2 Ino
-	if eno := m.Mknod(Background, dir2, "file2", TypeFile, 0777, 022, 0, "", &file2, nil); eno != 0 {
+	if eno := m.Mknod(Background(), dir2, "file2", TypeFile, 0777, 022, 0, "", &file2, nil); eno != 0 {
 		t.Fatalf("mknod: %s", eno)
 	}
 	var sliceId2 uint64
-	if st := m.NewSlice(Background, &sliceId2); st != 0 {
+	if st := m.NewSlice(Background(), &sliceId2); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(Background, file2, 0, 0, Slice{sliceId2, 67108863, 0, 67108863}, time.Now()); st != 0 {
+	if st := m.Write(Background(), file2, 0, 0, Slice{sliceId2, 67108863, 0, 67108863}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 	var file3 Ino
-	if eno := m.Mknod(Background, dir3, "file3", TypeFile, 0777, 022, 0, "", &file3, nil); eno != 0 {
+	if eno := m.Mknod(Background(), dir3, "file3", TypeFile, 0777, 022, 0, "", &file3, nil); eno != 0 {
 		t.Fatalf("mknod: %s", eno)
 	}
-	if eno := m.Fallocate(Background, file3, 0, 0, 67108864, nil); eno != 0 {
+	if eno := m.Fallocate(Background(), file3, 0, 0, 67108864, nil); eno != 0 {
 		t.Fatalf("fallocate: %s", eno)
 	}
 
-	if eno := m.SetXattr(Background, file1, "name", []byte("juicefs"), XattrCreateOrReplace); eno != 0 {
+	if eno := m.SetXattr(Background(), file1, "name", []byte("juicefs"), XattrCreateOrReplace); eno != 0 {
 		t.Fatalf("setxattr: %s", eno)
 	}
-	if eno := m.SetXattr(Background, file1, "name2", []byte("juicefs2"), XattrCreateOrReplace); eno != 0 {
+	if eno := m.SetXattr(Background(), file1, "name2", []byte("juicefs2"), XattrCreateOrReplace); eno != 0 {
 		t.Fatalf("setxattr: %s", eno)
 	}
 
-	if eno := m.SetXattr(Background, dir1, "name", []byte("juicefs"), XattrCreateOrReplace); eno != 0 {
+	if eno := m.SetXattr(Background(), dir1, "name", []byte("juicefs"), XattrCreateOrReplace); eno != 0 {
 		t.Fatalf("setxattr: %s", eno)
 	}
-	if eno := m.SetXattr(Background, dir1, "name2", []byte("juicefs2"), XattrCreateOrReplace); eno != 0 {
+	if eno := m.SetXattr(Background(), dir1, "name2", []byte("juicefs2"), XattrCreateOrReplace); eno != 0 {
 		t.Fatalf("setxattr: %s", eno)
 	}
 
 	var file1Symlink Ino
-	if eno := m.Symlink(Background, dir1, "file1Symlink", "file1", &file1Symlink, nil); eno != 0 {
+	if eno := m.Symlink(Background(), dir1, "file1Symlink", "file1", &file1Symlink, nil); eno != 0 {
 		t.Fatalf("symlink: %s", eno)
 	}
-	if eno := m.Link(Background, file2, dir2, "file2Hardlink", nil); eno != 0 {
+	if eno := m.Link(Background(), file2, dir2, "file2Hardlink", nil); eno != 0 {
 		t.Fatalf("hardlink: %s", eno)
 	}
 
 	var attr Attr
 	attr.Mtime = 1
-	m.SetAttr(Background, cloneDir, SetAttrMtime, 0, &attr)
+	m.SetAttr(Background(), cloneDir, SetAttrMtime, 0, &attr)
 	var totalspace, availspace, iused, iavail, space, iused2 uint64
-	m.StatFS(Background, RootInode, &totalspace, &availspace, &iused, &iavail)
+	m.StatFS(Background(), RootInode, &totalspace, &availspace, &iused, &iavail)
 	space = totalspace - availspace
 	iused2 = iused
 
@@ -2683,11 +2731,11 @@ func testClone(t *testing.T, m Meta) {
 	var count, total uint64
 	var cmode uint8
 	cmode |= CLONE_MODE_PRESERVE_ATTR
-	if eno := m.Clone(Background, cloneDir, dir1, cloneDir, cloneDstName, cmode, 022, &count, &total); eno != 0 {
+	if eno := m.Clone(Background(), cloneDir, dir1, cloneDir, cloneDstName, cmode, 022, &count, &total); eno != 0 {
 		t.Fatalf("clone: %s", eno)
 	}
 	var entries1 []*Entry
-	if eno := m.Readdir(Background, cloneDir, 1, &entries1); eno != 0 {
+	if eno := m.Readdir(Background(), cloneDir, 1, &entries1); eno != 0 {
 		t.Fatalf("readdir: %s", eno)
 	}
 
@@ -2711,7 +2759,7 @@ func testClone(t *testing.T, m Meta) {
 	}
 	// check dst parent dir nlink
 	var rootAttr Attr
-	if eno := m.GetAttr(Background, cloneDir, &rootAttr); eno != 0 {
+	if eno := m.GetAttr(Background(), cloneDir, &rootAttr); eno != 0 {
 		t.Fatalf("get rootAttr: %s", eno)
 	}
 	if rootAttr.Nlink != 5 {
@@ -2720,10 +2768,10 @@ func testClone(t *testing.T, m Meta) {
 	if rootAttr.Mtime == 1 {
 		t.Fatalf("mtime of rootDir is not updated")
 	}
-	m.StatFS(Background, cloneDir, &totalspace, &availspace, &iused, &iavail)
+	m.StatFS(Background(), cloneDir, &totalspace, &availspace, &iused, &iavail)
 	if totalspace-availspace-space != 268451840 {
 		time.Sleep(time.Second * 2)
-		m.StatFS(Background, cloneDir, &totalspace, &availspace, &iused, &iavail)
+		m.StatFS(Background(), cloneDir, &totalspace, &availspace, &iused, &iavail)
 		if totalspace-availspace-space != 268451840 {
 			t.Logf("warning: added space: %d", totalspace-availspace-space)
 		}
@@ -2731,18 +2779,18 @@ func testClone(t *testing.T, m Meta) {
 	if iused-iused2 != 8 {
 		t.Fatalf("added inodes: %d", iused-iused2)
 	}
-	if eno := m.Clone(Background, RootInode, dir1, cloneDir, "no_preserve", 0, 022, &count, &total); eno != 0 {
+	if eno := m.Clone(Background(), RootInode, dir1, cloneDir, "no_preserve", 0, 022, &count, &total); eno != 0 {
 		t.Fatalf("clone: %s", eno)
 	}
 	var d2 Ino
 	var noPreserveAttr = new(Attr)
-	m.Lookup(Background, cloneDir, "no_preserve", &d2, noPreserveAttr, true)
+	m.Lookup(Background(), cloneDir, "no_preserve", &d2, noPreserveAttr, true)
 	var cloneSrcAttr = new(Attr)
-	m.GetAttr(Background, dir1, cloneSrcAttr)
+	m.GetAttr(Background(), dir1, cloneSrcAttr)
 	if noPreserveAttr.Mtimensec == cloneSrcAttr.Mtimensec {
 		t.Fatalf("clone: should not preserve mtime")
 	}
-	if eno := m.Remove(Background, cloneDir, "no_preserve", nil); eno != 0 {
+	if eno := m.Remove(Background(), cloneDir, "no_preserve", false, nil); eno != 0 {
 		t.Fatalf("Rmdir: %s", eno)
 	}
 	// check attr
@@ -2764,7 +2812,7 @@ func testClone(t *testing.T, m Meta) {
 		t.Fatalf("should not delete slice")
 		return nil
 	})
-	if eno := m.Remove(Background, cloneDir, "dir1", nil); eno != 0 {
+	if eno := m.Remove(Background(), cloneDir, "dir1", false, nil); eno != 0 {
 		t.Fatalf("Rmdir: %s", eno)
 	}
 
@@ -2783,11 +2831,11 @@ func testClone(t *testing.T, m Meta) {
 	switch m := m.(type) {
 	case *redisMeta:
 		// del edge first
-		if err := m.rdb.HDel(Background, m.entryKey(cloneDstAttr.Parent), cloneDstName).Err(); err != nil {
+		if err := m.rdb.HDel(Background(), m.entryKey(cloneDstAttr.Parent), cloneDstName).Err(); err != nil {
 			t.Fatalf("del edge error: %v", err)
 		}
 		// check remove tree
-		if eno := m.doCleanupDetachedNode(Background, cloneDstIno); eno != 0 {
+		if eno := m.doCleanupDetachedNode(Background(), cloneDstIno); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
 		removedKeysStr := make([]string, len(removedItem))
@@ -2795,20 +2843,20 @@ func testClone(t *testing.T, m Meta) {
 			removedKeysStr[i] = key.(string)
 		}
 		removedKeysStr = append(removedKeysStr, m.detachedNodes())
-		if exists := m.rdb.Exists(Background, removedKeysStr...).Val(); exists != 0 {
+		if exists := m.rdb.Exists(Background(), removedKeysStr...).Val(); exists != 0 {
 			t.Fatalf("has keys not removed: %v", removedItem)
 		}
 		// check detached node
-		m.rdb.ZAdd(Background, m.detachedNodes(), redis.Z{Member: dNode1.String(), Score: float64(time.Now().Add(-1 * time.Minute).Unix())}).Err()
-		m.rdb.ZAdd(Background, m.detachedNodes(), redis.Z{Member: dNode2.String(), Score: float64(time.Now().Add(-5 * time.Minute).Unix())}).Err()
-		m.rdb.ZAdd(Background, m.detachedNodes(), redis.Z{Member: dNode3.String(), Score: float64(time.Now().Add(-48 * time.Hour).Unix())}).Err()
-		m.rdb.ZAdd(Background, m.detachedNodes(), redis.Z{Member: dNode4.String(), Score: float64(time.Now().Add(-48 * time.Hour).Unix())}).Err()
+		m.rdb.ZAdd(Background(), m.detachedNodes(), redis.Z{Member: dNode1.String(), Score: float64(time.Now().Add(-1 * time.Minute).Unix())}).Err()
+		m.rdb.ZAdd(Background(), m.detachedNodes(), redis.Z{Member: dNode2.String(), Score: float64(time.Now().Add(-5 * time.Minute).Unix())}).Err()
+		m.rdb.ZAdd(Background(), m.detachedNodes(), redis.Z{Member: dNode3.String(), Score: float64(time.Now().Add(-48 * time.Hour).Unix())}).Err()
+		m.rdb.ZAdd(Background(), m.detachedNodes(), redis.Z{Member: dNode4.String(), Score: float64(time.Now().Add(-48 * time.Hour).Unix())}).Err()
 	case *dbMeta:
 		if n, err := m.db.Delete(&edge{Parent: cloneDstAttr.Parent, Name: []byte(cloneDstName)}); err != nil || n != 1 {
 			t.Fatalf("del edge error: %v", err)
 		}
 		// check remove tree
-		if eno := m.doCleanupDetachedNode(Background, cloneDstIno); eno != 0 {
+		if eno := m.doCleanupDetachedNode(Background(), cloneDstIno); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
 		removedItem = append(removedItem, &detachedNode{Inode: cloneDstIno})
@@ -2830,11 +2878,11 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("del edge error: %v", err)
 		}
 		// check remove tree
-		if eno := m.doCleanupDetachedNode(Background, cloneDstIno); eno != 0 {
+		if eno := m.doCleanupDetachedNode(Background(), cloneDstIno); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
 		removedItem = append(removedItem, m.detachedKey(cloneDstIno))
-		m.txn(func(tx *kvTxn) error {
+		m.txn(Background(), func(tx *kvTxn) error {
 			for _, key := range removedItem {
 				if buf := tx.get(key.([]byte)); buf != nil {
 					t.Fatalf("has keys not removed: %v", removedItem)
@@ -2860,22 +2908,22 @@ func testClone(t *testing.T, m Meta) {
 	if len(nodes) != 2 {
 		t.Fatalf("find detached nodes error: %v", nodes)
 	}
-	if eno := m.Clone(Background, RootInode, TrashInode, cloneDir, "xxx", 0, 022, &count, &total); !errors.Is(eno, syscall.EPERM) {
+	if eno := m.Clone(Background(), RootInode, TrashInode, cloneDir, "xxx", 0, 022, &count, &total); !errors.Is(eno, syscall.EPERM) {
 		t.Fatalf("cloning trash files are not supported")
 	}
-	if eno := m.Clone(Background, TrashInode+1, 1000, cloneDir, "xxx", 0, 022, &count, &total); !errors.Is(eno, syscall.EPERM) {
+	if eno := m.Clone(Background(), TrashInode+1, 1000, cloneDir, "xxx", 0, 022, &count, &total); !errors.Is(eno, syscall.EPERM) {
 		t.Fatalf("cloning files in the trash is not supported")
 	}
 }
 
 func checkEntryTree(t *testing.T, m Meta, srcIno, dstIno Ino, walkFunc func(srcEntry, dstEntry *Entry, dstIno Ino)) {
 	var entries1 []*Entry
-	if eno := m.Readdir(Background, srcIno, 1, &entries1); eno != 0 {
+	if eno := m.Readdir(Background(), srcIno, 1, &entries1); eno != 0 {
 		t.Fatalf("Readdir: %s", eno)
 	}
 
 	var entries2 []*Entry
-	if eno := m.Readdir(Background, dstIno, 1, &entries2); eno != 0 {
+	if eno := m.Readdir(Background(), dstIno, 1, &entries2); eno != 0 {
 		t.Fatalf("Readdir: %s", eno)
 	}
 	sort.Slice(entries1, func(i, j int) bool { return string(entries1[i].Name) < string(entries1[j].Name) })
@@ -2917,7 +2965,7 @@ func checkEntry(t *testing.T, m Meta, srcEntry, dstEntry *Entry, dstParentIno In
 
 	// check xattr
 	var value1 []byte
-	if eno := m.ListXattr(Background, srcEntry.Inode, &value1); eno != 0 {
+	if eno := m.ListXattr(Background(), srcEntry.Inode, &value1); eno != 0 {
 		t.Fatalf("list xattr: %s", eno)
 	}
 	keys := bytes.Split(value1, []byte{0})
@@ -2926,10 +2974,10 @@ func checkEntry(t *testing.T, m Meta, srcEntry, dstEntry *Entry, dstParentIno In
 			continue
 		}
 		var v1, v2 []byte
-		if eno := m.GetXattr(Background, srcEntry.Inode, string(key), &v1); eno != 0 {
+		if eno := m.GetXattr(Background(), srcEntry.Inode, string(key), &v1); eno != 0 {
 			t.Fatalf("get xattr: %s", eno)
 		}
-		if eno := m.GetXattr(Background, dstEntry.Inode, string(key), &v2); eno != 0 {
+		if eno := m.GetXattr(Background(), dstEntry.Inode, string(key), &v2); eno != 0 {
 			t.Fatalf("get xattr: %s", eno)
 		}
 		if !bytes.Equal(v1, v2) {
@@ -2943,7 +2991,7 @@ func testQuota(t *testing.T, m Meta) {
 		t.Fatalf("New session: %s", err)
 	}
 	defer m.CloseSession()
-	ctx := Background
+	ctx := Background()
 	var inode, parent Ino
 	var attr Attr
 	if st := m.Mkdir(ctx, RootInode, "quota", 0755, 0, 0, &parent, &attr); st != 0 {
@@ -3094,7 +3142,7 @@ func testQuota(t *testing.T, m Meta) {
 }
 
 func testAtime(t *testing.T, m Meta) {
-	ctx := Background
+	ctx := Background()
 	var inode, parent Ino
 	var attr Attr
 	if st := m.Mkdir(ctx, RootInode, "atime", 0755, 0, 0, &parent, &attr); st != 0 {

@@ -332,7 +332,7 @@ class S3Machine(RuleBasedStateMachine):
         target = groups,    
         alias = aliases,
         group_name=st_group_name, 
-        members = st.lists(users, min_size=1, max_size=3, unique=True)
+        members = st.lists(users, min_size=1, max_size=3)
     )
     @precondition(lambda self: 'add_group' not in self.EXCLUDE_RULES)
     def add_group(self, group_name, members, alias=ROOT_ALIAS):
@@ -412,6 +412,8 @@ class S3Machine(RuleBasedStateMachine):
     )
     @precondition(lambda self: 'remove_policy' not in self.EXCLUDE_RULES)
     def remove_policy(self, policy_name, alias=ROOT_ALIAS):
+        assume(policy_name not in BUILD_IN_POLICIES)
+        assert policy_name not in BUILD_IN_POLICIES, f'policy_name {policy_name} is in BUILD_IN_POLICIES'
         result1 = self.client1.do_remove_policy(policy_name, alias)
         result2 = self.client2.do_remove_policy(policy_name, alias)
         assert self.equal(result1, result2), f'\033[31mremove_policy:\nresult1 is {result1}\nresult2 is {result2}\033[0m'

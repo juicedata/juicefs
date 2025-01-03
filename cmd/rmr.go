@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -39,6 +38,12 @@ This command provides a faster way to remove huge directories in JuiceFS.
 
 Examples:
 $ juicefs rmr /mnt/jfs/foo`,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "skip-trash",
+				Usage: "skip trash and delete files directly (requires root)",
+			},
+		},
 	}
 }
 
@@ -59,9 +64,12 @@ func openController(dpath string) (*os.File, error) {
 
 func rmr(ctx *cli.Context) error {
 	setup(ctx, 1)
-	if runtime.GOOS == "windows" {
-		logger.Infof("Windows is not supported")
-		return nil
+	var flag uint8
+	if ctx.Bool("skip-trash") {
+		if os.Getuid() != 0 {
+			logger.Fatalf("Only root can remove files directly")
+		}
+		flag = 1
 	}
 	progress := utils.NewProgress(false)
 	spin := progress.AddCountSpinner("Removing entries")
@@ -83,12 +91,13 @@ func rmr(ctx *cli.Context) error {
 			logger.Errorf("Open control file for %s: %s", d, err)
 			continue
 		}
-		wb := utils.NewBuffer(8 + 8 + 1 + uint32(len(name)))
+		wb := utils.NewBuffer(8 + 8 + 1 + uint32(len(name)) + 1)
 		wb.Put32(meta.Rmr)
-		wb.Put32(8 + 1 + uint32(len(name)))
+		wb.Put32(8 + 1 + uint32(len(name)) + 1)
 		wb.Put64(inode)
 		wb.Put8(uint8(len(name)))
 		wb.Put([]byte(name))
+		wb.Put8(flag)
 		_, err = f.Write(wb.Bytes())
 		if err != nil {
 			logger.Fatalf("write message: %s", err)

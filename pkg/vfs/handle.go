@@ -149,11 +149,11 @@ func (h *handle) Wunlock() {
 
 func (h *handle) Close() {
 	if h.reader != nil {
-		h.reader.Close(meta.Background)
+		h.reader.Close(meta.Background())
 		h.reader = nil
 	}
 	if h.writer != nil {
-		_ = h.writer.Close(meta.Background)
+		_ = h.writer.Close(meta.Background())
 		h.writer = nil
 	}
 }
@@ -331,7 +331,7 @@ func (v *VFS) dumpAllHandles(path string) (err error) {
 			var length uint64
 			if h.writer != nil {
 				length = h.writer.GetLength()
-				err := h.writer.Flush(meta.Background)
+				err := h.writer.Flush(meta.Background())
 				if err != 0 {
 					logger.Errorf("flush writer of %d: %s", ino, err)
 				}

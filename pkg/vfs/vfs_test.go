@@ -197,7 +197,7 @@ func TestVFSBasic(t *testing.T) {
 
 func TestVFSIO(t *testing.T) {
 	v, _ := createTestVFS(nil, "")
-	ctx := NewLogContext(meta.Background)
+	ctx := NewLogContext(meta.Background())
 	fe, fh, e := v.Create(ctx, 1, "file", 0755, 0, syscall.O_RDWR)
 	if e != 0 {
 		t.Fatalf("create file: %s", e)
@@ -362,7 +362,7 @@ func TestVFSIO(t *testing.T) {
 
 func TestVFSXattrs(t *testing.T) {
 	v, _ := createTestVFS(nil, "")
-	ctx := NewLogContext(meta.Background)
+	ctx := NewLogContext(meta.Background())
 	fe, e := v.Mkdir(ctx, 1, "xattrs", 0755, 0)
 	if e != 0 {
 		t.Fatalf("mkdir xattrs: %s", e)
@@ -429,7 +429,7 @@ func TestVFSXattrs(t *testing.T) {
 	if _, e := v.GetXattr(ctx, configInode, "test", 0); e != meta.ENOATTR {
 		t.Fatalf("getxattr not existed: %s", e)
 	}
-	if _, e := v.GetXattr(ctx, fe.Inode, "system.posix_acl_access", 0); e != syscall.ENOTSUP {
+	if _, e := v.GetXattr(ctx, fe.Inode, "system.posix_acl_access", 0); e != syscall.ENODATA {
 		t.Fatalf("getxattr not existed: %s", e)
 	}
 	if v, e := v.ListXattr(ctx, configInode, 0); e != meta.ENOATTR {
@@ -504,7 +504,7 @@ func TestSetattrStr(t *testing.T) {
 
 func TestVFSLocks(t *testing.T) {
 	v, _ := createTestVFS(nil, "")
-	ctx := NewLogContext(meta.Background)
+	ctx := NewLogContext(meta.Background())
 	fe, fh, e := v.Create(ctx, 1, "flock", 0644, 0, syscall.O_RDWR)
 	if e != 0 {
 		t.Fatalf("create flock: %s", e)
@@ -605,7 +605,7 @@ func TestVFSLocks(t *testing.T) {
 
 func TestInternalFile(t *testing.T) {
 	v, _ := createTestVFS(nil, "")
-	ctx := NewLogContext(meta.Background)
+	ctx := NewLogContext(meta.Background())
 	// list internal files
 	fh, _ := v.Opendir(ctx, 1, 0)
 	entries, _, e := v.Readdir(ctx, 1, 1024, 0, fh, true)
@@ -887,7 +887,7 @@ func TestReaddirCache(t *testing.T) {
 
 func testReaddirCache(t *testing.T, metaUri string, typ string, batchNum int) {
 	v, _ := createTestVFS(nil, metaUri)
-	ctx := NewLogContext(meta.Background)
+	ctx := NewLogContext(meta.Background())
 
 	old := meta.DirBatchNum
 	meta.DirBatchNum[typ] = batchNum
@@ -993,7 +993,7 @@ func testVFSReadDirSort(t *testing.T, metaUri string) {
 	v, _ := createTestVFS(func(metaConfig *meta.Config) {
 		metaConfig.SortDir = true
 	}, metaUri)
-	ctx := NewLogContext(meta.Background)
+	ctx := NewLogContext(meta.Background())
 	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
 	if st != 0 {
 		t.Fatalf("mkdir testdir: %s", st)
@@ -1032,7 +1032,7 @@ func testReaddirBatch(t *testing.T, metaUri string, typ string, batchNum int) {
 	n, extra := 5, 40
 
 	v, _ := createTestVFS(nil, metaUri)
-	ctx := NewLogContext(meta.Background)
+	ctx := NewLogContext(meta.Background())
 
 	old := meta.DirBatchNum
 	meta.DirBatchNum[typ] = batchNum
@@ -1121,7 +1121,7 @@ func TestReaddir(t *testing.T) {
 
 func testReaddir(t *testing.T, metaUri string, dirNum int, offset int) {
 	v, _ := createTestVFS(nil, metaUri)
-	ctx := NewLogContext(meta.Background)
+	ctx := NewLogContext(meta.Background())
 
 	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
 	if st != 0 {

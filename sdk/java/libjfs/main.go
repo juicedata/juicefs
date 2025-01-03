@@ -26,6 +26,21 @@ package main
 // #include <utime.h>
 // #include <stdlib.h>
 // void jfs_callback(const char *msg);
+/*
+#include <inttypes.h>
+
+typedef struct {
+	uint64_t inode;
+	uint32_t mode;
+	uint32_t uid;
+	uint32_t gid;
+	uint32_t atime;
+	uint32_t mtime;
+	uint32_t ctime;
+	uint32_t nlink;
+	uint64_t length;
+} fileInfo;
+*/
 import "C"
 import (
 	"bytes"
@@ -35,6 +50,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
@@ -75,6 +91,9 @@ var (
 	bridges      []*Bridge
 	pOnce        sync.Once
 	pushers      []*push.Pusher
+
+	userGroupCache = make(map[string]map[string][]string) // name -> (user -> groups)
+
 )
 
 const (
@@ -284,6 +303,7 @@ type javaConf struct {
 	Heartbeat         string `json:"heartbeat"`
 	CacheDir          string `json:"cacheDir"`
 	CacheSize         string `json:"cacheSize"`
+	CacheItems        int64  `json:"cacheItems"`
 	FreeSpace         string `json:"freeSpace"`
 	AutoCreate        bool   `json:"autoCreate"`
 	CacheFullBlock    bool   `json:"cacheFullBlock"`
@@ -340,7 +360,16 @@ func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.F
 		logger.Infof("JuiceFileSystem created for user:%s group:%s", user, group)
 	}
 	w := &wrapper{jfs, nil, m, user, superuser, supergroup}
-	if w.isSuperuser(user, strings.Split(group, ",")) {
+	var gs []string
+	if userGroupCache[name] != nil {
+		gs = userGroupCache[name][user]
+	}
+	if gs == nil {
+		gs = strings.Split(group, ",")
+	}
+	group = strings.Join(gs, ",")
+	logger.Debugf("update groups of %s to %s", user, group)
+	if w.isSuperuser(user, gs) {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
 	} else {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(user), w.lookupGids(group))
@@ -515,6 +544,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			CacheDir:          jConf.CacheDir,
 			CacheMode:         0644, // all user can read cache
 			CacheSize:         utils.ParseBytesStr("cache-size", jConf.CacheSize, 'M'),
+			CacheItems:        jConf.CacheItems,
 			FreeSpace:         float32(freeSpaceRatio),
 			AutoCreate:        jConf.AutoCreate,
 			CacheFullBlock:    jConf.CacheFullBlock,
@@ -603,11 +633,8 @@ func F(p int64) *wrapper {
 }
 
 //export jfs_update_uid_grouping
-func jfs_update_uid_grouping(h int64, uidstr *C.char, grouping *C.char) {
-	w := F(h)
-	if w == nil {
-		return
-	}
+func jfs_update_uid_grouping(cname, uidstr *C.char, grouping *C.char) {
+	name := C.GoString(cname)
 	var uids []pwent
 	if uidstr != nil {
 		for _, line := range strings.Split(C.GoString(uidstr), "\n") {
@@ -627,8 +654,9 @@ func jfs_update_uid_grouping(h int64, uidstr *C.char, grouping *C.char) {
 		logger.Debugf("Update uids mapping\n %s", buffer.String())
 	}
 
+	var userGroups = make(map[string][]string) // user -> groups
+
 	var gids []pwent
-	var groups []string
 	if grouping != nil {
 		for _, line := range strings.Split(C.GoString(grouping), "\n") {
 			fields := strings.Split(line, ":")
@@ -640,30 +668,47 @@ func jfs_update_uid_grouping(h int64, uidstr *C.char, grouping *C.char) {
 			gids = append(gids, pwent{uint32(gid), gname})
 			if len(fields) > 2 {
 				for _, user := range strings.Split(fields[len(fields)-1], ",") {
-					if strings.TrimSpace(user) == w.user {
-						groups = append(groups, gname)
-					}
+					userGroups[user] = append(userGroups[user], gname)
 				}
 			}
 		}
-		logger.Debugf("Update groups of %s to %s", w.user, strings.Join(groups, ","))
 		var buffer bytes.Buffer
 		for _, g := range gids {
 			buffer.WriteString(fmt.Sprintf("\t%v:%v\n", g.name, g.id))
 		}
 		logger.Debugf("Update gids mapping\n %s", buffer.String())
 	}
-	w.m.update(uids, gids, false)
 
-	if w.isSuperuser(w.user, groups) {
-		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
-	} else {
-		gids := w.ctx.Gids()
-		if len(groups) > 0 {
-			gids = w.lookupGids(strings.Join(groups, ","))
+	fslock.Lock()
+	defer fslock.Unlock()
+	userGroupCache[name] = userGroups
+	ws := activefs[name]
+	if len(ws) > 0 {
+		m := ws[0].m
+		m.update(uids, gids, false)
+		for _, w := range ws {
+			logger.Debugf("Update groups of %s to %s", w.user, strings.Join(userGroups[w.user], ","))
+			if w.isSuperuser(w.user, userGroups[w.user]) {
+				w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
+			} else {
+				w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), w.lookupGids(strings.Join(userGroups[w.user], ",")))
+			}
 		}
-		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), gids)
 	}
+}
+
+//export jfs_getGroups
+func jfs_getGroups(name, user string) string {
+	fslock.Lock()
+	defer fslock.Unlock()
+	userGroups := userGroupCache[name]
+	if userGroups != nil {
+		gs := userGroups[user]
+		if gs != nil {
+			return strings.Join(gs, ",")
+		}
+	}
+	return ""
 }
 
 //export jfs_term
@@ -788,6 +833,23 @@ func jfs_mkdir(pid int, h int64, cpath *C.char, mode uint16, umask uint16) int {
 	return err
 }
 
+//export jfs_mkdirAll
+func jfs_mkdirAll(pid int, h int64, cpath *C.char, mode, umask uint16) int {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	path := C.GoString(cpath)
+	err := errno(w.MkdirAll(w.withPid(pid), path, mode, umask))
+	if err == 0 && w.ctx.Uid() == 0 && w.user != w.superuser {
+		// belongs to supergroup
+		if err := setOwner(w, w.withPid(pid), path, w.user, ""); err != 0 {
+			logger.Errorf("change owner of %s to %s: %d", path, w.user, err)
+		}
+	}
+	return err
+}
+
 //export jfs_delete
 func jfs_delete(pid int, h int64, cpath *C.char) int {
 	w := F(h)
@@ -840,6 +902,22 @@ func jfs_setXattr(pid int, h int64, path *C.char, name *C.char, value uintptr, v
 	return errno(w.SetXattr(w.withPid(pid), C.GoString(path), C.GoString(name), toBuf(value, vlen), flags))
 }
 
+//export jfs_setXattr2
+func jfs_setXattr2(pid int, h int64, path *C.char, name *C.char, value *C.char, mode int) int {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	var flags uint32
+	switch mode {
+	case 1:
+		flags = meta.XattrCreate
+	case 2:
+		flags = meta.XattrReplace
+	}
+	return errno(w.SetXattr(w.withPid(pid), C.GoString(path), C.GoString(name), []byte(C.GoString(value)), flags))
+}
+
 //export jfs_getXattr
 func jfs_getXattr(pid int, h int64, path *C.char, name *C.char, buf uintptr, bufsize int) int {
 	w := F(h)
@@ -857,6 +935,19 @@ func jfs_getXattr(pid int, h int64, path *C.char, name *C.char, buf uintptr, buf
 	return len(buff)
 }
 
+//export jfs_getXattr2
+func jfs_getXattr2(pid int, h int64, path *C.char, name *C.char, value **C.char) int {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	t, err := w.GetXattr(w.withPid(pid), C.GoString(path), C.GoString(name))
+	if err == 0 {
+		*value = C.CString(string(t))
+	}
+	return errno(err)
+}
+
 //export jfs_listXattr
 func jfs_listXattr(pid int, h int64, path *C.char, buf uintptr, bufsize int) int {
 	w := F(h)
@@ -872,6 +963,20 @@ func jfs_listXattr(pid int, h int64, path *C.char, buf uintptr, bufsize int) int
 	}
 	copy(toBuf(buf, bufsize), buff)
 	return len(buff)
+}
+
+//export jfs_listXattr2
+func jfs_listXattr2(pid int, h int64, path *C.char, value **C.char, size *int) int {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	t, err := w.ListXattr(w.withPid(pid), C.GoString(path))
+	if err == 0 {
+		*value = C.CString(string(t))
+		*size = len(t)
+	}
+	return errno(err)
 }
 
 //export jfs_removeXattr
@@ -948,6 +1053,32 @@ func jfs_setfacl(pid int, h int64, path *C.char, acltype int, buf uintptr, alen 
 	return errno(w.SetFacl(w.withPid(pid), C.GoString(path), uint8(acltype), rule))
 }
 
+//export jfs_link
+func jfs_link(pid int, h int64, src *C.char, dst *C.char) int {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	return errno(w.Link(w.withPid(pid), C.GoString(src), C.GoString(dst)))
+}
+
+//export jfs_symlink
+func jfs_symlink(pid int, h int64, target_ *C.char, link_ *C.char) int {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	target := C.GoString(target_)
+	link := C.GoString(link_)
+	dir := path.Dir(strings.TrimRight(link, "/"))
+	rel, e := filepath.Rel(dir, target)
+	if e != nil {
+		// external link
+		rel = target
+	}
+	return errno(w.Symlink(w.withPid(pid), rel, link))
+}
+
 //export jfs_readlink
 func jfs_readlink(pid int, h int64, link *C.char, buf uintptr, bufsize int) int {
 	w := F(h)
@@ -1008,6 +1139,48 @@ func jfs_lstat1(pid int, h int64, cpath *C.char, buf uintptr) int {
 	return fill_stat(w, utils.NewNativeBuffer(toBuf(buf, 130)), fi)
 }
 
+func attrToInfo(fi *fs.FileStat, info *C.fileInfo) {
+	attr := fi.Sys().(*meta.Attr)
+	info.mode = C.uint32_t(attr.SMode())
+	info.uid = C.uint32_t(attr.Uid)
+	info.gid = C.uint32_t(attr.Gid)
+	info.atime = C.uint32_t(attr.Atime)
+	info.mtime = C.uint32_t(attr.Mtime)
+	info.ctime = C.uint32_t(attr.Ctime)
+	info.nlink = C.uint32_t(attr.Nlink)
+	info.length = C.uint64_t(attr.Length)
+}
+
+//export jfs_stat
+func jfs_stat(pid int, h int64, cpath *C.char, info *C.fileInfo) int {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	fi, err := w.Stat(w.withPid(pid), C.GoString(cpath))
+	if err != 0 {
+		return errno(err)
+	}
+	info.inode = C.uint64_t(fi.Inode())
+	attrToInfo(fi, info)
+	return 0
+}
+
+//export jfs_lstat
+func jfs_lstat(pid int, h int64, cpath *C.char, info *C.fileInfo) int {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	fi, err := w.Lstat(w.withPid(pid), C.GoString(cpath))
+	if err != 0 {
+		return errno(err)
+	}
+	info.inode = C.uint64_t(fi.Inode())
+	attrToInfo(fi, info)
+	return 0
+}
+
 //export jfs_summary
 func jfs_summary(pid int, h int64, cpath *C.char, buf uintptr) int {
 	w := F(h)
@@ -1056,6 +1229,19 @@ func jfs_chmod(pid int, h int64, cpath *C.char, mode C.mode_t) int {
 	}
 	defer f.Close(w.withPid(pid))
 	return errno(f.Chmod(w.withPid(pid), uint16(mode)))
+}
+
+//export jfs_chown
+func jfs_chown(pid int, h int64, cpath *C.char, uid uint32, gid uint32) int {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	f, err := w.Open(w.withPid(pid), C.GoString(cpath), 0)
+	if err != 0 {
+		return errno(err)
+	}
+	return errno(f.Chown(w.withPid(pid), uid, gid))
 }
 
 //export jfs_utime
@@ -1153,6 +1339,67 @@ func jfs_listdir(pid int, h int64, cpath *C.char, offset int, buf uintptr, bufsi
 	return bufsize - wb.Left() - 4
 }
 
+//export jfs_listdir2
+func jfs_listdir2(pid int, h int64, cpath *C.char, plus bool, buf **byte, size *int) int {
+	var ctx meta.Context
+	var f *fs.File
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	var err syscall.Errno
+	ctx = w.withPid(pid)
+	f, err = w.Open(ctx, C.GoString(cpath), 0)
+	if err != 0 {
+		return errno(err)
+	}
+	st, _ := f.Stat()
+	if !st.IsDir() {
+		return ENOTDIR
+	}
+
+	*size = 0
+	if plus {
+		es, err := f.ReaddirPlus(ctx, 0)
+		if err != 0 {
+			return errno(err)
+		}
+		for _, e := range es {
+			*size += 2 + len(e.Name) + 4*11
+		}
+		*buf = (*byte)(C.malloc(C.size_t(*size)))
+		out := utils.FromBuffer(unsafe.Slice(*buf, *size))
+		for _, e := range es {
+			out.Put16(uint16(len(e.Name)))
+			out.Put([]byte(e.Name))
+			out.Put32(e.Attr.SMode())
+			out.Put64(uint64(e.Inode))
+			out.Put32(e.Attr.Nlink)
+			out.Put32(e.Attr.Uid)
+			out.Put32(e.Attr.Gid)
+			out.Put64(e.Attr.Length)
+			out.Put32(uint32(e.Attr.Atime))
+			out.Put32(uint32(e.Attr.Mtime))
+			out.Put32(uint32(e.Attr.Ctime))
+		}
+	} else {
+		es, err := f.Readdir(ctx, 0)
+		if err != 0 {
+			return errno(err)
+		}
+		for _, e := range es {
+			*size += 2 + len(e.Name())
+		}
+		*buf = (*byte)(C.malloc(C.size_t(*size)))
+		out := utils.FromBuffer(unsafe.Slice(*buf, *size))
+		for _, e := range es {
+			out.Put16(uint16(len(e.Name())))
+			out.Put([]byte(e.Name()))
+		}
+	}
+	return 0
+}
+
 func toBuf(s uintptr, sz int) []byte {
 	return (*[1 << 30]byte)(unsafe.Pointer(s))[:sz:sz]
 }
@@ -1212,6 +1459,36 @@ func jfs_concat(pid int, h int64, _dst *C.char, buf uintptr, bufsize int) int {
 		wg.Wait()
 	}
 	return r
+}
+
+// TODO: implement real clone
+
+//export jfs_clone
+func jfs_clone(pid int, h int64, _src *C.char, _dst *C.char) int {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	src := C.GoString(_src)
+	dst := C.GoString(_dst)
+	ctx := w.withPid(pid)
+	fi, err := w.Open(ctx, src, 0)
+	if err != 0 {
+		logger.Errorf("open %s: %s", src, err)
+		return errno(err)
+	}
+	defer fi.Close(ctx)
+	fo, err := w.Create(ctx, dst, 0666, 022)
+	if err != 0 {
+		logger.Errorf("create %s: %s", dst, err)
+		return errno(err)
+	}
+	defer fo.Close(ctx)
+	_, err = w.CopyFileRange(ctx, src, 0, dst, 0, 1<<63)
+	if err != 0 {
+		logger.Errorf("copy %s to %s: %s", src, dst, err)
+	}
+	return errno(err)
 }
 
 //export jfs_lseek
@@ -1283,6 +1560,36 @@ func jfs_write(pid, fd int, cbuf uintptr, count C.size_t) int {
 		return errno(err)
 	}
 	return n
+}
+
+//export jfs_pwrite
+func jfs_pwrite(pid, fd int, cbuf uintptr, count C.size_t, offset C.off_t) int {
+	filesLock.Lock()
+	f, ok := openFiles[fd]
+	if !ok {
+		filesLock.Unlock()
+		return EINVAL
+	}
+	filesLock.Unlock()
+
+	buf := toBuf(cbuf, int(count))
+	n, err := f.Pwrite(f.w.withPid(pid), buf, int64(offset))
+	if err != 0 {
+		logger.Errorf("pwrite %s: %s", f.Name(), err)
+		return errno(err)
+	}
+	return n
+}
+
+//export jfs_ftruncate
+func jfs_ftruncate(pid, fd int, size uint64) int {
+	filesLock.Lock()
+	f, ok := openFiles[int(fd)]
+	filesLock.Unlock()
+	if !ok {
+		return EINVAL
+	}
+	return errno(f.Truncate(f.w.withPid(pid), size))
 }
 
 //export jfs_flush

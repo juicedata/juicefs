@@ -41,6 +41,13 @@ func Min(a, b int) int {
 	return b
 }
 
+func Min64(a, b uint64) uint64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // Exists checks if the file/folder in given path exists
 func Exists(path string) bool {
 	_, err := os.Stat(path)

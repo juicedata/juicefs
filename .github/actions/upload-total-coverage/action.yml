@@ -1,0 +1,42 @@
+name: 'upload_total_coverage_report'
+description: 'upload total coverage report of all jobs in workflow'
+inputs:
+  UPLOAD_TOKEN:
+    description: 'upload token'
+    required: true
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+    - name: generate total coverage report
+      shell: bash
+      run: |
+        echo "current dir is $(pwd)"
+        if [[ "${{github.event_name}}" == "schedule" ]]; then
+          coverdirs="cover,"
+        else
+          for dir in $(find cover -mindepth 1 -maxdepth 1 -type d -exec basename {} \;); do
+            coverdirs+="cover/$dir/,"
+          done
+        fi
+        coverdirs=${coverdirs%,}
+        echo coverdirs is $coverdirs
+        [[ -z "$coverdirs" ]] && echo -e "\e[31m no coverage dir found\e[0m" && exit 0
+        sudo go tool covdata percent -i=$coverdirs | sudo tee cover/cover.percent
+        echo "generated coverage percent report:" $(realpath cover/cover.percent)
+        sudo go tool covdata textfmt -o cover/cover.txt -i=$coverdirs 
+        echo "generated coverage report in text format:" $(realpath cover/cover.txt)
+        sudo go tool cover -html=cover/cover.txt -o cover/cover.html
+        echo "generated coverage report in html format:" $(realpath cover/cover.html)
+        ls -l cover/cover*
+
+    - name: upload coverage report
+      shell: bash
+      run: |
+        [[ -z "${{inputs.UPLOAD_TOKEN}}" ]] && echo -e "\e[31m no upload token, skip upload \e[0m" && exit 0 || true
+        if [[ -f cover/cover.html ]]; then
+          .github/scripts/upload_coverage_report.sh cover/cover.html ${{github.workflow}}_${{github.run_id}}.html ${{inputs.UPLOAD_TOKEN}}
+        else
+          echo -e "\e[31m no coverage report found\e[0m" && exit 0
+        fi

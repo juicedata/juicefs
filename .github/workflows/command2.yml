@@ -39,7 +39,7 @@ jobs:
           if [ "${{github.event_name}}" == "schedule"  ]; then
             echo 'meta_matrix=["sqlite3", "mysql", "tikv",  "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "pull_request"  ]; then
-            echo 'meta_matrix=["mysql", "tikv"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["sqlite3"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
             echo 'meta_matrix=["mysql", "tikv"]' >> $GITHUB_OUTPUT
           else
@@ -93,7 +93,7 @@ jobs:
           fi
 
       - name: Download example database
-        uses: dawidd6/action-download-artifact@v2.24.3
+        uses: dawidd6/action-download-artifact@v6
         with:
           name: hypothesis-example-db
           path: .hypothesis/examples
@@ -120,8 +120,8 @@ jobs:
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
           
       - name: Setup upterm session
-        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
-        # if: failure()
+        # if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 

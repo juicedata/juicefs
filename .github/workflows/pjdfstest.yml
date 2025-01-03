@@ -12,7 +12,6 @@ on:
       - '**.java'
       - '**/pom.xml'
   pull_request:
-    #The branches below must be a subset of the branches above
     branches:
       - 'main'
       - 'release-**'
@@ -68,6 +67,15 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
       - name: Set Variable
         id: vars
         run: |
@@ -76,7 +84,7 @@ jobs:
           else
             echo "target=juicefs" >> $GITHUB_OUTPUT
           fi
-
+      
       - name: Build
         uses: ./.github/actions/build
         with: 
@@ -102,7 +110,7 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           # sudo mkdir /var/jfs
           # sudo chmod 777 /var/jfs
-          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report 
+          sudo GOCOVERDIR=$(pwd)/cover ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report 
           stat /tmp/jfs/.accesslog
 
       - name: Pjdfstest
@@ -128,6 +136,12 @@ jobs:
             tail -300 /var/log/juicefs.log
             grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
           fi
+
+      - name: upload coverage report
+        timeout-minutes: 5
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
 
       - name: Send Slack Notification
         if: failure()

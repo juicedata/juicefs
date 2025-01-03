@@ -184,8 +184,25 @@ func (c *tikvClient) shouldRetry(err error) bool {
 	return strings.Contains(err.Error(), "write conflict") || strings.Contains(err.Error(), "TxnLockNotFound")
 }
 
-func (c *tikvClient) txn(f func(*kvTxn) error, retry int) (err error) {
-	tx, err := c.client.Begin()
+func (c *tikvClient) config(key string) interface{} {
+	if key == "startTS" {
+		ts, err := c.client.CurrentTimestamp(oracle.GlobalTxnScope)
+		if err != nil {
+			logger.Warnf("TiKV get startTS: %s", err)
+			return nil
+		}
+		return ts
+	}
+	return nil
+}
+
+func (c *tikvClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
+	var opts []tikv.TxnOption
+	if val := ctx.Value(txSessionKey{}); val != nil {
+		opts = append(opts, tikv.WithStartTS(val.(uint64)))
+	}
+
+	tx, err := c.client.Begin(opts...)
 	if err != nil {
 		return err
 	}

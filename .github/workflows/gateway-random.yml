@@ -1,4 +1,4 @@
-name: "gateway_random_test"
+name: "gateway-random"
 
 on:
   push:
@@ -6,14 +6,16 @@ on:
       - 'main'
       - 'release-**'
     paths:
-      - '**/gateway2.yml'
+      - '**/gateway-random.yml'
+      - '**/gateway-random.sh'
       - '.github/scripts/hypo/s3**.py'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
     paths:
-      - '**/gateway2.yml'
+      - '**/gateway-random.yml'
+      - '**/gateway-random.sh'
       - '.github/scripts/hypo/s3**.py'
   schedule:
     - cron:  '0 19 * * *'
@@ -41,7 +43,7 @@ jobs:
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
 
-  gateway:
+  gateway-random:
     timeout-minutes: 90
     needs: build-matrix
     strategy:
@@ -77,11 +79,11 @@ jobs:
           else
             subdir=false
           fi
-          sudo -E SUBDIR=$subdir .github/scripts/command/gateway2.sh test_run_example
+          sudo -E SUBDIR=$subdir .github/scripts/command/gateway-random.sh test_run_example
           
         
       - name: Download example database
-        uses: dawidd6/action-download-artifact@v2.24.3
+        uses: dawidd6/action-download-artifact@v6
         with:
           name: hypothesis-example-db
           path: .hypothesis/examples
@@ -96,7 +98,7 @@ jobs:
           else
             subdir=false
           fi
-          sudo -E LOG_LEVEL=WARNING SUBDIR=$subdir timeout 3600 .github/scripts/command/gateway2.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo test failed with $code && exit $code; fi
+          sudo -E LOG_LEVEL=WARNING SUBDIR=$subdir timeout 3600 .github/scripts/command/gateway-random.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo test failed with $code && exit $code; fi
 
       - name: Upload example database
         uses: actions/upload-artifact@v3
@@ -120,7 +122,7 @@ jobs:
 
   success-all-test:
     runs-on: ubuntu-latest
-    needs: [gateway]
+    needs: [gateway-random]
     if: always()
     steps:
       - uses: technote-space/workflow-conclusion-action@v3

@@ -25,6 +25,7 @@ import (
 
 	"github.com/DataDog/zstd"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
 )
 
@@ -33,10 +34,11 @@ func cmdDump() *cli.Command {
 		Name:      "dump",
 		Action:    dump,
 		Category:  "ADMIN",
-		Usage:     "Dump metadata into a JSON file",
+		Usage:     "Dump metadata into a file",
 		ArgsUsage: "META-URL [FILE]",
 		Description: `
-Dump metadata of the volume in JSON format so users are able to see its content in an easy way.
+Supports two formats: JSON format and binary format.
+1. Dump metadata of the volume in JSON format so users are able to see its content in an easy way.
 Output of this command can be loaded later into an empty database, serving as a method to backup
 metadata or to change metadata engine.
 
@@ -46,6 +48,11 @@ $ juicefs dump redis://localhost meta-dump.json.gz
 
 # Dump only a subtree of the volume to STDOUT
 $ juicefs dump redis://localhost --subdir /dir/in/jfs
+
+2. Binary format is more compact, faster, and memory-efficient.
+
+Examples:
+$ juicefs dump redis://localhost meta-dump.bin --binary
 
 Details: https://juicefs.com/docs/community/metadata_dump_load`,
 		Flags: []cli.Flag{
@@ -64,17 +71,21 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 			},
 			&cli.BoolFlag{
 				Name:  "fast",
-				Usage: "speedup dump by load all metadata into memory",
+				Usage: "speedup dump by load all metadata into memory (only works with JSON format and DB/KV engine)",
 			},
 			&cli.BoolFlag{
 				Name:  "skip-trash",
 				Usage: "skip files in trash",
 			},
+			&cli.BoolFlag{
+				Name:  "binary",
+				Usage: "dump metadata into a binary file (different from original JSON format, subdir/fast/skip-trash will be ignored)",
+			},
 		},
 	}
 }
 
-func dumpMeta(m meta.Meta, dst string, threads int, keepSecret, fast, skipTrash bool) (err error) {
+func dumpMeta(m meta.Meta, dst string, threads int, keepSecret, fast, skipTrash, isBinary bool) (err error) {
 	var w io.WriteCloser
 	if dst == "" {
 		w = os.Stdout
@@ -107,6 +118,23 @@ func dumpMeta(m meta.Meta, dst string, threads int, keepSecret, fast, skipTrash 
 			w = fp
 		}
 	}
+	if isBinary {
+		progress := utils.NewProgress(false)
+		defer progress.Done()
+
+		bars := make(map[string]*utils.Bar)
+		for _, name := range meta.SegType2Name {
+			bars[name] = progress.AddCountSpinner(name)
+		}
+
+		return m.DumpMetaV2(meta.Background(), w, &meta.DumpOption{
+			KeepSecret: keepSecret,
+			Threads:    threads,
+			Progress: func(name string, cnt int) {
+				bars[name].IncrBy(cnt)
+			},
+		})
+	}
 	return m.DumpMeta(w, 1, threads, keepSecret, fast, skipTrash)
 }
 
@@ -125,7 +153,7 @@ func dump(ctx *cli.Context) error {
 	if _, err := m.Load(true); err != nil {
 		return err
 	}
-	if st := m.Chroot(meta.Background, metaConf.Subdir); st != 0 {
+	if st := m.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
 		return st
 	}
 
@@ -134,7 +162,8 @@ func dump(ctx *cli.Context) error {
 		logger.Warnf("Invalid threads number %d, reset to 1", threads)
 		threads = 1
 	}
-	err := dumpMeta(m, dst, threads, ctx.Bool("keep-secret-key"), ctx.Bool("fast"), ctx.Bool("skip-trash"))
+
+	err := dumpMeta(m, dst, threads, ctx.Bool("keep-secret-key"), ctx.Bool("fast"), ctx.Bool("skip-trash"), ctx.Bool("binary"))
 	if err == nil {
 		if dst == "" {
 			dst = "STDOUT"

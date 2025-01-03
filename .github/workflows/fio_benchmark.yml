@@ -16,7 +16,7 @@ on:
     - '**/fio_benchmark.yml'
     - '**/fio.sh'
   schedule:
-    - cron:  '0 0 * * *'
+    - cron:  '0 17 * * *'
   workflow_dispatch:
     inputs:
       debug:
@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 30
     runs-on: [ubuntu-20.04]
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         meta: ['redis']
         fio_job : ['big-file-sequential-read', 'big-file-sequential-write',  'big-file-multi-read-4', 
@@ -68,8 +68,9 @@ jobs:
 
       - name: Fio Benchmark 
         env:
-          AWS_ACCESS_KEY_ID: ${{secrets.CI_AWS_ACCESS_KEY_ID}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_AWS_ACCESS_KEY_SECRET}}
+          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
+          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})

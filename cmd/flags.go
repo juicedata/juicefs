@@ -197,7 +197,7 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "upload-hours",
-			Usage: "(start,end) hour of a day between which the delayed blocks can be uploaded",
+			Usage: "(start-end) hour of a day between which the delayed blocks can be uploaded",
 		},
 		&cli.StringFlag{
 			Name:  "cache-dir",
@@ -213,6 +213,11 @@ func dataCacheFlags() []cli.Flag {
 			Name:  "cache-size",
 			Value: "100G",
 			Usage: "size of cached object for read in MiB",
+		},
+		&cli.Int64Flag{
+			Name:  "cache-items",
+			Value: 0,
+			Usage: "max number of cached items (0 for unlimited)",
 		},
 		&cli.Float64Flag{
 			Name:  "free-space-ratio",
@@ -348,6 +353,10 @@ func metaCacheFlags(defaultEntryCache float64) []cli.Flag {
 			Name:  "dir-entry-cache",
 			Value: "1.0s",
 			Usage: "dir entry cache timeout",
+		},
+		&cli.BoolFlag{
+			Name:  "readdir-cache",
+			Usage: "enable kernel caching of readdir entries, with timeout controlled by attr-cache flag (require linux kernel 4.20+)",
 		},
 		&cli.StringFlag{
 			Name:  "open-cache",

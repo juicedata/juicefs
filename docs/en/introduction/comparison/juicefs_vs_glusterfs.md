@@ -127,7 +127,7 @@ JuiceFS does not offer direct support for CIFS and requires mounting followed by
 
 GlusterFS supports S3 through the [`gluster-swift`](https://github.com/gluster/gluster-swift) project, but the project hasn't seen recent updates since November 2017.
 
-JuiceFS supports S3 through the [S3 gateway](../../deployment/s3_gateway.md).
+JuiceFS supports S3 through the [S3 gateway](../../guide/gateway.md).
 
 ### HDFS compatibility {#hdfs-compatibility}
 

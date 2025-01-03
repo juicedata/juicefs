@@ -49,7 +49,6 @@ import static org.apache.hadoop.fs.permission.AclEntryScope.ACCESS;
 import static org.apache.hadoop.fs.permission.AclEntryScope.DEFAULT;
 import static org.apache.hadoop.fs.permission.AclEntryType.*;
 import static org.apache.hadoop.fs.permission.FsAction.*;
-import static org.apache.hadoop.fs.permission.FsAction.ALL;
 import static org.junit.Assert.assertArrayEquals;
 
 public class JuiceFileSystemTest extends TestCase {
@@ -76,6 +75,7 @@ public class JuiceFileSystemTest extends TestCase {
 
   public void tearDown() throws Exception {
     fs.close();
+    FileSystem.closeAll();
   }
 
   public void testFsStatus() throws IOException {
@@ -668,6 +668,7 @@ public class JuiceFileSystemTest extends TestCase {
     writeFile(fs, groups1, "group1:3001:user1\n");
     writeFile(fs, users2, "user2:2001\n");
     writeFile(fs, groups2, "group2:3001:user2\n");
+    fs.close();
 
     Configuration conf = new Configuration(cfg);
     conf.set("juicefs.users", users1.toUri().getPath());
@@ -756,17 +757,21 @@ public class JuiceFileSystemTest extends TestCase {
     Path f = new Path("/test_foo");
     fooFs.create(f).close();
     assertEquals("foo", fooFs.getFileStatus(f).getOwner());
+    fooFs.close();
 
     ou = fs.create(new Path("/etc/users"));
     ou.write("foo:10001\n".getBytes());
     ou.close();
-    FileSystem newFS = FileSystem.newInstance(newConf);
-    assertEquals("10000", fooFs.getFileStatus(f).getOwner());
+    fs.close();
 
-    fooFs.delete(f, false);
+    FileSystem newFS = FileSystem.newInstance(newConf);
+    assertEquals("10000", newFS.getFileStatus(f).getOwner());
+    newFS.delete(f, false);
+    newFS.close();
   }
 
   public void testGuidMappingFromString() throws Exception {
+    fs.close();
     Configuration newConf = new Configuration(cfg);
 
     newConf.set("juicefs.users", "bar:10000;foo:20000;baz:30000");
@@ -779,14 +784,16 @@ public class JuiceFileSystemTest extends TestCase {
     fooFs.setOwner(f, "foo", "user");
     assertEquals("foo", fooFs.getFileStatus(f).getOwner());
     assertEquals("user", fooFs.getFileStatus(f).getGroup());
+    fooFs.close();
 
     newConf.set("juicefs.users", "foo:20001");
     newConf.set("juicefs.groups", "user:1001:foo,bar;admin:2001:baz");
     FileSystem newFS = FileSystem.newInstance(newConf);
-    assertEquals("20000", fooFs.getFileStatus(f).getOwner());
-    assertEquals("1000", fooFs.getFileStatus(f).getGroup());
+    assertEquals("20000", newFS.getFileStatus(f).getOwner());
+    assertEquals("1000", newFS.getFileStatus(f).getGroup());
 
-    fooFs.delete(f, false);
+    newFS.delete(f, false);
+    newFS.close();
   }
 
   public void testTrash() throws Exception {
@@ -948,10 +955,12 @@ public class JuiceFileSystemTest extends TestCase {
 
     writeFile(fs, users, "tom:2001\n");
     writeFile(fs, groups, "groupa:3001:tom\ngroupb:3002:tom");
+    fs.close();
 
     Configuration conf = new Configuration(cfg);
     conf.set("juicefs.users", users.toUri().getPath());
     conf.set("juicefs.groups", groups.toUri().getPath());
+    conf.set("juicefs.debug", "true");
 
     FileSystem superFs = createNewFs(conf, "hdfs", new String[]{"hadoop"});
     Path testDir = new Path("/test_multi_group/d1");

@@ -573,7 +573,7 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	if n.gConf.ObjTag && srcInfo.UserDefined != nil {
 		if tagStr = srcInfo.UserDefined[xhttp.AmzObjectTagging]; tagStr != "" {
 			if eno := n.fs.SetXattr(mctx, tmp, s3Tags, []byte(tagStr), 0); eno != 0 {
-				logger.Errorf("set object tags error, path: %s,value: %s error %s", tmp, tagStr, eno)
+				logger.Errorf("set object tags error, path: %s, value: %s error %s", tmp, tagStr, eno)
 			}
 		}
 	}
@@ -817,7 +817,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 			if n.gConf.ObjTag && opts.UserDefined != nil {
 				if tagStr = opts.UserDefined[xhttp.AmzObjectTagging]; tagStr != "" {
 					if eno := n.fs.SetXattr(mctx, tmpName, s3Tags, []byte(tagStr), 0); eno != 0 {
-						logger.Errorf("set object tags error, path: %s,value: %s error: %s", tmpName, tagStr, eno)
+						logger.Errorf("set object tags error, path: %s, value: %s error: %s", tmpName, tagStr, eno)
 					}
 				}
 			}
@@ -857,7 +857,7 @@ func (n *jfsObjects) NewMultipartUpload(ctx context.Context, bucket string, obje
 		if n.gConf.ObjTag && opts.UserDefined != nil {
 			if tagStr := opts.UserDefined[xhttp.AmzObjectTagging]; tagStr != "" {
 				if eno := n.fs.SetXattr(mctx, p, s3Tags, []byte(tagStr), 0); eno != 0 {
-					logger.Errorf("set object tags error, path: %s,value: %s errors: %s", p, tagStr, eno)
+					logger.Errorf("set object tags error, path: %s, value: %s errors: %s", p, tagStr, eno)
 				}
 			}
 		}
@@ -1091,11 +1091,6 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	var tagStr []byte
 	if n.gConf.ObjTag {
 		var eno syscall.Errno
-		if tagStr, eno = n.fs.GetXattr(mctx, n.upath(bucket, uploadID), s3Tags); eno != 0 && eno != meta.ENOATTR {
-			logger.Errorf("get object tags error, path: %s, error: %s", n.upath(bucket, uploadID), eno)
-		} else if eno = n.fs.SetXattr(mctx, tmp, s3Tags, tagStr, 0); eno != 0 {
-			logger.Errorf("set object tags error, path: %s, tags: %s, error: %s", tmp, string(tagStr), eno)
-		}
 		if tagStr, eno = n.fs.GetXattr(mctx, n.upath(bucket, uploadID), s3Tags); eno != 0 {
 			if eno != meta.ENOATTR {
 				logger.Errorf("get object tags error, path: %s, error: %s", n.upath(bucket, uploadID), eno)
@@ -1186,6 +1181,7 @@ func (n *jfsObjects) cleanup() {
 					}
 				}
 			}
+			_ = f.Close(mctx)
 		}
 	}
 }
@@ -1435,7 +1431,7 @@ func (n *jfsObjects) DeleteObjectTags(ctx context.Context, bucket, object string
 	if !n.gConf.ObjTag {
 		return minio.ObjectInfo{}, minio.NotImplemented{}
 	}
-	if errno := n.fs.RemoveXattr(mctx, n.path(bucket, object), string(s3Tags)); errno != 0 && errno != meta.ENOATTR {
+	if errno := n.fs.RemoveXattr(mctx, n.path(bucket, object), s3Tags); errno != 0 && errno != meta.ENOATTR {
 		return minio.ObjectInfo{}, errno
 	}
 	return n.GetObjectInfo(ctx, bucket, object, opts)

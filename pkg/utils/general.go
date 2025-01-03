@@ -22,7 +22,7 @@ import (
 )
 
 func SleepWithJitter(d time.Duration) {
-	time.Sleep(d + JitterIt(d))
+	time.Sleep(JitterIt(d))
 }
 
 func JitterIt[T float64 | time.Duration](d T) T {

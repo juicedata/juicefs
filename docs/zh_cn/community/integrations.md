@@ -22,3 +22,38 @@ slug: /integrations
 ## DevOps
 
 - [Terraform Provider for JuiceFS](https://github.com/toowoxx/terraform-provider-juicefs) 由 Toowoxx IT GmbH 贡献，他们是一家来自德国的 IT 服务公司。
+
+## Alfred
+
+JuiceFS 文档站集成了 Alfred，可以快速搜索 JuiceFS 文档。
+
+![JuiceFS Alfred Workflow](../images/workflow-root.png)
+
+只需在 Alfred 中输入关键字（默认：jfs）并提供查询即可查看 JuiceFS 文档的即时搜索结果。
+
+### 安装
+
+安装 Alfred 5 的 JuiceFS workflow： [下载最新版本](https://github.com/zwwhdls/juicefs-alfred-workflow/releases/download/v0.1.0/JuiceFS.Search.alfredworkflow)
+
+### 使用
+
+可以搜索 JuiceFS 的所有文档，包括社区、企业和 CSI：
+
+```
+# 查询 JuiceFS 社区版文档
+jfs ce <search>
+# 查询 JuiceFS 企业版文档
+jfs ee <search>
+# 查询 JuiceFS CSI 文档
+jfs csi <search>
+```
+
+![JuiceFS Alfred Workflow demo](../images/workflow-demo.gif)
+
+## Workflow 可配置的变量
+
+- `API_KEY`：JuiceFS 文档使用的 algolia 的 API 密钥，使用默认值就可以。
+- `LANGUAGE`：要搜索的 JuiceFS 文档的语言（en/zh），默认为 en。
+- `HITS_PER_PAGE`：每次搜索的点击量，默认值为 10。
+
+![JuiceFS Alfred Workflow configuration](../images/configuration.png)

@@ -127,7 +127,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 	}
 
 	key := s.key(indx)
-	if s.store.conf.CacheSize > 0 {
+	if s.store.conf.CacheEnabled() {
 		start := time.Now()
 		r, err := s.store.bcache.load(key)
 		if err == nil {
@@ -547,6 +547,7 @@ type Config struct {
 	CacheDir          string
 	CacheMode         os.FileMode
 	CacheSize         uint64
+	CacheItems        int64
 	CacheChecksum     string
 	CacheEviction     string
 	CacheScanInterval time.Duration
@@ -575,7 +576,7 @@ type Config struct {
 }
 
 func (c *Config) SelfCheck(uuid string) {
-	if c.CacheSize == 0 {
+	if !c.CacheEnabled() {
 		if c.Writeback || c.Prefetch > 0 {
 			logger.Warnf("cache-size is 0, writeback and prefetch will be disabled")
 			c.Writeback = false
@@ -633,7 +634,11 @@ func (c *Config) parseHours() (start, end int, err error) {
 	if c.UploadHours == "" {
 		return
 	}
-	ps := strings.Split(c.UploadHours, ",")
+	split := ","
+	if strings.Contains(c.UploadHours, "-") {
+		split = "-"
+	}
+	ps := strings.Split(c.UploadHours, split)
 	if len(ps) != 2 {
 		err = errors.New("unexpected number of fields")
 		return
@@ -648,6 +653,10 @@ func (c *Config) parseHours() (start, end int, err error) {
 		err = errors.New("invalid hour number")
 	}
 	return
+}
+
+func (c *Config) CacheEnabled() bool {
+	return c.CacheSize > 0
 }
 
 type cachedStore struct {
@@ -812,7 +821,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		}
 	}()
 
-	if config.CacheSize == 0 {
+	if !config.CacheEnabled() {
 		config.Prefetch = 0 // disable prefetch if cache is disabled
 	}
 	store.fetcher = newPrefetcher(config.Prefetch, func(key string) {
@@ -1100,9 +1109,7 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 	keys := r.keys()
 	var err error
 	for _, k := range keys {
-		f, e := store.bcache.load(k)
-		if e == nil { // already cached
-			_ = f.Close()
+		if store.bcache.exist(k) { // already cached
 			continue
 		}
 		size := parseObjOrigSize(k)
@@ -1134,9 +1141,7 @@ func (store *cachedStore) CheckCache(id uint64, length uint32) (uint64, error) {
 	keys := r.keys()
 	missBytes := uint64(0)
 	for i, k := range keys {
-		tmpReader, err := store.bcache.load(k)
-		if err == nil {
-			_ = tmpReader.Close()
+		if store.bcache.exist(k) {
 			continue
 		}
 		missBytes += uint64(r.blockSize(i))

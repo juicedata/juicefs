@@ -36,7 +36,7 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/json-iterator/go v1.1.12
 	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
-	github.com/juicedata/gogfapi v0.0.0-20230626071140-fc28e5537825
+	github.com/juicedata/gogfapi v0.0.0-20241204082332-ecd102647f80
 	github.com/juju/ratelimit v1.0.2
 	github.com/ks3sdklib/aws-sdk-go v1.2.2
 	github.com/l0wl3vel/bunny-storage-go-sdk v0.0.10
@@ -46,6 +46,7 @@ require (
 	github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c
 	github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78
 	github.com/ncw/swift/v2 v2.0.1
+	github.com/olekukonko/tablewriter v0.0.1
 	github.com/pingcap/log v1.1.1-0.20221015072633-39906604fb81
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.13.5
@@ -72,13 +73,13 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.9
 	go.uber.org/automaxprocs v1.5.2
 	go.uber.org/zap v1.20.0
-	golang.org/x/crypto v0.21.0
-	golang.org/x/net v0.23.0
+	golang.org/x/crypto v0.31.0
+	golang.org/x/net v0.33.0
 	golang.org/x/oauth2 v0.7.0
-	golang.org/x/sync v0.2.0
-	golang.org/x/sys v0.18.0
-	golang.org/x/term v0.18.0
-	golang.org/x/text v0.14.0
+	golang.org/x/sync v0.10.0
+	golang.org/x/sys v0.28.0
+	golang.org/x/term v0.27.0
+	golang.org/x/text v0.21.0
 	google.golang.org/api v0.114.0
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216

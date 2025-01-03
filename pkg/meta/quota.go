@@ -188,14 +188,22 @@ func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, spac
 	}
 }
 
-func (m *baseMeta) flushDirStat() {
+func (m *baseMeta) flushDirStat(ctx Context) {
+	defer m.sessWG.Done()
 	period := 1 * time.Second
 	if m.conf.DirStatFlushPeriod != 0 {
 		period = m.conf.DirStatFlushPeriod
 	}
+
+	ticker := time.NewTicker(period)
+	defer ticker.Stop()
 	for {
-		time.Sleep(period)
-		m.doFlushDirStat()
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.doFlushDirStat()
+		}
 	}
 }
 
@@ -211,16 +219,23 @@ func (m *baseMeta) doFlushDirStat() {
 	stats := m.dirStats
 	m.dirStats = make(map[Ino]dirStat)
 	m.dirStatsLock.Unlock()
-	err := m.en.doUpdateDirStat(Background, stats)
+	err := m.en.doUpdateDirStat(Background(), stats)
 	if err != nil {
 		logger.Errorf("update dir stat failed: %v", err)
 	}
 }
 
-func (m *baseMeta) flushStats() {
+func (m *baseMeta) flushStats(ctx Context) {
+	defer m.sessWG.Done()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 	for {
-		time.Sleep(time.Second)
-		m.doFlushStats()
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.doFlushStats()
+		}
 	}
 }
 
@@ -228,6 +243,10 @@ func (m *baseMeta) doFlushStats() {
 	m.fsStatsLock.Lock()
 	m.en.doFlushStats()
 	m.fsStatsLock.Unlock()
+}
+
+func (m *baseMeta) syncUsedSpace(ctx Context) error {
+	return m.en.doSyncUsedSpace(ctx)
 }
 
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) syscall.Errno {
@@ -256,7 +275,7 @@ func (m *baseMeta) loadQuotas() {
 	if !m.getFormat().DirStats {
 		return
 	}
-	quotas, err := m.en.doLoadQuotas(Background)
+	quotas, err := m.en.doLoadQuotas(Background())
 	if err == nil {
 		m.quotaMu.Lock()
 		for ino := range m.dirQuotas {
@@ -374,10 +393,17 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 	}
 }
 
-func (m *baseMeta) flushQuotas() {
+func (m *baseMeta) flushQuotas(ctx Context) {
+	defer m.sessWG.Done()
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
 	for {
-		time.Sleep(time.Second * 3)
-		m.doFlushQuotas()
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.doFlushQuotas()
+		}
 	}
 }
 
@@ -399,7 +425,7 @@ func (m *baseMeta) doFlushQuotas() {
 		return
 	}
 
-	if err := m.en.doFlushQuotas(Background, stageMap); err != nil {
+	if err := m.en.doFlushQuotas(Background(), stageMap); err != nil {
 		logger.Warnf("Flush quotas: %s", err)
 	} else {
 		m.quotaMu.RLock()

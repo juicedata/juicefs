@@ -29,6 +29,7 @@ import (
 	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/pkg/errors"
 
 	"github.com/urfave/cli/v2"
 )
@@ -122,27 +123,13 @@ func gc(ctx *cli.Context) error {
 
 	var wg sync.WaitGroup
 	var delSpin *utils.Bar
-	var sliceChan chan meta.Slice // pending delete slices
 
 	if delete || compact {
 		delSpin = progress.AddCountSpinner("Cleaned pending slices")
-		sliceChan = make(chan meta.Slice, 10240)
 		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
 			delSpin.Increment()
-			sliceChan <- meta.Slice{Id: args[0].(uint64), Size: args[1].(uint32)}
-			return nil
+			return store.Remove(args[0].(uint64), int(args[1].(uint32)))
 		})
-		for i := 0; i < threads; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for s := range sliceChan {
-					if err := store.Remove(s.Id, int(s.Size)); err != nil {
-						logger.Warnf("remove %d_%d: %s", s.Id, s.Size, err)
-					}
-				}
-			}()
-		}
 	}
 
 	c := meta.WrapContext(ctx.Context)
@@ -188,7 +175,7 @@ func gc(ctx *cli.Context) error {
 			}
 			return err
 		})
-		if st := m.CompactAll(meta.Background, ctx.Int("threads"), bar); st == 0 {
+		if st := m.CompactAll(meta.Background(), ctx.Int("threads"), bar); st == 0 {
 			if progress.Quiet {
 				c, b := spin.Current()
 				logger.Infof("Compacted %d chunks (%d slices, %d bytes).", bar.Current(), c, b)
@@ -367,11 +354,8 @@ func gc(ctx *cli.Context) error {
 		}
 	}
 	m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
-		return nil
+		return errors.New("stop deleting slice")
 	})
-	if sliceChan != nil {
-		close(sliceChan)
-	}
 	close(leakedObj)
 	wg.Wait()
 	if delete || compact {

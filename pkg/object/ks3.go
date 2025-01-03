@@ -215,7 +215,11 @@ func (s *ks3) List(prefix, start, token, delimiter string, limit int64, followLi
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, *resp.IsTruncated, *resp.NextMarker, nil
+	var nextMarker string
+	if resp.NextMarker != nil {
+		nextMarker = *resp.NextMarker
+	}
+	return objs, *resp.IsTruncated, nextMarker, nil
 }
 
 func (s *ks3) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
