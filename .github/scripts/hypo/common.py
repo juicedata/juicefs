@@ -6,6 +6,10 @@ import os
 import pwd
 import subprocess
 import sys
+import stat
+def red(s):
+    return f'\033[31m{s}\033[0m'
+
 def replace(src, old, new):
     if isinstance(src, str):
         return src.replace(old, new)
@@ -43,7 +47,7 @@ def setup_logger(log_file_path, logger_name, log_level='INFO'):
     elif log_level == 'ERROR':
         log_level = logging.ERROR
     # Create a logger object
-    assert os.path.exists(os.path.dirname(log_file_path)), f'setup_logger: {log_file_path} should exist'
+    assert os.path.exists(os.path.dirname(log_file_path)), red(f'setup_logger: {log_file_path} should exist')
     print(f'setup_logger {log_file_path}')
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.DEBUG)
@@ -79,6 +83,17 @@ def get_root(path):
             pass
         d = os.path.dirname(d)
     return d
+
+def get_volume_name(path):
+    root = get_root(path)
+    file = os.path.join(root, '.config')
+    if os.path.isfile(file):
+        with open(file, 'r') as f:
+            config = json.load(f)
+            try :
+                return config['Meta']['Volume']
+            except KeyError:
+                return config['Format']['Name']
 
 def get_zones(dir):
     zones = []
@@ -123,31 +138,14 @@ def support_acl(path):
             return False
         else:
             return True
-        
-def get_stat(path):
-    # TODO: add st_nlink and st_mode etc.
-    check_nlink = os.environ.get('CHECK_NLINK', 'true').lower() == 'true'
-    if os.path.isfile(path):
-        stat = os.stat(path)
-        # print(f'{path} is file: {stat}')
-        if check_nlink:
-            return stat.st_gid, stat.st_uid,  stat.st_size, oct(stat.st_mode), stat.st_nlink
-        else:
-            return stat.st_gid, stat.st_uid,  stat.st_size, oct(stat.st_mode)
-    elif os.path.isdir(path):
-        stat = os.stat(path)
-        # print(f'{path} is dir: {stat}')
-        return stat.st_gid, stat.st_uid, oct(stat.st_mode)
-    elif os.path.islink(path) and os.path.exists(path): # good link
-        stat = os.stat(path)
-        lstat = os.lstat(path)
-        # print(f'{path} is good link: {stat}\n{lstat}')
-        return stat.st_gid, stat.st_uid,  stat.st_size, oct(stat.st_mode), \
-            lstat.st_gid, lstat.st_uid, oct(lstat.st_mode), 
-    elif os.path.islink(path) and not os.path.exists(path): # broken link
-        lstat = os.lstat(path)
-        # print(f'{path} is broken link: {lstat}')
-        return lstat.st_gid, lstat.st_uid, oct(lstat.st_mode)
+
+def get_stat_field(st: os.stat_result):
+    if stat.S_ISREG(st.st_mode):
+        return st.st_gid, st.st_uid,  st.st_size, oct(st.st_mode), st.st_nlink
+    elif stat.S_ISDIR(st.st_mode):
+        return st.st_gid, st.st_uid, oct(st.st_mode)
+    elif stat.S_ISLNK(st.st_mode):
+        return st.st_gid, st.st_uid, oct(st.st_mode)
     else:
         return ()
     
@@ -165,16 +163,16 @@ def create_user(user):
         subprocess.run(['usermod', '-g', user, '-G', '', user], check=True)
     except KeyError:
         subprocess.run(['useradd', '-g', user, '-G', '', user], check=True)
-        print(f"create User {user} with group {user}")       
+        print(f"create User {user} with group {user}")
 
 def clean_dir(dir):
     try:
         subprocess.check_call(f'rm -rf {dir}'.split())
-        assert not os.path.exists(dir), f'clean_dir: {dir} should not exist'
+        assert not os.path.exists(dir), red(f'clean_dir: {dir} should not exist')
         subprocess.check_call(f'mkdir -p {dir}'.split())
-        assert os.path.isdir(dir), f'clean_dir: {dir} should be dir'
+        assert os.path.isdir(dir), red(f'clean_dir: {dir} should be dir')
     except subprocess.CalledProcessError as e:
-        print(f'clean_dir {dir} failed:{e}, {e.returncode}, {e.output.decode()}')
+        print(f'clean_dir {dir} failed:{e}, {e.returncode}, {e.output}')
         sys.exit(1)
 
 
@@ -194,22 +192,22 @@ def compare_content(dir1, dir2):
     with open('diff.log', 'r') as f:
         lines = f.readlines()
         filtered_lines = [line for line in lines if "recursive directory loop" not in line]
-        assert len(filtered_lines) == 0, f'found diff: \n' + '\n'.join(filtered_lines)
+        assert len(filtered_lines) == 0, red(f'found diff: \n' + '\n'.join(filtered_lines))
 
 def compare_stat(dir1, dir2):
     for root, dirs, files in os.walk(dir1):
         for file in files:
             path1 = os.path.join(root, file)
             path2 = os.path.join(dir2, os.path.relpath(path1, dir1))
-            stat1 = get_stat(path1)
-            stat2 = get_stat(path2)
-            assert stat1 == stat2, f"{path1}: {stat1} and {path2}: {stat2} have different stats"
+            stat1 = get_stat_field(os.stat(path1))
+            stat2 = get_stat_field(os.stat(path2))
+            assert stat1 == stat2, red(f"{path1}: {stat1} and {path2}: {stat2} have different stats")
         for dir in dirs:
             path1 = os.path.join(root, dir)
             path2 = os.path.join(dir2, os.path.relpath(path1, dir1))
-            stat1 = get_stat(path1)
-            stat2 = get_stat(path2)
-            assert stat1 == stat2, f"{path1}: {stat1} and {path2}: {stat2} have different stats"
+            stat1 = get_stat_field(os.stat(path1))
+            stat2 = get_stat_field(os.stat(path2))
+            assert stat1 == stat2, red(f"{path1}: {stat1} and {path2}: {stat2} have different stats")
 
 def compare_acl(dir1, dir2):
     for root, dirs, files in os.walk(dir1):
@@ -219,11 +217,11 @@ def compare_acl(dir1, dir2):
             if os.path.exists(path2):
                 acl1 = get_acl(path1)
                 acl2 = get_acl(path2)
-                assert acl1 == acl2, f"{path1}: {acl1} and {path2}: {acl2} have different acl"
+                assert acl1 == acl2, red(f"{path1}: {acl1} and {path2}: {acl2} have different acl")
         for dir in dirs:
             path1 = os.path.join(root, dir)
             path2 = os.path.join(dir2, os.path.relpath(path1, dir1))
             if os.path.exists(path2):
                 acl1 = get_acl(path1)
                 acl2 = get_acl(path2)
-                assert acl1 == acl2, f"{path1}: {acl1} and {path2}: {acl2} have different acl"
+                assert acl1 == acl2, red(f"{path1}: {acl1} and {path2}: {acl2} have different acl")
