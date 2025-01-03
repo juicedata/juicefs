@@ -23,7 +23,8 @@ on:
     - '**/test_pysdk.py'
     - '**/juicefs.py'
     - '**/pysdk.yml'
-
+  schedule:
+    - cron:  '0 19 * * *'
   workflow_dispatch:
     inputs:
       debug:
@@ -32,19 +33,37 @@ on:
         required: false
         default: false
 
-  schedule:
-    - cron:  '0 16 * * *'
-
 jobs:
-  pysdktest:
-    timeout-minutes: 60
-    runs-on: ubuntu-22.04
+  build-matrix:
+    runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v3
+      - id: set-matrix
+        run: |
+          echo "github.event_name is ${{github.event_name}}"
+          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch" ]]; then
+            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
+          elif [[ "${{github.event_name}}" == "pull_request" || "${{github.event_name}}" == "push"  ]]; then
+            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+          else
+            echo 'event name is not supported' && exit 1
+          fi
+    outputs:
+      meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
 
-      - name: Build
-        timeout-minutes: 5
-        uses: ./.github/actions/build
+  pysdk:
+    needs: build-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        # [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badger', 'mariadb', 'fdb']
+        meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
 
       - name: mount coverage dir
         timeout-minutes: 5
@@ -53,17 +72,42 @@ jobs:
           mount_point: cover
           access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
           secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
-          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}    
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
 
-      - name: Create python venv
+      - name: Set Variable
+        id: vars
         run: |
-          python -m venv venv
-          source venv/bin/activate
-          
-      - name: Start meta and mount jfs
-        timeout-minutes: 5
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
+          else
+            echo "target=juicefs" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Build
+        uses: ./.github/actions/build
+        with: 
+          target: ${{steps.vars.outputs.target}}
+
+      - name: Prepare meta db
+        run: | 
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+
+      - name: Juicefs Format
         run: |
-          sudo ./start_meta.sh multizone --cache-group=true
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo ./juicefs format $meta_url --trash-days 0 --enable-acl pics
+
+      - name: Juicefs Mount
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo GOCOVERDIR=$(pwd)/cover ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr
+          stat /tmp/jfs/.accesslog
 
       - name: Build and install SDK
         timeout-minutes: 5
@@ -71,15 +115,15 @@ jobs:
           make -C sdk/python/ libjfs.so
           sudo python3 sdk/python/juicefs/setup.py install
 
-      - name: Run pysdk_test.py
-        run: |
-          sudo umount /tmp/jfs
-          sudo python3 .github/scripts/pysdk/pysdk_test.py
-          sudo JFS_RANDOM_DIR=50 ./cmd/mount/mount mount --no-update --conf-dir=deploy/docker --enable-xattr --enable-acl -o allow_other test-volume /tmp/jfs
-      
       - name: Run juicefs.py
         run: |
-          sudo JFS_VOLUME=test-volume JFS_CONF_DIR=deploy/docker python3 sdk/python/juicefs/juicefs/juicefs.py
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo JFS_VOLUME=test-volume JFS_META=$meta_url python3 sdk/python/juicefs/juicefs/juicefs.py
+
+      - name: Run pysdk_test.py
+        run: |
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo META_URL=$meta_url python3 .github/scripts/pysdk/pysdk_test.py
 
       - name: Download example database
         uses: dawidd6/action-download-artifact@v6
@@ -91,23 +135,28 @@ jobs:
 
       - name: Run file_test.py
         run: |
-          sudo USE_SDK=true python3 .github/scripts/hypo/file_test.py
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/file_test.py
 
       - name: Run file.py without read
         run: |
-          sudo USE_SDK=true EXCLUDE_RULES="read,readline,readlines" python3 .github/scripts/hypo/file.py
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo USE_SDK=true META_URL=$meta_url EXCLUDE_RULES="read,readline,readlines" python3 .github/scripts/hypo/file.py
 
       - name: Run file.py without write
         run: |
-          sudo USE_SDK=true EXCLUDE_RULES="write,writelines,truncate" python3 .github/scripts/hypo/file.py
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo USE_SDK=true META_URL=$meta_url EXCLUDE_RULES="write,writelines,truncate" python3 .github/scripts/hypo/file.py
 
       - name: Run fs_sdk_test.py
         run: |
-          sudo USE_SDK=true python3 .github/scripts/hypo/fs_sdk_test.py
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/fs_sdk_test.py
 
       - name: Run fs.py
         run: |
-          sudo USE_SDK=true python3 .github/scripts/hypo/fs.py 
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/fs.py 
 
       - name: Upload example database
         uses: actions/upload-artifact@v3
@@ -116,18 +165,6 @@ jobs:
           name: hypothesis-example-db
           path: .hypothesis/examples
 
-      - name: check meta log
-        timeout-minutes: 1
-        if: always()
-        run: |
-          sudo deploy/docker/check_meta_log.sh
-
-      - name: check client log
-        timeout-minutes: 1
-        if: always()
-        run: | 
-          sudo deploy/docker/check_client_log.sh
-          
       - name: upload coverage report
         timeout-minutes: 5
         uses: ./.github/actions/upload-coverage
@@ -135,15 +172,36 @@ jobs:
           UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
 
       - name: Send Slack Notification
-        timeout-minutes: 1
+        if: failure()
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [pysdk]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
+      - name: Send Slack Notification
         if: failure() && github.event_name != 'workflow_dispatch'
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
-      - name: Setup upterm session
-        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
-        # if: failure()
-        timeout-minutes: 30
-        uses: lhotari/action-upterm@v1
+      - name: Success
+        if: success() 
+        run: echo "All Done"
