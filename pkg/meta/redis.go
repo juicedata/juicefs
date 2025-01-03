@@ -3801,7 +3801,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 	}, keys...)
 }
 
-func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, threads int, bar *utils.Bar) error {
+func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, threads int, showProgress func(totalIncr, currentIncr int64)) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -3836,8 +3836,8 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		entries = append(entries, e)
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
-	if bar != nil {
-		bar.IncrTotal(int64(len(entries)))
+	if showProgress != nil {
+		showProgress(int64(len(entries)), 0)
 	}
 
 	var batch = 100
@@ -3884,7 +3884,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 			return err
 		}
 		if e.Attr.Type == "directory" {
-			err = m.dumpDir(e.Attr.Inode, e, bw, depth+2, threads, bar)
+			err = m.dumpDir(e.Attr.Inode, e, bw, depth+2, threads, showProgress)
 		} else {
 			err = e.writeJSON(bw, depth+2)
 		}
@@ -3896,8 +3896,8 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		if i != len(entries)-1 {
 			bwWrite(",")
 		}
-		if bar != nil {
-			bar.IncrInt64(1)
+		if showProgress != nil {
+			showProgress(0, 1)
 		}
 	}
 	bwWrite(fmt.Sprintf("\n%s}\n%s}", strings.Repeat(jsonIndent, depth+1), strings.Repeat(jsonIndent, depth)))
@@ -4007,11 +4007,21 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 	if err != nil {
 		return err
 	}
-
-	progress := utils.NewProgress(false)
-	bar := progress.AddCountBar("Dumped entries", dm.Counters.UsedInodes) // with root
-
 	root = m.checkRoot(root)
+	progress := utils.NewProgress(false)
+	bar := progress.AddCountBar("Dumped entries", 1) // with root
+	useTotal := root == RootInode && !skipTrash
+	if useTotal {
+		bar.SetTotal(dm.Counters.UsedInodes)
+	}
+
+	showProgress := func(totalIncr, currentIncr int64) {
+		if !useTotal {
+			bar.IncrTotal(totalIncr)
+		}
+		bar.IncrInt64(currentIncr)
+	}
+
 	var tree = &DumpedEntry{
 		Name: "FSTree",
 		Attr: &DumpedAttr{
@@ -4022,7 +4032,8 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 	if err = m.dumpEntries(tree); err != nil {
 		return err
 	}
-	if err = m.dumpDir(root, tree, bw, 1, threads, bar); err != nil {
+	bar.Increment()
+	if err = m.dumpDir(root, tree, bw, 1, threads, showProgress); err != nil {
 		return err
 	}
 	if root == RootInode && !skipTrash {
@@ -4039,7 +4050,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 		if _, err = bw.WriteString(","); err != nil {
 			return err
 		}
-		if err = m.dumpDir(TrashInode, trash, bw, 1, threads, bar); err != nil {
+		if err = m.dumpDir(TrashInode, trash, bw, 1, threads, showProgress); err != nil {
 			return err
 		}
 	}

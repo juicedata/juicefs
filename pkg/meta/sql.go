@@ -3978,8 +3978,15 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		if err != nil {
 			return err
 		}
-
+		useTotal := root == RootInode && !skipTrash
 		bar := progress.AddCountBar("Dumped entries", 1) // with root
+		if useTotal {
+			totalBean := &counter{Name: "totalInodes"}
+			if _, err := s.Get(totalBean); err != nil {
+				return err
+			}
+			bar.SetTotal(totalBean.Value)
+		}
 		bar.Increment()
 		if trash != nil {
 			trash.Name = "Trash"
@@ -3987,7 +3994,9 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			bar.Increment()
 		}
 		showProgress := func(totalIncr, currentIncr int64) {
-			bar.IncrTotal(totalIncr)
+			if !useTotal {
+				bar.IncrTotal(totalIncr)
+			}
 			bar.IncrInt64(currentIncr)
 		}
 		if m.snap != nil {
