@@ -1002,8 +1002,6 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	start := time.Now()
 	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
 
-	m.txLock(h)
-	defer m.txUnlock(h)
 	// TODO: enable retry for some of idempodent transactions
 	var retryOnFailture = false
 	var lastErr error
@@ -1011,7 +1009,9 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 		if ctx.Canceled() {
 			return syscall.EINTR
 		}
+		m.txLock(h)
 		err := m.rdb.Watch(ctx, replaceErrno(txf), keys...)
+		m.txUnlock(h)
 		if eno, ok := err.(errNo); ok {
 			if eno == 0 {
 				err = nil
