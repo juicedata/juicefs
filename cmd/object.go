@@ -38,6 +38,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
+var jfsChunkStoreBufferSize uint64
 var dirSuffix = "/"
 
 func toError(eno syscall.Errno) error {
@@ -399,6 +400,7 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 		return nil, fmt.Errorf("object storage: %s", err)
 	}
 	chunkConf := getDefaultChunkConf(format)
+	chunkConf.BufferSize = jfsChunkStoreBufferSize
 	store := chunk.NewCachedStore(blob, *chunkConf, nil)
 	registerMetaMsg(metaCli, store, chunkConf)
 	err = metaCli.NewSession(false)
