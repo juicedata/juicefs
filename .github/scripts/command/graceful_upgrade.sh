@@ -31,9 +31,6 @@ test_kill_mount_process()
     sleep 3
     wait_process_started 2
     kill_parent_process
-    sleep 2
-    stat /tmp/jfs
-    ./juicefs umount /tmp/jfs
     wait_command_success "ps -ef | grep "mount" | grep "/tmp/jfs" | grep -v grep | wc -l" 0
     ./juicefs mount $META_URL /tmp/jfs -d
     kill_child_process
