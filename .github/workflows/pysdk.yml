@@ -1,0 +1,149 @@
+name: "pysdk"
+
+on:
+  push:
+    branches:
+    - main
+    - release**
+    paths:
+    - '**/hypo/fs_op.py'
+    - '**/hypo/fs.py'
+    - '**/hypo/fs_sdk_test.py'
+    - '**/test_pysdk.py'
+    - '**/juicefs.py'
+    - '**/pysdk.yml'
+  pull_request:
+    branches:
+    - main
+    - release**
+    paths:
+    - '**/hypo/fs_op.py'
+    - '**/hypo/fs.py'
+    - '**/hypo/fs_sdk_test.py'
+    - '**/test_pysdk.py'
+    - '**/juicefs.py'
+    - '**/pysdk.yml'
+
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+  schedule:
+    - cron:  '0 16 * * *'
+
+jobs:
+  pysdktest:
+    timeout-minutes: 60
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build
+        timeout-minutes: 5
+        uses: ./.github/actions/build
+
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}    
+
+      - name: Create python venv
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          
+      - name: Start meta and mount jfs
+        timeout-minutes: 5
+        run: |
+          sudo ./start_meta.sh multizone --cache-group=true
+
+      - name: Build and install SDK
+        timeout-minutes: 5
+        run: |
+          make -C sdk/python/ libjfs.so
+          sudo python3 sdk/python/juicefs/setup.py install
+
+      - name: Run pysdk_test.py
+        run: |
+          sudo umount /tmp/jfs
+          sudo python3 .github/scripts/pysdk/pysdk_test.py
+          sudo JFS_RANDOM_DIR=50 ./cmd/mount/mount mount --no-update --conf-dir=deploy/docker --enable-xattr --enable-acl -o allow_other test-volume /tmp/jfs
+      
+      - name: Run juicefs.py
+        run: |
+          sudo JFS_VOLUME=test-volume JFS_CONF_DIR=deploy/docker python3 sdk/python/juicefs/juicefs/juicefs.py
+
+      - name: Download example database
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          name: hypothesis-example-db
+          path: .hypothesis/examples
+          if_no_artifact_found: warn
+          workflow_conclusion: completed
+
+      - name: Run file_test.py
+        run: |
+          sudo USE_SDK=true python3 .github/scripts/hypo/file_test.py
+
+      - name: Run file.py without read
+        run: |
+          sudo USE_SDK=true EXCLUDE_RULES="read,readline,readlines" python3 .github/scripts/hypo/file.py
+
+      - name: Run file.py without write
+        run: |
+          sudo USE_SDK=true EXCLUDE_RULES="write,writelines,truncate" python3 .github/scripts/hypo/file.py
+
+      - name: Run fs_sdk_test.py
+        run: |
+          sudo USE_SDK=true python3 .github/scripts/hypo/fs_sdk_test.py
+
+      - name: Run fs.py
+        run: |
+          sudo USE_SDK=true python3 .github/scripts/hypo/fs.py 
+
+      - name: Upload example database
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: hypothesis-example-db
+          path: .hypothesis/examples
+
+      - name: check meta log
+        timeout-minutes: 1
+        if: always()
+        run: |
+          sudo deploy/docker/check_meta_log.sh
+
+      - name: check client log
+        timeout-minutes: 1
+        if: always()
+        run: | 
+          sudo deploy/docker/check_client_log.sh
+          
+      - name: upload coverage report
+        timeout-minutes: 5
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
+
+      - name: Send Slack Notification
+        timeout-minutes: 1
+        if: failure() && github.event_name != 'workflow_dispatch'
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
+        timeout-minutes: 30
+        uses: lhotari/action-upterm@v1
