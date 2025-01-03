@@ -564,12 +564,20 @@ func collectSpecialFile(ctx *cli.Context, amp string, currDir string, requireRoo
 func debug(ctx *cli.Context) error {
 	setup(ctx, 1)
 	mp := ctx.Args().First()
-	inode, err := utils.GetFileInode(mp)
-	if err != nil {
-		return fmt.Errorf("failed to lookup inode for %s: %s", mp, err)
-	}
-	if inode != uint64(meta.RootInode) {
-		return fmt.Errorf("path %s is not a mount point", mp)
+	var inode uint64
+	if err := utils.WithTimeout(func() error {
+		var err error
+		if inode, err = utils.GetFileInode(mp); err != nil {
+			return fmt.Errorf("failed to lookup inode for %s: %s", mp, err)
+		}
+		return nil
+	}, 3*time.Second); err != nil {
+		logger.Warnf(err.Error())
+		logger.Warnf("assuming the mount point is JuiceFS mount point")
+	} else {
+		if inode != uint64(meta.RootInode) {
+			return fmt.Errorf("path %s is not a mount point", mp)
+		}
 	}
 
 	amp, err := filepath.Abs(mp)
