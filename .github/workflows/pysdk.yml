@@ -117,11 +117,13 @@ jobs:
 
       - name: Run juicefs.py
         run: |
+          source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo JFS_VOLUME=test-volume JFS_META=$meta_url python3 sdk/python/juicefs/juicefs/juicefs.py
 
       - name: Run pysdk_test.py
         run: |
+          source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo META_URL=$meta_url python3 .github/scripts/pysdk/pysdk_test.py
 
@@ -135,26 +137,31 @@ jobs:
 
       - name: Run file_test.py
         run: |
+          source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/file_test.py
 
       - name: Run file.py without read
         run: |
+          source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo USE_SDK=true META_URL=$meta_url EXCLUDE_RULES="read,readline,readlines" python3 .github/scripts/hypo/file.py
 
       - name: Run file.py without write
         run: |
+          source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo USE_SDK=true META_URL=$meta_url EXCLUDE_RULES="write,writelines,truncate" python3 .github/scripts/hypo/file.py
 
       - name: Run fs_sdk_test.py
         run: |
+          source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/fs_sdk_test.py
 
       - name: Run fs.py
         run: |
+          source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/fs.py 
 
