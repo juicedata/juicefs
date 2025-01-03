@@ -45,6 +45,7 @@ test_dump_with_keep_secret()
     prepare_test
     ./juicefs format $META_URL myjfs --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
     ./juicefs dump --keep-secret-key $META_URL dump.json --fast
+    cat dump.json
     python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json
     ./juicefs mount -d $META_URL /jfs
@@ -57,6 +58,7 @@ test_dump_without_keep_secret()
     prepare_test
     ./juicefs format $META_URL myjfs --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
     ./juicefs dump $META_URL dump.json --fast
+    cat dump.json
     python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json
     ./juicefs mount -d $META_URL /jfs && echo "mount should fail" && exit 1 || true
