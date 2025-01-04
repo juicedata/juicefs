@@ -483,7 +483,8 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64, calChks
 			defer f.Close()
 			buf := bufPool.Get().(*[]byte)
 			defer bufPool.Put(buf)
-			if _, err = io.CopyBuffer(f, downer, *buf); err == nil {
+			// hide f.ReadFrom to avoid discarding buf
+			if _, err = io.CopyBuffer(struct{ io.Writer }{f}, downer, *buf); err == nil {
 				_, err = f.Seek(0, 0)
 				in = f
 			}
