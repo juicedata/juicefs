@@ -313,6 +313,7 @@ func (s *s3client) UploadPart(key string, uploadID string, num int, body []byte)
 }
 
 func (s *s3client) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	srcKey = strings.TrimPrefix(srcKey, "/")
 	resp, err := s.s3.UploadPartCopy(&s3.UploadPartCopyInput{
 		Bucket:          aws.String(s.bucket),
 		CopySource:      aws.String(s.bucket + "/" + srcKey),
