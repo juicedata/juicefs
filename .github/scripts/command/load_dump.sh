@@ -24,15 +24,24 @@ mc alias set myminio http://localhost:9000 minioadmin minioadmin
 python3 -c "import xattr" || sudo pip install xattr
 
 test_dump_load_with_iflag(){
+    do_dump_load_with_iflag
+}
+
+test_dump_load_with_iflag_binary(){
+    do_dump_load_with_iflag --binary
+}
+
+do_dump_load_with_iflag(){
+    option=$@
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs --enable-ioctl
     echo "hello" > /jfs/hello.txt
     chattr +i /jfs/hello.txt
-    ./juicefs dump $META_URL dump.json --fast
+    ./juicefs dump $META_URL dump.json $option
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
-    ./juicefs load $META_URL dump.json
+    ./juicefs load $META_URL dump.json $option
     ./juicefs mount -d $META_URL /jfs --enable-ioctl
     echo "hello" > /jfs/hello.txt && echo "write should fail" && exit 1 || true
     chattr -i /jfs/hello.txt
@@ -40,31 +49,37 @@ test_dump_load_with_iflag(){
     cat /jfs/hello.txt | grep world
 }
 
-test_dump_with_keep_secret()
+test_dump_load_with_keep_secret_key(){
+    do_dump_load_with_keep_secret_key
+}
+
+test_dump_load_with_keep_secret_key_in_binary(){
+    do_dump_load_with_keep_secret_key --binary
+}
+
+do_dump_load_with_keep_secret_key()
 {
+    option=$@
     prepare_test
     ./juicefs format $META_URL myjfs --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
-    ./juicefs dump --keep-secret-key $META_URL dump.json --fast
+    ./juicefs dump --keep-secret-key $META_URL dump.json $option
     python3 .github/scripts/flush_meta.py $META_URL
-    ./juicefs load $META_URL dump.json
+    ./juicefs load $META_URL dump.json $option
     ./juicefs mount -d $META_URL /jfs
     echo "hello" > /jfs/hello.txt
     cat /jfs/hello.txt | grep hello
-}
 
-test_dump_without_keep_secret()
-{
-    prepare_test
-    ./juicefs format $META_URL myjfs --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
-    ./juicefs dump $META_URL dump.json --fast
+    umount_jfs /jfs $META_URL
+    ./juicefs dump $META_URL dump.json $option
     python3 .github/scripts/flush_meta.py $META_URL
-    ./juicefs load $META_URL dump.json
+    ./juicefs load $META_URL dump.json $option
     ./juicefs mount -d $META_URL /jfs && echo "mount should fail" && exit 1 || true
     ./juicefs config --secret-key minioadmin $META_URL
     ./juicefs mount -d $META_URL /jfs
     echo "hello" > /jfs/hello.txt
     cat /jfs/hello.txt | grep hello
 }
+
 
 test_dump_load_with_trash_enable(){
     do_dump_load_with_fsrand 1
@@ -79,8 +94,8 @@ do_dump_load_with_fsrand(){
     ./juicefs format $META_URL myjfs --trash-days $trash_days --enable-acl
     ./juicefs mount -d $META_URL /jfs --enable-xattr
     SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fs.py || true
-    # find /jfs/fsrand -mindepth 1 -maxdepth 1 ! -name "syly" -exec rm -rf {} \; 
     do_dump_load_and_compare 
+    do_dump_load_and_compare --binary
     do_dump_load_and_compare --fast
     do_dump_load_and_compare --skip-trash
     do_dump_load_and_compare --fast --skip-trash
@@ -92,9 +107,15 @@ do_dump_load_and_compare()
     echo option is $option
     ./juicefs dump $META_URL dump.json $option
     rm -rf test2.db 
-    ./juicefs load sqlite3://test2.db dump.json
+    if [[ "$option" == *"--binary"* ]]; then
+        ./juicefs load sqlite3://test2.db dump.json $option
+    else
+        ./juicefs load sqlite3://test2.db dump.json
+    fi
     ./juicefs dump sqlite3://test2.db dump2.json $option
-    # compare_dump_json
+    # if [[ "$option" != *"--binary"* ]]; then
+    #     compare_dump_json
+    # fi
     ./juicefs mount -d sqlite3://test2.db /jfs2
     diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
     compare_stat_acl_xattr /jfs/fsrand /jfs2/fsrand
