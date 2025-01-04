@@ -141,10 +141,10 @@ start_meta_engine(){
             docker run --name postgresql \
                 -e POSTGRES_USER=postgres \
                 -e POSTGRES_PASSWORD=postgres \
-                -e PGOPTIONS="-c max_connections=300" \
                 -p 5432:5432 \
                 -v /tmp/postgresql:/var/lib/postgresql/data \
-                -d postgres
+                -d postgres \
+                -N 500
             sleep 10
             docker exec -i postgresql psql -U postgres -c "SHOW max_connections;"
         fi
