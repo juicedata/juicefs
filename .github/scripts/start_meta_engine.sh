@@ -137,10 +137,11 @@ start_meta_engine(){
         if lsof -i:5432; then
             echo "postgres is already running"
         else
-            # -e PGOPTIONS="-c max_connections=300" \
+            # default max_connections is 100.
             docker run --name postgresql \
                 -e POSTGRES_USER=postgres \
                 -e POSTGRES_PASSWORD=postgres \
+                -e PGOPTIONS="-c max_connections=300" \
                 -p 5432:5432 \
                 -v /tmp/postgresql:/var/lib/postgresql/data \
                 -d postgres
