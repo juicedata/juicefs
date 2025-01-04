@@ -144,7 +144,7 @@ start_meta_engine(){
                 -p 5432:5432 \
                 -v /tmp/postgresql:/var/lib/postgresql/data \
                 -d postgres \
-                -N 500
+                -N 300
             sleep 10
             docker exec -i postgresql psql -U postgres -c "SHOW max_connections;"
         fi
