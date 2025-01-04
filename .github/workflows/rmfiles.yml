@@ -3,10 +3,16 @@ name: "rmr-test"
 on:
   push:
     branches:
+      - 'main'
       - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**/rmfiles.yml'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - '**/rmfiles.yml'
   schedule:
     - cron:  '0 20 * * *'
   workflow_dispatch:
