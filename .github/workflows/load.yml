@@ -89,7 +89,7 @@ jobs:
           META: ${{matrix.meta}}
           START_META: true
         run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover BIGDIR=true .github/scripts/command/load_dump_bench.sh test_dump_load_in_binary
+          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_dump_load_in_binary
       
       - name: Test dump load fast
         timeout-minutes: 60
@@ -100,7 +100,7 @@ jobs:
           META: ${{matrix.meta}}
           START_META: false
         run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover BIGDIR=true .github/scripts/command/load_dump_bench.sh test_dump_load_fast
+          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_dump_load_fast
 
       - name: Test dump load
         timeout-minutes: 60
@@ -111,7 +111,7 @@ jobs:
           META: ${{matrix.meta}}
           START_META: false
         run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover BIGDIR=true .github/scripts/command/load_dump_bench.sh test_dump_load
+          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_dump_load
   
       - name: log
         if: always()
@@ -126,8 +126,8 @@ jobs:
           UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
           
       - name: Setup upterm session
-        # if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
-        if: failure()
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
