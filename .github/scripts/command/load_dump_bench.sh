@@ -3,74 +3,74 @@
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
+[[ -z "$START_META" ]] && START_META=true
+[[ -z "$BIGDIR" ]] && BIGDIR=false
 source .github/scripts/start_meta_engine.sh
 META_URL=$(get_meta_url $META)
-start_meta_engine $META
-FILE_COUNT=1000000
+META_URL2=$(get_meta_url2 $META)
+if [[ "$START_META" == "true" ]]; then  
+  start_meta_engine $META
+  prepare_test_data
+fi
+FILE_COUNT=10000
 
-test_dump_load_small_dir(){
-  do_dump_load small_dir
-}
-
-test_dump_load_small_dir_in_binary(){
-  do_dump_load small_dir --binary
-}
-
-test_dump_load_big_dir(){
-  do_dump_load big_dir
-}
-
-test_dump_load_big_dir_in_binary(){
-  do_dump_load big_dir --binary
-}
-
-do_dump_load(){
-  dir_type=$1
-  shift
-  options=$@
-  prepare_test
+prepare_test_data(){
+  umount_jfs /tmp/jfs $META_URL
+  python3 .github/scripts/flush_meta.py $META_URL
+  rm -rf /var/jfs/myjfs || true
   create_database $META_URL
   ./juicefs format $META_URL myjfs
   ./juicefs mount -d $META_URL /tmp/jfs
-  if [[ "$dir_type" == "bigdir" ]]; then
+  if [[ "$BIGDIR" == "true" ]]; then
     threads=100
     ./juicefs mdtest $META_URL /mdtest --depth=1 --dirs=0 --files=$((FILE_COUNT/threads)) --threads=$threads --write=8192
   else
     ./juicefs mdtest $META_URL /mdtest --depth=3 --dirs=10 --files=10 --threads=100 --write=8192
   fi
-  iused1=$(df -i /tmp/jfs | tail -1 | awk  '{print $3}')
-  summary1=$(./juicefs summary /tmp/jfs/ --csv | head -n +2 | tail -n 1)
+}
+
+
+test_dump_load(){
+  do_dump_load
+}
+
+test_dump_load_fast(){
+  do_dump_load --fast
+}
+
+test_dump_load_in_binary(){
+  do_dump_load --binary
+}
+
+do_dump_load(){
+  options=$@
   ./juicefs dump $META_URL dump.json $options --threads=50
-  umount_jfs /tmp/jfs $META_URL
-  python3 .github/scripts/flush_meta.py $META_URL
-  create_database $META_URL
+  umount_jfs /tmp/jfs2 $META_URL2
+  python3 .github/scripts/flush_meta.py $META_URL2
+  create_database $META_URL2
   if [[ "$options" == *"--binary"* ]]; then
-    ./juicefs load $META_URL dump.json $options
+    ./juicefs load $META_URL2 dump.json $options
   else
-    ./juicefs load $META_URL dump.json
+    ./juicefs load $META_URL2 dump.json
   fi
-  ./juicefs mount $META_URL /tmp/jfs -d
-  iused2=$(df -i /tmp/jfs | tail -1 | awk  '{print $3}')
-  summary2=$(./juicefs summary /tmp/jfs/ --csv | head -n +2 | tail -n 1)
+  ./juicefs mount $META_URL2 /tmp/jfs2 -d
+  iused1=$(df -i /tmp/jfs | tail -1 | awk  '{print $3}')
+  iused2=$(df -i /tmp/jfs2 | tail -1 | awk  '{print $3}')
   [[ "$iused1" == "$iused2" ]] || (echo "<FATAL>: iused error: $iused1 $iused2" && exit 1)
+  summary1=$(./juicefs summary /tmp/jfs/ --csv | head -n +2 | tail -n 1)
+  summary2=$(./juicefs summary /tmp/jfs2/ --csv | head -n +2 | tail -n 1)
   [[ "$summary1" == "$summary2" ]] || (echo "<FATAL>: summary error: $summary1 $summary2" && exit 1)
   
-  if [[ "$dir_type" == "bigdir" ]]; then
-    file_count=$(ls -l /tmp/jfs/mdtest/test-dir.0-0/mdtest_tree.0/ | wc -l)
+  if [[ "$BIGDIR" == "true" ]]; then
+    file_count=$(ls -l /tmp/jfs2/mdtest/test-dir.0-0/mdtest_tree.0/ | wc -l)
     if [[ "$file_count" -ne "$((FILE_COUNT+1))" ]]; then 
       echo "<FATAL>: file_count error: $file_count"
       exit 1
     fi
   fi
 
-  ./juicefs rmr /tmp/jfs/mdtest
-  ls /tmp/jfs/mdtest && echo "<FATAL>: ls should fail" && exit 1 || true
-}
-
-prepare_test(){
-    umount_jfs /tmp/jfs $META_URL
-    python3 .github/scripts/flush_meta.py $META_URL
-    rm -rf /var/jfs/myjfs || true
+  ./juicefs rmr /tmp/jfs2/mdtest
+  ls /tmp/jfs2/mdtest && echo "<FATAL>: ls should fail" && exit 1 || true
 }
 
 

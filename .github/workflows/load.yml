@@ -80,16 +80,39 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}
 
-      - name: Test
-        timeout-minutes: 60
+      - name: Test dump load in binary format
+        timeout-minutes: 30
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
           AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
           META: ${{matrix.meta}}
+          START_META: true
         run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh
+          sudo -E GOCOVERDIR=$(pwd)/cover BIGDIR=true .github/scripts/command/load_dump_bench.sh test_dump_load_fast
+      
+      - name: Test dump load fast
+        timeout-minutes: 30
+        env:
+          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
+          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
+          META: ${{matrix.meta}}
+          START_META: false
+        run: |
+          sudo -E GOCOVERDIR=$(pwd)/cover BIGDIR=true .github/scripts/command/load_dump_bench.sh test_dump_load_in_binary
 
+      - name: Test dump load
+        timeout-minutes: 30
+        env:
+          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
+          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
+          META: ${{matrix.meta}}
+          START_META: false
+        run: |
+          sudo -E GOCOVERDIR=$(pwd)/cover BIGDIR=true .github/scripts/command/load_dump_bench.sh test_dump_load
+  
       - name: log
         if: always()
         run: | 
