@@ -32,8 +32,13 @@ def flush_meta(meta_url):
         else:
             host = host_port
             port = 6379
+        db = meta_url[8:].split('/')[1]
+        if not db:
+            db = 0
+        else:
+            db = int(db)
         print(f'flush redis: {host}:{port}')
-        run_cmd(f'redis-cli -h {host} -p {port} flushall')
+        run_cmd(f'redis-cli -h {host} -p {port} -n {db} flushdb')
         print(f'flush redis succeed')
     elif meta_url.startswith('mysql://'):
         create_mysql_db(meta_url)
