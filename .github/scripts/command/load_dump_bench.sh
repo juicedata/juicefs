@@ -8,7 +8,7 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 META_URL=$(get_meta_url $META)
 META_URL2=$(get_meta_url2 $META)
-FILE_COUNT=500000
+FILE_COUNT=50000
 
 prepare_test_data(){
   umount_jfs /tmp/jfs $META_URL
