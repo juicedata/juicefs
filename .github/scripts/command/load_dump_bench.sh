@@ -8,7 +8,7 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 META_URL=$(get_meta_url $META)
 META_URL2=$(get_meta_url2 $META)
-FILE_COUNT=50000
+FILE_COUNT_IN_BIGDIR=50000
 
 prepare_test_data(){
   umount_jfs /tmp/jfs $META_URL
@@ -17,12 +17,9 @@ prepare_test_data(){
   create_database $META_URL
   ./juicefs format $META_URL myjfs
   ./juicefs mount -d $META_URL /tmp/jfs
-  if [[ "$BIGDIR" == "true" ]]; then
-    threads=100
-    ./juicefs mdtest $META_URL /mdtest --depth=1 --dirs=0 --files=$((FILE_COUNT/threads)) --threads=$threads --write=8192
-  else
-    ./juicefs mdtest $META_URL /mdtest --depth=3 --dirs=10 --files=10 --threads=100 --write=8192
-  fi
+  threads=100
+  ./juicefs mdtest $META_URL /bigdir --depth=1 --dirs=0 --files=$((FILE_COUNT_IN_BIGDIR/threads)) --threads=$threads --write=8192
+  ./juicefs mdtest $META_URL /smalldir --depth=3 --dirs=10 --files=10 --threads=100 --write=8192
 }
 
 if [[ "$START_META" == "true" ]]; then  
@@ -65,15 +62,18 @@ do_dump_load(){
   [[ "$summary1" == "$summary2" ]] || (echo "<FATAL>: summary error: $summary1 $summary2" && exit 1)
   
   if [[ "$BIGDIR" == "true" ]]; then
-    file_count=$(ls -l /tmp/jfs2/mdtest/test-dir.0-0/mdtest_tree.0/ | wc -l)
-    if [[ "$file_count" -ne "$((FILE_COUNT+1))" ]]; then 
+    file_count=$(ls -l /tmp/jfs2/bigdir/test-dir.0-0/mdtest_tree.0/ | wc -l)
+    file_count=$((file_count-1))
+    if [[ "$file_count" -ne "$FILE_COUNT_IN_BIGDIR" ]]; then 
       echo "<FATAL>: file_count error: $file_count"
       exit 1
     fi
   fi
 
-  ./juicefs rmr /tmp/jfs2/mdtest
-  ls /tmp/jfs2/mdtest && echo "<FATAL>: ls should fail" && exit 1 || true
+  ./juicefs rmr /tmp/jfs2/bigdir
+  ls /tmp/jfs2/bigdir && echo "<FATAL>: ls should fail" && exit 1 || true
+  ./juicefs rmr /tmp/jfs2/smalldir
+  ls /tmp/jfs2/smalldir && echo "<FATAL>: ls should fail" && exit 1 || true
 }
 
 
