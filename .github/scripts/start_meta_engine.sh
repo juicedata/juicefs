@@ -217,7 +217,7 @@ get_meta_url(){
     return 0
 }
 
-get_meta_url(){
+get_meta_url2(){
     meta=$1
     if [ "$meta" == "postgres" ]; then
         meta_url="postgres://postgres:postgres@127.0.0.1:5432/test2?sslmode=disable"

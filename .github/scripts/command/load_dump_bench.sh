@@ -4,15 +4,11 @@ source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
 [[ -z "$START_META" ]] && START_META=true
-[[ -z "$BIGDIR" ]] && BIGDIR=false
+[[ -z "$BIGDIR" ]] && BIGDIR=true
 source .github/scripts/start_meta_engine.sh
 META_URL=$(get_meta_url $META)
 META_URL2=$(get_meta_url2 $META)
-if [[ "$START_META" == "true" ]]; then  
-  start_meta_engine $META
-  prepare_test_data
-fi
-FILE_COUNT=10000
+FILE_COUNT=500000
 
 prepare_test_data(){
   umount_jfs /tmp/jfs $META_URL
@@ -29,6 +25,10 @@ prepare_test_data(){
   fi
 }
 
+if [[ "$START_META" == "true" ]]; then  
+  start_meta_engine $META
+  prepare_test_data
+fi
 
 test_dump_load(){
   do_dump_load
