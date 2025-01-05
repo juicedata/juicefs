@@ -34,7 +34,8 @@ def flush_meta(meta_url:str):
         else:
             host = host_port
             port = default_port[protocol]
-        db = int(meta_url.split("://")[1].split('/')[1])
+        db = meta_url.split("://")[1].split('/')[1]
+        assert db
         print(f'flushing {protocol}://{host}:{port}/{db}')
         if protocol == 'redis':
             run_cmd(f'redis-cli -h {host} -p {port} -n {db} flushdb')
@@ -48,7 +49,13 @@ def flush_meta(meta_url:str):
     elif meta_url.startswith('postgres://'): 
         create_postgres_db(meta_url)
     elif meta_url.startswith('fdb://'):
-        run_cmd('''fdbcli -C /home/runner/fdb.cluster --exec "writemode on ; clearrange '' \xFF"''')
+        # fdb:///home/runner/fdb.cluster?prefix=jfs2
+        prefix = meta_url.split('?prefix=')[1] if '?prefix=' in meta_url else ""
+        cluster_file = meta_url.split('fdb://')[1].split('?')[0]
+        print(f'flushing fdb: cluster_file: {cluster_file}, prefix: {prefix}')
+        run_cmd(f'echo "writemode on; clearrange {prefix} {prefix}xFF" | fdbcli -C {cluster_file}')
+        # run_cmd('''fdbcli -C /home/runner/fdb.cluster --exec "writemode on ; clearrange '' \xFF"''')
+        print(f'flush fdb succeed')
     else:
         raise Exception(f'{meta_url} not supported')
     print('flush meta succeed')
