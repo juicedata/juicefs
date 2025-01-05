@@ -53,7 +53,7 @@ def flush_meta(meta_url:str):
         prefix = meta_url.split('?prefix=')[1] if '?prefix=' in meta_url else ""
         cluster_file = meta_url.split('fdb://')[1].split('?')[0]
         print(f'flushing fdb: cluster_file: {cluster_file}, prefix: {prefix}')
-        run_cmd(f'echo "writemode on; clearrange {prefix} {prefix}xFF" | fdbcli -C {cluster_file}')
+        run_cmd(f'echo "writemode on; clearrange {prefix} {prefix}\xFF" | fdbcli -C {cluster_file}')
         # run_cmd('''fdbcli -C /home/runner/fdb.cluster --exec "writemode on ; clearrange '' \xFF"''')
         print(f'flush fdb succeed')
     else:
