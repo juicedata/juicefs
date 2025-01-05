@@ -54,9 +54,12 @@ do_dump_load(){
     ./juicefs load $META_URL2 dump.json
   fi
   ./juicefs mount $META_URL2 /tmp/jfs2 -d
+  df -i /tmp/jfs /tmp/jfs2
   iused1=$(df -i /tmp/jfs | tail -1 | awk  '{print $3}')
   iused2=$(df -i /tmp/jfs2 | tail -1 | awk  '{print $3}')
   [[ "$iused1" == "$iused2" ]] || (echo "<FATAL>: iused error: $iused1 $iused2" && exit 1)
+  ./juicefs summary /tmp/jfs/ --csv
+  ./juicefs summary /tmp/jfs2/ --csv
   summary1=$(./juicefs summary /tmp/jfs/ --csv | head -n +2 | tail -n 1)
   summary2=$(./juicefs summary /tmp/jfs2/ --csv | head -n +2 | tail -n 1)
   [[ "$summary1" == "$summary2" ]] || (echo "<FATAL>: summary error: $summary1 $summary2" && exit 1)
