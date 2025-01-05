@@ -6,7 +6,7 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 META_URL=$(get_meta_url $META)
 start_meta_engine $META
-FILE_COUNT=100000
+FILE_COUNT=1000000
 
 test_dump_load_small_dir(){
   do_dump_load small_dir
@@ -36,7 +36,7 @@ do_dump_load(){
     threads=100
     ./juicefs mdtest $META_URL /mdtest --depth=1 --dirs=0 --files=$((FILE_COUNT/threads)) --threads=$threads --write=8192
   else
-    ./juicefs mdtest $META_URL /mdtest --depth=2 --dirs=2 --files=10 --threads=10 --write=8192
+    ./juicefs mdtest $META_URL /mdtest --depth=3 --dirs=10 --files=10 --threads=100 --write=8192
   fi
   iused1=$(df -i /tmp/jfs | tail -1 | awk  '{print $3}')
   summary1=$(./juicefs summary /tmp/jfs/ --csv | head -n +2 | tail -n 1)

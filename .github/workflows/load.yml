@@ -93,11 +93,9 @@ jobs:
       - name: log
         if: always()
         run: | 
-          if [ -f ~/.juicefs/juicefs.log ]; then
-            tail -300 ~/.juicefs/juicefs.log
-            grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
-          fi
-
+          tail -500 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          
       - name: upload coverage report
         timeout-minutes: 5
         uses: ./.github/actions/upload-coverage
