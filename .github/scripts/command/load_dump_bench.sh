@@ -19,7 +19,7 @@ prepare_test_data(){
   ./juicefs mount -d $META_URL /tmp/jfs
   threads=10
   ./juicefs mdtest $META_URL /bigdir --depth=1 --dirs=0 --files=$((FILE_COUNT_IN_BIGDIR/threads)) --threads=$threads --write=8192
-  ./juicefs mdtest $META_URL /smalldir --depth=3 --dirs=10 --files=10 --threads=10 --write=8192
+  ./juicefs mdtest $META_URL /smalldir --depth=2 --dirs=10 --files=10 --threads=10 --write=8192
 }
 
 if [[ "$START_META" == "true" ]]; then  

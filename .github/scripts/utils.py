@@ -12,7 +12,7 @@ import sys
 import time
 from minio import Minio
 
-def flush_meta(meta_url):
+def flush_meta(meta_url:str):
     print(f'start flush meta: {meta_url}')
     if meta_url.startswith('sqlite3://'):
         path = meta_url[len('sqlite3://'):]
@@ -24,28 +24,29 @@ def flush_meta(meta_url):
         if os.path.isdir(path):
             shutil.rmtree(path)
             print(f'remove badger dir {path} succeed')
-    elif meta_url.startswith('redis://'):
-        host_port= meta_url[8:].split('/')[0]
+    elif meta_url.startswith('redis://') or meta_url.startswith('tikv://'):
+        default_port = {"redis": 6379, "tikv": 2379}
+        protocol = meta_url.split("://")[0]
+        host_port= meta_url.split("://")[1].split('/')[0]
         if ':' in host_port:
             host = host_port.split(':')[0]
             port = host_port.split(':')[1]
         else:
             host = host_port
-            port = 6379
-        db = meta_url[8:].split('/')[1]
-        if not db:
-            db = 0
+            port = default_port[protocol]
+        db = int(meta_url.split("://")[1].split('/')[1])
+        print(f'flushing {protocol}://{host}:{port}/{db}')
+        if protocol == 'redis':
+            run_cmd(f'redis-cli -h {host} -p {port} -n {db} flushdb')
+        elif protocol == 'tikv':
+            run_cmd(f'echo "delall --db {db} --yes" |tcli -pd {host}:{port}')
         else:
-            db = int(db)
-        print(f'flush redis: {host}:{port}')
-        run_cmd(f'redis-cli -h {host} -p {port} -n {db} flushdb')
-        print(f'flush redis succeed')
+            raise Exception(f'{protocol} not supported')
+        print(f'flush {protocol}://{host}:{port}/{db} succeed')
     elif meta_url.startswith('mysql://'):
         create_mysql_db(meta_url)
     elif meta_url.startswith('postgres://'): 
         create_postgres_db(meta_url)
-    elif meta_url.startswith('tikv://'):
-        run_cmd('echo "delall --yes" |tcli -pd localhost:2379')
     elif meta_url.startswith('fdb://'):
         run_cmd('''fdbcli -C /home/runner/fdb.cluster --exec "writemode on ; clearrange '' \xFF"''')
     else:
