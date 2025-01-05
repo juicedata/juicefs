@@ -3,10 +3,10 @@
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
-[[ -z "$START_META" ]] && START_META=true
 source .github/scripts/start_meta_engine.sh
 META_URL=$(get_meta_url $META)
 start_meta_engine $META
+FILE_COUNT=100000
 
 test_dump_load_small_dir(){
   do_dump_load small_dir
@@ -33,7 +33,8 @@ do_dump_load(){
   ./juicefs format $META_URL myjfs
   ./juicefs mount -d $META_URL /tmp/jfs
   if [[ "$dir_type" == "bigdir" ]]; then
-    ./juicefs mdtest $META_URL /mdtest --depth=1 --dirs=0 --files=10000 --threads=100 --write=8192
+    threads=100
+    ./juicefs mdtest $META_URL /mdtest --depth=1 --dirs=0 --files=$((FILE_COUNT/threads)) --threads=$threads --write=8192
   else
     ./juicefs mdtest $META_URL /mdtest --depth=2 --dirs=2 --files=10 --threads=10 --write=8192
   fi
@@ -56,7 +57,7 @@ do_dump_load(){
   
   if [[ "$dir_type" == "bigdir" ]]; then
     file_count=$(ls -l /tmp/jfs/mdtest/test-dir.0-0/mdtest_tree.0/ | wc -l)
-    if [[ "$file_count" -ne "1000001" ]]; then 
+    if [[ "$file_count" -ne "$((FILE_COUNT+1))" ]]; then 
       echo "<FATAL>: file_count error: $file_count"
       exit 1
     fi
