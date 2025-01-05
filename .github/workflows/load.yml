@@ -1,23 +1,19 @@
-name: "load-test"
+name: "load"
 on:
   push:
     branches:
       - 'main'
       - 'release-**'
     paths:
-      - '**.go'
-      - 'Makefile'
       - '**/load.yml'
-      - '.github/scripts/command/load_dump_bench.sh'
+      - '**/load_dump_bench.sh'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
     paths:
-      - '**.go'
-      - 'Makefile'
       - '**/load.yml'
-      - '.github/scripts/command/load_dump_bench.sh'
+      - '**/load_dump_bench.sh'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:
@@ -39,13 +35,13 @@ jobs:
           if [ "${{github.event_name}}" == "schedule"  ] || [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
             echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
           else
-            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["redis", "mysql", "tikv"]' >> $GITHUB_OUTPUT
           fi
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
 
   load:
-    timeout-minutes: 30
+    timeout-minutes: 120
     needs: [build-matrix]
     strategy:
       fail-fast: false
@@ -55,18 +51,6 @@ jobs:
     runs-on: ubuntu-20.04
 
     steps:
-      - name: Remove unused software
-        if: false
-        shell: bash
-        run: |
-            echo "before remove unused software"
-            sudo df -h
-            sudo rm -rf /usr/share/dotnet
-            sudo rm -rf /usr/local/lib/android
-            sudo rm -rf /opt/ghc
-            echo "after remove unused software"
-            sudo df -h
-
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -96,54 +80,18 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}
 
-      - name: Load and dump with small directory
-        timeout-minutes: 30
+      - name: Test
+        timeout-minutes: 60
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
           AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
           META: ${{matrix.meta}}
-          START_META: true
         run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_load_dump_with_small_dir
-
-      - name: Load and dump with big directory
-        timeout-minutes: 30
-        env:
-          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
-          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
-          META: ${{matrix.meta}}
-          START_META: false
-        run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir  
-  
-      - name: Load and dump subdir with big directory
-        if: false
-        timeout-minutes: 30
-        env:
-          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
-          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
-          META: ${{matrix.meta}}
-          START_META: false 
-        run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir_subdir
-          
-      - name: List big directory
-        timeout-minutes: 30
-        env:
-          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
-          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
-          META: ${{matrix.meta}}
-          START_META: false 
-        run: | 
-          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_list_with_big_dir
+          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh
 
       - name: log
         if: always()
-        shell: bash
         run: | 
           if [ -f ~/.juicefs/juicefs.log ]; then
             tail -300 ~/.juicefs/juicefs.log
