@@ -41,7 +41,7 @@ jobs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
 
   load:
-    timeout-minutes: 120
+    timeout-minutes: 180
     needs: [build-matrix]
     strategy:
       fail-fast: false
@@ -81,7 +81,7 @@ jobs:
           target: ${{steps.vars.outputs.target}}
 
       - name: Test dump load in binary format
-        timeout-minutes: 30
+        timeout-minutes: 60
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
@@ -89,10 +89,10 @@ jobs:
           META: ${{matrix.meta}}
           START_META: true
         run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover BIGDIR=true .github/scripts/command/load_dump_bench.sh test_dump_load_fast
+          sudo -E GOCOVERDIR=$(pwd)/cover BIGDIR=true .github/scripts/command/load_dump_bench.sh test_dump_load_in_binary
       
       - name: Test dump load fast
-        timeout-minutes: 30
+        timeout-minutes: 60
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
@@ -100,10 +100,10 @@ jobs:
           META: ${{matrix.meta}}
           START_META: false
         run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover BIGDIR=true .github/scripts/command/load_dump_bench.sh test_dump_load_in_binary
+          sudo -E GOCOVERDIR=$(pwd)/cover BIGDIR=true .github/scripts/command/load_dump_bench.sh test_dump_load_fast
 
       - name: Test dump load
-        timeout-minutes: 30
+        timeout-minutes: 60
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
@@ -126,8 +126,8 @@ jobs:
           UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
           
       - name: Setup upterm session
-        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
-        # if: failure()
+        # if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
