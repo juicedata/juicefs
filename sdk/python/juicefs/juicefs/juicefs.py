@@ -140,10 +140,9 @@ class Client(object):
         self.h = self.lib.jfs_init(name.encode(), jsonConf.encode(), user.pw_name.encode(), ','.join(groups).encode(), superuser.pw_name.encode(), ''.join(supergroups).encode())
 
     def stat(self, path):
-        """Get the status of a file."""
         """Get the status of a file or a directory."""
         fi = FileInfo()
-        self.lib.jfs_stat1(_tid(), self.h, _bin(path), byref(fi))
+        self.lib.jfs_stat(_tid(), self.h, _bin(path), byref(fi))
         return os.stat_result((fi.mode, fi.inode, 0, fi.nlink, fi.uid, fi.gid, fi.length, fi.atime, fi.mtime, fi.ctime))
     
     def exists(self, path):
