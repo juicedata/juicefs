@@ -4,7 +4,6 @@ source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
 [[ -z "$START_META" ]] && START_META=true
-[[ -z "$BIGDIR" ]] && BIGDIR=true
 source .github/scripts/start_meta_engine.sh
 META_URL=$(get_meta_url $META)
 META_URL2=$(get_meta_url2 $META)
@@ -51,6 +50,7 @@ do_dump_load(){
   else
     ./juicefs load $META_URL2 $dump_file
   fi
+  
   ./juicefs mount $META_URL2 /tmp/jfs2 -d
   df -i /tmp/jfs /tmp/jfs2
   iused1=$(df -i /tmp/jfs | tail -1 | awk  '{print $3}')
@@ -62,14 +62,13 @@ do_dump_load(){
   summary2=$(./juicefs summary /tmp/jfs2/ --csv | head -n +2 | tail -n 1)
   [[ "$summary1" == "$summary2" ]] || (echo "<FATAL>: summary error: $summary1 $summary2" && exit 1)
   
-  if [[ "$BIGDIR" == "true" ]]; then
-    file_count=$(ls -l /tmp/jfs2/bigdir/test-dir.0-0/mdtest_tree.0/ | wc -l)
-    file_count=$((file_count-1))
-    if [[ "$file_count" -ne "$FILE_COUNT_IN_BIGDIR" ]]; then 
-      echo "<FATAL>: file_count error: $file_count"
-      exit 1
-    fi
+  file_count=$(ls -l /tmp/jfs2/bigdir/test-dir.0-0/mdtest_tree.0/ | wc -l)
+  file_count=$((file_count-1))
+  if [[ "$file_count" -ne "$FILE_COUNT_IN_BIGDIR" ]]; then 
+    echo "<FATAL>: file_count error: $file_count"
+    exit 1
   fi
+
   ./juicefs rmr /tmp/jfs2/smalldir
   ls /tmp/jfs2/smalldir && echo "<FATAL>: ls should fail" && exit 1 || true
   umount_jfs /tmp/jfs2 $META_URL2
