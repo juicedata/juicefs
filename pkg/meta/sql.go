@@ -278,21 +278,21 @@ func retriveUrlConnsOptions(murl string) (string, int, int, int, int) {
 		baseurl := murl[:optIndex]
 		optsurl := murl[optIndex+1:]
 		if vals, err := url.ParseQuery(optsurl); err == nil {
-			if vals.Has("MaxOpenConns") {
-				vOpenConns, _ = strconv.Atoi(vals.Get("MaxOpenConns"))
-				vals.Del("MaxOpenConns")
+			if vals.Has("max_open_conns") {
+				vOpenConns, _ = strconv.Atoi(vals.Get("max_open_conns"))
+				vals.Del("max_open_conns")
 			}
-			if vals.Has("MaxIdleConns") {
-				vIdleConns, _ = strconv.Atoi(vals.Get("MaxIdleConns"))
-				vals.Del("MaxIdleConns")
+			if vals.Has("max_idle_conns") {
+				vIdleConns, _ = strconv.Atoi(vals.Get("max_idle_conns"))
+				vals.Del("max_idle_conns")
 			}
-			if vals.Has("MaxIdleTime") {
-				vIdleTime, _ = strconv.Atoi(vals.Get("MaxIdleTime"))
-				vals.Del("MaxIdleTime");
+			if vals.Has("max_idle_time") {
+				vIdleTime, _ = strconv.Atoi(vals.Get("max_idle_time"))
+				vals.Del("max_idle_time");
 			}
-			if vals.Has("MaxLifeTime") {
-				vLifeTime, _ = strconv.Atoi(vals.Get("MaxLifeTime"))
-				vals.Del("MaxLifeTime");
+			if vals.Has("max_life_time") {
+				vLifeTime, _ = strconv.Atoi(vals.Get("max_life_time"))
+				vals.Del("max_life_time");
 			}
 			optsurl = vals.Encode()
 		}
