@@ -29,7 +29,6 @@ fi
 
 test_dump_load(){
   do_dump_load
-  exit 1
 }
 
 test_dump_load_fast(){
