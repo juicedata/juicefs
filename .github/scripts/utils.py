@@ -54,7 +54,6 @@ def flush_meta(meta_url:str):
         cluster_file = meta_url.split('fdb://')[1].split('?')[0]
         print(f'flushing fdb: cluster_file: {cluster_file}, prefix: {prefix}')
         run_cmd(f'echo "writemode on; clearrange {prefix} {prefix}\\xff" | fdbcli -C {cluster_file}')
-        # run_cmd('''fdbcli -C /home/runner/fdb.cluster --exec "writemode on ; clearrange '' \xFF"''')
         print(f'flush fdb succeed')
     else:
         raise Exception(f'{meta_url} not supported')
