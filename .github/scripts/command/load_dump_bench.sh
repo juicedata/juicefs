@@ -28,26 +28,28 @@ if [[ "$START_META" == "true" ]]; then
 fi
 
 test_dump_load(){
-  do_dump_load
+  do_dump_load dump.json
 }
 
 test_dump_load_fast(){
-  do_dump_load --fast
+  do_dump_load dump.json.gz --fast
 }
 
 test_dump_load_in_binary(){
-  do_dump_load --binary
+  do_dump_load dump.bin --binary
 }
 
 do_dump_load(){
+  dump_file=$1
+  shift
   options=$@
-  ./juicefs dump $META_URL dump.json $options --threads=50
+  ./juicefs dump $META_URL $dump_file $options --threads=50
   # python3 .github/scripts/flush_meta.py $META_URL2
   create_database $META_URL2
   if [[ "$options" == *"--binary"* ]]; then
-    ./juicefs load $META_URL2 dump.json $options
+    ./juicefs load $META_URL2 $dump_file $options
   else
-    ./juicefs load $META_URL2 dump.json
+    ./juicefs load $META_URL2 $dump_file
   fi
   ./juicefs mount $META_URL2 /tmp/jfs2 -d
   df -i /tmp/jfs /tmp/jfs2
