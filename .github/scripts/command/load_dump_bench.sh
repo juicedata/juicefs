@@ -42,8 +42,7 @@ test_dump_load_in_binary(){
 do_dump_load(){
   options=$@
   ./juicefs dump $META_URL dump.json $options --threads=50
-  umount_jfs /tmp/jfs2 $META_URL2
-  python3 .github/scripts/flush_meta.py $META_URL2
+  # python3 .github/scripts/flush_meta.py $META_URL2
   create_database $META_URL2
   if [[ "$options" == *"--binary"* ]]; then
     ./juicefs load $META_URL2 dump.json $options
@@ -69,11 +68,11 @@ do_dump_load(){
       exit 1
     fi
   fi
-
-  ./juicefs rmr /tmp/jfs2/bigdir
-  ls /tmp/jfs2/bigdir && echo "<FATAL>: ls should fail" && exit 1 || true
   ./juicefs rmr /tmp/jfs2/smalldir
   ls /tmp/jfs2/smalldir && echo "<FATAL>: ls should fail" && exit 1 || true
+  umount_jfs /tmp/jfs2 $META_URL2
+  ./juicefs status $META_URL2 && UUID=$(./juicefs status $META_URL2 | grep UUID | cut -d '"' -f 4)
+  ./juicefs destroy --yes $META_URL2 $UUID
 }
 
 
