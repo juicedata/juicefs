@@ -35,7 +35,7 @@ jobs:
           if [ "${{github.event_name}}" == "schedule"  ] || [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
             echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
           else
-            echo 'meta_matrix=["fdb"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["tikv", "fdb"]' >> $GITHUB_OUTPUT
           fi
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}

@@ -203,7 +203,7 @@ get_meta_url(){
     elif [ "$meta" == "tidb" ]; then
         meta_url="mysql://root:@(127.0.0.1:4000)/test"
     elif [ "$meta" == "etcd" ]; then
-        meta_url="etcd://localhost:2379/jfs"
+        meta_url="etcd://localhost:2379/test"
     elif [ "$meta" == "fdb" ]; then
         meta_url="fdb:///home/runner/fdb.cluster?prefix=jfs"
     elif [ "$meta" == "ob" ]; then
@@ -228,7 +228,7 @@ get_meta_url2(){
     elif [ "$meta" == "sqlite3" ]; then
         meta_url="sqlite3://test2.db"
     elif [ "$meta" == "tikv" ]; then
-        meta_url="tikv://127.0.0.1:2379/test2"
+        meta_url="tikv://127.0.0.1:2379/jfs"
     elif [ "$meta" == "badger" ]; then
         meta_url="badger:///tmp/test2"
     elif [ "$meta" == "mariadb" ]; then
@@ -236,9 +236,9 @@ get_meta_url2(){
     elif [ "$meta" == "tidb" ]; then
         meta_url="mysql://root:@(127.0.0.1:4000)/test2"
     elif [ "$meta" == "etcd" ]; then
-        meta_url="etcd://localhost:2379/jfs2"
+        meta_url="etcd://localhost:2379/test2"
     elif [ "$meta" == "fdb" ]; then
-        meta_url="fdb:///home/runner/fdb.cluster?prefix=jfs2"
+        meta_url="fdb:///home/runner/fdb.cluster?prefix=kfs"
     elif [ "$meta" == "ob" ]; then
         meta_url="mysql://root:@\\(127.0.0.1:2881\\)/test2"
     else
