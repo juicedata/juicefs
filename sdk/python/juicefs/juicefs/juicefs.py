@@ -69,7 +69,7 @@ class JuiceFSLib(object):
     def __getattr__(self, n):
         fn = getattr(self.lib, n)
         if n.startswith("jfs"):
-            fn.restype = c_int
+            fn.restype = c_int64
             fn.errcheck = check_error
         return fn
 
@@ -142,7 +142,7 @@ class Client(object):
     def stat(self, path):
         """Get the status of a file or a directory."""
         fi = FileInfo()
-        self.lib.jfs_stat(_tid(), self.h, _bin(path), byref(fi))
+        self.lib.jfs_stat(c_int64(_tid()), self.h, _bin(path), byref(fi))
         return os.stat_result((fi.mode, fi.inode, 0, fi.nlink, fi.uid, fi.gid, fi.length, fi.atime, fi.mtime, fi.ctime))
     
     def exists(self, path):
@@ -190,13 +190,13 @@ class Client(object):
 
         size = 0
         if 'x' in mode:
-            fd = self.lib.jfs_create(_tid(), self.h, _bin(path), c_uint16(0o666), c_uint16(self.umask))
+            fd = self.lib.jfs_create(c_int64(_tid()), self.h, _bin(path), c_uint16(0o666), c_uint16(self.umask))
         else:
             try:
                 sz = c_uint64()
-                fd = self.lib.jfs_open(_tid(), self.h, _bin(path), byref(sz), c_uint32(flag))
+                fd = self.lib.jfs_open(c_int64(_tid()), self.h, _bin(path), byref(sz), c_uint32(flag))
                 if 'w' in mode:
-                    self.lib.jfs_ftruncate(_tid(), fd, 0)
+                    self.lib.jfs_ftruncate(c_int64(_tid()), fd, c_uint64(0))
                 else:
                     size = sz.value
             except OSError as e:
@@ -204,33 +204,33 @@ class Client(object):
                     raise e
                 if 'r' in mode:
                     raise FileNotFoundError(e)
-                fd = self.lib.jfs_create(_tid(), self.h, _bin(path), c_uint16(0o666), c_uint16(self.umask))
+                fd = self.lib.jfs_create(c_int64(_tid()), self.h, _bin(path), c_uint16(0o666), c_uint16(self.umask))
         return File(self.lib, fd, path, mode, flag, size, buffering, encoding, errors)
 
     def truncate(self, path, size):
         """Truncate a file to a specified size."""
-        self.lib.jfs_truncate(_tid(), self.h, _bin(path), c_uint64(size))
+        self.lib.jfs_truncate(c_int64(_tid()), self.h, _bin(path), c_uint64(size))
 
     def remove(self, path):
         """Remove a file."""
-        self.lib.jfs_delete(_tid(), self.h, _bin(path))
+        self.lib.jfs_delete(c_int64(_tid()), self.h, _bin(path))
 
     def mkdir(self, path, mode=0o777):
         """Create a directory."""
-        self.lib.jfs_mkdir(_tid(), self.h, _bin(path), c_uint16(mode&0o777), c_uint16(self.umask))
+        self.lib.jfs_mkdir(c_int64(_tid()), self.h, _bin(path), c_uint16(mode&0o777), c_uint16(self.umask))
 
     def makedirs(self, path, mode=0o777):
         """Create a directory and all its parent components if they do not exist."""
         print("makedirs: ", path, "--: ", mode, "--: ", self.umask)
-        self.lib.jfs_mkdirAll(_tid(), self.h, _bin(path), c_uint16(mode&0o777), c_uint16(self.umask))
+        self.lib.jfs_mkdirAll(c_int64(_tid()), self.h, _bin(path), c_uint16(mode&0o777), c_uint16(self.umask))
 
     def rmdir(self, path):
         """Remove a directory. The directory must be empty."""
-        self.lib.jfs_rmr(_tid(), self.h, _bin(path))
+        self.lib.jfs_rmr(c_int64(_tid()), self.h, _bin(path))
 
     def rename(self, old, new):
         """Rename the file or directory old to new."""
-        self.lib.jfs_rename(_tid(), self.h, _bin(old), _bin(new), c_uint32(0))
+        self.lib.jfs_rename(c_int64(_tid()), self.h, _bin(old), _bin(new), c_uint32(0))
 
     def listdir(self, path, detail=False):
         """Return a list containing the names of the entries in the directory given by path."""
@@ -238,7 +238,7 @@ class Client(object):
         size = c_int()
         # func jfs_listdir(pid int, h int64, cpath *C.char, offset int, buf uintptr, bufsize int) int {
 
-        self.lib.jfs_listdir2(_tid(), self.h, _bin(path), bool(detail), byref(buf), byref(size))
+        self.lib.jfs_listdir2(c_int64(_tid()), self.h, _bin(path), bool(detail), byref(buf), byref(size))
         data = string_at(buf, size)
         infos = []
         pos = 0
@@ -259,31 +259,31 @@ class Client(object):
     
     def chmod(self, path, mode):
         """Change the mode of a file."""
-        self.lib.jfs_chmod(_tid(), self.h, _bin(path), c_uint16(mode))
+        self.lib.jfs_chmod(c_int64(_tid()), self.h, _bin(path), c_uint16(mode))
 
     def chown(self, path, uid, gid):
         """Change the owner and group id of a file."""
-        self.lib.jfs_chown(_tid(), self.h, _bin(path), c_uint32(uid), c_uint32(gid))
+        self.lib.jfs_chown(c_int64(_tid()), self.h, _bin(path), c_uint32(uid), c_uint32(gid))
 
     def link(self, src, dst):
         """Create a hard link to a file."""
-        self.lib.jfs_link(_tid(), self.h, _bin(src), _bin(dst))
+        self.lib.jfs_link(c_int64(_tid()), self.h, _bin(src), _bin(dst))
 
     def lstat(self, path):
         """Like stat(), but do not follow symbolic links."""
         info = FileInfo()
-        self.lib.jfs_lstat(_tid(), self.h, _bin(path), byref(info))
+        self.lib.jfs_lstat(c_int64(_tid()), self.h, _bin(path), byref(info))
         return os.stat_result((info.mode, info.inode, 0, info.nlink, info.uid, info.gid, info.length, info.atime, info.mtime, info.ctime))
 
     def readlink(self, path):
         """Return a string representing the path to which the symbolic link points."""
         buf = bytes(1<<16)
-        n = self.lib.jfs_readlink(_tid(), self.h, _bin(path), buf, len(buf))
+        n = self.lib.jfs_readlink(c_int64(_tid()), self.h, _bin(path), buf, c_int64(len(buf)))
         return buf[:n].decode()
 
     def symlink(self, src, dst):
         """Create a symbolic link."""
-        self.lib.jfs_symlink(_tid(), self.h, _bin(src), _bin(dst))
+        self.lib.jfs_symlink(c_int64(_tid()), self.h, _bin(src), _bin(dst))
 
     def unlink(self, path):
         """Remove a file."""
@@ -291,14 +291,14 @@ class Client(object):
 
     def rmr(self, path):
         """Remove a directory and all its contents recursively."""
-        self.lib.jfs_rmr(_tid(), self.h, _bin(path))
+        self.lib.jfs_rmr(c_int64(_tid()), self.h, _bin(path))
 
     def utime(self, path, times=None):
         """Set the access and modified times of a file."""
         if not times:
             now = time.time()
             times = (now, now)
-        self.lib.jfs_utime(_tid(), self.h, _bin(path), c_int64(int(times[1]*1000)), c_int64(int(times[0]*1000)))
+        self.lib.jfs_utime(c_int64(_tid()), self.h, _bin(path), c_int64(int(times[1]*1000)), c_int64(int(times[0]*1000)))
 
     def walk(self, top, topdown=True, onerror=None, followlinks=False):
         raise NotImplementedError
@@ -307,14 +307,14 @@ class Client(object):
         """Get an extended attribute on a file."""
         size = 64 << 10 # XattrSizeMax
         buf = bytes(size)
-        size = self.lib.jfs_getXattr(_tid(), self.h, _bin(path), _bin(name), buf, size)
+        size = self.lib.jfs_getXattr(c_int64(_tid()), self.h, _bin(path), _bin(name), buf, c_int64(size))
         return buf[:size]
 
     def listxattr(self, path):
         """List extended attributes on a file."""
         buf = c_void_p()
         size = c_int()
-        self.lib.jfs_listXattr2(_tid(), self.h, _bin(path), byref(buf), byref(size))
+        self.lib.jfs_listXattr2(c_int64(_tid()), self.h, _bin(path), byref(buf), byref(size))
         data = string_at(buf, size).decode()
         self.lib.free(buf)
         if not data:
@@ -324,15 +324,15 @@ class Client(object):
     def setxattr(self, path, name, value, flags=0):
         """Set an extended attribute on a file."""
         value = _bin(value)
-        self.lib.jfs_setXattr(_tid(), self.h, _bin(path), _bin(name), value, len(value), c_int64(flags))
+        self.lib.jfs_setXattr(c_int64(_tid()),  self.h, _bin(path), _bin(name), value, c_int32(len(value)), c_int32(flags))
 
     def removexattr(self, path, name):
         """Remove an extended attribute from a file."""
-        self.lib.jfs_removeXattr(_tid(), self.h, _bin(path), _bin(name))
+        self.lib.jfs_removeXattr(c_int64(_tid()), self.h, _bin(path), _bin(name))
 
     def clone(self, src, dst):
         """Clone a file."""
-        self.lib.jfs_clone(_tid(), self.h, _bin(src), _bin(dst))
+        self.lib.jfs_clone(c_int64(_tid()), self.h, _bin(src), _bin(dst))
 
     # def summary(self, path, depth=0, entries=1):
     #     """Get the summary of a directory."""
@@ -397,7 +397,7 @@ class File(object):
         if (not self._readbuf or self._readbuf_off == len(self._readbuf)) and size < self._buffering:
             if not self._readbuf or len(self._readbuf) < self._buffering:
                 self._readbuf = bytes(self._buffering)
-            n = self.lib.jfs_pread(_tid(), self.fd, self._readbuf, self._buffering, c_int64(self.off))
+            n = self.lib.jfs_pread(c_int64(_tid()), self.fd, self._readbuf, c_uint64(self._buffering), c_int64(self.off))
             if n < self._buffering:
                 self._readbuf = self._readbuf[:n]
             self._readbuf_off = 0
@@ -417,7 +417,7 @@ class File(object):
             while size > 0:
                 n = min(size, 4 << 20)
                 buf = bytes(n)
-                n = self.lib.jfs_pread(_tid(), self.fd, buf, c_uint64(n), c_int64(self.off+got))
+                n = self.lib.jfs_pread(c_int64(_tid()), self.fd, buf, c_uint64(n), c_int64(self.off+got))
                 if n == 0:
                     break
                 if n < len(buf):
@@ -428,7 +428,7 @@ class File(object):
         elif size < 0:
             while True:
                 buf = bytes(128 << 10)
-                n = self.lib.jfs_pread(_tid(), self.fd, buf, len(buf), c_int64(self.off+got))
+                n = self.lib.jfs_pread(c_int64(_tid()), self.fd, buf, c_uint64(len(buf)), c_int64(self.off+got))
                 if n == 0:
                     break
                 if n < len(buf):
@@ -476,7 +476,7 @@ class File(object):
             if len(data) < self._buffering:
                 self._writebuf.append(data)
             else:
-                self.lib.jfs_pwrite(_tid(), self.fd, data, c_uint64(len(data)), c_int64(self.off))
+                self.lib.jfs_pwrite(c_int64(_tid()), self.fd, data, c_uint64(len(data)), c_int64(self.off))
         else:
             self._writebuf.append(data)
         self.off += len(data)
@@ -524,7 +524,7 @@ class File(object):
         self.flush()
         if size is None:
             size = self.tell()
-        self.lib.jfs_ftruncate(_tid(), self.fd, c_uint64(size))
+        self.lib.jfs_ftruncate(c_int64(_tid()), self.fd, c_uint64(size))
         self.length = size
         return size
 
@@ -533,20 +533,20 @@ class File(object):
         This does nothing for read-only and non-blocking streams."""
         if self._writebuf:
             data = b''.join(self._writebuf)
-            self.lib.jfs_pwrite(_tid(), self.fd, data, len(data), c_uint64(self.off-len(data)))
+            self.lib.jfs_pwrite(c_int64(_tid()), self.fd, data, c_uint64(len(data)), c_int64(self.off-len(data)))
             self._writebuf = []
 
     def fsync(self):
         """Force write file data to the backend storage."""
         self.flush()
-        self.lib.jfs_fsync(_tid(), self.fd)
+        self.lib.jfs_fsync(c_int64(_tid()), self.fd)
 
     def close(self):
         """Close the file. A closed file cannot be used for further I/O operations."""
         if self.closed:
             return
         self.flush()
-        self.lib.jfs_close(_tid(), self.fd)
+        self.lib.jfs_close(c_int64(_tid()), self.fd)
         self.closed = True
 
     def __del__(self):
