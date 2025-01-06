@@ -154,9 +154,7 @@ class Client(object):
             self.stat(path)
             return True
         except OSError as e:
-            if e.errno == errno.ENOENT:
-                return False
-            raise
+            return False
 
     def open(self, path, mode='r', buffering=-1, encoding=None, errors=None):
         """Open a file, returns a filelike object."""
