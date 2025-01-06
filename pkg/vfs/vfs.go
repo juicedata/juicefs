@@ -449,7 +449,12 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 		}
 		h.readAt = time.Now()
 		if h.dirHandler, err = v.Meta.NewDirHandler(ctx, ino, plus, initEntries); err != 0 {
-			return
+			if plus && err == syscall.EACCES {
+				h.dirHandler, err = v.Meta.NewDirHandler(ctx, ino, false, initEntries)
+			}
+			if err != 0 {
+				return
+			}
 		}
 	}
 	if entries, err = h.dirHandler.List(ctx, off); err != 0 {
