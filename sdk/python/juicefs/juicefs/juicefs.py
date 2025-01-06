@@ -324,7 +324,7 @@ class Client(object):
     def setxattr(self, path, name, value, flags=0):
         """Set an extended attribute on a file."""
         value = _bin(value)
-        self.lib.jfs_setXattr(_tid(), self.h, _bin(path), _bin(name), value, len(value), c_int(flags))
+        self.lib.jfs_setXattr(_tid(), self.h, _bin(path), _bin(name), value, len(value), c_int64(flags))
 
     def removexattr(self, path, name):
         """Remove an extended attribute from a file."""
