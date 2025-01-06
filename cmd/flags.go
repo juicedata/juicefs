@@ -297,6 +297,26 @@ func metaFlags() []cli.Flag {
 			Name:  "sort-dir",
 			Usage: "sort entries within a directory by name",
 		},
+		&cli.IntFlag{
+			Name:  "max-open-conns",
+			Value: 0,
+			Usage: "maximum number of connections allowed for meta engine (used for SQL engine only)",
+		},
+		&cli.IntFlag{
+			Name:  "max-idle-conns",
+			Value: 10,
+			Usage: "maximum number of idle connections allowed for meta engine (used for SQL engine only)",
+		},
+		&cli.IntFlag{
+			Name:  "max-idle-time",
+			Value: 300,
+			Usage: "maximum time allowed for a idle connection to be closed (used for SQL engine only)",
+		},
+		&cli.IntFlag{
+			Name:  "max-life-time",
+			Value: 3600,
+			Usage: "maximum life time allowed for a connection to be closed (used for SQL engine only)",
+		},
 	})
 }
 

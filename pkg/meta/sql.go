@@ -325,8 +325,22 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	if searchPath != "" {
 		engine.SetSchema(searchPath)
 	}
-	engine.DB().SetMaxIdleConns(runtime.GOMAXPROCS(-1) * 2)
-	engine.DB().SetConnMaxIdleTime(time.Minute * 5)
+	if conf.SqlMaxOpenConns > 0 {
+		engine.DB().SetMaxOpenConns(conf.SqlMaxOpenConns)
+	}
+	if conf.SqlMaxIdleConns > 0 {
+		engine.DB().SetMaxIdleConns(conf.SqlMaxIdleConns)
+	} else {
+		engine.DB().SetMaxIdleConns(runtime.GOMAXPROCS(-1) * 2)
+	}
+	if conf.SqlMaxIdleTime > 0 {
+		engine.DB().SetConnMaxIdleTime(time.Second * time.Duration(conf.SqlMaxIdleTime))
+	} else {
+		engine.DB().SetConnMaxIdleTime(time.Minute * 5)
+	}
+	if conf.SqlMaxLifeTime > 0 {
+		engine.DB().SetConnMaxLifetime(time.Second * time.Duration(conf.SqlMaxLifeTime))
+	}
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	m := &dbMeta{
 		baseMeta: newBaseMeta(addr, conf),
