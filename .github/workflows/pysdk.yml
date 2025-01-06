@@ -1,28 +1,28 @@
 name: "pysdk"
 
 on:
-  push:
-    branches:
-    - main
-    - release**
-    paths:
-    - '**/hypo/fs_op.py'
-    - '**/hypo/fs.py'
-    - '**/hypo/fs_sdk_test.py'
-    - '**/test_pysdk.py'
-    - '**/juicefs.py'
-    - '**/pysdk.yml'
-  pull_request:
-    branches:
-    - main
-    - release**
-    paths:
-    - '**/hypo/fs_op.py'
-    - '**/hypo/fs.py'
-    - '**/hypo/fs_sdk_test.py'
-    - '**/test_pysdk.py'
-    - '**/juicefs.py'
-    - '**/pysdk.yml'
+  # push:
+  #   branches:
+  #   - main
+  #   - release**
+  #   paths:
+  #   - '**/hypo/fs_op.py'
+  #   - '**/hypo/fs.py'
+  #   - '**/hypo/fs_sdk_test.py'
+  #   - '**/test_pysdk.py'
+  #   - '**/juicefs.py'
+  #   - '**/pysdk.yml'
+  # pull_request:
+  #   branches:
+  #   - main
+  #   - release**
+  #   paths:
+  #   - '**/hypo/fs_op.py'
+  #   - '**/hypo/fs.py'
+  #   - '**/hypo/fs_sdk_test.py'
+  #   - '**/test_pysdk.py'
+  #   - '**/juicefs.py'
+  #   - '**/pysdk.yml'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:

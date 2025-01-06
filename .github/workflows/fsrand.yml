@@ -1,24 +1,24 @@
 name: "fsrand"
 
 on:
-  push:
-    branches:
-    - main
-    - release**
-    paths:
-    - '**/fsrand.yml'
-    - '**/fs.py'
-    - '**/fs_test.py'
-    - '**/fs_acl_test.py'
-  pull_request:
-    branches:
-    - main
-    - release**
-    paths:
-    - '**/fsrand2.yml'
-    - '**/fs.py'
-    - '**/fs_test.py'
-    - '**/fs_acl_test.py'
+  # push:
+  #   branches:
+  #   - main
+  #   - release**
+  #   paths:
+  #   - '**/fsrand.yml'
+  #   - '**/fs.py'
+  #   - '**/fs_test.py'
+  #   - '**/fs_acl_test.py'
+  # pull_request:
+  #   branches:
+  #   - main
+  #   - release**
+  #   paths:
+  #   - '**/fsrand2.yml'
+  #   - '**/fs.py'
+  #   - '**/fs_test.py'
+  #   - '**/fs_acl_test.py'
   schedule:
     - cron:  '0 17 * * 0'
   workflow_dispatch:
