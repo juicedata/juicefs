@@ -1382,10 +1382,12 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 			return nil
 		}
 		nodeAttr.setAtime(now.UnixNano())
+		attr.Atime = now.Unix()
+		attr.Atimensec = uint32(now.Nanosecond())
 		_, e = s.Cols("atime", "atimensec").Update(&nodeAttr, &node{Inode: inode})
 		return e
 	}, inode)
-	atime = now.Unix()
+	atime = attr.Atime
 	return
 }
 
