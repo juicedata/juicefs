@@ -317,11 +317,6 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf.Sid, _ = strconv.ParseUint(os.Getenv("_JFS_META_SID"), 10, 64)
 	conf.SortDir = c.Bool("sort-dir")
 
-	conf.SqlMaxOpenConns = c.Int("max-open-conns")
-	conf.SqlMaxIdleConns = c.Int("max-idle-conns")
-	conf.SqlMaxIdleTime  = c.Int("max-idle-time")
-	conf.SqlMaxLifeTime  = c.Int("max-life-time")
-
 	atimeMode := c.String("atime-mode")
 	if atimeMode != meta.RelAtime && atimeMode != meta.StrictAtime && atimeMode != meta.NoAtime {
 		logger.Warnf("unknown atime-mode \"%s\", changed to %s", atimeMode, meta.NoAtime)

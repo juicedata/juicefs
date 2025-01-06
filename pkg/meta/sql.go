@@ -266,10 +266,53 @@ func recoveryMysqlPwd(addr string) string {
 	return addr
 }
 
+func retriveUrlConnsOptions(murl string) (string, int, int, int, int) {
+	optIndex := strings.Index(murl, "?")
+
+	var vOpenConns int = 0
+	var vIdleConns int = 10
+	var vIdleTime  int = 300
+	var vLifeTime  int = 3600
+
+	if optIndex != -1 {
+		baseurl := murl[:optIndex]
+		optsurl := murl[optIndex+1:]
+		if vals, err := url.ParseQuery(optsurl); err == nil {
+			if vals.Has("MaxOpenConns") {
+				vOpenConns, _ = strconv.Atoi(vals.Get("MaxOpenConns"))
+				vals.Del("MaxOpenConns")
+			}
+			if vals.Has("MaxIdleConns") {
+				vIdleConns, _ = strconv.Atoi(vals.Get("MaxIdleConns"))
+				vals.Del("MaxIdleConns")
+			}
+			if vals.Has("MaxIdleTime") {
+				vIdleTime, _ = strconv.Atoi(vals.Get("MaxIdleTime"))
+				vals.Del("MaxIdleTime");
+			}
+			if vals.Has("MaxLifeTime") {
+				vLifeTime, _ = strconv.Atoi(vals.Get("MaxLifeTime"))
+				vals.Del("MaxLifeTime");
+			}
+			optsurl = vals.Encode()
+		}
+		if optsurl != "" {
+			return fmt.Sprintf("%s?%s", baseurl, optsurl), vOpenConns, vIdleConns, vIdleTime, vLifeTime
+		} else {
+			return baseurl, vOpenConns, vIdleConns, vIdleTime, vLifeTime
+		}
+	}
+
+	return murl, vOpenConns, vIdleConns, vIdleTime, vLifeTime
+}
+
 var setTransactionIsolation func(dns string) (string, error)
 
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	var searchPath string
+
+	addr, vOpenConns, vIdleConns, vIdleTime, vLifeTime := retriveUrlConnsOptions(addr)
+
 	if driver == "postgres" {
 		addr = driver + "://" + addr
 		driver = "pgx"
@@ -325,21 +368,21 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	if searchPath != "" {
 		engine.SetSchema(searchPath)
 	}
-	if conf.SqlMaxOpenConns > 0 {
-		engine.DB().SetMaxOpenConns(conf.SqlMaxOpenConns)
+	if vOpenConns > 0 {
+		engine.DB().SetMaxOpenConns(vOpenConns)
 	}
-	if conf.SqlMaxIdleConns > 0 {
-		engine.DB().SetMaxIdleConns(conf.SqlMaxIdleConns)
+	if vIdleConns > 0 {
+		engine.DB().SetMaxIdleConns(vIdleConns)
 	} else {
 		engine.DB().SetMaxIdleConns(runtime.GOMAXPROCS(-1) * 2)
 	}
-	if conf.SqlMaxIdleTime > 0 {
-		engine.DB().SetConnMaxIdleTime(time.Second * time.Duration(conf.SqlMaxIdleTime))
+	if vIdleTime > 0 {
+		engine.DB().SetConnMaxIdleTime(time.Second * time.Duration(vIdleTime))
 	} else {
 		engine.DB().SetConnMaxIdleTime(time.Minute * 5)
 	}
-	if conf.SqlMaxLifeTime > 0 {
-		engine.DB().SetConnMaxLifetime(time.Second * time.Duration(conf.SqlMaxLifeTime))
+	if vLifeTime > 0 {
+		engine.DB().SetConnMaxLifetime(time.Second * time.Duration(vLifeTime))
 	}
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	m := &dbMeta{

@@ -50,11 +50,6 @@ type Config struct {
 	SkipDirMtime       time.Duration
 	Sid                uint64
 	SortDir            bool
-
-        SqlMaxOpenConns    int
-        SqlMaxIdleConns    int
-        SqlMaxIdleTime     int
-        SqlMaxLifeTime     int
 }
 
 func DefaultConf() *Config {
