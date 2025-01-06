@@ -1309,7 +1309,8 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 		} else {
 			buf := target.([]byte)
 			// ctime and mtime are ignored since symlink can't be modified
-			attr := &Attr{Atime: int64(binary.BigEndian.Uint64(buf[:8]))}
+			atime := int64(binary.BigEndian.Uint64(buf[:8]))
+			attr := &Attr{Atime: atime / int64(time.Second), Atimensec: uint32(atime % int64(time.Second))}
 			if !m.atimeNeedsUpdate(attr, time.Now()) {
 				*path = buf[8:]
 				return 0
