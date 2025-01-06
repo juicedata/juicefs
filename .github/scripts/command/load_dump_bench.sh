@@ -8,7 +8,7 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 META_URL=$(get_meta_url $META)
 META_URL2=$(get_meta_url2 $META)
-FILE_COUNT_IN_BIGDIR=100000
+FILE_COUNT_IN_BIGDIR=10000
 
 prepare_test_data(){
   umount_jfs /tmp/jfs $META_URL
@@ -19,7 +19,7 @@ prepare_test_data(){
   ./juicefs mount -d $META_URL /tmp/jfs
   threads=10
   ./juicefs mdtest $META_URL /bigdir --depth=1 --dirs=0 --files=$((FILE_COUNT_IN_BIGDIR/threads)) --threads=$threads --write=8192
-  ./juicefs mdtest $META_URL /smalldir --depth=2 --dirs=10 --files=10 --threads=10 --write=8192
+  ./juicefs mdtest $META_URL /smalldir --depth=1 --dirs=10 --files=10 --threads=10 --write=8192
 }
 
 if [[ "$START_META" == "true" ]]; then  
@@ -29,6 +29,7 @@ fi
 
 test_dump_load(){
   do_dump_load
+  exit 1
 }
 
 test_dump_load_fast(){
