@@ -40,7 +40,8 @@ def flush_meta(meta_url:str):
         if protocol == 'redis':
             run_cmd(f'redis-cli -h {host} -p {port} -n {db} flushdb')
         elif protocol == 'tikv':
-            run_cmd(f'echo "delp {db} --yes" |tcli -pd {host}:{port}')
+            # TODO: should only flush the specified db
+            run_cmd(f'echo "delall --yes" |tcli -pd {host}:{port}')
         else:
             raise Exception(f'{protocol} not supported')
         print(f'flush {protocol}://{host}:{port}/{db} succeed')
