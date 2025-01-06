@@ -31,6 +31,9 @@ from ctypes import *
 MODE_WRITE = 2
 MODE_READ = 4
 
+XATTR_CREATE = 1
+XATTR_REPLACE = 2
+
 def check_error(r, fn, args):
     if r < 0:
         e = OSError(f'call {fn.__name__} failed: [Errno {-r}] {os.strerror(-r)}: {args[2:]}')
