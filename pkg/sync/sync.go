@@ -359,7 +359,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 	if size > maxBlock && !inMap(dst, readInMem) && !inMap(src, fastStreamRead) {
 		var err error
 		var in io.Reader
-		downer := newParallelDownloader(src, key, size, 10<<20, concurrent)
+		downer := newParallelDownloader(src, key, size, downloadBufSize, concurrent)
 		defer downer.Close()
 		if inMap(dst, streamWrite) {
 			in = downer
