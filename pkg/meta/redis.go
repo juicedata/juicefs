@@ -908,14 +908,11 @@ func (m *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 }
 
 func (m *redisMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
-	return errno(m.rdb.Watch(ctx, func(tx *redis.Tx) error {
-		val, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
-		if err != nil {
-			return err
-		}
-		m.parseAttr(val, attr)
-		return nil
-	}, m.inodeKey(inode)))
+	a, err := m.rdb.Get(ctx, m.inodeKey(inode)).Bytes()
+	if err == nil {
+		m.parseAttr(a, attr)
+	}
+	return errno(err)
 }
 
 type timeoutError interface {
