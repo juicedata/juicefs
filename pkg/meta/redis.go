@@ -828,14 +828,11 @@ func (m *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 }
 
 func (m *redisMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
-	return errno(m.rdb.Watch(ctx, func(tx *redis.Tx) error {
-		val, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
-		if err != nil {
-			return err
-		}
-		m.parseAttr(val, attr)
-		return nil
-	}, m.inodeKey(inode)))
+	a, err := m.rdb.Get(ctx, m.inodeKey(inode)).Bytes()
+	if err == nil {
+		m.parseAttr(a, attr)
+	}
+	return errno(err)
 }
 
 type timeoutError interface {
@@ -4429,29 +4426,27 @@ func (m *redisMeta) doSetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.
 }
 
 func (m *redisMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno {
-	return errno(m.rdb.Watch(ctx, func(tx *redis.Tx) error {
-		if aclId == aclAPI.None {
-			val, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
-			if err != nil {
-				return err
-			}
-			attr := &Attr{}
-			m.parseAttr(val, attr)
-			m.of.Update(ino, attr)
-
-			aclId = getAttrACLId(attr, aclType)
-		}
-
-		a, err := m.getACL(ctx, tx, aclId)
+	if aclId == aclAPI.None {
+		val, err := m.rdb.Get(ctx, m.inodeKey(ino)).Bytes()
 		if err != nil {
-			return err
+			return errno(err)
 		}
-		if a == nil {
-			return ENOATTR
-		}
-		*rule = *a
-		return nil
-	}, m.inodeKey(ino)))
+		attr := &Attr{}
+		m.parseAttr(val, attr)
+		m.of.Update(ino, attr)
+
+		aclId = getAttrACLId(attr, aclType)
+	}
+
+	a, err := m.getACL(ctx, nil, aclId)
+	if err != nil {
+		return errno(err)
+	}
+	if a == nil {
+		return ENOATTR
+	}
+	*rule = *a
+	return 0
 }
 
 func (m *redisMeta) getACL(ctx Context, tx *redis.Tx, id uint32) (*aclAPI.Rule, error) {
@@ -4462,15 +4457,13 @@ func (m *redisMeta) getACL(ctx Context, tx *redis.Tx, id uint32) (*aclAPI.Rule, 
 		return cRule, nil
 	}
 
-	cmds, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.HGet(ctx, m.aclKey(), strconv.FormatUint(uint64(id), 10))
-		return nil
-	})
-	if err != nil {
-		return nil, err
+	var val []byte
+	var err error
+	if tx != nil {
+		val, err = tx.HGet(ctx, m.aclKey(), strconv.FormatUint(uint64(id), 10)).Bytes()
+	} else {
+		val, err = m.rdb.HGet(ctx, m.aclKey(), strconv.FormatUint(uint64(id), 10)).Bytes()
 	}
-
-	val, err := cmds[0].(*redis.StringCmd).Bytes()
 	if err != nil {
 		return nil, err
 	}
