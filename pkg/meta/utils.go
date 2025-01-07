@@ -356,9 +356,9 @@ func (m *baseMeta) RemoveEx(ctx Context, parent Ino, name string, skipTrash bool
 	} else if numThreads < 2 {
 		logger.Infof("Invalid threads number %d , auto adjust to 2 .", numThreads)
 		numThreads = 2
-	} else if numThreads > 127 {
-		logger.Infof("Invalid threads number %d , auto adjust to 127 .", numThreads)
-		numThreads = 127
+	} else if numThreads > 255 {
+		logger.Infof("Invalid threads number %d , auto adjust to 255 .", numThreads)
+		numThreads = 255
 	}
 	logger.Infof("Start emptyEntry with %d concurrent threads .", numThreads)
 	concurrent := make(chan int, numThreads)
