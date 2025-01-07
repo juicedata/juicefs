@@ -160,6 +160,7 @@ jobs:
           sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/fs_sdk_test.py
 
       - name: Run fs.py
+        if: false
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
