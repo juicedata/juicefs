@@ -184,7 +184,7 @@ var bufPool = sync.Pool{
 func try(n int, f func() error) (err error) {
 	for i := 0; i < n; i++ {
 		err = f()
-		if err == nil {
+		if err == nil || errors.Is(err, utils.ErrSkipped) {
 			return
 		}
 		logger.Debugf("Try %d failed: %s", i+1, err)
@@ -697,6 +697,8 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 					copyPerms(dst, obj, config)
 				}
 				copied.Increment()
+			} else if errors.Is(err, utils.ErrSkipped) {
+				skipped.Increment()
 			} else {
 				failed.Increment()
 				logger.Errorf("Failed to copy object %s: %s", key, err)
