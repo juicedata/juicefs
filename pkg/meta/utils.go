@@ -334,7 +334,7 @@ func (m *baseMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, s
 	return st
 }
 
-func (m *baseMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, numThreads int, count *uint64) syscall.Errno {
+func (m *baseMeta) RemoveEx(ctx Context, parent Ino, name string, skipTrash bool, numThreads int, count *uint64) syscall.Errno {
 	parent = m.checkRoot(parent)
 	if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, nil); st != 0 {
 		return st
@@ -352,6 +352,10 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, 
 	}
 	concurrent := make(chan int, numThreads)
 	return m.emptyEntry(ctx, parent, name, inode, skipTrash, count, concurrent)
+}
+
+func (m *baseMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, count *uint64) syscall.Errno {
+	return m.RemoveEx(ctx, parent, name, skipTrash, 50, count)
 }
 
 func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool) syscall.Errno {
