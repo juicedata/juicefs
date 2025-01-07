@@ -43,6 +43,11 @@ $ juicefs rmr /mnt/jfs/foo`,
 				Name:  "skip-trash",
 				Usage: "skip trash and delete files directly (requires root)",
 			},
+                        &cli.IntFlag{
+                                Name:  "threads",
+                                Value: 50,
+                                Usage: "number of concurrency worker threads (appropriate value)",
+                        },
 		},
 	}
 }
@@ -65,6 +70,15 @@ func openController(dpath string) (*os.File, error) {
 func rmr(ctx *cli.Context) error {
 	setup(ctx, 1)
 	var flag uint8
+	var numThreads int
+
+	numThreads = ctx.Int("threads")
+	if numThreads < 2 {
+		numThreads = 2
+	}
+	if numThreads > 127 {
+		numThreads = 127
+	}
 	if ctx.Bool("skip-trash") {
 		if os.Getuid() != 0 {
 			logger.Fatalf("Only root can remove files directly")
@@ -97,7 +111,7 @@ func rmr(ctx *cli.Context) error {
 		wb.Put64(inode)
 		wb.Put8(uint8(len(name)))
 		wb.Put([]byte(name))
-		wb.Put8(flag)
+		wb.Put8(flag + uint8(numThreads * 2))
 		_, err = f.Write(wb.Bytes())
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
