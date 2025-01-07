@@ -61,7 +61,7 @@ test_sync_without_mount_point(){
     
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5 \
+         --list-threads 10 --list-depth 5 --check-new \
          2>&1 | tee sync.log
     # diff data/ /jfs/data1/
     check_sync_log $file_count
@@ -86,6 +86,10 @@ test_sync_without_mount_point2(){
          --list-threads 10 --list-depth 5\
          2>&1 | tee sync.log
     check_sync_log $file_count
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --check-all \
+         2>&1 | tee sync.log
     ./juicefs mount -d $META_URL /jfs
     diff data/ /jfs/data/
     ./mc rm -r --force myminio/data
