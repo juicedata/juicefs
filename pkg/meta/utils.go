@@ -351,12 +351,16 @@ func (m *baseMeta) RemoveEx(ctx Context, parent Ino, name string, skipTrash bool
 		return m.Unlink(ctx, parent, name)
 	}
 	if numThreads <= 0 {
+		logger.Infof("Invalid threads number %d , auto adjust to 50 .", numThreads)
 		numThreads = 50
 	} else if numThreads < 2 {
+		logger.Infof("Invalid threads number %d , auto adjust to 2 .", numThreads)
 		numThreads = 2
-	} else if numThreads > 255 {
-		numThreads = 255
+	} else if numThreads > 127 {
+		logger.Infof("Invalid threads number %d , auto adjust to 127 .", numThreads)
+		numThreads = 127
 	}
+	logger.Infof("Start emptyEntry with %d concurrent threads .", numThreads)
 	concurrent := make(chan int, numThreads)
 	return m.emptyEntry(ctx, parent, name, inode, skipTrash, count, concurrent)
 }
