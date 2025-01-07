@@ -222,7 +222,6 @@ class Client(object):
 
     def makedirs(self, path, mode=0o777):
         """Create a directory and all its parent components if they do not exist."""
-        print("makedirs: ", path, "--: ", mode, "--: ", self.umask)
         self.lib.jfs_mkdirAll(c_int64(_tid()), self.h, _bin(path), c_uint16(mode&0o777), c_uint16(self.umask))
 
     def rmdir(self, path):
