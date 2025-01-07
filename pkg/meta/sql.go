@@ -270,9 +270,9 @@ func retriveUrlConnsOptions(murl string) (string, int, int, int, int) {
 	optIndex := strings.Index(murl, "?")
 
 	var vOpenConns int = 0
-	var vIdleConns int = 10
+	var vIdleConns int = runtime.GOMAXPROCS(-1) * 2
 	var vIdleTime  int = 300
-	var vLifeTime  int = 3600
+	var vLifeTime  int = 0
 
 	if optIndex != -1 {
 		baseurl := murl[:optIndex]
@@ -295,6 +295,12 @@ func retriveUrlConnsOptions(murl string) (string, int, int, int, int) {
 				vals.Del("max_life_time");
 			}
 			optsurl = vals.Encode()
+		}
+		if vIdleConns <= 0 {
+			vIdleConns = runtime.GOMAXPROCS(-1) * 2
+		}
+		if vIdleTime <= 0 {
+			vIdleTime = 300
 		}
 		if optsurl != "" {
 			return fmt.Sprintf("%s?%s", baseurl, optsurl), vOpenConns, vIdleConns, vIdleTime, vLifeTime
@@ -371,19 +377,11 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	if vOpenConns > 0 {
 		engine.DB().SetMaxOpenConns(vOpenConns)
 	}
-	if vIdleConns > 0 {
-		engine.DB().SetMaxIdleConns(vIdleConns)
-	} else {
-		engine.DB().SetMaxIdleConns(runtime.GOMAXPROCS(-1) * 2)
-	}
-	if vIdleTime > 0 {
-		engine.DB().SetConnMaxIdleTime(time.Second * time.Duration(vIdleTime))
-	} else {
-		engine.DB().SetConnMaxIdleTime(time.Minute * 5)
-	}
 	if vLifeTime > 0 {
 		engine.DB().SetConnMaxLifetime(time.Second * time.Duration(vLifeTime))
 	}
+	engine.DB().SetMaxIdleConns(vIdleConns)
+	engine.DB().SetConnMaxIdleTime(time.Second * time.Duration(vIdleTime))
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	m := &dbMeta{
 		baseMeta: newBaseMeta(addr, conf),
