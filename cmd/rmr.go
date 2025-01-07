@@ -45,8 +45,9 @@ $ juicefs rmr /mnt/jfs/foo`,
 			},
                         &cli.IntFlag{
                                 Name:  "threads",
+				Aliases: []string{"p"},
                                 Value: 50,
-                                Usage: "number of concurrency worker threads (appropriate value)",
+                                Usage: "number of threads for delete jobs (appropriate value)",
                         },
 		},
 	}
