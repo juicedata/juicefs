@@ -23,4 +23,5 @@ import (
 var (
 	ENOTSUP        = errors.New("not supported")
 	ErrFuncTimeout = errors.New("function timeout")
+	ErrSkipped     = errors.New("skipped")
 )
