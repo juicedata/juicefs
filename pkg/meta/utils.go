@@ -352,6 +352,10 @@ func (m *baseMeta) RemoveEx(ctx Context, parent Ino, name string, skipTrash bool
 	}
 	if numThreads <= 0 {
 		numThreads = 50
+	} else if numThreads < 2 {
+		numThreads = 2
+	} else if numThreads > 255 {
+		numThreads = 255
 	}
 	concurrent := make(chan int, numThreads)
 	return m.emptyEntry(ctx, parent, name, inode, skipTrash, count, concurrent)

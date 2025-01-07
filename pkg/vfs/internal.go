@@ -298,22 +298,17 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		inode := Ino(r.Get64())
 		name := string(r.Get(int(r.Get8())))
 		var skipTrash bool
-		var numThreads int = 50
+		var numThreads uint8 = 50
 		if r.HasMore() {
-			numThreads = int(r.Get8())
-			skipTrash = numThreads&1 != 0
-			numThreads = numThreads / 2
-			if numThreads == 0 {
-				numThreads = 50
-			}
-			if numThreads < 2 {
-				numThreads = 2
+			skipTrash = r.Get8()&1 != 0
+			if r.HasMore() {
+				numThreads = r.Get8()
 			}
 		}
 		var count uint64
 		var st syscall.Errno
 		go func() {
-			st = v.Meta.RemoveEx(ctx, inode, name, skipTrash, numThreads, &count)
+			st = v.Meta.RemoveEx(ctx, inode, name, skipTrash, int(numThreads), &count)
 			if st != 0 {
 				logger.Errorf("remove %d/%s: %s", inode, name, st)
 			}
