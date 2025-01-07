@@ -156,40 +156,41 @@ class LinkTests(unittest.TestCase):
     def test_link(self):
         self._test_link(self.file1, self.file2)
 
-# class SummaryTests(unittest.TestCase):
-#     # /test/dir1/file
-#     #      /dir2
-#     #      /file
-#     def setUp(self):
-#         if not v.exists(TESTFN):
-#             v.mkdir(TESTFN)
-#         create_file(TESTFILE)
-#         v.mkdir(TESTFN + '/dir1')
-#         create_file(TESTFN + '/dir1/file')
-#         v.mkdir(TESTFN + '/dir2')
+@unittest.skip("Skipping SummaryTests")
+class SummaryTests(unittest.TestCase):
+    # /test/dir1/file
+    #      /dir2
+    #      /file
+    def setUp(self):
+        if not v.exists(TESTFN):
+            v.mkdir(TESTFN)
+        create_file(TESTFILE)
+        v.mkdir(TESTFN + '/dir1')
+        create_file(TESTFN + '/dir1/file')
+        v.mkdir(TESTFN + '/dir2')
 
-#     def test_summary(self):
-#         res = v.summary(TESTFILE, depth=258, entries=2)
-#         self.assertTrue(res=={"Length":7, "Files":1, "Dirs":0, "Size":4096})
-#         res = v.summary(TESTFN)
-#         self.assertTrue(res=={"Length":14, "Files":2, "Dirs":3, "Size":20480, "Entries": None})
-#         res = v.summary(TESTFN, depth=257, entries=1)
-#         self.assertTrue(res=={"Length":14, "Files":2, "Dirs":3, "Size":20480, "Entries":
-#             {"dir1":{"Length":7, "Files":1, "Dirs":1, "Size":8192, "Entries": None}}})
-#         res = v.summary(TESTFN, depth=258, entries=1)
-#         self.assertTrue(res=={"Length":14, "Files":2, "Dirs":3, "Size":20480, "Entries":
-#             {"dir1":{"Length":7, "Files":1, "Dirs":1, "Size":8192, "Entries": {
-#                 "file": {"Length": 7, "Size": 4096, "Files": 1, "Dirs": 0}
-#             }}}})
-#         res = v.summary(TESTFN, depth=259, entries=4)
-#         self.assertTrue(res=={"Length":14, "Files":2, "Dirs":3, "Size":20480, "Entries":
-#             {
-#                 "dir1":{"Length":7, "Files":1, "Dirs":1, "Size":8192, "Entries": {
-#                     "file": {"Length": 7, "Size": 4096, "Files": 1, "Dirs": 0}
-#                     }},
-#                 "dir2": {"Length": 0, "Size": 4096, "Files": 0, "Dirs": 1, "Entries": {}},
-#                 "file": {"Length": 7, "Size": 4096, "Files": 1, "Dirs": 0}
-#             }})
+    def test_summary(self):
+        res = v.summary(TESTFILE, depth=258, entries=2)
+        self.assertTrue(res=={"Length":7, "Files":1, "Dirs":0, "Size":4096})
+        res = v.summary(TESTFN)
+        self.assertTrue(res=={"Length":14, "Files":2, "Dirs":3, "Size":20480, "Entries": None})
+        res = v.summary(TESTFN, depth=257, entries=1)
+        self.assertTrue(res=={"Length":14, "Files":2, "Dirs":3, "Size":20480, "Entries":
+            {"dir1":{"Length":7, "Files":1, "Dirs":1, "Size":8192, "Entries": None}}})
+        res = v.summary(TESTFN, depth=258, entries=1)
+        self.assertTrue(res=={"Length":14, "Files":2, "Dirs":3, "Size":20480, "Entries":
+            {"dir1":{"Length":7, "Files":1, "Dirs":1, "Size":8192, "Entries": {
+                "file": {"Length": 7, "Size": 4096, "Files": 1, "Dirs": 0}
+            }}}})
+        res = v.summary(TESTFN, depth=259, entries=4)
+        self.assertTrue(res=={"Length":14, "Files":2, "Dirs":3, "Size":20480, "Entries":
+            {
+                "dir1":{"Length":7, "Files":1, "Dirs":1, "Size":8192, "Entries": {
+                    "file": {"Length": 7, "Size": 4096, "Files": 1, "Dirs": 0}
+                    }},
+                "dir2": {"Length": 0, "Size": 4096, "Files": 0, "Dirs": 1, "Entries": {}},
+                "file": {"Length": 7, "Size": 4096, "Files": 1, "Dirs": 0}
+            }})
         
 class NonLocalSymlinkTests(unittest.TestCase):
     def setUp(self):
