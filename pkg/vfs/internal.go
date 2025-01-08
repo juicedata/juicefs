@@ -298,7 +298,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		inode := Ino(r.Get64())
 		name := string(r.Get(int(r.Get8())))
 		var skipTrash bool
-		var numThreads int = 50
+		var numThreads int = meta.RmrDefaultThreads
 		if r.HasMore() {
 			skipTrash = r.Get8()&1 != 0
 			if r.HasMore() {

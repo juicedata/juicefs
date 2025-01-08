@@ -113,6 +113,8 @@ type Ino uint64
 const RootInode Ino = 1
 const TrashInode Ino = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
 
+const RmrDefaultThreads = 50
+
 func (i Ino) String() string {
 	return strconv.FormatUint(uint64(i), 10)
 }

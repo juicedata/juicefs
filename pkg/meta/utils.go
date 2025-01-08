@@ -352,10 +352,7 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, 
 	}
 	if numThreads <= 0 {
 		logger.Infof("Invalid threads number %d , auto adjust to 50 .", numThreads)
-		numThreads = 50
-	} else if numThreads < 2 {
-		logger.Infof("Invalid threads number %d , auto adjust to 2 .", numThreads)
-		numThreads = 2
+		numThreads = RmrDefaultThreads
 	} else if numThreads > 255 {
 		logger.Infof("Invalid threads number %d , auto adjust to 255 .", numThreads)
 		numThreads = 255
