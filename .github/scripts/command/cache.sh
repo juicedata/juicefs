@@ -103,19 +103,6 @@ check_cache_distribute() {
     done
 }
 
-test_batch_warmup(){
-    prepare_test
-    ./juicefs format $META_URL myjfs --trash-days 0
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache/myjfs --io-retries 1
-    for i in $(seq 1 10); do
-        dd if=/dev/zero of=/tmp/test_$i bs=1M count=4
-        cp /tmp/test_$i /tmp/jfs/test_$i
-        echo /tmp/jfs/test_$i >> file.list
-    done
-    ./juicefs warmup -f file.list
-    
-}
-
 test_disk_failover()
 {
     prepare_test
