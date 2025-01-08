@@ -21,7 +21,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/object"
 )
 
@@ -33,7 +32,7 @@ type parallelDownloader struct {
 	fsize      int64
 	blockSize  int64
 	concurrent chan int
-	buffers    map[int64]*chunk.Page
+	buffers    map[int64]*[]byte
 	off        int64
 	err        error
 }
@@ -48,6 +47,15 @@ func (r *parallelDownloader) setErr(err error) {
 	r.Lock()
 	defer r.Unlock()
 	r.err = err
+}
+
+const downloadBufSize = 10 << 20
+
+var downloadBufPool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, 0, downloadBufSize)
+		return &buf
+	},
 }
 
 func (r *parallelDownloader) download() {
@@ -73,18 +81,19 @@ func (r *parallelDownloader) download() {
 					r.setErr(e)
 				} else { //nolint:typecheck
 					defer in.Close()
-					p := chunk.NewOffPage(int(size))
-					_, e = io.ReadFull(in, p.Data)
+					p := downloadBufPool.Get().(*[]byte)
+					*p = (*p)[:size]
+					_, e = io.ReadFull(in, *p)
 					if e != nil {
 						r.setErr(e)
-						p.Release()
+						downloadBufPool.Put(p)
 					} else {
 						r.Lock()
 						if r.buffers != nil {
 							r.buffers[off] = p
 							saved = true
 						} else {
-							p.Release()
+							downloadBufPool.Put(p)
 						}
 						r.Unlock()
 					}
@@ -115,10 +124,10 @@ func (r *parallelDownloader) Read(b []byte) (int, error) {
 	if p == nil {
 		return 0, r.err
 	}
-	n := copy(b, p.Data[r.off-off:])
+	n := copy(b, (*p)[r.off-off:])
 	r.off += int64(n)
-	if r.off == off+int64(len(p.Data)) {
-		p.Release()
+	if r.off == off+int64(len(*p)) {
+		downloadBufPool.Put(p)
 		r.Lock()
 		delete(r.buffers, off)
 		r.Unlock()
@@ -134,7 +143,7 @@ func (r *parallelDownloader) Close() {
 	r.Lock()
 	defer r.Unlock()
 	for _, p := range r.buffers {
-		p.Release()
+		downloadBufPool.Put(p)
 	}
 	r.buffers = nil
 	if r.err == nil {
@@ -152,7 +161,7 @@ func newParallelDownloader(store object.ObjectStorage, key string, size int64, b
 		fsize:      size,
 		blockSize:  bSize,
 		concurrent: concurrent,
-		buffers:    make(map[int64]*chunk.Page),
+		buffers:    make(map[int64]*[]byte),
 	}
 	down.notify = sync.NewCond(down)
 	go down.download()
