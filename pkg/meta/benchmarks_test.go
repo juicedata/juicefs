@@ -117,7 +117,7 @@ func BenchmarkReadSliceBuf(b *testing.B) {
 
 func prepareParent(m Meta, name string, inode *Ino) error {
 	ctx := Background()
-	if err := m.Remove(ctx, 1, name, true, 50, nil); err != 0 && err != syscall.ENOENT {
+	if err := m.Remove(ctx, 1, name, true, RmrDefaultThreads, nil); err != 0 && err != syscall.ENOENT {
 		return fmt.Errorf("remove: %s", err)
 	}
 	if err := m.Mkdir(ctx, 1, name, 0755, 0, 0, inode, nil); err != 0 {
