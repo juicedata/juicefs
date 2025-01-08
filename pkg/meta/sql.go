@@ -266,10 +266,59 @@ func recoveryMysqlPwd(addr string) string {
 	return addr
 }
 
+func retriveUrlConnsOptions(murl string) (string, int, int, int, int) {
+	optIndex := strings.Index(murl, "?")
+
+	var vOpenConns int = 0
+	var vIdleConns int = runtime.GOMAXPROCS(-1) * 2
+	var vIdleTime  int = 300
+	var vLifeTime  int = 0
+
+	if optIndex != -1 {
+		baseurl := murl[:optIndex]
+		optsurl := murl[optIndex+1:]
+		if vals, err := url.ParseQuery(optsurl); err == nil {
+			if vals.Has("max_open_conns") {
+				vOpenConns, _ = strconv.Atoi(vals.Get("max_open_conns"))
+				vals.Del("max_open_conns")
+			}
+			if vals.Has("max_idle_conns") {
+				vIdleConns, _ = strconv.Atoi(vals.Get("max_idle_conns"))
+				vals.Del("max_idle_conns")
+			}
+			if vals.Has("max_idle_time") {
+				vIdleTime, _ = strconv.Atoi(vals.Get("max_idle_time"))
+				vals.Del("max_idle_time");
+			}
+			if vals.Has("max_life_time") {
+				vLifeTime, _ = strconv.Atoi(vals.Get("max_life_time"))
+				vals.Del("max_life_time");
+			}
+			optsurl = vals.Encode()
+		}
+		if vIdleConns <= 0 {
+			vIdleConns = runtime.GOMAXPROCS(-1) * 2
+		}
+		if vIdleTime <= 0 {
+			vIdleTime = 300
+		}
+		if optsurl != "" {
+			return fmt.Sprintf("%s?%s", baseurl, optsurl), vOpenConns, vIdleConns, vIdleTime, vLifeTime
+		} else {
+			return baseurl, vOpenConns, vIdleConns, vIdleTime, vLifeTime
+		}
+	}
+
+	return murl, vOpenConns, vIdleConns, vIdleTime, vLifeTime
+}
+
 var setTransactionIsolation func(dns string) (string, error)
 
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	var searchPath string
+
+	addr, vOpenConns, vIdleConns, vIdleTime, vLifeTime := retriveUrlConnsOptions(addr)
+
 	if driver == "postgres" {
 		addr = driver + "://" + addr
 		driver = "pgx"
@@ -325,8 +374,14 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	if searchPath != "" {
 		engine.SetSchema(searchPath)
 	}
-	engine.DB().SetMaxIdleConns(runtime.GOMAXPROCS(-1) * 2)
-	engine.DB().SetConnMaxIdleTime(time.Minute * 5)
+	if vOpenConns > 0 {
+		engine.DB().SetMaxOpenConns(vOpenConns)
+	}
+	if vLifeTime > 0 {
+		engine.DB().SetConnMaxLifetime(time.Second * time.Duration(vLifeTime))
+	}
+	engine.DB().SetMaxIdleConns(vIdleConns)
+	engine.DB().SetConnMaxIdleTime(time.Second * time.Duration(vIdleTime))
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	m := &dbMeta{
 		baseMeta: newBaseMeta(addr, conf),
