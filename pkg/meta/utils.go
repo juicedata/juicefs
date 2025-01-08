@@ -351,13 +351,13 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, 
 		return m.Unlink(ctx, parent, name)
 	}
 	if numThreads <= 0 {
-		logger.Infof("Invalid threads number %d , auto adjust to 50 .", numThreads)
+		logger.Infof("invalid threads number %d , auto adjust to %d", numThreads, RmrDefaultThreads)
 		numThreads = RmrDefaultThreads
 	} else if numThreads > 255 {
-		logger.Infof("Invalid threads number %d , auto adjust to 255 .", numThreads)
+		logger.Infof("threads number %d too large, auto adjust to 255 .", numThreads)
 		numThreads = 255
 	}
-	logger.Infof("Start emptyEntry with %d concurrent threads .", numThreads)
+	logger.Debugf("Start emptyEntry with %d concurrent threads .", numThreads)
 	concurrent := make(chan int, numThreads)
 	return m.emptyEntry(ctx, parent, name, inode, skipTrash, count, concurrent)
 }

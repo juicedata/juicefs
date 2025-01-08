@@ -301,9 +301,9 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		var numThreads int = meta.RmrDefaultThreads
 		if r.HasMore() {
 			skipTrash = r.Get8()&1 != 0
-			if r.HasMore() {
-				numThreads = int(r.Get8())
-			}
+		}
+		if r.HasMore() {
+			numThreads = int(r.Get8())
 		}
 		var count uint64
 		var st syscall.Errno

@@ -43,12 +43,12 @@ $ juicefs rmr /mnt/jfs/foo`,
 				Name:  "skip-trash",
 				Usage: "skip trash and delete files directly (requires root)",
 			},
-                        &cli.IntFlag{
-                                Name:  "threads",
+			&cli.IntFlag{
+				Name:    "threads",
 				Aliases: []string{"p"},
-                                Value: 50,
-                                Usage: "number of threads for delete jobs (value from 2 to 255)",
-                        },
+				Value:   50,
+				Usage:   "number of threads for delete jobs (max 255)",
+			},
 		},
 	}
 }
@@ -74,11 +74,11 @@ func rmr(ctx *cli.Context) error {
 	var numThreads int
 
 	numThreads = ctx.Int("threads")
-	if numThreads < 2 {
-		numThreads = 2
+	if numThreads <= 0 {
+		numThreads = meta.RmrDefaultThreads
 	}
 	if numThreads > 255 {
-		numThreads = 255 
+		numThreads = 255
 	}
 	if ctx.Bool("skip-trash") {
 		if os.Getuid() != 0 {
