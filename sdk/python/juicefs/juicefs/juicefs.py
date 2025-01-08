@@ -71,7 +71,7 @@ class JuiceFSLib(object):
 
     def __getattr__(self, n):
         fn = getattr(self.lib, n)
-        if n.equals("jfs_init") or n.equals("jfs_lseek"):
+        if n == "jfs_init" or n == "jfs_lseek":
             fn.restype = c_int64
             fn.errcheck = check_error
         elif n.startswith("jfs"):
