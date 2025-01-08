@@ -113,6 +113,8 @@ type Ino uint64
 const RootInode Ino = 1
 const TrashInode Ino = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
 
+const RmrDefaultThreads = 50
+
 func (i Ino) String() string {
 	return strconv.FormatUint(uint64(i), 10)
 }
@@ -427,7 +429,7 @@ type Meta interface {
 	ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno
 	// Remove all files and directories recursively.
 	// count represents the number of attempted deletions of entries (even if failed).
-	Remove(ctx Context, parent Ino, name string, skipTrash bool, count *uint64) syscall.Errno
+	Remove(ctx Context, parent Ino, name string, skipTrash bool, numThreads int, count *uint64) syscall.Errno
 	// Get summary of a node; for a directory it will accumulate all its child nodes
 	GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool) syscall.Errno
 	// GetTreeSummary returns a summary in tree structure

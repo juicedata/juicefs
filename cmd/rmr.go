@@ -43,6 +43,12 @@ $ juicefs rmr /mnt/jfs/foo`,
 				Name:  "skip-trash",
 				Usage: "skip trash and delete files directly (requires root)",
 			},
+			&cli.IntFlag{
+				Name:    "threads",
+				Aliases: []string{"p"},
+				Value:   50,
+				Usage:   "number of threads for delete jobs (max 255)",
+			},
 		},
 	}
 }
@@ -65,6 +71,15 @@ func openController(dpath string) (*os.File, error) {
 func rmr(ctx *cli.Context) error {
 	setup(ctx, 1)
 	var flag uint8
+	var numThreads int
+
+	numThreads = ctx.Int("threads")
+	if numThreads <= 0 {
+		numThreads = meta.RmrDefaultThreads
+	}
+	if numThreads > 255 {
+		numThreads = 255
+	}
 	if ctx.Bool("skip-trash") {
 		if os.Getuid() != 0 {
 			logger.Fatalf("Only root can remove files directly")
@@ -91,13 +106,14 @@ func rmr(ctx *cli.Context) error {
 			logger.Errorf("Open control file for %s: %s", d, err)
 			continue
 		}
-		wb := utils.NewBuffer(8 + 8 + 1 + uint32(len(name)) + 1)
+		wb := utils.NewBuffer(8 + 8 + 1 + uint32(len(name)) + 1 + 1)
 		wb.Put32(meta.Rmr)
-		wb.Put32(8 + 1 + uint32(len(name)) + 1)
+		wb.Put32(8 + 1 + uint32(len(name)) + 1 + 1)
 		wb.Put64(inode)
 		wb.Put8(uint8(len(name)))
 		wb.Put([]byte(name))
 		wb.Put8(flag)
+		wb.Put8(uint8(numThreads))
 		_, err = f.Write(wb.Bytes())
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
