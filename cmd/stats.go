@@ -62,6 +62,12 @@ Details: https://juicefs.com/docs/community/fault_diagnosis_and_analysis#stats`,
 				Aliases: []string{"l"},
 				Usage:   "verbosity level, 0 or 1 is enough for most cases",
 			},
+			&cli.UintFlag{
+				Name:    "duration",
+				Aliases: []string{"d"},
+				Value:   3600 * 24 * 365,
+				Usage:   "duration time in seconds",
+			},
 		},
 	}
 }
@@ -400,6 +406,7 @@ func stats(ctx *cli.Context) error {
 
 	var tick uint
 	var start, last, current map[string]float64
+	beginTime := time.Now() 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	current = readStats(watcher.mp)
@@ -420,5 +427,8 @@ func stats(ctx *cli.Context) error {
 		tick++
 		<-ticker.C
 		current = readStats(watcher.mp)
+		if time.Since(beginTime) > time.Duration(ctx.Uint("duration")) * time.Second {
+			return nil
+		}
 	}
 }
