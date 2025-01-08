@@ -204,9 +204,16 @@ func padding(name string, width int, char byte) string {
 	return string(buf)
 }
 
+func getCurrentTime() string {
+    tm := time.Now()
+    return tm.Format("01/02-15:04:05")
+}
+
 func (w *statsWatcher) formatHeader() {
-	headers := make([]string, len(w.sections))
-	subHeaders := make([]string, len(w.sections))
+	headers := make([]string, len(w.sections) + 1)
+	subHeaders := make([]string, len(w.sections) + 1)
+	headers[0] = w.colorize(getCurrentTime(), BLUE, false, false)
+	subHeaders[0] = w.colorize(getCurrentTime(), BLUE, false, false)
 	for i, s := range w.sections {
 		subs := make([]string, 0, len(s.items))
 		for _, it := range s.items {
@@ -220,8 +227,8 @@ func (w *statsWatcher) formatHeader() {
 			}
 		}
 		width := 6*len(subs) - 1 // nick(5) + space(1)
-		subHeaders[i] = strings.Join(subs, " ")
-		headers[i] = w.colorize(padding(s.name, width, '-'), BLUE, true, false)
+		subHeaders[i + 1] = strings.Join(subs, " ")
+		headers[i + 1] = w.colorize(padding(s.name, width, '-'), BLUE, true, false)
 	}
 	w.header = fmt.Sprintf("%s\n%s", strings.Join(headers, " "),
 		strings.Join(subHeaders, w.colorize("|", BLUE, true, false)))
@@ -334,9 +341,11 @@ func (w *statsWatcher) printDiff(left, right map[string]float64, dark bool) {
 		values[i] = strings.Join(vals, " ")
 	}
 	if w.colorful && dark {
-		fmt.Printf("%s\r", strings.Join(values, w.colorize("|", BLUE, true, false)))
+		fmt.Printf("%s %s\r", w.colorize(getCurrentTime(), BLUE, false, false),
+			   strings.Join(values, w.colorize("|", BLUE, true, false)))
 	} else {
-		fmt.Printf("%s\n", strings.Join(values, w.colorize("|", BLUE, true, false)))
+		fmt.Printf("%s %s\n", w.colorize(getCurrentTime(), BLUE, false, false),
+			   strings.Join(values, w.colorize("|", BLUE, true, false)))
 	}
 }
 
