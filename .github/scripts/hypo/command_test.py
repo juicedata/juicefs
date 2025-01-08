@@ -5,7 +5,7 @@ class TestCommand(unittest.TestCase):
     def test_dump(self):
         state = JuicefsCommandMachine()
         folders_0 = state.init_folders()
-        files_0 = state.create_file(content=b'', file_name='aazz', mode='w', parent=folders_0, umask=312, user='root')
+        files_0 = state.create_file(content='', file_name='aazz', mode='w', parent=folders_0, umask=312, user='root')
         value = ''.join([chr(i) for i in range(256)])
         value = value.encode('latin-1')
         value = b'\x2580q\x2589'
@@ -17,14 +17,14 @@ class TestCommand(unittest.TestCase):
     def skip_test_info(self):
         state = JuicefsCommandMachine()
         folders_0 = state.init_folders()
-        files_2 = state.create_file(content=b'0', file_name='mvvd', mode='a', parent=folders_0, umask=293, user='root')
+        files_2 = state.create_file(content='0', file_name='mvvd', mode='a', parent=folders_0, umask=293, user='root')
         state.info(entry=folders_0, raw=True, recuisive=True, user='user1')
         state.teardown()
 
     def test_clone(self):
         state = JuicefsCommandMachine()
         v1 = state.init_folders()
-        v2 = state.create_file(content=b'\x9bcR\xba', file_name='ygbl', mode='x', parent=v1, umask=466, user='root')
+        v2 = state.create_file(content='\x9bcR\xba', file_name='ygbl', mode='x', parent=v1, umask=466, user='root')
         state.chmod(entry=v1, mode=715, user='root')
         state.clone(entry=v2, new_entry_name='drqj', parent=v1, preserve=False, user='user1')
         state.teardown()

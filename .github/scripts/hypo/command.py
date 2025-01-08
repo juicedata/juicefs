@@ -155,7 +155,7 @@ class JuicefsCommandMachine(JuicefsMachine):
     @rule(
         entry = Entries.filter(lambda x: x != multiple()),
         parent = Folders.filter(lambda x: x != multiple()),
-        new_entry_name = st_entry_name,
+        new_entry_name = st_file_name,
         user = st_sudo_user,
         preserve = st.booleans()
     )

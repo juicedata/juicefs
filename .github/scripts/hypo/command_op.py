@@ -8,8 +8,6 @@ try:
     __import__('xattr')
 except ImportError:
     subprocess.check_call(["pip", "install", "xattr"])
-from common import is_jfs, get_acl, get_root, get_stat
-from typing import Dict
 try: 
     __import__('psutil')
 except ImportError:

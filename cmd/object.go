@@ -117,6 +117,9 @@ var bufPool = sync.Pool{
 }
 
 func (j *juiceFS) Put(key string, in io.Reader, getters ...object.AttrGetter) (err error) {
+	if vfs.IsSpecialName(key) {
+		return fmt.Errorf("skip special file %s for jfs: %w", key, utils.ErrSkipped)
+	}
 	p := j.path(key)
 	if strings.HasSuffix(p, "/") {
 		eno := j.jfs.MkdirAll(ctx, p, 0777, j.umask)
