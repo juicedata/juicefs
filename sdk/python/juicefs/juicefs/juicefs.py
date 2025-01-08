@@ -71,8 +71,11 @@ class JuiceFSLib(object):
 
     def __getattr__(self, n):
         fn = getattr(self.lib, n)
-        if n.startswith("jfs"):
+        if n.equals("jfs_init") or n.equals("jfs_lseek"):
             fn.restype = c_int64
+            fn.errcheck = check_error
+        elif n.startswith("jfs"):
+            fn.restype = c_int32
             fn.errcheck = check_error
         return fn
 
@@ -195,7 +198,7 @@ class Client(object):
         else:
             try:
                 sz = c_uint64()
-                fd = self.lib.jfs_open(c_int64(_tid()), c_int64(self.h), _bin(path), byref(sz), c_uint32(flag))
+                fd = self.lib.jfs_open(c_int64(_tid()), c_int64(self.h), _bin(path), byref(sz), c_int32(flag))
                 if 'w' in mode:
                     self.lib.jfs_ftruncate(c_int64(_tid()), fd, c_uint64(0))
                 else:
@@ -278,7 +281,7 @@ class Client(object):
     def readlink(self, path):
         """Return a string representing the path to which the symbolic link points."""
         buf = bytes(1<<16)
-        n = self.lib.jfs_readlink(c_int64(_tid()), c_int64(self.h), _bin(path), buf, c_int64(len(buf)))
+        n = self.lib.jfs_readlink(c_int64(_tid()), c_int64(self.h), _bin(path), buf, c_int32(len(buf)))
         return buf[:n].decode()
 
     def symlink(self, src, dst):
@@ -307,7 +310,7 @@ class Client(object):
         """Get an extended attribute on a file."""
         size = 64 << 10 # XattrSizeMax
         buf = bytes(size)
-        size = self.lib.jfs_getXattr(c_int64(_tid()), c_int64(self.h), _bin(path), _bin(name), buf, c_int64(size))
+        size = self.lib.jfs_getXattr(c_int64(_tid()), c_int64(self.h), _bin(path), _bin(name), buf, c_int32(size))
         return buf[:size]
 
     def listxattr(self, path):
@@ -397,7 +400,7 @@ class File(object):
         if (not self._readbuf or self._readbuf_off == len(self._readbuf)) and size < self._buffering:
             if not self._readbuf or len(self._readbuf) < self._buffering:
                 self._readbuf = bytes(self._buffering)
-            n = self.lib.jfs_pread(c_int64(_tid()), c_int64(self.fd), self._readbuf, c_uint64(self._buffering), c_int64(self.off))
+            n = self.lib.jfs_pread(c_int64(_tid()), c_int32(self.fd), self._readbuf, c_int32(self._buffering), c_int64(self.off))
             if n < self._buffering:
                 self._readbuf = self._readbuf[:n]
             self._readbuf_off = 0
@@ -417,7 +420,7 @@ class File(object):
             while size > 0:
                 n = min(size, 4 << 20)
                 buf = bytes(n)
-                n = self.lib.jfs_pread(c_int64(_tid()), c_int64(self.fd), buf, c_uint64(n), c_int64(self.off+got))
+                n = self.lib.jfs_pread(c_int64(_tid()), c_int32(self.fd), buf, c_int32(n), c_int64(self.off+got))
                 if n == 0:
                     break
                 if n < len(buf):
@@ -428,7 +431,7 @@ class File(object):
         elif size < 0:
             while True:
                 buf = bytes(128 << 10)
-                n = self.lib.jfs_pread(c_int64(_tid()), c_int64(self.fd), buf, c_uint64(len(buf)), c_int64(self.off+got))
+                n = self.lib.jfs_pread(c_int64(_tid()), c_int32(self.fd), buf, c_int32(len(buf)), c_int64(self.off+got))
                 if n == 0:
                     break
                 if n < len(buf):
@@ -476,7 +479,7 @@ class File(object):
             if len(data) < self._buffering:
                 self._writebuf.append(data)
             else:
-                self.lib.jfs_pwrite(c_int64(_tid()), c_int64(self.fd), data, c_uint64(len(data)), c_int64(self.off))
+                self.lib.jfs_pwrite(c_int64(_tid()), c_int32(self.fd), data, c_int32(len(data)), c_int64(self.off))
         else:
             self._writebuf.append(data)
         self.off += len(data)
@@ -524,7 +527,7 @@ class File(object):
         self.flush()
         if size is None:
             size = self.tell()
-        self.lib.jfs_ftruncate(c_int64(_tid()), c_int64(self.fd), c_uint64(size))
+        self.lib.jfs_ftruncate(c_int64(_tid()), c_int32(self.fd), c_uint64(size))
         self.length = size
         return size
 
@@ -533,20 +536,20 @@ class File(object):
         This does nothing for read-only and non-blocking streams."""
         if self._writebuf:
             data = b''.join(self._writebuf)
-            self.lib.jfs_pwrite(c_int64(_tid()), c_int64(self.fd), data, c_uint64(len(data)), c_int64(self.off-len(data)))
+            self.lib.jfs_pwrite(c_int64(_tid()), c_int32(self.fd), data, c_int32(len(data)), c_int64(self.off-len(data)))
             self._writebuf = []
 
     def fsync(self):
         """Force write file data to the backend storage."""
         self.flush()
-        self.lib.jfs_fsync(c_int64(_tid()), c_int64(self.fd))
+        self.lib.jfs_fsync(c_int64(_tid()), c_int32(self.fd))
 
     def close(self):
         """Close the file. A closed file cannot be used for further I/O operations."""
         if self.closed:
             return
         self.flush()
-        self.lib.jfs_close(c_int64(_tid()), c_int64(self.fd))
+        self.lib.jfs_close(c_int64(_tid()), c_int32(self.fd))
         self.closed = True
 
     def __del__(self):
