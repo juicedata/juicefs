@@ -407,6 +407,7 @@ func stats(ctx *cli.Context) error {
 	last = current
 	for {
 		if tick%(watcher.interval*30) == 0 {
+			watcher.formatHeader()
 			fmt.Println(watcher.header)
 		}
 		if tick%watcher.interval == 0 {
