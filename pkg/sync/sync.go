@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 	"path"
@@ -33,6 +34,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juju/ratelimit"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/vimeo/go-util/crc32combine"
 )
 
 // The max number of key per listing request
@@ -57,8 +59,27 @@ var (
 	concurrent            chan int
 	limiter               *ratelimit.Bucket
 )
-
+var crcTable = crc32.MakeTable(crc32.Castagnoli)
 var logger = utils.GetLogger("juicefs")
+
+type chksumReader struct {
+	io.Reader
+	chksum uint32
+	cal    bool
+}
+
+func (r *chksumReader) Read(p []byte) (n int, err error) {
+	n, err = r.Reader.Read(p)
+	if r.cal {
+		r.chksum = crc32.Update(r.chksum, crcTable, p[:n])
+	}
+	return
+}
+
+type chksumWithSz struct {
+	chksum uint32
+	size   int64
+}
 
 // human readable bytes size
 func formatSize(bytes int64) string {
@@ -231,7 +252,157 @@ func copyPerms(dst object.ObjectStorage, obj object.Object, config *Config) {
 	logger.Debugf("Copied permissions (%s:%s:%s) for %s in %s", fi.Owner(), fi.Group(), fi.Mode(), key, time.Since(start))
 }
 
-func doCheckSum(src, dst object.ObjectStorage, key string, obj object.Object, config *Config, equal *bool) error {
+func calPartChksum(objStor object.ObjectStorage, key string, abort chan struct{}, offset, length int64) (uint32, error) {
+	if limiter != nil {
+		limiter.Wait(length)
+	}
+	select {
+	case <-abort:
+		return 0, fmt.Errorf("aborted")
+	case concurrent <- 1:
+		defer func() {
+			<-concurrent
+		}()
+	}
+	in, err := objStor.Get(key, offset, length)
+	if err != nil {
+		return 0, fmt.Errorf("dest get: %s", err)
+	}
+	defer in.Close()
+
+	buf := bufPool.Get().(*[]byte)
+	defer bufPool.Put(buf)
+	var chksum uint32
+	for left := int(length); left > 0; left -= bufferSize {
+		bs := bufferSize
+		if left < bufferSize {
+			bs = left
+		}
+		*buf = (*buf)[:bs]
+		if _, err = io.ReadFull(in, *buf); err != nil {
+			return 0, fmt.Errorf("dest read: %s", err)
+		}
+		chksum = crc32.Update(chksum, crcTable, *buf)
+	}
+	return chksum, nil
+}
+
+func calObjChksum(objStor object.ObjectStorage, key string, abort chan struct{}, obj object.Object) (uint32, error) {
+	var err error
+	var chksum uint32
+	if obj.Size() < maxBlock {
+		return calPartChksum(objStor, key, abort, 0, obj.Size())
+	}
+	n := int((obj.Size()-1)/defaultPartSize) + 1
+	errs := make(chan error, n)
+	chksums := make([]chksumWithSz, n)
+	for i := 0; i < n; i++ {
+		go func(num int) {
+			sz := int64(defaultPartSize)
+			if num == n-1 {
+				sz = obj.Size() - int64(num)*defaultPartSize
+			}
+			chksum, err := calPartChksum(objStor, key, abort, int64(num)*defaultPartSize, sz)
+			chksums[num] = chksumWithSz{chksum, sz}
+			errs <- err
+		}(i)
+	}
+	for i := 0; i < n; i++ {
+		if err = <-errs; err != nil {
+			close(abort)
+			break
+		}
+	}
+	if err != nil {
+		return 0, err
+	}
+	chksum = chksums[0].chksum
+	for i := 1; i < n; i++ {
+		chksum = crc32combine.CRC32Combine(crc32.Castagnoli, chksum, chksums[i].chksum, chksums[i].size)
+	}
+	return chksum, nil
+}
+
+func compObjPartBinary(src, dst object.ObjectStorage, key string, abort chan struct{}, offset, length int64) error {
+	if limiter != nil {
+		limiter.Wait(length)
+	}
+	select {
+	case <-abort:
+		return fmt.Errorf("aborted")
+	case concurrent <- 1:
+		defer func() {
+			<-concurrent
+		}()
+	}
+	in, err := src.Get(key, offset, length)
+	if err != nil {
+		return fmt.Errorf("src get: %s", err)
+	}
+	defer in.Close()
+	in2, err := dst.Get(key, offset, length)
+	if err != nil {
+		return fmt.Errorf("dest get: %s", err)
+	}
+	defer in2.Close()
+
+	buf := bufPool.Get().(*[]byte)
+	defer bufPool.Put(buf)
+	buf2 := bufPool.Get().(*[]byte)
+	defer bufPool.Put(buf2)
+	for left := int(length); left > 0; left -= bufferSize {
+		bs := bufferSize
+		if left < bufferSize {
+			bs = left
+		}
+		*buf = (*buf)[:bs]
+		*buf2 = (*buf2)[:bs]
+		if _, err = io.ReadFull(in, *buf); err != nil {
+			return fmt.Errorf("src read: %s", err)
+		}
+		if _, err = io.ReadFull(in2, *buf2); err != nil {
+			return fmt.Errorf("dest read: %s", err)
+		}
+		if !bytes.Equal(*buf, *buf2) {
+			return fmt.Errorf("bytes not equal")
+		}
+	}
+	return nil
+}
+
+func compObjBinary(src, dst object.ObjectStorage, key string, abort chan struct{}, obj object.Object) (bool, error) {
+	var err error
+	if obj.Size() < maxBlock {
+		err = compObjPartBinary(src, dst, key, abort, 0, obj.Size())
+	} else {
+		n := int((obj.Size()-1)/defaultPartSize) + 1
+		errs := make(chan error, n)
+		for i := 0; i < n; i++ {
+			go func(num int) {
+				sz := int64(defaultPartSize)
+				if num == n-1 {
+					sz = obj.Size() - int64(num)*defaultPartSize
+				}
+				errs <- compObjPartBinary(src, dst, key, abort, int64(num)*defaultPartSize, sz)
+			}(i)
+		}
+		for i := 0; i < n; i++ {
+			if err = <-errs; err != nil {
+				close(abort)
+				break
+			}
+		}
+	}
+	equal := false
+	if err != nil && err.Error() == "bytes not equal" {
+		err = nil
+	} else {
+		equal = err == nil
+	}
+	return equal, err
+}
+
+func doCheckSum(src, dst object.ObjectStorage, key string, srcChksumPtr *uint32, obj object.Object, config *Config, equal *bool) error {
 	if obj.IsSymlink() && config.Links && (config.CheckAll || config.CheckNew) {
 		var srcLink, dstLink string
 		var err error
@@ -249,89 +420,27 @@ func doCheckSum(src, dst object.ObjectStorage, key string, obj object.Object, co
 		return nil
 	}
 	abort := make(chan struct{})
-	checkPart := func(offset, length int64) error {
-		if limiter != nil {
-			limiter.Wait(length)
-		}
-		select {
-		case <-abort:
-			return fmt.Errorf("aborted")
-		case concurrent <- 1:
-			defer func() {
-				<-concurrent
-			}()
-		}
-		in, err := src.Get(key, offset, length)
-		if err != nil {
-			return fmt.Errorf("src get: %s", err)
-		}
-		defer in.Close()
-		in2, err := dst.Get(key, offset, length)
-		if err != nil {
-			return fmt.Errorf("dest get: %s", err)
-		}
-		defer in2.Close()
-
-		buf := bufPool.Get().(*[]byte)
-		defer bufPool.Put(buf)
-		buf2 := bufPool.Get().(*[]byte)
-		defer bufPool.Put(buf2)
-		for left := int(length); left > 0; left -= bufferSize {
-			bs := bufferSize
-			if left < bufferSize {
-				bs = left
-			}
-			*buf = (*buf)[:bs]
-			*buf2 = (*buf2)[:bs]
-			if _, err = io.ReadFull(in, *buf); err != nil {
-				return fmt.Errorf("src read: %s", err)
-			}
-			if _, err = io.ReadFull(in2, *buf2); err != nil {
-				return fmt.Errorf("dest read: %s", err)
-			}
-			if !bytes.Equal(*buf, *buf2) {
-				return fmt.Errorf("bytes not equal")
-			}
-		}
-		return nil
-	}
-
 	var err error
-	if obj.Size() < maxBlock {
-		err = checkPart(0, obj.Size())
-	} else {
-		n := int((obj.Size()-1)/defaultPartSize) + 1
-		errs := make(chan error, n)
-		for i := 0; i < n; i++ {
-			go func(num int) {
-				sz := int64(defaultPartSize)
-				if num == n-1 {
-					sz = obj.Size() - int64(num)*defaultPartSize
-				}
-				errs <- checkPart(int64(num)*defaultPartSize, sz)
-			}(i)
+	if srcChksumPtr != nil {
+		var srcChksum uint32
+		var dstChksum uint32
+		srcChksum = *srcChksumPtr
+		dstChksum, err = calObjChksum(dst, key, abort, obj)
+		if err == nil {
+			*equal = srcChksum == dstChksum
+		} else {
+			*equal = false
 		}
-		for i := 0; i < n; i++ {
-			if err = <-errs; err != nil {
-				close(abort)
-				break
-			}
-		}
-	}
-
-	if err != nil && err.Error() == "bytes not equal" {
-		*equal = false
-		err = nil
 	} else {
-		*equal = err == nil
+		*equal, err = compObjBinary(src, dst, key, abort, obj)
 	}
 	return err
 }
 
-func checkSum(src, dst object.ObjectStorage, key string, obj object.Object, config *Config) (bool, error) {
+func checkSum(src, dst object.ObjectStorage, key string, srcChksum *uint32, obj object.Object, config *Config) (bool, error) {
 	start := time.Now()
 	var equal bool
-	err := try(3, func() error { return doCheckSum(src, dst, key, obj, config, &equal) })
+	err := try(3, func() error { return doCheckSum(src, dst, key, srcChksum, obj, config, &equal) })
 	if err == nil {
 		checked.Increment()
 		checkedBytes.IncrInt64(obj.Size())
@@ -355,7 +464,7 @@ func inMap(obj object.ObjectStorage, m map[string]struct{}) bool {
 	return ok
 }
 
-func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
+func doCopySingle(src, dst object.ObjectStorage, key string, size int64, calChksum bool) (uint32, error) {
 	if size > maxBlock && !inMap(dst, readInMem) && !inMap(src, fastStreamRead) {
 		var err error
 		var in io.Reader
@@ -368,19 +477,21 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 			// download the object into disk
 			if f, err = os.CreateTemp("", "rep"); err != nil {
 				logger.Warnf("create temp file: %s", err)
-				return doCopySingle0(src, dst, key, size)
+				return doCopySingle0(src, dst, key, size, calChksum)
 			}
 			_ = os.Remove(f.Name()) // will be deleted after Close()
 			defer f.Close()
 			buf := bufPool.Get().(*[]byte)
 			defer bufPool.Put(buf)
+			// hide f.ReadFrom to avoid discarding buf
 			if _, err = io.CopyBuffer(struct{ io.Writer }{f}, downer, *buf); err == nil {
 				_, err = f.Seek(0, 0)
 				in = f
 			}
 		}
+		r := &chksumReader{in, 0, calChksum}
 		if err == nil {
-			err = dst.Put(key, in)
+			err = dst.Put(key, r)
 		}
 		if err != nil {
 			if _, e := src.Head(key); os.IsNotExist(e) {
@@ -389,12 +500,12 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 				err = nil
 			}
 		}
-		return err
+		return r.chksum, err
 	}
-	return doCopySingle0(src, dst, key, size)
+	return doCopySingle0(src, dst, key, size, calChksum)
 }
 
-func doCopySingle0(src, dst object.ObjectStorage, key string, size int64) error {
+func doCopySingle0(src, dst object.ObjectStorage, key string, size int64, calChksum bool) (uint32, error) {
 	concurrent <- 1
 	defer func() {
 		<-concurrent
@@ -406,7 +517,7 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64) error 
 			// for check permissions
 			r, err := src.Get(key, 0, -1)
 			if err != nil {
-				return err
+				return 0, err
 			}
 			_ = r.Close()
 		}
@@ -419,11 +530,13 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64) error 
 				copied.IncrInt64(-1)
 				err = nil
 			}
-			return err
+			return 0, err
 		}
 	}
+	r := &chksumReader{in, 0, calChksum}
 	defer in.Close()
-	return dst.Put(key, &withProgress{in})
+	err = dst.Put(key, &withProgress{r})
+	return r.chksum, err
 }
 
 type withProgress struct {
@@ -439,7 +552,7 @@ func (w *withProgress) Read(b []byte) (int, error) {
 	return n, err
 }
 
-func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64, key, uploadID string, num int) (*object.Part, error) {
+func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64, key, uploadID string, num int, calChksum bool) (*object.Part, uint32, error) {
 	if limiter != nil {
 		limiter.Wait(size)
 	}
@@ -449,26 +562,29 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 	defer p.Release()
 	data := p.Data
 	var part *object.Part
+	var chksum uint32
 	err := try(3, func() error {
 		in, err := src.Get(srckey, off, sz)
 		if err != nil {
 			return err
 		}
 		defer in.Close()
-		if _, err = io.ReadFull(in, data); err != nil {
+		r := &chksumReader{in, 0, calChksum}
+		if _, err = io.ReadFull(r, data); err != nil {
 			return err
 		}
+		chksum = r.chksum
 		// PartNumber starts from 1
 		part, err = dst.UploadPart(key, uploadID, num+1, data)
 		return err
 	})
 	if err != nil {
 		logger.Warnf("Failed to copy data of %s part %d: %s", key, num, err)
-		return nil, fmt.Errorf("part %d: %s", num, err)
+		return nil, 0, fmt.Errorf("part %d: %s", num, err)
 	}
 	logger.Debugf("Copied data of %s part %d in %s", key, num, time.Since(start))
 	copiedBytes.IncrInt64(sz)
-	return part, nil
+	return part, chksum, nil
 }
 
 func choosePartSize(upload *object.MultipartUpload, size int64) int64 {
@@ -483,10 +599,10 @@ func choosePartSize(upload *object.MultipartUpload, size int64) int64 {
 	return partSize
 }
 
-func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upload *object.MultipartUpload, num int, abort chan struct{}) (*object.Part, error) {
+func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upload *object.MultipartUpload, num int, abort chan struct{}, calChksum bool) (*object.Part, uint32, error) {
 	select {
 	case <-abort:
-		return nil, fmt.Errorf("aborted")
+		return nil, 0, fmt.Errorf("aborted")
 	case concurrent <- 1:
 		defer func() {
 			<-concurrent
@@ -495,7 +611,7 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 
 	limits := dst.Limits()
 	if size <= 32<<20 || !limits.IsSupportUploadPartCopy {
-		return doUploadPart(src, dst, key, off, size, key, upload.UploadID, num)
+		return doUploadPart(src, dst, key, off, size, key, upload.UploadID, num, calChksum)
 	}
 
 	tmpkey := fmt.Sprintf("%s.part%d", key, num)
@@ -506,13 +622,15 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("range(%d,%d): %s", off, size, err)
+		return nil, 0, fmt.Errorf("range(%d,%d): %s", off, size, err)
 	}
 
 	partSize := choosePartSize(up, size)
 	n := int((size-1)/partSize) + 1
 	logger.Debugf("Copying data of %s (range: %d,%d) as %d parts (size: %d): %s", key, off, size, n, partSize, up.UploadID)
 	parts := make([]*object.Part, n)
+	var tmpChksum uint32
+	first := true
 
 	for i := 0; i < n; i++ {
 		sz := partSize
@@ -522,20 +640,29 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 		select {
 		case <-abort:
 			dst.AbortUpload(tmpkey, up.UploadID)
-			return nil, fmt.Errorf("aborted")
+			return nil, 0, fmt.Errorf("aborted")
 		default:
 		}
-		parts[i], err = doUploadPart(src, dst, key, off+int64(i)*partSize, sz, tmpkey, up.UploadID, i)
+		var chksum uint32
+		parts[i], chksum, err = doUploadPart(src, dst, key, off+int64(i)*partSize, sz, tmpkey, up.UploadID, i, calChksum)
 		if err != nil {
 			dst.AbortUpload(tmpkey, up.UploadID)
-			return nil, fmt.Errorf("range(%d,%d): %s", off, size, err)
+			return nil, 0, fmt.Errorf("range(%d,%d): %s", off, size, err)
+		}
+		if calChksum {
+			if first {
+				tmpChksum = chksum
+				first = false
+			} else {
+				tmpChksum = crc32combine.CRC32Combine(crc32.Castagnoli, tmpChksum, chksum, sz)
+			}
 		}
 	}
 
 	err = try(3, func() error { return dst.CompleteUpload(tmpkey, up.UploadID, parts) })
 	if err != nil {
 		dst.AbortUpload(tmpkey, up.UploadID)
-		return nil, fmt.Errorf("multipart: %s", err)
+		return nil, 0, fmt.Errorf("multipart: %s", err)
 	}
 	var part *object.Part
 	err = try(3, func() error {
@@ -543,13 +670,13 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 		return err
 	})
 	_ = dst.Delete(tmpkey)
-	return part, err
+	return part, tmpChksum, err
 }
 
-func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload) error {
+func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload, calChksum bool) (uint32, error) {
 	limits := dst.Limits()
 	if size > limits.MaxPartSize*int64(upload.MaxCount) {
-		return fmt.Errorf("object size %d is too large to copy", size)
+		return 0, fmt.Errorf("object size %d is too large to copy", size)
 	}
 
 	partSize := choosePartSize(upload, size)
@@ -558,6 +685,7 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 	abort := make(chan struct{})
 	parts := make([]*object.Part, n)
 	errs := make(chan error, n)
+	chksums := make([]chksumWithSz, n)
 	var err error
 
 	for i := 0; i < n; i++ {
@@ -567,7 +695,9 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 				sz = size - int64(num)*partSize
 			}
 			var copyErr error
-			parts[num], copyErr = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort)
+			var chksum uint32
+			parts[num], chksum, copyErr = doCopyRange(src, dst, key, int64(num)*partSize, sz, upload, num, abort, calChksum)
+			chksums[num] = chksumWithSz{chksum, sz}
 			errs <- copyErr
 		}(i)
 	}
@@ -583,28 +713,43 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 	}
 	if err != nil {
 		dst.AbortUpload(key, upload.UploadID)
-		return fmt.Errorf("multipart: %s", err)
+		return 0, fmt.Errorf("multipart: %s", err)
 	}
-	return nil
+	var chksum uint32
+	if calChksum {
+		chksum = chksums[0].chksum
+		for i := 1; i < n; i++ {
+			chksum = crc32combine.CRC32Combine(crc32.Castagnoli, chksum, chksums[i].chksum, chksums[i].size)
+		}
+	}
+
+	return chksum, nil
 }
 
-func copyData(src, dst object.ObjectStorage, key string, size int64) error {
+func copyData(src, dst object.ObjectStorage, key string, size int64, calChksum bool) (uint32, error) {
 	start := time.Now()
 	var err error
+	var srcChksum uint32
 	if size < maxBlock {
-		err = try(3, func() error { return doCopySingle(src, dst, key, size) })
+		err = try(3, func() (err error) {
+			srcChksum, err = doCopySingle(src, dst, key, size, calChksum)
+			return
+		})
 	} else {
 		var upload *object.MultipartUpload
 		if upload, err = dst.CreateMultipartUpload(key); err == nil {
-			err = doCopyMultiple(src, dst, key, size, upload)
+			srcChksum, err = doCopyMultiple(src, dst, key, size, upload, calChksum)
 		} else if err == utils.ENOTSUP {
-			err = try(3, func() error { return doCopySingle(src, dst, key, size) })
+			err = try(3, func() (err error) {
+				srcChksum, err = doCopySingle(src, dst, key, size, calChksum)
+				return
+			})
 		} else { // other error retry
 			if err = try(2, func() error {
 				upload, err = dst.CreateMultipartUpload(key)
 				return err
 			}); err == nil {
-				err = doCopyMultiple(src, dst, key, size, upload)
+				srcChksum, err = doCopyMultiple(src, dst, key, size, upload, calChksum)
 			}
 		}
 	}
@@ -613,7 +758,7 @@ func copyData(src, dst object.ObjectStorage, key string, size int64) error {
 	} else {
 		logger.Errorf("Failed to copy data of %s in %s: %s", key, time.Since(start), err)
 	}
-	return err
+	return srcChksum, err
 }
 
 func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *Config) {
@@ -638,7 +783,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				break
 			}
 			obj = obj.(*withSize).Object
-			if equal, err := checkSum(src, dst, key, obj, config); err != nil {
+			if equal, err := checkSum(src, dst, key, nil, obj, config); err != nil {
 				failed.Increment()
 				break
 			} else if equal {
@@ -673,17 +818,18 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				break
 			}
 			var err error
+			var srcChksum uint32
 			if config.Links && obj.IsSymlink() {
 				if err = copyLink(src, dst, key); err != nil {
 					logger.Errorf("copy link failed: %s", err)
 				}
 			} else {
-				err = copyData(src, dst, key, obj.Size())
+				srcChksum, err = copyData(src, dst, key, obj.Size(), config.CheckAll || config.CheckNew)
 			}
 
 			if err == nil && (config.CheckAll || config.CheckNew) {
 				var equal bool
-				if equal, err = checkSum(src, dst, key, obj, config); err == nil && !equal {
+				if equal, err = checkSum(src, dst, key, &srcChksum, obj, config); err == nil && !equal {
 					err = fmt.Errorf("checksums of copied object %s don't match", key)
 				}
 			}
