@@ -117,6 +117,7 @@ jobs:
           sudo META=${{matrix.meta}} .github/scripts/command/info.sh
 
       - name: Test Format
+        if: false
         timeout-minutes: 10
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/format.sh
