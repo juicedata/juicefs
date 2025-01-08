@@ -407,12 +407,13 @@ func stats(ctx *cli.Context) error {
 	var tick uint
 	var start, last, current map[string]float64
 	beginTime := time.Now() 
+	duraTime := time.Duration(ctx.Uint("duration")) * time.Second
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	current = readStats(watcher.mp)
 	start = current
 	last = current
-	for {
+	for time.Since(beginTime) < duraTime {
 		if tick%(watcher.interval*30) == 0 {
 			watcher.formatHeader()
 			fmt.Println(watcher.header)
@@ -427,8 +428,6 @@ func stats(ctx *cli.Context) error {
 		tick++
 		<-ticker.C
 		current = readStats(watcher.mp)
-		if time.Since(beginTime) > time.Duration(ctx.Uint("duration")) * time.Second {
-			return nil
-		}
 	}
+	return err
 }
