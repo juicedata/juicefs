@@ -77,44 +77,47 @@ jobs:
         uses: ./.github/actions/build
   
       - name: Test Gc
-        timeout-minutes: 30
+        timeout-minutes: 10
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/gc.sh      
 
       - name: Test Config
+        timeout-minutes: 10
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/config.sh
     
       - name: Test acl
-        timeout-minutes: 30
+        timeout-minutes: 10
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/acl.sh     
 
       - name: Test Clone
-        timeout-minutes: 30
+        timeout-minutes: 10
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/clone.sh
 
       - name: Test fsck
-        timeout-minutes: 30
+        timeout-minutes: 10
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/fsck.sh 
       
       - name: Test Gateway
-        timeout-minutes: 30
+        timeout-minutes: 10
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/gateway.sh
       
       - name: Test Debug
-        timeout-minutes: 30
+        timeout-minutes: 10
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/debug.sh
       
       - name: Test Info
+        timeout-minutes: 10
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/info.sh
 
       - name: Test Format
+        timeout-minutes: 10
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/format.sh
   
