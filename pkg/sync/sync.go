@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"math"
 	"os"
 	"path"
 	"runtime"
@@ -1247,8 +1248,12 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 	var nextToken string
 	var marker string
 	var hasMore bool
+	var thisListMaxResults int64 = maxResults
+	if strings.HasPrefix(store.String(), "file://") || strings.HasPrefix(store.String(), "nfs://") || strings.HasPrefix(store.String(), "gluster://") {
+		thisListMaxResults = math.MaxInt64
+	}
 	for {
-		objs, hasMore, nextToken, err = store.List(prefix, marker, nextToken, "/", maxResults, followLink)
+		objs, hasMore, nextToken, err = store.List(prefix, marker, nextToken, "/", thisListMaxResults, followLink)
 		if err != nil {
 			return nil, err
 		}
