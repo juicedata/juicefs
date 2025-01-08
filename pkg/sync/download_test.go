@@ -33,7 +33,6 @@ func TestDownload(t *testing.T) {
 		os.RemoveAll("/tmp/download/")
 	})
 	type config struct {
-		blockSize  int64
 		concurrent int
 		fsize      int64
 	}
@@ -43,7 +42,7 @@ func TestDownload(t *testing.T) {
 	}
 
 	tcases := []tcase{
-		{config: config{fsize: 1110, concurrent: 4, blockSize: 300}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+		{config: config{fsize: downloadBufSize*3 + 100, concurrent: 4}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
 			defer pr.Close()
 			res, err := io.ReadAll(pr)
 			if err != nil {
@@ -54,7 +53,7 @@ func TestDownload(t *testing.T) {
 			}
 		}},
 
-		{config: config{fsize: 97340326, concurrent: 4, blockSize: 5 << 20}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+		{config: config{fsize: 97340326, concurrent: 4}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
 			defer pr.Close()
 			res, err := io.ReadAll(pr)
 			if err != nil {
@@ -65,7 +64,7 @@ func TestDownload(t *testing.T) {
 			}
 		}},
 
-		{config: config{fsize: 1110, concurrent: 5, blockSize: 300}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+		{config: config{fsize: downloadBufSize*3 + 100, concurrent: 5}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
 			defer pr.Close()
 			res, err := io.ReadAll(pr)
 			if err != nil {
@@ -76,7 +75,7 @@ func TestDownload(t *testing.T) {
 			}
 		}},
 
-		{config: config{fsize: 1, concurrent: 5, blockSize: 10}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+		{config: config{fsize: 1, concurrent: 5}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
 			defer pr.Close()
 			res := make([]byte, 1)
 			n, err := pr.Read(res)
@@ -89,7 +88,7 @@ func TestDownload(t *testing.T) {
 			}
 		}},
 
-		{config: config{fsize: 2, concurrent: 5, blockSize: 10}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+		{config: config{fsize: 2, concurrent: 5}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
 			defer pr.Close()
 			res := make([]byte, 1)
 			n, err := pr.Read(res)
@@ -106,7 +105,7 @@ func TestDownload(t *testing.T) {
 			}
 		}},
 
-		{config: config{fsize: 2, concurrent: 1, blockSize: 10}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+		{config: config{fsize: 2, concurrent: 1}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
 			defer pr.Close()
 			res := make([]byte, 1)
 			n, err := pr.Read(res)
@@ -124,17 +123,18 @@ func TestDownload(t *testing.T) {
 			}
 		}},
 
-		{config: config{fsize: 1000, concurrent: 3, blockSize: 5}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+		{config: config{fsize: downloadBufSize * 20, concurrent: 3}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
 			defer pr.Close()
-			res := make([]byte, 20)
+			resSize := 4 * downloadBufSize
+			res := make([]byte, 4*downloadBufSize)
 			n, err := io.ReadFull(pr, res)
 
-			if err != nil || n != 20 || res[0] != content[0] {
-				t.Fatalf("read 20 byte should succeed, but got %d, %s", n, err)
+			if err != nil || n != resSize || res[0] != content[0] {
+				t.Fatalf("read %v byte should succeed, but got %d, %s", resSize, n, err)
 			}
 			n, err = io.ReadFull(pr, res)
-			if err != nil || n != 20 || res[0] != content[20] {
-				t.Fatalf("read 20 byte should succeed, but got %d, %s", n, err)
+			if err != nil || n != resSize || res[0] != content[resSize] {
+				t.Fatalf("read %v byte should succeed, but got %d, %s", resSize, n, err)
 			}
 			_ = a.Delete(key)
 			n, err = io.ReadFull(pr, res)
@@ -144,7 +144,7 @@ func TestDownload(t *testing.T) {
 			}
 		}},
 
-		{config: config{fsize: 0, concurrent: 5, blockSize: 10}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+		{config: config{fsize: 0, concurrent: 5}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
 			defer pr.Close()
 			res := make([]byte, 1)
 			n, err := pr.Read(res)
@@ -153,7 +153,7 @@ func TestDownload(t *testing.T) {
 			}
 		}},
 
-		{config: config{fsize: 100, concurrent: 5, blockSize: 10}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+		{config: config{fsize: 10 * downloadBufSize, concurrent: 5}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
 			defer pr.Close()
 			res := make([]byte, 1)
 			pr.key = "notExist"
@@ -168,6 +168,6 @@ func TestDownload(t *testing.T) {
 		content := make([]byte, c.config.fsize)
 		_, _ = rand.Read(content)
 		_ = a.Put(key, bytes.NewReader(content))
-		c.tfunc(t, newParallelDownloader(a, key, c.config.fsize, c.blockSize, make(chan int, c.concurrent)), content)
+		c.tfunc(t, newParallelDownloader(a, key, c.config.fsize, downloadBufSize, make(chan int, c.concurrent)), content)
 	}
 }
