@@ -55,12 +55,22 @@ do_test_cache_expired(){
     cache_dir=$1
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir $cache_dir --cache-expire 5s 
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir $cache_dir --cache-expire 3s 
     dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
     ./juicefs warmup /tmp/jfs/test 2>&1 | tee warmup.log
     sleep 15
     ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
     grep "(0.0%)" warmup.log || (echo "cache should expired" && exit 1)
+}
+
+test_cache_large_write(){
+    cache_dir=$1
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 0
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir $cache_dir --cache-large-write 
+    dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
+    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
+    check_warmup_log warmup.log 90
 }
 
 test_disk_failover()
