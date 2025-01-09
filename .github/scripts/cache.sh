@@ -32,6 +32,17 @@ test_batch_warmup(){
     grep "(0.0%)" warmup.log || (echo "warmup failed, expect 0.0% warmup" && exit 1)
 }
 
+test_evict_with_writeback(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 0
+    ./juicefs mount $META_URL /tmp/jfs -d --writeback --upload-delay 5s
+    dd if=/dev/urandom of=/tmp/test bs=1M count=$TEST_FILE_SIZE
+    cp /tmp/test /tmp/jfs/test
+    ./juicefs warmup /tmp/jfs/test --evict
+    wait_stage_uploaded
+    compare_md5sum /tmp/test /tmp/jfs/test
+}
+
 test_disk_failover()
 {
     prepare_test
@@ -63,6 +74,22 @@ prepare_test()
     python3 .github/scripts/flush_meta.py $META_URL
     rm -rf /var/jfs/myjfs || true
     rm -rf /var/jfsCache/myjfs || true
+}
+
+wait_stage_uploaded()
+{
+    echo "wait stage upload"
+    for i in {1..30}; do
+        stageBlocks=$(grep "stageBlocks:" /tmp/jfs/.stats | awk '{print $2}')
+        if [ "$stageBlocks" -eq 0 ]; then
+            echo "stageBlocks is now 0"
+            break
+        fi
+        echo "wait stage upload $i" && sleep 1
+    done
+    if [ "$stageBlocks" -ne 0 ]; then
+        echo "stage blocks have not uploaded: $stageBlocks" && exit 1
+    fi
 }
 
 mount_jfsCache1(){
