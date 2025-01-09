@@ -871,6 +871,7 @@ func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 
 	if err == nil {
 		m.parseAttr(encodedAttr, attr)
+		m.updateAttrCache(foundIno, attr)
 	} else if err == redis.Nil { // corrupt entry
 		logger.Warnf("no attribute for inode %d (%d, %s)", foundIno, parent, name)
 		*attr = Attr{Typ: foundType}
@@ -4557,7 +4558,7 @@ func (m *redisMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32,
 		}
 		attr := &Attr{}
 		m.parseAttr(val, attr)
-		m.of.Update(ino, attr)
+		m.updateAttrCache(ino, attr)
 
 		aclId = getAttrACLId(attr, aclType)
 	}
