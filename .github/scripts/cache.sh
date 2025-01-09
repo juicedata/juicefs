@@ -32,7 +32,7 @@ test_batch_warmup(){
     grep "(0.0%)" warmup.log || (echo "warmup failed, expect 0.0% warmup" && exit 1)
 }
 
-test_evict_with_writeback(){
+test_evict_on_writeback(){
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0
     ./juicefs mount $META_URL /tmp/jfs -d --writeback --upload-delay 5s
@@ -41,6 +41,26 @@ test_evict_with_writeback(){
     ./juicefs warmup /tmp/jfs/test --evict
     wait_stage_uploaded
     compare_md5sum /tmp/test /tmp/jfs/test
+}
+
+test_cache_expired(){
+    do_test_cache_expired /var/jfsCache/myjfs
+}
+
+test_cache_expired_memory(){
+    do_test_cache_expired memory
+}
+
+do_test_cache_expired(){
+    cache_dir=$1
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 0
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir $cache_dir --cache-expire 5s 
+    dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
+    ./juicefs warmup /tmp/jfs/test 2>&1 | tee warmup.log
+    sleep 15
+    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
+    grep "(0.0%)" warmup.log || (echo "cache should expired" && exit 1)
 }
 
 test_disk_failover()
@@ -81,15 +101,32 @@ wait_stage_uploaded()
     echo "wait stage upload"
     for i in {1..30}; do
         stageBlocks=$(grep "stageBlocks:" /tmp/jfs/.stats | awk '{print $2}')
-        if [ "$stageBlocks" -eq 0 ]; then
+        if [[ "$stageBlocks" -eq 0 ]]; then
             echo "stageBlocks is now 0"
             break
         fi
         echo "wait stage upload $i" && sleep 1
     done
-    if [ "$stageBlocks" -ne 0 ]; then
+    if [[ "$stageBlocks" -ne 0 ]]; then
         echo "stage blocks have not uploaded: $stageBlocks" && exit 1
     fi
+}
+
+wait_cache_expired()
+{
+    file=$1
+    timeout=$2
+    [[ -z $timeout ]] && timeout=30
+    echo "wait cache expired"
+    for i in $(seq 1 $timeout); do
+        ./juicefs warmup $file --check 2>&1 | tee warmup.log
+        if grep "(0.0%)" warmup.log; then
+            echo "cache expired for $file"
+            return
+        fi
+        echo "wait cache expired $i" && sleep 1
+    done
+    echo "cache not expired failed for $file in $timeout sec" && exit 1
 }
 
 mount_jfsCache1(){
