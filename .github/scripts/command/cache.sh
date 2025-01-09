@@ -7,6 +7,57 @@ start_meta_engine $META minio
 META_URL=$(get_meta_url $META)
 TEST_FILE_SIZE=1024
 
+test_batch_warmup(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 0
+    ./juicefs mount $META_URL /tmp/jfs -d
+    file_count=11000
+    for i in $(seq 1 $file_count); do
+        echo $i > /tmp/jfs/test_$i
+        echo /tmp/jfs/test_$i >> file.list
+    done
+    ./juicefs warmup -f file.list 2>&1 | tee warmup.log
+    files=$(grep -oP 'warmup cache: \K[0-9]+' warmup.log)
+    [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
+    ./juicefs warmup -f file.list --check 2>&1 | tee warmup.log
+    files=$(grep -oP 'warmup cache: \K[0-9]+' warmup.log)
+    [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
+    grep "(100.0%)" warmup.log || (echo "warmup failed, expect 100.0% warmup" && exit 1)
+
+    ./juicefs warmup -f file.list --evict 2>&1 | tee warmup.log 
+    files=$(grep -oP 'warmup cache: \K[0-9]+' warmup.log)
+    [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
+    ./juicefs warmup -f file.list --check 2>&1 | tee warmup.log
+    files=$(grep -oP 'warmup cache: \K[0-9]+' warmup.log)
+    [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
+    grep "(0.0%)" warmup.log || (echo "warmup failed, expect 0.0% warmup" && exit 1)
+}
+
+test_disk_failover()
+{
+    prepare_test
+    mount_jfsCache1
+    rm -rf /var/log/juicefs.log
+    rm -rf /var/jfsCache2 /var/jfsCache3
+    ./juicefs format $META_URL myjfs --trash-days 0
+    JFS_MAX_DURATION_TO_DOWN=10s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1
+    dd if=/dev/urandom of=/tmp/test_failover bs=1M count=$TEST_FILE_SIZE
+    cp /tmp/test_failover /tmp/jfs/test_failover
+    /etc/init.d/redis-server stop
+    ./juicefs warmup /tmp/jfs/test_failover
+    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
+    check_warmup_log check.log 50
+    wait_disk_down 60
+    ./juicefs warmup /tmp/jfs/test_failover
+    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
+    check_warmup_log check.log 98
+    check_cache_distribute $TEST_FILE_SIZE /var/jfsCache2 /var/jfsCache3
+    echo stop minio && docker stop minio
+    compare_md5sum /tmp/test_failover /tmp/jfs/test_failover
+    docker start minio && sleep 3
+}
+
+
 prepare_test()
 {
     umount_jfs /tmp/jfs $META_URL
@@ -101,30 +152,6 @@ check_cache_distribute() {
             echo "$dir is evenly distributed"
         fi
     done
-}
-
-test_disk_failover()
-{
-    prepare_test
-    mount_jfsCache1
-    rm -rf /var/log/juicefs.log
-    rm -rf /var/jfsCache2 /var/jfsCache3
-    ./juicefs format $META_URL myjfs --trash-days 0
-    JFS_MAX_DURATION_TO_DOWN=10s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1
-    dd if=/dev/urandom of=/tmp/test_failover bs=1M count=$TEST_FILE_SIZE
-    cp /tmp/test_failover /tmp/jfs/test_failover
-    /etc/init.d/redis-server stop
-    ./juicefs warmup /tmp/jfs/test_failover
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_warmup_log check.log 50
-    wait_disk_down 60
-    ./juicefs warmup /tmp/jfs/test_failover
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_warmup_log check.log 98
-    check_cache_distribute $TEST_FILE_SIZE /var/jfsCache2 /var/jfsCache3
-    echo stop minio && docker stop minio
-    compare_md5sum /tmp/test_failover /tmp/jfs/test_failover
-    docker start minio && sleep 3
 }
 
 wait_disk_down()
