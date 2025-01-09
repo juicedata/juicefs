@@ -1096,14 +1096,15 @@ func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 		}
 		target = rs[1]
 		if !m.atimeNeedsUpdate(attr, now) {
+			atime = attr.Atime*int64(time.Second) + int64(attr.Atimensec)
 			return nil
 		}
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
+		atime = now.UnixNano()
 		tx.set(m.inodeKey(inode), m.marshal(attr))
 		return nil
 	}, inode)
-	atime = attr.Atime
 	return
 }
 
