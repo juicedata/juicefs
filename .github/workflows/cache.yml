@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  ltpfs:
+  cache:
     timeout-minutes: 60
     runs-on: ubuntu-20.04
     steps:
@@ -46,6 +46,11 @@ jobs:
         run: |
           sudo GOCOVERDIR=$(pwd)/cover .github/scripts/cache.sh
 
+      - name: Check juicefs log
+        if: always()
+        run: |
+          sudo .github/scripts/check_juicefs_log.sh
+
       - name: upload coverage report
         timeout-minutes: 5
         uses: ./.github/actions/upload-coverage
@@ -58,3 +63,9 @@ jobs:
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+      
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
