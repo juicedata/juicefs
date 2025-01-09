@@ -880,11 +880,6 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 			}
 		}
 	}
-	if st == 0 && attr.Typ == TypeDirectory && !isTrash(parent) {
-		m.parentMu.Lock()
-		m.dirParents[*inode] = parent
-		m.parentMu.Unlock()
-	}
 	return st
 }
 
@@ -1051,6 +1046,17 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 	return 0
 }
 
+func (m *baseMeta) updateAttrCache(inode Ino, attr *Attr) {
+	if m.conf.OpenCache > 0 {
+	        m.of.Update(inode, attr)
+	}
+        if attr.Typ == TypeDirectory && inode != RootInode && !isTrash(attr.Parent) {
+                m.parentMu.Lock()
+                m.dirParents[inode] = attr.Parent
+                m.parentMu.Unlock()
+        }
+}
+
 func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	inode = m.checkRoot(inode)
 	if m.conf.OpenCache > 0 && m.of.Check(inode, attr) {
@@ -1083,12 +1089,7 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		err = m.en.doGetAttr(ctx, inode, attr)
 	}
 	if err == 0 {
-		m.of.Update(inode, attr)
-		if attr.Typ == TypeDirectory && inode != RootInode && !isTrash(attr.Parent) {
-			m.parentMu.Lock()
-			m.dirParents[inode] = attr.Parent
-			m.parentMu.Unlock()
-		}
+		m.updateAttrCache(inode, attr)
 	}
 	return err
 }
@@ -1524,8 +1525,8 @@ func (m *baseMeta) touchAtime(ctx Context, inode Ino, attr *Attr) {
 	}
 
 	updated, err := m.en.doTouchAtime(ctx, inode, attr, now)
-	if updated {
-		m.of.Update(inode, attr)
+	if updated  && err == nil {
+		m.updateAttrCache(inode, attr)
 	} else if err != nil {
 		logger.Warnf("Update atime of inode %d: %s", inode, err)
 	}
