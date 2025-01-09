@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 dpkg -s redis-server || .github/scripts/apt_install.sh  redis-tools redis-server
 source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
@@ -11,24 +11,23 @@ test_batch_warmup(){
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0
     ./juicefs mount $META_URL /tmp/jfs -d
+    rm -f file.list
     file_count=11000
-    for i in $(seq 1 $file_count); do
-        echo $i > /tmp/jfs/test_$i
-        echo /tmp/jfs/test_$i >> file.list
-    done
+    time seq 1 $file_count | xargs -P 8 -I {} sh -c 'echo {} > /tmp/jfs/test_{}; echo /tmp/jfs/test_{} >> file.list'
+    # time for i in $(seq 1 $file_count); do echo $i > /tmp/jfs/test_$i; echo /tmp/jfs/test_$i >> file.list; done
     ./juicefs warmup -f file.list 2>&1 | tee warmup.log
-    files=$(grep -oP 'warmup cache: \K[0-9]+' warmup.log)
+    files=$(sed -n 's/.*cache: \([0-9]\+\) files.*/\1/p'  warmup.log)
     [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
     ./juicefs warmup -f file.list --check 2>&1 | tee warmup.log
-    files=$(grep -oP 'warmup cache: \K[0-9]+' warmup.log)
+    files=$(sed -n 's/.*cache: \([0-9]\+\) files.*/\1/p'  warmup.log)
     [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
     grep "(100.0%)" warmup.log || (echo "warmup failed, expect 100.0% warmup" && exit 1)
 
     ./juicefs warmup -f file.list --evict 2>&1 | tee warmup.log 
-    files=$(grep -oP 'warmup cache: \K[0-9]+' warmup.log)
+    files=$(sed -n 's/.*cache: \([0-9]\+\) files.*/\1/p'  warmup.log)
     [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
     ./juicefs warmup -f file.list --check 2>&1 | tee warmup.log
-    files=$(grep -oP 'warmup cache: \K[0-9]+' warmup.log)
+    files=$(sed -n 's/.*cache: \([0-9]\+\) files.*/\1/p'  warmup.log)
     [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
     grep "(0.0%)" warmup.log || (echo "warmup failed, expect 0.0% warmup" && exit 1)
 }
