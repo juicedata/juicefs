@@ -1,22 +1,22 @@
 name: "command-test"
 
 on:
-  push:
-    branches:
-      - 'main'
-      - 'release-**'
-    paths:
-      - '.github/scripts/command/*.sh'
-      - '**/command.yml'
-  pull_request:
-    branches:
-      - 'main'
-      - 'release-**'
-    paths:
-      - '.github/scripts/command/*.sh'
-      - '**/command.yml'
-  schedule:
-    - cron:  '30 20 * * *'
+  # push:
+  #   branches:
+  #     - 'main'
+  #     - 'release-**'
+  #   paths:
+  #     - '.github/scripts/command/*.sh'
+  #     - '**/command.yml'
+  # pull_request:
+  #   branches:
+  #     - 'main'
+  #     - 'release-**'
+  #   paths:
+  #     - '.github/scripts/command/*.sh'
+  #     - '**/command.yml'
+  # schedule:
+  #   - cron:  '30 20 * * *'
 
   workflow_dispatch:
     inputs:
