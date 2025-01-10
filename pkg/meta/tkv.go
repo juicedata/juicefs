@@ -898,7 +898,7 @@ func (m *kvMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 	if a != nil {
 		if attr != nil {
 			m.parseAttr(a, attr)
-			//m.updateAttrCache(foundIno, attr)
+			m.updateAttrCache(foundIno, attr)
 		}
 	} else if err == nil {
 		logger.Warnf("no attribute for inode %d (%d, %s)", foundIno, parent, name)

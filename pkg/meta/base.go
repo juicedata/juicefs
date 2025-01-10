@@ -1047,9 +1047,9 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 }
 
 func (m *baseMeta) updateAttrCache(inode Ino, attr *Attr) {
-	if m.conf.OpenCache > 0 {
+	//if m.conf.OpenCache > 0 {
 	        m.of.Update(inode, attr)
-	}
+	//}
         if attr.Typ == TypeDirectory && inode != RootInode && !isTrash(attr.Parent) {
                 m.parentMu.Lock()
                 m.dirParents[inode] = attr.Parent
