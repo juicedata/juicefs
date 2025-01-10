@@ -297,6 +297,13 @@ func retriveUrlConnsOptions(murl string) (string, int, int, int, int) {
 		baseurl := murl[:optIndex]
 		optsurl := murl[optIndex+1:]
 		if vals, err := url.ParseQuery(optsurl); err == nil {
+                        if vals.Has("metaconns") {
+                                vOpenConns, _ = strconv.Atoi(vals.Get("metaconns"))
+                                vIdleConns = 2 * vOpenConns;
+                                vIdleTime = 300
+                                vLifeTime = 3600
+                                vals.Del("metaconns")
+                        }
 			if vals.Has("max_open_conns") {
 				vOpenConns, _ = strconv.Atoi(vals.Get("max_open_conns"))
 				vals.Del("max_open_conns")
@@ -312,13 +319,6 @@ func retriveUrlConnsOptions(murl string) (string, int, int, int, int) {
 			if vals.Has("max_life_time") {
 				vLifeTime, _ = strconv.Atoi(vals.Get("max_life_time"))
 				vals.Del("max_life_time");
-			}
-			if vals.Has("metaconns") {
-				vOpenConns, _ = strconv.Atoi(vals.Get("metaconns"))
-				vIdleConns = 2 * vOpenConns;
-				vIdleTime = 300
-				vLifeTime = 3600
-				vals.Del("metaconns")
 			}
 			optsurl = vals.Encode()
 		}
