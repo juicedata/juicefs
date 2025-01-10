@@ -1097,13 +1097,19 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 	inode = m.checkRoot(inode)
 	defer func() {
 		m.of.InvalidateChunk(inode, invalidateAttrOnly)
+		/*
 		if set&(SetAttrAtime|SetAttrAtimeNow) != 0 {
 			if f := m.of.find(inode); f != nil {
 				f.attr.Full = false
 			}
 		}
+		*/
 	}()
-	return m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr)
+	err := m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr)
+	if err != 0 {
+		m.updateAttrCache(inode, attr)
+	}
+	return err
 }
 
 func (m *baseMeta) nextInode() (Ino, error) {
