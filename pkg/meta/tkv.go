@@ -809,13 +809,15 @@ func (m *kvMeta) txn(ctx context.Context, f func(tx *kvTxn) error, inodes ...Ino
 	}
 	start := time.Now()
 	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
-	if len(inodes) > 0 {
-		m.txLock(uint(inodes[0]))
-		defer m.txUnlock(uint(inodes[0]))
-	}
 	var lastErr error
 	for i := 0; i < 50; i++ {
+		if len(inodes) > 0 {
+			m.txLock(uint(inodes[0]))
+		}
 		err := m.client.txn(ctx, f, i)
+		if len(inodes) > 0 {
+			m.txUnlock(uint(inodes[0]))
+		}
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
 		}
