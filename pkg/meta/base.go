@@ -1525,7 +1525,7 @@ func (m *baseMeta) touchAtime(ctx Context, inode Ino, attr *Attr) {
 	}
 
 	updated, err := m.en.doTouchAtime(ctx, inode, attr, now)
-	if updated  && err == nil {
+	if updated {
 		m.updateAttrCache(inode, attr)
 	} else if err != nil {
 		logger.Warnf("Update atime of inode %d: %s", inode, err)
