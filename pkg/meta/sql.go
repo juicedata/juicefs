@@ -313,6 +313,12 @@ func retriveUrlConnsOptions(murl string) (string, int, int, int, int) {
 				vLifeTime, _ = strconv.Atoi(vals.Get("max_life_time"))
 				vals.Del("max_life_time");
 			}
+			if vals.Has("metaconns") {
+				vOpenConns, _ = strconv.Atoi(vals.Get("metaconns"))
+				vIdleConns = 2 * vOpenConns;
+				vIdleTime = 300
+				vLifeTime = 3600
+			}
 			optsurl = vals.Encode()
 		}
 		if vIdleConns <= 0 {
