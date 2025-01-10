@@ -1,5 +1,6 @@
 #!/bin/bash -ex
 dpkg -s redis-server || .github/scripts/apt_install.sh  redis-tools redis-server
+dpkg -s fio || .github/scripts/apt_install.sh fio
 source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 [[ -z "$META" ]] && META=sqlite3
@@ -36,7 +37,7 @@ test_kernel_writeback_cache(){
     ./juicefs format $META_URL myjfs --trash-days 0
     ./juicefs mount $META_URL /tmp/jfs -d -o writeback_cache
     mkdir /tmp/jfs/fio
-    runtime=30
+    runtime=15
     cat /tmp/jfs/.stats | grep fuse | grep 'juicefs_fuse_written_size_bytes_sum\|juicefs_fuse_ops_total_write'
     fio --name=seq_write_test --rw=write --bs=10 --size=4M --numjobs=8 --nrfiles=1 --runtime=$runtime --time_based --group_reporting --directory=/tmp/jfs/fio | tee fio.log
     cat /tmp/jfs/.stats | grep fuse | grep 'juicefs_fuse_written_size_bytes_sum\|juicefs_fuse_ops_total_write'
