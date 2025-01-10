@@ -31,6 +31,20 @@ test_batch_warmup(){
     grep "(0.0%)" warmup.log || (echo "warmup failed, expect 0.0% warmup" && exit 1)
 }
 
+test_kernel_writeback_cache(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 0
+    ./juicefs mount $META_URL /tmp/jfs -d -o writeback_cache
+    mkdir /tmp/jfs/fio
+    runtime=30
+    cat /tmp/jfs/.stats | grep fuse | grep 'juicefs_fuse_written_size_bytes_sum\|juicefs_fuse_ops_total_write'
+    fio --name=seq_write_test --rw=write --bs=10 --size=4M --numjobs=8 --nrfiles=1 --runtime=$runtime --time_based --group_reporting --directory=/tmp/jfs/fio | tee fio.log
+    cat /tmp/jfs/.stats | grep fuse | grep 'juicefs_fuse_written_size_bytes_sum\|juicefs_fuse_ops_total_write'
+    bytes=$(cat /tmp/jfs/.stats | grep juicefs_fuse_written_size_bytes_sum | awk '{print $2}')
+    ops=$(cat /tmp/jfs/.stats | grep juicefs_fuse_ops_total_write | awk '{print $2}')
+    [[ $((bytes/ops)) -lt 10240 ]] && echo "writeback_cache may not enabled" && exit 1 || true
+}
+
 skip_test_cache_items(){
     # should be enabled after bugfix: https://github.com/juicedata/juicefs/issues/5539
     prepare_test
