@@ -32,6 +32,17 @@ test_batch_warmup(){
     grep "(0.0%)" warmup.log || (echo "warmup failed, expect 0.0% warmup" && exit 1)
 }
 
+test_cache_items(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 0
+    cache_items=1000
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-items $cache_items --writeback
+    seq 1 $((cache_items+100)) | xargs -P 8 -I {} sh -c 'echo {} > /tmp/jfs/test_{};'
+    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
+    files=$(sed -n 's/.*cache: \([0-9]\+\) files.*/\1/p'  warmup.log)
+    [[ $files -ne $cache_items ]] && echo "warmup failed, expect $cache_items files, actual $files" && exit 1 || true
+}
+
 test_evict_on_writeback(){
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0
