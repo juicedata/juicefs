@@ -1107,6 +1107,7 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 	*/
 	err := m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr)
 	if err == 0 {
+		m.of.InvalidateChunk(inode, invalidateAttrOnly)
 		m.updateAttrCache(inode, attr)
 	}
 	return err
