@@ -318,6 +318,7 @@ func retriveUrlConnsOptions(murl string) (string, int, int, int, int) {
 				vIdleConns = 2 * vOpenConns;
 				vIdleTime = 300
 				vLifeTime = 3600
+				vals.Del("metaconns")
 			}
 			optsurl = vals.Encode()
 		}
