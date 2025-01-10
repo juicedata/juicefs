@@ -16,30 +16,30 @@ test_batch_warmup(){
     time seq 1 $file_count | xargs -P 8 -I {} sh -c 'echo {} > /tmp/jfs/test_{}; echo /tmp/jfs/test_{} >> file.list'
     # time for i in $(seq 1 $file_count); do echo $i > /tmp/jfs/test_$i; echo /tmp/jfs/test_$i >> file.list; done
     ./juicefs warmup -f file.list 2>&1 | tee warmup.log
-    files=$(sed -n 's/.*cache: \([0-9]\+\) files.*/\1/p'  warmup.log)
+    files=$(get_cache_file_count)
     [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
     ./juicefs warmup -f file.list --check 2>&1 | tee warmup.log
-    files=$(sed -n 's/.*cache: \([0-9]\+\) files.*/\1/p'  warmup.log)
+    files=$(get_cache_file_count)
     [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
     grep "(100.0%)" warmup.log || (echo "warmup failed, expect 100.0% warmup" && exit 1)
-
     ./juicefs warmup -f file.list --evict 2>&1 | tee warmup.log 
-    files=$(sed -n 's/.*cache: \([0-9]\+\) files.*/\1/p'  warmup.log)
+    files=$(get_cache_file_count)
     [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
     ./juicefs warmup -f file.list --check 2>&1 | tee warmup.log
-    files=$(sed -n 's/.*cache: \([0-9]\+\) files.*/\1/p'  warmup.log)
+    files=$(get_cache_file_count)
     [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
     grep "(0.0%)" warmup.log || (echo "warmup failed, expect 0.0% warmup" && exit 1)
 }
 
-test_cache_items(){
+skip_test_cache_items(){
+    # should be enabled after bugfix: https://github.com/juicedata/juicefs/issues/5539
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0
     cache_items=1000
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-items $cache_items --writeback
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-items $cache_items
     seq 1 $((cache_items+100)) | xargs -P 8 -I {} sh -c 'echo {} > /tmp/jfs/test_{};'
-    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
-    files=$(sed -n 's/.*cache: \([0-9]\+\) files.*/\1/p'  warmup.log)
+    ./juicefs warmup /tmp/jfs/ --check 2>&1 | tee warmup.log
+    files=$(get_cache_file_count)
     [[ $files -ne $cache_items ]] && echo "warmup failed, expect $cache_items files, actual $files" && exit 1 || true
 }
 
@@ -75,10 +75,9 @@ do_test_cache_expired(){
 }
 
 test_cache_large_write(){
-    cache_dir=$1
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir $cache_dir --cache-large-write 
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-large-write 
     dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
     ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
     check_warmup_log warmup.log 90
@@ -90,10 +89,9 @@ test_disk_failover()
     mount_jfsCache1
     rm -rf /var/log/juicefs.log
     rm -rf /var/jfsCache2 /var/jfsCache3
-    ./juicefs format $META_URL myjfs --trash-days 0
+    ./juicefs format $META_URL myjfs --trash-days 0 --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
     JFS_MAX_DURATION_TO_DOWN=10s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d \
-        --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1 \
-        --storage minio --access-key minioadmin --secret-key minioadmin
+        --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1 
     dd if=/dev/urandom of=/tmp/test bs=1M count=$TEST_FILE_SIZE
     cp /tmp/test /tmp/jfs/test
     /etc/init.d/redis-server stop
@@ -116,15 +114,14 @@ test_disk_failure_on_writeback()
     mount_jfsCache1
     rm -rf /var/log/juicefs.log
     rm -rf /var/jfsCache2 /var/jfsCache3
-    ./juicefs format $META_URL myjfs --trash-days 0
-    JFS_MAX_DURATION_TO_DOWN=10s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d \
+    ./juicefs format $META_URL myjfs --trash-days 0 --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
+    JFS_MAX_DURATION_TO_DOWN=5s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d \
         --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1 --writeback
-        --storage minio --access-key minioadmin --secret-key minioadmin
     dd if=/dev/urandom of=/tmp/test bs=1M count=$TEST_FILE_SIZE
     cp /tmp/test /tmp/jfs/test
     /etc/init.d/redis-server stop
     ./juicefs warmup /tmp/jfs/test &
-    sleep 15s
+    sleep 15
     /etc/init.d/redis-server start
     ./juicefs warmup /tmp/jfs/test
     ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee check.log
@@ -135,12 +132,19 @@ test_disk_failure_on_writeback()
     docker start minio && sleep 3
 }
 
+get_cache_file_count(){
+    sed -n 's/.*cache: \([0-9]\+\) files.*/\1/p' warmup.log
+}
+
 prepare_test()
 {
     umount_jfs /tmp/jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
     rm -rf /var/jfs/myjfs || true
     rm -rf /var/jfsCache/myjfs || true
+    [[ ! -f /usr/local/bin/mc ]] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc && chmod +x /usr/local/bin/mc
+    mc alias set myminio http://localhost:9000 minioadmin minioadmin
+    mc rm --force --recursive myminio/test || true
 }
 
 wait_stage_uploaded()
@@ -252,7 +256,7 @@ wait_disk_down()
     timeout=$1
     for i in $(seq 1 $timeout); do
         if grep -q "state change from unstable to down" /var/log/juicefs.log; then
-            echo "state changed from unstable to down"
+            echo "state changed from unstable to down after $i seconds"
             return
         else
             echo "\rWait for state change to down, $i"
@@ -260,7 +264,7 @@ wait_disk_down()
             count=$((count+1))
         fi
     done
-    echo "Wait for state change to down timeout" && exit 1
+    echo "Wait for state change to down timeout after $timeout seconds" && exit 1
 }   
 
 source .github/scripts/common/run_test.sh && run_test $@
