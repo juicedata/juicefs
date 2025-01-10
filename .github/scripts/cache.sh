@@ -73,7 +73,6 @@ test_cache_large_write(){
     check_warmup_log warmup.log 90
 }
 
-
 test_disk_failover()
 {
     prepare_test
@@ -81,7 +80,9 @@ test_disk_failover()
     rm -rf /var/log/juicefs.log
     rm -rf /var/jfsCache2 /var/jfsCache3
     ./juicefs format $META_URL myjfs --trash-days 0
-    JFS_MAX_DURATION_TO_DOWN=10s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1
+    JFS_MAX_DURATION_TO_DOWN=10s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d \
+        --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1 \
+        --storage minio --access-key minioadmin --secret-key minioadmin
     dd if=/dev/urandom of=/tmp/test bs=1M count=$TEST_FILE_SIZE
     cp /tmp/test /tmp/jfs/test
     /etc/init.d/redis-server stop
@@ -98,14 +99,16 @@ test_disk_failover()
     docker start minio && sleep 3
 }
 
-test_disk_failover_on_writeback()
+test_disk_failure_on_writeback()
 {
     prepare_test
     mount_jfsCache1
     rm -rf /var/log/juicefs.log
     rm -rf /var/jfsCache2 /var/jfsCache3
     ./juicefs format $META_URL myjfs --trash-days 0
-    JFS_MAX_DURATION_TO_DOWN=10s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1 --writeback
+    JFS_MAX_DURATION_TO_DOWN=10s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d \
+        --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1 --writeback
+        --storage minio --access-key minioadmin --secret-key minioadmin
     dd if=/dev/urandom of=/tmp/test bs=1M count=$TEST_FILE_SIZE
     cp /tmp/test /tmp/jfs/test
     /etc/init.d/redis-server stop
@@ -121,7 +124,6 @@ test_disk_failover_on_writeback()
     docker start minio && sleep 3
 }
 
-
 prepare_test()
 {
     umount_jfs /tmp/jfs $META_URL
@@ -134,7 +136,7 @@ wait_stage_uploaded()
 {
     echo "wait stage upload"
     for i in {1..30}; do
-        stageBlocks=$(grep "stageBlocks:" /tmp/jfs/.stats | awk '{print $2}')
+        stageBlocks=$(grep "juicefs_staging_blocks:" /tmp/jfs/.stats | awk '{print $2}')
         if [[ "$stageBlocks" -eq 0 ]]; then
             echo "stageBlocks is now 0"
             break
