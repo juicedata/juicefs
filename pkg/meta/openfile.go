@@ -173,16 +173,14 @@ func (o *openfiles) Update(ino Ino, attr *Attr) bool {
 	defer o.Unlock()
 	of, ok := o.files[ino]
 	if ok {
-		if attr.Mtime > of.attr.Mtime || attr.Mtimensec > of.attr.Mtimensec {
-			if attr.Mtime != of.attr.Mtime || attr.Mtimensec != of.attr.Mtimensec {
-				of.invalidateChunk()
-			} else {
-				attr.KeepCache = of.attr.KeepCache
-			}
-			of.attr = *attr
-			of.lastCheck = time.Now().Unix()
-			return true
+		if attr.Mtime != of.attr.Mtime || attr.Mtimensec != of.attr.Mtimensec {
+			of.invalidateChunk()
+		} else {
+			attr.KeepCache = of.attr.KeepCache
 		}
+		of.attr = *attr
+		of.lastCheck = time.Now().Unix()
+		return true
 	}
 	return false
 }
