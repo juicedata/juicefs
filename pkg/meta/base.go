@@ -1095,16 +1095,16 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	defer m.timeit("SetAttr", time.Now())
 	inode = m.checkRoot(inode)
+	/*
 	defer func() {
 		m.of.InvalidateChunk(inode, invalidateAttrOnly)
-		/*
 		if set&(SetAttrAtime|SetAttrAtimeNow) != 0 {
 			if f := m.of.find(inode); f != nil {
 				f.attr.Full = false
 			}
 		}
-		*/
 	}()
+	*/
 	err := m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr)
 	if err != 0 {
 		m.updateAttrCache(inode, attr)
