@@ -356,8 +356,11 @@ func (n *jfsObjects) checkBucket(ctx context.Context, bucket string) error {
 	if err := n.isValidBucketName(bucket); err != nil {
 		return err
 	}
-	if _, eno := n.fs.Stat(mctx, n.path(bucket)); eno != 0 {
-		return jfsToObjectErr(ctx, eno, bucket)
+	bucketPath := n.path(bucket)
+	if bucketPath != "/" { // no need to stat "/" in every request
+		if _, eno := n.fs.Stat(mctx, bucketPath); eno != 0 {
+			return jfsToObjectErr(ctx, eno, bucket)
+		}
 	}
 	return nil
 }
