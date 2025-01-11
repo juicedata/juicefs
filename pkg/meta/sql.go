@@ -908,10 +908,7 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 		inodes = []Ino{1}
 	}
 
-	if len(inodes) > 0 {
-		m.txLock(uint(inodes[0]))
-		defer m.txUnlock(uint(inodes[0]))
-	}
+	defer m.txBatchLock(inodes...)()
 	var lastErr error
 	for i := 0; i < 50; i++ {
 		_, err := m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
@@ -2252,7 +2249,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 		}
 		return err
-	})
+	}, parentSrc, parentDst)
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
 			m.fileDeleted(opened, false, dino, dn.Length)

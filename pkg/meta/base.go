@@ -387,6 +387,34 @@ func (r *baseMeta) txUnlock(idx uint) {
 	r.txlocks[idx%nlocks].Unlock()
 }
 
+func (r *baseMeta) txBatchLock(inodes ...Ino) func() {
+	switch len(inodes) {
+	case 0:
+		return func() {}
+	case 1: // most cases
+		r.txLock(uint(inodes[0]))
+		return func() { r.txUnlock(uint(inodes[0])) }
+	default: // for rename and more
+		sort.Slice(inodes, func(i, j int) bool { return inodes[i]%nlocks < inodes[j]%nlocks })
+		lockedKeys := make(map[uint]struct{}, 2)
+		lockedInodes := make([]uint, 0, len(inodes))
+		for _, ino := range inodes {
+			ino := uint(ino)
+			if _, locked := lockedKeys[ino%nlocks]; locked {
+				continue // Go does not support recursive locks
+			}
+			lockedKeys[ino%nlocks] = struct{}{}
+			r.txLock(ino)
+			lockedInodes = append(lockedInodes, ino)
+		}
+		return func() {
+			for _, ino := range lockedInodes {
+				r.txUnlock(ino)
+			}
+		}
+	}
+}
+
 func (r *baseMeta) OnMsg(mtype uint32, cb MsgCallback) {
 	r.msgCallbacks.Lock()
 	defer r.msgCallbacks.Unlock()
