@@ -384,6 +384,13 @@ public class JuiceFileSystemImpl extends FileSystem {
       groupStr = supergroup;
     }
 
+    if (Boolean.parseBoolean(getConf(conf, "verify-kerberos-user", "false"))) {
+      // Ensure the user has Kerberos credentials if not the superuser
+      if (!user.equals(superuser) && !ugi.hasKerberosCredentials()) {
+        throw new IOException(user + " does not have Kerberos credentials");
+      }
+    }
+
     synchronized (JuiceFileSystemImpl.class) {
       if (callBack == null) {
         callBack = new LogCallBackImpl(lib);
