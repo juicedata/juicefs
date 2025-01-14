@@ -8,6 +8,21 @@ start_meta_engine $META minio
 META_URL=$(get_meta_url $META)
 TEST_FILE_SIZE=1024
 
+test_warmup_in_background(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 0
+    ./juicefs mount $META_URL /tmp/jfs -d
+    dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
+    ./juicefs warmup /tmp/jfs/test --evict
+    ./juicefs warmup /tmp/jfs/test --background
+    wait_warmup_finish
+    ./juicefs warmup /tmp/jfs/test --check 2>&1 |tee warmup.log
+    check_warmup_log warmup.log 100
+    ./juicefs warmup /tmp/jfs/test --evict --background
+    ./juicefs warmup /tmp/jfs/test --check 2>&1 |tee warmup.log
+    check_warmup_log warmup.log 0
+}
+
 test_batch_warmup(){
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0
@@ -160,6 +175,22 @@ prepare_test()
     [[ ! -f /usr/local/bin/mc ]] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc && chmod +x /usr/local/bin/mc
     mc alias set myminio http://localhost:9000 minioadmin minioadmin
     mc rm --force --recursive myminio/test || true
+}
+wait_warmup_finish(){
+    timeout=30
+    for i in $(seq 1 $timeout); do
+        if ps -ef  | grep -v grep | grep "warmup" > /dev/null; then
+            echo "Warmup process is still running..."
+            sleep 1
+        else
+            echo "Warmup process has finished."
+            break
+        fi
+        if [[ $i -eq $timeout ]]; then
+            echo "Warmup process has not finished after $timeout seconds."
+            exit 1
+        fi
+    done
 }
 
 wait_stage_uploaded()
