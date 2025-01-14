@@ -12,7 +12,7 @@ test_warmup_in_background(){
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0
     ./juicefs mount $META_URL /tmp/jfs -d
-    dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
+    dd if=/dev/zero of=/tmp/jfs/test bs=1M count=1024
     ./juicefs warmup /tmp/jfs/test --evict
     ./juicefs warmup /tmp/jfs/test --background
     wait_warmup_finish
@@ -96,11 +96,14 @@ do_test_cache_expired(){
     cache_dir=$1
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir $cache_dir --cache-expire 3s 
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir $cache_dir --cache-expire 3s
     dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
-    ./juicefs warmup /tmp/jfs/test 2>&1 | tee warmup.log
+    for i in $(seq 1 1100); do
+        dd if=/dev/zero of=/tmp/jfs/test$i bs=32k count=1
+    done
+    ./juicefs warmup /tmp/jfs/ 2>&1 | tee warmup.log
     sleep 15
-    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
+    ./juicefs warmup /tmp/jfs/ --check 2>&1 | tee warmup.log
     grep "(0.0%)" warmup.log || (echo "cache should expired" && exit 1)
 }
 
@@ -111,6 +114,29 @@ test_cache_large_write(){
     dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
     ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
     check_warmup_log warmup.log 90
+}
+
+test_cache_compressed_lz4(){
+    do_test_cache_compressed lz4
+}
+
+test_cache_compressed_zstd(){
+    do_test_cache_compressed zstd
+}
+
+do_test_cache_compressed(){
+    compress=$1
+    prepare_test
+    ./juicefs format $META_URL myjfs --compress $compress
+    ./juicefs mount $META_URL /tmp/jfs -d --storage minio --bucket http://localhost:9000/test \
+        --access-key minioadmin --secret-key minioadmin
+    dd if=/dev/urandom of=/tmp/test bs=1M count=200
+    cp /tmp/test /tmp/jfs/test
+    ./juicefs warmup /tmp/jfs/test --evict
+    ./juicefs warmup /tmp/jfs/test
+    docker stop minio
+    compare_md5sum /tmp/test /tmp/jfs/test
+    docker start minio
 }
 
 test_disk_failover()
