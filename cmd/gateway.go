@@ -80,6 +80,10 @@ func cmdGateway() *cli.Command {
 			Name:  "object-tag",
 			Usage: "enable object tagging api",
 		},
+		&cli.BoolFlag{
+			Name:  "object-meta",
+			Usage: "enable object metadata api",
+		},
 		&cli.StringFlag{
 			Name:  "domain",
 			Usage: "domain for virtual-host-style requests",
@@ -153,6 +157,7 @@ func gateway(c *cli.Context) error {
 			KeepEtag:    c.Bool("keep-etag"),
 			Umask:       uint16(umask),
 			ObjTag:      c.Bool("object-tag"),
+			ObjMeta:     c.Bool("object-meta"),
 		},
 	)
 	if err != nil {
