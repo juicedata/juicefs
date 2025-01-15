@@ -75,12 +75,29 @@ skip_test_cache_items(){
 
 test_evict_on_writeback(){
     prepare_test
-    ./juicefs format $META_URL myjfs --trash-days 0
-    ./juicefs mount $META_URL /tmp/jfs -d --writeback --upload-delay 5s
-    dd if=/dev/urandom of=/tmp/test bs=1M count=$TEST_FILE_SIZE
+    ./juicefs format $META_URL myjfs --compress zstd
+    ./juicefs mount $META_URL /tmp/jfs -d --writeback --upload-delay 3s
+    dd if=/dev/urandom of=/tmp/test bs=1M count=200
     cp /tmp/test /tmp/jfs/test
+    sleep 3
+    stageBlocks=$(grep "juicefs_staging_blocks" /tmp/jfs/.stats | awk '{print $2}')
+    [[ $stageBlocks -eq 0 ]] && echo "stage blocks should not be 0" && exit 1 || true
     ./juicefs warmup /tmp/jfs/test --evict
     wait_stage_uploaded
+    compare_md5sum /tmp/test /tmp/jfs/test
+}
+
+test_remount_on_writeback(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --compress lz4
+    ./juicefs mount $META_URL /tmp/jfs -d --writeback --upload-delay 10s
+    dd if=/dev/urandom of=/tmp/test bs=1M count=200
+    cp /tmp/test /tmp/jfs/test
+    umount_jfs /tmp/jfs $META_URL
+    ./juicefs mount $META_URL /tmp/jfs -d --writeback --upload-delay 10s
+    stage_size=$(du -shm $(get_staging_dir) | awk '{print $1}')
+    [[ $stage_size -gt 2 ]] && echo "stage size should not great than 2M" && exit 1 || true
+    ./juicefs warmup /tmp/jfs/test --evict
     compare_md5sum /tmp/test /tmp/jfs/test
 }
 
@@ -188,6 +205,14 @@ test_disk_failure_on_writeback()
     docker start minio && sleep 3
 }
 
+get_cache_dir(){
+    grep CacheDir /tmp/jfs/.config | awk -F'"' '{print $4}'
+}
+
+get_staging_dir(){
+    echo $(get_cache_dir)/rawstaging/
+}
+
 get_cache_file_count(){
     sed -n 's/.*cache: \([0-9]\+\) files.*/\1/p' warmup.log
 }
@@ -223,7 +248,7 @@ wait_stage_uploaded()
 {
     echo "wait stage upload"
     for i in {1..30}; do
-        stageBlocks=$(grep "juicefs_staging_blocks:" /tmp/jfs/.stats | awk '{print $2}')
+        stageBlocks=$(grep "juicefs_staging_blocks" /tmp/jfs/.stats | awk '{print $2}')
         if [[ "$stageBlocks" -eq 0 ]]; then
             echo "stageBlocks is now 0"
             break
