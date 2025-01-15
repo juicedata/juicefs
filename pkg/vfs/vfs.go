@@ -135,8 +135,9 @@ type Config struct {
 	AccessLog            string `json:",omitempty"`
 	PrefixInternal       bool
 	HideInternal         bool
-	RootSquash           *RootSquash `json:",omitempty"`
-	NonDefaultPermission bool        `json:",omitempty"`
+	RootSquash           *AnonymousAccount `json:",omitempty"`
+	AllSquash            *AnonymousAccount `json:",omitempty"`
+	NonDefaultPermission bool              `json:",omitempty"`
 
 	Pid       int
 	PPid      int
@@ -145,7 +146,7 @@ type Config struct {
 	FuseOpts  *FuseOptions `json:",omitempty"`
 }
 
-type RootSquash struct {
+type AnonymousAccount struct {
 	Uid uint32
 	Gid uint32
 }

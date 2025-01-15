@@ -68,6 +68,11 @@ func (fs *fileSystem) newContext(cancel <-chan struct{}, header *fuse.InHeader) 
 		ctx.header.Uid = fs.conf.RootSquash.Uid
 		ctx.header.Gid = fs.conf.RootSquash.Gid
 	}
+	if fs.conf.AllSquash != nil {
+		ctx.checkPermission = true
+		ctx.header.Uid = fs.conf.AllSquash.Uid
+		ctx.header.Gid = fs.conf.AllSquash.Gid
+	}
 	return ctx
 }
 
