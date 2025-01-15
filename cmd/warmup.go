@@ -19,7 +19,6 @@ package cmd
 import (
 	"bufio"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -142,7 +141,7 @@ END:
 }
 
 // send fill-cache command to controller file
-func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads uint, background bool, dspin *utils.DoubleSpinner) vfs.CacheResponse {
+func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads uint, background bool, dspin *utils.DoubleSpinner, locs map[string]uint64) vfs.CacheResponse {
 	paths := strings.Join(batch, "\n")
 	var back uint8
 	if background {
@@ -178,9 +177,18 @@ func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads ui
 		logger.Fatalf("%s failed: %s", action, errno)
 	}
 
-	err := json.Unmarshal(data, &resp)
-	if err != nil {
-		logger.Fatalf("unmarshal error: %s", err)
+	r := utils.ReadBuffer(data)
+	resp.FileCount = r.Get64()
+	resp.SliceCount = r.Get64()
+	resp.TotalBytes = r.Get64()
+	resp.MissBytes = r.Get64()
+	if r.HasMore() {
+		n := r.Get32()
+		for i := uint32(0); i < n; i++ {
+			loc := string(r.Get(int(r.Get16())))
+			bytes := r.Get64()
+			locs[loc] = bytes
+		}
 	}
 
 	return resp
@@ -259,6 +267,7 @@ func warmup(ctx *cli.Context) error {
 		action = vfs.CheckCache
 	}
 
+	locs := make(map[string]uint64)
 	background := ctx.Bool("background")
 	start := len(mp)
 	batch := make([]string, 0, batchMax)
@@ -280,13 +289,13 @@ func warmup(ctx *cli.Context) error {
 			continue
 		}
 		if len(batch) >= batchMax {
-			resp := sendCommand(controller, action, batch, threads, background, dspin)
+			resp := sendCommand(controller, action, batch, threads, background, dspin, locs)
 			total.Add(resp)
 			batch = batch[:0]
 		}
 	}
 	if len(batch) > 0 {
-		resp := sendCommand(controller, action, batch, threads, background, dspin)
+		resp := sendCommand(controller, action, batch, threads, background, dspin, locs)
 		total.Add(resp)
 	}
 	progress.Done()
@@ -299,6 +308,10 @@ func warmup(ctx *cli.Context) error {
 		case vfs.EvictCache:
 			logger.Infof("%s: %d files (%s bytes)", action, count, humanize.IBytes(uint64(bytes)))
 		case vfs.CheckCache:
+                        for cf, cb := range locs {
+				fmt.Printf("Location=%s, size=%.1fm, pct=%2.1f%%\n",
+					   cf, float64(cb)/1048576.0, 100.0 * float64(cb)/float64(bytes))
+                        }
 			logger.Infof("%s: %d files checked, %s of %s (%2.1f%%) cached", action, count,
 				humanize.IBytes(uint64(bytes)-total.MissBytes),
 				humanize.IBytes(uint64(bytes)),

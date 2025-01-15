@@ -1037,7 +1037,7 @@ type CacheManager interface {
 	cache(key string, p *Page, force, dropCache bool)
 	remove(key string, staging bool)
 	load(key string) (ReadCloser, error)
-	exist(key string) bool
+	exist(key string) (bool, string)
 	uploaded(key string, size int)
 	stage(key string, data []byte, keepCache bool) (string, error)
 	removeStage(key string) error
@@ -1218,19 +1218,23 @@ func (m *cacheManager) load(key string) (ReadCloser, error) {
 	return r, err
 }
 
-func (m *cacheManager) exist(key string) bool {
+func (m *cacheManager) exist(key string) (bool, string) {
 	store := m.getStore(key)
 	if store == nil {
-		return false
+		return false, ""
 	}
+	var loc string = ""
 	exited, err := m.getStore(key).exist(key)
 	if err == errNotCached {
 		legacy := m.getStoreLegacy(key)
 		if legacy != store && legacy != nil {
 			exited, _ = legacy.exist(key)
+			loc = legacy.dir
 		}
+	} else {
+		loc = m.getStore(key).dir
 	}
-	return exited
+	return exited, loc
 }
 
 func (m *cacheManager) remove(key string, staging bool) {

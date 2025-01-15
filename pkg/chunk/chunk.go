@@ -34,13 +34,18 @@ type Writer interface {
 	Abort()
 }
 
+type CacheLocation interface {
+	AddCached(string, uint64)
+	GetCached() map[string]uint64
+}
+
 type ChunkStore interface {
 	NewReader(id uint64, length int) Reader
 	NewWriter(id uint64) Writer
 	Remove(id uint64, length int) error
 	FillCache(id uint64, length uint32) error
 	EvictCache(id uint64, length uint32) error
-	CheckCache(id uint64, length uint32) (uint64, error)
+	CheckCache(id uint64, length uint32, cl CacheLocation) (uint64, error)
 	UsedMemory() int64
 	UpdateLimit(upload, download int64)
 }

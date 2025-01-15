@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/chunk"
 )
 
 type _file struct {
@@ -54,7 +55,7 @@ const (
 	CheckCache = 2
 )
 
-func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concurrent int, resp *CacheResponse) {
+func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concurrent int, resp *CacheResponse, cl chunk.CacheLocation) {
 	logger.Infof("start to %s %d paths with %d workers", action, len(paths), concurrent)
 
 	if resp == nil {
@@ -97,7 +98,7 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 					}
 				case CheckCache:
 					handler = func(s meta.Slice) error {
-						missBytes, err := v.Store.CheckCache(s.Id, s.Size)
+						missBytes, err := v.Store.CheckCache(s.Id, s.Size, cl)
 						if err != nil {
 							return err
 						}

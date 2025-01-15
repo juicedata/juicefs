@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	io_prometheus_client "github.com/prometheus/client_model/go"
@@ -539,27 +540,42 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		}
 
 		var stat CacheResponse
+		var cloc chunk.CacheLocation
 		if background == 0 {
 			done := make(chan struct{})
 			go func() {
-				v.cache(ctx, action, paths, int(concurrent), &stat)
+				v.cache(ctx, action, paths, int(concurrent), &stat, cloc)
 				close(done)
 			}()
 			writeProgress(&stat.FileCount, &stat.TotalBytes, out, done)
 		} else {
-			go v.cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(concurrent), nil)
+			go v.cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(concurrent), nil, nil)
 		}
 
-		data, err := json.Marshal(stat)
-		if err != nil {
-			logger.Errorf("marshal response error: %v", err)
-			_, _ = out.Write([]byte{byte(syscall.EIO & 0xff)})
-			return
+		var buflen uint32
+		var locs = cloc.GetCached()
+		buflen = 8 + 8 + 8 + 8 //stats size
+		if len(locs) > 0 {
+			buflen += 4
+			for k := range locs {
+				buflen += uint32(2 + len(k) + 8)
+			}
 		}
-		w := utils.NewBuffer(uint32(1 + 4 + len(data)))
+		w := utils.NewBuffer(1 + 4 + uint32(buflen))
 		w.Put8(meta.CDATA)
-		w.Put32(uint32(len(data)))
-		w.Put(data)
+		w.Put32(uint32(buflen))
+		w.Put64(stat.FileCount)
+		w.Put64(stat.SliceCount)
+		w.Put64(stat.TotalBytes)
+		w.Put64(stat.MissBytes)
+		if len(locs) > 0 {
+			w.Put32(uint32(len(locs)))
+			for k, bytes := range locs {
+				w.Put16(uint16(len(k)))
+				w.Put([]byte(k))
+				w.Put64(bytes)
+			}
+		}
 		_, _ = out.Write(w.Bytes())
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
