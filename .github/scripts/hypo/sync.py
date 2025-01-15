@@ -74,8 +74,8 @@ class SyncMachine(RuleBasedStateMachine):
           umask = st_umask, 
             )
     def create_file(self, parent, file_name, content, mode='x', user='root', umask=0o022):
-        result1 = self.fsop1.do_create_file(parent, file_name, mode, content, user, umask)
-        result2 = self.fsop2.do_create_file(parent, file_name, mode, content, user, umask)
+        result1 = self.fsop1.do_create_file(parent=parent, file_name=file_name, mode=mode, content=content, user=user, umask=umask)
+        result2 = self.fsop2.do_create_file(parent=parent, file_name=file_name, mode=mode, content=content, user=user, umask=umask)
         assert self.equal(result1, result2), f'\033[31mcreate_file:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
         if isinstance(result1, Exception):
             return multiple()
