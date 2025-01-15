@@ -555,9 +555,9 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		var buflen uint32
 		var locs = cloc.GetCached()
 		buflen = 8 + 8 + 8 + 8 //stats size
-		if len(locs) > 0 {
+		if len(*locs) > 0 {
 			buflen += 4
-			for k := range locs {
+			for k := range *locs {
 				buflen += uint32(2 + len(k) + 8)
 			}
 		}
@@ -568,9 +568,9 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		w.Put64(stat.SliceCount)
 		w.Put64(stat.TotalBytes)
 		w.Put64(stat.MissBytes)
-		if len(locs) > 0 {
-			w.Put32(uint32(len(locs)))
-			for k, bytes := range locs {
+		if len(*locs) > 0 {
+			w.Put32(uint32(len(*locs)))
+			for k, bytes := range *locs {
 				w.Put16(uint16(len(k)))
 				w.Put([]byte(k))
 				w.Put64(bytes)

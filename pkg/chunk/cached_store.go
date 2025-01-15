@@ -671,8 +671,8 @@ func (cl *cacheLocation) AddCached(loc string, size uint64) {
 	cl.locs[loc] += size
 }
 
-func (cl *cacheLocation) GetCached() map[string]uint64 {
-	return cl.locs
+func (cl *cacheLocation) GetCached() *map[string]uint64 {
+	return &cl.locs
 }
 
 type cachedStore struct {

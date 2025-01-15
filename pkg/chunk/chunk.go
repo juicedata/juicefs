@@ -36,7 +36,7 @@ type Writer interface {
 
 type CacheLocation interface {
 	AddCached(string, uint64)
-	GetCached() map[string]uint64
+	GetCached() *map[string]uint64
 }
 
 type ChunkStore interface {
