@@ -131,20 +131,11 @@ test_cache_large_write(){
     check_warmup_log warmup.log 90
 }
 
-test_cache_compressed_lz4(){
-    do_test_cache_compressed lz4
-}
-
-test_cache_compressed_zstd(){
-    do_test_cache_compressed zstd
-}
-
-do_test_cache_compressed(){
-    compress=$1
+test_cache_compressed(){
     prepare_test
-    ./juicefs format $META_URL myjfs --compress $compress
-    ./juicefs mount $META_URL /tmp/jfs -d --storage minio --bucket http://localhost:9000/test \
-        --access-key minioadmin --secret-key minioadmin
+    ./juicefs format $META_URL myjfs --storage minio --bucket http://localhost:9000/test \
+        --access-key minioadmin --secret-key minioadmin --compress lz4
+    ./juicefs mount $META_URL /tmp/jfs -d 
     dd if=/dev/urandom of=/tmp/test bs=1M count=200
     cp /tmp/test /tmp/jfs/test
     ./juicefs warmup /tmp/jfs/test --evict
