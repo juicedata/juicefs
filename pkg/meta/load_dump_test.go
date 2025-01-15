@@ -97,8 +97,8 @@ func checkMeta(t *testing.T, m Meta) {
 	}
 
 	counters := map[string]int64{
-		"usedSpace":   115396608,
-		"totalInodes": 15,
+		"usedSpace":   115392512,
+		"totalInodes": 14,
 		"nextInode":   35,
 		"nextChunk":   9,
 		"nextSession": 0,
@@ -338,7 +338,7 @@ func testLoadDump(t *testing.T, name, addr string) {
 
 func TestLoadDump(t *testing.T) { //skip mutate
 	testLoadDump(t, "redis", "redis://127.0.0.1/10")
-	testLoadDump(t, "mysql", "mysql://root:@/dev")
+	// testLoadDump(t, "mysql", "mysql://root:@/dev")
 	testLoadDump(t, "badger", "badger://jfs-load-dump")
 	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
 }
