@@ -193,6 +193,10 @@ test_cache_checksum_none(){
     do_test_cache_checksum none
 }
 
+test_cache_checksum_full(){
+    do_test_cache_checksum full
+}
+
 test_cache_checksum_shrink(){
     do_test_cache_checksum shrink
 }
@@ -206,12 +210,9 @@ do_test_cache_checksum(){
     prepare_test
     ./juicefs format $META_URL myjfs --compress lz4
     ./juicefs mount $META_URL /tmp/jfs -d --verify-cache-checksum $checksum_level
-    dd if=/dev/urandom of=/tmp/test bs=1M count=200
-    cp /tmp/test /tmp/jfs/test
-    ./juicefs warmup /tmp/jfs/test --evict
-    ./juicefs warmup /tmp/jfs/test
-    echo 3 > /proc/sys/vm/drop_caches
-    compare_md5sum /tmp/test /tmp/jfs/test
+    mkdir -p /tmp/jfs/rand-rw
+    fio --name=seq_rw --rw=readwrite --bsrange=1k-4k --size=80M --numjobs=4 --runtime=30 --time_based --group_reporting --filename=/tmp/jfs/req-rw
+    fio --name=rand_rw   --rw=randrw --bsrange=1k-4k --size=80M --numjobs=4 --runtime=30 --time_based --group_reporting --directory=/tmp/jfs/rand-rw --nrfiles=1000 --filesize=4k
 }
 
 test_disk_full_2_random(){
