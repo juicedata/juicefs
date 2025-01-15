@@ -4667,7 +4667,6 @@ func (m *dbMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, ru
 			}
 			m.parseAttr(n, attr)
 			m.of.Update(ino, attr)
-
 			aclId = getAttrACLId(attr, aclType)
 		}
 
