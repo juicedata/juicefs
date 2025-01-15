@@ -675,6 +675,12 @@ func (cl *cacheLocation) GetCached() *map[string]uint64 {
 	return &cl.locs
 }
 
+func NewCacheLocation() CacheLocation {
+	locs := &cacheLocation{
+			locs: make(map[string]uint64)}
+	return locs
+}
+
 type cachedStore struct {
 	storage       object.ObjectStorage
 	bcache        CacheManager
@@ -1194,4 +1200,4 @@ func (store *cachedStore) UpdateLimit(upload, download int64) {
 }
 
 var _ ChunkStore = &cachedStore{}
-var _ CacheLocation = &cacheLocation{locs: make(map[string]uint64)}
+var _ CacheLocation = &cacheLocation{}

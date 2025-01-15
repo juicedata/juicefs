@@ -540,7 +540,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		}
 
 		var stat CacheResponse
-		var cloc chunk.CacheLocation
+		cloc := chunk.NewCacheLocation()
 		if background == 0 {
 			done := make(chan struct{})
 			go func() {
@@ -553,7 +553,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		}
 
 		var buflen uint32
-		var locs = cloc.GetCached()
+		locs := cloc.GetCached()
 		buflen = 8 + 8 + 8 + 8 //stats size
 		if len(*locs) > 0 {
 			buflen += 4
