@@ -839,6 +839,10 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 					}
 				}
 			}
+			err = n.setObjMeta(tmpName, opts.UserDefined)
+			if err != nil {
+				logger.Errorf("set object metadata error, path: %s error %s", p, err)
+			}
 		}); err != nil {
 			return
 		}
@@ -846,11 +850,6 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 	fi, eno := n.fs.Stat(mctx, p)
 	if eno != 0 {
 		return objInfo, jfsToObjectErr(ctx, eno, bucket, object)
-	}
-
-	err = n.setObjMeta(p, opts.UserDefined)
-	if err != nil {
-		logger.Errorf("set object metadata error, path: %s error %s", p, err)
 	}
 
 	return minio.ObjectInfo{
@@ -1178,6 +1177,15 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		}
 	}
 
+	var objMeta map[string]string
+	if n.gConf.ObjMeta {
+		if objMeta, err = n.getObjMeta(n.upath(bucket, uploadID)); err != nil {
+			logger.Errorf("get object meta error, path: %s, error: %s", n.upath(bucket, uploadID), err)
+		} else if err = n.setObjMeta(tmp, objMeta); err != nil {
+			logger.Errorf("set object meta error, path: %s, error: %s", tmp, err)
+		}
+	}
+
 	name := n.path(bucket, object)
 	eno = n.fs.Rename(mctx, tmp, name, 0)
 	if eno == syscall.ENOENT {
@@ -1201,15 +1209,6 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		_ = n.fs.Delete(mctx, name)
 		err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 		return
-	}
-
-	var objMeta map[string]string
-	if n.gConf.ObjMeta {
-		if objMeta, err = n.getObjMeta(n.upath(bucket, uploadID)); err != nil {
-			logger.Errorf("get object meta error, path: %s, error: %s", n.upath(bucket, uploadID), err)
-		} else if err = n.setObjMeta(name, objMeta); err != nil {
-			logger.Errorf("set object meta error, path: %s, error: %s", name, err)
-		}
 	}
 
 	// remove parts
