@@ -1154,10 +1154,8 @@ func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 			return syscall.ENOENT
 		}
 		*inode = nn.Inode
-		if attr != nil {
-			m.parseAttr(&nn.node, attr)
-			m.updateAttrCache(nn.Inode, attr)
-		}
+		m.parseAttr(&nn.node, attr)
+		m.of.Update(nn.Inode, attr)
 		return nil
 	}))
 }
@@ -4668,7 +4666,7 @@ func (m *dbMeta) doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, ru
 				return syscall.ENOENT
 			}
 			m.parseAttr(n, attr)
-			m.updateAttrCache(ino, attr)
+			m.of.Update(ino, attr)
 
 			aclId = getAttrACLId(attr, aclType)
 		}
