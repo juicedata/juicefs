@@ -15,12 +15,9 @@ test_warmup_in_background(){
     dd if=/dev/zero of=/tmp/jfs/test bs=1M count=1024
     ./juicefs warmup /tmp/jfs/test --evict
     ./juicefs warmup /tmp/jfs/test --background
-    wait_warmup_finish
-    ./juicefs warmup /tmp/jfs/test --check 2>&1 |tee warmup.log
-    check_warmup_log warmup.log 100
-    ./juicefs warmup /tmp/jfs/test --evict --background
-    ./juicefs warmup /tmp/jfs/test --check 2>&1 |tee warmup.log
-    check_warmup_log warmup.log 0
+    wait_warmup_finish /tmp/jfs/test 100
+    ./juicefs warmup /tmp/jfs/test --background --evict 
+    wait_warmup_finish /tmp/jfs/test 0
 }
 
 test_batch_warmup(){
@@ -227,19 +224,23 @@ prepare_test()
     mc alias set myminio http://localhost:9000 minioadmin minioadmin
     mc rm --force --recursive myminio/test || true
 }
+
 wait_warmup_finish(){
+    path=$1
+    expected_ratio=$2
     timeout=30
     for i in $(seq 1 $timeout); do
-        if ps -ef  | grep -v grep | grep "warmup" > /dev/null; then
-            echo "Warmup process is still running..."
-            sleep 1
-        else
-            echo "Warmup process has finished."
+        ./juicefs warmup $path --check 2>&1 |tee warmup.log
+        ratio=$(get_warmup_ratio warmup.log)
+        if [[ $ratio -eq $expected_ratio ]]; then
+            echo "warmup finished after $i seconds"
             break
+        else
+            echo "wait warmup finish $i"
+            sleep 1
         fi
         if [[ $i -eq $timeout ]]; then
-            echo "Warmup process has not finished after $timeout seconds."
-            exit 1
+            echo "wait warmup finish timeout after $timeout seconds" && exit 1
         fi
     done
 }
@@ -284,11 +285,16 @@ check_evict_log(){
 check_warmup_log(){
     log=$1
     ratio=$2
-    result=$(cat $log |  sed 's/.*(\([0-9]*\.[0-9]*%\)).*/\1/' | sed 's/%//')
+    result=$(get_warmup_ratio $log)
     if (( $(echo "$result < $ratio" | bc -l) )); then
         echo "cache ratio should be more than 98% after warmup, actual is $result"
         exit 1
     fi
+}
+
+get_warmup_ratio(){
+    log=$1
+    cat $log |  sed 's/.*(\([0-9]*\.[0-9]*%\)).*/\1/' | sed 's/%//'
 }
 
 
