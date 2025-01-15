@@ -87,11 +87,12 @@ test_evict_on_writeback(){
 test_remount_on_writeback(){
     prepare_test
     ./juicefs format $META_URL myjfs --compress lz4
-    ./juicefs mount $META_URL /tmp/jfs -d --writeback --upload-delay 10s
+    ./juicefs mount $META_URL /tmp/jfs -d --writeback --upload-delay 3s
     dd if=/dev/urandom of=/tmp/test bs=1M count=200
     cp /tmp/test /tmp/jfs/test
     umount_jfs /tmp/jfs $META_URL
-    ./juicefs mount $META_URL /tmp/jfs -d --writeback --upload-delay 10s
+    ./juicefs mount $META_URL /tmp/jfs -d --writeback
+    sleep 3
     stage_size=$(du -shm $(get_staging_dir) | awk '{print $1}')
     [[ $stage_size -gt 2 ]] && echo "stage size should not great than 2M" && exit 1 || true
     ./juicefs warmup /tmp/jfs/test --evict
@@ -151,6 +152,31 @@ do_test_cache_compressed(){
     docker stop minio
     compare_md5sum /tmp/test /tmp/jfs/test
     docker start minio
+}
+
+test_cache_checksum_none(){
+    do_test_cache_checksum none
+}
+
+test_cache_checksum_shrink(){
+    do_test_cache_checksum shrink
+}
+
+test_cache_checksum_extend(){
+    do_test_cache_checksum extend
+}
+
+do_test_cache_checksum(){
+    checksum_level=$1
+    prepare_test
+    ./juicefs format $META_URL myjfs --compress lz4
+    ./juicefs mount $META_URL /tmp/jfs -d --verify-cache-checksum $checksum_level
+    dd if=/dev/urandom of=/tmp/test bs=1M count=200
+    cp /tmp/test /tmp/jfs/test
+    ./juicefs warmup /tmp/jfs/test --evict
+    ./juicefs warmup /tmp/jfs/test
+    echo 3 > /proc/sys/vm/drop_caches
+    compare_md5sum /tmp/test /tmp/jfs/test
 }
 
 test_disk_failover()
