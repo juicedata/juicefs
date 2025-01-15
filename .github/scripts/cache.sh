@@ -99,6 +99,29 @@ test_remount_on_writeback(){
     compare_md5sum /tmp/test /tmp/jfs/test
 }
 
+test_memory_cache(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --compress lz4
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir memory --cache-size 100M --cache-eviction none
+    dd if=/dev/zero of=/tmp/jfs/test1 bs=1M count=200
+    ./juicefs warmup /tmp/jfs/test1
+    ./juicefs warmup /tmp/jfs/test1 --check 2>&1 | tee warmup.log
+    ratio=$(get_warmup_ratio warmup.log)
+    (( $(echo "$ratio < 60.0" | bc -l) )) || (echo "ratio($ratio) should less than 60%" && exit 1)
+    dd if=/dev/zero of=/tmp/jfs/test2 bs=1M count=200
+    ./juicefs warmup /tmp/jfs/test2
+    ./juicefs warmup /tmp/jfs/test2 --check 2>&1 | tee warmup.log
+    ratio=$(get_warmup_ratio warmup.log)
+    (( $(echo "$ratio < 5.0" | bc -l) )) || (echo "ratio($ratio) should less than 5%:" && exit 1)
+    
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir memory --cache-size 100M --cache-eviction 2-random
+    ./juicefs warmup /tmp/jfs/test1
+    ./juicefs warmup /tmp/jfs/test2
+    ./juicefs warmup /tmp/jfs/test2 --check 2>&1 | tee warmup.log
+    ratio=$(get_warmup_ratio warmup.log)
+    (( $(echo "$ratio > 40.0" | bc -l) )) || (echo "ratio($ratio) should more than 40%" && exit 1)
+}
+
 test_cache_expired(){
     do_test_cache_expired /var/jfsCache/myjfs
 }
