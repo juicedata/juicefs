@@ -15,9 +15,9 @@ test_warmup_in_background(){
     dd if=/dev/zero of=/tmp/jfs/test bs=1M count=1024
     ./juicefs warmup /tmp/jfs/test --evict
     ./juicefs warmup /tmp/jfs/test --background
-    wait_warmup_finish /tmp/jfs/test 100
+    wait_warmup_finish /tmp/jfs/test 100.0
     ./juicefs warmup /tmp/jfs/test --background --evict 
-    wait_warmup_finish /tmp/jfs/test 0
+    wait_warmup_finish /tmp/jfs/test 0.0
 }
 
 test_batch_warmup(){
@@ -232,7 +232,7 @@ wait_warmup_finish(){
     for i in $(seq 1 $timeout); do
         ./juicefs warmup $path --check 2>&1 |tee warmup.log
         ratio=$(get_warmup_ratio warmup.log)
-        if [[ $ratio -eq $expected_ratio ]]; then
+        if [[ "$ratio" == "$expected_ratio" ]]; then
             echo "warmup finished after $i seconds"
             break
         else
