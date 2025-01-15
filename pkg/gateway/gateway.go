@@ -551,7 +551,9 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	}
 	defer func() {
 		_ = f.Close(mctx)
-		_ = n.fs.Delete(mctx, tmp)
+		if err != nil {
+			_ = n.fs.Delete(mctx, tmp)
+		}
 	}()
 
 	_, eno = n.fs.CopyFileRange(mctx, src, 0, tmp, 0, 1<<63)
@@ -739,7 +741,11 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 		err = eno
 		return
 	}
-	defer func() { _ = n.fs.Delete(mctx, tmpname) }()
+	defer func() {
+		if err != nil {
+			_ = n.fs.Delete(mctx, tmpname)
+		}
+	}()
 	var buf = buffPool.Get().(*[]byte)
 	defer buffPool.Put(buf)
 	for {
