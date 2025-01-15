@@ -237,14 +237,30 @@ do_test_disk_full(){
     # [[ $size -lt 800 || $size -gt 900 ]] && echo "cached file size should between 800 to 900 MB" && exit 1 || true
 }
 
+test_inode_full(){
+    prepare_test
+    mount_jfsCache1 100G 1000
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir /var/jfsCache1 --free-space-ratio 0.2
+    seq 1 1000 | xargs -P 8 -I {} sh -c 'echo {} > /tmp/jfs/test_{};'
+    ./juicefs warmup /tmp/jfs/
+    ./juicefs warmup /tmp/jfs/ --check 2>&1 | tee warmup.log
+    sleep 3
+    used_percent=$(df -i /var/jfsCache1 | tail -1  | awk '{print $5}' | tr -d %)
+    [[ $used_percent -gt 85 ]] && echo "used percent($used_percent) should less than 85%" && exit 1 || true
+}
+
 test_disk_full_with_writeback(){
     prepare_test
     mount_jfsCache1 1G
-    ./juicefs format $META_URL myjfs 
+    ./juicefs format $META_URL myjfs --compress zstd
     ./juicefs mount $META_URL /tmp/jfs -d --cache-dir /var/jfsCache1 --writeback --free-space-ratio 0.2 --upload-delay 5s
     dd if=/dev/urandom of=/tmp/test bs=1M count=1400
     cp /tmp/test /tmp/jfs/test
     wait_stage_uploaded
+    sleep 3
+    used_percent=$(df /var/jfsCache1 | tail -1  | awk '{print $5}' | tr -d %)
+    [[ $used_percent -gt 80 ]] && echo "used percent($used_percent) should less than 80%" && exit 1 || true
     echo 3 > /proc/sys/vm/drop_caches
     ./juicefs warmup /tmp/jfs/test --evict
     compare_md5sum /tmp/test /tmp/jfs/test
@@ -368,13 +384,15 @@ wait_stage_uploaded()
 mount_jfsCache1(){
     capacity=$1
     [[ -z $capacity ]] && capacity=100G
+    inodes=$2
+    [[ -z $inodes ]] && inodes=10000000
     /etc/init.d/redis-server start
     timeout 30s bash -c 'until nc -zv localhost 6379; do sleep 1; done'
     umount -l /var/jfsCache1 || true
     rm -rf /var/jfsCache1
     redis-cli flushall
     rm -rf /var/jfs/test
-    ./juicefs format "redis://localhost/1?read-timeout=3&write-timeout=1&max-retry-backoff=3" test --trash-days 0 --capacity $capacity
+    ./juicefs format "redis://localhost/1?read-timeout=3&write-timeout=1&max-retry-backoff=3" test --trash-days 0 --capacity $capacity --inodes $inodes
     ./juicefs mount redis://localhost/1 /var/jfsCache1 -d --log /tmp/juicefs.log
     # trap "echo umount /var/jfsCache1 && umount -l /var/jfsCache1" EXIT
 }
