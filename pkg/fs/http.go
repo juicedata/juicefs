@@ -125,7 +125,7 @@ func (hfs *webdavFS) OpenFile(ctx context.Context, name string, flag int, perm o
 }
 
 func (hfs *webdavFS) RemoveAll(ctx context.Context, name string) error {
-	return econv(hfs.fs.Rmr(hfs.ctx, name))
+	return econv(hfs.fs.Rmr(hfs.ctx, name, hfs.config.MaxDeletes))
 }
 
 func (hfs *webdavFS) Rename(ctx context.Context, oldName, newName string) error {
@@ -252,6 +252,7 @@ type WebdavConfig struct {
 	Password        string
 	CertFile        string
 	KeyFile         string
+	MaxDeletes	int
 }
 
 type indexHandler struct {

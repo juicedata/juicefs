@@ -64,6 +64,12 @@ func cmdWebDav() *cli.Command {
 			Aliases: []string{"d"},
 			Usage:   "run in background",
 		},
+                &cli.IntFlag{
+                        Name:    "threads",
+                        Aliases: []string{"p"},
+                        Value:   50,
+                        Usage:   "number of threads for delete jobs (max 255)",
+                },
 	}
 
 	return &cli.Command{
@@ -95,6 +101,7 @@ func webdav(c *cli.Context) error {
 		CertFile:        c.String("cert-file"),
 		KeyFile:         c.String("key-file"),
 		EnableProppatch: c.Bool("enable-proppatch"),
+		MaxDeletes:      c.Int("threads"),
 	})
 	return jfs.Meta().CloseSession()
 }
