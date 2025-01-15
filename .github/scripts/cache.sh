@@ -58,16 +58,16 @@ test_kernel_writeback_cache(){
     [[ $((bytes/ops)) -lt 10240 ]] && echo "writeback_cache may not enabled" && exit 1 || true
 }
 
-skip_test_cache_items(){
-    # should be enabled after bugfix: https://github.com/juicedata/juicefs/issues/5539
+test_cache_items(){
     prepare_test
-    ./juicefs format $META_URL myjfs --trash-days 0
-    cache_items=1000
+    ./juicefs format $META_URL myjfs
+    cache_items=500
     ./juicefs mount $META_URL /tmp/jfs -d --cache-items $cache_items
-    seq 1 $((cache_items+100)) | xargs -P 8 -I {} sh -c 'echo {} > /tmp/jfs/test_{};'
+    seq 1 $((cache_items*2)) | xargs -P 8 -I {} sh -c 'echo {} > /tmp/jfs/test_{};'
+    ./juicefs warmup /tmp/jfs/
     ./juicefs warmup /tmp/jfs/ --check 2>&1 | tee warmup.log
-    files=$(get_cache_file_count)
-    [[ $files -ne $cache_items ]] && echo "warmup failed, expect $cache_items files, actual $files" && exit 1 || true
+    percent=$(cat warmup.log | awk -F'[()]' '{print $3}' | awk '{print $1}' | tr -d %)
+    (( $(echo "$percent < 51" | bc -l) )) || (echo "percentage should less than 50%" && exit 1)
 }
 
 test_evict_on_writeback(){
@@ -134,7 +134,7 @@ test_cache_expired_memory(){
 do_test_cache_expired(){
     cache_dir=$1
     prepare_test
-    ./juicefs format $META_URL myjfs --trash-days 0
+    ./juicefs format $META_URL myjfs
     ./juicefs mount $META_URL /tmp/jfs -d --cache-dir $cache_dir --cache-expire 3s
     dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
     for i in $(seq 1 1100); do
@@ -148,7 +148,12 @@ do_test_cache_expired(){
 
 test_cache_large_write(){
     prepare_test
-    ./juicefs format $META_URL myjfs --trash-days 0
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount $META_URL /tmp/jfs -d
+    dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
+    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
+    ratio=$(get_warmup_ratio warmup.log)
+    (( $(echo "$ratio < 1" | bc -l) )) || (echo "ratio($ratio) should less than 1%" && exit 1)
     ./juicefs mount $META_URL /tmp/jfs -d --cache-large-write 
     dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
     ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
@@ -173,7 +178,7 @@ test_cache_mode(){
 test_cache_compressed(){
     prepare_test
     ./juicefs format $META_URL myjfs --storage minio --bucket http://localhost:9000/test \
-        --access-key minioadmin --secret-key minioadmin --compress lz4
+        --access-key minioadmin --secret-key minioadmin --compress lz4 --hash-prefix
     ./juicefs mount $META_URL /tmp/jfs -d 
     dd if=/dev/urandom of=/tmp/test bs=1M count=200
     cp /tmp/test /tmp/jfs/test
@@ -230,6 +235,19 @@ do_test_disk_full(){
     size=$(get_cache_file_size warmup.log)
     # TODO uncomment this line
     # [[ $size -lt 800 || $size -gt 900 ]] && echo "cached file size should between 800 to 900 MB" && exit 1 || true
+}
+
+test_disk_full_with_writeback(){
+    prepare_test
+    mount_jfsCache1 1G
+    ./juicefs format $META_URL myjfs 
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir /var/jfsCache1 --writeback --free-space-ratio 0.2 --upload-delay 5s
+    dd if=/dev/urandom of=/tmp/test bs=1M count=1400
+    cp /tmp/test /tmp/jfs/test
+    wait_stage_uploaded
+    echo 3 > /proc/sys/vm/drop_caches
+    ./juicefs warmup /tmp/jfs/test --evict
+    compare_md5sum /tmp/test /tmp/jfs/test
 }
 
 test_disk_failover()
