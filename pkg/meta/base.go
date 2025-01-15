@@ -880,6 +880,11 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 			}
 		}
 	}
+	if st == 0 && attr.Typ == TypeDirectory && !isTrash(parent) {
+		m.parentMu.Lock()
+		m.dirParents[*inode] = parent
+		m.parentMu.Unlock()
+	}
 	return st
 }
 
@@ -1047,12 +1052,9 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 }
 
 func (m *baseMeta) updateAttrCache(inode Ino, attr *Attr) {
-	m.of.Update(inode, attr)
-        if attr.Typ == TypeDirectory && inode != RootInode && !isTrash(attr.Parent) {
-                m.parentMu.Lock()
-                m.dirParents[inode] = attr.Parent
-                m.parentMu.Unlock()
-        }
+	if attr != nil {
+		m.of.Update(inode, attr)
+	}
 }
 
 func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
