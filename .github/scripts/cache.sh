@@ -93,7 +93,7 @@ test_remount_on_writeback(){
     umount_jfs /tmp/jfs $META_URL
     ./juicefs mount $META_URL /tmp/jfs -d --writeback
     sleep 3
-    stage_size=$(du -shm $(get_staging_dir) | awk '{print $1}')
+    stage_size=$(du -shm $(get_rawstaging_dir) | awk '{print $1}')
     [[ $stage_size -gt 2 ]] && echo "stage size should not great than 2M" && exit 1 || true
     ./juicefs warmup /tmp/jfs/test --evict
     compare_md5sum /tmp/test /tmp/jfs/test
@@ -154,6 +154,21 @@ test_cache_large_write(){
     check_warmup_log warmup.log 90
 }
 
+test_cache_mode(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    cache_mode=$(printf "%03o" $((RANDOM % 512)))
+    echo "cache mode is $cache_mode"
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-mode $cache_mode --writeback --upload-delay 3s
+    dd if=/dev/zero of=/tmp/jfs/test bs=1M count=32
+    ./juicefs warmup /tmp/jfs/test
+    find $(get_raw_dir) -type f ! -perm $cache_mode -exec echo "perm of {} is incorrect" \; -exec false {} +
+    find $(get_rawstaging_dir) -type f ! -perm $cache_mode -exec echo "perm of {} is incorrect" \; -exec false {} +
+    sleep 5s 
+    find $(get_raw_dir) -type f ! -perm $cache_mode -exec echo "perm of {} is incorrect" \; -exec false {} +
+    find $(get_rawstaging_dir) -type f ! -perm $cache_mode -exec echo "perm of {} is incorrect" \; -exec false {} +
+}
+
 test_cache_compressed(){
     prepare_test
     ./juicefs format $META_URL myjfs --storage minio --bucket http://localhost:9000/test \
@@ -191,6 +206,30 @@ do_test_cache_checksum(){
     ./juicefs warmup /tmp/jfs/test
     echo 3 > /proc/sys/vm/drop_caches
     compare_md5sum /tmp/test /tmp/jfs/test
+}
+
+test_disk_full_2_random(){
+    do_test_disk_full 2-random
+}
+
+test_disk_full_none(){
+    do_test_disk_full none
+}
+
+do_test_disk_full(){
+    cache_eviction=$1
+    prepare_test
+    mount_jfsCache1 1G
+    ./juicefs format $META_URL myjfs 
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir /var/jfsCache1 --cache-eviction $cache_eviction --free-space-ratio 0.2
+    dd if=/dev/zero of=/tmp/test bs=1M count=1200
+    cp /tmp/test /tmp/jfs/test
+    exit 1
+    ./juicefs warmup /tmp/jfs/test
+    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
+    size=$(get_cache_file_size warmup.log)
+    # TODO uncomment this line
+    # [[ $size -lt 800 || $size -gt 900 ]] && echo "cached file size should between 800 to 900 MB" && exit 1 || true
 }
 
 test_disk_failover()
@@ -246,7 +285,11 @@ get_cache_dir(){
     grep CacheDir /tmp/jfs/.config | awk -F'"' '{print $4}'
 }
 
-get_staging_dir(){
+get_raw_dir(){
+    echo $(get_cache_dir)/raw/
+}
+
+get_rawstaging_dir(){
     echo $(get_cache_dir)/rawstaging/
 }
 
@@ -254,6 +297,9 @@ get_cache_file_count(){
     sed -n 's/.*cache: \([0-9]\+\) files.*/\1/p' warmup.log
 }
 
+get_cache_file_size(){
+    tail -n 1 warmup.log | awk -F'[()]' '{print $2}' | awk '{print $1}' 
+}
 prepare_test()
 {
     umount_jfs /tmp/jfs $META_URL
@@ -302,13 +348,15 @@ wait_stage_uploaded()
 }
 
 mount_jfsCache1(){
+    capacity=$1
+    [[ -z $capacity ]] && capacity=100G
     /etc/init.d/redis-server start
     timeout 30s bash -c 'until nc -zv localhost 6379; do sleep 1; done'
     umount -l /var/jfsCache1 || true
     rm -rf /var/jfsCache1
     redis-cli flushall
     rm -rf /var/jfs/test
-    ./juicefs format "redis://localhost/1?read-timeout=3&write-timeout=1&max-retry-backoff=3" test --trash-days 0
+    ./juicefs format "redis://localhost/1?read-timeout=3&write-timeout=1&max-retry-backoff=3" test --trash-days 0 --capacity $capacity
     ./juicefs mount redis://localhost/1 /var/jfsCache1 -d --log /tmp/juicefs.log
     # trap "echo umount /var/jfsCache1 && umount -l /var/jfsCache1" EXIT
 }
