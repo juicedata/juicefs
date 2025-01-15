@@ -92,6 +92,31 @@ func GbkToUtf8(s []byte) ([]byte, error) {
 }
 
 func checkMeta(t *testing.T, m Meta) {
+	if _, err := m.Load(true); err != nil {
+		t.Fatalf("load setting: %s", err)
+	}
+
+	counters := map[string]int64{
+		"usedSpace":   115396608,
+		"totalInodes": 15,
+		"nextInode":   35,
+		"nextChunk":   9,
+		"nextSession": 0,
+		"nextTrash":   1,
+	}
+	for name, expect := range counters {
+		val, err := m.getBase().en.getCounter(name)
+		if err != nil {
+			t.Fatalf("get counter %s: %s", name, err)
+		}
+		if m.Name() == "redis" && (name == "nextChunk" || name == "nextInode") {
+			expect--
+		}
+		if val != expect {
+			t.Fatalf("counter %s: %d != %d", name, val, expect)
+		}
+	}
+
 	ctx := Background()
 	var entries []*Entry
 	if st := m.Readdir(ctx, 1, 1, &entries); st != 0 {
@@ -241,23 +266,6 @@ func checkMeta(t *testing.T, m Meta) {
 	}
 }
 
-func testLoad(t *testing.T, uri, fname string) Meta {
-	m := NewClient(uri, nil)
-	if err := m.Reset(); err != nil {
-		t.Fatalf("reset meta: %s", err)
-	}
-	fp, err := os.Open(fname)
-	if err != nil {
-		t.Fatalf("open file: %s", fname)
-	}
-	defer fp.Close()
-	if err = m.LoadMeta(fp); err != nil {
-		t.Fatalf("load meta: %s", err)
-	}
-	checkMeta(t, m)
-	return m
-}
-
 func testLoadSub(t *testing.T, uri, fname string) {
 	m := NewClient(uri, nil)
 	if err := m.Reset(); err != nil {
@@ -314,7 +322,7 @@ func testDump(t *testing.T, m Meta, root Ino, expect, result string) {
 
 func testLoadDump(t *testing.T, name, addr string) {
 	t.Run("Metadata Engine: "+name, func(t *testing.T) {
-		m := testLoad(t, addr, sampleFile)
+		m := testLoad(t, addr, sampleFile, false)
 		testDump(t, m, 1, sampleFile, "test.dump")
 		m.Shutdown()
 		conf := DefaultConf()
@@ -353,7 +361,7 @@ func testDumpV2(t *testing.T, m Meta, result string, opt *DumpOption) {
 	fp.Sync()
 }
 
-func testLoadV2(t *testing.T, uri, fname string) Meta {
+func testLoad(t *testing.T, uri, fname string, v2 bool) Meta {
 	m := NewClient(uri, nil)
 	if err := m.Reset(); err != nil {
 		t.Fatalf("reset meta: %s", err)
@@ -363,11 +371,14 @@ func testLoadV2(t *testing.T, uri, fname string) Meta {
 		t.Fatalf("open file: %s", fname)
 	}
 	defer fp.Close()
-	if err = m.LoadMetaV2(Background(), fp, &LoadOption{Threads: 10}); err != nil {
-		t.Fatalf("load meta: %s", err)
-	}
-	if _, err := m.Load(true); err != nil {
-		t.Fatalf("load setting: %s", err)
+	if v2 {
+		if err = m.LoadMetaV2(Background(), fp, &LoadOption{Threads: 10}); err != nil {
+			t.Fatalf("load meta: %s", err)
+		}
+	} else {
+		if err = m.LoadMeta(fp); err != nil {
+			t.Fatalf("load meta: %s", err)
+		}
 	}
 	checkMeta(t, m)
 	return m
@@ -376,14 +387,14 @@ func testLoadV2(t *testing.T, uri, fname string) Meta {
 func testLoadDumpV2(t *testing.T, name, addr1, addr2 string) {
 	t.Run("Metadata Engine: "+name, func(t *testing.T) {
 		start := time.Now()
-		m := testLoad(t, addr1, sampleFile)
+		m := testLoad(t, addr1, sampleFile, false)
 		t.Logf("load meta: %v", time.Since(start))
 		start = time.Now()
 		testDumpV2(t, m, fmt.Sprintf("%s.dump", name), nil)
 		m.Shutdown()
 		t.Logf("dump meta v2: %v", time.Since(start))
 		start = time.Now()
-		m = testLoadV2(t, addr2, fmt.Sprintf("%s.dump", name))
+		m = testLoad(t, addr2, fmt.Sprintf("%s.dump", name), true)
 		m.Shutdown()
 		t.Logf("load meta v2: %v", time.Since(start))
 	})
@@ -391,7 +402,7 @@ func testLoadDumpV2(t *testing.T, name, addr1, addr2 string) {
 
 func testLoadOtherEngine(t *testing.T, src, dst, dstAddr string) {
 	t.Run(fmt.Sprintf("Load %s to %s", src, dst), func(t *testing.T) {
-		m := testLoadV2(t, dstAddr, fmt.Sprintf("%s.dump", src))
+		m := testLoad(t, dstAddr, fmt.Sprintf("%s.dump", src), true)
 		m.Shutdown()
 	})
 }
@@ -436,12 +447,12 @@ func TestLoadDumpSlow(t *testing.T) { //skip mutate
 func TestLoadDump_MemKV(t *testing.T) {
 	t.Run("Metadata Engine: memkv", func(t *testing.T) {
 		_ = os.Remove(settingPath)
-		m := testLoad(t, "memkv://test/jfs", sampleFile)
+		m := testLoad(t, "memkv://test/jfs", sampleFile, false)
 		testDump(t, m, 1, sampleFile, "test.dump")
 	})
 	t.Run("Metadata Engine: memkv; --SubDir d1 ", func(t *testing.T) {
 		_ = os.Remove(settingPath)
-		m := testLoad(t, "memkv://user:pass@test/jfs", sampleFile)
+		m := testLoad(t, "memkv://user:pass@test/jfs", sampleFile, false)
 		if kvm, ok := m.(*kvMeta); ok { // memkv will be empty if created again
 			if st := kvm.Chroot(Background(), "d1"); st != 0 {
 				t.Fatalf("Chroot to subdir d1: %s", st)
@@ -455,16 +466,16 @@ func TestLoadDump_MemKV(t *testing.T) {
 }
 
 func testSecretAndTrash(t *testing.T, addr, addr2 string) {
-	m := testLoad(t, addr, sampleFile)
+	m := testLoad(t, addr, sampleFile, false)
 	testDumpV2(t, m, "sqlite-secret.dump", &DumpOption{Threads: 10, KeepSecret: true})
-	m2 := testLoadV2(t, addr2, "sqlite-secret.dump")
+	m2 := testLoad(t, addr2, "sqlite-secret.dump", true)
 	if m2.GetFormat().EncryptKey != m.GetFormat().EncryptKey {
 		t.Fatalf("encrypt key not valid: %s", m2.GetFormat().EncryptKey)
 	}
 	testDumpV2(t, m, "sqlite-non-secret.dump", &DumpOption{Threads: 10, KeepSecret: false})
 	m2.Shutdown()
 
-	m2 = testLoadV2(t, addr2, "sqlite-non-secret.dump")
+	m2 = testLoad(t, addr2, "sqlite-non-secret.dump", true)
 	if m2.GetFormat().EncryptKey != "removed" {
 		t.Fatalf("encrypt key not valid: %s", m2.GetFormat().EncryptKey)
 	}
