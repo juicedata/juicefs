@@ -255,11 +255,11 @@ func TestFillCache(t *testing.T) {
 	}
 
 	// check
-	missBytes, err := store.CheckCache(10, 1024)
+	missBytes, err := store.CheckCache(10, 1024, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(0), missBytes)
 
-	missBytes, err = store.CheckCache(11, uint32(bsize))
+	missBytes, err = store.CheckCache(11, uint32(bsize), nil)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(0), missBytes)
 
@@ -273,7 +273,7 @@ func TestFillCache(t *testing.T) {
 	}
 
 	// check again
-	missBytes, err = store.CheckCache(11, uint32(bsize))
+	missBytes, err = store.CheckCache(11, uint32(bsize), nil)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(bsize), missBytes)
 }
