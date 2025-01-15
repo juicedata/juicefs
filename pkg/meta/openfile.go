@@ -167,7 +167,7 @@ func (o *openfiles) Check(ino Ino, attr *Attr) bool {
 
 func (o *openfiles) Update(ino Ino, attr *Attr) bool {
 	if attr == nil {
-		panic("attr is nil")
+		return false
 	}
 	o.Lock()
 	defer o.Unlock()
