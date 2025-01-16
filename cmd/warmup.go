@@ -299,7 +299,7 @@ func warmup(ctx *cli.Context) error {
 		case vfs.EvictCache:
 			logger.Infof("%s: %d files (%s bytes)", action, count, humanize.IBytes(uint64(bytes)))
 		case vfs.CheckCache:
-			logger.Infof("%s: %d files (%s of %s (%2.1f%%)) cached", action, count,
+			logger.Infof("%s: %d files checked, %s of %s (%2.1f%%) cached", action, count,
 				humanize.IBytes(uint64(bytes)-total.MissBytes),
 				humanize.IBytes(uint64(bytes)),
 				float64(uint64(bytes)-total.MissBytes)*100/float64(bytes))

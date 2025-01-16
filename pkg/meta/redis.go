@@ -1263,17 +1263,18 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 		}
 		target = []byte(rs[1].(string))
 		if !m.atimeNeedsUpdate(attr, now) {
+			atime = attr.Atime*int64(time.Second) + int64(attr.Atimensec)
 			return nil
 		}
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
+		atime = now.UnixNano()
 		_, e = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
 			return nil
 		})
 		return e
 	}, m.inodeKey(inode))
-	atime = attr.Atime
 	return
 }
 

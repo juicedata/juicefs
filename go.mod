@@ -41,7 +41,7 @@ require (
 	github.com/ks3sdklib/aws-sdk-go v1.2.2
 	github.com/l0wl3vel/bunny-storage-go-sdk v0.0.10
 	github.com/mattn/go-isatty v0.0.18
-	github.com/mattn/go-sqlite3 v1.14.16
+	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/minio/cli v1.24.2
 	github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c
 	github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78
