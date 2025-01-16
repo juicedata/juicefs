@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 dpkg -s redis-server || .github/scripts/apt_install.sh  redis-tools redis-server
 dpkg -s fio || .github/scripts/apt_install.sh fio
 source .github/scripts/common/common.sh
@@ -6,7 +6,6 @@ source .github/scripts/start_meta_engine.sh
 [[ -z "$META" ]] && META=sqlite3
 start_meta_engine $META minio
 META_URL=$(get_meta_url $META)
-TEST_FILE_SIZE=1024
 
 test_warmup_in_background(){
     prepare_test
@@ -70,7 +69,7 @@ test_cache_items(){
     seq 1 $((cache_items*2)) | xargs -P 8 -I {} sh -c 'echo {} > /tmp/jfs/test_{};'
     ./juicefs warmup /tmp/jfs/
     ./juicefs warmup /tmp/jfs/ --check 2>&1 | tee warmup.log
-    ratio=$(get_warmup_ratio warmup.log)
+    ratio=$(get_warmup_ratio)
     [[ $ratio -lt 50 ]] || (echo "ratio should less than 50%" && exit 1)
 }
 
@@ -118,7 +117,7 @@ do_test_memory_cache(){
     dd if=/dev/zero of=/tmp/jfs/test1 bs=1M count=200
     ./juicefs warmup /tmp/jfs/test1
     ./juicefs warmup /tmp/jfs/test1 --check 2>&1 | tee warmup.log
-    ratio=$(get_warmup_ratio warmup.log)
+    ratio=$(get_warmup_ratio)
     if [[ $cache_eviction == "2-random" ]]; then
         [[ "$ratio" -gt 40 && "$ratio" -lt 55   ]] || (echo "ratio($ratio) should between 40% and 50%" && exit 1)
     # elif [[ $cache_eviction == "none" ]]; then
@@ -142,7 +141,7 @@ do_test_cache_expired(){
     ./juicefs mount $META_URL /tmp/jfs -d --cache-dir $cache_dir --cache-expire 3s
     dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
     for i in $(seq 1 1100); do
-        dd if=/dev/zero of=/tmp/jfs/test$i bs=32k count=1
+        dd if=/dev/zero of=/tmp/jfs/test$i bs=32k count=1 status=none
     done
     ./juicefs warmup /tmp/jfs/ 2>&1 | tee warmup.log
     sleep 15
@@ -156,13 +155,13 @@ test_cache_large_write(){
     ./juicefs mount $META_URL /tmp/jfs -d
     dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
     ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
-    ratio=$(get_warmup_ratio warmup.log)
+    ratio=$(get_warmup_ratio)
     [[ "$ratio" = 0 ]] || (echo "ratio($ratio) should less than 0" && exit 1)
     ./juicefs mount $META_URL /tmp/jfs -d --cache-large-write 
     dd if=/dev/zero of=/tmp/jfs/test1 bs=1M count=200
     ./juicefs warmup /tmp/jfs/test1 --check 2>&1 | tee warmup.log
     # TODO: should check the ratio
-    check_warmup_log warmup.log 90
+    check_warmup_log 90
 }
 
 test_cache_mode(){
@@ -287,17 +286,17 @@ test_disk_failover()
     ./juicefs format $META_URL myjfs --trash-days 0 --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
     JFS_MAX_DURATION_TO_DOWN=10s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d \
         --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1 
-    dd if=/dev/urandom of=/tmp/test bs=1M count=$TEST_FILE_SIZE
+    dd if=/dev/urandom of=/tmp/test bs=1M count=1024
     cp /tmp/test /tmp/jfs/test
     /etc/init.d/redis-server stop
     ./juicefs warmup /tmp/jfs/test
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_warmup_log check.log 50
+    ./juicefs warmup --check /tmp/jfs 2>&1 | tee warmup.log
+    check_warmup_log  50
     wait_disk_down 60
     ./juicefs warmup /tmp/jfs/test
-    ./juicefs warmup --check /tmp/jfs 2>&1 | tee check.log
-    check_warmup_log check.log 98
-    check_cache_distribute $TEST_FILE_SIZE /var/jfsCache2 /var/jfsCache3
+    ./juicefs warmup --check /tmp/jfs 2>&1 | tee warmup.log
+    check_warmup_log 98
+    check_cache_distribute 1024 /var/jfsCache2 /var/jfsCache3
     echo stop minio && docker stop minio
     compare_md5sum /tmp/test /tmp/jfs/test
     docker start minio && sleep 3
@@ -312,40 +311,21 @@ test_disk_failure_on_writeback()
     ./juicefs format $META_URL myjfs --trash-days 0 --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
     JFS_MAX_DURATION_TO_DOWN=5s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d \
         --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1 --writeback
-    dd if=/dev/urandom of=/tmp/test bs=1M count=$TEST_FILE_SIZE
+    dd if=/dev/urandom of=/tmp/test bs=1M count=1024
     cp /tmp/test /tmp/jfs/test
     /etc/init.d/redis-server stop
     ./juicefs warmup /tmp/jfs/test &
     sleep 15
     /etc/init.d/redis-server start
     ./juicefs warmup /tmp/jfs/test
-    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee check.log
-    check_warmup_log check.log 100
-    check_cache_distribute $TEST_FILE_SIZE /var/jfsCache1 /var/jfsCache2 /var/jfsCache3
+    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
+    check_warmup_log 100
+    check_cache_distribute 1024 /var/jfsCache1 /var/jfsCache2 /var/jfsCache3
     echo stop minio && docker stop minio
     compare_md5sum /tmp/test /tmp/jfs/test
     docker start minio && sleep 3
 }
 
-get_cache_dir(){
-    grep CacheDir /tmp/jfs/.config | awk -F'"' '{print $4}'
-}
-
-get_raw_dir(){
-    echo $(get_cache_dir)/raw/
-}
-
-get_rawstaging_dir(){
-    echo $(get_cache_dir)/rawstaging/
-}
-
-get_cache_file_count(){
-    sed -n 's/.* \([0-9]\+\) files.*/\1/p' warmup.log
-}
-
-get_cache_file_size(){
-    sed -n 's/.* \([0-9]*\) MiB of.*/\1/p' warmup.log
-}
 prepare_test()
 {
     umount_jfs /tmp/jfs $META_URL
@@ -363,9 +343,9 @@ wait_warmup_finish(){
     timeout=30
     for i in $(seq 1 $timeout); do
         ./juicefs warmup $path --check 2>&1 |tee warmup.log
-        ratio=$(get_warmup_ratio warmup.log)
+        ratio=$(get_warmup_ratio)
         if [[ "$ratio" == "$expected_ratio" ]]; then
-            echo "warmup finished after $i seconds"
+            echo "warmup finished after $i seconds, ratio is $ratio, expected ratio is $expected_ratio"
             break
         else
             echo "wait warmup finish $i"
@@ -409,9 +389,20 @@ mount_jfsCache1(){
     # trap "echo umount /var/jfsCache1 && umount -l /var/jfsCache1" EXIT
 }
 
+get_cache_dir(){
+    grep CacheDir /tmp/jfs/.config | awk -F'"' '{print $4}'
+}
+
+get_raw_dir(){
+    echo $(get_cache_dir)/raw/
+}
+
+get_rawstaging_dir(){
+    echo $(get_cache_dir)/rawstaging/
+}
+
 check_evict_log(){
-    log=$1
-    ratio=$(get_warmup_ratio $log)
+    ratio=$(get_warmup_ratio)
     if [[ "$ratio" -gt 0 ]]; then
         echo "cache ratio($ratio) should be 0 after evict"
         exit 1
@@ -419,18 +410,24 @@ check_evict_log(){
 }
 
 check_warmup_log(){
-    log=$1
-    expected_ratio=$2
-    ratio=$(get_warmup_ratio $log)
+    expected_ratio=$1
+    ratio=$(get_warmup_ratio)
     if [[ "$ratio" -lt "$expected_ratio" ]]; then
         echo "cache ratio($ratio) should be more than expected_ratio($expected_ratio) after warmup"
         exit 1
     fi
 }
 
+get_cache_file_count(){
+    sed -n 's/.* \([0-9]\+\) files.*/\1/p' warmup.log
+}
+
+get_cache_file_size(){
+    sed -n 's/.* \([0-9]*\) MiB of.*/\1/p' warmup.log
+}
+
 get_warmup_ratio(){
-    log=$1
-    cat $log |  sed 's/.*(\([0-9]*\.[0-9]*%\)).*/\1/' | sed 's/%//' | awk '{print int($1)}'
+    sed -n 's/.*(\([0-9]*\.[0-9]*%\)).*/\1/p' warmup.log | sed 's/%//' | awk '{print int($1)}'
 }
 
 
