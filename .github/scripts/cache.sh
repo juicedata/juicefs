@@ -37,11 +37,15 @@ test_batch_warmup(){
     grep "(100.0%)" warmup.log || (echo "warmup failed, expect 100.0% warmup" && exit 1)
     ./juicefs warmup -f file.list --evict 2>&1 | tee warmup.log 
     files=$(get_cache_file_count)
-    [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
+    [[ $files -ne $file_count ]] && echo "warmup evict failed, expect $file_count files, actual $files" && exit 1 || true
     ./juicefs warmup -f file.list --check 2>&1 | tee warmup.log
     files=$(get_cache_file_count)
-    [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
+    [[ $files -ne $file_count ]] && echo "warmup evict failed, expect $file_count files, actual $files" && exit 1 || true
     grep "(0.0%)" warmup.log || (echo "warmup failed, expect 0.0% warmup" && exit 1)
+
+    ./juicefs warmup /tmp/jfs/test* 2>&1 | tee warmup.log
+    files=$(get_cache_file_count)
+    [[ $files -ne $file_count ]] && echo "warmup failed, expect $file_count files, actual $files" && exit 1 || true
 }
 
 test_kernel_writeback_cache(){
