@@ -1155,6 +1155,7 @@ func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 		}
 		*inode = nn.Inode
 		m.parseAttr(&nn.node, attr)
+		m.of.Update(nn.Inode, attr)
 		return nil
 	}))
 }
