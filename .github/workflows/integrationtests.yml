@@ -105,6 +105,14 @@ jobs:
           sudo GOCOVERDIR=$(pwd)/cover ./juicefs mount -d $meta_url /jfs --no-usage-report --enable-xattr
           stat /jfs/.accesslog
 
+      - name: Test copy file range
+        timeout-minutes: 15
+        # if: github.event == 'schedule' || github.event == 'workflow_dispatch'
+        run: |
+          sudo .github/scripts/apt_install.sh nodejs
+          dd if=/dev/urandom of=/jfs/source bs=32M count=130
+          node .github/scripts/copy_file_range.js /jfs/source /jfs/target
+
       - name: Fslock Test
         timeout-minutes: 5
         run: |
