@@ -243,8 +243,8 @@ do_test_disk_full(){
     if [[ $cache_eviction == "2-random" ]]; then 
         [[ $used_percent -gt 80 ]] && echo "used percent($used_percent) should not more than 80%" && exit 1 || true
     elif [[ $cache_eviction == "none" ]]; then
-        # TODO: if cache_eviction is none, free-space-ratio is not work
-        [[ $used_percent -lt 90 ]] && echo "used percent($used_percent) should not less than 90%" && exit 1 || true
+        # cache will not evict even reach the free-space-ratio.
+        [[ $used_percent -lt 80 ]] && echo "used percent($used_percent) should not less than 80%" && exit 1 || true
     fi
 }
 
