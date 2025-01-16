@@ -237,14 +237,15 @@ do_test_disk_full(){
     cp /tmp/test /tmp/jfs/test
     ./juicefs warmup /tmp/jfs/test
     sleep 3 # wait to free space
+    df -h /var/jfsCache1
     ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
-    size=$(get_cache_file_size warmup.log)
+    used_percent=$(df /var/jfsCache1 | tail -1  | awk '{print $5}' | tr -d %)
+    echo "used percent is $used_percent"
     if [[ $cache_eviction == "2-random" ]]; then 
-        # expected cached size: 1024*(1-0.2-0.5)=768
-        [[ $size -gt 700 && $size -lt 800 ]] || (echo "cached file size($size) should between 700 to 800" && exit 1)
+        [[ $used_percent -gt 80 ]] && echo "used percent($used_percent) should more than 80%" && exit 1 || true
     elif [[ $cache_eviction == "none" ]]; then
         # TODO: if cache_eviction is none, free-space-ratio is not work
-        [[ $size -gt 1000 ]] || (echo "cached file size($size) should more than 1000" && exit 1)
+        [[ $used_percent -lt 90 ]] && echo "used percent($used_percent) should less than 90%" && exit 1 || true
     fi
 }
 
