@@ -114,15 +114,19 @@ do_test_memory_cache(){
     prepare_test
     ./juicefs format $META_URL myjfs --compress lz4
     ./juicefs mount $META_URL /tmp/jfs -d --cache-dir memory --cache-size 100M --cache-eviction $cache_eviction
-    dd if=/dev/zero of=/tmp/jfs/test1 bs=1M count=200
-    ./juicefs warmup /tmp/jfs/test1
-    ./juicefs warmup /tmp/jfs/test1 --check 2>&1 | tee warmup.log
+    dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
+    ./juicefs warmup /tmp/jfs/test
+    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
     ratio=$(get_warmup_ratio)
     if [[ $cache_eviction == "2-random" ]]; then
         [[ "$ratio" -gt 40 && "$ratio" -lt 60   ]] || (echo "ratio($ratio) should between 40% and 60%" && exit 1)
     elif [[ $cache_eviction == "none" ]]; then
         [[ "$ratio" -gt 40 && "$ratio" -lt 60   ]] || (echo "ratio($ratio) should between 40% and 60%" && exit 1)
     fi
+    ./juicefs warmup /tmp/jfs/test --evict
+    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
+    ratio=$(get_warmup_ratio)
+    [[ "$ratio" = 0 ]] || (echo "ratio($ratio) should less than 0" && exit 1)
 }
 
 test_cache_expired(){
