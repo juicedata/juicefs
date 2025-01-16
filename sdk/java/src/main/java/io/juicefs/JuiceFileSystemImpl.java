@@ -832,7 +832,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   private List<String> discoverNodes(String urls) {
     LOG.debug("fetching nodes from {}", urls);
-    NodesFetcher fetcher = NodesFetcherBuilder.buildFetcher(urls, name, this);
+    Configuration newConf = new Configuration(getConf());
+    newConf.setBoolean("juicefs.internal-bg-task", true);
+    NodesFetcher fetcher = NodesFetcherBuilder.buildFetcher(urls, name, newConf);
     List<String> fetched = fetcher.fetchNodes(urls);
     if (fetched == null) {
       fetched = new ArrayList<>();

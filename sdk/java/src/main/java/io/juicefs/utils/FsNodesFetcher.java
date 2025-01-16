@@ -35,50 +35,25 @@ import java.util.stream.Collectors;
 public class FsNodesFetcher extends NodesFetcher {
   private static final Logger LOG = LoggerFactory.getLogger(FsNodesFetcher.class);
 
-  private FileSystem jfs;
   private Configuration conf;
 
-  public FsNodesFetcher(String jfsName, FileSystem jfs) {
+  public FsNodesFetcher(String jfsName) {
     super(jfsName);
-    this.jfs = jfs;
-    this.conf = jfs.getConf();
+  }
+
+  public void setConf(Configuration conf) {
+    this.conf = conf;
   }
 
   @Override
   public List<String> fetchNodes(String uri) {
-    FileSystem fs;
-
     Path path = new Path(uri);
-    URI toUri = path.toUri();
-    URI defaultUri = FileSystem.getDefaultUri(conf);
-    String scheme = toUri.getScheme();
-    if (scheme == null) {
-      scheme = defaultUri.getScheme();
-    }
-    String authority = toUri.getAuthority();
-    if (authority == null) {
-      authority = defaultUri.getAuthority();
-    }
-    if (scheme != null) {
-      try {
-        String classStr = conf.getTrimmed("fs." + scheme + ".impl");
-        if (JuiceFileSystem.class.getName().equals(classStr) && Objects.equals(authority, jfs.getUri().getAuthority())) {
-          fs = jfs;
-        } else {
-          fs = path.getFileSystem(conf);
-        }
-        if (!fs.exists(path)) {
-          return null;
-        }
-        FSDataInputStream inputStream = fs.open(path);
-        List<String> res = new BufferedReader(new InputStreamReader(inputStream))
-            .lines().collect(Collectors.toList());
-        inputStream.close();
-        return res;
-      } catch (Exception e) {
-        LOG.warn("fetch nodes from {} failed", uri, e);
-        return null;
-      }
+    try (FileSystem fs = FileSystem.newInstance(path.toUri(), conf);
+         FSDataInputStream inputStream = fs.open(path)) {
+      return new BufferedReader(new InputStreamReader(inputStream))
+          .lines().filter(l->!l.isEmpty()).collect(Collectors.toList());
+    } catch (Exception e) {
+      LOG.warn("fetch nodes from {} failed", uri, e);
     }
     return null;
   }

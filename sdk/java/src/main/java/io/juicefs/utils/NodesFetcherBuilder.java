@@ -16,10 +16,10 @@
 
 package io.juicefs.utils;
 
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.conf.Configuration;
 
 public class NodesFetcherBuilder {
-  public static NodesFetcher buildFetcher(String urls, String jfsName, FileSystem jfs) {
+  public static NodesFetcher buildFetcher(String urls, String jfsName, Configuration conf) {
     NodesFetcher fetcher;
     if ((urls.startsWith("http") && urls.contains("cluster/nodes"))
         || "yarn".equals(urls.toLowerCase().trim())) {
@@ -31,7 +31,8 @@ public class NodesFetcherBuilder {
     } else if (urls.startsWith("http") && urls.contains("api/v1/applications")) {
       fetcher = new SparkThriftNodesFetcher(jfsName);
     } else {
-      fetcher = new FsNodesFetcher(jfsName, jfs);
+      fetcher = new FsNodesFetcher(jfsName);
+      ((FsNodesFetcher) fetcher).setConf(conf);
     }
     return fetcher;
   }
