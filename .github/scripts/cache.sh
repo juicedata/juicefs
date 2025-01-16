@@ -311,7 +311,7 @@ test_disk_failure_on_writeback()
     rm -rf /var/jfsCache2 /var/jfsCache3
     ./juicefs format $META_URL myjfs --trash-days 0 --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
     JFS_MAX_DURATION_TO_DOWN=5s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d \
-        --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1 --writeback
+        --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1 --writeback -v
     dd if=/dev/urandom of=/tmp/test bs=1M count=1024
     cp /tmp/test /tmp/jfs/test
     /etc/init.d/redis-server stop
