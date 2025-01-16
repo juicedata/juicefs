@@ -126,7 +126,7 @@ func TestSync(t *testing.T) {
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
-	if c := copied.Current(); c != 1 {
+	if c := Copied.Current(); c != 1 {
 		t.Fatalf("should copy 1 keys, but got %d", c)
 	}
 
@@ -134,7 +134,7 @@ func TestSync(t *testing.T) {
 		t.Fatalf("sync: %s", err)
 	}
 	// No copy occurred
-	if c := copied.Current(); c != 0 {
+	if c := Copied.Current(); c != 0 {
 		t.Fatalf("should copy 0 keys, but got %d", c)
 	}
 
@@ -146,7 +146,7 @@ func TestSync(t *testing.T) {
 	if err := Sync(b, a, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
-	if c := copied.Current(); c != 1 {
+	if c := Copied.Current(); c != 1 {
 		t.Fatalf("should copy 1 keys, but got %d", c)
 	}
 	// Now a: {"a1", "a2", "abc", "ba", "c1", "c2"}, b: {"a1", "a2", "ba"}

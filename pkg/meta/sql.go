@@ -290,8 +290,8 @@ func retriveUrlConnsOptions(murl string) (string, int, int, int, int) {
 
 	var vOpenConns int = 0
 	var vIdleConns int = runtime.GOMAXPROCS(-1) * 2
-	var vIdleTime  int = 300
-	var vLifeTime  int = 0
+	var vIdleTime int = 300
+	var vLifeTime int = 0
 
 	if optIndex != -1 {
 		baseurl := murl[:optIndex]
@@ -307,11 +307,11 @@ func retriveUrlConnsOptions(murl string) (string, int, int, int, int) {
 			}
 			if vals.Has("max_idle_time") {
 				vIdleTime, _ = strconv.Atoi(vals.Get("max_idle_time"))
-				vals.Del("max_idle_time");
+				vals.Del("max_idle_time")
 			}
 			if vals.Has("max_life_time") {
 				vLifeTime, _ = strconv.Atoi(vals.Get("max_life_time"))
-				vals.Del("max_life_time");
+				vals.Del("max_life_time")
 			}
 			optsurl = vals.Encode()
 		}

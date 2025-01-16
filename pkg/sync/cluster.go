@@ -53,8 +53,8 @@ type Stat struct {
 }
 
 func updateStats(r *Stat) {
-	copied.IncrInt64(r.Copied)
-	copiedBytes.IncrInt64(r.CopiedBytes)
+	Copied.IncrInt64(r.Copied)
+	CopiedBytes.IncrInt64(r.CopiedBytes)
 	if checked != nil {
 		checked.IncrInt64(r.Checked)
 		checkedBytes.IncrInt64(r.CheckedBytes)
@@ -96,8 +96,8 @@ func sendStats(addr string) {
 	var r Stat
 	r.Skipped = skipped.Current()
 	r.SkippedBytes = skippedBytes.Current()
-	r.Copied = copied.Current()
-	r.CopiedBytes = copiedBytes.Current()
+	r.Copied = Copied.Current()
+	r.CopiedBytes = CopiedBytes.Current()
 	if checked != nil {
 		r.Checked = checked.Current()
 		r.CheckedBytes = checkedBytes.Current()
@@ -119,8 +119,8 @@ func sendStats(addr string) {
 	} else {
 		skipped.IncrInt64(-r.Skipped)
 		skippedBytes.IncrInt64(-r.SkippedBytes)
-		copied.IncrInt64(-r.Copied)
-		copiedBytes.IncrInt64(-r.CopiedBytes)
+		Copied.IncrInt64(-r.Copied)
+		CopiedBytes.IncrInt64(-r.CopiedBytes)
 		if checked != nil {
 			checked.IncrInt64(-r.Checked)
 			checkedBytes.IncrInt64(-r.CheckedBytes)
