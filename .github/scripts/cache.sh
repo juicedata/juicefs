@@ -316,12 +316,12 @@ test_disk_failure_on_writeback()
     /etc/init.d/redis-server stop
     ./juicefs warmup /tmp/jfs/test &
     sleep 15
+    grep -q "state change from unstable to down" /var/log/juicefs.log && echo "disk should not down" && exit 1 || true
     /etc/init.d/redis-server start
     ./juicefs warmup /tmp/jfs/test
     ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
     check_warmup_log 100
     check_cache_distribute 1024 /var/jfsCache1 /var/jfsCache2 /var/jfsCache3
-    echo stop minio && docker stop minio
     compare_md5sum /tmp/test /tmp/jfs/test
     docker start minio && sleep 3
 }
