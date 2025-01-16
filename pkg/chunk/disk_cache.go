@@ -1223,18 +1223,16 @@ func (m *cacheManager) exist(key string) (bool, string) {
 	if store == nil {
 		return false, ""
 	}
-	var loc string = ""
-	exited, err := m.getStore(key).exist(key)
+	var loc string = store.dir
+	existed, err := m.getStore(key).exist(key)
 	if err == errNotCached {
 		legacy := m.getStoreLegacy(key)
 		if legacy != store && legacy != nil {
-			exited, _ = legacy.exist(key)
+			existed, _ = legacy.exist(key)
 			loc = legacy.dir
 		}
-	} else {
-		loc = m.getStore(key).dir
 	}
-	return exited, loc
+	return existed, loc
 }
 
 func (m *cacheManager) remove(key string, staging bool) {
