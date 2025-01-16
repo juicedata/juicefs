@@ -70,10 +70,9 @@ class SyncMachine(RuleBasedStateMachine):
           parent = Folders.filter(lambda x: x != multiple()), 
           file_name = st_entry_name, 
           mode = st_open_mode, 
-          content = st_content, 
           umask = st_umask, 
             )
-    def create_file(self, parent, file_name, content, mode='x', user='root', umask=0o022):
+    def create_file(self, parent, file_name, content='s', mode='x', user='root', umask=0o022):
         result1 = self.fsop1.do_create_file(parent=parent, file_name=file_name, mode=mode, content=content, user=user, umask=umask)
         result2 = self.fsop2.do_create_file(parent=parent, file_name=file_name, mode=mode, content=content, user=user, umask=umask)
         assert self.equal(result1, result2), f'\033[31mcreate_file:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
