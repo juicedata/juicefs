@@ -2,17 +2,14 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// 检查命令行参数
 if (process.argv.length !== 4) {
   console.error('Usage: node copyFile.js <sourceFile> <destinationFile>');
   process.exit(1);
 }
 
-// 从命令行参数获取源文件和目标文件路径
 const sourceFile = path.resolve(process.argv[2]);
 const destinationFile = path.resolve(process.argv[3]);
 
-// 计算文件的哈希值
 function calculateHash(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
@@ -23,7 +20,6 @@ function calculateHash(filePath) {
   });
 }
 
-// 使用 fs.copyFile() 方法拷贝文件
 fs.copyFile(sourceFile, destinationFile, async (err) => {
   if (err) {
     console.error('Error copying file:', err);
