@@ -106,8 +106,7 @@ jobs:
           stat /jfs/.accesslog
 
       - name: Test copy file range
-        timeout-minutes: 15
-        # if: github.event == 'schedule' || github.event == 'workflow_dispatch'
+        timeout-minutes: 5
         run: |
           curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
           export NVM_DIR="$HOME/.nvm"
