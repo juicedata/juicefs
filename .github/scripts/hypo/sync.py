@@ -69,7 +69,6 @@ class SyncMachine(RuleBasedStateMachine):
     @rule(target=Files, 
           parent = Folders.filter(lambda x: x != multiple()), 
           file_name = st_entry_name, 
-          mode = st_open_mode, 
           umask = st_umask, 
             )
     def create_file(self, parent, file_name, content='s', mode='x', user='root', umask=0o022):
