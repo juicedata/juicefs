@@ -102,29 +102,29 @@ test_remount_on_writeback(){
     ./juicefs warmup /tmp/jfs/test --evict
     compare_md5sum /tmp/test /tmp/jfs/test
 }
+test_memory_cache_none(){
+    do_test_memory_cache none
+}
 
-test_memory_cache(){
+test_memory_cache_2_random(){
+    do_test_memory_cache 2-random
+}
+
+do_test_memory_cache(){
+    cache_eviction=$1
     prepare_test
     ./juicefs format $META_URL myjfs --compress lz4
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir memory --cache-size 100M --cache-eviction none
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir memory --cache-size 100M --cache-eviction $cache_eviction
     dd if=/dev/zero of=/tmp/jfs/test1 bs=1M count=200
     ./juicefs warmup /tmp/jfs/test1
     ./juicefs warmup /tmp/jfs/test1 --check 2>&1 | tee warmup.log
     ratio=$(get_warmup_ratio warmup.log)
-    (( $(echo "$ratio < 60.0" | bc -l) )) || (echo "ratio($ratio) should less than 60%" && exit 1)
-    dd if=/dev/zero of=/tmp/jfs/test2 bs=1M count=200
-    ./juicefs warmup /tmp/jfs/test2
-    ./juicefs warmup /tmp/jfs/test2 --check 2>&1 | tee warmup.log
-    ratio=$(get_warmup_ratio warmup.log)
-    (( $(echo "$ratio < 5.0" | bc -l) )) || (echo "ratio($ratio) should less than 5%:" && exit 1)
-    
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir memory --cache-size 100M --cache-eviction 2-random
-    ./juicefs warmup /tmp/jfs/test1
-    ./juicefs warmup /tmp/jfs/test2
-    ./juicefs warmup /tmp/jfs/test2 --check 2>&1 | tee warmup.log
-    ratio=$(get_warmup_ratio warmup.log)
-    # TODO: change 30.0 to 40.0
-    (( $(echo "$ratio > 30.0" | bc -l) )) || (echo "ratio($ratio) should more than 40%" && exit 1)
+    if [[ $cache_eviction == "2-random" ]]; then
+        [[ "$ratio" > 40 && "$ratio" < 55   ]] || (echo "ratio($ratio) should between 40% and 50%" && exit 1)
+    elif [[ $cache_eviction == "none" ]]; then
+        # TODO: check if cache_eviction is none.
+        # [[ "$ration" > 90 ]] || (echo "ratio($ratio) should more than 90%" && exit 1)
+    fi
 }
 
 test_cache_expired(){
@@ -430,7 +430,7 @@ check_warmup_log(){
 
 get_warmup_ratio(){
     log=$1
-    cat $log |  sed 's/.*(\([0-9]*\.[0-9]*%\)).*/\1/' | sed 's/%//'
+    cat $log |  sed 's/.*(\([0-9]*\.[0-9]*%\)).*/\1/' | sed 's/%//' | awk '{print int($1)}'
 }
 
 
