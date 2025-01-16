@@ -128,7 +128,7 @@ jobs:
 
       - name: Upload command log
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{matrix.meta}}-${{matrix.old_juicefs_version}}.command.log
           path: ~/command.log
