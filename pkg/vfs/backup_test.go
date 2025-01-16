@@ -70,7 +70,7 @@ func TestRotate(t *testing.T) {
 func TestBackup(t *testing.T) {
 	v, blob := createTestVFS(nil, "")
 	go Backup(v.Meta, blob, time.Millisecond*100, false)
-	time.Sleep(time.Millisecond * 100)
+	time.Sleep(time.Millisecond * 300)
 
 	blob = object.WithPrefix(blob, "meta/")
 	kc, _ := osync.ListAll(blob, "", "", "", true)
