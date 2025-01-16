@@ -109,9 +109,12 @@ jobs:
         timeout-minutes: 15
         # if: github.event == 'schedule' || github.event == 'workflow_dispatch'
         run: |
-          sudo .github/scripts/apt_install.sh nodejs
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | sudo bash
+          sudo nvm install 22
+          node -v # Should print "v22.13.0".
+          nvm current # Should print "v22.13.0".s
           dd if=/dev/urandom of=/jfs/source bs=32M count=130
-          node .github/scripts/copy_file_range.js /jfs/source /jfs/target
+          sudo node .github/scripts/copy_file_range.js /jfs/source /jfs/target
 
       - name: Fslock Test
         timeout-minutes: 5
