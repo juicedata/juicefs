@@ -241,10 +241,10 @@ do_test_disk_full(){
     used_percent=$(df /var/jfsCache1 | tail -1  | awk '{print $5}' | tr -d %)
     echo "used percent is $used_percent"
     if [[ $cache_eviction == "2-random" ]]; then 
-        [[ $used_percent -gt 80 ]] && echo "used percent($used_percent) should more than 80%" && exit 1 || true
+        [[ $used_percent -gt 80 ]] && echo "used percent($used_percent) should not more than 80%" && exit 1 || true
     elif [[ $cache_eviction == "none" ]]; then
         # TODO: if cache_eviction is none, free-space-ratio is not work
-        [[ $used_percent -lt 90 ]] && echo "used percent($used_percent) should less than 90%" && exit 1 || true
+        [[ $used_percent -lt 90 ]] && echo "used percent($used_percent) should not less than 90%" && exit 1 || true
     fi
 }
 

@@ -44,7 +44,7 @@ jobs:
 
       - name: Test
         run: |
-          sudo GOCOVERDIR=$(pwd)/cover .github/scripts/cache.sh test_cache_large_write
+          sudo GOCOVERDIR=$(pwd)/cover .github/scripts/cache.sh
 
       - name: Check juicefs log
         if: always()
