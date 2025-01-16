@@ -443,6 +443,7 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16, umask uint1
 	}
 	var inode Ino
 	err = fs.m.Mkdir(ctx, fi.inode, path.Base(p), mode, umask, 0, &inode, nil)
+	fmt.Printf("Mkdir %s %d %d %d\n", p, fi.inode, inode, err)
 	if err == syscall.ENOENT && fi.inode != 1 {
 		// parent be moved into trash, try again
 		if fs.conf.DirEntryTimeout > 0 {
@@ -473,6 +474,7 @@ func (fs *FileSystem) MkdirAll0(ctx meta.Context, p string, mode uint16, umask u
 			err = fs.Mkdir(ctx, p, mode, umask)
 		}
 	}
+	fmt.Printf("MkdirAll0: %s, %o, %o, %t, %s\n", p, mode, umask, existOK, errstr(err))
 	if existOK && err == syscall.EEXIST {
 		err = 0
 	}
