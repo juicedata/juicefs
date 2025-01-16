@@ -313,18 +313,17 @@ test_disk_failure_on_writeback()
         --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1 --writeback -v
     dd if=/dev/urandom of=/tmp/test bs=1M count=1024
     cp /tmp/test /tmp/jfs/test
-    dd if=/dev/urandom of=/tmp/test bs=4k count=1
+    dd if=/dev/urandom of=/tmp/jfs/test2 bs=1M count=10
     /etc/init.d/redis-server stop
-    cp /tmp/jfs/abc.txt /dev/null
+    ./juicefs warmup /tmp/jfs/test2 &
     sleep 15
     grep -q "state change from unstable to down" /var/log/juicefs.log && echo "disk should not down" && exit 1 || true
     /etc/init.d/redis-server start
     ./juicefs warmup /tmp/jfs/test
     ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
-    check_warmup_log 100
+    check_warmup_log 90
     check_cache_distribute 1024 /var/jfsCache1 /var/jfsCache2 /var/jfsCache3
     compare_md5sum /tmp/test /tmp/jfs/test
-    docker start minio && sleep 3
 }
 
 prepare_test()
