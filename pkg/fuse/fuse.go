@@ -19,6 +19,7 @@ package fuse
 import (
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -298,7 +299,12 @@ func (fs *fileSystem) Fallocate(cancel <-chan struct{}, in *fuse.FallocateIn) (c
 func (fs *fileSystem) CopyFileRange(cancel <-chan struct{}, in *fuse.CopyFileRangeIn) (written uint32, code fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	copied, err := fs.v.CopyFileRange(ctx, Ino(in.NodeId), in.FhIn, in.OffIn, Ino(in.NodeIdOut), in.FhOut, in.OffOut, in.Len, uint32(in.Flags))
+	var len = in.Len
+	if len > math.MaxUint32 {
+		// written may overflow
+		len = math.MaxUint32 + 1 - meta.ChunkSize
+	}
+	copied, err := fs.v.CopyFileRange(ctx, Ino(in.NodeId), in.FhIn, in.OffIn, Ino(in.NodeIdOut), in.FhOut, in.OffOut, len, uint32(in.Flags))
 	if err != 0 {
 		return 0, fuse.Status(err)
 	}
