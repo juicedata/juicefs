@@ -129,7 +129,7 @@ func storageFlags() []cli.Flag {
 		},
 		&cli.IntFlag{
 			Name:  "max-stage-write",
-			Value: 0, // Enable this to have concurrent uploads to two backends, and get write bandwidth equals to sum of the two
+			Value: 1000, // large enough for normal cases, also prevents unlimited concurrency in abnormal cases
 			Usage: "number of threads allowed to write staged files, other requests will be uploaded directly (this option is only effective when 'writeback' mode is enabled)",
 		},
 		&cli.IntFlag{
