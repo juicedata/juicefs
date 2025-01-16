@@ -118,7 +118,7 @@ jobs:
           node -v 
           nvm current 
           dd if=/dev/urandom of=/jfs/source bs=32M count=130
-          node .github/scripts/copy_file_range.js /jfs/source /jfs/target
+          node .github/scripts/test_copy_file_range.js /jfs/source /jfs/target
 
       - name: Fslock Test
         timeout-minutes: 5
