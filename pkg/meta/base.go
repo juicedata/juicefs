@@ -1174,6 +1174,9 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if name == "" {
 		return syscall.ENOENT
 	}
+	if name == "." || name == ".." {
+		return syscall.EEXIST
+	}
 
 	defer m.timeit("Mknod", time.Now())
 	parent = m.checkRoot(parent)

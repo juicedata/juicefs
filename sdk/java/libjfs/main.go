@@ -834,13 +834,13 @@ func jfs_mkdir(pid int64, h int64, cpath *C.char, mode uint16, umask uint16) int
 }
 
 //export jfs_mkdirAll
-func jfs_mkdirAll(pid int64, h int64, cpath *C.char, mode, umask uint16) int32 {
+func jfs_mkdirAll(pid int64, h int64, cpath *C.char, mode, umask uint16, existOK bool) int32 {
 	w := F(h)
 	if w == nil {
 		return EINVAL
 	}
 	path := C.GoString(cpath)
-	err := errno(w.MkdirAll(w.withPid(pid), path, mode, umask))
+	err := errno(w.MkdirAll0(w.withPid(pid), path, mode, umask, existOK))
 	if err == 0 && w.ctx.Uid() == 0 && w.user != w.superuser {
 		// belongs to supergroup
 		if err := setOwner(w, w.withPid(pid), path, w.user, ""); err != 0 {
