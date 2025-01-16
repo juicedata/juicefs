@@ -328,6 +328,7 @@ test_disk_failure_on_writeback()
 
 prepare_test()
 {
+    df -h /
     umount_jfs /tmp/jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
     rm -rf /var/jfs/myjfs || true
