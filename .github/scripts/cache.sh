@@ -237,10 +237,16 @@ do_test_disk_full(){
     dd if=/dev/zero of=/tmp/test bs=1M count=1200
     cp /tmp/test /tmp/jfs/test
     ./juicefs warmup /tmp/jfs/test
+    sleep 3 # wait to free space
     ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
     size=$(get_cache_file_size warmup.log)
-    # TODO uncomment this line
-    # [[ $size -lt 800 || $size -gt 900 ]] && echo "cached file size should between 800 to 900 MB" && exit 1 || true
+    if [[ $cache_eviction == "2-random" ]]; then 
+        # expected cached size: 1024*(1-0.2-0.5)=768
+        [[ $size -gt 700 && $size -lt 800 ]] || (echo "cached file size($size) should between 700 to 800" && exit 1)
+    elif [[ $cache_eviction == "none" ]]; then
+        # TODO: if cache_eviction is none, free-space-ratio is not work
+        [[ $size -gt 1000 ]] || (echo "cached file size($size) should more than 1000" && exit 1)
+    fi
 }
 
 test_inode_full(){
