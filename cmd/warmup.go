@@ -29,6 +29,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"sort"
 
 	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -299,9 +300,20 @@ func warmup(ctx *cli.Context) error {
 		case vfs.EvictCache:
 			logger.Infof("%s: %d files (%s bytes)", action, count, humanize.IBytes(uint64(bytes)))
 		case vfs.CheckCache:
-                        for cf, cb := range total.Locations {
-				fmt.Printf("Location=%s, size=%.1fm, pct=%2.1f%%\n",
-					   cf, float64(cb)/1048576.0, 100.0 * float64(cb)/float64(bytes))
+                        if len(total.Locations) > 0 {
+                                var result = [][]string{
+                                        {"Location", "Size", "Percentage"},
+                                }
+                                var locs []string
+                                for loc := range total.Locations {
+                                        locs = append(locs, loc)
+                                }
+                                sort.Strings(locs)
+                                for _, loc := range locs {
+                                        size := total.Locations[loc]
+                                        result = append(result, []string{loc, humanize.IBytes(size), fmt.Sprintf("%.1f%%", float64(size)*100/float64(bytes))})
+                                }
+                                printResult(result, 0, false)
                         }
 			logger.Infof("%s: %d files checked, %s of %s (%2.1f%%) cached", action, count,
 				humanize.IBytes(uint64(bytes)-total.MissBytes),
