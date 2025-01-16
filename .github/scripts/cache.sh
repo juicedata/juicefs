@@ -119,10 +119,9 @@ do_test_memory_cache(){
     ./juicefs warmup /tmp/jfs/test1 --check 2>&1 | tee warmup.log
     ratio=$(get_warmup_ratio)
     if [[ $cache_eviction == "2-random" ]]; then
-        [[ "$ratio" -gt 40 && "$ratio" -lt 55   ]] || (echo "ratio($ratio) should between 40% and 50%" && exit 1)
-    # elif [[ $cache_eviction == "none" ]]; then
-        # TODO: check if cache_eviction is none.
-        # [[ "$ration" > 90 ]] || (echo "ratio($ratio) should more than 90%" && exit 1)
+        [[ "$ratio" -gt 40 && "$ratio" -lt 60   ]] || (echo "ratio($ratio) should between 40% and 60%" && exit 1)
+    elif [[ $cache_eviction == "none" ]]; then
+        [[ "$ratio" -gt 40 && "$ratio" -lt 60   ]] || (echo "ratio($ratio) should between 40% and 60%" && exit 1)
     fi
 }
 
@@ -149,7 +148,7 @@ do_test_cache_expired(){
     grep "(0.0%)" warmup.log || (echo "cache should expired" && exit 1)
 }
 
-skip_test_cache_large_write(){
+test_cache_large_write(){
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount $META_URL /tmp/jfs -d
@@ -314,8 +313,9 @@ test_disk_failure_on_writeback()
         --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1 --writeback -v
     dd if=/dev/urandom of=/tmp/test bs=1M count=1024
     cp /tmp/test /tmp/jfs/test
+    dd if=/dev/urandom of=/tmp/test bs=4k count=1
     /etc/init.d/redis-server stop
-    ./juicefs warmup /tmp/jfs/test &
+    cp /tmp/jfs/abc.txt /dev/null
     sleep 15
     grep -q "state change from unstable to down" /var/log/juicefs.log && echo "disk should not down" && exit 1 || true
     /etc/init.d/redis-server start
