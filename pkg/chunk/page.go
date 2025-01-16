@@ -31,11 +31,12 @@ var pageStack = os.Getenv("JFS_PAGE_STACK") != ""
 
 // Page is a page with refcount
 type Page struct {
-	refs    int32
-	offheap bool
-	dep     *Page
-	Data    []byte
-	stack   []byte
+	refs     int32
+	offheap  bool
+	dep      *Page
+	Data     []byte
+	stack    []byte
+	forOther bool
 }
 
 // NewPage create a new page.
@@ -43,12 +44,14 @@ func NewPage(data []byte) *Page {
 	return &Page{refs: 1, Data: data}
 }
 
-func NewOffPage(size int) *Page {
+func NewOffPage(size int, forOther ...bool) *Page {
 	if size <= 0 {
 		panic("size of page should > 0")
 	}
-	p := utils.Alloc(size)
-	page := &Page{refs: 1, offheap: true, Data: p}
+	var p []byte
+	other := len(forOther) > 0 && forOther[0]
+	p = utils.Alloc(size, other)
+	page := &Page{refs: 1, offheap: true, Data: p, forOther: other}
 	if pageStack {
 		page.stack = debug.Stack()
 	}
@@ -86,7 +89,7 @@ func (p *Page) Release() {
 	}
 	if atomic.AddInt32(&p.refs, -1) == 0 {
 		if p.offheap {
-			utils.Free(p.Data)
+			utils.Free(p.Data, p.forOther)
 		}
 		if p.dep != nil {
 			p.dep.Release()

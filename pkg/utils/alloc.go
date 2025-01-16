@@ -24,29 +24,36 @@ import (
 	"time"
 )
 
-var used int64
+var bufferUsed int64
+var otherUsed int64
 
-// Alloc returns size bytes memory from Go heap.
-func Alloc(size int) []byte {
+func Alloc(size int, forOther bool) []byte {
 	zeros := powerOf2(size)
 	b := *pools[zeros].Get().(*[]byte)
 	if cap(b) < size {
 		panic(fmt.Sprintf("%d < %d", cap(b), size))
 	}
-	atomic.AddInt64(&used, int64(cap(b)))
+	if forOther {
+		atomic.AddInt64(&otherUsed, int64(cap(b)))
+	} else {
+		atomic.AddInt64(&bufferUsed, int64(cap(b)))
+	}
 	return b[:size]
 }
 
 // Free returns memory to Go heap.
-func Free(b []byte) {
+func Free(b []byte, forOther bool) {
 	// buf could be zero length
-	atomic.AddInt64(&used, -int64(cap(b)))
+	if forOther {
+		atomic.AddInt64(&otherUsed, -int64(cap(b)))
+	} else {
+		atomic.AddInt64(&bufferUsed, -int64(cap(b)))
+	}
 	pools[powerOf2(cap(b))].Put(&b)
 }
 
-// AllocMemory returns the allocated memory
-func AllocMemory() int64 {
-	return atomic.LoadInt64(&used)
+func BufferUsedMemory() int64 {
+	return atomic.LoadInt64(&bufferUsed)
 }
 
 var pools []*sync.Pool
