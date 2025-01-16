@@ -70,8 +70,8 @@ test_cache_items(){
     seq 1 $((cache_items*2)) | xargs -P 8 -I {} sh -c 'echo {} > /tmp/jfs/test_{};'
     ./juicefs warmup /tmp/jfs/
     ./juicefs warmup /tmp/jfs/ --check 2>&1 | tee warmup.log
-    percent=$(cat warmup.log | awk -F'[()]' '{print $3}' | awk '{print $1}' | tr -d %)
-    (( $(echo "$percent < 51" | bc -l) )) || (echo "percentage should less than 50%" && exit 1)
+    ratio=$(get_warmup_ratio warmup.log)
+    [[ $ratio -lt 50 ]] || (echo "ratio should less than 50%" && exit 1)
 }
 
 test_evict_on_writeback(){
@@ -120,7 +120,7 @@ do_test_memory_cache(){
     ./juicefs warmup /tmp/jfs/test1 --check 2>&1 | tee warmup.log
     ratio=$(get_warmup_ratio warmup.log)
     if [[ $cache_eviction == "2-random" ]]; then
-        [[ "$ratio" > 40 && "$ratio" < 55   ]] || (echo "ratio($ratio) should between 40% and 50%" && exit 1)
+        [[ "$ratio" -gt 40 && "$ratio" -lt 55   ]] || (echo "ratio($ratio) should between 40% and 50%" && exit 1)
     # elif [[ $cache_eviction == "none" ]]; then
         # TODO: check if cache_eviction is none.
         # [[ "$ration" > 90 ]] || (echo "ratio($ratio) should more than 90%" && exit 1)
@@ -162,7 +162,7 @@ test_cache_large_write(){
     dd if=/dev/zero of=/tmp/jfs/test1 bs=1M count=200
     ./juicefs warmup /tmp/jfs/test1 --check 2>&1 | tee warmup.log
     # TODO: should check the ratio
-    # check_warmup_log warmup.log 90
+    check_warmup_log warmup.log 90
 }
 
 test_cache_mode(){
@@ -216,8 +216,8 @@ do_test_cache_checksum(){
     ./juicefs format $META_URL myjfs --compress lz4
     ./juicefs mount $META_URL /tmp/jfs -d --verify-cache-checksum $checksum_level
     mkdir -p /tmp/jfs/rand-rw
-    fio --name=seq_rw --rw=readwrite --bsrange=1k-4k --size=80M --numjobs=4 --runtime=15 --time_based --group_reporting --filename=/tmp/jfs/req-rw
-    fio --name=rand_rw   --rw=randrw --bsrange=1k-4k --size=80M --numjobs=4 --runtime=15 --time_based --group_reporting --directory=/tmp/jfs/rand-rw --nrfiles=1000 --filesize=4k
+    fio --name=seq_rw --rw=readwrite --bsrange=1k-4k --size=80M --numjobs=4 --runtime=5 --time_based --group_reporting --filename=/tmp/jfs/req-rw
+    fio --name=rand_rw   --rw=randrw --bsrange=1k-4k --size=80M --numjobs=4 --runtime=5 --time_based --group_reporting --directory=/tmp/jfs/rand-rw --nrfiles=1000 --filesize=4k
 }
 
 test_disk_full_2_random(){
@@ -412,7 +412,7 @@ mount_jfsCache1(){
 check_evict_log(){
     log=$1
     ratio=$(get_warmup_ratio $log)
-    if [[ "$ratio" > 0 ]]; then
+    if [[ "$ratio" -gt 0 ]]; then
         echo "cache ratio($ratio) should be 0 after evict"
         exit 1
     fi
@@ -422,7 +422,7 @@ check_warmup_log(){
     log=$1
     expected_ratio=$2
     ratio=$(get_warmup_ratio $log)
-    if [[ $ratio < $expected_ratio ]]; then
+    if [[ "$ratio" -lt "$expected_ratio" ]]; then
         echo "cache ratio($ratio) should be more than expected_ratio($expected_ratio) after warmup"
         exit 1
     fi
