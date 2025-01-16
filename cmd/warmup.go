@@ -19,6 +19,7 @@ package cmd
 import (
 	"bufio"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -141,7 +142,7 @@ END:
 }
 
 // send fill-cache command to controller file
-func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads uint, background bool, dspin *utils.DoubleSpinner, locs map[string]uint64) vfs.CacheResponse {
+func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads uint, background bool, dspin *utils.DoubleSpinner) *vfs.CacheResponse {
 	paths := strings.Join(batch, "\n")
 	var back uint8
 	if background {
@@ -162,7 +163,7 @@ func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads ui
 		logger.Fatalf("Write message: %s", err)
 	}
 
-	var resp vfs.CacheResponse
+	resp := &vfs.CacheResponse{Locations: make(map[string]uint64)}
 	if background {
 		logger.Infof("%s for %d paths in background", action, len(batch))
 		return resp
@@ -177,18 +178,9 @@ func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads ui
 		logger.Fatalf("%s failed: %s", action, errno)
 	}
 
-	r := utils.ReadBuffer(data)
-	resp.FileCount = r.Get64()
-	resp.SliceCount = r.Get64()
-	resp.TotalBytes = r.Get64()
-	resp.MissBytes = r.Get64()
-	if r.HasMore() {
-		n := r.Get32()
-		for i := uint32(0); i < n; i++ {
-			loc := string(r.Get(int(r.Get16())))
-			bytes := r.Get64()
-			locs[loc] = bytes
-		}
+	err := json.Unmarshal(data, resp)
+	if err != nil {
+		logger.Fatalf("unmarshal error: %s", err)
 	}
 
 	return resp
@@ -267,13 +259,12 @@ func warmup(ctx *cli.Context) error {
 		action = vfs.CheckCache
 	}
 
-	locs := make(map[string]uint64)
 	background := ctx.Bool("background")
 	start := len(mp)
 	batch := make([]string, 0, batchMax)
 	progress := utils.NewProgress(background)
 	dspin := progress.AddDoubleSpinnerTwo(fmt.Sprintf("%s file", action), fmt.Sprintf("%s size", action))
-	total := &vfs.CacheResponse{}
+	total := &vfs.CacheResponse{Locations: make(map[string]uint64)}
 	for _, path := range paths {
 		if mp == "/" {
 			inode, err := utils.GetFileInode(path)
@@ -289,13 +280,13 @@ func warmup(ctx *cli.Context) error {
 			continue
 		}
 		if len(batch) >= batchMax {
-			resp := sendCommand(controller, action, batch, threads, background, dspin, locs)
+			resp := sendCommand(controller, action, batch, threads, background, dspin)
 			total.Add(resp)
 			batch = batch[:0]
 		}
 	}
 	if len(batch) > 0 {
-		resp := sendCommand(controller, action, batch, threads, background, dspin, locs)
+		resp := sendCommand(controller, action, batch, threads, background, dspin)
 		total.Add(resp)
 	}
 	progress.Done()
@@ -308,7 +299,7 @@ func warmup(ctx *cli.Context) error {
 		case vfs.EvictCache:
 			logger.Infof("%s: %d files (%s bytes)", action, count, humanize.IBytes(uint64(bytes)))
 		case vfs.CheckCache:
-                        for cf, cb := range locs {
+                        for cf, cb := range total.Locations {
 				fmt.Printf("Location=%s, size=%.1fm, pct=%2.1f%%\n",
 					   cf, float64(cb)/1048576.0, 100.0 * float64(cb)/float64(bytes))
                         }

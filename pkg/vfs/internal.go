@@ -272,13 +272,17 @@ type CacheResponse struct {
 	SliceCount uint64
 	TotalBytes uint64
 	MissBytes  uint64 // for check op
+	Locations  map[string]uint64
 }
 
-func (resp *CacheResponse) Add(other CacheResponse) {
+func (resp *CacheResponse) Add(other *CacheResponse) {
 	resp.FileCount += other.FileCount
 	resp.TotalBytes += other.TotalBytes
 	resp.SliceCount += other.SliceCount
 	resp.MissBytes += other.MissBytes
+	for k, bytes := range other.Locations {
+		resp.Locations[k] += bytes
+	}
 }
 
 type chunkSlice struct {
@@ -539,43 +543,32 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			action = CacheAction(r.Get8())
 		}
 
-		var stat CacheResponse
+		stat := &CacheResponse{Locations: make(map[string]uint64)}
 		cloc := chunk.NewCacheLocation()
 		if background == 0 {
 			done := make(chan struct{})
 			go func() {
-				v.cache(ctx, action, paths, int(concurrent), &stat, cloc)
+				v.cache(ctx, action, paths, int(concurrent), stat, cloc)
 				close(done)
 			}()
 			writeProgress(&stat.FileCount, &stat.TotalBytes, out, done)
 		} else {
 			go v.cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(concurrent), nil, nil)
 		}
-
-		var buflen uint32
 		locs := cloc.GetCached()
-		buflen = 8 + 8 + 8 + 8 //stats size
-		if len(*locs) > 0 {
-			buflen += 4
-			for k := range *locs {
-				buflen += uint32(2 + len(k) + 8)
-			}
+		for k, bytes := range *locs {
+			stat.Locations[k] = bytes
 		}
-		w := utils.NewBuffer(1 + 4 + uint32(buflen))
+		data, err := json.Marshal(stat)
+		if err != nil {
+			logger.Errorf("marshal response error: %v", err)
+			_, _ = out.Write([]byte{byte(syscall.EIO & 0xff)})
+			return
+		}
+		w := utils.NewBuffer(uint32(1 + 4 + len(data)))
 		w.Put8(meta.CDATA)
-		w.Put32(uint32(buflen))
-		w.Put64(stat.FileCount)
-		w.Put64(stat.SliceCount)
-		w.Put64(stat.TotalBytes)
-		w.Put64(stat.MissBytes)
-		if len(*locs) > 0 {
-			w.Put32(uint32(len(*locs)))
-			for k, bytes := range *locs {
-				w.Put16(uint16(len(k)))
-				w.Put([]byte(k))
-				w.Put64(bytes)
-			}
-		}
+		w.Put32(uint32(len(data)))
+		w.Put(data)
 		_, _ = out.Write(w.Bytes())
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
