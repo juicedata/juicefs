@@ -117,7 +117,10 @@ jobs:
           node -v 
           nvm current 
           dd if=/dev/urandom of=/jfs/source bs=32M count=130
+          start=$(date +%s)
           time node .github/scripts/test_copy_file_range.js /jfs/source /jfs/target
+          duration=$(( $(date +%s) - $start ))
+          [[ $duration < 3 ]] || (echo "duration($duration) should less than 3s " && exit 1)
           md5sum1=$(md5sum /jfs/source | awk '{print $1}')
           md5sum2=$(md5sum /jfs/target | awk '{print $1}')
           echo md5sum1=$md5sum1 md5sum2=$md5sum2
