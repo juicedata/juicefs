@@ -727,7 +727,14 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 	return chksum, nil
 }
 
-func copyData(src, dst object.ObjectStorage, key string, size int64, calChksum bool) (uint32, error) {
+func InitForCopyData() {
+	concurrent = make(chan int, 10)
+	progress := utils.NewProgress(true)
+	copied = progress.AddCountSpinner("Copied objects")
+	copiedBytes = progress.AddByteSpinner("Copied bytes")
+}
+
+func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum bool) (uint32, error) {
 	start := time.Now()
 	var err error
 	var srcChksum uint32
@@ -825,7 +832,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 					logger.Errorf("copy link failed: %s", err)
 				}
 			} else {
-				srcChksum, err = copyData(src, dst, key, obj.Size(), config.CheckAll || config.CheckNew)
+				srcChksum, err = CopyData(src, dst, key, obj.Size(), config.CheckAll || config.CheckNew)
 			}
 
 			if err == nil && (config.CheckAll || config.CheckNew) {
