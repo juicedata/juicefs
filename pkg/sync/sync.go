@@ -558,7 +558,7 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 	}
 	start := time.Now()
 	sz := size
-	p := chunk.NewOffPage(int(size), true)
+	p := chunk.NewOffPage(int(size))
 	defer p.Release()
 	data := p.Data
 	var part *object.Part

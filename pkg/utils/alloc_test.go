@@ -19,13 +19,13 @@ package utils
 import "testing"
 
 func TestAlloc(t *testing.T) {
-	old := BufferUsedMemory()
-	b := Alloc(10, false)
-	if BufferUsedMemory()-old != 16 {
-		t.Fatalf("alloc 16 bytes, but got %d", BufferUsedMemory()-old)
+	old := AllocMemory()
+	b := Alloc(10)
+	if AllocMemory()-old != 16 {
+		t.Fatalf("alloc 16 bytes, but got %d", AllocMemory()-old)
 	}
-	Free(b, false)
-	if BufferUsedMemory()-old != 0 {
-		t.Fatalf("free all allocated memory, but got %d", BufferUsedMemory()-old)
+	Free(b)
+	if AllocMemory()-old != 0 {
+		t.Fatalf("free all allocated memory, but got %d", AllocMemory()-old)
 	}
 }
