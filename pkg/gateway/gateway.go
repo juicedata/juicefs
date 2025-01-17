@@ -57,11 +57,12 @@ var mctx meta.Context
 var logger = utils.GetLogger("juicefs")
 
 type Config struct {
-	MultiBucket bool
-	KeepEtag    bool
-	Umask       uint16
-	ObjTag      bool
-	ObjMeta     bool
+	MultiBucket   bool
+	KeepEtag      bool
+	Umask         uint16
+	ObjTag        bool
+	ObjMeta       bool
+	ObjSystemMeta bool
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -705,6 +706,8 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 	for k, v := range objMeta {
 		opts.UserDefined[k] = v
 	}
+	contentType := utils.GuessMimeType(object)
+	contentType = n.getObjContentType(objMeta, contentType)
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
@@ -713,7 +716,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		IsDir:       fi.IsDir(),
 		AccTime:     fi.ModTime(),
 		ETag:        string(etag),
-		ContentType: utils.GuessMimeType(object),
+		ContentType: contentType,
 		UserTags:    string(tagStr),
 		UserDefined: minio.CleanMetadata(opts.UserDefined),
 	}, nil
@@ -901,6 +904,13 @@ const s3Tags = "s3-tags"
 // S3 object metadata
 const s3Meta = "s3-meta"
 const amzMeta = "x-amz-meta-"
+const metaContentType = "content-type"
+
+var s3UserControlledSystemMeta = []string{
+	"cache-control",
+	"content-disposition",
+	"content-type",
+}
 
 func (n *jfsObjects) getObjMeta(p string) (objMeta map[string]string, err error) {
 	if n.gConf.ObjMeta {
@@ -910,20 +920,26 @@ func (n *jfsObjects) getObjMeta(p string) (objMeta map[string]string, err error)
 			return objMeta, errno
 		}
 		if len(metadataStr) > 0 {
-			var meta map[string]string
-			err = json.Unmarshal(metadataStr, &meta)
-			if err != nil {
-				return objMeta, err
-			}
-			objMeta = make(map[string]string, len(meta))
-			for k, v := range meta {
-				objMeta[amzMeta+k] = v
-			}
+			err = json.Unmarshal(metadataStr, &objMeta)
+			return objMeta, err
 		}
 	} else {
 		objMeta = make(map[string]string)
 	}
 	return objMeta, nil
+}
+
+func (n *jfsObjects) getObjContentType(objMeta map[string]string, fileContentType string) (contentType string) {
+	if !n.gConf.ObjSystemMeta {
+		return fileContentType
+	}
+	var exist bool
+	contentType, exist = objMeta[metaContentType]
+	if !exist || len(contentType) == 0 {
+		return fileContentType
+	} else {
+		return contentType
+	}
 }
 
 func (n *jfsObjects) setObjMeta(p string, metadata map[string]string) error {
@@ -932,7 +948,14 @@ func (n *jfsObjects) setObjMeta(p string, metadata map[string]string) error {
 		for k, v := range metadata {
 			k = strings.ToLower(k)
 			if strings.HasPrefix(k, amzMeta) {
-				meta[k[len(amzMeta):]] = v
+				meta[k] = v
+			} else if n.gConf.ObjSystemMeta {
+				for _, systemMetaKey := range s3UserControlledSystemMeta {
+					if k == systemMetaKey {
+						meta[k] = v
+						break
+					}
+				}
 			}
 		}
 		if len(meta) > 0 {

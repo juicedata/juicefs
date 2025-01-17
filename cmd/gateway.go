@@ -153,11 +153,12 @@ func gateway(c *cli.Context) error {
 		jfs,
 		conf,
 		&jfsgateway.Config{
-			MultiBucket: c.Bool("multi-buckets"),
-			KeepEtag:    c.Bool("keep-etag"),
-			Umask:       uint16(umask),
-			ObjTag:      c.Bool("object-tag"),
-			ObjMeta:     c.Bool("object-meta"),
+			MultiBucket:   c.Bool("multi-buckets"),
+			KeepEtag:      c.Bool("keep-etag"),
+			Umask:         uint16(umask),
+			ObjTag:        c.Bool("object-tag"),
+			ObjMeta:       c.Bool("object-meta"),
+			ObjSystemMeta: c.Bool("object-system-meta"),
 		},
 	)
 	if err != nil {

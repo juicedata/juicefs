@@ -150,6 +150,7 @@ Object tags are not supported by default, but you can use `--object-tag` to enab
 ### Enable object metadata
 
 Object metadata is not supported by default, but you can use `--object-meta` to enable them.
+To enable user controlled system-defined object metadata, you can use `--object-system-meta`.
 
 ### Enable virtual host-style requests
 
