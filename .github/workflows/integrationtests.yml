@@ -117,7 +117,11 @@ jobs:
           node -v 
           nvm current 
           dd if=/dev/urandom of=/jfs/source bs=32M count=130
-          node .github/scripts/test_copy_file_range.js /jfs/source /jfs/target
+          time node .github/scripts/test_copy_file_range.js /jfs/source /jfs/target
+          md5sum1=$(md5sum /jfs/source | awk '{print $1}')
+          md5sum2=$(md5sum /jfs/target | awk '{print $1}')
+          echo md5sum1=$md5sum1 md5sum2=$md5sum2
+          [[ "$md5sum1" == "$md5sum2" ]] || (echo md5sum not the same && exit 1)
 
       - name: Fslock Test
         timeout-minutes: 5
