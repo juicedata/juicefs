@@ -126,9 +126,6 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTra
 	if err != nil {
 		return "", err
 	}
-	if _, err = fp.Seek(0, io.SeekStart); err != nil {
-		return "", err
-	}
 
 	fpath := "meta/" + name
 	disk, err := object.CreateStorage("file", localDir, "", "", "")
