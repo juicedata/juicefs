@@ -52,6 +52,36 @@ skip_test_dump_load_sustained_file(){
     ls /jfs
 }
 
+test_dump_load_with_copy_file_range(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    dd if=/dev/zero of=/tmp/test bs=1M count=4096
+    cp /tmp/test /jfs/test
+    node .github/scripts/copyFile.js /jfs/test /jfs/test1
+    ./juicefs dump $META_URL dump.json $(get_dump_option)
+    umount_jfs /jfs $META_URL
+    python3 .github/scripts/flush_meta.py $META_URL
+    ./juicefs load $META_URL dump.json $(get_load_option)
+    ./juicefs mount -d $META_URL /jfs
+    compare_md5sum /tmp/test /jfs/test1
+}
+
+test_dump_load_with_clone(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    dd if=/dev/urandom of=/tmp/test bs=1M count=1024
+    cp /tmp/test /jfs/test
+    ./juicefs clone /jfs/test /jfs/test2
+    ./juicefs dump $META_URL dump.json $(get_dump_option)
+    umount_jfs /jfs $META_URL
+    python3 .github/scripts/flush_meta.py $META_URL
+    ./juicefs load $META_URL dump.json $(get_load_option)
+    ./juicefs mount -d $META_URL /jfs
+    compare_md5sum /tmp/test /jfs/test2
+}
+
 test_dump_load_with_quota(){
     prepare_test
     ./juicefs format $META_URL myjfs 
