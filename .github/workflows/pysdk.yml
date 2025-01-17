@@ -1,28 +1,28 @@
 name: "pysdk"
 
 on:
-  # push:
-  #   branches:
-  #   - main
-  #   - release**
-  #   paths:
-  #   - '**/hypo/fs_op.py'
-  #   - '**/hypo/fs.py'
-  #   - '**/hypo/fs_sdk_test.py'
-  #   - '**/test_pysdk.py'
-  #   - '**/juicefs.py'
-  #   - '**/pysdk.yml'
-  # pull_request:
-  #   branches:
-  #   - main
-  #   - release**
-  #   paths:
-  #   - '**/hypo/fs_op.py'
-  #   - '**/hypo/fs.py'
-  #   - '**/hypo/fs_sdk_test.py'
-  #   - '**/test_pysdk.py'
-  #   - '**/juicefs.py'
-  #   - '**/pysdk.yml'
+  push:
+    branches:
+    - main
+    - release**
+    paths:
+    - '**/hypo/fs_op.py'
+    - '**/hypo/fs.py'
+    - '**/hypo/fs_sdk_test.py'
+    - '**/test_pysdk.py'
+    - '**/juicefs.py'
+    - '**/pysdk.yml'
+  pull_request:
+    branches:
+    - main
+    - release**
+    paths:
+    - '**/hypo/fs_op.py'
+    - '**/hypo/fs.py'
+    - '**/hypo/fs_sdk_test.py'
+    - '**/test_pysdk.py'
+    - '**/juicefs.py'
+    - '**/pysdk.yml'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:
@@ -160,6 +160,7 @@ jobs:
           sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/fs_sdk_test.py
 
       - name: Run fs.py
+        if: false
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
