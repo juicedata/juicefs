@@ -38,6 +38,7 @@ test_dump_load_sustained_file(){
     rm /jfs/hello.txt
     # lsof -p $$ 
     ./juicefs dump $META_URL dump.json $(get_dump_option)
+    exec 3>&-
     if [[ "$BINARY" == "true" ]]; then
         sustained=$(./juicefs load dump.json --binary --stat | grep sustained | awk -F"|" '{print $2}')
     else
