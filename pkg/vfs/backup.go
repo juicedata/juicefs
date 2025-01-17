@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"syscall"
 	"time"
 
@@ -96,6 +97,9 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skip
 func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTrash bool) (string, error) {
 	name := "dump-" + now.UTC().Format("2006-01-02-150405") + ".json.gz"
 	localDir := os.TempDir()
+	if !strings.HasSuffix(localDir, "/") {
+		localDir += "/"
+	}
 	fp, err := os.Create(filepath.Join(localDir, "meta", name))
 	if errors.Is(err, syscall.ENOENT) {
 		if err = os.MkdirAll(filepath.Join(localDir, "meta"), 0755); err != nil {
