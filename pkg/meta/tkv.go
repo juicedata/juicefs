@@ -897,6 +897,7 @@ func (m *kvMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 	a, err := m.get(m.inodeKey(foundIno))
 	if a != nil {
 		m.parseAttr(a, attr)
+		m.of.Update(foundIno, attr)
 	} else if err == nil {
 		logger.Warnf("no attribute for inode %d (%d, %s)", foundIno, parent, name)
 		*attr = Attr{Typ: foundType}
@@ -1096,14 +1097,15 @@ func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 		}
 		target = rs[1]
 		if !m.atimeNeedsUpdate(attr, now) {
+			atime = attr.Atime*int64(time.Second) + int64(attr.Atimensec)
 			return nil
 		}
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
+		atime = now.UnixNano()
 		tx.set(m.inodeKey(inode), m.marshal(attr))
 		return nil
 	}, inode)
-	atime = attr.Atime
 	return
 }
 

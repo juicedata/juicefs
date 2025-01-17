@@ -1220,11 +1220,7 @@ type VFS struct {
 	modM       sync.Mutex
 	modifiedAt map[Ino]time.Time
 
-	handlersGause  prometheus.GaugeFunc
-	usedBufferSize prometheus.GaugeFunc
-	storeCacheSize prometheus.GaugeFunc
-	readBufferUsed prometheus.GaugeFunc
-	registry       *prometheus.Registry
+	registry *prometheus.Registry
 }
 
 func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer prometheus.Registerer, registry *prometheus.Registry) *VFS {
@@ -1324,7 +1320,7 @@ func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer pro
 	if registerer == nil {
 		return
 	}
-	v.handlersGause = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+	handlersGause := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "fuse_open_handlers",
 		Help: "number of open files and directories.",
 	}, func() float64 {
@@ -1332,7 +1328,12 @@ func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer pro
 		defer v.hanleM.Unlock()
 		return float64(len(v.handles))
 	})
-	v.usedBufferSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+	_ = registerer.Register(handlersGause)
+	InitMemoryBufferMetrics(writer, reader, registerer)
+}
+
+func InitMemoryBufferMetrics(writer DataWriter, reader DataReader, registerer prometheus.Registerer) {
+	usedBufferSize := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "used_buffer_size_bytes",
 		Help: "size of currently used buffer.",
 	}, func() float64 {
@@ -1341,7 +1342,7 @@ func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer pro
 		}
 		return 0.0
 	})
-	v.storeCacheSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+	storeCacheSize := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "store_cache_size_bytes",
 		Help: "size of store cache.",
 	}, func() float64 {
@@ -1350,7 +1351,7 @@ func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer pro
 		}
 		return 0.0
 	})
-	v.readBufferUsed = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+	readBufferMetric := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "used_read_buffer_size_bytes",
 		Help: "size of currently used buffer for read",
 	}, func() float64 {
@@ -1359,10 +1360,9 @@ func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer pro
 		}
 		return 0.0
 	})
-	_ = registerer.Register(v.handlersGause)
-	_ = registerer.Register(v.usedBufferSize)
-	_ = registerer.Register(v.storeCacheSize)
-	_ = registerer.Register(v.readBufferUsed)
+	_ = registerer.Register(usedBufferSize)
+	_ = registerer.Register(storeCacheSize)
+	_ = registerer.Register(readBufferMetric)
 }
 
 func InitMetrics(registerer prometheus.Registerer) {

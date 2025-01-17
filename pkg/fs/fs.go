@@ -209,6 +209,7 @@ func (fs *FileSystem) InitMetrics(reg prometheus.Registerer) {
 		reg.MustRegister(fs.readSizeHistogram)
 		reg.MustRegister(fs.writtenSizeHistogram)
 		reg.MustRegister(fs.opsDurationsHistogram)
+		vfs.InitMemoryBufferMetrics(fs.writer, fs.reader, reg)
 	}
 }
 
@@ -462,12 +463,18 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16, umask uint1
 }
 
 func (fs *FileSystem) MkdirAll(ctx meta.Context, p string, mode uint16, umask uint16) (err syscall.Errno) {
+	return fs.MkdirAll0(ctx, p, mode, umask, true)
+}
+
+func (fs *FileSystem) MkdirAll0(ctx meta.Context, p string, mode uint16, umask uint16, existOK bool) (err syscall.Errno) {
 	err = fs.Mkdir(ctx, p, mode, umask)
 	if err == syscall.ENOENT {
-		_ = fs.MkdirAll(ctx, parentDir(p), mode, umask)
-		err = fs.Mkdir(ctx, p, mode, umask)
+		err = fs.MkdirAll(ctx, parentDir(p), mode, umask)
+		if err == 0 {
+			err = fs.Mkdir(ctx, p, mode, umask)
+		}
 	}
-	if err == syscall.EEXIST {
+	if existOK && err == syscall.EEXIST {
 		err = 0
 	}
 	return err

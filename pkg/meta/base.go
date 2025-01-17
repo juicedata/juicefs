@@ -1096,15 +1096,12 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	defer m.timeit("SetAttr", time.Now())
 	inode = m.checkRoot(inode)
-	defer func() {
+	err := m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr)
+	if err == 0 {
 		m.of.InvalidateChunk(inode, invalidateAttrOnly)
-		if set&(SetAttrAtime|SetAttrAtimeNow) != 0 {
-			if f := m.of.find(inode); f != nil {
-				f.attr.Full = false
-			}
-		}
-	}()
-	return m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr)
+		m.of.Update(inode, attr)
+	}
+	return err
 }
 
 func (m *baseMeta) nextInode() (Ino, error) {
@@ -1176,6 +1173,9 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}
 	if name == "" {
 		return syscall.ENOENT
+	}
+	if name == "." || name == ".." {
+		return syscall.EEXIST
 	}
 
 	defer m.timeit("Mknod", time.Now())
@@ -1309,7 +1309,8 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 		} else {
 			buf := target.([]byte)
 			// ctime and mtime are ignored since symlink can't be modified
-			attr := &Attr{Atime: int64(binary.BigEndian.Uint64(buf[:8]))}
+			atime := int64(binary.BigEndian.Uint64(buf[:8]))
+			attr := &Attr{Atime: atime / int64(time.Second), Atimensec: uint32(atime % int64(time.Second))}
 			if !m.atimeNeedsUpdate(attr, time.Now()) {
 				*path = buf[8:]
 				return 0
@@ -2540,7 +2541,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 			}
 			for _, se := range subEntries {
 				var c uint64
-				st = m.Remove(ctx, e.Inode, string(se.Name), false, RmrDefaultThreads, &c)
+				st = m.Remove(ctx, e.Inode, string(se.Name), false, m.conf.MaxDeletes, &c)
 				if st == 0 {
 					count += int(c)
 					if increProgress != nil {
