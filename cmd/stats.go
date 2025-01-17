@@ -89,16 +89,16 @@ const (
 	COLOR_DARK_SEQ = "\033[0;" // %dm
 	UNDERLINE_SEQ  = "\033[4m"
 	CLEAR_SCREEM   = "\033[2J\033[1;1H"
-	// BOLD_SEQ       = "\033[1m"
 	UNIXTIME_FMT   = "01/02-15:04:05"
+	// BOLD_SEQ       = "\033[1m"
 )
 
 type statsWatcher struct {
-	colorful  bool
-	interval  uint
-	mp        string
-	header    string
-	sections  []*section
+	colorful bool
+	interval uint
+	mp       string
+	header   string
+	sections []*section
 }
 
 func (w *statsWatcher) colorize(msg string, color int, dark bool, underline bool) string {
@@ -246,7 +246,7 @@ func (w *statsWatcher) formatHeader() {
 		headers[i] = w.colorize(padding(s.name, width, '-'), BLUE, true, false)
 	}
 	w.header = fmt.Sprintf("%s\n%s", strings.Join(headers, " "),
-	           strings.Join(subHeaders, w.colorize("|", BLUE, true, false)))
+	        strings.Join(subHeaders, w.colorize("|", BLUE, true, false)))
 }
 
 func (w *statsWatcher) formatU64(v float64, dark, isByte bool) string {
