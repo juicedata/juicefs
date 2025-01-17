@@ -246,7 +246,7 @@ func (w *statsWatcher) formatHeader() {
 		headers[i] = w.colorize(padding(s.name, width, '-'), BLUE, true, false)
 	}
 	w.header = fmt.Sprintf("%s\n%s", strings.Join(headers, " "),
-	        strings.Join(subHeaders, w.colorize("|", BLUE, true, false)))
+		strings.Join(subHeaders, w.colorize("|", BLUE, true, false)))
 }
 
 func (w *statsWatcher) formatU64(v float64, dark, isByte bool) string {
