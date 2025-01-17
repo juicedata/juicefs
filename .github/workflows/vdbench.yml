@@ -100,7 +100,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: output-long-run-${{ matrix.runs-on }}
+          name: output-long-run-${{ matrix.meta }}
           path: output
 
       - name: check vdbench log

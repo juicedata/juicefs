@@ -109,7 +109,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: hypothesis-example-db-${{ matrix.runs-on }}
+          name: hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
 
       - name: Check client log
