@@ -9,6 +9,8 @@ META_URL=$(get_meta_url $META)
 HEARTBEAT_INTERVAL=2
 DIR_QUOTA_FLUSH_INTERVAL=4
 # [[ -z "$SEED" ]] && SEED=1711594639
+[[ -z "$BINARY" ]] && BINARY=false
+[[ -z "$FAST" ]] && FAST=false
 
 trap "echo random seed is $SEED" EXIT
 
@@ -25,17 +27,36 @@ sleep 3s
 mc alias set myminio http://localhost:9000 minioadmin minioadmin
 python3 -c "import xattr" || sudo pip install xattr
 
+get_dump_option(){
+    if [[ "$BINARY" == "true" ]]; then 
+        option="--binary"
+    elif [[ "$FAST" == "true" ]] 
+        option="--fast"
+    else
+        option=""
+    fi
+    echo $option
+}
 
-test_dump_load_quota(){
+get_load_option(){
+    if [[ "$BINARY" == "true" ]]; then 
+        option="--binary"
+    else
+        option=""
+    fi
+    echo $option
+}
+
+test_dump_load_with_quota(){
     prepare_test
     ./juicefs format $META_URL myjfs 
     ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
     mkdir -p /jfs/d
     ./juicefs quota set $META_URL --path /d --inodes 1000 --capacity 1
-    ./juicefs dump --log-level error $META_URL --fast > dump.json
+    ./juicefs dump --log-level error $META_URL $(get_dump_option) > dump.json
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
-    ./juicefs load $META_URL dump.json
+    ./juicefs load $META_URL dump.json $(get_load_option)
     ./juicefs mount $META_URL /jfs -d --heartbeat $HEARTBEAT_INTERVAL
     ./juicefs quota get $META_URL --path /d
     dd if=/dev/zero of=/jfs/d/test1 bs=1G count=1
@@ -44,25 +65,20 @@ test_dump_load_quota(){
     grep "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
 }
 
+test_sustained_file(){
+
+}
+
 test_dump_load_with_iflag(){
-    do_dump_load_with_iflag
-}
-
-test_dump_load_with_iflag_binary(){
-    do_dump_load_with_iflag --binary
-}
-
-do_dump_load_with_iflag(){
-    option=$@
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs --enable-ioctl
     echo "hello" > /jfs/hello.txt
     chattr +i /jfs/hello.txt
-    ./juicefs dump $META_URL dump.json $option
+    ./juicefs dump $META_URL dump.json $(get_dump_option)
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
-    ./juicefs load $META_URL dump.json $option
+    ./juicefs load $META_URL dump.json $(get_load_option)
     ./juicefs mount -d $META_URL /jfs --enable-ioctl
     echo "hello" > /jfs/hello.txt && echo "write should fail" && exit 1 || true
     chattr -i /jfs/hello.txt
@@ -70,30 +86,22 @@ do_dump_load_with_iflag(){
     cat /jfs/hello.txt | grep world
 }
 
-test_dump_load_with_keep_secret_key(){
-    do_dump_load_with_keep_secret_key
-}
-
-test_dump_load_with_keep_secret_key_in_binary(){
-    do_dump_load_with_keep_secret_key --binary
-}
-
-do_dump_load_with_keep_secret_key()
+test_dump_load_with_keep_secret_key()
 {
     option=$@
     prepare_test
     ./juicefs format $META_URL myjfs --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
-    ./juicefs dump --keep-secret-key $META_URL dump.json $option
+    ./juicefs dump --keep-secret-key $META_URL dump.json $(get_dump_option)
     python3 .github/scripts/flush_meta.py $META_URL
-    ./juicefs load $META_URL dump.json $option
+    ./juicefs load $META_URL dump.json $(get_load_option)
     ./juicefs mount -d $META_URL /jfs
     echo "hello" > /jfs/hello.txt
     cat /jfs/hello.txt | grep hello
 
     umount_jfs /jfs $META_URL
-    ./juicefs dump $META_URL dump.json $option
+    ./juicefs dump $META_URL dump.json $(get_dump_option)
     python3 .github/scripts/flush_meta.py $META_URL
-    ./juicefs load $META_URL dump.json $option
+    ./juicefs load $META_URL dump.json $(get_load_option)
     ./juicefs mount -d $META_URL /jfs && echo "mount should fail" && exit 1 || true
     ./juicefs config --secret-key minioadmin $META_URL
     ./juicefs mount -d $META_URL /jfs
@@ -122,18 +130,20 @@ do_dump_load_with_fsrand(){
     do_dump_load_and_compare --fast --skip-trash
 }
 
-do_dump_load_and_compare()
+test_dump_load_with_fsrand()
 {
-    option=$@
-    echo option is $option
-    ./juicefs dump $META_URL dump.json $option
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 0 --enable-acl
+    ./juicefs mount -d $META_URL /jfs --enable-xattr
+    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fs.py || true    
+    ./juicefs dump $META_URL dump.json $(get_dump_option)
     rm -rf test2.db 
     if [[ "$option" == *"--binary"* ]]; then
-        ./juicefs load sqlite3://test2.db dump.json $option
+        ./juicefs load sqlite3://test2.db dump.json $(get_load_option)
     else
         ./juicefs load sqlite3://test2.db dump.json
     fi
-    ./juicefs dump sqlite3://test2.db dump2.json $option
+    ./juicefs dump sqlite3://test2.db dump2.json $(get_dump_option)
     # if [[ "$option" != *"--binary"* ]]; then
     #     compare_dump_json
     # fi

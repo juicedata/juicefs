@@ -80,10 +80,20 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}
 
-      - name: Test Load & Dump 
+      - name: Test Load & Dump with Binary
         timeout-minutes: 30
         run: |
-          sudo GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/load_dump.sh      
+          sudo BINARY=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/load_dump.sh      
+
+      - name: Test Load & Dump with Json Fast Mode
+        timeout-minutes: 30
+        run: |
+          sudo FAST=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/load_dump.sh  
+
+      - name: Test Load & Dump with Json
+        timeout-minutes: 30
+        run: |
+          sudo GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/load_dump.sh     
 
       - name: Benchmark dump load in binary format
         if : false
