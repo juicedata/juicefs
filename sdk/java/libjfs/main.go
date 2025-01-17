@@ -94,7 +94,8 @@ var (
 
 	userGroupCache = make(map[string]map[string][]string) // name -> (user -> groups)
 
-	caller = CALLER_JAVA
+	MaxDeletes = meta.RmrDefaultThreads
+	caller     = CALLER_JAVA
 )
 
 const (
@@ -481,6 +482,10 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 		}
 
 		caller = jConf.Caller
+		if jConf.MaxDeletes > 0 {
+			MaxDeletes = jConf.MaxDeletes
+		}
+
 		metaConf := meta.DefaultConf()
 		metaConf.Retries = jConf.IORetries
 		metaConf.MaxDeletes = jConf.MaxDeletes
@@ -879,7 +884,7 @@ func jfs_rmr(pid int64, h int64, cpath *C.char) int32 {
 	if w == nil {
 		return EINVAL
 	}
-	return errno(w.Rmr(w.withPid(pid), C.GoString(cpath)))
+	return errno(w.Rmr(w.withPid(pid), C.GoString(cpath), MaxDeletes))
 }
 
 //export jfs_rename

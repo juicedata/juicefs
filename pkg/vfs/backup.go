@@ -18,9 +18,13 @@ package vfs
 
 import (
 	"compress/gzip"
+	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -92,7 +96,17 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skip
 
 func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTrash bool) (string, error) {
 	name := "dump-" + now.UTC().Format("2006-01-02-150405") + ".json.gz"
-	fp, err := os.CreateTemp("", "juicefs-meta-*")
+	localDir := os.TempDir()
+	if !strings.HasSuffix(localDir, "/") {
+		localDir += "/"
+	}
+	fp, err := os.Create(filepath.Join(localDir, "meta", name))
+	if errors.Is(err, syscall.ENOENT) {
+		if err = os.MkdirAll(filepath.Join(localDir, "meta"), 0755); err != nil {
+			return "", err
+		}
+		fp, err = os.Create(filepath.Join(localDir, "meta", name))
+	}
 	if err != nil {
 		return "", err
 	}
@@ -108,11 +122,19 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTra
 	if err != nil {
 		return "", err
 	}
-	if _, err = fp.Seek(0, io.SeekStart); err != nil {
+	size, err := fp.Seek(0, io.SeekCurrent)
+	if err != nil {
 		return "", err
 	}
+
 	fpath := "meta/" + name
-	return blob.String() + fpath, blob.Put(fpath, fp)
+	disk, err := object.CreateStorage("file", localDir, "", "", "")
+	if err != nil {
+		return "", err
+	}
+	osync.InitForCopyData()
+	_, err = osync.CopyData(disk, blob, fpath, size, true)
+	return blob.String() + fpath, err
 }
 
 func cleanupBackups(blob object.ObjectStorage, now time.Time) {
