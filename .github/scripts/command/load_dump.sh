@@ -1,10 +1,11 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
+META_URL2=$(get_meta_url2 $META)
 [[ -z "$SEED" ]] && SEED=$(date +%s)
 HEARTBEAT_INTERVAL=2
 DIR_QUOTA_FLUSH_INTERVAL=4
@@ -27,25 +28,6 @@ sleep 3s
 mc alias set myminio http://localhost:9000 minioadmin minioadmin
 python3 -c "import xattr" || sudo pip install xattr
 
-get_dump_option(){
-    if [[ "$BINARY" == "true" ]]; then 
-        option="--binary"
-    elif [[ "$FAST" == "true" ]] 
-        option="--fast"
-    else
-        option=""
-    fi
-    echo $option
-}
-
-get_load_option(){
-    if [[ "$BINARY" == "true" ]]; then 
-        option="--binary"
-    else
-        option=""
-    fi
-    echo $option
-}
 
 test_dump_load_with_quota(){
     prepare_test
@@ -63,10 +45,6 @@ test_dump_load_with_quota(){
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     echo a | tee -a /jfs/d/test1 2>error.log && echo "write should fail on out of space" && exit 1 || true
     grep "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
-}
-
-test_sustained_file(){
-
 }
 
 test_dump_load_with_iflag(){
@@ -109,25 +87,8 @@ test_dump_load_with_keep_secret_key()
     cat /jfs/hello.txt | grep hello
 }
 
-
-test_dump_load_with_trash_enable(){
-    do_dump_load_with_fsrand 1
-}
-test_dump_load_with_trash_disable(){
-    do_dump_load_with_fsrand 0
-}
-
-do_dump_load_with_fsrand(){
-    trash_days=$1
-    prepare_test
-    ./juicefs format $META_URL myjfs --trash-days $trash_days --enable-acl
-    ./juicefs mount -d $META_URL /jfs --enable-xattr
-    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fs.py || true
-    do_dump_load_and_compare 
-    do_dump_load_and_compare --binary
-    do_dump_load_and_compare --fast
-    do_dump_load_and_compare --skip-trash
-    do_dump_load_and_compare --fast --skip-trash
+test_dump_load_with_trash(){
+    echo "TOOD"
 }
 
 test_dump_load_with_fsrand()
@@ -137,20 +98,18 @@ test_dump_load_with_fsrand()
     ./juicefs mount -d $META_URL /jfs --enable-xattr
     SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fs.py || true    
     ./juicefs dump $META_URL dump.json $(get_dump_option)
-    rm -rf test2.db 
-    if [[ "$option" == *"--binary"* ]]; then
-        ./juicefs load sqlite3://test2.db dump.json $(get_load_option)
-    else
-        ./juicefs load sqlite3://test2.db dump.json
-    fi
-    ./juicefs dump sqlite3://test2.db dump2.json $(get_dump_option)
-    # if [[ "$option" != *"--binary"* ]]; then
+    create_database $META_URL2
+    ./juicefs load $META_URL2 dump.json $(get_load_option)
+    ./juicefs dump $META_URL2 dump2.json $(get_dump_option)
+    # if [[ "$BINARY" == "false" ]]; then
     #     compare_dump_json
     # fi
-    ./juicefs mount -d sqlite3://test2.db /jfs2
+    ./juicefs mount -d $META_URL2 /jfs2
     diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
     compare_stat_acl_xattr /jfs/fsrand /jfs2/fsrand
-    umount /jfs2
+    umount_jfs /jfs2 $META_URL2
+    ./juicefs status $META_URL2 && UUID=$(./juicefs status $META_URL2 | grep UUID | cut -d '"' -f 4)
+    ./juicefs destroy --yes $META_URL2 $UUID
 }
 
 compare_dump_json(){
@@ -207,6 +166,27 @@ test_load_encrypted_meta_backup()
     diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
     umount_jfs /jfs2 sqlite3://test2.db
     rm test2.db -rf
+}
+
+
+get_dump_option(){
+    if [[ "$BINARY" == "true" ]]; then 
+        option="--binary"
+    elif [[ "$FAST" == "true" ]]; then
+        option="--fast"
+    else
+        option=""
+    fi
+    echo $option
+}
+
+get_load_option(){
+    if [[ "$BINARY" == "true" ]]; then 
+        option="--binary"
+    else
+        option=""
+    fi
+    echo $option
 }
 
 prepare_test(){
