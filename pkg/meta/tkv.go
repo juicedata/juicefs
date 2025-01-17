@@ -1592,6 +1592,12 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						tattr.Parent = parentSrc
 					}
 				}
+			} else if dino == ino {
+				return nil
+			} else if typ == TypeDirectory && dtyp != TypeDirectory {
+				return syscall.ENOTDIR
+			} else if typ != TypeDirectory && dtyp == TypeDirectory {
+				return syscall.EISDIR
 			} else {
 				if dtyp == TypeDirectory {
 					if tx.exist(m.entryKey(dino, "")) {

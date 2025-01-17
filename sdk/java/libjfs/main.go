@@ -889,11 +889,16 @@ func jfs_rmr(pid int64, h int64, cpath *C.char) int32 {
 
 //export jfs_rename
 func jfs_rename(pid int64, h int64, oldpath *C.char, newpath *C.char) int32 {
+	return jfs_rename0(pid, h, oldpath, newpath, meta.RenameNoReplace)
+}
+
+//export jfs_rename0
+func jfs_rename0(pid int64, h int64, oldpath *C.char, newpath *C.char, flags uint32) int32 {
 	w := F(h)
 	if w == nil {
 		return EINVAL
 	}
-	return errno(w.Rename(w.withPid(pid), C.GoString(oldpath), C.GoString(newpath), meta.RenameNoReplace))
+	return errno(w.Rename(w.withPid(pid), C.GoString(oldpath), C.GoString(newpath), flags))
 }
 
 //export jfs_truncate
