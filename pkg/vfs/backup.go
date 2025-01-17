@@ -110,11 +110,7 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTra
 	if err != nil {
 		return "", err
 	}
-	defer func() {
-		if err == nil {
-			_ = os.Remove(fp.Name())
-		}
-	}()
+	defer os.Remove(fp.Name())
 	defer fp.Close()
 	zw, _ := gzip.NewWriterLevel(fp, gzip.BestSpeed)
 	var threads = 2
@@ -139,10 +135,7 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTra
 	if err != nil {
 		return "", err
 	}
-	osync.Concurrent = make(chan int, 10)
-	progress := utils.NewProgress(true)
-	osync.Copied = progress.AddCountSpinner("Copied objects")
-	osync.CopiedBytes = progress.AddByteSpinner("Copied bytes")
+	osync.InitForCopyData()
 	_, err = osync.CopyData(disk, blob, fpath, size, true)
 	return blob.String() + fpath, err
 }
