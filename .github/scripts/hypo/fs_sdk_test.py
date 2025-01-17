@@ -269,5 +269,13 @@ class TestPySdk(unittest.TestCase):
         state.read(file=v2, mode='r', offset=0, user='root', whence=0, length=4)
         state.teardown()
 
+    def test_issue_f(self):
+        state = JuicefsMachine()
+        folders_0 = state.init_folders()
+        files_0 = state.create_file(content=b'', file_name='b', parent=folders_0, umask=18, user='root')
+        state.chown(entry=folders_0, owner='user1', user='root')
+        state.create_file(content=b'', file_name='a', parent=folders_0, umask=18, user='root')
+        state.teardown()
+
 if __name__ == '__main__':
     unittest.main()

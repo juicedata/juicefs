@@ -135,6 +135,7 @@ class Client(object):
         kwargs["pushAuth"] = push_auth
         kwargs["pushLabels"] = push_labels
         kwargs["pushGraphite"] = push_graphite
+        kwargs["caller"] = 1
 
         jsonConf = json.dumps(kwargs)
         self.umask = os.umask(0)

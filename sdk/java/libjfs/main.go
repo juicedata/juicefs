@@ -94,6 +94,16 @@ var (
 
 	userGroupCache = make(map[string]map[string][]string) // name -> (user -> groups)
 
+	caller = CALLER_JAVA
+)
+
+const (
+	CALLER_JAVA = iota
+	CALLER_PYTHON
+)
+
+const (
+	BEHAVIOR_HADOOP = "Hadoop"
 )
 
 const (
@@ -210,7 +220,9 @@ func jfs_set_logger(cb unsafe.Pointer) {
 func (w *wrapper) withPid(pid int64) meta.Context {
 	// mapping Java Thread ID to global one
 	ctx := meta.NewContext(w.ctx.Pid()*1000+uint32(pid), w.ctx.Uid(), w.ctx.Gids())
-	ctx.WithValue(meta.CtxKey("behavior"), "Hadoop")
+	if caller == CALLER_JAVA {
+		ctx.WithValue(meta.CtxKey("behavior"), BEHAVIOR_HADOOP)
+	}
 	return ctx
 }
 
@@ -336,6 +348,7 @@ type javaConf struct {
 	PushAuth          string `json:"pushAuth"`
 	PushLabels        string `json:"pushLabels"`
 	PushGraphite      string `json:"pushGraphite"`
+	Caller            int    `json:"caller"`
 }
 
 func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.FileSystem) int64 {
@@ -465,6 +478,15 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			}
 		} else {
 			utils.SetLogLevel(logrus.WarnLevel)
+		}
+
+		switch jConf.Caller {
+		case CALLER_JAVA:
+			caller = CALLER_JAVA
+		case CALLER_PYTHON:
+			caller = CALLER_PYTHON
+		default:
+			caller = CALLER_PYTHON
 		}
 
 		metaConf := meta.DefaultConf()
