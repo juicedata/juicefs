@@ -29,7 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juju/ratelimit"
@@ -558,9 +557,8 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 	}
 	start := time.Now()
 	sz := size
-	p := chunk.NewOffPage(int(size))
-	defer p.Release()
-	data := p.Data
+	data := utils.DynAlloc(int(size))
+	defer utils.DynFree(data)
 	var part *object.Part
 	var chksum uint32
 	err := try(3, func() error {
