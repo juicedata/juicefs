@@ -89,12 +89,6 @@ func cmdGateway() *cli.Command {
 			Value: "5m",
 			Usage: "interval to reload gateway IAM from configuration",
 		},
-                &cli.IntFlag{
-                        Name:    "threads",
-                        Aliases: []string{"p"},
-                        Value:   50,
-                        Usage:   "number of threads for delete jobs (max 255)",
-                },
 	}
 
 	return &cli.Command{
@@ -159,7 +153,6 @@ func gateway(c *cli.Context) error {
 			KeepEtag:    c.Bool("keep-etag"),
 			Umask:       uint16(umask),
 			ObjTag:      c.Bool("object-tag"),
-			MaxDeletes:  c.Int("threads"),
 		},
 	)
 	if err != nil {

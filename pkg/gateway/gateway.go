@@ -60,7 +60,6 @@ type Config struct {
 	KeepEtag    bool
 	Umask       uint16
 	ObjTag      bool
-	MaxDeletes  int
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -1127,7 +1126,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	}
 
 	// remove parts
-	_ = n.fs.Rmr(mctx, n.upath(bucket, uploadID), n.gConf.MaxDeletes)
+	_ = n.fs.Rmr(mctx, n.upath(bucket, uploadID), meta.RmrDefaultThreads)
 	return minio.ObjectInfo{
 		Bucket:   bucket,
 		Name:     object,
@@ -1144,7 +1143,7 @@ func (n *jfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 	if err = n.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return
 	}
-	eno := n.fs.Rmr(mctx, n.upath(bucket, uploadID), n.gConf.MaxDeletes)
+	eno := n.fs.Rmr(mctx, n.upath(bucket, uploadID), meta.RmrDefaultThreads)
 	return jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 }
 
@@ -1175,7 +1174,7 @@ func (n *jfsObjects) cleanup() {
 				}
 				if t.Sub(time.Unix(entry.Attr.Mtime, 0)) > 7*24*time.Hour {
 					p := n.path(dir, string(entry.Name))
-					if errno := n.fs.Rmr(mctx, p, n.gConf.MaxDeletes); errno != 0 {
+					if errno := n.fs.Rmr(mctx, p, meta.RmrDefaultThreads); errno != 0 {
 						logger.Errorf("failed to delete expired temporary files path: %s,", p)
 					} else {
 						logger.Infof("delete expired temporary files path: %s, mtime: %s", p, time.Unix(entry.Attr.Mtime, 0).Format(time.RFC3339))
