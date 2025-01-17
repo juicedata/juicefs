@@ -209,6 +209,7 @@ func (fs *FileSystem) InitMetrics(reg prometheus.Registerer) {
 		reg.MustRegister(fs.readSizeHistogram)
 		reg.MustRegister(fs.writtenSizeHistogram)
 		reg.MustRegister(fs.opsDurationsHistogram)
+		vfs.InitMemoryBufferMetrics(fs.writer, fs.reader, reg)
 	}
 }
 
