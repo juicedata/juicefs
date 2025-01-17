@@ -50,7 +50,7 @@ Details: https://juicefs.com/docs/community/fault_diagnosis_and_analysis#stats`,
 			&cli.StringFlag{
 				Name:  "schema",
 				Value: "ufmco",
-				Usage: "schema string that controls the output sections (u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go)",
+				Usage: "schema string of output sections (t:time, u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go)",
 			},
 			&cli.UintFlag{
 				Name:  "interval",
@@ -62,11 +62,10 @@ Details: https://juicefs.com/docs/community/fault_diagnosis_and_analysis#stats`,
 				Aliases: []string{"l"},
 				Usage:   "verbosity level, 0 or 1 is enough for most cases",
 			},
-			&cli.UintFlag{
+			&cli.StringFlag{
 				Name:    "duration",
 				Aliases: []string{"d"},
-				Value:   3600 * 24 * 365,
-				Usage:   "duration time in seconds",
+				Usage:   "duration time",
 			},
 		},
 	}
@@ -93,12 +92,15 @@ const (
 	// BOLD_SEQ       = "\033[1m"
 )
 
+var prefixTimestamp bool
+
 type statsWatcher struct {
-	colorful bool
-	interval uint
-	mp       string
-	header   string
-	sections []*section
+	colorful  bool
+	interval  uint
+	mp        string
+	header    string
+	subheader string
+	sections  []*section
 }
 
 func (w *statsWatcher) colorize(msg string, color int, dark bool, underline bool) string {
@@ -142,6 +144,9 @@ func (w *statsWatcher) buildSchema(schema string, verbosity uint) {
 	for _, r := range schema {
 		var s section
 		switch r {
+		case 't':
+			prefixTimestamp = true
+			continue
 		case 'u':
 			s.name = "usage"
 			s.items = append(s.items, &item{"cpu", "juicefs_cpu_usage", metricCPU | metricCounter})
@@ -210,16 +215,17 @@ func padding(name string, width int, char byte) string {
 	return string(buf)
 }
 
-func getCurrentTime() string {
-    tm := time.Now()
-    return tm.Format("01/02-15:04:05")
+func (w *statsWatcher)getCurrentTime() string {
+	if prefixTimestamp {
+		tm := time.Now()
+		return w.colorize(tm.Format("01/02-15:04:05"), BLUE, false, false)
+	}
+	return ""
 }
 
 func (w *statsWatcher) formatHeader() {
-	headers := make([]string, len(w.sections) + 1)
-	subHeaders := make([]string, len(w.sections) + 1)
-	headers[0] = w.colorize(getCurrentTime(), BLUE, false, false)
-	subHeaders[0] = w.colorize(getCurrentTime(), BLUE, false, false)
+	headers := make([]string, len(w.sections))
+	subHeaders := make([]string, len(w.sections))
 	for i, s := range w.sections {
 		subs := make([]string, 0, len(s.items))
 		for _, it := range s.items {
@@ -233,11 +239,11 @@ func (w *statsWatcher) formatHeader() {
 			}
 		}
 		width := 6*len(subs) - 1 // nick(5) + space(1)
-		subHeaders[i + 1] = strings.Join(subs, " ")
-		headers[i + 1] = w.colorize(padding(s.name, width, '-'), BLUE, true, false)
+		subHeaders[i] = strings.Join(subs, " ")
+		headers[i] = w.colorize(padding(s.name, width, '-'), BLUE, true, false)
 	}
-	w.header = fmt.Sprintf("%s\n%s", strings.Join(headers, " "),
-		strings.Join(subHeaders, w.colorize("|", BLUE, true, false)))
+	w.header = strings.Join(headers, " ")
+	w.subheader = strings.Join(subHeaders, w.colorize("|", BLUE, true, false))
 }
 
 func (w *statsWatcher) formatU64(v float64, dark, isByte bool) string {
@@ -347,11 +353,9 @@ func (w *statsWatcher) printDiff(left, right map[string]float64, dark bool) {
 		values[i] = strings.Join(vals, " ")
 	}
 	if w.colorful && dark {
-		fmt.Printf("%s %s\r", w.colorize(getCurrentTime(), BLUE, false, false),
-			   strings.Join(values, w.colorize("|", BLUE, true, false)))
+		fmt.Printf("%s%s\r", w.getCurrentTime(), strings.Join(values, w.colorize("|", BLUE, true, false)))
 	} else {
-		fmt.Printf("%s %s\n", w.colorize(getCurrentTime(), BLUE, false, false),
-			   strings.Join(values, w.colorize("|", BLUE, true, false)))
+		fmt.Printf("%s%s\n", w.getCurrentTime(), strings.Join(values, w.colorize("|", BLUE, true, false)))
 	}
 }
 
@@ -407,16 +411,21 @@ func stats(ctx *cli.Context) error {
 	var tick uint
 	var start, last, current map[string]float64
 	beginTime := time.Now() 
-	duraTime := time.Duration(ctx.Uint("duration")) * time.Second
+	duraTime := time.Duration(0)
+	if ctx.String("duration") != "" {
+		if duraTime, err = time.ParseDuration(ctx.String("duration")); err != nil {
+			logger.Fatalf("invalid duration format (%s)", ctx.String("duration"))
+		}
+	}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	current = readStats(watcher.mp)
 	start = current
 	last = current
-	for time.Since(beginTime) < duraTime {
+	for duraTime == 0 || time.Since(beginTime) < duraTime {
 		if tick%(watcher.interval*30) == 0 {
-			watcher.formatHeader()
-			fmt.Println(watcher.header)
+			fmt.Printf("%s%s\n", watcher.getCurrentTime(), watcher.header)
+			fmt.Printf("%s%s\n", watcher.getCurrentTime(), watcher.subheader)
 		}
 		if tick%watcher.interval == 0 {
 			watcher.printDiff(start, current, false)
