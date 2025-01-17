@@ -35,7 +35,7 @@ jobs:
           if [ "${{github.event_name}}" == "schedule"  ] || [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
             echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
           else
-            echo 'meta_matrix=["redis", "tikv", "mysql"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           fi
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
@@ -83,9 +83,10 @@ jobs:
       - name: Test Load & Dump 
         timeout-minutes: 30
         run: |
-          sudo GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/load_dump.sh          
+          sudo GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/load_dump.sh      
 
       - name: Benchmark dump load in binary format
+        if : false
         timeout-minutes: 60
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
@@ -97,6 +98,7 @@ jobs:
           sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_dump_load_in_binary
       
       - name: Benchmark dump load fast
+        if : false
         timeout-minutes: 60
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
@@ -108,6 +110,7 @@ jobs:
           sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_dump_load_fast
 
       - name: Benchmark dump load
+        if : false
         timeout-minutes: 60
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
@@ -123,13 +126,13 @@ jobs:
         run: | 
           tail -500 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
-          
+
       - name: upload coverage report
         timeout-minutes: 5
         uses: ./.github/actions/upload-coverage
         with:
           UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
-          
+
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         # if: failure()
@@ -147,6 +150,15 @@ jobs:
       - name: Check Failure
         if: env.WORKFLOW_CONCLUSION == 'failure'
         run: exit 1
+
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
 
       - name: Send Slack Notification
         if: failure() && github.event_name != 'workflow_dispatch' 

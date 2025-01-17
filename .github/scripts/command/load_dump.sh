@@ -6,6 +6,8 @@ source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
 [[ -z "$SEED" ]] && SEED=$(date +%s)
+HEARTBEAT_INTERVAL=2
+DIR_QUOTA_FLUSH_INTERVAL=4
 # [[ -z "$SEED" ]] && SEED=1711594639
 
 trap "echo random seed is $SEED" EXIT
@@ -22,6 +24,25 @@ fi
 sleep 3s
 mc alias set myminio http://localhost:9000 minioadmin minioadmin
 python3 -c "import xattr" || sudo pip install xattr
+
+
+test_dump_load_quota(){
+    prepare_test
+    ./juicefs format $META_URL myjfs 
+    ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
+    mkdir -p /jfs/d
+    ./juicefs quota set $META_URL --path /d --inodes 1000 --capacity 1
+    ./juicefs dump --log-level error $META_URL --fast > dump.json
+    umount_jfs /jfs $META_URL
+    python3 .github/scripts/flush_meta.py $META_URL
+    ./juicefs load $META_URL dump.json
+    ./juicefs mount $META_URL /jfs -d --heartbeat $HEARTBEAT_INTERVAL
+    ./juicefs quota get $META_URL --path /d
+    dd if=/dev/zero of=/jfs/d/test1 bs=1G count=1
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    echo a | tee -a /jfs/d/test1 2>error.log && echo "write should fail on out of space" && exit 1 || true
+    grep "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
+}
 
 test_dump_load_with_iflag(){
     do_dump_load_with_iflag
