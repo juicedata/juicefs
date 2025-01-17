@@ -101,10 +101,10 @@ jobs:
           sudo -E LOG_LEVEL=WARNING SUBDIR=$subdir timeout 3600 .github/scripts/command/gateway-random.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo test failed with $code && exit $code; fi
 
       - name: Upload example database
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: hypothesis-example-db
+          name: hypothesis-example-db-${{ matrix.runs-on }}
           path: .hypothesis/examples
 
       - name: check log

@@ -166,10 +166,10 @@ jobs:
           sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/fs.py 
 
       - name: Upload example database
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: hypothesis-example-db
+          name: hypothesis-example-db-${{ matrix.runs-on }}
           path: .hypothesis/examples
 
       - name: upload coverage report

@@ -239,7 +239,7 @@ jobs:
         timeout-minutes: 30
         run: |
           if [[ "${{matrix.meta}}" == "mysql" || "${{matrix.meta}}" == "tikv" ]]; then
-            sudo META=${{matrix.meta}} .github/scripts/command/cache.sh
+            sudo META=${{matrix.meta}} .github/scripts/cache.sh
           fi
 
       - name: Test Graceful upgrade

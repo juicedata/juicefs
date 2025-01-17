@@ -106,10 +106,10 @@ jobs:
           sudo -E LOG_LEVEL=WARNING META1=redis META2=${{matrix.meta}} timeout 3600 .github/scripts/command/random.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo failed with $code && exit $code; fi
       
       - name: Upload example database
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: hypothesis-example-db
+          name: hypothesis-example-db-${{ matrix.runs-on }}
           path: .hypothesis/examples
 
       - name: Check client log
