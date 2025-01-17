@@ -194,6 +194,10 @@ func (n *jfsObjects) ppath(bucket, uploadID, part string) string {
 	return n.tpath(bucket, "uploads", uploadID[:subDirPrefix], uploadID, part)
 }
 
+func (n *jfsObjects) ppathFlat(bucket, uploadID, part string) string { // compatible with tmp files uploaded by old versions(<1.2)
+	return n.tpath(bucket, "uploads", uploadID, part)
+}
+
 func (n *jfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	if err := n.isValidBucketName(bucket); err != nil {
 		return err
@@ -1090,6 +1094,10 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	for _, part := range parts {
 		p := n.ppath(bucket, uploadID, strconv.Itoa(part.PartNumber))
 		copied, eno := n.fs.CopyFileRange(mctx, p, 0, tmp, total, 5<<30)
+		if eno == syscall.ENOENT { // try lookup from old path
+			p = n.ppathFlat(bucket, uploadID, strconv.Itoa(part.PartNumber))
+			copied, eno = n.fs.CopyFileRange(mctx, p, 0, tmp, total, 5<<30)
+		}
 		if eno != 0 {
 			err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 			logger.Errorf("merge parts: %s", err)
@@ -1199,7 +1207,7 @@ func (n *jfsObjects) cleanupDir(dir string) bool {
 	for _, entry := range entries {
 		dirPath := n.path(dir, string(entry.Name))
 		if entry.Attr.Typ == meta.TypeDirectory && len(entry.Name) == subDirPrefix {
-			if !n.cleanupDir(dirPath) {
+			if !n.cleanupDir(strings.TrimPrefix(dirPath, "/")) {
 				continue
 			}
 		} else if _, err := uuid.Parse(string(entry.Name)); err != nil {
