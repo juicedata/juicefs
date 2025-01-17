@@ -90,16 +90,14 @@ const (
 	UNDERLINE_SEQ  = "\033[4m"
 	CLEAR_SCREEM   = "\033[2J\033[1;1H"
 	// BOLD_SEQ       = "\033[1m"
+	UNIXTIME_FMT   = "01/02-15:04:05"
 )
-
-var prefixTimestamp bool
 
 type statsWatcher struct {
 	colorful  bool
 	interval  uint
 	mp        string
 	header    string
-	subheader string
 	sections  []*section
 }
 
@@ -127,6 +125,7 @@ const (
 	metricGauge
 	metricCounter
 	metricHist
+	metricUnixtime
 )
 
 type item struct {
@@ -145,8 +144,8 @@ func (w *statsWatcher) buildSchema(schema string, verbosity uint) {
 		var s section
 		switch r {
 		case 't':
-			prefixTimestamp = true
-			continue
+			s.name = "system"
+			s.items = append(s.items, &item{"time", "juicefs_timestamp", metricUnixtime})
 		case 'u':
 			s.name = "usage"
 			s.items = append(s.items, &item{"cpu", "juicefs_cpu_usage", metricCPU | metricCounter})
@@ -216,11 +215,8 @@ func padding(name string, width int, char byte) string {
 }
 
 func (w *statsWatcher)getCurrentTime() string {
-	if prefixTimestamp {
-		tm := time.Now()
-		return w.colorize(tm.Format("01/02-15:04:05"), BLUE, false, false)
-	}
-	return ""
+	tm := time.Now()
+	return w.colorize(tm.Format(UNIXTIME_FMT), BLUE, false, false)
 }
 
 func (w *statsWatcher) formatHeader() {
@@ -229,7 +225,11 @@ func (w *statsWatcher) formatHeader() {
 	for i, s := range w.sections {
 		subs := make([]string, 0, len(s.items))
 		for _, it := range s.items {
-			subs = append(subs, w.colorize(padding(it.nick, 5, ' '), BLUE, false, true))
+			if (it.typ & 0xF0) == metricUnixtime {
+				subs = append(subs, w.colorize(padding(it.nick, len(UNIXTIME_FMT), ' '), BLUE, false, true))
+			} else {
+				subs = append(subs, w.colorize(padding(it.nick, 5, ' '), BLUE, false, true))
+			}
 			if it.typ&metricHist != 0 {
 				if it.typ&metricTime != 0 {
 					subs = append(subs, w.colorize(" lat ", BLUE, false, true))
@@ -239,11 +239,14 @@ func (w *statsWatcher) formatHeader() {
 			}
 		}
 		width := 6*len(subs) - 1 // nick(5) + space(1)
+		if s.name == "system" {
+			width = len(UNIXTIME_FMT) // nick(5) + space(1)
+		}
 		subHeaders[i] = strings.Join(subs, " ")
 		headers[i] = w.colorize(padding(s.name, width, '-'), BLUE, true, false)
 	}
-	w.header = strings.Join(headers, " ")
-	w.subheader = strings.Join(subHeaders, w.colorize("|", BLUE, true, false))
+	w.header = fmt.Sprintf("%s\n%s", strings.Join(headers, " "),
+	           strings.Join(subHeaders, w.colorize("|", BLUE, true, false)))
 }
 
 func (w *statsWatcher) formatU64(v float64, dark, isByte bool) string {
@@ -320,6 +323,8 @@ func (w *statsWatcher) printDiff(left, right map[string]float64, dark bool) {
 		vals := make([]string, 0, len(s.items))
 		for _, it := range s.items {
 			switch it.typ & 0xF0 {
+			case metricUnixtime: // current timestamp
+				vals = append(vals, w.getCurrentTime())
 			case metricGauge: // currently must be metricByte
 				vals = append(vals, w.formatU64(right[it.name], dark, true))
 			case metricCounter:
@@ -353,9 +358,9 @@ func (w *statsWatcher) printDiff(left, right map[string]float64, dark bool) {
 		values[i] = strings.Join(vals, " ")
 	}
 	if w.colorful && dark {
-		fmt.Printf("%s%s\r", w.getCurrentTime(), strings.Join(values, w.colorize("|", BLUE, true, false)))
+		fmt.Printf("%s\r", strings.Join(values, w.colorize("|", BLUE, true, false)))
 	} else {
-		fmt.Printf("%s%s\n", w.getCurrentTime(), strings.Join(values, w.colorize("|", BLUE, true, false)))
+		fmt.Printf("%s\n", strings.Join(values, w.colorize("|", BLUE, true, false)))
 	}
 }
 
@@ -424,8 +429,7 @@ func stats(ctx *cli.Context) error {
 	last = current
 	for duraTime == 0 || time.Since(beginTime) < duraTime {
 		if tick%(watcher.interval*30) == 0 {
-			fmt.Printf("%s%s\n", watcher.getCurrentTime(), watcher.header)
-			fmt.Printf("%s%s\n", watcher.getCurrentTime(), watcher.subheader)
+			fmt.Println(watcher.header)
 		}
 		if tick%watcher.interval == 0 {
 			watcher.printDiff(start, current, false)
