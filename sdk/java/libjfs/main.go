@@ -480,15 +480,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			utils.SetLogLevel(logrus.WarnLevel)
 		}
 
-		switch jConf.Caller {
-		case CALLER_JAVA:
-			caller = CALLER_JAVA
-		case CALLER_PYTHON:
-			caller = CALLER_PYTHON
-		default:
-			caller = CALLER_PYTHON
-		}
-
+		caller = jConf.Caller
 		metaConf := meta.DefaultConf()
 		metaConf.Retries = jConf.IORetries
 		metaConf.MaxDeletes = jConf.MaxDeletes
