@@ -37,6 +37,7 @@ test_dump_load_big_dir(){
     for i in $(seq 1 $count); do
         mkdir /jfs/test/dir$i
         echo "hello" > /jfs/test/dir$i/hello.txt
+        ln -s /jfs/test/dir$i/hello.txt /jfs/test/dir$i/hello_link.txt
     done
     ./juicefs dump $META_URL dump.json $(get_dump_option)
     umount_jfs /jfs $META_URL
