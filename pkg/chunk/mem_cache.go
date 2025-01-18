@@ -210,6 +210,5 @@ func (c *memcache) stage(key string, data []byte, keepCache bool) (string, error
 	return "", errors.New("not supported")
 }
 func (c *memcache) uploaded(key string, size int)    {}
-func (c *memcache) stagePath(key string) string      { return "" }
 func (c *memcache) isEmpty() bool                    { return false }
 func (c *memcache) getMetrics() *cacheManagerMetrics { return c.metrics }

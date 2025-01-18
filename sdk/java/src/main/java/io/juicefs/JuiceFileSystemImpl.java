@@ -110,6 +110,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   private long handle;
   private UserGroupInformation ugi;
   private String homeDirPrefix = "/user";
+  private String discoverNodesUrl;
   private static final Map<String, Map<String, String>> cachedHostsForName = new ConcurrentHashMap<>(); // (name -> (ip -> hostname))
   private static final Map<String, ConsistentHash<String>> hashForName = new ConcurrentHashMap<>(); // (name -> consistentHash)
   private static final Map<String, FileStatus> lastFileStatus = new ConcurrentHashMap<>();
@@ -452,6 +453,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     } else {
       BgTaskUtil.register(name, handle);
     }
+    discoverNodesUrl = getConf(conf, "discover-nodes-url", null);
     homeDirPrefix = conf.get("dfs.user.home.dir.prefix", "/user");
     this.workingDir = getHomeDirectory();
 
@@ -804,27 +806,24 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
   }
 
-  private void initCache(Configuration conf) {
+  private void initCache() {
     try {
-      String urls = getConf(conf, "discover-nodes-url", null);
-      if (urls != null) {
-        List<String> newNodes = discoverNodes(urls);
-        Map<String, String> newCachedHosts = new HashMap<>();
-        for (String newNode : newNodes) {
-          try {
-            newCachedHosts.put(InetAddress.getByName(newNode).getHostAddress(), newNode);
-          } catch (UnknownHostException e) {
-            LOG.warn("unknown host: " + newNode);
-          }
+      List<String> newNodes = discoverNodes(discoverNodesUrl);
+      Map<String, String> newCachedHosts = new HashMap<>();
+      for (String newNode : newNodes) {
+        try {
+          newCachedHosts.put(InetAddress.getByName(newNode).getHostAddress(), newNode);
+        } catch (UnknownHostException e) {
+          LOG.warn("unknown host: " + newNode);
         }
+      }
 
-        // if newCachedHosts are not changed, skip
-        if (!newCachedHosts.equals(cachedHostsForName.get(name))) {
-          List<String> ips = new ArrayList<>(newCachedHosts.keySet());
-          LOG.debug("update nodes to: " + String.join(",", ips));
-          hashForName.put(name, new ConsistentHash<>(100, ips));
-          cachedHostsForName.put(name, newCachedHosts);
-        }
+      // if newCachedHosts are not changed, skip
+      if (!newCachedHosts.equals(cachedHostsForName.get(name))) {
+        List<String> ips = new ArrayList<>(newCachedHosts.keySet());
+        LOG.debug("update nodes to: " + String.join(",", ips));
+        hashForName.put(name, new ConsistentHash<>(100, ips));
+        cachedHostsForName.put(name, newCachedHosts);
       }
     } catch (Throwable e) {
       LOG.warn("failed to discover nodes", e);
@@ -833,7 +832,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   private List<String> discoverNodes(String urls) {
     LOG.debug("fetching nodes from {}", urls);
-    NodesFetcher fetcher = NodesFetcherBuilder.buildFetcher(urls, name, this);
+    Configuration newConf = new Configuration(getConf());
+    newConf.setBoolean("juicefs.internal-bg-task", true);
+    NodesFetcher fetcher = NodesFetcherBuilder.buildFetcher(urls, name, newConf);
     List<String> fetched = fetcher.fetchNodes(urls);
     if (fetched == null) {
       fetched = new ArrayList<>();
@@ -850,14 +851,11 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     Map<String, String> cachedHosts = cachedHostsForName.get(name);
     ConsistentHash<String> hash = hashForName.get(name);
-    String host = "localhost";
-    if (cachedHosts != null && hash != null) {
-      host = cachedHosts.get(hash.get(code + "-" + index));
-    }
-    ns[0] = host + ":50010";
-    hs[0] = host;
-    for (int i = 1; i < cacheReplica; i++) {
-      String h = hash.get(code + "-" + (index + i));
+    for (int i = 0; i < cacheReplica; i++) {
+      String h = "localhost";
+      if (cachedHosts != null && hash != null) {
+        h = cachedHosts.getOrDefault(hash.get(code + "-" + (index + i)), "localhost");
+      }
       ns[i] = h + ":50010";
       hs[i] = h;
     }
@@ -880,14 +878,34 @@ public class JuiceFileSystemImpl extends FileSystem {
     return res;
   }
 
+  private void setStorageId(BlockLocation bl) {
+    if (setStorageIds != null) {
+      try {
+        setStorageIds.invoke(bl, (Object) getStorageIds());
+      } catch (IllegalAccessException | InvocationTargetException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
   @Override
   public BlockLocation[] getFileBlockLocations(FileStatus file, long start, long len) throws IOException {
-    if (file == null) {
-      return null;
-    }
-
     if (needCheckPermission() && !checkPathAccess(file.getPath(), FsAction.READ, "getFileBlockLocations")) {
       return superGroupFileSystem.getFileBlockLocations(file, start, len);
+    }
+
+    if (isEmpty(discoverNodesUrl) || cacheReplica <= 0) {
+      BlockLocation[] bls = super.getFileBlockLocations(file, start, len);
+      if (bls != null) {
+        for (BlockLocation bl : bls) {
+          setStorageId(bl);
+        }
+      }
+      return bls;
+    }
+
+    if (file == null) {
+      return null;
     }
 
     if (start < 0 || len < 0) {
@@ -901,11 +919,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       String[] host = new String[]{"localhost"};
       return new BlockLocation[]{new BlockLocation(name, host, 0L, file.getLen())};
     }
-
-    BgTaskUtil.putTask(name, "Node fetcher", () -> {
-      initCache(getConf());
-    }, 10, 10, TimeUnit.MINUTES);
-
+    BgTaskUtil.putTask(name, "Node fetcher", this::initCache, 10, 10, TimeUnit.MINUTES);
     if (file.getLen() <= start + len) {
       len = file.getLen() - start;
     }

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"math"
 	"os"
 	"path"
 	"runtime"
@@ -29,7 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juju/ratelimit"
@@ -552,15 +552,43 @@ func (w *withProgress) Read(b []byte) (int, error) {
 	return n, err
 }
 
+func dynAlloc(size int) []byte {
+	zeros := utils.PowerOf2(size)
+	b := *dynPools[zeros].Get().(*[]byte)
+	if cap(b) < size {
+		panic(fmt.Sprintf("%d < %d", cap(b), size))
+	}
+	return b[:size]
+}
+
+func dynFree(b []byte) {
+	dynPools[utils.PowerOf2(cap(b))].Put(&b)
+}
+
+var dynPools []*sync.Pool
+
+func init() {
+	dynPools = make([]*sync.Pool, 33) // 1 - 8G
+	for i := 0; i < 33; i++ {
+		func(bits int) {
+			dynPools[i] = &sync.Pool{
+				New: func() interface{} {
+					b := make([]byte, 1<<bits)
+					return &b
+				},
+			}
+		}(i)
+	}
+}
+
 func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64, key, uploadID string, num int, calChksum bool) (*object.Part, uint32, error) {
 	if limiter != nil {
 		limiter.Wait(size)
 	}
 	start := time.Now()
 	sz := size
-	p := chunk.NewOffPage(int(size))
-	defer p.Release()
-	data := p.Data
+	data := dynAlloc(int(size))
+	defer dynFree(data)
 	var part *object.Part
 	var chksum uint32
 	err := try(3, func() error {
@@ -726,7 +754,14 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 	return chksum, nil
 }
 
-func copyData(src, dst object.ObjectStorage, key string, size int64, calChksum bool) (uint32, error) {
+func InitForCopyData() {
+	concurrent = make(chan int, 10)
+	progress := utils.NewProgress(true)
+	copied = progress.AddCountSpinner("Copied objects")
+	copiedBytes = progress.AddByteSpinner("Copied bytes")
+}
+
+func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum bool) (uint32, error) {
 	start := time.Now()
 	var err error
 	var srcChksum uint32
@@ -824,7 +859,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 					logger.Errorf("copy link failed: %s", err)
 				}
 			} else {
-				srcChksum, err = copyData(src, dst, key, obj.Size(), config.CheckAll || config.CheckNew)
+				srcChksum, err = CopyData(src, dst, key, obj.Size(), config.CheckAll || config.CheckNew)
 			}
 
 			if err == nil && (config.CheckAll || config.CheckNew) {
@@ -1247,8 +1282,14 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 	var nextToken string
 	var marker string
 	var hasMore bool
+	var thisListMaxResults int64 = maxResults
+	if strings.HasPrefix(store.String(), "file://") || strings.HasPrefix(store.String(), "nfs://") ||
+		strings.HasPrefix(store.String(), "gluster://") || strings.HasPrefix(store.String(), "jfs://") ||
+		strings.HasPrefix(store.String(), "hdfs://") || strings.HasPrefix(store.String(), "webdav://") {
+		thisListMaxResults = math.MaxInt64
+	}
 	for {
-		objs, hasMore, nextToken, err = store.List(prefix, marker, nextToken, "/", maxResults, followLink)
+		objs, hasMore, nextToken, err = store.List(prefix, marker, nextToken, "/", thisListMaxResults, followLink)
 		if err != nil {
 			return nil, err
 		}

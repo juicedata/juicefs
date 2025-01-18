@@ -80,7 +80,12 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}
 
-      - name: Test dump load in binary format
+      - name: Test Load & Dump 
+        timeout-minutes: 30
+        run: |
+          sudo GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/load_dump.sh          
+
+      - name: Benchmark dump load in binary format
         timeout-minutes: 60
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
@@ -91,7 +96,7 @@ jobs:
         run: |
           sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_dump_load_in_binary
       
-      - name: Test dump load fast
+      - name: Benchmark dump load fast
         timeout-minutes: 60
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
@@ -102,7 +107,7 @@ jobs:
         run: |
           sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_dump_load_fast
 
-      - name: Test dump load
+      - name: Benchmark dump load
         timeout-minutes: 60
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}

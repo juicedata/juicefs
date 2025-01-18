@@ -127,7 +127,7 @@ jobs:
       - name: check fsrand.log
         if: always()
         run: | 
-          tail -500 fsrand.log
+          [[ -f fsrand.log ]] && tail -500 fsrand.log || true
 
       - name: check juicefs.log
         if: always()

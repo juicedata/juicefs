@@ -448,11 +448,18 @@ func (s *wSlice) upload(indx int) {
 		}
 		if s.store.conf.Writeback {
 			stagingPath := "unknown"
+			stageFailed := false
+			block.Acquire()
 			err := utils.WithTimeout(func() (err error) { // In case it hangs for more than 5 minutes(see fileWriter.flush), fallback to uploading directly to avoid `EIO`
+				defer block.Release()
 				stagingPath, err = s.store.bcache.stage(key, block.Data, s.store.shouldCache(blen))
+				if err == nil && stageFailed { // upload thread already marked me as failed because of timeout
+					_ = s.store.bcache.removeStage(key)
+				}
 				return err
 			}, s.store.conf.PutTimeout)
 			if err != nil {
+				stageFailed = true
 				if !errors.Is(err, errStageConcurrency) {
 					s.store.stageBlockErrors.Add(1)
 					logger.Warnf("write %s to disk: %s, upload it directly", stagingPath, err)
@@ -590,10 +597,6 @@ func (c *Config) SelfCheck(uuid string) {
 			c.UploadDelay = 0
 			c.UploadHours = ""
 		}
-		if c.MaxStageWrite > 0 {
-			logger.Warnf("max-stage-write is disabled in non-writeback mode")
-			c.MaxStageWrite = 0
-		}
 	}
 	if _, _, err := c.parseHours(); err != nil {
 		logger.Warnf("invalid value (%s) for upload-hours: %s", c.UploadHours, err)
@@ -617,6 +620,9 @@ func (c *Config) SelfCheck(uuid string) {
 			logger.Warnf("verify-cache-checksum should be one of %v", cs)
 			c.CacheChecksum = CsFull
 		}
+	} else if c.Writeback {
+		logger.Warnf("writeback is not supported in memory cache mode")
+		c.Writeback = false
 	}
 	if c.CacheEviction == "" {
 		c.CacheEviction = "2-random"

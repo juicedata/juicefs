@@ -1041,7 +1041,6 @@ type CacheManager interface {
 	uploaded(key string, size int)
 	stage(key string, data []byte, keepCache bool) (string, error)
 	removeStage(key string) error
-	stagePath(key string) string
 	stats() (int64, int64)
 	usedMemory() int64
 	isEmpty() bool
@@ -1248,14 +1247,6 @@ func (m *cacheManager) stage(key string, data []byte, keepCache bool) (string, e
 		return store.stage(key, data, keepCache)
 	}
 	return "", errors.New("no available cache dir")
-}
-
-func (m *cacheManager) stagePath(key string) string {
-	store := m.getStore(key)
-	if store != nil {
-		return store.stagePath(key)
-	}
-	return ""
 }
 
 func (m *cacheManager) uploaded(key string, size int) {

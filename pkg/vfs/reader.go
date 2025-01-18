@@ -620,6 +620,12 @@ func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, 
 }
 
 func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, syscall.Errno) {
+	if f.r.readBufferUsed() > f.r.bufferSize {
+		time.Sleep(time.Millisecond * 10)             // slow down
+		for f.r.readBufferUsed() > f.r.bufferSize*2 { // readahead uses 80% of buffer, stop here to avoid OOM
+			time.Sleep(time.Millisecond * 100)
+		}
+	}
 	f.Lock()
 	defer f.Unlock()
 	f.acquire()
@@ -689,6 +695,7 @@ type dataReader struct {
 	store          chunk.ChunkStore
 	files          map[Ino]*fileReader
 	blockSize      uint64
+	bufferSize     int64
 	readAheadMax   uint64
 	readAheadTotal uint64
 	maxRequests    int
@@ -709,6 +716,7 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 		store:          store,
 		files:          make(map[Ino]*fileReader),
 		blockSize:      uint64(conf.Chunk.BlockSize),
+		bufferSize:     int64(conf.Chunk.BufferSize),
 		readAheadTotal: uint64(readAheadTotal),
 		readAheadMax:   uint64(readAheadMax),
 		maxRequests:    readAheadMax/conf.Chunk.BlockSize*readSessions + 1,
