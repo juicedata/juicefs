@@ -28,6 +28,24 @@ sleep 3s
 mc alias set myminio http://localhost:9000 minioadmin minioadmin
 python3 -c "import xattr" || sudo pip install xattr
 
+test_dump_load_big_dir(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    count=11000
+    mkdir /jfs/test
+    for i in $(seq 1 $count); do
+        mkdir /jfs/test/dir$i
+        echo "hello" > /jfs/test/dir$i/hello.txt
+    done
+    ./juicefs dump $META_URL dump.json $(get_dump_option)
+    umount_jfs /jfs $META_URL
+    python3 .github/scripts/flush_meta.py $META_URL
+    ./juicefs load $META_URL dump.json $(get_load_option)
+    ./juicefs mount -d $META_URL /jfs
+    ls /jfs/test | wc -l
+}
+
 test_dump_load_sustained_file(){
     prepare_test
     ./juicefs format $META_URL myjfs
