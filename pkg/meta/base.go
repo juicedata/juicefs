@@ -395,21 +395,23 @@ func (r *baseMeta) txBatchLock(inodes ...Ino) func() {
 		r.txLock(uint(inodes[0]))
 		return func() { r.txUnlock(uint(inodes[0])) }
 	default: // for rename and more
-		sort.Slice(inodes, func(i, j int) bool { return inodes[i]%nlocks < inodes[j]%nlocks })
-		lockedKeys := make(map[uint]struct{}, 2)
-		lockedInodes := make([]uint, 0, len(inodes))
-		for _, ino := range inodes {
-			ino := uint(ino)
-			if _, locked := lockedKeys[ino%nlocks]; locked {
-				continue // Go does not support recursive locks
+		inodeSlots := make([]int, len(inodes))
+		for i, ino := range inodes {
+			inodeSlots[i] = int(ino % nlocks)
+		}
+		sort.Ints(inodeSlots)
+		uniqInodeSlots := inodeSlots[:0]
+		for i := 0; i < len(inodeSlots); i++ { // Go does not support recursive locks
+			if i == 0 || inodeSlots[i] != inodeSlots[i-1] {
+				uniqInodeSlots = append(uniqInodeSlots, inodeSlots[i])
 			}
-			lockedKeys[ino%nlocks] = struct{}{}
-			r.txLock(ino)
-			lockedInodes = append(lockedInodes, ino)
+		}
+		for _, idx := range uniqInodeSlots {
+			r.txlocks[idx].Lock()
 		}
 		return func() {
-			for _, ino := range lockedInodes {
-				r.txUnlock(ino)
+			for _, idx := range uniqInodeSlots {
+				r.txlocks[idx].Unlock()
 			}
 		}
 	}
