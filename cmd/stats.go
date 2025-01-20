@@ -50,7 +50,7 @@ Details: https://juicefs.com/docs/community/fault_diagnosis_and_analysis#stats`,
 			&cli.StringFlag{
 				Name:  "schema",
 				Value: "ufmco",
-				Usage: "schema string that controls the output sections (u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go)",
+				Usage: "schema string of output sections (t:time, u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go)",
 			},
 			&cli.UintFlag{
 				Name:  "interval",
@@ -61,6 +61,11 @@ Details: https://juicefs.com/docs/community/fault_diagnosis_and_analysis#stats`,
 				Name:    "verbosity",
 				Aliases: []string{"l"},
 				Usage:   "verbosity level, 0 or 1 is enough for most cases",
+			},
+			&cli.UintFlag{
+				Name:    "count",
+				Aliases: []string{"c"},
+				Usage:   "number of updates to display before exiting",
 			},
 		},
 	}
@@ -84,6 +89,7 @@ const (
 	COLOR_DARK_SEQ = "\033[0;" // %dm
 	UNDERLINE_SEQ  = "\033[4m"
 	CLEAR_SCREEM   = "\033[2J\033[1;1H"
+	UNIXTIME_FMT   = "01-02 15:04:05"
 	// BOLD_SEQ       = "\033[1m"
 )
 
@@ -119,6 +125,7 @@ const (
 	metricGauge
 	metricCounter
 	metricHist
+	metricUnixtime
 )
 
 type item struct {
@@ -136,6 +143,9 @@ func (w *statsWatcher) buildSchema(schema string, verbosity uint) {
 	for _, r := range schema {
 		var s section
 		switch r {
+		case 't':
+			s.name = "system"
+			s.items = append(s.items, &item{"time", "juicefs_timestamp", metricUnixtime})
 		case 'u':
 			s.name = "usage"
 			s.items = append(s.items, &item{"cpu", "juicefs_cpu_usage", metricCPU | metricCounter})
@@ -210,7 +220,11 @@ func (w *statsWatcher) formatHeader() {
 	for i, s := range w.sections {
 		subs := make([]string, 0, len(s.items))
 		for _, it := range s.items {
-			subs = append(subs, w.colorize(padding(it.nick, 5, ' '), BLUE, false, true))
+			if (it.typ & 0xF0) == metricUnixtime {
+				subs = append(subs, w.colorize(padding(it.nick, len(UNIXTIME_FMT), ' '), BLUE, false, true))
+			} else {
+				subs = append(subs, w.colorize(padding(it.nick, 5, ' '), BLUE, false, true))
+			}
 			if it.typ&metricHist != 0 {
 				if it.typ&metricTime != 0 {
 					subs = append(subs, w.colorize(" lat ", BLUE, false, true))
@@ -220,6 +234,9 @@ func (w *statsWatcher) formatHeader() {
 			}
 		}
 		width := 6*len(subs) - 1 // nick(5) + space(1)
+		if s.name == "system" {
+			width = len(UNIXTIME_FMT)
+		}
 		subHeaders[i] = strings.Join(subs, " ")
 		headers[i] = w.colorize(padding(s.name, width, '-'), BLUE, true, false)
 	}
@@ -301,6 +318,12 @@ func (w *statsWatcher) printDiff(left, right map[string]float64, dark bool) {
 		vals := make([]string, 0, len(s.items))
 		for _, it := range s.items {
 			switch it.typ & 0xF0 {
+			case metricUnixtime: // current timestamp
+				if dark {
+					vals = append(vals, w.colorize(time.Now().Format(UNIXTIME_FMT), BLACK, false, false))
+				} else {
+					vals = append(vals, w.colorize(time.Now().Format(UNIXTIME_FMT), WHITE, true, false))
+				}
 			case metricGauge: // currently must be metricByte
 				vals = append(vals, w.formatU64(right[it.name], dark, true))
 			case metricCounter:
@@ -388,6 +411,7 @@ func stats(ctx *cli.Context) error {
 	}
 	watcher.buildSchema(ctx.String("schema"), ctx.Uint("verbosity"))
 	watcher.formatHeader()
+	count := ctx.Uint("count")
 
 	var tick uint
 	var start, last, current map[string]float64
@@ -406,9 +430,13 @@ func stats(ctx *cli.Context) error {
 		} else {
 			watcher.printDiff(last, current, true)
 		}
+		if count > 0 && tick >= watcher.interval*(count-1) {
+			break
+		}
 		last = current
 		tick++
 		<-ticker.C
 		current = readStats(watcher.mp)
 	}
+	return nil
 }
