@@ -132,6 +132,7 @@ jobs:
 
       - name: upload coverage report
         timeout-minutes: 5
+        continue-on-error: true
         uses: ./.github/actions/upload-coverage
         with:
           UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
@@ -164,11 +165,12 @@ jobs:
           token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
 
       - name: upload total coverage report
-        timeout-minutes: 5
+        timeout-minutes: 30
+        continue-on-error: true
         uses: ./.github/actions/upload-total-coverage
         with:
           UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
-          
+
       - name: Send Slack Notification
         if: failure() && github.event_name != 'workflow_dispatch' 
         uses: juicedata/slack-notify-action@main
