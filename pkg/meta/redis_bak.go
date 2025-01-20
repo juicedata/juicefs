@@ -169,7 +169,7 @@ func (m *redisMeta) dumpMix(ctx Context, opt *DumpOption, ch chan<- *dumpedResul
 			for _, key := range keys {
 				if typ, ok := char2Typ[key[len(m.prefix)]]; ok {
 					typ2Keys[typ] = append(typ2Keys[typ], key)
-					if len(typ2Keys[typ]) >= redisBatchSize {
+					if len(typ2Keys[typ]) >= typ2Limit[typ] {
 						iPools, sum, keys := pools[typ], sums[typ], typ2Keys[typ]
 						eg.Go(func() error {
 							return typ2Handles[typ](ctx, ch, keys, iPools, release, sum)
