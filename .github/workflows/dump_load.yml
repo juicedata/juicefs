@@ -1,19 +1,19 @@
-name: "load"
+name: "dump_load"
 on:
   push:
     branches:
       - 'main'
       - 'release-**'
     paths:
-      - '**/load.yml'
-      - '**/load_dump_bench.sh'
+      - '**/dump_load.yml'
+      - '**/dump_load.sh'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
     paths:
-      - '**/load.yml'
-      - '**/load_dump_bench.sh'
+      - '**/dump_load.yml'
+      - '**/dump_load.sh'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:
@@ -40,7 +40,7 @@ jobs:
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
 
-  load:
+  dump_load:
     timeout-minutes: 90
     needs: [build-matrix]
     strategy:
@@ -94,56 +94,18 @@ jobs:
       - name: Test Load & Dump with Binary
         timeout-minutes: 30
         run: |
-          sudo BINARY=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/load_dump.sh  test_dump_load_big_dir
+          sudo BINARY=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh
 
       - name: Test Load & Dump with Json Fast Mode
-        if: false
         timeout-minutes: 30
         run: |
-          sudo FAST=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/load_dump.sh  
+          sudo FAST=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh  
 
       - name: Test Load & Dump with Json
-        if: false
         timeout-minutes: 30
         run: |
-          sudo GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/load_dump.sh     
+          sudo GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh     
 
-      - name: Benchmark dump load in binary format
-        if : false
-        timeout-minutes: 60
-        env:
-          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
-          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
-          META: ${{matrix.meta}}
-          START_META: true
-        run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_dump_load_in_binary
-      
-      - name: Benchmark dump load fast
-        if : false
-        timeout-minutes: 60
-        env:
-          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
-          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
-          META: ${{matrix.meta}}
-          START_META: false
-        run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_dump_load_fast
-
-      - name: Benchmark dump load
-        if : false
-        timeout-minutes: 60
-        env:
-          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
-          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
-          META: ${{matrix.meta}}
-          START_META: false
-        run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_dump_load
-  
       - name: log
         if: always()
         run: | 
@@ -157,14 +119,14 @@ jobs:
           UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
 
       - name: Setup upterm session
-        # if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
-        if: failure()
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
   success-all-test:
     runs-on: ubuntu-latest
-    needs: [load]
+    needs: [dump_load]
     if: always()
     steps:
       - uses: technote-space/workflow-conclusion-action@v3

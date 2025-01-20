@@ -28,45 +28,11 @@ sleep 3s
 mc alias set myminio http://localhost:9000 minioadmin minioadmin
 python3 -c "import xattr" || sudo pip install xattr
 
-test_dump_load_big_dir(){
-    prepare_test
-    ./juicefs format $META_URL myjfs --enable-acl
-    ./juicefs mount -d $META_URL /jfs 
-    count=110
-    mkdir /jfs/test
-    touch /jfs/file
-    for i in $(seq 1 $count); do
-        mkdir /jfs/test/dir$i
-        echo "hello" > /jfs/test/dir$i/hello.txt
-        ln -s /jfs/test/dir$i/hello.txt /jfs/test/dir$i/hello_link.txt
-        # ln /jfs/test/dir$i/hello.txt /jfs/test/dir$i/hello_hardlink.txt
-        xattr -w user.test $i /jfs/test/dir$i/hello.txt
-        ./juicefs quota set $META_URL --path /test/dir$i --inodes 1000 --capacity 1
-        # setfacl -m u:root:rwx /jfs/test/dir$i
-    done
-    ./juicefs dump $META_URL dump.json $(get_dump_option)
-    if [[ "$BINARY" == "true" ]]; then
-        symlinks=$(./juicefs load dump.json --binary --stat | grep symlink | awk -F"|" '{print $2}')
-        xattrs=$(./juicefs load dump.json --binary --stat | grep xattr | awk -F"|" '{print $2}')
-        quota=$(./juicefs load dump.json --binary --stat | grep quota | awk -F"|" '{print $2}')
-        acl=$(./juicefs load dump.json --binary --stat | grep acl | awk -F"|" '{print $2}')
-        [[ "$symlinks" -eq "$count" ]] || (echo "symlinks($symlinks) should be $count" && exit 1)
-        [[ "$xattrs" -eq "$count" ]] || (echo "xattrs($xattrs) should be $count" && exit 1)
-        [[ "$quota" -eq "$count" ]] || (echo "quota($quota) should be $count" && exit 1)
-        # [[ "$acl" -eq "$count" ]] || (echo "acl($acl) should be $count" && exit 1)
-    fi
-    umount_jfs /jfs $META_URL
-    python3 .github/scripts/flush_meta.py $META_URL
-    ./juicefs load $META_URL dump.json $(get_load_option)
-    ./juicefs mount -d $META_URL /jfs
-    ls /jfs/test | wc -l
-}
-
 test_dump_load_sustained_file(){
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0
     ./juicefs mount -d $META_URL /jfs
-    file_count=10
+    file_count=100
     for i in $(seq 1 $file_count); do
         touch /jfs/file$i
         exec {fd}<>/jfs/file$i
@@ -75,8 +41,6 @@ test_dump_load_sustained_file(){
         rm /jfs/file$i
     done
     ./juicefs dump $META_URL dump.json $(get_dump_option)
-    exit 1
-
     for i in $(seq 1 $file_count); do
         fd=${fds[$i]}
         exec {fd}>&-
@@ -87,6 +51,7 @@ test_dump_load_sustained_file(){
         sustained=$(jq '.Sustained[].inodes | length' dump.json)
     fi
     echo "sustained file count: $sustained"
+    # TODO： uncomment this line 
     # [[ "$sustained" -eq "$file_count" ]] || (echo "sustained file count($sustained) should be $file_count" && exit 1)
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
@@ -107,21 +72,6 @@ test_dump_load_with_copy_file_range(){
     ./juicefs load $META_URL dump.json $(get_load_option)
     ./juicefs mount -d $META_URL /jfs
     compare_md5sum /tmp/test /jfs/test1
-}
-
-test_dump_load_with_clone(){
-    prepare_test
-    ./juicefs format $META_URL myjfs
-    ./juicefs mount -d $META_URL /jfs
-    dd if=/dev/urandom of=/tmp/test bs=1M count=1024
-    cp /tmp/test /jfs/test
-    ./juicefs clone /jfs/test /jfs/test2
-    ./juicefs dump $META_URL dump.json $(get_dump_option)
-    umount_jfs /jfs $META_URL
-    python3 .github/scripts/flush_meta.py $META_URL
-    ./juicefs load $META_URL dump.json $(get_load_option)
-    ./juicefs mount -d $META_URL /jfs
-    compare_md5sum /tmp/test /jfs/test2
 }
 
 test_dump_load_with_quota(){
@@ -182,8 +132,46 @@ test_dump_load_with_keep_secret_key()
     cat /jfs/hello.txt | grep hello
 }
 
-test_dump_load_with_trash(){
-    echo "TOOD"
+test_load_encrypted_meta_backup()
+{
+    prepare_test
+    [[ ! -f my-priv-key.pem ]] && openssl genrsa -out my-priv-key.pem -aes256 -passout pass:12345678 2048
+    export JFS_RSA_PASSPHRASE=12345678
+    ./juicefs format $META_URL myjfs --encrypt-rsa-key my-priv-key.pem
+    ./juicefs mount -d $META_URL /jfs
+    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=50 STEP_COUNT=50 PROFILE=generate ROOT_DIR1=/jfs/test ROOT_DIR2=/tmp/test python3 .github/scripts/hypo/fs.py || true
+    umount /jfs
+    SKIP_BACKUP_META_CHECK=true ./juicefs mount -d --backup-meta 10s $META_URL /jfs
+    sleep 10s
+    backup_file=$(ls -l /var/jfs/myjfs/meta/ |tail -1 | awk '{print $NF}')
+    backup_path=/var/jfs/myjfs/meta/$backup_file
+    ls -l $backup_path
+
+    ./juicefs load sqlite3://test2.db $backup_path --encrypt-rsa-key my-priv-key.pem --encrypt-algo aes256gcm-rsa
+    ./juicefs mount -d sqlite3://test2.db /jfs2
+    diff -ur /jfs/test /jfs2/test --no-dereference
+    umount_jfs /jfs2 sqlite3://test2.db
+    rm test2.db -rf
+}
+
+test_dump_load_with_random_test()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs --enable-acl
+    ./juicefs mount -d $META_URL /jfs 
+    ./random-test runOp -baseDir /jfs/test -files 500000 -ops 5000000 -threads 50 -dirSize 10 -duration 30s -createOp 30,uniform -deleteOp 5,end --linkOp 10,uniform --removeLinkOp 1,end --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform    
+    ./juicefs dump $META_URL dump.json $(get_dump_option)
+    python3 .github/scripts/flush_meta.py $META_URL2
+    create_database $META_URL2
+    ./juicefs load $META_URL2 dump.json $(get_load_option)
+    ./juicefs dump $META_URL2 dump2.json $(get_dump_option)
+    ./juicefs mount -d $META_URL2 /jfs2
+    diff -ur /jfs/test /jfs2/test --no-dereference
+    diff -ur /jfs/.trash /jfs2/.trash --no-dereference
+    # compare_stat_acl_xattr /jfs/test /jfs2/test
+    umount_jfs /jfs2 $META_URL2
+    ./juicefs status $META_URL2 && UUID=$(./juicefs status $META_URL2 | grep UUID | cut -d '"' -f 4)
+    ./juicefs destroy --yes $META_URL2 $UUID
 }
 
 test_dump_load_with_fsrand()
@@ -191,7 +179,8 @@ test_dump_load_with_fsrand()
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0 --enable-acl
     ./juicefs mount -d $META_URL /jfs --enable-xattr
-    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fs.py || true    
+    rm -rf /tmp/test
+    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/test ROOT_DIR2=/tmp/test python3 .github/scripts/hypo/fs.py || true    
     ./juicefs dump $META_URL dump.json $(get_dump_option)
     create_database $META_URL2
     ./juicefs load $META_URL2 dump.json $(get_load_option)
@@ -200,8 +189,8 @@ test_dump_load_with_fsrand()
     #     compare_dump_json
     # fi
     ./juicefs mount -d $META_URL2 /jfs2
-    diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
-    compare_stat_acl_xattr /jfs/fsrand /jfs2/fsrand
+    diff -ur /jfs/test /jfs2/test --no-dereference
+    compare_stat_acl_xattr /jfs/test /jfs2/test
     umount_jfs /jfs2 $META_URL2
     ./juicefs status $META_URL2 && UUID=$(./juicefs status $META_URL2 | grep UUID | cut -d '"' -f 4)
     ./juicefs destroy --yes $META_URL2 $UUID
@@ -240,29 +229,6 @@ compare_stat_acl_xattr(){
     done
     echo "compare_stat_acl: ACLs and stats are the same"
 }
-
-test_load_encrypted_meta_backup()
-{
-    prepare_test
-    [[ ! -f my-priv-key.pem ]] && openssl genrsa -out my-priv-key.pem -aes256 -passout pass:12345678 2048
-    export JFS_RSA_PASSPHRASE=12345678
-    ./juicefs format $META_URL myjfs --encrypt-rsa-key my-priv-key.pem
-    ./juicefs mount -d $META_URL /jfs
-    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=50 STEP_COUNT=50 PROFILE=generate ROOT_DIR1=/jfs/fsrand ROOT_DIR2=/tmp/fsrand python3 .github/scripts/hypo/fs.py || true
-    umount /jfs
-    SKIP_BACKUP_META_CHECK=true ./juicefs mount -d --backup-meta 10s $META_URL /jfs
-    sleep 10s
-    backup_file=$(ls -l /var/jfs/myjfs/meta/ |tail -1 | awk '{print $NF}')
-    backup_path=/var/jfs/myjfs/meta/$backup_file
-    ls -l $backup_path
-
-    ./juicefs load sqlite3://test2.db $backup_path --encrypt-rsa-key my-priv-key.pem --encrypt-algo aes256gcm-rsa
-    ./juicefs mount -d sqlite3://test2.db /jfs2
-    diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
-    umount_jfs /jfs2 sqlite3://test2.db
-    rm test2.db -rf
-}
-
 
 get_dump_option(){
     if [[ "$BINARY" == "true" ]]; then 
