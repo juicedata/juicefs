@@ -37,8 +37,8 @@ import (
 )
 
 var (
-	redisBatchSize = 100
-	redisPipeLimit = 10
+	redisBatchSize = 10000
+	redisPipeLimit = 1000
 )
 
 func (m *redisMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
