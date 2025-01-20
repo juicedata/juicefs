@@ -95,7 +95,7 @@ jobs:
         run: |
           wget https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test
           chmod +x random-test
-          
+
       - name: Test Load & Dump with Binary
         timeout-minutes: 30
         run: |
@@ -150,6 +150,12 @@ jobs:
           secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
           token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
 
+      - name: upload total coverage report
+        timeout-minutes: 5
+        uses: ./.github/actions/upload-total-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
+          
       - name: Send Slack Notification
         if: failure() && github.event_name != 'workflow_dispatch' 
         uses: juicedata/slack-notify-action@main
