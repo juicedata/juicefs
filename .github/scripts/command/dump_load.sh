@@ -63,6 +63,7 @@ test_dump_load_with_copy_file_range(){
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
+    rm -rf /tmp/test
     dd if=/dev/zero of=/tmp/test bs=1M count=4096
     cp /tmp/test /jfs/test
     node .github/scripts/copyFile.js /jfs/test /jfs/test1
