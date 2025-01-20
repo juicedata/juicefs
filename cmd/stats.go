@@ -214,11 +214,6 @@ func padding(name string, width int, char byte) string {
 	return string(buf)
 }
 
-func (w *statsWatcher) formatUnixTime() string {
-	tm := time.Now()
-	return w.colorize(tm.Format(UNIXTIME_FMT), BLUE, false, false)
-}
-
 func (w *statsWatcher) formatHeader() {
 	headers := make([]string, len(w.sections))
 	subHeaders := make([]string, len(w.sections))
