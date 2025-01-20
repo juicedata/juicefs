@@ -62,10 +62,10 @@ Details: https://juicefs.com/docs/community/fault_diagnosis_and_analysis#stats`,
 				Aliases: []string{"l"},
 				Usage:   "verbosity level, 0 or 1 is enough for most cases",
 			},
-			&cli.StringFlag{
-				Name:    "duration",
-				Aliases: []string{"d"},
-				Usage:   "duration time",
+			&cli.UintFlag{
+				Name:    "count",
+				Aliases: []string{"c"},
+				Usage:   "number of updates to display before exiting",
 			},
 		},
 	}
@@ -89,7 +89,7 @@ const (
 	COLOR_DARK_SEQ = "\033[0;" // %dm
 	UNDERLINE_SEQ  = "\033[4m"
 	CLEAR_SCREEM   = "\033[2J\033[1;1H"
-	UNIXTIME_FMT   = "01/02-15:04:05"
+	UNIXTIME_FMT   = "01-02 15:04:05"
 	// BOLD_SEQ       = "\033[1m"
 )
 
@@ -214,7 +214,7 @@ func padding(name string, width int, char byte) string {
 	return string(buf)
 }
 
-func (w *statsWatcher)getCurrentTime() string {
+func (w *statsWatcher) formatUnixTime() string {
 	tm := time.Now()
 	return w.colorize(tm.Format(UNIXTIME_FMT), BLUE, false, false)
 }
@@ -240,7 +240,7 @@ func (w *statsWatcher) formatHeader() {
 		}
 		width := 6*len(subs) - 1 // nick(5) + space(1)
 		if s.name == "system" {
-			width = len(UNIXTIME_FMT) // nick(5) + space(1)
+			width = len(UNIXTIME_FMT)
 		}
 		subHeaders[i] = strings.Join(subs, " ")
 		headers[i] = w.colorize(padding(s.name, width, '-'), BLUE, true, false)
@@ -324,7 +324,11 @@ func (w *statsWatcher) printDiff(left, right map[string]float64, dark bool) {
 		for _, it := range s.items {
 			switch it.typ & 0xF0 {
 			case metricUnixtime: // current timestamp
-				vals = append(vals, w.getCurrentTime())
+				if dark {
+					vals = append(vals, w.colorize(time.Now().Format(UNIXTIME_FMT), BLACK, false, false))
+				} else {
+					vals = append(vals, w.colorize(time.Now().Format(UNIXTIME_FMT), WHITE, true, false))
+				}
 			case metricGauge: // currently must be metricByte
 				vals = append(vals, w.formatU64(right[it.name], dark, true))
 			case metricCounter:
@@ -412,22 +416,16 @@ func stats(ctx *cli.Context) error {
 	}
 	watcher.buildSchema(ctx.String("schema"), ctx.Uint("verbosity"))
 	watcher.formatHeader()
+	count := ctx.Uint("count")
 
 	var tick uint
 	var start, last, current map[string]float64
-	beginTime := time.Now() 
-	duraTime := time.Duration(0)
-	if ctx.String("duration") != "" {
-		if duraTime, err = time.ParseDuration(ctx.String("duration")); err != nil {
-			logger.Fatalf("invalid duration format (%s)", ctx.String("duration"))
-		}
-	}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	current = readStats(watcher.mp)
 	start = current
 	last = current
-	for duraTime == 0 || time.Since(beginTime) < duraTime {
+	for {
 		if tick%(watcher.interval*30) == 0 {
 			fmt.Println(watcher.header)
 		}
@@ -437,10 +435,13 @@ func stats(ctx *cli.Context) error {
 		} else {
 			watcher.printDiff(last, current, true)
 		}
+		if count > 0 && tick >= watcher.interval*(count-1) {
+			break
+		}
 		last = current
 		tick++
 		<-ticker.C
 		current = readStats(watcher.mp)
 	}
-	return err
+	return nil
 }
