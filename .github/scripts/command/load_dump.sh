@@ -54,7 +54,7 @@ test_dump_load_big_dir(){
         [[ "$xattrs" -eq "$count" ]] || (echo "xattrs($xattrs) should be $count" && exit 1)
         [[ "$quota" -eq "$count" ]] || (echo "quota($quota) should be $count" && exit 1)
         [[ "$acl" -eq "$count" ]] || (echo "acl($acl) should be $count" && exit 1)
-
+    fi
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json $(get_load_option)
