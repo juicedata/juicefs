@@ -158,7 +158,6 @@ func gateway(c *cli.Context) error {
 			Umask:         uint16(umask),
 			ObjTag:        c.Bool("object-tag"),
 			ObjMeta:       c.Bool("object-meta"),
-			ObjSystemMeta: c.Bool("object-system-meta"),
 		},
 	)
 	if err != nil {

@@ -62,7 +62,6 @@ type Config struct {
 	Umask         uint16
 	ObjTag        bool
 	ObjMeta       bool
-	ObjSystemMeta bool
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -930,9 +929,6 @@ func (n *jfsObjects) getObjMeta(p string) (objMeta map[string]string, err error)
 }
 
 func (n *jfsObjects) getObjContentType(objMeta map[string]string, fileContentType string) (contentType string) {
-	if !n.gConf.ObjSystemMeta {
-		return fileContentType
-	}
 	var exist bool
 	contentType, exist = objMeta[metaContentType]
 	if !exist || len(contentType) == 0 {
@@ -949,7 +945,7 @@ func (n *jfsObjects) setObjMeta(p string, metadata map[string]string) error {
 			k = strings.ToLower(k)
 			if strings.HasPrefix(k, amzMeta) {
 				meta[k] = v
-			} else if n.gConf.ObjSystemMeta {
+			} else {
 				for _, systemMetaKey := range s3UserControlledSystemMeta {
 					if k == systemMetaKey {
 						meta[k] = v
