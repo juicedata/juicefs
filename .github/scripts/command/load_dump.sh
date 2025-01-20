@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
@@ -49,27 +49,32 @@ test_dump_load_big_dir(){
 
 test_dump_load_sustained_file(){
     prepare_test
-    ./juicefs format $META_URL myjfs
+    ./juicefs format $META_URL myjfs --trash-days 0
     ./juicefs mount -d $META_URL /jfs
-    # create a file, open it and keep it open, then remove it
-    echo "hello" > /jfs/hello.txt
-    exec 3<>/jfs/hello.txt
-    rm /jfs/hello.txt
-    # lsof -p $$ 
+    file_count=1001
+    for i in $(seq 1 $file_count); do
+        touch /jfs/file$i
+        exec {fd}<>/jfs/file$i
+        echo fd is $fd
+        fds[$i]=$fd
+        rm /jfs/file$i
+    done
     ./juicefs dump $META_URL dump.json $(get_dump_option)
-    exec 3>&-
+    for i in $(seq 1 $file_count); do
+        fd=${fds[$i]}
+        exec {fd}>&-
+    done
     if [[ "$BINARY" == "true" ]]; then
         sustained=$(./juicefs load dump.json --binary --stat | grep sustained | awk -F"|" '{print $2}')
     else
-        sustained=$(jq '.Sustained | length' dump.json)
+        sustained=$(jq '.Sustained[].inodes | length' dump.json)
     fi
     echo "sustained file count: $sustained"
-    # [[ "$sustained" -eq "$file_count" ]] || (echo "sustained file count($sustained) should be $file_count" && exit 1)
+    [[ "$sustained" -eq "$file_count" ]] || (echo "sustained file count($sustained) should be $file_count" && exit 1)
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json $(get_load_option)
     ./juicefs mount -d $META_URL /jfs 
-    ls /jfs
 }
 
 test_dump_load_with_copy_file_range(){
