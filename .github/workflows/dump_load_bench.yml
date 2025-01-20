@@ -92,7 +92,6 @@ jobs:
           nvm current
 
       - name: Benchmark dump load in binary format
-        if : false
         timeout-minutes: 60
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
@@ -104,7 +103,6 @@ jobs:
           sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/dump_load_bench.sh test_dump_load_in_binary
       
       - name: Benchmark dump load fast
-        if : false
         timeout-minutes: 60
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
@@ -116,7 +114,6 @@ jobs:
           sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/dump_load_bench.sh test_dump_load_fast
 
       - name: Benchmark dump load
-        if : false
         timeout-minutes: 60
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
@@ -166,6 +163,12 @@ jobs:
           secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
           token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
 
+      - name: upload total coverage report
+        timeout-minutes: 5
+        uses: ./.github/actions/upload-total-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
+          
       - name: Send Slack Notification
         if: failure() && github.event_name != 'workflow_dispatch' 
         uses: juicedata/slack-notify-action@main
