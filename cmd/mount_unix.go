@@ -860,6 +860,10 @@ func parseUIDGID(input string, defaultUid uint32, defaultGid uint32) (uint32, ui
 			logger.Fatalf("invalid uid: %s", ss[0])
 		}
 		uid = uint32(u)
+		if uid == 0 {
+			logger.Warnf("Can't map uid as 0, use %d instead", defaultUid)
+			uid = defaultUid
+		}
 	}
 	if len(ss) == 2 && ss[1] != "" {
 		g, err := strconv.ParseUint(ss[1], 10, 32)
@@ -867,6 +871,10 @@ func parseUIDGID(input string, defaultUid uint32, defaultGid uint32) (uint32, ui
 			logger.Fatalf("invalid gid: %s", ss[1])
 		}
 		gid = uint32(g)
+		if gid == 0 {
+			logger.Warnf("Can't map gid as 0, use %d instead", defaultGid)
+			gid = defaultGid
+		}
 	}
 	return uid, gid
 }
@@ -882,14 +890,21 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 	conf.NonDefaultPermission = c.Bool("non-default-permission")
 	rootSquash := c.String("root-squash")
 	allSquash := c.String("all-squash")
-	nobodyUid, nobodyGid := getNobodyUIDGID()
-	if rootSquash != "" {
-		uid, gid := parseUIDGID(rootSquash, nobodyUid, nobodyGid)
-		conf.RootSquash = &vfs.AnonymousAccount{Uid: uid, Gid: gid}
-	}
-	if allSquash != "" {
-		uid, gid := parseUIDGID(allSquash, nobodyUid, nobodyGid)
-		conf.AllSquash = &vfs.AnonymousAccount{Uid: uid, Gid: gid}
+	if allSquash != "" || rootSquash != "" {
+		if conf.NonDefaultPermission {
+			logger.Fatalf("root-squash or all-squash can't be used with non-default-permission")
+		}
+		nobodyUid, nobodyGid := getNobodyUIDGID()
+		// all-squash takes precedence over root-squash
+		if allSquash != "" {
+			uid, gid := parseUIDGID(allSquash, nobodyUid, nobodyGid)
+			conf.AllSquash = &vfs.AnonymousAccount{Uid: uid, Gid: gid}
+			logger.Infof("Map all uid/gid to %d/%d by setting all-squash", uid, gid)
+		} else { // rootSquash != ""
+			uid, gid := parseUIDGID(rootSquash, nobodyUid, nobodyGid)
+			conf.RootSquash = &vfs.AnonymousAccount{Uid: uid, Gid: gid}
+			logger.Infof("Map root uid/gid 0 to %d/%d by setting root-squash", uid, gid)
+		}
 	}
 	logger.Infof("Mounting volume %s at %s ...", conf.Format.Name, conf.Meta.MountPoint)
 	err := fuse.Serve(v, c.String("o"), c.Bool("enable-xattr"), c.Bool("enable-ioctl"))

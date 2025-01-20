@@ -276,3 +276,27 @@ func TestMountVersionMatch(t *testing.T) {
 	err = tryMountTemp(t, nil, []string{"--enable-acl=true"}, nil)
 	assert.Contains(t, err.Error(), "check version")
 }
+
+func TestParseUIDGID(t *testing.T) {
+	tests := []struct {
+		input       string
+		defaultUid  uint32
+		defaultGid  uint32
+		expectedUid uint32
+		expectedGid uint32
+	}{
+		{"1000:1000", 65534, 65534, 1000, 1000},
+		{"1000:", 65534, 65534, 1000, 65534},
+		{":1000", 65534, 65534, 65534, 1000},
+		{"", 65534, 65534, 65534, 65534},
+		{"0:1000", 65534, 65534, 65534, 1000},
+		{"1000:0", 65534, 65534, 1000, 65534},
+	}
+
+	for _, tt := range tests {
+		uid, gid := parseUIDGID(tt.input, tt.defaultUid, tt.defaultGid)
+		if uid != tt.expectedUid || gid != tt.expectedGid {
+			t.Errorf("parseUIDGID(%q) = (%d, %d), want (%d, %d)", tt.input, uid, gid, tt.expectedUid, tt.expectedGid)
+		}
+	}
+}
