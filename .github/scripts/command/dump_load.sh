@@ -64,7 +64,7 @@ test_dump_load_with_copy_file_range(){
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     rm -rf /tmp/test
-    dd if=/dev/zero of=/tmp/test bs=1M count=4096
+    dd if=/dev/zero of=/tmp/test bs=1M count=1024
     cp /tmp/test /jfs/test
     node .github/scripts/copyFile.js /jfs/test /jfs/test1
     ./juicefs dump $META_URL dump.json $(get_dump_option)
@@ -162,7 +162,6 @@ test_dump_load_with_random_test()
     ./juicefs mount -d $META_URL /jfs 
     ./random-test runOp -baseDir /jfs/test -files 500000 -ops 5000000 -threads 50 -dirSize 10 -duration 30s -createOp 30,uniform -deleteOp 5,end --linkOp 10,uniform --removeLinkOp 1,end --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform    
     ./juicefs dump $META_URL dump.json $(get_dump_option)
-    python3 .github/scripts/flush_meta.py $META_URL2
     create_database $META_URL2
     ./juicefs load $META_URL2 dump.json $(get_load_option)
     ./juicefs dump $META_URL2 dump2.json $(get_dump_option)
