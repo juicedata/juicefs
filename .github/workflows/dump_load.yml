@@ -93,10 +93,7 @@ jobs:
 
       - name: Download Random Test
         run: |
-          wget -O /usr/local/bin/ossutil64 https://gosspublic.alicdn.com/ossutil/1.7.9/ossutil64
-          chmod +x /usr/local/bin/ossutil64
-          ossutil64 config --access-key-id=${{ secrets.OSS_KEY_ID }} --access-key-secret=${{ secrets.OSS_KEY_SECRET }} -e oss-cn-shanghai.aliyuncs.com
-          ossutil64 cp oss://juicefs-com-static/random-test/random-test random-test
+          wget https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test
           chmod +x random-test
           
       - name: Test Load & Dump with Binary

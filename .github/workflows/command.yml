@@ -161,50 +161,6 @@ jobs:
       - name: Build 
         uses: ./.github/actions/build
 
-      - name: Test Load & Dump
-        timeout-minutes: 30
-        run: |
-          sudo META=${{matrix.meta}} .github/scripts/command/load_dump.sh
-
-      - name: Log
-        if: always()
-        run: |
-          echo "juicefs log"
-          sudo tail -n 1000 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
-          
-      - name: Setup upterm session
-        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
-        # if: failure()
-        timeout-minutes: 60
-        uses: lhotari/action-upterm@v1
-
-  command_test3:
-    needs: [build-matrix]
-    strategy:
-      fail-fast: false
-      matrix:
-        meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
-
-      - name: Remove unused software
-        run: |
-            echo "before remove unused software"
-            sudo df -h
-            sudo rm -rf /usr/share/dotnet
-            sudo rm -rf /usr/local/lib/android
-            sudo rm -rf /opt/ghc
-            echo "after remove unused software"
-            sudo df -h
-            
-      - name: Build 
-        uses: ./.github/actions/build
-
       - name: Test Quota
         timeout-minutes: 30
         run: |
@@ -223,7 +179,7 @@ jobs:
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
-  command_test4:
+  command_test3:
     needs: [build-matrix]
     strategy:
       fail-fast: false
@@ -270,7 +226,7 @@ jobs:
 
   success-all-test:
     runs-on: ubuntu-latest
-    needs: [command_test1, command_test2, command_test3, command_test4]
+    needs: [command_test1, command_test2, command_test3]
     if: always()
     steps:
       - uses: technote-space/workflow-conclusion-action@v3
