@@ -1,19 +1,19 @@
-name: "load"
+name: "dump_load"
 on:
   push:
     branches:
       - 'main'
       - 'release-**'
     paths:
-      - '**/load.yml'
-      - '**/load_dump_bench.sh'
+      - '**/dump_load.yml'
+      - '**/dump_load.sh'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
     paths:
-      - '**/load.yml'
-      - '**/load_dump_bench.sh'
+      - '**/dump_load.yml'
+      - '**/dump_load.sh'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:
@@ -35,12 +35,12 @@ jobs:
           if [ "${{github.event_name}}" == "schedule"  ] || [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
             echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
           else
-            echo 'meta_matrix=["redis", "tikv", "mysql"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["redis", "sqlite3", "tikv"]' >> $GITHUB_OUTPUT
           fi
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
 
-  load:
+  dump_load:
     timeout-minutes: 90
     needs: [build-matrix]
     strategy:
@@ -80,56 +80,49 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}
 
-      - name: Test Load & Dump 
+      - name: Install nodejs
+        run: |
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
+          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
+          nvm install 22
+          nvm use 22
+          node -v 
+          nvm current
+
+      - name: Download Random Test
+        run: |
+          wget https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test
+          chmod +x random-test
+
+      - name: Test Load & Dump with Binary
         timeout-minutes: 30
         run: |
-          sudo GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/load_dump.sh          
+          sudo BINARY=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh
 
-      - name: Benchmark dump load in binary format
-        timeout-minutes: 60
-        env:
-          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
-          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
-          META: ${{matrix.meta}}
-          START_META: true
+      - name: Test Load & Dump with Json Fast Mode
+        timeout-minutes: 30
         run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_dump_load_in_binary
-      
-      - name: Benchmark dump load fast
-        timeout-minutes: 60
-        env:
-          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
-          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
-          META: ${{matrix.meta}}
-          START_META: false
-        run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_dump_load_fast
+          sudo FAST=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh  
 
-      - name: Benchmark dump load
-        timeout-minutes: 60
-        env:
-          AWS_ACCESS_KEY_ID: ${{secrets.CI_COVERAGE_AWS_AK}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.CI_COVERAGE_AWS_SK}}
-          AWS_ACCESS_TOKEN: ${{secrets.CI_COVERAGE_AWS_TOKEN}}
-          META: ${{matrix.meta}}
-          START_META: false
+      - name: Test Load & Dump with Json
+        timeout-minutes: 30
         run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/load_dump_bench.sh test_dump_load
-  
+          sudo GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh     
+
       - name: log
         if: always()
         run: | 
           tail -500 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
-          
+
       - name: upload coverage report
         timeout-minutes: 5
         uses: ./.github/actions/upload-coverage
         with:
           UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
-          
+
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         # if: failure()
@@ -138,7 +131,7 @@ jobs:
 
   success-all-test:
     runs-on: ubuntu-latest
-    needs: [load]
+    needs: [dump_load]
     if: always()
     steps:
       - uses: technote-space/workflow-conclusion-action@v3
@@ -148,6 +141,21 @@ jobs:
         if: env.WORKFLOW_CONCLUSION == 'failure'
         run: exit 1
 
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
+      - name: upload total coverage report
+        timeout-minutes: 5
+        uses: ./.github/actions/upload-total-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
+          
       - name: Send Slack Notification
         if: failure() && github.event_name != 'workflow_dispatch' 
         uses: juicedata/slack-notify-action@main

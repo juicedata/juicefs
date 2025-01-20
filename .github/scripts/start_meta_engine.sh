@@ -228,7 +228,7 @@ get_meta_url2(){
     elif [ "$meta" == "sqlite3" ]; then
         meta_url="sqlite3://test2.db"
     elif [ "$meta" == "tikv" ]; then
-        meta_url="tikv://127.0.0.1:2379/jfs"
+        meta_url="tikv://127.0.0.1:2379/jfs2"
     elif [ "$meta" == "badger" ]; then
         meta_url="badger:///tmp/test2"
     elif [ "$meta" == "mariadb" ]; then
@@ -238,7 +238,7 @@ get_meta_url2(){
     elif [ "$meta" == "etcd" ]; then
         meta_url="etcd://localhost:2379/test2"
     elif [ "$meta" == "fdb" ]; then
-        meta_url="fdb:///home/runner/fdb.cluster?prefix=kfs"
+        meta_url="fdb:///home/runner/fdb.cluster?prefix=jfs2"
     elif [ "$meta" == "ob" ]; then
         meta_url="mysql://root:@\\(127.0.0.1:2881\\)/test2"
     else

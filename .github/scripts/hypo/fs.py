@@ -44,7 +44,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     if os.getenv('EXCLUDE_RULES'):
         EXCLUDE_RULES = os.getenv('EXCLUDE_RULES').split(',')
     else:
-        EXCLUDE_RULES = ['clone_cp_file', 'clone_cp_dir', 'loop_symlink', 'symlink', 'readlines', 'readline']
+        EXCLUDE_RULES = ['readlines', 'readline']
         # EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file', 'clone_cp_file', 'clone_cp_dir', 'loop_symlink', 'hardlink', 'rename_dir', 'chown']
     ROOT_DIR1=os.environ.get('ROOT_DIR1', '/tmp/fsrand')
     ROOT_DIR2=os.environ.get('ROOT_DIR2', '/tmp/jfs/fsrand')
