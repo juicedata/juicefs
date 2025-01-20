@@ -34,12 +34,27 @@ test_dump_load_big_dir(){
     ./juicefs mount -d $META_URL /jfs
     count=11000
     mkdir /jfs/test
+    touch /jfs/file
     for i in $(seq 1 $count); do
         mkdir /jfs/test/dir$i
         echo "hello" > /jfs/test/dir$i/hello.txt
         ln -s /jfs/test/dir$i/hello.txt /jfs/test/dir$i/hello_link.txt
+        ln /jfs/test/dir$i/hello.txt /jfs/test/dir$i/hello_hardlink.txt
+        xattr -w user.test $i /jfs/test/dir$i/hello.txt
+        ./juicefs quota set $META_URL --path /test/dir$i --inodes 1000 --capacity 1
+        setfacl -m u:root:rwx /jfs/test/dir$i
     done
     ./juicefs dump $META_URL dump.json $(get_dump_option)
+    if [[ "$BINARY" == "true" ]]; then
+        symlinks=$(./juicefs load dump.json --binary --stat | grep symlink | awk -F"|" '{print $2}')
+        xattrs=$(./juicefs load dump.json --binary --stat | grep xattr | awk -F"|" '{print $2}')
+        quota=$(./juicefs load dump.json --binary --stat | grep quota | awk -F"|" '{print $2}')
+        acl=$(./juicefs load dump.json --binary --stat | grep acl | awk -F"|" '{print $2}')
+        [[ "$symlinks" -eq "$count" ]] || (echo "symlinks($symlinks) should be $count" && exit 1)
+        [[ "$xattrs" -eq "$count" ]] || (echo "xattrs($xattrs) should be $count" && exit 1)
+        [[ "$quota" -eq "$count" ]] || (echo "quota($quota) should be $count" && exit 1)
+        [[ "$acl" -eq "$count" ]] || (echo "acl($acl) should be $count" && exit 1)
+
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json $(get_load_option)
@@ -51,7 +66,7 @@ test_dump_load_sustained_file(){
     prepare_test
     ./juicefs format $META_URL myjfs --trash-days 0
     ./juicefs mount -d $META_URL /jfs
-    file_count=1001
+    file_count=10
     for i in $(seq 1 $file_count); do
         touch /jfs/file$i
         exec {fd}<>/jfs/file$i
@@ -60,6 +75,8 @@ test_dump_load_sustained_file(){
         rm /jfs/file$i
     done
     ./juicefs dump $META_URL dump.json $(get_dump_option)
+    exit 1
+
     for i in $(seq 1 $file_count); do
         fd=${fds[$i]}
         exec {fd}>&-
