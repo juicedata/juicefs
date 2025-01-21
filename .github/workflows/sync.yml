@@ -98,8 +98,8 @@ jobs:
           UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}          
 
       - name: Setup upterm session
-        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
-        # if: failure()
+        # if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
