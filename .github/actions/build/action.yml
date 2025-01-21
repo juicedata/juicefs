@@ -43,7 +43,7 @@ runs:
       run: |
         if [[ -n "${{ inputs.beta }}" ]]; then
           echo "use beta version of juicefs: ${{inputs.beta}}"
-          wget -q https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/juicefs_beta/{{inputs.beta}} -O juicefs
+          wget -q https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/juicefs_beta/${{inputs.beta}} -O juicefs
           chmod +x juicefs
           ./juicefs version
         else
