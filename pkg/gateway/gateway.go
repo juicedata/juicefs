@@ -57,11 +57,11 @@ var mctx meta.Context
 var logger = utils.GetLogger("juicefs")
 
 type Config struct {
-	MultiBucket   bool
-	KeepEtag      bool
-	Umask         uint16
-	ObjTag        bool
-	ObjMeta       bool
+	MultiBucket bool
+	KeepEtag    bool
+	Umask       uint16
+	ObjTag      bool
+	ObjMeta     bool
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -536,12 +536,12 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	dst := n.path(dstBucket, dstObject)
 	src := n.path(srcBucket, srcObject)
 
-	err = n.setObjMeta(dst, srcInfo.UserDefined)
-	if err != nil {
-		logger.Errorf("set object metadata error, path: %s error %s", dst, err)
-	}
-
 	if minio.IsStringEqual(src, dst) {
+		// if we copy the same object for set metadata
+		err = n.setObjMeta(dst, srcInfo.UserDefined)
+		if err != nil {
+			logger.Errorf("set object metadata error, path: %s error %s", dst, err)
+		}
 		return n.GetObjectInfo(ctx, srcBucket, srcObject, minio.ObjectOptions{})
 	}
 	tmp := n.tpath(dstBucket, "tmp", minio.MustGetUUID())
@@ -584,6 +584,10 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 				logger.Errorf("set object tags error, path: %s, value: %s error %s", tmp, tagStr, eno)
 			}
 		}
+	}
+	err = n.setObjMeta(tmp, srcInfo.UserDefined)
+	if err != nil {
+		logger.Errorf("set object metadata error, path: %s error %s", dst, err)
 	}
 
 	eno = n.fs.Rename(mctx, tmp, dst, 0)
@@ -706,7 +710,9 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		opts.UserDefined[k] = v
 	}
 	contentType := utils.GuessMimeType(object)
-	contentType = n.getObjContentType(objMeta, contentType)
+	if c, exist := objMeta["content-type"]; exist && len(c) > 0 {
+		contentType = c
+	}
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
@@ -903,7 +909,6 @@ const s3Tags = "s3-tags"
 // S3 object metadata
 const s3Meta = "s3-meta"
 const amzMeta = "x-amz-meta-"
-const metaContentType = "content-type"
 
 var s3UserControlledSystemMeta = []string{
 	"cache-control",
@@ -926,16 +931,6 @@ func (n *jfsObjects) getObjMeta(p string) (objMeta map[string]string, err error)
 		objMeta = make(map[string]string)
 	}
 	return objMeta, nil
-}
-
-func (n *jfsObjects) getObjContentType(objMeta map[string]string, fileContentType string) (contentType string) {
-	var exist bool
-	contentType, exist = objMeta[metaContentType]
-	if !exist || len(contentType) == 0 {
-		return fileContentType
-	} else {
-		return contentType
-	}
 }
 
 func (n *jfsObjects) setObjMeta(p string, metadata map[string]string) error {
