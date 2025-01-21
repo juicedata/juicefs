@@ -77,10 +77,10 @@ func logit(ctx Context, method string, err syscall.Errno, format string, args ..
 		return
 	}
 	for i, a := range args {
-		switch a.(type) {
+		switch v := a.(type) {
 		case string:
-			if !strconv.CanBackquote(a.(string)) {
-				args[i] = strings.Trim(strconv.Quote(a.(string)), "\"")
+			if !strconv.CanBackquote(v) {
+				args[i] = strings.Trim(strconv.Quote(v), "\"")
 			}
 		}
 	}
