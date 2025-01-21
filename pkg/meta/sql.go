@@ -328,9 +328,9 @@ func retriveUrlConnsOptions(driver, murl string) (string, int, int, int, int) {
 				vals.Add("_journal", "WAL")
 			}
 			if vals.Has("_timeout") {
-				vals.Set("_timeout", "3")
+				vals.Set("_timeout", "5000")
 			} else {
-				vals.Add("_timeout", "3")
+				vals.Add("_timeout", "5000")
 			}
 		}
 		optsurl = vals.Encode()
