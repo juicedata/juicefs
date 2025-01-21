@@ -15,6 +15,15 @@ test_sync_small_files(){
     [ $count1 -eq $count2 ]
 }
 
+test_sync_big_file_with_jfs(){
+    prepare_test
+    [[ ! -f "/tmp/bigfile" ]] && dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
+    ./mc cp /tmp/bigfile myminio/myjfs/bigfile
+    export dst_jfs=$META_URL 
+    timeout 30 ./juicefs sync minio://minioadmin:minioadmin@localhost:9000/myjfs/bigfile jfs://dst_jfs/bigfile --threads=64 --force-update
+    cmp /tmp/bigfile /jfs/bigfile
+}
+
 test_sync_big_file(){
     prepare_test
     dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
@@ -22,16 +31,6 @@ test_sync_big_file(){
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/
     ./mc cp myminio/myjfs/bigfile /tmp/bigfile2
     cmp /tmp/bigfile /tmp/bigfile2
-}
-
-test_sync_big_file_with_jfs(){
-    prepare_test
-    [[ ! -f "/tmp/bigfile" ]] && dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
-    ./mc cp /tmp/bigfile myminio/myjfs/bigfile
-    exit 1
-    export dst_jfs=$META_URL 
-    timeout 30 ./juicefs sync minio://minioadmin:minioadmin@localhost:9000/myjfs/bigfile jfs://dst_jfs/bigfile --threads=64 --force-update
-    cmp /tmp/bigfile /jfs/bigfile
 }
 
 test_sync_with_limit(){
