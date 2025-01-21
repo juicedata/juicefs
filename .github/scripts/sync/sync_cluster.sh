@@ -139,6 +139,7 @@ check_sync_log(){
     echo "count1, $count1, count2, $count2, count3, $count3"
     min_count=10
     # check if count1 is less than min_count
+    grep "panic:\|<FATAL>" sync.log && "panic or fatal in sync.log" && exit 1 || true
     if [ "$count1" -lt "$min_count" ] || [ "$count2" -lt "$min_count" ] || [ "$count3" -lt "$min_count" ]; then
         echo "count is less than min_count, $count1, $count2, $count3, $min_count"
         exit 1
