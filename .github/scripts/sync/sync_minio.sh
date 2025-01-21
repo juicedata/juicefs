@@ -26,7 +26,7 @@ test_sync_big_file(){
 
 test_sync_big_file_with_jfs(){
     prepare_test
-    [[ ! -f /tmp/bigfile ]] dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
+    [[ ! -f "/tmp/bigfile" ]] && dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
     ./mc cp /tmp/bigfile myminio/myjfs/bigfile
     dst_jfs=$META_URL ./juicefs sync minio://minioadmin:minioadmin@localhost:9000/myjfs/bigfile jfs://dst_jfs/bigfile --threads=64 --force-update
     cmp /tmp/bigfile /jfs/bigfile
