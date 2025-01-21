@@ -76,15 +76,18 @@ func logit(ctx Context, method string, err syscall.Errno, format string, args ..
 	if len(readers) == 0 && used < time.Second*10 {
 		return
 	}
-
+	for i, a := range args {
+		switch a.(type) {
+		case string:
+			if !strconv.CanBackquote(a.(string)) {
+				args[i] = strings.Trim(strconv.Quote(a.(string)), "\"")
+			}
+		}
+	}
 	cmd := fmt.Sprintf(method+" "+format, args...)
 	t := utils.Now()
 	ts := t.Format("2006.01.02 15:04:05.000000")
-	errmsg := strerr(err)
-	if !strconv.CanBackquote(errmsg) {
-		errmsg = strings.Trim(strconv.Quote(errmsg), "\"")
-	}
-	cmd += fmt.Sprintf(" - %s <%.6f>", errmsg, used.Seconds())
+	cmd += fmt.Sprintf(" - %s <%.6f>", strerr(err), used.Seconds())
 	if ctx.Pid() != 0 && used >= time.Second*10 {
 		logger.Infof("slow operation: %s", cmd)
 	}
