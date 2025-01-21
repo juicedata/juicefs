@@ -64,7 +64,9 @@ jobs:
 
       - name: Build 
         uses: ./.github/actions/build
-
+        with: 
+          beta: juicefs-1.1.6
+          
       - name: Test Sync
         timeout-minutes: 60
         run: |
