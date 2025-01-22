@@ -190,7 +190,7 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 	if config.ManagerAddr != "" {
 		addr = config.ManagerAddr
 	} else {
-		ip, err := utils.GetLocalIp(config.Workers[0])
+		ip, err := utils.GetLocalIp(net.JoinHostPort(config.Workers[0], "22"))
 		if err != nil {
 			return "", fmt.Errorf("not found local ip: %s", err)
 		}
