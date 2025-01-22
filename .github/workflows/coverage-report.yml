@@ -60,9 +60,10 @@ jobs:
       - name: clean up old coverage data
         if: ${{ matrix.test == 'all' }}
         continue-on-error: true
-        timeout-minutes: 10
+        timeout-minutes: 1
         run: |
-          find /ci-coverage -type f \( -name 'covcounters*' -o -name 'covmeta*' \) -mtime +2 -print -exec rm -f {} +
+          sudo find /ci-coverage -type f \( -name 'covcounters*' -o -name 'covmeta*' \) -mtime +2 -print -exec rm -f {} +
+          umount /jfs-coverage
 
       - name: mount coverage dir
         timeout-minutes: 5
