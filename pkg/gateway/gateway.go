@@ -18,6 +18,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -61,6 +62,7 @@ type Config struct {
 	KeepEtag    bool
 	Umask       uint16
 	ObjTag      bool
+	ObjMeta     bool
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -541,7 +543,13 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	}
 	dst := n.path(dstBucket, dstObject)
 	src := n.path(srcBucket, srcObject)
+
 	if minio.IsStringEqual(src, dst) {
+		// if we copy the same object for set metadata
+		err = n.setObjMeta(dst, srcInfo.UserDefined)
+		if err != nil {
+			logger.Errorf("set object metadata error, path: %s error %s", dst, err)
+		}
 		return n.GetObjectInfo(ctx, srcBucket, srcObject, minio.ObjectOptions{})
 	}
 	uuid := minio.MustGetUUID()
@@ -587,6 +595,10 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 				logger.Errorf("set object tags error, path: %s, value: %s error %s", tmp, tagStr, eno)
 			}
 		}
+	}
+	err = n.setObjMeta(tmp, srcInfo.UserDefined)
+	if err != nil {
+		logger.Errorf("set object metadata error, path: %s error %s", dst, err)
 	}
 
 	eno = n.fs.Rename(mctx, tmp, dst, 0)
@@ -698,6 +710,20 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 			return minio.ObjectInfo{}, errno
 		}
 	}
+	objMeta, err := n.getObjMeta(n.path(bucket, object))
+	if err != nil {
+		return minio.ObjectInfo{}, err
+	}
+	if opts.UserDefined == nil {
+		opts.UserDefined = make(map[string]string)
+	}
+	for k, v := range objMeta {
+		opts.UserDefined[k] = v
+	}
+	contentType := utils.GuessMimeType(object)
+	if c, exist := objMeta["content-type"]; exist && len(c) > 0 {
+		contentType = c
+	}
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
@@ -706,7 +732,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		IsDir:       fi.IsDir(),
 		AccTime:     fi.ModTime(),
 		ETag:        string(etag),
-		ContentType: utils.GuessMimeType(object),
+		ContentType: contentType,
 		UserTags:    string(tagStr),
 		UserDefined: minio.CleanMetadata(opts.UserDefined),
 	}, nil
@@ -837,6 +863,10 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 					}
 				}
 			}
+			err = n.setObjMeta(tmpName, opts.UserDefined)
+			if err != nil {
+				logger.Errorf("set object metadata error, path: %s error %s", p, err)
+			}
 		}); err != nil {
 			return
 		}
@@ -845,6 +875,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 	if eno != 0 {
 		return objInfo, jfsToObjectErr(ctx, eno, bucket, object)
 	}
+
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
@@ -877,6 +908,10 @@ func (n *jfsObjects) NewMultipartUpload(ctx context.Context, bucket string, obje
 				}
 			}
 		}
+		err = n.setObjMeta(p, opts.UserDefined)
+		if err != nil {
+			logger.Errorf("set object metadata error, path: %s  error %s", p, err)
+		}
 	}
 	return
 }
@@ -886,6 +921,62 @@ const s3Etag = "s3-etag"
 
 // less than 64k ref: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#tag-restrictions
 const s3Tags = "s3-tags"
+
+// S3 object metadata
+const s3Meta = "s3-meta"
+const amzMeta = "x-amz-meta-"
+
+var s3UserControlledSystemMeta = []string{
+	"cache-control",
+	"content-disposition",
+	"content-type",
+}
+
+func (n *jfsObjects) getObjMeta(p string) (objMeta map[string]string, err error) {
+	if n.gConf.ObjMeta {
+		var errno syscall.Errno
+		var metadataStr []byte
+		if metadataStr, errno = n.fs.GetXattr(mctx, p, s3Meta); errno != 0 && errno != meta.ENOATTR {
+			return objMeta, errno
+		}
+		if len(metadataStr) > 0 {
+			err = json.Unmarshal(metadataStr, &objMeta)
+			return objMeta, err
+		}
+	} else {
+		objMeta = make(map[string]string)
+	}
+	return objMeta, nil
+}
+
+func (n *jfsObjects) setObjMeta(p string, metadata map[string]string) error {
+	if n.gConf.ObjMeta && metadata != nil {
+		meta := make(map[string]string)
+		for k, v := range metadata {
+			k = strings.ToLower(k)
+			if strings.HasPrefix(k, amzMeta) {
+				meta[k] = v
+			} else {
+				for _, systemMetaKey := range s3UserControlledSystemMeta {
+					if k == systemMetaKey {
+						meta[k] = v
+						break
+					}
+				}
+			}
+		}
+		if len(meta) > 0 {
+			s3MetadataValue, err := json.Marshal(meta)
+			if err != nil {
+				return err
+			}
+			if eno := n.fs.SetXattr(mctx, p, s3Meta, s3MetadataValue, 0); eno != 0 {
+				logger.Errorf("set object metadata error, path: %s,value: %s error: %s", p, string(s3Meta), eno)
+			}
+		}
+	}
+	return nil
+}
 
 func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi minio.ListMultipartsInfo, err error) {
 	if err = n.checkBucket(ctx, bucket); err != nil {
@@ -1136,6 +1227,15 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		}
 	}
 
+	var objMeta map[string]string
+	if n.gConf.ObjMeta {
+		if objMeta, err = n.getObjMeta(n.upath(bucket, uploadID)); err != nil {
+			logger.Errorf("get object meta error, path: %s, error: %s", n.upath(bucket, uploadID), err)
+		} else if err = n.setObjMeta(tmp, objMeta); err != nil {
+			logger.Errorf("set object meta error, path: %s, error: %s", tmp, err)
+		}
+	}
+
 	name := n.path(bucket, object)
 	eno = n.fs.Rename(mctx, tmp, name, 0)
 	if eno == syscall.ENOENT {
@@ -1164,14 +1264,15 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	// remove parts
 	_ = n.fs.Rmr(mctx, n.upath(bucket, uploadID), meta.RmrDefaultThreads)
 	return minio.ObjectInfo{
-		Bucket:   bucket,
-		Name:     object,
-		ETag:     s3MD5,
-		ModTime:  fi.ModTime(),
-		Size:     fi.Size(),
-		IsDir:    fi.IsDir(),
-		AccTime:  fi.ModTime(),
-		UserTags: string(tagStr),
+		Bucket:      bucket,
+		Name:        object,
+		ETag:        s3MD5,
+		ModTime:     fi.ModTime(),
+		Size:        fi.Size(),
+		IsDir:       fi.IsDir(),
+		AccTime:     fi.ModTime(),
+		UserTags:    string(tagStr),
+		UserDefined: minio.CleanMetadata(opts.UserDefined),
 	}, nil
 }
 
