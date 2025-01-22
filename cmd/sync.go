@@ -163,6 +163,10 @@ func selectionFlags() []cli.Flag {
 			Name:  "ignore-existing",
 			Usage: "skip updating files that already exist on destination",
 		},
+		&cli.StringFlag{
+			Name:  "files-from",
+			Usage: "generate the list of files or dirs to sync from FILE",
+		},
 	})
 }
 
