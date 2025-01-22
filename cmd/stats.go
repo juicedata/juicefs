@@ -280,11 +280,11 @@ func (w *statsWatcher) formatTime(v float64, dark bool) string {
 	switch {
 	case v <= 0.0:
 		ret, color, dark = "   0 ", BLACK, false
-	case v < 10.0:
+	case v < 9.995:
 		ret, color = fmt.Sprintf("%4.2f ", v), GREEN
-	case v < 100.0:
+	case v < 99.95:
 		ret, color = fmt.Sprintf("%4.1f ", v), YELLOW
-	case v < 10000.0:
+	case v < 9999.5:
 		ret, color = fmt.Sprintf("%4.f ", v), RED
 	default:
 		ret, color = fmt.Sprintf("%1.e", v), MAGENTA
@@ -300,7 +300,7 @@ func (w *statsWatcher) formatCPU(v float64, dark bool) string {
 		ret, color = " 0.0", WHITE
 	case v < 30.0:
 		ret, color = fmt.Sprintf("%4.1f", v), GREEN
-	case v < 100.0:
+	case v < 99.95:
 		ret, color = fmt.Sprintf("%4.1f", v), YELLOW
 	default:
 		ret, color = fmt.Sprintf("%4.f", v), RED
