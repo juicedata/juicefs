@@ -62,7 +62,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 30
         run: |
-          find /ci-coverage -type f \( -name 'covcounters*' -o -name 'covmeta*' \) -mtime +2 -exec rm -f {} +
+          find /ci-coverage -type f \( -name 'covcounters*' -o -name 'covmeta*' \) -mtime +2 -print -exec rm -f {} +
 
       - name: mount coverage dir
         timeout-minutes: 5
