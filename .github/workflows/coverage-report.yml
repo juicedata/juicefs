@@ -47,6 +47,7 @@ jobs:
           fetch-depth: 1
 
       - name: mount coverage dir
+        if: ${{ matrix.test == 'all' }}
         timeout-minutes: 5
         uses: ./.github/actions/mount-coverage-dir
         with:
@@ -57,6 +58,7 @@ jobs:
           token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
 
       - name: clean up old coverage data
+        if: ${{ matrix.test == 'all' }}
         continue-on-error: true
         timeout-minutes: 30
         run: |
