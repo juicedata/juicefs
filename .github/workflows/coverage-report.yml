@@ -46,7 +46,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: mount coverage dir
+      - name: mount coverage dir for cleanup
         if: ${{ matrix.test == 'all' }}
         timeout-minutes: 5
         uses: ./.github/actions/mount-coverage-dir
@@ -60,7 +60,7 @@ jobs:
       - name: clean up old coverage data
         if: ${{ matrix.test == 'all' }}
         continue-on-error: true
-        timeout-minutes: 30
+        timeout-minutes: 10
         run: |
           find /ci-coverage -type f \( -name 'covcounters*' -o -name 'covmeta*' \) -mtime +2 -print -exec rm -f {} +
 
