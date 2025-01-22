@@ -106,7 +106,47 @@ func (j *juice) Statfs(path string, stat *fuse.Statfs_t) int {
 }
 
 func errorconv(err syscall.Errno) int {
-	return -int(err)
+	// This should convert from sysCall to errno.h
+	// Not sure why these are different but they are
+	// This causes issues when determining reason for failure
+	// i.e. CreateDirectory when it already exists returns access denied instead of Already Exists 
+	switch err {
+	case syscall.EPERM:
+		return -1
+	case syscall.EINTR:
+		return -4
+	case syscall.EIO:
+		return -5
+	case syscall.EBADF:
+		return -9
+	case syscall.EAGAIN:
+		return -11
+	case syscall.EACCES:
+		return -13
+	case syscall.EBUSY:
+		return -16
+	case syscall.EEXIST:
+		return -17
+	case syscall.ENOTDIR:
+		return -20
+	case syscall.EINVAL:
+		return -22
+	case syscall.EFBIG:
+		return -27
+	case syscall.EROFS:
+		return -30
+	case syscall.EPIPE:
+		return -32
+	case syscall.ERANGE:
+		return -34
+	case syscall.ENAMETOOLONG:
+		return -38
+	case syscall.ENOTEMPTY:
+		return -41
+	default:
+		return -int(err)
+	}
+	
 }
 
 // Mknod creates a file node.
@@ -119,7 +159,7 @@ func (j *juice) Mknod(p string, mode uint32, dev uint64) (e int) {
 		return
 	}
 	_, errno := j.vfs.Mknod(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(dev))
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -161,7 +201,7 @@ func (j *juice) Symlink(target string, newpath string) (e int) {
 		return
 	}
 	_, errno := j.vfs.Symlink(ctx, target, parent.Inode(), path.Base(newpath))
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -174,7 +214,7 @@ func (j *juice) Readlink(path string) (e int, target string) {
 		return
 	}
 	t, errno := j.vfs.Readlink(ctx, fi.Inode())
-	e = -int(errno)
+	e = errorconv(errno)
 	target = string(t)
 	return
 }
@@ -253,7 +293,7 @@ func (j *juice) Create(p string, flags int, mode uint32) (e int, fh uint64) {
 		j.handlers[fh] = entry.Inode
 		j.Unlock()
 	}
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -300,7 +340,7 @@ func (j *juice) OpenEx(path string, fi *fuse.FileInfo_t) (e int) {
 		j.handlers[fh] = ino
 		j.Unlock()
 	}
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -414,7 +454,7 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 	}
 	entry, errrno := j.vfs.GetAttr(ctx, ino, 0)
 	if errrno != 0 {
-		e = -int(errrno)
+		e = errorconv(errrno)
 		return
 	}
 	j.vfs.UpdateLength(entry.Inode, entry.Attr)
@@ -431,7 +471,7 @@ func (j *juice) Truncate(path string, size int64, fh uint64) (e int) {
 		e = -fuse.EBADF
 		return
 	}
-	e = -int(j.vfs.Truncate(ctx, ino, size, 0, nil))
+	e = errorconv(j.vfs.Truncate(ctx, ino, size, 0, nil))
 	return
 }
 
@@ -450,7 +490,7 @@ func (j *juice) Read(path string, buf []byte, off int64, fh uint64) (e int) {
 	}
 	n, err := j.vfs.Read(ctx, ino, buf, uint64(off), fh)
 	if err != 0 {
-		e = -int(err)
+		e = errorconv(err)
 		return
 	}
 	return n
@@ -471,7 +511,7 @@ func (j *juice) Write(path string, buff []byte, off int64, fh uint64) (e int) {
 	}
 	errno := j.vfs.Write(ctx, ino, buff, uint64(off), fh)
 	if errno != 0 {
-		e = -int(errno)
+		e = errorconv(errno)
 	} else {
 		e = len(buff)
 	}
@@ -487,7 +527,7 @@ func (j *juice) Flush(path string, fh uint64) (e int) {
 		e = -fuse.EBADF
 		return
 	}
-	e = -int(j.vfs.Flush(ctx, ino, fh, 0))
+	e = errorconv(j.vfs.Flush(ctx, ino, fh, 0))
 	return
 }
 
@@ -521,7 +561,7 @@ func (j *juice) Fsync(path string, datasync bool, fh uint64) (e int) {
 	if ino == 0 {
 		e = -fuse.EBADF
 	} else {
-		e = -int(j.vfs.Fsync(ctx, ino, 1, fh))
+		e = errorconv(j.vfs.Fsync(ctx, ino, 1, fh))
 	}
 	return
 }
@@ -541,7 +581,7 @@ func (j *juice) Opendir(path string) (e int, fh uint64) {
 		j.handlers[fh] = f.Inode()
 		j.Unlock()
 	}
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -558,7 +598,7 @@ func (j *juice) Readdir(path string,
 	ctx := j.newContext()
 	entries, readAt, err := j.vfs.Readdir(ctx, ino, 100000, int(ofst), fh, true)
 	if err != 0 {
-		e = -int(err)
+		e = errorconv(err)
 		return
 	}
 	var st fuse.Stat_t
@@ -603,7 +643,7 @@ func (j *juice) Releasedir(path string, fh uint64) (e int) {
 	j.Lock()
 	delete(j.handlers, fh)
 	j.Unlock()
-	e = -int(j.vfs.Releasedir(j.newContext(), ino, fh))
+	e = -(j.vfs.Releasedir(j.newContext(), ino, fh))
 	return
 }
 
