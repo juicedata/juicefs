@@ -317,19 +317,13 @@ func retriveUrlConnsOptions(driver, murl string) (string, int, int, int, int) {
 			vals.Del("max_life_time")
 		}
 		if driver == "sqlite3" {
-			if vals.Has("cache") {
-				vals.Set("cache", "shared")
-			} else {
+			if !vals.Has("cache") {
 				vals.Add("cache", "shared")
 			}
-			if vals.Has("_journal") {
-				vals.Set("_journal", "WAL")
-			} else {
+			if !vals.Has("_journal") && !vals.Has("_journal_mode") {
 				vals.Add("_journal", "WAL")
 			}
-			if vals.Has("_timeout") {
-				vals.Set("_timeout", "5000")
-			} else {
+			if !vals.Has("_timeout") && !vals.Has("_busy_timeout") {
 				vals.Add("_timeout", "5000")
 			}
 		}
