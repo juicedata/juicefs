@@ -50,6 +50,22 @@ jobs:
         timeout-minutes: 5
         uses: ./.github/actions/mount-coverage-dir
         with:
+          mount_point: /ci-coverage
+          subdir: juicefs/
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
+      - name: clean up old coverage data
+        continue-on-error: true
+        timeout-minutes: 30
+        run: |
+          find /ci-coverage -type f \( -name 'covcounters*' -o -name 'covmeta*' \) -mtime +2 -exec rm -f {} +
+
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
           mount_point: schedule
           subdir: juicefs/schedule
           access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
