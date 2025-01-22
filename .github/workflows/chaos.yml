@@ -19,7 +19,7 @@ on:
 
 jobs:
   chaos-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
@@ -216,7 +216,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
   success-all-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [chaos-test]
     if: always()
     steps:
