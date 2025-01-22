@@ -65,6 +65,8 @@ type Config struct {
 	MinAge         time.Duration
 	Env            map[string]string
 
+	FilesFrom string
+
 	rules          []rule
 	concurrentList chan int
 	Registerer     prometheus.Registerer
@@ -176,6 +178,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		MinSize:        int64(utils.ParseBytes(c, "min-size", 'B')),
 		MaxAge:         utils.Duration(c.String("max-age")),
 		MinAge:         utils.Duration(c.String("min-age")),
+		FilesFrom:      c.String("files-from"),
 		Env:            make(map[string]string),
 	}
 	if !c.IsSet("max-size") {
