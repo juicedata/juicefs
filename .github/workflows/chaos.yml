@@ -20,7 +20,7 @@ on:
 jobs:
   chaos-test:
     timeout-minutes: 60
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
@@ -218,7 +218,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
   success-all-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [chaos-test]
     if: always()
     steps:
