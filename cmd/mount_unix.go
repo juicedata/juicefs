@@ -891,12 +891,10 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 	rootSquash := c.String("root-squash")
 	allSquash := c.String("all-squash")
 	if allSquash != "" || rootSquash != "" {
-		if conf.NonDefaultPermission {
-			logger.Fatalf("root-squash or all-squash can't be used with non-default-permission")
-		}
 		nobodyUid, nobodyGid := getNobodyUIDGID()
 		// all-squash takes precedence over root-squash
 		if allSquash != "" {
+			conf.NonDefaultPermission = true // disable kernel permission check
 			uid, gid := parseUIDGID(allSquash, nobodyUid, nobodyGid)
 			conf.AllSquash = &vfs.AnonymousAccount{Uid: uid, Gid: gid}
 			logger.Infof("Map all uid/gid to %d/%d by setting all-squash", uid, gid)
