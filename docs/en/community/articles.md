@@ -11,6 +11,7 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### AI, machine learning, and deep learning
 
+- [Tongcheng Travel Chose JuiceFS over CephFS to Manage Hundreds of Millions of Files](https://juicefs.com/en/blog/user-stories/juicefs-vs-cephfs-distributed-file-system-artificial-intelligence-storage), 2025-01-08, Chuanhai Wei @ Tongcheng Travel
 - [vivo Migrated from GlusterFS to a Distributed File System for AI Training](https://juicefs.com/en/blog/user-stories/improve-ai-training), 2024-07-18, Yige Peng @ vivo
 - [iSEE Lab Stores 500M+ Files on JuiceFS Replacing NFS](https://juicefs.com/en/blog/user-stories/deep-learning-ai-storage), 2024-07-03, Guohao Xu @ Sun Yat-sen University
 - [Beike Loads AI Models 20x Faster with Hybrid Cloud Storage](https://juicefs.com/en/blog/user-stories/ai-model-accelerate), 2024-06-26, Tianqing Wang @ Beike
@@ -42,8 +43,14 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 - [How to make HBase faster, more stable, and cheaper](https://juicefs.com/blog/en/posts/how-to-make-hbase-faster-more-stable-and-cheaper)
 - [Exploring storage and computing separation for ClickHouse](https://juicefs.com/blog/en/posts/clickhouse-disaggregated-storage-and-compute-practice)
 
+### Cloud-native & Kubernetes
+
+- [Hai Robotics Achieved High Availability & Easy Operations in a Hybrid Cloud Architecture with JuiceFS](https://juicefs.com/en/blog/user-stories/high-availability-easy-operations-hybrid-cloud-ai-storage), 2024-11-27, Sendong Wu @ Hai Robotics
+- [TAL: Building a Low-Operation Model Repository Based on JuiceFS in a Multi-Cloud Environment](https://juicefs.com/en/blog/user-stories/multi-cloud-llm-model-repository-storage), 2024-11-21, Longhua He @ TAL
+
 ### Data sharing
 
+- [Conda + JuiceFS: Enhancing AI Development Environment Sharing](https://juicefs.com/en/blog/usage-tips/improve-artificial-intelligence-development-environment-sharing), 2024-12-18, Herald Yu
 - [Building a Milvus Cluster Based on JuiceFS](https://juicefs.com/blog/en/posts/build-milvus-distributed-cluster-based-on-juicefs)
 
 ### Data backup and recovery
@@ -55,6 +62,9 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Tutorial, guide, and best practice
 
+- [Automated Cache Management: JuiceFS Enterprise Edition Introduces Cache Group Operator](https://juicefs.com/en/blog/usage-tips/automated-cache-management-cache-group-operator), 2025-01-16, Xuhui Zhang
+- [Database Release and End-to-End Testing: Bringing Modern Software Development Best Practices to the Data World](https://juicefs.com/en/blog/user-stories/end-to-end-test-clickhouse-database-clone), 2024-12-04, Tao Ma @ Jerry
+- [JuiceFS CSI: Smooth Upgrades of Mount Pods and Implementation Details](https://juicefs.com/en/blog/usage-tips/mount-pod-smooth-upgrade), 2024-11-13, Weiwei Zhu 
 - [Empowering NAS for AI Training with JuiceFS Direct-Mode NFS](https://juicefs.com/en/blog/usage-tips/direct-nfs)，2024-07-25，Herald Yu
 - [How to Deploy SeaweedFS+TiKV for Using JuiceFS](https://juicefs.com/en/blog/usage-tips/seaweedfs-tikv), 2024-07-11, Jinhao Yang @ SmartMore
 - [JuiceFS 1.2: Introducing Enterprise-Grade Permission Management and Smooth Upgrades](https://juicefs.com/en/blog/release-notes/juicefs-12), 2024-06-20
@@ -87,6 +97,8 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Others
 
+- [Code-Level Analysis: Design Principles of JuiceFS Metadata and Data Storage](https://juicefs.com/en/blog/engineering/design-metadata-data-storage), 2024-12-12, Arthur
+- [How JuiceFS Achieves Consistency and Low-Latency Data Distribution in Multi-Cloud Architectures](https://juicefs.com/en/blog/solutions/consistency-low-latency-data-distribution-multi-cloud-storage), 2025-01-22, Jerry Cai
 - [From HPC to AI: Evolution and Performance Evaluation of File Systems](https://juicefs.com/en/blog/user-stories/hpc-ai-file-system), 2024-05-23, Weizheng Lu @ Renmin University of China
 - [Is POSIX Really Unsuitable for Object Stores? A Data-Backed Answer](https://juicefs.com/en/blog/community/posix-object-store-suitable-file-system), 2023-11-16, Herald Yu
 - [Comparative Analysis of Major Distributed File System Architectures: GFS vs. Tectonic vs. JuiceFS](https://juicefs.com/en/blog/engineering/compare-distributed-file-system-architectures-gfs-tectonic-juicefs), 2023-10-20, Changjian Gao
