@@ -15,7 +15,7 @@ on:
     - main
     - release**
     paths:
-    - '**/fsrand2.yml'
+    - '**/fsrand.yml'
     - '**/fs.py'
     - '**/fs_test.py'
     - '**/fs_acl_test.py'
@@ -29,7 +29,7 @@ on:
         required: false
         default: false
 jobs:
-  fsrand2:
+  fsrand:
     timeout-minutes: 60
     strategy:
       fail-fast: false
