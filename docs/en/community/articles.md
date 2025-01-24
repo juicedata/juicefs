@@ -15,7 +15,7 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 - [LLM Storage Selection & Detailed Performance Analysis of JuiceFS](https://juicefs.com/en/blog/solutions/llm-storage-selection), 2024-10-23, Shaojie Li
 - [MiniMax Built a Cost-Effective, High-Performance AI Platform with JuiceFS](https://juicefs.com/en/blog/user-stories/minimax-foundation-model-ai-storage), 2024-09-02
 - [How JuiceFS Boosts Foundation Model Inference in Multi-Cloud Architectures](https://juicefs.com/en/blog/solutions/boost-foundation-model-inference-multi-cloud), 2024-08-29, Changjian Gao
-- [Enhancing AI Training Workflows with JuiceFS](https://juicefs.com/en/blog/solutions/enhance-ai-training-workflow), 2024-08-27 
+- [Enhancing AI Training Workflows with JuiceFS](https://juicefs.com/en/blog/solutions/enhance-ai-training-workflow), 2024-08-27
 - [vivo Migrated from GlusterFS to a Distributed File System for AI Training](https://juicefs.com/en/blog/user-stories/improve-ai-training), 2024-07-18, Yige Peng @ vivo
 - [iSEE Lab Stores 500M+ Files on JuiceFS Replacing NFS](https://juicefs.com/en/blog/user-stories/deep-learning-ai-storage), 2024-07-03, Guohao Xu @ Sun Yat-sen University
 - [Beike Loads AI Models 20x Faster with Hybrid Cloud Storage](https://juicefs.com/en/blog/user-stories/ai-model-accelerate), 2024-06-26, Tianqing Wang @ Beike
