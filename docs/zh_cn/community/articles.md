@@ -8,10 +8,13 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## AI
 
+- [加速 AI 训推：Lepton AI 如何构建多租户、低延迟云存储平台](https://juicefs.com/zh-cn/blog/user-stories/lepton-ai-build-multi-tenant-low-latency-cloud-storage-platform)，2025-01-17，丁聪@Lepton AI
+- [多云架构，JuiceFS 如何实现一致性与低延迟的数据分发？](https://juicefs.com/zh-cn/blog/solutions/juicefs-multi-cloud-consistency-low-latency)，2025-01-10，蔡敏
 - [从 CephFS 到 JuiceFS：同程旅行亿级文件存储平台构建之路](https://juicefs.com/zh-cn/blog/user-stories/cephfs-vs-juicefs-draco-travel-file-storage)，2024-12-13，位传海@同程旅行
 - [vivo 轩辕文件系统：AI 计算平台存储性能优化实践](https://juicefs.com/zh-cn/blog/user-stories/vivo-ai)，2024-10-25，于相洋@vivo
 - [大模型存储选型 & JuiceFS 在关键环节性能详解](https://juicefs.com/zh-cn/blog/solutions/large-model-storage-performance-juicefs)，2024-10-09，李少杰
 - [MiniMax：如何基于 JuiceFS 构建高性能、低成本的大模型 AI 平台？](https://juicefs.com/zh-cn/blog/user-stories/minimax-juicefs-ai)，2024-08-30
+- [JuiceFS 在多云架构中加速大模型推理](https://juicefs.com/zh-cn/blog/solutions/data-storage-multi-cloud-model-training-juicefs)，2024-08-23，高昌健
 - [基于 JuiceFS 构建高校 AI 存储方案：高并发、系统稳定、运维简单](https://juicefs.com/zh-cn/blog/user-stories/juicefs-vs-nfs-ai-storage)，2024-06-26，徐国昊@中山大学
 - [贝壳找房：为 AI 平台打造混合多云的存储加速底座](https://juicefs.com/zh-cn/blog/user-stories/beike-ai-platform-multi-cloud-storage)，2024-06-12，王天庆@贝壳找房
 - [北美科技企业 Jerry：基于 JuiceFS 构建 ClickHouse 主从架构](https://juicefs.com/zh-cn/blog/user-stories/jerry-clickhouse-read-write-separation-juicefs-primary-replica-architecture)，2024-05-17，马涛@Jerry
@@ -41,6 +44,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [基于 JuiceFS 的大数据平台上云：存储成本省 85%，性能媲美 HDFS](https://juicefs.com/zh-cn/blog/user-stories/hdfs-to-object-storage-juicefs)，2024-01-10，JuiceFS 资深用户
 - [多点 DMALL：大数据存算分离下的存储架构探索与实践](https://juicefs.com/zh-cn/blog/user-stories/separation-of-storage--computing-building-cloud-native-big-data-platform), 2023-08-16，李铭@多点
 - [网易互娱出海之旅：大数据平台上云架构设计与实践](https://juicefs.com/zh-cn/blog/user-stories/hadoop-compatible-storage-big-data-cloud-platform-s3)，2023-08-09，柯维鸿@网易互娱
+- - [云上大数据存储：探究 JuiceFS 与 HDFS 的异同](https://juicefs.com/zh-cn/blog/engineering/similarities-and-differences-between-hdfs-and-juicefs-structures)，2023-04-04，汤友棚
 - [Protobuf 在知乎大数据场景的应用，利用 JuiceFS 动态注入 JAR 包](https://zhuanlan.zhihu.com/p/586120009)，2022-11-23，胡梦宇@知乎
 - [金山云：基于 JuiceFS 的 Elasticsearch 温冷热数据管理实践](https://juicefs.com/zh-cn/blog/user-stories/juicefs-elasticsearch-cold-heat-data-management)，2022-11-17，侯学峰@金山云
 - [JuiceFS 替代 HDFS，苦 HDFS 小文件久矣](https://zhuanlan.zhihu.com/p/569586606)，2022-10-08，久耶供应链 大数据总监
@@ -72,11 +76,9 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [小米云原生文件存储平台化实践：支撑 AI 训练、大模型、容器平台多项业务](https://juicefs.com/zh-cn/blog/user-stories/cloud-native-file-storage-platform-as-ai-training-large-models-container-platforms)，2023-09-22，孙佳朋@小米
 - [大模型训练：K8s 环境中数千节点存储最佳实践](https://juicefs.com/zh-cn/blog/usage-tips/large-model-storage-kubernetes)，2024-09-25，朱唯唯
 - [Clobotics 计算机视觉场景存储实践：多云架构、POSIX 全兼容、低运维的统一存储](https://juicefs.com/zh-cn/blog/user-stories/clobotics-posix-multi-cloud-storage)，2024-08-30，Jonnas@Clobotics
-- [JuiceFS 在多云架构中加速大模型推理](https://juicefs.com/zh-cn/blog/solutions/data-storage-multi-cloud-model-training-juicefs)，2024-08-23，高昌健
 - [如何在 Kubernetes 中使用 ClickHouse 和 JuiceFS](https://juicefs.com/zh-cn/blog/usage-tips/kubernetes-clickhouse-juicefs)，2024-08-02，Vitaliy Zakaznikov
 - [Kubernetes 数据持久化：从零开始使用 JuiceFS CSI Driver](https://juicefs.com/zh-cn/blog/usage-tips/kubernetes-juicefs-csi-driver)，2023-12-11，于鸿儒
 - [从本地到云端：豆瓣如何使用 JuiceFS 实现统一的数据存储](https://juicefs.com/zh-cn/blog/user-stories/scalable-computing-unified-data-storage-ops-cloud-spark-k8s-juicefs)，2023-05-10，曹丰宇@豆瓣
-- [云上大数据存储：探究 JuiceFS 与 HDFS 的异同](https://juicefs.com/zh-cn/blog/engineering/similarities-and-differences-between-hdfs-and-juicefs-structures)，2023-04-04，汤友棚
 - [Sidecar-详解 JuiceFS CSI Driver 新模式](https://juicefs.com/zh-cn/blog/usage-tips/explain-in-detail-juicefs-csi-driver-sidecar)，2023-02-22，朱唯唯
 - [存储更弹性，详解 Fluid“ECI 环境数据访问”新功能](https://juicefs.com/zh-cn/blog/solutions/fluid-eci-juicefs)，2022-09-05，朱唯唯
 - [基于 JuiceFS 的 KubeSphere DevOps 项目数据迁移方案](https://mp.weixin.qq.com/s/RgUHRUrL0u-J9nVqwOfS8Q)，2022-08-04，尹珉@数跑科技
