@@ -162,7 +162,7 @@ jobs:
 
   success-all-test:
     runs-on: ubuntu-latest
-    needs: [fsrand2]
+    needs: [fsrand]
     if: always()
     steps:
       - uses: technote-space/workflow-conclusion-action@v3
