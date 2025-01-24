@@ -115,6 +115,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
+          include-hidden-files: true
           name: hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
 
