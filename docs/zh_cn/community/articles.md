@@ -120,6 +120,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [性能、成本与 POSIX 兼容性比较：JuiceFS vs EFS vs FSx for Lustre](https://juicefs.com/zh-cn/blog/engineering/juicefs-vs-efs-fsx-for-lustre)，2024-09-04，白伯纯
 - [如何判断数据库和对象存储是否被 JuiceFS 使用？](https://juicefs.com/zh-cn/blog/usage-tips/database-object-storage-used-by-juicefs)，2024-08-16，于鸿儒
 - [一文详解 JuiceFS 读性能：预读、预取、缓存、FUSE 和对象存储](https://juicefs.com/zh-cn/blog/engineering/juicefs-read-performance)，2024-07-26，莫飞虎
+- [MemVerge：小文件写入性能 5 倍于 S3FS，JuiceFS 加速生信研究](https://juicefs.com/zh-cn/blog/user-stories/memverge-s3fs-juicefs)，2024-07-24，Jon Jiang@MemVerge
 - [JuiceFS 直连 NFS 新功能介绍，赋能 NAS 进行 AI 训练](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-nfs-nas-ai)，2024-07-19，于鸿儒
 - [SeaweedFS + TiKV 部署保姆级教程](https://juicefs.com/zh-cn/blog/usage-tips/seaweedfs-tikv)，2024-07-12，杨进豪@思谋科技
 - [JuiceFS 社区版 v1.2 发布，新增企业级权限管理、平滑升级功能](https://juicefs.com/zh-cn/blog/release-notes/juicefs-v12)，2024-06-21
