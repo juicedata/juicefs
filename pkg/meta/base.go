@@ -2407,7 +2407,11 @@ func (m *baseMeta) deleteSlice(id uint64, size uint32) {
 		return
 	}
 	if m.dslices != nil {
-		m.dslices <- Slice{Id: id, Size: size}
+		select {
+		case <-m.sessCtx.Done():
+			return
+		case m.dslices <- Slice{Id: id, Size: size}:
+		}
 	} else {
 		m.deleteSlice_(id, size)
 	}
