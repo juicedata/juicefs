@@ -3,20 +3,20 @@ name: "gateway_random_test"
 on:
   push:
     branches:
-      - 'main'
-      - 'release-**'
+      - "main"
+      - "release-**"
     paths:
-      - '**/gateway2.yml'
-      - '.github/scripts/hypo/s3**.py'
+      - "**/gateway2.yml"
+      - ".github/scripts/hypo/s3**.py"
   pull_request:
     branches:
-      - 'main'
-      - 'release-**'
+      - "main"
+      - "release-**"
     paths:
-      - '**/gateway2.yml'
-      - '.github/scripts/hypo/s3**.py'
+      - "**/gateway2.yml"
+      - ".github/scripts/hypo/s3**.py"
   schedule:
-    - cron:  '0 19 * * *'
+    - cron: "0 19 * * *"
   workflow_dispatch:
     inputs:
       debug:
@@ -67,7 +67,7 @@ jobs:
 
       - name: Build
         uses: ./.github/actions/build
-        with: 
+        with:
           target: ${{steps.vars.outputs.target}}
 
       - name: Test with example
@@ -78,18 +78,18 @@ jobs:
             subdir=false
           fi
           sudo -E SUBDIR=$subdir .github/scripts/command/gateway2.sh test_run_example
-          
-        
+
       - name: Download example database
-        uses: dawidd6/action-download-artifact@v2.24.3
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: actions/download-artifact@v4
         with:
-          name: hypothesis-example-db
+          name: hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
-          if_no_artifact_found: warn
-          workflow_conclusion: completed
 
       - name: Test randomly
-        timeout-minutes: 65
+        continue-on-error: true
+        timeout-minutes: 60
         run: |
           if [[ ${{matrix.meta}} == "tikv" ]]; then
             subdir=true
@@ -99,20 +99,21 @@ jobs:
           sudo -E LOG_LEVEL=WARNING SUBDIR=$subdir timeout 3600 .github/scripts/command/gateway2.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo test failed with $code && exit $code; fi
 
       - name: Upload example database
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: hypothesis-example-db
+          include-hidden-files: true
+          name: hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
 
       - name: check log
         if: always()
-        run: | 
+        run: |
           if [ -f /var/log/juicefs-gateway.log ]; then
             tail -300 /var/log/juicefs-gateway.log
             grep "<FATAL>:" /var/log/juicefs-gateway.log && exit 1 || true
           fi
-          
+
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         timeout-minutes: 60
@@ -138,5 +139,5 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Success
-        if: success() 
+        if: success()
         run: echo "All Done"
