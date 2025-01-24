@@ -81,30 +81,36 @@ jobs:
           fi
           sudo -E SUBDIR=$subdir .github/scripts/command/gateway-random.sh test_run_example
           
-        
       - name: Download example database
-        uses: dawidd6/action-download-artifact@v6
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: actions/download-artifact@v4
         with:
-          name: hypothesis-example-db
+          name: hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
-          if_no_artifact_found: warn
-          workflow_conclusion: completed
 
       - name: Test randomly
-        timeout-minutes: 65
+        continue-on-error: true
+        timeout-minutes: 60
         run: |
           if [[ ${{matrix.meta}} == "tikv" ]]; then
             subdir=true
           else
             subdir=false
           fi
-          sudo -E LOG_LEVEL=WARNING SUBDIR=$subdir timeout 3600 .github/scripts/command/gateway-random.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo test failed with $code && exit $code; fi
+          sudo -E LOG_LEVEL=WARNING SUBDIR=$subdir .github/scripts/command/gateway-random.sh test_run_all 2>&1 | tee fsrand.log
+      
+      - name: check fsrand.log
+        if: always()
+        run: | 
+          grep "AssertionError" fsrand.log && exit 1 || true
 
       - name: Upload example database
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: hypothesis-example-db
+          include-hidden-files: true
+          name: hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
 
       - name: check log

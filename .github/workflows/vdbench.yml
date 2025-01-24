@@ -98,9 +98,9 @@ jobs:
           GOCOVERDIR=$(pwd)/cover ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --cache-size 1024 --max-deletes 50
           vdbench/vdbench -f .github/workflows/resources/vdbench_long_run.conf -jn
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          name: output-long-run
+          name: output-long-run-${{ matrix.meta }}
           path: output
 
       - name: check vdbench log

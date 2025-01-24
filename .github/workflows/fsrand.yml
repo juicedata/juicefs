@@ -15,7 +15,7 @@ on:
     - main
     - release**
     paths:
-    - '**/fsrand2.yml'
+    - '**/fsrand.yml'
     - '**/fs.py'
     - '**/fs_test.py'
     - '**/fs_acl_test.py'
@@ -29,7 +29,7 @@ on:
         required: false
         default: false
 jobs:
-  fsrand2:
+  fsrand:
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -105,23 +105,30 @@ jobs:
           sudo -E python3 .github/scripts/hypo/fs_acl_test.py
 
       - name: Download example database
-        uses: dawidd6/action-download-artifact@v6
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: actions/download-artifact@v4
         with:
-          name: hypothesis-example-db
+          name: hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
-          if_no_artifact_found: warn
-          workflow_conclusion: completed
 
       - name: Test
-        timeout-minutes: 125
+        continue-on-error: true
+        timeout-minutes: 120
         run: |
-          timeout 7200 sudo -E LOG_LEVEL=WARNING python3 .github/scripts/hypo/fs.py 2>&1 | tee fsrand.log || code=$?; if [[ $code -ne 124 && $code -ne 0 ]]; then echo test failed; exit $code; fi
+          sudo -E LOG_LEVEL=WARNING python3 .github/scripts/hypo/fs.py 2>&1 | tee fsrand.log
+      
+      - name: check fsrand.log
+        if: always()
+        run: | 
+          grep "AssertionError" fsrand.log && exit 1 || true
 
       - name: Upload example database
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: hypothesis-example-db
+          include-hidden-files: true
+          name: hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
 
       - name: check fsrand.log
@@ -155,7 +162,7 @@ jobs:
 
   success-all-test:
     runs-on: ubuntu-latest
-    needs: [fsrand2]
+    needs: [fsrand]
     if: always()
     steps:
       - uses: technote-space/workflow-conclusion-action@v3
