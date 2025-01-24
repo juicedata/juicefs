@@ -25,15 +25,15 @@ juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://VOL_NAME/
 juicefs sync --match-full-path --include='**.gz' --exclude='*' s3://xxx jfs://VOL_NAME/
 
 # Copy all files that do not end with .gz
-juicefs sync --match-full-path --exclude='**.gz' --include='*' s3://xxx/ jfs://VOL_NAME/
+juicefs sync --match-full-path --exclude='**.gz' s3://xxx/ jfs://VOL_NAME/
 
 # Copy all files except the subdirectory named tempdir
-juicefs sync --match-full-path --include='*' --exclude='**/tmpdir/**' s3://xxx/ jfs://VOL_NAME/
+juicefs sync --match-full-path --include='*' s3://xxx/ jfs://VOL_NAME/
 ```
 
 ## Pattern matching {#pattern-matching}
 
-You can use `--exclude` and `--include` for filtering. If no filtering rules are provided, all files are scanned and copied. However, if you do need filtering, you must use both `--include` and `--exclude` for any of them to work properly (see examples above for reference).
+You can use `--exclude` and `--include` for filtering. If no filtering rules are provided, all files are scanned and copied (`--include='*'` is the default). However, if you were to use `--include` filter to only handle files with the specified pattern, then you must also use `--exclude` as well, see examples above for reference.
 
 :::tip
 When using multiple matching patterns, it may be difficult to determine whether a file will be synchronized due to the filtering logic. In such cases, it is recommended to add the `--dry --debug` option to preview the files selected for synchronization. If the results are not as expected, adjust the matching patterns accordingly.
@@ -56,10 +56,6 @@ In addition:
 - A pattern that starts with `/` stands for absolute path, so `/foo` matches the `foo` file at the root.
 
 Here are some examples of matching patterns:
-
-:::tip
-`--include` and `--exclude` must **be used together**. If you only specify `--include` without any `--exclude`, filtering will not work (and vice versa). Therefore, if you want to copy a command from examples below, ensure you append `--include='*'` to make them effective.
-:::
 
 + `--exclude='*.o'` excludes all files matching `*.o`.
 + `--exclude='/foo/*/bar'` excludes `bar` files located two levels under `/foo`, such as `/foo/spam/bar`, but not `/foo/spam/eggs/bar`.

@@ -22,15 +22,15 @@ juicefs sync oss://mybucket.oss-cn-shanghai.aliyuncs.com s3://mybucket.s3.us-eas
 juicefs sync --match-full-path --include='**.gz' --exclude='*' s3://xxx s3://xxx
 
 # 拷贝不以 .gz 结尾的所有文件
-juicefs sync --match-full-path --exclude='**.gz' --include='*' s3://xxx/ s3://xxx
+juicefs sync --match-full-path --exclude='**.gz' s3://xxx/ s3://xxx
 
 # 拷贝所有文件，但忽略名为 tmpdir 的子目录
-juicefs sync --match-full-path --include='*' --exclude='**/tmpdir/**' s3://xxx/ s3://xxx
+juicefs sync --match-full-path --exclude='**/tmpdir/**' s3://xxx/ s3://xxx
 ```
 
 ## 模式匹配 {#pattern-matching}
 
-你可以通过 `--exclude` 和 `--include` 来包含或排除要同步的文件路径。如果不提供任何规则，默认会同步所有扫描到的文件。但如果需要过滤特定文件，则**必须同时使用`--include` 和 `--exclude`**，不可以单独只使用其一，具体请参考上方的示范命令。
+你可以通过 `--exclude` 和 `--include` 来包含或排除要同步的文件路径。如果不提供任何规则，默认会同步所有扫描到的文件（默认就是 `--include='*'`）。但如果需要使用 `--include` 实现只包含特定命名模式的文件，则**必须同时使用 `--exclude` 来排除其他文件**，具体请参考上方的示范命令。
 
 :::tip
 当提供多个匹配模式时，取决于你具体使用的「过滤模式」，对于判断是否要同步某个文件可能会变得很困难。此时建议加上 `--dry --debug` 选项提前查看要同步的具体文件是否符合预期，如果不符合预期则需要调整匹配模式。
@@ -53,10 +53,6 @@ juicefs sync --match-full-path --include='*' --exclude='**/tmpdir/**' s3://xxx/ 
 - 如果匹配模式以 `/` 开头，则表示匹配完整路径（路径不需要以 `/` 开头），因此 `/foo` 匹配的是传输中根目录的 `foo` 文件。
 
 以下是一些匹配模式的例子：
-
-:::tip
-`--include` 和 `--exclude` 必须**同时使用**，不能只用 `--include` 而没有 `--exclude`，反之亦然。因此如果要仿照下方示范撰写命令，还需要额外追加 `--include='*'` 才能发挥作用。
-:::
 
 + `--exclude '*.o'` 将排除所有文件名能匹配 `*.o` 的文件；
 + `--exclude '/foo/*/bar'` 将排除根目录中名为 `foo` 的目录向下「两层」的目录中名为 `bar` 的文件；
