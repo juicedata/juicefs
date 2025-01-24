@@ -155,7 +155,7 @@ do_test_cache_expired(){
 test_cache_large_write(){
     prepare_test
     ./juicefs format $META_URL myjfs
-    ./juicefs mount $META_URL /tmp/jfs -d
+    ./juicefs mount $META_URL /tmp/jfs -d -v
     dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
     ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
     ratio=$(get_warmup_ratio)
