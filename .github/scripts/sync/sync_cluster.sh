@@ -81,15 +81,19 @@ test_sync_without_mount_point2(){
     ./mc cp -r data myminio/data
     
     # (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
+    set -o pipefail
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5\
          2>&1 | tee sync.log
+    set +o pipefail
     check_sync_log $file_count
+    set -o pipefail
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-all \
          2>&1 | tee sync.log
+    set +o pipefail
     ./juicefs mount -d $META_URL /jfs
     diff data/ /jfs/data/
     ./mc rm -r --force myminio/data
@@ -120,7 +124,7 @@ skip_test_sync_between_oss(){
 }
 
 check_sync_log(){
-    grep "<FATAL>" sync.log && exit 1 || true
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     file_count=$1
     if tail -1 sync.log | grep -q "close session"; then
       file_copied=$(tail -n 3 sync.log | head -n 1  | sed 's/.*copied: \([0-9]*\).*/\1/' )

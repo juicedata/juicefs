@@ -18,6 +18,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -48,8 +49,9 @@ import (
 )
 
 const (
-	sep        = "/"
-	metaBucket = ".sys"
+	sep          = "/"
+	metaBucket   = ".sys"
+	subDirPrefix = 3 // 16^3=4096 slots
 )
 
 var mctx meta.Context
@@ -60,6 +62,7 @@ type Config struct {
 	KeepEtag    bool
 	Umask       uint16
 	ObjTag      bool
+	ObjMeta     bool
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -186,10 +189,14 @@ func (n *jfsObjects) tpath(p ...string) string {
 }
 
 func (n *jfsObjects) upath(bucket, uploadID string) string {
-	return n.tpath(bucket, "uploads", uploadID)
+	return n.tpath(bucket, "uploads", uploadID[:subDirPrefix], uploadID)
 }
 
 func (n *jfsObjects) ppath(bucket, uploadID, part string) string {
+	return n.tpath(bucket, "uploads", uploadID[:subDirPrefix], uploadID, part)
+}
+
+func (n *jfsObjects) ppathFlat(bucket, uploadID, part string) string { // compatible with tmp files uploaded by old versions(<1.2)
 	return n.tpath(bucket, "uploads", uploadID, part)
 }
 
@@ -536,10 +543,17 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	}
 	dst := n.path(dstBucket, dstObject)
 	src := n.path(srcBucket, srcObject)
+
 	if minio.IsStringEqual(src, dst) {
+		// if we copy the same object for set metadata
+		err = n.setObjMeta(dst, srcInfo.UserDefined)
+		if err != nil {
+			logger.Errorf("set object metadata error, path: %s error %s", dst, err)
+		}
 		return n.GetObjectInfo(ctx, srcBucket, srcObject, minio.ObjectOptions{})
 	}
-	tmp := n.tpath(dstBucket, "tmp", minio.MustGetUUID())
+	uuid := minio.MustGetUUID()
+	tmp := n.tpath(dstBucket, "tmp", uuid[:subDirPrefix], uuid)
 	f, eno := n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
 	if eno == syscall.ENOENT {
 		_ = n.mkdirAll(ctx, path.Dir(tmp))
@@ -581,6 +595,10 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 				logger.Errorf("set object tags error, path: %s, value: %s error %s", tmp, tagStr, eno)
 			}
 		}
+	}
+	err = n.setObjMeta(tmp, srcInfo.UserDefined)
+	if err != nil {
+		logger.Errorf("set object metadata error, path: %s error %s", dst, err)
 	}
 
 	eno = n.fs.Rename(mctx, tmp, dst, 0)
@@ -692,6 +710,20 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 			return minio.ObjectInfo{}, errno
 		}
 	}
+	objMeta, err := n.getObjMeta(n.path(bucket, object))
+	if err != nil {
+		return minio.ObjectInfo{}, err
+	}
+	if opts.UserDefined == nil {
+		opts.UserDefined = make(map[string]string)
+	}
+	for k, v := range objMeta {
+		opts.UserDefined[k] = v
+	}
+	contentType := utils.GuessMimeType(object)
+	if c, exist := objMeta["content-type"]; exist && len(c) > 0 {
+		contentType = c
+	}
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
@@ -700,7 +732,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		IsDir:       fi.IsDir(),
 		AccTime:     fi.ModTime(),
 		ETag:        string(etag),
-		ContentType: utils.GuessMimeType(object),
+		ContentType: contentType,
 		UserTags:    string(tagStr),
 		UserDefined: minio.CleanMetadata(opts.UserDefined),
 	}, nil
@@ -730,7 +762,8 @@ func (n *jfsObjects) mkdirAll(ctx context.Context, p string) error {
 }
 
 func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions, applyObjTaggingFunc func(tmpName string)) (err error) {
-	tmpname := n.tpath(bucket, "tmp", minio.MustGetUUID())
+	uuid := minio.MustGetUUID()
+	tmpname := n.tpath(bucket, "tmp", uuid[:subDirPrefix], uuid)
 	f, eno := n.fs.Create(mctx, tmpname, 0666, n.gConf.Umask)
 	if eno == syscall.ENOENT {
 		_ = n.mkdirAll(ctx, path.Dir(tmpname))
@@ -830,6 +863,10 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 					}
 				}
 			}
+			err = n.setObjMeta(tmpName, opts.UserDefined)
+			if err != nil {
+				logger.Errorf("set object metadata error, path: %s error %s", p, err)
+			}
 		}); err != nil {
 			return
 		}
@@ -838,6 +875,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 	if eno != 0 {
 		return objInfo, jfsToObjectErr(ctx, eno, bucket, object)
 	}
+
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
@@ -870,6 +908,10 @@ func (n *jfsObjects) NewMultipartUpload(ctx context.Context, bucket string, obje
 				}
 			}
 		}
+		err = n.setObjMeta(p, opts.UserDefined)
+		if err != nil {
+			logger.Errorf("set object metadata error, path: %s  error %s", p, err)
+		}
 	}
 	return
 }
@@ -880,6 +922,62 @@ const s3Etag = "s3-etag"
 // less than 64k ref: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#tag-restrictions
 const s3Tags = "s3-tags"
 
+// S3 object metadata
+const s3Meta = "s3-meta"
+const amzMeta = "x-amz-meta-"
+
+var s3UserControlledSystemMeta = []string{
+	"cache-control",
+	"content-disposition",
+	"content-type",
+}
+
+func (n *jfsObjects) getObjMeta(p string) (objMeta map[string]string, err error) {
+	if n.gConf.ObjMeta {
+		var errno syscall.Errno
+		var metadataStr []byte
+		if metadataStr, errno = n.fs.GetXattr(mctx, p, s3Meta); errno != 0 && errno != meta.ENOATTR {
+			return objMeta, errno
+		}
+		if len(metadataStr) > 0 {
+			err = json.Unmarshal(metadataStr, &objMeta)
+			return objMeta, err
+		}
+	} else {
+		objMeta = make(map[string]string)
+	}
+	return objMeta, nil
+}
+
+func (n *jfsObjects) setObjMeta(p string, metadata map[string]string) error {
+	if n.gConf.ObjMeta && metadata != nil {
+		meta := make(map[string]string)
+		for k, v := range metadata {
+			k = strings.ToLower(k)
+			if strings.HasPrefix(k, amzMeta) {
+				meta[k] = v
+			} else {
+				for _, systemMetaKey := range s3UserControlledSystemMeta {
+					if k == systemMetaKey {
+						meta[k] = v
+						break
+					}
+				}
+			}
+		}
+		if len(meta) > 0 {
+			s3MetadataValue, err := json.Marshal(meta)
+			if err != nil {
+				return err
+			}
+			if eno := n.fs.SetXattr(mctx, p, s3Meta, s3MetadataValue, 0); eno != 0 {
+				logger.Errorf("set object metadata error, path: %s,value: %s error: %s", p, string(s3Meta), eno)
+			}
+		}
+	}
+	return nil
+}
+
 func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi minio.ListMultipartsInfo, err error) {
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
@@ -889,7 +987,7 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 		return // no found
 	}
 	defer f.Close(mctx)
-	entries, eno := f.ReaddirPlus(mctx, 0)
+	parents, eno := f.ReaddirPlus(mctx, 0)
 	if eno != 0 {
 		err = jfsToObjectErr(ctx, eno, bucket)
 		return
@@ -900,22 +998,38 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 	lmi.MaxUploads = maxUploads
 	lmi.Delimiter = delimiter
 	commPrefixSet := make(map[string]struct{})
-	for _, e := range entries {
-		uploadID := string(e.Name)
-		// todo: parallel
-		object_, eno := n.fs.GetXattr(mctx, n.upath(bucket, uploadID), uploadKeyName)
+	for _, p := range parents {
+		f, eno := n.fs.Open(mctx, n.tpath(bucket, "uploads", string(p.Name)), 0)
 		if eno != 0 {
-			logger.Warnf("get object xattr error %s: %s, ignore this item", n.upath(bucket, uploadID), eno)
-			continue
+			return
 		}
-		object := string(object_)
-		if strings.HasPrefix(object, prefix) {
-			if keyMarker != "" && object+uploadID > keyMarker+uploadIDMarker || keyMarker == "" {
-				lmi.Uploads = append(lmi.Uploads, minio.MultipartInfo{
-					Object:    object,
-					UploadID:  uploadID,
-					Initiated: time.Unix(e.Attr.Atime, int64(e.Attr.Atimensec)),
-				})
+		defer f.Close(mctx)
+		entries, eno := f.ReaddirPlus(mctx, 0)
+		if eno != 0 {
+			err = jfsToObjectErr(ctx, eno, bucket)
+			return
+		}
+
+		for _, e := range entries {
+			if len(e.Name) != 36 {
+				continue // not an uuid
+			}
+			uploadID := string(e.Name)
+			// todo: parallel
+			object_, eno := n.fs.GetXattr(mctx, n.upath(bucket, uploadID), uploadKeyName)
+			if eno != 0 {
+				logger.Warnf("get object xattr error %s: %s, ignore this item", n.upath(bucket, uploadID), eno)
+				continue
+			}
+			object := string(object_)
+			if strings.HasPrefix(object, prefix) {
+				if keyMarker != "" && object+uploadID > keyMarker+uploadIDMarker || keyMarker == "" {
+					lmi.Uploads = append(lmi.Uploads, minio.MultipartInfo{
+						Object:    object,
+						UploadID:  uploadID,
+						Initiated: time.Unix(e.Attr.Atime, int64(e.Attr.Atimensec)),
+					})
+				}
 			}
 		}
 	}
@@ -1080,6 +1194,10 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	for _, part := range parts {
 		p := n.ppath(bucket, uploadID, strconv.Itoa(part.PartNumber))
 		copied, eno := n.fs.CopyFileRange(mctx, p, 0, tmp, total, 5<<30)
+		if eno == syscall.ENOENT { // try lookup from old path
+			p = n.ppathFlat(bucket, uploadID, strconv.Itoa(part.PartNumber))
+			copied, eno = n.fs.CopyFileRange(mctx, p, 0, tmp, total, 5<<30)
+		}
 		if eno != 0 {
 			err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 			logger.Errorf("merge parts: %s", err)
@@ -1109,6 +1227,15 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		}
 	}
 
+	var objMeta map[string]string
+	if n.gConf.ObjMeta {
+		if objMeta, err = n.getObjMeta(n.upath(bucket, uploadID)); err != nil {
+			logger.Errorf("get object meta error, path: %s, error: %s", n.upath(bucket, uploadID), err)
+		} else if err = n.setObjMeta(tmp, objMeta); err != nil {
+			logger.Errorf("set object meta error, path: %s, error: %s", tmp, err)
+		}
+	}
+
 	name := n.path(bucket, object)
 	eno = n.fs.Rename(mctx, tmp, name, 0)
 	if eno == syscall.ENOENT {
@@ -1135,16 +1262,17 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	}
 
 	// remove parts
-	_ = n.fs.Rmr(mctx, n.upath(bucket, uploadID))
+	_ = n.fs.Rmr(mctx, n.upath(bucket, uploadID), meta.RmrDefaultThreads)
 	return minio.ObjectInfo{
-		Bucket:   bucket,
-		Name:     object,
-		ETag:     s3MD5,
-		ModTime:  fi.ModTime(),
-		Size:     fi.Size(),
-		IsDir:    fi.IsDir(),
-		AccTime:  fi.ModTime(),
-		UserTags: string(tagStr),
+		Bucket:      bucket,
+		Name:        object,
+		ETag:        s3MD5,
+		ModTime:     fi.ModTime(),
+		Size:        fi.Size(),
+		IsDir:       fi.IsDir(),
+		AccTime:     fi.ModTime(),
+		UserTags:    string(tagStr),
+		UserDefined: minio.CleanMetadata(opts.UserDefined),
 	}, nil
 }
 
@@ -1152,12 +1280,12 @@ func (n *jfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 	if err = n.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return
 	}
-	eno := n.fs.Rmr(mctx, n.upath(bucket, uploadID))
+	eno := n.fs.Rmr(mctx, n.upath(bucket, uploadID), meta.RmrDefaultThreads)
 	return jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 }
 
 func (n *jfsObjects) cleanup() {
-	for t := range time.Tick(24 * time.Hour) {
+	for range time.Tick(24 * time.Hour) {
 		// default bucket tmp dirs
 		tmpDirs := []string{".sys/tmp/", ".sys/uploads/"}
 		if n.gConf.MultiBucket {
@@ -1172,27 +1300,40 @@ func (n *jfsObjects) cleanup() {
 			}
 		}
 		for _, dir := range tmpDirs {
-			f, errno := n.fs.Open(mctx, dir, 0)
-			if errno != 0 {
-				continue
-			}
-			entries, _ := f.ReaddirPlus(mctx, 0)
-			for _, entry := range entries {
-				if _, err := uuid.Parse(string(entry.Name)); err != nil {
-					continue
-				}
-				if t.Sub(time.Unix(entry.Attr.Mtime, 0)) > 7*24*time.Hour {
-					p := n.path(dir, string(entry.Name))
-					if errno := n.fs.Rmr(mctx, p); errno != 0 {
-						logger.Errorf("failed to delete expired temporary files path: %s,", p)
-					} else {
-						logger.Infof("delete expired temporary files path: %s, mtime: %s", p, time.Unix(entry.Attr.Mtime, 0).Format(time.RFC3339))
-					}
-				}
-			}
-			_ = f.Close(mctx)
+			n.cleanupDir(dir)
 		}
 	}
+}
+
+func (n *jfsObjects) cleanupDir(dir string) bool {
+	f, errno := n.fs.Open(mctx, dir, 0)
+	if errno != 0 {
+		return false
+	}
+	defer f.Close(mctx)
+	entries, _ := f.ReaddirPlus(mctx, 0)
+	now := time.Now()
+	deleted := 0
+	for _, entry := range entries {
+		dirPath := n.path(dir, string(entry.Name))
+		if entry.Attr.Typ == meta.TypeDirectory && len(entry.Name) == subDirPrefix {
+			if !n.cleanupDir(strings.TrimPrefix(dirPath, "/")) {
+				continue
+			}
+		} else if _, err := uuid.Parse(string(entry.Name)); err != nil {
+			logger.Warnf("unexpected file path: %s", dirPath)
+			continue
+		}
+		if now.Sub(time.Unix(entry.Attr.Mtime, 0)) > 7*24*time.Hour {
+			if errno = n.fs.Rmr(mctx, dirPath, meta.RmrDefaultThreads); errno != 0 {
+				logger.Errorf("failed to delete expired temporary files path: %s, err: %s", dirPath, errno)
+			} else {
+				deleted += 1
+				logger.Infof("delete expired temporary files path: %s, mtime: %s", dirPath, time.Unix(entry.Attr.Mtime, 0).Format(time.RFC3339))
+			}
+		}
+	}
+	return deleted == len(entries)
 }
 
 type jfsFLock struct {

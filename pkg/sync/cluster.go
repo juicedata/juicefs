@@ -190,19 +190,9 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 	if config.ManagerAddr != "" {
 		addr = config.ManagerAddr
 	} else {
-		ips, err := utils.FindLocalIPs()
+		ip, err := utils.GetLocalIp(net.JoinHostPort(config.Workers[0], "22"))
 		if err != nil {
-			return "", fmt.Errorf("find local ips: %s", err)
-		}
-		var ip string
-		for _, i := range ips {
-			if i = i.To4(); i != nil {
-				ip = i.String()
-				break
-			}
-		}
-		if ip == "" {
-			return "", fmt.Errorf("no local ip found")
+			return "", fmt.Errorf("not found local ip: %s", err)
 		}
 		addr = ip
 	}

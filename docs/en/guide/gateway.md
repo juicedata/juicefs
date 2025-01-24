@@ -147,6 +147,10 @@ By default, JuiceFS S3 Gateway does not save or return object ETag information. 
 
 Object tags are not supported by default, but you can use `--object-tag` to enable them.
 
+### Enable object metadata
+
+Object metadata is not supported by default, but you can use `--object-meta` to enable it.
+
 ### Enable virtual host-style requests
 
 By default, JuiceFS S3 Gateway supports path-style requests in the format of `http://mydomain.com/bucket/object`. The `MINIO_DOMAIN` environment variable is used to enable virtual host-style requests. If the request's `Host` header information matches `(.+).mydomain.com`, the matched pattern `$1` is used as the bucket, and the path is used as the object.

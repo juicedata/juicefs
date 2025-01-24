@@ -120,6 +120,7 @@ jobs:
 
       - name: upload coverage report
         timeout-minutes: 5
+        continue-on-error: true
         uses: ./.github/actions/upload-coverage
         with:
           UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }} 

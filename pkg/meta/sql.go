@@ -285,50 +285,60 @@ func recoveryMysqlPwd(addr string) string {
 	return addr
 }
 
-func retriveUrlConnsOptions(murl string) (string, int, int, int, int) {
+func retriveUrlConnsOptions(driver, murl string) (string, int, int, int, int) {
 	optIndex := strings.Index(murl, "?")
 
 	var vOpenConns int = 0
 	var vIdleConns int = runtime.GOMAXPROCS(-1) * 2
-	var vIdleTime  int = 300
-	var vLifeTime  int = 0
+	var vIdleTime int = 300
+	var vLifeTime int = 0
 
+	var baseurl string = murl
+	var optsurl string
 	if optIndex != -1 {
-		baseurl := murl[:optIndex]
-		optsurl := murl[optIndex+1:]
-		if vals, err := url.ParseQuery(optsurl); err == nil {
-			if vals.Has("max_open_conns") {
-				vOpenConns, _ = strconv.Atoi(vals.Get("max_open_conns"))
-				vals.Del("max_open_conns")
-			}
-			if vals.Has("max_idle_conns") {
-				vIdleConns, _ = strconv.Atoi(vals.Get("max_idle_conns"))
-				vals.Del("max_idle_conns")
-			}
-			if vals.Has("max_idle_time") {
-				vIdleTime, _ = strconv.Atoi(vals.Get("max_idle_time"))
-				vals.Del("max_idle_time");
-			}
-			if vals.Has("max_life_time") {
-				vLifeTime, _ = strconv.Atoi(vals.Get("max_life_time"))
-				vals.Del("max_life_time");
-			}
-			optsurl = vals.Encode()
-		}
-		if vIdleConns <= 0 {
-			vIdleConns = runtime.GOMAXPROCS(-1) * 2
-		}
-		if vIdleTime <= 0 {
-			vIdleTime = 300
-		}
-		if optsurl != "" {
-			return fmt.Sprintf("%s?%s", baseurl, optsurl), vOpenConns, vIdleConns, vIdleTime, vLifeTime
-		} else {
-			return baseurl, vOpenConns, vIdleConns, vIdleTime, vLifeTime
-		}
+		baseurl = murl[:optIndex]
+		optsurl = murl[optIndex+1:]
 	}
-
-	return murl, vOpenConns, vIdleConns, vIdleTime, vLifeTime
+	if vals, err := url.ParseQuery(optsurl); err == nil {
+		if vals.Has("max_open_conns") {
+			vOpenConns, _ = strconv.Atoi(vals.Get("max_open_conns"))
+			vals.Del("max_open_conns")
+		}
+		if vals.Has("max_idle_conns") {
+			vIdleConns, _ = strconv.Atoi(vals.Get("max_idle_conns"))
+			vals.Del("max_idle_conns")
+		}
+		if vals.Has("max_idle_time") {
+			vIdleTime, _ = strconv.Atoi(vals.Get("max_idle_time"))
+			vals.Del("max_idle_time")
+		}
+		if vals.Has("max_life_time") {
+			vLifeTime, _ = strconv.Atoi(vals.Get("max_life_time"))
+			vals.Del("max_life_time")
+		}
+		if driver == "sqlite3" {
+			if !vals.Has("cache") {
+				vals.Add("cache", "shared")
+			}
+			if !vals.Has("_journal") && !vals.Has("_journal_mode") {
+				vals.Add("_journal", "WAL")
+			}
+			if !vals.Has("_timeout") && !vals.Has("_busy_timeout") {
+				vals.Add("_timeout", "5000")
+			}
+		}
+		optsurl = vals.Encode()
+	}
+	if vIdleConns <= 0 {
+		vIdleConns = runtime.GOMAXPROCS(-1) * 2
+	}
+	if vIdleTime <= 0 {
+		vIdleTime = 300
+	}
+	if optsurl != "" {
+		return fmt.Sprintf("%s?%s", baseurl, optsurl), vOpenConns, vIdleConns, vIdleTime, vLifeTime
+	}
+	return baseurl, vOpenConns, vIdleConns, vIdleTime, vLifeTime
 }
 
 var setTransactionIsolation func(dns string) (string, error)
@@ -336,7 +346,7 @@ var setTransactionIsolation func(dns string) (string, error)
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	var searchPath string
 
-	addr, vOpenConns, vIdleConns, vIdleTime, vLifeTime := retriveUrlConnsOptions(addr)
+	addr, vOpenConns, vIdleConns, vIdleTime, vLifeTime := retriveUrlConnsOptions(driver, addr)
 
 	if driver == "postgres" {
 		addr = driver + "://" + addr

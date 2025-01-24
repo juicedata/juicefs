@@ -323,6 +323,10 @@ func fuseFlags() []cli.Flag {
 			Name:  "root-squash",
 			Usage: "mapping local root user (uid = 0) to another one specified as <uid>:<gid>",
 		},
+		&cli.StringFlag{
+			Name:  "all-squash",
+			Usage: "mapping all users to another one specified as <uid>:<gid>",
+		},
 		&cli.BoolFlag{
 			Name:  "prefix-internal",
 			Usage: "add '.jfs' prefix to all internal files",
@@ -836,6 +840,53 @@ func launchMount(mp string, conf *vfs.Config) error {
 	}
 }
 
+func getNobodyUIDGID() (uint32, uint32) {
+	var uid, gid uint32 = 65534, 65534
+	if u, err := user.Lookup("nobody"); err == nil {
+		nobody, err := strconv.ParseUint(u.Uid, 10, 32)
+		if err != nil {
+			logger.Fatalf("invalid uid: %s", u.Uid)
+		}
+		uid = uint32(nobody)
+	}
+	if g, err := user.LookupGroup("nogroup"); err == nil {
+		nogroup, err := strconv.ParseUint(g.Gid, 10, 32)
+		if err != nil {
+			logger.Fatalf("invalid gid: %s", g.Gid)
+		}
+		gid = uint32(nogroup)
+	}
+	return uid, gid
+}
+
+func parseUIDGID(input string, defaultUid uint32, defaultGid uint32) (uint32, uint32) {
+	ss := strings.SplitN(strings.TrimSpace(input), ":", 2)
+	uid, gid := defaultUid, defaultGid
+	if ss[0] != "" {
+		u, err := strconv.ParseUint(ss[0], 10, 32)
+		if err != nil {
+			logger.Fatalf("invalid uid: %s", ss[0])
+		}
+		uid = uint32(u)
+		if uid == 0 {
+			logger.Warnf("Can't map uid as 0, use %d instead", defaultUid)
+			uid = defaultUid
+		}
+	}
+	if len(ss) == 2 && ss[1] != "" {
+		g, err := strconv.ParseUint(ss[1], 10, 32)
+		if err != nil {
+			logger.Fatalf("invalid gid: %s", ss[1])
+		}
+		gid = uint32(g)
+		if gid == 0 {
+			logger.Warnf("Can't map gid as 0, use %d instead", defaultGid)
+			gid = defaultGid
+		}
+	}
+	return uid, gid
+}
+
 func mountMain(v *vfs.VFS, c *cli.Context) {
 	if os.Getuid() == 0 {
 		disableUpdatedb()
@@ -856,39 +907,20 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 	}
 	conf.NonDefaultPermission = c.Bool("non-default-permission")
 	rootSquash := c.String("root-squash")
-	if rootSquash != "" {
-		var uid, gid uint32 = 65534, 65534
-		if u, err := user.Lookup("nobody"); err == nil {
-			nobody, err := strconv.ParseUint(u.Uid, 10, 32)
-			if err != nil {
-				logger.Fatalf("invalid uid: %s", u.Uid)
-			}
-			uid = uint32(nobody)
+	allSquash := c.String("all-squash")
+	if allSquash != "" || rootSquash != "" {
+		nobodyUid, nobodyGid := getNobodyUIDGID()
+		// all-squash takes precedence over root-squash
+		if allSquash != "" {
+			conf.NonDefaultPermission = true // disable kernel permission check
+			uid, gid := parseUIDGID(allSquash, nobodyUid, nobodyGid)
+			conf.AllSquash = &vfs.AnonymousAccount{Uid: uid, Gid: gid}
+			logger.Infof("Map all uid/gid to %d/%d by setting all-squash", uid, gid)
+		} else { // rootSquash != ""
+			uid, gid := parseUIDGID(rootSquash, nobodyUid, nobodyGid)
+			conf.RootSquash = &vfs.AnonymousAccount{Uid: uid, Gid: gid}
+			logger.Infof("Map root uid/gid 0 to %d/%d by setting root-squash", uid, gid)
 		}
-		if g, err := user.LookupGroup("nogroup"); err == nil {
-			nogroup, err := strconv.ParseUint(g.Gid, 10, 32)
-			if err != nil {
-				logger.Fatalf("invalid gid: %s", g.Gid)
-			}
-			gid = uint32(nogroup)
-		}
-
-		ss := strings.SplitN(strings.TrimSpace(rootSquash), ":", 2)
-		if ss[0] != "" {
-			u, err := strconv.ParseUint(ss[0], 10, 32)
-			if err != nil {
-				logger.Fatalf("invalid uid: %s", ss[0])
-			}
-			uid = uint32(u)
-		}
-		if len(ss) == 2 && ss[1] != "" {
-			g, err := strconv.ParseUint(ss[1], 10, 32)
-			if err != nil {
-				logger.Fatalf("invalid gid: %s", ss[1])
-			}
-			gid = uint32(g)
-		}
-		conf.RootSquash = &vfs.RootSquash{Uid: uid, Gid: gid}
 	}
 	logger.Infof("Mounting volume %s at %s ...", conf.Format.Name, conf.Meta.MountPoint)
 	err := fuse.Serve(v, c.String("o"), c.Bool("enable-xattr"), c.Bool("enable-ioctl"))

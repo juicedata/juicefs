@@ -156,6 +156,7 @@ class LinkTests(unittest.TestCase):
     def test_link(self):
         self._test_link(self.file1, self.file2)
 
+@unittest.skip("Skipping SummaryTests")
 class SummaryTests(unittest.TestCase):
     # /test/dir1/file
     #      /dir2

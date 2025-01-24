@@ -46,6 +46,25 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: mount coverage dir for cleanup
+        if: ${{ matrix.test == 'all' }}
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: /ci-coverage
+          subdir: juicefs/
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
+      - name: clean up old coverage data
+        if: ${{ matrix.test == 'all' }}
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          sudo find /ci-coverage -type f \( -name 'covcounters*' -o -name 'covmeta*' \) -mtime +2 -print -exec rm -f {} +
+          umount /jfs-coverage
+
       - name: mount coverage dir
         timeout-minutes: 5
         uses: ./.github/actions/mount-coverage-dir
