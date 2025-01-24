@@ -44,7 +44,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [基于 JuiceFS 的大数据平台上云：存储成本省 85%，性能媲美 HDFS](https://juicefs.com/zh-cn/blog/user-stories/hdfs-to-object-storage-juicefs)，2024-01-10，JuiceFS 资深用户
 - [多点 DMALL：大数据存算分离下的存储架构探索与实践](https://juicefs.com/zh-cn/blog/user-stories/separation-of-storage--computing-building-cloud-native-big-data-platform), 2023-08-16，李铭@多点
 - [网易互娱出海之旅：大数据平台上云架构设计与实践](https://juicefs.com/zh-cn/blog/user-stories/hadoop-compatible-storage-big-data-cloud-platform-s3)，2023-08-09，柯维鸿@网易互娱
-- - [云上大数据存储：探究 JuiceFS 与 HDFS 的异同](https://juicefs.com/zh-cn/blog/engineering/similarities-and-differences-between-hdfs-and-juicefs-structures)，2023-04-04，汤友棚
+- [云上大数据存储：探究 JuiceFS 与 HDFS 的异同](https://juicefs.com/zh-cn/blog/engineering/similarities-and-differences-between-hdfs-and-juicefs-structures)，2023-04-04，汤友棚
 - [Protobuf 在知乎大数据场景的应用，利用 JuiceFS 动态注入 JAR 包](https://zhuanlan.zhihu.com/p/586120009)，2022-11-23，胡梦宇@知乎
 - [金山云：基于 JuiceFS 的 Elasticsearch 温冷热数据管理实践](https://juicefs.com/zh-cn/blog/user-stories/juicefs-elasticsearch-cold-heat-data-management)，2022-11-17，侯学峰@金山云
 - [JuiceFS 替代 HDFS，苦 HDFS 小文件久矣](https://zhuanlan.zhihu.com/p/569586606)，2022-10-08，久耶供应链 大数据总监
