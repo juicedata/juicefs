@@ -54,7 +54,7 @@ jobs:
       - name: Check /tmp/juicefs.log
         if: always()
         run: |
-          [[ -f /tmp/juicefs.log ]] && sudo tail -n 1000 /tmp/juicefs.log
+          [[ -f /tmp/juicefs.log ]] && sudo tail -n 1000 /tmp/juicefs.log || true
 
       - name: upload coverage report
         timeout-minutes: 5
