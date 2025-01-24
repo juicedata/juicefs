@@ -121,7 +121,6 @@ jobs:
       - name: check fsrand.log
         if: always()
         run: | 
-          exit 1
           grep "AssertionError" fsrand.log && exit 1 || true
 
       - name: Upload example database
