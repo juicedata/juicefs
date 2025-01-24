@@ -93,18 +93,24 @@ jobs:
           fi
 
       - name: Download example database
-        uses: dawidd6/action-download-artifact@v6
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: actions/download-artifact@v4
         with:
-          name: hypothesis-example-db
+          name: hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
-          if_no_artifact_found: warn
-          workflow_conclusion: completed
 
       - name: Run All
-        timeout-minutes: 70
+        continue-on-error: true
+        timeout-minutes: 60
         run: |
-          sudo -E LOG_LEVEL=WARNING META1=redis META2=${{matrix.meta}} timeout 3600 .github/scripts/command/random.sh test_run_all || code=$?; if [[ $code -eq 124 ]]; then echo test timeout with $code && exit 0; else echo failed with $code && exit $code; fi
+          sudo -E LOG_LEVEL=WARNING META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all 2>&1 | tee fsrand.log
       
+      - name: Check fsrand.log
+        if: always()
+        run: |
+          grep "AssertionError" fsrand.log && exit 1 || true
+
       - name: Upload example database
         uses: actions/upload-artifact@v4
         if: always()

@@ -128,12 +128,12 @@ jobs:
           sudo META_URL=$meta_url python3 .github/scripts/pysdk/pysdk_test.py
 
       - name: Download example database
-        uses: dawidd6/action-download-artifact@v6
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: actions/download-artifact@v4
         with:
-          name: hypothesis-example-db
+          name: hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
-          if_no_artifact_found: warn
-          workflow_conclusion: completed
 
       - name: Run file_test.py
         run: |
