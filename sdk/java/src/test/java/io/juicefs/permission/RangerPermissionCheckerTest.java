@@ -373,6 +373,7 @@ public class RangerPermissionCheckerTest extends TestCase {
 
   public void testHDFSContentSummary() throws Exception {
     HDFSGetContentSummary("/tmp/get-content-summary");
+    fs.delete(new Path("/tmp/get-content-summary"), true);
   }
 
   void HDFSReadTest(String fileName) throws Exception {
