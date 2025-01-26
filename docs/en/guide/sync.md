@@ -33,7 +33,7 @@ juicefs sync --match-full-path --include='*' s3://xxx/ jfs://VOL_NAME/
 
 ## Pattern matching {#pattern-matching}
 
-You can use `--exclude` and `--include` for filtering. If no filtering rules are provided, all files are scanned and copied (`--include='*'` is the default). However, if you were to use `--include` filter to only handle files with the specified pattern, then you must also use `--exclude` as well, see examples above for reference.
+You can use `--exclude` and `--include` for filtering. If no filtering rules are provided, all files are scanned and copied (`--include='*'` is the default). However, if you use the `--include` filter to match files with a specific pattern, you must also use `--exclude` to exclude other files. See the examples above for reference.
 
 :::tip
 When using multiple matching patterns, it may be difficult to determine whether a file will be synchronized due to the filtering logic. In such cases, it is recommended to add the `--dry --debug` option to preview the files selected for synchronization. If the results are not as expected, adjust the matching patterns accordingly.
