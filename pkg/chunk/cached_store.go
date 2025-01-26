@@ -142,10 +142,8 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 				s.store.cacheReadHist.Observe(time.Since(start).Seconds())
 				return n, nil
 			}
-			if f, ok := r.(*os.File); ok {
-				logger.Warnf("remove partial cached block %s: %d %s", f.Name(), n, err)
-				_ = os.Remove(f.Name())
-			}
+			logger.Warnf("remove partial cached block %s: %d %s", key, n, err)
+			s.store.bcache.remove(key, false)
 		}
 	}
 
