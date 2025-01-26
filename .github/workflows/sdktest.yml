@@ -68,6 +68,8 @@ jobs:
           echo `hostname` > etc/nodes
           echo "tom:3001" > users
           echo "g1:2001:tom" > groups
+          mkdir /jfs/tmp
+          chmod 777 /jfs/tmp
 
       - name: Sdk Test
         run: |
