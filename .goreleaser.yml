@@ -54,8 +54,8 @@ builds:
       - amd64
   - id: juicefs-linux-arm64
     env:
-      - CC=aarch64-linux-gnu-gcc
-    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.Env.REVISIONDATE}}
+      - CC=/usr/local/aarch64-linux-musl-cross/bin/aarch64-linux-musl-cc
+    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.Env.REVISIONDATE}} -linkmode external -extldflags '-static'
     main: .
     goos:
       - linux
