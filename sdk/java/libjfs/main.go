@@ -222,7 +222,7 @@ func (w *wrapper) withPid(pid int64) meta.Context {
 	// mapping Java Thread ID to global one
 	ctx := meta.NewContext(w.ctx.Pid()*1000+uint32(pid), w.ctx.Uid(), w.ctx.Gids())
 	if caller == CALLER_JAVA {
-		ctx.WithValue(meta.CtxKey("behavior"), BEHAVIOR_HADOOP)
+		ctx = ctx.WithValue(meta.CtxKey("behavior"), BEHAVIOR_HADOOP)
 	}
 	return ctx
 }

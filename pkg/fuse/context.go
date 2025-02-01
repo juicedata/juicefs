@@ -126,8 +126,10 @@ func (c *fuseContext) Canceled() bool {
 	}
 }
 
-func (c *fuseContext) WithValue(k, v interface{}) {
-	c.Context = context.WithValue(c.Context, k, v)
+func (c *fuseContext) WithValue(k, v interface{}) meta.Context {
+	wc := *c // gids is a const, so it's safe to shallow copy
+	wc.Context = context.WithValue(c.Context, k, v)
+	return &wc
 }
 
 func (c *fuseContext) Err() error {

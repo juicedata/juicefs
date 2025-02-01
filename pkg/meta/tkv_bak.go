@@ -55,7 +55,7 @@ func (m *kvMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) err
 	}
 	if ts != nil {
 		logger.Infof("dump kv with startTS: %d", ts.(uint64))
-		ctx.WithValue(txSessionKey{}, ts)
+		ctx = ctx.WithValue(txSessionKey{}, ts)
 	}
 
 	for _, f := range dumps {
@@ -540,19 +540,14 @@ func (m *kvMeta) loadSliceRefs(ctx Context, msg proto.Message, pairs *[]*pair) {
 	}
 }
 
-func (m *kvMeta) loadAcl(ctx Context, msg proto.Message, pairs *[]*pair) {
+func (m *kvMeta) loadAcl(ctx Context, msg proto.Message, pairs *[]*pair, maxAclId *uint32) {
 	batch := msg.(*pb.Batch)
-	var maxId uint32 = 0
-	if val := ctx.Value("maxAclId"); val != nil {
-		maxId = val.(uint32)
-	}
 	for _, acl := range batch.Acls {
-		if acl.Id > maxId {
-			maxId = acl.Id
+		if acl.Id > *maxAclId {
+			*maxAclId = acl.Id
 		}
 		*pairs = append(*pairs, &pair{m.aclKey(acl.Id), acl.Data})
 	}
-	ctx.WithValue("maxAclId", maxId)
 }
 
 func (m *kvMeta) loadXattrs(ctx Context, msg proto.Message, pairs *[]*pair) {
@@ -613,7 +608,10 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	}
 	taskCh := make(chan *task, 100)
 
-	var wg sync.WaitGroup
+	var (
+		wg       sync.WaitGroup
+		maxAclId uint32
+	)
 	workerFunc := func(ctx Context, taskCh <-chan *task) {
 		defer wg.Done()
 		var task *task
@@ -630,9 +628,9 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 					logger.Errorf("insert kvs failed: %v", err)
 				}
 
-				if val := ctx.Value("maxAclId"); val != nil {
+				if maxAclId != 0 {
 					if err := m.txn(ctx, func(tx *kvTxn) error {
-						tx.set(m.counterKey(aclCounter), packCounter(int64(val.(uint32))))
+						tx.set(m.counterKey(aclCounter), packCounter(int64(maxAclId)))
 						return nil
 					}); err != nil {
 						logger.Errorf("update maxAclId failed: %v", err)
@@ -664,7 +662,7 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			case segTypeSliceRef:
 				m.loadSliceRefs(ctx, task.msg, &pairs)
 			case segTypeAcl:
-				m.loadAcl(ctx, task.msg, &pairs)
+				m.loadAcl(ctx, task.msg, &pairs, &maxAclId)
 			case segTypeQuota:
 				m.loadQuota(ctx, task.msg, &pairs)
 			case segTypeStat:
