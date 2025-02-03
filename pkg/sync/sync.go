@@ -240,11 +240,11 @@ func copyPerms(dst object.ObjectStorage, obj object.Object, config *Config) {
 	start := time.Now()
 	key := obj.Key()
 	fi := obj.(object.File)
-	// chmod needs to be executed after chown, because chown will change setuid setgid to be invalid.
-	if err := dst.(object.FileSystem).Chown(key, fi.Owner(), fi.Group()); err != nil {
-		logger.Warnf("Chown %s to (%s,%s): %s", key, fi.Owner(), fi.Group(), err)
-	}
 	if !fi.IsSymlink() || !config.Links {
+		// chmod needs to be executed after chown, because chown will change setuid setgid to be invalid.
+		if err := dst.(object.FileSystem).Chown(key, fi.Owner(), fi.Group()); err != nil {
+			logger.Warnf("Chown %s to (%s,%s): %s", key, fi.Owner(), fi.Group(), err)
+		}
 		if err := dst.(object.FileSystem).Chmod(key, fi.Mode()); err != nil {
 			logger.Warnf("Chmod %s to %o: %s", key, fi.Mode(), err)
 		}
