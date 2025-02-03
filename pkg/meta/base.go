@@ -1356,7 +1356,7 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 	parent = m.checkRoot(parent)
 	var attr Attr
 	err := m.en.doUnlink(ctx, parent, name, &attr, skipCheckTrash...)
-	if err == 0 {
+	if err == 0 && !parent.IsTrash() {
 		var diffLength uint64
 		if attr.Typ == TypeFile {
 			diffLength = attr.Length
