@@ -217,17 +217,32 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 			logger.Errorf("invalid env JFS_MOUNT_TIMEOUT: %s %s", tStr, err)
 		}
 	}
-	for i := 0; i < mountTimeOut*1000/interval; i++ {
-		time.Sleep(time.Duration(interval) * time.Millisecond)
-		st, err := os.Stat(mp)
-		if err == nil {
-			if sys, ok := st.Sys().(*syscall.Stat_t); ok && sys.Ino == uint64(meta.RootInode) {
-				logger.Infof("\033[92mOK\033[0m, %s is ready at %s", name, mp)
+
+	stop := make(chan struct{}, 1)
+	go func() {
+		for {
+			select {
+			case <-stop:
 				return
+			default:
+				time.Sleep(time.Duration(interval) * time.Millisecond)
+				_, _ = os.Stdout.WriteString(".")
+				_ = os.Stdout.Sync()
 			}
 		}
-		_, _ = os.Stdout.WriteString(".")
-		_ = os.Stdout.Sync()
+	}()
+	ready := make(chan os.Signal, 1)
+	signal.Notify(ready, syscall.SIGUSR1)
+	if err := utils.WithTimeout(func() error {
+		<-ready
+		stop <- struct{}{}
+		_, _ = os.Stdout.WriteString("\n")
+		logger.Infof("\033[92mOK\033[0m, %s is ready at %s", name, mp)
+		return nil
+	}, time.Duration(mountTimeOut)*time.Second); err == nil {
+		return
+	} else {
+		stop <- struct{}{}
 	}
 	_, _ = os.Stdout.WriteString("\n")
 	mountDesc := "mount process is not started yet"
