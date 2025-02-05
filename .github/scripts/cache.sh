@@ -160,7 +160,7 @@ test_cache_large_write(){
     ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
     ratio=$(get_warmup_ratio)
     [[ "$ratio" = 0 ]] || (echo "ratio($ratio) should less than 0" && exit 1)
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-large-write 
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-large-write -v
     dd if=/dev/zero of=/tmp/jfs/test1 bs=1M count=200
     ./juicefs warmup /tmp/jfs/test1 --check 2>&1 | tee warmup.log
     # TODO: should check the ratio
