@@ -296,6 +296,7 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 			return nil, nil
 		}
 		if os.IsNotExist(err) {
+			logger.Warnf("skip %s: %s", dir, err)
 			return nil, nil
 		}
 		return nil, err
