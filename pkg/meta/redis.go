@@ -1749,7 +1749,8 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			if ino == dino {
 				return errno(nil)
 			}
-			if typ == TypeDirectory && dtyp != TypeDirectory {
+			if exchange {
+			} else if typ == TypeDirectory && dtyp != TypeDirectory {
 				return syscall.ENOTDIR
 			} else if typ != TypeDirectory && dtyp == TypeDirectory {
 				return syscall.EISDIR
