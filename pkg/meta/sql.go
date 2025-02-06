@@ -1608,7 +1608,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}))
 }
 
-func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
+func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, entry *Entry, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
 		if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1622,53 +1622,64 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		opened = false
 		newSpace, newInode = 0, 0
 		var pn = node{Inode: parent}
-		ok, err := s.Get(&pn)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return syscall.ENOENT
-		}
-		if pn.Type != TypeDirectory {
-			return syscall.ENOTDIR
-		}
-		var pattr Attr
-		m.parseAttr(&pn, &pattr)
-		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
-			return st
-		}
-		if (pn.Flags&FlagAppend) != 0 || (pn.Flags&FlagImmutable) != 0 {
-			return syscall.EPERM
-		}
-		var e = edge{Parent: parent, Name: []byte(name)}
-		ok, err = s.Get(&e)
-		if err != nil {
-			return err
-		}
-		if !ok && m.conf.CaseInsensi {
-			if ee := m.resolveCase(ctx, parent, name); ee != nil {
-				ok = true
-				e.Name = ee.Name
-				e.Inode = ee.Inode
-				e.Type = ee.Attr.Typ
+		if entry == nil {
+			ok, err := s.Get(&pn)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
+			if pn.Type != TypeDirectory {
+				return syscall.ENOTDIR
+			}
+			var pattr Attr
+			m.parseAttr(&pn, &pattr)
+
+			// Access is already checked in emptyDir call
+			if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+				return st
+			}
+			if (pn.Flags&FlagAppend) != 0 || (pn.Flags&FlagImmutable) != 0 {
+				return syscall.EPERM
 			}
 		}
-		if !ok {
-			return syscall.ENOENT
+		var e = edge{Parent: parent, Name: []byte(name)}
+		if entry == nil {
+			ok, err := s.Get(&e)
+			if err != nil {
+				return err
+			}
+			if !ok && m.conf.CaseInsensi {
+				if ee := m.resolveCase(ctx, parent, name); ee != nil {
+					ok = true
+					e.Name = ee.Name
+					e.Inode = ee.Inode
+					e.Type = ee.Attr.Typ
+				}
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
+		} else {
+			e.Inode = entry.Inode
+			e.Type = entry.Attr.Typ
 		}
 		if e.Type == TypeDirectory {
 			return syscall.EPERM
 		}
 
 		n = node{Inode: e.Inode}
-		ok, err = s.ForUpdate().Get(&n)
+		ok, err := s.ForUpdate().Get(&n)
 		if err != nil {
 			return err
 		}
 		now := time.Now().UnixNano()
 		if ok {
-			if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
-				return syscall.EACCES
+			if entry == nil {
+				if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
+					return syscall.EACCES
+				}
 			}
 			if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
@@ -1694,7 +1705,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		defer func() { m.of.InvalidateChunk(e.Inode, invalidateAttrOnly) }()
 
 		var updateParent bool
-		if !isTrash(parent) && time.Duration(now-pn.getMtime()) >= m.conf.SkipDirMtime {
+		if entry == nil && !isTrash(parent) && time.Duration(now-pn.getMtime()) >= m.conf.SkipDirMtime {
 			pn.setMtime(now)
 			pn.setCtime(now)
 			updateParent = true
@@ -1743,9 +1754,11 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				}
 				newSpace, newInode = -align4K(0), -1
 			}
+			/*
 			if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
 				return err
 			}
+			*/
 		}
 		if updateParent {
 			var _n int64
@@ -1771,7 +1784,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		}
 		m.updateStats(newSpace, newInode)
 	}
-	if err == nil && attr != nil {
+	if entry == nil && err == nil && attr != nil {
 		m.parseAttr(&n, attr)
 	}
 	return errno(err)

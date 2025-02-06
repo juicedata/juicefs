@@ -1246,7 +1246,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}, parent))
 }
 
-func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
+func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, entry *Entry, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
 		if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1328,7 +1328,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 
 		defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 		var updateParent bool
-		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
+		if entry == nil && !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()

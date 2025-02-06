@@ -303,7 +303,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 				if count != nil {
 					atomic.AddUint64(count, 1)
 				}
-				if st := m.Unlink(ctx, inode, string(e.Name), skipCheckTrash); st != 0 && st != syscall.ENOENT {
+				if st := m.Unlink2(ctx, inode, string(e.Name), e, skipCheckTrash); st != 0 && st != syscall.ENOENT {
 					ctx.Cancel()
 					return st
 				}

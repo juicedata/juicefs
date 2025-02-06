@@ -1427,7 +1427,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 	}, m.inodeKey(parent), m.entryKey(parent)))
 }
 
-func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
+func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, entry *Entry, skipCheckTrash ...bool) syscall.Errno {
 	var trash, inode Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
 		if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1482,7 +1482,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		}
 		var updateParent bool
 		now := time.Now()
-		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime {
+		if entry == nil && !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
