@@ -411,12 +411,13 @@ func TestSyncLinkWithOutFollow(t *testing.T) {
 
 func TestSingleLink(t *testing.T) {
 	defer func() {
-		_ = os.RemoveAll("/tmp/a")
-		_ = os.RemoveAll("/tmp/b")
+		_ = os.RemoveAll("/tmp/TestSingleLink/a")
+		_ = os.RemoveAll("/tmp/TestSingleLink/b")
 	}()
-	_ = os.Symlink("/tmp/aa", "/tmp/a")
-	a, _ := object.CreateStorage("file", "/tmp/a", "", "", "")
-	b, _ := object.CreateStorage("file", "/tmp/b", "", "", "")
+	os.MkdirAll("/tmp/TestSingleLink/", 0755)
+	_ = os.Symlink("/tmp/TestSingleLink/aa", "/tmp/TestSingleLink/a")
+	a, _ := object.CreateStorage("file", "/tmp/TestSingleLink/a", "", "", "")
+	b, _ := object.CreateStorage("file", "/tmp/TestSingleLink/b", "", "", "")
 	if err := Sync(a, b, &Config{
 		Threads:     50,
 		Update:      true,
@@ -429,13 +430,13 @@ func TestSingleLink(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
-	readlink, _ := os.Readlink("/tmp/a")
-	readlink2, err := os.Readlink("/tmp/b")
+	readlink, _ := os.Readlink("/tmp/TestSingleLink/a")
+	readlink2, err := os.Readlink("/tmp/TestSingleLink/b")
 	if err != nil {
 		t.Fatalf("sync err: %v", err)
 	}
 
-	if readlink != readlink2 || readlink != "/tmp/aa" {
+	if readlink != readlink2 || readlink != "/tmp/TestSingleLink/aa" {
 		t.Fatalf("sync link failed")
 	}
 }
