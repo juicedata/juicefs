@@ -411,8 +411,7 @@ func TestSyncLinkWithOutFollow(t *testing.T) {
 
 func TestSingleLink(t *testing.T) {
 	defer func() {
-		_ = os.RemoveAll("/tmp/TestSingleLink/a")
-		_ = os.RemoveAll("/tmp/TestSingleLink/b")
+		_ = os.RemoveAll("/tmp/TestSingleLink/")
 	}()
 	os.MkdirAll("/tmp/TestSingleLink/", 0755)
 	_ = os.Symlink("/tmp/TestSingleLink/aa", "/tmp/TestSingleLink/a")
