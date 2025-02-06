@@ -111,7 +111,7 @@ func mount(url, mp string) {
 	conf.DirEntryTimeout = time.Second
 	conf.HideInternal = true
 	v := vfs.NewVFS(conf, m, store, nil, nil)
-	os.Setenv("ORIGINAL_MOUNT_CLIENT_PID", "1")
+	os.Setenv("ORIGINAL_MOUNT_CLIENT_PID", strconv.Itoa(os.Getpid()))
 	err = Serve(v, "", true, true)
 	if err != nil {
 		log.Fatalf("fuse server err: %s\n", err)

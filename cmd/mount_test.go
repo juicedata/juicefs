@@ -25,6 +25,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -130,7 +131,7 @@ func mountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraMoun
 	ResetHttp()
 
 	os.Setenv("JFS_SUPERVISOR", "test")
-	os.Setenv("ORIGINAL_MOUNT_CLIENT_PID", "1")
+	os.Setenv("ORIGINAL_MOUNT_CLIENT_PID", strconv.Itoa(os.Getpid()))
 	mountArgs := []string{"", "mount", "--enable-xattr", testMeta, testMountPoint, "--attr-cache", "0", "--entry-cache", "0", "--dir-entry-cache", "0", "--no-usage-report"}
 	if extraMountOpts != nil {
 		mountArgs = append(mountArgs, extraMountOpts...)
@@ -240,7 +241,7 @@ func tryMountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraM
 	}
 
 	os.Setenv("JFS_SUPERVISOR", "test")
-	os.Setenv("ORIGINAL_MOUNT_CLIENT_PID", "1")
+	os.Setenv("ORIGINAL_MOUNT_CLIENT_PID", strconv.Itoa(os.Getpid()))
 	errChan := make(chan error, 1)
 	go func() {
 		defer mountLock.Unlock()
