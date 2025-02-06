@@ -142,10 +142,8 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 				s.store.cacheReadHist.Observe(time.Since(start).Seconds())
 				return n, nil
 			}
-			if f, ok := r.(*os.File); ok {
-				logger.Warnf("remove partial cached block %s: %d %s", f.Name(), n, err)
-				_ = os.Remove(f.Name())
-			}
+			logger.Warnf("remove partial cached block %s: %d %s", key, n, err)
+			s.store.bcache.remove(key, false)
 		}
 	}
 
@@ -462,7 +460,7 @@ func (s *wSlice) upload(indx int) {
 				stageFailed = true
 				if !errors.Is(err, errStageConcurrency) {
 					s.store.stageBlockErrors.Add(1)
-					logger.Warnf("write %s to disk: %s, upload it directly", stagingPath, err)
+					logger.Warnf("write %s to disk: %s, upload it directly", key, err)
 				}
 			} else {
 				s.errors <- nil
