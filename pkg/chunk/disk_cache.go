@@ -414,6 +414,10 @@ func (cache *cacheStore) cache(key string, p *Page, force, dropCache bool) {
 	if _, ok := cache.pages[key]; ok {
 		return
 	}
+	k := cache.getCacheKey(key)
+	if _, ok := cache.keys[k]; ok {
+		return
+	}
 	p.Acquire()
 	cache.pages[key] = p
 	atomic.AddInt64(&cache.totalPages, int64(cap(p.Data)))
