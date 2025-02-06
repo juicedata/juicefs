@@ -39,7 +39,6 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
-	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/metric"
 	"github.com/juicedata/juicefs/pkg/usage"
@@ -575,8 +574,8 @@ func mount(c *cli.Context) error {
 	mp := c.Args().Get(1)
 
 	// pass the original mount client pid to the final mount process
-	if pid := os.Getenv(fuse.OriginalMountClientPid); pid == "" {
-		os.Setenv(fuse.OriginalMountClientPid, strconv.Itoa(os.Getpid()))
+	if pid := os.Getenv("ORIGINAL_MOUNT_CLIENT_PID"); pid == "" {
+		os.Setenv("ORIGINAL_MOUNT_CLIENT_PID", strconv.Itoa(os.Getpid()))
 	}
 	stage := getDaemonStage()
 	if stage < 0 || stage > 2 {

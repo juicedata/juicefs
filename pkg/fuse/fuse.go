@@ -438,8 +438,6 @@ func (fs *fileSystem) Ioctl(cancel <-chan struct{}, in *fuse.IoctlIn, out *fuse.
 	return fuse.Status(err)
 }
 
-const OriginalMountClientPid = "ORIGINAL_MOUNT_CLIENT_PID"
-
 // Serve starts a server to serve requests from FUSE.
 func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	if err := syscall.Setpriority(syscall.PRIO_PROCESS, os.Getpid(), -19); err != nil {
@@ -526,7 +524,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 
 	fsserv = fssrv
 	// send signal to parent process to notify that the mount point is ready
-	pid, err := strconv.Atoi(os.Getenv(OriginalMountClientPid))
+	pid, err := strconv.Atoi(os.Getenv("ORIGINAL_MOUNT_CLIENT_PID"))
 	if err != nil {
 		return fmt.Errorf("get original mount client pid error: %s", err)
 	}
