@@ -1427,7 +1427,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 	}, m.inodeKey(parent), m.entryKey(parent)))
 }
 
-func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, entry *Entry, skipCheckTrash ...bool) syscall.Errno {
+func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, entry *Entry, pattr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash, inode Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
 		if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1469,13 +1469,15 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, e
 		if rs[0] == nil {
 			return redis.Nil
 		}
-		var pattr Attr
-		m.parseAttr([]byte(rs[0].(string)), &pattr)
-		if pattr.Typ != TypeDirectory {
-			return syscall.ENOTDIR
-		}
-		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
-			return st
+		if pattr == nil {
+			pattr = &Attr{}
+			m.parseAttr([]byte(rs[0].(string)), pattr)
+			if pattr.Typ != TypeDirectory {
+				return syscall.ENOTDIR
+			}
+			if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, pattr); st != 0 {
+				return st
+			}
 		}
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
@@ -1519,7 +1521,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, e
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, m.entryKey(parent), name)
 			if updateParent {
-				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
+				pipe.Set(ctx, m.inodeKey(parent), m.marshal(pattr), 0)
 			}
 			if attr.Nlink > 0 {
 				pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)

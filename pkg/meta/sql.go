@@ -1608,7 +1608,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}))
 }
 
-func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, entry *Entry, skipCheckTrash ...bool) syscall.Errno {
+func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, entry *Entry, pattr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
 		if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1622,7 +1622,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, entr
 		opened = false
 		newSpace, newInode = 0, 0
 		var pn = node{Inode: parent}
-		if entry == nil {
+		if pattr == nil {
 			ok, err := s.Get(&pn)
 			if err != nil {
 				return err
@@ -1630,19 +1630,17 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, entr
 			if !ok {
 				return syscall.ENOENT
 			}
-			if pn.Type != TypeDirectory {
+			pattr = &Attr{}
+			m.parseAttr(&pn, pattr)
+			if pattr.Typ != TypeDirectory {
 				return syscall.ENOTDIR
 			}
-			var pattr Attr
-			m.parseAttr(&pn, &pattr)
-
-			// Access is already checked in emptyDir call
-			if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+			if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, pattr); st != 0 {
 				return st
 			}
-			if (pn.Flags&FlagAppend) != 0 || (pn.Flags&FlagImmutable) != 0 {
-				return syscall.EPERM
-			}
+		}
+		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+			return syscall.EPERM
 		}
 		var e = edge{Parent: parent, Name: []byte(name)}
 		if entry == nil {
@@ -1677,7 +1675,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, entr
 		now := time.Now().UnixNano()
 		if ok {
 			if entry == nil {
-				if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
+				if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != n.Uid {
 					return syscall.EACCES
 				}
 			}
