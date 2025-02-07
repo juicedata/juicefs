@@ -800,11 +800,16 @@ func launchMount(mp string, conf *vfs.Config) error {
 
 		signalChan := make(chan os.Signal, 10)
 		signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+		inCSI := os.Getenv("JFS_SUPER_COMM") != ""
 		go func() {
 			for {
 				sig := <-signalChan
 				if sig == nil {
 					return
+				}
+				if inCSI && sig == syscall.SIGTERM {
+					logger.Infof("received syscall.SIGTERM in CSI, exit 0")
+					os.Exit(0)
 				}
 				logger.Infof("received signal %s, propagating to child process %d...", sig.String(), mountPid)
 				if err := cmd.Process.Signal(sig); err != nil && !errors.Is(err, os.ErrProcessDone) {
