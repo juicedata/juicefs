@@ -798,26 +798,31 @@ func launchMount(mp string, conf *vfs.Config) error {
 		os.Unsetenv("_FUSE_STATE_PATH")
 		mountPid = cmd.Process.Pid
 
+		notInCSI := os.Getenv("JFS_SUPER_COMM") == ""
 		signalChan := make(chan os.Signal, 10)
-		signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
-		go func() {
-			for {
-				sig := <-signalChan
-				if sig == nil {
-					return
+		if notInCSI {
+			signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+			go func() {
+				for {
+					sig := <-signalChan
+					if sig == nil {
+						return
+					}
+					logger.Infof("received signal %s, propagating to child process %d...", sig.String(), mountPid)
+					if err := cmd.Process.Signal(sig); err != nil && !errors.Is(err, os.ErrProcessDone) {
+						logger.Errorf("send signal %s to %d: %s", sig.String(), mountPid, err)
+					}
 				}
-				logger.Infof("received signal %s, propagating to child process %d...", sig.String(), mountPid)
-				if err := cmd.Process.Signal(sig); err != nil && !errors.Is(err, os.ErrProcessDone) {
-					logger.Errorf("send signal %s to %d: %s", sig.String(), mountPid, err)
-				}
-			}
-		}()
+			}()
+		}
 
 		ctx, cancel := context.WithCancel(context.TODO())
 		go watchdog(ctx, mp)
 		err = cmd.Wait()
 		cancel()
-		signal.Stop(signalChan)
+		if notInCSI {
+			signal.Stop(signalChan)
+		}
 		close(signalChan)
 		if err == nil {
 			return nil
