@@ -1380,14 +1380,14 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 					defer wg.Done()
 					err := startProducer(tasks, src, dst, prefix, config)
 					if err != nil {
-						logger.Fatalf("list prefix %s: %s", prefix, err)
+						logger.Warnf("list prefix %s: %s", prefix, err)
 					}
 					<-config.concurrentList
 				}(c.Key())
 			default:
 				err := startProducer(tasks, src, dst, c.Key(), config)
 				if err != nil {
-					logger.Fatalf("list prefix %s: %s", c.Key(), err)
+					logger.Warnf("list prefix %s: %s", c.Key(), err)
 				}
 			}
 
