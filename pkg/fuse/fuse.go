@@ -523,8 +523,8 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	}
 
 	fsserv = fssrv
-	// send signal to parent process to notify that the mount point is ready
-	pid, err := strconv.Atoi(os.Getenv("ORIGINAL_MOUNT_CLIENT_PID"))
+	// notify original mount process that mount point is ready
+	pid, err := strconv.Atoi(os.Getenv("JFS_ORIGINAL_MOUNT_CLIENT_PID"))
 	if err != nil {
 		return fmt.Errorf("get original mount client pid error: %s", err)
 	}

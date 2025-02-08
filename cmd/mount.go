@@ -573,9 +573,9 @@ func mount(c *cli.Context) error {
 	removePassword(addr)
 	mp := c.Args().Get(1)
 
-	// pass the original mount client pid to the final mount process
-	if pid := os.Getenv("ORIGINAL_MOUNT_CLIENT_PID"); pid == "" {
-		os.Setenv("ORIGINAL_MOUNT_CLIENT_PID", strconv.Itoa(os.Getpid()))
+	// pass the original mount client pid to the final service process
+	if pid := os.Getenv("JFS_ORIGINAL_MOUNT_CLIENT_PID"); pid == "" {
+		os.Setenv("JFS_ORIGINAL_MOUNT_CLIENT_PID", strconv.Itoa(os.Getpid()))
 	}
 	stage := getDaemonStage()
 	if stage < 0 || stage > 2 {

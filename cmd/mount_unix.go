@@ -218,14 +218,15 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 		}
 	}
 
-	stop := make(chan struct{}, 1)
+	stop := make(chan struct{})
 	go func() {
+		ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-stop:
 				return
-			default:
-				time.Sleep(time.Duration(interval) * time.Millisecond)
+			case <-ticker.C:
 				_, _ = os.Stdout.WriteString(".")
 				_ = os.Stdout.Sync()
 			}
@@ -235,15 +236,15 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 	signal.Notify(ready, syscall.SIGUSR1)
 	if err := utils.WithTimeout(func() error {
 		<-ready
-		stop <- struct{}{}
+		close(stop)
 		_, _ = os.Stdout.WriteString("\n")
 		logger.Infof("\033[92mOK\033[0m, %s is ready at %s", name, mp)
 		return nil
 	}, time.Duration(mountTimeOut)*time.Second); err == nil {
 		return
-	} else {
-		stop <- struct{}{}
 	}
+	close(stop)
+
 	_, _ = os.Stdout.WriteString("\n")
 	mountDesc := "mount process is not started yet"
 	if mountPid != 0 {
