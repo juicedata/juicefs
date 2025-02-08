@@ -35,6 +35,7 @@ type logHandle struct {
 
 	name     string
 	logid    string
+	pid      int
 	lvl      *logrus.Level
 	colorful bool
 }
@@ -60,12 +61,11 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 		lvlStr = fmt.Sprintf("\033[1;%dm%s\033[0m", color, lvlStr)
 	}
 	const timeFormat = "2006/01/02 15:04:05.000000"
-	timestamp := e.Time.Format(timeFormat)
 	str := fmt.Sprintf("%s%v %s[%d] <%v>: %v [%s@%s:%d]",
 		l.logid,
-		timestamp,
+		e.Time.Format(timeFormat),
 		l.name,
-		os.Getpid(),
+		l.pid,
 		lvlStr,
 		strings.TrimRight(e.Message, "\n"),
 		methodName(e.Caller.Function),
@@ -115,7 +115,7 @@ func (l *logHandle) Log(args ...interface{}) {
 }
 
 func newLogger(name string) *logHandle {
-	l := &logHandle{Logger: *logrus.New(), name: name, colorful: SupportANSIColor(os.Stderr.Fd())}
+	l := &logHandle{Logger: *logrus.New(), name: name, pid: os.Getpid(), colorful: SupportANSIColor(os.Stderr.Fd())}
 	l.Formatter = l
 	if syslogHook != nil {
 		l.AddHook(syslogHook)
