@@ -848,7 +848,7 @@ func TestInternalFile(t *testing.T) {
 	off += uint64(len(buf))
 	resp = make([]byte, 1024*10)
 
-	data, _ = json.Marshal(CacheResponse{})
+	data, _ = json.Marshal(CacheResponse{Locations: make(map[string]uint64)})
 	expectSize := 1 + 4 + len(data)
 	if n, e = readControl(resp, &off); e != 0 || n != expectSize {
 		t.Fatalf("read result: %s %d %d", e, n, expectSize)

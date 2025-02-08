@@ -58,7 +58,7 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 	logger.Infof("start to %s %d paths with %d workers", action, len(paths), concurrent)
 
 	if resp == nil {
-		resp = &CacheResponse{}
+		resp = &CacheResponse{Locations: make(map[string]uint64)}
 	}
 	start := time.Now()
 	todo := make(chan _file, 10*concurrent)
@@ -96,13 +96,17 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 						return v.Store.EvictCache(s.Id, s.Size)
 					}
 				case CheckCache:
-					handler = func(s meta.Slice) error {
-						missBytes, err := v.Store.CheckCache(s.Id, s.Size)
-						if err != nil {
-							return err
+					blockHandler := func(exists bool, loc string, size int) {
+						if exists {
+							resp.Lock()
+							resp.Locations[loc] += uint64(size)
+							resp.Unlock()
+						} else {
+							atomic.AddUint64(&resp.MissBytes, uint64(size))
 						}
-						atomic.AddUint64(&resp.MissBytes, missBytes)
-						return nil
+					}
+					handler = func(s meta.Slice) error {
+						return v.Store.CheckCache(s.Id, s.Size, blockHandler)
 					}
 				}
 
@@ -124,7 +128,7 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 			logger.Warnf("Failed to resolve path %s: %s", p, st)
 			continue
 		}
-		logger.Debugf("Warming up path %s", p)
+		logger.Debugf("path %s", p)
 		if attr.Typ == meta.TypeDirectory {
 			v.walkDir(ctx, inode, todo)
 		} else if attr.Typ == meta.TypeFile {

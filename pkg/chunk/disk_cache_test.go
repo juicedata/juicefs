@@ -342,7 +342,7 @@ func TestCacheManager(t *testing.T) {
 
 	rc, _ := m.load(k1)
 	require.Nil(t, rc)
-	exist := m.exist(k1)
+	_, exist := m.exist(k1)
 	require.False(t, exist)
 
 	s2 := m.getStore(k1)

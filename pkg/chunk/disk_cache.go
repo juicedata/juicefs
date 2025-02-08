@@ -750,7 +750,7 @@ func (cache *cacheStore) cleanupFull() {
 
 	goal := cache.capacity * 95 / 100
 	num := int64(len(cache.keys)) * 99 / 100
-	if cache.maxItems != 0 && num > cache.maxItems * 99 / 100 {
+	if cache.maxItems != 0 && num > cache.maxItems*99/100 {
 		num = cache.maxItems * 99 / 100
 	}
 	// make sure we have enough free space after cleanup
@@ -770,7 +770,7 @@ func (cache *cacheStore) cleanupFull() {
 		if toFree > len(cache.keys) {
 			num = 0
 		} else {
-			num = int64(len(cache.keys) - toFree) * 99 / 100
+			num = int64(len(cache.keys)-toFree) * 99 / 100
 		}
 	}
 
@@ -1037,7 +1037,7 @@ type CacheManager interface {
 	cache(key string, p *Page, force, dropCache bool)
 	remove(key string, staging bool)
 	load(key string) (ReadCloser, error)
-	exist(key string) bool
+	exist(key string) (string, bool)
 	uploaded(key string, size int)
 	stage(key string, data []byte, keepCache bool) (string, error)
 	removeStage(key string) error
@@ -1217,19 +1217,21 @@ func (m *cacheManager) load(key string) (ReadCloser, error) {
 	return r, err
 }
 
-func (m *cacheManager) exist(key string) bool {
+func (m *cacheManager) exist(key string) (string, bool) {
 	store := m.getStore(key)
 	if store == nil {
-		return false
+		return "", false
 	}
-	exited, err := m.getStore(key).exist(key)
+	loc := store.dir
+	existed, err := m.getStore(key).exist(key)
 	if err == errNotCached {
 		legacy := m.getStoreLegacy(key)
 		if legacy != store && legacy != nil {
-			exited, _ = legacy.exist(key)
+			existed, _ = legacy.exist(key)
+			loc = legacy.dir
 		}
 	}
-	return exited
+	return loc, existed
 }
 
 func (m *cacheManager) remove(key string, staging bool) {

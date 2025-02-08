@@ -267,17 +267,22 @@ type SummaryReponse struct {
 }
 
 type CacheResponse struct {
+	sync.Mutex
 	FileCount  uint64
 	SliceCount uint64
 	TotalBytes uint64
 	MissBytes  uint64 // for check op
+	Locations  map[string]uint64
 }
 
-func (resp *CacheResponse) Add(other CacheResponse) {
+func (resp *CacheResponse) Add(other *CacheResponse) {
 	resp.FileCount += other.FileCount
 	resp.TotalBytes += other.TotalBytes
 	resp.SliceCount += other.SliceCount
 	resp.MissBytes += other.MissBytes
+	for k, bytes := range other.Locations {
+		resp.Locations[k] += bytes
+	}
 }
 
 type chunkSlice struct {
@@ -538,18 +543,17 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			action = CacheAction(r.Get8())
 		}
 
-		var stat CacheResponse
+		stat := &CacheResponse{Locations: make(map[string]uint64)}
 		if background == 0 {
 			done := make(chan struct{})
 			go func() {
-				v.cache(ctx, action, paths, int(concurrent), &stat)
+				v.cache(ctx, action, paths, int(concurrent), stat)
 				close(done)
 			}()
 			writeProgress(&stat.FileCount, &stat.TotalBytes, out, done)
 		} else {
 			go v.cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(concurrent), nil)
 		}
-
 		data, err := json.Marshal(stat)
 		if err != nil {
 			logger.Errorf("marshal response error: %v", err)

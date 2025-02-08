@@ -1113,7 +1113,7 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 	keys := r.keys()
 	var err error
 	for _, k := range keys {
-		if store.bcache.exist(k) { // already cached
+		if _, existed := store.bcache.exist(k); existed { // already cached
 			continue
 		}
 		size := parseObjOrigSize(k)
@@ -1140,17 +1140,18 @@ func (store *cachedStore) EvictCache(id uint64, length uint32) error {
 	return nil
 }
 
-func (store *cachedStore) CheckCache(id uint64, length uint32) (uint64, error) {
+func (store *cachedStore) CheckCache(id uint64, length uint32, handler func(exists bool, loc string, size int)) error {
 	r := sliceForRead(id, int(length), store)
 	keys := r.keys()
-	missBytes := uint64(0)
+	var loc string
+	var existed bool
 	for i, k := range keys {
-		if store.bcache.exist(k) {
-			continue
+		loc, existed = store.bcache.exist(k)
+		if handler != nil {
+			handler(existed, loc, r.blockSize(i))
 		}
-		missBytes += uint64(r.blockSize(i))
 	}
-	return missBytes, nil
+	return nil
 }
 
 func (store *cachedStore) UsedMemory() int64 {
