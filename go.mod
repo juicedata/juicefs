@@ -40,7 +40,7 @@ require (
 	github.com/juju/ratelimit v1.0.2
 	github.com/ks3sdklib/aws-sdk-go v1.2.2
 	github.com/l0wl3vel/bunny-storage-go-sdk v0.0.10
-	github.com/mattn/go-isatty v0.0.18
+	github.com/mattn/go-isatty v0.0.20
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/minio/cli v1.24.2
 	github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c
@@ -263,3 +263,15 @@ replace github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.12+incompatible => g
 replace github.com/urfave/cli/v2 v2.19.3 => github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83
 
 replace github.com/vmware/go-nfs-client v0.0.0-20190605212624-d43b92724c1b => github.com/juicedata/go-nfs-client v0.0.0-20231018052507-dbca444fa7e8
+
+replace github.com/mattn/go-colorable v0.1.13 => github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db
+
+replace github.com/mattn/go-colorable v0.1.12 => github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db
+
+replace github.com/mattn/go-colorable v0.1.4 => github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db
+
+replace github.com/mattn/go-colorable v0.1.6 => github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db
+
+replace github.com/mattn/go-colorable v0.1.9 => github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db
+
+replace github.com/mattn/go-colorable v0.0.9 => github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db
