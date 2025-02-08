@@ -234,6 +234,7 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 	}()
 	ready := make(chan os.Signal, 1)
 	signal.Notify(ready, syscall.SIGUSR1)
+	defer signal.Stop(ready)
 	if err := utils.WithTimeout(func() error {
 		<-ready
 		close(stop)
