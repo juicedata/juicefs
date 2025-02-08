@@ -665,28 +665,6 @@ func (c *Config) CacheEnabled() bool {
 	return c.CacheSize > 0
 }
 
-type cacheLocation struct {
-	sync.Mutex
-	locs     map[string]uint64
-}
-
-func (cl *cacheLocation) AddCached(loc string, size uint64) {
-	cl.Lock()
-	defer cl.Unlock()
-
-	cl.locs[loc] += size
-}
-
-func (cl *cacheLocation) GetCached() *map[string]uint64 {
-	return &cl.locs
-}
-
-func NewCacheLocation() CacheLocation {
-	locs := &cacheLocation{
-			locs: make(map[string]uint64)}
-	return locs
-}
-
 type cachedStore struct {
 	storage       object.ObjectStorage
 	bcache        CacheManager
@@ -1137,7 +1115,7 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 	keys := r.keys()
 	var err error
 	for _, k := range keys {
-		if existed, _ := store.bcache.exist(k); existed { // already cached
+		if _, existed := store.bcache.exist(k); existed { // already cached
 			continue
 		}
 		size := parseObjOrigSize(k)
@@ -1164,20 +1142,18 @@ func (store *cachedStore) EvictCache(id uint64, length uint32) error {
 	return nil
 }
 
-func (store *cachedStore) CheckCache(id uint64, length uint32, cl CacheLocation) (uint64, error) {
+func (store *cachedStore) CheckCache(id uint64, length uint32, handler func(exists bool, loc string, size int)) error {
 	r := sliceForRead(id, int(length), store)
 	keys := r.keys()
-	missBytes := uint64(0)
+	var loc string
+	var existed bool
 	for i, k := range keys {
-		if existed, loc := store.bcache.exist(k); existed {
-			if cl != nil {
-				cl.AddCached(loc, uint64(r.blockSize(i)))
-			}
-			continue
+		loc, existed = store.bcache.exist(k)
+		if handler != nil {
+			handler(existed, loc, r.blockSize(i))
 		}
-		missBytes += uint64(r.blockSize(i))
 	}
-	return missBytes, nil
+	return nil
 }
 
 func (store *cachedStore) UsedMemory() int64 {
@@ -1206,4 +1182,3 @@ func (store *cachedStore) UpdateLimit(upload, download int64) {
 }
 
 var _ ChunkStore = &cachedStore{}
-var _ CacheLocation = &cacheLocation{}

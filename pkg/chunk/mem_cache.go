@@ -130,17 +130,17 @@ func (c *memcache) load(key string) (ReadCloser, error) {
 	return nil, errors.New("not found")
 }
 
-func (c *memcache) exist(key string) (bool, string) {
+func (c *memcache) exist(key string) (string, bool) {
 	if !c.enabled() {
-		return false, ""
+		return "", false
 	}
 	c.Lock()
 	defer c.Unlock()
 	if item, ok := c.pages[key]; ok {
 		c.pages[key] = memItem{time.Now(), item.page}
-		return true, "memory"
+		return "memory", true
 	}
-	return false, ""
+	return "", false
 }
 
 // locked

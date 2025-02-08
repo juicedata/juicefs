@@ -26,10 +26,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
-	"sort"
 
 	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -164,7 +164,7 @@ func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads ui
 		logger.Fatalf("Write message: %s", err)
 	}
 
-	resp := &vfs.CacheResponse{Locations: make(map[string]uint64)}
+	resp := &vfs.CacheResponse{}
 	if background {
 		logger.Infof("%s for %d paths in background", action, len(batch))
 		return resp
@@ -300,21 +300,21 @@ func warmup(ctx *cli.Context) error {
 		case vfs.EvictCache:
 			logger.Infof("%s: %d files (%s bytes)", action, count, humanize.IBytes(uint64(bytes)))
 		case vfs.CheckCache:
-                        if len(total.Locations) > 0 {
-                                var result = [][]string{
-                                        {"Location", "Size", "Percentage"},
-                                }
-                                var locs []string
-                                for loc := range total.Locations {
-                                        locs = append(locs, loc)
-                                }
-                                sort.Strings(locs)
-                                for _, loc := range locs {
-                                        size := total.Locations[loc]
-                                        result = append(result, []string{loc, humanize.IBytes(size), fmt.Sprintf("%.1f%%", float64(size)*100/float64(bytes))})
-                                }
-                                printResult(result, 0, false)
-                        }
+			if len(total.Locations) > 0 {
+				var result = [][]string{
+					{"Location", "Size", "Percentage"},
+				}
+				var locs []string
+				for loc := range total.Locations {
+					locs = append(locs, loc)
+				}
+				sort.Strings(locs)
+				for _, loc := range locs {
+					size := total.Locations[loc]
+					result = append(result, []string{loc, humanize.IBytes(size), fmt.Sprintf("%.1f%%", float64(size)*100/float64(bytes))})
+				}
+				printResult(result, 0, false)
+			}
 			logger.Infof("%s: %d files checked, %s of %s (%2.1f%%) cached", action, count,
 				humanize.IBytes(uint64(bytes)-total.MissBytes),
 				humanize.IBytes(uint64(bytes)),

@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
-	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	io_prometheus_client "github.com/prometheus/client_model/go"
@@ -268,6 +267,7 @@ type SummaryReponse struct {
 }
 
 type CacheResponse struct {
+	sync.Mutex
 	FileCount  uint64
 	SliceCount uint64
 	TotalBytes uint64
@@ -544,20 +544,15 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		}
 
 		stat := &CacheResponse{Locations: make(map[string]uint64)}
-		cloc := chunk.NewCacheLocation()
 		if background == 0 {
 			done := make(chan struct{})
 			go func() {
-				v.cache(ctx, action, paths, int(concurrent), stat, cloc)
+				v.cache(ctx, action, paths, int(concurrent), stat)
 				close(done)
 			}()
 			writeProgress(&stat.FileCount, &stat.TotalBytes, out, done)
 		} else {
-			go v.cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(concurrent), nil, nil)
-		}
-		locs := cloc.GetCached()
-		for k, bytes := range *locs {
-			stat.Locations[k] = bytes
+			go v.cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(concurrent), nil)
 		}
 		data, err := json.Marshal(stat)
 		if err != nil {

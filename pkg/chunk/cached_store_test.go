@@ -254,12 +254,19 @@ func TestFillCache(t *testing.T) {
 		t.Fatalf("cache cnt %d used %d, expect cnt 2 used %d", cnt, used, expect)
 	}
 
+	var missBytes uint64
+	handler := func(exists bool, loc string, size int) {
+		if !exists {
+			missBytes += uint64(size)
+		}
+	}
 	// check
-	missBytes, err := store.CheckCache(10, 1024, nil)
+	err := store.CheckCache(10, 1024, handler)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(0), missBytes)
 
-	missBytes, err = store.CheckCache(11, uint32(bsize), nil)
+	missBytes = 0
+	err = store.CheckCache(11, uint32(bsize), handler)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(0), missBytes)
 
@@ -273,7 +280,8 @@ func TestFillCache(t *testing.T) {
 	}
 
 	// check again
-	missBytes, err = store.CheckCache(11, uint32(bsize), nil)
+	missBytes = 0
+	err = store.CheckCache(11, uint32(bsize), handler)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(bsize), missBytes)
 }
