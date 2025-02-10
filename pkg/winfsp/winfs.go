@@ -106,6 +106,34 @@ func (j *juice) Statfs(path string, stat *fuse.Statfs_t) int {
 }
 
 func errorconv(err syscall.Errno) int {
+	// convert based on the error.i file in winfsp project
+	switch err {
+	case syscall.EACCES:
+		return -fuse.EACCES
+	case syscall.EEXIST:
+		return -fuse.EEXIST
+	case syscall.ENOENT, syscall.ENOTDIR:
+		return -fuse.ENOENT
+	case syscall.ECANCELED:
+		return -fuse.EINTR
+	case syscall.EIO:
+		return -fuse.EIO
+	case syscall.EINVAL:
+		return -fuse.ENXIO
+	case syscall.EBADFD:
+		return -fuse.EBADF
+	case syscall.EDQUOT:
+		return -fuse.ENOSPC
+	case syscall.EBUSY:
+		return -fuse.EBUSY
+	case syscall.ENOTEMPTY:
+		return -fuse.ENOTEMPTY
+	case syscall.ENAMETOOLONG:
+		return -fuse.ENAMETOOLONG
+	case syscall.ERROR_HANDLE_EOF:
+		return -fuse.ENODATA
+	}
+
 	return -int(err)
 }
 
@@ -174,7 +202,7 @@ func (j *juice) Readlink(path string) (e int, target string) {
 		return
 	}
 	t, errno := j.vfs.Readlink(ctx, fi.Inode())
-	e = -int(errno)
+	e = errorconv(errno)
 	target = string(t)
 	return
 }
@@ -253,7 +281,7 @@ func (j *juice) Create(p string, flags int, mode uint32) (e int, fh uint64) {
 		j.handlers[fh] = entry.Inode
 		j.Unlock()
 	}
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -300,7 +328,7 @@ func (j *juice) OpenEx(path string, fi *fuse.FileInfo_t) (e int) {
 		j.handlers[fh] = ino
 		j.Unlock()
 	}
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -407,6 +435,9 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 
 		fi, err := j.fs.Stat(ctx, p)
 		if err != 0 {
+			// Known issue: If the parent directory is not exists, the Windows api such as
+			// GetFileAttributeX expects the ERROR_PATH_NOT_FOUND returned.
+			// However, the fuse api has no such error code defined.
 			e = -fuse.ENOENT
 			return
 		}
@@ -450,7 +481,7 @@ func (j *juice) Read(path string, buf []byte, off int64, fh uint64) (e int) {
 	}
 	n, err := j.vfs.Read(ctx, ino, buf, uint64(off), fh)
 	if err != 0 {
-		e = -int(err)
+		e = errorconv(err)
 		return
 	}
 	return n
@@ -471,7 +502,7 @@ func (j *juice) Write(path string, buff []byte, off int64, fh uint64) (e int) {
 	}
 	errno := j.vfs.Write(ctx, ino, buff, uint64(off), fh)
 	if errno != 0 {
-		e = -int(errno)
+		e = errorconv(errno)
 	} else {
 		e = len(buff)
 	}
@@ -487,7 +518,7 @@ func (j *juice) Flush(path string, fh uint64) (e int) {
 		e = -fuse.EBADF
 		return
 	}
-	e = -int(j.vfs.Flush(ctx, ino, fh, 0))
+	e = errorconv(j.vfs.Flush(ctx, ino, fh, 0))
 	return
 }
 
@@ -521,7 +552,7 @@ func (j *juice) Fsync(path string, datasync bool, fh uint64) (e int) {
 	if ino == 0 {
 		e = -fuse.EBADF
 	} else {
-		e = -int(j.vfs.Fsync(ctx, ino, 1, fh))
+		e = errorconv(j.vfs.Fsync(ctx, ino, 1, fh))
 	}
 	return
 }
@@ -541,7 +572,7 @@ func (j *juice) Opendir(path string) (e int, fh uint64) {
 		j.handlers[fh] = f.Inode()
 		j.Unlock()
 	}
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -558,7 +589,7 @@ func (j *juice) Readdir(path string,
 	ctx := j.newContext()
 	entries, readAt, err := j.vfs.Readdir(ctx, ino, 100000, int(ofst), fh, true)
 	if err != 0 {
-		e = -int(err)
+		e = errorconv(err)
 		return
 	}
 	var st fuse.Stat_t
