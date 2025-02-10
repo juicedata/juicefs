@@ -170,6 +170,65 @@ type Attr struct {
 	DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
 }
 
+func (attr *Attr) Marshal() []byte {
+	size := uint32(36 + 24 + 4 + 8)
+	if attr.AccessACL|attr.DefaultACL != aclAPI.None {
+		size += 8
+	}
+	w := utils.NewBuffer(size)
+	w.Put8(attr.Flags)
+	w.Put16((uint16(attr.Typ) << 12) | (attr.Mode & 0xfff))
+	w.Put32(attr.Uid)
+	w.Put32(attr.Gid)
+	w.Put64(uint64(attr.Atime))
+	w.Put32(attr.Atimensec)
+	w.Put64(uint64(attr.Mtime))
+	w.Put32(attr.Mtimensec)
+	w.Put64(uint64(attr.Ctime))
+	w.Put32(attr.Ctimensec)
+	w.Put32(attr.Nlink)
+	w.Put64(attr.Length)
+	w.Put32(attr.Rdev)
+	w.Put64(uint64(attr.Parent))
+	if attr.AccessACL+attr.DefaultACL > 0 {
+		w.Put32(attr.AccessACL)
+		w.Put32(attr.DefaultACL)
+	}
+	logger.Tracef("attr: %+v -> %+v", attr, w.Bytes())
+	return w.Bytes()
+}
+
+func (attr *Attr) Unmarshal(buf []byte) {
+	if attr == nil || len(buf) == 0 {
+		return
+	}
+	rb := utils.FromBuffer(buf)
+	attr.Flags = rb.Get8()
+	attr.Mode = rb.Get16()
+	attr.Typ = uint8(attr.Mode >> 12)
+	attr.Mode &= 0xfff
+	attr.Uid = rb.Get32()
+	attr.Gid = rb.Get32()
+	attr.Atime = int64(rb.Get64())
+	attr.Atimensec = rb.Get32()
+	attr.Mtime = int64(rb.Get64())
+	attr.Mtimensec = rb.Get32()
+	attr.Ctime = int64(rb.Get64())
+	attr.Ctimensec = rb.Get32()
+	attr.Nlink = rb.Get32()
+	attr.Length = rb.Get64()
+	attr.Rdev = rb.Get32()
+	if rb.Left() >= 8 {
+		attr.Parent = Ino(rb.Get64())
+	}
+	attr.Full = true
+	if rb.Left() >= 8 {
+		attr.AccessACL = rb.Get32()
+		attr.DefaultACL = rb.Get32()
+	}
+	logger.Tracef("attr: %+v -> %+v", buf, attr)
+}
+
 func typeToStatType(_type uint8) uint32 {
 	switch _type & 0x7F {
 	case TypeDirectory:
@@ -234,7 +293,7 @@ func typeFromString(s string) uint8 {
 }
 
 // SMode is the file mode including type and unix permission.
-func (a Attr) SMode() uint32 {
+func (a *Attr) SMode() uint32 {
 	return typeToStatType(a.Typ) | uint32(a.Mode)
 }
 
