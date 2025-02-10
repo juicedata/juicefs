@@ -127,7 +127,7 @@ func (c *memcache) load(key string) (ReadCloser, error) {
 		c.pages[key] = memItem{time.Now(), item.page}
 		return NewPageReader(item.page), nil
 	}
-	return nil, errors.New("not found")
+	return nil, errNotCached
 }
 
 func (c *memcache) exist(key string) (string, bool) {
