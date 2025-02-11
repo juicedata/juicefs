@@ -47,6 +47,10 @@ func mountFlags() []cli.Flag {
 			Name:  "delay-close",
 			Usage: "delay file closing in seconds.",
 		},
+		&cli.BoolFlag{
+			Name:  "as-svc",
+			Usage: "If run as a system service. (support ONLY 1 volume mounting at the same time)",
+		},
 	}
 }
 
@@ -65,6 +69,11 @@ func getDaemonStage() int {
 }
 
 func mountMain(v *vfs.VFS, c *cli.Context) {
+	if c.Bool("as-svc") {
+		winfsp.RunAsSystemSerivce(v.Conf.Format.Name)
+		return
+	}
+
 	v.Conf.AccessLog = c.String("access-log")
 	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"))
 }
