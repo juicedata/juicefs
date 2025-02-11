@@ -552,43 +552,14 @@ func (w *withProgress) Read(b []byte) (int, error) {
 	return n, err
 }
 
-func dynAlloc(size int) []byte {
-	zeros := utils.PowerOf2(size)
-	b := *dynPools[zeros].Get().(*[]byte)
-	if cap(b) < size {
-		panic(fmt.Sprintf("%d < %d", cap(b), size))
-	}
-	return b[:size]
-}
-
-func dynFree(b []byte) {
-	dynPools[utils.PowerOf2(cap(b))].Put(&b)
-}
-
-var dynPools []*sync.Pool
-
-func init() {
-	dynPools = make([]*sync.Pool, 33) // 1 - 8G
-	for i := 0; i < 33; i++ {
-		func(bits int) {
-			dynPools[i] = &sync.Pool{
-				New: func() interface{} {
-					b := make([]byte, 1<<bits)
-					return &b
-				},
-			}
-		}(i)
-	}
-}
-
 func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64, key, uploadID string, num int, calChksum bool) (*object.Part, uint32, error) {
 	if limiter != nil {
 		limiter.Wait(size)
 	}
 	start := time.Now()
 	sz := size
-	data := dynAlloc(int(size))
-	defer dynFree(data)
+	data := utils.DynAlloc(int(size))
+	defer utils.DynFree(data)
 	var part *object.Part
 	var chksum uint32
 	err := try(3, func() error {

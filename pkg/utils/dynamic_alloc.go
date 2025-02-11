@@ -1,5 +1,5 @@
 /*
- * JuiceFS, Copyright 2020 Juicedata, Inc.
+ * JuiceFS, Copyright 2025 Juicedata, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,54 +18,29 @@ package utils
 
 import (
 	"fmt"
-	"runtime"
 	"sync"
-	"sync/atomic"
-	"time"
 )
 
-var used int64
-
-// Alloc returns size bytes memory from Go heap.
-func Alloc(size int) []byte {
+func DynAlloc(size int) []byte {
 	zeros := powerOf2(size)
-	b := *pools[zeros].Get().(*[]byte)
+	b := *dynPools[zeros].Get().(*[]byte)
 	if cap(b) < size {
 		panic(fmt.Sprintf("%d < %d", cap(b), size))
 	}
-	atomic.AddInt64(&used, int64(cap(b)))
 	return b[:size]
 }
 
-// Free returns memory to Go heap.
-func Free(b []byte) {
-	// buf could be zero length
-	atomic.AddInt64(&used, -int64(cap(b)))
-	pools[powerOf2(cap(b))].Put(&b)
+func DynFree(b []byte) {
+	dynPools[powerOf2(cap(b))].Put(&b)
 }
 
-// AllocMemory returns the allocated memory
-func AllocMemory() int64 {
-	return atomic.LoadInt64(&used)
-}
-
-var pools []*sync.Pool
-
-func powerOf2(s int) int {
-	var bits int
-	var p int = 1
-	for p < s {
-		bits++
-		p *= 2
-	}
-	return bits
-}
+var dynPools []*sync.Pool
 
 func init() {
-	pools = make([]*sync.Pool, 33) // 1 - 8G
+	dynPools = make([]*sync.Pool, 33) // 1 - 8G
 	for i := 0; i < 33; i++ {
 		func(bits int) {
-			pools[i] = &sync.Pool{
+			dynPools[i] = &sync.Pool{
 				New: func() interface{} {
 					b := make([]byte, 1<<bits)
 					return &b
@@ -73,10 +48,4 @@ func init() {
 			}
 		}(i)
 	}
-	go func() {
-		for {
-			time.Sleep(time.Minute * 10)
-			runtime.GC()
-		}
-	}()
 }
