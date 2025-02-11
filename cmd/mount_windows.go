@@ -70,7 +70,7 @@ func getDaemonStage() int {
 
 func mountMain(v *vfs.VFS, c *cli.Context) {
 	if c.Bool("as-svc") {
-		winfsp.RunAsSystemSerivce(v.Conf.Format.Name)
+		winfsp.RunAsSystemSerivce(v.Conf.Format.Name, c.Args().Get(1))
 		return
 	}
 
