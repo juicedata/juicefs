@@ -1373,24 +1373,16 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 				logger.Infof("ignore prefix %s", c.Key())
 				continue
 			}
-			select {
-			case config.concurrentList <- 1:
-				wg.Add(1)
-				go func(prefix string) {
-					defer wg.Done()
-					err := startProducer(tasks, src, dst, prefix, config)
-					if err != nil {
-						logger.Fatalf("list prefix %s: %s", prefix, err)
-					}
-					<-config.concurrentList
-				}(c.Key())
-			default:
-				err := startProducer(tasks, src, dst, c.Key(), config)
+			wg.Add(1)
+			go func(prefix string) {
+				defer wg.Done()
+				err := startProducer(tasks, src, dst, prefix, config)
 				if err != nil {
-					logger.Fatalf("list prefix %s: %s", c.Key(), err)
+					logger.Fatalf("list prefix %s: %s", prefix, err)
 				}
-			}
-
+				<-config.concurrentList
+			}(c.Key())
+			config.concurrentList <- 1
 		}
 	}()
 
