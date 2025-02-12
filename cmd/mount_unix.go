@@ -208,6 +208,7 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 		logger.Infof("\033[92mOK\033[0m, %s with special mount point %s", name, mp)
 		return
 	}
+	_, oldConf, _ := loadConfig(mp)
 	mountTimeOut := 10 // default 10 seconds
 	interval := 500    // check every 500 Millisecond
 	if tStr, ok := os.LookupEnv("JFS_MOUNT_TIMEOUT"); ok {
@@ -222,6 +223,13 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 		st, err := os.Stat(mp)
 		if err == nil {
 			if sys, ok := st.Sys().(*syscall.Stat_t); ok && sys.Ino == uint64(meta.RootInode) {
+				// in pod, pid probably the same
+				if csiCommPath == "" && oldConf != nil {
+					_, newConf, _ := loadConfig(mp)
+					if newConf == nil || newConf.Pid == oldConf.Pid {
+						continue
+					}
+				}
 				logger.Infof("\033[92mOK\033[0m, %s is ready at %s", name, mp)
 				return
 			}
