@@ -609,16 +609,20 @@ func (cache *cacheStore) load(key string) (ReadCloser, error) {
 
 	var f *cacheFile
 	var err error
+	size := parseObjOrigSize(key)
 	err = cache.checkErr(func() error {
-		f, err = openCacheFile(cache.cachePath(key), parseObjOrigSize(key), cache.checksum)
+		f, err = openCacheFile(cache.cachePath(key), size, cache.checksum)
 		return err
 	})
 
 	cache.Lock()
 	if err == nil {
+		// update atime
 		if it, ok := cache.keys[k]; ok {
-			// update atime
 			cache.keys[k] = cacheItem{it.size, uint32(time.Now().Unix())}
+		} else {
+			cache.keys[k] = cacheItem{int32(size), uint32(time.Now().Unix())}
+			cache.used += int64(size + 4096)
 		}
 	} else if it, ok := cache.keys[k]; ok {
 		if it.size > 0 {
@@ -702,6 +706,9 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 		// update size of staging block
 		cache.keys[k] = cacheItem{size, it.atime}
 	} else {
+		if it.atime > atime { // some filesystems donot have atime enabled
+			atime = it.atime
+		}
 		cache.keys[k] = cacheItem{size, atime}
 	}
 	if size > 0 {
@@ -914,10 +921,15 @@ func (cache *cacheStore) scanCached() {
 					key = strings.ReplaceAll(key, "\\", "/")
 				}
 				atime := uint32(getAtime(fi).Unix())
+				size := parseObjOrigSize(key) // track logical size
+				if size == 0 {
+					logger.Warnf("Ignore file with unknown size: %s", path)
+					return nil
+				}
 				if getNlink(fi) > 1 {
-					cache.add(key, -int32(fi.Size()), atime)
+					cache.add(key, -int32(size), atime)
 				} else {
-					cache.add(key, int32(fi.Size()), atime)
+					cache.add(key, int32(size), atime)
 				}
 			}
 		}
