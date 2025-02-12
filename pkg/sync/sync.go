@@ -57,6 +57,7 @@ var (
 	checked, checkedBytes *utils.Bar
 	skipped, skippedBytes *utils.Bar
 	deleted, failed       *utils.Bar
+	listedPrefix          *utils.Bar
 	concurrent            chan int
 	limiter               *ratelimit.Bucket
 )
@@ -1318,7 +1319,7 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 	return srckeys, nil
 }
 
-func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config, progress *utils.Progress) error {
+func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config) error {
 	f, err := os.Open(config.FilesFrom)
 	if err != nil {
 		return fmt.Errorf("open %s: %s", config.FilesFrom, err)
@@ -1326,7 +1327,6 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 	defer f.Close()
 
 	prefixs := make(chan string, config.Threads)
-	listedPrefix := progress.AddCountSpinner("Prefix")
 	var wg sync.WaitGroup
 	wg.Add(config.Threads)
 	for i := 0; i < config.Threads; i++ {
@@ -1566,6 +1566,11 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			}()
 		}
 	}
+
+	if config.Manager == "" && config.FilesFrom != "" {
+		listedPrefix = progress.AddCountSpinner("Prefix")
+	}
+
 	go func() {
 		for {
 			pending.SetCurrent(int64(len(tasks)))
@@ -1604,7 +1609,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		config.concurrentList = make(chan int, config.ListThreads)
 		var err error
 		if config.FilesFrom != "" {
-			err = produceFromList(tasks, src, dst, config, progress)
+			err = produceFromList(tasks, src, dst, config)
 		} else {
 			err = startProducer(tasks, src, dst, "", config)
 		}
@@ -1702,6 +1707,14 @@ func initSyncMetrics(config *Config) {
 				}, func() float64 {
 					return float64(checkedBytes.Current())
 				}))
+		}
+		if listedPrefix != nil {
+			config.Registerer.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "Prefix",
+				Help: "listed prefix",
+			}, func() float64 {
+				return float64(listedPrefix.Current())
+			}))
 		}
 	}
 }
