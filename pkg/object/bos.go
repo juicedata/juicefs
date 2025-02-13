@@ -297,6 +297,8 @@ func newBOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	if err != nil {
 		return nil, err
 	}
+	bosClient.Config.Retry = bce.NewNoRetryPolicy()
+	bosClient.Config.UserAgent = UserAgent
 	return &bosclient{bucket: bucketName, c: bosClient}, nil
 }
 

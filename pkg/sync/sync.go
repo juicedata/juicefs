@@ -240,11 +240,11 @@ func copyPerms(dst object.ObjectStorage, obj object.Object, config *Config) {
 	start := time.Now()
 	key := obj.Key()
 	fi := obj.(object.File)
-	// chmod needs to be executed after chown, because chown will change setuid setgid to be invalid.
-	if err := dst.(object.FileSystem).Chown(key, fi.Owner(), fi.Group()); err != nil {
-		logger.Warnf("Chown %s to (%s,%s): %s", key, fi.Owner(), fi.Group(), err)
-	}
 	if !fi.IsSymlink() || !config.Links {
+		// chmod needs to be executed after chown, because chown will change setuid setgid to be invalid.
+		if err := dst.(object.FileSystem).Chown(key, fi.Owner(), fi.Group()); err != nil {
+			logger.Warnf("Chown %s to (%s,%s): %s", key, fi.Owner(), fi.Group(), err)
+		}
 		if err := dst.(object.FileSystem).Chmod(key, fi.Mode()); err != nil {
 			logger.Warnf("Chmod %s to %o: %s", key, fi.Mode(), err)
 		}
@@ -1288,7 +1288,7 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 	return srckeys, nil
 }
 
-func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, config *Config) error {
+func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config) error {
 	if prefix == "" && config.Limit == 1 && len(config.rules) == 0 {
 		// fast path for single key
 		obj, err := src.Head(config.Start)
@@ -1311,7 +1311,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 			logger.Warnf("head %s from %s: %s", config.Start, src, err)
 		}
 	}
-	if config.ListThreads <= 1 || strings.Count(prefix, "/") >= config.ListDepth {
+	if config.ListThreads <= 1 || listDepth <= 0 {
 		return startSingleProducer(tasks, src, dst, prefix, config)
 	}
 
@@ -1349,19 +1349,18 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 				wg.Add(1)
 				go func(prefix string) {
 					defer wg.Done()
-					err := startProducer(tasks, src, dst, prefix, config)
+					err := startProducer(tasks, src, dst, prefix, listDepth-1, config)
 					if err != nil {
 						logger.Fatalf("list prefix %s: %s", prefix, err)
 					}
 					<-config.concurrentList
 				}(c.Key())
 			default:
-				err := startProducer(tasks, src, dst, c.Key(), config)
+				err := startProducer(tasks, src, dst, c.Key(), listDepth-1, config)
 				if err != nil {
 					logger.Fatalf("list prefix %s: %s", c.Key(), err)
 				}
 			}
-
 		}
 	}()
 
@@ -1532,7 +1531,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			logger.Infof("last key: %q", config.End)
 		}
 		config.concurrentList = make(chan int, config.ListThreads)
-		err := startProducer(tasks, src, dst, "", config)
+		err := startProducer(tasks, src, dst, "", config.ListDepth, config)
 		if err != nil {
 			return err
 		}

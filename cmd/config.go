@@ -166,8 +166,11 @@ func config(ctx *cli.Context) error {
 				storage = true
 			}
 		case "bucket":
+			// bucket will be accessed before storage, so it is necessary to determine if storage is a file
 			if new := ctx.String(flag); new != format.Bucket {
-				if format.Storage == "file" {
+				oldStorage := format.Storage
+				newStorage := ctx.String("storage")
+				if newStorage == "file" || (oldStorage == "file" && newStorage == "") {
 					if p, err := filepath.Abs(new); err == nil {
 						new = p + "/"
 					} else {

@@ -62,8 +62,8 @@ func powerOf2(s int) int {
 }
 
 func init() {
-	pools = make([]*sync.Pool, 33) // 1 - 8G
-	for i := 0; i < 33; i++ {
+	pools = make([]*sync.Pool, 34) // 1 - 8G
+	for i := 0; i < 34; i++ {
 		func(bits int) {
 			pools[i] = &sync.Pool{
 				New: func() interface{} {
