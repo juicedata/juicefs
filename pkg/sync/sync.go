@@ -1334,7 +1334,7 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 			defer wg.Done()
 			for key := range prefixs {
 				logger.Debugf("start listing prefix %s", key)
-				err = startProducer(tasks, src, dst, key, config)
+				err = startProducer(tasks, src, dst, key, config.ListDepth, config)
 				if err != nil {
 					logger.Errorf("list prefix %s: %s", key, err)
 				}
@@ -1358,8 +1358,8 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 	return nil
 }
 
-func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string,listDepth int,  config *Config) error {
-	if prefix == ""  && len(config.rules) == 0 {
+func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config) error {
+	if config.Limit == 1 && len(config.rules) == 0 {
 		// fast path for single key
 		obj, err := src.Head(config.Start)
 		if err == nil && (!obj.IsDir() || config.Dirs) {
@@ -1610,7 +1610,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		if config.FilesFrom != "" {
 			err = produceFromList(tasks, src, dst, config)
 		} else {
-			err = startProducer(tasks, src, dst, "", config)
+			err = startProducer(tasks, src, dst, "", config.ListDepth, config)
 		}
 		if err != nil {
 			return err
