@@ -30,15 +30,26 @@ func DynAlloc(size int) []byte {
 	return b[:size]
 }
 
+// DynFree b may be longer than the original, in the actual size into the pool
 func DynFree(b []byte) {
-	dynPools[powerOf2(cap(b))].Put(&b)
+	dynPools[FloorPowerOf2(cap(b))].Put(&b)
+}
+
+func FloorPowerOf2(s int) int {
+	var bits int
+	var p = 1
+	for p <= s {
+		bits++
+		p *= 2
+	}
+	return bits - 1
 }
 
 var dynPools []*sync.Pool
 
 func init() {
-	dynPools = make([]*sync.Pool, 33) // 1 - 8G
-	for i := 0; i < 33; i++ {
+	dynPools = make([]*sync.Pool, 34) // 1 - 8G
+	for i := 0; i < 34; i++ {
 		func(bits int) {
 			dynPools[i] = &sync.Pool{
 				New: func() interface{} {
