@@ -641,7 +641,7 @@ func (j *juice) Releasedir(path string, fh uint64) (e int) {
 	return
 }
 
-func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayClose int) {
+func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayClose int, hideDotFiles bool) {
 	var jfs juice
 	conf := v.Conf
 	jfs.conf = conf
@@ -666,6 +666,9 @@ func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayCl
 	}
 	if fuseOpt != "" {
 		options += "," + fuseOpt
+	}
+	if hideDotFiles {
+		options += ",dothidden"
 	}
 	host.SetCapCaseInsensitive(strings.HasSuffix(conf.Meta.MountPoint, ":"))
 	host.SetCapReaddirPlus(true)
