@@ -100,3 +100,8 @@ test.cmd:
 
 test.fdb:
 	go test -v -cover -count=1  -failfast -timeout=4m ./pkg/meta/ -tags fdb -run=TestFdb -args -test.gocoverdir="$(shell realpath cover/)"
+
+unit-random-test:
+	mkdir -p cover/meta
+	echo "Using seed: $(seed), steps: $(steps)"
+	go test ./pkg/meta/... -rapid.seed=$(seed) -rapid.checks=200000 -rapid.steps=$(steps) -run "TestFSOps" -v -failfast -count=1 -timeout=30m -cover -args -test.gocoverdir="$(shell realpath cover/)"
