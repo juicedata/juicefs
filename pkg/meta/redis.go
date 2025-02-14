@@ -1041,7 +1041,7 @@ func (m *redisMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint6
 			return err
 		}
 		m.parseAttr(a, &t)
-		if t.Typ != TypeFile || t.Flags&(FlagImmutable|FlagAppend) != 0 || t.Parent > TrashInode {
+		if t.Typ != TypeFile || t.Flags&(FlagImmutable|FlagAppend) != 0 || (!m.of.IsOpen(inode) && t.Parent > TrashInode) {
 			return syscall.EPERM
 		}
 		if !skipPermCheck {
