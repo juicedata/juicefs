@@ -1362,7 +1362,9 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 			diffLength = attr.Length
 		}
 		m.updateDirStat(ctx, parent, -int64(diffLength), -align4K(diffLength), -1)
-		m.updateDirQuota(ctx, parent, -align4K(diffLength), -1)
+		if !parent.IsTrash() {
+			m.updateDirQuota(ctx, parent, -align4K(diffLength), -1)
+		}
 	}
 	return err
 }
