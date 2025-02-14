@@ -1337,6 +1337,7 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 				err = startProducer(tasks, src, dst, key, config.ListDepth, config)
 				if err != nil {
 					logger.Errorf("list prefix %s: %s", key, err)
+					failed.Increment()
 				}
 				listedPrefix.Increment()
 			}
@@ -1417,11 +1418,14 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 			wg.Add(1)
 			go func(prefix string) {
 				defer wg.Done()
+				defer func() {
+					<-config.concurrentList
+				}()
 				err := startProducer(tasks, src, dst, prefix, listDepth-1, config)
 				if err != nil {
-					logger.Fatalf("list prefix %s: %s", prefix, err)
+					logger.Errorf("list prefix %s: %s", prefix, err)
+					failed.Increment()
 				}
-				<-config.concurrentList
 			}(c.Key())
 			config.concurrentList <- 1
 		}
