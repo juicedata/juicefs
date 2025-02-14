@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"reflect"
 	"runtime"
@@ -3281,4 +3282,63 @@ func TestSymlinkCache(t *testing.T) {
 
 	cache.doClean()
 	require.Equal(t, int32(8000), cache.size.Load())
+}
+
+func TestTxBatchLock(t *testing.T) {
+	var base baseMeta
+	// 0 inode
+	func() {
+		defer base.txBatchLock()()
+	}()
+	// 1 inodes
+	func() {
+		defer base.txBatchLock(2)()
+	}()
+	// 2 inodes
+	func() {
+		defer base.txBatchLock(1, 2)()
+	}()
+	// no reentrant
+	func() {
+		defer base.txBatchLock(1, 1, nlocks+1)()
+	}()
+	// no deadlock - sequential
+	func() {
+		batch1 := []Ino{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+		batch2 := []Ino{1 + nlocks*9, 2 + nlocks*8, 3 + nlocks*7, 4 + nlocks*6, 5 + nlocks*5, 6 + nlocks*4, 7 + nlocks*3, 8 + nlocks*2, 9 + nlocks, 10}
+		var wg sync.WaitGroup
+		for i := 0; i < 100; i++ {
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				defer base.txBatchLock(batch1...)()
+			}()
+			go func() {
+				defer wg.Done()
+				defer base.txBatchLock(batch2...)()
+			}()
+		}
+		wg.Wait()
+	}()
+	// no deadlock - fuzz testing
+	func() {
+		var batch1, batch2 []Ino
+		for i := 0; i < 100; i++ {
+			batch1 = append(batch1, Ino(rand.Uint64()+1))
+			batch2 = append(batch2, Ino(rand.Uint64()+1))
+		}
+		var wg sync.WaitGroup
+		for i := 0; i < 100; i++ {
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				defer base.txBatchLock(batch1...)()
+			}()
+			go func() {
+				defer wg.Done()
+				defer base.txBatchLock(batch2...)()
+			}()
+		}
+		wg.Wait()
+	}()
 }
