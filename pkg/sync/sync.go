@@ -17,6 +17,7 @@
 package sync
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -56,6 +57,7 @@ var (
 	checked, checkedBytes *utils.Bar
 	skipped, skippedBytes *utils.Bar
 	deleted, failed       *utils.Bar
+	listedPrefix          *utils.Bar
 	concurrent            chan int
 	limiter               *ratelimit.Bucket
 )
@@ -1317,8 +1319,47 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 	return srckeys, nil
 }
 
+func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config) error {
+	f, err := os.Open(config.FilesFrom)
+	if err != nil {
+		return fmt.Errorf("open %s: %s", config.FilesFrom, err)
+	}
+	defer f.Close()
+
+	prefixs := make(chan string, config.Threads)
+	var wg sync.WaitGroup
+	wg.Add(config.Threads)
+	for i := 0; i < config.Threads; i++ {
+		go func() {
+			defer wg.Done()
+			for key := range prefixs {
+				logger.Debugf("start listing prefix %s", key)
+				err = startProducer(tasks, src, dst, key, config.ListDepth, config)
+				if err != nil {
+					logger.Errorf("list prefix %s: %s", key, err)
+				}
+				listedPrefix.Increment()
+			}
+		}()
+	}
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		key := scanner.Text()
+		if key == "" {
+			continue
+		}
+		prefixs <- key
+	}
+	close(prefixs)
+
+	wg.Wait()
+	listedPrefix.Done()
+	return nil
+}
+
 func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config) error {
-	if prefix == "" && config.Limit == 1 && len(config.rules) == 0 {
+	if config.Limit == 1 && len(config.rules) == 0 {
 		// fast path for single key
 		obj, err := src.Head(config.Start)
 		if err == nil && (!obj.IsDir() || config.Dirs) {
@@ -1517,6 +1558,11 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			}()
 		}
 	}
+
+	if config.Manager == "" && config.FilesFrom != "" {
+		listedPrefix = progress.AddCountSpinner("Prefix")
+	}
+
 	go func() {
 		for {
 			pending.SetCurrent(int64(len(tasks)))
@@ -1553,7 +1599,12 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			logger.Infof("last key: %q", config.End)
 		}
 		config.concurrentList = make(chan int, config.ListThreads)
-		err := startProducer(tasks, src, dst, "", config.ListDepth, config)
+		var err error
+		if config.FilesFrom != "" {
+			err = produceFromList(tasks, src, dst, config)
+		} else {
+			err = startProducer(tasks, src, dst, "", config.ListDepth, config)
+		}
 		if err != nil {
 			return err
 		}
@@ -1648,6 +1699,14 @@ func initSyncMetrics(config *Config) {
 				}, func() float64 {
 					return float64(checkedBytes.Current())
 				}))
+		}
+		if listedPrefix != nil {
+			config.Registerer.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "Prefix",
+				Help: "listed prefix",
+			}, func() float64 {
+				return float64(listedPrefix.Current())
+			}))
 		}
 	}
 }
