@@ -678,8 +678,8 @@ func RunAsSystemSerivce(name string, mountpoint string) {
 	logger.Info("Running as Windows system service.")
 
 	cmdLine := strings.Join(os.Args[1:], " ")
-	cmdLine = strings.ReplaceAll(cmdLine, "--as-svc", "")
-	cmdLine = strings.ReplaceAll(cmdLine, "-as-svc", "")
+	cmdLine = strings.ReplaceAll(cmdLine, "--as-service", "")
+	cmdLine = strings.ReplaceAll(cmdLine, "-as-service", "")
 
 	regKeyPath := "SOFTWARE\\WOW6432Node\\WinFsp\\Services\\juicefs"
 	k, err := registry.OpenKey(registry.LOCAL_MACHINE, regKeyPath, registry.ALL_ACCESS)
