@@ -2558,7 +2558,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 					rmdir = false
 					continue
 				}
-				if count%10000 == 0 && time.Since(now) > 50*time.Minute {
+				if time.Since(now) > 50*time.Minute {
 					return
 				}
 			}
