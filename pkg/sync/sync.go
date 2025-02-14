@@ -1376,7 +1376,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 			wg.Add(1)
 			go func(prefix string) {
 				defer wg.Done()
-				err := startProducer(tasks, src, dst, prefix,listDepth-1, config)
+				err := startProducer(tasks, src, dst, prefix, listDepth-1, config)
 				if err != nil {
 					logger.Fatalf("list prefix %s: %s", prefix, err)
 				}
