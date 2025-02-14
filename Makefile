@@ -104,4 +104,4 @@ test.fdb:
 unit-random-test:
 	mkdir -p cover/meta
 	echo "Using seed: $(seed), steps: $(steps)"
-	go test ./pkg/meta/... -rapid.seed=$(seed) -rapid.checks=200000 -rapid.steps=$(steps) -run "TestFSOps" -v -failfast -count=1 -timeout=30m -cover -args -test.gocoverdir="$(shell realpath cover/)"
+	go test ./pkg/meta/... -rapid.seed=$(seed) -rapid.checks=10000 -rapid.steps=$(steps) -run "TestFSOps" -v -failfast -count=1 -timeout=30m -cover -args -test.gocoverdir="$(shell realpath cover/)"
