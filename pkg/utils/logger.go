@@ -19,6 +19,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -29,6 +30,7 @@ var mu sync.Mutex
 var loggers = make(map[string]*logHandle)
 
 var syslogHook logrus.Hook
+var framePlaceHolder = runtime.Frame{Function: "???", File: "???", Line: 0}
 
 type logHandle struct {
 	logrus.Logger
@@ -61,6 +63,10 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 		lvlStr = fmt.Sprintf("\033[1;%dm%s\033[0m", color, lvlStr)
 	}
 	const timeFormat = "2006/01/02 15:04:05.000000"
+	caller := e.Caller
+	if caller == nil { // for unknown reason, sometimes e.Caller is nil
+		caller = &framePlaceHolder
+	}
 	str := fmt.Sprintf("%s%v %s[%d] <%v>: %v [%s@%s:%d]",
 		l.logid,
 		e.Time.Format(timeFormat),
@@ -68,9 +74,9 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 		l.pid,
 		lvlStr,
 		strings.TrimRight(e.Message, "\n"),
-		methodName(e.Caller.Function),
-		path.Base(e.Caller.File),
-		e.Caller.Line)
+		methodName(caller.Function),
+		path.Base(caller.File),
+		caller.Line)
 
 	if len(e.Data) != 0 {
 		str += " " + fmt.Sprint(e.Data)
