@@ -135,7 +135,7 @@ func findLen(in io.Reader) (io.Reader, int64, error) {
 			return nil, 0, err
 		}
 		vlen = int64(len(d))
-		in = bytes.NewReader(d)
+		in = bytes.NewBuffer(d)
 	}
 	return in, vlen, nil
 }

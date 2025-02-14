@@ -20,6 +20,7 @@
 package object
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,6 +33,7 @@ import (
 	"github.com/baidubce/bce-sdk-go/bce"
 	"github.com/baidubce/bce-sdk-go/services/bos"
 	"github.com/baidubce/bce-sdk-go/services/bos/api"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type bosclient struct {
@@ -114,7 +116,18 @@ func (q *bosclient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	if err != nil {
 		return err
 	}
-	body, err := bce.NewBodyFromSizedReader(b, vlen)
+	var data []byte
+	if bf, ok := b.(*bytes.Buffer); ok {
+		data = bf.Bytes()
+	} else {
+		data = utils.Alloc0(int(vlen))
+		defer utils.Free0(data)
+		_, err = io.ReadFull(b, data)
+		if err != nil {
+			return err
+		}
+	}
+	body, err := bce.NewBodyFromBytes(data)
 	if err != nil {
 		return err
 	}
