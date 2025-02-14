@@ -1488,6 +1488,10 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dtyp uint8
 	var tattr Attr
 	var newSpace, newInode int64
+	parentLocks := []Ino{parentDst}
+	if !isTrash(parentSrc) { // there should be no conflict if parentSrc is in trash, relax lock to accelerate `restore` subcommand
+		parentLocks = append(parentLocks, parentSrc)
+	}
 	err := m.txn(ctx, func(tx *kvTxn) error {
 		opened = false
 		dino, dtyp = 0, 0
@@ -1724,7 +1728,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
 		}
 		return nil
-	}, parentSrc, parentDst)
+	}, parentLocks...)
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 			m.fileDeleted(opened, false, dino, tattr.Length)
