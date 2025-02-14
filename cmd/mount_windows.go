@@ -48,15 +48,15 @@ func mountFlags() []cli.Flag {
 			Usage: "delay file closing in seconds.",
 		},
 		&cli.BoolFlag{
-			Name:  "as-service",
-			Usage: "If run as a system service. (support ONLY 1 volume mounting at the same time)",
+			Name:  "d",
+			Aliases: []string{"background"},
+			Usage: "run in background(Windows: as a system service. support ONLY 1 volume mounting at the same time)",
 		},
 	}
 }
 
 func makeDaemon(c *cli.Context, conf *vfs.Config) error {
-	logger.Warnf("Cannot run in background in Windows.")
-	return nil
+	return winfsp.RunAsSystemSerivce(conf.Format.Name, c.Args().Get(1))
 }
 
 func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl, listenAddr string) error {
@@ -69,11 +69,6 @@ func getDaemonStage() int {
 }
 
 func mountMain(v *vfs.VFS, c *cli.Context) {
-	if c.Bool("as-service") {
-		winfsp.RunAsSystemSerivce(v.Conf.Format.Name, c.Args().Get(1))
-		return
-	}
-
 	v.Conf.AccessLog = c.String("access-log")
 	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"))
 }
