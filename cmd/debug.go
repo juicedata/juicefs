@@ -443,6 +443,7 @@ func collectPprof(ctx *cli.Context, cmd string, pid string, amp string, requireR
 		"cmdline":      {name: "cmdline.txt", url: baseUrl + "cmdline"},
 		"goroutine":    {name: "goroutine.pb.gz", url: baseUrl + "goroutine"},
 		"stack":        {name: "goroutine.stack.txt", url: baseUrl + "goroutine?debug=1"},
+		"stack-detail": {name: "goroutine.stack.detail.txt", url: baseUrl + "goroutine?debug=2"},
 		"heap":         {name: "heap.pb.gz", url: baseUrl + "heap"},
 		"mutex":        {name: "mutex.pb.gz", url: baseUrl + "mutex"},
 		"threadcreate": {name: "threadcreate.pb.gz", url: baseUrl + "threadcreate"},
