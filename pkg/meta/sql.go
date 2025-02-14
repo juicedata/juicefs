@@ -1196,7 +1196,7 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		}
 		var curAttr Attr
 		m.parseAttr(&cur, &curAttr)
-		if curAttr.Parent > TrashInode {
+		if !m.of.IsOpen(inode) && curAttr.Parent > TrashInode {
 			return syscall.EPERM
 		}
 		now := time.Now()

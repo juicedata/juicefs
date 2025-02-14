@@ -1199,7 +1199,7 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 			return err
 		}
 		m.parseAttr(a, &cur)
-		if cur.Parent > TrashInode {
+		if !m.of.IsOpen(inode) && cur.Parent > TrashInode {
 			return syscall.EPERM
 		}
 		now := time.Now()

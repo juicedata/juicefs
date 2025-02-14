@@ -925,7 +925,7 @@ func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, &cur)
-		if cur.Parent > TrashInode {
+		if !m.of.IsOpen(inode) && cur.Parent > TrashInode {
 			return syscall.EPERM
 		}
 		now := time.Now()
