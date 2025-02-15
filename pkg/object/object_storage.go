@@ -272,6 +272,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 		defer close(listed)
 		err := walk(prefix, entries)
 		if err != nil {
+			logger.Errorf("walk %s: %s", prefix, err)
 			listed <- nil
 		}
 	}()

@@ -55,8 +55,12 @@ var (
 	checked, checkedBytes *utils.Bar
 	skipped, skippedBytes *utils.Bar
 	deleted, failed       *utils.Bar
+	failedList            *utils.Bar
 	concurrent            chan int
 	limiter               *ratelimit.Bucket
+
+	failedPrefix map[string]error
+	listMu       sync.Mutex
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -1143,8 +1147,12 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 				err = startProducer(tasks, src, dst, key, config.ListDepth, config)
 				if err != nil {
 					logger.Errorf("list prefix %s: %s", key, err)
-					failed.Increment()
+					failedList.Increment()
+					listMu.Lock()
+					failedPrefix[key] = err
+					listMu.Unlock()
 				}
+				logger.Infof("finish listing prefix %s", key)
 				listedPrefix.Increment()
 			}
 		}()
@@ -1192,8 +1200,10 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		return startSingleProducer(tasks, src, dst, prefix, config)
 	}
 
-	commonPrefix := make(chan object.Object, 1000)
 	done := make(chan bool)
+	defer func() { <-done }()
+	commonPrefix := make(chan object.Object, 1000)
+	defer close(commonPrefix)
 	go func() {
 		defer close(done)
 		var mu sync.Mutex
@@ -1230,7 +1240,10 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 				err := startProducer(tasks, src, dst, prefix, listDepth-1, config)
 				if err != nil {
 					logger.Errorf("list prefix %s: %s", prefix, err)
-					failed.Increment()
+					failedList.Increment()
+					listMu.Lock()
+					failedPrefix[prefix] = err
+					listMu.Unlock()
 				}
 			}(c.Key())
 			config.concurrentList <- 1
@@ -1267,9 +1280,6 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	// consume all the keys from dst
 	for range dstkeys {
 	}
-	close(commonPrefix)
-
-	<-done
 	return nil
 }
 
@@ -1345,6 +1355,14 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			sendStats(config.Manager)
 			logger.Debugf("This worker process has already completed its task")
 		}
+		if failedList != nil && failedList.Current() > 0 {
+			listMu.Lock()
+			for k, v := range failedPrefix {
+				logger.Errorf("failed to list prefix %s: %s", k, v)
+			}
+			listMu.Unlock()
+			return fmt.Errorf("failed to list %d prefixes", failedList.Current())
+		}
 		if failed != nil {
 			if n := failed.Current(); n > 0 || total > handled.Current() {
 				return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
@@ -1353,6 +1371,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		return nil
 	}
 
+	failedList = progress.AddCountSpinner("Failed lists")
 	if !config.Dry {
 		failed = progress.AddCountSpinner("Failed objects")
 		if config.MaxFailure > 0 {
@@ -1480,6 +1499,14 @@ func initSyncMetrics(config *Config) {
 				Help: "Failed objects",
 			}, func() float64 {
 				return float64(failed.Current())
+			}))
+		}
+		if failedList != nil {
+			config.Registerer.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "failed_lists",
+				Help: "Failed lists",
+			}, func() float64 {
+				return float64(failedList.Current())
 			}))
 		}
 		if deleted != nil {
