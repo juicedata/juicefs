@@ -1209,7 +1209,15 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		var mu sync.Mutex
 		processing := make(map[string]bool)
 		var wg sync.WaitGroup
-		defer wg.Wait()
+		defer func() {
+			if listDepth < config.ListDepth {
+				<-config.concurrentList
+			}
+			wg.Wait()
+			if listDepth < config.ListDepth {
+				config.concurrentList <- 1
+			}
+		}()
 		for c := range commonPrefix {
 			mu.Lock()
 			if processing[c.Key()] {
