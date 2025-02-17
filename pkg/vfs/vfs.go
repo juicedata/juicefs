@@ -82,6 +82,7 @@ type FuseOptions struct {
 	DontUmask                bool
 	OtherCaps                uint32
 	NoAllocForRead           bool
+	Timeout                  time.Duration
 }
 
 func (o FuseOptions) StripOptions() FuseOptions {
