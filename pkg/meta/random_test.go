@@ -2136,7 +2136,7 @@ func (m *fsMachine) Setlk(t *rapid.T) {
 var metaURL string
 
 func init() {
-	flag.StringVar(&metaURL, "meta", "memkv://jfs-unit-test", "meta URL")
+	flag.StringVar(&metaURL, "rapid.meta", "memkv://jfs-unit-test", "meta URL")
 }
 
 func TestFSOps(t *testing.T) {
