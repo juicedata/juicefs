@@ -1361,7 +1361,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			logger.Info(msg)
 		} else {
 			sendStats(config.Manager)
-			logger.Debugf("This worker process has already completed its task")
+			logger.Infof("This worker process has already completed its task")
 		}
 		if failedList != nil && failedList.Current() > 0 {
 			listMu.Lock()
