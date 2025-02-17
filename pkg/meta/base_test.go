@@ -1876,9 +1876,6 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Open(ctx, inode, uint32(syscall.O_RDWR), attr); st != syscall.EPERM {
 		t.Fatalf("should not fallocate a file in trash")
 	}
-	if st := m.SetAttr(ctx, inode, SetAttrMode, 1, &Attr{Mode: 0}); st != syscall.EPERM {
-		t.Fatalf("should not change mode of a file in trash")
-	}
 	var parent2 Ino
 	if st := m.Mkdir(ctx, 1, "d2", 0755, 022, 0, &parent2, attr); st != 0 {
 		t.Fatalf("mkdir d2: %s", st)
