@@ -371,6 +371,7 @@ func fetchJobs(tasks chan<- object.Object, config *Config) {
 		}
 		logger.Debugf("got %d jobs", len(jobs))
 		if len(jobs) == 0 {
+			logger.Infof("no more jobs")
 			break
 		}
 		for _, obj := range jobs {
