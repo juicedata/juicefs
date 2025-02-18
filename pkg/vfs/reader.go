@@ -365,11 +365,19 @@ func (f *fileReader) release() {
 	}
 }
 
+func (f *fileReader) readMargin(ahead, blklen uint64) uint64 {
+	if f.r.multiBlock == 0 ||
+	   blklen * f.r.multiBlock > ahead + f.r.blockSize {
+		return ahead + f.r.blockSize
+	}
+	return blklen * f.r.multiBlock
+}
+
 func (f *fileReader) guessSession(block *frange) int {
 	idx := -1
 	var closestOff uint64
 	for i, ses := range f.sessions {
-		if ses.lastOffset > closestOff && ses.lastOffset <= block.off && block.off <= ses.lastOffset+ses.readahead+f.r.blockSize {
+		if ses.lastOffset > closestOff && ses.lastOffset <= block.off && block.off <= ses.lastOffset+f.readMargin(ses.readahead, block.len) {
 			idx = i
 			closestOff = ses.lastOffset
 		}
@@ -694,6 +702,7 @@ type dataReader struct {
 	m              meta.Meta
 	store          chunk.ChunkStore
 	files          map[Ino]*fileReader
+	multiBlock     uint64
 	blockSize      uint64
 	bufferSize     int64
 	readAheadMax   uint64
@@ -715,6 +724,7 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 		m:              m,
 		store:          store,
 		files:          make(map[Ino]*fileReader),
+		multiBlock:	uint64(conf.Chunk.MultiBlock),
 		blockSize:      uint64(conf.Chunk.BlockSize),
 		bufferSize:     int64(conf.Chunk.BufferSize),
 		readAheadTotal: uint64(readAheadTotal),
