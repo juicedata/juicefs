@@ -123,10 +123,6 @@ func storageFlags() []cli.Flag {
 			Usage: "number of retries after network failure",
 		},
 		&cli.IntFlag{
-			Name:  "multi-block",
-			Usage: "number of blocks for random read ahead",
-		},
-		&cli.IntFlag{
 			Name:  "max-uploads",
 			Value: 20,
 			Usage: "number of connections to upload",
@@ -185,6 +181,10 @@ func dataCacheFlags() []cli.Flag {
 			Name:  "max-readahead",
 			Usage: "max buffering for read ahead in MiB per read session",
 		},
+                &cli.IntFlag{
+                        Name:  "multi-block",
+                        Usage: "number of blocks for random read ahead",
+                },
 		&cli.IntFlag{
 			Name:  "prefetch",
 			Value: 1,
