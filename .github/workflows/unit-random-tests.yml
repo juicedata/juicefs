@@ -25,6 +25,10 @@ on:
 
 jobs:
   unit-random-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        meta: ['memkv://jfs-unit-test', 'sqlite3://test.db']
     timeout-minutes: 60
     runs-on: ubuntu-20.04
     steps:
@@ -49,7 +53,7 @@ jobs:
       - name: Test
         timeout-minutes: 30
         run: |
-          make unit-random-test seed=$RANDOM checks=100000 steps=200
+          make unit-random-test seed=$RANDOM checks=100000 steps=200 meta=${{ matrix.meta }}
 
       - name: upload coverage report
         timeout-minutes: 5

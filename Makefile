@@ -102,5 +102,5 @@ test.fdb:
 	go test -v -cover -count=1  -failfast -timeout=4m ./pkg/meta/ -tags fdb -run=TestFdb -args -test.gocoverdir="$(shell realpath cover/)"
 
 unit-random-test:
-	echo "Using seed: $(seed), checks:${checks}, steps: $(steps)"
-	go test ./pkg/meta/... -rapid.seed=$(seed) -rapid.checks=$(checks) -rapid.steps=$(steps) -run "TestFSOps" -v -failfast -count=1 -timeout=30m -cover -coverpkg=./pkg/...,./cmd/... -args -test.gocoverdir="$(shell realpath cover/)"
+	echo "Using meta:$(meta), seed: $(seed), checks:${checks}, steps: $(steps)"
+	go test ./pkg/meta/... -rapid.meta=$(meta) -rapid.seed=$(seed) -rapid.checks=$(checks) -rapid.steps=$(steps) -run "TestFSOps" -v -failfast -count=1 -timeout=30m -cover -coverpkg=./pkg/...,./cmd/... -args -test.gocoverdir="$(shell realpath cover/)"
