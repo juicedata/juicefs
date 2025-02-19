@@ -273,7 +273,7 @@ func testACL(t *testing.T, m Meta) {
 	attr2 = &Attr{
 		Mode: 0555,
 	}
-	if st := m.SetAttr(ctx, testDirIno, 0, set, 0, attr2); st != 0 {
+	if st := m.SetAttr(ctx, testDirIno, set, 0, attr2); st != 0 {
 		t.Fatalf("setattr error: %s", st)
 	}
 
@@ -514,7 +514,7 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("mkdir d1: %s", st)
 	}
 	attr.Gid = 1
-	m.SetAttr(ctx, p1, 0, SetAttrGID, 0, attr)
+	m.SetAttr(ctx, p1, SetAttrGID, 0, attr)
 	if attr.Mode&02000 == 0 {
 		t.Fatalf("SGID is lost")
 	}
@@ -552,10 +552,10 @@ func testMetaClient(t *testing.T, m Meta) {
 	attr.Uid = 1
 	attr.Gid = 1
 	attr.Mode = 0640
-	if st := m.SetAttr(ctx, inode, 0, SetAttrAtime|SetAttrMtime|SetAttrUID|SetAttrGID|SetAttrMode, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, inode, SetAttrAtime|SetAttrMtime|SetAttrUID|SetAttrGID|SetAttrMode, 0, attr); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
-	if st := m.SetAttr(ctx, inode, 0, 0, 0, attr); st != 0 { // changes nothing
+	if st := m.SetAttr(ctx, inode, 0, 0, attr); st != 0 { // changes nothing
 		t.Fatalf("setattr f: %s", st)
 	}
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
@@ -564,7 +564,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if attr.Atime != 2 || attr.Mtime != 2 || attr.Uid != 1 || attr.Gid != 1 || attr.Mode != 0640 {
 		t.Fatalf("atime:%d mtime:%d uid:%d gid:%d mode:%o", attr.Atime, attr.Mtime, attr.Uid, attr.Gid, attr.Mode)
 	}
-	if st := m.SetAttr(ctx, inode, 0, SetAttrAtimeNow|SetAttrMtimeNow, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, inode, SetAttrAtimeNow|SetAttrMtimeNow, 0, attr); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
 	fakeCtx := NewContext(100, 2, []uint32{2, 1})
@@ -1266,7 +1266,7 @@ func testResolve(t *testing.T, m Meta) {
 	}
 	if pattr.Gid != 65534 {
 		pattr.Gid = 65534
-		if st := m.SetAttr(NewContext(1, 65534, []uint32{65534}), parent, 0, SetAttrGID, 0, &pattr); st != 0 {
+		if st := m.SetAttr(NewContext(1, 65534, []uint32{65534}), parent, SetAttrGID, 0, &pattr); st != 0 {
 			t.Fatalf("setattr gid: %s", st)
 		}
 	}
@@ -2109,7 +2109,7 @@ func testOpenCache(t *testing.T, m Meta) {
 		t.Fatalf("attrs not the same: attr %+v; attr2 %+v", *attr, *attr2)
 	}
 	attr2.Uid = 1
-	if st := m.SetAttr(ctx, inode, 0, SetAttrUID, 0, attr2); st != 0 {
+	if st := m.SetAttr(ctx, inode, SetAttrUID, 0, attr2); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
@@ -2226,7 +2226,7 @@ func testAttrFlags(t *testing.T, m Meta) {
 		t.Fatalf("create f: %s", st)
 	}
 	attr.Flags = FlagAppend
-	if st := m.SetAttr(ctx, inode, 0, SetAttrFlag, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, inode, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
 	if st := m.Open(ctx, inode, syscall.O_WRONLY, attr); st != syscall.EPERM {
@@ -2236,7 +2236,7 @@ func testAttrFlags(t *testing.T, m Meta) {
 		t.Fatalf("open f: %s", st)
 	}
 	attr.Flags = FlagAppend | FlagImmutable
-	if st := m.SetAttr(ctx, inode, 0, SetAttrFlag, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, inode, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
 	if st := m.Open(ctx, inode, syscall.O_WRONLY, attr); st != syscall.EPERM {
@@ -2251,7 +2251,7 @@ func testAttrFlags(t *testing.T, m Meta) {
 		t.Fatalf("mkdir d: %s", st)
 	}
 	attr.Flags = FlagAppend
-	if st := m.SetAttr(ctx, d, 0, SetAttrFlag, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, d, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr d: %s", st)
 	}
 	if st := m.Create(ctx, d, "f", 0644, 022, 0, &inode, nil); st != 0 {
@@ -2261,7 +2261,7 @@ func testAttrFlags(t *testing.T, m Meta) {
 		t.Fatalf("unlink f: %s", st)
 	}
 	attr.Flags = FlagAppend | FlagImmutable
-	if st := m.SetAttr(ctx, d, 0, SetAttrFlag, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, d, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr d: %s", st)
 	}
 	if st := m.Create(ctx, d, "f2", 0644, 022, 0, &inode, nil); st != syscall.EPERM {
@@ -2273,7 +2273,7 @@ func testAttrFlags(t *testing.T, m Meta) {
 		t.Fatalf("mkdir d: %s", st)
 	}
 	attr.Flags = FlagImmutable
-	if st := m.SetAttr(ctx, Immutable, 0, SetAttrFlag, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, Immutable, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr d: %s", st)
 	}
 	if st := m.Create(ctx, Immutable, "f2", 0644, 022, 0, &inode, nil); st != syscall.EPERM {
@@ -2293,7 +2293,7 @@ func testAttrFlags(t *testing.T, m Meta) {
 	}
 
 	attr.Flags = FlagAppend
-	if st := m.SetAttr(ctx, src1, 0, SetAttrFlag, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, src1, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr d: %s", st)
 	}
 	if st := m.Rename(ctx, src1, "mfile", dst1, "mfile", 0, &mfile, attr); st != syscall.EPERM {
@@ -2301,14 +2301,14 @@ func testAttrFlags(t *testing.T, m Meta) {
 	}
 
 	attr.Flags = FlagImmutable
-	if st := m.SetAttr(ctx, src1, 0, SetAttrFlag, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, src1, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr d: %s", st)
 	}
 	if st := m.Rename(ctx, src1, "mfile", dst1, "mfile", 0, &mfile, attr); st != syscall.EPERM {
 		t.Fatalf("rename d: %s", st)
 	}
 
-	if st := m.SetAttr(ctx, dst1, 0, SetAttrFlag, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, dst1, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr d: %s", st)
 	}
 	if st := m.Rename(ctx, src1, "mfile", dst1, "mfile", 0, &mfile, attr); st != syscall.EPERM {
@@ -2320,7 +2320,7 @@ func testAttrFlags(t *testing.T, m Meta) {
 		t.Fatalf("create f: %s", st)
 	}
 	attr.Flags = FlagImmutable | FlagAppend
-	if st := m.SetAttr(ctx, delFile, 0, SetAttrFlag, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, delFile, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr d: %s", st)
 	}
 	if st := m.Unlink(ctx, 1, "delfile"); st != syscall.EPERM {
@@ -2332,7 +2332,7 @@ func testAttrFlags(t *testing.T, m Meta) {
 		t.Fatalf("create f: %s", st)
 	}
 	attr.Flags = FlagAppend
-	if st := m.SetAttr(ctx, fallocFile, 0, SetAttrFlag, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, fallocFile, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
 	if st := m.Fallocate(ctx, fallocFile, fallocKeepSize, 0, 1024, nil); st != 0 {
@@ -2342,7 +2342,7 @@ func testAttrFlags(t *testing.T, m Meta) {
 		t.Fatalf("fallocate f: %s", st)
 	}
 	attr.Flags = FlagImmutable
-	if st := m.SetAttr(ctx, fallocFile, 0, SetAttrFlag, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, fallocFile, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
 	if st := m.Fallocate(ctx, fallocFile, fallocKeepSize, 0, 1024, nil); st != syscall.EPERM {
@@ -2360,14 +2360,14 @@ func testAttrFlags(t *testing.T, m Meta) {
 		t.Fatalf("fallocate f: %s", st)
 	}
 	attr.Flags = FlagAppend
-	if st := m.SetAttr(ctx, copydstFile, 0, SetAttrFlag, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, copydstFile, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
 	if st := m.CopyFileRange(ctx, copysrcFile, 0, copydstFile, 0, 1024, 0, nil, nil); st != syscall.EPERM {
 		t.Fatalf("copy_file_range f: %s", st)
 	}
 	attr.Flags = FlagImmutable
-	if st := m.SetAttr(ctx, copydstFile, 0, SetAttrFlag, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, copydstFile, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
 	if st := m.CopyFileRange(ctx, copysrcFile, 0, copydstFile, 0, 1024, 0, nil, nil); st != syscall.EPERM {
@@ -2715,7 +2715,7 @@ func testClone(t *testing.T, m Meta) {
 
 	var attr Attr
 	attr.Mtime = 1
-	m.SetAttr(Background(), cloneDir, 0, SetAttrMtime, 0, &attr)
+	m.SetAttr(Background(), cloneDir, SetAttrMtime, 0, &attr)
 	var totalspace, availspace, iused, iavail, space, iused2 uint64
 	m.StatFS(Background(), RootInode, &totalspace, &availspace, &iused, &iavail)
 	space = totalspace - availspace
@@ -3151,7 +3151,7 @@ func testAtime(t *testing.T, m Meta) {
 		}
 		// atime < ctime
 		attr.Atime, attr.Atimensec = 1234, 5678
-		if st := m.SetAttr(ctx, inode, 0, SetAttrAtime, 0, &attr); st != 0 {
+		if st := m.SetAttr(ctx, inode, SetAttrAtime, 0, &attr); st != 0 {
 			t.Fatalf("Setattr atime/%s: %s", fname, st)
 		}
 		if st := m.Open(ctx, inode, 0, &attr); st != 0 {
@@ -3161,7 +3161,7 @@ func testAtime(t *testing.T, m Meta) {
 		ret[0] = attr.Atime != 1234
 
 		attr.Atime, attr.Atimensec = 1234, 5678
-		if st := m.SetAttr(ctx, inode, 0, SetAttrAtime, 0, &attr); st != 0 {
+		if st := m.SetAttr(ctx, inode, SetAttrAtime, 0, &attr); st != 0 {
 			t.Fatalf("Setattr atime/%s: %s", fname, st)
 		}
 		var slices []Slice
@@ -3177,7 +3177,7 @@ func testAtime(t *testing.T, m Meta) {
 		now := time.Now()
 		attr.Atime = now.Unix() - 2
 		attr.Mtime = now.Unix()
-		if st := m.SetAttr(ctx, inode, 0, SetAttrAtime|SetAttrMtime, 0, &attr); st != 0 {
+		if st := m.SetAttr(ctx, inode, SetAttrAtime|SetAttrMtime, 0, &attr); st != 0 {
 			t.Fatalf("Setattr atime/%s: %s", fname, st)
 		}
 		if st := m.Read(ctx, inode, 0, &slices); st != 0 {
@@ -3189,7 +3189,7 @@ func testAtime(t *testing.T, m Meta) {
 		ret[2] = attr.Atime >= now.Unix()
 
 		// atime = ctime = mtime, atime = now
-		if st := m.SetAttr(ctx, inode, 0, SetAttrAtimeNow|SetAttrMtimeNow, 0, &attr); st != 0 {
+		if st := m.SetAttr(ctx, inode, SetAttrAtimeNow|SetAttrMtimeNow, 0, &attr); st != 0 {
 			t.Fatalf("Setattr atime/%s: %s", fname, st)
 		}
 		time.Sleep(time.Second * 2)
@@ -3208,7 +3208,7 @@ func testAtime(t *testing.T, m Meta) {
 			t.Fatalf("Mkdir atime/%s: %s", fname, st)
 		}
 		attr.Atime, attr.Atimensec = 1234, 5678
-		if st := m.SetAttr(ctx, inode, 0, SetAttrAtime, 0, &attr); st != 0 {
+		if st := m.SetAttr(ctx, inode, SetAttrAtime, 0, &attr); st != 0 {
 			t.Fatalf("Setattr atime/%s: %s", fname, st)
 		}
 		var entries []*Entry
@@ -3226,7 +3226,7 @@ func testAtime(t *testing.T, m Meta) {
 			t.Fatalf("Symlink atime/%s: %s", fname, st)
 		}
 		attr.Atime, attr.Atimensec = 1234, 5678
-		if st := m.SetAttr(ctx, inode, 0, SetAttrAtime, 0, &attr); st != 0 {
+		if st := m.SetAttr(ctx, inode, SetAttrAtime, 0, &attr); st != 0 {
 			t.Fatalf("Setattr atime/%s: %s", fname, st)
 		}
 		var target []byte

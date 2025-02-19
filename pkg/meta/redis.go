@@ -1041,7 +1041,7 @@ func (m *redisMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint6
 			return err
 		}
 		m.parseAttr(a, &t)
-		if t.Typ != TypeFile || t.Flags&(FlagImmutable|FlagAppend) != 0 {
+		if t.Typ != TypeFile || t.Flags&(FlagImmutable|FlagAppend) != 0 || t.Parent > TrashInode {
 			return syscall.EPERM
 		}
 		if !skipPermCheck {
@@ -1191,7 +1191,7 @@ func (m *redisMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, 
 	}, m.inodeKey(inode)))
 }
 
-func (m *redisMeta) doSetAttr(ctx Context, inode Ino, fh uint64, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
+func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		var cur Attr
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
@@ -1199,7 +1199,7 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, fh uint64, set uint16, sug
 			return err
 		}
 		m.parseAttr(a, &cur)
-		if fh == 0 && cur.Parent > TrashInode {
+		if cur.Parent > TrashInode {
 			return syscall.EPERM
 		}
 		now := time.Now()

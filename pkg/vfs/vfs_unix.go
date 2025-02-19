@@ -194,7 +194,7 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid u
 		}
 	}
 
-	err = v.Meta.SetAttr(ctx, ino, fh, uint16(set), 0, attr)
+	err = v.Meta.SetAttr(ctx, ino, uint16(set), 0, attr)
 	if err == 0 {
 		v.UpdateLength(ino, attr)
 		entry = &meta.Entry{Inode: ino, Attr: attr}
@@ -354,7 +354,7 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 		if iflag &= ^uint64(FS_IMMUTABLE_FL | FS_APPEND_FL); iflag != 0 {
 			return syscall.ENOTSUP
 		}
-		return v.Meta.SetAttr(ctx, ino, 0, meta.SetAttrFlag, 0, attr)
+		return v.Meta.SetAttr(ctx, ino, meta.SetAttrFlag, 0, attr)
 	} else {
 		if err = v.Meta.GetAttr(ctx, ino, attr); err != 0 {
 			return
