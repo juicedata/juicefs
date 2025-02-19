@@ -917,7 +917,7 @@ func (m *kvMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}, 0))
 }
 
-func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
+func (m *kvMeta) doSetAttr(ctx Context, inode Ino, fh uint64, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
 		var cur Attr
 		a := tx.get(m.inodeKey(inode))
@@ -925,7 +925,7 @@ func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, &cur)
-		if cur.Parent > TrashInode {
+		if fh == 0 && cur.Parent > TrashInode {
 			return syscall.EPERM
 		}
 		now := time.Now()
@@ -966,7 +966,7 @@ func (m *kvMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		}
 		t := Attr{}
 		m.parseAttr(a, &t)
-		if t.Typ != TypeFile || t.Flags&(FlagImmutable|t.Flags&FlagAppend) != 0 || t.Parent > TrashInode {
+		if t.Typ != TypeFile || t.Flags&(FlagImmutable|t.Flags&FlagAppend) != 0 {
 			return syscall.EPERM
 		}
 		if !skipPermCheck {

@@ -936,7 +936,7 @@ func (f *File) Chmod(ctx meta.Context, mode uint16) (err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Chmod (%s,%o): %s", f.path, mode, errstr(err)) }()
 	var attr = Attr{Mode: mode}
-	err = f.fs.m.SetAttr(ctx, f.inode, meta.SetAttrMode, 0, &attr)
+	err = f.fs.m.SetAttr(ctx, f.inode, 0, meta.SetAttrMode, 0, &attr)
 	f.fs.invalidateAttr(f.inode)
 	return
 }
@@ -953,7 +953,7 @@ func (f *File) Chown(ctx meta.Context, uid uint32, gid uint32) (err syscall.Errn
 		flag |= meta.SetAttrGID
 	}
 	var attr = Attr{Uid: uid, Gid: gid}
-	err = f.fs.m.SetAttr(ctx, f.inode, flag, 0, &attr)
+	err = f.fs.m.SetAttr(ctx, f.inode, 0, flag, 0, &attr)
 	f.fs.invalidateAttr(f.inode)
 	return
 }
@@ -977,7 +977,7 @@ func (f *File) Utime(ctx meta.Context, atime, mtime int64) (err syscall.Errno) {
 	attr.Atimensec = uint32(atime%1000) * 1e6
 	attr.Mtime = mtime / 1000
 	attr.Mtimensec = uint32(mtime%1000) * 1e6
-	err = f.fs.m.SetAttr(ctx, f.inode, flag, 0, &attr)
+	err = f.fs.m.SetAttr(ctx, f.inode, 0, flag, 0, &attr)
 	f.fs.invalidateAttr(f.inode)
 	return
 }

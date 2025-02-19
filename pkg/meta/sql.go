@@ -1184,7 +1184,7 @@ func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}))
 }
 
-func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
+func (m *dbMeta) doSetAttr(ctx Context, inode Ino, fh uint64, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		var cur = node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&cur)
@@ -1196,7 +1196,7 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		}
 		var curAttr Attr
 		m.parseAttr(&cur, &curAttr)
-		if curAttr.Parent > TrashInode {
+		if fh == 0 && curAttr.Parent > TrashInode {
 			return syscall.EPERM
 		}
 		now := time.Now()
@@ -1283,7 +1283,7 @@ func (m *dbMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		if !ok {
 			return syscall.ENOENT
 		}
-		if nodeAttr.Type != TypeFile || nodeAttr.Flags&(FlagImmutable|FlagAppend) != 0 || nodeAttr.Parent > TrashInode {
+		if nodeAttr.Type != TypeFile || nodeAttr.Flags&(FlagImmutable|FlagAppend) != 0 {
 			return syscall.EPERM
 		}
 		m.parseAttr(&nodeAttr, attr)
