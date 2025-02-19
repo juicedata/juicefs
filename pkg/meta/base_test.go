@@ -1873,8 +1873,14 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Parent != TrashInode+1 {
 		t.Fatalf("getattr f(%d): %s, attr %+v", inode, st, attr)
 	}
+	if st := m.Truncate(ctx, inode, 0, 1<<30, attr, false); st != syscall.EPERM {
+		t.Fatalf("should not truncate a file in trash")
+	}
 	if st := m.Open(ctx, inode, uint32(syscall.O_RDWR), attr); st != syscall.EPERM {
 		t.Fatalf("should not fallocate a file in trash")
+	}
+	if st := m.SetAttr(ctx, inode, SetAttrMode, 1, &Attr{Mode: 0}); st != syscall.EPERM {
+		t.Fatalf("should not change mode of a file in trash")
 	}
 	var parent2 Ino
 	if st := m.Mkdir(ctx, 1, "d2", 0755, 022, 0, &parent2, attr); st != 0 {
