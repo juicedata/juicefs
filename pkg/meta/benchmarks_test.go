@@ -338,7 +338,7 @@ func benchSetAttr(b *testing.B, m Meta) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		attr.Mode ^= 1
-		if err := m.SetAttr(ctx, inode, 0, SetAttrMode, 0, &attr); err != 0 {
+		if err := m.SetAttr(ctx, inode, SetAttrMode, 0, &attr); err != 0 {
 			b.Fatalf("setattr: %s", err)
 		}
 	}
