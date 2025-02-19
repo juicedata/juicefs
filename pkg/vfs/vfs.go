@@ -111,6 +111,7 @@ func (o FuseOptions) StripOptions() FuseOptions {
 	o.MaxReadAhead = 0
 	o.DirectMount = false
 	o.DontUmask = false
+	o.Timeout = 0
 	return o
 }
 
