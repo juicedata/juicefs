@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        meta: ['memkv://jfs-unit-test', 'sqlite3://test.db']
+        meta: ['redis', 'sqlite3', 'tikv']
     timeout-minutes: 60
     runs-on: ubuntu-20.04
     steps:
@@ -50,10 +50,19 @@ jobs:
         timeout-minutes: 10
         uses: ./.github/actions/build
 
+      - name: Prepare meta db
+        run: | 
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+
       - name: Test
         timeout-minutes: 30
         run: |
-          make unit-random-test seed=$RANDOM checks=100000 steps=200 meta=${{ matrix.meta }}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          make unit-random-test seed=$RANDOM checks=100000 steps=200 meta=$meta_url
 
       - name: upload coverage report
         timeout-minutes: 5
