@@ -57,7 +57,7 @@ func (m *dbMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) err
 		m.dumpDirStat,
 	}
 
-	ctx.WithValue(txMaxRetryKey{}, 3)
+	ctx = ctx.WithValue(txMaxRetryKey{}, 3)
 	if opt.Threads == 1 {
 		// use same txn for all dumps
 		sess := m.db.NewSession()
@@ -76,7 +76,7 @@ func (m *dbMeta) dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) err
 			}
 		}
 		defer sess.Rollback() //nolint:errcheck
-		ctx.WithValue(txSessionKey{}, sess)
+		ctx = ctx.WithValue(txSessionKey{}, sess)
 	} else {
 		logger.Warnf("dump database with %d threads, please make sure that it's readonly, "+
 			"otherwise the dumped metadata will be inconsistent", opt.Threads)
