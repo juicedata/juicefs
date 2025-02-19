@@ -192,7 +192,7 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid u
 			v.writer.UpdateMtime(ino, time.Now())
 		}
 	}
-	if (set & (meta.SetAttrMode | meta.SetAttrUID | meta.SetAttrGID | meta.SetAttrAtime | meta.SetAttrMtime | meta.SetAttrMtimeNow)) != 0 {
+	if set == 0 || (set&(meta.SetAttrMode|meta.SetAttrUID|meta.SetAttrGID|meta.SetAttrAtime|meta.SetAttrMtime|meta.SetAttrMtimeNow)) != 0 {
 		err = v.Meta.SetAttr(ctx, ino, uint16(set), 0, attr)
 	}
 	if err == 0 {
