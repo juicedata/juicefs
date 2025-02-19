@@ -155,7 +155,6 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid u
 		}
 		return
 	}
-	err = syscall.EINVAL
 	var attr = &Attr{}
 	if set&meta.SetAttrSize != 0 {
 		err = v.Truncate(ctx, ino, int64(size), fh, attr)
