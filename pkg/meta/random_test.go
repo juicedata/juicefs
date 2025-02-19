@@ -135,7 +135,7 @@ func (m *fsMachine) Init(t *rapid.T) {
 		parents:  []*tNode{{inode: RootInode, _type: TypeDirectory}},
 	}
 	_ = os.Remove(settingPath)
-	m.meta, _ = newKVMeta("memkv", "jfs-unit-test", testConfig())
+	m.meta = NewClient(metaURL, testConfig())
 	if err := m.meta.Init(testFormat(), true); err != nil {
 		t.Fatalf("initialize failed: %s", err)
 	}
@@ -2133,6 +2133,7 @@ func (m *fsMachine) Setlk(t *rapid.T) {
 	}
 }
 
+<<<<<<< HEAD
 func defaultFlag(name string, value string) func() {
 	if f := flag.Lookup(name); f.Value.String() == f.DefValue {
 		flag.Set(name, value)
@@ -2141,6 +2142,12 @@ func defaultFlag(name string, value string) func() {
 		}
 	}
 	return func() {}
+=======
+var metaURL string
+
+func init() {
+	flag.StringVar(&metaURL, "rapid.meta", "memkv://jfs-unit-test", "meta URL")
+>>>>>>> main
 }
 
 func TestFSOps(t *testing.T) {

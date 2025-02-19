@@ -22,6 +22,7 @@ package winfsp
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"runtime"
 	"strings"
@@ -35,6 +36,8 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
+
+	"golang.org/x/sys/windows/registry"
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -668,4 +671,70 @@ func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayCl
 	host.SetCapReaddirPlus(true)
 	logger.Debugf("mount point: %s, options: %s", conf.Meta.MountPoint, options)
 	_ = host.Mount(conf.Meta.MountPoint, []string{"-o", options})
+}
+
+func RunAsSystemSerivce(name string, mountpoint string) error {
+	// https://winfsp.dev/doc/WinFsp-Service-Architecture/
+	logger.Info("Running as Windows system service.")
+
+	var cmds []string
+	for _, v := range os.Args[1:] {
+		if v == "-d" || v == "--background" {
+			continue
+		}
+		cmds = append(cmds, v)
+	}
+
+	cmdLine := strings.Join(cmds, " ")
+
+	regKeyPath := "SOFTWARE\\WOW6432Node\\WinFsp\\Services\\juicefs"
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, regKeyPath, registry.ALL_ACCESS)
+	if err != nil {
+		if err == syscall.ERROR_FILE_NOT_FOUND || err == syscall.ERROR_PATH_NOT_FOUND {
+			logger.Info("Registry key not found, create it")
+			k, _, err = registry.CreateKey(registry.LOCAL_MACHINE, regKeyPath, registry.ALL_ACCESS)
+			if err != nil {
+				return fmt.Errorf("Failed to create registry key: %s", err)
+			}
+		} else {
+			return fmt.Errorf("Failed to open registry key: %s", err)
+		}
+	}
+	defer k.Close()
+
+	err = k.SetStringValue("CommandLine", cmdLine)
+	if err != nil {
+		return fmt.Errorf("Failed to set registry key: %s", err)
+	}
+
+	securityDescriptor := "D:P(A;;RPWPLC;;;WD)"
+	err = k.SetStringValue("Security", securityDescriptor)
+	if err != nil {
+		return fmt.Errorf("Failed to set registry key: %s", err)
+	}
+
+	filePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("Failed to get current file path: %s", err)
+	}
+
+	err = k.SetStringValue("Executable", filePath)
+	if err != nil {
+		return fmt.Errorf("Failed to set registry key: %s", err)
+	}
+
+	err = k.SetDWordValue("JobControl", 1)
+	if err != nil {
+		return fmt.Errorf("Failed to set registry key: %s", err)
+	}
+
+	logger.Debug("Starting juicefs service.")
+	cmd := exec.Command("net", "use", mountpoint, "\\\\juicefs\\"+name)
+	err = cmd.Run()
+	if err != nil {
+		return fmt.Errorf("Failed to mount juicefs: %s", err)
+	}
+
+	logger.Info("Juicefs system service started successfully.")
+	return nil
 }

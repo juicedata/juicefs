@@ -676,6 +676,9 @@ func mount(c *cli.Context) error {
 		}
 		os.Setenv("JFS_SUPERVISOR", strconv.Itoa(os.Getppid()))
 		return launchMount(mp, vfsConf)
+	} else if runtime.GOOS == "windows" && c.Bool("background") {
+		daemonRun(c, addr, vfsConf)
+		return nil
 	}
 	logger.Infof("JuiceFS version %s", version.Version())
 

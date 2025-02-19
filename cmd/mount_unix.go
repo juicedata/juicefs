@@ -284,9 +284,10 @@ func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl, listenAddr string) e
 	if godaemon.Stage() == 0 {
 		var err error
 		attrs.Stdout, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		logger.Infof("open log file %s: %s", logfile, err)
 		if err != nil {
 			logger.Errorf("open log file %s: %s", logfile, err)
+		} else {
+			logger.Infof("open log file %s", logfile)
 		}
 
 		conn, err := net.DialTimeout("tcp", listenAddr, 500*time.Millisecond)

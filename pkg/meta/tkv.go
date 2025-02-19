@@ -809,10 +809,7 @@ func (m *kvMeta) txn(ctx context.Context, f func(tx *kvTxn) error, inodes ...Ino
 	}
 	start := time.Now()
 	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
-	if len(inodes) > 0 {
-		m.txLock(uint(inodes[0]))
-		defer m.txUnlock(uint(inodes[0]))
-	}
+	defer m.txBatchLock(inodes...)()
 	var lastErr error
 	for i := 0; i < 50; i++ {
 		err := m.client.txn(ctx, f, i)
@@ -1491,9 +1488,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dtyp uint8
 	var tattr Attr
 	var newSpace, newInode int64
-	lockParent := parentSrc
-	if isTrash(lockParent) {
-		lockParent = parentDst
+	parentLocks := []Ino{parentDst}
+	if !isTrash(parentSrc) { // there should be no conflict if parentSrc is in trash, relax lock to accelerate `restore` subcommand
+		parentLocks = append(parentLocks, parentSrc)
 	}
 	err := m.txn(ctx, func(tx *kvTxn) error {
 		opened = false
@@ -1731,7 +1728,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
 		}
 		return nil
-	}, lockParent)
+	}, parentLocks...)
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 			m.fileDeleted(opened, false, dino, tattr.Length)
