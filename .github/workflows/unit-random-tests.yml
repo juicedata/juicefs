@@ -66,6 +66,7 @@ jobs:
           make unit-random-test seed=$RANDOM checks=100000 steps=200 meta=$meta_url
 
       - name: upload coverage report
+        if: always()
         timeout-minutes: 5
         continue-on-error: true
         uses: ./.github/actions/upload-coverage
@@ -76,7 +77,6 @@ jobs:
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
-
 
   success-all-test:
     runs-on: ubuntu-latest
@@ -89,6 +89,22 @@ jobs:
       - name: Check Failure
         if: env.WORKFLOW_CONCLUSION == 'failure'
         run: exit 1
+
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
+      - name: upload total coverage report
+        timeout-minutes: 30
+        continue-on-error: true
+        uses: ./.github/actions/upload-total-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
 
       - name: Send Slack Notification
         if: failure() && github.event_name != 'workflow_dispatch' 
