@@ -1799,7 +1799,7 @@ func (m *fsMachine) SetAmtime(t *rapid.T) {
 		flag |= SetAttrMtime
 	}
 	st2 := m.amtime(inode, flag, atime, mtime, oattr)
-	st := m.meta.SetAttr(m.ctx, inode, 0, flag, 0, attr)
+	st := m.meta.SetAttr(m.ctx, inode, flag, 0, attr)
 	if st != st2 {
 		t.Fatalf("expect %s but got %s", st2, st)
 	}
@@ -1838,7 +1838,7 @@ func (m *fsMachine) chmod(inode Ino, mode uint16) syscall.Errno {
 func (m *fsMachine) Chmod(t *rapid.T) {
 	inode := m.pickNode(t)
 	mode := rapid.Uint16Range(0, 01777).Draw(t, "mode")
-	st := m.meta.SetAttr(m.ctx, inode, 0, SetAttrMode, 0, &Attr{Mode: mode})
+	st := m.meta.SetAttr(m.ctx, inode, SetAttrMode, 0, &Attr{Mode: mode})
 	st2 := m.chmod(inode, mode)
 	if st != st2 {
 		t.Fatalf("expect %s but got %s", st2, st)
@@ -1882,7 +1882,7 @@ func (m *fsMachine) Chown(t *rapid.T) {
 	if gid < 10 {
 		flag |= SetAttrGID
 	}
-	st := m.meta.SetAttr(m.ctx, inode, 0, flag, 0, &Attr{Uid: uid, Gid: gid})
+	st := m.meta.SetAttr(m.ctx, inode, flag, 0, &Attr{Uid: uid, Gid: gid})
 	st2 := m.chown(inode, flag, uid, gid)
 	if st != st2 {
 		t.Fatalf("expect %s but got %s", st2, st)
