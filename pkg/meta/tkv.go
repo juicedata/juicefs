@@ -2580,28 +2580,67 @@ func (m *kvMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	}
 	// deleted files: Diiiiiiiissssssss
 	klen := 1 + 8 + 8
-	pairs, err := m.scanValues(m.fmtKey("D"), -1, func(k, v []byte) bool {
-		return len(k) == klen
-	})
-	if err != nil {
-		return err
+	batchSize := 100000
+
+	threads := m.conf.MaxDeletes / 3
+	if threads < 1 {
+		threads = 1
+	}
+	deleteFileChan := make(chan pair, threads)
+	var wg sync.WaitGroup
+
+	for i := 0; i < threads; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for pair := range deleteFileChan {
+				key, value := pair.key, pair.value
+				if len(key) != klen {
+					logger.Errorf("invalid key %x", key)
+					continue
+				}
+				ino := m.decodeInode([]byte(key)[1:9])
+				size := binary.BigEndian.Uint64([]byte(key)[9:])
+				ts := m.parseInt64(value)
+				clean, err := scan(ino, size, ts)
+				if err != nil {
+					logger.Errorf("scan pending deleted files: %s", err)
+					continue
+				}
+				if clean {
+					m.doDeleteFileData(ino, size)
+				}
+			}
+		}()
 	}
 
-	for key, value := range pairs {
-		if len(key) != klen {
-			return fmt.Errorf("invalid key %x", key)
+	startKey := m.fmtKey("D")
+	endKey := nextKey(startKey)
+	for {
+		keys, values, err := m.scan(startKey, endKey, batchSize, func(k, v []byte) bool {
+			return len(k) == klen
+		})
+		if len(keys) == 0 {
+			break
 		}
-		ino := m.decodeInode([]byte(key)[1:9])
-		size := binary.BigEndian.Uint64([]byte(key)[9:])
-		ts := m.parseInt64(value)
-		clean, err := scan(ino, size, ts)
 		if err != nil {
+			close(deleteFileChan)
+			wg.Wait()
 			return err
 		}
-		if clean {
-			m.doDeleteFileData(ino, size)
+		startKey = nextKey(keys[len(keys)-1])
+
+		for index, key := range keys {
+			deleteFileChan <- pair{key, values[index]}
+		}
+
+		if len(keys) < batchSize {
+			break
 		}
 	}
+
+	close(deleteFileChan)
+	wg.Wait()
 	return nil
 }
 

@@ -3352,36 +3352,61 @@ func (m *redisMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	visited := make(map[Ino]bool)
 	start := int64(0)
 	const batchSize = 1000
+	threads := m.conf.MaxDeletes / 3
+	if threads < 1 {
+		threads = 1
+	}
+	deleteFileChan := make(chan redis.Z, threads)
+	var wg sync.WaitGroup
+
+	for i := 0; i < threads; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for p := range deleteFileChan {
+				v := p.Member.(string)
+				ps := strings.Split(v, ":")
+				if len(ps) != 2 { // will be cleaned up as legacy
+					continue
+				}
+				inode, _ := strconv.ParseUint(ps[0], 10, 64)
+				if visited[Ino(inode)] {
+					continue
+				}
+				visited[Ino(inode)] = true
+				size, _ := strconv.ParseUint(ps[1], 10, 64)
+				clean, err := scan(Ino(inode), size, int64(p.Score))
+				if err != nil {
+					logger.Errorf("scan pending deleted files: %s", err)
+					continue
+				}
+				if clean {
+					m.doDeleteFileData_(Ino(inode), size, v)
+				}
+			}
+		}()
+	}
+
 	for {
 		pairs, err := m.rdb.ZRangeWithScores(Background(), m.delfiles(), start, start+batchSize).Result()
 		if err != nil {
+			close(deleteFileChan)
+			wg.Wait()
 			return err
 		}
-		start += batchSize
 		for _, p := range pairs {
-			v := p.Member.(string)
-			ps := strings.Split(v, ":")
-			if len(ps) != 2 { // will be cleaned up as legacy
-				continue
-			}
-			inode, _ := strconv.ParseUint(ps[0], 10, 64)
-			if visited[Ino(inode)] {
-				continue
-			}
-			visited[Ino(inode)] = true
-			size, _ := strconv.ParseUint(ps[1], 10, 64)
-			clean, err := scan(Ino(inode), size, int64(p.Score))
-			if err != nil {
-				return err
-			}
-			if clean {
-				m.doDeleteFileData_(Ino(inode), size, v)
-			}
+			deleteFileChan <- p
 		}
+
+		start += batchSize
+
 		if len(pairs) < batchSize {
 			break
 		}
 	}
+
+	close(deleteFileChan)
+	wg.Wait()
 	return nil
 }
 
