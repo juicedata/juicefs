@@ -963,7 +963,7 @@ func (m *kvMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		}
 		t := Attr{}
 		m.parseAttr(a, &t)
-		if t.Typ != TypeFile || t.Flags&(FlagImmutable|t.Flags&FlagAppend) != 0 || t.Parent > TrashInode {
+		if t.Typ != TypeFile || t.Flags&(FlagImmutable|t.Flags&FlagAppend) != 0 || (flags == 0 && t.Parent > TrashInode) {
 			return syscall.EPERM
 		}
 		if !skipPermCheck {

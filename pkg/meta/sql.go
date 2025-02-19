@@ -1280,7 +1280,7 @@ func (m *dbMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		if !ok {
 			return syscall.ENOENT
 		}
-		if nodeAttr.Type != TypeFile || nodeAttr.Flags&(FlagImmutable|FlagAppend) != 0 || nodeAttr.Parent > TrashInode {
+		if nodeAttr.Type != TypeFile || nodeAttr.Flags&(FlagImmutable|FlagAppend) != 0 || (flags == 0 && nodeAttr.Parent > TrashInode) {
 			return syscall.EPERM
 		}
 		m.parseAttr(&nodeAttr, attr)
