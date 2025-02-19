@@ -2139,13 +2139,22 @@ func init() {
 	flag.StringVar(&metaURL, "rapid.meta", "memkv://jfs-unit-test", "meta URL")
 }
 
+func defaultFlag(name string, value string) func() {
+	if f := flag.Lookup(name); f.Value.String() == f.DefValue {
+		flag.Set(name, value)
+		return func() {
+			flag.Set(name, f.DefValue)
+		}
+	}
+	return func() {}
+}
+
 func TestFSOps(t *testing.T) {
 	logger.SetLevel(logrus.ErrorLevel)
 	defer logger.SetLevel(logrus.InfoLevel)
-	flag.Set("timeout", "10s")
-	flag.Set("rapid.steps", "200")
-	flag.Set("rapid.checks", "5000")
-	// flag.Set("rapid.seed", time.Now().String())
-	flag.Set("rapid.seed", "1")
+	defer defaultFlag("rapid.shrinktime", "1h")()
+	defer defaultFlag("rapid.steps", "200")()
+	defer defaultFlag("rapid.checks", "5000")()
+	defer defaultFlag("rapid.seed", "1")()
 	rapid.Check(t, rapid.Run[*fsMachine]())
 }

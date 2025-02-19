@@ -74,8 +74,6 @@ jobs:
       - name: Build
         timeout-minutes: 10
         uses: ./.github/actions/build
-        with: 
-          useBeta: true
 
       - name: Install Packages
         run: |
