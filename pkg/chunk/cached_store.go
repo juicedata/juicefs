@@ -561,6 +561,7 @@ type Config struct {
 	FreeSpace         float32
 	AutoCreate        bool
 	Compress          string
+	MultiBlock	  int
 	MaxUpload         int
 	MaxStageWrite     int
 	MaxRetries        int
