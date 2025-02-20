@@ -1002,8 +1002,6 @@ func (m *kvMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		}
 		t.Length = length
 		now := time.Now()
-		t.Mtime = now.Unix()
-		t.Mtimensec = uint32(now.Nanosecond())
 		t.Ctime = now.Unix()
 		t.Ctimensec = uint32(now.Nanosecond())
 		tx.set(m.inodeKey(inode), m.marshal(&t))

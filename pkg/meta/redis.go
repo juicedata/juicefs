@@ -1093,8 +1093,6 @@ func (m *redisMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint6
 		}
 		t.Length = length
 		now := time.Now()
-		t.Mtime = now.Unix()
-		t.Mtimensec = uint32(now.Nanosecond())
 		t.Ctime = now.Unix()
 		t.Ctimensec = uint32(now.Nanosecond())
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {

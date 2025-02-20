@@ -1329,7 +1329,6 @@ func (m *dbMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		}
 		nodeAttr.Length = length
 		now := time.Now().UnixNano()
-		nodeAttr.setMtime(now)
 		nodeAttr.setCtime(now)
 		if _, err = s.Cols("length", "mtime", "ctime", "mtimensec", "ctimensec").Update(&nodeAttr, &node{Inode: nodeAttr.Inode}); err != nil {
 			return err
