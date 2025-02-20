@@ -613,6 +613,7 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, fh uint64, attr *Attr) 
 			err = syscall.EACCES
 			return
 		}
+		// flags = 1 means the file is opened, so we don't need to check if it's in the trash
 		err = v.Meta.Truncate(ctx, ino, 1, uint64(size), attr, true)
 	}
 	if err == 0 {
