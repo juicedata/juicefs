@@ -149,6 +149,13 @@ func getInternalNodeByName(name string) *internalNode {
 	return nil
 }
 
+var commonLabels = map[string]struct{}{
+	"instance":        {},
+	"juicefs_version": {},
+	"mp":              {},
+	"vol_name":        {},
+}
+
 func collectMetrics(registry *prometheus.Registry) []byte {
 	if registry == nil {
 		return []byte("")
@@ -166,7 +173,7 @@ func collectMetrics(registry *prometheus.Registry) []byte {
 		for _, m := range mf.Metric {
 			var name = *mf.Name
 			for _, l := range m.Label {
-				if *l.Name == "method" || *l.Name == "errno" {
+				if _, isCommon := commonLabels[*l.Name]; !isCommon {
 					name += "_" + *l.Value
 				}
 			}
