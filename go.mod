@@ -262,7 +262,7 @@ replace github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.12+incompatible => g
 
 replace github.com/urfave/cli/v2 v2.19.3 => github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83
 
-replace github.com/vmware/go-nfs-client v0.0.0-20190605212624-d43b92724c1b => github.com/juicedata/go-nfs-client v0.0.0-20231018052507-dbca444fa7e8
+replace github.com/vmware/go-nfs-client v0.0.0-20190605212624-d43b92724c1b => github.com/juicedata/go-nfs-client v0.0.0-20250220101412-d3a8c1ca64a1
 
 replace github.com/mattn/go-colorable v0.1.13 => github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db
 
