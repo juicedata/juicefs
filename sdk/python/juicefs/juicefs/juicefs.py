@@ -234,7 +234,7 @@ class Client(object):
 
     def rename(self, old, new):
         """Rename the file or directory old to new."""
-        self.lib.jfs_rename(c_int64(_tid()), c_int64(self.h), _bin(old), _bin(new), c_uint32(0))
+        self.lib.jfs_rename0(c_int64(_tid()), c_int64(self.h), _bin(old), _bin(new), c_uint32(0))
 
     def listdir(self, path, detail=False):
         """Return a list containing the names of the entries in the directory given by path."""
