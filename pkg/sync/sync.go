@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
@@ -59,11 +60,23 @@ var (
 	concurrent            chan int
 	limiter               *ratelimit.Bucket
 
+	totalHandled atomic.Int64
+
 	failedPrefix = make(map[string]error)
 	listMu       sync.Mutex
 )
 
 var logger = utils.GetLogger("juicefs")
+
+func incrTotal(n int64) {
+	totalHandled.Add(n)
+}
+
+func incrHandled(n int) {
+	old := totalHandled.Swap(0)
+	handled.IncrTotal(old)
+	handled.IncrBy(n)
+}
 
 // human readable bytes size
 func formatSize(bytes int64) string {
@@ -705,7 +718,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				logger.Errorf("Failed to copy object %s: %s", key, err)
 			}
 		}
-		handled.Increment()
+		incrHandled(1)
 	}
 }
 
@@ -752,7 +765,7 @@ func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, config *Con
 		config.Limit--
 	}
 	tasks <- &withSize{dstobj, markDeleteDst}
-	handled.IncrTotal(1)
+	incrTotal(1)
 	return false
 }
 
@@ -783,6 +796,26 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 	srckeys = filter(srckeys, config.rules, config)
 	dstkeys = filter(dstkeys, config.rules, config)
 	var dstobj object.Object
+	var (
+		skip, skipBytes int64
+		lastUpdate      time.Time
+	)
+	flushProgress := func() {
+		skipped.IncrInt64(skip)
+		skippedBytes.IncrInt64(skipBytes)
+		incrHandled(int(skip))
+		skip, skipBytes = 0, 0
+	}
+	defer flushProgress()
+	skipIt := func(obj object.Object) {
+		skip++
+		skipBytes += obj.Size()
+		if skip > 100 || time.Since(lastUpdate) > time.Millisecond*100 {
+			lastUpdate = time.Now()
+			flushProgress()
+		}
+	}
+
 	for obj := range srckeys {
 		if obj == nil {
 			return fmt.Errorf("listing failed, stop syncing, waiting for pending ones")
@@ -797,7 +830,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			}
 			config.Limit--
 		}
-		handled.IncrTotal(1)
+		incrTotal(1)
 
 		if dstobj != nil && obj.Key() > dstobj.Key() {
 			if config.DeleteDst {
@@ -827,17 +860,13 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 		// FIXME: there is a race when source is modified during coping
 		if dstobj == nil || obj.Key() < dstobj.Key() {
 			if config.Existing {
-				skipped.Increment()
-				skippedBytes.IncrInt64(obj.Size())
-				handled.Increment()
+				skipIt(obj)
 				continue
 			}
 			tasks <- obj
 		} else { // obj.key == dstobj.key
 			if config.IgnoreExisting {
-				skipped.Increment()
-				skippedBytes.IncrInt64(obj.Size())
-				handled.Increment()
+				skipIt(obj)
 				dstobj = nil
 				continue
 			}
@@ -846,9 +875,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				(!config.Update && obj.Size() != dstobj.Size()) {
 				tasks <- obj
 			} else if config.Update && obj.Mtime().Unix() < dstobj.Mtime().Unix() {
-				skipped.Increment()
-				skippedBytes.IncrInt64(obj.Size())
-				handled.Increment()
+				skipIt(obj)
 			} else if config.CheckAll { // two objects are likely the same
 				tasks <- &withSize{obj, markChecksum}
 			} else if config.DeleteSrc {
@@ -856,9 +883,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			} else if config.Perms && needCopyPerms(obj, dstobj) {
 				tasks <- &withFSize{obj.(object.File), markCopyPerms}
 			} else {
-				skipped.Increment()
-				skippedBytes.IncrInt64(obj.Size())
-				handled.Increment()
+				skipIt(obj)
 			}
 			dstobj = nil
 		}
@@ -1340,6 +1365,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	syncExitFunc := func() error {
 		pending.SetCurrent(0)
+		incrHandled(0)
 		total := handled.GetTotal()
 		progress.Done()
 
