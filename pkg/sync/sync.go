@@ -59,7 +59,7 @@ var (
 	concurrent            chan int
 	limiter               *ratelimit.Bucket
 
-	failedPrefix map[string]error
+	failedPrefix = make(map[string]error)
 	listMu       sync.Mutex
 )
 
@@ -1241,8 +1241,9 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 			}
 			wg.Add(1)
 			go func(prefix string) {
-				defer wg.Done()
+				config.concurrentList <- 1
 				defer func() {
+					wg.Done()
 					<-config.concurrentList
 				}()
 				err := startProducer(tasks, src, dst, prefix, listDepth-1, config)
@@ -1254,7 +1255,6 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 					listMu.Unlock()
 				}
 			}(c.Key())
-			config.concurrentList <- 1
 		}
 	}()
 
