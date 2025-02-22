@@ -60,6 +60,8 @@ var (
 	listedPrefix          *utils.Bar
 	concurrent            chan int
 	limiter               *ratelimit.Bucket
+	threadsBar            *utils.Bar
+	listThreadsBar        *utils.Bar
 )
 var crcTable = crc32.MakeTable(crc32.Castagnoli)
 var logger = utils.GetLogger("juicefs")
@@ -1571,6 +1573,16 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		for {
 			pending.SetCurrent(int64(len(tasks)))
 			time.Sleep(time.Millisecond * 100)
+		}
+	}()
+
+	listThreadsBar = progress.AddCountBar("List Threads Capacity", int64(config.ListThreads))
+	threadsBar = progress.AddCountBar("Threads Capacity", int64(config.Threads))
+	go func() {
+		for {
+			listThreadsBar.SetCurrent(int64(config.ListThreads - len(config.concurrentList)))
+			threadsBar.SetCurrent(int64(config.Threads - len(concurrent)))
+			time.Sleep(time.Second)
 		}
 	}()
 
