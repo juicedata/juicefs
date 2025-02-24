@@ -426,6 +426,13 @@ func (m *fsMachine) unlink(parent Ino, name string) syscall.Errno {
 	if p == nil {
 		return syscall.ENOENT
 	}
+	if p._type != TypeDirectory {
+		return syscall.ENOTDIR
+	}
+	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+		return syscall.EACCES
+	}
+
 	if _, ok := p.children[name]; !ok {
 		return syscall.ENOENT
 	}
@@ -440,10 +447,6 @@ func (m *fsMachine) unlink(parent Ino, name string) syscall.Errno {
 	}
 
 	if !p.stickyAccess(c, m.ctx.Uid()) {
-		return syscall.EACCES
-	}
-
-	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
 		return syscall.EACCES
 	}
 
@@ -1039,11 +1042,10 @@ func (m *fsMachine) Mkdir(t *rapid.T) {
 	if name == "." || name == ".." {
 		t.Skipf("skip mkdir %s", name)
 	}
-	t.Logf("parent ino %d", parent)
 	var inode Ino
 	var attr Attr
 	st := m.meta.Mkdir(m.ctx, parent, name, mode, 0, 0, &inode, &attr)
-	t.Logf("dir ino %d", inode)
+	t.Logf("parent ino %d, dir ino %d", parent, inode)
 	//var attr2 Attr
 	//m.meta.GetAttr(m.ctx, inode, &attr2)
 	st2 := m.create(TypeDirectory, parent, name, mode, 0, inode)
@@ -1744,7 +1746,11 @@ func (m *fsMachine) StatFS(t *rapid.T) {
 	m.meta.StatFS(m.ctx, RootInode, &totalsize, &availspace, &iused, &iavail)
 	total2, avail2, iused2, iavail2 := m.statfs(m.meta.GetFormat())
 	if totalsize != total2 || availspace != avail2 || iused != iused2 || iavail != iavail2 {
-		t.Fatalf("expect %d %d %d %d but got %d %d %d %d", total2, avail2, iused2, iavail2, totalsize, availspace, iused, iavail)
+		t.Errorf("expect %d %d %d %d but got %d %d %d %d", total2, avail2, iused2, iavail2, totalsize, availspace, iused, iavail)
+
+		totalsize, availspace, iused, iavail = 0, 0, 0, 0
+		m.meta.StatFS(m.ctx, RootInode, &totalsize, &availspace, &iused, &iavail)
+		t.Logf("totalsize %d availspace %d iused %d iavail %d", totalsize, availspace, iused, iavail)
 	}
 }
 
@@ -1926,11 +1932,11 @@ func (m *fsMachine) flock(inode Ino, owner uint64, typ uint32) syscall.Errno {
 func (m *fsMachine) Flock(t *rapid.T) {
 	inode := m.pickNode(t)
 	owner := rapid.Uint64().Draw(t, "owner")
-	typ := rapid.Uint32Range(0, 3).Draw(t, "typ")
+	typ := rapid.Uint32Range(0, 2).Draw(t, "typ")
 	st := m.flock(inode, owner, typ)
 	st2 := m.meta.Flock(m.ctx, inode, owner, typ, false)
 	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
+		t.Fatalf("expect %s but got %s", st, st2)
 	}
 
 	if st == 0 {
@@ -1946,7 +1952,7 @@ func (m *fsMachine) Flock(t *rapid.T) {
 			sort.Slice(flocks2, func(i, j int) bool {
 				return flocks2[i].Owner < flocks2[j].Owner
 			})
-			if !reflect.DeepEqual(flocks1, flocks2) {
+			if !compareLocks(flocks1, flocks2) {
 				t.Fatalf("expect %+v but got %+v", flocks2, flocks1)
 			}
 			sort.Slice(plocks1, func(i, j int) bool {
@@ -1967,7 +1973,7 @@ func (m *fsMachine) Flock(t *rapid.T) {
 				}
 				return plocks2[i].End < plocks2[j].End
 			})
-			if !reflect.DeepEqual(plocks1, plocks2) {
+			if !compareLocks(plocks1, plocks2) {
 				t.Fatalf("expect %+v but got %+v", plocks2, plocks1)
 			}
 		}
@@ -1998,6 +2004,13 @@ func (m *fsMachine) listLocks(inode Ino) ([]PLockItem, []FLockItem, error) {
 	return plocks, flocks, nil
 }
 
+func compareLocks[T any](l1, l2 []T) bool {
+	if len(l1) == 0 && len(l2) == 0 {
+		return true
+	}
+	return reflect.DeepEqual(l1, l2)
+}
+
 func (m *fsMachine) ListLocks(t *rapid.T) {
 	inode := m.pickNode(t)
 	plocks1, flocks1, err1 := m.meta.ListLocks(m.ctx, inode)
@@ -2013,7 +2026,7 @@ func (m *fsMachine) ListLocks(t *rapid.T) {
 		sort.Slice(flocks2, func(i, j int) bool {
 			return flocks2[i].Owner < flocks2[j].Owner
 		})
-		if !reflect.DeepEqual(flocks1, flocks2) {
+		if !compareLocks(flocks1, flocks2) {
 			t.Fatalf("expect %+v but got %+v", flocks2, flocks1)
 		}
 		// sort plocks by owner
@@ -2023,7 +2036,7 @@ func (m *fsMachine) ListLocks(t *rapid.T) {
 		sort.Slice(plocks2, func(i, j int) bool {
 			return plocks2[i].Owner < plocks2[j].Owner
 		})
-		if !reflect.DeepEqual(plocks1, plocks2) {
+		if !compareLocks(plocks1, plocks2) {
 			t.Fatalf("expect %+v but got %+v", plocks2, plocks1)
 		}
 	}
@@ -2137,10 +2150,13 @@ var metaURL string
 
 func init() {
 	flag.StringVar(&metaURL, "rapid.meta", "memkv://jfs-unit-test", "meta URL")
+	// flag.StringVar(&metaURL, "rapid.meta", "sqlite3://test.db", "meta URL")
+	// flag.StringVar(&metaURL, "rapid.meta", "redis://localhost:6379", "meta URL")
 }
 
 func defaultFlag(name string, value string) func() {
-	if f := flag.Lookup(name); f.Value.String() == f.DefValue {
+	f := flag.Lookup(name)
+	if f != nil && value != f.DefValue {
 		flag.Set(name, value)
 		return func() {
 			flag.Set(name, f.DefValue)

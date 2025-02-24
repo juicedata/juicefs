@@ -1259,23 +1259,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	var opened bool
 	var newSpace, newInode int64
 	err := m.txn(ctx, func(tx *kvTxn) error {
-		opened = false
 		*attr = Attr{}
 		newSpace, newInode = 0, 0
-		buf := tx.get(m.entryKey(parent, name))
-		if buf == nil && m.conf.CaseInsensi {
-			if e := m.resolveCase(ctx, parent, name); e != nil {
-				name = string(e.Name)
-				buf = m.packEntry(e.Attr.Typ, e.Inode)
-			}
-		}
-		if buf == nil {
-			return syscall.ENOENT
-		}
-		_type, inode = m.parseEntry(buf)
-		if _type == TypeDirectory {
-			return syscall.EPERM
-		}
+
 		keys := [][]byte{m.inodeKey(parent), m.inodeKey(inode)}
 		if trash > 0 {
 			keys = append(keys, m.entryKey(trash, m.trashEntry(parent, inode, name)))
@@ -1295,6 +1281,22 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
+
+		buf := tx.get(m.entryKey(parent, name))
+		if buf == nil && m.conf.CaseInsensi {
+			if e := m.resolveCase(ctx, parent, name); e != nil {
+				name = string(e.Name)
+				buf = m.packEntry(e.Attr.Typ, e.Inode)
+			}
+		}
+		if buf == nil {
+			return syscall.ENOENT
+		}
+		_type, inode = m.parseEntry(buf)
+		if _type == TypeDirectory {
+			return syscall.EPERM
+		}
+
 		opened = false
 		now := time.Now()
 		if rs[1] != nil {
