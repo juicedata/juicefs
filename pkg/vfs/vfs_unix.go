@@ -161,7 +161,7 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid u
 		if err != 0 {
 			return
 		}
-		if (set &^ (meta.SetAttrSize | meta.SetAttrCtime)) == 0 {
+		if (set &^ (meta.SetAttrSize | meta.SetAttrCtime | meta.SetAttrCtimeNow)) == 0 {
 			v.UpdateLength(ino, attr)
 			entry = &meta.Entry{Inode: ino, Attr: attr}
 			return
