@@ -1746,11 +1746,7 @@ func (m *fsMachine) StatFS(t *rapid.T) {
 	m.meta.StatFS(m.ctx, RootInode, &totalsize, &availspace, &iused, &iavail)
 	total2, avail2, iused2, iavail2 := m.statfs(m.meta.GetFormat())
 	if totalsize != total2 || availspace != avail2 || iused != iused2 || iavail != iavail2 {
-		t.Errorf("expect %d %d %d %d but got %d %d %d %d", total2, avail2, iused2, iavail2, totalsize, availspace, iused, iavail)
-
-		totalsize, availspace, iused, iavail = 0, 0, 0, 0
-		m.meta.StatFS(m.ctx, RootInode, &totalsize, &availspace, &iused, &iavail)
-		t.Logf("totalsize %d availspace %d iused %d iavail %d", totalsize, availspace, iused, iavail)
+		t.Fatalf("expect %d %d %d %d but got %d %d %d %d", total2, avail2, iused2, iavail2, totalsize, availspace, iused, iavail)
 	}
 }
 
