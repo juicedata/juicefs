@@ -702,9 +702,6 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 		// update size of staging block
 		cache.keys[k] = cacheItem{size, it.atime}
 	} else {
-		if it.atime > atime { // some filesystems donot have atime enabled
-			atime = it.atime
-		}
 		cache.keys[k] = cacheItem{size, atime}
 	}
 	if size > 0 {
@@ -889,6 +886,10 @@ func (cache *cacheStore) uploadStaging() {
 func (cache *cacheStore) scanCached() {
 	cache.Lock()
 	cache.used = 0
+	lastAccessed := make(map[cacheKey]uint32, len(cache.keys))
+	for k, v := range cache.keys { // atime in memory is more accurate than on disk, inherit it for the next round
+		lastAccessed[k] = v.atime
+	}
 	cache.keys = make(map[cacheKey]cacheItem)
 	cache.scanned = false
 	cache.Unlock()
@@ -917,6 +918,9 @@ func (cache *cacheStore) scanCached() {
 					key = strings.ReplaceAll(key, "\\", "/")
 				}
 				atime := uint32(getAtime(fi).Unix())
+				if memAtime := lastAccessed[cache.getCacheKey(key)]; memAtime > atime {
+					atime = memAtime
+				}
 				size := parseObjOrigSize(key) // track logical size
 				if size == 0 {
 					logger.Warnf("Ignore file with unknown size: %s", path)
