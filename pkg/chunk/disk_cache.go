@@ -886,10 +886,7 @@ func (cache *cacheStore) uploadStaging() {
 func (cache *cacheStore) scanCached() {
 	cache.Lock()
 	cache.used = 0
-	lastAccessed := make(map[cacheKey]uint32, len(cache.keys))
-	for k, v := range cache.keys { // atime in memory is more accurate than on disk, inherit it for the next round
-		lastAccessed[k] = v.atime
-	}
+	lastAccessed := cache.keys // atime in memory is more accurate than on disk, inherit it for the next round
 	cache.keys = make(map[cacheKey]cacheItem)
 	cache.scanned = false
 	cache.Unlock()
@@ -918,7 +915,7 @@ func (cache *cacheStore) scanCached() {
 					key = strings.ReplaceAll(key, "\\", "/")
 				}
 				atime := uint32(getAtime(fi).Unix())
-				if memAtime := lastAccessed[cache.getCacheKey(key)]; memAtime > atime {
+				if memAtime := lastAccessed[cache.getCacheKey(key)].atime; memAtime > atime {
 					atime = memAtime
 				}
 				size := parseObjOrigSize(key) // track logical size
