@@ -609,20 +609,16 @@ func (cache *cacheStore) load(key string) (ReadCloser, error) {
 
 	var f *cacheFile
 	var err error
-	size := parseObjOrigSize(key)
 	err = cache.checkErr(func() error {
-		f, err = openCacheFile(cache.cachePath(key), size, cache.checksum)
+		f, err = openCacheFile(cache.cachePath(key), parseObjOrigSize(key), cache.checksum)
 		return err
 	})
 
 	cache.Lock()
 	if err == nil {
-		// update atime
 		if it, ok := cache.keys[k]; ok {
+			// update atime
 			cache.keys[k] = cacheItem{it.size, uint32(time.Now().Unix())}
-		} else {
-			cache.keys[k] = cacheItem{int32(size), uint32(time.Now().Unix())}
-			cache.used += int64(size + 4096)
 		}
 	} else if it, ok := cache.keys[k]; ok {
 		if it.size > 0 {
