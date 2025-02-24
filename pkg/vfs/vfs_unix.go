@@ -156,6 +156,17 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid u
 		return
 	}
 	var attr = &Attr{}
+	if set&meta.SetAttrSize != 0 {
+		err = v.Truncate(ctx, ino, int64(size), fh, attr)
+		if err != 0 {
+			return
+		}
+		if set&(meta.SetAttrMode|meta.SetAttrUID|meta.SetAttrGID|meta.SetAttrAtime|meta.SetAttrMtime|meta.SetAttrMtimeNow) == 0 {
+			v.UpdateLength(ino, attr)
+			entry = &meta.Entry{Inode: ino, Attr: attr}
+			return
+		}
+	}
 	if set&meta.SetAttrMode != 0 {
 		attr.Mode = uint16(mode & 07777)
 	}
@@ -186,14 +197,8 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid u
 			v.writer.UpdateMtime(ino, time.Now())
 		}
 	}
-	if set&meta.SetAttrSize != 0 {
-		err = v.Truncate(ctx, ino, int64(size), fh, attr)
-		if err != 0 {
-			return
-		}
-	} else {
-		err = v.Meta.SetAttr(ctx, ino, uint16(set), 0, attr)
-	}
+
+	err = v.Meta.SetAttr(ctx, ino, uint16(set), 0, attr)
 	if err == 0 {
 		v.UpdateLength(ino, attr)
 		entry = &meta.Entry{Inode: ino, Attr: attr}
