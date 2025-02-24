@@ -89,6 +89,7 @@ const (
 	SetAttrCtime
 	SetAttrAtimeNow
 	SetAttrMtimeNow
+	SetAttrCtimeNow
 	SetAttrFlag = 1 << 15
 )
 
