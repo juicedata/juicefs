@@ -3403,7 +3403,7 @@ func (m *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte)
 	if err == redis.Nil {
 		err = ENOATTR
 	}
-	if bytes.Equal(buff, []byte{0x00}) {
+	if bytes.Equal(buff, emptyXAttr) {
 		buff = []byte{}
 	}
 	*vbuff = buff
