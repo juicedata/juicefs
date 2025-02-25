@@ -816,6 +816,13 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 		if len(c.children) != 0 {
 			return syscall.ENOTEMPTY
 		}
+		if flag != 0 {
+		} else if srcnode._type == TypeDirectory && c._type != TypeDirectory {
+			return syscall.ENOTDIR
+		} else if srcnode._type != TypeDirectory && c._type == TypeDirectory {
+			return syscall.EISDIR
+		}
+
 		if dst != src || dstname != srcname {
 			if !dst.stickyAccess(c, m.ctx.Uid()) {
 				return syscall.EACCES
