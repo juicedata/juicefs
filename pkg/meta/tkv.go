@@ -2625,6 +2625,9 @@ func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 	if buf == nil {
 		return ENOATTR
 	}
+	if bytes.Equal(buf, []byte{0x00}) {
+		buf = []byte{}
+	}
 	*vbuff = buf
 	return 0
 }
@@ -2657,6 +2660,9 @@ func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 }
 
 func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
+	if len(value) == 0 {
+		value = []byte{0x00}
+	}
 	key := m.xattrKey(inode, name)
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
 		switch flags {

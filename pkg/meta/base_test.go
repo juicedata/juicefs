@@ -751,6 +751,21 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 
 	// xattr
+	for _, val := range [][]byte{nil, []byte{}} {
+		if st := m.SetXattr(ctx, inode, "a1", val, XattrCreate); st != 0 {
+			t.Fatalf("setxattr: %s", st)
+		}
+		if st := m.GetXattr(ctx, inode, "a1", &val); st != 0 || len(val) != 0 {
+			t.Fatalf("getxattr: %s %v", st, val)
+		}
+		if st := m.ListXattr(ctx, inode, &val); st != 0 || string(val) != "a1\000" {
+			t.Fatalf("listxattr: %s %v", st, val)
+		}
+		if st := m.RemoveXattr(ctx, inode, "a1"); st != 0 {
+			t.Fatalf("removexattr: %s", st)
+		}
+	}
+
 	if st := m.SetXattr(ctx, inode, "a", []byte("v"), XattrCreateOrReplace); st != 0 {
 		t.Fatalf("setxattr: %s", st)
 	}
