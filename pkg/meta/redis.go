@@ -21,6 +21,7 @@ package meta
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -3398,11 +3399,14 @@ func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 func (m *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
 	defer m.timeit("GetXattr", time.Now())
 	inode = m.checkRoot(inode)
-	var err error
-	*vbuff, err = m.rdb.HGet(ctx, m.xattrKey(inode), name).Bytes()
+	buff, err := m.rdb.HGet(ctx, m.xattrKey(inode), name).Bytes()
 	if err == redis.Nil {
 		err = ENOATTR
 	}
+	if bytes.Equal(buff, emptyXAttr) {
+		buff = []byte{}
+	}
+	*vbuff = buff
 	return errno(err)
 }
 
