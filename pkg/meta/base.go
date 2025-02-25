@@ -1772,6 +1772,9 @@ func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, f
 	if name == "" {
 		return syscall.EINVAL
 	}
+	if len(value) == 0 {
+		value = []byte{0x00}
+	}
 	switch flags {
 	case 0, XattrCreate, XattrReplace:
 	default:
