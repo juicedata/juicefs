@@ -36,6 +36,7 @@ type Config struct {
 	Strict             bool // update ctime
 	Retries            int
 	MaxDeletes         int
+	MaxCleanups        int // number of threads for cleaning up pending deleted files
 	SkipDirNlink       int
 	CaseInsensi        bool
 	ReadOnly           bool

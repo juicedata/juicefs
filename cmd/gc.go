@@ -70,6 +70,11 @@ $ juicefs gc redis://localhost --delete`,
 				Value:   10,
 				Usage:   "number threads to delete leaked objects",
 			},
+			&cli.IntFlag{
+				Name:  "cleanup-threads",
+				Value: 10,
+				Usage: "number threads for cleaning up pending deleted files",
+			},
 		},
 	}
 }
@@ -79,6 +84,10 @@ func gc(ctx *cli.Context) error {
 	removePassword(ctx.Args().Get(0))
 	metaConf := meta.DefaultConf()
 	metaConf.MaxDeletes = ctx.Int("threads")
+	metaConf.MaxCleanups = ctx.Int("cleanup-threads")
+	if metaConf.MaxCleanups <= 0 {
+		logger.Fatalf("cleanup threads should be greater than 0")
+	}
 	metaConf.NoBGJob = true
 	m := meta.NewClient(ctx.Args().Get(0), metaConf)
 	format, err := m.Load(true)
