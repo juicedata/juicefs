@@ -2625,6 +2625,9 @@ func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 	if buf == nil {
 		return ENOATTR
 	}
+	if bytes.Equal(buf, emptyXAttr) {
+		buf = []byte{}
+	}
 	*vbuff = buf
 	return 0
 }

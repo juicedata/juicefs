@@ -3356,6 +3356,9 @@ func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 		if !ok {
 			return ENOATTR
 		}
+		if bytes.Equal(x.Value, emptyXAttr) {
+			x.Value = []byte{}
+		}
 		*vbuff = x.Value
 		return nil
 	}))
