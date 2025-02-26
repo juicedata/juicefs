@@ -33,7 +33,7 @@ JuiceFS 文档站集成了 Alfred，可以快速搜索 JuiceFS 文档。
 
 ### 安装
 
-安装 Alfred 5 的 JuiceFS workflow： [下载最新版本](https://github.com/zwwhdls/juicefs-alfred-workflow/releases/download/v0.1.0/JuiceFS.Search.alfredworkflow)
+安装 Alfred 5 的 JuiceFS workflow： [下载最新版本](https://github.com/zwwhdls/juicefs-alfred-workflow/releases/download/v0.2.0/JuiceFS.Search.alfredworkflow)
 
 ### 使用
 
@@ -50,7 +50,7 @@ jfs csi <search>
 
 ![JuiceFS Alfred Workflow demo](../images/workflow-demo.gif)
 
-## Workflow 可配置的变量
+### Workflow 可配置的变量
 
 - `API_KEY`：JuiceFS 文档使用的 algolia 的 API 密钥，使用默认值就可以。
 - `LANGUAGE`：要搜索的 JuiceFS 文档的语言（en/zh），默认为 en。
