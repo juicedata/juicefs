@@ -2576,10 +2576,7 @@ func (m *kvMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	klen := 1 + 8 + 8
 	batchSize := 100000
 
-	threads := m.conf.MaxDeletes / 3
-	if threads < 1 {
-		threads = 1
-	}
+	threads := m.conf.MaxCleanups
 	deleteFileChan := make(chan pair, threads)
 	var wg sync.WaitGroup
 
@@ -2618,6 +2615,7 @@ func (m *kvMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 			break
 		}
 		if err != nil {
+			logger.Errorf("scan pending deleted files: %s", err)
 			close(deleteFileChan)
 			wg.Wait()
 			return err

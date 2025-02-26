@@ -3296,11 +3296,7 @@ func (m *dbMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 		return err
 	}
 
-	threads := m.conf.MaxDeletes / 3
-	if threads < 1 {
-		threads = 1
-	}
-
+	threads := m.conf.MaxCleanups
 	deleteFileChan := make(chan delfile, threads)
 	var wg sync.WaitGroup
 
