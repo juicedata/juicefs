@@ -924,19 +924,17 @@ func (o *withFSize) Size() int64 {
 	return o.nsize
 }
 
-func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, config *Config) bool {
-	if !config.Dirs && dstobj.IsDir() {
-		logger.Debug("Ignore deleting dst directory ", dstobj.Key())
+func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config *Config) bool {
+	handled.IncrTotal(1)
+	if !config.DeleteDst || !config.Dirs && dstobj.IsDir() || config.Limit == 0 {
+		logger.Debug("Ignore extra object", dstobj.Key())
+		extra.Increment()
+		extraBytes.IncrInt64(dstobj.Size())
 		return false
 	}
-	if config.Limit >= 0 {
-		if config.Limit == 0 {
-			return true
-		}
-		config.Limit--
-	}
+	config.Limit--
 	tasks <- &withSize{dstobj, markDeleteDst}
-	return false
+	return config.Limit == 0
 }
 
 func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, config *Config) error {
@@ -983,12 +981,8 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 		handled.IncrTotal(1)
 
 		if dstobj != nil && obj.Key() > dstobj.Key() {
-			extra.Increment()
-			extraBytes.IncrInt64(dstobj.Size())
-			if config.DeleteDst {
-				if deleteFromDst(tasks, dstobj, config) {
-					return nil
-				}
+			if handleExtraObject(tasks, dstobj, config) {
+				return nil
 			}
 			dstobj = nil
 		}
@@ -997,16 +991,11 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				if dstobj == nil {
 					return fmt.Errorf("listing failed, stop syncing, waiting for pending ones")
 				}
-				handled.IncrTotal(1)
 				if obj.Key() <= dstobj.Key() {
 					break
 				}
-				extra.Increment()
-				extraBytes.IncrInt64(dstobj.Size())
-				if config.DeleteDst {
-					if deleteFromDst(tasks, dstobj, config) {
-						return nil
-					}
+				if handleExtraObject(tasks, dstobj, config) {
+					return nil
 				}
 				dstobj = nil
 			}
@@ -1053,9 +1042,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 	}
 	if config.DeleteDst {
 		if dstobj != nil {
-			extra.Increment()
-			extraBytes.IncrInt64(dstobj.Size())
-			if deleteFromDst(tasks, dstobj, config) {
+			if handleExtraObject(tasks, dstobj, config) {
 				return nil
 			}
 		}
@@ -1063,10 +1050,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			if dstobj == nil {
 				return fmt.Errorf("listing failed, stop syncing, waiting for pending ones")
 			}
-			handled.IncrTotal(1)
-			extra.Increment()
-			extraBytes.IncrInt64(dstobj.Size())
-			if deleteFromDst(tasks, dstobj, config) {
+			if handleExtraObject(tasks, dstobj, config) {
 				return nil
 			}
 		}
@@ -1552,7 +1536,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			if failed != nil {
 				msg += fmt.Sprintf(", failed: %d", failed.Current())
 			}
-			if total-handled.Current() > 0 {
+			if total-handled.Current()-extra.Current() > 0 {
 				msg += fmt.Sprintf(", lost: %d", total-handled.Current())
 			}
 			logger.Info(msg)
@@ -1561,7 +1545,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			logger.Infof("This worker process has already completed its tasks")
 		}
 		if failed != nil {
-			if n := failed.Current(); n > 0 || total > handled.Current() {
+			if n := failed.Current(); n > 0 || total > handled.Current()+extra.Current() {
 				return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
 			}
 		}
