@@ -59,10 +59,9 @@ var (
 	maxSlices         = 2500
 	inodeNeedPrefetch = uint64(utils.JitterIt(inodeBatch * 0.1)) // Add jitter to reduce probability of txn conflicts
 
-	// The binary representation of the string "jfs_empty" with a null character
-	// added at both the beginning and the end.
+	// The binary representation of the string "jfs" with a null character added at the beginning.
 	// This special value is used as the empty value for xattr in the metadata engine.
-	emptyXAttr = []byte{0x00, 0x6A, 0x66, 0x73, 0x5F, 0x65, 0x6D, 0x70, 0x74, 0x79, 0x00}
+	emptyXAttr = []byte{0x00, 0x6A, 0x66, 0x73}
 )
 
 type engine interface {
