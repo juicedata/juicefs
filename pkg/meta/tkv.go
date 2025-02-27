@@ -2580,15 +2580,11 @@ func (m *kvMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	}
 	// deleted files: Diiiiiiiissssssss
 	klen := 1 + 8 + 8
-	batchSize := 100000
 
-	threads := m.conf.MaxDeletes / 3
-	if threads < 1 {
-		threads = 1
-	}
+	threads := m.conf.MaxDeletes
 	deleteFileChan := make(chan pair, threads)
+		
 	var wg sync.WaitGroup
-
 	for i := 0; i < threads; i++ {
 		wg.Add(1)
 		go func() {
@@ -2614,30 +2610,9 @@ func (m *kvMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 		}()
 	}
 
-	startKey := m.fmtKey("D")
-	endKey := nextKey(startKey)
-	for {
-		keys, values, err := m.scan(startKey, endKey, batchSize, func(k, v []byte) bool {
-			return len(k) == klen
-		})
-		if len(keys) == 0 {
-			break
-		}
-		if err != nil {
-			close(deleteFileChan)
-			wg.Wait()
-			return err
-		}
-		startKey = nextKey(keys[len(keys)-1])
-
-		for index, key := range keys {
-			deleteFileChan <- pair{key, values[index]}
-		}
-
-		if len(keys) < batchSize {
-			break
-		}
-	}
+	m.client.scan(m.fmtKey("D"), func(k, v []byte) {
+		deleteFileChan <- pair{k, v}
+	})	
 
 	close(deleteFileChan)
 	wg.Wait()
