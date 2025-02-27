@@ -1252,17 +1252,17 @@ func (m *dbMeta) upsertSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 	driver := m.Name()
 	if driver == "sqlite3" || driver == "postgres" {
 		_, err = s.Exec(`
-		INSERT INTO jfs_chunk (inode, indx, slices)
-		VALUES (?, ?, ?)
-		ON CONFLICT (inode, indx)
-		DO UPDATE SET slices=jfs_chunk.slices || ?`, inode, indx, buf, buf)
+			 INSERT INTO jfs_chunk (inode, indx, slices)
+			 VALUES (?, ?, ?)
+			 ON CONFLICT (inode, indx)
+			 DO UPDATE SET slices=jfs_chunk.slices || ?`, inode, indx, buf, buf)
 	} else {
 		var r sql.Result
 		r, err = s.Exec(`
-		INSERT INTO jfs_chunk (inode, indx, slices)
-		VALUES (?, ?, ?)
-		ON DUPLICATE KEY UPDATE
-		slices=concat(slices, ?)`, inode, indx, buf, buf)
+			 INSERT INTO jfs_chunk (inode, indx, slices)
+			 VALUES (?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 slices=concat(slices, ?)`, inode, indx, buf, buf)
 		n, _ := r.RowsAffected()
 		*insert = n == 1 // https://dev.mysql.com/doc/refman/5.7/en/insert-on-duplicate.html
 	}
@@ -2063,31 +2063,36 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						dn.Parent = parentSrc
 					}
 				}
+			} else if de.Inode == se.Inode {
+				return nil
+			} else if se.Type == TypeDirectory && de.Type != TypeDirectory {
+				return syscall.ENOTDIR
+			} else if de.Type == TypeDirectory {
+				if se.Type != TypeDirectory {
+					return syscall.EISDIR
+				}
+				exist, err := s.Exist(&edge{Parent: de.Inode})
+				if err != nil {
+					return err
+				}
+				if exist {
+					return syscall.ENOTEMPTY
+				}
+				dpn.Nlink--
+				dstnlink--
+				dupdate = true
+				if trash > 0 {
+					dn.Parent = trash
+				}
 			} else {
-				if de.Type == TypeDirectory {
-					exist, err := s.Exist(&edge{Parent: de.Inode})
-					if err != nil {
-						return err
+				if trash == 0 {
+					dn.Nlink--
+					if de.Type == TypeFile && dn.Nlink == 0 {
+						opened = m.of.IsOpen(dn.Inode)
 					}
-					if exist {
-						return syscall.ENOTEMPTY
-					}
-					dpn.Nlink--
-					dstnlink--
-					dupdate = true
-					if trash > 0 {
-						dn.Parent = trash
-					}
-				} else {
-					if trash == 0 {
-						dn.Nlink--
-						if de.Type == TypeFile && dn.Nlink == 0 {
-							opened = m.of.IsOpen(dn.Inode)
-						}
-						defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
-					} else if dn.Parent > 0 {
-						dn.Parent = trash
-					}
+					defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
+				} else if dn.Parent > 0 {
+					dn.Parent = trash
 				}
 			}
 			if ctx.Uid() != 0 && dpn.Mode&01000 != 0 && ctx.Uid() != dpn.Uid && ctx.Uid() != dn.Uid {
