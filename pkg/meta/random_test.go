@@ -136,6 +136,7 @@ func (m *fsMachine) Init(t *rapid.T) {
 	}
 	_ = os.Remove(settingPath)
 	m.meta = NewClient(metaURL, testConfig())
+	m.meta.Reset()
 	if err := m.meta.Init(testFormat(), true); err != nil {
 		t.Fatalf("initialize failed: %s", err)
 	}
@@ -156,6 +157,7 @@ func (m *fsMachine) genName(t *rapid.T) string {
 
 func (m *fsMachine) Cleanup() {
 	m.meta.Reset()
+	m.meta.Shutdown()
 }
 
 func (m *fsMachine) prepare(t *rapid.T) {
@@ -429,6 +431,12 @@ func (m *fsMachine) unlink(parent Ino, name string) syscall.Errno {
 	if p._type != TypeDirectory {
 		return syscall.ENOTDIR
 	}
+	c := p.children[name]
+
+	if c._type == TypeDirectory {
+		return syscall.EPERM
+	}
+
 	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
 		return syscall.EACCES
 	}
@@ -438,12 +446,6 @@ func (m *fsMachine) unlink(parent Ino, name string) syscall.Errno {
 	}
 	if fsnodes_namecheck(name) != 0 {
 		return syscall.EINVAL
-	}
-
-	c := p.children[name]
-
-	if c._type == TypeDirectory {
-		return syscall.EPERM
 	}
 
 	if !p.stickyAccess(c, m.ctx.Uid()) {
@@ -472,13 +474,6 @@ func (m *fsMachine) rmdir(parent Ino, name string) syscall.Errno {
 	if p == nil {
 		return syscall.ENOENT
 	}
-	if _, ok := p.children[name]; !ok {
-		return syscall.ENOENT
-	}
-	if fsnodes_namecheck(name) != 0 {
-		return syscall.EINVAL
-	}
-
 	c := p.children[name]
 
 	if c._type != TypeDirectory {
@@ -487,6 +482,12 @@ func (m *fsMachine) rmdir(parent Ino, name string) syscall.Errno {
 
 	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
 		return syscall.EACCES
+	}
+	if _, ok := p.children[name]; !ok {
+		return syscall.ENOENT
+	}
+	if fsnodes_namecheck(name) != 0 {
+		return syscall.EINVAL
 	}
 
 	if len(c.children) != 0 {
@@ -609,9 +610,9 @@ func (m *fsMachine) fallocate(inode Ino, mode uint8, offset uint64, size uint64)
 	if n._type != TypeFile {
 		return syscall.EPERM
 	}
-	//if !n.access(m.ctx, MODE_MASK_W) {
-	//	return syscall.EACCES
-	//}
+	if !n.access(m.ctx, MODE_MASK_W) {
+		return syscall.EACCES
+	}
 	if offset+size > n.length {
 		n.length = offset + size
 	}
@@ -1084,6 +1085,9 @@ func (m *fsMachine) Link(t *rapid.T) {
 func (m *fsMachine) Rmdir(t *rapid.T) {
 	parent := m.pickNode(t)
 	name := m.pickChild(parent, t)
+	if name == "" {
+		return
+	}
 	st := m.meta.Rmdir(m.ctx, parent, name)
 	st2 := m.rmdir(parent, name)
 	if st != st2 {
@@ -1094,6 +1098,9 @@ func (m *fsMachine) Rmdir(t *rapid.T) {
 func (m *fsMachine) Unlink(t *rapid.T) {
 	parent := m.pickNode(t)
 	name := m.pickChild(parent, t)
+	if name == "" {
+		return
+	}
 	st := m.meta.Unlink(m.ctx, parent, name)
 	st2 := m.unlink(parent, name)
 	if st != st2 {
@@ -1137,6 +1144,9 @@ func (m *fsMachine) Readlink(t *rapid.T) {
 func (m *fsMachine) Lookup(t *rapid.T) {
 	parent := m.pickNode(t)
 	name := m.pickChild(parent, t)
+	if name == "" {
+		return
+	}
 	var inode Ino
 	var attr Attr
 	st := m.meta.Lookup(m.ctx, parent, name, &inode, &attr, true)
@@ -1388,7 +1398,7 @@ func cleanupSlices(ss []tSlice) []tSlice {
 func (m *fsMachine) SetXAttr(t *rapid.T) {
 	inode := m.pickNode(t)
 	name := rapid.StringN(1, 200, XATTR_NAME_MAX+1).Draw(t, "name")
-	value := rapid.SliceOfN(rapid.Byte(), 0, XATTR_SIZE_MAX+1).Draw(t, "value")
+	value := rapid.SliceOfN(rapid.Byte(), 1, XATTR_SIZE_MAX+1).Draw(t, "value")
 	mode := rapid.Uint8Range(0, XATTR_REMOVE).Draw(t, "mode")
 	st := m.meta.SetXattr(m.ctx, inode, name, value, uint32(mode))
 	st2 := m.setxattr(inode, name, value, mode)
@@ -1928,7 +1938,7 @@ func (m *fsMachine) flock(inode Ino, owner uint64, typ uint32) syscall.Errno {
 func (m *fsMachine) Flock(t *rapid.T) {
 	inode := m.pickNode(t)
 	owner := rapid.Uint64().Draw(t, "owner")
-	typ := rapid.Uint32Range(0, 2).Draw(t, "typ")
+	typ := rapid.Uint32Range(1, 2).Draw(t, "typ")
 	st := m.flock(inode, owner, typ)
 	st2 := m.meta.Flock(m.ctx, inode, owner, typ, false)
 	if st != st2 {

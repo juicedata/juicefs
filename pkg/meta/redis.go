@@ -1589,6 +1589,9 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, s
 				err = nil
 			}
 		}
+		if errors.Is(err, redis.Nil) {
+			return syscall.ENOENT
+		}
 		if err != nil {
 			return err
 		}
