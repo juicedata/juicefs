@@ -3289,46 +3289,23 @@ func (m *dbMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	}
 
 	var dfs []delfile
-	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
+	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		if ok, err := s.IsTableExist(&delfile{}); err != nil {
 			return err
 		} else if !ok {
 			return nil
 		}
 		return s.Find(&dfs)
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 
-	threads := m.conf.MaxDeletes
-
-	deleteFileChan := make(chan delfile, threads)
-	var wg sync.WaitGroup
-
-	for i := 0; i < threads; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for ds := range deleteFileChan {
-				clean, err := scan(ds.Inode, ds.Length, ds.Expire)
-				if err != nil {
-					logger.Errorf("scan pending deleted files: %s", err)
-					continue
-				}
-				if clean {
-					m.doDeleteFileData(ds.Inode, ds.Length)
-				}
-			}
-		}()
-	}
-
 	for _, ds := range dfs {
-		deleteFileChan <- ds
+		if _, err := scan(ds.Inode, ds.Length, ds.Expire); err != nil {
+			logger.Warnf("scan pending files: %s", err)
+		}
 	}
 
-	close(deleteFileChan)
-	wg.Wait()
 	return nil
 }
 
