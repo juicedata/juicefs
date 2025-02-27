@@ -3372,7 +3372,7 @@ func (m *redisMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 			visited[Ino(inode)] = true
 			size, _ := strconv.ParseUint(ps[1], 10, 64)
 			if _, err := scan(Ino(inode), size, int64(p.Score)); err != nil {
-				logger.Warnf("scan pending files: %s", err)
+				return err
 			}
 		}
 

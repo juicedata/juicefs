@@ -2581,20 +2581,19 @@ func (m *kvMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	// deleted files: Diiiiiiiissssssss
 	klen := 1 + 8 + 8
 
+	var err error
 	m.client.scan(m.fmtKey("D"), func(key, val []byte) {
 		if len(key) != klen {
-			logger.Errorf("invalid key %x", key)
+			err = fmt.Errorf("invalid key %x", key)
 			return
 		}
 		ino := m.decodeInode(key[1:9])
 		size := binary.BigEndian.Uint64(key[9:])
 		ts := m.parseInt64(val)
-		if _, err := scan(ino, size, ts); err != nil {
-			logger.Warnf("scan pending deleted files: %s", err)
-		}
+		_, err = scan(ino, size, ts)
 	})
 
-	return nil
+	return err
 }
 
 func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {

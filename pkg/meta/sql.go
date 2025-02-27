@@ -3302,7 +3302,7 @@ func (m *dbMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 
 	for _, ds := range dfs {
 		if _, err := scan(ds.Inode, ds.Length, ds.Expire); err != nil {
-			logger.Warnf("scan pending files: %s", err)
+			return err
 		}
 	}
 
