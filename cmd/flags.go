@@ -73,6 +73,8 @@ func addCategory(f cli.Flag, cat string) {
 		ff.Category = cat
 	case *cli.IntFlag:
 		ff.Category = cat
+	case *cli.UintFlag:
+		ff.Category = cat
 	case *cli.Int64Flag:
 		ff.Category = cat
 	case *cli.Uint64Flag:
