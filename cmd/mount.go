@@ -345,7 +345,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		Writeback:     c.Bool("writeback"),
 		Prefetch:      c.Int("prefetch"),
 		BufferSize:    utils.ParseBytes(c, "buffer-size", 'M'),
-		Readahead:     int(utils.ParseBytes(c, "max-readahead", 'M')),
+		Readahead:     int(c.Uint("max-readahead-blocks")) * format.BlockSize * 1024,
 		UploadLimit:   utils.ParseMbps(c, "upload-limit") * 1e6 / 8,
 		DownloadLimit: utils.ParseMbps(c, "download-limit") * 1e6 / 8,
 		UploadDelay:   utils.Duration(c.String("upload-delay")),
