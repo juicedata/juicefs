@@ -19,6 +19,7 @@ package meta
 import (
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"reflect"
 	"runtime"
@@ -27,6 +28,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unicode"
 
 	"pgregory.net/rapid"
 
@@ -122,8 +124,10 @@ type fsMachine struct {
 	ctx   Context
 }
 
+var isDbMeta bool
+
 func (m *fsMachine) Init(t *rapid.T) {
-	m.sid = rapid.Uint64().Draw(t, "sid")
+	m.sid = uint64(rapid.UintRange(1, math.MaxUint32-1).Draw(t, "sid"))
 	m.nodes = make(map[Ino]*tNode)
 	m.nodes[1] = &tNode{
 		_type:    TypeDirectory,
@@ -145,6 +149,9 @@ func (m *fsMachine) Init(t *rapid.T) {
 	registerer := prometheus.WrapRegistererWithPrefix("juicefs_",
 		prometheus.WrapRegistererWith(prometheus.Labels{"mp": "virtual-mp", "vol_name": "test-vol"}, registry))
 	m.meta.InitMetrics(registerer)
+	if _, ok := m.meta.(*dbMeta); ok {
+		isDbMeta = true
+	}
 }
 
 func (m *fsMachine) genName(t *rapid.T) string {
@@ -431,6 +438,12 @@ func (m *fsMachine) unlink(parent Ino, name string) syscall.Errno {
 	if p._type != TypeDirectory {
 		return syscall.ENOTDIR
 	}
+
+	if isDbMeta {
+		if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+			return syscall.EACCES
+		}
+	}
 	c := p.children[name]
 
 	if c._type == TypeDirectory {
@@ -473,6 +486,12 @@ func (m *fsMachine) rmdir(parent Ino, name string) syscall.Errno {
 	p := m.nodes[parent]
 	if p == nil {
 		return syscall.ENOENT
+	}
+
+	if isDbMeta {
+		if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+			return syscall.EACCES
+		}
 	}
 	c := p.children[name]
 
@@ -769,6 +788,25 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 		return 0
 	}
 
+	if isDbMeta {
+		src := m.nodes[srcparent]
+		if src == nil {
+			return syscall.ENOENT
+		}
+		dst := m.nodes[dstparent]
+		if dst == nil {
+			return syscall.ENOENT
+		}
+		if src._type != TypeDirectory || dst._type != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		if !src.access(m.ctx, MODE_MASK_X|MODE_MASK_W) {
+			return syscall.EACCES
+		}
+		if !dst.access(m.ctx, MODE_MASK_X|MODE_MASK_W) {
+			return syscall.EACCES
+		}
+	}
 	src := m.nodes[srcparent]
 	if src == nil {
 		return syscall.ENOENT
@@ -1397,7 +1435,7 @@ func cleanupSlices(ss []tSlice) []tSlice {
 
 func (m *fsMachine) SetXAttr(t *rapid.T) {
 	inode := m.pickNode(t)
-	name := rapid.StringN(1, 200, XATTR_NAME_MAX+1).Draw(t, "name")
+	name := string(rapid.SliceOfN(rapid.RuneFrom(nil, unicode.Lu), 1, XATTR_NAME_MAX).Draw(t, "name"))
 	value := rapid.SliceOfN(rapid.Byte(), 1, XATTR_SIZE_MAX+1).Draw(t, "value")
 	mode := rapid.Uint8Range(0, XATTR_REMOVE).Draw(t, "mode")
 	st := m.meta.SetXattr(m.ctx, inode, name, value, uint32(mode))
@@ -1423,7 +1461,7 @@ const XATTR_SIZE_MAX = 65536
 
 func (m *fsMachine) GetXAttr(t *rapid.T) {
 	inode := m.pickNode(t)
-	name := rapid.StringN(1, 200, XATTR_NAME_MAX+1).Draw(t, "name")
+	name := string(rapid.SliceOfN(rapid.RuneFrom(nil, unicode.Lu), 1, XATTR_NAME_MAX+1).Draw(t, "name"))
 	var value []byte
 	st := m.meta.GetXattr(m.ctx, inode, name, &value)
 	value2, st2 := m.getxattr(inode, name)
@@ -1938,7 +1976,7 @@ func (m *fsMachine) flock(inode Ino, owner uint64, typ uint32) syscall.Errno {
 func (m *fsMachine) Flock(t *rapid.T) {
 	inode := m.pickNode(t)
 	owner := rapid.Uint64().Draw(t, "owner")
-	typ := rapid.Uint32Range(1, 2).Draw(t, "typ")
+	typ := rapid.SampledFrom([]uint32{F_WRLCK, F_RDLCK, F_UNLCK}).Draw(t, "typ")
 	st := m.flock(inode, owner, typ)
 	st2 := m.meta.Flock(m.ctx, inode, owner, typ, false)
 	if st != st2 {
@@ -2140,7 +2178,7 @@ func (m *fsMachine) setlk(inode Ino, owner uint64, ltype uint32, start uint64, e
 func (m *fsMachine) Setlk(t *rapid.T) {
 	inode := m.pickNode(t)
 	owner := rapid.Uint64().Draw(t, "owner")
-	ltype := rapid.Uint32Range(0, 2).Draw(t, "ltype")
+	ltype := rapid.SampledFrom([]uint32{F_WRLCK, F_RDLCK, F_UNLCK}).Draw(t, "ltype")
 	start := rapid.Uint64Range(0, 500<<20).Draw(t, "start")
 	len := rapid.Uint64Range(1, 500<<20).Draw(t, "len")
 	pid := rapid.Uint32Range(1, 10000).Draw(t, "pid")
@@ -2177,6 +2215,11 @@ func TestFSOps(t *testing.T) {
 	defer defaultFlag("rapid.shrinktime", "1h")()
 	defer defaultFlag("rapid.steps", "200")()
 	defer defaultFlag("rapid.checks", "5000")()
-	defer defaultFlag("rapid.seed", "1")()
+	//defer defaultFlag("rapid.seed", "1")()
+	//defer defaultFlag("rapid.v", "true")()
+	//defer defaultFlag("rapid.debug", "true")()
+	//defer defaultFlag("rapid.debugvis", "true")()
+	//defer defaultFlag("rapid.failfile", "testdata/rapid/TestFSOps/TestFSOps-20250228114121-68323.fail")()
+
 	rapid.Check(t, rapid.Run[*fsMachine]())
 }
