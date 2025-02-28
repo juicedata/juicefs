@@ -924,6 +924,9 @@ func (o *withFSize) Size() int64 {
 	return o.nsize
 }
 
+var dstDelayDel []string
+var srcDelayDel []string
+
 func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config *Config) bool {
 	handled.IncrTotal(1)
 	if !config.DeleteDst || !config.Dirs && dstobj.IsDir() || config.Limit == 0 {
@@ -933,7 +936,11 @@ func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config 
 		return false
 	}
 	config.Limit--
-	tasks <- &withSize{dstobj, markDeleteDst}
+	if dstobj.IsDir() {
+		dstDelayDel = append(dstDelayDel, dstobj.Key())
+	} else {
+		tasks <- &withSize{dstobj, markDeleteDst}
+	}
 	return config.Limit == 0
 }
 
@@ -1029,7 +1036,11 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			} else if config.CheckAll { // two objects are likely the same
 				tasks <- &withSize{obj, markChecksum}
 			} else if config.DeleteSrc {
-				tasks <- &withSize{obj, markDeleteSrc}
+				if obj.IsDir() {
+					srcDelayDel = append(srcDelayDel, obj.Key())
+				} else {
+					tasks <- &withSize{obj, markDeleteSrc}
+				}
 			} else if config.Perms && needCopyPerms(obj, dstobj) {
 				tasks <- &withFSize{obj.(object.File), markCopyPerms}
 			} else {
@@ -1628,6 +1639,21 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		}()
 	}
 
+	delayDelFunc := func(storage object.ObjectStorage, keys []string) {
+		for i := len(keys) - 1; i >= 0; i-- {
+			deleteObj(storage, keys[i], config.Dry)
+		}
+	}
+	go func() {
+		wg.Add(1)
+		defer wg.Done()
+		delayDelFunc(src, srcDelayDel)
+	}()
+	go func() {
+		wg.Add(1)
+		defer wg.Done()
+		delayDelFunc(dst, dstDelayDel)
+	}()
 	wg.Wait()
 	return syncExitFunc()
 }
