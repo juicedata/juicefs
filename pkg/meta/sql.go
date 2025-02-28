@@ -1356,6 +1356,11 @@ func (m *dbMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 		if nodeAttr.Type != TypeFile || (nodeAttr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
+		var t Attr
+		m.parseAttr(&nodeAttr, &t)
+		if st := m.Access(ctx, inode, MODE_MASK_W, &t); st != 0 {
+			return st
+		}
 		if (nodeAttr.Flags&FlagAppend) != 0 && (mode&^fallocKeepSize) != 0 {
 			return syscall.EPERM
 		}

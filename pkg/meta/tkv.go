@@ -1027,6 +1027,9 @@ func (m *kvMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 		if t.Typ != TypeFile || (t.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
+		if st := m.Access(ctx, inode, MODE_MASK_W, &t); st != 0 {
+			return st
+		}
 		if (t.Flags&FlagAppend) != 0 && (mode&^fallocKeepSize) != 0 {
 			return syscall.EPERM
 		}
