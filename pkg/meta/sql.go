@@ -3526,11 +3526,12 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	return quotas, nil
 }
 
-func (m *dbMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
+func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
+	sort.Slice(quotas, func(i, j int) bool { return quotas[i].inode < quotas[j].inode })
 	return m.txn(func(s *xorm.Session) error {
-		for ino, q := range quotas {
+		for _, q := range quotas {
 			_, err := s.Exec("update jfs_dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?",
-				q.newSpace, q.newInodes, ino)
+				q.quota.newSpace, q.quota.newInodes, q.inode)
 			if err != nil {
 				return err
 			}
