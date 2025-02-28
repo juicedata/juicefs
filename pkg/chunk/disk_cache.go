@@ -399,7 +399,7 @@ func (cache *cacheStore) refreshCacheKeys() {
 	cache.scanCached()
 	if cache.scanInterval > 0 {
 		for {
-			time.Sleep(cache.scanInterval)
+			utils.SleepWithJitter(cache.scanInterval)
 			cache.scanCached()
 		}
 	}
@@ -410,10 +410,6 @@ func (cache *cacheStore) removeStage(key string) error {
 	if err = cache.removeFile(cache.stagePath(key)); err == nil {
 		cache.m.stageBlocks.Sub(1)
 		cache.m.stageBlockBytes.Sub(float64(parseObjOrigSize(key)))
-	}
-	// ignore ENOENT error
-	if err != nil && os.IsNotExist(err) {
-		return nil
 	}
 	return err
 }
@@ -750,30 +746,30 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	}
 }
 
-func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string, error) {
+func (cache *cacheStore) stage(key string, data []byte) (string, error) {
 	stagingPath := cache.stagePath(key)
 	if cache.stageFull {
 		return stagingPath, errStageFull
 	}
 	if cache.maxStageWrite != 0 && stagingBlocks.Load() > int64(cache.maxStageWrite) {
+		logger.Debugf("Too many concurrent staging blocks (%d), drop %s", stagingBlocks.Load(), key)
 		return stagingPath, errStageConcurrency
 	}
 	stagingBlocks.Add(1)
 	defer stagingBlocks.Add(-1)
 	err := cache.flushPage(stagingPath, data, false)
-	if err == nil {
+	if err != nil {
+		return stagingPath, err
+	}
+	path := cache.cachePath(key)
+	cache.createDir(filepath.Dir(path))
+	if err = os.Link(stagingPath, path); err == nil {
+		cache.add(key, -int32(len(data)), uint32(time.Now().Unix()))
 		cache.m.stageBlocks.Add(1)
 		cache.m.stageBlockBytes.Add(float64(len(data)))
 		cache.m.stageWriteBytes.Add(float64(len(data)))
-		if cache.enabled() && keepCache {
-			path := cache.cachePath(key)
-			cache.createDir(filepath.Dir(path))
-			if err = os.Link(stagingPath, path); err == nil {
-				cache.add(key, -int32(len(data)), uint32(time.Now().Unix()))
-			} else {
-				logger.Warnf("link %s to %s failed: %s", stagingPath, path, err)
-			}
-		}
+	} else {
+		logger.Warnf("link %s to %s failed: %s", stagingPath, path, err)
 	}
 	return stagingPath, err
 }
@@ -895,7 +891,6 @@ func (cache *cacheStore) uploadStaging() {
 			cache.Unlock()
 			key := cache.getPathFromKey(lastK)
 			if !cache.uploader(key, cache.stagePath(key), true) {
-				logger.Warnf("Upload list is too full")
 				cache.Lock()
 				return
 			}
@@ -1016,11 +1011,12 @@ func (cache *cacheStore) scanStaging() {
 					return nil
 				}
 				logger.Debugf("Found staging block: %s", path)
-				cache.m.stageBlocks.Add(1)
-				cache.m.stageBlockBytes.Add(float64(origSize))
-				cache.uploader(key, path, false)
-				count++
-				usage += uint64(origSize)
+				if cache.uploader(key, path, false) {
+					cache.m.stageBlocks.Add(1)
+					cache.m.stageBlockBytes.Add(float64(origSize))
+					count++
+					usage += uint64(origSize)
+				}
 			}
 		}
 		return nil
@@ -1089,7 +1085,7 @@ type CacheManager interface {
 	load(key string) (ReadCloser, error)
 	exist(key string) (string, bool)
 	uploaded(key string, size int)
-	stage(key string, data []byte, keepCache bool) (string, error)
+	stage(key string, data []byte) (string, error)
 	removeStage(key string) error
 	stats() (int64, int64)
 	usedMemory() int64
@@ -1208,7 +1204,13 @@ func (m *cacheManager) removeStage(key string) error {
 	if s := m.getStore(key); s == nil {
 		return errCacheDown
 	} else {
-		return s.removeStage(key)
+		err := s.removeStage(key)
+		if os.IsNotExist(err) { // Caller should ensure `stageBlocks` has already counted the key, `ENOENT` means another process already finished uploading it.
+			s.m.stageBlocks.Sub(1)
+			s.m.stageBlockBytes.Sub(float64(parseObjOrigSize(key)))
+			err = nil
+		}
+		return err
 	}
 }
 
@@ -1291,10 +1293,10 @@ func (m *cacheManager) remove(key string, staging bool) {
 	}
 }
 
-func (m *cacheManager) stage(key string, data []byte, keepCache bool) (string, error) {
+func (m *cacheManager) stage(key string, data []byte) (string, error) {
 	store := m.getStore(key)
 	if store != nil {
-		return store.stage(key, data, keepCache)
+		return store.stage(key, data)
 	}
 	return "", errors.New("no available cache dir")
 }

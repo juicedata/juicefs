@@ -235,6 +235,7 @@ func (s *rSlice) Remove() error {
 	for i := 0; i <= lastIndx; i++ {
 		if e := s.delete(i); e != nil {
 			err = e
+			logger.Warnf("Failed to delete block %s: %s", s.key(i), e)
 		}
 	}
 	return err
@@ -456,7 +457,7 @@ func (s *wSlice) upload(indx int) {
 			block.Acquire()
 			err := utils.WithTimeout(func() (err error) { // In case it hangs for more than 5 minutes(see fileWriter.flush), fallback to uploading directly to avoid `EIO`
 				defer block.Release()
-				stagingPath, err = s.store.bcache.stage(key, block.Data, s.store.shouldCache(blen))
+				stagingPath, err = s.store.bcache.stage(key, block.Data)
 				if err == nil && stageFailed { // upload thread already marked me as failed because of timeout
 					_ = s.store.bcache.removeStage(key)
 				}
@@ -594,6 +595,10 @@ func (c *Config) SelfCheck(uuid string) {
 			c.Prefetch = 0
 		}
 		c.CacheDir = "memory"
+	}
+	if !c.CacheFullBlock && c.Writeback {
+		logger.Warnf("writeback is disabled in non-full-block cache mode")
+		c.Writeback = false
 	}
 	if !c.Writeback {
 		if c.UploadDelay > 0 || c.UploadHours != "" {
@@ -998,7 +1003,13 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	f, err := openCacheFile(stagingPath, blen, store.conf.CacheChecksum)
 	if err != nil {
 		if store.isPendingValid(key) {
-			logger.Errorf("Open staging file %s: %s", stagingPath, err)
+			if os.IsNotExist(err) {
+				store.bcache.uploaded(key, blen)
+				store.removePending(key)
+				_ = store.bcache.removeStage(key) // trigger update metrics
+			} else {
+				logger.Errorf("Open staging file %s: %s", stagingPath, err)
+			}
 		} else {
 			logger.Debugf("Key %s is not needed, drop it", key)
 		}
@@ -1033,7 +1044,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	}
 }
 
-func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.Time, force bool) bool {
+func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.Time, immediate bool) bool {
 	store.pendingMutex.Lock()
 	item := store.pendingKeys[key]
 	if item == nil {
@@ -1043,15 +1054,18 @@ func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.
 	store.pendingMutex.Unlock()
 	if item.uploading {
 		logger.Debugf("Key %s is ignored since it's already being uploaded", key)
-		return true
+		return false // don't update staging metrics
 	}
-	if force || store.canUpload() && time.Since(added) > store.conf.UploadDelay {
+	if immediate || store.canUpload() && time.Since(added) > store.conf.UploadDelay {
 		select {
 		case store.pendingCh <- item:
 			item.uploading = true
 			return true
 		default:
 		}
+	}
+	if immediate {
+		logger.Warnf("Upload list is too full for %s", key)
 	}
 	return false
 }
