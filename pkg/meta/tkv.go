@@ -2800,13 +2800,13 @@ func (m *kvMeta) doSyncUsedSpace(ctx Context) error {
 	return m.setValue(m.counterKey(usedSpace), packCounter(used))
 }
 
-func (m *kvMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
+func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	return m.txn(ctx, func(tx *kvTxn) error {
 		keys := make([][]byte, 0, len(quotas))
 		qs := make([]*Quota, 0, len(quotas))
-		for ino, q := range quotas {
-			keys = append(keys, m.dirQuotaKey(ino))
-			qs = append(qs, q)
+		for _, q := range quotas {
+			keys = append(keys, m.dirQuotaKey(q.inode))
+			qs = append(qs, q.quota)
 		}
 		for i, v := range tx.gets(keys...) {
 			if len(v) == 0 {

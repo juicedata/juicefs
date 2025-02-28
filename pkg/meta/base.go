@@ -96,7 +96,7 @@ type engine interface {
 	doSetQuota(ctx Context, inode Ino, quota *Quota) (created bool, err error)
 	doDelQuota(ctx Context, inode Ino) error
 	doLoadQuotas(ctx Context) (map[Ino]*Quota, error)
-	doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error
+	doFlushQuotas(ctx Context, quotas []*iQuota) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno
