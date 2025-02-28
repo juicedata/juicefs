@@ -188,7 +188,7 @@ type xattr struct {
 	Id    int64  `xorm:"pk bigserial"`
 	Inode Ino    `xorm:"unique(name) notnull"`
 	Name  string `xorm:"unique(name) notnull"`
-	Value []byte `xorm:"blob notnull"`
+	Value []byte `xorm:"blob"`
 }
 
 type flock struct {
@@ -3565,8 +3565,10 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 		xattrs := make([]*DumpedXattr, 0, len(rows))
 		for _, x := range rows {
 			if len(x.Value) == 0 {
-				logger.Warnf("empty xattr not supported in meta version v1, skip inode %d xattr %s", x.Inode, x.Name)
-				continue
+				if m.fmt.MetaVersion < 2 {
+					logger.Warnf("empty xattr not supported in meta version v1, skip inode %d xattr %s", x.Inode, x.Name)
+					continue
+				}
 			}
 			xattrs = append(xattrs, &DumpedXattr{x.Name, string(x.Value)})
 		}

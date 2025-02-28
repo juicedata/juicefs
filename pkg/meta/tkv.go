@@ -2856,11 +2856,12 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalInc
 
 		var xattrs []*DumpedXattr
 		tx.scan(m.xattrKey(inode, ""), nextKey(m.xattrKey(inode, "")), false, func(k, v []byte) bool {
-			if m.fmt.MetaVersion < 2 {
-				// empty xattr not supported in v1
-				if bytes.Equal(v, emptyXAttr) {
+			if bytes.Equal(v, emptyXAttr) {
+				if m.fmt.MetaVersion < 2 {
 					logger.Warnf("empty xattr not supported in meta version v1, skip inode %d xattr %s", inode, k)
 					return true
+				} else {
+					v = []byte{}
 				}
 			}
 			xattrs = append(xattrs, &DumpedXattr{string(k[10:]), string(v)}) // "A" + inode + "X"
