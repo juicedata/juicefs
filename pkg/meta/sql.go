@@ -3564,6 +3564,10 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 	if len(rows) > 0 {
 		xattrs := make([]*DumpedXattr, 0, len(rows))
 		for _, x := range rows {
+			if len(x.Value) == 0 {
+				logger.Warnf("empty xattr not supported in meta version v1, skip inode %d xattr %s", x.Inode, x.Name)
+				continue
+			}
 			xattrs = append(xattrs, &DumpedXattr{x.Name, string(x.Value)})
 		}
 		sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
@@ -3871,6 +3875,12 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 
 	if err := ses.Table(&xattr{}).Iterate(new(xattr), func(idx int, bean interface{}) error {
 		x := bean.(*xattr)
+		if len(x.Value) == 0 {
+			if m.fmt.MetaVersion < 2 {
+				logger.Warnf("empty xattr not supported in meta version v1, skip inode %d xattr %s", x.Inode, x.Name)
+				return nil
+			}
+		}
 		snap.xattr[x.Inode] = append(snap.xattr[x.Inode], x)
 		bar.Increment()
 		return nil

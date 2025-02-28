@@ -34,7 +34,7 @@ import (
 
 const (
 	// MaxVersion is the max of supported versions.
-	MaxVersion = 1
+	MaxVersion = 2
 	// ChunkBits is the size of a chunk.
 	ChunkBits = 26
 	// ChunkSize is size of a chunk

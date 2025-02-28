@@ -41,6 +41,11 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
+// The binary representation of the string "jfs" with a null character added at the beginning.
+// This special value is used since TiKV does not allow empty values.
+// Badger and Etcd also have different behavior on empty values.
+var emptyXAttr = []byte{0x00, 0x6A, 0x66, 0x73}
+
 type kvtxn interface {
 	get(key []byte) []byte
 	gets(keys ...[]byte) [][]byte
@@ -2631,6 +2636,9 @@ func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 	if buf == nil {
 		return ENOATTR
 	}
+	if bytes.Equal(buf, emptyXAttr) {
+		buf = []byte{}
+	}
 	*vbuff = buf
 	return 0
 }
@@ -2663,6 +2671,9 @@ func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 }
 
 func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
+	if len(value) == 0 {
+		value = emptyXAttr
+	}
 	key := m.xattrKey(inode, name)
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
 		switch flags {
@@ -2845,6 +2856,13 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalInc
 
 		var xattrs []*DumpedXattr
 		tx.scan(m.xattrKey(inode, ""), nextKey(m.xattrKey(inode, "")), false, func(k, v []byte) bool {
+			if m.fmt.MetaVersion < 2 {
+				// empty xattr not supported in v1
+				if bytes.Equal(v, emptyXAttr) {
+					logger.Warnf("empty xattr not supported in meta version v1, skip inode %d xattr %s", inode, k)
+					return true
+				}
+			}
 			xattrs = append(xattrs, &DumpedXattr{string(k[10:]), string(v)}) // "A" + inode + "X"
 			return true
 		})
@@ -3141,6 +3159,15 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 					}
 					e.Entries[name] = child
 				case 'X':
+					if bytes.Equal(value, emptyXAttr) {
+						if m.fmt.MetaVersion < 2 {
+							// empty xattr not supported in v1
+							logger.Warnf("empty xattr not supported in meta version v1, skip inode %s xattr %s", key[1:10], key[10:])
+							return
+						} else {
+							value = []byte{}
+						}
+					}
 					e.Xattrs = append(e.Xattrs, &DumpedXattr{string(key[10:]), string(value)})
 				case 'S':
 					e.Symlink = string(value)
@@ -3368,8 +3395,14 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair, aclMaxId *uint32) {
 		attr.Length = uint64(len(symL))
 		kv <- &pair{m.symKey(inode), []byte(symL)}
 	}
+	var val []byte
 	for _, x := range e.Xattrs {
-		kv <- &pair{m.xattrKey(inode, x.Name), []byte(unescape(x.Value))}
+		if len(x.Value) == 0 {
+			val = emptyXAttr
+		} else {
+			val = unescape(x.Value)
+		}
+		kv <- &pair{m.xattrKey(inode, x.Name), val}
 	}
 
 	attr.AccessACL = m.saveACL(loadACL(e.AccessACL), aclMaxId)
