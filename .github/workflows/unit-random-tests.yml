@@ -6,12 +6,14 @@ on:
       - 'main'
       - 'release-*'
     paths:
+      - 'pkg/meta/random_test.go'
       - '**/unit-random-tests.yml'
   pull_request:
     branches:
       - 'main'
       - 'release-*'
     paths:
+      - 'pkg/meta/random_test.go'
       - '**/unit-random-tests.yml'
   workflow_dispatch:
     inputs:
