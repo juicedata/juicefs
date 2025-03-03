@@ -32,7 +32,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 	owner := int64(owner_)
 	if ltype == F_UNLCK {
 		return errno(m.txn(func(s *xorm.Session) error {
-			_, err := s.Where("inode = ? and owner = ? and sid = ? ", inode, owner, m.sid).Delete(&flock{})
+			_, err := s.Where("inode = ? and owner = ? and sid = ?", inode, owner, m.sid).Delete(&flock{})
 			return err
 		}, inode))
 	}
@@ -182,7 +182,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 				}
 				ls = updateLocks(ls, lock)
 				if len(ls) == 0 {
-					_, err = s.Delete(&plock{Inode: inode, Owner: owner, Sid: m.sid})
+					_, err = s.Where("inode = ? and owner = ? and sid = ?", inode, owner, m.sid).Delete(&plock{})
 				} else {
 					_, err = s.Cols("records").Update(plock{Records: dumpLocks(ls)}, l)
 				}
