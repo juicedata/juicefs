@@ -1898,8 +1898,8 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			if exchange { // dbuf, tattr are valid
-				pipe.HSet(ctx, m.entryKey(parentSrc), nameSrc, dbuf)
 				pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
+				pipe.HSet(ctx, m.entryKey(parentSrc), nameSrc, dbuf)
 				if parentSrc != parentDst && tattr.Parent == 0 {
 					pipe.HIncrBy(ctx, m.parentKey(dino), parentSrc.String(), 1)
 					pipe.HIncrBy(ctx, m.parentKey(dino), parentDst.String(), -1)
