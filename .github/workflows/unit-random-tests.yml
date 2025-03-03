@@ -65,6 +65,7 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
+          touch /tmp/randomtest-failfile.log
           make unit-random-test failfile=/tmp/randomtest-failfile.log seed=$RANDOM checks=100000 steps=200 meta=$meta_url
 
       - name: print failfile content
