@@ -48,9 +48,13 @@ func mountFlags() []cli.Flag {
 			Usage: "delay file closing in seconds.",
 		},
 		&cli.BoolFlag{
-			Name:  "d",
+			Name:    "d",
 			Aliases: []string{"background"},
-			Usage: "run in background(Windows: as a system service. support ONLY 1 volume mounting at the same time)",
+			Usage:   "run in background(Windows: as a system service. support ONLY 1 volume mounting at the same time)",
+		},
+		&cli.BoolFlag{
+			Name:  "show-dot-files",
+			Usage: "If set, dot files will not be treated as hidden files",
 		},
 	}
 }
@@ -70,7 +74,7 @@ func getDaemonStage() int {
 
 func mountMain(v *vfs.VFS, c *cli.Context) {
 	v.Conf.AccessLog = c.String("access-log")
-	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"))
+	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"), c.Bool("show-dot-files"))
 }
 
 func checkMountpoint(name, mp, logPath string, background bool) {}
