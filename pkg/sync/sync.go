@@ -1644,15 +1644,16 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			deleteObj(storage, keys[i], config.Dry)
 		}
 	}
+
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
-		defer wg.Done()
 		delayDelFunc(src, srcDelayDel)
+		wg.Done()
 	}()
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
-		defer wg.Done()
 		delayDelFunc(dst, dstDelayDel)
+		wg.Done()
 	}()
 	wg.Wait()
 	return syncExitFunc()
