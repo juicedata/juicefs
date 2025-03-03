@@ -3289,26 +3289,23 @@ func (m *dbMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	}
 
 	var dfs []delfile
-	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
+	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		if ok, err := s.IsTableExist(&delfile{}); err != nil {
 			return err
 		} else if !ok {
 			return nil
 		}
 		return s.Find(&dfs)
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
+
 	for _, ds := range dfs {
-		clean, err := scan(ds.Inode, ds.Length, ds.Expire)
-		if err != nil {
+		if _, err := scan(ds.Inode, ds.Length, ds.Expire); err != nil {
 			return err
 		}
-		if clean {
-			m.doDeleteFileData(ds.Inode, ds.Length)
-		}
 	}
+
 	return nil
 }
 
