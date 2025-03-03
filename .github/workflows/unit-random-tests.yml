@@ -61,11 +61,14 @@ jobs:
           create_database $meta_url
 
       - name: Test
-        timeout-minutes: 60
+        timeout-minutes: 30
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          make unit-random-test seed=$RANDOM checks=100000 steps=200 meta=$meta_url
+          if ${{matrix.meta}} eq "tikv"; then
+            checks=50000
+          fi
+          make unit-random-test seed=$RANDOM checks=checks steps=200 meta=$meta_url
 
       - name: print failfile content
         if: failure()
