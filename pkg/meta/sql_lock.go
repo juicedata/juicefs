@@ -184,7 +184,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 				if len(ls) == 0 {
 					_, err = s.Where("inode = ? and owner = ? and sid = ?", inode, owner, m.sid).Delete(&plock{})
 				} else {
-					_, err = s.Cols("records").Update(plock{Records: dumpLocks(ls)}, l)
+					_, err = s.Cols("records").Where("inode = ? and owner = ? and sid = ?", inode, owner, m.sid).Update(plock{Records: dumpLocks(ls)}, &plock{})
 				}
 				return err
 			}
@@ -219,8 +219,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 			records := dumpLocks(ls)
 			if len(locks[lkey]) > 0 {
 				if !bytes.Equal(locks[lkey], records) {
-					n, err = s.Cols("records").Update(plock{Records: records},
-						&plock{Inode: inode, Sid: m.sid, Owner: owner})
+					n, err = s.Cols("records").Where("inode = ? and owner = ? and sid = ?", inode, owner, m.sid).Update(plock{Records: records}, &plock{})
 				} else {
 					n = 1
 				}
