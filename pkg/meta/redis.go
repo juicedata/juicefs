@@ -1405,14 +1405,14 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.HSet(ctx, m.entryKey(parent), name, m.packEntry(_type, *inode))
+			pipe.Set(ctx, m.inodeKey(*inode), m.marshal(attr), 0)
 			if updateParent {
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
-			pipe.Set(ctx, m.inodeKey(*inode), m.marshal(attr), 0)
 			if _type == TypeSymlink {
 				pipe.Set(ctx, m.symKey(*inode), path, 0)
 			}
+			pipe.HSet(ctx, m.entryKey(parent), name, m.packEntry(_type, *inode))
 			if _type == TypeDirectory {
 				field := (*inode).String()
 				pipe.HSet(ctx, m.dirUsedInodesKey(), field, "0")
