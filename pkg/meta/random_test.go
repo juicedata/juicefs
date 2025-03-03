@@ -1251,6 +1251,10 @@ func (m *fsMachine) Rename(t *rapid.T) {
 	if srcIno == dstParent {
 		t.Skipf("skip rename srcIno is dstParent")
 	}
+	// hard link
+	if n, ok := m.nodes[dstParent].children[dstName]; ok && n.inode == srcIno {
+		t.Skipf("skip rename srcIno is dstParent")
+	}
 	tmp := m.nodes[dstParent].inode
 	for {
 		if tmp == RootInode {
