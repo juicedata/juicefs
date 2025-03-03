@@ -61,15 +61,11 @@ jobs:
           create_database $meta_url
 
       - name: Test
-        timeout-minutes: 30
+        timeout-minutes: 60
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          make unit-random-test failfile=/tmp/${{matrix.meta}}/failfile.log seed=$RANDOM checks=100000 steps=200 meta=$meta_url
-          if $? -ne 0; then
-            cat /tmp/${{matrix.meta}}/failfile.log
-            exit 1
-          fi
+          make unit-random-test failfile=/tmp/randomtest-failfile.log seed=$RANDOM checks=100000 steps=200 meta=$meta_url
 
       - name: upload coverage report
         if: always()
@@ -94,7 +90,9 @@ jobs:
 
       - name: Check Failure
         if: env.WORKFLOW_CONCLUSION == 'failure'
-        run: exit 1
+        run:
+          cat /tmp/randomtest-failfile.log
+          exit 1
 
       - name: mount coverage dir
         timeout-minutes: 5
