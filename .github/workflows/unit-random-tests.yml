@@ -65,12 +65,11 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          touch /tmp/randomtest-failfile.log
-          make unit-random-test failfile=/tmp/randomtest-failfile.log seed=$RANDOM checks=100000 steps=200 meta=$meta_url
+          make unit-random-test seed=$RANDOM checks=100000 steps=200 meta=$meta_url
 
       - name: print failfile content
         if: failure()
-        run: cat /tmp/randomtest-failfile.log
+        run: cat testdata/rapid/TestFSOps/TestFSOps-*.fail
         continue-on-error: true
 
       - name: upload coverage report

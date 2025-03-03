@@ -103,4 +103,4 @@ test.fdb:
 
 unit-random-test:
 	echo "Using meta:$(meta), seed: $(seed), checks:${checks}, steps: $(steps)"
-	go test ./pkg/meta/... -rapid.failfile=/tmp/randomtest-failfile.log -rapid.meta=$(meta) -rapid.seed=$(seed) -rapid.checks=$(checks) -rapid.steps=$(steps) -run "TestFSOps" -v -failfast -count=1 -timeout=30m -cover -coverpkg=./pkg/... -args -test.gocoverdir="$(shell realpath cover/)"
+	go test ./pkg/meta/... -rapid.meta=$(meta) -rapid.seed=$(seed) -rapid.checks=$(checks) -rapid.steps=$(steps) -run "TestFSOps" -v -failfast -count=1 -timeout=30m -cover -coverpkg=./pkg/... -args -test.gocoverdir="$(shell realpath cover/)"
