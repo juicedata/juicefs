@@ -125,6 +125,7 @@ type fsMachine struct {
 }
 
 var isDbMeta bool
+var tCounter uint64
 
 func (m *fsMachine) Init(t *rapid.T) {
 	m.sid = uint64(rapid.UintRange(1, math.MaxUint32-1).Draw(t, "sid"))
@@ -152,6 +153,8 @@ func (m *fsMachine) Init(t *rapid.T) {
 	if _, ok := m.meta.(*dbMeta); ok {
 		isDbMeta = true
 	}
+	tCounter++
+	fmt.Println("current counter: ", tCounter)
 }
 
 func (m *fsMachine) genName(t *rapid.T) string {
@@ -1241,8 +1244,9 @@ func (m *fsMachine) Rename(t *rapid.T) {
 		return
 	}
 	var srcIno Ino
-	for _, n := range m.nodes[srcParent].children {
-		if n.name == srcName {
+	for name, n := range m.nodes[srcParent].children {
+		// When the node is a hard link, name is not equal to n.name
+		if srcName == name {
 			srcIno = n.inode
 		}
 	}
