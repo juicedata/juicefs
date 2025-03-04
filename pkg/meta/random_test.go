@@ -124,7 +124,7 @@ type fsMachine struct {
 	ctx   Context
 }
 
-var isDbMeta bool
+var metaType string
 var tCounter uint64
 
 func (m *fsMachine) Init(t *rapid.T) {
@@ -150,9 +150,16 @@ func (m *fsMachine) Init(t *rapid.T) {
 	registerer := prometheus.WrapRegistererWithPrefix("juicefs_",
 		prometheus.WrapRegistererWith(prometheus.Labels{"mp": "virtual-mp", "vol_name": "test-vol"}, registry))
 	m.meta.InitMetrics(registerer)
-	if _, ok := m.meta.(*dbMeta); ok {
-		isDbMeta = true
+
+	switch m.meta.(type) {
+	case *dbMeta:
+		metaType = "db"
+	case *redisMeta:
+		metaType = "redis"
+	case tkvClient:
+		metaType = "kv"
 	}
+
 	tCounter++
 	if tCounter%50 == 0 {
 		fmt.Println("current counter: ", tCounter)
@@ -444,7 +451,7 @@ func (m *fsMachine) unlink(parent Ino, name string) syscall.Errno {
 		return syscall.ENOTDIR
 	}
 
-	if isDbMeta {
+	if metaType == "db" {
 		if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
 			return syscall.EACCES
 		}
@@ -493,7 +500,7 @@ func (m *fsMachine) rmdir(parent Ino, name string) syscall.Errno {
 		return syscall.ENOENT
 	}
 
-	if isDbMeta {
+	if metaType == "db" {
 		if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
 			return syscall.EACCES
 		}
@@ -793,7 +800,7 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 		return 0
 	}
 
-	if isDbMeta {
+	if metaType == "db" {
 		src := m.nodes[srcparent]
 		if src == nil {
 			return syscall.ENOENT
@@ -811,6 +818,30 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 		if !dst.access(m.ctx, MODE_MASK_X|MODE_MASK_W) {
 			return syscall.EACCES
 		}
+	}
+
+	if metaType == "redis" {
+		src := m.nodes[srcparent]
+		if src == nil {
+			return syscall.ENOENT
+		}
+		dst := m.nodes[dstparent]
+		if dst == nil {
+			return syscall.ENOENT
+		}
+		srcnode := src.children[srcname]
+		if srcnode == nil {
+			return syscall.ENOENT
+		}
+		c := dst.children[dstname]
+		if c != nil {
+			if srcnode._type == TypeDirectory && c._type != TypeDirectory {
+				return syscall.ENOTDIR
+			} else if srcnode._type != TypeDirectory && c._type == TypeDirectory {
+				return syscall.EISDIR
+			}
+		}
+
 	}
 	src := m.nodes[srcparent]
 	if src == nil {
