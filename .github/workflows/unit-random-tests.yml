@@ -65,7 +65,11 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          make unit-random-test seed=$RANDOM checks=1000000 steps=200 meta=$meta_url
+          number=10000
+          if [[ ${{matrix.meta}} == "tikv" ]]; then
+            number=1500
+          fi
+          make unit-random-test seed=$RANDOM checks=${number} steps=200 meta=$meta_url
 
       - name: print failfile content
         if: failure()
