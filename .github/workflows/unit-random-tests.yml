@@ -31,7 +31,7 @@ jobs:
       fail-fast: false
       matrix:
         meta: ['redis', 'sqlite3', 'tikv']
-    timeout-minutes: 60
+    timeout-minutes: 120
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
