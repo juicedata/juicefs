@@ -154,7 +154,9 @@ func (m *fsMachine) Init(t *rapid.T) {
 		isDbMeta = true
 	}
 	tCounter++
-	fmt.Println("current counter: ", tCounter)
+	if tCounter%50 == 0 {
+		fmt.Println("current counter: ", tCounter)
+	}
 }
 
 func (m *fsMachine) genName(t *rapid.T) string {
@@ -2214,8 +2216,7 @@ func init() {
 }
 
 func defaultFlag(name string, value string) func() {
-	f := flag.Lookup(name)
-	if f != nil && value != f.DefValue {
+	if f := flag.Lookup(name); f.Value.String() == f.DefValue {
 		flag.Set(name, value)
 		return func() {
 			flag.Set(name, f.DefValue)
