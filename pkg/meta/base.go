@@ -96,7 +96,7 @@ type engine interface {
 	doSetQuota(ctx Context, inode Ino, quota *Quota) (created bool, err error)
 	doDelQuota(ctx Context, inode Ino) error
 	doLoadQuotas(ctx Context) (map[Ino]*Quota, error)
-	doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error
+	doFlushQuotas(ctx Context, quotas []*iQuota) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno
@@ -2626,7 +2626,41 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 	}
 	if pfs != nil {
 		eg.Go(func() error {
-			return m.en.scanPendingFiles(ctx, pfs)
+			concurrency := m.conf.MaxDeletes
+			cleanChan := make(chan struct {
+				ino  Ino
+				size uint64
+			}, concurrency)
+			var wg sync.WaitGroup
+
+			for i := 0; i < concurrency; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for p := range cleanChan {
+						m.en.doDeleteFileData(p.ino, p.size)
+					}
+				}()
+			}
+
+			cpfs := func(ino Ino, size uint64, ts int64) (bool, error) {
+				clean, err := pfs(ino, size, ts)
+				if err != nil {
+					return false, err
+				}
+				if clean {
+					cleanChan <- struct {
+						ino  Ino
+						size uint64
+					}{ino, size}
+				}
+				return clean, nil
+			}
+
+			err := m.en.scanPendingFiles(ctx, cpfs)
+			close(cleanChan)
+			wg.Wait()
+			return err
 		})
 	}
 	return eg.Wait()

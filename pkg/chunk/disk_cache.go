@@ -886,6 +886,7 @@ func (cache *cacheStore) uploadStaging() {
 func (cache *cacheStore) scanCached() {
 	cache.Lock()
 	cache.used = 0
+	lastAccessed := cache.keys // atime in memory is more accurate than on disk, inherit it for the next round
 	cache.keys = make(map[cacheKey]cacheItem)
 	cache.scanned = false
 	cache.Unlock()
@@ -914,10 +915,18 @@ func (cache *cacheStore) scanCached() {
 					key = strings.ReplaceAll(key, "\\", "/")
 				}
 				atime := uint32(getAtime(fi).Unix())
+				if memAtime := lastAccessed[cache.getCacheKey(key)].atime; memAtime > atime {
+					atime = memAtime
+				}
+				size := parseObjOrigSize(key) // track logical size
+				if size == 0 {
+					logger.Warnf("Ignore file with unknown size: %s", path)
+					return nil
+				}
 				if getNlink(fi) > 1 {
-					cache.add(key, -int32(fi.Size()), atime)
+					cache.add(key, -int32(size), atime)
 				} else {
-					cache.add(key, int32(fi.Size()), atime)
+					cache.add(key, int32(size), atime)
 				}
 			}
 		}

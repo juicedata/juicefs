@@ -963,7 +963,7 @@ func (m *kvMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		}
 		t := Attr{}
 		m.parseAttr(a, &t)
-		if t.Typ != TypeFile || t.Flags&(FlagImmutable|t.Flags&FlagAppend) != 0 || t.Parent > TrashInode {
+		if t.Typ != TypeFile || t.Flags&(FlagImmutable|t.Flags&FlagAppend) != 0 || (flags == 0 && t.Parent > TrashInode) {
 			return syscall.EPERM
 		}
 		if !skipPermCheck {
@@ -1592,6 +1592,12 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						tattr.Parent = parentSrc
 					}
 				}
+			} else if dino == ino {
+				return nil
+			} else if typ == TypeDirectory && dtyp != TypeDirectory {
+				return syscall.ENOTDIR
+			} else if typ != TypeDirectory && dtyp == TypeDirectory {
+				return syscall.EISDIR
 			} else {
 				if dtyp == TypeDirectory {
 					if tx.exist(m.entryKey(dino, "")) {
@@ -2577,29 +2583,25 @@ func (m *kvMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	}
 	// deleted files: Diiiiiiiissssssss
 	klen := 1 + 8 + 8
-	pairs, err := m.scanValues(m.fmtKey("D"), -1, func(k, v []byte) bool {
-		return len(k) == klen
-	})
-	if err != nil {
+
+	var scanErr error
+	if err := m.client.scan(m.fmtKey("D"), func(key, val []byte) {
+		if scanErr != nil {
+			return
+		}
+		if len(key) != klen {
+			scanErr = fmt.Errorf("invalid key %x", key)
+			return
+		}
+		ino := m.decodeInode(key[1:9])
+		size := binary.BigEndian.Uint64(key[9:])
+		ts := m.parseInt64(val)
+		_, scanErr = scan(ino, size, ts)
+	}); err != nil {
 		return err
 	}
 
-	for key, value := range pairs {
-		if len(key) != klen {
-			return fmt.Errorf("invalid key %x", key)
-		}
-		ino := m.decodeInode([]byte(key)[1:9])
-		size := binary.BigEndian.Uint64([]byte(key)[9:])
-		ts := m.parseInt64(value)
-		clean, err := scan(ino, size, ts)
-		if err != nil {
-			return err
-		}
-		if clean {
-			m.doDeleteFileData(ino, size)
-		}
-	}
-	return nil
+	return scanErr
 }
 
 func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
@@ -2797,13 +2799,13 @@ func (m *kvMeta) doSyncUsedSpace(ctx Context) error {
 	return m.setValue(m.counterKey(usedSpace), packCounter(used))
 }
 
-func (m *kvMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
+func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	return m.txn(ctx, func(tx *kvTxn) error {
 		keys := make([][]byte, 0, len(quotas))
 		qs := make([]*Quota, 0, len(quotas))
-		for ino, q := range quotas {
-			keys = append(keys, m.dirQuotaKey(ino))
-			qs = append(qs, q)
+		for _, q := range quotas {
+			keys = append(keys, m.dirQuotaKey(q.inode))
+			qs = append(qs, q.quota)
 		}
 		for i, v := range tx.gets(keys...) {
 			if len(v) == 0 {

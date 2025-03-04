@@ -51,15 +51,17 @@ const (
 )
 
 var (
-	handled               *utils.Bar
-	pending               *utils.Bar
-	copied, copiedBytes   *utils.Bar
-	checked, checkedBytes *utils.Bar
-	skipped, skippedBytes *utils.Bar
-	deleted, failed       *utils.Bar
-	listedPrefix          *utils.Bar
-	concurrent            chan int
-	limiter               *ratelimit.Bucket
+	handled                 *utils.Bar
+	pending                 *utils.Bar
+	copied, copiedBytes     *utils.Bar
+	checked, checkedBytes   *utils.Bar
+	skipped, skippedBytes   *utils.Bar
+	excluded, excludedBytes *utils.Bar
+	extra, extraBytes       *utils.Bar
+	deleted, failed         *utils.Bar
+	listedPrefix            *utils.Bar
+	concurrent              chan int
+	limiter                 *ratelimit.Bucket
 )
 var crcTable = crc32.MakeTable(crc32.Castagnoli)
 var logger = utils.GetLogger("juicefs")
@@ -922,20 +924,17 @@ func (o *withFSize) Size() int64 {
 	return o.nsize
 }
 
-func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, config *Config) bool {
-	if !config.Dirs && dstobj.IsDir() {
-		logger.Debug("Ignore deleting dst directory ", dstobj.Key())
+func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config *Config) bool {
+	handled.IncrTotal(1)
+	if !config.DeleteDst || !config.Dirs && dstobj.IsDir() || config.Limit == 0 {
+		logger.Debug("Ignore extra object", dstobj.Key())
+		extra.Increment()
+		extraBytes.IncrInt64(dstobj.Size())
 		return false
 	}
-	if config.Limit >= 0 {
-		if config.Limit == 0 {
-			return true
-		}
-		config.Limit--
-	}
+	config.Limit--
 	tasks <- &withSize{dstobj, markDeleteDst}
-	handled.IncrTotal(1)
-	return false
+	return config.Limit == 0
 }
 
 func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, config *Config) error {
@@ -982,10 +981,8 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 		handled.IncrTotal(1)
 
 		if dstobj != nil && obj.Key() > dstobj.Key() {
-			if config.DeleteDst {
-				if deleteFromDst(tasks, dstobj, config) {
-					return nil
-				}
+			if handleExtraObject(tasks, dstobj, config) {
+				return nil
 			}
 			dstobj = nil
 		}
@@ -997,10 +994,8 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				if obj.Key() <= dstobj.Key() {
 					break
 				}
-				if config.DeleteDst {
-					if deleteFromDst(tasks, dstobj, config) {
-						return nil
-					}
+				if handleExtraObject(tasks, dstobj, config) {
+					return nil
 				}
 				dstobj = nil
 			}
@@ -1047,15 +1042,16 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 	}
 	if config.DeleteDst {
 		if dstobj != nil {
-			if deleteFromDst(tasks, dstobj, config) {
+			if handleExtraObject(tasks, dstobj, config) {
 				return nil
 			}
 		}
 		for dstobj = range dstkeys {
-			if dstobj != nil {
-				if deleteFromDst(tasks, dstobj, config) {
-					return nil
-				}
+			if dstobj == nil {
+				return fmt.Errorf("listing failed, stop syncing, waiting for pending ones")
+			}
+			if handleExtraObject(tasks, dstobj, config) {
+				return nil
 			}
 		}
 	}
@@ -1134,6 +1130,8 @@ func filter(keys <-chan object.Object, rules []rule, config *Config) <-chan obje
 				r <- o
 			} else {
 				logger.Debugf("exclude %s size: %d, mtime: %s", o.Key(), o.Size(), o.Mtime())
+				excluded.Increment()
+				excludedBytes.IncrInt64(o.Size())
 			}
 		}
 		close(r)
@@ -1501,8 +1499,12 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	progress := utils.NewProgress(config.Verbose || config.Quiet || config.Manager != "")
 	handled = progress.AddCountBar("Scanned objects", 0)
+	excluded = progress.AddCountSpinner("Excluded objects")
+	excludedBytes = progress.AddByteSpinner("Excluded bytes")
 	skipped = progress.AddCountSpinner("Skipped objects")
 	skippedBytes = progress.AddByteSpinner("Skipped bytes")
+	extra = progress.AddCountSpinner("Extra objects")
+	extraBytes = progress.AddByteSpinner("Extra bytes")
 	pending = progress.AddCountSpinner("Pending objects")
 	copied = progress.AddCountSpinner("Copied objects")
 	copiedBytes = progress.AddByteSpinner("Copied bytes")
@@ -1520,8 +1522,11 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		progress.Done()
 
 		if config.Manager == "" {
-			msg := fmt.Sprintf("Found: %d, skipped: %d (%s), copied: %d (%s)",
-				total, skipped.Current(), formatSize(skippedBytes.Current()), copied.Current(), formatSize(copiedBytes.Current()))
+			msg := fmt.Sprintf("Found: %d, excluded: %d (%s), skipped: %d (%s), copied: %d (%s), extra: %d (%s)", total,
+				excluded.Current(), formatSize(excludedBytes.Current()),
+				skipped.Current(), formatSize(skippedBytes.Current()),
+				copied.Current(), formatSize(copiedBytes.Current()),
+				extra.Current(), formatSize(extraBytes.Current()))
 			if checked != nil {
 				msg += fmt.Sprintf(", checked: %d (%s)", checked.Current(), formatSize(checkedBytes.Current()))
 			}
@@ -1531,16 +1536,16 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			if failed != nil {
 				msg += fmt.Sprintf(", failed: %d", failed.Current())
 			}
-			if total-handled.Current() > 0 {
+			if total-handled.Current()-extra.Current() > 0 {
 				msg += fmt.Sprintf(", lost: %d", total-handled.Current())
 			}
 			logger.Info(msg)
 		} else {
 			sendStats(config.Manager)
-			logger.Infof("This worker process has already completed its task")
+			logger.Infof("This worker process has already completed its tasks")
 		}
 		if failed != nil {
-			if n := failed.Current(); n > 0 || total > handled.Current() {
+			if n := failed.Current(); n > 0 || total > handled.Current()+extra.Current() {
 				return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
 			}
 		}
@@ -1553,7 +1558,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			go func() {
 				for {
 					if failed.Current() >= config.MaxFailure {
-						logger.Infof("the maximum error limit of %d was reached, triggering the quick exit process", config.MaxFailure)
+						logger.Infof("the maximum error limit of %d was reached, stop now", config.MaxFailure)
 						_ = syncExitFunc()
 						os.Exit(1)
 					}
@@ -1635,6 +1640,30 @@ func initSyncMetrics(config *Config) {
 				Help: "Scanned objects",
 			}, func() float64 {
 				return float64(handled.Total())
+			}),
+			prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "excluded",
+				Help: "Excluded objects",
+			}, func() float64 {
+				return float64(excluded.Current())
+			}),
+			prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "excluded_bytes",
+				Help: "Excluded bytes",
+			}, func() float64 {
+				return float64(copied.Current())
+			}),
+			prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "extra",
+				Help: "Extra objects",
+			}, func() float64 {
+				return float64(excluded.Current())
+			}),
+			prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "extra_bytes",
+				Help: "Extra bytes",
+			}, func() float64 {
+				return float64(copied.Current())
 			}),
 			prometheus.NewCounterFunc(prometheus.CounterOpts{
 				Name: "handled",

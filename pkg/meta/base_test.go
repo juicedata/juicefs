@@ -612,17 +612,17 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f", 1, "d", RenameExchange, &inode, attr); st != 0 {
 		t.Fatalf("rename f <-> d: %s", st)
 	}
-	if st := m.Rename(ctx, 1, "d", 1, "f", 0, &inode, attr); st != 0 {
+	if st := m.Rename(ctx, 1, "f", 1, "d", RenameExchange, &inode, attr); st != 0 {
+		t.Fatalf("rename f <-> d: %s", st)
+	}
+	if st := m.Rename(ctx, 1, "d", 1, "f", 0, &inode, attr); st != syscall.ENOTDIR {
 		t.Fatalf("rename d -> f: %s", st)
 	}
 	if st := m.GetAttr(ctx, 1, attr); st != 0 {
 		t.Fatalf("getattr f: %s", st)
 	}
-	if attr.Nlink != 2 {
-		t.Fatalf("nlink expect 2, but got %d", attr.Nlink)
-	}
-	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &parent, attr); st != 0 {
-		t.Fatalf("mkdir d: %s", st)
+	if attr.Nlink != 3 {
+		t.Fatalf("nlink expect 3, but got %d", attr.Nlink)
 	}
 	// Test rename with parent change
 	var parent2 Ino
@@ -1865,7 +1865,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Create(ctx, parent, "f", 0644, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create d/f: %s", st)
 	}
-	if st := m.Rename(ctx, 1, "f1", 1, "d", 0, &inode, attr); st != syscall.ENOTEMPTY {
+	if st := m.Rename(ctx, 1, "f1", 1, "d", 0, &inode, attr); st != syscall.EISDIR {
 		t.Fatalf("rename f1 -> d: %s", st)
 	}
 	if st := m.Unlink(ctx, parent, "f"); st != 0 {
@@ -1906,11 +1906,11 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "d", parent2, "ttlink", 0, &tino, attr); st != syscall.ENOENT {
 		t.Fatalf("link inside trash should fail")
 	}
+	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
+		t.Fatalf("rmdir d: %s", st)
+	}
 	if st := m.Rename(ctx, 1, "f1", 1, "d", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f1 -> d: %s", st)
-	}
-	if st := m.Lookup(ctx, TrashInode+1, fmt.Sprintf("1-%d-d", parent), &inode, attr, true); st != 0 || attr.Parent != TrashInode+1 {
-		t.Fatalf("lookup subTrash/d: %s, attr %+v", st, attr)
 	}
 	if st := m.Rename(ctx, 1, "f2", TrashInode, "td", 0, &inode, attr); st != syscall.EPERM {
 		t.Fatalf("rename f2 -> td: %s", st)

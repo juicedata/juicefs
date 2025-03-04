@@ -140,6 +140,7 @@ func TestChecksum(t *testing.T) {
 	k5 := "4_8_1048576"
 
 	p := NewPage([]byte("helloworld"))
+	defer p.Release()
 	s.cache(k1, p, true, false)
 
 	s.checksum = CsFull
@@ -356,4 +357,29 @@ func TestCacheManager(t *testing.T) {
 	m.Unlock()
 	time.Sleep(3 * time.Second)
 	require.True(t, m.isEmpty())
+}
+
+func TestAtimeNotLost(t *testing.T) {
+	m := newCacheManager(&defaultConf, nil, nil)
+	key := "0_0_10"
+
+	p := NewPage([]byte("helloworld"))
+	defer p.Release()
+	m.cache(key, p, true, false)
+	time.Sleep(3 * time.Second)
+
+	_, exist := m.exist(key) // touch atime
+	if !exist {
+		t.Fatalf("CacheStore key %s not exist", key)
+	}
+	s := m.(*cacheManager).stores[0]
+	atimeMem := s.keys[s.getCacheKey(key)].atime
+	if atimeMem == 0 {
+		t.Fatalf("CacheStore key %s atime lost", key)
+	}
+	s.scanCached() // should use atime from memory
+	atimeAfterScan := s.keys[s.getCacheKey(key)].atime
+	if atimeAfterScan != atimeMem {
+		t.Fatalf("CacheStore key %s atime lost after scan, before: %d, after: %d", key, atimeMem, atimeAfterScan)
+	}
 }
