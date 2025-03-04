@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"golang.org/x/sync/errgroup"
 )
 
 type _file struct {
@@ -77,7 +78,6 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 					continue
 				}
 
-				iter := newSliceIterator(ctx, v.Meta, f.ino, f.size, resp)
 				var handler sliceHandler
 				switch action {
 				case WarmupCache:
@@ -110,8 +110,8 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 					}
 				}
 
-				// log and skip error
-				err := iter.Iterate(handler)
+				iter := newSliceIterator(ctx, v.Meta, f.ino, f.size, resp)
+				err := iter.Iterate(handler, concurrent)
 				if err != nil {
 					logger.Errorf("%s error : %s", action, err)
 				}
@@ -266,6 +266,7 @@ type sliceHandler func(s meta.Slice) error
 func (iter *sliceIterator) hasNext() bool {
 	if iter.ctx.Canceled() {
 		iter.err = iter.ctx.Err()
+		logger.Error(iter.err)
 		return false
 	}
 
@@ -278,6 +279,7 @@ func (iter *sliceIterator) hasNext() bool {
 		iter.nextSliceIndex = 0
 		if st := iter.mClient.Read(iter.ctx, iter.ino, iter.nextChunkIndex, &iter.slices); st != 0 {
 			iter.err = fmt.Errorf("get slices of inode %d index %d error: %d", iter.ino, iter.nextChunkIndex, st)
+			logger.Error(iter.err)
 			return false
 		}
 		iter.nextChunkIndex++
@@ -292,17 +294,27 @@ func (iter *sliceIterator) next() meta.Slice {
 	return s
 }
 
-func (iter *sliceIterator) Iterate(handler sliceHandler) error {
+func (iter *sliceIterator) Iterate(handler sliceHandler, concurrent int) error {
 	if handler == nil {
 		return fmt.Errorf("handler not set")
 	}
+	var eg errgroup.Group
+	eg.SetLimit(concurrent)
 	for iter.hasNext() {
 		s := iter.next()
 		atomic.AddUint64(&iter.stat.SliceCount, 1)
 		atomic.AddUint64(&iter.stat.TotalBytes, uint64(s.Size))
-		if err := handler(s); err != nil {
-			return fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
-		}
+		eg.Go(func() error {
+			if err := handler(s); err != nil {
+				err = fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
+				logger.Error(err)
+				return err
+			}
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		iter.err = err
 	}
 	return iter.err
 }
