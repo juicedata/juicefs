@@ -278,7 +278,7 @@ func (j *juice) Create(p string, flags int, mode uint32) (e int, fh uint64) {
 		e = errorconv(err)
 		return
 	}
-	entry, fh, errno := j.vfs.Create(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(flags))
+	entry, fh, errno := j.vfs.Create(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(flags|syscall.O_EXCL))
 	if errno == 0 {
 		j.Lock()
 		j.handlers[fh] = entry.Inode
