@@ -132,14 +132,14 @@ class TestPySdk(unittest.TestCase):
         state.readline(file=v2, mode='r', offset=1708,  user='root', whence=0)
         state.teardown()
 
-    # def test_issue_1425(self):
-    #     # SEE: https://github.com/juicedata/jfs/issues/1425
-    #     state = JuicefsMachine()
-    #     v1 = state.init_folders()
-    #     v2 = state.create_file(content=b'a', file_name='a', parent=v1, umask=18,  user='root')
-    #     v3 = state.mkdir(mode=0, parent=v1, subdir='b', umask=18,  user='root')
-    #     state.rename_dir(entry=v3, new_entry_name=v2, parent=v1, umask=18,  user='root')
-    #     state.teardown()
+    def test_issue_1425(self):
+        # SEE: https://github.com/juicedata/jfs/issues/1425
+        state = JuicefsMachine()
+        v1 = state.init_folders()
+        v2 = state.create_file(content=b'a', file_name='a', parent=v1, umask=18,  user='root')
+        v3 = state.mkdir(mode=0, parent=v1, subdir='b', umask=18,  user='root')
+        state.rename_dir(entry=v3, new_entry_name=v2, parent=v1, umask=18,  user='root')
+        state.teardown()
 
     def test_issue_1442(self):
         # SEE: https://github.com/juicedata/jfs/issues/1442
@@ -149,14 +149,14 @@ class TestPySdk(unittest.TestCase):
         state.set_xattr(file=v2, flag=0, name='user.0', user='root', value=b'\x01\x01\x00\x01')
         state.teardown()
 
-    # def test_issue_1443(self):
-    #     # SEE: https://github.com/juicedata/jfs/issues/1443
-    #     state = JuicefsMachine()
-    #     v1 = state.init_folders()
-    #     v2 = state.create_file(content=b'bcb', file_name='bcba', parent=v1, umask=18, user='root')
-    #     v3 = state.hardlink(src_file=v2, link_file_name='a', parent=v1, umask=18, user='root')
-    #     state.rename_file(entry=v2, new_entry_name=v3, parent=v1, umask=18, user='root')
-    #     state.teardown()
+    def test_issue_1443(self):
+        # SEE: https://github.com/juicedata/jfs/issues/1443
+        state = JuicefsMachine()
+        v1 = state.init_folders()
+        v2 = state.create_file(content=b'bcb', file_name='bcba', parent=v1, umask=18, user='root')
+        v3 = state.hardlink(src_file=v2, link_file_name='a', parent=v1, umask=18, user='root')
+        state.rename_file(entry=v2, new_entry_name=v3, parent=v1, umask=18, user='root')
+        state.teardown()
 
     def test_issue_1449(self):
         # SEE: https://github.com/juicedata/jfs/issues/1449

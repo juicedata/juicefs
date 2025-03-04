@@ -1252,17 +1252,17 @@ func (m *dbMeta) upsertSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 	driver := m.Name()
 	if driver == "sqlite3" || driver == "postgres" {
 		_, err = s.Exec(`
-		INSERT INTO jfs_chunk (inode, indx, slices)
-		VALUES (?, ?, ?)
-		ON CONFLICT (inode, indx)
-		DO UPDATE SET slices=jfs_chunk.slices || ?`, inode, indx, buf, buf)
+			 INSERT INTO jfs_chunk (inode, indx, slices)
+			 VALUES (?, ?, ?)
+			 ON CONFLICT (inode, indx)
+			 DO UPDATE SET slices=jfs_chunk.slices || ?`, inode, indx, buf, buf)
 	} else {
 		var r sql.Result
 		r, err = s.Exec(`
-		INSERT INTO jfs_chunk (inode, indx, slices)
-		VALUES (?, ?, ?)
-		ON DUPLICATE KEY UPDATE
-		slices=concat(slices, ?)`, inode, indx, buf, buf)
+			 INSERT INTO jfs_chunk (inode, indx, slices)
+			 VALUES (?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 slices=concat(slices, ?)`, inode, indx, buf, buf)
 		n, _ := r.RowsAffected()
 		*insert = n == 1 // https://dev.mysql.com/doc/refman/5.7/en/insert-on-duplicate.html
 	}
@@ -1280,7 +1280,7 @@ func (m *dbMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		if !ok {
 			return syscall.ENOENT
 		}
-		if nodeAttr.Type != TypeFile || nodeAttr.Flags&(FlagImmutable|FlagAppend) != 0 || nodeAttr.Parent > TrashInode {
+		if nodeAttr.Type != TypeFile || nodeAttr.Flags&(FlagImmutable|FlagAppend) != 0 || (flags == 0 && nodeAttr.Parent > TrashInode) {
 			return syscall.EPERM
 		}
 		m.parseAttr(&nodeAttr, attr)
@@ -2068,31 +2068,36 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						dn.Parent = parentSrc
 					}
 				}
+			} else if de.Inode == se.Inode {
+				return nil
+			} else if se.Type == TypeDirectory && de.Type != TypeDirectory {
+				return syscall.ENOTDIR
+			} else if de.Type == TypeDirectory {
+				if se.Type != TypeDirectory {
+					return syscall.EISDIR
+				}
+				exist, err := s.Exist(&edge{Parent: de.Inode})
+				if err != nil {
+					return err
+				}
+				if exist {
+					return syscall.ENOTEMPTY
+				}
+				dpn.Nlink--
+				dstnlink--
+				dupdate = true
+				if trash > 0 {
+					dn.Parent = trash
+				}
 			} else {
-				if de.Type == TypeDirectory {
-					exist, err := s.Exist(&edge{Parent: de.Inode})
-					if err != nil {
-						return err
+				if trash == 0 {
+					dn.Nlink--
+					if de.Type == TypeFile && dn.Nlink == 0 {
+						opened = m.of.IsOpen(dn.Inode)
 					}
-					if exist {
-						return syscall.ENOTEMPTY
-					}
-					dpn.Nlink--
-					dstnlink--
-					dupdate = true
-					if trash > 0 {
-						dn.Parent = trash
-					}
-				} else {
-					if trash == 0 {
-						dn.Nlink--
-						if de.Type == TypeFile && dn.Nlink == 0 {
-							opened = m.of.IsOpen(dn.Inode)
-						}
-						defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
-					} else if dn.Parent > 0 {
-						dn.Parent = trash
-					}
+					defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
+				} else if dn.Parent > 0 {
+					dn.Parent = trash
 				}
 			}
 			if ctx.Uid() != 0 && dpn.Mode&01000 != 0 && ctx.Uid() != dpn.Uid && ctx.Uid() != dn.Uid {
@@ -3289,26 +3294,23 @@ func (m *dbMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	}
 
 	var dfs []delfile
-	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
+	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		if ok, err := s.IsTableExist(&delfile{}); err != nil {
 			return err
 		} else if !ok {
 			return nil
 		}
 		return s.Find(&dfs)
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
+
 	for _, ds := range dfs {
-		clean, err := scan(ds.Inode, ds.Length, ds.Expire)
-		if err != nil {
+		if _, err := scan(ds.Inode, ds.Length, ds.Expire); err != nil {
 			return err
 		}
-		if clean {
-			m.doDeleteFileData(ds.Inode, ds.Length)
-		}
 	}
+
 	return nil
 }
 
@@ -3526,11 +3528,12 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	return quotas, nil
 }
 
-func (m *dbMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
+func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
+	sort.Slice(quotas, func(i, j int) bool { return quotas[i].inode < quotas[j].inode })
 	return m.txn(func(s *xorm.Session) error {
-		for ino, q := range quotas {
+		for _, q := range quotas {
 			_, err := s.Exec("update jfs_dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?",
-				q.newSpace, q.newInodes, ino)
+				q.quota.newSpace, q.quota.newInodes, q.inode)
 			if err != nil {
 				return err
 			}

@@ -1041,7 +1041,7 @@ func (m *redisMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint6
 			return err
 		}
 		m.parseAttr(a, &t)
-		if t.Typ != TypeFile || t.Flags&(FlagImmutable|FlagAppend) != 0 || t.Parent > TrashInode {
+		if t.Typ != TypeFile || t.Flags&(FlagImmutable|FlagAppend) != 0 || (flags == 0 && t.Parent > TrashInode) {
 			return syscall.EPERM
 		}
 		if !skipPermCheck {
@@ -1747,6 +1747,17 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		}
 		if err := tx.Watch(ctx, keys...).Err(); err != nil {
 			return err
+		}
+		if dino > 0 {
+			if ino == dino {
+				return errno(nil)
+			}
+			if exchange {
+			} else if typ == TypeDirectory && dtyp != TypeDirectory {
+				return syscall.ENOTDIR
+			} else if typ != TypeDirectory && dtyp == TypeDirectory {
+				return syscall.EISDIR
+			}
 		}
 
 		keys = []string{m.inodeKey(parentSrc), m.inodeKey(parentDst), m.inodeKey(ino)}
@@ -3344,12 +3355,13 @@ func (m *redisMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	visited := make(map[Ino]bool)
 	start := int64(0)
 	const batchSize = 1000
+
 	for {
 		pairs, err := m.rdb.ZRangeWithScores(Background(), m.delfiles(), start, start+batchSize).Result()
 		if err != nil {
 			return err
 		}
-		start += batchSize
+
 		for _, p := range pairs {
 			v := p.Member.(string)
 			ps := strings.Split(v, ":")
@@ -3362,18 +3374,17 @@ func (m *redisMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 			}
 			visited[Ino(inode)] = true
 			size, _ := strconv.ParseUint(ps[1], 10, 64)
-			clean, err := scan(Ino(inode), size, int64(p.Score))
-			if err != nil {
+			if _, err := scan(Ino(inode), size, int64(p.Score)); err != nil {
 				return err
 			}
-			if clean {
-				m.doDeleteFileData_(Ino(inode), size, v)
-			}
 		}
+
+		start += batchSize
 		if len(pairs) < batchSize {
 			break
 		}
 	}
+
 	return nil
 }
 
@@ -3586,12 +3597,12 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	})
 }
 
-func (m *redisMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
+func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		for ino, q := range quotas {
-			field := ino.String()
-			pipe.HIncrBy(ctx, m.dirQuotaUsedSpaceKey(), field, q.newSpace)
-			pipe.HIncrBy(ctx, m.dirQuotaUsedInodesKey(), field, q.newInodes)
+		for _, q := range quotas {
+			field := q.inode.String()
+			pipe.HIncrBy(ctx, m.dirQuotaUsedSpaceKey(), field, q.quota.newSpace)
+			pipe.HIncrBy(ctx, m.dirQuotaUsedInodesKey(), field, q.quota.newInodes)
 		}
 		return nil
 	})

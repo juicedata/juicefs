@@ -155,11 +155,15 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid u
 		}
 		return
 	}
-	err = syscall.EINVAL
 	var attr = &Attr{}
 	if set&meta.SetAttrSize != 0 {
 		err = v.Truncate(ctx, ino, int64(size), fh, attr)
 		if err != 0 {
+			return
+		}
+		if (set &^ (meta.SetAttrSize | meta.SetAttrCtime | meta.SetAttrCtimeNow)) == 0 {
+			v.UpdateLength(ino, attr)
+			entry = &meta.Entry{Inode: ino, Attr: attr}
 			return
 		}
 	}
