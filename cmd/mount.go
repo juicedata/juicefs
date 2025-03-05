@@ -184,27 +184,32 @@ func updateFormat(c *cli.Context) func(*meta.Format) {
 	}
 }
 
+func relPathToAbs(ss []string) []string {
+	for i, d := range ss {
+		if strings.HasPrefix(d, "/") {
+			continue
+		} else if strings.HasPrefix(d, "~/") {
+			if h, err := os.UserHomeDir(); err == nil {
+				ss[i] = filepath.Join(h, d[1:])
+			} else {
+				logger.Fatalf("Expand user home dir of %s: %s", d, err)
+			}
+		} else {
+			if ad, err := filepath.Abs(d); err == nil {
+				ss[i] = ad
+			} else {
+				logger.Fatalf("Find absolute path of %s: %s", d, err)
+			}
+		}
+	}
+	return ss
+}
+
 func cacheDirPathToAbs(c *cli.Context) {
 	if runtime.GOOS != "windows" {
 		if cd := c.String("cache-dir"); cd != "memory" {
 			ds := utils.SplitDir(cd)
-			for i, d := range ds {
-				if strings.HasPrefix(d, "/") {
-					continue
-				} else if strings.HasPrefix(d, "~/") {
-					if h, err := os.UserHomeDir(); err == nil {
-						ds[i] = filepath.Join(h, d[1:])
-					} else {
-						logger.Fatalf("Expand user home dir of %s: %s", d, err)
-					}
-				} else {
-					if ad, err := filepath.Abs(d); err == nil {
-						ds[i] = ad
-					} else {
-						logger.Fatalf("Find absolute path of %s: %s", d, err)
-					}
-				}
-			}
+			ds = relPathToAbs(ds)
 			for i, a := range os.Args {
 				if a == cd || a == "--cache-dir="+cd {
 					os.Args[i] = a[:len(a)-len(cd)] + strings.Join(ds, string(os.PathListSeparator))
@@ -454,6 +459,10 @@ func tellFstabOptions(c *cli.Context) string {
 			opts = append(opts, c.String(s))
 		} else if v := c.Bool(s); v {
 			opts = append(opts, s)
+		} else if s == "cache-dir" {
+			dirs := utils.SplitDir(c.String(s))
+			dirString := strings.Join(relPathToAbs(dirs), string(os.PathListSeparator))
+			opts = append(opts, fmt.Sprintf("%s=%s", s, dirString))
 		} else {
 			opts = append(opts, fmt.Sprintf("%s=%s", s, c.Generic(s)))
 		}
