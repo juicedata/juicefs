@@ -800,6 +800,7 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 		return 0
 	}
 
+	// todo: The order of condition checks in different metadata engines is inconsistent
 	if metaType == "db" {
 		src := m.nodes[srcparent]
 		if src == nil {
