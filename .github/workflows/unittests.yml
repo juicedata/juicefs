@@ -33,7 +33,7 @@ jobs:
       matrix:
         test: [ 'test.meta.core','test.meta.non-core','test.pkg','test.cmd', 'test.fdb' ]
     timeout-minutes: 60
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       MINIO_TEST_BUCKET: 127.0.0.1:9000/testbucket
       MINIO_ACCESS_KEY: testUser

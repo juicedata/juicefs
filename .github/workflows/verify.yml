@@ -4,36 +4,35 @@ on:
   push:
     branches:
       - main
-      - 'release-**'
+      - "release-**"
     paths-ignore:
-      - 'docs/**'
-      - '**.md'
-      - '.github/**'
-      - '!.github/workflows/verify.yml'
+      - "docs/**"
+      - "**.md"
+      - ".github/**"
+      - "!.github/workflows/verify.yml"
   pull_request:
     branches:
-      - 'main'
-      - 'release-**'
+      - "main"
+      - "release-**"
     paths-ignore:
-      - 'docs/**'
-      - '**.md'
-      - '.github/**'
-      - '!.github/workflows/verify.yml'
+      - "docs/**"
+      - "**.md"
+      - ".github/**"
+      - "!.github/workflows/verify.yml"
   workflow_dispatch:
 
 jobs:
   lint:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/setup-go@v3
         with:
-          go-version: 'oldstable'
+          go-version: "oldstable"
 
       - uses: actions/checkout@v3
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
 
-            
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         # if: failure()
@@ -43,60 +42,60 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ['1.20', '1.21', '1.22']
-    runs-on: ubuntu-20.04
+        version: ["1.20", "1.21", "1.22"]
+    runs-on: ubuntu-22.04
     steps:
-    - name: Check out code
-      uses: actions/checkout@v3
+      - name: Check out code
+        uses: actions/checkout@v3
 
-    - name: Set up Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: ${{ matrix.version }}
-        cache: true
-      id: go
-      
-    - name: Install dependencies
-      run: |
-        sudo .github/scripts/apt_install.sh g++-multilib gcc-mingw-w64
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.version }}
+          cache: true
+        id: go
 
-    - name: Build linux target
-      timeout-minutes: 10
-      run: |
-        make
-        ./juicefs version
+      - name: Install dependencies
+        run: |
+          sudo .github/scripts/apt_install.sh g++-multilib gcc-mingw-w64
 
-    - name: build lite
-      timeout-minutes: 10
-      run: | 
-        make juicefs.lite
-        ./juicefs.lite version
+      - name: Build linux target
+        timeout-minutes: 10
+        run: |
+          make
+          ./juicefs version
 
-    - name: build windows
-      timeout-minutes: 10
-      run: make juicefs.exe
+      - name: build lite
+        timeout-minutes: 10
+        run: |
+          make juicefs.lite
+          ./juicefs.lite version
 
-    - name: build libjfs.dll
-      timeout-minutes: 10
-      run: make -C sdk/java/libjfs libjfs.dll
+      - name: build windows
+        timeout-minutes: 10
+        run: make juicefs.exe
 
-    - name: build ceph
-      timeout-minutes: 10
-      run: |
-        sudo .github/scripts/apt_install.sh librados-dev
-        make juicefs.ceph
-        ./juicefs.ceph version
+      - name: build libjfs.dll
+        timeout-minutes: 10
+        run: make -C sdk/java/libjfs libjfs.dll
 
-    - name: build fdb
-      timeout-minutes: 10
-      run: |
-        wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-        sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
-        make juicefs.fdb
-        ./juicefs.fdb version
+      - name: build ceph
+        timeout-minutes: 10
+        run: |
+          sudo .github/scripts/apt_install.sh librados-dev
+          make juicefs.ceph
+          ./juicefs.ceph version
 
-    - name: Setup upterm session
-      if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
-      # if: failure()
-      timeout-minutes: 60
-      uses: lhotari/action-upterm@v1
+      - name: build fdb
+        timeout-minutes: 10
+        run: |
+          wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+          sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+          make juicefs.fdb
+          ./juicefs.fdb version
+
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
