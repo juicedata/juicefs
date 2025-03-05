@@ -924,7 +924,9 @@ func (o *withFSize) Size() int64 {
 	return o.nsize
 }
 
+var dstDelayDelMu sync.Mutex
 var dstDelayDel []string
+var srcDelayDelMu sync.Mutex
 var srcDelayDel []string
 
 func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config *Config) bool {
@@ -937,7 +939,9 @@ func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config 
 	}
 	config.Limit--
 	if dstobj.IsDir() {
+		dstDelayDelMu.Lock()
 		dstDelayDel = append(dstDelayDel, dstobj.Key())
+		dstDelayDelMu.Unlock()
 	} else {
 		tasks <- &withSize{dstobj, markDeleteDst}
 	}
@@ -1037,7 +1041,9 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				tasks <- &withSize{obj, markChecksum}
 			} else if config.DeleteSrc {
 				if obj.IsDir() {
+					srcDelayDelMu.Lock()
 					srcDelayDel = append(srcDelayDel, obj.Key())
+					srcDelayDelMu.Unlock()
 				} else {
 					tasks <- &withSize{obj, markDeleteSrc}
 				}
@@ -1640,6 +1646,9 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	delayDelFunc := func(storage object.ObjectStorage, keys []string) {
+		if len(keys) > 0 {
+			logger.Infof("delete %d dirs from %s", len(keys), storage)
+		}
 		for i := len(keys) - 1; i >= 0; i-- {
 			deleteObj(storage, keys[i], config.Dry)
 		}
