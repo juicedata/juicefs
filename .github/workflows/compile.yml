@@ -119,7 +119,7 @@ jobs:
         timeout-minutes: 90
         working-directory: /jfs
         run: |
-          wget -O /tmp/linux.tar.gz https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.9.tar.gz
+          wget -O /tmp/linux.tar.gz https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.5.tar.gz
           mkdir linux
           tar xzf /tmp//linux.tar.gz -C linux --strip-components 1
           make -C linux defconfig
