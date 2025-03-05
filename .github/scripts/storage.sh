@@ -38,7 +38,7 @@ test_with_fsx(){
     ./juicefs mount $META_URL /jfs -d
     dpkg -s libacl1-dev || sudo .github/scripts/apt_install.sh  libacl1-dev
     [ ! -d secfs.test ] && git clone https://github.com/billziss-gh/secfs.test.git
-    make -C secfs.test >secfs.test-build-integration.log 2>&1
+    make -C secfs.test tools tools/bin/fsx > secfs.test-build-integration.log 2>&1
 	secfs.test/tools/bin/fsx -d 180 -p 10000 -F 100000 /jfs/fsx
 }
 

@@ -29,7 +29,7 @@ on:
 
 jobs:
   build-matrix:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - id: set-matrix
         run: |
