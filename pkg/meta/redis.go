@@ -1405,14 +1405,14 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.HSet(ctx, m.entryKey(parent), name, m.packEntry(_type, *inode))
+			pipe.Set(ctx, m.inodeKey(*inode), m.marshal(attr), 0)
 			if updateParent {
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
-			pipe.Set(ctx, m.inodeKey(*inode), m.marshal(attr), 0)
 			if _type == TypeSymlink {
 				pipe.Set(ctx, m.symKey(*inode), path, 0)
 			}
+			pipe.HSet(ctx, m.entryKey(parent), name, m.packEntry(_type, *inode))
 			if _type == TypeDirectory {
 				field := (*inode).String()
 				pipe.HSet(ctx, m.dirUsedInodesKey(), field, "0")
@@ -1898,8 +1898,8 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			if exchange { // dbuf, tattr are valid
-				pipe.HSet(ctx, m.entryKey(parentSrc), nameSrc, dbuf)
 				pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
+				pipe.HSet(ctx, m.entryKey(parentSrc), nameSrc, dbuf)
 				if parentSrc != parentDst && tattr.Parent == 0 {
 					pipe.HIncrBy(ctx, m.parentKey(dino), parentSrc.String(), 1)
 					pipe.HIncrBy(ctx, m.parentKey(dino), parentDst.String(), -1)
