@@ -4757,6 +4757,7 @@ func (s *redisDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno
 	}
 
 	s.Lock()
+	defer s.Unlock()
 	if s.entries == nil {
 		var entries []*Entry
 		err := s.en.hscan(ctx, s.en.entryKey(s.inode), func(keys []string) error {
@@ -4799,7 +4800,6 @@ func (s *redisDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno
 		}
 		s.indexes = indexes
 	}
-	s.Unlock()
 
 	size := len(s.entries) - offset
 	if size > s.batchNum {
