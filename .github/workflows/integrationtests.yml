@@ -31,7 +31,7 @@ on:
 
 jobs:
   build-matrix:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - id: set-matrix
         run: |
@@ -49,7 +49,7 @@ jobs:
 
   integrationtests:
     timeout-minutes: 120
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: build-matrix
     strategy:
       fail-fast: false
@@ -116,7 +116,8 @@ jobs:
         run: |
           sudo .github/scripts/apt_install.sh  libacl1-dev
           git clone https://github.com/billziss-gh/secfs.test.git
-          make -C secfs.test
+          make -C secfs.test tools tools/bin/fsx
+          make -C secfs.test tools tools/bin/fsracer
   
       - name: Fsx Test
         timeout-minutes: 16
