@@ -126,6 +126,7 @@ jobs:
           sudo .github/scripts/apt_install.sh  libacl1-dev
           git clone https://github.com/billziss-gh/secfs.test.git
           make -C secfs.test tools tools/bin/fsx
+          make -C secfs.test tools tools/bin/fsracer
   
       - name: Fsx Test
         timeout-minutes: 16
