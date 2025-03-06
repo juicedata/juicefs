@@ -201,6 +201,11 @@ jobs:
           if [ "${{matrix.meta}}" == "redis" ]; then
             sudo META=${{matrix.meta}} .github/scripts/command/graceful_upgrade.sh
           fi
+      
+      - name: Test Interface
+        timeout-minutes: 20
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/interface.sh
 
       - name: Log
         if: always()
