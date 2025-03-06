@@ -52,6 +52,8 @@ start_worker
 sed -i 's/bind 127.0.0.1 ::1/bind 0.0.0.0 ::1/g' /etc/redis/redis.conf
 systemctl restart redis
 META_URL=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
+# github runner 22.04 will set /home/runner to 750, which make juicefs binary not accessed by other users.
+chmod 755 /home/runner/
 
 test_sync_without_mount_point() {
     prepare_test
