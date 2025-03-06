@@ -94,8 +94,11 @@ const (
 )
 
 const (
-	FlagImmutable = 1 << iota
+	FlagImmutable = 1 << iota // same as Windows FILE_ATTRIBUTE_READONLY
 	FlagAppend
+	FlagWindowsHidden
+	FlagWindowsSystem
+	FlagWindowsArchive
 )
 
 const (
