@@ -656,8 +656,7 @@ func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayCl
 	host := fuse.NewFileSystemHost(&jfs)
 	jfs.host = host
 	var options = "volname=" + conf.Format.Name
-	// create_umask 022 results in 755 for directories and 644 for files, see https://github.com/winfsp/sshfs-win/issues/14
-	options += ",ExactFileSystemName=JuiceFS,create_umask=022,ThreadCount=16"
+	options += ",ExactFileSystemName=JuiceFS,ThreadCount=16"
 	options += ",DirInfoTimeout=1000,VolumeInfoTimeout=1000,KeepFileCache"
 	options += fmt.Sprintf(",FileInfoTimeout=%d", int(fileCacheTo*1000))
 	options += ",VolumePrefix=/juicefs/" + conf.Format.Name
