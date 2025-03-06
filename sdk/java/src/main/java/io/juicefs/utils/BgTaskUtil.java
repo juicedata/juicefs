@@ -15,13 +15,14 @@
  */
 package io.juicefs.utils;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -32,6 +33,12 @@ public class BgTaskUtil {
   private static final Map<String, ScheduledExecutorService> bgThreadForName = new HashMap<>(); // volName -> threadpool
   private static final Map<String, Object> tasks = new HashMap<>(); // volName|taskName -> running
   private static final Map<String, Set<Long>> runningInstance = new HashMap<>();
+
+  public static void reset() {
+    bgThreadForName.clear();
+    tasks.clear();
+    runningInstance.clear();
+  }
 
   public static Map<String, ScheduledExecutorService> getBgThreadForName() {
     return bgThreadForName;
