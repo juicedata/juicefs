@@ -73,8 +73,8 @@ type node struct {
 	Type         uint8  `xorm:"notnull"`
 	Flags        uint8  `xorm:"notnull"`
 	Mode         uint16 `xorm:"notnull"`
-	Uid          uint32 `xorm:"notnull"`
-	Gid          uint32 `xorm:"notnull"`
+	Uid          uint32 `xorm:"BIGINT notnull"`
+	Gid          uint32 `xorm:"BIGINT notnull"`
 	Atime        int64  `xorm:"notnull"`
 	Mtime        int64  `xorm:"notnull"`
 	Ctime        int64  `xorm:"notnull"`
