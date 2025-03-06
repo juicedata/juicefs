@@ -4793,27 +4793,20 @@ func (s *redisDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno
 			if nEntries <= s.batchNum {
 				err = s.en.fillAttr(ctx, entries)
 			} else {
-				indexCh := make(chan []*Entry, 10)
 				eg := errgroup.Group{}
 				eg.SetLimit(2)
-				eg.Go(func() error {
-					for es := range indexCh {
-						e := s.en.fillAttr(ctx, es)
-						if e != nil {
-							return e
-						}
-					}
-					return nil
-				})
-
 				for i := 0; i < nEntries; i += s.batchNum {
+					var es []*Entry
 					if i+s.batchNum > nEntries {
-						indexCh <- entries[i:]
+						es = entries[i:]
+
 					} else {
-						indexCh <- entries[i : i+s.batchNum]
+						es = entries[i : i+s.batchNum]
 					}
+					eg.Go(func() error {
+						return s.en.fillAttr(ctx, es)
+					})
 				}
-				close(indexCh)
 				err = eg.Wait()
 			}
 			if err != nil {
