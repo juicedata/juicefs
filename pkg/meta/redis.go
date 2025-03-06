@@ -48,6 +48,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/sync/errgroup"
 )
 
 /*
@@ -4788,7 +4789,34 @@ func (s *redisDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno
 			})
 		}
 		if s.plus {
-			if err := s.en.fillAttr(ctx, entries); err != nil {
+			nEntries := len(entries)
+			if nEntries <= s.batchNum {
+				err = s.en.fillAttr(ctx, entries)
+			} else {
+				indexCh := make(chan []*Entry, 10)
+				eg := errgroup.Group{}
+				eg.SetLimit(2)
+				eg.Go(func() error {
+					for es := range indexCh {
+						e := s.en.fillAttr(ctx, es)
+						if e != nil {
+							return e
+						}
+					}
+					return nil
+				})
+
+				for i := 0; i < nEntries; i += s.batchNum {
+					if i+s.batchNum > nEntries {
+						indexCh <- entries[i:]
+					} else {
+						indexCh <- entries[i : i+s.batchNum]
+					}
+				}
+				close(indexCh)
+				err = eg.Wait()
+			}
+			if err != nil {
 				return nil, errno(err)
 			}
 		}
