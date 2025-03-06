@@ -16,5 +16,33 @@
 
 package vfs
 
+import (
+	"syscall"
+
+	"github.com/juicedata/juicefs/pkg/meta"
+)
+
 const O_ACCMODE = 0xff
 const F_UNLCK = 0x01
+
+func (v *VFS) ChFlags(ctx Context, ino Ino, flags uint8) (err syscall.Errno) {
+	defer func() {
+		logit(ctx, "chflags", err, "(%d):%d", ino, flags)
+	}()
+	if IsSpecialNode(ino) {
+		err = syscall.EPERM
+		return
+	}
+
+	err = syscall.EINVAL
+	var attr = &Attr{Flags: flags}
+
+	if ctx.CheckPermission() {
+		if err = v.Meta.CheckSetAttr(ctx, ino, meta.SetAttrFlag, *attr); err != 0 {
+			return
+		}
+	}
+
+	err = v.Meta.SetAttr(ctx, ino, meta.SetAttrFlag, 0, attr)
+	return
+}

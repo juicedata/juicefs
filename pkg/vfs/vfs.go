@@ -512,6 +512,9 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 
 	var inode Ino
 	var attr = &Attr{}
+	if runtime.GOOS == "windows" {
+		attr.Flags = meta.FlagWindowsArchive
+	}
 	err = v.Meta.Create(ctx, parent, name, mode&07777, cumask, flags, &inode, attr)
 	if runtime.GOOS == "darwin" && err == syscall.ENOENT {
 		err = syscall.EACCES
