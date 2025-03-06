@@ -13,6 +13,8 @@ public class BgTaskUtilTest extends TestCase {
   private static final Logger LOG = LoggerFactory.getLogger(BgTaskUtilTest.class);
 
   public void testBgTask() throws Exception {
+    BgTaskUtil.reset();
+
     String[] volNames = new String[]{"fs1", "fs2", "fs3"};
     String[] taskNames = new String[]{"task1", "task2", "task3"};
     int threads = 20;
