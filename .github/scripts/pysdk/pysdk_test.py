@@ -227,11 +227,11 @@ class ExtendedAttributeTests(unittest.TestCase):
         init_xattr = v.listxattr(fn)
         self.assertIsInstance(init_xattr, list)
 
-        v.setxattr(fn, s("user.test"), b"", **kwargs)
+        v.setxattr(fn, s("user.test"), b"a", **kwargs)
         xattr = set(init_xattr)
         xattr.add("user.test")
         self.assertEqual(set(v.listxattr(fn)), xattr)
-        self.assertEqual(v.getxattr(fn, b"user.test", **kwargs), b"")
+        self.assertEqual(v.getxattr(fn, b"user.test", **kwargs), b"a")
         v.setxattr(fn, s("user.test"), b"hello", os.XATTR_REPLACE, **kwargs)
         self.assertEqual(v.getxattr(fn, b"user.test", **kwargs), b"hello")
 
