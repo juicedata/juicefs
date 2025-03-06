@@ -231,7 +231,7 @@ class ExtendedAttributeTests(unittest.TestCase):
         xattr = set(init_xattr)
         xattr.add("user.test")
         self.assertEqual(set(v.listxattr(fn)), xattr)
-        self.assertEqual(v.getxattr(fn, b"user.test", **kwargs), b"")
+        self.assertEqual(v.getxattr(fn, b"user.test", **kwargs), b"a")
         v.setxattr(fn, s("user.test"), b"hello", os.XATTR_REPLACE, **kwargs)
         self.assertEqual(v.getxattr(fn, b"user.test", **kwargs), b"hello")
 
