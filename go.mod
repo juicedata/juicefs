@@ -7,7 +7,7 @@ require (
 	cloud.google.com/go/storage v1.28.1
 	github.com/Arvintian/scs-go-sdk v1.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.0.0
-	github.com/DataDog/zstd v1.5.0
+	github.com/DataDog/zstd v1.5.6
 	github.com/IBM/ibm-cos-sdk-go v1.10.0
 	github.com/agiledragon/gomonkey/v2 v2.6.0
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.7+incompatible
