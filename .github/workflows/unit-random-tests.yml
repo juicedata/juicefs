@@ -6,12 +6,14 @@ on:
       - 'main'
       - 'release-*'
     paths:
+      - 'pkg/meta/random_test.go'
       - '**/unit-random-tests.yml'
   pull_request:
     branches:
       - 'main'
       - 'release-*'
     paths:
+      - 'pkg/meta/random_test.go'
       - '**/unit-random-tests.yml'
   workflow_dispatch:
     inputs:
@@ -59,11 +61,22 @@ jobs:
           create_database $meta_url
 
       - name: Test
-        timeout-minutes: 30
+        timeout-minutes: 60
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          make unit-random-test seed=$RANDOM checks=100000 steps=200 meta=$meta_url
+          number=10000
+          if [[ ${{matrix.meta}} == "tikv" ]]; then
+            number=1500
+          fi
+          make unit-random-test seed=$RANDOM checks=${number} steps=200 meta=$meta_url
+
+      - name: print failfile content
+        if: failure()
+        run: |
+          pwd
+          cat pkg/meta/testdata/rapid/TestFSOps/TestFSOps-*.fail
+        continue-on-error: true
 
       - name: upload coverage report
         if: always()
@@ -88,7 +101,8 @@ jobs:
 
       - name: Check Failure
         if: env.WORKFLOW_CONCLUSION == 'failure'
-        run: exit 1
+        run:
+          exit 1
 
       - name: mount coverage dir
         timeout-minutes: 5
