@@ -19,10 +19,11 @@ package vfs
 import (
 	"syscall"
 
+	"github.com/billziss-gh/cgofuse/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
 )
 
-const O_ACCMODE = 0xff
+const O_ACCMODE = uint32(fuse.O_ACCMODE)
 const F_UNLCK = 0x01
 
 func (v *VFS) ChFlags(ctx Context, ino Ino, flags uint8) (err syscall.Errno) {

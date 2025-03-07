@@ -140,6 +140,34 @@ func errorconv(err syscall.Errno) int {
 	return -int(err)
 }
 
+func fuseFlagToSyscall(flag int) int {
+	var ret int
+
+	if flag&fuse.O_RDONLY != 0 {
+		ret |= syscall.O_RDONLY
+	}
+	if flag&fuse.O_WRONLY != 0 {
+		ret |= syscall.O_WRONLY
+	}
+	if flag&fuse.O_RDWR != 0 {
+		ret |= syscall.O_RDWR
+	}
+	if flag&fuse.O_APPEND != 0 {
+		ret |= syscall.O_APPEND
+	}
+	if flag&fuse.O_CREAT != 0 {
+		ret |= syscall.O_CREAT
+	}
+	if flag&fuse.O_EXCL != 0 {
+		ret |= syscall.O_EXCL
+	}
+	if flag&fuse.O_TRUNC != 0 {
+		ret |= syscall.O_TRUNC
+	}
+	return ret
+
+}
+
 // Mknod creates a file node.
 func (j *juice) Mknod(p string, mode uint32, dev uint64) (e int) {
 	ctx := j.newContext()
@@ -278,7 +306,8 @@ func (j *juice) Create(p string, flags int, mode uint32) (e int, fh uint64) {
 		e = errorconv(err)
 		return
 	}
-	entry, fh, errno := j.vfs.Create(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(flags|syscall.O_EXCL))
+
+	entry, fh, errno := j.vfs.Create(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(fuseFlagToSyscall(flags)))
 	if errno == 0 {
 		j.Lock()
 		j.handlers[fh] = entry.Inode
@@ -292,7 +321,7 @@ func (j *juice) Create(p string, flags int, mode uint32) (e int, fh uint64) {
 // The flags are a combination of the fuse.O_* constants.
 func (j *juice) Open(path string, flags int) (e int, fh uint64) {
 	var fi fuse.FileInfo_t
-	fi.Flags = flags
+	fi.Flags = fuseFlagToSyscall(flags)
 	e = j.OpenEx(path, &fi)
 	fh = fi.Fh
 	return
@@ -319,7 +348,7 @@ func (j *juice) OpenEx(path string, fi *fuse.FileInfo_t) (e int) {
 		ino = f.Inode()
 	}
 
-	entry, fh, errno := j.vfs.Open(ctx, ino, uint32(fi.Flags))
+	entry, fh, errno := j.vfs.Open(ctx, ino, uint32(fuseFlagToSyscall(fi.Flags)))
 	if errno == 0 {
 		fi.Fh = fh
 		if vfs.IsSpecialNode(ino) {
