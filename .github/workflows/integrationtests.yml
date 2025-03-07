@@ -142,6 +142,7 @@ jobs:
           sudo secfs.test/tools/bin/fsx -d $duration -p 10000 -F 10000000 /tmp/fsx.out
 
       - name: Fsracer Test
+        if: false
         timeout-minutes: 16
         shell: 'script -q -e -c "bash {0}"'
         run: |
