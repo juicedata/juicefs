@@ -32,7 +32,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 	owner := int64(owner_)
 	if ltype == F_UNLCK {
 		return errno(m.txn(func(s *xorm.Session) error {
-			_, err := s.Where("inode = ? and owner = ? and sid = ?", inode, owner, m.sid).Delete(&flock{})
+			_, err := s.MustCols("inode", "owner", "sid").Delete(&flock{Inode: inode, Owner: owner, Sid: m.sid})
 			return err
 		}, inode))
 	}
@@ -76,7 +76,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 			var n int64
 			if ok {
 				if flk.Ltype != typec {
-					n, err = s.Where("inode = ? and owner = ? and sid = ?", inode, owner, m.sid).Cols("Ltype").Update(&flock{Ltype: typec}, &flock{})
+					n, err = s.MustCols("inode", "owner", "sid").Cols("Ltype").Update(&flock{Ltype: typec}, &flock{Inode: inode, Owner: owner, Sid: m.sid})
 				} else {
 					n = 1
 				}
@@ -168,8 +168,8 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 				return err
 			}
 			if ltype == F_UNLCK {
-				var l = plock{}
-				ok, err := s.ForUpdate().Where("inode = ? and owner = ? and sid = ?", inode, owner, m.sid).Get(&l)
+				var l = plock{Inode: inode, Owner: owner, Sid: m.sid}
+				ok, err := s.ForUpdate().MustCols("inode", "owner", "sid").Get(&l)
 				if err != nil {
 					return err
 				}
@@ -182,9 +182,9 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 				}
 				ls = updateLocks(ls, lock)
 				if len(ls) == 0 {
-					_, err = s.Where("inode = ? and owner = ? and sid = ?", inode, owner, m.sid).Delete(&plock{})
+					_, err = s.MustCols("inode", "owner", "sid").Delete(&plock{Inode: inode, Owner: owner, Sid: m.sid})
 				} else {
-					_, err = s.Cols("records").Where("inode = ? and owner = ? and sid = ?", inode, owner, m.sid).Update(plock{Records: dumpLocks(ls)}, &plock{})
+					_, err = s.MustCols("inode", "owner", "sid").Cols("records").Update(plock{Records: dumpLocks(ls)}, l)
 				}
 				return err
 			}
@@ -219,7 +219,8 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 			records := dumpLocks(ls)
 			if len(locks[lkey]) > 0 {
 				if !bytes.Equal(locks[lkey], records) {
-					n, err = s.Cols("records").Where("inode = ? and owner = ? and sid = ?", inode, owner, m.sid).Update(plock{Records: records}, &plock{})
+					n, err = s.MustCols("inode", "owner", "sid").Cols("records").Update(plock{Records: records},
+						&plock{Inode: inode, Sid: m.sid, Owner: owner})
 				} else {
 					n = 1
 				}
