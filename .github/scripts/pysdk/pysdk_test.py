@@ -109,6 +109,7 @@ class ChownFileTests(unittest.TestCase):
         stat = v.stat(TESTFN)
         uid = stat.st_uid
         gid = stat.st_gid
+        print(f'uid={uid}, gid={gid}')
         for value in (-1.0, -1j, fractions.Fraction(-2, 2)):
             self.assertRaises(TypeError, v.chown, TESTFN, value, gid)
             self.assertRaises(TypeError, v.chown, TESTFN, uid, value)
