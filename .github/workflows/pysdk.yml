@@ -163,7 +163,13 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/fs.py 
+          sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/fs.py 2>&1 | tee fsrand.log
+          exit ${PIPESTATUS[0]}
+
+      - name: check fsrand.log
+        if: always()
+        run: |
+          sudo tail -n 500 fsrand.log
 
       - name: Upload example database
         uses: actions/upload-artifact@v4
@@ -172,6 +178,7 @@ jobs:
           include-hidden-files: true
           name: hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
+          overwrite: true
 
       - name: upload coverage report
         timeout-minutes: 5
