@@ -9,7 +9,7 @@ on:
     - '**/hypo/fs_op.py'
     - '**/hypo/fs.py'
     - '**/hypo/fs_sdk_test.py'
-    - '**/test_pysdk.py'
+    - '**/pysdk_test.py'
     - '**/juicefs.py'
     - '**/pysdk.yml'
   pull_request:
@@ -20,7 +20,7 @@ on:
     - '**/hypo/fs_op.py'
     - '**/hypo/fs.py'
     - '**/hypo/fs_sdk_test.py'
-    - '**/test_pysdk.py'
+    - '**/pysdk_test.py'
     - '**/juicefs.py'
     - '**/pysdk.yml'
   schedule:
