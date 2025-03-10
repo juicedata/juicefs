@@ -20,11 +20,20 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
-func getUmask(in *fuse.MknodIn) uint16 {
+func getCreateUmask(mask uint32, defMask uint16) uint16 {
+	if defMask != 0xFFFF {
+		return defMask
+	}
 	return 0
 }
 
-func getCreateUmask(in *fuse.CreateIn) uint16 {
+func getUmask(mask uint32, defMask uint16, isDir bool) uint16 {
+	if defMask != 0xFFFF {
+		return defMask
+	}
+	if isDir {
+		return uint16(mask)
+	}
 	return 0
 }
 
