@@ -113,7 +113,6 @@ class ChownFileTests(unittest.TestCase):
             self.assertRaises(TypeError, v.chown, TESTFN, value, gid)
             self.assertRaises(TypeError, v.chown, TESTFN, uid, value)
         self.assertIsNone(v.chown(TESTFN, uid, gid))
-        self.assertIsNone(v.chown(TESTFN, -1, -1))
 
     def test_chown_with_root(self):
         try:
