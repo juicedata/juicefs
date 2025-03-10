@@ -19,6 +19,7 @@ package utils
 import (
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/urfave/cli/v2"
 )
@@ -111,4 +112,11 @@ func Mbps(val int64) string {
 		return strconv.FormatFloat(v/1e6, 'f', 1, 64) + " Tbps"
 	}
 	return strconv.FormatFloat(v/1e9, 'f', 1, 64) + " Pbps"
+}
+
+func ParseMode(mode string) (uint64, error) {
+	if strings.HasPrefix(mode, "0") {
+		return strconv.ParseUint(mode, 8, 16)
+	}
+	return strconv.ParseUint(mode, 10, 16)
 }
