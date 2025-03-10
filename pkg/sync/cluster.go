@@ -243,12 +243,12 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 				return
 			}
 			rpath := filepath.Join("/tmp", filepath.Base(path))
-			cmd := exec.Command("rsync", "-au", "-e", "ssh -o PasswordAuthentication=no", path, host+":"+rpath)
+			cmd := exec.Command("rsync", "-au", "-e", "ssh -o StrictHostKeyChecking=no", "-e", "ssh -o PasswordAuthentication=no", path, host+":"+rpath)
 			output, err := cmd.CombinedOutput()
 			logger.Debugf("exec: %s,err: %s", cmd.String(), string(output))
 			if err != nil {
 				// fallback to scp
-				cmd = exec.Command("scp", "-o", "PasswordAuthentication=no StrictHostKeyChecking=no", path, host+":"+rpath)
+				cmd = exec.Command("scp", "-o", "StrictHostKeyChecking=no", "-o", "PasswordAuthentication=no", path, host+":"+rpath)
 				output, err = cmd.CombinedOutput()
 				logger.Debugf("exec: %s,err: %s", cmd.String(), string(output))
 			}
