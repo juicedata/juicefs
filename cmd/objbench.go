@@ -76,6 +76,10 @@ Details: https://juicefs.com/docs/community/performance_evaluation_guide#juicefs
 				Name:  "session-token",
 				Usage: "session token for object storage",
 			},
+			&cli.IntFlag{
+				Name:  "shards",
+				Usage: "store the blocks into N buckets by hash of key",
+			},
 			&cli.StringFlag{
 				Name:  "block-size",
 				Value: "4M",
@@ -160,7 +164,14 @@ func objbench(ctx *cli.Context) error {
 			logger.Fatalf("invalid path: %s", err)
 		}
 	}
-	blobOrigin, err := object.CreateStorage(storageType, endpoint, ak, sk, token)
+	var blobOrigin object.ObjectStorage
+	var err error
+	shards := ctx.Int("shards")
+	if shards > 1 {
+		blobOrigin, err = object.NewSharded(storageType, endpoint, ak, sk, token, shards)
+	} else {
+		blobOrigin, err = object.CreateStorage(storageType, endpoint, ak, sk, token)
+	}
 	if err != nil {
 		logger.Fatalf("create storage failed: %v", err)
 	}
