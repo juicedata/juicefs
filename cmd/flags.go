@@ -73,6 +73,8 @@ func addCategory(f cli.Flag, cat string) {
 		ff.Category = cat
 	case *cli.IntFlag:
 		ff.Category = cat
+	case *cli.UintFlag:
+		ff.Category = cat
 	case *cli.Int64Flag:
 		ff.Category = cat
 	case *cli.Uint64Flag:
@@ -177,9 +179,10 @@ func dataCacheFlags() []cli.Flag {
 			Value: "300M",
 			Usage: "total read/write buffering in MiB",
 		},
-		&cli.StringFlag{
-			Name:  "max-readahead",
-			Usage: "max buffering for read ahead in MiB per read session",
+		&cli.UintFlag{
+			Name:  "max-readahead-blocks",
+			Value: 8,
+			Usage: "max buffering blocks for read ahead per read session",
 		},
 		&cli.IntFlag{
 			Name:  "prefetch",
