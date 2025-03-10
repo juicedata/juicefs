@@ -1650,6 +1650,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			logger.Infof("delete %d dirs from %s", len(keys), storage)
 		}
 		for i := len(keys) - 1; i >= 0; i-- {
+			handled.Increment()
 			deleteObj(storage, keys[i], config.Dry)
 		}
 	}
