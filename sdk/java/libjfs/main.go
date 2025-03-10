@@ -1265,7 +1265,6 @@ func jfs_chown(pid int64, h int64, cpath *C.char, uid uint32, gid uint32) int32 
 	if err != 0 {
 		return errno(err)
 	}
-	logger.Infof("jfs_chown path=%s uid=%d gid=%d", C.GoString(cpath), uid, gid)
 	return errno(f.Chown(w.withPid(pid), uid, gid))
 }
 

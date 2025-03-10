@@ -267,7 +267,6 @@ class Client(object):
 
     def chown(self, path, uid, gid):
         """Change the owner and group id of a file."""
-        print(f"chown: path={path}, uid={uid}, gid={gid}")
         self.lib.jfs_chown(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint32(uid), c_uint32(gid))
 
     def link(self, src, dst):
