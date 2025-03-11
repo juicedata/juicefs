@@ -32,6 +32,7 @@ import (
 func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
 	ikey := r.flockKey(inode)
 	lkey := r.ownerKey(owner)
+	ctx = ctx.WithValue(txMethodKey{}, "Flock"+strconv.Itoa(int(ltype)))
 	if ltype == F_UNLCK {
 		return errno(r.txn(ctx, func(tx *redis.Tx) error {
 			lkeys, err := tx.HKeys(ctx, ikey).Result()
@@ -135,6 +136,7 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
 	ikey := r.plockKey(inode)
 	lkey := r.ownerKey(owner)
+	ctx = ctx.WithValue(txMethodKey{}, "Setlk"+strconv.Itoa(int(ltype)))
 	var err error
 	lock := plockRecord{ltype, pid, start, end}
 	for {

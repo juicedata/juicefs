@@ -259,7 +259,7 @@ type baseMeta struct {
 	totalSpaceG  prometheus.Gauge
 	totalInodesG prometheus.Gauge
 	txDist       prometheus.Histogram
-	txRestart    prometheus.Counter
+	txRestart    *prometheus.CounterVec
 	opDist       prometheus.Histogram
 	opCount      *prometheus.CounterVec
 	opDuration   *prometheus.CounterVec
@@ -308,10 +308,10 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			Help:    "Transactions latency distributions.",
 			Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
 		}),
-		txRestart: prometheus.NewCounter(prometheus.CounterOpts{
+		txRestart: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "transaction_restart",
 			Help: "The number of times a transaction is restarted.",
-		}),
+		}, []string{"method"}),
 		opDist: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Name:    "meta_ops_durations_histogram_seconds",
 			Help:    "Operation latency distributions.",
