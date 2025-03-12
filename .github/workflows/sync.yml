@@ -66,7 +66,7 @@ jobs:
         uses: ./.github/actions/build
 
       - name: Test Sync
-        timeout-minutes: 60
+        timeout-minutes: 20
         run: |
           if [[ "${{matrix.type}}" == 'sync' ]]; then
             sudo GOCOVERDIR=$(pwd)/cover META=redis .github/scripts/sync/sync.sh 
@@ -75,6 +75,8 @@ jobs:
           elif [[ "${{matrix.type}}" == 'sync_minio' ]]; then
             sudo GOCOVERDIR=$(pwd)/cover META=redis .github/scripts/sync/sync_minio.sh 
           elif [[ "${{matrix.type}}" == 'sync_cluster' ]]; then
+            wget https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test
+            chmod +x random-test
             types=("ecdsa"  "ed25519"  "rsa")
             random_type=${types[$RANDOM % ${#types[@]}]}
             sudo CI=true GOCOVERDIR=$(pwd)/cover META=redis KEY_TYPE=$random_type .github/scripts/sync/sync_cluster.sh
