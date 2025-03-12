@@ -1375,6 +1375,10 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 }
 
 func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config) error {
+	config.concurrentList <- 1
+	defer func() {
+		<-config.concurrentList
+	}()
 	if config.Limit == 1 && len(config.rules) == 0 {
 		// fast path for single key
 		obj, err := src.Head(config.Start)
@@ -1433,16 +1437,12 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 			wg.Add(1)
 			go func(prefix string) {
 				defer wg.Done()
-				defer func() {
-					<-config.concurrentList
-				}()
 				err := startProducer(tasks, src, dst, prefix, listDepth-1, config)
 				if err != nil {
 					logger.Errorf("list prefix %s: %s", prefix, err)
 					failed.Increment()
 				}
 			}(c.Key())
-			config.concurrentList <- 1
 		}
 	}()
 
@@ -1478,7 +1478,9 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	}
 	close(commonPrefix)
 
+	<-config.concurrentList
 	<-done
+	config.concurrentList <- 1
 	return nil
 }
 
