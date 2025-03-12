@@ -457,6 +457,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	opt.SingleThreaded = false
 	opt.MaxBackground = 50
 	opt.EnableLocks = true
+	opt.EnableSymlinkCaching = conf.FuseOpts.EnableSymlinkCaching
 	opt.EnableAcl = conf.Format.EnableACL
 	opt.DontUmask = conf.Format.EnableACL
 	opt.DisableXAttrs = !xattrs
@@ -534,6 +535,7 @@ func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, m
 	opt.SingleThreaded = mt == 0
 	opt.MaxBackground = 200
 	opt.EnableLocks = true
+	opt.EnableSymlinkCaching = true
 	opt.DisableXAttrs = noxattr
 	opt.EnableAcl = !noacl
 	opt.IgnoreSecurityLabels = false
