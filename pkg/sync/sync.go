@@ -1536,11 +1536,11 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	syncExitFunc := func() error {
-		pending.SetCurrent(0)
-		total := handled.GetTotal()
-		progress.Done()
-
 		if config.Manager == "" {
+			pending.SetCurrent(0)
+			total := handled.GetTotal()
+			progress.Done()
+
 			msg := fmt.Sprintf("Found: %d, excluded: %d (%s), skipped: %d (%s), copied: %d (%s), extra: %d (%s)", total,
 				excluded.Current(), formatSize(excludedBytes.Current()),
 				skipped.Current(), formatSize(skippedBytes.Current()),
@@ -1559,14 +1559,15 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				msg += fmt.Sprintf(", lost: %d", total-handled.Current())
 			}
 			logger.Info(msg)
+
+			if failed != nil {
+				if n := failed.Current(); n > 0 || total > handled.Current()+extra.Current() {
+					return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
+				}
+			}
 		} else {
 			sendStats(config.Manager)
 			logger.Infof("This worker process has already completed its tasks")
-		}
-		if failed != nil {
-			if n := failed.Current(); n > 0 || total > handled.Current()+extra.Current() {
-				return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
-			}
 		}
 		return nil
 	}
