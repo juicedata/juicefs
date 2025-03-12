@@ -810,14 +810,20 @@ func (m *kvMeta) txn(ctx context.Context, f func(tx *kvTxn) error, inodes ...Ino
 	start := time.Now()
 	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
 	defer m.txBatchLock(inodes...)()
-	var lastErr error
+	var (
+		lastErr error
+		method  string
+	)
 	for i := 0; i < 50; i++ {
 		err := m.client.txn(ctx, f, i)
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
 		}
 		if err != nil && m.shouldRetry(err) {
-			m.txRestart.Add(1)
+			if method == "" {
+				method = callerName(ctx) // lazy evaluation
+			}
+			m.txRestart.WithLabelValues(method).Add(1)
 			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
 			lastErr = err
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
@@ -846,7 +852,7 @@ func (m *kvMeta) getCounter(name string) (int64, error) {
 func (m *kvMeta) incrCounter(name string, value int64) (int64, error) {
 	var new int64
 	key := m.counterKey(name)
-	err := m.txn(Background(), func(tx *kvTxn) error {
+	err := m.txn(Background().WithValue(txMethodKey{}, "incrCounter:"+name), func(tx *kvTxn) error {
 		new = tx.incrBy(key, value)
 		return nil
 	})
@@ -856,7 +862,7 @@ func (m *kvMeta) incrCounter(name string, value int64) (int64, error) {
 func (m *kvMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 	var changed bool
 	key := m.counterKey(name)
-	err := m.txn(Background(), func(tx *kvTxn) error {
+	err := m.txn(Background().WithValue(txMethodKey{}, "setIfSmall:"+name), func(tx *kvTxn) error {
 		changed = false
 		if m.parseInt64(tx.get(key)) > value-diff {
 			return nil

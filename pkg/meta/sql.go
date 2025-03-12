@@ -919,7 +919,10 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 	}
 
 	defer m.txBatchLock(inodes...)()
-	var lastErr error
+	var (
+		lastErr error
+		method  string
+	)
 	for i := 0; i < 50; i++ {
 		_, err := m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
 			return nil, f(s)
@@ -928,13 +931,16 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 			err = nil
 		}
 		if err != nil && m.shouldRetry(err) {
-			m.txRestart.Add(1)
+			if method == "" {
+				method = callerName(context.TODO()) // lazy evaluation
+			}
+			m.txRestart.WithLabelValues(method).Add(1)
 			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
 			lastErr = err
 			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
 		} else if err == nil && i > 1 {
-			logger.Warnf("Transaction succeeded after %d tries (%s), inodes: %v, last error: %s", i+1, time.Since(start), inodes, lastErr)
+			logger.Warnf("Transaction succeeded after %d tries (%s), inodes: %v, method: %s, last error: %s", i+1, time.Since(start), inodes, method, lastErr)
 		}
 		return err
 	}
@@ -960,7 +966,10 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 	} else {
 		maxRetry = val.(int)
 	}
-	var lastErr error
+	var (
+		lastErr error
+		method  string
+	)
 	for i := 0; i < maxRetry; i++ {
 		select {
 		case <-ctx.Done():
@@ -986,13 +995,16 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 		}
 		_ = s.Rollback()
 		if err != nil && m.shouldRetry(err) {
-			m.txRestart.Add(1)
+			if method == "" {
+				method = callerName(ctx) // lazy evaluation
+			}
+			m.txRestart.WithLabelValues(method).Add(1)
 			logger.Debugf("Read transaction failed, restart it (tried %d): %s", i+1, err)
 			lastErr = err
 			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
 		} else if err == nil && i > 1 {
-			logger.Warnf("Read transaction succeeded after %d tries (%s), last error: %s", i+1, time.Since(start), lastErr)
+			logger.Warnf("Read transaction succeeded after %d tries (%s), method: %s, last error: %s", i+1, time.Since(start), method, lastErr)
 		}
 		return err
 	}
@@ -1006,8 +1018,11 @@ func (m *dbMeta) simpleTxn(ctx context.Context, f func(s *xorm.Session) error) e
 	s := m.spool.Get().(*xorm.Session)
 	defer m.spool.Put(s)
 
-	var maxRetry int = 50
-	var lastErr error
+	var (
+		maxRetry = 50
+		lastErr  error
+		method   string
+	)
 	for i := 0; i < maxRetry; i++ {
 		select {
 		case <-ctx.Done():
@@ -1019,13 +1034,16 @@ func (m *dbMeta) simpleTxn(ctx context.Context, f func(s *xorm.Session) error) e
 			err = nil
 		}
 		if err != nil && m.shouldRetry(err) {
-			m.txRestart.Add(1)
+			if method == "" {
+				method = callerName(ctx) // lazy evaluation
+			}
+			m.txRestart.WithLabelValues(method).Add(1)
 			logger.Debugf("Read transaction failed, restart it (tried %d): %s", i+1, err)
 			lastErr = err
 			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
 		} else if err == nil && i > 1 {
-			logger.Warnf("simple transaction succeeded after %d tries (%s), last error: %s", i+1, time.Since(start), lastErr)
+			logger.Warnf("Simple transaction succeeded after %d tries (%s), method: %s, last error: %s", i+1, time.Since(start), method, lastErr)
 		}
 		return err
 	}
