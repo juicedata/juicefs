@@ -46,7 +46,7 @@ func TestCompact(t *testing.T) {
 			buf[j] = byte(i)
 		}
 		cid := uint64(i)
-		w := store.NewWriter(cid, false)
+		w := store.NewWriter(cid)
 		if n, e := w.WriteAt(buf, 0); e != nil {
 			t.Fatalf("write chunk %d: %s", cid, e)
 		} else {
