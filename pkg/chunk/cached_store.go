@@ -274,13 +274,15 @@ type wSlice struct {
 	errors      chan error
 	uploadError error
 	pendings    int
+	forceUpload bool // force upload to object storage
 }
 
-func sliceForWrite(id uint64, store *cachedStore) *wSlice {
+func sliceForWrite(id uint64, store *cachedStore, forceUpload bool) *wSlice {
 	return &wSlice{
-		rSlice: rSlice{id, 0, store},
-		pages:  make([][]*Page, chunkSize/store.conf.BlockSize),
-		errors: make(chan error, chunkSize/store.conf.BlockSize),
+		rSlice:      rSlice{id, 0, store},
+		pages:       make([][]*Page, chunkSize/store.conf.BlockSize),
+		errors:      make(chan error, chunkSize/store.conf.BlockSize),
+		forceUpload: forceUpload,
 	}
 }
 
@@ -444,7 +446,7 @@ func (s *wSlice) upload(indx int) {
 		if off != blen {
 			panic(fmt.Sprintf("block length does not match: %v != %v", off, blen))
 		}
-		if s.store.conf.Writeback {
+		if !s.forceUpload && s.store.conf.Writeback {
 			stagingPath := "unknown"
 			stageFailed := false
 			block.Acquire()
@@ -1099,8 +1101,8 @@ func (store *cachedStore) NewReader(id uint64, length int) Reader {
 	return sliceForRead(id, length, store)
 }
 
-func (store *cachedStore) NewWriter(id uint64) Writer {
-	return sliceForWrite(id, store)
+func (store *cachedStore) NewWriter(id uint64, forceUpload bool) Writer {
+	return sliceForWrite(id, store, forceUpload)
 }
 
 func (store *cachedStore) Remove(id uint64, length int) error {

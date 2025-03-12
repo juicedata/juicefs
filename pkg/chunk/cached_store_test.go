@@ -31,7 +31,7 @@ import (
 )
 
 func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
-	w := store.NewWriter(sliceId)
+	w := store.NewWriter(sliceId, false)
 	buf := bytes.Repeat([]byte{0x41}, size)
 	if _, err := w.WriteAt(buf, 0); err != nil {
 		return err
@@ -40,7 +40,7 @@ func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
 }
 
 func testStore(t *testing.T, store ChunkStore) {
-	writer := store.NewWriter(1)
+	writer := store.NewWriter(1, false)
 	data := []byte("hello world")
 	if n, err := writer.WriteAt(data, 0); n != 11 || err != nil {
 		t.Fatalf("write fail: %d %s", n, err)
@@ -194,6 +194,55 @@ func TestStoreAsync(t *testing.T) {
 	testStore(t, store)
 }
 
+func TestForceUpload(t *testing.T) {
+	blob, _ := object.CreateStorage("mem", "", "", "", "")
+	config := defaultConf
+	_ = os.RemoveAll(config.CacheDir)
+	config.Writeback = true
+	config.UploadDelay = time.Hour
+	config.BlockSize = 4 << 20
+	store := NewCachedStore(blob, config, nil)
+	cleanCache := func() {
+		rSlice := sliceForRead(1, 1024, store.(*cachedStore))
+		keys := rSlice.keys()
+		for _, k := range keys {
+			store.(*cachedStore).bcache.remove(k, true)
+		}
+	}
+	readSlice := func(id uint64, length int) error {
+		p := NewPage(make([]byte, length))
+		r := store.NewReader(id, length)
+		_, err := r.ReadAt(context.Background(), p, 0)
+		return err
+	}
+
+	// write to cache
+	w := store.NewWriter(1, false)
+	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
+		t.Fatalf("write fail: %s", err)
+	}
+	if err := w.Finish(1024); err != nil {
+		t.Fatalf("write fail: %s", err)
+	}
+	cleanCache()
+	if readSlice(1, 1024) == nil {
+		t.Fatalf("read slice 1 should fail")
+	}
+
+	// write to os
+	w = store.NewWriter(2, true)
+	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
+		t.Fatalf("write fail: %s", err)
+	}
+	if err := w.Finish(1024); err != nil {
+		t.Fatalf("write fail: %s", err)
+	}
+	cleanCache()
+	if readSlice(2, 1024) != nil {
+		t.Fatalf("check slice 2 should success")
+	}
+}
+
 func TestStoreDelayed(t *testing.T) {
 	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf
@@ -291,7 +340,7 @@ func BenchmarkCachedRead(b *testing.B) {
 	config := defaultConf
 	config.BlockSize = 4 << 20
 	store := NewCachedStore(blob, config, nil)
-	w := store.NewWriter(1)
+	w := store.NewWriter(1, false)
 	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
 		b.Fatalf("write fail: %s", err)
 	}
@@ -315,7 +364,7 @@ func BenchmarkUncachedRead(b *testing.B) {
 	config.BlockSize = 4 << 20
 	config.CacheSize = 0
 	store := NewCachedStore(blob, config, nil)
-	w := store.NewWriter(2)
+	w := store.NewWriter(2, false)
 	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
 		b.Fatalf("write fail: %s", err)
 	}
