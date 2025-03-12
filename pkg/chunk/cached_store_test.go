@@ -31,7 +31,7 @@ import (
 )
 
 func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
-	w := store.NewWriter(sliceId, false)
+	w := store.NewWriter(sliceId)
 	buf := bytes.Repeat([]byte{0x41}, size)
 	if _, err := w.WriteAt(buf, 0); err != nil {
 		return err
@@ -40,7 +40,7 @@ func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
 }
 
 func testStore(t *testing.T, store ChunkStore) {
-	writer := store.NewWriter(1, false)
+	writer := store.NewWriter(1)
 	data := []byte("hello world")
 	if n, err := writer.WriteAt(data, 0); n != 11 || err != nil {
 		t.Fatalf("write fail: %d %s", n, err)
@@ -217,7 +217,7 @@ func TestForceUpload(t *testing.T) {
 	}
 
 	// write to cache
-	w := store.NewWriter(1, false)
+	w := store.NewWriter(1)
 	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
 		t.Fatalf("write fail: %s", err)
 	}
@@ -230,7 +230,8 @@ func TestForceUpload(t *testing.T) {
 	}
 
 	// write to os
-	w = store.NewWriter(2, true)
+	w = store.NewWriter(2)
+	w.SetWriteback(false)
 	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
 		t.Fatalf("write fail: %s", err)
 	}
@@ -340,7 +341,7 @@ func BenchmarkCachedRead(b *testing.B) {
 	config := defaultConf
 	config.BlockSize = 4 << 20
 	store := NewCachedStore(blob, config, nil)
-	w := store.NewWriter(1, false)
+	w := store.NewWriter(1)
 	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
 		b.Fatalf("write fail: %s", err)
 	}
@@ -364,7 +365,7 @@ func BenchmarkUncachedRead(b *testing.B) {
 	config.BlockSize = 4 << 20
 	config.CacheSize = 0
 	store := NewCachedStore(blob, config, nil)
-	w := store.NewWriter(2, false)
+	w := store.NewWriter(2)
 	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
 		b.Fatalf("write fail: %s", err)
 	}

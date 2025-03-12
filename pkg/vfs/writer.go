@@ -261,7 +261,7 @@ func (f *fileWriter) writeChunk(ctx meta.Context, indx uint32, off uint32, data 
 		s = &sliceWriter{
 			chunk:   c,
 			off:     off,
-			writer:  f.w.store.NewWriter(0, false),
+			writer:  f.w.store.NewWriter(0),
 			notify:  utils.NewCond(&f.Mutex),
 			started: time.Now(),
 		}
