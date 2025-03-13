@@ -59,9 +59,9 @@ jobs:
 
       - name: Install WinFsp
         run: |
-          msiexec.exe /jm "C:\wfsp\winfsp.msi" /qn /norestart /Lw "C:\wfsp\install.log" INSTALLLEVEL=32767
-          #ls "C:\Program Files (x86)\WinFsp"
-          #ls "C:\Program Files (x86)\WinFsp\bin"
+          Start-Process msiexec.exe -Wait -ArgumentList '/i /qn /l*v C:\wfsp\install.log C:\wfsp\winfsp.msi'
+          ls "C:\Program Files (x86)\WinFsp"
+          ls "C:\Program Files (x86)\WinFsp\bin"
 
       - name: Set up Include Headers
         run: |
