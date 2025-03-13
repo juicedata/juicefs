@@ -145,7 +145,7 @@ jobs:
       
       - name: Run Winfsp Test
         run: |
-          cd "Z:\"
+          cd Z:
           & "C:\Program Files (x86)\WinFsp\bin\winfsp-tests-x64.exe" --fuse-external --resilient --case-insensitive-cmp
       
       - name: Download winfstest
