@@ -128,7 +128,7 @@ jobs:
       - name: Juicefs Mount
         run: |
           $env:PATH+=";C:\Program Files (x86)\WinFsp\bin"
-          ./juicefs.exe mount -d redis://127.0.0.1:6379/1 myjfs z:
+          ./juicefs.exe mount -d redis://127.0.0.1:6379/1 z:
 
       - name: Test Juicefs
         run: |
