@@ -110,10 +110,6 @@ jobs:
         run: |
           choco install python2 -y
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
-
       - name: Juicefs Format
         run: |
           ./juicefs.exe format redis://127.0.0.1:6379/1 myjfs
@@ -157,14 +153,9 @@ jobs:
           ls fsx.exe
           ./fsx.exe -d 180 -p 10000 -F 100000 fsxtest
           
-
-        
-
-
-
-
-
-          
+      - name: Setup tmate session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+        uses: mxschmitt/action-tmate@v3
 
       #there is go-fuse compile error with unit test
       #- name: Unit Test
