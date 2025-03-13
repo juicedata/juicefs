@@ -156,8 +156,8 @@ func (m *fsMachine) Init(t *rapid.T) {
 		metaType = "db"
 	case *redisMeta:
 		metaType = "redis"
-	case tkvClient:
-		metaType = "kv"
+	case *kvMeta:
+		metaType = "tkv"
 	}
 
 	tCounter++
@@ -875,6 +875,17 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 	srcnode := src.children[srcname]
 	if srcnode == nil {
 		return syscall.ENOENT
+	}
+
+	if metaType == "tkv" {
+		c := dst.children[dstname]
+		if c != nil {
+			if srcnode._type == TypeDirectory && c._type != TypeDirectory {
+				return syscall.ENOTDIR
+			} else if srcnode._type != TypeDirectory && c._type == TypeDirectory {
+				return syscall.EISDIR
+			}
+		}
 	}
 
 	if !src.stickyAccess(srcnode, m.ctx.Uid()) {
