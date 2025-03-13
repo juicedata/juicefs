@@ -1472,7 +1472,10 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		if err := tx.Watch(ctx, m.inodeKey(inode)).Err(); err != nil {
 			return err
 		}
-		rs, _ := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
+		rs, err := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
+		if err != nil {
+			return err
+		}
 		if rs[0] == nil {
 			return redis.Nil
 		}
@@ -1610,7 +1613,10 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, s
 			return err
 		}
 
-		rs, _ := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
+		rs, err := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
+		if err != nil {
+			return err
+		}
 		if rs[0] == nil {
 			return redis.Nil
 		}
@@ -1768,7 +1774,10 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if dino > 0 {
 			keys = append(keys, m.inodeKey(dino))
 		}
-		rs, _ := tx.MGet(ctx, keys...).Result()
+		rs, err := tx.MGet(ctx, keys...).Result()
+		if err != nil {
+			return err
+		}
 		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
 			return redis.Nil
 		}
