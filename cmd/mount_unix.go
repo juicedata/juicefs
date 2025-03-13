@@ -321,6 +321,10 @@ func fuseFlags() []cli.Flag {
 			Usage: "enable security.capability xattr",
 		},
 		&cli.BoolFlag{
+			Name:  "enable-slcache",
+			Usage: "enable symlink cache",
+		},
+		&cli.BoolFlag{
 			Name:  "enable-selinux",
 			Usage: "enable security.selinux xattr",
 		},
@@ -449,8 +453,8 @@ func getFuserMountVersion() string {
 }
 
 func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {
-	rawOpts, mt, noxattr, noacl, maxWrite := genFuseOptExt(c, format)
-	options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl, maxWrite))
+	rawOpts, mt, noxattr, noacl, maxWrite, symlinkcache := genFuseOptExt(c, format)
+	options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl, maxWrite, symlinkcache))
 	vfsConf.FuseOpts = &options
 }
 
@@ -537,12 +541,13 @@ func prepareMp(mp string) {
 	}
 }
 
-func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int, noxattr, noacl bool, maxWrite int) {
+func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int, noxattr, noacl bool, maxWrite int, enableSymlinkCaching bool) {
 	enableXattr := c.Bool("enable-xattr")
 	if format.EnableACL {
 		enableXattr = true
 	}
-	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL, int(utils.ParseBytes(c, "max-write", 'B'))
+
+	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL, int(utils.ParseBytes(c, "max-write", 'B')), c.Bool("enable-slcache")
 }
 
 func shutdownGraceful(mp string) {

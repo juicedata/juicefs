@@ -528,14 +528,14 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	return nil
 }
 
-func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, maxWrite int) fuse.MountOptions {
+func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, maxWrite int, symlinkcache bool) fuse.MountOptions {
 	var opt fuse.MountOptions
 	opt.FsName = "JuiceFS:" + conf.Format.Name
 	opt.Name = "juicefs"
 	opt.SingleThreaded = mt == 0
 	opt.MaxBackground = 200
 	opt.EnableLocks = true
-	opt.EnableSymlinkCaching = true
+	opt.EnableSymlinkCaching = symlinkcache
 	opt.DisableXAttrs = noxattr
 	opt.EnableAcl = !noacl
 	opt.IgnoreSecurityLabels = false
