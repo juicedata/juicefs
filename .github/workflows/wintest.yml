@@ -55,6 +55,7 @@ jobs:
           mkdir "C:\wfsp\"
           wget -O winfsp.msi https://github.com/winfsp/winfsp/releases/download/v2.0/winfsp-2.0.23075.msi
           copy winfsp.msi "C:\wfsp\"
+          choco install 7zip -y
 
       - name: Install WinFsp
         run: |
@@ -102,8 +103,17 @@ jobs:
           .\redis-service.exe install
           net start redisredis
 
+      - name: Download MinGW
+        run: |
+          wget https://github.com/niXman/mingw-builds-binaries/releases/download/14.2.0-rt_v12-rev1/x86_64-14.2.0-release-win32-seh-msvcrt-rt_v12-rev1.7z -O mingw.7z
+          7z.exe x mingw.7z -oC:\mingw64
+          ls C:\mingw64\bin
+
+
       - name: Build Juicefs
         run: |
+          $env:CGO_ENABLED=1
+          $env:PATH+=";C:\mingw64\bin"
           go build -ldflags="-s -w" -o juicefs.exe .
       
       - name: Install Python2
