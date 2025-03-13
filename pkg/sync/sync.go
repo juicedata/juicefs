@@ -27,6 +27,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -1651,6 +1652,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	delayDelFunc := func(storage object.ObjectStorage, keys []string) {
 		if len(keys) > 0 {
 			logger.Infof("delete %d dirs from %s", len(keys), storage)
+			sort.Strings(keys)
 		}
 		for i := len(keys) - 1; i >= 0; i-- {
 			handled.Increment()
