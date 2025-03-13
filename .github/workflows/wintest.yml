@@ -59,7 +59,8 @@ jobs:
 
       - name: Install WinFsp
         run: |
-          Start-Process msiexec.exe -Wait -ArgumentList '/i /qn /l*v C:\wfsp\install.log C:\wfsp\winfsp.msi'
+          # call start-process to install winfsp.msi
+          Start-Process -Wait -FilePath "C:\wfsp\winfsp-2.0.23075.msi" -ArgumentList "/quiet /norestart"
           ls "C:\Program Files (x86)\WinFsp"
           ls "C:\Program Files (x86)\WinFsp\bin"
 
