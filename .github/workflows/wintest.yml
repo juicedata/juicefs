@@ -87,7 +87,7 @@ jobs:
 
       - name: Download winsw
         run: |
-          wget https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe -O winsw.exe
+          wget https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe -q --show-progress -O winsw.exe
           ls winsw.exe
 
       - name: Start Redis
@@ -105,7 +105,7 @@ jobs:
 
       - name: Download MinGW
         run: |
-          wget https://github.com/niXman/mingw-builds-binaries/releases/download/14.2.0-rt_v12-rev1/x86_64-14.2.0-release-win32-seh-msvcrt-rt_v12-rev1.7z -O mingw.7z
+          wget https://github.com/niXman/mingw-builds-binaries/releases/download/14.2.0-rt_v12-rev1/x86_64-14.2.0-release-win32-seh-msvcrt-rt_v12-rev1.7z -q --show-progress -O mingw.7z
           7z.exe x mingw.7z -oC:\mingw64
           ls C:\mingw64\bin
 
@@ -138,7 +138,7 @@ jobs:
 
       - name: Download Winfsp Test Binary
         run: |
-          wget https://github.com/juicedata/winfsp/releases/download/testing_20250312/winfsp-tests-x64.exe -O "C:\Program Files (x86)\WinFsp\bin\winfstest.exe"
+          wget https://github.com/juicedata/winfsp/releases/download/testing_20250312/winfsp-tests-x64.exe -q --show-progress -O "C:\Program Files (x86)\WinFsp\bin\winfstest.exe"
           ls "C:\Program Files (x86)\WinFsp\bin\winfstest.exe"
       
       - name: Run Winfsp Test
@@ -148,7 +148,7 @@ jobs:
       
       - name: Download winfstest
         run: |
-          wget https://github.com/juicedata/winfstest/releases/download/testing_20250313/TestSuite-x64.zip -O Z:\TestSuite-x64.zip
+          wget https://github.com/juicedata/winfstest/releases/download/testing_20250313/TestSuite-x64.zip -q --show-progress -O Z:\TestSuite-x64.zip
           ls Z:\TestSuite-x64.zip
           cd Z:\
           Expand-Archive -Path .\TestSuite-x64.zip -DestinationPath .\TestSuite
@@ -159,7 +159,7 @@ jobs:
       - name: Run FSX Test
         run: |
           cd Z:\
-          wget https://github.com/chenjie4255/fstools/releases/download/v0.0.1/fsx-x64.exe -O fsx.exe
+          wget https://github.com/chenjie4255/fstools/releases/download/v0.0.1/fsx-x64.exe -q --show-progress -O fsx.exe
           ls fsx.exe
           ./fsx.exe -d 180 -p 10000 -F 100000 fsxtest
           
