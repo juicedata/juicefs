@@ -808,7 +808,7 @@ func RunAsSystemSerivce(name string, mountpoint string) error {
 	cmd := exec.Command("net", "use", mountpoint, "\\\\juicefs\\"+name)
 	err = cmd.Run()
 	if err != nil {
-		return fmt.Errorf("Failed to mount juicefs: %s", err)
+		return fmt.Errorf("Failed to call system command %s, %s", cmd.String(), err)
 	}
 
 	logger.Info("Juicefs system service started successfully.")

@@ -59,7 +59,7 @@ jobs:
 
       - name: Install WinFsp
         run: |
-          msiexec.exe /i "C:\wfsp\winfsp.msi" /qn /norestart /Lw "C:\wfsp\install.log"
+          msiexec.exe /jm "C:\wfsp\winfsp.msi" /qn /norestart /Lw "C:\wfsp\install.log" INSTALLLEVEL=32767
           #ls "C:\Program Files (x86)\WinFsp"
           #ls "C:\Program Files (x86)\WinFsp\bin"
 
