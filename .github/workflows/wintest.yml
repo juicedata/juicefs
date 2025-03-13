@@ -7,6 +7,13 @@ on:
       - 'release-**'
     paths:
       - '**/wintest.yml'
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
+        required: false
+        default: false
   pull_request:
     branches:
       - 'main'
@@ -99,6 +106,14 @@ jobs:
       - name: Build Juicefs
         run: |
           go build -ldflags="-s -w" -o juicefs.exe .
+      
+      - name: Install Python2
+        run: |
+          choco install python2 -y
+
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
 
       - name: Juicefs Format
         run: |
@@ -115,10 +130,6 @@ jobs:
           echo "hello" > "Z:\dir\hello.txt"
           dir "Z:\dir\hello.txt"
           type "Z:\dir\hello.txt"
-        
-      - name: Install Python2
-        run: |
-          choco install python2 -y
 
       - name: Download Winfsp Test Binary
         run: |
@@ -140,7 +151,7 @@ jobs:
           cd Z:\TestSuite
           ./run-winfstest
 
-      - name: Download FSX
+      - name: Run FSX Test
         run: |
           cd Z:\
           wget https://github.com/chenjie4255/fstools/releases/download/v0.0.1/fsx-x64.exe -O fsx.exe
