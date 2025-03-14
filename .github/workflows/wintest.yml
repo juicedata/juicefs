@@ -140,7 +140,7 @@ jobs:
 
       - name: Download Winfsp Test Binary
         run: |
-          wget https://github.com/juicedata/winfsp/releases/download/testing_20250312/winfsp-tests-x64.exe -q --show-progress -O "C:\Program Files (x86)\WinFsp\bin\winfsp-tests-x64.exe"
+          wget https://github.com/juicedata/winfsp/releases/download/testing_20250312/winfsp-tests-x64-dbg.exe -q --show-progress -O "C:\Program Files (x86)\WinFsp\bin\winfsp-tests-x64.exe"
           ls "C:\Program Files (x86)\WinFsp\bin\winfsp-tests-x64.exe"
       
       - name: Run Winfsp Test
