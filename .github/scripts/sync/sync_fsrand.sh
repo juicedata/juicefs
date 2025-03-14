@@ -121,6 +121,12 @@ test_files_from(){
     sync_option2="--dirs --perms --check-all --links --list-threads 10 --list-depth 5"
     ls -A $SOURCE_DIR1 > files
     sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR1 $sync_option1 2>&1| tee sync1.log || true
+    SOURCE_PERM=$(sudo stat -c "%a" "$DEST_DIR1")
+    SOURCE_OWNER=$(sudo stat -c "%U" "$DEST_DIR1")
+    SOURCE_GROUP=$(sudo stat -c "%G" "$DEST_DIR1")
+    sudo mkdir -p $DEST_DIR2
+    sudo chmod $SOURCE_PERM $DEST_DIR2
+    sudo chown $SOURCE_OWNER:$SOURCE_GROUP $DEST_DIR2
     sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR2 $sync_option2 2>&1| tee sync2.log || true
     check_diff $DEST_DIR1 $DEST_DIR2
 }
