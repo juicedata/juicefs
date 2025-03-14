@@ -650,7 +650,7 @@ class FsOperation:
             return False
         return True
         
-    def do_clone_entry(self,  entry, parent, new_entry_name, preserve, user='root', umask=0o022, mount='cmd/mount/mount'):
+    def do_clone_entry(self,  entry, parent, new_entry_name, preserve, user='root', umask=0o022, mount='./juicefs'):
         root_dir = self.root_dir
         abspath = os.path.join(root_dir, entry)
         new_relpath = os.path.join(parent, new_entry_name)

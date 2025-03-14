@@ -277,5 +277,17 @@ class TestPySdk(unittest.TestCase):
         state.create_file(content=b'', file_name='a', parent=folders_0, umask=18, user='root')
         state.teardown()
 
+    def test_rename(self):
+        state = JuicefsMachine()
+        folders_0 = state.init_folders()
+        files_0 = state.loop_symlink(link_file_name='aa', parent=folders_0, user='root')
+        folders_1 = state.mkdir(mode=0, parent=folders_0, subdir='a', umask=18, user='root')
+        folders_2 = state.mkdir(mode=0, parent=folders_1, subdir='b', umask=18, user='root')
+        state.exists(entry=files_0, user='root')
+        state.rename_dir(entry=folders_1, new_entry_name=folders_1, parent=folders_0, umask=18, user='root')
+        state.rename_dir(entry=folders_0, new_entry_name=folders_1, parent=folders_1, umask=18, user='root')
+        state.rename_dir(entry=folders_2, new_entry_name=folders_1, parent=folders_0, umask=18, user='root')
+        state.teardown()
+
 if __name__ == '__main__':
     unittest.main()

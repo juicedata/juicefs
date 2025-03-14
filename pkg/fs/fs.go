@@ -515,6 +515,25 @@ func (fs *FileSystem) Rmr(ctx meta.Context, p string, numthreads int) (err sysca
 }
 
 func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, flags uint32) (err syscall.Errno) {
+	oss := strings.Split(oldpath, "/")
+	nss := strings.Split(newpath, "/")
+
+	// check if oldpath is ancestor of newpath
+	for i := 0; i < len(oss); {
+		if i >= len(nss) || oss[i] != nss[i] {
+			break
+		} else { // oss[i] == nss[i]
+			i++
+			if i == len(oss) && i == len(nss) {
+				return 0
+			} else if i == len(oss) {
+				return syscall.EINVAL
+			} else {
+				continue
+			}
+		}
+	}
+
 	defer trace.StartRegion(context.TODO(), "fs.Rename").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Rename (%s,%s,%d): %s", oldpath, newpath, flags, errstr(err)) }()
