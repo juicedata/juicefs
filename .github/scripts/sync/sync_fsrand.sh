@@ -114,6 +114,17 @@ test_update(){
     diff -ur --no-dereference $DEST_DIR1 $DEST_DIR2
 }
 
+test_files_from(){
+    prepare_test
+    ./juicefs mount $META_URL /tmp/jfs -d
+    sync_option1="--dirs --perms --check-all --links --list-threads 10 --list-depth 5 --files-from files"
+    sync_option2="--dirs --perms --check-all --links --list-threads 10 --list-depth 5"
+    ls -A $SOURCE_DIR1 > files
+    sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR1 $sync_option1 2>&1| tee sync1.log || true
+    sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR2 $sync_option2 2>&1| tee sync2.log || true
+    check_diff $DEST_DIR1 $DEST_DIR2
+}
+
 do_copy(){
     local sync_option=$@
     local preserve="timestamps"
