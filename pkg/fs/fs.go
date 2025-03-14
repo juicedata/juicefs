@@ -522,16 +522,15 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, f
 	for i := 0; i < len(oss); {
 		if i >= len(nss) || oss[i] != nss[i] {
 			break
-		}
-		if oss[i] == nss[i] {
+		} else { // oss[i] == nss[i]
 			i++
-			if i == len(oss) {
-				if i == len(nss) {
-					return 0
-				}
+			if i == len(oss) && i == len(nss) {
+				return 0
+			} else if i == len(oss) {
 				return syscall.EINVAL
+			} else {
+				continue
 			}
-			continue
 		}
 	}
 
