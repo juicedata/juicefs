@@ -144,7 +144,7 @@ jobs:
           cd Z:\
           Expand-Archive -Path .\TestSuite-x64.zip -DestinationPath .\TestSuite
           ls Z:\TestSuite
-          cd Z:\TestSuite
+          cd Z:\TestSuite\TestSuite
           ./run-winfstest.ps1
 
       - name: Run FSX Test
