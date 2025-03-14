@@ -139,7 +139,7 @@ jobs:
       
       - name: Run winfstest
         run: |
-          wget https://github.com/juicedata/winfstest/releases/download/testing_20250313/TestSuite-x64.zip -q --show-progress -O Z:\TestSuite-x64.zip
+          wget https://github.com/juicedata/winfstest/releases/download/testing_20250313/TestSuite-x64-v2.zip -q --show-progress -O Z:\TestSuite-x64.zip
           ls Z:\TestSuite-x64.zip
           cd Z:\
           Expand-Archive -Path .\TestSuite-x64.zip -DestinationPath .\TestSuite
