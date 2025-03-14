@@ -130,25 +130,14 @@ jobs:
           $env:PATH+=";C:\Program Files (x86)\WinFsp\bin"
           ./juicefs.exe mount -d redis://127.0.0.1:6379/1 z:
 
-      - name: Test Juicefs
+      - name: Run Winfsp Tests
         run: |
-          mkdir "Z:\dir"
-          dir "Z:\dir"
-          echo "hello" > "Z:\dir\hello.txt"
-          dir "Z:\dir\hello.txt"
-          type "Z:\dir\hello.txt"
-
-      - name: Download Winfsp Test Binary
-        run: |
-          wget https://github.com/juicedata/winfsp/releases/download/testing_20250312/winfsp-tests-x64-dbg.exe -q --show-progress -O "C:\Program Files (x86)\WinFsp\bin\winfsp-tests-x64.exe"
+          wget https://github.com/juicedata/winfsp/releases/download/testing_20250312/winfsp-tests-x64.exe -q --show-progress -O "C:\Program Files (x86)\WinFsp\bin\winfsp-tests-x64.exe"
           ls "C:\Program Files (x86)\WinFsp\bin\winfsp-tests-x64.exe"
-      
-      - name: Run Winfsp Test
-        run: |
           cd Z:
           & "C:\Program Files (x86)\WinFsp\bin\winfsp-tests-x64.exe" --fuse-external --resilient --case-insensitive-cmp
       
-      - name: Download winfstest
+      - name: Run winfstest
         run: |
           wget https://github.com/juicedata/winfstest/releases/download/testing_20250313/TestSuite-x64.zip -q --show-progress -O Z:\TestSuite-x64.zip
           ls Z:\TestSuite-x64.zip
