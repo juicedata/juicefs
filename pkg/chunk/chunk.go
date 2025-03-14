@@ -29,6 +29,7 @@ type Writer interface {
 	io.WriterAt
 	ID() uint64
 	SetID(id uint64)
+	SetWriteback(enabled bool)
 	FlushTo(offset int) error
 	Finish(length int) error
 	Abort()

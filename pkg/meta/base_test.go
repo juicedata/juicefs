@@ -62,7 +62,7 @@ func TestRedisClient(t *testing.T) {
 	testMeta(t, m)
 }
 
-func TestKeyDB(t *testing.T) { //skip mutate
+func TestKeyDB(t *testing.T) { // skip mutate
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
 	}
@@ -107,7 +107,7 @@ func TestKeyDB(t *testing.T) { //skip mutate
 	}
 }
 
-func TestRedisCluster(t *testing.T) { //skip mutate
+func TestRedisCluster(t *testing.T) { // skip mutate
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
 	}
@@ -2636,10 +2636,10 @@ func testDirStat(t *testing.T, m Meta) {
 }
 
 func testClone(t *testing.T, m Meta) {
-	//$ tree cloneDir
-	//.
-	//├── dir
-	//└── dir1
+	// $ tree cloneDir
+	// .
+	// ├── dir
+	// └── dir1
 	//    ├── dir2
 	//    │ ├── dir3
 	//    │ │ └── file3

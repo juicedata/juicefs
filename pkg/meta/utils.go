@@ -17,9 +17,11 @@
 package meta
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"path"
+	"runtime"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -596,4 +598,29 @@ func relatimeNeedUpdate(attr *Attr, now time.Time) bool {
 	mtime := time.Unix(attr.Mtime, int64(attr.Mtimensec))
 	ctime := time.Unix(attr.Ctime, int64(attr.Ctimensec))
 	return mtime.After(atime) || ctime.After(atime) || now.Sub(atime) > 24*time.Hour
+}
+
+type txMethodKey struct{}
+
+func callerName(ctx context.Context) string {
+	if method, ok := ctx.Value(txMethodKey{}).(string); ok {
+		return method // Fast path, prefer explicitly provided method name
+	}
+	const minSkip = 2
+	for i := minSkip; i < 20; i++ { // Slow path, find the real caller
+		pc, _, _, ok := runtime.Caller(i)
+		if !ok {
+			break
+		}
+		fn := runtime.FuncForPC(pc)
+		if fn == nil {
+			continue
+		}
+		name := fn.Name()
+		// Skip frames containing anonymous functions (indicated by dot+number)
+		if !strings.Contains(name, ".func") {
+			return utils.MethodName(name)
+		}
+	}
+	return "unknown"
 }

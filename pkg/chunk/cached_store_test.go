@@ -194,6 +194,56 @@ func TestStoreAsync(t *testing.T) {
 	testStore(t, store)
 }
 
+func TestForceUpload(t *testing.T) {
+	blob, _ := object.CreateStorage("mem", "", "", "", "")
+	config := defaultConf
+	_ = os.RemoveAll(config.CacheDir)
+	config.Writeback = true
+	config.UploadDelay = time.Hour
+	config.BlockSize = 4 << 20
+	store := NewCachedStore(blob, config, nil)
+	cleanCache := func() {
+		rSlice := sliceForRead(1, 1024, store.(*cachedStore))
+		keys := rSlice.keys()
+		for _, k := range keys {
+			store.(*cachedStore).bcache.remove(k, true)
+		}
+	}
+	readSlice := func(id uint64, length int) error {
+		p := NewPage(make([]byte, length))
+		r := store.NewReader(id, length)
+		_, err := r.ReadAt(context.Background(), p, 0)
+		return err
+	}
+
+	// write to cache
+	w := store.NewWriter(1)
+	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
+		t.Fatalf("write fail: %s", err)
+	}
+	if err := w.Finish(1024); err != nil {
+		t.Fatalf("write fail: %s", err)
+	}
+	cleanCache()
+	if readSlice(1, 1024) == nil {
+		t.Fatalf("read slice 1 should fail")
+	}
+
+	// write to os
+	w = store.NewWriter(2)
+	w.SetWriteback(false)
+	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
+		t.Fatalf("write fail: %s", err)
+	}
+	if err := w.Finish(1024); err != nil {
+		t.Fatalf("write fail: %s", err)
+	}
+	cleanCache()
+	if readSlice(2, 1024) != nil {
+		t.Fatalf("check slice 2 should success")
+	}
+}
+
 func TestStoreDelayed(t *testing.T) {
 	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf

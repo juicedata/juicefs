@@ -115,10 +115,54 @@ test_sync_without_mount_point2(){
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal or ERROR in sync.log" && exit 1 || true
 }   
 
+test_sync_delete_src_and_update(){
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    file_count=$FILE_COUNT
+    rm -rf data
+    mkdir -p data
+    for i in $(seq 1 $file_count); do
+        echo "test-$i" > data/test-$i
+    done
+    ./mc cp -r data myminio/data
+    set -o pipefail
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 \
+         2>&1 | tee sync.log
+    set +o pipefail
+    diff data/ /jfs/data/
+    rm sync.log
+    for i in $(seq 1 $file_count); do
+        echo "test-update-$i" > data/test-$i
+    done
+    ./mc cp -r data myminio/data
+    set -o pipefail
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --delete-src --update \
+         2>&1 | tee sync.log
+    set +o pipefail
+    diff data/ /jfs/data/
+    set -o pipefail
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --delete-src  \
+         2>&1 | tee sync.log
+    set +o pipefail
+    if ./mc ls myminio/data/ | grep -q .; then
+        echo "Error: MinIO bucket /data is not empty"
+        exit 1
+    fi
+    diff data/ /jfs/data/
+    grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal or ERROR in sync.log" && exit 1 || true
+}
+
 test_sync_delete_dst(){
     prepare_test
     ./juicefs mount -d $META_URL /jfs
     file_count=$FILE_COUNT
+    rm -rf data
     mkdir -p /jfs/data
     for i in $(seq 1 $file_count); do
         dd if=/dev/urandom of=/jfs/data/file$i bs=1M count=1 status=none

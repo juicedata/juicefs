@@ -74,7 +74,7 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 		l.pid,
 		lvlStr,
 		strings.TrimRight(e.Message, "\n"),
-		methodName(caller.Function),
+		MethodName(caller.Function),
 		path.Base(caller.File),
 		caller.Line)
 
@@ -88,7 +88,7 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 }
 
 // Returns a human-readable method name, removing internal markers added by Go
-func methodName(fullFuncName string) string {
+func MethodName(fullFuncName string) string {
 	firstSlash := strings.Index(fullFuncName, "/")
 	if firstSlash != -1 && firstSlash < len(fullFuncName)-1 {
 		fullFuncName = fullFuncName[firstSlash+1:]
@@ -100,14 +100,14 @@ func methodName(fullFuncName string) string {
 	method := fullFuncName[lastDot+1:]
 	// avoid func1
 	if strings.HasPrefix(method, "func") && method[4] >= '0' && method[4] <= '9' {
-		candidate := methodName(fullFuncName[:lastDot])
+		candidate := MethodName(fullFuncName[:lastDot])
 		if candidate != "" {
 			method = candidate
 		}
 	}
-	// aoid init.3
+	// avoid init.3
 	if len(method) == 1 && method[0] >= '0' && method[0] <= '9' {
-		candidate := methodName(fullFuncName[:lastDot])
+		candidate := MethodName(fullFuncName[:lastDot])
 		if candidate != "" {
 			method = candidate
 		}

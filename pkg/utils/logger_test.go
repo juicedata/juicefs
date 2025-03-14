@@ -88,8 +88,8 @@ func TestMethodName(t *testing.T) {
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := methodName(tt.args.fullFuncName); got != tt.want {
-				t.Errorf("methodName() = %v, want %v", got, tt.want)
+			if got := MethodName(tt.args.fullFuncName); got != tt.want {
+				t.Errorf("MethodName() = %v, want %v", got, tt.want)
 			}
 		})
 	}

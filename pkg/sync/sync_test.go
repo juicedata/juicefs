@@ -95,20 +95,21 @@ func TestSync(t *testing.T) {
 		_ = os.RemoveAll("/tmp/b")
 	}()
 	config := &Config{
-		Start:     "",
-		End:       "",
-		Threads:   50,
-		Update:    true,
-		Perms:     true,
-		Dry:       false,
-		DeleteSrc: false,
-		Limit:     -1,
-		DeleteDst: false,
-		Exclude:   []string{"c*"},
-		Include:   []string{"a[1-9]", "a*"},
-		MaxSize:   math.MaxInt64,
-		Verbose:   false,
-		Quiet:     true,
+		Start:       "",
+		End:         "",
+		Threads:     50,
+		ListThreads: 1,
+		Update:      true,
+		Perms:       true,
+		Dry:         false,
+		DeleteSrc:   false,
+		Limit:       -1,
+		DeleteDst:   false,
+		Exclude:     []string{"c*"},
+		Include:     []string{"a[1-9]", "a*"},
+		MaxSize:     math.MaxInt64,
+		Verbose:     false,
+		Quiet:       true,
 	}
 	os.Args = []string{"--include", "a[1-9]", "--exclude", "a*", "--exclude", "c*"}
 	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
@@ -183,19 +184,20 @@ func TestSyncIncludeAndExclude(t *testing.T) {
 		_ = os.RemoveAll("/tmp/b")
 	}()
 	config := &Config{
-		Start:     "",
-		End:       "",
-		Threads:   50,
-		Update:    true,
-		Perms:     true,
-		Dry:       false,
-		DeleteSrc: false,
-		DeleteDst: false,
-		Verbose:   false,
-		Limit:     -1,
-		Quiet:     true,
-		MaxSize:   math.MaxInt64,
-		Exclude:   []string{"1"},
+		Start:       "",
+		End:         "",
+		Threads:     50,
+		ListThreads: 1,
+		Update:      true,
+		Perms:       true,
+		Dry:         false,
+		DeleteSrc:   false,
+		DeleteDst:   false,
+		Verbose:     false,
+		Limit:       -1,
+		Quiet:       true,
+		MaxSize:     math.MaxInt64,
+		Exclude:     []string{"1"},
 	}
 	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
 	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
@@ -329,6 +331,7 @@ func TestSyncLink(t *testing.T) {
 		Threads:     50,
 		Update:      true,
 		Perms:       true,
+		ListThreads: 1,
 		Links:       true,
 		Quiet:       true,
 		Limit:       -1,
@@ -384,6 +387,7 @@ func TestSyncLinkWithOutFollow(t *testing.T) {
 
 	if err := Sync(a, b, &Config{
 		Threads:     50,
+		ListThreads: 1,
 		Update:      true,
 		Perms:       true,
 		Quiet:       true,
@@ -419,6 +423,7 @@ func TestSingleLink(t *testing.T) {
 	b, _ := object.CreateStorage("file", "/tmp/b", "", "", "")
 	if err := Sync(a, b, &Config{
 		Threads:     50,
+		ListThreads: 1,
 		Update:      true,
 		Perms:       true,
 		Links:       true,
@@ -456,13 +461,14 @@ func TestSyncCheckAllLink(t *testing.T) {
 	bs.Symlink("/tmp/b/a1", "l1")
 
 	if err := Sync(a, b, &Config{
-		Threads:  50,
-		Perms:    true,
-		Links:    true,
-		Quiet:    true,
-		Limit:    -1,
-		MaxSize:  math.MaxInt64,
-		CheckAll: true,
+		Threads:     50,
+		Perms:       true,
+		Links:       true,
+		Quiet:       true,
+		ListThreads: 1,
+		Limit:       -1,
+		MaxSize:     math.MaxInt64,
+		CheckAll:    true,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
@@ -495,13 +501,14 @@ func TestSyncCheckNewLink(t *testing.T) {
 	bs := b.(object.SupportSymlink)
 
 	if err := Sync(a, b, &Config{
-		Threads:  50,
-		Perms:    true,
-		Links:    true,
-		Quiet:    true,
-		Limit:    -1,
-		MaxSize:  math.MaxInt64,
-		CheckNew: true,
+		Threads:     50,
+		Perms:       true,
+		Links:       true,
+		Quiet:       true,
+		ListThreads: 1,
+		Limit:       -1,
+		MaxSize:     math.MaxInt64,
+		CheckNew:    true,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
@@ -551,10 +558,11 @@ func TestLimits(t *testing.T) {
 		{c, 7, true, append(commonKeys, "c2", "c3")},
 	}
 	config := &Config{
-		Threads: 50,
-		Update:  true,
-		Perms:   true,
-		MaxSize: math.MaxInt64,
+		Threads:     50,
+		Update:      true,
+		Perms:       true,
+		MaxSize:     math.MaxInt64,
+		ListThreads: 1,
 	}
 	setConfig := func(config *Config, subC subConfig) {
 		config.Limit = subC.limit

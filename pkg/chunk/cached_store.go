@@ -274,18 +274,24 @@ type wSlice struct {
 	errors      chan error
 	uploadError error
 	pendings    int
+	writeback   bool
 }
 
 func sliceForWrite(id uint64, store *cachedStore) *wSlice {
 	return &wSlice{
-		rSlice: rSlice{id, 0, store},
-		pages:  make([][]*Page, chunkSize/store.conf.BlockSize),
-		errors: make(chan error, chunkSize/store.conf.BlockSize),
+		rSlice:    rSlice{id, 0, store},
+		pages:     make([][]*Page, chunkSize/store.conf.BlockSize),
+		errors:    make(chan error, chunkSize/store.conf.BlockSize),
+		writeback: store.conf.Writeback,
 	}
 }
 
 func (s *wSlice) SetID(id uint64) {
 	s.id = id
+}
+
+func (s *wSlice) SetWriteback(enabled bool) {
+	s.writeback = enabled
 }
 
 func (s *wSlice) WriteAt(p []byte, off int64) (n int, err error) {
@@ -444,7 +450,7 @@ func (s *wSlice) upload(indx int) {
 		if off != blen {
 			panic(fmt.Sprintf("block length does not match: %v != %v", off, blen))
 		}
-		if s.store.conf.Writeback {
+		if s.writeback {
 			stagingPath := "unknown"
 			stageFailed := false
 			block.Acquire()
