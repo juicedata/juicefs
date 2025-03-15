@@ -121,7 +121,7 @@ jobs:
       - name: check fsrand.log
         if: always()
         run: | 
-          [[ -f "fsrand.log"]] && tail -n 1000 fsrand.log     
+          [[ -f "fsrand.log" ]] && tail -n 1000 fsrand.log     
           grep -i "AssertionError" fsrand.log && exit 1 || true
 
       - name: chmod example directory
