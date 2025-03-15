@@ -95,7 +95,7 @@ jobs:
       - name: Download example database
         timeout-minutes: 5
         continue-on-error: true
-        uses: actions/download-artifact@v4.0.0
+        uses: actions/download-artifact@v4
         with:
           name: hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
