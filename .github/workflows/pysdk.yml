@@ -91,6 +91,7 @@ jobs:
           name: pysdk-hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
           if_no_artifact_found: fail
+          workflow_conclusion: ""
 
       - name: Set Variable
         id: vars
