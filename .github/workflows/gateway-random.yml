@@ -86,7 +86,7 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: hypothesis-example-db-${{ matrix.meta }}
+          name: gateway-hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
 
       - name: Test randomly
@@ -119,7 +119,7 @@ jobs:
         if: always()
         with:
           include-hidden-files: true
-          name: hypothesis-example-db-${{ matrix.meta }}
+          name: gateway-hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
 
       - name: check log
