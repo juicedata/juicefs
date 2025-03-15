@@ -90,7 +90,8 @@ jobs:
         with:
           name: pysdk-hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
-          if_no_artifact_found: fail
+          if_no_artifact_found: ignore
+          workflow: pysdk.yml
           workflow_conclusion: ""
 
       - name: Set Variable
