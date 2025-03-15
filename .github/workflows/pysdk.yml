@@ -74,6 +74,16 @@ jobs:
           secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
           token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
 
+      - name: Download example database
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          # name: pysdk-hypothesis-example-db-${{ matrix.meta }}
+          pattern: pysdk-hypothesis-example-db*
+          path: .hypothesis/examples
+          merge-multiple: true
+
       - name: Set Variable
         id: vars
         run: |
@@ -126,14 +136,6 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo META_URL=$meta_url python3 .github/scripts/pysdk/pysdk_test.py
-
-      - name: Download example database
-        timeout-minutes: 5
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: pysdk-hypothesis-example-db-${{ matrix.meta }}
-          path: .hypothesis/examples
 
       - name: Run file_test.py
         run: |
