@@ -83,11 +83,13 @@ jobs:
           
       - name: Download example database
         timeout-minutes: 5
-        continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v9
         with:
           name: gateway-hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
+          if_no_artifact_found: ignore
+          workflow_conclusion: ""
+          check_artifacts: true
 
       - name: Test randomly
         continue-on-error: true

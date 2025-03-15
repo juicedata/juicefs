@@ -74,25 +74,13 @@ jobs:
           secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
           token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
 
-      # - name: Download example database
-      #   timeout-minutes: 5
-      #   continue-on-error: true
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     # name: pysdk-hypothesis-example-db-${{ matrix.meta }}
-      #     pattern: pysdk-hypothesis-example-db*
-      #     path: .hypothesis/examples
-      #     merge-multiple: true
-
       - name: Download example database
         timeout-minutes: 5
         uses: dawidd6/action-download-artifact@v9
         with:
-          # github_token: ${{secrets.GITHUB_TOKEN}}
           name: pysdk-hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
           if_no_artifact_found: ignore
-          # workflow: pysdk.yml
           workflow_conclusion: ""
           check_artifacts: true
 
