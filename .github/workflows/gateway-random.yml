@@ -103,7 +103,14 @@ jobs:
       - name: check fsrand.log
         if: always()
         run: | 
-          grep "AssertionError" fsrand.log && exit 1 || true
+          [[ -f "fsrand.log"]] && tail -n 1000 fsrand.log     
+          grep -i "AssertionError" fsrand.log && exit 1 || true
+
+      - name: chmod example directory
+        if: always()
+        timeout-minutes: 5
+        run: |
+          [[ -d ".hypothesis/examples" ]] && sudo chmod -R 755 .hypothesis/examples
 
       - name: Upload example database
         uses: actions/upload-artifact@v4
