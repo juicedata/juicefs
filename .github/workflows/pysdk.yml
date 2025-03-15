@@ -94,6 +94,7 @@ jobs:
           if_no_artifact_found: ignore
           workflow: pysdk.yml
           workflow_conclusion: ""
+          check_artifacts: true
 
       - name: Set Variable
         id: vars
