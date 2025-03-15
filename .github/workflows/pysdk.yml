@@ -127,6 +127,11 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo META_URL=$meta_url python3 .github/scripts/pysdk/pysdk_test.py
 
+      - name: chmod /home/runner
+        timeout-minutes: 1
+        run: |
+          sudo chmod 755 /home/runner
+
       - name: Download example database
         timeout-minutes: 5
         continue-on-error: true
