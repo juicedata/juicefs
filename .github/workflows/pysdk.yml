@@ -127,11 +127,6 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo META_URL=$meta_url python3 .github/scripts/pysdk/pysdk_test.py
 
-      - name: chmod /home/runner
-        timeout-minutes: 1
-        run: |
-          sudo chmod 755 /home/runner
-
       - name: Download example database
         timeout-minutes: 5
         continue-on-error: true
@@ -175,6 +170,10 @@ jobs:
         if: always()
         run: |
           sudo tail -n 500 fsrand.log
+
+      - name: chmod
+        run: |
+          sudo chmod -R 755 .hypothesis/examples
 
       - name: Upload example database
         uses: actions/upload-artifact@v4
