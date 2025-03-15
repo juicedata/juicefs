@@ -176,7 +176,9 @@ jobs:
         if: always()
         timeout-minutes: 5
         run: |
-          [[ -d ".hypothesis/examples" ]] && sudo chmod -R 755 .hypothesis/examples
+          if [[ -e ".hypothesis/examples" ]]; then
+            echo "chmod for .hypothesis/examples" && sudo chmod -R 755 .hypothesis/examples
+          fi
 
       - name: Upload example database
         uses: actions/upload-artifact@v4
