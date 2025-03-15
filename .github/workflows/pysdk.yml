@@ -88,11 +88,11 @@ jobs:
         timeout-minutes: 5
         uses: dawidd6/action-download-artifact@v9
         with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
+          # github_token: ${{secrets.GITHUB_TOKEN}}
           name: pysdk-hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
           if_no_artifact_found: ignore
-          workflow: pysdk.yml
+          # workflow: pysdk.yml
           workflow_conclusion: ""
           check_artifacts: true
 
