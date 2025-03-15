@@ -172,6 +172,8 @@ jobs:
           sudo tail -n 500 fsrand.log
 
       - name: chmod
+        if: always()
+        continue-on-error: true
         run: |
           sudo chmod -R 755 .hypothesis/examples
 
