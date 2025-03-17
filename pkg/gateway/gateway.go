@@ -102,7 +102,17 @@ func (n *jfsObjects) IsReady(_ context.Context) bool {
 }
 
 func (n *jfsObjects) Shutdown(ctx context.Context) error {
-	return n.fs.Close()
+	if err := n.fs.Close(); err != nil {
+		logger.Warnf("Close fs error: %s", err)
+	}
+	if err := n.fs.Meta().CloseSession(); err != nil {
+		logger.Warnf("Close session error: %s", err)
+	}
+	err := n.fs.Meta().Shutdown()
+	if err != nil {
+		logger.Warnf("Shutdown meta error: %s", err)
+	}
+	return err
 }
 
 func (n *jfsObjects) StorageInfo(ctx context.Context) (info minio.StorageInfo, errors []error) {
