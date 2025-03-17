@@ -528,8 +528,6 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, f
 				return 0
 			} else if i == len(oss) {
 				return syscall.EINVAL
-			} else {
-				continue
 			}
 		}
 	}
