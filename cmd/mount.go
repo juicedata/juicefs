@@ -281,7 +281,17 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		PrefixInternal:  c.Bool("prefix-internal"),
 		Pid:             os.Getpid(),
 		PPid:            os.Getppid(),
+		UMask:           0xFFFF,
 	}
+
+	if c.IsSet("umask") {
+		umask, err := utils.ParseMode(c.String("umask"))
+		if err != nil {
+			logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
+		}
+		cfg.UMask = uint16(umask)
+	}
+
 	skip_check := os.Getenv("SKIP_BACKUP_META_CHECK") == "true"
 	if !skip_check && cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
 		logger.Fatalf("backup-meta should not be less than 5 minutes: %s", cfg.BackupMeta)

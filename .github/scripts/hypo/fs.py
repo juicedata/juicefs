@@ -686,12 +686,12 @@ if __name__ == '__main__':
     settings.register_profile("schedule", max_examples=1000, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=200, deadline=None, \
         report_multiple_bugs=False, 
-        phases=[Phase.reuse, Phase.generate, Phase.target], 
+        phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain], 
         database=ci_db)
     settings.register_profile("pull_request", max_examples=100, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=50, deadline=None, \
         report_multiple_bugs=False, 
-        phases=[Phase.reuse, Phase.generate, Phase.target], 
+        phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain], 
         database=ci_db)
     settings.register_profile("generate", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \

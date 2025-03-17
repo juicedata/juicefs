@@ -413,7 +413,7 @@ func (m *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 	var changed bool
 	ctx := Background()
 	name = m.prefix + name
-	err := m.txn(ctx, func(tx *redis.Tx) error {
+	err := m.txn(ctx.WithValue(txMethodKey{}, "setIfSmall:"+name), func(tx *redis.Tx) error {
 		changed = false
 		old, err := tx.Get(ctx, name).Int64()
 		if err != nil && err != redis.Nil {
@@ -1004,8 +1004,11 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	m.txLock(h)
 	defer m.txUnlock(h)
 	// TODO: enable retry for some of idempodent transactions
-	var retryOnFailture = false
-	var lastErr error
+	var (
+		retryOnFailture = false
+		lastErr         error
+		method          string
+	)
 	for i := 0; i < 50; i++ {
 		if ctx.Canceled() {
 			return syscall.EINTR
@@ -1019,13 +1022,16 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 			}
 		}
 		if err != nil && m.shouldRetry(err, retryOnFailture) {
-			m.txRestart.Add(1)
+			if method == "" {
+				method = callerName(ctx) // lazy evaluation
+			}
+			m.txRestart.WithLabelValues(method).Add(1)
 			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
 			lastErr = err
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
 		} else if err == nil && i > 1 {
-			logger.Warnf("Transaction succeeded after %d tries (%s), keys: %v, last error: %s", i+1, time.Since(start), keys, lastErr)
+			logger.Warnf("Transaction succeeded after %d tries (%s), keys: %v, method: %s, last error: %s", i+1, time.Since(start), keys, method, lastErr)
 		}
 		return err
 	}
@@ -1466,7 +1472,10 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		if err := tx.Watch(ctx, m.inodeKey(inode)).Err(); err != nil {
 			return err
 		}
-		rs, _ := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
+		rs, err := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
+		if err != nil {
+			return err
+		}
 		if rs[0] == nil {
 			return redis.Nil
 		}
@@ -1604,7 +1613,10 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, s
 			return err
 		}
 
-		rs, _ := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
+		rs, err := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
+		if err != nil {
+			return err
+		}
 		if rs[0] == nil {
 			return redis.Nil
 		}
@@ -1762,7 +1774,10 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if dino > 0 {
 			keys = append(keys, m.inodeKey(dino))
 		}
-		rs, _ := tx.MGet(ctx, keys...).Result()
+		rs, err := tx.MGet(ctx, keys...).Result()
+		if err != nil {
+			return err
+		}
 		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
 			return redis.Nil
 		}

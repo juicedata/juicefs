@@ -541,7 +541,7 @@ func Register(name string, register Creator) {
 }
 
 func setPasswordFromEnv(uri string) (string, error) {
-	atIndex := strings.Index(uri, "@")
+	atIndex := strings.LastIndex(uri, "@")
 	if atIndex == -1 {
 		return "", fmt.Errorf("invalid uri: %s", uri)
 	}

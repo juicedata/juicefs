@@ -94,11 +94,13 @@ jobs:
 
       - name: Download example database
         timeout-minutes: 5
-        continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v9
         with:
-          name: hypothesis-example-db-${{ matrix.meta }}
+          name: fsrand-hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
+          if_no_artifact_found: ignore
+          workflow_conclusion: ""
+          check_artifacts: true
 
       - name: Run All
         continue-on-error: true
@@ -106,17 +108,26 @@ jobs:
         run: |
           sudo -E LOG_LEVEL=WARNING META1=redis META2=${{matrix.meta}} .github/scripts/command/random.sh test_run_all 2>&1 | tee fsrand.log
       
-      - name: Check fsrand.log
+      - name: check fsrand.log
         if: always()
+        run: | 
+          [[ -f "fsrand.log" ]] && tail -n 1000 fsrand.log     
+          grep -i "AssertionError" fsrand.log && exit 1 || true
+
+      - name: chmod example directory
+        if: always()
+        timeout-minutes: 5
         run: |
-          grep "AssertionError" fsrand.log && exit 1 || true
+          if [[ -e ".hypothesis/examples" ]]; then
+            echo "chmod for .hypothesis/examples" && sudo chmod -R 755 .hypothesis/examples
+          fi
 
       - name: Upload example database
         uses: actions/upload-artifact@v4
         if: always()
         with:
           include-hidden-files: true
-          name: hypothesis-example-db-${{ matrix.meta }}
+          name: command2-hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
 
       - name: Check client log

@@ -20,12 +20,18 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
-func getCreateUmask(in *fuse.CreateIn) uint16 {
-	return uint16(in.Umask)
+func getCreateUmask(mask uint32, defMask uint16) uint16 {
+	if defMask != 0xFFFF {
+		return defMask
+	}
+	return uint16(mask)
 }
 
-func getUmask(in *fuse.MknodIn) uint16 {
-	return uint16(in.Umask)
+func getUmask(mask uint32, defMask uint16, isDir bool) uint16 {
+	if defMask != 0xFFFF {
+		return defMask
+	}
+	return uint16(mask)
 }
 
 func setBlksize(out *fuse.Attr, size uint32) {

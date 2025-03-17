@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -86,4 +87,18 @@ func TestAtimeNeedsUpdate(t *testing.T) {
 	if m.atimeNeedsUpdate(attr, now) {
 		t.Fatal("atime updated for strictatime when < 1s")
 	}
+}
+
+func Test_getCallerName(t *testing.T) {
+	ctx := context.WithValue(context.Background(), txMethodKey{}, "test")
+	method := callerName(ctx)
+	if method != "test" {
+		t.Fatalf("expected %q, got %q", "test", method)
+	}
+	func() {
+		method := callerName(context.Background())
+		if method != "Test_getCallerName" {
+			t.Fatalf("expected %q, got %q", "Test_getCallerName", method)
+		}
+	}()
 }

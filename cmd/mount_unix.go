@@ -351,6 +351,10 @@ func fuseFlags() []cli.Flag {
 			Value: "128K",
 		},
 		&cli.StringFlag{
+			Name:  "umask",
+			Usage: "umask for new files and directories in octal (overwrite the one from app)",
+		},
+		&cli.StringFlag{
 			Name:  "o",
 			Usage: "other FUSE options",
 		},

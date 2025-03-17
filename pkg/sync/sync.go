@@ -27,6 +27,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -1375,6 +1376,10 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 }
 
 func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config) error {
+	config.concurrentList <- 1
+	defer func() {
+		<-config.concurrentList
+	}()
 	if config.Limit == 1 && len(config.rules) == 0 {
 		// fast path for single key
 		obj, err := src.Head(config.Start)
@@ -1433,16 +1438,12 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 			wg.Add(1)
 			go func(prefix string) {
 				defer wg.Done()
-				defer func() {
-					<-config.concurrentList
-				}()
 				err := startProducer(tasks, src, dst, prefix, listDepth-1, config)
 				if err != nil {
 					logger.Errorf("list prefix %s: %s", prefix, err)
 					failed.Increment()
 				}
 			}(c.Key())
-			config.concurrentList <- 1
 		}
 	}()
 
@@ -1478,7 +1479,9 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	}
 	close(commonPrefix)
 
+	<-config.concurrentList
 	<-done
+	config.concurrentList <- 1
 	return nil
 }
 
@@ -1534,11 +1537,11 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	syncExitFunc := func() error {
-		pending.SetCurrent(0)
-		total := handled.GetTotal()
-		progress.Done()
-
 		if config.Manager == "" {
+			pending.SetCurrent(0)
+			total := handled.GetTotal()
+			progress.Done()
+
 			msg := fmt.Sprintf("Found: %d, excluded: %d (%s), skipped: %d (%s), copied: %d (%s), extra: %d (%s)", total,
 				excluded.Current(), formatSize(excludedBytes.Current()),
 				skipped.Current(), formatSize(skippedBytes.Current()),
@@ -1557,14 +1560,15 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				msg += fmt.Sprintf(", lost: %d", total-handled.Current())
 			}
 			logger.Info(msg)
+
+			if failed != nil {
+				if n := failed.Current(); n > 0 || total > handled.Current()+extra.Current() {
+					return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
+				}
+			}
 		} else {
 			sendStats(config.Manager)
 			logger.Infof("This worker process has already completed its tasks")
-		}
-		if failed != nil {
-			if n := failed.Current(); n > 0 || total > handled.Current()+extra.Current() {
-				return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
-			}
 		}
 		return nil
 	}
@@ -1648,6 +1652,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	delayDelFunc := func(storage object.ObjectStorage, keys []string) {
 		if len(keys) > 0 {
 			logger.Infof("delete %d dirs from %s", len(keys), storage)
+			sort.Strings(keys)
 		}
 		for i := len(keys) - 1; i >= 0; i-- {
 			handled.Increment()
