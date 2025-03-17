@@ -40,16 +40,19 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
+var srcDelayDelDir = make(chan string, 10240)
+
 // Stat has the counters to represent the progress.
 type Stat struct {
-	Copied       int64 // the number of copied files
-	CopiedBytes  int64 // total amount of copied data in bytes
-	Checked      int64 // the number of checked files
-	CheckedBytes int64 // total amount of checked data in bytes
-	Deleted      int64 // the number of deleted files
-	Skipped      int64 // the number of files skipped
-	SkippedBytes int64 // total amount of skipped data in bytes
-	Failed       int64 // the number of files that fail to copy
+	Copied       int64    // the number of copied files
+	CopiedBytes  int64    // total amount of copied data in bytes
+	Checked      int64    // the number of checked files
+	CheckedBytes int64    // total amount of checked data in bytes
+	Deleted      int64    // the number of deleted files
+	Skipped      int64    // the number of files skipped
+	SkippedBytes int64    // total amount of skipped data in bytes
+	Failed       int64    // the number of files that fail to copy
+	DelayDelDir  []string // the directories that need to be deleted
 }
 
 func updateStats(r *Stat) {
@@ -91,6 +94,16 @@ func httpRequest(url string, body []byte) (ans []byte, err error) {
 var sendStatMu sync.Mutex
 
 func sendStats(addr string) {
+	var dirs []string
+LOOP:
+	for len(dirs) < 5000 {
+		select {
+		case obj := <-srcDelayDelDir:
+			dirs = append(dirs, obj)
+		default:
+			break LOOP
+		}
+	}
 	sendStatMu.Lock()
 	defer sendStatMu.Unlock()
 	var r Stat
@@ -98,6 +111,7 @@ func sendStats(addr string) {
 	r.SkippedBytes = skippedBytes.Current()
 	r.Copied = copied.Current()
 	r.CopiedBytes = copiedBytes.Current()
+	r.DelayDelDir = dirs
 	if checked != nil {
 		r.Checked = checked.Current()
 		r.CheckedBytes = checkedBytes.Current()
@@ -183,6 +197,9 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 			return
 		}
 		updateStats(&r)
+		SrcDelayDelMu.Lock()
+		SrcDelayDel = append(SrcDelayDel, r.DelayDelDir...)
+		SrcDelayDelMu.Unlock()
 		logger.Debugf("receive stats %+v from %s", r, req.RemoteAddr)
 		_, _ = w.Write([]byte("OK"))
 	})

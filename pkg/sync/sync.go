@@ -828,7 +828,17 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				break
 			} else if equal {
 				if config.DeleteSrc {
-					deleteObj(src, key, false)
+					if obj.IsDir() {
+						if config.Manager != "" {
+							srcDelayDelDir <- key
+						} else {
+							SrcDelayDelMu.Lock()
+							SrcDelayDel = append(SrcDelayDel, key)
+							SrcDelayDelMu.Unlock()
+						}
+					} else {
+						deleteObj(src, key, false)
+					}
 				} else if config.Perms && (!obj.IsSymlink() || !config.Links) {
 					if o, e := dst.Head(key); e == nil {
 						if needCopyPerms(obj, o) {
@@ -927,8 +937,8 @@ func (o *withFSize) Size() int64 {
 
 var dstDelayDelMu sync.Mutex
 var dstDelayDel []string
-var srcDelayDelMu sync.Mutex
-var srcDelayDel []string
+var SrcDelayDelMu sync.Mutex
+var SrcDelayDel []string
 
 func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config *Config) bool {
 	handled.IncrTotal(1)
@@ -1042,9 +1052,9 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				tasks <- &withSize{obj, markChecksum}
 			} else if config.DeleteSrc {
 				if obj.IsDir() {
-					srcDelayDelMu.Lock()
-					srcDelayDel = append(srcDelayDel, obj.Key())
-					srcDelayDelMu.Unlock()
+					SrcDelayDelMu.Lock()
+					SrcDelayDel = append(SrcDelayDel, obj.Key())
+					SrcDelayDelMu.Unlock()
 				} else {
 					tasks <- &withSize{obj, markDeleteSrc}
 				}
@@ -1649,27 +1659,29 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		}()
 	}
 
-	delayDelFunc := func(storage object.ObjectStorage, keys []string) {
-		if len(keys) > 0 {
-			logger.Infof("delete %d dirs from %s", len(keys), storage)
-			sort.Strings(keys)
+	if config.Manager == "" {
+		delayDelFunc := func(storage object.ObjectStorage, keys []string) {
+			if len(keys) > 0 {
+				logger.Infof("delete %d dirs from %s", len(keys), storage)
+				sort.Strings(keys)
+			}
+			for i := len(keys) - 1; i >= 0; i-- {
+				handled.Increment()
+				deleteObj(storage, keys[i], config.Dry)
+			}
 		}
-		for i := len(keys) - 1; i >= 0; i-- {
-			handled.Increment()
-			deleteObj(storage, keys[i], config.Dry)
-		}
-	}
 
-	wg.Add(1)
-	go func() {
-		delayDelFunc(src, srcDelayDel)
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
-		delayDelFunc(dst, dstDelayDel)
-		wg.Done()
-	}()
+		wg.Add(1)
+		go func() {
+			delayDelFunc(src, SrcDelayDel)
+			wg.Done()
+		}()
+		wg.Add(1)
+		go func() {
+			delayDelFunc(dst, dstDelayDel)
+			wg.Done()
+		}()
+	}
 	wg.Wait()
 	return syncExitFunc()
 }
