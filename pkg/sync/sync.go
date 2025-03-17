@@ -1658,6 +1658,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			}
 		}()
 	}
+	wg.Wait()
 
 	if config.Manager == "" {
 		delayDelFunc := func(storage object.ObjectStorage, keys []string) {
@@ -1670,19 +1671,20 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				deleteObj(storage, keys[i], config.Dry)
 			}
 		}
+		delWg := sync.WaitGroup{}
 
-		wg.Add(1)
+		delWg.Add(1)
 		go func() {
 			delayDelFunc(src, SrcDelayDel)
-			wg.Done()
+			delWg.Done()
 		}()
-		wg.Add(1)
+		delWg.Add(1)
 		go func() {
 			delayDelFunc(dst, dstDelayDel)
-			wg.Done()
+			delWg.Done()
 		}()
+		delWg.Wait()
 	}
-	wg.Wait()
 	return syncExitFunc()
 }
 
