@@ -514,9 +514,29 @@ func (fs *FileSystem) Rmr(ctx meta.Context, p string, numthreads int) (err sysca
 	return
 }
 
+func trimDotsForRename(paths []string) (res []string) {
+	for i, p := range paths {
+		if p == "." {
+			paths[i] = ""
+		} else if p == ".." {
+			if i > 0 {
+				paths[i] = ""
+				paths[i-1] = ""
+			}
+		}
+	}
+	for _, p := range paths {
+		if p != "" {
+			res = append(res, p)
+		}
+	}
+
+	return
+}
+
 func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, flags uint32) (err syscall.Errno) {
-	oss := strings.Split(oldpath, "/")
-	nss := strings.Split(newpath, "/")
+	oss := trimDotsForRename(strings.Split(oldpath, "/"))
+	nss := trimDotsForRename(strings.Split(newpath, "/"))
 
 	// check if oldpath is ancestor of newpath
 	for i := 0; i < len(oss); {
