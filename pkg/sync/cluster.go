@@ -99,14 +99,14 @@ func sendStats(addr string) {
 	r.SkippedBytes = skippedBytes.Current()
 	r.Copied = copied.Current()
 	r.CopiedBytes = copiedBytes.Current()
-	SrcDelayDelMu.Lock()
-	idx := len(SrcDelayDel)
+	srcDelayDelMu.Lock()
+	idx := len(srcDelayDel)
 	if idx > 5000 {
 		idx = 5000
 	}
-	r.DelayDelDir = SrcDelayDel[:idx]
-	SrcDelayDel = SrcDelayDel[idx:]
-	SrcDelayDelMu.Unlock()
+	r.DelayDelDir = srcDelayDel[:idx]
+	srcDelayDel = srcDelayDel[idx:]
+	srcDelayDelMu.Unlock()
 	if checked != nil {
 		r.Checked = checked.Current()
 		r.CheckedBytes = checkedBytes.Current()
@@ -120,9 +120,9 @@ func sendStats(addr string) {
 	d, _ := json.Marshal(r)
 	ans, err := httpRequest(fmt.Sprintf("http://%s/stats", addr), d)
 	if err != nil || string(ans) != "OK" {
-		SrcDelayDelMu.Lock()
-		SrcDelayDel = append(SrcDelayDel, r.DelayDelDir...)
-		SrcDelayDelMu.Unlock()
+		srcDelayDelMu.Lock()
+		srcDelayDel = append(srcDelayDel, r.DelayDelDir...)
+		srcDelayDelMu.Unlock()
 		if errors.Is(err, syscall.ECONNREFUSED) {
 			logger.Errorf("the management process has been stopped, so the worker process now exits")
 			os.Exit(1)
@@ -195,9 +195,9 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 			return
 		}
 		updateStats(&r)
-		SrcDelayDelMu.Lock()
-		SrcDelayDel = append(SrcDelayDel, r.DelayDelDir...)
-		SrcDelayDelMu.Unlock()
+		srcDelayDelMu.Lock()
+		srcDelayDel = append(srcDelayDel, r.DelayDelDir...)
+		srcDelayDelMu.Unlock()
 		logger.Debugf("receive stats %+v from %s", r, req.RemoteAddr)
 		_, _ = w.Write([]byte("OK"))
 	})

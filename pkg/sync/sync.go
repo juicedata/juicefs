@@ -829,9 +829,9 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			} else if equal {
 				if config.DeleteSrc {
 					if obj.IsDir() {
-						SrcDelayDelMu.Lock()
-						SrcDelayDel = append(SrcDelayDel, key)
-						SrcDelayDelMu.Unlock()
+						srcDelayDelMu.Lock()
+						srcDelayDel = append(srcDelayDel, key)
+						srcDelayDelMu.Unlock()
 					} else {
 						deleteObj(src, key, false)
 					}
@@ -933,8 +933,8 @@ func (o *withFSize) Size() int64 {
 
 var dstDelayDelMu sync.Mutex
 var dstDelayDel []string
-var SrcDelayDelMu sync.Mutex
-var SrcDelayDel []string
+var srcDelayDelMu sync.Mutex
+var srcDelayDel []string
 
 func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config *Config) bool {
 	handled.IncrTotal(1)
@@ -1048,9 +1048,9 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				tasks <- &withSize{obj, markChecksum}
 			} else if config.DeleteSrc {
 				if obj.IsDir() {
-					SrcDelayDelMu.Lock()
-					SrcDelayDel = append(SrcDelayDel, obj.Key())
-					SrcDelayDelMu.Unlock()
+					srcDelayDelMu.Lock()
+					srcDelayDel = append(srcDelayDel, obj.Key())
+					srcDelayDelMu.Unlock()
 				} else {
 					tasks <- &withSize{obj, markDeleteSrc}
 				}
@@ -1573,7 +1573,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				}
 			}
 		} else {
-			for len(SrcDelayDel) > 0 {
+			for len(srcDelayDel) > 0 {
 				sendStats(config.Manager)
 			}
 			logger.Infof("This worker process has already completed its tasks")
@@ -1673,7 +1673,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 		delWg.Add(1)
 		go func() {
-			delayDelFunc(src, SrcDelayDel)
+			delayDelFunc(src, srcDelayDel)
 			delWg.Done()
 		}()
 		delWg.Add(1)
