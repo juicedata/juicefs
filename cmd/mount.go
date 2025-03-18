@@ -360,7 +360,6 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		Writeback:     c.Bool("writeback"),
 		Prefetch:      c.Int("prefetch"),
 		BufferSize:    utils.ParseBytes(c, "buffer-size", 'M'),
-		Readahead:     int(utils.ParseBytes(c, "max-readahead", 'M')),
 		UploadLimit:   utils.ParseMbps(c, "upload-limit") * 1e6 / 8,
 		DownloadLimit: utils.ParseMbps(c, "download-limit") * 1e6 / 8,
 		UploadDelay:   utils.Duration(c.String("upload-delay")),
@@ -380,6 +379,12 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		OSCache:           os.Getenv("JFS_DROP_OSCACHE") == "",
 		AutoCreate:        true,
 	}
+	if c.IsSet("max-readahead") {
+		chunkConf.Readahead = int(utils.ParseBytes(c, "max-readahead", 'M'))
+	} else {
+		chunkConf.Readahead = 8 * chunkConf.BlockSize
+	}
+
 	if chunkConf.UploadLimit == 0 {
 		chunkConf.UploadLimit = format.UploadLimit * 1e6 / 8
 	}
