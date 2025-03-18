@@ -354,6 +354,10 @@ func metaCacheFlags(defaultEntryCache float64) []cli.Flag {
 			Value: "1.0s",
 			Usage: "dir entry cache timeout",
 		},
+		&cli.StringFlag{
+			Name:  "negative-dir-entry-cache",
+			Usage: "cache timeout for negative dir entry lookups",
+		},
 		&cli.BoolFlag{
 			Name:  "readdir-cache",
 			Usage: "enable kernel caching of readdir entries, with timeout controlled by attr-cache flag (require linux kernel 4.20+)",
