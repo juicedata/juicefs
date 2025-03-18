@@ -461,6 +461,10 @@ func (j *juice) getAttrForControlFile(ctx vfs.LogContext, p string, stat *fuse.S
 	}
 
 	j.vfs.UpdateLength(inode, attr)
+
+	attr.Gid = ctx.Gid()
+	attr.Uid = ctx.Uid()
+
 	attrToStat(inode, attr, stat)
 	return
 }
