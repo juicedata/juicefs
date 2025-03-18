@@ -40,8 +40,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
-var srcDelayDelDir = make(chan string, 10240)
-
 // Stat has the counters to represent the progress.
 type Stat struct {
 	Copied       int64    // the number of copied files
@@ -94,16 +92,6 @@ func httpRequest(url string, body []byte) (ans []byte, err error) {
 var sendStatMu sync.Mutex
 
 func sendStats(addr string) {
-	var dirs []string
-LOOP:
-	for len(dirs) < 5000 {
-		select {
-		case obj := <-srcDelayDelDir:
-			dirs = append(dirs, obj)
-		default:
-			break LOOP
-		}
-	}
 	sendStatMu.Lock()
 	defer sendStatMu.Unlock()
 	var r Stat
@@ -111,7 +99,14 @@ LOOP:
 	r.SkippedBytes = skippedBytes.Current()
 	r.Copied = copied.Current()
 	r.CopiedBytes = copiedBytes.Current()
-	r.DelayDelDir = dirs
+	SrcDelayDelMu.Lock()
+	idx := len(SrcDelayDel)
+	if idx > 5000 {
+		idx = 5000
+	}
+	r.DelayDelDir = SrcDelayDel[:idx]
+	SrcDelayDel = SrcDelayDel[idx:]
+	SrcDelayDelMu.Unlock()
 	if checked != nil {
 		r.Checked = checked.Current()
 		r.CheckedBytes = checkedBytes.Current()
@@ -125,6 +120,9 @@ LOOP:
 	d, _ := json.Marshal(r)
 	ans, err := httpRequest(fmt.Sprintf("http://%s/stats", addr), d)
 	if err != nil || string(ans) != "OK" {
+		SrcDelayDelMu.Lock()
+		SrcDelayDel = append(SrcDelayDel, r.DelayDelDir...)
+		SrcDelayDelMu.Unlock()
 		if errors.Is(err, syscall.ECONNREFUSED) {
 			logger.Errorf("the management process has been stopped, so the worker process now exits")
 			os.Exit(1)

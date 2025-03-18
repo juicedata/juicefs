@@ -829,13 +829,9 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			} else if equal {
 				if config.DeleteSrc {
 					if obj.IsDir() {
-						if config.Manager != "" {
-							srcDelayDelDir <- key
-						} else {
-							SrcDelayDelMu.Lock()
-							SrcDelayDel = append(SrcDelayDel, key)
-							SrcDelayDelMu.Unlock()
-						}
+						SrcDelayDelMu.Lock()
+						SrcDelayDel = append(SrcDelayDel, key)
+						SrcDelayDelMu.Unlock()
 					} else {
 						deleteObj(src, key, false)
 					}
@@ -1577,7 +1573,9 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				}
 			}
 		} else {
-			sendStats(config.Manager)
+			for len(SrcDelayDel) > 0 {
+				sendStats(config.Manager)
+			}
 			logger.Infof("This worker process has already completed its tasks")
 		}
 		return nil
