@@ -752,6 +752,7 @@ func (fs *FileSystem) lookup(ctx meta.Context, parent Ino, name string, inode *I
 		es[name] = &entryCache{*inode, attr.Typ, expire}
 		fs.cacheM.Unlock()
 	}
+	// TODO: support for `negative_dentry_cache`?
 	return err
 }
 
