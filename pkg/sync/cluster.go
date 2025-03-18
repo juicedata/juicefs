@@ -100,12 +100,8 @@ func sendStats(addr string) {
 	r.Copied = copied.Current()
 	r.CopiedBytes = copiedBytes.Current()
 	srcDelayDelMu.Lock()
-	idx := len(srcDelayDel)
-	if idx > 5000 {
-		idx = 5000
-	}
-	r.DelayDelDir = srcDelayDel[:idx]
-	srcDelayDel = srcDelayDel[idx:]
+	r.DelayDelDir = srcDelayDel
+	srcDelayDel = make([]string, 0)
 	srcDelayDelMu.Unlock()
 	if checked != nil {
 		r.Checked = checked.Current()
