@@ -514,7 +514,46 @@ func (fs *FileSystem) Rmr(ctx meta.Context, p string, numthreads int) (err sysca
 	return
 }
 
+func trimDotsForRename(paths []string) (res []string) {
+	for i, p := range paths {
+		if p == "." {
+			paths[i] = ""
+		} else if p == ".." {
+			if i > 0 {
+				paths[i] = ""
+				paths[i-1] = ""
+			}
+		}
+	}
+	for _, p := range paths {
+		if p != "" {
+			res = append(res, p)
+		}
+	}
+
+	return
+}
+
 func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, flags uint32) (err syscall.Errno) {
+	oss := trimDotsForRename(strings.Split(oldpath, "/"))
+	nss := trimDotsForRename(strings.Split(newpath, "/"))
+	var err0 syscall.Errno
+
+	// check if oldpath is ancestor of newpath
+	for i := 0; i < len(oss); {
+		if i >= len(nss) || oss[i] != nss[i] {
+			break
+		} else { // oss[i] == nss[i]
+			i++
+			if i == len(oss) && i == len(nss) {
+				break
+			} else if i == len(oss) {
+				err0 = syscall.EINVAL
+				break
+			}
+		}
+	}
+
 	defer trace.StartRegion(context.TODO(), "fs.Rename").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Rename (%s,%s,%d): %s", oldpath, newpath, flags, errstr(err)) }()
@@ -525,6 +564,9 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, f
 	newfi, err := fs.resolve(ctx, parentDir(newpath), true)
 	if err != 0 {
 		return
+	}
+	if err0 != 0 {
+		return err0
 	}
 	err = fs.m.Rename(ctx, oldfi.inode, path.Base(oldpath), newfi.inode, path.Base(newpath), flags, nil, nil)
 	fs.invalidateEntry(oldfi.inode, path.Base(oldpath))
