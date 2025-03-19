@@ -2483,7 +2483,7 @@ func (m *kvMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
 	}
 
 	foundInodes[RootInode], foundInodes[TrashInode] = nil, nil
-	m.client.txn(Background(), func(tx *kvTxn) error {
+	if err := m.client.txn(Background(), func(tx *kvTxn) error {
 		for c, e := range foundInodes {
 			if e != nil {
 				logger.Infof("found leaked edge %d -> (%d, %s)", e.Parent, c, e.Name)
@@ -2493,7 +2493,10 @@ func (m *kvMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
 			}
 		}
 		return nil
-	}, 0)
+	}, 0); err != nil {
+		logger.Errorf("delete leaked edges: %s", err)
+		return
+	}
 }
 
 func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, scanLeaked, delete bool, showProgress func()) syscall.Errno {

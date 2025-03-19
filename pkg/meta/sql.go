@@ -3191,7 +3191,7 @@ func (m *dbMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
 	}
 
 	foundInodes[RootInode], foundInodes[TrashInode] = nil, nil
-	m.txn(func(s *xorm.Session) error {
+	if err := m.txn(func(s *xorm.Session) error {
 		for c, e := range foundInodes {
 			if e != nil {
 				logger.Infof("found leaked edge %d -> (%d, %s)", e.Parent, c, e.Name)
@@ -3203,7 +3203,10 @@ func (m *dbMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		logger.Errorf("delete leaked edges: %s", err)
+		return
+	}
 }
 
 func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, scanLeaked, delete bool, showProgress func()) syscall.Errno {
