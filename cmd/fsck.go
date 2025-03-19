@@ -133,7 +133,7 @@ func fsck(ctx *cli.Context) error {
 	// List all slices in metadata engine
 	sliceCSpin := progress.AddCountSpinner("Listed slices")
 	slices := make(map[meta.Ino][]meta.Slice)
-	r := m.ListSlices(c, slices, false, false, sliceCSpin.Increment)
+	r := m.ListSlices(c, slices, false, false, false, sliceCSpin.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}

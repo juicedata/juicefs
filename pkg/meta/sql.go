@@ -3149,7 +3149,67 @@ func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 	})
 }
 
-func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
+func (m *dbMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
+	type entry struct {
+		Parent Ino
+		Name   []byte
+	}
+	var foundInodes = make(map[Ino]*entry)
+	foundInodes[RootInode] = &entry{Parent: RootInode, Name: []byte("/")}
+	foundInodes[TrashInode] = &entry{Parent: RootInode, Name: []byte(".trash")}
+	cutoff := time.Now().Add(-before)
+
+	var edges []edge
+	var nodes []node
+	if err := m.txn(func(s *xorm.Session) error {
+		if err := s.Find(&edges); err != nil {
+			return err
+		}
+		for _, edge := range edges {
+			foundInodes[edge.Inode] = &entry{Parent: edge.Parent, Name: edge.Name}
+		}
+		if err := s.Find(&nodes); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		logger.Errorf("scan all edges and nodes: %s", err)
+		return
+	}
+
+	for _, node := range nodes {
+		if _, ok := foundInodes[node.Inode]; !ok && time.Unix(node.Ctime/1e6, 0).Before(cutoff) {
+			logger.Infof("found leaded inode: %d %+v", node.Inode, node)
+			if clean {
+				err := m.doDeleteSustainedInode(0, node.Inode)
+				if err != nil {
+					logger.Errorf("delete leaked inode %d : %s", node.Inode, err)
+				}
+			}
+		}
+		foundInodes[node.Inode] = nil
+	}
+
+	foundInodes[RootInode], foundInodes[TrashInode] = nil, nil
+	m.txn(func(s *xorm.Session) error {
+		for c, e := range foundInodes {
+			if e != nil {
+				logger.Infof("found leaked edge %d -> (%d, %s)", e.Parent, c, e.Name)
+				if clean {
+					if _, err := s.Delete(&edge{Parent: e.Parent, Name: e.Name}); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		return nil
+	})
+}
+
+func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, scanLeaked, delete bool, showProgress func()) syscall.Errno {
+	if scanLeaked {
+		m.cleanupLeakedInodesAndEdges(delete, time.Hour)
+	}
 	if delete {
 		m.doCleanupSlices()
 	}

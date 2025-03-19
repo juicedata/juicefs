@@ -196,7 +196,7 @@ func gc(ctx *cli.Context) error {
 
 	// List all slices in metadata engine
 	slices := make(map[meta.Ino][]meta.Slice)
-	r := m.ListSlices(c, slices, true, delete, sliceCSpin.Increment)
+	r := m.ListSlices(c, slices, true, true, delete, sliceCSpin.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
