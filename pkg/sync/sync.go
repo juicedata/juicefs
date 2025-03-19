@@ -828,7 +828,13 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				break
 			} else if equal {
 				if config.DeleteSrc {
-					deleteObj(src, key, false)
+					if obj.IsDir() {
+						srcDelayDelMu.Lock()
+						srcDelayDel = append(srcDelayDel, key)
+						srcDelayDelMu.Unlock()
+					} else {
+						deleteObj(src, key, false)
+					}
 				} else if config.Perms && (!obj.IsSymlink() || !config.Links) {
 					if o, e := dst.Head(key); e == nil {
 						if needCopyPerms(obj, o) {
@@ -1568,6 +1574,9 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			}
 		} else {
 			sendStats(config.Manager)
+			for len(srcDelayDel) > 0 {
+				sendStats(config.Manager)
+			}
 			logger.Infof("This worker process has already completed its tasks")
 		}
 		return nil
@@ -1648,29 +1657,33 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			}
 		}()
 	}
-
-	delayDelFunc := func(storage object.ObjectStorage, keys []string) {
-		if len(keys) > 0 {
-			logger.Infof("delete %d dirs from %s", len(keys), storage)
-			sort.Strings(keys)
-		}
-		for i := len(keys) - 1; i >= 0; i-- {
-			handled.Increment()
-			deleteObj(storage, keys[i], config.Dry)
-		}
-	}
-
-	wg.Add(1)
-	go func() {
-		delayDelFunc(src, srcDelayDel)
-		wg.Done()
-	}()
-	wg.Add(1)
-	go func() {
-		delayDelFunc(dst, dstDelayDel)
-		wg.Done()
-	}()
 	wg.Wait()
+
+	if config.Manager == "" {
+		delayDelFunc := func(storage object.ObjectStorage, keys []string) {
+			if len(keys) > 0 {
+				logger.Infof("delete %d dirs from %s", len(keys), storage)
+				sort.Strings(keys)
+			}
+			for i := len(keys) - 1; i >= 0; i-- {
+				handled.Increment()
+				deleteObj(storage, keys[i], config.Dry)
+			}
+		}
+		delWg := sync.WaitGroup{}
+
+		delWg.Add(1)
+		go func() {
+			delayDelFunc(src, srcDelayDel)
+			delWg.Done()
+		}()
+		delWg.Add(1)
+		go func() {
+			delayDelFunc(dst, dstDelayDel)
+			delWg.Done()
+		}()
+		delWg.Wait()
+	}
 	return syncExitFunc()
 }
 

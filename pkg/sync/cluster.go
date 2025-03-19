@@ -42,14 +42,15 @@ import (
 
 // Stat has the counters to represent the progress.
 type Stat struct {
-	Copied       int64 // the number of copied files
-	CopiedBytes  int64 // total amount of copied data in bytes
-	Checked      int64 // the number of checked files
-	CheckedBytes int64 // total amount of checked data in bytes
-	Deleted      int64 // the number of deleted files
-	Skipped      int64 // the number of files skipped
-	SkippedBytes int64 // total amount of skipped data in bytes
-	Failed       int64 // the number of files that fail to copy
+	Copied       int64    // the number of copied files
+	CopiedBytes  int64    // total amount of copied data in bytes
+	Checked      int64    // the number of checked files
+	CheckedBytes int64    // total amount of checked data in bytes
+	Deleted      int64    // the number of deleted files
+	Skipped      int64    // the number of files skipped
+	SkippedBytes int64    // total amount of skipped data in bytes
+	Failed       int64    // the number of files that fail to copy
+	DelayDelDir  []string // the directories that need to be deleted
 }
 
 func updateStats(r *Stat) {
@@ -98,6 +99,10 @@ func sendStats(addr string) {
 	r.SkippedBytes = skippedBytes.Current()
 	r.Copied = copied.Current()
 	r.CopiedBytes = copiedBytes.Current()
+	srcDelayDelMu.Lock()
+	r.DelayDelDir = srcDelayDel
+	srcDelayDel = make([]string, 0)
+	srcDelayDelMu.Unlock()
 	if checked != nil {
 		r.Checked = checked.Current()
 		r.CheckedBytes = checkedBytes.Current()
@@ -111,6 +116,9 @@ func sendStats(addr string) {
 	d, _ := json.Marshal(r)
 	ans, err := httpRequest(fmt.Sprintf("http://%s/stats", addr), d)
 	if err != nil || string(ans) != "OK" {
+		srcDelayDelMu.Lock()
+		srcDelayDel = append(srcDelayDel, r.DelayDelDir...)
+		srcDelayDelMu.Unlock()
 		if errors.Is(err, syscall.ECONNREFUSED) {
 			logger.Errorf("the management process has been stopped, so the worker process now exits")
 			os.Exit(1)
@@ -183,6 +191,9 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 			return
 		}
 		updateStats(&r)
+		srcDelayDelMu.Lock()
+		srcDelayDel = append(srcDelayDel, r.DelayDelDir...)
+		srcDelayDelMu.Unlock()
 		logger.Debugf("receive stats %+v from %s", r, req.RemoteAddr)
 		_, _ = w.Write([]byte("OK"))
 	})
