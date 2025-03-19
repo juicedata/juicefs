@@ -1573,6 +1573,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				}
 			}
 		} else {
+			sendStats(config.Manager)
 			for len(srcDelayDel) > 0 {
 				sendStats(config.Manager)
 			}
