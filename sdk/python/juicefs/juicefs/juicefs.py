@@ -89,14 +89,14 @@ class JuiceFSLib(object):
 class Client(object):
     """A JuiceFS client."""
     def __init__(self, name, meta, *, bucket="", storage_class="", read_only=False, no_session=False, 
-                 no_bg_job=False, open_cache="", backup_meta="", backup_skip_trash=False, heartbeat="", 
-                 cache_dir="", cache_size="100M", free_space="", auto_create=False, cache_full_block=False, 
-                 cache_checksum="", cache_eviction="", cache_scan_interval="", cache_expire="", 
-                 writeback=False, memory_size="300M", prefetch=0, readahead="100M", upload_limit="10g", 
-                 download_limit="10g", max_uploads=0, max_deletes=0, skip_dir_nlink=0, skip_dir_mtime="", 
-                 io_retries=0, get_timeout="", put_timeout="", fast_resolve=False, attr_timeout="", 
-                 entry_timeout="", dir_entry_timeout="", debug=False, no_usage_report=False, access_log="", 
-                 push_gateway="", push_interval="", push_auth="", push_labels="", push_graphite="", **kwargs): 
+                 no_bg_job=True, open_cache="0", backup_meta="3600", backup_skip_trash=False, heartbeat="12",
+                 cache_dir="memory", cache_size="100M", free_space="0.1", auto_create=True, cache_full_block=True,
+                 cache_checksum="full", cache_eviction="2-random", cache_scan_interval="300", cache_expire="0",
+                 writeback=False, memory_size="300M", prefetch=1, readahead="0", upload_limit="0",
+                 download_limit="0", max_uploads=20, max_deletes=10, skip_dir_nlink=20, skip_dir_mtime="100ms",
+                 io_retries=10, get_timeout="5", put_timeout="60", fast_resolve=True, attr_timeout="0",
+                 entry_timeout="0", dir_entry_timeout="0", debug=False, no_usage_report=False, access_log="",
+                 push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite="", **kwargs):
         self.lib = JuiceFSLib()
         kwargs["meta"] = meta
         kwargs["bucket"] = bucket
