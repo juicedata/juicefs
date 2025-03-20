@@ -283,29 +283,64 @@ func recoveryMysqlPwd(addr string) string {
 	return addr
 }
 
-func extractCustomConfig[T string | int](value *url.Values, key string, defaultV T) (T, error) {
-	if value == nil {
-		return defaultV, nil
+func retriveUrlConnsOptions(driver, murl string) (string, int, int, int, int, string) {
+	optIndex := strings.Index(murl, "?")
+
+	var vOpenConns int = 0
+	var vIdleConns int = runtime.GOMAXPROCS(-1) * 2
+	var vIdleTime int = 300
+	var vLifeTime int = 0
+	var tablePrefix string
+	var baseurl string = murl
+	var optsurl string
+	if optIndex != -1 {
+		baseurl = murl[:optIndex]
+		optsurl = murl[optIndex+1:]
 	}
-	if v := value.Get(key); v != "" {
-		value.Del(key)
-		var result T
-		switch any(defaultV).(type) {
-		case int:
-			parsedInt, err := strconv.Atoi(v)
-			if err != nil {
-				return defaultV, fmt.Errorf("failed to parse value as int: %v", err)
-			}
-			result = any(parsedInt).(T)
-		case string:
-			result = any(v).(T)
-		default:
-			return defaultV, fmt.Errorf("unsupported type: %T", defaultV)
+	if vals, err := url.ParseQuery(optsurl); err == nil {
+		if vals.Has("max_open_conns") {
+			vOpenConns, _ = strconv.Atoi(vals.Get("max_open_conns"))
+			vals.Del("max_open_conns")
 		}
-		return result, nil
-	} else {
-		return defaultV, nil
+		if vals.Has("max_idle_conns") {
+			vIdleConns, _ = strconv.Atoi(vals.Get("max_idle_conns"))
+			vals.Del("max_idle_conns")
+		}
+		if vals.Has("max_idle_time") {
+			vIdleTime, _ = strconv.Atoi(vals.Get("max_idle_time"))
+			vals.Del("max_idle_time")
+		}
+		if vals.Has("max_life_time") {
+			vLifeTime, _ = strconv.Atoi(vals.Get("max_life_time"))
+			vals.Del("max_life_time")
+		}
+		if vals.Has("table_prefix") {
+			tablePrefix = vals.Get("table_prefix")
+			vals.Del("table_prefix")
+		}
+		if driver == "sqlite3" {
+			if !vals.Has("cache") {
+				vals.Add("cache", "shared")
+			}
+			if !vals.Has("_journal") && !vals.Has("_journal_mode") {
+				vals.Add("_journal", "WAL")
+			}
+			if !vals.Has("_timeout") && !vals.Has("_busy_timeout") {
+				vals.Add("_timeout", "5000")
+			}
+		}
+		optsurl = vals.Encode()
 	}
+	if vIdleConns <= 0 {
+		vIdleConns = runtime.GOMAXPROCS(-1) * 2
+	}
+	if vIdleTime <= 0 {
+		vIdleTime = 300
+	}
+	if optsurl != "" {
+		return fmt.Sprintf("%s?%s", baseurl, optsurl), vOpenConns, vIdleConns, vIdleTime, vLifeTime, tablePrefix
+	}
+	return baseurl, vOpenConns, vIdleConns, vIdleTime, vLifeTime, tablePrefix
 }
 
 var setTransactionIsolation func(dns string) (string, error)
@@ -380,51 +415,12 @@ func (m *dbMeta) initStatement() {
 
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	var searchPath string
-	baseUrl, queryStr, _ := strings.Cut(addr, "?")
-	var query url.Values
-	var err error
-	query, err = url.ParseQuery(queryStr)
-	if err != nil {
-		return nil, err
-	}
-	var vOpenConns, vIdleConns, vIdleTime, vLifeTime int
-	if vOpenConns, err = extractCustomConfig(&query, "max_open_conns", 0); err != nil {
-		return nil, err
-	}
-	if vIdleConns, err = extractCustomConfig(&query, "max_idle_conns", runtime.GOMAXPROCS(-1)*2); err != nil {
-		return nil, err
-	}
-	if vIdleTime, err = extractCustomConfig(&query, "max_idle_time", 300); err != nil {
-		return nil, err
-	}
-	if vLifeTime, err = extractCustomConfig(&query, "max_life_time", 0); err != nil {
-		return nil, err
-	}
-	var tablePrefix string
-	if tablePrefix, err = extractCustomConfig(&query, "table_prefix", ""); err != nil {
-		return nil, err
-	}
-	if tablePrefix != "" {
-		tablePrefix = "jfs_" + tablePrefix + "_"
-	} else {
-		tablePrefix = "jfs_"
-	}
-	if driver == "sqlite3" {
-		if !query.Has("cache") {
-			query.Add("cache", "shared")
-		}
-		if !query.Has("_journal") && !query.Has("_journal_mode") {
-			query.Add("_journal", "WAL")
-		}
-		if !query.Has("_timeout") && !query.Has("_busy_timeout") {
-			query.Add("_timeout", "5000")
-		}
-	}
 
-	if encode := query.Encode(); encode != "" {
-		addr = fmt.Sprintf("%s?%s", baseUrl, encode)
+	addr, vOpenConns, vIdleConns, vIdleTime, vLifeTime, tablePrefix := retriveUrlConnsOptions(driver, addr)
+	if tablePrefix == "" {
+		tablePrefix = "jfs_"
 	} else {
-		addr = baseUrl
+		tablePrefix = "jfs_" + tablePrefix + "_"
 	}
 
 	if driver == "postgres" {
