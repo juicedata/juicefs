@@ -333,14 +333,14 @@ func (m *dbMeta) sqlConv(sql string) string {
 }
 
 func (m *dbMeta) initStatement() {
-	m.statement["SELECT length FROM node WHERE inode IN (SELECT inode FROM ssustained)"] =
-		fmt.Sprintf("SELECT length FROM %snode WHERE inode IN (SELECT inode FROM %ssustained)", m.tablePrefix)
+	m.statement["SELECT length FROM node WHERE inode IN (SELECT inode FROM sustained)"] =
+		fmt.Sprintf("SELECT length FROM %snode WHERE inode IN (SELECT inode FROM %sustained)", m.tablePrefix, m.tablePrefix)
 	m.statement["update counter set value=value + ? where name='totalInodes'"] =
 		fmt.Sprintf("update %scounter set value=value + ? where name='totalInodes'", m.tablePrefix)
 	m.statement["update counter set value= value + ? where name='usedSpace'"] =
 		fmt.Sprintf("update %scounter set value= value + ? where name='usedSpace'", m.tablePrefix)
 	m.statement["update chunk set slices=slices || ? where inode=? AND indx=?"] =
-		fmt.Sprintf("update %sschunk set slices=slices || ? where inode=? AND indx=?", m.tablePrefix)
+		fmt.Sprintf("update %schunk set slices=slices || ? where inode=? AND indx=?", m.tablePrefix)
 	m.statement["update chunk set slices=concat(slices, ?) where inode=? AND indx=?"] =
 		fmt.Sprintf("update %schunk set slices=concat(slices, ?) where inode=? AND indx=?", m.tablePrefix)
 	m.statement["update chunk_ref set refs=refs+1 where chunkid = ? AND size = ?"] =
@@ -349,7 +349,6 @@ func (m *dbMeta) initStatement() {
 		fmt.Sprintf("update %schunk_ref set refs=refs-1 where chunkid=? AND size=?", m.tablePrefix)
 	m.statement["update dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"] =
 		fmt.Sprintf("update %sdir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?", m.tablePrefix)
-	m.statement["edge.inode=node.inode"] = fmt.Sprintf("%sedge.inode=%snode.inode", m.tablePrefix, m.tablePrefix)
 	m.statement[`
 			 INSERT INTO chunk (inode, indx, slices)
 			 VALUES (?, ?, ?)
@@ -370,12 +369,12 @@ func (m *dbMeta) initStatement() {
 			 VALUES (?, ?, ?)
 			 ON DUPLICATE KEY UPDATE
 			 slices=concat(slices, ?)`, m.tablePrefix)
-
+	m.statement["edge.inode=node.inode"] = fmt.Sprintf("%sedge.inode=%snode.inode", m.tablePrefix, m.tablePrefix)
 	m.statement["edge.id"] = fmt.Sprintf("%sedge.id", m.tablePrefix)
 	m.statement["edge.name"] = fmt.Sprintf("%sedge.name", m.tablePrefix)
 	m.statement["edge.type"] = fmt.Sprintf("%sedge.type", m.tablePrefix)
 	m.statement["edge.*"] = fmt.Sprintf("%sedge.*", m.tablePrefix)
-	m.statement["node.*"] = fmt.Sprintf("%sode.*", m.tablePrefix)
+	m.statement["node.*"] = fmt.Sprintf("%snode.*", m.tablePrefix)
 
 }
 
@@ -493,9 +492,10 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	engine.DB().SetConnMaxIdleTime(time.Second * time.Duration(vIdleTime))
 	engine.SetTableMapper(prefixMapper{mapper: engine.GetTableMapper(), prefix: tablePrefix})
 	m := &dbMeta{
-		baseMeta:  newBaseMeta(addr, conf),
-		db:        engine,
-		statement: make(map[string]string),
+		baseMeta:    newBaseMeta(addr, conf),
+		db:          engine,
+		statement:   make(map[string]string),
+		tablePrefix: tablePrefix,
 	}
 	m.initStatement()
 	m.spool = &sync.Pool{
@@ -1195,7 +1195,7 @@ func (m *dbMeta) doSyncUsedSpace(ctx Context) error {
 		return err
 	}
 	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
-		queryResultMap, err := s.QueryString(m.sqlConv("SELECT length FROM node WHERE inode IN (SELECT inode FROM ssustained)"))
+		queryResultMap, err := s.QueryString(m.sqlConv("SELECT length FROM node WHERE inode IN (SELECT inode FROM sustained)"))
 		if err != nil {
 			return err
 		}
@@ -1362,6 +1362,9 @@ func (m *dbMeta) upsertSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 			 VALUES (?, ?, ?)
 			 ON DUPLICATE KEY UPDATE
 			 slices=concat(slices, ?)`), inode, indx, buf, buf)
+		if err != nil {
+			return err
+		}
 		n, _ := r.RowsAffected()
 		*insert = n == 1 // https://dev.mysql.com/doc/refman/5.7/en/insert-on-duplicate.html
 	}
@@ -3098,7 +3101,7 @@ func (m *dbMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
 					return fmt.Errorf("invalid value for delayed slices %d: %v", ds.Id, ds.Slices)
 				}
 				for _, s := range ss {
-					if _, e := ses.Exec(m.sqlConv("update chunk_ref set refs=refs-1 where chunkid=? and size=?"), s.Id, s.Size); e != nil {
+					if _, e := ses.Exec(m.sqlConv("update chunk_ref set refs=refs-1 where chunkid=? AND size=?"), s.Id, s.Size); e != nil {
 						return e
 					}
 				}
@@ -3164,7 +3167,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 				if s_.id == 0 {
 					continue
 				}
-				if _, err := s.Exec(m.sqlConv("update chunk_ref set refs=refs-1 where chunkid=? and size=?"), s_.id, s_.size); err != nil {
+				if _, err := s.Exec(m.sqlConv("update chunk_ref set refs=refs-1 where chunkid=? AND size=?"), s_.id, s_.size); err != nil {
 					return err
 				}
 			}
@@ -3327,7 +3330,7 @@ func (m *dbMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 			}
 			if clean {
 				for _, s := range ss {
-					if _, e := tx.Exec(m.sqlConv("update chunk_ref set refs=refs-1 where chunkid=? and size=?"), s.Id, s.Size); e != nil {
+					if _, e := tx.Exec(m.sqlConv("update chunk_ref set refs=refs-1 where chunkid=? AND size=?"), s.Id, s.Size); e != nil {
 						return e
 					}
 				}
@@ -4877,7 +4880,7 @@ func (m *dbMeta) getDirFetcher() dirFetcher {
 
 			s = s.Table(&edge{}).In(m.sqlConv("edge.id"), ids).OrderBy(m.sqlConv("edge.name")) // need to sorted by name, otherwise the cursor will be invalid
 			if plus {
-				s = s.Join("INNER", &node{}, m.sqlConv("edge.inode=node.inode")).Cols(m.sqlConv("edge.name"), m.sqlConv("edge.*"))
+				s = s.Join("INNER", &node{}, m.sqlConv("edge.inode=node.inode")).Cols(m.sqlConv("edge.name"), m.sqlConv("node.*"))
 			} else {
 				s = s.Cols(m.sqlConv("edge.id"), m.sqlConv("edge.name"), m.sqlConv("edge.type"))
 			}
