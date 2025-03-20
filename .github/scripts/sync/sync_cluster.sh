@@ -60,7 +60,6 @@ test_sync_without_mount_point(){
     done
     dd if=/dev/urandom of=/jfs/data/file$file_count bs=1M count=1024
     (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
-    
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-new \
@@ -98,8 +97,131 @@ test_sync_without_mount_point2(){
     set +o pipefail
     ./juicefs mount -d $META_URL /jfs
     diff data/ /jfs/data/
+    for i in $(seq 1 $file_count); do
+        dd if=/dev/urandom of=data/file$i bs=1M count=2 status=none
+    done
+    dd if=/dev/urandom of=data/file$file_count bs=1M count=10
+    ./mc cp -r data myminio/data
+    sleep 2
+    set -o pipefail
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --update \
+         2>&1 | tee sync.log
+    set +o pipefail
+    diff data/ /jfs/data/
     ./mc rm -r --force myminio/data
     rm -rf data
+    grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal or ERROR in sync.log" && exit 1 || true
+}   
+
+test_sync_delete_src_and_update(){
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    file_count=$FILE_COUNT
+    rm -rf data
+    mkdir -p data
+    for i in $(seq 1 $file_count); do
+        echo "test-$i" > data/test-$i
+    done
+    ./mc cp -r data myminio/data
+    set -o pipefail
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --dirs \
+         2>&1 | tee sync.log
+    set +o pipefail
+    diff data/ /jfs/data/
+    rm sync.log
+    for i in $(seq 1 $file_count); do
+        echo "test-update-$i" > data/test-$i
+    done
+    ./mc cp -r data myminio/data
+    set -o pipefail
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --delete-src --update --dirs \
+         2>&1 | tee sync.log
+    set +o pipefail
+    diff data/ /jfs/data/
+    set -o pipefail
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --delete-src --dirs \
+         2>&1 | tee sync.log
+    set +o pipefail
+    if ./mc ls myminio/data/ | grep -q .; then
+        echo "Error: MinIO bucket /data is not empty"
+        exit 1
+    fi
+    diff data/ /jfs/data/
+    grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal or ERROR in sync.log" && exit 1 || true
+}
+
+test_sync_delete_dst(){
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    file_count=$FILE_COUNT
+    rm -rf data
+    mkdir -p /jfs/data
+    for i in $(seq 1 $file_count); do
+        dd if=/dev/urandom of=/jfs/data/file$i bs=1M count=1 status=none
+    done
+    dd if=/dev/urandom of=/jfs/data/file$file_count bs=1M count=1024
+    echo "retain" > /jfs/data/retain
+    chmod -R 777 /jfs/data
+    rm -rf empty && mkdir empty
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-dst --match-full-path --exclude='retain' --include='*' \
+         ./empty/ jfs://meta_url/data/  --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --check-new \
+         2>&1 | tee sync.log
+    grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    [ ! -f /jfs/data/retain ] && echo "Error: retain file was incorrectly deleted" && exit 1 || true
+}
+
+test_sync_with_random_test(){
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    mkdir /jfs/test || true
+    mkdir /jfs/test2 || true
+    
+    ./random-test runOp -baseDir /jfs/test -files 500000 -ops 5000000 -threads 50 -dirSize 10 -duration 60s -createOp 30,uniform \
+    -deleteOp 5,end --linkOp 10,uniform --removeLinkOp 1,end --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform
+    chmod -R 777 /jfs/test
+    chmod -R 777 /jfs/test2
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/test/ jfs://meta_url/test2/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --check-new --links --dirs \
+         2>&1 | tee sync.log
+    grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 --dirs \
+         --list-threads 10 --list-depth 5 --check-all --links \
+         2>&1 | tee sync.log
+    grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    [ -z "$(ls -A /jfs/test)" ] || exit 1
+    rm -rf empty || mkdir empty
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-dst --match-full-path  --include='*' \
+         ./empty/ jfs://meta_url/test2/ --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --check-new --dirs --links \
+         2>&1 | tee sync.log
+    grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
+    [ -z "$(ls -A /jfs/test2)" ] || exit 1
+}
+
+test_sync_files_from_file(){
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    mkdir /jfs/test || true
+    mkdir /jfs/test2 || true
+    sudo -u juicedata ./random-test runOp -baseDir /jfs/test -files 500000 -ops 5000000 -threads 50 -dirSize 100000 -duration 60s -createOp 30,uniform \
+    -deleteOp 5,end --linkOp 10,uniform --removeLinkOp 1,end --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform
+    sudo ls /jfs/test > files
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/test/ jfs://meta_url/test2/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --check-all --links --dirs --files-from files \
+         2>&1 | tee sync.log
+    grep "panic\|<FATAL>\|ERROR" sync.log && echo "panic or fatal or error in sync.log" && exit 1 || true
 }
 
 skip_test_sync_between_oss(){
@@ -123,6 +245,23 @@ skip_test_sync_between_oss(){
         exit 1
     fi
     check_sync_log $file_count
+}
+
+test_sync_worker_down(){
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    file_count=$FILE_COUNT 
+    mkdir -p /jfs/data
+    for i in $(seq 1 $file_count); do
+        echo "test-$i" > /jfs/data/test-$i
+    done
+    docker stop worker1
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ jfs://meta_url/data2/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --check-new \
+         2>&1 | tee sync.log
+    diff /jfs/data/ /jfs/data2/
+    docker start worker1
 }
 
 check_sync_log(){
