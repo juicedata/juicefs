@@ -1967,6 +1967,10 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 		attr.Parent = parent
 	}
 
+	progress := utils.NewProgress(false)
+	defer progress.Done()
+	nodeBar := progress.AddCountBar("Checked nodes", 0)
+
 	var hasError bool
 	type node struct {
 		inode Ino
@@ -1976,16 +1980,20 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 	nodes := make(chan *node, 1000)
 	go func() {
 		defer close(nodes)
+		var count int64
 		if recursive {
 			if st := m.walk(ctx, inode, fpath, &attr, func(ctx Context, inode Ino, path string, attr *Attr) {
 				nodes <- &node{inode, path, attr}
+				atomic.AddInt64(&count, 1)
 			}); st != 0 {
 				hasError = true
 				logger.Errorf("Walk %s: %s", fpath, st)
 			}
 		} else {
 			nodes <- &node{inode, fpath, &attr}
+			count = 1
 		}
+		nodeBar.SetTotal(count)
 	}()
 
 	format, err := m.Load(false)
@@ -2096,6 +2104,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 						hasError = true
 					}
 				}
+				nodeBar.Increment()
 			}
 		}()
 	}
@@ -2109,6 +2118,11 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 	if hasError {
 		return errors.New("some errors occurred, please check the log of fsck")
 	}
+
+	if progress.Quiet {
+		logger.Infof("Checked %d nodes", nodeBar.Current())
+	}
+
 	return nil
 }
 
