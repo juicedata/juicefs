@@ -181,6 +181,10 @@ func dataCacheFlags() []cli.Flag {
 			Name:  "max-readahead",
 			Usage: "max buffering for read ahead in MiB per read session",
 		},
+                &cli.IntFlag{
+                        Name:  "multi-block",
+                        Usage: "number of blocks for random read ahead",
+                },
 		&cli.IntFlag{
 			Name:  "prefetch",
 			Value: 1,
