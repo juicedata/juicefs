@@ -8,6 +8,7 @@ from os.path import dirname
 import sys
 sys.path.append('.')
 from sdk.python.juicefs.juicefs import juicefs
+from bench import seq_write, random_write, seq_read, random_read
 
 TESTFN='/test'
 TESTFILE='/test/file'
@@ -289,6 +290,82 @@ class ExtendedAttributeTests(unittest.TestCase):
             with v.open(path, "rb") as fp:
                 return v.listxattr(fp.fileno(), *args)
         self._check_xattrs(getxattr, setxattr, removexattr, listxattr)
+
+class BenchTests(unittest.TestCase):
+    def setUp(self):
+        if not v.exists(TESTFN):
+            v.mkdir(TESTFN)
+        self.test_file = TESTFILE + '_bench'
+        self.block_size = 128 * 1024  # 128KB
+        self.buffer_size = 300
+        self.buffering = 2 * 1024 * 1024 
+        self.run_time = 30
+        self.file_size = 100 * 1024 * 1024  
+        self.seed = 20
+        self.count = 200
+
+    def tearDown(self):
+        if v.exists(self.test_file):
+            v.unlink(self.test_file)
+
+    def test_seq_write(self):
+        print('test_seq_write')
+        seq_write(
+            filename=self.test_file,
+            client=v,
+            protocol='pysdk',
+            block_size=self.block_size,
+            buffering=self.buffering,
+            run_time=self.run_time,
+            file_size=self.file_size
+        )
+        self.assertTrue(v.exists(self.test_file))
+        stat = v.stat(self.test_file)
+        self.assertGreater(stat.st_size, 0)
+
+    def test_random_write(self):
+        print('test_random_write')
+        random_write(
+            filename=self.test_file,
+            client=v,
+            protocol='pysdk',
+            buffering=self.buffering,
+            block_size=self.block_size,
+            run_time=self.run_time,
+            file_size=self.file_size,
+            seed=self.seed
+        )
+        self.assertTrue(v.exists(self.test_file))
+        stat = v.stat(self.test_file)
+        self.assertGreater(stat.st_size, 0)
+
+    def test_seq_read(self):
+        print('test_seq_read')
+        with v.open(self.test_file, 'wb') as f:
+            f.write(os.urandom(self.file_size))
+        
+        seq_read(
+            filename=self.test_file,
+            client=v,
+            protocol='pysdk',
+            block_size=self.block_size,
+            buffering=self.buffering
+        )
+
+    def test_random_read(self):
+        print('test_random_read')
+        with v.open(self.test_file, 'wb') as f:
+            f.write(os.urandom(self.file_size))
+        
+        random_read(
+            filename=self.test_file,
+            client=v,
+            protocol='pysdk',
+            buffering=self.buffering,
+            block_size=self.block_size,
+            seed=self.seed,
+            count=self.count
+        )
 
 if __name__ == "__main__":
     unittest.main()
