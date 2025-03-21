@@ -18,12 +18,13 @@ package vfs
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
-	"strconv"
-	"strings"
 
+	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -91,7 +92,11 @@ func logit(ctx Context, method string, err syscall.Errno, format string, args ..
 	if ctx.Pid() != 0 && used >= time.Second*10 {
 		logger.Infof("slow operation: %s", cmd)
 	}
-	line := []byte(fmt.Sprintf("%s [uid:%d,gid:%d,pid:%d] %s\n", ts, ctx.Uid(), ctx.Gid(), ctx.Pid(), cmd))
+	procDesc := ""
+	if userProc := meta.ProcOf(ctx.Pid()); userProc != "" {
+		procDesc = fmt.Sprintf(",proc:%s", userProc)
+	}
+	line := []byte(fmt.Sprintf("%s [uid:%d,gid:%d,pid:%d%s] %s\n", ts, ctx.Uid(), ctx.Gid(), ctx.Pid(), procDesc, cmd))
 
 	for _, r := range readers {
 		select {

@@ -17,7 +17,14 @@
 package meta
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"runtime"
+	"sync"
 )
 
 type CtxKey string
@@ -100,4 +107,69 @@ func containsGid(ctx Context, gid uint32) bool {
 		}
 	}
 	return false
+}
+
+type SizedCache[K comparable, V any] struct {
+	mu       sync.RWMutex
+	cache    map[K]V
+	capacity int
+}
+
+func NewSizedCache[K comparable, V any](capacity int) *SizedCache[K, V] {
+	return &SizedCache[K, V]{
+		cache:    make(map[K]V, capacity),
+		capacity: capacity,
+	}
+}
+
+func (sc *SizedCache[K, V]) Get(key K) (V, bool) {
+	sc.mu.RLock()
+	defer sc.mu.RUnlock()
+	value, found := sc.cache[key]
+	return value, found
+}
+
+func (sc *SizedCache[K, V]) Put(key K, value V) {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	if len(sc.cache) >= sc.capacity {
+		for k := range sc.cache {
+			delete(sc.cache, k)
+			break
+		}
+	}
+	sc.cache[key] = value
+}
+
+var procCache = NewSizedCache[uint32, string](100)
+
+func ProcOf(pid uint32) (proc string) {
+	if runtime.GOOS != "linux" {
+		return ""
+	}
+	proc, found := procCache.Get(pid)
+	if found {
+		return proc
+	}
+	defer func() {
+		procCache.Put(pid, proc)
+	}()
+	path := fmt.Sprintf("/proc/%d/cmdline", pid)
+	f, err := os.Open(path)
+	if err != nil { // from other namespace
+		return ""
+	}
+	defer f.Close()
+	buf, err := io.ReadAll(f)
+	if err != nil {
+		return ""
+	}
+	p := bytes.Index(buf, []byte{0}) // some are separated by null
+	if p < 0 {
+		p = len(buf)
+	}
+	if sp := bytes.IndexByte(buf[:p], ' '); sp > 0 { // some are separated by space
+		p = sp
+	}
+	return filepath.Base(string(buf[:p])) // some are full path
 }
