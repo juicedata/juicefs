@@ -34,7 +34,7 @@ slug: /adopters
 | [商汤科技](https://www.sensetime.com/cn)    |  AI  |           |
 | [云从科技](https://www.cloudwalk.com)   | AI    |         |
 | [思必驰](https://www.aispeech.com)   |  AI   |             |
-| [Clobotics](https://clobotics.com)   | 机器人，AI   | [Clobotics 计算机视觉场景存储实践：多云架构、 POSIX 全兼容、低运维的统一存储](https://juicefs.com/zh-cn/blog/user-stories/clobotics-posix-multi-cloud-storage)         |
+| [Clobotics](https://clobotics.com)   | 机器人，AI   | [Clobotics 计算机视觉场景存储实践：多云架构、POSIX 全兼容、低运维的统一存储](https://juicefs.com/zh-cn/blog/user-stories/clobotics-posix-multi-cloud-storage)         |
 | [刻行 coSence](https://www.coscene.io)   | 机器人，AI   | [机器人行业数据闭环实践：从对象存储到 JuiceFS](https://juicefs.com/zh-cn/blog/user-stories/data-object-storag--to-juicefs)   |
 | [海柔创新](https://www.hairobotics.cn)   | 机器人，AI   | [海柔仿真系统存储实践：混合云架构下实现高可用与极简运维](https://juicefs.com/zh-cn/blog/user-stories/multi-cloud-storage-high-availability)   |
 | [蝉妈妈数据](https://www.chanmama.com)  |  AI  |         |
