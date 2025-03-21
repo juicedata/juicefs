@@ -10,12 +10,12 @@ slug: /adopters
 | [Character.AI](https://character.ai) | GenAI, Training |              |
 | [Fal](https://fal.ai) | GenAI, Inference    |           |
 | [BentoML](https://bentoml.com)  | GenAI, Inference  | [BentoML Reduced LLM Loading Time from 20+ to a Few Minutes with JuiceF](https://juicefs.com/en/blog/user-stories/accelerate-large-language-model-loading)   |
-| [Lepton AI](https://www.lepton.ai) | GenAI, Training, Inference |           |
+| [Lepton AI](https://www.lepton.ai) | GenAI, Training, Inference | [How Lepton AI Cut Cloud Storage Costs by 98% for AI Workflows with JuiceFS](https://juicefs.com/en/blog/user-stories/cloud-storage-artificial-intelligence-juicefs-vs-efs)          |
 | [Graviti Diffus](https://www.diffus.graviti.com) | GenAI, Inference |      |
 | [Plus.AI](https://plus.ai) | Autonomous driving, AI pipeline  |                     |
 | [Jerry](https://getjerry.com) | Car insurance, Data platform | [Low-Cost Read/Write Separation: Jerry Builds a Primary-Replica ClickHouse Architecture](https://juicefs.com/en/blog/user-stories/read-write-separation) |
 | [DJI](https://www.dji.com) | Drone & Autonomous driving, AI pipeline|             |
-| [Clobotics](https://clobotics.com)   | Drone, AI pipeline  |      |
+| [Clobotics](https://clobotics.com)   | Drone, AI pipeline  | [How Clobotics Overcame Multi-Cloud and Massive File Storage Challenges](https://juicefs.com/en/blog/user-stories/multi-cloud-storage-posix-compatible)     |
 | [TP-LINK](https://www.tp-link.com) | AI      |       |
 | [MemVerge](https://memverge.com)  | BioTech, High performance file store  |            |
 | [MDI Biological Laboratory](https://mdibl.org) | BioTech, High performance file store |           |
@@ -46,10 +46,10 @@ slug: /adopters
 | [SF Express](https://www.sf-express.com)  | Logistics, AI pipeline, File sharing   |           |
 | [Unisound](https://www.unisound.com)  | AI, Training, Inference   | [Unisound’s HPC Platform accelerates AI model training and development with JuiceFS](https://juicefs.com/en/blog/unisounds-hpc-platform-accelerates-ai-model-training-and-development-with-juicefs)   |
 | [Yimian](https://www.yimian.io)  | Consulting, Data platform   | [Yimian Migrated Hadoop to the Cloud: 2x Storage Capacity & Fewer Ops Costs](https://juicefs.com/en/blog/user-stories/migrating-hadoop-to-cloud-2x-storage-capacity-fewer-ops-costs)  |
-| [Trip.com](https://www.trip.com)   | Internet service, Data platform, File sharing  | [Trip.com’s practice of massive cold data migrating to object storage with JuiceFS](https://juicefs.com/en/blog/user-stories/a-practice-of-massive-cold-data-migrating-to-oss-with-juicefs)   |
+| [Trip.com](https://www.trip.com)   | Internet service, Data platform, File sharing  | [Trip.com’s practice of massive cold data migrating to object storage with JuiceFS](https://juicefs.com/en/blog/user-stories/a-practice-of-massive-cold-data-migrating-to-oss-with-juicefs), [JuiceFS at Trip.com: Managing 10 PB of Data for Stable and Cost-Effective LLM Storage](https://juicefs.com/en/blog/user-stories/large-language-model-artificial-intelligence-storage-cost-effective)   |
 | [Beike](https://ke.com)  | Internet service, AI pipline   | [Beike Loads AI Models 20x Faster with Hybrid Cloud Storage](https://juicefs.com/en/blog/user-stories/ai-model-accelerate)    |
 | [Baidu](https://ir.baidu.com/company-overview)  | Internet Service    |             |
-| [Tongcheng Travel](https://www.tongchengir.com)  | Internet service, File sharing    |           |
+| [Tongcheng Travel](https://www.tongchengir.com)  | Internet service, File sharing    | [Tongcheng Travel Chose JuiceFS over CephFS to Manage Hundreds of Millions of Files](https://juicefs.com/en/blog/user-stories/juicefs-vs-cephfs-distributed-file-system-artificial-intelligence-storage)          |
 | [Skyplatanus](https://www.kuaidianyuedu.com)  | Internet service, AI, File sharing |              |
 | [NetEase Games](https://www.neteasegames.com)   | Gaming, Data platform, File sharing      | [50%+ Cut in Both Storage & Compute Costs: Designing NetEase Games' Cloud Big Data Platform](https://juicefs.com/en/blog/user-stories/cut-storage-compute-costs-cloud-big-data-platform)   |
 | [Joyient](http://www.joyient.com)  | Gaming, File sharing, VFX rendering |            |
