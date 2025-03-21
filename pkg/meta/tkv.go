@@ -1252,7 +1252,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}, parent))
 }
 
-func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
+func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, entry *Entry, pattr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
 		if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1293,13 +1293,15 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		if rs[0] == nil {
 			return syscall.ENOENT
 		}
-		var pattr Attr
-		m.parseAttr(rs[0], &pattr)
-		if pattr.Typ != TypeDirectory {
-			return syscall.ENOTDIR
-		}
-		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
-			return st
+		if pattr == nil {
+			pattr = &Attr{}
+			m.parseAttr(rs[0], pattr)
+			if pattr.Typ != TypeDirectory {
+				return syscall.ENOTDIR
+			}
+			if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, pattr); st != 0 {
+				return st
+			}
 		}
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
@@ -1334,7 +1336,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 
 		defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 		var updateParent bool
-		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
+		if entry == nil && !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -1344,7 +1346,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 
 		tx.delete(m.entryKey(parent, name))
 		if updateParent {
-			tx.set(m.inodeKey(parent), m.marshal(&pattr))
+			tx.set(m.inodeKey(parent), m.marshal(pattr))
 		}
 		if attr.Nlink > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(attr))

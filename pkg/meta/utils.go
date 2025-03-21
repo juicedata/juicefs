@@ -261,6 +261,10 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 }
 
 func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *uint64, concurrent chan int) syscall.Errno {
+	var pattr Attr
+	if st := m.en.doGetAttr(ctx, inode, &pattr); st != 0 {
+		return st
+	}
 	for {
 		var entries []*Entry
 		if st := m.en.doReaddir(ctx, inode, 0, &entries, 10000); st != 0 && st != syscall.ENOENT {
@@ -305,7 +309,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 				if count != nil {
 					atomic.AddUint64(count, 1)
 				}
-				if st := m.Unlink(ctx, inode, string(e.Name), skipCheckTrash); st != 0 && st != syscall.ENOENT {
+				if st := m.Unlink2(ctx, inode, string(e.Name), e, &pattr, skipCheckTrash); st != 0 && st != syscall.ENOENT {
 					ctx.Cancel()
 					return st
 				}
