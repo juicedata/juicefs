@@ -70,6 +70,11 @@ $ juicefs gc redis://localhost --delete`,
 				Value:   10,
 				Usage:   "number threads to delete leaked objects",
 			},
+			&cli.BoolFlag{
+				Name:  "scan-dangling",
+				Value: false,
+				Usage: "Scan dangling objects (nodes/edges...), better in read-only mode (time-intensive).",
+			},
 		},
 	}
 }
@@ -196,7 +201,7 @@ func gc(ctx *cli.Context) error {
 
 	// List all slices in metadata engine
 	slices := make(map[meta.Ino][]meta.Slice)
-	r := m.ListSlices(c, slices, true, true, delete, sliceCSpin.Increment)
+	r := m.ListSlices(c, slices, true, ctx.Bool("scan-dangling"), delete, sliceCSpin.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}

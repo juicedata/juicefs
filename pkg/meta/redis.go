@@ -3058,9 +3058,9 @@ func (m *redisMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration
 		Name   string
 	}
 	var ctx = Background()
-	var foundInodes = make(map[Ino]*entry)
-	foundInodes[RootInode] = &entry{Parent: RootInode, Name: "/"}
-	foundInodes[TrashInode] = &entry{Parent: RootInode, Name: ".trash"}
+	var node2Edges = make(map[Ino][]*entry)
+	node2Edges[RootInode] = []*entry{{Parent: RootInode, Name: "/"}}
+	node2Edges[TrashInode] = []*entry{{Parent: RootInode, Name: ".trash"}}
 	cutoff := time.Now().Add(-before)
 	prefix := len(m.prefix)
 
@@ -3074,7 +3074,7 @@ func (m *redisMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration
 				return eno
 			}
 			for _, e := range entries {
-				foundInodes[e.Inode] = &entry{Parent: Ino(ino), Name: string(e.Name)}
+				node2Edges[e.Inode] = append(node2Edges[e.Inode], &entry{Parent: Ino(ino), Name: string(e.Name)})
 			}
 		}
 		return nil
@@ -3096,7 +3096,7 @@ func (m *redisMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration
 			var attr Attr
 			m.parseAttr([]byte(v.(string)), &attr)
 			ino, _ := strconv.Atoi(keys[i][prefix+1:])
-			if _, ok := foundInodes[Ino(ino)]; !ok && time.Unix(attr.Ctime, 0).Before(cutoff) {
+			if _, ok := node2Edges[Ino(ino)]; !ok && time.Unix(attr.Ctime, 0).Before(cutoff) {
 				logger.Infof("found leaded inode: %d %+v", ino, attr)
 				if clean {
 					err = m.doDeleteSustainedInode(0, Ino(ino))
@@ -3105,7 +3105,7 @@ func (m *redisMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration
 					}
 				}
 			}
-			foundInodes[Ino(ino)] = nil
+			node2Edges[Ino(ino)] = nil
 		}
 		return nil
 	}); err != nil {
@@ -3113,19 +3113,25 @@ func (m *redisMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration
 		return
 	}
 
-	foundInodes[RootInode], foundInodes[TrashInode] = nil, nil
-	pipe := m.rdb.Pipeline()
-	for c, e := range foundInodes {
-		if e != nil {
-			logger.Infof("found leaked edge %d -> (%d, %s)", e.Parent, c, e.Name)
-			if clean {
-				pipe.HDel(ctx, m.entryKey(e.Parent), e.Name)
+	node2Edges[RootInode], node2Edges[TrashInode] = nil, nil
+	for c, es := range node2Edges {
+		if err := m.txn(ctx, func(tx *redis.Tx) error {
+			// double check
+			if err := tx.Get(ctx, m.inodeKey(c)).Err(); err == nil {
+				return nil
+			} else if err != redis.Nil {
+				return err
 			}
-		}
-	}
-	if pipe.Len() > 0 {
-		if _, err := pipe.Exec(ctx); err != nil {
-			logger.Errorf("delete leaked edges: %s", err)
+			for _, e := range es {
+				logger.Infof("found leaked edge %d -> (%d, %s)", e.Parent, c, e.Name)
+				if clean {
+					tx.HDel(ctx, m.entryKey(e.Parent), e.Name)
+				}
+			}
+			return nil
+		}, m.inodeKey(c)); err != nil {
+			logger.Errorf("delete leaked edges %d: %s", c, err)
+			return
 		}
 	}
 }

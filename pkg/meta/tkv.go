@@ -2444,9 +2444,9 @@ func (m *kvMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
 		Parent Ino
 		Name   []byte
 	}
-	var foundInodes = make(map[Ino]*entry)
-	foundInodes[RootInode] = &entry{Parent: RootInode, Name: []byte("/")}
-	foundInodes[TrashInode] = &entry{Parent: RootInode, Name: []byte(".trash")}
+	var node2Edges = make(map[Ino][]*entry)
+	node2Edges[RootInode] = []*entry{{Parent: RootInode, Name: []byte("/")}}
+	node2Edges[TrashInode] = []*entry{{Parent: RootInode, Name: []byte(".trash")}}
 	cutoff := time.Now().Add(-before)
 
 	nodes := make(map[Ino]*Attr)
@@ -2461,7 +2461,7 @@ func (m *kvMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
 			case 'D':
 				name := string(key[10:])
 				_, inode := m.parseEntry(value)
-				foundInodes[inode] = &entry{Parent: ino, Name: []byte(name)}
+				node2Edges[inode] = append(node2Edges[inode], &entry{Parent: ino, Name: []byte(name)})
 			}
 		}
 	}); err != nil {
@@ -2470,7 +2470,7 @@ func (m *kvMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
 	}
 
 	for inode, attr := range nodes {
-		if _, ok := foundInodes[inode]; !ok && time.Unix(attr.Ctime, 0).Before(cutoff) {
+		if _, ok := node2Edges[inode]; !ok && time.Unix(attr.Ctime, 0).Before(cutoff) {
 			logger.Infof("found leaded inode: %d %+v", inode, attr)
 			if clean {
 				err := m.doDeleteSustainedInode(0, inode)
@@ -2479,13 +2479,16 @@ func (m *kvMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
 				}
 			}
 		}
-		foundInodes[inode] = nil
+		node2Edges[inode] = nil
 	}
 
-	foundInodes[RootInode], foundInodes[TrashInode] = nil, nil
+	node2Edges[RootInode], node2Edges[TrashInode] = nil, nil
 	if err := m.client.txn(Background(), func(tx *kvTxn) error {
-		for c, e := range foundInodes {
-			if e != nil {
+		for c, es := range node2Edges {
+			if tx.get(m.inodeKey(c)) != nil {
+				continue
+			}
+			for _, e := range es {
 				logger.Infof("found leaked edge %d -> (%d, %s)", e.Parent, c, e.Name)
 				if clean {
 					tx.delete(m.entryKey(e.Parent, string(e.Name)))

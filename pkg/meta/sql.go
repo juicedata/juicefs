@@ -3154,9 +3154,9 @@ func (m *dbMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
 		Parent Ino
 		Name   []byte
 	}
-	var foundInodes = make(map[Ino]*entry)
-	foundInodes[RootInode] = &entry{Parent: RootInode, Name: []byte("/")}
-	foundInodes[TrashInode] = &entry{Parent: RootInode, Name: []byte(".trash")}
+	var node2Edges = make(map[Ino][]*entry)
+	node2Edges[RootInode] = []*entry{{Parent: RootInode, Name: []byte("/")}}
+	node2Edges[TrashInode] = []*entry{{Parent: RootInode, Name: []byte(".trash")}}
 	cutoff := time.Now().Add(-before)
 
 	var edges []edge
@@ -3166,7 +3166,7 @@ func (m *dbMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
 			return err
 		}
 		for _, edge := range edges {
-			foundInodes[edge.Inode] = &entry{Parent: edge.Parent, Name: edge.Name}
+			node2Edges[edge.Inode] = append(node2Edges[edge.Inode], &entry{Parent: edge.Parent, Name: edge.Name})
 		}
 		if err := s.Find(&nodes); err != nil {
 			return err
@@ -3178,7 +3178,7 @@ func (m *dbMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
 	}
 
 	for _, node := range nodes {
-		if _, ok := foundInodes[node.Inode]; !ok && time.Unix(node.Ctime/1e6, 0).Before(cutoff) {
+		if _, ok := node2Edges[node.Inode]; !ok && time.Unix(node.Ctime/1e6, 0).Before(cutoff) {
 			logger.Infof("found leaded inode: %d %+v", node.Inode, node)
 			if clean {
 				err := m.doDeleteSustainedInode(0, node.Inode)
@@ -3187,13 +3187,19 @@ func (m *dbMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
 				}
 			}
 		}
-		foundInodes[node.Inode] = nil
+		node2Edges[node.Inode] = nil
 	}
 
-	foundInodes[RootInode], foundInodes[TrashInode] = nil, nil
+	node2Edges[RootInode], node2Edges[TrashInode] = nil, nil
 	if err := m.txn(func(s *xorm.Session) error {
-		for c, e := range foundInodes {
-			if e != nil {
+		for c, es := range node2Edges {
+			n := node{Inode: c}
+			if exist, err := s.Get(&n); err != nil {
+				return err
+			} else if exist {
+				continue
+			}
+			for _, e := range es {
 				logger.Infof("found leaked edge %d -> (%d, %s)", e.Parent, c, e.Name)
 				if clean {
 					if _, err := s.Delete(&edge{Parent: e.Parent, Name: e.Name}); err != nil {
