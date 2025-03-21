@@ -18,6 +18,7 @@
 package meta
 
 import (
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -120,4 +121,35 @@ func TestRecoveryMysqlPwd(t *testing.T) { //skip mutate
 			t.Fatalf("recoveryMysqlPwd error: expect %s but got %s", tc.expect, got)
 		}
 	}
+}
+
+func TestGetCustomConfig(t *testing.T) {
+	u := "mysql://root:password@tcp(localhost:3306)/db1?max_open_conns=100&notDefine=str"
+	_, after, _ := strings.Cut(u, "?")
+	query, err := url.ParseQuery(after)
+	if err != nil {
+		t.Fatalf("url parse query error: %s", err)
+	}
+	maxOpenConns, err := extractCustomConfig(&query, "max_open_conns", 1)
+	if err != nil {
+		t.Fatalf("getCustomConfig error: %s", err)
+	}
+	if maxOpenConns != 100 {
+		t.Fatalf("getCustomConfig error: expect 100 but got %d", maxOpenConns)
+	}
+	if query.Has("max_open_conns") {
+		t.Fatalf("getCustomConfig error: expect not found but found")
+	}
+
+	not, err := extractCustomConfig(&query, "notSetKey", "default")
+	if err != nil {
+		t.Fatalf("getCustomConfig error: %s", err)
+	}
+	if not != "default" {
+		t.Fatalf("getCustomConfig error: expect default but got %s", not)
+	}
+	if !query.Has("notDefine") {
+		t.Fatalf("getCustomConfig error: expect found but not")
+	}
+
 }
