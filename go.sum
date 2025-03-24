@@ -119,6 +119,11 @@ github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 h1:DklsrG3d
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2/go.mod h1:WaHUgvxTVq04UNunO+XhnAqY/wQc+bxr74GqbsZ/Jqw=
 github.com/aws/aws-sdk-go v1.23.0/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
 github.com/aws/aws-sdk-go v1.25.48/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
+github.com/aws/aws-sdk-go v1.44.204/go.mod h1:aVsgQcEevwlmQ7qHE9I3h+dtQgpqhFB+i8Phjh7fkwI=
+github.com/aws/aws-sdk-go v1.55.6 h1:cSg4pvZ3m8dgYcgqB97MrcdjUmZ1BeMYKUxMMB89IPk=
+github.com/aws/aws-sdk-go v1.55.6/go.mod h1:eRwEWoyTWFMVYVQzKMNHWP5/RV4xIUGMQfXQHfHkpNU=
+github.com/baidubce/bce-sdk-go v0.9.200 h1:zF3yuKp/wkKZhutCZYl5HtIZJPziWsPEu1kxHEyOaWI=
+github.com/baidubce/bce-sdk-go v0.9.200/go.mod h1:zbYJMQwE4IZuyrJiFO8tO8NbtYiKTFTbwh4eIsqjVdg=
 github.com/aws/aws-sdk-go v1.44.262 h1:gyXpcJptWoNkK+DiAiaBltlreoWKQXjAIh6FRh60F+I=
 github.com/aws/aws-sdk-go v1.44.262/go.mod h1:aVsgQcEevwlmQ7qHE9I3h+dtQgpqhFB+i8Phjh7fkwI=
 github.com/baidubce/bce-sdk-go v0.9.221 h1:x5uTXND33m5TE3UBXYhlePuXcJi5rxNnBBt+bP7kPe0=
