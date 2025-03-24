@@ -13,7 +13,6 @@ require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.7+incompatible
 	github.com/aws/aws-sdk-go v1.44.262
 	github.com/baidubce/bce-sdk-go v0.9.221
-	github.com/billziss-gh/cgofuse v1.5.0
 	github.com/ceph/go-ceph v0.18.0
 	github.com/colinmarc/hdfs/v2 v2.3.0
 	github.com/davies/groupcache v0.0.0-20230821031435-e4e8362f58e1
@@ -68,10 +67,11 @@ require (
 	github.com/vimeo/go-util v1.4.1
 	github.com/vmware/go-nfs-client v0.0.0-20190605212624-d43b92724c1b
 	github.com/volcengine/ve-tos-golang-sdk/v2 v2.7.0
+	github.com/winfsp/cgofuse v1.6.0
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a
 	go.etcd.io/etcd v3.3.27+incompatible
 	go.etcd.io/etcd/client/v3 v3.5.9
-	go.uber.org/automaxprocs v1.5.2
+	go.uber.org/automaxprocs v1.6.0
 	go.uber.org/zap v1.20.0
 	golang.org/x/crypto v0.32.0
 	golang.org/x/net v0.34.0
