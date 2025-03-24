@@ -10,7 +10,7 @@ require (
 	github.com/DataDog/zstd v1.5.6
 	github.com/IBM/ibm-cos-sdk-go v1.10.0
 	github.com/agiledragon/gomonkey/v2 v2.6.0
-	github.com/aliyun/aliyun-oss-go-sdk v2.2.7+incompatible
+	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
 	github.com/aws/aws-sdk-go v1.44.262
 	github.com/baidubce/bce-sdk-go v0.9.200
 	github.com/billziss-gh/cgofuse v1.5.0
