@@ -76,6 +76,11 @@ jobs:
         timeout-minutes: 10
         uses: ./.github/actions/build
   
+      - name: Download Random Test
+        run: |
+          wget https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test
+          chmod +x random-test
+
       - name: Test Gc
         timeout-minutes: 10
         run: |
@@ -99,7 +104,8 @@ jobs:
       - name: Test fsck
         timeout-minutes: 10
         run: |
-          sudo META=${{matrix.meta}} .github/scripts/command/fsck.sh 
+          meta=$([ "${{matrix.meta}}" = "mysql" ] && echo "sqlite3" || echo "${{matrix.meta}}")
+          sudo META=${meta} .github/scripts/command/fsck.sh 
       
       - name: Test Gateway
         timeout-minutes: 10
