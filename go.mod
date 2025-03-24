@@ -10,10 +10,9 @@ require (
 	github.com/DataDog/zstd v1.5.6
 	github.com/IBM/ibm-cos-sdk-go v1.10.0
 	github.com/agiledragon/gomonkey/v2 v2.6.0
-	github.com/aliyun/aliyun-oss-go-sdk v2.2.7+incompatible
+	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
 	github.com/aws/aws-sdk-go v1.44.262
-	github.com/baidubce/bce-sdk-go v0.9.200
-	github.com/billziss-gh/cgofuse v1.5.0
+	github.com/baidubce/bce-sdk-go v0.9.221
 	github.com/ceph/go-ceph v0.18.0
 	github.com/colinmarc/hdfs/v2 v2.3.0
 	github.com/davies/groupcache v0.0.0-20230821031435-e4e8362f58e1
@@ -38,14 +37,14 @@ require (
 	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
 	github.com/juicedata/gogfapi v0.0.0-20241204082332-ecd102647f80
 	github.com/juju/ratelimit v1.0.2
-	github.com/ks3sdklib/aws-sdk-go v1.2.2
+	github.com/ks3sdklib/aws-sdk-go v1.6.0
 	github.com/l0wl3vel/bunny-storage-go-sdk v0.0.10
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/minio/cli v1.24.2
 	github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c
 	github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78
-	github.com/ncw/swift/v2 v2.0.1
+	github.com/ncw/swift/v2 v2.0.3
 	github.com/pingcap/log v1.1.1-0.20221015072633-39906604fb81
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.13.5
@@ -59,7 +58,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
 	github.com/studio-b12/gowebdav v0.0.0-20230203202212-3282f94193f2
-	github.com/tencentyun/cos-go-sdk-v5 v0.7.45
+	github.com/tencentyun/cos-go-sdk-v5 v0.7.63
 	github.com/tikv/client-go/v2 v2.0.4
 	github.com/upyun/go-sdk/v3 v3.0.4
 	github.com/urfave/cli/v2 v2.19.3
@@ -67,11 +66,12 @@ require (
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	github.com/vimeo/go-util v1.4.1
 	github.com/vmware/go-nfs-client v0.0.0-20190605212624-d43b92724c1b
-	github.com/volcengine/ve-tos-golang-sdk/v2 v2.7.0
+	github.com/volcengine/ve-tos-golang-sdk/v2 v2.7.8
+	github.com/winfsp/cgofuse v1.6.0
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a
 	go.etcd.io/etcd v3.3.27+incompatible
 	go.etcd.io/etcd/client/v3 v3.5.9
-	go.uber.org/automaxprocs v1.5.2
+	go.uber.org/automaxprocs v1.6.0
 	go.uber.org/zap v1.20.0
 	golang.org/x/crypto v0.32.0
 	golang.org/x/net v0.34.0

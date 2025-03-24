@@ -30,13 +30,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/billziss-gh/cgofuse/fuse"
-
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
-
+	"github.com/winfsp/cgofuse/fuse"
 	"golang.org/x/sys/windows/registry"
 )
 
