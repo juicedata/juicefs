@@ -171,5 +171,8 @@ func ProcOf(pid uint32) (proc string) {
 	if sp := bytes.IndexByte(buf[:p], ' '); sp > 0 { // some are separated by space
 		p = sp
 	}
+	if len(buf[:p]) == 0 { // some are empty
+		return ""
+	}
 	return filepath.Base(string(buf[:p])) // some are full path
 }
