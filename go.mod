@@ -37,7 +37,7 @@ require (
 	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
 	github.com/juicedata/gogfapi v0.0.0-20241204082332-ecd102647f80
 	github.com/juju/ratelimit v1.0.2
-	github.com/ks3sdklib/aws-sdk-go v1.2.2
+	github.com/ks3sdklib/aws-sdk-go v1.6.0
 	github.com/l0wl3vel/bunny-storage-go-sdk v0.0.10
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mattn/go-sqlite3 v1.14.24
