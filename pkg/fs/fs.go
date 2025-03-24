@@ -129,10 +129,12 @@ type attrCache struct {
 }
 
 type FileSystem struct {
-	conf   *vfs.Config
-	reader vfs.DataReader
-	writer vfs.DataWriter
-	m      meta.Meta
+	conf        *vfs.Config
+	reader      vfs.DataReader
+	writer      vfs.DataWriter
+	m           meta.Meta
+	store       chunk.ChunkStore
+	cacheFiller *vfs.CacheFiller
 
 	cacheM          sync.Mutex
 	entries         map[Ino]map[string]*entryCache
@@ -165,7 +167,9 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSyst
 	reader := vfs.NewDataReader(conf, m, d)
 	fs := &FileSystem{
 		m:               m,
+		store:           d,
 		conf:            conf,
+		cacheFiller:     vfs.NewCacheFiller(conf, m, d),
 		reader:          reader,
 		writer:          vfs.NewDataWriter(conf, m, d, reader),
 		entries:         make(map[meta.Ino]map[string]*entryCache),
@@ -983,6 +987,36 @@ func (fs *FileSystem) Close() error {
 	if buffer != nil {
 		fs.logBuffer = nil
 		close(buffer)
+	}
+	return nil
+}
+
+func (fs *FileSystem) Clone() error {
+	return nil
+}
+
+func (fs *FileSystem) Summary() string {
+	return ""
+}
+
+func (fs *FileSystem) Info() string {
+	return ""
+}
+
+func (fs *FileSystem) Warmup(ctx meta.Context, paths []string, numthreads int, background bool, isEvict bool, isCheck bool) error {
+	stat := &vfs.CacheResponse{Locations: make(map[string]uint64)}
+	action := vfs.WarmupCache
+	if isEvict {
+		action = vfs.EvictCache
+	}
+	if isCheck {
+		action = vfs.CheckCache
+	}
+
+	if background {
+		go fs.cacheFiller.Cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(numthreads), stat)
+	} else {
+		fs.cacheFiller.Cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(numthreads), stat)
 	}
 	return nil
 }
