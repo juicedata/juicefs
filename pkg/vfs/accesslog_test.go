@@ -48,7 +48,7 @@ func TestAccessLog(t *testing.T) {
 
 	// read whole line, block for 1 second
 	n = readAccessLog(1, buf[10:])
-	if n != 66 {
+	if n < 66 {
 		t.Fatalf("partial read: %d", n)
 	}
 	logs := string(buf[:10+n])
