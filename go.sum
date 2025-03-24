@@ -165,8 +165,8 @@ github.com/cncf/xds/go v0.0.0-20210805033703-aa0b78936158/go.mod h1:eXthEFrGJvWH
 github.com/cncf/xds/go v0.0.0-20210922020428-25de7278fc84/go.mod h1:eXthEFrGJvWHgFFCl3hGmgk+/aYT6PnTQLykKQRLhEs=
 github.com/cncf/xds/go v0.0.0-20211011173535-cb28da3451f1/go.mod h1:eXthEFrGJvWHgFFCl3hGmgk+/aYT6PnTQLykKQRLhEs=
 github.com/cockroachdb/datadriven v0.0.0-20190809214429-80d97fb3cbaa/go.mod h1:zn76sxSg3SzpJ0PPJaLDCu+Bu0Lg3sKTORVIj19EIF8=
-github.com/colinmarc/hdfs/v2 v2.3.0 h1:tMxOjXn6+7iPUlxAyup9Ha2hnmLe3Sv5DM2qqbSQ2VY=
-github.com/colinmarc/hdfs/v2 v2.3.0/go.mod h1:nsyY1uyQOomU34KVQk9Qb/lDJobN1MQ/9WS6IqcVZno=
+github.com/colinmarc/hdfs/v2 v2.4.0 h1:v6R8oBx/Wu9fHpdPoJJjpGSUxo8NhHIwrwsfhFvU9W0=
+github.com/colinmarc/hdfs/v2 v2.4.0/go.mod h1:0NAO+/3knbMx6+5pCv+Hcbaz4xn/Zzbn9+WIib2rKVI=
 github.com/coredns/coredns v1.6.6 h1:GFJXHHBiN2YGp4vS1tltNR0AhI1+TXhb79WT1VAS47I=
 github.com/coredns/coredns v1.6.6/go.mod h1:Bdcnka9HmKGYj12ZIDF3lpQSfDHSsMc85Wj9xEyZUts=
 github.com/coredns/federation v0.0.0-20190818181423-e032b096babe/go.mod h1:MoqTEFX8GlnKkyq8eBCF94VzkNAOgjdlCJ+Pz/oCLPk=

@@ -14,7 +14,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.262
 	github.com/baidubce/bce-sdk-go v0.9.221
 	github.com/ceph/go-ceph v0.18.0
-	github.com/colinmarc/hdfs/v2 v2.3.0
+	github.com/colinmarc/hdfs/v2 v2.4.0
 	github.com/davies/groupcache v0.0.0-20230821031435-e4e8362f58e1
 	github.com/dgraph-io/badger/v4 v4.5.1
 	github.com/dustin/go-humanize v1.0.1
