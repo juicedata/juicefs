@@ -1558,8 +1558,6 @@ func jfs_concat(pid int64, h int64, _dst *C.char, buf uintptr, bufsize int32) in
 	return r
 }
 
-// TODO: implement real clone
-
 //export jfs_clone
 func jfs_clone(pid int64, h int64, _src *C.char, _dst *C.char) int32 {
 	w := F(h)
@@ -1569,22 +1567,7 @@ func jfs_clone(pid int64, h int64, _src *C.char, _dst *C.char) int32 {
 	src := C.GoString(_src)
 	dst := C.GoString(_dst)
 	ctx := w.withPid(pid)
-	fi, err := w.Open(ctx, src, 0)
-	if err != 0 {
-		logger.Errorf("open %s: %s", src, err)
-		return errno(err)
-	}
-	defer fi.Close(ctx)
-	fo, err := w.Create(ctx, dst, 0666, 022)
-	if err != 0 {
-		logger.Errorf("create %s: %s", dst, err)
-		return errno(err)
-	}
-	defer fo.Close(ctx)
-	_, err = w.CopyFileRange(ctx, src, 0, dst, 0, 1<<63)
-	if err != 0 {
-		logger.Errorf("copy %s to %s: %s", src, dst, err)
-	}
+	err := w.Clone(ctx, src, dst, true)
 	return errno(err)
 }
 

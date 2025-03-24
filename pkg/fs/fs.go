@@ -991,20 +991,34 @@ func (fs *FileSystem) Close() error {
 	return nil
 }
 
-//func (fs *FileSystem) Clone(ctx meta.Context) error {
-//	if eno = fs.m.Clone(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), srcParentIno, srcIno, dstParentIno, dstName, cmode, umask, &count, &total); eno != 0 {
-//		logger.Errorf("clone failed srcIno:%d,dstParentIno:%d,dstName:%s,cmode:%d,umask:%d,eno:%v", srcIno, dstParentIno, dstName, cmode, umask, eno)
-//	}
-//	return nil
-//}
-//
-//func (fs *FileSystem) Summary(ctx meta.Context) string {
-//	eno := fs.m.GetTreeSummary(ctx, &tree, depth, topN, strict,
-//		func(count, bytes uint64) {
-//			atomic.AddUint64(&files, count)
-//			atomic.AddUint64(&size, bytes)
-//		})
-//}
+func (fs *FileSystem) Clone(ctx meta.Context, src, dst string, preserve bool) (err syscall.Errno) {
+	srcParent, err := fs.resolve(ctx, parentDir(src), true)
+	if err != 0 {
+		return
+	}
+	var srcIno Ino
+	err = fs.lookup(ctx, srcParent.Inode(), path.Base(src), &srcIno, nil)
+	if err != 0 {
+		return
+	}
+	dstParent, err := fs.resolve(ctx, parentDir(dst), true)
+	if err != 0 {
+		return
+	}
+
+	var count, total uint64
+	var umask uint16
+	umask = uint16(utils.GetUmask())
+	var cmode uint8
+	if preserve {
+		cmode |= meta.CLONE_MODE_PRESERVE_ATTR
+	}
+
+	if err = fs.m.Clone(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), srcParent.Inode(), srcIno, dstParent.Inode(), path.Base(dst), cmode, umask, &count, &total); err != 0 {
+		logger.Errorf("clone failed srcIno:%d,dstParentIno:%d,dstName:%s,cmode:%d,umask:%d,eno:%v", srcIno, dstParent.Inode(), path.Base(dst), cmode, umask, err)
+	}
+	return
+}
 
 func (fs *FileSystem) Info(ctx meta.Context) string {
 	return ""
