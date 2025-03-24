@@ -1025,6 +1025,32 @@ func (f *File) Utime(ctx meta.Context, atime, mtime int64) (err syscall.Errno) {
 	return
 }
 
+func (f *File) Utime2(ctx meta.Context, atimeSec, atimeNSec, mtimeSec, mtimeNsec int64) (err syscall.Errno) {
+	defer trace.StartRegion(context.TODO(), "fs.Utime2").End()
+	var flag uint16
+	if atimeSec >= 0 || atimeNSec >= 0 {
+		flag |= meta.SetAttrAtime
+	}
+	if mtimeSec >= 0 || mtimeNsec >= 0 {
+		flag |= meta.SetAttrMtime
+	}
+	if flag == 0 {
+		return 0
+	}
+	l := vfs.NewLogContext(ctx)
+	defer func() {
+		f.fs.log(l, "Utime2 (%s,%d,%d,%d,%d): %s", f.path, atimeSec, atimeNSec, mtimeSec, mtimeNsec, errstr(err))
+	}()
+	var attr Attr
+	attr.Atime = atimeSec
+	attr.Atimensec = uint32(atimeNSec)
+	attr.Mtime = mtimeSec
+	attr.Mtimensec = uint32(mtimeNsec)
+	err = f.fs.m.SetAttr(ctx, f.inode, flag, 0, &attr)
+	f.fs.invalidateAttr(f.inode)
+	return
+}
+
 func (f *File) Seek(ctx meta.Context, offset int64, whence int) (int64, error) {
 	defer trace.StartRegion(context.TODO(), "fs.Seek").End()
 	l := vfs.NewLogContext(ctx)

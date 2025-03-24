@@ -30,6 +30,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
@@ -63,9 +64,20 @@ var (
 	listedPrefix            *utils.Bar
 	concurrent              chan int
 	limiter                 *ratelimit.Bucket
+	totalHandled            atomic.Int64
 )
 var crcTable = crc32.MakeTable(crc32.Castagnoli)
 var logger = utils.GetLogger("juicefs")
+
+func incrTotal(n int64) {
+	totalHandled.Add(n)
+}
+
+func incrHandled(n int) {
+	old := totalHandled.Swap(0)
+	handled.IncrTotal(old)
+	handled.IncrBy(n)
+}
 
 type chksumReader struct {
 	io.Reader
@@ -896,7 +908,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				logger.Errorf("Failed to copy object %s: %s", key, err)
 			}
 		}
-		handled.Increment()
+		incrHandled(1)
 	}
 }
 
@@ -937,7 +949,7 @@ var srcDelayDelMu sync.Mutex
 var srcDelayDel []string
 
 func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config *Config) bool {
-	handled.IncrTotal(1)
+	incrTotal(1)
 	if !config.DeleteDst || !config.Dirs && dstobj.IsDir() || config.Limit == 0 {
 		logger.Debug("Ignore extra object", dstobj.Key())
 		extra.Increment()
@@ -982,6 +994,25 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 	srckeys = filter(srckeys, config.rules, config)
 	dstkeys = filter(dstkeys, config.rules, config)
 	var dstobj object.Object
+	var (
+		skip, skipBytes int64
+		lastUpdate      time.Time
+	)
+	flushProgress := func() {
+		skipped.IncrInt64(skip)
+		skippedBytes.IncrInt64(skipBytes)
+		incrHandled(int(skip))
+		skip, skipBytes = 0, 0
+	}
+	defer flushProgress()
+	skipIt := func(obj object.Object) {
+		skip++
+		skipBytes += obj.Size()
+		if skip > 100 || time.Since(lastUpdate) > time.Millisecond*100 {
+			lastUpdate = time.Now()
+			flushProgress()
+		}
+	}
 	for obj := range srckeys {
 		if obj == nil {
 			return fmt.Errorf("listing failed, stop syncing, waiting for pending ones")
@@ -996,7 +1027,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			}
 			config.Limit--
 		}
-		handled.IncrTotal(1)
+		incrTotal(1)
 
 		if dstobj != nil && obj.Key() > dstobj.Key() {
 			if handleExtraObject(tasks, dstobj, config) {
@@ -1022,17 +1053,13 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 		// FIXME: there is a race when source is modified during coping
 		if dstobj == nil || obj.Key() < dstobj.Key() {
 			if config.Existing {
-				skipped.Increment()
-				skippedBytes.IncrInt64(obj.Size())
-				handled.Increment()
+				skipIt(obj)
 				continue
 			}
 			tasks <- obj
 		} else { // obj.key == dstobj.key
 			if config.IgnoreExisting {
-				skipped.Increment()
-				skippedBytes.IncrInt64(obj.Size())
-				handled.Increment()
+				skipIt(obj)
 				dstobj = nil
 				continue
 			}
@@ -1041,9 +1068,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				(!config.Update && obj.Size() != dstobj.Size()) {
 				tasks <- obj
 			} else if config.Update && obj.Mtime().Unix() < dstobj.Mtime().Unix() {
-				skipped.Increment()
-				skippedBytes.IncrInt64(obj.Size())
-				handled.Increment()
+				skipIt(obj)
 			} else if config.CheckAll { // two objects are likely the same
 				tasks <- &withSize{obj, markChecksum}
 			} else if config.DeleteSrc {
@@ -1057,9 +1082,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			} else if config.Perms && needCopyPerms(obj, dstobj) {
 				tasks <- &withFSize{obj.(object.File), markCopyPerms}
 			} else {
-				skipped.Increment()
-				skippedBytes.IncrInt64(obj.Size())
-				handled.Increment()
+				skipIt(obj)
 			}
 			dstobj = nil
 		}
@@ -1545,6 +1568,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	syncExitFunc := func() error {
 		if config.Manager == "" {
 			pending.SetCurrent(0)
+			incrHandled(0)
 			total := handled.GetTotal()
 			progress.Done()
 
@@ -1666,7 +1690,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				sort.Strings(keys)
 			}
 			for i := len(keys) - 1; i >= 0; i-- {
-				handled.Increment()
+				incrHandled(1)
 				deleteObj(storage, keys[i], config.Dry)
 			}
 		}
