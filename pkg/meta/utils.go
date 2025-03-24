@@ -350,7 +350,7 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, 
 		if count != nil {
 			atomic.AddUint64(count, 1)
 		}
-		return m.Unlink(ctx, parent, name)
+		return m.Unlink(ctx, parent, name, skipTrash)
 	}
 	if numThreads <= 0 {
 		logger.Infof("invalid threads number %d , auto adjust to %d", numThreads, RmrDefaultThreads)
