@@ -345,8 +345,15 @@ class Client(object):
         """Clone a file."""
         self.lib.jfs_clone(c_int64(_tid()), c_int64(self.h), _bin(src), _bin(dst))
 
-    # def summary(self, path, depth=0, entries=1):
-    #     """Get the summary of a directory."""
+    def summary(self, path, depth=0, entries=1):
+        """Get the summary of a directory."""
+
+    def warmup(self, path):
+        """Warm up a file or a directory."""
+
+    # def quota(self, path):
+    #     """Get the quota of a directory."""
+
 
 
 class File(object):
