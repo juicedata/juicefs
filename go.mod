@@ -66,7 +66,7 @@ require (
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	github.com/vimeo/go-util v1.4.1
 	github.com/vmware/go-nfs-client v0.0.0-20190605212624-d43b92724c1b
-	github.com/volcengine/ve-tos-golang-sdk/v2 v2.7.0
+	github.com/volcengine/ve-tos-golang-sdk/v2 v2.7.8
 	github.com/winfsp/cgofuse v1.6.0
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a
 	go.etcd.io/etcd v3.3.27+incompatible
