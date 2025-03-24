@@ -30,13 +30,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/billziss-gh/cgofuse/fuse"
-
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
-
+	"github.com/winfsp/cgofuse/fuse"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -291,7 +289,7 @@ func (j *juice) Utimens(path string, tmsp []fuse.Timespec) (e int) {
 	if err != 0 {
 		e = errorconv(err)
 	} else {
-		e = errorconv(f.Utime(ctx, tmsp[0].Sec*1000+tmsp[0].Nsec/1e6, tmsp[1].Sec*1000+tmsp[1].Nsec/1e6))
+		e = errorconv(f.Utime2(ctx, tmsp[0].Sec, tmsp[0].Nsec, tmsp[1].Sec, tmsp[1].Nsec))
 	}
 	return
 }

@@ -1,65 +1,64 @@
 module github.com/juicedata/juicefs
 
-go 1.21
+go 1.21.0
 
 require (
-	cloud.google.com/go/compute/metadata v0.2.3
+	cloud.google.com/go/compute/metadata v0.3.0
 	cloud.google.com/go/storage v1.28.1
 	github.com/Arvintian/scs-go-sdk v1.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.0.0
 	github.com/DataDog/zstd v1.5.6
-	github.com/IBM/ibm-cos-sdk-go v1.10.0
+	github.com/IBM/ibm-cos-sdk-go v1.12.1
 	github.com/agiledragon/gomonkey/v2 v2.6.0
-	github.com/aliyun/aliyun-oss-go-sdk v2.2.7+incompatible
+	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
 	github.com/aws/aws-sdk-go v1.44.262
-	github.com/baidubce/bce-sdk-go v0.9.200
-	github.com/billziss-gh/cgofuse v1.5.0
+	github.com/baidubce/bce-sdk-go v0.9.221
 	github.com/ceph/go-ceph v0.18.0
-	github.com/colinmarc/hdfs/v2 v2.3.0
+	github.com/colinmarc/hdfs/v2 v2.4.0
 	github.com/davies/groupcache v0.0.0-20230821031435-e4e8362f58e1
 	github.com/dgraph-io/badger/v4 v4.5.1
 	github.com/dustin/go-humanize v1.0.1
 	github.com/erikdubbelboer/gspt v0.0.0-20210805194459-ce36a5128377
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
-	github.com/go-sql-driver/mysql v1.7.1
-	github.com/goccy/go-json v0.10.2
+	github.com/go-sql-driver/mysql v1.9.1
+	github.com/goccy/go-json v0.10.5
 	github.com/gofrs/flock v0.8.1
 	github.com/google/btree v1.1.2
-	github.com/google/uuid v1.5.0
-	github.com/grafana/pyroscope-go v1.0.4
+	github.com/google/uuid v1.6.0
+	github.com/grafana/pyroscope-go v1.2.1
 	github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8
 	github.com/hashicorp/consul/api v1.15.2
-	github.com/hashicorp/go-hclog v1.5.0
+	github.com/hashicorp/go-hclog v1.6.3
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.12+incompatible
 	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099
-	github.com/jackc/pgx/v5 v5.5.4
+	github.com/jackc/pgx/v5 v5.7.3
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/json-iterator/go v1.1.12
 	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
 	github.com/juicedata/gogfapi v0.0.0-20241204082332-ecd102647f80
 	github.com/juju/ratelimit v1.0.2
-	github.com/ks3sdklib/aws-sdk-go v1.2.2
+	github.com/ks3sdklib/aws-sdk-go v1.6.0
 	github.com/l0wl3vel/bunny-storage-go-sdk v0.0.10
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/minio/cli v1.24.2
 	github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c
 	github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78
-	github.com/ncw/swift/v2 v2.0.1
+	github.com/ncw/swift/v2 v2.0.3
 	github.com/pingcap/log v1.1.1-0.20221015072633-39906604fb81
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.13.5
 	github.com/pkg/xattr v0.4.9
-	github.com/prometheus/client_golang v1.15.1
-	github.com/prometheus/client_model v0.4.0
-	github.com/prometheus/common v0.43.0
+	github.com/prometheus/client_golang v1.21.1
+	github.com/prometheus/client_model v0.6.1
+	github.com/prometheus/common v0.62.0
 	github.com/qingstor/qingstor-sdk-go/v4 v4.4.0
 	github.com/qiniu/go-sdk/v7 v7.25.2
-	github.com/redis/go-redis/v9 v9.0.2
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
-	github.com/studio-b12/gowebdav v0.0.0-20230203202212-3282f94193f2
-	github.com/tencentyun/cos-go-sdk-v5 v0.7.45
+	github.com/studio-b12/gowebdav v0.10.0
+	github.com/tencentyun/cos-go-sdk-v5 v0.7.63
 	github.com/tikv/client-go/v2 v2.0.4
 	github.com/upyun/go-sdk/v3 v3.0.4
 	github.com/urfave/cli/v2 v2.19.3
@@ -67,15 +66,16 @@ require (
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	github.com/vimeo/go-util v1.4.1
 	github.com/vmware/go-nfs-client v0.0.0-20190605212624-d43b92724c1b
-	github.com/volcengine/ve-tos-golang-sdk/v2 v2.7.0
+	github.com/volcengine/ve-tos-golang-sdk/v2 v2.7.8
+	github.com/winfsp/cgofuse v1.6.0
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a
 	go.etcd.io/etcd v3.3.27+incompatible
 	go.etcd.io/etcd/client/v3 v3.5.9
-	go.uber.org/automaxprocs v1.5.2
+	go.uber.org/automaxprocs v1.6.0
 	go.uber.org/zap v1.20.0
 	golang.org/x/crypto v0.32.0
 	golang.org/x/net v0.34.0
-	golang.org/x/oauth2 v0.7.0
+	golang.org/x/oauth2 v0.24.0
 	golang.org/x/sync v0.10.0
 	golang.org/x/sys v0.29.0
 	golang.org/x/term v0.28.0
@@ -96,18 +96,20 @@ require (
 
 require (
 	cloud.google.com/go v0.110.0 // indirect
-	cloud.google.com/go/compute v1.19.1 // indirect
 	cloud.google.com/go/iam v0.13.0 // indirect
+	filippo.io/edwards25519 v1.1.0 // indirect
 	git.apache.org/thrift.git v0.13.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.3.0
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.1.1 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c // indirect
+	github.com/IBM/go-sdk-core/v5 v5.18.5 // indirect
 	github.com/VividCortex/ewma v1.2.0 // indirect
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/alecthomas/participle v0.2.1 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/apple/foundationdb/bindings/go v0.0.0-20211207225159-47b9a81d1c10
 	github.com/armon/go-metrics v0.3.10 // indirect
+	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/bcicen/jstream v1.0.1 // indirect
 	github.com/beevik/ntp v0.3.0 // indirect
 	github.com/benbjohnson/clock v1.1.0 // indirect
@@ -131,12 +133,18 @@ require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/djherbis/atime v1.0.0 // indirect
 	github.com/dswarbrick/smart v0.0.0-20190505152634-909a45200d6d // indirect
-	github.com/fatih/color v1.13.0 // indirect
+	github.com/fatih/color v1.16.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/felixge/httpsnoop v1.0.1 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.1 // indirect
 	github.com/go-ldap/ldap/v3 v3.2.4 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
+	github.com/go-openapi/errors v0.21.0 // indirect
+	github.com/go-openapi/strfmt v0.22.1 // indirect
+	github.com/go-playground/locales v0.14.1 // indirect
+	github.com/go-playground/universal-translator v0.18.1 // indirect
+	github.com/go-playground/validator/v10 v10.19.0 // indirect
 	github.com/go-resty/resty/v2 v2.11.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
@@ -154,15 +162,16 @@ require (
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.8
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0 // indirect
-	github.com/hashicorp/go-cleanhttp v0.5.1 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.0 // indirect
+	github.com/hashicorp/go-retryablehttp v0.7.7 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/hashicorp/serf v0.9.7 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
-	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
-	github.com/jackc/puddle/v2 v2.2.1 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
 	github.com/jcmturner/gofork v1.7.6 // indirect
@@ -176,6 +185,7 @@ require (
 	github.com/klauspost/readahead v1.3.1 // indirect
 	github.com/klauspost/reedsolomon v1.9.11 // indirect
 	github.com/kr/fs v0.1.0 // indirect
+	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
@@ -188,13 +198,14 @@ require (
 	github.com/minio/simdjson-go v0.2.1 // indirect
 	github.com/minio/sio v0.2.1 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/mitchellh/mapstructure v1.4.3 // indirect
+	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/montanaflynn/stats v0.5.0 // indirect
 	github.com/mozillazg/go-httpheader v0.2.1 // indirect
+	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/ncw/directio v1.0.5 // indirect
-	github.com/nxadm/tail v1.4.8 // indirect
+	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/oliverisaac/shellescape v0.0.0-20220131224704-1b6c6b87b668
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pengsrc/go-shared v0.2.1-0.20190131101655-1999055a4a14 // indirect
@@ -206,7 +217,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7 // indirect
-	github.com/prometheus/procfs v0.11.0 // indirect
+	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rasky/go-xdr v0.0.0-20170124162913-1a41d1a06c93 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
@@ -240,6 +251,7 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.9 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.9 // indirect
+	go.mongodb.org/mongo-driver v1.14.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
@@ -255,7 +267,7 @@ require (
 	xorm.io/builder v0.3.7 // indirect
 )
 
-replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/juicedata/minio v0.0.0-20240912134328-6a47725331ab
+replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/juicedata/minio v0.0.0-20250321080125-0f92d5f311b8
 
 replace github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8 => github.com/juicedata/go-fuse/v2 v2.1.1-0.20250317053401-3956686cd45c
 
