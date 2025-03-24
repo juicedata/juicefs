@@ -1220,6 +1220,7 @@ type VFS struct {
 	UpdateFormat    func(*meta.Format)
 	reader          DataReader
 	writer          DataWriter
+	cacheFiller     *CacheFiller
 
 	handles   map[Ino][]*handle
 	handleIno map[uint64]Ino
@@ -1237,16 +1238,17 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	writer := NewDataWriter(conf, m, store, reader)
 
 	v := &VFS{
-		Conf:       conf,
-		Meta:       m,
-		Store:      store,
-		reader:     reader,
-		writer:     writer,
-		handles:    make(map[Ino][]*handle),
-		handleIno:  make(map[uint64]Ino),
-		modifiedAt: make(map[meta.Ino]time.Time),
-		nextfh:     1,
-		registry:   registry,
+		Conf:        conf,
+		Meta:        m,
+		Store:       store,
+		reader:      reader,
+		writer:      writer,
+		cacheFiller: NewCacheFiller(conf, m, store),
+		handles:     make(map[Ino][]*handle),
+		handleIno:   make(map[uint64]Ino),
+		modifiedAt:  make(map[meta.Ino]time.Time),
+		nextfh:      1,
+		registry:    registry,
 	}
 
 	n := getInternalNode(configInode)
