@@ -22,7 +22,7 @@ require (
 	github.com/erikdubbelboer/gspt v0.0.0-20210805194459-ce36a5128377
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
 	github.com/go-sql-driver/mysql v1.7.1
-	github.com/goccy/go-json v0.10.2
+	github.com/goccy/go-json v0.10.5
 	github.com/gofrs/flock v0.8.1
 	github.com/google/btree v1.1.2
 	github.com/google/uuid v1.5.0
