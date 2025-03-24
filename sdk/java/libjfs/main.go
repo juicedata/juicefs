@@ -1698,5 +1698,24 @@ func jfs_close(pid int64, fd int32) int32 {
 	return errno(f.Close(f.w.withPid(pid)))
 }
 
+//export jfs_warmup
+func jfs_warmup(pid int64, h int64, _paths *C.char, numthreads int32, background, isEvict, isCheck bool) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	ctx := w.withPid(pid)
+
+	var paths []string
+	err := json.Unmarshal([]byte(C.GoString(_paths)), &paths)
+	if err != nil {
+		logger.Errorf("invalid json: %s", C.GoString(_paths))
+		return EINVAL
+	}
+	_ = w.Warmup(ctx, paths, int(numthreads), background, isEvict, isCheck)
+
+	return 0
+}
+
 func main() {
 }

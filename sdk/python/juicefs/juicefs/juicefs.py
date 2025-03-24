@@ -348,8 +348,11 @@ class Client(object):
     def summary(self, path, depth=0, entries=1):
         """Get the summary of a directory."""
 
-    def warmup(self, path):
+    def warmup(self, paths, numthreads=10, background=False, isEvict=False, isCheck=False):
         """Warm up a file or a directory."""
+        if type(paths) is not list:
+            paths = [paths]
+        self.lib.jfs_warmup(c_int64(_tid()), c_int64(self.h), json.dumps(paths).encode(), c_int32(numthreads), c_bool(background), c_bool(isEvict), c_bool(isCheck))
 
     # def quota(self, path):
     #     """Get the quota of a directory."""

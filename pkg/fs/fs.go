@@ -991,15 +991,22 @@ func (fs *FileSystem) Close() error {
 	return nil
 }
 
-func (fs *FileSystem) Clone() error {
-	return nil
-}
+//func (fs *FileSystem) Clone(ctx meta.Context) error {
+//	if eno = fs.m.Clone(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), srcParentIno, srcIno, dstParentIno, dstName, cmode, umask, &count, &total); eno != 0 {
+//		logger.Errorf("clone failed srcIno:%d,dstParentIno:%d,dstName:%s,cmode:%d,umask:%d,eno:%v", srcIno, dstParentIno, dstName, cmode, umask, eno)
+//	}
+//	return nil
+//}
+//
+//func (fs *FileSystem) Summary(ctx meta.Context) string {
+//	eno := fs.m.GetTreeSummary(ctx, &tree, depth, topN, strict,
+//		func(count, bytes uint64) {
+//			atomic.AddUint64(&files, count)
+//			atomic.AddUint64(&size, bytes)
+//		})
+//}
 
-func (fs *FileSystem) Summary() string {
-	return ""
-}
-
-func (fs *FileSystem) Info() string {
+func (fs *FileSystem) Info(ctx meta.Context) string {
 	return ""
 }
 
