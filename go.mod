@@ -26,7 +26,7 @@ require (
 	github.com/gofrs/flock v0.8.1
 	github.com/google/btree v1.1.2
 	github.com/google/uuid v1.5.0
-	github.com/grafana/pyroscope-go v1.0.4
+	github.com/grafana/pyroscope-go v1.2.1
 	github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8
 	github.com/hashicorp/consul/api v1.15.2
 	github.com/hashicorp/go-hclog v1.5.0
