@@ -55,7 +55,7 @@ require (
 	github.com/prometheus/common v0.43.0
 	github.com/qingstor/qingstor-sdk-go/v4 v4.4.0
 	github.com/qiniu/go-sdk/v7 v7.15.0
-	github.com/redis/go-redis/v9 v9.0.2
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
 	github.com/studio-b12/gowebdav v0.0.0-20230203202212-3282f94193f2
