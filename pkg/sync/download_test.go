@@ -152,16 +152,6 @@ func TestDownload(t *testing.T) {
 				t.Fatalf("err should be io.EOF or n should equal 0, but got %s %d", err, n)
 			}
 		}},
-
-		{config: config{fsize: 10 * downloadBufSize, concurrent: 5}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
-			defer pr.Close()
-			res := make([]byte, 1)
-			pr.key = "notExist"
-			n, err := pr.Read(res)
-			if !os.IsNotExist(err) || n != 0 {
-				t.Fatalf("err should be ErrNotExist or n should equal 0, but got %s %d", err, n)
-			}
-		}},
 	}
 
 	for _, c := range tcases {
@@ -169,5 +159,12 @@ func TestDownload(t *testing.T) {
 		utils.RandRead(content)
 		_ = a.Put(key, bytes.NewReader(content))
 		c.tfunc(t, newParallelDownloader(a, key, c.config.fsize, downloadBufSize, make(chan int, c.concurrent)), content)
+	}
+
+	downloader := newParallelDownloader(a, "notExist", 10*downloadBufSize, downloadBufSize, make(chan int, 5))
+	res := make([]byte, 1)
+	n, err := downloader.Read(res)
+	if !os.IsNotExist(err) || n != 0 {
+		t.Fatalf("err should be ErrNotExist or n should equal 0, but got %s %d", err, n)
 	}
 }
