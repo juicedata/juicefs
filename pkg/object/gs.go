@@ -66,7 +66,7 @@ func (g *gs) Create() error {
 	}
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
 	if projectID == "" {
-		projectID, _ = metadata.ProjectID()
+		projectID, _ = metadata.ProjectIDWithContext(context.Background())
 	}
 	if projectID == "" {
 		cred, err := google.FindDefaultCredentials(context.Background())
@@ -79,7 +79,7 @@ func (g *gs) Create() error {
 	}
 	// Guess region when region is not provided
 	if g.region == "" {
-		zone, err := metadata.Zone()
+		zone, err := metadata.ZoneWithContext(context.Background())
 		if err == nil && len(zone) > 2 {
 			g.region = zone[:len(zone)-2]
 		}
