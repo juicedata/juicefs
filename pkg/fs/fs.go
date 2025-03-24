@@ -1377,3 +1377,19 @@ func (f *File) Summary(ctx meta.Context) (s *meta.Summary, err syscall.Errno) {
 	err = f.fs.m.GetSummary(ctx, f.inode, s, true, true)
 	return
 }
+
+func (f *File) GetTreeSummary(ctx meta.Context, depth, entries uint8, strict bool) (s *meta.TreeSummary, err syscall.Errno) {
+	s = &meta.TreeSummary{
+		Inode: f.inode,
+		Path:  "",
+		Type:  meta.TypeDirectory,
+	}
+
+	l := vfs.NewLogContext(ctx)
+	defer func() {
+		f.fs.log(l, "GetTreeSummary (%s,%d,%d,%t): %s (%d,%d,%d)", f.path, depth, entries, strict, errstr(err), s.Size, s.Files, s.Dirs)
+	}()
+	s = &meta.TreeSummary{}
+	err = f.fs.m.GetTreeSummary(ctx, s, depth, entries, strict, nil)
+	return
+}

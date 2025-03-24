@@ -347,6 +347,25 @@ class Client(object):
 
     def summary(self, path, depth=0, entries=1):
         """Get the summary of a directory."""
+        buf = c_void_p()
+
+        n = self.lib.jfs_summary1(_tid(), self.h, _bin(path), c_uint8(depth), c_uint32(entries), byref(buf))
+        data = string_at(buf, n)
+        res = json.loads(str(data, encoding='utf-8'))
+
+        # def parseSummary(entry, removefields):
+        #     for f in removefields:
+        #         entry.pop(f, None)
+        #
+        #     if entry["Dirs"] == 0:
+        #         entry.pop("Entries", None)
+        #     elif entry.get("Entries") is not None:
+        #         for k, v in entry["Entries"].items():
+        #             parseSummary(v, removefields)
+        #
+        # parseSummary(res, ["Inode"])
+        self.lib.free(buf)
+        return res
 
     def warmup(self, paths, numthreads=10, background=False, isEvict=False, isCheck=False):
         """Warm up a file or a directory."""
@@ -354,7 +373,7 @@ class Client(object):
             paths = [paths]
         self.lib.jfs_warmup(c_int64(_tid()), c_int64(self.h), json.dumps(paths).encode(), c_int32(numthreads), c_bool(background), c_bool(isEvict), c_bool(isCheck))
 
-    # def quota(self, path):
+    # def quota_get(self, path):
     #     """Get the quota of a directory."""
 
 

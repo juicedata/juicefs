@@ -1272,6 +1272,35 @@ func jfs_summary(pid int64, h int64, cpath *C.char, buf uintptr) int32 {
 	return 24
 }
 
+//export jfs_gettreesummary
+func jfs_gettreesummary(pid, h int64, cpath *C.char, depth, entries uint8, p_buf **byte) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	ctx := w.withPid(pid)
+	f, err := w.Open(ctx, C.GoString(cpath), 0)
+	if err != 0 {
+		return errno(err)
+	}
+	summary, err := f.GetTreeSummary(ctx, depth, entries, true)
+	if err != 0 {
+		return errno(err)
+	}
+	res, err2 := json.Marshal(summary)
+	if err2 != nil {
+		return EINVAL
+	}
+	if *p_buf != nil {
+		return EINVAL
+	}
+
+	*p_buf = (*byte)(C.malloc(C.size_t(len(res))))
+
+	buf := unsafe.Slice(*p_buf, len(res))
+	return int32(copy(buf, res))
+}
+
 //export jfs_statvfs
 func jfs_statvfs(pid int64, h int64, buf uintptr) int32 {
 	w := F(h)
