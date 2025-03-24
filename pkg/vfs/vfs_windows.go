@@ -19,8 +19,8 @@ package vfs
 import (
 	"syscall"
 
-	"github.com/billziss-gh/cgofuse/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/winfsp/cgofuse/fuse"
 )
 
 const O_ACCMODE = uint32(fuse.O_ACCMODE)
