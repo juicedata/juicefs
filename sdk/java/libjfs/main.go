@@ -878,6 +878,15 @@ func jfs_delete(pid int64, h int64, cpath *C.char) int32 {
 	return errno(w.Delete(w.withPid(pid), C.GoString(cpath)))
 }
 
+//export jfs_unlink
+func jfs_unlink(pid int64, h int64, cpath *C.char) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	return errno(w.Unlink(w.withPid(pid), C.GoString(cpath)))
+}
+
 //export jfs_rmr
 func jfs_rmr(pid int64, h int64, cpath *C.char) int32 {
 	w := F(h)

@@ -291,7 +291,7 @@ class Client(object):
 
     def unlink(self, path):
         """Remove a file."""
-        self.remove(path)
+        self.lib.jfs_unlink(c_int64(_tid()), c_int64(self.h), _bin(path))
 
     def rmr(self, path):
         """Remove a directory and all its contents recursively."""

@@ -487,10 +487,21 @@ func (fs *FileSystem) MkdirAll0(ctx meta.Context, p string, mode uint16, umask u
 	return err
 }
 
+func (fs *FileSystem) Unlink(ctx meta.Context, p string) (err syscall.Errno) {
+	defer trace.StartRegion(context.TODO(), "fs.Unlink").End()
+	l := vfs.NewLogContext(ctx)
+	defer func() { fs.log(l, "Unlink (%s): %s", p, errstr(err)) }()
+	return fs.Delete0(ctx, p, true)
+}
+
 func (fs *FileSystem) Delete(ctx meta.Context, p string) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Delete").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Delete (%s): %s", p, errstr(err)) }()
+	return fs.Delete0(ctx, p, false)
+}
+
+func (fs *FileSystem) Delete0(ctx meta.Context, p string, callByUnlink bool) (err syscall.Errno) {
 	parent, err := fs.resolve(ctx, parentDir(p), true)
 	if err != 0 {
 		return
@@ -500,6 +511,10 @@ func (fs *FileSystem) Delete(ctx meta.Context, p string) (err syscall.Errno) {
 		return
 	}
 	if fi.IsDir() {
+		if callByUnlink {
+			err = syscall.EISDIR
+			return
+		}
 		err = fs.m.Rmdir(ctx, parent.inode, path.Base(p))
 	} else {
 		err = fs.m.Unlink(ctx, parent.inode, path.Base(p))
