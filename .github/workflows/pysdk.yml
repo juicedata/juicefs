@@ -11,7 +11,7 @@ on:
     - '**/hypo/fs_sdk_test.py'
     - '**/pysdk_test.py'
     - '**/juicefs.py'
-    - '**/pysdk.yml'
+#    - '**/pysdk.yml'
   pull_request:
     branches:
     - main
@@ -22,7 +22,7 @@ on:
     - '**/hypo/fs_sdk_test.py'
     - '**/pysdk_test.py'
     - '**/juicefs.py'
-    - '**/pysdk.yml'
+#    - '**/pysdk.yml'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:
