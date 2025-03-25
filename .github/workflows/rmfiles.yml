@@ -73,6 +73,7 @@ jobs:
           # wget -q https://s.juicefs.com/static/bench/500K_empty_files.dump.gz
           # gzip -dk  500K_empty_files.dump.gz
           # ./juicefs load $meta_url 500K_empty_files.dump
+          sudo chmod 777 /mnt
           GOCOVERDIR=$(pwd)/cover ./juicefs format $meta_url --bucket=/mnt/jfs jfs
           GOCOVERDIR=$(pwd)/cover ./juicefs mdtest $meta_url test --dirs 10 --depth 3 --files 10 --threads 10 --no-usage-report
           GOCOVERDIR=$(pwd)/cover ./juicefs mount -d $meta_url $mp --no-usage-report
