@@ -297,15 +297,6 @@ class TestPySdk(unittest.TestCase):
         state.rename_dir(entry=folders_0, new_entry_name='a/a', parent=folders_1, umask=18, user='root')
         state.teardown()
 
-    # def test_rmdir_check_exist(self):
-    #     state = JuicefsMachine()
-    #     folders_0 = state.init_folders()
-    #     folders_1 = state.mkdir(mode=0, parent=folders_0, subdir='a', umask=18, user='root')
-    #     files_0 = state.loop_symlink(link_file_name=folders_1, parent=folders_1, user='root')
-    #     state.exists(entry=files_0, user='root')
-    #     state.rmdir(dir=folders_1, user='root')
-    #     state.teardown()
-
     # def test_truncate(self):
     #     state = JuicefsMachine()
     #     folders_0 = state.init_folders()

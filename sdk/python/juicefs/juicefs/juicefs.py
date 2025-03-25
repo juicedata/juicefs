@@ -230,7 +230,7 @@ class Client(object):
 
     def rmdir(self, path):
         """Remove a directory. The directory must be empty."""
-        self.lib.jfs_rmr(c_int64(_tid()), c_int64(self.h), _bin(path))
+        self.lib.jfs_delete(c_int64(_tid()), c_int64(self.h), _bin(path))
 
     def rename(self, old, new):
         """Rename the file or directory old to new."""
@@ -340,6 +340,7 @@ class Client(object):
 
     # def summary(self, path, depth=0, entries=1):
     #     """Get the summary of a directory."""
+
 
 class File(object):
     """A JuiceFS file."""
