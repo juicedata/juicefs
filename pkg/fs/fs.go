@@ -19,6 +19,7 @@ package fs
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -954,6 +955,99 @@ func (fs *FileSystem) Close() error {
 		close(buffer)
 	}
 	return nil
+}
+
+type statistic struct {
+	UsedSpace                uint64
+	AvailableSpace           uint64
+	UsedInodes               uint64
+	AvailableInodes          uint64
+	TrashFileCount           int64 `json:",omitempty"`
+	TrashFileSize            int64 `json:",omitempty"`
+	PendingDeletedFileCount  int64 `json:",omitempty"`
+	PendingDeletedFileSize   int64 `json:",omitempty"`
+	TrashSliceCount          int64 `json:",omitempty"`
+	TrashSliceSize           int64 `json:",omitempty"`
+	PendingDeletedSliceCount int64 `json:",omitempty"`
+	PendingDeletedSliceSize  int64 `json:",omitempty"`
+}
+
+func printJson(v interface{}) {
+	output, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		logger.Fatalf("json: %s", err)
+	}
+	fmt.Println(string(output))
+}
+
+func (fs *FileSystem) Status(ctx meta.Context, more bool) ([]byte, error) {
+	var totalSpace uint64
+	var err error
+
+	defer trace.StartRegion(context.TODO(), "fs.Status").End()
+	l := vfs.NewLogContext(ctx)
+	defer func() {
+		fs.log(l, "Status (%t): %s", more, errstr(err))
+	}()
+
+	stat := &statistic{}
+	if err = fs.m.StatFS(meta.Background(), meta.RootInode, &totalSpace, &stat.AvailableSpace, &stat.UsedInodes, &stat.AvailableInodes); err != syscall.Errno(0) {
+		logger.Fatalf("stat fs: %s", err)
+	}
+	stat.UsedSpace = totalSpace - stat.AvailableSpace
+
+	if more {
+		var (
+			trashSlicesCount, trashSlicesSize                   int64
+			pendingDeletedSlicesCount, pendingDeletedSlicesSize int64
+			trashFileCount, trashFileSize                       int64
+			pendingDeletedFileCount, pendingDeletedFileSize     int64
+		)
+
+		err = fs.m.ScanDeletedObject(
+			meta.WrapContext(ctx),
+			func(ss []meta.Slice, _ int64) (bool, error) {
+				trashSlicesCount += int64(len(ss))
+				for _, s := range ss {
+					trashSlicesSize += int64(s.Size)
+				}
+				return false, nil
+			},
+			func(_ uint64, size uint32) (bool, error) {
+				pendingDeletedSlicesCount++
+				pendingDeletedSlicesSize += int64(size)
+				return false, nil
+			},
+			func(_ meta.Ino, size uint64, _ time.Time) (bool, error) {
+				trashFileCount++
+				trashFileSize += int64(size)
+				return false, nil
+			},
+			func(_ meta.Ino, size uint64, _ int64) (bool, error) {
+				pendingDeletedFileCount++
+				pendingDeletedFileSize += int64(size)
+				return false, nil
+			},
+		)
+		if err != nil {
+			logger.Fatalf("statistic: %s", err)
+		}
+
+		stat.TrashSliceCount = trashSlicesCount
+		stat.TrashSliceSize = trashSlicesSize
+		stat.PendingDeletedSliceCount = pendingDeletedSlicesCount
+		stat.PendingDeletedSliceSize = pendingDeletedSlicesSize
+		stat.TrashFileCount = trashFileCount
+		stat.TrashFileSize = trashFileSize
+		stat.PendingDeletedFileCount = pendingDeletedFileCount
+		stat.PendingDeletedFileSize = pendingDeletedFileSize
+	}
+
+	output, err := json.Marshal(stat)
+	if err != nil {
+		logger.Fatalf("json: %s", err)
+	}
+	return output, nil
 }
 
 // File

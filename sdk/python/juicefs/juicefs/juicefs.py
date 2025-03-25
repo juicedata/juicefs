@@ -341,6 +341,13 @@ class Client(object):
     # def summary(self, path, depth=0, entries=1):
     #     """Get the summary of a directory."""
 
+    def status(self, more):
+        buf = c_void_p()
+        n = self.lib.jfs_status(c_int64(_tid()), c_int64(self.h), c_bool(more), byref(buf))
+        res = json.loads(str(string_at(buf, n), encoding='utf-8'))
+        self.lib.free(buf)
+        return res
+
 class File(object):
     """A JuiceFS file."""
     def __init__(self, lib, fd, path, mode, flag, length, buffering, encoding, errors):
