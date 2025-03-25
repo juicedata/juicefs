@@ -19,6 +19,7 @@ package fs
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -954,6 +955,112 @@ func (fs *FileSystem) Close() error {
 		close(buffer)
 	}
 	return nil
+}
+
+type statistic struct {
+	UsedSpace                uint64
+	AvailableSpace           uint64
+	UsedInodes               uint64
+	AvailableInodes          uint64
+	TrashFileCount           int64 `json:",omitempty"`
+	TrashFileSize            int64 `json:",omitempty"`
+	PendingDeletedFileCount  int64 `json:",omitempty"`
+	PendingDeletedFileSize   int64 `json:",omitempty"`
+	TrashSliceCount          int64 `json:",omitempty"`
+	TrashSliceSize           int64 `json:",omitempty"`
+	PendingDeletedSliceCount int64 `json:",omitempty"`
+	PendingDeletedSliceSize  int64 `json:",omitempty"`
+}
+
+type sections struct {
+	Setting   *meta.Format
+	Sessions  []*meta.Session
+	Statistic *statistic
+}
+
+func (fs *FileSystem) Status(ctx meta.Context, trash bool, sessionId uint64) ([]byte, error) {
+	var totalSpace uint64
+	var err error
+
+	defer trace.StartRegion(context.TODO(), "fs.Status").End()
+	l := vfs.NewLogContext(ctx)
+	defer func() {
+		fs.log(l, "Status (%t): %s", trash, errstr(err))
+	}()
+
+	format, err := fs.m.Load(true)
+	if err != nil {
+		return nil, fmt.Errorf("load setting: %v", err)
+	}
+	format.RemoveSecret()
+
+	if sessionId != 0 {
+		s, err := fs.m.GetSession(sessionId, true)
+		if err != nil {
+			return nil, fmt.Errorf("get session: %v", err)
+		}
+		output, err := json.Marshal(s)
+		return output, err
+	}
+
+	sessions, err := fs.m.ListSessions()
+	if err != nil {
+		return nil, fmt.Errorf("list sessions: %v", err)
+	}
+
+	stat := &statistic{}
+	if err = fs.m.StatFS(meta.Background(), meta.RootInode, &totalSpace, &stat.AvailableSpace, &stat.UsedInodes, &stat.AvailableInodes); err != syscall.Errno(0) {
+		return nil, fmt.Errorf("stat fs: %v", err)
+	}
+	stat.UsedSpace = totalSpace - stat.AvailableSpace
+
+	if trash {
+		progress := utils.NewProgress(false)
+		trashFileSpinner := progress.AddDoubleSpinner("Trash Files")
+		pendingDeletedFileSpinner := progress.AddDoubleSpinner("Pending Deleted Files")
+		trashSlicesSpinner := progress.AddDoubleSpinner("Trash Slices")
+		pendingDeletedSlicesSpinner := progress.AddDoubleSpinner("Pending Deleted Slices")
+		err = fs.m.ScanDeletedObject(
+			meta.WrapContext(ctx),
+			func(ss []meta.Slice, _ int64) (bool, error) {
+				for _, s := range ss {
+					trashSlicesSpinner.IncrInt64(int64(s.Size))
+				}
+				return false, nil
+			},
+			func(_ uint64, size uint32) (bool, error) {
+				pendingDeletedSlicesSpinner.IncrInt64(int64(size))
+				return false, nil
+			},
+			func(_ meta.Ino, size uint64, _ time.Time) (bool, error) {
+				trashFileSpinner.IncrInt64(int64(size))
+				return false, nil
+			},
+			func(_ meta.Ino, size uint64, _ int64) (bool, error) {
+				pendingDeletedFileSpinner.IncrInt64(int64(size))
+				return false, nil
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("statistic: %v", err)
+		}
+
+		trashSlicesSpinner.Done()
+		pendingDeletedSlicesSpinner.Done()
+		trashFileSpinner.Done()
+		pendingDeletedFileSpinner.Done()
+		progress.Done()
+		stat.TrashSliceCount, stat.TrashSliceSize = trashSlicesSpinner.Current()
+		stat.PendingDeletedSliceCount, stat.PendingDeletedSliceSize = pendingDeletedSlicesSpinner.Current()
+		stat.TrashFileCount, stat.TrashFileSize = trashFileSpinner.Current()
+		stat.PendingDeletedFileCount, stat.PendingDeletedFileSize = pendingDeletedFileSpinner.Current()
+	}
+
+	output, err := json.Marshal(&sections{format, sessions, stat})
+	if err != nil {
+		return nil, fmt.Errorf("json: %v", err)
+	}
+	return output, nil
 }
 
 // File
