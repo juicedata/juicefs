@@ -36,7 +36,14 @@ XATTR_REPLACE = 2
 
 def check_error(r, fn, args):
     if r < 0:
-        e = OSError(f'call {fn.__name__} failed: [Errno {-r}] {os.strerror(-r)}: {args[2:]}')
+        formatted_args = []
+        for arg in args[2:]:
+            if isinstance(arg, (bytes, bytearray)):
+                formatted_args.append(f'bytes(len={len(arg)})')
+            else:
+                formatted_args.append(repr(arg))
+
+        e = OSError(f'call {fn.__name__} failed: [Errno {-r}] {os.strerror(-r)}: {formatted_args}')
         e.errno = -r
         raise e
     return r
