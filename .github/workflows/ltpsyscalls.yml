@@ -80,7 +80,7 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo GOCOVERDIR=$(pwd)/cover ./juicefs format --trash-days 0 $meta_url pics
+          sudo GOCOVERDIR=$(pwd)/cover ./juicefs format --trash-days 0 $meta_url --bucket=/mnt/jfs pics
 
       - name: Juicefs Mount
         run: |
