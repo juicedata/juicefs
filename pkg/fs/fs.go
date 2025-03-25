@@ -997,7 +997,7 @@ func (fs *FileSystem) Clone(ctx meta.Context, src, dst string, preserve bool) (e
 		return
 	}
 	var srcIno Ino
-	err = fs.lookup(ctx, srcParent.Inode(), path.Base(src), &srcIno, nil)
+	err = fs.lookup(ctx, srcParent.Inode(), path.Base(src), &srcIno, &Attr{})
 	if err != 0 {
 		return
 	}
@@ -1018,10 +1018,6 @@ func (fs *FileSystem) Clone(ctx meta.Context, src, dst string, preserve bool) (e
 		logger.Errorf("clone failed srcIno:%d,dstParentIno:%d,dstName:%s,cmode:%d,umask:%d,eno:%v", srcIno, dstParent.Inode(), path.Base(dst), cmode, umask, err)
 	}
 	return
-}
-
-func (fs *FileSystem) Info(ctx meta.Context) string {
-	return ""
 }
 
 func (fs *FileSystem) Warmup(ctx meta.Context, paths []string, numthreads int, background bool, isEvict bool, isCheck bool) error {

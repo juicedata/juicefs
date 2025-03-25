@@ -349,7 +349,7 @@ class Client(object):
         """Get the summary of a directory."""
         buf = c_void_p()
 
-        n = self.lib.jfs_summary1(_tid(), self.h, _bin(path), c_uint8(depth), c_uint32(entries), byref(buf))
+        n = self.lib.gettreesummary(_tid(), self.h, _bin(path), c_uint8(depth), c_uint32(entries), byref(buf))
         data = string_at(buf, n)
         res = json.loads(str(data, encoding='utf-8'))
 
