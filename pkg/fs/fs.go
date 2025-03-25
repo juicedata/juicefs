@@ -467,6 +467,13 @@ func (fs *FileSystem) MkdirAll(ctx meta.Context, p string, mode uint16, umask ui
 }
 
 func (fs *FileSystem) MkdirAll0(ctx meta.Context, p string, mode uint16, umask uint16, existOK bool) (err syscall.Errno) {
+	//if p == "/" || p == "." {
+	//	if existOK {
+	//		return 0
+	//	} else {
+	//		return syscall.EEXIST
+	//	}
+	//}
 	err = fs.Mkdir(ctx, p, mode, umask)
 	if err == syscall.ENOENT {
 		err = fs.MkdirAll(ctx, parentDir(p), mode, umask)
@@ -627,6 +634,9 @@ func (fs *FileSystem) Truncate(ctx meta.Context, path string, length uint64) (er
 	fi, err := fs.resolve(ctx, path, true)
 	if err != 0 {
 		return
+	}
+	if fi.IsDir() {
+		return syscall.EISDIR
 	}
 	err = fs.m.Truncate(ctx, fi.inode, 0, length, nil, false)
 	return
