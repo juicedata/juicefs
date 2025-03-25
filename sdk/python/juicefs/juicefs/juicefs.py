@@ -38,7 +38,7 @@ def check_error(r, fn, args):
     if r < 0:
         formatted_args = []
         for arg in args[2:]:
-            if isinstance(arg, (bytes, bytearray)):
+            if isinstance(arg, (bytes, bytearray)) and len(arg) > 1024:
                 formatted_args.append(f'bytes(len={len(arg)})')
             else:
                 formatted_args.append(repr(arg))
