@@ -345,6 +345,11 @@ class Client(object):
         """Clone a file."""
         self.lib.jfs_clone(c_int64(_tid()), c_int64(self.h), _bin(src), _bin(dst), c_bool(preserve))
 
+    def quota(self, path, cmd):
+        """Get the quota of a directory."""
+        self.lib.jfs_quota(c_int64(_tid()), c_int64(self.h), _bin(path), _bin(cmd))
+        return 0
+
     def info(self, path, recursive=False, strict=False):
         """Get the information of a file or a directory."""
         buf = c_void_p()
