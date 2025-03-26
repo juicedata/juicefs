@@ -36,7 +36,14 @@ XATTR_REPLACE = 2
 
 def check_error(r, fn, args):
     if r < 0:
-        e = OSError(f'call {fn.__name__} failed: [Errno {-r}] {os.strerror(-r)}: {args[2:]}')
+        formatted_args = []
+        for arg in args[2:]:
+            if isinstance(arg, (bytes, bytearray)) and len(arg) > 1024:
+                formatted_args.append(f'bytes(len={len(arg)})')
+            else:
+                formatted_args.append(repr(arg))
+
+        e = OSError(f'call {fn.__name__} failed: [Errno {-r}] {os.strerror(-r)}: {formatted_args}')
         e.errno = -r
         raise e
     return r
@@ -199,7 +206,7 @@ class Client(object):
         else:
             try:
                 sz = c_uint64()
-                fd = self.lib.jfs_open(c_int64(_tid()), c_int64(self.h), _bin(path), byref(sz), c_int32(flag))
+                fd = self.lib.jfs_open_posix(c_int64(_tid()), c_int64(self.h), _bin(path), byref(sz), c_int32(flag))
                 if 'w' in mode:
                     self.lib.jfs_ftruncate(c_int64(_tid()), fd, c_uint64(0))
                 else:
@@ -230,7 +237,7 @@ class Client(object):
 
     def rmdir(self, path):
         """Remove a directory. The directory must be empty."""
-        self.lib.jfs_rmr(c_int64(_tid()), c_int64(self.h), _bin(path))
+        self.lib.jfs_rmdir(c_int64(_tid()), c_int64(self.h), _bin(path))
 
     def rename(self, old, new):
         """Rename the file or directory old to new."""
@@ -291,7 +298,7 @@ class Client(object):
 
     def unlink(self, path):
         """Remove a file."""
-        self.remove(path)
+        self.lib.jfs_unlink(c_int64(_tid()), c_int64(self.h), _bin(path))
 
     def rmr(self, path):
         """Remove a directory and all its contents recursively."""
@@ -340,6 +347,7 @@ class Client(object):
 
     # def summary(self, path, depth=0, entries=1):
     #     """Get the summary of a directory."""
+
 
 class File(object):
     """A JuiceFS file."""

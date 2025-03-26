@@ -115,6 +115,7 @@ const (
 	EACCES    = -0x0d
 	EEXIST    = -0x11
 	ENOTDIR   = -0x14
+	EISDIR    = -0x15
 	EINVAL    = -0x16
 	ENOSPC    = -0x1c
 	EDQUOT    = -0x45
@@ -811,6 +812,29 @@ func jfs_open(pid int64, h int64, cpath *C.char, lenPtr uintptr, flags int32) in
 	return nextFileHandle(f, w)
 }
 
+//export jfs_open_posix
+func jfs_open_posix(pid int64, h int64, cpath *C.char, lenPtr uintptr, flags int32) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	path := C.GoString(cpath)
+	f, err := w.Open(w.withPid(pid), path, uint32(flags))
+	if err != 0 {
+		return errno(err)
+	}
+	st, _ := f.Stat()
+	if st.IsDir() {
+		return EISDIR
+	}
+	if lenPtr != 0 {
+		buf := toBuf(lenPtr, 8)
+		wb := utils.NewNativeBuffer(buf)
+		wb.Put64(uint64(st.Size()))
+	}
+	return nextFileHandle(f, w)
+}
+
 //export jfs_access
 func jfs_access(pid int64, h int64, cpath *C.char, flags int64) int32 {
 	w := F(h)
@@ -876,6 +900,24 @@ func jfs_delete(pid int64, h int64, cpath *C.char) int32 {
 		return EINVAL
 	}
 	return errno(w.Delete(w.withPid(pid), C.GoString(cpath)))
+}
+
+//export jfs_unlink
+func jfs_unlink(pid int64, h int64, cpath *C.char) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	return errno(w.Unlink(w.withPid(pid), C.GoString(cpath)))
+}
+
+//export jfs_rmdir
+func jfs_rmdir(pid int64, h int64, cpath *C.char) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	return errno(w.Rmdir(w.withPid(pid), C.GoString(cpath)))
 }
 
 //export jfs_rmr
