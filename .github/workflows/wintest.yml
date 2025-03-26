@@ -7,12 +7,16 @@ on:
       - 'release-**'
     paths:
       - '**/wintest.yml'
+      - 'pkg/winfsp/*.go'
+      - '**/*_windows.go'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
     paths:
       - '**/wintest.yml'
+      - 'pkg/winfsp/*.go'
+      - '**/*_windows.go'
   workflow_dispatch:
     inputs:
       debug_enabled:

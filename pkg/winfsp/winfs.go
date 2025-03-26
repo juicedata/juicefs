@@ -444,7 +444,7 @@ func (j *juice) reopen(p string, fh *uint64) meta.Ino {
 }
 
 // Getattr gets file attributes.
-func (j *juice) getAttrForControlFile(ctx vfs.LogContext, p string, stat *fuse.Stat_t, fh uint64) (e int) {
+func (j *juice) getAttrForSpFile(ctx vfs.LogContext, p string, stat *fuse.Stat_t, fh uint64) (e int) {
 	parentDir := path.Dir(p)
 	_, err := j.fs.Stat(ctx, parentDir)
 	if err != 0 {
@@ -452,7 +452,8 @@ func (j *juice) getAttrForControlFile(ctx vfs.LogContext, p string, stat *fuse.S
 		return
 	}
 
-	inode, attr := vfs.GetInternalNodeByName(".control")
+	filename := path.Base(p)
+	inode, attr := vfs.GetInternalNodeByName(filename)
 	if inode == 0 {
 		e = -fuse.ENOENT
 		return
@@ -475,7 +476,10 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 	if ino == 0 {
 		// special case for .control file
 		if strings.HasSuffix(p, "/.control") {
-			j.getAttrForControlFile(ctx, p, stat, fh)
+			e = j.getAttrForSpFile(ctx, p, stat, fh)
+			return
+		} else if vfs.IsSpecialName(path.Base(p)) {
+			e = j.getAttrForSpFile(ctx, p, stat, fh)
 			return
 		}
 
