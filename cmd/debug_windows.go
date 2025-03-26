@@ -145,7 +145,7 @@ func getProcessUserSid(pid int) (string, error) {
 
 }
 
-func getCmdMount(mp string) (uiJd, pid, cmd string, err error) {
+func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 	var tmpPid string
 	_ = utils.WithTimeout(func() error {
 		content, err := readConfig(mp)
