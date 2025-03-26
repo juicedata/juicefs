@@ -467,13 +467,6 @@ func (fs *FileSystem) MkdirAll(ctx meta.Context, p string, mode uint16, umask ui
 }
 
 func (fs *FileSystem) MkdirAll0(ctx meta.Context, p string, mode uint16, umask uint16, existOK bool) (err syscall.Errno) {
-	//if p == "/" || p == "." {
-	//	if existOK {
-	//		return 0
-	//	} else {
-	//		return syscall.EEXIST
-	//	}
-	//}
 	err = fs.Mkdir(ctx, p, mode, umask)
 	if err == syscall.ENOENT {
 		err = fs.MkdirAll(ctx, parentDir(p), mode, umask)
@@ -519,6 +512,19 @@ func (fs *FileSystem) Delete0(ctx meta.Context, p string, callByUnlink bool) (er
 	} else {
 		err = fs.m.Unlink(ctx, parent.inode, path.Base(p))
 	}
+	fs.invalidateEntry(parent.inode, path.Base(p))
+	return
+}
+
+func (fs *FileSystem) Rmdir(ctx meta.Context, p string) (err syscall.Errno) {
+	defer trace.StartRegion(context.TODO(), "fs.Rmdir").End()
+	l := vfs.NewLogContext(ctx)
+	defer func() { fs.log(l, "Rmdir (%s): %s", p, errstr(err)) }()
+	parent, err := fs.resolve(ctx, parentDir(p), true)
+	if err != 0 {
+		return
+	}
+	err = fs.m.Rmdir(ctx, parent.inode, path.Base(p))
 	fs.invalidateEntry(parent.inode, path.Base(p))
 	return
 }

@@ -911,6 +911,15 @@ func jfs_unlink(pid int64, h int64, cpath *C.char) int32 {
 	return errno(w.Unlink(w.withPid(pid), C.GoString(cpath)))
 }
 
+//export jfs_rmdir
+func jfs_rmdir(pid int64, h int64, cpath *C.char) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	return errno(w.Rmdir(w.withPid(pid), C.GoString(cpath)))
+}
+
 //export jfs_rmr
 func jfs_rmr(pid int64, h int64, cpath *C.char) int32 {
 	w := F(h)

@@ -237,7 +237,7 @@ class Client(object):
 
     def rmdir(self, path):
         """Remove a directory. The directory must be empty."""
-        self.lib.jfs_delete(c_int64(_tid()), c_int64(self.h), _bin(path))
+        self.lib.jfs_rmdir(c_int64(_tid()), c_int64(self.h), _bin(path))
 
     def rename(self, old, new):
         """Rename the file or directory old to new."""
