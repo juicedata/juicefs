@@ -269,7 +269,7 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 }
 
 func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	logger.Infof("list req:%s  prefix=%s marker=%s delimiter=%s limit=%d followLink=%v", d.String(), prefix, marker, delimiter, limit, followLink)
+	logger.Infof("list req:%s  prefix=%s marker=%s delimiter=%s limit=%d followLink=%v makervalue %v", d.String(), prefix, marker, delimiter, limit, followLink, []byte(marker))
 	if delimiter != "/" {
 		return nil, notSupported
 	}
@@ -315,8 +315,12 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 			continue
 		}
 		key := p[len(d.root):]
-		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
-			logger.Infof("list req:%s continue2 key=%s prefix=%s marker=%s", d.String(), key, prefix, marker)
+		if !strings.HasPrefix(key, prefix) {
+			logger.Infof("list req:%s continue2 key=%s prefix=%s", d.String(), key, prefix)
+			continue
+		}
+		if marker != "" && key <= marker {
+			logger.Infof("list req:%s continue3 key=%s prefix=%s marker=%s,value:%v", d.String(), key, prefix, marker, []byte(marker))
 			continue
 		}
 		info := e.Info()
