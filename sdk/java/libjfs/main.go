@@ -115,6 +115,7 @@ const (
 	EACCES    = -0x0d
 	EEXIST    = -0x11
 	ENOTDIR   = -0x14
+	EISDIR    = -0x15
 	EINVAL    = -0x16
 	ENOSPC    = -0x1c
 	EDQUOT    = -0x45
@@ -801,7 +802,7 @@ func jfs_open(pid int64, h int64, cpath *C.char, lenPtr uintptr, flags int32) in
 	}
 	st, _ := f.Stat()
 	if st.IsDir() {
-		return ENOENT
+		return EISDIR
 	}
 	if lenPtr != 0 {
 		buf := toBuf(lenPtr, 8)
