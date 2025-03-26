@@ -94,8 +94,8 @@ class Client(object):
                  verify_cache_checksum="full", cache_eviction="2-random", cache_scan_interval="3600", cache_expire="0",
                  writeback=False, buffer_size="300M", prefetch=1, max_readahead="0", upload_limit="0",
                  download_limit="0", max_uploads=20, max_deletes=10, skip_dir_nlink=20, skip_dir_mtime="100ms",
-                 io_retries=10, get_timeout="5", put_timeout="60", fast_resolve=True, attr_cache="1",
-                 entry_cache="1", dir_entry_cache="1", debug=False, no_usage_report=False, access_log="",
+                 io_retries=10, get_timeout="5", put_timeout="60", fast_resolve=False, attr_cache="1s",
+                 entry_cache="0s", dir_entry_cache="1s", debug=False, no_usage_report=False, access_log="",
                  push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite="", **kwargs):
         self.lib = JuiceFSLib()
         kwargs["meta"] = meta
