@@ -125,16 +125,17 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 	}
 
 	marker := start
-	logger.Debugf("Listing objects from %s marker %q", store, marker)
+	logger.Infof("Listing objects from %s marker %q", store, marker)
 	objs, err := store.List(prefix, marker, "", maxResults, followLink)
 	if err == utils.ENOTSUP {
+		logger.Infof("use ListAllWithDelimiter")
 		return object.ListAllWithDelimiter(store, prefix, start, end, followLink)
 	}
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
 		return nil, err
 	}
-	logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
+	logger.Infof("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
 	go func() {
 		lastkey := ""
 		first := true
@@ -1169,6 +1170,7 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 			defer wg.Done()
 			for key := range prefixs {
 				logger.Debugf("start listing prefix %s", key)
+				logger.Infof("startProducer src=%s dst=%s key=%s depth=%d", src.String(), dst.String(), key, config.ListDepth)
 				err = startProducer(tasks, src, dst, key, config.ListDepth, config)
 				if err != nil {
 					logger.Errorf("list prefix %s: %s", key, err)
@@ -1222,6 +1224,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		}
 	}
 	if config.ListThreads <= 1 || listDepth <= 0 {
+		logger.Infof("startSingleProducer src=%s dst=%s prefix=%s", src.String(), dst.String(), prefix)
 		return startSingleProducer(tasks, src, dst, prefix, config)
 	}
 

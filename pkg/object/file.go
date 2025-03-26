@@ -269,6 +269,7 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 }
 
 func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+	logger.Infof("list req:%s  prefix=%s marker=%s delimiter=%s limit=%d followLink=%v", d.String(), prefix, marker, delimiter, limit, followLink)
 	if delimiter != "/" {
 		return nil, notSupported
 	}
@@ -288,8 +289,10 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 			return nil, err
 		}
 		objs = append(objs, obj)
+		logger.Infof("list req: head prefix objs %s key=%s,issymlink=%v,mtime=%s,size=%d", d.String(), obj.Key(), obj.IsSymlink(), obj.Mtime().String(), obj.Size())
 	}
 	entries, err := readDirSorted(dir, followLink)
+	logger.Infof("list req: %s len(entries):%d err:%s", d.String(), len(entries), err)
 	if err != nil {
 		if os.IsPermission(err) {
 			logger.Warnf("skip %s: %s", dir, err)
@@ -306,20 +309,25 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 		if e.IsDir() {
 			p = p + "/"
 		}
+		logger.Infof("list req: %s e.name=%s p=%s", d.String(), e.Name(), p)
 		if !strings.HasPrefix(p, d.root) {
+			logger.Infof("list req:%s continue1 p=%s root=%s", d.String(), p, d.root)
 			continue
 		}
 		key := p[len(d.root):]
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
+			logger.Infof("list req:%s continue2 key=%s prefix=%s marker=%s", d.String(), key, prefix, marker)
 			continue
 		}
 		info := e.Info()
 		f := toFile(key, info, e.isSymlink, getOwnerGroup)
 		objs = append(objs, f)
+		logger.Infof("list req: put in objs %s key=%s,issymlink=%v,mtime=%s,size=%d", d.String(), f.Key(), f.IsSymlink(), f.Mtime().String(), f.Size())
 		if len(objs) == int(limit) {
 			break
 		}
 	}
+	logger.Infof("list req len(obj):%d", len(objs))
 	return objs, nil
 }
 

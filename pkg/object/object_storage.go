@@ -188,6 +188,7 @@ type listThread struct {
 
 func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
 	entries, err := store.List(prefix, "", "/", 1e9, followLink)
+	logger.Infof("ListAllWithDelimiter1: len(entries)=%d", len(entries))
 	if err != nil {
 		logger.Errorf("list %s: %s", prefix, err)
 		return nil, err
@@ -216,6 +217,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 					}
 
 					t.entries, t.err = store.List(key, "\x00", "/", 1e9, followLink) // exclude itself
+					logger.Infof("ListAllWithDelimiter2: len(entries)=%d", len(t.entries))
 					t.Lock()
 					t.ready = true
 					t.cond.Signal()
@@ -234,14 +236,18 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 		for i, e := range entries {
 			key := e.Key()
 			if end != "" && key >= end {
+				logger.Infof("ListAllWithDelimiter3:continue key=%s,end=%s", key, end)
 				return nil
 			}
 			if key >= start {
+				logger.Infof("ListAllWithDelimiter4: put in listed key=%s,end=%s", key, start)
 				listed <- e
 			} else if !strings.HasPrefix(start, key) {
+				logger.Infof("ListAllWithDelimiter5:continue key=%s,end=%s", key, start)
 				continue
 			}
 			if !e.IsDir() || key == prefix {
+				logger.Infof("ListAllWithDelimiter5:continue key=%s,prefix=%s isdir=%v", key, prefix, e.IsDir())
 				continue
 			}
 
@@ -270,6 +276,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 
 	go func() {
 		defer close(listed)
+		logger.Infof("walk %s,len(entries)=%d", prefix, len(entries))
 		err := walk(prefix, entries)
 		if err != nil {
 			logger.Errorf("walk %s: %s", prefix, err)
