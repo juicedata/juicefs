@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -308,6 +309,7 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			}
 			logger.Infof("launch a worker on %s", host)
 			var finished = make(chan struct{})
+			var logRe = regexp.MustCompile(`^.*<([A-Z]+)>: (.*)`)
 			go func() {
 				r := bufio.NewReader(stderr)
 				for {
@@ -316,7 +318,27 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 						finished <- struct{}{}
 						return
 					}
-					println(host, line[:len(line)-1])
+					line = strings.TrimSuffix(line, "\n")
+
+					var level, content string
+					if matches := logRe.FindStringSubmatch(line); len(matches) >= 3 {
+						level = matches[1]
+						content = matches[2]
+					} else {
+						level = "INFO"
+						content = line
+					}
+
+					switch level {
+					case "ERROR":
+						logger.Errorf("[%s] %s", host, content)
+					case "WARNING":
+						logger.Warnf("[%s] %s", host, content)
+					case "DEBUG":
+						logger.Debugf("[%s] %s", host, content)
+					default:
+						logger.Infof("[%s] %s", host, content)
+					}
 				}
 			}()
 			err = cmd.Wait()
