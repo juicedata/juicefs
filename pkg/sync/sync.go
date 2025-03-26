@@ -1191,7 +1191,11 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 		if key == "" {
 			continue
 		}
-		prefixs <- key
+		space := strings.TrimSpace(key)
+		if space != key {
+			logger.Infof("TrimSpace:%s", key)
+		}
+		prefixs <- space
 	}
 	close(prefixs)
 
