@@ -11,7 +11,7 @@ on:
     - '**/hypo/fs_sdk_test.py'
     - '**/pysdk_test.py'
     - '**/juicefs.py'
-    - '**/pysdk.yml'
+#    - '**/pysdk.yml'
   pull_request:
     branches:
     - main
@@ -22,7 +22,7 @@ on:
     - '**/hypo/fs_sdk_test.py'
     - '**/pysdk_test.py'
     - '**/juicefs.py'
-    - '**/pysdk.yml'
+#    - '**/pysdk.yml'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:
@@ -110,7 +110,7 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs format $meta_url --trash-days 0 --enable-acl pics
+          sudo ./juicefs format $meta_url --trash-days 0 --enable-acl --bucket=/mnt/jfs pics
 
       - name: Juicefs Mount
         run: |
@@ -124,42 +124,49 @@ jobs:
         run: |
           make -C sdk/python/ libjfs.so
           sudo python3 sdk/python/juicefs/setup.py install
+          df -h
 
       - name: Run juicefs.py
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo JFS_VOLUME=test-volume JFS_META=$meta_url python3 sdk/python/juicefs/juicefs/juicefs.py
+          df -h
 
       - name: Run pysdk_test.py
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo META_URL=$meta_url python3 .github/scripts/pysdk/pysdk_test.py
+          df -h
 
       - name: Run file_test.py
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/file_test.py
+          df -h
 
       - name: Run file.py without read
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo USE_SDK=true META_URL=$meta_url EXCLUDE_RULES="read,readline,readlines" python3 .github/scripts/hypo/file.py
+          df -h
 
       - name: Run file.py without write
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo USE_SDK=true META_URL=$meta_url EXCLUDE_RULES="write,writelines,truncate" python3 .github/scripts/hypo/file.py
+          df -h
 
       - name: Run fs_sdk_test.py
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/fs_sdk_test.py
+          df -h
 
       - name: Run fs.py
         timeout-minutes: 60
@@ -168,6 +175,7 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo USE_SDK=true META_URL=$meta_url EXCLUDE_RULES="readlines,readline,clone_cp_file,clone_cp_dir" python3 .github/scripts/hypo/fs.py 2>&1 | tee fsrand.log
           exit ${PIPESTATUS[0]}
+          df -h
 
       - name: check fsrand.log
         if: always()
