@@ -802,6 +802,29 @@ func jfs_open(pid int64, h int64, cpath *C.char, lenPtr uintptr, flags int32) in
 	}
 	st, _ := f.Stat()
 	if st.IsDir() {
+		return ENOENT
+	}
+	if lenPtr != 0 {
+		buf := toBuf(lenPtr, 8)
+		wb := utils.NewNativeBuffer(buf)
+		wb.Put64(uint64(st.Size()))
+	}
+	return nextFileHandle(f, w)
+}
+
+//export jfs_open_posix
+func jfs_open_posix(pid int64, h int64, cpath *C.char, lenPtr uintptr, flags int32) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	path := C.GoString(cpath)
+	f, err := w.Open(w.withPid(pid), path, uint32(flags))
+	if err != 0 {
+		return errno(err)
+	}
+	st, _ := f.Stat()
+	if st.IsDir() {
 		return EISDIR
 	}
 	if lenPtr != 0 {

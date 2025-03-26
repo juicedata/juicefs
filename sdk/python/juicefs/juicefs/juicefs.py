@@ -206,7 +206,7 @@ class Client(object):
         else:
             try:
                 sz = c_uint64()
-                fd = self.lib.jfs_open(c_int64(_tid()), c_int64(self.h), _bin(path), byref(sz), c_int32(flag))
+                fd = self.lib.jfs_open_posix(c_int64(_tid()), c_int64(self.h), _bin(path), byref(sz), c_int32(flag))
                 if 'w' in mode:
                     self.lib.jfs_ftruncate(c_int64(_tid()), fd, c_uint64(0))
                 else:
