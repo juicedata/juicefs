@@ -1007,8 +1007,8 @@ func (fs *FileSystem) Clone(ctx meta.Context, src, dst string, preserve bool) (e
 	}
 
 	var count, total uint64
-	var umask uint16
-	umask = uint16(utils.GetUmask())
+	umask := uint16(utils.GetUmask())
+
 	var cmode uint8
 	if preserve {
 		cmode |= meta.CLONE_MODE_PRESERVE_ATTR

@@ -345,6 +345,15 @@ class Client(object):
         """Clone a file."""
         self.lib.jfs_clone(c_int64(_tid()), c_int64(self.h), _bin(src), _bin(dst))
 
+    def info(self, path):
+        """Get the information of a file or a directory."""
+        buf = c_void_p()
+        size = self.lib.jfs_summary(c_int64(_tid()), c_int64(self.h), _bin(path), byref(buf))
+        data = string_at(buf, size)
+        res = json.loads(data)
+        self.lib.free(buf)
+        return res
+
     def summary(self, path, depth=0, entries=1):
         """Get the summary of a directory."""
         buf = c_void_p()
@@ -372,9 +381,6 @@ class Client(object):
         if type(paths) is not list:
             paths = [paths]
         self.lib.jfs_warmup(c_int64(_tid()), c_int64(self.h), json.dumps(paths).encode(), c_int32(numthreads), c_bool(background), c_bool(isEvict), c_bool(isCheck))
-
-    # def quota_get(self, path):
-    #     """Get the quota of a directory."""
 
 
 
@@ -632,7 +638,6 @@ class File(object):
         self._check_closed()
         self.write(''.join(lines) if self.encoding else b''.join(lines))
         self.flush()
-
 
 def test():
     volume = os.getenv("JFS_VOLUME", "test")
