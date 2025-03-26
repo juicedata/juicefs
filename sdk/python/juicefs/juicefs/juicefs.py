@@ -88,39 +88,39 @@ class JuiceFSLib(object):
 
 class Client(object):
     """A JuiceFS client."""
-    def __init__(self, name, meta, *, bucket="", storage_class="", read_only=False, no_session=False, 
-                 no_bg_job=False, open_cache="", backup_meta="", backup_skip_trash=False, heartbeat="", 
-                 cache_dir="", cache_size="100M", free_space="", auto_create=False, cache_full_block=False, 
-                 cache_checksum="", cache_eviction="", cache_scan_interval="", cache_expire="", 
-                 writeback=False, memory_size="300M", prefetch=0, readahead="100M", upload_limit="10g", 
-                 download_limit="10g", max_uploads=0, max_deletes=0, skip_dir_nlink=0, skip_dir_mtime="", 
-                 io_retries=0, get_timeout="", put_timeout="", fast_resolve=False, attr_timeout="", 
-                 entry_timeout="", dir_entry_timeout="", debug=False, no_usage_report=False, access_log="", 
-                 push_gateway="", push_interval="", push_auth="", push_labels="", push_graphite="", **kwargs): 
+    def __init__(self, name, meta, *, bucket="", storage_class="", read_only=False, no_session=False, no_bgjob=True,
+                 open_cache="0", backup_meta="3600", backup_skip_trash=False, heartbeat="12",
+                 cache_dir="memory", cache_size="100M", free_space_ratio="0.1", cache_partial_only=False,
+                 verify_cache_checksum="full", cache_eviction="2-random", cache_scan_interval="3600", cache_expire="0",
+                 writeback=False, buffer_size="300M", prefetch=1, max_readahead="0", upload_limit="0",
+                 download_limit="0", max_uploads=20, max_deletes=10, skip_dir_nlink=20, skip_dir_mtime="100ms",
+                 io_retries=10, get_timeout="5", put_timeout="60", fast_resolve=True, attr_cache="1",
+                 entry_cache="1", dir_entry_cache="1", debug=False, no_usage_report=False, access_log="",
+                 push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite="", **kwargs):
         self.lib = JuiceFSLib()
         kwargs["meta"] = meta
         kwargs["bucket"] = bucket
         kwargs["storageClass"] = storage_class
         kwargs["readOnly"] = read_only
         kwargs["noSession"] = no_session
-        kwargs["noBGJob"] = no_bg_job
+        kwargs["noBGJob"] = no_bgjob
         kwargs["openCache"] = open_cache
         kwargs["backupMeta"] = backup_meta
         kwargs["backupSkipTrash"] = backup_skip_trash
         kwargs["heartbeat"] = heartbeat
         kwargs["cacheDir"] = cache_dir
         kwargs["cacheSize"] = cache_size
-        kwargs["freeSpace"] = free_space
-        kwargs["autoCreate"] = auto_create
-        kwargs["cacheFullBlock"] = cache_full_block
-        kwargs["cacheChecksum"] = cache_checksum
+        kwargs["freeSpace"] = free_space_ratio
+        kwargs["autoCreate"] = True
+        kwargs["cacheFullBlock"] = not cache_partial_only
+        kwargs["cacheChecksum"] = verify_cache_checksum
         kwargs["cacheEviction"] = cache_eviction
         kwargs["cacheScanInterval"] = cache_scan_interval
         kwargs["cacheExpire"] = cache_expire
         kwargs["writeback"] = writeback
-        kwargs["memorySize"] = memory_size
+        kwargs["memorySize"] = buffer_size
         kwargs["prefetch"] = prefetch
-        kwargs["readahead"] = readahead
+        kwargs["readahead"] = max_readahead
         kwargs["uploadLimit"] = upload_limit
         kwargs["downloadLimit"] = download_limit
         kwargs["maxUploads"] = max_uploads
@@ -131,9 +131,9 @@ class Client(object):
         kwargs["getTimeout"] = get_timeout
         kwargs["putTimeout"] = put_timeout
         kwargs["fastResolve"] = fast_resolve
-        kwargs["attrTimeout"] = attr_timeout
-        kwargs["entryTimeout"] = entry_timeout
-        kwargs["dirEntryTimeout"] = dir_entry_timeout
+        kwargs["attrTimeout"] = attr_cache
+        kwargs["entryTimeout"] = entry_cache
+        kwargs["dirEntryTimeout"] = dir_entry_cache
         kwargs["debug"] = debug
         kwargs["noUsageReport"] = no_usage_report
         kwargs["accessLog"] = access_log
