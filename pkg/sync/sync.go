@@ -29,6 +29,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/object"
@@ -1189,7 +1190,11 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 		if key == "" {
 			continue
 		}
-		prefixs <- key
+		trimKey := strings.TrimRightFunc(key, unicode.IsSpace)
+		if trimKey != key {
+			logger.Infof("found a prefix with a space character:%q", key)
+		}
+		prefixs <- trimKey
 	}
 	close(prefixs)
 
