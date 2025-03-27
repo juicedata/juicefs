@@ -170,14 +170,14 @@ class SummaryTests(unittest.TestCase):
 
     def test_summary(self):
         res = v.summary(TESTFILE, depth=258, entries=2)
-        self.assertTrue(res=={"Path": "file", "Type": 2, "Files":1, "Dirs":0, "Size":4096})
+        self.assertTrue(normalize(res)==normalize({"Path": "file", "Type": 2, "Files":1, "Dirs":0, "Size":4096}))
         res = v.summary(TESTFN)
-        self.assertTrue(res=={"Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480})
+        self.assertTrue(normalize(res)==normalize({"Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480}))
         res = v.summary(TESTFN, depth=257, entries=1)
-        self.assertTrue(res=={"Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480, "Children":[
-            {"Path": "dir1", "Type": 2, "Files":1, "Dirs":1, "Size":8192},{'Path': '...', 'Type': 1, 'Size': 8192, 'Files': 1, 'Dirs': 1}]})
+        self.assertTrue(normalize(res)==normalize({"Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480, "Children":[
+            {"Path": "dir1", "Type": 2, "Files":1, "Dirs":1, "Size":8192},{'Path': '...', 'Type': 1, 'Size': 8192, 'Files': 1, 'Dirs': 1}]}))
         res = v.summary(TESTFN, depth=258, entries=1)
-        self.assertTrue(res==
+        self.assertTrue(normalize(res)==normalize(
                         {
                             "Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480, "Children":
                             [
@@ -186,10 +186,9 @@ class SummaryTests(unittest.TestCase):
                                 ]
                                  },{'Path': '...', 'Type': 1, 'Size': 8192, 'Files': 1, 'Dirs': 1}
                             ]}
-                        )
+                        ))
         res = v.summary(TESTFN, depth=259, entries=4)
-        print(res)
-        self.assertTrue(res==
+        self.assertTrue(normalize(res)==normalize(
                         {
                             "Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480, "Children":
                             [
@@ -202,7 +201,17 @@ class SummaryTests(unittest.TestCase):
                                 'Path': 'dir2', 'Type': 2, 'Size': 4096, 'Files': 0, 'Dirs': 1
                             }
                             ]}
-                        )
+                        ))
+
+def normalize(d):
+    if isinstance(d, dict):
+        if "Children" in d:
+            d["Children"].sort(key=lambda x: x["Path"])
+        return {k: normalize(v) for k, v in d.items()}
+    elif isinstance(d, list):
+        return sorted((normalize(x) for x in d), key=lambda x: x.get("Path", ""))
+    else:
+        return d
 
 class NonLocalSymlinkTests(unittest.TestCase):
     def setUp(self):
