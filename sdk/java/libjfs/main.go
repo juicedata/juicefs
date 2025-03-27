@@ -152,6 +152,8 @@ func errno(err error) int32 {
 		return EEXIST
 	case syscall.ENOTDIR:
 		return ENOTDIR
+	case syscall.EISDIR:
+		return EISDIR
 	case syscall.EINVAL:
 		return EINVAL
 	case syscall.ENOSPC:
