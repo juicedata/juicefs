@@ -347,15 +347,13 @@ class Client(object):
 
     def info(self, path):
         """Get the information of a file or a directory."""
-        buf = bytes(24)
-        self.lib.jfs_summary(c_int64(_tid()), c_int64(self.h), _bin(path), buf)
+        buf = c_void_p()
+        n = self.lib.jfs_info(c_int64(_tid()), c_int64(self.h), _bin(path), byref(buf))
+        data = string_at(buf, n)
+        res = json.loads(str(data, encoding='utf-8'))
 
-        info = {
-            'Length': struct.unpack('<Q', buf[0:8])[0],
-            'Files': struct.unpack('<Q', buf[8:16])[0],
-            'Dirs': struct.unpack('<Q', buf[16:24])[0]
-        }
-        return info
+        self.lib.free(buf)
+        return res
 
     def summary(self, path, depth=0, entries=1):
         """Get the summary of a directory."""
