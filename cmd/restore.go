@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,7 +43,7 @@ $ juicefs restore redis://localhost/1 2023-05-10-01`,
 
 func restore(ctx *cli.Context) error {
 	setup(ctx, 2)
-	if os.Getuid() != 0 {
+	if os.Getuid() != 0 && runtime.GOOS != "windows" {
 		return fmt.Errorf("only root can restore files from trash")
 	}
 	removePassword(ctx.Args().Get(0))
