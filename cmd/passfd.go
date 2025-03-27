@@ -162,7 +162,6 @@ func serveFuseFD(path string) {
 		return
 	}
 	go func() {
-		defer os.Remove(path)
 		defer sock.Close()
 		for {
 			conn, err := sock.Accept()

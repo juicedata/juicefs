@@ -775,6 +775,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 	}
 	os.Setenv("_FUSE_FD_COMM", serverAddress)
 	serveFuseFD(serverAddress)
+	defer os.Remove(serverAddress)
 
 	path, err := os.Executable()
 	if err != nil {
