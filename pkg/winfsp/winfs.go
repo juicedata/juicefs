@@ -761,7 +761,7 @@ func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayCl
 	_ = host.Mount(conf.Meta.MountPoint, []string{"-o", options})
 }
 
-func RunAsSystemSerivce(name string, mountpoint string) error {
+func RunAsSystemSerivce(name string, mountpoint string, logPath string) error {
 	// https://winfsp.dev/doc/WinFsp-Service-Architecture/
 	logger.Info("Running as Windows system service.")
 
@@ -814,6 +814,19 @@ func RunAsSystemSerivce(name string, mountpoint string) error {
 	err = k.SetDWordValue("JobControl", 1)
 	if err != nil {
 		return fmt.Errorf("Failed to set registry key: %s", err)
+	}
+
+	if logPath != "" {
+		err = k.SetStringValue("Stderr", logPath)
+		if err != nil {
+			return fmt.Errorf("Failed to set registry key: %s", err)
+		}
+	} else {
+		err = k.DeleteValue("Stderr")
+		if err != nil {
+			return fmt.Errorf("Failed to delete registry key: %s", err)
+		}
+
 	}
 
 	logger.Debug("Starting juicefs service.")

@@ -51,7 +51,7 @@ func getprocessCommandLine(pid int) (string, error) {
 		return sline, nil
 	}
 
-	return "", fmt.Errorf("cannot find command line for pid %d", pid)
+	return "", fmt.Errorf("cannot find command line for pid %d. If the juicefs are mounted at background, Please rerun this with the admin permission.", pid)
 }
 
 func findMountProcess(mp string) (int, error) {
