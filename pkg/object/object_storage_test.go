@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/baidubce/bce-sdk-go/services/bos/api"
 	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 	"io"
@@ -43,8 +44,6 @@ import (
 	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/enum"
-
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -84,7 +83,7 @@ func setStorageClass(o ObjectStorage) string {
 		case *gs:
 			sc = "NEARLINE"
 		case *ossClient:
-			sc = string(oss.StorageIA)
+			sc = string(oss.StorageClassIA)
 		case *tosClient:
 			sc = string(enum.StorageClassIa)
 		case *obsClient:
