@@ -1559,7 +1559,7 @@ func jfs_concat(pid int64, h int64, _dst *C.char, buf uintptr, bufsize int32) in
 }
 
 //export jfs_clone
-func jfs_clone(pid int64, h int64, _src *C.char, _dst *C.char) int32 {
+func jfs_clone(pid int64, h int64, _src *C.char, _dst *C.char, preserve bool) int32 {
 	w := F(h)
 	if w == nil {
 		return EINVAL
@@ -1567,7 +1567,7 @@ func jfs_clone(pid int64, h int64, _src *C.char, _dst *C.char) int32 {
 	src := C.GoString(_src)
 	dst := C.GoString(_dst)
 	ctx := w.withPid(pid)
-	err := w.Clone(ctx, src, dst, true)
+	err := w.Clone(ctx, src, dst, preserve)
 	return errno(err)
 }
 
