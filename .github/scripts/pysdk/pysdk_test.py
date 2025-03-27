@@ -23,7 +23,7 @@ def create_file(filename, content=b'content'):
 class FileTests(unittest.TestCase):
     def setUp(self):
         if not v.exists(TESTFN):
-           v.mkdir(TESTFN)
+            v.mkdir(TESTFN)
 
     def test_read(self):
         with v.open(TESTFILE, "w+b") as fobj:
@@ -74,7 +74,7 @@ class UtimeTests(unittest.TestCase):
 class MakedirTests(unittest.TestCase):
     def setUp(self):
         if v.exists(TESTFN):
-           v.rmr(TESTFN)
+            v.rmr(TESTFN)
         v.mkdir(TESTFN)
 
     def test_makedir(self):
@@ -97,14 +97,14 @@ class MakedirTests(unittest.TestCase):
         # may not have been created, so we look for the outermost directory
         # that exists.
         if v.exists(path):
-           v.rmr(path)
+            v.rmr(path)
 
 class ChownFileTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         if not v.exists(TESTFN):
-           v.mkdir(TESTFN)
+            v.mkdir(TESTFN)
 
     def test_chown_uid_gid_arguments_must_be_index(self):
         stat = v.stat(TESTFN)
@@ -156,7 +156,6 @@ class LinkTests(unittest.TestCase):
     def test_link(self):
         self._test_link(self.file1, self.file2)
 
-@unittest.skip("Skipping SummaryTests")
 class SummaryTests(unittest.TestCase):
     # /test/dir1/file
     #      /dir2
@@ -171,27 +170,40 @@ class SummaryTests(unittest.TestCase):
 
     def test_summary(self):
         res = v.summary(TESTFILE, depth=258, entries=2)
-        self.assertTrue(res=={"Length":7, "Files":1, "Dirs":0, "Size":4096})
+        self.assertTrue(res=={"Path": "file", "Type": 2, "Files":1, "Dirs":0, "Size":4096})
         res = v.summary(TESTFN)
-        self.assertTrue(res=={"Length":14, "Files":2, "Dirs":3, "Size":20480, "Entries": None})
+        self.assertTrue(res=={"Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480})
         res = v.summary(TESTFN, depth=257, entries=1)
-        self.assertTrue(res=={"Length":14, "Files":2, "Dirs":3, "Size":20480, "Entries":
-            {"dir1":{"Length":7, "Files":1, "Dirs":1, "Size":8192, "Entries": None}}})
+        self.assertTrue(res=={"Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480, "Children":[
+            {"Path": "dir1", "Type": 2, "Files":1, "Dirs":1, "Size":8192},{'Path': '...', 'Type': 1, 'Size': 8192, 'Files': 1, 'Dirs': 1}]})
         res = v.summary(TESTFN, depth=258, entries=1)
-        self.assertTrue(res=={"Length":14, "Files":2, "Dirs":3, "Size":20480, "Entries":
-            {"dir1":{"Length":7, "Files":1, "Dirs":1, "Size":8192, "Entries": {
-                "file": {"Length": 7, "Size": 4096, "Files": 1, "Dirs": 0}
-            }}}})
+        self.assertTrue(res==
+                        {
+                            "Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480, "Children":
+                            [
+                                {"Path": "dir1", "Type": 2, "Files":1, "Dirs":1, "Size":8192, "Children": [
+                                    {"Path": "dir1/file", "Type": 1, "Size": 4096, "Files": 1, "Dirs": 0}
+                                ]
+                                 },{'Path': '...', 'Type': 1, 'Size': 8192, 'Files': 1, 'Dirs': 1}
+                            ]}
+                        )
         res = v.summary(TESTFN, depth=259, entries=4)
-        self.assertTrue(res=={"Length":14, "Files":2, "Dirs":3, "Size":20480, "Entries":
-            {
-                "dir1":{"Length":7, "Files":1, "Dirs":1, "Size":8192, "Entries": {
-                    "file": {"Length": 7, "Size": 4096, "Files": 1, "Dirs": 0}
-                    }},
-                "dir2": {"Length": 0, "Size": 4096, "Files": 0, "Dirs": 1, "Entries": {}},
-                "file": {"Length": 7, "Size": 4096, "Files": 1, "Dirs": 0}
-            }})
-        
+        print(res)
+        self.assertTrue(res==
+                        {
+                            "Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480, "Children":
+                            [
+                                {
+                                    "Path": "dir1", "Type": 2, "Files":1, "Dirs":1, "Size":8192, "Children":
+                                    [{"Path": "dir1/file", "Type": 1, "Size": 4096, "Files": 1, "Dirs": 0}]
+                                },{
+                                'Path': 'file', 'Type': 1, 'Size': 4096, 'Files': 1, 'Dirs': 0
+                            },{
+                                'Path': 'dir2', 'Type': 2, 'Size': 4096, 'Files': 0, 'Dirs': 1
+                            }
+                            ]}
+                        )
+
 class NonLocalSymlinkTests(unittest.TestCase):
     def setUp(self):
         r"""
@@ -210,9 +222,9 @@ class NonLocalSymlinkTests(unittest.TestCase):
         assert v.readlink(src) == '../some_dir'
 
 class ExtendedAttributeTests(unittest.TestCase):
-#    def tearDown(self):
-#        if v.exists(TESTFN + "_xattr"):
-#            v.rmr(TESTFN + '_xattr')
+    #    def tearDown(self):
+    #        if v.exists(TESTFN + "_xattr"):
+    #            v.rmr(TESTFN + '_xattr')
 
     def _check_xattrs_str(self, s, getxattr, setxattr, removexattr, listxattr, **kwargs):
         fn = TESTFN + '_xattr'
@@ -220,9 +232,9 @@ class ExtendedAttributeTests(unittest.TestCase):
             v.unlink(fn)
         create_file(fn)
 
-#        with self.assertRaises(OSError) as cm:
-#            v.getxattr(fn, s("user.test"), **kwargs)
-#        self.assertEqual(cm.exception.errno, errno.ENODATA)
+        #        with self.assertRaises(OSError) as cm:
+        #            v.getxattr(fn, s("user.test"), **kwargs)
+        #        self.assertEqual(cm.exception.errno, errno.ENODATA)
 
         init_xattr = v.listxattr(fn)
         self.assertIsInstance(init_xattr, list)
@@ -239,9 +251,9 @@ class ExtendedAttributeTests(unittest.TestCase):
             v.setxattr(fn, s("user.test"), b"bye", os.XATTR_CREATE, **kwargs)
         self.assertEqual(cm.exception.errno, errno.EEXIST)
 
-#        with self.assertRaises(OSError) as cm:
-#            v.setxattr(fn, s("user.test2"), b"bye", os.XATTR_REPLACE, **kwargs)
-#        self.assertEqual(cm.exception.errno, errno.ENODATA)
+        #        with self.assertRaises(OSError) as cm:
+        #            v.setxattr(fn, s("user.test2"), b"bye", os.XATTR_REPLACE, **kwargs)
+        #        self.assertEqual(cm.exception.errno, errno.ENODATA)
 
         v.setxattr(fn, s("user.test2"), b"foo", os.XATTR_CREATE, **kwargs)
         xattr.add("user.test2")
@@ -291,6 +303,7 @@ class ExtendedAttributeTests(unittest.TestCase):
                 return v.listxattr(fp.fileno(), *args)
         self._check_xattrs(getxattr, setxattr, removexattr, listxattr)
 
+
 class BenchTests(unittest.TestCase):
     def setUp(self):
         if not v.exists(TESTFN):
@@ -298,9 +311,9 @@ class BenchTests(unittest.TestCase):
         self.test_file = TESTFILE + '_bench'
         self.block_size = 128 * 1024  # 128KB
         self.buffer_size = 300
-        self.buffering = 2 * 1024 * 1024 
+        self.buffering = 2 * 1024 * 1024
         self.run_time = 30
-        self.file_size = 100 * 1024 * 1024  
+        self.file_size = 100 * 1024 * 1024
         self.seed = 20
         self.count = 200
 
@@ -343,7 +356,7 @@ class BenchTests(unittest.TestCase):
         print('test_seq_read')
         with v.open(self.test_file, 'wb') as f:
             f.write(os.urandom(self.file_size))
-        
+
         seq_read(
             filename=self.test_file,
             client=v,
@@ -356,7 +369,7 @@ class BenchTests(unittest.TestCase):
         print('test_random_read')
         with v.open(self.test_file, 'wb') as f:
             f.write(os.urandom(self.file_size))
-        
+
         random_read(
             filename=self.test_file,
             client=v,

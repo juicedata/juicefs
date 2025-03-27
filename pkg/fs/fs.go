@@ -1034,7 +1034,6 @@ func (fs *FileSystem) Warmup(ctx meta.Context, paths []string, numthreads int, b
 	} else {
 		fs.cacheFiller.Cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(numthreads), resp)
 	}
-	return
 }
 
 // File
