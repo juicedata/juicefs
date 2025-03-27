@@ -77,32 +77,10 @@ func (o *ossClient) Create() error {
 }
 
 func (o *ossClient) Head(key string) (Object, error) {
-	var size int64
-	var mtime time.Time
-	var sc string
-	var err error
-	if o.sc != "" {
-		var info *oss.HeadObjectResult
-		info, err = o.client.HeadObject(ctx, &oss.HeadObjectRequest{
-			Bucket: &o.bucket,
-			Key:    &key,
-		})
-		if info != nil {
-			size = info.ContentLength
-			mtime = oss.ToTime(info.LastModified)
-			sc = oss.ToString(info.StorageClass)
-		}
-	} else {
-		var info *oss.GetObjectMetaResult
-		info, err = o.client.GetObjectMeta(ctx, &oss.GetObjectMetaRequest{
-			Bucket: &o.bucket,
-			Key:    &key,
-		})
-		if info != nil {
-			size = info.ContentLength
-			mtime = oss.ToTime(info.LastModified)
-		}
-	}
+	info, err := o.client.HeadObject(ctx, &oss.HeadObjectRequest{
+		Bucket: &o.bucket,
+		Key:    &key,
+	})
 	if err != nil {
 		var svcErr *oss.ServiceError
 		if errors.As(err, &svcErr); svcErr.StatusCode == http.StatusNotFound {
@@ -112,10 +90,10 @@ func (o *ossClient) Head(key string) (Object, error) {
 	}
 	return &obj{
 		key,
-		size,
-		mtime,
+		info.ContentLength,
+		oss.ToTime(info.LastModified),
 		strings.HasSuffix(key, "/"),
-		sc,
+		oss.ToString(info.StorageClass),
 	}, nil
 }
 
@@ -423,7 +401,7 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	config.DisableUploadCRC64Check = oss.Ptr(true)
 	config.DisableDownloadCRC64Check = oss.Ptr(true)
 	config.UserAgent = &UserAgent
-	config.HttpClient = http.DefaultClient
+	config.HttpClient = httpClient
 	config.CredentialsProvider = provider
 	client := oss.NewClient(config)
 	o := &ossClient{client: client, bucket: bucketName}
