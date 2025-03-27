@@ -361,11 +361,6 @@ func collectPprof(ctx *cli.Context, cmd string, pid string, amp string, requireR
 		return nil
 	}
 
-	if !isUnix() {
-		logger.Warnf("Collecting pprof currently only support Linux/macOS")
-		return nil
-	}
-
 	port, err := getPprofPort(pid, amp, requireRootPrivileges)
 	if err != nil {
 		return fmt.Errorf("failed to get pprof port: %v", err)
@@ -414,12 +409,9 @@ func collectPprof(ctx *cli.Context, cmd string, pid string, amp string, requireR
 	return nil
 }
 
-func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDir string) error {
-	if !isUnix() {
-		logger.Warnf("Collecting log currently only support Linux/macOS")
-		return nil
-	}
-	if !(strings.Contains(cmd, "-d") || strings.Contains(cmd, "--background")) {
+func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDir string, uid string) error {
+	mountdByWinSystem := runtime.GOOS == "windows" && uid == "S-1-5-18" // https://learn.microsoft.com/en-us/windows/win32/secauthz/well-known-sids
+	if !(strings.Contains(cmd, "-d") || strings.Contains(cmd, "--background")) && !mountdByWinSystem {
 		logger.Warnf("The juicefs mount by foreground, the log will not be collected")
 		return nil
 	}
@@ -430,15 +422,30 @@ func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDi
 	limit := ctx.Uint64("limit")
 	retLogPath := filepath.Join(currDir, "juicefs.log")
 
-	var copyArgs []string
-	if requireRootPrivileges {
-		copyArgs = append(copyArgs, "sudo")
+	if runtime.GOOS == "windows" {
+		// check powershell is installed
+		_, err = exec.LookPath("powershell")
+		if err != nil {
+			logger.Warnf("Powershell is not installed, the log will not be collected")
+			return nil
+		}
+
+		copyArgs := []string{"powershell", "-Command", fmt.Sprintf("Get-Content -Tail %d %s > %s", limit, logPath, retLogPath)}
+		logger.Infof("The last %d lines of %s will be collected", limit, logPath)
+		timeoutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return exec.CommandContext(timeoutCtx, copyArgs[0], copyArgs[1:]...).Run()
+	} else {
+		var copyArgs []string
+		if requireRootPrivileges {
+			copyArgs = append(copyArgs, "sudo")
+		}
+		copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("tail -n %d %s > %s", limit, logPath, retLogPath))
+		logger.Infof("The last %d lines of %s will be collected", limit, logPath)
+		timeoutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return exec.CommandContext(timeoutCtx, copyArgs[0], copyArgs[1:]...).Run()
 	}
-	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("tail -n %d %s > %s", limit, logPath, retLogPath))
-	logger.Infof("The last %d lines of %s will be collected", limit, logPath)
-	timeoutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	return exec.CommandContext(timeoutCtx, copyArgs[0], copyArgs[1:]...).Run()
 }
 
 func collectSysInfo(ctx *cli.Context, currDir string) error {
@@ -555,7 +562,7 @@ func debug(ctx *cli.Context) error {
 		logger.Errorf("Failed to collect special file: %v", err)
 	}
 
-	if err := collectLog(ctx, cmd, requireRootPrivileges, currDir); err != nil {
+	if err := collectLog(ctx, cmd, requireRootPrivileges, currDir, uid); err != nil {
 		logger.Errorf("Failed to collect log: %v", err)
 	}
 

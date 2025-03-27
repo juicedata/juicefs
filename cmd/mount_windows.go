@@ -17,6 +17,9 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/vfs"
@@ -29,6 +32,11 @@ func mountFlags() []cli.Flag {
 		&cli.StringFlag{
 			Name:  "o",
 			Usage: "other FUSE options",
+		},
+		&cli.StringFlag{
+			Name:  "log",
+			Value: filepath.Join(getDefaultLogDir(), "juicefs.log"),
+			Usage: "path of log file when running in background",
 		},
 		&cli.StringFlag{
 			Name:  "access-log",
@@ -60,7 +68,17 @@ func mountFlags() []cli.Flag {
 }
 
 func makeDaemon(c *cli.Context, conf *vfs.Config) error {
-	return winfsp.RunAsSystemSerivce(conf.Format.Name, c.Args().Get(1))
+	logPath := c.String("log")
+	if logPath != "" {
+		if !filepath.IsAbs(logPath) {
+			return cli.Exit("log path must be an absolute path", 1)
+		}
+		if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+			return cli.Exit(err, 1)
+		}
+	}
+
+	return winfsp.RunAsSystemSerivce(conf.Format.Name, c.Args().Get(1), logPath)
 }
 
 func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl, listenAddr string) error {

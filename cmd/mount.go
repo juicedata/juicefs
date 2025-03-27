@@ -534,7 +534,7 @@ func getDefaultLogDir() string {
 			break
 		}
 		fallthrough
-	case "darwin":
+	case "darwin", "windows":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			logger.Fatalf("%v", err)
