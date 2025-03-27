@@ -1711,7 +1711,9 @@ func jfs_close(pid int64, fd int32) int32 {
 }
 
 //export jfs_warmup
-func jfs_warmup(pid int64, h int64, _paths *C.char, numthreads int32, background, isEvict, isCheck bool) int32 {
+func jfs_warmup(pid int64, h int64, _paths *C.char, numthreads int32, background, isEvict, isCheck bool, p_buf **byte) int32 {
+	resp := &vfs.CacheResponse{Locations: make(map[string]uint64)}
+
 	w := F(h)
 	if w == nil {
 		return EINVAL
@@ -1724,9 +1726,16 @@ func jfs_warmup(pid int64, h int64, _paths *C.char, numthreads int32, background
 		logger.Errorf("invalid json: %s", C.GoString(_paths))
 		return EINVAL
 	}
-	_ = w.Warmup(ctx, paths, int(numthreads), background, isEvict, isCheck)
+	w.Warmup(ctx, paths, int(numthreads), background, isEvict, isCheck, resp)
+	res, err := json.Marshal(resp)
+	if err != nil {
+		logger.Fatalf("json: %s", err)
+	}
 
-	return 0
+	*p_buf = (*byte)(C.malloc(C.size_t(len(res))))
+	buf := unsafe.Slice(*p_buf, len(res))
+
+	return int32(copy(buf, res))
 }
 
 func main() {

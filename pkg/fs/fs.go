@@ -1020,8 +1020,7 @@ func (fs *FileSystem) Clone(ctx meta.Context, src, dst string, preserve bool) (e
 	return
 }
 
-func (fs *FileSystem) Warmup(ctx meta.Context, paths []string, numthreads int, background bool, isEvict bool, isCheck bool) error {
-	stat := &vfs.CacheResponse{Locations: make(map[string]uint64)}
+func (fs *FileSystem) Warmup(ctx meta.Context, paths []string, numthreads int, background bool, isEvict bool, isCheck bool, resp *vfs.CacheResponse) {
 	action := vfs.WarmupCache
 	if isEvict {
 		action = vfs.EvictCache
@@ -1031,11 +1030,11 @@ func (fs *FileSystem) Warmup(ctx meta.Context, paths []string, numthreads int, b
 	}
 
 	if background {
-		go fs.cacheFiller.Cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(numthreads), stat)
+		go fs.cacheFiller.Cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(numthreads), resp)
 	} else {
-		fs.cacheFiller.Cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(numthreads), stat)
+		fs.cacheFiller.Cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(numthreads), resp)
 	}
-	return nil
+	return
 }
 
 // File
