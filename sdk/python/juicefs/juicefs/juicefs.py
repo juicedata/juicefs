@@ -343,12 +343,12 @@ class Client(object):
 
     def clone(self, src, dst, preserve=False):
         """Clone a file."""
-        self.lib.jfs_clone(c_int64(_tid()), c_int64(self.h), _bin(src), _bin(dst), preserve)
+        self.lib.jfs_clone(c_int64(_tid()), c_int64(self.h), _bin(src), _bin(dst), c_bool(preserve))
 
-    def info(self, path):
+    def info(self, path, recursive=False, strict=False):
         """Get the information of a file or a directory."""
         buf = c_void_p()
-        n = self.lib.jfs_info(c_int64(_tid()), c_int64(self.h), _bin(path), byref(buf))
+        n = self.lib.jfs_info(c_int64(_tid()), c_int64(self.h), _bin(path), byref(buf), c_bool(recursive), c_bool(strict))
         data = string_at(buf, n)
         res = json.loads(str(data, encoding='utf-8'))
 

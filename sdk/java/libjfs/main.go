@@ -1261,7 +1261,7 @@ func jfs_summary(pid int64, h int64, cpath *C.char, buf uintptr) int32 {
 		return errno(err)
 	}
 	defer f.Close(ctx)
-	summary, err := f.Summary(ctx)
+	summary, err := f.Summary(ctx, true, true)
 	if err != 0 {
 		return errno(err)
 	}
@@ -1273,7 +1273,7 @@ func jfs_summary(pid int64, h int64, cpath *C.char, buf uintptr) int32 {
 }
 
 //export jfs_info
-func jfs_info(pid int64, h int64, cpath *C.char, p_buf **byte) int32 {
+func jfs_info(pid int64, h int64, cpath *C.char, p_buf **byte, recursive, strict bool) int32 {
 	w := F(h)
 	if w == nil {
 		return EINVAL
@@ -1284,7 +1284,7 @@ func jfs_info(pid int64, h int64, cpath *C.char, p_buf **byte) int32 {
 		return errno(err)
 	}
 	defer f.Close(ctx)
-	info, err := f.Summary(ctx)
+	info, err := f.Summary(ctx, recursive, strict)
 	if err != 0 {
 		return errno(err)
 	}

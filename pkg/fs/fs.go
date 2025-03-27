@@ -1375,14 +1375,14 @@ func (f *File) ReaddirPlus(ctx meta.Context, offset int) (entries []*meta.Entry,
 	return
 }
 
-func (f *File) Summary(ctx meta.Context) (s *meta.Summary, err syscall.Errno) {
+func (f *File) Summary(ctx meta.Context, recursive, strict bool) (s *meta.Summary, err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Summary").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() {
 		f.fs.log(l, "Summary (%s): %s (%d,%d,%d,%d)", f.path, errstr(err), s.Length, s.Size, s.Files, s.Dirs)
 	}()
 	s = &meta.Summary{}
-	err = f.fs.m.GetSummary(ctx, f.inode, s, true, true)
+	err = f.fs.m.GetSummary(ctx, f.inode, s, recursive, strict)
 	return
 }
 
