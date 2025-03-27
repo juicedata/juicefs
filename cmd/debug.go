@@ -295,10 +295,6 @@ func reqAndSaveMetric(name string, metric metricItem, outDir string, timeout tim
 	return writer.Flush()
 }
 
-func isUnix() bool {
-	return runtime.GOOS == "linux" || runtime.GOOS == "darwin"
-}
-
 func checkAgent(cmd string) bool {
 	for _, field := range strings.Fields(cmd) {
 		if field == "--no-agent" {
