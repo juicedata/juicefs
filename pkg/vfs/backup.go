@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"syscall"
@@ -101,7 +102,7 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTra
 		localDir += "/"
 	}
 	fp, err := os.Create(filepath.Join(localDir, "meta", name))
-	if errors.Is(err, syscall.ENOENT) {
+	if errors.Is(err, syscall.ENOENT) || (errors.Is(err, syscall.ENOTDIR) && runtime.GOOS == "windows") {
 		if err = os.MkdirAll(filepath.Join(localDir, "meta"), 0755); err != nil {
 			return "", err
 		}
