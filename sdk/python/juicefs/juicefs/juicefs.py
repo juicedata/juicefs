@@ -361,21 +361,21 @@ class Client(object):
         """Get the summary of a directory."""
         buf = c_void_p()
 
-        n = self.lib.gettreesummary(_tid(), self.h, _bin(path), c_uint8(depth), c_uint32(entries), byref(buf))
+        n = self.lib.jfs_gettreesummary(_tid(), self.h, _bin(path), c_uint8(depth), c_uint32(entries), byref(buf))
         data = string_at(buf, n)
         res = json.loads(str(data, encoding='utf-8'))
 
-        # def parseSummary(entry, removefields):
-        #     for f in removefields:
-        #         entry.pop(f, None)
-        #
-        #     if entry["Dirs"] == 0:
-        #         entry.pop("Entries", None)
-        #     elif entry.get("Entries") is not None:
-        #         for k, v in entry["Entries"].items():
-        #             parseSummary(v, removefields)
-        #
-        # parseSummary(res, ["Inode"])
+        def parseSummary(entry, removefields):
+            for f in removefields:
+                entry.pop(f, None)
+
+            if entry["Dirs"] == 0:
+                entry.pop("Children", None)
+            elif entry.get("Children") is not None:
+                for v in entry["Children"]:
+                    parseSummary(v, removefields)
+
+        parseSummary(res, ["Inode"])
         self.lib.free(buf)
         return res
 
