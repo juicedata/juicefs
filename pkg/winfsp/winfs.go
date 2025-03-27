@@ -327,18 +327,24 @@ func (j *juice) Open(path string, flags int) (e int, fh uint64) {
 
 // Open opens a file.
 // The flags are a combination of the fuse.O_* constants.
-func (j *juice) OpenEx(path string, fi *fuse.FileInfo_t) (e int) {
+func (j *juice) OpenEx(p string, fi *fuse.FileInfo_t) (e int) {
 	ctx := j.newContext()
-	defer trace(path, fi.Flags)(&e)
+	defer trace(p, fi.Flags)(&e)
 	ino := meta.Ino(0)
-	if strings.HasSuffix(path, "/.control") {
+	if strings.HasSuffix(p, "/.control") {
 		ino, _ = vfs.GetInternalNodeByName(".control")
 		if ino == 0 {
 			e = -fuse.ENOENT
 			return
 		}
+	} else if filename := path.Base(p); vfs.IsSpecialName(filename) {
+		ino, _ = vfs.GetInternalNodeByName(filename)
+		if ino == 0 {
+			e = -fuse.ENOENT
+			return
+		}
 	} else {
-		f, err := j.fs.Open(ctx, path, 0)
+		f, err := j.fs.Open(ctx, p, 0)
 		if err != 0 {
 			e = -fuse.ENOENT
 			return
