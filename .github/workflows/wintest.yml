@@ -7,12 +7,16 @@ on:
       - 'release-**'
     paths:
       - '**/wintest.yml'
+      - 'pkg/winfsp/*.go'
+      - '**/*_windows.go'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
     paths:
       - '**/wintest.yml'
+      - 'pkg/winfsp/*.go'
+      - '**/*_windows.go'
   workflow_dispatch:
     inputs:
       debug_enabled:
@@ -153,7 +157,19 @@ jobs:
           wget https://github.com/chenjie4255/fstools/releases/download/v0.0.1/fsx-x64.exe -q --show-progress -O fsx.exe
           ls fsx.exe
           ./fsx.exe -d 180 -p 10000 -F 100000 fsxtest
-          
+
+      - name: Run basic subcommand tests
+        run: |
+          echo hi > Z:\hi.txt
+          ./juicefs.exe info Z:\hi.txt
+          ./juicefs.exe status redis://127.0.0.1:6379/1
+          ./juicefs.exe debug Z:\
+          New-Item -Path 'Z:\summary' -ItemType Directory
+          echo hi > Z:\summary\1.txt
+          echo hi > Z:\summary\2.txt
+          ./juicefs.exe summary Z:\summary
+          ./juicefs.exe info Z:\summary\1.txt
+          ./juicefs.exe stats Z: -c 5
       - name: Setup tmate session
         if: ${{ failure() && github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
         uses: mxschmitt/action-tmate@v3

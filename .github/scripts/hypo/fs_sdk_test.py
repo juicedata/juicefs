@@ -297,25 +297,57 @@ class TestPySdk(unittest.TestCase):
         state.rename_dir(entry=folders_0, new_entry_name='a/a', parent=folders_1, umask=18, user='root')
         state.teardown()
 
-    # def test_rmdir_check_exist(self):
-    #     state = JuicefsMachine()
-    #     folders_0 = state.init_folders()
-    #     folders_1 = state.mkdir(mode=0, parent=folders_0, subdir='a', umask=18, user='root')
-    #     files_0 = state.loop_symlink(link_file_name=folders_1, parent=folders_1, user='root')
-    #     state.exists(entry=files_0, user='root')
-    #     state.rmdir(dir=folders_1, user='root')
-    #     state.teardown()
+    def test_rmdir_check_exist(self):
+        state = JuicefsMachine()
+        folders_0 = state.init_folders()
+        folders_1 = state.mkdir(mode=0, parent=folders_0, subdir='a', umask=18, user='root')
+        files_0 = state.loop_symlink(link_file_name=folders_1, parent=folders_1, user='root')
+        state.exists(entry=files_0, user='root')
+        state.rmdir(dir=folders_1, user='root')
+        state.teardown()
 
-    # def test_truncate(self):
-    #     state = JuicefsMachine()
-    #     folders_0 = state.init_folders()
-    #     files_0 = state.loop_symlink(link_file_name='a', parent=folders_0, user='root')
-    #     files_1 = state.rename_file(entry=files_0, new_entry_name='b', parent=folders_0, umask=18, user='root')
-    #     state.listdir(dir=folders_0, user='root')
-    #     folders_1 = state.mkdir(mode=0, parent=folders_0, subdir=files_0, umask=18, user='root')
-    #     state.listdir(dir=files_0, user='root')
-    #     state.truncate(file=files_0, size=0, user='root')
-    #     state.teardown()
+    def test_truncate(self):
+        state = JuicefsMachine()
+        folders_0 = state.init_folders()
+        files_0 = state.loop_symlink(link_file_name='a', parent=folders_0, user='root')
+        files_1 = state.rename_file(entry=files_0, new_entry_name='b', parent=folders_0, umask=18, user='root')
+        state.listdir(dir=folders_0, user='root')
+        folders_1 = state.mkdir(mode=0, parent=folders_0, subdir=files_0, umask=18, user='root')
+        state.listdir(dir=files_0, user='root')
+        state.truncate(file=files_0, size=0, user='root')
+        state.teardown()
+
+    def test_unlink(self):
+        state = JuicefsMachine()
+        folders_0 = state.init_folders()
+        state.listdir(dir=folders_0, user='root')
+        files_0 = state.loop_symlink(link_file_name='a', parent=folders_0, user='root')
+        files_1 = state.rename_file(entry=files_0, new_entry_name='b', parent=folders_0, umask=18, user='root')
+        folders_1 = state.mkdir(mode=0, parent=folders_0, subdir=files_0, umask=18, user='root')
+        state.unlink(file=files_0, user='root')
+        state.teardown()
+
+    def test_read_utf8(self):
+        state = JuicefsMachine()
+        folders_0 = state.init_folders()
+        files_0 = state.create_file(content=b'', file_name='aa', parent=folders_0, umask=18, user='root')
+        folders_1 = state.mkdir(mode=0, parent=folders_0, subdir='a', umask=18, user='root')
+        state.rename_dir(entry=folders_0, new_entry_name='a/a', parent=folders_1, umask=18, user='root')
+        state.teardown()
+
+    def test_create_isdir(self):
+        state = JuicefsMachine()
+        folders_0 = state.init_folders()
+        state.listdir(dir=folders_0, user='root')
+        files_0 = state.loop_symlink(link_file_name='a', parent=folders_0, user='root')
+        state.chmod(entry=files_0, mode=0, user='root')
+        files_1 = state.rename_file(entry=files_0, new_entry_name='b', parent=folders_0, umask=18, user='root')
+        folders_1 = state.mkdir(mode=0, parent=folders_0, subdir=files_0, umask=18, user='root')
+        state.truncate(file=files_0, size=0, user='root')
+        state.readlink(file=files_0, user='root')
+        state.writelines(file=files_0, lines=['dua', 'hbixuhv'], mode='wb', offset=8344, user='root', whence=1)
+        state.teardown()
+
 
 if __name__ == '__main__':
     unittest.main()

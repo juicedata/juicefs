@@ -327,18 +327,24 @@ func (j *juice) Open(path string, flags int) (e int, fh uint64) {
 
 // Open opens a file.
 // The flags are a combination of the fuse.O_* constants.
-func (j *juice) OpenEx(path string, fi *fuse.FileInfo_t) (e int) {
+func (j *juice) OpenEx(p string, fi *fuse.FileInfo_t) (e int) {
 	ctx := j.newContext()
-	defer trace(path, fi.Flags)(&e)
+	defer trace(p, fi.Flags)(&e)
 	ino := meta.Ino(0)
-	if strings.HasSuffix(path, "/.control") {
+	if strings.HasSuffix(p, "/.control") {
 		ino, _ = vfs.GetInternalNodeByName(".control")
 		if ino == 0 {
 			e = -fuse.ENOENT
 			return
 		}
+	} else if filename := path.Base(p); vfs.IsSpecialName(filename) {
+		ino, _ = vfs.GetInternalNodeByName(filename)
+		if ino == 0 {
+			e = -fuse.ENOENT
+			return
+		}
 	} else {
-		f, err := j.fs.Open(ctx, path, 0)
+		f, err := j.fs.Open(ctx, p, 0)
 		if err != 0 {
 			e = -fuse.ENOENT
 			return
@@ -444,7 +450,7 @@ func (j *juice) reopen(p string, fh *uint64) meta.Ino {
 }
 
 // Getattr gets file attributes.
-func (j *juice) getAttrForControlFile(ctx vfs.LogContext, p string, stat *fuse.Stat_t, fh uint64) (e int) {
+func (j *juice) getAttrForSpFile(ctx vfs.LogContext, p string, stat *fuse.Stat_t, fh uint64) (e int) {
 	parentDir := path.Dir(p)
 	_, err := j.fs.Stat(ctx, parentDir)
 	if err != 0 {
@@ -452,7 +458,8 @@ func (j *juice) getAttrForControlFile(ctx vfs.LogContext, p string, stat *fuse.S
 		return
 	}
 
-	inode, attr := vfs.GetInternalNodeByName(".control")
+	filename := path.Base(p)
+	inode, attr := vfs.GetInternalNodeByName(filename)
 	if inode == 0 {
 		e = -fuse.ENOENT
 		return
@@ -475,7 +482,10 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 	if ino == 0 {
 		// special case for .control file
 		if strings.HasSuffix(p, "/.control") {
-			j.getAttrForControlFile(ctx, p, stat, fh)
+			e = j.getAttrForSpFile(ctx, p, stat, fh)
+			return
+		} else if vfs.IsSpecialName(path.Base(p)) {
+			e = j.getAttrForSpFile(ctx, p, stat, fh)
 			return
 		}
 
@@ -751,7 +761,7 @@ func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayCl
 	_ = host.Mount(conf.Meta.MountPoint, []string{"-o", options})
 }
 
-func RunAsSystemSerivce(name string, mountpoint string) error {
+func RunAsSystemSerivce(name string, mountpoint string, logPath string) error {
 	// https://winfsp.dev/doc/WinFsp-Service-Architecture/
 	logger.Info("Running as Windows system service.")
 
@@ -804,6 +814,19 @@ func RunAsSystemSerivce(name string, mountpoint string) error {
 	err = k.SetDWordValue("JobControl", 1)
 	if err != nil {
 		return fmt.Errorf("Failed to set registry key: %s", err)
+	}
+
+	if logPath != "" {
+		err = k.SetStringValue("Stderr", logPath)
+		if err != nil {
+			return fmt.Errorf("Failed to set registry key: %s", err)
+		}
+	} else {
+		err = k.DeleteValue("Stderr")
+		if err != nil {
+			return fmt.Errorf("Failed to delete registry key: %s", err)
+		}
+
 	}
 
 	logger.Debug("Starting juicefs service.")

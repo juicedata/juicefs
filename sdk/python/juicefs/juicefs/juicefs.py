@@ -36,7 +36,14 @@ XATTR_REPLACE = 2
 
 def check_error(r, fn, args):
     if r < 0:
-        e = OSError(f'call {fn.__name__} failed: [Errno {-r}] {os.strerror(-r)}: {args[2:]}')
+        formatted_args = []
+        for arg in args[2:]:
+            if isinstance(arg, (bytes, bytearray)) and len(arg) > 1024:
+                formatted_args.append(f'bytes(len={len(arg)})')
+            else:
+                formatted_args.append(repr(arg))
+
+        e = OSError(f'call {fn.__name__} failed: [Errno {-r}] {os.strerror(-r)}: {formatted_args}')
         e.errno = -r
         raise e
     return r
@@ -81,39 +88,39 @@ class JuiceFSLib(object):
 
 class Client(object):
     """A JuiceFS client."""
-    def __init__(self, name, meta, *, bucket="", storage_class="", read_only=False, no_session=False, 
-                 no_bg_job=False, open_cache="", backup_meta="", backup_skip_trash=False, heartbeat="", 
-                 cache_dir="", cache_size="100M", free_space="", auto_create=False, cache_full_block=False, 
-                 cache_checksum="", cache_eviction="", cache_scan_interval="", cache_expire="", 
-                 writeback=False, memory_size="300M", prefetch=0, readahead="100M", upload_limit="10g", 
-                 download_limit="10g", max_uploads=0, max_deletes=0, skip_dir_nlink=0, skip_dir_mtime="", 
-                 io_retries=0, get_timeout="", put_timeout="", fast_resolve=False, attr_timeout="", 
-                 entry_timeout="", dir_entry_timeout="", debug=False, no_usage_report=False, access_log="", 
-                 push_gateway="", push_interval="", push_auth="", push_labels="", push_graphite="", **kwargs): 
+    def __init__(self, name, meta, *, bucket="", storage_class="", read_only=False, no_session=False, no_bgjob=True,
+                 open_cache="0", backup_meta="3600", backup_skip_trash=False, heartbeat="12",
+                 cache_dir="memory", cache_size="100M", free_space_ratio="0.1", cache_partial_only=False,
+                 verify_cache_checksum="full", cache_eviction="2-random", cache_scan_interval="3600", cache_expire="0",
+                 writeback=False, buffer_size="300M", prefetch=1, max_readahead="0", upload_limit="0",
+                 download_limit="0", max_uploads=20, max_deletes=10, skip_dir_nlink=20, skip_dir_mtime="100ms",
+                 io_retries=10, get_timeout="5", put_timeout="60", fast_resolve=False, attr_cache="1s",
+                 entry_cache="0s", dir_entry_cache="1s", debug=False, no_usage_report=False, access_log="",
+                 push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite="", **kwargs):
         self.lib = JuiceFSLib()
         kwargs["meta"] = meta
         kwargs["bucket"] = bucket
         kwargs["storageClass"] = storage_class
         kwargs["readOnly"] = read_only
         kwargs["noSession"] = no_session
-        kwargs["noBGJob"] = no_bg_job
+        kwargs["noBGJob"] = no_bgjob
         kwargs["openCache"] = open_cache
         kwargs["backupMeta"] = backup_meta
         kwargs["backupSkipTrash"] = backup_skip_trash
         kwargs["heartbeat"] = heartbeat
         kwargs["cacheDir"] = cache_dir
         kwargs["cacheSize"] = cache_size
-        kwargs["freeSpace"] = free_space
-        kwargs["autoCreate"] = auto_create
-        kwargs["cacheFullBlock"] = cache_full_block
-        kwargs["cacheChecksum"] = cache_checksum
+        kwargs["freeSpace"] = free_space_ratio
+        kwargs["autoCreate"] = True
+        kwargs["cacheFullBlock"] = not cache_partial_only
+        kwargs["cacheChecksum"] = verify_cache_checksum
         kwargs["cacheEviction"] = cache_eviction
         kwargs["cacheScanInterval"] = cache_scan_interval
         kwargs["cacheExpire"] = cache_expire
         kwargs["writeback"] = writeback
-        kwargs["memorySize"] = memory_size
+        kwargs["memorySize"] = buffer_size
         kwargs["prefetch"] = prefetch
-        kwargs["readahead"] = readahead
+        kwargs["readahead"] = max_readahead
         kwargs["uploadLimit"] = upload_limit
         kwargs["downloadLimit"] = download_limit
         kwargs["maxUploads"] = max_uploads
@@ -124,9 +131,9 @@ class Client(object):
         kwargs["getTimeout"] = get_timeout
         kwargs["putTimeout"] = put_timeout
         kwargs["fastResolve"] = fast_resolve
-        kwargs["attrTimeout"] = attr_timeout
-        kwargs["entryTimeout"] = entry_timeout
-        kwargs["dirEntryTimeout"] = dir_entry_timeout
+        kwargs["attrTimeout"] = attr_cache
+        kwargs["entryTimeout"] = entry_cache
+        kwargs["dirEntryTimeout"] = dir_entry_cache
         kwargs["debug"] = debug
         kwargs["noUsageReport"] = no_usage_report
         kwargs["accessLog"] = access_log
@@ -199,7 +206,7 @@ class Client(object):
         else:
             try:
                 sz = c_uint64()
-                fd = self.lib.jfs_open(c_int64(_tid()), c_int64(self.h), _bin(path), byref(sz), c_int32(flag))
+                fd = self.lib.jfs_open_posix(c_int64(_tid()), c_int64(self.h), _bin(path), byref(sz), c_int32(flag))
                 if 'w' in mode:
                     self.lib.jfs_ftruncate(c_int64(_tid()), fd, c_uint64(0))
                 else:
@@ -230,7 +237,7 @@ class Client(object):
 
     def rmdir(self, path):
         """Remove a directory. The directory must be empty."""
-        self.lib.jfs_rmr(c_int64(_tid()), c_int64(self.h), _bin(path))
+        self.lib.jfs_rmdir(c_int64(_tid()), c_int64(self.h), _bin(path))
 
     def rename(self, old, new):
         """Rename the file or directory old to new."""
@@ -291,7 +298,7 @@ class Client(object):
 
     def unlink(self, path):
         """Remove a file."""
-        self.remove(path)
+        self.lib.jfs_unlink(c_int64(_tid()), c_int64(self.h), _bin(path))
 
     def rmr(self, path):
         """Remove a directory and all its contents recursively."""
@@ -334,12 +341,54 @@ class Client(object):
         """Remove an extended attribute from a file."""
         self.lib.jfs_removeXattr(c_int64(_tid()), c_int64(self.h), _bin(path), _bin(name))
 
-    def clone(self, src, dst):
+    def clone(self, src, dst, preserve=False):
         """Clone a file."""
-        self.lib.jfs_clone(c_int64(_tid()), c_int64(self.h), _bin(src), _bin(dst))
+        self.lib.jfs_clone(c_int64(_tid()), c_int64(self.h), _bin(src), _bin(dst), c_bool(preserve))
 
-    # def summary(self, path, depth=0, entries=1):
-    #     """Get the summary of a directory."""
+    def info(self, path, recursive=False, strict=False):
+        """Get the information of a file or a directory."""
+        buf = c_void_p()
+        n = self.lib.jfs_info(c_int64(_tid()), c_int64(self.h), _bin(path), byref(buf), c_bool(recursive), c_bool(strict))
+        data = string_at(buf, n)
+        res = json.loads(str(data, encoding='utf-8'))
+
+        self.lib.free(buf)
+        return res
+
+    def summary(self, path, depth=0, entries=1):
+        """Get the summary of a directory."""
+        buf = c_void_p()
+
+        n = self.lib.jfs_gettreesummary(_tid(), self.h, _bin(path), c_uint8(depth), c_uint32(entries), byref(buf))
+        data = string_at(buf, n)
+        res = json.loads(str(data, encoding='utf-8'))
+
+        def parseSummary(entry, removefields):
+            for f in removefields:
+                entry.pop(f, None)
+
+            if entry["Dirs"] == 0:
+                entry.pop("Children", None)
+            elif entry.get("Children") is not None:
+                for v in entry["Children"]:
+                    parseSummary(v, removefields)
+
+        parseSummary(res, ["Inode"])
+        self.lib.free(buf)
+        return res
+
+    def warmup(self, paths, numthreads=10, background=False, isEvict=False, isCheck=False):
+        """Warm up a file or a directory."""
+        if type(paths) is not list:
+            paths = [paths]
+
+        buf = c_void_p()
+
+        n = self.lib.jfs_warmup(c_int64(_tid()), c_int64(self.h), json.dumps(paths).encode(), c_int32(numthreads), c_bool(background), c_bool(isEvict), c_bool(isCheck), byref(buf))
+        res = json.loads(str(string_at(buf, n), encoding='utf-8'))
+        self.lib.free(buf)
+        return res
+
 
     def status(self, trash = False, session = 0):
         buf = c_void_p()
@@ -602,7 +651,6 @@ class File(object):
         self._check_closed()
         self.write(''.join(lines) if self.encoding else b''.join(lines))
         self.flush()
-
 
 def test():
     volume = os.getenv("JFS_VOLUME", "test")

@@ -111,7 +111,8 @@ jobs:
           volume="myjfs"
           export MINIO_ROOT_USER=minioadmin
           export MINIO_ROOT_PASSWORD=minioadmin
-          ./juicefs format $meta_url $volume --trash-days 0
+          sudo chmod 777 /mnt
+          ./juicefs format $meta_url $volume --trash-days 0 --bucket=/mnt/jfs
           ./juicefs gateway $meta_url localhost:8080 --no-usage-report --access-log /tmp/access1.log &
         
       - name: Sync with multiple process

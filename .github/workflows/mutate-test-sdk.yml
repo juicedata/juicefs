@@ -50,7 +50,7 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format  localhost dev
+          sudo ./juicefs format  localhost --bucket=/mnt/jfs dev
 
       - name: Juicefs Mount
         run: |

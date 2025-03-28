@@ -133,7 +133,7 @@ func TestFileSystem(t *testing.T) {
 	if e := f.Utime(ctx, 1, 2); e != 0 {
 		t.Fatalf("utime: %s", e)
 	}
-	if s, e := f.Summary(ctx); e != 0 || s.Dirs != 0 || s.Files != 1 || s.Length != 5 || s.Size != 4<<10 {
+	if s, e := f.Summary(ctx, true, true); e != 0 || s.Dirs != 0 || s.Files != 1 || s.Length != 5 || s.Size != 4<<10 {
 		t.Fatalf("summary: %s %+v", e, s)
 	}
 	if e := f.Close(ctx); e != 0 {
@@ -218,7 +218,7 @@ func TestFileSystem(t *testing.T) {
 		t.Fatalf("follow symlink: %s %+v", e, fi)
 	}
 
-	if s, e := d.Summary(ctx); e != 0 || s.Dirs != 2 || s.Files != 2 || s.Length != 7 || s.Size != 16<<10 {
+	if s, e := d.Summary(ctx, true, true); e != 0 || s.Dirs != 2 || s.Files != 2 || s.Length != 7 || s.Size != 16<<10 {
 		t.Fatalf("summary: %s %+v", e, s)
 	}
 	if e := fs.Delete(ctx, "/d"); e == 0 || !IsNotEmpty(e) {

@@ -126,69 +126,6 @@ func copyFile(srcPath, destPath string, requireRootPrivileges bool) error {
 	return exec.CommandContext(ctx, copyArgs[0], copyArgs[1:]...).Run()
 }
 
-func getCmdMount(mp string) (uid, pid, cmd string, err error) {
-	var tmpPid string
-	_ = utils.WithTimeout(func() error {
-		content, err := readConfig(mp)
-		if err != nil {
-			logger.Warnf("failed to read config file: %v", err)
-		}
-		cfg := vfs.Config{}
-		if err := json.Unmarshal(content, &cfg); err != nil {
-			logger.Warnf("failed to unmarshal config file: %v", err)
-		}
-		if cfg.Pid != 0 {
-			tmpPid = strconv.Itoa(cfg.Pid)
-		}
-		return nil
-	}, 3*time.Second)
-
-	var psArgs []string
-	if tmpPid != "" {
-		pid = tmpPid
-		psArgs = []string{"/bin/sh", "-c", fmt.Sprintf("ps -f -p %s", pid)}
-	} else {
-		psArgs = []string{"/bin/sh", "-c", fmt.Sprintf("ps -ef | grep -v grep | grep mount | grep %s", mp)}
-	}
-	ret, err := exec.Command(psArgs[0], psArgs[1:]...).CombinedOutput()
-	if err != nil {
-		return "", "", "", fmt.Errorf("failed to execute command `%s`: %v", strings.Join(psArgs, " "), err)
-	}
-	var find bool
-	var ppid string
-	lines := strings.Split(string(ret), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := lines[i]
-		fields := strings.Fields(line)
-		if len(fields) <= 7 {
-			continue
-		}
-		cmdFields := fields[7:]
-		for _, arg := range cmdFields {
-			if mp == arg {
-				if find {
-					newCmd := strings.Join(fields[7:], " ")
-					newUid, newPid, newPpid := strings.TrimSpace(fields[0]), strings.TrimSpace(fields[1]), strings.TrimSpace(fields[2])
-					if newPid == ppid {
-						return uid, pid, cmd, nil
-					} else if pid == newPpid {
-						return newUid, newPid, newCmd, nil
-					} else {
-						return "", "", "", fmt.Errorf("find more than one mount process for %s", mp)
-					}
-				}
-				cmd = strings.Join(fields[7:], " ")
-				uid, pid, ppid = strings.TrimSpace(fields[0]), strings.TrimSpace(fields[1]), strings.TrimSpace(fields[2])
-				find = true
-			}
-		}
-	}
-	if cmd == "" {
-		return "", "", "", fmt.Errorf("no mount command found for %s", mp)
-	}
-	return uid, pid, cmd, nil
-}
-
 var logArg = regexp.MustCompile(`--log(\s*=?\s*)(\S+)`)
 
 func getLogPath(cmd string) (string, error) {
@@ -358,10 +295,6 @@ func reqAndSaveMetric(name string, metric metricItem, outDir string, timeout tim
 	return writer.Flush()
 }
 
-func isUnix() bool {
-	return runtime.GOOS == "linux" || runtime.GOOS == "darwin"
-}
-
 func checkAgent(cmd string) bool {
 	for _, field := range strings.Fields(cmd) {
 		if field == "--no-agent" {
@@ -424,11 +357,6 @@ func collectPprof(ctx *cli.Context, cmd string, pid string, amp string, requireR
 		return nil
 	}
 
-	if !isUnix() {
-		logger.Warnf("Collecting pprof currently only support Linux/macOS")
-		return nil
-	}
-
 	port, err := getPprofPort(pid, amp, requireRootPrivileges)
 	if err != nil {
 		return fmt.Errorf("failed to get pprof port: %v", err)
@@ -477,12 +405,9 @@ func collectPprof(ctx *cli.Context, cmd string, pid string, amp string, requireR
 	return nil
 }
 
-func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDir string) error {
-	if !isUnix() {
-		logger.Warnf("Collecting log currently only support Linux/macOS")
-		return nil
-	}
-	if !(strings.Contains(cmd, "-d") || strings.Contains(cmd, "--background")) {
+func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDir string, uid string) error {
+	mountdByWinSystem := runtime.GOOS == "windows" && uid == "S-1-5-18" // https://learn.microsoft.com/en-us/windows/win32/secauthz/well-known-sids
+	if !(strings.Contains(cmd, "-d") || strings.Contains(cmd, "--background")) && !mountdByWinSystem {
 		logger.Warnf("The juicefs mount by foreground, the log will not be collected")
 		return nil
 	}
@@ -493,15 +418,30 @@ func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDi
 	limit := ctx.Uint64("limit")
 	retLogPath := filepath.Join(currDir, "juicefs.log")
 
-	var copyArgs []string
-	if requireRootPrivileges {
-		copyArgs = append(copyArgs, "sudo")
+	if runtime.GOOS == "windows" {
+		// check powershell is installed
+		_, err = exec.LookPath("powershell")
+		if err != nil {
+			logger.Warnf("Powershell is not installed, the log will not be collected")
+			return nil
+		}
+
+		copyArgs := []string{"powershell", "-Command", fmt.Sprintf("Get-Content -Tail %d %s > %s", limit, logPath, retLogPath)}
+		logger.Infof("The last %d lines of %s will be collected", limit, logPath)
+		timeoutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return exec.CommandContext(timeoutCtx, copyArgs[0], copyArgs[1:]...).Run()
+	} else {
+		var copyArgs []string
+		if requireRootPrivileges {
+			copyArgs = append(copyArgs, "sudo")
+		}
+		copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("tail -n %d %s > %s", limit, logPath, retLogPath))
+		logger.Infof("The last %d lines of %s will be collected", limit, logPath)
+		timeoutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return exec.CommandContext(timeoutCtx, copyArgs[0], copyArgs[1:]...).Run()
 	}
-	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("tail -n %d %s > %s", limit, logPath, retLogPath))
-	logger.Infof("The last %d lines of %s will be collected", limit, logPath)
-	timeoutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	return exec.CommandContext(timeoutCtx, copyArgs[0], copyArgs[1:]...).Run()
 }
 
 func collectSysInfo(ctx *cli.Context, currDir string) error {
@@ -587,6 +527,9 @@ func debug(ctx *cli.Context) error {
 	}
 	timestamp := time.Now().Format("20060102150405")
 	prefix := strings.Trim(strings.Join(strings.Split(amp, "/"), "-"), "-")
+	if runtime.GOOS == "windows" {
+		prefix = strings.ReplaceAll(prefix, ":", "")
+	}
 	outDir := ctx.String("out-dir")
 	currDir := filepath.Join(outDir, fmt.Sprintf("%s-%s", prefix, timestamp))
 	if err := os.MkdirAll(currDir, os.ModePerm); err != nil {
@@ -615,7 +558,7 @@ func debug(ctx *cli.Context) error {
 		logger.Errorf("Failed to collect special file: %v", err)
 	}
 
-	if err := collectLog(ctx, cmd, requireRootPrivileges, currDir); err != nil {
+	if err := collectLog(ctx, cmd, requireRootPrivileges, currDir, uid); err != nil {
 		logger.Errorf("Failed to collect log: %v", err)
 	}
 

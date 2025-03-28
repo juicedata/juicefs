@@ -18,6 +18,7 @@ package vfs
 
 import (
 	"fmt"
+	"github.com/juicedata/juicefs/pkg/chunk"
 	"path"
 	"strconv"
 	"strings"
@@ -55,7 +56,21 @@ const (
 	CheckCache = 2
 )
 
-func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concurrent int, resp *CacheResponse) {
+type CacheFiller struct {
+	conf  *Config
+	meta  meta.Meta
+	store chunk.ChunkStore
+}
+
+func NewCacheFiller(conf *Config, meta meta.Meta, store chunk.ChunkStore) *CacheFiller {
+	return &CacheFiller{
+		conf:  conf,
+		meta:  meta,
+		store: store,
+	}
+}
+
+func (c *CacheFiller) Cache(ctx meta.Context, action CacheAction, paths []string, concurrent int, resp *CacheResponse) {
 	logger.Infof("start to %s %d paths with %d workers", action, len(paths), concurrent)
 
 	if resp == nil {
@@ -82,18 +97,18 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 				switch action {
 				case WarmupCache:
 					handler = func(s meta.Slice) error {
-						return v.Store.FillCache(s.Id, s.Size)
+						return c.store.FillCache(s.Id, s.Size)
 					}
 
-					if v.Conf.Meta.OpenCache > 0 {
-						if err := v.Meta.Open(ctx, f.ino, syscall.O_RDONLY, &meta.Attr{}); err != 0 {
+					if c.conf.Meta.OpenCache > 0 {
+						if err := c.meta.Open(ctx, f.ino, syscall.O_RDONLY, &meta.Attr{}); err != 0 {
 							logger.Errorf("Inode %d could be opened: %s", f.ino, err)
 						}
-						_ = v.Meta.Close(ctx, f.ino)
+						_ = c.meta.Close(ctx, f.ino)
 					}
 				case EvictCache:
 					handler = func(s meta.Slice) error {
-						return v.Store.EvictCache(s.Id, s.Size)
+						return c.store.EvictCache(s.Id, s.Size)
 					}
 				case CheckCache:
 					blockHandler := func(exists bool, loc string, size int) {
@@ -106,11 +121,11 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 						}
 					}
 					handler = func(s meta.Slice) error {
-						return v.Store.CheckCache(s.Id, s.Size, blockHandler)
+						return c.store.CheckCache(s.Id, s.Size, blockHandler)
 					}
 				}
 
-				iter := newSliceIterator(ctx, v.Meta, f.ino, f.size, resp)
+				iter := newSliceIterator(ctx, c.meta, f.ino, f.size, resp)
 				err := iter.Iterate(handler, concurrent)
 				if err != nil {
 					logger.Errorf("%s error : %s", action, err)
@@ -124,13 +139,13 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 	var inode Ino
 	var attr = &Attr{}
 	for _, p := range paths {
-		if st := v.resolve(ctx, p, &inode, attr); st != 0 {
+		if st := c.resolve(ctx, p, &inode, attr); st != 0 {
 			logger.Warnf("Failed to resolve path %s: %s", p, st)
 			continue
 		}
 		logger.Debugf("path %s", p)
 		if attr.Typ == meta.TypeDirectory {
-			v.walkDir(ctx, inode, todo)
+			c.walkDir(ctx, inode, todo)
 		} else if attr.Typ == meta.TypeFile {
 			_ = sendFile(ctx, todo, _file{inode, attr.Length})
 		}
@@ -156,22 +171,22 @@ func sendFile(ctx meta.Context, todo chan _file, f _file) error {
 	}
 }
 
-func (v *VFS) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr) syscall.Errno {
+func (c *CacheFiller) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr) syscall.Errno {
 	var inodePrefix = "inode:"
 	if strings.HasPrefix(p, inodePrefix) {
 		i, err := strconv.ParseUint(p[len(inodePrefix):], 10, 64)
 		if err == nil {
 			*inode = meta.Ino(i)
-			return v.Meta.GetAttr(ctx, meta.Ino(i), attr)
+			return c.meta.GetAttr(ctx, meta.Ino(i), attr)
 		}
 	}
 	p = strings.Trim(p, "/")
-	err := v.Meta.Resolve(ctx, 1, p, inode, attr)
+	err := c.meta.Resolve(ctx, 1, p, inode, attr)
 	if err != syscall.ENOTSUP {
 		return err
 	}
 
-	// Fallback to the default implementation that calls `m.Lookup` for each directory along the path.
+	// Fallback to the default implementation that calls `meta.Lookup` for each directory along the path.
 	// It might be slower for deep directories, but it works for every meta that implements `Lookup`.
 	parent := Ino(1)
 	ss := strings.Split(p, "/")
@@ -185,16 +200,16 @@ func (v *VFS) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr) syscal
 			break
 		}
 		if i > 0 {
-			if err = v.Meta.Access(ctx, parent, MODE_MASK_R|MODE_MASK_X, attr); err != 0 {
+			if err = c.meta.Access(ctx, parent, MODE_MASK_R|MODE_MASK_X, attr); err != 0 {
 				return err
 			}
 		}
-		if err = v.Meta.Lookup(ctx, parent, name, inode, attr, false); err != 0 {
+		if err = c.meta.Lookup(ctx, parent, name, inode, attr, false); err != 0 {
 			return err
 		}
 		if attr.Typ == meta.TypeSymlink {
 			var buf []byte
-			if err = v.Meta.ReadLink(ctx, *inode, &buf); err != 0 {
+			if err = c.meta.ReadLink(ctx, *inode, &buf); err != 0 {
 				return err
 			}
 			target := string(buf)
@@ -202,7 +217,7 @@ func (v *VFS) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr) syscal
 				return syscall.ENOTSUP
 			}
 			target = path.Join(strings.Join(ss[:i], "/"), target)
-			if err = v.resolve(ctx, target, inode, attr); err != 0 {
+			if err = c.resolve(ctx, target, inode, attr); err != 0 {
 				return err
 			}
 		}
@@ -210,14 +225,14 @@ func (v *VFS) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr) syscal
 	}
 	if parent == meta.RootInode {
 		*inode = parent
-		if err = v.Meta.GetAttr(ctx, *inode, attr); err != 0 {
+		if err = c.meta.GetAttr(ctx, *inode, attr); err != 0 {
 			return err
 		}
 	}
 	return 0
 }
 
-func (v *VFS) walkDir(ctx meta.Context, inode Ino, todo chan _file) {
+func (c *CacheFiller) walkDir(ctx meta.Context, inode Ino, todo chan _file) {
 	pending := make([]Ino, 1)
 	pending[0] = inode
 	for len(pending) > 0 {
@@ -226,7 +241,7 @@ func (v *VFS) walkDir(ctx meta.Context, inode Ino, todo chan _file) {
 		inode = pending[l]
 		pending = pending[:l]
 		var entries []*meta.Entry
-		r := v.Meta.Readdir(ctx, inode, 1, &entries)
+		r := c.meta.Readdir(ctx, inode, 1, &entries)
 		if r == 0 {
 			for _, f := range entries {
 				name := string(f.Name)

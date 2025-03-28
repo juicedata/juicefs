@@ -115,6 +115,7 @@ const (
 	EACCES    = -0x0d
 	EEXIST    = -0x11
 	ENOTDIR   = -0x14
+	EISDIR    = -0x15
 	EINVAL    = -0x16
 	ENOSPC    = -0x1c
 	EDQUOT    = -0x45
@@ -151,6 +152,8 @@ func errno(err error) int32 {
 		return EEXIST
 	case syscall.ENOTDIR:
 		return ENOTDIR
+	case syscall.EISDIR:
+		return EISDIR
 	case syscall.EINVAL:
 		return EINVAL
 	case syscall.ENOSPC:
@@ -811,6 +814,29 @@ func jfs_open(pid int64, h int64, cpath *C.char, lenPtr uintptr, flags int32) in
 	return nextFileHandle(f, w)
 }
 
+//export jfs_open_posix
+func jfs_open_posix(pid int64, h int64, cpath *C.char, lenPtr uintptr, flags int32) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	path := C.GoString(cpath)
+	f, err := w.Open(w.withPid(pid), path, uint32(flags))
+	if err != 0 {
+		return errno(err)
+	}
+	st, _ := f.Stat()
+	if st.IsDir() {
+		return EISDIR
+	}
+	if lenPtr != 0 {
+		buf := toBuf(lenPtr, 8)
+		wb := utils.NewNativeBuffer(buf)
+		wb.Put64(uint64(st.Size()))
+	}
+	return nextFileHandle(f, w)
+}
+
 //export jfs_access
 func jfs_access(pid int64, h int64, cpath *C.char, flags int64) int32 {
 	w := F(h)
@@ -876,6 +902,24 @@ func jfs_delete(pid int64, h int64, cpath *C.char) int32 {
 		return EINVAL
 	}
 	return errno(w.Delete(w.withPid(pid), C.GoString(cpath)))
+}
+
+//export jfs_unlink
+func jfs_unlink(pid int64, h int64, cpath *C.char) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	return errno(w.Unlink(w.withPid(pid), C.GoString(cpath)))
+}
+
+//export jfs_rmdir
+func jfs_rmdir(pid int64, h int64, cpath *C.char) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	return errno(w.Rmdir(w.withPid(pid), C.GoString(cpath)))
 }
 
 //export jfs_rmr
@@ -1217,7 +1261,7 @@ func jfs_summary(pid int64, h int64, cpath *C.char, buf uintptr) int32 {
 		return errno(err)
 	}
 	defer f.Close(ctx)
-	summary, err := f.Summary(ctx)
+	summary, err := f.Summary(ctx, true, true)
 	if err != 0 {
 		return errno(err)
 	}
@@ -1226,6 +1270,65 @@ func jfs_summary(pid int64, h int64, cpath *C.char, buf uintptr) int32 {
 	wb.Put64(summary.Files)
 	wb.Put64(summary.Dirs)
 	return 24
+}
+
+//export jfs_info
+func jfs_info(pid int64, h int64, cpath *C.char, p_buf **byte, recursive, strict bool) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	ctx := w.withPid(pid)
+	f, err := w.Open(ctx, C.GoString(cpath), 0)
+	if err != 0 {
+		return errno(err)
+	}
+	defer f.Close(ctx)
+	info, err := f.Summary(ctx, recursive, strict)
+	if err != 0 {
+		return errno(err)
+	}
+	res, err2 := json.Marshal(info)
+	if err2 != nil {
+		return EINVAL
+	}
+	if *p_buf != nil {
+		return EINVAL
+	}
+
+	*p_buf = (*byte)(C.malloc(C.size_t(len(res))))
+
+	buf := unsafe.Slice(*p_buf, len(res))
+	return int32(copy(buf, res))
+}
+
+//export jfs_gettreesummary
+func jfs_gettreesummary(pid, h int64, cpath *C.char, depth, entries uint8, p_buf **byte) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	ctx := w.withPid(pid)
+	f, err := w.Open(ctx, C.GoString(cpath), 0)
+	if err != 0 {
+		return errno(err)
+	}
+	summary, err := f.GetTreeSummary(ctx, depth, entries, true)
+	if err != 0 {
+		return errno(err)
+	}
+	res, err2 := json.Marshal(summary)
+	if err2 != nil {
+		return EINVAL
+	}
+	if *p_buf != nil {
+		return EINVAL
+	}
+
+	*p_buf = (*byte)(C.malloc(C.size_t(len(res))))
+
+	buf := unsafe.Slice(*p_buf, len(res))
+	return int32(copy(buf, res))
 }
 
 //export jfs_statvfs
@@ -1485,10 +1588,8 @@ func jfs_concat(pid int64, h int64, _dst *C.char, buf uintptr, bufsize int32) in
 	return r
 }
 
-// TODO: implement real clone
-
 //export jfs_clone
-func jfs_clone(pid int64, h int64, _src *C.char, _dst *C.char) int32 {
+func jfs_clone(pid int64, h int64, _src *C.char, _dst *C.char, preserve bool) int32 {
 	w := F(h)
 	if w == nil {
 		return EINVAL
@@ -1496,22 +1597,7 @@ func jfs_clone(pid int64, h int64, _src *C.char, _dst *C.char) int32 {
 	src := C.GoString(_src)
 	dst := C.GoString(_dst)
 	ctx := w.withPid(pid)
-	fi, err := w.Open(ctx, src, 0)
-	if err != 0 {
-		logger.Errorf("open %s: %s", src, err)
-		return errno(err)
-	}
-	defer fi.Close(ctx)
-	fo, err := w.Create(ctx, dst, 0666, 022)
-	if err != 0 {
-		logger.Errorf("create %s: %s", dst, err)
-		return errno(err)
-	}
-	defer fo.Close(ctx)
-	_, err = w.CopyFileRange(ctx, src, 0, dst, 0, 1<<63)
-	if err != 0 {
-		logger.Errorf("copy %s to %s: %s", src, dst, err)
-	}
+	err := w.Clone(ctx, src, dst, preserve)
 	return errno(err)
 }
 
@@ -1670,6 +1756,34 @@ func jfs_close(pid int64, fd int32) int32 {
 	}
 	freeHandle(fd)
 	return errno(f.Close(f.w.withPid(pid)))
+}
+
+//export jfs_warmup
+func jfs_warmup(pid int64, h int64, _paths *C.char, numthreads int32, background, isEvict, isCheck bool, p_buf **byte) int32 {
+	resp := &vfs.CacheResponse{Locations: make(map[string]uint64)}
+
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	ctx := w.withPid(pid)
+
+	var paths []string
+	err := json.Unmarshal([]byte(C.GoString(_paths)), &paths)
+	if err != nil {
+		logger.Errorf("invalid json: %s", C.GoString(_paths))
+		return EINVAL
+	}
+	w.Warmup(ctx, paths, int(numthreads), background, isEvict, isCheck, resp)
+	res, err := json.Marshal(resp)
+	if err != nil {
+		logger.Fatalf("json: %s", err)
+	}
+
+	*p_buf = (*byte)(C.malloc(C.size_t(len(res))))
+	buf := unsafe.Slice(*p_buf, len(res))
+
+	return int32(copy(buf, res))
 }
 
 func main() {
