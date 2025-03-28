@@ -327,14 +327,6 @@ class TestPySdk(unittest.TestCase):
         state.unlink(file=files_0, user='root')
         state.teardown()
 
-    def test_read_utf8(self):
-        state = JuicefsMachine()
-        folders_0 = state.init_folders()
-        files_0 = state.create_file(content=b'', file_name='aa', parent=folders_0, umask=18, user='root')
-        folders_1 = state.mkdir(mode=0, parent=folders_0, subdir='a', umask=18, user='root')
-        state.rename_dir(entry=folders_0, new_entry_name='a/a', parent=folders_1, umask=18, user='root')
-        state.teardown()
-
     def test_create_isdir(self):
         state = JuicefsMachine()
         folders_0 = state.init_folders()
@@ -346,6 +338,14 @@ class TestPySdk(unittest.TestCase):
         state.truncate(file=files_0, size=0, user='root')
         state.readlink(file=files_0, user='root')
         state.writelines(file=files_0, lines=['dua', 'hbixuhv'], mode='wb', offset=8344, user='root', whence=1)
+        state.teardown()
+
+    def test_read_utf8(self):
+        state = JuicefsMachine()
+        folders_0 = state.init_folders()
+        files_0 = state.create_file(content=b'\xc2\x80', file_name='a', parent=folders_0, umask=18, user='root')
+        state.readlink(file=files_0, user='root')
+        state.read(encoding='utf-8', errors='strict', file=files_0, length=1, mode='r', offset=0, user='root', whence=0)
         state.teardown()
 
 
