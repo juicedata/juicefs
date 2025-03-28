@@ -465,30 +465,40 @@ class File(object):
             if not new_data and not self.encoding_buffer:
                 return ''
 
-            self.encoding_buffer += new_data
+            decoded_str = ""
+            while True:
+                self.encoding_buffer += new_data
 
-            try:
-                decoded_str = self.encoding_buffer.decode(self.encoding, self.errors)
-                if size == -1:
+                try:
+                    part = self.encoding_buffer.decode(self.encoding, self.errors)
+                    decoded_str += part
                     self.encoding_buffer = b''
-                    return decoded_str
+                except UnicodeDecodeError:
+                    for i in range(1, 4):
+                        try:
+                            partial = self.encoding_buffer[:-i] if i else self.encoding_buffer
+                            part = partial.decode(self.encoding, self.errors)
+                            decoded_str += part
+                            self.encoding_buffer = self.encoding_buffer[-i:] if i else b''
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                    else:
+                        part = self.encoding_buffer.decode(self.encoding, errors=self.errors)
+                        decoded_str += part
+
+                if size == -1:
+                    break
                 else:
-                    valid_chars = decoded_str[:size]
-                    remaining_bytes = decoded_str[size:].encode(self.encoding)
-                    self.encoding_buffer = remaining_bytes
-                    return valid_chars
-            except UnicodeDecodeError:
-                for i in range(1, 4):
-                    try:
-                        partial = self.encoding_buffer[:-i] if i else self.encoding_buffer
-                        decoded_str = partial.decode(self.encoding, self.errors)
-                        self.encoding_buffer = self.encoding_buffer[-i:] if i else b''
-                        return decoded_str
-                    except UnicodeDecodeError:
-                        continue
-                decoded_str = self.encoding_buffer.decode(self.encoding, errors=self.errors)
-                self.encoding_buffer = b''
-                return decoded_str
+                    if len(decoded_str) >= size:
+                        self.encoding_buffer = decoded_str[size:].encode(self.encoding) + self.encoding_buffer
+                        decoded_str = decoded_str[:size]
+                        break
+                    else:
+                        new_data = self._read(size)
+                        if not new_data:
+                            break
+            return decoded_str
 
     def write(self, data):
         """Write the string data to the file."""
