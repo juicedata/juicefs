@@ -1128,11 +1128,11 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 			continue
 		}
 		p := NewOffPage(size)
-		defer p.Release()
 		if e := store.load(k, p, true, true); e != nil {
 			logger.Warnf("Failed to load key: %s %s", k, e)
 			err = e
 		}
+		p.Release()
 	}
 	return err
 }
