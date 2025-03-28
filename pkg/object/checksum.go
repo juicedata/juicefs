@@ -57,19 +57,22 @@ type checksumReader struct {
 	expected        uint32
 	checksum        uint32
 	remainingLength int64
+	table           *crc32.Table
 }
 
 func (c *checksumReader) Read(buf []byte) (n int, err error) {
 	n, err = c.ReadCloser.Read(buf)
-	c.checksum = crc32.Update(c.checksum, crc32c, buf[:n])
+	c.checksum = crc32.Update(c.checksum, c.table, buf[:n])
 	c.remainingLength -= int64(n)
 	if (err == io.EOF || c.remainingLength == 0) && c.checksum != c.expected {
 		return 0, fmt.Errorf("verify checksum failed: %d != %d", c.checksum, c.expected)
 	}
 	return
 }
-
 func verifyChecksum(in io.ReadCloser, checksum string, contentLength int64) io.ReadCloser {
+	return verifyChecksum0(in, checksum, contentLength, crc32c)
+}
+func verifyChecksum0(in io.ReadCloser, checksum string, contentLength int64, table *crc32.Table) io.ReadCloser {
 	if checksum == "" {
 		return in
 	}
@@ -78,5 +81,5 @@ func verifyChecksum(in io.ReadCloser, checksum string, contentLength int64) io.R
 		logger.Errorf("invalid crc32c: %s", checksum)
 		return in
 	}
-	return &checksumReader{in, uint32(expected), 0, contentLength}
+	return &checksumReader{in, uint32(expected), 0, contentLength, table}
 }
