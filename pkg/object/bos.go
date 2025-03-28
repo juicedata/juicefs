@@ -97,22 +97,26 @@ func (q *bosclient) Head(key string) (Object, error) {
 
 func (q *bosclient) Get(key string, off, limit int64, getters ...AttrGetter) (resp io.ReadCloser, err error) {
 	var r *api.GetObjectResult
+	var needCheck bool
 	if limit > 0 {
 		r, err = q.c.GetObject(q.bucket, key, nil, off, off+limit-1)
-		resp = r.Body
 	} else if off > 0 {
 		r, err = q.c.GetObject(q.bucket, key, nil, off)
-		resp = r.Body
 	} else {
 		r, err = q.c.GetObject(q.bucket, key, nil)
+		needCheck = true
+	}
+	if err != nil {
+		return
+	}
+	if needCheck {
 		if r.UserMeta[checksumAlgr] != "" {
 			resp = verifyChecksum(r.Body, r.UserMeta[checksumAlgr], r.ContentLength, crc32c)
 		} else {
 			resp = verifyChecksum(r.Body, r.ContentCrc32, r.ContentLength, crc32.IEEETable)
 		}
-	}
-	if err != nil {
-		return
+	} else {
+		resp = r.Body
 	}
 	attrs := applyGetters(getters...)
 	attrs.SetStorageClass(r.StorageClass)
