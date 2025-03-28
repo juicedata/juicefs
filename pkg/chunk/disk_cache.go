@@ -140,12 +140,12 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize, maxItems int64
 	}
 
 	c.createDir(c.dir)
-	br, fr := c.curFreeRatio()
-	if br < c.freeRatio || fr < c.freeRatio {
-		logger.Warnf("not enough space (%d%%) or inodes (%d%%) for caching in %s: free ratio should be >= %d%%", int(br*100), int(fr*100), c.dir, int(c.freeRatio*100))
+	usage := c.curFreeRatio()
+	if usage.br < c.freeRatio || usage.fr < c.freeRatio {
+		logger.Warnf("not enough space (%d%%) or inodes (%d%%) for caching in %s: free ratio should be >= %d%%", int(usage.br*100), int(usage.fr*100), c.dir, int(c.freeRatio*100))
 	}
 	logger.Infof("Disk cache (%s): used ratio - [space %s%%, inode %s%%]",
-		c.dir, humanize.FtoaWithDigits(float64((1-br)*100), 1), humanize.FtoaWithDigits(float64((1-fr)*100), 1))
+		c.dir, humanize.FtoaWithDigits(float64((1-usage.br)*100), 1), humanize.FtoaWithDigits(float64((1-usage.fr)*100), 1))
 	c.createLockFile()
 	go c.checkLockFile()
 	go c.flush()
@@ -258,7 +258,7 @@ func (c *cacheStore) checkTimeout() {
 		c.opMu.Lock()
 		for ts := range c.opTs {
 			if ts < cutOff {
-				logger.Errorf("IO operation %s on %s is timeout after %s, ", getFunctionName(c.opTs[ts]), c.dir, now-ts)
+				logger.Warnf("IO operation %s on %s is timeout after %s, ", getFunctionName(c.opTs[ts]), c.dir, now-ts)
 				c.state.onIOErr()
 				delete(c.opTs, ts)
 			}
@@ -312,16 +312,16 @@ func (cache *cacheStore) stats() (int64, int64) {
 
 func (cache *cacheStore) checkFreeSpace() {
 	for cache.available() {
-		br, fr := cache.curFreeRatio()
-		cache.stageFull = br < cache.freeRatio/2 || fr < cache.freeRatio/2
-		cache.rawFull = br < cache.freeRatio || fr < cache.freeRatio
+		usage := cache.curFreeRatio()
+		cache.stageFull = usage.br < cache.freeRatio/2 || usage.fr < cache.freeRatio/2
+		cache.rawFull = usage.br < cache.freeRatio || usage.fr < cache.freeRatio
 		if cache.rawFull && cache.eviction != "none" {
-			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(br*100), int(fr*100))
+			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(usage.br*100), int(usage.fr*100))
 			cache.Lock()
 			cache.cleanupFull()
 			cache.Unlock()
-			br, fr = cache.curFreeRatio()
-			cache.rawFull = br < cache.freeRatio || fr < cache.freeRatio
+			usage = cache.curFreeRatio()
+			cache.rawFull = usage.br < cache.freeRatio || usage.fr < cache.freeRatio
 		}
 		if cache.rawFull {
 			cache.uploadStaging()
@@ -439,13 +439,31 @@ func (cache *cacheStore) cache(key string, p *Page, force, dropCache bool) {
 	}
 }
 
-func (cache *cacheStore) curFreeRatio() (float32, float32) {
+type DiskFreeRatio struct {
+	br       float32
+	fr       float32
+	spaceCap uint64
+	inodeCap uint64
+}
+
+// caller should not hold cache lock
+func (cache *cacheStore) curFreeRatio() DiskFreeRatio {
 	var total, free, files, ffree uint64
 	_ = cache.checkErr(func() error {
 		total, free, files, ffree = getDiskUsage(cache.dir)
 		return nil
 	})
-	return float32(free) / float32(total), float32(ffree) / float32(files)
+	usage := DiskFreeRatio{
+		spaceCap: total,
+		inodeCap: files,
+	}
+	if total != 0 {
+		usage.br = float32(free) / float32(total)
+	}
+	if files != 0 {
+		usage.fr = float32(ffree) / float32(files)
+	}
+	return usage
 }
 
 func (cache *cacheStore) flushPage(path string, data []byte, dropCache bool) (err error) {
@@ -468,7 +486,7 @@ func (cache *cacheStore) flushPage(path string, data []byte, dropCache bool) (er
 		return err
 	})
 	if err != nil {
-		logger.Infof("Can't create cache file %s: %s", tmp, err)
+		logger.Warnf("Can't create cache file %s: %s", tmp, err)
 		return err
 	}
 
@@ -757,25 +775,28 @@ func (cache *cacheStore) cleanupFull() {
 	if cache.maxItems != 0 && num > cache.maxItems*99/100 {
 		num = cache.maxItems * 99 / 100
 	}
+	cache.Unlock()
 	// make sure we have enough free space after cleanup
-	br, fr := cache.curFreeRatio()
-	if br < cache.freeRatio {
-		total, _, _, _ := getDiskUsage(cache.dir)
-		toFree := int64(float32(total) * (cache.freeRatio - br))
+	usage := cache.curFreeRatio()
+	cache.Lock()
+	if usage.br < cache.freeRatio {
+		toFree := int64(float32(usage.spaceCap) * (cache.freeRatio - usage.br))
 		if toFree > cache.used {
 			goal = 0
 		} else if cache.used-toFree < goal {
 			goal = (cache.used - toFree) * 95 / 100
 		}
 	}
-	if fr < cache.freeRatio {
-		_, _, files, _ := getDiskUsage(cache.dir)
-		toFree := int(float32(files) * (cache.freeRatio - fr))
+	if usage.fr < cache.freeRatio {
+		toFree := int(float32(usage.inodeCap) * (cache.freeRatio - usage.fr))
 		if toFree > len(cache.keys) {
 			num = 0
 		} else {
 			num = int64(len(cache.keys)-toFree) * 99 / 100
 		}
+	}
+	if int64(len(cache.keys)) <= num && cache.used <= goal {
+		return // some other thread has done the cleanup
 	}
 
 	var todel []cacheKey
@@ -826,18 +847,16 @@ func (cache *cacheStore) cleanupFull() {
 }
 
 func (cache *cacheStore) uploadStaging() {
-	cache.Lock()
-	defer cache.Unlock()
 	if !cache.scanned || cache.uploader == nil {
 		return
 	}
-
 	var toFree int64
-	br, fr := cache.curFreeRatio()
-	if br < cache.freeRatio || fr < cache.freeRatio {
-		total, _, _, _ := getDiskUsage(cache.dir)
-		toFree = int64(float64(total)*float64(cache.freeRatio) - math.Min(float64(br), float64(fr)))
+	usage := cache.curFreeRatio()
+	if usage.br < cache.freeRatio || usage.fr < cache.freeRatio {
+		toFree = int64(float64(usage.spaceCap)*float64(cache.freeRatio) - math.Min(float64(usage.br), float64(usage.fr)))
 	}
+	cache.Lock()
+	defer cache.Unlock()
 	var cnt int
 	var lastK cacheKey
 	var lastValue cacheItem
