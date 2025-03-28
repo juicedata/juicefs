@@ -124,6 +124,7 @@ func testMeta(t *testing.T, m Meta) {
 	}
 
 	testMetaClient(t, m)
+	testCleanLeakedObjects(t, m)
 	testTruncateAndDelete(t, m)
 	testTrash(t, m)
 	testParents(t, m)
@@ -1491,7 +1492,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	}
 	p.Done()
 	sliceMap := make(map[Ino][]Slice)
-	if st := m.ListSlices(ctx, sliceMap, false, false, nil); st != 0 {
+	if st := m.ListSlices(ctx, sliceMap, false, false, false, nil); st != 0 {
 		t.Fatalf("list all slices: %s", st)
 	}
 
@@ -1700,7 +1701,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	}
 	var total int64
 	slices := make(map[Ino][]Slice)
-	m.ListSlices(ctx, slices, false, false, func() { total++ })
+	m.ListSlices(ctx, slices, false, false, false, func() { total++ })
 	var totalSlices int
 	for _, ss := range slices {
 		totalSlices += len(ss)
@@ -1715,7 +1716,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 
 	time.Sleep(time.Millisecond * 100)
 	slices = make(map[Ino][]Slice)
-	m.ListSlices(ctx, slices, false, false, nil)
+	m.ListSlices(ctx, slices, false, false, false, nil)
 	totalSlices = 0
 	for _, ss := range slices {
 		totalSlices += len(ss)
@@ -3282,6 +3283,92 @@ func TestSymlinkCache(t *testing.T) {
 
 	cache.doClean()
 	require.Equal(t, int32(8000), cache.size.Load())
+}
+
+func testCleanLeakedObjects(t *testing.T, m Meta) {
+	if err := m.Init(testFormat(), false); err != nil {
+		t.Fatalf("init error: %s", err)
+	}
+
+	ctx := Background()
+	var parent Ino
+	var pattr Attr
+	pname := "d1"
+	if st := m.Mkdir(ctx, RootInode, pname, 0755, 0, 0, &parent, &pattr); st != 0 {
+		t.Fatalf("Mkdir %s: %s", pname, st)
+	}
+	defer m.Rmdir(ctx, RootInode, pname)
+
+	num := 5
+	cnames := make([]string, num)
+	cnodes := make([]Ino, num)
+	cattr := make([]Attr, num)
+	for i := 0; i < num; i++ {
+		cnames[i] = fmt.Sprintf("f%d", i+1)
+		if st := m.Mknod(ctx, parent, cnames[i], TypeFile, 0755, 0, 0, "", &cnodes[i], &cattr[i]); st != 0 {
+			t.Fatalf("Mknod %s: %s", cnames[i], st)
+		}
+		defer m.Unlink(ctx, parent, cnames[i])
+	}
+
+	time.Sleep(time.Second)
+	// delete cnodes[0]'s edge and cnodes[1]'s node
+	switch m.Name() {
+	case "redis":
+		meta := m.getBase().en.(*redisMeta)
+		require.Nil(t, meta.rdb.HDel(ctx, meta.entryKey(parent), cnames[0]).Err())
+		require.Nil(t, meta.rdb.Del(ctx, meta.inodeKey(cnodes[1])).Err())
+		meta.cleanupLeakedInodesAndEdges(true, 0)
+
+		require.Equal(t, redis.Nil, meta.rdb.Get(ctx, meta.inodeKey(cnodes[0])).Err())
+		require.Equal(t, redis.Nil, meta.rdb.HGet(ctx, meta.entryKey(parent), cnames[1]).Err())
+	case "badger":
+		meta := m.getBase().en.(*kvMeta)
+		meta.client.txn(Background(), func(tx *kvTxn) error {
+			tx.delete(meta.entryKey(parent, cnames[0]))
+			tx.delete(meta.inodeKey(cnodes[1]))
+			return nil
+		}, 0)
+		meta.cleanupLeakedInodesAndEdges(true, 0)
+		meta.client.txn(Background(), func(tx *kvTxn) error {
+			require.Nil(t, tx.get(meta.inodeKey(cnodes[0])))
+			require.Nil(t, tx.get(meta.entryKey(parent, cnames[1])))
+			return nil
+		}, 0)
+	case "sqlite3":
+		meta := m.getBase().en.(*dbMeta)
+		_, err := meta.db.Delete(&edge{Parent: parent, Name: []byte(cnames[0])})
+		require.Nil(t, err)
+		_, err = meta.db.Delete(&node{Inode: cnodes[1]})
+		require.Nil(t, err)
+		meta.cleanupLeakedInodesAndEdges(true, 0)
+		ok, err := meta.db.Exist(&node{Inode: cnodes[0]})
+		require.Nil(t, err)
+		require.False(t, ok)
+		ok, err = meta.db.Exist(&edge{Parent: parent, Name: []byte(cnames[1])})
+		require.Nil(t, err)
+		require.False(t, ok)
+	default:
+		return
+	}
+
+	var entries []*Entry
+	if st := m.Readdir(ctx, parent, 0, &entries); st != 0 {
+		t.Fatalf("Readdir %s: %s", pname, st)
+	}
+	require.Equal(t, num, len(entries))
+	expected := map[Ino]bool{
+		RootInode: true,
+		parent:    true,
+		cnodes[2]: true,
+		cnodes[3]: true,
+		cnodes[4]: true,
+	}
+	for i := 0; i < num; i++ {
+		if _, ok := expected[entries[i].Inode]; !ok {
+			t.Fatalf("Unexpected entry %s", entries[i].Name)
+		}
+	}
 }
 
 func TestTxBatchLock(t *testing.T) {
