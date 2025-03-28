@@ -367,6 +367,7 @@ class File(object):
             self._buffering = 128 << 10
         if flag == MODE_READ | MODE_WRITE:
             self._buffering = 0
+        self.encoding_buffer=b''
         self._readbuf = None
         self._readbuf_off = 0
         self._writebuf = []
@@ -456,11 +457,38 @@ class File(object):
 
     def read(self, size=-1):
         """Read at most size bytes, returned as a string."""
-        buf = self._read(size)
-        if self.encoding:
-            return buf.decode(self.encoding, self.errors)
+        new_data = self._read(size)
+
+        if not self.encoding:
+            return new_data
         else:
-            return buf
+            if not new_data and not self.encoding_buffer:
+                return ''
+
+            self.encoding_buffer += new_data
+
+            try:
+                decoded_str = self.encoding_buffer.decode(self.encoding, self.errors)
+                if size == -1:
+                    self.encoding_buffer = b''
+                    return decoded_str
+                else:
+                    valid_chars = decoded_str[:size]
+                    remaining_bytes = decoded_str[size:].encode(self.encoding)
+                    self.encoding_buffer = remaining_bytes
+                    return valid_chars
+            except UnicodeDecodeError:
+                for i in range(1, 4):
+                    try:
+                        partial = self.encoding_buffer[:-i] if i else self.encoding_buffer
+                        decoded_str = partial.decode(self.encoding, self.errors)
+                        self.encoding_buffer = self.encoding_buffer[-i:] if i else b''
+                        return decoded_str
+                    except UnicodeDecodeError:
+                        continue
+                decoded_str = self.encoding_buffer.decode(self.encoding, errors=self.errors)
+                self.encoding_buffer = b''
+                return decoded_str
 
     def write(self, data):
         """Write the string data to the file."""
