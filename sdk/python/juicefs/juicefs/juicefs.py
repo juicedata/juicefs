@@ -341,12 +341,53 @@ class Client(object):
         """Remove an extended attribute from a file."""
         self.lib.jfs_removeXattr(c_int64(_tid()), c_int64(self.h), _bin(path), _bin(name))
 
-    def clone(self, src, dst):
+    def clone(self, src, dst, preserve=False):
         """Clone a file."""
-        self.lib.jfs_clone(c_int64(_tid()), c_int64(self.h), _bin(src), _bin(dst))
+        self.lib.jfs_clone(c_int64(_tid()), c_int64(self.h), _bin(src), _bin(dst), c_bool(preserve))
 
-    # def summary(self, path, depth=0, entries=1):
-    #     """Get the summary of a directory."""
+    def info(self, path, recursive=False, strict=False):
+        """Get the information of a file or a directory."""
+        buf = c_void_p()
+        n = self.lib.jfs_info(c_int64(_tid()), c_int64(self.h), _bin(path), byref(buf), c_bool(recursive), c_bool(strict))
+        data = string_at(buf, n)
+        res = json.loads(str(data, encoding='utf-8'))
+
+        self.lib.free(buf)
+        return res
+
+    def summary(self, path, depth=0, entries=1):
+        """Get the summary of a directory."""
+        buf = c_void_p()
+
+        n = self.lib.jfs_gettreesummary(_tid(), self.h, _bin(path), c_uint8(depth), c_uint32(entries), byref(buf))
+        data = string_at(buf, n)
+        res = json.loads(str(data, encoding='utf-8'))
+
+        def parseSummary(entry, removefields):
+            for f in removefields:
+                entry.pop(f, None)
+
+            if entry["Dirs"] == 0:
+                entry.pop("Children", None)
+            elif entry.get("Children") is not None:
+                for v in entry["Children"]:
+                    parseSummary(v, removefields)
+
+        parseSummary(res, ["Inode"])
+        self.lib.free(buf)
+        return res
+
+    def warmup(self, paths, numthreads=10, background=False, isEvict=False, isCheck=False):
+        """Warm up a file or a directory."""
+        if type(paths) is not list:
+            paths = [paths]
+
+        buf = c_void_p()
+
+        n = self.lib.jfs_warmup(c_int64(_tid()), c_int64(self.h), json.dumps(paths).encode(), c_int32(numthreads), c_bool(background), c_bool(isEvict), c_bool(isCheck), byref(buf))
+        res = json.loads(str(string_at(buf, n), encoding='utf-8'))
+        self.lib.free(buf)
+        return res
 
 
 class File(object):
@@ -603,7 +644,6 @@ class File(object):
         self._check_closed()
         self.write(''.join(lines) if self.encoding else b''.join(lines))
         self.flush()
-
 
 def test():
     volume = os.getenv("JFS_VOLUME", "test")

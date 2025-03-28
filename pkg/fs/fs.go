@@ -129,10 +129,12 @@ type attrCache struct {
 }
 
 type FileSystem struct {
-	conf   *vfs.Config
-	reader vfs.DataReader
-	writer vfs.DataWriter
-	m      meta.Meta
+	conf        *vfs.Config
+	reader      vfs.DataReader
+	writer      vfs.DataWriter
+	m           meta.Meta
+	store       chunk.ChunkStore
+	cacheFiller *vfs.CacheFiller
 
 	cacheM          sync.Mutex
 	entries         map[Ino]map[string]*entryCache
@@ -165,7 +167,9 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSyst
 	reader := vfs.NewDataReader(conf, m, d)
 	fs := &FileSystem{
 		m:               m,
+		store:           d,
 		conf:            conf,
+		cacheFiller:     vfs.NewCacheFiller(conf, m, d),
 		reader:          reader,
 		writer:          vfs.NewDataWriter(conf, m, d, reader),
 		entries:         make(map[meta.Ino]map[string]*entryCache),
@@ -987,6 +991,51 @@ func (fs *FileSystem) Close() error {
 	return nil
 }
 
+func (fs *FileSystem) Clone(ctx meta.Context, src, dst string, preserve bool) (err syscall.Errno) {
+	srcParent, err := fs.resolve(ctx, parentDir(src), true)
+	if err != 0 {
+		return
+	}
+	var srcIno Ino
+	err = fs.lookup(ctx, srcParent.Inode(), path.Base(src), &srcIno, &Attr{})
+	if err != 0 {
+		return
+	}
+	dstParent, err := fs.resolve(ctx, parentDir(dst), true)
+	if err != 0 {
+		return
+	}
+
+	var count, total uint64
+	umask := uint16(utils.GetUmask())
+
+	var cmode uint8
+	if preserve {
+		cmode |= meta.CLONE_MODE_PRESERVE_ATTR
+	}
+
+	if err = fs.m.Clone(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), srcParent.Inode(), srcIno, dstParent.Inode(), path.Base(dst), cmode, umask, &count, &total); err != 0 {
+		logger.Errorf("clone failed srcIno:%d,dstParentIno:%d,dstName:%s,cmode:%d,umask:%d,eno:%v", srcIno, dstParent.Inode(), path.Base(dst), cmode, umask, err)
+	}
+	return
+}
+
+func (fs *FileSystem) Warmup(ctx meta.Context, paths []string, numthreads int, background bool, isEvict bool, isCheck bool, resp *vfs.CacheResponse) {
+	action := vfs.WarmupCache
+	if isEvict {
+		action = vfs.EvictCache
+	}
+	if isCheck {
+		action = vfs.CheckCache
+	}
+
+	if background {
+		go fs.cacheFiller.Cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(numthreads), resp)
+	} else {
+		fs.cacheFiller.Cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(numthreads), resp)
+	}
+}
+
 // File
 
 func (f *File) FS() *FileSystem {
@@ -1326,13 +1375,29 @@ func (f *File) ReaddirPlus(ctx meta.Context, offset int) (entries []*meta.Entry,
 	return
 }
 
-func (f *File) Summary(ctx meta.Context) (s *meta.Summary, err syscall.Errno) {
+func (f *File) Summary(ctx meta.Context, recursive, strict bool) (s *meta.Summary, err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Summary").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() {
 		f.fs.log(l, "Summary (%s): %s (%d,%d,%d,%d)", f.path, errstr(err), s.Length, s.Size, s.Files, s.Dirs)
 	}()
 	s = &meta.Summary{}
-	err = f.fs.m.GetSummary(ctx, f.inode, s, true, true)
+	err = f.fs.m.GetSummary(ctx, f.inode, s, recursive, strict)
+	return
+}
+
+func (f *File) GetTreeSummary(ctx meta.Context, depth, entries uint8, strict bool) (s *meta.TreeSummary, err syscall.Errno) {
+	s = &meta.TreeSummary{
+		Inode: f.inode,
+		Path:  "",
+		Type:  meta.TypeDirectory,
+	}
+
+	l := vfs.NewLogContext(ctx)
+	defer func() {
+		f.fs.log(l, "GetTreeSummary (%s,%d,%d,%t): %s (%d,%d,%d)", f.path, depth, entries, strict, errstr(err), s.Size, s.Files, s.Dirs)
+	}()
+	err = f.fs.m.GetTreeSummary(ctx, s, depth, entries, strict, nil)
+	s.Path = path.Base(f.path)
 	return
 }
