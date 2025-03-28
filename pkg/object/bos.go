@@ -111,9 +111,9 @@ func (q *bosclient) Get(key string, off, limit int64, getters ...AttrGetter) (re
 	}
 	if needCheck {
 		if r.UserMeta[checksumAlgr] != "" {
-			resp = verifyChecksum(r.Body, r.UserMeta[checksumAlgr], r.ContentLength, crc32c)
+			resp = verifyChecksum(r.Body, r.UserMeta[checksumAlgr], r.ContentLength)
 		} else {
-			resp = verifyChecksum(r.Body, r.ContentCrc32, r.ContentLength, crc32.IEEETable)
+			resp = verifyChecksum0(r.Body, r.ContentCrc32, r.ContentLength, crc32.IEEETable)
 		}
 	} else {
 		resp = r.Body

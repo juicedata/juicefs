@@ -120,7 +120,7 @@ func (o *ossClient) Get(key string, off, limit int64, getters ...AttrGetter) (re
 		} else {
 			resp = verifyChecksum(result.Body,
 				result.Headers.Get(oss.HeaderOssMetaPrefix+checksumAlgr),
-				result.ContentLength, crc32c)
+				result.ContentLength)
 		}
 	}
 

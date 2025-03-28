@@ -69,8 +69,10 @@ func (c *checksumReader) Read(buf []byte) (n int, err error) {
 	}
 	return
 }
-
-func verifyChecksum(in io.ReadCloser, checksum string, contentLength int64, table *crc32.Table) io.ReadCloser {
+func verifyChecksum(in io.ReadCloser, checksum string, contentLength int64) io.ReadCloser {
+	return verifyChecksum0(in, checksum, contentLength, crc32c)
+}
+func verifyChecksum0(in io.ReadCloser, checksum string, contentLength int64, table *crc32.Table) io.ReadCloser {
 	if checksum == "" {
 		return in
 	}
