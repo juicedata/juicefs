@@ -143,7 +143,7 @@ func (s *s3client) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 			length = *resp.ContentLength
 		}
 		if cs != nil {
-			resp.Body = verifyChecksum(resp.Body, *cs, length)
+			resp.Body = verifyChecksum(resp.Body, *cs, length, crc32c)
 		}
 	}
 	if resp.StorageClass != nil {

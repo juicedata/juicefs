@@ -116,7 +116,7 @@ func (c *COS) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadC
 			length = -1
 			logger.Warnf("failed to parse content-length %s: %s", resp.Header.Get("Content-Length"), err)
 		}
-		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey), length)
+		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey), length, crc32c)
 	}
 	if resp != nil {
 		attrs := applyGetters(getters...)

@@ -22,11 +22,13 @@ package object
 import (
 	"bytes"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -93,22 +95,28 @@ func (q *bosclient) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (q *bosclient) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (q *bosclient) Get(key string, off, limit int64, getters ...AttrGetter) (resp io.ReadCloser, err error) {
 	var r *api.GetObjectResult
-	var err error
 	if limit > 0 {
 		r, err = q.c.GetObject(q.bucket, key, nil, off, off+limit-1)
+		resp = r.Body
 	} else if off > 0 {
 		r, err = q.c.GetObject(q.bucket, key, nil, off)
+		resp = r.Body
 	} else {
 		r, err = q.c.GetObject(q.bucket, key, nil)
+		if r.UserMeta[checksumAlgr] != "" {
+			resp = verifyChecksum(r.Body, r.UserMeta[checksumAlgr], r.ContentLength, crc32c)
+		} else {
+			resp = verifyChecksum(r.Body, r.ContentCrc32, r.ContentLength, crc32.IEEETable)
+		}
 	}
 	if err != nil {
-		return nil, err
+		return
 	}
 	attrs := applyGetters(getters...)
 	attrs.SetStorageClass(r.StorageClass)
-	return r.Body, nil
+	return
 }
 
 func (q *bosclient) Put(key string, in io.Reader, getters ...AttrGetter) error {
@@ -135,6 +143,8 @@ func (q *bosclient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	if q.sc != "" {
 		args.StorageClass = q.sc
 	}
+	args.UserMeta = make(map[string]string)
+	args.UserMeta[checksumAlgr] = strconv.Itoa(int(crc32.Update(0, crc32c, data)))
 	_, err = q.c.PutObject(q.bucket, key, body, args)
 	attrs := applyGetters(getters...)
 	attrs.SetStorageClass(q.sc)
