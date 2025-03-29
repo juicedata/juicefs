@@ -29,6 +29,7 @@
 # (INCLUDING NEGLIGENCE  OR OTHERWISE) ARISING IN  ANY WAY OUT OF  THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import subprocess
+import sys
 try:
     __import__("xattr")
 except ImportError:
@@ -37,7 +38,8 @@ import os, random
 import platform
 import unicodedata
 from xmlrpc.client import boolean
-import xattr 
+import xattr
+
 class Devnull(object):
     def write(self, *args):
         pass
