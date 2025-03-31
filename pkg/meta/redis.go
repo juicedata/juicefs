@@ -4776,6 +4776,11 @@ func (s *redisDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno
 	defer s.Unlock()
 	if s.entries == nil {
 		var entries []*Entry
+
+		if prefix != nil {
+			entries = append(entries, prefix...)
+		}
+
 		err := s.en.hscan(ctx, s.en.entryKey(s.inode), func(keys []string) error {
 			newEntries := make([]Entry, len(keys)/2)
 			newAttrs := make([]Attr, len(keys)/2)
@@ -4843,9 +4848,6 @@ func (s *redisDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno
 	}
 	s.readOff = offset + size
 	entries := s.entries[offset : offset+size]
-	if len(prefix) > 0 {
-		entries = append(prefix, entries...)
-	}
 	return entries, 0
 }
 
