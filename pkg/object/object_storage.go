@@ -74,11 +74,11 @@ func MarshalObject(o Object) map[string]interface{} {
 	m["size"] = o.Size()
 	m["mtime"] = o.Mtime().UnixNano()
 	m["isdir"] = o.IsDir()
+	m["isSymlink"] = o.IsSymlink()
 	if f, ok := o.(File); ok {
 		m["mode"] = f.Mode()
 		m["owner"] = f.Owner()
 		m["group"] = f.Group()
-		m["isSymlink"] = f.IsSymlink()
 	}
 	return m
 }
@@ -89,9 +89,19 @@ func UnmarshalObject(m map[string]interface{}) Object {
 		key:   m["key"].(string),
 		size:  int64(m["size"].(float64)),
 		mtime: mtime,
-		isDir: m["isdir"].(bool)}
-	if _, ok := m["mode"]; ok {
-		f := file{o, m["owner"].(string), m["group"].(string), os.FileMode(m["mode"].(float64)), m["isSymlink"].(bool)}
+		isDir: m["isdir"].(bool),
+	}
+	isSymlink := m["isSymlink"].(bool)
+	_, hasMode := m["mode"]
+	if !hasMode && isSymlink {
+		f := file{
+			obj:       o,
+			isSymlink: m["isSymlink"].(bool),
+		}
+		return &f
+	}
+	if hasMode {
+		f := file{o, m["owner"].(string), m["group"].(string), os.FileMode(m["mode"].(float64)), isSymlink}
 		return &f
 	}
 	return &o

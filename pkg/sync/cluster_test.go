@@ -73,6 +73,7 @@ func TestMarshal(t *testing.T) {
 		&obj{key: "test"},
 		&withSize{&obj{key: "test1", size: 100}, -4},
 		&withFSize{&obj{key: "test2", size: 200}, -1},
+		&withSize{&obj{key: "test3", size: 101, isSymlink: true}, -4},
 	}
 	d, err := marshalObjects(objs)
 	if err != nil {
@@ -86,9 +87,12 @@ func TestMarshal(t *testing.T) {
 		t.Fatalf("expect test but got %s", objs2[0].Key())
 	}
 	if objs2[1].Key() != "test1" || objs2[1].Size() != -4 || objs2[1].(*withSize).Object.Size() != 100 {
-		t.Fatalf("expect withSize but got %s", objs2[0].Key())
+		t.Fatalf("expect withSize but got %s", objs2[1].Key())
 	}
 	if objs2[2].Key() != "test2" || objs2[2].Size() != -1 || objs2[2].(*withFSize).File.Size() != 200 {
-		t.Fatalf("expect withFSize but got %s", objs2[0].Key())
+		t.Fatalf("expect withFSize but got %s", objs2[2].Key())
+	}
+	if objs2[3].Key() != "test3" || objs2[3].Size() != -4 || objs2[3].(*withSize).Object.Size() != 101 && objs2[3].IsSymlink() != true {
+		t.Fatalf("expect withFSize but got %s", objs2[3].Key())
 	}
 }
