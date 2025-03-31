@@ -185,7 +185,7 @@ test_sync_with_random_test(){
     mkdir /jfs/test || true
     mkdir /jfs/test2 || true
     
-    ./random-test runOp -baseDir /jfs/test -files 500000 -ops 5000000 -threads 50 -dirSize 10 -duration 60s -createOp 30,uniform \
+    ./random-test runOp -baseDir /jfs/test -files 500000 -ops 5000000 -threads 50 -dirSize 100 -duration 60s -createOp 30,uniform \
     -deleteOp 5,end --linkOp 10,uniform --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform
     chmod -R 777 /jfs/test
     chmod -R 777 /jfs/test2

@@ -160,7 +160,7 @@ test_dump_load_with_random_test()
     prepare_test
     ./juicefs format $META_URL myjfs --enable-acl
     ./juicefs mount -d $META_URL /jfs 
-    ./random-test runOp -baseDir /jfs/test -files 500000 -ops 5000000 -threads 50 -dirSize 10 -duration 30s -createOp 30,uniform -deleteOp 5,end --linkOp 10,uniform --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform    
+    ./random-test runOp -baseDir /jfs/test -files 500000 -ops 5000000 -threads 50 -dirSize 100 -duration 30s -createOp 30,uniform -deleteOp 5,end --linkOp 10,uniform --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform    
     ./juicefs dump $META_URL dump.json $(get_dump_option)
     create_database $META_URL2
     ./juicefs load $META_URL2 dump.json $(get_load_option)
