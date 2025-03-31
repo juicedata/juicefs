@@ -203,6 +203,18 @@ class SummaryTests(unittest.TestCase):
                             ]}
                         ))
 
+class QuotaTests(unittest.TestCase):
+    # /test/dir1/file
+    #      /dir2
+    #      /file
+    def setUp(self):
+        if not v.exists(TESTFN):
+            v.mkdir(TESTFN)
+        create_file(TESTFILE)
+        v.mkdir(TESTFN + '/dir1')
+        create_file(TESTFN + '/dir1/file')
+        v.mkdir(TESTFN + '/dir2')
+
 def normalize(d):
     if isinstance(d, dict):
         if "Children" in d:

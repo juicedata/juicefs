@@ -1332,13 +1332,13 @@ func jfs_gettreesummary(pid, h int64, cpath *C.char, depth, entries uint8, p_buf
 }
 
 //export jfs_quota
-func jfs_quota(pid int64, h int64, cpath *C.char, cmd *C.char, p_buf **byte) int32 {
+func jfs_quota(pid int64, h int64, cpath *C.char, cmd *C.char, cap, inodes uint64, p_buf **byte) int32 {
 	w := F(h)
 	if w == nil {
 		return EINVAL
 	}
 
-	qs, err := w.HandleQuota(w.withPid(pid), C.GoString(cpath), C.GoString(cmd), 0, 0, true, true, true)
+	qs, err := w.HandleQuota(w.withPid(pid), C.GoString(cpath), C.GoString(cmd), cap, inodes, true, true, true)
 	if err != 0 {
 		return errno(err)
 	}

@@ -1168,11 +1168,23 @@ func (fs *FileSystem) HandleQuota(ctx meta.Context, path string, _cmd string, ca
 	}
 	if cmd == meta.QuotaSet {
 		if capacity == 0 && inodes == 0 {
-			return nil, syscall.EPERM
+			return nil, syscall.EINVAL
 		}
 	}
 	defer func() { fs.log(l, "QuotaCtl (%s,%d): %s", path, cmd, errstr(err)) }()
 	qs = make(map[string]*meta.Quota)
+
+	if cmd == meta.QuotaSet {
+		q := &meta.Quota{MaxSpace: -1, MaxInodes: -1} // negative means no change
+		if capacity > 0 {
+			q.MaxSpace = int64(capacity)
+		}
+		if inodes > 0 {
+			q.MaxInodes = int64(inodes)
+		}
+		qs[path] = q
+	}
+
 	if _err := fs.m.HandleQuota(meta.Background(), cmd, path, qs, strict, repair, create); _err != nil {
 		if strings.HasPrefix(_err.Error(), "no quota for inode") {
 			return qs, 0
