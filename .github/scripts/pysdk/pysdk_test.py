@@ -168,6 +168,9 @@ class SummaryTests(unittest.TestCase):
         create_file(TESTFN + '/dir1/file')
         v.mkdir(TESTFN + '/dir2')
 
+    def tearDown(self):
+        v.rmr(TESTFN)
+
     def test_summary(self):
         res = v.summary(TESTFILE, depth=258, entries=2)
         self.assertTrue(normalize(res)==normalize({"Path": "file", "Type": 2, "Files":1, "Dirs":0, "Size":4096}))
@@ -214,6 +217,26 @@ class QuotaTests(unittest.TestCase):
         v.mkdir(TESTFN + '/dir1')
         create_file(TESTFN + '/dir1/file')
         v.mkdir(TESTFN + '/dir2')
+
+    def tearDown(self):
+        v.rmr(TESTFN)
+
+    def test_quota(self):
+        # set quota
+        v.quota(TESTFN, "set", capacity=1024*1024*1024, inodes=1000)
+        res = v.quota(TESTFN, "get")
+        self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 16384, "UsedInodes": 4}}))
+        res = v.quota(TESTFN, "list")
+        self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 16384, "UsedInodes": 4}}))
+        v.quota(TESTFN+"dir1", "set", capacity=1024*1024*1024, inodes=10000)
+        res = v.quota(TESTFN, "list")
+        self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 16384, "UsedInodes": 4}, "/test/dir1": {"MaxSpace": 1024*1024*1024, "MaxInodes": 10000, "UsedSpace": 4096, "UsedInodes": 1}}))
+
+        # unset quota
+        v.quota(TESTFN, "del")
+        res = v.quota(TESTFN, "get")
+        self.assertTrue(res=={})
+
 
 def normalize(d):
     if isinstance(d, dict):
