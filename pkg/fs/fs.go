@@ -1174,6 +1174,9 @@ func (fs *FileSystem) HandleQuota(ctx meta.Context, path string, _cmd string, ca
 	defer func() { fs.log(l, "QuotaCtl (%s,%d): %s", path, cmd, errstr(err)) }()
 	qs = make(map[string]*meta.Quota)
 	if _err := fs.m.HandleQuota(meta.Background(), cmd, path, qs, strict, repair, create); _err != nil {
+		if strings.HasPrefix(_err.Error(), "no quota for inode") {
+			return qs, 0
+		}
 		err = syscall.EINVAL
 	}
 	return

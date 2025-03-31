@@ -347,8 +347,13 @@ class Client(object):
 
     def quota(self, path, cmd):
         """Get the quota of a directory."""
-        self.lib.jfs_quota(c_int64(_tid()), c_int64(self.h), _bin(path), _bin(cmd))
-        return 0
+        buf = c_void_p()
+        n = self.lib.jfs_quota(c_int64(_tid()), c_int64(self.h), _bin(path), _bin(cmd), byref(buf))
+        data = string_at(buf, n)
+        res = json.loads(str(data, encoding='utf-8'))
+
+        self.lib.free(buf)
+        return res
 
     def info(self, path, recursive=False, strict=False):
         """Get the information of a file or a directory."""
