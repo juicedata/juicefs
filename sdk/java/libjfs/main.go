@@ -46,6 +46,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/grafana/pyroscope-go"
+	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
 	"io"
 	"net/http"
 	_ "net/http/pprof"
@@ -346,6 +348,8 @@ type javaConf struct {
 	DirEntryTimeout   string `json:"dirEntryTimeout"`
 	Debug             bool   `json:"debug"`
 	NoUsageReport     bool   `json:"noUsageReport"`
+	NoAgent           *bool  `json:"noAgent"`
+	Pyroscope         string `json:"pyroscope"`
 	AccessLog         string `json:"accessLog"`
 	PushGateway       string `json:"pushGateway"`
 	PushInterval      string `json:"pushInterval"`
@@ -466,12 +470,6 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 		}
 		if jConf.Debug || os.Getenv("JUICEFS_DEBUG") != "" {
 			utils.SetLogLevel(logrus.DebugLevel)
-			go func() {
-				for port := 6060; port < 6100; port++ {
-					logger.Debugf("listen at 127.0.0.1:%d", port)
-					_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
-				}
-			}()
 		} else if os.Getenv("JUICEFS_LOGLEVEL") != "" {
 			level, err := logrus.ParseLevel(os.Getenv("JUICEFS_LOGLEVEL"))
 			if err == nil {
@@ -482,6 +480,39 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			}
 		} else {
 			utils.SetLogLevel(logrus.WarnLevel)
+		}
+
+		if (jConf.NoAgent != nil && !*jConf.NoAgent) || jConf.Debug || os.Getenv("JUICEFS_DEBUG") != "" {
+			go func() {
+				for port := 6060; port < 6100; port++ {
+					logger.Debugf("listen at 127.0.0.1:%d", port)
+					_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
+				}
+			}()
+		}
+
+		{
+			tags := make(map[string]string)
+			tags["mountpoint"] = "juicefs.pysdk"
+			if hostname, err := os.Hostname(); err == nil {
+				tags["hostname"] = hostname
+			}
+			tags["pid"] = strconv.Itoa(os.Getpid())
+			tags["version"] = version.Version()
+
+			types := []pyroscope.ProfileType{pyroscope.ProfileCPU, pyroscope.ProfileInuseObjects, pyroscope.ProfileAllocObjects,
+				pyroscope.ProfileInuseSpace, pyroscope.ProfileAllocSpace, pyroscope.ProfileGoroutines, pyroscope.ProfileMutexCount,
+				pyroscope.ProfileMutexDuration, pyroscope.ProfileBlockCount, pyroscope.ProfileBlockDuration}
+			if _, err := pyroscope.Start(pyroscope.Config{
+				ApplicationName: "juicefs.pysdk",
+				ServerAddress:   jConf.Pyroscope,
+				Logger:          logger,
+				Tags:            tags,
+				AuthToken:       os.Getenv("PYROSCOPE_AUTH_TOKEN"),
+				ProfileTypes:    types,
+			}); err != nil {
+				logger.Errorf("start pyroscope agent: %v", err)
+			}
 		}
 
 		caller = jConf.Caller
