@@ -16,7 +16,9 @@
 
 package utils
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestAlloc(t *testing.T) {
 	old := AllocMemory()
@@ -28,4 +30,32 @@ func TestAlloc(t *testing.T) {
 	if AllocMemory()-old != 0 {
 		t.Fatalf("free all allocated memory, but got %d", AllocMemory()-old)
 	}
+}
+
+func PowerOf2Loop(s int) int {
+	var bits int
+	var p int = 1
+	for p < s {
+		bits++
+		p *= 2
+	}
+	return bits
+}
+
+func BenchmarkPowerOf2(b *testing.B) {
+	b.Run("bits.Len", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for j := 0; j < 100000; j++ {
+				_ = PowerOf2(j)
+			}
+		}
+	})
+
+	b.Run("Loop", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for j := 0; j < 100000; j++ {
+				_ = PowerOf2Loop(j)
+			}
+		}
+	})
 }
