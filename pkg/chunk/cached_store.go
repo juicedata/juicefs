@@ -553,6 +553,10 @@ func (s *wSlice) Abort() {
 	_ = s.Remove()
 }
 
+func (s *wSlice) PendingBytes() int {
+	return s.length - s.uploaded
+}
+
 // Config contains options for cachedStore
 type Config struct {
 	CacheDir          string
@@ -1099,6 +1103,13 @@ func (store *cachedStore) canUpload() bool {
 	h := time.Now().Hour()
 	return store.startHour < store.endHour && h >= store.startHour && h < store.endHour ||
 		store.startHour > store.endHour && (h >= store.startHour || h < store.endHour)
+}
+
+func (store *cachedStore) HasUploadSlot() bool {
+	if store.currentUpload == nil {
+		return false
+	}
+	return len(store.currentUpload) < cap(store.currentUpload)
 }
 
 func (store *cachedStore) NewReader(id uint64, length int) Reader {

@@ -453,21 +453,41 @@ func (w *dataWriter) flushAll() {
 	for {
 		w.Lock()
 		now := time.Now()
+		bufferExceeds := w.usedBufferSize() - w.bufferSize
+		var flushDurTriggered, lastModTriggered, sliceTriggered, bufferTriggered int
 		for _, f := range w.files {
 			f.refs++
 			w.Unlock()
-			tooMany := f.totalSlices() > 800
+			slicesExceeds := f.totalSlices() - 800
 			f.Lock()
-
-			lastBit := uint32(rand.Int() % 2) // choose half of chunks randomly
-			for i, c := range f.chunks {
-				hs := len(c.slices) / 2
-				for j, s := range c.slices {
-					if !s.freezed && (now.Sub(s.started) > flushDuration || now.Sub(s.lastMod) > time.Second && now.Sub(s.started) > time.Second ||
-						tooMany && i%2 == lastBit && j <= hs) {
-						s.freezed = true
-						go s.flushData()
+			for _, c := range f.chunks {
+				for _, s := range c.slices {
+					switch {
+					case s.freezed:
+						continue
+					case s.id == 0: // not ready
+						continue
+					case !w.store.HasUploadSlot():
+						continue // donot freeze to reduce fragmentation and avoid oom
+					case now.Sub(s.started) > flushDuration: // too old
+						flushDurTriggered += 1
+					case now.Sub(s.lastMod) > time.Second && now.Sub(s.started) > time.Second: // too stale
+						lastModTriggered += 1
+					case slicesExceeds > 0: // too many slices
+						slicesExceeds -= 1
+						sliceTriggered += 1
+					case bufferExceeds > 0: // too many buffer
+						myPending := s.writer.PendingBytes()
+						if float64(myPending)/float64(w.conf.Chunk.BlockSize) <= rand.Float64() {
+							continue
+						}
+						bufferExceeds -= int64(myPending)
+						bufferTriggered += 1
+					default:
+						continue
 					}
+					s.freezed = true
+					go s.flushData()
 				}
 			}
 			f.Unlock()
@@ -475,7 +495,14 @@ func (w *dataWriter) flushAll() {
 			w.Lock()
 		}
 		w.Unlock()
-		time.Sleep(time.Millisecond * 100)
+		if flushDurTriggered+lastModTriggered+sliceTriggered+bufferTriggered != 0 {
+			logger.Debugf("Flushed by: age=%d, lastMod=%d, tooManySlices=%d, tooManyBuffer=%d", flushDurTriggered, lastModTriggered, sliceTriggered, bufferTriggered)
+		}
+		sleep := time.Millisecond * 100
+		if bufferExceeds > 0 && bufferTriggered > 0 {
+			sleep = time.Millisecond * 5 // smaller than "slow down" interval in Write()
+		}
+		time.Sleep(sleep)
 	}
 }
 
