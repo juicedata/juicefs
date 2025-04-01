@@ -3089,12 +3089,24 @@ func (m *baseMeta) NewDirHandler(ctx Context, inode Ino, plus bool, initEntries 
 	initEntries = append(initEntries, &Entry{
 		Inode: inode,
 		Name:  []byte("."),
-		Attr:  &Attr{Typ: TypeDirectory},
-	}, &Entry{
+		Attr:  &attr,
+	})
+
+	parent := &Entry{
 		Inode: attr.Parent,
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
-	})
+	}
+	if plus {
+		if attr.Parent == inode {
+			parent.Attr = &attr
+		} else {
+			if st := m.GetAttr(ctx, attr.Parent, parent.Attr); st != 0 {
+				return nil, st
+			}
+		}
+	}
+	initEntries = append(initEntries, parent)
 
 	return m.en.newDirHandler(inode, plus, initEntries), 0
 }
