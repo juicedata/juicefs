@@ -353,14 +353,18 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 func marshalObjects(objs []object.Object) ([]byte, error) {
 	var arr []map[string]interface{}
 	for _, o := range objs {
-		obj := object.MarshalObject(o)
+		var nsize int64
 		switch oo := o.(type) {
-		case *withSize:
-			obj["nsize"] = oo.nsize
-			obj["size"] = oo.Object.Size()
-		case *withFSize:
-			obj["fnsize"] = oo.nsize
-			obj["size"] = oo.File.Size()
+		case *objWithSize:
+			nsize = oo.nsize
+			o = oo.Object
+		case *fileWithSize:
+			nsize = oo.nsize
+			o = oo.File
+		}
+		obj := object.MarshalObject(o)
+		if nsize != 0 {
+			obj["nsize"] = nsize
 		}
 		arr = append(arr, obj)
 	}
@@ -377,9 +381,7 @@ func unmarshalObjects(d []byte) ([]object.Object, error) {
 	for _, m := range arr {
 		obj := object.UnmarshalObject(m)
 		if nsize, ok := m["nsize"]; ok {
-			obj = &withSize{obj, int64(nsize.(float64))}
-		} else if fnsize, ok := m["fnsize"]; ok {
-			obj = &withFSize{obj.(object.File), int64(fnsize.(float64))}
+			obj = withSize(obj, int64(nsize.(float64)))
 		}
 		objs = append(objs, obj)
 	}
