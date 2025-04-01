@@ -345,10 +345,10 @@ class Client(object):
         """Clone a file."""
         self.lib.jfs_clone(c_int64(_tid()), c_int64(self.h), _bin(src), _bin(dst), c_bool(preserve))
 
-    def quota(self, path, cmd, capacity=0, inodes=0):
+    def quota(self, cmd, path="", capacity=0, inodes=0, strict=False, repair=False, create=False):
         """Get the quota of a directory."""
         buf = c_void_p()
-        n = self.lib.jfs_quota(c_int64(_tid()), c_int64(self.h), _bin(path), _bin(cmd), c_uint64(capacity), c_uint64(inodes), byref(buf))
+        n = self.lib.jfs_quota(c_int64(_tid()), c_int64(self.h), _bin(path), _bin(cmd), c_uint64(capacity), c_uint64(inodes), c_bool(strict), c_bool(repair), c_bool(create), byref(buf))
         data = string_at(buf, n)
         res = json.loads(str(data, encoding='utf-8'))
 
