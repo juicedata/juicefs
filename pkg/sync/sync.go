@@ -826,7 +826,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			if config.Dry {
 				logger.Debugf("Will copy permissions for %s", key)
 			} else {
-				copyPerms(dst, obj, config)
+				copyPerms(dst, withoutSize(obj), config)
 			}
 			copied.Increment()
 		case markChecksum:
@@ -835,7 +835,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				checked.Increment()
 				break
 			}
-			obj = obj.(*withSize).Object
+			obj = withoutSize(obj)
 			if equal, err := checkSum(src, dst, key, nil, obj, config); err != nil {
 				failed.Increment()
 				break
@@ -926,22 +926,39 @@ func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) er
 	}
 }
 
-type withSize struct {
+type objWithSize struct {
 	object.Object
 	nsize int64
 }
 
-func (o *withSize) Size() int64 {
+func (o *objWithSize) Size() int64 {
 	return o.nsize
 }
 
-type withFSize struct {
+type fileWithSize struct {
 	object.File
 	nsize int64
 }
 
-func (o *withFSize) Size() int64 {
+func (o *fileWithSize) Size() int64 {
 	return o.nsize
+}
+
+func withSize(o object.Object, nsize int64) object.Object {
+	if f, ok := o.(object.File); ok {
+		return &fileWithSize{f, nsize}
+	}
+	return &objWithSize{o, nsize}
+}
+
+func withoutSize(o object.Object) object.Object {
+	switch w := o.(type) {
+	case *objWithSize:
+		return w.Object
+	case *fileWithSize:
+		return w.File
+	}
+	return o
 }
 
 var dstDelayDelMu sync.Mutex
@@ -963,7 +980,7 @@ func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config 
 		dstDelayDel = append(dstDelayDel, dstobj.Key())
 		dstDelayDelMu.Unlock()
 	} else {
-		tasks <- &withSize{dstobj, markDeleteDst}
+		tasks <- withSize(dstobj, markDeleteDst)
 	}
 	return config.Limit == 0
 }
@@ -1071,17 +1088,17 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			} else if config.Update && obj.Mtime().Unix() < dstobj.Mtime().Unix() {
 				skipIt(obj)
 			} else if config.CheckAll { // two objects are likely the same
-				tasks <- &withSize{obj, markChecksum}
+				tasks <- withSize(obj, markChecksum)
 			} else if config.DeleteSrc {
 				if obj.IsDir() {
 					srcDelayDelMu.Lock()
 					srcDelayDel = append(srcDelayDel, obj.Key())
 					srcDelayDelMu.Unlock()
 				} else {
-					tasks <- &withSize{obj, markDeleteSrc}
+					tasks <- withSize(obj, markDeleteSrc)
 				}
 			} else if config.Perms && needCopyPerms(obj, dstobj) {
-				tasks <- &withFSize{obj.(object.File), markCopyPerms}
+				tasks <- withSize(obj, markCopyPerms)
 			} else {
 				skipIt(obj)
 			}
