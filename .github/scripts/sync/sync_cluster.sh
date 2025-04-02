@@ -214,9 +214,11 @@ test_sync_files_from_file(){
     ./juicefs mount -d $META_URL /jfs
     mkdir /jfs/test || true
     mkdir /jfs/test2 || true
-    sudo -u juicedata ./random-test runOp -baseDir /jfs/test -files 500000 -ops 5000000 -threads 50 -dirSize 100000 -duration 60s -createOp 30,uniform \
+    ./random-test runOp -baseDir /jfs/test -files 500000 -ops 5000000 -threads 50 -dirSize 100000 -duration 60s -createOp 30,uniform \
     -deleteOp 5,end --linkOp 10,uniform --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform
-    sudo ls /jfs/test > files
+    chmod -R 777 /jfs/test
+    chmod -R 777 /jfs/test2
+    echo 'dir' > files
     sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-all --links --dirs --files-from files \
