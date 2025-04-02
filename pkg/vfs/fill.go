@@ -294,7 +294,8 @@ type sliceHandler func(s meta.Slice) error
 
 func (iter *sliceIterator) hasNext() bool {
 	if iter.err != nil {
-		return false
+		logger.Error(iter.err)
+		iter.err = nil
 	}
 
 	if iter.ctx.Canceled() {
