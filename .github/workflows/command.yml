@@ -109,7 +109,6 @@ jobs:
       - name: Test fsck
         timeout-minutes: 10
         run: |
-          meta=$([ "${{matrix.meta}}" = "mysql" ] && echo "sqlite3" || echo "${{matrix.meta}}")
           sudo META=${meta} .github/scripts/command/fsck.sh 
       
       - name: Test Gateway
