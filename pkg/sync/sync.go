@@ -1380,10 +1380,12 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 			defer wg.Done()
 			for key := range prefixs {
 				if !strings.HasSuffix(key, "/") {
-					if err := fastPath(tasks, src, dst, key, config); err == nil {
+					if processed, err := fastPath(tasks, src, dst, key, config); processed {
+						if err != nil {
+							logger.Errorf("failed to process single key:%s: %s", key, err)
+							failed.Increment()
+						}
 						continue
-					} else if !errors.Is(err, utils.ENOTSUP) {
-						logger.Errorf("try fast path error %s: %s", key, err)
 					}
 				}
 				logger.Debugf("start listing prefix %s", key)
@@ -1417,7 +1419,7 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 }
 
 // fast path for single object copy
-func fastPath(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) error {
+func fastPath(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) (bool, error) {
 	obj, err := src.Head(key)
 	if err == nil && (!obj.IsDir() || config.Dirs) {
 		var srckeys = make(chan object.Object, 1)
@@ -1430,17 +1432,14 @@ func fastPath(tasks chan<- object.Object, src, dst object.ObjectStorage, key str
 			}
 			close(dstkeys)
 			logger.Debugf("produce single key %s", key)
-			return produce(tasks, srckeys, dstkeys, config)
+			return true, produce(tasks, srckeys, dstkeys, config)
 		} else {
 			logger.Warnf("head %s from %s: %s", key, dst, err)
 		}
 	} else if err != nil && !os.IsNotExist(err) {
 		logger.Warnf("head %s from %s: %s", key, src, err)
 	}
-	if obj.IsDir() {
-		return utils.ENOTSUP
-	}
-	return err
+	return false, err
 }
 func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config) error {
 	config.concurrentList <- 1
@@ -1448,8 +1447,8 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		<-config.concurrentList
 	}()
 	if config.Limit == 1 && len(config.rules) == 0 {
-		if err := fastPath(tasks, src, dst, prefix, config); err == nil {
-			return nil
+		if processed, err := fastPath(tasks, src, dst, prefix, config); processed {
+			return err
 		}
 	}
 	if config.ListThreads <= 1 || listDepth <= 0 {
