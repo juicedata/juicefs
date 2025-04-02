@@ -1143,6 +1143,57 @@ func (fs *FileSystem) Warmup(ctx meta.Context, paths []string, numthreads int, b
 	}
 }
 
+func toQuotaCMD(cmd string) (uint8, syscall.Errno) {
+	switch cmd {
+	case "set":
+		return meta.QuotaSet, 0
+	case "get":
+		return meta.QuotaGet, 0
+	case "del":
+		return meta.QuotaDel, 0
+	case "list":
+		return meta.QuotaList, 0
+	case "check":
+		return meta.QuotaCheck, 0
+	default:
+		return 0, syscall.EINVAL
+	}
+}
+
+func (fs *FileSystem) HandleQuota(ctx meta.Context, path string, _cmd string, capacity, inodes uint64, strict, repair, create bool) (qs map[string]*meta.Quota, err syscall.Errno) {
+	l := vfs.NewLogContext(ctx)
+	cmd, err := toQuotaCMD(_cmd)
+	if err != 0 {
+		return
+	}
+	if cmd == meta.QuotaSet {
+		if capacity == 0 && inodes == 0 {
+			return nil, syscall.EINVAL
+		}
+	}
+	defer func() { fs.log(l, "QuotaCtl (%s,%d): %s", path, cmd, errstr(err)) }()
+	qs = make(map[string]*meta.Quota)
+
+	if cmd == meta.QuotaSet {
+		q := &meta.Quota{MaxSpace: -1, MaxInodes: -1} // negative means no change
+		if capacity > 0 {
+			q.MaxSpace = int64(capacity)
+		}
+		if inodes > 0 {
+			q.MaxInodes = int64(inodes)
+		}
+		qs[path] = q
+	}
+
+	if _err := fs.m.HandleQuota(meta.Background(), cmd, path, qs, strict, repair, create); _err != nil {
+		if strings.HasPrefix(_err.Error(), "no quota for inode") {
+			return qs, 0
+		}
+		err = syscall.EINVAL
+	}
+	return
+}
+
 // File
 
 func (f *File) FS() *FileSystem {
