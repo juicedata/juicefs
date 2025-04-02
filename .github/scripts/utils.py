@@ -61,7 +61,7 @@ def flush_meta(meta_url:str):
     print('flush meta succeed')
 
 def create_mysql_db(meta_url):
-    db_name = meta_url[8:].split('@')[1].split('/')[1]
+    db_name = meta_url[8:].split('@')[1].split('/')[1].split('?')[0]
     user = meta_url[8:].split('@')[0].split(':')[0]
     password = meta_url[8:].split('@')[0].split(':')[1]
     if password: 
