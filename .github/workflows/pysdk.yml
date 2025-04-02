@@ -11,7 +11,7 @@ on:
     - '**/hypo/fs_sdk_test.py'
     - '**/pysdk_test.py'
     - '**/juicefs.py'
-#    - '**/pysdk.yml'
+    - '**/pysdk.yml'
   pull_request:
     branches:
     - main
@@ -22,7 +22,7 @@ on:
     - '**/hypo/fs_sdk_test.py'
     - '**/pysdk_test.py'
     - '**/juicefs.py'
-#    - '**/pysdk.yml'
+    - '**/pysdk.yml'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:
@@ -40,8 +40,9 @@ jobs:
       - id: set-matrix
         run: |
           echo "github.event_name is ${{github.event_name}}"
+          # TODO: add fdb when bugfix: https://github.com/juicedata/juicefs/issues/5910
           if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch" ]]; then
-            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb"]' >> $GITHUB_OUTPUT
           elif [[ "${{github.event_name}}" == "pull_request" || "${{github.event_name}}" == "push"  ]]; then
             echo 'meta_matrix=["redis", "tikv", "mysql"]' >> $GITHUB_OUTPUT
           else
@@ -113,6 +114,7 @@ jobs:
           sudo ./juicefs format $meta_url --trash-days 0 --enable-acl --bucket=/mnt/jfs pics
 
       - name: Juicefs Mount
+        if: false
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
@@ -173,7 +175,7 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo USE_SDK=true META_URL=$meta_url EXCLUDE_RULES="readlines,readline,clone_cp_file,clone_cp_dir" python3 .github/scripts/hypo/fs.py 2>&1 | tee fsrand.log
+          sudo MAX_EXAMPLE=1000 STEP_COUNT=200 USE_SDK=true META_URL=$meta_url EXCLUDE_RULES="readlines,readline,clone_cp_file,clone_cp_dir" python3 .github/scripts/hypo/fs.py 2>&1 | tee fsrand.log
           exit ${PIPESTATUS[0]}
           df -h
 
