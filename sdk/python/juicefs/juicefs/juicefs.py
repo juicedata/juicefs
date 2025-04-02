@@ -217,7 +217,10 @@ class Client(object):
                 if 'r' in mode:
                     raise FileNotFoundError(e)
                 fd = self.lib.jfs_create(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint16(0o666), c_uint16(self.umask))
-        return File(self.lib, fd, path, mode, flag, size, buffering, encoding, errors)
+        f = File(self.lib, fd, path, mode, flag, size, buffering)
+        if 't' in mode:
+            f = io.TextIOBase(f, encoding=encoding, errors=errors)
+        return f
 
     def truncate(self, path, size):
         """Truncate a file to a specified size."""
@@ -399,15 +402,13 @@ class Client(object):
 
 class File(object):
     """A JuiceFS file."""
-    def __init__(self, lib, fd, path, mode, flag, length, buffering, encoding, errors):
+    def __init__(self, lib, fd, path, mode, flag, length, buffering):
         self.lib = lib
         self.fd = fd
         self.name = path
         self.append = 'a' in mode
         self.flag = flag
         self.length = length
-        self.encoding = encoding
-        self.errors = errors
         self.newlines = None
         self.closed = False
         self._buffering = buffering
@@ -503,29 +504,19 @@ class File(object):
         return buf
 
     def read(self, size=-1):
-        """Read at most size bytes, returned as a string."""
-        buf = self._read(size)
-        if self.encoding:
-            return buf.decode(self.encoding, self.errors)
-        else:
-            return buf
+        """Read at most size bytes, returned as bytes."""
+        return self._read(size)
 
     def write(self, data):
         """Write the string data to the file."""
         self._check_closed()
         # TODO: buffer for small write
-        if self.encoding and not isinstance(data, six.text_type):
-            raise TypeError(f'write() argument must be str, not {type(data).__name__}')
-        if not self.encoding and not isinstance(data, six.binary_type):
-            raise TypeError(f"a bytes-like object is required, not '{type(data).__name__}'")
         if self.flag & MODE_WRITE == 0:
             raise io.UnsupportedOperation('not writable')
 
         if not data:
             return 0
         n = len(data)
-        if self.encoding:
-            data = data.encode(self.encoding, self.errors)
         if self.append:
             self.off = self.length
         total = len(data)
@@ -551,11 +542,6 @@ class File(object):
         self._check_closed()
         if whence not in (os.SEEK_SET, os.SEEK_CUR, os.SEEK_END):
             raise ValueError(f'invalid whence ({whence}, should be {os.SEEK_SET}, {os.SEEK_CUR} or {os.SEEK_END})')
-        if self.encoding:
-            if whence == os.SEEK_CUR and offset != 0:
-                raise io.UnsupportedOperation("can't do nonzero cur-relative seeks")
-            if whence == os.SEEK_END and offset != 0:
-                raise io.UnsupportedOperation("can't do nonzero end-relative seeks")
         self.flush()
         if whence == os.SEEK_SET:
             self.off = offset
@@ -622,7 +608,7 @@ class File(object):
         ls = self.readlines(1)
         if ls:
             return ls[0]
-        return '' if self.encoding else b''
+        return b''
 
     def xreadlines(self):
         return self
@@ -642,14 +628,12 @@ class File(object):
                 if r[0] == b'\n':
                     hint -= 1
             data = b''.join(rs)
-        if self.encoding:
-            return [l.decode(self.encoding, self.errors) for l in data.splitlines(True)]
         return data.splitlines(True)
 
     def writelines(self, lines):
         """Write a list of lines to the file."""
         self._check_closed()
-        self.write(''.join(lines) if self.encoding else b''.join(lines))
+        self.write(b''.join(lines))
         self.flush()
 
 def test():
