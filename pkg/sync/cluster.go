@@ -353,17 +353,10 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 func marshalObjects(objs []object.Object) ([]byte, error) {
 	var arr []map[string]interface{}
 	for _, o := range objs {
-		var nsize int64
-		switch oo := o.(type) {
-		case *objWithSize:
-			nsize = oo.nsize
-			o = oo.Object
-		case *fileWithSize:
-			nsize = oo.nsize
-			o = oo.File
-		}
+		nsize := o.Size()
+		o = withoutSize(o)
 		obj := object.MarshalObject(o)
-		if nsize != 0 {
+		if nsize != o.Size() {
 			obj["nsize"] = nsize
 		}
 		arr = append(arr, obj)
