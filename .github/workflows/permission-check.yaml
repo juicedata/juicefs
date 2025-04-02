@@ -35,7 +35,7 @@ jobs:
       matrix:
         meta: [ 'sqlite3', 'redis', 'badger' ]
     
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: shogo82148/actions-setup-perl@v1
         with:
