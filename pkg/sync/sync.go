@@ -1379,12 +1379,11 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 		go func() {
 			defer wg.Done()
 			for key := range prefixs {
-				if strings.HasSuffix(key, "/") {
-					if err := fastPath(tasks, src, dst, key, config); err != nil {
-						logger.Errorf("fast path %s: %s", key, err)
-						failed.Increment()
-					} else {
+				if !strings.HasSuffix(key, "/") {
+					if err := fastPath(tasks, src, dst, key, config); err == nil {
 						continue
+					} else if !errors.Is(err, utils.ENOTSUP) {
+						logger.Errorf("try fast path error %s: %s", key, err)
 					}
 				}
 				logger.Debugf("start listing prefix %s", key)
@@ -1437,6 +1436,9 @@ func fastPath(tasks chan<- object.Object, src, dst object.ObjectStorage, key str
 		}
 	} else if err != nil && !os.IsNotExist(err) {
 		logger.Warnf("head %s from %s: %s", key, src, err)
+	}
+	if obj.IsDir() {
+		return utils.ENOTSUP
 	}
 	return err
 }
