@@ -19,6 +19,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
@@ -64,6 +65,16 @@ func mountFlags() []cli.Flag {
 			Name:  "show-dot-files",
 			Usage: "If set, dot files will not be treated as hidden files",
 		},
+		&cli.IntFlag{
+			Name:  "winfsp-threads",
+			Usage: "WinFsp threads count option, Default is min(cpu core * 2, 16)",
+			Value: min(runtime.NumCPU()*2, 16),
+		},
+		&cli.Float64Flag{
+			Name:  "dirinfo-cache-to",
+			Usage: "Dir information timeout in seconds",
+			Value: 1,
+		},
 	}
 }
 
@@ -92,7 +103,8 @@ func getDaemonStage() int {
 
 func mountMain(v *vfs.VFS, c *cli.Context) {
 	v.Conf.AccessLog = c.String("access-log")
-	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"), c.Bool("show-dot-files"))
+
+	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Float64("dirinfo-cache-to"), c.Bool("as-root"), c.Int("delay-close"), c.Bool("show-dot-files"), c.Int("winfsp-threads"))
 }
 
 func checkMountpoint(name, mp, logPath string, background bool) {}
