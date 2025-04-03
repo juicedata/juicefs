@@ -41,6 +41,10 @@ func Test_setPasswordFromEnv(t *testing.T) {
 			args: "mysql://root@(127.0.0.1:3306)/juicefs",
 			want: "mysql://root:dbPasswd@(127.0.0.1:3306)/juicefs",
 		},
+		{
+			args: "mysql://root@@(127.0.0.1:3306)/juicefs",
+			want: "mysql://root@:dbPasswd@(127.0.0.1:3306)/juicefs",
+		},
 		// no user is ok
 		{
 			args: "mysql://:@(127.0.0.1:3306)/juicefs",
