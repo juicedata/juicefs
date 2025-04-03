@@ -3150,8 +3150,8 @@ func testAtime(t *testing.T, m Meta) {
 		t.Fatalf("Mkdir atime: %s", st)
 	}
 
-	// open, read, read atime < mtime, read recent, readdir, readlink
-	testFn := func(name string) (ret [6]bool) {
+	// open, read, read atime < mtime, read recent, readdir, readlink, link
+	testFn := func(name string) (ret [7]bool) {
 		fname := "f-" + name
 		if st := m.Create(ctx, parent, fname, 0644, 0, 0, &inode, &attr); st != 0 {
 			t.Fatalf("Create atime/%s: %s", fname, st)
@@ -3228,7 +3228,7 @@ func testAtime(t *testing.T, m Meta) {
 		ret[4] = attr.Atime != 1234
 
 		// readlink
-		fname = "l-" + name
+		fname = "s-" + name
 		if st := m.Symlink(ctx, parent, fname, "f-"+name, &inode, &attr); st != 0 {
 			t.Fatalf("Symlink atime/%s: %s", fname, st)
 		}
@@ -3243,14 +3243,25 @@ func testAtime(t *testing.T, m Meta) {
 		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
 			t.Fatalf("Getattr after readlink atime/%s: %s", fname, st)
 		}
-		ret[5] = attr.Atime != 1234
+		ret[5] = attr.Atime != 1234 && attr.Atimensec != 5678
+
+		// test link ctime
+		attr.Atime, attr.Atimensec = 1234, 5678
+		if st := m.SetAttr(ctx, inode, SetAttrAtime, 0, &attr); st != 0 {
+			t.Fatalf("Setattr atime/%s: %s", fname, st)
+		}
+		fname = "l-" + name
+		if st := m.Link(ctx, inode, parent, fname, &attr); st != 0 {
+			t.Fatalf("Link %s: %s", fname, st)
+		}
+		ret[6] = attr.Ctime != 1234 && attr.Ctimensec != 5678
 		return
 	}
 
-	for name, exp := range map[string][6]bool{
-		RelAtime:    {true, true, true, false, true, true},
-		StrictAtime: {true, true, true, true, true, true},
-		NoAtime:     {false, false, false, false, false, false},
+	for name, exp := range map[string][7]bool{
+		RelAtime:    {true, true, true, false, true, true, true},
+		StrictAtime: {true, true, true, true, true, true, true},
+		NoAtime:     {false, false, false, false, false, false, true},
 	} {
 		m.getBase().conf.AtimeMode = name
 		if ret := testFn(name); ret != exp {
