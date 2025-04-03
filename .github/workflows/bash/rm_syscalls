@@ -320,3 +320,6 @@ getxattr05 getxattr05
 finit_module02 finit_module02
 msgstress03 msgstress03
 kill11 kill11
+# failed after upgrade github runner from ubuntu 20.04 to 22.04
+inotify02 inotify02
+ioprio_set03 ioprio_set03

@@ -80,6 +80,11 @@ jobs:
         run: |
           wget https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test
           chmod +x random-test
+      
+      - name: Test Mount
+        timeout-minutes: 10
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/mount.sh
 
       - name: Test Gc
         timeout-minutes: 10

@@ -18,6 +18,7 @@ package utils
 
 import (
 	"fmt"
+	"math/bits"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -63,14 +64,13 @@ func AllocMemory() int64 {
 
 var pools []*sync.Pool
 
+// PowerOf2 returns the smallest power of 2 that is >= s
 func PowerOf2(s int) int {
-	var bits int
-	var p int = 1
-	for p < s {
-		bits++
-		p *= 2
+	if s <= 0 {
+		return 0
 	}
-	return bits
+	// Find position of the most significant bit (MSB)
+	return bits.Len(uint(s - 1))
 }
 
 func init() {

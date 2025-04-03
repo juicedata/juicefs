@@ -30,7 +30,7 @@ on:
 
 jobs:
   build-matrix:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - id: set-matrix
         run: |
@@ -54,7 +54,7 @@ jobs:
       fail-fast: false
       matrix:
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
