@@ -25,6 +25,25 @@ var (
 	TracePattern = os.Getenv("CGOFUSE_TRACE")
 )
 
+var traceLogger = log.New(os.Stderr, "", log.LstdFlags|log.Lshortfile)
+
+func SetTraceOutput(file string) {
+	if "" == file {
+		traceLogger.SetOutput(os.Stderr)
+	} else {
+		f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if nil != err {
+			traceLogger.Printf("Error opening trace log file %s: %v", file, err)
+			traceLogger.SetOutput(os.Stderr)
+			return
+		}
+		traceLogger.SetOutput(f)
+		if TracePattern == "" {
+			TracePattern = "*"
+		}
+	}
+}
+
 func traceJoin(deref bool, vals []interface{}) string {
 	rslt := ""
 	for _, v := range vals {
@@ -109,7 +128,7 @@ func Trace(skip int, prfx string, vals ...interface{}) func(vals ...interface{})
 			}
 			rslt = traceJoin(true, vals)
 		}
-		log.Printf(form, prfx, name, args, rslt)
+		traceLogger.Printf(form, prfx, name, args, rslt)
 		if nil != rcvr {
 			panic(rcvr)
 		}

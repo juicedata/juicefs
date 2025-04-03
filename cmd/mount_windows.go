@@ -64,6 +64,10 @@ func mountFlags() []cli.Flag {
 			Name:  "show-dot-files",
 			Usage: "If set, dot files will not be treated as hidden files",
 		},
+		&cli.BoolFlag{
+			Name:  "case-sensitive",
+			Usage: "If set, the file system will be case sensitive",
+		},
 	}
 }
 
@@ -91,8 +95,12 @@ func getDaemonStage() int {
 }
 
 func mountMain(v *vfs.VFS, c *cli.Context) {
-	v.Conf.AccessLog = c.String("access-log")
-	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"), c.Bool("show-dot-files"))
+	acLog := c.String("access-log")
+	if acLog != "" {
+		winfsp.SetTraceOutput(acLog)
+	}
+
+	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"), c.Bool("show-dot-files"), c.Bool("case-sensitive"))
 }
 
 func checkMountpoint(name, mp, logPath string, background bool) {}
