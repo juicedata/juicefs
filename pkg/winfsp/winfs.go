@@ -727,7 +727,7 @@ func (j *juice) Chflags(path string, flags uint32) (e int) {
 	return
 }
 
-func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayClose int, showDotFiles bool) {
+func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, dirCacheTo float64, asRoot bool, delayClose int, showDotFiles bool, threadsCount int) {
 	var jfs juice
 	conf := v.Conf
 	jfs.conf = conf
@@ -742,8 +742,8 @@ func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayCl
 	host := fuse.NewFileSystemHost(&jfs)
 	jfs.host = host
 	var options = "volname=" + conf.Format.Name
-	options += ",ExactFileSystemName=JuiceFS,ThreadCount=16"
-	options += ",DirInfoTimeout=1000,VolumeInfoTimeout=1000,KeepFileCache"
+	options += fmt.Sprintf(",ExactFileSystemName=JuiceFS,ThreadCount=%d", threadsCount)
+	options += fmt.Sprintf(",DirInfoTimeout=%d,VolumeInfoTimeout=1000,KeepFileCache", int(dirCacheTo*1000))
 	options += fmt.Sprintf(",FileInfoTimeout=%d", int(fileCacheTo*1000))
 	options += ",VolumePrefix=/juicefs/" + conf.Format.Name
 	if asRoot {
