@@ -20,14 +20,17 @@ package chunk
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
@@ -380,4 +383,23 @@ func BenchmarkUncachedRead(b *testing.B) {
 			b.FailNow()
 		}
 	}
+}
+
+type dStore struct {
+	object.ObjectStorage
+	cnt int32
+}
+
+func (s *dStore) Get(key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+	atomic.AddInt32(&s.cnt, 1)
+	return nil, errors.New("not found")
+}
+
+func TestStoreRetry(t *testing.T) {
+	s := &dStore{}
+	cs := NewCachedStore(s, defaultConf, nil)
+	p := NewPage(nil)
+	defer p.Release()
+	cs.(*cachedStore).load("non", p, false, false) // wont retry
+	require.Equal(t, int32(1), s.cnt)
 }
