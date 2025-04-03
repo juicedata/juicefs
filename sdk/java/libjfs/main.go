@@ -1601,24 +1601,6 @@ func jfs_clone(pid int64, h int64, _src *C.char, _dst *C.char, preserve bool) in
 	return errno(err)
 }
 
-//export jfs_status
-func jfs_status(pid int64, h int64, trash bool, session uint64, p_buf **byte) int32 {
-	w := F(h)
-	if w == nil {
-		return EINVAL
-	}
-	ctx := w.withPid(pid)
-	res, err := w.Status(ctx, trash, session)
-	if err != nil {
-		logger.Errorf("status %s: %s", ctx, err)
-	}
-
-	*p_buf = (*byte)(C.malloc(C.size_t(len(res))))
-	buf := unsafe.Slice(*p_buf, len(res))
-
-	return int32(copy(buf, res))
-}
-
 //export jfs_lseek
 func jfs_lseek(pid int64, fd int32, offset int64, whence int64) int64 {
 	filesLock.Lock()

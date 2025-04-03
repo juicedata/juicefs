@@ -17,13 +17,11 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
+	"syscall"
+	"time"
 
-	"github.com/juicedata/juicefs/pkg/chunk"
-	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 
@@ -60,58 +58,107 @@ $ juicefs status redis://localhost`,
 	}
 }
 
-func printJson(data []byte) {
-	var out bytes.Buffer
-	if err := json.Indent(&out, data, "", "  "); err != nil {
-		logger.Fatalf("format JSON: %s", err)
-	}
-	formatted := out.Bytes()
-	fmt.Println(string(formatted))
+type sections struct {
+	Setting   *meta.Format
+	Sessions  []*meta.Session
+	Statistic *statistic
 }
 
-func initForStatus(c *cli.Context, metaUrl string) *fs.FileSystem {
-	metaConf := getMetaConf(c, "status", false)
-	m := meta.NewClient(metaUrl, metaConf)
-	format, err := m.Load(true)
-	if err != nil {
-		logger.Fatalf("load setting: %s", err)
-	}
-	if st := m.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
-		logger.Fatalf("Chroot to %s: %s", metaConf.Subdir, st)
-	}
+type statistic struct {
+	UsedSpace                uint64
+	AvailableSpace           uint64
+	UsedInodes               uint64
+	AvailableInodes          uint64
+	TrashFileCount           int64 `json:",omitempty"`
+	TrashFileSize            int64 `json:",omitempty"`
+	PendingDeletedFileCount  int64 `json:",omitempty"`
+	PendingDeletedFileSize   int64 `json:",omitempty"`
+	TrashSliceCount          int64 `json:",omitempty"`
+	TrashSliceSize           int64 `json:",omitempty"`
+	PendingDeletedSliceCount int64 `json:",omitempty"`
+	PendingDeletedSliceSize  int64 `json:",omitempty"`
+}
 
-	blob, err := NewReloadableStorage(format, m, updateFormat(c))
+func printJson(v interface{}) {
+	output, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		logger.Fatalf("object storage: %s", err)
+		logger.Fatalf("json: %s", err)
 	}
-
-	chunkConf := getChunkConf(c, format)
-	store := chunk.NewCachedStore(blob, *chunkConf, nil)
-	conf := getVfsConf(c, metaConf, format, chunkConf)
-	conf.AccessLog = c.String("access-log")
-	conf.AttrTimeout = utils.Duration(c.String("attr-cache"))
-	conf.EntryTimeout = utils.Duration(c.String("entry-cache"))
-	conf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
-	jfs, err := fs.NewFileSystem(conf, m, store)
-	if err != nil {
-		logger.Fatalf("initialize failed: %s", err)
-	}
-	return jfs
+	fmt.Println(string(output))
 }
 
 func status(ctx *cli.Context) error {
 	setup(ctx, 1)
-	metaUrl := ctx.Args().Get(0)
-	removePassword(metaUrl)
-
-	jfs := initForStatus(ctx, metaUrl)
-	sessionId := ctx.Uint64("session")
-	context := meta.NewContext(1, uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
-	output, err := jfs.Status(context, ctx.Bool("more"), sessionId)
+	removePassword(ctx.Args().Get(0))
+	m := meta.NewClient(ctx.Args().Get(0), nil)
+	format, err := m.Load(true)
 	if err != nil {
-		logger.Fatalf("status: %s", err)
+		logger.Fatalf("load setting: %s", err)
+	}
+	format.RemoveSecret()
+
+	if sid := ctx.Uint64("session"); sid != 0 {
+		s, err := m.GetSession(sid, true)
+		if err != nil {
+			logger.Fatalf("get session: %s", err)
+		}
+		printJson(s)
+		return nil
 	}
 
-	printJson(output)
+	sessions, err := m.ListSessions()
+	if err != nil {
+		logger.Fatalf("list sessions: %s", err)
+	}
+
+	stat := &statistic{}
+	var totalSpace uint64
+	if err = m.StatFS(meta.Background(), meta.RootInode, &totalSpace, &stat.AvailableSpace, &stat.UsedInodes, &stat.AvailableInodes); err != syscall.Errno(0) {
+		logger.Fatalf("stat fs: %s", err)
+	}
+	stat.UsedSpace = totalSpace - stat.AvailableSpace
+
+	if ctx.Bool("more") {
+		progress := utils.NewProgress(false)
+		trashFileSpinner := progress.AddDoubleSpinner("Trash Files")
+		pendingDeletedFileSpinner := progress.AddDoubleSpinner("Pending Deleted Files")
+		trashSlicesSpinner := progress.AddDoubleSpinner("Trash Slices")
+		pendingDeletedSlicesSpinner := progress.AddDoubleSpinner("Pending Deleted Slices")
+		err = m.ScanDeletedObject(
+			meta.WrapContext(ctx.Context),
+			func(ss []meta.Slice, _ int64) (bool, error) {
+				for _, s := range ss {
+					trashSlicesSpinner.IncrInt64(int64(s.Size))
+				}
+				return false, nil
+			},
+			func(_ uint64, size uint32) (bool, error) {
+				pendingDeletedSlicesSpinner.IncrInt64(int64(size))
+				return false, nil
+			},
+			func(_ meta.Ino, size uint64, _ time.Time) (bool, error) {
+				trashFileSpinner.IncrInt64(int64(size))
+				return false, nil
+			},
+			func(_ meta.Ino, size uint64, _ int64) (bool, error) {
+				pendingDeletedFileSpinner.IncrInt64(int64(size))
+				return false, nil
+			},
+		)
+		if err != nil {
+			logger.Fatalf("statistic: %s", err)
+		}
+		trashSlicesSpinner.Done()
+		pendingDeletedSlicesSpinner.Done()
+		trashFileSpinner.Done()
+		pendingDeletedFileSpinner.Done()
+		progress.Done()
+		stat.TrashSliceCount, stat.TrashSliceSize = trashSlicesSpinner.Current()
+		stat.PendingDeletedSliceCount, stat.PendingDeletedSliceSize = pendingDeletedSlicesSpinner.Current()
+		stat.TrashFileCount, stat.TrashFileSize = trashFileSpinner.Current()
+		stat.PendingDeletedFileCount, stat.PendingDeletedFileSize = pendingDeletedFileSpinner.Current()
+	}
+
+	printJson(&sections{format, sessions, stat})
 	return nil
 }

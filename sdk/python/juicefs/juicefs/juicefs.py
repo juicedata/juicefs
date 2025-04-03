@@ -390,13 +390,6 @@ class Client(object):
         return res
 
 
-    def status(self, trash = False, session = 0):
-        buf = c_void_p()
-        n = self.lib.jfs_status(c_int64(_tid()), c_int64(self.h), c_bool(trash), c_bool(session), byref(buf))
-        res = json.loads(str(string_at(buf, n), encoding='utf-8'))
-        self.lib.free(buf)
-        return res
-
 class File(object):
     """A JuiceFS file."""
     def __init__(self, lib, fd, path, mode, flag, length, buffering, encoding, errors):
