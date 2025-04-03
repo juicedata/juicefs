@@ -21,6 +21,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -50,7 +51,8 @@ $ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2`,
 			&cli.BoolFlag{
 				Name:    "preserve",
 				Aliases: []string{"p"},
-				Usage:   "preserve the uid, gid, and mode of the file"},
+				Usage:   "preserve the uid, gid, and mode of the file. (This is forced on Windows)",
+			},
 		},
 	}
 }
@@ -107,7 +109,7 @@ func clone(ctx *cli.Context) error {
 	}
 	var cmode uint8
 	umask := utils.GetUmask()
-	if ctx.Bool("preserve") {
+	if ctx.Bool("preserve") || runtime.GOOS == "windows" {
 		cmode |= meta.CLONE_MODE_PRESERVE_ATTR
 	}
 	headerSize := 4 + 4
