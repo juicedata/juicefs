@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -207,12 +208,22 @@ func (o *jObj) Mode() os.FileMode    { return o.fi.Mode() }
 func (o *jObj) StorageClass() string { return "" }
 
 func (j *juiceFS) Head(key string) (object.Object, error) {
-	fi, eno := j.jfs.Stat(ctx, j.path(key))
-	if eno == syscall.ENOENT {
-		return nil, os.ErrNotExist
+	errConv := func(eno syscall.Errno) error {
+		if errors.Is(eno, syscall.ENOENT) {
+			return os.ErrNotExist
+		} else {
+			return eno
+		}
 	}
+	fi, eno := j.jfs.Lstat(ctx, j.path(key))
 	if eno != 0 {
-		return nil, eno
+		return nil, errConv(eno)
+	}
+	if fi.IsSymlink() {
+		fi, eno = j.jfs.Stat(ctx, j.path(key))
+		if eno != 0 {
+			return nil, errConv(eno)
+		}
 	}
 	return &jObj{key, fi}, nil
 }

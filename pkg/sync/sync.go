@@ -1403,6 +1403,8 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 							failed.Increment()
 						}
 						continue
+					} else if errors.Is(err, isDirErr) {
+						key += "/"
 					}
 				}
 				logger.Debugf("start listing prefix %s", key)
@@ -1435,13 +1437,12 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 	return nil
 }
 
+var isDirErr = errors.New("is dir error")
+
 // fast path for single object copy
 func fastPath(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) (bool, error) {
 	obj, err := src.Head(key)
-	if err == nil {
-		if obj.IsDir() {
-			return false, err
-		}
+	if err == nil && (!obj.IsDir() || obj.IsSymlink() && config.Links) {
 		var srckeys = make(chan object.Object, 1)
 		srckeys <- obj
 		close(srckeys)
@@ -1456,8 +1457,9 @@ func fastPath(tasks chan<- object.Object, src, dst object.ObjectStorage, key str
 		} else {
 			logger.Warnf("head %s from %s: %s", key, dst, err)
 		}
-	} else if !os.IsNotExist(err) {
-		logger.Warnf("head %s from %s: %s", key, src, err)
+	}
+	if err == nil && obj.IsDir() {
+		return false, isDirErr
 	}
 	return false, err
 }
@@ -1469,6 +1471,8 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	if config.Limit == 1 && len(config.rules) == 0 {
 		if processed, err := fastPath(tasks, src, dst, prefix, config); processed {
 			return err
+		} else if errors.Is(err, isDirErr) {
+			prefix += "/"
 		}
 	}
 	if config.ListThreads <= 1 || listDepth <= 0 {
