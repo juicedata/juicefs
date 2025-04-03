@@ -39,8 +39,8 @@ func mountFlags() []cli.Flag {
 			Usage: "path of log file when running in background",
 		},
 		&cli.StringFlag{
-			Name:  "access-log",
-			Usage: "Access log file",
+			Name:  "fuse-trace-log",
+			Usage: "FUSE trace log file",
 		},
 		&cli.BoolFlag{
 			Name:  "as-root",
@@ -65,8 +65,9 @@ func mountFlags() []cli.Flag {
 			Usage: "If set, dot files will not be treated as hidden files",
 		},
 		&cli.BoolFlag{
-			Name:  "case-sensitive",
-			Usage: "If set, the file system will be case sensitive",
+			Name:   "case-sensitive",
+			Usage:  "If set, the file system will be case sensitive",
+			Hidden: true,
 		},
 	}
 }
@@ -95,9 +96,9 @@ func getDaemonStage() int {
 }
 
 func mountMain(v *vfs.VFS, c *cli.Context) {
-	acLog := c.String("access-log")
-	if acLog != "" {
-		winfsp.SetTraceOutput(acLog)
+	traceLog := c.String("fuse-trace-log")
+	if traceLog != "" {
+		winfsp.SetTraceOutput(traceLog)
 	}
 
 	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"), c.Bool("show-dot-files"), c.Bool("case-sensitive"))
