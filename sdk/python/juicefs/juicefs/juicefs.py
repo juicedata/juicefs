@@ -95,8 +95,8 @@ class Client(object):
                  writeback=False, buffer_size="300M", prefetch=1, max_readahead="0", upload_limit="0",
                  download_limit="0", max_uploads=20, max_deletes=10, skip_dir_nlink=20, skip_dir_mtime="100ms",
                  io_retries=10, get_timeout="5", put_timeout="60", fast_resolve=False, attr_cache="1s",
-                 entry_cache="0s", dir_entry_cache="1s", debug=False, no_usage_report=False, access_log="",
-                 push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite="", **kwargs):
+                 entry_cache="0s", dir_entry_cache="1s", debug=False, no_usage_report=False, no_agent=True, pyroscope="",
+                 access_log="", push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite="", **kwargs):
         self.lib = JuiceFSLib()
         kwargs["meta"] = meta
         kwargs["bucket"] = bucket
@@ -136,6 +136,8 @@ class Client(object):
         kwargs["dirEntryTimeout"] = dir_entry_cache
         kwargs["debug"] = debug
         kwargs["noUsageReport"] = no_usage_report
+        kwargs["noAgent"] = no_agent
+        kwargs["pyroscope"] = pyroscope
         kwargs["accessLog"] = access_log
         kwargs["pushGateway"] = push_gateway
         kwargs["pushInterval"] = push_interval
