@@ -641,7 +641,9 @@ func mount(c *cli.Context) error {
 	var metaCli meta.Meta
 	var blob object.ObjectStorage
 	metaConf := getMetaConf(c, mp, c.Bool("read-only") || utils.StringContains(strings.Split(c.String("o"), ","), "ro"))
-	metaConf.CaseInsensi = strings.HasSuffix(mp, ":") && runtime.GOOS == "windows"
+	if runtime.GOOS == "windows" {
+		metaConf.CaseInsensi = !c.Bool("case-sensitive")
+	}
 	// stage 0: check the connection to fail fast
 	// stage 2: need the volume name to check if it's already mounted
 	// stage 3: the real service process

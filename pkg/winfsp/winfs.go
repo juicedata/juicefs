@@ -727,7 +727,29 @@ func (j *juice) Chflags(path string, flags uint32) (e int) {
 	return
 }
 
-func Serve(v *vfs.VFS, fuseOpt string, fileCacheTimeoutSec float64, dirCacheTimeoutSec float64, asRoot bool, delayCloseSec int, showDotFiles bool, threadsCount int) {
+func (j *juice) Getpath(p string, fh uint64) (e int, ret string) {
+	defer trace(p, fh)(&e, &ret)
+	ino := j.h2i(&fh)
+	ctx := j.newContext()
+	if ino == 0 {
+		fi, err := j.fs.Stat(ctx, p)
+		if err != 0 {
+			e = errorconv(err)
+			return
+		}
+		ino = fi.Inode()
+	}
+
+	paths := j.vfs.Meta.GetPaths(ctx, ino)
+	if len(paths) == 0 {
+		ret = p
+		return
+	}
+	ret = path.Join(paths...)
+	return
+}
+
+func Serve(v *vfs.VFS, fuseOpt string, fileCacheTimeoutSec float64, dirCacheTimeoutSec float64, asRoot bool, delayCloseSec int, showDotFiles bool, threadsCount int, caseSensitive bool) {
 	var jfs juice
 	conf := v.Conf
 	jfs.conf = conf
@@ -755,7 +777,7 @@ func Serve(v *vfs.VFS, fuseOpt string, fileCacheTimeoutSec float64, dirCacheTime
 	if !showDotFiles {
 		options += ",dothidden"
 	}
-	host.SetCapCaseInsensitive(strings.HasSuffix(conf.Meta.MountPoint, ":"))
+	host.SetCapCaseInsensitive(!caseSensitive)
 	host.SetCapReaddirPlus(true)
 	logger.Debugf("mount point: %s, options: %s", conf.Meta.MountPoint, options)
 	_ = host.Mount(conf.Meta.MountPoint, []string{"-o", options})

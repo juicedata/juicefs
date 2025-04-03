@@ -67,6 +67,10 @@ func mountFlags() []cli.Flag {
 			Usage: "WinFsp threads count option, Default is min(cpu core * 2, 16)",
 			Value: min(runtime.NumCPU()*2, 16),
 		},
+		&cli.BoolFlag{
+			Name:  "case-sensitive",
+			Usage: "If set, the file system will be case sensitive",
+		},
 	}
 }
 
@@ -101,6 +105,12 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 	delayCloseTime := utils.Duration(c.String("delay-close"))
 
 	winfsp.Serve(v, c.String("o"), fileCacheTimeout.Seconds(), dirCacheTimeout.Seconds(), c.Bool("as-root"), int(delayCloseTime.Seconds()), c.Bool("show-dot-files"), c.Int("winfsp-threads"))
+	acLog := c.String("access-log")
+	if acLog != "" {
+		winfsp.SetTraceOutput(acLog)
+	}
+
+	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"), c.Bool("show-dot-files"), c.Bool("case-sensitive"))
 }
 
 func checkMountpoint(name, mp, logPath string, background bool) {}
