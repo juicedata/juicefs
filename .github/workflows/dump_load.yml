@@ -5,6 +5,7 @@ on:
       - 'main'
       - 'release-**'
     paths:
+      - '**/start_meta_engine.sh'
       - '**/dump_load.yml'
       - '**/dump_load.sh'
   pull_request:
@@ -12,6 +13,7 @@ on:
       - 'main'
       - 'release-**'
     paths:
+      - '**/start_meta_engine.sh'
       - '**/dump_load.yml'
       - '**/dump_load.sh'
   schedule:
@@ -35,7 +37,7 @@ jobs:
           if [ "${{github.event_name}}" == "schedule"  ] || [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
             echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
           else
-            echo 'meta_matrix=["redis", "sqlite3", "tikv"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["redis", "mysql", "tikv"]' >> $GITHUB_OUTPUT
           fi
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
