@@ -18,7 +18,6 @@ package vfs
 
 import (
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/chunk"
 	"path"
 	"strconv"
 	"strings"
@@ -27,8 +26,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/chunk"
+
 	"github.com/juicedata/juicefs/pkg/meta"
-	"golang.org/x/sync/errgroup"
 )
 
 type _file struct {
@@ -70,71 +70,85 @@ func NewCacheFiller(conf *Config, meta meta.Meta, store chunk.ChunkStore) *Cache
 	}
 }
 
-func (c *CacheFiller) Cache(ctx meta.Context, action CacheAction, paths []string, concurrent int, resp *CacheResponse) {
-	logger.Infof("start to %s %d paths with %d workers", action, len(paths), concurrent)
+type token struct{}
+
+func (c *CacheFiller) cacheFile(ctx meta.Context, action CacheAction, resp *CacheResponse, concurrent chan token, wg *sync.WaitGroup, f _file) {
+	concurrent <- token{}
+	wg.Add(1)
+	go func() {
+		defer func() {
+			<-concurrent
+			wg.Done()
+		}()
+
+		if f.ino == 0 {
+			logger.Warnf("%s got inode 0", action)
+			return
+		}
+
+		var handler sliceHandler
+		switch action {
+		case WarmupCache:
+			handler = func(s meta.Slice) error {
+				return c.store.FillCache(s.Id, s.Size)
+			}
+
+			if c.conf.Meta.OpenCache > 0 {
+				if err := c.meta.Open(ctx, f.ino, syscall.O_RDONLY, &meta.Attr{}); err != 0 {
+					logger.Errorf("Inode %d could be opened: %s", f.ino, err)
+				}
+				_ = c.meta.Close(ctx, f.ino)
+			}
+		case EvictCache:
+			handler = func(s meta.Slice) error {
+				return c.store.EvictCache(s.Id, s.Size)
+			}
+		case CheckCache:
+			blockHandler := func(exists bool, loc string, size int) {
+				if exists {
+					resp.Lock()
+					resp.Locations[loc] += uint64(size)
+					resp.Unlock()
+				} else {
+					atomic.AddUint64(&resp.MissBytes, uint64(size))
+				}
+			}
+			handler = func(s meta.Slice) error {
+				return c.store.CheckCache(s.Id, s.Size, blockHandler)
+			}
+		}
+
+		iter := newSliceIterator(ctx, c.meta, f.ino, f.size, resp)
+		err := iter.Iterate(handler, concurrent)
+		if err != nil {
+			logger.Errorf("%s error : %s", action, err)
+		}
+
+		atomic.AddUint64(&resp.FileCount, 1)
+	}()
+}
+
+func (c *CacheFiller) Cache(ctx meta.Context, action CacheAction, paths []string, threads int, resp *CacheResponse) {
+	logger.Infof("start to %s %d paths with %d workers", action, len(paths), threads)
 
 	if resp == nil {
 		resp = &CacheResponse{Locations: make(map[string]uint64)}
 	}
 	start := time.Now()
-	todo := make(chan _file, 10*concurrent)
+	todo := make(chan _file, 20*threads)
+
+	concurrent := make(chan token, threads)
 	wg := sync.WaitGroup{}
-	for i := 0; i < concurrent; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for f := range todo {
-				if ctx.Canceled() {
-					return
-				}
-
-				if f.ino == 0 {
-					logger.Warnf("%s got inode 0", action)
-					continue
-				}
-
-				var handler sliceHandler
-				switch action {
-				case WarmupCache:
-					handler = func(s meta.Slice) error {
-						return c.store.FillCache(s.Id, s.Size)
-					}
-
-					if c.conf.Meta.OpenCache > 0 {
-						if err := c.meta.Open(ctx, f.ino, syscall.O_RDONLY, &meta.Attr{}); err != 0 {
-							logger.Errorf("Inode %d could be opened: %s", f.ino, err)
-						}
-						_ = c.meta.Close(ctx, f.ino)
-					}
-				case EvictCache:
-					handler = func(s meta.Slice) error {
-						return c.store.EvictCache(s.Id, s.Size)
-					}
-				case CheckCache:
-					blockHandler := func(exists bool, loc string, size int) {
-						if exists {
-							resp.Lock()
-							resp.Locations[loc] += uint64(size)
-							resp.Unlock()
-						} else {
-							atomic.AddUint64(&resp.MissBytes, uint64(size))
-						}
-					}
-					handler = func(s meta.Slice) error {
-						return c.store.CheckCache(s.Id, s.Size, blockHandler)
-					}
-				}
-
-				iter := newSliceIterator(ctx, c.meta, f.ino, f.size, resp)
-				err := iter.Iterate(handler, concurrent)
-				if err != nil {
-					logger.Errorf("%s error : %s", action, err)
-				}
-
-				atomic.AddUint64(&resp.FileCount, 1)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for f := range todo {
+			if ctx.Canceled() {
+				return
 			}
-		}()
-	}
+			c.cacheFile(ctx, action, resp, concurrent, &wg, f)
+		}
+	}()
 
 	var inode Ino
 	var attr = &Attr{}
@@ -279,9 +293,13 @@ type sliceIterator struct {
 type sliceHandler func(s meta.Slice) error
 
 func (iter *sliceIterator) hasNext() bool {
+	if iter.err != nil {
+		logger.Error(iter.err)
+		iter.err = nil
+	}
+
 	if iter.ctx.Canceled() {
 		iter.err = iter.ctx.Err()
-		logger.Error(iter.err)
 		return false
 	}
 
@@ -309,28 +327,35 @@ func (iter *sliceIterator) next() meta.Slice {
 	return s
 }
 
-func (iter *sliceIterator) Iterate(handler sliceHandler, concurrent int) error {
+func (iter *sliceIterator) Iterate(handler sliceHandler, concurrent chan token) error {
 	if handler == nil {
 		return fmt.Errorf("handler not set")
 	}
-	var eg errgroup.Group
-	eg.SetLimit(concurrent)
+	var wg sync.WaitGroup
 	for iter.hasNext() {
 		s := iter.next()
 		atomic.AddUint64(&iter.stat.SliceCount, 1)
 		atomic.AddUint64(&iter.stat.TotalBytes, uint64(s.Size))
-		eg.Go(func() error {
+
+		select {
+		case concurrent <- token{}:
+			wg.Add(1)
+			go func() {
+				defer func() {
+					<-concurrent
+					wg.Done()
+				}()
+				if err := handler(s); err != nil {
+					iter.err = fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
+				}
+			}()
+		default:
 			if err := handler(s); err != nil {
-				err = fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
-				logger.Error(err)
-				return err
+				iter.err = fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
 			}
-			return nil
-		})
+		}
 	}
-	if err := eg.Wait(); err != nil {
-		iter.err = err
-	}
+	wg.Wait()
 	return iter.err
 }
 
