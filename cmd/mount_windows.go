@@ -41,8 +41,8 @@ func mountFlags() []cli.Flag {
 			Usage: "path of log file when running in background",
 		},
 		&cli.StringFlag{
-			Name:  "access-log",
-			Usage: "Access log file",
+			Name:  "fuse-trace-log",
+			Usage: "FUSE trace log file",
 		},
 		&cli.BoolFlag{
 			Name:  "as-root",
@@ -68,8 +68,9 @@ func mountFlags() []cli.Flag {
 			Value: min(runtime.NumCPU()*2, 16),
 		},
 		&cli.BoolFlag{
-			Name:  "case-sensitive",
-			Usage: "If set, the file system will be case sensitive",
+			Name:   "case-sensitive",
+			Usage:  "If set, the file system will be case sensitive",
+			Hidden: true,
 		},
 	}
 }
@@ -104,13 +105,12 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 	dirCacheTimeout := utils.Duration(c.String("dir-entry-cache"))
 	delayCloseTime := utils.Duration(c.String("delay-close"))
 
-	winfsp.Serve(v, c.String("o"), fileCacheTimeout.Seconds(), dirCacheTimeout.Seconds(), c.Bool("as-root"), int(delayCloseTime.Seconds()), c.Bool("show-dot-files"), c.Int("winfsp-threads"))
-	acLog := c.String("access-log")
-	if acLog != "" {
-		winfsp.SetTraceOutput(acLog)
+	traceLog := c.String("fuse-trace-log")
+	if traceLog != "" {
+		winfsp.SetTraceOutput(traceLog)
 	}
 
-	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"), c.Bool("show-dot-files"), c.Bool("case-sensitive"))
+	winfsp.Serve(v, c.String("o"), fileCacheTimeout.Seconds(), dirCacheTimeout.Seconds(), c.Bool("as-root"), int(delayCloseTime.Seconds()), c.Bool("show-dot-files"), c.Int("winfsp-threads"), c.Bool("case-sensitive"))
 }
 
 func checkMountpoint(name, mp, logPath string, background bool) {}
