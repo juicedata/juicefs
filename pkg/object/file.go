@@ -76,11 +76,18 @@ func (d *filestore) path(key string) string {
 
 func (d *filestore) Head(key string) (Object, error) {
 	p := d.path(key)
-	fi, err := os.Stat(p)
+	fi, err := os.Lstat(p)
 	if err != nil {
 		return nil, err
 	}
-	return toFile(key, fi, false, getOwnerGroup), nil
+	isSymlink := fi.Mode()&os.ModeSymlink != 0
+	if isSymlink {
+		fi, err = os.Stat(p)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return toFile(key, fi, isSymlink, getOwnerGroup), nil
 }
 
 func toFile(key string, fi fs.FileInfo, isSymlink bool, ownerGetter func(fs.FileInfo) (string, string)) *file {

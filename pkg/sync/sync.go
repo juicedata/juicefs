@@ -1396,6 +1396,17 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 		go func() {
 			defer wg.Done()
 			for key := range prefixs {
+				if !strings.HasSuffix(key, "/") {
+					if processed, err := fastPath(tasks, src, dst, key, config); processed {
+						if err != nil {
+							logger.Errorf("failed to process single key:%s: %s", key, err)
+							failed.Increment()
+						}
+						continue
+					} else if errors.Is(err, isDirErr) {
+						key += "/"
+					}
+				}
 				logger.Debugf("start listing prefix %s", key)
 				err = startProducer(tasks, src, dst, key, config.ListDepth, config)
 				if err != nil {
@@ -1426,31 +1437,42 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 	return nil
 }
 
+var isDirErr = errors.New("is dir error")
+
+// fast path for single object copy
+func fastPath(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) (bool, error) {
+	obj, err := src.Head(key)
+	if err == nil && (!obj.IsDir() || obj.IsSymlink() && config.Links) {
+		var srckeys = make(chan object.Object, 1)
+		srckeys <- obj
+		close(srckeys)
+		var dstkeys = make(chan object.Object, 1)
+		if dobj, err := dst.Head(key); err == nil || os.IsNotExist(err) {
+			if dobj != nil {
+				dstkeys <- dobj
+			}
+			close(dstkeys)
+			logger.Debugf("produce single key %s", key)
+			return true, produce(tasks, srckeys, dstkeys, config)
+		} else {
+			logger.Warnf("head %s from %s: %s", key, dst, err)
+		}
+	}
+	if err == nil && obj.IsDir() {
+		return false, isDirErr
+	}
+	return false, err
+}
 func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config) error {
 	config.concurrentList <- 1
 	defer func() {
 		<-config.concurrentList
 	}()
 	if config.Limit == 1 && len(config.rules) == 0 {
-		// fast path for single key
-		obj, err := src.Head(config.Start)
-		if err == nil && (!obj.IsDir() || config.Dirs) {
-			var srckeys = make(chan object.Object, 1)
-			srckeys <- obj
-			close(srckeys)
-			var dstkeys = make(chan object.Object, 1)
-			if dobj, err := dst.Head(config.Start); err == nil || os.IsNotExist(err) {
-				if dobj != nil {
-					dstkeys <- dobj
-				}
-				close(dstkeys)
-				logger.Debugf("produce single key %s", config.Start)
-				return produce(tasks, srckeys, dstkeys, config)
-			} else {
-				logger.Warnf("head %s from %s: %s", config.Start, dst, err)
-			}
-		} else if err != nil && !os.IsNotExist(err) {
-			logger.Warnf("head %s from %s: %s", config.Start, src, err)
+		if processed, err := fastPath(tasks, src, dst, prefix, config); processed {
+			return err
+		} else if errors.Is(err, isDirErr) {
+			prefix += "/"
 		}
 	}
 	if config.ListThreads <= 1 || listDepth <= 0 {
