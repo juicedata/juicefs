@@ -1438,7 +1438,10 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 // fast path for single object copy
 func fastPath(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) (bool, error) {
 	obj, err := src.Head(key)
-	if err == nil && (!obj.IsDir() || config.Dirs) {
+	if err == nil {
+		if obj.IsDir() {
+			return false, err
+		}
 		var srckeys = make(chan object.Object, 1)
 		srckeys <- obj
 		close(srckeys)
@@ -1453,7 +1456,7 @@ func fastPath(tasks chan<- object.Object, src, dst object.ObjectStorage, key str
 		} else {
 			logger.Warnf("head %s from %s: %s", key, dst, err)
 		}
-	} else if err != nil && !os.IsNotExist(err) {
+	} else if !os.IsNotExist(err) {
 		logger.Warnf("head %s from %s: %s", key, src, err)
 	}
 	return false, err
