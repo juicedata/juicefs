@@ -26,6 +26,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -382,4 +383,48 @@ func TestAtimeNotLost(t *testing.T) {
 	if atimeAfterScan != atimeMem {
 		t.Fatalf("CacheStore key %s atime lost after scan, before: %d, after: %d", key, atimeMem, atimeAfterScan)
 	}
+}
+
+func TestDiskCacheExpirationAndEviction(t *testing.T) {
+	cacheDataDir := filepath.Join(t.TempDir(), "cache")
+	conf := defaultConf
+	conf.CacheExpire = 2 * time.Second
+	conf.CacheDir = cacheDataDir
+	conf.CacheSize = 11 << 20
+	conf.AutoCreate = true
+	cacheStore := newCacheManager(&conf, nil, nil)
+
+	// Cache capcity could not satisfy 3 blocks, this would trigger eviction
+	numBlocks := 3
+	keys := make([]string, numBlocks)
+	testData := make([]byte, 4<<20)
+	for i := 0; i < numBlocks; i++ {
+		keys[i] = fmt.Sprintf("%d_0_%d", i, len(testData))
+		cacheStore.cache(keys[i], NewPage(testData), true, false)
+	}
+
+	// Wait for the cache to be flushed
+	time.Sleep(1 * time.Second)
+
+	// Verify one block is evicted
+	numEvicted := 0
+	for _, key := range keys {
+		if _, err := os.Stat(filepath.Join(cacheDataDir, cacheDir, key)); os.IsNotExist(err) {
+			numEvicted++
+		}
+	}
+	currentKeys, _ := cacheStore.stats()
+	assert.Equal(t, 1, numEvicted, "One cache entry should be evicted due to size limit")
+	assert.Equal(t, numBlocks-1, int(currentKeys), "Cache should have 2 entries left")
+
+	// Wait for cleanupExpire to remove the expired blocks
+	time.Sleep(conf.CacheExpire + 2*time.Second)
+
+	// Verify all blocks are expired
+	for _, key := range keys {
+		_, err := os.Stat(filepath.Join(cacheDataDir, cacheDir, key))
+		assert.True(t, os.IsNotExist(err), "Cache file should be removed after expiration or eviction")
+	}
+	currentKeys, _ = cacheStore.stats()
+	assert.Equal(t, 0, int(currentKeys), "Cache should be empty after expiration")
 }

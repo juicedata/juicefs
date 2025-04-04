@@ -367,7 +367,7 @@ func (cache *cacheStore) cleanupExpire() {
 			if !cache.available() {
 				break
 			}
-			_ = cache.removeFile(cache.cachePath(cache.getPathFromKey(k)))
+			_ = cache.removeFile(cache.cachePath(k.String()))
 		}
 		todel = todel[:0]
 		time.Sleep(interval * time.Duration((cnt+1-deleted)/(cnt+1)))
@@ -841,7 +841,7 @@ func (cache *cacheStore) cleanupFull() {
 		if !cache.available() {
 			break
 		}
-		_ = cache.removeFile(cache.cachePath(cache.getPathFromKey(k)))
+		_ = cache.removeFile(cache.cachePath(k.String()))
 	}
 	cache.Lock()
 }
