@@ -24,6 +24,11 @@ install_tikv(){
     [[ ! -d tcli ]] && git clone https://github.com/c4pt0r/tcli
     make -C tcli && sudo cp tcli/bin/tcli /usr/local/bin
     # retry because of: https://github.com/pingcap/tiup/issues/2057
+    echo 'head -1' > /tmp/head.txt
+    if lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt; then
+        echo "TiKV is already running and healthy"
+        return 0
+    fi
     user=$(whoami)
     echo user is $user
     if [[ "$user" == "root" ]]; then
