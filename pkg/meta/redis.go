@@ -1732,7 +1732,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		dbuf, err := tx.HGet(ctx, m.entryKey(parentDst), nameDst).Bytes()
 		if err == redis.Nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
-				if parentDst != parentSrc || !strings.EqualFold(nameDst, nameSrc) {
+				if e.Inode != ino {
 					nameDst = string(e.Name)
 					dbuf = m.packEntry(e.Attr.Typ, e.Inode)
 					err = nil
@@ -1762,11 +1762,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		}
 		if dino > 0 {
 			if ino == dino {
-				if m.conf.CaseInsensi && nameSrc != nameDst {
-					dino = 0
-				} else {
-					return errno(nil)
-				}
+				return errno(nil)
 			}
 			if exchange {
 			} else if typ == TypeDirectory && dtyp != TypeDirectory {

@@ -1561,8 +1561,10 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		dbuf := tx.get(m.entryKey(parentDst, nameDst))
 		if dbuf == nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
-				nameDst = string(e.Name)
-				dbuf = m.packEntry(e.Attr.Typ, e.Inode)
+				if e.Inode != ino {
+					nameDst = string(e.Name)
+					dbuf = m.packEntry(e.Attr.Typ, e.Inode)
+				}
 			}
 		}
 		var supdate, dupdate bool
@@ -1599,7 +1601,11 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					}
 				}
 			} else if dino == ino {
-				return nil
+				if m.conf.CaseInsensi && nameSrc != nameDst {
+					dino = 0
+				} else {
+					return nil
+				}
 			} else if typ == TypeDirectory && dtyp != TypeDirectory {
 				return syscall.ENOTDIR
 			} else if typ != TypeDirectory && dtyp == TypeDirectory {

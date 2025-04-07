@@ -2132,10 +2132,12 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 		if !ok && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
-				ok = true
-				de.Inode = e.Inode
-				de.Type = e.Attr.Typ
-				de.Name = e.Name
+				if e.Inode != se.Inode {
+					ok = true
+					de.Inode = e.Inode
+					de.Type = e.Attr.Typ
+					de.Name = e.Name
+				}
 			}
 		}
 		var supdate, dupdate bool
