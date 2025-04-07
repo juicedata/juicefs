@@ -390,6 +390,21 @@ class Client(object):
         return res
 
 
+    def status(self, trash = False, session = 0):
+        buf = c_void_p()
+        try:
+            n = self.lib.jfs_status(c_int64(_tid()), c_int64(self.h), c_bool(trash), c_bool(session), byref(buf))
+        except OSError as e:
+            if e.errno == errno.ENOMEM:
+                buf = None
+            if buf is not None:
+                self.lib.free(buf)
+            err_msg = os.strerror(-n) if os.name == 'posix' else f"Error code: {n}"
+            raise OSError(-n, f"jfs_status failed: {err_msg}")
+        res = json.loads(str(string_at(buf, n), encoding='utf-8'))
+        self.lib.free(buf)
+        return res
+
 class File(object):
     """A JuiceFS file."""
     def __init__(self, lib, fd, path, mode, flag, length, buffering, encoding, errors):

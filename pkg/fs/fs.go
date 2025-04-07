@@ -19,6 +19,7 @@ package fs
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -989,6 +990,38 @@ func (fs *FileSystem) Close() error {
 		close(buffer)
 	}
 	return nil
+}
+
+func (fs *FileSystem) Status(ctx meta.Context, trash bool, sessionId uint64) ([]byte, error) {
+	var err error
+	var output []byte
+	defer trace.StartRegion(context.TODO(), "fs.Status").End()
+	l := vfs.NewLogContext(ctx)
+	defer func() {
+		fs.log(l, "Status (%t): %s", trash, errstr(err))
+	}()
+
+	if sessionId != 0 {
+		s, err := fs.m.GetSession(sessionId, true)
+		if err != nil {
+			return nil, fmt.Errorf("get session: %v", err)
+		}
+		output, err = json.Marshal(s)
+		if err != nil {
+			return nil, fmt.Errorf("marshal session: %v", err)
+		}
+	} else {
+		sections := &meta.Sections{}
+		err = meta.Status(ctx, fs.m, trash, sections)
+		if err != nil {
+			logger.Fatalf("get status: %s", err)
+		}
+		output, err = json.Marshal(sections)
+		if err != nil {
+			return nil, fmt.Errorf("marshal session: %v", err)
+		}
+	}
+	return output, nil
 }
 
 func (fs *FileSystem) Clone(ctx meta.Context, src, dst string, preserve bool) (err syscall.Errno) {

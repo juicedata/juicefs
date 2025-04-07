@@ -19,11 +19,8 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"syscall"
-	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
-	"github.com/juicedata/juicefs/pkg/utils"
 
 	"github.com/urfave/cli/v2"
 )
@@ -36,13 +33,13 @@ func cmdStatus() *cli.Command {
 		Usage:     "Show status of a volume",
 		ArgsUsage: "META-URL",
 		Description: `
-It shows basic setting of the target volume, and a list of active sessions (including mount, SDK,
-S3-gateway and WebDAV) that are connected with the metadata engine.
-
-NOTE: Read-only session is not listed since it cannot register itself in the metadata.
-
-Examples:
-$ juicefs status redis://localhost`,
+ It shows basic setting of the target volume, and a list of active sessions (including mount, SDK,
+ S3-gateway and WebDAV) that are connected with the metadata engine.
+ 
+ NOTE: Read-only session is not listed since it cannot register itself in the metadata.
+ 
+ Examples:
+ $ juicefs status redis://localhost`,
 		Flags: []cli.Flag{
 			&cli.Uint64Flag{
 				Name:    "session",
@@ -58,107 +55,39 @@ $ juicefs status redis://localhost`,
 	}
 }
 
-type sections struct {
-	Setting   *meta.Format
-	Sessions  []*meta.Session
-	Statistic *statistic
-}
-
-type statistic struct {
-	UsedSpace                uint64
-	AvailableSpace           uint64
-	UsedInodes               uint64
-	AvailableInodes          uint64
-	TrashFileCount           int64 `json:",omitempty"`
-	TrashFileSize            int64 `json:",omitempty"`
-	PendingDeletedFileCount  int64 `json:",omitempty"`
-	PendingDeletedFileSize   int64 `json:",omitempty"`
-	TrashSliceCount          int64 `json:",omitempty"`
-	TrashSliceSize           int64 `json:",omitempty"`
-	PendingDeletedSliceCount int64 `json:",omitempty"`
-	PendingDeletedSliceSize  int64 `json:",omitempty"`
-}
-
-func printJson(v interface{}) {
-	output, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		logger.Fatalf("json: %s", err)
-	}
-	fmt.Println(string(output))
-}
-
 func status(ctx *cli.Context) error {
+	var output []byte
+	var err error
+
 	setup(ctx, 1)
-	removePassword(ctx.Args().Get(0))
-	m := meta.NewClient(ctx.Args().Get(0), nil)
-	format, err := m.Load(true)
-	if err != nil {
-		logger.Fatalf("load setting: %s", err)
-	}
-	format.RemoveSecret()
+	metaUrl := ctx.Args().Get(0)
+	removePassword(metaUrl)
+	m := meta.NewClient(metaUrl, nil)
+	sessionId := ctx.Uint64("session")
 
-	if sid := ctx.Uint64("session"); sid != 0 {
-		s, err := m.GetSession(sid, true)
+	if sessionId != 0 {
+		s, err := m.GetSession(sessionId, true)
 		if err != nil {
-			logger.Fatalf("get session: %s", err)
+			logger.Fatalf("get session: %v", err)
 		}
-		printJson(s)
-		return nil
-	}
-
-	sessions, err := m.ListSessions()
-	if err != nil {
-		logger.Fatalf("list sessions: %s", err)
-	}
-
-	stat := &statistic{}
-	var totalSpace uint64
-	if err = m.StatFS(meta.Background(), meta.RootInode, &totalSpace, &stat.AvailableSpace, &stat.UsedInodes, &stat.AvailableInodes); err != syscall.Errno(0) {
-		logger.Fatalf("stat fs: %s", err)
-	}
-	stat.UsedSpace = totalSpace - stat.AvailableSpace
-
-	if ctx.Bool("more") {
-		progress := utils.NewProgress(false)
-		trashFileSpinner := progress.AddDoubleSpinner("Trash Files")
-		pendingDeletedFileSpinner := progress.AddDoubleSpinner("Pending Deleted Files")
-		trashSlicesSpinner := progress.AddDoubleSpinner("Trash Slices")
-		pendingDeletedSlicesSpinner := progress.AddDoubleSpinner("Pending Deleted Slices")
-		err = m.ScanDeletedObject(
-			meta.WrapContext(ctx.Context),
-			func(ss []meta.Slice, _ int64) (bool, error) {
-				for _, s := range ss {
-					trashSlicesSpinner.IncrInt64(int64(s.Size))
-				}
-				return false, nil
-			},
-			func(_ uint64, size uint32) (bool, error) {
-				pendingDeletedSlicesSpinner.IncrInt64(int64(size))
-				return false, nil
-			},
-			func(_ meta.Ino, size uint64, _ time.Time) (bool, error) {
-				trashFileSpinner.IncrInt64(int64(size))
-				return false, nil
-			},
-			func(_ meta.Ino, size uint64, _ int64) (bool, error) {
-				pendingDeletedFileSpinner.IncrInt64(int64(size))
-				return false, nil
-			},
-		)
+		output, err = json.MarshalIndent(s, "", " ")
 		if err != nil {
-			logger.Fatalf("statistic: %s", err)
+			logger.Fatalf("marshal session: %v", err)
 		}
-		trashSlicesSpinner.Done()
-		pendingDeletedSlicesSpinner.Done()
-		trashFileSpinner.Done()
-		pendingDeletedFileSpinner.Done()
-		progress.Done()
-		stat.TrashSliceCount, stat.TrashSliceSize = trashSlicesSpinner.Current()
-		stat.PendingDeletedSliceCount, stat.PendingDeletedSliceSize = pendingDeletedSlicesSpinner.Current()
-		stat.TrashFileCount, stat.TrashFileSize = trashFileSpinner.Current()
-		stat.PendingDeletedFileCount, stat.PendingDeletedFileSize = pendingDeletedFileSpinner.Current()
+	} else {
+
+		sections := &meta.Sections{}
+		err = meta.Status(ctx.Context, m, ctx.Bool("more"), sections)
+		if err != nil {
+			logger.Fatalf("get status: %s", err)
+		}
+
+		output, err = json.MarshalIndent(sections, "", " ")
+		if err != nil {
+			logger.Fatalf("marshal status: %s", err)
+		}
 	}
 
-	printJson(&sections{format, sessions, stat})
+	fmt.Println(string(output))
 	return nil
 }
