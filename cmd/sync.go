@@ -165,7 +165,7 @@ func selectionFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "files-from",
-			Usage: "generate the list of files or dirs to sync from FILE",
+			Usage: "read list of files or dirs to sync from FILE",
 		},
 	})
 }
