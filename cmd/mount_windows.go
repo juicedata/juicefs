@@ -23,6 +23,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/juicedata/juicefs/pkg/winfsp"
 	"github.com/urfave/cli/v2"
@@ -47,14 +48,10 @@ func mountFlags() []cli.Flag {
 			Name:  "as-root",
 			Usage: "Access files as administrator",
 		},
-		&cli.Float64Flag{
-			Name:  "file-cache-to",
-			Value: 0.1,
-			Usage: "Cache file attributes in seconds",
-		},
-		&cli.Float64Flag{
+		&cli.StringFlag{
 			Name:  "delay-close",
-			Usage: "delay file closing in seconds.",
+			Usage: "delay file closing duration",
+			Value: "0s",
 		},
 		&cli.BoolFlag{
 			Name:    "d",
@@ -69,11 +66,6 @@ func mountFlags() []cli.Flag {
 			Name:  "winfsp-threads",
 			Usage: "WinFsp threads count option, Default is min(cpu core * 2, 16)",
 			Value: min(runtime.NumCPU()*2, 16),
-		},
-		&cli.Float64Flag{
-			Name:  "dirinfo-cache-to",
-			Usage: "Dir information timeout in seconds",
-			Value: 1,
 		},
 	}
 }
@@ -104,7 +96,11 @@ func getDaemonStage() int {
 func mountMain(v *vfs.VFS, c *cli.Context) {
 	v.Conf.AccessLog = c.String("access-log")
 
-	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Float64("dirinfo-cache-to"), c.Bool("as-root"), c.Int("delay-close"), c.Bool("show-dot-files"), c.Int("winfsp-threads"))
+	fileCacheTimeout := utils.Duration(c.String("entry-cache"))
+	dirCacheTimeout := utils.Duration(c.String("dir-entry-cache"))
+	delayCloseTime := utils.Duration(c.String("delay-close"))
+
+	winfsp.Serve(v, c.String("o"), fileCacheTimeout.Seconds(), dirCacheTimeout.Seconds(), c.Bool("as-root"), int(delayCloseTime.Seconds()), c.Bool("show-dot-files"), c.Int("winfsp-threads"))
 }
 
 func checkMountpoint(name, mp, logPath string, background bool) {}
