@@ -18,6 +18,7 @@ package object
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -198,6 +199,14 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		if fi, err := s.Head("bb/b1"); err != nil || !fi.IsSymlink() || fi.Size() != 10 {
 			t.Fatalf("haed of symlink: err=%s, size=%d isSymlink=%v", err, fi.Size(), fi.IsSymlink())
 		}
+		err = ss.Symlink("../notExist", "bb/brokenLink")
+		if err != nil {
+			t.Fatalf("symlink: %s", err)
+		}
+		if _, err := s.Head("bb/brokenLink"); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("head broken symlink: err=%s, should be os.ErrNotExist", err)
+		}
+		_ = s.Delete("bb/brokenLink")
 		if err = ss.Symlink("xyz/ol1/", "a"); err != nil {
 			t.Fatalf("symlink: a: %s", err)
 		}

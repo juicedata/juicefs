@@ -330,34 +330,31 @@ func (f *sftpStore) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (f *sftpStore) sortByName(path string, fis []os.FileInfo, followLink bool) ([]Object, error) {
-	var obs = make([]Object, 0, len(fis))
-	for _, fi := range fis {
-		p := path + fi.Name()
-		var o Object
-		var err error
-		var isSymlink bool
-		if !fi.Mode().IsRegular() && followLink {
-			isSymlink = true
-			o, err = f.Head(p)
+func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo, followLink bool) []*mEntry {
+	mEntries := make([]*mEntry, len(fis))
+	for i, e := range fis {
+		isSymlink := e.Mode()&os.ModeSymlink != 0
+		if e.IsDir() {
+			mEntries[i] = &mEntry{e, e.Name() + dirSuffix, nil, false}
+		} else if isSymlink && followLink {
+			var fi os.FileInfo
+			p := path + e.Name()
+			fi, err := c.Stat(p)
 			if err != nil {
-				return nil, err
+				mEntries[i] = &mEntry{e, e.Name(), nil, true}
+				continue
 			}
-		}
-		if strings.HasPrefix(p, f.root) {
-			if isSymlink {
-				if f2, ok := o.(*file); ok {
-					f2.key = p[len(f.root):]
-					obs = append(obs, f2)
-				}
+			name := e.Name()
+			if fi.IsDir() {
+				name = e.Name() + dirSuffix
 			}
-
-			key := p[len(f.root):]
-			obs = append(obs, f.fileInfo(key, fi, false))
+			mEntries[i] = &mEntry{e, name, fi, false}
+		} else {
+			mEntries[i] = &mEntry{e, e.Name(), nil, isSymlink}
 		}
 	}
-	sort.Slice(obs, func(i, j int) bool { return obs[i].Key() < obs[j].Key() })
-	return obs, nil
+	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
+	return mEntries
 }
 
 func (f *sftpStore) fileInfo(key string, fi os.FileInfo, isSymlink bool) Object {
@@ -418,17 +415,22 @@ func (f *sftpStore) List(prefix, marker, token, delimiter string, limit int64, f
 		return nil, false, "", err
 	}
 
-	var entries []Object
-	entries, err = f.sortByName(dir, infos, followLink)
-	if err != nil {
-		return nil, false, "", err
-	}
-	for _, o := range entries {
-		key := o.Key()
+	entries := f.sortByName(c.sftpClient, dir, infos, followLink)
+	for _, e := range entries {
+		p := path.Join(dir, e.Name())
+		if e.IsDir() {
+			p = p + "/"
+		}
+		if !strings.HasPrefix(p, f.root) {
+			continue
+		}
+		key := p[len(f.root):]
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
-		objs = append(objs, o)
+		info := e.Info()
+		f := toFile(key, info, e.isSymlink, getOwnerGroup)
+		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break
 		}

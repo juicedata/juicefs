@@ -243,7 +243,7 @@ func (n *nfsStore) Delete(key string, getters ...AttrGetter) error {
 
 func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
 	owner, group := n.getOwnerGroup(fi)
-	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
+	isSymlink := fi.Mode()&os.ModeSymlink != 0
 	ff := &file{
 		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
 		owner,

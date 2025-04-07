@@ -254,9 +254,10 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 
 	mEntries := make([]*mEntry, len(entries))
 	for i, e := range entries {
+		isSymlink := e.Mode()&os.ModeSymlink != 0
 		if e.IsDir() {
 			mEntries[i] = &mEntry{e, e.Name() + dirSuffix, nil, false}
-		} else if !e.Mode().IsRegular() && followLink {
+		} else if isSymlink && followLink {
 			fi, err := os.Stat(filepath.Join(dir, e.Name()))
 			if err != nil {
 				mEntries[i] = &mEntry{e, e.Name(), nil, true}
@@ -268,7 +269,7 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 			}
 			mEntries[i] = &mEntry{e, name, fi, false}
 		} else {
-			mEntries[i] = &mEntry{e, e.Name(), nil, !e.Mode().IsRegular()}
+			mEntries[i] = &mEntry{e, e.Name(), nil, isSymlink}
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
