@@ -195,8 +195,8 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		} else if target != "../b0" {
 			t.Fatalf("target should be ../b0, but got %s", target)
 		}
-		if fi, err := s.Head("bb/b1"); err != nil || fi.Size() != 10 {
-			t.Fatalf("size of symlink: %s, %d != %d", err, fi.Size(), 10)
+		if fi, err := s.Head("bb/b1"); err != nil || !fi.IsSymlink() || fi.Size() != 10 {
+			t.Fatalf("haed of symlink: err=%s, size=%d isSymlink=%v", err, fi.Size(), fi.IsSymlink())
 		}
 		if err = ss.Symlink("xyz/ol1/", "a"); err != nil {
 			t.Fatalf("symlink: a: %s", err)

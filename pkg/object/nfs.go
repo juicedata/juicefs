@@ -106,7 +106,14 @@ func (n *nfsStore) Head(key string) (Object, error) {
 			return nil, err
 		}
 		dir, _ := path.Split(p)
-		return n.Head(path.Join(dir, src))
+		ff, err := n.Head(path.Join(dir, src))
+		if err != nil {
+			return nil, err
+		}
+		if f2, ok := ff.(*file); ok {
+			f2.isSymlink = true
+		}
+		return ff, nil
 	}
 	return n.fileInfo(key, fi), nil
 }
