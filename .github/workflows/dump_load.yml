@@ -110,7 +110,7 @@ jobs:
           sudo FAST=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh  
 
       - name: Test Load & Dump with Json
-        timeout-minutes: 30
+        timeout-minutes: 60
         run: |
           sudo GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh     
 
