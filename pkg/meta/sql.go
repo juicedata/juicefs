@@ -3842,21 +3842,23 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 	conds := make([]*sync.Cond, threads)
 	ready := make([]bool, threads)
 	var err error
+	var threadErr error
 	for c := 0; c < threads; c++ {
 		conds[c] = sync.NewCond(&ms[c])
 		if c < len(entries) {
 			go func(c int) {
+				lastIdx := c
 				_ = m.roTxn(Background(), func(s *xorm.Session) error {
-					for i := c; i < len(entries) && err == nil; i += threads {
-						e := entries[i]
+					for ; lastIdx < len(entries) && threadErr == nil; lastIdx += threads {
+						e := entries[lastIdx]
 						er := m.dumpEntry(s, e.Attr.Inode, 0, e, showProgress)
 						ms[c].Lock()
 						ready[c] = true
 						if er != nil {
-							err = er
+							threadErr = er
 						}
 						conds[c].Signal()
-						for ready[c] && err == nil {
+						for ready[c] && threadErr == nil {
 							conds[c].Wait()
 						}
 						ms[c].Unlock()
@@ -3870,13 +3872,13 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 	for i, e := range entries {
 		c := i % threads
 		ms[c].Lock()
-		for !ready[c] && err == nil {
+		for !ready[c] && threadErr == nil {
 			conds[c].Wait()
 		}
 		ready[c] = false
 		conds[c].Signal()
 		ms[c].Unlock()
-		if err != nil {
+		if threadErr != nil {
 			return err
 		}
 		if e.Attr.Type == "directory" {
