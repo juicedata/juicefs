@@ -218,7 +218,7 @@ class Client(object):
                     raise FileNotFoundError(e)
                 fd = self.lib.jfs_create(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint16(0o666), c_uint16(self.umask))
         f = File(self.lib, fd, path, mode, flag, size, buffering)
-        if 't' in mode:
+        if 'b' not in mode:
             f = io.TextIOBase(f, encoding=encoding, errors=errors)
         return f
 
