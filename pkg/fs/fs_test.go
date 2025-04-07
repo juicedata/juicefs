@@ -28,6 +28,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // mutate_test_job_number: 5
@@ -269,6 +270,83 @@ func TestFileSystem(t *testing.T) {
 	}
 }
 
+func TestMemoryBufferMetrics(t *testing.T) {
+	fs := createTestFS(t)
+	registry := prometheus.NewRegistry()
+	fs.InitMetrics(registry)
+	expectedMetrics := []string{
+		"used_buffer_size_bytes",
+		"store_cache_size_bytes",
+		"used_read_buffer_size_bytes",
+	}
+
+	metrics, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Gather metrics failed: %v", err)
+	}
+
+	for _, name := range expectedMetrics {
+		found := false
+		for _, m := range metrics {
+			if *m.Name == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Metric %s not registered", name)
+		}
+	}
+
+	ctx := meta.NewContext(1, 1, []uint32{2})
+	f, err := fs.Create(ctx, "/test_metrics", 0666, 022)
+	if err != syscall.Errno(0) {
+		t.Fatalf("Create file failed: %v", err)
+	}
+	defer f.Close(ctx)
+
+	data := []byte("test data for metrics")
+	if n, err := f.Write(ctx, data); err != 0 || n != len(data) {
+		t.Fatalf("Write failed: %d %v", n, err)
+	}
+
+	checkGaugeValue(t, registry, "used_buffer_size_bytes", func(v float64) bool {
+		return v > 0
+	})
+	checkGaugeValue(t, registry, "store_cache_size_bytes", func(v float64) bool {
+		return v >= 0
+	})
+	buf := make([]byte, len(data))
+	if n, err := f.Pread(ctx, buf, 0); err != nil || n != len(data) {
+		t.Fatalf("Read failed: %d %v, except: %d", n, err, len(data))
+	}
+	checkGaugeValue(t, registry, "used_read_buffer_size_bytes", func(v float64) bool {
+		return v > 0
+	})
+}
+
+func checkGaugeValue(t *testing.T, registry *prometheus.Registry, name string, check func(float64) bool) {
+	metrics, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Gather metrics failed: %v", err)
+	}
+
+	for _, m := range metrics {
+		if *m.Name == name {
+			if len(m.Metric) == 0 {
+				t.Errorf("No metric values for %s", name)
+				return
+			}
+			value := *m.Metric[0].Gauge.Value
+			if !check(value) {
+				t.Errorf("Unexpected value for %s: %f", name, value)
+			}
+			return
+		}
+	}
+	t.Errorf("Metric %s not found", name)
+}
+
 func createTestFS(t *testing.T) *FileSystem {
 	m := meta.NewClient("memkv://", nil)
 	format := &meta.Format{
@@ -298,5 +376,7 @@ func createTestFS(t *testing.T) *FileSystem {
 	if err != nil {
 		t.Fatalf("initialize  failed: %s", err)
 	}
+
+	jfs.InitMetrics(prometheus.DefaultRegisterer)
 	return jfs
 }
