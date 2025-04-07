@@ -189,7 +189,7 @@ get_meta_url(){
     if [ "$meta" == "postgres" ]; then
         meta_url="postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable"
     elif [ "$meta" == "mysql" ]; then
-        meta_url="mysql://root:root@(127.0.0.1)/test?max_open_conns=30"
+        meta_url="mysql://root:root@(127.0.0.1)/test?max_open_conns=60"
     elif [ "$meta" == "redis" ]; then
         meta_url="redis://127.0.0.1:6379/1"
     elif [ "$meta" == "sqlite3" ]; then
