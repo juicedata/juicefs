@@ -221,6 +221,9 @@ func TestFileSystem(t *testing.T) {
 	if s, e := d.Summary(ctx, true, true); e != 0 || s.Dirs != 2 || s.Files != 2 || s.Length != 7 || s.Size != 16<<10 {
 		t.Fatalf("summary: %s %+v", e, s)
 	}
+	if q, e := d.GetQuota(ctx); e != nil || q.MaxInodes != 0 || q.MaxSpace != (1<<30) {
+		t.Fatalf("quota: %s %+v", e, q)
+	}
 	if e := fs.Delete(ctx, "/d"); e == 0 || !IsNotEmpty(e) {
 		t.Fatalf("rmdir: %s", e)
 	}

@@ -1265,11 +1265,21 @@ func jfs_summary(pid int64, h int64, cpath *C.char, buf uintptr) int32 {
 	if err != 0 {
 		return errno(err)
 	}
-	wb := utils.NewNativeBuffer(toBuf(buf, 24))
+	wb := utils.NewNativeBuffer(toBuf(buf, 40))
 	wb.Put64(summary.Length)
 	wb.Put64(summary.Files)
 	wb.Put64(summary.Dirs)
-	return 24
+
+	// quota
+	quota, _ := f.GetQuota(ctx)
+	if quota != nil {
+		wb.Put64(uint64(quota.MaxInodes))
+		wb.Put64(uint64(quota.MaxSpace))
+	} else {
+		wb.Put64(0)
+		wb.Put64(0)
+	}
+	return 40
 }
 
 //export jfs_info
