@@ -3846,23 +3846,22 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 		conds[c] = sync.NewCond(&ms[c])
 		if c < len(entries) {
 			go func(c int) {
-				_ = m.roTxn(Background(), func(s *xorm.Session) error {
-					for i := c; i < len(entries) && err == nil; i += threads {
-						e := entries[i]
-						er := m.dumpEntry(s, e.Attr.Inode, 0, e, showProgress)
-						ms[c].Lock()
-						ready[c] = true
-						if er != nil {
-							err = er
-						}
-						conds[c].Signal()
-						for ready[c] && err == nil {
-							conds[c].Wait()
-						}
-						ms[c].Unlock()
+				for i := c; i < len(entries) && err == nil; i += threads {
+					e := entries[i]
+					er := m.roTxn(Background(), func(s *xorm.Session) error {
+						return m.dumpEntry(s, e.Attr.Inode, 0, e, showProgress)
+					})
+					ms[c].Lock()
+					ready[c] = true
+					if er != nil {
+						err = er
 					}
-					return nil
-				})
+					conds[c].Signal()
+					for ready[c] && err == nil {
+						conds[c].Wait()
+					}
+					ms[c].Unlock()
+				}
 			}(c)
 		}
 	}
