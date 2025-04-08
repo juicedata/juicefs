@@ -751,14 +751,18 @@ func (j *juice) Getpath(p string, fh uint64) (e int, ret string) {
 		return
 	}
 
+	retCandidicate := paths[0]
+
 	for _, path := range paths {
-		if strings.EqualFold(path, p) {
+		if p == path {
 			ret = path
 			return
+		} else if strings.EqualFold(path, p) {
+			retCandidicate = path
 		}
 	}
 
-	ret = paths[0]
+	ret = retCandidicate
 	return
 }
 
