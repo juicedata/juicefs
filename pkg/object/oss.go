@@ -456,11 +456,11 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 
 	client.Config.Timeout = 10
 	client.Config.RetryTimes = 1
-	client.Config.HTTPTimeout.ConnectTimeout = time.Second * 2   // 30s
-	client.Config.HTTPTimeout.ReadWriteTimeout = time.Second * 5 // 60s
-	client.Config.HTTPTimeout.HeaderTimeout = time.Second * 5    // 60s
-	client.Config.HTTPTimeout.LongTimeout = time.Second * 30     // 300s
-	client.Config.IsEnableCRC = false                            // CRC64ECMA is much slower than CRC32C
+	client.Config.HTTPTimeout.ConnectTimeout = time.Second * 2    // 30s
+	client.Config.HTTPTimeout.ReadWriteTimeout = time.Second * 60 // 60s
+	client.Config.HTTPTimeout.HeaderTimeout = time.Second * 60    // 60s
+	client.Config.HTTPTimeout.LongTimeout = time.Second * 300     // 300s
+	client.Config.IsEnableCRC = false                             // CRC64ECMA is much slower than CRC32C
 	client.Config.UserAgent = UserAgent
 
 	bucket, err := client.Bucket(bucketName)
