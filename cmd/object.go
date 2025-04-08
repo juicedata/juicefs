@@ -187,6 +187,13 @@ func (j *juiceFS) Delete(key string, getters ...object.AttrGetter) error {
 	return toError(eno)
 }
 
+type warpJObj struct {
+	jObj
+	isSymlink bool
+}
+
+func (w *warpJObj) IsSymlink() bool { return w.isSymlink }
+
 type jObj struct {
 	key string
 	fi  *fs.FileStat
@@ -224,6 +231,7 @@ func (j *juiceFS) Head(key string) (object.Object, error) {
 		if eno != 0 {
 			return nil, errConv(eno)
 		}
+		return &warpJObj{jObj{key, fi}, true}, nil
 	}
 	return &jObj{key, fi}, nil
 }

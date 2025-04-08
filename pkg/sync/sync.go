@@ -1471,8 +1471,6 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	if config.Limit == 1 && len(config.rules) == 0 {
 		if processed, err := fastPath(tasks, src, dst, prefix, config); processed {
 			return err
-		} else if errors.Is(err, isDirErr) {
-			prefix += "/"
 		}
 	}
 	if config.ListThreads <= 1 || listDepth <= 0 {
