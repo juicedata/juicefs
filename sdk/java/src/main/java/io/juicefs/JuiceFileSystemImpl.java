@@ -1639,7 +1639,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
     statistics.incrementReadOps(1);
     String path = normalizePath(f);
-    Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 24);
+    Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 40);
     int r = lib.jfs_summary(Thread.currentThread().getId(), handle, path, buf);
     if (r < 0) {
       throw error(r, f);
@@ -1647,7 +1647,11 @@ public class JuiceFileSystemImpl extends FileSystem {
     long size = buf.getLongLong(0);
     long files = buf.getLongLong(8);
     long dirs = buf.getLongLong(16);
-    return new ContentSummary(size, files, dirs);
+    long quota = buf.getLongLong(24);
+    long spaceQuota = buf.getLongLong(32);
+    quota = quota == 0 ? -1L : quota;
+    spaceQuota = spaceQuota == 0 ? -1L : spaceQuota;
+    return new ContentSummary(size, files, dirs, quota, size, spaceQuota);
   }
 
   private FileStatus newFileStatus(Path p, Pointer buf, int size, boolean readlink) throws IOException {

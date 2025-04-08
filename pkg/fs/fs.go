@@ -1401,3 +1401,29 @@ func (f *File) GetTreeSummary(ctx meta.Context, depth, entries uint8, strict boo
 	s.Path = path.Base(f.path)
 	return
 }
+
+func (f *File) GetQuota(ctx meta.Context) (quota *meta.Quota, err error) {
+	defer trace.StartRegion(context.TODO(), "fs.getQuota").End()
+	l := vfs.NewLogContext(ctx)
+	defer func() {
+		f.fs.log(l, "getQuota (%s): %s", f.path, errstr(err))
+	}()
+	err = nil
+	qs := make(map[string]*meta.Quota)
+	// get filesystem quota if root
+	if f.inode == meta.RootInode {
+		format := f.fs.m.GetFormat()
+		quota = &meta.Quota{
+			MaxSpace:  int64(format.Capacity),
+			MaxInodes: int64(format.Inodes),
+		}
+		return quota, err
+	}
+	// get directory quota
+	err = f.fs.m.HandleQuota(ctx, meta.QuotaGet, f.path, qs, false, false, false)
+	if err != nil {
+		return nil, err
+	}
+	quota = qs[f.path]
+	return quota, err
+}

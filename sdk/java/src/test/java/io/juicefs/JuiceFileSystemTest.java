@@ -92,6 +92,8 @@ public class JuiceFileSystemTest extends TestCase {
     assertEquals(6, summary.getLength());
     assertEquals(1, summary.getFileCount());
     assertEquals(0, summary.getDirectoryCount());
+    assertEquals(-1L, summary.getQuota());
+    assertEquals(-1L, summary.getSpaceQuota());
   }
 
   public void testLongName() throws IOException {
