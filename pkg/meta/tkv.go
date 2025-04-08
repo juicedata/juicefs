@@ -1561,8 +1561,10 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		dbuf := tx.get(m.entryKey(parentDst, nameDst))
 		if dbuf == nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
-				nameDst = string(e.Name)
-				dbuf = m.packEntry(e.Attr.Typ, e.Inode)
+				if string(e.Name) != nameSrc || parentDst != parentSrc {
+					nameDst = string(e.Name)
+					dbuf = m.packEntry(e.Attr.Typ, e.Inode)
+				}
 			}
 		}
 		var supdate, dupdate bool

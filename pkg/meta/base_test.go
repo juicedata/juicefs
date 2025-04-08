@@ -149,6 +149,8 @@ func testMeta(t *testing.T, m Meta) {
 	testOpenCache(t, m)
 	base.conf.CaseInsensi = true
 	testCaseIncensi(t, m)
+	testCaseIncensiRename(t, m)
+	testCaseIncensiHardlinkRename(t, m)
 	testCheckAndRepair(t, m)
 	testDirStat(t, m)
 	testClone(t, m)
@@ -1386,6 +1388,162 @@ func testCaseIncensi(t *testing.T, m Meta) {
 	}
 	if st := m.Rmdir(ctx, 1, "foo"); st != 0 {
 		t.Fatalf("rmdir foo should be OK")
+	}
+}
+
+func testCaseIncensiRename(t *testing.T, m Meta) {
+	ctx := Background()
+	var inode Ino
+	var attr = &Attr{}
+
+	_ = m.Create(ctx, 1, "aaa", 0755, 0, 0, &inode, attr)
+	if st := m.Create(ctx, 1, "AAA", 0755, 0, syscall.O_EXCL, &inode, attr); st == 0 {
+		t.Fatalf("create AAA should NOT be ok")
+	}
+
+	_ = m.Create(ctx, 1, "bbb", 0755, 0, 0, &inode, attr)
+
+	/* NOW we have:
+	/aaa
+	/bbb
+	*/
+
+	if st := m.Rename(ctx, 1, "aaa", 1, "AAA", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename aaa to AAA should be OK, bug got : %s", st)
+	}
+
+	if st := m.Rename(ctx, 1, "aaa", 1, "AAA", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename aaa to AAA again should be OK, bug got : %s", st)
+	}
+
+	if st := m.Rename(ctx, 1, "aaa", 1, "BBB", RenameNoReplace, &inode, attr); st == 0 {
+		t.Fatal("rename aaa to BBB (RenameNoReplace) should NOT be OK")
+	}
+
+	if st := m.Rename(ctx, 1, "aaa", 1, "BBB", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename aaa to BBB should be OK, but got: %s", st)
+	}
+
+	/* NOW we have:
+	/BBB
+	*/
+
+	if st := m.Create(ctx, 1, "aaa", 0755, 0, 0, &inode, attr); st != 0 {
+		t.Fatalf("create aaa should be ok, but got %s", st)
+	}
+
+	/*NOW we have:
+	/BBB
+	/aaa
+	*/
+
+	if st := m.Rename(ctx, 1, "aaa", 1, "Aaa", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename aaa to Aaa should be OK, but got %s", st)
+	}
+
+	var dirInode Ino
+
+	if st := m.Mkdir(ctx, 1, "case_insensi_dir", 0755, 0, 0, &dirInode, attr); st != 0 {
+		t.Fatalf("mkdir case_insensi_dir should be OK, but got %s", st)
+	}
+
+	if st := m.Create(ctx, dirInode, "AAA", 0755, 0, 0, &inode, attr); st != 0 {
+		t.Fatalf("create case_insensi_dir/AAA should be ok, but got %s", st)
+	}
+
+	/*NOW we have:
+	/BBB
+	/Aaa
+	/case_insensi_dir/AAA
+	*/
+
+	if st := m.Rename(ctx, 1, "aaa", dirInode, "aaa", RenameNoReplace, &inode, attr); st == 0 {
+		t.Fatalf("rename aaa to case_insensi_dir/aaa (RenameNoReplace) should NOT be OK")
+	}
+
+	if st := m.Rename(ctx, 1, "aaa", dirInode, "aaa", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename Aaa to case_insensi_dir/aaa should be OK, but got %s", st)
+	}
+}
+
+func testCaseIncensiHardlinkRename(t *testing.T, m Meta) {
+	ctx := Background()
+	var inode Ino
+	var attr = &Attr{}
+
+	_ = m.Create(ctx, 1, "ccc", 0755, 0, 0, &inode, attr)
+	if st := m.Link(ctx, inode, 1, "CCC", attr); st == 0 {
+		t.Fatalf("create hardlink CCC should NOT be ok")
+	}
+
+	if st := m.Link(ctx, inode, 1, "ddd", attr); st != 0 {
+		t.Fatalf("create hardlink ddd should be ok, but got %s", st)
+	}
+
+	/* NOW we have:
+	/ccc
+	/ddd
+	*/
+
+	if st := m.Rename(ctx, 1, "ccc", 1, "CCC", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename ccc to CCC should be OK, bug got : %s", st)
+	}
+
+	if st := m.Rename(ctx, 1, "ccc", 1, "DDD", RenameNoReplace, &inode, attr); st != syscall.EEXIST {
+		t.Fatal("rename ccc to DDD (RenameNoReplace) should fail with EEXIST")
+	}
+
+	if st := m.Rename(ctx, 1, "ccc", 1, "DDD", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename ccc to DDD shouldshould fail silently")
+	}
+
+	if st := m.Lookup(ctx, 1, "ccc", &inode, attr, false); st != 0 {
+		t.Fatalf("Lookup ccc should be OK, but got %s", st)
+	}
+
+	if st := m.Lookup(ctx, 1, "ddd", &inode, attr, false); st != 0 {
+		t.Fatalf("Lookup ddd should be OK, but got %s", st)
+	}
+
+	/* NOW we have:
+	/ccc
+	/ddd
+	*/
+
+	var dirInode Ino
+
+	if st := m.Mkdir(ctx, 1, "case_insensi_hark_dir", 0755, 0, 0, &dirInode, attr); st != 0 {
+		t.Fatalf("mkdir case_insensi_hark_dir should be OK, but got %s", st)
+	}
+
+	if st := m.Link(ctx, inode, dirInode, "DDD", attr); st != 0 {
+		t.Fatalf("create case_insensi_dir/DDD should be ok, but got %s", st)
+	}
+
+	/*NOW we have:
+	/ccc
+	/ddd
+	/case_insensi_dir/DDD
+	*/
+
+	if st := m.Rename(ctx, 1, "ccc", dirInode, "ddd", RenameNoReplace, &inode, attr); st != syscall.EEXIST {
+		t.Fatalf("rename ccc to case_insensi_dir/ddd (RenameNoReplace) should fail with EEXIST")
+	}
+
+	if st := m.Rename(ctx, 1, "ccc", dirInode, "ddd", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename ccc to case_insensi_dir/ddd should fail silently")
+	}
+
+	if st := m.Lookup(ctx, 1, "ccc", &inode, attr, false); st != 0 {
+		t.Fatalf("resolve ccc should be OK, but got %s", st)
+	}
+
+	if st := m.Rename(ctx, 1, "ddd", dirInode, "ddd", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename ddd to case_insensi_dir/ddd should fail silently")
+	}
+
+	if st := m.Lookup(ctx, 1, "ddd", &inode, attr, false); st != 0 {
+		t.Fatalf("lookup ddd should be OK, but got %s", st)
 	}
 }
 

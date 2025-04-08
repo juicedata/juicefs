@@ -1732,9 +1732,11 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		dbuf, err := tx.HGet(ctx, m.entryKey(parentDst), nameDst).Bytes()
 		if err == redis.Nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
-				nameDst = string(e.Name)
-				buf = m.packEntry(e.Attr.Typ, e.Inode)
-				err = nil
+				if (nameSrc != string(e.Name)) || parentDst != parentSrc {
+					nameDst = string(e.Name)
+					dbuf = m.packEntry(e.Attr.Typ, e.Inode)
+					err = nil
+				}
 			}
 		}
 		if err != nil && err != redis.Nil {
