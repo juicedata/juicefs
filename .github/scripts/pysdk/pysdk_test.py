@@ -223,20 +223,23 @@ class QuotaTests(unittest.TestCase):
 
     def test_quota(self):
         # set quota
-        v.quota("set", path=TESTFN, capacity=1024*1024*1024, inodes=1000)
-        res = v.quota("get", path=TESTFN)
+        v.set_quota(path=TESTFN, capacity=1024*1024*1024, inodes=1000, create=True)
+        res = v.get_quota(path=TESTFN)
         self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 0, "UsedInodes": 3}}))
 
-        res = v.quota("list")
+        res = v.list_quota()
         self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 0, "UsedInodes": 3}}))
 
-        v.quota("set", path=TESTFN+"/dir1",  capacity=1024*1024*1024, inodes=10000)
-        res = v.quota("list")
+        v.set_quota(path=TESTFN+"/dir1",  capacity=1024*1024*1024, inodes=10000, create=True, strict=True)
+        res = v.list_quota()
         self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 0, "UsedInodes": 3}, "/test/dir1": {"MaxSpace": 1024*1024*1024, "MaxInodes": 10000, "UsedSpace": 0, "UsedInodes": 0}}))
 
+        # check quota
+        v.check_quota(path=TESTFN, strict=True, repair=True)
+
         # unset quota
-        v.quota("del", path=TESTFN)
-        res = v.quota("get", path=TESTFN)
+        v.del_quota(path=TESTFN)
+        res = v.get_quota(path=TESTFN)
         self.assertTrue(res=={})
 
 
