@@ -1396,6 +1396,13 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 		go func() {
 			defer wg.Done()
 			for key := range prefixs {
+				if !strings.HasSuffix(key, "/") {
+					if err := produceSingleObject(tasks, src, dst, key, config); err == nil {
+						continue
+					} else if errors.Is(err, ignoreDir) {
+						key += "/"
+					}
+				}
 				logger.Debugf("start listing prefix %s", key)
 				err = startProducer(tasks, src, dst, key, config.ListDepth, config)
 				if err != nil {
@@ -1426,31 +1433,43 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 	return nil
 }
 
+var ignoreDir = errors.New("ignore dir")
+
+func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) error {
+	obj, err := src.Head(key)
+	if err == nil && (!obj.IsDir() || obj.IsSymlink() && config.Links || obj.IsDir() && config.Dirs && strings.HasSuffix(key, "/")) {
+		var srckeys = make(chan object.Object, 1)
+		srckeys <- obj
+		close(srckeys)
+		if dobj, e := dst.Head(key); e == nil || os.IsNotExist(e) {
+			var dstkeys = make(chan object.Object, 1)
+			if dobj != nil {
+				dstkeys <- dobj
+			}
+			close(dstkeys)
+			logger.Debugf("produce single key %s", key)
+			_ = produce(tasks, srckeys, dstkeys, config)
+			return nil
+		} else {
+			logger.Warnf("head %s from %s: %s", key, dst, e)
+			err = e
+		}
+	} else if err != nil {
+		logger.Warnf("head %s from %s: %s", key, src, err)
+	} else {
+		err = ignoreDir
+	}
+	return err
+}
+
 func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config) error {
 	config.concurrentList <- 1
 	defer func() {
 		<-config.concurrentList
 	}()
 	if config.Limit == 1 && len(config.rules) == 0 {
-		// fast path for single key
-		obj, err := src.Head(config.Start)
-		if err == nil && (!obj.IsDir() || config.Dirs) {
-			var srckeys = make(chan object.Object, 1)
-			srckeys <- obj
-			close(srckeys)
-			var dstkeys = make(chan object.Object, 1)
-			if dobj, err := dst.Head(config.Start); err == nil || os.IsNotExist(err) {
-				if dobj != nil {
-					dstkeys <- dobj
-				}
-				close(dstkeys)
-				logger.Debugf("produce single key %s", config.Start)
-				return produce(tasks, srckeys, dstkeys, config)
-			} else {
-				logger.Warnf("head %s from %s: %s", config.Start, dst, err)
-			}
-		} else if err != nil && !os.IsNotExist(err) {
-			logger.Warnf("head %s from %s: %s", config.Start, src, err)
+		if produceSingleObject(tasks, src, dst, prefix, config) == nil {
+			return nil
 		}
 	}
 	if config.ListThreads <= 1 || listDepth <= 0 {

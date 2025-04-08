@@ -17,7 +17,9 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -135,6 +137,16 @@ func testFileSystem(t *testing.T, s object.ObjectStorage) {
 		if target, err := ss.Readlink("b"); err != nil || target != "/xyz/notExist/" {
 			t.Fatalf("readlink b %s %s", target, err)
 		}
+		head, err := s.Head("a")
+		if err != nil || !head.IsSymlink() {
+			t.Fatalf("head a %s %s", head, err)
+		}
+		ss.Symlink("notExit", "brokenLink")
+		_, err = s.Head("brokenLink")
+		if !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("head b %s %s", head, err)
+		}
+		s.Delete("brokenLink")
 		objs, err = listAll(s, "", "", 100)
 		if err != nil {
 			t.Fatalf("listall failed: %s", err)

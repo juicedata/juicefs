@@ -106,7 +106,14 @@ func (n *nfsStore) Head(key string) (Object, error) {
 			return nil, err
 		}
 		dir, _ := path.Split(p)
-		return n.Head(path.Join(dir, src))
+		ff, err := n.Head(path.Join(dir, src))
+		if err != nil {
+			return nil, err
+		}
+		if f2, ok := ff.(*file); ok {
+			f2.isSymlink = true
+		}
+		return ff, nil
 	}
 	return n.fileInfo(key, fi), nil
 }
@@ -236,7 +243,7 @@ func (n *nfsStore) Delete(key string, getters ...AttrGetter) error {
 
 func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
 	owner, group := n.getOwnerGroup(fi)
-	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
+	isSymlink := fi.Mode()&os.ModeSymlink != 0
 	ff := &file{
 		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
 		owner,

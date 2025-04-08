@@ -178,9 +178,10 @@ func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 		if name == "." || name == ".." {
 			continue
 		}
+		isSymlink := e.Mode()&os.ModeSymlink != 0
 		if e.IsDir() {
 			mEntries = append(mEntries, &mEntry{nil, name + dirSuffix, e, false})
-		} else if !e.Mode().IsRegular() && followLink {
+		} else if isSymlink && followLink {
 			fi, err := v.Stat(filepath.Join(dirname, name))
 			if err != nil {
 				mEntries = append(mEntries, &mEntry{nil, name, e, true})
@@ -191,7 +192,7 @@ func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 			}
 			mEntries = append(mEntries, &mEntry{nil, name, fi, false})
 		} else {
-			mEntries = append(mEntries, &mEntry{nil, name, e, !e.Mode().IsRegular()})
+			mEntries = append(mEntries, &mEntry{nil, name, e, isSymlink})
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })

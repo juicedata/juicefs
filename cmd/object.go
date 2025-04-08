@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -187,8 +188,9 @@ func (j *juiceFS) Delete(key string, getters ...object.AttrGetter) error {
 }
 
 type jObj struct {
-	key string
-	fi  *fs.FileStat
+	key       string
+	fi        *fs.FileStat
+	isSymlink bool
 }
 
 func (o *jObj) Key() string { return o.key }
@@ -200,21 +202,32 @@ func (o *jObj) Size() int64 {
 }
 func (o *jObj) Mtime() time.Time     { return o.fi.ModTime() }
 func (o *jObj) IsDir() bool          { return o.fi.IsDir() }
-func (o *jObj) IsSymlink() bool      { return o.fi.IsSymlink() }
+func (o *jObj) IsSymlink() bool      { return o.isSymlink }
 func (o *jObj) Owner() string        { return utils.UserName(o.fi.Uid()) }
 func (o *jObj) Group() string        { return utils.GroupName(o.fi.Gid()) }
 func (o *jObj) Mode() os.FileMode    { return o.fi.Mode() }
 func (o *jObj) StorageClass() string { return "" }
 
 func (j *juiceFS) Head(key string) (object.Object, error) {
-	fi, eno := j.jfs.Stat(ctx, j.path(key))
-	if eno == syscall.ENOENT {
-		return nil, os.ErrNotExist
+	errConv := func(eno syscall.Errno) error {
+		if errors.Is(eno, syscall.ENOENT) {
+			return os.ErrNotExist
+		} else {
+			return eno
+		}
 	}
+	fi, eno := j.jfs.Lstat(ctx, j.path(key))
 	if eno != 0 {
-		return nil, eno
+		return nil, errConv(eno)
 	}
-	return &jObj{key, fi}, nil
+	isSymlink := fi.IsSymlink()
+	if isSymlink {
+		fi, eno = j.jfs.Stat(ctx, j.path(key))
+		if eno != 0 {
+			return nil, errConv(eno)
+		}
+	}
+	return &jObj{key, fi, isSymlink}, nil
 }
 
 func (j *juiceFS) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
@@ -250,7 +263,7 @@ func (j *juiceFS) List(prefix, marker, token, delimiter string, limit int64, fol
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
-		f := &jObj{key, e.fi}
+		f := &jObj{key, e.fi, e.fi.IsSymlink()}
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break
