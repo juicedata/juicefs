@@ -109,9 +109,8 @@ jobs:
       - name: Test fsck
         timeout-minutes: 10
         run: |
-          meta=$([ "${{matrix.meta}}" = "mysql" ] && echo "sqlite3" || echo "${{matrix.meta}}")
-          sudo META=${meta} .github/scripts/command/fsck.sh 
-      
+          sudo META=${{matrix.meta}} .github/scripts/command/fsck.sh
+
       - name: Test Gateway
         timeout-minutes: 10
         run: |
@@ -125,6 +124,10 @@ jobs:
       - name: Test Info
         timeout-minutes: 10
         run: |
+          free -g
+          if [ "${{matrix.meta}}" == "tikv" ]; then
+            ps -ef | grep tikv-server || true
+          fi
           sudo META=${{matrix.meta}} .github/scripts/command/info.sh
 
       - name: Test Format
