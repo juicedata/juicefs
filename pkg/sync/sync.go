@@ -1397,10 +1397,11 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 			defer wg.Done()
 			for key := range prefixs {
 				if !strings.HasSuffix(key, "/") {
-					if fastPath(tasks, src, dst, key, config) {
+					if err := produceSingleObject(tasks, src, dst, key, config); err == nil {
 						continue
+					} else if errors.Is(err, ignoreDir) {
+						key += "/"
 					}
-					key += "/"
 				}
 				logger.Debugf("start listing prefix %s", key)
 				err = startProducer(tasks, src, dst, key, config.ListDepth, config)
@@ -1432,14 +1433,15 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 	return nil
 }
 
-// fast path for single object
-func fastPath(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) bool {
+var ignoreDir = errors.New("ignore dir")
+
+func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) error {
 	obj, err := src.Head(key)
-	if err == nil && (!obj.IsDir() || obj.IsSymlink() && config.Links) {
+	if err == nil && (!obj.IsDir() || obj.IsSymlink() && config.Links || obj.IsDir() && config.Dirs && strings.HasSuffix(key, "/")) {
 		var srckeys = make(chan object.Object, 1)
 		srckeys <- obj
 		close(srckeys)
-		if dobj, err := dst.Head(key); err == nil || os.IsNotExist(err) {
+		if dobj, e := dst.Head(key); e == nil || os.IsNotExist(e) {
 			var dstkeys = make(chan object.Object, 1)
 			if dobj != nil {
 				dstkeys <- dobj
@@ -1447,14 +1449,17 @@ func fastPath(tasks chan<- object.Object, src, dst object.ObjectStorage, key str
 			close(dstkeys)
 			logger.Debugf("produce single key %s", key)
 			_ = produce(tasks, srckeys, dstkeys, config)
-			return true
+			return nil
 		} else {
-			logger.Warnf("head %s from %s: %s", key, dst, err)
+			logger.Warnf("head %s from %s: %s", key, dst, e)
+			err = e
 		}
 	} else if err != nil {
 		logger.Warnf("head %s from %s: %s", key, src, err)
+	} else {
+		err = ignoreDir
 	}
-	return false
+	return err
 }
 
 func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config) error {
@@ -1463,7 +1468,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		<-config.concurrentList
 	}()
 	if config.Limit == 1 && len(config.rules) == 0 {
-		if fastPath(tasks, src, dst, prefix, config) {
+		if produceSingleObject(tasks, src, dst, prefix, config) == nil {
 			return nil
 		}
 	}
