@@ -3509,6 +3509,7 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 		if err != nil {
 			return err
 		}
+		existing := k.Value
 		k.Value = nil
 		switch flags {
 		case XattrCreate:
@@ -3522,6 +3523,9 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 			}
 			_, err = s.Update(&x, k)
 		default:
+			if bytes.Equal(existing, value) {
+				return nil
+			}
 			if ok {
 				_, err = s.Update(&x, k)
 			} else {
