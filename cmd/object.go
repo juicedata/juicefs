@@ -187,16 +187,10 @@ func (j *juiceFS) Delete(key string, getters ...object.AttrGetter) error {
 	return toError(eno)
 }
 
-type warpJObj struct {
-	jObj
-	isSymlink bool
-}
-
-func (w *warpJObj) IsSymlink() bool { return w.isSymlink }
-
 type jObj struct {
-	key string
-	fi  *fs.FileStat
+	key       string
+	fi        *fs.FileStat
+	isSymlink bool
 }
 
 func (o *jObj) Key() string { return o.key }
@@ -208,7 +202,7 @@ func (o *jObj) Size() int64 {
 }
 func (o *jObj) Mtime() time.Time     { return o.fi.ModTime() }
 func (o *jObj) IsDir() bool          { return o.fi.IsDir() }
-func (o *jObj) IsSymlink() bool      { return o.fi.IsSymlink() }
+func (o *jObj) IsSymlink() bool      { return o.isSymlink }
 func (o *jObj) Owner() string        { return utils.UserName(o.fi.Uid()) }
 func (o *jObj) Group() string        { return utils.GroupName(o.fi.Gid()) }
 func (o *jObj) Mode() os.FileMode    { return o.fi.Mode() }
@@ -226,14 +220,14 @@ func (j *juiceFS) Head(key string) (object.Object, error) {
 	if eno != 0 {
 		return nil, errConv(eno)
 	}
-	if fi.IsSymlink() {
+	isSymlink := fi.IsSymlink()
+	if isSymlink {
 		fi, eno = j.jfs.Stat(ctx, j.path(key))
 		if eno != 0 {
 			return nil, errConv(eno)
 		}
-		return &warpJObj{jObj{key, fi}, true}, nil
 	}
-	return &jObj{key, fi}, nil
+	return &jObj{key, fi, isSymlink}, nil
 }
 
 func (j *juiceFS) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
@@ -269,7 +263,7 @@ func (j *juiceFS) List(prefix, marker, token, delimiter string, limit int64, fol
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
-		f := &jObj{key, e.fi}
+		f := &jObj{key, e.fi, e.fi.IsSymlink()}
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break

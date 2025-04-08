@@ -1397,15 +1397,10 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 			defer wg.Done()
 			for key := range prefixs {
 				if !strings.HasSuffix(key, "/") {
-					if processed, err := fastPath(tasks, src, dst, key, config); processed {
-						if err != nil {
-							logger.Errorf("failed to process single key:%s: %s", key, err)
-							failed.Increment()
-						}
+					if fastPath(tasks, src, dst, key, config) {
 						continue
-					} else if errors.Is(err, isDirErr) {
-						key += "/"
 					}
+					key += "/"
 				}
 				logger.Debugf("start listing prefix %s", key)
 				err = startProducer(tasks, src, dst, key, config.ListDepth, config)
@@ -1437,40 +1432,39 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 	return nil
 }
 
-var isDirErr = errors.New("is dir error")
-
-// fast path for single object copy
-func fastPath(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) (bool, error) {
+// fast path for single object
+func fastPath(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) bool {
 	obj, err := src.Head(key)
 	if err == nil && (!obj.IsDir() || obj.IsSymlink() && config.Links) {
 		var srckeys = make(chan object.Object, 1)
 		srckeys <- obj
 		close(srckeys)
-		var dstkeys = make(chan object.Object, 1)
 		if dobj, err := dst.Head(key); err == nil || os.IsNotExist(err) {
+			var dstkeys = make(chan object.Object, 1)
 			if dobj != nil {
 				dstkeys <- dobj
 			}
 			close(dstkeys)
 			logger.Debugf("produce single key %s", key)
-			return true, produce(tasks, srckeys, dstkeys, config)
+			_ = produce(tasks, srckeys, dstkeys, config)
+			return true
 		} else {
 			logger.Warnf("head %s from %s: %s", key, dst, err)
 		}
+	} else if err != nil {
+		logger.Warnf("head %s from %s: %s", key, src, err)
 	}
-	if err == nil && obj.IsDir() {
-		return false, isDirErr
-	}
-	return false, err
+	return false
 }
+
 func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, listDepth int, config *Config) error {
 	config.concurrentList <- 1
 	defer func() {
 		<-config.concurrentList
 	}()
 	if config.Limit == 1 && len(config.rules) == 0 {
-		if processed, err := fastPath(tasks, src, dst, prefix, config); processed {
-			return err
+		if fastPath(tasks, src, dst, prefix, config) {
+			return nil
 		}
 	}
 	if config.ListThreads <= 1 || listDepth <= 0 {
