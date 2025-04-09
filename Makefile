@@ -19,6 +19,10 @@ ifdef STATIC
 	export CC
 endif
 
+juicefsdebug: Makefile cmd/*.go pkg/*/*.go go.*
+	go version
+	go build -tags DebugMode -ldflags="$(LDFLAGS)"  -o juicefs.debug .
+
 juicefs: Makefile cmd/*.go pkg/*/*.go go.*
 	go version
 	go build -ldflags="$(LDFLAGS)"  -o juicefs .

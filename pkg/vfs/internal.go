@@ -41,6 +41,7 @@ const (
 	controlInode    = minInternalNode + 2
 	statsInode      = minInternalNode + 3
 	configInode     = minInternalNode + 4
+	debugTestInode	= minInternalNode + 5
 	trashInode      = meta.TrashInode
 )
 
@@ -80,6 +81,7 @@ var internalNodes = []*internalNode{
 	{logInode, ".accesslog", &Attr{Mode: 0400}},
 	{statsInode, ".stats", &Attr{Mode: 0444}},
 	{configInode, ".config", &Attr{Mode: 0400}},
+	{debugTestInode, ".debugtest", &Attr{Mode: 0666}},
 	{trashInode, meta.TrashName, &Attr{Mode: 0555}},
 }
 

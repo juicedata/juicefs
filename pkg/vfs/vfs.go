@@ -33,6 +33,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/juicedata/juicefs/pkg/debugtest"
 )
 
 type Ino = meta.Ino
@@ -202,6 +203,14 @@ func (v *VFS) GetAttr(ctx Context, ino Ino, opened uint8) (entry *meta.Entry, er
 	if IsSpecialNode(ino) && getInternalNode(ino) != nil {
 		n := getInternalNode(ino)
 		entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
+
+		if debugtest.DebugMode {
+			if ino == configInode && debugtest.GetDebugOption("simulate_getattr_config_hang_90s") {
+				debugtest.SetDebugOption("-simulate_getattr_config_hang_90s")
+				time.Sleep(time.Second * 90)
+			}
+		}
+
 		return
 	}
 	defer func() { logit(ctx, "getattr", err, "(%d):%s", ino, (*Entry)(entry)) }()
@@ -547,7 +556,7 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 	}()
 	var attr = &Attr{}
 	if IsSpecialNode(ino) {
-		if ino != controlInode && (flags&O_ACCMODE) != syscall.O_RDONLY {
+		if ino != controlInode && ino != debugTestInode && (flags&O_ACCMODE) != syscall.O_RDONLY {
 			err = syscall.EACCES
 			return
 		}
@@ -570,6 +579,9 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 			}
 			v.Conf.Format.RemoveSecret()
 			h.data, _ = json.MarshalIndent(v.Conf, "", " ")
+			entry.Attr.Length = uint64(len(h.data))
+		case debugTestInode:
+			h.data = []byte(debugtest.PrintDebugOption())
 			entry.Attr.Length = uint64(len(h.data))
 		}
 		return
@@ -703,6 +715,8 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 				}
 				v.Conf.Format.RemoveSecret()
 				h.data, _ = json.MarshalIndent(v.Conf, "", " ")
+			case debugTestInode:
+				h.data = []byte(debugtest.PrintDebugOption())
 			}
 		}
 
@@ -826,6 +840,16 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 			h.data = append(h.data, uint8(syscall.EIO&0xff))
 		}
 		return
+	}
+
+	if debugtest.DebugMode {
+		if ino == debugTestInode {
+			h.Lock()
+			defer h.Unlock()
+			debugtest.SetDebugOption(string(buf))
+			h.data = []byte(debugtest.PrintDebugOption())
+			return
+		}
 	}
 
 	if h.writer == nil {
@@ -991,7 +1015,7 @@ func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err sysc
 		return
 	}
 	if IsSpecialNode(ino) {
-		if ino == controlInode && h.bctx != nil {
+		if (ino == controlInode || ino == debugTestInode) && h.bctx != nil {
 			h.bctx.Cancel()
 		}
 		return
