@@ -216,6 +216,13 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 	if !strings.Contains(addr, ":") {
 		addr += ":"
 	}
+	if strings.HasPrefix(addr, ":") || strings.Contains(addr, "0.0.0.0") {
+		ip, err := utils.GetLocalIp(net.JoinHostPort(config.Workers[0], "22"))
+		if err != nil {
+			return "", fmt.Errorf("get local ip: %s", err)
+		}
+		addr = ip + addr
+	}
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
