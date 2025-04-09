@@ -76,6 +76,7 @@ jobs:
             sudo GOCOVERDIR=$(pwd)/cover META=redis .github/scripts/sync/sync.sh 
           elif [[ "${{matrix.type}}" == 'sync_fsrand' ]]; then
             [[ -z "${{ github.event.inputs.seed }}" ]] && seed=$RANDOM || seed=${{ github.event.inputs.seed }}
+            echo "seed: $seed"
             sudo GOCOVERDIR=$(pwd)/cover META=redis SEED="$seed" .github/scripts/sync/sync_fsrand.sh 
           elif [[ "${{matrix.type}}" == 'sync_minio' ]]; then
             sudo GOCOVERDIR=$(pwd)/cover META=redis .github/scripts/sync/sync_minio.sh 
