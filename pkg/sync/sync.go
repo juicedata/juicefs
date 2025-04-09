@@ -1577,7 +1577,8 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	var bufferSize = 10240
 	if config.Manager != "" {
-		bufferSize = 100
+		// No support for work-stealing, so workers shouldnot buffer tasks to prevent piling up in their own queues, which could cause imbalance among workers.
+		bufferSize = 0
 	}
 	tasks := make(chan object.Object, bufferSize)
 	wg := sync.WaitGroup{}
