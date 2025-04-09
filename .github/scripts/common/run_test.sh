@@ -15,7 +15,7 @@ run_one_test()
     if [[ $EXIT_STATUS -eq 0 ]]; then
         echo -e "\033[0;34mFinish Test: $test in $ELAPSED_TIME seconds\033[0m"
     else
-        echo -e "\033[0;31mTest Failed: $test($0) in $ELAPSED_TIME seconds\033[0m"
+        echo -e "\033[0;31mTest Failed: $0 $test in $ELAPSED_TIME seconds\033[0m"
         exit 1
     fi
 }

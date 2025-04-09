@@ -37,6 +37,10 @@ on:
         description: "Run the build with tmate debugging enabled"
         required: false
         default: false
+      seed:
+        type: string
+        description: "Seed for random test"
+        required: false
   schedule:
     - cron:  '0 17 * * *'
 
@@ -71,7 +75,8 @@ jobs:
           if [[ "${{matrix.type}}" == 'sync' ]]; then
             sudo GOCOVERDIR=$(pwd)/cover META=redis .github/scripts/sync/sync.sh 
           elif [[ "${{matrix.type}}" == 'sync_fsrand' ]]; then
-            sudo GOCOVERDIR=$(pwd)/cover META=redis .github/scripts/sync/sync_fsrand.sh 
+            [[ -z "${{ github.event.inputs.seed }}" ]] && seed=$RANDOM || seed=${{ github.event.inputs.seed }}
+            sudo GOCOVERDIR=$(pwd)/cover META=redis SEED="$seed" .github/scripts/sync/sync_fsrand.sh 
           elif [[ "${{matrix.type}}" == 'sync_minio' ]]; then
             sudo GOCOVERDIR=$(pwd)/cover META=redis .github/scripts/sync/sync_minio.sh 
           elif [[ "${{matrix.type}}" == 'sync_cluster' ]]; then
