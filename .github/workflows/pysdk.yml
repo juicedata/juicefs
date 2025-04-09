@@ -172,6 +172,7 @@ jobs:
 
       - name: Run fs.py
         timeout-minutes: 60
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
@@ -182,7 +183,7 @@ jobs:
       - name: check fsrand.log
         if: always()
         run: |
-          sudo tail -n 500 fsrand.log
+          sudo tail -n 500 fsrand.log || true
 
       - name: chmod example directory
         if: always()
