@@ -50,7 +50,7 @@ func TestCluster(t *testing.T) {
 	// manager
 	todo := make(chan object.Object, 100)
 	var conf Config
-	conf.Workers = []string{"127.0.0.1"}
+	conf.Workers = []string{"root@127.0.0.1"}
 	addr, err := startManager(&conf, todo)
 	if err != nil {
 		t.Fatal(err)
