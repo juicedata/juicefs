@@ -20,6 +20,7 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -36,6 +37,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -641,6 +643,91 @@ func absPath(d string) string {
 		logger.Fatalf("Expand %s: %s", d, err)
 	}
 	return d
+}
+
+func tellFstabOptions(c *cli.Context) string {
+	opts := []string{"_netdev"}
+	for _, s := range os.Args[2:] {
+		if !strings.HasPrefix(s, "-") {
+			continue
+		}
+		s = strings.TrimLeft(s, "-")
+		s = strings.Split(s, "=")[0]
+		if !c.IsSet(s) || s == "update-fstab" || s == "background" || s == "d" {
+			continue
+		}
+		if s == "o" {
+			opts = append(opts, c.String(s))
+		} else if v := c.Bool(s); v {
+			opts = append(opts, s)
+		} else if s == "cache-dir" {
+			dirs := utils.SplitDir(c.String(s))
+			dirString := strings.Join(relPathToAbs(dirs), string(os.PathListSeparator))
+			opts = append(opts, fmt.Sprintf("%s=%s", s, dirString))
+		} else {
+			opts = append(opts, fmt.Sprintf("%s=%s", s, c.Generic(s)))
+		}
+	}
+	sort.Strings(opts)
+	return strings.Join(opts, ",")
+}
+
+func updateFstab(c *cli.Context) error {
+	addr := expandPathForEmbedded(c.Args().Get(0))
+	mp := absPath(c.Args().Get(1))
+	var fstab = "/etc/fstab"
+
+	f, err := os.Open(fstab)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	entryIndex := -1
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+		if len(fields) >= 6 && fields[2] == "juicefs" && fields[0] == addr && fields[1] == mp {
+			entryIndex = len(lines)
+		}
+		lines = append(lines, line)
+	}
+	if err = scanner.Err(); err != nil {
+		return err
+	}
+	opts := tellFstabOptions(c)
+	entry := fmt.Sprintf("%s  %s  juicefs  %s  0 0", addr, mp, opts)
+	if entryIndex >= 0 {
+		if entry == lines[entryIndex] {
+			return nil
+		}
+		lines[entryIndex] = entry
+	} else {
+		lines = append(lines, entry)
+	}
+	tempFstab := fstab + ".tmp"
+	tmpf, err := os.OpenFile(tempFstab, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer tmpf.Close()
+	if _, err := tmpf.WriteString(strings.Join(lines, "\n") + "\n"); err != nil {
+		_ = os.Remove(tempFstab)
+		return err
+	}
+	return os.Rename(tempFstab, fstab)
+}
+
+func tryToInstallMountExec() error {
+	if _, err := os.Stat("/sbin/mount.juicefs"); err == nil {
+		return nil
+	}
+	src, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	return os.Symlink(src, "/sbin/mount.juicefs")
 }
 
 func fixCacheDirs(c *cli.Context) {

@@ -122,3 +122,7 @@ func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {}
 func launchMount(mp string, conf *vfs.Config) error { return nil }
 
 func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorage) {}
+
+func tryToInstallMountExec() error { return nil }
+
+func updateFstab(c *cli.Context) error { return nil }
