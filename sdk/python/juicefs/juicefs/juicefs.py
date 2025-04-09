@@ -357,13 +357,13 @@ class Client(object):
         """Delete the quota of a directory."""
         self._quota(2, path)
 
-    def check_quota(self, path, repair=False, strict=False):
-        """Check the quota of a directory."""
-        return self._quota(3, path, repair=repair, strict=strict)
-
     def list_quota(self):
         """List the quota of all directories."""
-        return self._quota(4)
+        return self._quota(3)
+
+    def check_quota(self, path, repair=False, strict=False):
+        """Check the quota of a directory."""
+        return self._quota(4, path, repair=repair, strict=strict)
 
     def _quota(self, cmd, path="", capacity=0, inodes=0, create=False, repair=False, strict=False):
         """Get the quota of a directory."""
