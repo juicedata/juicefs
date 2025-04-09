@@ -538,6 +538,8 @@ func (m *baseMeta) NewSession(record bool) error {
 }
 
 func (m *baseMeta) startDeleteSliceTasks() {
+	m.Lock()
+	defer m.Unlock()
 	if m.conf.MaxDeletes <= 0 || m.dslices != nil {
 		return
 	}
@@ -545,31 +547,35 @@ func (m *baseMeta) startDeleteSliceTasks() {
 	m.dSliceWG.Add(m.conf.MaxDeletes)
 	m.dslices = make(chan Slice, m.conf.MaxDeletes*10240)
 	for i := 0; i < m.conf.MaxDeletes; i++ {
-		go func() {
+		go func(dslices chan Slice) {
 			defer m.sessWG.Done()
 			defer m.dSliceWG.Done()
 			for {
 				select {
 				case <-m.sessCtx.Done():
 					return
-				case s, ok := <-m.dslices:
+				case s, ok := <-dslices:
 					if !ok {
 						return
 					}
 					m.deleteSlice_(s.Id, s.Size)
 				}
 			}
-		}()
+		}(m.dslices)
 	}
 }
 
 func (m *baseMeta) stopDeleteSliceTasks() {
+	m.Lock()
 	if m.conf.MaxDeletes <= 0 || m.dslices == nil {
+		m.Unlock()
 		return
 	}
 	close(m.dslices)
-	m.dSliceWG.Wait()
 	m.dslices = nil
+	m.Unlock()
+
+	m.dSliceWG.Wait()
 }
 
 func (m *baseMeta) expireTime() int64 {
@@ -2401,11 +2407,14 @@ func (m *baseMeta) deleteSlice(id uint64, size uint32) {
 	if id == 0 || m.conf.MaxDeletes == 0 {
 		return
 	}
-	if m.dslices != nil {
+	m.Lock()
+	dslices := m.dslices
+	m.Unlock()
+	if dslices != nil {
 		select {
 		case <-m.sessCtx.Done():
 			return
-		case m.dslices <- Slice{Id: id, Size: size}:
+		case dslices <- Slice{Id: id, Size: size}:
 		}
 	} else {
 		m.deleteSlice_(id, size)
