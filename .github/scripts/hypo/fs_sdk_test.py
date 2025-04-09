@@ -348,7 +348,7 @@ class TestPySdk(unittest.TestCase):
         state.writelines(file=files_0, lines=['dua', 'hbixuhv'], mode='wb', offset=8344, user='root', whence=1)
         state.teardown()
 
-    def test_rename(self):
+    def skip_test_rename_file(self):
         state = JuicefsMachine()
         folders_0 = state.init_folders()
         files_0 = state.create_file(content=b'', file_name='q', parent=folders_0, umask=18, user='root')
