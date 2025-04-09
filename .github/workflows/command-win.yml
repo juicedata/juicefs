@@ -1,0 +1,243 @@
+name: "command-win"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - '**/command-win.yml'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - '**/command-win.yml'
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
+        required: false
+        default: false
+  schedule:
+    - cron: '0 17 * * 0'
+
+jobs:
+  command-win:
+    runs-on: windows-2019
+    env:
+      Actions_Allow_Unsecure_Commands: true
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.21'
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Setup MSBuild.exe
+        if: false
+        uses: microsoft/setup-msbuild@v1.0.3
+
+      - name: Change Winsdk Version
+        if: false
+        uses: GuillaumeFalourd/setup-windows10-sdk-action@v1
+        with:
+          sdk-version: 18362
+
+      - name: Download WinFsp
+        run: |
+          choco install wget
+          mkdir "C:\wfsp\"
+          wget -O winfsp.msi https://github.com/winfsp/winfsp/releases/download/v2.0/winfsp-2.0.23075.msi
+          copy winfsp.msi "C:\wfsp\"
+          choco install 7zip -y
+
+      - name: Install WinFsp
+        run: |
+          # call start-process to install winfsp.msi
+          Start-Process -Wait -FilePath "C:\wfsp\winfsp.msi" -ArgumentList "/quiet /norestart"
+          ls "C:\Program Files (x86)\WinFsp"
+          ls "C:\Program Files (x86)\WinFsp\bin"
+
+      - name: Set up Include Headers
+        run: |
+          mkdir "C:\WinFsp\inc\fuse"
+          copy .\hack\winfsp_headers\* C:\WinFsp\inc\fuse\
+          dir "C:\WinFsp\inc\fuse"
+          set CGO_CFLAGS=-IC:/WinFsp/inc/fuse
+          go env
+          go env -w CGO_CFLAGS=-IC:/WinFsp/inc/fuse
+          go env
+
+      - name: Install Scoop
+        run: |
+          dir "C:\Program Files (x86)\WinFsp"
+          Set-ExecutionPolicy RemoteSigned -scope CurrentUser
+          iwr -useb 'https://raw.githubusercontent.com/scoopinstaller/install/master/install.ps1' -outfile 'install.ps1'
+          .\install.ps1 -RunAsAdmin
+          echo $env:USERNAME
+          scoop
+          scoop install redis
+          scoop reset redis
+          $env:Path += ";$env:USERPROFILE\scoop\shims"
+          echo "Updated PATH: $env:Path"
+          redis-cli --version
+          scoop install minio@2021-12-10T23-03-39Z
+          scoop install runasti
+
+      - name: Download winsw
+        run: |
+          wget https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe -q --show-progress -O winsw.exe
+          ls winsw.exe
+
+      - name: Start Redis
+        run: |
+          copy winsw.exe redis-service.exe
+          echo  "<service>"   >> redis-service.xml
+          echo  "<id>redisredis</id>"  >> redis-service.xml
+          echo  "<name>redisredis</name>"  >> redis-service.xml
+          echo  "<description>redisredis</description>"  >> redis-service.xml
+          echo  "<executable>C:\Users\$env:USERNAME\scoop\shims\redis-server.exe</executable>"  >> redis-service.xml
+          echo  "<logmode>rotate</logmode>"  >> redis-service.xml
+          echo  "</service>"  >> redis-service.xml
+          .\redis-service.exe install
+          net start redisredis
+
+      - name: Download MinGW
+        run: |
+          wget https://github.com/niXman/mingw-builds-binaries/releases/download/14.2.0-rt_v12-rev1/x86_64-14.2.0-release-win32-seh-msvcrt-rt_v12-rev1.7z -q --show-progress -O mingw.7z
+          7z.exe x mingw.7z -oC:\mingw64
+          ls C:\mingw64\bin
+
+      - name: Install Git
+        run: |
+          if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+              Write-Host "Installing Git..."
+              $gitInstaller = "$env:TEMP\Git-Installer.exe"
+              Invoke-WebRequest -Uri "https://github.com/git-for-windows/git/releases/download/v2.44.0.windows.1/Git-2.44.0-64-bit.exe" -OutFile $gitInstaller
+              
+              Start-Process -Wait -FilePath $gitInstaller -ArgumentList "/VERYSILENT", "/NORESTART", "/NOCANCEL", "/SP-", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS", "/COMPONENTS=""icons,ext\reg\shellhere,assoc,assoc_sh"""
+              $env:Path += ";C:\Program Files\Git\bin"
+          }
+       
+
+      - name: Build Juicefs
+        run: |
+          $env:CGO_ENABLED=1
+          $env:PATH+=";C:\mingw64\bin"
+          go build -ldflags="-s -w" -o juicefs.exe .
+      
+      - name: Install Python2
+        run: |
+          choco install python2 -y
+
+      - name: Install Python3
+        run: |
+          choco install python3 -y
+
+      - name: Wins_fs_test
+        run: |
+          ./juicefs.exe format redis://127.0.0.1:6379/1 myjfs
+          $env:PATH+=";C:\Program Files (x86)\WinFsp\bin"
+          ./juicefs.exe mount -d redis://127.0.0.1:6379/1 z:
+          python3 .github/scripts/wins_fs_test.py
+
+      - name: Get FSX 
+        run: |
+          wget https://github.com/chenjie4255/fstools/releases/download/v0.0.1/fsx-x64.exe -q --show-progress -O fsx.exe
+          ls fsx.exe
+
+      - name: Test Gc
+        if: false
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          export PATH="$HOME/scoop/shims:$PATH"
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
+          META_URL=redis://127.0.0.1:6379/1 .github/scripts/command-win/gc.sh
+      
+      - name: Test Debug
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          export PATH="$HOME/scoop/shims:$PATH"
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
+          META_URL=redis://127.0.0.1:6379/1 .github/scripts/command-win/debug.sh
+
+      - name: Test dump load
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          export PATH="$HOME/scoop/shims:$PATH"
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
+          META_URL=redis://127.0.0.1:6379/1 .github/scripts/command-win/dump_load.sh
+
+      - name: Test acl
+        if: false
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          export PATH="$HOME/scoop/shims:$PATH"
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
+          META_URL=redis://127.0.0.1:6379/1 .github/scripts/command-win/acl.sh
+
+      - name: Test clone
+        timeout-minutes: 10
+        shell: bash
+        if: false
+        run: |
+          export PATH="$HOME/scoop/shims:$PATH"
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
+          META_URL=redis://127.0.0.1:6379/1 .github/scripts/command-win/clone.sh
+
+      - name: Test fsck
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          export PATH="$HOME/scoop/shims:$PATH"
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
+          META_URL=redis://127.0.0.1:6379/1 .github/scripts/command-win/fsck.sh
+
+      - name: Test profile
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          export PATH="$HOME/scoop/shims:$PATH"
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
+          META_URL=redis://127.0.0.1:6379/1 .github/scripts/command-win/profile.sh
+      
+      - name: Test gateway
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          export PATH="$HOME/scoop/shims:$PATH"
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
+          META_URL=redis://127.0.0.1:6379/1 .github/scripts/command-win/gateway.sh
+
+      - name: Test quota
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          export PATH="$HOME/scoop/shims:$PATH"
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
+          META_URL=redis://127.0.0.1:6379/1 .github/scripts/command-win/quota.sh
+          
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        timeout-minutes: 60
+        uses: mxschmitt/action-tmate@v3
+     
