@@ -131,10 +131,6 @@ jobs:
           $env:CGO_ENABLED=1
           $env:PATH+=";C:\mingw64\bin"
           go build -ldflags="-s -w" -o juicefs.exe .
-      
-      - name: Install Python2
-        run: |
-          choco install python2 -y
 
       - name: Install Python3
         run: |
@@ -146,11 +142,6 @@ jobs:
           $env:PATH+=";C:\Program Files (x86)\WinFsp\bin"
           ./juicefs.exe mount -d redis://127.0.0.1:6379/1 z:
           python3 .github/scripts/wins_fs_test.py
-
-      - name: Get FSX 
-        run: |
-          wget https://github.com/chenjie4255/fstools/releases/download/v0.0.1/fsx-x64.exe -q --show-progress -O fsx.exe
-          ls fsx.exe
 
       - name: Test Gc
         if: false
