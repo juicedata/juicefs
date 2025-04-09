@@ -285,7 +285,7 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 	}
 
 	if c.IsSet("umask") {
-		umask, err := utils.ParseMode(c.String("umask"))
+		umask, err := strconv.ParseUint(c.String("umask"), 8, 16)
 		if err != nil {
 			logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
 		}
