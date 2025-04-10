@@ -25,6 +25,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -201,11 +202,14 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 	var addr string
 	if config.ManagerAddr != "" {
 		addr = config.ManagerAddr
+	} else if u, err := url.Parse("ssh://" + config.Workers[0]); err != nil {
+		return "", fmt.Errorf("invalid worker address %s: %s", config.Workers[0], err)
 	} else {
-		ip, err := utils.GetLocalIp(net.JoinHostPort(config.Workers[0], "22"))
+		ip, err := utils.GetLocalIp(net.JoinHostPort(u.Host, "22"))
 		if err != nil {
 			return "", fmt.Errorf("not found local ip: %s", err)
 		}
+		logger.Debugf("Use local ip %s", ip)
 		addr = ip
 	}
 

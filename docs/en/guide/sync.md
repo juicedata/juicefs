@@ -284,7 +284,7 @@ juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa
 
 The synchronization workload between the two object storage services is shared by the manager machine and two workers, `bob@192.168.1.20` and `tom@192.168.8.10`.
 
-The above command demonstrates object → object sychronization, if you need to sync via FUSE mount points, then you need to mount the file system in all worker nodes, and then run the following command to achieve distributed sync:
+The above command demonstrates object → object synchronization, if you need to sync via FUSE mount points, then you need to mount the file system in all worker nodes, and then run the following command to achieve distributed sync:
 
 ```shell
 # Source file system needs better read performance, increase its buffer-size
