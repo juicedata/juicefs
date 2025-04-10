@@ -17,6 +17,7 @@ package sync
 
 import (
 	"os"
+	"os/user"
 	"testing"
 	"time"
 
@@ -48,9 +49,15 @@ func (o *file) Mode() os.FileMode { return 0 }
 
 func TestCluster(t *testing.T) {
 	// manager
+	workerAddr := "127.0.0.1"
+	if u, err := user.Current(); err != nil {
+		logger.Warnf("Failed to get current user: %v", err)
+	} else if u.Username != "" {
+		workerAddr = u.Username + "@" + workerAddr
+	}
 	todo := make(chan object.Object, 100)
 	var conf Config
-	conf.Workers = []string{"root@127.0.0.1"}
+	conf.Workers = []string{workerAddr}
 	addr, err := startManager(&conf, todo)
 	if err != nil {
 		t.Fatal(err)
