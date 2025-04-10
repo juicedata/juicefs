@@ -33,13 +33,13 @@ func cmdStatus() *cli.Command {
 		Usage:     "Show status of a volume",
 		ArgsUsage: "META-URL",
 		Description: `
- It shows basic setting of the target volume, and a list of active sessions (including mount, SDK,
- S3-gateway and WebDAV) that are connected with the metadata engine.
- 
- NOTE: Read-only session is not listed since it cannot register itself in the metadata.
- 
- Examples:
- $ juicefs status redis://localhost`,
+It shows basic setting of the target volume, and a list of active sessions (including mount, SDK,
+S3-gateway and WebDAV) that are connected with the metadata engine.
+
+NOTE: Read-only session is not listed since it cannot register itself in the metadata.
+
+Examples:
+$ juicefs status redis://localhost`,
 		Flags: []cli.Flag{
 			&cli.Uint64Flag{
 				Name:    "session",
@@ -69,11 +69,10 @@ func status(ctx *cli.Context) error {
 	removePassword(metaUrl)
 	m := meta.NewClient(metaUrl, nil)
 
-	sessionId := ctx.Uint64("session")
-	if sessionId != 0 {
-		s, err := m.GetSession(sessionId, true)
+	if sid := ctx.Uint64("session"); sid != 0 {
+		s, err := m.GetSession(sid, true)
 		if err != nil {
-			logger.Fatalf("get session: %v", err)
+			logger.Fatalf("get session: %s", err)
 		}
 		printJson(s)
 		return nil

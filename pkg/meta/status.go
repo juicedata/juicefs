@@ -1,4 +1,3 @@
-// meta/status.go
 /*
  * JuiceFS, Copyright 2021 Juicedata, Inc.
  *
@@ -26,6 +25,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
+// Statistic contains the statistics of the filesystem
 type Statistic struct {
 	UsedSpace                uint64
 	AvailableSpace           uint64
@@ -47,6 +47,7 @@ type Sections struct {
 	Stat     *Statistic
 }
 
+// Status retrieves the status of the filesystem
 func Status(ctx context.Context, m Meta, trash bool, sections *Sections) error {
 	format, err := m.Load(true)
 	if err != nil {
