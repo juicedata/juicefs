@@ -176,7 +176,7 @@ func (j *juice) Mknod(p string, mode uint32, dev uint64) (e int) {
 		return
 	}
 	_, errno := j.vfs.Mknod(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(dev))
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -218,7 +218,7 @@ func (j *juice) Symlink(target string, newpath string) (e int) {
 		return
 	}
 	_, errno := j.vfs.Symlink(ctx, target, parent.Inode(), path.Base(newpath))
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -501,7 +501,7 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 	}
 	entry, errrno := j.vfs.GetAttr(ctx, ino, 0)
 	if errrno != 0 {
-		e = -int(errrno)
+		e = errorconv(errrno)
 		return
 	}
 	j.vfs.UpdateLength(entry.Inode, entry.Attr)
@@ -518,7 +518,7 @@ func (j *juice) Truncate(path string, size int64, fh uint64) (e int) {
 		e = -fuse.EBADF
 		return
 	}
-	e = -int(j.vfs.Truncate(ctx, ino, size, 0, nil))
+	e = errorconv(j.vfs.Truncate(ctx, ino, size, 0, nil))
 	return
 }
 
@@ -721,7 +721,7 @@ func (j *juice) Chflags(path string, flags uint32) (e int) {
 	ino := fi.Inode()
 	err = j.vfs.ChFlags(ctx, ino, flagSet)
 	if err != 0 {
-		e = -int(err)
+		e = errorconv(err)
 	}
 
 	return
