@@ -168,6 +168,9 @@ class SummaryTests(unittest.TestCase):
         create_file(TESTFN + '/dir1/file')
         v.mkdir(TESTFN + '/dir2')
 
+    def tearDown(self):
+        v.rmr(TESTFN)
+
     def test_summary(self):
         res = v.summary(TESTFILE, depth=258, entries=2)
         self.assertTrue(normalize(res)==normalize({"Path": "file", "Type": 2, "Files":1, "Dirs":0, "Size":4096}))
@@ -202,6 +205,43 @@ class SummaryTests(unittest.TestCase):
                             }
                             ]}
                         ))
+
+class QuotaTests(unittest.TestCase):
+    # /test/dir1/file
+    #      /dir2
+    #      /file
+    def setUp(self):
+        if not v.exists(TESTFN):
+            v.mkdir(TESTFN)
+        create_file(TESTFILE)
+        v.mkdir(TESTFN + '/dir1')
+        create_file(TESTFN + '/dir1/file')
+        v.mkdir(TESTFN + '/dir2')
+
+    def tearDown(self):
+        v.rmr(TESTFN)
+
+    def test_quota(self):
+        # set quota
+        v.set_quota(path=TESTFN, capacity=1024*1024*1024, inodes=1000, create=True)
+        res = v.get_quota(path=TESTFN)
+        self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 0, "UsedInodes": 3}}))
+
+        res = v.list_quota()
+        self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 0, "UsedInodes": 3}}))
+
+        v.set_quota(path=TESTFN+"/dir1",  capacity=1024*1024*1024, inodes=10000, create=True, strict=True)
+        res = v.list_quota()
+        self.assertTrue(normalize(res)==normalize({"/test": {"MaxSpace": 1024*1024*1024, "MaxInodes": 1000, "UsedSpace": 0, "UsedInodes": 3}, "/test/dir1": {"MaxSpace": 1024*1024*1024, "MaxInodes": 10000, "UsedSpace": 4096, "UsedInodes": 1}}))
+
+        # check quota
+        v.check_quota(path=TESTFN, strict=True, repair=True)
+
+        # unset quota
+        v.del_quota(path=TESTFN)
+        res = v.get_quota(path=TESTFN)
+        self.assertTrue(res=={})
+
 
 def normalize(d):
     if isinstance(d, dict):

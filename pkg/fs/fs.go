@@ -1036,6 +1036,35 @@ func (fs *FileSystem) Warmup(ctx meta.Context, paths []string, numthreads int, b
 	}
 }
 
+func (fs *FileSystem) HandleQuota(ctx meta.Context, path string, cmd uint8, capacity, inodes uint64, strict, repair, create bool) (qs map[string]*meta.Quota, err syscall.Errno) {
+	l := vfs.NewLogContext(ctx)
+	defer func() {
+		fs.log(l, "QuotaCtl (%s,%d,%d,%d,%t,%t,%t): %s", path, cmd, capacity, inodes, create, repair, strict, errstr(err))
+	}()
+	if cmd == meta.QuotaSet && capacity == 0 && inodes == 0 {
+		return nil, syscall.EINVAL
+	}
+	qs = make(map[string]*meta.Quota)
+	if cmd == meta.QuotaSet {
+		q := &meta.Quota{MaxSpace: -1, MaxInodes: -1} // negative means no change
+		if capacity > 0 {
+			q.MaxSpace = int64(capacity)
+		}
+		if inodes > 0 {
+			q.MaxInodes = int64(inodes)
+		}
+		qs[path] = q
+	}
+
+	if _err := fs.m.HandleQuota(meta.Background(), cmd, path, qs, strict, repair, create); _err != nil {
+		if strings.HasPrefix(_err.Error(), "no quota for inode") {
+			return qs, 0
+		}
+		err = syscall.EINVAL
+	}
+	return
+}
+
 // File
 
 func (f *File) FS() *FileSystem {
