@@ -200,10 +200,19 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 		_, _ = w.Write([]byte("OK"))
 	})
 	var addr string
+	u, err := url.Parse("ssh://" + config.Workers[0])
+	if err != nil {
+		return "", fmt.Errorf("invalid worker address %s: %s", config.Workers[0], err)
+	}
 	if config.ManagerAddr != "" {
 		addr = config.ManagerAddr
-	} else if u, err := url.Parse("ssh://" + config.Workers[0]); err != nil {
-		return "", fmt.Errorf("invalid worker address %s: %s", config.Workers[0], err)
+		if strings.HasPrefix(addr, ":") || strings.Contains(addr, "0.0.0.0") {
+			ip, err := utils.GetLocalIp(net.JoinHostPort(u.Host, "22"))
+			if err != nil {
+				return "", fmt.Errorf("get local ip: %s", err)
+			}
+			addr = ip + addr
+		}
 	} else {
 		ip, err := utils.GetLocalIp(net.JoinHostPort(u.Host, "22"))
 		if err != nil {
