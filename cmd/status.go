@@ -55,39 +55,35 @@ func cmdStatus() *cli.Command {
 	}
 }
 
-func status(ctx *cli.Context) error {
-	var output []byte
-	var err error
+func printJson(v interface{}) {
+	output, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		logger.Fatalf("json: %s", err)
+	}
+	fmt.Println(string(output))
+}
 
+func status(ctx *cli.Context) error {
 	setup(ctx, 1)
 	metaUrl := ctx.Args().Get(0)
 	removePassword(metaUrl)
 	m := meta.NewClient(metaUrl, nil)
-	sessionId := ctx.Uint64("session")
 
+	sessionId := ctx.Uint64("session")
 	if sessionId != 0 {
 		s, err := m.GetSession(sessionId, true)
 		if err != nil {
 			logger.Fatalf("get session: %v", err)
 		}
-		output, err = json.MarshalIndent(s, "", " ")
-		if err != nil {
-			logger.Fatalf("marshal session: %v", err)
-		}
-	} else {
-
-		sections := &meta.Sections{}
-		err = meta.Status(ctx.Context, m, ctx.Bool("more"), sections)
-		if err != nil {
-			logger.Fatalf("get status: %s", err)
-		}
-
-		output, err = json.MarshalIndent(sections, "", " ")
-		if err != nil {
-			logger.Fatalf("marshal status: %s", err)
-		}
+		printJson(s)
+		return nil
 	}
 
-	fmt.Println(string(output))
+	sections := &meta.Sections{}
+	err := meta.Status(ctx.Context, m, ctx.Bool("more"), sections)
+	if err != nil {
+		logger.Fatalf("get status: %s", err)
+	}
+	printJson(sections)
 	return nil
 }

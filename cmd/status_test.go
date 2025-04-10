@@ -25,27 +25,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 )
 
-type statistic struct {
-	UsedSpace                uint64
-	AvailableSpace           uint64
-	UsedInodes               uint64
-	AvailableInodes          uint64
-	TrashFileCount           int64 `json:",omitempty"`
-	TrashFileSize            int64 `json:",omitempty"`
-	PendingDeletedFileCount  int64 `json:",omitempty"`
-	PendingDeletedFileSize   int64 `json:",omitempty"`
-	TrashSliceCount          int64 `json:",omitempty"`
-	TrashSliceSize           int64 `json:",omitempty"`
-	PendingDeletedSliceCount int64 `json:",omitempty"`
-	PendingDeletedSliceSize  int64 `json:",omitempty"`
-}
-
-type sections struct {
-	Setting   *meta.Format
-	Sessions  []*meta.Session
-	Statistic *statistic
-}
-
 func TestStatus(t *testing.T) {
 	tmpFile, err := os.CreateTemp("/tmp", "")
 	if err != nil {
@@ -68,7 +47,7 @@ func TestStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read file failed: %s", err)
 	}
-	s := sections{}
+	s := meta.Sections{}
 	if err = json.Unmarshal(content, &s); err != nil {
 		t.Fatalf("json unmarshal failed: %s", err)
 	}
