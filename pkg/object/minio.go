@@ -21,22 +21,22 @@ package object
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"net/url"
 	"os"
 	"strings"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 type minio struct {
 	s3client
+	endpoint string
 }
 
 func (m *minio) String() string {
-	return fmt.Sprintf("minio://%s/%s/", *m.s3client.ses.Config.Endpoint, m.s3client.bucket)
+	return fmt.Sprintf("minio://%s/%s/", m.endpoint, m.s3client.bucket)
 }
 
 func (m *minio) Limits() Limits {
@@ -65,29 +65,25 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 	if region == "" {
 		region = awsDefaultRegion
 	}
-	awsConfig := &aws.Config{
-		Region:           aws.String(region),
-		Endpoint:         &uri.Host,
-		DisableSSL:       aws.Bool(!ssl),
-		S3ForcePathStyle: aws.Bool(defaultPathStyle()),
-		HTTPClient:       httpClient,
-	}
 	if accessKey == "" {
 		accessKey = os.Getenv("MINIO_ACCESS_KEY")
 	}
 	if secretKey == "" {
 		secretKey = os.Getenv("MINIO_SECRET_KEY")
 	}
-	if accessKey != "" {
-		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, token)
-	}
 
-	ses, err := session.NewSession(awsConfig)
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load config: %v", err)
 	}
-	ses.Handlers.Build.PushFront(disableSha256Func)
-
+	client := s3.NewFromConfig(cfg, func(options *s3.Options) {
+		options.Region = region
+		options.BaseEndpoint = aws.String(endpoint)
+		options.EndpointOptions.DisableHTTPS = !ssl
+		options.UsePathStyle = defaultPathStyle()
+		options.HTTPClient = httpClient
+	})
 	if len(uri.Path) < 2 {
 		return nil, fmt.Errorf("no bucket name provided in %s", endpoint)
 	}
@@ -96,7 +92,8 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		bucket = bucket[len("minio/"):]
 	}
 	bucket = strings.Split(bucket, "/")[0]
-	return &minio{s3client{bucket: bucket, s3: s3.New(ses), ses: ses}}, nil
+	//todo: support disableChecksum
+	return &minio{s3client{bucket: bucket, s3: client, region: region}, endpoint}, nil
 }
 
 func init() {
