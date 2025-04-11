@@ -32,7 +32,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	aws2 "github.com/aws/aws-sdk-go/aws"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/ks3sdklib/aws-sdk-go/aws"
 	"github.com/ks3sdklib/aws-sdk-go/aws/awserr"
@@ -113,8 +112,8 @@ func (s *ks3) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadC
 	resp, err := s.s3.GetObject(params)
 	if resp != nil {
 		attrs := applyGetters(getters...)
-		attrs.SetRequestID(aws2.StringValue(resp.Metadata[s3RequestIDKey]))
-		attrs.SetStorageClass(aws2.StringValue(resp.Metadata[s3StorageClassHdr]))
+		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey]))
+		attrs.SetStorageClass(aws.ToString(resp.Metadata[s3StorageClassHdr]))
 	}
 	if err != nil {
 		return nil, err
@@ -146,7 +145,7 @@ func (s *ks3) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	resp, err := s.s3.PutObject(params)
 	if resp != nil {
 		attrs := applyGetters(getters...)
-		attrs.SetRequestID(aws2.StringValue(resp.Metadata[s3RequestIDKey])).SetStorageClass(s.sc)
+		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey])).SetStorageClass(s.sc)
 	}
 	return err
 }
@@ -172,7 +171,7 @@ func (s *ks3) Delete(key string, getters ...AttrGetter) error {
 	resp, err := s.s3.DeleteObject(&param)
 	if resp != nil {
 		attrs := applyGetters(getters...)
-		attrs.SetRequestID(aws2.StringValue(resp.Metadata[s3RequestIDKey]))
+		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey]))
 	}
 	if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
 		return nil

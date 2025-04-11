@@ -22,6 +22,7 @@ package object
 import (
 	"bytes"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"io"
 	"net/http"
 	"net/url"
@@ -29,8 +30,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/aws/aws-sdk-go/aws"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/qingstor/qingstor-sdk-go/v4/config"
@@ -90,7 +89,7 @@ func (q *qingstor) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 	output, err := q.bucket.GetObject(key, input)
 	if output != nil {
 		attrs := applyGetters(getters...)
-		attrs.SetRequestID(aws.StringValue(output.RequestID))
+		attrs.SetRequestID(aws.ToString(output.RequestID))
 		if output.XQSStorageClass != nil {
 			attrs.SetStorageClass(*output.XQSStorageClass)
 		}
@@ -157,7 +156,7 @@ func (q *qingstor) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	out, err := q.bucket.PutObject(key, input)
 	if out != nil {
 		attrs := applyGetters(getters...)
-		attrs.SetRequestID(aws.StringValue(out.RequestID)).SetStorageClass(q.sc)
+		attrs.SetRequestID(aws.ToString(out.RequestID)).SetStorageClass(q.sc)
 	}
 	if err != nil {
 		return err
@@ -190,7 +189,7 @@ func (q *qingstor) Delete(key string, getters ...AttrGetter) error {
 	output, err := q.bucket.DeleteObject(key)
 	if output != nil {
 		attrs := applyGetters(getters...)
-		attrs.SetRequestID(aws.StringValue(output.RequestID))
+		attrs.SetRequestID(aws.ToString(output.RequestID))
 	}
 	return err
 }
