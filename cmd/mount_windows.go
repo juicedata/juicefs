@@ -72,6 +72,10 @@ func mountFlags() []cli.Flag {
 			Usage:  "If set, the file system will be case sensitive",
 			Hidden: true,
 		},
+		&cli.BoolFlag{
+			Name:  "enable-get-path",
+			Usage: "If set, it will improve the accuracy of letter case when returning file paths. (May incur a performance lost)",
+		},
 	}
 }
 
@@ -110,7 +114,9 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 		winfsp.SetTraceOutput(traceLog)
 	}
 
-	winfsp.Serve(v, c.String("o"), fileCacheTimeout.Seconds(), dirCacheTimeout.Seconds(), c.Bool("as-root"), int(delayCloseTime.Seconds()), c.Bool("show-dot-files"), c.Int("winfsp-threads"), c.Bool("case-sensitive"))
+	winfsp.Serve(v, c.String("o"), fileCacheTimeout.Seconds(), dirCacheTimeout.Seconds(),
+		c.Bool("as-root"), int(delayCloseTime.Seconds()), c.Bool("show-dot-files"),
+		c.Int("winfsp-threads"), c.Bool("case-sensitive"), c.Bool("enable-get-path"))
 }
 
 func checkMountpoint(name, mp, logPath string, background bool) {}
