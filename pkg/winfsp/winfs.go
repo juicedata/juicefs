@@ -57,8 +57,9 @@ type juice struct {
 	handlers map[uint64]meta.Ino
 	badfd    map[uint64]uint64
 
-	asRoot     bool
-	delayClose int
+	asRoot         bool
+	delayClose     int
+	enabledGetPath bool
 }
 
 // Init is called when the file system is created.
@@ -728,6 +729,10 @@ func (j *juice) Chflags(path string, flags uint32) (e int) {
 }
 
 func (j *juice) Getpath(p string, fh uint64) (e int, ret string) {
+	if !j.enabledGetPath {
+		ret = p
+		return
+	}
 	defer trace(p, fh)(&e, &ret)
 	ino := j.h2i(&fh)
 	ctx := j.newContext()
@@ -766,11 +771,13 @@ func (j *juice) Getpath(p string, fh uint64) (e int, ret string) {
 	return
 }
 
-func Serve(v *vfs.VFS, fuseOpt string, fileCacheTimeoutSec float64, dirCacheTimeoutSec float64, asRoot bool, delayCloseSec int, showDotFiles bool, threadsCount int, caseSensitive bool) {
+func Serve(v *vfs.VFS, fuseOpt string, fileCacheTimeoutSec float64, dirCacheTimeoutSec float64,
+	asRoot bool, delayCloseSec int, showDotFiles bool, threadsCount int, caseSensitive bool, enabledGetPath bool) {
 	var jfs juice
 	conf := v.Conf
 	jfs.conf = conf
 	jfs.vfs = v
+	jfs.enabledGetPath = enabledGetPath
 	var err error
 	jfs.fs, err = fs.NewFileSystem(conf, v.Meta, v.Store)
 	if err != nil {
