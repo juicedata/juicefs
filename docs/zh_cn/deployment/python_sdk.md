@@ -36,7 +36,6 @@ cd juicefs && python3 -m build -w
 
 编译好的 Python SDK 会在 `juicefs/sdk/python/dist` 目录下，文件名为 `juicefs-1.3.0-py3-none-any.whl`。
 
-
 ### Docker 编译
 
 使用 Docker 容器编译需要当前系统安装了 `Docker`、`make` 和 `go1.20+` 环境。
@@ -63,7 +62,6 @@ make juicefs
 
 如果在编译时遇到 `sed: 1: "juicefs/setup.py": invalid command code j` 的错误，可以尝试将 `Makefile` 中 `sed` 相关的命令注释掉。
 
-
 ## 安装与使用
 
 ### 安装 SDK
@@ -81,7 +79,6 @@ JuiceFS 的 Python SDK 暂不支持格式化文件系统，因此在使用之前
 :::
 
 假设这里已经有一个预先创建好的名称为 `myfs` 的文件系统，元数据引擎 URL 为 `redis://192.168.1.8/0`。
-
 
 ### 使用 Client
 
