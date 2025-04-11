@@ -1635,6 +1635,46 @@ func jfs_clone(pid int64, h int64, _src *C.char, _dst *C.char, preserve bool) in
 	return errno(err)
 }
 
+//export jfs_status
+func jfs_status(pid int64, h int64, trash bool, session uint64, p_buf **byte) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	ctx := w.withPid(pid)
+
+	var err error
+	var output []byte
+	if session != 0 {
+		s, err := w.Meta().GetSession(session, true)
+		if err != nil {
+			logger.Errorf("get session %d: %s", session, err)
+			return errno(syscall.EIO)
+		}
+		output, err = json.Marshal(s)
+		if err != nil {
+			logger.Errorf("marshal session: %v", err)
+			return errno(syscall.EIO)
+		}
+	} else {
+		sections := &meta.Sections{}
+		err = meta.Status(ctx, w.Meta(), trash, sections)
+		if err != nil {
+			logger.Errorf("get status: %s", err)
+			return errno(syscall.EIO)
+		}
+		output, err = json.Marshal(sections)
+		if err != nil {
+			logger.Errorf("marshal sessions: %v", err)
+			return errno(syscall.EIO)
+		}
+	}
+
+	*p_buf = (*byte)(C.malloc(C.size_t(len(output))))
+	buf := unsafe.Slice(*p_buf, len(output))
+	return int32(copy(buf, output))
+}
+
 //export jfs_lseek
 func jfs_lseek(pid int64, fd int32, offset int64, whence int64) int64 {
 	filesLock.Lock()

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/agiledragon/gomonkey/v2"
+	"github.com/juicedata/juicefs/pkg/meta"
 )
 
 func TestStatus(t *testing.T) {
@@ -46,7 +47,7 @@ func TestStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read file failed: %s", err)
 	}
-	s := sections{}
+	s := meta.Sections{}
 	if err = json.Unmarshal(content, &s); err != nil {
 		t.Fatalf("json unmarshal failed: %s", err)
 	}
