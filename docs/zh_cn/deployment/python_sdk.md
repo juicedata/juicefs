@@ -20,7 +20,7 @@ cd juicefs/sdk/python
 
 直接编译需要 `go1.20+` 和 `python3` 环境。
 
-**第一步，编译 libjfs.so：**
+第一步：编译 libjfs.so
 
 ```bash
 go build -buildmode c-shared -ldflags="-s -w" -o juicefs/juicefs/libjfs.so ../java/libjfs
@@ -28,7 +28,7 @@ go build -buildmode c-shared -ldflags="-s -w" -o juicefs/juicefs/libjfs.so ../ja
 
 编译产生的 `libjfs.so` 和 `libjfs.h` 文件在 `sdk/python/juicefs/juicefs` 目录下。
 
-**第二步，编译 Python SDK：**
+第二步：编译 Python SDK
 
 ```bash
 cd juicefs && python3 -m build -w
@@ -40,7 +40,7 @@ cd juicefs && python3 -m build -w
 
 使用 Docker 容器编译需要当前系统安装了 `Docker`、`make` 和 `go1.20+` 环境。
 
-**第一步：构建 Docker 镜像**
+第一步：构建 Docker 镜像
 
 ```bash
 # For arm64
@@ -50,7 +50,7 @@ make arm-builder
 make builder
 ```
 
-**第二步：编译 Python SDK**
+第二步：编译 Python SDK
 
 ```bash
 make juicefs

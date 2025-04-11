@@ -20,7 +20,7 @@ cd juicefs/sdk/python
 
 Direct compilation requires `go1.20+` and `python3` environments.
 
-**Step 1: Compile libjfs.so:**
+Step 1: Compile libjfs.so
 
 ```bash
 go build -buildmode c-shared -ldflags="-s -w" -o juicefs/juicefs/libjfs.so ../java/libjfs
@@ -28,7 +28,7 @@ go build -buildmode c-shared -ldflags="-s -w" -o juicefs/juicefs/libjfs.so ../ja
 
 The compiled `libjfs.so` and `libjfs.h` files will be in the `sdk/python/juicefs/juicefs` directory.
 
-**Step 2: Compile Python SDK:**
+Step 2: Compile Python SDK
 
 ```bash
 cd juicefs && python3 -m build -w
@@ -40,7 +40,7 @@ The compiled Python SDK will be in the `juicefs/sdk/python/dist` directory, name
 
 Using Docker containers for compilation requires `Docker`, `make`, and `go1.20+` installed on your system.
 
-**Step 1: Build Docker image**
+Step 1: Build Docker image
 
 ```bash
 # For arm64
@@ -50,7 +50,7 @@ make arm-builder
 make builder
 ```
 
-**Step 2: Compile Python SDK**
+Step 2: Compile Python SDK
 
 ```bash
 make juicefs
