@@ -2683,7 +2683,7 @@ func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 				return ENOATTR
 			}
 		}
-		if !bytes.Equal(v, value) {
+		if v == nil || !bytes.Equal(v, value) {
 			tx.set(key, value)
 		}
 		return nil
