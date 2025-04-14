@@ -217,13 +217,15 @@ func (s *s3client) Delete(key string, getters ...AttrGetter) error {
 
 func (s *s3client) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := s3.ListObjectsV2Input{
-		Bucket:            &s.bucket,
-		Prefix:            &prefix,
-		MaxKeys:           aws.Int32(int32(limit)),
-		EncodingType:      types.EncodingTypeUrl,
-		StartAfter:        aws.String(start),
-		ContinuationToken: aws.String(token),
-		Delimiter:         aws.String(delimiter),
+		Bucket:       &s.bucket,
+		Prefix:       &prefix,
+		MaxKeys:      aws.Int32(int32(limit)),
+		EncodingType: types.EncodingTypeUrl,
+		StartAfter:   aws.String(start),
+		Delimiter:    aws.String(delimiter),
+	}
+	if token != "" {
+		param.ContinuationToken = aws.String(token)
 	}
 	resp, err := s.s3.ListObjectsV2(ctx, &param)
 	if err != nil {
