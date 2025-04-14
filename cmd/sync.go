@@ -276,8 +276,6 @@ func supportHTTPS(name, endpoint string) bool {
 		return !(strings.Contains(endpoint, ".internal-") || strings.HasSuffix(endpoint, ".ucloud.cn"))
 	case "oss":
 		return !(strings.Contains(endpoint, ".vpc100-oss") || strings.Contains(endpoint, "internal.aliyuncs.com"))
-	case "jss":
-		return false
 	case "s3":
 		ps := strings.SplitN(strings.Split(endpoint, ":")[0], ".", 2)
 		if len(ps) > 1 && net.ParseIP(ps[1]) != nil {
