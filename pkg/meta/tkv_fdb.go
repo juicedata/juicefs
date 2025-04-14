@@ -85,7 +85,9 @@ func (c *fdbClient) scan(prefix []byte, handler func(key, value []byte)) error {
 			var count int
 			for iter.Advance() {
 				r = iter.MustGet()
-				handler(r.Key, r.Value)
+				if !handler(r.Key, r.Value) {
+					break
+				}
 				count++
 			}
 			if count < limit {

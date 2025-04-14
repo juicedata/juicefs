@@ -55,7 +55,7 @@ type kvtxn interface {
 type tkvClient interface {
 	name() string
 	txn(f func(*kvTxn) error, retry int) error
-	scan(prefix []byte, handler func(key, value []byte)) error
+	scan(prefix []byte, handler func(key, value []byte) bool) error
 	reset(prefix []byte) error
 	close() error
 	shouldRetry(err error) bool
@@ -2168,13 +2168,19 @@ func (m *kvMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, sys
 }
 
 func (m *kvMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {
+	if limit == 0 {
+		return nil, nil
+	}
 	klen := 1 + 8 + 8
 	files := make(map[Ino]uint64)
-	err := m.client.scan(m.fmtKey("D"), func(k, v []byte) {
+	var count int
+	err := m.client.scan(m.fmtKey("D"), func(k, v []byte) bool {
 		if len(k) == klen && len(v) == 8 && m.parseInt64(v) < ts {
 			rb := utils.FromBuffer([]byte(k)[1:])
 			files[m.decodeInode(rb.Get(8))] = rb.Get64()
+			count++
 		}
+		return limit < 0 || count < limit
 	})
 	return files, err
 }
@@ -2184,7 +2190,7 @@ func (m *kvMeta) doCleanupSlices() {
 		m.client.gc()
 	}
 	klen := 1 + 8 + 4
-	m.client.scan(m.fmtKey("K"), func(k, v []byte) {
+	_ = m.client.scan(m.fmtKey("K"), func(k, v []byte) bool {
 		if len(k) == klen && len(v) == 8 && parseCounter(v) <= 0 {
 			rb := utils.FromBuffer([]byte(k)[1:])
 			id := rb.Get64()
@@ -2196,6 +2202,7 @@ func (m *kvMeta) doCleanupSlices() {
 				m.cleanupZeroRef(id, size)
 			}
 		}
+		return true
 	})
 }
 
@@ -2376,7 +2383,7 @@ func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice,
 func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
-	return m.client.scan(m.fmtKey("A"), func(k, v []byte) {
+	return m.client.scan(m.fmtKey("A"), func(k, v []byte) bool {
 		if len(k) == klen && k[1+8] == 'C' && len(v) > sliceBytes {
 			bar.IncrTotal(1)
 			ch <- cchunk{
@@ -2385,6 +2392,7 @@ func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 				slices: len(v) / sliceBytes,
 			}
 		}
+		return true
 	})
 }
 
@@ -2394,15 +2402,15 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	}
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
-	m.client.scan(m.fmtKey("A"), func(key, value []byte) {
+	_ = m.client.scan(m.fmtKey("A"), func(key, value []byte) bool {
 		if len(key) != klen || key[1+8] != 'C' {
-			return
+			return true
 		}
 		inode := m.decodeInode([]byte(key)[1:9])
 		ss := readSliceBuf(value)
 		if ss == nil {
 			logger.Errorf("Corrupt value for inode %d chunk key %s", inode, key)
-			return
+			return true
 		}
 		for _, s := range ss {
 			if s.id > 0 {
@@ -2412,6 +2420,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 				}
 			}
 		}
+		return true
 	})
 	if m.getFormat().TrashDays == 0 {
 		return 0
@@ -2437,9 +2446,9 @@ func (m *kvMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 	klen := 1 + 8 + 8
 	var ss []Slice
 	var rs []int64
-	return m.client.scan(m.fmtKey("L"), func(key, value []byte) {
+	return m.client.scan(m.fmtKey("L"), func(key, value []byte) bool {
 		if len(key) != klen || len(value) == 0 {
-			return
+			return true
 		}
 		var clean bool
 		var err error
@@ -2467,7 +2476,7 @@ func (m *kvMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 		})
 		if err != nil {
 			logger.Warnf("scan trash slices %s: %s", key, err)
-			return
+			return true
 		}
 		if clean && len(rs) == len(ss) {
 			for i, s := range ss {
@@ -2476,6 +2485,7 @@ func (m *kvMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 				}
 			}
 		}
+		return true
 	})
 }
 
@@ -2486,7 +2496,7 @@ func (m *kvMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
 
 	// slice refs: Kiiiiiiiissss
 	klen := 1 + 8 + 4
-	return m.client.scan(m.fmtKey("K"), func(key, v []byte) {
+	return m.client.scan(m.fmtKey("K"), func(key, v []byte) bool {
 		refs := parseCounter(v)
 		if len(key) == klen && refs < 0 {
 			b := utils.ReadBuffer([]byte(key)[1:])
@@ -2495,7 +2505,7 @@ func (m *kvMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
 			clean, err := scan(id, size)
 			if err != nil {
 				logger.Warnf("scan pending deleted slices %d %d: %s", id, size, err)
-				return
+				return true
 			}
 			if clean {
 				// TODO: m.deleteSlice(id, size)
@@ -2503,6 +2513,7 @@ func (m *kvMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
 				_ = clean
 			}
 		}
+		return true
 	})
 }
 
@@ -2512,9 +2523,9 @@ func (m *kvMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	}
 	// deleted files: Diiiiiiiissssssss
 	klen := 1 + 8 + 8
-	return m.client.scan(m.fmtKey("D"), func(key, value []byte) {
+	return m.client.scan(m.fmtKey("D"), func(key, value []byte) bool {
 		if len(key) != klen {
-			return
+			return true
 		}
 		ino := m.decodeInode([]byte(key)[1:9])
 		size := binary.BigEndian.Uint64([]byte(key)[9:])
@@ -2522,11 +2533,12 @@ func (m *kvMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 		clean, err := scan(ino, size, ts)
 		if err != nil {
 			logger.Warnf("scan pending deleted files %d %d %d: %s", ino, size, ts, err)
-			return
+			return true
 		}
 		if clean {
 			m.doDeleteFileData(ino, size)
 		}
+		return true
 	})
 }
 
@@ -2984,7 +2996,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			return err
 		}
 
-		err := m.client.scan(nil, func(key, value []byte) {
+		err := m.client.scan(nil, func(key, value []byte) bool {
 			if len(key) > 9 && key[0] == 'A' {
 				ino := m.decodeInode(key[1:9])
 				e := m.snap[ino]
@@ -3037,6 +3049,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 				bar.SetTotal(guessKeyTotal)
 			}
 			bar.Increment()
+			return true
 		})
 		if err != nil {
 			return err

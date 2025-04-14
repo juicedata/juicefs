@@ -206,47 +206,40 @@ func (c *tikvClient) txn(f func(*kvTxn) error, retry int) (err error) {
 	return err
 }
 
-func (c *tikvClient) scan(prefix []byte, handler func(key, value []byte)) error {
-	ts, err := c.client.CurrentTimestamp("global")
-	if err != nil {
-		return err
-	}
+func (c *tikvClient) scan(prefix []byte, handler func(key, value []byte) bool) error {
 	end := nextKey(prefix)
-	snap := c.client.GetSnapshot(ts)
-	snap.SetScanBatchSize(10240)
-	snap.SetNotFillCache(true)
-	snap.SetPriority(txnutil.PriorityLow)
-	it, err := snap.Iter(prefix, end)
-	if err != nil {
-		return err
-	}
-	defer it.Close()
-	var lastKey []byte
-	for it.Valid() {
-		handler(it.Key(), it.Value())
-		lastKey = it.Key()
-		if err = it.Next(); err != nil {
-			if _, ok := err.(*tikverr.ErrGCTooEarly); !ok {
-				logger.Warnf("scan next key: %s", err)
-				return err
-			}
-			it.Close()
-			// restart scan
-			ts, err = c.client.CurrentTimestamp("global")
-			if err != nil {
-				return err
-			}
-			snap = c.client.GetSnapshot(ts)
-			snap.SetScanBatchSize(10240)
-			snap.SetNotFillCache(true)
-			snap.SetPriority(txnutil.PriorityLow)
-			it, err = snap.Iter(nextKey(lastKey), end)
-			if err != nil {
-				return err
+	start := prefix
+OUT:
+	for {
+		ts, err := c.client.CurrentTimestamp("global")
+		if err != nil {
+			return err
+		}
+		snap := c.client.GetSnapshot(ts)
+		snap.SetScanBatchSize(10240)
+		snap.SetNotFillCache(true)
+		snap.SetPriority(txnutil.PriorityLow)
+		it, err := snap.Iter(start, end)
+		if err != nil {
+			return err
+		}
+		var lastKey []byte
+		for it.Valid() && handler(it.Key(), it.Value()) {
+			lastKey = it.Key()
+			if err = it.Next(); err != nil {
+				it.Close()
+				if _, ok := err.(*tikverr.ErrGCTooEarly); !ok {
+					logger.Warnf("scan next key: %s", err)
+					return err
+				} else { // restart scan
+					start = nextKey(lastKey)
+					continue OUT
+				}
 			}
 		}
+		it.Close()
+		return nil
 	}
-	return nil
 }
 
 func (c *tikvClient) reset(prefix []byte) error {
