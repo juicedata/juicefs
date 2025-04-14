@@ -72,7 +72,6 @@ func isExists(err error) bool {
 }
 
 func (s *s3client) Create() error {
-	//todo: why need list
 	if _, _, _, err := s.List("", "", "", "", 1, true); err == nil {
 		return nil
 	}
@@ -212,7 +211,6 @@ func (s *s3client) Delete(key string, getters ...AttrGetter) error {
 		if errors.As(err, &re) {
 			attrs.SetRequestID(re.ServiceRequestID())
 		}
-		// todo: why need to check NoSuchKey?
 		if strings.Contains(err.Error(), "NoSuchKey") {
 			err = nil
 		}
