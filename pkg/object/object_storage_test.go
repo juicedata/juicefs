@@ -120,7 +120,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("delete failed: %s", err)
 		}
 	}()
-	all, err := listAll(s, "", "", -1, true)
+	all, err := listAll(s, "", "", 10000, true)
 	for _, object := range all {
 		_ = s.Delete(object.Key())
 	}
@@ -644,9 +644,9 @@ func TestQingStor(t *testing.T) { //skip mutate
 }
 
 func TestS3(t *testing.T) { //skip mutate
-	if os.Getenv("AWS_ACCESS_KEY_ID") == "" {
-		t.SkipNow()
-	}
+	//if os.Getenv("AWS_ACCESS_KEY_ID") == "" {
+	//	t.SkipNow()
+	//}
 	s, _ := newS3(os.Getenv("AWS_ENDPOINT"),
 		os.Getenv("AWS_ACCESS_KEY_ID"),
 		os.Getenv("AWS_SECRET_ACCESS_KEY"),

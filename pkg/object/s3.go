@@ -556,7 +556,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 
 	if ep != "" {
 		optFns = append(optFns, func(options *s3.Options) {
-			options.BaseEndpoint = aws.String(ep)
+			options.BaseEndpoint = aws.String(uri.Scheme + "://" + ep)
 			options.UsePathStyle = defaultPathStyle()
 		})
 	}
