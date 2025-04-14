@@ -21,14 +21,13 @@ package object
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"net/url"
 	"os"
 	"strings"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 type eos struct {
@@ -60,7 +59,7 @@ func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
-	endpoint = uri.Host[len(bucket)+1:]
+	endpoint = uri.Scheme + "://" + uri.Host[len(bucket)+1:]
 	region := "us-east-1"
 
 	if accessKey == "" {
@@ -72,22 +71,20 @@ func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	if token == "" {
 		token = os.Getenv("EOS_TOKEN")
 	}
-
-	awsConfig := &aws.Config{
-		Endpoint:         &endpoint,
-		Region:           &region,
-		DisableSSL:       aws.Bool(!ssl),
-		S3ForcePathStyle: aws.Bool(defaultPathStyle()),
-		HTTPClient:       httpClient,
-		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
-	}
-
-	ses, err := session.NewSession(awsConfig)
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
 	if err != nil {
-		return nil, fmt.Errorf("aws session: %s", err)
+		return nil, fmt.Errorf("failed to load config: %s", err)
 	}
-	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &eos{s3client{bucket: bucket, s3: s3.New(ses), ses: ses}}, nil
+	client := s3.NewFromConfig(cfg, func(options *s3.Options) {
+		options.BaseEndpoint = aws.String(endpoint)
+		options.Region = region
+		options.EndpointOptions.DisableHTTPS = !ssl
+		options.UsePathStyle = defaultPathStyle()
+		options.HTTPClient = httpClient
+	})
+
+	return &eos{s3client{bucket: bucket, s3: client, region: region}}, nil
 }
 
 func init() {

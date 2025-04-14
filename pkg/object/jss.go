@@ -24,10 +24,11 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 type jss struct {
@@ -41,14 +42,12 @@ func (j *jss) String() string {
 func (j *jss) Copy(dst, src string) error {
 	src = "/" + j.s3client.bucket + "/" + src
 	params := &s3.CopyObjectInput{
-		Bucket:     &j.s3client.bucket,
-		Key:        &dst,
-		CopySource: &src,
+		Bucket:       &j.s3client.bucket,
+		Key:          &dst,
+		CopySource:   &src,
+		StorageClass: types.StorageClass(j.sc),
 	}
-	if j.sc != "" {
-		params.SetStorageClass(j.sc)
-	}
-	_, err := j.s3client.s3.CopyObject(params)
+	_, err := j.s3client.s3.CopyObject(ctx, params)
 	return err
 }
 
@@ -61,23 +60,22 @@ func newJSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
 	region := hostParts[2]
-	endpoint = uri.Host[len(bucket)+1:]
+	endpoint = uri.Scheme + "://" + uri.Host[len(bucket)+1:]
 
-	awsConfig := &aws.Config{
-		Region:           &region,
-		Endpoint:         &endpoint,
-		DisableSSL:       aws.Bool(!ssl),
-		S3ForcePathStyle: aws.Bool(true),
-		HTTPClient:       httpClient,
-		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
-	}
-
-	ses, err := session.NewSession(awsConfig)
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load config: %s", err)
 	}
-	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &jss{s3client{bucket: bucket, s3: s3.New(ses), ses: ses}}, nil
+	client := s3.NewFromConfig(cfg, func(options *s3.Options) {
+		options.Region = region
+		options.BaseEndpoint = aws.String(endpoint)
+		options.EndpointOptions.DisableHTTPS = !ssl
+		options.UsePathStyle = true
+		options.HTTPClient = httpClient
+	})
+
+	return &jss{s3client{bucket: bucket, s3: client, region: region}}, nil
 }
 
 func init() {

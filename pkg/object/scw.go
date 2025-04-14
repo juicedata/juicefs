@@ -21,14 +21,13 @@ package object
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"net/url"
 	"os"
 	"strings"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 type scw struct {
@@ -61,8 +60,7 @@ func newScw(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
 	region := hostParts[2]
-	endpoint = uri.Host[len(bucket)+1:]
-
+	endpoint = uri.Scheme + "://" + uri.Host[len(bucket)+1:]
 	if accessKey == "" {
 		accessKey = os.Getenv("SCW_ACCESS_KEY")
 	}
@@ -70,21 +68,19 @@ func newScw(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		secretKey = os.Getenv("SCW_SECRET_KEY")
 	}
 
-	awsConfig := &aws.Config{
-		Region:           &region,
-		Endpoint:         &endpoint,
-		DisableSSL:       aws.Bool(!ssl),
-		S3ForcePathStyle: aws.Bool(false),
-		HTTPClient:       httpClient,
-		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
-	}
-
-	ses, err := session.NewSession(awsConfig)
+	awsCfg, err := config.LoadDefaultConfig(ctx,
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
 	if err != nil {
-		return nil, fmt.Errorf("aws session: %s", err)
+		return nil, fmt.Errorf("failed to load config: %s", err)
 	}
-	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &scw{s3client{bucket: bucket, s3: s3.New(ses), ses: ses}}, nil
+	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
+		options.Region = region
+		options.BaseEndpoint = aws.String(endpoint)
+		options.EndpointOptions.DisableHTTPS = !ssl
+		options.UsePathStyle = false
+		options.HTTPClient = httpClient
+	})
+	return &scw{s3client{bucket: bucket, s3: client, region: region}}, nil
 }
 
 func init() {

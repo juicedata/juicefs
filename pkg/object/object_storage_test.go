@@ -120,6 +120,10 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("delete failed: %s", err)
 		}
 	}()
+	all, err := listAll(s, "", "", 10000, true)
+	for _, object := range all {
+		_ = s.Delete(object.Key())
+	}
 
 	var scPut string
 	key := "测试编码文件" + `{"name":"juicefs"}` + string('\u001F') + "%uFF081%uFF09.jpg"
@@ -137,7 +141,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 	_ = s.Delete(key)
 
-	_, err := s.Get("not_exists", 0, -1)
+	_, err = s.Get("not_exists", 0, -1)
 	if err == nil {
 		t.Fatalf("Get should failed: %s", err)
 	}
