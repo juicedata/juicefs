@@ -3527,10 +3527,10 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 			}
 			_, err = s.Update(&x, k)
 		default:
-			if ok && !bytes.Equal(existing, value) {
-				_, err = s.Update(&x, k)
-			} else {
+			if !ok {
 				err = mustInsert(s, &x)
+			} else if !bytes.Equal(existing, value) {
+				_, err = s.Update(&x, k)
 			}
 		}
 		return err
