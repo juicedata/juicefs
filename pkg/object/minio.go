@@ -75,11 +75,11 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %v", err)
+		return nil, fmt.Errorf("failed to load config: %s", err)
 	}
 	client := s3.NewFromConfig(cfg, func(options *s3.Options) {
 		options.Region = region
-		options.BaseEndpoint = aws.String(endpoint)
+		options.BaseEndpoint = aws.String(uri.Scheme + "://" + uri.Host)
 		options.EndpointOptions.DisableHTTPS = !ssl
 		options.UsePathStyle = defaultPathStyle()
 		options.HTTPClient = httpClient
@@ -92,7 +92,6 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		bucket = bucket[len("minio/"):]
 	}
 	bucket = strings.Split(bucket, "/")[0]
-	//todo: support disableChecksum
 	return &minio{s3client{bucket: bucket, s3: client, region: region}, endpoint}, nil
 }
 

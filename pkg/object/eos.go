@@ -59,7 +59,7 @@ func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
-	endpoint = uri.Host[len(bucket)+1:]
+	endpoint = uri.Scheme + "://" + uri.Host[len(bucket)+1:]
 	region := "us-east-1"
 
 	if accessKey == "" {
@@ -74,7 +74,7 @@ func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %v", err)
+		return nil, fmt.Errorf("failed to load config: %s", err)
 	}
 	client := s3.NewFromConfig(cfg, func(options *s3.Options) {
 		options.BaseEndpoint = aws.String(endpoint)
@@ -84,7 +84,6 @@ func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		options.HTTPClient = httpClient
 	})
 
-	//todo: support disableChecksum
 	return &eos{s3client{bucket: bucket, s3: client, region: region}}, nil
 }
 

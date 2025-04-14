@@ -208,10 +208,10 @@ func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 	awsCfg, err := config.LoadDefaultConfig(ctx,
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %v", err)
+		return nil, fmt.Errorf("failed to load config: %s", err)
 	}
 	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
-		options.BaseEndpoint = aws.String(endpoint)
+		options.BaseEndpoint = aws.String(uri.Scheme + "://" + endpoint)
 		options.Region = region
 		options.EndpointOptions.DisableHTTPS = uri.Scheme == "http"
 		options.UsePathStyle = true

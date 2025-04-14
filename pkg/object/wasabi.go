@@ -53,12 +53,12 @@ func newWasabi(endpoint, accessKey, secretKey, token string) (ObjectStorage, err
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
 	region := hostParts[2]
-	endpoint = uri.Host[len(bucket)+1:]
+	endpoint = uri.Scheme + "://" + uri.Host[len(bucket)+1:]
 
 	awsCfg, err := config.LoadDefaultConfig(ctx,
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %v", err)
+		return nil, fmt.Errorf("failed to load config: %s", err)
 	}
 	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
 		options.Region = region
