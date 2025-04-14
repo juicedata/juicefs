@@ -70,7 +70,6 @@ require (
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.63
 	github.com/tikv/client-go/v2 v2.0.7
 	github.com/twmb/murmur3 v1.1.8
-	github.com/upyun/go-sdk/v3 v3.0.4
 	github.com/urfave/cli/v2 v2.19.3
 	github.com/vbauerster/mpb/v7 v7.0.3
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
