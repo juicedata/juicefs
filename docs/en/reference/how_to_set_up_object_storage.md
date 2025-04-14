@@ -172,7 +172,6 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Kingsoft Cloud KS3](#kingsoft-cloud-ks3)                   | `ks3`      |
 | [QingStor](#qingstor)                                       | `qingstor` |
 | [Qiniu](#qiniu)                                             | `qiniu`    |
-| [Sina Cloud Storage](#sina-cloud-storage)                   | `scs`      |
 | [CTYun OOS](#ctyun-oos)                                     | `oos`      |
 | [ECloud Object Storage](#ecloud-object-storage)             | `eos`      |
 | [JD Cloud OSS](#jd-cloud-oss)                               | `s3`       |
@@ -708,20 +707,6 @@ The `--bucket` option format is `https://<bucket>.s3-<region>.qiniucs.com`, repl
 juicefs format \
     --storage qiniu \
     --bucket https://<bucket>.s3-<region>.qiniucs.com \
-    ... \
-    myjfs
-```
-
-### Sina Cloud Storage
-
-Please follow [this document](https://scs.sinacloud.com/doc/scs/guide/quick_start#accesskey) to learn how to get access key and secret key.
-
-The `--bucket` option format is `https://<bucket>.stor.sinaapp.com`. For example:
-
-```bash
-juicefs format \
-    --storage scs \
-    --bucket https://<bucket>.stor.sinaapp.com \
     ... \
     myjfs
 ```

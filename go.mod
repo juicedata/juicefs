@@ -5,7 +5,6 @@ go 1.21.0
 require (
 	cloud.google.com/go/compute/metadata v0.5.2
 	cloud.google.com/go/storage v1.48.0
-	github.com/Arvintian/scs-go-sdk v1.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.9.2
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.3.1
 	github.com/DataDog/zstd v1.5.6
