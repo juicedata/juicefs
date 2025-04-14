@@ -21,13 +21,14 @@ package object
 
 import (
 	"fmt"
+	"net/url"
+	"os"
+	"strings"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"net/url"
-	"os"
-	"strings"
 )
 
 type minio struct {

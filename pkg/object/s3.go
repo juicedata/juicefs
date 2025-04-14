@@ -22,6 +22,14 @@ package object
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"net/url"
+	"os"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -31,13 +39,6 @@ import (
 	"github.com/aws/smithy-go"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
-	"io"
-	"net/url"
-	"os"
-	"regexp"
-	"sort"
-	"strings"
-	"time"
 )
 
 const awsDefaultRegion = "us-east-1"
@@ -75,9 +76,11 @@ func (s *s3client) Create() error {
 	if _, _, _, err := s.List("", "", "", "", 1, true); err == nil {
 		return nil
 	}
-	_, err := s.s3.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: &s.bucket, CreateBucketConfiguration: &types.CreateBucketConfiguration{
-		LocationConstraint: types.BucketLocationConstraint(s.region),
-	}})
+	_, err := s.s3.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: &s.bucket,
+		CreateBucketConfiguration: &types.CreateBucketConfiguration{
+			LocationConstraint: types.BucketLocationConstraint(s.region),
+		}})
 	if err != nil && isExists(err) {
 		err = nil
 	}
@@ -95,16 +98,12 @@ func (s *s3client) Head(key string) (Object, error) {
 		err = os.ErrNotExist
 		return nil, err
 	}
-	var sc = DefaultStorageClass
-	if s := string(r.StorageClass); s != "" {
-		sc = s
-	}
 	return &obj{
 		key,
 		*r.ContentLength,
 		*r.LastModified,
 		strings.HasSuffix(key, "/"),
-		sc,
+		string(r.StorageClass),
 	}, nil
 }
 
@@ -131,14 +130,10 @@ func (s *s3client) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 	if reqID, ok := middleware.GetRequestIDMetadata(resp.ResultMetadata); ok {
 		attrs.SetRequestID(reqID)
 	}
-	if off == 0 && limit == -1 {
+	if off == 0 && limit == -1 && !s.disableChecksum {
 		cs := resp.Metadata[strings.ToLower(checksumAlgr)]
-		var length int64 = -1
-		if resp.ContentLength != nil {
-			length = *resp.ContentLength
-		}
-		if cs != "" {
-			resp.Body = verifyChecksum(resp.Body, cs, length)
+		if cs != "" && resp.ContentLength != nil {
+			resp.Body = verifyChecksum(resp.Body, cs, *resp.ContentLength)
 		}
 	}
 	attrs.SetStorageClass(string(resp.StorageClass))
@@ -188,12 +183,10 @@ func (s *s3client) Put(key string, in io.Reader, getters ...AttrGetter) error {
 func (s *s3client) Copy(dst, src string) error {
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
-		Bucket:     &s.bucket,
-		Key:        &dst,
-		CopySource: &src,
-	}
-	if s.sc != "" {
-		params.StorageClass = types.StorageClass(s.sc)
+		Bucket:       &s.bucket,
+		Key:          &dst,
+		CopySource:   &src,
+		StorageClass: types.StorageClass(s.sc),
 	}
 	_, err := s.s3.CopyObject(ctx, params)
 	return err
@@ -224,19 +217,13 @@ func (s *s3client) Delete(key string, getters ...AttrGetter) error {
 
 func (s *s3client) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := s3.ListObjectsV2Input{
-		Bucket:       &s.bucket,
-		Prefix:       &prefix,
-		MaxKeys:      aws.Int32(int32(limit)),
-		EncodingType: types.EncodingTypeUrl,
-	}
-	if start != "" {
-		param.StartAfter = aws.String(start)
-	}
-	if token != "" {
-		param.ContinuationToken = aws.String(token)
-	}
-	if delimiter != "" {
-		param.Delimiter = aws.String(delimiter)
+		Bucket:            &s.bucket,
+		Prefix:            &prefix,
+		MaxKeys:           aws.Int32(int32(limit)),
+		EncodingType:      types.EncodingTypeUrl,
+		StartAfter:        aws.String(start),
+		ContinuationToken: aws.String(token),
+		Delimiter:         aws.String(delimiter),
 	}
 	resp, err := s.s3.ListObjectsV2(ctx, &param)
 	if err != nil {
@@ -253,16 +240,12 @@ func (s *s3client) List(prefix, start, token, delimiter string, limit int64, fol
 		if !strings.HasPrefix(oKey, prefix) || oKey < start {
 			return nil, false, "", fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, start)
 		}
-		var sc = DefaultStorageClass
-		if o.StorageClass != "" {
-			sc = string(o.StorageClass)
-		}
 		objs[i] = &obj{
 			oKey,
 			*o.Size,
 			*o.LastModified,
 			strings.HasSuffix(oKey, "/"),
-			sc,
+			string(o.StorageClass),
 		}
 	}
 	if delimiter != "" {

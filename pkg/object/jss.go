@@ -21,13 +21,14 @@ package object
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"net/url"
-	"strings"
 )
 
 type jss struct {
