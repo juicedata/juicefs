@@ -72,6 +72,10 @@ func mountFlags() []cli.Flag {
 			Usage:  "If set, the file system will be case sensitive",
 			Hidden: true,
 		},
+		&cli.BoolFlag{
+			Name:  "report-case",
+			Usage: "If set, juicefs will report the correct case of a file path for a case-insensitive filesystem. (May incur a performance lost)",
+		},
 	}
 }
 
@@ -110,7 +114,9 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 		winfsp.SetTraceOutput(traceLog)
 	}
 
-	winfsp.Serve(v, c.String("o"), fileCacheTimeout.Seconds(), dirCacheTimeout.Seconds(), c.Bool("as-root"), int(delayCloseTime.Seconds()), c.Bool("show-dot-files"), c.Int("winfsp-threads"), c.Bool("case-sensitive"))
+	winfsp.Serve(v, c.String("o"), fileCacheTimeout.Seconds(), dirCacheTimeout.Seconds(),
+		c.Bool("as-root"), int(delayCloseTime.Seconds()), c.Bool("show-dot-files"),
+		c.Int("winfsp-threads"), c.Bool("case-sensitive"), c.Bool("report-case"))
 }
 
 func checkMountpoint(name, mp, logPath string, background bool) {}
