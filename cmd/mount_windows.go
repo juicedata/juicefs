@@ -73,8 +73,8 @@ func mountFlags() []cli.Flag {
 			Hidden: true,
 		},
 		&cli.BoolFlag{
-			Name:  "enable-get-path",
-			Usage: "If set, it will improve the accuracy of letter case when returning file paths. (May incur a performance lost)",
+			Name:  "report-case",
+			Usage: "If set, juicefs will report the correct case of a file path for a case-insensitive filesystem. (May incur a performance lost)",
 		},
 	}
 }
@@ -116,7 +116,7 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 
 	winfsp.Serve(v, c.String("o"), fileCacheTimeout.Seconds(), dirCacheTimeout.Seconds(),
 		c.Bool("as-root"), int(delayCloseTime.Seconds()), c.Bool("show-dot-files"),
-		c.Int("winfsp-threads"), c.Bool("case-sensitive"), c.Bool("enable-get-path"))
+		c.Int("winfsp-threads"), c.Bool("case-sensitive"), c.Bool("report-case"))
 }
 
 func checkMountpoint(name, mp, logPath string, background bool) {}
