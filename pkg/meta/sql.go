@@ -673,6 +673,8 @@ func (m *dbMeta) cacheACLs(ctx Context) error {
 }
 
 func (m *dbMeta) Reset() error {
+	m.Lock()
+	defer m.Unlock()
 	return m.db.DropTables(&setting{}, &counter{},
 		&node{}, &edge{}, &symlink{}, &xattr{},
 		&chunk{}, &sliceRef{}, &delslices{},
