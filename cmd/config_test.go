@@ -25,7 +25,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 )
 
-//mutate_test_job_number: 3
+// mutate_test_job_number: 3
 func getStdout(args []string) ([]byte, error) {
 	tmp, err := os.CreateTemp("/tmp", "jfstest-*")
 	if err != nil {
@@ -79,6 +79,19 @@ func TestConfig(t *testing.T) {
 	}
 	if format.Capacity != 10<<30 || format.Inodes != 1000000 ||
 		format.Bucket != "/tmp/newBucket/" || format.AccessKey != "testAK" || format.SecretKey != "removed" || format.SessionToken != "removed" {
+		t.Fatalf("unexpect format: %+v", format)
+	}
+
+	if err = Main([]string{"", "config", testMeta, "--bucket", "http://localhost:9000/miniofs", "--storage", "minio", "--force"}); err != nil {
+		t.Fatalf("config: %s", err)
+	}
+	if data, err = getStdout([]string{"", "config", testMeta}); err != nil {
+		t.Fatalf("getStdout: %s", err)
+	}
+	if err = json.Unmarshal(data, &format); err != nil {
+		t.Fatalf("json unmarshal: %s", err)
+	}
+	if format.Bucket != "http://localhost:9000/miniofs" || format.Storage != "minio" {
 		t.Fatalf("unexpect format: %+v", format)
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +28,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
+
+	. "github.com/bytedance/mockey"
+	. "github.com/smartystreets/goconvey/convey"
 )
 
 // Copy from https://github.com/prometheus/client_golang/blob/v1.14.0/prometheus/testutil/testutil.go
@@ -335,6 +339,26 @@ func TestCacheManager(t *testing.T) {
 
 	s1 := m.getStore(k1)
 	require.NotNil(t, s1)
+
+	PatchConvey("test getDiskUsage", t, func() {
+		Mock(getDiskUsage).To(func(path string) (uint64, uint64, uint64, uint64) {
+			time.Sleep(time.Second * 10)
+			return 1, 1, 1, 1
+		}).Build()
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			s1.Lock()
+			wg.Done()
+			s1.cleanupFull()
+			s1.Unlock()
+		}()
+
+		wg.Wait()
+		start := time.Now()
+		s1.load(k1)
+		So(time.Since(start), ShouldBeLessThan, time.Second*3)
+	})
 
 	m.Lock()
 	shutdownStore(s1)
