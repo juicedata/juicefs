@@ -223,7 +223,7 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 		return
 	}
 	_, oldConf, _ := loadConfig(mp)
-	mountTimeOut := getMountTimeout() + 3 // add 3 extra seconds
+	mountTimeOut := getMountTimeout() + 3 // wait for 3 extra seconds
 	interval := 500                       // check every 500 Millisecond
 	if tStr, ok := os.LookupEnv("JFS_MOUNT_TIMEOUT"); ok {
 		if t, err := strconv.ParseInt(tStr, 10, 64); err == nil {
