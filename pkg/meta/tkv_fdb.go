@@ -73,7 +73,7 @@ func (c *fdbClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) er
 	return err
 }
 
-func (c *fdbClient) scan(prefix []byte, handler func(key, value []byte)) error {
+func (c *fdbClient) scan(prefix []byte, handler func(key, value []byte) bool) error {
 	begin := fdb.Key(prefix)
 	end := fdb.Key(nextKey(prefix))
 	limit := 102400

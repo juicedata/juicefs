@@ -2512,8 +2512,7 @@ func (m *kvMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 		var clean bool
 		var err error
 		err = m.txn(ctx, func(tx *kvTxn) error {
-			ss := ss[:0]
-			rs := rs[:0]
+			ss, rs = ss[:0], rs[:0]
 			v := tx.get(key)
 			if len(v) == 0 {
 				return nil
