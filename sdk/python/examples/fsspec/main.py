@@ -15,7 +15,7 @@ ds.count()
 
 print("----++++----++++----")
 
-jfs = fsspec.filesystem("jfs", auto_mkdir=True, name="myjfs", meta="redis://localhost", cache_dir="/tmp/data", cache_size="0")
+jfs = fsspec.filesystem("jfs", auto_mkdir=True, name="myjfs", meta="redis://localhost")
 dsjfs = ray.data.read_csv('/ray_demo_data.csv', filesystem=jfs)
 dsjfs.count()
 
