@@ -11,11 +11,11 @@ JuiceFS separates "data" and "metadata" storage. Files are split into chunks and
 
 JuiceFS provides rich APIs for various forms of data management, analysis, archiving, and backup. It seamlessly interfaces with big data, machine learning, artificial intelligence and other application platforms without modifying code, and delivers massive, elastic, and high-performance storage at low cost. With JuiceFS, you do not need to worry about availability, disaster recovery, monitoring, and scalability. This greatly reduces maintenance work and makes it an excellent choice for DevOps.
 
-## Features
+## Features {#features}
 
 - **POSIX Compatible**: JuiceFS can be used like a local file system, making it easy to integrate with existing applications.
 - **HDFS Compatible**: JuiceFS is fully compatible with the [HDFS API](../deployment/hadoop_java_sdk.md), which can enhance metadata performance.
-- **S3 Compatible**: JuiceFS provides an [S3 gateway](../deployment/s3_gateway.md) to implement an S3-compatible access interface.
+- **S3 Compatible**: JuiceFS provides an [S3 gateway](../guide/gateway.md) to implement an S3-compatible access interface.
 - **Cloud-Native**: It is easy to use JuiceFS in Kubernetes via the [CSI Driver](../deployment/how_to_use_on_kubernetes.md).
 - **Distributed**: Each file system can be mounted on thousands of servers at the same time with high-performance concurrent reads and writes and shared data.
 - **Strong Consistency**: Any changes committed to files are immediately visible on all servers.
@@ -24,7 +24,7 @@ JuiceFS provides rich APIs for various forms of data management, analysis, archi
 - **File Lock**: JuiceFS supports BSD lock (flock) and POSIX lock (fcntl).
 - **Data Compression**: JuiceFS supports the [LZ4](https://lz4.github.io/lz4) and [Zstandard](https://facebook.github.io/zstd) compression algorithms to save storage space.
 
-## Scenarios
+## Scenarios {#scenarios}
 
 JuiceFS is designed for massive data storage and can be used as an alternative to many distributed file systems and network file systems, especially in the following scenarios:
 
@@ -34,11 +34,12 @@ JuiceFS is designed for massive data storage and can be used as an alternative t
 - **Shared Workspace**: JuiceFS file system can be mounted on any host, allowing concurrent read/write operations without limitations. Its POSIX compatibility ensures smooth data flow and supports scripting operations.
 - **Data Backup**: JuiceFS provides scalable storage space for backing up all kinds of data. With its shared mount feature, data from multiple hosts can be aggregated into one place and then backed up together.
 
-## Data privacy
+## Data privacy {#data-privacy}
 
 JuiceFS is an open-source software available on [GitHub](https://github.com/juicedata/juicefs). When using JuiceFS to store data, the data is split into chunks according to specific rules and stored in custom object storage or other storage media, and the corresponding metadata is stored in a custom database.
 
-## More info
+## More info {#more-info}
 
 * **Use case**: For more use cases of similar scenarios, please visit [User Stories](https://juicefs.com/en/blog/user-stories).
 * **Join the community**: Welcome to join [Slack](https://go.juicefs.com/slack) to discuss with JuiceFS users.
+* **AI assistant**: If you encounter any problems, you are welcome to use the "Ask AI" feature (in the bottom right corner) to get assistance from the AI assistant. The knowledge base of the AI ​​assistant comes from documentation and related content on GitHub.

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -41,7 +43,7 @@ $ juicefs restore redis://localhost/1 2023-05-10-01`,
 
 func restore(ctx *cli.Context) error {
 	setup(ctx, 2)
-	if os.Getuid() != 0 {
+	if os.Getuid() != 0 && runtime.GOOS != "windows" {
 		return fmt.Errorf("only root can restore files from trash")
 	}
 	removePassword(ctx.Args().Get(0))
@@ -66,7 +68,7 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 		}()
 	}
 	logger.Infof("restore files in %s ...", hour)
-	ctx := meta.Background
+	ctx := meta.Background()
 	var parent meta.Ino
 	var attr meta.Attr
 	err := m.Lookup(ctx, meta.TrashInode, hour, &parent, &attr, false)
@@ -75,7 +77,7 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 		return
 	}
 	var entries []*meta.Entry
-	err = m.Readdir(meta.Background, parent, 0, &entries)
+	err = m.Readdir(meta.Background(), parent, 0, &entries)
 	if err != 0 {
 		logger.Errorf("list %s: %s", hour, err)
 		return
@@ -100,6 +102,8 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 	restored := p.AddCountBar("restored", int64(len(entries)))
 	skipped := p.AddCountSpinner("skipped")
 	failed := p.AddCountSpinner("failed")
+	var mu sync.Mutex
+	restoredTo := make(map[meta.Ino]int)
 	var wg sync.WaitGroup
 	for i := 0; i < threads; i++ {
 		wg.Add(1)
@@ -115,6 +119,9 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 						failed.Increment()
 					} else {
 						restored.Increment()
+						mu.Lock()
+						restoredTo[meta.Ino(dst)] += 1
+						mu.Unlock()
 					}
 				} else {
 					skipped.Increment()
@@ -133,4 +140,7 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 	restored.Done()
 	p.Done()
 	logger.Infof("restored %d files in %s", restored.Current(), hour)
+	for dst, count := range restoredTo {
+		logger.Infof("restored %d files to %q", count, strings.Join(m.GetPaths(ctx, dst), ", "))
+	}
 }

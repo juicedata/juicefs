@@ -31,13 +31,22 @@ jobs:
         # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
         meta: ['redis']
         type: [ 'head', 'middle', 'tail']
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
+
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
 
       - name: Set Variable
         id: vars
@@ -71,13 +80,13 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs format --trash-days 0 $meta_url pics
+          sudo GOCOVERDIR=$(pwd)/cover ./juicefs format --trash-days 0 $meta_url --bucket=/mnt/jfs pics
 
       - name: Juicefs Mount
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs mount --enable-xattr -d $meta_url /tmp/jfs --no-usage-report
+          sudo GOCOVERDIR=$(pwd)/cover ./juicefs mount --enable-xattr -d $meta_url /tmp/jfs --no-usage-report
 
       - name: Install LTP Syscalls
         run: |
@@ -122,6 +131,13 @@ jobs:
         if: always()
         run: |
           cat /opt/ltp/output/result.log.failed
+
+      - name: upload coverage report
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
 
       - name: Send Slack Notification
         if: failure()

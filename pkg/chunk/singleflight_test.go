@@ -17,6 +17,7 @@
 package chunk
 
 import (
+	"bytes"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -25,22 +26,39 @@ import (
 )
 
 func TestSingleFlight(t *testing.T) {
-	g := &Controller{}
+	g := NewController()
 	gp := &sync.WaitGroup{}
 	var cache sync.Map
 	var n int32
+	var piggyback atomic.Int64
 	iters := 100000
 	for i := 0; i < iters; i++ {
-		gp.Add(1)
+		gp.Add(2)
 		go func(k int) {
 			p, _ := g.Execute(strconv.Itoa(k/100), func() (*Page, error) {
 				time.Sleep(time.Microsecond * 500000) // In most cases 500ms is enough to run 100 goroutines
 				atomic.AddInt32(&n, 1)
-				return NewOffPage(100), nil
+				page := NewOffPage(100)
+				copy(page.Data, make([]byte, 100)) // zeroed
+				copy(page.Data, strconv.Itoa(k/100))
+				return page, nil
 			})
 			p.Release()
 			cache.LoadOrStore(strconv.Itoa(k/100), p)
 			gp.Done()
+		}(i)
+		go func(k int) {
+			defer gp.Done()
+			page, _ := g.TryPiggyback(strconv.Itoa(k / 100))
+			if page != nil {
+				expected := make([]byte, 100)
+				copy(expected, strconv.Itoa(k/100))
+				if bytes.Compare(page.Data, expected) != 0 {
+					t.Fatalf("got %x, want %x, key: %d", page.Data, expected, k/100)
+				}
+				page.Release()
+				piggyback.Add(1)
+			}
 		}(i)
 	}
 	gp.Wait()
@@ -49,11 +67,14 @@ func TestSingleFlight(t *testing.T) {
 	if nv != iters/100 {
 		t.Fatalf("singleflight doesn't take effect: %v", nv)
 	}
+	if piggyback.Load() == 0 {
+		t.Fatal("never piggybacked?")
+	}
 
 	// verify the ref
 	cache.Range(func(key any, value any) bool {
 		if value.(*Page).refs != 0 {
-			t.Fatal("refs of page is not 0")
+			t.Fatalf("refs of page is not 0, got: %d, key: %s", value.(*Page).refs, key)
 		}
 		return true
 	})

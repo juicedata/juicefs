@@ -51,17 +51,14 @@ $ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2`,
 			&cli.BoolFlag{
 				Name:    "preserve",
 				Aliases: []string{"p"},
-				Usage:   "preserve the uid, gid, and mode of the file"},
+				Usage:   "preserve the uid, gid, and mode of the file. (This is forced on Windows)",
+			},
 		},
 	}
 }
 
 func clone(ctx *cli.Context) error {
 	setup(ctx, 2)
-	if runtime.GOOS == "windows" {
-		logger.Infof("Windows is not supported")
-		return nil
-	}
 	srcPath := ctx.Args().Get(0)
 	srcAbsPath, err := filepath.Abs(srcPath)
 	if err != nil {
@@ -70,6 +67,10 @@ func clone(ctx *cli.Context) error {
 	srcIno, err := utils.GetFileInode(srcPath)
 	if err != nil {
 		return fmt.Errorf("lookup inode for %s: %s", srcPath, err)
+	}
+	srcParentIno, err := utils.GetFileInode(filepath.Dir(srcAbsPath))
+	if err != nil {
+		return fmt.Errorf("lookup inode for %s: %s", filepath.Dir(srcAbsPath), err)
 	}
 	dst := ctx.Args().Get(1)
 	if strings.HasSuffix(dst, string(filepath.Separator)) {
@@ -108,15 +109,16 @@ func clone(ctx *cli.Context) error {
 	}
 	var cmode uint8
 	umask := utils.GetUmask()
-	if ctx.Bool("preserve") {
+	if ctx.Bool("preserve") || runtime.GOOS == "windows" {
 		cmode |= meta.CLONE_MODE_PRESERVE_ATTR
 	}
 	headerSize := 4 + 4
-	contentSize := 8 + 8 + 1 + uint32(len(dstName)) + 2 + 1
+	contentSize := 8 + 8 + 8 + 1 + uint32(len(dstName)) + 2 + 1
 	wb := utils.NewBuffer(uint32(headerSize) + contentSize)
 	wb.Put32(meta.Clone)
 	wb.Put32(contentSize)
 	wb.Put64(srcIno)
+	wb.Put64(srcParentIno)
 	wb.Put64(dstParentIno)
 	wb.Put8(uint8(len(dstName)))
 	wb.Put([]byte(dstName))

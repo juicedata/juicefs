@@ -75,7 +75,13 @@ func (s *obsClient) Create() error {
 	}
 	return err
 }
-
+func getStorageClassStr(sc obs.StorageClassType) string {
+	if sc == "" {
+		return string(obs.StorageClassStandard)
+	} else {
+		return string(sc)
+	}
+}
 func (s *obsClient) Head(key string) (Object, error) {
 	params := &obs.GetObjectMetadataInput{
 		Bucket: s.bucket,
@@ -88,21 +94,13 @@ func (s *obsClient) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
-	var sc string
-	switch r.StorageClass {
-	case "":
-		sc = string(obs.StorageClassStandard)
-	case obs.StorageClassWarm:
-		sc = string("STANDARD_IA")
-	default:
-		sc = string(r.StorageClass)
-	}
+
 	return &obj{
 		key,
 		r.ContentLength,
 		r.LastModified,
 		strings.HasSuffix(key, "/"),
-		sc,
+		getStorageClassStr(r.StorageClass),
 	}, nil
 }
 
@@ -120,7 +118,7 @@ func (s *obsClient) Get(key string, off, limit int64, getters ...AttrGetter) (io
 	}
 	if resp != nil {
 		attrs := applyGetters(getters...)
-		attrs.SetRequestID(resp.RequestId).SetStorageClass(string(resp.StorageClass))
+		attrs.SetRequestID(resp.RequestId).SetStorageClass(getStorageClassStr(resp.StorageClass))
 	}
 	if err != nil {
 		return nil, err
@@ -176,7 +174,7 @@ func (s *obsClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	}
 	if resp != nil {
 		attrs := applyGetters(getters...)
-		attrs.SetRequestID(resp.RequestId).SetStorageClass(s.sc)
+		attrs.SetRequestID(resp.RequestId).SetStorageClass(getStorageClassStr(resp.StorageClass))
 	}
 	return err
 }
@@ -204,10 +202,10 @@ func (s *obsClient) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (s *obsClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (s *obsClient) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	input := &obs.ListObjectsInput{
 		Bucket: s.bucket,
-		Marker: marker,
+		Marker: start,
 	}
 	input.Prefix = prefix
 	input.MaxKeys = int(limit)
@@ -215,7 +213,7 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64, followLi
 	input.EncodingType = "url"
 	resp, err := s.c.ListObjects(input)
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	n := len(resp.Contents)
 	objs := make([]Object, n)
@@ -228,13 +226,13 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64, followLi
 		for _, p := range resp.CommonPrefixes {
 			prefix, err := obs.UrlDecode(p)
 			if err != nil {
-				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", p)
+				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", p)
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, nil
+	return objs, resp.IsTruncated, resp.NextMarker, nil
 }
 
 func (s *obsClient) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {

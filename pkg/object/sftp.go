@@ -9,6 +9,13 @@ package object
 import (
 	"bytes"
 	"fmt"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/pkg/errors"
+	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh/knownhosts"
+	"golang.org/x/term"
 	"io"
 	"math/rand"
 	"net"
@@ -23,13 +30,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/pkg/errors"
-	"github.com/pkg/sftp"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
-	"golang.org/x/term"
 )
 
 // conn encapsulates an ssh client and corresponding sftp client
@@ -168,11 +168,19 @@ func (f *sftpStore) Head(key string) (Object, error) {
 	}
 	defer f.putSftpConnection(&c, err)
 
-	info, err := c.sftpClient.Stat(f.path(key))
+	info, err := c.sftpClient.Lstat(f.path(key))
 	if err != nil {
 		return nil, err
 	}
-	return f.fileInfo(nil, key, info, true), nil
+	var isSymlink bool
+	if info.Mode()&os.ModeSymlink != 0 {
+		isSymlink = true
+		info, err = c.sftpClient.Stat(f.path(key))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return f.fileInfo(key, info, isSymlink), nil
 }
 
 func (f *sftpStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
@@ -322,28 +330,35 @@ func (f *sftpStore) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo, followLink bool) []Object {
-	var obs = make([]Object, 0, len(fis))
-	for _, fi := range fis {
-		p := path + fi.Name()
-		if strings.HasPrefix(p, f.root) {
-			key := p[len(f.root):]
-			obs = append(obs, f.fileInfo(c, key, fi, followLink))
+func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo, followLink bool) []*mEntry {
+	mEntries := make([]*mEntry, len(fis))
+	for i, e := range fis {
+		isSymlink := e.Mode()&os.ModeSymlink != 0
+		if e.IsDir() {
+			mEntries[i] = &mEntry{e, e.Name() + dirSuffix, nil, false}
+		} else if isSymlink && followLink {
+			var fi os.FileInfo
+			p := path + e.Name()
+			fi, err := c.Stat(p)
+			if err != nil {
+				mEntries[i] = &mEntry{e, e.Name(), nil, true}
+				continue
+			}
+			name := e.Name()
+			if fi.IsDir() {
+				name = e.Name() + dirSuffix
+			}
+			mEntries[i] = &mEntry{e, name, fi, false}
+		} else {
+			mEntries[i] = &mEntry{e, e.Name(), nil, isSymlink}
 		}
 	}
-	sort.Slice(obs, func(i, j int) bool { return obs[i].Key() < obs[j].Key() })
-	return obs
+	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
+	return mEntries
 }
 
-func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followLink bool) Object {
+func (f *sftpStore) fileInfo(key string, fi os.FileInfo, isSymlink bool) Object {
 	owner, group := getOwnerGroup(fi)
-	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
-	if isSymlink && c != nil && followLink {
-		if fi2, err := c.Stat(f.root + key); err == nil {
-			fi = fi2
-			isSymlink = false
-		}
-	}
 	ff := &file{
 		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
 		owner,
@@ -360,14 +375,14 @@ func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followL
 	return ff
 }
 
-func (f *sftpStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (f *sftpStore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 
 	c, err := f.getSftpConnection()
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	defer f.putSftpConnection(&c, nil)
 
@@ -382,9 +397,9 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64, followLi
 		obj, err := f.Head(prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return nil, nil
+				return nil, false, "", nil
 			}
-			return nil, err
+			return nil, false, "", err
 		}
 		objs = append(objs, obj)
 	}
@@ -392,26 +407,35 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64, followLi
 	if err != nil {
 		if os.IsPermission(err) {
 			logger.Warnf("skip %s: %s", dir, err)
-			return nil, nil
+			return nil, false, "", nil
 		}
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, false, "", nil
 		}
-		return nil, err
+		return nil, false, "", err
 	}
 
 	entries := f.sortByName(c.sftpClient, dir, infos, followLink)
-	for _, o := range entries {
-		key := o.Key()
+	for _, e := range entries {
+		p := path.Join(dir, e.Name())
+		if e.IsDir() {
+			p = p + "/"
+		}
+		if !strings.HasPrefix(p, f.root) {
+			continue
+		}
+		key := p[len(f.root):]
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
-		objs = append(objs, o)
+		info := e.Info()
+		f := toFile(key, info, e.isSymlink, getOwnerGroup)
+		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break
 		}
 	}
-	return objs, nil
+	return generateListResult(objs, limit)
 }
 
 func sshInteractive(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
@@ -526,10 +550,20 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 	if pass == "" {
 		auth = append(auth, ssh.KeyboardInteractive(sshInteractive))
 	}
+	var hostKeyCallback ssh.HostKeyCallback
+	if kn := os.Getenv("SSH_KNOWN_HOSTS"); kn != "" {
+		var err error
+		hostKeyCallback, err = knownhosts.New(kn)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		hostKeyCallback = ssh.InsecureIgnoreHostKey()
+	}
 
 	config := &ssh.ClientConfig{
 		User:            username,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         time.Second * 3,
 		Auth:            auth,
 	}

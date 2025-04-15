@@ -9,8 +9,9 @@ on:
       - 'docs/**'
       - '**.md'
       - '.github/**'
+      - '**.java'
+      - '**/pom.xml'
   pull_request:
-    #The branches below must be a subset of the branches above
     branches:
       - 'main'
       - 'release-**'
@@ -18,6 +19,8 @@ on:
       - 'docs/**'
       - '**.md'
       - '.github/**'
+      - '**.java'
+      - '**/pom.xml'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:
@@ -30,7 +33,7 @@ on:
 
 jobs:
   build-matrix:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - id: set-matrix
         run: |
@@ -52,7 +55,7 @@ jobs:
       matrix:
         # [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badger', 'mariadb', 'fdb']
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: shogo82148/actions-setup-perl@v1
@@ -64,6 +67,15 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
       - name: Set Variable
         id: vars
         run: |
@@ -72,7 +84,7 @@ jobs:
           else
             echo "target=juicefs" >> $GITHUB_OUTPUT
           fi
-
+      
       - name: Build
         uses: ./.github/actions/build
         with: 
@@ -90,7 +102,7 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs format $meta_url --trash-days 0 pics
+          sudo ./juicefs format $meta_url --trash-days 0 --bucket=/mnt/jfs pics
 
       - name: Juicefs Mount
         run: |
@@ -98,7 +110,7 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           # sudo mkdir /var/jfs
           # sudo chmod 777 /var/jfs
-          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report 
+          sudo GOCOVERDIR=$(pwd)/cover ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report 
           stat /tmp/jfs/.accesslog
 
       - name: Pjdfstest
@@ -124,6 +136,13 @@ jobs:
             tail -300 /var/log/juicefs.log
             grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
           fi
+
+      - name: upload coverage report
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
 
       - name: Send Slack Notification
         if: failure()

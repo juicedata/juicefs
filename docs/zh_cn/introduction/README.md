@@ -15,11 +15,11 @@ JuiceFS 提供了丰富的 API，适用于各种形式数据的管理、分析�
   <iframe src="//player.bilibili.com/player.html?aid=931107196&bvid=BV1HK4y197va&cid=350876578&page=1&autoplay=0" width="100%" height="360" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"> </iframe>
 </div>
 
-## 核心特性
+## 核心特性 {#features}
 
 1. **POSIX 兼容**：像本地文件系统一样使用，无缝对接已有应用，无业务侵入性；
 2. **HDFS 兼容**：完整兼容 [HDFS API](../deployment/hadoop_java_sdk.md)，提供更强的元数据性能；
-3. **S3 兼容**：提供 [S3 网关](../deployment/s3_gateway.md) 实现 S3 协议兼容的访问接口；
+3. **S3 兼容**：提供 [S3 网关](../guide/gateway.md) 实现 S3 协议兼容的访问接口；
 4. **云原生**：通过 [Kubernetes CSI 驱动](../deployment/how_to_use_on_kubernetes.md) 轻松地在 Kubernetes 中使用 JuiceFS；
 5. **分布式设计**：同一文件系统可在上千台服务器同时挂载，高性能并发读写，共享数据；
 6. **强一致性**：确认的文件修改会在所有服务器上立即可见，保证强一致性；
@@ -28,7 +28,7 @@ JuiceFS 提供了丰富的 API，适用于各种形式数据的管理、分析�
 9. **文件锁**：支持 BSD 锁（flock）和 POSIX 锁（fcntl）；
 10. **数据压缩**：支持 [LZ4](https://lz4.github.io/lz4) 和 [Zstandard](https://facebook.github.io/zstd) 压缩算法，节省存储空间。
 
-## 应用场景
+## 应用场景 {#scenarios}
 
 JuiceFS 为海量数据存储设计，可以作为很多分布式文件系统和网络文件系统的替代，特别是以下场景：
 
@@ -38,13 +38,14 @@ JuiceFS 为海量数据存储设计，可以作为很多分布式文件系统和
 - **共享工作区**：可以在任意主机挂载；没有客户端并发读写限制；POSIX 兼容已有的数据流和脚本操作。
 - **数据备份**：在无限平滑扩展的存储空间备份各种数据，结合共享挂载功能，可以将多主机数据汇总至一处，做统一备份。
 
-## 数据隐私
+## 数据隐私 {#data-privacy}
 
 JuiceFS 是开源软件，你可以在 [GitHub](https://github.com/juicedata/juicefs) 找到完整的源代码。在使用 JuiceFS 存储数据时，数据会按照一定的规则被拆分成数据块并保存在你自己定义的对象存储或其它存储介质中，数据所对应的元数据则存储在你自己定义的数据库中。
 
-## 更多相关信息
+## 更多相关信息 {#more-info}
 
 * **案例**：想了解更多相似场景的实践案例，请访问[用户案例](https://juicefs.com/zh-cn/blog/user-stories)。
 * **视频**：我们在 [Bilibili 频道](https://space.bilibili.com/1206844881)提供了丰富的视频教程。
 * **加入社群**：欢迎加入我们的[微信用户组](https://juicefs.com/zh-cn/wechat-user-group)（中文）或者 [Slack](https://go.juicefs.com/slack)（英文），与 JuiceFS 用户共同探讨。
 * **Office Hours**：每月第 2 周的星期三 16:00-17:00（UTC+8）在线上举行，Juicedata 工程师将为你实时答疑解惑。请加入微信用户组获取最新活动信息。
+* **AI 助手**：如果你遇到了任何问题，欢迎使用「Ask AI」功能（右下角）求助 AI 助手。AI 助手的知识库来源于文档以及 GitHub 中的相关内容。

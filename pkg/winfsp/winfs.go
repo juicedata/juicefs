@@ -22,6 +22,7 @@ package winfsp
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"runtime"
 	"strings"
@@ -29,12 +30,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/billziss-gh/cgofuse/fuse"
-
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/winfsp/cgofuse/fuse"
+	"golang.org/x/sys/windows/registry"
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -56,8 +57,9 @@ type juice struct {
 	handlers map[uint64]meta.Ino
 	badfd    map[uint64]uint64
 
-	asRoot     bool
-	delayClose int
+	asRoot         bool
+	delayClose     int
+	enabledGetPath bool
 }
 
 // Init is called when the file system is created.
@@ -68,7 +70,7 @@ func (j *juice) Init() {
 
 func (j *juice) newContext() vfs.LogContext {
 	if j.asRoot {
-		return vfs.NewLogContext(meta.Background)
+		return vfs.NewLogContext(meta.Background())
 	}
 	uid, gid, pid := fuse.Getcontext()
 	if uid == 0xffffffff {
@@ -106,7 +108,63 @@ func (j *juice) Statfs(path string, stat *fuse.Statfs_t) int {
 }
 
 func errorconv(err syscall.Errno) int {
+	// convert based on the error.i file in winfsp project
+	switch err {
+	case syscall.EACCES:
+		return -fuse.EACCES
+	case syscall.EEXIST:
+		return -fuse.EEXIST
+	case syscall.ENOENT, syscall.ENOTDIR:
+		return -fuse.ENOENT
+	case syscall.ECANCELED:
+		return -fuse.EINTR
+	case syscall.EIO:
+		return -fuse.EIO
+	case syscall.EINVAL:
+		return -fuse.ENXIO
+	case syscall.EBADFD:
+		return -fuse.EBADF
+	case syscall.EDQUOT:
+		return -fuse.ENOSPC
+	case syscall.EBUSY:
+		return -fuse.EBUSY
+	case syscall.ENOTEMPTY:
+		return -fuse.ENOTEMPTY
+	case syscall.ENAMETOOLONG:
+		return -fuse.ENAMETOOLONG
+	case syscall.ERROR_HANDLE_EOF:
+		return -fuse.ENODATA
+	}
+
 	return -int(err)
+}
+
+func fuseFlagToSyscall(flag int) int {
+	var ret int
+
+	if flag&fuse.O_RDONLY != 0 {
+		ret |= syscall.O_RDONLY
+	}
+	if flag&fuse.O_WRONLY != 0 {
+		ret |= syscall.O_WRONLY
+	}
+	if flag&fuse.O_RDWR != 0 {
+		ret |= syscall.O_RDWR
+	}
+	if flag&fuse.O_APPEND != 0 {
+		ret |= syscall.O_APPEND
+	}
+	if flag&fuse.O_CREAT != 0 {
+		ret |= syscall.O_CREAT
+	}
+	if flag&fuse.O_EXCL != 0 {
+		ret |= syscall.O_EXCL
+	}
+	if flag&fuse.O_TRUNC != 0 {
+		ret |= syscall.O_TRUNC
+	}
+	return ret
+
 }
 
 // Mknod creates a file node.
@@ -119,7 +177,7 @@ func (j *juice) Mknod(p string, mode uint32, dev uint64) (e int) {
 		return
 	}
 	_, errno := j.vfs.Mknod(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(dev))
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -161,7 +219,7 @@ func (j *juice) Symlink(target string, newpath string) (e int) {
 		return
 	}
 	_, errno := j.vfs.Symlink(ctx, target, parent.Inode(), path.Base(newpath))
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -174,7 +232,7 @@ func (j *juice) Readlink(path string) (e int, target string) {
 		return
 	}
 	t, errno := j.vfs.Readlink(ctx, fi.Inode())
-	e = -int(errno)
+	e = errorconv(errno)
 	target = string(t)
 	return
 }
@@ -232,7 +290,7 @@ func (j *juice) Utimens(path string, tmsp []fuse.Timespec) (e int) {
 	if err != 0 {
 		e = errorconv(err)
 	} else {
-		e = errorconv(f.Utime(ctx, tmsp[0].Sec*1000+tmsp[0].Nsec/1e6, tmsp[1].Sec*1000+tmsp[1].Nsec/1e6))
+		e = errorconv(f.Utime2(ctx, tmsp[0].Sec, tmsp[0].Nsec, tmsp[1].Sec, tmsp[1].Nsec))
 	}
 	return
 }
@@ -247,13 +305,14 @@ func (j *juice) Create(p string, flags int, mode uint32) (e int, fh uint64) {
 		e = errorconv(err)
 		return
 	}
-	entry, fh, errno := j.vfs.Create(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(flags))
+
+	entry, fh, errno := j.vfs.Create(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(fuseFlagToSyscall(flags)))
 	if errno == 0 {
 		j.Lock()
 		j.handlers[fh] = entry.Inode
 		j.Unlock()
 	}
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -261,7 +320,7 @@ func (j *juice) Create(p string, flags int, mode uint32) (e int, fh uint64) {
 // The flags are a combination of the fuse.O_* constants.
 func (j *juice) Open(path string, flags int) (e int, fh uint64) {
 	var fi fuse.FileInfo_t
-	fi.Flags = flags
+	fi.Flags = fuseFlagToSyscall(flags)
 	e = j.OpenEx(path, &fi)
 	fh = fi.Fh
 	return
@@ -269,27 +328,44 @@ func (j *juice) Open(path string, flags int) (e int, fh uint64) {
 
 // Open opens a file.
 // The flags are a combination of the fuse.O_* constants.
-func (j *juice) OpenEx(path string, fi *fuse.FileInfo_t) (e int) {
+func (j *juice) OpenEx(p string, fi *fuse.FileInfo_t) (e int) {
 	ctx := j.newContext()
-	defer trace(path, fi.Flags)(&e)
-	f, err := j.fs.Open(ctx, path, 0)
-	if err != 0 {
-		e = -fuse.ENOENT
-		return
+	defer trace(p, fi.Flags)(&e)
+	ino := meta.Ino(0)
+	if strings.HasSuffix(p, "/.control") {
+		ino, _ = vfs.GetInternalNodeByName(".control")
+		if ino == 0 {
+			e = -fuse.ENOENT
+			return
+		}
+	} else if filename := path.Base(p); vfs.IsSpecialName(filename) {
+		ino, _ = vfs.GetInternalNodeByName(filename)
+		if ino == 0 {
+			e = -fuse.ENOENT
+			return
+		}
+	} else {
+		f, err := j.fs.Open(ctx, p, 0)
+		if err != 0 {
+			e = -fuse.ENOENT
+			return
+		}
+		ino = f.Inode()
 	}
-	entry, fh, errno := j.vfs.Open(ctx, f.Inode(), uint32(fi.Flags))
+
+	entry, fh, errno := j.vfs.Open(ctx, ino, uint32(fuseFlagToSyscall(fi.Flags)))
 	if errno == 0 {
 		fi.Fh = fh
-		if vfs.IsSpecialNode(f.Inode()) {
+		if vfs.IsSpecialNode(ino) {
 			fi.DirectIo = true
 		} else {
 			fi.KeepCache = entry.Attr.KeepCache
 		}
 		j.Lock()
-		j.handlers[fh] = f.Inode()
+		j.handlers[fh] = ino
 		j.Unlock()
 	}
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -332,6 +408,18 @@ func attrToStat(inode Ino, attr *meta.Attr, stat *fuse.Stat_t) {
 	stat.Size = int64(size)
 	stat.Blocks = int64(blocks)
 	stat.Rdev = uint64(rdev)
+	if attr.Flags&meta.FlagImmutable != 0 {
+		stat.Flags |= fuse.UF_READONLY
+	}
+	if attr.Flags&meta.FlagWindowsHidden != 0 {
+		stat.Flags |= fuse.UF_HIDDEN
+	}
+	if attr.Flags&meta.FlagWindowsSystem != 0 {
+		stat.Flags |= fuse.UF_SYSTEM
+	}
+	if attr.Flags&meta.FlagWindowsArchive != 0 {
+		stat.Flags |= fuse.UF_ARCHIVE
+	}
 }
 
 func (j *juice) h2i(fh *uint64) meta.Ino {
@@ -363,13 +451,50 @@ func (j *juice) reopen(p string, fh *uint64) meta.Ino {
 }
 
 // Getattr gets file attributes.
+func (j *juice) getAttrForSpFile(ctx vfs.LogContext, p string, stat *fuse.Stat_t, fh uint64) (e int) {
+	parentDir := path.Dir(p)
+	_, err := j.fs.Stat(ctx, parentDir)
+	if err != 0 {
+		e = -fuse.ENOENT
+		return
+	}
+
+	filename := path.Base(p)
+	inode, attr := vfs.GetInternalNodeByName(filename)
+	if inode == 0 {
+		e = -fuse.ENOENT
+		return
+	}
+
+	j.vfs.UpdateLength(inode, attr)
+
+	attr.Gid = ctx.Gid()
+	attr.Uid = ctx.Uid()
+
+	attrToStat(inode, attr, stat)
+	return
+}
+
+// Getattr gets file attributes.
 func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 	ctx := j.newContext()
 	defer trace(p, fh)(stat, &e)
 	ino := j.h2i(&fh)
 	if ino == 0 {
+		// special case for .control file
+		if strings.HasSuffix(p, "/.control") {
+			e = j.getAttrForSpFile(ctx, p, stat, fh)
+			return
+		} else if vfs.IsSpecialName(path.Base(p)) {
+			e = j.getAttrForSpFile(ctx, p, stat, fh)
+			return
+		}
+
 		fi, err := j.fs.Stat(ctx, p)
 		if err != 0 {
+			// Known issue: If the parent directory is not exists, the Windows api such as
+			// GetFileAttributeX expects the ERROR_PATH_NOT_FOUND returned.
+			// However, the fuse api has no such error code defined.
 			e = -fuse.ENOENT
 			return
 		}
@@ -377,7 +502,7 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 	}
 	entry, errrno := j.vfs.GetAttr(ctx, ino, 0)
 	if errrno != 0 {
-		e = -int(errrno)
+		e = errorconv(errrno)
 		return
 	}
 	j.vfs.UpdateLength(entry.Inode, entry.Attr)
@@ -394,7 +519,7 @@ func (j *juice) Truncate(path string, size int64, fh uint64) (e int) {
 		e = -fuse.EBADF
 		return
 	}
-	e = -int(j.vfs.Truncate(ctx, ino, size, 0, nil))
+	e = errorconv(j.vfs.Truncate(ctx, ino, size, 0, nil))
 	return
 }
 
@@ -413,7 +538,7 @@ func (j *juice) Read(path string, buf []byte, off int64, fh uint64) (e int) {
 	}
 	n, err := j.vfs.Read(ctx, ino, buf, uint64(off), fh)
 	if err != 0 {
-		e = -int(err)
+		e = errorconv(err)
 		return
 	}
 	return n
@@ -434,7 +559,7 @@ func (j *juice) Write(path string, buff []byte, off int64, fh uint64) (e int) {
 	}
 	errno := j.vfs.Write(ctx, ino, buff, uint64(off), fh)
 	if errno != 0 {
-		e = -int(errno)
+		e = errorconv(errno)
 	} else {
 		e = len(buff)
 	}
@@ -450,7 +575,7 @@ func (j *juice) Flush(path string, fh uint64) (e int) {
 		e = -fuse.EBADF
 		return
 	}
-	e = -int(j.vfs.Flush(ctx, ino, fh, 0))
+	e = errorconv(j.vfs.Flush(ctx, ino, fh, 0))
 	return
 }
 
@@ -484,7 +609,7 @@ func (j *juice) Fsync(path string, datasync bool, fh uint64) (e int) {
 	if ino == 0 {
 		e = -fuse.EBADF
 	} else {
-		e = -int(j.vfs.Fsync(ctx, ino, 1, fh))
+		e = errorconv(j.vfs.Fsync(ctx, ino, 1, fh))
 	}
 	return
 }
@@ -504,7 +629,7 @@ func (j *juice) Opendir(path string) (e int, fh uint64) {
 		j.handlers[fh] = f.Inode()
 		j.Unlock()
 	}
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -521,7 +646,7 @@ func (j *juice) Readdir(path string,
 	ctx := j.newContext()
 	entries, readAt, err := j.vfs.Readdir(ctx, ino, 100000, int(ofst), fh, true)
 	if err != 0 {
-		e = -int(err)
+		e = errorconv(err)
 		return
 	}
 	var st fuse.Stat_t
@@ -570,24 +695,102 @@ func (j *juice) Releasedir(path string, fh uint64) (e int) {
 	return
 }
 
-func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayClose int) {
+func (j *juice) Chflags(path string, flags uint32) (e int) {
+	defer trace(path, flags)(&e)
+
+	ctx := j.newContext()
+	fi, err := j.fs.Stat(ctx, path)
+	if err != 0 {
+		e = -fuse.ENOENT
+		return
+	}
+
+	var flagSet uint8
+	if flags&fuse.UF_READONLY != 0 {
+		flagSet |= meta.FlagImmutable
+	}
+	if flags&fuse.UF_HIDDEN != 0 {
+		flagSet |= meta.FlagWindowsHidden
+	}
+	if flags&fuse.UF_SYSTEM != 0 {
+		flagSet |= meta.FlagWindowsSystem
+	}
+	if flags&fuse.UF_ARCHIVE != 0 {
+		flagSet |= meta.FlagWindowsArchive
+	}
+
+	ino := fi.Inode()
+	err = j.vfs.ChFlags(ctx, ino, flagSet)
+	if err != 0 {
+		e = errorconv(err)
+	}
+
+	return
+}
+
+func (j *juice) Getpath(p string, fh uint64) (e int, ret string) {
+	if !j.enabledGetPath {
+		ret = p
+		return
+	}
+	defer trace(p, fh)(&e, &ret)
+	ino := j.h2i(&fh)
+	ctx := j.newContext()
+	if ino == 0 {
+		fi, err := j.fs.Stat(ctx, p)
+		if err != 0 {
+			e = errorconv(err)
+			return
+		}
+		ino = fi.Inode()
+	}
+
+	paths := j.vfs.Meta.GetPaths(ctx, ino)
+	if len(paths) == 0 {
+		ret = p
+		return
+	}
+
+	if len(paths) == 1 {
+		ret = paths[0]
+		return
+	}
+
+	retCandidicate := paths[0]
+
+	for _, path := range paths {
+		if p == path {
+			ret = path
+			return
+		} else if strings.EqualFold(path, p) {
+			retCandidicate = path
+		}
+	}
+
+	ret = retCandidicate
+	return
+}
+
+func Serve(v *vfs.VFS, fuseOpt string, fileCacheTimeoutSec float64, dirCacheTimeoutSec float64,
+	asRoot bool, delayCloseSec int, showDotFiles bool, threadsCount int, caseSensitive bool, enabledGetPath bool) {
 	var jfs juice
 	conf := v.Conf
 	jfs.conf = conf
 	jfs.vfs = v
+	jfs.enabledGetPath = enabledGetPath
 	var err error
 	jfs.fs, err = fs.NewFileSystem(conf, v.Meta, v.Store)
 	if err != nil {
 		logger.Fatalf("Initialize FileSystem failed: %s", err)
 	}
 	jfs.asRoot = asRoot
-	jfs.delayClose = delayClose
+	jfs.delayClose = delayCloseSec
 	host := fuse.NewFileSystemHost(&jfs)
 	jfs.host = host
 	var options = "volname=" + conf.Format.Name
-	options += ",ExactFileSystemName=JuiceFS,create_umask=022,ThreadCount=16"
-	options += ",DirInfoTimeout=1000,VolumeInfoTimeout=1000,KeepFileCache"
-	options += fmt.Sprintf(",FileInfoTimeout=%d", int(fileCacheTo*1000))
+	options += fmt.Sprintf(",ExactFileSystemName=JuiceFS,ThreadCount=%d", threadsCount)
+	options += fmt.Sprintf(",DirInfoTimeout=%d,VolumeInfoTimeout=1000,KeepFileCache", int(dirCacheTimeoutSec*1000))
+	options += fmt.Sprintf(",FileInfoTimeout=%d", int(fileCacheTimeoutSec*1000))
 	options += ",VolumePrefix=/juicefs/" + conf.Format.Name
 	if asRoot {
 		options += ",uid=-1,gid=-1"
@@ -595,8 +798,90 @@ func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayCl
 	if fuseOpt != "" {
 		options += "," + fuseOpt
 	}
-	host.SetCapCaseInsensitive(strings.HasSuffix(conf.Meta.MountPoint, ":"))
+	if !showDotFiles {
+		options += ",dothidden"
+	}
+	host.SetCapCaseInsensitive(!caseSensitive)
 	host.SetCapReaddirPlus(true)
 	logger.Debugf("mount point: %s, options: %s", conf.Meta.MountPoint, options)
 	_ = host.Mount(conf.Meta.MountPoint, []string{"-o", options})
+}
+
+func RunAsSystemSerivce(name string, mountpoint string, logPath string) error {
+	// https://winfsp.dev/doc/WinFsp-Service-Architecture/
+	logger.Info("Running as Windows system service.")
+
+	var cmds []string
+	for _, v := range os.Args[1:] {
+		if v == "-d" || v == "--background" {
+			continue
+		}
+		cmds = append(cmds, v)
+	}
+
+	cmdLine := strings.Join(cmds, " ")
+
+	regKeyPath := "SOFTWARE\\WOW6432Node\\WinFsp\\Services\\juicefs"
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, regKeyPath, registry.ALL_ACCESS)
+	if err != nil {
+		if err == syscall.ERROR_FILE_NOT_FOUND || err == syscall.ERROR_PATH_NOT_FOUND {
+			logger.Info("Registry key not found, create it")
+			k, _, err = registry.CreateKey(registry.LOCAL_MACHINE, regKeyPath, registry.ALL_ACCESS)
+			if err != nil {
+				return fmt.Errorf("Failed to create registry key: %s", err)
+			}
+		} else {
+			return fmt.Errorf("Failed to open registry key: %s", err)
+		}
+	}
+	defer k.Close()
+
+	err = k.SetStringValue("CommandLine", cmdLine)
+	if err != nil {
+		return fmt.Errorf("Failed to set registry key: %s", err)
+	}
+
+	securityDescriptor := "D:P(A;;RPWPLC;;;WD)"
+	err = k.SetStringValue("Security", securityDescriptor)
+	if err != nil {
+		return fmt.Errorf("Failed to set registry key: %s", err)
+	}
+
+	filePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("Failed to get current file path: %s", err)
+	}
+
+	err = k.SetStringValue("Executable", filePath)
+	if err != nil {
+		return fmt.Errorf("Failed to set registry key: %s", err)
+	}
+
+	err = k.SetDWordValue("JobControl", 1)
+	if err != nil {
+		return fmt.Errorf("Failed to set registry key: %s", err)
+	}
+
+	if logPath != "" {
+		err = k.SetStringValue("Stderr", logPath)
+		if err != nil {
+			return fmt.Errorf("Failed to set registry key: %s", err)
+		}
+	} else {
+		err = k.DeleteValue("Stderr")
+		if err != nil {
+			return fmt.Errorf("Failed to delete registry key: %s", err)
+		}
+
+	}
+
+	logger.Debug("Starting juicefs service.")
+	cmd := exec.Command("net", "use", mountpoint, "\\\\juicefs\\"+name)
+	err = cmd.Run()
+	if err != nil {
+		return fmt.Errorf("Failed to call system command %s, %s", cmd.String(), err)
+	}
+
+	logger.Info("Juicefs system service started successfully.")
+	return nil
 }

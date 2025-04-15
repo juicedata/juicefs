@@ -35,8 +35,10 @@ import (
 const (
 	// MaxVersion is the max of supported versions.
 	MaxVersion = 1
+	// ChunkBits is the size of a chunk.
+	ChunkBits = 26
 	// ChunkSize is size of a chunk
-	ChunkSize = 1 << 26 // 64M
+	ChunkSize = 1 << ChunkBits // 64M
 	// DeleteSlice is a message to delete a slice from object store.
 	DeleteSlice = 1000
 	// CompactChunk is a message to compact a chunk in object store.
@@ -87,12 +89,16 @@ const (
 	SetAttrCtime
 	SetAttrAtimeNow
 	SetAttrMtimeNow
+	SetAttrCtimeNow
 	SetAttrFlag = 1 << 15
 )
 
 const (
-	FlagImmutable = 1 << iota
+	FlagImmutable = 1 << iota // same as Windows FILE_ATTRIBUTE_READONLY
 	FlagAppend
+	FlagWindowsHidden
+	FlagWindowsSystem
+	FlagWindowsArchive
 )
 
 const (
@@ -110,6 +116,8 @@ type Ino uint64
 
 const RootInode Ino = 1
 const TrashInode Ino = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
+
+const RmrDefaultThreads = 50
 
 func (i Ino) String() string {
 	return strconv.FormatUint(uint64(i), 10)
@@ -168,6 +176,65 @@ type Attr struct {
 
 	AccessACL  uint32 // access ACL id (identical ACL rules share the same access ACL ID.)
 	DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
+}
+
+func (attr *Attr) Marshal() []byte {
+	size := uint32(36 + 24 + 4 + 8)
+	if attr.AccessACL|attr.DefaultACL != aclAPI.None {
+		size += 8
+	}
+	w := utils.NewBuffer(size)
+	w.Put8(attr.Flags)
+	w.Put16((uint16(attr.Typ) << 12) | (attr.Mode & 0xfff))
+	w.Put32(attr.Uid)
+	w.Put32(attr.Gid)
+	w.Put64(uint64(attr.Atime))
+	w.Put32(attr.Atimensec)
+	w.Put64(uint64(attr.Mtime))
+	w.Put32(attr.Mtimensec)
+	w.Put64(uint64(attr.Ctime))
+	w.Put32(attr.Ctimensec)
+	w.Put32(attr.Nlink)
+	w.Put64(attr.Length)
+	w.Put32(attr.Rdev)
+	w.Put64(uint64(attr.Parent))
+	if attr.AccessACL+attr.DefaultACL > 0 {
+		w.Put32(attr.AccessACL)
+		w.Put32(attr.DefaultACL)
+	}
+	logger.Tracef("attr: %+v -> %+v", attr, w.Bytes())
+	return w.Bytes()
+}
+
+func (attr *Attr) Unmarshal(buf []byte) {
+	if attr == nil || len(buf) == 0 {
+		return
+	}
+	rb := utils.FromBuffer(buf)
+	attr.Flags = rb.Get8()
+	attr.Mode = rb.Get16()
+	attr.Typ = uint8(attr.Mode >> 12)
+	attr.Mode &= 0xfff
+	attr.Uid = rb.Get32()
+	attr.Gid = rb.Get32()
+	attr.Atime = int64(rb.Get64())
+	attr.Atimensec = rb.Get32()
+	attr.Mtime = int64(rb.Get64())
+	attr.Mtimensec = rb.Get32()
+	attr.Ctime = int64(rb.Get64())
+	attr.Ctimensec = rb.Get32()
+	attr.Nlink = rb.Get32()
+	attr.Length = rb.Get64()
+	attr.Rdev = rb.Get32()
+	if rb.Left() >= 8 {
+		attr.Parent = Ino(rb.Get64())
+	}
+	attr.Full = true
+	if rb.Left() >= 8 {
+		attr.AccessACL = rb.Get32()
+		attr.DefaultACL = rb.Get32()
+	}
+	logger.Tracef("attr: %+v -> %+v", buf, attr)
 }
 
 func typeToStatType(_type uint8) uint32 {
@@ -234,7 +301,7 @@ func typeFromString(s string) uint8 {
 }
 
 // SMode is the file mode including type and unix permission.
-func (a Attr) SMode() uint32 {
+func (a *Attr) SMode() uint32 {
 	return typeToStatType(a.Typ) | uint32(a.Mode)
 }
 
@@ -320,6 +387,8 @@ type Meta interface {
 	NewSession(record bool) error
 	// CloseSession does cleanup and close the session.
 	CloseSession() error
+	// FlushSession flushes the status to meta service.
+	FlushSession()
 	// GetSession retrieves information of session with sid
 	GetSession(sid uint64, detail bool) (*Session, error)
 	// ListSessions returns all client sessions.
@@ -329,7 +398,7 @@ type Meta interface {
 	// ListLocks returns all locks of a inode.
 	ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error)
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
-	CleanStaleSessions()
+	CleanStaleSessions(ctx Context)
 	// CleanupTrashBefore deletes all files in trash before the given time.
 	CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int))
 	// CleanupDetachedNodesBefore deletes all detached nodes before the given time.
@@ -376,6 +445,8 @@ type Meta interface {
 	Link(ctx Context, inodeSrc, parent Ino, name string, attr *Attr) syscall.Errno
 	// Readdir returns all entries for given directory, which include attributes if plus is true.
 	Readdir(ctx Context, inode Ino, wantattr uint8, entries *[]*Entry) syscall.Errno
+	// NewDirHandler returns a stream for directory entries.
+	NewDirHandler(ctx Context, inode Ino, plus bool, initEntries []*Entry) (DirHandler, syscall.Errno)
 	// Create creates a file in a directory with given name.
 	Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno
 	// Open checks permission on a node and track it as open.
@@ -418,16 +489,16 @@ type Meta interface {
 	Compact(ctx Context, inode Ino, concurrency int, preFunc, postFunc func()) syscall.Errno
 
 	// ListSlices returns all slices used by all files.
-	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
+	ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno
 	// Remove all files and directories recursively.
 	// count represents the number of attempted deletions of entries (even if failed).
-	Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno
+	Remove(ctx Context, parent Ino, name string, skipTrash bool, numThreads int, count *uint64) syscall.Errno
 	// Get summary of a node; for a directory it will accumulate all its child nodes
 	GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool) syscall.Errno
 	// GetTreeSummary returns a summary in tree structure
 	GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool, updateProgress func(count uint64, bytes uint64)) syscall.Errno
 	// Clone a file or directory
-	Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno
+	Clone(ctx Context, srcParentIno, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno
 	// GetPaths returns all paths of an inode
 	GetPaths(ctx Context, inode Ino) []string
 	// Check integrity of an absolute path and repair it if asked
@@ -444,11 +515,14 @@ type Meta interface {
 	// OnReload register a callback for any change founded after reloaded.
 	OnReload(func(new *Format))
 
-	HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool) error
+	HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool, create bool) error
 
 	// Dump the tree under root, which may be modified by checkRoot
 	DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) error
 	LoadMeta(r io.Reader) error
+
+	DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error
+	LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error
 
 	// getBase return the base engine.
 	getBase() *baseMeta
@@ -467,7 +541,7 @@ func Register(name string, register Creator) {
 }
 
 func setPasswordFromEnv(uri string) (string, error) {
-	atIndex := strings.Index(uri, "@")
+	atIndex := strings.LastIndex(uri, "@")
 	if atIndex == -1 {
 		return "", fmt.Errorf("invalid uri: %s", uri)
 	}

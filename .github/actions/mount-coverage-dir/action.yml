@@ -1,0 +1,73 @@
+name: 'mount_coverage_dir'
+description: 'mount coverage directory'
+inputs:
+  mount_point:
+    description: 'mount point'
+    required: true
+    type: string
+  subdir:
+    description: 'subdir'
+    required: false
+    type: string
+  token:
+    description: 'token of jfs'
+    required: true
+    type: string
+  access_key:
+    description: 'access key of object storage service'
+    required: true
+    type: string
+  secret_key:
+    description: 'secret key of object storage service'
+    required: true
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+    - name: set subdir
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        jobs=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs)
+        job_id=$(echo $jobs | jq -r '.jobs[] | select(.runner_name=="${{ runner.name }}") | select(.status=="in_progress") | .id')
+        echo Job ID is: ${job_id}
+
+        if [ "${{ github.event_name }}" == "pull_request" ]; then
+          branch=${GITHUB_BASE_REF} # 目标分支
+        elif [ "${{ github.event_name }}" == "push" ]; then
+          branch=${GITHUB_REF#refs/heads/} # 当前分支
+        else
+          branch=${GITHUB_REF#refs/heads/} # 对于 schedule 和 workflow_dispatch
+        fi
+        echo input.subdir is ${{inputs.subdir}}
+        if [ -n "${{inputs.subdir}}" ]; then
+          subdir=${{inputs.subdir}}
+        elif [[ "${{github.event_name}}" == "schedule" ]]; then
+          subdir=juicefs/schedule/$(date +"%Y%m%d")/${{github.workflow}}
+        elif [[ "${{github.job}}" == "success-all-test" ]]; then 
+          subdir=juicefs/pr/$branch/${{github.workflow}}/${{github.run_id}}
+        else
+          subdir=juicefs/pr/$branch/${{github.workflow}}/${{github.run_id}}/${job_id}        
+        fi
+        echo "subdir=$subdir"
+        echo "subdir=$subdir" >> $GITHUB_ENV
+
+    - name: mount coverage dir
+      shell: bash
+      run: |
+        sudo mkdir -p /root/.juicefs
+        if ! sudo test -f /root/.juicefs/jfsmount; then
+          sudo wget -q s.juicefs.com/static/Linux/mount -O /root/.juicefs/jfsmount 
+          sudo chmod +x /root/.juicefs/jfsmount
+        fi
+        sudo curl -s -L https://juicefs.com/static/juicefs -o /usr/local/bin/juicefs && sudo chmod +x /usr/local/bin/juicefs
+        if [[ -n "${{inputs.access_key}}" && -n "${{inputs.secret_key}}" && -n "${{inputs.token}}" ]]; then
+          sudo juicefs auth ci-coverage --access-key ${{ inputs.access_key }} --secret-key ${{ inputs.secret_key }} --token ${{inputs.token}} --encrypt-keys
+          sudo juicefs mount ci-coverage --subdir ${subdir} ${{inputs.mount_point}} --allow-other
+        else
+          echo "no jfs secrets provided, use local dir instead of jfs"
+          mkdir -p ${{inputs.mount_point}}
+        fi
+        

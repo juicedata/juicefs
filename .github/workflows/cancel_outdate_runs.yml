@@ -1,0 +1,66 @@
+name: cancel_outdate_runs
+on:
+  pull_request:
+    branches:
+      - main
+      - release**
+
+jobs:
+  cancel-outdate-runs:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+        with :
+          fetch-depth: 1
+
+      - name: mount jfs dir
+        timeout-minutes: 3
+        run: |
+          sudo mkdir -p /root/.juicefs
+          sudo wget -q s.juicefs.com/static/Linux/mount -O /root/.juicefs/jfsmount 
+          sudo chmod +x /root/.juicefs/jfsmount
+          sudo curl -s -L https://juicefs.com/static/juicefs -o /usr/local/bin/juicefs && sudo chmod +x /usr/local/bin/juicefs
+          sudo juicefs auth ci-coverage --access-key ${{ secrets.CI_COVERAGE_AWS_AK }} --secret-key ${{ secrets.CI_COVERAGE_AWS_SK }} --token ${{ secrets.CI_COVERAGE_AWS_TOKEN }} --encrypt-keys
+          sudo juicefs mount ci-coverage --subdir juicefs/cancel-outdate-runs /jfs --allow-other
+            
+      - name: Get previous head_sha
+        timeout-minutes: 1
+        run: |
+          echo get previous head sha from /jfs/${{ github.event.pull_request.number }}/head_sha
+          previous_head_sha=/jfs/${{ github.event.pull_request.number }}/head_sha
+          if [ ! -f ${previous_head_sha} ]; then
+            echo "no previous head sha found"
+            exit 0
+          else
+            previous_head_sha=$(cat ${previous_head_sha})
+            echo "previous head sha is ${previous_head_sha}"
+            echo "previous_head_sha=${previous_head_sha}" >> $GITHUB_ENV
+          fi
+
+      - name: Save head_sha 
+        timeout-minutes: 1
+        run: |
+          mkdir -p /jfs/${{ github.event.pull_request.number }}
+          echo ${{ github.event.pull_request.head.sha }} | tee /jfs/${{ github.event.pull_request.number }}/head_sha
+          echo save head sha to /jfs/${{ github.event.pull_request.number }}/head_sha
+      
+      - name : Cancel Outdate Runs
+        uses: ./.github/actions/cancel-outdate-runs
+        with: 
+          per_page: 8
+          page: 1
+          head_sha: ${{ env.previous_head_sha }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait Runs Cancelled
+        run: |
+          sleep 10s
+
+      - name : Cancel Outdate Runs
+        uses: ./.github/actions/cancel-outdate-runs
+        with: 
+          per_page: 8
+          page: 1
+          head_sha: ${{ env.previous_head_sha }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}

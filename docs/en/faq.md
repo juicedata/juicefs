@@ -3,9 +3,11 @@ title: FAQ
 slug: /faq
 ---
 
-## My question is not answered in the documentations
+## My question is not answered in the documentation
 
-Try searching using different keywords (top right corner), if that doesn't help, reach our community at [JuiceFS Community](https://juicefs.com/en/community).
+If you can't find an answer in the documentation, please try using the "Ask AI" feature (in the bottom right corner). If the AI assistant's answer helps you or provides a wrong answer, feel free to leave feedback on the response. Alternatively, use the document search feature (in the top right corner) and try searching with different keywords.
+
+If these methods still do not resolve your question, you can join the [JuiceFS Community](https://juicefs.com/en/community) for further assistance.
 
 ## General Questions
 
@@ -114,7 +116,7 @@ In addition to mounting, the following methods are also supported:
 
 - Kubernetes CSI Driver: Use JuiceFS as the storage layer of Kubernetes cluster through the Kubernetes CSI Driver. For details, please refer to ["Use JuiceFS on Kubernetes"](deployment/how_to_use_on_kubernetes.md).
 - Hadoop Java SDK: It is convenient to use a Java client compatible with the HDFS interface to access JuiceFS in the Hadoop ecosystem. For details, please refer to ["Use JuiceFS on Hadoop Ecosystem"](deployment/hadoop_java_sdk.md).
-- S3 Gateway: Access JuiceFS through the S3 protocol. For details, please refer to ["Deploy JuiceFS S3 Gateway"](deployment/s3_gateway.md).
+- S3 Gateway: Access JuiceFS through the S3 protocol. For details, please refer to ["Deploy JuiceFS S3 Gateway"](./guide/gateway.md).
 - Docker Volume Plugin: A convenient way to use JuiceFS in Docker, please refer to ["Use JuiceFS on Docker"](deployment/juicefs_on_docker.md).
 - WebDAV Gateway: Access JuiceFS via WebDAV protocol
 

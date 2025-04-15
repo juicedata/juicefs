@@ -1,0 +1,133 @@
+name: "unit-random-tests"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-*'
+    paths:
+      - 'pkg/meta/random_test.go'
+      - '**/unit-random-tests.yml'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-*'
+    paths:
+      - 'pkg/meta/random_test.go'
+      - '**/unit-random-tests.yml'
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+  schedule:
+    - cron: '0 17 * * *'
+
+jobs:
+  unit-random-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        meta: ['redis', 'sqlite3', 'tikv']
+    timeout-minutes: 120
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
+      - name: Build
+        timeout-minutes: 10
+        uses: ./.github/actions/build
+
+      - name: Prepare meta db
+        run: | 
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+
+      - name: Test
+        timeout-minutes: 60
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          number=10000
+          if [[ ${{matrix.meta}} == "tikv" ]]; then
+            number=1500
+          fi
+          make unit-random-test seed=$RANDOM checks=${number} steps=200 meta=$meta_url
+
+      - name: print failfile content
+        if: failure()
+        run: |
+          pwd
+          cat pkg/meta/testdata/rapid/TestFSOps/TestFSOps-*.fail
+        continue-on-error: true
+
+      - name: upload coverage report
+        if: always()
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }} 
+
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [unit-random-tests]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run:
+          exit 1
+
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
+      - name: upload total coverage report
+        timeout-minutes: 30
+        continue-on-error: true
+        uses: ./.github/actions/upload-total-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
+
+      - name: Send Slack Notification
+        if: failure() && github.event_name != 'workflow_dispatch' 
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Success
+        if: success()
+        run: echo "All Done"
+

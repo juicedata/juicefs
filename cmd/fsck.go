@@ -20,9 +20,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
-	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
@@ -91,15 +89,8 @@ func fsck(ctx *cli.Context) error {
 		return m.Check(c, p, ctx.Bool("repair"), ctx.Bool("recursive"), ctx.Bool("sync-dir-stat"))
 	}
 
-	chunkConf := chunk.Config{
-		BlockSize:  format.BlockSize * 1024,
-		Compress:   format.Compression,
-		GetTimeout: time.Second * 60,
-		PutTimeout: time.Second * 60,
-		MaxUpload:  20,
-		BufferSize: 300 << 20,
-		CacheDir:   "memory",
-	}
+	chunkConf := *getDefaultChunkConf(format)
+	chunkConf.CacheDir = "memory"
 
 	blob, err := createStorage(*format)
 	if err != nil {
@@ -142,7 +133,7 @@ func fsck(ctx *cli.Context) error {
 	// List all slices in metadata engine
 	sliceCSpin := progress.AddCountSpinner("Listed slices")
 	slices := make(map[meta.Ino][]meta.Slice)
-	r := m.ListSlices(c, slices, false, sliceCSpin.Increment)
+	r := m.ListSlices(c, slices, false, false, sliceCSpin.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
@@ -187,7 +178,7 @@ func fsck(ctx *cli.Context) error {
 					}
 					if _, err := blob.Head(objKey); err != nil {
 						if _, ok := brokens[inode]; !ok {
-							if ps := m.GetPaths(meta.Background, inode); len(ps) > 0 {
+							if ps := m.GetPaths(meta.Background(), inode); len(ps) > 0 {
 								brokens[inode] = ps[0]
 							} else {
 								brokens[inode] = fmt.Sprintf("inode:%d", inode)

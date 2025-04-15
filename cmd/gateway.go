@@ -80,6 +80,10 @@ func cmdGateway() *cli.Command {
 			Name:  "object-tag",
 			Usage: "enable object tagging api",
 		},
+		&cli.BoolFlag{
+			Name:  "object-meta",
+			Usage: "enable object metadata api",
+		},
 		&cli.StringFlag{
 			Name:  "domain",
 			Usage: "domain for virtual-host-style requests",
@@ -149,10 +153,11 @@ func gateway(c *cli.Context) error {
 		jfs,
 		conf,
 		&jfsgateway.Config{
-			MultiBucket: c.Bool("multi-buckets"),
-			KeepEtag:    c.Bool("keep-etag"),
-			Umask:       uint16(umask),
-			ObjTag:      c.Bool("object-tag"),
+			MultiBucket:   c.Bool("multi-buckets"),
+			KeepEtag:      c.Bool("keep-etag"),
+			Umask:         uint16(umask),
+			ObjTag:        c.Bool("object-tag"),
+			ObjMeta:       c.Bool("object-meta"),
 		},
 	)
 	if err != nil {
@@ -218,7 +223,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl, listenAddr string) (*vfs.Con
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
-	if st := metaCli.Chroot(meta.Background, metaConf.Subdir); st != 0 {
+	if st := metaCli.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
 		logger.Fatalf("Chroot to %s: %s", metaConf.Subdir, st)
 	}
 	registerer, registry := wrapRegister(c, mp, format.Name)

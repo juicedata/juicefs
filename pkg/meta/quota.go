@@ -41,6 +41,11 @@ type Quota struct {
 	newSpace, newInodes   int64
 }
 
+type iQuota struct {
+	inode Ino
+	quota *Quota
+}
+
 // Returns true if it will exceed the quota limit
 func (q *Quota) check(space, inodes int64) bool {
 	if space > 0 {
@@ -61,6 +66,17 @@ func (q *Quota) check(space, inodes int64) bool {
 func (q *Quota) update(space, inodes int64) {
 	atomic.AddInt64(&q.newSpace, space)
 	atomic.AddInt64(&q.newInodes, inodes)
+}
+
+func (q *Quota) snap() Quota {
+	return Quota{
+		MaxSpace:   atomic.LoadInt64(&q.MaxSpace),
+		MaxInodes:  atomic.LoadInt64(&q.MaxInodes),
+		UsedSpace:  atomic.LoadInt64(&q.UsedSpace),
+		UsedInodes: atomic.LoadInt64(&q.UsedInodes),
+		newSpace:   atomic.LoadInt64(&q.newSpace),
+		newInodes:  atomic.LoadInt64(&q.newInodes),
+	}
 }
 
 // not thread safe
@@ -177,14 +193,22 @@ func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, spac
 	}
 }
 
-func (m *baseMeta) flushDirStat() {
+func (m *baseMeta) flushDirStat(ctx Context) {
+	defer m.sessWG.Done()
 	period := 1 * time.Second
 	if m.conf.DirStatFlushPeriod != 0 {
 		period = m.conf.DirStatFlushPeriod
 	}
+
+	ticker := time.NewTicker(period)
+	defer ticker.Stop()
 	for {
-		time.Sleep(period)
-		m.doFlushDirStat()
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.doFlushDirStat()
+		}
 	}
 }
 
@@ -200,10 +224,34 @@ func (m *baseMeta) doFlushDirStat() {
 	stats := m.dirStats
 	m.dirStats = make(map[Ino]dirStat)
 	m.dirStatsLock.Unlock()
-	err := m.en.doUpdateDirStat(Background, stats)
+	err := m.en.doUpdateDirStat(Background(), stats)
 	if err != nil {
 		logger.Errorf("update dir stat failed: %v", err)
 	}
+}
+
+func (m *baseMeta) flushStats(ctx Context) {
+	defer m.sessWG.Done()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.doFlushStats()
+		}
+	}
+}
+
+func (m *baseMeta) doFlushStats() {
+	m.fsStatsLock.Lock()
+	m.en.doFlushStats()
+	m.fsStatsLock.Unlock()
+}
+
+func (m *baseMeta) syncUsedSpace(ctx Context) error {
+	return m.en.doSyncUsedSpace(ctx)
 }
 
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) syscall.Errno {
@@ -232,7 +280,7 @@ func (m *baseMeta) loadQuotas() {
 	if !m.getFormat().DirStats {
 		return
 	}
-	quotas, err := m.en.doLoadQuotas(Background)
+	quotas, err := m.en.doLoadQuotas(Background())
 	if err == nil {
 		m.quotaMu.Lock()
 		for ino := range m.dirQuotas {
@@ -276,9 +324,9 @@ func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
 }
 
 // get inode of the first parent (or myself) with quota
-func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) Ino {
+func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) (Ino, *Quota) {
 	if !m.getFormat().DirStats {
-		return 0
+		return 0, nil
 	}
 	var q *Quota
 	var st syscall.Errno
@@ -287,7 +335,7 @@ func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) Ino {
 		q = m.dirQuotas[inode]
 		m.quotaMu.RUnlock()
 		if q != nil {
-			return inode
+			return inode, q
 		}
 		if inode <= RootInode {
 			break
@@ -298,7 +346,7 @@ func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) Ino {
 			break
 		}
 	}
-	return 0
+	return 0, nil
 }
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bool {
@@ -350,10 +398,17 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 	}
 }
 
-func (m *baseMeta) flushQuotas() {
+func (m *baseMeta) flushQuotas(ctx Context) {
+	defer m.sessWG.Done()
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
 	for {
-		time.Sleep(time.Second * 3)
-		m.doFlushQuotas()
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.doFlushQuotas()
+		}
 	}
 }
 
@@ -361,43 +416,45 @@ func (m *baseMeta) doFlushQuotas() {
 	if !m.getFormat().DirStats {
 		return
 	}
-	stageMap := make(map[Ino]*Quota)
+
+	var quotas []*iQuota
 	m.quotaMu.RLock()
+	var newSpace, newInodes int64
 	for ino, q := range m.dirQuotas {
-		newSpace := atomic.LoadInt64(&q.newSpace)
-		newInodes := atomic.LoadInt64(&q.newInodes)
+		newSpace = atomic.LoadInt64(&q.newSpace)
+		newInodes = atomic.LoadInt64(&q.newInodes)
 		if newSpace != 0 || newInodes != 0 {
-			stageMap[ino] = &Quota{newSpace: newSpace, newInodes: newInodes}
+			quotas = append(quotas, &iQuota{inode: ino, quota: &Quota{newSpace: newSpace, newInodes: newInodes}})
 		}
 	}
 	m.quotaMu.RUnlock()
-	if len(stageMap) == 0 {
+	if len(quotas) == 0 {
 		return
 	}
 
-	if err := m.en.doFlushQuotas(Background, stageMap); err != nil {
+	if err := m.en.doFlushQuotas(Background(), quotas); err != nil {
 		logger.Warnf("Flush quotas: %s", err)
 	} else {
 		m.quotaMu.RLock()
-		for ino, snap := range stageMap {
-			q := m.dirQuotas[ino]
+		for _, snap := range quotas {
+			q := m.dirQuotas[snap.inode]
 			if q == nil {
 				continue
 			}
-			atomic.AddInt64(&q.newSpace, -snap.newSpace)
-			atomic.AddInt64(&q.UsedSpace, snap.newSpace)
-			atomic.AddInt64(&q.newInodes, -snap.newInodes)
-			atomic.AddInt64(&q.UsedInodes, snap.newInodes)
+			atomic.AddInt64(&q.newSpace, -snap.quota.newSpace)
+			atomic.AddInt64(&q.UsedSpace, snap.quota.newSpace)
+			atomic.AddInt64(&q.newInodes, -snap.quota.newInodes)
+			atomic.AddInt64(&q.UsedInodes, snap.quota.newInodes)
 		}
 		m.quotaMu.RUnlock()
 	}
 }
 
-func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool) error {
+func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool, create bool) error {
 	var inode Ino
 	if cmd != QuotaList {
-		if st := m.resolve(ctx, dpath, &inode); st != 0 {
-			return st
+		if st := m.resolve(ctx, dpath, &inode, create); st != 0 {
+			return fmt.Errorf("resolve dir %s: %s", dpath, st)
 		}
 		if isTrash(inode) {
 			return errors.New("no quota for any trash directory")

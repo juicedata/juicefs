@@ -1,0 +1,245 @@
+name: "pysdk"
+
+on:
+  push:
+    branches:
+    - main
+    - release**
+    paths:
+    - '**/hypo/fs_op.py'
+    - '**/hypo/fs.py'
+    - '**/hypo/fs_sdk_test.py'
+    - '**/pysdk_test.py'
+    - '**/juicefs.py'
+    - '**/pysdk.yml'
+  pull_request:
+    branches:
+    - main
+    - release**
+    paths:
+    - '**/hypo/fs_op.py'
+    - '**/hypo/fs.py'
+    - '**/hypo/fs_sdk_test.py'
+    - '**/pysdk_test.py'
+    - '**/juicefs.py'
+    - '**/pysdk.yml'
+  schedule:
+    - cron:  '0 19 * * *'
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+jobs:
+  build-matrix:
+    runs-on: ubuntu-22.04
+    steps:
+      - id: set-matrix
+        run: |
+          echo "github.event_name is ${{github.event_name}}"
+          # TODO: add fdb when bugfix: https://github.com/juicedata/juicefs/issues/5910
+          if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch" ]]; then
+            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb"]' >> $GITHUB_OUTPUT
+          elif [[ "${{github.event_name}}" == "pull_request" || "${{github.event_name}}" == "push"  ]]; then
+            echo 'meta_matrix=["redis", "tikv", "mysql"]' >> $GITHUB_OUTPUT
+          else
+            echo 'event name is not supported' && exit 1
+          fi
+    outputs:
+      meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
+
+  pysdk:
+    needs: build-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        # [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badger', 'mariadb', 'fdb']
+        meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
+      - name: Download example database
+        timeout-minutes: 5
+        uses: dawidd6/action-download-artifact@v9
+        with:
+          name: pysdk-hypothesis-example-db-${{ matrix.meta }}
+          path: .hypothesis/examples
+          if_no_artifact_found: ignore
+          workflow_conclusion: ""
+          check_artifacts: true
+
+      - name: Set Variable
+        id: vars
+        run: |
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
+          else
+            echo "target=juicefs" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Build
+        uses: ./.github/actions/build
+        with: 
+          target: ${{steps.vars.outputs.target}}
+
+      - name: Prepare meta db
+        run: | 
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+
+      - name: Juicefs Format
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo ./juicefs format $meta_url --trash-days 0 --enable-acl --bucket=/mnt/jfs pics
+
+      - name: Juicefs Mount
+        if: false
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo GOCOVERDIR=$(pwd)/cover ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr
+          stat /tmp/jfs/.accesslog
+
+      - name: Build and install SDK
+        timeout-minutes: 5
+        run: |
+          make -C sdk/python/ libjfs.so
+          sudo python3 sdk/python/juicefs/setup.py install
+          df -h
+
+      - name: Run juicefs.py
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo JFS_VOLUME=test-volume JFS_META=$meta_url python3 sdk/python/juicefs/juicefs/juicefs.py
+          df -h
+
+      - name: Run pysdk_test.py
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo META_URL=$meta_url python3 .github/scripts/pysdk/pysdk_test.py
+          df -h
+
+      - name: Run file_test.py
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/file_test.py
+          df -h
+
+      - name: Run file.py without read
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo USE_SDK=true META_URL=$meta_url EXCLUDE_RULES="read,readline,readlines" python3 .github/scripts/hypo/file.py
+          df -h
+
+      - name: Run file.py without write
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo USE_SDK=true META_URL=$meta_url EXCLUDE_RULES="write,writelines,truncate" python3 .github/scripts/hypo/file.py
+          df -h
+
+      - name: Run fs_sdk_test.py
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo USE_SDK=true META_URL=$meta_url python3 .github/scripts/hypo/fs_sdk_test.py
+          df -h
+
+      - name: Run fs.py
+        timeout-minutes: 60
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo MAX_EXAMPLE=1000 STEP_COUNT=200 USE_SDK=true META_URL=$meta_url EXCLUDE_RULES="readlines,readline,clone_cp_file,clone_cp_dir" python3 .github/scripts/hypo/fs.py 2>&1 | tee fsrand.log
+          exit ${PIPESTATUS[0]}
+          df -h
+
+      - name: check fsrand.log
+        if: always()
+        run: |
+          sudo tail -n 500 fsrand.log || true
+
+      - name: chmod example directory
+        if: always()
+        timeout-minutes: 5
+        run: |
+          if [[ -e ".hypothesis/examples" ]]; then
+            echo "chmod for .hypothesis/examples" && sudo chmod -R 755 .hypothesis/examples
+          fi
+
+      - name: Upload example database
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          include-hidden-files: true
+          name: pysdk-hypothesis-example-db-${{ matrix.meta }}
+          path: .hypothesis/examples
+          overwrite: true
+
+      - name: upload coverage report
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
+
+      - name: Send Slack Notification
+        if: failure()
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [pysdk]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
+      - name: Send Slack Notification
+        if: failure() && github.event_name != 'workflow_dispatch'
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Success
+        if: success() 
+        run: echo "All Done"

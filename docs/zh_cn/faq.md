@@ -5,7 +5,9 @@ slug: /faq
 
 ## 文档没能解答我的疑问
 
-请首先尝试使用站内搜索功能（右上角），尝试用不同的关键词进行检索，如果文档始终未能解决你的疑问，可以加入 [JuiceFS 开源社区](https://juicefs.com/zh-cn/community)以寻求帮助。
+请首先尝试使用「Ask AI」功能（右下角），如果 AI 助手的回答有帮到你或者给了你错误的回答，欢迎在回答里给出你的反馈。或者使用文档搜索功能（右上角），尝试用不同的关键词进行检索。
+
+如果以上方法依然未能解决你的疑问，可以加入 [JuiceFS 开源社区](https://juicefs.com/zh-cn/community)以寻求帮助。
 
 ## 一般问题
 
@@ -117,7 +119,7 @@ uid=1201(alice) gid=500(staff) groups=500(staff)
 
 - Kubernetes CSI 驱动：通过 Kubernetes CSI 驱动的方式将 JuiceFS 作为 Kubernetes 集群的存储层，详情请参考[「JuiceFS CSI 驱动」](deployment/how_to_use_on_kubernetes.md)。
 - Hadoop Java SDK：方便在 Hadoop 体系中使用兼容 HDFS 接口的 Java 客户端访问 JuiceFS。详情请参考[「Hadoop 使用 JuiceFS」](deployment/hadoop_java_sdk.md)。
-- S3 网关：通过 S3 协议访问 JuiceFS，详情请参考[「配置 JuiceFS S3 网关」](deployment/s3_gateway.md)。
+- S3 网关：通过 S3 协议访问 JuiceFS，详情请参考[「配置 JuiceFS S3 网关」](./guide/gateway.md)。
 - Docker Volume 插件：在 Docker 中方便使用 JuiceFS 的方式，详情请参考[「Docker 使用 JuiceFS」](deployment/juicefs_on_docker.md)。
 - WebDAV 网关：通过 WebDAV 协议访问 JuiceFS
 

@@ -21,6 +21,7 @@ package object
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"io"
 	"net"
 	"net/url"
@@ -34,7 +35,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
-	"github.com/aws/aws-sdk-go/aws"
 )
 
 type wasb struct {
@@ -43,7 +43,6 @@ type wasb struct {
 	azblobCli *azblob.Client
 	sc        string
 	cName     string
-	marker    string
 }
 
 func (b *wasb) String() string {
@@ -85,7 +84,7 @@ func (b *wasb) Get(key string, off, limit int64, getters ...AttrGetter) (io.Read
 	}
 	attrs := applyGetters(getters...)
 	// TODO fire another property request to get the actual storage class
-	attrs.SetRequestID(aws.StringValue(download.RequestID)).SetStorageClass(b.sc)
+	attrs.SetRequestID(aws.ToString(download.RequestID)).SetStorageClass(b.sc)
 	return download.Body, err
 }
 
@@ -105,7 +104,7 @@ func (b *wasb) Put(key string, data io.Reader, getters ...AttrGetter) error {
 	}
 	resp, err := b.azblobCli.UploadStream(ctx, b.cName, key, data, &options)
 	attrs := applyGetters(getters...)
-	attrs.SetRequestID(aws.StringValue(resp.RequestID)).SetStorageClass(b.sc)
+	attrs.SetRequestID(aws.ToString(resp.RequestID)).SetStorageClass(b.sc)
 	return err
 }
 
@@ -132,52 +131,46 @@ func (b *wasb) Delete(key string, getters ...AttrGetter) error {
 		}
 	}
 	attrs := applyGetters(getters...)
-	attrs.SetRequestID(aws.StringValue(resp.RequestID))
+	attrs.SetRequestID(aws.ToString(resp.RequestID))
 	return err
 }
 
-func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (b *wasb) List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
-		return nil, notSupported
-	}
-	// todo
-	if marker != "" {
-		if b.marker == "" {
-			// last page
-			return nil, nil
-		}
-		marker = b.marker
+		return nil, false, "", notSupported
 	}
 
 	limit32 := int32(limit)
-
-	pager := b.azblobCli.NewListBlobsFlatPager(b.cName, &azblob.ListBlobsFlatOptions{Prefix: &prefix, Marker: &marker, MaxResults: &(limit32)})
+	pager := b.azblobCli.NewListBlobsFlatPager(b.cName, &azblob.ListBlobsFlatOptions{Prefix: &prefix, Marker: &token, MaxResults: &limit32})
 	page, err := pager.NextPage(ctx)
 	if err != nil {
-		return nil, err
-	}
-	if pager.More() {
-		b.marker = *page.NextMarker
-	} else {
-		b.marker = ""
+		return nil, false, "", err
 	}
 	var n int
 	if page.Segment != nil {
 		n = len(page.Segment.BlobItems)
 	}
-	objs := make([]Object, n)
+	objs := make([]Object, 0, n)
 	for i := 0; i < n; i++ {
 		blob := page.Segment.BlobItems[i]
+		if *blob.Name <= startAfter {
+			continue
+		}
 		mtime := blob.Properties.LastModified
-		objs[i] = &obj{
+		objs = append(objs, &obj{
 			*blob.Name,
 			*blob.Properties.ContentLength,
 			*mtime,
 			strings.HasSuffix(*blob.Name, "/"),
 			string(*blob.Properties.AccessTier),
-		}
+		})
 	}
-	return objs, nil
+
+	var nextMarker string
+	if pager.More() {
+		nextMarker = *page.NextMarker
+	}
+	return objs, pager.More(), nextMarker, nil
 }
 
 func (b *wasb) SetStorageClass(sc string) error {

@@ -48,6 +48,8 @@ type hdfsclient struct {
 	c              *hdfs.Client
 	dfsReplication int
 	umask          os.FileMode
+	closeTimeout   time.Duration
+	closeMaxDelay  time.Duration
 }
 
 func (h *hdfsclient) String() string {
@@ -163,14 +165,32 @@ func (h *hdfsclient) Put(key string, in io.Reader, getters ...AttrGetter) (err e
 		_ = f.Close()
 		return err
 	}
-	err = f.Close()
-	if err != nil && !IsErrReplicating(err) {
+	start := time.Now()
+	sleeptime := 400 * time.Millisecond
+	for {
+		err = f.Close()
+		if IsErrReplicating(err) && start.Add(h.closeTimeout).After(time.Now()) {
+			time.Sleep(sleeptime)
+			sleeptime = min(2*sleeptime, h.closeMaxDelay)
+			continue
+		} else {
+			break
+		}
+	}
+	if err != nil {
 		return err
 	}
 	if !PutInplace {
 		err = h.c.Rename(tmp, p)
 	}
 	return err
+}
+
+func min(a, b time.Duration) time.Duration {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func IsErrReplicating(err error) bool {
@@ -186,9 +206,9 @@ func (h *hdfsclient) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (h *hdfsclient) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 	dir := h.path(prefix)
 	var objs []Object
@@ -201,9 +221,9 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followL
 		obj, err := h.Head(prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return nil, nil
+				return nil, false, "", nil
 			}
-			return nil, err
+			return nil, false, "", err
 		}
 		objs = append(objs, obj)
 	}
@@ -216,12 +236,12 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followL
 	if err != nil {
 		if os.IsPermission(err) {
 			logger.Warnf("skip %s: %s", dir, err)
-			return nil, nil
+			return nil, false, "", nil
 		}
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, false, "", nil
 		}
-		return nil, err
+		return nil, false, "", err
 	}
 
 	// make sure they are ordered in full path
@@ -252,7 +272,7 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followL
 			break
 		}
 	}
-	return objs, nil
+	return generateListResult(objs, limit)
 }
 
 func (h *hdfsclient) Chtimes(key string, mtime time.Time) error {
@@ -328,6 +348,18 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 			umask = uint16(x)
 		}
 	}
+	var closeTimeout = 120 * time.Second
+	if v, found := conf["ipc.client.rpc-timeout.ms"]; found {
+		if x, err := strconv.Atoi(v); err == nil {
+			closeTimeout = time.Duration(x) * time.Millisecond
+		}
+	}
+	var closeMaxDelay = 60 * time.Second
+	if v, found := conf["dfs.client.block.write.locateFollowingBlock.max.delay.ms"]; found {
+		if x, err := strconv.Atoi(v); err == nil {
+			closeMaxDelay = time.Duration(x) * time.Millisecond
+		}
+	}
 
 	return &hdfsclient{
 		addr:           strings.Join(rpcAddr, ","),
@@ -335,6 +367,8 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		c:              c,
 		dfsReplication: replication,
 		umask:          os.FileMode(umask),
+		closeTimeout:   closeTimeout,
+		closeMaxDelay:  closeMaxDelay,
 	}, nil
 }
 

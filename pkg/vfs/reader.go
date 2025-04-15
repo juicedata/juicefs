@@ -170,7 +170,7 @@ func (s *sliceReader) run() {
 	f.Unlock()
 
 	var slices []meta.Slice
-	err := f.r.m.Read(meta.Background, inode, indx, &slices)
+	err := f.r.m.Read(meta.Background(), inode, indx, &slices)
 	f.Lock()
 	length := f.length
 	if s.state != BUSY || f.err != 0 || f.closing {
@@ -219,7 +219,7 @@ func (s *sliceReader) run() {
 		s.currentPos = 0 // start again from beginning
 		err = syscall.EIO
 		f.tried++
-		_ = f.r.m.InvalidateChunkCache(meta.Background, inode, indx)
+		_ = f.r.m.InvalidateChunkCache(meta.Background(), inode, indx)
 		if f.tried > f.r.maxRetries {
 			s.done(err, 0)
 		} else {
@@ -418,7 +418,7 @@ func (f *fileReader) checkReadahead(block *frange) int {
 	seqdata := ses.total
 	readahead := ses.readahead
 	used := uint64(atomic.LoadInt64(&readBufferUsed))
-	if readahead == 0 && (block.off == 0 || seqdata > block.len) { // begin with read-ahead turned on
+	if readahead == 0 && f.r.blockSize <= f.r.readAheadMax && (block.off == 0 || seqdata > block.len) { // begin with read-ahead turned on
 		ses.readahead = f.r.blockSize
 	} else if readahead < f.r.readAheadMax && seqdata >= readahead && f.r.readAheadTotal-used > readahead*4 {
 		ses.readahead *= 2
@@ -620,6 +620,12 @@ func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, 
 }
 
 func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, syscall.Errno) {
+	if f.r.readBufferUsed() > f.r.bufferSize {
+		time.Sleep(time.Millisecond * 10)             // slow down
+		for f.r.readBufferUsed() > f.r.bufferSize*2 { // readahead uses 80% of buffer, stop here to avoid OOM
+			time.Sleep(time.Millisecond * 100)
+		}
+	}
 	f.Lock()
 	defer f.Unlock()
 	f.acquire()
@@ -689,6 +695,7 @@ type dataReader struct {
 	store          chunk.ChunkStore
 	files          map[Ino]*fileReader
 	blockSize      uint64
+	bufferSize     int64
 	readAheadMax   uint64
 	readAheadTotal uint64
 	maxRequests    int
@@ -697,18 +704,16 @@ type dataReader struct {
 
 func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader {
 	var readAheadTotal = 256 << 20
-	var readAheadMax = conf.Chunk.BlockSize * 8
 	if conf.Chunk.BufferSize > 0 {
 		readAheadTotal = int(conf.Chunk.BufferSize / 10 * 8) // 80% of total buffer
 	}
-	if conf.Chunk.Readahead > 0 {
-		readAheadMax = conf.Chunk.Readahead
-	}
+	readAheadMax := utils.Min(conf.Chunk.Readahead, readAheadTotal)
 	r := &dataReader{
 		m:              m,
 		store:          store,
 		files:          make(map[Ino]*fileReader),
 		blockSize:      uint64(conf.Chunk.BlockSize),
+		bufferSize:     int64(conf.Chunk.BufferSize),
 		readAheadTotal: uint64(readAheadTotal),
 		readAheadMax:   uint64(readAheadMax),
 		maxRequests:    readAheadMax/conf.Chunk.BlockSize*readSessions + 1,

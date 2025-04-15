@@ -21,13 +21,12 @@ package object
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"net/url"
 	"strings"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 type oos struct {
@@ -41,26 +40,29 @@ func (s *oos) String() string {
 func (s *oos) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,
+		MinPartSize:              5 << 20,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
 	}
 }
 
 func (s *oos) Create() error {
-	_, err := s.List("", "", "", 1, true)
+	_, _, _, err := s.List("", "", "", "", 1, true)
 	if err != nil {
 		return fmt.Errorf("please create bucket %s manually", s.s3client.bucket)
 	}
 	return err
 }
 
-func (s *oos) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (s *oos) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
-	objs, err := s.s3client.List(prefix, marker, delimiter, limit, followLink)
-	if marker != "" && len(objs) > 0 && objs[0].Key() == marker {
+	objs, hasMore, nextMarker, err := s.s3client.List(prefix, start, token, delimiter, limit, followLink)
+	if start != "" && len(objs) > 0 && objs[0].Key() == start {
 		objs = objs[1:]
 	}
-	return objs, err
+	return objs, hasMore, nextMarker, err
 }
 
 func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
@@ -75,24 +77,22 @@ func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
 	region := hostParts[1][4:]
-	endpoint = uri.Host[len(bucket)+1:]
+	endpoint = uri.Scheme + "://" + uri.Host[len(bucket)+1:]
 	forcePathStyle := !strings.Contains(strings.ToLower(endpoint), "xstore.ctyun.cn")
 
-	awsConfig := &aws.Config{
-		Region:           &region,
-		Endpoint:         &endpoint,
-		DisableSSL:       aws.Bool(!ssl),
-		S3ForcePathStyle: aws.Bool(forcePathStyle),
-		HTTPClient:       httpClient,
-		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
-	}
-
-	ses, err := session.NewSession(awsConfig)
+	awsCfg, err := config.LoadDefaultConfig(ctx,
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
 	if err != nil {
-		return nil, fmt.Errorf("OOS session: %s", err)
+		return nil, fmt.Errorf("failed to load config: %s", err)
 	}
-	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &oos{s3client{bucket: bucket, s3: s3.New(ses), ses: ses}}, nil
+	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
+		options.EndpointOptions.DisableHTTPS = !ssl
+		options.Region = region
+		options.UsePathStyle = forcePathStyle
+		options.HTTPClient = httpClient
+		options.BaseEndpoint = aws.String(endpoint)
+	})
+	return &oos{s3client{bucket: bucket, s3: client, region: region}}, nil
 }
 
 func init() {

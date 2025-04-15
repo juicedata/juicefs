@@ -1,20 +1,31 @@
-name: "test jfs on windows"
+name: "wintest"
 
 on:
   push:
     branches:
+      - 'main'
       - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**/wintest.yml'
+      - 'pkg/winfsp/*.go'
+      - '**/*_windows.go'
   pull_request:
-    #The branches below must be a subset of the branches above
     branches:
+      - 'main'
       - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**/wintest.yml'
+      - 'pkg/winfsp/*.go'
+      - '**/*_windows.go'
   workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
+        required: false
+        default: false
+  schedule:
+    - cron: '0 17 * * 0'
 
 jobs:
   wintest:
@@ -25,45 +36,37 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: 'oldstable'
+          go-version: '1.21'
 
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
-
       - name: Setup MSBuild.exe
+        if: false
         uses: microsoft/setup-msbuild@v1.0.3
 
       - name: Change Winsdk Version
+        if: false
         uses: GuillaumeFalourd/setup-windows10-sdk-action@v1
         with:
           sdk-version: 18362
 
-      - name: Cache WinFsp
-        id: Cache-WinFsp
-        uses: actions/cache@v3
-        with:
-          path: 'C:\wfsp\'
-          key: ${{ runner.os }}-winfsp-key
-          restore-keys: |
-            ${{ runner.os }}-winfsp
-
-
       - name: Download WinFsp
-        if: steps.Cache-WinFsp.outputs.cache-hit != 'true'
         run: |
           choco install wget
           mkdir "C:\wfsp\"
-          wget -O winfsp.msi  https://github.com/billziss-gh/winfsp/releases/download/v1.9/winfsp-1.9.21096.msi
+          wget -O winfsp.msi https://github.com/winfsp/winfsp/releases/download/v2.0/winfsp-2.0.23075.msi
           copy winfsp.msi "C:\wfsp\"
+          choco install 7zip -y
 
       - name: Install WinFsp
         run: |
-          msiexec.exe /i "C:\wfsp\winfsp.msi" /qn /norestart INSTALLLEVEL=1000
-
-
+          # call start-process to install winfsp.msi
+          Start-Process -Wait -FilePath "C:\wfsp\winfsp.msi" -ArgumentList "/quiet /norestart"
+          ls "C:\Program Files (x86)\WinFsp"
+          ls "C:\Program Files (x86)\WinFsp\bin"
 
       - name: Set up Include Headers
         run: |
@@ -75,8 +78,7 @@ jobs:
           go env -w CGO_CFLAGS=-IC:/WinFsp/inc/fuse
           go env
 
-
-      - name: Install Scoop Redis and MinIO
+      - name: Install Scoop
         run: |
           dir "C:\Program Files (x86)\WinFsp"
           Set-ExecutionPolicy RemoteSigned -scope CurrentUser
@@ -84,11 +86,18 @@ jobs:
           .\install.ps1 -RunAsAdmin
           echo $env:USERNAME
           scoop
-          scoop install curl
           scoop install redis
           scoop install minio@2021-12-10T23-03-39Z
           scoop install runasti
-          curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o redis-service.exe
+
+      - name: Download winsw
+        run: |
+          wget https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe -q --show-progress -O winsw.exe
+          ls winsw.exe
+
+      - name: Start Redis
+        run: |
+          copy winsw.exe redis-service.exe
           echo  "<service>"   >> redis-service.xml
           echo  "<id>redisredis</id>"  >> redis-service.xml
           echo  "<name>redisredis</name>"  >> redis-service.xml
@@ -98,80 +107,69 @@ jobs:
           echo  "</service>"  >> redis-service.xml
           .\redis-service.exe install
           net start redisredis
-          curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o minio-service.exe
-          mkdir "C:\tmp"
-          echo  "<service>"   >> minio-service.xml
-          echo  "<id>MinIO</id>"  >> minio-service.xml
-          echo  "<name>MinIO</name>"  >> minio-service.xml
-          echo  "<description>MinIO</description>"  >> minio-service.xml
-          echo  "<executable>C:\Users\$env:USERNAME\scoop\shims\minio.exe</executable>"  >> minio-service.xml
-          echo  "<arguments>server C:\tmp</arguments>"  >> minio-service.xml
-          echo  "<logmode>rotate</logmode>"  >> minio-service.xml
-          echo  "</service>"  >> minio-service.xml
-          .\minio-service.exe install
-          net start MinIO
 
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~\AppData\Local\go-build
-            ~\go\pkg\mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+      - name: Download MinGW
+        run: |
+          wget https://github.com/niXman/mingw-builds-binaries/releases/download/14.2.0-rt_v12-rev1/x86_64-14.2.0-release-win32-seh-msvcrt-rt_v12-rev1.7z -q --show-progress -O mingw.7z
+          7z.exe x mingw.7z -oC:\mingw64
+          ls C:\mingw64\bin
+
 
       - name: Build Juicefs
         run: |
+          $env:CGO_ENABLED=1
+          $env:PATH+=";C:\mingw64\bin"
           go build -ldflags="-s -w" -o juicefs.exe .
-
-      - name: Juicefs Format
-        run: |
-          ./juicefs.exe format --storage minio --bucket http://127.0.0.1:9000/pics --access-key minioadmin --secret-key minioadmin redis://127.0.0.1:6379/1 pics
-
-      - name: Juicefs Mount
-        run: |
-          echo "C:\Program Files (x86)\WinFsp\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o juicefs-service.exe
-          echo  "<service>"   >> juicefs-service.xml
-          echo  "<id>jfs</id>"  >> juicefs-service.xml
-          echo  "<name>jfs</name>"  >> juicefs-service.xml
-          echo  "<description>jfs</description>"  >> juicefs-service.xml
-          echo  "<executable>$PWD\juicefs.exe</executable>"  >> juicefs-service.xml
-          echo  "<arguments>mount redis://127.0.0.1:6379/1 Z: --no-usage-report</arguments>"  >> juicefs-service.xml
-          echo  "<logmode>rotate</logmode>"  >> juicefs-service.xml
-          echo  "</service>"  >> juicefs-service.xml
-          .\juicefs-service.exe install
-          net start jfs
-
-      #there is go-fuse compile error with unit test
-      #- name: Unit Test
-      #  run: |
-      #    rm pkg/meta/redis_test.go
-      #    rm pkg/meta/sql_test.go
-      #    rm pkg/meta/tkv_test.go
-      #    go test -v -cover ./pkg/... ./cmd/...
-
-
+      
       - name: Install Python2
         run: |
           choco install python2 -y
 
-      - name: Build and Run Winfstest
+      - name: Juicefs Format
         run: |
-          git clone https://github.com/sanwan/winfstest.git
-          cd winfstest
-          msbuild.exe winfstest.sln
-          cd TestSuite
-          .\run-winfstest
+          ./juicefs.exe format redis://127.0.0.1:6379/1 myjfs
 
-      #cannot write file because of some permission question with winfsp
-      #- name: Build and Run Winfstest in Jfs Directory
-      #  run: |
-      #    Z:
-      #    mkdir "Z:\tmptmp"
-      #    cd tmptmp
-      #    git clone https://github.com/sanwan/winfstest.git
-      #    cd winfstest
-      #    msbuild.exe winfstest.sln
-      #    cd TestSuite
-      #    .\run-winfstest
+      - name: Juicefs Mount
+        run: |
+          $env:PATH+=";C:\Program Files (x86)\WinFsp\bin"
+          ./juicefs.exe mount -d redis://127.0.0.1:6379/1 z:
+
+      - name: Run Winfsp Tests
+        run: |
+          wget https://github.com/juicedata/winfsp/releases/download/testing_suit_20250324/winfsp-tests-x64.exe -q --show-progress -O "C:\Program Files (x86)\WinFsp\bin\winfsp-tests-x64.exe"
+          ls "C:\Program Files (x86)\WinFsp\bin\winfsp-tests-x64.exe"
+          cd Z:
+          & "C:\Program Files (x86)\WinFsp\bin\winfsp-tests-x64.exe" --fuse-external --resilient --case-insensitive-cmp
+      
+      - name: Run winfstest
+        run: |
+          wget https://github.com/juicedata/winfstest/releases/download/testing_20250313/TestSuite-x64-v3.zip -q --show-progress -O Z:\TestSuite-x64.zip
+          ls Z:\TestSuite-x64.zip
+          cd Z:\
+          Expand-Archive -Path .\TestSuite-x64.zip -DestinationPath .\TestSuite
+          ls Z:\TestSuite
+          cd Z:\TestSuite\TestSuite
+          ./run-winfstest.ps1
+
+      - name: Run FSX Test
+        run: |
+          cd Z:\
+          wget https://github.com/chenjie4255/fstools/releases/download/v0.0.1/fsx-x64.exe -q --show-progress -O fsx.exe
+          ls fsx.exe
+          ./fsx.exe -d 180 -p 10000 -F 100000 fsxtest
+
+      - name: Run basic subcommand tests
+        run: |
+          echo hi > Z:\hi.txt
+          ./juicefs.exe info Z:\hi.txt
+          ./juicefs.exe status redis://127.0.0.1:6379/1
+          ./juicefs.exe debug Z:\
+          New-Item -Path 'Z:\summary' -ItemType Directory
+          echo hi > Z:\summary\1.txt
+          echo hi > Z:\summary\2.txt
+          ./juicefs.exe summary Z:\summary
+          ./juicefs.exe info Z:\summary\1.txt
+          ./juicefs.exe stats Z: -c 5
+      - name: Setup tmate session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+        uses: mxschmitt/action-tmate@v3

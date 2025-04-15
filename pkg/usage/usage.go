@@ -68,7 +68,7 @@ func sendUsage(u usage) error {
 // understand how the community is using it. You can use `--no-usage-report`
 // to disable this.
 func ReportUsage(m meta.Meta, version string) {
-	ctx := meta.Background
+	ctx := meta.Background()
 	var u usage
 	if format, err := m.Load(false); err == nil {
 		u.VolumeID = format.UUID

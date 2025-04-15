@@ -162,7 +162,7 @@ func (g *gluster) Delete(key string, getters ...AttrGetter) error {
 // a sorted list of directory entries.
 func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
 	v := g.vol()
-	f, err := v.Open(dirname)
+	f, err := v.OpenDir(dirname)
 	if err != nil {
 		return nil, err
 	}
@@ -178,9 +178,10 @@ func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 		if name == "." || name == ".." {
 			continue
 		}
+		isSymlink := e.Mode()&os.ModeSymlink != 0
 		if e.IsDir() {
 			mEntries = append(mEntries, &mEntry{nil, name + dirSuffix, e, false})
-		} else if !e.Mode().IsRegular() && followLink {
+		} else if isSymlink && followLink {
 			fi, err := v.Stat(filepath.Join(dirname, name))
 			if err != nil {
 				mEntries = append(mEntries, &mEntry{nil, name, e, true})
@@ -191,16 +192,16 @@ func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 			}
 			mEntries = append(mEntries, &mEntry{nil, name, fi, false})
 		} else {
-			mEntries = append(mEntries, &mEntry{nil, name, e, !e.Mode().IsRegular()})
+			mEntries = append(mEntries, &mEntry{nil, name, e, isSymlink})
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
 	return mEntries, err
 }
 
-func (g *gluster) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (g *gluster) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 	var dir string = prefix
 	var objs []Object
@@ -213,9 +214,9 @@ func (g *gluster) List(prefix, marker, delimiter string, limit int64, followLink
 		obj, err := g.Head(prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return nil, nil
+				return nil, false, "", nil
 			}
-			return nil, err
+			return nil, false, "", err
 		}
 		objs = append(objs, obj)
 	}
@@ -223,12 +224,12 @@ func (g *gluster) List(prefix, marker, delimiter string, limit int64, followLink
 	if err != nil {
 		if os.IsPermission(err) {
 			logger.Warnf("skip %s: %s", dir, err)
-			return nil, nil
+			return nil, false, "", nil
 		}
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, false, "", nil
 		}
-		return nil, err
+		return nil, false, "", err
 	}
 	for _, e := range entries {
 		p := filepath.Join(dir, e.Name())
@@ -246,7 +247,7 @@ func (g *gluster) List(prefix, marker, delimiter string, limit int64, followLink
 			break
 		}
 	}
-	return objs, nil
+	return generateListResult(objs, limit)
 }
 
 func (g *gluster) Chtimes(path string, mtime time.Time) error {

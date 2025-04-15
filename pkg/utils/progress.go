@@ -86,7 +86,9 @@ func NewProgress(quiet bool) *Progress {
 		p = &Progress{mpb.New(mpb.WithWidth(64), mpb.WithOutput(nil)), true, nil}
 	} else {
 		p = &Progress{mpb.New(mpb.WithWidth(64)), false, nil}
-		SetOutput(p)
+		if isatty.IsTerminal(os.Stderr.Fd()) {
+			SetOutput(p)
+		}
 	}
 	return p
 }

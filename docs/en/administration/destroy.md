@@ -22,9 +22,9 @@ juicefs destroy <METADATA URL> <UUID>
 JuiceFS client provides a `status` command to view detailed information about a file system by simply specifying the file system's metadata engine URL, e.g.
 
 ```shell {8}
-$ juicefs status redis://127.0.0.1:6379/1
+$ juicefs status redis://127.0.0.1:6379
 
-2022/01/26 21:41:37.577645 juicefs[31181] <INFO>: Meta address: redis://127.0.0.1:6379/1
+2022/01/26 21:41:37.577645 juicefs[31181] <INFO>: Meta address: redis://127.0.0.1:6379
 2022/01/26 21:41:37.578238 juicefs[31181] <INFO>: Ping redis: 55.041µs
 {
   "Setting": {
@@ -52,9 +52,9 @@ The destroy operation will cause all the data in the database and the object sto
 :::
 
 ```shell {1}
-$ juicefs destroy redis://127.0.0.1:6379/1 eabb96d5-7228-461e-9240-fddbf2b576d8
+$ juicefs destroy redis://127.0.0.1:6379 eabb96d5-7228-461e-9240-fddbf2b576d8
 
-2022/01/26 21:52:17.488987 juicefs[31518] <INFO>: Meta address: redis://127.0.0.1:6379/1
+2022/01/26 21:52:17.488987 juicefs[31518] <INFO>: Meta address: redis://127.0.0.1:6379
 2022/01/26 21:52:17.489668 juicefs[31518] <INFO>: Ping redis: 55.542µs
  volume name: macjfs
  volume UUID: eabb96d5-7228-461e-9240-fddbf2b576d8

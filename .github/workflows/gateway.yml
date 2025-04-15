@@ -22,7 +22,7 @@ on:
         required: false
         default: false
   schedule:
-    - cron:  '0 0 * * *'
+    - cron:  '0 19 * * *'
 
 jobs:
   gateway:
@@ -65,7 +65,7 @@ jobs:
             file_size: '100M'
             isolation_level: "repeatable read"
 
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps: 
       - name: Checkout
@@ -111,7 +111,8 @@ jobs:
           volume="myjfs"
           export MINIO_ROOT_USER=minioadmin
           export MINIO_ROOT_PASSWORD=minioadmin
-          ./juicefs format $meta_url $volume --trash-days 0
+          sudo chmod 777 /mnt
+          ./juicefs format $meta_url $volume --trash-days 0 --bucket=/mnt/jfs
           ./juicefs gateway $meta_url localhost:8080 --no-usage-report --access-log /tmp/access1.log &
         
       - name: Sync with multiple process

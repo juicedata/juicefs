@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,6 +28,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -167,6 +169,44 @@ func TestMount(t *testing.T) {
 	}
 }
 
+func TestFtruncate(t *testing.T) {
+	mountTemp(t, nil, nil, nil)
+	defer umountTemp(t)
+
+	fpath := fmt.Sprintf("%s/f1.txt", testMountPoint)
+	if err := os.WriteFile(fpath, []byte("test"), 0644); err != nil {
+		t.Fatalf("write file failed: %s", err)
+	}
+	file, err := os.OpenFile(fpath, os.O_RDWR, 0644)
+	if err != nil {
+		t.Fatalf("open file failed: %s", err)
+	}
+	if err = syscall.Ftruncate(int(file.Fd()), 1024); err != nil {
+		t.Fatalf("ftruncate failed: %s", err)
+	}
+	fileInfo, err := os.Stat(fpath)
+	if err != nil {
+		t.Fatalf("stat file failed: %s", err)
+	}
+	if fileInfo.Size() != 1024 {
+		t.Fatalf("ftruncate failed: file size is %d, expect 1024", fileInfo.Size())
+	}
+	if err = os.Remove(fpath); err != nil {
+		t.Fatalf("remove file failed: %s", err)
+	}
+	if _, err = os.Stat(fpath); !errors.Is(err, syscall.ENOENT) {
+		t.Fatalf("file still exists after delete: %s", err)
+	}
+	err = syscall.Ftruncate(int(file.Fd()), 2048)
+	if err != nil {
+		t.Fatalf("ftruncate failed: %s", err)
+	}
+	file.Close()
+	_, err = os.Stat(fpath)
+	if !errors.Is(err, syscall.ENOENT) {
+		t.Fatalf("file still exists after close: %s", err)
+	}
+}
 func TestUpdateFstab(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.SkipNow()
@@ -275,4 +315,28 @@ func TestMountVersionMatch(t *testing.T) {
 
 	err = tryMountTemp(t, nil, []string{"--enable-acl=true"}, nil)
 	assert.Contains(t, err.Error(), "check version")
+}
+
+func TestParseUIDGID(t *testing.T) {
+	tests := []struct {
+		input       string
+		defaultUid  uint32
+		defaultGid  uint32
+		expectedUid uint32
+		expectedGid uint32
+	}{
+		{"1000:1000", 65534, 65534, 1000, 1000},
+		{"1000:", 65534, 65534, 1000, 65534},
+		{":1000", 65534, 65534, 65534, 1000},
+		{"", 65534, 65534, 65534, 65534},
+		{"0:1000", 65534, 65534, 65534, 1000},
+		{"1000:0", 65534, 65534, 1000, 65534},
+	}
+
+	for _, tt := range tests {
+		uid, gid := parseUIDGID(tt.input, tt.defaultUid, tt.defaultGid)
+		if uid != tt.expectedUid || gid != tt.expectedGid {
+			t.Errorf("parseUIDGID(%q) = (%d, %d), want (%d, %d)", tt.input, uid, gid, tt.expectedUid, tt.expectedGid)
+		}
+	}
 }

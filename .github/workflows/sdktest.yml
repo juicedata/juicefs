@@ -24,11 +24,13 @@ on:
         description: "Run the build with tmate debugging enabled"
         required: false
         default: false
-
+  schedule:
+    - cron:  '0 17 * * *'
+    
 jobs:
   sdktest:
     timeout-minutes: 50
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -52,7 +54,7 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format  localhost dev
+          sudo ./juicefs format  localhost  --bucket=/mnt/jfs dev
 
       - name: Juicefs Mount
         run: |
@@ -64,12 +66,17 @@ jobs:
           mkdir etc
           chmod 777 etc
           echo `hostname` > etc/nodes
+          echo "tom:3001" > users
+          echo "g1:2001:tom" > groups
+          mkdir /jfs/tmp
+          chmod 777 /jfs/tmp
 
       - name: Sdk Test
         run: |
           make -C sdk/java/libjfs
           cd sdk/java
           sudo mvn test -B
+          sudo mvn test -B -Dflink.version=1.17.2 -Dtest=io.juicefs.JuiceFileSystemTest#testFlinkHadoopRecoverableWriter 
           sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
           expect=$(git rev-parse --short HEAD | cut -b 1-7)
           ls /tmp/libjfs* | grep $expect

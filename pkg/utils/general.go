@@ -22,6 +22,10 @@ import (
 )
 
 func SleepWithJitter(d time.Duration) {
+	time.Sleep(JitterIt(d))
+}
+
+func JitterIt[T float64 | time.Duration](d T) T {
 	j := int64(d / 20) // +- 5%
-	time.Sleep(d + time.Duration(rand.Int63n(2*j+1)-j))
+	return d + T(rand.Int63n(2*j+1)-j)
 }

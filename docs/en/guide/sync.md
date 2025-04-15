@@ -1,88 +1,151 @@
 ---
 title: Data Synchronization
 sidebar_position: 7
-description: Learn how to use the data sync tool in JuiceFS.
+description: Learn how to use juicefs sync for efficient data synchronization across supported storage systems, including object storage, JuiceFS, and local file systems.
 ---
 
-[`juicefs sync`](../reference/command_reference.mdx#sync) is a powerful data migration tool, which can copy data across all supported storages including object storage, JuiceFS itself, and local file systems, you can freely copy data between any of these systems. In addition, it supports remote directories through SSH, HDFS, WebDAV, etc. while providing advanced features such as  incremental synchronization, and pattern matching (like rsync), and distributed syncing.
+[`juicefs sync`](../reference/command_reference.mdx#sync) is a powerful data synchronization tool that can copy data across all supported storage systems, including object storage, JuiceFS, and local file systems. You can freely copy data between any of these systems. It also supports syncing remote directories accessed via SSH, HDFS, and WebDAV. Advanced features include incremental synchronization, pattern matching (like rsync), and distributed syncing.
 
-## Basic Usage
+:::tip Mixing Community and Enterprise Editions
+`juicefs sync` shares code between Community and Enterprise Editions. Therefore, even when you use different editions of the JuiceFS client, `sync` works normally. The only exception is when the [`jfs://`](#sync-without-mount-point) protocol header is involved. Due to the different metadata engine implementations in the Community and Enterprise Editions, clients from different editions cannot be mixed when using the `jfs://` protocol header.
+:::
 
-### Command Syntax
+`juicefs sync` works like this:
 
 ```shell
 juicefs sync [command options] SRC DST
+
+# Sync object from OSS to S3
+juicefs sync oss://mybucket.oss-cn-shanghai.aliyuncs.com s3://mybucket.s3.us-east-2.amazonaws.com
+
+# Sync objects from S3 to JuiceFS
+juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://VOL_NAME/
+
+# Copy all files ending with .gz
+juicefs sync --match-full-path --include='**.gz' --exclude='*' s3://xxx jfs://VOL_NAME/
+
+# Copy all files that do not end with .gz
+juicefs sync --match-full-path --exclude='**.gz' s3://xxx/ jfs://VOL_NAME/
+
+# Copy all files except the subdirectory named tempdir
+juicefs sync --match-full-path --include='*' s3://xxx/ jfs://VOL_NAME/
 ```
 
-Synchronize data from `SRC` to `DST`, capable for both directories and files.
+## Pattern matching {#pattern-matching}
 
-Arguments:
+You can use `--exclude` and `--include` for filtering. If no filtering rules are provided, all files are scanned and copied (`--include='*'` is the default). However, if you use the `--include` filter to match files with a specific pattern, you must also use `--exclude` to exclude other files. See the examples above for reference.
 
-- `SRC` is the source data address or path;
-- `DST` is the destination address or path;
-- `[command options]` are synchronization options. See [command reference](../reference/command_reference.mdx#sync) for more details.
+:::tip
+When using multiple matching patterns, it may be difficult to determine whether a file will be synchronized due to the filtering logic. In such cases, it is recommended to add the `--dry --debug` option to preview the files selected for synchronization. If the results are not as expected, adjust the matching patterns accordingly.
+:::
 
-Address format:
+### Matching rules {#matching-rules}
+
+You can use any word or substring for filtering, as well as these special patterns (similar to shell wildcards):
+
++ A single `*` matches any character, but terminates at `/`.
++ `**` matches any character, including `/`.
++ `?` matches any single character except `/`.
++ `[...]` matches a set of characters, such as `[a-z]` for any lowercase letter.
++ `[^...]` excludes specified characters. For example, `[^abc]` matches any character except `a`, `b`, and `c`.
+
+In addition:
+
+- If the matching pattern does not contain regex patterns, it tries to match the full file name. For example, `foo` matches `foo` and `xx/foo` but not `foo1`, `2foo`, or `foo/xx`, since none of them is a file named exactly `foo`.
+- If the matching pattern ends with `/`, it only matches directories, not files.
+- A pattern that starts with `/` stands for absolute path, so `/foo` matches the `foo` file at the root.
+
+Here are some examples of matching patterns:
+
++ `--exclude='*.o'` excludes all files matching `*.o`.
++ `--exclude='/foo/*/bar'` excludes `bar` files located two levels under `/foo`, such as `/foo/spam/bar`, but not `/foo/spam/eggs/bar`.
++ `--exclude='/foo/**/bar'` excludes `bar` files at any level under `/foo`.
+
+The `sync` command supports two filtering modes: *full path filtering* and *layer-by-layer filtering*. Both use `--include` and `--exclude` to filter files, but their behaviors are different. By default, `sync` employs the layer-by-layer filtering mode, which is more complicated but resembles rsync's usage. Therefore, it is only recommended for users familiar with rsync. For most people, `--match-full-path` is recommended because it is much easier to understand.
+
+### Full path filtering (recommended) <VersionAdd>1.2.0</VersionAdd> {#full-path-filtering-mode}
+
+Since v1.2.0, JuiceFS supports the `--match-full-path` option. This mode directly matches the full path of an object against all specified filters sequentially. Once a pattern matches, the result is returned (either "include" or "exclude"), and subsequent patterns are ignored.
+
+Below is the workflow of full path filtering mode:
+
+![Full path filtering workflow](../images/sync-full-path-filtering-mode-flow-chart.svg)
+
+For example, consider a file located at `a1/b1/c1.txt` and three matching patterns `--include 'a*.txt' --include 'c1.txt' --exclude 'c*.txt'`. In full path filtering mode:
+The string `a1/b1/c1.txt` is first matched against `--include 'a*.txt'`. This fails because `*` does not match the `/` character (see [matching rules](#matching-rules)).
+`a1/b1/c1.txt` is then matched against `--include 'c1.txt'`, which succeeds. According to the mode's logic, subsequent patterns, such as `--exclude 'c*.txt'`, are ignored once a match is found. This file will be handled by the `sync` command.
+
+Here are some more examples:
+
+- `--exclude '/foo**'` excludes all files or directories whose root directory name starts with `foo`.
+- `--exclude '**foo/**'` excludes all directories ending with `foo`.
+- `--include '*/' --include '*.c' --exclude '*'` includes all directories and files with the `.c` extension while excluding everything else.
+- `--include 'foo/bar.c' --exclude '*'` includes only the `foo` directory and the `foo/bar.c` file.
+
+### Layer-by-layer filtering mode {#layer-by-layer-filtering-mode}
+
+In layer-by-layer filtering mode, the full path is split into hierarchical levels, generating a sequence of strings. For example, a path like `a1/b1/c1.txt` is split into the sequence `a1`, `a1/b1`, and `a1/b1/c1.txt`. Each element in this sequence is processed as though in ["full path filtering"](#full-path-filtering-mode) mode.
+
+If an element matches a certain pattern, two outcomes are possible:
+
+- If it is an exclude pattern, the *exclude* behavior is immediately returned as the final result.
+- If it is an include pattern, remaining patterns for that layer are skipped and the process moves on to the next layer.
+
+If no patterns match at a particular layer, the process moves on to the next layer. **If "exclude" is not returned after all layers are processed, the scanned files are included (be "handled" by the `sync` command) by default.**
+
+Below is the workflow for layer-by-layer filtering mode:
+
+![Layer-by-layer filtering workflow](../images/sync-layer-by-layer-filtering-mode-flow-chart.svg)
+
+For example, given the file `a1/b1/c1.txt` and the patterns `--include 'a*.txt' --include 'c1.txt' --exclude 'c*.txt'`, in layer-by-layer filtering mode, the sequence is `a1`, `a1/b1`, and `a1/b1/c1.txt`. The specific matching steps are:
+
+1. At the first layer `a1`, no patterns match. Move on to the next layer.
+2. At the second layer `a1/b1`, no patterns match. Move to the next level.
+3. At the third layer `a1/b1/c1.txt`, the `--inlude 'c1.txt'` pattern matches. So as for the current state, this file will be handled, and the process will continue to the next layer.
+4. Since there is no next layer, `a1/b1/c1.txt` will be included and handled by this command.
+
+In the example above, the matching is successful until the last layer. In addition, there may be two situations:
+
+- If the match is successful before the last layer, and the matching pattern is an exclude filter, the file is excluded as a final state, skipping all subsequent layers.
+- If all layers are processed but no matches occur, this file will be included.
+
+Essentially, this mode processes paths hierarchically, applying full path filtering at each layer. Each layer comes out with either a hit to exclude or a miss and continue to the next layer. The only way to get the file included is to process all layers of filtering.
+
+Some more examples:
+
++ `--exclude /foo` excludes all files or directories named `foo` under the root directory.
++ `--exclude foo/` excludes all directories named `foo`.
++ For multi-level directories such as `dir_name/.../.../...`, all paths under `dir_name` will be processed according to the directory hierarchy. If the parent directory of a file is "excluded," the file will not be handled, even if an include rule is subsequently specified for it. If you want this file to be included, you must guarantee that all its parent directories are not excluded. For example, `/some/path/this-file-will-not-be-synced` in the following example will not be included because its parent directory `some` has been excluded by the rule `--exclude '*'`:
+
+  ```shell
+  --include '/some/path/this-file-will-not-be-synced' \
+  --exclude '*'
+  ```
+
+One solution is to include all directories in the directory hierarchy by using the `--include '*/'` rule (which needs to be placed before the `--exclude '*'` rule). Alternatively, you can add include rules to each parent directory, for example:
+
+  ```shell
+  --include '/some/' \
+  --include '/some/path/' \
+  --include '/some/path/this-file-will-be-synced' \
+  --exclude '*'
+  ```
+
+## Storage protocols {#storage-protocols}
+
+You can sync data between any [supported storage system](../reference/how_to_set_up_object_storage.md), but note that if one of the endpoint is a JuiceFS volume, it it then recommended to [sync without mount point](#sync-without-mount-point) since it runs without FUSE overhead.
+
+### Sync without mount point <VersionAdd>1.1</VersionAdd> {#sync-without-mount-point}
+
+For data migrations that involve JuiceFS, it's recommended use the `jfs://` protocol, rather than mount JuiceFS and access its local directory, which bypasses the FUSE mount point and access JuiceFS directly. Under large scale scenarios, bypassing FUSE can save precious resources and increase performance.
 
 ```shell
-[NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]
-
-# MinIO only supports path style
-minio://[ACCESS_KEY:SECRET_KEY[:TOKEN]@]ENDPOINT/BUCKET[/PREFIX]
+myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ jfs://myfs/movies/
 ```
 
-Explanation:
+### Synchronize between object storage and JuiceFS {#synchronize-between-object-storage-and-juicefs}
 
-- `NAME` is the storage type like `s3` or `oss`. See [available storage services](../reference/how_to_set_up_object_storage.md#supported-object-storage) for more details;
-- `ACCESS_KEY` and `SECRET_KEY` are the credentials for accessing object storage APIs; If special characters are included, it needs to be escaped and replaced manually. For example, `/` needs to be replaced with its escape character `%2F`.
-- `TOKEN` token used to access the object storage, as some object storage supports the use of temporary token to obtain permission for a limited time
-- `BUCKET[.ENDPOINT]` is the address of the object storage;
-- `PREFIX` is the common prefix of the directories to synchronize, optional.
-
-Here is an example of the object storage address of Amazon S3.
-
-```
-s3://ABCDEFG:HIJKLMN@myjfs.s3.us-west-1.amazonaws.com
-```
-
-In particular, `SRC` and `DST` ending with a trailing `/` are treated as directories, e.g. `movie/`. Those don't end with a trailing `/` are treated as _prefixes_, and will be used for pattern matching. For example, assuming we have `test` and `text` directories in the current directory, the following command can synchronize them into the destination `~/mnt/`.
-
-```shell
-juicefs sync ./te ~/mnt/te
-```
-
-In this way, the subcommand `sync` takes `te` as a prefix to find all the matching directories, i.e. `test` and `text`. `~/mnt/te` is also a prefix, and all directories and files synchronized to this destination will be renamed by replacing the original prefix `te` with the new prefix `te`. The changes in the names of directories and files before and after synchronization cannot be seen in the above example. However, if we take another prefix, for example, `ab`,
-
-```shell
-juicefs sync ./te ~/mnt/ab
-```
-
-the `test` directory synchronized to the destination directory will be renamed as `abst`, and `text` will be `abxt`.
-
-### Required Storages {#required-storages}
-
-Assume that we have the following storages.
-
-1. **Object Storage A**
-   - Bucket name: aaa
-   - Endpoint: `https://aaa.s3.us-west-1.amazonaws.com`
-
-2. **Object Storage B**
-   - Bucket name: bbb
-   - Endpoint: `https://bbb.oss-cn-hangzhou.aliyuncs.com`
-
-3. **JuiceFS File System**
-   - Metadata Storage: `redis://10.10.0.8:6379/1`
-   - Object Storage: `https://ccc-125000.cos.ap-beijing.myqcloud.com`
-
-All of the storages share the same **secret key**:
-
-- **ACCESS_KEY**: `ABCDEFG`
-- **SECRET_KEY**: `HIJKLMN`
-
-### Synchronize between Object Storage and JuiceFS
-
-The following command synchronizes `movies` directory on [Object Storage A](#required-storages) to [JuiceFS File System](#required-storages).
+The following command synchronizes `movies` directory from object storage to JuiceFS.
 
 ```shell
 # mount JuiceFS
@@ -91,7 +154,7 @@ juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
 
-The following command synchronizes `images` directory from [JuiceFS File System](#required-storages) to [Object Storage A](#required-storages).
+The following command synchronizes `images` directory from JuiceFS to object storage.
 
 ```shell
 # mount JuiceFS
@@ -100,15 +163,15 @@ juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync /mnt/jfs/images/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/images/
 ```
 
-### Synchronize between Object Storages
+### Synchronize between object storages {#synchronize-between-object-storages}
 
-The following command synchronizes all of the data on [Object Storage A](#required-storages) to [Object Storage B](#required-storages).
+The following command synchronizes all of the data from object storage to another bucket.
 
 ```shell
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
 ```
 
-### Synchronize between Local and Remote Servers
+### Synchronize between local and remote servers {#synchronize-between-local-and-remote-servers}
 
 To copy files between directories on a local computer, simply specify the source and destination paths. For example, to synchronize the `/media/` directory with the `/backup/` directory:
 
@@ -126,205 +189,82 @@ juicefs sync /media/ "username:password"@192.168.1.100:/backup/
 
 When using the SFTP/SSH protocol, if no password is specified, the sync task will prompt for the password. If you want to explicitly specify the username and password, you need to enclose them in double quotation marks, with a colon separating the username and password.
 
-### Sync Without Mount Point <VersionAdd>1.1</VersionAdd>
+## Sync behavior {#sync-behavior}
 
-For data migrations that involve JuiceFS, it's recommended use the `jfs://` protocol, rather than mount JuiceFS and access its local directory, which bypasses the FUSE mount point and access JuiceFS directly. Under large scale scenarios, bypassing FUSE can save precious resources and increase performance.
+### Incremental and full synchronization {#incremental-and-full-synchronization}
 
-```shell
-myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ jfs://myfs/movies/
-```
+By default, `juicefs sync` performs incremental synchronization. It only overwrites files if their sizes are different. You can also use [`--update`](../reference/command_reference.mdx#sync) to overwrite files when the `mtime` of the source file has been updated. For scenarios with higher demand for data integrity, use [`--check-new`](../reference/command_reference.mdx#sync) or [`--check-all`](../reference/command_reference.mdx#sync) to perform byte-by-byte comparison between the source and the destination.
 
-## Advanced Usage
+For full synchronization (where all files are synchronized regardless of their presence on the destination path), use [`--force-update`](../reference/command_reference.mdx#sync).
 
-## Observation {#observation}
+### Directory structure and file permissions {#directory-structure-and-file-permissions}
 
-Simply put, when using `sync` to transfer big files, progress bar might move slowly or get stuck. If this happens, you can observe the progress using other methods.
+By default, empty directories are not synchronized. To include them, use the `--dirs` option.
 
-`sync` assumes it's mainly used to copy a large amount of files, its progress bar is designed for this scenario: progress only updates when a file has been transferred. In a large file scenario, every file is transferred slowly, hence the slow or even static progress bar. This is worse for destinations without multipart upload support (e.g. `file`, `sftp`, `jfs`, `gluster` schemes), where every file is transferred single-threaded.
+In addition, when migrating data between file systems such as local, SFTP, and HDFS, use the `--perms` option to synchronize file permissions.
 
-If progress bar is not moving, use below methods to observe and troubleshoot:
+### Copy symbolic links {#copy-symbolic-links}
 
-* If either end is a JuiceFS mount point, you can use [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) to quickly check current IO status.
-* If destination is a local disk, look for temporary files that end with `.tmp.xxx`, these are the temp files created by `sync`, they will be renamed upon transfer complete. Look for size changes in temp files to verify the current IO status.
-* If both end are object storage services, use tools like `nethogs` to check network IO.
+For synchronization between **local directories**, the `--links` option allows symbolic links to be copied as is, instead of resolving their targets. The synchronized symbolic link retains the original path stored in the source, regardless of whether the path is valid before or after the synchronization.
 
-### Incremental and Full Synchronization
+Note:
 
-The subcommand `sync` works incrementally by default, which compares the differences between the source and target paths, and then synchronizes only the differences. You can add option `--update` or `-u` to keep updated the `mtime` of the synchronized directories and files.
+* The `mtime` of a symbolic link is not synchronized.
+* The `--check-new` and `--perms` options will be ignored when synchronizing symbolic links.
 
-For full synchronization, i.e. synchronizing all the time no matter whether the destination files exist or not, you can add option `--force-update` or `-f`. For example, the following command fully synchronizes `movies` directory from [Object Storage A](#required-storages) to [JuiceFS File System](#required-storages).
+### Data sync and compaction {#sync-and-compaction}
 
-```shell
-# mount JuiceFS
-juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
-# full synchronization
-juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
-```
+For sequential write scenarios, ensure each file write has at least a 4M (the default block size) buffer available. If the write concurrency is too high or the buffer size is too small, the client will not be able to maintain the desired "writing by large chunks" pattern. Instead, it could only write by small slices, which combined with compaction, could really deteriorate performance due to write amplification.
 
-### Pattern Matching
+Compaction can be monitored using `juicefs_compact_size_histogram_bytes`, If compaction traffic is substantial during a `sync` operation, consider the following optimizations:
 
-The pattern matching function of the subcommand `sync` is similar to that of `rsync`, which allows you to exclude or include certain classes of files by rules and synchronize any set of files by combining multiple rules. Now we have the following rules available.
+* If the object storage bandwidth is limited, avoid setting high concurrency (`--threads`). Instead, start with low concurrency and gradually increase it until you get the desired speed.
 
-- Patterns ending with `/` only matches directories; otherwise, they match files, links or devices.
-- Patterns containing `*`, `?` or `[` match as wildcards, otherwise, they match as regular strings;
-- `*` matches any non-empty path components (it stops at `/`).
-- `?` matches any single character except `/`;
-- `[` matches a set of characters, for example `[a-z]` or `[[:alpha:]]`;
-- Backslashes can be used to escape characters in wildcard patterns, while they match literally when no wildcards are present.
-- It is always matched recursively using patterns as prefixes.
+* When the destination is a JuiceFS file system, use the `jfs://` protocol, because it bypasses the FUSE mount point (reducing overhead) and is already optimized for file fragmentation problems. See the next point for details.
 
-#### Exclude Directories/Files
+* When the destination is a JuiceFS file system, ensure the destination has sufficient available [buffer](https://github.com/juicedata/docs/pull/662/cache.md#buffer-size) capacity. Each write file handler must have at least 4MB of reserved memory. This means the `--buffer-size` should be at least 4 times the `--threads` value. If higher write concurrency is needed, consider setting it to 8 or 12 times the value. Depending on the destination file system's deployment model, you will use different methods to configure buffer size:
 
-Option `--exclude` can be used to exclude patterns. The following example shows a full synchronization from [JuiceFS File System](#required-storages) to [Object Storage A](#required-storages), excluding hidden directories and files:
+  * When the destination starts with the `jfs://` protocol, the JuiceFS client is part of the `juicefs sync` command itself. In this case, `--buffer-size` needs to be appended to the `juicefs sync` command.
+  * When the destination is a FUSE mount point, the JuiceFS client runs as the `juicefs mount` process on the host machine. In this case, `--buffer-size` needs to be added directly to the mount command.
 
-:::note Remark
-Linux regards a directory or a file with a name starts with `.` as hidden.
-:::
+* If you need to limit the bandwidth via `--bwlimit`, you must also lower the `--threads` value to avoid write fragmentation caused by concurrency congestion. Since storage systems come with different performance levels, exact calculations cannot be provided here. Therefore, it is recommended to start with low concurrency and adjust as needed.
+
+### Delete selected files
+
+Using filters, you can even delete files by pattern via `juicefs sync`, the trick is to create an empty directory and use it as `SRC`.
+
+Below are some examples which uses `--dry --debug` just to be cautious, they will not delete anything as long as `--dry` is specified, after the behavior is verified, remove the option to actually execute.
 
 ```shell
-# mount JuiceFS
-juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
-# full synchronization, excluding hidden directories and files
-juicefs sync --exclude '.*' /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
+mkdir empty-dir
+# Delete all objects in mybucket except the .gz files
+juicefs sync ./empty-dir/ s3://mybucket.s3.us-east-2.amazonaws.com/ --match-full-path --delete-dst --exclude='**.gz' --include='*' --dry --debug
+# Delete all files ending with .gz in mybucket
+juicefs sync ./empty-dir/ s3://mybucket.s3.us-east-2.amazonaws.com/ --match-full-path --delete-dst --include='**.gz' --exclude='*' --dry --debug
 ```
 
-You can use this option several times with different parameters in the command to exclude multiple patterns. For example, using the following command can exclude all hidden files, `pic/` directory and `4.png` file in synchronization:
+## Accelerate synchronization {#accelerate-sync}
 
-```shell
-juicefs sync --exclude '.*' --exclude 'pic/' --exclude '4.png' /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com
-```
+By default, `juicefs sync` starts 10 threads to run syncing jobs. You can set the `--threads` option to increase or decrease the number of threads as needed. However, adding threads beyond a system's resource limits may cause issues like out-of-memory errors. If performance is still insufficient, consider:
 
-#### Include Directories/Files
+* Check if `SRC` or `DST` storage systems have reached bandwidth limits. If either is constrained, increasing concurrency will not help.
 
-Option `--include` can be used to include patterns you don't want to exclude. For example, only `pic/` and `4.png` are synchronized and all the others are excluded after executing the following command:
+* Performing `juicefs sync` on a single host may be limited by host resources, such as CPU or network throttle. If this is the case, consider the following:
 
-```shell
-juicefs sync --include 'pic/' --include '4.png' --exclude '*' /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com
-```
+  * If a node with better hardware resources (such as CPU or network bandwidth) is available in your environment, consider using that node to run `juicefs sync` and access the source data via SSH. For example, `juicefs sync root@src:/data /jfs/data`.
+  * Use [distributed synchronization](#distributed-sync) (introduced below).
 
-:::info NOTICE
-The earlier options have higher priorities than the latter ones. Thus, the `--include` options should come before `--exclude`. Otherwise, all the `--include` options such as `--include 'pic/' --include '4.png'` which appear later than `--exclude '*'` will be ignored.
-:::
-
-### Filtering modes
-
-Filtering modes determine how multiple filtering patterns decide whether to synchronize a path. The `sync` command supports two filtering modes: one-time filtering and layered filtering. By default, the `sync` command uses the layered filtering mode. You can use the `--match-full-path` parameter to switch to one-time filtering mode.
-
-#### One-time filtering
-
-In one-time filtering, the full path of an object is matched against multiple patterns in sequence.
-
-![One-time filtering](../images/one-time-filtering.png)
-
-For example, given the `a1./b1/c1.txt` object and the `inclusion`/`exclusion` rule `--include a*.txt, --include c1.txt, --exclude c*.txt`, the string `a1/b1/c1.txt` is matched against the three patterns `--include a*.txt`, `--inlude c1.txt`, and `--exclude c*.txt` in sequence.
-
-The specific steps are as follows:
-
-1. `a1/b1/c1.txt` matches against `--include a*.txt`, which fails to match.
-2. `a1/b1/c1.txt` is matched against `--inlude c1.txt`, which succeeds according to the matching rules. The final matching result for `a1/b1/c1.txt` is "sync."
-
-The subsequent rule `--exclude c*.txt` would also match based on the suffix. But according to the sequential nature of `include`/`exclude` parameters, once a pattern is matched, no further patterns are evaluated. Therefore, the final result for matching `a1/b1/c1.txt` is determined by the `--inlude c1.txt` rule, which is "sync."
-
-Here are some examples of `exclude`/`include` rules in the one-time filtering mode:
-
-+ `--exclude *.o` excludes all files matching the pattern `*.o`.
-+ `--exclude /foo**` excludes any file or directory in the root named `foo`.
-+ `--exclude **foo/**` excludes all directories ending with `foo`.
-+ `--exclude /foo/*/bar` excludes any `bar` file located two levels down within the `foo` directory in the root.
-+ `--exclude /foo/**/bar` excludes any file named `bar` located within any level of the `foo` directory in the root. (`**` matches any number of directory levels)
-+ Using `--include */ --include *.c --exclude *` includes only directories and `c` source files, excluding all other files and directories.
-+ Using `--include foo/bar.c --exclude *` includes only the `foo` directory and `foo/bar.c`.
-
-One-time filtering is easy to understand and use. It is recommended in most cases.
-
-#### Layered filtering
-
-![Layered filtering](../images/layered-filtering.png)
-
-Layered filtering breaks down the object's path into sequential subpaths according to its layers. For example, the layer sequence for the path `a1/b1/c1.txt` is `a1`, `a1/b1`, and `a1/b1/c1.txt`.
-
-Each element in this sequence is treated as the original path in a one-time filtering process. During one-time filtering, if a pattern matches and it is an `exclude` rule, it immediately returns "Exclude" as the result for the entire layered filtering of the object. If the pattern matches and it is an `include` rule, it skips the remaining rules for the current layer and proceeds to the next layer of filtering.
-
-If no rules match at a given level, the filtering proceeds to the next layer. If all layers are processed without any match, the default action "sync" is returned.
-
-For example, given the object `a1/b1/c1.txt` and the rules `--include a*.txt`, `--include c1.txt`, `--exclude c*.txt`, the layered filtering process for this example with the subpath sequence `a1`, `a1/b1`, and `a1/b1/c1.txt` will be as follows:
-
-1. At the first layer, the path `a1` is evaluated against the rules `--include a*.txt`, `--inlude c1.txt`, and `--exclude c*.txt`. None of these rules match, so it proceeds to the next layer.
-
-2. At the second layer, the path `a1/b1` is evaluated against the same rules. Again, no rules match, so it proceeds to the next layer.
-
-3. At the third layer, the path `a1/b1/c1.txt` is evaluated. The rule `--include c1.txt` matches. The behavior of this pattern is "sync." In layered filtering, if the filtering result for a level is "sync," it directly proceeds to the next layer of filtering.
-
-4. There are no more layers. All layers of filtering have been completed, so the default behavior is "sync."
-
-In the example above, the match was successful at the last layer. Besides this, there are two other scenarios:
-
-- If a match occurs before the last layer, and it is an `exclude` pattern, the result is "exclude" for the entire filtering. If it is an `include` pattern, it proceeds to the next layer of filtering.
-- If all layers are completed without any matches, the default behavior is "sync."
-
-In summary, layered filtering sequentially applies one-time filtering from the top layer to the bottom. Each layer of filtering can result in either "exclude," which is final, or "sync," which requires proceeding to the next layer.
-
-Here are some examples of layered filtering with `exclude`/`include` rules:
-
-+ `--exclude *.o` excludes all files matching "*.o".
-+ `--exclude /foo` excludes files or directories with the root directory name "foo" during transfer.
-+ `--exclude foo/` excludes all directories named "foo".
-+ `--exclude /foo/*/bar` excludes "bar" files under the "foo" directory, up to two layers deep from the root directory.
-+ `--exclude /foo/**/bar` excludes "bar" files under the "foo" directory recursively at any layer from the root directory. ("**" matches any number of directory levels)
-+ Using `--include */ --include *.c --exclude *` includes all directories and `c` source code files, excluding all other files and directories.
-+ Using `--include foo/ --include foo/bar.c --exclude *` includes only the "foo" directory and "foo/bar.c" file. (The "foo" directory must be explicitly included, or it is excluded by the `--exclude *` rule.)
-+ For `dir_name/***`, it matches all files at all layers under the `dir_name` directory. Note that each subpath element is recursively traversed from top to bottom, so `include`/`exclude` matching rules apply recursively to each full path element. For example, to include `/foo/bar/baz`, both `/foo` and `/foo/bar` should not be excluded. When a file is found to be transferred, the exclusion matching pattern short-circuits the exclusion traversal at that file's directory layer. If a parent directory is excluded, deeper include pattern matching is ineffective. This is crucial when using trailing `*`. For example, the following example will not work as expected:
-
-    ```
-    --include='/some/path/this-file-will-not-be-found'
-    --include='/file-is-included'
-    --exclude='*'
-    ```
-
-    Due to the `*` rule excluding the parent directory `some`, it will fail. One solution is to request the inclusion of all directory structures by using a single rule like `--include */`, which must be placed before other `--include*` rules. Another solution is to add specific inclusion rules for all parent directories that need to be accessed. For example, the following rules can work correctly:
-
-    ```
-    --include /some/
-    --include /some/path/
-    --include /some/path/this-file-is-found
-    --include /file-also-included
-    --exclude *
-    ```
-
-Understanding and using layered filtering can be quite complex. However, it is mostly compatible with rsync's `include`/`exclude` parameters. Therefore, it is generally recommended to use it in scenarios compatible with rsync behavior.
-
-### Directory Structure and File Permissions
-
-The subcommand `sync` only synchronizes file objects and directories containing file objects, and skips empty directories by default. To synchronize empty directories, you can use `--dirs` option.
-
-In addition, when synchronizing between file systems such as local, SFTP and HDFS, option `--perms` can be used to synchronize file permissions from the source to the destination.
-
-### Copy Symbolic Links
-
-You can use `--links` option to disable symbolic link resolving when synchronizing **local directories**. That is, synchronizing only the symbolic links themselves rather than the directories or files they are pointing to. The new symbolic links created by the synchronization refer to the same paths as the original symbolic links without any conversions, no matter whether their references are reachable before or after the synchronization.
-
-Some details need to be noticed
-
-1. The `mtime` of a symbolic link will not be synchronized;
-2. `--check-new` and `--perms` will be ignored when synchronizing symbolic links.
-
-## Concurrent data synchronization {#concurrent-sync}
-
-`juicefs sync` by default starts 10 threads to run syncing jobs, you can set the `--threads` option to increase or decrease the number of threads as needed. But also note that due to various factors, blindly increasing `--threads` may not always work, and you should also consider:
-
-* `SRC` and `DST` storage systems may have already reached their bandwidth limits, if this is indeed the bottleneck, further increasing concurrency will not improve the situation;
-* Performing `juicefs sync` on a single host may be limited by host resources, e.g. CPU or network throttle, if this is the case, consider using [distributed synchronization](#distributed-sync) (introduced below);
-* If the synchronized data is mainly small files, and the `list` API of `SRC` storage system has excellent performance, then the default single-threaded `list` of `juicefs sync` may become a bottleneck. You can consider enabling [concurrent `list`](#concurrent-list) (introduced below).
+* If the synchronized data is mainly small files, and the `list` API of `SRC` storage system has excellent performance, the default single-threaded `list` of `juicefs sync` may become a bottleneck. You can enable [concurrent `list`](#concurrent-list) (introduced below).
 
 ### Concurrent `list` {#concurrent-list}
 
-From the output of `juicefs sync`, pay attention to the `Pending objects` count, if this value stays zero, consumption is faster than production and you should increase `--list-threads` to enable concurrent `list`, and then use `--list-depth` to control `list` depth.
+If `Pending objects` in `juicefs sync` output remains 0, it means consumption is faster than production. You can increase `--list-threads` to enable concurrent `list` and then use `--list-depth` to control directory depth of `list`.
 
-For example, if you're dealing with a object storage bucket used by JuiceFS, directory structure will be `/<vol-name>/chunks/xxx/xxx/...`, using `--list-depth=2` will perform concurrent listing on `/<vol-name>/chunks` which usually renders the best performance.
+For example, if you are dealing with an object storage bucket used by JuiceFS, the directory structure is `/<vol-name>/chunks/xxx/xxx/...`. In this case, setting `--list-depth=2` enables concurrent listing on `<vol-name>/chunks`.
 
 ### Distributed synchronization {#distributed-sync}
 
-Synchronizing between two object storages is essentially pulling data from one and pushing it to the other. The efficiency of the synchronization will depend on the bandwidth between the client and the cloud.
+Synchronizing between two object storage services is essentially pulling data from one and pushing it to the other. The efficiency of the synchronization depends on the bandwidth between the client and the cloud.
 
 ![JuiceFS-sync-single](../images/juicefs-sync-single.png)
 
@@ -332,23 +272,66 @@ When copying large scale data, node bandwidth can easily bottleneck the synchron
 
 ![JuiceFS-sync-worker](../images/juicefs-sync-worker.png)
 
-Manager node executes `sync` command as the master, and defines multiple worker nodes by setting option `--worker` (manager node itself also serve as a worker node). JuiceFS will split the workload distribute to Workers for distributed synchronization. This increases the amount of data that can be processed per unit time, and the total bandwidth is also multiplied.
+The manager node executes the `sync` command as the master and defines multiple worker nodes by setting the `--worker` option (the manager node also serves as a worker node). JuiceFS splits the workload and distributes it to workers for distributed synchronization. This increases the amount of data that can be processed per unit time, and the total bandwidth is also multiplied.
 
-When using distributed syncing, you should configure SSH logins so that the manager can access all worker nodes without password, if SSH port isn't the default 22, you'll also have to include that in the manager's `~/.ssh/config`. Manager will distribute the JuiceFS Client to all worker nodes, so they should all use the same architecture to avoid running into compatibility problems.
+When using distributed syncing, you should configure SSH logins so that the manager can access all worker nodes without a password. If the SSH port is not the default 22, you need to include that in the manager's `~/.ssh/config`. The manager will distribute the JuiceFS Client to all worker nodes, so they should all use the same architecture to avoid compatibility problems.
 
-For example, synchronize data from [Object Storage A](#required-storages) to [Object Storage B](#required-storages) concurrently with multiple machines.
+For example, to synchronize data between two object storage services:
 
 ```shell
 juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
 ```
 
-The synchronization workload between the two object storages is shared by the current machine and the two Workers `bob@192.168.1.20` and `tom@192.168.8.10`.
+The synchronization workload between the two object storage services is shared by the manager machine and two workers, `bob@192.168.1.20` and `tom@192.168.8.10`.
 
-## Application Scenarios
+The above command demonstrates object → object synchronization, if you need to sync via FUSE mount points, then you need to mount the file system in all worker nodes, and then run the following command to achieve distributed sync:
 
-### Geo-disaster Recovery Backup
+```shell
+# Source file system needs better read performance, increase its buffer-size
+parallel-ssh -h hosts.txt -i juicefs mount -d redis://10.10.0.8:6379/1 /jfs-src --buffer-size=1024 --cache-size=0
 
-Geo-disaster recovery backup backs up files, and thus the files stored in JuiceFS should be synchronized to other object storages. For example, synchronize files in [JuiceFS File System](#required-storages) to [Object Storage A](#required-storages):
+# Destination file system needs better write performance
+parallel-ssh -h hosts.txt -i juicefs mount -d redis://10.10.0.8:6379/1 /jfs-dst --buffer-size=1024 --cache-size=0 --max-uploads=50
+
+# Copy data
+juicefs sync --worker host1,host2 /jfs-src /jfs-dst
+```
+
+## Observation {#observation}
+
+When using `sync` to transfer large files, the progress bar might move slowly or get stuck. If this happens, you can observe the progress using other methods.
+
+`sync` is designed for scenarios involving a large number of files. Its progress bar only updates when a file has been transferred. In a large file scenario, each file is transferred slowly, so the progress bar updates infrequently or even appears stuck. This is worse for destinations without multipart upload support (such as `file`, `sftp`, and `jfs` schemes), where each file is transferred using a single thread.
+
+If you notice the progress bar is not changing, use the methods below for monitoring and troubleshooting:
+
+* Add the [`--verbose` or `--debug`](../reference/command_reference.mdx#global-options) option to the `juicefs sync` command to print debug logs.
+
+* If either end is a JuiceFS mount point:
+
+  * Use [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) to quickly check current I/O status.
+  * Review the [client log](../administration/fault_diagnosis_and_analysis.md#client-log) (default path: `/var/log/juicefs.log`) for [slow requests or timeout errors](../administration/troubleshooting.md#io-error-object-storage).
+
+* If the destination is a local disk, check the directory for temporary files with `.tmp.xxx`. During the synchronization process, the transfer results are written to these temporary files. Once the transfer is complete, they are renamed to finalize the write. By monitoring the size changes of the temporary files, you can determine the current I/O status.
+
+* If both the source and destination are object storage systems, use tools like `nethogs` to check network I/O.
+
+* If none of the above methods provide useful debug information, please collect its goroutine and send it to Juicedata engineers:
+
+    ```shell
+    # Replace <PID> with the actual PID of the stuck sync process
+    # This command will print its pprof listen port
+    lsof -p <PID> | grep TCP | grep LISTEN
+    # pprof port is typically 6061, but in the face of port conflict,
+    # port number will be automatically increased
+    curl -s localhost:6061/debug/pprof/goroutine?debug=1
+    ```
+
+## Application scenarios {#application-scenarios}
+
+### Geo-disaster recovery backup {#geo-disaster-recovery-backup}
+
+Geo-disaster recovery backup backs up files, and thus the files stored in JuiceFS should be synchronized to other object storages. For example, synchronize files from JuiceFS to object storage:
 
 ```shell
 # mount JuiceFS
@@ -357,28 +340,24 @@ juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 ```
 
-After sync, you can see all the files in [Object Storage A](#required-storages).
-
-### Build a JuiceFS Data Copy
+### Build a JuiceFS data copy {#build-a-juicefs-data-copy}
 
 Unlike the file-oriented disaster recovery backup, the purpose of creating a copy of JuiceFS data is to establish a mirror with exactly the same content and structure as the JuiceFS data storage. When the object storage in use fails, you can switch to the data copy by modifying the configurations. Note that only the file data of the JuiceFS file system is replicated, and the metadata stored in the metadata engine still needs to be backed up.
 
-This requires manipulating the underlying object storage directly to synchronize it with the target object storage. For example, to take the [Object Storage B](#required-storages) as the data copy of the [JuiceFS File System](#required-storages):
+This requires manipulating the underlying object storage directly to synchronize it with the target object storage. For example, to take the object storage as the data copy of a JuiceFS volume:
 
 ```shell
 juicefs sync cos://ABCDEFG:HIJKLMN@ccc-125000.cos.ap-beijing.myqcloud.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
 ```
 
-After sync, the file content and hierarchy in the [Object Storage B](#required-storages) are exactly the same as the [underlying object storage of JuiceFS](#required-storages).
-
 ### Sync across regions using S3 Gateway {#sync-across-region}
 
-When transferring a large amount of small files across different regions via FUSE mount points, clients will inevitably talk to the metadata service in the opposite region via public internet (or dedicated network connection with limited bandwidth). In such cases, metadata latency can become the bottleneck of the data transfer:
+When transferring a large number of small files across different regions via FUSE mount points, clients will inevitably talk to the metadata service in the opposite region via the public internet (or dedicated network connection with limited bandwidth). In such cases, metadata latency can become the bottleneck of the data transfer:
 
 ![sync via public metadata service](../images/sync-public-metadata.svg)
 
-S3 Gateway comes to rescue in these circumstances: deploy a gateway in the source region, and since this gateway accesses metadata via private network, metadata latency is eliminated to a minimum, bringing the best performance for small file intensive scenarios.
+JuiceFS S3 Gateway is the solution in these scenarios: by deploying a gateway in the source region, metadata is accessed over a private network, minimizing metadata latency and delivering optimal performance for small-file-intensive workloads.
 
 ![sync via gateway](../images/sync-via-gateway.svg)
 
-Read [S3 Gateway](../deployment/s3_gateway.md) to learn its deployment and use.
+Read [S3 Gateway](../guide/gateway.md) to learn its deployment and use.

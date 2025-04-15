@@ -88,7 +88,7 @@ func (c *cacheManagerMetrics) initMetrics() {
 		Name: "staging_block_bytes",
 		Help: "Total bytes of blocks in the staging path.",
 	})
-	c.stageWriteBytes = prometheus.NewGauge(prometheus.GaugeOpts{
+	c.stageWriteBytes = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "staging_write_bytes",
 		Help: "write bytes of blocks in the staging path.",
 	})

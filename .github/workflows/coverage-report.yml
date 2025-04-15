@@ -1,0 +1,140 @@
+name: "coverage-report"
+
+on:
+  push:
+    branches:
+      - main
+      - release**
+    paths:
+      - '**/coverage-report.yml'
+  pull_request:
+    branches:
+      - main
+      - release**
+    paths:
+      - '**/coverage-report.yml'
+
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+      last_date:
+        type: string
+        description: "last date of coverage data"
+        required: false
+        default: ""
+  schedule:
+    - cron:  '0 23 * * *'
+    
+jobs:
+  coverage-report:
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ['main']
+        test: ['ut', 'it', 'all']
+          
+    timeout-minutes: 60
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: mount coverage dir for cleanup
+        if: ${{ matrix.test == 'all' }}
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: /ci-coverage
+          subdir: juicefs/
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
+      - name: clean up old coverage data
+        if: ${{ matrix.test == 'all' }}
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          sudo find /ci-coverage -type f \( -name 'covcounters*' -o -name 'covmeta*' \) -mtime +2 -print -exec rm -f {} +
+          umount /jfs-coverage
+
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: schedule
+          subdir: juicefs/schedule
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+      
+      - name: Determine lastdate dir
+        timeout-minutes: 120
+        run: |
+          if [[ -n "${{github.event.inputs.last_date}}" ]]; then
+            last_date=${{github.event.inputs.last_date}}
+          else
+            last_date=$(ls -t schedule | head -n 1)
+            [[ -z "$last_date" ]] && echo "no data found in schedule" && exit 1
+          fi
+          [[ ! -d "schedule/$last_date" ]] && echo "schedule/$last_date not found" && exit 1
+          echo "last_date=$last_date" >> $GITHUB_ENV
+
+      - name: Generate today's coverage report
+        timeout-minutes: 30
+        working-directory: schedule/${{env.last_date}}
+        run: |
+          echo "current dir is $(pwd)"
+          coverdirs=""
+          for dir in $(find . -mindepth 1 -maxdepth 1 -type d -exec basename {} \;); do
+              if [[ ${{matrix.test}} == "ut" ]]; then
+                if [[ "$dir" == "unittests" ]]; then
+                  coverdirs+="$dir,"
+                fi
+              elif [[ ${{matrix.test}} == "it" ]]; then
+                if [[ "$dir" != "unittests" ]]; then
+                  coverdirs+="$dir,"
+                fi
+              elif [[ ${{matrix.test}} == "all" ]]; then
+                coverdirs+="$dir,"
+              fi
+          done
+          coverdirs=${coverdirs%,}
+          echo coverdirs is $coverdirs
+          [[ -z "$coverdirs" ]] && echo "no coverage dir found" && exit 0
+          name=cover_${{matrix.test}}
+          sudo go tool covdata percent -i=$coverdirs | sudo tee ${name}.percent
+          echo "generated coverage percent report:" $(realpath ${name}.percent)
+          sudo go tool covdata textfmt -i=$coverdirs -o ${name}.txt 
+          echo "generated coverage report in text format:" $(realpath ${name}.txt)
+          sudo go tool cover -html=${name}.txt -o ${name}.html
+          echo "generated coverage report in html format:" $(realpath ${name}.html)
+          ls -l cover_*
+          
+      - name: upload coverage report
+        working-directory: schedule/${{env.last_date}}
+        timeout-minutes: 10
+        run: |
+          echo "current dir is $(pwd)"
+          [[ ! -f "cover_${{matrix.test}}.html" ]] && echo "no coverage report found" && exit 0
+          UPLOAD_PATH=${{github.workflow}}_${{github.run_id}}_${{matrix.test}}.html
+          response=$(curl -w '%{http_code}' -s -o /dev/null --form 'file=@cover_${{matrix.test}}.html' https://juicefs.com/upload-file-u80sdvuke/${UPLOAD_PATH}?token=${{secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN}})
+          if [ "$response" -eq 200 ]; then
+            echo Coverage Report for ${{matrix.test}}: https://i.juicefs.io/ci-coverage/${UPLOAD_PATH}
+          else
+            echo "Upload failed with status code $response"
+            exit 1
+          fi
+  
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
+        timeout-minutes: 30
+        uses: lhotari/action-upterm@v1

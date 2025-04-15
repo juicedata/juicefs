@@ -58,3 +58,39 @@ func TestLogger(t *testing.T) {
 		t.Fatalf("logid \"testid\" should be logged: %s", s)
 	}
 }
+
+func TestMethodName(t *testing.T) {
+	type args struct {
+		fullFuncName string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{{
+		name: "main",
+		args: args{
+			fullFuncName: "cmd.Main",
+		},
+		want: "Main",
+	}, {
+		name: "nested method",
+		args: args{
+			fullFuncName: "github.com/juicedata/juicefs/cmd.watchdog.func1",
+		},
+		want: "watchdog",
+	}, {
+		name: "multiple inits",
+		args: args{
+			fullFuncName: "github.com/juicedata/juicefs/pkg/utils.init.3.func1",
+		},
+		want: "init",
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MethodName(tt.args.fullFuncName); got != tt.want {
+				t.Errorf("MethodName() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

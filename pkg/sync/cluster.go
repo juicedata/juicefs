@@ -25,9 +25,11 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -42,14 +44,15 @@ import (
 
 // Stat has the counters to represent the progress.
 type Stat struct {
-	Copied       int64 // the number of copied files
-	CopiedBytes  int64 // total amount of copied data in bytes
-	Checked      int64 // the number of checked files
-	CheckedBytes int64 // total amount of checked data in bytes
-	Deleted      int64 // the number of deleted files
-	Skipped      int64 // the number of files skipped
-	SkippedBytes int64 // total amount of skipped data in bytes
-	Failed       int64 // the number of files that fail to copy
+	Copied       int64    // the number of copied files
+	CopiedBytes  int64    // total amount of copied data in bytes
+	Checked      int64    // the number of checked files
+	CheckedBytes int64    // total amount of checked data in bytes
+	Deleted      int64    // the number of deleted files
+	Skipped      int64    // the number of files skipped
+	SkippedBytes int64    // total amount of skipped data in bytes
+	Failed       int64    // the number of files that fail to copy
+	DelayDelDir  []string // the directories that need to be deleted
 }
 
 func updateStats(r *Stat) {
@@ -98,6 +101,10 @@ func sendStats(addr string) {
 	r.SkippedBytes = skippedBytes.Current()
 	r.Copied = copied.Current()
 	r.CopiedBytes = copiedBytes.Current()
+	srcDelayDelMu.Lock()
+	r.DelayDelDir = srcDelayDel
+	srcDelayDel = make([]string, 0)
+	srcDelayDelMu.Unlock()
 	if checked != nil {
 		r.Checked = checked.Current()
 		r.CheckedBytes = checkedBytes.Current()
@@ -111,6 +118,9 @@ func sendStats(addr string) {
 	d, _ := json.Marshal(r)
 	ans, err := httpRequest(fmt.Sprintf("http://%s/stats", addr), d)
 	if err != nil || string(ans) != "OK" {
+		srcDelayDelMu.Lock()
+		srcDelayDel = append(srcDelayDel, r.DelayDelDir...)
+		srcDelayDelMu.Unlock()
 		if errors.Is(err, syscall.ECONNREFUSED) {
 			logger.Errorf("the management process has been stopped, so the worker process now exits")
 			os.Exit(1)
@@ -183,27 +193,32 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 			return
 		}
 		updateStats(&r)
+		srcDelayDelMu.Lock()
+		srcDelayDel = append(srcDelayDel, r.DelayDelDir...)
+		srcDelayDelMu.Unlock()
 		logger.Debugf("receive stats %+v from %s", r, req.RemoteAddr)
 		_, _ = w.Write([]byte("OK"))
 	})
 	var addr string
+	u, err := url.Parse("ssh://" + config.Workers[0])
+	if err != nil {
+		return "", fmt.Errorf("invalid worker address %s: %s", config.Workers[0], err)
+	}
 	if config.ManagerAddr != "" {
 		addr = config.ManagerAddr
-	} else {
-		ips, err := utils.FindLocalIPs()
-		if err != nil {
-			return "", fmt.Errorf("find local ips: %s", err)
-		}
-		var ip string
-		for _, i := range ips {
-			if i = i.To4(); i != nil {
-				ip = i.String()
-				break
+		if strings.HasPrefix(addr, ":") || strings.Contains(addr, "0.0.0.0") {
+			ip, err := utils.GetLocalIp(net.JoinHostPort(u.Host, "22"))
+			if err != nil {
+				return "", fmt.Errorf("get local ip: %s", err)
 			}
+			addr = ip + addr
 		}
-		if ip == "" {
-			return "", fmt.Errorf("no local ip found")
+	} else {
+		ip, err := utils.GetLocalIp(net.JoinHostPort(u.Host, "22"))
+		if err != nil {
+			return "", fmt.Errorf("not found local ip: %s", err)
 		}
+		logger.Debugf("Use local ip %s", ip)
 		addr = ip
 	}
 
@@ -253,12 +268,14 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 				return
 			}
 			rpath := filepath.Join("/tmp", filepath.Base(path))
-			cmd := exec.Command("rsync", "-au", path, host+":"+rpath)
-			err = cmd.Run()
+			cmd := exec.Command("rsync", "-a", "-e", "ssh -o StrictHostKeyChecking=no", "-e", "ssh -o PasswordAuthentication=no", path, host+":"+rpath)
+			output, err := cmd.CombinedOutput()
+			logger.Debugf("exec: %s,err: %s", cmd.String(), string(output))
 			if err != nil {
 				// fallback to scp
-				cmd = exec.Command("scp", path, host+":"+rpath)
-				err = cmd.Run()
+				cmd = exec.Command("scp", "-o", "StrictHostKeyChecking=no", "-o", "PasswordAuthentication=no", path, host+":"+rpath)
+				output, err = cmd.CombinedOutput()
+				logger.Debugf("exec: %s,err: %s", cmd.String(), string(output))
 			}
 			if err != nil {
 				logger.Errorf("copy itself to %s: %s", host, err)
@@ -304,17 +321,41 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 				return
 			}
 			logger.Infof("launch a worker on %s", host)
+			var finished = make(chan struct{})
+			var logRe = regexp.MustCompile(`^.*<([A-Z]+)>: (.*)`)
 			go func() {
 				r := bufio.NewReader(stderr)
 				for {
 					line, err := r.ReadString('\n')
 					if err != nil || len(line) == 0 {
+						finished <- struct{}{}
 						return
 					}
-					println(host, line[:len(line)-1])
+					line = strings.TrimSuffix(line, "\n")
+
+					var level, content string
+					if matches := logRe.FindStringSubmatch(line); len(matches) >= 3 {
+						level = matches[1]
+						content = matches[2]
+					} else {
+						level = "INFO"
+						content = line
+					}
+
+					switch level {
+					case "ERROR":
+						logger.Errorf("[%s] %s", host, content)
+					case "WARNING":
+						logger.Warnf("[%s] %s", host, content)
+					case "DEBUG":
+						logger.Debugf("[%s] %s", host, content)
+					default:
+						logger.Infof("[%s] %s", host, content)
+					}
 				}
 			}()
 			err = cmd.Wait()
+			<-finished
 			if err != nil {
 				logger.Errorf("%s: %s", host, err)
 			}
@@ -325,7 +366,13 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 func marshalObjects(objs []object.Object) ([]byte, error) {
 	var arr []map[string]interface{}
 	for _, o := range objs {
-		arr = append(arr, object.MarshalObject(o))
+		nsize := o.Size()
+		o = withoutSize(o)
+		obj := object.MarshalObject(o)
+		if nsize != o.Size() {
+			obj["nsize"] = nsize
+		}
+		arr = append(arr, obj)
 	}
 	return json.MarshalIndent(arr, "", " ")
 }
@@ -338,7 +385,11 @@ func unmarshalObjects(d []byte) ([]object.Object, error) {
 	}
 	var objs []object.Object
 	for _, m := range arr {
-		objs = append(objs, object.UnmarshalObject(m))
+		obj := object.UnmarshalObject(m)
+		if nsize, ok := m["nsize"]; ok {
+			obj = withSize(obj, int64(nsize.(float64)))
+		}
+		objs = append(objs, obj)
 	}
 	return objs, nil
 }
@@ -361,6 +412,7 @@ func fetchJobs(tasks chan<- object.Object, config *Config) {
 		}
 		logger.Debugf("got %d jobs", len(jobs))
 		if len(jobs) == 0 {
+			logger.Infof("no more jobs")
 			break
 		}
 		for _, obj := range jobs {

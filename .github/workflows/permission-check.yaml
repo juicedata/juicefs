@@ -8,6 +8,8 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
+      - '**.java'
+      - '**/pom.xml'
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
@@ -17,6 +19,8 @@ on:
       - 'docs/**'
       - '**.md'
       - '.github/**'
+      - '**.java'
+      - '**/pom.xml'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:
@@ -35,7 +39,7 @@ jobs:
       matrix:
         meta: [ 'sqlite3', 'redis', 'badger' ]
     
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: shogo82148/actions-setup-perl@v1
         with:

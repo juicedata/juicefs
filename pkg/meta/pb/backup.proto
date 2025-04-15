@@ -1,0 +1,118 @@
+syntax = "proto3";
+package pb;
+option go_package = "./pb";
+
+/*
+1. install protocol buffer compiler
+2. install Go protoc plugin (protoc-gen-go)
+3. exec: protoc --go_out=pkg/meta pkg/meta/pb/backup.proto in main directory
+*/
+
+message Format {
+  bytes data = 1; // meta.Format's json format
+}
+
+message Counter {
+  string key = 1;
+  int64 value = 2;
+}
+
+message Sustained {
+  uint64 sid = 1;
+  repeated uint64 inodes = 2;
+}
+
+message DelFile {
+  uint64 inode = 1;
+  uint64 length = 2;
+  int64 expire = 3;
+}
+
+message SliceRef {
+  uint64 id   = 1;
+  uint32 size = 2;
+  int64 refs  = 3;
+}
+
+message Acl {
+  uint32 id = 1;
+  bytes data = 2; // acl.Rule's binary format
+}
+
+message Xattr {
+  uint64 inode = 1;
+  string name = 2;
+  bytes value = 3;
+}
+
+message Quota {
+  uint64 inode = 1;
+  int64 maxSpace = 2;
+  int64 maxInodes = 3;
+  int64 usedSpace = 4;
+  int64 usedInodes = 5;
+}
+
+message Stat {
+  uint64 inode = 1;
+  int64 dataLength = 2;
+  int64 usedSpace = 3;
+  int64 usedInodes = 4;
+}
+
+message Node {
+  uint64 inode = 1;
+  bytes data = 2; // meta.Attr's binary format
+}
+
+message Edge {
+  uint64 parent = 1;
+  uint64 inode = 2;
+  bytes name = 3;
+  uint32 type = 4;
+}
+
+// for redis and tikv only
+message Parent {
+  uint64 inode = 1;
+  uint64 parent = 2 ;
+  int64 cnt = 3;
+}
+
+message Chunk {
+  uint64 inode = 1;
+  uint32 index = 2;
+  bytes slices = 3; // array of meta.slice
+}
+
+message Symlink {
+  uint64 inode = 1;
+  bytes target = 2;
+}
+
+message Batch {
+  repeated Node nodes = 1;
+  repeated Edge edges = 2;
+  repeated Chunk chunks = 3;
+  repeated SliceRef sliceRefs = 4;
+  repeated Xattr xattrs = 5;
+  repeated Parent parents = 6;
+  repeated Symlink symlinks = 7;
+  repeated Sustained sustained = 8;
+  repeated DelFile delfiles = 9;
+  repeated Stat dirstats = 10;
+  repeated Quota quotas = 11;
+  repeated Acl acls = 12;
+  repeated Counter counters = 13;
+}
+
+message Footer {
+  message SegInfo {
+    repeated uint64 offset = 1;
+    uint64 num = 2;
+  }
+
+  uint32 magic = 1;
+  uint32 version = 2;
+  map<string, SegInfo> infos = 3;
+}

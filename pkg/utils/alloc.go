@@ -18,6 +18,7 @@ package utils
 
 import (
 	"fmt"
+	"math/bits"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -28,12 +29,18 @@ var used int64
 
 // Alloc returns size bytes memory from Go heap.
 func Alloc(size int) []byte {
-	zeros := powerOf2(size)
+	b := Alloc0(size)
+	atomic.AddInt64(&used, int64(cap(b)))
+	return b
+}
+
+// Alloc returns size bytes memory from Go heap.
+func Alloc0(size int) []byte {
+	zeros := PowerOf2(size)
 	b := *pools[zeros].Get().(*[]byte)
 	if cap(b) < size {
 		panic(fmt.Sprintf("%d < %d", cap(b), size))
 	}
-	atomic.AddInt64(&used, int64(cap(b)))
 	return b[:size]
 }
 
@@ -41,7 +48,13 @@ func Alloc(size int) []byte {
 func Free(b []byte) {
 	// buf could be zero length
 	atomic.AddInt64(&used, -int64(cap(b)))
-	pools[powerOf2(cap(b))].Put(&b)
+	Free0(b)
+}
+
+// Free returns memory to Go heap.
+func Free0(b []byte) {
+	// buf could be zero length
+	pools[PowerOf2(cap(b))].Put(&b)
 }
 
 // AllocMemory returns the allocated memory
@@ -51,19 +64,18 @@ func AllocMemory() int64 {
 
 var pools []*sync.Pool
 
-func powerOf2(s int) int {
-	var bits int
-	var p int = 1
-	for p < s {
-		bits++
-		p *= 2
+// PowerOf2 returns the smallest power of 2 that is >= s
+func PowerOf2(s int) int {
+	if s <= 0 {
+		return 0
 	}
-	return bits
+	// Find position of the most significant bit (MSB)
+	return bits.Len(uint(s - 1))
 }
 
 func init() {
-	pools = make([]*sync.Pool, 33) // 1 - 8G
-	for i := 0; i < 33; i++ {
+	pools = make([]*sync.Pool, 34) // 1 - 8G
+	for i := 0; i < 34; i++ {
 		func(bits int) {
 			pools[i] = &sync.Pool{
 				New: func() interface{} {

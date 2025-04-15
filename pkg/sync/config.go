@@ -35,6 +35,7 @@ type Config struct {
 	Update         bool
 	ForceUpdate    bool
 	Perms          bool
+	MaxFailure     int64
 	Dry            bool
 	DeleteSrc      bool
 	DeleteDst      bool
@@ -63,6 +64,8 @@ type Config struct {
 	MaxAge         time.Duration
 	MinAge         time.Duration
 	Env            map[string]string
+
+	FilesFrom string
 
 	rules          []rule
 	concurrentList chan int
@@ -102,8 +105,13 @@ func envList() []string {
 		"HADOOP_USER_NAME",
 		"HADOOP_SUPER_USER",
 		"HADOOP_SUPER_GROUP",
+		"HADOOP_CONF_DIR",
+		"HADOOP_HOME",
 		"KRB5_CONFIG",
 		"KRB5CCNAME",
+		"KRB5KEYTAB",
+		"KRB5KEYTAB_BASE64",
+		"KRB5PRINCIPAL",
 
 		"AWS_REGION",
 		"AWS_DEFAULT_REGION",
@@ -116,6 +124,9 @@ func envList() []string {
 		"ALICLOUD_ACCESS_KEY_ID",
 		"ALICLOUD_ACCESS_KEY_SECRET",
 		"SECURITY_TOKEN",
+
+		"CEPH_ADMIN_SOCKET",
+		"CEPH_LOG_FILE",
 
 		"QINIU_DOMAIN",
 
@@ -151,6 +162,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Perms:          c.Bool("perms"),
 		Dirs:           c.Bool("dirs"),
 		Dry:            c.Bool("dry"),
+		MaxFailure:     c.Int64("max-failure"),
 		DeleteSrc:      c.Bool("delete-src"),
 		DeleteDst:      c.Bool("delete-dst"),
 		Exclude:        c.StringSlice("exclude"),
@@ -174,6 +186,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		MinSize:        int64(utils.ParseBytes(c, "min-size", 'B')),
 		MaxAge:         utils.Duration(c.String("max-age")),
 		MinAge:         utils.Duration(c.String("min-age")),
+		FilesFrom:      c.String("files-from"),
 		Env:            make(map[string]string),
 	}
 	if !c.IsSet("max-size") {

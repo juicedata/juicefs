@@ -132,9 +132,7 @@ There is no need to specify extra options while mounting an encrypted file syste
 2. Mount file system
 
     ```shell
-    juicefs format --storage s3 \
-    --encrypt-rsa-key my-priv-key.pem \
-    ...
+    juicefs mount redis://127.0.0.1:6379/1 /mnt/myjfs
     ```
 
 When creating a new volume using `juicefs format`, static encryption can be enabled by specifying the RSA private key with the `-encrypt-rsa-key` parameter, which will be saved on the Metadata service. When the private key is password-protected, the password must be specified using the environment variable `JFS_RSA_PASSPHRASE`.

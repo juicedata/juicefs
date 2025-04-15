@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -142,7 +143,7 @@ END:
 }
 
 // send fill-cache command to controller file
-func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads uint, background bool, dspin *utils.DoubleSpinner) vfs.CacheResponse {
+func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads uint, background bool, dspin *utils.DoubleSpinner) *vfs.CacheResponse {
 	paths := strings.Join(batch, "\n")
 	var back uint8
 	if background {
@@ -163,7 +164,7 @@ func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads ui
 		logger.Fatalf("Write message: %s", err)
 	}
 
-	var resp vfs.CacheResponse
+	resp := &vfs.CacheResponse{}
 	if background {
 		logger.Infof("%s for %d paths in background", action, len(batch))
 		return resp
@@ -178,7 +179,7 @@ func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads ui
 		logger.Fatalf("%s failed: %s", action, errno)
 	}
 
-	err := json.Unmarshal(data, &resp)
+	err := json.Unmarshal(data, resp)
 	if err != nil {
 		logger.Fatalf("unmarshal error: %s", err)
 	}
@@ -264,7 +265,7 @@ func warmup(ctx *cli.Context) error {
 	batch := make([]string, 0, batchMax)
 	progress := utils.NewProgress(background)
 	dspin := progress.AddDoubleSpinnerTwo(fmt.Sprintf("%s file", action), fmt.Sprintf("%s size", action))
-	total := &vfs.CacheResponse{}
+	total := &vfs.CacheResponse{Locations: make(map[string]uint64)}
 	for _, path := range paths {
 		if mp == "/" {
 			inode, err := utils.GetFileInode(path)
@@ -282,7 +283,7 @@ func warmup(ctx *cli.Context) error {
 		if len(batch) >= batchMax {
 			resp := sendCommand(controller, action, batch, threads, background, dspin)
 			total.Add(resp)
-			batch = batch[0:]
+			batch = batch[:0]
 		}
 	}
 	if len(batch) > 0 {
@@ -299,7 +300,22 @@ func warmup(ctx *cli.Context) error {
 		case vfs.EvictCache:
 			logger.Infof("%s: %d files (%s bytes)", action, count, humanize.IBytes(uint64(bytes)))
 		case vfs.CheckCache:
-			logger.Infof("%s: %d files (%s of %s (%2.1f%%)) cached", action, count,
+			if len(total.Locations) > 0 {
+				var result = [][]string{
+					{"Location", "Size", "Percentage"},
+				}
+				var locs []string
+				for loc := range total.Locations {
+					locs = append(locs, loc)
+				}
+				sort.Strings(locs)
+				for _, loc := range locs {
+					size := total.Locations[loc]
+					result = append(result, []string{loc, humanize.IBytes(size), fmt.Sprintf("%.1f%%", float64(size)*100/float64(bytes))})
+				}
+				printResult(result, 0, false)
+			}
+			logger.Infof("%s: %d files checked, %s of %s (%2.1f%%) cached", action, count,
 				humanize.IBytes(uint64(bytes)-total.MissBytes),
 				humanize.IBytes(uint64(bytes)),
 				float64(uint64(bytes)-total.MissBytes)*100/float64(bytes))

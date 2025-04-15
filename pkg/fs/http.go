@@ -125,7 +125,7 @@ func (hfs *webdavFS) OpenFile(ctx context.Context, name string, flag int, perm o
 }
 
 func (hfs *webdavFS) RemoveAll(ctx context.Context, name string) error {
-	return econv(hfs.fs.Rmr(hfs.ctx, name))
+	return econv(hfs.fs.Rmr(hfs.ctx, name, hfs.config.MaxDeletes))
 }
 
 func (hfs *webdavFS) Rename(ctx context.Context, oldName, newName string) error {
@@ -216,22 +216,22 @@ func (f *davFile) Patch(patches []webdav.Proppatch) ([]webdav.Propstat, error) {
 }
 
 func (f *davFile) Seek(offset int64, whence int) (int64, error) {
-	n, err := f.File.Seek(meta.Background, offset, whence)
+	n, err := f.File.Seek(meta.Background(), offset, whence)
 	return n, econv(err)
 }
 
 func (f *davFile) Read(b []byte) (n int, err error) {
-	n, err = f.File.Read(meta.Background, b)
+	n, err = f.File.Read(meta.Background(), b)
 	return n, econv(err)
 }
 
 func (f *davFile) Write(buf []byte) (n int, err error) {
-	n, err = f.File.Write(meta.Background, buf)
+	n, err = f.File.Write(meta.Background(), buf)
 	return n, econv(err)
 }
 
 func (f *davFile) Readdir(count int) (fi []os.FileInfo, err error) {
-	fi, err = f.File.Readdir(meta.Background, count)
+	fi, err = f.File.Readdir(meta.Background(), count)
 	// skip the first two (. and ..)
 	for len(fi) > 0 && (fi[0].Name() == "." || fi[0].Name() == "..") {
 		fi = fi[1:]
@@ -240,7 +240,7 @@ func (f *davFile) Readdir(count int) (fi []os.FileInfo, err error) {
 }
 
 func (f *davFile) Close() error {
-	return econv(f.File.Close(meta.Background))
+	return econv(f.File.Close(meta.Background()))
 }
 
 type WebdavConfig struct {
@@ -252,6 +252,7 @@ type WebdavConfig struct {
 	Password        string
 	CertFile        string
 	KeyFile         string
+	MaxDeletes	int
 }
 
 type indexHandler struct {

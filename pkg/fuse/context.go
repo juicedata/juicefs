@@ -68,6 +68,11 @@ func (fs *fileSystem) newContext(cancel <-chan struct{}, header *fuse.InHeader) 
 		ctx.header.Uid = fs.conf.RootSquash.Uid
 		ctx.header.Gid = fs.conf.RootSquash.Gid
 	}
+	if fs.conf.AllSquash != nil {
+		ctx.checkPermission = true
+		ctx.header.Uid = fs.conf.AllSquash.Uid
+		ctx.header.Gid = fs.conf.AllSquash.Gid
+	}
 	return ctx
 }
 
@@ -121,8 +126,10 @@ func (c *fuseContext) Canceled() bool {
 	}
 }
 
-func (c *fuseContext) WithValue(k, v interface{}) {
-	c.Context = context.WithValue(c.Context, k, v)
+func (c *fuseContext) WithValue(k, v interface{}) meta.Context {
+	wc := *c // gids is a const, so it's safe to shallow copy
+	wc.Context = context.WithValue(c.Context, k, v)
+	return &wc
 }
 
 func (c *fuseContext) Err() error {

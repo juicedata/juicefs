@@ -19,6 +19,8 @@ import com.google.common.collect.Lists;
 import com.kenai.jffi.internal.StubLoader;
 import io.juicefs.exception.QuotaExceededException;
 import io.juicefs.metrics.JuiceFSInstrumentation;
+import io.juicefs.permission.RangerConfig;
+import io.juicefs.permission.RangerPermissionChecker;
 import io.juicefs.utils.*;
 import jnr.ffi.LibraryLoader;
 import jnr.ffi.Memory;
@@ -58,6 +60,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
@@ -89,22 +92,32 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   private Path workingDir;
   private String name;
+  private String user;
+  private String superuser;
+  private String supergroup;
   private URI uri;
   private long blocksize;
   private int minBufferSize;
   private int cacheReplica;
   private boolean fileChecksumEnabled;
+  private final boolean isSuperGroupFileSystem;
+  private boolean isBackGroundTask = false;
+
+  private JuiceFileSystemImpl superGroupFileSystem;
+  private RangerPermissionChecker rangerPermissionChecker;
   private static Libjfs lib = loadLibrary();
 
   private long handle;
   private UserGroupInformation ugi;
   private String homeDirPrefix = "/user";
-  private Map<String, String> cachedHosts = new HashMap<>(); // (ip, hostname)
-  private ConsistentHash<String> hash = new ConsistentHash<>(1, Collections.singletonList("localhost"));
+  private String discoverNodesUrl;
+  private static final Map<String, Map<String, String>> cachedHostsForName = new ConcurrentHashMap<>(); // (name -> (ip -> hostname))
+  private static final Map<String, ConsistentHash<String>> hashForName = new ConcurrentHashMap<>(); // (name -> consistentHash)
+  private static final Map<String, FileStatus> lastFileStatus = new ConcurrentHashMap<>();
+
   private FsPermission uMask;
   private String hflushMethod;
 
-  private Map<String, FileStatus> lastFileStatus = new HashMap<>();
   private static final DirectBufferPool directBufferPool = new DirectBufferPool();
 
   private boolean metricsEnable = false;
@@ -132,7 +145,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   public static interface Libjfs {
     long jfs_init(String name, String jsonConf, String user, String group, String superuser, String supergroup);
 
-    void jfs_update_uid_grouping(long h, String uidstr, String grouping);
+    void jfs_update_uid_grouping(String name, String uidstr, String grouping);
 
     int jfs_term(long pid, long h);
 
@@ -193,6 +206,8 @@ public class JuiceFileSystemImpl extends FileSystem {
     int jfs_getfacl(long pid, long h, String path, int acltype, Pointer b, int len);
 
     int jfs_setfacl(long pid, long h, String path, int acltype, Pointer b, int len);
+
+    String jfs_getGroups(String volName, String user);
 
     void jfs_set_callback(LogCallBack callBack);
 
@@ -270,7 +285,6 @@ public class JuiceFileSystemImpl extends FileSystem {
       return new FileNotFoundException(pStr+ ": not found");
     } else if (errno == EACCESS) {
       try {
-        String user = ugi.getShortUserName();
         FileStatus stat = getFileStatusInternalNoException(p);
         if (stat != null) {
           FsPermission perm = stat.getPermission();
@@ -305,6 +319,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   public JuiceFileSystemImpl() {
+    this.isSuperGroupFileSystem = false;
   }
 
   @Override
@@ -316,6 +331,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     return makeQualified(path).toUri().getPath();
   }
 
+  @Override
   public String getScheme() {
     return uri.getScheme();
   }
@@ -357,15 +373,17 @@ public class JuiceFileSystemImpl extends FileSystem {
     fileChecksumEnabled = Boolean.parseBoolean(getConf(conf, "file.checksum", "false"));
 
     this.ugi = UserGroupInformation.getCurrentUser();
-    String user = ugi.getShortUserName();
-    String group = "nogroup";
-    String groupingFile = getConf(conf, "groups", null);
-    if (isEmpty(groupingFile) && ugi.getGroupNames().length > 0) {
-      group = String.join(",", ugi.getGroupNames());
+    user = ugi.getShortUserName();
+    String groupStr = "nogroup";
+    if (ugi.getGroupNames().length > 0) {
+      groupStr = String.join(",", ugi.getGroupNames());
     }
-    String superuser = getConf(conf, "superuser", "hdfs");
-    String supergroup = getConf(conf, "supergroup", conf.get("dfs.permissions.superusergroup", "supergroup"));
-    String mountpoint = getConf(conf, "mountpoint", "");
+    superuser = getConf(conf, "superuser", "hdfs");
+    supergroup = getConf(conf, "supergroup", conf.get("dfs.permissions.superusergroup", "supergroup"));
+    isBackGroundTask = conf.getBoolean("juicefs.internal-bg-task", false);
+    if (isSuperGroupFileSystem || isBackGroundTask) {
+      groupStr = supergroup;
+    }
 
     synchronized (JuiceFileSystemImpl.class) {
       if (callBack == null) {
@@ -390,6 +408,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("noBGJob", Boolean.valueOf(getConf(conf, "no-bgjob", "false")));
     obj.put("cacheDir", getConf(conf, "cache-dir", "memory"));
     obj.put("cacheSize", getConf(conf, "cache-size", "100"));
+    obj.put("cacheItems", Integer.valueOf(getConf(conf, "cache-items", "0")));
     obj.put("openCache", getConf(conf, "open-cache", "0.0"));
     obj.put("backupMeta", getConf(conf, "backup-meta", "3600"));
     obj.put("backupSkipTrash", Boolean.valueOf(getConf(conf, "backup-skip-trash", "false")));
@@ -425,14 +444,16 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("freeSpace", getConf(conf, "free-space", "0.1"));
     obj.put("accessLog", getConf(conf, "access-log", ""));
     String jsonConf = obj.toString(2);
-    handle = lib.jfs_init(name, jsonConf, user, group, superuser, supergroup);
+    handle = lib.jfs_init(name, jsonConf, user, groupStr, superuser, supergroup);
     if (handle <= 0) {
       throw new IOException("JuiceFS initialized failed for jfs://" + name);
     }
-
-    initCache(conf);
-    refreshCache(conf);
-
+    if (isBackGroundTask) {
+      LOG.debug("background fs {}|({})", name, handle);
+    } else {
+      BgTaskUtil.register(name, handle);
+    }
+    discoverNodesUrl = getConf(conf, "discover-nodes-url", null);
     homeDirPrefix = conf.get("dfs.user.home.dir.prefix", "/user");
     this.workingDir = getHomeDirectory();
 
@@ -463,11 +484,12 @@ public class JuiceFileSystemImpl extends FileSystem {
       }
     }
 
-    uMask = FsPermission.getUMask(conf);
     String umaskStr = getConf(conf, "umask", null);
     if (!isEmpty(umaskStr)) {
-      uMask = new FsPermission(umaskStr);
+      conf.set("fs.permissions.umask-mode", umaskStr);
+      LOG.debug("override fs.permissions.umask-mode to {}", umaskStr);
     }
+    uMask = FsPermission.getUMask(conf);
 
     hflushMethod = getConf(conf, "hflush", "writeback");
     initializeStorageIds(conf);
@@ -477,11 +499,85 @@ public class JuiceFileSystemImpl extends FileSystem {
       JuiceFSInstrumentation.init(this, statistics);
     }
 
-    String uidFile = getConf(conf, "users", null);
-    if (!isEmpty(uidFile) || !isEmpty(groupingFile)) {
-      updateUidAndGrouping(uidFile, groupingFile);
-      refreshUidAndGrouping(uidFile, groupingFile);
+
+    String rangerRestUrl = getConf(conf, "ranger-rest-url", null);
+    if (!isEmpty(rangerRestUrl) && !isSuperGroupFileSystem && !isBackGroundTask) {
+        RangerConfig rangerConfig = checkAndGetRangerParams(rangerRestUrl, conf);
+        Configuration superConf = new Configuration(conf);
+        superConf.set("juicefs.internal-bg-task", "true");
+        superGroupFileSystem = new JuiceFileSystemImpl(true);
+        superGroupFileSystem.initialize(uri, superConf);
+        rangerPermissionChecker = RangerPermissionChecker.acquire(name, handle, superGroupFileSystem, rangerConfig);
     }
+
+    if (!isBackGroundTask && !isSuperGroupFileSystem) {
+      // use juicefs.users and juicefs.groups for global mapping
+      String uidFile = getConf(conf, "users", null);
+      String groupFile = getConf(conf, "groups", null);
+      if (!isEmpty(uidFile) || !isEmpty(groupFile)) {
+        BgTaskUtil.putTask(name, "Refresh guid", () -> {
+          updateUidAndGrouping(uidFile, groupFile);
+        }, 1, 1, TimeUnit.MINUTES);
+      }
+    }
+  }
+
+  private RangerConfig checkAndGetRangerParams(String rangerRestUrl, Configuration conf) throws IOException {
+    if (!rangerRestUrl.startsWith("http")) {
+      throw new IOException("illegal value for parameter 'juicefs.ranger-rest-url': " + rangerRestUrl);
+    }
+
+    String serviceName = getConf(conf, "ranger-service-name", "");
+    if (serviceName.isEmpty()) {
+      throw new IOException("illegal value for parameter 'juicefs.ranger-service-name': " + serviceName);
+    }
+
+    String pollIntervalMs = getConf(conf, "ranger-poll-interval-ms", "30000");
+
+    return new RangerConfig(rangerRestUrl, serviceName, Long.parseLong(pollIntervalMs));
+  }
+
+  private JuiceFileSystemImpl(boolean isSuperGroupFileSystem) {
+    this.isSuperGroupFileSystem = isSuperGroupFileSystem;
+  }
+
+  private Set<String> getGroups() {
+    String groupsFile = getConf(getConf(), "groups", null);
+    if (isEmpty(groupsFile)) {
+      return new HashSet<>(ugi.getGroups());
+    }
+    String gStr = lib.jfs_getGroups(name, user);
+    Set<String> res;
+    if (!isEmpty(gStr)) {
+      res = new HashSet<>(Arrays.asList(gStr.split(","))) ;
+    } else {
+      res = new HashSet<>(ugi.getGroups());
+    }
+    return res;
+  }
+
+  private boolean hasSuperPermission() {
+    return user.equals(superuser) || getGroups().contains(supergroup);
+  }
+
+  private boolean needCheckPermission() {
+    return rangerPermissionChecker != null && !isSuperGroupFileSystem && !isBackGroundTask && !hasSuperPermission() ;
+  }
+
+  private boolean checkPathAccess(Path path, FsAction action, String operation) throws IOException {
+    return rangerPermissionChecker.checkPermission(path, false, null, null, action, operation, user, getGroups());
+  }
+
+  private boolean checkParentPathAccess(Path path, FsAction action, String operation) throws IOException {
+    return rangerPermissionChecker.checkPermission(path, false, null, action, null, operation, user, getGroups());
+  }
+
+  private boolean checkAncestorAccess(Path path, FsAction action, String operation) throws IOException {
+    return rangerPermissionChecker.checkPermission(path, false, action, null, null, operation, user, getGroups());
+  }
+
+  private boolean checkOwner(Path path, String operation) throws IOException {
+    return rangerPermissionChecker.checkPermission(path, true, null, null, null, operation, user, getGroups());
   }
 
   private boolean isEmpty(String str) {
@@ -490,38 +586,20 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   private String readFile(String file) throws IOException {
     Path path = new Path(file);
-    URI uri = path.toUri();
-    FileSystem fs;
-    try {
-      URI defaultUri = getDefaultUri(getConf());
-      if (uri.getScheme() == null) {
-        uri = defaultUri;
-      } else {
-        if (uri.getAuthority() == null && (uri.getScheme().equals(defaultUri.getScheme()))) {
-          uri = defaultUri;
-        }
-      }
-      if (getScheme().equals(uri.getScheme()) &&
-              (name != null && name.equals(uri.getAuthority()))) {
-        fs = this;
-      } else {
-        fs = path.getFileSystem(getConf());
-      }
-
-      FileStatus lastStatus = lastFileStatus.get(file);
+    FileStatus lastStatus = lastFileStatus.get(file);
+    Configuration newConf = new Configuration(getConf());
+    newConf.setBoolean("juicefs.internal-bg-task", true);
+    try (FileSystem fs = FileSystem.newInstance(path.toUri(), newConf)) {
       FileStatus status = fs.getFileStatus(path);
       if (lastStatus != null && status.getModificationTime() == lastStatus.getModificationTime()
-              && status.getLen() == lastStatus.getLen()) {
+          && status.getLen() == lastStatus.getLen()) {
         return null;
       }
-      FSDataInputStream in = fs.open(path);
-      String res = new BufferedReader(new InputStreamReader(in)).lines().collect(Collectors.joining("\n"));
-      in.close();
-      lastFileStatus.put(file, status);
-      return res;
-    } catch (IOException e) {
-      LOG.warn(String.format("read %s failed", file), e);
-      throw e;
+      try (FSDataInputStream in = fs.open(path)) {
+        String res = new BufferedReader(new InputStreamReader(in)).lines().collect(Collectors.joining("\n"));
+        lastFileStatus.put(file, status);
+        return res;
+      }
     }
   }
 
@@ -551,13 +629,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       grouping = readFile(groupFile);
     }
 
-    lib.jfs_update_uid_grouping(handle, uidstr, grouping);
-  }
-
-  private void refreshUidAndGrouping(String uidFile, String groupFile) {
-    BgTaskUtil.startScheduleTask(name, "Refresh guid", () -> {
-      updateUidAndGrouping(uidFile, groupFile);
-    }, 1, 1, TimeUnit.MINUTES);
+    lib.jfs_update_uid_grouping(name, uidstr, grouping);
   }
 
   private void initializeStorageIds(Configuration conf) throws IOException {
@@ -579,7 +651,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public Path getHomeDirectory() {
-    return makeQualified(new Path(homeDirPrefix + "/" + ugi.getShortUserName()));
+    return makeQualified(new Path(homeDirPrefix + "/" + user));
   }
 
   private static void initStubLoader() {
@@ -734,42 +806,35 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
   }
 
-  private void initCache(Configuration conf) {
+  private void initCache() {
     try {
-      String urls = getConf(conf, "discover-nodes-url", null);
-      if (urls != null) {
-        List<String> newNodes = discoverNodes(urls);
-        Map<String, String> newCachedHosts = new HashMap<>();
-        for (String newNode : newNodes) {
-          try {
-            newCachedHosts.put(InetAddress.getByName(newNode).getHostAddress(), newNode);
-          } catch (UnknownHostException e) {
-            LOG.warn("unknown host: " + newNode);
-          }
+      List<String> newNodes = discoverNodes(discoverNodesUrl);
+      Map<String, String> newCachedHosts = new HashMap<>();
+      for (String newNode : newNodes) {
+        try {
+          newCachedHosts.put(InetAddress.getByName(newNode).getHostAddress(), newNode);
+        } catch (UnknownHostException e) {
+          LOG.warn("unknown host: " + newNode);
         }
+      }
 
-        // if newCachedHosts are not changed, skip
-        if (!newCachedHosts.equals(cachedHosts)) {
-          List<String> ips = new ArrayList<>(newCachedHosts.keySet());
-          LOG.debug("update nodes to: " + String.join(",", ips));
-          this.hash = new ConsistentHash<>(100, ips);
-          this.cachedHosts = newCachedHosts;
-        }
+      // if newCachedHosts are not changed, skip
+      if (!newCachedHosts.equals(cachedHostsForName.get(name))) {
+        List<String> ips = new ArrayList<>(newCachedHosts.keySet());
+        LOG.debug("update nodes to: " + String.join(",", ips));
+        hashForName.put(name, new ConsistentHash<>(100, ips));
+        cachedHostsForName.put(name, newCachedHosts);
       }
     } catch (Throwable e) {
       LOG.warn("failed to discover nodes", e);
     }
   }
 
-  private void refreshCache(Configuration conf) {
-    BgTaskUtil.startScheduleTask(name, "Node fetcher", ()  -> {
-      initCache(conf);
-    }, 10, 10, TimeUnit.MINUTES);
-  }
-
   private List<String> discoverNodes(String urls) {
     LOG.debug("fetching nodes from {}", urls);
-    NodesFetcher fetcher = NodesFetcherBuilder.buildFetcher(urls, name, this);
+    Configuration newConf = new Configuration(getConf());
+    newConf.setBoolean("juicefs.internal-bg-task", true);
+    NodesFetcher fetcher = NodesFetcherBuilder.buildFetcher(urls, name, newConf);
     List<String> fetched = fetcher.fetchNodes(urls);
     if (fetched == null) {
       fetched = new ArrayList<>();
@@ -783,11 +848,14 @@ public class JuiceFileSystemImpl extends FileSystem {
     BlockLocation blockLocation;
     String[] ns = new String[cacheReplica];
     String[] hs = new String[cacheReplica];
-    String host = cachedHosts.getOrDefault(hash.get(code + "-" + index), "localhost");
-    ns[0] = host + ":50010";
-    hs[0] = host;
-    for (int i = 1; i < cacheReplica; i++) {
-      String h = hash.get(code + "-" + (index + i));
+
+    Map<String, String> cachedHosts = cachedHostsForName.get(name);
+    ConsistentHash<String> hash = hashForName.get(name);
+    for (int i = 0; i < cacheReplica; i++) {
+      String h = "localhost";
+      if (cachedHosts != null && hash != null) {
+        h = cachedHosts.getOrDefault(hash.get(code + "-" + (index + i)), "localhost");
+      }
       ns[i] = h + ":50010";
       hs[i] = h;
     }
@@ -810,10 +878,36 @@ public class JuiceFileSystemImpl extends FileSystem {
     return res;
   }
 
+  private void setStorageId(BlockLocation bl) {
+    if (setStorageIds != null) {
+      try {
+        setStorageIds.invoke(bl, (Object) getStorageIds());
+      } catch (IllegalAccessException | InvocationTargetException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  @Override
   public BlockLocation[] getFileBlockLocations(FileStatus file, long start, long len) throws IOException {
+    if (needCheckPermission() && !checkPathAccess(file.getPath(), FsAction.READ, "getFileBlockLocations")) {
+      return superGroupFileSystem.getFileBlockLocations(file, start, len);
+    }
+
+    if (isEmpty(discoverNodesUrl) || cacheReplica <= 0) {
+      BlockLocation[] bls = super.getFileBlockLocations(file, start, len);
+      if (bls != null) {
+        for (BlockLocation bl : bls) {
+          setStorageId(bl);
+        }
+      }
+      return bls;
+    }
+
     if (file == null) {
       return null;
     }
+
     if (start < 0 || len < 0) {
       throw new IllegalArgumentException("Invalid start or len parameter");
     }
@@ -825,6 +919,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       String[] host = new String[]{"localhost"};
       return new BlockLocation[]{new BlockLocation(name, host, 0L, file.getLen())};
     }
+    BgTaskUtil.putTask(name, "Node fetcher", this::initCache, 10, 10, TimeUnit.MINUTES);
     if (file.getLen() <= start + len) {
       len = file.getLen() - start;
     }
@@ -1048,6 +1143,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path f, int bufferSize) throws IOException {
+    if (needCheckPermission() && !checkPathAccess(f, FsAction.READ, "open")) {
+      return superGroupFileSystem.open(f, bufferSize);
+    }
     statistics.incrementReadOps(1);
     ByteBuffer fileLen = ByteBuffer.allocate(8);
     fileLen.order(ByteOrder.nativeOrder());
@@ -1061,6 +1159,10 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void access(Path path, FsAction mode) throws IOException {
+    if (needCheckPermission() && !checkPathAccess(path, mode, "access")) {
+      superGroupFileSystem.access(path, mode);
+      return;
+    }
     int r = lib.jfs_access(Thread.currentThread().getId(), handle, normalizePath(path), mode.ordinal());
     if (r < 0)
       throw error(r, path);
@@ -1230,6 +1332,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FSDataOutputStream append(Path f, int bufferSize, Progressable progress) throws IOException {
+    if (needCheckPermission() && !checkPathAccess(f, FsAction.WRITE, "append")) {
+      return superGroupFileSystem.append(f, bufferSize, progress);
+    }
     statistics.incrementWriteOps(1);
     int fd = lib.jfs_open(Thread.currentThread().getId(), handle, normalizePath(f), null, MODE_MASK_W);
     if (fd < 0)
@@ -1243,6 +1348,13 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite, int bufferSize,
                                    short replication, long blockSize, Progressable progress) throws IOException {
+    if (needCheckPermission() && !checkAncestorAccess(f, FsAction.WRITE, "create")) {
+      if (!overwrite || !superGroupFileSystem.exists(f)) {
+        return superGroupFileSystem.create(f, permission, overwrite, bufferSize, replication, blockSize, progress);
+      } else if (!checkPathAccess(f, FsAction.WRITE, "create")) {
+        return superGroupFileSystem.create(f, permission, overwrite, bufferSize, replication, blockSize, progress);
+      }
+    }
     statistics.incrementWriteOps(1);
     while (true) {
       int fd = lib.jfs_create(Thread.currentThread().getId(), handle, normalizePath(f), permission.toShort(), uMask.toShort());
@@ -1278,6 +1390,13 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, EnumSet<CreateFlag> flag,
                                                int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
+    if (needCheckPermission() && !checkAncestorAccess(f, FsAction.WRITE, "createNonRecursive")) {
+      if (!flag.contains(CreateFlag.OVERWRITE) || !superGroupFileSystem.exists(f)) {
+        return superGroupFileSystem.createNonRecursive(f, permission, flag, bufferSize, replication, blockSize, progress);
+      } else if (!checkPathAccess(f, FsAction.WRITE, "createNonRecursive")) {
+        return superGroupFileSystem.createNonRecursive(f, permission, flag, bufferSize, replication, blockSize, progress);
+      }
+    }
     statistics.incrementWriteOps(1);
     int fd = lib.jfs_create(Thread.currentThread().getId(), handle, normalizePath(f), permission.toShort(), uMask.toShort());
     while (fd == EEXIST) {
@@ -1310,6 +1429,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FileChecksum getFileChecksum(Path f, long length) throws IOException {
+    if (needCheckPermission() && !checkPathAccess(f, FsAction.READ, "getFileChecksum")) {
+      return superGroupFileSystem.getFileChecksum(f, length);
+    }
     statistics.incrementReadOps(1);
     if (!fileChecksumEnabled)
       return null;
@@ -1370,6 +1492,15 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void concat(final Path dst, final Path[] srcs) throws IOException {
+    if (needCheckPermission()) {
+      access(dst.getParent(), FsAction.WRITE);
+      access(dst, FsAction.WRITE);
+      for (Path src : srcs) {
+        access(src, FsAction.READ);
+      }
+      superGroupFileSystem.concat(dst, srcs);
+      return;
+    }
     statistics.incrementWriteOps(1);
     if (srcs.length == 0) {
       throw new IllegalArgumentException("No sources given");
@@ -1410,6 +1541,15 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public boolean rename(Path src, Path dst) throws IOException {
+    if (needCheckPermission()) {
+      if (!superGroupFileSystem.exists(src)) {
+        return false;
+      }
+      access(src.getParent(), FsAction.WRITE);
+      Path dstAncestor = rangerPermissionChecker.getAncestor(dst).getPath();
+      access(dstAncestor, FsAction.WRITE);
+      return superGroupFileSystem.rename(src, dst);
+    }
     statistics.incrementWriteOps(1);
     String srcStr = makeQualified(src).toUri().getPath();
     String dstStr = makeQualified(dst).toUri().getPath();
@@ -1446,6 +1586,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public boolean truncate(Path f, long newLength) throws IOException {
+    if (needCheckPermission() && !checkPathAccess(f, FsAction.WRITE, "truncate")) {
+      return superGroupFileSystem.truncate(f, newLength);
+    }
     int r = lib.jfs_truncate(Thread.currentThread().getId(), handle, normalizePath(f), newLength);
     if (r < 0)
       throw error(r, f);
@@ -1465,6 +1608,17 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public boolean delete(Path p, boolean recursive) throws IOException {
+    if (needCheckPermission()) {
+      try {
+        if (!checkParentPathAccess(p, FsAction.WRITE_EXECUTE, "delete")) {
+          return superGroupFileSystem.delete(p, recursive);
+        }
+      } catch (Exception e) {
+        if (!checkPathAccess(p, FsAction.WRITE_EXECUTE, "delete")) {
+          return superGroupFileSystem.delete(p, recursive);
+        }
+      }
+    }
     statistics.incrementWriteOps(1);
     if (recursive)
       return rmr(p);
@@ -1480,9 +1634,12 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public ContentSummary getContentSummary(Path f) throws IOException {
+    if (needCheckPermission() && !checkPathAccess(f, FsAction.READ_EXECUTE, "getContentSummary")) {
+      return superGroupFileSystem.getContentSummary(f);
+    }
     statistics.incrementReadOps(1);
     String path = normalizePath(f);
-    Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 24);
+    Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 40);
     int r = lib.jfs_summary(Thread.currentThread().getId(), handle, path, buf);
     if (r < 0) {
       throw error(r, f);
@@ -1490,7 +1647,11 @@ public class JuiceFileSystemImpl extends FileSystem {
     long size = buf.getLongLong(0);
     long files = buf.getLongLong(8);
     long dirs = buf.getLongLong(16);
-    return new ContentSummary(size, files, dirs);
+    long quota = buf.getLongLong(24);
+    long spaceQuota = buf.getLongLong(32);
+    quota = quota == 0 ? -1L : quota;
+    spaceQuota = spaceQuota == 0 ? -1L : spaceQuota;
+    return new ContentSummary(size, files, dirs, quota, size, spaceQuota);
   }
 
   private FileStatus newFileStatus(Path p, Pointer buf, int size, boolean readlink) throws IOException {
@@ -1520,6 +1681,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FileStatus[] listStatus(Path f) throws FileNotFoundException, IOException {
+    if (needCheckPermission() && !checkPathAccess(f, FsAction.READ_EXECUTE, "listStatus")) {
+      return superGroupFileSystem.listStatus(f);
+    }
     statistics.incrementReadOps(1);
     int bufsize = 32 << 10;
     Pointer buf = Memory.allocate(Runtime.getRuntime(lib), bufsize); // TODO: smaller buff
@@ -1583,6 +1747,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public boolean mkdirs(Path f, FsPermission permission) throws IOException {
+    if (needCheckPermission() && !checkAncestorAccess(f, FsAction.WRITE, "mkdirs")) {
+      return superGroupFileSystem.mkdirs(f, permission);
+    }
     statistics.incrementWriteOps(1);
     if (f == null) {
       throw new IllegalArgumentException("mkdirs path arg is null");
@@ -1604,6 +1771,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FileStatus getFileStatus(Path f) throws IOException {
+    if (needCheckPermission() && !checkParentPathAccess(f, FsAction.EXECUTE, "getFileStatus")) {
+      return superGroupFileSystem.getFileStatus(f);
+    }
     statistics.incrementReadOps(1);
     try {
       return getFileStatusInternal(f, true);
@@ -1649,6 +1819,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FsStatus getStatus(Path p) throws IOException {
+    if (needCheckPermission() && !checkParentPathAccess(p, FsAction.EXECUTE, "getStatus")) {
+      return superGroupFileSystem.getStatus(p);
+    }
     statistics.incrementReadOps(1);
     Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 16);
     int r = lib.jfs_statvfs(Thread.currentThread().getId(), handle, buf);
@@ -1661,6 +1834,10 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void setPermission(Path p, FsPermission permission) throws IOException {
+    if (needCheckPermission() && !checkOwner(p, "setPermission")) {
+      superGroupFileSystem.setPermission(p, permission);
+      return;
+    }
     statistics.incrementWriteOps(1);
     int r = lib.jfs_chmod(Thread.currentThread().getId(), handle, normalizePath(p), permission.toShort());
     if (r != 0)
@@ -1669,6 +1846,18 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void setOwner(Path p, String username, String groupname) throws IOException {
+    if (needCheckPermission()) {
+      if (username == null) {
+        throw new AccessControlException(
+            "User can not be null");
+      }
+      if (!superuser.equals(username)) {
+        throw new AccessControlException(
+            "Only SuperUser can do setOwner Action, the current user is " + username);
+      }
+      superGroupFileSystem.setOwner(p, username, groupname);
+      return;
+    }
     statistics.incrementWriteOps(1);
     int r = lib.jfs_setOwner(Thread.currentThread().getId(), handle, normalizePath(p), username, groupname);
     if (r != 0)
@@ -1677,9 +1866,13 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void setTimes(Path p, long mtime, long atime) throws IOException {
+    if (needCheckPermission() && !checkPathAccess(p, FsAction.WRITE, "setTimes")) {
+      superGroupFileSystem.setTimes(p, mtime, atime);
+      return;
+    }
     statistics.incrementWriteOps(1);
     int r = lib.jfs_utime(Thread.currentThread().getId(), handle, normalizePath(p), mtime >= 0 ? mtime : -1,
-            atime >= 0 ? atime : -1);
+        atime >= 0 ? atime : -1);
     if (r != 0)
       throw error(r, p);
   }
@@ -1687,13 +1880,25 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public void close() throws IOException {
     super.close();
+    RangerPermissionChecker.release(name, handle);
+    BgTaskUtil.unregister(name, handle, () -> {
+      cachedHostsForName.clear();
+      hashForName.clear();
+      lastFileStatus.clear();
+    });
+    LOG.debug("close {}({})", name, handle);
     lib.jfs_term(Thread.currentThread().getId(), handle);
     if (metricsEnable) {
       JuiceFSInstrumentation.close();
     }
   }
 
+  @Override
   public void setXAttr(Path path, String name, byte[] value, EnumSet<XAttrSetFlag> flag) throws IOException {
+    if (needCheckPermission() && !checkPathAccess(path, FsAction.WRITE, "setXAttr")) {
+      superGroupFileSystem.setXAttr(path, name, value, flag);
+      return;
+    }
     Pointer buf = Memory.allocate(Runtime.getRuntime(lib), value.length);
     buf.put(0, value, 0, value.length);
     int mode = 0; // create or replace
@@ -1705,12 +1910,16 @@ public class JuiceFileSystemImpl extends FileSystem {
       mode = 2;
     }
     int r = lib.jfs_setXattr(Thread.currentThread().getId(), handle, normalizePath(path), name, buf, value.length,
-            mode);
+        mode);
     if (r < 0)
       throw error(r, path);
   }
 
+  @Override
   public byte[] getXAttr(Path path, String name) throws IOException {
+    if (needCheckPermission() && !checkPathAccess(path, FsAction.READ, "getXAttr")) {
+      return superGroupFileSystem.getXAttr(path, name);
+    }
     Pointer buf;
     int bufsize = 16 << 10;
     int r;
@@ -1728,11 +1937,16 @@ public class JuiceFileSystemImpl extends FileSystem {
     return value;
   }
 
+  @Override
   public Map<String, byte[]> getXAttrs(Path path) throws IOException {
     return getXAttrs(path, listXAttrs(path));
   }
 
+  @Override
   public Map<String, byte[]> getXAttrs(Path path, List<String> names) throws IOException {
+    if (needCheckPermission() && !checkPathAccess(path, FsAction.READ, "getXAttrs")) {
+      return superGroupFileSystem.getXAttrs(path, names);
+    }
     Map<String, byte[]> result = new HashMap<String, byte[]>();
     for (String n : names) {
       byte[] value = getXAttr(path, n);
@@ -1743,7 +1957,11 @@ public class JuiceFileSystemImpl extends FileSystem {
     return result;
   }
 
+  @Override
   public List<String> listXAttrs(Path path) throws IOException {
+    if (needCheckPermission() && !checkPathAccess(path, FsAction.READ, "listXAttrs")) {
+      return superGroupFileSystem.listXAttrs(path);
+    }
     Pointer buf;
     int bufsize = 1024;
     int r;
@@ -1768,7 +1986,12 @@ public class JuiceFileSystemImpl extends FileSystem {
     return result;
   }
 
+  @Override
   public void removeXAttr(Path path, String name) throws IOException {
+    if (needCheckPermission() && !checkPathAccess(path, FsAction.WRITE, "removeXAttr")) {
+      superGroupFileSystem.removeXAttr(path, name);
+      return;
+    }
     int r = lib.jfs_removeXattr(Thread.currentThread().getId(), handle, normalizePath(path), name);
     if (r == ENOATTR || r == ENODATA) {
       throw new IOException("No matching attributes found for remove operation");
@@ -1779,6 +2002,10 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void modifyAclEntries(Path path, List<AclEntry> aclSpec) throws IOException {
+    if (needCheckPermission() && !checkOwner(path, "modifyAclEntries")) {
+      superGroupFileSystem.modifyAclEntries(path, aclSpec);
+      return;
+    }
     List<AclEntry> existingEntries = getAllAclEntries(path);
     List<AclEntry> newAcl = AclTransformation.mergeAclEntries(existingEntries, aclSpec);
     setAclInternal(path, newAcl);
@@ -1786,6 +2013,10 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void removeAclEntries(Path path, List<AclEntry> aclSpec) throws IOException {
+    if (needCheckPermission() && !checkOwner(path, "removeAclEntries")) {
+      superGroupFileSystem.removeAclEntries(path, aclSpec);
+      return;
+    }
     List<AclEntry> existingEntries = getAllAclEntries(path);
     List<AclEntry> newAcl = AclTransformation.filterAclEntriesByAclSpec(existingEntries, aclSpec);
     setAclInternal(path, newAcl);
@@ -1793,6 +2024,10 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void setAcl(Path path, List<AclEntry> aclSpec) throws IOException {
+    if (needCheckPermission() && !checkOwner(path, "setAcl")) {
+      superGroupFileSystem.setAcl(path, aclSpec);
+      return;
+    }
     List<AclEntry> existingEntries = getAllAclEntries(path);
     List<AclEntry> newAcl = AclTransformation.replaceAclEntries(existingEntries, aclSpec);
     setAclInternal(path, newAcl);
@@ -1823,11 +2058,19 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void removeDefaultAcl(Path path) throws IOException {
+    if (needCheckPermission() && !checkOwner(path, "removeDefaultAcl")) {
+      superGroupFileSystem.removeDefaultAcl(path);
+      return;
+    }
     removeAclInternal(path, AclEntryScope.DEFAULT);
   }
 
   @Override
   public void removeAcl(Path path) throws IOException {
+    if (needCheckPermission() && !checkOwner(path, "removeAcl")) {
+      superGroupFileSystem.removeAcl(path);
+      return;
+    }
     removeAclInternal(path, AclEntryScope.ACCESS);
     removeAclInternal(path, AclEntryScope.DEFAULT);
   }
@@ -1984,6 +2227,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public AclStatus getAclStatus(Path path) throws IOException {
+    if (needCheckPermission() && !checkOwner(path, "getAclStatus")) {
+      return superGroupFileSystem.getAclStatus(path);
+    }
     FileStatus st = getFileStatus(path);
     List<AclEntry> entries = getAclEntries(path);
     AclStatus.Builder builder = new AclStatus.Builder().owner(st.getOwner()).group(st.getGroup())

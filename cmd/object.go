@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -117,6 +118,9 @@ var bufPool = sync.Pool{
 }
 
 func (j *juiceFS) Put(key string, in io.Reader, getters ...object.AttrGetter) (err error) {
+	if vfs.IsSpecialName(key) {
+		return fmt.Errorf("skip special file %s for jfs: %w", key, utils.ErrSkipped)
+	}
 	p := j.path(key)
 	if strings.HasSuffix(p, "/") {
 		eno := j.jfs.MkdirAll(ctx, p, 0777, j.umask)
@@ -139,14 +143,14 @@ func (j *juiceFS) Put(key string, in io.Reader, getters ...object.AttrGetter) (e
 			}
 		}()
 	}
-	f, eno := j.jfs.Open(ctx, tmp, vfs.MODE_MASK_W)
+	f, eno := j.jfs.Create(ctx, tmp, 0666, j.umask)
 	if eno == syscall.ENOENT {
 		_ = j.jfs.MkdirAll(ctx, path.Dir(tmp), 0777, j.umask)
 		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)
 	}
 
 	if eno == syscall.EEXIST {
-		_ = j.jfs.Delete(ctx, path.Dir(tmp))
+		_ = j.jfs.Delete(ctx, tmp)
 		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)
 	}
 
@@ -184,8 +188,9 @@ func (j *juiceFS) Delete(key string, getters ...object.AttrGetter) error {
 }
 
 type jObj struct {
-	key string
-	fi  *fs.FileStat
+	key       string
+	fi        *fs.FileStat
+	isSymlink bool
 }
 
 func (o *jObj) Key() string { return o.key }
@@ -197,26 +202,37 @@ func (o *jObj) Size() int64 {
 }
 func (o *jObj) Mtime() time.Time     { return o.fi.ModTime() }
 func (o *jObj) IsDir() bool          { return o.fi.IsDir() }
-func (o *jObj) IsSymlink() bool      { return o.fi.IsSymlink() }
+func (o *jObj) IsSymlink() bool      { return o.isSymlink }
 func (o *jObj) Owner() string        { return utils.UserName(o.fi.Uid()) }
 func (o *jObj) Group() string        { return utils.GroupName(o.fi.Gid()) }
 func (o *jObj) Mode() os.FileMode    { return o.fi.Mode() }
 func (o *jObj) StorageClass() string { return "" }
 
 func (j *juiceFS) Head(key string) (object.Object, error) {
-	fi, eno := j.jfs.Stat(ctx, j.path(key))
-	if eno == syscall.ENOENT {
-		return nil, os.ErrNotExist
+	errConv := func(eno syscall.Errno) error {
+		if errors.Is(eno, syscall.ENOENT) {
+			return os.ErrNotExist
+		} else {
+			return eno
+		}
 	}
+	fi, eno := j.jfs.Lstat(ctx, j.path(key))
 	if eno != 0 {
-		return nil, eno
+		return nil, errConv(eno)
 	}
-	return &jObj{key, fi}, nil
+	isSymlink := fi.IsSymlink()
+	if isSymlink {
+		fi, eno = j.jfs.Stat(ctx, j.path(key))
+		if eno != 0 {
+			return nil, errConv(eno)
+		}
+	}
+	return &jObj{key, fi, isSymlink}, nil
 }
 
-func (j *juiceFS) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]object.Object, error) {
+func (j *juiceFS) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
 	if delimiter != "/" {
-		return nil, utils.ENOTSUP
+		return nil, false, "", utils.ENOTSUP
 	}
 	dir := j.path(prefix)
 	var objs []object.Object
@@ -229,31 +245,35 @@ func (j *juiceFS) List(prefix, marker, delimiter string, limit int64, followLink
 		obj, err := j.Head(prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return nil, nil
+				return nil, false, "", nil
 			}
-			return nil, err
+			return nil, false, "", err
 		}
 		objs = append(objs, obj)
 	}
 	entries, err := j.readDirSorted(dir, followLink)
 	if err != 0 {
 		if err == syscall.ENOENT {
-			return nil, nil
+			return nil, false, "", nil
 		}
-		return nil, err
+		return nil, false, "", err
 	}
 	for _, e := range entries {
 		key := dir[1:] + e.name
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
-		f := &jObj{key, e.fi}
+		f := &jObj{key, e.fi, e.fi.IsSymlink()}
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break
 		}
 	}
-	return objs, nil
+	var nextMarker string
+	if len(objs) > 0 {
+		nextMarker = objs[len(objs)-1].Key()
+	}
+	return objs, len(objs) == int(limit), nextMarker, nil
 }
 
 type mEntry struct {
@@ -371,6 +391,10 @@ func getDefaultChunkConf(format *meta.Format) *chunk.Config {
 	}
 	chunkConf.SelfCheck(format.UUID)
 	return chunkConf
+}
+
+func (j *juiceFS) Shutdown() {
+	_ = j.jfs.Meta().CloseSession()
 }
 
 func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {

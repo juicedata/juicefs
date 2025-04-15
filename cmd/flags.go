@@ -129,7 +129,7 @@ func storageFlags() []cli.Flag {
 		},
 		&cli.IntFlag{
 			Name:  "max-stage-write",
-			Value: 0, // Enable this to have concurrent uploads to two backends, and get write bandwidth equals to sum of the two
+			Value: 1000, // large enough for normal cases, also prevents unlimited concurrency in abnormal cases
 			Usage: "number of threads allowed to write staged files, other requests will be uploaded directly (this option is only effective when 'writeback' mode is enabled)",
 		},
 		&cli.IntFlag{
@@ -144,6 +144,11 @@ func storageFlags() []cli.Flag {
 		&cli.StringFlag{
 			Name:  "download-limit",
 			Usage: "bandwidth limit for download in Mbps",
+		},
+		&cli.BoolFlag{
+			Name: "check-storage",
+			// AK/SK should have been checked before creating volume, here checks client access to the storage
+			Usage: "test storage before mounting to expose access issues early",
 		},
 	})
 }
@@ -172,6 +177,10 @@ func dataCacheFlags() []cli.Flag {
 			Value: "300M",
 			Usage: "total read/write buffering in MiB",
 		},
+		&cli.StringFlag{
+			Name:  "max-readahead",
+			Usage: "max buffering for read ahead in MiB per read session",
+		},
 		&cli.IntFlag{
 			Name:  "prefetch",
 			Value: 1,
@@ -188,7 +197,7 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "upload-hours",
-			Usage: "(start,end) hour of a day between which the delayed blocks can be uploaded",
+			Usage: "(start-end) hour of a day between which the delayed blocks can be uploaded",
 		},
 		&cli.StringFlag{
 			Name:  "cache-dir",
@@ -205,6 +214,11 @@ func dataCacheFlags() []cli.Flag {
 			Value: "100G",
 			Usage: "size of cached object for read in MiB",
 		},
+		&cli.Int64Flag{
+			Name:  "cache-items",
+			Value: 0,
+			Usage: "max number of cached items (0 for unlimited)",
+		},
 		&cli.Float64Flag{
 			Name:  "free-space-ratio",
 			Value: 0.1,
@@ -213,6 +227,10 @@ func dataCacheFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:  "cache-partial-only",
 			Usage: "cache only random/small read",
+		},
+		&cli.BoolFlag{
+			Name:  "cache-large-write",
+			Usage: "cache full blocks after uploading",
 		},
 		&cli.StringFlag{
 			Name:  "verify-cache-checksum",
@@ -335,6 +353,14 @@ func metaCacheFlags(defaultEntryCache float64) []cli.Flag {
 			Name:  "dir-entry-cache",
 			Value: "1.0s",
 			Usage: "dir entry cache timeout",
+		},
+		&cli.StringFlag{
+			Name:  "negative-dir-entry-cache",
+			Usage: "cache timeout for negative dir entry lookups",
+		},
+		&cli.BoolFlag{
+			Name:  "readdir-cache",
+			Usage: "enable kernel caching of readdir entries, with timeout controlled by attr-cache flag (require linux kernel 4.20+)",
 		},
 		&cli.StringFlag{
 			Name:  "open-cache",

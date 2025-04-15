@@ -40,7 +40,7 @@ jobs:
       - name: Set up Java
         uses: actions/setup-java@v3
         with:
-          distribution: 'adopt'
+          distribution: 'temurin'
           java-version: '8'
 
       - name: Run Redis
@@ -50,7 +50,7 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format  localhost dev
+          sudo ./juicefs format  localhost --bucket=/mnt/jfs dev
 
       - name: Juicefs Mount
         run: |
@@ -92,7 +92,7 @@ jobs:
           cd -
 
       - name: Upload Pit Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pit-reports
           path: sdk/java/target/pit-reports

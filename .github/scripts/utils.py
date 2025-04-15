@@ -12,7 +12,7 @@ import sys
 import time
 from minio import Minio
 
-def flush_meta(meta_url):
+def flush_meta(meta_url:str):
     print(f'start flush meta: {meta_url}')
     if meta_url.startswith('sqlite3://'):
         path = meta_url[len('sqlite3://'):]
@@ -24,31 +24,44 @@ def flush_meta(meta_url):
         if os.path.isdir(path):
             shutil.rmtree(path)
             print(f'remove badger dir {path} succeed')
-    elif meta_url.startswith('redis://'):
-        host_port= meta_url[8:].split('/')[0]
+    elif meta_url.startswith('redis://') or meta_url.startswith('tikv://'):
+        default_port = {"redis": 6379, "tikv": 2379}
+        protocol = meta_url.split("://")[0]
+        host_port= meta_url.split("://")[1].split('/')[0]
         if ':' in host_port:
             host = host_port.split(':')[0]
             port = host_port.split(':')[1]
         else:
             host = host_port
-            port = 6379
-        print(f'flush redis: {host}:{port}')
-        run_cmd(f'redis-cli -h {host} -p {port} flushall')
-        print(f'flush redis succeed')
+            port = default_port[protocol]
+        db = meta_url.split("://")[1].split('/')[1]
+        assert db
+        print(f'flushing {protocol}://{host}:{port}/{db}')
+        if protocol == 'redis':
+            run_cmd(f'redis-cli -h {host} -p {port} -n {db} flushdb')
+        elif protocol == 'tikv':
+            # TODO: should only flush the specified db
+            run_cmd(f'echo "delall --yes" |tcli -pd {host}:{port}')
+        else:
+            raise Exception(f'{protocol} not supported')
+        print(f'flush {protocol}://{host}:{port}/{db} succeed')
     elif meta_url.startswith('mysql://'):
         create_mysql_db(meta_url)
     elif meta_url.startswith('postgres://'): 
         create_postgres_db(meta_url)
-    elif meta_url.startswith('tikv://'):
-        run_cmd('echo "delall --yes" |tcli -pd localhost:2379')
     elif meta_url.startswith('fdb://'):
-        run_cmd('''fdbcli -C /home/runner/fdb.cluster --exec "writemode on ; clearrange '' \xFF"''')
+        # fdb:///home/runner/fdb.cluster?prefix=jfs2
+        prefix = meta_url.split('?prefix=')[1] if '?prefix=' in meta_url else ""
+        cluster_file = meta_url.split('fdb://')[1].split('?')[0]
+        print(f'flushing fdb: cluster_file: {cluster_file}, prefix: {prefix}')
+        run_cmd(f'echo "writemode on; clearrange {prefix} {prefix}\\xff" | fdbcli -C {cluster_file}')
+        print(f'flush fdb succeed')
     else:
         raise Exception(f'{meta_url} not supported')
     print('flush meta succeed')
 
 def create_mysql_db(meta_url):
-    db_name = meta_url[8:].split('@')[1].split('/')[1]
+    db_name = meta_url[8:].split('@')[1].split('/')[1].split('?')[0]
     user = meta_url[8:].split('@')[0].split(':')[0]
     password = meta_url[8:].split('@')[0].split(':')[1]
     if password: 

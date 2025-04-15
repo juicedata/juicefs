@@ -1,0 +1,1252 @@
+{
+  "serviceName": "cl1_hadoop",
+  "serviceId": 6,
+  "policyVersion": 7,
+  "policyUpdateTime": "20170220-12:36:01.000-+0000",
+  "policies": [
+    {
+      "service": "cl1_hadoop",
+      "name": "/tmp/tmpdir",
+      "policyType": 0,
+      "policyPriority": 0,
+      "description": "",
+      "isAuditEnabled": false,
+      "resources": {
+        "path": {
+          "values": [
+            "/tmp/tmpdir/"
+          ],
+          "isExcludes": false,
+          "isRecursive": true
+        }
+      },
+      "policyItems": [
+        {
+          "accesses": [
+            {
+              "type": "read",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "IT"
+          ],
+          "roles": [],
+          "conditions": [],
+          "delegateAdmin": false
+        },
+        {
+          "accesses": [
+            {
+              "type": "read",
+              "isAllowed": true
+            }
+          ],
+          "users": [
+            "bob"
+          ],
+          "groups": [],
+          "roles": [],
+          "conditions": [],
+          "delegateAdmin": false
+        }
+      ],
+      "denyPolicyItems": [],
+      "allowExceptions": [],
+      "denyExceptions": [],
+      "dataMaskPolicyItems": [],
+      "rowFilterPolicyItems": [],
+      "serviceType": "hdfs",
+      "id": 14,
+      "isEnabled": true,
+      "version": 4
+    },
+    {
+      "service": "cl1_hadoop",
+      "name": "/tmp/tmpdir2",
+      "policyType": 0,
+      "description": "",
+      "isAuditEnabled": true,
+      "resources": {
+        "path": {
+          "values": [
+            "/tmp/tmpdir2"
+          ],
+          "isExcludes": false,
+          "isRecursive": true
+        }
+      },
+      "policyItems": [
+        {
+          "accesses": [
+            {
+              "type": "write",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "IT"
+          ],
+          "conditions": [],
+          "delegateAdmin": false
+        },
+        {
+          "accesses": [
+            {
+              "type": "write",
+              "isAllowed": true
+            }
+          ],
+          "users": [
+            "bob"
+          ],
+          "groups": [],
+          "conditions": [],
+          "delegateAdmin": false
+        }
+      ],
+      "denyPolicyItems": [],
+      "allowExceptions": [],
+      "denyExceptions": [],
+      "dataMaskPolicyItems": [],
+      "rowFilterPolicyItems": [],
+      "id": 15,
+      "isEnabled": true,
+      "version": 1
+    },
+    {
+      "service": "cl1_hadoop",
+      "name": "/tmp/tmpdir3",
+      "policyType": 0,
+      "description": "",
+      "isAuditEnabled": true,
+      "resources": {
+        "path": {
+          "values": [
+            "/tmp/tmpdir3"
+          ],
+          "isExcludes": false,
+          "isRecursive": true
+        }
+      },
+      "policyItems": [
+        {
+          "accesses": [
+            {
+              "type": "read",
+              "isAllowed": true
+            },
+            {
+              "type": "execute",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "IT"
+          ],
+          "conditions": [],
+          "delegateAdmin": false
+        },
+        {
+          "accesses": [
+            {
+              "type": "read",
+              "isAllowed": true
+            },
+            {
+              "type": "execute",
+              "isAllowed": true
+            }
+          ],
+          "users": [
+            "bob"
+          ],
+          "groups": [],
+          "conditions": [],
+          "delegateAdmin": false
+        }
+      ],
+      "denyPolicyItems": [],
+      "allowExceptions": [],
+      "denyExceptions": [],
+      "dataMaskPolicyItems": [],
+      "rowFilterPolicyItems": [],
+      "id": 16,
+      "isEnabled": true,
+      "version": 1
+    },
+    {
+      "service": "cl1_hadoop",
+      "name": "/tmp/get-content-summary",
+      "policyType": 0,
+      "description": "",
+      "isAuditEnabled": true,
+      "resources": {
+        "path": {"values": ["/tmp/get-content-summary", "/tmp/get-content-summary/tmpdir1", "/tmp/get-content-summary/tmpdir2"], "isExcludes": false, "isRecursive": false}
+      },
+      "policyItems": [
+        {
+          "accesses": [{"type": "read","isAllowed": true}, {"type": "execute","isAllowed": true}],
+          "users": ["bob"],
+          "groups": ["IT"],
+          "conditions": [],
+          "delegateAdmin": false
+        }
+      ],
+      "denyPolicyItems": [],
+      "allowExceptions": [],
+      "denyExceptions": [],
+      "dataMaskPolicyItems": [],
+      "rowFilterPolicyItems": [],
+      "id": 40,
+      "isEnabled": true,
+      "version": 1
+    }
+  ],
+  "serviceDef": {
+    "name": "hdfs",
+    "implClass": "org.apache.ranger.services.hdfs.RangerServiceHdfs",
+    "label": "HDFS Repository",
+    "description": "HDFS Repository",
+    "options": {},
+    "configs": [
+      {
+        "itemId": 1,
+        "name": "username",
+        "type": "string",
+        "subType": "",
+        "mandatory": true,
+        "validationRegEx": "",
+        "validationMessage": "",
+        "uiHint": "",
+        "label": "Username"
+      },
+      {
+        "itemId": 2,
+        "name": "password",
+        "type": "password",
+        "subType": "",
+        "mandatory": true,
+        "validationRegEx": "",
+        "validationMessage": "",
+        "uiHint": "",
+        "label": "Password"
+      },
+      {
+        "itemId": 3,
+        "name": "fs.default.name",
+        "type": "string",
+        "subType": "",
+        "mandatory": true,
+        "validationRegEx": "",
+        "validationMessage": "",
+        "uiHint": "",
+        "label": "Namenode URL"
+      },
+      {
+        "itemId": 4,
+        "name": "hadoop.security.authorization",
+        "type": "bool",
+        "subType": "YesTrue:NoFalse",
+        "mandatory": true,
+        "defaultValue": "false",
+        "validationRegEx": "",
+        "validationMessage": "",
+        "uiHint": "",
+        "label": "Authorization Enabled"
+      },
+      {
+        "itemId": 5,
+        "name": "hadoop.security.authentication",
+        "type": "enum",
+        "subType": "authnType",
+        "mandatory": true,
+        "defaultValue": "simple",
+        "validationRegEx": "",
+        "validationMessage": "",
+        "uiHint": "",
+        "label": "Authentication Type"
+      },
+      {
+        "itemId": 6,
+        "name": "hadoop.security.auth_to_local",
+        "type": "string",
+        "subType": "",
+        "mandatory": false,
+        "validationRegEx": "",
+        "validationMessage": "",
+        "uiHint": ""
+      },
+      {
+        "itemId": 7,
+        "name": "dfs.datanode.kerberos.principal",
+        "type": "string",
+        "subType": "",
+        "mandatory": false,
+        "validationRegEx": "",
+        "validationMessage": "",
+        "uiHint": ""
+      },
+      {
+        "itemId": 8,
+        "name": "dfs.namenode.kerberos.principal",
+        "type": "string",
+        "subType": "",
+        "mandatory": false,
+        "validationRegEx": "",
+        "validationMessage": "",
+        "uiHint": ""
+      },
+      {
+        "itemId": 9,
+        "name": "dfs.secondary.namenode.kerberos.principal",
+        "type": "string",
+        "subType": "",
+        "mandatory": false,
+        "validationRegEx": "",
+        "validationMessage": "",
+        "uiHint": ""
+      },
+      {
+        "itemId": 10,
+        "name": "hadoop.rpc.protection",
+        "type": "enum",
+        "subType": "rpcProtection",
+        "mandatory": false,
+        "defaultValue": "authentication",
+        "validationRegEx": "",
+        "validationMessage": "",
+        "uiHint": "",
+        "label": "RPC Protection Type"
+      },
+      {
+        "itemId": 11,
+        "name": "commonNameForCertificate",
+        "type": "string",
+        "subType": "",
+        "mandatory": false,
+        "validationRegEx": "",
+        "validationMessage": "",
+        "uiHint": "",
+        "label": "Common Name for Certificate"
+      }
+    ],
+    "resources": [
+      {
+        "itemId": 1,
+        "name": "path",
+        "type": "path",
+        "level": 10,
+        "mandatory": true,
+        "lookupSupported": true,
+        "recursiveSupported": true,
+        "excludesSupported": false,
+        "matcher": "org.apache.ranger.plugin.resourcematcher.RangerPathResourceMatcher",
+        "matcherOptions": {
+          "wildCard": "true",
+          "ignoreCase": "false"
+        },
+        "validationRegEx": "",
+        "validationMessage": "",
+        "uiHint": "",
+        "label": "Resource Path",
+        "description": "HDFS file or directory path"
+      }
+    ],
+    "accessTypes": [
+      {
+        "itemId": 1,
+        "name": "read",
+        "label": "Read",
+        "impliedGrants": []
+      },
+      {
+        "itemId": 2,
+        "name": "write",
+        "label": "Write",
+        "impliedGrants": []
+      },
+      {
+        "itemId": 3,
+        "name": "execute",
+        "label": "Execute",
+        "impliedGrants": []
+      }
+    ],
+    "policyConditions": [],
+    "contextEnrichers": [],
+    "enums": [
+      {
+        "itemId": 1,
+        "name": "authnType",
+        "elements": [
+          {
+            "itemId": 1,
+            "name": "simple",
+            "label": "Simple"
+          },
+          {
+            "itemId": 2,
+            "name": "kerberos",
+            "label": "Kerberos"
+          }
+        ],
+        "defaultIndex": 0
+      },
+      {
+        "itemId": 2,
+        "name": "rpcProtection",
+        "elements": [
+          {
+            "itemId": 1,
+            "name": "authentication",
+            "label": "Authentication"
+          },
+          {
+            "itemId": 2,
+            "name": "integrity",
+            "label": "Integrity"
+          },
+          {
+            "itemId": 3,
+            "name": "privacy",
+            "label": "Privacy"
+          }
+        ],
+        "defaultIndex": 0
+      }
+    ],
+    "dataMaskDef": {
+      "maskTypes": [],
+      "accessTypes": [],
+      "resources": []
+    },
+    "rowFilterDef": {
+      "accessTypes": [],
+      "resources": []
+    },
+    "id": 1,
+    "guid": "0d047247-bafe-4cf8-8e9b-d5d377284b2d",
+    "isEnabled": true,
+    "createTime": "20170217-11:41:31.000-+0000",
+    "updateTime": "20170217-11:41:31.000-+0000",
+    "version": 1
+  },
+  "auditMode": "audit-default",
+  "tagPolicies": {
+    "serviceName": "KafkaTagService",
+    "serviceId": 5,
+    "policyVersion": 5,
+    "policyUpdateTime": "20170220-12:35:51.000-+0000",
+    "policies": [
+      {
+        "service": "KafkaTagService",
+        "name": "EXPIRES_ON",
+        "policyType": 0,
+        "description": "Policy for data with EXPIRES_ON tag",
+        "isAuditEnabled": true,
+        "resources": {
+          "tag": {
+            "values": [
+              "EXPIRES_ON"
+            ],
+            "isExcludes": false,
+            "isRecursive": false
+          }
+        },
+        "policyItems": [],
+        "denyPolicyItems": [
+          {
+            "accesses": [
+              {
+                "type": "hdfs:read",
+                "isAllowed": true
+              },
+              {
+                "type": "hdfs:write",
+                "isAllowed": true
+              },
+              {
+                "type": "hdfs:execute",
+                "isAllowed": true
+              },
+              {
+                "type": "hbase:read",
+                "isAllowed": true
+              },
+              {
+                "type": "hbase:write",
+                "isAllowed": true
+              },
+              {
+                "type": "hbase:create",
+                "isAllowed": true
+              },
+              {
+                "type": "hbase:admin",
+                "isAllowed": true
+              },
+              {
+                "type": "hive:select",
+                "isAllowed": true
+              },
+              {
+                "type": "hive:update",
+                "isAllowed": true
+              },
+              {
+                "type": "hive:create",
+                "isAllowed": true
+              },
+              {
+                "type": "hive:drop",
+                "isAllowed": true
+              },
+              {
+                "type": "hive:alter",
+                "isAllowed": true
+              },
+              {
+                "type": "hive:index",
+                "isAllowed": true
+              },
+              {
+                "type": "hive:lock",
+                "isAllowed": true
+              },
+              {
+                "type": "hive:all",
+                "isAllowed": true
+              },
+              {
+                "type": "yarn:submit-app",
+                "isAllowed": true
+              },
+              {
+                "type": "yarn:admin-queue",
+                "isAllowed": true
+              },
+              {
+                "type": "knox:allow",
+                "isAllowed": true
+              },
+              {
+                "type": "storm:submitTopology",
+                "isAllowed": true
+              },
+              {
+                "type": "storm:fileUpload",
+                "isAllowed": true
+              },
+              {
+                "type": "storm:fileDownload",
+                "isAllowed": true
+              },
+              {
+                "type": "storm:killTopology",
+                "isAllowed": true
+              },
+              {
+                "type": "storm:rebalance",
+                "isAllowed": true
+              },
+              {
+                "type": "storm:activate",
+                "isAllowed": true
+              },
+              {
+                "type": "storm:deactivate",
+                "isAllowed": true
+              },
+              {
+                "type": "storm:getTopologyConf",
+                "isAllowed": true
+              },
+              {
+                "type": "storm:getTopology",
+                "isAllowed": true
+              },
+              {
+                "type": "storm:getUserTopology",
+                "isAllowed": true
+              },
+              {
+                "type": "storm:getTopologyInfo",
+                "isAllowed": true
+              },
+              {
+                "type": "storm:uploadNewCredentials",
+                "isAllowed": true
+              },
+              {
+                "type": "kms:create",
+                "isAllowed": true
+              },
+              {
+                "type": "kms:delete",
+                "isAllowed": true
+              },
+              {
+                "type": "kms:rollover",
+                "isAllowed": true
+              },
+              {
+                "type": "kms:setkeymaterial",
+                "isAllowed": true
+              },
+              {
+                "type": "kms:get",
+                "isAllowed": true
+              },
+              {
+                "type": "kms:getkeys",
+                "isAllowed": true
+              },
+              {
+                "type": "kms:getmetadata",
+                "isAllowed": true
+              },
+              {
+                "type": "kms:generateeek",
+                "isAllowed": true
+              },
+              {
+                "type": "kms:decrypteek",
+                "isAllowed": true
+              },
+              {
+                "type": "solr:query",
+                "isAllowed": true
+              },
+              {
+                "type": "solr:update",
+                "isAllowed": true
+              },
+              {
+                "type": "solr:others",
+                "isAllowed": true
+              },
+              {
+                "type": "solr:solr_admin",
+                "isAllowed": true
+              },
+              {
+                "type": "kafka:publish",
+                "isAllowed": true
+              },
+              {
+                "type": "kafka:consume",
+                "isAllowed": true
+              },
+              {
+                "type": "kafka:configure",
+                "isAllowed": true
+              },
+              {
+                "type": "kafka:describe",
+                "isAllowed": true
+              },
+              {
+                "type": "kafka:create",
+                "isAllowed": true
+              },
+              {
+                "type": "kafka:delete",
+                "isAllowed": true
+              },
+              {
+                "type": "kafka:kafka_admin",
+                "isAllowed": true
+              },
+              {
+                "type": "atlas:read",
+                "isAllowed": true
+              },
+              {
+                "type": "atlas:create",
+                "isAllowed": true
+              },
+              {
+                "type": "atlas:update",
+                "isAllowed": true
+              },
+              {
+                "type": "atlas:delete",
+                "isAllowed": true
+              },
+              {
+                "type": "atlas:all",
+                "isAllowed": true
+              }
+            ],
+            "users": [],
+            "groups": [
+              "public"
+            ],
+            "conditions": [
+              {
+                "type": "accessed-after-expiry",
+                "values": [
+                  "yes"
+                ]
+              }
+            ],
+            "delegateAdmin": false
+          }
+        ],
+        "allowExceptions": [],
+        "denyExceptions": [],
+        "dataMaskPolicyItems": [],
+        "rowFilterPolicyItems": [],
+        "id": 10,
+        "isEnabled": true,
+        "version": 1
+      },
+      {
+        "service": "KafkaTagService",
+        "name": "AtlasKafkaTagPolicy",
+        "policyType": 0,
+        "description": "",
+        "isAuditEnabled": true,
+        "resources": {
+          "tag": {
+            "values": [
+              "KafkaTag"
+            ],
+            "isExcludes": false,
+            "isRecursive": false
+          }
+        },
+        "policyItems": [
+          {
+            "accesses": [
+              {
+                "type": "kafka:consume",
+                "isAllowed": true
+              },
+              {
+                "type": "kafka:describe",
+                "isAllowed": true
+              }
+            ],
+            "users": [
+              "CN\u003dClient,O\u003dApache,L\u003dDublin,ST\u003dLeinster,C\u003dIE"
+            ],
+            "groups": [],
+            "conditions": [],
+            "delegateAdmin": false
+          }
+        ],
+        "denyPolicyItems": [],
+        "allowExceptions": [],
+        "denyExceptions": [],
+        "dataMaskPolicyItems": [],
+        "rowFilterPolicyItems": [],
+        "id": 11,
+        "isEnabled": true,
+        "version": 2
+      },
+      {
+        "service": "KafkaTagService",
+        "name": "TmpdirTagPolicy",
+        "policyType": 0,
+        "description": "",
+        "isAuditEnabled": true,
+        "resources": {
+          "tag": {
+            "values": [
+              "TmpdirTag"
+            ],
+            "isExcludes": false,
+            "isRecursive": false
+          }
+        },
+        "policyItems": [
+          {
+            "accesses": [
+              {
+                "type": "hdfs:read",
+                "isAllowed": true
+              }
+            ],
+            "users": [],
+            "groups": [
+              "IT"
+            ],
+            "conditions": [],
+            "delegateAdmin": false
+          },
+          {
+            "accesses": [
+              {
+                "type": "hdfs:read",
+                "isAllowed": true
+              }
+            ],
+            "users": [
+              "bob"
+            ],
+            "groups": [],
+            "conditions": [],
+            "delegateAdmin": false
+          }
+        ],
+        "denyPolicyItems": [],
+        "allowExceptions": [],
+        "denyExceptions": [],
+        "dataMaskPolicyItems": [],
+        "rowFilterPolicyItems": [],
+        "id": 17,
+        "isEnabled": true,
+        "version": 1
+      }
+    ],
+    "serviceDef": {
+      "name": "tag",
+      "implClass": "org.apache.ranger.services.tag.RangerServiceTag",
+      "label": "TAG",
+      "description": "TAG Service Definition",
+      "options": {
+        "ui.pages": "tag-based-policies"
+      },
+      "configs": [],
+      "resources": [
+        {
+          "itemId": 1,
+          "name": "tag",
+          "type": "string",
+          "level": 1,
+          "mandatory": true,
+          "lookupSupported": true,
+          "recursiveSupported": false,
+          "excludesSupported": false,
+          "matcher": "org.apache.ranger.plugin.resourcematcher.RangerDefaultResourceMatcher",
+          "matcherOptions": {
+            "wildCard": "false",
+            "ignoreCase": "false"
+          },
+          "validationRegEx": "",
+          "validationMessage": "",
+          "uiHint": "{ \"singleValue\":true }",
+          "label": "TAG",
+          "description": "TAG"
+        }
+      ],
+      "accessTypes": [
+        {
+          "itemId": 1002,
+          "name": "hdfs:read",
+          "label": "Read",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 1003,
+          "name": "hdfs:write",
+          "label": "Write",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 1004,
+          "name": "hdfs:execute",
+          "label": "Execute",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 2003,
+          "name": "hbase:read",
+          "label": "Read",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 2004,
+          "name": "hbase:write",
+          "label": "Write",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 2005,
+          "name": "hbase:create",
+          "label": "Create",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 2006,
+          "name": "hbase:admin",
+          "label": "Admin",
+          "impliedGrants": [
+            "hbase:read",
+            "hbase:write",
+            "hbase:create"
+          ]
+        },
+        {
+          "itemId": 3004,
+          "name": "hive:select",
+          "label": "select",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 3005,
+          "name": "hive:update",
+          "label": "update",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 3006,
+          "name": "hive:create",
+          "label": "Create",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 3007,
+          "name": "hive:drop",
+          "label": "Drop",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 3008,
+          "name": "hive:alter",
+          "label": "Alter",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 3009,
+          "name": "hive:index",
+          "label": "Index",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 3010,
+          "name": "hive:lock",
+          "label": "Lock",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 3011,
+          "name": "hive:all",
+          "label": "All",
+          "impliedGrants": [
+            "hive:select",
+            "hive:update",
+            "hive:create",
+            "hive:drop",
+            "hive:alter",
+            "hive:index",
+            "hive:lock"
+          ]
+        },
+        {
+          "itemId": 4005,
+          "name": "yarn:submit-app",
+          "label": "submit-app",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 4006,
+          "name": "yarn:admin-queue",
+          "label": "admin-queue",
+          "impliedGrants": [
+            "yarn:submit-app"
+          ]
+        },
+        {
+          "itemId": 5006,
+          "name": "knox:allow",
+          "label": "Allow",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 6007,
+          "name": "storm:submitTopology",
+          "label": "Submit Topology",
+          "impliedGrants": [
+            "storm:fileUpload",
+            "storm:fileDownload"
+          ]
+        },
+        {
+          "itemId": 6008,
+          "name": "storm:fileUpload",
+          "label": "File Upload",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 6011,
+          "name": "storm:fileDownload",
+          "label": "File Download",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 6012,
+          "name": "storm:killTopology",
+          "label": "Kill Topology",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 6013,
+          "name": "storm:rebalance",
+          "label": "Rebalance",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 6014,
+          "name": "storm:activate",
+          "label": "Activate",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 6015,
+          "name": "storm:deactivate",
+          "label": "Deactivate",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 6016,
+          "name": "storm:getTopologyConf",
+          "label": "Get Topology Conf",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 6017,
+          "name": "storm:getTopology",
+          "label": "Get Topology",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 6018,
+          "name": "storm:getUserTopology",
+          "label": "Get User Topology",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 6019,
+          "name": "storm:getTopologyInfo",
+          "label": "Get Topology Info",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 6020,
+          "name": "storm:uploadNewCredentials",
+          "label": "Upload New Credential",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 7008,
+          "name": "kms:create",
+          "label": "Create",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 7009,
+          "name": "kms:delete",
+          "label": "Delete",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 7010,
+          "name": "kms:rollover",
+          "label": "Rollover",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 7011,
+          "name": "kms:setkeymaterial",
+          "label": "Set Key Material",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 7012,
+          "name": "kms:get",
+          "label": "Get",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 7013,
+          "name": "kms:getkeys",
+          "label": "Get Keys",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 7014,
+          "name": "kms:getmetadata",
+          "label": "Get Metadata",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 7015,
+          "name": "kms:generateeek",
+          "label": "Generate EEK",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 7016,
+          "name": "kms:decrypteek",
+          "label": "Decrypt EEK",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 8108,
+          "name": "solr:query",
+          "label": "Query",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 8208,
+          "name": "solr:update",
+          "label": "Update",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 8308,
+          "name": "solr:others",
+          "label": "Others",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 8908,
+          "name": "solr:solr_admin",
+          "label": "Solr Admin",
+          "impliedGrants": [
+            "solr:query",
+            "solr:update",
+            "solr:others"
+          ]
+        },
+        {
+          "itemId": 9010,
+          "name": "kafka:publish",
+          "label": "Publish",
+          "impliedGrants": [
+            "kafka:describe"
+          ]
+        },
+        {
+          "itemId": 9011,
+          "name": "kafka:consume",
+          "label": "Consume",
+          "impliedGrants": [
+            "kafka:describe"
+          ]
+        },
+        {
+          "itemId": 9014,
+          "name": "kafka:configure",
+          "label": "Configure",
+          "impliedGrants": [
+            "kafka:describe"
+          ]
+        },
+        {
+          "itemId": 9015,
+          "name": "kafka:describe",
+          "label": "Describe",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 9017,
+          "name": "kafka:create",
+          "label": "Create",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 9018,
+          "name": "kafka:delete",
+          "label": "Delete",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 9016,
+          "name": "kafka:kafka_admin",
+          "label": "Kafka Admin",
+          "impliedGrants": [
+            "kafka:publish",
+            "kafka:consume",
+            "kafka:configure",
+            "kafka:describe",
+            "kafka:create",
+            "kafka:delete"
+          ]
+        },
+        {
+          "itemId": 11012,
+          "name": "atlas:read",
+          "label": "read",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 11013,
+          "name": "atlas:create",
+          "label": "create",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 11014,
+          "name": "atlas:update",
+          "label": "update",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 11015,
+          "name": "atlas:delete",
+          "label": "delete",
+          "impliedGrants": []
+        },
+        {
+          "itemId": 11016,
+          "name": "atlas:all",
+          "label": "All",
+          "impliedGrants": [
+            "atlas:read",
+            "atlas:create",
+            "atlas:update",
+            "atlas:delete"
+          ]
+        }
+      ],
+      "policyConditions": [
+        {
+          "itemId": 1,
+          "name": "accessed-after-expiry",
+          "evaluator": "org.apache.ranger.plugin.conditionevaluator.RangerScriptTemplateConditionEvaluator",
+          "evaluatorOptions": {
+            "scriptTemplate": "ctx.isAccessedAfter(\u0027expiry_date\u0027);"
+          },
+          "uiHint": "{ \"singleValue\":true }",
+          "label": "Accessed after expiry_date (yes/no)?",
+          "description": "Accessed after expiry_date? (yes/no)"
+        }
+      ],
+      "contextEnrichers": [
+        {
+          "itemId": 1,
+          "name": "TagEnricher",
+          "enricher": "org.apache.ranger.plugin.contextenricher.RangerTagEnricher",
+          "enricherOptions": {
+            "tagRetrieverClassName": "org.apache.ranger.plugin.contextenricher.RangerAdminTagRetriever",
+            "tagRefresherPollingInterval": "60000"
+          }
+        }
+      ],
+      "enums": [],
+      "dataMaskDef": {
+        "maskTypes": [],
+        "accessTypes": [],
+        "resources": []
+      },
+      "rowFilterDef": {
+        "accessTypes": [],
+        "resources": []
+      },
+      "id": 100,
+      "guid": "0d047248-baff-4cf9-8e9e-d5d377284b2e",
+      "isEnabled": true,
+      "createTime": "20170217-11:41:33.000-+0000",
+      "updateTime": "20170217-11:41:35.000-+0000",
+      "version": 11
+    },
+    "auditMode": "audit-default"
+  }
+}

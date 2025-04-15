@@ -12,7 +12,7 @@ In JuiceFS, [files are stored as objects and distributed in chunks within the un
 
 ![JuiceFS S3 Gateway architecture](../images/juicefs-s3-gateway-arch.png)
 
-JuiceFS S3 Gateway implements its functionality through [MinIO S3 Gateway](https://github.com/minio/minio/tree/ea1803417f80a743fc6c7bb261d864c38628cf8d/docs/gateway). Leveraging MinIO's [`object` interface](https://github.com/minio/minio/blob/d46386246fb6db5f823df54d932b6f7274d46059/cmd/object-api-interface.go#L88), we integrate the JuiceFS file system as the backend storage for MinIO servers. This provides a user experience close to that of native MinIO usage while inheriting many advanced features of MinIO. In this architecture, JuiceFS acts as a local disk for the MinIO instance, and the principle is similar to the `minio server /data1` command..
+JuiceFS S3 Gateway implements its functionality through [MinIO S3 Gateway](https://github.com/minio/minio/tree/ea1803417f80a743fc6c7bb261d864c38628cf8d/docs/gateway). Leveraging MinIO's [`object` interface](https://github.com/minio/minio/blob/d46386246fb6db5f823df54d932b6f7274d46059/cmd/object-api-interface.go#L88), we integrate the JuiceFS file system as the backend storage for MinIO servers. This provides a user experience close to that of native MinIO usage while inheriting many advanced features of MinIO. In this architecture, JuiceFS acts as a local disk for the MinIO instance, and the principle is similar to the `minio server /data1` command.
 
 Common application scenarios for JuiceFS S3 Gateway include:
 
@@ -23,48 +23,52 @@ Common application scenarios for JuiceFS S3 Gateway include:
 
 ## Quick start
 
-1. Create a JuiceFS file system by following the steps in [this document](../getting-started/standalone.md).
+JuiceFS S3 Gateway enables access to an existing JuiceFS volume. If you do not have one, follow the steps in this [guide](../getting-started/standalone.md) to create a JuiceFS file system.
 
-2. Start JuiceFS S3 Gateway.
+The gateway is built on MinIO, so you must set the `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` environment variables. They serve as the access key and secret key for authentication when you access the S3 API. These credentials are administrator credentials with the highest privileges.
 
-    Before enabling the gateway, set the `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` environment variables. They serve as the access key and secret key for authentication when you access the S3 API. These credentials are called administrator credentials, with the highest privileges. For example:
+```shell
+export MINIO_ROOT_USER=admin
+export MINIO_ROOT_PASSWORD=12345678
 
-    ```shell
-    export MINIO_ROOT_USER=admin
-    export MINIO_ROOT_PASSWORD=12345678
-    ```
+# Use "set" on Windows
+set MINIO_ROOT_USER=admin
+```
 
-    Note that `MINIO_ROOT_USER` must be at least 3 characters long, and `MINIO_ROOT_PASSWORD` must be at least 8 characters long. Windows users must use the `set` command to set environment variables, for example, `set MINIO_ROOT_USER=admin`.
+Note that `MINIO_ROOT_USER` must be at least 3 characters long, and `MINIO_ROOT_PASSWORD` must be at least 8 characters long. If these requirements are not met, the gateway service will display an error: `MINIO_ROOT_USER should be specified as an environment variable with at least 3 characters`.
 
-    Then, use the `juicefs gateway` command to start JuiceFS S3 Gateway. For example:
+Start the gateway:
 
-    ```shell
-    juicefs gateway redis://localhost:6379/1 localhost:9000
-    ```
+```shell
+# The first argument is the metadata engine URL; the second argument is the address/port for JuiceFS S3 Gateway to listen on.
+juicefs gateway redis://localhost:6379/1 localhost:9000
 
-    The `gateway` subcommand requires at least two parameters: the database URL for storing metadata and the address/port for JuiceFS S3 Gateway to listen on. Since version 1.2, JuiceFS supports running services in the background with options such as `--background` or `-d`, allowing them to operate as background processes.
+# Since v1.2, JuiceFS supports running services in the background, using --background or -d.
+# When running in background, use --log to specify the log path.
+juicefs gateway redis://localhost:6379 localhost:9000 -d --log=/var/log/juicefs-s3-gateway.log
+```
 
-    By default, [Multi-bucket support](#multi-bucket-support) is not enabled. You can enable it by adding the `--multi-buckets` option. Additionally, you can add [other options](../reference/command_reference.mdx#gateway) to `gateway` subcommands as needed. For example, you can set the default local cache to 20 GiB.
+By default, [multi-bucket support](#multi-bucket-support) is not enabled. You can enable it by adding the `--multi-buckets` option. Additionally, you can add [other options](../reference/command_reference.mdx#gateway) to `gateway` subcommands as needed. For example, you can set the default local cache to 20 GiB.
 
-    ```shell
-    juicefs gateway --cache-size 20480 redis://localhost:6379/1 localhost:9000
-    ```
+```shell
+juicefs gateway --cache-size 20480 redis://localhost:6379/1 localhost:9000
+```
 
-    This example assumes that the JuiceFS file system uses a local Redis database. When JuiceFS S3 Gateway is enabled, you can access the gateway's management interface at `http://localhost:9000` on the **current host**.
+This example assumes that the JuiceFS file system uses a local Redis database. When JuiceFS S3 Gateway is enabled, you can access the gateway's management interface at `http://localhost:9000` on the **current host**.
 
-    ![S3-gateway-file-manager](../images/s3-gateway-file-manager.jpg)
+![S3-gateway-file-manager](../images/s3-gateway-file-manager.jpg)
 
-    To allow access to JuiceFS S3 Gateway from other hosts on the local network or the internet, adjust the listen address. For example:
+To allow access to JuiceFS S3 Gateway from other hosts on the local network or the internet, adjust the listen address. For example:
 
-    ```shell
-    juicefs gateway redis://localhost:6379/1 0.0.0.0:9000
-    ```
+```shell
+juicefs gateway redis://localhost:6379/1 0.0.0.0:9000
+```
 
-    This configuration makes JuiceFS S3 Gateway accept requests from all networks by default. Different S3 clients can access JuiceFS S3 Gateway using different addresses. For example:
+This configuration makes JuiceFS S3 Gateway accept requests from all networks by default. Different S3 clients can access JuiceFS S3 Gateway using different addresses. For example:
 
-    - Third-party clients on the same host as JuiceFS S3 Gateway can use `http://127.0.0.1:9000` or `http://localhost:9000` for access.
-    - Third-party clients on the same local network as the JuiceFS S3 Gateway host can use `http://192.168.1.8:9000` for access (assuming the JuiceFS S3 Gateway host's internal IP address is `192.168.1.8`).
-    - Using `http://110.220.110.220:9000` to access JuiceFS S3 Gateway over the internet (assuming the JuiceFS S3 Gateway host's public IP address is `110.220.110.220`).
+- Third-party clients on the same host as JuiceFS S3 Gateway can use `http://127.0.0.1:9000` or `http://localhost:9000` for access.
+- Third-party clients on the same local network as the JuiceFS S3 Gateway host can use `http://192.168.1.8:9000` for access (assuming the JuiceFS S3 Gateway host's internal IP address is `192.168.1.8`).
+- Using `http://110.220.110.220:9000` to access JuiceFS S3 Gateway over the internet (assuming the JuiceFS S3 Gateway host's public IP address is `110.220.110.220`).
 
 ## Access JuiceFS S3 Gateway
 
@@ -143,6 +147,10 @@ By default, JuiceFS S3 Gateway does not save or return object ETag information. 
 
 Object tags are not supported by default, but you can use `--object-tag` to enable them.
 
+### Enable object metadata
+
+Object metadata is not supported by default, but you can use `--object-meta` to enable it.
+
 ### Enable virtual host-style requests
 
 By default, JuiceFS S3 Gateway supports path-style requests in the format of `http://mydomain.com/bucket/object`. The `MINIO_DOMAIN` environment variable is used to enable virtual host-style requests. If the request's `Host` header information matches `(.+).mydomain.com`, the matched pattern `$1` is used as the bucket, and the path is used as the object.
@@ -163,13 +171,107 @@ For example, to set a refresh interval of 1 minute:
 juicefs gateway xxxx xxxx    --refresh-iam-interval 1m
 ```
 
-### Multiple Gateway Instances
+### Multiple gateway instances
 
-The distributed nature of JuiceFS allows for multiple JuiceFS S3 gateway instances to be started on different nodes simultaneously, which can improve the availability and performance of the S3 gateways. In this scenario, each instance of the S3 gateway will independently handle requests, but all will access the same JuiceFS file system. It's important to note the following:
+The distributed nature of JuiceFS allows multiple JuiceFS S3 gateway instances to be started on different nodes simultaneously. This can improve the availability and performance of S3 Gateway instances. In this scenario, each gateway instance independently handles requests, but all access the same JuiceFS file system. It is important to note the following:
 
-1. Ensure that all instances are started with the same user at initialization; use the same UID and GID for all instances.
-2. The IAM refresh time between nodes can vary, but it must be ensured that this interval is not too short to avoid putting excessive pressure on JuiceFS.
-3. Addresses and ports listened by each instance can be freely configured. If multiple instances are started on the same machine, ensure that there is no conflict in port numbers.
+- Ensure that all instances are started with the same user at initialization; use the same UID and GID for all instances.
+- The IAM refresh time between nodes can vary, but it must be ensured that this interval is not too short to prevent excessive load on JuiceFS.
+- Each instance’s listening address and port can be freely configured. If multiple instances are started on the same machine, ensure that there is no conflict in port numbers.
+
+### Run as a daemon service
+
+JuiceFS S3 Gateway can be configured as a systemd unit.
+
+```shell
+cat > /lib/systemd/system/juicefs-gateway.service<<EOF
+[Unit]
+Description=Juicefs S3 Gateway
+Requires=network.target
+After=multi-user.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+Environment="MINIO_ROOT_USER=admin"
+Environment="MINIO_ROOT_PASSWORD=12345678"
+ExecStart=/usr/local/bin/juicefs gateway redis://localhost:6379 localhost:9000
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+To enable the service at startup:
+
+```shell
+systemctl daemon-reload
+systemctl enable juicefs-gateway --now
+systemctl status juicefs-gateway
+```
+
+To inspect logs:
+
+```bash
+journalctl -xefu juicefs-gateway.service
+```
+
+### Deploy S3 Gateway in Kubernetes {#deploy-in-kubernetes}
+
+Installation requires Helm 3.1.0 or above, refer to the [Helm Installation Guide](https://helm.sh/docs/intro/install).
+
+```shell
+helm repo add juicefs https://juicedata.github.io/charts/
+helm repo update
+```
+
+The Helm chart supports both the Community and Enterprise Editions of JuiceFS. You can specify the version to use by configuring different fields in the [values file](https://github.com/juicedata/charts/blob/main/charts/juicefs-s3-gateway/values.yaml).
+
+```yaml title="values-mycluster.yaml"
+secret:
+  name: "myjfs"
+  # If the token field is populated, the deployment will be treated as an Enterprise Edition.
+  token: "xxx"
+  accessKey: "xxx"
+  secretKey: "xxx"
+```
+
+If you want to deploy Ingress, append the following content and write the corresponding Ingress configuration:
+
+```yaml title="values-mycluster.yaml"
+ingress:
+  enabled: true
+```
+
+:::tip
+Be sure to include the `values-mycluster.yaml` file into your Git project (or using other source code management systems), so that all changes on the values file can be traced and rolled back.
+:::
+
+Once the values file is ready, run the following command to deploy:
+
+```shell
+# Use this command for both initial deployment and subsequent updates.
+helm upgrade --install -f values-mycluster.yaml s3-gateway juicefs/juicefs-s3-gateway
+```
+
+After installation, follow the output instructions to get the Kubernetes service address and verify if it is working.
+
+```shell
+$ kubectl -n kube-system get svc -l app.kubernetes.io/name=juicefs-s3-gateway
+NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
+```
+
+The deployment will launch a Deploy named `juicefs-s3-gateway`. Run this command to check the Pod status:
+
+```sh
+$ kubectl -n kube-system get po -l app.kubernetes.io/name=juicefs-s3-gateway
+NAME                                  READY   STATUS    RESTARTS   AGE
+juicefs-s3-gateway-5c69d574cc-t92b6   1/1     Running   0          136m
+```
 
 ## Advanced features
 
@@ -225,7 +327,7 @@ $ mc admin user list myjfs --json
 }
 ```
 
-### Service Accounts
+### Service accounts
 
 Service accounts are used to create a copy of an existing user with the same permissions, allowing different applications to use separate access keys. The privileges for service accounts inherit from their parent users. They can be managed using the command:
 
@@ -248,10 +350,10 @@ COMMANDS:
 ```
 
 :::tip
-Service accounts inherit privileges from their parent users and cannot be directly attached with policy.
+Service accounts inherit privileges from their parent users and cannot be directly attached with permission policies.
 :::
 
-For example, let's say there is an existing user named `user1`. You can create a service account called `svcacct1` for it as follows:
+For example, consider a user named `user1`. You can create a service account named `svcacct1` for it using the following command:
 
 ```Shell
 mc admin user svcacct add myjfs user1 --access-key svcacct1 --secret-key 123456abc
@@ -380,6 +482,10 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 
 See the [MinIO official example program](https://github.com/minio/minio/blob/master/docs/sts/assume-role.go).
 
+:::note
+Superusers defined by environment variables cannot use AssumeRole APIs; only users added by `mc admin user add` can use AssumeRole APIs.
+:::
+
 #### Permission management
 
 By default, newly created users have no permissions and need to be granted permissions using `mc admin policy` before they can be used. This command supports adding, deleting, updating, and listing policies, as well as adding, deleting, and updating permissions for users.
@@ -431,7 +537,7 @@ USAGE:
   mc admin policy add TARGET POLICYNAME POLICYFILE
 
 POLICYNAME:
-  Name of the canned policy on MinIO server.
+  Name of the canned policy on the MinIO server.
 
 POLICYFILE:
   Name of the policy file associated with the policy name.
@@ -441,7 +547,7 @@ EXAMPLES:
      $ mc admin policy add myjfs writeonly /tmp/writeonly.json
 ```
 
-The policy file to be added here must be in JSON format with [IAM-compatible](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies.html) syntax, and no more than 2,048 characters. This syntax allows for more fine-grained access control. If you are unfamiliar with this, you can first use the following command to see the simple policies and then modify them accordingly.
+The policy file to be added here must be in JSON format with [IAM-compatible](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies.html) syntax, limited to 2,048 characters. This syntax allows for more fine-grained access control. If you are unfamiliar with this, you can first use the following command to see the simple policies and then modify them accordingly.
 
 ```Shell
 $ mc admin policy info myjfs readonly
@@ -646,10 +752,10 @@ To use notification destinations in `namespace` and `access` formats:
     notify_redis[:name]               Supports setting multiple Redis instances with different names.
     address*     (address)            Address of the Redis server. For example: localhost:6379.
     key*         (string)             Redis key to store/update events. The key is created automatically.
-    format*      (namespace*|access)  Whether it is namespace or access. Default is 'namespace'.
+    format*      (namespace*|access)  Determines the format type, either 'namespace' or 'access'; defaults to 'namespace'.
     password     (string)             Password for the Redis server.
     queue_dir    (path)               Directory to store unsent messages, for example, '/home/events'.
-    queue_limit  (number)             Maximum limit of unsent messages. Default is '100000'.
+    queue_limit  (number)             Maximum limit of unsent messages. The default is '100000'.
     comment      (sentence)           Optional comment description.
     ```
 
@@ -662,8 +768,8 @@ To use notification destinations in `namespace` and `access` formats:
     # Effective after restart
     $ mc admin config set myjfs notify_redis:1 queue_limit="1000"
     Successfully applied new settings.
-    Please restart your server 'mc admin service restart myjfs'.
-    # Note that you cannot use `mc admin service restart myjfs` to restart. JuiceFS S3 Gateway does not currently support this functionality. You need to manually restart JuiceFS S3 Gateway when prompted after configuring with `mc`.
+    Please restart your server: 'mc admin service restart myjfs'.
+    # Note that the `mc admin service restart myjfs` command cannot be used to restart. JuiceFS S3 Gateway does not currently support this functionality. When you see this prompt after configuring with `mc`, you need to manually restart JuiceFS S3 Gateway.
     ```
 
     After using the `mc admin config set` command to update the configuration, restart JuiceFS S3 Gateway to apply the changes. JuiceFS S3 Gateway will output a line similar to `SQS ARNs: arn:minio:sqs::1:redis`.
@@ -860,7 +966,7 @@ The method of publishing events using PostgreSQL is similar to publishing MinIO 
     mc event add myjfs/images arn:minio:sqs::1:webhook --event put --suffix .jpg
     ```
 
-    If the command report cannot create a bucket, please check if the S3 Gateway has enabled [Multi-bucket support](#multi-bucket-support).
+    If the command report cannot create a bucket, please check if the S3 Gateway has enabled [multi-bucket support](#multi-bucket-support).
 
 3. Use Thumbnailer to verify.
 

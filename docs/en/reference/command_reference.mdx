@@ -118,6 +118,18 @@ cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
 source /etc/bash_completion.d/juicefs
 ```
 
+## Global options {#global-options}
+
+|Items|Description|
+|-|-|
+|`-v` `--verbose` `--debug`|Enable debug logs.|
+|`-q` `--quiet`|Show only warning and error logs.|
+|`--trace`|Enable more detailed debug logs than the `--debug` option.|
+|`--no-agent`|Disable pprof agent.|
+|`--pyroscope`|Config [Pyroscope](https://github.com/pyroscope-io/pyroscope) address, e.g. `http://localhost:4040`.|
+|`--no-color`|Disable log color.|
+
+
 ## Admin {#admin}
 
 ### `juicefs format` {#format}
@@ -666,7 +678,7 @@ juicefs umount /mnt/jfs
 
 ### `juicefs gateway` {#gateway}
 
-Start an S3-compatible gateway, read [Deploy JuiceFS S3 Gateway](../deployment/s3_gateway.md) for more.
+Start an S3-compatible gateway, read [Deploy JuiceFS S3 Gateway](../guide/gateway.md) for more.
 
 #### Synopsis
 
@@ -750,7 +762,7 @@ juicefs bench /mnt/jfs --big-file-size 0
 |-|-|
 |`--block-size=1`|block size in MiB (default: 1)|
 |`--big-file-size=1024`|size of big file in MiB (default: 1024)|
-|`--small-file-size=0.1`|size of small file in MiB (default: 0.1)|
+|`--small-file-size=128`|size of small file in KiB (default: 128)|
 |`--small-file-count=100`|number of small files (default: 100)|
 |`--threads=1, -p 1`|number of concurrent threads (default: 1)|
 
@@ -861,8 +873,8 @@ As shown in the examples, the format of both source (`SRC`) and destination (`DS
 In which:
 
 - `NAME`: JuiceFS supported data storage types like `s3`, `oss`, refer to [this document](../reference/how_to_set_up_object_storage.md#supported-object-storage) for a full list.
-- `ACCESS_KEY` and `SECRET_KEY`: The credential required to access the data storage, refer to [this document](../reference/how_to_set_up_object_storage.md#aksk).
-- `TOKEN` token used to access the object storage, as some object storage supports the use of temporary token to obtain permission for a limited time
+- `ACCESS_KEY` and `SECRET_KEY`: The credential required to access the data storage, special characters need to be [URL encoded](https://www.w3schools.com/tags/ref_urlencode.ASP), e.g. `/` must be substituted with `%2F`. If you are not familiar with AKSK management, refer to [this document](../reference/how_to_set_up_object_storage.md#aksk).
+- `TOKEN` token used to access the object storage, as some object storage supports the use of temporary token to obtain permission for a limited time.
 - `BUCKET[.ENDPOINT]`: The access address of the data storage service. The format may be different for different storage types, and refer to [the document](../reference/how_to_set_up_object_storage.md#supported-object-storage).
 - `[/PREFIX]`: Optional, a prefix for the source and destination paths that can be used to limit synchronization of data only in certain paths.
 
@@ -871,10 +883,10 @@ In which:
 |Items|Description|
 |-|-|
 |`--start=KEY, -s KEY, --end=KEY, -e KEY`|Provide object storage key range for syncing.|
-|`--end KEY, -e KEY`| the last `KEY` to sync |
-|`--exclude=PATTERN`|Exclude keys matching PATTERN.|
-|`--include=PATTERN`|Include keys matching PATTERN, need to be used with `--exclude`.|
-|`--match-full-path` <VersionAdd>1.2</VersionAdd>|match filters again the full path (default: false)|
+|`--end KEY, -e KEY`|the last `KEY` to sync|
+|`--exclude=PATTERN`|Exclude keys matching `PATTERN`. Refer to the ["Filtering"](../guide/sync.md#filtering) document to learn how to use it.|
+|`--include=PATTERN`|Include keys matching `PATTERN`, need to be used with `--exclude`. Refer to the ["Filtering"](../guide/sync.md#filtering) document to learn how to use it.|
+|`--match-full-path` <VersionAdd>1.2</VersionAdd>|Use "Full path filtering mode", default is false. Refer to the ["Filtering modes"](../guide/sync.md#filtering-mode) document to learn how to use it.|
 |`--max-size-SIZE` <VersionAdd>1.2</VersionAdd>|skip files larger than `SIZE`|
 |`--min-size-SIZE` <VersionAdd>1.2</VersionAdd>|skip files smaller than `SIZE`|
 |`--max-age=DURATION` <VersionAdd>1.2</VersionAdd>|Skip files whose last modification time exceeds `DURATION`, in seconds. For example, `--max-age=3600` means to synchronize only files that have been modified within 1 hour.|

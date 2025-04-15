@@ -32,6 +32,9 @@ juicefs format --storage s3 \
 
 When executing the `juicefs format` or `juicefs mount` command, you can set some special options in the form of URL parameters in the `--bucket` option, such as `tls-insecure-skip-verify=true` in `https://myjuicefs.s3.us-east-2.amazonaws.com?tls-insecure-skip-verify=true` is to skip the certificate verification of HTTPS requests.
 
+Client certificates are also supported as they are commonly used for mTLS connections, for example:
+`https://myjuicefs.s3.us-east-2.amazonaws.com?ca-certs=./path/to/ca&ssl-cert=./path/to/cert&ssl-key=./path/to/privatekey`
+
 ## Enable data sharding {#enable-data-sharding}
 
 When creating a file system, multiple buckets can be defined as the underlying storage of the file system through the [`--shards`](../reference/command_reference.mdx#format-data-format-options) option. In this way, the system will distribute the files to multiple buckets based on the hashed value of the file name. Data sharding technology can distribute the load of concurrent writing of large-scale data to multiple buckets, thereby improving the writing performance.
@@ -169,7 +172,6 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Kingsoft Cloud KS3](#kingsoft-cloud-ks3)                   | `ks3`      |
 | [QingStor](#qingstor)                                       | `qingstor` |
 | [Qiniu](#qiniu)                                             | `qiniu`    |
-| [Sina Cloud Storage](#sina-cloud-storage)                   | `scs`      |
 | [CTYun OOS](#ctyun-oos)                                     | `oos`      |
 | [ECloud Object Storage](#ecloud-object-storage)             | `eos`      |
 | [JD Cloud OSS](#jd-cloud-oss)                               | `s3`       |
@@ -705,20 +707,6 @@ The `--bucket` option format is `https://<bucket>.s3-<region>.qiniucs.com`, repl
 juicefs format \
     --storage qiniu \
     --bucket https://<bucket>.s3-<region>.qiniucs.com \
-    ... \
-    myjfs
-```
-
-### Sina Cloud Storage
-
-Please follow [this document](https://scs.sinacloud.com/doc/scs/guide/quick_start#accesskey) to learn how to get access key and secret key.
-
-The `--bucket` option format is `https://<bucket>.stor.sinaapp.com`. For example:
-
-```bash
-juicefs format \
-    --storage scs \
-    --bucket https://<bucket>.stor.sinaapp.com \
     ... \
     myjfs
 ```

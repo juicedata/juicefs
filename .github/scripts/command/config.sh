@@ -5,6 +5,10 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META minio
 META_URL=$(get_meta_url $META)
+# version lower than 1.3.0 does not support parameter max_open_conns
+if [[ $META_URL == *"?max_open_conns="* ]]; then
+    META_URL=${META_URL%%\?*}
+fi
 [ ! -x mc ] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc && chmod +x mc
 
 download_juicefs_client(){
@@ -39,7 +43,7 @@ test_config_max_client_version()
     ./juicefs mount $META_URL /jfs -d
 }
 
-test_confi_secret_key(){
+test_config_secret_key(){
     # # Consider command as failed when any component of the pipe fails:
     # https://stackoverflow.com/questions/1221833/pipe-output-and-capture-exit-status-in-bash
     prepare_test
@@ -47,8 +51,8 @@ test_confi_secret_key(){
     ./mc config host add minio http://127.0.0.1:9000 minioadmin minioadmin
     ./mc admin user add minio juicedata juicedata
     ./mc admin policy attach minio consoleAdmin --user juicedata
-    ./juicefs format --storage minio --bucket http://localhost:9000/jfs-test --access-key juicedata --secret-key juicedata $meta_url myjfs
-    ./juicefs mount $META_URL /jfs -d --io-retries 1 --no-usage-report --heartbeat 5
+    ./juicefs format --storage minio --bucket http://localhost:9000/jfs-test --access-key juicedata --secret-key juicedata $META_URL myjfs
+    ./juicefs mount $META_URL /jfs -d --io-retries 1 --no-usage-report --heartbeat 3
 
     ./mc admin user remove minio juicedata
     ./mc admin user add minio juicedata1 juicedata1

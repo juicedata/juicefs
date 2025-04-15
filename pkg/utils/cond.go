@@ -43,26 +43,29 @@ func (c *Cond) Broadcast() {
 	c.signal = make(chan struct{})
 }
 
-var timerPool = sync.Pool{
-	New: func() interface{} {
-		return time.NewTimer(time.Second)
-	},
-}
+var timerPool = sync.Pool{}
 
 // WaitWithTimeout wait for a signal or a period of timeout eclipsed.
 // returns true in case of timeout else false
 func (c *Cond) WaitWithTimeout(d time.Duration) bool {
 	ch := c.signal
 	c.L.Unlock()
-	t := timerPool.Get().(*time.Timer)
-	t.Reset(d)
+	var t *time.Timer
+	if e := timerPool.Get(); e == nil {
+		t = time.NewTimer(d)
+	} else {
+		t = e.(*time.Timer)
+		t.Reset(d)
+	}
 	defer func() {
-		t.Stop()
 		timerPool.Put(t)
 		c.L.Lock()
 	}()
 	select {
 	case <-ch:
+		if !t.Stop() {
+			<-t.C
+		}
 		return false
 	case <-t.C:
 		return true

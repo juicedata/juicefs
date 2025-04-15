@@ -78,7 +78,7 @@ func (s *swiftOSS) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (s *swiftOSS) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (s *swiftOSS) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 10000 {
 		limit = 10000
 	}
@@ -87,12 +87,12 @@ func (s *swiftOSS) List(prefix, marker, delimiter string, limit int64, followLin
 		if len([]rune(delimiter)) == 1 {
 			delimiter_ = []rune(delimiter)[0]
 		} else {
-			return nil, fmt.Errorf("delimiter should be a rune but now is %s", delimiter)
+			return nil, false, "", fmt.Errorf("delimiter should be a rune but now is %s", delimiter)
 		}
 	}
 	objects, err := s.conn.Objects(context.Background(), s.container, &swift.ObjectsOpts{Prefix: prefix, Marker: marker, Delimiter: delimiter_, Limit: int(limit)})
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	var objs = make([]Object, len(objects))
 	for i, o := range objects {
@@ -103,7 +103,7 @@ func (s *swiftOSS) List(prefix, marker, delimiter string, limit int64, followLin
 			objs[i] = &obj{o.Name, o.Bytes, o.LastModified, strings.HasSuffix(o.Name, "/"), ""}
 		}
 	}
-	return objs, nil
+	return generateListResult(objs, limit)
 }
 
 func (s *swiftOSS) Head(key string) (Object, error) {

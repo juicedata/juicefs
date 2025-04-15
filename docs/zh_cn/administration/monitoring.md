@@ -122,13 +122,13 @@ cat /jfs/.stats
 该特性需要运行 0.17.1 及以上版本 JuiceFS 客户端
 :::
 
-[JuiceFS S3 网关](../deployment/s3_gateway.md)默认会在 `http://localhost:9567/metrics` 这个地址提供监控指标，你也可以通过 `--metrics` 选项自定义。如：
+[JuiceFS S3 网关](../guide/gateway.md)默认会在 `http://localhost:9567/metrics` 这个地址提供监控指标，你也可以通过 `--metrics` 选项自定义。如：
 
 ```shell
 juicefs gateway --metrics localhost:9567 ...
 ```
 
-如果你是[在 Kubernetes 中部署](../deployment/s3_gateway.md#deploy-in-kubernetes) JuiceFS S3 网关，可以参考 [Kubernetes](#kubernetes) 小节的 Prometheus 配置来收集监控指标（区别主要在于 `__meta_kubernetes_pod_label_app_kubernetes_io_name` 这个标签的正则表达式），例如：
+如果你是[在 Kubernetes 中部署](../guide/gateway.md#deploy-in-kubernetes) JuiceFS S3 网关，可以参考 [Kubernetes](#kubernetes) 小节的 Prometheus 配置来收集监控指标（区别主要在于 `__meta_kubernetes_pod_label_app_kubernetes_io_name` 这个标签的正则表达式），例如：
 
 ```yaml {6-8}
 scrape_configs:

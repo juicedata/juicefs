@@ -19,6 +19,7 @@ package vfs
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 	"sort"
@@ -26,6 +27,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -58,7 +60,6 @@ type FuseOptions struct {
 	MaxBackground            int
 	MaxWrite                 int
 	MaxReadAhead             int
-	MaxPages                 int
 	IgnoreSecurityLabels     bool // ignoring labels should be provided as a fusermount mount option.
 	RememberInodes           bool
 	FsName                   string
@@ -66,16 +67,22 @@ type FuseOptions struct {
 	SingleThreaded           bool
 	DisableXAttrs            bool
 	Debug                    bool
+	Logger                   *log.Logger `json:"-"`
 	EnableLocks              bool
+	EnableSymlinkCaching     bool `json:",omitempty"`
 	ExplicitDataCacheControl bool
+	SyncRead                 bool `json:",omitempty"`
 	DirectMount              bool
+	DirectMountStrict        bool `json:",omitempty"`
 	DirectMountFlags         uintptr
 	EnableAcl                bool
+	DisableReadDirPlus       bool `json:",omitempty"`
 	EnableWriteback          bool
-	EnableIoctl              bool
+	EnableIoctl              bool `json:",omitempty"`
 	DontUmask                bool
 	OtherCaps                uint32
 	NoAllocForRead           bool
+	Timeout                  time.Duration
 }
 
 func (o FuseOptions) StripOptions() FuseOptions {
@@ -101,30 +108,40 @@ func (o FuseOptions) StripOptions() FuseOptions {
 	// ignore there options because they cannot be configured by users
 	o.Name = ""
 	o.MaxBackground = 0
-	o.MaxWrite = 0
 	o.MaxReadAhead = 0
 	o.DirectMount = false
 	o.DontUmask = false
+	o.Timeout = 0
 	return o
+}
+
+type SecurityConfig struct {
+	EnableCap     bool
+	EnableSELinux bool
 }
 
 type Config struct {
 	Meta                 *meta.Config
 	Format               meta.Format
 	Chunk                *chunk.Config
+	Security             *SecurityConfig
 	Port                 *Port
 	Version              string
 	AttrTimeout          time.Duration
 	DirEntryTimeout      time.Duration
+	NegDirEntryTimeout   time.Duration
 	EntryTimeout         time.Duration
+	ReaddirCache         bool
 	BackupMeta           time.Duration
 	BackupSkipTrash      bool
 	FastResolve          bool   `json:",omitempty"`
 	AccessLog            string `json:",omitempty"`
 	PrefixInternal       bool
 	HideInternal         bool
-	RootSquash           *RootSquash `json:",omitempty"`
-	NonDefaultPermission bool        `json:",omitempty"`
+	RootSquash           *AnonymousAccount `json:",omitempty"`
+	AllSquash            *AnonymousAccount `json:",omitempty"`
+	NonDefaultPermission bool              `json:",omitempty"`
+	UMask                uint16
 
 	Pid       int
 	PPid      int
@@ -133,7 +150,7 @@ type Config struct {
 	FuseOpts  *FuseOptions `json:",omitempty"`
 }
 
-type RootSquash struct {
+type AnonymousAccount struct {
 	Uid uint32
 	Gid uint32
 }
@@ -411,7 +428,7 @@ func (v *VFS) UpdateLength(inode Ino, attr *meta.Attr) {
 }
 
 func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plus bool) (entries []*meta.Entry, readAt time.Time, err syscall.Errno) {
-	defer func() { logit(ctx, "readdir", err, "(%d,%d,%d): (%d)", ino, size, off, len(entries)) }()
+	defer func() { logit(ctx, "readdir", err, "(%d,%d,%d,%t): (%d)", ino, size, off, plus, len(entries)) }()
 	h := v.findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF
@@ -420,45 +437,36 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 	h.Lock()
 	defer h.Unlock()
 
-	if h.children == nil || off == 0 {
-		var inodes []*meta.Entry
-		h.readAt = time.Now()
-		err = v.Meta.Readdir(ctx, ino, 1, &inodes)
-		if err == syscall.EACCES {
-			err = v.Meta.Readdir(ctx, ino, 0, &inodes)
+	if h.dirHandler == nil || off == 0 {
+		if h.dirHandler != nil {
+			h.dirHandler.Close()
+			h.dirHandler = nil
 		}
-		if err != 0 {
-			return
-		}
+		var initEntries []*meta.Entry
 		if ino == rootID && !v.Conf.HideInternal {
-			// add internal nodes
 			for _, node := range internalNodes[1:] {
-				inodes = append(inodes, &meta.Entry{
+				initEntries = append(initEntries, &meta.Entry{
 					Inode: node.inode,
 					Name:  []byte(node.name),
 					Attr:  node.attr,
 				})
 			}
 		}
-		if v.Conf.Meta.SortDir {
-			sort.SliceStable(inodes[2:], func(i, j int) bool {
-				return string(inodes[i+2].Name) < string(inodes[j+2].Name)
-			})
+		h.readAt = time.Now()
+		if h.dirHandler, err = v.Meta.NewDirHandler(ctx, ino, plus, initEntries); err != 0 {
+			if plus && err == syscall.EACCES {
+				h.dirHandler, err = v.Meta.NewDirHandler(ctx, ino, false, initEntries)
+			}
+			if err != 0 {
+				return
+			}
 		}
-		h.children = inodes
-
-		index := make(map[string]int)
-		for i, e := range inodes {
-			index[string(e.Name)] = i
-		}
-		h.index = index
 	}
-	if off < len(h.children) {
-		entries = h.children[off:]
-		// we don't know how much of them will be sent, assume all of them
-		h.readOff = len(h.children) - 1
+	if entries, err = h.dirHandler.List(ctx, off); err != 0 {
+		return
 	}
 	readAt = h.readAt
+	logger.Debugf("readdir: [%d:%d] %d entries, offset=%d", ino, fh, len(entries), off)
 	return
 }
 
@@ -469,7 +477,9 @@ func (v *VFS) UpdateReaddirOffset(ctx Context, ino Ino, fh uint64, off int) {
 	}
 	h.Lock()
 	defer h.Unlock()
-	h.readOff = off
+	if h.dirHandler != nil {
+		h.dirHandler.Read(off)
+	}
 }
 
 func (v *VFS) Releasedir(ctx Context, ino Ino, fh uint64) int {
@@ -482,10 +492,17 @@ func (v *VFS) Releasedir(ctx Context, ino Ino, fh uint64) int {
 	return 0
 }
 
+const O_TMPFILE = 020000000
+
 func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32) (entry *meta.Entry, fh uint64, err syscall.Errno) {
 	defer func() {
 		logit(ctx, "create", err, "(%d,%s,%s:0%04o):%s [fh:%d]", parent, name, smode(mode), mode, (*Entry)(entry), fh)
 	}()
+	// O_TMPFILE support
+	doUnlink := runtime.GOOS == "linux" && flags&O_TMPFILE != 0
+	if doUnlink {
+		name = fmt.Sprintf("tmpfile_%s", uuid.New().String())
+	}
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
 		return
@@ -497,6 +514,9 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 
 	var inode Ino
 	var attr = &Attr{}
+	if runtime.GOOS == "windows" {
+		attr.Flags = meta.FlagWindowsArchive
+	}
 	err = v.Meta.Create(ctx, parent, name, mode&07777, cumask, flags, &inode, attr)
 	if runtime.GOOS == "darwin" && err == syscall.ENOENT {
 		err = syscall.EACCES
@@ -506,6 +526,13 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 		fh = v.newFileHandle(inode, attr.Length, flags)
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 		v.invalidateDirHandle(parent, name, inode, attr)
+
+		if doUnlink {
+			if flags&syscall.O_EXCL != 0 {
+				logger.Warnf("The O_EXCL is currently not supported for use with O_TMPFILE")
+			}
+			err = v.Unlink(ctx, parent, name)
+		}
 	}
 	return
 }
@@ -593,7 +620,8 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, fh uint64, attr *Attr) 
 			err = syscall.EACCES
 			return
 		}
-		err = v.Meta.Truncate(ctx, ino, 0, uint64(size), attr, true)
+		// flags = 1 means the file is opened, so we don't need to check if it's in the trash
+		err = v.Meta.Truncate(ctx, ino, 1, uint64(size), attr, true)
 	}
 	if err == 0 {
 		v.writer.Truncate(ino, uint64(size))
@@ -706,7 +734,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 
 	defer func() {
 		readSizeHistogram.Observe(float64(n))
-		logit(ctx, "read", err, "(%d,%d,%d): (%d)", ino, size, off, n)
+		logit(ctx, "read", err, "(%d,%d,%d,%d): (%d)", ino, size, off, fh, n)
 	}()
 	h := v.findHandle(ino, fh)
 	if h == nil {
@@ -739,7 +767,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 	}
 
 	// there could be read operation for write-only if kernel writeback is enabled
-	if !v.Conf.FuseOpts.EnableWriteback && !hasReadPerm(h.flags) {
+	if v.Conf.FuseOpts != nil && !v.Conf.FuseOpts.EnableWriteback && !hasReadPerm(h.flags) {
 		err = syscall.EBADF
 		return
 	}
@@ -1026,6 +1054,27 @@ const (
 	xattrMaxSize = 65536
 )
 
+var macSupportFlags = meta.XattrCreateOrReplace | meta.XattrCreate | meta.XattrReplace
+
+const (
+	_SECURITY_CAPABILITY  = "security.capability"
+	_SECURITY_SELINUX     = "security.selinux"
+	_SECURITY_ACL         = "system.posix_acl_access"
+	_SECURITY_ACL_DEFAULT = "system.posix_acl_default"
+)
+
+func isXattrEnabled(conf *Config, name string) bool {
+	switch name {
+	case _SECURITY_CAPABILITY:
+		return conf.Security != nil && conf.Security.EnableCap
+	case _SECURITY_SELINUX:
+		return conf.Security != nil && conf.Security.EnableSELinux
+	case _SECURITY_ACL, _SECURITY_ACL_DEFAULT:
+		return conf.Format.EnableACL
+	}
+	return true
+}
+
 func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags uint32) (err syscall.Errno) {
 	defer func() { logit(ctx, "setxattr", err, "(%d,%s,%d,%d)", ino, name, len(value), flags) }()
 	if IsSpecialNode(ino) {
@@ -1053,27 +1102,35 @@ func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags ui
 		return
 	}
 
-	aclType := GetACLType(name)
-	if aclType != acl.TypeNone {
-		if !v.Conf.Format.EnableACL {
-			err = syscall.ENOTSUP
-			return
-		}
+	if !isXattrEnabled(v.Conf, name) {
+		err = syscall.ENOTSUP
+		return
+	}
 
+	if typ, ok := aclTypes[name]; ok {
 		var rule *acl.Rule
 		rule, err = decodeACL(value)
 		if err != 0 {
 			return
 		}
-		err = v.Meta.SetFacl(ctx, ino, aclType, rule)
+		err = v.Meta.SetFacl(ctx, ino, typ, rule)
 		v.invalidateAttr(ino)
 	} else {
+		// only retain supported flags
+		if runtime.GOOS == "darwin" {
+			flags &= uint32(macSupportFlags)
+		}
 		err = v.Meta.SetXattr(ctx, ino, name, value, flags)
 	}
 	return
 }
 
 func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []byte, err syscall.Errno) {
+	if !isXattrEnabled(v.Conf, name) {
+		err = syscall.ENODATA
+		return
+	}
+
 	defer func() { logit(ctx, "getxattr", err, "(%d,%s,%d): (%d)", ino, name, size, len(value)) }()
 	if IsSpecialNode(ino) {
 		err = meta.ENOATTR
@@ -1092,15 +1149,9 @@ func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []
 		return
 	}
 
-	aclType := GetACLType(name)
-	if aclType != acl.TypeNone {
-		if !v.Conf.Format.EnableACL {
-			err = syscall.ENOTSUP
-			return
-		}
-
+	if typ, ok := aclTypes[name]; ok {
 		rule := &acl.Rule{}
-		if err = v.Meta.GetFacl(ctx, ino, aclType, rule); err != 0 {
+		if err = v.Meta.GetFacl(ctx, ino, typ, rule); err != 0 {
 			return nil, err
 		}
 		value = encodeACL(rule)
@@ -1145,13 +1196,13 @@ func (v *VFS) RemoveXattr(ctx Context, ino Ino, name string) (err syscall.Errno)
 		return
 	}
 
-	aclType := GetACLType(name)
-	if aclType != acl.TypeNone {
-		if !v.Conf.Format.EnableACL {
-			err = syscall.ENOTSUP
-			return
-		}
-		err = v.Meta.SetFacl(ctx, ino, aclType, acl.EmptyRule())
+	if !isXattrEnabled(v.Conf, name) {
+		err = syscall.ENOTSUP
+		return
+	}
+
+	if typ, ok := aclTypes[name]; ok {
+		err = v.Meta.SetFacl(ctx, ino, typ, acl.EmptyRule())
 	} else {
 		err = v.Meta.RemoveXattr(ctx, ino, name)
 	}
@@ -1169,6 +1220,7 @@ type VFS struct {
 	UpdateFormat    func(*meta.Format)
 	reader          DataReader
 	writer          DataWriter
+	cacheFiller     *CacheFiller
 
 	handles   map[Ino][]*handle
 	handleIno map[uint64]Ino
@@ -1178,11 +1230,7 @@ type VFS struct {
 	modM       sync.Mutex
 	modifiedAt map[Ino]time.Time
 
-	handlersGause  prometheus.GaugeFunc
-	usedBufferSize prometheus.GaugeFunc
-	storeCacheSize prometheus.GaugeFunc
-	readBufferUsed prometheus.GaugeFunc
-	registry       *prometheus.Registry
+	registry *prometheus.Registry
 }
 
 func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer prometheus.Registerer, registry *prometheus.Registry) *VFS {
@@ -1190,16 +1238,17 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	writer := NewDataWriter(conf, m, store, reader)
 
 	v := &VFS{
-		Conf:       conf,
-		Meta:       m,
-		Store:      store,
-		reader:     reader,
-		writer:     writer,
-		handles:    make(map[Ino][]*handle),
-		handleIno:  make(map[uint64]Ino),
-		modifiedAt: make(map[meta.Ino]time.Time),
-		nextfh:     1,
-		registry:   registry,
+		Conf:        conf,
+		Meta:        m,
+		Store:       store,
+		reader:      reader,
+		writer:      writer,
+		cacheFiller: NewCacheFiller(conf, m, store),
+		handles:     make(map[Ino][]*handle),
+		handleIno:   make(map[uint64]Ino),
+		modifiedAt:  make(map[meta.Ino]time.Time),
+		nextfh:      1,
+		registry:    registry,
 	}
 
 	n := getInternalNode(configInode)
@@ -1220,10 +1269,10 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	if statePath == "" {
 		statePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 	}
-
 	if err := v.loadAllHandles(statePath); err != nil && !os.IsNotExist(err) {
 		logger.Errorf("load state from %s: %s", statePath, err)
 	}
+	_ = os.Rename(statePath, statePath+".bak")
 
 	go v.cleanupModified()
 	initVFSMetrics(v, writer, reader, registerer)
@@ -1282,7 +1331,7 @@ func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer pro
 	if registerer == nil {
 		return
 	}
-	v.handlersGause = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+	handlersGause := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "fuse_open_handlers",
 		Help: "number of open files and directories.",
 	}, func() float64 {
@@ -1290,7 +1339,12 @@ func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer pro
 		defer v.hanleM.Unlock()
 		return float64(len(v.handles))
 	})
-	v.usedBufferSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+	_ = registerer.Register(handlersGause)
+	InitMemoryBufferMetrics(writer, reader, registerer)
+}
+
+func InitMemoryBufferMetrics(writer DataWriter, reader DataReader, registerer prometheus.Registerer) {
+	usedBufferSize := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "used_buffer_size_bytes",
 		Help: "size of currently used buffer.",
 	}, func() float64 {
@@ -1299,7 +1353,7 @@ func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer pro
 		}
 		return 0.0
 	})
-	v.storeCacheSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+	storeCacheSize := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "store_cache_size_bytes",
 		Help: "size of store cache.",
 	}, func() float64 {
@@ -1308,7 +1362,7 @@ func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer pro
 		}
 		return 0.0
 	})
-	v.readBufferUsed = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+	readBufferMetric := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "used_read_buffer_size_bytes",
 		Help: "size of currently used buffer for read",
 	}, func() float64 {
@@ -1317,10 +1371,9 @@ func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer pro
 		}
 		return 0.0
 	})
-	_ = registerer.Register(v.handlersGause)
-	_ = registerer.Register(v.usedBufferSize)
-	_ = registerer.Register(v.storeCacheSize)
-	_ = registerer.Register(v.readBufferUsed)
+	_ = registerer.Register(usedBufferSize)
+	_ = registerer.Register(storeCacheSize)
+	_ = registerer.Register(readBufferMetric)
 }
 
 func InitMetrics(registerer prometheus.Registerer) {
@@ -1425,12 +1478,7 @@ func decodeACL(buff []byte) (*acl.Rule, syscall.Errno) {
 	return n, 0
 }
 
-func GetACLType(name string) uint8 {
-	switch name {
-	case "system.posix_acl_access":
-		return acl.TypeAccess
-	case "system.posix_acl_default":
-		return acl.TypeDefault
-	}
-	return acl.TypeNone
+var aclTypes = map[string]uint8{
+	_SECURITY_ACL:         acl.TypeAccess,
+	_SECURITY_ACL_DEFAULT: acl.TypeDefault,
 }

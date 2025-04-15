@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+  JuiceFS, Copyright 2024 Juicedata, Inc.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<configuration xmlns:xi="http://www.w3.org/2001/XInclude">
+    <property>
+        <name>ranger.plugin.hdfs.service.name</name>
+        <value>xxx</value>
+        <description>
+            Name of the Ranger service containing policies for this YARN instance
+        </description>
+    </property>
+
+    <property>
+        <name>ranger.plugin.hdfs.policy.source.impl</name>
+        <value>io.juicefs.permission.RangerAdminClientImpl</value>
+        <description>
+            Policy source.
+        </description>
+    </property>
+
+    <property>
+        <name>ranger.plugin.hdfs.policy.cache.dir</name>
+        <value>${project.build.directory}</value>
+        <description>
+            Directory where Ranger policies are cached after successful retrieval from the source
+        </description>
+    </property>
+
+    <property>
+        <name>ranger.plugin.hdfs.policy.pollIntervalMs</name>
+        <value>30000</value>
+        <description>
+            How often to poll for changes in policies?
+        </description>
+    </property>
+
+    <property>
+        <name>ranger.plugin.hdfs.policy.cache.dir</name>
+        <value>xxx</value>
+        <description>
+            Directory where Ranger policies are cached after successful retrieval from the source
+        </description>
+    </property>
+
+    <property>
+        <name>ranger.plugin.hdfs.policy.rest.client.connection.timeoutMs</name>
+        <value>120000</value>
+        <description>
+            Hdfs Plugin RangerRestClient Connection Timeout in Milli Seconds
+        </description>
+    </property>
+
+    <property>
+        <name>ranger.plugin.hdfs.policy.rest.client.read.timeoutMs</name>
+        <value>30000</value>
+        <description>
+            Hdfs Plugin RangerRestClient read Timeout in Milli Seconds
+        </description>
+    </property>
+
+    <property>
+        <name>xasecure.add-hadoop-authorization</name>
+        <value>true</value>
+        <description>
+            Enable/Disable the default hadoop authorization (based on
+            rwxrwxrwx permission on the resource) if Ranger Authorization fails.
+        </description>
+    </property>
+</configuration>

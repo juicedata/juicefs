@@ -18,9 +18,14 @@ package vfs
 
 import (
 	"compress/gzip"
+	"errors"
 	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 	"sort"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -43,7 +48,7 @@ var (
 
 // Backup metadata periodically in the object storage
 func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skipTrash bool) {
-	ctx := meta.Background
+	ctx := meta.Background()
 	key := "lastBackup"
 	for {
 		utils.SleepWithJitter(interval / 10)
@@ -75,9 +80,9 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skip
 				logger.Warnf("setxattr inode 1 key %s: %s", key, st)
 				continue
 			}
-			go cleanupBackups(blob, now)
 			logger.Debugf("backup metadata started")
 			if fpath, err := backup(m, blob, now, iused < 1e5, skipTrash); err == nil {
+				go cleanupBackups(blob, now) // only cleanup on success
 				LastBackupTimeG.Set(float64(now.UnixNano()) / 1e9)
 				logger.Infof("backup metadata succeed, fast mode: %v, path: %q, used %s", iused < 1e5, fpath, time.Since(now))
 			} else {
@@ -92,13 +97,23 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skip
 
 func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTrash bool) (string, error) {
 	name := "dump-" + now.UTC().Format("2006-01-02-150405") + ".json.gz"
-	fp, err := os.CreateTemp("", "juicefs-meta-*")
+	localDir := os.TempDir()
+	if !strings.HasSuffix(localDir, "/") {
+		localDir += "/"
+	}
+	fp, err := os.Create(filepath.Join(localDir, "meta", name))
+	if errors.Is(err, syscall.ENOENT) || (errors.Is(err, syscall.ENOTDIR) && runtime.GOOS == "windows") {
+		if err = os.MkdirAll(filepath.Join(localDir, "meta"), 0755); err != nil {
+			return "", err
+		}
+		fp, err = os.Create(filepath.Join(localDir, "meta", name))
+	}
 	if err != nil {
 		return "", err
 	}
 	defer os.Remove(fp.Name())
 	defer fp.Close()
-	zw := gzip.NewWriter(fp)
+	zw, _ := gzip.NewWriterLevel(fp, gzip.BestSpeed)
 	var threads = 2
 	if m.Name() == "tikv" {
 		threads = 10
@@ -108,11 +123,19 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time, fast, skipTra
 	if err != nil {
 		return "", err
 	}
-	if _, err = fp.Seek(0, io.SeekStart); err != nil {
+	size, err := fp.Seek(0, io.SeekCurrent)
+	if err != nil {
 		return "", err
 	}
+
 	fpath := "meta/" + name
-	return blob.String() + fpath, blob.Put(fpath, fp)
+	disk, err := object.CreateStorage("file", localDir, "", "", "")
+	if err != nil {
+		return "", err
+	}
+	osync.InitForCopyData()
+	_, err = osync.CopyData(disk, blob, fpath, size, true)
+	return blob.String() + fpath, err
 }
 
 func cleanupBackups(blob object.ObjectStorage, now time.Time) {

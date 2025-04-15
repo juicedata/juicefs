@@ -20,6 +20,7 @@
 package meta
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 
@@ -60,7 +61,11 @@ func (c *fdbClient) name() string {
 	return "fdb"
 }
 
-func (c *fdbClient) txn(f func(*kvTxn) error, retry int) error {
+func (c *fdbClient) config(key string) interface{} {
+	return nil
+}
+
+func (c *fdbClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) error {
 	_, err := c.client.Transact(func(t fdb.Transaction) (interface{}, error) {
 		e := f(&kvTxn{&fdbTxn{t}, retry})
 		return nil, e

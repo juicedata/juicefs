@@ -109,7 +109,7 @@ Result: PASS
 Aside from the POSIX features covered by pjdfstest, JuiceFS also provides:
 
 - **Close-to-open consistency**. Once a file is written _and_ closed, it is guaranteed to view the written data in the following opens and reads from any client. Within the same mount point, all the written data can be read immediately.
-- Rename and all other metadata operations are atomic, which are guaranteed by supported metadada engine transaction.
+- Rename and all other metadata operations are atomic, which are guaranteed by supported metadata engine transaction.
 - Opened files remain accessible after unlink from same mount point.
 - Mmap (tested with FSx).
 - Fallocate with punch hole support.

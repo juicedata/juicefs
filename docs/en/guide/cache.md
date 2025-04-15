@@ -144,13 +144,13 @@ The client will perform prefetch and cache automatically to improve sequence rea
 
 Data downloaded from object storage, as well as small data (smaller than a single block) uploaded to object storage will be cached by JuiceFS Client, without compression or encryption. To achieve better performance on application's first read, use [`juicefs warmup`](../reference/command_reference.mdx#warmup) to cache data in advance.
 
-If the file system where the cache directory is located is not working properly, the JuiceFS client can immediately return an error and downgrade to direct access to object storage. This is usually true for local disk, but if the file system where the cache directory is located is abnormal and the read operation is stuck (such as some kernel-mode network file system), then JuiceFS will also get stuck together. This requires you to tune the underlying file system behavior of the cache directory to fail fast.
+When '--write-back' is not enabled, if the file system where the cache directory is located is not working properly, the JuiceFS client can return an error and downgrade to direct access to object storage. In the case of enable '--write-back', if the file system where the cache directory is located is abnormal and the read operation is stuck (such as some kernel-mode network file system), then JuiceFS will also get stuck together. This requires you to tune the underlying file system behavior of the cache directory to fail fast.
 
 Below are some important options for cache configuration (see [`juicefs mount`](../reference/command_reference.mdx#mount) for complete reference):
 
 * `--prefetch`
 
-  Prefetch N blocks concurrently (default to 1), prefetch mechanism works like this: when reading a block at arbitrary position, the whole block is asynchronously scheduled for download. Prefetch often improves random read performance, but if your scenario cannot effectively utilize prefetched data (for example, reading large files randomly and sparsely), prefetch will bring read amplification, consider set to 0 to disable it.
+  Concurrent prefetch of N (1 by default) blocks. Prefetching refers to randomly reading a segment of a file's block, and the client asynchronously downloads the entire object storage block. Prefetching can often improve the performance of random reads. However, if the file access pattern in your scenario cannot effectively utilize the prefetched data (for example, reading large files randomly and sparsely), prefetching may lead to noticeable read amplification. In such cases, you can set it to 0 to disable the prefetch feature.
 
   JuiceFS is equipped with another internal similar mechanism called "readahead": when doing sequential reads, client will download nearby blocks in advance, improving sequential performance. The concurrency of readahead is affected by the size of ["Read/Write Buffer"](#buffer-size), the larger the read-write buffer, the higher the concurrency.
 

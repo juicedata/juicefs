@@ -40,12 +40,11 @@ import (
 
 type gs struct {
 	DefaultObjectStorage
-	clients   []*storage.Client
-	index     uint64
-	bucket    string
-	region    string
-	pageToken string
-	sc        string
+	clients []*storage.Client
+	index   uint64
+	bucket  string
+	region  string
+	sc      string
 }
 
 func (g *gs) String() string {
@@ -62,13 +61,12 @@ func (g *gs) getClient() *storage.Client {
 
 func (g *gs) Create() error {
 	// check if the bucket is already exists
-	if objs, err := g.List("", "", "", 1, true); err == nil && len(objs) > 0 {
+	if objs, _, _, err := g.List("", "", "", "", 1, true); err == nil && len(objs) > 0 {
 		return nil
 	}
-
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
 	if projectID == "" {
-		projectID, _ = metadata.ProjectID()
+		projectID, _ = metadata.ProjectIDWithContext(context.Background())
 	}
 	if projectID == "" {
 		cred, err := google.FindDefaultCredentials(context.Background())
@@ -81,7 +79,7 @@ func (g *gs) Create() error {
 	}
 	// Guess region when region is not provided
 	if g.region == "" {
-		zone, err := metadata.Zone()
+		zone, err := metadata.ZoneWithContext(context.Background())
 		if err == nil && len(zone) > 2 {
 			g.region = zone[:len(zone)-2]
 		}
@@ -166,19 +164,14 @@ func (g *gs) Delete(key string, getters ...AttrGetter) error {
 	return nil
 }
 
-func (g *gs) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	if marker != "" && g.pageToken == "" {
-		// last page
-		return nil, nil
-	}
-	objectIterator := g.getClient().Bucket(g.bucket).Objects(ctx, &storage.Query{Prefix: prefix, Delimiter: delimiter})
-	pager := iterator.NewPager(objectIterator, int(limit), g.pageToken)
+func (g *gs) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	objectIterator := g.getClient().Bucket(g.bucket).Objects(ctx, &storage.Query{Prefix: prefix, Delimiter: delimiter, StartOffset: start})
+	pager := iterator.NewPager(objectIterator, int(limit), token)
 	var entries []*storage.ObjectAttrs
 	nextPageToken, err := pager.NextPage(&entries)
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
-	g.pageToken = nextPageToken
 	n := len(entries)
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
@@ -192,7 +185,7 @@ func (g *gs) List(prefix, marker, delimiter string, limit int64, followLink bool
 	if delimiter != "" {
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-	return objs, nil
+	return objs, nextPageToken != "", nextPageToken, nil
 }
 
 func (g *gs) SetStorageClass(sc string) error {

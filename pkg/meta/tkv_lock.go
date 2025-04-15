@@ -18,6 +18,7 @@ package meta
 
 import (
 	"context"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -53,10 +54,11 @@ func unmarshalFlock(buf []byte) map[lockOwner]byte {
 
 func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
 	ikey := m.flockKey(inode)
+	ctx = ctx.WithValue(txMethodKey{}, "Flock"+strconv.Itoa(int(ltype)))
 	var err error
 	lkey := lockOwner{m.sid, owner}
 	for {
-		err = m.txn(func(tx *kvTxn) error {
+		err = m.txn(ctx, func(tx *kvTxn) error {
 			v := tx.get(ikey)
 			ls := unmarshalFlock(v)
 			switch ltype {
@@ -167,11 +169,12 @@ func (m *kvMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, star
 
 func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
 	ikey := m.plockKey(inode)
+	ctx = ctx.WithValue(txMethodKey{}, "Setlk"+strconv.Itoa(int(ltype)))
 	var err error
 	lock := plockRecord{ltype, pid, start, end}
 	lkey := lockOwner{m.sid, owner}
 	for {
-		err = m.txn(func(tx *kvTxn) error {
+		err = m.txn(ctx, func(tx *kvTxn) error {
 			owners := unmarshalPlock(tx.get(ikey))
 			if ltype == F_UNLCK {
 				records := owners[lkey]

@@ -28,13 +28,15 @@ type Context interface {
 	Gids() []uint32
 	Uid() uint32
 	Pid() uint32
-	WithValue(k, v interface{})
+	WithValue(k, v interface{}) Context // should remain const semantics, so user can chain it
 	Cancel()
 	Canceled() bool
 	CheckPermission() bool
 }
 
-var Background Context = WrapContext(context.Background())
+func Background() Context {
+	return WrapContext(context.Background())
+}
 
 type wrapContext struct {
 	context.Context
@@ -68,8 +70,10 @@ func (c *wrapContext) Canceled() bool {
 	return c.Err() != nil
 }
 
-func (c *wrapContext) WithValue(k, v interface{}) {
-	c.Context = context.WithValue(c.Context, k, v)
+func (c *wrapContext) WithValue(k, v interface{}) Context {
+	wc := *c // gids is a const, so it's safe to shallow copy
+	wc.Context = context.WithValue(c.Context, k, v)
+	return &wc
 }
 
 func (c *wrapContext) CheckPermission() bool {

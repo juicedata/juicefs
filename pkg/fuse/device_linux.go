@@ -70,8 +70,8 @@ func grantAccess() error {
 		return errors.Errorf("fail to find device cgroup")
 	}
 
-	deviceListPath := path.Join("/sys/fs/cgroup/devices" + deviceCgroup + "/devices.list")
-	deviceAllowPath := "/sys/fs/cgroup/devices" + deviceCgroup + "/devices.allow"
+	deviceListPath := path.Join("/sys/fs/cgroup/devices" + deviceCgroup, "/devices.list")
+	deviceAllowPath := path.Join("/sys/fs/cgroup/devices" + deviceCgroup, "/devices.allow")
 
 	// check if fuse is already allowed
 	deviceListFile, err := os.OpenFile(deviceListPath, os.O_RDONLY, 0)
@@ -103,6 +103,7 @@ func grantAccess() error {
 	if err != nil {
 		return errors.Wrapf(err, "open %s", deviceAllowPath)
 	}
+	defer f.Close()
 	// 10, 229 according to https://www.kernel.org/doc/Documentation/admin-guide/devices.txt
 	content := "c 10:229 rwm"
 	_, err = f.WriteString(content)

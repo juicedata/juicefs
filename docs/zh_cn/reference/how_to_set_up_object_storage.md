@@ -32,6 +32,9 @@ juicefs format --storage s3 \
 
 在执行 `juicefs format` 或 `juicefs mount` 命令时，可以在 `--bucket` 选项中以 URL 参数的形式设置一些特别的选项，比如 `https://myjuicefs.s3.us-east-2.amazonaws.com?tls-insecure-skip-verify=true` 中的 `tls-insecure-skip-verify=true` 即为跳过 HTTPS 请求的证书验证环节。
 
+客户端证书也受支持，因为它们通常用于 mTLS 连接，例如：
+`https://myjuicefs.s3.us-east-2.amazonaws.com?ca-certs=./path/to/ca&ssl-cert=./path/to/cert&ssl-key=./path/to/privatekey`
+
 ## 配置数据分片（Sharding） {#enable-data-sharding}
 
 创建文件系统时，可以通过 [`--shards`](../reference/command_reference.mdx#format-data-format-options) 选项定义多个 Bucket 作为文件系统的底层存储。这样一来，系统会根据文件名哈希值将文件分散到多个 Bucket 中。数据分片技术可以将大规模数据并发写的负载分散到多个 Bucket 中，从而提高写入性能。
@@ -167,7 +170,6 @@ juicefs format \
 | [金山云 KS3](#金山云-ks3)                   | `ks3`      |
 | [青云 QingStor](#青云-qingstor)             | `qingstor` |
 | [七牛云 Kodo](#七牛云-kodo)                 | `qiniu`    |
-| [新浪云 SCS](#新浪云-scs)                   | `scs`      |
 | [天翼云 OOS](#天翼云-oos)                   | `oos`      |
 | [移动云 EOS](#移动云-eos)                   | `eos`      |
 | [京东云 OSS](#京东云-oss)                   | `s3`       |
@@ -665,20 +667,6 @@ juicefs format \
 juicefs format \
     --storage qiniu \
     --bucket https://<bucket>.s3-<region>.qiniucs.com \
-    ... \
-    myjfs
-```
-
-### 新浪云 SCS
-
-使用新浪云 SCS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://scs.sinacloud.com/doc/scs/guide/quick_start#accesskey) 了解如何创建 Access Key 和 Secret Key。
-
-`--bucket` 选项格式为 `https://<bucket>.stor.sinaapp.com`。例如：
-
-```bash
-juicefs format \
-    --storage scs \
-    --bucket https://<bucket>.stor.sinaapp.com \
     ... \
     myjfs
 ```

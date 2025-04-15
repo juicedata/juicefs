@@ -1,0 +1,77 @@
+name: "cache"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - '**/cache.yml'
+      - '**/cache.sh'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - '**/cache.yml'
+      - '**/cache.sh'
+  schedule:
+    - cron:  '30 20 * * *'
+  workflow_dispatch:
+
+jobs:
+  cache:
+    timeout-minutes: 60
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
+      - name: Build
+        timeout-minutes: 10
+        uses: ./.github/actions/build
+
+      - name: Test
+        run: |
+          sudo GOCOVERDIR=$(pwd)/cover .github/scripts/cache.sh
+
+      - name: Check juicefs log
+        if: always()
+        run: |
+          sudo .github/scripts/check_juicefs_log.sh
+      
+      - name: Check /tmp/juicefs.log
+        if: always()
+        run: |
+          [[ -f /tmp/juicefs.log ]] && sudo tail -n 1000 /tmp/juicefs.log || true
+
+      - name: upload coverage report
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
+
+      - name: Send Slack Notification
+        if: failure()
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+      
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1

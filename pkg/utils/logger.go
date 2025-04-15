@@ -19,6 +19,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -29,12 +30,14 @@ var mu sync.Mutex
 var loggers = make(map[string]*logHandle)
 
 var syslogHook logrus.Hook
+var framePlaceHolder = runtime.Frame{Function: "???", File: "???", Line: 0}
 
 type logHandle struct {
 	logrus.Logger
 
 	name     string
 	logid    string
+	pid      int
 	lvl      *logrus.Level
 	colorful bool
 }
@@ -60,16 +63,20 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 		lvlStr = fmt.Sprintf("\033[1;%dm%s\033[0m", color, lvlStr)
 	}
 	const timeFormat = "2006/01/02 15:04:05.000000"
-	timestamp := e.Time.Format(timeFormat)
-	str := fmt.Sprintf("%s%v %s[%d] <%v>: %v [%s:%d]",
+	caller := e.Caller
+	if caller == nil { // for unknown reason, sometimes e.Caller is nil
+		caller = &framePlaceHolder
+	}
+	str := fmt.Sprintf("%s%v %s[%d] <%v>: %v [%s@%s:%d]",
 		l.logid,
-		timestamp,
+		e.Time.Format(timeFormat),
 		l.name,
-		os.Getpid(),
+		l.pid,
 		lvlStr,
 		strings.TrimRight(e.Message, "\n"),
-		path.Base(e.Caller.File),
-		e.Caller.Line)
+		MethodName(caller.Function),
+		path.Base(caller.File),
+		caller.Line)
 
 	if len(e.Data) != 0 {
 		str += " " + fmt.Sprint(e.Data)
@@ -80,13 +87,41 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 	return []byte(str), nil
 }
 
+// Returns a human-readable method name, removing internal markers added by Go
+func MethodName(fullFuncName string) string {
+	firstSlash := strings.Index(fullFuncName, "/")
+	if firstSlash != -1 && firstSlash < len(fullFuncName)-1 {
+		fullFuncName = fullFuncName[firstSlash+1:]
+	}
+	lastDot := strings.LastIndex(fullFuncName, ".")
+	if lastDot == -1 || lastDot == len(fullFuncName)-1 {
+		return fullFuncName
+	}
+	method := fullFuncName[lastDot+1:]
+	// avoid func1
+	if strings.HasPrefix(method, "func") && method[4] >= '0' && method[4] <= '9' {
+		candidate := MethodName(fullFuncName[:lastDot])
+		if candidate != "" {
+			method = candidate
+		}
+	}
+	// avoid init.3
+	if len(method) == 1 && method[0] >= '0' && method[0] <= '9' {
+		candidate := MethodName(fullFuncName[:lastDot])
+		if candidate != "" {
+			method = candidate
+		}
+	}
+	return method
+}
+
 // for aws.Logger
 func (l *logHandle) Log(args ...interface{}) {
 	l.Debugln(args...)
 }
 
 func newLogger(name string) *logHandle {
-	l := &logHandle{Logger: *logrus.New(), name: name, colorful: SupportANSIColor(os.Stderr.Fd())}
+	l := &logHandle{Logger: *logrus.New(), name: name, pid: os.Getpid(), colorful: SupportANSIColor(os.Stderr.Fd())}
 	l.Formatter = l
 	if syslogHook != nil {
 		l.AddHook(syslogHook)

@@ -24,17 +24,24 @@ install_tikv(){
     [[ ! -d tcli ]] && git clone https://github.com/c4pt0r/tcli
     make -C tcli && sudo cp tcli/bin/tcli /usr/local/bin
     # retry because of: https://github.com/pingcap/tiup/issues/2057
-    curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+    echo 'head -1' > /tmp/head.txt
+    if lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt; then
+        echo "TiKV is already running and healthy"
+        return 0
+    fi
     user=$(whoami)
-    if [ "$user" == "root" ]; then
+    echo user is $user
+    if [[ "$user" == "root" ]]; then
+        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sudo sh
         tiup=/root/.tiup/bin/tiup
-    elif [ "$user" == "runner" ]; then
+    elif [[ "$user" == "runner" ]]; then
+        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
         tiup=/home/runner/.tiup/bin/tiup
     else
         echo "Unknown user $user"
         exit 1
     fi
-    
+    echo tiup is $tiup
     $tiup playground --mode tikv-slim > tikv.log 2>&1  &
     pid=$!
     timeout=60
@@ -57,16 +64,19 @@ install_tikv(){
 }
 
 install_tidb(){
-    curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
     user=$(whoami)
-    if [ "$user" == "root" ]; then
+    echo user is $user
+    if [[ "$user" == "root" ]]; then
+        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sudo sh
         tiup=/root/.tiup/bin/tiup
-    elif [ "$user" == "runner" ]; then
+    elif [[ "$user" == "runner" ]]; then
+        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
         tiup=/home/runner/.tiup/bin/tiup
     else
         echo "Unknown user $user"
         exit 1
     fi
+    echo tiup is $tiup
     
     $tiup playground 5.4.0 > tidb.log 2>&1  &
     pid=$!
@@ -132,13 +142,16 @@ start_meta_engine(){
         if lsof -i:5432; then
             echo "postgres is already running"
         else
+            # default max_connections is 100.
             docker run --name postgresql \
                 -e POSTGRES_USER=postgres \
                 -e POSTGRES_PASSWORD=postgres \
                 -p 5432:5432 \
                 -v /tmp/postgresql:/var/lib/postgresql/data \
-                -d postgres
+                -d postgres \
+                -N 300
             sleep 10
+            docker exec -i postgresql psql -U postgres -c "SHOW max_connections;"
         fi
     fi
     
@@ -181,7 +194,7 @@ get_meta_url(){
     if [ "$meta" == "postgres" ]; then
         meta_url="postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable"
     elif [ "$meta" == "mysql" ]; then
-        meta_url="mysql://root:root@(127.0.0.1)/test"
+        meta_url="mysql://root:root@(127.0.0.1)/test?max_open_conns=30"
     elif [ "$meta" == "redis" ]; then
         meta_url="redis://127.0.0.1:6379/1"
     elif [ "$meta" == "sqlite3" ]; then
@@ -191,15 +204,48 @@ get_meta_url(){
     elif [ "$meta" == "badger" ]; then
         meta_url="badger:///tmp/test"
     elif [ "$meta" == "mariadb" ]; then
-        meta_url="mysql://root:root@(127.0.0.1)/test"
+        meta_url="mysql://root:root@(127.0.0.1)/test?max_open_conns=30"
     elif [ "$meta" == "tidb" ]; then
         meta_url="mysql://root:@(127.0.0.1:4000)/test"
     elif [ "$meta" == "etcd" ]; then
-        meta_url="etcd://localhost:2379/jfs"
+        meta_url="etcd://localhost:2379/test"
     elif [ "$meta" == "fdb" ]; then
         meta_url="fdb:///home/runner/fdb.cluster?prefix=jfs"
     elif [ "$meta" == "ob" ]; then
         meta_url="mysql://root:@\\(127.0.0.1:2881\\)/test"
+    else
+        echo >&2 "<FATAL>: meta $meta is not supported"
+        meta_url=""
+        return 1
+    fi
+    echo $meta_url
+    return 0
+}
+
+get_meta_url2(){
+    meta=$1
+    if [ "$meta" == "postgres" ]; then
+        meta_url="postgres://postgres:postgres@127.0.0.1:5432/test2?sslmode=disable"
+    elif [ "$meta" == "mysql" ]; then
+        meta_url="mysql://root:root@(127.0.0.1)/test2?max_open_conns=30"
+    elif [ "$meta" == "redis" ]; then
+        meta_url="redis://127.0.0.1:6379/2"
+    elif [ "$meta" == "sqlite3" ]; then
+        meta_url="sqlite3://test2.db"
+    elif [ "$meta" == "tikv" ]; then
+        meta_url="tikv://127.0.0.1:2379/jfs2"
+    elif [ "$meta" == "badger" ]; then
+        meta_url="badger:///tmp/test2"
+    elif [ "$meta" == "mariadb" ]; then
+        meta_url="mysql://root:root@(127.0.0.1)/test2?max_open_conns=30"
+    elif [ "$meta" == "tidb" ]; then
+        meta_url="mysql://root:@(127.0.0.1:4000)/test2"
+    elif [ "$meta" == "etcd" ]; then
+        meta_url="etcd://localhost:2379/test2"
+    elif [ "$meta" == "fdb" ]; then
+        meta_url="fdb:///home/runner/fdb.cluster?prefix=jfs2"
+    elif [ "$meta" == "ob" ]; then
+        meta_url="mysql://root:@\\(127.0.0.1:2881\\)/test2"
     else
         echo >&2 "<FATAL>: meta $meta is not supported"
         meta_url=""

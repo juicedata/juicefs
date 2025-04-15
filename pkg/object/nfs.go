@@ -106,7 +106,14 @@ func (n *nfsStore) Head(key string) (Object, error) {
 			return nil, err
 		}
 		dir, _ := path.Split(p)
-		return n.Head(path.Join(dir, src))
+		ff, err := n.Head(path.Join(dir, src))
+		if err != nil {
+			return nil, err
+		}
+		if f2, ok := ff.(*file); ok {
+			f2.isSymlink = true
+		}
+		return ff, nil
 	}
 	return n.fileInfo(key, fi), nil
 }
@@ -236,7 +243,7 @@ func (n *nfsStore) Delete(key string, getters ...AttrGetter) error {
 
 func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
 	owner, group := n.getOwnerGroup(fi)
-	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
+	isSymlink := fi.Mode()&os.ModeSymlink != 0
 	ff := &file{
 		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
 		owner,
@@ -294,9 +301,9 @@ func (n *nfsStore) readDirSorted(dir string, followLink bool) ([]*nfsEntry, erro
 	return nfsEntries, err
 }
 
-func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (n *nfsStore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 	dir := prefix
 	var objs []Object
@@ -309,9 +316,9 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 		obj, err := n.Head(dir)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return nil, nil
+				return nil, false, "", nil
 			}
-			return nil, err
+			return nil, false, "", err
 		}
 		objs = append(objs, obj)
 	}
@@ -319,12 +326,12 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 	if err != nil {
 		if os.IsPermission(err) || errors.Is(err, nfs.NFS3Error(nfs.NFS3ErrAcces)) {
 			logger.Warnf("skip %s: %s", dir, err)
-			return nil, nil
+			return nil, false, "", nil
 		}
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, false, "", nil
 		}
-		return nil, err
+		return nil, false, "", err
 	}
 	for _, e := range entries {
 		p := path.Join(dir, e.Name())
@@ -340,7 +347,7 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 			break
 		}
 	}
-	return objs, nil
+	return generateListResult(objs, limit)
 }
 
 func (n *nfsStore) setAttr(path string, attrSet func(attr *nfs.Fattr) nfs.Sattr3) error {
@@ -456,6 +463,9 @@ func newNFSStore(addr, username, pass, token string) (ObjectStorage, error) {
 	}
 	auth := rpc.NewAuthUnix(username, uint32(os.Getuid()), uint32(os.Getgid()))
 	target, err := mount.Mount(path, auth.Auth())
+	target.Config.DirCount = 1 << 17
+	// Readdir returns up to 1M at a time, even if MaxCount is set larger
+	target.Config.MaxCount = 1 << 20
 	if err != nil {
 		return nil, fmt.Errorf("unable to mount %s: %v", addr, err)
 	}

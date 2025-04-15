@@ -22,9 +22,9 @@ juicefs destroy <METADATA URL> <UUID>
 JuiceFS 客户端的 `status` 命令可以查看一个文件系统的详细信息，只需指定文件系统的元数据引擎 URL 即可，例如：
 
 ```shell {8}
-$ juicefs status redis://127.0.0.1:6379/1
+$ juicefs status redis://127.0.0.1:6379
 
-2022/01/26 21:41:37.577645 juicefs[31181] <INFO>: Meta address: redis://127.0.0.1:6379/1
+2022/01/26 21:41:37.577645 juicefs[31181] <INFO>: Meta address: redis://127.0.0.1:6379
 2022/01/26 21:41:37.578238 juicefs[31181] <INFO>: Ping redis: 55.041µs
 {
   "Setting": {
@@ -52,9 +52,9 @@ $ juicefs status redis://127.0.0.1:6379/1
 :::
 
 ```shell {1}
-$ juicefs destroy redis://127.0.0.1:6379/1 eabb96d5-7228-461e-9240-fddbf2b576d8
+$ juicefs destroy redis://127.0.0.1:6379 eabb96d5-7228-461e-9240-fddbf2b576d8
 
-2022/01/26 21:52:17.488987 juicefs[31518] <INFO>: Meta address: redis://127.0.0.1:6379/1
+2022/01/26 21:52:17.488987 juicefs[31518] <INFO>: Meta address: redis://127.0.0.1:6379
 2022/01/26 21:52:17.489668 juicefs[31518] <INFO>: Ping redis: 55.542µs
  volume name: macjfs
  volume UUID: eabb96d5-7228-461e-9240-fddbf2b576d8

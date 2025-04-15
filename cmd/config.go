@@ -166,8 +166,11 @@ func config(ctx *cli.Context) error {
 				storage = true
 			}
 		case "bucket":
+			// bucket will be accessed before storage, so it is necessary to determine if storage is a file
 			if new := ctx.String(flag); new != format.Bucket {
-				if format.Storage == "file" {
+				oldStorage := format.Storage
+				newStorage := ctx.String("storage")
+				if newStorage == "file" || (oldStorage == "file" && newStorage == "") {
 					if p, err := filepath.Abs(new); err == nil {
 						new = p + "/"
 					} else {
@@ -278,7 +281,7 @@ func config(ctx *cli.Context) error {
 		}
 		if quota {
 			var totalSpace, availSpace, iused, iavail uint64
-			_ = m.StatFS(meta.Background, meta.RootInode, &totalSpace, &availSpace, &iused, &iavail)
+			_ = m.StatFS(meta.Background(), meta.RootInode, &totalSpace, &availSpace, &iused, &iavail)
 			usedSpace := totalSpace - availSpace
 			if format.Capacity > 0 && usedSpace >= format.Capacity ||
 				format.Inodes > 0 && iused >= format.Inodes {
@@ -297,7 +300,7 @@ func config(ctx *cli.Context) error {
 		}
 		if originDirStats && !format.DirStats {
 			qs := make(map[string]*meta.Quota)
-			err := m.HandleQuota(meta.Background, meta.QuotaList, "", qs, false, false)
+			err := m.HandleQuota(meta.Background(), meta.QuotaList, "", qs, false, false, false)
 			if err != nil {
 				return errors.Wrap(err, "list quotas")
 			}

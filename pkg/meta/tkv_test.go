@@ -64,7 +64,7 @@ func TestEtcdClient(t *testing.T) { //skip mutate
 
 func testTKV(t *testing.T, c tkvClient) {
 	txn := func(f func(kt *kvTxn)) {
-		if err := c.txn(func(kt *kvTxn) error {
+		if err := c.txn(Background(), func(kt *kvTxn) error {
 			f(kt)
 			return nil
 		}, 0); err != nil {
@@ -198,21 +198,21 @@ func testTKV(t *testing.T, c tkvClient) {
 
 	// counters
 	var count int64
-	c.txn(func(tx *kvTxn) error {
+	c.txn(Background(), func(tx *kvTxn) error {
 		count = tx.incrBy([]byte("counter"), -1)
 		return nil
 	}, 0)
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
 	}
-	c.txn(func(tx *kvTxn) error {
+	c.txn(Background(), func(tx *kvTxn) error {
 		count = tx.incrBy([]byte("counter"), 0)
 		return nil
 	}, 0)
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
 	}
-	c.txn(func(tx *kvTxn) error {
+	c.txn(Background(), func(tx *kvTxn) error {
 		count = tx.incrBy([]byte("counter"), 2)
 		return nil
 	}, 0)

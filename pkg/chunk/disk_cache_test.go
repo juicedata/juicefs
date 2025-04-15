@@ -70,7 +70,7 @@ func toFloat64(c prometheus.Collector) float64 {
 }
 
 func TestNewCacheStore(t *testing.T) {
-	s := newCacheStore(nil, defaultConf.CacheDir, 1<<30, 1, &defaultConf, nil)
+	s := newCacheStore(nil, defaultConf.CacheDir, 1<<30, defaultConf.CacheItems, 1, &defaultConf, nil)
 	if s == nil {
 		t.Fatalf("Create new cache store failed")
 	}
@@ -140,6 +140,7 @@ func TestChecksum(t *testing.T) {
 	k5 := "4_8_1048576"
 
 	p := NewPage([]byte("helloworld"))
+	defer p.Release()
 	s.cache(k1, p, true, false)
 
 	s.checksum = CsFull
@@ -242,7 +243,7 @@ func TestExpand(t *testing.T) {
 
 func BenchmarkLoadCached(b *testing.B) {
 	dir := b.TempDir()
-	s := newCacheStore(nil, filepath.Join(dir, "diskCache"), 1<<30, 1, &defaultConf, nil)
+	s := newCacheStore(nil, filepath.Join(dir, "diskCache"), 1<<30, defaultConf.CacheItems, 1, &defaultConf, nil)
 	p := NewPage(make([]byte, 1024))
 	key := "/chunks/1_1024"
 	s.cache(key, p, false, false)
@@ -259,11 +260,11 @@ func BenchmarkLoadCached(b *testing.B) {
 
 func BenchmarkLoadUncached(b *testing.B) {
 	dir := b.TempDir()
-	s := newCacheStore(nil, filepath.Join(dir, "diskCache"), 1<<30, 1, &defaultConf, nil)
+	s := newCacheStore(nil, filepath.Join(dir, "diskCache"), 1<<30, defaultConf.CacheItems, 1, &defaultConf, nil)
 	key := "chunks/222_1024"
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if f, e := s.load(key); e != nil {
+		if f, e := s.load(key); e == nil {
 			_ = f.Close()
 		}
 	}
@@ -291,6 +292,12 @@ func TestCheckPath(t *testing.T) {
 		{path: "chunks/111_/2222/3333_3333_3333", expected: false},
 		{path: "chunks/111/22_22/3333_3333_3333", expected: false},
 		{path: "chunks/111/22_22/3333_3333_3333", expected: false},
+		{path: "chunks/dd/222/3333_3333_0", expected: true}, // hash prefix
+		{path: "chunks/FF/222/3333_3333_0", expected: true}, // hash prefix
+		{path: "chunks/5D/222/3333_3333_0", expected: true}, // hash prefix
+		{path: "chunks/D1/222/3333_3333_0", expected: true}, // hash prefix
+		{path: "chunks/5DD/222/3333_3333_0", expected: false},
+		{path: "chunks/111D/222/3333_3333_0", expected: false},
 	}
 	for _, c := range cases {
 		if res := pathReg.MatchString(c.path); res != c.expected {
@@ -336,6 +343,8 @@ func TestCacheManager(t *testing.T) {
 
 	rc, _ := m.load(k1)
 	require.Nil(t, rc)
+	_, exist := m.exist(k1)
+	require.False(t, exist)
 
 	s2 := m.getStore(k1)
 	require.NotNil(t, s2)
@@ -348,4 +357,29 @@ func TestCacheManager(t *testing.T) {
 	m.Unlock()
 	time.Sleep(3 * time.Second)
 	require.True(t, m.isEmpty())
+}
+
+func TestAtimeNotLost(t *testing.T) {
+	m := newCacheManager(&defaultConf, nil, nil)
+	key := "0_0_10"
+
+	p := NewPage([]byte("helloworld"))
+	defer p.Release()
+	m.cache(key, p, true, false)
+	time.Sleep(3 * time.Second)
+
+	_, exist := m.exist(key) // touch atime
+	if !exist {
+		t.Fatalf("CacheStore key %s not exist", key)
+	}
+	s := m.(*cacheManager).stores[0]
+	atimeMem := s.keys[s.getCacheKey(key)].atime
+	if atimeMem == 0 {
+		t.Fatalf("CacheStore key %s atime lost", key)
+	}
+	s.scanCached() // should use atime from memory
+	atimeAfterScan := s.keys[s.getCacheKey(key)].atime
+	if atimeAfterScan != atimeMem {
+		t.Fatalf("CacheStore key %s atime lost after scan, before: %d, after: %d", key, atimeMem, atimeAfterScan)
+	}
 }

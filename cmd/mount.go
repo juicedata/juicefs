@@ -27,7 +27,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -184,27 +183,32 @@ func updateFormat(c *cli.Context) func(*meta.Format) {
 	}
 }
 
+func relPathToAbs(ss []string) []string {
+	for i, d := range ss {
+		if strings.HasPrefix(d, "/") {
+			continue
+		} else if strings.HasPrefix(d, "~/") {
+			if h, err := os.UserHomeDir(); err == nil {
+				ss[i] = filepath.Join(h, d[1:])
+			} else {
+				logger.Fatalf("Expand user home dir of %s: %s", d, err)
+			}
+		} else {
+			if ad, err := filepath.Abs(d); err == nil {
+				ss[i] = ad
+			} else {
+				logger.Fatalf("Find absolute path of %s: %s", d, err)
+			}
+		}
+	}
+	return ss
+}
+
 func cacheDirPathToAbs(c *cli.Context) {
 	if runtime.GOOS != "windows" {
 		if cd := c.String("cache-dir"); cd != "memory" {
 			ds := utils.SplitDir(cd)
-			for i, d := range ds {
-				if strings.HasPrefix(d, "/") {
-					continue
-				} else if strings.HasPrefix(d, "~/") {
-					if h, err := os.UserHomeDir(); err == nil {
-						ds[i] = filepath.Join(h, d[1:])
-					} else {
-						logger.Fatalf("Expand user home dir of %s: %s", d, err)
-					}
-				} else {
-					if ad, err := filepath.Abs(d); err == nil {
-						ds[i] = ad
-					} else {
-						logger.Fatalf("Find absolute path of %s: %s", d, err)
-					}
-				}
-			}
+			ds = relPathToAbs(ds)
 			for i, a := range os.Args {
 				if a == cd || a == "--cache-dir="+cd {
 					os.Args[i] = a[:len(a)-len(cd)] + strings.Join(ds, string(os.PathListSeparator))
@@ -262,8 +266,12 @@ func expandPathForEmbedded(addr string) string {
 
 func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config) *vfs.Config {
 	cfg := &vfs.Config{
-		Meta:            metaConf,
-		Format:          *format,
+		Meta:   metaConf,
+		Format: *format,
+		Security: &vfs.SecurityConfig{
+			EnableCap:     c.Bool("enable-cap"),
+			EnableSELinux: c.Bool("enable-selinux"),
+		},
 		Version:         version.Version(),
 		Chunk:           chunkConf,
 		BackupMeta:      utils.Duration(c.String("backup-meta")),
@@ -272,7 +280,17 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		PrefixInternal:  c.Bool("prefix-internal"),
 		Pid:             os.Getpid(),
 		PPid:            os.Getppid(),
+		UMask:           0xFFFF,
 	}
+
+	if c.IsSet("umask") {
+		umask, err := strconv.ParseUint(c.String("umask"), 8, 16)
+		if err != nil {
+			logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
+		}
+		cfg.UMask = uint16(umask)
+	}
+
 	skip_check := os.Getenv("SKIP_BACKUP_META_CHECK") == "true"
 	if !skip_check && cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
 		logger.Fatalf("backup-meta should not be less than 5 minutes: %s", cfg.BackupMeta)
@@ -348,9 +366,11 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 
 		CacheDir:          c.String("cache-dir"),
 		CacheSize:         utils.ParseBytes(c, "cache-size", 'M'),
+		CacheItems:        c.Int64("cache-items"),
 		FreeSpace:         float32(c.Float64("free-space-ratio")),
 		CacheMode:         os.FileMode(cm),
 		CacheFullBlock:    !c.Bool("cache-partial-only"),
+		CacheLargeWrite:   c.Bool("cache-large-write"),
 		CacheChecksum:     c.String("verify-cache-checksum"),
 		CacheEviction:     c.String("cache-eviction"),
 		CacheScanInterval: utils.Duration(c.String("cache-scan-interval")),
@@ -358,6 +378,12 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		OSCache:           os.Getenv("JFS_DROP_OSCACHE") == "",
 		AutoCreate:        true,
 	}
+	if c.IsSet("max-readahead") {
+		chunkConf.Readahead = int(utils.ParseBytes(c, "max-readahead", 'M'))
+	} else {
+		chunkConf.Readahead = 8 * chunkConf.BlockSize
+	}
+
 	if chunkConf.UploadLimit == 0 {
 		chunkConf.UploadLimit = format.UploadLimit * 1e6 / 8
 	}
@@ -432,40 +458,6 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 	return holder, nil
 }
 
-func tellFstabOptions(c *cli.Context) string {
-	opts := []string{"_netdev"}
-	for _, s := range os.Args[2:] {
-		if !strings.HasPrefix(s, "-") {
-			continue
-		}
-		s = strings.TrimLeft(s, "-")
-		s = strings.Split(s, "=")[0]
-		if !c.IsSet(s) || s == "update-fstab" || s == "background" || s == "d" {
-			continue
-		}
-		if s == "o" {
-			opts = append(opts, c.String(s))
-		} else if v := c.Bool(s); v {
-			opts = append(opts, s)
-		} else {
-			opts = append(opts, fmt.Sprintf("%s=%s", s, c.Generic(s)))
-		}
-	}
-	sort.Strings(opts)
-	return strings.Join(opts, ",")
-}
-
-func tryToInstallMountExec() error {
-	if _, err := os.Stat("/sbin/mount.juicefs"); err == nil {
-		return nil
-	}
-	src, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	return os.Symlink(src, "/sbin/mount.juicefs")
-}
-
 func insideContainer() bool {
 	if _, err := os.Stat("/.dockerenv"); err == nil {
 		return true
@@ -503,7 +495,7 @@ func getDefaultLogDir() string {
 			break
 		}
 		fallthrough
-	case "darwin":
+	case "darwin", "windows":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			logger.Fatalf("%v", err)
@@ -511,53 +503,6 @@ func getDefaultLogDir() string {
 		defaultLogDir = path.Join(homeDir, ".juicefs")
 	}
 	return defaultLogDir
-}
-
-func updateFstab(c *cli.Context) error {
-	addr := expandPathForEmbedded(c.Args().Get(0))
-	mp := c.Args().Get(1)
-	var fstab = "/etc/fstab"
-
-	f, err := os.Open(fstab)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	entryIndex := -1
-	var lines []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		fields := strings.Fields(line)
-		if len(fields) >= 6 && fields[2] == "juicefs" && fields[0] == addr && fields[1] == mp {
-			entryIndex = len(lines)
-		}
-		lines = append(lines, line)
-	}
-	if err = scanner.Err(); err != nil {
-		return err
-	}
-	opts := tellFstabOptions(c)
-	entry := fmt.Sprintf("%s  %s  juicefs  %s  0 0", addr, mp, opts)
-	if entryIndex >= 0 {
-		if entry == lines[entryIndex] {
-			return nil
-		}
-		lines[entryIndex] = entry
-	} else {
-		lines = append(lines, entry)
-	}
-	tempFstab := fstab + ".tmp"
-	tmpf, err := os.OpenFile(tempFstab, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
-	}
-	defer tmpf.Close()
-	if _, err := tmpf.WriteString(strings.Join(lines, "\n") + "\n"); err != nil {
-		_ = os.Remove(tempFstab)
-		return err
-	}
-	return os.Rename(tempFstab, fstab)
 }
 
 func mount(c *cli.Context) error {
@@ -588,7 +533,7 @@ func mount(c *cli.Context) error {
 			logger.Fatalf("should not mount on the root directory")
 		}
 		prepareMp(mp)
-		if c.Bool("update-fstab") && !calledViaMount(os.Args) && !insideContainer() {
+		if runtime.GOOS == "linux" && c.Bool("update-fstab") && !calledViaMount(os.Args) && !insideContainer() {
 			if os.Getuid() != 0 {
 				logger.Warnf("--update-fstab should be used with root")
 			} else {
@@ -610,7 +555,9 @@ func mount(c *cli.Context) error {
 	var metaCli meta.Meta
 	var blob object.ObjectStorage
 	metaConf := getMetaConf(c, mp, c.Bool("read-only") || utils.StringContains(strings.Split(c.String("o"), ","), "ro"))
-	metaConf.CaseInsensi = strings.HasSuffix(mp, ":") && runtime.GOOS == "windows"
+	if runtime.GOOS == "windows" {
+		metaConf.CaseInsensi = !c.Bool("case-sensitive")
+	}
 	// stage 0: check the connection to fail fast
 	// stage 2: need the volume name to check if it's already mounted
 	// stage 3: the real service process
@@ -642,6 +589,16 @@ func mount(c *cli.Context) error {
 			}
 		}
 		if blob != nil {
+			// test storage at startup to fail fast instead of throwing EIO in the middle of user's workload
+			if c.Bool("check-storage") {
+				start := time.Now()
+				if err = test(blob); err != nil {
+					logger.Errorf("Object storage test failed: %s", err)
+					return err
+				} else {
+					logger.Infof("Object storage test passed in %s", time.Since(start))
+				}
+			}
 			object.Shutdown(blob)
 		}
 		var foreground bool
@@ -659,6 +616,9 @@ func mount(c *cli.Context) error {
 		}
 		os.Setenv("JFS_SUPERVISOR", strconv.Itoa(os.Getppid()))
 		return launchMount(mp, vfsConf)
+	} else if runtime.GOOS == "windows" && c.Bool("background") {
+		daemonRun(c, addr, vfsConf)
+		return nil
 	}
 	logger.Infof("JuiceFS version %s", version.Version())
 
@@ -667,7 +627,7 @@ func mount(c *cli.Context) error {
 		vfsConf.StatePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 	}
 
-	if st := metaCli.Chroot(meta.Background, metaConf.Subdir); st != 0 {
+	if st := metaCli.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
 		return st
 	}
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
@@ -686,7 +646,7 @@ func mount(c *cli.Context) error {
 		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
 	})
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
-	installHandler(mp, v, blob)
+	installHandler(metaCli, mp, v, blob)
 	v.UpdateFormat = updateFormat(c)
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	mountMain(v, c)

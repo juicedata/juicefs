@@ -18,7 +18,7 @@ on:
       - '**.c'
       - '**/xattr.yml'
   schedule:
-    - cron:  '0 19 * * *'
+    - cron:  '0 17 * * *'
   workflow_dispatch:
     inputs:
       debug:
@@ -29,7 +29,7 @@ on:
 
 jobs:
   build-matrix:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - id: set-matrix
         run: |
@@ -50,7 +50,7 @@ jobs:
       fail-fast: false
       matrix:
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: shogo82148/actions-setup-perl@v1
@@ -61,6 +61,15 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
+
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
 
       - name: Set Variable
         id: vars
@@ -88,7 +97,7 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs format $meta_url --trash-days 0 pics
+          sudo GOCOVERDIR=$(pwd)/cover ./juicefs format $meta_url --trash-days 0 --bucket=/mnt/jfs pics
 
       - name: Juicefs Mount
         run: |
@@ -96,7 +105,7 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           # sudo mkdir /var/jfs
           # sudo chmod 777 /var/jfs
-          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr
+          sudo GOCOVERDIR=$(pwd)/cover ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr
           stat /tmp/jfs/.accesslog
 
       - name: Test
@@ -119,6 +128,13 @@ jobs:
             tail -300 /var/log/juicefs.log
             grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
           fi
+
+      - name: upload coverage report
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
 
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)

@@ -76,11 +76,18 @@ func (d *filestore) path(key string) string {
 
 func (d *filestore) Head(key string) (Object, error) {
 	p := d.path(key)
-	fi, err := os.Stat(p)
+	fi, err := os.Lstat(p)
 	if err != nil {
 		return nil, err
 	}
-	return toFile(key, fi, false, getOwnerGroup), nil
+	isSymlink := fi.Mode()&os.ModeSymlink != 0
+	if isSymlink {
+		fi, err = os.Stat(p)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return toFile(key, fi, isSymlink, getOwnerGroup), nil
 }
 
 func toFile(key string, fi fs.FileInfo, isSymlink bool, ownerGetter func(fs.FileInfo) (string, string)) *file {
@@ -247,9 +254,10 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 
 	mEntries := make([]*mEntry, len(entries))
 	for i, e := range entries {
+		isSymlink := e.Mode()&os.ModeSymlink != 0
 		if e.IsDir() {
 			mEntries[i] = &mEntry{e, e.Name() + dirSuffix, nil, false}
-		} else if !e.Mode().IsRegular() && followLink {
+		} else if isSymlink && followLink {
 			fi, err := os.Stat(filepath.Join(dir, e.Name()))
 			if err != nil {
 				mEntries[i] = &mEntry{e, e.Name(), nil, true}
@@ -261,16 +269,16 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 			}
 			mEntries[i] = &mEntry{e, name, fi, false}
 		} else {
-			mEntries[i] = &mEntry{e, e.Name(), nil, !e.Mode().IsRegular()}
+			mEntries[i] = &mEntry{e, e.Name(), nil, isSymlink}
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
 	return mEntries, err
 }
 
-func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (d *filestore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
-		return nil, notSupported
+		return nil, false, "", notSupported
 	}
 	var dir string = d.root + prefix
 	var objs []Object
@@ -283,9 +291,9 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 		obj, err := d.Head(prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return nil, nil
+				return nil, false, "", nil
 			}
-			return nil, err
+			return nil, false, "", err
 		}
 		objs = append(objs, obj)
 	}
@@ -293,12 +301,13 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 	if err != nil {
 		if os.IsPermission(err) {
 			logger.Warnf("skip %s: %s", dir, err)
-			return nil, nil
+			return nil, false, "", nil
 		}
 		if os.IsNotExist(err) {
-			return nil, nil
+			logger.Warnf("skip %s: %s", dir, err)
+			return nil, false, "", nil
 		}
-		return nil, err
+		return nil, false, "", err
 	}
 	for _, e := range entries {
 		p := path.Join(dir, e.Name())
@@ -319,7 +328,7 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 			break
 		}
 	}
-	return objs, nil
+	return generateListResult(objs, limit)
 }
 
 func (d *filestore) Chmod(key string, mode os.FileMode) error {

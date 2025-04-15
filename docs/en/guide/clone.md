@@ -1,17 +1,18 @@
 ---
 title: Clone Files or Directories
 sidebar_position: 6
+description: Learn how to use the juicefs clone command to efficiently clone files or directories by creating a metadata-only copy. 
 ---
 
-This command makes a 1:1 clone of your data by creating a mere metadata copy, without creating any new data in the object storage, thus cloning is very fast regardless of target file / directory size. Under JuiceFS, this command is a better alternative to `cp`, moreover, for Linux clients using kernels with [`copy_file_range`](https://man7.org/linux/man-pages/man2/copy_file_range.2.html) support, then the `cp` command achieves the same result as `juicefs clone`.
+Cloning specific data does not involve copying the actual object storage data but only copies metadata. Therefore, cloning is very fast regardless of the size of the file or directory. For JuiceFS, this command is a better alternative to `cp`. Moreover, for Linux clients using kernels with [`copy_file_range`](https://man7.org/linux/man-pages/man2/copy_file_range.2.html) support, using `cp` effectively performs the same metadata copy and is very fast.
 
 ![clone](../images/juicefs-clone.svg)
 
-The clone result is a metadata copy only, where all the files are still referencing the same underlying object storage blocks, that's why a clone behaves the same in every way as its originals. When either of them go through actual file data modification, the affected data blocks will be copied on write, and become new blocks after write, while the unchanged part of the files remains the same, still referencing the original blocks.
+The clone result is purely a metadata copy, meaning all files still refer to the same underlying object storage blocks. Therefore, a clone behaves exactly like the original. When either the original or the clone is modified, the affected data blocks are copied on write, resulting in new blocks while the unchanged parts remain the same, still referencing the original blocks.
 
-Please note that system tools like disk-free or disk-usage (`df`, `du`) will report the space used by the cloned data, but the underlying object storage space will not grow as blocks remains the same. On the same way, as metadata is actually replicated, the clone will take the same metadata engine storage space as the original.
+Note that system tools like disk-free or disk-usage (`df`, `du`) show the space used by the cloned data, but the underlying object storage space remains unchanged since the blocks are not duplicated. Cloning replicates metadata, so it will occupy the same metadata engine storage space as the original.
 
-**Clones takes up both file system storage space, inodes and metadata engine storage space**. Pay special attention when making clones on large size directories.
+**Cloning impacts file system storage space, inodes, and metadata engine storage space.** Be cautious when cloning large directories.
 
 ```shell
 juicefs clone SRC DST
@@ -27,9 +28,9 @@ juicefs clone /mnt/jfs/dir1 /mnt/jfs/dir2
 
 In terms of transaction consistency, cloning behaves as follows:
 
-- Before `clone` command finishes, destination file is not visible.
-- For file: The `clone` command ensures atomicity, meaning that the cloned file will always be in a correct and consistent state.
-- For directory: The `clone` command does not guarantee atomicity for directories. In other words, if the source directory changes during the cloning process, the target directory may be different from the source directory.
-- Only one `clone` can be successfully created from the same location at the same time. The failed clone will clean up the temporarily created directory tree.
+- The destination file is not visible until the `clone` command completes.
+- For files: The `clone` command ensures atomicity, meaning that the cloned file will always be in a correct and consistent state.
+- For directories: The `clone` command does not guarantee atomicity for directories. In other words, if the source directory changes during the cloning process, the target directory may be different from the source directory.
+- Only one `clone` operation can succeed from the same source at the same time. Any failed clones will clean up the temporarily created directory tree.
 
-The clone is done by the mount process, it will be interrupted if `clone` command is terminated. If the clone fails or is interrupted, `mount` process will cleanup any created inodes. If the mount process fails to do that, there could be some leaking the metadata engine and object storage, because the dangling tree still hold the references to underlying data blocks. They could be cleaned up by the [`juicefs gc --delete`](../reference/command_reference.mdx#gc) command.
+The cloning operation is performed by the mount process. It will be interrupted, if the `clone` command is terminated. If a cloning operation fails or is interrupted, the `mount` process will clean up any created inodes. If this cleanup fails, it may lead to metadata leaks and potential object storage leaks, because the dangling tree continues to reference the underlying data blocks. They could be cleaned up by the [`juicefs gc --delete`](../reference/command_reference.mdx#gc) command.

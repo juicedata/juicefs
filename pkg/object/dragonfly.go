@@ -177,7 +177,7 @@ func (d *dragonfly) String() string {
 
 // Create creates the object if it does not exist.
 func (d *dragonfly) Create() error {
-	if _, err := d.List("", "", "", 1, false); err == nil {
+	if _, _, _, err := d.List("", "", "", "", 1, false); err == nil {
 		return nil
 	}
 
@@ -438,14 +438,14 @@ func (d *dragonfly) Delete(key string, getters ...AttrGetter) error {
 }
 
 // List lists the objects with the given prefix.
-func (d *dragonfly) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (d *dragonfly) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > MaxGetObjectMetadatasLimit {
 		limit = MaxGetObjectMetadatasLimit
 	}
 
 	u, err := url.Parse(d.endpoint)
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 
 	u.Path = path.Join("buckets", d.bucket, "metadatas")
@@ -469,23 +469,23 @@ func (d *dragonfly) List(prefix, marker, delimiter string, limit int64, followLi
 	u.RawQuery = query.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 
 	// List object.
 	resp, err := d.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("bad response status %s", resp.Status)
+		return nil, false, "", fmt.Errorf("bad response status %s", resp.Status)
 	}
 
 	var objectMetadatas ObjectMetadatas
 	if err := json.NewDecoder(resp.Body).Decode(&objectMetadatas); err != nil {
-		return nil, err
+		return nil, false, "", err
 	}
 
 	objs := make([]Object, 0, len(objectMetadatas.Metadatas))
@@ -505,8 +505,7 @@ func (d *dragonfly) List(prefix, marker, delimiter string, limit int64, followLi
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
-
-	return objs, err
+	return generateListResult(objs, limit)
 }
 
 // newDragonfly creates a new dragonfly object storage.

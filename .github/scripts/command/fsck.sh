@@ -42,6 +42,42 @@ test_sync_dir_stat()
     ./juicefs info -r /jfs/d | tee info1.log
     ./juicefs info -r /jfs/d --strict | tee info2.log
     diff info1.log info2.log
+    rm info*.log
+    ./juicefs fsck $META_URL --path / --sync-dir-stat --repair -r
+    ./juicefs info -r /jfs | tee info1.log
+    ./juicefs info -r /jfs --strict | tee info2.log
+    diff info1.log info2.log
+}
+
+test_fsck_with_random_test()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    ./random-test runOp -baseDir /jfs/test -files 500000 -ops 5000000 -threads 50 -dirSize 100 -duration 30s -createOp 30,uniform -deleteOp 5,end --linkOp 10,uniform  --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform    
+    ./juicefs fsck $META_URL --path /test --sync-dir-stat --repair -r
+    ./juicefs info -r /jfs | tee info1.log
+    ./juicefs info -r /jfs --strict | tee info2.log
+    diff info1.log info2.log || true
+}
+
+test_fsck_delete_object()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    echo "test" > /jfs/test.txt
+    sleep 1
+    object=$(./juicefs info /jfs/test.txt | grep chunks | awk '{print $4}')
+    rm /var/jfs/$object
+    ./juicefs fsck $META_URL 2>&1 | tee fsck.log
+    grep -q "1 objects are lost" fsck.log || exit 1
+    rm fsck.log
+ #   ./juicefs fsck $META_URL --path / --sync-dir-stat --repair -r 2>&1 | tee fsck.log
+ #   grep -q "1 objects are lost" fsck.log || exit 1
+ #   rm fsck.log
+    ./juicefs rmr /jfs/test.txt --skip-trash
+    ./juicefs fsck $META_URL || { echo "files is deleted, fsck should success"; exit 1; }
 }
 
 source .github/scripts/common/run_test.sh && run_test $@

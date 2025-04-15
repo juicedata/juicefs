@@ -19,6 +19,7 @@ package fuse
 import (
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -86,6 +87,11 @@ func (fs *fileSystem) Lookup(cancel <-chan struct{}, header *fuse.InHeader, name
 	defer releaseContext(ctx)
 	entry, err := fs.v.Lookup(ctx, Ino(header.NodeId), name)
 	if err != 0 {
+		if fs.conf.NegDirEntryTimeout != 0 && err == syscall.ENOENT {
+			out.NodeId = 0 // zero nodeid is same as ENOENT, but with valid timeout
+			out.SetEntryTimeout(fs.conf.NegDirEntryTimeout)
+			return 0
+		}
 		return fuse.Status(err)
 	}
 	return fs.replyEntry(ctx, out, entry)
@@ -120,7 +126,7 @@ func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *f
 func (fs *fileSystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string, out *fuse.EntryOut) (code fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	entry, err := fs.v.Mknod(ctx, Ino(in.NodeId), name, uint16(in.Mode), getUmask(in), in.Rdev)
+	entry, err := fs.v.Mknod(ctx, Ino(in.NodeId), name, uint16(in.Mode), getUmask(in.Umask, fs.v.Conf.UMask, false), in.Rdev)
 	if err != 0 {
 		return fuse.Status(err)
 	}
@@ -130,7 +136,7 @@ func (fs *fileSystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name strin
 func (fs *fileSystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string, out *fuse.EntryOut) (code fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	entry, err := fs.v.Mkdir(ctx, Ino(in.NodeId), name, uint16(in.Mode), uint16(in.Umask))
+	entry, err := fs.v.Mkdir(ctx, Ino(in.NodeId), name, uint16(in.Mode), getUmask(in.Umask, fs.v.Conf.UMask, true))
 	if err != 0 {
 		return fuse.Status(err)
 	}
@@ -224,7 +230,7 @@ func (fs *fileSystem) RemoveXAttr(cancel <-chan struct{}, header *fuse.InHeader,
 func (fs *fileSystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name string, out *fuse.CreateOut) (code fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	entry, fh, err := fs.v.Create(ctx, Ino(in.NodeId), name, uint16(in.Mode), getCreateUmask(in), in.Flags)
+	entry, fh, err := fs.v.Create(ctx, Ino(in.NodeId), name, uint16(in.Mode), getCreateUmask(in.Umask, fs.v.Conf.UMask), in.Flags)
 	if err != 0 {
 		return fuse.Status(err)
 	}
@@ -298,7 +304,12 @@ func (fs *fileSystem) Fallocate(cancel <-chan struct{}, in *fuse.FallocateIn) (c
 func (fs *fileSystem) CopyFileRange(cancel <-chan struct{}, in *fuse.CopyFileRangeIn) (written uint32, code fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	copied, err := fs.v.CopyFileRange(ctx, Ino(in.NodeId), in.FhIn, in.OffIn, Ino(in.NodeIdOut), in.FhOut, in.OffOut, in.Len, uint32(in.Flags))
+	var len = in.Len
+	if len > math.MaxUint32 {
+		// written may overflow
+		len = math.MaxUint32 + 1 - meta.ChunkSize
+	}
+	copied, err := fs.v.CopyFileRange(ctx, Ino(in.NodeId), in.FhIn, in.OffIn, Ino(in.NodeIdOut), in.FhOut, in.OffOut, len, uint32(in.Flags))
 	if err != 0 {
 		return 0, fuse.Status(err)
 	}
@@ -347,6 +358,9 @@ func (fs *fileSystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse
 	defer releaseContext(ctx)
 	fh, err := fs.v.Opendir(ctx, Ino(in.NodeId), in.Flags)
 	out.Fh = fh
+	if fs.conf.ReaddirCache {
+		out.OpenFlags |= fuse.FOPEN_CACHE_DIR | fuse.FOPEN_KEEP_CACHE // both flags are required
+	}
 	return fuse.Status(err)
 }
 
@@ -448,14 +462,16 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	opt.SingleThreaded = false
 	opt.MaxBackground = 50
 	opt.EnableLocks = true
+	opt.EnableSymlinkCaching = conf.FuseOpts.EnableSymlinkCaching
 	opt.EnableAcl = conf.Format.EnableACL
 	opt.DontUmask = conf.Format.EnableACL
 	opt.DisableXAttrs = !xattrs
 	opt.EnableIoctl = ioctl
-	opt.MaxWrite = 1 << 20
+	opt.MaxWrite = conf.FuseOpts.MaxWrite
 	opt.MaxReadAhead = 1 << 20
 	opt.DirectMount = true
 	opt.AllowOther = os.Getuid() == 0
+	opt.Timeout = conf.FuseOpts.Timeout
 
 	if opt.EnableAcl && conf.NonDefaultPermission {
 		logger.Warnf("it is recommended to turn on 'default-permissions' when enable acl")
@@ -465,7 +481,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		logger.Infof("The format \"enable-acl\" flag will enable the xattrs feature.")
 		opt.DisableXAttrs = false
 	}
-	opt.IgnoreSecurityLabels = !opt.EnableAcl
+	opt.IgnoreSecurityLabels = false
 
 	for _, n := range strings.Split(options, ",") {
 		if n == "allow_other" || n == "allow_root" {
@@ -517,26 +533,30 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	return nil
 }
 
-func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool) fuse.MountOptions {
+func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, maxWrite int) fuse.MountOptions {
 	var opt fuse.MountOptions
 	opt.FsName = "JuiceFS:" + conf.Format.Name
 	opt.Name = "juicefs"
 	opt.SingleThreaded = mt == 0
 	opt.MaxBackground = 200
 	opt.EnableLocks = true
+	opt.EnableSymlinkCaching = true
 	opt.DisableXAttrs = noxattr
 	opt.EnableAcl = !noacl
-	opt.IgnoreSecurityLabels = noacl
-	opt.MaxWrite = 1 << 20
+	opt.IgnoreSecurityLabels = false
+	opt.MaxWrite = maxWrite
 	opt.MaxReadAhead = 1 << 20
 	opt.DirectMount = true
 	opt.DontUmask = true
+	opt.Timeout = time.Minute * 15
 	for _, n := range strings.Split(options, ",") {
 		// TODO allow_root
 		if n == "allow_other" {
 			opt.AllowOther = true
 		} else if strings.HasPrefix(n, "fsname=") {
 			opt.FsName = n[len("fsname="):]
+		} else if n == "writeback_cache" {
+			opt.EnableWriteback = true
 		} else if n == "debug" {
 			opt.Debug = true
 			log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)

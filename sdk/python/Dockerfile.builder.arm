@@ -1,0 +1,17 @@
+FROM golang:1.24
+
+RUN apt update && \
+    apt install -y --no-install-recommends \
+        git \
+        make \
+        gcc \
+        python3 \
+        python3-pip \
+        python3-setuptools \
+        python3-wheel \
+        python3-build \
+        python3-venv \
+        ca-certificates \
+    && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/*

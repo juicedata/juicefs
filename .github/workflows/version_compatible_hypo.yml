@@ -41,7 +41,7 @@ jobs:
             meta: 'postgres'
             storage: 'minio'
 
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
@@ -128,7 +128,7 @@ jobs:
 
       - name: Upload command log
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{matrix.meta}}-${{matrix.old_juicefs_version}}.command.log
           path: ~/command.log

@@ -10,6 +10,7 @@
 	<packaging>jar</packaging>
 	<properties>
 		<hadoop.version>3.1.4</hadoop.version>
+		<flink.version>1.16.3</flink.version>
 		<argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true -Djava.library.path=${project.basedir}/../mount/libjfs:${java.library.path} -Djdk.attach.allowAttachSelf=true</argLine>
 	</properties>
 
@@ -80,6 +81,14 @@
 						<relocation>
 							<pattern>com.google.common</pattern>
 							<shadedPattern>io.juicefs.shaded.com.google.common</shadedPattern>
+						</relocation>
+						<relocation>
+							<pattern>org.apache.commons.lang</pattern>
+							<shadedPattern>io.juicefs.shaded.org.apache.commons.lang</shadedPattern>
+						</relocation>
+						<relocation>
+							<pattern>com.kstruct.gethostname4j</pattern>
+							<shadedPattern>io.juicefs.shaded.com.kstruct.gethostname4j</shadedPattern>
 						</relocation>
 					</relocations>
 				</configuration>
@@ -311,13 +320,13 @@
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-hadoop-fs</artifactId>
-			<version>1.10.3</version>
+			<version>${flink.version}</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-core</artifactId>
-			<version>1.10.3</version>
+			<version>${flink.version}</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -333,8 +342,8 @@
 		</dependency>
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-streaming-java_2.12</artifactId>
-			<version>1.10.0</version>
+			<artifactId>flink-streaming-java</artifactId>
+			<version>${flink.version}</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -342,6 +351,48 @@
 			<artifactId>kite-data-core</artifactId>
 			<version>1.1.0</version>
 			<scope>provided</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>*</groupId>
+					<artifactId>*</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>commons-lang</groupId>
+			<artifactId>commons-lang</artifactId>
+			<version>2.6</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.ranger</groupId>
+			<artifactId>ranger-plugins-common</artifactId>
+			<version>2.3.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>*</groupId>
+					<artifactId>*</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>com.kstruct</groupId>
+			<artifactId>gethostname4j</artifactId>
+			<version>0.0.2</version>
+		</dependency>
+		<dependency>
+			<groupId>com.sun.jersey</groupId>
+			<artifactId>jersey-bundle</artifactId>
+			<version>1.19.3</version>
+		</dependency>
+		<dependency>
+			<groupId>org.codehaus.jackson</groupId>
+			<artifactId>jackson-jaxrs</artifactId>
+			<version>1.9.13</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.ranger</groupId>
+			<artifactId>ranger-plugins-audit</artifactId>
+			<version>2.3.0</version>
 			<exclusions>
 				<exclusion>
 					<groupId>*</groupId>

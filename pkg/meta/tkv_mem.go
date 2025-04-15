@@ -18,6 +18,7 @@ package meta
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -174,6 +175,10 @@ func (c *memKV) shouldRetry(err error) bool {
 	return strings.Contains(err.Error(), "write conflict")
 }
 
+func (c *memKV) config(key string) interface{} {
+	return nil
+}
+
 func (c *memKV) get(key string) *kvItem {
 	c.temp.key = key
 	it := c.items.Get(c.temp)
@@ -198,7 +203,7 @@ func (c *memKV) set(key string, value []byte) {
 	}
 }
 
-func (c *memKV) txn(f func(*kvTxn) error, retry int) error {
+func (c *memKV) txn(ctx context.Context, f func(*kvTxn) error, retry int) error {
 	tx := &memTxn{
 		store:    c,
 		observed: make(map[string]int),
@@ -257,7 +262,7 @@ func (c *memKV) reset(prefix []byte) error {
 		c.Unlock()
 		return nil
 	}
-	return c.txn(func(kt *kvTxn) error {
+	return c.txn(Background(), func(kt *kvTxn) error {
 		return c.scan(prefix, func(key, value []byte) bool {
 			kt.delete(key)
 			return true

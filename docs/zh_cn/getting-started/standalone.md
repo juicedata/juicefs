@@ -31,7 +31,7 @@ juicefs format [command options] META-URL NAME
 
 可见，格式化文件系统需要提供 3 种信息：
 
-- **[command options]**：设定文件系统的存储介质，留空则**默认使用本地磁盘**作为存储介质，路径为 `"$HOME/.juicefs/local"`，`"/var/jfs"` 或 `"C:/jfs/local"`；
+- **[command options]**：设定文件系统的存储介质，留空则**默认使用本地磁盘**作为存储介质，路径为 `"$HOME/.juicefs/local"`(darwin/macOS)，`"/var/jfs"`(Linux) 或 `"C:/jfs/local"`(Windows)；
 - **META-URL**：用来设置元数据存储，即数据库相关的信息，通常是数据库的 URL 或文件路径；
 - **NAME**：是文件系统的名称。
 

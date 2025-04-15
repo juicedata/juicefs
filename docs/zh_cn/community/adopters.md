@@ -21,24 +21,27 @@ slug: /adopters
 | [上汽集团](https://www.saicmotor.com/chinese)   | 汽车，AI  | [上汽云 x JuiceFS：iGear 用了这个小魔法，模型训练速度提升 300%](https://juicefs.com/zh-cn/blog/performance-boost-3x-on-igear-platform)      |
 | [Plus.AI](https://plus.ai) | 汽车，AI  |
 | [五菱汽车](https://wuling.com)   | 汽车，大数据     |          |
+| [驭势科技](https://www.uisee.com)   | 汽车，AI        |       |
+| [长安汽车梧桐车联](https://www.auto-pai.com)    | AI，大数据   |            |
 | [小米](https://www.mi.com)    |  消费电子，AI  | [小米云原生文件存储平台化实践：支撑 AI 训练、大模型、容器平台多项业务](https://juicefs.com/zh-cn/blog/user-stories/cloud-native-file-storage-platform-as-ai-training-large-models-container-platforms)  |
 | [vivo](https://www.vivo.com)   |  AI  | [vivo AI 计算平台的轩辕文件存储实践](https://www.infoq.cn/article/3oFSOWfYGsX5h7xzsIe6)     |
 | [DJI 大疆创新](https://www.dji.com/cn)    |  消费电子，AI     |            |
 | [安克创新](https://cn.anker-in.com)   | 消费电子，AI      |       |
-| [驭势科技](https://www.uisee.com)   | 交通，AI        |       |
+| [OPPO](https://www.oppo.com)   | 消费电子，共享文件存储      |       |
 | [顺丰速运](https://www.sf-express.com)   | 物流，AI，共享文件存储   |        |
 | [思谋 SmartMore](https://cn.smartmore.com)   |  AI  | [思谋科技：构建易于运维的 AI 训练平台](https://juicefs.com/zh-cn/blog/user-stories/easy-operate-ai-training-platform-storage-selection)      |
 | [旷视](https://megvii.com)     | AI     |            |
 | [商汤科技](https://www.sensetime.com/cn)    |  AI  |           |
 | [云从科技](https://www.cloudwalk.com)   | AI    |         |
 | [思必驰](https://www.aispeech.com)   |  AI   |             |
-| [Clobotics](https://clobotics.com)   |  AI   |          |
-| [刻行 coSence](https://www.coscene.io)   | AI   | [机器人行业数据闭环实践：从对象存储到 JuiceFS](https://juicefs.com/zh-cn/blog/user-stories/data-object-storag--to-juicefs)   |
+| [Clobotics](https://clobotics.com)   | 机器人，AI   | [Clobotics 计算机视觉场景存储实践：多云架构、POSIX 全兼容、低运维的统一存储](https://juicefs.com/zh-cn/blog/user-stories/clobotics-posix-multi-cloud-storage)         |
+| [刻行 coSence](https://www.coscene.io)   | 机器人，AI   | [机器人行业数据闭环实践：从对象存储到 JuiceFS](https://juicefs.com/zh-cn/blog/user-stories/data-object-storag--to-juicefs)   |
+| [海柔创新](https://www.hairobotics.cn)   | 机器人，AI   | [海柔仿真系统存储实践：混合云架构下实现高可用与极简运维](https://juicefs.com/zh-cn/blog/user-stories/multi-cloud-storage-high-availability)   |
 | [蝉妈妈数据](https://www.chanmama.com)  |  AI  |         |
 | [酷家乐](https://www.kujiale.com)    |  AI    |       |
 | [TP-LINK](https://www.tp-link.com)   | AI      |       |
 | [Fal](https://fal.ai) | GenerativeAI    |           |
-| [Lepton AI](https://www.lepton.ai) | GenerativeAI |           |
+| [Lepton AI](https://www.lepton.ai) | GenerativeAI | [加速 AI 训推：Lepton AI 如何构建多租户、低延迟云存储平台](https://juicefs.com/zh-cn/blog/user-stories/lepton-ai-build-multi-tenant-low-latency-cloud-storage-platform)          |
 | [Graviti Diffus](https://www.diffus.graviti.com) | GenerativeAI |      |
 | [建信金融科技](https://www.ccbft.com)   | 金融科技，AI   |          |
 | [平安银行](https://pingan.com)    | 金融科技，大数据  |         |
@@ -52,11 +55,13 @@ slug: /adopters
 | [腾讯](https://www.tencent.com)    | 互联网服务，AI   |       |
 | [百度](https://home.baidu.com/home/index)    |  互联网服务，大数据   |        |
 | [知乎](https://www.zhihu.com)   |  互联网服务，大数据  | [知乎 x JuiceFS：利用 JuiceFS 给 Flink 容器启动加速](https://juicefs.com/zh-cn/blog/zhihu-flink-with-juicefs)，<br />[利用 JuiceFS 动态注入 Protobuf JAR 包](https://zhuanlan.zhihu.com/p/586120009)，<br />[知乎：多云架构下大模型训练，如何保障存储稳定性](https://juicefs.com/zh-cn/blog/user-stories/data-storage-multi-cloud-zhihu-model-training-juicefs)    |
+| [好未来](https://www.100tal.com)   |  互联网服务，AI  | [好未来：多云环境下基于 JuiceFS 建设低运维模型仓库](https://juicefs.com/zh-cn/blog/user-stories/multi-cloud-storage-juicefs-model-stroage)    |
 | [Shopee](https://shopee.com)    |  电商，大数据  | [Shopee x JuiceFS：ClickHouse 冷热数据分离存储架构与实践](https://juicefs.com/zh-cn/blog/shopee-clickhouse-with-juicefs)       |
 | [京东](https://jd.com)   | 电商，大数据   |       |
 | [Grab](https://grab.com/sg)     |  出行服务，大数据   |         |
 | [深势科技](https://www.dp.tech)   |  生物科技，AI  | [深势科技分享 AI 企业多云存储架构实践](https://juicefs.com/zh-cn/blog/dptech-ai-storage-in-multi-cloud-practice)    |
 | [MemVerge](https://memverge.com)   | 生物科技，共享文件存储  |  [MemVerge：小文件写入性能 5 倍于 S3FS，JuiceFS 加速生信研究](https://juicefs.com/zh-cn/blog/user-stories/memverge-s3fs-juicefs)            |
+| [百图生科](https://www.biotu.com)   | 生物科技，共享文件存储  |             |
 | [MDI 生物实验室](https://mdibl.org) | 生物科技，高性能文件存储 |           |
 | [劳伦斯伯克利实验室](https://www.lbl.gov) | 生物科技，高性能文件存储 |             |
 | [美国自然历史博物馆](https://www.amnh.org) | 非盈利组织，高性能文件存储 |     |
@@ -67,18 +72,18 @@ slug: /adopters
 | [米哈游](https://www.mihoyo.com)   | 游戏，共享文件存储   |       |
 | [嘉谊互娱](http://www.joyient.com)   |  游戏，共享文件存储，特效渲染 |         |
 | [一面数据](https://www.yimian.com.cn)    | 大数据   | [一面数据：Hadoop 迁移云上架构设计与实践](https://juicefs.com/zh-cn/blog/yimiancase)    |
-| [携程旅行](https://www.ctrip.com)   |  互联网服务，大数据   | [突破存储数据量限制，JuiceFS 在携程海量冷数据场景下的实践](https://juicefs.com/zh-cn/blog/xiecheng-case)    |
-| [同程旅行](https://ly.com)   |  互联网服务，共享文件存储  |            |
+| [携程旅行](https://www.ctrip.com)   |  互联网服务，大数据，AI   | [突破存储数据量限制，JuiceFS 在携程海量冷数据场景下的实践](https://juicefs.com/zh-cn/blog/xiecheng-case)，[稳定且高性价比的大模型存储：携程 10PB 级 JuiceFS 工程实践](https://juicefs.com/zh-cn/blog/user-stories/trip-10pb-level-llm-stroage-juicefs-practice)    |
+| [同程旅行](https://ly.com)   |  互联网服务，共享文件存储  | [从 CephFS 到 JuiceFS：同程旅行亿级文件存储平台构建之路](https://juicefs.com/zh-cn/blog/user-stories/cephfs-vs-juicefs-draco-travel-file-storage)           |
 | [贝壳](https://ke.com)   |  互联网服务，AI  |  [贝壳找房：为 AI 平台打造混合多云的存储加速底座](https://juicefs.com/zh-cn/blog/user-stories/beike-ai-platform-multi-cloud-storage)        |
 | [Jerry](https://getjerry.com)  | 互联网服务，大数据  | [北美科技企业 Jerry：基于 JuiceFS 构建 ClickHouse 主从架构](https://juicefs.com/zh-cn/blog/user-stories/jerry-clickhouse-read-write-separation-juicefs-primary-replica-architecture)  |
 | [航天宏图](https://www.piesat.cn)   |  遥感，共享文件存储    |                |
 | [天桐互动](https://www.kuaidianyuedu.com)   |  AI，共享文件存储  |             |
 | [视源股份](http://www.cvte.com)   |  共享文件存储  |         |
 | [多点 DMALL](https://www.dmall.com)   |  零售，大数据   | [多点 DMALL：大数据存算分离下的存储架构探索与实践](https://juicefs.com/zh-cn/blog/user-stories/separation-of-storage--computing-building-cloud-native-big-data-platform)   |
+| [百胜中国](https://www.yumchina.com)   |  零售，AI   |             |
 | [酷数智能](http://www.kurudata.com)   | 共享文件存储    |       |
 | [朗新集团](https://www.longshine.com)   | 大数据，共享文件存储   |           |
 | [网易邮箱](https://mail.163.com)   |  互联网服务，大数据    |           |
-| [梧桐车联](https://www.auto-pai.com)    | AI，大数据   |            |
 | [南昌维网科技](https://www.vwell.cn)   | 共享数据存储     |         |
 | [声网](https://www.agora.io/cn)   |  大数据    |            |
 | [南京鹏云网络](https://www.pengyunnetwork.cn)  | 共享文件存储    |        |
@@ -91,6 +96,7 @@ slug: /adopters
 | [九曳供应链](https://www.jiuyescm.com)   | 大数据  |           |
 | [摩登天空](https://www.modernsky.com/home)   | 共享文件存储  |       |
 | [酷狗音乐](https://www.kugou.com)   | 共享文件存储   |       |
+| [东方财富](https://www.eastmoney.com)   | 共享文件存储   |       |
 | [Texas A&M 大学](https://www.tamu.edu) | 大学 |     |
 | [Simon Fraser 大学](https://www.sfu.ca) | 大学 |     |
 | [堪培拉大学](https://www.canberra.edu.au) | 大学 |     |

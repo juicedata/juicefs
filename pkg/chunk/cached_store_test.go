@@ -20,14 +20,17 @@ package chunk
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
@@ -63,6 +66,12 @@ func testStore(t *testing.T, store ChunkStore) {
 	if n, err := reader.ReadAt(context.Background(), p, 6); n != 5 || err != nil {
 		t.Fatalf("read failed: %d %s", n, err)
 	} else if string(p.Data[:n]) != "world" {
+		t.Fatalf("not expected: %s", string(p.Data[:n]))
+	}
+	p = NewPage(make([]byte, 5))
+	if n, err := reader.ReadAt(context.Background(), p, 0); n != 5 || err != nil {
+		t.Fatalf("read failed: %d %s", n, err)
+	} else if string(p.Data[:n]) != "hello" {
 		t.Fatalf("not expected: %s", string(p.Data[:n]))
 	}
 	p = NewPage(make([]byte, 20))
@@ -188,6 +197,56 @@ func TestStoreAsync(t *testing.T) {
 	testStore(t, store)
 }
 
+func TestForceUpload(t *testing.T) {
+	blob, _ := object.CreateStorage("mem", "", "", "", "")
+	config := defaultConf
+	_ = os.RemoveAll(config.CacheDir)
+	config.Writeback = true
+	config.UploadDelay = time.Hour
+	config.BlockSize = 4 << 20
+	store := NewCachedStore(blob, config, nil)
+	cleanCache := func() {
+		rSlice := sliceForRead(1, 1024, store.(*cachedStore))
+		keys := rSlice.keys()
+		for _, k := range keys {
+			store.(*cachedStore).bcache.remove(k, true)
+		}
+	}
+	readSlice := func(id uint64, length int) error {
+		p := NewPage(make([]byte, length))
+		r := store.NewReader(id, length)
+		_, err := r.ReadAt(context.Background(), p, 0)
+		return err
+	}
+
+	// write to cache
+	w := store.NewWriter(1)
+	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
+		t.Fatalf("write fail: %s", err)
+	}
+	if err := w.Finish(1024); err != nil {
+		t.Fatalf("write fail: %s", err)
+	}
+	cleanCache()
+	if readSlice(1, 1024) == nil {
+		t.Fatalf("read slice 1 should fail")
+	}
+
+	// write to os
+	w = store.NewWriter(2)
+	w.SetWriteback(false)
+	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
+		t.Fatalf("write fail: %s", err)
+	}
+	if err := w.Finish(1024); err != nil {
+		t.Fatalf("write fail: %s", err)
+	}
+	cleanCache()
+	if readSlice(2, 1024) != nil {
+		t.Fatalf("check slice 2 should success")
+	}
+}
+
 func TestStoreDelayed(t *testing.T) {
 	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf
@@ -248,12 +307,19 @@ func TestFillCache(t *testing.T) {
 		t.Fatalf("cache cnt %d used %d, expect cnt 2 used %d", cnt, used, expect)
 	}
 
+	var missBytes uint64
+	handler := func(exists bool, loc string, size int) {
+		if !exists {
+			missBytes += uint64(size)
+		}
+	}
 	// check
-	missBytes, err := store.CheckCache(10, 1024)
+	err := store.CheckCache(10, 1024, handler)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(0), missBytes)
 
-	missBytes, err = store.CheckCache(11, uint32(bsize))
+	missBytes = 0
+	err = store.CheckCache(11, uint32(bsize), handler)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(0), missBytes)
 
@@ -267,7 +333,8 @@ func TestFillCache(t *testing.T) {
 	}
 
 	// check again
-	missBytes, err = store.CheckCache(11, uint32(bsize))
+	missBytes = 0
+	err = store.CheckCache(11, uint32(bsize), handler)
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(bsize), missBytes)
 }
@@ -316,4 +383,23 @@ func BenchmarkUncachedRead(b *testing.B) {
 			b.FailNow()
 		}
 	}
+}
+
+type dStore struct {
+	object.ObjectStorage
+	cnt int32
+}
+
+func (s *dStore) Get(key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+	atomic.AddInt32(&s.cnt, 1)
+	return nil, errors.New("not found")
+}
+
+func TestStoreRetry(t *testing.T) {
+	s := &dStore{}
+	cs := NewCachedStore(s, defaultConf, nil)
+	p := NewPage(nil)
+	defer p.Release()
+	cs.(*cachedStore).load("non", p, false, false) // wont retry
+	require.Equal(t, int32(1), s.cnt)
 }

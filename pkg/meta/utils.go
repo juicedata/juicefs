@@ -17,9 +17,11 @@
 package meta
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"path"
+	"runtime"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -39,6 +41,8 @@ const (
 	totalInodes    = "totalInodes"
 	legacySessions = "sessions"
 )
+
+var counterNames = []string{usedSpace, totalInodes, "nextInode", "nextChunk", "nextSession", "nextTrash"}
 
 const (
 	// fallocate
@@ -332,7 +336,7 @@ func (m *baseMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, s
 	return st
 }
 
-func (m *baseMeta) Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno {
+func (m *baseMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, numThreads int, count *uint64) syscall.Errno {
 	parent = m.checkRoot(parent)
 	if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, nil); st != 0 {
 		return st
@@ -346,10 +350,18 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, count *uint64) s
 		if count != nil {
 			atomic.AddUint64(count, 1)
 		}
-		return m.Unlink(ctx, parent, name)
+		return m.Unlink(ctx, parent, name, skipTrash)
 	}
-	concurrent := make(chan int, 50)
-	return m.emptyEntry(ctx, parent, name, inode, false, count, concurrent)
+	if numThreads <= 0 {
+		logger.Infof("invalid threads number %d , auto adjust to %d", numThreads, RmrDefaultThreads)
+		numThreads = RmrDefaultThreads
+	} else if numThreads > 255 {
+		logger.Infof("threads number %d too large, auto adjust to 255 .", numThreads)
+		numThreads = 255
+	}
+	logger.Debugf("Start emptyEntry with %d concurrent threads .", numThreads)
+	concurrent := make(chan int, numThreads)
+	return m.emptyEntry(ctx, parent, name, inode, skipTrash, count, concurrent)
 }
 
 func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool) syscall.Errno {
@@ -428,6 +440,8 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 			continue
 		}
 		select {
+		case <-ctx.Done():
+			return syscall.EINTR
 		case err := <-errCh:
 			// TODO: cancel others
 			return err
@@ -517,8 +531,9 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 		}
 		child.Dirs++
 		select {
+		case <-ctx.Done():
+			return syscall.EINTR
 		case err = <-errCh:
-			// TODO: cancel context
 			return err
 		case concurrent <- struct{}{}:
 			wg.Add(1)
@@ -583,4 +598,29 @@ func relatimeNeedUpdate(attr *Attr, now time.Time) bool {
 	mtime := time.Unix(attr.Mtime, int64(attr.Mtimensec))
 	ctime := time.Unix(attr.Ctime, int64(attr.Ctimensec))
 	return mtime.After(atime) || ctime.After(atime) || now.Sub(atime) > 24*time.Hour
+}
+
+type txMethodKey struct{}
+
+func callerName(ctx context.Context) string {
+	if method, ok := ctx.Value(txMethodKey{}).(string); ok {
+		return method // Fast path, prefer explicitly provided method name
+	}
+	const minSkip = 2
+	for i := minSkip; i < 20; i++ { // Slow path, find the real caller
+		pc, _, _, ok := runtime.Caller(i)
+		if !ok {
+			break
+		}
+		fn := runtime.FuncForPC(pc)
+		if fn == nil {
+			continue
+		}
+		name := fn.Name()
+		// Skip frames containing anonymous functions (indicated by dot+number)
+		if !strings.Contains(name, ".func") {
+			return utils.MethodName(name)
+		}
+	}
+	return "unknown"
 }

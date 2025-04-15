@@ -5,7 +5,8 @@ source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
 
-HEARTBEAT_INTERVAL=5
+HEARTBEAT_INTERVAL=3
+HEARTBEAT_SLEEP=3
 DIR_QUOTA_FLUSH_INTERVAL=4
 VOLUME_QUOTA_FLUSH_INTERVAL=2
 source .github/scripts/common/common.sh
@@ -20,7 +21,7 @@ test_total_capacity()
     echo a | tee -a /jfs/test1 2>error.log && echo "echo should fail on out of space" && exit 1 || true
     grep "No space left on device" error.log
     ./juicefs config $META_URL --capacity 2
-    sleep $((HEARTBEAT_INTERVAL+1))
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     dd if=/dev/zero of=/jfs/test2 bs=1G count=1
     sleep $VOLUME_QUOTA_FLUSH_INTERVAL
     echo a | tee -a /jfs/test2 2>error.log && echo "echo should fail on out of space" && exit 1 || true
@@ -52,7 +53,7 @@ test_total_inodes(){
     echo a | tee /jfs/test1001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
     grep "No space left on device" error.log
     ./juicefs config $META_URL --inodes 2000
-    sleep $((HEARTBEAT_INTERVAL+1))
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     set +x
     for i in {1001..2000}; do
         echo $i | tee /jfs/test$i > /dev/null || (df -i /jfs && ls /jfs/ -l | wc -l  && exit 1)
@@ -71,7 +72,7 @@ test_nested_dir(){
     dir_count=$(find /jfs/d1 -type d | wc -l)
     echo "dir_count: $dir_count"
     ./juicefs quota set $META_URL --path /d1 --inodes $((file_count+dir_count-1))
-    sleep $HEARTBEAT_INTERVAL
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     for i in $(seq 1 $file_count); do
         subdir=$(find /jfs/d1/ -type d | shuf -n 1)
         echo "touch $subdir/test$i" && touch $subdir/test$i
@@ -82,7 +83,7 @@ test_nested_dir(){
     grep -i "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
 
     ./juicefs quota set $META_URL --path /d1 --inodes $((file_count+dir_count))
-    sleep $HEARTBEAT_INTERVAL
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     subdir=$(find /jfs/d1/ -type d | shuf -n 1)
     touch $subdir/test
 }
@@ -93,7 +94,7 @@ test_remove_and_restore(){
     ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
     mkdir -p /jfs/d
     ./juicefs quota set $META_URL --path /d --capacity 1
-    sleep $((HEARTBEAT_INTERVAL+1))
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     dd if=/dev/zero of=/jfs/d/test1 bs=1G count=1
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     ./juicefs quota get $META_URL --path /d 2>&1 | tee quota.log
@@ -113,7 +114,7 @@ test_remove_and_restore(){
     ./juicefs quota get $META_URL --path /d 2>&1 | tee quota.log
     used=$(cat quota.log | grep "/d" | awk -F'|' '{print $5}'  | tr -d '[:space:]')
     [[ $used != "100%" ]] && echo "used should be 100%" && exit 1 || true
-    sleep $HEARTBEAT_INTERVAL
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     echo a | tee -a /jfs/d/test1 2>error.log && echo "write should fail on out of space" && exit 1 || true
     grep -i "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
 
@@ -130,7 +131,7 @@ test_dir_capacity(){
     ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
     mkdir -p /jfs/d
     ./juicefs quota set $META_URL --path /d --capacity 1
-    sleep $((HEARTBEAT_INTERVAL+1))
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     dd if=/dev/zero of=/jfs/d/test1 bs=1G count=1
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     ./juicefs quota get $META_URL --path /d
@@ -140,7 +141,7 @@ test_dir_capacity(){
     grep -i "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
 
     ./juicefs quota set $META_URL --path /d --capacity 2
-    sleep $((HEARTBEAT_INTERVAL+1))
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     dd if=/dev/zero of=/jfs/d/test2 bs=1G count=1
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     echo a | tee -a /jfs/d/test2 2>error.log && echo "echo should fail on out of space" && exit 1 || true
@@ -160,7 +161,7 @@ test_dir_inodes(){
     ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
     mkdir -p /jfs/d
     ./juicefs quota set $META_URL --path /d --inodes 1000
-    sleep $((HEARTBEAT_INTERVAL+1))
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     set +x
     for i in {1..1000}; do
         echo $i > /jfs/d/test$i > /dev/null
@@ -171,7 +172,7 @@ test_dir_inodes(){
     grep "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
     rm -rf error.log
     ./juicefs quota set $META_URL --path /d --inodes 2000
-    sleep $((HEARTBEAT_INTERVAL+1))
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     set +x
     for i in {1001..2000}; do
         echo $i | tee  /jfs/d/test$i > /dev/null
@@ -193,7 +194,7 @@ test_sub_dir(){
     ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
     mkdir -p /jfs/d
     ./juicefs quota set $META_URL --path /d --inodes 1000 --capacity 1
-    sleep $((HEARTBEAT_INTERVAL+1))
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     umount_jfs /jfs $META_URL
     ./juicefs mount -d $META_URL --subdir /d /jfs --heartbeat 2
     size=$(df -h /jfs | grep "JuiceFS" | awk '{print $2}')
@@ -223,7 +224,7 @@ test_dump_load(){
     ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
     mkdir -p /jfs/d
     ./juicefs quota set $META_URL --path /d --inodes 1000 --capacity 1
-    sleep $((HEARTBEAT_INTERVAL+1))
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     ./juicefs dump --log-level error $META_URL --fast > dump.json
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
@@ -253,7 +254,7 @@ test_hard_link(){
     mkdir -p /jfs/d
     dd if=/dev/zero of=/jfs/file bs=1G count=1
     ./juicefs quota set $META_URL --path /d --capacity 2
-    sleep $((HEARTBEAT_INTERVAL+1))
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     dd if=/dev/zero of=/jfs/d/test1 bs=1G count=1
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     ln /jfs/file /jfs/d/test2
@@ -270,7 +271,7 @@ test_check_and_repair_quota(){
     ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
     mkdir -p /jfs/d
     ./juicefs quota set $META_URL --path /d --capacity 1
-    sleep $((HEARTBEAT_INTERVAL+1))
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     dd if=/dev/zero of=/jfs/d/test1 bs=1G count=1
     pid=$(ps -ef | grep "juicefs mount" | grep -v grep | awk '{print $2}')
     kill -9 $pid

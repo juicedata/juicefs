@@ -163,6 +163,10 @@ func selectionFlags() []cli.Flag {
 			Name:  "ignore-existing",
 			Usage: "skip updating files that already exist on destination",
 		},
+		&cli.StringFlag{
+			Name:  "files-from",
+			Usage: "read list of files or dirs to sync from FILE",
+		},
 	})
 }
 
@@ -202,6 +206,11 @@ func syncActionFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:  "check-new",
 			Usage: "verify integrity of newly copied files",
+		},
+		&cli.Int64Flag{
+			Name:  "max-failure",
+			Value: -1,
+			Usage: "max number of allowed failed files (-1 for unlimited)",
 		},
 		&cli.BoolFlag{
 			Name:  "dry",
@@ -267,8 +276,6 @@ func supportHTTPS(name, endpoint string) bool {
 		return !(strings.Contains(endpoint, ".internal-") || strings.HasSuffix(endpoint, ".ucloud.cn"))
 	case "oss":
 		return !(strings.Contains(endpoint, ".vpc100-oss") || strings.Contains(endpoint, "internal.aliyuncs.com"))
-	case "jss":
-		return false
 	case "s3":
 		ps := strings.SplitN(strings.Split(endpoint, ":")[0], ".", 2)
 		if len(ps) > 1 && net.ParseIP(ps[1]) != nil {
@@ -461,6 +468,10 @@ func doSync(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		object.Shutdown(src)
+		object.Shutdown(dst)
+	}()
 	if config.StorageClass != "" {
 		if os, ok := dst.(object.SupportStorageClass); ok {
 			err := os.SetStorageClass(config.StorageClass)

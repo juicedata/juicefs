@@ -236,6 +236,10 @@ Additional parameters can be appended to the metadata URL. More details can be s
 
 [MySQL](https://www.mysql.com) is one of the most popular open source relational databases, and is often preferred for web applications.
 
+>[MariaDB](https://mariadb.org) is an open source branch of MySQL, maintained by the original developers of MySQL. With its high compatibility with MySQL, setting up the Meta engine in MariaDB uses the same parameters and configurations as MySQL.
+>
+>[OceanBase](https://en.oceanbase.com) is a self-developed distributed relational database designed for processing massive data and high-concurrency transactions. It features high performance, strong consistency, and high availability. OceanBase is also highly compatible with MySQL, allowing the metadata engine to be configured in the same way.
+
 ### Create a file system
 
 When using MySQL as the metadata storage engine, you need to create a database manually before create the file system. The command with the following format is usually used to access the database:
@@ -315,58 +319,6 @@ juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs?tls=true" /
 ```
 
 For more examples of MySQL database address format, please refer to [Go-MySQL-Driver](https://github.com/Go-SQL-Driver/MySQL/#examples).
-
-## MariaDB
-
-[MariaDB](https://mariadb.org) is an open source branch of MySQL, maintained by the original developers of MySQL.
-
-Because MariaDB is highly compatible with MySQL, there is no difference in usage, the parameters and settings are exactly the same.
-
-For example:
-
-```shell
-juicefs format \
-    --storage s3 \
-    ... \
-    "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" \
-    pics
-```
-
-```shell
-juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mnt/jfs
-```
-
-Passing passwords through environment variables is also the same:
-
-```shell
-export META_PASSWORD="mypassword"
-juicefs format \
-    --storage s3 \
-    ... \
-    "mysql://user@(192.168.1.6:3306)/juicefs" \
-    pics
-```
-
-```shell
-juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
-```
-
-To connect to a TLS enabled MariaDB server, pass the `tls=true` parameter (or `tls=skip-verify` if using a self-signed certificate):
-
-```shell
-export META_PASSWORD="mypassword"
-juicefs format \
-    --storage s3 \
-    ... \
-    "mysql://user@(192.168.1.6:3306)/juicefs?tls=true" \
-    pics
-```
-
-```shell
-juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs?tls=true" /mnt/jfs
-```
-
-For more examples of MariaDB database address format, please refer to [Go-MySQL-Driver](https://github.com/Go-SQL-Driver/MySQL/#examples).
 
 ## SQLite
 

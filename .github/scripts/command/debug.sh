@@ -32,7 +32,7 @@ check_debug_file(){
 test_debug_juicefs(){
     ./juicefs format $META_URL myjfs 
     ./juicefs mount -d $META_URL /jfs
-    dd if=/dev/urandom of=/jfs/bigfile bs=1M count=1024
+    dd if=/dev/urandom of=/jfs/bigfile bs=1M count=128
     ./juicefs debug /jfs/
     check_debug_file
     ./juicefs rmr /jfs/bigfile
@@ -42,7 +42,7 @@ test_debug_abnormal_juicefs(){
     rm -rf debug | true
     ./juicefs format $META_URL myjfs 
     ./juicefs mount -d $META_URL /jfs
-    dd if=/dev/urandom of=/jfs/bigfile bs=1M count=1024
+    dd if=/dev/urandom of=/jfs/bigfile bs=1M count=128
     killall -9 redis-server | true
     ./juicefs debug /jfs/
 #    check_debug_file

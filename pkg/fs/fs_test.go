@@ -133,7 +133,7 @@ func TestFileSystem(t *testing.T) {
 	if e := f.Utime(ctx, 1, 2); e != 0 {
 		t.Fatalf("utime: %s", e)
 	}
-	if s, e := f.Summary(ctx); e != 0 || s.Dirs != 0 || s.Files != 1 || s.Length != 5 || s.Size != 4<<10 {
+	if s, e := f.Summary(ctx, true, true); e != 0 || s.Dirs != 0 || s.Files != 1 || s.Length != 5 || s.Size != 4<<10 {
 		t.Fatalf("summary: %s %+v", e, s)
 	}
 	if e := f.Close(ctx); e != 0 {
@@ -218,8 +218,11 @@ func TestFileSystem(t *testing.T) {
 		t.Fatalf("follow symlink: %s %+v", e, fi)
 	}
 
-	if s, e := d.Summary(ctx); e != 0 || s.Dirs != 2 || s.Files != 2 || s.Length != 7 || s.Size != 16<<10 {
+	if s, e := d.Summary(ctx, true, true); e != 0 || s.Dirs != 2 || s.Files != 2 || s.Length != 7 || s.Size != 16<<10 {
 		t.Fatalf("summary: %s %+v", e, s)
+	}
+	if q, e := d.GetQuota(ctx); e != nil || q.MaxInodes != 0 || q.MaxSpace != (1<<30) {
+		t.Fatalf("quota: %s %+v", e, q)
 	}
 	if e := fs.Delete(ctx, "/d"); e == 0 || !IsNotEmpty(e) {
 		t.Fatalf("rmdir: %s", e)
@@ -230,7 +233,7 @@ func TestFileSystem(t *testing.T) {
 	if err := fs.Delete(ctx, "/d/f"); err == 0 || !IsNotExist(err) {
 		t.Fatalf("delete /d/f: %s", err)
 	}
-	if e := fs.Rmr(ctx, "/d"); e != 0 {
+	if e := fs.Rmr(ctx, "/d", meta.RmrDefaultThreads); e != 0 {
 		t.Fatalf("delete /d -r: %s", e)
 	}
 
@@ -261,7 +264,7 @@ func TestFileSystem(t *testing.T) {
 	if err := fs.Rename(ctx, "/ddd/", "/ttt/", 0); err != 0 {
 		t.Fatalf("delete /ddd/: %s", err)
 	}
-	if err := fs.Rmr(ctx, "/ttt/"); err != 0 {
+	if err := fs.Rmr(ctx, "/ttt/", meta.RmrDefaultThreads); err != 0 {
 		t.Fatalf("rmr /ttt/: %s", err)
 	}
 	if _, err := fs.Stat(ctx, "/ttt/"); err != syscall.ENOENT {

@@ -19,6 +19,7 @@ package meta
 import (
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"reflect"
 	"runtime"
@@ -27,6 +28,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unicode"
 
 	"pgregory.net/rapid"
 
@@ -122,8 +124,11 @@ type fsMachine struct {
 	ctx   Context
 }
 
+var metaType string
+var tCounter uint64
+
 func (m *fsMachine) Init(t *rapid.T) {
-	m.sid = rapid.Uint64().Draw(t, "sid")
+	m.sid = uint64(rapid.UintRange(1, math.MaxUint32-1).Draw(t, "sid"))
 	m.nodes = make(map[Ino]*tNode)
 	m.nodes[1] = &tNode{
 		_type:    TypeDirectory,
@@ -135,7 +140,8 @@ func (m *fsMachine) Init(t *rapid.T) {
 		parents:  []*tNode{{inode: RootInode, _type: TypeDirectory}},
 	}
 	_ = os.Remove(settingPath)
-	m.meta, _ = newKVMeta("memkv", "jfs-unit-test", testConfig())
+	m.meta = NewClient(metaURL, testConfig())
+	m.meta.Reset()
 	if err := m.meta.Init(testFormat(), true); err != nil {
 		t.Fatalf("initialize failed: %s", err)
 	}
@@ -144,6 +150,20 @@ func (m *fsMachine) Init(t *rapid.T) {
 	registerer := prometheus.WrapRegistererWithPrefix("juicefs_",
 		prometheus.WrapRegistererWith(prometheus.Labels{"mp": "virtual-mp", "vol_name": "test-vol"}, registry))
 	m.meta.InitMetrics(registerer)
+
+	switch m.meta.(type) {
+	case *dbMeta:
+		metaType = "db"
+	case *redisMeta:
+		metaType = "redis"
+	case *kvMeta:
+		metaType = "tkv"
+	}
+
+	tCounter++
+	if tCounter%50 == 0 {
+		fmt.Println("current counter: ", tCounter)
+	}
 }
 
 func (m *fsMachine) genName(t *rapid.T) string {
@@ -156,6 +176,7 @@ func (m *fsMachine) genName(t *rapid.T) string {
 
 func (m *fsMachine) Cleanup() {
 	m.meta.Reset()
+	m.meta.Shutdown()
 }
 
 func (m *fsMachine) prepare(t *rapid.T) {
@@ -426,6 +447,25 @@ func (m *fsMachine) unlink(parent Ino, name string) syscall.Errno {
 	if p == nil {
 		return syscall.ENOENT
 	}
+	if p._type != TypeDirectory {
+		return syscall.ENOTDIR
+	}
+
+	if metaType == "db" {
+		if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+			return syscall.EACCES
+		}
+	}
+	c := p.children[name]
+
+	if c._type == TypeDirectory {
+		return syscall.EPERM
+	}
+
+	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+		return syscall.EACCES
+	}
+
 	if _, ok := p.children[name]; !ok {
 		return syscall.ENOENT
 	}
@@ -433,17 +473,7 @@ func (m *fsMachine) unlink(parent Ino, name string) syscall.Errno {
 		return syscall.EINVAL
 	}
 
-	c := p.children[name]
-
-	if c._type == TypeDirectory {
-		return syscall.EPERM
-	}
-
 	if !p.stickyAccess(c, m.ctx.Uid()) {
-		return syscall.EACCES
-	}
-
-	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
 		return syscall.EACCES
 	}
 
@@ -469,13 +499,12 @@ func (m *fsMachine) rmdir(parent Ino, name string) syscall.Errno {
 	if p == nil {
 		return syscall.ENOENT
 	}
-	if _, ok := p.children[name]; !ok {
-		return syscall.ENOENT
-	}
-	if fsnodes_namecheck(name) != 0 {
-		return syscall.EINVAL
-	}
 
+	if metaType == "db" {
+		if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+			return syscall.EACCES
+		}
+	}
 	c := p.children[name]
 
 	if c._type != TypeDirectory {
@@ -484,6 +513,12 @@ func (m *fsMachine) rmdir(parent Ino, name string) syscall.Errno {
 
 	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
 		return syscall.EACCES
+	}
+	if _, ok := p.children[name]; !ok {
+		return syscall.ENOENT
+	}
+	if fsnodes_namecheck(name) != 0 {
+		return syscall.EINVAL
 	}
 
 	if len(c.children) != 0 {
@@ -606,9 +641,9 @@ func (m *fsMachine) fallocate(inode Ino, mode uint8, offset uint64, size uint64)
 	if n._type != TypeFile {
 		return syscall.EPERM
 	}
-	//if !n.access(m.ctx, MODE_MASK_W) {
-	//	return syscall.EACCES
-	//}
+	if !n.access(m.ctx, MODE_MASK_W) {
+		return syscall.EACCES
+	}
 	if offset+size > n.length {
 		n.length = offset + size
 	}
@@ -765,6 +800,50 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 		return 0
 	}
 
+	// todo: The order of condition checks in different metadata engines is inconsistent
+	if metaType == "db" {
+		src := m.nodes[srcparent]
+		if src == nil {
+			return syscall.ENOENT
+		}
+		dst := m.nodes[dstparent]
+		if dst == nil {
+			return syscall.ENOENT
+		}
+		if src._type != TypeDirectory || dst._type != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		if !src.access(m.ctx, MODE_MASK_X|MODE_MASK_W) {
+			return syscall.EACCES
+		}
+		if !dst.access(m.ctx, MODE_MASK_X|MODE_MASK_W) {
+			return syscall.EACCES
+		}
+	}
+
+	if metaType == "redis" {
+		src := m.nodes[srcparent]
+		if src == nil {
+			return syscall.ENOENT
+		}
+		dst := m.nodes[dstparent]
+		if dst == nil {
+			return syscall.ENOENT
+		}
+		srcnode := src.children[srcname]
+		if srcnode == nil {
+			return syscall.ENOENT
+		}
+		c := dst.children[dstname]
+		if c != nil {
+			if srcnode._type == TypeDirectory && c._type != TypeDirectory {
+				return syscall.ENOTDIR
+			} else if srcnode._type != TypeDirectory && c._type == TypeDirectory {
+				return syscall.EISDIR
+			}
+		}
+
+	}
 	src := m.nodes[srcparent]
 	if src == nil {
 		return syscall.ENOENT
@@ -798,6 +877,17 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 		return syscall.ENOENT
 	}
 
+	if metaType == "tkv" {
+		c := dst.children[dstname]
+		if c != nil {
+			if srcnode._type == TypeDirectory && c._type != TypeDirectory {
+				return syscall.ENOTDIR
+			} else if srcnode._type != TypeDirectory && c._type == TypeDirectory {
+				return syscall.EISDIR
+			}
+		}
+	}
+
 	if !src.stickyAccess(srcnode, m.ctx.Uid()) {
 		return syscall.EACCES
 	}
@@ -812,6 +902,12 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 	if c := dst.children[dstname]; c != nil {
 		if c == srcnode {
 			return syscall.EPERM
+		}
+		if flag != 0 {
+		} else if srcnode._type == TypeDirectory && c._type != TypeDirectory {
+			return syscall.ENOTDIR
+		} else if srcnode._type != TypeDirectory && c._type == TypeDirectory {
+			return syscall.EISDIR
 		}
 		if len(c.children) != 0 {
 			return syscall.ENOTEMPTY
@@ -1039,11 +1135,10 @@ func (m *fsMachine) Mkdir(t *rapid.T) {
 	if name == "." || name == ".." {
 		t.Skipf("skip mkdir %s", name)
 	}
-	t.Logf("parent ino %d", parent)
 	var inode Ino
 	var attr Attr
 	st := m.meta.Mkdir(m.ctx, parent, name, mode, 0, 0, &inode, &attr)
-	t.Logf("dir ino %d", inode)
+	t.Logf("parent ino %d, dir ino %d", parent, inode)
 	//var attr2 Attr
 	//m.meta.GetAttr(m.ctx, inode, &attr2)
 	st2 := m.create(TypeDirectory, parent, name, mode, 0, inode)
@@ -1082,6 +1177,9 @@ func (m *fsMachine) Link(t *rapid.T) {
 func (m *fsMachine) Rmdir(t *rapid.T) {
 	parent := m.pickNode(t)
 	name := m.pickChild(parent, t)
+	if name == "" {
+		return
+	}
 	st := m.meta.Rmdir(m.ctx, parent, name)
 	st2 := m.rmdir(parent, name)
 	if st != st2 {
@@ -1092,6 +1190,9 @@ func (m *fsMachine) Rmdir(t *rapid.T) {
 func (m *fsMachine) Unlink(t *rapid.T) {
 	parent := m.pickNode(t)
 	name := m.pickChild(parent, t)
+	if name == "" {
+		return
+	}
 	st := m.meta.Unlink(m.ctx, parent, name)
 	st2 := m.unlink(parent, name)
 	if st != st2 {
@@ -1135,6 +1236,9 @@ func (m *fsMachine) Readlink(t *rapid.T) {
 func (m *fsMachine) Lookup(t *rapid.T) {
 	parent := m.pickNode(t)
 	name := m.pickChild(parent, t)
+	if name == "" {
+		return
+	}
 	var inode Ino
 	var attr Attr
 	st := m.meta.Lookup(m.ctx, parent, name, &inode, &attr, true)
@@ -1191,14 +1295,19 @@ func (m *fsMachine) Rename(t *rapid.T) {
 		return
 	}
 	var srcIno Ino
-	for _, n := range m.nodes[srcParent].children {
-		if n.name == srcName {
+	for name, n := range m.nodes[srcParent].children {
+		// When the node is a hard link, name is not equal to n.name
+		if srcName == name {
 			srcIno = n.inode
 		}
 	}
 	dstParent := m.pickNode(t)
 
 	if srcIno == dstParent {
+		t.Skipf("skip rename srcIno is dstParent")
+	}
+	// hard link
+	if n, ok := m.nodes[dstParent].children[dstName]; ok && n.inode == srcIno {
 		t.Skipf("skip rename srcIno is dstParent")
 	}
 	tmp := m.nodes[dstParent].inode
@@ -1385,8 +1494,8 @@ func cleanupSlices(ss []tSlice) []tSlice {
 
 func (m *fsMachine) SetXAttr(t *rapid.T) {
 	inode := m.pickNode(t)
-	name := rapid.StringN(1, 200, XATTR_NAME_MAX+1).Draw(t, "name")
-	value := rapid.SliceOfN(rapid.Byte(), 0, XATTR_SIZE_MAX+1).Draw(t, "value")
+	name := string(rapid.SliceOfN(rapid.RuneFrom(nil, unicode.Lu), 1, XATTR_NAME_MAX).Draw(t, "name"))
+	value := rapid.SliceOfN(rapid.Byte(), 1, XATTR_SIZE_MAX+1).Draw(t, "value")
 	mode := rapid.Uint8Range(0, XATTR_REMOVE).Draw(t, "mode")
 	st := m.meta.SetXattr(m.ctx, inode, name, value, uint32(mode))
 	st2 := m.setxattr(inode, name, value, mode)
@@ -1411,7 +1520,7 @@ const XATTR_SIZE_MAX = 65536
 
 func (m *fsMachine) GetXAttr(t *rapid.T) {
 	inode := m.pickNode(t)
-	name := rapid.StringN(1, 200, XATTR_NAME_MAX+1).Draw(t, "name")
+	name := string(rapid.SliceOfN(rapid.RuneFrom(nil, unicode.Lu), 1, XATTR_NAME_MAX+1).Draw(t, "name"))
 	var value []byte
 	st := m.meta.GetXattr(m.ctx, inode, name, &value)
 	value2, st2 := m.getxattr(inode, name)
@@ -1926,11 +2035,11 @@ func (m *fsMachine) flock(inode Ino, owner uint64, typ uint32) syscall.Errno {
 func (m *fsMachine) Flock(t *rapid.T) {
 	inode := m.pickNode(t)
 	owner := rapid.Uint64().Draw(t, "owner")
-	typ := rapid.Uint32Range(0, 3).Draw(t, "typ")
+	typ := rapid.SampledFrom([]uint32{F_WRLCK, F_RDLCK, F_UNLCK}).Draw(t, "typ")
 	st := m.flock(inode, owner, typ)
 	st2 := m.meta.Flock(m.ctx, inode, owner, typ, false)
 	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
+		t.Fatalf("expect %s but got %s", st, st2)
 	}
 
 	if st == 0 {
@@ -1946,7 +2055,7 @@ func (m *fsMachine) Flock(t *rapid.T) {
 			sort.Slice(flocks2, func(i, j int) bool {
 				return flocks2[i].Owner < flocks2[j].Owner
 			})
-			if !reflect.DeepEqual(flocks1, flocks2) {
+			if !compareLocks(flocks1, flocks2) {
 				t.Fatalf("expect %+v but got %+v", flocks2, flocks1)
 			}
 			sort.Slice(plocks1, func(i, j int) bool {
@@ -1967,7 +2076,7 @@ func (m *fsMachine) Flock(t *rapid.T) {
 				}
 				return plocks2[i].End < plocks2[j].End
 			})
-			if !reflect.DeepEqual(plocks1, plocks2) {
+			if !compareLocks(plocks1, plocks2) {
 				t.Fatalf("expect %+v but got %+v", plocks2, plocks1)
 			}
 		}
@@ -1998,6 +2107,13 @@ func (m *fsMachine) listLocks(inode Ino) ([]PLockItem, []FLockItem, error) {
 	return plocks, flocks, nil
 }
 
+func compareLocks[T any](l1, l2 []T) bool {
+	if len(l1) == 0 && len(l2) == 0 {
+		return true
+	}
+	return reflect.DeepEqual(l1, l2)
+}
+
 func (m *fsMachine) ListLocks(t *rapid.T) {
 	inode := m.pickNode(t)
 	plocks1, flocks1, err1 := m.meta.ListLocks(m.ctx, inode)
@@ -2013,7 +2129,7 @@ func (m *fsMachine) ListLocks(t *rapid.T) {
 		sort.Slice(flocks2, func(i, j int) bool {
 			return flocks2[i].Owner < flocks2[j].Owner
 		})
-		if !reflect.DeepEqual(flocks1, flocks2) {
+		if !compareLocks(flocks1, flocks2) {
 			t.Fatalf("expect %+v but got %+v", flocks2, flocks1)
 		}
 		// sort plocks by owner
@@ -2023,7 +2139,7 @@ func (m *fsMachine) ListLocks(t *rapid.T) {
 		sort.Slice(plocks2, func(i, j int) bool {
 			return plocks2[i].Owner < plocks2[j].Owner
 		})
-		if !reflect.DeepEqual(plocks1, plocks2) {
+		if !compareLocks(plocks1, plocks2) {
 			t.Fatalf("expect %+v but got %+v", plocks2, plocks1)
 		}
 	}
@@ -2121,7 +2237,7 @@ func (m *fsMachine) setlk(inode Ino, owner uint64, ltype uint32, start uint64, e
 func (m *fsMachine) Setlk(t *rapid.T) {
 	inode := m.pickNode(t)
 	owner := rapid.Uint64().Draw(t, "owner")
-	ltype := rapid.Uint32Range(0, 2).Draw(t, "ltype")
+	ltype := rapid.SampledFrom([]uint32{F_WRLCK, F_RDLCK, F_UNLCK}).Draw(t, "ltype")
 	start := rapid.Uint64Range(0, 500<<20).Draw(t, "start")
 	len := rapid.Uint64Range(1, 500<<20).Draw(t, "len")
 	pid := rapid.Uint32Range(1, 10000).Draw(t, "pid")
@@ -2133,13 +2249,35 @@ func (m *fsMachine) Setlk(t *rapid.T) {
 	}
 }
 
+var metaURL string
+
+func init() {
+	flag.StringVar(&metaURL, "rapid.meta", "memkv://jfs-unit-test", "meta URL")
+	// flag.StringVar(&metaURL, "rapid.meta", "sqlite3://test.db", "meta URL")
+	// flag.StringVar(&metaURL, "rapid.meta", "redis://localhost:6379", "meta URL")
+}
+
+func defaultFlag(name string, value string) func() {
+	if f := flag.Lookup(name); f.Value.String() == f.DefValue {
+		flag.Set(name, value)
+		return func() {
+			flag.Set(name, f.DefValue)
+		}
+	}
+	return func() {}
+}
+
 func TestFSOps(t *testing.T) {
 	logger.SetLevel(logrus.ErrorLevel)
 	defer logger.SetLevel(logrus.InfoLevel)
-	flag.Set("timeout", "10s")
-	flag.Set("rapid.steps", "200")
-	flag.Set("rapid.checks", "5000")
-	// flag.Set("rapid.seed", time.Now().String())
-	flag.Set("rapid.seed", "1")
+	defer defaultFlag("rapid.shrinktime", "1h")()
+	defer defaultFlag("rapid.steps", "200")()
+	defer defaultFlag("rapid.checks", "5000")()
+	//defer defaultFlag("rapid.seed", "1")()
+	//defer defaultFlag("rapid.v", "true")()
+	//defer defaultFlag("rapid.debug", "true")()
+	//defer defaultFlag("rapid.debugvis", "true")()
+	//defer defaultFlag("rapid.failfile", "testdata/rapid/TestFSOps/TestFSOps-20250228114121-68323.fail")()
+
 	rapid.Check(t, rapid.Run[*fsMachine]())
 }

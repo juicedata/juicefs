@@ -79,6 +79,8 @@
       "f1": {
         "attr": {"inode":2,"flags":128,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746580,"mtime":1623746661,"ctime":1623746661,"atimensec":219686444,"mtimensec":219686444,"ctimensec":219686444,"nlink":1,"length":24},
         "xattrs": [{"name":"k","value":"v"}],
+        "posix_acl_access": {"owner":6,"group":4,"other":4,"mask":4,"users":[{"id":1,"perm":6},{"id":2,"perm":7}],"groups":null},
+        "posix_acl_default": {"owner":7,"group":5,"other":5,"mask":5,"users":null,"groups":[{"id":3,"perm":6},{"id":4,"perm":7}]},
         "chunks": [{"index":0,"slices":[{"id":1,"size":6,"len":6},{"id":2,"size":12,"len":12},{"id":4,"size":24,"len":24}]}]
       },
       "l1": {

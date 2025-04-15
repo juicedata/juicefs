@@ -79,6 +79,10 @@ $ juicefs quota delete redis://localhost --path /dir1`,
 				Name:  "path",
 				Usage: "full path of the directory within the volume",
 			},
+			&cli.BoolFlag{
+				Name:  "create",
+				Usage: "create the directory if not exists",
+			},
 			&cli.StringFlag{
 				Name:  "capacity",
 				Usage: "hard quota of the directory limiting its usage of space in GiB",
@@ -144,7 +148,7 @@ func quota(c *cli.Context) error {
 		strict = c.Bool("strict")
 		repair = c.Bool("repair")
 	}
-	if err := m.HandleQuota(meta.Background, cmd, dpath, qs, strict, repair); err != nil {
+	if err := m.HandleQuota(meta.Background(), cmd, dpath, qs, strict, repair, c.Bool("create")); err != nil {
 		return err
 	} else if len(qs) == 0 {
 		return nil

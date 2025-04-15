@@ -333,8 +333,10 @@ func bench(ctx *cli.Context) error {
 		purgeArgs = append(purgeArgs, "purge")
 	case "linux":
 		purgeArgs = append(purgeArgs, "/bin/sh", "-c", "echo 3 > /proc/sys/vm/drop_caches")
+	case "windows":
+		break
 	default:
-		logger.Fatal("Currently only support Linux/macOS")
+		logger.Fatal("Currently only support Linux/MacOS/Windows")
 	}
 
 	/* --- Prepare --- */
@@ -345,7 +347,7 @@ func bench(ctx *cli.Context) error {
 	}
 	mp, _ := findMountpoint(bm.tmpdir)
 	dropCaches := func() {
-		if os.Getenv("SKIP_DROP_CACHES") != "true" {
+		if os.Getenv("SKIP_DROP_CACHES") != "true" && runtime.GOOS != "windows" {
 			if err := exec.Command(purgeArgs[0], purgeArgs[1:]...).Run(); err != nil {
 				logger.Warnf("Failed to clean kernel caches: %s", err)
 			}
@@ -373,7 +375,7 @@ func bench(ctx *cli.Context) error {
 		b.wbar.Done()
 		line := make([]string, 3)
 		line[0] = "Write big file"
-		line[1], line[2] = bm.colorize("bigwr", float64((b.fsize>>20)*b.fcount*bm.threads)/cost, cost/float64(b.fcount), 2)
+		line[1], line[2] = bm.colorize("bigwr", float64(b.fsize)/1024/1024*float64(b.fcount*bm.threads)/cost, cost/float64(b.fcount), 2)
 		line[1] += " MiB/s"
 		line[2] += " s/file"
 		result = append(result, line)
@@ -384,7 +386,7 @@ func bench(ctx *cli.Context) error {
 		b.rbar.Done()
 		line = make([]string, 3)
 		line[0] = "Read big file"
-		line[1], line[2] = bm.colorize("bigrd", float64((b.fsize>>20)*b.fcount*bm.threads)/cost, cost/float64(b.fcount), 2)
+		line[1], line[2] = bm.colorize("bigrd", float64(b.fsize)/1024/1024*float64(b.fcount*bm.threads)/cost, cost/float64(b.fcount), 2)
 		line[1] += " MiB/s"
 		line[2] += " s/file"
 		result = append(result, line)
