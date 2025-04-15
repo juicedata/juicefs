@@ -205,14 +205,26 @@ func parseFuseFd(mountPoint string) (fd int) {
 	return fd
 }
 
+func getMountTimeout() int {
+	mountTimeOut := 10 // default 10 seconds
+	if tStr, ok := os.LookupEnv("JFS_MOUNT_TIMEOUT"); ok {
+		if t, err := strconv.ParseInt(tStr, 10, 64); err == nil {
+			mountTimeOut = int(t)
+		} else {
+			logger.Errorf("invalid env JFS_MOUNT_TIMEOUT: %s %s", tStr, err)
+		}
+	}
+	return mountTimeOut
+}
+
 func checkMountpoint(name, mp, logPath string, background bool) {
 	if parseFuseFd(mp) > 0 {
 		logger.Infof("\033[92mOK\033[0m, %s with special mount point %s", name, mp)
 		return
 	}
 	_, oldConf, _ := loadConfig(mp)
-	mountTimeOut := 10 // default 10 seconds
-	interval := 500    // check every 500 Millisecond
+	mountTimeOut := getMountTimeout() + 3 // add 3 extra seconds
+	interval := 500                       // check every 500 Millisecond
 	if tStr, ok := os.LookupEnv("JFS_MOUNT_TIMEOUT"); ok {
 		if t, err := strconv.ParseInt(tStr, 10, 64); err == nil {
 			mountTimeOut = int(t)
@@ -853,6 +865,7 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 	}()
 }
 func launchMount(mp string, conf *vfs.Config) error {
+	start := time.Now()
 	increaseRlimit()
 	if runtime.GOOS == "linux" {
 		adjustOOMKiller(-1000)
@@ -868,9 +881,10 @@ func launchMount(mp string, conf *vfs.Config) error {
 	if err != nil {
 		return fmt.Errorf("find executable: %s", err)
 	}
-	start := time.Now()
+
+	timeout := time.Duration(getMountTimeout()) * time.Second
 	for c := 0; ; c++ {
-		if c == 3 && time.Since(start) < time.Second*10 {
+		if c == 3 && time.Since(start) < timeout {
 			return fmt.Errorf("fail 3 times in %s, give up", time.Since(start))
 		}
 		// For volcengine VKE serverless container, no umount before mount when
