@@ -67,9 +67,8 @@ func (s *s3client) Limits() Limits {
 }
 
 func isExists(err error) bool {
-	var bucketExists *types.BucketAlreadyExists
-	var bucketOwned *types.BucketAlreadyOwnedByYou
-	return errors.As(err, &bucketExists) || errors.As(err, &bucketOwned)
+	msg := err.Error()
+	return strings.Contains(msg, "BucketAlreadyExists") || strings.Contains(msg, "BucketAlreadyOwnedByYou")
 }
 
 func (s *s3client) Create() error {
