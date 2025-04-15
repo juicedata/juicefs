@@ -108,7 +108,8 @@ func formatStorageFlags() []cli.Flag {
 	case "darwin":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			logger.Fatalf("%v", err)
+			logger.Warn(err)
+			homeDir = defaultBucket
 		}
 		defaultBucket = path.Join(homeDir, ".juicefs", "local")
 	case "windows":

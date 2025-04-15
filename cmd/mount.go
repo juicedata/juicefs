@@ -495,7 +495,14 @@ func getDefaultLogDir() string {
 			break
 		}
 		fallthrough
-	case "darwin", "windows":
+	case "darwin":
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			logger.Warn(err)
+			homeDir = defaultLogDir
+		}
+		defaultLogDir = path.Join(homeDir, ".juicefs")
+	case "windows":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			logger.Fatalf("%v", err)
