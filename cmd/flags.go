@@ -162,7 +162,12 @@ func dataCacheFlags() []cli.Flag {
 		}
 		fallthrough
 	case "darwin":
-		fallthrough
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			logger.Warn(err)
+			homeDir = defaultCacheDir
+		}
+		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
 	case "windows":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {

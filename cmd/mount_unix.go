@@ -366,6 +366,12 @@ func fuseFlags() []cli.Flag {
 func mountFlags() []cli.Flag {
 	selfFlags := []cli.Flag{
 		&cli.BoolFlag{
+			Name:    "f",
+			Aliases: []string{"foreground"},
+			Hidden:  true,
+			Usage:   "run in foreground",
+		},
+		&cli.BoolFlag{
 			Name:    "d",
 			Aliases: []string{"background"},
 			Usage:   "run in background",
