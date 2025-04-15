@@ -86,12 +86,12 @@ func (c *prefixClient) txn(ctx context.Context, f func(*kvTxn) error, retry int)
 	}, retry)
 }
 
-func (c *prefixClient) scan(prefix []byte, handler func(key, value []byte)) error {
+func (c *prefixClient) scan(prefix []byte, handler func(key, value []byte) bool) error {
 	k := make([]byte, len(c.prefix)+len(prefix))
 	copy(k, c.prefix)
 	copy(k[len(c.prefix):], prefix)
-	return c.tkvClient.scan(k, func(key, value []byte) {
-		handler(key[len(c.prefix):], value)
+	return c.tkvClient.scan(k, func(key, value []byte) bool {
+		return handler(key[len(c.prefix):], value)
 	})
 }
 
