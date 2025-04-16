@@ -348,7 +348,7 @@ class TestPySdk(unittest.TestCase):
         state.writelines(file=files_0, lines=['dua', 'hbixuhv'], mode='wb', offset=8344, user='root', whence=1)
         state.teardown()
 
-    def skip_test_rename_file(self):
+    def test_rename_file(self):
         state = JuicefsMachine()
         folders_0 = state.init_folders()
         files_0 = state.create_file(content=b'', file_name='q', parent=folders_0, umask=18, user='root')
@@ -365,7 +365,7 @@ class TestPySdk(unittest.TestCase):
         state.list_xattr(file=files_2, user='root')
         files_6 = state.create_file(content=b'', file_name='alwr', parent=folders_0, umask=18, user='root')
         files_7 = state.create_file(content=b'', file_name='m', parent=folders_0, umask=18, user='root')
-        files_8 = state.symlink(link_file_name='d', parent=folders_0, src_file=files_7, umask=18, user='root')
+        files_8 = state.symlink(link_file_name='rd', parent=folders_0, src_file=files_7, umask=18, user='root')
         folders_1 = state.mkdir(mode=0, parent=folders_0, subdir='n', umask=18, user='root')
         state.list_xattr(file=files_8, user='root')
         state.list_xattr(file=files_8, user='root')
