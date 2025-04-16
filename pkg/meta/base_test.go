@@ -1765,6 +1765,11 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 		return nil
 	})
 
+	if err := m.NewSession(false); err != nil {
+		t.Fatalf("new session: %v", err)
+	}
+	defer m.CloseSession()
+
 	ctx := Background()
 	var inode Ino
 	var attr = &Attr{}

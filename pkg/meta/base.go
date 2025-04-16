@@ -2227,6 +2227,10 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	// avoid too many or duplicated compaction
 	k := uint64(inode) + (uint64(indx) << 40)
 	m.Lock()
+	if m.sessCtx != nil && m.sessCtx.Canceled() {
+		m.Unlock()
+		return
+	}
 	if once || force {
 		for m.compacting[k] {
 			m.Unlock()
