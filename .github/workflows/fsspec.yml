@@ -92,7 +92,7 @@ jobs:
         run: |
           sudo pip install pytest
           sudo pip install fsspec
-          source .github/scripts/start_meta_engine.sh
+          source ../../../.github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo JUICEFS_META=${meta_url} python3 -m pytest tests/test.py
   
