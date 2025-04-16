@@ -3,69 +3,77 @@ from typing import List, Iterator, Callable
 from multiprocessing import Pool
 from dataset import FFRecordDataset
 import os
+import torch
+import time
 
-
-class FFRecordDataLoader:
+class FFRecordDataLoader(torch.utils.data.DataLoader):
     def __init__(
-            self,
-            dataset: FFRecordDataset,
-            batch_size: int = 32,
-            shuffle: bool = False,
-            num_workers: int = 0,
-            worker_init_fn: Callable = None,
-    ):
-        self.dataset = dataset
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-        self.num_workers = num_workers
-        self.indices = np.arange(len(dataset))
-        self.worker_init_fn = worker_init_fn
+                self,
+                dataset: FFRecordDataset,
+                batch_size=1,
+                shuffle: bool = False,
+                sampler=None,
+                batch_sampler=None,
+                num_workers: int = 0,
+                collate_fn=None,
+                pin_memory: bool = False,
+                drop_last: bool = False,
+                timeout: float = 0,
+                worker_init_fn=None,
+                generator=None,
+                *,
+                prefetch_factor: int = 2,
+                persistent_workers: bool = False,
+                skippable: bool = True):
 
-
-        if self.shuffle:
-            np.random.shuffle(self.indices)
-
-    def __iter__(self) -> Iterator[List[np.array]]:
-        batches = [
-            self.indices[i : i + self.batch_size]
-            for i in range(0, len(self.indices), self.batch_size)
-        ]
-
-        if self.num_workers > 0:
-            with Pool(
-                    processes=self.num_workers, initializer=self.worker_init_fn
-            ) as pool:
-                for batch_indices in batches:
-                    batch_indices = [int(i) for i in batch_indices]
-                    yield pool.map(self.dataset.__getitem__, batch_indices)
+        # use fork to create subprocesses
+        if num_workers == 0:
+            multiprocessing_context = None
+            dataset.initialize()
         else:
-            for batch_indices in batches:
-                batch_indices = [int(i) for i in batch_indices]
-                yield [self.dataset[i] for i in batch_indices]
+            multiprocessing_context = 'fork'
+        self.skippable = skippable
 
-    def __len__(self) -> int:
-        return (len(self.dataset) + self.batch_size - 1) // self.batch_size
-
+        super(FFRecordDataLoader,
+              self).__init__(dataset=dataset,
+                             batch_size=batch_size,
+                             shuffle=shuffle,
+                             sampler=sampler,
+                             batch_sampler=batch_sampler,
+                             num_workers=num_workers,
+                             collate_fn=collate_fn,
+                             pin_memory=pin_memory,
+                             drop_last=drop_last,
+                             timeout=timeout,
+                             worker_init_fn=worker_init_fn,
+                             multiprocessing_context=multiprocessing_context,
+                             generator=generator,
+                             prefetch_factor=prefetch_factor,
+                             persistent_workers=persistent_workers)
 
 if __name__ == "__main__":
-    fnames = ["/val2017.ffr"]
+    fnames = ["/demo.ffr"]
 
     dataset = FFRecordDataset(fnames, check_data=True)
 
-    def worker_init_fn():
-        print("Worker initialized")
-        dataset._init_reader()
+    def worker_init_fn(worker_id):
+        worker_info = torch.utils.data.get_worker_info()
+        print(f"Worker initialized pid: {os.getpid()}, work_info: {worker_info}")
+        dataset = worker_info.dataset
+        dataset.initialize(worker_id=worker_id)
 
-    print("pid: ", os.getpid())
+    def collate_fn(batch):
+        return batch
 
-    # dataloader = FFRecordDataLoader(dataset, batch_size=2, shuffle=True);worker_init_fn()
-    dataloader = FFRecordDataLoader(dataset, batch_size=2, shuffle=True, worker_init_fn=worker_init_fn)
-    # dataloader = FFRecordDataLoader(dataset, batch_size=1, shuffle=True, num_workers=1, worker_init_fn=worker_init_fn)
-    # dataloader = FFRecordDataLoader(dataset, batch_size=32, shuffle=True, num_workers=1, worker_init_fn=worker_init_fn)
+    begin_time = time.time()
+
+    dataloader = FFRecordDataLoader(dataset, batch_size=1, shuffle=True, num_workers=10, worker_init_fn=worker_init_fn, prefetch_factor=None, collate_fn=collate_fn)
 
     i=0
     for batch in dataloader:
-        print("Batch shape:", [arr.shape for arr in batch])
+        # print(i, ": ", batch[0]["index"], "----", time.time()-begin_time)
         i+=1
-        if i>1:
+        if i>1000:
             break
+    end_time = time.time()
+    print(f"takes: {end_time-begin_time}")

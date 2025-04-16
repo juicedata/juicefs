@@ -1,19 +1,11 @@
-import sys
-sys.path.append('.')
-from sdk.python.juicefs.juicefs import juicefs
-# import juicefs
 import zlib
-from typing import Union
-import struct
 import os
 import struct
-import zlib
-from typing import List, Tuple, Optional
-import io
-import pickle
+from typing import List, Tuple, Union
 import numpy as np
 
 MAX_SIZE = 512 * (1 << 20)  # 512 MB
+DIRECTIO_BLOCK_SIZE = 1 * (1 << 20)  # 1 MB
 
 def ffcrc32(code: int, data: Union[bytes, bytearray], length: int) -> int:
     start = 0
@@ -24,37 +16,48 @@ def ffcrc32(code: int, data: Union[bytes, bytearray], length: int) -> int:
     return code
 
 class FileHeader:
-    def __init__(self, jfscli: juicefs.Client, fname: str, check_data: bool = True):
+    def __init__(self, fname: str, check_data: bool = True):
+        print(f"__init__ self: {hex(id(self))}")
+        print(f"pid: {os.getpid()}")
         self.fname = fname
-        self.fd = jfscli.open(fname, mode='rb')
+        self.fd = os.open(fname, os.O_RDONLY | os.O_DIRECT)
+        self.aiofd = self.fd 
 
-        self.fd.seek(0)
+        self.file_obj = os.fdopen(self.fd, 'rb', buffering=0)
+
         self.checksum_meta = self._read_uint32()
         self.n = self._read_uint64()
 
-        self.checksums = [self._read_uint32() for _ in range(self.n)]
-        self.fd.seek(4+8+4*self.n)
-        self.offsets = [self._read_uint64() for _ in range(self.n + 1)]
+        checksums_size = 4 * self.n
+        offsets_size = 8 * (self.n + 1)
+        combined_data = self.file_obj.read(checksums_size + offsets_size)
+        self.checksums = list(struct.unpack(f'<{self.n}I', combined_data[:checksums_size]))
+        self.offsets = list(struct.unpack(f'<{self.n + 1}Q', combined_data[checksums_size:checksums_size + offsets_size]))
 
-        self.offsets[self.n] = jfscli.stat(fname).st_size
-
+        self.offsets[self.n] = os.path.getsize(fname)
         if check_data:
             self.validate()
-        self.fd.close()
-        self.fd = jfscli.open(fname, mode='rb', buffering=0)
-        self.aiofd = self.fd
 
+        print("FileHeader initialized for:", fname, "fd:", self.fd)
 
     def _read_uint32(self) -> int:
-        return struct.unpack('<I', self.fd.read(4))[0]
+        return struct.unpack('<I', self.file_obj.read(4))[0]
 
     def _read_uint64(self) -> int:
-        return struct.unpack('<Q', self.fd.read(8))[0]
+        return struct.unpack('<Q', self.file_obj.read(8))[0]
 
     def close_fd(self):
-        if self.fd:
-            self.fd.close()
-            self.fd = None
+        print("close fd: ", self.fd)
+        if self.fd != -1:
+            os.close(self.fd)
+            self.fd = -1
+            self.file_obj = None
+    
+    def open_fd(self):
+        if self.fd == -1:
+            self.fd = os.open(self.fname, os.O_RDONLY | os.O_DIRECT)
+            self.aiofd = self.fd
+            print(f"header.open_fd: {self.fd} address: {hex(id(self))} pid: {os.getpid()}")
 
     def validate(self):
         if self.checksum_meta == 0:
@@ -80,26 +83,24 @@ class FileReader:
         self.fnames = fnames
         self.check_data = check_data
         self.nfiles = len(fnames)
-        self.n = 1000
+        self.n = 0
         self.nsamples = [0]
         self.headers = []
+
+        for fname in fnames:
+            header = FileHeader(fname, check_data)
+            self.headers.append(header)
+            self.n += header.n
+            self.nsamples.append(self.n)
 
     def close_fd(self):
         for header in self.headers:
             header.close_fd()
-        self.headers = []
-        self.n = 0
-        self.nsamples = [0]
-        return
     
     def open_fd(self):
-        self.v = juicefs.Client("myjfs", "redis://localhost", cache_dir="/tmp/data", cache_size="0", debug=False)
-
-        for fname in self.fnames:
-            header = FileHeader(self.v, fname, self.check_data)
-            self.headers.append(header)
-            self.n += header.n
-            self.nsamples.append(self.n)
+      print(f"open_fd address: {hex(id(self))} pid: {os.getpid()}")
+      for header in self.headers:
+          header.open_fd()
 
     def validate(self):
         for header in self.headers:
@@ -110,10 +111,7 @@ class FileReader:
             checksum2 = ffcrc32(0, buf, len(buf))
             assert checksum2 == checksum, f"Sample {index}: checksum mismatched!"
 
-    def read(self, indices: List[int]):
-        return self.read_batch(indices)
-
-    def read_batch(self, indices: List[int]):
+    def read_batch(self, indices: List[int]) -> List[np.array]:
         assert not any(index >= self.n for index in indices), "Index out of range"
         results = []
 
@@ -122,7 +120,7 @@ class FileReader:
 
         return results
 
-    def read_one(self, index: int):
+    def read_one(self, index: int) -> np.array:
         assert index < self.n, "Index out of range"
 
         fid = 0
@@ -132,21 +130,22 @@ class FileReader:
         header = self.headers[fid]
         fd, offset, length, checksum = header.access(index - self.nsamples[fid], use_aio=False)
 
-        fd.seek(offset)
-        buf = fd.read(length)
+        buf = bytearray(length)
+        start = 0
+        while start < length:
+            chunk_size = min(DIRECTIO_BLOCK_SIZE, length - start)
+            read_bytes = os.pread(fd, chunk_size, offset + start)
+            buf[start:start + chunk_size] = read_bytes
+            start += chunk_size
+
         self.validate_sample(index, buf, checksum)
-        res = pickle.loads(buf)
-        return res
-    
-    def close(self):
-        self.close_fd()
+        array = np.frombuffer(buf, dtype=np.uint8)
+
+        return array
+
 
 if __name__ == "__main__":
     fnames = ["/demo.ffr"]
     reader = FileReader(fnames, check_data=True)
-    reader.open_fd()
     data = reader.read_one(0)
     print(data)
-    data = pickle.loads(data)
-    print(data["index"])
-    print(data["txt"])

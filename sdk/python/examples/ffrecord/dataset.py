@@ -3,31 +3,24 @@ from typing import List, Union
 from filereader import FileReader
 # from filereader_dio import FileReader
 import torch
+import os
 
-class FFRecordDataset:
+class FFRecordDataset(torch.utils.data.Dataset):
     def __init__(self, fnames: Union[str, List[str]], check_data: bool = True):
         if isinstance(fnames, str):
             fnames = [fnames]
         self.reader = FileReader(fnames, check_data=check_data)
-        self.n = self.reader.n  # 总样本数
+        self.n = self.reader.n
         self.reader.close_fd()
 
-        # self.fnames = fnames
-        # self.check_data = check_data
-        # self.reader = None
-        # print("init here", torch.utils.data.get_worker_info())
-
-        # self._init_reader()
-        # self.n = self.reader.n
-    def _init_reader(self):
-        print("init reader+++++++++++++++++++++")
+    def initialize(self, worker_id=0, num_workers=1):
         self.reader.open_fd()
+        self.n = self.reader.n
 
     def __len__(self) -> int:
         return self.n
 
     def __getitem__(self, index: Union[int, List[int]]) -> Union[np.array, List[np.array]]:
-        print("getitem here, ptr of self: ", id(self))
         if isinstance(index, int):
             return self.reader.read_one(index)
         elif isinstance(index, list):
@@ -46,12 +39,12 @@ class FFRecordDataset:
 
 
 if __name__ == "__main__":
-    fnames = ["/val2017.ffr"]
+    fnames = ["/demo.ffr"]
 
     with FFRecordDataset(fnames, check_data=True) as dataset:
         sample = dataset[0]
-        print("Sample 0 shape:", sample.shape)
+        print("Sample 0:", sample)
 
         batch = dataset[[1, 2, 3]]
-        print("Batch shape:", [arr.shape for arr in batch])
+        print(batch)
         print("Dataset length:", len(dataset))
