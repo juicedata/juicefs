@@ -26,6 +26,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/chunk"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -129,8 +130,6 @@ func (c *CacheFiller) cacheFile(ctx meta.Context, action CacheAction, resp *Cach
 }
 
 func (c *CacheFiller) Cache(ctx meta.Context, action CacheAction, paths []string, threads int, resp *CacheResponse) {
-	logger.Infof("start to %s %d paths with %d workers", action, len(paths), threads)
-
 	if resp == nil {
 		resp = &CacheResponse{Locations: make(map[string]uint64)}
 	}
@@ -173,7 +172,7 @@ func (c *CacheFiller) Cache(ctx meta.Context, action CacheAction, paths []string
 	if ctx.Canceled() {
 		logger.Infof("%s cancelled", action)
 	}
-	logger.Infof("%s %d paths in %s", action, len(paths), time.Since(start))
+	logger.Infof("%s %s (%s) in %s", action, strings.Join(paths, ","), humanize.IBytes(resp.TotalBytes), time.Since(start))
 }
 
 func sendFile(ctx meta.Context, todo chan _file, f _file) error {

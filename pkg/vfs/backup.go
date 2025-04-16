@@ -80,7 +80,9 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration, skip
 				logger.Warnf("setxattr inode 1 key %s: %s", key, st)
 				continue
 			}
-			logger.Debugf("backup metadata started")
+			if iused >= 1e5 {
+				logger.Infof("backup metadata started, inodes=%d", iused)
+			}
 			if fpath, err := backup(m, blob, now, iused < 1e5, skipTrash); err == nil {
 				go cleanupBackups(blob, now) // only cleanup on success
 				LastBackupTimeG.Set(float64(now.UnixNano()) / 1e9)

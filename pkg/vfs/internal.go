@@ -216,7 +216,7 @@ type obj struct {
 	size, off, len uint32
 }
 
-func (v *VFS) caclObjects(id uint64, size, offset, length uint32) []*obj {
+func (v *VFS) calcObjects(id uint64, size, offset, length uint32) []*obj {
 	if id == 0 {
 		return []*obj{{"", size, offset, length}}
 	}
@@ -313,6 +313,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		var count uint64
 		var st syscall.Errno
 		go func() {
+			logger.Infof("Start to rmr %d/%s, workers=%d, skipTrash=%v", inode, name, numThreads, skipTrash)
 			st = v.Meta.Remove(ctx, inode, name, skipTrash, numThreads, &count)
 			if st != 0 {
 				logger.Errorf("remove %d/%s: %s", inode, name, st)
@@ -337,6 +338,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		var count, total uint64
 		var eno syscall.Errno
 		go func() {
+			logger.Infof("Start to clone %d/%d to %d/%s, cmode=%d, umask=%d", srcIno, srcParentIno, dstParentIno, dstName, cmode, umask)
 			if eno = v.Meta.Clone(ctx, srcParentIno, srcIno, dstParentIno, dstName, cmode, umask, &count, &total); eno != 0 {
 				logger.Errorf("clone failed srcIno:%d,dstParentIno:%d,dstName:%s,cmode:%d,umask:%d,eno:%v", srcIno, dstParentIno, dstName, cmode, umask, eno)
 			}
@@ -357,6 +359,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		if r.HasMore() {
 			raw = r.Get8() != 0
 		}
+		logger.Infof("Start to get legacy info of %d, recursive=%d", inode, recursive)
 
 		wb := utils.NewBuffer(4)
 		r := v.Meta.GetSummary(ctx, inode, &summary, recursive != 0, true)
@@ -397,7 +400,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 					if raw {
 						fmt.Fprintf(w, "\t%d:\t%d\t%d\t%d\t%d\n", indx, c.Id, c.Size, c.Off, c.Len)
 					} else {
-						for _, o := range v.caclObjects(c.Id, c.Size, c.Off, c.Len) {
+						for _, o := range v.calcObjects(c.Id, c.Size, c.Off, c.Len) {
 							fmt.Fprintf(w, "\t%d:\t%s\t%d\t%d\t%d\n", indx, o.key, o.size, o.off, o.len)
 						}
 					}
@@ -428,6 +431,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		done := make(chan struct{})
 		var r syscall.Errno
 		go func() {
+			logger.Infof("Start to get info v2 of %d, recursive=%d", inode, recursive)
 			r = v.Meta.GetSummary(ctx, inode, &info.Summary, recursive != 0, strict)
 			close(done)
 		}()
@@ -445,7 +449,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 						if raw {
 							info.Chunks = append(info.Chunks, &chunkSlice{indx, c})
 						} else {
-							for _, o := range v.caclObjects(c.Id, c.Size, c.Off, c.Len) {
+							for _, o := range v.calcObjects(c.Id, c.Size, c.Off, c.Len) {
 								info.Objects = append(info.Objects, &chunkObj{indx, o.key, o.size, o.off, o.len})
 							}
 						}
@@ -495,6 +499,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		var files, size uint64
 		var r syscall.Errno
 		go func() {
+			logger.Infof("Start to get summary of %d, depth=%d, topN=%d", inode, depth, topN)
 			r = v.Meta.GetTreeSummary(ctx, &tree, depth, topN, strict,
 				func(count, bytes uint64) {
 					atomic.AddUint64(&files, count)
@@ -522,6 +527,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		var totalChunks, currChunks uint64
 		var eno syscall.Errno
 		go func() {
+			logger.Infof("Start to compact %d with %d workers", inode, coCnt)
 			eno = v.Meta.Compact(ctx, inode, int(coCnt), func() {
 				atomic.AddUint64(&totalChunks, 1)
 			}, func() {
@@ -543,6 +549,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			action = CacheAction(r.Get8())
 		}
 
+		logger.Infof("Start to %s %d paths with %d workers, background=%d", action, len(paths), concurrent, background)
 		stat := &CacheResponse{Locations: make(map[string]uint64)}
 		if background == 0 {
 			done := make(chan struct{})

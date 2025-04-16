@@ -829,7 +829,7 @@ func (m *kvMeta) txn(ctx context.Context, f func(tx *kvTxn) error, inodes ...Ino
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
 		} else if err == nil && i > 1 {
-			logger.Warnf("Transaction succeeded after %d tries (%s), inodes: %v, error: %s", i+1, time.Since(start), inodes, lastErr)
+			logger.Warnf("Transaction succeeded after %d tries (%s), inodes: %v, method: %s, error: %s", i+1, time.Since(start), inodes, method, lastErr)
 		}
 		return err
 	}

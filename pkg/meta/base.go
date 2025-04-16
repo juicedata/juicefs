@@ -1918,6 +1918,9 @@ type metaWalkFunc func(ctx Context, inode Ino, p string, attr *Attr)
 
 func (m *baseMeta) walk(ctx Context, inode Ino, p string, attr *Attr, walkFn metaWalkFunc) syscall.Errno {
 	walkFn(ctx, inode, p, attr)
+	if attr.Full && attr.Typ != TypeDirectory {
+		return 0
+	}
 	var entries []*Entry
 	st := m.en.doReaddir(ctx, inode, 1, &entries, -1)
 	if st != 0 && st != syscall.ENOENT {
@@ -2341,6 +2344,9 @@ func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 			for c := range chunkChan {
 				m.compactChunk(c.inode, c.indx, false, true)
 				postFunc()
+				if ctx.Canceled() {
+					return
+				}
 			}
 		}()
 	}
@@ -2353,11 +2359,12 @@ func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 		// calc chunk index in local
 		chunkCnt := uint32((fAttr.Length + ChunkSize - 1) / ChunkSize)
 		for i := uint32(0); i < chunkCnt; i++ {
-			if ctx.Canceled() {
+			select {
+			case <-ctx.Done():
 				return
+			case chunkChan <- cchunk{inode: fIno, indx: i}:
+				preFunc()
 			}
-			preFunc()
-			chunkChan <- cchunk{inode: fIno, indx: i}
 		}
 	})
 
