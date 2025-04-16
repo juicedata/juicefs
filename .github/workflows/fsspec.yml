@@ -92,7 +92,8 @@ jobs:
         run: |
           sudo pip install pytest
           sudo pip install fsspec
-          sudo python3 -m pytest tests/test.py
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo JUICEFS_META=${meta_url} python3 -m pytest tests/test.py
   
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
