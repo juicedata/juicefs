@@ -290,6 +290,9 @@ func (f *sftpStore) Chown(key string, owner, group string) error {
 	defer f.putSftpConnection(&c, err)
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
+	if uid == -1 || gid == -1 {
+		return fmt.Errorf("user(%s):group(%s) not found", owner, group)
+	}
 	return c.sftpClient.Chown(f.path(key), uid, gid)
 }
 

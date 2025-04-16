@@ -355,6 +355,9 @@ func (j *juiceFS) Chmod(key string, mode os.FileMode) error {
 func (j *juiceFS) Chown(key string, owner, group string) error {
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
+	if uid == -1 || gid == -1 {
+		return fmt.Errorf("user(%s):group(%s) not found", owner, group)
+	}
 	f, err := j.jfs.Lopen(ctx, j.path(key), 0)
 	if err != 0 {
 		return err

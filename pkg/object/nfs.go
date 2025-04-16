@@ -389,6 +389,9 @@ func (n *nfsStore) Chmod(path string, mode os.FileMode) error {
 func (n *nfsStore) Chown(path string, owner, group string) error {
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
+	if uid == -1 || gid == -1 {
+		return fmt.Errorf("user(%s):group(%s) not found", owner, group)
+	}
 	return n.setAttr(path, func(attr *nfs.Fattr) nfs.Sattr3 {
 		return nfs.Sattr3{
 			UID: nfs.SetUID{
