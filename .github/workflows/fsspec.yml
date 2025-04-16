@@ -1,0 +1,126 @@
+name: "fsspec"
+
+on:
+  push:
+    branches:
+      - main
+      - release**
+    paths:
+      - '**/fsspec.yml'
+  pull_request:
+    branches:
+      - main
+      - release**
+    paths:
+      - '**/fsspec.yml'
+
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+  schedule:
+    - cron:  '0 16 * * *'
+    
+jobs:
+  fsspec:
+    strategy:
+      fail-fast: false
+      matrix:
+        meta: ['redis', 'mysql', 'tikv']
+    timeout-minutes: 60
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@v3
+
+      - name: Set Variable
+        id: vars
+        run: |
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
+          else
+            echo "target=juicefs" >> $GITHUB_OUTPUT
+          fi
+  
+      - name: Build
+        timeout-minutes: 10
+        uses: ./.github/actions/build
+        with: 
+          target: ${{steps.vars.outputs.target}}
+      
+      - name: Create venv
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+
+      - name: Prepare meta db
+        run: | 
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+    
+      - name: Juicefs Format
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo GOCOVERDIR=$(pwd)/cover ./juicefs format $meta_url --enable-acl --trash-days 0 --bucket=/mnt/jfs myjfs
+
+      - name: Build and install SDK
+        timeout-minutes: 5
+        run: |
+          make -C sdk/python/ libjfs.so
+          sudo python3 sdk/python/juicefs/setup.py install
+
+      - name: Build and install juicefs spec
+        timeout-minutes: 10
+        working-directory: sdk/python/juicefs
+        run: |
+          pip install build
+          python3 -m build -w
+          ls dist/
+          pip install dist/juicefs-*.whl
+
+      - name: Run Test
+        timeout-minutes: 10
+        working-directory: sdk/python/juicefs
+        run: |
+          sudo pip install pytest
+          sudo pip install fsspec
+          source ../../../.github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo JUICEFS_META=${meta_url} python3 -m pytest tests/test.py
+  
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
+        timeout-minutes: 30
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [fsspec]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
+      - name: Send Slack Notification
+        if: failure() && github.event_name != 'workflow_dispatch'
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Success
+        if: success()
+        run: echo "All Done"

@@ -4,11 +4,13 @@ from fsspec import filesystem
 import fsspec.tests.abstract as abstract
 
 from juicefs.spec import JuiceFS
+import os
 
 class JuiceFSFixtures(abstract.AbstractFixtures):
     @pytest.fixture(scope="class")
     def fs(self):
-        m = filesystem("jfs", auto_mkdir=True, name="test", meta="redis://localhost")
+        meta = os.getenv("JUICEFS_META", "redis://localhost")
+        m = filesystem("jfs", auto_mkdir=True, name="test", meta=meta)
         return m
 
     @pytest.fixture
