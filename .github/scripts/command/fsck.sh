@@ -80,4 +80,27 @@ test_fsck_delete_object()
     ./juicefs fsck $META_URL || { echo "files is deleted, fsck should success"; exit 1; }
 }
 
+test_sync_dir_df()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    ./juicefs mdtest $META_URL /d --depth 15 --dirs 2 --files 100 --threads 10 & 
+    pid=$!
+    sleep 60s
+    kill -9 $pid
+    ./juicefs info -r /jfs/d --strict
+    #df -h /jfs的Used和
+    df -h /jfs
+    ./juicefs fsck $META_URL --path /d --sync-dir-stat --repair -r
+    ./juicefs info -r /jfs/d | tee info1.log
+    ./juicefs info -r /jfs/d --strict | tee info2.log
+    diff info1.log info2.log
+    rm info*.log
+    ./juicefs fsck $META_URL --path / --sync-dir-stat --repair -r
+    ./juicefs info -r /jfs | tee info1.log
+    ./juicefs info -r /jfs --strict | tee info2.log
+    diff info1.log info2.log
+}
+
 source .github/scripts/common/run_test.sh && run_test $@
