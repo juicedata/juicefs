@@ -105,15 +105,10 @@ func (q *qiniu) Head(key string) (Object, error) {
 }
 
 func (q *qiniu) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	// S3 SDK cannot get objects with prefix "/" in the key
 	if strings.HasPrefix(key, "/") && os.Getenv("QINIU_DOMAIN") != "" {
 		return q.download(key, off, limit)
 	}
-	for strings.HasPrefix(key, "/") {
-		key = key[1:]
-	}
-	// S3ForcePathStyle = true
-	return q.s3client.Get("/"+key, off, limit, getters...)
+	return q.s3client.Get(key, off, limit, getters...)
 }
 
 func (q *qiniu) Put(key string, in io.Reader, getters ...AttrGetter) error {
