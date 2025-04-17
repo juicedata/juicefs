@@ -18,6 +18,7 @@ package object
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/fs"
 	"math/rand"
@@ -340,6 +341,9 @@ func (d *filestore) Chown(key string, owner, group string) error {
 	p := d.path(key)
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
+	if uid == -1 || gid == -1 {
+		return fmt.Errorf("user(%s):group(%s) not found", owner, group)
+	}
 	return os.Lchown(p, uid, gid)
 }
 
