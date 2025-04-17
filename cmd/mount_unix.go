@@ -688,14 +688,15 @@ func updateFstab(c *cli.Context) error {
 		return err
 	}
 	defer f.Close()
-	entryIndex := -1
+
+	var entryIndices []int
 	var lines []string
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
 		fields := strings.Fields(line)
-		if len(fields) >= 6 && fields[2] == "juicefs" && fields[0] == addr && fields[1] == mp {
-			entryIndex = len(lines)
+		if len(fields) >= 6 && fields[2] == "juicefs" && fields[0] == addr {
+			entryIndices = append(entryIndices, len(lines))
 		}
 		lines = append(lines, line)
 	}
@@ -704,21 +705,29 @@ func updateFstab(c *cli.Context) error {
 	}
 	opts := tellFstabOptions(c)
 	entry := fmt.Sprintf("%s  %s  juicefs  %s  0 0", addr, mp, opts)
-	if entryIndex >= 0 {
-		if entry == lines[entryIndex] {
-			return nil
+
+	newLines := make([]string, 0, len(lines)-len(entryIndices)+1)
+	for i, line := range lines {
+		contains := false
+		for _, idx := range entryIndices {
+			if i == idx {
+				contains = true
+				break
+			}
 		}
-		lines[entryIndex] = entry
-	} else {
-		lines = append(lines, entry)
+		if !contains {
+			newLines = append(newLines, line)
+		}
 	}
+	newLines = append(newLines, entry)
+
 	tempFstab := fstab + ".tmp"
 	tmpf, err := os.OpenFile(tempFstab, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
 	defer tmpf.Close()
-	if _, err := tmpf.WriteString(strings.Join(lines, "\n") + "\n"); err != nil {
+	if _, err := tmpf.WriteString(strings.Join(newLines, "\n") + "\n"); err != nil {
 		_ = os.Remove(tempFstab)
 		return err
 	}
