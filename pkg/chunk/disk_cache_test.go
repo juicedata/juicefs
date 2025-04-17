@@ -407,3 +407,23 @@ func TestAtimeNotLost(t *testing.T) {
 		t.Fatalf("CacheStore key %s atime lost after scan, before: %d, after: %d", key, atimeMem, atimeAfterScan)
 	}
 }
+func TestSetlimitByFreeRatio(t *testing.T) {
+	dir := t.TempDir()
+	cache := newCacheStore(nil, dir, 1<<30, 1000, 1, &defaultConf, nil)
+
+	usage := DiskFreeRatio{
+		spaceCap: 1 << 30,
+		inodeCap: 1000,
+	}
+	freeRatio := float32(0.2)
+	cache.setlimitByFreeRatio(usage, 0.2)
+
+	expectedSizeLimit := int64((1 - freeRatio + 0.05) * float32(usage.spaceCap))
+	if cache.capacity > expectedSizeLimit {
+		t.Fatalf("Expected capacity <= %d, but got %d", expectedSizeLimit, cache.capacity)
+	}
+	expectedInodeLimit := int64((1 - freeRatio + 0.05) * float32(usage.inodeCap))
+	if cache.maxItems > expectedInodeLimit && cache.maxItems != 0 {
+		t.Fatalf("Expected maxItems <= %d, but got %d", expectedInodeLimit, cache.maxItems)
+	}
+}
