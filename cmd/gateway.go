@@ -84,6 +84,10 @@ func cmdGateway() *cli.Command {
 			Name:  "object-meta",
 			Usage: "enable object metadata api",
 		},
+		&cli.BoolFlag{
+			Name:  "list-ignore-dir",
+			Usage: "ignore the directories in the list object results",
+		},
 		&cli.StringFlag{
 			Name:  "domain",
 			Usage: "domain for virtual-host-style requests",
@@ -153,11 +157,12 @@ func gateway(c *cli.Context) error {
 		jfs,
 		conf,
 		&jfsgateway.Config{
-			MultiBucket:   c.Bool("multi-buckets"),
-			KeepEtag:      c.Bool("keep-etag"),
-			Umask:         uint16(umask),
-			ObjTag:        c.Bool("object-tag"),
-			ObjMeta:       c.Bool("object-meta"),
+			MultiBucket: c.Bool("multi-buckets"),
+			KeepEtag:    c.Bool("keep-etag"),
+			Umask:       uint16(umask),
+			ObjTag:      c.Bool("object-tag"),
+			ObjMeta:     c.Bool("object-meta"),
+			IgnoreDir:   c.Bool("list-ignore-dir"),
 		},
 	)
 	if err != nil {

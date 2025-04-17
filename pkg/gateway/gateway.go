@@ -63,6 +63,7 @@ type Config struct {
 	Umask       uint16
 	ObjTag      bool
 	ObjMeta     bool
+	IgnoreDir   bool
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -424,7 +425,17 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	if maxKeys == 0 {
 		maxKeys = -1 // list as many objects as possible
 	}
-	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
+	objects, err := minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
+	if err == nil && n.gConf.IgnoreDir && len(objects.Objects) > 0 {
+		var objs = make([]minio.ObjectInfo, 0, len(objects.Objects))
+		for _, o := range objects.Objects {
+			if !o.IsDir {
+				objs = append(objs, o)
+			}
+		}
+		objects.Objects = objs
+	}
+	return objects, err
 }
 
 // ListObjectsV2 lists all blobs in JFS bucket filtered by prefix
