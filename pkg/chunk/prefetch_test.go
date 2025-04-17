@@ -45,4 +45,25 @@ func TestPrefetcher(t *testing.T) {
 			t.Errorf("Duplicate keys  fetched")
 		}
 	})
+
+	t.Run("should drop keys when pending queue is full", func(t *testing.T) {
+		const maxPending = 10
+		var counter int32
+
+		f := newPrefetcher(1, func(k string) {
+			atomic.AddInt32(&counter, 1)
+			time.Sleep(10 * time.Millisecond)
+		})
+
+		for i := 0; i < maxPending+1; i++ {
+			f.fetch(string(rune('a' + i)))
+		}
+
+		time.Sleep(50 * time.Millisecond)
+
+		finalCount := atomic.LoadInt32(&counter)
+		if finalCount > maxPending {
+			t.Errorf("Processed count %d exceeds queue capacity %d", finalCount, maxPending)
+		}
+	})
 }
