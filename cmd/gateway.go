@@ -85,8 +85,8 @@ func cmdGateway() *cli.Command {
 			Usage: "enable object metadata api",
 		},
 		&cli.BoolFlag{
-			Name:  "list-ignore-dir",
-			Usage: "ignore the directories in the list object results",
+			Name:  "hide-dir",
+			Usage: "hide the directories in the list object results",
 		},
 		&cli.StringFlag{
 			Name:  "domain",
@@ -162,7 +162,7 @@ func gateway(c *cli.Context) error {
 			Umask:       uint16(umask),
 			ObjTag:      c.Bool("object-tag"),
 			ObjMeta:     c.Bool("object-meta"),
-			IgnoreDir:   c.Bool("list-ignore-dir"),
+			HideDir:     c.Bool("hide-dir"),
 		},
 	)
 	if err != nil {

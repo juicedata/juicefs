@@ -63,7 +63,7 @@ type Config struct {
 	Umask       uint16
 	ObjTag      bool
 	ObjMeta     bool
-	IgnoreDir   bool
+	HideDir     bool
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -314,8 +314,10 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 			return fs.IsNotExist(eno), nil, false
 		}
 		defer f.Close(mctx)
-		if fi, _ := f.Stat(); fi.(*fs.FileStat).Atime() == 0 && prefixEntry == "" {
-			entries = append(entries, &minio.Entry{Name: ""})
+		if !n.gConf.HideDir {
+			if fi, _ := f.Stat(); fi.(*fs.FileStat).Atime() == 0 && prefixEntry == "" {
+				entries = append(entries, &minio.Entry{Name: ""})
+			}
 		}
 
 		fis, eno := f.Readdir(mctx, 0)
@@ -425,17 +427,7 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	if maxKeys == 0 {
 		maxKeys = -1 // list as many objects as possible
 	}
-	objects, err := minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
-	if err == nil && n.gConf.IgnoreDir && len(objects.Objects) > 0 {
-		var objs = make([]minio.ObjectInfo, 0, len(objects.Objects))
-		for _, o := range objects.Objects {
-			if !o.IsDir {
-				objs = append(objs, o)
-			}
-		}
-		objects.Objects = objs
-	}
-	return objects, err
+	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
 }
 
 // ListObjectsV2 lists all blobs in JFS bucket filtered by prefix
