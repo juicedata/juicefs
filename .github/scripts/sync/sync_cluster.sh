@@ -218,12 +218,30 @@ test_sync_files_from_file(){
     -deleteOp 5,end --linkOp 10,uniform --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform
     chmod -R 777 /jfs/test
     chmod -R 777 /jfs/test2
-    echo 'dir' > files
+    ls /jfs/test > files | tee files
     sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-all --links --dirs --files-from files \
          2>&1 | tee sync.log
     grep "panic\|<FATAL>\|ERROR" sync.log && echo "panic or fatal or error in sync.log" && exit 1 || true
+}
+
+test_sync_chown_perms(){
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    mkdir /jfs/data
+    for i in $(seq 1 $FILE_COUNT); do
+        mkdir /jfs/data/test$i
+        dd if=/dev/urandom of=/jfs/data/test$i/file$i bs=1M count=1 status=none
+    done
+    sudo chown 1000:1000 /jfs/data -R
+    sudo chmod -R 777 /jfs/data
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/data/ jfs://meta_url/data2/ \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --list-threads 10 --list-depth 5 --check-all --links --dirs --perms \
+         2>&1 | tee sync.log
+    grep "panic\|<FATAL>\|ERROR" sync.log && echo "panic or fatal or error in sync.log" && exit 1 || true
+    diff /jfs/data/ /jfs/data2/
 }
 
 skip_test_sync_between_oss(){
