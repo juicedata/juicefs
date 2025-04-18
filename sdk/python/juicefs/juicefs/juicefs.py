@@ -153,13 +153,6 @@ class Client(object):
         supergroups = [grp.getgrgid(gid).gr_name for gid in os.getgrouplist(superuser.pw_name, superuser.pw_gid)]
         self.h = self.lib.jfs_init(name.encode(), jsonConf.encode(), user.pw_name.encode(), ','.join(groups).encode(), superuser.pw_name.encode(), ''.join(supergroups).encode())
 
-    def version(self):
-        buf = c_void_p()
-        n = self.lib.jfs_version(byref(buf))
-        data = string_at(buf, n)
-        self.lib.free(buf)
-        return data
-
     def stat(self, path):
         """Get the status of a file or a directory."""
         fi = FileInfo()

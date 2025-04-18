@@ -648,22 +648,6 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 	})
 }
 
-//export jfs_version
-func jfs_version(p_buf **byte) int32 {
-	res := version.Version()
-	if res == "" {
-		return 0
-	}
-	if *p_buf != nil {
-		return EINVAL
-	}
-
-	*p_buf = (*byte)(C.malloc(C.size_t(len(res))))
-
-	buf := unsafe.Slice(*p_buf, len(res))
-	return int32(copy(buf, res))
-}
-
 func F(p int64) *wrapper {
 	fslock.Lock()
 	defer fslock.Unlock()
