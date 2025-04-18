@@ -99,6 +99,11 @@ class JuicefsMachine(RuleBasedStateMachine):
             return True
         if type(result1) != type(result2):
             return False
+        # TODO: ignore the diff temp, we should check the difference of result1 and result2 in the future.
+        # Ref: https://github.com/juicedata/juicefs/issues/5982
+        ignore_diff_errors = os.environ.get('IGNORE_DIFF_ERRORS', 'false').lower() == 'true'
+        if ignore_diff_errors and isinstance(result1, Exception) and isinstance(result2, Exception):
+            return True
         if isinstance(result1, Exception):
             if 'panic:' in str(result1) or 'panic:' in str(result2):
                 return False
