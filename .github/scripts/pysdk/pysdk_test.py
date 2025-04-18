@@ -6,6 +6,7 @@ import os
 import pwd
 from os.path import dirname
 import sys
+import time
 sys.path.append('.')
 from sdk.python.juicefs.juicefs import juicefs
 from bench import seq_write, random_write, seq_read, random_read
@@ -429,5 +430,192 @@ class BenchTests(unittest.TestCase):
             count=self.count
         )
 
-if __name__ == "__main__":
+class ClientParamsTests(unittest.TestCase):
+    def setUp(self):
+        if v.exists(TESTFN):
+            v.rmr(TESTFN)
+        v.mkdir(TESTFN)
+        self.testfile = TESTFN + '/testfile'
+    
+    def tearDown(self):
+        if v.exists(TESTFN):
+            v.rmr(TESTFN)
+
+    def test_readonly_param(self):
+        readonly_client = juicefs.Client(
+            "test-volume-ro",
+            meta=meta_url,
+            read_only=True
+        )
+        with self.assertRaises(OSError):
+            readonly_client.open(self.testfile, 'w')
+
+    def test_cache_params(self):
+        cache_client = juicefs.Client(
+            "test-volume-cache",
+            meta=meta_url,
+            cache_dir="/tmp/jfs_test_cache",
+            cache_size="100M",
+            cache_partial_only=True
+        )
+        
+        size_mb = 50
+        test_data = os.urandom(size_mb * 1024 * 1024) 
+        with cache_client.open(self.testfile, 'wb') as f:
+            f.write(test_data)
+        
+        with cache_client.open(self.testfile, 'rb') as f:
+            read_data = f.read()
+        self.assertEqual(read_data, test_data)
+
+        cache_dir = "/tmp/jfs_test_cache"
+        cache_size = 0
+        for root, dirs, files in os.walk(cache_dir):
+            for file in files:
+                cache_size += os.path.getsize(os.path.join(root, file))
+        self.assertGreaterEqual(cache_size, size_mb * 1024 * 1024)
+
+    def test_io_limits(self):
+        limited_client = juicefs.Client(
+            "test-volume-limited",
+            meta=meta_url,
+            upload_limit="1M",
+            download_limit="1M"
+        )
+        
+        test_data = b"x" * (10 * 1024 * 1024)  # 10MB
+        start_time = time.time()
+        with limited_client.open(self.testfile, 'wb') as f:
+            f.write(test_data)
+        write_time = time.time() - start_time
+        
+        self.assertGreaterEqual(write_time, 10.0)
+
+class CloneTests(unittest.TestCase):
+    def setUp(self):
+        if v.exists(TESTFN):
+            v.rmr(TESTFN)
+        v.mkdir(TESTFN)
+        self.source = TESTFN + '/source'
+        self.target = TESTFN + '/target'
+        self.test_data = b"Hello JuiceFS!" * 1024
+        
+        with v.open(self.source, 'wb') as f:
+            f.write(self.test_data)
+    
+    def tearDown(self):
+        if v.exists(TESTFN):
+            v.rmr(TESTFN)
+
+    def test_basic_clone(self):
+        v.clone(self.source, self.target)
+        
+        self.assertTrue(v.exists(self.target))
+        
+        with v.open(self.target, 'rb') as f:
+            cloned_data = f.read()
+        self.assertEqual(cloned_data, self.test_data)
+        
+        source_stat = v.stat(self.source)
+        target_stat = v.stat(self.target)
+        self.assertEqual(source_stat.st_size, target_stat.st_size)
+
+    def test_clone_with_preserve(self):
+        v.chmod(self.source, 0o644)
+        
+        v.clone(self.source, self.target, preserve=True)        
+        source_stat = v.stat(self.source)
+        target_stat = v.stat(self.target)
+        self.assertEqual(source_stat.st_mode, target_stat.st_mode)
+
+class WarmupTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        self.warmup_client = juicefs.Client(
+            "test-warmup",
+            meta=meta_url,
+            cache_dir="/tmp/jfs_test_warmup",
+            cache_size="1000M",
+            cache_partial_only=True
+        )
+        if self.warmup_client.exists(TESTFN):
+            self.warmup_client.rmr(TESTFN)
+        self.warmup_client.mkdir(TESTFN)
+        self.test_files = [
+            TESTFN + '/file1',
+            TESTFN + '/file2'
+        ]
+        size_mb = 50
+        test_data = os.urandom(size_mb * 1024 * 1024)
+        for file in self.test_files:
+            with self.warmup_client.open(file, 'wb') as f:
+                f.write(test_data)
+    
+    @classmethod
+    def tearDownClass(self):
+        if self.warmup_client.exists(TESTFN):
+            self.warmup_client.warmup(self.test_files, isEvict=True)
+            self.warmup_client.rmr(TESTFN)
+
+    def test_basic_warmup(self): 
+        result = self.warmup_client.warmup(self.test_files, numthreads=4)
+        self.assertIn('FileCount', result)
+        self.assertEqual(result['FileCount'], 2)
+        self.assertIn('SliceCount', result)
+        self.assertIn('TotalBytes', result)
+        self.assertIn('MissBytes', result)
+#        self.assertIn('Locations', result)
+        cache_dir = "/tmp/jfs_test_warmup"
+        size_mb = 100
+        cache_size = 0
+        time.sleep(2)
+        for root, dirs, files in os.walk(cache_dir):
+            for file in files:
+                cache_size += os.path.getsize(os.path.join(root, file))
+        self.assertGreaterEqual(cache_size, size_mb * 1024 * 1024)
+
+    def test_warmup_check(self):
+        self.warmup_client.warmup(self.test_files)
+        result = self.warmup_client.warmup(self.test_files, isCheck=True)
+        self.assertEqual(result['MissBytes'], 0)
+        self.assertTrue(any('jfs_test_warmup' in path for path in result['Locations']),
+                       msg=f"'jfs_test_warmup' not found in {result['Locations']}")
+
+    def test_warmup_evict(self):
+        self.warmup_client.warmup(self.test_files)
+        result = self.warmup_client.warmup(self.test_files, isEvict=True)
+        time.sleep(2)
+        cache_dir = "/tmp/jfs_test_warmup"
+        size_mb = 1
+        cache_size = 0
+        for root, dirs, files in os.walk(cache_dir):
+            for file in files:
+                cache_size += os.path.getsize(os.path.join(root, file))
+        self.assertLessEqual(cache_size, size_mb * 1024 * 1024)
+        result = self.warmup_client.warmup(self.test_files, isCheck=True)
+        self.assertEqual(result['MissBytes'], result['TotalBytes'])
+
+class InfoTests(unittest.TestCase):
+    def setUp(self):
+        if v.exists(TESTFN):
+            v.rmr(TESTFN)
+        v.mkdir(TESTFN)
+        
+        self.test_dir = TESTFN + '/infotest'
+        self.test_file = self.test_dir + '/testfile'
+        v.makedirs(self.test_dir)
+        with v.open(self.test_file, 'w') as f:
+            f.write("test content")
+    
+    def tearDown(self):
+        if v.exists(TESTFN):
+            v.rmr(TESTFN)
+
+    def test_file_info(self):
+        info = v.info(self.test_dir,recursive=True,strict=True)
+        self.assertIn('Length', info)
+        self.assertEqual(info['Files'], 1)
+        self.assertEqual(info['Dirs'], 1)
+
+if __name__ == '__main__':
     unittest.main()
