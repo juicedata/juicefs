@@ -15,9 +15,18 @@ VERSION := $(shell awk '/major[[:space:]]*:[[:space:]]*/ {gsub(/[^0-9]/, "", $$2
     /patch[[:space:]]*:[[:space:]]*/ {gsub(/[^0-9]/, "", $$2); patch=$$2} \
     END {print major "." minor "." patch}' $(VERSION_FILE))
 
+REVISION := $(shell git rev-parse --short HEAD 2>/dev/null)
+REVISIONDATE := $(shell git log -1 --pretty=format:'%cd' --date short 2>/dev/null)
+PKG := github.com/juicedata/juicefs/pkg/version
+
 SHORT_HASH := $(shell git rev-parse --short HEAD)
 BUILD_DATE := $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 BUILD_DATE_SHORT := $(shell date -u +'%Y%m%d%H%M')
+
+ifneq ($(strip $(REVISION)),) # Use git clone
+	LDFLAGS += -X $(PKG).revision=$(REVISION) \
+		   -X $(PKG).revisionDate=$(REVISIONDATE)
+endif
 
 # libjfs is located in the sdk/java/libjfs
 libjfs.so:
