@@ -1346,10 +1346,10 @@ func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer pro
 func InitMemoryBufferMetrics(writer DataWriter, reader DataReader, registerer prometheus.Registerer) {
 	usedBufferSize := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "used_buffer_size_bytes",
-		Help: "size of currently used buffer.",
+		Help: "size of currently used buffer for read and write",
 	}, func() float64 {
 		if dw, ok := writer.(*dataWriter); ok {
-			return float64(dw.usedBufferSize())
+			return float64(utils.AllocMemory() - dw.store.UsedMemory())
 		}
 		return 0.0
 	})
