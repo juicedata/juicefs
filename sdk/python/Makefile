@@ -18,6 +18,9 @@ VERSION := $(shell awk '/major[[:space:]]*:[[:space:]]*/ {gsub(/[^0-9]/, "", $$2
 SHORT_HASH := $(shell git rev-parse --short HEAD)
 BUILD_DATE := $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 BUILD_DATE_SHORT := $(shell date -u +'%Y%m%d%H%M')
+PKG := github.com/juicedata/juicefs/pkg/version
+LDFLAGS += -X $(PKG).revision=$(SHORT_HASH) \
+		-X $(PKG).revisionDate=$(BUILD_DATE_SHORT)
 
 # libjfs is located in the sdk/java/libjfs
 libjfs.so:
