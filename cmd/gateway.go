@@ -85,8 +85,8 @@ func cmdGateway() *cli.Command {
 			Usage: "enable object metadata api",
 		},
 		&cli.BoolFlag{
-			Name:  "hide-dir",
-			Usage: "hide the directories in the list object results",
+			Name:  "hide-dir-object",
+			Usage: "hide the directories created by PUT Object API",
 		},
 		&cli.StringFlag{
 			Name:  "domain",
@@ -162,7 +162,7 @@ func gateway(c *cli.Context) error {
 			Umask:       uint16(umask),
 			ObjTag:      c.Bool("object-tag"),
 			ObjMeta:     c.Bool("object-meta"),
-			HideDir:     c.Bool("hide-dir"),
+			HideDir:     c.Bool("hide-dir-object"),
 		},
 	)
 	if err != nil {
