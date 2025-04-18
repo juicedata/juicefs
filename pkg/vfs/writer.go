@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -287,8 +288,8 @@ func (f *fileWriter) totalSlices() int {
 	return cnt
 }
 
-func (w *dataWriter) usedBufferSize() int64 {
-	return utils.AllocMemory() - w.store.UsedMemory()
+func (w *dataWriter) usedBufferSize() int64 { // used buffer by writers
+	return utils.AllocMemory() - w.store.UsedMemory() - atomic.LoadInt64(&readBufferUsed)
 }
 
 func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Errno {
