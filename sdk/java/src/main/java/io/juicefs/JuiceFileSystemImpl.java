@@ -207,6 +207,8 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     int jfs_setfacl(long pid, long h, String path, int acltype, Pointer b, int len);
 
+    void jfs_asSuperFs(long h);
+
     String jfs_getGroups(String volName, String user);
 
     void jfs_set_callback(LogCallBack callBack);
@@ -447,6 +449,9 @@ public class JuiceFileSystemImpl extends FileSystem {
     handle = lib.jfs_init(name, jsonConf, user, groupStr, superuser, supergroup);
     if (handle <= 0) {
       throw new IOException("JuiceFS initialized failed for jfs://" + name);
+    }
+    if (isSuperGroupFileSystem || isBackGroundTask) {
+      lib.jfs_asSuperFs(handle);
     }
     if (isBackGroundTask) {
       LOG.debug("background fs {}|({})", name, handle);

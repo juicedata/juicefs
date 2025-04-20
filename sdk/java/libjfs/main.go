@@ -86,7 +86,8 @@ var (
 	handlers           = make(map[int64]*wrapper)
 	nextFsHandle int64 = 0
 	activefs           = make(map[string][]*wrapper)
-	logger             = utils.GetLogger("juicefs")
+	superFs      []*wrapper
+	logger       = utils.GetLogger("juicefs")
 	bOnce        sync.Once
 	bridges      []*Bridge
 	pOnce        sync.Once
@@ -648,10 +649,21 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 	})
 }
 
-func F(p int64) *wrapper {
+func F0(p int64) *wrapper {
 	fslock.Lock()
 	defer fslock.Unlock()
 	return handlers[p]
+}
+
+func F(p int64) *wrapper {
+	w := F0(p)
+	// since superFs will not be too much, it's ok to iterate
+	for _, sf := range superFs {
+		if w == sf {
+			w.ctx = meta.NewContext(w.ctx.Pid(), 0, []uint32{0})
+		}
+	}
+	return w
 }
 
 //export jfs_update_uid_grouping
@@ -731,6 +743,14 @@ func jfs_getGroups(name, user string) string {
 		}
 	}
 	return ""
+}
+
+//export jfs_asSuperFs
+func jfs_asSuperFs(h int64) {
+	w := F0(h)
+	fslock.Lock()
+	defer fslock.Unlock()
+	superFs = append(superFs, w)
 }
 
 //export jfs_term
