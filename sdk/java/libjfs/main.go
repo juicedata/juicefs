@@ -657,6 +657,8 @@ func F0(p int64) *wrapper {
 
 func F(p int64) *wrapper {
 	w := F0(p)
+	fslock.Lock()
+	defer fslock.Unlock()
 	// since superFs will not be too much, it's ok to iterate
 	for _, sf := range superFs {
 		if w == sf {
