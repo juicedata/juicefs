@@ -41,7 +41,7 @@ JuiceFS 客户端可以控制这些内核元数据缓存：文件属性（attrib
 # 目录类型文件的缓存时间（秒），默认为 1，提升目录的 lookup 性能
 --dir-entry-cache=1
 
-# 失败查询的缓存时间（秒），默认为 0，提升不存在文件或目录(返回ENOENT错误码)的 lookup 性能
+# 失败查询的缓存时间（秒），默认为 0，提升不存在文件或目录 (返回 ENOENT 错误码) 的 lookup 性能
 --negative-dir-entry-cache=1
 
 # 开启目录内容缓存，默认为 false，提升 readdir 性能
