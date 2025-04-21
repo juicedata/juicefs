@@ -11,6 +11,7 @@
 |`--atime-mode=noatime` <VersionAdd>1.1</VersionAdd>|控制如何更新 atime（文件最后被访问的时间）。支持以下模式：<br/><ul><li>`noatime`（默认）：仅在文件创建和主动调用 `SetAttr` 时设置，平时访问与修改文件不影响 atime 值。考虑到更新 atime 需要运行额外的事务，对性能有影响，因此默认关闭。</li><li>`relatime`：仅在 mtime（文件内容修改时间）或 ctime（文件元数据修改时间）比 atime 新，或者 atime 超过 24 小时没有更新时进行更新。</li><li>`strictatime`：持续更新 atime</li></ul>|
 |`--skip-dir-nlink=20` <VersionAdd>1.1</VersionAdd>|跳过更新目录 nlink 前的重试次数 (仅用于 TKV, 0 代表永不跳过) (默认：20)|
 |`--skip-dir-mtime=100ms` <VersionAdd>1.2</VersionAdd>|如果 mtime 差异小于该值（默认值：100ms），则跳过更新目录的属性。|
+|`--sort-dir` <VersionAdd>1.3</VersionAdd>|按名称对目录中的条目进行排序|
 
 #### 元数据缓存参数 {#mount-metadata-cache-options}
 
