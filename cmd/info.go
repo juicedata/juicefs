@@ -181,15 +181,22 @@ func info(ctx *cli.Context) error {
 		if len(resp.Objects) > 0 {
 			fmt.Println(" objects:")
 			results := make([][]string, 0, 1+len(resp.Objects))
-			results = append(results, []string{"chunkIndex", "objectName", "size", "offset", "length"})
+			results = append(results, []string{"chunkIndex", "objectName", "size", "offset", "foff", "length"})
+			var chunkOffset, lastChunk uint64
 			for _, o := range resp.Objects {
+				if lastChunk != o.ChunkIndex {
+					chunkOffset = 0
+				}
+				lastChunk = o.ChunkIndex
 				results = append(results, []string{
 					strconv.FormatUint(o.ChunkIndex, 10),
 					o.Key,
 					strconv.FormatUint(uint64(o.Size), 10),
 					strconv.FormatUint(uint64(o.Off), 10),
+					strconv.FormatUint(chunkOffset+o.ChunkIndex*meta.ChunkSize, 10),
 					strconv.FormatUint(uint64(o.Len), 10),
 				})
+				chunkOffset += uint64(o.Len)
 			}
 			printResult(results, 1, false)
 		}
