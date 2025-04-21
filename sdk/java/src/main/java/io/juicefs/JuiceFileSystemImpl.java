@@ -207,7 +207,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     int jfs_setfacl(long pid, long h, String path, int acltype, Pointer b, int len);
 
-    String jfs_getGroups(String volName, String user);
+    int jfs_getGroups(String volName, String user, Pointer buf, int len);
 
     void jfs_set_callback(LogCallBack callBack);
 
@@ -549,14 +549,21 @@ public class JuiceFileSystemImpl extends FileSystem {
     if (isEmpty(groupsFile)) {
       return new HashSet<>(ugi.getGroups());
     }
-    String gStr = lib.jfs_getGroups(name, user);
-    Set<String> res;
-    if (!isEmpty(gStr)) {
-      res = new HashSet<>(Arrays.asList(gStr.split(","))) ;
-    } else {
-      res = new HashSet<>(ugi.getGroups());
+
+    int size = 0, r = 1 << 10;
+    Pointer buf = null;
+    while (r > size) {
+      size = r;
+      buf = Memory.allocate(Runtime.getRuntime(lib), size);
+      r = lib.jfs_getGroups(name, user, buf, size);
     }
-    return res;
+    if (r == 0) {
+      return new HashSet<>(ugi.getGroups());
+    }
+    byte[] rBuf = new byte[r];
+    buf.get(0, rBuf, 0, r);
+
+    return new HashSet<>(Arrays.asList(new String(rBuf).split(",")));
   }
 
   private boolean hasSuperPermission() {

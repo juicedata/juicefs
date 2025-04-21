@@ -722,17 +722,21 @@ func jfs_update_uid_grouping(cname, uidstr *C.char, grouping *C.char) {
 }
 
 //export jfs_getGroups
-func jfs_getGroups(name, user string) string {
+func jfs_getGroups(cname, cuser *C.char, buf uintptr, count int32) int32 {
+	name := C.GoString(cname)
+	user := C.GoString(cuser)
 	fslock.Lock()
-	defer fslock.Unlock()
 	userGroups := userGroupCache[name]
+	fslock.Unlock()
+	var gStr string
 	if userGroups != nil {
 		gs := userGroups[user]
 		if gs != nil {
-			return strings.Join(gs, ",")
+			gStr = strings.Join(gs, ",")
 		}
 	}
-	return ""
+	copy(toBuf(buf, count), gStr)
+	return int32(len(gStr))
 }
 
 //export jfs_term
