@@ -18,7 +18,6 @@ package object
 
 import (
 	"os"
-	"time"
 )
 
 func getOwnerGroup(info os.FileInfo) (string, string) {
@@ -31,9 +30,4 @@ func lookupUser(name string) int {
 
 func lookupGroup(name string) int {
 	return 0
-}
-
-func (d *filestore) Chtimes(key string, mtime time.Time) error {
-	p := d.path(key)
-	return os.Chtimes(p, mtime, mtime)
 }

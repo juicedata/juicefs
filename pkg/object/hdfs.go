@@ -276,7 +276,7 @@ func (h *hdfsclient) List(prefix, marker, token, delimiter string, limit int64, 
 }
 
 func (h *hdfsclient) Chtimes(key string, mtime time.Time) error {
-	return h.c.Chtimes(h.path(key), mtime, mtime)
+	return h.c.Chtimes(h.path(key), time.Time{}, mtime)
 }
 
 func (h *hdfsclient) Chmod(key string, mode os.FileMode) error {

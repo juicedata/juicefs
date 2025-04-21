@@ -270,7 +270,7 @@ func (f *sftpStore) Chtimes(key string, mtime time.Time) error {
 		return err
 	}
 	defer f.putSftpConnection(&c, err)
-	return c.sftpClient.Chtimes(f.path(key), mtime, mtime)
+	return c.sftpClient.Chtimes(f.path(key), time.Time{}, mtime)
 }
 
 func (f *sftpStore) Chmod(key string, mode os.FileMode) error {
