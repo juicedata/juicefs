@@ -338,7 +338,7 @@ func (j *juice) OpenEx(p string, fi *fuse.FileInfo_t) (e int) {
 			e = -fuse.ENOENT
 			return
 		}
-	} else if filename := path.Base(p); vfs.IsSpecialName(filename) {
+	} else if filename := path.Base(p); vfs.IsSpecialName(filename) && path.Dir(p) == "/" {
 		ino, _ = vfs.GetInternalNodeByName(filename)
 		if ino == 0 {
 			e = -fuse.ENOENT
@@ -485,7 +485,7 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 		if strings.HasSuffix(p, "/.control") {
 			e = j.getAttrForSpFile(ctx, p, stat, fh)
 			return
-		} else if vfs.IsSpecialName(path.Base(p)) {
+		} else if vfs.IsSpecialName(path.Base(p)) && path.Dir(p) == "/" {
 			e = j.getAttrForSpFile(ctx, p, stat, fh)
 			return
 		}
@@ -733,6 +733,15 @@ func (j *juice) Getpath(p string, fh uint64) (e int, ret string) {
 		ret = p
 		return
 	}
+
+	if strings.HasSuffix(p, "/.control") {
+		ret = p
+		return
+	} else if vfs.IsSpecialName(path.Base(p)) && path.Dir(p) == "/" {
+		ret = p
+		return
+	}
+
 	defer trace(p, fh)(&e, &ret)
 	ino := j.h2i(&fh)
 	ctx := j.newContext()

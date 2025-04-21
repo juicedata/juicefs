@@ -149,4 +149,31 @@ test_all_squash()
     fi
 }
 
+test_umask()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs --umask 0027
+
+    mkdir -p /jfs/test_dir
+    dir_perms=$(stat -c %a /jfs/test_dir)
+    if [[ "$dir_perms" != "750" ]]; then
+        echo >&2 "<FATAL>: Directory permissions incorrect. Expected: 750, Got: $dir_perms"
+        exit 1
+    fi
+    touch /jfs/test_file
+    file_perms=$(stat -c %a /jfs/test_file)
+    if [[ "$file_perms" != "640" ]]; then
+        echo >&2 "<FATAL>: File permissions incorrect. Expected: 640, Got: $file_perms"
+        exit 1
+    fi
+    touch /jfs/test_dir/nested_file
+    nested_perms=$(stat -c %a /jfs/test_dir/nested_file)
+    if [[ "$nested_perms" != "640" ]]; then
+        echo >&2 "<FATAL>: Nested file permissions incorrect. Expected: 640, Got: $nested_perms"
+        exit 1
+    fi
+    echo "PASS: Umask test completed successfully"
+}
+
 source .github/scripts/common/run_test.sh && run_test $@

@@ -63,6 +63,7 @@ type Config struct {
 	Umask       uint16
 	ObjTag      bool
 	ObjMeta     bool
+	HeadDir     bool
 	HideDir     bool
 }
 
@@ -693,7 +694,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 	} else if !strings.HasSuffix(object, sep) && !fi.IsDir() {
 		isObject = true
 	}
-	if !isObject {
+	if !n.gConf.HeadDir && !isObject {
 		err = jfsToObjectErr(ctx, syscall.ENOENT, bucket, object)
 		return
 	}

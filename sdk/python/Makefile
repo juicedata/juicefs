@@ -15,9 +15,16 @@ VERSION := $(shell awk '/major[[:space:]]*:[[:space:]]*/ {gsub(/[^0-9]/, "", $$2
     /patch[[:space:]]*:[[:space:]]*/ {gsub(/[^0-9]/, "", $$2); patch=$$2} \
     END {print major "." minor "." patch}' $(VERSION_FILE))
 
-SHORT_HASH := $(shell git rev-parse --short HEAD)
+REVISION := $(shell git rev-parse --short HEAD 2>/dev/null)
+REVISIONDATE := $(shell git log -1 --pretty=format:'%cd' --date short 2>/dev/null)
 BUILD_DATE := $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 BUILD_DATE_SHORT := $(shell date -u +'%Y%m%d%H%M')
+
+PKG := github.com/juicedata/juicefs/pkg/version
+ifneq ($(strip $(REVISION)),) # Use git clone
+	LDFLAGS += -X $(PKG).revision=$(REVISION) \
+		   -X $(PKG).revisionDate=$(REVISIONDATE)
+endif
 
 # libjfs is located in the sdk/java/libjfs
 libjfs.so:
@@ -33,7 +40,7 @@ juicefs:
 	sudo rm -rf juicefs.egg-info
 	echo "Building juicefs version $(VERSION).$(BUILD_DATE_SHORT)"
 	sed -i 's/^VERSION = .*/VERSION = "$(VERSION).$(BUILD_DATE_SHORT)"/' juicefs/setup.py
-	sed -i 's/^BUILD_INFO = .*/BUILD_INFO = "$(BUILD_DATE) $(SHORT_HASH)"/' juicefs/setup.py
+	sed -i 's/^BUILD_INFO = .*/BUILD_INFO = "$(BUILD_DATE) $(REVISION)"/' juicefs/setup.py
 	docker run --rm -i -v ${PWD}/../../:/opt/jfs -w /opt/jfs/sdk/python -e GOPROXY=${GOPROXY} sdkbuilder sh -c 'make libjfs.so && cd juicefs && python3 -m build -w'
 
 clean:

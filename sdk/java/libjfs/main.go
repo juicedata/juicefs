@@ -181,6 +181,7 @@ type wrapper struct {
 	user       string
 	superuser  string
 	supergroup string
+	isSuperFs  bool
 }
 
 type logWriter struct {
@@ -231,7 +232,7 @@ func (w *wrapper) withPid(pid int64) meta.Context {
 }
 
 func (w *wrapper) isSuperuser(name string, groups []string) bool {
-	if name == w.superuser {
+	if name == w.superuser || w.isSuperFs {
 		return true
 	}
 	for _, g := range groups {
@@ -353,9 +354,11 @@ type javaConf struct {
 	PushLabels        string `json:"pushLabels"`
 	PushGraphite      string `json:"pushGraphite"`
 	Caller            int    `json:"caller"`
+
+	SuperFS bool `json:"superFs,omitempty"`
 }
 
-func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.FileSystem) int64 {
+func getOrCreate(name, user, group, superuser, supergroup string, superFs bool, f func() *fs.FileSystem) int64 {
 	fslock.Lock()
 	defer fslock.Unlock()
 	ws := activefs[name]
@@ -376,7 +379,7 @@ func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.F
 		}
 		logger.Infof("JuiceFileSystem created for user:%s group:%s", user, group)
 	}
-	w := &wrapper{jfs, nil, m, user, superuser, supergroup}
+	w := &wrapper{jfs, nil, m, user, superuser, supergroup, superFs}
 	var gs []string
 	if userGroupCache[name] != nil {
 		gs = userGroupCache[name][user]
@@ -457,13 +460,12 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 	name := C.GoString(cname)
 	debug.SetGCPercent(50)
 	object.UserAgent = "JuiceFS-SDK " + version.Version()
-	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), func() *fs.FileSystem {
-		var jConf javaConf
-		err := json.Unmarshal([]byte(C.GoString(jsonConf)), &jConf)
-		if err != nil {
-			logger.Errorf("invalid json: %s", C.GoString(jsonConf))
-			return nil
-		}
+	var jConf javaConf
+	err := json.Unmarshal([]byte(C.GoString(jsonConf)), &jConf)
+	if err != nil {
+		logger.Fatalf("invalid json: %s", C.GoString(jsonConf))
+	}
+	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), jConf.SuperFS, func() *fs.FileSystem {
 		if jConf.Debug || os.Getenv("JUICEFS_DEBUG") != "" {
 			utils.SetLogLevel(logrus.DebugLevel)
 			go func() {
