@@ -735,7 +735,7 @@ func jfs_update_uid_grouping(cname, uidstr *C.char, grouping *C.char) {
 				uid := w.lookupUid(w.user)
 				groupStr := strings.Join(userGroups[w.user], ",")
 				gids := w.lookupGids(groupStr)
-				logger.Debugf("Update groups of %s(%d) to %s(%s)", w.user, uid, groupStr, gids)
+				logger.Debugf("Update groups of %s(%d) to %s(%v)", w.user, uid, groupStr, gids)
 				w.ctx = meta.NewContext(w.ctx.Pid(), uid, gids)
 			}
 		}
