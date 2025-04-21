@@ -67,3 +67,16 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |`--custom-labels`|custom labels for metrics, format: `key1:value1;key2:value2` (default: "")|
 |`--consul=127.0.0.1:8500`|Consul address to register (default: `127.0.0.1:8500`)|
 |`--no-usage-report`|do not send usage report (default: false)|
+
+#### Windows related options {#mount-windows-options}
+
+|Items|Description|
+|-|-|
+|`--o=`|Used to specify additional FUSE mount options. The actual supported options are determined by WinFsp.|
+|`--log=c:/juicefs.log` <VersionAdd>1.3</VersionAdd>|Path to save JuiceFS logs (only effective when running in background mode).|
+|`-d` <VersionAdd>1.3</VersionAdd>|Run in background mode. On Windows, enabling this will run JuiceFS as a system service. (Note: This requires administrator privileges and only one file system can be mounted at a time in this mode.)|
+|`--fuse-trace-log=c:/fuse.log` <VersionAdd>1.3</VersionAdd>|Specifies the trace log path for WinFsp's FUSE layer callbacks. (Default: "")|
+|`--as-root`|A compatibility option that maps all file uid, gid, and write operations to the root user (uid=0).|
+|`--show-dot-files` <VersionAdd>1.3</VersionAdd>|Show files that begin with a dot (.). By default, such files are treated as hidden.|
+|`--winfsp-threads=16` <VersionAdd>1.3</VersionAdd>|Sets the number of threads WinFSP uses to handle kernel events. The default is min(CPU cores * 2, 16).|
+|`--report-case` <VersionAdd>1.3</VersionAdd>|Configures whether JuiceFS should report the precise case of filenames when possible. For example, when opening aaa.txt that actually exists as AAA.txt, enabling this option allows JuiceFS to report the original case to the Windows kernel. (Note: Enabling this may affect performance.)|

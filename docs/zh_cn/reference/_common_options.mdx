@@ -67,3 +67,16 @@
 |`--custom-labels`|监控指标自定义标签，格式为 `key1:value1;key2:value2` (默认："")|
 |`--consul=127.0.0.1:8500`|Consul 注册中心地址，默认为 `127.0.0.1:8500`。|
 |`--no-usage-report`|不发送使用量信息 (默认：false)|
+
+#### Windows 相关参数 {#mount-windows-options}
+
+|项 | 说明|
+|-|-|
+|`--o=`|可以用于指定 FUSE 的额外挂载参数，具体支持情况由 WinFSP 决定。|
+|`--log=c:/juicefs.log` <VersionAdd>1.3</VersionAdd>|JuiceFS 日志保存路径（仅对后台运行生效）。|
+|`-d` <VersionAdd>1.3</VersionAdd>|是否后台运行。在 Windows 系统下，指定了后台运行后，JuiceFS 将以系统服务运行。（注：运行此参数时，需要有管理员权限，并且同一时间只能挂载一个文件系统）|
+|`--fuse-trace-log=c:/fuse.log` <VersionAdd>1.3</VersionAdd>|用于指定WinFSP FUSE层的回调日志。（默认：""）|
+|`--as-root`|这是一个兼容选项，开启此设置后，将会把所有文件uid,gid以及写入的身份都映射为root(uid=0)用户。|
+|`--show-dot-files` <VersionAdd>1.3 </VersionAdd>|显示.开头的文件。默认情况下，这些文件会被设置为隐藏文件。|
+|`--winfsp-threads=16` <VersionAdd>1.3</VersionAdd>|设置 WinFSP 用于处理内核事件的线程数量，默认为 min(CPU核数 * 2, 16)。|
+|`--report-case` <VersionAdd>1.3</VersionAdd>|配置 JuiceFS 在处理文件名时，是否尽可能上报精确的大小写信息。例如在使用aaa.txt打开一个实际为AAA.txt的文件名时，JuiceFS 是否向 Windows 内核汇报实际的文件名。（打开此选项可能会对性能有影响）|
