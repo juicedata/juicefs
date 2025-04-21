@@ -207,8 +207,6 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     int jfs_setfacl(long pid, long h, String path, int acltype, Pointer b, int len);
 
-    void jfs_asSuperFs(long h);
-
     String jfs_getGroups(String volName, String user);
 
     void jfs_set_callback(LogCallBack callBack);
@@ -383,8 +381,10 @@ public class JuiceFileSystemImpl extends FileSystem {
     superuser = getConf(conf, "superuser", "hdfs");
     supergroup = getConf(conf, "supergroup", conf.get("dfs.permissions.superusergroup", "supergroup"));
     isBackGroundTask = conf.getBoolean("juicefs.internal-bg-task", false);
+    boolean asSuperFs = false;
     if (isSuperGroupFileSystem || isBackGroundTask) {
       groupStr = supergroup;
+      asSuperFs = true;
     }
 
     synchronized (JuiceFileSystemImpl.class) {
@@ -445,13 +445,11 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("noUsageReport", Boolean.valueOf(getConf(conf, "no-usage-report", "false")));
     obj.put("freeSpace", getConf(conf, "free-space", "0.1"));
     obj.put("accessLog", getConf(conf, "access-log", ""));
+    obj.put("superFs", asSuperFs);
     String jsonConf = obj.toString(2);
     handle = lib.jfs_init(name, jsonConf, user, groupStr, superuser, supergroup);
     if (handle <= 0) {
       throw new IOException("JuiceFS initialized failed for jfs://" + name);
-    }
-    if (isSuperGroupFileSystem || isBackGroundTask) {
-      lib.jfs_asSuperFs(handle);
     }
     if (isBackGroundTask) {
       LOG.debug("background fs {}|({})", name, handle);

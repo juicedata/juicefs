@@ -86,8 +86,7 @@ var (
 	handlers           = make(map[int64]*wrapper)
 	nextFsHandle int64 = 0
 	activefs           = make(map[string][]*wrapper)
-	superFs      []*wrapper
-	logger       = utils.GetLogger("juicefs")
+	logger             = utils.GetLogger("juicefs")
 	bOnce        sync.Once
 	bridges      []*Bridge
 	pOnce        sync.Once
@@ -182,6 +181,7 @@ type wrapper struct {
 	user       string
 	superuser  string
 	supergroup string
+	isSuperFs  bool
 }
 
 type logWriter struct {
@@ -232,12 +232,7 @@ func (w *wrapper) withPid(pid int64) meta.Context {
 }
 
 func (w *wrapper) isSuperuser(name string, groups []string) bool {
-	for _, sw := range superFs {
-		if w == sw {
-			return true
-		}
-	}
-	if name == w.superuser {
+	if name == w.superuser || w.isSuperFs {
 		return true
 	}
 	for _, g := range groups {
@@ -359,9 +354,11 @@ type javaConf struct {
 	PushLabels        string `json:"pushLabels"`
 	PushGraphite      string `json:"pushGraphite"`
 	Caller            int    `json:"caller"`
+
+	SuperFS bool `json:"superFs,omitempty"`
 }
 
-func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.FileSystem) int64 {
+func getOrCreate(name, user, group, superuser, supergroup string, superFs bool, f func() *fs.FileSystem) int64 {
 	fslock.Lock()
 	defer fslock.Unlock()
 	ws := activefs[name]
@@ -382,7 +379,7 @@ func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.F
 		}
 		logger.Infof("JuiceFileSystem created for user:%s group:%s", user, group)
 	}
-	w := &wrapper{jfs, nil, m, user, superuser, supergroup}
+	w := &wrapper{jfs, nil, m, user, superuser, supergroup, superFs}
 	var gs []string
 	if userGroupCache[name] != nil {
 		gs = userGroupCache[name][user]
@@ -463,13 +460,12 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 	name := C.GoString(cname)
 	debug.SetGCPercent(50)
 	object.UserAgent = "JuiceFS-SDK " + version.Version()
-	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), func() *fs.FileSystem {
-		var jConf javaConf
-		err := json.Unmarshal([]byte(C.GoString(jsonConf)), &jConf)
-		if err != nil {
-			logger.Errorf("invalid json: %s", C.GoString(jsonConf))
-			return nil
-		}
+	var jConf javaConf
+	err := json.Unmarshal([]byte(C.GoString(jsonConf)), &jConf)
+	if err != nil {
+		logger.Fatalf("invalid json: %s", C.GoString(jsonConf))
+	}
+	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), jConf.SuperFS, func() *fs.FileSystem {
 		if jConf.Debug || os.Getenv("JUICEFS_DEBUG") != "" {
 			utils.SetLogLevel(logrus.DebugLevel)
 			go func() {
@@ -654,23 +650,10 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 	})
 }
 
-func F0(p int64) *wrapper {
+func F(p int64) *wrapper {
 	fslock.Lock()
 	defer fslock.Unlock()
 	return handlers[p]
-}
-
-func F(p int64) *wrapper {
-	w := F0(p)
-	fslock.Lock()
-	defer fslock.Unlock()
-	// since superFs will not be too much, it's ok to iterate
-	for _, sf := range superFs {
-		if w == sf {
-			w.ctx = meta.NewContext(w.ctx.Pid(), 0, []uint32{0})
-		}
-	}
-	return w
 }
 
 //export jfs_update_uid_grouping
@@ -728,15 +711,11 @@ func jfs_update_uid_grouping(cname, uidstr *C.char, grouping *C.char) {
 		m := ws[0].m
 		m.update(uids, gids, false)
 		for _, w := range ws {
+			logger.Debugf("Update groups of %s to %s", w.user, strings.Join(userGroups[w.user], ","))
 			if w.isSuperuser(w.user, userGroups[w.user]) {
-				logger.Debugf("Update groups of %s(%d) to %s(0)", w.user, 0, w.supergroup)
-				w.ctx = meta.NewContext(w.ctx.Pid(), 0, []uint32{0})
+				w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
 			} else {
-				uid := w.lookupUid(w.user)
-				groupStr := strings.Join(userGroups[w.user], ",")
-				gids := w.lookupGids(groupStr)
-				logger.Debugf("Update groups of %s(%d) to %s(%v)", w.user, uid, groupStr, gids)
-				w.ctx = meta.NewContext(w.ctx.Pid(), uid, gids)
+				w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), w.lookupGids(strings.Join(userGroups[w.user], ",")))
 			}
 		}
 	}
@@ -754,14 +733,6 @@ func jfs_getGroups(name, user string) string {
 		}
 	}
 	return ""
-}
-
-//export jfs_asSuperFs
-func jfs_asSuperFs(h int64) {
-	w := F0(h)
-	fslock.Lock()
-	defer fslock.Unlock()
-	superFs = append(superFs, w)
 }
 
 //export jfs_term
