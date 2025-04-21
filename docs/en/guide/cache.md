@@ -40,6 +40,12 @@ JuiceFS Client controls these kinds of metadata as kernel cache: attribute (file
 
 # Directory entry cache TTL in seconds, default to 1, improves lookup performance
 --dir-entry-cache=1
+
+# Negative lookup cache TTL in seconds，default to 0，improves lookup performance for non-existent (return ENOENT) files  or directories
+--negative-dir-entry-cache=1
+
+# Enable directory contents cache, default to false, improves readdir performance
+--readdir-cache=true
 ```
 
 Caching these metadata in kernel for 1 second really speeds up `lookup` and `getattr` calls.
