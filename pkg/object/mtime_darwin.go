@@ -1,6 +1,3 @@
-//go:build !windows
-// +build !windows
-
 /*
  * JuiceFS, Copyright 2025 Juicedata, Inc.
  *
@@ -27,10 +24,12 @@ import (
 
 func lchtimes(name string, atime time.Time, mtime time.Time) error {
 	var ts = make([]unix.Timespec, 2)
+	///Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include//sys/stat.h
+	// define UTIME_NOW       -1
+	// define UTIME_OMIT      -2
 	// only change mtime
-	ts[0] = unix.Timespec{Sec: -1, Nsec: -1}
+	ts[0] = unix.Timespec{Sec: -2, Nsec: -2}
 	ts[1] = unix.NsecToTimespec(mtime.UnixNano())
-
 	if e := unix.UtimesNanoAt(unix.AT_FDCWD, name, ts, unix.AT_SYMLINK_NOFOLLOW); e != nil {
 		return &os.PathError{Op: "lchtimes", Path: name, Err: e}
 	}
