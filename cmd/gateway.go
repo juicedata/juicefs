@@ -88,6 +88,10 @@ func cmdGateway() *cli.Command {
 			Name:  "head-dir",
 			Usage: "allow HEAD request on directories",
 		},
+		&cli.BoolFlag{
+			Name:  "hide-dir-object",
+			Usage: "hide the directories created by PUT Object API",
+		},
 		&cli.StringFlag{
 			Name:  "domain",
 			Usage: "domain for virtual-host-style requests",
@@ -163,6 +167,7 @@ func gateway(c *cli.Context) error {
 			ObjTag:      c.Bool("object-tag"),
 			ObjMeta:     c.Bool("object-meta"),
 			HeadDir:     c.Bool("head-dir"),
+			HideDir:     c.Bool("hide-dir-object"),
 		},
 	)
 	if err != nil {

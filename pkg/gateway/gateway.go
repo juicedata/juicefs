@@ -64,6 +64,7 @@ type Config struct {
 	ObjTag      bool
 	ObjMeta     bool
 	HeadDir     bool
+	HideDir     bool
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -314,8 +315,10 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 			return fs.IsNotExist(eno), nil, false
 		}
 		defer f.Close(mctx)
-		if fi, _ := f.Stat(); fi.(*fs.FileStat).Atime() == 0 && prefixEntry == "" {
-			entries = append(entries, &minio.Entry{Name: ""})
+		if !n.gConf.HideDir {
+			if fi, _ := f.Stat(); fi.(*fs.FileStat).Atime() == 0 && prefixEntry == "" {
+				entries = append(entries, &minio.Entry{Name: ""})
+			}
 		}
 
 		fis, eno := f.Readdir(mctx, 0)
