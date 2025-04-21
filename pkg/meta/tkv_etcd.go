@@ -68,13 +68,6 @@ func (tx *etcdTxn) get(key []byte) []byte {
 	panic("unreachable")
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
 	if len(keys) > 128 {
 		var rs = make([][]byte, 0, len(keys))

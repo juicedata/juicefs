@@ -29,7 +29,6 @@ import (
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
-	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
@@ -658,7 +657,7 @@ func (m *dbMeta) loadDirStats(ctx Context, msg proto.Message) error {
 func (m *dbMeta) insertRows(beans []interface{}) error {
 	batch := m.getTxnBatchNum()
 	for len(beans) > 0 {
-		bs := utils.Min(batch, len(beans))
+		bs := min(batch, len(beans))
 		err := m.txn(func(s *xorm.Session) error {
 			n, err := s.Insert(beans[:bs])
 			if err == nil && int(n) != bs {
