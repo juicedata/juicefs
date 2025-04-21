@@ -209,6 +209,8 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     String jfs_getGroups(String volName, String user);
 
+    String jfs_getRangerCfg(String volName);
+
     void jfs_set_callback(LogCallBack callBack);
 
     interface LogCallBack {
@@ -505,7 +507,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     String rangerRestUrl = getConf(conf, "ranger-rest-url", null);
     if (!isEmpty(rangerRestUrl) && !isSuperGroupFileSystem && !isBackGroundTask) {
-        RangerConfig rangerConfig = checkAndGetRangerParams(rangerRestUrl, conf);
+        RangerConfig rangerConfig = checkAndGetRangerParams(conf);
         Configuration superConf = new Configuration(conf);
         superConf.set("juicefs.internal-bg-task", "true");
         superGroupFileSystem = new JuiceFileSystemImpl(true);
@@ -525,19 +527,26 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
   }
 
-  private RangerConfig checkAndGetRangerParams(String rangerRestUrl, Configuration conf) throws IOException {
-    if (!rangerRestUrl.startsWith("http")) {
-      throw new IOException("illegal value for parameter 'juicefs.ranger-rest-url': " + rangerRestUrl);
+  private RangerConfig checkAndGetRangerParams(Configuration conf) throws IOException {
+    String cfgStr = lib.jfs_getRangerCfg(name);
+    if (isEmpty(cfgStr)) {
+      return null;
     }
-
-    String serviceName = getConf(conf, "ranger-service-name", "");
+    // http://localhost:6080?name=service_name
+    String[] split = cfgStr.split("\\?", -1);
+    if (split.length != 2) {
+      throw new IOException(String.format("wrong ranger config: %s", cfgStr));
+    }
+    String url = split[0];
+    String serviceName = split[1].substring(5);
+    if (!url.startsWith("http")) {
+      throw new IOException("illegal value for parameter 'juicefs.ranger-rest-url': " + url);
+    }
     if (serviceName.isEmpty()) {
       throw new IOException("illegal value for parameter 'juicefs.ranger-service-name': " + serviceName);
     }
-
     String pollIntervalMs = getConf(conf, "ranger-poll-interval-ms", "30000");
-
-    return new RangerConfig(rangerRestUrl, serviceName, Long.parseLong(pollIntervalMs));
+    return new RangerConfig(url, serviceName, Long.parseLong(pollIntervalMs));
   }
 
   private JuiceFileSystemImpl(boolean isSuperGroupFileSystem) {

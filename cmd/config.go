@@ -89,6 +89,14 @@ func configManagementFlags() []cli.Flag {
 			Name:  "dir-stats",
 			Usage: "enable dir stats, which is necessary for fast summary and dir quota",
 		},
+		&cli.StringFlag{
+			Name:  "ranger-rest-url",
+			Usage: "URL of the RangerAdmin",
+		},
+		&cli.StringFlag{
+			Name:  "ranger-service",
+			Usage: "Name of the Ranger service used For JuiceFS",
+		},
 	})
 }
 
@@ -260,6 +268,18 @@ func config(ctx *cli.Context) error {
 				} else {
 					return errors.New("cannot disable acl")
 				}
+			}
+		case "ranger-rest-url":
+			if newUrl := ctx.String(flag); newUrl != format.RangerRestUrl {
+				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.RangerRestUrl, newUrl))
+				format.RangerRestUrl = newUrl
+				clientVer = true
+			}
+		case "ranger-service":
+			if newService := ctx.String(flag); newService != format.RangerService {
+				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.RangerService, newService))
+				format.RangerService = newService
+				clientVer = true
 			}
 		}
 	}
