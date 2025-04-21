@@ -1807,18 +1807,20 @@ func jfs_fsync(pid int64, fd int32) int32 {
 	return errno(f.Fsync(f.w.withPid(pid)))
 }
 
-//export jfs_getRangerCfg
-func jfs_getRangerCfg(name string) string {
-	var cfg string
+//export jfs_ranger_cfg
+func jfs_ranger_cfg(cname *C.char, buf uintptr, count int32) int32 {
+	name := C.GoString(cname)
 	fslock.Lock()
 	format := formats[name]
 	fslock.Unlock()
+	var cfg string
 	if format != nil {
 		url := format.RangerRestUrl
 		name := format.RangerService
 		cfg = fmt.Sprintf("%s?name=%s", url, name)
 	}
-	return cfg
+	copy(toBuf(buf, count), cfg)
+	return int32(len(cfg))
 }
 
 //export jfs_close

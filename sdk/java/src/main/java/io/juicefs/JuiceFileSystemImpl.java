@@ -209,7 +209,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     String jfs_getGroups(String volName, String user);
 
-    String jfs_getRangerCfg(String volName);
+    int jfs_ranger_cfg(String volName, Pointer buf, int size);
 
     void jfs_set_callback(LogCallBack callBack);
 
@@ -528,10 +528,19 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   private RangerConfig checkAndGetRangerParams(Configuration conf) throws IOException {
-    String cfgStr = lib.jfs_getRangerCfg(name);
-    if (isEmpty(cfgStr)) {
+    int size = 0, r = 1 << 10;
+    Pointer buf = null;
+    while (r > size) {
+      size = r;
+      buf = Memory.allocate(Runtime.getRuntime(lib), size);
+      r = lib.jfs_ranger_cfg(name, buf, size);
+    }
+    if (r == 0) {
       return null;
     }
+    byte[] rBuf = new byte[r];
+    buf.get(0, rBuf, 0, r);
+    String cfgStr = new String(rBuf);
     // http://localhost:6080?name=service_name
     String[] split = cfgStr.split("\\?", -1);
     if (split.length != 2) {
