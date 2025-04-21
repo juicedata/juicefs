@@ -11,6 +11,7 @@
 |`--atime-mode=noatime` <VersionAdd>1.1</VersionAdd> |Control atime (last time the file was accessed) behavior, support the following modes:<br/><ul><li>`noatime` (default): set when the file is created or when `SetAttr` is explicitly called. Accessing and modifying the file will not affect atime, tracking atime comes at a performance cost, so this is the default behavior</li><li>`relatime`: update inode access times relative to mtime (last time when the file data was modified) or ctime (last time when file metadata was changed). Only update atime if atime was earlier than the current mtime or ctime, or the file's atime is more than 1 day old</li><li>`strictatime`: always update atime on access</li></ul>|
 |`--skip-dir-nlink=20` <VersionAdd>1.1</VersionAdd> |number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never) (default: 20)|
 |`--skip-dir-mtime=100ms` <VersionAdd>1.2</VersionAdd>|skip updating attribute of a directory if the mtime difference is smaller than this value (default: 100ms)|
+|`--sort-dir` <VersionAdd>1.3</VersionAdd>|sort entries within a directory by name|
 
 #### Metadata cache related options {#mount-metadata-cache-options}
 
