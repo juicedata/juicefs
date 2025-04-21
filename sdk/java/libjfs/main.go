@@ -232,6 +232,11 @@ func (w *wrapper) withPid(pid int64) meta.Context {
 }
 
 func (w *wrapper) isSuperuser(name string, groups []string) bool {
+	for _, sw := range superFs {
+		if w == sw {
+			return true
+		}
+	}
 	if name == w.superuser {
 		return true
 	}
@@ -723,11 +728,15 @@ func jfs_update_uid_grouping(cname, uidstr *C.char, grouping *C.char) {
 		m := ws[0].m
 		m.update(uids, gids, false)
 		for _, w := range ws {
-			logger.Debugf("Update groups of %s to %s", w.user, strings.Join(userGroups[w.user], ","))
 			if w.isSuperuser(w.user, userGroups[w.user]) {
-				w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
+				logger.Debugf("Update groups of %s(%d) to %s(0)", w.user, 0, w.supergroup)
+				w.ctx = meta.NewContext(w.ctx.Pid(), 0, []uint32{0})
 			} else {
-				w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), w.lookupGids(strings.Join(userGroups[w.user], ",")))
+				uid := w.lookupUid(w.user)
+				groupStr := strings.Join(userGroups[w.user], ",")
+				gids := w.lookupGids(groupStr)
+				logger.Debugf("Update groups of %s(%d) to %s(%s)", w.user, uid, groupStr, gids)
+				w.ctx = meta.NewContext(w.ctx.Pid(), uid, gids)
 			}
 		}
 	}
