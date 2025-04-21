@@ -59,6 +59,7 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |`--cache-eviction=2-random` <VersionAdd>1.1</VersionAdd> |cache eviction policy (`none` or `2-random`) (default: "2-random")|
 |`--cache-scan-interval=1h` <VersionAdd>1.1</VersionAdd> |interval (in seconds) to scan cache-dir to rebuild in-memory index (default: "1h")|
 |`--cache-expire=0` <VersionAdd>1.2</VersionAdd>|Cache blocks that have not been accessed for more than the set time, in seconds, will be automatically cleared (even if the value of `--cache-eviction` is `none`, these cache blocks will be deleted). A value of 0 means never expires (default: 0)|
+|`--max-readahead` <VersionAdd>1.3</VersionAdd>|max buffering for read ahead in MiB|
 
 #### Metrics related options {#mount-metrics-options}
 
