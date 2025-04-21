@@ -88,7 +88,7 @@ func cmdGateway() *cli.Command {
 			Name:  "head-dir",
 			Usage: "allow HEAD request on directories",
 		},
-    &cli.BoolFlag{
+		&cli.BoolFlag{
 			Name:  "hide-dir-object",
 			Usage: "hide the directories created by PUT Object API",
 		},
