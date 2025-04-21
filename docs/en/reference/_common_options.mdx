@@ -23,8 +23,8 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |`--dir-entry-cache=1`|dir entry cache timeout in seconds (default: 1), read [Kernel metadata cache](../guide/cache.md#kernel-metadata-cache)|
 |`--open-cache=0`|open file cache timeout in seconds (0 means disable this feature) (default: 0)|
 |`--open-cache-limit value` <VersionAdd>1.1</VersionAdd> |max number of open files to cache (soft limit, 0 means unlimited) (default: 10000)|
-|`--readdir-cache=false` <VersionAdd>1.3</VersionAdd>|enable directory entry cache (default: false, disable this feature)|
-|`--negative-dir-entry-cache=0` <VersionAdd>1.3</VersionAdd>|negative lookup (return ENOENT) cache timeout in seconds (default: 0, means disable this feature)|
+|`--readdir-cache=false` <VersionAdd>1.3, only for mount</VersionAdd>|enable directory entry cache (default: false, disable this feature)|
+|`--negative-dir-entry-cache=0` <VersionAdd>1.3, only for mount</VersionAdd>|negative lookup (return ENOENT) cache timeout in seconds (default: 0, means disable this feature)|
 
 #### Data storage related options {#mount-data-storage-options}
 
