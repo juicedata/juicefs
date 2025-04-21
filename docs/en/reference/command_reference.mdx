@@ -641,6 +641,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--enable-xattr`|enable extended attributes (xattr) (default: false)|
 |`--enable-ioctl` <VersionAdd>1.1</VersionAdd> |enable ioctl (support GETFLAGS/SETFLAGS only) (default: false)|
 |`--root-squash value` <VersionAdd>1.1</VersionAdd> |mapping local root user (UID = 0) to another one specified as UID:GID|
+|`--all-squash value` <VersionAdd>1.3</VersionAdd> |mapping all users to another one specified as UID:GID|
 |`--prefix-internal` <VersionAdd>1.1</VersionAdd> |add '.jfs' prefix to all internal files (default: false)|
 |`-o value`|other FUSE options, see [FUSE Mount Options](../reference/fuse_mount_options.md)|
 
