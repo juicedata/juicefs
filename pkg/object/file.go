@@ -29,7 +29,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 )
@@ -346,10 +345,6 @@ func (d *filestore) Chown(key string, owner, group string) error {
 		return fmt.Errorf("user(%s):group(%s) not found", owner, group)
 	}
 	return os.Lchown(p, uid, gid)
-}
-
-func (d *filestore) Chtimes(key string, mtime time.Time) error {
-	return os.Chtimes(d.path(key), time.Time{}, mtime)
 }
 
 func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {

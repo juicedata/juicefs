@@ -2,7 +2,7 @@
 // +build !windows
 
 /*
- * JuiceFS, Copyright 2020 Juicedata, Inc.
+ * JuiceFS, Copyright 2025 Juicedata, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,28 +20,19 @@
 package object
 
 import (
+	"golang.org/x/sys/unix"
 	"os"
-	"syscall"
 	"time"
-
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/pkg/sftp"
 )
 
-func getOwnerGroup(info os.FileInfo) (string, string) {
-	var owner, group string
-	switch st := info.Sys().(type) {
-	case *syscall.Stat_t:
-		owner = utils.UserName(int(st.Uid))
-		group = utils.GroupName(int(st.Gid))
-	case *sftp.FileStat:
-		owner = utils.UserName(int(st.UID))
-		group = utils.GroupName(int(st.GID))
-	}
-	return owner, group
-}
+func lchtimes(name string, atime time.Time, mtime time.Time) error {
+	var ts = make([]unix.Timespec, 2)
+	// only change mtime
+	ts[0] = unix.Timespec{Sec: -1, Nsec: -1}
+	ts[1] = unix.NsecToTimespec(mtime.UnixNano())
 
-func (d *filestore) Chtimes(key string, mtime time.Time) error {
-	p := d.path(key)
-	return lchtimes(p, time.Time{}, mtime)
+	if e := unix.UtimesNanoAt(unix.AT_FDCWD, name, ts, unix.AT_SYMLINK_NOFOLLOW); e != nil {
+		return &os.PathError{Op: "lchtimes", Path: name, Err: e}
+	}
+	return nil
 }
