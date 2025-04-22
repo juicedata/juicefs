@@ -1,4 +1,5 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.juicefs</groupId>
@@ -6,12 +7,14 @@
 	<url>https://github.com/juicedata/juicefs</url>
 	<description>Hadoop FileSystem implementation for JuiceFS</description>
 	<artifactId>juicefs-hadoop</artifactId>
-	<version>1.2-dev</version>
+	<version>1.3.0-beta1</version>
 	<packaging>jar</packaging>
 	<properties>
 		<hadoop.version>3.1.4</hadoop.version>
 		<flink.version>1.16.3</flink.version>
-		<argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true -Djava.library.path=${project.basedir}/../mount/libjfs:${java.library.path} -Djdk.attach.allowAttachSelf=true</argLine>
+		<argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true
+			-Djava.library.path=${project.basedir}/../mount/libjfs:${java.library.path}
+			-Djdk.attach.allowAttachSelf=true</argLine>
 	</properties>
 
 	<developers>
@@ -231,7 +234,8 @@
 				</executions>
 				<configuration>
 					<generateGitPropertiesFile>true</generateGitPropertiesFile>
-					<generateGitPropertiesFilename>${project.build.outputDirectory}/juicefs-ver.properties</generateGitPropertiesFilename>
+					<generateGitPropertiesFilename>
+						${project.build.outputDirectory}/juicefs-ver.properties</generateGitPropertiesFilename>
 					<includeOnlyProperties>
 						<includeOnlyProperty>^git.build.(time|version)$</includeOnlyProperty>
 						<includeOnlyProperty>^git.commit.id.(abbrev|full)$</includeOnlyProperty>
