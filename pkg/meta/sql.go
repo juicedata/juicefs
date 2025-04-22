@@ -1186,14 +1186,15 @@ func (m *dbMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.newInodes, inodes)
 }
 
-func (m *dbMeta) doSyncUsedSpace(ctx Context) error {
+func (m *dbMeta) doSyncVolumeStat(ctx Context) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
-	var used int64
+	var used, inode int64
 	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
-		total, err := s.SumInt(&dirStats{}, "used_space")
-		used += total
+		total, err := s.SumsInt(&dirStats{}, "used_space", "used_inodes")
+		used += total[0]
+		inode += total[1]
 		return err
 	}); err != nil {
 		return err
@@ -1210,6 +1211,7 @@ func (m *dbMeta) doSyncUsedSpace(ctx Context) error {
 				continue
 			}
 			used += align4K(uint64(value))
+			inode += 1
 		}
 		return nil
 	}); err != nil {
@@ -1217,6 +1219,9 @@ func (m *dbMeta) doSyncUsedSpace(ctx Context) error {
 	}
 
 	return m.txn(func(s *xorm.Session) error {
+		if _, err := s.Update(&counter{Value: inode}, &counter{Name: totalInodes}); err != nil {
+			return fmt.Errorf("update totalInodes: %s", err)
+		}
 		_, err := s.Update(&counter{Value: used}, &counter{Name: usedSpace})
 		return err
 	})
