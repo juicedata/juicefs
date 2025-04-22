@@ -759,8 +759,7 @@ juicefs config META-URL --ranger-rest-url http://localhost:6080 --ranger-service
 
 ### 2. Dependencies
 
-Considering the convenience of use, JuiceFS packages all Ranger dependencies into the JuiceFS SDK. 
-If you encounter version conflicts with Apache Ranger, you may need to modify the version and recompile.
+Considering the convenience of use, JuiceFS packages all Ranger dependencies into the JuiceFS SDK. If you encounter version conflicts with Apache Ranger, you may need to modify the version and recompile.
 
 ### 3. Tips
 
