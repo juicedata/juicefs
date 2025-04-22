@@ -110,7 +110,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		var got int
 		for got < len(p) {
 			// aligned to current page
-			l := utils.Min(len(p)-got, s.blockSize(s.index(off))-off%s.store.conf.BlockSize)
+			l := min(len(p)-got, s.blockSize(s.index(off))-off%s.store.conf.BlockSize)
 			pp := page.Slice(got, l)
 			n, err = s.ReadAt(ctx, pp, off)
 			pp.Release()

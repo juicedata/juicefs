@@ -707,7 +707,7 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 	if conf.Chunk.BufferSize > 0 {
 		readAheadTotal = int(conf.Chunk.BufferSize / 10 * 8) // 80% of total buffer
 	}
-	readAheadMax := utils.Min(conf.Chunk.Readahead, readAheadTotal)
+	readAheadMax := min(conf.Chunk.Readahead, readAheadTotal)
 	r := &dataReader{
 		m:              m,
 		store:          store,
@@ -845,7 +845,7 @@ func (r *dataReader) Read(ctx context.Context, page *chunk.Page, slices []meta.S
 	size := len(buf)
 	for i := 0; i < len(slices); i++ {
 		if read < size && offset < pos+slices[i].Len {
-			toread := utils.Min(size-read, int(pos+slices[i].Len-offset))
+			toread := min(size-read, int(pos+slices[i].Len-offset))
 			go func(s *meta.Slice, p *chunk.Page, off, pos uint32) {
 				defer p.Release()
 				errs <- r.readSlice(ctx, s, p, int(off))
@@ -887,7 +887,7 @@ func (r *dataReader) readManySlices(ctx context.Context, page *chunk.Page, slice
 SLICES:
 	for i := 0; i < len(slices); i++ {
 		if read < size && offset < pos+slices[i].Len {
-			toread := utils.Min(size-read, int(pos+slices[i].Len-offset))
+			toread := min(size-read, int(pos+slices[i].Len-offset))
 		WAIT:
 			for {
 				select {

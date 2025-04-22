@@ -242,7 +242,7 @@ func (m *redisMeta) dumpDelFiles(ctx Context, opt *DumpOption, ch chan<- *dumped
 		return err
 	}
 
-	delFiles := make([]*pb.DelFile, 0, utils.Min(len(zs), redisBatchSize))
+	delFiles := make([]*pb.DelFile, 0, min(len(zs), redisBatchSize))
 	for i, z := range zs {
 		parts := strings.Split(z.Member.(string), ":")
 		if len(parts) != 2 {
@@ -256,7 +256,7 @@ func (m *redisMeta) dumpDelFiles(ctx Context, opt *DumpOption, ch chan<- *dumped
 			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Delfiles: delFiles}}); err != nil {
 				return err
 			}
-			delFiles = make([]*pb.DelFile, 0, utils.Min(len(zs)-i-1, redisBatchSize))
+			delFiles = make([]*pb.DelFile, 0, min(len(zs)-i-1, redisBatchSize))
 		}
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Delfiles: delFiles}})
@@ -435,7 +435,7 @@ func (m *redisMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedR
 		}
 	}
 
-	ss := make([]*pb.Stat, 0, utils.Min(len(stats), redisBatchSize))
+	ss := make([]*pb.Stat, 0, min(len(stats), redisBatchSize))
 	cnt := 0
 	for _, s := range stats {
 		cnt++
@@ -444,7 +444,7 @@ func (m *redisMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedR
 			if err := dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Dirstats: ss}}); err != nil {
 				return err
 			}
-			ss = make([]*pb.Stat, 0, utils.Min(len(stats)-cnt, redisBatchSize))
+			ss = make([]*pb.Stat, 0, min(len(stats)-cnt, redisBatchSize))
 		}
 	}
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Dirstats: ss}})
