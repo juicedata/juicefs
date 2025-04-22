@@ -129,8 +129,6 @@ func (c *CacheFiller) cacheFile(ctx meta.Context, action CacheAction, resp *Cach
 }
 
 func (c *CacheFiller) Cache(ctx meta.Context, action CacheAction, paths []string, threads int, resp *CacheResponse) {
-	logger.Infof("start to %s %d paths with %d workers", action, len(paths), threads)
-
 	if resp == nil {
 		resp = &CacheResponse{Locations: make(map[string]uint64)}
 	}
