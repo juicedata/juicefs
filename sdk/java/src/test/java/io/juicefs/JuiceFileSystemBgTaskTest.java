@@ -35,6 +35,7 @@ public class JuiceFileSystemBgTaskTest extends TestCase {
 
   public void testJuiceFileSystemBgTask() throws Exception {
     FileSystem.closeAll();
+    BgTaskUtil.reset();
     Configuration conf = new Configuration();
     conf.addResource(JuiceFileSystemTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
     conf.set(FS_TRASH_INTERVAL_KEY, "6");

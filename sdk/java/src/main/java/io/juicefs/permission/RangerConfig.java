@@ -30,6 +30,8 @@ public class RangerConfig {
 
   private long pollIntervalMs;
 
+  private String impl;
+
   public String getRangerRestUrl() {
     return rangerRestUrl;
   }
@@ -54,4 +56,11 @@ public class RangerConfig {
     this.pollIntervalMs = pollIntervalMs;
   }
 
+  public void setImpl(String impl) {
+    this.impl = impl;
+  }
+
+  public String getImpl() {
+    return impl;
+  }
 }

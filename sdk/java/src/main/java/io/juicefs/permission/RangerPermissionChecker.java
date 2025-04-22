@@ -68,6 +68,10 @@ public class RangerPermissionChecker {
     rangerPlugin = new RangerJfsPlugin(superGroupFileSystem, config.getServiceName(), config.getRangerRestUrl(), config.getPollIntervalMs());
     rangerPlugin.getConfig().set("ranger.plugin.hdfs.service.name", config.getServiceName());
     rangerPlugin.getConfig().set("ranger.plugin.hdfs.policy.rest.url", config.getRangerRestUrl());
+    // for test use
+    if (config.getImpl() != null) {
+      rangerPlugin.getConfig().set("ranger.plugin.hdfs.policy.source.impl", config.getImpl());
+    }
     rangerPlugin.getConfig().setIsFallbackSupported(true);
     rangerPlugin.init();
   }

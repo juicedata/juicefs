@@ -1817,7 +1817,9 @@ func jfs_ranger_cfg(cname *C.char, buf uintptr, count int32) int32 {
 	if format != nil {
 		url := format.RangerRestUrl
 		name := format.RangerService
-		cfg = fmt.Sprintf("%s?name=%s", url, name)
+		if url != "" && name != "" {
+			cfg = fmt.Sprintf("%s?name=%s", url, name)
+		}
 	}
 	copy(toBuf(buf, count), cfg)
 	return int32(len(cfg))
