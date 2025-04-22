@@ -3,7 +3,7 @@ title: Python SDK
 sidebar_position: 6
 ---
 
-JuiceFS 社区版从 v1.3.0 引入 Python SDK，支持以编程的方式使用 JuiceFS 进行文件的读写操作，特别适合无法使用 FUSE 挂载的容器化或虚拟化环境环境使用。Python SDK 目前处于实验阶段，可能会有一些不稳定的地方，欢迎大家反馈问题。
+JuiceFS 社区版从 v1.3.0 引入 Python SDK，适合无法使用 FUSE 挂载的容器化或虚拟化环境使用。并且 Python SDK 实现了 fsspec 的接口规范，可方便的对接 Ray 等框架。
 
 ## 编译
 

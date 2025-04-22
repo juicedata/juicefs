@@ -3,7 +3,7 @@ title: Python SDK
 sidebar_position: 6
 ---
 
-JuiceFS Community Edition introduced Python SDK since v1.3.0, supporting programmatic file reading and writing operations on JuiceFS. It's particularly suitable for containerized or virtualized environments where FUSE mounting cannot be used. The Python SDK is currently in experimental stage and may have some instabilities; we welcome your feedback on any issues.
+The JuiceFS Community Edition introduced the Python SDK in v1.3.0, making it suitable for containerized or virtualized environments where FUSE mounting is not available. The Python SDK also implements the `fsspec` interface, enabling easy integration with frameworks such as Ray.
 
 ## Compilation
 
