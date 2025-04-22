@@ -17,10 +17,19 @@
 package object
 
 import (
-	"golang.org/x/sys/unix"
 	"os"
+	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
+
+func getAtime(fi os.FileInfo) time.Time {
+	if sst, ok := fi.Sys().(*syscall.Stat_t); ok {
+		return time.Unix(sst.Atim.Unix())
+	}
+	return fi.ModTime()
+}
 
 func lchtimes(name string, atime time.Time, mtime time.Time) error {
 	var ts = make([]unix.Timespec, 2)

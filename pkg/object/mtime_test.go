@@ -18,7 +18,6 @@ package object
 
 import (
 	"os"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -41,7 +40,7 @@ func TestLChtimes(t *testing.T) {
 		t.Fatalf("lstat file failed: %s", err)
 	}
 
-	oldAtime := oldStat.Sys().(*syscall.Stat_t).Atimespec
+	oldAtime := getAtime(oldStat)
 	newMtime := oldStat.ModTime().Add(-time.Hour)
 	err = lchtimes(linkPath, time.Time{}, newMtime)
 	if err != nil {
@@ -54,7 +53,7 @@ func TestLChtimes(t *testing.T) {
 	if newStat.ModTime() != newMtime {
 		t.Fatalf("mtime change failed")
 	}
-	newAtime := newStat.Sys().(*syscall.Stat_t).Atimespec
+	newAtime := getAtime(newStat)
 	if newAtime != oldAtime {
 		t.Fatalf("atime change failed")
 	}
