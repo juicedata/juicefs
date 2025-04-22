@@ -8,9 +8,10 @@ slug: /metadata_dump_load
 
 - JuiceFS v1.0.0 开始支持元数据自动备份
 - JuiceFS v1.0.4 开始支持通过 `load` 命令恢复加密的元数据备份
+- JuiceFS v1.3.0 开始支持二进制格式的元数据备份和恢复
 :::
 
-JuiceFS 支持[多种元数据引擎](../reference/how_to_set_up_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 [`dump`](../reference/command_reference.mdx#dump) 命令允许将所有元数据以统一格式写入到 JSON 文件进行备份。同时，JuiceFS 也提供了 [`load`](../reference/command_reference.mdx#load) 命令，允许将备份恢复或迁移到任意元数据存储引擎。这个导出导入流程也可以用来将 JuiceFS 社区版文件系统迁移到企业版（参考[企业版文档](https://juicefs.com/docs/zh/cloud/administration/metadata_dump_load)），反之亦然。
+JuiceFS 支持[多种元数据引擎](../reference/how_to_set_up_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 [`dump`](../reference/command_reference.mdx#dump) 命令允许将所有元数据以统一格式写入到 JSON 或二进制文件进行备份。同时，JuiceFS 也提供了 [`load`](../reference/command_reference.mdx#load) 命令，允许将备份恢复或迁移到任意元数据存储引擎。这个导出导入流程也可以用来将 JuiceFS 社区版文件系统迁移到企业版（参考[企业版文档](https://juicefs.com/docs/zh/cloud/administration/metadata_dump_load)），反之亦然。
 
 ## 元数据备份 {#backup}
 
@@ -20,12 +21,25 @@ JuiceFS 支持[多种元数据引擎](../reference/how_to_set_up_metadata_engine
 * 对大规模文件系统，如果直接在线上环境进行导出，可能影响业务稳定性。
 :::
 
+## 文件格式
+
+JuiceFS 支持两种格式的元数据备份：JSON 格式和二进制格式。二进制格式在 v1.3.0 版本中引入，主要用于大规模文件系统的导入导出和迁移。二进制格式的备份体积更小，内存占用更低，并且支持并发导入导出。
+
+| 格式类型     | 结构特点         | 适用场景           | 体积大小         | 内存占用         | 并发支持 | 版本要求   |
+|------------|------------------|--------------------|------------------|------------------|----------|------------|
+| **JSON 格式**   | 完整目录树结构，易读 | 中小规模文件系统；问题定位 | 较大             | 较高             | 不支持   | 所有版本   |
+| **二进制格式**  | 扁平化结构，高效紧凑 | 大规模导入导出和迁移     | 约为 JSON 的 1/3 | < 1GiB（1 亿文件） | 支持     | v1.3.0+    |
+
 ### 手动备份 {#backup-manually}
 
 使用 JuiceFS 客户端提供的 `dump` 命令可以将元数据导出到 JSON 文件，例如：
 
 ```shell
+# 导出为 JSON 格式
 juicefs dump redis://192.168.1.6:6379/1 meta-dump.json
+
+# 导出为二进制格式
+juicefs dump redis://192.168.1.6:6379/1 meta-dump.json --binary
 ```
 
 上例中 `meta-dump.json` 是导出的 JSON 文件，你可以随意调整它的文件名和扩展名。特别地，如果文件的扩展名为 `.gz`（如 `meta-dump.json.gz`），将会使用 Gzip 算法对导出的数据进行压缩。
@@ -84,7 +98,11 @@ JuiceFS 会按照以下规则定期清理备份：
 使用 [`load`](../reference/command_reference.mdx#load) 命令可以将 `dump` 命令导出的元数据恢复到一个空数据库中，比如：
 
 ```shell
+# 从 JSON 文件导入
 juicefs load redis://192.168.1.6:6379/1 meta-dump.json
+
+# 从二进制备份导入
+juicefs load redis://192.168.1.6:6379/1 meta-dump.json --binary
 ```
 
 导入元数据时，JuiceFS 会重新计算文件系统的统计信息，包括空间使用量、inode 计数器等，最后在数据库中生成一份全局一致的元数据。如果你对 JuiceFS 的元数据设计有深入理解，还可以在恢复前对元数据备份文件进行修改，以此来进行调试。
@@ -141,3 +159,51 @@ juicefs dump redis://192.168.1.6:6379/1 meta-dump.json --subdir /path/in/juicefs
 ```
 
 另外，也可以使用 `jq` 等工具对导出文件进行分析。
+
+### 二进制备份内容分析与排查
+
+二进制备份还支持直接查看类型统计、分段（Segment）信息等：
+
+```shell
+# 查看备份元数据类型统计信息
+juicefs load meta-dump.json --binary --stat
+
+# 查看备份元数据 Segments 信息（获取 offset）
+juicefs load meta-dump.json --binary --stat --offset=-1
+
+# 查看备份元数据指定 Segment（指定 offset）信息
+juicefs load meta-dump.json --binary --stat --offset=123416309
+```
+
+示例输出：
+
+```
+Backup Version: 1
+-----------------------
+Name      | Num       
+-----------------------
+acl           | 0              
+chunk      | 1111179   
+counter    | 6              
+delFile     | 0              
+edge        | 1112124   
+format      | 1              
+…
+Segment: format
+Value: {
+"Name": "test2",
+"UUID": "15b92123-1395-40e4-a5aa-edb38918985a",
+"Storage": "file",
+"Bucket": "/home/hjf/.juicefs/local/",
+"BlockSize": 4096,
+"Compression": "none",
+"EncryptAlgo": "aes256gcm-rsa",
+"TrashDays": 1,
+"MetaVersion": 1,
+"MinClientVersion": "1.1.0-A",
+"DirStats": true,
+"EnableACL": false
+}
+```
+
+> 二进制备份为 PB 格式，也可自定义工具对备份进行校验和查看。

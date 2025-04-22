@@ -8,6 +8,7 @@ slug: /metadata_dump_load
 
 - JuiceFS v1.0.0 starts to support automatic metadata backup.
 - JuiceFS v1.0.4 starts to support importing an encrypted backup.
+- JuiceFS v1.3.0 starts to support binary format metadata backup and recovery.
 :::
 
 JuiceFS supports [multiple metadata engines](../reference/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.mdx#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.mdx#load) command to restore or migrate backups to any metadata storage engine. This dump / load process can also be used to migrate a community edition file system to enterprise edition (read [enterprise docs](https://juicefs.com/docs/cloud/administration/metadata_dump_load) for more), and vice versa.
@@ -20,15 +21,28 @@ JuiceFS supports [multiple metadata engines](../reference/how_to_set_up_metadata
 * For large scale file systems, dumping directly from online database may prove risks to system reliability, use with caution.
 :::
 
+## File format
+
+JuiceFS supports two formats for metadata backup: JSON and binary. The binary format was introduced in v1.3.0, mainly for large-scale import/export and migration scenarios. The binary format backup is smaller, uses less memory, and supports concurrent import/export.
+
+| Format Type      | Structure & Features         | Use Case                  | Size              | Memory Usage         | Concurrency | Version    |
+|------------------|-----------------------------|---------------------------|-------------------|---------------------|-------------|------------|
+| **JSON**         | Complete directory tree, human-readable | Small/medium FS; troubleshooting | Larger            | Higher              | Not supported | All versions |
+| **Binary**       | Flattened, efficient, compact           | Large-scale import/export/migration | ~1/3 of JSON      | < 1GiB (100M files) | Supported    | v1.3.0+     |
+
 ### Manual backup {#backup-manually}
 
 Using the `dump` command provided by JuiceFS client, you can export metadata to a JSON file, for example:
 
 ```shell
+# Export as JSON format
 juicefs dump redis://192.168.1.6:6379 meta-dump.json
+
+# Export as binary format
+juicefs dump redis://192.168.1.6:6379 meta-dump.json --binary
 ```
 
-The JSON file exported by using the `dump` command provided by the JuiceFS client can have any filename and extension that you prefer, as shown in the example above. In particular, if the file extension is `.gz` (e.g. `meta-dump.json.gz`), the exported data will be compressed using the Gzip algorithm.
+The JSON or binary file exported by using the `dump` command provided by the JuiceFS client can have any filename and extension that you prefer, as shown in the example above. In particular, if the file extension is `.gz` (e.g. `meta-dump.json.gz`), the exported data will be compressed using the Gzip algorithm.
 
 By default, the `dump` command starts from the root directory `/` and iterates recursively through all the files in the directory tree, and writes the metadata of each file to a JSON output. The object storage credentials will be omitted for data security, but it can be preserved using the `--keep-secret-key` option.
 
@@ -84,7 +98,11 @@ JuiceFS periodically cleans up backups according to the following rules.
 Use the [`load`](../reference/command_reference.mdx#load) command to restore the metadata dump file into an empty database, for example:
 
 ```shell
+# Import from JSON file
 juicefs load redis://192.168.1.6:6379 meta-dump.json
+
+# Import from binary backup
+juicefs load redis://192.168.1.6:6379 meta-dump.json --binary
 ```
 
 Once imported, JuiceFS will recalculate the file system statistics including space usage, inode counters, and eventually generates a globally consistent metadata in the database. If you have a deep understanding of the metadata design of JuiceFS, you can also modify the metadata backup file before restoring to debug.
@@ -141,3 +159,51 @@ juicefs dump redis://192.168.1.6:6379 meta-dump.json --subdir /path/in/juicefs
 ```
 
 Using tools like `jq` to analyze the exported file is also an option.
+
+### Binary backup content analysis and troubleshooting
+
+Binary backup also supports direct inspection of type statistics and segment information:
+
+```shell
+# View backup metadata type statistics
+juicefs load meta-dump.json --binary --stat
+
+# View backup metadata Segments info (get offset)
+juicefs load meta-dump.json --binary --stat --offset=-1
+
+# View backup metadata for a specific Segment (by offset)
+juicefs load meta-dump.json --binary --stat --offset=123416309
+```
+
+Example output:
+
+```
+Backup Version: 1
+-----------------------
+Name      | Num       
+-----------------------
+acl           | 0              
+chunk      | 1111179   
+counter    | 6              
+delFile     | 0              
+edge        | 1112124   
+format      | 1              
+…
+Segment: format
+Value: {
+"Name": "test2",
+"UUID": "15b92123-1395-40e4-a5aa-edb38918985a",
+"Storage": "file",
+"Bucket": "/home/hjf/.juicefs/local/",
+"BlockSize": 4096,
+"Compression": "none",
+"EncryptAlgo": "aes256gcm-rsa",
+"TrashDays": 1,
+"MetaVersion": 1,
+"MinClientVersion": "1.1.0-A",
+"DirStats": true,
+"EnableACL": false
+}
+```
+
+> The binary backup is in PB format, and you can also use custom tools to verify and inspect the backup.
