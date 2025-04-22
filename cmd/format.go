@@ -489,7 +489,7 @@ func format(c *cli.Context) error {
 		if format.EnableACL {
 			format.MinClientVersion = "1.2.0-A"
 		}
-		if format.RangerRestUrl != "" || format.RangerService == "" {
+		if format.RangerRestUrl != "" || format.RangerService != "" {
 			format.MinClientVersion = "1.3.0-A"
 		}
 
