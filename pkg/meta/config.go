@@ -96,8 +96,8 @@ type Format struct {
 	MaxClientVersion string `json:",omitempty"`
 	DirStats         bool   `json:",omitempty"`
 	EnableACL        bool
-	RangerRestUrl    string
-	RangerService    string
+	RangerRestUrl    string `json:",omitempty"`
+	RangerService    string `json:",omitempty"`
 }
 
 func (f *Format) update(old *Format, force bool) error {
