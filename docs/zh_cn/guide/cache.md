@@ -42,7 +42,7 @@ JuiceFS 客户端可以控制这些内核元数据缓存：文件属性（attrib
 --dir-entry-cache=1
 
 # 失败查询 (lookup 返回 ENOENT) 的缓存时间（秒），默认为 0，提升不存在文件或目录的 lookup 性能
---negative-dir-entry-cache=1
+--negative-entry-cache=1
 ```
 
 让以上元数据默认在内核中缓存 1 秒，能显著提高 `lookup` 和 `getattr` 的性能。

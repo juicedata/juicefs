@@ -1007,7 +1007,7 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 	conf.AttrTimeout = utils.Duration(c.String("attr-cache"))
 	conf.EntryTimeout = utils.Duration(c.String("entry-cache"))
 	conf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
-	conf.NegDirEntryTimeout = utils.Duration(c.String("negative-dir-entry-cache"))
+	conf.NegEntryTimeout = utils.Duration(c.String("negative-entry-cache"))
 	conf.ReaddirCache = c.Bool("readdir-cache")
 	if conf.ReaddirCache {
 		if conf.AttrTimeout == 0 {
