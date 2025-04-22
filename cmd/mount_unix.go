@@ -348,8 +348,8 @@ func fuseFlags() []cli.Flag {
 			Hidden: true,
 		},
 		&cli.StringFlag{
-			Name:  "max-write",
-			Usage: "maximum write size for fuse request",
+			Name:  "max-fuse-io",
+			Usage: "maximum size for fuse request",
 			Value: "128K",
 		},
 		&cli.StringFlag{
