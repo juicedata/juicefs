@@ -25,7 +25,7 @@
 |`--open-cache=0`|打开的文件的缓存过期时间，单位为秒，默认为 0，代表关闭该特性。|
 |`--open-cache-limit=value` <VersionAdd>1.1</VersionAdd>|允许缓存的最大文件个数 (软限制，0 代表不限制) (默认：10000)|
 |`--readdir-cache=false` <VersionAdd>1.3, only for mount</VersionAdd>|开启目录项缓存，默认为 false，代表不开启|
-|`--negative-dir-entry-cache=0` <VersionAdd>1.3, only for mount</VersionAdd>|失败 lookup 查询 (返回 ENOENT) 缓存过期时间，默认为 0，代表不缓存|
+|`--negative-entry-cache=0` <VersionAdd>1.3, only for mount</VersionAdd>|失败 lookup 查询 (返回 ENOENT) 缓存过期时间，默认为 0，代表不缓存|
 
 #### 数据存储参数 {#mount-data-storage-options}
 

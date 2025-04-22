@@ -87,9 +87,9 @@ func (fs *fileSystem) Lookup(cancel <-chan struct{}, header *fuse.InHeader, name
 	defer releaseContext(ctx)
 	entry, err := fs.v.Lookup(ctx, Ino(header.NodeId), name)
 	if err != 0 {
-		if fs.conf.NegDirEntryTimeout != 0 && err == syscall.ENOENT {
+		if fs.conf.NegEntryTimeout != 0 && err == syscall.ENOENT {
 			out.NodeId = 0 // zero nodeid is same as ENOENT, but with valid timeout
-			out.SetEntryTimeout(fs.conf.NegDirEntryTimeout)
+			out.SetEntryTimeout(fs.conf.NegEntryTimeout)
 			return 0
 		}
 		return fuse.Status(err)

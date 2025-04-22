@@ -129,7 +129,7 @@ type Config struct {
 	Version              string
 	AttrTimeout          time.Duration
 	DirEntryTimeout      time.Duration
-	NegDirEntryTimeout   time.Duration
+	NegEntryTimeout      time.Duration
 	EntryTimeout         time.Duration
 	ReaddirCache         bool
 	BackupMeta           time.Duration

@@ -47,7 +47,7 @@ measure_lookup_time() {
 test_negative_dir(){
     prepare_test
     ./juicefs format $META_URL myjfs
-    ./juicefs mount -d $META_URL /jfs --negative-dir-entry-cache 5
+    ./juicefs mount -d $META_URL /jfs --negative-entry-cache 5
     TEST_DIR="/jfs/test_dir_$$"
     mkdir -p "${TEST_DIR}"
 
