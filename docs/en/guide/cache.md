@@ -40,6 +40,9 @@ JuiceFS Client controls these kinds of metadata as kernel cache: attribute (file
 
 # Directory entry cache TTL in seconds, default to 1, improves lookup performance
 --dir-entry-cache=1
+
+# Negative lookup (return ENOENT) cache TTL in seconds，default to 0，improves lookup performance for non-existent files  or directories
+--negative-dir-entry-cache=1
 ```
 
 Caching these metadata in kernel for 1 second really speeds up `lookup` and `getattr` calls.
@@ -80,7 +83,7 @@ The Read/Write buffer is a memory space allocated to the JuiceFS Client, size co
 To accurately describe the internal mechanism of JuiceFS Client, we use the term "readahead" and "prefetch" to refer to the two different behaviors that both download data ahead of time to increase read performance.
 :::
 
-When a file is sequentially read, JuiceFS Client performs what's called "readahead", which involves downloading data ahead of the current read offset. In fact, the similar behavior is already being built into the [Linux Kernel](https://www.halolinux.us/kernel-architecture/page-cache-readahead.html): when reading files, kernel dynamically settles on a readahead window based on the actual read behavior, and load file into the page cache. With JuiceFS being a network file system, the classic kernel readahead mechanism is simply not enough to bring the desired performance increase, that's why JuiceFS performs its own readahead on top of kernel readahead, using algorithm to "guess" the size of the readahead window (more aggressive than kernel's), and then download the object storage data in advance.
+When a file is sequentially read, JuiceFS Client performs what's called "readahead", which involves downloading data ahead of the current read offset. In fact, the similar behavior is already being built into the [Linux Kernel](https://www.halolinux.us/kernel-architecture/page-cache-readahead.html): when reading files, kernel dynamically settles on a readahead window based on the actual read behavior, and load file into the page cache. With JuiceFS being a network file system, the classic kernel readahead mechanism is simply not enough to bring the desired performance increase, that's why JuiceFS performs its own readahead on top of kernel readahead, using algorithm to "guess" the size of the readahead window (more aggressive than kernel's), and then download the object storage data in advance. The maximum readahead window size can be controlled by the `--max-readahead` parameter. In random read scenarios, you may consider setting it to 0 to disable readahead.
 
 ![readahead](../images/buffer-readahead.svg)
 
@@ -112,7 +115,7 @@ Buffer is crucial to both read & write, as is already introduced in above sectio
 
 Before making any adjustments, we recommend running a [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) command to check the current buffer usage, and read below content to guide your tuning.
 
-If you wish to improve sequential read speed, use a larger `--buffer-size` to expand the readahead window, all data blocks within the window will be concurrently fetched from object storage. Also keep in mind that, reading a single large file will never consume the full buffer, the space reserved for readahead is between 1/4 to 1/2 of the total buffer size. So if you noticed that `juicefs stats` indicates `buf` is already half full, while performing sequential read on a single large file, then it's time to increase `--buffer-size` to set a larger readahead window.
+If you wish to improve sequential read speed, use larger `--max-readahead` and `--buffer-size` to expand the readahead window, all data blocks within the window will be concurrently fetched from object storage. Also keep in mind that, reading a single large file will never consume the full buffer, the space reserved for readahead is between 1/4 to 1/2 of the total buffer size. So if you noticed that `juicefs stats` indicates `buf` is already half full, while performing sequential read on a single large file, then it's time to increase `--buffer-size` to set a larger readahead window.
 
 If you wish to improve write speed, and have already increased [`--max-uploads`](../reference/command_reference.mdx#mount-data-storage-options) for more upload concurrency, with no noticeable increase in upload traffic, consider also increasing `--buffer-size` so that concurrent threads may easier allocate memory for data uploads. This also works in the opposite direction: if tuning up `--buffer-size` didn't bring out an increase in upload traffic, you should probably increase `--max-uploads` as well.
 
