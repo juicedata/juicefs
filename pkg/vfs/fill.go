@@ -26,7 +26,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/chunk"
 
 	"github.com/juicedata/juicefs/pkg/meta"
