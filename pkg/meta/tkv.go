@@ -35,6 +35,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/pkg/errors"
 
@@ -2759,16 +2760,17 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	return quotas, nil
 }
 
-func (m *kvMeta) doSyncUsedSpace(ctx Context) error {
+func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
-	var used int64
+	var used, inodes int64
 	if err := m.client.txn(ctx, func(tx *kvTxn) error {
 		prefix := m.fmtKey("U")
 		tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
 			stat := m.parseDirStat(v)
 			used += stat.space
+			inodes += stat.inodes
 			return true
 		})
 		return nil
@@ -2794,8 +2796,14 @@ func (m *kvMeta) doSyncUsedSpace(ctx Context) error {
 			continue
 		}
 		used += align4K(attr.Length)
+		inodes += 1
 	}
 
+	logger.Debugf("Used space: %s, inodes: %d", humanize.IBytes(uint64(used)), inodes)
+	err = m.setValue(m.counterKey(totalInodes), packCounter(inodes))
+	if err != nil {
+		return fmt.Errorf("set total inodes: %w", err)
+	}
 	return m.setValue(m.counterKey(usedSpace), packCounter(used))
 }
 
