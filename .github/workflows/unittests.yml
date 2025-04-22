@@ -49,6 +49,9 @@ jobs:
       SFTP_HOST: localhost:2222:/home/testUser1/upload/
       SFTP_USER: testUser1
       SFTP_PASS: password
+      CIFS_ADDR: localhost:4445/Data
+      CIFS_USER: samba
+      CIFS_PASSWORD: secret
       WEBDAV_TEST_BUCKET: 127.0.0.1:9007
       TIKV_ADDR: 127.0.0.1
       REDIS_ADDR: redis://127.0.0.1:6379/13
@@ -88,17 +91,17 @@ jobs:
           echo "/srv/nfs 127.0.0.1(rw,sync,insecure)" | sudo tee -a /etc/exports
           sudo systemctl start nfs-kernel-server.service
           sudo exportfs -arv
-        
+
       - if: matrix.test == 'test.meta.non-core'
         name: Install redis-cluster
         uses: vishnudxb/redis-cluster@1.0.5
         with:
-            master1-port: 7000
-            master2-port: 7001
-            master3-port: 7002
-            slave1-port: 7003
-            slave2-port: 7004
-            slave3-port: 7005
+          master1-port: 7000
+          master2-port: 7001
+          master3-port: 7002
+          slave1-port: 7003
+          slave2-port: 7004
+          slave3-port: 7005
 
       - name: Prepare Database
         run: |
@@ -115,7 +118,7 @@ jobs:
         continue-on-error: true
         uses: ./.github/actions/upload-coverage
         with:
-          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }} 
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
 
       - name: Code Coverage
         uses: codecov/codecov-action@v3
@@ -141,7 +144,7 @@ jobs:
         run: exit 1
 
       - name: Send Slack Notification
-        if: failure() && github.event_name != 'workflow_dispatch' 
+        if: failure() && github.event_name != 'workflow_dispatch'
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"

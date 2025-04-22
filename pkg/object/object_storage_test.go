@@ -1077,6 +1077,18 @@ func TestDragonfly(t *testing.T) { //skip mutate
 	testStorage(t, dragonfly)
 }
 
+func TestCifs(t *testing.T) { //skip mutate
+	if os.Getenv("CIFS_ADDR") == "" {
+		fmt.Println("skip CIFS test")
+		t.SkipNow()
+	}
+	cifs, err := newCifs(os.Getenv("CIFS_ADDR"), os.Getenv("CIFS_USER"), os.Getenv("CIFS_PASSWORD"), "")
+	if err != nil {
+		t.Fatalf("create: %s", err)
+	}
+	testStorage(t, cifs)
+}
+
 // func TestBunny(t *testing.T) { //skip mutate
 // 	if os.Getenv("BUNNY_ENDPOINT") == "" {
 // 		t.SkipNow()
