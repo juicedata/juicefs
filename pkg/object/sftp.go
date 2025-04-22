@@ -270,7 +270,9 @@ func (f *sftpStore) Chtimes(key string, mtime time.Time) error {
 		return err
 	}
 	defer f.putSftpConnection(&c, err)
-	return c.sftpClient.Chtimes(f.path(key), time.Time{}, mtime)
+	// fixme: 1. The Chtimes of sftp always follows link 2. Only pass the mtime field to avoid updating atime
+	// ref: https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-13#section-8.6
+	return c.sftpClient.Chtimes(f.path(key), mtime, mtime)
 }
 
 func (f *sftpStore) Chmod(key string, mode os.FileMode) error {
