@@ -145,6 +145,7 @@ func (m *fsMachine) Init(t *rapid.T) {
 	if err := m.meta.Init(testFormat(), true); err != nil {
 		t.Fatalf("initialize failed: %s", err)
 	}
+	m.meta.getBase().sessCtx = Background()
 	m.meta.getBase().sid = m.sid
 	registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
 	registerer := prometheus.WrapRegistererWithPrefix("juicefs_",
@@ -175,6 +176,7 @@ func (m *fsMachine) genName(t *rapid.T) string {
 }
 
 func (m *fsMachine) Cleanup() {
+	m.meta.CloseSession()
 	m.meta.Reset()
 	m.meta.Shutdown()
 }

@@ -68,13 +68,6 @@ func (tx *etcdTxn) get(key []byte) []byte {
 	panic("unreachable")
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
 	if len(keys) > 128 {
 		var rs = make([][]byte, 0, len(keys))
@@ -245,7 +238,7 @@ func (c *etcdClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (
 
 var conflicted = errors.New("conflicted transaction")
 
-func (c *etcdClient) scan(prefix []byte, handler func(key []byte, value []byte)) error {
+func (c *etcdClient) scan(prefix []byte, handler func(key []byte, value []byte) bool) error {
 	var start = prefix
 	var end = string(nextKey(prefix))
 	resp, err := c.client.Get(context.Background(), "anything")
@@ -271,7 +264,9 @@ func (c *etcdClient) scan(prefix []byte, handler func(key []byte, value []byte))
 			break
 		}
 		for _, kv := range resp.Kvs {
-			handler(kv.Key, kv.Value)
+			if !handler(kv.Key, kv.Value) {
+				return nil
+			}
 		}
 		start = resp.Kvs[len(resp.Kvs)-1].Key
 		following = true

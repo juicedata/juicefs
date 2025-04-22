@@ -123,7 +123,7 @@ type engine interface {
 	// @trySync: try sync dir stat if broken or not existed
 	doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, syscall.Errno)
 	doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno)
-	doSyncUsedSpace(ctx Context) error
+	doSyncVolumeStat(ctx Context) error
 
 	scanTrashSlices(Context, trashSliceScan) error
 	scanPendingSlices(Context, pendingSliceScan) error
@@ -538,6 +538,8 @@ func (m *baseMeta) NewSession(record bool) error {
 }
 
 func (m *baseMeta) startDeleteSliceTasks() {
+	m.Lock()
+	defer m.Unlock()
 	if m.conf.MaxDeletes <= 0 || m.dslices != nil {
 		return
 	}
@@ -545,31 +547,35 @@ func (m *baseMeta) startDeleteSliceTasks() {
 	m.dSliceWG.Add(m.conf.MaxDeletes)
 	m.dslices = make(chan Slice, m.conf.MaxDeletes*10240)
 	for i := 0; i < m.conf.MaxDeletes; i++ {
-		go func() {
+		go func(dslices chan Slice) {
 			defer m.sessWG.Done()
 			defer m.dSliceWG.Done()
 			for {
 				select {
 				case <-m.sessCtx.Done():
 					return
-				case s, ok := <-m.dslices:
+				case s, ok := <-dslices:
 					if !ok {
 						return
 					}
 					m.deleteSlice_(s.Id, s.Size)
 				}
 			}
-		}()
+		}(m.dslices)
 	}
 }
 
 func (m *baseMeta) stopDeleteSliceTasks() {
+	m.Lock()
 	if m.conf.MaxDeletes <= 0 || m.dslices == nil {
+		m.Unlock()
 		return
 	}
 	close(m.dslices)
-	m.dSliceWG.Wait()
 	m.dslices = nil
+	m.Unlock()
+
+	m.dSliceWG.Wait()
 }
 
 func (m *baseMeta) expireTime() int64 {
@@ -2110,7 +2116,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 	}
 	wg.Wait()
 	if fpath == "/" && repair && recursive && statAll {
-		if err := m.syncUsedSpace(ctx); err != nil {
+		if err := m.syncVolumeStat(ctx); err != nil {
 			logger.Errorf("Sync used space: %s", err)
 			hasError = true
 		}
@@ -2221,6 +2227,10 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	// avoid too many or duplicated compaction
 	k := uint64(inode) + (uint64(indx) << 40)
 	m.Lock()
+	if m.sessCtx != nil && m.sessCtx.Canceled() {
+		m.Unlock()
+		return
+	}
 	if once || force {
 		for m.compacting[k] {
 			m.Unlock()
@@ -2401,11 +2411,14 @@ func (m *baseMeta) deleteSlice(id uint64, size uint32) {
 	if id == 0 || m.conf.MaxDeletes == 0 {
 		return
 	}
-	if m.dslices != nil {
+	m.Lock()
+	dslices := m.dslices
+	m.Unlock()
+	if dslices != nil {
 		select {
 		case <-m.sessCtx.Done():
 			return
-		case m.dslices <- Slice{Id: id, Size: size}:
+		case dslices <- Slice{Id: id, Size: size}:
 		}
 	} else {
 		m.deleteSlice_(id, size)

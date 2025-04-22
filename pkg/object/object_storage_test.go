@@ -24,9 +24,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
-	"github.com/baidubce/bce-sdk-go/services/bos/api"
-	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 	"io"
 	"math"
 	"os"
@@ -37,6 +34,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
+	"github.com/baidubce/bce-sdk-go/services/bos/api"
+	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 
 	"github.com/colinmarc/hdfs/v2/hadoopconf"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -120,6 +121,10 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("delete failed: %s", err)
 		}
 	}()
+	all, err := listAll(s, "", "", 10000, true)
+	for _, object := range all {
+		_ = s.Delete(object.Key())
+	}
 
 	var scPut string
 	key := "测试编码文件" + `{"name":"juicefs"}` + string('\u001F') + "%uFF081%uFF09.jpg"
@@ -137,7 +142,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 	_ = s.Delete(key)
 
-	_, err := s.Get("not_exists", 0, -1)
+	_, err = s.Get("not_exists", 0, -1)
 	if err == nil {
 		t.Fatalf("Get should failed: %s", err)
 	}
@@ -751,15 +756,6 @@ func TestAzure(t *testing.T) { //skip mutate
 	testStorage(t, abs)
 }
 
-func TestJSS(t *testing.T) { //skip mutate
-	if os.Getenv("JSS_ACCESS_KEY") == "" {
-		t.SkipNow()
-	}
-	jss, _ := newJSS(os.Getenv("JSS_ENDPOINT"),
-		os.Getenv("JSS_ACCESS_KEY"), os.Getenv("JSS_SECRET_KEY"), "")
-	testStorage(t, jss)
-}
-
 func TestB2(t *testing.T) { //skip mutate
 	if os.Getenv("B2_ACCOUNT_ID") == "" {
 		t.SkipNow()
@@ -1048,14 +1044,6 @@ func TestWASABI(t *testing.T) { //skip mutate
 		t.SkipNow()
 	}
 	s, _ := newWasabi(os.Getenv("WASABI_ENDPOINT"), os.Getenv("WASABI_ACCESS_KEY"), os.Getenv("WASABI_SECRET_KEY"), "")
-	testStorage(t, s)
-}
-
-func TestSCS(t *testing.T) { //skip mutate
-	if os.Getenv("SCS_ENDPOINT") == "" {
-		t.SkipNow()
-	}
-	s, _ := newSCS(os.Getenv("SCS_ENDPOINT"), os.Getenv("SCS_ACCESS_KEY"), os.Getenv("SCS_SECRET_KEY"), "")
 	testStorage(t, s)
 }
 

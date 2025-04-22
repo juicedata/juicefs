@@ -57,8 +57,9 @@ type juice struct {
 	handlers map[uint64]meta.Ino
 	badfd    map[uint64]uint64
 
-	asRoot     bool
-	delayClose int
+	asRoot         bool
+	delayClose     int
+	enabledGetPath bool
 }
 
 // Init is called when the file system is created.
@@ -176,7 +177,7 @@ func (j *juice) Mknod(p string, mode uint32, dev uint64) (e int) {
 		return
 	}
 	_, errno := j.vfs.Mknod(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(dev))
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -218,7 +219,7 @@ func (j *juice) Symlink(target string, newpath string) (e int) {
 		return
 	}
 	_, errno := j.vfs.Symlink(ctx, target, parent.Inode(), path.Base(newpath))
-	e = -int(errno)
+	e = errorconv(errno)
 	return
 }
 
@@ -337,7 +338,7 @@ func (j *juice) OpenEx(p string, fi *fuse.FileInfo_t) (e int) {
 			e = -fuse.ENOENT
 			return
 		}
-	} else if filename := path.Base(p); vfs.IsSpecialName(filename) {
+	} else if filename := path.Base(p); vfs.IsSpecialName(filename) && path.Dir(p) == "/" {
 		ino, _ = vfs.GetInternalNodeByName(filename)
 		if ino == 0 {
 			e = -fuse.ENOENT
@@ -484,7 +485,7 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 		if strings.HasSuffix(p, "/.control") {
 			e = j.getAttrForSpFile(ctx, p, stat, fh)
 			return
-		} else if vfs.IsSpecialName(path.Base(p)) {
+		} else if vfs.IsSpecialName(path.Base(p)) && path.Dir(p) == "/" {
 			e = j.getAttrForSpFile(ctx, p, stat, fh)
 			return
 		}
@@ -501,7 +502,7 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 	}
 	entry, errrno := j.vfs.GetAttr(ctx, ino, 0)
 	if errrno != 0 {
-		e = -int(errrno)
+		e = errorconv(errrno)
 		return
 	}
 	j.vfs.UpdateLength(entry.Inode, entry.Attr)
@@ -518,7 +519,7 @@ func (j *juice) Truncate(path string, size int64, fh uint64) (e int) {
 		e = -fuse.EBADF
 		return
 	}
-	e = -int(j.vfs.Truncate(ctx, ino, size, 0, nil))
+	e = errorconv(j.vfs.Truncate(ctx, ino, size, 0, nil))
 	return
 }
 
@@ -721,13 +722,26 @@ func (j *juice) Chflags(path string, flags uint32) (e int) {
 	ino := fi.Inode()
 	err = j.vfs.ChFlags(ctx, ino, flagSet)
 	if err != 0 {
-		e = -int(err)
+		e = errorconv(err)
 	}
 
 	return
 }
 
 func (j *juice) Getpath(p string, fh uint64) (e int, ret string) {
+	if !j.enabledGetPath {
+		ret = p
+		return
+	}
+
+	if strings.HasSuffix(p, "/.control") {
+		ret = p
+		return
+	} else if vfs.IsSpecialName(path.Base(p)) && path.Dir(p) == "/" {
+		ret = p
+		return
+	}
+
 	defer trace(p, fh)(&e, &ret)
 	ino := j.h2i(&fh)
 	ctx := j.newContext()
@@ -766,11 +780,13 @@ func (j *juice) Getpath(p string, fh uint64) (e int, ret string) {
 	return
 }
 
-func Serve(v *vfs.VFS, fuseOpt string, fileCacheTimeoutSec float64, dirCacheTimeoutSec float64, asRoot bool, delayCloseSec int, showDotFiles bool, threadsCount int, caseSensitive bool) {
+func Serve(v *vfs.VFS, fuseOpt string, fileCacheTimeoutSec float64, dirCacheTimeoutSec float64,
+	asRoot bool, delayCloseSec int, showDotFiles bool, threadsCount int, caseSensitive bool, enabledGetPath bool) {
 	var jfs juice
 	conf := v.Conf
 	jfs.conf = conf
 	jfs.vfs = v
+	jfs.enabledGetPath = enabledGetPath
 	var err error
 	jfs.fs, err = fs.NewFileSystem(conf, v.Meta, v.Store)
 	if err != nil {

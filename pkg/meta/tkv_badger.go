@@ -170,7 +170,7 @@ func (c *badgerClient) txn(ctx context.Context, f func(*kvTxn) error, retry int)
 	return tx.t.Commit()
 }
 
-func (c *badgerClient) scan(prefix []byte, handler func(key []byte, value []byte)) error {
+func (c *badgerClient) scan(prefix []byte, handler func(key []byte, value []byte) bool) error {
 	tx := c.client.NewTransaction(false)
 	defer tx.Discard()
 	it := tx.NewIterator(badger.IteratorOptions{
@@ -185,7 +185,9 @@ func (c *badgerClient) scan(prefix []byte, handler func(key []byte, value []byte
 		if err != nil {
 			return err
 		}
-		handler(it.Item().Key(), value)
+		if !handler(it.Item().Key(), value) {
+			break
+		}
 	}
 	return nil
 }

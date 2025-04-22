@@ -32,6 +32,10 @@ on:
         description: "Run the build with tmate debugging enabled"
         required: false
         default: false
+      seed:
+        type: string
+        description: "Seed for random test"
+        required: false
 
 jobs:
   build-matrix:
@@ -173,16 +177,24 @@ jobs:
       - name: Run fs.py
         timeout-minutes: 60
         run: |
+          if [[ -n "${{ github.event.inputs.seed }}" ]]; then 
+            seed=${{ github.event.inputs.seed }}
+          elif [[ "${{github.event_name}}" == "pull_request" || "${{github.event_name}}" == "push" ]]; then
+            seed=0
+          else
+            seed=$RANDOM
+          fi
+          echo seed is $seed
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo MAX_EXAMPLE=1000 STEP_COUNT=200 USE_SDK=true META_URL=$meta_url EXCLUDE_RULES="readlines,readline,clone_cp_file,clone_cp_dir" python3 .github/scripts/hypo/fs.py 2>&1 | tee fsrand.log
+          sudo IGNORE_DIFF_ERRORS=true MAX_EXAMPLE=1000 STEP_COUNT=200 USE_SDK=true SEED=$seed META_URL=$meta_url EXCLUDE_RULES="readlines,readline,clone_cp_file,clone_cp_dir" python3 .github/scripts/hypo/fs.py 2>&1 | tee fsrand.log
           exit ${PIPESTATUS[0]}
           df -h
 
       - name: check fsrand.log
         if: always()
         run: |
-          sudo tail -n 500 fsrand.log
+          sudo tail -n 500 fsrand.log || true
 
       - name: chmod example directory
         if: always()

@@ -162,7 +162,12 @@ func dataCacheFlags() []cli.Flag {
 		}
 		fallthrough
 	case "darwin":
-		fallthrough
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			logger.Warn(err)
+			homeDir = defaultCacheDir
+		}
+		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
 	case "windows":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
@@ -355,8 +360,8 @@ func metaCacheFlags(defaultEntryCache float64) []cli.Flag {
 			Usage: "dir entry cache timeout",
 		},
 		&cli.StringFlag{
-			Name:  "negative-dir-entry-cache",
-			Usage: "cache timeout for negative dir entry lookups",
+			Name:  "negative-entry-cache",
+			Usage: "cache timeout for negative entry lookups",
 		},
 		&cli.BoolFlag{
 			Name:  "readdir-cache",

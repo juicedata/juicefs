@@ -194,7 +194,7 @@ get_meta_url(){
     if [ "$meta" == "postgres" ]; then
         meta_url="postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable"
     elif [ "$meta" == "mysql" ]; then
-        meta_url="mysql://root:root@(127.0.0.1)/test?max_open_conns=120"
+        meta_url="mysql://root:root@(127.0.0.1)/test?max_open_conns=30"
     elif [ "$meta" == "redis" ]; then
         meta_url="redis://127.0.0.1:6379/1"
     elif [ "$meta" == "sqlite3" ]; then
@@ -204,7 +204,7 @@ get_meta_url(){
     elif [ "$meta" == "badger" ]; then
         meta_url="badger:///tmp/test"
     elif [ "$meta" == "mariadb" ]; then
-        meta_url="mysql://root:root@(127.0.0.1)/test?max_open_conns=120"
+        meta_url="mysql://root:root@(127.0.0.1)/test?max_open_conns=30"
     elif [ "$meta" == "tidb" ]; then
         meta_url="mysql://root:@(127.0.0.1:4000)/test"
     elif [ "$meta" == "etcd" ]; then
@@ -227,7 +227,7 @@ get_meta_url2(){
     if [ "$meta" == "postgres" ]; then
         meta_url="postgres://postgres:postgres@127.0.0.1:5432/test2?sslmode=disable"
     elif [ "$meta" == "mysql" ]; then
-        meta_url="mysql://root:root@(127.0.0.1)/test2?max_open_conns=120"
+        meta_url="mysql://root:root@(127.0.0.1)/test2?max_open_conns=30"
     elif [ "$meta" == "redis" ]; then
         meta_url="redis://127.0.0.1:6379/2"
     elif [ "$meta" == "sqlite3" ]; then
@@ -237,7 +237,7 @@ get_meta_url2(){
     elif [ "$meta" == "badger" ]; then
         meta_url="badger:///tmp/test2"
     elif [ "$meta" == "mariadb" ]; then
-        meta_url="mysql://root:root@(127.0.0.1)/test2?max_open_conns=120"
+        meta_url="mysql://root:root@(127.0.0.1)/test2?max_open_conns=30"
     elif [ "$meta" == "tidb" ]; then
         meta_url="mysql://root:@(127.0.0.1:4000)/test2"
     elif [ "$meta" == "etcd" ]; then

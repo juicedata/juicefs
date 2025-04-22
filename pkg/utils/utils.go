@@ -33,21 +33,6 @@ import (
 	"github.com/mattn/go-isatty"
 )
 
-// Min returns min of 2 int
-func Min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func Min64(a, b uint64) uint64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // Exists checks if the file/folder in given path exists
 func Exists(path string) bool {
 	_, err := os.Stat(path)

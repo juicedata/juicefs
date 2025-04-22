@@ -21,13 +21,12 @@ package object
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"net/url"
 	"strings"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 type oos struct {
@@ -78,24 +77,22 @@ func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
 	region := hostParts[1][4:]
-	endpoint = uri.Host[len(bucket)+1:]
+	endpoint = uri.Scheme + "://" + uri.Host[len(bucket)+1:]
 	forcePathStyle := !strings.Contains(strings.ToLower(endpoint), "xstore.ctyun.cn")
 
-	awsConfig := &aws.Config{
-		Region:           &region,
-		Endpoint:         &endpoint,
-		DisableSSL:       aws.Bool(!ssl),
-		S3ForcePathStyle: aws.Bool(forcePathStyle),
-		HTTPClient:       httpClient,
-		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
-	}
-
-	ses, err := session.NewSession(awsConfig)
+	awsCfg, err := config.LoadDefaultConfig(ctx,
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
 	if err != nil {
-		return nil, fmt.Errorf("OOS session: %s", err)
+		return nil, fmt.Errorf("failed to load config: %s", err)
 	}
-	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &oos{s3client{bucket: bucket, s3: s3.New(ses), ses: ses}}, nil
+	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
+		options.EndpointOptions.DisableHTTPS = !ssl
+		options.Region = region
+		options.UsePathStyle = forcePathStyle
+		options.HTTPClient = httpClient
+		options.BaseEndpoint = aws.String(endpoint)
+	})
+	return &oos{s3client{bucket: bucket, s3: client, region: region}}, nil
 }
 
 func init() {

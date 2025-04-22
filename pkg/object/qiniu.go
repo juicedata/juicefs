@@ -21,6 +21,10 @@ package object
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"io"
 	"net/http"
 	"net/url"
@@ -29,10 +33,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/qiniu/go-sdk/v7/auth"
 	"github.com/qiniu/go-sdk/v7/storage"
 )
@@ -105,15 +105,10 @@ func (q *qiniu) Head(key string) (Object, error) {
 }
 
 func (q *qiniu) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	// S3 SDK cannot get objects with prefix "/" in the key
 	if strings.HasPrefix(key, "/") && os.Getenv("QINIU_DOMAIN") != "" {
 		return q.download(key, off, limit)
 	}
-	for strings.HasPrefix(key, "/") {
-		key = key[1:]
-	}
-	// S3ForcePathStyle = true
-	return q.s3client.Get("/"+key, off, limit, getters...)
+	return q.s3client.Get(key, off, limit, getters...)
 }
 
 func (q *qiniu) Put(key string, in io.Reader, getters ...AttrGetter) error {
@@ -204,21 +199,21 @@ func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 	} else {
 		region = endpoint[:strings.LastIndex(endpoint, "-")]
 	}
-	awsConfig := &aws.Config{
-		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
-		Endpoint:         &endpoint,
-		Region:           &region,
-		DisableSSL:       aws.Bool(uri.Scheme == "http"),
-		S3ForcePathStyle: aws.Bool(true),
-		HTTPClient:       httpClient,
-	}
-	ses, err := session.NewSession(awsConfig)
-	if err != nil {
-		return nil, fmt.Errorf("aws session: %s", err)
-	}
-	ses.Handlers.Build.PushFront(disableSha256Func)
-	s3client := s3client{bucket: bucket, s3: s3.New(ses), ses: ses}
 
+	awsCfg, err := config.LoadDefaultConfig(ctx,
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, token)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %s", err)
+	}
+	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
+		options.BaseEndpoint = aws.String(uri.Scheme + "://" + endpoint)
+		options.Region = region
+		options.EndpointOptions.DisableHTTPS = uri.Scheme == "http"
+		options.UsePathStyle = true
+		options.HTTPClient = httpClient
+
+	})
+	s3c := s3client{bucket: bucket, s3: client, region: region}
 	cfg := storage.Config{
 		UseHTTPS: uri.Scheme == "https",
 	}
@@ -240,7 +235,7 @@ func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 	cfg.Zone = zone
 	cred := auth.New(accessKey, secretKey)
 	bucketManager := storage.NewBucketManager(cred, &cfg)
-	return &qiniu{s3client, bucketManager, cred, &cfg, ""}, nil
+	return &qiniu{s3c, bucketManager, cred, &cfg, ""}, nil
 }
 
 func init() {

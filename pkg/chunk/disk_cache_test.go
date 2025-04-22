@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +28,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
+
+	. "github.com/bytedance/mockey"
+	. "github.com/smartystreets/goconvey/convey"
 )
 
 // Copy from https://github.com/prometheus/client_golang/blob/v1.14.0/prometheus/testutil/testutil.go
@@ -336,6 +340,26 @@ func TestCacheManager(t *testing.T) {
 	s1 := m.getStore(k1)
 	require.NotNil(t, s1)
 
+	PatchConvey("test getDiskUsage", t, func() {
+		Mock(getDiskUsage).To(func(path string) (uint64, uint64, uint64, uint64) {
+			time.Sleep(time.Second * 10)
+			return 1, 1, 1, 1
+		}).Build()
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			s1.Lock()
+			wg.Done()
+			s1.cleanupFull()
+			s1.Unlock()
+		}()
+
+		wg.Wait()
+		start := time.Now()
+		s1.load(k1)
+		So(time.Since(start), ShouldBeLessThan, time.Second*3)
+	})
+
 	m.Lock()
 	shutdownStore(s1)
 	m.Unlock()
@@ -381,5 +405,25 @@ func TestAtimeNotLost(t *testing.T) {
 	atimeAfterScan := s.keys[s.getCacheKey(key)].atime
 	if atimeAfterScan != atimeMem {
 		t.Fatalf("CacheStore key %s atime lost after scan, before: %d, after: %d", key, atimeMem, atimeAfterScan)
+	}
+}
+func TestSetlimitByFreeRatio(t *testing.T) {
+	dir := t.TempDir()
+	cache := newCacheStore(nil, dir, 1<<30, 1000, 1, &defaultConf, nil)
+
+	usage := DiskFreeRatio{
+		spaceCap: 1 << 30,
+		inodeCap: 1000,
+	}
+	freeRatio := float32(0.2)
+	cache.setlimitByFreeRatio(usage, 0.2)
+
+	expectedSizeLimit := int64((1 - freeRatio + 0.05) * float32(usage.spaceCap))
+	if cache.capacity > expectedSizeLimit {
+		t.Fatalf("Expected capacity <= %d, but got %d", expectedSizeLimit, cache.capacity)
+	}
+	expectedInodeLimit := int64((1 - freeRatio + 0.05) * float32(usage.inodeCap))
+	if cache.maxItems > expectedInodeLimit && cache.maxItems != 0 {
+		t.Fatalf("Expected maxItems <= %d, but got %d", expectedInodeLimit, cache.maxItems)
 	}
 }

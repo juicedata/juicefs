@@ -146,6 +146,9 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize, maxItems int64
 	}
 	logger.Infof("Disk cache (%s): used ratio - [space %s%%, inode %s%%]",
 		c.dir, humanize.FtoaWithDigits(float64((1-usage.br)*100), 1), humanize.FtoaWithDigits(float64((1-usage.fr)*100), 1))
+
+	c.setlimitByFreeRatio(usage, c.freeRatio)
+
 	c.createLockFile()
 	go c.checkLockFile()
 	go c.flush()
@@ -157,6 +160,21 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize, maxItems int64
 	go c.scanStaging()
 	go c.checkTimeout()
 	return c
+}
+
+func (cache *cacheStore) setlimitByFreeRatio(usage DiskFreeRatio, freeRatio float32) {
+	sizeLimit := int64(float64(1-freeRatio) * float64(usage.spaceCap))
+	inodeLimit := int64(float64(1-freeRatio) * float64(usage.inodeCap))
+	if sizeLimit < cache.capacity {
+		limit := cache.capacity
+		cache.capacity = sizeLimit
+		logger.Infof("Adjusted cache capacity based on freeratio: from %d to %d bytes", limit, cache.capacity)
+	}
+	if inodeLimit < cache.maxItems || cache.maxItems == 0 {
+		limit := cache.maxItems
+		cache.maxItems = inodeLimit
+		logger.Infof("Adjusted max items based on freeratio: from %d to %d items", limit, cache.maxItems)
+	}
 }
 
 func (cache *cacheStore) lockFilePath() string {

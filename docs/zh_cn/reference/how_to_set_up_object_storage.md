@@ -170,7 +170,6 @@ juicefs format \
 | [金山云 KS3](#金山云-ks3)                   | `ks3`      |
 | [青云 QingStor](#青云-qingstor)             | `qingstor` |
 | [七牛云 Kodo](#七牛云-kodo)                 | `qiniu`    |
-| [新浪云 SCS](#新浪云-scs)                   | `scs`      |
 | [天翼云 OOS](#天翼云-oos)                   | `oos`      |
 | [移动云 EOS](#移动云-eos)                   | `eos`      |
 | [京东云 OSS](#京东云-oss)                   | `s3`       |
@@ -668,20 +667,6 @@ juicefs format \
 juicefs format \
     --storage qiniu \
     --bucket https://<bucket>.s3-<region>.qiniucs.com \
-    ... \
-    myjfs
-```
-
-### 新浪云 SCS
-
-使用新浪云 SCS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://scs.sinacloud.com/doc/scs/guide/quick_start#accesskey) 了解如何创建 Access Key 和 Secret Key。
-
-`--bucket` 选项格式为 `https://<bucket>.stor.sinaapp.com`。例如：
-
-```bash
-juicefs format \
-    --storage scs \
-    --bucket https://<bucket>.stor.sinaapp.com \
     ... \
     myjfs
 ```

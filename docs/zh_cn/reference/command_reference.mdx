@@ -637,9 +637,14 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |项 | 说明|
 |-|-|
 |`--enable-xattr`|启用扩展属性 (xattr) 功能，默认为 false。|
+|`--enable-cap` <VersionAdd>1.3</VersionAdd>|启用 security.capability 扩展属性 (xattr) ，默认为 false。|
+|`--enable-selinux` <VersionAdd>1.3</VersionAdd>|启用 security.selinux 扩展属性 (xattr) ，默认为 false。|
 |`--enable-ioctl` <VersionAdd>1.1</VersionAdd>|启用 ioctl (仅支持 GETFLAGS/SETFLAGS) (默认：false)|
 |`--root-squash value` <VersionAdd>1.1</VersionAdd>|将本地 root 用户 (UID=0) 映射到一个指定用户，如 UID:GID|
+|`--all-squash value` <VersionAdd>1.3</VersionAdd>|将所有用户映射到一个指定用户，如 UID:GID|
+|`--umask value` <VersionAdd>1.3</VersionAdd> |新文件和新目录的 umask 的八进制格式|
 |`--prefix-internal` <VersionAdd>1.1</VersionAdd>|挂载 JuiceFS 后，挂载点下默认创建 `.stats`, `.accesslog` 等虚拟文件。如果这些内部文件和你的应用发生冲突，可以启用该选项，添加 `.jfs` 前缀到所有内部文件。|
+|`--max-fuse-io=128K` <VersionAdd>1.3</VersionAdd>| fuse 请求最大大小 (默认：128K)|
 |`-o value`|其他 FUSE 选项，详见 [FUSE 挂载选项](../reference/fuse_mount_options.md)|
 
 <CommonOptions />

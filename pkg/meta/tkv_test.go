@@ -104,8 +104,9 @@ func testTKV(t *testing.T, c tkvClient) {
 	}
 
 	var keys [][]byte
-	c.scan([]byte("k"), func(key, value []byte) {
+	c.scan([]byte("k"), func(key, value []byte) bool {
 		keys = append(keys, key)
+		return true
 	})
 	if len(keys) != 2 || string(keys[0]) != "k" || string(keys[1]) != "k2" {
 		t.Fatalf("keys: %+v", keys)

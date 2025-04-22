@@ -181,6 +181,7 @@ type wrapper struct {
 	user       string
 	superuser  string
 	supergroup string
+	isSuperFs  bool
 }
 
 type logWriter struct {
@@ -231,7 +232,7 @@ func (w *wrapper) withPid(pid int64) meta.Context {
 }
 
 func (w *wrapper) isSuperuser(name string, groups []string) bool {
-	if name == w.superuser {
+	if name == w.superuser || w.isSuperFs {
 		return true
 	}
 	for _, g := range groups {
@@ -353,9 +354,11 @@ type javaConf struct {
 	PushLabels        string `json:"pushLabels"`
 	PushGraphite      string `json:"pushGraphite"`
 	Caller            int    `json:"caller"`
+
+	SuperFS bool `json:"superFs,omitempty"`
 }
 
-func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.FileSystem) int64 {
+func getOrCreate(name, user, group, superuser, supergroup string, superFs bool, f func() *fs.FileSystem) int64 {
 	fslock.Lock()
 	defer fslock.Unlock()
 	ws := activefs[name]
@@ -376,7 +379,7 @@ func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.F
 		}
 		logger.Infof("JuiceFileSystem created for user:%s group:%s", user, group)
 	}
-	w := &wrapper{jfs, nil, m, user, superuser, supergroup}
+	w := &wrapper{jfs, nil, m, user, superuser, supergroup, superFs}
 	var gs []string
 	if userGroupCache[name] != nil {
 		gs = userGroupCache[name][user]
@@ -457,13 +460,12 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 	name := C.GoString(cname)
 	debug.SetGCPercent(50)
 	object.UserAgent = "JuiceFS-SDK " + version.Version()
-	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), func() *fs.FileSystem {
-		var jConf javaConf
-		err := json.Unmarshal([]byte(C.GoString(jsonConf)), &jConf)
-		if err != nil {
-			logger.Errorf("invalid json: %s", C.GoString(jsonConf))
-			return nil
-		}
+	var jConf javaConf
+	err := json.Unmarshal([]byte(C.GoString(jsonConf)), &jConf)
+	if err != nil {
+		logger.Fatalf("invalid json: %s", C.GoString(jsonConf))
+	}
+	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), jConf.SuperFS, func() *fs.FileSystem {
 		if jConf.Debug || os.Getenv("JUICEFS_DEBUG") != "" {
 			utils.SetLogLevel(logrus.DebugLevel)
 			go func() {
@@ -1341,6 +1343,30 @@ func jfs_gettreesummary(pid, h int64, cpath *C.char, depth, entries uint8, p_buf
 	return int32(copy(buf, res))
 }
 
+//export jfs_quota
+func jfs_quota(pid int64, h int64, cpath *C.char, cmd uint8, cap, inodes uint64, strict, repair, create bool, p_buf **byte) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	if *p_buf != nil {
+		return EINVAL
+	}
+
+	qs, err := w.HandleQuota(w.withPid(pid), C.GoString(cpath), cmd, cap, inodes, strict, repair, create)
+	if err != 0 {
+		return errno(err)
+	}
+	res, err2 := json.Marshal(qs)
+	if err2 != nil {
+		return EINVAL
+	}
+
+	*p_buf = (*byte)(C.malloc(C.size_t(len(res))))
+	buf := unsafe.Slice(*p_buf, len(res))
+	return int32(copy(buf, res))
+}
+
 //export jfs_statvfs
 func jfs_statvfs(pid int64, h int64, buf uintptr) int32 {
 	w := F(h)
@@ -1609,6 +1635,46 @@ func jfs_clone(pid int64, h int64, _src *C.char, _dst *C.char, preserve bool) in
 	ctx := w.withPid(pid)
 	err := w.Clone(ctx, src, dst, preserve)
 	return errno(err)
+}
+
+//export jfs_status
+func jfs_status(pid int64, h int64, trash bool, session uint64, p_buf **byte) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	ctx := w.withPid(pid)
+
+	var err error
+	var output []byte
+	if session != 0 {
+		s, err := w.Meta().GetSession(session, true)
+		if err != nil {
+			logger.Errorf("get session %d: %s", session, err)
+			return errno(syscall.EIO)
+		}
+		output, err = json.Marshal(s)
+		if err != nil {
+			logger.Errorf("marshal session: %v", err)
+			return errno(syscall.EIO)
+		}
+	} else {
+		sections := &meta.Sections{}
+		err = meta.Status(ctx, w.Meta(), trash, sections)
+		if err != nil {
+			logger.Errorf("get status: %s", err)
+			return errno(syscall.EIO)
+		}
+		output, err = json.Marshal(sections)
+		if err != nil {
+			logger.Errorf("marshal sessions: %v", err)
+			return errno(syscall.EIO)
+		}
+	}
+
+	*p_buf = (*byte)(C.malloc(C.size_t(len(output))))
+	buf := unsafe.Slice(*p_buf, len(output))
+	return int32(copy(buf, output))
 }
 
 //export jfs_lseek

@@ -129,7 +129,7 @@ type Config struct {
 	Version              string
 	AttrTimeout          time.Duration
 	DirEntryTimeout      time.Duration
-	NegDirEntryTimeout   time.Duration
+	NegEntryTimeout      time.Duration
 	EntryTimeout         time.Duration
 	ReaddirCache         bool
 	BackupMeta           time.Duration
@@ -1126,6 +1126,11 @@ func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags ui
 }
 
 func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []byte, err syscall.Errno) {
+	if !isXattrEnabled(v.Conf, name) {
+		err = syscall.ENODATA
+		return
+	}
+
 	defer func() { logit(ctx, "getxattr", err, "(%d,%s,%d): (%d)", ino, name, size, len(value)) }()
 	if IsSpecialNode(ino) {
 		err = meta.ENOATTR
@@ -1141,11 +1146,6 @@ func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []
 	}
 	if len(name) == 0 {
 		err = syscall.EINVAL
-		return
-	}
-
-	if !isXattrEnabled(v.Conf, name) {
-		err = syscall.ENODATA
 		return
 	}
 

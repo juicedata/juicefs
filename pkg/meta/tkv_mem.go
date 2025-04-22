@@ -238,7 +238,7 @@ func (c *memKV) txn(ctx context.Context, f func(*kvTxn) error, retry int) error 
 	return nil
 }
 
-func (c *memKV) scan(prefix []byte, handler func(key []byte, value []byte)) error {
+func (c *memKV) scan(prefix []byte, handler func(key []byte, value []byte) bool) error {
 	c.Lock()
 	snap := c.items.Clone()
 	c.Unlock()
@@ -249,8 +249,7 @@ func (c *memKV) scan(prefix []byte, handler func(key []byte, value []byte)) erro
 		if end != "" && it.key >= end {
 			return false
 		}
-		handler([]byte(it.key), it.value)
-		return true
+		return handler([]byte(it.key), it.value)
 	})
 	return nil
 }
@@ -264,8 +263,9 @@ func (c *memKV) reset(prefix []byte) error {
 		return nil
 	}
 	return c.txn(Background(), func(kt *kvTxn) error {
-		return c.scan(prefix, func(key, value []byte) {
+		return c.scan(prefix, func(key, value []byte) bool {
 			kt.delete(key)
+			return true
 		})
 	}, 0)
 }

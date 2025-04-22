@@ -1,5 +1,5 @@
 # encoding: utf-8
-# JuiceFS, Copyright 2020 Juicedata, Inc.
+# JuiceFS, Copyright 2024 Juicedata, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -345,6 +345,35 @@ class Client(object):
         """Clone a file."""
         self.lib.jfs_clone(c_int64(_tid()), c_int64(self.h), _bin(src), _bin(dst), c_bool(preserve))
 
+    def set_quota(self, path, capacity=0, inodes=0, create=False, strict=False):
+        """Set the quota of a directory."""
+        self._quota(0, path, capacity, inodes, create=create, strict=strict)
+    
+    def get_quota(self, path):
+        """Get the quota of a directory."""
+        return self._quota(1, path)
+    
+    def del_quota(self, path):
+        """Delete the quota of a directory."""
+        self._quota(2, path)
+
+    def list_quota(self):
+        """List the quota of all directories."""
+        return self._quota(3)
+
+    def check_quota(self, path, repair=False, strict=False):
+        """Check the quota of a directory."""
+        return self._quota(4, path, repair=repair, strict=strict)
+
+    def _quota(self, cmd, path="", capacity=0, inodes=0, create=False, repair=False, strict=False):
+        """Get the quota of a directory."""
+        buf = c_void_p()
+        n = self.lib.jfs_quota(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint8(cmd), c_uint64(capacity), c_uint64(inodes), c_bool(strict), c_bool(repair), c_bool(create), byref(buf))
+        data = string_at(buf, n)
+        res = json.loads(str(data, encoding='utf-8'))
+        self.lib.free(buf)
+        return res
+
     def info(self, path, recursive=False, strict=False):
         """Get the information of a file or a directory."""
         buf = c_void_p()
@@ -389,6 +418,13 @@ class Client(object):
         self.lib.free(buf)
         return res
 
+    def status(self, trash=False, session=0):
+        """Get the status of the volume and client sessions."""
+        buf = c_void_p()
+        n = self.lib.jfs_status(c_int64(_tid()), c_int64(self.h), c_bool(trash), c_bool(session), byref(buf))
+        res = json.loads(str(string_at(buf, n), encoding='utf-8'))
+        self.lib.free(buf)
+        return res
 
 class File(object):
     """A JuiceFS file."""
@@ -649,6 +685,7 @@ def test():
     volume = os.getenv("JFS_VOLUME", "test")
     meta = os.getenv("JFS_META", "redis://localhost")
     v = Client(volume, meta, access_log="/tmp/jfs.log")
+    print(v.status())
     st = v.stat("/")
     print(st)
     if v.exists("/d"):
