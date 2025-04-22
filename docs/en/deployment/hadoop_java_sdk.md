@@ -741,35 +741,26 @@ JuiceFS can use local disk as a cache to accelerate data access, the following d
 
 ![parquet](../images/spark_sql_parquet.png)
 
-## Permission control by Apache Ranger
+## Permission control by Apache Ranger(from v1.3)
 
-JuiceFS currently supports path permission control by integrating with Apache Ranger's HDFS module.
+JuiceFS currently supports path permission control by integrating with Apache Ranger's HDFS module. Only supported in Hadoop Java SDK.
 
 ### 1. Configurations
 
-| Configuration                     | Default Value | Description                                                                                                                                                                                                                                                                                                                                                                        |
-|-----------------------------------|---------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `juicefs.ranger-rest-url`         |               | `ranger`'s HTTP link url. Not configured means not using this feature.                                                                                                                                                                                                                                                                                                             |
-| `juicefs.ranger-service-name`     |               | `ranger`'s `service name` in `HDFS` module, required                                                                                                                                                                                                                                                                                                                               |
-| `juicefs.ranger-poll-interval-ms` | `30000`       | `ranger`'s interval to refresh cache, default is 30s                                                                                                                                                                                                                                                                                                                               |
+The config for Apache Ranger is sotred in the metadata database. You can enable Ranger permission control by the following methods:
+
+```shell
+# configure with format
+juicefs format META-URL NAME --ranger-rest-url http://localhost:6080 --ranger-service jfs
+
+# or configure with config
+juicefs config META-URL --ranger-rest-url http://localhost:6080 --ranger-service jfs
+```
 
 ### 2. Dependencies
 
-Considering the complexity of the authentication environment and the possibility of dependency conflicts, the JAR packages related to Ranger authentication (such as `ranger-plugins-common-2.3.0.jar`, `ranger-plugins-audit-2.3.0.jar`, etc.) and their dependencies have not been included in the JuiceFS SDK.
-
-If occurred the `ClassNotFound` error when use, it is recommended to import it into the relevant directory (such as `$SPARK-HOME/jars`)
-
-Some dependencies may need：
-
-```shell
-ranger-plugins-common-2.3.0.jar
-ranger-plugins-audit-2.3.0.jar
-gethostname4j-1.0.0.jar
-jackson-jaxrs-1.9.13.jar
-jersey-client-1.19.jar
-jersey-core-1.19.jar
-jna-5.7.0.jar
-```
+Considering the convenience of use, JuiceFS packages all Ranger dependencies into the JuiceFS SDK. 
+If you encounter version conflicts with Apache Ranger, you may need to modify the version and recompile.
 
 ### 3. Tips
 
@@ -787,7 +778,7 @@ To improve usage efficiency, currently only support some **CORE** parameters of 
 
 #### 3.4 Security tips
 
-Due to the complete open source of the project, it is unavoidable for users to disrupt permission control by replacing parameters such as `juicefs.ranger.rest-url`. If stricter control is required, it is recommended to compile the code independently and solve the problem by encrypting relevant security parameters.
+Due to the complete open source of the project, it is unavoidable for users to disrupt permission control by replacing parameters such as `ranger-rest-url`. If stricter control is required, it is recommended to compile the code independently and solve the problem by encrypting relevant security parameters.
 
 ## FAQ
 
