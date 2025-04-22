@@ -25,24 +25,24 @@ JuiceFS supports [multiple metadata engines](../reference/how_to_set_up_metadata
 
 JuiceFS supports two formats for metadata backup: JSON and binary. The binary format was introduced in v1.3.0, mainly for large-scale import/export and migration scenarios. The binary format backup is smaller, uses less memory, and supports concurrent import/export.
 
-| Format Type      | Structure & Features         | Use Case                  | Size              | Memory Usage         | Concurrency | Version    |
-|------------------|-----------------------------|---------------------------|-------------------|---------------------|-------------|------------|
-| **JSON**         | Complete directory tree, human-readable | Small/medium FS; troubleshooting | Larger            | Higher              | Not supported | All versions |
-| **Binary**       | Flattened, efficient, compact           | Large-scale import/export/migration | ~1/3 of JSON      | < 1GiB (100M files) | Supported    | v1.3.0+     |
+| Format Type      | Structure & Features         | Use Case                  | Size              | Memory Usage         | Version    |
+|------------------|-----------------------------|---------------------------|-------------------|---------------------|------------|
+| **JSON**         | Complete directory tree, human-readable | Small/medium FS; troubleshooting | Larger            | Higher              | All versions |
+| **Binary**       | Flattened, efficient, compact           | Large-scale import/export/migration | ~1/3 of JSON      | < 1GiB (100M files) | v1.3.0+     |
 
 ### Manual backup {#backup-manually}
 
-Using the `dump` command provided by JuiceFS client, you can export metadata to a JSON file, for example:
+Using the `dump` command provided by JuiceFS client, you can export metadata to a file, for example:
 
 ```shell
 # Export as JSON format
-juicefs dump redis://192.168.1.6:6379 meta-dump.json
+juicefs dump redis://192.168.1.6:6379 meta-dump
 
 # Export as binary format
-juicefs dump redis://192.168.1.6:6379 meta-dump.json --binary
+juicefs dump redis://192.168.1.6:6379 meta-dump --binary
 ```
 
-The JSON or binary file exported by using the `dump` command provided by the JuiceFS client can have any filename and extension that you prefer, as shown in the example above. In particular, if the file extension is `.gz` (e.g. `meta-dump.json.gz`), the exported data will be compressed using the Gzip algorithm.
+The JSON or binary file exported by using the `dump` command provided by the JuiceFS client can have any filename and extension that you prefer, as shown in the example above. In particular, if the file extension is `.gz` (e.g. `meta-dump.gz`), the exported data will be compressed using the Gzip algorithm. Starting from version 1.3, the Zstandard compression algorithm is also supported, using .zstd as the file extension.
 
 By default, the `dump` command starts from the root directory `/` and iterates recursively through all the files in the directory tree, and writes the metadata of each file to a JSON output. The object storage credentials will be omitted for data security, but it can be preserved using the `--keep-secret-key` option.
 
@@ -99,10 +99,10 @@ Use the [`load`](../reference/command_reference.mdx#load) command to restore the
 
 ```shell
 # Import from JSON file
-juicefs load redis://192.168.1.6:6379 meta-dump.json
+juicefs load redis://192.168.1.6:6379 meta-dump
 
 # Import from binary backup
-juicefs load redis://192.168.1.6:6379 meta-dump.json --binary
+juicefs load redis://192.168.1.6:6379 meta-dump --binary
 ```
 
 Once imported, JuiceFS will recalculate the file system statistics including space usage, inode counters, and eventually generates a globally consistent metadata in the database. If you have a deep understanding of the metadata design of JuiceFS, you can also modify the metadata backup file before restoring to debug.
@@ -166,13 +166,13 @@ Binary backup also supports direct inspection of type statistics and segment inf
 
 ```shell
 # View backup metadata type statistics
-juicefs load meta-dump.json --binary --stat
+juicefs load meta-dump --binary --stat
 
 # View backup metadata Segments info (get offset)
-juicefs load meta-dump.json --binary --stat --offset=-1
+juicefs load meta-dump --binary --stat --offset=-1
 
 # View backup metadata for a specific Segment (by offset)
-juicefs load meta-dump.json --binary --stat --offset=123416309
+juicefs load meta-dump --binary --stat --offset=123416309
 ```
 
 Example output:
