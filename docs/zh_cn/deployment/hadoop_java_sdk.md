@@ -866,35 +866,26 @@ JuiceFS 可以使用本地磁盘作为缓存加速数据访问，以下数据是
 
 ![parquet](../images/spark_sql_parquet.png)
 
-## 使用 Apache Ranger 进行权限管控
+## 使用 Apache Ranger 进行权限管控（ v1.3支持 ）
 
-JuiceFS 当前支持对接 Apache Ranger 的 `HDFS` 模块进行路径的权限管控。
+JuiceFS 当前支持对接 Apache Ranger 的 `HDFS` 模块进行路径的权限管控。仅 Hadoop Java SDK 支持该功能。
 
 ### 1. 相关配置
 
-| 配置项                               | 默认值      | 描述                                                                                                                             |
-|-----------------------------------|----------|--------------------------------------------------------------------------------------------------------------------------------|
-| `juicefs.ranger-rest-url`         |          | `ranger`连接地址。不配置该参数即不使用该功能。                                                                                                    |
-| `juicefs.ranger-service-name`     |          | `ranger`中配置的`service name`，必填                                                                                                  |
-| `juicefs.ranger-poll-interval-ms` | `30000`  | `ranger`缓存刷新周期，默认30s                                                                                                           |
+Apache Ranger 的配置统一放在 META 数据库内。可以通过以下方法开启 Ranger 的权限管控：
+
+```shell
+# format 的时候指定 ranger 配置
+juicefs format META-URL NAME --ranger-rest-url http://localhost:6080 --ranger-service jfs
+
+# 已有的文件系统增加 ranger 配置
+juicefs config META-URL --ranger-rest-url http://localhost:6080 --ranger-service jfs
+
+```
 
 ### 2. 环境及依赖
 
-考虑到鉴权环境的复杂性，以及依赖冲突的可能性，Ranger 鉴权相关 JAR 包（例如`ranger-plugins-common-2.3.0.jar`,`ranger-plugins-audit-2.3.0.jar`等）及其依赖并未打进 JuiceFS 的 SDK 中。
-
-使用中如果遇到`ClassNotFound`报错，建议单独引入相关目录中（例如`$SPARK_HOME/jars`）
-
-可能需要单独添加的依赖：
-
-```shell
-ranger-plugins-common-2.3.0.jar
-ranger-plugins-audit-2.3.0.jar
-gethostname4j-1.0.0.jar
-jackson-jaxrs-1.9.13.jar
-jersey-client-1.19.jar
-jersey-core-1.19.jar
-jna-5.7.0.jar
-```
+考虑到使用的方便性，JuiceFS 将 Ranger 所有依赖的包均打包到 JuiceFS 的 SDK 中。如果遇到 Apache Ranger 的版本冲突问题，可能需要修改版本重新编译。
 
 ### 3. 使用提示
 
@@ -912,7 +903,7 @@ jna-5.7.0.jar
 
 #### 3.4 安全性问题
 
-因项目代码完全开源，无法避免用户通过替换`juicefs.ranger.rest-url`等参数的方式扰乱安全管控。如需更严格的管控，建议自主编译代码，通过将相关安全参数进行加密处理等方式解决。
+因项目代码完全开源，无法避免用户通过替换`ranger-rest-url`等参数的方式扰乱安全管控。如需更严格的管控，建议自主编译代码，通过将相关安全参数进行加密处理等方式解决。
 
 ## FAQ
 

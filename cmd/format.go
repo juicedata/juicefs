@@ -196,6 +196,14 @@ func formatManagementFlags() []cli.Flag {
 			Name:  "enable-acl",
 			Usage: "enable POSIX ACL (this flag is irreversible once enabled)",
 		},
+		&cli.StringFlag{
+			Name:  "ranger-rest-url",
+			Usage: "URL of the RangerAdmin",
+		},
+		&cli.StringFlag{
+			Name:  "ranger-service",
+			Usage: "Name of the Ranger service used For JuiceFS",
+		},
 	})
 }
 
@@ -445,6 +453,10 @@ func format(c *cli.Context) error {
 				format.Storage = c.String(flag)
 			case "encrypt-rsa-key", "encrypt-algo":
 				logger.Warnf("Flag %s is ignored since it cannot be updated", flag)
+			case "ranger-rest-url":
+				format.RangerRestUrl = c.String(flag)
+			case "ranger-service":
+				format.RangerService = c.String(flag)
 			}
 		}
 	} else if strings.HasPrefix(err.Error(), "database is not formatted") {
@@ -471,9 +483,14 @@ func format(c *cli.Context) error {
 			MetaVersion:      meta.MaxVersion,
 			MinClientVersion: "1.1.0-A",
 			EnableACL:        c.Bool("enable-acl"),
+			RangerRestUrl:    c.String("ranger-rest-url"),
+			RangerService:    c.String("ranger-service"),
 		}
 		if format.EnableACL {
 			format.MinClientVersion = "1.2.0-A"
+		}
+		if format.RangerRestUrl != "" || format.RangerService != "" {
+			format.MinClientVersion = "1.3.0-A"
 		}
 
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {

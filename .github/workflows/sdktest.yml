@@ -75,8 +75,9 @@ jobs:
         run: |
           make -C sdk/java/libjfs
           cd sdk/java
-          sudo mvn test -B
+          sudo mvn test -B -Dtest=\!io.juicefs.permission.**
           sudo mvn test -B -Dflink.version=1.17.2 -Dtest=io.juicefs.JuiceFileSystemTest#testFlinkHadoopRecoverableWriter 
+          sudo JUICEFS_RANGER_TEST=1 mvn test -B -Dtest=io.juicefs.permission.RangerPermissionCheckerTest
           sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
           expect=$(git rev-parse --short HEAD | cut -b 1-7)
           ls /tmp/libjfs* | grep $expect

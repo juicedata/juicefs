@@ -261,6 +261,20 @@ func config(ctx *cli.Context) error {
 					return errors.New("cannot disable acl")
 				}
 			}
+		case "ranger-rest-url":
+			if newUrl := ctx.String(flag); newUrl != format.RangerRestUrl {
+				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.RangerRestUrl, newUrl))
+				format.RangerRestUrl = newUrl
+				format.MinClientVersion = "1.3.0-A"
+				clientVer = true
+			}
+		case "ranger-service":
+			if newService := ctx.String(flag); newService != format.RangerService {
+				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.RangerService, newService))
+				format.RangerService = newService
+				format.MinClientVersion = "1.3.0-A"
+				clientVer = true
+			}
 		}
 	}
 	if msg.Len() == 0 {
