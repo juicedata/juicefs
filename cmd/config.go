@@ -89,14 +89,6 @@ func configManagementFlags() []cli.Flag {
 			Name:  "dir-stats",
 			Usage: "enable dir stats, which is necessary for fast summary and dir quota",
 		},
-		&cli.StringFlag{
-			Name:  "ranger-rest-url",
-			Usage: "URL of the RangerAdmin",
-		},
-		&cli.StringFlag{
-			Name:  "ranger-service",
-			Usage: "Name of the Ranger service used For JuiceFS",
-		},
 	})
 }
 
