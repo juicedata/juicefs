@@ -276,6 +276,8 @@ func (h *hdfsclient) List(prefix, marker, token, delimiter string, limit int64, 
 }
 
 func (h *hdfsclient) Chtimes(key string, mtime time.Time) error {
+	// fixme: need set the atime in hdfs.SetTimesRequestProto to -1 to avoid updating the atime
+	// ref: https://hadoop.apache.org/docs/stable/api/org/apache/hadoop/fs/FileSystem.html#setTimes-org.apache.hadoop.fs.Path-long-long-
 	return h.c.Chtimes(h.path(key), mtime, mtime)
 }
 
