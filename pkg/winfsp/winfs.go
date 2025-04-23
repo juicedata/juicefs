@@ -63,8 +63,8 @@ type juice struct {
 	fs           *fs.FileSystem
 	host         *fuse.FileSystemHost
 	handlers     map[uint64]handleInfo
-	inoHandleMap map[meta.Ino][]uint64
 	badfd        map[uint64]uint64
+	inoHandleMap map[meta.Ino][]uint64
 
 	asRoot         bool
 	delayClose     int
@@ -311,7 +311,6 @@ func (j *juice) Utimens(path string, tmsp []fuse.Timespec) (e int) {
 	if err != 0 {
 		e = errorconv(err)
 	} else {
-		defer f.Close(ctx)
 		e = errorconv(f.Utime2(ctx, tmsp[0].Sec, tmsp[0].Nsec, tmsp[1].Sec, tmsp[1].Nsec))
 		if e == 0 {
 			j.invalidateAttrCache(f.Inode())
@@ -540,7 +539,6 @@ func (j *juice) getAttrFromCache(fh uint64) (entry *meta.Entry) {
 				Inode: cache.ino,
 				Attr:  cache.cacheAttr,
 			}
-			j.vfs.UpdateLength(cache.ino, cache.cacheAttr)
 			return entry
 		}
 	}
@@ -562,7 +560,7 @@ func (j *juice) setAttrCache(fh uint64, attr *meta.Attr) {
 	}
 }
 
-func (j *juice) getAttrCache(ctx vfs.Context, fh uint64, ino Ino, opened uint8) (entry *meta.Entry, err syscall.Errno) {
+func (j *juice) getAttr(ctx vfs.Context, fh uint64, ino Ino, opened uint8) (entry *meta.Entry, err syscall.Errno) {
 	if entry := j.getAttrFromCache(fh); entry != nil {
 		return entry, 0
 	}
@@ -609,7 +607,7 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 		}
 	}
 
-	entry, errrno := j.getAttrCache(ctx, fh, ino, 0)
+	entry, errrno := j.getAttr(ctx, fh, ino, 0)
 	if errrno != 0 {
 		e = errorconv(errrno)
 		return
