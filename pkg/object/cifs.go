@@ -424,6 +424,9 @@ func (c *cifsStore) CreateMultipartUpload(key string) (*MultipartUpload, error) 
 }
 
 func parseEndpoint(endpoint string) (host, port, share string, err error) {
+	if !strings.Contains(endpoint, "://") {
+		endpoint = "cifs://" + endpoint
+	}
 	u, err := url.Parse(endpoint)
 	if err != nil {
 		return
@@ -440,11 +443,11 @@ func parseEndpoint(endpoint string) (host, port, share string, err error) {
 	}
 	parts := strings.Split(u.Path, "/")
 	if len(parts) < 2 || parts[1] == "" {
-		err = fmt.Errorf("should be a valid share name (%s)", "\\\\<server>\\<share>")
+		err = fmt.Errorf("endpoint should be a valid share name (%s)", "\\\\<server>\\<share>")
 		return
 	}
 	if len(parts) > 2 && parts[2] != "" {
-		err = fmt.Errorf("should be a valid share name (%s)", "\\\\<server>\\<share>")
+		err = fmt.Errorf("endpoint should be a valid share name (%s)", "\\\\<server>\\<share>")
 		return
 	}
 	share = parts[1]
