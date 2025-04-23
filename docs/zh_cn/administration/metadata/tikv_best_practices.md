@@ -1,6 +1,6 @@
 ---
 sidebar_label: TiKV
-sidebar_position: 4
+sidebar_position: 5
 slug: /tikv_best_practices
 ---
 # TiKV 最佳实践
