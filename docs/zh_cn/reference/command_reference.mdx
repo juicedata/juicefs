@@ -884,7 +884,7 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 
 |项 | 说明|
 |-|-|
-|`--files-from` <VersionAdd>1.3</VersionAdd>|仅同步给定文件中记录的对象，其每行内容都是待同步对象的相对路径吗，如果对象是目录建议以 / 结尾|
+|`--files-from` <VersionAdd>1.3</VersionAdd>|仅同步给定文件中记录的对象，其每行内容都是待同步对象的相对路径，如果对象是目录建议以 / 结尾|
 |`--start=KEY, -s KEY, --end=KEY, -e KEY`|提供 KEY 范围，来指定对象存储的 List 范围。|
 |`--end KEY, -e KEY`|同步的最后一个 `KEY`|
 |`--exclude=PATTERN`|排除匹配 `PATTERN` 的 Key。参考[「过滤」](../guide/sync.md#filtering)文档了解如何使用。|
