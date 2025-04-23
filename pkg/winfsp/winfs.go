@@ -212,6 +212,7 @@ func (j *juice) Rmdir(path string) (e int) {
 }
 
 func (j *juice) Symlink(target string, newpath string) (e int) {
+	return -fuse.ENOSYS
 	ctx := j.newContext()
 	defer trace(target, newpath)(&e)
 	parent, err := j.fs.Open(ctx, path.Dir(newpath), 0)
