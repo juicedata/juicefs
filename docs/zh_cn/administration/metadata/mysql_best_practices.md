@@ -54,7 +54,7 @@ MySQL后端采用多线程模式，每一个连接对应后端一个线程，控
 juicefs mount -d "mysql://user:@(192.168.1.6:3306)/juicefs?max_open_conns=30&max_life_time=3600" /mnt/jfs
 ```
 
-请参考 Go datatabase/sql 模块文档（https://pkg.go.dev/database/sql#SetConnMaxIdleTime）了解更多信息。
+请参考 Go datatabase/sql 模块文档（https://pkg.go.dev/database/sql#SetConnMaxIdleTime) 了解更多信息。
 
 ## 定期备份
 
