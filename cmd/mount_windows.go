@@ -104,9 +104,10 @@ func getDaemonStage() int {
 
 func mountMain(v *vfs.VFS, c *cli.Context) {
 	v.Conf.AccessLog = c.String("access-log")
+	v.Conf.AttrTimeout = utils.Duration(c.String("attr-cache"))
+	v.Conf.EntryTimeout = utils.Duration(c.String("entry-cache"))
+	v.Conf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
 
-	fileCacheTimeout := utils.Duration(c.String("entry-cache"))
-	dirCacheTimeout := utils.Duration(c.String("dir-entry-cache"))
 	delayCloseTime := utils.Duration(c.String("delay-close"))
 
 	traceLog := c.String("fuse-trace-log")
@@ -114,7 +115,7 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 		winfsp.SetTraceOutput(traceLog)
 	}
 
-	winfsp.Serve(v, c.String("o"), fileCacheTimeout.Seconds(), dirCacheTimeout.Seconds(),
+	winfsp.Serve(v, c.String("o"),
 		c.Bool("as-root"), int(delayCloseTime.Seconds()), c.Bool("show-dot-files"),
 		c.Int("winfsp-threads"), c.Bool("case-sensitive"), c.Bool("report-case"))
 }

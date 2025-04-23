@@ -428,8 +428,14 @@ func bench(ctx *cli.Context) error {
 	progress.Done()
 
 	/* --- Clean-up --- */
-	if err := exec.Command("rm", "-rf", bm.tmpdir).Run(); err != nil {
-		logger.Warnf("Failed to cleanup %s: %s", bm.tmpdir, err)
+	if runtime.GOOS == "windows" {
+		if err := exec.Command("cmd", "/C", "rd", "/s", "/q", bm.tmpdir).Run(); err != nil {
+			logger.Warnf("Failed to cleanup %s: %s", bm.tmpdir, err)
+		}
+	} else {
+		if err := exec.Command("rm", "-rf", bm.tmpdir).Run(); err != nil {
+			logger.Warnf("Failed to cleanup %s: %s", bm.tmpdir, err)
+		}
 	}
 
 	/* --- Report --- */
