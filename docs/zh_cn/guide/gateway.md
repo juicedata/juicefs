@@ -149,6 +149,10 @@ juicefs gateway redis://localhost:6379/1 localhost:9000 --multi-buckets
 
 默认不支持对象标签，可以通过`--object-tag` 开启
 
+### 开启对象元数据 <VersionAdd>1.3</VersionAdd>
+
+默认不支持对象元数据，可以通过 `--object-meta` 开启，[参考文档](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html)
+
 ### 启用虚拟主机风格请求
 
 默认情况下，S3 网关支持格式为 `http://mydomain.com/bucket/object` 的路径类型请求。`MINIO_DOMAIN` 环境变量被用来启用虚拟主机类型请求。如果请求的 `Host` 头信息匹配 `(.+).mydomain.com`，则匹配的模式 `$1` 被用作 bucket，并且路径被用作 object.
