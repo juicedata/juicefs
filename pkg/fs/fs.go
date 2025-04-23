@@ -266,7 +266,7 @@ func (fs *FileSystem) invalidateEntry(parent Ino, name string) {
 	}
 }
 
-func (fs *FileSystem) invalidateAttr(ino Ino) {
+func (fs *FileSystem) InvalidateAttr(ino Ino) {
 	fs.cacheM.Lock()
 	defer fs.cacheM.Unlock()
 	delete(fs.attrs, ino)
@@ -1091,7 +1091,7 @@ func (f *File) Chmod(ctx meta.Context, mode uint16) (err syscall.Errno) {
 	defer func() { f.fs.log(l, "Chmod (%s,%o): %s", f.path, mode, errstr(err)) }()
 	var attr = Attr{Mode: mode}
 	err = f.fs.m.SetAttr(ctx, f.inode, meta.SetAttrMode, 0, &attr)
-	f.fs.invalidateAttr(f.inode)
+	f.fs.InvalidateAttr(f.inode)
 	return
 }
 
@@ -1108,7 +1108,7 @@ func (f *File) Chown(ctx meta.Context, uid uint32, gid uint32) (err syscall.Errn
 	}
 	var attr = Attr{Uid: uid, Gid: gid}
 	err = f.fs.m.SetAttr(ctx, f.inode, flag, 0, &attr)
-	f.fs.invalidateAttr(f.inode)
+	f.fs.InvalidateAttr(f.inode)
 	return
 }
 
@@ -1132,7 +1132,7 @@ func (f *File) Utime(ctx meta.Context, atime, mtime int64) (err syscall.Errno) {
 	attr.Mtime = mtime / 1000
 	attr.Mtimensec = uint32(mtime%1000) * 1e6
 	err = f.fs.m.SetAttr(ctx, f.inode, flag, 0, &attr)
-	f.fs.invalidateAttr(f.inode)
+	f.fs.InvalidateAttr(f.inode)
 	return
 }
 
@@ -1158,7 +1158,7 @@ func (f *File) Utime2(ctx meta.Context, atimeSec, atimeNSec, mtimeSec, mtimeNsec
 	attr.Mtime = mtimeSec
 	attr.Mtimensec = uint32(mtimeNsec)
 	err = f.fs.m.SetAttr(ctx, f.inode, flag, 0, &attr)
-	f.fs.invalidateAttr(f.inode)
+	f.fs.InvalidateAttr(f.inode)
 	return
 }
 
@@ -1291,7 +1291,7 @@ func (f *File) Truncate(ctx meta.Context, length uint64) (err syscall.Errno) {
 		f.fs.writer.Truncate(f.inode, length)
 		f.fs.reader.Truncate(f.inode, length)
 		f.info.attr.Length = length
-		f.fs.invalidateAttr(f.inode)
+		f.fs.InvalidateAttr(f.inode)
 	}
 	return
 }
@@ -1306,7 +1306,7 @@ func (f *File) Flush(ctx meta.Context) (err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Flush (%s): %s", f.path, errstr(err)) }()
 	err = f.wdata.Flush(ctx)
-	f.fs.invalidateAttr(f.inode)
+	f.fs.InvalidateAttr(f.inode)
 	return
 }
 
@@ -1320,7 +1320,7 @@ func (f *File) Fsync(ctx meta.Context) (err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Fsync (%s): %s", f.path, errstr(err)) }()
 	err = f.wdata.Flush(ctx)
-	f.fs.invalidateAttr(f.inode)
+	f.fs.InvalidateAttr(f.inode)
 	return
 }
 
@@ -1340,7 +1340,7 @@ func (f *File) Close(ctx meta.Context) (err syscall.Errno) {
 		}
 		if f.wdata != nil {
 			err = f.wdata.Close(meta.Background())
-			f.fs.invalidateAttr(f.inode)
+			f.fs.InvalidateAttr(f.inode)
 			f.wdata = nil
 		}
 		_ = f.fs.m.Close(ctx, f.inode)

@@ -514,11 +514,12 @@ func (j *juice) invalidateAttrCache(ino meta.Ino) {
 	if j.attrCacheTimeout == 0 || ino == 0 {
 		return
 	}
+	j.fs.InvalidateAttr(ino) // invalidate the attrcache in fs layer
 	j.Lock()
 	defer j.Unlock()
 
-	hs := j.inoHandleMap[ino]
-	for _, fh := range hs {
+	handlers := j.inoHandleMap[ino]
+	for _, fh := range handlers {
 		if cache, ok := j.handlers[fh]; ok {
 			cache.cacheAttr = nil
 			cache.attrExpiredAt = time.Time{}
@@ -687,6 +688,19 @@ func (j *juice) Flush(path string, fh uint64) (e int) {
 	return
 }
 
+func (j *juice) cleanInoHandlerMap(ino meta.Ino, fh uint64) {
+	handles := j.inoHandleMap[ino]
+	for i, handle := range handles {
+		if handle == fh {
+			j.inoHandleMap[ino] = append(handles[:i], handles[i+1:]...)
+			break
+		}
+	}
+	if len(j.inoHandleMap[ino]) == 0 {
+		delete(j.inoHandleMap, ino)
+	}
+}
+
 // Release closes an open file.
 func (j *juice) Release(path string, fh uint64) int {
 	defer trace(path, fh)()
@@ -700,9 +714,10 @@ func (j *juice) Release(path string, fh uint64) int {
 		time.Sleep(time.Second * time.Duration(j.delayClose))
 		j.Lock()
 		delete(j.handlers, fh)
-		delete(j.inoHandleMap, ino)
+		j.cleanInoHandlerMap(ino, fh)
 		if orig != fh {
 			delete(j.badfd, orig)
+			j.cleanInoHandlerMap(ino, orig)
 		}
 		j.Unlock()
 		j.vfs.Release(j.newContext(), ino, fh)
@@ -803,7 +818,7 @@ func (j *juice) Releasedir(path string, fh uint64) (e int) {
 	}
 	j.Lock()
 	delete(j.handlers, fh)
-	delete(j.inoHandleMap, ino)
+	j.cleanInoHandlerMap(ino, fh)
 	j.Unlock()
 	e = -int(j.vfs.Releasedir(j.newContext(), ino, fh))
 	return
