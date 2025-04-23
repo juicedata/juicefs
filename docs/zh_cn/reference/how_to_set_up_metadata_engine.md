@@ -671,4 +671,3 @@ juicefs mount -d "sqlite3:///home/herald/my-jfs.db" /mnt/jfs/
 :::note 注意
 由于 SQLite 是一款单文件数据库，在不做特殊共享设置的情况下，只有数据库所在的主机可以访问它。对于多台服务器共享同一文件系统的情况，需要使用 Redis 或 MySQL 等数据库。
 :::
-

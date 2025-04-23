@@ -441,7 +441,7 @@ juicefs.fdb mount -d \
 
 ## Relational Database
 
-Each database can only be used by one juicefs file system by default. If you want multiple file systems to share a database, you can achieve this by adding a `table_prefix` <VersionAdd>1.3</VersionAdd> query parameter in the META-URL to add different table prefixes for different file systems.
+Each database can only be used by one JuiceFS file system by default. If you want multiple file systems to share a database, you can achieve this by adding a `table_prefix` <VersionAdd>1.3</VersionAdd> query parameter in the META-URL to add different table prefixes for different file systems.
 For example: `mysql://user:mypassword@(192.168.1.6:3306)/juicefs?table_prefix=volume1`
 
 ### MySQL
@@ -659,10 +659,3 @@ For more examples of SQLite database address format, please refer to [Go-SQLite3
 :::note
 Since SQLite is a single-file database, usually only the host where the database is located can access it. Therefore, SQLite database is more suitable for standalone use. For multiple servers sharing the same file system, it is recommended to use databases such as Redis or MySQL.
 :::
-
-
-
-
-
-
-
