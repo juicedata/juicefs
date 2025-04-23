@@ -149,7 +149,7 @@ Object tags are not supported by default, but you can use `--object-tag` to enab
 
 ### Enable object metadata
 
-Object metadata is not supported by default, but you can use `--object-meta` to enable it.
+Object metadata is not supported by default, but you can use `--object-meta` to enable it. Refer to the [documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html) for usage.
 
 ### Enable virtual host-style requests
 
@@ -177,7 +177,7 @@ The distributed nature of JuiceFS allows multiple JuiceFS S3 gateway instances t
 
 - Ensure that all instances are started with the same user at initialization; use the same UID and GID for all instances.
 - The IAM refresh time between nodes can vary, but it must be ensured that this interval is not too short to prevent excessive load on JuiceFS.
-- Each instance’s listening address and port can be freely configured. If multiple instances are started on the same machine, ensure that there is no conflict in port numbers.
+- Each instance's listening address and port can be freely configured. If multiple instances are started on the same machine, ensure that there is no conflict in port numbers.
 
 ### Run as a daemon service
 
