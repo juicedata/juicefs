@@ -60,6 +60,7 @@ type juice struct {
 	asRoot         bool
 	delayClose     int
 	enabledGetPath bool
+	disableSymlink bool
 }
 
 // Init is called when the file system is created.
@@ -121,7 +122,7 @@ func errorconv(err syscall.Errno) int {
 	case syscall.EIO:
 		return -fuse.EIO
 	case syscall.EINVAL:
-		return -fuse.ENXIO
+		return -fuse.EINVAL
 	case syscall.EBADFD:
 		return -fuse.EBADF
 	case syscall.EDQUOT:
@@ -211,6 +212,7 @@ func (j *juice) Rmdir(path string) (e int) {
 }
 
 func (j *juice) Symlink(target string, newpath string) (e int) {
+	return -fuse.ENOSYS
 	ctx := j.newContext()
 	defer trace(target, newpath)(&e)
 	parent, err := j.fs.Open(ctx, path.Dir(newpath), 0)
@@ -226,6 +228,10 @@ func (j *juice) Symlink(target string, newpath string) (e int) {
 func (j *juice) Readlink(path string) (e int, target string) {
 	ctx := j.newContext()
 	defer trace(path)(&e, &target)
+	if path == "/" && j.disableSymlink {
+		e = -fuse.ENOSYS
+		return
+	}
 	fi, err := j.fs.Stat(ctx, path)
 	if err != 0 {
 		e = errorconv(err)
@@ -792,6 +798,7 @@ func Serve(v *vfs.VFS, fuseOpt string, fileCacheTimeoutSec float64, dirCacheTime
 	if err != nil {
 		logger.Fatalf("Initialize FileSystem failed: %s", err)
 	}
+	jfs.disableSymlink = os.Getenv("JUICEFS_ENABLE_SYMLINK") != "1"
 	jfs.asRoot = asRoot
 	jfs.delayClose = delayCloseSec
 	host := fuse.NewFileSystemHost(&jfs)
