@@ -147,7 +147,7 @@ By default, JuiceFS S3 Gateway does not save or return object ETag information. 
 
 Object tags are not supported by default, but you can use `--object-tag` to enable them.
 
-### Enable object metadata
+### Enable object metadata <VersionAdd>1.3</VersionAdd>
 
 Object metadata is not supported by default, but you can use `--object-meta` to enable it. Refer to the [documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html) for usage.
 
