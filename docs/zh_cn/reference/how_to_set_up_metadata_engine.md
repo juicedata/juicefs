@@ -437,7 +437,7 @@ juicefs.fdb mount -d \
 
 ## 关系型数据库
 
-每个数据库默认只能被一个 juicefs 文件系统所使用，如果想要多个文件系统共享一个数据库，可以通过在 META-URL 中添加 `table_prefix` <VersionAdd>1.3</VersionAdd> query 参数
+每个数据库默认只能被一个 JuiceFS 文件系统所使用，如果想要多个文件系统共享一个数据库，可以通过在 META-URL 中添加 `table_prefix` <VersionAdd>1.3</VersionAdd> query 参数
 为不同的文件系统添加不同的表名来前缀实现。例如：`mysql://user:mypassword@(192.168.1.6:3306)/juicefs?table_prefix=volume1`
 
 ### MySQL
