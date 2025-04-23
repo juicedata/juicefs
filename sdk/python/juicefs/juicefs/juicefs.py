@@ -426,6 +426,15 @@ class Client(object):
         self.lib.free(buf)
         return res
 
+    def get_config(self):
+        """Get the status of the volume and client sessions."""
+        buf = c_void_p()
+        n = self.lib.jfs_getconfig(c_int64(_tid()), c_int64(self.h), byref(buf))
+        res = json.loads(str(string_at(buf, n), encoding='utf-8'))
+        self.lib.free(buf)
+        return res
+
+
 class File(object):
     """A JuiceFS file."""
     def __init__(self, lib, fd, path, mode, flag, length, buffering, encoding, errors):

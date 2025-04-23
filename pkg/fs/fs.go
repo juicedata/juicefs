@@ -208,6 +208,10 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSyst
 	return fs, nil
 }
 
+func (fs *FileSystem) GetConf() *vfs.Config {
+	return fs.conf
+}
+
 func (fs *FileSystem) InitMetrics(reg prometheus.Registerer) {
 	if reg != nil {
 		reg.MustRegister(fs.readSizeHistogram)

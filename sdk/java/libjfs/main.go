@@ -1374,6 +1374,26 @@ func jfs_quota(pid int64, h int64, cpath *C.char, cmd uint8, cap, inodes uint64,
 	return int32(copy(buf, res))
 }
 
+//export jfs_getconfig
+func jfs_getconfig(pid int64, h int64, p_buf **byte) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	if *p_buf != nil {
+		return EINVAL
+	}
+
+	res, err := json.Marshal(w.GetConf())
+	if err != nil {
+		return EINVAL
+	}
+
+	*p_buf = (*byte)(C.malloc(C.size_t(len(res))))
+	buf := unsafe.Slice(*p_buf, len(res))
+	return int32(copy(buf, res))
+}
+
 //export jfs_statvfs
 func jfs_statvfs(pid int64, h int64, buf uintptr) int32 {
 	w := F(h)
