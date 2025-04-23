@@ -887,7 +887,7 @@ In which:
 
 |Items|Description|
 |-|-|
-|`--files-from` <VersionAdd>1.3</VersionAdd>|Only synchronize the objects recorded in the given file, where each line is the relative path of the object to be synchronized.|
+|`--files-from` <VersionAdd>1.3</VersionAdd>|Only synchronize the objects recorded in the given file, where each line is the relative path of the object to be synchronized. If the object is a directory, it is recommended to end with `/`.|
 |`--start=KEY, -s KEY, --end=KEY, -e KEY`|Provide object storage key range for syncing.|
 |`--end KEY, -e KEY`|the last `KEY` to sync|
 |`--exclude=PATTERN`|Exclude keys matching `PATTERN`. Refer to the ["Filtering"](../guide/sync.md#filtering) document to learn how to use it.|
