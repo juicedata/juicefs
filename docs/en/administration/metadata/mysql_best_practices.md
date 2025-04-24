@@ -37,7 +37,7 @@ export META_PASSWORD=mypassword
 juicefs mount -d "mysql://user:@(192.168.1.6:3306)/juicefs?max_open_conns=30&max_life_time=3600" /mnt/jfs
 ```
 
-Plase refer Go datatabase/sql official manual (https://pkg.go.dev/database/sql#SetConnMaxIdleTime) for more information.
+Plase refer Go official module manual [datatabase/sql](https://pkg.go.dev/database/sql#SetConnMaxIdleTime) for more information.
 
 ## Periodic backups
 
@@ -50,6 +50,6 @@ It is recommended to make a plan for regularly backing up your database, and at 
 The official MySQL document [Chapter 19. Replication](https://dev.mysql.com/doc/refman/8.0/en/replication.html)  and [Chapter 20. Group Replication](https://dev.mysql.com/doc/refman/8.0/en/group-replication.html) are prefered high availability solutions. Please choose the appropriate ones according to your needs.
 
 :::note
-JuiceFS uses [transactions] to ensure atomicity of metadata operations, so a transactional storage engine such as InnoDB (https://dev.mysql.com/doc/refman/8.0/en/backup-and-recovery.html) is required. Some MySQL based distributed (Multi-Shards) databases may not fully compatiable with MySQL both in SQL syntax or transactions, we do not have any testing or certificating works on them.
+JuiceFS uses [transactions] to ensure atomicity of metadata operations, so a transactional storage engine such as [InnoDB](https://dev.mysql.com/doc/refman/8.0/en/backup-and-recovery.html) is required. Some MySQL based distributed (Multi-Shards) databases may not fully compatiable with MySQL both in SQL syntax or transactions, we do not have any testing or certificating works on them.
 :::
 

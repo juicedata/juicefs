@@ -44,7 +44,7 @@ export META_PASSWORD=mypassword
 juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs?max_open_conns=30&max_life_time=3600" /mnt/jfs
 ```
 
-Plase refer Go datatabase/sql official manual (https://pkg.go.dev/database/sql#SetConnMaxIdleTime) for more information.
+Plase refer Go official module manual [datatabase/sql](https://pkg.go.dev/database/sql#SetConnMaxIdleTime) for more information.
 
 ## Authentication methods
 
