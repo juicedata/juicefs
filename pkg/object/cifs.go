@@ -126,32 +126,42 @@ func (c *cifsStore) releaseConnection(conn *cifsConn, err error) {
 	if conn == nil {
 		return
 	}
-	// close connection if there's an error or if the pool is full
-	if err != nil || len(c.pool) >= cap(c.pool) {
-		if conn.session != nil {
-			_ = conn.session.Logoff()
+
+	if err == nil {
+		select {
+		case c.pool <- conn:
+			return
+		default:
 		}
-		return
 	}
-	c.pool <- conn
+
+	// close connection if there's an error or if the pool is full
+	if conn.session != nil {
+		_ = conn.session.Logoff()
+	}
+}
+
+func (c *cifsStore) withConn(f func(*cifsConn) error) error {
+	conn, err := c.getConnection()
+	if err != nil {
+		return err
+	}
+	err = f(conn)
+	c.releaseConnection(conn, err)
+	return err
 }
 
 func (c *cifsStore) Head(key string) (oj Object, err error) {
-	conn, err := c.getConnection()
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		c.releaseConnection(conn, err)
-	}()
-
-	p := c.path(key)
-	fi, err := conn.share.Lstat(p)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.fileInfo(key, fi, fi.Mode()&os.ModeSymlink != 0), nil
+	err = c.withConn(func(conn *cifsConn) error {
+		p := c.path(key)
+		fi, err := conn.share.Lstat(p)
+		if err != nil {
+			return err
+		}
+		oj = c.fileInfo(key, fi, fi.Mode()&os.ModeSymlink != 0)
+		return nil
+	})
+	return oj, err
 }
 
 func (c *cifsStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
@@ -223,87 +233,74 @@ func (r *smbReadCloser) Close() error {
 }
 
 func (c *cifsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
-	conn, err := c.getConnection()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		defer c.releaseConnection(conn, err)
-	}()
+	return c.withConn(func(conn *cifsConn) error {
+		p := c.path(key)
+		if strings.HasSuffix(p, dirSuffix) {
+			// perm will not take effect, is not used
+			// ref: https://github.com/hirochachacha/go-smb2/blob/c8e61c7a5fa7bcd1143359f071f9425a9f4dda3f/client.go#L341-L370
+			return conn.share.MkdirAll(p, 0755)
+		}
 
-	p := c.path(key)
-	if strings.HasSuffix(p, dirSuffix) {
-		// perm will not take effect, is not used
-		// ref: https://github.com/hirochachacha/go-smb2/blob/c8e61c7a5fa7bcd1143359f071f9425a9f4dda3f/client.go#L341-L370
-		return conn.share.MkdirAll(p, 0755)
-	}
+		// Ensure parent directories exist
+		dirPath := path.Dir(p)
+		if dirPath != "/" {
+			err = conn.share.MkdirAll(dirPath, 0755)
+			if err != nil {
+				return err
+			}
+		}
 
-	// Ensure parent directories exist
-	dirPath := path.Dir(p)
-	if dirPath != "/" {
-		err = conn.share.MkdirAll(dirPath, 0755)
+		var tmp string
+		if PutInplace {
+			tmp = p
+		} else {
+			name := path.Base(p)
+			if len(name) > 200 {
+				name = name[:200]
+			}
+			tmp = path.Join(path.Dir(p), fmt.Sprintf(".%s.tmp.%d", name, rand.Int()))
+			defer func() {
+				if err != nil {
+					_ = conn.share.Remove(tmp)
+				}
+			}()
+		}
+
+		f, err := conn.share.Create(tmp)
 		if err != nil {
 			return err
 		}
-	}
 
-	var tmp string
-	if PutInplace {
-		tmp = p
-	} else {
-		name := path.Base(p)
-		if len(name) > 200 {
-			name = name[:200]
+		buf := bufPool.Get().(*[]byte)
+		defer bufPool.Put(buf)
+		_, err = io.CopyBuffer(f, in, *buf)
+		if err != nil {
+			_ = f.Close()
+			return err
 		}
-		tmp = path.Join(path.Dir(p), fmt.Sprintf(".%s.tmp.%d", name, rand.Int()))
-		defer func() {
-			if err != nil {
-				_ = conn.share.Remove(tmp)
-			}
-		}()
-	}
 
-	f, err := conn.share.Create(tmp)
-	if err != nil {
-		return err
-	}
+		err = f.Close()
+		if err != nil {
+			return err
+		}
 
-	buf := bufPool.Get().(*[]byte)
-	defer bufPool.Put(buf)
-	_, err = io.CopyBuffer(f, in, *buf)
-	if err != nil {
-		_ = f.Close()
-		return err
-	}
-
-	err = f.Close()
-	if err != nil {
-		return err
-	}
-
-	if !PutInplace {
-		_ = conn.share.Remove(p) // Ignore error if file doesn't exist
-		return conn.share.Rename(tmp, p)
-	}
-
-	return nil
+		if !PutInplace {
+			_ = conn.share.Remove(p) // Ignore error if file doesn't exist
+			return conn.share.Rename(tmp, p)
+		}
+		return nil
+	})
 }
 
 func (c *cifsStore) Delete(key string, getters ...AttrGetter) (err error) {
-	conn, err := c.getConnection()
-	if err != nil {
+	return c.withConn(func(conn *cifsConn) error {
+		p := strings.TrimRight(c.path(key), dirSuffix)
+		err = conn.share.RemoveAll(p)
+		if err != nil && os.IsNotExist(err) {
+			err = nil
+		}
 		return err
-	}
-	defer func() {
-		defer c.releaseConnection(conn, err)
-	}()
-
-	p := strings.TrimRight(c.path(key), dirSuffix)
-	err = conn.share.RemoveAll(p)
-	if err != nil && os.IsNotExist(err) {
-		err = nil
-	}
-	return err
+	})
 }
 
 func (c *cifsStore) fileInfo(key string, fi os.FileInfo, isSymlink bool) Object {
@@ -328,16 +325,6 @@ func (c *cifsStore) List(prefix, marker, token, delimiter string, limit int64, f
 		return nil, false, "", notSupported
 	}
 
-	conn, err := c.getConnection()
-	if err != nil {
-		return nil, false, "", err
-	}
-	var retErr error
-	defer func() {
-		defer c.releaseConnection(conn, retErr)
-	}()
-
-	var objs []Object
 	dir := c.path(prefix)
 	if !strings.HasSuffix(dir, "/") {
 		dir = path.Dir(dir)
@@ -345,42 +332,45 @@ func (c *cifsStore) List(prefix, marker, token, delimiter string, limit int64, f
 			dir += dirSuffix
 		}
 	}
-
-	// Ensure directory exists before listing
-	_, retErr = conn.share.Stat(dir)
-	if retErr != nil {
-		if os.IsNotExist(retErr) || os.IsPermission(retErr) {
-			return nil, false, "", nil
+	var mEntries []*mEntry
+	err := c.withConn(func(conn *cifsConn) error {
+		// Ensure directory exists before listing
+		_, err := conn.share.Stat(dir)
+		if err != nil {
+			return err
 		}
-		return nil, false, "", retErr
-	}
 
-	// Read directory entries
-	entries, retErr := conn.share.ReadDir(dir)
-	if retErr != nil {
-		return nil, false, "", retErr
-	}
-
-	// Process entries
-	mEntries := make([]*mEntry, 0, len(entries))
-	for _, e := range entries {
-		isSymlink := e.Mode()&os.ModeSymlink != 0
-		if e.IsDir() {
-			mEntries = append(mEntries, &mEntry{e, e.Name() + dirSuffix, nil, false})
-		} else if isSymlink && followLink {
-			fi, err := conn.share.Stat(path.Join(dir, e.Name()))
-			if err != nil {
-				mEntries = append(mEntries, &mEntry{e, e.Name(), nil, true})
-				continue
-			}
-			name := e.Name()
-			if fi.IsDir() {
-				name = e.Name() + dirSuffix
-			}
-			mEntries = append(mEntries, &mEntry{e, name, fi, false})
-		} else {
-			mEntries = append(mEntries, &mEntry{e, e.Name(), nil, isSymlink})
+		// Read directory entries
+		entries, err := conn.share.ReadDir(dir)
+		if err != nil {
+			return err
 		}
+
+		// Process entries
+		mEntries = make([]*mEntry, 0, len(entries))
+		for _, e := range entries {
+			isSymlink := e.Mode()&os.ModeSymlink != 0
+			if e.IsDir() {
+				mEntries = append(mEntries, &mEntry{e, e.Name() + dirSuffix, nil, false})
+			} else if isSymlink && followLink {
+				fi, err := conn.share.Stat(path.Join(dir, e.Name()))
+				if err != nil {
+					mEntries = append(mEntries, &mEntry{e, e.Name(), nil, true})
+					continue
+				}
+				name := e.Name()
+				if fi.IsDir() {
+					name = e.Name() + dirSuffix
+				}
+				mEntries = append(mEntries, &mEntry{e, name, fi, false})
+			} else {
+				mEntries = append(mEntries, &mEntry{e, e.Name(), nil, isSymlink})
+			}
+		}
+		return nil
+	})
+	if os.IsNotExist(err) || os.IsPermission(err) {
+		return nil, false, "", nil
 	}
 
 	// Sort entries by name
@@ -388,6 +378,7 @@ func (c *cifsStore) List(prefix, marker, token, delimiter string, limit int64, f
 
 	// Generate object list
 	rootLen := len(c.path(""))
+	var objs []Object
 	for _, e := range mEntries {
 		p := path.Join(dir, e.Name())
 		if e.IsDir() && !strings.HasSuffix(p, "/") {
