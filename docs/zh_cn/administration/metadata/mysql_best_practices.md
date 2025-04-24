@@ -54,7 +54,7 @@ MySQL后端采用多线程模式，每一个连接对应后端一个线程，控
 juicefs mount -d "mysql://user:@(192.168.1.6:3306)/juicefs?max_open_conns=30&max_life_time=3600" /mnt/jfs
 ```
 
-请参考 Go 模块文档 [datatabase/sql](https://pkg.go.dev/database/sql#SetConnMaxIdleTime) 了解更多信息。
+请参考 Go 模块文档 [Database/SQL](https://pkg.go.dev/database/sql#SetConnMaxIdleTime) 了解更多信息。
 
 ## 定期备份
 
@@ -69,4 +69,3 @@ MySQL 官方文档 [Chapter 19. Replication](https://dev.mysql.com/doc/refman/8.
 :::note 注意
 JuiceFS 需要使用[事务功能]来保证元数据操作的原子性，因此需要使用支持事务的存储引擎，例如 [InnoDB](https://dev.mysql.com/doc/refman/8.0/en/innodb-storage-engine.html) 。一些基于 MySQL 的Shared Nothing 分布式架构可能会存在事务的兼容性问题，目前未对分布式架构做 JuiceFS 元数据做兼容性研发和测试。
 :::
-

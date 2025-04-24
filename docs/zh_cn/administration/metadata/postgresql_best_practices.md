@@ -48,7 +48,7 @@ PostgreSQL后端采用多进程模式，每一个连接对应后端一个进程�
 juicefs mount -d "postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs?max_open_conns=30&max_life_time=3600" /mnt/jfs
 ```
 
-请参考 Go 模块文档 [datatabase/sql](https://pkg.go.dev/database/sql#SetConnMaxIdleTime) 了解更多信息。
+请参考 Go 模块文档 [Database/SQL](https://pkg.go.dev/database/sql#SetConnMaxIdleTime) 了解更多信息。
 
 ## 定期备份
 
