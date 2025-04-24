@@ -833,6 +833,13 @@ juicefs warmup -f /tmp/filelist.txt
 
 如果文件系统启用了回收站功能，被删除的文件会进入回收站。详见[「回收站」](../security/trash.md)。
 
+#### 参数
+
+|项 | 说明|
+|-|-|
+|`--skip-trash`<VersionAdd>1.3</VersionAdd>|跳过垃圾并直接删除文件（需要 root 权限）|
+|`--threads=50, -p 50`<VersionAdd>1.3</VersionAdd>|用于删除作业的最大线程数（最大 255 个）|
+
 #### 概览
 
 ```shell

@@ -844,6 +844,13 @@ juicefs rmr PATH ...
 juicefs rmr /mnt/jfs/foo
 ```
 
+#### Options
+
+|Items|Description|
+|-|-|
+|`--skip-trash`<VersionAdd>1.3</VersionAdd>|skip trash and delete files directly (requires root)|
+|`--threads=50, -p 50`<VersionAdd>1.3</VersionAdd>|number of threads for delete jobs (max 255)|
+
 ### `juicefs sync` {#sync}
 
 Sync between two storage, read [Data migration](../guide/sync.md) for more.
