@@ -792,6 +792,7 @@ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage=s3 http
 |`--access-key=value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
 |`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
 |`--session-token value` <VersionAdd>1.0</VersionAdd>|session token for object storage|
+|`--shards`<VersionAdd>1.3</VersionAdd>|If your object storage limit speed in a bucket level (or you're using a self-hosted object storage with limited performance), you can store the blocks into N buckets by hash of key (default: 0), when N is greater than 0, `bucket` should to be in the form of `%d`, e.g. `--bucket "juicefs-%d"`. `--shards` cannot be changed afterwards and must be planned carefully ahead.|
 |`--block-size=4096`|size of each IO block in KiB (default: 4096)|
 |`--big-object-size=1024`|size of each big object in MiB (default: 1024)|
 |`--small-object-size=128`|size of each small object in KiB (default: 128)|
