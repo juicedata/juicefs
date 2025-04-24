@@ -789,6 +789,7 @@ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage=s3 http
 |`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--session-token value` <VersionAdd>1.0</VersionAdd>|对象存储的会话令牌|
+|`--shards`<VersionAdd>1.3</VersionAdd>|如果对象存储服务在桶级别设置了限速（或者你使用自建的对象存储服务，单个桶的性能有限），可以将数据块根据名字哈希分散存入 N 个桶中。该值默认为 0，也就是所有数据存入单个桶。当 N 大于 0 时，`bucket` 需要包含 `%d` 占位符，例如 `--bucket=juicefs-%d`。`--shards` 设置无法动态修改，需要提前规划好用量。|
 |`--block-size=4096`|每个 IO 块的大小（以 KiB 为单位）（默认值：4096）|
 |`--big-object-size=1024`|大文件的大小（以 MiB 为单位）（默认值：1024）|
 |`--small-object-size=128`|每个小文件的大小（以 KiB 为单位）（默认值：128）|
