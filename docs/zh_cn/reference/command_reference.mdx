@@ -912,6 +912,7 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--delete-dst, --deleteDst`|删除目标存储下的不相关对象。|
 |`--check-all`|校验源路径和目标路径中所有文件的数据完整性，默认为 false。校验方式是基于字节流对比，因此也将带来相应的开销。|
 |`--check-new`|校验新拷贝文件的数据完整性，默认为 false。校验方式是基于字节流对比，因此也将带来相应的开销。|
+|`--max-failure` <VersionAdd>1.3</VersionAdd>|最大允许失败的文件数（-1 表示无限）|
 |`--dry`|仅打印执行计划，不实际拷贝文件。|
 
 #### 对象存储相关参数 {#sync-storage-related-options}
