@@ -39,14 +39,6 @@ juicefs mount -d "mysql://user:@(192.168.1.6:3306)/juicefs?max_open_conns=30&max
 
 Plase refer Go datatabase/sql official manual (https://pkg.go.dev/database/sql#SetConnMaxIdleTime) for more information.
 
-## 高可用
-
-MySQL 官方文档 [Chapter 19. Replication](https://dev.mysql.com/doc/refman/8.0/en/replication.html) 和 [Chapter 20. Group Replication](https://dev.mysql.com/doc/refman/8.0/en/group-replication.html) 是常用的数据库高可用方案，请根据实际业务需要选择恰当的高可用方案。
-
-:::note 注意
-JuiceFS 需要使用[事务功能]来保证元数据操作的原子性，因此需要使用支持事务的存储引擎，例如InnoDB (https://dev.mysql.com/doc/refman/8.0/en/innodb-storage-engine.html) 。一些基于 MySQL 的Shared Nothing 分布式架构可能会存在事务的兼容性问题，目前未对分布式架构做 JuiceFS 元数据做兼容性研发和测试。
-:::
-
 ## Periodic backups
 
 Please refer to the official manual [Chapter 9. Backup and Recovery](https://dev.mysql.com/doc/refman/8.0/en/backup-and-recovery.html) to learn how to back up and restore databases.
