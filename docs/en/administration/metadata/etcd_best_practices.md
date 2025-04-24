@@ -1,6 +1,6 @@
 ---
 sidebar_label: etcd
-sidebar_position: 3
+sidebar_position: 4
 slug: /etcd_best_practices
 ---
 
