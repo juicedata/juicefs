@@ -1,6 +1,6 @@
 ---
 sidebar_label: FoundationDB
-sidebar_position: 4
+sidebar_position: 6
 slug: /fdb_best_practices
 ---
 

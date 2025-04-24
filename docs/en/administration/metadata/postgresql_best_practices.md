@@ -1,6 +1,6 @@
 ---
 sidebar_label: PostgreSQL
-sidebar_position: 2
+sidebar_position: 3
 slug: /postgresql_best_practices
 ---
 # PostgreSQL Best Practices
@@ -27,6 +27,24 @@ Database password can be set directly through the metadata URL. Although it is e
 export META_PASSWORD=mypassword
 juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
+
+## Database connection control
+
+PostgreSQL is a multiple process database, every client connection need a dedicate server process, limition of total connections and new connects are prefered. JuiceFS now provides the following options for better control of the connections:
+
+- max_open_conns: The maximim database connections allowed for this mount point, default value is 0 which means ulimited connections. If a non-zero values is provided, lower limit may cause current requests have to wait for other reqeusts to free the database connections under high concurrency, while higher value may waste the server side resources. Dynamicly adjusting is prefered based on real business trafics.
+- max_idle_conns: The minimum database connections allowed for this mount point, default values is double of logical CPU cores. Lower value will bring new database connetions under peak time, while higher value may waste some server side resource and get other mount points lack of database connections in peak time.  
+- max_idle_time: The maximum idle time allowed for a database connection, default value is 300 seconds. If a connection has no request to database for a given time, it will be closed to free the server side resource. Lower value will bring new database connetions under peak time.
+- max_life_time: The maximum life time allowed for a database connection, default value is 0 which means unlimited. As database connections are shared with different business requests, some resources (such as memory) may not be freed cleanly or be fragmented. Provide a non-zero value (such as 3600 seconds) will let the connection to be destroyed at given time to fully release the resource associated.
+
+We can pass the above options in metadata URL :
+
+```shell
+export META_PASSWORD=mypassword
+juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs?max_open_conns=30&max_life_time=3600" /mnt/jfs
+```
+
+Plase refer Go official module manual [Datatabase/SQL](https://pkg.go.dev/database/sql#SetConnMaxIdleTime) for more information.
 
 ## Authentication methods
 

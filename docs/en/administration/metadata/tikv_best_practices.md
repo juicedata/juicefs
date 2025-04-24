@@ -1,6 +1,6 @@
 ---
 sidebar_label: TiKV
-sidebar_position: 3
+sidebar_position: 5
 ---
 # TiKV Best Practices
 
