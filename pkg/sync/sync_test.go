@@ -782,4 +782,17 @@ func TestFilterSizeAndAge(t *testing.T) {
 	if filterKey(&mockObject{200, now.Add(-time.Second * 200)}, now, nil, config) {
 		t.Fatalf("filterKey should fail")
 	}
+
+	config = &Config{
+		MaxSize:   math.MaxInt64,
+		StartTime: time.Now().Add(-time.Hour),
+		EndTime:   time.Now().Add(-time.Minute),
+	}
+	if !filterKey(&mockObject{200, now.Add(-time.Minute * 30)}, now, nil, config) {
+		t.Fatalf("filterKey fail")
+	}
+
+	if filterKey(&mockObject{200, now.Add(-time.Hour * 2)}, now, nil, config) {
+		t.Fatalf("filterKey should fail")
+	}
 }

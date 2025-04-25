@@ -24,6 +24,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/spf13/cast"
 	"github.com/urfave/cli/v2"
 )
 
@@ -63,6 +64,8 @@ type Config struct {
 	MinSize        int64
 	MaxAge         time.Duration
 	MinAge         time.Duration
+	StartTime      time.Time
+	EndTime        time.Time
 	Env            map[string]string
 
 	FilesFrom string
@@ -149,7 +152,20 @@ func NewConfigFromCli(c *cli.Context) *Config {
 	if c.Int64("limit") < -1 {
 		logger.Fatal("limit should not be less than -1")
 	}
-
+	var startTime, endTime time.Time
+	var err error
+	if c.IsSet("start-time") {
+		startTime, err = cast.ToTimeInDefaultLocationE(c.String("start-time"), time.Local)
+		if err != nil {
+			logger.Fatalf("failed to parse start time: %v", err)
+		}
+	}
+	if c.IsSet("end-time") {
+		endTime, err = cast.ToTimeInDefaultLocationE(c.String("end-time"), time.Local)
+		if err != nil {
+			logger.Fatalf("failed to parse end time: %v", err)
+		}
+	}
 	cfg := &Config{
 		StorageClass:   c.String("storage-class"),
 		Start:          c.String("start"),
@@ -186,6 +202,8 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		MinSize:        int64(utils.ParseBytes(c, "min-size", 'B')),
 		MaxAge:         utils.Duration(c.String("max-age")),
 		MinAge:         utils.Duration(c.String("min-age")),
+		StartTime:      startTime,
+		EndTime:        endTime,
 		FilesFrom:      c.String("files-from"),
 		Env:            make(map[string]string),
 	}
