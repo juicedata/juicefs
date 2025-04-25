@@ -154,6 +154,12 @@ makepkg -si
 
 ### Windows {#windows}
 
+Since Windows does not natively support the FUSE interface, you need to download and install [WinFsp](https://winfsp.dev) first in order to implement FUSE support.
+
+   :::tip
+   **[WinFsp](https://github.com/winfsp/winfsp)** is an open source Windows file system agent. It provides a FUSE emulation layer that allows JuiceFS clients to mount file systems on Windows systems for use.
+   :::
+
 There are three ways to use JuiceFS on Windows systems.
 
 - [Using the pre-compiled Windows client](#using-the-pre-compiled-windows-client)
@@ -164,21 +170,13 @@ There are three ways to use JuiceFS on Windows systems.
 
 The Windows client of JuiceFS is also a standalone binary. After you download and extract it, you can run it right away.
 
-1. Install dependencies.
+Take the Windows 10 system as an example, download the file with the file name `windows-amd64`, unzip it, and get `juicefs.exe` which is the JuiceFS client binary.
 
-   Since Windows does not natively support the FUSE interface, you need to download and install [WinFsp](https://winfsp.dev) first in order to implement FUSE support.
+For convenience, you can move `juicefs.exe` to `C:\Windows\System32`, so you can run the `juicefs` command directly from any directory in the command line.
 
-   :::tip
-   **[WinFsp](https://github.com/winfsp/winfsp)** is an open source Windows file system agent. It provides a FUSE emulation layer that allows JuiceFS clients to mount file systems on Windows systems for use.
-   :::
+If you prefer more flexible management of the JuiceFS client, you can create a `juicefs` folder under the `C:\` drive, place `juicefs.exe` inside it, and add `C:\juicefs` to your system's PATH environment variable. After restarting your system, you can use the `juicefs` command directly in terminals such as Command Prompt or PowerShell.
 
-2. Install the client.
-
-   Take the Windows 10 system as an example, download the file with the file name `windows-amd64`, unzip it, and get `juicefs.exe` which is the JuiceFS client binary.
-
-   To make it easier to use, it is recommended to create a folder named `juicefs` in the root directory of the `C:\` disk and extract `juicefs.exe` to that folder. Then add `C:\juicefs` to the environment variables of your system and restart the system to let the settings take effect. Lastly, you can run `juicefs` commands directly using the "Command Prompt" or "PowerShell" terminal that comes with your system.
-
-   ![Windows ENV path](../images/windows-path-en.png)
+![Windows ENV path](../images/windows-path-en.png)
 
 #### Using Scoop {#scoop}
 
@@ -196,7 +194,7 @@ For details, see [Using JuiceFS on WSL](../tutorials/juicefs_on_wsl.md).
 
 ### macOS {#macos}
 
-Since macOS does not support the FUSE interface by default, you need to install [macFUSE](https://osxfuse.github.io) first to implement the support for FUSE.
+Since macOS does not support the FUSE interface by default, you need to install [macFUSE](https://osxfuse.github.io) to enable FUSE mounting. If FUSE mounting is not your primary use case, installing macFUSE is not required. You can also conveniently read and write data using JuiceFS through [WebDAV](../deployment/webdav.md), [Gateway](../guide/gateway.md), or the [Python SDK](../deployment/python_sdk.md).
 
 :::tip
 [macFUSE](https://github.com/osxfuse/osxfuse) is an open source file system enhancement tool that allows macOS to mount third-party file systems. It enables JuiceFS clients to mount file systems on macOS systems.
