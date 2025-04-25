@@ -86,19 +86,19 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 }
 
 type reader struct {
-	encryptR io.ReadCloser
-	zipR     io.ReadCloser
+	encryptR  io.ReadCloser
+	compressR io.ReadCloser
 }
 
 func (r *reader) Read(p []byte) (n int, err error) {
-	return r.zipR.Read(p)
+	return r.compressR.Read(p)
 }
 
 func (r *reader) Close() error {
-	if err := r.zipR.Close(); err != nil {
+	if err := r.compressR.Close(); err != nil {
 		return err
 	}
-	if r.encryptR != r.zipR {
+	if r.encryptR != r.compressR {
 		return r.encryptR.Close()
 	}
 	return nil
@@ -157,7 +157,7 @@ func open(src string, key string, algo string) (io.ReadCloser, error) {
 	} else {
 		r = fp
 	}
-	return &reader{zipR: r, encryptR: fp}, nil
+	return &reader{compressR: r, encryptR: fp}, nil
 }
 
 func convert(path string, key, algo string) (string, error) {
