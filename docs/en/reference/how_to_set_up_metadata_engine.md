@@ -27,11 +27,13 @@ When you need to migrate between two types of metadata engines, you can use this
 
 ## Redis Compatible Database
 
+### Redis
+
 JuiceFS requires Redis version 4.0 and above. Redis Cluster is also supported, but in order to avoid transactions across different Redis instances, JuiceFS puts all metadata for one file system on a single Redis instance.
 
 To ensure metadata security, JuiceFS requires [`maxmemory-policy noeviction`](https://redis.io/docs/reference/eviction/), otherwise it will try to set it to `noeviction` when starting JuiceFS, and will print a warning log if it fails. Refer to [Redis Best practices](../administration/metadata/redis_best_practices.md) for more.
 
-### Create a file system
+#### Create a file system
 
 When using Redis as the metadata storage engine, the following format is usually used to access the database:
 
@@ -91,7 +93,7 @@ juicefs format \
     pics
 ```
 
-### Mount a file system
+#### Mount a file system
 
 If you need to share the same file system across multiple nodes, ensure that all nodes has access to the Metadata Engine.
 
@@ -106,7 +108,7 @@ export META_PASSWORD=mypassword
 juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 ```
 
-### Set up TLS
+#### Set up TLS
 
 JuiceFS supports both TLS server-side encryption authentication and mTLS mutual encryption authentication connections to Redis. When connecting to Redis via TLS or mTLS, use the `rediss://` protocol header. However, when using TLS server-side encryption authentication, it is not necessary to specify the client certificate and private key.
 
@@ -134,8 +136,6 @@ When specifying options in a URL, start with the `?` symbol and use the `&` symb
 
 In the above example, `/etc/certs` is just a directory name. Replace it with your actual certificate directory when using it, which can be a relative or absolute path.
 
-## Key-Value Database
-
 ### KeyDB
 
 [KeyDB](https://keydb.dev) is an open source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis, and also supports [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication), i.e., the Active Active feature.
@@ -145,6 +145,8 @@ Same as Redis, the Active Replication is asynchronous, which may cause consisten
 :::
 
 When being used as metadata storage engine for Juice, KeyDB is used exactly in the same way as Redis. So please refer to the [Redis](#redis) section for usage.
+
+## Key-Value Database
 
 ### BadgerDB
 

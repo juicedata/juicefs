@@ -27,11 +27,13 @@ JuiceFS 采用数据和元数据分离的存储架构，元数据可以存储在
 
 ## Redis 兼容数据库
 
+### Redis
+
 JuiceFS 要求使用 4.0 及以上版本的 Redis。JuiceFS 也支持使用 Redis Cluster 作为元数据引擎，但为了避免在 Redis 集群中执行跨节点事务，同一个文件系统的元数据总会坐落于单个 Redis 实例中。
 
 为了保证元数据安全，JuiceFS 需要 [`maxmemory-policy noeviction`](https://redis.io/docs/reference/eviction/)，否则在启动 JuiceFS 的时候将会尝试将其设置为 `noeviction`，如果设置失败将会打印告警日志。更多可以参考 [Redis 最佳实践](../administration/metadata/redis_best_practices.md)。
 
-### 创建文件系统
+#### 创建文件系统
 
 使用 Redis 作为元数据存储引擎时，通常使用以下格式访问数据库：
 
@@ -91,7 +93,7 @@ juicefs format \
     pics
 ```
 
-### 挂载文件系统
+#### 挂载文件系统
 
 如果需要在多台服务器上共享同一个文件系统，必须确保每台服务器都能访问到存储元数据的数据库。
 
@@ -106,7 +108,7 @@ export META_PASSWORD=mypassword
 juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 ```
 
-### 设置 TLS
+#### 设置 TLS
 
 JuiceFS 同时支持 Redis 的 TLS 单向加密认证和 mTLS 双向加密认证连接。通过 TLS 或 mTLS 连接到 Redis 时均使用 `rediss://` 协议头，但是在使用 TLS 单向加密认证时，不需要指定客户端证书和私钥。
 
@@ -134,8 +136,6 @@ juicefs format --storage s3 \
 
 上例中的 `/etc/certs` 只是一个目录，实际使用时请替换为你的证书目录，可以使用相对路径或绝对路径。
 
-## 键值数据库
-
 ### KeyDB
 
 [KeyDB](https://keydb.dev) 是 Redis 的开源分支，在开发上保持与 Redis 主线对齐。KeyDB 在 Redis 的基础上实现了多线程支持、更好的内存利用率和更大的吞吐量，另外还支持 [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication)，即 Active Active（双活）功能。
@@ -145,6 +145,8 @@ KeyDB 的数据复制是异步的，使用 Active Active（双活）功能可能
 :::
 
 在用于 JuiceFS 元数据存储时，KeyDB 与 Redis 的用法完全一致，这里不再赘述，请参考 [Redis](#redis) 部分使用。
+
+## 键值数据库
 
 ### BadgerDB
 
