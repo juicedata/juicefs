@@ -25,15 +25,13 @@ When the average file is larger (over 64MB), or the file is frequently modified 
 
 When you need to migrate between two types of metadata engines, you can use this method to estimate the required storage space. For example, if you want to migrate the metadata engine from a relational database (MySQL) to a key-value database (Redis), and the current usage of MySQL is 30GB, then the target Redis needs to prepare at least 15GB or more of memory. The reverse is also true.
 
-## Key-Value Database
-
-### Redis
+## Redis Compatible Database
 
 JuiceFS requires Redis version 4.0 and above. Redis Cluster is also supported, but in order to avoid transactions across different Redis instances, JuiceFS puts all metadata for one file system on a single Redis instance.
 
 To ensure metadata security, JuiceFS requires [`maxmemory-policy noeviction`](https://redis.io/docs/reference/eviction/), otherwise it will try to set it to `noeviction` when starting JuiceFS, and will print a warning log if it fails. Refer to [Redis Best practices](../administration/metadata/redis_best_practices.md) for more.
 
-#### Create a file system
+### Create a file system
 
 When using Redis as the metadata storage engine, the following format is usually used to access the database:
 
@@ -93,7 +91,7 @@ juicefs format \
     pics
 ```
 
-#### Mount a file system
+### Mount a file system
 
 If you need to share the same file system across multiple nodes, ensure that all nodes has access to the Metadata Engine.
 
@@ -108,7 +106,7 @@ export META_PASSWORD=mypassword
 juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 ```
 
-#### Set up TLS
+### Set up TLS
 
 JuiceFS supports both TLS server-side encryption authentication and mTLS mutual encryption authentication connections to Redis. When connecting to Redis via TLS or mTLS, use the `rediss://` protocol header. However, when using TLS server-side encryption authentication, it is not necessary to specify the client certificate and private key.
 
@@ -135,6 +133,8 @@ In the code mentioned above, we use the `rediss://` protocol header to enable mT
 When specifying options in a URL, start with the `?` symbol and use the `&` symbol to separate multiple options, for example: `?tls-cert-file=client.crt&tls-key-file=client.key`.
 
 In the above example, `/etc/certs` is just a directory name. Replace it with your actual certificate directory when using it, which can be a relative or absolute path.
+
+## Key-Value Database
 
 ### KeyDB
 
@@ -439,7 +439,7 @@ juicefs.fdb mount -d \
     /mnt/jfs
 ```
 
-## Relational Database
+## SQL Database
 
 Each database can only be used by one JuiceFS file system by default. If you want multiple file systems to share a database, you can achieve this by adding a `table_prefix` <VersionAdd>1.3</VersionAdd> query parameter in the META-URL to add different table prefixes for different file systems.
 For example: `mysql://user:mypassword@(192.168.1.6:3306)/juicefs?table_prefix=volume1`

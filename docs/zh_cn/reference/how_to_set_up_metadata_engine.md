@@ -25,15 +25,13 @@ JuiceFS 采用数据和元数据分离的存储架构，元数据可以存储在
 
 当你需要在两种类型的元数据引擎之间迁移时，就可以据此来估算所需的存储空间。例如，假设你希望将元数据引擎从一个关系型数据库（MySQL）迁移到键值数据库（Redis），如果当前 MySQL 的用量为 30GB，那么目标 Redis 至少需要准备 15GB 以上的内存。反之亦然。
 
-## 键值数据库
-
-### Redis
+## Redis 兼容数据库
 
 JuiceFS 要求使用 4.0 及以上版本的 Redis。JuiceFS 也支持使用 Redis Cluster 作为元数据引擎，但为了避免在 Redis 集群中执行跨节点事务，同一个文件系统的元数据总会坐落于单个 Redis 实例中。
 
 为了保证元数据安全，JuiceFS 需要 [`maxmemory-policy noeviction`](https://redis.io/docs/reference/eviction/)，否则在启动 JuiceFS 的时候将会尝试将其设置为 `noeviction`，如果设置失败将会打印告警日志。更多可以参考 [Redis 最佳实践](../administration/metadata/redis_best_practices.md)。
 
-#### 创建文件系统
+### 创建文件系统
 
 使用 Redis 作为元数据存储引擎时，通常使用以下格式访问数据库：
 
@@ -93,7 +91,7 @@ juicefs format \
     pics
 ```
 
-#### 挂载文件系统
+### 挂载文件系统
 
 如果需要在多台服务器上共享同一个文件系统，必须确保每台服务器都能访问到存储元数据的数据库。
 
@@ -108,7 +106,7 @@ export META_PASSWORD=mypassword
 juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 ```
 
-#### 设置 TLS
+### 设置 TLS
 
 JuiceFS 同时支持 Redis 的 TLS 单向加密认证和 mTLS 双向加密认证连接。通过 TLS 或 mTLS 连接到 Redis 时均使用 `rediss://` 协议头，但是在使用 TLS 单向加密认证时，不需要指定客户端证书和私钥。
 
@@ -135,6 +133,8 @@ juicefs format --storage s3 \
 在 URL 指定选项时，以 `?` 符号开头，使用 `&` 符号来分隔多个选项，例如：`?tls-cert-file=client.crt&tls-key-file=client.key`。
 
 上例中的 `/etc/certs` 只是一个目录，实际使用时请替换为你的证书目录，可以使用相对路径或绝对路径。
+
+## 键值数据库
 
 ### KeyDB
 
@@ -435,7 +435,7 @@ juicefs.fdb mount -d \
     /mnt/jfs
 ```
 
-## 关系型数据库
+## SQL 数据库
 
 每个数据库默认只能被一个 JuiceFS 文件系统所使用，如果想要多个文件系统共享一个数据库，可以通过在 META-URL 中添加 `table_prefix` <VersionAdd>1.3</VersionAdd> query 参数
 为不同的文件系统添加不同的表名来前缀实现。例如：`mysql://user:mypassword@(192.168.1.6:3306)/juicefs?table_prefix=volume1`
