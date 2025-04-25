@@ -3060,10 +3060,11 @@ func testClone(t *testing.T, m Meta) {
 		})
 
 	}
-	time.Sleep(1 * time.Second)
+	m.getBase().stopDeleteSliceTasks()
 	if !sli1del || !sli2del {
 		t.Fatalf("slice should be deleted")
 	}
+	m.getBase().startDeleteSliceTasks()
 	nodes := m.(engine).doFindDetachedNodes(time.Now())
 	if len(nodes) != 4 {
 		t.Fatalf("find detached nodes error: %v", nodes)
