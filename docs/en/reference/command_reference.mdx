@@ -740,6 +740,7 @@ juicefs webdav redis://localhost localhost:9007
 |`--log value` <VersionAdd>1.2</VersionAdd>|path for WebDAV log|
 |`--access-log=path`|path for JuiceFS access log|
 |`--background, -d` <VersionAdd>1.2</VersionAdd>|run in background (default: false)|
+|`--threads=50, -p 50` <VersionAdd>1.3</VersionAdd>|number of threads for delete jobs (max 255)|
 
 <CommonOptions />
 
@@ -845,6 +846,13 @@ juicefs rmr PATH ...
 
 juicefs rmr /mnt/jfs/foo
 ```
+
+#### Options
+
+|Items|Description|
+|-|-|
+|`--skip-trash`<VersionAdd>1.3</VersionAdd>|skip trash and delete files directly (requires root)|
+|`--threads=50, -p 50`<VersionAdd>1.3</VersionAdd>|number of threads for delete jobs (max 255)|
 
 ### `juicefs sync` {#sync}
 
