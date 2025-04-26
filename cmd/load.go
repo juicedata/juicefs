@@ -20,7 +20,6 @@ import (
 	"compress/gzip"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -86,76 +85,148 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 	}
 }
 
+type reader struct {
+	encryptR  io.ReadCloser
+	compressR io.ReadCloser
+}
+
+func (r *reader) Read(p []byte) (n int, err error) {
+	return r.compressR.Read(p)
+}
+
+func (r *reader) Close() error {
+	if err := r.compressR.Close(); err != nil {
+		return err
+	}
+	if r.encryptR != r.compressR {
+		return r.encryptR.Close()
+	}
+	return nil
+}
+
+func open(src string, key string, algo string) (io.ReadCloser, error) {
+	var r io.ReadCloser
+	var ioErr error
+	var fp io.ReadCloser
+	if key != "" {
+		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
+		encryptKey := loadEncrypt(key)
+		if passphrase == "" {
+			block, _ := pem.Decode([]byte(encryptKey))
+			// nolint:staticcheck
+			if block != nil && strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
+				return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
+			}
+		}
+		privKey, err := object.ParseRsaPrivateKeyFromPem([]byte(encryptKey), []byte(passphrase))
+		if err != nil {
+			return nil, fmt.Errorf("parse rsa: %s", err)
+		}
+		encryptor, err := object.NewDataEncryptor(object.NewRSAEncryptor(privKey), algo)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := os.Stat(src); err != nil {
+			return nil, fmt.Errorf("failed to stat %s: %s", src, err)
+		}
+		var srcAbsPath string
+		srcAbsPath, err = filepath.Abs(src)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get absolute path of %s: %s", src, err)
+		}
+		fileBlob, err := object.CreateStorage("file", strings.TrimSuffix(src, filepath.Base(srcAbsPath)), "", "", "")
+		if err != nil {
+			return nil, err
+		}
+		blob := object.NewEncrypted(fileBlob, encryptor)
+		fp, ioErr = blob.Get(filepath.Base(srcAbsPath), 0, -1)
+	} else {
+		fp, ioErr = os.Open(src)
+	}
+	if ioErr != nil {
+		return nil, ioErr
+	}
+	if strings.HasSuffix(src, ".gz") {
+		var err error
+		r, err = gzip.NewReader(fp)
+		if err != nil {
+			return nil, err
+		}
+	} else if strings.HasSuffix(src, ".zstd") {
+		r = zstd.NewReader(fp)
+	} else {
+		r = fp
+	}
+	return &reader{compressR: r, encryptR: fp}, nil
+}
+
+func convert(path string, key, algo string) (string, error) {
+	isCompress := false
+	if strings.HasSuffix(path, ".gz") || strings.HasSuffix(path, ".zstd") {
+		isCompress = true
+	}
+
+	if key == "" && !isCompress {
+		return path, nil
+	}
+
+	nPath := path[:strings.LastIndex(path, ".")]
+	if utils.Exists(nPath) {
+		logger.Infof("plain backup %s already exists, skip conversion", nPath)
+		return nPath, nil
+	}
+
+	r, err := open(path, key, algo)
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+
+	w, err := os.Create(nPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create plain backup %s: %w", nPath, err)
+	}
+	defer w.Close()
+
+	if _, err = io.Copy(w, r); err != nil {
+		return "", fmt.Errorf("failed to convert %s to %s: %w", path, nPath, err)
+	}
+	logger.Infof("converted backup %s to %s", path, nPath)
+	return nPath, nil
+}
+
 func load(ctx *cli.Context) error {
 	setup(ctx, 1)
 
-	if ctx.Bool("binary") && ctx.Bool("stat") {
-		return statBak(ctx)
+	key, algo := ctx.String("encrypt-rsa-key"), ctx.String("encrypt-algo")
+	src := ctx.Args().Get(1)
+	var err error
+	if ctx.Bool("binary") {
+		if ctx.Bool("stat") {
+			src = ctx.Args().Get(0)
+		}
+		if src, err = convert(src, key, algo); err != nil {
+			return err
+		}
+		if ctx.Bool("stat") {
+			return statBak(ctx, src)
+		}
 	}
 
 	metaUri := ctx.Args().Get(0)
-	src := ctx.Args().Get(1)
 	removePassword(metaUri)
 	var r io.ReadCloser
 	if ctx.Args().Len() == 1 {
 		r = os.Stdin
 		src = "STDIN"
 	} else {
-		var ioErr error
-		var fp io.ReadCloser
-		if ctx.String("encrypt-rsa-key") != "" {
-			passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
-			encryptKey := loadEncrypt(ctx.String("encrypt-rsa-key"))
-			if passphrase == "" {
-				block, _ := pem.Decode([]byte(encryptKey))
-				// nolint:staticcheck
-				if block != nil && strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
-					return fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
-				}
-			}
-			privKey, err := object.ParseRsaPrivateKeyFromPem([]byte(encryptKey), []byte(passphrase))
-			if err != nil {
-				return fmt.Errorf("parse rsa: %s", err)
-			}
-			encryptor, err := object.NewDataEncryptor(object.NewRSAEncryptor(privKey), ctx.String("encrypt-algo"))
-			if err != nil {
-				return err
-			}
-			if _, err := os.Stat(src); err != nil {
-				return fmt.Errorf("failed to stat %s: %s", src, err)
-			}
-			var srcAbsPath string
-			srcAbsPath, err = filepath.Abs(src)
-			if err != nil {
-				return fmt.Errorf("failed to get absolute path of %s: %s", src, err)
-			}
-			fileBlob, err := object.CreateStorage("file", strings.TrimSuffix(src, filepath.Base(srcAbsPath)), "", "", "")
-			if err != nil {
-				return err
-			}
-			blob := object.NewEncrypted(fileBlob, encryptor)
-			fp, ioErr = blob.Get(filepath.Base(srcAbsPath), 0, -1)
-		} else {
-			fp, ioErr = os.Open(src)
+		r, err = open(src, key, algo)
+		if err != nil {
+			return err
 		}
-		if ioErr != nil {
-			return ioErr
-		}
-		defer fp.Close()
-		if strings.HasSuffix(src, ".gz") {
-			var err error
-			r, err = gzip.NewReader(fp)
-			if err != nil {
-				return err
-			}
-			defer r.Close()
-		} else if strings.HasSuffix(src, ".zstd") {
-			r = zstd.NewReader(fp)
-			defer r.Close()
-		} else {
-			r = fp
-		}
+		defer r.Close()
 	}
+
 	m := meta.NewClient(metaUri, nil)
 	if format, err := m.Load(false); err == nil {
 		return fmt.Errorf("database %s is used by volume %s", utils.RemovePassword(metaUri), format.Name)
@@ -185,21 +256,17 @@ func load(ctx *cli.Context) error {
 	}
 	if format, err := m.Load(true); err == nil {
 		if format.SecretKey == "removed" {
-			logger.Warnf("Secret key was removed; please correct it with `config` command")
+			logger.Warnf("secret key was removed; please correct it with `config` command")
 		}
 	} else {
 		return err
 	}
-	logger.Infof("Load metadata from %s succeed", src)
+	logger.Infof("load metadata from %s succeed", src)
 	return nil
 }
 
-func statBak(ctx *cli.Context) error {
-	path := ctx.Args().Get(0)
-	if path == "" {
-		return errors.New("missing file path")
-	}
-
+func statBak(ctx *cli.Context, path string) error {
+	logger.Infof("load backup from %s", path)
 	fp, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("failed to open file %s: %w", path, err)
