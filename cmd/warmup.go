@@ -315,10 +315,14 @@ func warmup(ctx *cli.Context) error {
 				}
 				printResult(result, 0, false)
 			}
+			pct := 0.0
+			if bytes != 0 {
+				pct = float64(uint64(bytes)-total.MissBytes) * 100 / float64(bytes)
+			}
 			logger.Infof("%s: %d files checked, %s of %s (%2.1f%%) cached", action, count,
 				humanize.IBytes(uint64(bytes)-total.MissBytes),
 				humanize.IBytes(uint64(bytes)),
-				float64(uint64(bytes)-total.MissBytes)*100/float64(bytes))
+				pct)
 		}
 	}
 	return nil
