@@ -1170,6 +1170,12 @@ func filterKey(o object.Object, now time.Time, rules []rule, config *Config) boo
 		if ok && config.MinAge > 0 {
 			ok = o.Mtime().Before(now.Add(-config.MinAge))
 		}
+		if ok && !config.StartTime.IsZero() {
+			ok = o.Mtime().After(config.StartTime)
+		}
+		if ok && !config.EndTime.IsZero() {
+			ok = o.Mtime().Before(config.EndTime)
+		}
 	}
 	if ok {
 		if config.MatchFullPath {
