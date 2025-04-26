@@ -152,6 +152,12 @@ makepkg -si
 
 ### Windows 系统 {#windows}
 
+由于 Windows 没有原生支持 FUSE 接口，首先需要下载安装 [WinFsp](https://winfsp.dev) 才能实现对 FUSE 的支持。
+
+   :::tip 提示
+   **[WinFsp](https://github.com/winfsp/winfsp)** 是一个开源的 Windows 文件系统代理，它提供了一个 FUSE 仿真层，使得 JuiceFS 客户端可以将文件系统挂载到 Windows 系统中使用。
+   :::
+
 在 Windows 系统安装 JuiceFS 有以下几种方法：
 
 - [使用预编译的 Windows 客户端](#预编译的-windows-客户端)
@@ -160,23 +166,15 @@ makepkg -si
 
 #### 预编译的 Windows 客户端
 
-JuiceFS 的 Windows 客户端也是一个独立的二进制程序，下载解压即可直接运行使用。
+JuiceFS 的 Windows 客户端为独立的二进制文件，下载并解压后即可直接运行。
 
-1. 安装依赖程序
+以 Windows 10 为例，下载包含 `windows-amd64` 的压缩包，解压后获得 `juicefs.exe`，即为 JuiceFS 客户端。
 
-   由于 Windows 没有原生支持 FUSE 接口，首先需要下载安装 [WinFsp](https://winfsp.dev) 才能实现对 FUSE 的支持。
+为方便使用，可将 `juicefs.exe` 移动到 `C:\Windows\System32`，这样可在任意目录下通过命令行直接运行 `juicefs`。
 
-   :::tip 提示
-   **[WinFsp](https://github.com/winfsp/winfsp)** 是一个开源的 Windows 文件系统代理，它提供了一个 FUSE 仿真层，使得 JuiceFS 客户端可以将文件系统挂载到 Windows 系统中使用。
-   :::
+如需更灵活地管理 JuiceFS 客户端，可以在 `C:\` 盘下新建 `juicefs` 文件夹，将 `juicefs.exe` 放入其中，并将 `C:\juicefs` 添加到系统环境变量 PATH。重启系统后，即可在「命令提示符」或「PowerShell」等终端中直接使用 `juicefs` 命令。
 
-2. 安装客户端
-
-   以 Windows 10 系统为例，下载文件名包含 `windows-amd64` 的压缩包，解压后得到 `juicefs.exe` 即是 JuiceFS 的客户端程序。
-
-   为了便于使用，可以在 `C:\` 盘根目录创建一个名为 `juicefs` 的文件夹，把 `juicefs.exe` 解压到该文件夹中。然后将 `C:\juicefs` 文件夹路径添加到系统的环境变量，重启系统让设置生效以后，可直接使用使用系统自带的「命令提示符」或「PowerShell」等终端程序运行 `juicefs` 命令。
-
-   ![Windows ENV path](../images/windows-path.png)
+![Windows ENV path](../images/windows-path.png)
 
 #### 使用 Scoop 安装 {#scoop}
 
@@ -194,7 +192,7 @@ scoop install juicefs
 
 ### macOS 系统 {#macos}
 
-由于 macOS 默认不支持 FUSE 接口，需要先安装 [macFUSE](https://osxfuse.github.io) 实现对 FUSE 的支持。
+由于 macOS 默认不支持 FUSE 接口，需要安装 [macFUSE](https://osxfuse.github.io) 才能实现 FUSE 挂载。如果 FUSE 挂载不是你的主要使用场景，则无需安装 macFUSE。通过使用 JuiceFS 的 [WebDAV](../deployment/webdav.md)、[Gateway](../guide/gateway.md)、[Python SDK](../deployment/python_sdk.md) 等访问方式也能方便地读写数据。
 
 :::tip 提示
 [macFUSE](https://github.com/osxfuse/osxfuse) 是一个开源的文件系统增强工具，它让 macOS 可以挂载第三方的文件系统，使得 JuiceFS 客户端可以将文件系统挂载到 macOS 系统中使用。
