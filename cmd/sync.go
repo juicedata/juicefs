@@ -141,11 +141,11 @@ func selectionFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "start-time",
-			Usage: "skip files older than start-time",
+			Usage: "skip files modified before start-time",
 		},
 		&cli.StringFlag{
 			Name:  "end-time",
-			Usage: "skip files newer than end-time",
+			Usage: "skip files modified after end-time",
 		},
 		&cli.Int64Flag{
 			Name:  "limit",
