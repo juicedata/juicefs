@@ -233,8 +233,10 @@ type baseMeta struct {
 	sesMu        sync.Mutex
 	aclCache     aclAPI.Cache
 
-	sessCtx  Context
-	sessWG   sync.WaitGroup
+	sessCtx Context
+	sessWG  sync.WaitGroup
+
+	dSliceMu sync.Mutex
 	dSliceWG sync.WaitGroup
 
 	dirStatsLock sync.Mutex
@@ -566,15 +568,14 @@ func (m *baseMeta) startDeleteSliceTasks() {
 }
 
 func (m *baseMeta) stopDeleteSliceTasks() {
-	m.Lock()
+	m.dSliceMu.Lock()
 	if m.conf.MaxDeletes <= 0 || m.dslices == nil {
-		m.Unlock()
+		m.dSliceMu.Unlock()
 		return
 	}
 	close(m.dslices)
 	m.dslices = nil
-	m.Unlock()
-
+	m.dSliceMu.Unlock()
 	m.dSliceWG.Wait()
 }
 
@@ -2418,18 +2419,17 @@ func (m *baseMeta) deleteSlice(id uint64, size uint32) {
 	if id == 0 || m.conf.MaxDeletes == 0 {
 		return
 	}
-	m.Lock()
-	dslices := m.dslices
-	m.Unlock()
-	if dslices != nil {
-		select {
-		case <-m.sessCtx.Done():
-			return
-		case dslices <- Slice{Id: id, Size: size}:
-		}
-	} else {
+	m.dSliceMu.Lock()
+	if m.dslices == nil {
+		m.dSliceMu.Unlock()
 		m.deleteSlice_(id, size)
+		return
 	}
+	select {
+	case <-m.sessCtx.Done():
+	case m.dslices <- Slice{Id: id, Size: size}:
+	}
+	m.dSliceMu.Unlock()
 }
 
 func (m *baseMeta) toTrash(parent Ino) bool {
