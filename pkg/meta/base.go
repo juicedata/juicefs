@@ -60,6 +60,13 @@ var (
 	inodeNeedPrefetch = uint64(utils.JitterIt(inodeBatch * 0.1)) // Add jitter to reduce probability of txn conflicts
 )
 
+func checkInodeName(name string) syscall.Errno {
+	if len(name) == 0 || strings.ContainsAny(name, "/\x00") {
+		return syscall.EINVAL
+	}
+	return 0
+}
+
 type engine interface {
 	// Get the value of counter name.
 	getCounter(name string) (int64, error)
@@ -1157,11 +1164,11 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
-	if name == "" {
-		return syscall.ENOENT
-	}
 	if name == "." || name == ".." {
 		return syscall.EEXIST
+	}
+	if errno := checkInodeName(name); errno != 0 {
+		return errno
 	}
 
 	defer m.timeit("Mknod", time.Now())
@@ -1255,8 +1262,8 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
-	if name == "" {
-		return syscall.ENOENT
+	if errno := checkInodeName(name); errno != 0 {
+		return errno
 	}
 	if name == "." || name == ".." {
 		return syscall.EEXIST
@@ -1395,9 +1402,10 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
-	if nameDst == "" {
-		return syscall.ENOENT
+	if errno := checkInodeName(nameDst); errno != 0 {
+		return errno
 	}
+
 	switch flags {
 	case 0, RenameNoReplace, RenameExchange, RenameNoReplace | RenameRestore:
 	case RenameWhiteout, RenameNoReplace | RenameWhiteout:
