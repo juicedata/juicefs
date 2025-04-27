@@ -254,7 +254,7 @@ func (fs *FileSystem) cleanupCache() {
 	}
 }
 
-func (fs *FileSystem) invalidateEntry(parent Ino, name string) {
+func (fs *FileSystem) InvalidateEntry(parent Ino, name string) {
 	fs.cacheM.Lock()
 	defer fs.cacheM.Unlock()
 	es, ok := fs.entries[parent]
@@ -455,7 +455,7 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16, umask uint1
 		if fs.conf.DirEntryTimeout > 0 {
 			parent := parentDir(p)
 			if fi, err := fs.resolve(ctx, parentDir(parent), true); err == 0 {
-				fs.invalidateEntry(fi.inode, path.Base(parent))
+				fs.InvalidateEntry(fi.inode, path.Base(parent))
 			}
 		}
 		if fi2, e := fs.resolve(ctx, parentDir(p), true); e != 0 {
@@ -464,7 +464,7 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16, umask uint1
 			err = fs.m.Mkdir(ctx, fi2.inode, path.Base(p), mode, umask, 0, &inode, nil)
 		}
 	}
-	fs.invalidateEntry(fi.inode, path.Base(p))
+	fs.InvalidateEntry(fi.inode, path.Base(p))
 	return
 }
 
@@ -518,7 +518,7 @@ func (fs *FileSystem) Delete0(ctx meta.Context, p string, callByUnlink bool) (er
 	} else {
 		err = fs.m.Unlink(ctx, parent.inode, path.Base(p))
 	}
-	fs.invalidateEntry(parent.inode, path.Base(p))
+	fs.InvalidateEntry(parent.inode, path.Base(p))
 	return
 }
 
@@ -531,7 +531,7 @@ func (fs *FileSystem) Rmdir(ctx meta.Context, p string) (err syscall.Errno) {
 		return
 	}
 	err = fs.m.Rmdir(ctx, parent.inode, path.Base(p))
-	fs.invalidateEntry(parent.inode, path.Base(p))
+	fs.InvalidateEntry(parent.inode, path.Base(p))
 	return
 }
 
@@ -544,7 +544,7 @@ func (fs *FileSystem) Rmr(ctx meta.Context, p string, skipTrash bool, numthreads
 		return
 	}
 	err = fs.m.Remove(ctx, parent.inode, path.Base(p), skipTrash, numthreads, nil)
-	fs.invalidateEntry(parent.inode, path.Base(p))
+	fs.InvalidateEntry(parent.inode, path.Base(p))
 	return
 }
 
@@ -603,8 +603,8 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, f
 		return err0
 	}
 	err = fs.m.Rename(ctx, oldfi.inode, path.Base(oldpath), newfi.inode, path.Base(newpath), flags, nil, nil)
-	fs.invalidateEntry(oldfi.inode, path.Base(oldpath))
-	fs.invalidateEntry(newfi.inode, path.Base(newpath))
+	fs.InvalidateEntry(oldfi.inode, path.Base(oldpath))
+	fs.InvalidateEntry(newfi.inode, path.Base(newpath))
 	return
 }
 
@@ -622,7 +622,7 @@ func (fs *FileSystem) Link(ctx meta.Context, src string, dst string) (err syscal
 		return
 	}
 	err = fs.m.Link(ctx, fi.inode, pi.inode, path.Base(dst), nil)
-	fs.invalidateEntry(pi.inode, path.Base(dst))
+	fs.InvalidateEntry(pi.inode, path.Base(dst))
 	return
 }
 
@@ -638,7 +638,7 @@ func (fs *FileSystem) Symlink(ctx meta.Context, target string, link string) (err
 		return
 	}
 	err = fs.m.Symlink(ctx, fi.inode, path.Base(link), target, nil, nil)
-	fs.invalidateEntry(fi.inode, path.Base(link))
+	fs.InvalidateEntry(fi.inode, path.Base(link))
 	return
 }
 
@@ -951,7 +951,7 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16, umask uint
 		if fs.conf.DirEntryTimeout > 0 {
 			parent := parentDir(p)
 			if fi, err := fs.resolve(ctx, parentDir(parent), true); err == 0 {
-				fs.invalidateEntry(fi.inode, path.Base(parent))
+				fs.InvalidateEntry(fi.inode, path.Base(parent))
 			}
 		}
 		if fi2, e := fs.resolve(ctx, parentDir(p), true); e != 0 {
@@ -970,7 +970,7 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16, umask uint
 		f.info = fi
 		f.fs = fs
 	}
-	fs.invalidateEntry(fi.inode, path.Base(p))
+	fs.InvalidateEntry(fi.inode, path.Base(p))
 	return
 }
 
