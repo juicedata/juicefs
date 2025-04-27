@@ -359,7 +359,7 @@ func (j *juice) Open(path string, flags int) (e int, fh uint64) {
 // The flags are a combination of the fuse.O_* constants.
 func (j *juice) OpenEx(p string, fi *fuse.FileInfo_t) (e int) {
 	ctx := j.newContext()
-	defer trace(p, fi.Flags)(&e)
+	defer trace(p, fi.Flags)(&e, &fi.Fh)
 	ino := meta.Ino(0)
 	if strings.HasSuffix(p, "/.control") {
 		ino, _ = vfs.GetInternalNodeByName(".control")
