@@ -34,7 +34,11 @@ run_test(){
         done
     else
         # Find and run all test functions
-        tests=$(grep -oP '^\s*test_\w+\s*\(\s*\)' "$0")
+        if [[ "$(uname)" == "Darwin" ]]; then
+            tests=$(grep -E '^[[:space:]]*test_[[:alnum:]_]+[[:space:]]*\([[:space:]]*\)' "$0")
+        else
+            tests=$(grep -oP '^\s*test_\w+\s*\(\s*\)' "$0")
+        fi
         if [[ -z "$tests" ]]; then
             echo -e "\033[0;31mNo test function found in $0\033[0m"
         else
