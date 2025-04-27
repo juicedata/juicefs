@@ -915,6 +915,7 @@ func Serve(v *vfs.VFS, fuseOpt string, asRoot bool, delayCloseSec int, showDotFi
 	var jfs juice
 	conf := v.Conf
 	jfs.attrCacheTimeout = v.Conf.AttrTimeout
+	v.Conf.AttrTimeout = time.Duration(0)
 	jfs.conf = conf
 	jfs.vfs = v
 	jfs.enabledGetPath = enabledGetPath
