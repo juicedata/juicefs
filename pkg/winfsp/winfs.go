@@ -191,6 +191,9 @@ func (j *juice) Mknod(p string, mode uint32, dev uint64) (e int) {
 	}
 	_, errno := j.vfs.Mknod(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(dev))
 	e = errorconv(errno)
+	if e == 0 {
+		j.fs.InvalidateEntry(parent.Inode(), path.Base(p))
+	}
 	return
 }
 
@@ -342,6 +345,9 @@ func (j *juice) Create(p string, flags int, mode uint32) (e int, fh uint64) {
 		j.Unlock()
 	}
 	e = errorconv(errno)
+	if e == 0 {
+		j.fs.InvalidateEntry(parent.Inode(), path.Base(p))
+	}
 	return
 }
 
@@ -628,6 +634,9 @@ func (j *juice) Truncate(path string, size int64, fh uint64) (e int) {
 		return
 	}
 	e = errorconv(j.vfs.Truncate(ctx, ino, size, 0, nil))
+	if e == 0 {
+		j.invalidateAttrCache(ino)
+	}
 	return
 }
 
