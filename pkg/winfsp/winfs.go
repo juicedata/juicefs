@@ -86,10 +86,10 @@ func (j *juice) newContext() vfs.LogContext {
 		return vfs.NewLogContext(meta.Background())
 	}
 	uid, gid, pid := fuse.Getcontext()
-	if uid == 0xffffffff {
+	if uid == 0xffffffff || uid == 18 {
 		uid = 0
 	}
-	if gid == 0xffffffff {
+	if gid == 0xffffffff || gid == 18 {
 		gid = 0
 	}
 	if pid == -1 {
