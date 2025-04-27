@@ -158,6 +158,14 @@ func (c *cifsStore) Head(key string) (oj Object, err error) {
 		if err != nil {
 			return err
 		}
+		isSymlink := fi.Mode()&os.ModeSymlink != 0
+		if isSymlink {
+			// SMB doesn't fully support symlinks like POSIX, but we'll try our best
+			fi, err = conn.share.Stat(p)
+			if err != nil {
+				return err
+			}
+		}
 		oj = c.fileInfo(key, fi, fi.Mode()&os.ModeSymlink != 0)
 		return nil
 	})
@@ -353,6 +361,7 @@ func (c *cifsStore) List(prefix, marker, token, delimiter string, limit int64, f
 			if e.IsDir() {
 				mEntries = append(mEntries, &mEntry{e, e.Name() + dirSuffix, nil, false})
 			} else if isSymlink && followLink {
+				// SMB doesn't fully support symlinks like POSIX, but we'll try our best
 				fi, err := conn.share.Stat(path.Join(dir, e.Name()))
 				if err != nil {
 					mEntries = append(mEntries, &mEntry{e, e.Name(), nil, true})
