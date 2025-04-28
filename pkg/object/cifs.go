@@ -20,6 +20,7 @@
 package object
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"math/rand"
@@ -180,15 +181,16 @@ func (c *cifsStore) Get(key string, off, limit int64, getters ...AttrGetter) (io
 		if err != nil {
 			return err
 		}
-
-		if off > 0 {
-			_, err = f.Seek(off, 0)
-			if err != nil {
-				_ = f.Close()
-				return err
-			}
+		finfo, err := f.Stat()
+		if err != nil {
+			_ = f.Close()
+			return err
 		}
-
+		if finfo.IsDir() || off > finfo.Size() {
+			_ = f.Close()
+			readCloser = io.NopCloser(bytes.NewBuffer([]byte{}))
+			return nil
+		}
 		if limit > 0 {
 			readCloser = &SectionReaderCloser{
 				SectionReader: io.NewSectionReader(f, off, limit),
