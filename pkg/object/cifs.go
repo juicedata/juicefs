@@ -213,15 +213,6 @@ func (c *cifsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err er
 			return conn.share.MkdirAll(p, 0755)
 		}
 
-		// Ensure parent directories exist
-		dirPath := path.Dir(p)
-		if dirPath != "/" {
-			err = conn.share.MkdirAll(dirPath, 0755)
-			if err != nil {
-				return err
-			}
-		}
-
 		var tmp string
 		if PutInplace {
 			tmp = p
@@ -239,6 +230,16 @@ func (c *cifsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err er
 		}
 
 		f, err := conn.share.Create(tmp)
+		if err != nil && os.IsNotExist(err) {
+			dirPath := path.Dir(p)
+			if dirPath != "/" {
+				err = conn.share.MkdirAll(dirPath, 0755)
+				if err != nil {
+					return err
+				}
+			}
+			f, err = conn.share.Create(tmp)
+		}
 		if err != nil {
 			return err
 		}
@@ -257,8 +258,14 @@ func (c *cifsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err er
 		}
 
 		if !PutInplace {
-			_ = conn.share.Remove(p) // Ignore error if file doesn't exist
-			return conn.share.Rename(tmp, p)
+			err := conn.share.Rename(tmp, p)
+			if err != nil && os.IsNotExist(err) {
+				_ = conn.share.Remove(tmp)
+				return conn.share.Rename(tmp, p)
+			}
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -351,15 +358,13 @@ func (c *cifsStore) List(prefix, marker, token, delimiter string, limit int64, f
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
 
 	// Generate object list
-	rootLen := len(c.path(""))
 	var objs []Object
 	for _, e := range mEntries {
 		p := path.Join(dir, e.Name())
 		if e.IsDir() && !strings.HasSuffix(p, "/") {
 			p = p + "/"
 		}
-
-		key := p[rootLen:]
+		key := p
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
