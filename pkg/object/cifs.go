@@ -166,78 +166,40 @@ func (c *cifsStore) Head(key string) (oj Object, err error) {
 				return err
 			}
 		}
-		oj = c.fileInfo(key, fi, fi.Mode()&os.ModeSymlink != 0)
+		oj = c.fileInfo(key, fi, isSymlink)
 		return nil
 	})
 	return oj, err
 }
 
 func (c *cifsStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	conn, err := c.getConnection()
-	if err != nil {
-		return nil, err
-	}
-
-	p := c.path(key)
-	f, err := conn.share.Open(p)
-	if err != nil {
-		c.releaseConnection(conn, err)
-		return nil, err
-	}
-
-	if off > 0 {
-		_, err = f.Seek(off, 0)
+	var readCloser io.ReadCloser
+	err := c.withConn(func(conn *cifsConn) error {
+		p := c.path(key)
+		f, err := conn.share.Open(p)
 		if err != nil {
-			_ = f.Close()
-			c.releaseConnection(conn, err)
-			return nil, err
+			return err
 		}
-	}
 
-	if limit > 0 {
-		return &smbReadCloser{
-			f:     f,
-			conn:  conn,
-			store: c,
-			limit: limit,
-		}, nil
-	}
-
-	return &smbReadCloser{
-		f:     f,
-		conn:  conn,
-		store: c,
-		limit: -1,
-	}, nil
-}
-
-// smbReadCloser is a wrapper for SMB file that handles connection release on close
-type smbReadCloser struct {
-	f     *smb2.File
-	conn  *cifsConn
-	store *cifsStore
-	limit int64
-	read  int64
-}
-
-func (r *smbReadCloser) Read(p []byte) (n int, err error) {
-	if r.limit >= 0 {
-		if r.read >= r.limit {
-			return 0, io.EOF
+		if off > 0 {
+			_, err = f.Seek(off, 0)
+			if err != nil {
+				_ = f.Close()
+				return err
+			}
 		}
-		if int64(len(p)) > r.limit-r.read {
-			p = p[:r.limit-r.read]
-		}
-	}
-	n, err = r.f.Read(p)
-	r.read += int64(n)
-	return
-}
 
-func (r *smbReadCloser) Close() error {
-	err := r.f.Close()
-	r.store.releaseConnection(r.conn, err)
-	return err
+		if limit > 0 {
+			readCloser = &SectionReaderCloser{
+				SectionReader: io.NewSectionReader(f, off, limit),
+				Closer:        f,
+			}
+			return nil
+		}
+		readCloser = f
+		return nil
+	})
+	return readCloser, err
 }
 
 func (c *cifsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
@@ -303,7 +265,7 @@ func (c *cifsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err er
 func (c *cifsStore) Delete(key string, getters ...AttrGetter) (err error) {
 	return c.withConn(func(conn *cifsConn) error {
 		p := strings.TrimRight(c.path(key), dirSuffix)
-		err = conn.share.RemoveAll(p)
+		err = conn.share.Remove(p)
 		if err != nil && os.IsNotExist(err) {
 			err = nil
 		}
@@ -379,6 +341,7 @@ func (c *cifsStore) List(prefix, marker, token, delimiter string, limit int64, f
 		return nil
 	})
 	if os.IsNotExist(err) || os.IsPermission(err) {
+		logger.Warnf("skip %s: %s", dir, err)
 		return nil, false, "", nil
 	}
 
@@ -417,10 +380,6 @@ func (c *cifsStore) Copy(dst, src string) error {
 	}
 	defer r.Close()
 	return c.Put(dst, r)
-}
-
-func (c *cifsStore) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	return nil, notSupported
 }
 
 func parseEndpoint(endpoint string) (host, port, share string, err error) {

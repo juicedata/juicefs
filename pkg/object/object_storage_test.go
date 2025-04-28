@@ -122,7 +122,9 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}()
 	all, err := listAll(s, "", "", 10000, true)
-	for _, object := range all {
+	// reverse to make sure clean up successfully
+	for i := len(all) - 1; i >= 0; i-- {
+		object := all[i]
 		_ = s.Delete(object.Key())
 	}
 
