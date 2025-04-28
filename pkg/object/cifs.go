@@ -259,8 +259,8 @@ func (c *cifsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err er
 
 		if !PutInplace {
 			err := conn.share.Rename(tmp, p)
-			if err != nil && os.IsNotExist(err) {
-				_ = conn.share.Remove(tmp)
+			if err != nil && os.IsExist(err) {
+				_ = conn.share.Remove(p)
 				return conn.share.Rename(tmp, p)
 			}
 			if err != nil {
