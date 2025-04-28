@@ -232,7 +232,7 @@ func (j *juice) Readlink(path string) (e int, target string) {
 		e = -fuse.ENOSYS
 		return
 	}
-	fi, err := j.fs.Stat(ctx, path)
+	fi, err := j.fs.Lstat(ctx, path)
 	if err != 0 {
 		e = errorconv(err)
 		return
@@ -496,7 +496,7 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 			return
 		}
 
-		fi, err := j.fs.Stat(ctx, p)
+		fi, err := j.fs.Lstat(ctx, p)
 		if err != 0 {
 			// Known issue: If the parent directory is not exists, the Windows api such as
 			// GetFileAttributeX expects the ERROR_PATH_NOT_FOUND returned.

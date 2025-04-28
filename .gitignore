@@ -36,5 +36,7 @@ pkg/meta/testdata
 /juicefs.ceph
 /juicefs.exe
 /juicefsd.exe
+/juicefs.exe~
+/juicefsd.exe~
 /juicefs.lite
 dist/
