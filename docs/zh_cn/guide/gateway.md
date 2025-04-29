@@ -163,7 +163,7 @@ aws s3api --endpoint=http://localhost:9000 head-object --bucket myjfs --key test
 }
 ```
 
-这个 etag 还通过 `setXattr` 设置了key为 `s3-tag` 的扩展属性到文件中，如果你使用 `--enable-xattr` 挂载 JuiceFS 的话也可以用 `getfattr` 来获取这个etag：
+这个 etag 还通过 `setXattr` 设置了 key 为 `s3-tag` 的扩展属性到文件中，如果你使用 `--enable-xattr` 挂载 JuiceFS 的话也可以用 `getfattr` 来获取这个 etag：
 
 ```shell
 getfattr -n s3-etag test.etag
