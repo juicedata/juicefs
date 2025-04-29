@@ -161,7 +161,7 @@ aws s3api --endpoint=http://localhost:9000 head-object --bucket myjfs --key test
 }
 ```
 
-This etag also `setXattr` to this file with key `s3-tag`, if you mount the JuiceFS with `--enable-xattr` then you can use `getfattr` to get this etag:
+This etag is calculated using the MD5 algorithm, and it's also `setXattr` to file with key `s3-tag`, if you mount the JuiceFS with `--enable-xattr` then you can use `getfattr` to get this etag:
 
 ```shell
 getfattr -n s3-etag test.etag
