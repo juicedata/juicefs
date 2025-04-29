@@ -147,7 +147,7 @@ The client will perform prefetch and cache automatically to improve sequence rea
 
 Data downloaded from object storage, as well as small data (smaller than a single block) uploaded to object storage will be cached by JuiceFS Client, without compression or encryption. To achieve better performance on application's first read, use [`juicefs warmup`](../reference/command_reference.mdx#warmup) to cache data in advance.
 
-When '--write-back' is not enabled, if the file system where the cache directory is located is not working properly, the JuiceFS client can return an error and downgrade to direct access to object storage. In the case of enable '--write-back', if the file system where the cache directory is located is abnormal and the read operation is stuck (such as some kernel-mode network file system), then JuiceFS will also get stuck together. This requires you to tune the underlying file system behavior of the cache directory to fail fast.
+When '--writeback' is not enabled, if the file system where the cache directory is located is not working properly, the JuiceFS client can return an error and downgrade to direct access to object storage. In the case of enable '--writeback', if the file system where the cache directory is located is abnormal and the read operation is stuck (such as some kernel-mode network file system), then JuiceFS will also get stuck together. This requires you to tune the underlying file system behavior of the cache directory to fail fast.
 
 Below are some important options for cache configuration (see [`juicefs mount`](../reference/command_reference.mdx#mount) for complete reference):
 
