@@ -937,7 +937,7 @@ func jfs_rmr(pid int64, h int64, cpath *C.char) int32 {
 	if w == nil {
 		return EINVAL
 	}
-	return errno(w.Rmr(w.withPid(pid), C.GoString(cpath), MaxDeletes))
+	return errno(w.Rmr(w.withPid(pid), C.GoString(cpath), false, MaxDeletes))
 }
 
 //export jfs_rename
