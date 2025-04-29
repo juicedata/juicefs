@@ -6,6 +6,9 @@ on:
       - 'main'
       - 'release-**'
     paths-ignore:
+      - '.autocorrectrc'
+      - '.markdownlint-cli2.jsonc'
+      - 'package*.json'
       - 'docs/**'
       - '**.md'
       - '**.java'
@@ -16,6 +19,9 @@ on:
       - 'main'
       - 'release-**'
     paths-ignore:
+      - '.autocorrectrc'
+      - '.markdownlint-cli2.jsonc'
+      - 'package*.json'
       - 'docs/**'
       - '**.md'
       - '.github/**'
@@ -38,7 +44,7 @@ jobs:
       fail-fast: false
       matrix:
         meta: [ 'sqlite3', 'redis', 'badger' ]
-    
+
     runs-on: ubuntu-22.04
     steps:
       - uses: shogo82148/actions-setup-perl@v1
@@ -57,11 +63,11 @@ jobs:
       - name: Build
         timeout-minutes: 10
         uses: ./.github/actions/build
-        with: 
+        with:
           target: ${{steps.vars.outputs.target}}
 
       - name: Prepare meta db
-        run: | 
+        run: |
           chmod +x .github/scripts/start_meta_engine.sh
           source .github/scripts/start_meta_engine.sh
           start_meta_engine ${{matrix.meta}}
@@ -101,7 +107,7 @@ jobs:
       - name: log
         if: always()
         shell: bash
-        run: | 
+        run: |
           if [ -f ~/.juicefs/juicefs.log ]; then
             tail -300 ~/.juicefs/juicefs.log
             grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
@@ -116,7 +122,7 @@ jobs:
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
