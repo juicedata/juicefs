@@ -3010,8 +3010,12 @@ func (m *dbMeta) doCleanupSlices() {
 		cks = nil
 		return s.Where("refs <= 0").Find(&cks)
 	})
+	start := time.Now()
 	for _, ck := range cks {
 		m.deleteSlice(ck.Id, ck.Size)
+		if time.Since(start) > 50*time.Minute {
+			break
+		}
 	}
 }
 
