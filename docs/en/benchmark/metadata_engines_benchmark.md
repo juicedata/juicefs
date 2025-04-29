@@ -15,6 +15,7 @@ Conclusion first:
 
 1. By changing `appendfsync` from `always` to `everysec`, Redis gains performance boost but loses a bit of data reliability. More information can be found [here](https://redis.io/docs/manual/persistence).
 2. Both Redis and MySQL store only one replica locally, while TiKV and etcd stores three replicas on three different hosts using Raft protocol.
+
 :::
 
 Details are provided below. Please note all the tests are run with the same object storage (to save data), clients and metadata hosts, only metadata engines differ.
@@ -189,7 +190,7 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 | File removal       | 6084.791     | 12221.083      | 1073.063 | 3961.855   | 3742.269  | 1648.734 | 2214.311     |
 | Tree creation      | 80.121       | 83.546         | 34.420   | 61.937     | 77.875    | 56.299   | 74.982       |
 | Tree removal       | 218.535      | 95.599         | 42.330   | 44.696     | 114.414   | 76.002   | 64.036       |
-| **SMALL FILES**    |              |                |          |            |           |          |
+| **SMALL FILES**    |              |                |          |            |           |          |              |
 | File creation      | 295.067      | 312.182        | 275.588  | 289.627    | 307.121   | 275.578  | 263.487      |
 | File stat          | 54069.827    | 52800.108      | 8760.709 | 19841.728  | 14076.214 | 8214.318 | 10009.670    |
 | File read          | 62341.568    | 57998.398      | 4639.571 | 19244.678  | 23376.733 | 5477.754 | 6533.787     |

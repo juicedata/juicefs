@@ -9,6 +9,7 @@ slug: /metadata_dump_load
 - JuiceFS v1.0.0 开始支持元数据自动备份
 - JuiceFS v1.0.4 开始支持通过 `load` 命令恢复加密的元数据备份
 - JuiceFS v1.3.0 开始支持二进制格式的元数据备份和恢复
+
 :::
 
 JuiceFS 支持[多种元数据引擎](../reference/how_to_set_up_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 [`dump`](../reference/command_reference.mdx#dump) 命令允许将所有元数据以统一格式写入到 JSON 或二进制文件进行备份。同时，JuiceFS 也提供了 [`load`](../reference/command_reference.mdx#load) 命令，允许将备份恢复或迁移到任意元数据存储引擎。这个导出导入流程也可以用来将 JuiceFS 社区版文件系统迁移到企业版（参考[企业版文档](https://juicefs.com/docs/zh/cloud/administration/metadata_dump_load)），反之亦然。
@@ -19,6 +20,7 @@ JuiceFS 支持[多种元数据引擎](../reference/how_to_set_up_metadata_engine
 
 * `juicefs dump` 不提供全局时间点快照的功能，如果在导出过程中业务仍在写入，最终结果会包含不同时间点的信息，对于特定应用（比如数据库），这可能意味着导出文件不可用。如果对一致性有更高要求，可能需要在导出前确保应用停写。
 * 对大规模文件系统，如果直接在线上环境进行导出，可能影响业务稳定性。
+
 :::
 
 ## 文件格式
@@ -180,14 +182,14 @@ juicefs load meta-dump --binary --stat --offset=123416309
 ```
 Backup Version: 1
 -----------------------
-Name      | Num       
+Name      | Num
 -----------------------
-acl           | 0              
-chunk      | 1111179   
-counter    | 6              
-delFile     | 0              
-edge        | 1112124   
-format      | 1              
+acl           | 0
+chunk      | 1111179
+counter    | 6
+delFile     | 0
+edge        | 1112124
+format      | 1
 …
 Segment: format
 Value: {

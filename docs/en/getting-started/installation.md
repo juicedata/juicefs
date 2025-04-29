@@ -137,6 +137,7 @@ There are multiple JuiceFS client packages available on AUR. The following are v
 - [`aur/juicefs`](https://aur.archlinux.org/packages/juicefs): A stable compiled version that fetches the latest stable source code and compiles it during installation.
 - [`aur/juicefs-bin`](https://aur.archlinux.org/packages/juicefs-bin): A stable pre-compiled version that directly downloads and installs the latest stable pre-compiled program.
 - [`aur/juicefs-git`](https://aur.archlinux.org/packages/juicefs-git): A development version that fetches the latest development source code and compiles it during installation.
+
 :::
 
 Additionally, you can manually compile and install using `makepkg`, as shown for an Arch Linux system:

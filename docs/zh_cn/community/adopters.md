@@ -19,7 +19,7 @@ slug: /adopters
 | [理想汽车](https://www.lixiang.com)   | 汽车，大数据，AI  | [JuiceFS 在理想汽车的使用和展望](https://juicefs.com/zh-cn/blog/li-auto-with-juicefs)，<br />[理想汽车：从 Hadoop 到云原生的演进与思考](https://juicefs.com/zh-cn/blog/liauto-case-hadoop-cloudnatrive)  |
 | [蔚来汽车](https://www.nio.cn)  | 汽车，AI  |         |
 | [上汽集团](https://www.saicmotor.com/chinese)   | 汽车，AI  | [上汽云 x JuiceFS：iGear 用了这个小魔法，模型训练速度提升 300%](https://juicefs.com/zh-cn/blog/performance-boost-3x-on-igear-platform)      |
-| [Plus.AI](https://plus.ai) | 汽车，AI  |
+| [Plus.AI](https://plus.ai) | 汽车，AI  | |
 | [五菱汽车](https://wuling.com)   | 汽车，大数据     |          |
 | [驭势科技](https://www.uisee.com)   | 汽车，AI        |       |
 | [长安汽车梧桐车联](https://www.auto-pai.com)    | AI，大数据   |            |
