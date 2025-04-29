@@ -908,6 +908,7 @@ juicefs format \
 1. 当前，JuiceFS 仅支持路径风格的 MinIO URI 地址，例如：`http://127.0.0.1:9000/myjfs`
 1. `MINIO_REGION` 环境变量可以用于设置 MinIO 的 region，如果不设置，默认为 `us-east-1`
 1. 面对多节点 MinIO 集群，考虑在 Endpoint 中使用 DNS 域名，解析到各个 MinIO 节点，作为简易负载均衡，比如 `http://minio.example.com:9000/myjfs`
+
 :::
 
 ### WebDAV

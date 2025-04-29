@@ -6,6 +6,9 @@ on:
       - main
       - 'release-**'
     paths-ignore:
+      - '.autocorrectrc'
+      - '.markdownlint-cli2.jsonc'
+      - 'package*.json'
       - 'docs/**'
       - '**.md'
       - '.github/**'
@@ -15,6 +18,9 @@ on:
       - 'main'
       - 'release-**'
     paths-ignore:
+      - '.autocorrectrc'
+      - '.markdownlint-cli2.jsonc'
+      - 'package*.json'
       - 'docs/**'
       - '**.md'
       - '.github/**'
@@ -22,7 +28,7 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 17 * * 0'
-    
+
 jobs:
   lint:
     runs-on: ubuntu-22.04
@@ -35,7 +41,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
 
-            
+
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         # if: failure()
@@ -57,15 +63,15 @@ jobs:
         go-version: ${{ matrix.version }}
         cache: true
       id: go
-      
+
     - name: Install dependencies
       run: |
         sudo .github/scripts/apt_install.sh g++-multilib gcc-mingw-w64
-    
+
     - name: Go mod tidy
       run: |
         go mod tidy
-      
+
     - name: Build linux target
       timeout-minutes: 10
       run: |
@@ -74,7 +80,7 @@ jobs:
 
     - name: build lite
       timeout-minutes: 10
-      run: | 
+      run: |
         make juicefs.lite
         ./juicefs.lite version
 

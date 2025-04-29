@@ -6,6 +6,9 @@ on:
       - 'main'
       - 'release-*'
     paths-ignore:
+      - '.autocorrectrc'
+      - '.markdownlint-cli2.jsonc'
+      - 'package*.json'
       - 'docs/**'
       - '**.md'
       - '**.java'
@@ -16,6 +19,9 @@ on:
       - 'main'
       - 'release-*'
     paths-ignore:
+      - '.autocorrectrc'
+      - '.markdownlint-cli2.jsonc'
+      - 'package*.json'
       - 'docs/**'
       - '**.md'
       - '.github/**'
@@ -88,7 +94,7 @@ jobs:
           echo "/srv/nfs 127.0.0.1(rw,sync,insecure)" | sudo tee -a /etc/exports
           sudo systemctl start nfs-kernel-server.service
           sudo exportfs -arv
-        
+
       - if: matrix.test == 'test.meta.non-core'
         name: Install redis-cluster
         uses: vishnudxb/redis-cluster@1.0.5
@@ -115,7 +121,7 @@ jobs:
         continue-on-error: true
         uses: ./.github/actions/upload-coverage
         with:
-          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }} 
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
 
       - name: Code Coverage
         uses: codecov/codecov-action@v3
@@ -141,7 +147,7 @@ jobs:
         run: exit 1
 
       - name: Send Slack Notification
-        if: failure() && github.event_name != 'workflow_dispatch' 
+        if: failure() && github.event_name != 'workflow_dispatch'
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
@@ -150,4 +156,3 @@ jobs:
       - name: Success
         if: success()
         run: echo "All Done"
-

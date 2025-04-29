@@ -9,6 +9,7 @@ slug: /metadata_dump_load
 - JuiceFS v1.0.0 starts to support automatic metadata backup.
 - JuiceFS v1.0.4 starts to support importing an encrypted backup.
 - JuiceFS v1.3.0 starts to support binary format metadata backup and recovery.
+
 :::
 
 JuiceFS supports [multiple metadata engines](../reference/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.mdx#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.mdx#load) command to restore or migrate backups to any metadata storage engine. This dump / load process can also be used to migrate a community edition file system to enterprise edition (read [enterprise docs](https://juicefs.com/docs/cloud/administration/metadata_dump_load) for more), and vice versa.
@@ -19,6 +20,7 @@ JuiceFS supports [multiple metadata engines](../reference/how_to_set_up_metadata
 
 * `juicefs dump` does not provide snapshot consistency. If files are modified during the export, the final backup file will contain information from different points in time, which might prove unusable for some applications (like databases). If you have higher standards for consistency, you should suspend all writes to the system before exporting.
 * For large scale file systems, dumping directly from online database may prove risks to system reliability, use with caution.
+
 :::
 
 ## File format
@@ -180,14 +182,14 @@ Example output:
 ```
 Backup Version: 1
 -----------------------
-Name      | Num       
+Name      | Num
 -----------------------
-acl           | 0              
-chunk      | 1111179   
-counter    | 6              
-delFile     | 0              
-edge        | 1112124   
-format      | 1              
+acl           | 0
+chunk      | 1111179
+counter    | 6
+delFile     | 0
+edge        | 1112124
+format      | 1
 …
 Segment: format
 Value: {
