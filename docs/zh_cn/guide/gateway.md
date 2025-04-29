@@ -143,7 +143,38 @@ juicefs gateway redis://localhost:6379/1 localhost:9000 --multi-buckets
 
 ### 保留 etag
 
-默认 S3 网关不会保存和返回对象的 etag 信息，可以通过`--keep-etag` 开启
+默认 S3 网关不会保存和返回对象的 etag 信息，可以通过`--keep-etag` 开启:
+
+```shell
+juicefs gateway myjfs localhost:9000 --multi-buckets
+```
+
+### 保留 etag
+
+默认 S3 网关不会保存和返回对象的 etag 信息，可以通过`--keep-etag` 开启：
+
+```shell
+juicefs gateway myjfs localhost:9000 --keep-etag
+```
+
+然后通过网关上传到 JuiceFS 的文件你就可以用 s3API 的 `head-object` 来获取 etag 了：
+```shell
+aws s3api --endpoint=http://localhost:9000 head-object --bucket myjfs --key test123/test.etag
+{
+    "AcceptRanges": "bytes",
+    "LastModified": "Wed, 23 Apr 2025 00:17:16 GMT",
+    "ContentLength": 7,
+    "ETag": "\"d2fde576f44a6601b73201234b491904\"",
+    "ContentType": "application/octet-stream",
+    "Metadata": {}
+}
+```
+这个 etag 还通过 `setXattr` 设置了key为 `s3-tag` 的扩展属性到文件中，如果你使用 `--enable-xattr` 挂载 JuiceFS 的话也可以用 `getfattr` 来获取这个etag：
+```shell
+getfattr -n s3-etag test.etag
+# file: test.etag
+s3-etag="d2fde576f44a6601b73201234b491904"
+```
 
 ### 开启对象标签
 
