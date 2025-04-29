@@ -143,14 +143,6 @@ juicefs gateway redis://localhost:6379/1 localhost:9000 --multi-buckets
 
 ### 保留 etag
 
-默认 S3 网关不会保存和返回对象的 etag 信息，可以通过`--keep-etag` 开启:
-
-```shell
-juicefs gateway myjfs localhost:9000 --multi-buckets
-```
-
-### 保留 etag
-
 默认 S3 网关不会保存和返回对象的 etag 信息，可以通过`--keep-etag` 开启：
 
 ```shell
