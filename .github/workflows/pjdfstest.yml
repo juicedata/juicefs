@@ -6,6 +6,9 @@ on:
       - 'main'
       - 'release-**'
     paths-ignore:
+      - '.autocorrectrc'
+      - '.markdownlint-cli2.jsonc'
+      - 'package*.json'
       - 'docs/**'
       - '**.md'
       - '.github/**'
@@ -16,6 +19,9 @@ on:
       - 'main'
       - 'release-**'
     paths-ignore:
+      - '.autocorrectrc'
+      - '.markdownlint-cli2.jsonc'
+      - 'package*.json'
       - 'docs/**'
       - '**.md'
       - '.github/**'
@@ -84,14 +90,14 @@ jobs:
           else
             echo "target=juicefs" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Build
         uses: ./.github/actions/build
-        with: 
+        with:
           target: ${{steps.vars.outputs.target}}
 
       - name: Prepare meta db
-        run: | 
+        run: |
           chmod +x .github/scripts/start_meta_engine.sh
           source .github/scripts/start_meta_engine.sh
           start_meta_engine ${{matrix.meta}}
@@ -110,7 +116,7 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           # sudo mkdir /var/jfs
           # sudo chmod 777 /var/jfs
-          sudo GOCOVERDIR=$(pwd)/cover ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report 
+          sudo GOCOVERDIR=$(pwd)/cover ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report
           stat /tmp/jfs/.accesslog
 
       - name: Pjdfstest
@@ -127,7 +133,7 @@ jobs:
       - name: log
         if: always()
         shell: bash
-        run: | 
+        run: |
           if [ -f ~/.juicefs/juicefs.log ]; then
             tail -300 ~/.juicefs/juicefs.log
             grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
@@ -149,7 +155,7 @@ jobs:
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
@@ -176,5 +182,5 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Success
-        if: success() 
+        if: success()
         run: echo "All Done"

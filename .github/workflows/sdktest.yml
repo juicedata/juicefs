@@ -6,6 +6,9 @@ on:
       - 'main'
       - 'release-*'
     paths-ignore:
+      - '.autocorrectrc'
+      - '.markdownlint-cli2.jsonc'
+      - 'package*.json'
       - 'docs/**'
       - '**.md'
   pull_request:
@@ -14,6 +17,9 @@ on:
       - 'main'
       - 'release-*'
     paths-ignore:
+      - '.autocorrectrc'
+      - '.markdownlint-cli2.jsonc'
+      - 'package*.json'
       - 'docs/**'
       - '**.md'
       - '.github/**'
@@ -26,7 +32,7 @@ on:
         default: false
   schedule:
     - cron:  '0 17 * * *'
-    
+
 jobs:
   sdktest:
     timeout-minutes: 50
@@ -62,7 +68,7 @@ jobs:
           touch /jfs/inner_sym_target
           echo "hello juicefs" > /jfs/inner_sym_target
           cd /jfs
-          ln -s inner_sym_target inner_sym_link 
+          ln -s inner_sym_target inner_sym_link
           mkdir etc
           chmod 777 etc
           echo `hostname` > etc/nodes
@@ -76,7 +82,7 @@ jobs:
           make -C sdk/java/libjfs
           cd sdk/java
           sudo mvn test -B -Dtest=\!io.juicefs.permission.**
-          sudo mvn test -B -Dflink.version=1.17.2 -Dtest=io.juicefs.JuiceFileSystemTest#testFlinkHadoopRecoverableWriter 
+          sudo mvn test -B -Dflink.version=1.17.2 -Dtest=io.juicefs.JuiceFileSystemTest#testFlinkHadoopRecoverableWriter
           sudo JUICEFS_RANGER_TEST=1 mvn test -B -Dtest=io.juicefs.permission.RangerPermissionCheckerTest
           sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
           expect=$(git rev-parse --short HEAD | cut -b 1-7)
@@ -87,7 +93,7 @@ jobs:
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
