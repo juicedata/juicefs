@@ -158,6 +158,7 @@ juicefs gateway myjfs localhost:9000 --keep-etag
 ```
 
 然后通过网关上传到 JuiceFS 的文件你就可以用 s3API 的 `head-object` 来获取 etag 了：
+
 ```shell
 aws s3api --endpoint=http://localhost:9000 head-object --bucket myjfs --key test123/test.etag
 {
@@ -169,7 +170,9 @@ aws s3api --endpoint=http://localhost:9000 head-object --bucket myjfs --key test
     "Metadata": {}
 }
 ```
+
 这个 etag 还通过 `setXattr` 设置了key为 `s3-tag` 的扩展属性到文件中，如果你使用 `--enable-xattr` 挂载 JuiceFS 的话也可以用 `getfattr` 来获取这个etag：
+
 ```shell
 getfattr -n s3-etag test.etag
 # file: test.etag

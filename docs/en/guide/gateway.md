@@ -148,6 +148,7 @@ juicefs gateway myjfs localhost:9000 --keep-etag
 ```
 
 Then if you upload the file through gateway into JuiceFS, you can get this etag by s3API `head-object`:
+
 ```shell
 aws s3api --endpoint=http://localhost:9000 head-object --bucket myjfs --key test123/test.etag
 {
@@ -159,7 +160,9 @@ aws s3api --endpoint=http://localhost:9000 head-object --bucket myjfs --key test
     "Metadata": {}
 }
 ```
+
 This etag also `setXattr` to this file with key `s3-tag`, if you mount the JuiceFS with `--enable-xattr` then you can use `getfattr` to get this etag:
+
 ```shell
 getfattr -n s3-etag test.etag
 # file: test.etag
