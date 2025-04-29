@@ -143,6 +143,32 @@ juicefs gateway redis://localhost:6379/1 localhost:9000 --multi-buckets
 
 By default, JuiceFS S3 Gateway does not save or return object ETag information. You can enable this with `--keep-etag`.
 
+```shell
+juicefs gateway myjfs localhost:9000 --keep-etag
+```
+
+Then if you upload the file through gateway into JuiceFS, you can get this etag by s3API `head-object`:
+
+```shell
+aws s3api --endpoint=http://localhost:9000 head-object --bucket myjfs --key test123/test.etag
+{
+    "AcceptRanges": "bytes",
+    "LastModified": "Wed, 23 Apr 2025 00:17:16 GMT",
+    "ContentLength": 7,
+    "ETag": "\"d2fde576f44a6601b73201234b491904\"",
+    "ContentType": "application/octet-stream",
+    "Metadata": {}
+}
+```
+
+This etag is calculated using the MD5 algorithm, and it's also `setXattr` to file with key `s3-tag`, if you mount the JuiceFS with `--enable-xattr` then you can use `getfattr` to get this etag:
+
+```shell
+getfattr -n s3-etag test.etag
+# file: test.etag
+s3-etag="d2fde576f44a6601b73201234b491904"
+```
+
 ### Enable object tags
 
 Object tags are not supported by default, but you can use `--object-tag` to enable them.
