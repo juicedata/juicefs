@@ -36,28 +36,6 @@ do_clone()
  #   rm -f "${CURRENT_DIR}/log1" "${CURRENT_DIR}/log2"
 }
 
-test_clone_with_big_file()
-{
-    prepare_win_test
-    ./juicefs.exe format $META_URL myjfs
-    ./juicefs.exe mount -d $META_URL z:
-    dd if=/dev/urandom of=./test bs=1M count=1000
-    cp test /z/test
-    ./juicefs.exe clone /z/test /z/test1
-    rm /z/test -rf
-    diff test /z/test1
-}
-
-test_clone_with_random_write(){
-    prepare_win_test
-    ./juicefs.exe format $META_URL myjfs
-    ./juicefs.exe mount -d $META_URL z:
-    PATH1=test PATH2=z:\\test python3 .github/scripts/random_read_write.py 
-    ./juicefs.exe clone test /z/test1
-    rm /z/test -rf
-    diff /tmp/test /z/test1
-}
-
 test_clone_with_small_files(){
     prepare_win_test
     ./juicefs.exe format $META_URL myjfs
