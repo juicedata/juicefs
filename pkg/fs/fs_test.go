@@ -233,7 +233,7 @@ func TestFileSystem(t *testing.T) {
 	if err := fs.Delete(ctx, "/d/f"); err == 0 || !IsNotExist(err) {
 		t.Fatalf("delete /d/f: %s", err)
 	}
-	if e := fs.Rmr(ctx, "/d", meta.RmrDefaultThreads); e != 0 {
+	if e := fs.Rmr(ctx, "/d", false, meta.RmrDefaultThreads); e != 0 {
 		t.Fatalf("delete /d -r: %s", e)
 	}
 
@@ -264,7 +264,7 @@ func TestFileSystem(t *testing.T) {
 	if err := fs.Rename(ctx, "/ddd/", "/ttt/", 0); err != 0 {
 		t.Fatalf("delete /ddd/: %s", err)
 	}
-	if err := fs.Rmr(ctx, "/ttt/", meta.RmrDefaultThreads); err != 0 {
+	if err := fs.Rmr(ctx, "/ttt/", false, meta.RmrDefaultThreads); err != 0 {
 		t.Fatalf("rmr /ttt/: %s", err)
 	}
 	if _, err := fs.Stat(ctx, "/ttt/"); err != syscall.ENOENT {

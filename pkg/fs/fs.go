@@ -533,7 +533,7 @@ func (fs *FileSystem) Rmdir(ctx meta.Context, p string) (err syscall.Errno) {
 	return
 }
 
-func (fs *FileSystem) Rmr(ctx meta.Context, p string, numthreads int) (err syscall.Errno) {
+func (fs *FileSystem) Rmr(ctx meta.Context, p string, skipTrash bool, numthreads int) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Rmr").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Rmr (%s): %s", p, errstr(err)) }()
@@ -541,7 +541,7 @@ func (fs *FileSystem) Rmr(ctx meta.Context, p string, numthreads int) (err sysca
 	if err != 0 {
 		return
 	}
-	err = fs.m.Remove(ctx, parent.inode, path.Base(p), false, numthreads, nil)
+	err = fs.m.Remove(ctx, parent.inode, path.Base(p), skipTrash, numthreads, nil)
 	fs.invalidateEntry(parent.inode, path.Base(p))
 	return
 }

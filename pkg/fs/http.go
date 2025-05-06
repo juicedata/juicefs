@@ -125,7 +125,7 @@ func (hfs *webdavFS) OpenFile(ctx context.Context, name string, flag int, perm o
 }
 
 func (hfs *webdavFS) RemoveAll(ctx context.Context, name string) error {
-	return econv(hfs.fs.Rmr(hfs.ctx, name, hfs.config.MaxDeletes))
+	return econv(hfs.fs.Rmr(hfs.ctx, name, false, hfs.config.MaxDeletes))
 }
 
 func (hfs *webdavFS) Rename(ctx context.Context, oldName, newName string) error {
@@ -252,7 +252,7 @@ type WebdavConfig struct {
 	Password        string
 	CertFile        string
 	KeyFile         string
-	MaxDeletes	int
+	MaxDeletes      int
 }
 
 type indexHandler struct {
@@ -262,7 +262,7 @@ type indexHandler struct {
 
 func (h *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-	//http://www.webdav.org/specs/rfc4918.html#n-guidance-for-clients-desiring-to-authenticate
+	// http://www.webdav.org/specs/rfc4918.html#n-guidance-for-clients-desiring-to-authenticate
 	if h.Username != "" && h.Password != "" {
 		userName, pwd, ok := r.BasicAuth()
 		if !ok {

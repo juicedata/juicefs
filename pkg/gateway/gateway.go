@@ -1266,7 +1266,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	}
 
 	// remove parts
-	_ = n.fs.Rmr(mctx, n.upath(bucket, uploadID), meta.RmrDefaultThreads)
+	_ = n.fs.Rmr(mctx, n.upath(bucket, uploadID), true, meta.RmrDefaultThreads)
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
@@ -1284,7 +1284,7 @@ func (n *jfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 	if err = n.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return
 	}
-	eno := n.fs.Rmr(mctx, n.upath(bucket, uploadID), meta.RmrDefaultThreads)
+	eno := n.fs.Rmr(mctx, n.upath(bucket, uploadID), true, meta.RmrDefaultThreads)
 	return jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 }
 
@@ -1329,7 +1329,7 @@ func (n *jfsObjects) cleanupDir(dir string) bool {
 			continue
 		}
 		if now.Sub(time.Unix(entry.Attr.Mtime, 0)) > 7*24*time.Hour {
-			if errno = n.fs.Rmr(mctx, dirPath, meta.RmrDefaultThreads); errno != 0 {
+			if errno = n.fs.Rmr(mctx, dirPath, true, meta.RmrDefaultThreads); errno != 0 {
 				logger.Errorf("failed to delete expired temporary files path: %s, err: %s", dirPath, errno)
 			} else {
 				deleted += 1
