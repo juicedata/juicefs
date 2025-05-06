@@ -203,8 +203,8 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 	if _type < TypeFile || _type == TypeSymlink {
 		return syscall.EINVAL
 	}
-	if checkFSNodeName(name) != 0 {
-		return syscall.EINVAL
+	if err := checkFSNodeName(name); err != 0 {
+		return err
 	}
 	p := m.nodes[parent]
 	if p == nil {
@@ -317,8 +317,8 @@ func (m *fsMachine) link(parent Ino, name string, inode Ino) syscall.Errno {
 	if name == "." || name == ".." {
 		return syscall.EEXIST
 	}
-	if checkFSNodeName(name) != 0 {
-		return syscall.EINVAL
+	if err := checkFSNodeName(name); err != 0 {
+		return err
 	}
 	n := m.nodes[inode]
 	if n == nil {
@@ -358,8 +358,8 @@ func (m *fsMachine) symlink(parent Ino, name string, inode Ino, target string) s
 			return syscall.EINVAL
 		}
 	}
-	if checkFSNodeName(name) != 0 {
-		return syscall.EINVAL
+	if err := checkFSNodeName(name); err != 0 {
+		return err
 	}
 	p := m.nodes[parent]
 	if p == nil {
@@ -468,8 +468,8 @@ func (m *fsMachine) unlink(parent Ino, name string) syscall.Errno {
 	if _, ok := p.children[name]; !ok {
 		return syscall.ENOENT
 	}
-	if checkFSNodeName(name) != 0 {
-		return syscall.EINVAL
+	if err := checkFSNodeName(name); err != 0 {
+		return err
 	}
 
 	if !p.stickyAccess(c, m.ctx.Uid()) {
@@ -516,8 +516,8 @@ func (m *fsMachine) rmdir(parent Ino, name string) syscall.Errno {
 	if _, ok := p.children[name]; !ok {
 		return syscall.ENOENT
 	}
-	if checkFSNodeName(name) != 0 {
-		return syscall.EINVAL
+	if err := checkFSNodeName(name); err != 0 {
+		return err
 	}
 
 	if len(c.children) != 0 {
@@ -558,8 +558,8 @@ func (m *fsMachine) lookup(parent Ino, name string, checkPerm bool) (Ino, syscal
 	if p == nil {
 		return 0, syscall.ENOENT
 	}
-	if checkFSNodeName(name) != 0 {
-		return 0, syscall.EINVAL
+	if err := checkFSNodeName(name); err != 0 {
+		return 0, err
 	}
 	//if p.children == nil {
 	//	return 0, syscall.ENOENT
@@ -748,8 +748,8 @@ func (m *fsMachine) rmr(parent Ino, name string, removed *uint64) syscall.Errno 
 	if p.children == nil {
 		return syscall.ENOENT
 	}
-	if checkFSNodeName(name) != 0 {
-		return syscall.EINVAL
+	if err := checkFSNodeName(name); err != 0 {
+		return err
 	}
 
 	c := p.children[name]
@@ -798,8 +798,8 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 	if dstparent == srcparent && dstname == srcname {
 		return 0
 	}
-	if checkFSNodeName(dstname) != 0 {
-		return syscall.EINVAL
+	if err := checkFSNodeName(dstname); err != 0 {
+		return err
 	}
 	// todo: The order of condition checks in different metadata engines is inconsistent
 	if metaType == "db" {
