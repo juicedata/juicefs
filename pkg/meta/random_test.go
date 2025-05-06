@@ -203,15 +203,15 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 	if _type < TypeFile || _type == TypeSymlink {
 		return syscall.EINVAL
 	}
+	if err := checkFSNodeName(name); err != 0 {
+		return err
+	}
 	p := m.nodes[parent]
 	if p == nil {
 		return syscall.ENOENT
 	}
 	if p.children == nil {
 		return syscall.ENOTDIR
-	}
-	if fsnodes_namecheck(name) != 0 {
-		return syscall.EINVAL
 	}
 
 	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
@@ -291,27 +291,24 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 	return 0
 }
 
-func fsnodes_namecheck(name string) syscall.Errno {
-	return 0
-	nleng := len(name)
-	if nleng == 0 {
+func checkFSNodeName(name string) syscall.Errno {
+	len := len(name)
+	if len == 0 {
 		return syscall.EINVAL
 	}
-	if nleng > MaxName {
+	if len > MaxName {
 		return syscall.ENAMETOOLONG
 	}
 	if name[0] == '.' {
-		if nleng == 1 {
+		if len == 1 {
 			return syscall.EINVAL
 		}
-		if nleng == 2 && name[1] == '.' {
+		if len == 2 && name[1] == '.' {
 			return syscall.EINVAL
 		}
 	}
-	for i := 0; i < nleng; i++ {
-		if name[i] == 0 || name[i] == '/' {
-			return syscall.EINVAL
-		}
+	if strings.ContainsAny(name, "/\x00") {
+		return syscall.EINVAL
 	}
 	return 0
 }
@@ -319,6 +316,9 @@ func fsnodes_namecheck(name string) syscall.Errno {
 func (m *fsMachine) link(parent Ino, name string, inode Ino) syscall.Errno {
 	if name == "." || name == ".." {
 		return syscall.EEXIST
+	}
+	if err := checkFSNodeName(name); err != 0 {
+		return err
 	}
 	n := m.nodes[inode]
 	if n == nil {
@@ -333,9 +333,6 @@ func (m *fsMachine) link(parent Ino, name string, inode Ino) syscall.Errno {
 	}
 	if p.children == nil {
 		return syscall.ENOTDIR
-	}
-	if fsnodes_namecheck(name) != 0 {
-		return syscall.EINVAL
 	}
 	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
 		return syscall.EACCES
@@ -361,15 +358,15 @@ func (m *fsMachine) symlink(parent Ino, name string, inode Ino, target string) s
 			return syscall.EINVAL
 		}
 	}
+	if err := checkFSNodeName(name); err != 0 {
+		return err
+	}
 	p := m.nodes[parent]
 	if p == nil {
 		return syscall.ENOENT
 	}
 	if p.children == nil {
 		return syscall.ENOTDIR
-	}
-	if fsnodes_namecheck(name) != 0 {
-		return syscall.EINVAL
 	}
 	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
 		return syscall.EACCES
@@ -471,8 +468,8 @@ func (m *fsMachine) unlink(parent Ino, name string) syscall.Errno {
 	if _, ok := p.children[name]; !ok {
 		return syscall.ENOENT
 	}
-	if fsnodes_namecheck(name) != 0 {
-		return syscall.EINVAL
+	if err := checkFSNodeName(name); err != 0 {
+		return err
 	}
 
 	if !p.stickyAccess(c, m.ctx.Uid()) {
@@ -519,8 +516,8 @@ func (m *fsMachine) rmdir(parent Ino, name string) syscall.Errno {
 	if _, ok := p.children[name]; !ok {
 		return syscall.ENOENT
 	}
-	if fsnodes_namecheck(name) != 0 {
-		return syscall.EINVAL
+	if err := checkFSNodeName(name); err != 0 {
+		return err
 	}
 
 	if len(c.children) != 0 {
@@ -561,8 +558,8 @@ func (m *fsMachine) lookup(parent Ino, name string, checkPerm bool) (Ino, syscal
 	if p == nil {
 		return 0, syscall.ENOENT
 	}
-	if fsnodes_namecheck(name) != 0 {
-		return 0, syscall.EINVAL
+	if err := checkFSNodeName(name); err != 0 {
+		return 0, err
 	}
 	//if p.children == nil {
 	//	return 0, syscall.ENOENT
@@ -751,8 +748,8 @@ func (m *fsMachine) rmr(parent Ino, name string, removed *uint64) syscall.Errno 
 	if p.children == nil {
 		return syscall.ENOENT
 	}
-	if fsnodes_namecheck(name) != 0 {
-		return syscall.EINVAL
+	if err := checkFSNodeName(name); err != 0 {
+		return err
 	}
 
 	c := p.children[name]
@@ -801,7 +798,9 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 	if dstparent == srcparent && dstname == srcname {
 		return 0
 	}
-
+	if err := checkFSNodeName(dstname); err != 0 {
+		return err
+	}
 	// todo: The order of condition checks in different metadata engines is inconsistent
 	if metaType == "db" {
 		src := m.nodes[srcparent]
@@ -853,9 +852,6 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 	if src.children == nil {
 		return syscall.ENOTDIR
 	}
-	if fsnodes_namecheck(srcname) != 0 {
-		return syscall.EINVAL
-	}
 	if !src.access(m.ctx, MODE_MASK_X|MODE_MASK_W) {
 		return syscall.EACCES
 	}
@@ -866,9 +862,6 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 	}
 	if dst.children == nil {
 		return syscall.ENOTDIR
-	}
-	if fsnodes_namecheck(dstname) != 0 {
-		return syscall.EINVAL
 	}
 	if !dst.access(m.ctx, MODE_MASK_X|MODE_MASK_W) {
 		return syscall.EACCES
