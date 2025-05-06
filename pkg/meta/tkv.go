@@ -2234,9 +2234,10 @@ func (m *kvMeta) doCleanupSlices() {
 		m.client.gc()
 	}
 	klen := 1 + 8 + 4
+	start := time.Now()
 	_ = m.client.scan(m.fmtKey("K"), func(k, v []byte) bool {
 		if len(k) == klen && len(v) == 8 && parseCounter(v) <= 0 {
-			rb := utils.FromBuffer([]byte(k)[1:])
+			rb := utils.FromBuffer(k[1:])
 			id := rb.Get64()
 			size := rb.Get32()
 			refs := parseCounter(v)
@@ -2244,6 +2245,9 @@ func (m *kvMeta) doCleanupSlices() {
 				m.deleteSlice(id, size)
 			} else {
 				m.cleanupZeroRef(id, size)
+			}
+			if time.Since(start) > 50*time.Minute {
+				return false
 			}
 		}
 		return true

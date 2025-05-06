@@ -2713,6 +2713,8 @@ func (m *redisMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, err
 }
 
 func (m *redisMeta) doCleanupSlices() {
+	start := time.Now()
+	stop := fmt.Errorf("exceeded time limit")
 	_ = m.hscan(Background(), m.sliceRefs(), func(keys []string) error {
 		for i := 0; i < len(keys); i += 2 {
 			key, val := keys[i], keys[i+1]
@@ -2727,6 +2729,9 @@ func (m *redisMeta) doCleanupSlices() {
 				}
 			} else if val == "0" {
 				m.cleanupZeroRef(key)
+			}
+			if time.Since(start) > 50*time.Minute {
+				return stop
 			}
 		}
 		return nil
