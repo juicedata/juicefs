@@ -40,7 +40,15 @@ import (
 
 var logger = utils.GetLogger("juicefs")
 
+const invalidFileHandle = uint64(0xffffffffffffffff)
+
 type Ino = meta.Ino
+
+type handleInfo struct {
+	ino           meta.Ino
+	cacheAttr     *meta.Attr
+	attrExpiredAt time.Time
+}
 
 func trace(vals ...interface{}) func(vals ...interface{}) {
 	uid, gid, pid := fuse.Getcontext()
@@ -49,24 +57,28 @@ func trace(vals ...interface{}) func(vals ...interface{}) {
 
 type juice struct {
 	fuse.FileSystemBase
-	sync.Mutex
-	conf     *vfs.Config
-	vfs      *vfs.VFS
-	fs       *fs.FileSystem
-	host     *fuse.FileSystemHost
-	handlers map[uint64]meta.Ino
-	badfd    map[uint64]uint64
+	sync.RWMutex
+	conf         *vfs.Config
+	vfs          *vfs.VFS
+	fs           *fs.FileSystem
+	host         *fuse.FileSystemHost
+	handlers     map[uint64]handleInfo
+	badfd        map[uint64]uint64
+	inoHandleMap map[meta.Ino][]uint64
 
 	asRoot         bool
 	delayClose     int
 	enabledGetPath bool
 	disableSymlink bool
+
+	attrCacheTimeout time.Duration
 }
 
 // Init is called when the file system is created.
 func (j *juice) Init() {
-	j.handlers = make(map[uint64]meta.Ino)
+	j.handlers = make(map[uint64]handleInfo)
 	j.badfd = make(map[uint64]uint64)
+	j.inoHandleMap = make(map[meta.Ino][]uint64)
 }
 
 func (j *juice) newContext() vfs.LogContext {
@@ -74,10 +86,10 @@ func (j *juice) newContext() vfs.LogContext {
 		return vfs.NewLogContext(meta.Background())
 	}
 	uid, gid, pid := fuse.Getcontext()
-	if uid == 0xffffffff {
+	if uid == 0xffffffff || uid == 18 {
 		uid = 0
 	}
-	if gid == 0xffffffff {
+	if gid == 0xffffffff || gid == 18 {
 		gid = 0
 	}
 	if pid == -1 {
@@ -179,6 +191,9 @@ func (j *juice) Mknod(p string, mode uint32, dev uint64) (e int) {
 	}
 	_, errno := j.vfs.Mknod(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(dev))
 	e = errorconv(errno)
+	if e == 0 {
+		j.fs.InvalidateEntry(parent.Inode(), path.Base(p))
+	}
 	return
 }
 
@@ -261,6 +276,9 @@ func (j *juice) Chmod(path string, mode uint32) (e int) {
 		return
 	}
 	e = errorconv(f.Chmod(ctx, uint16(mode)))
+	if e == 0 {
+		j.invalidateAttrCache(f.Inode())
+	}
 	return
 }
 
@@ -297,6 +315,9 @@ func (j *juice) Utimens(path string, tmsp []fuse.Timespec) (e int) {
 		e = errorconv(err)
 	} else {
 		e = errorconv(f.Utime2(ctx, tmsp[0].Sec, tmsp[0].Nsec, tmsp[1].Sec, tmsp[1].Nsec))
+		if e == 0 {
+			j.invalidateAttrCache(f.Inode())
+		}
 	}
 	return
 }
@@ -315,10 +336,18 @@ func (j *juice) Create(p string, flags int, mode uint32) (e int, fh uint64) {
 	entry, fh, errno := j.vfs.Create(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(fuseFlagToSyscall(flags)))
 	if errno == 0 {
 		j.Lock()
-		j.handlers[fh] = entry.Inode
+		j.handlers[fh] = handleInfo{
+			ino:           entry.Inode,
+			cacheAttr:     entry.Attr,
+			attrExpiredAt: time.Now().Add(j.conf.AttrTimeout),
+		}
+		j.inoHandleMap[entry.Inode] = append(j.inoHandleMap[entry.Inode], fh)
 		j.Unlock()
 	}
 	e = errorconv(errno)
+	if e == 0 {
+		j.fs.InvalidateEntry(parent.Inode(), path.Base(p))
+	}
 	return
 }
 
@@ -336,7 +365,7 @@ func (j *juice) Open(path string, flags int) (e int, fh uint64) {
 // The flags are a combination of the fuse.O_* constants.
 func (j *juice) OpenEx(p string, fi *fuse.FileInfo_t) (e int) {
 	ctx := j.newContext()
-	defer trace(p, fi.Flags)(&e)
+	defer trace(p, fi.Flags)(&e, &fi.Fh)
 	ino := meta.Ino(0)
 	if strings.HasSuffix(p, "/.control") {
 		ino, _ = vfs.GetInternalNodeByName(".control")
@@ -368,7 +397,12 @@ func (j *juice) OpenEx(p string, fi *fuse.FileInfo_t) (e int) {
 			fi.KeepCache = entry.Attr.KeepCache
 		}
 		j.Lock()
-		j.handlers[fh] = ino
+		j.handlers[fh] = handleInfo{
+			ino:           ino,
+			cacheAttr:     entry.Attr,
+			attrExpiredAt: time.Now().Add(j.conf.AttrTimeout),
+		}
+		j.inoHandleMap[ino] = append(j.inoHandleMap[ino], fh)
 		j.Unlock()
 	}
 	e = errorconv(errno)
@@ -429,19 +463,20 @@ func attrToStat(inode Ino, attr *meta.Attr, stat *fuse.Stat_t) {
 }
 
 func (j *juice) h2i(fh *uint64) meta.Ino {
-	defer j.Unlock()
-	j.Lock()
-	ino := j.handlers[*fh]
-	if ino == 0 {
+	defer j.RUnlock()
+	j.RLock()
+
+	entry := j.handlers[*fh]
+	if entry.ino == 0 {
 		newfh := j.badfd[*fh]
 		if newfh != 0 {
-			ino = j.handlers[newfh]
-			if ino > 0 {
+			entry = j.handlers[newfh]
+			if entry.ino > 0 {
 				*fh = newfh
 			}
 		}
 	}
-	return ino
+	return entry.ino
 }
 
 func (j *juice) reopen(p string, fh *uint64) meta.Ino {
@@ -453,7 +488,7 @@ func (j *juice) reopen(p string, fh *uint64) meta.Ino {
 	defer j.Unlock()
 	j.badfd[*fh] = newfh
 	*fh = newfh
-	return j.handlers[newfh]
+	return j.handlers[newfh].ino
 }
 
 // Getattr gets file attributes.
@@ -481,11 +516,77 @@ func (j *juice) getAttrForSpFile(ctx vfs.LogContext, p string, stat *fuse.Stat_t
 	return
 }
 
+func (j *juice) invalidateAttrCache(ino meta.Ino) {
+	if j.attrCacheTimeout == 0 || ino == 0 {
+		return
+	}
+	j.fs.InvalidateAttr(ino) // invalidate the attrcache in fs layer
+	j.Lock()
+	defer j.Unlock()
+
+	handlers := j.inoHandleMap[ino]
+	for _, fh := range handlers {
+		if cache, ok := j.handlers[fh]; ok {
+			cache.cacheAttr = nil
+			cache.attrExpiredAt = time.Time{}
+			j.handlers[fh] = cache
+		}
+	}
+}
+
+func (j *juice) getAttrFromCache(fh uint64) (entry *meta.Entry) {
+	if j.attrCacheTimeout == 0 || fh == invalidFileHandle {
+		return nil
+	}
+	j.RLock()
+	defer j.RUnlock()
+	if cache, ok := j.handlers[fh]; ok && cache.cacheAttr != nil {
+		if time.Now().Before(cache.attrExpiredAt) {
+			entry = &meta.Entry{
+				Inode: cache.ino,
+				Attr:  cache.cacheAttr,
+			}
+			return entry
+		}
+	}
+	return nil
+}
+
+func (j *juice) setAttrCache(fh uint64, attr *meta.Attr) {
+	if j.attrCacheTimeout == 0 || fh == invalidFileHandle {
+		return
+	}
+
+	j.Lock()
+	defer j.Unlock()
+
+	if cache, ok := j.handlers[fh]; ok {
+		cache.cacheAttr = attr
+		cache.attrExpiredAt = time.Now().Add(j.attrCacheTimeout)
+		j.handlers[fh] = cache
+	}
+}
+
+func (j *juice) getAttr(ctx vfs.Context, fh uint64, ino Ino, opened uint8) (entry *meta.Entry, err syscall.Errno) {
+	if entry := j.getAttrFromCache(fh); entry != nil {
+		return entry, 0
+	}
+
+	if entry, err = j.vfs.GetAttr(ctx, ino, opened); err != 0 {
+		return nil, err
+	}
+
+	j.setAttrCache(fh, entry.Attr)
+
+	return entry, 0
+}
+
 // Getattr gets file attributes.
 func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 	ctx := j.newContext()
 	defer trace(p, fh)(stat, &e)
 	ino := j.h2i(&fh)
+
 	if ino == 0 {
 		// special case for .control file
 		if strings.HasSuffix(p, "/.control") {
@@ -505,8 +606,15 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 			return
 		}
 		ino = fi.Inode()
+		entry := fi.Attr()
+		if entry != nil {
+			j.vfs.UpdateLength(ino, entry)
+			attrToStat(ino, entry, stat)
+			return
+		}
 	}
-	entry, errrno := j.vfs.GetAttr(ctx, ino, 0)
+
+	entry, errrno := j.getAttr(ctx, fh, ino, 0)
 	if errrno != 0 {
 		e = errorconv(errrno)
 		return
@@ -526,6 +634,9 @@ func (j *juice) Truncate(path string, size int64, fh uint64) (e int) {
 		return
 	}
 	e = errorconv(j.vfs.Truncate(ctx, ino, size, 0, nil))
+	if e == 0 {
+		j.invalidateAttrCache(ino)
+	}
 	return
 }
 
@@ -569,6 +680,7 @@ func (j *juice) Write(path string, buff []byte, off int64, fh uint64) (e int) {
 	} else {
 		e = len(buff)
 	}
+
 	return
 }
 
@@ -585,6 +697,19 @@ func (j *juice) Flush(path string, fh uint64) (e int) {
 	return
 }
 
+func (j *juice) cleanInoHandlerMap(ino meta.Ino, fh uint64) {
+	handles := j.inoHandleMap[ino]
+	for i, handle := range handles {
+		if handle == fh {
+			j.inoHandleMap[ino] = append(handles[:i], handles[i+1:]...)
+			break
+		}
+	}
+	if len(j.inoHandleMap[ino]) == 0 {
+		delete(j.inoHandleMap, ino)
+	}
+}
+
 // Release closes an open file.
 func (j *juice) Release(path string, fh uint64) int {
 	defer trace(path, fh)()
@@ -598,8 +723,10 @@ func (j *juice) Release(path string, fh uint64) int {
 		time.Sleep(time.Second * time.Duration(j.delayClose))
 		j.Lock()
 		delete(j.handlers, fh)
+		j.cleanInoHandlerMap(ino, fh)
 		if orig != fh {
 			delete(j.badfd, orig)
+			j.cleanInoHandlerMap(ino, orig)
 		}
 		j.Unlock()
 		j.vfs.Release(j.newContext(), ino, fh)
@@ -632,7 +759,11 @@ func (j *juice) Opendir(path string) (e int, fh uint64) {
 	fh, errno := j.vfs.Opendir(ctx, f.Inode(), 0)
 	if errno == 0 {
 		j.Lock()
-		j.handlers[fh] = f.Inode()
+		j.handlers[fh] = handleInfo{
+			ino: f.Inode(),
+		}
+		j.inoHandleMap[f.Inode()] = append(j.inoHandleMap[f.Inode()], fh)
+
 		j.Unlock()
 	}
 	e = errorconv(errno)
@@ -696,6 +827,7 @@ func (j *juice) Releasedir(path string, fh uint64) (e int) {
 	}
 	j.Lock()
 	delete(j.handlers, fh)
+	j.cleanInoHandlerMap(ino, fh)
 	j.Unlock()
 	e = -int(j.vfs.Releasedir(j.newContext(), ino, fh))
 	return
@@ -729,6 +861,8 @@ func (j *juice) Chflags(path string, flags uint32) (e int) {
 	err = j.vfs.ChFlags(ctx, ino, flagSet)
 	if err != 0 {
 		e = errorconv(err)
+	} else {
+		j.invalidateAttrCache(ino)
 	}
 
 	return
@@ -786,10 +920,10 @@ func (j *juice) Getpath(p string, fh uint64) (e int, ret string) {
 	return
 }
 
-func Serve(v *vfs.VFS, fuseOpt string, fileCacheTimeoutSec float64, dirCacheTimeoutSec float64,
-	asRoot bool, delayCloseSec int, showDotFiles bool, threadsCount int, caseSensitive bool, enabledGetPath bool) {
+func Serve(v *vfs.VFS, fuseOpt string, asRoot bool, delayCloseSec int, showDotFiles bool, threadsCount int, caseSensitive bool, enabledGetPath bool) {
 	var jfs juice
 	conf := v.Conf
+	jfs.attrCacheTimeout = v.Conf.AttrTimeout
 	jfs.conf = conf
 	jfs.vfs = v
 	jfs.enabledGetPath = enabledGetPath
@@ -805,8 +939,8 @@ func Serve(v *vfs.VFS, fuseOpt string, fileCacheTimeoutSec float64, dirCacheTime
 	jfs.host = host
 	var options = "volname=" + conf.Format.Name
 	options += fmt.Sprintf(",ExactFileSystemName=JuiceFS,ThreadCount=%d", threadsCount)
-	options += fmt.Sprintf(",DirInfoTimeout=%d,VolumeInfoTimeout=1000,KeepFileCache", int(dirCacheTimeoutSec*1000))
-	options += fmt.Sprintf(",FileInfoTimeout=%d", int(fileCacheTimeoutSec*1000))
+	options += fmt.Sprintf(",DirInfoTimeout=%d,VolumeInfoTimeout=1000,KeepFileCache", int(conf.DirEntryTimeout.Seconds()*1000))
+	options += fmt.Sprintf(",FileInfoTimeout=%d", int(conf.EntryTimeout.Seconds()*1000))
 	options += ",VolumePrefix=/juicefs/" + conf.Format.Name
 	if asRoot {
 		options += ",uid=-1,gid=-1"
