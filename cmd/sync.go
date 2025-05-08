@@ -215,6 +215,10 @@ func syncActionFlags() []cli.Flag {
 			Name:  "check-new",
 			Usage: "verify integrity of newly copied files",
 		},
+		&cli.BoolFlag{
+			Name:  "check-change",
+			Usage: "check if source file changes after sync",
+		},
 		&cli.Int64Flag{
 			Name:  "max-failure",
 			Value: -1,

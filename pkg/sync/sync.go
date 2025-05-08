@@ -878,12 +878,27 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 			var err error
 			var srcChksum uint32
+			var srcObject object.Object
+			if config.CheckChange {
+				srcObject, err = src.Head(key)
+				if err != nil {
+					logger.Errorf("Failed to head object %s: %s", key, err)
+				}
+			}
+
 			if config.Links && obj.IsSymlink() {
 				if err = copyLink(src, dst, key); err != nil {
 					logger.Errorf("copy link failed: %s", err)
 				}
 			} else {
 				srcChksum, err = CopyData(src, dst, key, obj.Size(), config.CheckAll || config.CheckNew)
+			}
+
+			if err == nil && config.CheckChange {
+				var equal bool
+				if equal, err = checkChange(src, srcObject, key); err == nil && !equal {
+					err = fmt.Errorf("source object %s changed during sync", key)
+				}
 			}
 
 			if err == nil && (config.CheckAll || config.CheckNew) {
@@ -910,6 +925,29 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 		}
 		incrHandled(1)
+	}
+}
+
+func checkChange(src object.ObjectStorage, obj object.Object, key string) (bool, error) {
+	if obj.IsSymlink() {
+		return true, nil
+	}
+	if obj == nil {
+		return false, nil
+	}
+	if currentObj, headErr := src.Head(key); headErr == nil {
+		checked.Increment()
+		checkedBytes.IncrInt64(obj.Size())
+
+		if currentObj.Size() == obj.Size() && currentObj.Mtime().Equal(obj.Mtime()) {
+			return true, nil
+		} else {
+			logger.Warnf("Source file %s changed during sync. Original: size=%d, mtime=%s; Current: size=%d, mtime=%s",
+				currentObj.Key(), obj.Size(), obj.Mtime(), currentObj.Size(), currentObj.Mtime())
+			return false, nil
+		}
+	} else {
+		return false, headErr
 	}
 }
 
@@ -1605,7 +1643,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	pending = progress.AddCountSpinner("Pending objects")
 	copied = progress.AddCountSpinner("Copied objects")
 	copiedBytes = progress.AddByteSpinner("Copied bytes")
-	if config.CheckAll || config.CheckNew {
+	if config.CheckAll || config.CheckNew || config.CheckChange {
 		checked = progress.AddCountSpinner("Checked objects")
 		checkedBytes = progress.AddByteSpinner("Checked bytes")
 	}
