@@ -356,11 +356,12 @@ type javaConf struct {
 	PushLabels        string `json:"pushLabels"`
 	PushGraphite      string `json:"pushGraphite"`
 	Caller            int    `json:"caller"`
+	SubDir            string `json:"subDir"`
 
 	SuperFS bool `json:"superFs,omitempty"`
 }
 
-func getOrCreate(name, user, group, superuser, supergroup string, superFs bool, f func() *fs.FileSystem) int64 {
+func getOrCreate(name, user, group, superuser, supergroup string, conf javaConf, f func() *fs.FileSystem) int64 {
 	fslock.Lock()
 	defer fslock.Unlock()
 	ws := activefs[name]
@@ -381,7 +382,7 @@ func getOrCreate(name, user, group, superuser, supergroup string, superFs bool, 
 		}
 		logger.Infof("JuiceFileSystem created for user:%s group:%s", user, group)
 	}
-	w := &wrapper{jfs, nil, m, user, superuser, supergroup, superFs}
+	w := &wrapper{jfs, nil, m, user, superuser, supergroup, conf.SuperFS}
 	var gs []string
 	if userGroupCache[name] != nil {
 		gs = userGroupCache[name][user]
@@ -395,6 +396,25 @@ func getOrCreate(name, user, group, superuser, supergroup string, superFs bool, 
 		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
 	} else {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(user), w.lookupGids(group))
+	}
+	if conf.SubDir != "" {
+		// Check if the subdir is a valid directory when in read-only mode
+		if conf.ReadOnly {
+			fi, err := jfs.Stat(w.ctx, conf.SubDir)
+			if err != 0 {
+				logger.Errorf("Subdir %s must be valid if read-only. but failed to stat %v", conf.SubDir, err)
+				return 0
+			}
+			if !fi.IsDir() {
+				logger.Errorf("Subdir %s must be valid if read-only. but, it is not a directory", conf.SubDir)
+				return 0
+			}
+		}
+		if err := jfs.Meta().Chroot(w.ctx, conf.SubDir); err != 0 {
+			logger.Errorf("Failed to chroot to %s: %v", conf.SubDir, err)
+			return 0
+		}
+		logger.Infof("Changed root to %s", conf.SubDir)
 	}
 	activefs[name] = append(ws, w)
 	nextFsHandle = nextFsHandle + 1
@@ -467,7 +487,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 	if err != nil {
 		logger.Fatalf("invalid json: %s", C.GoString(jsonConf))
 	}
-	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), jConf.SuperFS, func() *fs.FileSystem {
+	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), jConf, func() *fs.FileSystem {
 		if jConf.Debug || os.Getenv("JUICEFS_DEBUG") != "" {
 			utils.SetLogLevel(logrus.DebugLevel)
 			go func() {
