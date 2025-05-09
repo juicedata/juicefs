@@ -758,6 +758,15 @@ func jfs_getGroups(cname, cuser *C.char, buf uintptr, count int32) int32 {
 
 //export jfs_term
 func jfs_term(pid int64, h int64) int32 {
+	return jfs_term0(pid, h, false)
+}
+
+//export jfs_shutdown
+func jfs_shutdown(pid, h int64) int32 {
+	return jfs_term0(pid, h, true)
+}
+
+func jfs_term0(pid int64, h int64, shouldClose bool) int32 {
 	w := F(h)
 	if w == nil {
 		return 0
@@ -794,9 +803,10 @@ func jfs_term(pid int64, h int64) int32 {
 					activefs[name] = ws[:len(ws)-1]
 				} else {
 					_ = w.Flush()
-					// don't close the filesystem, so it can be re-used later
-					// w.Close()
-					// delete(activefs, name)
+					if shouldClose {
+						w.Close()
+						delete(activefs, name)
+					}
 				}
 			}
 		}

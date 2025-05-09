@@ -182,30 +182,30 @@ class SummaryTests(unittest.TestCase):
             {"Path": "dir1", "Type": 2, "Files":1, "Dirs":1, "Size":8192},{'Path': '...', 'Type': 1, 'Size': 8192, 'Files': 1, 'Dirs': 1}]}))
         res = v.summary(TESTFN, depth=258, entries=1)
         self.assertTrue(normalize(res)==normalize(
-                        {
-                            "Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480, "Children":
-                            [
-                                {"Path": "dir1", "Type": 2, "Files":1, "Dirs":1, "Size":8192, "Children": [
-                                    {"Path": "dir1/file", "Type": 1, "Size": 4096, "Files": 1, "Dirs": 0}
-                                ]
-                                 },{'Path': '...', 'Type': 1, 'Size': 8192, 'Files': 1, 'Dirs': 1}
-                            ]}
-                        ))
+            {
+                "Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480, "Children":
+                [
+                    {"Path": "dir1", "Type": 2, "Files":1, "Dirs":1, "Size":8192, "Children": [
+                        {"Path": "dir1/file", "Type": 1, "Size": 4096, "Files": 1, "Dirs": 0}
+                    ]
+                     },{'Path': '...', 'Type': 1, 'Size': 8192, 'Files': 1, 'Dirs': 1}
+                ]}
+        ))
         res = v.summary(TESTFN, depth=259, entries=4)
         self.assertTrue(normalize(res)==normalize(
-                        {
-                            "Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480, "Children":
-                            [
-                                {
-                                    "Path": "dir1", "Type": 2, "Files":1, "Dirs":1, "Size":8192, "Children":
-                                    [{"Path": "dir1/file", "Type": 1, "Size": 4096, "Files": 1, "Dirs": 0}]
-                                },{
-                                'Path': 'file', 'Type': 1, 'Size': 4096, 'Files': 1, 'Dirs': 0
-                            },{
-                                'Path': 'dir2', 'Type': 2, 'Size': 4096, 'Files': 0, 'Dirs': 1
-                            }
-                            ]}
-                        ))
+            {
+                "Path": "test", "Type": 2, "Files":2, "Dirs":3, "Size":20480, "Children":
+                [
+                    {
+                        "Path": "dir1", "Type": 2, "Files":1, "Dirs":1, "Size":8192, "Children":
+                        [{"Path": "dir1/file", "Type": 1, "Size": 4096, "Files": 1, "Dirs": 0}]
+                    },{
+                    'Path': 'file', 'Type': 1, 'Size': 4096, 'Files': 1, 'Dirs': 0
+                },{
+                    'Path': 'dir2', 'Type': 2, 'Size': 4096, 'Files': 0, 'Dirs': 1
+                }
+                ]}
+        ))
 
 class QuotaTests(unittest.TestCase):
     # /test/dir1/file
@@ -436,10 +436,14 @@ class ClientParamsTests(unittest.TestCase):
             v.rmr(TESTFN)
         v.mkdir(TESTFN)
         self.testfile = TESTFN + '/testfile'
-    
+        v.shutdown()
+
     def tearDown(self):
+        global v
         if v.exists(TESTFN):
             v.rmr(TESTFN)
+        v = juicefs.Client("test-volume", meta=meta_url, access_log="/tmp/access.log")
+
 
     def test_readonly_param(self):
         readonly_client = juicefs.Client(
@@ -449,6 +453,7 @@ class ClientParamsTests(unittest.TestCase):
         )
         with self.assertRaises(OSError):
             readonly_client.open(self.testfile, 'w')
+        readonly_client.shutdown()
 
     def test_cache_params(self):
         cache_client = juicefs.Client(
@@ -460,10 +465,10 @@ class ClientParamsTests(unittest.TestCase):
         )
         
         size_mb = 48
-        test_data = os.urandom(size_mb * 1024 * 1024) 
+        test_data = os.urandom(size_mb * 1024 * 1024)
         with cache_client.open(self.testfile, 'wb') as f:
             f.write(test_data)
-        
+
         with cache_client.open(self.testfile, 'rb') as f:
             read_data = f.read()
         self.assertEqual(read_data, test_data)
@@ -482,14 +487,15 @@ class ClientParamsTests(unittest.TestCase):
             upload_limit="1M",
             download_limit="1M"
         )
-        
+
         test_data = b"x" * (10 * 1024 * 1024)  # 10MB
         start_time = time.time()
         with limited_client.open(self.testfile, 'wb') as f:
             f.write(test_data)
         write_time = time.time() - start_time
-        
+
         self.assertGreaterEqual(write_time, 10.0)
+        limited_client.shutdown()
 
 class CloneTests(unittest.TestCase):
     def setUp(self):
@@ -499,31 +505,31 @@ class CloneTests(unittest.TestCase):
         self.source = TESTFN + '/source'
         self.target = TESTFN + '/target'
         self.test_data = b"Hello JuiceFS!" * 1024
-        
+
         with v.open(self.source, 'wb') as f:
             f.write(self.test_data)
-    
+
     def tearDown(self):
         if v.exists(TESTFN):
             v.rmr(TESTFN)
 
     def test_basic_clone(self):
         v.clone(self.source, self.target)
-        
+
         self.assertTrue(v.exists(self.target))
-        
+
         with v.open(self.target, 'rb') as f:
             cloned_data = f.read()
         self.assertEqual(cloned_data, self.test_data)
-        
+
         source_stat = v.stat(self.source)
         target_stat = v.stat(self.target)
         self.assertEqual(source_stat.st_size, target_stat.st_size)
 
     def test_clone_with_preserve(self):
         v.chmod(self.source, 0o644)
-        
-        v.clone(self.source, self.target, preserve=True)        
+
+        v.clone(self.source, self.target, preserve=True)
         source_stat = v.stat(self.source)
         target_stat = v.stat(self.target)
         self.assertEqual(source_stat.st_mode, target_stat.st_mode)
@@ -531,6 +537,7 @@ class CloneTests(unittest.TestCase):
 class WarmupTests(unittest.TestCase):
     @classmethod
     def setUpClass(self):
+        v.shutdown()
         self.warmup_client = juicefs.Client(
             "test-warmup",
             meta=meta_url,
@@ -550,21 +557,25 @@ class WarmupTests(unittest.TestCase):
         for file in self.test_files:
             with self.warmup_client.open(file, 'wb') as f:
                 f.write(test_data)
-    
+
     @classmethod
     def tearDownClass(self):
         if self.warmup_client.exists(TESTFN):
             self.warmup_client.warmup(self.test_files, isEvict=True)
             self.warmup_client.rmr(TESTFN)
+        self.warmup_client.shutdown()
+        global v
+        v = juicefs.Client("test-volume", meta=meta_url, access_log="/tmp/access.log")
 
-    def test_basic_warmup(self): 
+
+    def test_basic_warmup(self):
         result = self.warmup_client.warmup(self.test_files, numthreads=4)
         self.assertIn('FileCount', result)
         self.assertEqual(result['FileCount'], 2)
         self.assertIn('SliceCount', result)
         self.assertIn('TotalBytes', result)
         self.assertIn('MissBytes', result)
-#        self.assertIn('Locations', result)
+        #        self.assertIn('Locations', result)
         cache_dir = "/tmp/jfs_test_warmup"
         size_mb = 100
         cache_size = 0
@@ -579,7 +590,7 @@ class WarmupTests(unittest.TestCase):
         result = self.warmup_client.warmup(self.test_files, isCheck=True)
         self.assertEqual(result['MissBytes'], 0)
         self.assertTrue(any('jfs_test_warmup' in path for path in result['Locations']),
-                       msg=f"'jfs_test_warmup' not found in {result['Locations']}")
+                        msg=f"'jfs_test_warmup' not found in {result['Locations']}")
 
     def test_warmup_evict(self):
         self.warmup_client.warmup(self.test_files)
@@ -600,13 +611,13 @@ class InfoTests(unittest.TestCase):
         if v.exists(TESTFN):
             v.rmr(TESTFN)
         v.mkdir(TESTFN)
-        
+
         self.test_dir = TESTFN + '/infotest'
         self.test_file = self.test_dir + '/testfile'
         v.makedirs(self.test_dir)
         with v.open(self.test_file, 'w') as f:
             f.write("test content")
-    
+
     def tearDown(self):
         if v.exists(TESTFN):
             v.rmr(TESTFN)
