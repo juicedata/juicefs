@@ -1201,4 +1201,15 @@ public class JuiceFileSystemTest extends TestCase {
     user1Fs.delete(d1, true);
     user1Fs.delete(d2, true);
   }
+
+  public void testSudDir() {
+    Configuration newConf = new Configuration(cfg);
+    newConf.set("juicefs.read-only", "true");
+    newConf.set("juicefs.subdir", "subdir");
+    try {
+      FileSystem.newInstance(newConf);
+      fail("Creating filesystem should fail because the subdir must be a valid directory in read-only mode.");
+    } catch (IOException ignored) {
+    }
+  }
 }

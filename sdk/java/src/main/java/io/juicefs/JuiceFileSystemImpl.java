@@ -447,6 +447,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("noUsageReport", Boolean.valueOf(getConf(conf, "no-usage-report", "false")));
     obj.put("freeSpace", getConf(conf, "free-space", "0.1"));
     obj.put("accessLog", getConf(conf, "access-log", ""));
+    obj.put("subDir", getConf(conf, "subdir", ""));
     obj.put("superFs", asSuperFs);
     String jsonConf = obj.toString(2);
     handle = lib.jfs_init(name, jsonConf, user, groupStr, superuser, supergroup);
