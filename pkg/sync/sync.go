@@ -878,12 +878,34 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 			var err error
 			var srcChksum uint32
+			var srcObject object.Object
+			var srcLink string
+			if config.CheckChange {
+				srcObject, err = src.Head(key)
+				if err != nil {
+					logger.Errorf("Failed to head object %s: %s", key, err)
+				} else if config.Links && obj.IsSymlink() {
+					if s, ok := src.(object.SupportSymlink); ok {
+						if srcLink, err = s.Readlink(key); err != nil {
+							logger.Errorf("Failed to readlink %s: %s", key, err)
+						}
+					}
+				}
+			}
+
 			if config.Links && obj.IsSymlink() {
 				if err = copyLink(src, dst, key); err != nil {
 					logger.Errorf("copy link failed: %s", err)
 				}
 			} else {
 				srcChksum, err = CopyData(src, dst, key, obj.Size(), config.CheckAll || config.CheckNew)
+			}
+
+			if err == nil && config.CheckChange {
+				var equal bool
+				if equal, err = checkChange(src, srcObject, srcLink, key, config); err == nil && !equal {
+					err = fmt.Errorf("source object %s changed during sync", key)
+				}
 			}
 
 			if err == nil && (config.CheckAll || config.CheckNew) {
@@ -910,6 +932,40 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 		}
 		incrHandled(1)
+	}
+}
+
+func checkChange(src object.ObjectStorage, obj object.Object, srcLink, key string, config *Config) (bool, error) {
+	if obj == nil {
+		return true, nil
+	}
+	if obj.IsSymlink() && config.Links {
+		var currentLink string
+		var err error
+		if s, ok := src.(object.SupportSymlink); ok {
+			if currentLink, err = s.Readlink(key); err != nil {
+				return false, err
+			}
+		}
+		equal := srcLink == currentLink && srcLink != "" && currentLink != ""
+		if !equal {
+			logger.Warnf("Source symlink %s changed during sync. Original: %s; Current: %s", key, srcLink, currentLink)
+		}
+		return equal, nil
+	}
+	if currentObj, headErr := src.Head(key); headErr == nil {
+		checked.Increment()
+		checkedBytes.IncrInt64(obj.Size())
+
+		if currentObj.Size() == obj.Size() && currentObj.Mtime().Equal(obj.Mtime()) {
+			return true, nil
+		} else {
+			logger.Warnf("Source file %s changed during sync. Original: size=%d, mtime=%s; Current: size=%d, mtime=%s",
+				currentObj.Key(), obj.Size(), obj.Mtime(), currentObj.Size(), currentObj.Mtime())
+			return false, nil
+		}
+	} else {
+		return false, headErr
 	}
 }
 
@@ -1605,7 +1661,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	pending = progress.AddCountSpinner("Pending objects")
 	copied = progress.AddCountSpinner("Copied objects")
 	copiedBytes = progress.AddByteSpinner("Copied bytes")
-	if config.CheckAll || config.CheckNew {
+	if config.CheckAll || config.CheckNew || config.CheckChange {
 		checked = progress.AddCountSpinner("Checked objects")
 		checkedBytes = progress.AddByteSpinner("Checked bytes")
 	}
