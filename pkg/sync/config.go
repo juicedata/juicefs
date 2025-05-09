@@ -222,9 +222,9 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		logger.Warnf("threads should be larger than 0, reset it to 1")
 		cfg.Threads = 1
 	}
-	if cfg.CheckAll && cfg.CheckChange {
+	if (cfg.CheckAll || cfg.CheckNew) && cfg.CheckChange {
 		cfg.CheckChange = false
-		logger.Warnf("check-all and check-change are mutually exclusive, check-change is ignored")
+		logger.Warnf("check-all/check-new and check-change are mutually exclusive, check-change is ignored")
 	}
 
 	for _, key := range envList() {
