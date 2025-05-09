@@ -879,10 +879,17 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			var err error
 			var srcChksum uint32
 			var srcObject object.Object
+			var srcLink string
 			if config.CheckChange {
 				srcObject, err = src.Head(key)
 				if err != nil {
 					logger.Errorf("Failed to head object %s: %s", key, err)
+				} else if config.Links && obj.IsSymlink() {
+					if s, ok := src.(object.SupportSymlink); ok {
+						if srcLink, err = s.Readlink(key); err != nil {
+							logger.Errorf("Failed to readlink %s: %s", key, err)
+						}
+					}
 				}
 			}
 
@@ -896,7 +903,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 
 			if err == nil && config.CheckChange {
 				var equal bool
-				if equal, err = checkChange(src, srcObject, key); err == nil && !equal {
+				if equal, err = checkChange(src, srcObject, srcLink, key, config); err == nil && !equal {
 					err = fmt.Errorf("source object %s changed during sync", key)
 				}
 			}
@@ -928,12 +935,23 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 	}
 }
 
-func checkChange(src object.ObjectStorage, obj object.Object, key string) (bool, error) {
-	if obj.IsSymlink() {
+func checkChange(src object.ObjectStorage, obj object.Object, srcLink, key string, config *Config) (bool, error) {
+	if obj == nil {
 		return true, nil
 	}
-	if obj == nil {
-		return false, nil
+	if obj.IsSymlink() && config.Links {
+		var currentLink string
+		var err error
+		if s, ok := src.(object.SupportSymlink); ok {
+			if currentLink, err = s.Readlink(key); err != nil {
+				return false, err
+			}
+		}
+		equal := srcLink == currentLink && srcLink != "" && currentLink != ""
+		if !equal {
+			logger.Warnf("Source symlink %s changed during sync. Original: %s; Current: %s", key, srcLink, currentLink)
+		}
+		return equal, nil
 	}
 	if currentObj, headErr := src.Head(key); headErr == nil {
 		checked.Increment()
