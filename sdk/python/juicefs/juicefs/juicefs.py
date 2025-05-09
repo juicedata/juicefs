@@ -153,12 +153,15 @@ class Client(object):
         supergroups = [grp.getgrgid(gid).gr_name for gid in os.getgrouplist(superuser.pw_name, superuser.pw_gid)]
         self.h = self.lib.jfs_init(name.encode(), jsonConf.encode(), user.pw_name.encode(), ','.join(groups).encode(), superuser.pw_name.encode(), ''.join(supergroups).encode())
 
+    def shutdown(self):
+        self.lib.jfs_shutdown(c_int64(_tid()), c_int64(self.h))
+
     def stat(self, path):
         """Get the status of a file or a directory."""
         fi = FileInfo()
         self.lib.jfs_stat(c_int64(_tid()), c_int64(self.h), _bin(path), byref(fi))
         return os.stat_result((fi.mode, fi.inode, 0, fi.nlink, fi.uid, fi.gid, fi.length, fi.atime, fi.mtime, fi.ctime))
-    
+
     def exists(self, path):
         """Check if a file exists."""
         try:
@@ -267,7 +270,7 @@ class Client(object):
                 infos.append(name)
         self.lib.free(buf)
         return sorted(infos)
-    
+
     def chmod(self, path, mode):
         """Change the mode of a file."""
         self.lib.jfs_chmod(c_int64(_tid()), c_int64(self.h), _bin(path), c_uint16(mode))
@@ -348,11 +351,11 @@ class Client(object):
     def set_quota(self, path, capacity=0, inodes=0, create=False, strict=False):
         """Set the quota of a directory."""
         self._quota(0, path, capacity, inodes, create=create, strict=strict)
-    
+
     def get_quota(self, path):
         """Get the quota of a directory."""
         return self._quota(1, path)
-    
+
     def del_quota(self, path):
         """Delete the quota of a directory."""
         self._quota(2, path)
@@ -752,6 +755,8 @@ def test():
             if not t: break
             size += len(t)
     print("read time:", time.time()-start, size>>20)
+    v.remove("/bigfile")
+    v.rmr("/d")
 
 if __name__ == '__main__':
     test()
