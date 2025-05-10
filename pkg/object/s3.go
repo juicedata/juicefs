@@ -32,11 +32,13 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/middleware"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
+	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -524,6 +526,9 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 	optFns = append(optFns, func(options *s3.Options) {
 		options.EndpointOptions.DisableHTTPS = !ssl
 		options.Region = region
+		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
+			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
+		})
 	})
 
 	disable100Continue := strings.EqualFold(uri.Query().Get("disable-100-continue"), "true")

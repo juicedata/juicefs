@@ -21,10 +21,6 @@ package object
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"io"
 	"net/http"
 	"net/url"
@@ -33,6 +29,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/qiniu/go-sdk/v7/auth"
 	"github.com/qiniu/go-sdk/v7/storage"
 )
@@ -211,6 +213,9 @@ func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		options.EndpointOptions.DisableHTTPS = uri.Scheme == "http"
 		options.UsePathStyle = true
 		options.HTTPClient = httpClient
+		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
+			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
+		})
 
 	})
 	s3c := s3client{bucket: bucket, s3: client, region: region}

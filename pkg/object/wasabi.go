@@ -21,12 +21,15 @@ package object
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"net/url"
-	"strings"
+	smithymiddleware "github.com/aws/smithy-go/middleware"
 )
 
 type wasabi struct {
@@ -66,6 +69,9 @@ func newWasabi(endpoint, accessKey, secretKey, token string) (ObjectStorage, err
 		options.EndpointOptions.DisableHTTPS = !ssl
 		options.UsePathStyle = false
 		options.HTTPClient = httpClient
+		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
+			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
+		})
 	})
 	return &wasabi{s3client{bucket: bucket, s3: client, region: region}}, nil
 }
