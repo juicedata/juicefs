@@ -144,7 +144,6 @@ jobs:
           python3 .github/scripts/wins_fs_test.py
 
       - name: Test Gc
-        if: false
         timeout-minutes: 10
         shell: bash
         run: |
@@ -172,9 +171,9 @@ jobs:
           META_URL=redis://127.0.0.1:6379/1 .github/scripts/command-win/dump_load.sh
 
       - name: Test acl
-        if: false
         timeout-minutes: 10
         shell: bash
+        if: false
         run: |
           export PATH="$HOME/scoop/shims:$PATH"
           export LANG=C.UTF-8
@@ -184,7 +183,7 @@ jobs:
       - name: Test clone
         timeout-minutes: 10
         shell: bash
-        if: false
+#        if: false
         run: |
           export PATH="$HOME/scoop/shims:$PATH"
           export LANG=C.UTF-8
