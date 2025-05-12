@@ -1,10 +1,17 @@
 #!/bin/bash -e
 source .github/scripts/common/common.sh
 
+[[ -z "$ENCRYPT" ]] && ENCRYPT=false
 [[ -z "$META" ]] && META=sqlite3
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
+FORMAT_OPTIONS=""
+if [ "$ENCRYPT" == "true" ]; then
+    export JFS_RSA_PASSPHRASE=the-passwd-for-rsa
+    openssl genrsa -aes256 -passout pass:$JFS_RSA_PASSPHRASE -out my-priv-key.pem 2048
+    FORMAT_OPTIONS="--encrypt-rsa-key my-priv-key.pem"
+fi
 
 generate_source_dir(){
     rm -rf jfs_source
@@ -45,7 +52,7 @@ test_sync_without_mount_point(){
 do_sync_without_mount_point(){
     prepare_test
     options=$@
-    ./juicefs format $META_URL myjfs
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
     meta_url=$META_URL ./juicefs sync jfs_source/ jfs://meta_url/jfs_source/ $options --links
 
     ./juicefs mount -d $META_URL /jfs
@@ -59,7 +66,7 @@ do_sync_without_mount_point(){
 do_sync_with_mount_point(){
     prepare_test
     options=$@
-    ./juicefs format $META_URL myjfs
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
     ./juicefs mount -d $META_URL /jfs
     ./juicefs sync jfs_source/ /jfs/jfs_source/ $options --links
 
@@ -73,7 +80,7 @@ do_sync_with_mount_point(){
 test_sync_with_loop_link(){
     prepare_test
     options="--dirs --update --perms --check-all --list-threads 10 --list-depth 5"
-    ./juicefs format $META_URL myjfs
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
     ./juicefs mount -d $META_URL /jfs
     ln -s looplink jfs_source/looplink
     ./juicefs sync jfs_source/ /jfs/jfs_source/ $options  2>&1 | tee err.log || true
@@ -84,7 +91,7 @@ test_sync_with_loop_link(){
 test_sync_with_deep_link(){
     prepare_test
     options="--dirs --update --perms --check-all --list-threads 10 --list-depth 5"
-    ./juicefs format $META_URL myjfs
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
     ./juicefs mount -d $META_URL /jfs
     touch jfs_source/symlink_1
     for i in {1..41}; do
@@ -106,7 +113,7 @@ skip_test_sync_fsrand_with_mount_point(){
 do_test_sync_fsrand_with_mount_point(){
     prepare_test
     options=$@
-    ./juicefs format $META_URL myjfs
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
     ./juicefs mount -d $META_URL /jfs
     ./juicefs sync fsrand/ /jfs/fsrand/ $options --links
 
@@ -118,7 +125,7 @@ do_test_sync_fsrand_with_mount_point(){
 
 test_sync_include_exclude_option(){
     prepare_test
-    ./juicefs format --trash-days 0 $META_URL myjfs
+    ./juicefs format --trash-days 0 $FORMAT_OPTIONS $META_URL myjfs
     ./juicefs mount $META_URL /jfs -d
     ./juicefs sync jfs_source/ /jfs/
     for source_dir in "/jfs/" "jfs_source/" ; do 
@@ -183,7 +190,7 @@ test_ignore_existing()
 }
 test_file_head(){
     # issue link: https://github.com/juicedata/juicefs/issues/2125
-    ./juicefs format $META_URL myjfs
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
     ./juicefs mount $META_URL /jfs -d
     mkdir /jfs/jfs_source/
     [[ ! -d jfs_source ]] && git clone https://github.com/juicedata/juicefs.git jfs_source
