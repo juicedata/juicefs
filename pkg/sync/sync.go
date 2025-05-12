@@ -1585,7 +1585,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	concurrent = make(chan int, config.Threads)
 	if config.BWLimit > 0 {
 		bps := float64(config.BWLimit*1e6/8) * 0.85 // 15% overhead
-		limiter = ratelimit.NewBucketWithRate(bps, int64(bps)*3)
+		limiter = ratelimit.NewBucketWithRate(bps, int64(bps)/5)
 	}
 
 	progress := utils.NewProgress(config.Verbose || config.Quiet || config.Manager != "")
