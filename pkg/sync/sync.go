@@ -889,7 +889,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 
 			if err == nil && config.CheckChange {
 				var equal bool
-				if equal, err = checkChange(src, obj, key, config); err == nil && !equal {
+				if equal, err = checkChange(src, dst, obj, key, config); err == nil && !equal {
 					err = fmt.Errorf("source object %s changed during sync", key)
 				}
 			}
@@ -921,7 +921,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 	}
 }
 
-func checkChange(src object.ObjectStorage, obj object.Object, key string, config *Config) (bool, error) {
+func checkChange(src, dst object.ObjectStorage, obj object.Object, key string, config *Config) (bool, error) {
 	if obj == nil {
 		return true, nil
 	}
@@ -929,16 +929,25 @@ func checkChange(src object.ObjectStorage, obj object.Object, key string, config
 		return true, nil
 	}
 	if currentObj, headErr := src.Head(key); headErr == nil {
-		checked.Increment()
-		checkedBytes.IncrInt64(obj.Size())
-
-		if currentObj.Size() == obj.Size() && currentObj.Mtime().Equal(obj.Mtime()) {
-			return true, nil
-		} else {
+		if !config.CheckAll && !config.CheckNew {
+			checked.Increment()
+			checkedBytes.IncrInt64(obj.Size())
+		}
+		equal := currentObj.Size() == obj.Size() && currentObj.Mtime().Equal(obj.Mtime())
+		if !equal {
 			logger.Warnf("Source file %s changed during sync. Original: size=%d, mtime=%s; Current: size=%d, mtime=%s",
 				currentObj.Key(), obj.Size(), obj.Mtime(), currentObj.Size(), currentObj.Mtime())
 			return false, nil
 		}
+		if dstObj, headErr := dst.Head(key); headErr == nil {
+			if currentObj.Size() != dstObj.Size() {
+				logger.Warnf("Destination object %s size mismatch: original=%d, current=%d", key, obj.Size(), dstObj.Size())
+				return false, nil
+			}
+		} else {
+			return false, headErr
+		}
+		return true, nil
 	} else {
 		return false, headErr
 	}
