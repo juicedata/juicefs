@@ -888,10 +888,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 
 			if err == nil && config.CheckChange {
-				var equal bool
-				if equal, err = checkChange(src, dst, obj, key, config); err == nil && !equal {
-					err = fmt.Errorf("source object %s changed during sync", key)
-				}
+				err = checkChange(src, dst, obj, key, config)
 			}
 
 			if err == nil && (config.CheckAll || config.CheckNew) {
@@ -921,36 +918,32 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 	}
 }
 
-func checkChange(src, dst object.ObjectStorage, obj object.Object, key string, config *Config) (bool, error) {
-	if obj == nil {
-		return true, nil
+func checkChange(src, dst object.ObjectStorage, obj object.Object, key string, config *Config) error {
+	if obj == nil || config.Links && obj.IsSymlink() {
+		return nil // ignore symlink
 	}
-	if config.Links && obj.IsSymlink() {
-		return true, nil
-	}
-	if currentObj, headErr := src.Head(key); headErr == nil {
+	if cur, err := src.Head(key); err == nil {
 		if !config.CheckAll && !config.CheckNew {
 			checked.Increment()
 			checkedBytes.IncrInt64(obj.Size())
 		}
-		equal := currentObj.Size() == obj.Size() && currentObj.Mtime().Equal(obj.Mtime())
+		equal := cur.Size() == obj.Size() && cur.Mtime().Equal(obj.Mtime())
 		if !equal {
-			return false, fmt.Errorf("source file %s changed during sync. Original: size=%d, mtime=%s; Current: size=%d, mtime=%s",
-				currentObj.Key(), obj.Size(), obj.Mtime(), currentObj.Size(), currentObj.Mtime())
+			return fmt.Errorf("%s changed during sync. Original: size=%d, mtime=%s; Current: size=%d, mtime=%s",
+				cur.Key(), obj.Size(), obj.Mtime(), cur.Size(), cur.Mtime())
 		}
-		if dstObj, headErr := dst.Head(key); headErr == nil {
-			if currentObj.Size() != dstObj.Size() {
-				return false, fmt.Errorf("destination object %s size mismatch: original=%d, current=%d", key, obj.Size(), dstObj.Size())
+		if dstObj, err := dst.Head(key); err == nil {
+			if cur.Size() != dstObj.Size() {
+				return fmt.Errorf("copied %s size mismatch: original=%d, current=%d", key, obj.Size(), dstObj.Size())
 			}
+			return nil
 		} else {
-			return false, headErr
+			return fmt.Errorf("check %s in %s: %s", key, dst, err)
 		}
-		return true, nil
-	} else if errors.Is(headErr, os.ErrNotExist) {
-		logger.Warnf("Source object %s was removed during sync", key)
-		return false, nil
+	} else if errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("object %s was removed during sync", key)
 	} else {
-		return false, headErr
+		return fmt.Errorf("check %s in %s: %s", key, src, err)
 	}
 }
 
