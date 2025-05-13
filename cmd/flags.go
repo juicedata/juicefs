@@ -239,7 +239,7 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "verify-cache-checksum",
-			Value: "full",
+			Value: "extend",
 			Usage: "checksum level (none, full, shrink, extend)",
 		},
 		&cli.StringFlag{

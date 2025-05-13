@@ -421,7 +421,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("entryTimeout", getConf(conf, "entry-cache", "0.0"));
     obj.put("dirEntryTimeout", getConf(conf, "dir-entry-cache", "0.0"));
     obj.put("cacheFullBlock", Boolean.valueOf(getConf(conf, "cache-full-block", "true")));
-    obj.put("cacheChecksum", getConf(conf, "verify-cache-checksum", "full"));
+    obj.put("cacheChecksum", getConf(conf, "verify-cache-checksum", "extend"));
     obj.put("cacheEviction", getConf(conf, "cache-eviction", "2-random"));
     obj.put("cacheScanInterval", getConf(conf, "cache-scan-interval", "300"));
     obj.put("cacheExpire", getConf(conf, "cache-expire", "0"));

@@ -91,7 +91,7 @@ class Client(object):
     def __init__(self, name, meta, *, bucket="", storage_class="", read_only=False, no_session=False, no_bgjob=True,
                  open_cache="0", backup_meta="3600", backup_skip_trash=False, heartbeat="12",
                  cache_dir="memory", cache_size="100M", free_space_ratio="0.1", cache_partial_only=False,
-                 verify_cache_checksum="full", cache_eviction="2-random", cache_scan_interval="3600", cache_expire="0",
+                 verify_cache_checksum="extend", cache_eviction="2-random", cache_scan_interval="3600", cache_expire="0",
                  writeback=False, buffer_size="300M", prefetch=1, max_readahead="0", upload_limit="0",
                  download_limit="0", max_uploads=20, max_deletes=10, skip_dir_nlink=20, skip_dir_mtime="100ms",
                  io_retries=10, get_timeout="5", put_timeout="60", fast_resolve=False, attr_cache="1s",

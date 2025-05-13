@@ -622,7 +622,7 @@ func (c *Config) SelfCheck(uuid string) {
 		c.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 		if cs := []string{CsNone, CsFull, CsShrink, CsExtend}; !utils.StringContains(cs, c.CacheChecksum) {
 			logger.Warnf("verify-cache-checksum should be one of %v", cs)
-			c.CacheChecksum = CsFull
+			c.CacheChecksum = CsExtend
 		}
 	} else if c.Writeback {
 		logger.Warnf("writeback is not supported in memory cache mode")
