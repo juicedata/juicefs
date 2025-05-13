@@ -798,10 +798,10 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 	}
 	if config.UploadLimit > 0 {
 		// there are overheads coming from HTTP/TCP/IP
-		store.upLimit = ratelimit.NewBucketWithRate(float64(config.UploadLimit)*0.85, config.UploadLimit)
+		store.upLimit = ratelimit.NewBucketWithRate(float64(config.UploadLimit)*0.85, config.UploadLimit/10)
 	}
 	if config.DownloadLimit > 0 {
-		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit)
+		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit/10)
 	}
 	store.initMetrics()
 	if store.conf.CacheDir != "memory" && store.conf.Writeback {
@@ -1169,7 +1169,7 @@ func (store *cachedStore) UpdateLimit(upload, download int64) {
 		logger.Infof("Upload limit changed from %d to %d", store.conf.UploadLimit, upload)
 		store.conf.UploadLimit = upload
 		if upload > 0 {
-			store.upLimit = ratelimit.NewBucketWithRate(float64(upload)*0.85, upload)
+			store.upLimit = ratelimit.NewBucketWithRate(float64(upload)*0.85, upload/10)
 		} else {
 			store.upLimit = nil
 		}
@@ -1178,7 +1178,7 @@ func (store *cachedStore) UpdateLimit(upload, download int64) {
 		logger.Infof("Download limit changed from %d to %d", store.conf.DownloadLimit, download)
 		store.conf.DownloadLimit = download
 		if download > 0 {
-			store.downLimit = ratelimit.NewBucketWithRate(float64(download)*0.85, download)
+			store.downLimit = ratelimit.NewBucketWithRate(float64(download)*0.85, download/10)
 		} else {
 			store.downLimit = nil
 		}
