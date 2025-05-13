@@ -2220,6 +2220,7 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 			*trash = TrashInode + Ino(next)
 			attr := Attr{Typ: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: TrashInode, Full: true}
 			st = m.en.doMknod(Background, TrashInode, name, TypeDirectory, 0555, 0, "", trash, &attr)
+			m.en.updateStats(align4K(0), 1)
 		} else {
 			st = errno(err)
 		}
