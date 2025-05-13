@@ -2666,6 +2666,9 @@ func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 }
 
 func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
+	if len(value) == 0 && m.Name() == "tikv" {
+		return syscall.EINVAL
+	}
 	key := m.xattrKey(inode, name)
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
 		v := tx.get(key)
