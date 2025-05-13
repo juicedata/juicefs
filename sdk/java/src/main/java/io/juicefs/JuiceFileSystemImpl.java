@@ -56,6 +56,7 @@ import java.lang.reflect.Method;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -137,6 +138,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   private static final String USERNAME_UID_PATTERN = "[a-zA-Z0-9_-]+:[0-9]+";
   private static final String GROUPNAME_GID_USERNAMES_PATTERN = "[a-zA-Z0-9_-]+:[0-9]+:[,a-zA-Z0-9_-]+";
 
+  private String subdir = "";
   /*
     go call back
   */
@@ -447,7 +449,6 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("noUsageReport", Boolean.valueOf(getConf(conf, "no-usage-report", "false")));
     obj.put("freeSpace", getConf(conf, "free-space", "0.1"));
     obj.put("accessLog", getConf(conf, "access-log", ""));
-    obj.put("subDir", getConf(conf, "subdir", ""));
     obj.put("superFs", asSuperFs);
     String jsonConf = obj.toString(2);
     handle = lib.jfs_init(name, jsonConf, user, groupStr, superuser, supergroup);
@@ -525,6 +526,37 @@ public class JuiceFileSystemImpl extends FileSystem {
         BgTaskUtil.putTask(name, "Refresh guid", () -> {
           updateUidAndGrouping(uidFile, groupFile);
         }, 1, 1, TimeUnit.MINUTES);
+      }
+
+      // set juicefs.subdir which is used to limit the access to the subdir
+      String subdirStr = getConf(conf, "subdir", "").trim();
+      if (!subdirStr.isEmpty() && !subdirStr.equals("/")) {
+        // subdir must be absolute path
+        if (!subdirStr.startsWith("/")) {
+          subdirStr = "/" + subdirStr;
+        }
+        Path subdirPath = new Path(subdirStr);
+        FileStatus subdirFs;
+        // subdir must be a valid directory
+        try {
+          subdirFs = getFileStatusInternal(subdirPath, true);
+        } catch (IOException e) {
+          throw new IOException("Failed to initialize subdir: " + subdirStr + " is not valid. " + e.getMessage());
+        }
+        if (!subdirFs.isDirectory()) {
+          throw new IOException("Failed to initialize subdir: " + subdirStr + " is not a directory");
+        }
+        subdir = normalizePath(subdirPath);
+        LOG.info("Subdir is set to {}", subdir);
+      }
+    }
+  }
+
+  public void checkSubPath(Path path) throws AccessDeniedException {
+    if (!subdir.isEmpty() && path != null) {
+      String normalizePath = normalizePath(path);
+      if (!normalizePath.startsWith(subdir)) {
+        throw new AccessDeniedException("Access Denied: " + normalizePath + " is not a sub-path of " + subdir);
       }
     }
   }
@@ -925,6 +957,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public BlockLocation[] getFileBlockLocations(FileStatus file, long start, long len) throws IOException {
+    checkSubPath(file.getPath());
     if (needCheckPermission() && !checkPathAccess(file.getPath(), FsAction.READ, "getFileBlockLocations")) {
       return superGroupFileSystem.getFileBlockLocations(file, start, len);
     }
@@ -1178,6 +1211,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path f, int bufferSize) throws IOException {
+    checkSubPath(f);
     if (needCheckPermission() && !checkPathAccess(f, FsAction.READ, "open")) {
       return superGroupFileSystem.open(f, bufferSize);
     }
@@ -1194,6 +1228,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void access(Path path, FsAction mode) throws IOException {
+    checkSubPath(path);
     if (needCheckPermission() && !checkPathAccess(path, mode, "access")) {
       superGroupFileSystem.access(path, mode);
       return;
@@ -1367,6 +1402,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FSDataOutputStream append(Path f, int bufferSize, Progressable progress) throws IOException {
+    checkSubPath(f);
     if (needCheckPermission() && !checkPathAccess(f, FsAction.WRITE, "append")) {
       return superGroupFileSystem.append(f, bufferSize, progress);
     }
@@ -1383,6 +1419,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite, int bufferSize,
                                    short replication, long blockSize, Progressable progress) throws IOException {
+    checkSubPath(f);
     if (needCheckPermission() && !checkAncestorAccess(f, FsAction.WRITE, "create")) {
       if (!overwrite || !superGroupFileSystem.exists(f)) {
         return superGroupFileSystem.create(f, permission, overwrite, bufferSize, replication, blockSize, progress);
@@ -1425,6 +1462,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, EnumSet<CreateFlag> flag,
                                                int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
+    checkSubPath(f);
     if (needCheckPermission() && !checkAncestorAccess(f, FsAction.WRITE, "createNonRecursive")) {
       if (!flag.contains(CreateFlag.OVERWRITE) || !superGroupFileSystem.exists(f)) {
         return superGroupFileSystem.createNonRecursive(f, permission, flag, bufferSize, replication, blockSize, progress);
@@ -1464,6 +1502,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FileChecksum getFileChecksum(Path f, long length) throws IOException {
+    checkSubPath(f);
     if (needCheckPermission() && !checkPathAccess(f, FsAction.READ, "getFileChecksum")) {
       return superGroupFileSystem.getFileChecksum(f, length);
     }
@@ -1527,6 +1566,10 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void concat(final Path dst, final Path[] srcs) throws IOException {
+    checkSubPath(dst);
+    for (Path src : srcs) {
+        checkSubPath(src);
+    }
     if (needCheckPermission()) {
       access(dst.getParent(), FsAction.WRITE);
       access(dst, FsAction.WRITE);
@@ -1576,6 +1619,8 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public boolean rename(Path src, Path dst) throws IOException {
+    checkSubPath(src);
+    checkSubPath(dst);
     if (needCheckPermission()) {
       if (!superGroupFileSystem.exists(src)) {
         return false;
@@ -1621,6 +1666,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public boolean truncate(Path f, long newLength) throws IOException {
+    checkSubPath(f);
     if (needCheckPermission() && !checkPathAccess(f, FsAction.WRITE, "truncate")) {
       return superGroupFileSystem.truncate(f, newLength);
     }
@@ -1643,6 +1689,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public boolean delete(Path p, boolean recursive) throws IOException {
+    checkSubPath(p);
     if (needCheckPermission()) {
       try {
         if (!checkParentPathAccess(p, FsAction.WRITE_EXECUTE, "delete")) {
@@ -1669,6 +1716,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public ContentSummary getContentSummary(Path f) throws IOException {
+    checkSubPath(f);
     if (needCheckPermission() && !checkPathAccess(f, FsAction.READ_EXECUTE, "getContentSummary")) {
       return superGroupFileSystem.getContentSummary(f);
     }
@@ -1716,6 +1764,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FileStatus[] listStatus(Path f) throws FileNotFoundException, IOException {
+    checkSubPath(f);
     if (needCheckPermission() && !checkPathAccess(f, FsAction.READ_EXECUTE, "listStatus")) {
       return superGroupFileSystem.listStatus(f);
     }
@@ -1782,6 +1831,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public boolean mkdirs(Path f, FsPermission permission) throws IOException {
+    checkSubPath(f);
     if (needCheckPermission() && !checkAncestorAccess(f, FsAction.WRITE, "mkdirs")) {
       return superGroupFileSystem.mkdirs(f, permission);
     }
@@ -1806,6 +1856,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FileStatus getFileStatus(Path f) throws IOException {
+    checkSubPath(f);
     if (needCheckPermission() && !checkParentPathAccess(f, FsAction.EXECUTE, "getFileStatus")) {
       return superGroupFileSystem.getFileStatus(f);
     }
@@ -1854,6 +1905,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FsStatus getStatus(Path p) throws IOException {
+    checkSubPath(p);
     if (needCheckPermission() && !checkParentPathAccess(p, FsAction.EXECUTE, "getStatus")) {
       return superGroupFileSystem.getStatus(p);
     }
@@ -1869,6 +1921,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void setPermission(Path p, FsPermission permission) throws IOException {
+    checkSubPath(p);
     if (needCheckPermission() && !checkOwner(p, "setPermission")) {
       superGroupFileSystem.setPermission(p, permission);
       return;
@@ -1881,6 +1934,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void setOwner(Path p, String username, String groupname) throws IOException {
+    checkSubPath(p);
     if (needCheckPermission()) {
       if (username == null) {
         throw new AccessControlException(
@@ -1901,6 +1955,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void setTimes(Path p, long mtime, long atime) throws IOException {
+    checkSubPath(p);
     if (needCheckPermission() && !checkPathAccess(p, FsAction.WRITE, "setTimes")) {
       superGroupFileSystem.setTimes(p, mtime, atime);
       return;
@@ -1930,6 +1985,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void setXAttr(Path path, String name, byte[] value, EnumSet<XAttrSetFlag> flag) throws IOException {
+    checkSubPath(path);
     if (needCheckPermission() && !checkPathAccess(path, FsAction.WRITE, "setXAttr")) {
       superGroupFileSystem.setXAttr(path, name, value, flag);
       return;
@@ -1952,6 +2008,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public byte[] getXAttr(Path path, String name) throws IOException {
+    checkSubPath(path);
     if (needCheckPermission() && !checkPathAccess(path, FsAction.READ, "getXAttr")) {
       return superGroupFileSystem.getXAttr(path, name);
     }
@@ -1979,6 +2036,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public Map<String, byte[]> getXAttrs(Path path, List<String> names) throws IOException {
+    checkSubPath(path);
     if (needCheckPermission() && !checkPathAccess(path, FsAction.READ, "getXAttrs")) {
       return superGroupFileSystem.getXAttrs(path, names);
     }
@@ -1994,6 +2052,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public List<String> listXAttrs(Path path) throws IOException {
+    checkSubPath(path);
     if (needCheckPermission() && !checkPathAccess(path, FsAction.READ, "listXAttrs")) {
       return superGroupFileSystem.listXAttrs(path);
     }
@@ -2023,6 +2082,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void removeXAttr(Path path, String name) throws IOException {
+    checkSubPath(path);
     if (needCheckPermission() && !checkPathAccess(path, FsAction.WRITE, "removeXAttr")) {
       superGroupFileSystem.removeXAttr(path, name);
       return;
@@ -2037,6 +2097,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void modifyAclEntries(Path path, List<AclEntry> aclSpec) throws IOException {
+    checkSubPath(path);
     if (needCheckPermission() && !checkOwner(path, "modifyAclEntries")) {
       superGroupFileSystem.modifyAclEntries(path, aclSpec);
       return;
@@ -2048,6 +2109,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void removeAclEntries(Path path, List<AclEntry> aclSpec) throws IOException {
+    checkSubPath(path);
     if (needCheckPermission() && !checkOwner(path, "removeAclEntries")) {
       superGroupFileSystem.removeAclEntries(path, aclSpec);
       return;
@@ -2059,6 +2121,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void setAcl(Path path, List<AclEntry> aclSpec) throws IOException {
+    checkSubPath(path);
     if (needCheckPermission() && !checkOwner(path, "setAcl")) {
       superGroupFileSystem.setAcl(path, aclSpec);
       return;
@@ -2093,6 +2156,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void removeDefaultAcl(Path path) throws IOException {
+    checkSubPath(path);
     if (needCheckPermission() && !checkOwner(path, "removeDefaultAcl")) {
       superGroupFileSystem.removeDefaultAcl(path);
       return;
@@ -2102,6 +2166,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void removeAcl(Path path) throws IOException {
+    checkSubPath(path);
     if (needCheckPermission() && !checkOwner(path, "removeAcl")) {
       superGroupFileSystem.removeAcl(path);
       return;
@@ -2262,6 +2327,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public AclStatus getAclStatus(Path path) throws IOException {
+    checkSubPath(path);
     if (needCheckPermission() && !checkOwner(path, "getAclStatus")) {
       return superGroupFileSystem.getAclStatus(path);
     }

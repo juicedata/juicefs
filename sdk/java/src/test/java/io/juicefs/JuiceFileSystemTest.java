@@ -35,6 +35,7 @@ import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.nio.file.AccessDeniedException;
 import java.security.PrivilegedExceptionAction;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -1202,14 +1203,40 @@ public class JuiceFileSystemTest extends TestCase {
     user1Fs.delete(d2, true);
   }
 
-  public void testSudDir() {
+  public void testSudDir() throws IOException {
     Configuration newConf = new Configuration(cfg);
-    newConf.set("juicefs.read-only", "true");
-    newConf.set("juicefs.subdir", "subdir");
+    // Test creating a new filesystem with an invalid subdir
+    newConf.set("juicefs.subdir", "nonexistent");
     try {
       FileSystem.newInstance(newConf);
-      fail("Creating filesystem should fail because the subdir must be a valid directory in read-only mode.");
-    } catch (IOException ignored) {
+      fail("Creating filesystem should fail because the subdir must be a valid directory");
+    } catch (IOException e) {
+      assertTrue(e.getMessage().contains("nonexistent"));
     }
+
+    Path subdirPath = new Path("/subdir");
+    fs.delete(subdirPath, true);
+    fs.mkdirs(subdirPath);
+
+    // Test creating a new filesystem with a valid subdir
+    newConf.set("juicefs.subdir", "subdir");
+    FileSystem newFS = FileSystem.newInstance(newConf);
+    assertTrue(newFS.mkdirs(new Path("/subdir/dir")));
+    newFS.create(new Path("/subdir/dir/f")).close();
+    assertTrue(newFS.exists(new Path("/subdir/dir/f")));
+
+    try {
+      newFS.mkdirs(new Path("/nonexistent/dir"));
+      fail("mkdirs should fail because the path is not under the subdir");
+    } catch (AccessDeniedException ignored) {
+      // Expected exception
+    }
+    try {
+      newFS.create(new Path("/nonexistent/dir/f"));
+      fail("create should fail because the path is not under the subdir");
+    } catch (AccessDeniedException ignored) {
+      // Expected exception
+    }
+    newFS.close();
   }
 }
