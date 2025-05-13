@@ -154,7 +154,7 @@ class Client(object):
         supergroups = [grp.getgrgid(gid).gr_name for gid in os.getgrouplist(superuser.pw_name, superuser.pw_gid)]
         self.h = self.lib.jfs_init(name.encode(), jsonConf.encode(), user.pw_name.encode(), ','.join(groups).encode(), superuser.pw_name.encode(), ''.join(supergroups).encode())
 
-    def shutdown(self):
+    def __del__(self):
         self.lib.jfs_shutdown(c_int64(_tid()), c_int64(self.h))
 
     def stat(self, path):

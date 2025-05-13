@@ -436,7 +436,7 @@ class ClientParamsTests(unittest.TestCase):
             v.rmr(TESTFN)
         v.mkdir(TESTFN)
         self.testfile = TESTFN + '/testfile'
-        v.shutdown()
+        v.__del__()
 
     def tearDown(self):
         global v
@@ -453,7 +453,6 @@ class ClientParamsTests(unittest.TestCase):
         )
         with self.assertRaises(OSError):
             readonly_client.open(self.testfile, 'w')
-        readonly_client.shutdown()
 
     def test_cache_params(self):
         cache_client = juicefs.Client(
@@ -463,7 +462,7 @@ class ClientParamsTests(unittest.TestCase):
             cache_size="100M",
             cache_partial_only=False
         )
-        
+
         size_mb = 48
         test_data = os.urandom(size_mb * 1024 * 1024)
         with cache_client.open(self.testfile, 'wb') as f:
@@ -495,7 +494,6 @@ class ClientParamsTests(unittest.TestCase):
         write_time = time.time() - start_time
 
         self.assertGreaterEqual(write_time, 10.0)
-        limited_client.shutdown()
 
 class CloneTests(unittest.TestCase):
     def setUp(self):
@@ -537,7 +535,7 @@ class CloneTests(unittest.TestCase):
 class WarmupTests(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        v.shutdown()
+        v.__del__()
         self.warmup_client = juicefs.Client(
             "test-warmup",
             meta=meta_url,
@@ -563,7 +561,7 @@ class WarmupTests(unittest.TestCase):
         if self.warmup_client.exists(TESTFN):
             self.warmup_client.warmup(self.test_files, isEvict=True)
             self.warmup_client.rmr(TESTFN)
-        self.warmup_client.shutdown()
+        self.warmup_client.__del__()
         global v
         v = juicefs.Client("test-volume", meta=meta_url, access_log="/tmp/access.log")
 
