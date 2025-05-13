@@ -50,7 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        type: ['sync', 'sync_fsrand', 'sync_minio', 'sync_cluster', 'sync_exclude']
+        type: ['sync', 'sync_encrypt', 'sync_fsrand', 'sync_minio', 'sync_cluster', 'sync_exclude']
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -73,7 +73,9 @@ jobs:
         timeout-minutes: 20
         run: |
           if [[ "${{matrix.type}}" == 'sync' ]]; then
-            sudo GOCOVERDIR=$(pwd)/cover META=redis .github/scripts/sync/sync.sh 
+            sudo GOCOVERDIR=$(pwd)/cover META=redis .github/scripts/sync/sync.sh
+          elif [[ "${{matrix.type}}" == 'sync_encrypt' ]]; then
+            sudo GOCOVERDIR=$(pwd)/cover ENCRYPT=true META=redis .github/scripts/sync/sync.sh
           elif [[ "${{matrix.type}}" == 'sync_fsrand' ]]; then
             if [[ -n "${{ github.event.inputs.seed }}" ]]; then 
               seed=${{ github.event.inputs.seed }}
