@@ -60,6 +60,7 @@ type Config struct {
 	Quiet          bool
 	CheckAll       bool
 	CheckNew       bool
+	CheckChange    bool
 	MaxSize        int64
 	MinSize        int64
 	MaxAge         time.Duration
@@ -198,6 +199,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Quiet:          c.Bool("quiet"),
 		CheckAll:       c.Bool("check-all"),
 		CheckNew:       c.Bool("check-new"),
+		CheckChange:    c.Bool("check-change"),
 		MaxSize:        int64(utils.ParseBytes(c, "max-size", 'B')),
 		MinSize:        int64(utils.ParseBytes(c, "min-size", 'B')),
 		MaxAge:         utils.Duration(c.String("max-age")),
@@ -220,7 +222,6 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		logger.Warnf("threads should be larger than 0, reset it to 1")
 		cfg.Threads = 1
 	}
-
 	for _, key := range envList() {
 		if os.Getenv(key) != "" {
 			cfg.Env[key] = os.Getenv(key)

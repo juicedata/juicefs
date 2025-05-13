@@ -878,12 +878,17 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 			var err error
 			var srcChksum uint32
+
 			if config.Links && obj.IsSymlink() {
 				if err = copyLink(src, dst, key); err != nil {
 					logger.Errorf("copy link failed: %s", err)
 				}
 			} else {
 				srcChksum, err = CopyData(src, dst, key, obj.Size(), config.CheckAll || config.CheckNew)
+			}
+
+			if err == nil && config.CheckChange {
+				err = checkChange(src, dst, obj, key, config)
 			}
 
 			if err == nil && (config.CheckAll || config.CheckNew) {
@@ -910,6 +915,35 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 		}
 		incrHandled(1)
+	}
+}
+
+func checkChange(src, dst object.ObjectStorage, obj object.Object, key string, config *Config) error {
+	if obj == nil || config.Links && obj.IsSymlink() {
+		return nil // ignore symlink
+	}
+	if cur, err := src.Head(key); err == nil {
+		if !config.CheckAll && !config.CheckNew {
+			checked.Increment()
+			checkedBytes.IncrInt64(obj.Size())
+		}
+		equal := cur.Size() == obj.Size() && cur.Mtime().Equal(obj.Mtime())
+		if !equal {
+			return fmt.Errorf("%s changed during sync. Original: size=%d, mtime=%s; Current: size=%d, mtime=%s",
+				cur.Key(), obj.Size(), obj.Mtime(), cur.Size(), cur.Mtime())
+		}
+		if dstObj, err := dst.Head(key); err == nil {
+			if cur.Size() != dstObj.Size() {
+				return fmt.Errorf("copied %s size mismatch: original=%d, current=%d", key, obj.Size(), dstObj.Size())
+			}
+			return nil
+		} else {
+			return fmt.Errorf("check %s in %s: %s", key, dst, err)
+		}
+	} else if errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("object %s was removed during sync", key)
+	} else {
+		return fmt.Errorf("check %s in %s: %s", key, src, err)
 	}
 }
 
@@ -1605,7 +1639,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	pending = progress.AddCountSpinner("Pending objects")
 	copied = progress.AddCountSpinner("Copied objects")
 	copiedBytes = progress.AddByteSpinner("Copied bytes")
-	if config.CheckAll || config.CheckNew {
+	if config.CheckAll || config.CheckNew || config.CheckChange {
 		checked = progress.AddCountSpinner("Checked objects")
 		checkedBytes = progress.AddByteSpinner("Checked bytes")
 	}
