@@ -935,19 +935,20 @@ func checkChange(src, dst object.ObjectStorage, obj object.Object, key string, c
 		}
 		equal := currentObj.Size() == obj.Size() && currentObj.Mtime().Equal(obj.Mtime())
 		if !equal {
-			logger.Warnf("Source file %s changed during sync. Original: size=%d, mtime=%s; Current: size=%d, mtime=%s",
+			return false, fmt.Errorf("source file %s changed during sync. Original: size=%d, mtime=%s; Current: size=%d, mtime=%s",
 				currentObj.Key(), obj.Size(), obj.Mtime(), currentObj.Size(), currentObj.Mtime())
-			return false, nil
 		}
 		if dstObj, headErr := dst.Head(key); headErr == nil {
 			if currentObj.Size() != dstObj.Size() {
-				logger.Warnf("Destination object %s size mismatch: original=%d, current=%d", key, obj.Size(), dstObj.Size())
-				return false, nil
+				return false, fmt.Errorf("destination object %s size mismatch: original=%d, current=%d", key, obj.Size(), dstObj.Size())
 			}
 		} else {
 			return false, headErr
 		}
 		return true, nil
+	} else if errors.Is(headErr, os.ErrNotExist) {
+		logger.Warnf("Source object %s was removed during sync", key)
+		return false, nil
 	} else {
 		return false, headErr
 	}
