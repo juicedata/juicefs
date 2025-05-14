@@ -993,7 +993,7 @@ func (fs *FileSystem) Close() error {
 		fs.logBuffer = nil
 		close(buffer)
 	}
-	return fs.Meta().Shutdown()
+	return nil
 }
 
 func (fs *FileSystem) Clone(ctx meta.Context, src, dst string, preserve bool) (err syscall.Errno) {
