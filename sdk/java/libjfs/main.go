@@ -184,6 +184,7 @@ type wrapper struct {
 	superuser  string
 	supergroup string
 	isSuperFs  bool
+	jConf      string
 }
 
 type logWriter struct {
@@ -361,16 +362,20 @@ type javaConf struct {
 	SuperFS bool `json:"superFs,omitempty"`
 }
 
-func getOrCreate(name, user, group, superuser, supergroup string, conf javaConf, f func() *fs.FileSystem) int64 {
+func getOrCreate(name, user, group, superuser, supergroup, jConf string, conf javaConf, f func() *fs.FileSystem) int64 {
 	fslock.Lock()
 	defer fslock.Unlock()
 	ws := activefs[name]
 	var jfs *fs.FileSystem
 	var m *mapping
-	if len(ws) > 0 {
-		jfs = ws[0].FileSystem
-		m = ws[0].m
-	} else {
+	for _, w := range ws {
+		if w.jConf == jConf {
+			jfs = w.FileSystem
+			m = w.m
+			break
+		}
+	}
+	if jfs == nil {
 		m = newMapping(name)
 		jfs = f()
 		if jfs == nil {
@@ -382,7 +387,7 @@ func getOrCreate(name, user, group, superuser, supergroup string, conf javaConf,
 		}
 		logger.Infof("JuiceFileSystem created for user:%s group:%s", user, group)
 	}
-	w := &wrapper{jfs, nil, m, user, superuser, supergroup, conf.SuperFS}
+	w := &wrapper{jfs, nil, m, user, superuser, supergroup, conf.SuperFS, jConf}
 	var gs []string
 	if userGroupCache[name] != nil {
 		gs = userGroupCache[name][user]
@@ -471,16 +476,17 @@ func push2Graphite(graphite string, pushInterVal time.Duration, registry *promet
 }
 
 //export jfs_init
-func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64 {
+func jfs_init(cname, cjsonConf, user, group, superuser, supergroup *C.char) int64 {
 	name := C.GoString(cname)
 	debug.SetGCPercent(50)
 	object.UserAgent = "JuiceFS-SDK " + version.Version()
 	var jConf javaConf
-	err := json.Unmarshal([]byte(C.GoString(jsonConf)), &jConf)
+	jsonConf := C.GoString(cjsonConf)
+	err := json.Unmarshal([]byte(jsonConf), &jConf)
 	if err != nil {
-		logger.Fatalf("invalid json: %s", C.GoString(jsonConf))
+		logger.Fatalf("invalid json: %s", jsonConf)
 	}
-	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), jConf, func() *fs.FileSystem {
+	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), jsonConf, jConf, func() *fs.FileSystem {
 		if jConf.Debug || os.Getenv("JUICEFS_DEBUG") != "" {
 			utils.SetLogLevel(logrus.DebugLevel)
 			go func() {
@@ -758,15 +764,6 @@ func jfs_getGroups(cname, cuser *C.char, buf uintptr, count int32) int32 {
 
 //export jfs_term
 func jfs_term(pid int64, h int64) int32 {
-	return jfs_term0(pid, h, false)
-}
-
-//export jfs_shutdown
-func jfs_shutdown(pid, h int64) int32 {
-	return jfs_term0(pid, h, true)
-}
-
-func jfs_term0(pid int64, h int64, shouldClose bool) int32 {
 	w := F(h)
 	if w == nil {
 		return 0
@@ -803,10 +800,8 @@ func jfs_term0(pid int64, h int64, shouldClose bool) int32 {
 					activefs[name] = ws[:len(ws)-1]
 				} else {
 					_ = w.Flush()
-					if shouldClose {
-						w.Close()
-						delete(activefs, name)
-					}
+					// w.Close()
+					// delete(activefs, name)
 				}
 			}
 		}
