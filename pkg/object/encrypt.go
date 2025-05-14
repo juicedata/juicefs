@@ -194,6 +194,9 @@ func (e *dataEncryptor) Encrypt(plaintext []byte) ([]byte, error) {
 }
 
 func (e *dataEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {
+	if len(ciphertext) < 3 {
+		return nil, fmt.Errorf("received encrypted text length is less than 3, the object is corrupted")
+	}
 	keyLen := int(ciphertext[0])<<8 + int(ciphertext[1])
 	nonceLen := int(ciphertext[2])
 	if 3+keyLen+nonceLen >= len(ciphertext) {
