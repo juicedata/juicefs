@@ -353,6 +353,9 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 
 	go func() {
 		for {
+			if m.sessCtx == nil || m.sessCtx.Canceled() {
+				return
+			}
 			var totalSpace, availSpace, iused, iavail uint64
 			err := m.StatFS(Background(), m.root, &totalSpace, &availSpace, &iused, &iavail)
 			if err == 0 {
