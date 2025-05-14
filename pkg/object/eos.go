@@ -21,13 +21,16 @@ package object
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	smithymiddleware "github.com/aws/smithy-go/middleware"
 )
 
 type eos struct {
@@ -82,6 +85,9 @@ func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		options.EndpointOptions.DisableHTTPS = !ssl
 		options.UsePathStyle = defaultPathStyle()
 		options.HTTPClient = httpClient
+		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
+			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
+		})
 	})
 
 	return &eos{s3client{bucket: bucket, s3: client, region: region}}, nil

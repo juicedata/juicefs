@@ -26,9 +26,11 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	smithymiddleware "github.com/aws/smithy-go/middleware"
 )
 
 type minio struct {
@@ -88,6 +90,9 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		options.EndpointOptions.DisableHTTPS = !ssl
 		options.UsePathStyle = defaultPathStyle()
 		options.HTTPClient = httpClient
+		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
+			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
+		})
 	})
 	if len(uri.Path) < 2 {
 		return nil, fmt.Errorf("no bucket name provided in %s", endpoint)

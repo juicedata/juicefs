@@ -21,12 +21,15 @@ package object
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"net/url"
-	"strings"
+	smithymiddleware "github.com/aws/smithy-go/middleware"
 )
 
 type oos struct {
@@ -91,6 +94,9 @@ func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		options.UsePathStyle = forcePathStyle
 		options.HTTPClient = httpClient
 		options.BaseEndpoint = aws.String(endpoint)
+		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
+			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
+		})
 	})
 	return &oos{s3client{bucket: bucket, s3: client, region: region}}, nil
 }
