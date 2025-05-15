@@ -1219,6 +1219,7 @@ public class JuiceFileSystemTest extends TestCase {
     Path allowedSubdir = new Path("/test_allowed_subdir");
     fs.delete(allowedSubdir, true);
     fs.mkdirs(allowedSubdir);
+    fs.setPermission(allowedSubdir, new FsPermission((short) 0777));
     newConf.set("juicefs.allowed-subdir", "/test_allowed_subdir");
     FileSystem newFS = FileSystem.newInstance(newConf);
 
