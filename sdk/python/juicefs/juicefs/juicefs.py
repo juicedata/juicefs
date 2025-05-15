@@ -72,6 +72,7 @@ def unpack(fmt, buf):
         fmt = "!" + fmt
     return struct.unpack(fmt, buf[: struct.calcsize(fmt)])
 
+
 class JuiceFSLib(object):
     def __init__(self):
         self.lib = cdll.LoadLibrary(os.path.join(os.path.dirname(__file__), "libjfs.so"))
@@ -426,50 +427,20 @@ class Client(object):
         self.lib.free(buf)
         return res
 
+
 class _File(object):
     """A JuiceFS file."""
-    def __init__(self, lib, fd, path, mode, flag, length, buffering, errors):
+    def __init__(self, lib, fd, path, mode, flag, length):
         self.lib = lib
         self.fd = fd
         self.name = path
-        self.append = 'a' in mode
         self.flag = flag
         self.length = length
-        self.errors = errors
-        self.newlines = None
-        self.closed = False
-        self._buffering = buffering
-        if self._buffering < 0:
-            self._buffering = 128 << 10
-        if flag == MODE_READ | MODE_WRITE:
-            self._buffering = 0
-        self._readbuf = None
-        self._readbuf_off = 0
-        self._writebuf = []
-        self.off = 0
-        if self.append:
-            self.off = self.length
+        self.is_closed = False
+        self.off = self.length if 'a' in mode else 0
 
     def __fspath__(self):
         return self.name
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.close()
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        return self.next()
-
-    def next(self):
-        lines = self.readlines(1)
-        if lines:
-            return lines[0]
-        raise StopIteration
 
     def readable(self):
         return self.flag & MODE_READ != 0
@@ -481,7 +452,7 @@ class _File(object):
         return True
 
     def closed(self):
-        return self.closed
+        return self.is_closed
 
     def fileno(self):
         return self.fd
@@ -489,52 +460,28 @@ class _File(object):
     def isatty(self):
         return False
 
-    def _read(self, size):
+    def read(self, size):
+        """Read at most size bytes, returned as a byes."""
         self._check_closed()
         if self.flag & MODE_READ == 0:
             raise io.UnsupportedOperation('not readable')
-        # fill buffer
-        if (not self._readbuf or self._readbuf_off == len(self._readbuf)) and size < self._buffering:
-            if not self._readbuf or len(self._readbuf) < self._buffering:
-                self._readbuf = bytes(self._buffering)
-            n = self.lib.jfs_pread(c_int64(_tid()), c_int32(self.fd), self._readbuf, c_int32(self._buffering), c_int64(self.off))
-            if n < self._buffering:
-                self._readbuf = self._readbuf[:n]
-            self._readbuf_off = 0
-        # read from buffer
+        # read directly
         rs = []
         got = 0
-        if self._readbuf and self._readbuf_off < len(self._readbuf):
-            n = len(self._readbuf) - self._readbuf_off
-            if size >= 0 and size < n:
+        while size > 0 or size < 0:
+            n = 4 << 20
+            if size > 0 and size < n:
                 n = size
-            rs.append(self._readbuf[self._readbuf_off:self._readbuf_off+n])
-            self._readbuf_off += n
+            buf = bytes(n)
+            n = self.lib.jfs_pread(c_int64(_tid()), c_int32(self.fd), buf, c_int32(n), c_int64(self.off+got))
+            if n == 0:
+                break
+            if n < len(buf):
+                buf = buf[:n]
+            rs.append(buf)
             got += n
-            size -= n
-        # read directly
-        if size > 0:
-            while size > 0:
-                n = min(size, 4 << 20)
-                buf = bytes(n)
-                n = self.lib.jfs_pread(c_int64(_tid()), c_int32(self.fd), buf, c_int32(n), c_int64(self.off+got))
-                if n == 0:
-                    break
-                if n < len(buf):
-                    buf = buf[:n]
-                rs.append(buf)
-                got += n
+            if size > 0:
                 size -= n
-        elif size < 0:
-            while True:
-                buf = bytes(128 << 10)
-                n = self.lib.jfs_pread(c_int64(_tid()), c_int32(self.fd), buf, c_int32(len(buf)), c_int64(self.off+got))
-                if n == 0:
-                    break
-                if n < len(buf):
-                    buf = buf[:n]
-                rs.append(buf)
-                got += n
         if len(rs) == 1:
             buf = rs[0]
         else:
@@ -542,37 +489,18 @@ class _File(object):
         self.off += len(buf)
         return buf
 
-    def read(self, size=-1):
-        """Read at most size bytes, returned as a string."""
-        return self._read(size)
-
     def write(self, data):
         """Write the string data to the file."""
         self._check_closed()
-        # TODO: buffer for small write
         if not isinstance(data, six.binary_type):
             raise TypeError(f"a bytes-like object is required, not '{type(data).__name__}'")
-        if self.flag & MODE_WRITE == 0:
+        if not self.writable():
             raise io.UnsupportedOperation('not writable')
 
         if not data:
             return 0
-        n = len(data)
-
-        if self.append:
-            self.off = self.length
-        total = len(data)
-        for b in self._writebuf:
-            total += len(b)
-        if total >= self._buffering:
-            self.flush()
-            if len(data) < self._buffering:
-                self._writebuf.append(data)
-            else:
-                self.lib.jfs_pwrite(c_int64(_tid()), c_int32(self.fd), data, c_int32(len(data)), c_int64(self.off))
-        else:
-            self._writebuf.append(data)
-        self.off += len(data)
+        n = self.lib.jfs_pwrite(c_int64(_tid()), c_int32(self.fd), data, c_int32(len(data)), c_int64(self.off))
+        self.off += n
         if self.off > self.length:
             self.length = self.off
         return n
@@ -584,18 +512,12 @@ class _File(object):
         self._check_closed()
         if whence not in (os.SEEK_SET, os.SEEK_CUR, os.SEEK_END):
             raise ValueError(f'invalid whence ({whence}, should be {os.SEEK_SET}, {os.SEEK_CUR} or {os.SEEK_END})')
-        self.flush()
         if whence == os.SEEK_SET:
             self.off = offset
-            self._readbuf = None
         elif whence == os.SEEK_CUR:
             self.off += offset
-            self._readbuf_off += offset
-            if self._readbuf and (self._readbuf_off < 0 or self._readbuf_off >= len(self._readbuf)):
-                self._readbuf = None
         else:
             self.off = self.length + offset
-            self._readbuf = None
         return self.off
 
     def tell(self):
@@ -607,190 +529,60 @@ class _File(object):
         """Truncate the file to at most size bytes.
         Size defaults to the current file position, as returned by tell()."""
         self._check_closed()
-        if self.flag & MODE_WRITE == 0:
+        if not self.writable():
             raise io.UnsupportedOperation('File not open for writing')
-        self.flush()
         if size is None:
             size = self.tell()
         self.lib.jfs_ftruncate(c_int64(_tid()), c_int32(self.fd), c_uint64(size))
         self.length = size
         return size
 
-    def flush(self):
-        """Flush the write buffers of the file if applicable.
-        This does nothing for read-only and non-blocking streams."""
-        if self._writebuf:
-            data = b''.join(self._writebuf)
-            self.lib.jfs_pwrite(c_int64(_tid()), c_int32(self.fd), data, c_int32(len(data)), c_int64(self.off-len(data)))
-            self._writebuf = []
-
     def fsync(self):
-        """Force write file data to the backend storage."""
-        self.flush()
         self.lib.jfs_fsync(c_int64(_tid()), c_int32(self.fd))
-
-    def close(self):
-        """Close the file. A closed file cannot be used for further I/O operations."""
-        if self.closed:
-            return
-        self.flush()
-        self.lib.jfs_close(c_int64(_tid()), c_int32(self.fd))
-        self.closed = True
-
-    def __del__(self):
-        if not self.closed:
-            self.close()
-
-    def _check_closed(self):
-        if self.closed:
-            raise ValueError('I/O operation on closed file.')
-
-    def readline(self): # TODO: add parameter `size=-1`
-        """Read until newline or EOF."""
-        ls = self.readlines(1)
-        if ls:
-            return ls[0]
-        return b''
-
-    def xreadlines(self):
-        return self
-
-    def readlines(self, hint=-1):
-        """Return a list of lines from the stream."""
-        self._check_closed()
-        if hint == -1:
-            data = self._read(-1)
-        else:
-            rs = []
-            while hint > 0:
-                r = self._read(1)
-                if not r:
-                    break
-                rs.append(r)
-                if r[0] == b'\n':
-                    hint -= 1
-            data = b''.join(rs)
-        return data.splitlines(True)
-
-    def writelines(self, lines):
-        """Write a list of lines to the file."""
-        self._check_closed()
-        self.write(b''.join(lines))
-        self.flush()
-
-class File(object):
-    """A JuiceFS file."""
-    def __init__(self, lib, fd, path, mode, flag, length, buffering, encoding=None, errors=None):
-        self._bytes_io = _File(lib, fd, path, mode, flag, length, buffering, errors=errors)
-        self.encoding = encoding
-        self.is_closed = False
-        self.errors = errors
-        self._text_io = io.TextIOWrapper(
-            self._bytes_io,
-            encoding=self.encoding,
-            errors=self.errors
-        )
-
-    def __fspath__(self):
-        return self._bytes_io.name
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.close()
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        return self.next()
-
-    def next(self):
-        lines = self.readlines(1)
-        if lines:
-            return lines[0]
-        raise StopIteration
-
-    def fileno(self):
-        return self._bytes_io.fd
-
-    def isatty(self):
-        return False
-
-    def read(self, size=-1):
-        """Read at most size bytes, returned as a string."""
-        if not self._bytes_io.readable():
-            raise io.UnsupportedOperation('not readable')
-        if self.encoding:
-            return self._text_io.read(size)
-        return self._bytes_io.read(size)
-
-    def write(self, data):
-        """Write the string data to the file."""
-        if not self._bytes_io.writable():
-            raise io.UnsupportedOperation('not writable')
-        if self.encoding:
-            if not isinstance(data, str):
-                raise TypeError(f"write() argument must be str, not {type(data).__name__}")
-            return self._text_io.write(data)
-        return self._bytes_io.write(data)
-
-    def readline(self):
-        """Read until newline or EOF."""
-        if self.encoding:
-            return self._text_io.readline()
-        else:
-            return self._bytes_io.readline()
-
-    def readlines(self, hint=-1):
-        """Return a list of lines from the stream."""
-        if self.encoding:
-            return self._text_io.readlines(hint)
-        else:
-            return self._bytes_io.readlines(hint)
-
-    def writelines(self, lines):
-        """Write a list of lines to the file."""
-        if self.encoding:
-            return self._text_io.writelines(lines)
-        else:
-            return self._bytes_io.writelines(lines)
-
-    def seek(self, offset, whence=0):
-        if self.encoding:
-            return self._text_io.seek(offset, whence)
-        return self._bytes_io.seek(offset, whence)
-
-    def tell(self):
-        if self.encoding:
-            return self._text_io.tell()
-        return self._bytes_io.tell()
-
-    def truncate(self, size=None):
-        if self.encoding:
-            return self._text_io.truncate(size)
-        return self._bytes_io.truncate(size)
-
-    def flush(self):
-        if self.encoding:
-            return self._text_io.flush()
-        return self._bytes_io.flush()
-
-    def fsync(self):
-        return self._bytes_io.fsync()
-
-    def __del__(self):
-        if not self.is_closed:
-            self.close()
 
     def close(self):
         if self.is_closed:
             return
+        self.lib.jfs_close(c_int64(_tid()), c_int32(self.fd))
         self.is_closed = True
-        if hasattr(self, '_text_io') and self._text_io is not None:
-            self._text_io.close()
-        self._bytes_io.close()
+
+    def __del__(self):
+        self.close()
+
+    def _check_closed(self):
+        if self.is_closed:
+            raise ValueError('I/O operation on closed file.')
+
+
+class File(object):
+    """A JuiceFS file."""
+    def __init__(self, lib, fd, path, mode, flag, length, buffering, encoding=None, errors=None):
+        self._file = _File(lib, fd, path, mode, flag, length)
+        self.io = io.BufferedReader(self._file, buffer_size=buffering)
+        if encoding:
+            self.io = io.TextIOWrapper(self.io, encoding=encoding, errors=errors)
+
+    def __getattr__(self, name):
+        return getattr(self.io, name)
+
+    def __fspath__(self):
+        return self._file.name
+
+    def fileno(self):
+        return self._file.fd
+
+    def isatty(self):
+        return False
+
+    def fsync(self):
+        """Force write file data to the backend storage."""
+        self.io.flush()
+        return self._file.fsync()
+
+    def close(self):
+        """Close the file. A closed file cannot be used for further I/O operations."""
+        self.io.close()
+        self._file.close()
 
 
 def test():
