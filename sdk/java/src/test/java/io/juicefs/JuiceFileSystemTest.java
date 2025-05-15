@@ -777,7 +777,7 @@ public class JuiceFileSystemTest extends TestCase {
     Configuration newConf = new Configuration(cfg);
 
     newConf.set("juicefs.users", "bar:10000;foo:20000;baz:30000");
-    newConf.set("juicefs.groups", "user:1000:foo,bar;admin:2000:baz");
+    newConf.set("juicefs.groups", "user:10000:foo,bar;admin:2000:baz");
     newConf.set("juicefs.superuser", UserGroupInformation.getCurrentUser().getShortUserName());
 
     FileSystem fooFs = createNewFs(newConf, "foo", new String[]{"nogrp"});
@@ -792,7 +792,7 @@ public class JuiceFileSystemTest extends TestCase {
     newConf.set("juicefs.groups", "user:1001:foo,bar;admin:2001:baz");
     FileSystem newFS = FileSystem.newInstance(newConf);
     assertEquals("20000", newFS.getFileStatus(f).getOwner());
-    assertEquals("1000", newFS.getFileStatus(f).getGroup());
+    assertEquals("10000", newFS.getFileStatus(f).getGroup());
 
     newFS.delete(f, false);
     newFS.close();
