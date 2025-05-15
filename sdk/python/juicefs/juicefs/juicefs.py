@@ -436,8 +436,9 @@ class _File(object):
         self.name = path
         self.flag = flag
         self.length = length
-        self.is_closed = False
-        self.off = self.length if 'a' in mode else 0
+        self.closed = False
+        self.append = 'a' in mode
+        self.off = self.length if self.append else 0
 
     def __fspath__(self):
         return self.name
@@ -451,16 +452,13 @@ class _File(object):
     def seekable(self):
         return True
 
-    def closed(self):
-        return self.is_closed
-
     def fileno(self):
         return self.fd
 
     def isatty(self):
         return False
 
-    def read(self, size):
+    def read(self, size=-1):
         """Read at most size bytes, returned as a byes."""
         self._check_closed()
         if self.flag & MODE_READ == 0:
@@ -489,9 +487,18 @@ class _File(object):
         self.off += len(buf)
         return buf
 
+    def readinto(self, buffer):
+        data = self.read(len(buffer))
+        if not data:
+            return 0
+        buffer[:len(data)] = data
+        return len(data)
+
     def write(self, data):
         """Write the string data to the file."""
         self._check_closed()
+        if isinstance(data, memoryview):
+            data = data.tobytes()
         if not isinstance(data, six.binary_type):
             raise TypeError(f"a bytes-like object is required, not '{type(data).__name__}'")
         if not self.writable():
@@ -499,6 +506,8 @@ class _File(object):
 
         if not data:
             return 0
+        if self.append:
+            self.off = self.length
         n = self.lib.jfs_pwrite(c_int64(_tid()), c_int32(self.fd), data, c_int32(len(data)), c_int64(self.off))
         self.off += n
         if self.off > self.length:
@@ -537,36 +546,104 @@ class _File(object):
         self.length = size
         return size
 
+    def flush(self):
+        return
+
     def fsync(self):
         self.lib.jfs_fsync(c_int64(_tid()), c_int32(self.fd))
 
     def close(self):
-        if self.is_closed:
+        if self.closed:
             return
         self.lib.jfs_close(c_int64(_tid()), c_int32(self.fd))
-        self.is_closed = True
+        self.closed = True
 
     def __del__(self):
         self.close()
 
     def _check_closed(self):
-        if self.is_closed:
+        if self.closed:
             raise ValueError('I/O operation on closed file.')
 
+    def readline(self): # TODO: add parameter `size=-1`
+        """Read until newline or EOF."""
+        ls = self.readlines(1)
+        if ls:
+            return ls[0]
+        return b''
+
+    def xreadlines(self):
+        return self
+
+    def readlines(self, hint=-1):
+        """Return a list of lines from the stream."""
+        self._check_closed()
+        if hint == -1:
+            data = self.read(-1)
+        else:
+            rs = []
+            while hint > 0:
+                r = self.read(1)
+                if not r:
+                    break
+                rs.append(r)
+                if r[0] == b'\n':
+                    hint -= 1
+            data = b''.join(rs)
+        return data.splitlines(True)
+
+    def writelines(self, lines):
+        """Write a list of lines to the file."""
+        self._check_closed()
+        self.write(b''.join(lines))
+        self.flush()
 
 class File(object):
     """A JuiceFS file."""
     def __init__(self, lib, fd, path, mode, flag, length, buffering, encoding=None, errors=None):
         self._file = _File(lib, fd, path, mode, flag, length)
-        self.io = io.BufferedReader(self._file, buffer_size=buffering)
+
+        if buffering < 0:
+            buffering = 128<<10
+
+        if buffering == 0:
+            self.raw_io = self._file
+        elif self._file.readable():
+            if self._file.writable():
+                self.raw_io = io.BufferedRandom(self._file, buffer_size=buffering)
+            else:
+                self.raw_io = io.BufferedReader(self._file, buffer_size=buffering)
+        else:
+            self.raw_io = io.BufferedWriter(self._file, buffer_size=buffering)
+
         if encoding:
-            self.io = io.TextIOWrapper(self.io, encoding=encoding, errors=errors)
+            self.io = io.TextIOWrapper(self.raw_io, encoding=encoding, errors=errors)
+        else:
+            self.io = self.raw_io
 
     def __getattr__(self, name):
         return getattr(self.io, name)
 
     def __fspath__(self):
         return self._file.name
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return self.next()
+
+    def next(self):
+        lines = self.readlines(1)
+        if lines:
+            return lines[0]
+        raise StopIteration
 
     def fileno(self):
         return self._file.fd
@@ -607,6 +684,9 @@ def test():
     with v.open("/d/file", "w") as f:
         f.write("hello")
     with v.open("/d/file", 'rb', 5) as f:
+        data = f.readlines()
+        assert data == [b"hello"]
+    with v.open("/d/file", 'rb', 0) as f:
         data = f.readlines()
         assert data == [b"hello"]
     print(list(v.open("/d/file")))

@@ -456,10 +456,10 @@ class ClientParamsTests(unittest.TestCase):
             meta=meta_url,
             cache_dir="/tmp/jfs_test_cache",
             cache_size="100M",
-            cache_partial_only=True
+            cache_partial_only=False
         )
         
-        size_mb = 50
+        size_mb = 48
         test_data = os.urandom(size_mb * 1024 * 1024) 
         with cache_client.open(self.testfile, 'wb') as f:
             f.write(test_data)
