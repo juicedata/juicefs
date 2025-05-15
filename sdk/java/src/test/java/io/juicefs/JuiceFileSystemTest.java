@@ -35,7 +35,6 @@ import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.URI;
 import java.nio.ByteBuffer;
-import java.nio.file.AccessDeniedException;
 import java.security.PrivilegedExceptionAction;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -1203,39 +1202,50 @@ public class JuiceFileSystemTest extends TestCase {
     user1Fs.delete(d2, true);
   }
 
-  public void testSudDir() throws IOException {
+  public void testAllowedSubdir() throws IOException, InterruptedException {
     Configuration newConf = new Configuration(cfg);
-    // Test creating a new filesystem with an invalid subdir
-    newConf.set("juicefs.subdir", "nonexistent");
+    newConf.set("fs.defaultFS", "jfs://test/");
+    newConf.set("juicefs.name", "test");
+    newConf.set("juicefs.test.meta", newConf.get("juicefs.dev.meta"));
+    // Test creating a new filesystem with an invalid allowed-subdir
+    newConf.set("juicefs.allowed-subdir", "nonexistent");
     try {
       FileSystem.newInstance(newConf);
       fail("Creating filesystem should fail because the subdir must be a valid directory");
-    } catch (IOException e) {
-      assertTrue(e.getMessage().contains("nonexistent"));
+    } catch (IOException ignored) {
     }
 
-    Path subdirPath = new Path("/subdir");
-    fs.delete(subdirPath, true);
-    fs.mkdirs(subdirPath);
-
-    // Test creating a new filesystem with a valid subdir
-    newConf.set("juicefs.subdir", "subdir");
+    // Test creating a new filesystem with allowed-subdir
+    Path allowedSubdir = new Path("/test_allowed_subdir");
+    fs.delete(allowedSubdir, true);
+    fs.mkdirs(allowedSubdir);
+    newConf.set("juicefs.allowed-subdir", "/test_allowed_subdir");
     FileSystem newFS = FileSystem.newInstance(newConf);
-    assertTrue(newFS.mkdirs(new Path("/subdir/dir")));
-    newFS.create(new Path("/subdir/dir/f")).close();
-    assertTrue(newFS.exists(new Path("/subdir/dir/f")));
 
+    // Test file operations within the allowed-subdir
+    assertTrue(newFS.mkdirs(new Path("/test_allowed_subdir/dir")));
+    newFS.create(new Path("/test_allowed_subdir/dir/f")).close();
+    assertTrue(newFS.exists(new Path("/test_allowed_subdir/dir/f")));
+
+    // Test file operations not within the allowed-subdir
+    Path nonexistent = new Path("/nonexistent");
     try {
-      newFS.mkdirs(new Path("/nonexistent/dir"));
-      fail("mkdirs should fail because the path is not under the subdir");
-    } catch (AccessDeniedException ignored) {
-      // Expected exception
+      newFS.exists(nonexistent);
+      fail("exists should not work because the path is not under the allowed-subdir");
+    } catch (AccessControlException e) {
+      assertTrue(e.getMessage().contains("Permission denied"));
     }
     try {
-      newFS.create(new Path("/nonexistent/dir/f"));
-      fail("create should fail because the path is not under the subdir");
-    } catch (AccessDeniedException ignored) {
-      // Expected exception
+      newFS.mkdirs(nonexistent);
+      fail("mkdirs should not work because the path is not under the allowed-subdir");
+    } catch (AccessControlException e) {
+      assertTrue(e.getMessage().contains("Permission denied"));
+    }
+    try {
+      newFS.create(nonexistent);
+      fail("create should not work because the path is not under the allowed-subdir");
+    } catch (AccessControlException e) {
+      assertTrue(e.getMessage().contains("Permission denied"));
     }
     newFS.close();
   }
