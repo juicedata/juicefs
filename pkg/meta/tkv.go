@@ -2806,6 +2806,12 @@ func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
 		inodes += 1
 	}
 
+	if err := m.scanTrashEntry(ctx, func(_ Ino, length uint64) {
+		used += align4K(length)
+		inodes += 1
+	}); err != nil {
+		return err
+	}
 	logger.Debugf("Used space: %s, inodes: %d", humanize.IBytes(uint64(used)), inodes)
 	err = m.setValue(m.counterKey(totalInodes), packCounter(inodes))
 	if err != nil {

@@ -28,6 +28,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/dustin/go-humanize"
 	"hash/fnv"
 	"io"
 	"math/rand"
@@ -787,7 +788,13 @@ func (m *redisMeta) doSyncVolumeStat(ctx Context) error {
 			}
 		}
 	}
-
+	if err := m.scanTrashEntry(ctx, func(_ Ino, length uint64) {
+		used += align4K(length)
+		inodes += 1
+	}); err != nil {
+		return err
+	}
+	logger.Debugf("Used space: %s, inodes: %d", humanize.IBytes(uint64(used)), inodes)
 	if err := m.rdb.Set(ctx, m.totalInodesKey(), strconv.FormatInt(inodes, 10), 0).Err(); err != nil {
 		return fmt.Errorf("set total inodes: %s", err)
 	}
