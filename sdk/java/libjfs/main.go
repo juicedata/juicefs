@@ -735,9 +735,8 @@ func jfs_update_uid_grouping(cname, uidstr *C.char, grouping *C.char) {
 	userGroupCache[name] = userGroups
 	ws := activefs[name]
 	if len(ws) > 0 {
-		m := ws[0].m
-		m.update(uids, gids, false)
 		for _, w := range ws {
+			w.m.update(uids, gids, false)
 			logger.Debugf("Update groups of %s to %s", w.user, strings.Join(userGroups[w.user], ","))
 			if w.isSuperuser(w.user, userGroups[w.user]) {
 				w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
