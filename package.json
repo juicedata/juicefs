@@ -9,7 +9,7 @@
     "autocorrect-lint-fix": "autocorrect --fix ./docs/ README*.md",
     "check-broken-link": "./node_modules/.bin/remark --quiet --frail ./docs/ README*.md",
     "markdown-lint": "./node_modules/.bin/markdownlint-cli2 './docs/**/*.md' README*.md",
-    "markdown-lint-fix": "./node_modules/.bin/markdownlint-cli2-fix './docs/**/*.md' README*.md"
+    "markdown-lint-fix": "./node_modules/.bin/markdownlint-cli2 --fix './docs/**/*.md' README*.md"
   },
   "dependencies": {
     "markdownlint-cli2": "^0.17.2",
