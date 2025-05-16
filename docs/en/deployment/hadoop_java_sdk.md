@@ -212,6 +212,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.backup-skip-trash` | `false`       | Skip files and directories in trash when backup metadata.                                                                                                                   |
 | `juicefs.heartbeat`     | 12            | Heartbeat interval (in seconds) between client and metadata engine. It's recommended that all clients use the same value.                                                   |
 | `juicefs.skip-dir-mtime`              | 100ms         | Minimal duration to modify parent dir mtime.                                                                                                                                |
+| `juicefs.subdir`        |               | Allow access only to the subpaths of this directory. all other paths, including the root or sibling directories, will be denied access.                                     |
 
 #### Multiple file systems configuration
 

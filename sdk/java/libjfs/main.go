@@ -356,7 +356,7 @@ type javaConf struct {
 	PushLabels        string `json:"pushLabels"`
 	PushGraphite      string `json:"pushGraphite"`
 	Caller            int    `json:"caller"`
-	AllowedSubdir     string `json:"allowedSubdir"`
+	Subdir            string `json:"subdir"`
 
 	SuperFS bool `json:"superFs,omitempty"`
 }
@@ -397,15 +397,15 @@ func getOrCreate(name, user, group, superuser, supergroup string, conf javaConf,
 	} else {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(user), w.lookupGids(group))
 	}
-	// Check if the allowed subdirectory is valid
-	if conf.AllowedSubdir != "" {
-		fi, err := jfs.Stat(w.ctx, conf.AllowedSubdir)
+	// Check if the subdir is valid
+	if conf.Subdir != "" {
+		fi, err := jfs.Stat(w.ctx, conf.Subdir)
 		if err != 0 {
-			logger.Errorf("allowed-subdir %s is not valid: %v", conf.AllowedSubdir, err)
+			logger.Errorf("subdir %s is not valid: %v", conf.Subdir, err)
 			return 0
 		}
 		if !fi.IsDir() {
-			logger.Errorf("allowed-subdir %s is not a directory", conf.AllowedSubdir)
+			logger.Errorf("subdir %s is not a directory", conf.Subdir)
 			return 0
 		}
 	}
@@ -647,7 +647,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			DirEntryTimeout: utils.Duration(jConf.DirEntryTimeout),
 			AccessLog:       jConf.AccessLog,
 			FastResolve:     jConf.FastResolve,
-			AllowedSubdir:   jConf.AllowedSubdir,
+			Subdir:          jConf.Subdir,
 			BackupMeta:      utils.Duration(jConf.BackupMeta),
 			BackupSkipTrash: jConf.BackupSkipTrash,
 		}

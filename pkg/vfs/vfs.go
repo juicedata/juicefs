@@ -136,7 +136,7 @@ type Config struct {
 	BackupSkipTrash      bool
 	FastResolve          bool   `json:",omitempty"`
 	AccessLog            string `json:",omitempty"`
-	AllowedSubdir        string `json:",omitempty"`
+	Subdir               string `json:",omitempty"`
 	PrefixInternal       bool
 	HideInternal         bool
 	RootSquash           *AnonymousAccount `json:",omitempty"`
