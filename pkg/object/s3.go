@@ -529,6 +529,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
 			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
 		})
+		options.RetryMaxAttempts = 1
 	})
 
 	disable100Continue := strings.EqualFold(uri.Query().Get("disable-100-continue"), "true")

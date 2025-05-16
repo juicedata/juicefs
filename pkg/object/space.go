@@ -73,6 +73,7 @@ func newSpace(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
 			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
 		})
+		options.RetryMaxAttempts = 1
 	})
 	return &space{s3client{bucket: bucket, s3: client, region: region}}, nil
 }

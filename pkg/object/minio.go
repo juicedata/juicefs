@@ -93,6 +93,7 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
 			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
 		})
+		options.RetryMaxAttempts = 1
 	})
 	if len(uri.Path) < 2 {
 		return nil, fmt.Errorf("no bucket name provided in %s", endpoint)
