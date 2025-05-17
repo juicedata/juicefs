@@ -216,7 +216,7 @@ func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
 			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
 		})
-
+		options.RetryMaxAttempts = 1
 	})
 	s3c := s3client{bucket: bucket, s3: client, region: region}
 	cfg := storage.Config{

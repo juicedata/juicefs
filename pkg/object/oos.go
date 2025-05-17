@@ -97,6 +97,7 @@ func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		options.APIOptions = append(options.APIOptions, func(stack *smithymiddleware.Stack) error {
 			return v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware(stack)
 		})
+		options.RetryMaxAttempts = 1
 	})
 	return &oos{s3client{bucket: bucket, s3: client, region: region}}, nil
 }
