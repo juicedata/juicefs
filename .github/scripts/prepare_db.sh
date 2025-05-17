@@ -118,6 +118,7 @@ prepare_db() {
         install_gluster
         install_webdav
         docker run -d --name sftp -p 2222:22 juicedata/ci-sftp
+        docker run -d --name samba -p 4445:445 -e "USER=samba" -e "PASS=secret" dockurr/samba
         install_etcd
         .github/scripts/setup-hdfs.sh
         ;;
