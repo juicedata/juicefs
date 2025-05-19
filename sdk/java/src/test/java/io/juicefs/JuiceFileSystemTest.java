@@ -1201,4 +1201,53 @@ public class JuiceFileSystemTest extends TestCase {
     user1Fs.delete(d1, true);
     user1Fs.delete(d2, true);
   }
+
+  public void testSubdir() throws IOException, InterruptedException {
+    Configuration newConf = new Configuration(cfg);
+    newConf.set("fs.defaultFS", "jfs://test/");
+    newConf.set("juicefs.name", "test");
+    newConf.set("juicefs.test.meta", newConf.get("juicefs.dev.meta"));
+    // Test creating a new filesystem with an invalid subdir
+    newConf.set("juicefs.subdir", "nonexistent");
+    try {
+      FileSystem.newInstance(newConf);
+      fail("Creating filesystem should fail because the subdir must be a valid directory");
+    } catch (IOException ignored) {
+    }
+
+    // Test creating a new filesystem with a valid subdir
+    Path subdir = new Path("/test_subdir");
+    fs.delete(subdir, true);
+    fs.mkdirs(subdir);
+    fs.setPermission(subdir, new FsPermission((short) 0777));
+    newConf.set("juicefs.subdir", "/test_subdir");
+    FileSystem newFS = FileSystem.newInstance(newConf);
+
+    // Test file operations within the subdir
+    assertTrue(newFS.mkdirs(new Path("/test_subdir/dir")));
+    newFS.create(new Path("/test_subdir/dir/f")).close();
+    assertTrue(newFS.exists(new Path("/test_subdir/dir/f")));
+
+    // Test file operations not within the subdir
+    Path nonexistent = new Path("/nonexistent");
+    try {
+      newFS.exists(nonexistent);
+      fail("exists should not work because the path is not under the subdir");
+    } catch (AccessControlException e) {
+      assertTrue(e.getMessage().contains("Permission denied"));
+    }
+    try {
+      newFS.mkdirs(nonexistent);
+      fail("mkdirs should not work because the path is not under the subdir");
+    } catch (AccessControlException e) {
+      assertTrue(e.getMessage().contains("Permission denied"));
+    }
+    try {
+      newFS.create(nonexistent);
+      fail("create should not work because the path is not under the subdir");
+    } catch (AccessControlException e) {
+      assertTrue(e.getMessage().contains("Permission denied"));
+    }
+    newFS.close();
+  }
 }

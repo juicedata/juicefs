@@ -405,6 +405,16 @@ public class JuiceFileSystemImpl extends FileSystem {
     for (String key : bkeys) {
       obj.put(key, Boolean.valueOf(getConf(conf, key, "false")));
     }
+    String subdir = getConf(conf, "subdir", "");
+    if (subdir.equals("/")) {
+      subdir = "";
+    } else if (!subdir.startsWith("/")) {
+      subdir = "/" + subdir;
+    }
+    subdir = subdir.replaceAll("/+$", "");
+    if (!subdir.isEmpty()) {
+      LOG.debug("subdir {} is enabled", subdir);
+    }
     obj.put("bucket", getConf(conf, "bucket", ""));
     obj.put("storageClass", getConf(conf, "storage-class", ""));
     obj.put("readOnly", Boolean.valueOf(getConf(conf, "read-only", "false")));
@@ -448,6 +458,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("freeSpace", getConf(conf, "free-space", "0.1"));
     obj.put("accessLog", getConf(conf, "access-log", ""));
     obj.put("superFs", asSuperFs);
+    obj.put("subdir", subdir);
     String jsonConf = obj.toString(2);
     handle = lib.jfs_init(name, jsonConf, user, groupStr, superuser, supergroup);
     if (handle <= 0) {

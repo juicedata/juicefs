@@ -356,11 +356,12 @@ type javaConf struct {
 	PushLabels        string `json:"pushLabels"`
 	PushGraphite      string `json:"pushGraphite"`
 	Caller            int    `json:"caller"`
+	Subdir            string `json:"subdir"`
 
 	SuperFS bool `json:"superFs,omitempty"`
 }
 
-func getOrCreate(name, user, group, superuser, supergroup string, superFs bool, f func() *fs.FileSystem) int64 {
+func getOrCreate(name, user, group, superuser, supergroup string, conf javaConf, f func() *fs.FileSystem) int64 {
 	fslock.Lock()
 	defer fslock.Unlock()
 	ws := activefs[name]
@@ -381,7 +382,7 @@ func getOrCreate(name, user, group, superuser, supergroup string, superFs bool, 
 		}
 		logger.Infof("JuiceFileSystem created for user:%s group:%s", user, group)
 	}
-	w := &wrapper{jfs, nil, m, user, superuser, supergroup, superFs}
+	w := &wrapper{jfs, nil, m, user, superuser, supergroup, conf.SuperFS}
 	var gs []string
 	if userGroupCache[name] != nil {
 		gs = userGroupCache[name][user]
@@ -395,6 +396,18 @@ func getOrCreate(name, user, group, superuser, supergroup string, superFs bool, 
 		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
 	} else {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(user), w.lookupGids(group))
+	}
+	// Check if the subdir is valid
+	if conf.Subdir != "" {
+		fi, err := jfs.Stat(w.ctx, conf.Subdir)
+		if err != 0 {
+			logger.Errorf("subdir %s is not valid: %v", conf.Subdir, err)
+			return 0
+		}
+		if !fi.IsDir() {
+			logger.Errorf("subdir %s is not a directory", conf.Subdir)
+			return 0
+		}
 	}
 	activefs[name] = append(ws, w)
 	nextFsHandle = nextFsHandle + 1
@@ -467,7 +480,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 	if err != nil {
 		logger.Fatalf("invalid json: %s", C.GoString(jsonConf))
 	}
-	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), jConf.SuperFS, func() *fs.FileSystem {
+	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), jConf, func() *fs.FileSystem {
 		if jConf.Debug || os.Getenv("JUICEFS_DEBUG") != "" {
 			utils.SetLogLevel(logrus.DebugLevel)
 			go func() {
@@ -634,6 +647,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) int64
 			DirEntryTimeout: utils.Duration(jConf.DirEntryTimeout),
 			AccessLog:       jConf.AccessLog,
 			FastResolve:     jConf.FastResolve,
+			Subdir:          jConf.Subdir,
 			BackupMeta:      utils.Duration(jConf.BackupMeta),
 			BackupSkipTrash: jConf.BackupSkipTrash,
 		}

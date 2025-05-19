@@ -840,6 +840,9 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 }
 
 func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bool, visited map[Ino]struct{}) (fi *FileStat, err syscall.Errno) {
+	if fs.conf.Subdir != "" && !strings.HasPrefix(p, fs.conf.Subdir) {
+		return nil, syscall.EACCES
+	}
 	var inode Ino
 	var attr = &Attr{}
 
