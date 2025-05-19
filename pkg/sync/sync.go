@@ -1115,6 +1115,14 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				dstobj = nil
 				continue
 			}
+
+			if config.DeleteDst && (dstobj.IsDir() != obj.IsDir()) {
+				tasks <- withSize(dstobj, markDeleteDst)
+				tasks <- obj
+				dstobj = nil
+				continue
+			}
+
 			if config.ForceUpdate ||
 				(config.Update && obj.Mtime().Unix() > dstobj.Mtime().Unix()) ||
 				(!config.Update && obj.Size() != dstobj.Size()) {
