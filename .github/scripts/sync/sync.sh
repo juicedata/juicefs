@@ -102,7 +102,7 @@ test_sync_with_deep_link(){
     rm -rf jfs_source/symlink_*
 }
 
-skip_test_sync_fsrand_with_mount_point(){
+test_sync_fsrand_with_mount_point(){
     generate_fsrand
     do_test_sync_fsrand_with_mount_point 
     do_test_sync_fsrand_with_mount_point --list-threads 10 --list-depth 5
