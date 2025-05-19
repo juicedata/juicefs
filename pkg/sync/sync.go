@@ -514,8 +514,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64, calChks
 		if err != nil {
 			if _, e := src.Head(key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
-				copied.IncrInt64(-1)
-				err = nil
+				err = utils.ErrSkipped
 			}
 		}
 		return r.chksum, err
@@ -545,8 +544,7 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64, calChk
 		if err != nil {
 			if _, e := src.Head(key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
-				copied.IncrInt64(-1)
-				err = nil
+				err = utils.ErrSkipped
 			}
 			return 0, err
 		}
