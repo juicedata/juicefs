@@ -184,7 +184,6 @@ type wrapper struct {
 	user       string
 	superuser  string
 	supergroup string
-	isSuperFs  bool
 	conf       javaConf
 }
 
@@ -236,7 +235,7 @@ func (w *wrapper) withPid(pid int64) meta.Context {
 }
 
 func (w *wrapper) isSuperuser(name string, groups []string) bool {
-	if name == w.superuser || w.isSuperFs {
+	if name == w.superuser || w.conf.SuperFS {
 		return true
 	}
 	for _, g := range groups {
@@ -388,7 +387,7 @@ func getOrCreate(name, user, group, superuser, supergroup string, conf javaConf,
 		}
 		logger.Infof("JuiceFileSystem created for user:%s group:%s", user, group)
 	}
-	w := &wrapper{jfs, nil, m, user, superuser, supergroup, conf.SuperFS, conf}
+	w := &wrapper{jfs, nil, m, user, superuser, supergroup, conf}
 	var gs []string
 	if userGroupCache[name] != nil {
 		gs = userGroupCache[name][user]
