@@ -149,7 +149,7 @@ func getInternalNodeByName(name string) *internalNode {
 	return nil
 }
 
-func collectMetrics(registry *prometheus.Registry) []byte {
+func CollectMetrics(registry *prometheus.Registry) []byte {
 	if registry == nil {
 		return []byte("")
 	}
