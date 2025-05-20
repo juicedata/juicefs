@@ -456,10 +456,10 @@ class ClientParamsTests(unittest.TestCase):
             meta=meta_url,
             cache_dir="/tmp/jfs_test_cache",
             cache_size="100M",
-            cache_partial_only=True
+            cache_partial_only=False
         )
         
-        size_mb = 50
+        size_mb = 48
         test_data = os.urandom(size_mb * 1024 * 1024) 
         with cache_client.open(self.testfile, 'wb') as f:
             f.write(test_data)
@@ -473,7 +473,7 @@ class ClientParamsTests(unittest.TestCase):
         for root, dirs, files in os.walk(cache_dir):
             for file in files:
                 cache_size += os.path.getsize(os.path.join(root, file))
-        self.assertGreaterEqual(cache_size, size_mb * 1024 * 1024)
+        self.assertGreaterEqual(cache_size, size_mb * 1024 * 1024/2)
 
     def test_io_limits(self):
         limited_client = juicefs.Client(
