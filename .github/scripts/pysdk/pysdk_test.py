@@ -15,6 +15,7 @@ TESTFILE='/test/file'
 os.makedirs('/tmp/jfsCache0', exist_ok=True)
 meta_url=os.environ.get('META_URL', 'redis://localhost')
 
+
 class FileTests(unittest.TestCase):
     def setUp(self):
         self.v = juicefs.Client("test-volume", meta=meta_url, access_log="/tmp/access.log")
@@ -46,9 +47,10 @@ class FileTests(unittest.TestCase):
         with self.v.open(TESTFILE, "rb") as fobj:
             self.assertEqual(fobj.read().splitlines(), [b"bacon"])
 
+
 class UtimeTests(FileTests):
     def setUp(self):
-        super(self).setUp()
+        super().setUp()
         self.fname = os.path.join(TESTFN, "f1")
         if not self.v.exists(self.fname):
             self.create_file(self.fname)
@@ -84,7 +86,7 @@ class MakedirTests(FileTests):
         path = os.path.join(base, 'dir1', os.curdir, 'dir2', 'dir3', 'dir4',
                             'dir5', 'dir6')
         self.v.makedirs(path)
-        self.v.rmr(TESTFN)
+
 
 class ChownFileTests(FileTests):
     def test_chown_uid_gid_arguments_must_be_index(self):
@@ -110,11 +112,12 @@ class ChownFileTests(FileTests):
         uid = self.v.stat(TESTFN).st_uid
         self.assertEqual(uid, uid_2)
 
+
 class LinkTests(FileTests):
     def setUp(self):
         super().setUp()
-        self.file1 = TESTFN + "1"
-        self.file2 = os.path.join(TESTFN + "2")
+        self.file1 = os.path.join(TESTFN, "1")
+        self.file2 = os.path.join(TESTFN, "2")
 
     def are_files_same(self, file1, file2):
         stat1 = self.v.lstat(file1)
@@ -132,6 +135,7 @@ class LinkTests(FileTests):
 
     def test_link(self):
         self._test_link(self.file1, self.file2)
+
 
 class SummaryTests(FileTests):
     # /test/dir1/file
@@ -179,7 +183,8 @@ class SummaryTests(FileTests):
                 ]}
         ))
 
-class QuotaTests(unittest.TestCase):
+
+class QuotaTests(FileTests):
     def test_quota(self):
         # /test/dir1/file
         #      /dir2
@@ -188,7 +193,7 @@ class QuotaTests(unittest.TestCase):
         self.v.mkdir(TESTFN + '/dir1')
         self.create_file(TESTFN + '/dir1/file')
         self.v.mkdir(TESTFN + '/dir2')
-    
+
         # set quota
         self.v.set_quota(path=TESTFN, capacity=1024*1024*1024, inodes=1000, create=True)
         res = self.v.get_quota(path=TESTFN)
@@ -220,11 +225,13 @@ def normalize(d):
     else:
         return d
 
+
 class NonLocalSymlinkTests(FileTests):
     def test_directory_link_nonlocal(self):
         src = os.path.join(TESTFN, 'some_link')
-        self.v.symlink('some_dir', src)
+        self.v.symlink('/some_dir', src)
         assert self.v.readlink(src) == '../some_dir'
+
 
 class ExtendedAttributeTests(FileTests):
     def _check_xattrs_str(self, s, getxattr, setxattr, removexattr, listxattr, **kwargs):
@@ -372,6 +379,7 @@ class BenchTests(FileTests):
             count=self.count
         )
 
+
 class ClientParamsTests(FileTests):
     testfile = TESTFN + '/testfile'
 
@@ -425,9 +433,10 @@ class ClientParamsTests(FileTests):
 
         self.assertGreaterEqual(write_time, 10.0)
 
+
 class CloneTests(FileTests):
     def setUp(self):
-        super(self).setUp()
+        super().setUp()
         self.source = TESTFN + '/source'
         self.target = TESTFN + '/target'
         self.test_data = b"Hello JuiceFS!" * 1024
@@ -455,6 +464,7 @@ class CloneTests(FileTests):
         source_stat = self.v.stat(self.source)
         target_stat = self.v.stat(self.target)
         self.assertEqual(source_stat.st_mode, target_stat.st_mode)
+
 
 class WarmupTests(unittest.TestCase):
     @classmethod
@@ -523,6 +533,7 @@ class WarmupTests(unittest.TestCase):
         result = self.v.warmup(self.test_files, isCheck=True)
         self.assertEqual(result['MissBytes'], result['TotalBytes'])
 
+
 class InfoTests(FileTests):
     def test_file_info(self):
         self.test_dir = TESTFN + '/infotest'
@@ -535,6 +546,7 @@ class InfoTests(FileTests):
         self.assertIn('Length', info)
         self.assertEqual(info['Files'], 1)
         self.assertEqual(info['Dirs'], 1)
+
 
 if __name__ == '__main__':
     unittest.main()
