@@ -532,7 +532,8 @@ func jfs_init(cname, cjsonConf, user, group, superuser, supergroup *C.char) int6
 		}
 		formats[name] = format
 		var registerer prometheus.Registerer
-		if jConf.PushGateway != "" || jConf.PushGraphite != "" {
+		var registry *prometheus.Registry
+		if jConf.PushGateway != "" || jConf.PushGraphite != "" || jConf.Caller == CALLER_PYTHON {
 			commonLabels := prometheus.Labels{"vol_name": name, "mp": "sdk-" + strconv.Itoa(os.Getpid())}
 			if h, err := os.Hostname(); err == nil {
 				commonLabels["instance"] = h
@@ -552,7 +553,7 @@ func jfs_init(cname, cjsonConf, user, group, superuser, supergroup *C.char) int6
 					commonLabels[splited[0]] = splited[1]
 				}
 			}
-			registry := prometheus.NewRegistry()
+			registry = prometheus.NewRegistry()
 			registerer = prometheus.WrapRegistererWithPrefix("juicefs_", registry)
 			registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 			registerer.MustRegister(collectors.NewGoCollector())
@@ -666,7 +667,7 @@ func jfs_init(cname, cjsonConf, user, group, superuser, supergroup *C.char) int6
 		if !jConf.NoUsageReport && !jConf.NoSession {
 			go usage.ReportUsage(m, "java-sdk "+version.Version())
 		}
-		jfs, err := fs.NewFileSystem(conf, m, store)
+		jfs, err := fs.NewFileSystem(conf, m, store, registry)
 		if err != nil {
 			logger.Errorf("Initialize failed: %s", err)
 			return nil
@@ -1390,6 +1391,43 @@ func jfs_quota(pid int64, h int64, cpath *C.char, cmd uint8, cap, inodes uint64,
 	if err2 != nil {
 		return EINVAL
 	}
+
+	*p_buf = (*byte)(C.malloc(C.size_t(len(res))))
+	buf := unsafe.Slice(*p_buf, len(res))
+	return int32(copy(buf, res))
+}
+
+//export jfs_getconfig
+func jfs_getconfig(pid int64, h int64, p_buf **byte) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	if *p_buf != nil {
+		return EINVAL
+	}
+
+	res, err := json.Marshal(w.GetConf())
+	if err != nil {
+		return EINVAL
+	}
+
+	*p_buf = (*byte)(C.malloc(C.size_t(len(res))))
+	buf := unsafe.Slice(*p_buf, len(res))
+	return int32(copy(buf, res))
+}
+
+//export jfs_getstats
+func jfs_getstats(pid int64, h int64, p_buf **byte) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	if *p_buf != nil {
+		return EINVAL
+	}
+
+	res := w.GetMetrics()
 
 	*p_buf = (*byte)(C.malloc(C.size_t(len(res))))
 	buf := unsafe.Slice(*p_buf, len(res))

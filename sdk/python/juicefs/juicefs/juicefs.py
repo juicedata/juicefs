@@ -174,6 +174,18 @@ class Client(object):
 
     def open(self, path, mode='r', buffering=-1, encoding=None, errors=None):
         """Open a file, returns a filelike object."""
+        if path == "/.config":
+            buf = c_void_p()
+            n = self.lib.jfs_getconfig(c_int64(_tid()), c_int64(self.h), byref(buf))
+            res = json.loads(str(string_at(buf, n), encoding='utf-8'))
+            self.lib.free(buf)
+            return _Config(self.lib, res)
+        elif path == "/.stats":
+            buf = c_void_p()
+            n = self.lib.jfs_getstats(c_int64(_tid()), c_int64(self.h), byref(buf))
+            stats = f"{str(string_at(buf, n))}"
+            self.lib.free(buf)
+            return _Stats(self.lib, stats)
         if len(mode) != len(set(mode)):
             raise ValueError(f'invalid mode: {mode}')
         flag = 0
@@ -664,6 +676,36 @@ class File(object):
         """Close the file. A closed file cannot be used for further I/O operations."""
         self.io.close()
         self._file.close()
+
+
+class _Config(object):
+    def __init__(self, lib, config):
+        self.lib = lib
+        self.off = 0
+        self.configStr = f"{config}"
+
+    def read(self, size=-1):
+        off = self.off
+        end = len(self.configStr)
+        if size > 0 and size + off < len(self.configStr):
+            end = size+off
+        self.off = end
+        return self.configStr[off:end]
+
+
+class _Stats(object):
+    def __init__(self, lib, stats):
+        self.lib = lib
+        self.off = 0
+        self.stats = stats
+
+    def read(self, size=-1):
+        off = self.off
+        end = len(self.stats)
+        if size > 0 and size + off < len(self.stats):
+            end = size+off
+        self.off = end
+        return self.stats[off:end]
 
 
 def test():

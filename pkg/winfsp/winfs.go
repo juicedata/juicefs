@@ -928,7 +928,7 @@ func Serve(v *vfs.VFS, fuseOpt string, asRoot bool, delayCloseSec int, showDotFi
 	jfs.vfs = v
 	jfs.enabledGetPath = enabledGetPath
 	var err error
-	jfs.fs, err = fs.NewFileSystem(conf, v.Meta, v.Store)
+	jfs.fs, err = fs.NewFileSystem(conf, v.Meta, v.Store, nil)
 	if err != nil {
 		logger.Fatalf("Initialize FileSystem failed: %s", err)
 	}
