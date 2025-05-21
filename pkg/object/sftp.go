@@ -166,7 +166,7 @@ func (f *sftpStore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.putSftpConnection(&c, err)
+	defer func() { f.putSftpConnection(&c, err) }()
 
 	info, err := c.sftpClient.Lstat(f.path(key))
 	if err != nil {
@@ -188,7 +188,7 @@ func (f *sftpStore) Get(key string, off, limit int64, getters ...AttrGetter) (io
 	if err != nil {
 		return nil, err
 	}
-	defer f.putSftpConnection(&c, err)
+	defer func() { f.putSftpConnection(&c, err) }()
 
 	p := f.path(key)
 	ff, err := c.sftpClient.Open(p)
@@ -217,7 +217,7 @@ func (f *sftpStore) Put(key string, in io.Reader, getters ...AttrGetter) (err er
 	if err != nil {
 		return err
 	}
-	defer f.putSftpConnection(&c, err)
+	defer func() { f.putSftpConnection(&c, err) }()
 
 	p := f.path(key)
 	if strings.HasSuffix(p, dirSuffix) {
@@ -269,10 +269,11 @@ func (f *sftpStore) Chtimes(key string, mtime time.Time) error {
 	if err != nil {
 		return err
 	}
-	defer f.putSftpConnection(&c, err)
+	defer func() { f.putSftpConnection(&c, err) }()
 	// fixme: 1. The Chtimes of sftp always follows link 2. Only pass the mtime field to avoid updating atime
 	// ref: https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-13#section-8.6
-	return c.sftpClient.Chtimes(f.path(key), mtime, mtime)
+	err = c.sftpClient.Chtimes(f.path(key), mtime, mtime)
+	return err
 }
 
 func (f *sftpStore) Chmod(key string, mode os.FileMode) error {
@@ -280,8 +281,9 @@ func (f *sftpStore) Chmod(key string, mode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	defer f.putSftpConnection(&c, err)
-	return c.sftpClient.Chmod(f.path(key), mode)
+	defer func() { f.putSftpConnection(&c, err) }()
+	err = c.sftpClient.Chmod(f.path(key), mode)
+	return err
 }
 
 func (f *sftpStore) Chown(key string, owner, group string) error {
@@ -289,13 +291,14 @@ func (f *sftpStore) Chown(key string, owner, group string) error {
 	if err != nil {
 		return err
 	}
-	defer f.putSftpConnection(&c, err)
+	defer func() { f.putSftpConnection(&c, err) }()
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
 	if uid == -1 || gid == -1 {
 		return fmt.Errorf("user(%s):group(%s) not found", owner, group)
 	}
-	return c.sftpClient.Chown(f.path(key), uid, gid)
+	err = c.sftpClient.Chown(f.path(key), uid, gid)
+	return err
 }
 
 func (f *sftpStore) Symlink(oldName, newName string) error {
@@ -303,7 +306,7 @@ func (f *sftpStore) Symlink(oldName, newName string) error {
 	if err != nil {
 		return err
 	}
-	defer f.putSftpConnection(&c, err)
+	defer func() { f.putSftpConnection(&c, err) }()
 	p := f.path(newName)
 	err = c.sftpClient.Symlink(oldName, p)
 	if err != nil && os.IsNotExist(err) {
@@ -318,8 +321,9 @@ func (f *sftpStore) Readlink(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.putSftpConnection(&c, err)
-	return c.sftpClient.ReadLink(f.path(name))
+	defer func() { f.putSftpConnection(&c, err) }()
+	link, err := c.sftpClient.ReadLink(f.path(name))
+	return link, err
 }
 
 func (f *sftpStore) Delete(key string, getters ...AttrGetter) error {
@@ -327,7 +331,7 @@ func (f *sftpStore) Delete(key string, getters ...AttrGetter) error {
 	if err != nil {
 		return err
 	}
-	defer f.putSftpConnection(&c, err)
+	defer func() { f.putSftpConnection(&c, err) }()
 	err = c.sftpClient.Remove(strings.TrimRight(f.path(key), dirSuffix))
 	if err != nil && os.IsNotExist(err) {
 		err = nil
@@ -389,7 +393,7 @@ func (f *sftpStore) List(prefix, marker, token, delimiter string, limit int64, f
 	if err != nil {
 		return nil, false, "", err
 	}
-	defer f.putSftpConnection(&c, nil)
+	defer f.putSftpConnection(&c, err)
 
 	var objs []Object
 	dir := f.path(prefix)
@@ -595,7 +599,7 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 		logger.Errorf("connect to %s failed: %s", host, err)
 		return nil, err
 	}
-	defer f.putSftpConnection(&c, err)
+	defer func() { f.putSftpConnection(&c, err) }()
 
 	return f, nil
 }
