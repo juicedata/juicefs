@@ -81,8 +81,9 @@ func TestCluster(t *testing.T) {
 }
 
 func TestMarshal(t *testing.T) {
+	mtime := time.Now()
 	var objs = []object.Object{
-		&obj{key: "test"},
+		&obj{key: "test", mtime: mtime},
 		withSize(&obj{key: "test1", size: 100}, -4),
 		withSize(&file{obj{key: "test2", size: 200}}, -1),
 		withSize(&file{obj{key: "test3", size: 200, isSymlink: true}}, -1),
@@ -97,6 +98,9 @@ func TestMarshal(t *testing.T) {
 	}
 	if objs2[0].Key() != "test" {
 		t.Fatalf("expect test but got %s", objs2[0].Key())
+	}
+	if !objs2[0].Mtime().Equal(objs[0].Mtime()) {
+		t.Fatalf("expect %s but got %s", mtime, objs2[0].Mtime())
 	}
 	if objs2[1].Key() != "test1" || objs2[1].Size() != -4 || withoutSize(objs2[1]).Size() != 100 {
 		t.Fatalf("expect withSize but got %s", objs2[1].Key())
