@@ -46,7 +46,7 @@ jobs:
           echo "github.event_name is ${{github.event_name}}"
           # TODO: add fdb when bugfix: https://github.com/juicedata/juicefs/issues/5910
           if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch" ]]; then
-            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "mariadb"]' >> $GITHUB_OUTPUT
           elif [[ "${{github.event_name}}" == "pull_request" || "${{github.event_name}}" == "push"  ]]; then
             echo 'meta_matrix=["redis", "tikv", "mysql"]' >> $GITHUB_OUTPUT
           else
