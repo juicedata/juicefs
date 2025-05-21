@@ -122,7 +122,9 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}()
 	all, err := listAll(s, "", "", 10000, true)
-	for _, object := range all {
+	// reverse to make sure clean up successfully
+	for i := len(all) - 1; i >= 0; i-- {
+		object := all[i]
 		_ = s.Delete(object.Key())
 	}
 
@@ -1078,6 +1080,18 @@ func TestDragonfly(t *testing.T) { //skip mutate
 		t.Fatalf("create: %s", err)
 	}
 	testStorage(t, dragonfly)
+}
+
+func TestCifs(t *testing.T) { //skip mutate
+	if os.Getenv("CIFS_ADDR") == "" {
+		fmt.Println("skip CIFS test")
+		t.SkipNow()
+	}
+	cifs, err := newCifs(os.Getenv("CIFS_ADDR"), os.Getenv("CIFS_USER"), os.Getenv("CIFS_PASSWORD"), "")
+	if err != nil {
+		t.Fatalf("create: %s", err)
+	}
+	testStorage(t, cifs)
 }
 
 // func TestBunny(t *testing.T) { //skip mutate
