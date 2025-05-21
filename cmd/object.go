@@ -441,7 +441,7 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 	d, _ := json.MarshalIndent(vfsConf, "  ", "")
 	logger.Debugf("Config: %s", string(d))
 
-	jfs, err := fs.NewFileSystem(vfsConf, metaCli, store)
+	jfs, err := fs.NewFileSystem(vfsConf, metaCli, store, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Initialize: %s", err)
 	}

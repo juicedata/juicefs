@@ -278,7 +278,7 @@ func TestVFSIO(t *testing.T) {
 	if e = v.Fallocate(ctx, fe.Inode, 0, -1, -1, fh); e != syscall.EINVAL {
 		t.Fatalf("fallocate invalid off,length: %s", e)
 	}
-	if e = v.Fallocate(ctx, statsInode, 0, 0, 1, fh); e != syscall.EPERM {
+	if e = v.Fallocate(ctx, StatsInode, 0, 0, 1, fh); e != syscall.EPERM {
 		t.Fatalf("fallocate invalid off,length: %s", e)
 	}
 	if e = v.Fallocate(ctx, fe.Inode, 0, 0, 100, 0); e != syscall.EBADF {
@@ -292,10 +292,10 @@ func TestVFSIO(t *testing.T) {
 	}
 
 	// copy file range
-	if n, e := v.CopyFileRange(ctx, statsInode, fh, 0, fe.Inode, fh, 10<<20, 10, 0); e != syscall.ENOTSUP {
+	if n, e := v.CopyFileRange(ctx, StatsInode, fh, 0, fe.Inode, fh, 10<<20, 10, 0); e != syscall.ENOTSUP {
 		t.Fatalf("copyfilerange internal file: %s %d", e, n)
 	}
-	if n, e := v.CopyFileRange(ctx, fe.Inode, fh, 0, statsInode, fh, 10<<20, 10, 0); e != syscall.EPERM {
+	if n, e := v.CopyFileRange(ctx, fe.Inode, fh, 0, StatsInode, fh, 10<<20, 10, 0); e != syscall.EPERM {
 		t.Fatalf("copyfilerange internal file: %s %d", e, n)
 	}
 	if n, e := v.CopyFileRange(ctx, fe.Inode, 0, 0, fe.Inode, fh, 10<<20, 10, 0); e != syscall.EBADF {

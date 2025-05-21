@@ -295,7 +295,7 @@ func createTestFS(t *testing.T) *FileSystem {
 	}
 	objStore, _ := object.CreateStorage("mem", "", "", "", "")
 	store := chunk.NewCachedStore(objStore, *conf.Chunk, nil)
-	jfs, err := NewFileSystem(&conf, m, store)
+	jfs, err := NewFileSystem(&conf, m, store, nil)
 	jfs.checkAccessFile = time.Millisecond
 	jfs.rotateAccessLog = 500
 	if err != nil {

@@ -277,7 +277,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl, listenAddr string) (*vfs.Con
 	vfsConf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
 
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
-	jfs, err := fs.NewFileSystem(vfsConf, metaCli, store)
+	jfs, err := fs.NewFileSystem(vfsConf, metaCli, store, registry)
 	if err != nil {
 		logger.Fatalf("Initialize failed: %s", err)
 	}

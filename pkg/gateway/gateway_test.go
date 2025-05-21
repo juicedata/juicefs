@@ -52,7 +52,7 @@ func TestGatewayLock(t *testing.T) {
 	}
 	objStore, _ := object.CreateStorage("mem", "", "", "", "")
 	store := chunk.NewCachedStore(objStore, *conf.Chunk, nil)
-	jfs, err := fs.NewFileSystem(&conf, m, store)
+	jfs, err := fs.NewFileSystem(&conf, m, store, nil)
 	if err != nil {
 		t.Fatalf("initialize  failed: %s", err)
 	}

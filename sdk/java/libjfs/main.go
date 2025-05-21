@@ -532,7 +532,8 @@ func jfs_init(cname, cjsonConf, user, group, superuser, supergroup *C.char) int6
 		}
 		formats[name] = format
 		var registerer prometheus.Registerer
-		if jConf.PushGateway != "" || jConf.PushGraphite != "" {
+		var registry *prometheus.Registry
+		if jConf.PushGateway != "" || jConf.PushGraphite != "" || jConf.Caller == CALLER_PYTHON {
 			commonLabels := prometheus.Labels{"vol_name": name, "mp": "sdk-" + strconv.Itoa(os.Getpid())}
 			if h, err := os.Hostname(); err == nil {
 				commonLabels["instance"] = h
@@ -552,7 +553,7 @@ func jfs_init(cname, cjsonConf, user, group, superuser, supergroup *C.char) int6
 					commonLabels[splited[0]] = splited[1]
 				}
 			}
-			registry := prometheus.NewRegistry()
+			registry = prometheus.NewRegistry()
 			registerer = prometheus.WrapRegistererWithPrefix("juicefs_", registry)
 			registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 			registerer.MustRegister(collectors.NewGoCollector())
@@ -666,7 +667,7 @@ func jfs_init(cname, cjsonConf, user, group, superuser, supergroup *C.char) int6
 		if !jConf.NoUsageReport && !jConf.NoSession {
 			go usage.ReportUsage(m, "java-sdk "+version.Version())
 		}
-		jfs, err := fs.NewFileSystem(conf, m, store)
+		jfs, err := fs.NewFileSystem(conf, m, store, registry)
 		if err != nil {
 			logger.Errorf("Initialize failed: %s", err)
 			return nil

@@ -149,6 +149,8 @@ type FileSystem struct {
 	readSizeHistogram     prometheus.Histogram
 	writtenSizeHistogram  prometheus.Histogram
 	opsDurationsHistogram prometheus.Histogram
+
+	registry *prometheus.Registry
 }
 
 type File struct {
@@ -167,7 +169,7 @@ type File struct {
 	data     []byte
 }
 
-func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSystem, error) {
+func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore, registry *prometheus.Registry) (*FileSystem, error) {
 	reader := vfs.NewDataReader(conf, m, d)
 	fs := &FileSystem{
 		m:               m,
@@ -196,6 +198,7 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSyst
 			Help:    "Operations latency distributions.",
 			Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
 		}),
+		registry: registry,
 	}
 
 	go fs.cleanupCache()
@@ -407,6 +410,9 @@ func (fs *FileSystem) open(ctx meta.Context, path string, flags uint32, followLi
 		fs.conf.Format = fs.Meta().GetFormat()
 		fs.conf.Format.RemoveSecret()
 		f.data, _ = json.MarshalIndent(fs.conf, "", " ")
+		f.info.attr.Length = uint64(len(f.data))
+	case vfs.StatsInode:
+		f.data = vfs.CollectMetrics(fs.registry)
 		f.info.attr.Length = uint64(len(f.data))
 	}
 	return

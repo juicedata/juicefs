@@ -562,8 +562,8 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 		switch ino {
 		case logInode:
 			openAccessLog(fh)
-		case statsInode:
-			h.data = collectMetrics(v.registry)
+		case StatsInode:
+			h.data = CollectMetrics(v.registry)
 		case ConfigInode:
 			v.Conf.Format = v.Meta.GetFormat()
 			if v.UpdateFormat != nil {
@@ -695,8 +695,8 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 		}
 		if len(h.data) == 0 {
 			switch ino {
-			case statsInode:
-				h.data = collectMetrics(v.registry)
+			case StatsInode:
+				h.data = CollectMetrics(v.registry)
 			case ConfigInode:
 				v.Conf.Format = v.Meta.GetFormat()
 				if v.UpdateFormat != nil {

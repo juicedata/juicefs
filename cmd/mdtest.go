@@ -229,7 +229,7 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 		metadata["mountPoint"] = conf.Meta.MountPoint
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, metadata)
 	}
-	jfs, err := fs.NewFileSystem(conf, m, store)
+	jfs, err := fs.NewFileSystem(conf, m, store, registry)
 	if err != nil {
 		logger.Fatalf("initialize failed: %s", err)
 	}
