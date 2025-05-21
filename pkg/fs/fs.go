@@ -19,6 +19,7 @@ package fs
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -163,6 +164,7 @@ type File struct {
 	wdata    vfs.FileWriter
 	dircache []os.FileInfo
 	entries  []*meta.Entry
+	data     []byte
 }
 
 func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSystem, error) {
@@ -400,6 +402,13 @@ func (fs *FileSystem) open(ctx meta.Context, path string, flags uint32, followLi
 	f.info = fi
 	f.fs = fs
 	f.flags = flags
+	switch fi.inode {
+	case vfs.ConfigInode:
+		fs.conf.Format = fs.Meta().GetFormat()
+		fs.conf.Format.RemoveSecret()
+		f.data, _ = json.MarshalIndent(fs.conf, "", " ")
+		f.info.attr.Length = uint64(len(f.data))
+	}
 	return
 }
 
@@ -1211,6 +1220,10 @@ func (f *File) pread(ctx meta.Context, b []byte, offset int64) (n int, err error
 	}
 	if int64(len(b))+offset > f.info.Size() {
 		b = b[:f.info.Size()-offset]
+	}
+	if f.data != nil {
+		n := copy(b, f.data[offset:])
+		return n, nil
 	}
 	if f.wdata != nil {
 		eno := f.wdata.Flush(ctx)

@@ -417,7 +417,7 @@ func TestVFSXattrs(t *testing.T) {
 	if e = v.SetXattr(ctx, fe.Inode, "system.posix_acl_access", []byte("v2"), 0); e != syscall.ENOTSUP {
 		t.Fatalf("setxattr long key: %s", e)
 	}
-	if e = v.SetXattr(ctx, configInode, "test", []byte("v2"), 0); e != syscall.EPERM {
+	if e = v.SetXattr(ctx, ConfigInode, "test", []byte("v2"), 0); e != syscall.EPERM {
 		t.Fatalf("setxattr long key: %s", e)
 	}
 	if _, e := v.GetXattr(ctx, fe.Inode, "", 0); e != syscall.EINVAL {
@@ -426,13 +426,13 @@ func TestVFSXattrs(t *testing.T) {
 	if _, e := v.GetXattr(ctx, fe.Inode, strings.Repeat("test", 100), 0); e == 0 {
 		t.Fatalf("getxattr not existed: %s", e)
 	}
-	if _, e := v.GetXattr(ctx, configInode, "test", 0); e != meta.ENOATTR {
+	if _, e := v.GetXattr(ctx, ConfigInode, "test", 0); e != meta.ENOATTR {
 		t.Fatalf("getxattr not existed: %s", e)
 	}
 	if _, e := v.GetXattr(ctx, fe.Inode, "system.posix_acl_access", 0); e != syscall.ENODATA {
 		t.Fatalf("getxattr not existed: %s", e)
 	}
-	if v, e := v.ListXattr(ctx, configInode, 0); e != meta.ENOATTR {
+	if v, e := v.ListXattr(ctx, ConfigInode, 0); e != meta.ENOATTR {
 		t.Fatalf("listxattr: %s %q", e, string(v))
 	}
 	if e := v.RemoveXattr(ctx, fe.Inode, strings.Repeat("test", 100)); e != syscall.EPERM && e != syscall.ERANGE {
@@ -444,7 +444,7 @@ func TestVFSXattrs(t *testing.T) {
 	if e := v.RemoveXattr(ctx, fe.Inode, "system.posix_acl_access"); e != syscall.ENOTSUP {
 		t.Fatalf("removexattr test: %s", e)
 	}
-	if e := v.RemoveXattr(ctx, configInode, "test"); e != syscall.EPERM {
+	if e := v.RemoveXattr(ctx, ConfigInode, "test"); e != syscall.EPERM {
 		t.Fatalf("removexattr test: %s", e)
 	}
 }
