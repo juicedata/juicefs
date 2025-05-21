@@ -108,8 +108,11 @@ func (s *swiftOSS) List(prefix, marker, token, delimiter string, limit int64, fo
 
 func (s *swiftOSS) Head(key string) (Object, error) {
 	object, _, err := s.conn.Object(context.Background(), s.container, key)
-	if err == swift.ObjectNotFound {
-		err = os.ErrNotExist
+	if err != nil {
+		if err == swift.ObjectNotFound {
+			err = os.ErrNotExist
+		}
+		return nil, err
 	}
 	return &obj{
 		key,

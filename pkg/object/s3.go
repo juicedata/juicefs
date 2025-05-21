@@ -93,10 +93,12 @@ func (s *s3client) Head(key string) (Object, error) {
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
-	var notFound *types.NotFound
 	r, err := s.s3.HeadObject(ctx, &param)
-	if err != nil && errors.As(err, &notFound) {
-		err = os.ErrNotExist
+	if err != nil {
+		var notFound *types.NotFound
+		if errors.As(err, &notFound) {
+			err = os.ErrNotExist
+		}
 		return nil, err
 	}
 	return &obj{
