@@ -670,6 +670,10 @@ def test():
     volume = os.getenv("JFS_VOLUME", "test")
     meta = os.getenv("JFS_META", "redis://localhost")
     v = Client(volume, meta, access_log="/tmp/jfs.log")
+    with v.open("/.config", "r") as f:
+        print(f.read())
+    with v.open("/.stats", "r") as f:
+        print(f.read())
     print(v.status())
     st = v.stat("/")
     print(st)

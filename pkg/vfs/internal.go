@@ -39,8 +39,8 @@ const (
 	minInternalNode = 0x7FFFFFFF00000000
 	logInode        = minInternalNode + 1
 	controlInode    = minInternalNode + 2
-	statsInode      = minInternalNode + 3
-	configInode     = minInternalNode + 4
+	StatsInode      = minInternalNode + 3
+	ConfigInode     = minInternalNode + 4
 	trashInode      = meta.TrashInode
 )
 
@@ -78,8 +78,8 @@ type internalNode struct {
 var internalNodes = []*internalNode{
 	{controlInode, ".control", &Attr{Mode: 0666}},
 	{logInode, ".accesslog", &Attr{Mode: 0400}},
-	{statsInode, ".stats", &Attr{Mode: 0444}},
-	{configInode, ".config", &Attr{Mode: 0400}},
+	{StatsInode, ".stats", &Attr{Mode: 0444}},
+	{ConfigInode, ".config", &Attr{Mode: 0400}},
 	{trashInode, meta.TrashName, &Attr{Mode: 0555}},
 }
 
@@ -149,7 +149,7 @@ func getInternalNodeByName(name string) *internalNode {
 	return nil
 }
 
-func collectMetrics(registry *prometheus.Registry) []byte {
+func CollectMetrics(registry *prometheus.Registry) []byte {
 	if registry == nil {
 		return []byte("")
 	}
