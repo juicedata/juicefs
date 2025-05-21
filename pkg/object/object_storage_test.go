@@ -146,6 +146,9 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err == nil {
 		t.Fatalf("Get should failed: %s", err)
 	}
+	if _, err := s.Head(string(make([]byte, 4<<20))); err == nil {
+		t.Logf("Head should failed: %s", err)
+	}
 
 	br := []byte("hello")
 	if err := s.Put("test", bytes.NewReader(br)); err != nil {
