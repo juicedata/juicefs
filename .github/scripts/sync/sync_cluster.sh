@@ -62,7 +62,7 @@ test_sync_without_mount_point(){
     (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5 --check-new \
+         --list-threads 10 --list-depth 5 --check-change \
          2>&1 | tee sync.log
     # diff data/ /jfs/data1/
     check_sync_log $file_count
@@ -85,7 +85,7 @@ test_sync_without_mount_point2(){
     set -o pipefail
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5\
+         --list-threads 10 --list-depth 5 --check-change \
          2>&1 | tee sync.log
     set +o pipefail
     check_sync_log $file_count
@@ -129,7 +129,7 @@ test_sync_delete_src_and_update(){
     set -o pipefail
     sudo -u juicedata meta_url=$META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5 --dirs \
+         --list-threads 10 --list-depth 5 --dirs --check-change \
          2>&1 | tee sync.log
     set +o pipefail
     diff data/ /jfs/data/
@@ -141,14 +141,14 @@ test_sync_delete_src_and_update(){
     set -o pipefail
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5 --delete-src --update --dirs \
+         --list-threads 10 --list-depth 5 --delete-src --update --dirs --check-change \
          2>&1 | tee sync.log
     set +o pipefail
     diff data/ /jfs/data/
     set -o pipefail
     sudo -u juicedata meta_url=$META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5 --delete-src --dirs \
+         --list-threads 10 --list-depth 5 --delete-src --dirs --check-change \
          2>&1 | tee sync.log
     set +o pipefail
     if ./mc ls myminio/data/ | grep -q .; then
@@ -196,11 +196,10 @@ test_sync_with_random_test(){
          2>&1 | tee sync.log
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
-         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 --dirs \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5 --check-all --links --start-time 2199-12-30 \
          2>&1 | tee sync.log
-    grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
-    
+    grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true 
     sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 --dirs \
          --list-threads 10 --list-depth 5 --check-all --links --start-time $current_time \
@@ -210,7 +209,7 @@ test_sync_with_random_test(){
     rm -rf empty || mkdir empty
     sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-dst --match-full-path  --include='*' \
          ./empty/ jfs://meta_url/test2/ --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5 --check-new --dirs --links \
+         --list-threads 10 --list-depth 5 --check-change --dirs --links --start-time $current_time \
          2>&1 | tee sync.log
     grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     [ -z "$(ls -A /jfs/test2)" ] || exit 1
@@ -228,7 +227,7 @@ test_sync_files_from_file(){
     ls /jfs/test > files | tee files
     sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5 --check-all --links --dirs --files-from files \
+         --list-threads 10 --list-depth 5 --check-all --check-change --links --dirs --files-from files \
          2>&1 | tee sync.log
     grep "panic\|<FATAL>\|ERROR" sync.log && echo "panic or fatal or error in sync.log" && exit 1 || true
 }

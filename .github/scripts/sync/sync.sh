@@ -183,6 +183,20 @@ test_sync_with_time(){
     [ "$(cat /jfs/sync_dst2/file3 2>/dev/null)" = "" ] || (echo "file3 should not exist" && exit 1)
 }
 
+test_sync_check_change()
+{
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount $META_URL /jfs -d
+    rm -rf data/
+    mkdir data
+    nohup bash -c 'for i in `seq 1 1000000`; do echo $i >> data/echo; done' > /dev/null 2>&1 &
+    pid=$!
+    sleep 0.5
+    ./juicefs sync --check-change data/ /jfs/data/ 2>&1 | grep "changed during sync" || (echo "should detect file changes during sync" && exit 1 )
+    kill $pid || true
+}
+
 test_ignore_existing()
 {
     prepare_test
