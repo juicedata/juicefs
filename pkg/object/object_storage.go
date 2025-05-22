@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -72,7 +73,7 @@ func MarshalObject(o Object) map[string]interface{} {
 	m := make(map[string]interface{})
 	m["key"] = o.Key()
 	m["size"] = o.Size()
-	m["mtime"] = o.Mtime().UnixNano()
+	m["mtime"] = strconv.FormatInt(o.Mtime().UnixNano(), 10)
 	m["isdir"] = o.IsDir()
 	if f, ok := o.(File); ok {
 		m["mode"] = f.Mode()
@@ -84,7 +85,8 @@ func MarshalObject(o Object) map[string]interface{} {
 }
 
 func UnmarshalObject(m map[string]interface{}) Object {
-	mtime := time.Unix(0, int64(m["mtime"].(float64)))
+	mtime_int64, _ := strconv.ParseInt(m["mtime"].(string), 10, 64)
+	mtime := time.Unix(0, mtime_int64)
 	o := obj{
 		key:   m["key"].(string),
 		size:  int64(m["size"].(float64)),
