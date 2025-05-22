@@ -28,7 +28,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/dustin/go-humanize"
 	"hash/fnv"
 	"io"
 	"math/rand"
@@ -44,6 +43,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/dustin/go-humanize"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -189,12 +190,15 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		fopt.MaxRetries = opt.MaxRetries
 		fopt.MinRetryBackoff = opt.MinRetryBackoff
 		fopt.MaxRetryBackoff = opt.MaxRetryBackoff
+		fopt.DialTimeout = opt.DialTimeout
 		fopt.ReadTimeout = opt.ReadTimeout
 		fopt.WriteTimeout = opt.WriteTimeout
+		fopt.PoolFIFO = opt.PoolFIFO               // default: false
 		fopt.PoolSize = opt.PoolSize               // default: GOMAXPROCS * 10
 		fopt.PoolTimeout = opt.PoolTimeout         // default: ReadTimeout + 1 second.
 		fopt.MinIdleConns = opt.MinIdleConns       // disable by default
 		fopt.MaxIdleConns = opt.MaxIdleConns       // disable by default
+		fopt.MaxActiveConns = opt.MaxActiveConns   // default: 0, no limit
 		fopt.ConnMaxIdleTime = opt.ConnMaxIdleTime // default: 30 minutes
 		fopt.ConnMaxLifetime = opt.ConnMaxLifetime // disable by default
 		if conf.ReadOnly {
@@ -222,12 +226,15 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			copt.MaxRetries = opt.MaxRetries
 			copt.MinRetryBackoff = opt.MinRetryBackoff
 			copt.MaxRetryBackoff = opt.MaxRetryBackoff
+			copt.DialTimeout = opt.DialTimeout
 			copt.ReadTimeout = opt.ReadTimeout
 			copt.WriteTimeout = opt.WriteTimeout
+			copt.PoolFIFO = opt.PoolFIFO               // default: false
 			copt.PoolSize = opt.PoolSize               // default: GOMAXPROCS * 10
 			copt.PoolTimeout = opt.PoolTimeout         // default: ReadTimeout + 1 second.
 			copt.MinIdleConns = opt.MinIdleConns       // disable by default
 			copt.MaxIdleConns = opt.MaxIdleConns       // disable by default
+			copt.MaxActiveConns = opt.MaxActiveConns   // default: 0, no limit
 			copt.ConnMaxIdleTime = opt.ConnMaxIdleTime // default: 30 minutes
 			copt.ConnMaxLifetime = opt.ConnMaxLifetime // disable by default
 			if conf.ReadOnly {
