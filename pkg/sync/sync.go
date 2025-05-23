@@ -221,10 +221,27 @@ var bufPool = sync.Pool{
 	},
 }
 
+func shouldRetry(err error) bool {
+	if err == nil || errors.Is(err, utils.ErrSkipped) {
+		return false
+	}
+
+	var eno syscall.Errno
+	if errors.As(err, &eno) {
+		switch eno {
+		case syscall.EAGAIN, syscall.EINTR, syscall.EBUSY, syscall.ETIMEDOUT, syscall.EIO:
+			return true
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func try(n int, f func() error) (err error) {
 	for i := 0; i < n; i++ {
 		err = f()
-		if err == nil || errors.Is(err, utils.ErrSkipped) {
+		if !shouldRetry(err) {
 			return
 		}
 		logger.Debugf("Try %d failed: %s", i+1, err)
@@ -240,14 +257,7 @@ func deleteObj(storage object.ObjectStorage, key string, dry bool) {
 		return
 	}
 	start := time.Now()
-	if err := try(3, func() error {
-		e := storage.Delete(key)
-		if errors.Is(e, syscall.ENOTEMPTY) {
-			logger.Errorf("Failed to delete %s from %s: %s", key, storage, e)
-			return utils.ErrSkipped
-		}
-		return e
-	}); err == nil {
+	if err := try(3, func() error { return storage.Delete(key) }); err == nil {
 		deleted.Increment()
 		logger.Debugf("Deleted %s from %s in %s", key, storage, time.Since(start))
 	} else {
