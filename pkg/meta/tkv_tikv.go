@@ -21,9 +21,12 @@ package meta
 
 import (
 	"context"
+	"math"
 	"net/url"
 	"os"
+	"runtime/debug"
 	"strings"
+	"syscall"
 	"time"
 
 	plog "github.com/pingcap/log"
@@ -192,6 +195,31 @@ func (c *tikvClient) config(key string) interface{} {
 			return nil
 		}
 		return ts
+	}
+	return nil
+}
+
+func (c *tikvClient) pointGetTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
+	tx, err := c.client.Begin(tikv.WithStartTS(math.MaxUint64)) // math.MaxUint64 means to point get the latest committed data without PD access
+	if err != nil {
+		return errors.Wrap(err, "failed to begin transaction")
+	}
+	tx.GetSnapshot().SetIsolationLevel(txnkv.RC) // RC isolation to skip lock checking in TiKV
+	defer func() {
+		if r := recover(); r != nil {
+			if e, ok := r.(error); ok {
+				err = e
+			} else {
+				err = errors.Errorf("panic in point get transaction: %v", r)
+			}
+		}
+	}()
+	if err = f(&kvTxn{&tikvTxn{tx}, retry}); err != nil {
+		return err
+	}
+	if !tx.IsReadOnly() {
+		logger.Errorf("TiKV point get transaction is read-only\n%s", debug.Stack()) // should not happen
+		return syscall.EINVAL
 	}
 	return nil
 }

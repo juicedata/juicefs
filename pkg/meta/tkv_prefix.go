@@ -80,6 +80,12 @@ type prefixClient struct {
 	prefix []byte
 }
 
+func (c *prefixClient) pointGetTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
+	return c.tkvClient.pointGetTxn(ctx, func(tx *kvTxn) error {
+		return f(&kvTxn{&prefixTxn{tx, c.prefix}, retry})
+	}, retry)
+}
+
 func (c *prefixClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) error {
 	return c.tkvClient.txn(ctx, func(tx *kvTxn) error {
 		return f(&kvTxn{&prefixTxn{tx, c.prefix}, retry})
