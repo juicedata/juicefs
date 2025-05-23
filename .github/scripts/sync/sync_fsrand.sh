@@ -131,6 +131,15 @@ test_files_from(){
     check_diff $DEST_DIR1 $DEST_DIR2
 }
 
+test_check_change(){
+    prepare_test
+   ./juicefs mount $META_URL /tmp/jfs -d
+    sync_option="--dirs --check-change --links --perms --list-threads 10 --list-depth 5"
+    sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR1 $sync_option 2>&1| tee sync.log || true
+    do_copy $sync_option
+    check_diff $DEST_DIR1 $DEST_DIR2
+}
+
 do_copy(){
     local sync_option=$@
     local preserve="timestamps"
