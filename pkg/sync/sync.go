@@ -925,7 +925,11 @@ func checkChange(src, dst object.ObjectStorage, obj object.Object, key string, c
 			checked.Increment()
 			checkedBytes.IncrInt64(obj.Size())
 		}
-		equal := cur.Size() == obj.Size() && cur.Mtime().Equal(obj.Mtime())
+		equal := cur.Size() == obj.Size()
+		if equal && !cur.Mtime().Equal(obj.Mtime()) {
+			// Head of an object may not return the millisecond part of mtime as List
+			equal = cur.Mtime().Unix() == obj.Mtime().Unix() && cur.Mtime().UnixMilli()%1000 == 0
+		}
 		if !equal {
 			return fmt.Errorf("%s changed during sync. Original: size=%d, mtime=%s; Current: size=%d, mtime=%s",
 				cur.Key(), obj.Size(), obj.Mtime(), cur.Size(), cur.Mtime())
