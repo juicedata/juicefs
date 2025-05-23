@@ -31,6 +31,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 	"unicode"
 
@@ -239,7 +240,14 @@ func deleteObj(storage object.ObjectStorage, key string, dry bool) {
 		return
 	}
 	start := time.Now()
-	if err := try(3, func() error { return storage.Delete(key) }); err == nil {
+	if err := try(3, func() error {
+		e := storage.Delete(key)
+		if errors.Is(e, syscall.ENOTEMPTY) {
+			logger.Errorf("Failed to delete %s from %s: %s", key, storage, e)
+			return utils.ErrSkipped
+		}
+		return e
+	}); err == nil {
 		deleted.Increment()
 		logger.Debugf("Deleted %s from %s in %s", key, storage, time.Since(start))
 	} else {
