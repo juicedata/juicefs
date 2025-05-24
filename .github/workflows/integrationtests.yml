@@ -119,7 +119,9 @@ jobs:
         run: |
           git clone https://github.com/gofrs/flock.git
           mkdir /jfs/tmp
-          cd flock && go mod tidy && TMPDIR=/jfs/tmp go test .
+          cd flock && go mod tidy
+          sudo cat /jfs/.accesslog | grep -v '#' &
+          TMPDIR=/jfs/tmp go test .
 
       - name: make secfs.test
         run: |

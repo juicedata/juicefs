@@ -65,6 +65,10 @@ func (c *fdbClient) config(key string) interface{} {
 	return nil
 }
 
+func (c *fdbClient) pointGetTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
+	return c.txn(ctx, f, retry)
+}
+
 func (c *fdbClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) error {
 	_, err := c.client.Transact(func(t fdb.Transaction) (interface{}, error) {
 		e := f(&kvTxn{&fdbTxn{t}, retry})
