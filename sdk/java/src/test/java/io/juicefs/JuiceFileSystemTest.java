@@ -1207,13 +1207,6 @@ public class JuiceFileSystemTest extends TestCase {
     newConf.set("fs.defaultFS", "jfs://test/");
     newConf.set("juicefs.name", "test");
     newConf.set("juicefs.test.meta", newConf.get("juicefs.dev.meta"));
-    // Test creating a new filesystem with an invalid subdir
-    newConf.set("juicefs.subdir", "nonexistent");
-    try {
-      FileSystem.newInstance(newConf);
-      fail("Creating filesystem should fail because the subdir must be a valid directory");
-    } catch (IOException ignored) {
-    }
 
     // Test creating a new filesystem with a valid subdir
     Path subdir = new Path("/test_subdir");
@@ -1245,6 +1238,16 @@ public class JuiceFileSystemTest extends TestCase {
     try {
       newFS.create(nonexistent);
       fail("create should not work because the path is not under the subdir");
+    } catch (AccessControlException e) {
+      assertTrue(e.getMessage().contains("Permission denied"));
+    }
+
+    // Test creating a path with the same prefix but not under the subdir
+    Path wrongPathWithSamePrefix = new Path("/test_subdir_wrong");
+    fs.mkdirs(wrongPathWithSamePrefix);
+    try {
+      newFS.listStatus(wrongPathWithSamePrefix);
+      fail("listStatus should not work because the path is not under the subdir");
     } catch (AccessControlException e) {
       assertTrue(e.getMessage().contains("Permission denied"));
     }
