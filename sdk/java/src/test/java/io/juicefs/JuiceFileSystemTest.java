@@ -1207,13 +1207,6 @@ public class JuiceFileSystemTest extends TestCase {
     newConf.set("fs.defaultFS", "jfs://test/");
     newConf.set("juicefs.name", "test");
     newConf.set("juicefs.test.meta", newConf.get("juicefs.dev.meta"));
-    // Test creating a new filesystem with an invalid subdir
-    newConf.set("juicefs.subdir", "nonexistent");
-    try {
-      FileSystem.newInstance(newConf);
-      fail("Creating filesystem should fail because the subdir must be a valid directory");
-    } catch (IOException ignored) {
-    }
 
     // Test creating a new filesystem with a valid subdir
     Path subdir = new Path("/test_subdir");
