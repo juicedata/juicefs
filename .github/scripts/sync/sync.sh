@@ -153,6 +153,50 @@ test_sync_include_exclude_option(){
     done
 }
 
+test_sync_with_time(){
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount $META_URL /jfs -d
+    rm -rf data/
+    mkdir data
+    echo "old" > data/file1
+    echo "old" > data/file2
+    echo "old" > data/file3
+    sleep 1
+    start_time=$(date "+%Y-%m-%d %H:%M:%S")
+    sleep 1
+    echo "new" > data/file2
+    sleep 1
+    mid_time=$(date "+%Y-%m-%d %H:%M:%S")
+    sleep 1
+    echo "new" > data/file3
+    sleep 1
+    end_time=$(date "+%Y-%m-%d %H:%M:%S")
+    mkdir -p sync_dst1 sync_dst2
+    ./juicefs sync --start-time "$start_time" data/ /jfs/sync_dst1/
+    [ "$(cat /jfs/sync_dst1/file1 2>/dev/null)" = "" ] || (echo "file1 should not exist" && exit 1)
+    [ "$(cat /jfs/sync_dst1/file2)" = "new" ] || (echo "file2 should be new" && exit 1)
+    [ "$(cat /jfs/sync_dst1/file3)" = "new" ] || (echo "file3 should be new" && exit 1)
+    ./juicefs sync --start-time "$start_time" --end-time "$mid_time" data/ /jfs/sync_dst2/
+    [ "$(cat /jfs/sync_dst2/file1 2>/dev/null)" = "" ] || (echo "file1 should not exist" && exit 1)
+    [ "$(cat /jfs/sync_dst2/file2)" = "new" ] || (echo "file2 should be new" && exit 1)
+    [ "$(cat /jfs/sync_dst2/file3 2>/dev/null)" = "" ] || (echo "file3 should not exist" && exit 1)
+}
+
+test_sync_check_change()
+{
+    prepare_test
+    ./juicefs format $META_URL $FORMAT_OPTIONS myjfs
+    ./juicefs mount $META_URL /jfs -d
+    rm -rf data/
+    mkdir data
+    nohup bash -c 'for i in `seq 1 1000000`; do echo $i >> data/echo; done' > /dev/null 2>&1 &
+    pid=$!
+    sleep 0.5
+    ./juicefs sync --check-change data/ /jfs/data/ 2>&1 | grep "changed during sync" || (echo "should detect file changes during sync" && exit 1 )
+    kill $pid || true
+}
+
 test_ignore_existing()
 {
     prepare_test
