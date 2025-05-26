@@ -4,13 +4,16 @@ retry() {
     local delay=3
     for i in $(seq 1 $retries); do
         set +e
-        ( set -e; "$@" )
+        (
+            set -e
+            "$@"
+        )
         exit=$?
         set -e
         if [ $exit == 0 ]; then
             echo "run $@ succceed"
             return $exit
-        elif [ $i ==  $retries ]; then
+        elif [ $i == $retries ]; then
             echo "Retry failed after $i attempts."
             exit $exit
         else
@@ -20,7 +23,7 @@ retry() {
     done
 }
 
-install_tikv(){
+install_tikv() {
     [[ ! -d tcli ]] && git clone https://github.com/c4pt0r/tcli
     make -C tcli && sudo cp tcli/bin/tcli /usr/local/bin
     # retry because of: https://github.com/pingcap/tiup/issues/2057
@@ -34,20 +37,20 @@ install_tikv(){
         echo "Unknown user $user"
         exit 1
     fi
-    
-    $tiup playground --mode tikv-slim > tikv.log 2>&1  &
+
+    $tiup playground --mode tikv-slim >tikv.log 2>&1 &
     pid=$!
     timeout=60
     count=0
     while true; do
-        echo 'head -1' > /tmp/head.txt
-        lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt && exit_code=0 || exit_code=$?
+        echo 'head -1' >/tmp/head.txt
+        lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 </tmp/head.txt && exit_code=0 || exit_code=$?
         if [ $exit_code -eq 0 ]; then
             echo "TiDB is running."
             exit 0
         fi
         sleep 1
-        count=$((count+1))
+        count=$((count + 1))
         if [ $count -eq $timeout ]; then
             echo "TiDB failed to start within $timeout seconds."
             kill -9 $pid || true
@@ -56,7 +59,7 @@ install_tikv(){
     done
 }
 
-install_tidb(){
+install_tidb() {
     curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
     user=$(whoami)
     if [ "$user" == "root" ]; then
@@ -67,8 +70,8 @@ install_tidb(){
         echo "Unknown user $user"
         exit 1
     fi
-    
-    $tiup playground 5.4.0 > tidb.log 2>&1  &
+
+    $tiup playground 5.4.0 >tidb.log 2>&1 &
     pid=$!
     timeout=60
     count=0
@@ -79,7 +82,7 @@ install_tidb(){
             exit 0
         fi
         sleep 1
-        count=$((count+1))
+        count=$((count + 1))
         if [ $count -eq $timeout ]; then
             echo "TiDB failed to start within $timeout seconds."
             kill -9 $pid || true
@@ -88,13 +91,13 @@ install_tidb(){
     done
 }
 
-start_meta_engine(){
+start_meta_engine() {
     meta=$1
     storage=$2
     if [ "$meta" == "mysql" ]; then
         sudo /etc/init.d/mysql start
     elif [ "$meta" == "redis" ]; then
-        sudo .github/scripts/apt_install.sh  redis-tools redis-server
+        sudo .github/scripts/apt_install.sh redis-tools redis-server
     elif [ "$meta" == "tikv" ]; then
         retry install_tikv
     elif [ "$meta" == "badger" ]; then
@@ -103,7 +106,7 @@ start_meta_engine(){
         if lsof -i:3306; then
             echo "mariadb is already running"
         else
-            docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
+            docker run -p 127.0.0.1:3306:3306 --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
             sleep 10
         fi
     elif [ "$meta" == "tidb" ]; then
@@ -114,11 +117,11 @@ start_meta_engine(){
     elif [ "$meta" == "fdb" ]; then
         if lsof -i:4500; then
             echo "fdb is already running"
-        else  
+        else
             docker run --name fdb --rm -d -p 4500:4500 foundationdb/foundationdb:6.3.23
             sleep 5
             docker exec fdb fdbcli --exec "configure new single memory"
-            echo "docker:docker@127.0.0.1:4500" > /home/runner/fdb.cluster
+            echo "docker:docker@127.0.0.1:4500" >/home/runner/fdb.cluster
             fdbcli -C /home/runner/fdb.cluster --exec "status"
         fi
     elif [ "$meta" == "ob" ]; then
@@ -141,7 +144,7 @@ start_meta_engine(){
             sleep 10
         fi
     fi
-    
+
     if [ "$storage" == "minio" ]; then
         if ! docker ps | grep "minio/minio"; then
             docker run -d -p 9000:9000 --name minio \
@@ -153,7 +156,7 @@ start_meta_engine(){
             sleep 3s
         fi
         [ ! -x mc ] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc && chmod +x mc
-        ./mc config host add myminio http://127.0.0.1:9000 minioadmin minioadmin
+        ./mc alias set myminio http://localhost:9000 minioadmin minioadmin || ./mc alias set myminio http://127.0.0.1:9000 minioadmin minioadmin
     elif [ "$storage" == "gluster" ]; then
         dpkg -s glusterfs-server || .github/scripts/apt_install.sh glusterfs-server
         systemctl start glusterd.service
@@ -176,7 +179,7 @@ start_meta_engine(){
     fi
 }
 
-get_meta_url(){
+get_meta_url() {
     meta=$1
     if [ "$meta" == "postgres" ]; then
         meta_url="postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable"
@@ -209,15 +212,15 @@ get_meta_url(){
     return 0
 }
 
-create_database(){
+create_database() {
     meta_url=$1
     db_name=$(basename $meta_url | awk -F? '{print $1}')
     if [[ "$meta_url" == mysql* ]]; then
-        user=$(echo $meta_url |  awk -F/ '{print $3}' | awk -F@ '{print $1}' | awk -F: '{print $1}')
-        password=$(echo $meta_url |  awk -F/ '{print $3}' | awk -F@ '{print $1}' | awk -F: '{print $2}')
+        user=$(echo $meta_url | awk -F/ '{print $3}' | awk -F@ '{print $1}' | awk -F: '{print $1}')
+        password=$(echo $meta_url | awk -F/ '{print $3}' | awk -F@ '{print $1}' | awk -F: '{print $2}')
         test -n "$password" && password="-p$password" || password=""
-        host=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $1}')
-        port=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $2}')
+        host=$(basename $(dirname $meta_url) | awk -F@ '{print $2}' | sed 's/(//g' | sed 's/)//g' | awk -F: '{print $1}')
+        port=$(basename $(dirname $meta_url) | awk -F@ '{print $2}' | sed 's/(//g' | sed 's/)//g' | awk -F: '{print $2}')
         test -z "$port" && port="3306"
         echo user=$user, password=$password, host=$host, port=$port, db_name=$db_name
         if [ "$#" -eq 2 ]; then
@@ -226,12 +229,12 @@ create_database(){
             mysql -u$user $password -h $host -P $port -e "show variables like '%isolation%;'"
         fi
         mysql -u$user $password -h $host -P $port -e "drop database if exists $db_name; create database $db_name;"
-        elif [[ "$meta_url" == postgres* ]]; then
-            export PGPASSWORD="postgres"
-            printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
+    elif [[ "$meta_url" == postgres* ]]; then
+        export PGPASSWORD="postgres"
+        printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " | psql -U postgres -h localhost
         if [ "$#" -eq 2 ]; then
             echo isolation_level=$2
-            printf "\set AUTOCOMMIT on\nALTER DATABASE $db_name SET DEFAULT_TRANSACTION_ISOLATION TO '$2';" |  psql -U postgres -h localhost
+            printf "\set AUTOCOMMIT on\nALTER DATABASE $db_name SET DEFAULT_TRANSACTION_ISOLATION TO '$2';" | psql -U postgres -h localhost
         fi
     fi
 }

@@ -44,7 +44,7 @@ test_confi_secret_key(){
     # https://stackoverflow.com/questions/1221833/pipe-output-and-capture-exit-status-in-bash
     prepare_test
     set -o pipefail
-    ./mc config host add minio http://127.0.0.1:9000 minioadmin minioadmin
+    ./mc alias set minio http://127.0.0.1:9000 minioadmin minioadmin
     ./mc admin user add minio juicedata juicedata
     ./mc admin policy attach minio consoleAdmin --user juicedata
     ./juicefs format --storage minio --bucket http://localhost:9000/jfs-test --access-key juicedata --secret-key juicedata $meta_url myjfs
