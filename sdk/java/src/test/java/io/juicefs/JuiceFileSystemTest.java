@@ -1241,6 +1241,16 @@ public class JuiceFileSystemTest extends TestCase {
     } catch (AccessControlException e) {
       assertTrue(e.getMessage().contains("Permission denied"));
     }
+
+    // Test creating a path with the same prefix but not under the subdir
+    Path wrongPathWithSamePrefix = new Path("/test_subdir_wrong");
+    fs.mkdirs(wrongPathWithSamePrefix);
+    try {
+      newFS.listStatus(wrongPathWithSamePrefix);
+      fail("listStatus should not work because the path is not under the subdir");
+    } catch (AccessControlException e) {
+      assertTrue(e.getMessage().contains("Permission denied"));
+    }
     newFS.close();
   }
 }
