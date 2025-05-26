@@ -209,7 +209,7 @@ func (c *etcdClient) config(key string) interface{} {
 	return nil
 }
 
-func (c *etcdClient) pointGetTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
+func (c *etcdClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
 	return c.txn(ctx, f, retry)
 }
 

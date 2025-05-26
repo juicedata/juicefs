@@ -56,7 +56,7 @@ type kvtxn interface {
 
 type tkvClient interface {
 	name() string
-	pointGetTxn(ctx context.Context, f func(*kvTxn) error, retry int) error // should only be used for simple point get scenarios
+	simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) error // should only be used for point get scenarios
 	txn(ctx context.Context, f func(*kvTxn) error, retry int) error
 	scan(prefix []byte, handler func(key, value []byte) bool) error
 	reset(prefix []byte) error
@@ -381,7 +381,7 @@ func (m *kvMeta) parseQuota(buf []byte) *Quota {
 
 func (m *kvMeta) get(key []byte) ([]byte, error) {
 	var value []byte
-	err := m.client.pointGetTxn(Background(), func(tx *kvTxn) error {
+	err := m.client.simpleTxn(Background(), func(tx *kvTxn) error {
 		value = tx.get(key)
 		return nil
 	}, 0)
@@ -912,7 +912,7 @@ func (m *kvMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 }
 
 func (m *kvMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
-	return errno(m.client.pointGetTxn(ctx, func(tx *kvTxn) error {
+	return errno(m.client.simpleTxn(ctx, func(tx *kvTxn) error {
 		val := tx.get(m.inodeKey(inode))
 		if val == nil {
 			return syscall.ENOENT
@@ -1828,7 +1828,7 @@ func (m *kvMeta) fillAttr(entries []*Entry) (err error) {
 		keys[i] = m.inodeKey(e.Inode)
 	}
 	var rs [][]byte
-	err = m.client.pointGetTxn(Background(), func(tx *kvTxn) error {
+	err = m.client.simpleTxn(Background(), func(tx *kvTxn) error {
 		rs = tx.gets(keys...)
 		return nil
 	}, 0)

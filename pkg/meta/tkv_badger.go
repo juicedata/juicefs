@@ -148,7 +148,7 @@ func (c *badgerClient) config(key string) interface{} {
 	return nil
 }
 
-func (c *badgerClient) pointGetTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
+func (c *badgerClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
 	return c.txn(ctx, f, retry)
 }
 

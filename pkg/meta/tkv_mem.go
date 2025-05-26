@@ -203,7 +203,7 @@ func (c *memKV) set(key string, value []byte) {
 	}
 }
 
-func (c *memKV) pointGetTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
+func (c *memKV) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
 	return c.txn(ctx, f, retry)
 }
 

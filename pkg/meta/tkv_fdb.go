@@ -65,7 +65,7 @@ func (c *fdbClient) config(key string) interface{} {
 	return nil
 }
 
-func (c *fdbClient) pointGetTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
+func (c *fdbClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
 	return c.txn(ctx, f, retry)
 }
 
