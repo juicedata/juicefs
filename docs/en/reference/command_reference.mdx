@@ -907,6 +907,8 @@ In which:
 |`--min-size-SIZE` <VersionAdd>1.2</VersionAdd>|skip files smaller than `SIZE`|
 |`--max-age=DURATION` <VersionAdd>1.2</VersionAdd>|Skip files whose last modification time exceeds `DURATION`, in seconds. For example, `--max-age=3600` means to synchronize only files that have been modified within 1 hour.|
 |`--min-age=DURATION` <VersionAdd>1.2</VersionAdd>|Skip files whose last modification time is no more than `DURATION`, in seconds. For example, `--min-age=3600` means to synchronize only files whose last modification time is more than 1 hour from the current time.|
+|`--start-time` <VersionAdd>1.3</VersionAdd>|skip files modified before start-time. example: 2006-01-02 15:04:05|
+|`--end-time` <VersionAdd>1.3</VersionAdd>|skip files modified after end-time. example: 2006-01-02 15:04:05|
 |`--limit=-1`|Limit the number of objects that will be processed, default to -1 which means unlimited.|
 |`--update, -u`|Update existing files if the source files' `mtime` is newer, default to false.|
 |`--force-update, -f`|Always update existing file, default to false.|
