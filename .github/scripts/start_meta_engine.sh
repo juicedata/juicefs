@@ -166,7 +166,7 @@ start_meta_engine(){
             sleep 3s
         fi
         [ ! -x mc ] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc && chmod +x mc
-        ./mc alias set myminio http://localhost:9000 minioadmin minioadmin || ./mc config host add myminio http://127.0.0.1:9000 minioadmin minioadmin
+        ./mc alias set myminio http://localhost:9000 minioadmin minioadmin || ./mc alias set myminio http://127.0.0.1:9000 minioadmin minioadmin
     elif [ "$storage" == "gluster" ]; then
         dpkg -s glusterfs-server || .github/scripts/apt_install.sh glusterfs-server
         systemctl start glusterd.service
