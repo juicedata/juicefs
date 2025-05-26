@@ -8,30 +8,35 @@ source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
 dpkg -s gawk || .github/scripts/apt_install.sh gawk
-start_minio(){
+start_minio() {
     if ! docker ps | grep "minio/minio"; then
         docker run -d -p 9000:9000 --name minio \
-                -e "MINIO_ACCESS_KEY=minioadmin" \
-                -e "MINIO_SECRET_KEY=minioadmin" \
-                -v /tmp/data:/data \
-                -v /tmp/config:/root/.minio \
-                minio/minio server /data
+            -e "MINIO_ACCESS_KEY=minioadmin" \
+            -e "MINIO_SECRET_KEY=minioadmin" \
+            -v /tmp/data:/data \
+            -v /tmp/config:/root/.minio \
+            minio/minio server /data
         sleep 3s
     fi
     [ ! -x mc ] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc && chmod +x mc
-    # ./mc alias set myminio http://localhost:9000 minioadmin minioadmin
-    ./mc config host add myminio http://127.0.0.1:9000 minioadmin minioadmin
+    ./mc alias set myminio http://localhost:9000 minioadmin minioadmin || ./mc alias set myminio http://127.0.0.1:9000 minioadmin minioadmin
 }
 start_minio
-start_worker(){
-    if getent group juicedata ; then groupdel -f juicedata; echo delete juicedata group; fi
-    if getent passwd juicedata ; then rm -rf /home/juicedata && userdel -f juicedata; echo delete juicedata user; fi
+start_worker() {
+    if getent group juicedata; then
+        groupdel -f juicedata
+        echo delete juicedata group
+    fi
+    if getent passwd juicedata; then
+        rm -rf /home/juicedata && userdel -f juicedata
+        echo delete juicedata user
+    fi
     groupadd juicedata && useradd -ms /bin/bash -g juicedata juicedata -u 1024
     if [ "$CI" != "true" ] && [ -f ~/.ssh/id_rsa ]; then
         echo "ssh key already exists, don't overwrite it in non ci environment"
     else
         echo "generating ssh key with type $KEY_TYPE"
-        yes |sudo -u juicedata ssh-keygen -t $KEY_TYPE -C "default" -f /home/juicedata/.ssh/id_rsa -q -N ""
+        yes | sudo -u juicedata ssh-keygen -t $KEY_TYPE -C "default" -f /home/juicedata/.ssh/id_rsa -q -N ""
         chmod 600 /home/juicedata/.ssh/id_rsa
     fi
     cp -f /home/juicedata/.ssh/id_rsa.pub .github/scripts/ssh/id_rsa.pub
@@ -48,7 +53,7 @@ sed -i 's/bind 127.0.0.1 ::1/bind 0.0.0.0 ::1/g' /etc/redis/redis.conf
 systemctl restart redis
 META_URL=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
 
-test_sync_without_mount_point(){
+test_sync_without_mount_point() {
     prepare_test
     ./juicefs mount -d $META_URL /jfs
     file_count=$FILE_COUNT
@@ -57,18 +62,18 @@ test_sync_without_mount_point(){
         dd if=/dev/urandom of=/jfs/data/file$i bs=1M count=1 status=none
     done
     dd if=/dev/urandom of=/jfs/data/file$file_count bs=1M count=1024
-    (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
-    
+    (./mc rb myminio/data1 --force >/dev/null 2>&1 || true) && ./mc mb myminio/data1
+
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
-         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5 --check-new \
-         2>&1 | tee sync.log
+        --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+        --list-threads 10 --list-depth 5 --check-new \
+        2>&1 | tee sync.log
     # diff data/ /jfs/data1/
     check_sync_log $file_count
     ./mc rm -r --force myminio/data1
 }
 
-test_sync_without_mount_point2(){
+test_sync_without_mount_point2() {
     prepare_test
     file_count=$FILE_COUNT
     rm -rf data/
@@ -77,26 +82,25 @@ test_sync_without_mount_point2(){
         dd if=/dev/urandom of=data/file$i bs=1M count=1 status=none
     done
     dd if=/dev/urandom of=data/file$file_count bs=1M count=1024
-    (./mc rb myminio/data > /dev/null 2>&1 --force || true) && ./mc mb myminio/data
+    (./mc rb myminio/data --force >/dev/null 2>&1 || true) && ./mc mb myminio/data
     ./mc cp -r data myminio/data
-    
+
     # (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
-         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5\
-         2>&1 | tee sync.log
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+        --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+        --list-threads 10 --list-depth 5 2>&1 | tee sync.log
     check_sync_log $file_count
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
-         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5 --check-all \
-         2>&1 | tee sync.log
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+        --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+        --list-threads 10 --list-depth 5 --check-all \
+        2>&1 | tee sync.log
     ./juicefs mount -d $META_URL /jfs
     diff data/ /jfs/data/
     ./mc rm -r --force myminio/data
     rm -rf data
 }
 
-skip_test_sync_between_oss(){
+skip_test_sync_between_oss() {
     prepare_test
     ./juicefs mount -d $META_URL /jfs
     mkdir -p /jfs/test
@@ -106,7 +110,7 @@ skip_test_sync_between_oss(){
     done
     start_gateway
     sudo -u juicedata ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
-         minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
+        minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         2>&1 | tee sync.log
@@ -119,10 +123,10 @@ skip_test_sync_between_oss(){
     check_sync_log $file_count
 }
 
-check_sync_log(){
+check_sync_log() {
     grep "<FATAL>" sync.log && exit 1 || true
     file_count=$1
-    file_copied=$(tail -1 sync.log  | sed 's/.*copied: \([0-9]*\).*/\1/' )
+    file_copied=$(tail -1 sync.log | sed 's/.*copied: \([0-9]*\).*/\1/')
     if [ "$file_copied" != "$file_count" ]; then
         echo "file_copied not equal, $file_copied, $file_count"
         exit 1
@@ -141,19 +145,18 @@ check_sync_log(){
     fi
 }
 
-prepare_test(){
+prepare_test() {
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
     rm -rf /var/jfs/myjfs
     rm -rf /var/jfsCache/myjfs
-    (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
+    (./mc rb myminio/myjfs --force >/dev/null 2>&1 || true) && ./mc mb myminio/myjfs
     ./juicefs format $META_URL myjfs --storage minio --access-key minioadmin --secret-key minioadmin --bucket http://172.20.0.1:9000/myjfs
 }
-start_gateway(){
+start_gateway() {
     lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
     MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL 172.20.0.1:9005 &
     ./mc alias set juicegw http://172.20.0.1:9005 minioadmin minioadmin --api S3v4
 }
-
 
 source .github/scripts/common/run_test.sh && run_test $@
