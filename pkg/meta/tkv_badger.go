@@ -24,7 +24,7 @@ import (
 	"context"
 	"time"
 
-	badger "github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
@@ -146,6 +146,10 @@ func (c *badgerClient) shouldRetry(err error) bool {
 
 func (c *badgerClient) config(key string) interface{} {
 	return nil
+}
+
+func (c *badgerClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
+	return c.txn(ctx, f, retry)
 }
 
 func (c *badgerClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {

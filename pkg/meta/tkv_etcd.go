@@ -209,6 +209,10 @@ func (c *etcdClient) config(key string) interface{} {
 	return nil
 }
 
+func (c *etcdClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
+	return c.txn(ctx, f, retry)
+}
+
 func (c *etcdClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
 	tx := &etcdTxn{
 		ctx,
