@@ -55,6 +55,9 @@ type s3client struct {
 }
 
 func (s *s3client) String() string {
+	if s.s3.Options().BaseEndpoint != nil {
+		return fmt.Sprintf("%s/%s/", *s.s3.Options().BaseEndpoint, s.bucket)
+	}
 	return fmt.Sprintf("s3://%s/", s.bucket)
 }
 
