@@ -203,7 +203,6 @@ func (c *tikvClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry 
 	if err != nil {
 		return errors.Wrap(err, "failed to begin transaction")
 	}
-	tx.GetSnapshot().SetIsolationLevel(txnkv.RC) // RC isolation to skip lock checking in TiKV
 	defer func() {
 		if r := recover(); r != nil {
 			if e, ok := r.(error); ok {
