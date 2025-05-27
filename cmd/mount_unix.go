@@ -53,6 +53,8 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
+
+	"golang.org/x/sys/unix"
 )
 
 var mountPid int
@@ -820,6 +822,15 @@ func adjustOOMKiller(score int) {
 	}
 }
 
+func setIOFlusher() {
+	err := unix.Prctl(unix.PR_SET_IO_FLUSHER, 1, 0, 0, 0)
+	if errors.Is(err, unix.EPERM) {
+		logger.Warn("CAP_SYS_RESOURCE is needed for PR_SET_IO_FLUSHER")
+	} else if errors.Is(err, unix.EINVAL) {
+		logger.Info("PR_SET_IO_FLUSHER, which is introduced by Linux 5.6, is not supported by the running kernel")
+	}
+}
+
 func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorage) {
 	// Go will catch all the signals
 	signal.Ignore(syscall.SIGPIPE)
@@ -862,6 +873,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 	increaseRlimit()
 	if runtime.GOOS == "linux" {
 		adjustOOMKiller(-1000)
+		setIOFlusher()
 	}
 	if canShutdownGracefully(mp, conf) {
 		shutdownGraceful(mp)
