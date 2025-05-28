@@ -448,6 +448,10 @@ func isS3PathType(endpoint string) bool {
 }
 
 func doSync(c *cli.Context) error {
+	if c.NArg() != 2 {
+		fmt.Printf("ERROR: This command requires 2 arguments but got %d %s\n", c.NArg(), c.Args().Slice())
+		os.Exit(1)
+	}
 	setup(c, 2)
 	if c.IsSet("include") && !c.IsSet("exclude") {
 		logger.Warnf("The include option needs to be used with the exclude option, otherwise the result of the current sync may not match your expectations")
