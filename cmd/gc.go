@@ -24,10 +24,12 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
+	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/pkg/errors"
 
@@ -54,7 +56,10 @@ $ juicefs gc redis://localhost
 $ juicefs gc redis://localhost --compact
 
 # Delete leaked objects or metadata and delayed deleted slices or files
-$ juicefs gc redis://localhost --delete`,
+$ juicefs gc redis://localhost --delete
+
+# Clean up temporary files left from interrupted operations
+$ juicefs gc redis://localhost --clean-tmp`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "compact",
@@ -63,6 +68,10 @@ $ juicefs gc redis://localhost --delete`,
 			&cli.BoolFlag{
 				Name:  "delete",
 				Usage: "delete leaked objects or metadata and delayed deleted slices or files",
+			},
+			&cli.BoolFlag{
+				Name:  "clean-tmp",
+				Usage: "clean up temporary files that might remain from interrupted operations",
 			},
 			&cli.IntFlag{
 				Name:    "threads",
@@ -261,6 +270,7 @@ func gc(ctx *cli.Context) error {
 	}
 
 	bar := progress.AddCountBar("Scanned objects", total)
+	tmpFiles := progress.AddCountBar("Temporary files", 0)
 	valid := progress.AddDoubleSpinnerTwo("Valid objects", "Valid data")
 	pending := progress.AddDoubleSpinnerTwo("Pending delete objects", "Pending delete data")
 	compacted := progress.AddDoubleSpinnerTwo("Compacted objects", "Compacted data")
@@ -358,6 +368,25 @@ func gc(ctx *cli.Context) error {
 	})
 	close(leakedObj)
 	wg.Wait()
+
+	if ctx.Bool("clean-tmp") {
+		jfs, err := fs.NewFileSystem(&vfs.Config{
+			Meta:            metaConf,
+			Format:          *format,
+			Version:         version.Version(),
+			Chunk:           &chunkConf,
+			AttrTimeout:     time.Second,
+			DirEntryTimeout: time.Second,
+		}, m, store, nil)
+		if err != nil {
+			return nil
+		}
+		err = cleanupTempFiles(jfs, "/", delete, tmpFiles)
+		if err != nil {
+			logger.Errorf("cleanup temporary files: %s", err)
+		}
+	}
+
 	if delete || compact {
 		delSpin.Done()
 		if progress.Quiet {
@@ -374,10 +403,54 @@ func gc(ctx *cli.Context) error {
 	sc, sb := skipped.Current()
 	dsc, dsb := cleanedSliceSpin.Current()
 	fc, fb := cleanedFileSpin.Current()
-	logger.Infof("scanned %d objects, %d valid, %d pending delete (%d bytes), %d compacted (%d bytes), %d leaked (%d bytes), %d delslices (%d bytes), %d delfiles (%d bytes), %d skipped (%d bytes)",
-		bar.Current(), vc, pc, pb, cc, cb, lc, lb, dsc, dsb, fc, fb, sc, sb)
-	if lc > 0 && !delete {
-		logger.Infof("Please add `--delete` to clean leaked objects")
+	tmpc := tmpFiles.Current()
+
+	logger.Infof("scanned %d objects, %d valid, %d pending delete (%d bytes), %d compacted (%d bytes), %d leaked (%d bytes), %d delslices (%d bytes), %d delfiles (%d bytes), %d skipped (%d bytes), %d tmpfiles",
+		bar.Current(), vc, pc, pb, cc, cb, lc, lb, dsc, dsb, fc, fb, sc, sb, tmpc)
+	if (lc > 0 || tmpc > 0) && !delete {
+		logger.Infof("Please add `--delete` to clean leaked objects or temporary files")
 	}
+	return nil
+}
+
+func cleanupTempFiles(jfs *fs.FileSystem, dir string, delete bool, tmpFiles *utils.Bar) error {
+	f, err := jfs.Open(meta.Background(), dir, 0)
+	if err != 0 {
+		return err
+	}
+	defer f.Close(meta.Background())
+	entries, err := f.ReaddirPlus(meta.Background(), 0)
+	if err != 0 {
+		return err
+	}
+	for _, e := range entries {
+		name := string(e.Name)
+		if name == "." || name == ".." {
+			continue
+		}
+		fi := fs.AttrToFileInfo(e.Inode, e.Attr)
+		path := dir + name
+
+		if fi.IsDir() {
+			if err := cleanupTempFiles(jfs, path+"/", delete, tmpFiles); err != nil {
+				logger.Warnf("cleanup temporary files in %s: %s", path, err)
+			}
+			continue
+		}
+
+		// Check if filename matches the pattern .*.tmp.* (format: .%s.tmp.%d)
+		if strings.HasPrefix(name, ".") && strings.Contains(name, ".tmp.") &&
+			(len(strings.Split(name, ".tmp.")) > 1 && strings.IndexAny(strings.Split(name, ".tmp.")[1], "0123456789") == 0) {
+			logger.Infof("found temporary file: %s, size: %+v", path, e.Attr.Length)
+			tmpFiles.Increment()
+			if delete {
+				eno := jfs.Delete(meta.Background(), path)
+				if eno != 0 {
+					logger.Warnf("delete temporary file %s: %s", path, eno)
+				}
+			}
+		}
+	}
+
 	return nil
 }
