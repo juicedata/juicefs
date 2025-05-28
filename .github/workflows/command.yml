@@ -40,6 +40,9 @@ jobs:
             echo 'meta_matrix=["mysql", "redis", "tikv"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
             echo 'meta_matrix=["mysql", "redis", "tikv"]' >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "issue_comment" ]] &&
+               [[ "${{ github.event.comment.body }}" == *"/run-command-tests"* ]];then 
+            echo 'meta_matrix=["mysql", "redis", "tikv"]' >> $GITHUB_OUTPUT
           else
             echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           fi
@@ -131,7 +134,6 @@ jobs:
           sudo META=${{matrix.meta}} .github/scripts/command/info.sh
 
       - name: Test Format
-        if: false
         timeout-minutes: 10
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/format.sh
