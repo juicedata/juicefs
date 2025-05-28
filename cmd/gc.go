@@ -441,7 +441,6 @@ func cleanupTempFiles(jfs *fs.FileSystem, dir string, delete bool, tmpFiles *uti
 		// Check if filename matches the pattern .*.tmp.* (format: .%s.tmp.%d)
 		if strings.HasPrefix(name, ".") && strings.Contains(name, ".tmp.") &&
 			(len(strings.Split(name, ".tmp.")) > 1 && strings.IndexAny(strings.Split(name, ".tmp.")[1], "0123456789") == 0) {
-			logger.Infof("found temporary file: %s, size: %+v", path, e.Attr.Length)
 			tmpFiles.Increment()
 			if delete {
 				eno := jfs.Delete(meta.Background(), path)
