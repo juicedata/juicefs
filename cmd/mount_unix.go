@@ -53,8 +53,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
-
-	"golang.org/x/sys/unix"
 )
 
 var mountPid int
@@ -803,34 +801,6 @@ func increaseRlimit() {
 	}
 }
 
-// change oom_score_adj to avoid OOM-killer
-func adjustOOMKiller(score int) {
-	if os.Getuid() != 0 {
-		return
-	}
-	f, err := os.OpenFile("/proc/self/oom_score_adj", os.O_WRONLY, 0666)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			println(err)
-		}
-		return
-	}
-	defer f.Close()
-	_, err = f.WriteString(strconv.Itoa(score))
-	if err != nil {
-		println("adjust OOM score:", err)
-	}
-}
-
-func setIOFlusher() {
-	err := unix.Prctl(unix.PR_SET_IO_FLUSHER, 1, 0, 0, 0)
-	if errors.Is(err, unix.EPERM) {
-		logger.Warn("CAP_SYS_RESOURCE is needed for PR_SET_IO_FLUSHER")
-	} else if errors.Is(err, unix.EINVAL) {
-		logger.Info("PR_SET_IO_FLUSHER, which is introduced by Linux 5.6, is not supported by the running kernel")
-	}
-}
-
 func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorage) {
 	// Go will catch all the signals
 	signal.Ignore(syscall.SIGPIPE)
@@ -871,10 +841,9 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 }
 func launchMount(mp string, conf *vfs.Config) error {
 	increaseRlimit()
-	if runtime.GOOS == "linux" {
-		adjustOOMKiller(-1000)
-		setIOFlusher()
-	}
+	utils.AdjustOOMKiller(-1000)
+	utils.SetIOFlusher()
+
 	if canShutdownGracefully(mp, conf) {
 		shutdownGraceful(mp)
 	}
