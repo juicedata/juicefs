@@ -38,7 +38,7 @@ test_format_sftp_object()
     --bucket $CONTAINER_IP:myjfs/ \
     --access-key testUser1 \
     --secret-key password
-    ./juicefs mount -d $META_URL /tmp/jfs --no-usage-report
+    ./juicefs mount -d $META_URL /tmp/jfs --no-usage-report --cache-size 0
     cd /tmp/jfs
     bash -c 'for k in {1..100}; do echo abc>$k; sleep 0.1; done' || true &
     bg_pid=$!
