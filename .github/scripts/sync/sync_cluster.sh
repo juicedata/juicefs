@@ -96,7 +96,7 @@ test_sync_without_mount_point2(){
     set +o pipefail
     ./juicefs mount -d $META_URL /jfs
     diff data/ /jfs/data/
-    current_time=$(date "+%Y-%m-%d %H:%M:%S")
+    current_time=$(date -d "1 minute ago" "+%Y-%m-%d %H:%M:%S")
     for i in $(seq 1 $file_count); do
         dd if=/dev/urandom of=data/file$i bs=1M count=2 status=none
     done
@@ -105,7 +105,7 @@ test_sync_without_mount_point2(){
     sleep 2
     set -o pipefail
     sudo -u juicedata meta_url=$META_URL ./juicefs sync  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
-         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 --start-time $current_time \
+         --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 --start-time "$current_time" \
          --list-threads 10 --list-depth 5 --update \
          2>&1 | tee sync.log
     set +o pipefail
@@ -184,14 +184,14 @@ test_sync_with_random_test(){
     ./juicefs mount -d $META_URL /jfs
     mkdir /jfs/test || true
     mkdir /jfs/test2 || true
-    current_time=$(date "+%Y-%m-%d %H:%M:%S")
+    current_time=$(date -d "1 minute ago" "+%Y-%m-%d %H:%M:%S")
     ./random-test runOp -baseDir /jfs/test -files 500000 -ops 5000000 -threads 50 -dirSize 100 -duration 60s -createOp 30,uniform \
     -deleteOp 5,end --linkOp 10,uniform --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform
     chmod -R 777 /jfs/test
     chmod -R 777 /jfs/test2
     sudo -u juicedata meta_url=$META_URL ./juicefs sync jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5 --check-new --links --dirs --start-time $current_time \
+         --list-threads 10 --list-depth 5 --check-new --links --dirs --start-time "$current_time" \
          2>&1 | tee sync.log
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
@@ -201,14 +201,14 @@ test_sync_with_random_test(){
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true 
     sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-src --match-full-path jfs://meta_url/test/ jfs://meta_url/test2/ \
          --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 --dirs \
-         --list-threads 10 --list-depth 5 --check-all --links --start-time $current_time \
+         --list-threads 10 --list-depth 5 --check-all --links --start-time "$current_time" \
          2>&1 | tee sync.log
     grep "panic:\|<FATAL>\|ERROR" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     [ -z "$(ls -A /jfs/test)" ] || exit 1
     rm -rf empty || mkdir empty
     sudo -u juicedata meta_url=$META_URL ./juicefs sync --delete-dst --match-full-path  --include='*' \
          ./empty/ jfs://meta_url/test2/ --manager-addr 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5 --check-change --dirs --links --start-time $current_time \
+         --list-threads 10 --list-depth 5 --check-change --dirs --links --start-time "$current_time" \
          2>&1 | tee sync.log
     grep "panic:\|<FATAL>" sync.log && echo "panic or fatal in sync.log" && exit 1 || true
     [ -z "$(ls -A /jfs/test2)" ] || exit 1
