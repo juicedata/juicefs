@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 func GetKernelVersion() (major, minor int) {
