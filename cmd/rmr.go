@@ -69,7 +69,7 @@ func openController(dpath string) (*os.File, error) {
 }
 
 func rmr(ctx *cli.Context) error {
-	setup(ctx, 1)
+	setup0(ctx, 1, 0)
 	var flag uint8
 	var numThreads int
 

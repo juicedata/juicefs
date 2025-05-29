@@ -139,7 +139,7 @@ func dumpMeta(m meta.Meta, dst string, threads int, keepSecret, fast, skipTrash,
 }
 
 func dump(ctx *cli.Context) error {
-	setup(ctx, 1)
+	setup0(ctx, 1, 2)
 	metaUri := ctx.Args().Get(0)
 	var dst string
 	if ctx.Args().Len() > 1 {
