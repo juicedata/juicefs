@@ -1227,10 +1227,10 @@ func (m *dbMeta) doSyncVolumeStat(ctx Context) error {
 	}
 	logger.Debugf("Used space: %s, inodes: %d", humanize.IBytes(uint64(used)), inode)
 	return m.txn(func(s *xorm.Session) error {
-		if _, err := s.Update(&counter{Value: inode}, &counter{Name: totalInodes}); err != nil {
+		if _, err := s.Cols("value").Update(&counter{Value: inode}, &counter{Name: totalInodes}); err != nil {
 			return fmt.Errorf("update totalInodes: %s", err)
 		}
-		_, err := s.Update(&counter{Value: used}, &counter{Name: usedSpace})
+		_, err := s.Cols("value").Update(&counter{Value: used}, &counter{Name: usedSpace})
 		return err
 	})
 }
@@ -2983,7 +2983,7 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, sys
 		}
 		st.DataLength, st.UsedSpace, st.UsedInodes = stat.length, stat.space, stat.inodes
 		e := m.txn(func(s *xorm.Session) error {
-			n, err := s.AllCols().Update(&st)
+			n, err := s.Cols("data_length", "used_space", "used_inodes").Update(&st, &dirStats{Inode: ino})
 			if err == nil && n != 1 {
 				err = errors.Errorf("update dir usage of inode %d: %d rows affected", ino, n)
 			}
@@ -3174,7 +3174,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 		}
 
 		c2.Slices = append(append(c2.Slices[:skipped*sliceBytes], marshalSlice(pos, id, size, 0, size)...), c2.Slices[len(origin):]...)
-		if _, err := s.Where("Inode = ? AND indx = ?", inode, indx).Update(c2); err != nil {
+		if _, err := s.Cols("slices").Where("Inode = ? AND indx = ?", inode, indx).Update(c2); err != nil {
 			return err
 		}
 		// create the key to tracking it
@@ -3469,7 +3469,14 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		ok, err := s.ForUpdate().Get(&node{Inode: inode})
 		if err == nil {
 			if ok {
-				_, err = s.Update(n, &node{Inode: inode})
+				updateColumns := []string{
+					"type", "mode",
+					"uid", "gid",
+					"length", "parent", "nlink",
+					"atime", "mtime", "ctime",
+					"atimensec", "mtimensec", "ctimensec",
+				}
+				_, err = s.Cols(updateColumns...).Update(n, &node{Inode: inode})
 			} else {
 				err = mustInsert(s, n)
 			}
