@@ -622,7 +622,7 @@ func mount(c *cli.Context) error {
 			daemonRun(c, addr, vfsConf) // only stage 0 needs the vfsConf
 		}
 		os.Setenv("JFS_SUPERVISOR", strconv.Itoa(os.Getppid()))
-		return launchMount(mp, vfsConf)
+		return launchMount(c, mp, vfsConf)
 	} else if runtime.GOOS == "windows" && c.Bool("background") {
 		daemonRun(c, addr, vfsConf)
 		return nil
