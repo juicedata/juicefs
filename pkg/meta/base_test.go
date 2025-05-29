@@ -1907,10 +1907,26 @@ func testCopyFileRange(t *testing.T, m Meta) {
 		t.Fatalf("create file %s", st)
 	}
 	defer m.Unlink(ctx, 1, "fout")
-	m.Write(ctx, iin, 0, 100, Slice{10, 200, 0, 100}, time.Now())
-	m.Write(ctx, iin, 1, 100<<10, Slice{11, 40 << 20, 0, 40 << 20}, time.Now())
-	m.Write(ctx, iin, 3, 0, Slice{12, 63 << 20, 10 << 20, 30 << 20}, time.Now())
-	m.Write(ctx, iout, 2, 10<<20, Slice{13, 50 << 20, 10 << 20, 30 << 20}, time.Now())
+
+	var sliceIds [4]uint64
+	for i := 0; i < len(sliceIds); i++ {
+		if st := m.NewSlice(Background(), &sliceIds[i]); st != 0 {
+			t.Fatalf("new chunk: %s", st)
+		}
+	}
+
+	if st := m.Write(ctx, iin, 0, 100, Slice{sliceIds[0], 200, 0, 100}, time.Now()); st != 0 {
+		t.Fatalf("write file %s", st)
+	}
+	if st := m.Write(ctx, iin, 1, 100<<10, Slice{sliceIds[1], 40 << 20, 0, 40 << 20}, time.Now()); st != 0 {
+		t.Fatalf("write file %s", st)
+	}
+	if st := m.Write(ctx, iin, 3, 0, Slice{sliceIds[2], 63 << 20, 10 << 20, 30 << 20}, time.Now()); st != 0 {
+		t.Fatalf("write file %s", st)
+	}
+	if st := m.Write(ctx, iout, 2, 10<<20, Slice{sliceIds[3], 50 << 20, 10 << 20, 30 << 20}, time.Now()); st != 0 {
+		t.Fatalf("write file %s", st)
+	}
 	var copied uint64
 	if st := m.CopyFileRange(ctx, iin, 150, iout, 30<<20, 200<<20, 0, &copied, nil); st != 0 {
 		t.Fatalf("copy file range: %s", st)
@@ -1920,10 +1936,10 @@ func testCopyFileRange(t *testing.T, m Meta) {
 		t.Fatalf("expect copy %d bytes, but got %d", expected, copied)
 	}
 	var expectedSlices = [][]Slice{
-		{{0, 30 << 20, 0, 30 << 20}, {10, 200, 50, 50}, {0, 0, 200, ChunkSize - 30<<20 - 50}},
-		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {0, 0, 0, 100 << 10}, {11, 40 << 20, 0, (34 << 20) + 150 - (100 << 10)}},
-		{{11, 40 << 20, (34 << 20) + 150 - (100 << 10), 6<<20 - 150 + 100<<10}, {0, 0, 40<<20 + 100<<10, ChunkSize - 40<<20 - 100<<10}, {0, 0, 0, 150 + (ChunkSize - 30<<20)}},
-		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {12, 63 << 20, 10 << 20, (8 << 20) + 150}},
+		{{0, 30 << 20, 0, 30 << 20}, {sliceIds[0], 200, 50, 50}, {0, 0, 200, ChunkSize - 30<<20 - 50}},
+		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {0, 0, 0, 100 << 10}, {sliceIds[1], 40 << 20, 0, (34 << 20) + 150 - (100 << 10)}},
+		{{sliceIds[1], 40 << 20, (34 << 20) + 150 - (100 << 10), 6<<20 - 150 + 100<<10}, {0, 0, 40<<20 + 100<<10, ChunkSize - 40<<20 - 100<<10}, {0, 0, 0, 150 + (ChunkSize - 30<<20)}},
+		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {sliceIds[2], 63 << 20, 10 << 20, (8 << 20) + 150}},
 	}
 	for i := uint32(0); i < 4; i++ {
 		var slices []Slice
