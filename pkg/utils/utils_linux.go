@@ -79,6 +79,23 @@ func SetIOFlusher() {
 	}
 }
 
+// Disable transparent huge page
+func DisableTHP() {
+	for {
+		err := unix.Prctl(unix.PR_SET_THP_DISABLE, 1, 0, 0, 0)
+		if err == nil {
+			break
+		}
+
+		if errors.Is(err, unix.EINTR) {
+			continue
+		} else {
+			logger.Warnf("Failed to disable transparent huge page: %s", err)
+			return
+		}
+	}
+}
+
 // AdjustOOMKiller: change oom_score_adj to avoid OOM-killer
 func AdjustOOMKiller(score int) {
 	if os.Getuid() != 0 {

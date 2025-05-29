@@ -47,4 +47,6 @@ Hardware:
 
 func SetIOFlusher() {}
 
+func DisableTHP() {}
+
 func AdjustOOMKiller(score int) {}
