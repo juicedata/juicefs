@@ -188,7 +188,7 @@ func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads ui
 }
 
 func warmup(ctx *cli.Context) error {
-	setup(ctx, 0)
+	setup0(ctx, 1, 0)
 
 	evict, check := ctx.Bool("evict"), ctx.Bool("check")
 	if evict && check {

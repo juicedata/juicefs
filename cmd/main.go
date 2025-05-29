@@ -266,10 +266,16 @@ func reorderOptions(app *cli.App, args []string) []string {
 
 // Check number of positional arguments, set logger level and setup agent if needed
 func setup(c *cli.Context, n int) {
-	if c.NArg() < n {
-		fmt.Printf("ERROR: This command requires at least %d arguments\n", n)
+	setup0(c, n, n)
+}
+
+func setup0(c *cli.Context, min, max int) {
+	if c.NArg() < min {
+		fmt.Printf("ERROR: This command requires at least %d arguments\n", min)
 		fmt.Printf("USAGE:\n   juicefs %s [command options] %s\n", c.Command.Name, c.Command.ArgsUsage)
 		os.Exit(1)
+	} else if max > 0 && c.NArg() > max {
+		logger.Warnf("Expect %d arguments, but got %d: %+v", max, c.NArg(), c.Args().Slice())
 	}
 
 	switch c.String("log-level") {
