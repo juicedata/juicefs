@@ -275,7 +275,9 @@ func setup0(c *cli.Context, min, max int) {
 		fmt.Printf("USAGE:\n   juicefs %s [command options] %s\n", c.Command.Name, c.Command.ArgsUsage)
 		os.Exit(1)
 	} else if max > 0 && c.NArg() > max {
-		logger.Warnf("Expect %d arguments, but got %d: %+v", max, c.NArg(), c.Args().Slice())
+		fmt.Printf("ERROR: This command accept at most %d arguments but got %+v\n", max, c.Args().Slice())
+		fmt.Printf("USAGE:\n   juicefs %s [command options] %s\n", c.Command.Name, c.Command.ArgsUsage)
+		logger.Exit(1)
 	}
 
 	switch c.String("log-level") {
