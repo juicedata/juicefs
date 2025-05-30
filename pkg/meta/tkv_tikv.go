@@ -38,6 +38,7 @@ import (
 	"github.com/tikv/client-go/v2/txnkv"
 	"github.com/tikv/client-go/v2/txnkv/txnutil"
 	"go.uber.org/zap"
+	pd "github.com/tikv/pd/client"
 )
 
 func init() {
@@ -89,6 +90,21 @@ func newTikvClient(addr string) (tkvClient, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if strings.ToLower(query.Get("open-tso-follower-proxy")) == "true" {
+		logger.Infof("Enabling TSO Follower Proxy")
+		client.KVStore.GetPDClient().UpdateOption(pd.EnableTSOFollowerProxy, true)
+
+		if waitStr := query.Get("max-tso-batch-wait-interval"); waitStr != "" {
+			if waitDur, err := time.ParseDuration(waitStr); err == nil {
+				client.KVStore.GetPDClient().UpdateOption(pd.MaxTSOBatchWaitInterval, waitDur)
+				logger.Infof("Set MaxTSOBatchWaitInterval to %s", waitDur)
+			} else {
+				logger.Warnf("Failed to parse max-tso-batch-wait-interval (%s): %v", waitStr, err)
+			}
+		}
+	}
+
 	prefix := strings.TrimLeft(tUrl.Path, "/")
 	return withPrefix(&tikvClient{client.KVStore, interval}, append([]byte(prefix), 0xFD)), nil
 }
