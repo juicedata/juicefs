@@ -850,7 +850,6 @@ func launchMount(c *cli.Context, mp string, conf *vfs.Config) error {
 
 	if c.Bool("disable-transparent-hugepage") {
 		utils.DisableTHP()
-		logger.Info("Disabled transparent hugepage")
 	}
 
 	if canShutdownGracefully(mp, conf) {

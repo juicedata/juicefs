@@ -84,6 +84,7 @@ func DisableTHP() {
 	for {
 		err := unix.Prctl(unix.PR_SET_THP_DISABLE, 1, 0, 0, 0)
 		if err == nil {
+			logger.Info("Disabled transparent hugepage")
 			break
 		}
 
