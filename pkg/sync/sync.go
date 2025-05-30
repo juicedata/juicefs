@@ -1440,6 +1440,7 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 			for key := range prefixs {
 				if !strings.HasSuffix(key, "/") {
 					if err := produceSingleObject(tasks, src, dst, key, config); err == nil {
+						listedPrefix.Increment()
 						continue
 					} else if errors.Is(err, ignoreDir) {
 						key += "/"
