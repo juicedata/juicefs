@@ -202,7 +202,7 @@ func (c *memcache) cleanupExpire() {
 		if deleted > 0 {
 			logger.Debugf("Expired cache blocks: %d blocks (%s), remaining: %d blocks (%s)", deleted, humanize.IBytes(uint64(freed)), len(c.pages), humanize.IBytes(uint64(c.used)))
 		}
-		time.Sleep(interval * time.Duration((cnt+1-deleted)/(cnt+1)))
+		time.Sleep(interval / 1000 * time.Duration((cnt+1-deleted)*1000/(cnt+1)))
 	}
 }
 
