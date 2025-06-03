@@ -813,21 +813,9 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 
 func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
 	var used, inodes int64
-	var err error
-	err = utils.WithTimeout(func() error {
-		used, err = m.en.getCounter(usedSpace)
-		return err
-	}, time.Millisecond*150)
-	if err != nil {
-		used = atomic.LoadInt64(&m.usedSpace)
-	}
-	err = utils.WithTimeout(func() error {
-		inodes, err = m.en.getCounter(totalInodes)
-		return err
-	}, time.Millisecond*150)
-	if err != nil {
-		inodes = atomic.LoadInt64(&m.usedInodes)
-	}
+	used = atomic.LoadInt64(&m.usedSpace)
+	inodes = atomic.LoadInt64(&m.usedInodes)
+
 	used += atomic.LoadInt64(&m.newSpace)
 	inodes += atomic.LoadInt64(&m.newInodes)
 	if used < 0 {
