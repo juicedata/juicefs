@@ -97,17 +97,17 @@ func newTikvClient(addr string) (tkvClient, error) {
 		} else {
 			logger.Infof("Enabling TSO Follower Proxy")
 		}
+	}
 
-		if waitStr := query.Get("max-tso-batch-wait-interval"); waitStr != "" {
-			if waitDur, err := time.ParseDuration(waitStr); err == nil {
-				if err := client.KVStore.GetPDClient().UpdateOption(pd.MaxTSOBatchWaitInterval, waitDur); err != nil {
-					logger.Warnf("Failed to set MaxTSOBatchWaitInterval: %v", err)
-				} else {
-					logger.Infof("Set MaxTSOBatchWaitInterval to %s", waitDur)
-				}
+	if waitStr := query.Get("max-tso-batch-wait-interval"); waitStr != "" {
+		if waitDur, err := time.ParseDuration(waitStr); err == nil {
+			if err := client.KVStore.GetPDClient().UpdateOption(pd.MaxTSOBatchWaitInterval, waitDur); err != nil {
+				logger.Warnf("Failed to set MaxTSOBatchWaitInterval: %v", err)
 			} else {
-				logger.Warnf("Failed to parse max-tso-batch-wait-interval (%s): %v", waitStr, err)
+				logger.Infof("Set MaxTSOBatchWaitInterval to %s", waitDur)
 			}
+		} else {
+			logger.Warnf("Failed to parse max-tso-batch-wait-interval (%s): %v", waitStr, err)
 		}
 	}
 
