@@ -388,7 +388,7 @@ func (cache *cacheStore) cleanupExpire() {
 			_ = cache.removeFile(cache.cachePath(cache.getPathFromKey(k)))
 		}
 		todel = todel[:0]
-		time.Sleep(interval * time.Duration((cnt+1-deleted)/(cnt+1)))
+		time.Sleep(interval / 1000 * time.Duration((cnt+1-deleted)*1000/(cnt+1)))
 	}
 }
 
