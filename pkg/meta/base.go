@@ -47,6 +47,7 @@ const (
 	sliceIdBatch   = 4 << 10
 	nlocks         = 1024
 	maxSymCacheNum = int32(10000)
+	unknownUsage   = -1
 )
 
 var (
@@ -287,10 +288,13 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		compacting:   make(map[uint64]bool),
 		maxDeleting:  make(chan struct{}, 100),
 		symlinks:     newSymlinkCache(maxSymCacheNum),
-		fsStat:       new(fsStat),
-		dirStats:     make(map[Ino]dirStat),
-		dirParents:   make(map[Ino]Ino),
-		dirQuotas:    make(map[Ino]*Quota),
+		fsStat: &fsStat{
+			usedSpace:  unknownUsage,
+			usedInodes: unknownUsage,
+		},
+		dirStats:   make(map[Ino]dirStat),
+		dirParents: make(map[Ino]Ino),
+		dirQuotas:  make(map[Ino]*Quota),
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
@@ -353,7 +357,7 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 
 	go func() {
 		for {
-			if m.sessCtx != nil && m.sessCtx.Canceled()  {
+			if m.sessCtx != nil && m.sessCtx.Canceled() {
 				return
 			}
 			var totalSpace, availSpace, iused, iavail uint64
@@ -812,28 +816,27 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 }
 
 func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
-	var used, inodes int64
+	used, inodes := atomic.LoadInt64(&m.usedSpace), atomic.LoadInt64(&m.usedInodes)
 	var err error
-	if !m.conf.FastStatfs {
+	if !m.conf.FastStatfs || used == unknownUsage || inodes == unknownUsage {
+		var remoteUsed int64 // using an additional variable here to ensure the assignment inside `utils.WithTimeout` does not change the `used` variable again after a timeout.
 		err = utils.WithTimeout(func() error {
-			used, err = m.en.getCounter(usedSpace)
+			remoteUsed, err = m.en.getCounter(usedSpace)
 			return err
 		}, time.Millisecond*150)
-		if err != nil {
-			used = atomic.LoadInt64(&m.usedSpace)
+		if err == nil {
+			used = remoteUsed
 		}
+		var remoteInodes int64
 		err = utils.WithTimeout(func() error {
-			inodes, err = m.en.getCounter(totalInodes)
+			remoteInodes, err = m.en.getCounter(totalInodes)
 			return err
 		}, time.Millisecond*150)
-		if err != nil {
-			inodes = atomic.LoadInt64(&m.usedInodes)
+		if err == nil {
+			inodes = remoteInodes
 		}
-	} else {
-		used = atomic.LoadInt64(&m.usedSpace)
-		inodes = atomic.LoadInt64(&m.usedInodes)
 	}
-	
+
 	used += atomic.LoadInt64(&m.newSpace)
 	inodes += atomic.LoadInt64(&m.newInodes)
 	if used < 0 {
