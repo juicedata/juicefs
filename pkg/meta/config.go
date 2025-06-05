@@ -50,6 +50,7 @@ type Config struct {
 	SkipDirMtime       time.Duration
 	Sid                uint64
 	SortDir            bool
+	FastStatfs         bool
 }
 
 func DefaultConf() *Config {
