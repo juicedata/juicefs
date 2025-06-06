@@ -340,12 +340,13 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 			}
 			entry := &minio.Entry{Name: fi.Name(),
 				Info: &minio.ObjectInfo{
-					Bucket:  bucket,
-					Name:    fi.Name(),
-					ModTime: fi.ModTime(),
-					Size:    fi.Size(),
-					IsDir:   fi.IsDir(),
-					AccTime: fi.ModTime(),
+					Bucket:   bucket,
+					Name:     fi.Name(),
+					ModTime:  fi.ModTime(),
+					Size:     fi.Size(),
+					IsDir:    fi.IsDir(),
+					AccTime:  fi.ModTime(),
+					IsLatest: true,
 				},
 			}
 
@@ -392,11 +393,12 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 					size = 0
 				}
 				info = &minio.ObjectInfo{
-					Bucket:  bucket,
-					ModTime: fi.ModTime(),
-					Size:    size,
-					IsDir:   fi.IsDir(),
-					AccTime: fi.ModTime(),
+					Bucket:   bucket,
+					ModTime:  fi.ModTime(),
+					Size:     size,
+					IsDir:    fi.IsDir(),
+					AccTime:  fi.ModTime(),
+					IsLatest: true,
 				}
 			}
 
@@ -404,11 +406,12 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 			if errors.Is(eno, syscall.ENOTSUP) {
 				now := time.Now()
 				info = &minio.ObjectInfo{
-					Bucket:  bucket,
-					ModTime: now,
-					Size:    0,
-					IsDir:   false,
-					AccTime: now,
+					Bucket:   bucket,
+					ModTime:  now,
+					Size:     0,
+					IsDir:    false,
+					AccTime:  now,
+					IsLatest: true,
 				}
 				eno = 0
 			}
@@ -635,6 +638,7 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		AccTime:     fi.ModTime(),
 		UserTags:    tagStr,
 		UserDefined: minio.CleanMetadata(srcInfo.UserDefined),
+		IsLatest:    true,
 	}, nil
 }
 
@@ -739,6 +743,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		ContentType: contentType,
 		UserTags:    string(tagStr),
 		UserDefined: minio.CleanMetadata(opts.UserDefined),
+		IsLatest:    true,
 	}, nil
 }
 
@@ -890,6 +895,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 		AccTime:     fi.ModTime(),
 		UserTags:    tagStr,
 		UserDefined: minio.CleanMetadata(opts.UserDefined),
+		IsLatest:    true,
 	}, nil
 }
 
@@ -1277,6 +1283,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		AccTime:     fi.ModTime(),
 		UserTags:    string(tagStr),
 		UserDefined: minio.CleanMetadata(opts.UserDefined),
+		IsLatest:    true,
 	}, nil
 }
 
