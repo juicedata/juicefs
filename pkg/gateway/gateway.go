@@ -1474,7 +1474,12 @@ func (n *jfsObjects) LocalStorageInfo(ctx context.Context) (minio.StorageInfo, [
 }
 
 func (n *jfsObjects) ListObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (loi minio.ListObjectVersionsInfo, err error) {
-	return loi, minio.NotImplemented{}
+	objs, err := n.ListObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
+	if err == nil {
+		loi.Objects = objs.Objects
+		loi.Prefixes = objs.Prefixes
+	}
+	return loi, err
 }
 
 func (n *jfsObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object string, info *minio.ObjectInfo) (oi minio.ObjectInfo, e error) {
