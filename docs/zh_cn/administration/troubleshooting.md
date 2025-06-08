@@ -203,6 +203,7 @@ Resource busy -- try 'diskutil unmount'
   * 对 macOS 而言，`juicefs umount --force` 意味着 `umount -f`，文件系统会被强制卸载，已打开的文件会强制关闭。
 
 ## 系统自动 mount 不生效 {#netmount}
+
 管理员一般通过 `--update-fstab` 更新 `/etc/fstab` 以确保系统在重启后自动 mount JuiceFS 文件系统，但某些最小化的 Linux 发行版本，如 Alpine, 可能在其基础镜像中缺少 'netmount' 或类似功能的包。这个包对于网络文件系统是必要的。 如果缺少 'netmount' 包，系统在重启后无法在 '/etc/fstab' 中自动挂载 JuiceFS 文件系统。 为了解决这个问题，需安装 'netmount' 包并启动相关服务，以 Alpine 为例：
 ```bash
 # use --update-fstab to add juicefs mount to /etc/fstab

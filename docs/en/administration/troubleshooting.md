@@ -203,7 +203,8 @@ In such case:
   * For macOS, `juicefs umount --force` is translated to `umount -f`, file system will be forcibly unmounted and opened files will be closed immediately.
 
 ## Fail to mount jfs after system reboot {#netmount}
-Minimized linux distribution, such as Alpine, may lack the 'netmount' package within their base image. The absence of the 'netmount' package can lead to failure in automatically mounting network file system like JuiceFS defined in '/etc/fstab' post-rebooting. To rectify this problem, following is the recommended method to install the 'netmount' package, using Alpine as an example:
+
+Minimized Linux distribution, such as Alpine, may lack the 'netmount' package within their base image. The absence of the 'netmount' package can lead to failure in automatically mounting network file system like JuiceFS defined in '/etc/fstab' post-rebooting. To rectify this problem, following is the recommended method to install the 'netmount' package, using Alpine as an example:
 
 ```bash
 # use --update-fstab to add juicefs mount to /etc/fstab
