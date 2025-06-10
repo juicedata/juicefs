@@ -140,16 +140,18 @@ func watchdog(ctx context.Context, mp string) {
 	var dev uint64
 	go func() {
 		time.Sleep(time.Millisecond * 100) // wait for child process
+		var confStat syscall.Stat_t
+		var confName = ".config"
+		if !vfs.IsSpecialName(confName) {
+			confName = ".jfs" + confName
+		}
+		expectedIno, _ := vfs.GetInternalNodeByName(confName)
 		atomic.StoreInt64(&lastActive, time.Now().Unix())
 		for ctx.Err() == nil {
-			var confName = ".config"
-			if !vfs.IsSpecialName(confName) {
-				confName = ".jfs" + confName
+			if confStat.Ino == 0 {
+				_ = syscall.Stat(filepath.Join(mp, confName), &confStat)
 			}
-			var confStat syscall.Stat_t
-			err := syscall.Stat(filepath.Join(mp, confName), &confStat)
-			ino, _ := vfs.GetInternalNodeByName(confName)
-			if err == nil && confStat.Ino == uint64(ino) {
+			if confStat.Ino != 0 && confStat.Ino == uint64(expectedIno) {
 				if dev == 0 && runtime.GOOS == "linux" {
 					var st syscall.Stat_t
 					if err := syscall.Stat(mp, &st); err == nil && st.Ino == 1 {
