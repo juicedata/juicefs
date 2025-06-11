@@ -1232,8 +1232,10 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 			if eno != meta.ENOATTR {
 				logger.Errorf("get object tags error, path: %s, error: %s", n.upath(bucket, uploadID), eno)
 			}
-		} else if eno = n.fs.SetXattr(mctx, tmp, s3Tags, tagStr, 0); eno != 0 {
-			logger.Errorf("set object tags error, path: %s, tags: %s, error: %s", tmp, string(tagStr), eno)
+		} else if len(tagStr) > 0 {
+			if eno = n.fs.SetXattr(mctx, tmp, s3Tags, tagStr, 0); eno != 0 {
+				logger.Errorf("set object tags error, path: %s, tags: %s, error: %s", tmp, string(tagStr), eno)
+			}
 		}
 	}
 
