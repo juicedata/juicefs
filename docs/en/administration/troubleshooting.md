@@ -202,6 +202,24 @@ In such case:
   * For Linux, `juicefs umount --force` is translated to `umount --lazy`, file system will be detached, but opened files remain, FUSE client will exit when file descriptors are released.
   * For macOS, `juicefs umount --force` is translated to `umount -f`, file system will be forcibly unmounted and opened files will be closed immediately.
 
+## Fail to mount jfs after system reboot {#netmount}
+
+Minimized Linux distribution, such as Alpine, may lack the 'netmount' package within their base image. The absence of the 'netmount' package can lead to failure in automatically mounting network file system like JuiceFS defined in '/etc/fstab' post-rebooting. To rectify this problem, following is the recommended method to install the 'netmount' package, using Alpine as an example:
+
+```bash
+# use --update-fstab to add juicefs mount to /etc/fstab
+
+# install and enable netmount service
+apk add openrc
+
+rc-update add netmount boot
+# * service netmount added to runlevel boot
+
+ rc-service netmount start
+# / # rc-service netmount start
+# * Mounting network filesystems ...
+```
+
 ## Development related issues {#development-related-issues}
 
 Compiling JuiceFS requires GCC 5.4 and above, this error may occur when using lower versions:
