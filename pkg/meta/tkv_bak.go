@@ -536,6 +536,9 @@ func (m *kvMeta) loadDelFiles(ctx Context, msg proto.Message, pairs *[]*pair) {
 func (m *kvMeta) loadSliceRefs(ctx Context, msg proto.Message, pairs *[]*pair) {
 	batch := msg.(*pb.Batch)
 	for _, r := range batch.SliceRefs {
+		if r.Refs == 1 {
+			continue
+		}
 		*pairs = append(*pairs, &pair{m.sliceKey(r.Id, r.Size), packCounter(r.Refs - 1)})
 	}
 }

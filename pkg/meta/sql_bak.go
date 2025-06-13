@@ -363,7 +363,7 @@ func (m *dbMeta) dumpDelFiles(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 func (m *dbMeta) dumpSliceRef(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
 	var rows []sliceRef
 	if err := m.execTxn(ctx, func(s *xorm.Session) error {
-		return s.Where("refs != 1").Find(&rows) // skip default refs
+		return s.Find(&rows)
 	}); err != nil {
 		return err
 	}
