@@ -65,6 +65,7 @@ type Config struct {
 	ObjMeta     bool
 	HeadDir     bool
 	HideDir     bool
+	ReadOnly    bool
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -1354,6 +1355,7 @@ type jfsFLock struct {
 	owner     uint64
 	meta      meta.Meta
 	localLock sync.RWMutex
+	readonly  bool
 }
 
 func (j *jfsFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
@@ -1361,11 +1363,7 @@ func (j *jfsFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (
 }
 
 func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeout *minio.DynamicTimeout) (context.Context, error) {
-	if os.Getenv("JUICEFS_META_READ_ONLY") != "" {
-		return ctx, nil
-	}
-	if j.inode == 0 {
-		logger.Warnf("failed to get lock")
+	if j.readonly || j.inode == 0 {
 		return ctx, nil
 	}
 	start := time.Now()
@@ -1418,7 +1416,7 @@ func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeou
 }
 
 func (j *jfsFLock) Unlock() {
-	if j.inode == 0 || os.Getenv("JUICEFS_META_READ_ONLY") != "" {
+	if j.inode == 0 || j.readonly {
 		return
 	}
 	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
@@ -1432,7 +1430,7 @@ func (j *jfsFLock) GetRLock(ctx context.Context, timeout *minio.DynamicTimeout) 
 }
 
 func (j *jfsFLock) RUnlock() {
-	if j.inode == 0 || os.Getenv("JUICEFS_META_READ_ONLY") != "" {
+	if j.inode == 0 || j.readonly {
 		return
 	}
 	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
@@ -1442,8 +1440,8 @@ func (j *jfsFLock) RUnlock() {
 }
 
 func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker {
-	if os.Getenv("JUICEFS_META_READ_ONLY") != "" {
-		return &jfsFLock{}
+	if n.gConf.ReadOnly {
+		return &jfsFLock{readonly: true}
 	}
 	if len(objects) != 1 {
 		panic(fmt.Errorf("jfsObjects.NewNSLock: the length of the objects parameter must be 1, current %s", objects))

@@ -157,6 +157,7 @@ func gateway(c *cli.Context) error {
 		logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
 	}
 
+	readonly := c.Bool("read-only")
 	jfsGateway, err = jfsgateway.NewJFSGateway(
 		jfs,
 		conf,
@@ -168,12 +169,13 @@ func gateway(c *cli.Context) error {
 			ObjMeta:     c.Bool("object-meta"),
 			HeadDir:     c.Bool("head-dir"),
 			HideDir:     c.Bool("hide-dir-object"),
+			ReadOnly:    readonly,
 		},
 	)
 	if err != nil {
 		return err
 	}
-	if c.IsSet("read-only") {
+	if readonly {
 		os.Setenv("JUICEFS_META_READ_ONLY", "1")
 	} else {
 		if _, err := jfsGateway.GetBucketInfo(context.Background(), minio.MinioMetaBucket); errors.As(err, &minio.BucketNotFound{}) {
