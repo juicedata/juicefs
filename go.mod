@@ -71,6 +71,7 @@ require (
 	github.com/studio-b12/gowebdav v0.10.0
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.63
 	github.com/tikv/client-go/v2 v2.0.7
+	github.com/tikv/pd/client v0.0.0-20230329114254-1948c247c2b1
 	github.com/twmb/murmur3 v1.1.8
 	github.com/urfave/cli/v2 v2.19.3
 	github.com/vbauerster/mpb/v7 v7.0.3
@@ -253,7 +254,7 @@ require (
 	github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rasky/go-xdr v0.0.0-20170124162913-1a41d1a06c93 // indirect
-	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/rjeczalik/notify v0.9.3 // indirect
 	github.com/rs/cors v1.7.0 // indirect
@@ -270,7 +271,6 @@ require (
 	github.com/tidwall/match v1.0.3 // indirect
 	github.com/tidwall/pretty v1.0.2 // indirect
 	github.com/tidwall/sjson v1.0.4 // indirect
-	github.com/tikv/pd/client v0.0.0-20230329114254-1948c247c2b1 // indirect
 	github.com/tinylib/msgp v1.1.3 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
