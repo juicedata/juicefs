@@ -820,6 +820,9 @@ func (m *redisMeta) loadDelFiles(ctx Context, msg proto.Message) error {
 func (m *redisMeta) loadSliceRefs(ctx Context, msg proto.Message) error {
 	slices := make(map[string]interface{})
 	for _, p := range msg.(*pb.Batch).SliceRefs {
+		if p.Refs == 0 {
+			continue
+		}
 		slices[m.sliceKey(p.Id, p.Size)] = strconv.Itoa(int(p.Refs - 1))
 	}
 	if len(slices) == 0 {
