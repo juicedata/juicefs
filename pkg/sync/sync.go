@@ -511,6 +511,13 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64, calChks
 		if err == nil {
 			err = dst.Put(key, r)
 		}
+		if err != nil && key == "" {
+			ps := strings.SplitN(dst.String(), "/", 4)
+			if !object.IsFileSystem(dst) && len(ps) == 4 && ps[3] == "" {
+				logger.Warnf("empty key is not support by %s, ignore it", dst)
+				err = nil
+			}
+		}
 		if err != nil {
 			if _, e := src.Head(key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
