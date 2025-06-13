@@ -98,6 +98,9 @@ func str2Tier(tier string) *blob2.AccessTier {
 }
 
 func (b *wasb) Put(key string, data io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	options := azblob.UploadStreamOptions{}
 	if b.sc != "" {
 		options.AccessTier = str2Tier(b.sc)

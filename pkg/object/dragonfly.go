@@ -299,6 +299,9 @@ func (d *dragonfly) Get(key string, off, limit int64, getters ...AttrGetter) (io
 
 // Put creates or replaces the object.
 func (d *dragonfly) Put(key string, data io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 

@@ -95,6 +95,9 @@ func (c *b2client) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 }
 
 func (c *b2client) Put(key string, data io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	_, err := c.bucket.UploadFile(key, nil, data)
 	return err
 }

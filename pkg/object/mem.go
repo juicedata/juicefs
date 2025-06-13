@@ -96,6 +96,9 @@ func (m *memStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 }
 
 func (m *memStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	m.Lock()
 	defer m.Unlock()
 	// Minimum length is 1.

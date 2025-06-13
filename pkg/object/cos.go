@@ -126,6 +126,9 @@ func (c *COS) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadC
 }
 
 func (c *COS) Put(key string, in io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	var options cos.ObjectPutOptions
 	if ins, ok := in.(io.ReadSeeker); ok {
 		header := http.Header(map[string][]string{

@@ -87,6 +87,9 @@ func (t *tosClient) Get(key string, off, limit int64, getters ...AttrGetter) (io
 }
 
 func (t *tosClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	resp, err := t.client.PutObjectV2(context.Background(), &tos.PutObjectV2Input{
 		PutObjectBasicInput: tos.PutObjectBasicInput{
 			Bucket:       t.bucket,

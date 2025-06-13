@@ -66,6 +66,9 @@ func (r *redisStore) Get(key string, off, limit int64, getters ...AttrGetter) (i
 }
 
 func (r *redisStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	data, err := io.ReadAll(in)
 	if err != nil {
 		return err

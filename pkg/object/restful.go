@@ -203,6 +203,9 @@ func (s *RestfulStorage) Get(key string, off, limit int64, getters ...AttrGetter
 }
 
 func (u *RestfulStorage) Put(key string, body io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	resp, err := u.request("PUT", key, body, nil)
 	if err != nil {
 		return err

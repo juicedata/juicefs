@@ -131,6 +131,9 @@ func (s *obsClient) Get(key string, off, limit int64, getters ...AttrGetter) (io
 }
 
 func (s *obsClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	var body io.ReadSeeker
 	var vlen int64
 	var sum []byte

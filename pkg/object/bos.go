@@ -124,6 +124,9 @@ func (q *bosclient) Get(key string, off, limit int64, getters ...AttrGetter) (re
 }
 
 func (q *bosclient) Put(key string, in io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	b, vlen, err := findLen(in)
 	if err != nil {
 		return err

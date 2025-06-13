@@ -67,6 +67,9 @@ func (c *etcdClient) Get(key string, off, limit int64, getters ...AttrGetter) (i
 }
 
 func (c *etcdClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	d, err := io.ReadAll(in)
 	if err != nil {
 		return err

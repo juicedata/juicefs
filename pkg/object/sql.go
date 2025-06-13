@@ -79,6 +79,9 @@ func (s *sqlStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 }
 
 func (s *sqlStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	d, err := io.ReadAll(in)
 	if err != nil {
 		return err

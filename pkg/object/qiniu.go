@@ -114,6 +114,9 @@ func (q *qiniu) Get(key string, off, limit int64, getters ...AttrGetter) (io.Rea
 }
 
 func (q *qiniu) Put(key string, in io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	body, vlen, err := findLen(in)
 	if err != nil {
 		return err

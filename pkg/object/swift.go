@@ -65,6 +65,9 @@ func (s *swiftOSS) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 }
 
 func (s *swiftOSS) Put(key string, in io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	mimeType := utils.GuessMimeType(key)
 	_, err := s.conn.ObjectPut(context.Background(), s.container, key, in, true, "", mimeType, nil)
 	return err

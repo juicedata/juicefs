@@ -126,6 +126,9 @@ func (g *gs) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCl
 }
 
 func (g *gs) Put(key string, data io.Reader, getters ...AttrGetter) error {
+	if key == "" {
+		return nil
+	}
 	writer := g.getClient().Bucket(g.bucket).Object(key).NewWriter(ctx)
 	writer.StorageClass = g.sc
 
