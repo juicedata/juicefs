@@ -1838,6 +1838,8 @@ func (m *kvMeta) fillAttr(entries []*Entry) (err error) {
 	for j, re := range rs {
 		if re != nil {
 			m.parseAttr(re, entries[j].Attr)
+			// If `readdirplus` returns complete attributes, kernel may not invoke `GetAttr`. Therefore, we must also validate chunk cache here to prevent stale cache, which may lead to data corruption.
+			m.of.Update(entries[j].Inode, entries[j].Attr)
 		}
 	}
 	return err

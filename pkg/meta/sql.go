@@ -26,7 +26,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/dustin/go-humanize"
 	"io"
 	"net/url"
 	"runtime"
@@ -39,6 +38,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"xorm.io/xorm"
 	"xorm.io/xorm/log"
 	"xorm.io/xorm/names"
@@ -2515,6 +2515,7 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 			}
 			if plus != 0 {
 				m.parseAttr(&n.node, entry.Attr)
+				m.of.Update(entry.Inode, entry.Attr)
 			} else {
 				entry.Attr.Typ = n.Type
 			}
@@ -4933,6 +4934,7 @@ func (m *dbMeta) getDirFetcher() dirFetcher {
 				}
 				if plus {
 					m.parseAttr(&n.node, entry.Attr)
+					m.of.Update(n.Inode, entry.Attr)
 				} else {
 					entry.Attr.Typ = n.Type
 				}

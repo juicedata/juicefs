@@ -2118,6 +2118,7 @@ func (m *redisMeta) fillAttr(ctx Context, es []*Entry) error {
 		if re != nil {
 			if a, ok := re.(string); ok {
 				m.parseAttr([]byte(a), es[j].Attr)
+				m.of.Update(es[j].Inode, es[j].Attr)
 			}
 		}
 	}
