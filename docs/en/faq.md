@@ -51,6 +51,36 @@ The first reason is that you may have enabled the trash feature. In order to ens
 
 The second reason is that JuiceFS deletes the data in the object storage asynchronously, so the space change of the object storage will be slower. If you need to immediately clean up the data in the object store that needs to be deleted, you can try running the [`juicefs gc`](reference/command_reference.mdx#gc) command.
 
+### How Does JuiceFS Asynchronous Deletion Work?
+
+* ​**When trash is disabled:**
+  - The system checks whether the file is being opened by other processes:
+    * If the file is in use, it is marked as ​**"deferred deletion (`sustained`)"** and will be processed after the program closes the file
+    * If the file is not in use, it is marked as ​**pending deletion (`delfile`)** and attempts to place it into the ​**deletion queue (`maxDeleting`)**
+  
+* ​**When trash is enabled:**
+  - The system creates subdirectories in the trash based on ​**current time (accurate to the hour)** (e.g., `2024-01-15-14`)
+  - Files pending deletion are moved to the corresponding time-stamped directory:
+    * ​**All chunks and slices of data remain intact**
+    * Only the ​**parent directory pointer** in metadata changes
+    * Filenames are ​**re-encoded** to prevent conflicts
+  - A background task cleans expired files based on retention period:
+    * Starts cleaning from the ​**oldest directory**
+    * Method: Marked as ​**pending deletion (`delfile`)**, placed into the ​**deletion queue (`maxDeleting`)**
+  
+* ​**Deletion queue processing (asynchronous cleanup):**
+  1. ​**Find all chunks corresponding to the file and delete them**
+  2. Deleting chunks will ​**decrement the reference count of their slices**
+  3. When a slice's reference count drops to zero, it becomes ​**`Pending Deleted Slices`**
+  4. The background task cleans these data slices from object storage
+
+![JuiceFS-delete-file](./images/juicefs-delete-file-English.svg)
+
+* The deletion queue has a capacity limit. If too many files are deleted simultaneously, deletion requests will return immediately when the queue is full. Then a background cleanup task that runs hourly continues the cleanup. It finds all files marked as ​**pending deletion (`delfile`)** and cleans them using the same method as files in the deletion queue.
+* If NoBGJob is configured, the hourly scheduled background cleanup task and trash cleanup task are disabled. After deleting files, manual cleanup is required in the trash.
+* In a special scenario, when you manually delete files directly from the trash, it ensures synchronous insertion into the deletion queue, enabling relatively fast reclamation of object storage space. However, subsequent chunk cleanup remains asynchronous.
+* Regarding slice reference count: Deleting chunks and compaction (`compact`) will decrease the reference count of related slices, while `clone` and `copyFileRange` will increase the reference count of related slices.
+
 ### Why is file system data size different from object storage usage? {#size-inconsistency}
 
 * ["Random write in JuiceFS"](#random-write) produces data fragments, causing higher storage usage for object storage, especially after a large number of overwrites in a short period of time, many fragments will be generated. These fragments continue to occupy space in object storage until they are compacted and released. You shouldn't worry about this because JuiceFS checks for file compaction with every read/write, and cleans up in the client background job. Alternatively, you can manually trigger merges and garbage collection with [`juicefs gc --compact --delete`](./reference/command_reference.mdx#gc).
