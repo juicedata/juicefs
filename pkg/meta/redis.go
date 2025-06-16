@@ -2007,6 +2007,7 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 				if re != nil {
 					if a, ok := re.(string); ok {
 						m.parseAttr([]byte(a), es[j].Attr)
+						m.of.Update(es[j].Inode, es[j].Attr)
 					}
 				}
 			}

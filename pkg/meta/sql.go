@@ -2111,6 +2111,7 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 			}
 			if plus != 0 {
 				m.parseAttr(&n.node, entry.Attr)
+				m.of.Update(entry.Inode, entry.Attr)
 			} else {
 				entry.Attr.Typ = n.Type
 			}
