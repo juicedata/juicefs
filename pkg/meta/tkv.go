@@ -1815,6 +1815,8 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 			for j, re := range rs {
 				if re != nil {
 					m.parseAttr(re, es[j].Attr)
+					// If `readdirplus` returns complete attributes, kernel may not invoke `GetAttr`. Therefore, we must also validate chunk cache here to prevent stale cache, which may lead to data corruption.
+					m.of.Update(es[j].Inode, es[j].Attr)
 				}
 			}
 			return nil
