@@ -370,6 +370,26 @@ func (m *dbMeta) initStatement() {
 			 VALUES (?, ?, ?)
 			 ON DUPLICATE KEY UPDATE
 			 slices=concat(slices, ?)`, m.tablePrefix)
+	m.statement[`
+			 INSERT INTO chunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON CONFLICT (chunkid)
+			 DO UPDATE SET size=?, refs=?`] =
+		fmt.Sprintf(`
+			 INSERT INTO %schunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON CONFLICT (chunkid)
+			 DO UPDATE SET size=?, refs=?`, m.tablePrefix)
+	m.statement[`
+			 INSERT INTO chunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 size=?, refs=?`] =
+		fmt.Sprintf(`
+			 INSERT INTO %schunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 size=?, refs=?`, m.tablePrefix)
 	m.statement["edge.inode=node.inode"] = fmt.Sprintf("%sedge.inode=%snode.inode", m.tablePrefix, m.tablePrefix)
 	m.statement["edge.id"] = fmt.Sprintf("%sedge.id", m.tablePrefix)
 	m.statement["edge.name"] = fmt.Sprintf("%sedge.name", m.tablePrefix)

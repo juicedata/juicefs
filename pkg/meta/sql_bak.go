@@ -538,16 +538,28 @@ func (m *dbMeta) loadNodes(ctx Context, msg proto.Message) error {
 
 func (m *dbMeta) loadChunks(ctx Context, msg proto.Message) error {
 	chunks := msg.(*pb.Batch).Chunks
-	rows := make([]interface{}, 0, len(chunks))
+	chkRows := make([]interface{}, 0, len(chunks))
+	srRows := make([]interface{}, 0, len(chunks))
 	cs := make([]chunk, len(chunks))
 	for i, c := range chunks {
 		pc := &cs[i]
 		pc.Inode = Ino(c.Inode)
 		pc.Indx = c.Index
 		pc.Slices = c.Slices
-		rows = append(rows, pc)
+		chkRows = append(chkRows, pc)
+
+		ss := readSliceBuf(c.Slices)
+		for _, s := range ss {
+			srRows = append(srRows, &sliceRef{Id: s.id, Size: s.size, Refs: 1})
+		}
 	}
-	return m.insertRows(rows)
+	if err := m.insertRows(chkRows); err != nil {
+		return err
+	}
+	if err := m.insertRows(srRows); err != nil && !isDuplicateEntryErr(err) {
+		return err
+	}
+	return nil
 }
 
 func (m *dbMeta) loadEdges(ctx Context, msg proto.Message) error {
@@ -595,12 +607,26 @@ func (m *dbMeta) loadDelFiles(ctx Context, msg proto.Message) error {
 }
 
 func (m *dbMeta) loadSliceRefs(ctx Context, msg proto.Message) error {
+	batch := m.getTxnBatchNum()
 	srs := msg.(*pb.Batch).SliceRefs
-	rows := make([]interface{}, 0, len(srs))
-	for _, sr := range srs {
-		rows = append(rows, &sliceRef{Id: sr.Id, Size: sr.Size, Refs: int(sr.Refs)})
+	for len(srs) > 0 {
+		num := min(batch, len(srs))
+		err := m.txn(func(s *xorm.Session) error {
+			var err error
+			for i := 0; i < num; i++ {
+				if err = m.upsertSliceRef(s, srs[i].Id, srs[i].Size, int(srs[i].Refs)); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			logger.Errorf("Write %d beans: %s", num, err)
+			return err
+		}
+		srs = srs[num:]
 	}
-	return m.insertRows(rows)
+	return nil
 }
 
 func (m *dbMeta) loadAcl(ctx Context, msg proto.Message) error {
@@ -652,6 +678,26 @@ func (m *dbMeta) loadDirStats(ctx Context, msg proto.Message) error {
 		})
 	}
 	return m.insertRows(rows)
+}
+
+func (m *dbMeta) upsertSliceRef(s *xorm.Session, id uint64, size uint32, refs int) error {
+	var err error
+	driver := m.Name()
+	if driver == "sqlite3" || driver == "postgres" {
+		state := m.sqlConv(`
+			 INSERT INTO chunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON CONFLICT (chunkid)
+			 DO UPDATE SET size=?, refs=?`)
+		_, err = s.Exec(state, id, size, refs, size, refs)
+	} else {
+		_, err = s.Exec(m.sqlConv(`
+			 INSERT INTO chunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 size=?, refs=?`), id, size, refs, size, refs)
+	}
+	return err
 }
 
 func (m *dbMeta) insertRows(beans []interface{}) error {
