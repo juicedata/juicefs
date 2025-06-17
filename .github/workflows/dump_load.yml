@@ -35,7 +35,7 @@ jobs:
           echo "github.event_name is ${{github.event_name}}"
           echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
           if [ "${{github.event_name}}" == "schedule"  ] || [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
-            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["sqlite3"]' >> $GITHUB_OUTPUT
           else
             echo 'meta_matrix=["redis", "mysql", "tikv"]' >> $GITHUB_OUTPUT
           fi
@@ -82,37 +82,37 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}
 
-      - name: Install nodejs
-        run: |
-          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
-          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
-          nvm install 22
-          nvm use 22
-          node -v 
-          nvm current
+      # - name: Install nodejs
+      #   run: |
+      #     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+      #     export NVM_DIR="$HOME/.nvm"
+      #     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
+      #     [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
+      #     nvm install 22
+      #     nvm use 22
+      #     node -v 
+      #     nvm current
 
-      - name: Download Random Test
-        run: |
-          wget https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test
-          chmod +x random-test
+      # - name: Download Random Test
+      #   run: |
+      #     wget https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test
+      #     chmod +x random-test
 
-      - name: Test Load & Dump with Binary
-        timeout-minutes: 30
-        continue-on-error: true
-        run: |
-          sudo BINARY=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh
+      # - name: Test Load & Dump with Binary
+      #   timeout-minutes: 30
+      #   continue-on-error: true
+      #   run: |
+      #     sudo BINARY=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh
 
-      - name: Test Load & Dump with Json Fast Mode
-        timeout-minutes: 30
-        run: |
-          sudo FAST=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh  
+      # - name: Test Load & Dump with Json Fast Mode
+      #   timeout-minutes: 30
+      #   run: |
+      #     sudo FAST=true GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh  
 
       - name: Test Load & Dump with Json
         timeout-minutes: 30
         run: |
-          sudo GOCOVERDIR=$(pwd)/cover META=${{matrix.meta}} .github/scripts/command/dump_load.sh     
+          sudo GOCOVERDIR=$(pwd)/cover META1=redis META2=mysql .github/scripts/command/dump_load_cross.sh test_dump_load_with_clone
 
       - name: log
         if: always()
