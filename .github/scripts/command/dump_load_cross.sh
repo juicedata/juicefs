@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 source .github/scripts/common/common.sh
 
 [[ -z "$META1" ]] && META1=sqlite3
@@ -57,9 +57,11 @@ test_dump_load_with_clone()
     dd if=/dev/urandom of=/jfs/test/file1 bs=1M count=1024  
     ./juicefs clone /jfs/test/file1 /jfs/test/file2
     ./juicefs dump $META_URL1 dump.json $(get_dump_option)
+    cat dump.json
     create_database $META_URL2
     ./juicefs load $META_URL2 dump.json $(get_load_option)
     ./juicefs dump $META_URL2 dump2.json $(get_dump_option)
+    cat dump2.json
     if [[ "$BINARY" == "false" ]]; then
         compare_dump_json
     fi
