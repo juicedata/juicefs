@@ -147,10 +147,10 @@ get_load_option(){
 }
 
 prepare_test(){
-    umount_jfs /jfs $META_URL
-    umount_jfs /jfs2 sqlite3://test2.db
-    python3 .github/scripts/flush_meta.py $META_URL
-    rm test2.db -rf 
+    umount_jfs /jfs $META_URL1
+    umount_jfs /jfs2 $META_URL2
+    python3 .github/scripts/flush_meta.py $META_URL1
+    python3 .github/scripts/flush_meta.py $META_URL2
     rm -rf /var/jfs/myjfs || true
     mc rm --force --recursive myminio/test || true
 }
