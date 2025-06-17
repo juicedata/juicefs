@@ -53,6 +53,7 @@ test_dump_load_with_clone()
     prepare_test
     ./juicefs format $META_URL1 myjfs --trash-days 0 --enable-acl
     ./juicefs mount -d $META_URL1 /jfs --enable-xattr
+    mkdir -p /jfs/test
     dd if=/dev/urandom of=/jfs/test/file1 bs=1M count=1024  
     ./juicefs clone /jfs/test/file1 /jfs/test/file2
     ./juicefs dump $META_URL1 dump.json $(get_dump_option)
