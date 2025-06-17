@@ -106,6 +106,7 @@ compare_dump_json(){
     sed -i '/nextSession/d' dump*.json.bak
     sed -i 's/"inode":[0-9]\+/"inode":0/g' dump*.json.bak
     diff -ur dump.json.bak dump2.json.bak
+    echo "compare_dump_json: dump json files are the same"
 }
 
 compare_stat_acl_xattr(){
