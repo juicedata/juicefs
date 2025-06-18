@@ -53,9 +53,7 @@ test_dump_load_with_clone()
     prepare_test
     ./juicefs format $META_URL1 myjfs --trash-days 0 --enable-acl
     ./juicefs mount -d $META_URL1 /jfs --enable-xattr
-    mkdir -p /jfs/test
-    dd if=/dev/urandom of=/jfs/test/file1 bs=1M count=1024  
-    ./juicefs clone /jfs/test/file1 /jfs/test/file2
+    dd if=/dev/urandom of=/jfs/file1 bs=1M count=1024  
     ./juicefs dump $META_URL1 dump.json $(get_dump_option)
     create_database $META_URL2
     ./juicefs load $META_URL2 dump.json $(get_load_option)
@@ -64,7 +62,9 @@ test_dump_load_with_clone()
         compare_dump_json
     fi
     ./juicefs mount -d $META_URL2 /jfs2
-    diff -ur /jfs/test /jfs2/test --no-dereference
+    ./juicefs clone /jfs2/file1 /jfs2/file2
+    rm -f /jfs/file1
+    diff -ur /jfs/file1 /jfs2/file2
     compare_stat_acl_xattr /jfs/test /jfs2/test
     umount_jfs /jfs2 $META_URL2
     ./juicefs status $META_URL2 && UUID=$(./juicefs status $META_URL2 | grep UUID | cut -d '"' -f 4)
