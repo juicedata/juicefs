@@ -396,7 +396,10 @@ func (m *dbMeta) initStatement() {
 	m.statement["edge.type"] = fmt.Sprintf("%sedge.type", m.tablePrefix)
 	m.statement["edge.*"] = fmt.Sprintf("%sedge.*", m.tablePrefix)
 	m.statement["node.*"] = fmt.Sprintf("%snode.*", m.tablePrefix)
-
+	m.statement[`INSERT INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?) ON CONFLICT DO NOTHING`] =
+		fmt.Sprintf(`INSERT INTO %schunk_ref (chunkid, size, refs) VALUES (?,?,?) ON CONFLICT DO NOTHING`, m.tablePrefix)
+	m.statement[`INSERT IGNORE INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?)`] = 
+		fmt.Sprintf(`INSERT IGNORE INTO %schunk_ref (chunkid, size, refs) VALUES (?,?,?)`, m.tablePrefix)
 }
 
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {

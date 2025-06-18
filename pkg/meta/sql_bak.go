@@ -536,10 +536,58 @@ func (m *dbMeta) loadNodes(ctx Context, msg proto.Message) error {
 	return m.insertRows(rows)
 }
 
+func genMultiSQL(stmt string, num int) string {
+	if num <= 0 {
+		return ""
+	}
+	if num == 1 {
+		return stmt
+	}
+	pattern := "(?,?,?)"
+	idx := strings.Index(stmt, pattern)
+	if idx == -1 {
+		return stmt
+	}
+	values := strings.Repeat(pattern+",", num)
+	values = values[:len(values)-1]
+	return stmt[:idx] + values + stmt[idx+len(pattern):]
+}
+
+func insertSliceRefs(m *dbMeta, ss []*sliceRef) error {
+	driver := m.Name()
+	var stmt string
+	if driver == "sqlite3" || driver == "postgres" {
+		stmt = m.sqlConv(`INSERT INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?) ON CONFLICT DO NOTHING`)
+	} else {
+		stmt = m.sqlConv(`INSERT IGNORE INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?)`)
+	}
+
+	batch := m.getTxnBatchNum()
+	for len(ss) > 0 {
+		bs := min(batch, len(ss))
+		err := m.txn(func(s *xorm.Session) error {
+			nStmt := genMultiSQL(stmt, bs)
+			rows := make([]interface{}, 0, 1+bs*3)
+			rows = append(rows, nStmt)
+			for i := 0; i < bs; i++ {
+				rows = append(rows, ss[i].Id, ss[i].Size, ss[i].Refs)
+			}
+			_, err := s.Exec(rows...)
+			return err
+		})
+		if err != nil {
+			logger.Errorf("write %d slice ref: %s", bs, err)
+			return err
+		}
+		ss = ss[bs:]
+	}
+	return nil
+}
+
 func (m *dbMeta) loadChunks(ctx Context, msg proto.Message) error {
 	chunks := msg.(*pb.Batch).Chunks
 	chkRows := make([]interface{}, 0, len(chunks))
-	srRows := make([]interface{}, 0, len(chunks))
+	srRows := make([]*sliceRef, 0, len(chunks))
 	cs := make([]chunk, len(chunks))
 	for i, c := range chunks {
 		pc := &cs[i]
@@ -556,10 +604,7 @@ func (m *dbMeta) loadChunks(ctx Context, msg proto.Message) error {
 	if err := m.insertRows(chkRows); err != nil {
 		return err
 	}
-	if err := m.insertRows(srRows); err != nil && !isDuplicateEntryErr(err) {
-		return err
-	}
-	return nil
+	return insertSliceRefs(m, srRows)
 }
 
 func (m *dbMeta) loadEdges(ctx Context, msg proto.Message) error {
@@ -604,6 +649,26 @@ func (m *dbMeta) loadDelFiles(ctx Context, msg proto.Message) error {
 		rows = append(rows, &delfile{Inode: Ino(f.Inode), Length: f.Length, Expire: f.Expire})
 	}
 	return m.insertRows(rows)
+}
+
+func (m *dbMeta) upsertSliceRef(s *xorm.Session, id uint64, size uint32, refs int) error {
+	var err error
+	driver := m.Name()
+	if driver == "sqlite3" || driver == "postgres" {
+		state := m.sqlConv(`
+			 INSERT INTO chunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON CONFLICT (chunkid)
+			 DO UPDATE SET size=?, refs=?`)
+		_, err = s.Exec(state, id, size, refs, size, refs)
+	} else {
+		_, err = s.Exec(m.sqlConv(`
+			 INSERT INTO chunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 size=?, refs=?`), id, size, refs, size, refs)
+	}
+	return err
 }
 
 func (m *dbMeta) loadSliceRefs(ctx Context, msg proto.Message) error {
@@ -678,26 +743,6 @@ func (m *dbMeta) loadDirStats(ctx Context, msg proto.Message) error {
 		})
 	}
 	return m.insertRows(rows)
-}
-
-func (m *dbMeta) upsertSliceRef(s *xorm.Session, id uint64, size uint32, refs int) error {
-	var err error
-	driver := m.Name()
-	if driver == "sqlite3" || driver == "postgres" {
-		state := m.sqlConv(`
-			 INSERT INTO chunk_ref (chunkid, size, refs)
-			 VALUES (?, ?, ?)
-			 ON CONFLICT (chunkid)
-			 DO UPDATE SET size=?, refs=?`)
-		_, err = s.Exec(state, id, size, refs, size, refs)
-	} else {
-		_, err = s.Exec(m.sqlConv(`
-			 INSERT INTO chunk_ref (chunkid, size, refs)
-			 VALUES (?, ?, ?)
-			 ON DUPLICATE KEY UPDATE
-			 size=?, refs=?`), id, size, refs, size, refs)
-	}
-	return err
 }
 
 func (m *dbMeta) insertRows(beans []interface{}) error {
