@@ -63,6 +63,7 @@ test_dump_load_with_clone()
     ./juicefs mount -d $META_URL2 /jfs2
     ./juicefs clone /jfs2/file1 /jfs2/file2
     ./juicefs rmr --skip-trash /jfs2/file1
+    exit 1
     diff -ur /jfs/file1 /jfs2/file2
     umount_jfs /jfs2 $META_URL2
     ./juicefs status $META_URL2 && UUID=$(./juicefs status $META_URL2 | grep UUID | cut -d '"' -f 4)
