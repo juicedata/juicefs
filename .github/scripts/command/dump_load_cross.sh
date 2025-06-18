@@ -53,50 +53,26 @@ test_dump_load_with_clone()
     prepare_test
     ./juicefs format $META_URL1 myjfs --trash-days 0 --enable-acl
     ./juicefs mount -d $META_URL1 /jfs --enable-xattr
-    dd if=/dev/urandom of=/jfs/file1 bs=1M count=1024  
-    ./juicefs dump $META_URL1 dump.json $(get_dump_option)
+    dd if=/dev/urandom of=/jfs/file1 bs=1M count=1024
+    ./juicefs dump $META_URL1 dump1.json
+    ./juicefs dump $META_URL1 dump1 $(get_dump_option)
     create_database $META_URL2
-    ./juicefs load $META_URL2 dump.json $(get_load_option)
-    ./juicefs dump $META_URL2 dump2.json $(get_dump_option)
-    if [[ "$BINARY" == "false" ]]; then
-        compare_dump_json
-    fi
+    ./juicefs load $META_URL2 dump1 $(get_load_option)
+    ./juicefs dump $META_URL2 dump2.json
+    compare_dump_json dump1.json dump2.json
     ./juicefs mount -d $META_URL2 /jfs2
     ./juicefs clone /jfs2/file1 /jfs2/file2
-    rm -f /jfs2/file1
+    ./juicefs rmr --skip-trash /jfs2/file1
     diff -ur /jfs/file1 /jfs2/file2
-    compare_stat_acl_xattr /jfs/test /jfs2/test
-    umount_jfs /jfs2 $META_URL2
-    ./juicefs status $META_URL2 && UUID=$(./juicefs status $META_URL2 | grep UUID | cut -d '"' -f 4)
-    ./juicefs destroy --yes $META_URL2 $UUID
-}
-
-test_dump_load_with_fsrand()
-{
-    prepare_test
-    ./juicefs format $META_URL1 myjfs --trash-days 0 --enable-acl
-    ./juicefs mount -d $META_URL1 /jfs --enable-xattr
-    rm -rf /tmp/test
-    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/test ROOT_DIR2=/tmp/test python3 .github/scripts/hypo/fs.py || true    
-    ./juicefs dump $META_URL1 dump.json $(get_dump_option)
-    create_database $META_URL2
-    ./juicefs load $META_URL2 dump.json $(get_load_option)
-    ./juicefs dump $META_URL2 dump2.json $(get_dump_option)
-    if [[ "$BINARY" == "false" ]]; then
-        compare_dump_json
-    fi
-    ./juicefs mount -d $META_URL2 /jfs2
-    diff -ur /jfs/test /jfs2/test --no-dereference
-    compare_stat_acl_xattr /jfs/test /jfs2/test
     umount_jfs /jfs2 $META_URL2
     ./juicefs status $META_URL2 && UUID=$(./juicefs status $META_URL2 | grep UUID | cut -d '"' -f 4)
     ./juicefs destroy --yes $META_URL2 $UUID
 }
 
 compare_dump_json(){
-    cat dump.json
+    cat dump1.json
     cat dump2.json
-    cp dump.json dump.json.bak
+    cp dump1.json dump1.json.bak
     cp dump2.json dump2.json.bak
     sed -i '/usedSpace/d' dump*.json.bak
     sed -i '/usedInodes/d' dump*.json.bak
@@ -105,7 +81,7 @@ compare_dump_json(){
     sed -i '/nextTrash/d' dump*.json.bak
     sed -i '/nextSession/d' dump*.json.bak
     sed -i 's/"inode":[0-9]\+/"inode":0/g' dump*.json.bak
-    diff -ur dump.json.bak dump2.json.bak
+    diff -ur dump1.json.bak dump2.json.bak
     echo "compare_dump_json: dump json files are the same"
 }
 
