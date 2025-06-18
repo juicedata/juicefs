@@ -63,7 +63,7 @@ test_dump_load_with_clone()
     fi
     ./juicefs mount -d $META_URL2 /jfs2
     ./juicefs clone /jfs2/file1 /jfs2/file2
-    rm -f /jfs/file1
+    rm -f /jfs2/file1
     diff -ur /jfs/file1 /jfs2/file2
     compare_stat_acl_xattr /jfs/test /jfs2/test
     umount_jfs /jfs2 $META_URL2
