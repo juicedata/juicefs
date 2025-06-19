@@ -80,7 +80,6 @@ jobs:
 
       - name: Test Load & Dump with Binary
         timeout-minutes: 30
-        continue-on-error: true
         run: |
           sudo GOCOVERDIR=$(pwd)/cover META1=${{matrix.meta1}} META2=${{matrix.meta2}} BINARY=true .github/scripts/command/dump_load_cross_meta.sh
 
