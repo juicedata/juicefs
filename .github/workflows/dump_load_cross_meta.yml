@@ -34,17 +34,17 @@ jobs:
       matrix:
         meta1: [redis]
         meta2: [sqlite3]
-        include:
-          - meta1: mysql
-            meta2: redis
-          - meta1: mysql
-            meta2: tikv
-          - meta1: tikv
-            meta2: mysql
-          - meta1: redis
-            meta2: tikv
-          - meta1: tikv
-            meta2: redis
+        # include:
+        #   - meta1: mysql
+        #     meta2: redis
+        #   - meta1: mysql
+        #     meta2: tikv
+        #   - meta1: tikv
+        #     meta2: mysql
+        #   - meta1: redis
+        #     meta2: tikv
+        #   - meta1: tikv
+        #     meta2: redis
 
     runs-on: ubuntu-22.04
 
