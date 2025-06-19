@@ -30,6 +30,26 @@ mc alias set myminio http://localhost:9000 minioadmin minioadmin
 [[ ! -x random-test ]] && wget -q https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test -O random-test && chmod +x random-test
 python3 -c "import xattr" || sudo pip install xattr
 
+test_dump_load_with_rmr()
+{
+    # ref: https://github.com/juicedata/juicefs/pull/6188
+    prepare_test
+    ./juicefs format $META_URL1 myjfs --trash-days 0 --enable-acl
+    ./juicefs mount -d $META_URL1 /jfs --enable-xattr
+    dd if=/dev/urandom of=/jfs/file1 bs=1M count=1024
+    ./juicefs dump $META_URL1 dump1.json
+    ./juicefs dump $META_URL1 dump1 $(get_dump_option)
+    create_database $META_URL2
+    ./juicefs load $META_URL2 dump1 $(get_load_option)
+    ./juicefs dump $META_URL2 dump2.json
+    compare_dump_json dump1.json dump2.json
+    ./juicefs mount -d $META_URL2 /jfs2
+    ./juicefs rmr --skip-trash /jfs2/file1
+    JFS_GC_SKIPPEDTIME=1 ./juicefs gc $META_URL2 2>&1| tee gc.log
+    count=$(sed -n 's/.*\([0-9]\+\) leaked.*/\1/p' gc.log)
+    [[ "$count" -ne 0 ]] && echo "Expected 0 leaked file, but got $count" && exit 1 || true
+}
+
 test_dump_load_with_fsrand()
 {
     prepare_test
@@ -52,24 +72,30 @@ test_dump_load_with_fsrand()
     [[ "$count" -ne 0 ]] && echo "Expected 0 leaked file, but got $count" && exit 1 || true
 }
 
-test_dump_load_with_rmr()
+test_dump_load_with_random_test()
 {
-    # ref: https://github.com/juicedata/juicefs/pull/6188
     prepare_test
     ./juicefs format $META_URL1 myjfs --trash-days 0 --enable-acl
     ./juicefs mount -d $META_URL1 /jfs --enable-xattr
-    dd if=/dev/urandom of=/jfs/file1 bs=1M count=1024
+    ./random-test runOp --baseDir /jfs/test --logDir random-test-log --withData --writeSize 1,10240 \
+             --duration 30s --files 10000000 --ops 100000000 --threads 200 --dirSize 100 \
+             --mkdirOp 10,uniform -createOp 10,uniform -readOp 1,uniform -lsOp 1,uniform -deleteOp 0.01,uniform -rmrOp 0.01,end -renameOp 1,uniform -linkOp 3,uniform  
+    ./juicefs clone /jfs/test /jfs/test_clone
     ./juicefs dump $META_URL1 dump1.json
     ./juicefs dump $META_URL1 dump1 $(get_dump_option)
     create_database $META_URL2
     ./juicefs load $META_URL2 dump1 $(get_load_option)
-    ./juicefs dump $META_URL2 dump2.json
-    compare_dump_json dump1.json dump2.json
-    ./juicefs mount -d $META_URL2 /jfs2
-    ./juicefs rmr --skip-trash /jfs2/file1
-    JFS_GC_SKIPPEDTIME=1 ./juicefs gc $META_URL2 2>&1| tee gc.log
-    count=$(sed -n 's/.*\([0-9]\+\) leaked.*/\1/p' gc.log)
-    [[ "$count" -ne 0 ]] && echo "Expected 0 leaked file, but got $count" && exit 1 || true
+    ./juicefs dump $META_URL2 dump2.json $(get_dump_option)
+    ./juicefs mount -d $META_URL2 /jfs2 --no-bgjob
+    diff -ur /jfs/test /jfs2/test --no-dereference
+    diff -ur /jfs/test_clone /jfs2/test_clone --no-dereference
+    ./juicefs clone /jfs2/test /jfs2/test_clone2
+    for dir in /jfs2/test_clone /jfs2/test /jfs2/test_clone2; do
+        ./juicefs rmr --skip-trash $dir
+        JFS_GC_SKIPPEDTIME=1 ./juicefs gc -v $META_URL2 2>&1| tee gc.log
+        count=$(sed -n 's/.*\([0-9]\+\) leaked.*/\1/p' gc.log)
+        [[ "$count" -ne 0 ]] && echo "Expected 0 leaked file after rmr $dir, but got $count" && exit 1 || true
+    done
 }
 
 compare_dump_json(){
