@@ -196,6 +196,15 @@ docker run --privileged --name myjfs \
 ```yaml
 version: "3"
 services:
+    busybox:
+      image: busybox
+      command: "ls /jfs"
+      volumes:
+        - ./mnt:/jfs
+      depends_on:
+        juicefs:
+          condition: service_healthy
+
     juicefs:
       image: juicedata/mount:ce-v1.1.2
       container_name: myjfs
@@ -209,9 +218,15 @@ services:
         - apparmor:unconfined
       command: ["juicefs", "mount", "rediss://user:password@xxx.your-redis-server.com:6379/1", "/mnt"]
       restart: unless-stopped
+      healthcheck:
+        test: ["CMD-SHELL", "cat /mnt/.control"]
+        interval: 60s
+        retries: 5
+        start_period: 30s
+        timeout: 10s
 ```
 
-在容器中，JuiceFS 文件系统挂载到了 `/mnt` 目录，又通过配置文件中的 volumes 部分将容器中的 `/mnt` 映射到宿主机的 `./mnt` 目录，这样就可以实现在宿主机直接访问容器中挂载的 JuiceFS 文件系统。
+在容器中，JuiceFS 文件系统挂载到了 `/mnt` 目录，又通过配置文件中的 volumes 部分将容器中的 `/mnt` 映射到宿主机的 `./mnt` 目录，这样就可以实现在宿主机直接访问容器中挂载的 JuiceFS 文件系统。同时通过 depends_on 和 volumes 的结合可以将目录再次挂载进其余容器中使用
 
 #### 通过 S3 Gateway 开放文件系统访问
 
