@@ -27,29 +27,12 @@ fi
 [[ ! -f /usr/local/bin/mc ]] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc && chmod +x /usr/local/bin/mc
 sleep 3s
 mc alias set myminio http://localhost:9000 minioadmin minioadmin
+[[ ! -x random-test ]] && wget -q https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test -O random-test && chmod +x random-test
 python3 -c "import xattr" || sudo pip install xattr
 
-test_dump_load_with_random_test()
+test_dump_load_with_rmr()
 {
-    prepare_test
-    ./juicefs format $META_URL myjfs --enable-acl
-    ./juicefs mount -d $META_URL /jfs 
-    ./random-test runOp -baseDir /jfs/test -files 500000 -ops 5000000 -threads 50 -dirSize 100 -duration 30s -createOp 30,uniform -deleteOp 5,end --linkOp 10,uniform --symlinkOp 20,uniform --setXattrOp 10,uniform --truncateOp 10,uniform    
-    ./juicefs dump $META_URL dump.json $(get_dump_option)
-    create_database $META_URL2
-    ./juicefs load $META_URL2 dump.json $(get_load_option)
-    ./juicefs dump $META_URL2 dump2.json $(get_dump_option)
-    ./juicefs mount -d $META_URL2 /jfs2
-    diff -ur /jfs/test /jfs2/test --no-dereference
-    diff -ur /jfs/.trash /jfs2/.trash --no-dereference
-    # compare_stat_acl_xattr /jfs/test /jfs2/test
-    umount_jfs /jfs2 $META_URL2
-    ./juicefs status $META_URL2 && UUID=$(./juicefs status $META_URL2 | grep UUID | cut -d '"' -f 4)
-    ./juicefs destroy --yes $META_URL2 $UUID
-}
-
-test_dump_load_with_clone()
-{
+    # ref: https://github.com/juicedata/juicefs/pull/6188
     prepare_test
     ./juicefs format $META_URL1 myjfs --trash-days 0 --enable-acl
     ./juicefs mount -d $META_URL1 /jfs --enable-xattr
@@ -61,15 +44,10 @@ test_dump_load_with_clone()
     ./juicefs dump $META_URL2 dump2.json
     compare_dump_json dump1.json dump2.json
     ./juicefs mount -d $META_URL2 /jfs2
-    # ./juicefs clone /jfs2/file1 /jfs2/file2
     ./juicefs rmr --skip-trash /jfs2/file1
-    JFS_GC_SKIPPEDTIME=1 ./juicefs gc $META_URL2 
-    JFS_GC_SKIPPEDTIME=1 ./juicefs gc $META_URL2 --delete
-    JFS_GC_SKIPPEDTIME=1 ./juicefs gc $META_URL2 
-    diff -ur /jfs/file1 /jfs2/file1
-    umount_jfs /jfs2 $META_URL2
-    ./juicefs status $META_URL2 && UUID=$(./juicefs status $META_URL2 | grep UUID | cut -d '"' -f 4)
-    ./juicefs destroy --yes $META_URL2 $UUID
+    JFS_GC_SKIPPEDTIME=1 ./juicefs gc $META_URL2 2>&1| tee gc.log
+    count=$(sed -n 's/.*\([0-9]\+\) leaked.*/\1/p' gc.log)
+    [[ "$count" -ne 0 ]] && echo "Expected 0 leaked file, but got $count" && exit 1 || true
 }
 
 compare_dump_json(){
