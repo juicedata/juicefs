@@ -370,13 +370,36 @@ func (m *dbMeta) initStatement() {
 			 VALUES (?, ?, ?)
 			 ON DUPLICATE KEY UPDATE
 			 slices=concat(slices, ?)`, m.tablePrefix)
+	m.statement[`
+			 INSERT INTO chunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON CONFLICT (chunkid)
+			 DO UPDATE SET size=?, refs=?`] =
+		fmt.Sprintf(`
+			 INSERT INTO %schunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON CONFLICT (chunkid)
+			 DO UPDATE SET size=?, refs=?`, m.tablePrefix)
+	m.statement[`
+			 INSERT INTO chunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 size=?, refs=?`] =
+		fmt.Sprintf(`
+			 INSERT INTO %schunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 size=?, refs=?`, m.tablePrefix)
 	m.statement["edge.inode=node.inode"] = fmt.Sprintf("%sedge.inode=%snode.inode", m.tablePrefix, m.tablePrefix)
 	m.statement["edge.id"] = fmt.Sprintf("%sedge.id", m.tablePrefix)
 	m.statement["edge.name"] = fmt.Sprintf("%sedge.name", m.tablePrefix)
 	m.statement["edge.type"] = fmt.Sprintf("%sedge.type", m.tablePrefix)
 	m.statement["edge.*"] = fmt.Sprintf("%sedge.*", m.tablePrefix)
 	m.statement["node.*"] = fmt.Sprintf("%snode.*", m.tablePrefix)
-
+	m.statement[`INSERT INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?) ON CONFLICT DO NOTHING`] =
+		fmt.Sprintf(`INSERT INTO %schunk_ref (chunkid, size, refs) VALUES (?,?,?) ON CONFLICT DO NOTHING`, m.tablePrefix)
+	m.statement[`INSERT IGNORE INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?)`] = 
+		fmt.Sprintf(`INSERT IGNORE INTO %schunk_ref (chunkid, size, refs) VALUES (?,?,?)`, m.tablePrefix)
 }
 
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {

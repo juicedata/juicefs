@@ -197,6 +197,15 @@ Here is an example using Docker Compose. Replace the metadata engine URL and mou
 ```yaml
 version: "3"
 services:
+    busybox:
+      image: busybox
+      command: "ls /jfs"
+      volumes:
+        - ./mnt:/jfs
+      depends_on:
+        juicefs:
+          condition: service_healthy
+
     juicefs:
       image: juicedata/mount:ce-v1.1.2
       container_name: myjfs
@@ -210,9 +219,15 @@ services:
         - apparmor:unconfined
       command: ["juicefs", "mount", "rediss://user:password@xxx.your-redis-server.com:6379/1", "/mnt"]
       restart: unless-stopped
+      healthcheck:
+        test: ["CMD-SHELL", "cat /mnt/.control"]
+        interval: 60s
+        retries: 5
+        start_period: 30s
+        timeout: 10s
 ```
 
-In the container, the JuiceFS file system is mounted to the `/mnt` directory, and the volumes section in the configuration file maps the `/mnt` in the container to the `./mnt` directory on the host, allowing direct access to the JuiceFS file system mounted in the container from the host.
+In the container, the JuiceFS file system is mounted to the `/mnt` directory, and the volumes section in the configuration file maps the `/mnt` in the container to the `./mnt` directory on the host, allowing direct access to the JuiceFS file system mounted in the container from the host. At the same time, by combining `depends_on` and `volumes`, the directory mapped to the host machine can be remounted into the container for use.
 
 #### Access the file system through S3 Gateway
 
