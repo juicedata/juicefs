@@ -1,0 +1,155 @@
+name: "dump_load_cross_meta"
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - '**/start_meta_engine.sh'
+      - '**/dump_load_cross_meta.yml'
+      - '**/dump_load_cross_meta.sh'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - '**/start_meta_engine.sh'
+      - '**/dump_load_cross_meta.yml'
+      - '**/dump_load_cross_meta.sh'
+  schedule:
+    - cron:  '0 19 * * *'
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+jobs:
+  dump_load_cross_meta:
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        meta1: [redis]
+        meta2: [sqlite3]
+        include:
+          - meta1: mysql
+            meta2: redis
+          - meta1: mysql
+            meta2: tikv
+          - meta1: tikv
+            meta2: mysql
+          - meta1: redis
+            meta2: tikv
+          - meta1: tikv
+            meta2: redis
+
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
+      - name: Set Variable
+        id: vars
+        run: |
+          if [[ "${{matrix.meta1}}" == "fdb" || "${{matrix.meta2}}" == "fdb" ]]; then
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
+          else
+            echo "target=juicefs" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build
+        timeout-minutes: 10
+        uses: ./.github/actions/build
+        with: 
+          target: ${{steps.vars.outputs.target}}
+
+      - name: Test Load & Dump with Binary
+        timeout-minutes: 30
+        continue-on-error: true
+        run: |
+          sudo GOCOVERDIR=$(pwd)/cover META1=${{matrix.meta1}} META2=${{matrix.meta2}} BINARY=true .github/scripts/command/dump_load_cross_meta.sh
+
+      - name: Test Load & Dump with Json Fast Mode
+        timeout-minutes: 30
+        run: |
+          sudo GOCOVERDIR=$(pwd)/cover META1=${{matrix.meta1}} META2=${{matrix.meta2}} FAST=true .github/scripts/command/dump_load_cross_meta.sh  
+
+      - name: Test Load & Dump with Json
+        timeout-minutes: 30
+        run: |
+          sudo GOCOVERDIR=$(pwd)/cover META1=${{matrix.meta1}} META2=${{matrix.meta2}} .github/scripts/command/dump_load_cross_meta.sh     
+
+      - name: log
+        if: always()
+        run: | 
+          tail -500 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+
+      - name: upload coverage report
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: ./.github/actions/upload-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
+
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [dump_load_cross_meta]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
+      - name: mount coverage dir
+        timeout-minutes: 5
+        uses: ./.github/actions/mount-coverage-dir
+        with:
+          mount_point: cover
+          access_key: ${{ secrets.CI_COVERAGE_AWS_AK }}
+          secret_key: ${{ secrets.CI_COVERAGE_AWS_SK }}
+          token: ${{ secrets.CI_COVERAGE_AWS_TOKEN }}
+
+      - name: upload total coverage report
+        timeout-minutes: 30
+        continue-on-error: true
+        uses: ./.github/actions/upload-total-coverage
+        with:
+          UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
+
+      - name: Send Slack Notification
+        if: failure() && github.event_name != 'workflow_dispatch' 
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Success
+        if: success()
+        run: echo "All Done"
+              
+        
