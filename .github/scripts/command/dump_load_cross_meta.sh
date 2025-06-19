@@ -37,10 +37,11 @@ test_dump_load_with_fsrand()
     ./juicefs mount -d $META_URL1 /jfs --enable-xattr
     rm -rf /tmp/test
     SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/test ROOT_DIR2=/tmp/test python3 .github/scripts/hypo/fs.py || true    
+    ./juicefs dump $META_URL1 dump1.json
     ./juicefs dump $META_URL1 dump1 $(get_dump_option)
     create_database $META_URL2
     ./juicefs load $META_URL2 dump1 $(get_load_option)
-    ./juicefs dump $META_URL2 dump2 $(get_dump_option)
+    ./juicefs dump $META_URL2 dump2.json $(get_dump_option)
     compare_dump_json
     ./juicefs mount -d $META_URL2 /jfs2
     diff -ur /jfs/test /jfs2/test --no-dereference
