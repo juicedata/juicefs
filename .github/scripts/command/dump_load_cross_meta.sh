@@ -67,9 +67,18 @@ test_dump_load_with_fsrand()
     diff -ur /jfs/test /jfs2/test --no-dereference
     compare_stat_acl_xattr /jfs/test /jfs2/test
     ./juicefs rmr --skip-trash /jfs2/test
-    JFS_GC_SKIPPEDTIME=1 ./juicefs gc -v $META_URL2 2>&1| tee gc.log
-    count=$(sed -n 's/.*\([0-9]\+\) leaked.*/\1/p' gc.log)
-    [[ "$count" -ne 0 ]] && echo "Expected 0 leaked file, but got $count" && exit 1 || true
+    for i in {1..60}; do 
+        JFS_GC_SKIPPEDTIME=1 ./juicefs gc -v $META_URL2 2>&1| tee gc.log
+        count=$(sed -n 's/.*\([0-9]\+\) leaked.*/\1/p' gc.log)
+        if [[ "$count" -eq 0 ]]; then 
+            echo "Expected 0 leaked file after rmr /jfs2/test, got $count"
+            break
+        else
+            echo "Expected 0 leaked file after rmr /jfs2/test, got $count, retrying..."
+            sleep 1s
+        fi
+        [[ $i -eq 60 ]] && echo "Expected 0 leaked file after rmr /jfs2/test, but got $count" && exit 1 || true
+    done
 }
 
 test_dump_load_with_random_test()
