@@ -30,6 +30,27 @@ mc alias set myminio http://localhost:9000 minioadmin minioadmin
 [[ ! -x random-test ]] && wget -q https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test -O random-test && chmod +x random-test
 python3 -c "import xattr" || sudo pip install xattr
 
+test_dump_load_with_fsrand()
+{
+    prepare_test
+    ./juicefs format $META_URL1 myjfs --trash-days 0 --enable-acl
+    ./juicefs mount -d $META_URL1 /jfs --enable-xattr
+    rm -rf /tmp/test
+    SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/test ROOT_DIR2=/tmp/test python3 .github/scripts/hypo/fs.py || true    
+    ./juicefs dump $META_URL1 dump1 $(get_dump_option)
+    create_database $META_URL2
+    ./juicefs load $META_URL2 dump1 $(get_load_option)
+    ./juicefs dump $META_URL2 dump2 $(get_dump_option)
+    compare_dump_json
+    ./juicefs mount -d $META_URL2 /jfs2
+    diff -ur /jfs/test /jfs2/test --no-dereference
+    compare_stat_acl_xattr /jfs/test /jfs2/test
+    ./juicefs rmr --skip-trash /jfs2/test
+    JFS_GC_SKIPPEDTIME=1 ./juicefs gc $META_URL2 2>&1| tee gc.log
+    count=$(sed -n 's/.*\([0-9]\+\) leaked.*/\1/p' gc.log)
+    [[ "$count" -ne 0 ]] && echo "Expected 0 leaked file, but got $count" && exit 1 || true
+}
+
 test_dump_load_with_rmr()
 {
     # ref: https://github.com/juicedata/juicefs/pull/6188
