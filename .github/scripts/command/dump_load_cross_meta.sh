@@ -57,6 +57,18 @@ test_dump_load_with_fsrand()
     ./juicefs mount -d $META_URL1 /jfs --enable-xattr
     rm -rf /tmp/test
     SEED=$SEED LOG_LEVEL=WARNING MAX_EXAMPLE=30 STEP_COUNT=20 PROFILE=generate ROOT_DIR1=/jfs/test ROOT_DIR2=/tmp/test python3 .github/scripts/hypo/fs.py || true    
+    for i in {1..60}; do 
+        JFS_GC_SKIPPEDTIME=1 ./juicefs gc -v $META_URL1 2>&1| tee gc.log
+        count=$(sed -n 's/.*\([0-9]\+\) leaked.*/\1/p' gc.log)
+        if [[ "$count" -eq 0 ]]; then 
+            echo "Expected 0 leaked file after rmr /jfs2/test, got $count"
+            break
+        else
+            echo "Expected 0 leaked file after rmr /jfs2/test, got $count, retrying..."
+            sleep 1s
+        fi
+        [[ $i -eq 60 ]] && echo "Expected 0 leaked file after rmr /jfs2/test, but got $count" && exit 1 || true
+    done
     ./juicefs dump $META_URL1 dump1.json
     ./juicefs dump $META_URL1 dump1 $(get_dump_option)
     create_database $META_URL2
