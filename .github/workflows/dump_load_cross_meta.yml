@@ -78,15 +78,15 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}
 
-      - name: Test Load & Dump with Binary
-        timeout-minutes: 30
-        run: |
-          sudo GOCOVERDIR=$(pwd)/cover META1=${{matrix.meta1}} META2=${{matrix.meta2}} BINARY=true .github/scripts/command/dump_load_cross_meta.sh
-
       - name: Test Load & Dump with Json Fast Mode
         timeout-minutes: 30
         run: |
           sudo GOCOVERDIR=$(pwd)/cover META1=${{matrix.meta1}} META2=${{matrix.meta2}} FAST=true .github/scripts/command/dump_load_cross_meta.sh  
+  
+      - name: Test Load & Dump with Binary
+        timeout-minutes: 30
+        run: |
+          sudo GOCOVERDIR=$(pwd)/cover META1=${{matrix.meta1}} META2=${{matrix.meta2}} BINARY=true .github/scripts/command/dump_load_cross_meta.sh
 
       - name: Test Load & Dump with Json
         timeout-minutes: 30

@@ -43,7 +43,7 @@ test_dump_load_with_rmr()
     ./juicefs load $META_URL2 dump1 $(get_load_option)
     ./juicefs dump $META_URL2 dump2.json
     compare_dump_json dump1.json dump2.json
-    ./juicefs mount -d $META_URL2 /jfs2
+    ./juicefs mount -d $META_URL2 /jfs2 --no-bgjob
     ./juicefs rmr --skip-trash /jfs2/file1
     JFS_GC_SKIPPEDTIME=1 ./juicefs gc $META_URL2 2>&1| tee gc.log
     count=$(sed -n 's/.*\([0-9]\+\) leaked.*/\1/p' gc.log)
