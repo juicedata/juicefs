@@ -99,6 +99,17 @@ jobs:
           tail -500 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
 
+      - name: Upload dumpfiies
+        uses: actions/upload-artifact@v4
+        timeout-minutes: 5
+        if: failure()
+        with:
+          name: dump-files-${{ github.run_id }}-${{matrix.meta1}}-${{matrix.meta2}}
+          path: |
+            ${{github.workspace}}/*.json
+            ${{github.workspace}}/*.db
+          if-no-files-found: warn
+
       - name: upload coverage report
         timeout-minutes: 5
         continue-on-error: true
