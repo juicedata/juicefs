@@ -18,11 +18,11 @@ package vfs
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
-	"strconv"
-	"strings"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
@@ -32,7 +32,7 @@ var (
 	opsDurationsHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "fuse_ops_durations_histogram_seconds",
 		Help:    "Operations latency distributions.",
-		Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
+		Buckets: prometheus.ExponentialBuckets(0.00001, 1.8, 30), // should cover range of `objectReqsHistogram`
 	})
 	opsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "fuse_ops_total",
