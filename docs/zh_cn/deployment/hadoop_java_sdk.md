@@ -882,6 +882,8 @@ juicefs format META-URL NAME --ranger-rest-url http://localhost:6080 --ranger-se
 # 已有的文件系统增加 ranger 配置
 juicefs config META-URL --ranger-rest-url http://localhost:6080 --ranger-service jfs
 
+# 关闭 ranger
+juicefs config META-URL --ranger-rest-url "" --ranger-service jfs ""
 ```
 
 ### 2. 环境及依赖
