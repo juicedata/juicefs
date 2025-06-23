@@ -384,7 +384,7 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		logger.Debugf("use endpoint %s", domain)
 	}
 	var regionID string
-	if regionID = os.Getenv("OSS_REGION_ID"); regionID == "" {
+	if regionID = os.Getenv("ALICLOUD_REGION_ID"); regionID == "" {
 		index := strings.Index(domain, ".")
 		if index <= 0 {
 			return nil, fmt.Errorf("invalid endpoint: %s", domain)
