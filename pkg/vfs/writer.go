@@ -208,6 +208,7 @@ func (c *chunkWriter) commitThread() {
 					_ = f.w.store.Remove(id, length)
 				}(s.id, int(s.length))
 			} else {
+				logger.Warnf("write inode:%d error: %s", f.inode, err)
 				err = syscall.EIO
 			}
 			f.err = err
