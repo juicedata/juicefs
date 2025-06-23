@@ -17,11 +17,15 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 func GetKernelVersion() (major, minor int) {
@@ -64,4 +68,50 @@ Kernel:
 %s
 OS: 
 %s`, kernel, osVersion)
+}
+
+func SetIOFlusher() {
+	err := unix.Prctl(unix.PR_SET_IO_FLUSHER, 1, 0, 0, 0)
+	if errors.Is(err, unix.EPERM) {
+		logger.Warn("CAP_SYS_RESOURCE is needed for PR_SET_IO_FLUSHER")
+	} else if errors.Is(err, unix.EINVAL) {
+		logger.Info("PR_SET_IO_FLUSHER, which is introduced by Linux 5.6, is not supported by the running kernel")
+	}
+}
+
+// Disable transparent huge page
+func DisableTHP() {
+	for {
+		err := unix.Prctl(unix.PR_SET_THP_DISABLE, 1, 0, 0, 0)
+		if err == nil {
+			logger.Info("Disabled transparent hugepage")
+			break
+		}
+
+		if errors.Is(err, unix.EINTR) {
+			continue
+		} else {
+			logger.Warnf("Failed to disable transparent huge page: %s", err)
+			return
+		}
+	}
+}
+
+// AdjustOOMKiller: change oom_score_adj to avoid OOM-killer
+func AdjustOOMKiller(score int) {
+	if os.Getuid() != 0 {
+		return
+	}
+	f, err := os.OpenFile("/proc/self/oom_score_adj", os.O_WRONLY, 0666)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			println(err)
+		}
+		return
+	}
+	defer f.Close()
+	_, err = f.WriteString(strconv.Itoa(score))
+	if err != nil {
+		println("adjust OOM score:", err)
+	}
 }

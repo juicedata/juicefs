@@ -110,6 +110,11 @@ Details: https://juicefs.com/docs/community/performance_evaluation_guide#juicefs
 				Value:   4,
 				Usage:   "number of concurrent threads",
 			},
+			&cli.StringFlag{
+				Name:    "storage-class",
+				Aliases: []string{"sc"},
+				Usage:   "storage class for object storage, e.g. Standard, IA",
+			},
 		},
 	}
 }
@@ -178,6 +183,12 @@ func objbench(ctx *cli.Context) error {
 
 	prefix := fmt.Sprintf("__juicefs_benchmark_%d__/", time.Now().UnixNano())
 	blob := object.WithPrefix(blobOrigin, prefix)
+	storageClass := ctx.String("storage-class")
+	if os, ok := blob.(object.SupportStorageClass); ok && storageClass != "" {
+		if err := os.SetStorageClass(storageClass); err != nil {
+			logger.Fatalf("set storageClass %s failed: %v", storageClass, err)
+		}
+	}
 	defer func() {
 		_ = blobOrigin.Delete(prefix)
 	}()

@@ -395,6 +395,10 @@ func mountFlags() []cli.Flag {
 			Name:  "update-fstab",
 			Usage: "add / update entry in /etc/fstab, will create a symlink from /sbin/mount.juicefs to JuiceFS executable if not existing",
 		})
+		selfFlags = append(selfFlags, &cli.BoolFlag{
+			Name:  "disable-transparent-hugepage",
+			Usage: "disable transparent huge page to avoid latency spikes caused by kernel's memory compaction",
+		})
 	}
 	return append(selfFlags, fuseFlags()...)
 }
@@ -801,25 +805,6 @@ func increaseRlimit() {
 	}
 }
 
-// change oom_score_adj to avoid OOM-killer
-func adjustOOMKiller(score int) {
-	if os.Getuid() != 0 {
-		return
-	}
-	f, err := os.OpenFile("/proc/self/oom_score_adj", os.O_WRONLY, 0666)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			println(err)
-		}
-		return
-	}
-	defer f.Close()
-	_, err = f.WriteString(strconv.Itoa(score))
-	if err != nil {
-		println("adjust OOM score:", err)
-	}
-}
-
 func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorage) {
 	// Go will catch all the signals
 	signal.Ignore(syscall.SIGPIPE)
@@ -858,11 +843,15 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 		}
 	}()
 }
-func launchMount(mp string, conf *vfs.Config) error {
+func launchMount(c *cli.Context, mp string, conf *vfs.Config) error {
 	increaseRlimit()
-	if runtime.GOOS == "linux" {
-		adjustOOMKiller(-1000)
+	utils.AdjustOOMKiller(-1000)
+	utils.SetIOFlusher()
+
+	if c.Bool("disable-transparent-hugepage") {
+		utils.DisableTHP()
 	}
+
 	if canShutdownGracefully(mp, conf) {
 		shutdownGraceful(mp)
 	}
@@ -875,14 +864,14 @@ func launchMount(mp string, conf *vfs.Config) error {
 		return fmt.Errorf("find executable: %s", err)
 	}
 	start := time.Now()
-	for c := 0; ; c++ {
-		if c == 3 && time.Since(start) < time.Second*10 {
+	for attempt := 0; ; attempt++ {
+		if attempt == 3 && time.Since(start) < time.Second*10 {
 			return fmt.Errorf("fail 3 times in %s, give up", time.Since(start))
 		}
 		// For volcengine VKE serverless container, no umount before mount when
 		// `JFS_NO_UMOUNT` environment provided
 		noUmount := os.Getenv("JFS_NO_UMOUNT")
-		if fuseFd == 0 && (c > 0 || noUmount == "0") {
+		if fuseFd == 0 && (attempt > 0 || noUmount == "0") {
 			_ = doUmount(mp, true)
 		}
 		if runtime.GOOS == "linux" {

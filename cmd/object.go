@@ -145,12 +145,16 @@ func (j *juiceFS) Put(key string, in io.Reader, getters ...object.AttrGetter) (e
 	}
 	f, eno := j.jfs.Create(ctx, tmp, 0666, j.umask)
 	if eno == syscall.ENOENT {
-		_ = j.jfs.MkdirAll(ctx, path.Dir(tmp), 0777, j.umask)
+		if eno = j.jfs.MkdirAll(ctx, path.Dir(tmp), 0777, j.umask); eno != 0 {
+			return toError(eno)
+		}
 		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)
 	}
 
 	if eno == syscall.EEXIST {
-		_ = j.jfs.Delete(ctx, tmp)
+		if eno = j.jfs.Delete(ctx, tmp); eno != 0 {
+			return toError(eno)
+		}
 		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)
 	}
 
@@ -370,7 +374,9 @@ func (j *juiceFS) Symlink(oldName, newName string) error {
 	p := j.path(newName)
 	err := j.jfs.Symlink(ctx, oldName, p)
 	if err == syscall.ENOENT {
-		_ = j.jfs.MkdirAll(ctx, path.Dir(p), 0777, j.umask)
+		if err = j.jfs.MkdirAll(ctx, path.Dir(p), 0777, j.umask); err != 0 {
+			return toError(err)
+		}
 		err = j.jfs.Symlink(ctx, oldName, p)
 	}
 	return toError(err)

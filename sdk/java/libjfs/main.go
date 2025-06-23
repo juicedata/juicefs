@@ -402,18 +402,6 @@ func getOrCreate(name, user, group, superuser, supergroup string, conf javaConf,
 	} else {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(user), w.lookupGids(group))
 	}
-	// Check if the subdir is valid
-	if conf.Subdir != "" {
-		fi, err := jfs.Stat(w.ctx, conf.Subdir)
-		if err != 0 {
-			logger.Errorf("subdir %s is not valid: %v", conf.Subdir, err)
-			return 0
-		}
-		if !fi.IsDir() {
-			logger.Errorf("subdir %s is not a directory", conf.Subdir)
-			return 0
-		}
-	}
 	activefs[name] = append(ws, w)
 	nextFsHandle = nextFsHandle + 1
 	handlers[nextFsHandle] = w

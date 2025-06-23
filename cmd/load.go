@@ -196,7 +196,7 @@ func convert(path string, key, algo string) (string, error) {
 }
 
 func load(ctx *cli.Context) error {
-	setup(ctx, 1)
+	setup0(ctx, 1, 2)
 
 	key, algo := ctx.String("encrypt-rsa-key"), ctx.String("encrypt-algo")
 	src := ctx.Args().Get(1)

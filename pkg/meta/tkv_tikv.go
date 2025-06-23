@@ -38,6 +38,7 @@ import (
 	"github.com/tikv/client-go/v2/txnkv"
 	"github.com/tikv/client-go/v2/txnkv/txnutil"
 	"go.uber.org/zap"
+	pd "github.com/tikv/pd/client"
 )
 
 func init() {
@@ -89,6 +90,27 @@ func newTikvClient(addr string) (tkvClient, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if strings.ToLower(query.Get("open-tso-follower-proxy")) == "true" {
+		if err := client.KVStore.GetPDClient().UpdateOption(pd.EnableTSOFollowerProxy, true); err != nil {
+			logger.Warnf("Failed to enable TSO Follower Proxy: %v", err)
+		} else {
+			logger.Infof("Enabling TSO Follower Proxy")
+		}
+	}
+
+	if waitStr := query.Get("max-tso-batch-wait-interval"); waitStr != "" {
+		if waitDur, err := time.ParseDuration(waitStr); err == nil {
+			if err := client.KVStore.GetPDClient().UpdateOption(pd.MaxTSOBatchWaitInterval, waitDur); err != nil {
+				logger.Warnf("Failed to set MaxTSOBatchWaitInterval: %v", err)
+			} else {
+				logger.Infof("Set MaxTSOBatchWaitInterval to %s", waitDur)
+			}
+		} else {
+			logger.Warnf("Failed to parse max-tso-batch-wait-interval (%s): %v", waitStr, err)
+		}
+	}
+
 	prefix := strings.TrimLeft(tUrl.Path, "/")
 	return withPrefix(&tikvClient{client.KVStore, interval}, append([]byte(prefix), 0xFD)), nil
 }
@@ -203,7 +225,6 @@ func (c *tikvClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry 
 	if err != nil {
 		return errors.Wrap(err, "failed to begin transaction")
 	}
-	tx.GetSnapshot().SetIsolationLevel(txnkv.RC) // RC isolation to skip lock checking in TiKV
 	defer func() {
 		if r := recover(); r != nil {
 			if e, ok := r.(error); ok {

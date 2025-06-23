@@ -330,6 +330,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf.SkipDirMtime = utils.Duration(c.String("skip-dir-mtime"))
 	conf.Sid, _ = strconv.ParseUint(os.Getenv("_JFS_META_SID"), 10, 64)
 	conf.SortDir = c.Bool("sort-dir")
+	conf.FastStatfs = c.Bool("fast-statfs")
 
 	atimeMode := c.String("atime-mode")
 	if atimeMode != meta.RelAtime && atimeMode != meta.StrictAtime && atimeMode != meta.NoAtime {
@@ -622,7 +623,7 @@ func mount(c *cli.Context) error {
 			daemonRun(c, addr, vfsConf) // only stage 0 needs the vfsConf
 		}
 		os.Setenv("JFS_SUPERVISOR", strconv.Itoa(os.Getppid()))
-		return launchMount(mp, vfsConf)
+		return launchMount(c, mp, vfsConf)
 	} else if runtime.GOOS == "windows" && c.Bool("background") {
 		daemonRun(c, addr, vfsConf)
 		return nil

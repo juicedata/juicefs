@@ -42,7 +42,7 @@ $ juicefs restore redis://localhost/1 2023-05-10-01`,
 }
 
 func restore(ctx *cli.Context) error {
-	setup(ctx, 2)
+	setup0(ctx, 2, 0)
 	if os.Getuid() != 0 && runtime.GOOS != "windows" {
 		return fmt.Errorf("only root can restore files from trash")
 	}
