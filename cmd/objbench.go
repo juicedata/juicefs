@@ -30,7 +30,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -188,6 +187,13 @@ func objbench(ctx *cli.Context) error {
 		listCount = 1000
 	}
 	threads := int(ctx.Uint("threads"))
+	if threads > bCount || threads > sCount {
+		threads = bCount
+		if threads > sCount {
+			threads = sCount
+		}
+		logger.Warnf("The number of threads was set too large and has been reduced to %d", threads)
+	}
 	colorful := utils.SupportANSIColor(os.Stdout.Fd())
 	progress := utils.NewProgress(false)
 	if colorful {
@@ -504,7 +510,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 		bar = bm.progressBar.AddCountBar(api.title, int64(count))
 	}
 	var err error
-	var duration int64
+	start := time.Now()
 	for i := api.startKey; i < api.startKey+count; i++ {
 		pool <- struct{}{}
 		wg.Add(1)
@@ -513,11 +519,9 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 				<-pool
 				wg.Done()
 			}()
-			start := time.Now()
 			if e := fn(strconv.Itoa(key), api.startKey); e != nil {
 				err = e
 			}
-			atomic.AddInt64(&duration, time.Since(start).Microseconds())
 			if api.name == "list" {
 				bar.IncrInt64(int64(listCount))
 			} else {
@@ -527,7 +531,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 	}
 	wg.Wait()
 	bar.Done()
-	line := api.getResult(float64(duration) / float64(bm.threads) / float64(1000) / float64(1000))
+	line := api.getResult(time.Since(start).Seconds())
 	if err != nil {
 		logger.Errorf("%s test failed: %s", api.name, err)
 		return []string{api.title, failed, failed}
