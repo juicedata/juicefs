@@ -515,11 +515,8 @@ public class JuiceFileSystemImpl extends FileSystem {
       JuiceFSInstrumentation.init(this, statistics);
     }
 
-
-    String rangerRestUrl = getConf(conf, "ranger-rest-url", null);
     RangerConfig rangerConfig = checkAndGetRangerParams(conf);
-    if (!isEmpty(rangerRestUrl) && !isSuperGroupFileSystem && !isBackGroundTask) {
-
+    if (rangerConfig != null && !isSuperGroupFileSystem && !isBackGroundTask) {
         Configuration superConf = new Configuration(conf);
         superConf.set("juicefs.internal-bg-task", "true");
         superGroupFileSystem = new JuiceFileSystemImpl(true);

@@ -39,8 +39,6 @@ public class RangerPermissionCheckerTest extends TestCase {
   public void setUp() throws Exception {
     cfg = new Configuration();
     cfg.addResource(JuiceFileSystemTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
-    cfg.set("juicefs.ranger-rest-url", "http://localhost");
-    cfg.set("juicefs.ranger-service-name", "cl1_hadoop");
     // set superuser
     cfg.set("juicefs.superuser", UserGroupInformation.getCurrentUser().getShortUserName());
     fs = FileSystem.newInstance(cfg);
