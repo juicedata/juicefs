@@ -196,7 +196,7 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore, registry *
 		opsDurationsHistogram: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Name:    "sdk_ops_durations_histogram_seconds",
 			Help:    "Operations latency distributions.",
-			Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
+			Buckets: prometheus.ExponentialBuckets(0.00001, 1.8, 29),
 		}),
 		registry: registry,
 	}
