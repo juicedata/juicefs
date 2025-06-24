@@ -2,9 +2,10 @@ name: release
 
 on:
   push:
+    branches:
+      - 'mvn-deploy'
     tags:
       - v*
-  workflow_dispatch:
 
 jobs:
   releaser:
