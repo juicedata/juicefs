@@ -841,7 +841,7 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 	defer h.Wunlock()
 
 	err = h.writer.Write(ctx, off, buf)
-	if err == syscall.EPERM || err == syscall.EINVAL {
+	if err == syscall.ENOENT || err == syscall.EPERM || err == syscall.EINVAL {
 		err = syscall.EBADF
 	}
 	h.removeOp(ctx)
