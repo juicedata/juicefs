@@ -32,7 +32,7 @@ var (
 	opsDurationsHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "fuse_ops_durations_histogram_seconds",
 		Help:    "Operations latency distributions.",
-		Buckets: prometheus.ExponentialBuckets(0.00001, 1.8, 30), // should cover range of `objectReqsHistogram`
+		Buckets: prometheus.ExponentialBuckets(0.00001, 1.8, 29), // should cover range of `objectReqsHistogram`
 	})
 	opsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "fuse_ops_total",
