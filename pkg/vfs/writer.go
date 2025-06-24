@@ -203,16 +203,16 @@ func (c *chunkWriter) commitThread() {
 
 		f.Lock()
 		if err != 0 {
-			if err == syscall.ENOENT {
+			if err == syscall.ENOENT || err == syscall.ENOSPC || err == syscall.EDQUOT {
 				go func(id uint64, length int) {
 					_ = f.w.store.Remove(id, length)
 				}(s.id, int(s.length))
-			} else if err != syscall.ENOSPC && err != syscall.EDQUOT {
+			} else {
 				logger.Warnf("write inode:%d error: %s", f.inode, err)
 				err = syscall.EIO
 			}
 			f.err = err
-			logger.Errorf("write inode:%d indx:%d  %s", f.inode, c.indx, err)
+			logger.Errorf("write inode:%d indx:%d %s", f.inode, c.indx, err)
 		}
 		c.slices = c.slices[1:]
 	}
