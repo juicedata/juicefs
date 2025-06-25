@@ -49,7 +49,7 @@ jobs:
 
       - name: Build SDK
         run: |
-          make -C sdk/java package-all && sudo chown -R $USER sdk/java/target
+          make -C sdk/java && sudo chown -R $USER sdk/java/target
           echo "JUICEFS_VERSION=$(mvn -f sdk/java/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV
 
 
@@ -59,3 +59,8 @@ jobs:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+
+      - name: Setup upterm session
+        if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
