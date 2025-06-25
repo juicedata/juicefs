@@ -52,13 +52,6 @@ jobs:
           make -C sdk/java package-all && sudo chown -R $USER sdk/java/target
           echo "JUICEFS_VERSION=$(mvn -f sdk/java/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV
 
-      - name: Upload SDK
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            sdk/java/target/juicefs-hadoop-${{ env.JUICEFS_VERSION }}.jar
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish package
         run: mvn -f sdk/java/pom.xml deploy -DskipTests
