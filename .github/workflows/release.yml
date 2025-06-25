@@ -2,8 +2,6 @@ name: release
 
 on:
   push:
-    branches:
-      - 'mvn-deploy'
     tags:
       - v*
 
@@ -36,6 +34,8 @@ jobs:
         run: |-
           echo 'GITHUB_TOKEN=${{secrets.GH_PERSONAL_ACCESS_TOKEN}}' > .release-env
 
+      - name: goreleaser release
+        run: make release
 
       - name: Cache local Maven repository
         id: cache-maven
@@ -46,12 +46,21 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
+      - name: Chown go module cache
+        run: sudo chown -R $USER $HOME/go/pkg/mod
 
       - name: Build SDK
         run: |
-          make -C sdk/java && sudo chown -R $USER sdk/java/target
+          make -C sdk/java package-all && sudo chown -R $USER sdk/java/target
           echo "JUICEFS_VERSION=$(mvn -f sdk/java/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV
 
+      - name: Upload SDK
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            sdk/java/target/juicefs-hadoop-${{ env.JUICEFS_VERSION }}.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish package
         run: mvn -f sdk/java/pom.xml deploy -DskipTests
@@ -59,8 +68,3 @@ jobs:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
-
-      - name: Setup upterm session
-        if: failure()
-        timeout-minutes: 60
-        uses: lhotari/action-upterm@v1
