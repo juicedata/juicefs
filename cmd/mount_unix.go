@@ -1006,6 +1006,9 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 		if major < 4 || (major == 4 && minor < 20) {
 			logger.Warnf("readdir-cache requires kernel version 4.20 or higher, current version: %d.%d", major, minor)
 		}
+		if conf.Meta.SkipDirMtime > 0 {
+			logger.Warnf("When both readdir-cache and skip-dir-mtime are enabled, ignoring mtime may disable readdir refreshes on other nodes")
+		}
 	}
 	conf.NonDefaultPermission = c.Bool("non-default-permission")
 	rootSquash := c.String("root-squash")
