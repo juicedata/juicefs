@@ -756,6 +756,9 @@ juicefs format META-URL NAME --ranger-rest-url http://localhost:6080 --ranger-se
 
 # or configure with config
 juicefs config META-URL --ranger-rest-url http://localhost:6080 --ranger-service jfs
+
+# disable ranger
+juicefs config META-URL --ranger-rest-url "" --ranger-service jfs ""
 ```
 
 ### 2. Dependencies
