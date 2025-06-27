@@ -633,6 +633,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--log=path`|path of log file when running in background (default: `$HOME/.juicefs/juicefs.log` or `/var/log/juicefs.log`)|
 |`--force`|force to mount even if the mount point is already mounted by the same filesystem.|
 |`--update-fstab` <VersionAdd>1.1</VersionAdd> |add / update entry in `/etc/fstab`, will create a symlink from `/sbin/mount.juicefs` to JuiceFS executable if not existing (default: false)|
+|`--disable-transparent-hugepage` <VersionAdd>1.3</VersionAdd> |Disable the kernel’s Transparent Huge Pages. In situations like memory pressure, keeping THP enabled may cause processes to hang. (default: false)|
 
 #### FUSE related options {#mount-fuse-options}
 
