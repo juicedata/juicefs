@@ -1476,9 +1476,14 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 }
 
 var ignoreDir = errors.New("ignore dir")
+var ignoreFiles int64
 
 func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) error {
 	obj, err := src.Head(key)
+	if os.IsNotExist(err) {
+		atomic.AddInt64(&ignoreFiles, 1)
+		return nil
+	}
 	if err == nil && (!obj.IsDir() || obj.IsSymlink() && config.Links || obj.IsDir() && config.Dirs && strings.HasSuffix(key, "/")) {
 		var srckeys = make(chan object.Object, 1)
 		srckeys <- obj
@@ -1651,6 +1656,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	syncExitFunc := func() error {
 		if config.Manager == "" {
+			logger.Infof("ignoring %d files", atomic.LoadInt64(&ignoreFiles))
 			pending.SetCurrent(0)
 			incrHandled(0)
 			total := handled.GetTotal()
