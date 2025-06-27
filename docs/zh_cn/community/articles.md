@@ -10,7 +10,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 - [中国科学院计算所：从 NFS 到 JuiceFS，大模型训推平台存储演进之路](https://juicefs.com/zh-cn/blog/user-stories/nfs-vs-juicefs-llm-storage)，2025-05-14，孙玮
 - [百图生科：基于 JuiceFS 构建生命科学大模型存储平台，成本降 90%](https://juicefs.com/zh-cn/blog/user-stories/biomap-juicefs-building-llm-storage)，2025-05-07，郑泽东@百图生科
-- [稳定且高性价比的大模型存储：携程 10PB 级 JuiceFS 工程实践](https://juicefs.com/zh-cn/blog/user-stories/trip-10pb-level-llm-stroage-juicefs-practice)，2025-03-10，吴松林@携程 
+- [稳定且高性价比的大模型存储：携程 10PB 级 JuiceFS 工程实践](https://juicefs.com/zh-cn/blog/user-stories/trip-10pb-level-llm-stroage-juicefs-practice)，2025-03-10，吴松林@携程
 - [加速 AI 训推：Lepton AI 如何构建多租户、低延迟云存储平台](https://juicefs.com/zh-cn/blog/user-stories/lepton-ai-build-multi-tenant-low-latency-cloud-storage-platform)，2025-01-17，丁聪@Lepton AI
 - [多云架构，JuiceFS 如何实现一致性与低延迟的数据分发？](https://juicefs.com/zh-cn/blog/solutions/juicefs-multi-cloud-consistency-low-latency)，2025-01-10，蔡敏
 - [从 CephFS 到 JuiceFS：同程旅行亿级文件存储平台构建之路](https://juicefs.com/zh-cn/blog/user-stories/cephfs-vs-juicefs-draco-travel-file-storage)，2024-12-13，位传海@同程旅行
