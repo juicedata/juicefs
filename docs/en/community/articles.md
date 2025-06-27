@@ -12,6 +12,9 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 ### AI, machine learning, and deep learning
 
 - [NFS to JuiceFS: Building a Scalable Storage Platform for LLM Training & Inference](https://juicefs.com/en/blog/user-stories/ai-storage-platform-large-language-model-training-inference), 2025-06-11, Wei Sun
+- [BioMap Cut AI Model Storage Costs by 90% Using JuiceFS](https://juicefs.com/en/blog/user-stories/ai-storage-life-sciences-solution-juicefs-vs-lustre-alluxio), 2025-05-15, Zedong​​ ​​Zheng @ BioMap
+- [JuiceFS at Trip.com: Managing 10 PB of Data for Stable and Cost-Effective LLM Storage](https://juicefs.com/en/blog/user-stories/large-language-model-artificial-intelligence-storage-cost-effective), 2025-03-13, Songlin Wu @ Trip.com
+- [How Lepton AI Cut Cloud Storage Costs by 98% for AI Workflows with JuiceFS](https://juicefs.com/en/blog/user-stories/cloud-storage-artificial-intelligence-juicefs-vs-efs), 2025-02-07, Cong Ding @ Lepton AI
 - [Tongcheng Travel Chose JuiceFS over CephFS to Manage Hundreds of Millions of Files](https://juicefs.com/en/blog/user-stories/juicefs-vs-cephfs-distributed-file-system-artificial-intelligence-storage), 2025-01-08, Chuanhai Wei @ Tongcheng Travel
 - [LLM Storage Selection & Detailed Performance Analysis of JuiceFS](https://juicefs.com/en/blog/solutions/llm-storage-selection), 2024-10-23, Shaojie Li
 - [MiniMax Built a Cost-Effective, High-Performance AI Platform with JuiceFS](https://juicefs.com/en/blog/user-stories/minimax-foundation-model-ai-storage), 2024-09-02
@@ -74,6 +77,10 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Tutorial, guide, and best practice
 
+- [Deep Dive into JuiceFS Permission Management: Full Compatibility with Linux Security Mechanisms](https://juicefs.com/en/blog/engineering/linux-file-system-juicefs-access-management), 2025-06-26, Jiefeng Huang
+- [JuiceFS 1.3 Beta 2 Integrates Apache Ranger for Fine-Grained Access Control](https://juicefs.com/en/blog/release-notes/juicefs-1-3-integrates-apache-ranger-access-control), 2025-06-18, Youpeng Tang
+- [JuiceFS Enterprise Edition 5.2: Supporting Hundreds of Billions of Files and Windows Clients](https://juicefs.com/en/blog/release-notes/juicefs-5-2-windows-client), 2025-06-05
+- [​​JuiceFS 1.3 Beta: Enhanced Support for SQL Databases, a New Option for Billion-Scale Metadata Management](https://juicefs.com/en/blog/release-notes/juicefs-1-3-support-sql-database), 2025-04-28, Fangxin Lou
 - [Automated Cache Management: JuiceFS Enterprise Edition Introduces Cache Group Operator](https://juicefs.com/en/blog/usage-tips/automated-cache-management-cache-group-operator), 2025-01-16, Xuhui Zhang
 - [Database Release and End-to-End Testing: Bringing Modern Software Development Best Practices to the Data World](https://juicefs.com/en/blog/user-stories/end-to-end-test-clickhouse-database-clone), 2024-12-04, Tao Ma @ Jerry
 - [JuiceFS CSI: Smooth Upgrades of Mount Pods and Implementation Details](https://juicefs.com/en/blog/usage-tips/mount-pod-smooth-upgrade), 2024-11-13, Weiwei Zhu
@@ -114,9 +121,7 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 ### Others
 
 - [Introducing JuiceFS Python SDK: 3x Faster than FUSE for Data Loading](https://juicefs.com/en/blog/release-notes/juicefs-1-3-python-sdk), 2025-05-22, Feihu Mo
-- [JuiceFS Enterprise Edition 5.2: Supporting Hundreds of Billions of Files and Windows Clients](https://juicefs.com/en/blog/release-notes/juicefs-5-2-windows-client), 2025-06-05
-- [Deep Dive into JuiceFS Permission Management: Full Compatibility with Linux Security Mechanisms](https://juicefs.com/en/blog/engineering/linux-file-system-juicefs-access-management), 2025-06-26, Jiefeng Huang
-- [JuiceFS 1.3 Beta 2 Integrates Apache Ranger for Fine-Grained Access Control](https://juicefs.com/en/blog/release-notes/juicefs-1-3-integrates-apache-ranger-access-control), 2025-06-18, Youpeng Tang
+- [DeepSeek 3FS vs. JuiceFS: Architectures, Features, and Innovations in AI Storage](https://juicefs.com/en/blog/engineering/deepseek-3fs-vs-juicefs-architecture-feature), 2025-04-02, Qing Liu
 - [How JuiceFS Achieves Consistency and Low-Latency Data Distribution in Multi-Cloud Architectures](https://juicefs.com/en/blog/solutions/consistency-low-latency-data-distribution-multi-cloud-storage), 2025-01-22, Jerry Cai
 - [Code-Level Analysis: Design Principles of JuiceFS Metadata and Data Storage](https://juicefs.com/en/blog/engineering/design-metadata-data-storage), 2024-12-12, Arthur
 - [JuiceFS Evaluation with AWS EFS and FSx for Lustre](https://juicefs.com/en/blog/engineering/juicefs-vs-efs-fsx-for-lustre), 2024-08-07, Brent Bai
