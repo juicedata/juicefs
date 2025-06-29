@@ -512,6 +512,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			content[i] = getMockData(seed, i)
 		}
 		pool := make(chan struct{}, 4)
+		errCh := make(chan error, total)
 		var wg sync.WaitGroup
 		for i := 1; i <= total; i++ {
 			pool <- struct{}{}
@@ -524,11 +525,17 @@ func testStorage(t *testing.T, s ObjectStorage) {
 				}()
 				parts[num-1], err = s.UploadPart(k, upload.UploadID, num, content[num-1])
 				if err != nil {
-					t.Fatalf("multipart upload error: %v", err)
+					errCh <- fmt.Errorf("multipart upload error: %v", err)
 				}
 			}()
 		}
 		wg.Wait()
+		close(errCh)
+
+		for err := range errCh {
+			t.Fatalf("Test failed: %v", err)
+		}
+
 		// overwrite the first part
 		firstPartContent := append(getMockData(seed, 0), getMockData(seed, 0)...)
 		if len(firstPartContent) < int(s.Limits().MaxPartSize) {
