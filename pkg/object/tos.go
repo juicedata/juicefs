@@ -83,15 +83,26 @@ func (t *tosClient) Get(key string, off, limit int64, getters ...AttrGetter) (io
 		_ = resp.Content.Close()
 		return nil, err
 	}
+	if off == 0 && limit == -1 {
+		v, _ := resp.Meta.Get(checksumAlgr)
+		resp.Content = verifyChecksum(resp.Content, v, resp.ContentLength)
+	}
 	return resp.Content, nil
 }
 
 func (t *tosClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
+	var meta map[string]string
+	if ins, ok := in.(io.ReadSeeker); ok {
+		meta = map[string]string{
+			checksumAlgr: generateChecksum(ins),
+		}
+	}
 	resp, err := t.client.PutObjectV2(context.Background(), &tos.PutObjectV2Input{
 		PutObjectBasicInput: tos.PutObjectBasicInput{
 			Bucket:       t.bucket,
 			Key:          key,
 			StorageClass: enum.StorageClassType(t.sc),
+			Meta:         meta,
 		},
 		Content: in,
 	})
@@ -289,7 +300,8 @@ func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		hostParts[1]+"."+hostParts[2],
 		tos.WithRegion(strings.TrimPrefix(hostParts[1], "tos-")),
 		tos.WithCredentials(credentials),
-		tos.WithEnableVerifySSL(httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify))
+		tos.WithEnableVerifySSL(httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify),
+		tos.WithEnableCRC(false))
 	if err != nil {
 		return nil, err
 	}
