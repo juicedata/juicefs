@@ -927,11 +927,18 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 				return
 			}
 			target := string(buf)
-			if strings.HasPrefix(target, "/") || strings.Contains(target, "://") {
+			if strings.Contains(target, "://") {
 				return &FileStat{name: target}, syscall.ENOTSUP
 			}
-			target = path.Join(strings.Join(ss[:i], "/"), target)
-			fi, err = fs.doResolve(ctx, target, followLastSymlink, visited)
+			if strings.HasPrefix(target, "/") {
+				// When a symlink target starts with "/", it would typically refer to
+				// an absolute path on the host filesystem, which is outside the scope
+				// of the JuiceFS mount. we return ENOENT (no such file or directory)
+				return nil, syscall.ENOENT
+			} else {
+				target = path.Join(strings.Join(ss[:i], "/"), target)
+				fi, err = fs.doResolve(ctx, target, followLastSymlink, visited)
+			}
 			if err != 0 {
 				return
 			}
