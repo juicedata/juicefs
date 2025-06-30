@@ -1,0 +1,183 @@
+name: "JuiceFS mdtest Performance Comparison"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-*'
+    paths:
+      - '**/perf-test.yml'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-*'
+    paths:
+      - '**/perf-test.yml'
+  schedule:
+    - cron:  '0 20 * * *'
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+      current_version_commit:
+        type: string
+        description: "Commit hash for current version to test (default: HEAD)"
+        required: false
+        default: ''
+      old_version_commit:
+        type: string
+        description: "Commit hash for old version to compare (default: latest release)"
+        required: false
+        default: ''
+
+jobs:
+  mdtest-perf-test:
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        meta: ['redis', 'mysql', 'tikv']
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Need full history for checking out specific commits
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc
+          sudo pip install minio
+
+      - name: Set Variable
+        id: vars
+        run: |
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
+          else
+            echo "target=juicefs" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Prepare meta db
+        run: |
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+
+      - name: Install mdtest
+        run: |
+          sudo apt-get install mpich openmpi-bin libopenmpi-dev
+          wget https://github.com/hpc/ior/releases/download/3.3.0/ior-3.3.0.tar.gz
+          tar -xzvf ior-3.3.0.tar.gz
+          cd ior-3.3.0
+          ./configure && make && sudo make install
+
+      # Build and test current version (either specified commit or HEAD)
+      - name: Checkout and build current version
+        if: ${{ inputs.current_version_commit != '' }}
+        run: |
+          git checkout ${{ inputs.current_version_commit }}
+          make clean
+          ./configure
+          make
+
+      - name: Build current version (default)
+        if: ${{ inputs.current_version_commit == '' }}
+        timeout-minutes: 10
+        uses: ./.github/actions/build
+        with:
+          target: ${{steps.vars.outputs.target}}
+
+      - name: Run mdtest with current version
+        run: |
+          mkdir -p /tmp/jfs/mdtest
+          sudo chmod 777 /tmp/jfs
+          
+          # Mount current version
+          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
+          sudo chmod 777 /mnt
+          ./juicefs format $meta_url current-version-test --trash-days 0 --bucket=/mnt/jfs
+          ./juicefs mount -d "$meta_url" /tmp/jfs --no-usage-report
+          
+          # Run tests
+          chmod +x .github/scripts/run_mdtest.sh
+          .github/scripts/run_mdtest.sh /tmp/jfs "./results/current_${{matrix.meta}}" "current"
+
+      - name: Cleanup current version
+        run: |
+          source .github/scripts/common/common.sh
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
+          META_URL=$meta_url
+          uuid=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4)
+          ./juicefs destroy --force $meta_url $uuid
+          ./juicefs umount /tmp/jfs
+          rm -rf /mnt/jfs
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+          prepare_test
+
+      # Build and test old version (either specified commit or latest release)
+      - name: Checkout and build old version from commit
+        if: ${{ inputs.old_version_commit != '' }}
+        run: |
+          git checkout ${{ inputs.old_version_commit }}
+          make clean
+          ./configure
+          make
+          mv juicefs juicefs_old
+          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
+          mkdir -p /tmp/jfs_old/mdtest
+          sudo chmod 777 /tmp/jfs_old
+          ./juicefs format "$meta_url" old-version-test --trash-days 0 --bucket=/mnt/jfs
+          ./juicefs mount -d "$meta_url" /tmp/jfs_old --no-usage-report
+
+      - name: Install old JuiceFS version (default)
+        if: ${{ inputs.old_version_commit == '' }}
+        run: |
+          curl -sSL https://d.juicefs.com/install | sh -
+          JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
+          if [[ $JFS_LATEST_TAG == 1.2.* && "${{matrix.meta}}" == "mysql" ]]; then
+            meta_url=${meta_url%%\?*}
+            echo "Removed query parameters from MySQL URL for JuiceFS v1.2"
+          fi
+          juicefs format "$meta_url" old-version-test --trash-days 0 --bucket=/mnt/jfs
+          mkdir -p /tmp/jfs_old/mdtest
+          sudo chmod 777 /tmp/jfs_old
+          juicefs mount -d "$meta_url" /tmp/jfs_old --no-usage-report
+
+      - name: Run mdtest with old version
+        run: |
+          .github/scripts/run_mdtest.sh /tmp/jfs_old "./results/old_${{matrix.meta}}" "old"
+
+      - name: Compare results
+        run: |
+          chmod +x .github/scripts/compare_results.sh
+          .github/scripts/compare_results.sh "./results/current_${{matrix.meta}}" "./results/old_${{matrix.meta}}" || true
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: mdtest-results-${{ matrix.meta }}
+          path: results
+
+      - name: Send Slack Notification
+        if: failure()
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
