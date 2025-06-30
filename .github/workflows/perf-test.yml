@@ -106,6 +106,10 @@ jobs:
           # Mount current version
           meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
           sudo chmod 777 /mnt
+          if [[ "${{matrix.meta}}" == "mysql" ]]; then
+            meta_url=${meta_url%%\?*}
+            echo "Removed query parameters from MySQL URL"
+          fi
           ./juicefs format $meta_url current-version-test --trash-days 0 --bucket=/mnt/jfs
           ./juicefs mount -d "$meta_url" /tmp/jfs --no-usage-report
           
@@ -140,6 +144,10 @@ jobs:
           meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
           mkdir -p /tmp/jfs_old/mdtest
           sudo chmod 777 /tmp/jfs_old
+          if [[ "${{matrix.meta}}" == "mysql" ]]; then
+            meta_url=${meta_url%%\?*}
+            echo "Removed query parameters from MySQL URL"
+          fi
           ./juicefs format "$meta_url" old-version-test --trash-days 0 --bucket=/mnt/jfs
           ./juicefs mount -d "$meta_url" /tmp/jfs_old --no-usage-report
           cd ../juicefs
@@ -150,9 +158,9 @@ jobs:
           curl -sSL https://d.juicefs.com/install | sh -
           JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
           meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
-          if [[ $JFS_LATEST_TAG == 1.2.* && "${{matrix.meta}}" == "mysql" ]]; then
+          if [[ "${{matrix.meta}}" == "mysql" ]]; then
             meta_url=${meta_url%%\?*}
-            echo "Removed query parameters from MySQL URL for JuiceFS v1.2"
+            echo "Removed query parameters from MySQL URL"
           fi
           juicefs format "$meta_url" old-version-test --trash-days 0 --bucket=/mnt/jfs
           mkdir -p /tmp/jfs_old/mdtest
