@@ -83,10 +83,15 @@ jobs:
       - name: Checkout and build current version
         if: ${{ inputs.current_version_commit != '' }}
         run: |
+          mkdir -p ../juicefs-build
+          cd ../juicefs-build
+          git clone $GITHUB_SERVER_URL/$GITHUB_REPOSITORY .
           git checkout ${{ inputs.current_version_commit }}
           make clean
           ./configure
           make
+          cp juicefs ../juicefs/
+          cd ../juicefs
 
       - name: Build current version (default)
         if: ${{ inputs.current_version_commit == '' }}
@@ -129,16 +134,19 @@ jobs:
       - name: Checkout and build old version from commit
         if: ${{ inputs.old_version_commit != '' }}
         run: |
+          mkdir -p ../juicefs-build2
+          cd ../juicefs-build2
+          git clone $GITHUB_SERVER_URL/$GITHUB_REPOSITORY .
           git checkout ${{ inputs.old_version_commit }}
           make clean
           ./configure
           make
-          mv juicefs juicefs_old
           meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
           mkdir -p /tmp/jfs_old/mdtest
           sudo chmod 777 /tmp/jfs_old
           ./juicefs format "$meta_url" old-version-test --trash-days 0 --bucket=/mnt/jfs
           ./juicefs mount -d "$meta_url" /tmp/jfs_old --no-usage-report
+          cd ../juicefs
 
       - name: Install old JuiceFS version (default)
         if: ${{ inputs.old_version_commit == '' }}
