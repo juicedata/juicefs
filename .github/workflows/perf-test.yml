@@ -87,8 +87,6 @@ jobs:
           cd ../juicefs-build
           git clone $GITHUB_SERVER_URL/$GITHUB_REPOSITORY .
           git checkout ${{ inputs.current_version_commit }}
-          make clean
-          ./configure
           make
           cp juicefs ../juicefs/
           cd ../juicefs
@@ -138,8 +136,6 @@ jobs:
           cd ../juicefs-build2
           git clone $GITHUB_SERVER_URL/$GITHUB_REPOSITORY .
           git checkout ${{ inputs.old_version_commit }}
-          make clean
-          ./configure
           make
           meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
           mkdir -p /tmp/jfs_old/mdtest
