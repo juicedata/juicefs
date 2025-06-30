@@ -259,8 +259,8 @@ type dbMeta struct {
 	tablePrefix   string
 }
 
-var _ Meta = &dbMeta{}
-var _ engine = &dbMeta{}
+var _ Meta = (*dbMeta)(nil)
+var _ engine = (*dbMeta)(nil)
 
 type dbSnap struct {
 	node    map[Ino]*node
@@ -398,7 +398,7 @@ func (m *dbMeta) initStatement() {
 	m.statement["node.*"] = fmt.Sprintf("%snode.*", m.tablePrefix)
 	m.statement[`INSERT INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?) ON CONFLICT DO NOTHING`] =
 		fmt.Sprintf(`INSERT INTO %schunk_ref (chunkid, size, refs) VALUES (?,?,?) ON CONFLICT DO NOTHING`, m.tablePrefix)
-	m.statement[`INSERT IGNORE INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?)`] = 
+	m.statement[`INSERT IGNORE INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?)`] =
 		fmt.Sprintf(`INSERT IGNORE INTO %schunk_ref (chunkid, size, refs) VALUES (?,?,?)`, m.tablePrefix)
 }
 

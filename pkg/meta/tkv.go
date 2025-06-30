@@ -84,8 +84,8 @@ type kvMeta struct {
 	snap   map[Ino]*DumpedEntry
 }
 
-var _ Meta = &kvMeta{}
-var _ engine = &kvMeta{}
+var _ Meta = (*kvMeta)(nil)
+var _ engine = (*kvMeta)(nil)
 
 var drivers = make(map[string]func(string) (tkvClient, error))
 

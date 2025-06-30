@@ -94,8 +94,8 @@ type redisMeta struct {
 	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
 }
 
-var _ Meta = &redisMeta{}
-var _ engine = &redisMeta{}
+var _ Meta = (*redisMeta)(nil)
+var _ engine = (*redisMeta)(nil)
 
 func init() {
 	Register("redis", newRedisMeta)

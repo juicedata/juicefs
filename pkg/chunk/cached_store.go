@@ -1185,4 +1185,4 @@ func (store *cachedStore) UpdateLimit(upload, download int64) {
 	}
 }
 
-var _ ChunkStore = &cachedStore{}
+var _ ChunkStore = (*cachedStore)(nil)
