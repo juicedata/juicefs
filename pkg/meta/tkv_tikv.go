@@ -37,8 +37,8 @@ import (
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/txnkv"
 	"github.com/tikv/client-go/v2/txnkv/txnutil"
-	"go.uber.org/zap"
 	pd "github.com/tikv/pd/client"
+	"go.uber.org/zap"
 )
 
 func init() {
@@ -279,7 +279,7 @@ func (c *tikvClient) scan(prefix []byte, handler func(key, value []byte) bool) e
 	start := prefix
 OUT:
 	for {
-		ts, err := c.client.CurrentTimestamp("global")
+		ts, err := c.client.CurrentTimestamp(oracle.GlobalTxnScope)
 		if err != nil {
 			return err
 		}
@@ -323,7 +323,14 @@ func (c *tikvClient) gc() {
 	if c.gcInterval == 0 {
 		return
 	}
-	safePoint, err := c.client.GC(context.Background(), oracle.GoTimeToTS(time.Now().Add(-c.gcInterval)))
+
+	currentTs, err := c.client.CurrentTimestamp(oracle.GlobalTxnScope)
+	if err != nil {
+		logger.Warnf("TiKV GC was skipped due to failure in obtaining the current timestamp.")
+		return
+	}
+
+	safePoint, err := c.client.GC(context.Background(), oracle.GoTimeToTS(oracle.GetTimeFromTS(currentTs).Add(-c.gcInterval)))
 	if err == nil {
 		logger.Debugf("TiKV GC returns new safe point: %d (%s)", safePoint, oracle.GetTimeFromTS(safePoint))
 	} else {
