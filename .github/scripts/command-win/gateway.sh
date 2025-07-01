@@ -8,7 +8,7 @@ wget https://dl.min.io/client/mc/release/windows-amd64/archive/mc.RELEASE.2021-0
 chmod +x mc.exe
 export MINIO_ROOT_USER=admin
 export MINIO_ROOT_PASSWORD=admin123
-export MINIO_REFRESH_IAM_INTERVAL=10s
+export MINIO_REFRESH_IAM_INTERVAL=3s
 
 prepare_test()
 {
@@ -46,7 +46,7 @@ test_user_management()
     prepare_test
     start_two_gateway
     ./mc.exe admin user add gateway1 user1 admin123
-    sleep 12
+    sleep 5
     user=$(./mc.exe admin user list gateway2 | grep user1) || true
     if [ -z "$user" ]
     then
@@ -72,7 +72,7 @@ test_user_management()
     compare_md5sum file1 mc.exe
     ./mc.exe admin user disable gateway1 user1
     ./mc.exe admin user remove gateway2 user1
-    sleep 12
+    sleep 5
     user=$(./mc.exe admin user list gateway1 | grep user1) || true
     if [ ! -z "$user" ]
     then
@@ -130,7 +130,7 @@ test_mult_gateways_set_group()
     ./mc.exe admin user add gateway1 user3 admin123
     ./mc.exe admin group add gateway1 testcents user1 user2 user3
     ./mc.exe admin group disable gateway2 testcents
-    sleep 12
+    sleep 5
     result=$(./mc.exe admin group info gateway2 testcents | grep Members |awk '{print $2}') || true
     if [ "$result" != "user1,user2,user3" ]
     then
@@ -142,7 +142,7 @@ test_mult_gateways_set_group()
     ./mc.exe admin group add gateway1 testcents user4
     sleep 1
     ./mc.exe admin group disable gateway2 testcents
-    sleep 12
+    sleep 5
     result=$(./mc.exe admin group info gateway2 testcents | grep Members |awk '{print $2}') || true
     if [ "$result" != "user1,user2,user3,user4" ]
     then

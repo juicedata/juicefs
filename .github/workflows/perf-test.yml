@@ -122,13 +122,16 @@ jobs:
           source .github/scripts/common/common.sh
           source .github/scripts/start_meta_engine.sh
           meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
-          META_URL=$meta_url
+          if [[ "${{matrix.meta}}" == "mysql" ]]; then
+            meta_url=${meta_url%%\?*}
+            echo "Removed query parameters from MySQL URL"
+          fi
+          META_URL=$meta_url          
           uuid=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4)
           ./juicefs destroy --force $meta_url $uuid
           ./juicefs umount /tmp/jfs
           rm -rf /mnt/jfs
           start_meta_engine ${{matrix.meta}}
-          meta_url=$(get_meta_url ${{matrix.meta}})
           create_database $meta_url
           prepare_test
 

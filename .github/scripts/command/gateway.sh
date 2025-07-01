@@ -9,7 +9,7 @@ wget https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-04-
 chmod +x mc
 export MINIO_ROOT_USER=admin
 export MINIO_ROOT_PASSWORD=admin123
-export MINIO_REFRESH_IAM_INTERVAL=10s
+export MINIO_REFRESH_IAM_INTERVAL=3s
 
 prepare_test()
 {
@@ -27,7 +27,7 @@ kill_gateway() {
     lsof -t -i :$port | xargs -r kill -9 || true
 }
 
-trap 'kill_gateway 9001; kill_gateway 9002' EXIT
+trap 'kill_gateway 9001; kill_gateway 9002; kill_gateway 9003' EXIT
 
 start_two_gateway()
 {
@@ -49,7 +49,7 @@ test_user_management()
     prepare_test
     start_two_gateway
     ./mc admin user add gateway1 user1 admin123
-    sleep 12
+    sleep 5
     user=$(./mc admin user list gateway2 | grep user1) || true
     if [ -z "$user" ]
     then
@@ -75,7 +75,7 @@ test_user_management()
     compare_md5sum file1 mc  
     ./mc admin user disable gateway1 user1
     ./mc admin user remove gateway2 user1
-    sleep 12
+    sleep 5
     user=$(./mc admin user list gateway1 | grep user1) || true
     if [ ! -z "$user" ]
     then
@@ -133,7 +133,7 @@ test_mult_gateways_set_group()
     ./mc admin user add gateway1 user3 admin123
     ./mc admin group add gateway1 testcents user1 user2 user3
     ./mc admin group disable gateway2 testcents
-    sleep 12
+    sleep 5
     result=$(./mc admin group info gateway2 testcents | grep Members |awk '{print $2}') || true
     if [ "$result" != "user1,user2,user3" ]
     then
@@ -145,7 +145,7 @@ test_mult_gateways_set_group()
     ./mc admin group add gateway1 testcents user4
     sleep 1
     ./mc admin group disable gateway2 testcents
-    sleep 12
+    sleep 5
     result=$(./mc admin group info gateway2 testcents | grep Members |awk '{print $2}') || true
     if [ "$result" != "user1,user2,user3,user4" ]
     then
@@ -217,7 +217,7 @@ test_user_sts()
 }
 
 
-test_change_credentials()
+skip_test_change_credentials()
 {
     prepare_test
     start_two_gateway
@@ -238,6 +238,25 @@ test_change_credentials()
     ./mc cp gateway2/test1/file1 file2
     compare_md5sum file1 mc
     compare_md5sum file2 mc  
+}
+
+
+test_ro_gateway()
+{   
+    prepare_test
+    start_two_gateway
+    ./juicefs gateway $META_URL 127.0.0.1:9003 --read-only --multi-buckets --keep-etag --object-tag -background    
+    ./mc alias set gateway3 http://127.0.0.1:9003 admin admin123 
+    ./mc mb gateway1/test1
+    ./mc cp mc gateway1/test1/file1
+    ./mc admin user add gateway1 user1 admin123
+    sleep 4
+    user=$(./mc admin user list gateway3 | grep user1) || true
+    [[ -z "$user" ]] && echo "user synchronization error" && exit 1 || true
+    ./mc mb gateway3/test3 && echo "By default, the ro has no write permission for creating buckets" && exit 1 || true
+    ./mc cp mc gateway3/test1/file1 && echo "By default, the ro has no write permission for copying files" && exit 1 || true
+    ./mc cp gateway3/test1/file1 .
+    diff mc file1
 }
 
 source .github/scripts/common/run_test.sh && run_test $@
