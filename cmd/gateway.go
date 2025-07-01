@@ -101,6 +101,11 @@ func cmdGateway() *cli.Command {
 			Value: "5m",
 			Usage: "interval to reload gateway IAM from configuration",
 		},
+		&cli.StringFlag{
+			Name:  "mountpoint",
+			Value: "s3gateway",
+			Usage: "the mount point for current volume (to follow symlink)",
+		},
 	}
 
 	return &cli.Command{
@@ -150,7 +155,7 @@ func gateway(c *cli.Context) error {
 
 	metaAddr := c.Args().Get(0)
 	listenAddr := c.Args().Get(1)
-	conf, jfs := initForSvc(c, "s3gateway", metaAddr, listenAddr)
+	conf, jfs := initForSvc(c, c.String("mountpoint"), metaAddr, listenAddr)
 
 	umask, err := strconv.ParseUint(c.String("umask"), 8, 16)
 	if err != nil {

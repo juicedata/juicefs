@@ -228,6 +228,10 @@ func syncActionFlags() []cli.Flag {
 			Name:  "dry",
 			Usage: "don't copy file",
 		},
+		&cli.StringFlag{
+			Name:  "mountpoint",
+			Usage: "the mount point for current volume (to follow symlink)",
+		},
 	})
 }
 
@@ -453,7 +457,7 @@ func doSync(c *cli.Context) error {
 		logger.Warnf("The include option needs to be used with the exclude option, otherwise the result of the current sync may not match your expectations")
 	}
 	config := sync.NewConfigFromCli(c)
-
+	cliCtx = c
 	if config.Manager != "" {
 		logger.Debugf("worker process start")
 	}

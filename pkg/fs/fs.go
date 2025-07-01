@@ -927,11 +927,16 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 				return
 			}
 			target := string(buf)
-			if strings.HasPrefix(target, "/") || strings.Contains(target, "://") {
+			if strings.Contains(target, "://") {
 				return &FileStat{name: target}, syscall.ENOTSUP
 			}
-			target = path.Join(strings.Join(ss[:i], "/"), target)
-			fi, err = fs.doResolve(ctx, target, followLastSymlink, visited)
+			if strings.HasPrefix(target, "/") {
+				target = strings.Replace(target, path.Clean(fs.conf.Mountpoint), "", 1)
+				fi, err = fs.doResolve(ctx, target, followLastSymlink, visited)
+			} else {
+				target = path.Join(strings.Join(ss[:i], "/"), target)
+				fi, err = fs.doResolve(ctx, target, followLastSymlink, visited)
+			}
 			if err != 0 {
 				return
 			}
