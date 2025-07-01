@@ -243,4 +243,4 @@ func (s *RestfulStorage) List(prefix, marker, token, delimiter string, limit int
 	return nil, false, "", notSupported
 }
 
-var _ ObjectStorage = &RestfulStorage{}
+var _ ObjectStorage = (*RestfulStorage)(nil)

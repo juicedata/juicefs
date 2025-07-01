@@ -38,7 +38,7 @@ import (
 	"github.com/vmware/go-nfs-client/nfs/rpc"
 )
 
-var _ ObjectStorage = &nfsStore{}
+var _ ObjectStorage = (*nfsStore)(nil)
 
 type nfsStore struct {
 	DefaultObjectStorage
