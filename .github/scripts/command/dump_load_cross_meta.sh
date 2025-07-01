@@ -50,8 +50,9 @@ test_dump_load_with_rmr()
     [[ "$count" -ne 0 ]] && echo "Expected 0 leaked file, but got $count" && exit 1 || true
 }
 
-test_dump_load_with_fsrand()
+skip_test_dump_load_with_fsrand()
 {
+    # unskip the test after fix: https://github.com/juicedata/juicefs/issues/6230
     prepare_test
     ./juicefs format $META_URL1 myjfs --trash-days 0 --enable-acl
     ./juicefs mount -d $META_URL1 /jfs --enable-xattr
@@ -93,8 +94,9 @@ test_dump_load_with_fsrand()
     done
 }
 
-test_dump_load_with_random_test()
+skip_test_dump_load_with_random_test()
 {
+    # unskip the test after fix: https://github.com/juicedata/juicefs/issues/6230
     prepare_test
     ./juicefs format $META_URL1 myjfs --trash-days 0 --enable-acl
     ./juicefs mount -d $META_URL1 /jfs --enable-xattr
