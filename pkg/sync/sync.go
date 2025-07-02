@@ -26,7 +26,6 @@ import (
 	"math"
 	"os"
 	"path"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -1468,7 +1467,7 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 		if trimKey != key {
 			logger.Infof("found a prefix with a space character:%q", key)
 		}
-		prefixs <- filepath.Clean(trimKey)
+		prefixs <- path.Clean(trimKey)
 	}
 	close(prefixs)
 
