@@ -420,10 +420,13 @@ func (f *fileReader) checkReadahead(block *frange) int {
 	used := uint64(atomic.LoadInt64(&readBufferUsed))
 	if readahead == 0 && f.r.blockSize <= f.r.readAheadMax && (block.off == 0 || seqdata > block.len) { // begin with read-ahead turned on
 		ses.readahead = f.r.blockSize
-	} else if readahead < f.r.readAheadMax && seqdata >= readahead && f.r.readAheadTotal-used > readahead*4 {
+	} else if readahead < f.r.readAheadMax && seqdata >= readahead && f.r.readAheadTotal > used+readahead*4 {
 		ses.readahead *= 2
-	} else if readahead >= f.r.blockSize && (f.r.readAheadTotal-used < readahead/2 || seqdata < readahead/4) {
+	} else if readahead >= f.r.blockSize && (f.r.readAheadTotal < used+readahead/2 || seqdata < readahead/4) {
 		ses.readahead /= 2
+		if seqdata > readahead/4 {
+			ses.total = readahead / 4
+		}
 	}
 	if ses.readahead >= f.r.blockSize {
 		ahead := frange{block.end(), ses.readahead}
