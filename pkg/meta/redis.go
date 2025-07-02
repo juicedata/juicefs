@@ -1523,7 +1523,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		}
 		var updateParent bool
 		now := time.Now()
-		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime {
+		if !parent.IsTrash() && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -1607,7 +1607,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 	}, m.inodeKey(parent), m.entryKey(parent))
 	if err == nil && trash == 0 {
 		if _type == TypeFile && attr.Nlink == 0 {
-			m.fileDeleted(opened, isTrash(parent), inode, attr.Length)
+			m.fileDeleted(opened, parent.IsTrash(), inode, attr.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1693,7 +1693,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, s
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, m.entryKey(parent), name)
-			if !isTrash(parent) {
+			if !parent.IsTrash() {
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
 			if trash > 0 {
@@ -1731,7 +1731,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 	var tattr Attr
 	var newSpace, newInode int64
 	keys := []string{m.inodeKey(parentSrc), m.entryKey(parentSrc), m.inodeKey(parentDst), m.entryKey(parentDst)}
-	if isTrash(parentSrc) {
+	if parentSrc.IsTrash() {
 		// lock the parentDst
 		keys[0], keys[2] = keys[2], keys[0]
 	}
@@ -2003,7 +2003,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				}
 			}
 			if parentDst != parentSrc {
-				if !isTrash(parentSrc) && supdate {
+				if !parentSrc.IsTrash() && supdate {
 					pipe.Set(ctx, m.inodeKey(parentSrc), m.marshal(&sattr), 0)
 				}
 				if iattr.Parent == 0 {

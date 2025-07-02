@@ -936,7 +936,7 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 			}
 		}
 	}
-	if st == 0 && attr.Typ == TypeDirectory && !isTrash(parent) {
+	if st == 0 && attr.Typ == TypeDirectory && !parent.IsTrash() {
 		m.parentMu.Lock()
 		m.dirParents[*inode] = parent
 		m.parentMu.Unlock()
@@ -1089,7 +1089,7 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}
 	if err == 0 {
 		m.of.Update(inode, attr)
-		if attr.Typ == TypeDirectory && inode != RootInode && !isTrash(attr.Parent) {
+		if attr.Typ == TypeDirectory && inode != RootInode && !attr.Parent.IsTrash() {
 			m.parentMu.Lock()
 			m.dirParents[inode] = attr.Parent
 			m.parentMu.Unlock()
@@ -1167,7 +1167,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if _type < TypeFile || _type > TypeSocket {
 		return syscall.EINVAL
 	}
-	if isTrash(parent) {
+	if parent.IsTrash() {
 		return syscall.EPERM
 	}
 	if parent == RootInode && name == TrashName {
@@ -1265,7 +1265,7 @@ func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, in
 }
 
 func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
-	if isTrash(parent) {
+	if parent.IsTrash() {
 		return syscall.EPERM
 	}
 	if parent == RootInode && name == TrashName {
@@ -1350,7 +1350,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 }
 
 func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
-	if parent == RootInode && name == TrashName || isTrash(parent) && ctx.Uid() != 0 {
+	if parent == RootInode && name == TrashName || parent.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	if m.conf.ReadOnly {
@@ -1381,7 +1381,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
-	if parent == RootInode && name == TrashName || parent == TrashInode || isTrash(parent) && ctx.Uid() != 0 {
+	if parent == RootInode && name == TrashName || parent == TrashInode || parent.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	if m.conf.ReadOnly {
@@ -1393,7 +1393,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	var inode Ino
 	st := m.en.doRmdir(ctx, parent, name, &inode, skipCheckTrash...)
 	if st == 0 {
-		if !isTrash(parent) {
+		if !parent.IsTrash() {
 			m.parentMu.Lock()
 			delete(m.dirParents, inode)
 			m.parentMu.Unlock()
@@ -1408,7 +1408,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	if parentSrc == RootInode && nameSrc == TrashName || parentDst == RootInode && nameDst == TrashName {
 		return syscall.EPERM
 	}
-	if isTrash(parentDst) || isTrash(parentSrc) && ctx.Uid() != 0 {
+	if parentDst.IsTrash() || parentSrc.IsTrash() && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	if m.conf.ReadOnly {
@@ -1436,7 +1436,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	parentSrc = m.checkRoot(parentSrc)
 	parentDst = m.checkRoot(parentDst)
 	var quotaSrc, quotaDst Ino
-	if !isTrash(parentSrc) {
+	if !parentSrc.IsTrash() {
 		quotaSrc, _ = m.getQuotaParent(ctx, parentSrc)
 	}
 	if parentSrc == parentDst {
@@ -2453,7 +2453,7 @@ func (m *baseMeta) deleteSlice(id uint64, size uint32) {
 }
 
 func (m *baseMeta) toTrash(parent Ino) bool {
-	if isTrash(parent) {
+	if parent.IsTrash() {
 		return false
 	}
 	return m.getFormat().TrashDays > 0
@@ -2745,7 +2745,7 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 
 func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
 
-	if isTrash(srcIno) || isTrash(srcParentIno) || isTrash(parent) || (parent == RootInode && name == TrashName) {
+	if srcIno.IsTrash() || srcParentIno.IsTrash() || parent.IsTrash() || (parent == RootInode && name == TrashName) {
 		return syscall.EPERM
 	}
 

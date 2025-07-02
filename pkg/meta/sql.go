@@ -1848,7 +1848,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		defer func() { m.of.InvalidateChunk(e.Inode, invalidateAttrOnly) }()
 
 		var updateParent bool
-		if !isTrash(parent) && time.Duration(now-pn.getMtime()) >= m.conf.SkipDirMtime {
+		if !parent.IsTrash() && time.Duration(now-pn.getMtime()) >= m.conf.SkipDirMtime {
 			pn.setMtime(now)
 			pn.setCtime(now)
 			updateParent = true
@@ -1921,7 +1921,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	})
 	if err == nil && trash == 0 {
 		if n.Type == TypeFile && n.Nlink == 0 {
-			m.fileDeleted(opened, isTrash(parent), n.Inode, n.Length)
+			m.fileDeleted(opened, parent.IsTrash(), n.Inode, n.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -2035,7 +2035,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 				return err
 			}
 		}
-		if !isTrash(parent) {
+		if !parent.IsTrash() {
 			_, err = s.SetExpr("nlink", "nlink - 1").Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode})
 		}
 		return err
@@ -2085,7 +2085,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dn node
 	var newSpace, newInode int64
 	parentLocks := []Ino{parentDst}
-	if !isTrash(parentSrc) { // there should be no conflict if parentSrc is in trash, relax lock to accelerate `restore` subcommand
+	if !parentSrc.IsTrash() { // there should be no conflict if parentSrc is in trash, relax lock to accelerate `restore` subcommand
 		parentLocks = append(parentLocks, parentSrc)
 	}
 	err := m.txn(func(s *xorm.Session) error {
@@ -2370,7 +2370,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return err
 		}
 
-		if parentDst != parentSrc && !isTrash(parentSrc) && supdate {
+		if parentDst != parentSrc && !parentSrc.IsTrash() && supdate {
 			if dupdate && dpn.Inode < spn.Inode {
 				if _n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", dstnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&dpn, &node{Inode: parentDst}); err != nil || _n == 0 {
 					if err == nil {
