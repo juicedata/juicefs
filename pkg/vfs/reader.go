@@ -424,9 +424,6 @@ func (f *fileReader) checkReadahead(block *frange) int {
 		ses.readahead *= 2
 	} else if readahead >= f.r.blockSize && (f.r.readAheadTotal < used+readahead/2 || seqdata < readahead/4) {
 		ses.readahead /= 2
-		if seqdata > readahead/4 {
-			ses.total = readahead / 4
-		}
 	}
 	if ses.readahead >= f.r.blockSize {
 		ahead := frange{block.end(), ses.readahead}
