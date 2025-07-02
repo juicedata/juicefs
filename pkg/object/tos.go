@@ -293,6 +293,10 @@ func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	if err != nil {
 		return nil, fmt.Errorf("invalid endpoint: %v, error: %v", endpoint, err)
 	}
+	disableChecksum := strings.EqualFold(uri.Query().Get("disable-checksum"), "true")
+	if disableChecksum {
+		logger.Infof("default CRC checksum is disabled")
+	}
 	hostParts := strings.SplitN(uri.Host, ".", 3)
 	credentials := tos.NewStaticCredentials(accessKey, secretKey)
 	credentials.WithSecurityToken(token)
@@ -301,7 +305,7 @@ func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		tos.WithRegion(strings.TrimPrefix(hostParts[1], "tos-")),
 		tos.WithCredentials(credentials),
 		tos.WithEnableVerifySSL(httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify),
-		tos.WithEnableCRC(false))
+		tos.WithEnableCRC(!disableChecksum))
 	if err != nil {
 		return nil, err
 	}
