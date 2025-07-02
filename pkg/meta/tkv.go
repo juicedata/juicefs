@@ -1785,7 +1785,7 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			return syscall.EPERM
 		}
 		buf := tx.get(m.entryKey(parent, name))
-		if buf != nil || buf == nil && m.conf.CaseInsensi && m.resolveCase(ctx, parent, name) != nil {
+		if buf != nil || m.conf.CaseInsensi && m.resolveCase(ctx, parent, name) != nil {
 			return syscall.EEXIST
 		}
 
