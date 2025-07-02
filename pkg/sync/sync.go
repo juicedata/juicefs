@@ -884,6 +884,10 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			} else {
 				srcChksum, err = CopyData(src, dst, key, obj.Size(), config.CheckAll || config.CheckNew)
 			}
+			if config.IgnoreExternalLink && errors.Is(err, utils.ErrExtlink) {
+				logger.Warnf("external link %s, skip copying", key)
+				err = utils.ErrSkipped
+			}
 
 			if err == nil && config.CheckChange {
 				err = checkChange(src, dst, obj, key, config)

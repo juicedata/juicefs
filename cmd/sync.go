@@ -232,6 +232,10 @@ func syncActionFlags() []cli.Flag {
 			Name:  "mountpoint",
 			Usage: "the mount point for current volume (to follow symlink)",
 		},
+		&cli.BoolFlag{
+			Name:  "ignore-external-link",
+			Usage: "ignore external link, i.e. the link target is outside of the mount point",
+		},
 	})
 }
 
