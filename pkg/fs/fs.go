@@ -931,9 +931,8 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 				return &FileStat{name: target}, syscall.ENOTSUP
 			}
 			if strings.HasPrefix(target, "/") {
-				mp := path.Clean(fs.conf.Mountpoint)
-				if strings.HasPrefix(target, mp) {
-					target = target[len(mp):]
+				if strings.HasPrefix(target, fs.conf.Mountpoint) {
+					target = target[len(fs.conf.Mountpoint):]
 				} else {
 					return fi, utils.ErrExtlink
 				}
