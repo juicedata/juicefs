@@ -932,6 +932,9 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 			}
 			if strings.HasPrefix(target, "/") {
 				mp := fs.conf.Mountpoint
+				if !strings.HasSuffix(mp, "/") {
+					mp += "/"
+				}
 				if strings.HasPrefix(target, mp) {
 					target = target[len(mp):]
 				} else {
