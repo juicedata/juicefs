@@ -37,9 +37,11 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/urfave/cli/v2"
 )
 
 var dirSuffix = "/"
+var cliCtx *cli.Context
 
 func toError(eno syscall.Errno) error {
 	if eno == 0 {
@@ -441,6 +443,7 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 		Chunk:           chunkConf,
 		AttrTimeout:     time.Second,
 		DirEntryTimeout: time.Second,
+		Mountpoint:      cliCtx.String("mountpoint"),
 	}
 
 	vfsConf.Format.RemoveSecret()

@@ -927,10 +927,24 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 				return
 			}
 			target := string(buf)
-			if strings.HasPrefix(target, "/") || strings.Contains(target, "://") {
+			if strings.Contains(target, "://") {
 				return &FileStat{name: target}, syscall.ENOTSUP
 			}
-			target = path.Join(strings.Join(ss[:i], "/"), target)
+			if strings.HasPrefix(target, "/") {
+				mp := fs.conf.Mountpoint
+				if !strings.HasSuffix(mp, "/") {
+					mp += "/"
+				}
+				if strings.HasPrefix(target, mp) {
+					target = target[len(mp):]
+				} else {
+					fi.name = "file:" + target
+					logger.Errorf("external link: %s -> %s", p, target)
+					return fi, utils.ErrExtlink
+				}
+			} else {
+				target = path.Join(strings.Join(ss[:i], "/"), target)
+			}
 			fi, err = fs.doResolve(ctx, target, followLastSymlink, visited)
 			if err != 0 {
 				return
