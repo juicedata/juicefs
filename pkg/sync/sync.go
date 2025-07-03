@@ -223,7 +223,7 @@ var bufPool = sync.Pool{
 func try(n int, f func() error) (err error) {
 	for i := 0; i < n; i++ {
 		err = f()
-		if err == nil || errors.Is(err, utils.ErrSkipped) {
+		if err == nil || errors.Is(err, utils.ErrSkipped) || errors.Is(err, utils.ErrExtlink) {
 			return
 		}
 		logger.Debugf("Try %d failed: %s", i+1, err)
@@ -884,8 +884,8 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			} else {
 				srcChksum, err = CopyData(src, dst, key, obj.Size(), config.CheckAll || config.CheckNew)
 			}
-			if config.IgnoreExternalLink && errors.Is(err, utils.ErrExtlink) {
-				logger.Warnf("external link %s, skip copying", key)
+			if errors.Is(err, utils.ErrExtlink) {
+				logger.Warnf("Skip external link %s: %s", key, err)
 				err = utils.ErrSkipped
 			}
 

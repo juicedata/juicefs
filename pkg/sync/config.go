@@ -29,46 +29,45 @@ import (
 )
 
 type Config struct {
-	StorageClass       string
-	Start              string
-	End                string
-	Threads            int
-	Update             bool
-	ForceUpdate        bool
-	Perms              bool
-	MaxFailure         int64
-	Dry                bool
-	DeleteSrc          bool
-	DeleteDst          bool
-	MatchFullPath      bool
-	Dirs               bool
-	Exclude            []string
-	Include            []string
-	Existing           bool
-	IgnoreExisting     bool
-	Links              bool
-	Inplace            bool
-	Limit              int64
-	Manager            string
-	Workers            []string
-	ManagerAddr        string
-	ListThreads        int
-	ListDepth          int
-	BWLimit            int64
-	NoHTTPS            bool
-	Verbose            bool
-	Quiet              bool
-	CheckAll           bool
-	CheckNew           bool
-	CheckChange        bool
-	MaxSize            int64
-	MinSize            int64
-	MaxAge             time.Duration
-	MinAge             time.Duration
-	StartTime          time.Time
-	EndTime            time.Time
-	Env                map[string]string
-	IgnoreExternalLink bool
+	StorageClass   string
+	Start          string
+	End            string
+	Threads        int
+	Update         bool
+	ForceUpdate    bool
+	Perms          bool
+	MaxFailure     int64
+	Dry            bool
+	DeleteSrc      bool
+	DeleteDst      bool
+	MatchFullPath  bool
+	Dirs           bool
+	Exclude        []string
+	Include        []string
+	Existing       bool
+	IgnoreExisting bool
+	Links          bool
+	Inplace        bool
+	Limit          int64
+	Manager        string
+	Workers        []string
+	ManagerAddr    string
+	ListThreads    int
+	ListDepth      int
+	BWLimit        int64
+	NoHTTPS        bool
+	Verbose        bool
+	Quiet          bool
+	CheckAll       bool
+	CheckNew       bool
+	CheckChange    bool
+	MaxSize        int64
+	MinSize        int64
+	MaxAge         time.Duration
+	MinAge         time.Duration
+	StartTime      time.Time
+	EndTime        time.Time
+	Env            map[string]string
 
 	FilesFrom string
 
@@ -169,47 +168,46 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		}
 	}
 	cfg := &Config{
-		StorageClass:       c.String("storage-class"),
-		Start:              c.String("start"),
-		End:                c.String("end"),
-		Threads:            c.Int("threads"),
-		ListThreads:        c.Int("list-threads"),
-		ListDepth:          c.Int("list-depth"),
-		Update:             c.Bool("update"),
-		ForceUpdate:        c.Bool("force-update"),
-		Perms:              c.Bool("perms"),
-		Dirs:               c.Bool("dirs"),
-		Dry:                c.Bool("dry"),
-		MaxFailure:         c.Int64("max-failure"),
-		DeleteSrc:          c.Bool("delete-src"),
-		DeleteDst:          c.Bool("delete-dst"),
-		Exclude:            c.StringSlice("exclude"),
-		Include:            c.StringSlice("include"),
-		MatchFullPath:      c.Bool("match-full-path"),
-		Existing:           c.Bool("existing"),
-		IgnoreExisting:     c.Bool("ignore-existing"),
-		Links:              c.Bool("links"),
-		Inplace:            c.Bool("inplace"),
-		Limit:              c.Int64("limit"),
-		Workers:            c.StringSlice("worker"),
-		ManagerAddr:        c.String("manager-addr"),
-		Manager:            c.String("manager"),
-		BWLimit:            utils.ParseMbps(c, "bwlimit"),
-		NoHTTPS:            c.Bool("no-https"),
-		Verbose:            c.Bool("verbose"),
-		Quiet:              c.Bool("quiet"),
-		CheckAll:           c.Bool("check-all"),
-		CheckNew:           c.Bool("check-new"),
-		CheckChange:        c.Bool("check-change"),
-		MaxSize:            int64(utils.ParseBytes(c, "max-size", 'B')),
-		MinSize:            int64(utils.ParseBytes(c, "min-size", 'B')),
-		MaxAge:             utils.Duration(c.String("max-age")),
-		MinAge:             utils.Duration(c.String("min-age")),
-		StartTime:          startTime,
-		EndTime:            endTime,
-		FilesFrom:          c.String("files-from"),
-		Env:                make(map[string]string),
-		IgnoreExternalLink: c.Bool("ignore-external-link"),
+		StorageClass:   c.String("storage-class"),
+		Start:          c.String("start"),
+		End:            c.String("end"),
+		Threads:        c.Int("threads"),
+		ListThreads:    c.Int("list-threads"),
+		ListDepth:      c.Int("list-depth"),
+		Update:         c.Bool("update"),
+		ForceUpdate:    c.Bool("force-update"),
+		Perms:          c.Bool("perms"),
+		Dirs:           c.Bool("dirs"),
+		Dry:            c.Bool("dry"),
+		MaxFailure:     c.Int64("max-failure"),
+		DeleteSrc:      c.Bool("delete-src"),
+		DeleteDst:      c.Bool("delete-dst"),
+		Exclude:        c.StringSlice("exclude"),
+		Include:        c.StringSlice("include"),
+		MatchFullPath:  c.Bool("match-full-path"),
+		Existing:       c.Bool("existing"),
+		IgnoreExisting: c.Bool("ignore-existing"),
+		Links:          c.Bool("links"),
+		Inplace:        c.Bool("inplace"),
+		Limit:          c.Int64("limit"),
+		Workers:        c.StringSlice("worker"),
+		ManagerAddr:    c.String("manager-addr"),
+		Manager:        c.String("manager"),
+		BWLimit:        utils.ParseMbps(c, "bwlimit"),
+		NoHTTPS:        c.Bool("no-https"),
+		Verbose:        c.Bool("verbose"),
+		Quiet:          c.Bool("quiet"),
+		CheckAll:       c.Bool("check-all"),
+		CheckNew:       c.Bool("check-new"),
+		CheckChange:    c.Bool("check-change"),
+		MaxSize:        int64(utils.ParseBytes(c, "max-size", 'B')),
+		MinSize:        int64(utils.ParseBytes(c, "min-size", 'B')),
+		MaxAge:         utils.Duration(c.String("max-age")),
+		MinAge:         utils.Duration(c.String("min-age")),
+		StartTime:      startTime,
+		EndTime:        endTime,
+		FilesFrom:      c.String("files-from"),
+		Env:            make(map[string]string),
 	}
 	if !c.IsSet("max-size") {
 		cfg.MaxSize = math.MaxInt64
