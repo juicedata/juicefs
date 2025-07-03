@@ -55,6 +55,13 @@ type s3client struct {
 }
 
 func (s *s3client) String() string {
+	if s.s3.Options().BaseEndpoint != nil {
+		endpoint := *s.s3.Options().BaseEndpoint
+		if idx := strings.Index(endpoint, "://"); idx >= 0 {
+			endpoint = endpoint[idx+3:]
+		}
+		return fmt.Sprintf("s3://%s/%s/", endpoint, s.bucket)
+	}
 	return fmt.Sprintf("s3://%s/", s.bucket)
 }
 
@@ -481,7 +488,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 			// get region or endpoint
 			if strings.Contains(uri.Host, ".amazonaws.com") {
 				vpcCompile := regexp.MustCompile(`^.*\.(.*)\.vpce\.amazonaws\.com`)
-				//vpc link
+				// vpc link
 				if vpcCompile.MatchString(uri.Host) {
 					bucketName = hostParts[0]
 					ep = hostParts[1]

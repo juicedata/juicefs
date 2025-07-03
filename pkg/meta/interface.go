@@ -137,10 +137,6 @@ func (i Ino) IsNormal() bool {
 
 var TrashName = ".trash"
 
-func isTrash(ino Ino) bool {
-	return ino >= TrashInode
-}
-
 type internalNode struct {
 	inode Ino
 	name  string

@@ -65,6 +65,7 @@ type Config struct {
 	ObjMeta     bool
 	HeadDir     bool
 	HideDir     bool
+	ReadOnly    bool
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -340,12 +341,13 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 			}
 			entry := &minio.Entry{Name: fi.Name(),
 				Info: &minio.ObjectInfo{
-					Bucket:  bucket,
-					Name:    fi.Name(),
-					ModTime: fi.ModTime(),
-					Size:    fi.Size(),
-					IsDir:   fi.IsDir(),
-					AccTime: fi.ModTime(),
+					Bucket:   bucket,
+					Name:     fi.Name(),
+					ModTime:  fi.ModTime(),
+					Size:     fi.Size(),
+					IsDir:    fi.IsDir(),
+					AccTime:  fi.ModTime(),
+					IsLatest: true,
 				},
 			}
 
@@ -392,11 +394,12 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 					size = 0
 				}
 				info = &minio.ObjectInfo{
-					Bucket:  bucket,
-					ModTime: fi.ModTime(),
-					Size:    size,
-					IsDir:   fi.IsDir(),
-					AccTime: fi.ModTime(),
+					Bucket:   bucket,
+					ModTime:  fi.ModTime(),
+					Size:     size,
+					IsDir:    fi.IsDir(),
+					AccTime:  fi.ModTime(),
+					IsLatest: true,
 				}
 			}
 
@@ -404,11 +407,12 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 			if errors.Is(eno, syscall.ENOTSUP) {
 				now := time.Now()
 				info = &minio.ObjectInfo{
-					Bucket:  bucket,
-					ModTime: now,
-					Size:    0,
-					IsDir:   false,
-					AccTime: now,
+					Bucket:   bucket,
+					ModTime:  now,
+					Size:     0,
+					IsDir:    false,
+					AccTime:  now,
+					IsLatest: true,
 				}
 				eno = 0
 			}
@@ -635,6 +639,7 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		AccTime:     fi.ModTime(),
 		UserTags:    tagStr,
 		UserDefined: minio.CleanMetadata(srcInfo.UserDefined),
+		IsLatest:    true,
 	}, nil
 }
 
@@ -739,6 +744,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		ContentType: contentType,
 		UserTags:    string(tagStr),
 		UserDefined: minio.CleanMetadata(opts.UserDefined),
+		IsLatest:    true,
 	}, nil
 }
 
@@ -890,6 +896,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 		AccTime:     fi.ModTime(),
 		UserTags:    tagStr,
 		UserDefined: minio.CleanMetadata(opts.UserDefined),
+		IsLatest:    true,
 	}, nil
 }
 
@@ -1226,8 +1233,10 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 			if eno != meta.ENOATTR {
 				logger.Errorf("get object tags error, path: %s, error: %s", n.upath(bucket, uploadID), eno)
 			}
-		} else if eno = n.fs.SetXattr(mctx, tmp, s3Tags, tagStr, 0); eno != 0 {
-			logger.Errorf("set object tags error, path: %s, tags: %s, error: %s", tmp, string(tagStr), eno)
+		} else if len(tagStr) > 0 {
+			if eno = n.fs.SetXattr(mctx, tmp, s3Tags, tagStr, 0); eno != 0 {
+				logger.Errorf("set object tags error, path: %s, tags: %s, error: %s", tmp, string(tagStr), eno)
+			}
 		}
 	}
 
@@ -1277,6 +1286,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		AccTime:     fi.ModTime(),
 		UserTags:    string(tagStr),
 		UserDefined: minio.CleanMetadata(opts.UserDefined),
+		IsLatest:    true,
 	}, nil
 }
 
@@ -1345,6 +1355,7 @@ type jfsFLock struct {
 	owner     uint64
 	meta      meta.Meta
 	localLock sync.RWMutex
+	readonly  bool
 }
 
 func (j *jfsFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (newCtx context.Context, timedOutErr error) {
@@ -1352,11 +1363,7 @@ func (j *jfsFLock) GetLock(ctx context.Context, timeout *minio.DynamicTimeout) (
 }
 
 func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeout *minio.DynamicTimeout) (context.Context, error) {
-	if os.Getenv("JUICEFS_META_READ_ONLY") != "" {
-		return ctx, nil
-	}
-	if j.inode == 0 {
-		logger.Warnf("failed to get lock")
+	if j.readonly || j.inode == 0 {
 		return ctx, nil
 	}
 	start := time.Now()
@@ -1409,7 +1416,7 @@ func (j *jfsFLock) getFlockWithTimeOut(ctx context.Context, ltype uint32, timeou
 }
 
 func (j *jfsFLock) Unlock() {
-	if j.inode == 0 || os.Getenv("JUICEFS_META_READ_ONLY") != "" {
+	if j.inode == 0 || j.readonly {
 		return
 	}
 	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
@@ -1423,7 +1430,7 @@ func (j *jfsFLock) GetRLock(ctx context.Context, timeout *minio.DynamicTimeout) 
 }
 
 func (j *jfsFLock) RUnlock() {
-	if j.inode == 0 || os.Getenv("JUICEFS_META_READ_ONLY") != "" {
+	if j.inode == 0 || j.readonly {
 		return
 	}
 	if errno := j.meta.Flock(mctx, j.inode, j.owner, meta.F_UNLCK, true); errno != 0 {
@@ -1433,8 +1440,8 @@ func (j *jfsFLock) RUnlock() {
 }
 
 func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker {
-	if os.Getenv("JUICEFS_META_READ_ONLY") != "" {
-		return &jfsFLock{}
+	if n.gConf.ReadOnly {
+		return &jfsFLock{readonly: true}
 	}
 	if len(objects) != 1 {
 		panic(fmt.Errorf("jfsObjects.NewNSLock: the length of the objects parameter must be 1, current %s", objects))
@@ -1474,7 +1481,12 @@ func (n *jfsObjects) LocalStorageInfo(ctx context.Context) (minio.StorageInfo, [
 }
 
 func (n *jfsObjects) ListObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (loi minio.ListObjectVersionsInfo, err error) {
-	return loi, minio.NotImplemented{}
+	objs, err := n.ListObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
+	if err == nil {
+		loi.Objects = objs.Objects
+		loi.Prefixes = objs.Prefixes
+	}
+	return loi, err
 }
 
 func (n *jfsObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object string, info *minio.ObjectInfo) (oi minio.ObjectInfo, e error) {

@@ -73,7 +73,7 @@ $ juicefs info -i 100`,
 }
 
 func info(ctx *cli.Context) error {
-	setup(ctx, 1)
+	setup0(ctx, 1, 0)
 	var recursive, strict, raw uint8
 	if ctx.Bool("recursive") {
 		recursive = 1

@@ -222,7 +222,7 @@ var bufPool = sync.Pool{
 }
 
 func shouldRetry(err error) bool {
-	if err == nil || errors.Is(err, utils.ErrSkipped) {
+	if err == nil || errors.Is(err, utils.ErrSkipped) || errors.Is(err, utils.ErrExtlink) {
 		return false
 	}
 
@@ -548,6 +548,13 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64, calChk
 	var in io.ReadCloser
 	var err error
 	if size == 0 {
+		if key == "" && !object.IsFileSystem(dst) {
+			ps := strings.SplitN(dst.String(), "/", 4)
+			if len(ps) == 4 && ps[3] == "" {
+				logger.Warnf("empty key is not support by %s, ignore it", dst)
+				return 0, nil
+			}
+		}
 		if object.IsFileSystem(src) {
 			// for check permissions
 			r, err := src.Get(key, 0, -1)
@@ -902,6 +909,10 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			} else {
 				srcChksum, err = CopyData(src, dst, key, obj.Size(), config.CheckAll || config.CheckNew)
 			}
+			if errors.Is(err, utils.ErrExtlink) {
+				logger.Warnf("Skip external link %s: %s", key, err)
+				err = utils.ErrSkipped
+			}
 
 			if err == nil && config.CheckChange {
 				err = checkChange(src, dst, obj, key, config)
@@ -943,7 +954,11 @@ func checkChange(src, dst object.ObjectStorage, obj object.Object, key string, c
 			checked.Increment()
 			checkedBytes.IncrInt64(obj.Size())
 		}
-		equal := cur.Size() == obj.Size() && cur.Mtime().Equal(obj.Mtime())
+		equal := cur.Size() == obj.Size()
+		if equal && !cur.Mtime().Equal(obj.Mtime()) {
+			// Head of an object may not return the millisecond part of mtime as List
+			equal = cur.Mtime().Unix() == obj.Mtime().Unix() && cur.Mtime().UnixMilli()%1000 == 0
+		}
 		if !equal {
 			return fmt.Errorf("%s changed during sync. Original: size=%d, mtime=%s; Current: size=%d, mtime=%s",
 				cur.Key(), obj.Size(), obj.Mtime(), cur.Size(), cur.Mtime())
@@ -1454,6 +1469,7 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 			for key := range prefixs {
 				if !strings.HasSuffix(key, "/") {
 					if err := produceSingleObject(tasks, src, dst, key, config); err == nil {
+						listedPrefix.Increment()
 						continue
 					} else if errors.Is(err, ignoreDir) {
 						key += "/"

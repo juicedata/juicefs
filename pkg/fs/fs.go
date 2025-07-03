@@ -196,7 +196,7 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore, registry *
 		opsDurationsHistogram: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Name:    "sdk_ops_durations_histogram_seconds",
 			Help:    "Operations latency distributions.",
-			Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
+			Buckets: prometheus.ExponentialBuckets(0.00001, 1.8, 29),
 		}),
 		registry: registry,
 	}
@@ -855,7 +855,9 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 }
 
 func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bool, visited map[Ino]struct{}) (fi *FileStat, err syscall.Errno) {
-	if fs.conf.Subdir != "" && !strings.HasPrefix(p, fs.conf.Subdir) {
+	prefix := fs.conf.Subdir
+	p = path.Clean(p)
+	if !strings.HasPrefix(p, prefix) || len(prefix) > 0 && len(p) > len(prefix) && p[len(prefix)] != '/' {
 		return nil, syscall.EACCES
 	}
 	var inode Ino
@@ -925,10 +927,24 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 				return
 			}
 			target := string(buf)
-			if strings.HasPrefix(target, "/") || strings.Contains(target, "://") {
+			if strings.Contains(target, "://") {
 				return &FileStat{name: target}, syscall.ENOTSUP
 			}
-			target = path.Join(strings.Join(ss[:i], "/"), target)
+			if strings.HasPrefix(target, "/") {
+				mp := fs.conf.Mountpoint
+				if !strings.HasSuffix(mp, "/") {
+					mp += "/"
+				}
+				if strings.HasPrefix(target, mp) {
+					target = target[len(mp):]
+				} else {
+					fi.name = "file:" + target
+					logger.Errorf("external link: %s -> %s", p, target)
+					return fi, utils.ErrExtlink
+				}
+			} else {
+				target = path.Join(strings.Join(ss[:i], "/"), target)
+			}
 			fi, err = fs.doResolve(ctx, target, followLastSymlink, visited)
 			if err != 0 {
 				return

@@ -26,7 +26,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/dustin/go-humanize"
 	"io"
 	"net/url"
 	"runtime"
@@ -39,6 +38,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"xorm.io/xorm"
 	"xorm.io/xorm/log"
 	"xorm.io/xorm/names"
@@ -259,8 +259,8 @@ type dbMeta struct {
 	tablePrefix   string
 }
 
-var _ Meta = &dbMeta{}
-var _ engine = &dbMeta{}
+var _ Meta = (*dbMeta)(nil)
+var _ engine = (*dbMeta)(nil)
 
 type dbSnap struct {
 	node    map[Ino]*node
@@ -370,13 +370,36 @@ func (m *dbMeta) initStatement() {
 			 VALUES (?, ?, ?)
 			 ON DUPLICATE KEY UPDATE
 			 slices=concat(slices, ?)`, m.tablePrefix)
+	m.statement[`
+			 INSERT INTO chunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON CONFLICT (chunkid)
+			 DO UPDATE SET size=?, refs=?`] =
+		fmt.Sprintf(`
+			 INSERT INTO %schunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON CONFLICT (chunkid)
+			 DO UPDATE SET size=?, refs=?`, m.tablePrefix)
+	m.statement[`
+			 INSERT INTO chunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 size=?, refs=?`] =
+		fmt.Sprintf(`
+			 INSERT INTO %schunk_ref (chunkid, size, refs)
+			 VALUES (?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			 size=?, refs=?`, m.tablePrefix)
 	m.statement["edge.inode=node.inode"] = fmt.Sprintf("%sedge.inode=%snode.inode", m.tablePrefix, m.tablePrefix)
 	m.statement["edge.id"] = fmt.Sprintf("%sedge.id", m.tablePrefix)
 	m.statement["edge.name"] = fmt.Sprintf("%sedge.name", m.tablePrefix)
 	m.statement["edge.type"] = fmt.Sprintf("%sedge.type", m.tablePrefix)
 	m.statement["edge.*"] = fmt.Sprintf("%sedge.*", m.tablePrefix)
 	m.statement["node.*"] = fmt.Sprintf("%snode.*", m.tablePrefix)
-
+	m.statement[`INSERT INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?) ON CONFLICT DO NOTHING`] =
+		fmt.Sprintf(`INSERT INTO %schunk_ref (chunkid, size, refs) VALUES (?,?,?) ON CONFLICT DO NOTHING`, m.tablePrefix)
+	m.statement[`INSERT IGNORE INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?)`] =
+		fmt.Sprintf(`INSERT IGNORE INTO %schunk_ref (chunkid, size, refs) VALUES (?,?,?)`, m.tablePrefix)
 }
 
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
@@ -1227,10 +1250,10 @@ func (m *dbMeta) doSyncVolumeStat(ctx Context) error {
 	}
 	logger.Debugf("Used space: %s, inodes: %d", humanize.IBytes(uint64(used)), inode)
 	return m.txn(func(s *xorm.Session) error {
-		if _, err := s.Update(&counter{Value: inode}, &counter{Name: totalInodes}); err != nil {
+		if _, err := s.Cols("value").Update(&counter{Value: inode}, &counter{Name: totalInodes}); err != nil {
 			return fmt.Errorf("update totalInodes: %s", err)
 		}
-		_, err := s.Update(&counter{Value: used}, &counter{Name: usedSpace})
+		_, err := s.Cols("value").Update(&counter{Value: used}, &counter{Name: usedSpace})
 		return err
 	})
 }
@@ -1825,7 +1848,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		defer func() { m.of.InvalidateChunk(e.Inode, invalidateAttrOnly) }()
 
 		var updateParent bool
-		if !isTrash(parent) && time.Duration(now-pn.getMtime()) >= m.conf.SkipDirMtime {
+		if !parent.IsTrash() && time.Duration(now-pn.getMtime()) >= m.conf.SkipDirMtime {
 			pn.setMtime(now)
 			pn.setCtime(now)
 			updateParent = true
@@ -1898,7 +1921,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	})
 	if err == nil && trash == 0 {
 		if n.Type == TypeFile && n.Nlink == 0 {
-			m.fileDeleted(opened, isTrash(parent), n.Inode, n.Length)
+			m.fileDeleted(opened, parent.IsTrash(), n.Inode, n.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -2012,7 +2035,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 				return err
 			}
 		}
-		if !isTrash(parent) {
+		if !parent.IsTrash() {
 			_, err = s.SetExpr("nlink", "nlink - 1").Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode})
 		}
 		return err
@@ -2062,7 +2085,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dn node
 	var newSpace, newInode int64
 	parentLocks := []Ino{parentDst}
-	if !isTrash(parentSrc) { // there should be no conflict if parentSrc is in trash, relax lock to accelerate `restore` subcommand
+	if !parentSrc.IsTrash() { // there should be no conflict if parentSrc is in trash, relax lock to accelerate `restore` subcommand
 		parentLocks = append(parentLocks, parentSrc)
 	}
 	err := m.txn(func(s *xorm.Session) error {
@@ -2347,7 +2370,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return err
 		}
 
-		if parentDst != parentSrc && !isTrash(parentSrc) && supdate {
+		if parentDst != parentSrc && !parentSrc.IsTrash() && supdate {
 			if dupdate && dpn.Inode < spn.Inode {
 				if _n, err := s.SetExpr("nlink", fmt.Sprintf("nlink + (%d)", dstnlink)).Cols("nlink", "mtime", "ctime", "mtimensec", "ctimensec").Update(&dpn, &node{Inode: parentDst}); err != nil || _n == 0 {
 					if err == nil {
@@ -2515,6 +2538,7 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 			}
 			if plus != 0 {
 				m.parseAttr(&n.node, entry.Attr)
+				m.of.Update(entry.Inode, entry.Attr)
 			} else {
 				entry.Attr.Typ = n.Type
 			}
@@ -2983,7 +3007,7 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, sys
 		}
 		st.DataLength, st.UsedSpace, st.UsedInodes = stat.length, stat.space, stat.inodes
 		e := m.txn(func(s *xorm.Session) error {
-			n, err := s.AllCols().Update(&st)
+			n, err := s.Cols("data_length", "used_space", "used_inodes").Update(&st, &dirStats{Inode: ino})
 			if err == nil && n != 1 {
 				err = errors.Errorf("update dir usage of inode %d: %d rows affected", ino, n)
 			}
@@ -3174,7 +3198,7 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 		}
 
 		c2.Slices = append(append(c2.Slices[:skipped*sliceBytes], marshalSlice(pos, id, size, 0, size)...), c2.Slices[len(origin):]...)
-		if _, err := s.Where("Inode = ? AND indx = ?", inode, indx).Update(c2); err != nil {
+		if _, err := s.Cols("slices").Where("Inode = ? AND indx = ?", inode, indx).Update(c2); err != nil {
 			return err
 		}
 		// create the key to tracking it
@@ -3469,7 +3493,14 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		ok, err := s.ForUpdate().Get(&node{Inode: inode})
 		if err == nil {
 			if ok {
-				_, err = s.Update(n, &node{Inode: inode})
+				updateColumns := []string{
+					"type", "mode",
+					"uid", "gid",
+					"length", "parent", "nlink",
+					"atime", "mtime", "ctime",
+					"atimensec", "mtimensec", "ctimensec",
+				}
+				_, err = s.Cols(updateColumns...).Update(n, &node{Inode: inode})
 			} else {
 				err = mustInsert(s, n)
 			}
@@ -3544,12 +3575,12 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 			if !ok {
 				return ENOATTR
 			}
-			_, err = s.Update(&x, k)
+			_, err = s.Cols("value").Update(&x, k)
 		default:
 			if !ok {
 				err = mustInsert(s, &x)
 			} else if !bytes.Equal(existing, value) {
-				_, err = s.Update(&x, k)
+				_, err = s.Cols("value").Update(&x, k)
 			}
 		}
 		return err
@@ -4926,6 +4957,7 @@ func (m *dbMeta) getDirFetcher() dirFetcher {
 				}
 				if plus {
 					m.parseAttr(&n.node, entry.Attr)
+					m.of.Update(n.Inode, entry.Attr)
 				} else {
 					entry.Attr.Typ = n.Type
 				}

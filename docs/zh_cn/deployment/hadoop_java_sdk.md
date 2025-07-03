@@ -214,6 +214,7 @@ make win
 |`juicefs.backup-skip-trash`| `false`      | 备份元数据时忽略回收站中的文件和目录。                                                                                         |
 | `juicefs.heartbeat`       | 12           | 客户端和元数据引擎之间的心跳间隔（单位：秒），建议所有客户端都设置一样                                                                         |
 | `juicefs.skip-dir-mtime`  | 100ms        | 修改父目录 mtime 间隔。                                                                                             |
+| `juicefs.subdir`          |              | 仅允许访问此目录的子路径。                                                                     |
 
 #### 多文件系统配置
 
@@ -881,6 +882,8 @@ juicefs format META-URL NAME --ranger-rest-url http://localhost:6080 --ranger-se
 # 已有的文件系统增加 ranger 配置
 juicefs config META-URL --ranger-rest-url http://localhost:6080 --ranger-service jfs
 
+# 关闭 ranger
+juicefs config META-URL --ranger-rest-url "" --ranger-service jfs ""
 ```
 
 ### 2. 环境及依赖

@@ -21,9 +21,11 @@ package meta
 
 import (
 	"context"
+	"math"
 	"net/url"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	plog "github.com/pingcap/log"
@@ -35,6 +37,7 @@ import (
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/txnkv"
 	"github.com/tikv/client-go/v2/txnkv/txnutil"
+	pd "github.com/tikv/pd/client"
 	"go.uber.org/zap"
 )
 
@@ -87,6 +90,27 @@ func newTikvClient(addr string) (tkvClient, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if strings.ToLower(query.Get("open-tso-follower-proxy")) == "true" {
+		if err := client.KVStore.GetPDClient().UpdateOption(pd.EnableTSOFollowerProxy, true); err != nil {
+			logger.Warnf("Failed to enable TSO Follower Proxy: %v", err)
+		} else {
+			logger.Infof("Enabling TSO Follower Proxy")
+		}
+	}
+
+	if waitStr := query.Get("max-tso-batch-wait-interval"); waitStr != "" {
+		if waitDur, err := time.ParseDuration(waitStr); err == nil {
+			if err := client.KVStore.GetPDClient().UpdateOption(pd.MaxTSOBatchWaitInterval, waitDur); err != nil {
+				logger.Warnf("Failed to set MaxTSOBatchWaitInterval: %v", err)
+			} else {
+				logger.Infof("Set MaxTSOBatchWaitInterval to %s", waitDur)
+			}
+		} else {
+			logger.Warnf("Failed to parse max-tso-batch-wait-interval (%s): %v", waitStr, err)
+		}
+	}
+
 	prefix := strings.TrimLeft(tUrl.Path, "/")
 	return withPrefix(&tikvClient{client.KVStore, interval}, append([]byte(prefix), 0xFD)), nil
 }
@@ -196,6 +220,29 @@ func (c *tikvClient) config(key string) interface{} {
 	return nil
 }
 
+func (c *tikvClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
+	tx, err := c.client.Begin(tikv.WithStartTS(math.MaxUint64)) // math.MaxUint64 means to point get the latest committed data without PD access
+	if err != nil {
+		return errors.Wrap(err, "failed to begin transaction")
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			if e, ok := r.(error); ok {
+				err = e
+			} else {
+				err = errors.Errorf("panic in point get transaction: %v", r)
+			}
+		}
+	}()
+	if err = f(&kvTxn{&tikvTxn{tx}, retry}); err != nil {
+		return err
+	}
+	if !tx.IsReadOnly() {
+		return syscall.EINVAL
+	}
+	return nil
+}
+
 func (c *tikvClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
 	var opts []tikv.TxnOption
 	if val := ctx.Value(txSessionKey{}); val != nil {
@@ -232,7 +279,7 @@ func (c *tikvClient) scan(prefix []byte, handler func(key, value []byte) bool) e
 	start := prefix
 OUT:
 	for {
-		ts, err := c.client.CurrentTimestamp("global")
+		ts, err := c.client.CurrentTimestamp(oracle.GlobalTxnScope)
 		if err != nil {
 			return err
 		}
@@ -276,7 +323,14 @@ func (c *tikvClient) gc() {
 	if c.gcInterval == 0 {
 		return
 	}
-	safePoint, err := c.client.GC(context.Background(), oracle.GoTimeToTS(time.Now().Add(-c.gcInterval)))
+
+	currentTs, err := c.client.CurrentTimestamp(oracle.GlobalTxnScope)
+	if err != nil {
+		logger.Warnf("TiKV GC was skipped due to failure in obtaining the current timestamp.")
+		return
+	}
+
+	safePoint, err := c.client.GC(context.Background(), oracle.GoTimeToTS(oracle.GetTimeFromTS(currentTs).Add(-c.gcInterval)))
 	if err == nil {
 		logger.Debugf("TiKV GC returns new safe point: %d (%s)", safePoint, oracle.GetTimeFromTS(safePoint))
 	} else {

@@ -44,3 +44,9 @@ OS:
 Hardware: 
 %s`, kernel, string(osVersion), string(hardware))
 }
+
+func SetIOFlusher() {}
+
+func DisableTHP() {}
+
+func AdjustOOMKiller(score int) {}

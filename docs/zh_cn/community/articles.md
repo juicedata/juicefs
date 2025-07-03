@@ -8,6 +8,9 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## AI
 
+- [中国科学院计算所：从 NFS 到 JuiceFS，大模型训推平台存储演进之路](https://juicefs.com/zh-cn/blog/user-stories/nfs-vs-juicefs-llm-storage)，2025-05-14，孙玮
+- [百图生科：基于 JuiceFS 构建生命科学大模型存储平台，成本降 90%](https://juicefs.com/zh-cn/blog/user-stories/biomap-juicefs-building-llm-storage)，2025-05-07，郑泽东@百图生科
+- [稳定且高性价比的大模型存储：携程 10PB 级 JuiceFS 工程实践](https://juicefs.com/zh-cn/blog/user-stories/trip-10pb-level-llm-stroage-juicefs-practice)，2025-03-10，吴松林@携程
 - [加速 AI 训推：Lepton AI 如何构建多租户、低延迟云存储平台](https://juicefs.com/zh-cn/blog/user-stories/lepton-ai-build-multi-tenant-low-latency-cloud-storage-platform)，2025-01-17，丁聪@Lepton AI
 - [多云架构，JuiceFS 如何实现一致性与低延迟的数据分发？](https://juicefs.com/zh-cn/blog/solutions/juicefs-multi-cloud-consistency-low-latency)，2025-01-10，蔡敏
 - [从 CephFS 到 JuiceFS：同程旅行亿级文件存储平台构建之路](https://juicefs.com/zh-cn/blog/user-stories/cephfs-vs-juicefs-draco-travel-file-storage)，2024-12-13，位传海@同程旅行
@@ -71,6 +74,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 云原生 & Kubernetes
 
+- [加速 AI 训推：Lepton AI 如何构建多租户、低延迟云存储平台](https://juicefs.com/zh-cn/blog/user-stories/lepton-ai-build-multi-tenant-low-latency-cloud-storage-platform)，2025-01-17，丁聪@Lepton AI
 - [海柔仿真系统存储实践：混合云架构下实现高可用与极简运维](https://juicefs.com/zh-cn/blog/user-stories/multi-cloud-storage-high-availability)，2024-11-08，吴森栋@海柔创新
 - [好未来：多云环境下基于 JuiceFS 建设低运维模型仓库](https://juicefs.com/zh-cn/blog/user-stories/multi-cloud-storage-juicefs-model-stroage)，2024-11-06，贺龙华@好未来
 - [小米云原生文件存储平台化实践：支撑 AI 训练、大模型、容器平台多项业务](https://juicefs.com/zh-cn/blog/user-stories/cloud-native-file-storage-platform-as-ai-training-large-models-container-platforms)，2023-09-22，孙佳朋@小米
@@ -99,6 +103,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 数据备份、迁移与恢复
 
+- [JuiceFS v1.3-Beta1：一亿文件备份分钟级完成，性能优化全解析](https://juicefs.com/zh-cn/blog/release-notes/juicefs-v13-beta1-backup)，2025-05-21，黄杰烽
 - [基于 JuiceFS 的低成本 Elasticsearch 云上备份存储](https://juicefs.com/zh-cn/blog/user-stories/low-cost-elasticsearch-cloud-backup-storage-juicefs)，2023-11-15，uuwang（正能量云）@杭州火石创造
 - [突破存储数据量限制，JuiceFS 在携程海量冷数据场景下的实践](https://juicefs.com/zh-cn/blog/user-stories/xiecheng-case)，2022-08-29，妙成 & 小峰
 - [40+ 倍提升，详解 JuiceFS 元数据备份恢复性能优化方法](https://juicefs.com/zh-cn/blog/engineering/juicefs-load-and-dump-optimization)，2022-07-13，执剑
@@ -109,6 +114,15 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 教程、使用指南、评测及其他
 
+- [Lustre 与 JuiceFS：架构设计、文件分布与特性比较](https://juicefs.com/zh-cn/blog/engineering/lustre-vs-juicefs)，2025-06-18，刘庆
+- [深度解析 JuiceFS 权限管理：Linux 多种安全机制全兼容](https://juicefs.com/zh-cn/blog/engineering/linux-file-system-juicefs-access-management)，2025-06-12，黄杰烽
+- [JuiceFS v1.3-Beta2：集成 Apache Ranger，实现更精细化的权限控制](https://juicefs.com/zh-cn/blog/release-notes/juicefs-1-3-ranger)，2025-06-06，汤友棚
+- [JuiceFS 企业版 5.2：迈入千亿文件时代，稳定性与性能再升级，首次支持 Windows 客户端](https://juicefs.com/zh-cn/blog/release-notes/juicefs-enterprise-edition-v52)，2025-05-28
+- [JuiceFS v1.3-beta1：新增 Python SDK，特定场景性能 3 倍于 FUSE](https://juicefs.com/zh-cn/blog/release-notes/juicefs-v13-beta1-python-sdk)，2025-05-09，莫飞虎
+- [JuiceFS v1.3-beta1：全面优化 SQL 数据库支持，十亿级元数据管理新选项](https://juicefs.com/zh-cn/blog/release-notes/juicefs-v13-beta1-sql)，2025-04-23，楼方鑫
+- [DeepSeek 3FS 与 JuiceFS：架构与特性比较](https://juicefs.com/zh-cn/blog/engineering/deepseek-3fs-vs-juicefs)，2025-03-18，刘庆
+- [FUSE，从内核到用户态文件系统的设计之路](https://juicefs.com/zh-cn/blog/engineering/fuse-file-system-design)，2025-02-27，许誉超
+- [告别“服务器繁忙”：JuiceFS 助力打造专属 DeepSeek 牧场](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-deepseek--storage)，2025-02-08，朱唯唯
 - [缓存管理自动化：JuiceFS 企业版 Cache Group Operator 新特性发布](https://juicefs.com/zh-cn/blog/release-notes/juicefs-cache-group-operator)，2024-12-26，张旭辉
 - [代码级解析：JuiceFS 元数据、数据存储设计原理](https://juicefs.com/zh-cn/blog/engineering/juicefs-metadata-data-stroage-designed)，2024-11-25，Arthur
 - [使用 JuiceFS 快照功能实现数据库发布与端到端测试](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-snapshot-database-test)，2024-11-15，马涛@Jerry

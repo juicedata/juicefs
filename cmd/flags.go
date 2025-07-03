@@ -307,6 +307,11 @@ func metaFlags() []cli.Flag {
 			Name:  "sort-dir",
 			Usage: "sort entries within a directory by name",
 		},
+		&cli.BoolFlag{
+			Name:  "fast-statfs",
+			Value: false,
+			Usage: "Use local counters for statfs instead of querying metadata service",
+		},
 	})
 }
 

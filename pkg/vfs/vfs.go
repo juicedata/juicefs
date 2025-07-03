@@ -149,6 +149,9 @@ type Config struct {
 	CommPath  string       `json:",omitempty"`
 	StatePath string       `json:",omitempty"`
 	FuseOpts  *FuseOptions `json:",omitempty"`
+
+	// the mount point for current volume (to follow symlink)
+	Mountpoint string
 }
 
 type AnonymousAccount struct {

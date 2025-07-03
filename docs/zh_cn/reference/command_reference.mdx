@@ -631,6 +631,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--log=path`|后台运行时日志文件的位置 (默认：`$HOME/.juicefs/juicefs.log` 或 `/var/log/juicefs.log`)|
 |`--force`|强制挂载即使挂载点已经被相同的文件系统挂载 (默认值:false)|
 |`--update-fstab` <VersionAdd>1.1</VersionAdd>|新增／更新 `/etc/fstab` 中的条目，如果不存在将会创建一个从 `/sbin/mount.juicefs` 到 JuiceFS 可执行文件的软链接，默认为 false。|
+|`--disable-transparent-hugepage` <VersionAdd>1.3</VersionAdd>| 关闭内核的透明大页（THP），内存紧张时，THP 可能导致进程挂起等待，默认为 false。 |
 
 #### FUSE 相关参数 {#mount-fuse-options}
 
@@ -904,6 +905,8 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--min-size=SIZE` <VersionAdd>1.2</VersionAdd>|跳过大小小于 `SIZE` 的文件，单位字节|
 |`--max-age=DURATION` <VersionAdd>1.2</VersionAdd>|跳过最后修改时间超过 `DURATION` 的文件，单位秒。例如 `--max-age=3600` 表示仅同步在 1 小时内被修改过的文件。|
 |`--min-age=DURATION` <VersionAdd>1.2</VersionAdd>|跳过最后修改时间不超过 `DURATION` 的文件，单位秒。例如 `--min-age=3600` 表示仅同步最后修改时间距离当前时间已经超过 1 小时的文件。|
+|`--start-time=DURATION` <VersionAdd>1.3</VersionAdd>|跳过开始时间之前修改的文件。例如 `2006-01-02 15:04:05`|
+|`--end-time=DURATION` <VersionAdd>1.3</VersionAdd>|跳过结束时间之后修改的文件。例如 `2006-01-02 15:04:05`|
 |`--limit=-1`|限制将要处理的对象的数量，默认为 -1 表示不限制|
 |`--update, -u`|当源文件更新时（`mtime` 更新），覆盖已存在的文件，默认为 false。|
 |`--force-update, -f`|强制覆盖已存在的文件，默认为 false。|
@@ -922,6 +925,7 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--delete-dst, --deleteDst`|删除目标存储下的不相关对象。|
 |`--check-all`|校验源路径和目标路径中所有文件的数据完整性，默认为 false。校验方式是基于字节流对比，因此也将带来相应的开销。|
 |`--check-new`|校验新拷贝文件的数据完整性，默认为 false。校验方式是基于字节流对比，因此也将带来相应的开销。|
+|`--check-change` <VersionAdd>1.3</VersionAdd>|校验同步前后的数据是否有变更，默认为 false。校验方式基于文件大小和 mtime，比较轻量。|
 |`--max-failure` <VersionAdd>1.3</VersionAdd>|最大允许失败的文件数（-1 表示无限）|
 |`--dry`|仅打印执行计划，不实际拷贝文件。|
 

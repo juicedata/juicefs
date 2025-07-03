@@ -324,7 +324,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 
 func (m *baseMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, skipCheckTrash bool, count *uint64, concurrent chan int) syscall.Errno {
 	st := m.emptyDir(ctx, inode, skipCheckTrash, count, concurrent)
-	if st == 0 && !isTrash(inode) {
+	if st == 0 && !inode.IsTrash() {
 		st = m.Rmdir(ctx, parent, name, skipCheckTrash)
 		if st == syscall.ENOTEMPTY {
 			// redo when concurrent conflict may happen

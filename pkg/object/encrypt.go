@@ -269,4 +269,4 @@ func (e *encrypted) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	return e.ObjectStorage.Put(key, bytes.NewReader(ciphertext), getters...)
 }
 
-var _ ObjectStorage = &encrypted{}
+var _ ObjectStorage = (*encrypted)(nil)

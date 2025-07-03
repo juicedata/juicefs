@@ -56,6 +56,7 @@ type kvtxn interface {
 
 type tkvClient interface {
 	name() string
+	simpleTxn(ctx context.Context, f func(*kvTxn) error, retry int) error // should only be used for point get scenarios
 	txn(ctx context.Context, f func(*kvTxn) error, retry int) error
 	scan(prefix []byte, handler func(key, value []byte) bool) error
 	reset(prefix []byte) error
@@ -83,8 +84,8 @@ type kvMeta struct {
 	snap   map[Ino]*DumpedEntry
 }
 
-var _ Meta = &kvMeta{}
-var _ engine = &kvMeta{}
+var _ Meta = (*kvMeta)(nil)
+var _ engine = (*kvMeta)(nil)
 
 var drivers = make(map[string]func(string) (tkvClient, error))
 
@@ -380,7 +381,7 @@ func (m *kvMeta) parseQuota(buf []byte) *Quota {
 
 func (m *kvMeta) get(key []byte) ([]byte, error) {
 	var value []byte
-	err := m.client.txn(Background(), func(tx *kvTxn) error {
+	err := m.client.simpleTxn(Background(), func(tx *kvTxn) error {
 		value = tx.get(key)
 		return nil
 	}, 0)
@@ -911,7 +912,7 @@ func (m *kvMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 }
 
 func (m *kvMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
-	return errno(m.client.txn(ctx, func(tx *kvTxn) error {
+	return errno(m.client.simpleTxn(ctx, func(tx *kvTxn) error {
 		val := tx.get(m.inodeKey(inode))
 		if val == nil {
 			return syscall.ENOENT
@@ -1335,7 +1336,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 
 		defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 		var updateParent bool
-		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
+		if !parent.IsTrash() && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -1385,7 +1386,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	}, parent)
 	if err == nil && trash == 0 {
 		if _type == TypeFile && attr.Nlink == 0 {
-			m.fileDeleted(opened, isTrash(parent), inode, attr.Length)
+			m.fileDeleted(opened, parent.IsTrash(), inode, attr.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1466,7 +1467,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 			updateParent = true
 		}
 
-		if !isTrash(parent) && updateParent {
+		if !parent.IsTrash() && updateParent {
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		}
 		tx.delete(m.entryKey(parent, name))
@@ -1499,7 +1500,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var tattr Attr
 	var newSpace, newInode int64
 	parentLocks := []Ino{parentDst}
-	if !isTrash(parentSrc) { // there should be no conflict if parentSrc is in trash, relax lock to accelerate `restore` subcommand
+	if !parentSrc.IsTrash() { // there should be no conflict if parentSrc is in trash, relax lock to accelerate `restore` subcommand
 		parentLocks = append(parentLocks, parentSrc)
 	}
 	err := m.txn(ctx, func(tx *kvTxn) error {
@@ -1732,7 +1733,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 		}
 		if parentDst != parentSrc {
-			if !isTrash(parentSrc) && supdate {
+			if !parentSrc.IsTrash() && supdate {
 				tx.set(m.inodeKey(parentSrc), m.marshal(&sattr))
 			}
 			if iattr.Parent == 0 {
@@ -1784,7 +1785,7 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			return syscall.EPERM
 		}
 		buf := tx.get(m.entryKey(parent, name))
-		if buf != nil || buf == nil && m.conf.CaseInsensi && m.resolveCase(ctx, parent, name) != nil {
+		if buf != nil || m.conf.CaseInsensi && m.resolveCase(ctx, parent, name) != nil {
 			return syscall.EEXIST
 		}
 
@@ -1827,7 +1828,7 @@ func (m *kvMeta) fillAttr(entries []*Entry) (err error) {
 		keys[i] = m.inodeKey(e.Inode)
 	}
 	var rs [][]byte
-	err = m.client.txn(Background(), func(tx *kvTxn) error {
+	err = m.client.simpleTxn(Background(), func(tx *kvTxn) error {
 		rs = tx.gets(keys...)
 		return nil
 	}, 0)
@@ -1837,6 +1838,8 @@ func (m *kvMeta) fillAttr(entries []*Entry) (err error) {
 	for j, re := range rs {
 		if re != nil {
 			m.parseAttr(re, entries[j].Attr)
+			// If `readdirplus` returns complete attributes, kernel may not invoke `GetAttr`. Therefore, we must also validate chunk cache here to prevent stale cache, which may lead to data corruption.
+			m.of.Update(entries[j].Inode, entries[j].Attr)
 		}
 	}
 	return err

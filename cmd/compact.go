@@ -51,7 +51,7 @@ func cmdCompact() *cli.Command {
 }
 
 func compact(ctx *cli.Context) error {
-	setup(ctx, 1)
+	setup0(ctx, 1, 0)
 
 	coCnt := ctx.Int("threads")
 	if coCnt <= 0 {

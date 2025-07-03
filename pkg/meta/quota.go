@@ -456,7 +456,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 		if st := m.resolve(ctx, dpath, &inode, create); st != 0 {
 			return fmt.Errorf("resolve dir %s: %s", dpath, st)
 		}
-		if isTrash(inode) {
+		if inode.IsTrash() {
 			return errors.New("no quota for any trash directory")
 		}
 	}
