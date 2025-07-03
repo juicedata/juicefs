@@ -550,7 +550,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 	}
 	disableChecksum := strings.EqualFold(uri.Query().Get("disable-checksum"), "true")
 	if disableChecksum {
-		logger.Infof("CRC checksum is disabled")
+		logger.Infof("default CRC checksum is disabled")
 	}
 
 	if ep != "" {

@@ -400,8 +400,12 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	config.RetryMaxAttempts = oss.Ptr(1)
 	config.ConnectTimeout = oss.Ptr(time.Second * 2)
 	config.ReadWriteTimeout = oss.Ptr(time.Second * 5)
-	config.DisableUploadCRC64Check = oss.Ptr(true)
-	config.DisableDownloadCRC64Check = oss.Ptr(true)
+	enableChecksum := strings.EqualFold(uri.Query().Get("enable-default-checksum"), "true")
+	if enableChecksum {
+		logger.Infof("default CRC checksum is enabled")
+	}
+	config.DisableUploadCRC64Check = oss.Ptr(!enableChecksum)
+	config.DisableDownloadCRC64Check = oss.Ptr(!enableChecksum)
 	config.UserAgent = &UserAgent
 	config.HttpClient = httpClient
 	config.CredentialsProvider = provider
