@@ -530,6 +530,13 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64, calChk
 	var in io.ReadCloser
 	var err error
 	if size == 0 {
+		if key == "" && !object.IsFileSystem(dst) {
+			ps := strings.SplitN(dst.String(), "/", 4)
+			if len(ps) == 4 && ps[3] == "" {
+				logger.Warnf("empty key is not support by %s, ignore it", dst)
+				return 0, nil
+			}
+		}
 		if object.IsFileSystem(src) {
 			// for check permissions
 			r, err := src.Get(key, 0, -1)
