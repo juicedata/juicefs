@@ -931,9 +931,12 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 				return &FileStat{name: target}, syscall.ENOTSUP
 			}
 			if strings.HasPrefix(target, "/") {
-				if strings.HasPrefix(target, fs.conf.Mountpoint) {
-					target = target[len(fs.conf.Mountpoint):]
+				mp := fs.conf.Mountpoint
+				if strings.HasPrefix(target, mp) {
+					target = target[len(mp):]
 				} else {
+					fi.name = "file:" + target
+					logger.Errorf("external link: %s -> %s", p, target)
 					return fi, utils.ErrExtlink
 				}
 			} else {
