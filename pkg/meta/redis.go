@@ -1317,14 +1317,14 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.HSet(ctx, m.entryKey(parent), name, m.packEntry(_type, *inode))
+			pipe.Set(ctx, m.inodeKey(*inode), m.marshal(attr), 0)
 			if updateParent {
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
-			pipe.Set(ctx, m.inodeKey(*inode), m.marshal(attr), 0)
 			if _type == TypeSymlink {
 				pipe.Set(ctx, m.symKey(*inode), path, 0)
 			}
+			pipe.HSet(ctx, m.entryKey(parent), name, m.packEntry(_type, *inode))
 			if _type == TypeDirectory {
 				field := (*inode).String()
 				pipe.HSet(ctx, m.dirUsedInodesKey(), field, "0")
@@ -1377,7 +1377,10 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		if err := tx.Watch(ctx, m.inodeKey(inode)).Err(); err != nil {
 			return err
 		}
-		rs, _ := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
+		rs, err := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
+		if err != nil {
+			return err
+		}
 		if rs[0] == nil {
 			return redis.Nil
 		}
@@ -1515,7 +1518,10 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, s
 			return err
 		}
 
-		rs, _ := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
+		rs, err := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
+		if err != nil {
+			return err
+		}
 		if rs[0] == nil {
 			return redis.Nil
 		}
@@ -1662,7 +1668,10 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if dino > 0 {
 			keys = append(keys, m.inodeKey(dino))
 		}
-		rs, _ := tx.MGet(ctx, keys...).Result()
+		rs, err := tx.MGet(ctx, keys...).Result()
+		if err != nil {
+			return err
+		}
 		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
 			return redis.Nil
 		}
@@ -1799,8 +1808,8 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			if exchange { // dbuf, tattr are valid
-				pipe.HSet(ctx, m.entryKey(parentSrc), nameSrc, dbuf)
 				pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
+				pipe.HSet(ctx, m.entryKey(parentSrc), nameSrc, dbuf)
 				if parentSrc != parentDst && tattr.Parent == 0 {
 					pipe.HIncrBy(ctx, m.parentKey(dino), parentSrc.String(), 1)
 					pipe.HIncrBy(ctx, m.parentKey(dino), parentDst.String(), -1)
@@ -1998,6 +2007,7 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 				if re != nil {
 					if a, ok := re.(string); ok {
 						m.parseAttr([]byte(a), es[j].Attr)
+						m.of.Update(es[j].Inode, es[j].Attr)
 					}
 				}
 			}
@@ -3469,12 +3479,12 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	})
 }
 
-func (m *redisMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
+func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		for ino, q := range quotas {
-			field := ino.String()
-			pipe.HIncrBy(ctx, m.dirQuotaUsedSpaceKey(), field, q.newSpace)
-			pipe.HIncrBy(ctx, m.dirQuotaUsedInodesKey(), field, q.newInodes)
+		for _, q := range quotas {
+			field := q.inode.String()
+			pipe.HIncrBy(ctx, m.dirQuotaUsedSpaceKey(), field, q.quota.newSpace)
+			pipe.HIncrBy(ctx, m.dirQuotaUsedInodesKey(), field, q.quota.newInodes)
 		}
 		return nil
 	})

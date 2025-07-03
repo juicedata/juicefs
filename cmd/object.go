@@ -139,14 +139,14 @@ func (j *juiceFS) Put(key string, in io.Reader, getters ...object.AttrGetter) (e
 			}
 		}()
 	}
-	f, eno := j.jfs.Open(ctx, tmp, vfs.MODE_MASK_W)
+	f, eno := j.jfs.Create(ctx, tmp, 0666, j.umask)
 	if eno == syscall.ENOENT {
 		_ = j.jfs.MkdirAll(ctx, path.Dir(tmp), 0777, j.umask)
 		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)
 	}
 
 	if eno == syscall.EEXIST {
-		_ = j.jfs.Delete(ctx, path.Dir(tmp))
+		_ = j.jfs.Delete(ctx, tmp)
 		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)
 	}
 

@@ -922,16 +922,15 @@ func (m *dbMeta) updateStats(space int64, inodes int64) {
 }
 
 func (m *dbMeta) flushStats() {
-	var inttype = "BIGINT"
-	if m.Name() == "mysql" {
-		inttype = "SIGNED"
-	}
 	for {
 		newSpace := atomic.LoadInt64(&m.newSpace)
 		newInodes := atomic.LoadInt64(&m.newInodes)
 		if newSpace != 0 || newInodes != 0 {
 			err := m.txn(func(s *xorm.Session) error {
-				_, err := s.Exec(fmt.Sprintf("UPDATE jfs_counter SET value=value+ CAST((CASE name WHEN 'usedSpace' THEN %d ELSE %d END) AS %s) WHERE name='usedSpace' OR name='totalInodes' ", newSpace, newInodes, inttype))
+				if _, err := s.Exec("update jfs_counter set value=value + ? where name='totalInodes'", newInodes); err != nil {
+					return err
+				}
+				_, err := s.Exec("update jfs_counter set value= value + ? where name='usedSpace'", newSpace)
 				return err
 			})
 			if err != nil && !strings.Contains(err.Error(), "attempt to write a readonly database") {
@@ -2112,6 +2111,7 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 			}
 			if plus != 0 {
 				m.parseAttr(&n.node, entry.Attr)
+				m.of.Update(entry.Inode, entry.Attr)
 			} else {
 				entry.Attr.Typ = n.Type
 			}
@@ -3242,11 +3242,12 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	return quotas, nil
 }
 
-func (m *dbMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
+func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
+	sort.Slice(quotas, func(i, j int) bool { return quotas[i].inode < quotas[j].inode })
 	return m.txn(func(s *xorm.Session) error {
-		for ino, q := range quotas {
+		for _, q := range quotas {
 			_, err := s.Exec("update jfs_dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?",
-				q.newSpace, q.newInodes, ino)
+				q.quota.newSpace, q.quota.newInodes, q.inode)
 			if err != nil {
 				return err
 			}

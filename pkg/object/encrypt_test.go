@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -222,6 +223,11 @@ func TestEncryptedStore(t *testing.T) {
 	r, _ = es.Get("a", 0, -1)
 	d, _ = io.ReadAll(r)
 	if string(d) != "hello" {
+		t.Fail()
+	}
+	_ = s.Put("emptyfile", bytes.NewReader([]byte("")))
+	_, err = es.Get("emptyfile", 0, -1)
+	if err == nil || !strings.Contains(err.Error(), "the object is corrupted") {
 		t.Fail()
 	}
 }
