@@ -155,7 +155,7 @@ func gateway(c *cli.Context) error {
 
 	metaAddr := c.Args().Get(0)
 	listenAddr := c.Args().Get(1)
-	conf, jfs := initForSvc(c, c.String("mountpoint"), metaAddr, listenAddr)
+	conf, jfs := initForSvc(c, c.String("mountpoint"), "s3gateway", metaAddr, listenAddr)
 
 	umask, err := strconv.ParseUint(c.String("umask"), 8, 16)
 	if err != nil {
@@ -226,7 +226,7 @@ func gateway2(ctx *mcli.Context) error {
 	return nil
 }
 
-func initForSvc(c *cli.Context, mp string, metaUrl, listenAddr string) (*vfs.Config, *fs.FileSystem) {
+func initForSvc(c *cli.Context, mp string, svcType, metaUrl, listenAddr string) (*vfs.Config, *fs.FileSystem) {
 	removePassword(metaUrl)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
@@ -243,7 +243,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl, listenAddr string) (*vfs.Con
 	if st := metaCli.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
 		logger.Fatalf("Chroot to %s: %s", metaConf.Subdir, st)
 	}
-	registerer, registry := wrapRegister(c, mp, format.Name)
+	registerer, registry := wrapRegister(c, svcType, format.Name)
 
 	blob, err := NewReloadableStorage(format, metaCli, updateFormat(c))
 	if err != nil {
@@ -282,6 +282,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl, listenAddr string) (*vfs.Con
 	vfsConf.AttrTimeout = utils.Duration(c.String("attr-cache"))
 	vfsConf.EntryTimeout = utils.Duration(c.String("entry-cache"))
 	vfsConf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
+	vfsConf.Mountpoint = mp
 
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	jfs, err := fs.NewFileSystem(vfsConf, metaCli, store, registry)
