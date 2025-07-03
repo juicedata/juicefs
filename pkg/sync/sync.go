@@ -1467,11 +1467,6 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 		if trimKey != key {
 			logger.Infof("found a prefix with a space character:%q", key)
 		}
-		isDir := strings.HasSuffix(trimKey, "/")
-		trimKey = path.Clean(trimKey)
-		if isDir {
-			trimKey += "/"
-		}
 		prefixs <- trimKey
 	}
 	close(prefixs)
