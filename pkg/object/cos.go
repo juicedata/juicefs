@@ -329,6 +329,11 @@ func newCOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		},
 	})
 	client.UserAgent = UserAgent
+	disableChecksum := strings.EqualFold(uri.Query().Get("disable-checksum"), "true")
+	if disableChecksum {
+		logger.Infof("default CRC checksum is disabled")
+	}
+	client.Conf.EnableCRC = !disableChecksum
 	return &COS{c: client, endpoint: uri.Host}, nil
 }
 
