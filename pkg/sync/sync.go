@@ -31,6 +31,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 	"unicode"
 
@@ -220,10 +221,27 @@ var bufPool = sync.Pool{
 	},
 }
 
+func shouldRetry(err error) bool {
+	if err == nil || errors.Is(err, utils.ErrSkipped) || errors.Is(err, utils.ErrExtlink) {
+		return false
+	}
+
+	var eno syscall.Errno
+	if errors.As(err, &eno) {
+		switch eno {
+		case syscall.EAGAIN, syscall.EINTR, syscall.EBUSY, syscall.ETIMEDOUT, syscall.EIO:
+			return true
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func try(n int, f func() error) (err error) {
 	for i := 0; i < n; i++ {
 		err = f()
-		if err == nil || errors.Is(err, utils.ErrSkipped) || errors.Is(err, utils.ErrExtlink) {
+		if !shouldRetry(err) {
 			return
 		}
 		logger.Debugf("Try %d failed: %s", i+1, err)
