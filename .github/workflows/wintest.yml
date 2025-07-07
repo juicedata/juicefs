@@ -29,7 +29,7 @@ on:
 
 jobs:
   wintest:
-    runs-on: windows-2019
+    runs-on: windows-2022
     env:
       Actions_Allow_Unsecure_Commands: true
     steps:
