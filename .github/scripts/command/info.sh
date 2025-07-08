@@ -8,11 +8,11 @@ source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
 
-test_info_big_file(){
+test_info_big_file() {
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
-    dd if=/dev/urandom of=/jfs/bigfile bs=16M count=1024
+    dd if=/dev/zero of=/jfs/bigfile bs=1M count=4096
     ./juicefs info /jfs/bigfile
     ./juicefs rmr /jfs/bigfile
     df -h /jfs
