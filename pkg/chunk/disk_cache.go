@@ -174,10 +174,10 @@ func (cache *cacheStore) setLimitByFreeRatio(usage DiskFreeRatio, freeRatio floa
 	if inodeLimit < cache.maxItems || cache.maxItems == 0 {
 		limit := cache.maxItems
 		cache.maxItems = inodeLimit
-		
-		maxItems := strconv.FormatInt(cache.maxItems, 10)
-		if cache.maxItems == 0 {
-			maxItems = "unlimited"
+
+		maxItems := "unlimited"
+		if cache.maxItems != 0 {
+			maxItems = strconv.FormatInt(cache.maxItems, 10)
 		}
 		logger.Infof("Adjusted max items based on freeratio: from %d to %s items", limit, maxItems)
 	}
