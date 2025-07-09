@@ -419,7 +419,7 @@ func (store *cachedStore) upload(key string, block *Page, s *wSlice) error {
 		if err = store.put(key, buf); err == nil {
 			break
 		}
-		logger.Warnf("Upload %s: %s (try %d)", key, err, try+1)
+		logger.Debugf("Upload %s: %s (try %d)", key, err, try+1)
 	}
 	if err != nil && try >= max {
 		err = fmt.Errorf("(max tries) upload block %s: %s (after %d tries)", key, err, try)
