@@ -176,4 +176,17 @@ test_umask()
     echo "PASS: Umask test completed successfully"
 }
 
+test_avoid_reading_all_zero()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    mkdir /jfs2
+    ./juicefs mount -d $META_URL /jfs2 --entry-cache=0s --attr-cache=0s
+    sleep 1
+    python .github/scripts/test_consistency.py
+}
+
+
+
 source .github/scripts/common/run_test.sh && run_test $@
