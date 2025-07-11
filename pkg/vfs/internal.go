@@ -338,7 +338,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		var count, total uint64
 		var eno syscall.Errno
 		go func() {
-			logger.Infof("Start to clone %d/%d to %d/%s, cmode=%d, umask=%d", srcIno, srcParentIno, dstParentIno, dstName, cmode, umask)
+			logger.Infof("Start to clone %d/%d to %d/%s, cmode=%d, umask=%d", srcParentIno, srcIno, dstParentIno, dstName, cmode, umask)
 			if eno = v.Meta.Clone(ctx, srcParentIno, srcIno, dstParentIno, dstName, cmode, umask, &count, &total); eno != 0 {
 				logger.Errorf("clone failed srcIno:%d,dstParentIno:%d,dstName:%s,cmode:%d,umask:%d,eno:%v", srcIno, dstParentIno, dstName, cmode, umask, eno)
 			}
