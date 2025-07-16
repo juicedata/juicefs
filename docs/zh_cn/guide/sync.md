@@ -28,6 +28,19 @@ juicefs sync --match-full-path --exclude='**.gz' s3://xxx/ s3://xxx
 juicefs sync --match-full-path --exclude='**/tmpdir/**' s3://xxx/ s3://xxx
 ```
 
+## 快速上手视频
+
+<div className="video-container">
+  <iframe
+    src="//player.bilibili.com/player.html?isOutside=true&aid=114856149652272&bvid=BV1JruJzbEDB&cid=31047811517&p=1&autoplay=false"
+    width="100%"
+    height="360"
+    scrolling="no"
+    frameBorder="0"
+    allowFullScreen
+  ></iframe>
+</div>
+
 ## 模式匹配 {#pattern-matching}
 
 你可以通过 `--exclude` 和 `--include` 来包含或排除要同步的文件路径。如果不提供任何规则，默认会同步所有扫描到的文件（默认就是 `--include='*'`）。但如果需要使用 `--include` 实现只包含特定命名模式的文件，则**必须同时使用 `--exclude` 来排除其他文件**，具体请参考上方的示范命令。
