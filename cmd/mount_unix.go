@@ -671,8 +671,13 @@ func tellFstabOptions(c *cli.Context) string {
 		} else if v := c.Bool(s); v {
 			opts = append(opts, s)
 		} else if s == "cache-dir" {
-			dirs := utils.SplitDir(c.String(s))
-			dirString := strings.Join(relPathToAbs(dirs), string(os.PathListSeparator))
+			var dirString string
+			if c.String(s) == "memory" {
+				dirString = "memory"
+			} else {
+				dirs := utils.SplitDir(c.String(s))
+				dirString = strings.Join(relPathToAbs(dirs), string(os.PathListSeparator))
+			}
 			opts = append(opts, fmt.Sprintf("%s=%s", s, dirString))
 		} else {
 			opts = append(opts, fmt.Sprintf("%s=%s", s, c.Generic(s)))
