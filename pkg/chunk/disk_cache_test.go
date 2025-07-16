@@ -416,7 +416,7 @@ func TestSetlimitByFreeRatio(t *testing.T) {
 		inodeCap: 1000,
 	}
 	freeRatio := float32(0.2)
-	cache.setlimitByFreeRatio(usage, 0.2)
+	cache.setLimitByFreeRatio(usage, 0.2)
 
 	expectedSizeLimit := int64((1 - freeRatio + 0.05) * float32(usage.spaceCap))
 	if cache.capacity > expectedSizeLimit {
