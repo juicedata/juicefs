@@ -159,6 +159,19 @@ makepkg -si
    **[WinFsp](https://github.com/winfsp/winfsp)** 是一个开源的 Windows 文件系统代理，它提供了一个 FUSE 仿真层，使得 JuiceFS 客户端可以将文件系统挂载到 Windows 系统中使用。
    :::
 
+#### 快速上手视频
+
+<div className="video-container">
+  <iframe
+    src="//player.bilibili.com/player.html?isOutside=true&aid=114499784808051&bvid=BV1jtEczZEvq&cid=29939011077&p=1&autoplay=false"
+    width="100%"
+    height="360"
+    scrolling="no"
+    frameBorder="0"
+    allowFullScreen
+  ></iframe>
+</div>
+
 在 Windows 系统安装 JuiceFS 有以下几种方法：
 
 - [使用预编译的 Windows 客户端](#预编译的-windows-客户端)
