@@ -70,7 +70,16 @@ juicefs gateway redis://localhost:6379/1 0.0.0.0:9000
 - 与 S3 网关所在主机处于同一局域网的第三方客户端可以使用 `http://192.168.1.8:9000` 访问（假设启用 S3 网关的主机内网 IP 地址为 192.168.1.8）；
 - 通过互联网访问 S3 网关可以使用 `http://110.220.110.220:9000` 访问（假设启用 S3 网关的主机公网 IP 地址为 110.220.110.220）。
 
-<iframe src="//player.bilibili.com/player.html?isOutside=true&aid=1706122101&bvid=BV1fT421r72r&cid=1618194316&p=1&autoplay=0" width="100%" height="360" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"> </iframe>
+<div className="video-container">
+  <iframe
+    src="//player.bilibili.com/player.html?isOutside=true&aid=1706122101&bvid=BV1fT421r72r&cid=27189643521&p=1&autoplay=false"
+    width="100%"
+    height="360"
+    scrolling="no"
+    frameBorder="0"
+    allowFullScreen
+  ></iframe>
+</div>
 
 ## 访问 S3 网关
 
@@ -139,7 +148,16 @@ $ mc ls juicefs/jfs
 juicefs gateway redis://localhost:6379/1 localhost:9000 --multi-buckets
 ```
 
-<iframe src="//player.bilibili.com/player.html?isOutside=true&aid=1056147201&bvid=BV1LH4y1A73s&cid=1618197063&p=1&autoplay=0" width="100%" height="360" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"> </iframe>
+<div className="video-container">
+  <iframe
+    src="//player.bilibili.com/player.html?isOutside=true&aid=1056147201&bvid=BV1LH4y1A73s&cid=1620258239&p=1&autoplay=false"
+    width="100%"
+    height="360"
+    scrolling="no"
+    frameBorder="0"
+    allowFullScreen
+  ></iframe>
+</div>
 
 ### 保留 etag
 
