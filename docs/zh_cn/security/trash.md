@@ -25,6 +25,19 @@ juicefs config META-URL --trash-days=0
 
 另外，回收站自动清理依赖 JuiceFS 客户端的后台任务，为了保证后台任务能够正常执行，需要至少 1 个在线的挂载点，并且在挂载文件系统时不可以使用 [`--no-bgjob`](../reference/command_reference.mdx#mount-metadata-options) 参数。
 
+## 快速上手视频
+
+<div className="video-container">
+  <iframe
+    src="//player.bilibili.com/player.html?isOutside=true&aid=114737031550670&bvid=BV1cFKGzeEjk&cid=30669867418&p=1&autoplay=false"
+    width="100%"
+    height="360"
+    scrolling="no"
+    frameBorder="0"
+    allowFullScreen
+  ></iframe>
+</div>
+
 ## 恢复文件 {#recover}
 
 文件被删除时，会根据删除时间，被保存在格式为 `.trash/YYYY-MM-DD-HH/[parent inode]-[file inode]-[file name]` 的目录，其中 `YYYY-MM-DD-HH` 就是删除操作的 UTC 时间。因此只需要确定文件的删除时间，就能在对应的目录中找到他们，来进行恢复操作。
