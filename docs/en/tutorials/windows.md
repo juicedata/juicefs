@@ -161,6 +161,6 @@ Use Windows Task Scheduler to automatically mount JuiceFS at startup:
 6. Click "OK" to save the task.
 
 **Notes:**
+
 - Ensure the mount command parameters are correct; do not include the password in the command (it is stored in environment variables).
 - To unmount the file system: right-click the mounted drive letter and select "Disconnect".
-
