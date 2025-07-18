@@ -811,7 +811,7 @@ func (cache *cacheStore) evictionIter(yield func(k cacheKey, v *cacheItem) bool)
 			if item.size < 0 { // It's OK to pop staging blocks from heap
 				continue
 			}
-			if !yield(item.key, item.cacheItem) {
+			if !yield(*item.key, item.cacheItem) {
 				return
 			}
 		}
