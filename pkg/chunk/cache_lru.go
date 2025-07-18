@@ -31,7 +31,7 @@ type atimeHeap []heapItem
 
 type heapItem struct {
 	*cacheItem
-	key cacheKey
+	key *cacheKey // key to cacheItem
 }
 
 func (h atimeHeap) Len() int { return len(h) }
@@ -66,7 +66,7 @@ func (h *atimeHeap) Pop() any {
 
 func (cache *cacheStore) lruPush(k cacheKey) {
 	if cache.eviction == EvictionLRU {
-		heap.Push(&cache.lruHeap, heapItem{cache.keys[k], k})
+		heap.Push(&cache.lruHeap, heapItem{cache.keys[k], &k})
 	}
 }
 
@@ -97,7 +97,7 @@ func (cache *cacheStore) verifyHeap() bool {
 			logger.Warnf("atime heap item %d index %d does not match its position %d", i, item.index, i)
 			return false
 		}
-		if it, ok := cache.keys[item.key]; !ok {
+		if it, ok := cache.keys[*item.key]; !ok {
 			logger.Warnf("heap item %d key %s not found in keys map", i, item.key)
 			return false
 		} else if it != item.cacheItem {
