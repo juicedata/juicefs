@@ -28,7 +28,27 @@ JuiceFS supports Redis CSC through the following options in the metadata URL:
 - `client-cache-size`: Maximum cache size in megabytes (default: 300MB)
 - `client-cache-expire`: Optional cache expiration time (default: infinite - entries stay in cache until invalidated by server or evicted due to size limits)
 
+When client-side caching is enabled, JuiceFS caches:
+1. **Inode attributes**: File/directory metadata like permissions, size, timestamps
+2. **Directory entries**: Name to inode mappings for faster lookups
+3. **File chunks**: Read operations benefit from chunk-level caching for faster file access
+
 > **Note:** Redis Client Side Cache requires Redis server version 7.4 or higher. Using this feature with older Redis versions will result in errors.
+
+### Preloading Cache
+
+When client-side caching is enabled, JuiceFS automatically preloads up to 10,000 inodes into the cache after mounting. This lazy preloading happens in the background and helps to:
+
+1. Warm up the cache for common operations
+2. Reduce latency for initial filesystem operations
+3. Provide better performance from the moment the filesystem is mounted
+
+The preloading process intelligently prioritizes the most important inodes by:
+1. Starting with the root directory
+2. Loading the most frequently accessed top-level directories and files
+3. Recursively exploring important subdirectories
+
+If the filesystem contains fewer than 10,000 inodes, only the most important ones will be preloaded. The preloading process runs in a background goroutine with fail-safe mechanisms and won't block or affect normal filesystem operations.
 
 ## Modes
 
@@ -50,6 +70,8 @@ BCAST mode provides the simplest implementation while ensuring cache coherence a
 3. The cache is most effective for metadata-heavy workloads with many repeated operations
 4. Write operations automatically invalidate related cache entries to maintain consistency
 5. For very write-heavy workloads, consider disabling CSC as invalidation traffic may offset benefits
+6. The automatic preloading of up to 10,000 inodes helps achieve optimal performance from the start
+7. File read operations benefit from chunk-level caching to improve read performance for frequently accessed files
 
 ## Troubleshooting
 

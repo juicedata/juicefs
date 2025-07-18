@@ -112,12 +112,26 @@ func (m *redisMeta) invalidateFileCache(inode Ino) {
 			m.entryCache.Remove(keyStr)
 		}
 	}
+	
+	// Remove any related read cache items
+	if m.readCache != nil {
+		for _, k := range m.readCache.Keys() {
+			if k.Inode == inode {
+				m.readCache.Remove(k)
+			}
+		}
+	}
 
 	logger.Debugf("Explicitly invalidated cache for inode %d", inode)
 }
 
 // Write with cache invalidation
 func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time) syscall.Errno {
+	// Specifically invalidate read cache for this chunk before writing
+	if m.clientCache && m.readCache != nil {
+		m.invalidateReadCache(inode, indx)
+	}
+	
 	result := m.baseMeta.Write(ctx, inode, indx, off, slice, mtime)
 	if result == 0 && m.clientCache {
 		m.invalidateFileCache(inode)

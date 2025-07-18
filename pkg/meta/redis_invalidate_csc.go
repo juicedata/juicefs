@@ -49,3 +49,37 @@ func (m *redisMeta) invalidateEntryCache(parent Ino, name string) {
 	m.entryCache.Remove(cacheKey)
 	logger.Debugf("Manually invalidated entry cache for %d:%s", parent, name)
 }
+
+// Helper method to invalidate read cache for a specific inode and chunk index
+func (m *redisMeta) invalidateReadCache(inode Ino, indx uint32) {
+	if !m.clientCache || m.readCache == nil {
+		return
+	}
+
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
+
+	key := readCacheKey{Inode: inode, Index: indx}
+	m.readCache.Remove(key)
+	logger.Debugf("Manually invalidated read cache for inode %d index %d", inode, indx)
+}
+
+// Helper method to invalidate all read cache entries for an inode
+func (m *redisMeta) invalidateAllReadCache(inode Ino) {
+	if !m.clientCache || m.readCache == nil {
+		return
+	}
+
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
+	
+	// We need to scan through the cache and remove all entries for this inode
+	// This is not very efficient, but it's a simple solution
+	for _, key := range m.readCache.Keys() {
+		if key.Inode == inode {
+			m.readCache.Remove(key)
+		}
+	}
+	
+	logger.Debugf("Manually invalidated all read cache entries for inode %d", inode)
+}

@@ -105,6 +105,7 @@ type redisMeta struct {
 		ino  Ino
 		attr Attr
 	}] // Cache for directory entries
+	readCache         *lru.Cache[readCacheKey, []*slice] // Cache for read operations
 	cacheMu sync.RWMutex // Mutex for cache access
 }
 
@@ -304,6 +305,12 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			return nil, fmt.Errorf("create entry cache: %s", err)
 		}
 		m.entryCache = entryCache
+		
+		readCache, err := lru.New[readCacheKey, []*slice](clientCacheSize)
+		if err != nil {
+			return nil, fmt.Errorf("create read cache: %s", err)
+		}
+		m.readCache = readCache
 	}
 
 	m.en = m
@@ -339,7 +346,7 @@ func (m *redisMeta) NewSession(record bool) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// Now that we have a valid session, setup client-side caching if enabled
 	if m.clientCache {
 		err = m.setupClientSideCaching(m.clientCacheExpiry)
@@ -352,9 +359,20 @@ func (m *redisMeta) NewSession(record bool) error {
 			} else {
 				logger.Infof("Redis client-side caching enabled with infinite expiry")
 			}
+
+			// Preload the first 10000 inodes into the cache in a safe background goroutine
+			// Wrap with a recovery function to prevent any panics from affecting the mount process
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logger.Errorf("Recovered from panic in cache preloading goroutine: %v", r)
+					}
+				}()
+				m.preloadInodeCache(10000)
+			}()
 		}
 	}
-	
+
 	return nil
 }
 

@@ -117,7 +117,97 @@ func (m *redisMeta) setupCachedMethods() {
 	}
 }
 
-// shutdownClientSideCaching safely cleans up CSC resources
+// preloadInodeCache loads the first N inodes into cache
+func (m *redisMeta) preloadInodeCache(maxCount int) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf("Recovered from panic in preloadInodeCache: %v", r)
+		}
+	}()
+
+	if !m.clientCache || m.inodeCache == nil {
+		return
+	}
+
+	ctx := Background()
+	logger.Infof("Preloading up to %d inodes into client-side cache...", maxCount)
+	start := time.Now()
+
+	// Instead of scanning all Redis keys (which can cause parsing issues),
+	// start from the root inode and load the most important inodes first
+	rootInode := Ino(1)
+	count := 0
+
+	// First, let's load the root inode
+	attr := &Attr{}
+	err := m.baseMeta.GetAttr(ctx, rootInode, attr)
+	if err != 0 {
+		logger.Warnf("Error preloading root inode: %v", err)
+	} else {
+		// Cache manually since we're using baseMeta.GetAttr
+		cachedAttr := *attr
+		m.cacheMu.Lock()
+		m.inodeCache.Add(rootInode, &cachedAttr)
+		m.cacheMu.Unlock()
+		count++
+
+		// Load root directory entries to get the most important inodes
+		var entries []*Entry
+		err = m.baseMeta.Readdir(ctx, rootInode, 0, &entries)
+		if err != 0 {
+			logger.Warnf("Error reading root directory: %v", err)
+		} else {
+			// Load attributes for each entry in root dir
+			for _, entry := range entries {
+				if count >= maxCount {
+					break
+				}
+
+				entryAttr := &Attr{}
+				err = m.baseMeta.GetAttr(ctx, entry.Inode, entryAttr)
+				if err == 0 {
+					// Cache manually
+					cachedEntryAttr := *entryAttr
+					m.cacheMu.Lock()
+					m.inodeCache.Add(entry.Inode, &cachedEntryAttr)
+					m.cacheMu.Unlock()
+
+					count++
+
+					// If it's a directory, also load its contents recursively
+					if entryAttr.Typ == TypeDirectory && count < maxCount {
+						var subEntries []*Entry
+						err = m.baseMeta.Readdir(ctx, entry.Inode, 0, &subEntries)
+						if err == 0 {
+							for _, subEntry := range subEntries {
+								if count >= maxCount {
+									break
+								}
+
+								subAttr := &Attr{}
+								err = m.baseMeta.GetAttr(ctx, subEntry.Inode, subAttr)
+								if err == 0 {
+									cachedSubAttr := *subAttr
+									m.cacheMu.Lock()
+									m.inodeCache.Add(subEntry.Inode, &cachedSubAttr)
+									m.cacheMu.Unlock()
+
+									count++
+								}
+							}
+						}
+					}
+				}
+
+				if count%100 == 0 && count > 0 {
+					logger.Debugf("Preloaded %d inodes...", count)
+				}
+			}
+		}
+	}
+
+	logger.Infof("Preloaded %d inodes in %v", count, time.Since(start))
+} // shutdownClientSideCaching safely cleans up CSC resources
 func (m *redisMeta) shutdownClientSideCaching() {
 	if m.cacheSubscription != nil {
 		err := m.cacheSubscription.Close()
