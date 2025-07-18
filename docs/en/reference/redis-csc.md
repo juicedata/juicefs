@@ -28,6 +28,8 @@ JuiceFS supports Redis CSC through the following options in the metadata URL:
 - `client-cache-size`: Maximum cache size in megabytes (default: 300MB)
 - `client-cache-expire`: Optional cache expiration time (default: infinite - entries stay in cache until invalidated by server or evicted due to size limits)
 
+> **Note:** Redis Client Side Cache requires Redis server version 7.4 or higher. Using this feature with older Redis versions will result in errors.
+
 ## Modes
 
 JuiceFS uses BCAST mode for simplicity and reliability:

@@ -309,21 +309,16 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	m.en = m
 	m.checkServerConfig()
 
-	// Setup client-side caching if enabled
+	// We'll initialize the client-side caching after session creation
 	if clientCache {
-		err = m.setupClientSideCaching(clientCacheExpiry)
-		if err != nil {
-			logger.Warnf("Failed to setup client-side caching: %v", err)
-			m.clientCache = false
+		// Only prepare the caches, actual setup will be done after session creation
+		m.setupCachedMethods()
+		if clientCacheExpiry > 0 {
+			logger.Infof("Redis client-side caching prepared with size %d MB (%d entries) and expiry %s",
+				clientCacheSizeMB, clientCacheSize, clientCacheExpiry)
 		} else {
-			m.setupCachedMethods()
-			if clientCacheExpiry > 0 {
-				logger.Infof("Redis client-side caching enabled with size %d MB (%d entries) and expiry %s",
-					clientCacheSizeMB, clientCacheSize, clientCacheExpiry)
-			} else {
-				logger.Infof("Redis client-side caching enabled with size %d MB (%d entries) and infinite expiry",
-					clientCacheSizeMB, clientCacheSize)
-			}
+			logger.Infof("Redis client-side caching prepared with size %d MB (%d entries) and infinite expiry",
+				clientCacheSizeMB, clientCacheSize)
 		}
 	}
 
@@ -335,6 +330,32 @@ func (m *redisMeta) Shutdown() error {
 		m.shutdownClientSideCaching()
 	}
 	return m.rdb.Close()
+}
+
+// Override NewSession to initialize client-side cache after session is created
+func (m *redisMeta) NewSession(record bool) error {
+	// First, create the session normally
+	err := m.baseMeta.NewSession(record)
+	if err != nil {
+		return err
+	}
+	
+	// Now that we have a valid session, setup client-side caching if enabled
+	if m.clientCache {
+		err = m.setupClientSideCaching(m.clientCacheExpiry)
+		if err != nil {
+			logger.Warnf("Failed to setup client-side caching: %v", err)
+			m.clientCache = false
+		} else {
+			if m.clientCacheExpiry > 0 {
+				logger.Infof("Redis client-side caching enabled with expiry %s", m.clientCacheExpiry)
+			} else {
+				logger.Infof("Redis client-side caching enabled with infinite expiry")
+			}
+		}
+	}
+	
+	return nil
 }
 
 func (m *redisMeta) doDeleteSlice(id uint64, size uint32) error {

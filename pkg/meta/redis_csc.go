@@ -30,7 +30,7 @@ import (
 // setupClientSideCaching configures Redis client-side caching
 func (m *redisMeta) setupClientSideCaching(expiry time.Duration) error {
 	ctx := Background()
-	
+
 	// Store the expiry setting - 0 means infinite (no expiry)
 	m.clientCacheExpiry = expiry
 
