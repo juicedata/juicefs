@@ -2406,18 +2406,65 @@ func (m *redisMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 func (m *redisMeta) doRefreshSession() error {
 	ctx := Background()
 	ssid := strconv.FormatUint(m.sid, 10)
-	// we have to check sessionInfo here because the operations are not within a transaction
-	ok, err := m.rdb.HExists(ctx, m.sessionInfos(), ssid).Result()
-	if err == nil && !ok {
-		logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
-		err = m.rdb.HSet(ctx, m.sessionInfos(), m.sid, m.newSessionInfo()).Err()
-	}
-	if err != nil {
+	
+	// Handle CSC parsing errors if client-side caching is enabled
+	if m.clientCache {
+		// Check if session exists, handling potential CSC responses
+		var exists bool
+		hexists, err := m.rdb.HExists(ctx, m.sessionInfos(), ssid).Result()
+		if err != nil {
+			// Check if it's a CSC parsing error
+			if strings.Contains(err.Error(), "can't parse reply") {
+				// Assume session exists (since we're getting a CSC response)
+				logger.Debugf("Ignoring Redis CSC parsing error when checking session: %v", err)
+				exists = true
+			} else {
+				return err
+			}
+		} else {
+			exists = hexists
+		}
+		
+		if !exists {
+			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
+			err = m.rdb.HSet(ctx, m.sessionInfos(), m.sid, m.newSessionInfo()).Err()
+			if err != nil {
+				// Check if it's a CSC parsing error
+				if strings.Contains(err.Error(), "can't parse reply") {
+					logger.Debugf("Ignoring Redis CSC parsing error when setting session info: %v", err)
+				} else {
+					return err
+				}
+			}
+		}
+		
+		// Update session expiration
+		err = m.rdb.ZAdd(ctx, m.allSessions(), redis.Z{
+			Score:  float64(m.expireTime()),
+			Member: ssid}).Err()
+		
+		// Handle CSC parsing errors for the final ZAdd operation
+		if err != nil && strings.Contains(err.Error(), "can't parse reply") {
+			logger.Debugf("Ignoring Redis CSC parsing error when refreshing session: %v", err)
+			err = nil
+		}
+		
 		return err
+	} else {
+		// Original implementation for non-CSC mode
+		// we have to check sessionInfo here because the operations are not within a transaction
+		ok, err := m.rdb.HExists(ctx, m.sessionInfos(), ssid).Result()
+		if err == nil && !ok {
+			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
+			err = m.rdb.HSet(ctx, m.sessionInfos(), m.sid, m.newSessionInfo()).Err()
+		}
+		if err != nil {
+			return err
+		}
+		return m.rdb.ZAdd(ctx, m.allSessions(), redis.Z{
+			Score:  float64(m.expireTime()),
+			Member: ssid}).Err()
 	}
-	return m.rdb.ZAdd(ctx, m.allSessions(), redis.Z{
-		Score:  float64(m.expireTime()),
-		Member: ssid}).Err()
 }
 
 func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {

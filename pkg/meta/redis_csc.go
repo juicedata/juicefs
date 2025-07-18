@@ -120,7 +120,7 @@ func (m *redisMeta) setupCachedMethods() {
 // safeGetAttr safely gets inode attributes for preloading, handling Redis parsing errors
 func (m *redisMeta) safeGetAttr(ctx Context, inode Ino) (*Attr, bool) {
 	attr := &Attr{}
-	
+
 	// Instead of using baseMeta.GetAttr which can trigger Redis parsing errors,
 	// we'll directly access Redis with error handling
 	a, err := m.rdb.Get(ctx, m.inodeKey(inode)).Bytes()
@@ -130,14 +130,14 @@ func (m *redisMeta) safeGetAttr(ctx Context, inode Ino) (*Attr, bool) {
 			logger.Debugf("Ignoring Redis parsing error for inode %d: %v", inode, err)
 			return nil, false
 		}
-		
+
 		// If it's another error, also skip
 		if err != redis.Nil {
 			logger.Debugf("Error getting inode %d: %v", inode, err)
 		}
 		return nil, false
 	}
-	
+
 	// Parse the attribute bytes
 	m.parseAttr(a, attr)
 	return attr, true
@@ -146,11 +146,11 @@ func (m *redisMeta) safeGetAttr(ctx Context, inode Ino) (*Attr, bool) {
 // safeReaddir safely reads directory entries for preloading, handling Redis parsing errors
 func (m *redisMeta) safeReaddir(ctx Context, inode Ino) ([]*Entry, bool) {
 	var entries []*Entry
-	
+
 	// Get all entries from the directory hash
 	entryKey := m.entryKey(inode)
 	var vals map[string]string
-	
+
 	vals, err := m.rdb.HGetAll(ctx, entryKey).Result()
 	if err != nil {
 		// Check if it's a Redis parsing error
@@ -158,19 +158,19 @@ func (m *redisMeta) safeReaddir(ctx Context, inode Ino) ([]*Entry, bool) {
 			logger.Debugf("Ignoring Redis parsing error in readdir for inode %d: %v", inode, err)
 			return nil, false
 		}
-		
+
 		logger.Debugf("Error getting directory entries for inode %d: %v", inode, err)
 		return nil, false
 	}
-	
+
 	// Process each entry
 	for name, val := range vals {
 		if name == "" {
 			continue
 		}
-		
+
 		typ, ino := m.parseEntry([]byte(val))
-		
+
 		entry := &Entry{
 			Inode: ino,
 			Name:  []byte(name),
@@ -178,10 +178,10 @@ func (m *redisMeta) safeReaddir(ctx Context, inode Ino) ([]*Entry, bool) {
 				Typ: typ,
 			},
 		}
-		
+
 		entries = append(entries, entry)
 	}
-	
+
 	return entries, true
 }
 
