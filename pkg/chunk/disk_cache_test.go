@@ -427,3 +427,56 @@ func TestSetlimitByFreeRatio(t *testing.T) {
 		t.Fatalf("Expected maxItems <= %d, but got %d", expectedInodeLimit, cache.maxItems)
 	}
 }
+
+func TestAtimeEviction(t *testing.T) {
+	Convey("TestAtimeEviction", t, func() {
+		dir := t.TempDir()
+		defer os.RemoveAll(dir)
+		conf := defaultConf
+		conf.CacheEviction = EvictionLRU
+		conf.FreeSpace = 0.00001
+		conf.CacheScanInterval = -1
+		conf.CacheSize = 1 << 30
+		conf.CacheItems = 10 // Max 10 items to easily trigger eviction
+
+		m := new(cacheManagerMetrics)
+		m.initMetrics()
+		s := newCacheStore(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
+		require.NotNil(t, s)
+
+		// Add items with distinct atimes
+		for i := 1; i <= 20; i++ {
+			key := fmt.Sprintf("%d_%d_1024", i, i)
+			s.add(key, 1024, uint32(time.Now().Add(time.Duration(i)*time.Second).Unix())) // New items have larger atime
+			require.True(t, s.verifyHeap())
+			require.LessOrEqual(t, int64(len(s.keys)), conf.CacheItems, "Cache should not exceed max items limit during addition")
+		}
+
+		cutIndex := 20 - conf.CacheItems
+		expectedKeys := make(map[string]bool)
+		// After eviction, the cache should only contain the newest items.
+		for i := cutIndex + 1; i <= 20; i++ {
+			key := fmt.Sprintf("%d_%d_1024", i, i)
+			expectedKeys[key] = true
+		}
+
+		require.Equal(t, s.lruHeap.Len(), len(s.keys), "Heap length should match keys length after insertion")
+		require.Equal(t, len(expectedKeys), len(s.keys), "Number of items in cache after eviction mismatch")
+		require.Equal(t, len(expectedKeys), s.lruHeap.Len(), "Number of items in heap after eviction mismatch")
+
+		// Verify the heap also contains the expected keys
+		tempHeap := make(atimeHeap, s.lruHeap.Len())
+		copy(tempHeap, s.lruHeap)
+		for tempHeap.Len() > 0 {
+			item := tempHeap.Pop().(heapItem)
+			require.Contains(t, expectedKeys, item.key.String(), "Unexpected key found in heap: %s", item.key.String())
+		}
+
+		// Verify all evicted keys are no longer in the cache
+		for i := int64(1); i <= cutIndex; i++ {
+			key := fmt.Sprintf("%d_%d_1024", i, i)
+			_, ok := s.keys[s.getCacheKey(key)]
+			require.False(t, ok, "Evicted key %s still found in cache", key)
+		}
+	})
+}
