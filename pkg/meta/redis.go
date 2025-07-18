@@ -2406,7 +2406,7 @@ func (m *redisMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 func (m *redisMeta) doRefreshSession() error {
 	ctx := Background()
 	ssid := strconv.FormatUint(m.sid, 10)
-	
+
 	// Handle CSC parsing errors if client-side caching is enabled
 	if m.clientCache {
 		// Check if session exists, handling potential CSC responses
@@ -2424,7 +2424,7 @@ func (m *redisMeta) doRefreshSession() error {
 		} else {
 			exists = hexists
 		}
-		
+
 		if !exists {
 			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
 			err = m.rdb.HSet(ctx, m.sessionInfos(), m.sid, m.newSessionInfo()).Err()
@@ -2437,18 +2437,18 @@ func (m *redisMeta) doRefreshSession() error {
 				}
 			}
 		}
-		
+
 		// Update session expiration
 		err = m.rdb.ZAdd(ctx, m.allSessions(), redis.Z{
 			Score:  float64(m.expireTime()),
 			Member: ssid}).Err()
-		
+
 		// Handle CSC parsing errors for the final ZAdd operation
 		if err != nil && strings.Contains(err.Error(), "can't parse reply") {
 			logger.Debugf("Ignoring Redis CSC parsing error when refreshing session: %v", err)
 			err = nil
 		}
-		
+
 		return err
 	} else {
 		// Original implementation for non-CSC mode

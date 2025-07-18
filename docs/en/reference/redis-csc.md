@@ -79,7 +79,11 @@ If you experience crashes or instability with CSC enabled:
 
 1. Update to the latest JuiceFS version which contains important fixes for CSC
 2. Try reducing the cache size with `client-cache-size`
-3. If problems persist, disable CSC by removing the `client-cache` parameter
+3. Check Redis server logs for any memory or client tracking issues
+4. Make sure your Redis server version is 7.4 or higher
+5. If problems persist, disable CSC by removing the `client-cache` parameter
+
+JuiceFS includes robust error handling for various Redis CSC-specific responses to ensure stable operation even when Redis sends unexpected response formats due to client tracking.
 
 ## References
 
