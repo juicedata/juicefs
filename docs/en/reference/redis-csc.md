@@ -1,6 +1,6 @@
 # Redis Client-Side Caching Support in JuiceFS
 
-Starting with version 7.4, Redis provides [Client-Side Caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) which allows clients to maintain local caches of data in a faster and more efficient way.
+Starting with version 7.4, Redis provides [Client-Side Caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) which allows clients to maintain local caches of data in a faster and more efficient way. JuiceFS includes full support for this feature, offering significant performance improvements for metadata operations.
 
 ## How it works
 
