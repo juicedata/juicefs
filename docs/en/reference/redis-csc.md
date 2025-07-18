@@ -18,15 +18,15 @@ JuiceFS supports Redis CSC through the following options in the metadata URL:
 
 ```
 --meta-url="redis://localhost/1?client-cache=true" # Enable client-side caching (always BCAST mode) 
---meta-url="redis://localhost/1?client-cache=true&client-cache-size=50000" # Set cache size (default 100000) 
---meta-url="redis://localhost/1?client-cache-expire=30s" # Set cache expiration (default 30s)
+--meta-url="redis://localhost/1?client-cache=true&client-cache-size=500" # Set cache size in MB (default 300MB) 
+--meta-url="redis://localhost/1?client-cache-expire=30s" # Set cache expiration (default: infinite)
 ```
 
 ### Options
 
 - `client-cache`: Enables client-side caching in BCAST mode (set to any value except "false")
-- `client-cache-size`: Maximum number of cached entries (default: 100000)
-- `client-cache-expire`: Cache expiration time (default: 30 seconds)
+- `client-cache-size`: Maximum cache size in megabytes (default: 300MB)
+- `client-cache-expire`: Optional cache expiration time (default: infinite - entries stay in cache until invalidated by server or evicted due to size limits)
 
 ## Modes
 
@@ -43,10 +43,11 @@ BCAST mode provides the simplest implementation while ensuring cache coherence a
 
 ## Performance Considerations
 
-1. Avoid setting cache too large to prevent excessive memory usage
-2. The cache is most effective for metadata-heavy workloads with many repeated operations
-3. Write operations automatically invalidate related cache entries to maintain consistency
-4. For very write-heavy workloads, consider disabling CSC as invalidation traffic may offset benefits
+1. The default 300MB cache size should be sufficient for most workloads
+2. For very large filesystems with millions of files, you may benefit from increasing the cache size
+3. The cache is most effective for metadata-heavy workloads with many repeated operations
+4. Write operations automatically invalidate related cache entries to maintain consistency
+5. For very write-heavy workloads, consider disabling CSC as invalidation traffic may offset benefits
 
 ## Troubleshooting
 

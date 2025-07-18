@@ -93,19 +93,19 @@ type redisMeta struct {
 	prefix     string
 	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
 	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
-	
+
 	// Client-side caching fields
-	clientCache       bool               // Whether client-side caching is enabled
-	clientCacheBcast  bool               // Whether we're using broadcast mode for caching
-	clientCacheSize   int                // Size limit for the cache
-	clientCacheExpiry time.Duration      // Expiration time for cached entries
-	cacheSubscription *redis.PubSub      // For invalidation messages
-	inodeCache        *lru.Cache[Ino, *Attr]     // Cache for inodes
+	clientCache       bool                   // Whether client-side caching is enabled
+	clientCacheBcast  bool                   // Whether we're using broadcast mode for caching
+	clientCacheSize   int                    // Size limit for the cache
+	clientCacheExpiry time.Duration          // Expiration time for cached entries
+	cacheSubscription *redis.PubSub          // For invalidation messages
+	inodeCache        *lru.Cache[Ino, *Attr] // Cache for inodes
 	entryCache        *lru.Cache[string, struct {
 		ino  Ino
 		attr Attr
-	}]  // Cache for directory entries
-	cacheMu           sync.RWMutex       // Mutex for cache access
+	}] // Cache for directory entries
+	cacheMu sync.RWMutex // Mutex for cache access
 }
 
 var _ Meta = (*redisMeta)(nil)
@@ -136,12 +136,15 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	keyFile := query.pop("tls-key-file")
 	caCertFile := query.pop("tls-ca-cert-file")
 	tlsServerName := query.pop("tls-server-name")
-	
+
 	// Client-side caching options
 	clientCacheStr := query.pop("client-cache")
 	clientCache := clientCacheStr != "false" && clientCacheStr != ""
-	clientCacheSize := query.getInt("client-cache-size", "client_cache_size", 100000)
-	clientCacheExpiry := query.duration("client-cache-expire", "client_cache_expire", time.Second*30)
+	clientCacheSizeMB := query.getInt("client-cache-size", "client_cache_size", 300) // Default to 300MB
+	// Convert MB to approximate number of entries (assuming ~2KB per entry on average)
+	clientCacheSize := clientCacheSizeMB * 500 // ~500 entries per MB
+	// TTL is now effectively infinite by default
+	clientCacheExpiry := query.duration("client-cache-expire", "client_cache_expire", 0)
 	u.RawQuery = values.Encode()
 
 	hosts := u.Host
@@ -276,15 +279,15 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 
 	// Setup Redis meta
 	m := &redisMeta{
-		baseMeta:         newBaseMeta(addr, conf),
-		rdb:              rdb,
-		prefix:           prefix,
-		clientCache:      clientCache,
-		clientCacheBcast: true, // Always use BCAST mode for simplicity
-		clientCacheSize:  clientCacheSize,
+		baseMeta:          newBaseMeta(addr, conf),
+		rdb:               rdb,
+		prefix:            prefix,
+		clientCache:       clientCache,
+		clientCacheBcast:  true, // Always use BCAST mode for simplicity
+		clientCacheSize:   clientCacheSize,
 		clientCacheExpiry: clientCacheExpiry,
 	}
-	
+
 	// Initialize LRU caches if client-side caching is enabled
 	if clientCache {
 		var err error
@@ -292,7 +295,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		if err != nil {
 			return nil, fmt.Errorf("create inode cache: %s", err)
 		}
-		
+
 		entryCache, err := lru.New[string, struct {
 			ino  Ino
 			attr Attr
@@ -302,10 +305,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		}
 		m.entryCache = entryCache
 	}
-	
+
 	m.en = m
 	m.checkServerConfig()
-	
+
 	// Setup client-side caching if enabled
 	if clientCache {
 		err = m.setupClientSideCaching(clientCacheExpiry)
@@ -314,11 +317,16 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			m.clientCache = false
 		} else {
 			m.setupCachedMethods()
-			logger.Infof("Redis client-side caching enabled with size %d and expiry %s", 
-						clientCacheSize, clientCacheExpiry)
+			if clientCacheExpiry > 0 {
+				logger.Infof("Redis client-side caching enabled with size %d MB (%d entries) and expiry %s",
+					clientCacheSizeMB, clientCacheSize, clientCacheExpiry)
+			} else {
+				logger.Infof("Redis client-side caching enabled with size %d MB (%d entries) and infinite expiry",
+					clientCacheSizeMB, clientCacheSize)
+			}
 		}
 	}
-	
+
 	return m, nil
 }
 
