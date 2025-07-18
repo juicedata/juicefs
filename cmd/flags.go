@@ -22,6 +22,7 @@ import (
 	"path"
 	"runtime"
 
+	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/urfave/cli/v2"
 )
 
@@ -244,8 +245,8 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "cache-eviction",
-			Value: "2-random",
-			Usage: "cache eviction policy (none or 2-random)",
+			Value: chunk.Eviction2Random,
+			Usage: fmt.Sprintf("cache eviction policy [%s, %s, %s]", chunk.EvictionNone, chunk.Eviction2Random, chunk.EvictionLRU),
 		},
 		&cli.StringFlag{
 			Name:  "cache-scan-interval",
