@@ -72,7 +72,7 @@ func (m *redisMeta) doReadWithCache(ctx Context, inode Ino, indx uint32) ([]*sli
 				return cached, 0
 			}
 			m.cacheMu.RUnlock()
-			
+
 			// If not in cache, fall back to regular read
 			// This is inefficient but should be rare
 			return m.doRead(ctx, inode, indx)
@@ -82,12 +82,12 @@ func (m *redisMeta) doReadWithCache(ctx Context, inode Ino, indx uint32) ([]*sli
 
 	// Parse the results
 	slices := readSlices(result)
-	
+
 	// Cache the results
 	key := readCacheKey{Inode: inode, Index: indx}
 	m.cacheMu.Lock()
 	m.readCache.Add(key, slices)
 	m.cacheMu.Unlock()
-	
+
 	return slices, 0
 }

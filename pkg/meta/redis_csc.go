@@ -117,6 +117,74 @@ func (m *redisMeta) setupCachedMethods() {
 	}
 }
 
+// safeGetAttr safely gets inode attributes for preloading, handling Redis parsing errors
+func (m *redisMeta) safeGetAttr(ctx Context, inode Ino) (*Attr, bool) {
+	attr := &Attr{}
+	
+	// Instead of using baseMeta.GetAttr which can trigger Redis parsing errors,
+	// we'll directly access Redis with error handling
+	a, err := m.rdb.Get(ctx, m.inodeKey(inode)).Bytes()
+	if err != nil {
+		// Check if it's a Redis parsing error which might be caused by CSC
+		if strings.Contains(err.Error(), "can't parse reply") {
+			logger.Debugf("Ignoring Redis parsing error for inode %d: %v", inode, err)
+			return nil, false
+		}
+		
+		// If it's another error, also skip
+		if err != redis.Nil {
+			logger.Debugf("Error getting inode %d: %v", inode, err)
+		}
+		return nil, false
+	}
+	
+	// Parse the attribute bytes
+	m.parseAttr(a, attr)
+	return attr, true
+}
+
+// safeReaddir safely reads directory entries for preloading, handling Redis parsing errors
+func (m *redisMeta) safeReaddir(ctx Context, inode Ino) ([]*Entry, bool) {
+	var entries []*Entry
+	
+	// Get all entries from the directory hash
+	entryKey := m.entryKey(inode)
+	var vals map[string]string
+	
+	vals, err := m.rdb.HGetAll(ctx, entryKey).Result()
+	if err != nil {
+		// Check if it's a Redis parsing error
+		if strings.Contains(err.Error(), "can't parse reply") {
+			logger.Debugf("Ignoring Redis parsing error in readdir for inode %d: %v", inode, err)
+			return nil, false
+		}
+		
+		logger.Debugf("Error getting directory entries for inode %d: %v", inode, err)
+		return nil, false
+	}
+	
+	// Process each entry
+	for name, val := range vals {
+		if name == "" {
+			continue
+		}
+		
+		typ, ino := m.parseEntry([]byte(val))
+		
+		entry := &Entry{
+			Inode: ino,
+			Name:  []byte(name),
+			Attr: &Attr{
+				Typ: typ,
+			},
+		}
+		
+		entries = append(entries, entry)
+	}
+	
+	return entries, true
+}
+
 // preloadInodeCache loads the first N inodes into cache
 func (m *redisMeta) preloadInodeCache(maxCount int) {
 	defer func() {
@@ -138,24 +206,22 @@ func (m *redisMeta) preloadInodeCache(maxCount int) {
 	rootInode := Ino(1)
 	count := 0
 
-	// First, let's load the root inode
-	attr := &Attr{}
-	err := m.baseMeta.GetAttr(ctx, rootInode, attr)
-	if err != 0 {
-		logger.Warnf("Error preloading root inode: %v", err)
+	// First, let's load the root inode safely
+	rootAttr, ok := m.safeGetAttr(ctx, rootInode)
+	if !ok {
+		logger.Warnf("Error preloading root inode")
 	} else {
-		// Cache manually since we're using baseMeta.GetAttr
-		cachedAttr := *attr
+		// Cache manually
+		cachedAttr := *rootAttr
 		m.cacheMu.Lock()
 		m.inodeCache.Add(rootInode, &cachedAttr)
 		m.cacheMu.Unlock()
 		count++
 
 		// Load root directory entries to get the most important inodes
-		var entries []*Entry
-		err = m.baseMeta.Readdir(ctx, rootInode, 0, &entries)
-		if err != 0 {
-			logger.Warnf("Error reading root directory: %v", err)
+		entries, ok := m.safeReaddir(ctx, rootInode)
+		if !ok {
+			logger.Warnf("Error reading root directory")
 		} else {
 			// Load attributes for each entry in root dir
 			for _, entry := range entries {
@@ -163,9 +229,8 @@ func (m *redisMeta) preloadInodeCache(maxCount int) {
 					break
 				}
 
-				entryAttr := &Attr{}
-				err = m.baseMeta.GetAttr(ctx, entry.Inode, entryAttr)
-				if err == 0 {
+				entryAttr, ok := m.safeGetAttr(ctx, entry.Inode)
+				if ok {
 					// Cache manually
 					cachedEntryAttr := *entryAttr
 					m.cacheMu.Lock()
@@ -176,17 +241,15 @@ func (m *redisMeta) preloadInodeCache(maxCount int) {
 
 					// If it's a directory, also load its contents recursively
 					if entryAttr.Typ == TypeDirectory && count < maxCount {
-						var subEntries []*Entry
-						err = m.baseMeta.Readdir(ctx, entry.Inode, 0, &subEntries)
-						if err == 0 {
+						subEntries, ok := m.safeReaddir(ctx, entry.Inode)
+						if ok {
 							for _, subEntry := range subEntries {
 								if count >= maxCount {
 									break
 								}
 
-								subAttr := &Attr{}
-								err = m.baseMeta.GetAttr(ctx, subEntry.Inode, subAttr)
-								if err == 0 {
+								subAttr, ok := m.safeGetAttr(ctx, subEntry.Inode)
+								if ok {
 									cachedSubAttr := *subAttr
 									m.cacheMu.Lock()
 									m.inodeCache.Add(subEntry.Inode, &cachedSubAttr)

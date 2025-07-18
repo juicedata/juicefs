@@ -105,8 +105,8 @@ type redisMeta struct {
 		ino  Ino
 		attr Attr
 	}] // Cache for directory entries
-	readCache         *lru.Cache[readCacheKey, []*slice] // Cache for read operations
-	cacheMu sync.RWMutex // Mutex for cache access
+	readCache *lru.Cache[readCacheKey, []*slice] // Cache for read operations
+	cacheMu   sync.RWMutex                       // Mutex for cache access
 }
 
 var _ Meta = (*redisMeta)(nil)
@@ -305,7 +305,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			return nil, fmt.Errorf("create entry cache: %s", err)
 		}
 		m.entryCache = entryCache
-		
+
 		readCache, err := lru.New[readCacheKey, []*slice](clientCacheSize)
 		if err != nil {
 			return nil, fmt.Errorf("create read cache: %s", err)

@@ -72,7 +72,7 @@ func (m *redisMeta) invalidateAllReadCache(inode Ino) {
 
 	m.cacheMu.Lock()
 	defer m.cacheMu.Unlock()
-	
+
 	// We need to scan through the cache and remove all entries for this inode
 	// This is not very efficient, but it's a simple solution
 	for _, key := range m.readCache.Keys() {
@@ -80,6 +80,6 @@ func (m *redisMeta) invalidateAllReadCache(inode Ino) {
 			m.readCache.Remove(key)
 		}
 	}
-	
+
 	logger.Debugf("Manually invalidated all read cache entries for inode %d", inode)
 }

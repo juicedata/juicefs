@@ -112,7 +112,7 @@ func (m *redisMeta) invalidateFileCache(inode Ino) {
 			m.entryCache.Remove(keyStr)
 		}
 	}
-	
+
 	// Remove any related read cache items
 	if m.readCache != nil {
 		for _, k := range m.readCache.Keys() {
@@ -131,7 +131,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 	if m.clientCache && m.readCache != nil {
 		m.invalidateReadCache(inode, indx)
 	}
-	
+
 	result := m.baseMeta.Write(ctx, inode, indx, off, slice, mtime)
 	if result == 0 && m.clientCache {
 		m.invalidateFileCache(inode)
