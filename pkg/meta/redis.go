@@ -45,6 +45,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -92,6 +93,19 @@ type redisMeta struct {
 	prefix     string
 	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
 	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
+	
+	// Client-side caching fields
+	clientCache       bool               // Whether client-side caching is enabled
+	clientCacheBcast  bool               // Whether we're using broadcast mode for caching
+	clientCacheSize   int                // Size limit for the cache
+	clientCacheExpiry time.Duration      // Expiration time for cached entries
+	cacheSubscription *redis.PubSub      // For invalidation messages
+	inodeCache        *lru.Cache[Ino, *Attr]     // Cache for inodes
+	entryCache        *lru.Cache[string, struct {
+		ino  Ino
+		attr Attr
+	}]  // Cache for directory entries
+	cacheMu           sync.RWMutex       // Mutex for cache access
 }
 
 var _ Meta = (*redisMeta)(nil)
@@ -122,6 +136,12 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	keyFile := query.pop("tls-key-file")
 	caCertFile := query.pop("tls-ca-cert-file")
 	tlsServerName := query.pop("tls-server-name")
+	
+	// Client-side caching options
+	clientCacheStr := query.pop("client-cache")
+	clientCache := clientCacheStr != "false" && clientCacheStr != ""
+	clientCacheSize := query.getInt("client-cache-size", "client_cache_size", 100000)
+	clientCacheExpiry := query.duration("client-cache-expire", "client_cache_expire", time.Second*30)
 	u.RawQuery = values.Encode()
 
 	hosts := u.Host
@@ -254,17 +274,58 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		}
 	}
 
+	// Setup Redis meta
 	m := &redisMeta{
-		baseMeta: newBaseMeta(addr, conf),
-		rdb:      rdb,
-		prefix:   prefix,
+		baseMeta:         newBaseMeta(addr, conf),
+		rdb:              rdb,
+		prefix:           prefix,
+		clientCache:      clientCache,
+		clientCacheBcast: true, // Always use BCAST mode for simplicity
+		clientCacheSize:  clientCacheSize,
+		clientCacheExpiry: clientCacheExpiry,
 	}
+	
+	// Initialize LRU caches if client-side caching is enabled
+	if clientCache {
+		var err error
+		m.inodeCache, err = lru.New[Ino, *Attr](clientCacheSize)
+		if err != nil {
+			return nil, fmt.Errorf("create inode cache: %s", err)
+		}
+		
+		entryCache, err := lru.New[string, struct {
+			ino  Ino
+			attr Attr
+		}](clientCacheSize)
+		if err != nil {
+			return nil, fmt.Errorf("create entry cache: %s", err)
+		}
+		m.entryCache = entryCache
+	}
+	
 	m.en = m
 	m.checkServerConfig()
+	
+	// Setup client-side caching if enabled
+	if clientCache {
+		err = m.setupClientSideCaching(clientCacheExpiry)
+		if err != nil {
+			logger.Warnf("Failed to setup client-side caching: %v", err)
+			m.clientCache = false
+		} else {
+			m.setupCachedMethods()
+			logger.Infof("Redis client-side caching enabled with size %d and expiry %s", 
+						clientCacheSize, clientCacheExpiry)
+		}
+	}
+	
 	return m, nil
 }
 
 func (m *redisMeta) Shutdown() error {
+	if m.clientCache {
+		m.shutdownClientSideCaching()
+	}
 	return m.rdb.Close()
 }
 
