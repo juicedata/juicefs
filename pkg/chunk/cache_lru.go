@@ -16,7 +16,9 @@
 
 package chunk
 
-import "container/heap"
+import (
+	"container/heap"
+)
 
 const (
 	EvictionNone    = "none"
@@ -77,7 +79,9 @@ func (cache *cacheStore) lruFix(index int) {
 }
 
 func (cache *cacheStore) lruPop() heapItem {
-	return heap.Pop(&cache.lruHeap).(heapItem)
+	item := heap.Pop(&cache.lruHeap).(heapItem)
+	item.index = notInLru
+	return item
 }
 
 func (cache *cacheStore) lruRemove(index int) {
@@ -88,7 +92,16 @@ func (cache *cacheStore) lruRemove(index int) {
 
 // nolint:unused
 func (cache *cacheStore) verifyHeap() bool {
-	if cache.lruHeap.Len() != len(cache.keys) {
+	cacheKeys := 0
+	for k, v := range cache.keys {
+		if v.size > 0 {
+			cacheKeys += 1
+		} else if v.index != notInLru {
+			logger.Warnf("Staging block %s has size %d but index %d in lruHeap", k, v.size, v.index)
+			return false
+		}
+	}
+	if cache.lruHeap.Len() != cacheKeys {
 		logger.Warnf("atime heap length %d does not match keys length %d", cache.lruHeap.Len(), len(cache.keys))
 		return false
 	}

@@ -429,13 +429,13 @@ func TestSetlimitByFreeRatio(t *testing.T) {
 }
 
 func TestAtimeEviction(t *testing.T) {
-	Convey("TestAtimeEviction", t, func() {
+	Convey("TestAtimeEviction-CacheFull", t, func() {
 		dir := t.TempDir()
 		defer os.RemoveAll(dir)
 		conf := defaultConf
 		conf.CacheEviction = EvictionLRU
 		conf.FreeSpace = 0.00001
-		conf.CacheScanInterval = -1
+		conf.CacheScanInterval = -1 // Disable periodic scan
 		conf.CacheSize = 1 << 30
 		conf.CacheItems = 10 // Max 10 items to easily trigger eviction
 
@@ -478,5 +478,50 @@ func TestAtimeEviction(t *testing.T) {
 			_, ok := s.keys[s.getCacheKey(key)]
 			require.False(t, ok, "Evicted key %s still found in cache", key)
 		}
+	})
+
+	Convey("TestAtimeEviction-WriteBack", t, func() {
+		dir := t.TempDir()
+		defer os.RemoveAll(dir)
+		conf := defaultConf
+		conf.CacheEviction = EvictionLRU
+		conf.Writeback = true
+		conf.FreeSpace = 0.00001
+		conf.CacheScanInterval = -1 // Disable periodic scan
+		conf.CacheSize = 1 << 30
+		conf.CacheItems = 10 // Max 10 items to easily trigger eviction
+
+		// TODO: delete me
+		m := new(cacheManagerMetrics)
+		m.initMetrics()
+		s := newCacheStore(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
+		require.NotNil(t, s)
+
+		// Add items with distinct atimes
+		blockPlaceHolder := []byte("test data")
+		for i := 1; i <= 20; i++ {
+			key := fmt.Sprintf("%d_%d_9", i, i)
+			_, err := s.stage(key, blockPlaceHolder, true)
+			require.True(t, s.verifyHeap())
+			require.NoError(t, err, "Failed to stage data for key %s", key)
+		}
+		require.Equal(t, 20, len(s.keys), "Cache should contain 20 staged items even if full")
+		require.Equal(t, 0, len(s.lruHeap), "Staged items should not be in the LRU heap")
+
+		s.Lock()
+		s.cleanupFull()
+		s.Unlock()
+		for i := 1; i <= 20; i++ {
+			key := fmt.Sprintf("%d_%d_9", i, i)
+			s.uploaded(key, len(blockPlaceHolder))
+		}
+		require.Equal(t, len(s.keys), s.lruHeap.Len(), "Heap length should match keys length after staged items are uploaded")
+
+		s.maxItems = 1
+		s.Lock()
+		s.cleanupFull()
+		s.Unlock()
+		require.Equal(t, 0, len(s.keys), "Cache should be empty by cleanupFull after setting maxItems to 1")
+		require.Equal(t, 0, len(s.lruHeap), "LRU heap should be empty by cleanupFull after setting maxItems to 1")
 	})
 }
