@@ -22,7 +22,7 @@ sidebar_position: 1
 On Windows, JuiceFS relies on WinFsp to mount the file system. You can download the latest version from the [WinFsp Repository](https://github.com/winfsp/winfsp). After installation, it is recommended to restart your computer to ensure all components are loaded properly.
 :::
 
-The [installation guide](../getting-started/installation#windows) introduces various ways to install JuiceFS on Windows. Here, we detail the manual installation process.
+The [installation guide](../getting-started/installation.md#windows) introduces various ways to install JuiceFS on Windows. Here, we detail the manual installation process.
 
 ### Step 1: Download JuiceFS Client
 

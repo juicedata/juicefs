@@ -22,7 +22,7 @@ sidebar_position: 1
 在 Windows 系统上，JuiceFS 依赖 WinFsp 实现文件系统的挂载。你可以在 [WinFsp 源码仓库](https://github.com/winfsp/winfsp) 下载最新版本，安装后建议重启计算机，以确保所有组件正常加载。
 :::
 
-[安装文档](../getting-started/installation#windows) 介绍了在 Windows 上安装 JuiceFS 客户端的多种方式，这里我们展开介绍手动安装方式。
+[安装文档](../getting-started/installation.md#windows) 介绍了在 Windows 上安装 JuiceFS 客户端的多种方式，这里我们展开介绍手动安装方式。
 
 ### 第一步 下载 JuiceFS 客户端
 
