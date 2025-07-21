@@ -19,7 +19,7 @@ sidebar_position: 1
 ## Install JuiceFS Client
 
 :::tip Environment Dependency
-On Windows, JuiceFS relies on Winfsp to mount the file system. You can download the latest version from the [Winfsp official site](https://winfsp.dev/). After installation, it is recommended to restart your computer to ensure all components are loaded properly.
+On Windows, JuiceFS relies on WinFsp to mount the file system. You can download the latest version from the [WinFsp Repository](https://github.com/winfsp/winfsp). After installation, it is recommended to restart your computer to ensure all components are loaded properly.
 :::
 
 The [installation guide](../getting-started/installation#windows) introduces various ways to install JuiceFS on Windows. Here, we detail the manual installation process.
@@ -114,7 +114,7 @@ To automatically load these variables every time Windows starts, set them as sys
      - Press `Win + S`, search for and open "Edit the system environment variables".
      - Click the "Environment Variables" button.
 
-![System Environment Variable Settings](https://static1.juicefs.com/docs/win_env_01.png)
+     ![System Environment Variable Settings](https://static1.juicefs.com/docs/win_env_01.png)
 
 2. **Create System-Level Environment Variable**
      - In the "System variables" area, click "New".
@@ -122,41 +122,40 @@ To automatically load these variables every time Windows starts, set them as sys
      - **Variable value**: Enter the password or key
      - Click "OK" to save.
 
-![Add Environment Variable](https://static1.juicefs.com/docs/win_env_02.png)
+     ![Add Environment Variable](https://static1.juicefs.com/docs/win_env_02.png)
 
-![Add Environment Variable](https://static1.juicefs.com/docs/win_env_03.png)
+     ![Add Environment Variable](https://static1.juicefs.com/docs/win_env_03.png)
 
 3. **Verify Environment Variable**
 
-        Reopen the terminal and try mounting the file system without specifying the password. If successful, the environment variable is effective.
-
+     Reopen the terminal and try mounting the file system without specifying the password. If successful, the environment variable is effective.
 
 ## Auto-Mount on Startup
 
-Use Windows Task Scheduler to automatically mount JuiceFS at startup:
+There are several ways to enable auto-mount on startup in Windows. This section introduces the method using "Task Scheduler".
 
 1. Open "Task Scheduler" and click "Create Task".
 
-![Task Scheduler](https://static1.juicefs.com/docs/task_00.png)
+     ![Task Scheduler](https://static1.juicefs.com/docs/task_00.png)
 
 2. In the "General" tab, set the task name (e.g., `JuiceFS_AutoMount`) and check "Run with highest privileges".
 
-![General Settings](https://static1.juicefs.com/docs/task_01.png)
+     ![General Settings](https://static1.juicefs.com/docs/task_01.png)
 
 3. Switch to the "Triggers" tab, click "New", and select "At system startup" as the trigger.
 
-![Trigger Settings](https://static1.juicefs.com/docs/task_02.png)
+     ![Trigger Settings](https://static1.juicefs.com/docs/task_02.png)
 
 4. Switch to the "Actions" tab, click "New", and fill in:
 
      - **Program/script**: Browse to select the JuiceFS client path (e.g., `C:\juicefs\juicefs.exe`).
      - **Arguments**: Enter the mount command parameters. It is recommended to use system environment variables for the metadata engine password to avoid plain text input here.
 
-![Action Settings](https://static1.juicefs.com/docs/task_03.png)
+     ![Action Settings](https://static1.juicefs.com/docs/task_03.png)
 
 5. In the "Conditions" tab, check "Start only if the network connection is available" to ensure the mount operation runs when the network is ready.
 
-![Condition Settings](https://static1.juicefs.com/docs/task_04.png)
+     ![Condition Settings](https://static1.juicefs.com/docs/task_04.png)
 
 6. Click "OK" to save the task.
 

@@ -19,7 +19,7 @@ sidebar_position: 1
 ## 安装 JuiceFS 客户端
 
 :::tip 环境依赖
-在 Windows 系统上，JuiceFS 依赖 Winfsp 实现文件系统的挂载。你可以在 [Winfsp 官网](https://winfsp.dev/) 下载最新版本，安装后建议重启计算机，以确保所有组件正常加载。
+在 Windows 系统上，JuiceFS 依赖 WinFsp 实现文件系统的挂载。你可以在 [WinFsp 源码仓库](https://github.com/winfsp/winfsp) 下载最新版本，安装后建议重启计算机，以确保所有组件正常加载。
 :::
 
 [安装文档](../getting-started/installation#windows) 介绍了在 Windows 上安装 JuiceFS 客户端的多种方式，这里我们展开介绍手动安装方式。
@@ -114,7 +114,7 @@ set MINIO_ROOT_PASSWORD=your_secret_key
    - 按下 `Win + S`，搜索并打开“编辑系统环境变量”。
    - 点击“环境变量”按钮。
 
-![系统环境变量设置](https://static1.juicefs.com/docs/win_env_01.png)
+   ![系统环境变量设置](https://static1.juicefs.com/docs/win_env_01.png)
 
 2. **新建系统级环境变量**
    - 在“系统变量”区域点击“新建”。
@@ -122,41 +122,40 @@ set MINIO_ROOT_PASSWORD=your_secret_key
    - **变量值**：填写密码或秘钥
    - 点击“确定”保存。
 
-![添加环境变量](https://static1.juicefs.com/docs/win_env_02.png)
+   ![添加环境变量](https://static1.juicefs.com/docs/win_env_02.png)
 
-![添加环境变量](https://static1.juicefs.com/docs/win_env_03.png)
+   ![添加环境变量](https://static1.juicefs.com/docs/win_env_03.png)
 
 3. **验证环境变量**
 
     重新打开终端，尝试不带密码挂载文件系统。如果能够成功挂载，则说明环境变量已生效。
 
-
 ## 开机自启动挂载
 
-通过 Windows 计划任务实现开机自动挂载：
+通过 Windows 计划任务实现开机自动挂载有多种方式，这里介绍通过“任务计划程序”设置的方法。
 
 1. 打开“任务计划程序”，点击“创建任务”。
 
-![任务计划程序](https://static1.juicefs.com/docs/task_00.png)
+   ![任务计划程序](https://static1.juicefs.com/docs/task_00.png)
 
 2. 在“常规”选项卡中，设置任务名称（如 `JuiceFS_AutoMount`），并勾选“使用最高权限运行”。
 
-![常规设置](https://static1.juicefs.com/docs/task_01.png)
+   ![常规设置](https://static1.juicefs.com/docs/task_01.png)
 
 3. 切换到“触发器”选项卡，点击“新建”，选择“系统启动时”作为触发条件。
 
-![触发器设置](https://static1.juicefs.com/docs/task_02.png)
+   ![触发器设置](https://static1.juicefs.com/docs/task_02.png)
 
 4. 切换到“操作”选项卡，点击“新建”，填写以下信息：
 
    - **程序或脚本**：浏览选择 JuiceFS 客户端路径（如 `C:\juicefs\juicefs.exe`）。
    - **参数**：填写挂载命令参数。建议将元数据引擎密码通过系统环境变量进行设置，这样可以避免在此处明文输入密码。
 
-![触发器设置](https://static1.juicefs.com/docs/task_03.png)
+   ![触发器设置](https://static1.juicefs.com/docs/task_03.png)
 
 5. 在“条件”选项卡中，勾选“仅当网络连接可用时”，以确保挂载操作在网络可用时执行。
 
-![触发器设置](https://static1.juicefs.com/docs/task_04.png)
+   ![触发器设置](https://static1.juicefs.com/docs/task_04.png)
 
 6. 点击“确定”保存任务。
 
