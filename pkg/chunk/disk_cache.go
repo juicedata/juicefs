@@ -743,29 +743,38 @@ func (cache *cacheStore) flush() {
 }
 
 func (cache *cacheStore) add(key string, size int32, atime uint32) {
+	if size == 0 {
+		logger.Warnf("Cache add %s with size 0, atime %d", key, atime) // should not happen
+		return
+	}
 	k := cache.getCacheKey(key)
 	cache.Lock()
 	defer cache.Unlock()
-	it, ok := cache.keys[k]
+	iter, ok := cache.keys[k]
 	if !ok {
 		cache.keys[k] = &cacheItem{size: size, atime: atime, index: notInLru}
-		cache.lruPush(k)
+		iter = cache.keys[k]
 	} else {
-		if it.size > 0 {
-			cache.used -= int64(it.size + 4096)
+		if iter.size > 0 {
+			cache.used -= int64(iter.size + 4096)
 		}
-		it.size = size
-		if atime != 0 { // only update size of staging block
-			cache.keys[k].atime = atime
-			cache.lruFix(cache.keys[k].index)
+		iter.size = size
+		if atime > iter.atime {
+			iter.atime = atime
 		}
 	}
 	if size > 0 {
 		cache.used += int64(size + 4096)
+		// don't add staging blocks to lru as they should not be evicted in `cleanupFull`
+		if iter.index == notInLru {
+			cache.lruPush(k)
+		} else {
+			cache.lruFix(iter.index)
+		}
 	}
 
 	if cache.full() && cache.eviction != EvictionNone {
-		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20)
+		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%s)", cache.dir, len(cache.keys), humanize.IBytes(uint64(cache.used)))
 		cache.cleanupFull()
 	}
 }
@@ -808,7 +817,8 @@ func (cache *cacheStore) evictionIter(yield func(k cacheKey, v *cacheItem) bool)
 	case EvictionLRU:
 		for cache.lruHeap.Len() > 0 {
 			item := cache.lruPop()
-			if item.size < 0 { // It's OK to pop staging blocks from heap
+			if item.size < 0 {
+				logger.Warnf("Got a staging block in LRU: %s", item.key) // should not happen
 				continue
 			}
 			if !yield(*item.key, item.cacheItem) {
@@ -842,7 +852,7 @@ func (cache *cacheStore) evictionIter(yield func(k cacheKey, v *cacheItem) bool)
 			}
 		}
 	default:
-		panic(fmt.Sprintf("unexpected eviction policy: %q", cache.eviction)) // Should not happen
+		panic(fmt.Sprintf("unexpected eviction policy: %q", cache.eviction)) // should not happen
 	}
 }
 
