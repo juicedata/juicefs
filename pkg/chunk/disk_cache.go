@@ -30,6 +30,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -147,7 +148,7 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize, maxItems int64
 	logger.Infof("Disk cache (%s): used ratio - [space %s%%, inode %s%%]",
 		c.dir, humanize.FtoaWithDigits(float64((1-usage.br)*100), 1), humanize.FtoaWithDigits(float64((1-usage.fr)*100), 1))
 
-	c.setlimitByFreeRatio(usage, c.freeRatio)
+	c.setLimitByFreeRatio(usage, c.freeRatio)
 
 	c.createLockFile()
 	go c.checkLockFile()
@@ -162,7 +163,7 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize, maxItems int64
 	return c
 }
 
-func (cache *cacheStore) setlimitByFreeRatio(usage DiskFreeRatio, freeRatio float32) {
+func (cache *cacheStore) setLimitByFreeRatio(usage DiskFreeRatio, freeRatio float32) {
 	sizeLimit := int64(float64(1-freeRatio) * float64(usage.spaceCap))
 	inodeLimit := int64(float64(1-freeRatio) * float64(usage.inodeCap))
 	if sizeLimit < cache.capacity {
@@ -173,7 +174,12 @@ func (cache *cacheStore) setlimitByFreeRatio(usage DiskFreeRatio, freeRatio floa
 	if inodeLimit < cache.maxItems || cache.maxItems == 0 {
 		limit := cache.maxItems
 		cache.maxItems = inodeLimit
-		logger.Infof("Adjusted max items based on freeratio: from %d to %d items", limit, cache.maxItems)
+
+		maxItems := "unlimited"
+		if cache.maxItems != 0 {
+			maxItems = strconv.FormatInt(cache.maxItems, 10)
+		}
+		logger.Infof("Adjusted max items based on freeratio: from %d to %s items", limit, maxItems)
 	}
 }
 
