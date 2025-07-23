@@ -39,10 +39,13 @@ type heapItem struct {
 func (h atimeHeap) Len() int { return len(h) }
 
 func (h atimeHeap) Less(i, j int) bool { // min-heap
-	if h[i].atime == h[j].atime {
-		return h[i].key.id < h[j].key.id
+	if h[i].atime != h[j].atime {
+		return h[i].atime < h[j].atime
 	}
-	return h[i].atime < h[j].atime
+	if h[i].size != h[j].size {
+		return h[i].size > h[j].size // prefer deleting larger blocks
+	}
+	return h[i].key.id < h[j].key.id
 }
 
 func (h atimeHeap) Swap(i, j int) {
