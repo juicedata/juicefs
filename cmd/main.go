@@ -127,7 +127,7 @@ func handleSysMountArgs(args []string) ([]string, error) {
 		return nil, nil
 	}
 	mountOptions := args[3:]
-	sysOptions := []string{"_netdev", "rw", "defaults", "remount"}
+	sysOptions := []string{"_netdev", "nofail", "rw", "defaults", "remount"}
 	fuseOptions := make([]string, 0, 20)
 	cmdFlagsLookup := make(map[string]bool, 20)
 	for _, f := range append(cmdMount().Flags, globalFlags()...) {
@@ -354,6 +354,7 @@ func setup0(c *cli.Context, min, max int) {
 			Tags:            tags,
 			AuthToken:       os.Getenv("PYROSCOPE_AUTH_TOKEN"),
 			ProfileTypes:    types,
+			DisableGCRuns:   true,
 		}); err != nil {
 			logger.Errorf("start pyroscope agent: %v", err)
 		}
