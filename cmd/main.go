@@ -354,7 +354,6 @@ func setup0(c *cli.Context, min, max int) {
 			Tags:            tags,
 			AuthToken:       os.Getenv("PYROSCOPE_AUTH_TOKEN"),
 			ProfileTypes:    types,
-			DisableGCRuns:   true,
 		}); err != nil {
 			logger.Errorf("start pyroscope agent: %v", err)
 		}
