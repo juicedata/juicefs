@@ -16,6 +16,19 @@ POSIX ACL（Portable Operating System Interface for Unix - Access Control List�
 如果计划使用 ACL 功能，建议将所有客户端升级的最新版，避免旧版本客户端影响 ACL 的正确性。
 :::
 
+## 快速上手视频
+
+<div className="video-container">
+  <iframe
+    src="//player.bilibili.com/player.html?isOutside=true&aid=114691951041052&bvid=BV136MqzFEDD&cid=30526082573&p=1&autoplay=false"
+    width="100%"
+    height="360"
+    scrolling="no"
+    frameBorder="0"
+    allowFullScreen
+  ></iframe>
+</div>
+
 ## 启用 ACL
 
 如前所述，可以用新版客户端在创建新卷时开启 ACL，也可以用新版客户端在已创建的卷上开启 ACL。
