@@ -656,7 +656,7 @@ func absPath(d string) string {
 }
 
 func tellFstabOptions(c *cli.Context) string {
-	opts := []string{"_netdev"}
+	opts := []string{"_netdev,nofail"}
 	for _, s := range os.Args[2:] {
 		if !strings.HasPrefix(s, "-") {
 			continue

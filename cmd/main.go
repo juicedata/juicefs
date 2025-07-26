@@ -127,7 +127,7 @@ func handleSysMountArgs(args []string) ([]string, error) {
 		return nil, nil
 	}
 	mountOptions := args[3:]
-	sysOptions := []string{"_netdev", "rw", "defaults", "remount"}
+	sysOptions := []string{"_netdev", "nofail", "rw", "defaults", "remount"}
 	fuseOptions := make([]string, 0, 20)
 	cmdFlagsLookup := make(map[string]bool, 20)
 	for _, f := range append(cmdMount().Flags, globalFlags()...) {
