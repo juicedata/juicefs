@@ -92,41 +92,7 @@ func (w *webdav) Get(key string, off, limit int64, getters ...AttrGetter) (io.Re
 	if off == 0 && limit <= 0 {
 		return w.c.ReadStream(key)
 	}
-	url := &url.URL{
-		Scheme: w.endpoint.Scheme,
-		User:   w.endpoint.User,
-		Host:   w.endpoint.Host,
-		Path:   path.Join(w.endpoint.Path, key),
-	}
-	req, err := http.NewRequest("GET", url.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-	if limit > 0 {
-		req.Header.Add("Range", fmt.Sprintf("bytes=%d-%d", off, off+limit-1))
-	} else {
-		req.Header.Add("Range", fmt.Sprintf("bytes=%d-", off))
-	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode == http.StatusPartialContent {
-		// server supported partial content, return as-is.
-		return resp.Body, nil
-	}
-
-	// server returned success, but did not support partial content, so we have the whole
-	// stream in rs.Body
-	if resp.StatusCode == 200 {
-		if _, err := io.Copy(io.Discard, io.LimitReader(resp.Body, off)); err != nil {
-			return nil, &os.PathError{Op: "ReadStreamRange", Path: key, Err: err}
-		}
-		// return a io.ReadCloser that is limited to `length` bytes.
-		return &limitedReadCloser{resp.Body, int(limit)}, nil
-	}
-	_ = resp.Body.Close()
-	return nil, &os.PathError{Op: "ReadStreamRange", Path: key, Err: err}
+	return w.c.ReadStreamRange(key, off, limit)
 }
 
 func (w *webdav) Put(key string, in io.Reader, getters ...AttrGetter) error {
@@ -242,7 +208,6 @@ func newWebDAV(endpoint, user, passwd, token string) (ObjectStorage, error) {
 	if uri.Path == "" {
 		uri.Path = "/"
 	}
-	uri.User = url.UserPassword(user, passwd)
 	c := gowebdav.NewClient(uri.String(), user, passwd)
 	c.SetTransport(httpClient.Transport)
 	return &webdav{endpoint: uri, c: c}, nil
