@@ -128,7 +128,7 @@ func (s *s3client) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 		}
 		params.Range = &r
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	resp, err := s.s3.GetObject(ctx, params)
 	if err != nil {
 		var re s3.ResponseError
@@ -174,7 +174,7 @@ func (s *s3client) Put(key string, in io.Reader, getters ...AttrGetter) error {
 		checksum := generateChecksum(body)
 		params.Metadata = map[string]string{checksumAlgr: checksum}
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(s.sc)
 	resp, err := s.s3.PutObject(ctx, params)
 	if err != nil {
@@ -208,7 +208,7 @@ func (s *s3client) Delete(key string, getters ...AttrGetter) error {
 		Key:    &key,
 	}
 	resp, err := s.s3.DeleteObject(ctx, &param)
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	if err != nil {
 		var re s3.ResponseError
 		if errors.As(err, &re) {

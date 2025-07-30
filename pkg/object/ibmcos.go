@@ -87,7 +87,7 @@ func (s *ibmcos) Get(key string, off, limit int64, getters ...AttrGetter) (io.Re
 	}
 	var reqID string
 	resp, err := s.s3.GetObjectWithContext(ctx, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetRequestID(reqID)
 	if err != nil {
 		return nil, err
@@ -121,7 +121,7 @@ func (s *ibmcos) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	}
 	var reqID string
 	_, err := s.s3.PutObjectWithContext(ctx, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetRequestID(reqID).SetStorageClass(s.sc)
 	return err
 }
@@ -168,7 +168,7 @@ func (s *ibmcos) Delete(key string, getters ...AttrGetter) error {
 	}
 	var reqID string
 	_, err := s.s3.DeleteObjectWithContext(ctx, &param, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetRequestID(reqID)
 	return err
 }

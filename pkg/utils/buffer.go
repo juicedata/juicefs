@@ -63,6 +63,10 @@ func (b *Buffer) Seek(p int) {
 	b.off = p
 }
 
+func (b *Buffer) Offset() int {
+	return b.off
+}
+
 // Buffer returns
 func (b *Buffer) Buffer() []byte {
 	return b.buf[b.off:]

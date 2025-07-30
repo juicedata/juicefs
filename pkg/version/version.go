@@ -40,15 +40,19 @@ type Semver struct {
 	preRelease, build   string
 }
 
-func Version() string {
-	pr := ver.preRelease
+func (s *Semver) String() string {
+	pr := s.preRelease
 	if pr != "" {
 		pr = "-" + pr
 	}
-	if strings.Contains(ver.build, "Format") {
-		ver.build = "unknown"
+	if strings.Contains(s.build, "Format") {
+		s.build = "unknown"
 	}
-	return fmt.Sprintf("%d.%d.%d%s+%s", ver.major, ver.minor, ver.patch, pr, ver.build)
+	return fmt.Sprintf("%d.%d.%d%s+%s", s.major, s.minor, s.patch, pr, s.build)
+}
+
+func Version() string {
+	return ver.String()
 }
 
 func SetVersion(v string) {

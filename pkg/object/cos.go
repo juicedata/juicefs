@@ -119,7 +119,7 @@ func (c *COS) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadC
 		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey), length)
 	}
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey)).SetStorageClass(resp.Header.Get(cosStorageClassHeader))
 	}
 	return resp.Body, nil
@@ -141,7 +141,7 @@ func (c *COS) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	}
 	resp, err := c.c.Object.Put(ctx, key, in, &options)
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey)).SetStorageClass(c.sc)
 	}
 	return err
@@ -160,7 +160,7 @@ func (c *COS) Copy(dst, src string) error {
 func (c *COS) Delete(key string, getters ...AttrGetter) error {
 	resp, err := c.c.Object.Delete(ctx, key)
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey))
 	}
 	return err

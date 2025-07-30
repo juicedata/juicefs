@@ -26,6 +26,7 @@ type SupportStorageClass interface {
 type ResponseAttrs struct {
 	storageClass *string
 	requestID    *string
+	requestSize  *int64
 	// other interested attrs can be added here
 }
 
@@ -43,6 +44,13 @@ func (r *ResponseAttrs) SetStorageClass(sc string) *ResponseAttrs {
 	return r
 }
 
+func (r *ResponseAttrs) GetRequestSize() int64 {
+	if r.requestSize != nil {
+		return *r.requestSize
+	}
+	return -1
+}
+
 type AttrGetter func(attrs *ResponseAttrs)
 
 func WithRequestID(id *string) AttrGetter {
@@ -57,7 +65,13 @@ func WithStorageClass(sc *string) AttrGetter {
 	}
 }
 
-func applyGetters(getters ...AttrGetter) ResponseAttrs {
+func WithRequestSize(size *int64) AttrGetter {
+	return func(attrs *ResponseAttrs) {
+		attrs.requestSize = size
+	}
+}
+
+func ApplyGetters(getters ...AttrGetter) ResponseAttrs {
 	var attrs ResponseAttrs
 	for _, getter := range getters {
 		getter(&attrs)

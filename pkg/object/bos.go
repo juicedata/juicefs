@@ -118,7 +118,7 @@ func (q *bosclient) Get(key string, off, limit int64, getters ...AttrGetter) (re
 	} else {
 		resp = r.Body
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(r.StorageClass)
 	return
 }
@@ -150,7 +150,7 @@ func (q *bosclient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	args.UserMeta = make(map[string]string)
 	args.UserMeta[checksumAlgr] = strconv.Itoa(int(crc32.Update(0, crc32c, data)))
 	_, err = q.c.PutObject(q.bucket, key, body, args)
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(q.sc)
 	return err
 }

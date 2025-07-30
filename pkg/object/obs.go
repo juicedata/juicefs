@@ -117,7 +117,7 @@ func (s *obsClient) Get(key string, off, limit int64, getters ...AttrGetter) (io
 		resp, err = s.c.GetObject(params)
 	}
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.RequestId).SetStorageClass(getStorageClassStr(resp.StorageClass))
 	}
 	if err != nil {
@@ -173,7 +173,7 @@ func (s *obsClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
 	}
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.RequestId).SetStorageClass(getStorageClassStr(resp.StorageClass))
 	}
 	return err
@@ -196,7 +196,7 @@ func (s *obsClient) Delete(key string, getters ...AttrGetter) error {
 	params.Key = key
 	resp, err := s.c.DeleteObject(&params)
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.RequestId)
 	}
 	return err

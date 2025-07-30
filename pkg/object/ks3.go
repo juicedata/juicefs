@@ -111,7 +111,7 @@ func (s *ks3) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadC
 	}
 	resp, err := s.s3.GetObject(params)
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey]))
 		attrs.SetStorageClass(aws.ToString(resp.Metadata[s3StorageClassHdr]))
 	}
@@ -144,7 +144,7 @@ func (s *ks3) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	}
 	resp, err := s.s3.PutObject(params)
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey])).SetStorageClass(s.sc)
 	}
 	return err
@@ -170,7 +170,7 @@ func (s *ks3) Delete(key string, getters ...AttrGetter) error {
 	}
 	resp, err := s.s3.DeleteObject(&param)
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey]))
 	}
 	if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
