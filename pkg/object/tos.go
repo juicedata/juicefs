@@ -73,7 +73,7 @@ func (t *tosClient) Get(key string, off, limit int64, getters ...AttrGetter) (io
 		Range:  rangeStr, // When Range and RangeStart & RangeEnd appear together, range is preferred
 	})
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.RequestID).SetStorageClass(string(resp.StorageClass))
 	}
 	if err != nil {
@@ -107,7 +107,7 @@ func (t *tosClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 		Content: in,
 	})
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.RequestID).SetStorageClass(t.sc)
 	}
 	return err
@@ -119,7 +119,7 @@ func (t *tosClient) Delete(key string, getters ...AttrGetter) error {
 		Key:    key,
 	})
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.RequestID)
 	}
 	return err

@@ -291,7 +291,7 @@ func (d *dragonfly) Get(key string, off, limit int64, getters ...AttrGetter) (io
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("bad response status %s", resp.Status)
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(resp.Header.Get(HeaderDragonflyObjectMetaStorageClass))
 
 	return resp.Body, nil

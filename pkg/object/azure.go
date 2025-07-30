@@ -21,13 +21,14 @@ package object
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"io"
 	"net"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
@@ -82,7 +83,7 @@ func (b *wasb) Get(key string, off, limit int64, getters ...AttrGetter) (io.Read
 	if err != nil {
 		return nil, err
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	// TODO fire another property request to get the actual storage class
 	attrs.SetRequestID(aws.ToString(download.RequestID)).SetStorageClass(b.sc)
 	return download.Body, err
@@ -103,7 +104,7 @@ func (b *wasb) Put(key string, data io.Reader, getters ...AttrGetter) error {
 		options.AccessTier = str2Tier(b.sc)
 	}
 	resp, err := b.azblobCli.UploadStream(ctx, b.cName, key, data, &options)
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetRequestID(aws.ToString(resp.RequestID)).SetStorageClass(b.sc)
 	return err
 }
@@ -130,7 +131,7 @@ func (b *wasb) Delete(key string, getters ...AttrGetter) error {
 			err = nil
 		}
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetRequestID(aws.ToString(resp.RequestID))
 	return err
 }

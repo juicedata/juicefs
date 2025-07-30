@@ -120,7 +120,7 @@ func (g *gs) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCl
 		return nil, err
 	}
 	// TODO fire another attr request to get the actual storage class
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(g.sc)
 	return reader, nil
 }
@@ -140,7 +140,7 @@ func (g *gs) Put(key string, data io.Reader, getters ...AttrGetter) error {
 	if err != nil {
 		return err
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(g.sc)
 	return writer.Close()
 }

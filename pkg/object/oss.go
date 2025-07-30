@@ -124,7 +124,7 @@ func (o *ossClient) Get(key string, off, limit int64, getters ...AttrGetter) (re
 		}
 	}
 
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetRequestID(reqId)
 	attrs.SetStorageClass(sc)
 	return
@@ -151,7 +151,7 @@ func (o *ossClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	} else {
 		reqId = result.Headers.Get(oss.HeaderOssRequestID)
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetRequestID(reqId).SetStorageClass(o.sc)
 	return err
 }
@@ -182,7 +182,7 @@ func (o *ossClient) Delete(key string, getters ...AttrGetter) error {
 	} else {
 		reqId = result.Headers.Get(oss.HeaderOssRequestID)
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetRequestID(reqId)
 	return err
 }
