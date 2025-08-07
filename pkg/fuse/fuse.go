@@ -472,6 +472,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	opt.DirectMount = true
 	opt.AllowOther = os.Getuid() == 0
 	opt.Timeout = conf.FuseOpts.Timeout
+	opt.EnableReadDirPlusAuto = conf.FuseOpts.EnableReadDirPlusAuto
 
 	if opt.EnableAcl && conf.NonDefaultPermission {
 		logger.Warnf("it is recommended to turn on 'default-permissions' when enable acl")
@@ -549,6 +550,7 @@ func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, m
 	opt.DirectMount = true
 	opt.DontUmask = true
 	opt.Timeout = time.Minute * 15
+	opt.EnableReadDirPlusAuto = true
 	for _, n := range strings.Split(options, ",") {
 		// TODO allow_root
 		if n == "allow_other" {
