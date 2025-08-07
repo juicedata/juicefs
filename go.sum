@@ -470,8 +470,8 @@ github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83 h1:RyHTka3jCnT
 github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83/go.mod h1:1CNUng3PtjQMtRzJO4FMXBQvkGtuYRxxiR9xMa7jMwI=
 github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db h1:esc0bVXkjEuyPLn7JXFhKBDztpM0dT0GYQn7CqaBB6w=
 github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db/go.mod h1:6LmQG8QLFO4G5z1gPvYEzlUgJ2wF+stgPZH1UqBm1s8=
-github.com/juicedata/go-fuse/v2 v2.1.1-0.20250509085345-58f40c5d2ed9 h1:nwpDwi2fQj6GVm3XVWgl/fSGON0ihLvZep+hNhZEy54=
-github.com/juicedata/go-fuse/v2 v2.1.1-0.20250509085345-58f40c5d2ed9/go.mod h1:xKwi1cF7nXAOBCXujD5ie0ZKsxc8GGSA1rlMJc+8IJs=
+github.com/juicedata/go-fuse/v2 v2.1.1-0.20250807045235-112198daa7df h1:H3/AM/YZGPitgptMKBn3WrvWj7UrlhJSMHx4BrjuXMo=
+github.com/juicedata/go-fuse/v2 v2.1.1-0.20250807045235-112198daa7df/go.mod h1:xKwi1cF7nXAOBCXujD5ie0ZKsxc8GGSA1rlMJc+8IJs=
 github.com/juicedata/go-nfs-client v0.0.0-20250220101412-d3a8c1ca64a1 h1:GgH2ZG9inMYSme7zZb79z3QeOW70YusbJIVYjvqd508=
 github.com/juicedata/go-nfs-client v0.0.0-20250220101412-d3a8c1ca64a1/go.mod h1:xOMqi3lOrcGe9uZLnSzgaq94Vc3oz6VPCNDLJUnXpKs=
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d h1:kpQMvNZJKGY3PTt7OSoahYc4nM0HY67SvK0YyS0GLwA=
