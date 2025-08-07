@@ -384,27 +384,31 @@ func TestCacheManager(t *testing.T) {
 }
 
 func TestAtimeNotLost(t *testing.T) {
-	m := newCacheManager(&defaultConf, nil, nil)
-	key := "0_0_10"
+	for _, eviction := range []string{EvictionNone, Eviction2Random, EvictionLRU} {
+		cfg := defaultConf
+		cfg.CacheEviction = eviction
+		m := newCacheManager(&cfg, nil, nil)
+		key := "0_0_10"
 
-	p := NewPage([]byte("helloworld"))
-	defer p.Release()
-	m.cache(key, p, true, false)
-	time.Sleep(3 * time.Second)
+		p := NewPage([]byte("helloworld"))
+		defer p.Release()
+		m.cache(key, p, true, false)
+		time.Sleep(3 * time.Second)
 
-	_, exist := m.exist(key) // touch atime
-	if !exist {
-		t.Fatalf("CacheStore key %s not exist", key)
-	}
-	s := m.(*cacheManager).stores[0]
-	atimeMem := s.keys[s.getCacheKey(key)].atime
-	if atimeMem == 0 {
-		t.Fatalf("CacheStore key %s atime lost", key)
-	}
-	s.scanCached() // should use atime from memory
-	atimeAfterScan := s.keys[s.getCacheKey(key)].atime
-	if atimeAfterScan != atimeMem {
-		t.Fatalf("CacheStore key %s atime lost after scan, before: %d, after: %d", key, atimeMem, atimeAfterScan)
+		_, exist := m.exist(key) // touch atime
+		if !exist {
+			t.Fatalf("CacheStore key %s not exist", key)
+		}
+		s := m.(*cacheManager).stores[0]
+		atimeMem := s.keys.peekAtime(s.getCacheKey(key))
+		if atimeMem == 0 {
+			t.Fatalf("CacheStore key %s atime lost", key)
+		}
+		s.scanCached() // should use atime from memory
+		atimeAfterScan := s.keys.peekAtime(s.getCacheKey(key))
+		if atimeAfterScan != atimeMem {
+			t.Fatalf("CacheStore key %s atime lost after scan, before: %d, after: %d", key, atimeMem, atimeAfterScan)
+		}
 	}
 }
 func TestSetlimitByFreeRatio(t *testing.T) {
@@ -428,8 +432,36 @@ func TestSetlimitByFreeRatio(t *testing.T) {
 	}
 }
 
-func TestAtimeEviction(t *testing.T) {
-	Convey("TestAtimeEviction-CacheFull", t, func() {
+func Test2RandomEviction(t *testing.T) {
+	Convey("Test2RandomEviction-CacheFull", t, func() {
+		dir := t.TempDir()
+		defer os.RemoveAll(dir)
+		conf := defaultConf
+		conf.FreeSpace = 0.00001
+		conf.CacheScanInterval = -1 // Disable periodic scan
+		conf.CacheSize = 1 << 30
+		conf.CacheItems = 10 // Max 10 items to easily trigger eviction
+
+		m := new(cacheManagerMetrics)
+		m.initMetrics()
+		s := newCacheStore(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
+		require.NotNil(t, s)
+		if _, ok := s.keys.(*randomEviction); !ok {
+			t.Fatalf("Expected randomEviction, but got %T", s.keys)
+		}
+
+		// Add items with distinct atimes
+		for i := 1; i <= 20; i++ {
+			key := fmt.Sprintf("%d_%d_1024", i, i)
+			s.add(key, 1024, uint32(time.Now().Add(time.Duration(i)*time.Second).Unix())) // New items have larger atime
+			require.LessOrEqual(t, int64(s.keys.len()), conf.CacheItems, "Cache should not exceed max items limit during addition")
+			require.Greater(t, s.keys.len(), 0, "Cache should always have items after addition")
+		}
+	})
+}
+
+func TestLruEviction(t *testing.T) {
+	Convey("TestLruEviction-CacheFull", t, func() {
 		dir := t.TempDir()
 		defer os.RemoveAll(dir)
 		conf := defaultConf
@@ -443,13 +475,15 @@ func TestAtimeEviction(t *testing.T) {
 		m.initMetrics()
 		s := newCacheStore(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
 		require.NotNil(t, s)
+		le := s.keys.(*lruEviction)
 
 		// Add items with distinct atimes
 		for i := 1; i <= 20; i++ {
 			key := fmt.Sprintf("%d_%d_1024", i, i)
 			s.add(key, 1024, uint32(time.Now().Add(time.Duration(i)*time.Second).Unix())) // New items have larger atime
-			require.True(t, s.verifyHeap())
-			require.LessOrEqual(t, int64(len(s.keys)), conf.CacheItems, "Cache should not exceed max items limit during addition")
+			require.True(t, le.verifyHeap())
+			require.LessOrEqual(t, int64(s.keys.len()), conf.CacheItems, "Cache should not exceed max items limit during addition")
+			require.Greater(t, s.keys.len(), 0, "Cache should always have items after addition")
 		}
 
 		cutIndex := 20 - conf.CacheItems
@@ -460,13 +494,13 @@ func TestAtimeEviction(t *testing.T) {
 			expectedKeys[key] = true
 		}
 
-		require.Equal(t, s.lruHeap.Len(), len(s.keys), "Heap length should match keys length after insertion")
-		require.Equal(t, len(expectedKeys), len(s.keys), "Number of items in cache after eviction mismatch")
-		require.Equal(t, len(expectedKeys), s.lruHeap.Len(), "Number of items in heap after eviction mismatch")
+		require.Equal(t, le.lruHeap.Len(), len(le.keys), "Heap length should match keys length after insertion")
+		require.Equal(t, len(expectedKeys), len(le.keys), "Number of items in cache after eviction mismatch")
+		require.Equal(t, len(expectedKeys), le.lruHeap.Len(), "Number of items in heap after eviction mismatch")
 
 		// Verify the heap also contains the expected keys
-		tempHeap := make(atimeHeap, s.lruHeap.Len())
-		copy(tempHeap, s.lruHeap)
+		tempHeap := make(atimeHeap, le.lruHeap.Len())
+		copy(tempHeap, le.lruHeap)
 		for tempHeap.Len() > 0 {
 			item := tempHeap.Pop().(heapItem)
 			require.Contains(t, expectedKeys, item.key.String(), "Unexpected key found in heap: %s", item.key.String())
@@ -475,12 +509,12 @@ func TestAtimeEviction(t *testing.T) {
 		// Verify all evicted keys are no longer in the cache
 		for i := int64(1); i <= cutIndex; i++ {
 			key := fmt.Sprintf("%d_%d_1024", i, i)
-			_, ok := s.keys[s.getCacheKey(key)]
+			_, ok := le.keys[s.getCacheKey(key)]
 			require.False(t, ok, "Evicted key %s still found in cache", key)
 		}
 	})
 
-	Convey("TestAtimeEviction-WriteBack", t, func() {
+	Convey("TestLruEviction-WriteBack", t, func() {
 		dir := t.TempDir()
 		defer os.RemoveAll(dir)
 		conf := defaultConf
@@ -496,17 +530,18 @@ func TestAtimeEviction(t *testing.T) {
 		m.initMetrics()
 		s := newCacheStore(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
 		require.NotNil(t, s)
+		le := s.keys.(*lruEviction)
 
 		// Add items with distinct atimes
 		blockPlaceHolder := []byte("test data")
 		for i := 1; i <= 20; i++ {
 			key := fmt.Sprintf("%d_%d_9", i, i)
 			_, err := s.stage(key, blockPlaceHolder, true)
-			require.True(t, s.verifyHeap())
+			require.True(t, le.verifyHeap())
 			require.NoError(t, err, "Failed to stage data for key %s", key)
 		}
-		require.Equal(t, 20, len(s.keys), "Cache should contain 20 staged items even if full")
-		require.Equal(t, 0, len(s.lruHeap), "Staged items should not be in the LRU heap")
+		require.Equal(t, 20, len(le.keys), "Cache should contain 20 staged items even if full")
+		require.Equal(t, 0, len(le.lruHeap), "Staged items should not be in the LRU heap")
 
 		s.Lock()
 		s.cleanupFull()
@@ -515,13 +550,13 @@ func TestAtimeEviction(t *testing.T) {
 			key := fmt.Sprintf("%d_%d_9", i, i)
 			s.uploaded(key, len(blockPlaceHolder))
 		}
-		require.Equal(t, len(s.keys), s.lruHeap.Len(), "Heap length should match keys length after staged items are uploaded")
+		require.Equal(t, len(le.keys), le.lruHeap.Len(), "Heap length should match keys length after staged items are uploaded")
 
 		s.maxItems = 1
 		s.Lock()
 		s.cleanupFull()
 		s.Unlock()
-		require.Equal(t, 0, len(s.keys), "Cache should be empty by cleanupFull after setting maxItems to 1")
-		require.Equal(t, 0, len(s.lruHeap), "LRU heap should be empty by cleanupFull after setting maxItems to 1")
+		require.Equal(t, 0, len(le.keys), "Cache should be empty by cleanupFull after setting maxItems to 1")
+		require.Equal(t, 0, len(le.lruHeap), "LRU heap should be empty by cleanupFull after setting maxItems to 1")
 	})
 }
