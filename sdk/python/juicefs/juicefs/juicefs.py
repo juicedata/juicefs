@@ -97,7 +97,8 @@ class Client(object):
                  download_limit="0", max_uploads=20, max_deletes=10, skip_dir_nlink=20, skip_dir_mtime="100ms",
                  io_retries=10, get_timeout="5", put_timeout="60", fast_resolve=False, attr_cache="1s",
                  entry_cache="0s", dir_entry_cache="1s", debug=False, no_usage_report=False, access_log="",
-                 push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite=""):
+                 push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite="", push_remote_write="", 
+                 push_remote_write_auth=""):
         self.lib = JuiceFSLib()
         kwargs = {}
         kwargs["meta"] = meta
@@ -144,6 +145,8 @@ class Client(object):
         kwargs["pushAuth"] = push_auth
         kwargs["pushLabels"] = push_labels
         kwargs["pushGraphite"] = push_graphite
+        kwargs["pushRemoteWrite"] = push_remote_write
+        kwargs["pushRemoteWriteAuth"] = push_remote_write_auth
         kwargs["caller"] = 1
 
         jsonConf = json.dumps(kwargs, sort_keys=True)
