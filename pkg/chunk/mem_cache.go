@@ -85,7 +85,7 @@ func (c *memcache) cache(key string, p *Page, force, dropCache bool) {
 	}
 	c.Lock()
 	defer c.Unlock()
-	if c.full() && c.eviction == "none" {
+	if c.full() && c.eviction == EvictionNone {
 		logger.Debugf("Caching is full, drop %s (%d bytes)", key, len(p.Data))
 		c.metrics.cacheDrops.Add(1)
 		return
@@ -99,7 +99,7 @@ func (c *memcache) cache(key string, p *Page, force, dropCache bool) {
 	p.Acquire()
 	c.pages[key] = memItem{time.Now(), p}
 	c.used += size
-	if c.full() && c.eviction != "none" {
+	if c.full() && c.eviction != EvictionNone {
 		c.cleanup()
 	}
 }
