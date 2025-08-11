@@ -248,7 +248,9 @@ func (p *lruEviction) add(key cacheKey, item cacheItem) {
 	} else {
 		iter.cacheItem = item
 		if iter.pos == notInLru {
-			heap.Push(&p.lruHeap, heapItem{iter, &key})
+			if iter.size > 0 {
+				heap.Push(&p.lruHeap, heapItem{iter, &key})
+			}
 		} else {
 			heap.Fix(&p.lruHeap, iter.pos)
 		}
