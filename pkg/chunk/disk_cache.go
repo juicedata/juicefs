@@ -612,7 +612,9 @@ func (cache *cacheStore) remove(key string, staging bool) {
 	path := cache.cachePath(key)
 	k := cache.getCacheKey(key)
 	if it := cache.keys.remove(k, staging); it != nil {
-		cache.used -= int64(it.size + 4096)
+		if it.size > 0 {
+			cache.used -= int64(it.size + 4096)
+		}
 	} else if cache.scanned || !staging {
 		path = "" // not existed or staging block
 	}
@@ -675,6 +677,9 @@ func (cache *cacheStore) exist(key string) (bool, error) {
 	var err error
 	err = cache.checkErr(func() error {
 		_, err = os.Stat(cache.cachePath(key))
+		if err != nil && !os.IsNotExist(err) {
+			logger.Warnf("Stat %s failed: %s", cache.cachePath(key), err)
+		}
 		return err
 	})
 
