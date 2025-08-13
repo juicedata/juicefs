@@ -1003,17 +1003,20 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 	conf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
 	conf.NegEntryTimeout = utils.Duration(c.String("negative-entry-cache"))
 	conf.ReaddirCache = c.Bool("readdir-cache")
+	major, minor := utils.GetKernelVersion()
 	if conf.ReaddirCache {
 		if conf.AttrTimeout == 0 {
 			logger.Warnf("readdir-cache is enabled without attr-cache, it's performance may be affected")
 		}
-		major, minor := utils.GetKernelVersion()
 		if major < 4 || (major == 4 && minor < 20) {
 			logger.Warnf("readdir-cache requires kernel version 4.20 or higher, current version: %d.%d", major, minor)
 		}
 		if conf.Meta.SkipDirMtime > 0 {
 			logger.Warnf("When both readdir-cache and skip-dir-mtime are enabled, ignoring mtime may disable readdir refreshes on other nodes")
 		}
+	}
+	if conf.NegEntryTimeout > 0 && (major < 5 || (major == 5 && minor < 11)) {
+		logger.Warnf("On kernel versions below 5.11 (current: %d.%d), negative-entry-cache may cause concurrent check-then-create operations (e.g. mkdir -p) to fail in a distributed environment", major, minor)
 	}
 	conf.NonDefaultPermission = c.Bool("non-default-permission")
 	rootSquash := c.String("root-squash")
