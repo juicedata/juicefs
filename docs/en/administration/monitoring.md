@@ -172,7 +172,7 @@ For more information on Prometheus Operator, please refer to the [official docum
 
 ### Hadoop Java SDK {#hadoop}
 
-[JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) supports reporting monitoring metrics to [Pushgateway](https://github.com/prometheus/pushgateway) and [Graphite](https://graphiteapp.org).
+[JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) supports reporting monitoring metrics to [Pushgateway](https://github.com/prometheus/pushgateway), [Graphite](https://graphiteapp.org), and [Prometheus remote write](https://prometheus.io/docs/specs/prw/remote_write_spec/) endpoints.
 
 #### Pushgateway
 
@@ -220,6 +220,28 @@ Report metrics to Graphite:
 ```
 
 At the same time, the frequency of reporting metrics can be modified through the `juicefs.push-interval` configuration. The default is to report every 10 seconds.
+
+#### Remote Write
+
+Report metrics to Prometheus remote write endpoint:
+
+```xml
+<property>
+  <name>juicefs.push-remote-write</name>
+  <value>http://host:port/api/v1/write</value>
+</property>
+```
+
+At the same time, the frequency of reporting metrics can be modified through the `juicefs.push-interval` configuration. The default is to report every 10 seconds.
+
+:::info
+The remote write feature supports various Prometheus-compatible endpoints including:
+- [Prometheus with remote write enabled](https://prometheus.io/docs/prometheus/latest/querying/api/#remote-write-receiver)
+- [VictoriaMetrics](https://docs.victoriametrics.com/victoriametrics/vmagent/)
+- [Cortex](https://cortexmetrics.io/docs/architecture/)
+- [Grafana Mimir](https://grafana.com/docs/mimir/latest/send/)
+- ETC
+:::
 
 For all configurations supported by JuiceFS Hadoop Java SDK, please refer to [documentation](../deployment/hadoop_java_sdk.md#client-configurations).
 
