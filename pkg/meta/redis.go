@@ -45,6 +45,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -92,6 +93,20 @@ type redisMeta struct {
 	prefix     string
 	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
 	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
+
+	// Client-side caching fields
+	clientCache       bool                   // Whether client-side caching is enabled
+	clientCacheBcast  bool                   // Whether we're using broadcast mode for caching
+	clientCacheSize   int                    // Size limit for the cache
+	clientCacheExpiry time.Duration          // Expiration time for cached entries
+	cacheSubscription *redis.PubSub          // For invalidation messages
+	inodeCache        *lru.Cache[Ino, *Attr] // Cache for inodes
+	entryCache        *lru.Cache[string, struct {
+		ino  Ino
+		attr Attr
+	}] // Cache for directory entries
+	readCache *lru.Cache[readCacheKey, []*slice] // Cache for read operations
+	cacheMu   sync.RWMutex                       // Mutex for cache access
 }
 
 var _ Meta = (*redisMeta)(nil)
@@ -122,6 +137,15 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	keyFile := query.pop("tls-key-file")
 	caCertFile := query.pop("tls-ca-cert-file")
 	tlsServerName := query.pop("tls-server-name")
+
+	// Client-side caching options
+	clientCacheStr := query.pop("client-cache")
+	clientCache := clientCacheStr != "false" && clientCacheStr != ""
+	clientCacheSizeMB := query.getInt("client-cache-size", "client_cache_size", 300) // Default to 300MB
+	// Convert MB to approximate number of entries (assuming ~2KB per entry on average)
+	clientCacheSize := clientCacheSizeMB * 500 // ~500 entries per MB
+	// TTL is now effectively infinite by default
+	clientCacheExpiry := query.duration("client-cache-expire", "client_cache_expire", 0)
 	u.RawQuery = values.Encode()
 
 	hosts := u.Host
@@ -254,18 +278,102 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		}
 	}
 
+	// Setup Redis meta
 	m := &redisMeta{
-		baseMeta: newBaseMeta(addr, conf),
-		rdb:      rdb,
-		prefix:   prefix,
+		baseMeta:          newBaseMeta(addr, conf),
+		rdb:               rdb,
+		prefix:            prefix,
+		clientCache:       clientCache,
+		clientCacheBcast:  true, // Always use BCAST mode for simplicity
+		clientCacheSize:   clientCacheSize,
+		clientCacheExpiry: clientCacheExpiry,
 	}
+
+	// Initialize LRU caches if client-side caching is enabled
+	if clientCache {
+		var err error
+		m.inodeCache, err = lru.New[Ino, *Attr](clientCacheSize)
+		if err != nil {
+			return nil, fmt.Errorf("create inode cache: %s", err)
+		}
+
+		entryCache, err := lru.New[string, struct {
+			ino  Ino
+			attr Attr
+		}](clientCacheSize)
+		if err != nil {
+			return nil, fmt.Errorf("create entry cache: %s", err)
+		}
+		m.entryCache = entryCache
+
+		readCache, err := lru.New[readCacheKey, []*slice](clientCacheSize)
+		if err != nil {
+			return nil, fmt.Errorf("create read cache: %s", err)
+		}
+		m.readCache = readCache
+	}
+
 	m.en = m
 	m.checkServerConfig()
+
+	// We'll initialize the client-side caching after session creation
+	if clientCache {
+		// Only prepare the caches, actual setup will be done after session creation
+		m.setupCachedMethods()
+		if clientCacheExpiry > 0 {
+			logger.Infof("Redis client-side caching prepared with size %d MB (%d entries) and expiry %s",
+				clientCacheSizeMB, clientCacheSize, clientCacheExpiry)
+		} else {
+			logger.Infof("Redis client-side caching prepared with size %d MB (%d entries) and infinite expiry",
+				clientCacheSizeMB, clientCacheSize)
+		}
+	}
+
 	return m, nil
 }
 
 func (m *redisMeta) Shutdown() error {
+	if m.clientCache {
+		m.shutdownClientSideCaching()
+	}
 	return m.rdb.Close()
+}
+
+// Override NewSession to initialize client-side cache after session is created
+func (m *redisMeta) NewSession(record bool) error {
+	// First, create the session normally
+	err := m.baseMeta.NewSession(record)
+	if err != nil {
+		return err
+	}
+
+	// Now that we have a valid session, setup client-side caching if enabled
+	if m.clientCache {
+		err = m.setupClientSideCaching(m.clientCacheExpiry)
+		if err != nil {
+			logger.Warnf("Failed to setup client-side caching: %v", err)
+			m.clientCache = false
+		} else {
+			if m.clientCacheExpiry > 0 {
+				logger.Infof("Redis client-side caching enabled with expiry %s", m.clientCacheExpiry)
+			} else {
+				logger.Infof("Redis client-side caching enabled with infinite expiry")
+			}
+
+			// Preload the first 10000 inodes into the cache in a safe background goroutine
+			// Wrap with a recovery function to prevent any panics from affecting the mount process
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logger.Errorf("Recovered from panic in cache preloading goroutine: %v", r)
+					}
+				}()
+				m.preloadInodeCache(10000)
+			}()
+		}
+	}
+
+	return nil
 }
 
 func (m *redisMeta) doDeleteSlice(id uint64, size uint32) error {
@@ -2298,18 +2406,65 @@ func (m *redisMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 func (m *redisMeta) doRefreshSession() error {
 	ctx := Background()
 	ssid := strconv.FormatUint(m.sid, 10)
-	// we have to check sessionInfo here because the operations are not within a transaction
-	ok, err := m.rdb.HExists(ctx, m.sessionInfos(), ssid).Result()
-	if err == nil && !ok {
-		logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
-		err = m.rdb.HSet(ctx, m.sessionInfos(), m.sid, m.newSessionInfo()).Err()
-	}
-	if err != nil {
+
+	// Handle CSC parsing errors if client-side caching is enabled
+	if m.clientCache {
+		// Check if session exists, handling potential CSC responses
+		var exists bool
+		hexists, err := m.rdb.HExists(ctx, m.sessionInfos(), ssid).Result()
+		if err != nil {
+			// Check if it's a CSC parsing error
+			if strings.Contains(err.Error(), "can't parse reply") {
+				// Assume session exists (since we're getting a CSC response)
+				logger.Debugf("Ignoring Redis CSC parsing error when checking session: %v", err)
+				exists = true
+			} else {
+				return err
+			}
+		} else {
+			exists = hexists
+		}
+
+		if !exists {
+			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
+			err = m.rdb.HSet(ctx, m.sessionInfos(), m.sid, m.newSessionInfo()).Err()
+			if err != nil {
+				// Check if it's a CSC parsing error
+				if strings.Contains(err.Error(), "can't parse reply") {
+					logger.Debugf("Ignoring Redis CSC parsing error when setting session info: %v", err)
+				} else {
+					return err
+				}
+			}
+		}
+
+		// Update session expiration
+		err = m.rdb.ZAdd(ctx, m.allSessions(), redis.Z{
+			Score:  float64(m.expireTime()),
+			Member: ssid}).Err()
+
+		// Handle CSC parsing errors for the final ZAdd operation
+		if err != nil && strings.Contains(err.Error(), "can't parse reply") {
+			logger.Debugf("Ignoring Redis CSC parsing error when refreshing session: %v", err)
+			err = nil
+		}
+
 		return err
+	} else {
+		// Original implementation for non-CSC mode
+		// we have to check sessionInfo here because the operations are not within a transaction
+		ok, err := m.rdb.HExists(ctx, m.sessionInfos(), ssid).Result()
+		if err == nil && !ok {
+			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
+			err = m.rdb.HSet(ctx, m.sessionInfos(), m.sid, m.newSessionInfo()).Err()
+		}
+		if err != nil {
+			return err
+		}
+		return m.rdb.ZAdd(ctx, m.allSessions(), redis.Z{
+			Score:  float64(m.expireTime()),
+			Member: ssid}).Err()
 	}
-	return m.rdb.ZAdd(ctx, m.allSessions(), redis.Z{
-		Score:  float64(m.expireTime()),
-		Member: ssid}).Err()
 }
 
 func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
