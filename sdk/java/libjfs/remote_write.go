@@ -143,7 +143,7 @@ func (rw *RemoteWriter) Push() error {
 				rw.logger.Println("continue on error:", err)
 			}
 		default:
-			panic("unrecognized error handling value")
+			return err
 		}
 	}
 
