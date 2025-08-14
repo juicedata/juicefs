@@ -203,6 +203,8 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.push-gateway`  |               | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) address, format is `<host>:<port>`.                                                                     |
 | `juicefs.push-auth`     |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`.                                                       |
 | `juicefs.push-graphite` |               | [Graphite](https://graphiteapp.org) address, format is `<host>:<port>`.                                                                                                     |
+| `juicefs.push-remote-write` |           | [Prometheus remote write](https://prometheus.io/docs/specs/prw/remote_write_spec) endpoint, format is `http://<host>:<port>`. |
+| `juicefs.push-remote-write-auth` |       | Authentication for remote write endpoint, format is `<username>:<password>`. |
 | `juicefs.push-interval` | 10            | Metric push interval (in seconds)                                                                                                                                           |
 | `juicefs.push-labels`   |               | Metric labels, format is `key1:value1;key2:value2`.                                                                                                                         |
 | `juicefs.fast-resolve`  | `true`        | Whether enable faster metadata lookup using Redis Lua script                                                                                                                |
