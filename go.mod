@@ -1,6 +1,6 @@
 module github.com/juicedata/juicefs
 
-go 1.21.0
+go 1.23.0
 
 require (
 	cloud.google.com/go/compute/metadata v0.5.2
