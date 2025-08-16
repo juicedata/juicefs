@@ -389,6 +389,10 @@ func mountFlags() []cli.Flag {
 			Name:  "force",
 			Usage: "force to mount even if the mount point is already mounted by the same filesystem",
 		},
+		&cli.BoolFlag{
+			Name:  "hide-internal",
+			Usage: "hide all internal files (.accesslog, .stats, etc.)",
+		},
 	}
 	if runtime.GOOS == "linux" {
 		selfFlags = append(selfFlags, &cli.BoolFlag{
