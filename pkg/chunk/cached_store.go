@@ -629,10 +629,14 @@ func (c *Config) SelfCheck(uuid string) {
 		c.Writeback = false
 	}
 	if c.CacheEviction == "" {
-		c.CacheEviction = "2-random"
-	} else if c.CacheEviction != "2-random" && c.CacheEviction != "none" {
-		logger.Warnf("cache-eviction should be one of [2-random, none]")
-		c.CacheEviction = "2-random"
+		c.CacheEviction = Eviction2Random
+	} else if c.CacheEviction != Eviction2Random && c.CacheEviction != EvictionNone && c.CacheEviction != EvictionLRU {
+		logger.Warnf("cache-eviction should be one of [%s, %s, %s]", EvictionNone, Eviction2Random, EvictionLRU)
+		c.CacheEviction = Eviction2Random
+	}
+	if c.CacheDir == "memory" && c.CacheEviction == EvictionLRU {
+		logger.Warnf("LRU eviction is not supported in memory cache mode yet, setting it to 2-random")
+		c.CacheEviction = Eviction2Random
 	}
 	if c.CacheExpire > 0 && c.CacheExpire < time.Second {
 		logger.Warnf("cache-expire it too short, setting it to 1 second")
