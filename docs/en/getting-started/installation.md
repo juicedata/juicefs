@@ -12,13 +12,15 @@ The JuiceFS client has only one binary file. You can either download the pre-com
 
 The one-click installation script is available for Linux and macOS systems. It automatically downloads and installs the latest version of the JuiceFS client based on your hardware architecture. Here is how to use it:
 
+Default installation path is `/usr/local/bin`:
+
 ```shell
-# default installation path is /usr/local/bin
 curl -sSL https://d.juicefs.com/install | sh -
 ```
 
+Install to `/tmp` directory:
+
 ```shell
-# install to /tmp directory
 curl -sSL https://d.juicefs.com/install | sh -s /tmp
 ```
 
@@ -78,11 +80,23 @@ JuiceFS also provides a [PPA](https://launchpad.net/~juicefs) repository, which 
 
 For example, on a Ubuntu 22.04 system with x86 architecture, execute the following commands:
 
-```shell
-sudo add-apt-repository ppa:juicefs/ppa
-sudo apt-get update
-sudo apt-get install juicefs
-```
+1. Add the PPA repository:
+
+   ```shell
+   sudo add-apt-repository ppa:juicefs/ppa
+   ```
+
+2. Update the package list:
+
+   ```shell
+   sudo apt-get update
+   ```
+
+3. Install the JuiceFS client:
+
+   ```shell
+   sudo apt-get install juicefs
+   ```
 
 #### Fedora Copr
 
@@ -95,10 +109,15 @@ JuiceFS also provides a [Copr](https://copr.fedorainfracloud.org/coprs/juicedata
 
 Taking Fedora 38 as an example, execute the following commands to install the client:
 
+Enable the Copr repository:
+
 ```shell
-# Enable the Copr repository
 sudo dnf copr enable -y juicedata/juicefs
-# Install the client
+```
+
+Install the client:
+
+```shell
 sudo dnf install juicefs
 ```
 
@@ -108,10 +127,11 @@ We have also packaged and released the [Snap version of the JuiceFS client](http
 
 ```shell
 sudo snap install juicefs
-# Since Snap is a closed sandbox environment, it may affect
-# the client's FUSE mount. You can remove the restriction by
-# executing the following command. If you only need to use
-# WebDAV and Gateway, there is no need to execute.
+```
+
+Since Snap is a closed sandbox environment, it may affect the client's FUSE mount. You can remove the restriction by executing the following command. If you only need to use WebDAV and Gateway, there is no need to execute:
+
+```shell
 sudo ln -s -f /snap/juicefs/current/juicefs /snap/bin/juicefs
 ```
 
@@ -142,14 +162,27 @@ There are multiple JuiceFS client packages available on AUR. The following are v
 
 Additionally, you can manually compile and install using `makepkg`, as shown for an Arch Linux system:
 
+Install dependencies:
+
 ```shell
-# Install dependencies
 sudo pacman -S base-devel git go
-# Clone the AUR repository to be packaged
+```
+
+Clone the AUR repository to be packaged:
+
+```shell
 git clone https://aur.archlinux.org/juicefs.git
-# Navigate to the repository directory
+```
+
+Navigate to the repository directory:
+
+```shell
 cd juicefs
-# Compile and install
+```
+
+Compile and install:
+
+```shell
 makepkg -si
 ```
 
