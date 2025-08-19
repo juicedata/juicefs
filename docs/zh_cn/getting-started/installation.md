@@ -80,11 +80,23 @@ JuiceFS 也提供 [PPA](https://launchpad.net/~juicefs) 仓库，可以方便地
 
 以 x86 架构的 Ubuntu 22.04 系统为例，执行以下命令。
 
-```shell
-sudo add-apt-repository ppa:juicefs/ppa
-sudo apt-get update
-sudo apt-get install juicefs
-```
+1. 添加 PPA 仓库：
+
+   ```shell
+   sudo add-apt-repository ppa:juicefs/ppa
+   ```
+
+2. 更新包列表：
+
+   ```shell
+   sudo apt-get update
+   ```
+
+3. 安装 JuiceFS 客户端：
+
+   ```shell
+   sudo apt-get install juicefs
+   ```
 
 #### Fedora Copr
 
