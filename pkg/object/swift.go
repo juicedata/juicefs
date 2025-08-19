@@ -46,9 +46,9 @@ func (s *swiftOSS) String() string {
 	return fmt.Sprintf("swift://%s/", s.container)
 }
 
-func (s *swiftOSS) Create() error {
+func (s *swiftOSS) Create(ctx context.Context) error {
 	// No error is returned if it already exists but the metadata if any will be updated.
-	return s.conn.ContainerCreate(context.Background(), s.container, nil)
+	return s.conn.ContainerCreate(ctx, s.container, nil)
 }
 
 func (s *swiftOSS) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {

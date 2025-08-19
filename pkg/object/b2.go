@@ -20,6 +20,7 @@
 package object
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,7 +41,7 @@ func (c *b2client) String() string {
 	return fmt.Sprintf("b2://%s/", c.bucket.Name)
 }
 
-func (c *b2client) Create() error {
+func (c *b2client) Create(ctx context.Context) error {
 	return nil
 }
 

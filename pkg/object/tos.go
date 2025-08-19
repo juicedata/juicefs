@@ -55,8 +55,8 @@ func (t *tosClient) Limits() Limits {
 	}
 }
 
-func (t *tosClient) Create() error {
-	_, err := t.client.CreateBucketV2(context.Background(), &tos.CreateBucketV2Input{Bucket: t.bucket, StorageClass: enum.StorageClassType(t.sc)})
+func (t *tosClient) Create(ctx context.Context) error {
+	_, err := t.client.CreateBucketV2(ctx, &tos.CreateBucketV2Input{Bucket: t.bucket, StorageClass: enum.StorageClassType(t.sc)})
 	if e, ok := err.(*tos.TosServerError); ok {
 		if e.Code == codes.BucketAlreadyOwnedByYou || e.Code == codes.BucketAlreadyExists {
 			return nil

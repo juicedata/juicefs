@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -176,7 +177,7 @@ func (d *dragonfly) String() string {
 }
 
 // Create creates the object if it does not exist.
-func (d *dragonfly) Create() error {
+func (d *dragonfly) Create(ctx context.Context) error {
 	if _, _, _, err := d.List("", "", "", "", 1, false); err == nil {
 		return nil
 	}

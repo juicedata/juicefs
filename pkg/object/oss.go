@@ -59,7 +59,7 @@ func (o *ossClient) Limits() Limits {
 	}
 }
 
-func (o *ossClient) Create() error {
+func (o *ossClient) Create(ctx context.Context) error {
 	var configuration *oss.CreateBucketConfiguration
 	if o.sc != "" {
 		configuration = &oss.CreateBucketConfiguration{

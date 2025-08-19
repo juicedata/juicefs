@@ -17,6 +17,7 @@
 package object
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -62,8 +63,8 @@ func (p *withPrefix) Limits() Limits {
 	return p.os.Limits()
 }
 
-func (p *withPrefix) Create() error {
-	return p.os.Create()
+func (p *withPrefix) Create(ctx context.Context) error {
+	return p.os.Create(ctx)
 }
 
 type withFile struct {

@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/base64"
 	"fmt"
@@ -63,7 +64,7 @@ func (s *obsClient) Limits() Limits {
 	}
 }
 
-func (s *obsClient) Create() error {
+func (s *obsClient) Create(ctx context.Context) error {
 	params := &obs.CreateBucketInput{}
 	params.Bucket = s.bucket
 	params.Location = s.region

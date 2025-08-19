@@ -20,6 +20,7 @@
 package object
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -49,7 +50,7 @@ func (s *oos) Limits() Limits {
 	}
 }
 
-func (s *oos) Create() error {
+func (s *oos) Create(ctx context.Context) error {
 	_, _, _, err := s.List("", "", "", "", 1, true)
 	if err != nil {
 		return fmt.Errorf("please create bucket %s manually", s.s3client.bucket)

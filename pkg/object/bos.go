@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -64,7 +65,7 @@ func (q *bosclient) SetStorageClass(sc string) error {
 	return nil
 }
 
-func (q *bosclient) Create() error {
+func (q *bosclient) Create(ctx context.Context) error {
 	_, err := q.c.PutBucket(q.bucket)
 	if err == nil && q.sc != "" {
 		if err := q.c.PutBucketStorageclass(q.bucket, q.sc); err != nil {

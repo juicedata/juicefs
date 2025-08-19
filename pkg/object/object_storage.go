@@ -109,7 +109,7 @@ var notSupported = utils.ENOTSUP
 
 type DefaultObjectStorage struct{}
 
-func (s DefaultObjectStorage) Create() error {
+func (s DefaultObjectStorage) Create(ctx context.Context) error {
 	return nil
 }
 

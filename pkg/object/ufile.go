@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
@@ -82,7 +83,7 @@ func ufileSigner(req *http.Request, accessKey, secretKey, signName string) {
 	req.Header.Add("Authorization", token)
 }
 
-func (u *ufile) Create() error {
+func (u *ufile) Create(ctx context.Context) error {
 	uri, _ := url.ParseRequestURI(u.endpoint)
 	parts := strings.Split(uri.Host, ".")
 	name := parts[0]

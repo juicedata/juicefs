@@ -17,6 +17,7 @@
 package object
 
 import (
+	"context"
 	"io"
 	"time"
 )
@@ -79,7 +80,7 @@ type ObjectStorage interface {
 	// Limits of the object storage.
 	Limits() Limits
 	// Create the bucket if not existed.
-	Create() error
+	Create(ctx context.Context) error
 	// Get the data for the given object specified by key.
 	Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error)
 	// Put data read from a reader to an object specified by key.

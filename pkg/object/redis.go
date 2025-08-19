@@ -46,10 +46,6 @@ func (r *redisStore) String() string {
 	return r.uri + "/"
 }
 
-func (r *redisStore) Create() error {
-	return nil
-}
-
 func (r *redisStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	data, err := r.rdb.Get(ctx, key).Bytes()
 	if err != nil {

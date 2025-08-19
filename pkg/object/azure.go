@@ -20,6 +20,7 @@
 package object
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -50,7 +51,7 @@ func (b *wasb) String() string {
 	return fmt.Sprintf("wasb://%s/", b.cName)
 }
 
-func (b *wasb) Create() error {
+func (b *wasb) Create(ctx context.Context) error {
 	_, err := b.container.Create(ctx, nil)
 	if err != nil {
 		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.ContainerAlreadyExists) {

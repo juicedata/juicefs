@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -226,14 +227,14 @@ func objbench(ctx *cli.Context) error {
 		}
 	}
 	if ctx.Bool("skip-functional-tests") {
-		if err := blob.Create(); err != nil {
+		if err := blob.Create(ctx.Context); err != nil {
 			return fmt.Errorf("can't create bucket: %s", err)
 		}
 	} else {
 		var result [][]string
 		result = append(result, []string{"CATEGORY", "TEST", "RESULT"})
 		fmt.Println("Start Functional Testing ...")
-		functionalTesting(blob, &result, colorful)
+		functionalTesting(ctx.Context, blob, &result, colorful)
 		printResult(result, -1, colorful)
 		fmt.Println()
 	}
@@ -690,7 +691,7 @@ var syncTests = map[string]bool{
 	"multipart upload":    true,
 }
 
-func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful bool) {
+func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[][]string, colorful bool) {
 	runCase := func(title string, fn func(blob object.ObjectStorage) error) {
 		r := pass
 		if err := fn(blob); err == utils.ENOTSUP {
@@ -765,11 +766,11 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		defer blob.Delete(key) //nolint:errcheck
 
 		if !created {
-			if err := blob.Create(); err != nil {
+			if err := blob.Create(ctx); err != nil {
 				return fmt.Errorf("can't create bucket: %s", err)
 			}
 		}
-		if err := blob.Create(); err != nil {
+		if err := blob.Create(ctx); err != nil {
 			return fmt.Errorf("creating a bucket that already exists returns an error")
 		}
 		return nil

@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -80,7 +81,7 @@ func isExists(err error) bool {
 	return strings.Contains(msg, "BucketAlreadyExists") || strings.Contains(msg, "BucketAlreadyOwnedByYou")
 }
 
-func (s *s3client) Create() error {
+func (s *s3client) Create(ctx context.Context) error {
 	if _, _, _, err := s.List("", "", "", "", 1, true); err == nil {
 		return nil
 	}

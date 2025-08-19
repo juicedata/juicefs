@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -57,8 +58,8 @@ func (q *qingstor) Limits() Limits {
 	}
 }
 
-func (q *qingstor) Create() error {
-	_, err := q.bucket.Put()
+func (q *qingstor) Create(ctx context.Context) error {
+	_, err := q.bucket.PutWithContext(ctx)
 	if err != nil && strings.Contains(err.Error(), "bucket_already_exists") {
 		err = nil
 	}

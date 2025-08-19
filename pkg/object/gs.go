@@ -59,17 +59,17 @@ func (g *gs) getClient() *storage.Client {
 	return g.clients[n%(uint64(len(g.clients)))]
 }
 
-func (g *gs) Create() error {
+func (g *gs) Create(ctx context.Context) error {
 	// check if the bucket is already exists
 	if objs, _, _, err := g.List("", "", "", "", 1, true); err == nil && len(objs) > 0 {
 		return nil
 	}
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
 	if projectID == "" {
-		projectID, _ = metadata.ProjectIDWithContext(context.Background())
+		projectID, _ = metadata.ProjectIDWithContext(ctx)
 	}
 	if projectID == "" {
-		cred, err := google.FindDefaultCredentials(context.Background())
+		cred, err := google.FindDefaultCredentials(ctx)
 		if err == nil {
 			projectID = cred.ProjectID
 		}
@@ -79,7 +79,7 @@ func (g *gs) Create() error {
 	}
 	// Guess region when region is not provided
 	if g.region == "" {
-		zone, err := metadata.ZoneWithContext(context.Background())
+		zone, err := metadata.ZoneWithContext(ctx)
 		if err == nil && len(zone) > 2 {
 			g.region = zone[:len(zone)-2]
 		}

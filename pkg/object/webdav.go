@@ -20,6 +20,7 @@
 package object
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,7 +43,7 @@ func (w *webdav) String() string {
 	return fmt.Sprintf("webdav://%s/", w.endpoint.Host)
 }
 
-func (w *webdav) Create() error {
+func (w *webdav) Create(ctx context.Context) error {
 	return nil
 }
 

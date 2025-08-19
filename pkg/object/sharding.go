@@ -18,6 +18,7 @@ package object
 
 import (
 	"container/heap"
+	"context"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -41,9 +42,9 @@ func (s *sharded) Limits() Limits {
 	return l
 }
 
-func (s *sharded) Create() error {
+func (s *sharded) Create(ctx context.Context) error {
 	for _, o := range s.stores {
-		if err := o.Create(); err != nil {
+		if err := o.Create(ctx); err != nil {
 			return err
 		}
 	}

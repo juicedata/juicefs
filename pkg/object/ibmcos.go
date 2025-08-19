@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -50,7 +51,7 @@ func (s *ibmcos) String() string {
 	return fmt.Sprintf("ibmcos://%s/", s.bucket)
 }
 
-func (s *ibmcos) Create() error {
+func (s *ibmcos) Create(ctx context.Context) error {
 	input := &s3.CreateBucketInput{Bucket: &s.bucket}
 	// https://cloud.ibm.com/docs/cloud-object-storage?topic=cloud-object-storage-classes&code=go
 	if s.sc != "" {

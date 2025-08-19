@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -52,7 +53,7 @@ func (c *COS) String() string {
 	return fmt.Sprintf("cos://%s/", strings.Split(c.endpoint, ".")[0])
 }
 
-func (c *COS) Create() error {
+func (c *COS) Create(ctx context.Context) error {
 	_, err := c.c.Bucket.Put(ctx, nil)
 	if err != nil && isExists(err) {
 		err = nil

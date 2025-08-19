@@ -61,10 +61,6 @@ func (j *juiceFS) String() string {
 	return fmt.Sprintf("jfs://%s/", j.name)
 }
 
-func (j *juiceFS) Create() error {
-	return nil
-}
-
 func (j *juiceFS) path(key string) string {
 	return dirSuffix + key
 }
