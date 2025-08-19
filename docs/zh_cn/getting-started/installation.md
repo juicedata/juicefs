@@ -12,15 +12,21 @@ JuiceFS 客户端只有一个二进制文件，你可以下载预编译的版本
 
 一键安装脚本适用于 Linux 和 macOS 系统，会根据你的硬件架构自动下载安装最新版 JuiceFS 客户端。
 
+**方式一（推荐）：** 默认安装到 `/usr/local/bin`：
+
 ```shell
-# 默认安装到 /usr/local/bin
 curl -sSL https://d.juicefs.com/install | sh -
 ```
 
+**方式二：** 如需安装到自定义位置，例如安装到 `/tmp` 目录下：
+
 ```shell
-# 安装到 /tmp 目录下
 curl -sSL https://d.juicefs.com/install | sh -s /tmp
 ```
+
+:::tip 提示
+大多数用户应该选择**方式一**进行默认安装。只有在对安装目录有特殊要求时才使用**方式二**。
+:::
 
 ## 安装预编译客户端 {#install-the-pre-compiled-client}
 
@@ -78,11 +84,23 @@ JuiceFS 也提供 [PPA](https://launchpad.net/~juicefs) 仓库，可以方便地
 
 以 x86 架构的 Ubuntu 22.04 系统为例，执行以下命令。
 
-```shell
-sudo add-apt-repository ppa:juicefs/ppa
-sudo apt-get update
-sudo apt-get install juicefs
-```
+1. 添加 PPA 仓库：
+
+   ```shell
+   sudo add-apt-repository ppa:juicefs/ppa
+   ```
+
+2. 更新包列表：
+
+   ```shell
+   sudo apt-get update
+   ```
+
+3. 安装 JuiceFS 客户端：
+
+   ```shell
+   sudo apt-get install juicefs
+   ```
 
 #### Fedora Copr
 
@@ -95,10 +113,15 @@ JuiceFS 也提供 [Copr](https://copr.fedorainfracloud.org/coprs/juicedata/juice
 
 以 Fedora 38 系统为例，执行以下命令安装客户端：
 
+启用 Copr 仓库：
+
 ```shell
-# 启用 Copr 仓库
 sudo dnf copr enable -y juicedata/juicefs
-# 安装客户端
+```
+
+安装客户端：
+
+```shell
 sudo dnf install juicefs
 ```
 
@@ -108,8 +131,11 @@ sudo dnf install juicefs
 
 ```shell
 sudo snap install juicefs
-# 由于 Snap 是一个封闭的沙箱环境，它会影响客户端的 FUSE 挂载，执行以下命令可以解除限制。
-# 如果只需使用 WebDAV 和 Gateway 则不必执行以下命令。
+```
+
+由于 Snap 是一个封闭的沙箱环境，它会影响客户端的 FUSE 挂载，执行以下命令可以解除限制。如果只需使用 WebDAV 和 Gateway 则不必执行以下命令：
+
+```shell
 sudo ln -s -f /snap/juicefs/current/juicefs /snap/bin/juicefs
 ```
 
@@ -140,14 +166,27 @@ AUR 上存在多个 JuiceFS 客户端的打包，以下是 JuiceFS 官方维护�
 
 另外，你也可以使用 `makepkg` 手动编译安装，以 Arch Linux 系统为例：
 
+安装依赖：
+
 ```shell
-# 安装依赖
 sudo pacman -S base-devel git go
-# 克隆要打包的 AUR 仓库
+```
+
+克隆要打包的 AUR 仓库：
+
+```shell
 git clone https://aur.archlinux.org/juicefs.git
-# 进入仓库目录
+```
+
+进入仓库目录：
+
+```shell
 cd juicefs
-# 编译安装
+```
+
+编译安装：
+
+```shell
 makepkg -si
 ```
 
