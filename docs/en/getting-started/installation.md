@@ -10,19 +10,23 @@ The JuiceFS client has only one binary file. You can either download the pre-com
 
 ## One-click installation {#one-click-installation}
 
-The one-click installation script is available for Linux and macOS systems. It automatically downloads and installs the latest version of the JuiceFS client based on your hardware architecture. Here is how to use it:
+The one-click installation script is available for Linux and macOS systems. It automatically downloads and installs the latest version of the JuiceFS client based on your hardware architecture.
 
-Default installation path is `/usr/local/bin`:
+**Option 1 (Recommended):** Install to the default location `/usr/local/bin`:
 
 ```shell
 curl -sSL https://d.juicefs.com/install | sh -
 ```
 
-Install to `/tmp` directory:
+**Option 2:** If you need to install to a custom location, for example `/tmp` directory:
 
 ```shell
 curl -sSL https://d.juicefs.com/install | sh -s /tmp
 ```
+
+:::tip
+Most users should choose **Option 1** for the default installation. Only use **Option 2** if you have specific requirements for the installation directory.
+:::
 
 ## Install the pre-compiled client {#install-the-pre-compiled-client}
 
