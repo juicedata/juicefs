@@ -98,14 +98,14 @@ func (f *jFile) Close() error {
 	return toError(f.f.Close(ctx))
 }
 
-func (j *juiceFS) Get(ctx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
-	mCtx := meta.WrapContextWith(ctx, pid, uid, []uint32{gid})
-	f, err := j.jfs.Open(mCtx, j.path(key), vfs.MODE_MASK_R)
+func (j *juiceFS) Get(rCtx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+	ctx := meta.WrapContextWith(rCtx, pid, uid, []uint32{gid})
+	f, err := j.jfs.Open(ctx, j.path(key), vfs.MODE_MASK_R)
 	if err != 0 {
 		return nil, err
 	}
 	if off > 0 {
-		_, _ = f.Seek(mCtx, off, io.SeekStart)
+		_, _ = f.Seek(ctx, off, io.SeekStart)
 	}
 	if limit <= 0 {
 		limit = 1 << 62
@@ -120,7 +120,8 @@ var bufPool = sync.Pool{
 	},
 }
 
-func (j *juiceFS) Put(key string, in io.Reader, getters ...object.AttrGetter) (err error) {
+func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ...object.AttrGetter) (err error) {
+	ctx := meta.WrapContextWith(rCtx, pid, uid, []uint32{gid})
 	if vfs.IsSpecialName(key) {
 		return fmt.Errorf("skip special file %s for jfs: %w", key, utils.ErrSkipped)
 	}

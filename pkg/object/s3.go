@@ -151,7 +151,7 @@ func (s *s3client) Get(ctx context.Context, key string, off, limit int64, getter
 	return resp.Body, nil
 }
 
-func (s *s3client) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b

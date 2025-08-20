@@ -66,8 +66,8 @@ func (s *sharded) Get(ctx context.Context, key string, off, limit int64, getters
 	return s.pick(key).Get(ctx, key, off, limit, getters...)
 }
 
-func (s *sharded) Put(key string, body io.Reader, getters ...AttrGetter) error {
-	return s.pick(key).Put(key, body, getters...)
+func (s *sharded) Put(ctx context.Context, key string, body io.Reader, getters ...AttrGetter) error {
+	return s.pick(key).Put(ctx, key, body, getters...)
 }
 
 func (s *sharded) Copy(dst, src string) error {

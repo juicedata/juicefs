@@ -99,7 +99,7 @@ func (s *ibmcos) Get(ctx context.Context, key string, off, limit int64, getters 
 	return resp.Body, nil
 }
 
-func (s *ibmcos) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (s *ibmcos) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b

@@ -90,14 +90,14 @@ func (t *tosClient) Get(ctx context.Context, key string, off, limit int64, gette
 	return resp.Content, nil
 }
 
-func (t *tosClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (t *tosClient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	var meta map[string]string
 	if ins, ok := in.(io.ReadSeeker); ok {
 		meta = map[string]string{
 			checksumAlgr: generateChecksum(ins),
 		}
 	}
-	resp, err := t.client.PutObjectV2(context.Background(), &tos.PutObjectV2Input{
+	resp, err := t.client.PutObjectV2(ctx, &tos.PutObjectV2Input{
 		PutObjectBasicInput: tos.PutObjectBasicInput{
 			Bucket:       t.bucket,
 			Key:          key,

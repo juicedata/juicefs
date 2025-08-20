@@ -114,7 +114,7 @@ func (q *qiniu) Get(ctx context.Context, key string, off, limit int64, getters .
 	return q.s3client.Get(ctx, key, off, limit, getters...)
 }
 
-func (q *qiniu) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (q *qiniu) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	body, vlen, err := findLen(in)
 	if err != nil {
 		return err

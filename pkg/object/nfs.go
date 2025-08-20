@@ -163,7 +163,7 @@ func (n *nfsStore) mkdirAll(p string) error {
 	return err
 }
 
-func (n *nfsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
+func (n *nfsStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
 	p := n.path(key)
 	if strings.HasSuffix(p, dirSuffix) {
 		return n.mkdirAll(p)

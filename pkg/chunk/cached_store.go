@@ -351,7 +351,7 @@ func (store *cachedStore) put(key string, p *Page) error {
 	return utils.WithTimeout(func(ctx context.Context) error {
 		defer p.Release()
 		st := time.Now()
-		err := store.storage.Put(key, bytes.NewReader(p.Data), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+		err := store.storage.Put(ctx, key, bytes.NewReader(p.Data), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
 		used := time.Since(st)
 		logRequest("PUT", key, "", reqID, err, used)
 		store.objectDataBytes.WithLabelValues("PUT", sc).Add(float64(len(p.Data)))

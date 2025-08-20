@@ -95,7 +95,7 @@ func (c *b2client) Get(ctx context.Context, key string, off, limit int64, getter
 	return r, err
 }
 
-func (c *b2client) Put(key string, data io.Reader, getters ...AttrGetter) error {
+func (c *b2client) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
 	_, err := c.bucket.UploadFile(key, nil, data)
 	return err
 }

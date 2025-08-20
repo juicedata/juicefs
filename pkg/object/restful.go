@@ -203,7 +203,7 @@ func (s *RestfulStorage) Get(ctx context.Context, key string, off, limit int64, 
 	return resp.Body, nil
 }
 
-func (u *RestfulStorage) Put(key string, body io.Reader, getters ...AttrGetter) error {
+func (u *RestfulStorage) Put(ctx context.Context, key string, body io.Reader, getters ...AttrGetter) error {
 	resp, err := u.request(ctx, "PUT", key, body, nil)
 	if err != nil {
 		return err
@@ -225,7 +225,7 @@ func (s *RestfulStorage) Copy(dst, src string) error {
 	if err != nil {
 		return err
 	}
-	return s.Put(dst, bytes.NewReader(d))
+	return s.Put(ctx, dst, bytes.NewReader(d))
 }
 
 func (s *RestfulStorage) Delete(key string, getters ...AttrGetter) error {

@@ -258,7 +258,7 @@ func (e *encrypted) Get(ctx context.Context, key string, off, limit int64, gette
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (e *encrypted) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (e *encrypted) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	plain, err := io.ReadAll(in)
 	if err != nil {
 		return err
@@ -267,7 +267,7 @@ func (e *encrypted) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	if err != nil {
 		return err
 	}
-	return e.ObjectStorage.Put(key, bytes.NewReader(ciphertext), getters...)
+	return e.ObjectStorage.Put(ctx, key, bytes.NewReader(ciphertext), getters...)
 }
 
 var _ ObjectStorage = (*encrypted)(nil)

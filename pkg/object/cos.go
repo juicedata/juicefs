@@ -126,7 +126,7 @@ func (c *COS) Get(ctx context.Context, key string, off, limit int64, getters ...
 	return resp.Body, nil
 }
 
-func (c *COS) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	var options cos.ObjectPutOptions
 	if ins, ok := in.(io.ReadSeeker); ok {
 		header := http.Header(map[string][]string{

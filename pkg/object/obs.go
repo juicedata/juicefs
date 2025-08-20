@@ -131,7 +131,7 @@ func (s *obsClient) Get(ctx context.Context, key string, off, limit int64, gette
 	return resp.Body, nil
 }
 
-func (s *obsClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (s *obsClient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	var body io.ReadSeeker
 	var vlen int64
 	var sum []byte

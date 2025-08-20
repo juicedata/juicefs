@@ -84,7 +84,7 @@ type ObjectStorage interface {
 	// Get the data for the given object specified by key.
 	Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error)
 	// Put data read from a reader to an object specified by key.
-	Put(key string, in io.Reader, getters ...AttrGetter) error
+	Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error
 	// Copy an object from src to dst.
 	Copy(dst, src string) error
 	// Delete a object.

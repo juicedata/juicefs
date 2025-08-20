@@ -212,7 +212,7 @@ func (f *sftpStore) Get(ctx context.Context, key string, off, limit int64, gette
 	return ff, err
 }
 
-func (f *sftpStore) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
+func (f *sftpStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return err

@@ -124,7 +124,7 @@ func (q *bosclient) Get(ctx context.Context, key string, off, limit int64, gette
 	return
 }
 
-func (q *bosclient) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (q *bosclient) Put(ctx context.Context,key string, in io.Reader, getters ...AttrGetter) error {
 	b, vlen, err := findLen(in)
 	if err != nil {
 		return err

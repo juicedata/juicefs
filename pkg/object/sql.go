@@ -79,7 +79,7 @@ func (s *sqlStore) Get(ctx context.Context, key string, off, limit int64, getter
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (s *sqlStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (s *sqlStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	d, err := io.ReadAll(in)
 	if err != nil {
 		return err

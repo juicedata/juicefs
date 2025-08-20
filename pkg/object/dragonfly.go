@@ -299,7 +299,7 @@ func (d *dragonfly) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 // Put creates or replaces the object.
-func (d *dragonfly) Put(key string, data io.Reader, getters ...AttrGetter) error {
+func (d *dragonfly) Put(ctx context.Context,key string, data io.Reader, getters ...AttrGetter) error {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 

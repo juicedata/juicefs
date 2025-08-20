@@ -125,7 +125,7 @@ func (g *gs) Get(ctx context.Context, key string, off, limit int64, getters ...A
 	return reader, nil
 }
 
-func (g *gs) Put(key string, data io.Reader, getters ...AttrGetter) error {
+func (g *gs) Put(ctx context.Context,key string, data io.Reader, getters ...AttrGetter) error {
 	writer := g.getClient().Bucket(g.bucket).Object(key).NewWriter(ctx)
 	writer.StorageClass = g.sc
 

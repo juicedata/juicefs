@@ -122,7 +122,7 @@ func (s *ks3) Get(ctx context.Context, key string, off, limit int64, getters ...
 	return resp.Body, nil
 }
 
-func (s *ks3) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (s *ks3) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b
@@ -143,7 +143,7 @@ func (s *ks3) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	if s.sc != "" {
 		params.StorageClass = aws.String(s.sc)
 	}
-	resp, err := s.s3.PutObject(params)
+	resp, err := s.s3.PutObjectWithContext(ctx, params)
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey])).SetStorageClass(s.sc)

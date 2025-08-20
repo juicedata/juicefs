@@ -145,7 +145,7 @@ func (d *filestore) Get(ctx context.Context, key string, off, limit int64, gette
 	return f, nil
 }
 
-func (d *filestore) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
+func (d *filestore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
 	p := d.path(key)
 
 	if strings.HasSuffix(key, dirSuffix) || key == "" && strings.HasSuffix(d.root, dirSuffix) {
@@ -205,7 +205,7 @@ func (d *filestore) Copy(dst, src string) error {
 		return err
 	}
 	defer r.Close()
-	return d.Put(dst, r)
+	return d.Put(ctx, dst, r)
 }
 
 func (d *filestore) Delete(key string, getters ...AttrGetter) error {

@@ -96,7 +96,7 @@ func (m *memStore) Get(ctx context.Context, key string, off, limit int64, getter
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (m *memStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (m *memStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	m.Lock()
 	defer m.Unlock()
 	// Minimum length is 1.
@@ -120,7 +120,7 @@ func (m *memStore) Copy(dst, src string) error {
 	if err != nil {
 		return err
 	}
-	return m.Put(dst, d)
+	return m.Put(ctx, dst, d)
 }
 
 func (m *memStore) Delete(key string, getters ...AttrGetter) error {

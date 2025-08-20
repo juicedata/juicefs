@@ -115,8 +115,8 @@ func (p *withPrefix) Get(ctx context.Context, key string, off, limit int64, gett
 	return p.os.Get(ctx, p.prefix+key, off, limit, getters...)
 }
 
-func (p *withPrefix) Put(key string, in io.Reader, getters ...AttrGetter) error {
-	return p.os.Put(p.prefix+key, in, getters...)
+func (p *withPrefix) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+	return p.os.Put(ctx, p.prefix+key, in, getters...)
 }
 
 func (p *withPrefix) Copy(dst, src string) error {

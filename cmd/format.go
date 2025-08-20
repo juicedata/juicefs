@@ -325,7 +325,7 @@ func randSeq(n int) string {
 
 func doTesting(store object.ObjectStorage, key string, data []byte) error {
 	ctx := context.Background()
-	if err := store.Put(key, bytes.NewReader(data)); err != nil {
+	if err := store.Put(ctx, key, bytes.NewReader(data)); err != nil {
 		if strings.Contains(err.Error(), "Access Denied") {
 			return fmt.Errorf("Failed to put: %s", err)
 		}
@@ -338,7 +338,7 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 					store, err2, err)
 			}
 		}
-		if err := store.Put(key, bytes.NewReader(data)); err != nil {
+		if err := store.Put(ctx, key, bytes.NewReader(data)); err != nil {
 			return fmt.Errorf("Failed to put: %s", err)
 		}
 	}
@@ -546,7 +546,7 @@ func format(c *cli.Context) error {
 			} else {
 				logger.Warnf("List storage %s failed: %s", blob, err)
 			}
-			if err = blob.Put("juicefs_uuid", strings.NewReader(format.UUID)); err != nil {
+			if err = blob.Put(ctx, "juicefs_uuid", strings.NewReader(format.UUID)); err != nil {
 				logger.Warnf("Put uuid object: %s", err)
 			}
 		}

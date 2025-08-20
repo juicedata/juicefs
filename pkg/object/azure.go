@@ -99,7 +99,7 @@ func str2Tier(tier string) *blob2.AccessTier {
 	return nil
 }
 
-func (b *wasb) Put(key string, data io.Reader, getters ...AttrGetter) error {
+func (b *wasb) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
 	options := azblob.UploadStreamOptions{}
 	if b.sc != "" {
 		options.AccessTier = str2Tier(b.sc)

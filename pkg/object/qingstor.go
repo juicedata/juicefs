@@ -141,7 +141,7 @@ func findLen(in io.Reader) (io.Reader, int64, error) {
 	return in, vlen, nil
 }
 
-func (q *qingstor) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	body, vlen, err := findLen(in)
 	if err != nil {
 		return err
@@ -155,7 +155,7 @@ func (q *qingstor) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	if q.sc != "" {
 		input.XQSStorageClass = &q.sc
 	}
-	out, err := q.bucket.PutObject(key, input)
+	out, err := q.bucket.PutObjectWithContext(ctx, key, input)
 	if out != nil {
 		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.ToString(out.RequestID)).SetStorageClass(q.sc)

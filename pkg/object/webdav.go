@@ -71,7 +71,7 @@ func (w *webdav) Get(ctx context.Context, key string, off, limit int64, getters 
 	return w.c.ReadStreamRange(key, off, limit)
 }
 
-func (w *webdav) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (w *webdav) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	if key == "" {
 		return nil
 	}

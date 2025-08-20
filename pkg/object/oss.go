@@ -130,7 +130,7 @@ func (o *ossClient) Get(ctx context.Context, key string, off, limit int64, gette
 	return
 }
 
-func (o *ossClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	req := &oss.PutObjectRequest{
 		Bucket:       &o.bucket,
 		Key:          &key,

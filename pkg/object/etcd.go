@@ -66,12 +66,12 @@ func (c *etcdClient) Get(ctx context.Context, key string, off, limit int64, gett
 	return nil, os.ErrNotExist
 }
 
-func (c *etcdClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (c *etcdClient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	d, err := io.ReadAll(in)
 	if err != nil {
 		return err
 	}
-	_, err = c.kv.Put(context.TODO(), key, string(d))
+	_, err = c.kv.Put(ctx, key, string(d))
 	return err
 }
 

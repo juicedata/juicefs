@@ -165,7 +165,7 @@ func copyObj(store ObjectStorage, dst, src string) error {
 	if err != nil {
 		return err
 	}
-	return store.Put(dst, bytes.NewReader(d))
+	return store.Put(ctx, dst, bytes.NewReader(d))
 }
 
 func (u *ufile) Copy(dst, src string) error {

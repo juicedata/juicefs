@@ -63,12 +63,12 @@ func (t *tikv) Get(ctx context.Context, key string, off, limit int64, getters ..
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (t *tikv) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (t *tikv) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	d, err := io.ReadAll(in)
 	if err != nil {
 		return err
 	}
-	return t.c.Put(context.TODO(), []byte(key), d)
+	return t.c.Put(ctx, []byte(key), d)
 }
 
 func (t *tikv) Head(key string) (Object, error) {

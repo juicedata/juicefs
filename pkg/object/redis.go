@@ -61,7 +61,7 @@ func (r *redisStore) Get(ctx context.Context, key string, off, limit int64, gett
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (r *redisStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (r *redisStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	data, err := io.ReadAll(in)
 	if err != nil {
 		return err
