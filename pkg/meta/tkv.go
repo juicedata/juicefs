@@ -259,6 +259,14 @@ func (m *kvMeta) dirQuotaKey(inode Ino) []byte {
 	return m.fmtKey("QD", inode)
 }
 
+func (m *kvMeta) userQuotaKey(uid uint64) []byte {
+	return m.fmtKey("QU", uid)
+}
+
+func (m *kvMeta) groupQuotaKey(gid uint64) []byte {
+	return m.fmtKey("QG", gid)
+}
+
 func (m *kvMeta) aclKey(id uint32) []byte {
 	return m.fmtKey("R", id)
 }
@@ -2755,19 +2763,42 @@ func (m *kvMeta) doDelQuota(ctx Context, inode Ino) error {
 	return m.deleteKeys(m.dirQuotaKey(inode))
 }
 
-func (m *kvMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
-	pairs, err := m.scanValues(m.fmtKey("QD"), -1, nil)
-	if err != nil || len(pairs) == 0 {
-		return nil, err
+func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
+	// Helper function to load quotas for a given prefix
+	loadQuotaMap := func(prefix string) (map[uint64]*Quota, error) {
+		pairs, err := m.scanValues(m.fmtKey(prefix), -1, nil)
+		if err != nil {
+			return nil, err
+		}
+		if len(pairs) == 0 {
+			return make(map[uint64]*Quota), nil
+		}
+
+		quotas := make(map[uint64]*Quota, len(pairs))
+		for k, v := range pairs {
+			id := binary.LittleEndian.Uint64([]byte(k[2:])) // skip prefix
+			quota := m.parseQuota(v)
+			quotas[id] = quota
+		}
+		return quotas, nil
 	}
 
-	quotas := make(map[Ino]*Quota, len(pairs))
-	for k, v := range pairs {
-		inode := m.decodeInode([]byte(k[2:])) // skip "QD"
-		quota := m.parseQuota(v)
-		quotas[inode] = quota
+	dirQuotas, err := loadQuotaMap("QD")
+	if err != nil {
+		return nil, nil, nil, err
 	}
-	return quotas, nil
+
+	userQuotas, err := loadQuotaMap("QU")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	groupQuotas, err := loadQuotaMap("QG")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return dirQuotas, userQuotas, groupQuotas, nil
 }
 
 func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
@@ -2828,7 +2859,13 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 		keys := make([][]byte, 0, len(quotas))
 		qs := make([]*Quota, 0, len(quotas))
 		for _, q := range quotas {
-			keys = append(keys, m.dirQuotaKey(q.inode))
+			if q.qtype == DirQuotaType {
+				keys = append(keys, m.dirQuotaKey(Ino(q.key)))
+			} else if q.qtype == UserQuotaType {
+				keys = append(keys, m.userQuotaKey(q.key))
+			} else if q.qtype == GroupQuotaType {
+				keys = append(keys, m.groupQuotaKey(q.key))
+			}
 			qs = append(qs, q.quota)
 		}
 		for i, v := range tx.gets(keys...) {

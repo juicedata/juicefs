@@ -99,11 +99,11 @@ type engine interface {
 	doFindDetachedNodes(t time.Time) []Ino
 	doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno
 
-	doGetQuota(ctx Context, inode Ino) (*Quota, error)
+	doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, error)
 	// set quota, return true if there is no quota exists before
-	doSetQuota(ctx Context, inode Ino, quota *Quota) (created bool, err error)
-	doDelQuota(ctx Context, inode Ino) error
-	doLoadQuotas(ctx Context) (map[Ino]*Quota, error)
+	doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (created bool, err error)
+	doDelQuota(ctx Context, qtype uint32, key uint64) error
+	doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error)
 	doFlushQuotas(ctx Context, quotas []*iQuota) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
@@ -253,10 +253,12 @@ type baseMeta struct {
 	fsStatsLock sync.Mutex
 	*fsStat
 
-	parentMu   sync.Mutex     // protect dirParents
-	quotaMu    sync.RWMutex   // protect dirQuotas
-	dirParents map[Ino]Ino    // directory inode -> parent inode
-	dirQuotas  map[Ino]*Quota // directory inode -> quota
+	parentMu    sync.Mutex        // protect dirParents
+	quotaMu     sync.RWMutex      // protect dirQuotas
+	dirParents  map[uint64]Ino    // directory inode -> parent inode
+	dirQuotas   map[uint64]*Quota // directory inode -> quota
+	userQuotas  map[uint64]*Quota // uid -> quota
+	groupQuotas map[uint64]*Quota // gid -> quota
 
 	freeMu           sync.Mutex
 	freeInodes       freeID

@@ -647,6 +647,46 @@ func (m *redisMeta) dirQuotaKey() string {
 	return m.prefix + "dirQuota"
 }
 
+func (m *redisMeta) userUsedSpaceKey() string {
+	return m.prefix + "userUsedSpace"
+}
+
+func (m *redisMeta) userUsedInodesKey() string {
+	return m.prefix + "userUsedInodes"
+}
+
+func (m *redisMeta) userQuotaUsedSpaceKey() string {
+	return m.prefix + "userQuotaUsedSpace"
+}
+
+func (m *redisMeta) userQuotaUsedInodesKey() string {
+	return m.prefix + "userQuotaUsedInodes"
+}
+
+func (m *redisMeta) userQuotaKey() string {
+	return m.prefix + "userQuota"
+}
+
+func (m *redisMeta) groupUsedSpaceKey() string {
+	return m.prefix + "groupUsedSpace"
+}
+
+func (m *redisMeta) groupUsedInodesKey() string {
+	return m.prefix + "groupUsedInodes"
+}
+
+func (m *redisMeta) groupQuotaUsedSpaceKey() string {
+	return m.prefix + "groupQuotaUsedSpace"
+}
+
+func (m *redisMeta) groupQuotaUsedInodesKey() string {
+	return m.prefix + "groupQuotaUsedInodes"
+}
+
+func (m *redisMeta) groupQuotaKey() string {
+	return m.prefix + "groupQuota"
+}
+
 func (m *redisMeta) totalInodesKey() string {
 	return m.prefix + totalInodes
 }
@@ -3615,46 +3655,70 @@ func (m *redisMeta) doDelQuota(ctx Context, inode Ino) error {
 	return err
 }
 
-func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
-	quotas := make(map[Ino]*Quota)
-	return quotas, m.hscan(ctx, m.dirQuotaKey(), func(keys []string) error {
-		for i := 0; i < len(keys); i += 2 {
-			key, val := keys[i], []byte(keys[i+1])
-			inode, err := strconv.ParseUint(key, 10, 64)
-			if err != nil {
-				logger.Errorf("invalid inode: %s", key)
-				continue
+func (m *redisMeta) doLoadQuotas(ctx Context, qType int64) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
+	dirQuotas := make(map[uint64]*Quota)
+	userQuotas := make(map[uint64]*Quota)
+	groupQuotas := make(map[uint64]*Quota)
+
+	loadQuotaType := func(quotas map[uint64]*Quota, quotaKeyFunc func() string, usedSpaceKeyFunc func() string, usedInodesKeyFunc func() string) error {
+		return m.hscan(ctx, quotaKeyFunc(), func(keys []string) error {
+			for i := 0; i < len(keys); i += 2 {
+				key, val := keys[i], []byte(keys[i+1])
+				id, err := strconv.ParseUint(key, 10, 64)
+				if err != nil {
+					logger.Errorf("invalid id: %s", key)
+					continue
+				}
+				if len(val) != 16 {
+					logger.Errorf("invalid quota: %s=%s", key, val)
+					continue
+				}
+				maxSpace, maxInodes := m.parseQuota(val)
+				usedSpace, err := m.rdb.HGet(ctx, usedSpaceKeyFunc(), key).Int64()
+				if err != nil && err != redis.Nil {
+					return err
+				}
+				usedInodes, err := m.rdb.HGet(ctx, usedInodesKeyFunc(), key).Int64()
+				if err != nil && err != redis.Nil {
+					return err
+				}
+				quotas[id] = &Quota{
+					MaxSpace:   int64(maxSpace),
+					MaxInodes:  int64(maxInodes),
+					UsedSpace:  usedSpace,
+					UsedInodes: usedInodes,
+				}
 			}
-			if len(val) != 16 {
-				logger.Errorf("invalid quota: %s=%s", key, val)
-				continue
-			}
-			maxSpace, maxInodes := m.parseQuota(val)
-			usedSpace, err := m.rdb.HGet(ctx, m.dirQuotaUsedSpaceKey(), key).Int64()
-			if err != nil && err != redis.Nil {
-				return err
-			}
-			usedInodes, err := m.rdb.HGet(ctx, m.dirQuotaUsedInodesKey(), key).Int64()
-			if err != nil && err != redis.Nil {
-				return err
-			}
-			quotas[Ino(inode)] = &Quota{
-				MaxSpace:   int64(maxSpace),
-				MaxInodes:  int64(maxInodes),
-				UsedSpace:  usedSpace,
-				UsedInodes: usedInodes,
-			}
-		}
-		return nil
-	})
+			return nil
+		})
+	}
+	if err := loadQuotaType(dirQuotas, m.dirQuotaKey, m.dirQuotaUsedSpaceKey, m.dirQuotaUsedInodesKey); err != nil {
+		return dirQuotas, userQuotas, groupQuotas, err
+	}
+	if err := loadQuotaType(userQuotas, m.userQuotaKey, m.userQuotaUsedSpaceKey, m.userQuotaUsedInodesKey); err != nil {
+		return dirQuotas, userQuotas, groupQuotas, err
+	}
+	if err := loadQuotaType(groupQuotas, m.groupQuotaKey, m.groupQuotaUsedSpaceKey, m.groupQuotaUsedInodesKey); err != nil {
+		return dirQuotas, userQuotas, groupQuotas, err
+	}
+
+	return dirQuotas, userQuotas, groupQuotas, nil
 }
 
 func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		for _, q := range quotas {
-			field := q.inode.String()
-			pipe.HIncrBy(ctx, m.dirQuotaUsedSpaceKey(), field, q.quota.newSpace)
-			pipe.HIncrBy(ctx, m.dirQuotaUsedInodesKey(), field, q.quota.newInodes)
+			field := strconv.FormatUint(q.key, 10)
+			if q.qtype == DirQuotaType {
+				pipe.HIncrBy(ctx, m.dirQuotaUsedSpaceKey(), field, q.quota.newSpace)
+				pipe.HIncrBy(ctx, m.dirQuotaUsedInodesKey(), field, q.quota.newInodes)
+			} else if q.qtype == UserQuotaType {
+				pipe.HIncrBy(ctx, m.userQuotaUsedSpaceKey(), field, q.quota.newSpace)
+				pipe.HIncrBy(ctx, m.userQuotaUsedInodesKey(), field, q.quota.newInodes)
+			} else if q.qtype == GroupQuotaType {
+				pipe.HIncrBy(ctx, m.groupQuotaUsedSpaceKey(), field, q.quota.newSpace)
+				pipe.HIncrBy(ctx, m.groupQuotaUsedInodesKey(), field, q.quota.newInodes)
+			}
 		}
 		return nil
 	})
