@@ -217,7 +217,8 @@ func (o *jObj) Group() string        { return utils.GroupName(o.fi.Gid()) }
 func (o *jObj) Mode() os.FileMode    { return o.fi.Mode() }
 func (o *jObj) StorageClass() string { return "" }
 
-func (j *juiceFS) Head(key string) (object.Object, error) {
+func (j *juiceFS) Head(rCtx context.Context, key string) (object.Object, error) {
+	ctx := meta.WrapContextWith(rCtx, pid, uid, []uint32{gid})
 	errConv := func(eno syscall.Errno) error {
 		if errors.Is(eno, syscall.ENOENT) {
 			return os.ErrNotExist
@@ -251,7 +252,7 @@ func (j *juiceFS) List(prefix, marker, token, delimiter string, limit int64, fol
 			dir += dirSuffix
 		}
 	} else if marker == "" {
-		obj, err := j.Head(prefix)
+		obj, err := j.Head(ctx, prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, false, "", nil

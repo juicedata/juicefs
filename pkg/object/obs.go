@@ -83,7 +83,7 @@ func getStorageClassStr(sc obs.StorageClassType) string {
 		return string(sc)
 	}
 }
-func (s *obsClient) Head(key string) (Object, error) {
+func (s *obsClient) Head(ctx context.Context, key string) (Object, error) {
 	params := &obs.GetObjectMetadataInput{
 		Bucket: s.bucket,
 		Key:    key,

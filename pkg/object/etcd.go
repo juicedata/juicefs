@@ -75,8 +75,8 @@ func (c *etcdClient) Put(ctx context.Context, key string, in io.Reader, getters 
 	return err
 }
 
-func (c *etcdClient) Head(key string) (Object, error) {
-	resp, err := c.kv.Get(context.TODO(), key, etcd.WithLimit(1))
+func (c *etcdClient) Head(ctx context.Context, key string) (Object, error) {
+	resp, err := c.kv.Get(ctx, key, etcd.WithLimit(1))
 	if err != nil {
 		return nil, err
 	}

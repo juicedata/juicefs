@@ -61,7 +61,7 @@ func (b *wasb) Create(ctx context.Context) error {
 	return err
 }
 
-func (b *wasb) Head(key string) (Object, error) {
+func (b *wasb) Head(ctx context.Context, key string) (Object, error) {
 	properties, err := b.container.NewBlobClient(key).GetProperties(ctx, nil)
 	if err != nil {
 		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.BlobNotFound) {

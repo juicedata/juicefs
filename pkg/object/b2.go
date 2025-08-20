@@ -65,7 +65,7 @@ func (c *b2client) getFileInfo(key string) (*backblaze.File, error) {
 	return f, nil
 }
 
-func (c *b2client) Head(key string) (Object, error) {
+func (c *b2client) Head(ctx context.Context, key string) (Object, error) {
 	f, err := c.getFileInfo(key)
 	if err != nil {
 		if e, ok := err.(*backblaze.B2Error); ok && e.Status == http.StatusNotFound {

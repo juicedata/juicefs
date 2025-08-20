@@ -71,8 +71,8 @@ func (t *tikv) Put(ctx context.Context, key string, in io.Reader, getters ...Att
 	return t.c.Put(ctx, []byte(key), d)
 }
 
-func (t *tikv) Head(key string) (Object, error) {
-	data, err := t.c.Get(context.TODO(), []byte(key))
+func (t *tikv) Head(ctx context.Context, key string) (Object, error) {
+	data, err := t.c.Get(ctx, []byte(key))
 	if err == nil && data == nil {
 		return nil, os.ErrNotExist
 	}

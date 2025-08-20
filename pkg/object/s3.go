@@ -96,7 +96,7 @@ func (s *s3client) Create(ctx context.Context) error {
 	return err
 }
 
-func (s *s3client) Head(key string) (Object, error) {
+func (s *s3client) Head(ctx context.Context, key string) (Object, error) {
 	param := s3.HeadObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,

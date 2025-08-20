@@ -125,9 +125,8 @@ func (t *tosClient) Delete(ctx context.Context, key string, getters ...AttrGette
 	return err
 }
 
-func (t *tosClient) Head(key string) (Object, error) {
-	head, err := t.client.HeadObjectV2(context.Background(),
-		&tos.HeadObjectV2Input{Bucket: t.bucket, Key: key})
+func (t *tosClient) Head(ctx context.Context, key string) (Object, error) {
+	head, err := t.client.HeadObjectV2(ctx, &tos.HeadObjectV2Input{Bucket: t.bucket, Key: key})
 	if err != nil {
 		if e, ok := err.(*tos.TosServerError); ok {
 			if e.StatusCode == http.StatusNotFound {

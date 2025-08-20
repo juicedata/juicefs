@@ -106,8 +106,8 @@ func (s *swiftOSS) List(prefix, marker, token, delimiter string, limit int64, fo
 	return generateListResult(objs, limit)
 }
 
-func (s *swiftOSS) Head(key string) (Object, error) {
-	object, _, err := s.conn.Object(context.Background(), s.container, key)
+func (s *swiftOSS) Head(ctx context.Context, key string) (Object, error) {
+	object, _, err := s.conn.Object(ctx, s.container, key)
 	if err != nil {
 		if err == swift.ObjectNotFound {
 			err = os.ErrNotExist

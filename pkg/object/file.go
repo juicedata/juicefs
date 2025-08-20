@@ -76,7 +76,7 @@ func (d *filestore) path(key string) string {
 	return filepath.Clean(d.root + key)
 }
 
-func (d *filestore) Head(key string) (Object, error) {
+func (d *filestore) Head(ctx context.Context, key string) (Object, error) {
 	p := d.path(key)
 	fi, err := os.Lstat(p)
 	if err != nil {
@@ -290,7 +290,7 @@ func (d *filestore) List(prefix, marker, token, delimiter string, limit int64, f
 			dir += dirSuffix
 		}
 	} else if marker == "" {
-		obj, err := d.Head(prefix)
+		obj, err := d.Head(ctx, prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, false, "", nil

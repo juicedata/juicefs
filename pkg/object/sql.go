@@ -106,7 +106,7 @@ func (s *sqlStore) Put(ctx context.Context, key string, in io.Reader, getters ..
 	return err
 }
 
-func (s *sqlStore) Head(key string) (Object, error) {
+func (s *sqlStore) Head(ctx context.Context, key string) (Object, error) {
 	var b = blob{Key: []byte(key)}
 	ok, err := s.db.Cols("key", "modified", "size").Get(&b)
 	if err != nil {

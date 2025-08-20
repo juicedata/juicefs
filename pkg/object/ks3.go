@@ -53,7 +53,7 @@ func (s *ks3) String() string {
 }
 
 func (s *ks3) Create(ctx context.Context) error {
-	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
+	_, err := s.s3.CreateBucketWithContext(ctx, &s3.CreateBucketInput{Bucket: &s.bucket})
 	if err != nil && isExists(err) {
 		err = nil
 	}
@@ -70,13 +70,13 @@ func (s *ks3) Limits() Limits {
 	}
 }
 
-func (s *ks3) Head(key string) (Object, error) {
+func (s *ks3) Head(ctx context.Context, key string) (Object, error) {
 	param := s3.HeadObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
 
-	r, err := s.s3.HeadObject(&param)
+	r, err := s.s3.HeadObjectWithContext(ctx, &param)
 	if err != nil {
 		if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
 			err = os.ErrNotExist

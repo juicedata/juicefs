@@ -47,7 +47,7 @@ func (w *webdav) Create(ctx context.Context) error {
 	return nil
 }
 
-func (w *webdav) Head(key string) (Object, error) {
+func (w *webdav) Head(ctx context.Context, key string) (Object, error) {
 	info, err := w.c.Stat(key)
 	if err != nil {
 		if gowebdav.IsErrNotFound(err) {

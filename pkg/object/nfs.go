@@ -95,7 +95,7 @@ func (n *nfsStore) path(key string) string {
 	return key
 }
 
-func (n *nfsStore) Head(key string) (Object, error) {
+func (n *nfsStore) Head(ctx context.Context, key string) (Object, error) {
 	p := n.path(key)
 	fi, _, err := n.target.Lookup(p)
 	if err != nil {
@@ -107,7 +107,7 @@ func (n *nfsStore) Head(key string) (Object, error) {
 			return nil, err
 		}
 		dir, _ := path.Split(p)
-		ff, err := n.Head(path.Join(dir, src))
+		ff, err := n.Head(ctx, path.Join(dir, src))
 		if err != nil {
 			return nil, err
 		}
@@ -261,8 +261,8 @@ func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
 	return ff
 }
 
-func (n *nfsStore) readDirSorted(dir string, followLink bool) ([]*nfsEntry, error) {
-	o, err := n.Head(strings.TrimSuffix(dir, "/"))
+func (n *nfsStore) readDirSorted(ctx context.Context, dir string, followLink bool) ([]*nfsEntry, error) {
+	o, err := n.Head(ctx, strings.TrimSuffix(dir, "/"))
 	if err != nil {
 		return nil, err
 	}
@@ -314,7 +314,7 @@ func (n *nfsStore) List(prefix, marker, token, delimiter string, limit int64, fo
 			dir += dirSuffix
 		}
 	} else if marker == "" {
-		obj, err := n.Head(dir)
+		obj, err := n.Head(ctx, dir)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, false, "", nil
@@ -323,7 +323,7 @@ func (n *nfsStore) List(prefix, marker, token, delimiter string, limit int64, fo
 		}
 		objs = append(objs, obj)
 	}
-	entries, err := n.readDirSorted(dir, followLink)
+	entries, err := n.readDirSorted(ctx, dir, followLink)
 	if err != nil {
 		if os.IsPermission(err) || errors.Is(err, nfs.NFS3Error(nfs.NFS3ErrAcces)) {
 			logger.Warnf("skip %s: %s", dir, err)

@@ -78,7 +78,7 @@ func (q *bosclient) Create(ctx context.Context) error {
 	return err
 }
 
-func (q *bosclient) Head(key string) (Object, error) {
+func (q *bosclient) Head(ctx context.Context, key string) (Object, error) {
 	r, err := q.c.GetObjectMeta(q.bucket, key)
 	if err != nil {
 		if e, ok := err.(*bce.BceServiceError); ok && e.StatusCode == http.StatusNotFound {

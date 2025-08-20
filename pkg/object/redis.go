@@ -160,8 +160,8 @@ func (t *redisStore) ListAll(prefix, marker string, followLink bool) (<-chan Obj
 	return objs, nil
 }
 
-func (t *redisStore) Head(key string) (Object, error) {
-	data, err := t.rdb.Get(context.TODO(), key).Bytes()
+func (t *redisStore) Head(ctx context.Context, key string) (Object, error) {
+	data, err := t.rdb.Get(ctx, key).Bytes()
 	if err != nil {
 		if err == redis.Nil {
 			err = os.ErrNotExist

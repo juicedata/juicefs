@@ -58,8 +58,8 @@ func (s *sharded) pick(key string) ObjectStorage {
 	return s.stores[i]
 }
 
-func (s *sharded) Head(key string) (Object, error) {
-	return s.pick(key).Head(key)
+func (s *sharded) Head(ctx context.Context, key string) (Object, error) {
+	return s.pick(key).Head(ctx, key)
 }
 
 func (s *sharded) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {

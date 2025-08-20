@@ -91,7 +91,7 @@ type ObjectStorage interface {
 	Delete(ctx context.Context, key string, getters ...AttrGetter) error
 
 	// Head returns some information about the object or an error if not found.
-	Head(key string) (Object, error)
+	Head(ctx context.Context, key string) (Object, error)
 	// List returns a list of objects using ListObjectV2.
 	List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error)
 	// ListAll returns all the objects as an channel.

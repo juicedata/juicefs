@@ -76,7 +76,7 @@ func (o *ossClient) Create(ctx context.Context) error {
 	return err
 }
 
-func (o *ossClient) Head(key string) (Object, error) {
+func (o *ossClient) Head(ctx context.Context, key string) (Object, error) {
 	info, err := o.client.HeadObject(ctx, &oss.HeadObjectRequest{
 		Bucket: &o.bucket,
 		Key:    &key,

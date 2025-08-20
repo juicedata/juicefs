@@ -209,7 +209,7 @@ func (d *dragonfly) Create(ctx context.Context) error {
 }
 
 // Head returns the object metadata if it exists.
-func (d *dragonfly) Head(key string) (Object, error) {
+func (d *dragonfly) Head(ctx context.Context, key string) (Object, error) {
 	// get get object metadata request.
 	u, err := url.Parse(d.endpoint)
 	if err != nil {

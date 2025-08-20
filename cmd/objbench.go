@@ -647,7 +647,7 @@ func (bm *benchMarkObj) delete(ctx context.Context, key string, startKey int) er
 }
 
 func (bm *benchMarkObj) head(ctx context.Context, key string, startKey int) error {
-	_, err := bm.blob.Head(key)
+	_, err := bm.blob.Head(ctx, key)
 	return err
 }
 
@@ -847,7 +847,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 			return fmt.Errorf("put object failed: %s", err)
 		}
 		defer blob.Delete(ctx, key) //nolint:errcheck
-		if h, err := blob.Head(key); err != nil {
+		if h, err := blob.Head(ctx, key); err != nil {
 			return fmt.Errorf("failed to head object %s", err)
 		} else {
 			if h.Key() != key {
@@ -865,7 +865,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 		if err := blob.Delete(ctx, key); err != nil {
 			return fmt.Errorf("delete failed: %s", err)
 		}
-		if _, err := blob.Head(key); err == nil {
+		if _, err := blob.Head(ctx, key); err == nil {
 			return fmt.Errorf("expect err is not nil")
 		}
 
@@ -1100,7 +1100,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 		if err := fi.Chown(key, "nobody", groupName); err != nil {
 			return fmt.Errorf("failed to chown object %s", err)
 		}
-		if objInfo, err := blob.Head(key); err != nil {
+		if objInfo, err := blob.Head(ctx, key); err != nil {
 			return fmt.Errorf("failed to head object %s", err)
 		} else if info, ok := objInfo.(object.File); ok {
 			if info.Owner() != "nobody" {
@@ -1117,7 +1117,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 		if err := fi.Chmod(key, 0777); err != nil {
 			return err
 		}
-		if objInfo, err := blob.Head(key); err != nil {
+		if objInfo, err := blob.Head(ctx, key); err != nil {
 			return fmt.Errorf("failed to head object %s", err)
 		} else if info, ok := objInfo.(object.File); ok {
 			if info.Mode()&0xFFF != 0777 {
@@ -1132,7 +1132,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 		if err := fi.Chtimes(key, mtime); err != nil {
 			return fmt.Errorf("failed to chtimes %s", err)
 		}
-		if objInfo, err := blob.Head(key); err != nil {
+		if objInfo, err := blob.Head(ctx, key); err != nil {
 			return fmt.Errorf("failed to head object %s", err)
 		} else {
 			if objInfo.Mtime().Before(mtime.Add(-2*time.Second)) || objInfo.Mtime().After(mtime.Add(2*time.Second)) {

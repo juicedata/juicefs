@@ -161,7 +161,7 @@ func (f *sftpStore) path(key string) string {
 	return f.root + key
 }
 
-func (f *sftpStore) Head(key string) (Object, error) {
+func (f *sftpStore) Head(ctx context.Context, key string) (Object, error) {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return nil, err
@@ -402,7 +402,7 @@ func (f *sftpStore) List(prefix, marker, token, delimiter string, limit int64, f
 			dir += dirSuffix
 		}
 	} else if marker == "" {
-		obj, err := f.Head(prefix)
+		obj, err := f.Head(ctx, prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, false, "", nil

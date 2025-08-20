@@ -100,8 +100,8 @@ func (p *withPrefix) updateKey(o Object) Object {
 	return o
 }
 
-func (p *withPrefix) Head(key string) (Object, error) {
-	o, err := p.os.Head(p.prefix + key)
+func (p *withPrefix) Head(ctx context.Context, key string) (Object, error) {
+	o, err := p.os.Head(ctx, p.prefix+key)
 	if err != nil {
 		return nil, err
 	}

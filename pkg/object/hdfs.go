@@ -61,7 +61,7 @@ func (h *hdfsclient) path(key string) string {
 	return h.basePath + key
 }
 
-func (h *hdfsclient) Head(key string) (Object, error) {
+func (h *hdfsclient) Head(ctx context.Context, key string) (Object, error) {
 	info, err := h.c.Stat(h.path(key))
 	if err != nil {
 		return nil, err
@@ -219,7 +219,7 @@ func (h *hdfsclient) List(prefix, marker, token, delimiter string, limit int64, 
 			dir += dirSuffix
 		}
 	} else if marker == "" {
-		obj, err := h.Head(prefix)
+		obj, err := h.Head(ctx, prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, false, "", nil

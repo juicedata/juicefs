@@ -96,7 +96,7 @@ func (g *gs) Create(ctx context.Context) error {
 	return err
 }
 
-func (g *gs) Head(key string) (Object, error) {
+func (g *gs) Head(ctx context.Context, key string) (Object, error) {
 	attrs, err := g.getClient().Bucket(g.bucket).Object(key).Attrs(ctx)
 	if err != nil {
 		if err == storage.ErrObjectNotExist {

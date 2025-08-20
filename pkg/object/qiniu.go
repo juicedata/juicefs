@@ -88,7 +88,7 @@ func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
 
 var notexist = "no such file or directory"
 
-func (q *qiniu) Head(key string) (Object, error) {
+func (q *qiniu) Head(ctx context.Context, key string) (Object, error) {
 	r, err := q.bm.Stat(q.bucket, key)
 	if err != nil {
 		if strings.Contains(err.Error(), notexist) {

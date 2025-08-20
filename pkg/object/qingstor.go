@@ -66,8 +66,8 @@ func (q *qingstor) Create(ctx context.Context) error {
 	return err
 }
 
-func (q *qingstor) Head(key string) (Object, error) {
-	r, err := q.bucket.HeadObject(key, nil)
+func (q *qingstor) Head(ctx context.Context, key string) (Object, error) {
+	r, err := q.bucket.HeadObjectWithContext(ctx, key, nil)
 	if err != nil {
 		if e, ok := err.(*errors.QingStorError); ok && e.StatusCode == http.StatusNotFound {
 			return nil, os.ErrNotExist

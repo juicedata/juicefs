@@ -127,7 +127,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 	// As the result of object storage's List method doesn't include the marker key,
 	// we try List the marker key separately.
 	if start != "" && strings.HasPrefix(start, prefix) {
-		if obj, err := store.Head(start); err == nil {
+		if obj, err := store.Head(ctx, start); err == nil {
 			logger.Debugf("Found start key: %s from %s in %s", start, store, time.Since(startTime))
 			out <- obj
 		}
@@ -532,7 +532,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64, calChks
 			err = dst.Put(ctx, key, r)
 		}
 		if err != nil {
-			if _, e := src.Head(key); os.IsNotExist(e) {
+			if _, e := src.Head(ctx, key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
 				err = utils.ErrSkipped
 			}
@@ -569,7 +569,7 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64, calChk
 	} else {
 		in, err = src.Get(ctx, key, 0, size)
 		if err != nil {
-			if _, e := src.Head(key); os.IsNotExist(e) {
+			if _, e := src.Head(ctx, key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
 				err = utils.ErrSkipped
 			}
@@ -874,7 +874,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 						deleteObj(src, key, false)
 					}
 				} else if config.Perms && (!obj.IsSymlink() || !config.Links) {
-					if o, e := dst.Head(key); e == nil {
+					if o, e := dst.Head(ctx, key); e == nil {
 						if needCopyPerms(obj, o) {
 							copyPerms(dst, obj, config)
 							copied.Increment()
@@ -951,7 +951,7 @@ func checkChange(src, dst object.ObjectStorage, obj object.Object, key string, c
 	if obj == nil || config.Links && obj.IsSymlink() {
 		return nil // ignore symlink
 	}
-	if cur, err := src.Head(key); err == nil {
+	if cur, err := src.Head(ctx, key); err == nil {
 		if !config.CheckAll && !config.CheckNew {
 			checked.Increment()
 			checkedBytes.IncrInt64(obj.Size())
@@ -965,7 +965,7 @@ func checkChange(src, dst object.ObjectStorage, obj object.Object, key string, c
 			return fmt.Errorf("%s changed during sync. Original: size=%d, mtime=%s; Current: size=%d, mtime=%s",
 				cur.Key(), obj.Size(), obj.Mtime(), cur.Size(), cur.Mtime())
 		}
-		if dstObj, err := dst.Head(key); err == nil {
+		if dstObj, err := dst.Head(ctx, key); err == nil {
 			if cur.Size() != dstObj.Size() {
 				return fmt.Errorf("copied %s size mismatch: original=%d, current=%d", key, obj.Size(), dstObj.Size())
 			}
@@ -1510,12 +1510,12 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 var ignoreDir = errors.New("ignore dir")
 
 func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) error {
-	obj, err := src.Head(key)
+	obj, err := src.Head(ctx, key)
 	if err == nil && (!obj.IsDir() || obj.IsSymlink() && config.Links || obj.IsDir() && config.Dirs && strings.HasSuffix(key, "/")) {
 		var srckeys = make(chan object.Object, 1)
 		srckeys <- obj
 		close(srckeys)
-		if dobj, e := dst.Head(key); e == nil || os.IsNotExist(e) {
+		if dobj, e := dst.Head(ctx, key); e == nil || os.IsNotExist(e) {
 			var dstkeys = make(chan object.Object, 1)
 			if dobj != nil {
 				dstkeys <- dobj

@@ -48,7 +48,7 @@ func (m *memStore) String() string {
 	return fmt.Sprintf("mem://%s/", m.name)
 }
 
-func (m *memStore) Head(key string) (Object, error) {
+func (m *memStore) Head(ctx context.Context, key string) (Object, error) {
 	m.Lock()
 	defer m.Unlock()
 	// Minimum length is 1.

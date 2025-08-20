@@ -135,7 +135,7 @@ func parseError(resp *http.Response) error {
 	return fmt.Errorf("status: %v, message: %s", resp.StatusCode, string(data))
 }
 
-func (s *RestfulStorage) Head(key string) (Object, error) {
+func (s *RestfulStorage) Head(ctx context.Context, key string) (Object, error) {
 	resp, err := s.request(ctx, "HEAD", key, nil, nil)
 	if err != nil {
 		return nil, err

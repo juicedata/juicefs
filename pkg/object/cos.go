@@ -71,7 +71,7 @@ func (c *COS) Limits() Limits {
 	}
 }
 
-func (c *COS) Head(key string) (Object, error) {
+func (c *COS) Head(ctx context.Context, key string) (Object, error) {
 	resp, err := c.c.Object.Head(ctx, key, nil)
 	if err != nil {
 		if exist, err := c.c.Object.IsExist(ctx, key); err == nil && !exist {
