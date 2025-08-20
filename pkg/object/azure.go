@@ -137,7 +137,7 @@ func (b *wasb) Delete(ctx context.Context, key string, getters ...AttrGetter) er
 	return err
 }
 
-func (b *wasb) List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (b *wasb) List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}

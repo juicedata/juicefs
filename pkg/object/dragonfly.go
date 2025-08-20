@@ -178,7 +178,7 @@ func (d *dragonfly) String() string {
 
 // Create creates the object if it does not exist.
 func (d *dragonfly) Create(ctx context.Context) error {
-	if _, _, _, err := d.List("", "", "", "", 1, false); err == nil {
+	if _, _, _, err := d.List(ctx, "", "", "", "", 1, false); err == nil {
 		return nil
 	}
 
@@ -439,7 +439,7 @@ func (d *dragonfly) Delete(ctx context.Context, key string, getters ...AttrGette
 }
 
 // List lists the objects with the given prefix.
-func (d *dragonfly) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (d *dragonfly) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > MaxGetObjectMetadatasLimit {
 		limit = MaxGetObjectMetadatasLimit
 	}

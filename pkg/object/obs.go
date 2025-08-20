@@ -203,7 +203,7 @@ func (s *obsClient) Delete(ctx context.Context, key string, getters ...AttrGette
 	return err
 }
 
-func (s *obsClient) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *obsClient) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	input := &obs.ListObjectsInput{
 		Bucket: s.bucket,
 		Marker: start,
@@ -236,7 +236,7 @@ func (s *obsClient) List(prefix, start, token, delimiter string, limit int64, fo
 	return objs, resp.IsTruncated, resp.NextMarker, nil
 }
 
-func (s *obsClient) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (s *obsClient) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 

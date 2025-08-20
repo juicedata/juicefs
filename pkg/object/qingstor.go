@@ -196,7 +196,7 @@ func (q *qingstor) Delete(ctx context.Context, key string, getters ...AttrGetter
 	return err
 }
 
-func (q *qingstor) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (q *qingstor) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -209,7 +209,7 @@ func (q *qingstor) List(prefix, start, token, delimiter string, limit int64, fol
 	if delimiter != "" {
 		input.Delimiter = &delimiter
 	}
-	out, err := q.bucket.ListObjects(input)
+	out, err := q.bucket.ListObjectsWithContext(ctx, input)
 	if err != nil {
 		return nil, false, "", err
 	}
@@ -234,7 +234,7 @@ func (q *qingstor) List(prefix, start, token, delimiter string, limit int64, fol
 	return objs, *out.HasMore, *out.NextMarker, nil
 }
 
-func (q *qingstor) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (q *qingstor) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 

@@ -73,11 +73,11 @@ func (r *redisStore) Delete(ctx context.Context, key string, getters ...AttrGett
 	return r.rdb.Del(ctx, key).Err()
 }
 
-func (t *redisStore) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (t *redisStore) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	var scanCli []redis.UniversalClient
 	var m sync.Mutex
 	if c, ok := t.rdb.(*redis.ClusterClient); ok {
-		err := c.ForEachMaster(context.TODO(), func(ctx context.Context, client *redis.Client) error {
+		err := c.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
 			m.Lock()
 			defer m.Unlock()
 			scanCli = append(scanCli, client)
@@ -96,7 +96,7 @@ func (t *redisStore) ListAll(prefix, marker string, followLink bool) (<-chan Obj
 	for _, mCli := range scanCli {
 		for {
 			// FIXME: this will be really slow for many objects
-			keys, c, err := mCli.Scan(context.TODO(), cursor, prefix+"*", int64(batch)).Result()
+			keys, c, err := mCli.Scan(ctx, cursor, prefix+"*", int64(batch)).Result()
 			if err != nil {
 				logger.Warnf("redis scan error, coursor %d: %s", cursor, err)
 				return nil, err
@@ -142,7 +142,7 @@ func (t *redisStore) ListAll(prefix, marker string, followLink bool) (<-chan Obj
 						return
 					}
 					if size == 0 {
-						exist, err := t.rdb.Exists(context.TODO(), keyList[start:end][idx]).Result()
+						exist, err := t.rdb.Exists(ctx, keyList[start:end][idx]).Result()
 						if err != nil {
 							objs <- nil
 							return

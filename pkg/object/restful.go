@@ -240,7 +240,7 @@ func (s *RestfulStorage) Delete(ctx context.Context, key string, getters ...Attr
 	return nil
 }
 
-func (s *RestfulStorage) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *RestfulStorage) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	return nil, false, "", notSupported
 }
 

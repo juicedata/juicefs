@@ -61,7 +61,7 @@ func (g *gs) getClient() *storage.Client {
 
 func (g *gs) Create(ctx context.Context) error {
 	// check if the bucket is already exists
-	if objs, _, _, err := g.List("", "", "", "", 1, true); err == nil && len(objs) > 0 {
+	if objs, _, _, err := g.List(ctx, "", "", "", "", 1, true); err == nil && len(objs) > 0 {
 		return nil
 	}
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
@@ -164,7 +164,7 @@ func (g *gs) Delete(ctx context.Context, key string, getters ...AttrGetter) erro
 	return nil
 }
 
-func (g *gs) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (g *gs) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	objectIterator := g.getClient().Bucket(g.bucket).Objects(ctx, &storage.Query{Prefix: prefix, Delimiter: delimiter, StartOffset: start})
 	pager := iterator.NewPager(objectIterator, int(limit), token)
 	var entries []*storage.ObjectAttrs

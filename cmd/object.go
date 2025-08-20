@@ -240,7 +240,7 @@ func (j *juiceFS) Head(rCtx context.Context, key string) (object.Object, error) 
 	return &jObj{key, fi, isSymlink}, nil
 }
 
-func (j *juiceFS) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
+func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, false, "", utils.ENOTSUP
 	}

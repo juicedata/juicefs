@@ -174,7 +174,7 @@ func (s *ibmcos) Delete(ctx context.Context, key string, getters ...AttrGetter) 
 	return err
 }
 
-func (s *ibmcos) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *ibmcos) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := s3.ListObjectsInput{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
@@ -185,7 +185,7 @@ func (s *ibmcos) List(prefix, start, token, delimiter string, limit int64, follo
 	if delimiter != "" {
 		param.Delimiter = &delimiter
 	}
-	resp, err := s.s3.ListObjects(&param)
+	resp, err := s.s3.ListObjectsWithContext(ctx, &param)
 	if err != nil {
 		return nil, false, "", err
 	}
@@ -212,7 +212,7 @@ func (s *ibmcos) List(prefix, start, token, delimiter string, limit int64, follo
 	return objs, *resp.IsTruncated, *resp.NextMarker, nil
 }
 
-func (s *ibmcos) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (s *ibmcos) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 

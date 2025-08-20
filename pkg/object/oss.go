@@ -187,7 +187,7 @@ func (o *ossClient) Delete(ctx context.Context, key string, getters ...AttrGette
 	return err
 }
 
-func (o *ossClient) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (o *ossClient) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -217,7 +217,7 @@ func (o *ossClient) List(prefix, start, token, delimiter string, limit int64, fo
 	return objs, result.IsTruncated, oss.ToString(result.NextContinuationToken), nil
 }
 
-func (o *ossClient) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (o *ossClient) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 

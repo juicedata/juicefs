@@ -122,7 +122,7 @@ func (c *b2client) Delete(ctx context.Context, key string, getters ...AttrGetter
 	return err
 }
 
-func (c *b2client) List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (c *b2client) List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}

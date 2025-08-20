@@ -144,8 +144,8 @@ func (t *tosClient) Head(ctx context.Context, key string) (Object, error) {
 	}, err
 }
 
-func (t *tosClient) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
-	resp, err := t.client.ListObjectsType2(context.Background(), &tos.ListObjectsType2Input{
+func (t *tosClient) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	resp, err := t.client.ListObjectsType2(ctx, &tos.ListObjectsType2Input{
 		Bucket:            t.bucket,
 		Delimiter:         delimiter,
 		Prefix:            prefix,
@@ -180,7 +180,7 @@ func (t *tosClient) List(prefix, start, token, delimiter string, limit int64, fo
 	return objs, resp.IsTruncated, resp.NextContinuationToken, nil
 }
 
-func (t *tosClient) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (t *tosClient) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 

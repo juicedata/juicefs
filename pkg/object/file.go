@@ -278,7 +278,7 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 	return mEntries, err
 }
 
-func (d *filestore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}

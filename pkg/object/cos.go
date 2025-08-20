@@ -167,7 +167,7 @@ func (c *COS) Delete(ctx context.Context, key string, getters ...AttrGetter) err
 	return err
 }
 
-func (c *COS) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (c *COS) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := cos.BucketGetOptions{
 		Prefix:       prefix,
 		Marker:       start,
@@ -203,7 +203,7 @@ func (c *COS) List(prefix, start, token, delimiter string, limit int64, followLi
 	return objs, resp.IsTruncated, resp.NextMarker, nil
 }
 
-func (c *COS) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (c *COS) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 

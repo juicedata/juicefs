@@ -180,7 +180,7 @@ func (s *ks3) Delete(ctx context.Context, key string, getters ...AttrGetter) err
 	return err
 }
 
-func (s *ks3) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *ks3) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := s3.ListObjectsInput{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
@@ -191,7 +191,7 @@ func (s *ks3) List(prefix, start, token, delimiter string, limit int64, followLi
 	if delimiter != "" {
 		param.Delimiter = &delimiter
 	}
-	resp, err := s.s3.ListObjects(&param)
+	resp, err := s.s3.ListObjectsWithContext(ctx, &param)
 	if err != nil {
 		return nil, false, "", err
 	}
@@ -222,7 +222,7 @@ func (s *ks3) List(prefix, start, token, delimiter string, limit int64, followLi
 	return objs, *resp.IsTruncated, nextMarker, nil
 }
 
-func (s *ks3) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (s *ks3) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 

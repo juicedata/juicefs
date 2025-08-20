@@ -93,9 +93,9 @@ type ObjectStorage interface {
 	// Head returns some information about the object or an error if not found.
 	Head(ctx context.Context, key string) (Object, error)
 	// List returns a list of objects using ListObjectV2.
-	List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error)
+	List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error)
 	// ListAll returns all the objects as an channel.
-	ListAll(prefix, marker string, followLink bool) (<-chan Object, error)
+	ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error)
 
 	// CreateMultipartUpload starts to upload a large object part by part.
 	CreateMultipartUpload(key string) (*MultipartUpload, error)

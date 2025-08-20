@@ -670,8 +670,8 @@ func (bm *benchMarkObj) chtimes(ctx context.Context, key string, startKey int) e
 	return bm.blob.(object.FileSystem).Chtimes(key, time.Now())
 }
 
-func listAll(s object.ObjectStorage, prefix, marker string, limit int64) ([]object.Object, error) {
-	ch, err := object.ListAll(s, prefix, marker, true)
+func listAll(ctx context.Context, s object.ObjectStorage, prefix, marker string, limit int64) ([]object.Object, error) {
+	ch, err := object.ListAll(ctx, s, prefix, marker, true)
 	if err == nil {
 		objs := make([]object.Object, 0)
 		for obj := range ch {
@@ -889,7 +889,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 		}
 		defer blob.Delete(ctx, key) //nolint:errcheck
 		if isFileSystem {
-			objs, err := listAll(blob, "", "", 2)
+			objs, err := listAll(ctx, blob, "", "", 2)
 			if err == nil {
 				if len(objs) != 2 {
 					return fmt.Errorf("list should return 2 keys, but got %d", len(objs))
@@ -914,14 +914,14 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 				return fmt.Errorf("list failed: %s", err)
 			}
 
-			objs, err = listAll(blob, "", "test2", 1)
+			objs, err = listAll(ctx, blob, "", "test2", 1)
 			if err != nil {
 				return fmt.Errorf("list failed: %s", err)
 			} else if len(objs) != 0 {
 				return fmt.Errorf("list should not return anything, but got %d", len(objs))
 			}
 		} else {
-			objs, err2 := listAll(blob, "", "", 1)
+			objs, err2 := listAll(ctx, blob, "", "", 1)
 			if err2 == nil {
 				if len(objs) != 1 {
 					return fmt.Errorf("list should return 1 keys, but got %d", len(objs))
@@ -940,7 +940,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 				return fmt.Errorf("list failed: %s", err2)
 			}
 
-			objs, err2 = listAll(blob, "", "test2", 1)
+			objs, err2 = listAll(ctx, blob, "", "test2", 1)
 			if err2 != nil {
 				return fmt.Errorf("list failed: %s", err2)
 			} else if len(objs) != 0 {
@@ -963,7 +963,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 			}
 		}()
 
-		if objs, err := listAll(blob, "hashKey", "", int64(keyTotal)); err != nil {
+		if objs, err := listAll(ctx, blob, "hashKey", "", int64(keyTotal)); err != nil {
 			return fmt.Errorf("list failed: %s", err)
 		} else {
 			for i := 0; i < keyTotal; i++ {
@@ -981,7 +981,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 		if err := blob.Put(ctx, key, bytes.NewReader([]byte("1"))); err != nil {
 			return fmt.Errorf("put encode file failed: %s", err)
 		} else {
-			if resp, _, _, err := blob.List("", "测试编码文件", "", "", 1, true); err != nil && err != utils.ENOTSUP {
+			if resp, _, _, err := blob.List(ctx, "", "测试编码文件", "", "", 1, true); err != nil && err != utils.ENOTSUP {
 				return fmt.Errorf("list encode file failed %s", err)
 			} else if len(resp) == 1 && resp[0].Key() != key {
 				return fmt.Errorf("list encode file failed: expect key %s, but got %s", key, resp[0].Key())

@@ -129,7 +129,7 @@ func (s *sqlStore) Delete(ctx context.Context, key string, getters ...AttrGetter
 	return err
 }
 
-func (s *sqlStore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *sqlStore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if marker == "" {
 		marker = prefix
 	}

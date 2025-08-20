@@ -91,8 +91,8 @@ func (s *sharded) SetStorageClass(sc string) error {
 const maxResults = 10000
 
 // ListAll on all the keys that starts at marker from object storage.
-func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-chan Object, error) {
-	if ch, err := store.ListAll(prefix, marker, followLink); err == nil {
+func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, followLink bool) (<-chan Object, error) {
+	if ch, err := store.ListAll(ctx, prefix, marker, followLink); err == nil {
 		return ch, nil
 	} else if !errors.Is(err, notSupported) {
 		return nil, err
@@ -101,9 +101,9 @@ func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-cha
 	startTime := time.Now()
 	out := make(chan Object, maxResults)
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
-	objs, hasMore, nextToken, err := store.List(prefix, marker, "", "", maxResults, followLink)
+	objs, hasMore, nextToken, err := store.List(ctx, prefix, marker, "", "", maxResults, followLink)
 	if errors.Is(err, notSupported) {
-		return ListAllWithDelimiter(store, prefix, marker, "", followLink)
+		return ListAllWithDelimiter(ctx, store, prefix, marker, "", followLink)
 	}
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
@@ -135,12 +135,12 @@ func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-cha
 			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
 			var nextToken2 string
-			objs, hasMore, nextToken2, err = store.List(prefix, marker, nextToken, "", maxResults, followLink)
+			objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
 			for err != nil {
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
 				// slow down
 				time.Sleep(time.Millisecond * 100)
-				objs, hasMore, nextToken, err = store.List(prefix, marker, nextToken, "", maxResults, followLink)
+				objs, hasMore, nextToken, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
 			}
 			nextToken = nextToken2
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
@@ -168,10 +168,10 @@ func (s *nextObjects) Pop() interface{} {
 	return o
 }
 
-func (s *sharded) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	heads := &nextObjects{make([]nextKey, 0)}
 	for i := range s.stores {
-		ch, err := ListAll(s.stores[i], prefix, marker, followLink)
+		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink)
 		if err != nil {
 			return nil, fmt.Errorf("list %s: %s", s.stores[i], err)
 		}

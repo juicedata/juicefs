@@ -173,7 +173,7 @@ func (q *bosclient) Delete(ctx context.Context, key string, getters ...AttrGette
 	return err
 }
 
-func (q *bosclient) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (q *bosclient) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}

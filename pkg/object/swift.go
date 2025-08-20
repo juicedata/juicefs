@@ -78,7 +78,7 @@ func (s *swiftOSS) Delete(ctx context.Context, key string, getters ...AttrGetter
 	return err
 }
 
-func (s *swiftOSS) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *swiftOSS) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 10000 {
 		limit = 10000
 	}
@@ -90,7 +90,7 @@ func (s *swiftOSS) List(prefix, marker, token, delimiter string, limit int64, fo
 			return nil, false, "", fmt.Errorf("delimiter should be a rune but now is %s", delimiter)
 		}
 	}
-	objects, err := s.conn.Objects(context.Background(), s.container, &swift.ObjectsOpts{Prefix: prefix, Marker: marker, Delimiter: delimiter_, Limit: int(limit)})
+	objects, err := s.conn.Objects(ctx, s.container, &swift.ObjectsOpts{Prefix: prefix, Marker: marker, Delimiter: delimiter_, Limit: int(limit)})
 	if err != nil {
 		return nil, false, "", err
 	}

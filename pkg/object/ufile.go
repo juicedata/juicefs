@@ -223,7 +223,7 @@ type uFileListObjectsOutput struct {
 	CommonPrefixes []*CommonPrefixesItem `json:"CommonPrefixes,omitempty"`
 }
 
-func (u *ufile) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (u *ufile) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}

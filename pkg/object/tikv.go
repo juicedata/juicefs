@@ -89,7 +89,7 @@ func (t *tikv) Delete(ctx context.Context, key string, getters ...AttrGetter) er
 	return t.c.Delete(ctx, []byte(key))
 }
 
-func (t *tikv) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (t *tikv) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}
@@ -100,7 +100,7 @@ func (t *tikv) List(prefix, marker, token, delimiter string, limit int64, follow
 		limit = int64(rawkv.MaxRawKVScanLimit)
 	}
 	// TODO: key only
-	keys, vs, err := t.c.Scan(context.TODO(), []byte(marker), nil, int(limit))
+	keys, vs, err := t.c.Scan(ctx, []byte(marker), nil, int(limit))
 	if err != nil {
 		return nil, false, "", err
 	}

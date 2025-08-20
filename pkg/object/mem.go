@@ -130,7 +130,7 @@ func (m *memStore) Delete(ctx context.Context, key string, getters ...AttrGetter
 	return nil
 }
 
-func (m *memStore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (m *memStore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	m.Lock()
 	defer m.Unlock()
 

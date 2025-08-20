@@ -127,22 +127,22 @@ func (p *withPrefix) Delete(ctx context.Context, key string, getters ...AttrGett
 	return p.os.Delete(ctx, p.prefix+key, getters...)
 }
 
-func (p *withPrefix) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (p *withPrefix) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if start != "" {
 		start = p.prefix + start
 	}
-	objs, hasMore, nextMarker, err := p.os.List(p.prefix+prefix, start, token, delimiter, limit, followLink)
+	objs, hasMore, nextMarker, err := p.os.List(ctx, p.prefix+prefix, start, token, delimiter, limit, followLink)
 	for i, o := range objs {
 		objs[i] = p.updateKey(o)
 	}
 	return objs, hasMore, nextMarker, err
 }
 
-func (p *withPrefix) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (p *withPrefix) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	if marker != "" {
 		marker = p.prefix + marker
 	}
-	r, err := p.os.ListAll(p.prefix+prefix, marker, followLink)
+	r, err := p.os.ListAll(ctx, p.prefix+prefix, marker, followLink)
 	if err != nil {
 		return r, err
 	}

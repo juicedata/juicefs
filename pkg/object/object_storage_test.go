@@ -50,7 +50,7 @@ import (
 )
 
 func get(s ObjectStorage, k string, off, limit int64, getters ...AttrGetter) (string, error) {
-	r, err := s.Get(k, off, limit, getters...)
+	r, err := s.Get(context.Background(), k, off, limit, getters...)
 	if err != nil {
 		return "", err
 	}
@@ -61,8 +61,8 @@ func get(s ObjectStorage, k string, off, limit int64, getters ...AttrGetter) (st
 	return string(data), nil
 }
 
-func listAll(s ObjectStorage, prefix, marker string, limit int64, followLink bool) ([]Object, error) {
-	ch, err := ListAll(s, prefix, marker, followLink)
+func listAll(ctx context.Context, s ObjectStorage, prefix, marker string, limit int64, followLink bool) ([]Object, error) {
+	ch, err := ListAll(ctx, s, prefix, marker, followLink)
 	if err == nil {
 		objs := make([]Object, 0)
 		for obj := range ch {
@@ -107,55 +107,56 @@ func setStorageClass(o ObjectStorage) string {
 
 // nolint:errcheck
 func testStorage(t *testing.T, s ObjectStorage) {
+	ctx := context.Background()
 	sc := setStorageClass(s)
-	if err := s.Create(); err != nil {
+	if err := s.Create(ctx); err != nil {
 		t.Fatalf("Can't create bucket %s: %s", s, err)
 	}
-	if err := s.Create(); err != nil {
+	if err := s.Create(ctx); err != nil {
 		t.Fatalf("err should be nil when creating a bucket with the same name")
 	}
 	prefix := "unit-test/"
 	s = WithPrefix(s, prefix)
 	defer func() {
-		if err := s.Delete("test"); err != nil {
+		if err := s.Delete(ctx, "test"); err != nil {
 			t.Fatalf("delete failed: %s", err)
 		}
 	}()
-	all, err := listAll(s, "", "", 10000, true)
+	all, err := listAll(ctx, s, "", "", 10000, true)
 	var dels []string
 	for _, object := range all {
 		dels = append(dels, object.Key())
 	}
 	for i := len(dels) - 1; i >= 0; i-- {
-		_ = s.Delete(dels[i])
+		_ = s.Delete(ctx, dels[i])
 	}
 
 	var scPut string
 	key := "测试编码文件" + `{"name":"juicefs"}` + string('\u001F') + "%uFF081%uFF09.jpg"
-	if err := s.Put(key, bytes.NewReader(nil), WithStorageClass(&scPut)); err != nil {
+	if err := s.Put(ctx, key, bytes.NewReader(nil), WithStorageClass(&scPut)); err != nil {
 		t.Logf("PUT testEncodeFile failed: %s", err.Error())
 	} else {
 		if scPut != sc {
 			t.Fatalf("Storage class should be %q, got %q", sc, scPut)
 		}
-		if resp, _, _, err := s.List("测试编码文件", "", "", "", 1, true); err != nil && err != notSupported {
+		if resp, _, _, err := s.List(ctx, "测试编码文件", "", "", "", 1, true); err != nil && err != notSupported {
 			t.Logf("List testEncodeFile Failed: %s", err)
 		} else if len(resp) == 1 && resp[0].Key() != key {
 			t.Logf("List testEncodeFile Failed: expect key %s, but got %s", key, resp[0].Key())
 		}
 	}
-	_ = s.Delete(key)
+	_ = s.Delete(ctx, key)
 
-	_, err = s.Get("not_exists", 0, -1)
+	_, err = s.Get(ctx, "not_exists", 0, -1)
 	if err == nil {
 		t.Fatalf("Get should failed: %s", err)
 	}
-	if _, err := s.Head(string(make([]byte, 8<<10))); err == nil {
+	if _, err := s.Head(ctx, string(make([]byte, 8<<10))); err == nil {
 		t.Logf("Head should failed: %s", err)
 	}
 
 	br := []byte("hello")
-	if err := s.Put("test", bytes.NewReader(br)); err != nil {
+	if err := s.Put(ctx, "test", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 
@@ -197,7 +198,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 	switch s.(*withPrefix).os.(type) {
 	case FileSystem:
-		objs, err2 := listAll(s, "", "", 2, true)
+		objs, err2 := listAll(ctx, s, "", "", 2, true)
 		if err2 == nil {
 			if len(objs) != 2 {
 				t.Fatalf("List should return 2 keys, but got %d", len(objs))
@@ -222,14 +223,14 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("list failed: %s", err2.Error())
 		}
 
-		objs, err2 = listAll(s, "", "test2", 1, true)
+		objs, err2 = listAll(ctx, s, "", "test2", 1, true)
 		if err2 != nil {
 			t.Fatalf("list3 failed: %s", err2.Error())
 		} else if len(objs) != 0 {
 			t.Fatalf("list3 should not return anything, but got %d", len(objs))
 		}
 	default:
-		objs, err2 := listAll(s, "", "", 1, true)
+		objs, err2 := listAll(ctx, s, "", "", 1, true)
 		if err2 == nil {
 			if len(objs) != 1 {
 				t.Fatalf("List should return 1 keys, but got %d", len(objs))
@@ -248,7 +249,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("list failed: %s", err2.Error())
 		}
 
-		objs, err2 = listAll(s, "", "test2", 1, true)
+		objs, err2 = listAll(ctx, s, "", "test2", 1, true)
 		if err2 != nil {
 			t.Fatalf("list3 failed: %s", err2.Error())
 		} else if len(objs) != 0 {
@@ -256,47 +257,47 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	defer s.Delete("a/")
-	defer s.Delete("a/a")
-	if err := s.Put("a/a", bytes.NewReader(br)); err != nil {
+	defer s.Delete(ctx, "a/")
+	defer s.Delete(ctx, "a/a")
+	if err := s.Put(ctx, "a/a", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
-	defer s.Delete("a/a1")
-	if err := s.Put("a/a1", bytes.NewReader(br)); err != nil {
+	defer s.Delete(ctx, "a/a1")
+	if err := s.Put(ctx, "a/a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
-	defer s.Delete("b/")
-	defer s.Delete("b/b")
-	if err := s.Put("b/b", bytes.NewReader(br)); err != nil {
+	defer s.Delete(ctx, "b/")
+	defer s.Delete(ctx, "b/b")
+	if err := s.Put(ctx, "b/b", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
-	defer s.Delete("b/b1")
-	if err := s.Put("b/b1", bytes.NewReader(br)); err != nil {
+	defer s.Delete(ctx, "b/b1")
+	if err := s.Put(ctx, "b/b1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
-	defer s.Delete("c/")
+	defer s.Delete(ctx, "c/")
 	//tikv will appear empty value is not supported
-	if err1 := s.Put("c/", bytes.NewReader(nil)); err1 != nil {
+	if err1 := s.Put(ctx, "c/", bytes.NewReader(nil)); err1 != nil {
 		//minio will appear XMinioObjectExistsAsDirectory: Object name already exists as a directory. status code:  409
-		if err2 := s.Put("c/", bytes.NewReader(br)); err2 != nil {
+		if err2 := s.Put(ctx, "c/", bytes.NewReader(br)); err2 != nil {
 			t.Fatalf("PUT failed err1: %s, err2: %s", err1.Error(), err2.Error())
 		}
 	}
-	defer s.Delete("a1")
-	if err := s.Put("a1", bytes.NewReader(br)); err != nil {
+	defer s.Delete(ctx, "a1")
+	if err := s.Put(ctx, "a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
-	defer s.Delete("a/b/c/d/e/f")
-	if err := s.Put("a/b/c/d/e/f", bytes.NewReader(br)); err != nil {
+	defer s.Delete(ctx, "a/b/c/d/e/f")
+	if err := s.Put(ctx, "a/b/c/d/e/f", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 
 	br = []byte("hello2")
-	if err := s.Put("a1", bytes.NewReader(br)); err != nil {
+	if err := s.Put(ctx, "a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 
-	if obs, more, nextMarker, err := s.List("", "", "", "/", 4, true); err != nil {
+	if obs, more, nextMarker, err := s.List(ctx, "", "", "", "/", 4, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list: %s", err)
 		} else {
@@ -319,7 +320,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			if nextMarker == "" {
 				t.Fatalf("next marker should not be empty")
 			}
-			obs, more, nextMarker, err = s.List("", obs[len(obs)-1].Key(), nextMarker, "/", 4, true)
+			obs, more, nextMarker, err = s.List(ctx, "", obs[len(obs)-1].Key(), nextMarker, "/", 4, true)
 			if err != nil {
 				t.Fatalf("list with marker: %s", err)
 			}
@@ -329,7 +330,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			if obs[0].Key() != "test" {
 				t.Fatalf("should get key test but got %s", obs[0].Key())
 			}
-			_, more, nextMarker, err = s.List("", obs[len(obs)-1].Key(), nextMarker, "/", 4, true)
+			_, more, nextMarker, err = s.List(ctx, "", obs[len(obs)-1].Key(), nextMarker, "/", 4, true)
 			if more {
 				t.Fatalf("should no more results")
 			}
@@ -339,7 +340,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	if obs, _, _, err := s.List("", "", "", "/", 10, true); err != nil {
+	if obs, _, _, err := s.List(ctx, "", "", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
@@ -365,7 +366,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	if obs, _, _, err := s.List("a", "", "", "/", 10, true); err != nil {
+	if obs, _, _, err := s.List(ctx, "a", "", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		}
@@ -381,7 +382,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	if obs, _, _, err := s.List("a/", "", "", "/", 10, true); err != nil {
+	if obs, _, _, err := s.List(ctx, "a/", "", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
@@ -413,17 +414,17 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	for i := 0; i < keyTotal; i++ {
 		k := fmt.Sprintf("hashKey%d", i)
 		sortedKeys = append(sortedKeys, k)
-		if err := s.Put(k, bytes.NewReader(br)); err != nil {
+		if err := s.Put(ctx, k, bytes.NewReader(br)); err != nil {
 			t.Fatalf("PUT failed: %s", err.Error())
 		}
 	}
 	sort.Strings(sortedKeys)
 	defer func() {
 		for i := 0; i < keyTotal; i++ {
-			_ = s.Delete(fmt.Sprintf("hashKey%d", i))
+			_ = s.Delete(ctx, fmt.Sprintf("hashKey%d", i))
 		}
 	}()
-	objs, err := listAll(s, "hashKey", "", int64(keyTotal), true)
+	objs, err := listAll(ctx, s, "hashKey", "", int64(keyTotal), true)
 	if err != nil {
 		t.Fatalf("list4 failed: %s", err.Error())
 	} else {
@@ -442,45 +443,45 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	f.Seek(0, 0)
 	os.Remove(f.Name())
 	defer f.Close()
-	if err := s.Put("file", f); err != nil {
+	if err := s.Put(ctx, "file", f); err != nil {
 		t.Fatalf("failed to put from file")
-	} else if _, err := s.Head("file"); err != nil {
+	} else if _, err := s.Head(ctx, "file"); err != nil {
 		t.Fatalf("file should exists")
 	} else {
-		if err := s.Delete("file"); err != nil {
+		if err := s.Delete(ctx, "file"); err != nil {
 			t.Fatalf("delete failed %s", err)
 		}
 	}
 
-	if _, err := s.Head("not-exist-file"); !os.IsNotExist(err) {
+	if _, err := s.Head(ctx, "not-exist-file"); !os.IsNotExist(err) {
 		t.Fatal("err should be os.ErrNotExist")
 	}
 
-	if o, err := s.Head("test"); err != nil {
+	if o, err := s.Head(ctx, "test"); err != nil {
 		t.Fatalf("check exists failed: %s", err.Error())
 	} else if sc != "" && o.StorageClass() != sc {
 		t.Fatalf("storage class should be %s but got %s", sc, o.StorageClass())
 	}
 
 	dstKey := "test-copy"
-	defer s.Delete(dstKey)
-	err = s.Copy(fmt.Sprintf("%s%s", prefix, dstKey), fmt.Sprintf("%stest", prefix))
+	defer s.Delete(ctx, dstKey)
+	err = s.Copy(ctx, fmt.Sprintf("%s%s", prefix, dstKey), fmt.Sprintf("%stest", prefix))
 	if err != nil && err != notSupported {
 		t.Fatalf("copy failed: %s", err.Error())
 	}
 	if err == nil {
-		if o, err := s.Head(dstKey); err != nil {
+		if o, err := s.Head(ctx, dstKey); err != nil {
 			t.Fatalf("check exists failed: %s", err.Error())
 		} else if sc != "" && o.StorageClass() != sc {
 			t.Fatalf("storage class should be %s but got %s", sc, o.StorageClass())
 		}
 	}
 
-	if err := s.Delete("test"); err != nil {
+	if err := s.Delete(ctx, "test"); err != nil {
 		t.Fatalf("delete failed: %s", err)
 	}
 
-	if err := s.Delete("test"); err != nil {
+	if err := s.Delete(ctx, "test"); err != nil {
 		t.Fatalf("delete non exists: %v", err)
 	}
 
@@ -500,7 +501,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		return content
 	}
 	k := "large"
-	defer s.Delete(k)
+	defer s.Delete(ctx, k)
 
 	if upload, err := s.CreateMultipartUpload(k); err == nil {
 		total := 3
@@ -563,13 +564,13 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		if err = s.CompleteUpload(k, upload.UploadID, parts); err != nil {
 			t.Fatalf("failed to complete multipart upload: %v", err)
 		}
-		if meta, err := s.Head(k); err != nil {
+		if meta, err := s.Head(ctx, k); err != nil {
 			t.Fatalf("failed to head object: %v", err)
 		} else if sc != "" && meta.StorageClass() != sc {
 			t.Fatalf("storage class should be %s but got %s", sc, meta.StorageClass())
 		}
 		checkContent := func(key string, content []byte) {
-			r, err := s.Get(key, 0, -1)
+			r, err := s.Get(ctx, key, 0, -1)
 			if err != nil {
 				t.Fatalf("failed to get multipart upload file: %v", err)
 			}
@@ -586,7 +587,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		if s.Limits().IsSupportUploadPartCopy {
 			var copyUpload *MultipartUpload
 			var dstKey = "dstUploadPartCopyKey"
-			defer s.Delete(dstKey)
+			defer s.Delete(ctx, dstKey)
 			if copyUpload, err = s.CreateMultipartUpload(dstKey); err != nil {
 				t.Fatalf("failed to create multipart upload: %v", err)
 			}
@@ -610,22 +611,22 @@ func testStorage(t *testing.T, s ObjectStorage) {
 
 	// Copy empty objects
 	defer func() {
-		if err := s.Delete("empty"); err != nil {
+		if err := s.Delete(ctx, "empty"); err != nil {
 			t.Logf("delete empty file failed: %s", err)
 		}
 	}()
 
-	if err := s.Put("empty", bytes.NewReader([]byte{})); err != nil {
+	if err := s.Put(ctx, "empty", bytes.NewReader([]byte{})); err != nil {
 		t.Logf("PUT empty object failed: %s", err.Error())
 	}
 
 	// Copy `/` suffixed object
 	defer func() {
-		if err := s.Delete("slash/"); err != nil {
+		if err := s.Delete(ctx, "slash/"); err != nil {
 			t.Logf("delete slash/ failed %s", err)
 		}
 	}()
-	if err := s.Put("slash/", bytes.NewReader([]byte{})); err != nil {
+	if err := s.Put(ctx, "slash/", bytes.NewReader([]byte{})); err != nil {
 		t.Logf("PUT `/` suffixed object failed: %s", err.Error())
 	}
 }
@@ -947,17 +948,18 @@ func TestEncrypted(t *testing.T) {
 }
 
 func TestMarsharl(t *testing.T) {
+	ctx := context.Background()
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.SkipNow()
 	}
 	s, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "", "")
-	if err := s.Put("hello", bytes.NewReader([]byte("world"))); err != nil {
+	if err := s.Put(ctx, "hello", bytes.NewReader([]byte("world"))); err != nil {
 		t.Fatalf("PUT failed: %s", err)
 	}
 	fs := s.(FileSystem)
 	_ = fs.Chown("hello", "user", "group")
 	_ = fs.Chmod("hello", 0764)
-	o, err := s.Head("hello")
+	o, err := s.Head(ctx, "hello")
 	if err != nil {
 		t.Fatalf("HEAD failed: %s", err)
 	}

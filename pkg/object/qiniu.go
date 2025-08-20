@@ -142,7 +142,7 @@ func (q *qiniu) Delete(ctx context.Context, key string, getters ...AttrGetter) e
 	return err
 }
 
-func (q *qiniu) List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (q *qiniu) List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}

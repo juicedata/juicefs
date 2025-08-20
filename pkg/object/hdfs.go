@@ -207,7 +207,7 @@ func (h *hdfsclient) Delete(ctx context.Context, key string, getters ...AttrGett
 	return err
 }
 
-func (h *hdfsclient) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (h *hdfsclient) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}

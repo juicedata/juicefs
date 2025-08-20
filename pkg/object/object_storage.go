@@ -147,11 +147,11 @@ func (s DefaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string
 	return nil, "", nil
 }
 
-func (s DefaultObjectStorage) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s DefaultObjectStorage) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	return nil, false, "", notSupported
 }
 
-func (s DefaultObjectStorage) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (s DefaultObjectStorage) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 
@@ -190,8 +190,8 @@ type listThread struct {
 	hasMore   bool
 }
 
-func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
-	entries, _, _, err := store.List(prefix, start, "", "/", 1e9, followLink)
+func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
+	entries, _, _, err := store.List(ctx, prefix, start, "", "/", 1e9, followLink)
 	if err != nil {
 		logger.Errorf("list %s: %s", prefix, err)
 		return nil, err
@@ -218,7 +218,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 					if !entries[i].IsDir() || key == prefix {
 						continue
 					}
-					t.entries, t.hasMore, t.nextToken, t.err = store.List(key, "\x00", t.nextToken, "/", 1e9, followLink) // exclude itself
+					t.entries, t.hasMore, t.nextToken, t.err = store.List(ctx, key, "\x00", t.nextToken, "/", 1e9, followLink) // exclude itself
 					t.Lock()
 					t.ready = true
 					t.cond.Signal()

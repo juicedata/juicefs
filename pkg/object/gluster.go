@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/fs"
@@ -56,7 +57,7 @@ func (g *gluster) vol() *gfapi.Volume {
 	return g.vols[n%uint64(len(g.vols))]
 }
 
-func (g *gluster) Head(key string) (Object, error) {
+func (g *gluster) Head(ctx context.Context, key string) (Object, error) {
 	fi, err := g.vol().Stat(key)
 	if err != nil {
 		return nil, err
@@ -85,7 +86,7 @@ func (g *gluster) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 	}
 }
 
-func (g *gluster) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (g *gluster) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	f, err := g.vol().Open(key)
 	if err != nil {
 		return nil, err
@@ -110,7 +111,7 @@ func (g *gluster) Get(key string, off, limit int64, getters ...AttrGetter) (io.R
 	return f, nil
 }
 
-func (g *gluster) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (g *gluster) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	v := g.vol()
 	if strings.HasSuffix(key, dirSuffix) {
 		return v.MkdirAll(key, os.FileMode(0777))
@@ -146,7 +147,7 @@ func (g *gluster) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	return err
 }
 
-func (g *gluster) Delete(key string, getters ...AttrGetter) error {
+func (g *gluster) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	v := g.vol()
 	err := v.Unlink(key)
 	if err != nil && strings.Contains(err.Error(), "is a directory") {
@@ -199,7 +200,7 @@ func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 	return mEntries, err
 }
 
-func (g *gluster) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (g *gluster) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
@@ -211,7 +212,7 @@ func (g *gluster) List(prefix, marker, token, delimiter string, limit int64, fol
 			dir += dirSuffix
 		}
 	} else if marker == "" {
-		obj, err := g.Head(prefix)
+		obj, err := g.Head(ctx, prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, false, "", nil

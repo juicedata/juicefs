@@ -383,7 +383,7 @@ func (f *sftpStore) fileInfo(key string, fi os.FileInfo, isSymlink bool) Object 
 	return ff
 }
 
-func (f *sftpStore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (f *sftpStore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}

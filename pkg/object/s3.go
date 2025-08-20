@@ -82,7 +82,7 @@ func isExists(err error) bool {
 }
 
 func (s *s3client) Create(ctx context.Context) error {
-	if _, _, _, err := s.List("", "", "", "", 1, true); err == nil {
+	if _, _, _, err := s.List(ctx, "", "", "", "", 1, true); err == nil {
 		return nil
 	}
 	_, err := s.s3.CreateBucket(ctx, &s3.CreateBucketInput{
@@ -226,7 +226,7 @@ func (s *s3client) Delete(ctx context.Context, key string, getters ...AttrGetter
 	return err
 }
 
-func (s *s3client) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := s3.ListObjectsV2Input{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
@@ -282,7 +282,7 @@ func (s *s3client) List(prefix, start, token, delimiter string, limit int64, fol
 	return objs, isTruncated, nextMarker, nil
 }
 
-func (s *s3client) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (s *s3client) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 

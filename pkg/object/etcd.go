@@ -111,7 +111,7 @@ func genNextKey(key string) string {
 	return string(next)
 }
 
-func (c *etcdClient) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (c *etcdClient) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}
@@ -124,7 +124,7 @@ func (c *etcdClient) List(prefix, start, token, delimiter string, limit int64, f
 	} else {
 		opts = append(opts, etcd.WithFromKey())
 	}
-	resp, err := c.client.Get(context.Background(), start, opts...)
+	resp, err := c.client.Get(ctx, start, opts...)
 	if err != nil {
 		return nil, false, "", fmt.Errorf("get start %v: %s", start, err)
 	}
