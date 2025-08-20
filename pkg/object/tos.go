@@ -184,8 +184,8 @@ func (t *tosClient) ListAll(ctx context.Context, prefix, marker string, followLi
 	return nil, notSupported
 }
 
-func (t *tosClient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	resp, err := t.client.CreateMultipartUploadV2(context.Background(), &tos.CreateMultipartUploadV2Input{
+func (t *tosClient) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
+	resp, err := t.client.CreateMultipartUploadV2(ctx, &tos.CreateMultipartUploadV2Input{
 		Bucket:       t.bucket,
 		Key:          key,
 		StorageClass: enum.StorageClassType(t.sc),
@@ -196,8 +196,8 @@ func (t *tosClient) CreateMultipartUpload(key string) (*MultipartUpload, error) 
 	return &MultipartUpload{UploadID: resp.UploadID, MinPartSize: 5 << 20, MaxCount: 10000}, nil
 }
 
-func (t *tosClient) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
-	resp, err := t.client.UploadPartV2(context.Background(), &tos.UploadPartV2Input{
+func (t *tosClient) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
+	resp, err := t.client.UploadPartV2(ctx, &tos.UploadPartV2Input{
 		UploadPartBasicInput: tos.UploadPartBasicInput{
 			Bucket:     t.bucket,
 			Key:        key,
@@ -212,8 +212,8 @@ func (t *tosClient) UploadPart(key string, uploadID string, num int, body []byte
 	return &Part{Num: num, ETag: resp.ETag}, nil
 }
 
-func (t *tosClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
-	resp, err := t.client.UploadPartCopyV2(context.Background(), &tos.UploadPartCopyV2Input{
+func (t *tosClient) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	resp, err := t.client.UploadPartCopyV2(ctx, &tos.UploadPartCopyV2Input{
 		Bucket:          t.bucket,
 		Key:             key,
 		UploadID:        uploadID,
@@ -229,20 +229,20 @@ func (t *tosClient) UploadPartCopy(key string, uploadID string, num int, srcKey 
 	return &Part{Num: num, ETag: resp.ETag}, nil
 }
 
-func (t *tosClient) AbortUpload(key string, uploadID string) {
-	_, _ = t.client.AbortMultipartUpload(context.Background(), &tos.AbortMultipartUploadInput{
+func (t *tosClient) AbortUpload(ctx context.Context, key string, uploadID string) {
+	_, _ = t.client.AbortMultipartUpload(ctx, &tos.AbortMultipartUploadInput{
 		Bucket:   t.bucket,
 		Key:      key,
 		UploadID: uploadID,
 	})
 }
 
-func (t *tosClient) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (t *tosClient) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	var tosParts []tos.UploadedPartV2
 	for i := range parts {
 		tosParts = append(tosParts, tos.UploadedPartV2{ETag: parts[i].ETag, PartNumber: parts[i].Num})
 	}
-	_, err := t.client.CompleteMultipartUploadV2(context.Background(), &tos.CompleteMultipartUploadV2Input{
+	_, err := t.client.CompleteMultipartUploadV2(ctx, &tos.CompleteMultipartUploadV2Input{
 		Bucket:   t.bucket,
 		Key:      key,
 		UploadID: uploadID,
@@ -251,9 +251,8 @@ func (t *tosClient) CompleteUpload(key string, uploadID string, parts []*Part) e
 	return err
 }
 
-func (t *tosClient) ListUploads(marker string) ([]*PendingPart, string, error) {
-	result, err := t.client.ListMultipartUploadsV2(context.Background(),
-		&tos.ListMultipartUploadsV2Input{Bucket: t.bucket})
+func (t *tosClient) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
+	result, err := t.client.ListMultipartUploadsV2(ctx, &tos.ListMultipartUploadsV2Input{Bucket: t.bucket})
 	if err != nil {
 		return nil, "", err
 	}

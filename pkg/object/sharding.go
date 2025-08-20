@@ -197,20 +197,20 @@ func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink
 	return out, nil
 }
 
-func (s *sharded) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	return s.pick(key).CreateMultipartUpload(key)
+func (s *sharded) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
+	return s.pick(key).CreateMultipartUpload(ctx, key)
 }
 
-func (s *sharded) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
-	return s.pick(key).UploadPart(key, uploadID, num, body)
+func (s *sharded) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
+	return s.pick(key).UploadPart(ctx, key, uploadID, num, body)
 }
 
-func (s *sharded) AbortUpload(key string, uploadID string) {
-	s.pick(key).AbortUpload(key, uploadID)
+func (s *sharded) AbortUpload(ctx context.Context, key string, uploadID string) {
+	s.pick(key).AbortUpload(ctx, key, uploadID)
 }
 
-func (s *sharded) CompleteUpload(key string, uploadID string, parts []*Part) error {
-	return s.pick(key).CompleteUpload(key, uploadID, parts)
+func (s *sharded) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
+	return s.pick(key).CompleteUpload(ctx, key, uploadID, parts)
 }
 
 func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage, error) {

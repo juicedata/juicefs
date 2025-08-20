@@ -503,7 +503,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	k := "large"
 	defer s.Delete(ctx, k)
 
-	if upload, err := s.CreateMultipartUpload(k); err == nil {
+	if upload, err := s.CreateMultipartUpload(ctx, k); err == nil {
 		total := 3
 		seed := make([]byte, upload.MinPartSize)
 		utils.RandRead(seed)
@@ -524,7 +524,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 					<-pool
 					wg.Done()
 				}()
-				parts[num-1], err = s.UploadPart(k, upload.UploadID, num, content[num-1])
+				parts[num-1], err = s.UploadPart(ctx, k, upload.UploadID, num, content[num-1])
 				if err != nil {
 					errCh <- fmt.Errorf("multipart upload error: %v", err)
 				}
@@ -544,7 +544,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			firstPartContent[0] = 'a'
 		}
 		oldPart := parts[0]
-		if parts[0], err = s.UploadPart(k, upload.UploadID, 1, firstPartContent); err != nil {
+		if parts[0], err = s.UploadPart(ctx, k, upload.UploadID, 1, firstPartContent); err != nil {
 			t.Logf("overwrite the first part error: %v", err)
 			parts[0] = oldPart
 		} else {
@@ -554,14 +554,14 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		// overwrite the last part
 		lastPartContent := []byte("hello")
 		oldPart = parts[total-1]
-		if parts[total-1], err = s.UploadPart(k, upload.UploadID, total, lastPartContent); err != nil {
+		if parts[total-1], err = s.UploadPart(ctx, k, upload.UploadID, total, lastPartContent); err != nil {
 			t.Logf("overwrite the last part error: %v", err)
 			parts[total-1] = oldPart
 		} else {
 			content[total-1] = lastPartContent
 		}
 
-		if err = s.CompleteUpload(k, upload.UploadID, parts); err != nil {
+		if err = s.CompleteUpload(ctx, k, upload.UploadID, parts); err != nil {
 			t.Fatalf("failed to complete multipart upload: %v", err)
 		}
 		if meta, err := s.Head(ctx, k); err != nil {
@@ -588,19 +588,19 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			var copyUpload *MultipartUpload
 			var dstKey = "dstUploadPartCopyKey"
 			defer s.Delete(ctx, dstKey)
-			if copyUpload, err = s.CreateMultipartUpload(dstKey); err != nil {
+			if copyUpload, err = s.CreateMultipartUpload(ctx, dstKey); err != nil {
 				t.Fatalf("failed to create multipart upload: %v", err)
 			}
 			copyParts := make([]*Part, total)
 			var startIdx = 0
 			for i, c := range content {
-				copyParts[i], err = s.UploadPartCopy(dstKey, copyUpload.UploadID, i+1, k, int64(startIdx), int64(len(c)))
+				copyParts[i], err = s.UploadPartCopy(ctx, dstKey, copyUpload.UploadID, i+1, k, int64(startIdx), int64(len(c)))
 				if err != nil {
 					t.Fatalf("failed to upload part copy: %v", err)
 				}
 				startIdx += len(c)
 			}
-			if err = s.CompleteUpload(dstKey, copyUpload.UploadID, copyParts); err != nil {
+			if err = s.CompleteUpload(ctx, dstKey, copyUpload.UploadID, copyParts); err != nil {
 				t.Fatalf("failed to complete multipart upload: %v", err)
 			}
 			checkContent(dstKey, bytes.Join(content, nil))

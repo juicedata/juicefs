@@ -240,7 +240,7 @@ func (s *obsClient) ListAll(ctx context.Context, prefix, marker string, followLi
 	return nil, notSupported
 }
 
-func (s *obsClient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (s *obsClient) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	params := &obs.InitiateMultipartUploadInput{}
 	params.Bucket = s.bucket
 	params.Key = key
@@ -252,7 +252,7 @@ func (s *obsClient) CreateMultipartUpload(key string) (*MultipartUpload, error) 
 	return &MultipartUpload{UploadID: resp.UploadId, MinPartSize: 5 << 20, MaxCount: 10000}, nil
 }
 
-func (s *obsClient) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
+func (s *obsClient) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
 	params := &obs.UploadPartInput{}
 	params.Bucket = s.bucket
 	params.Key = key
@@ -272,7 +272,7 @@ func (s *obsClient) UploadPart(key string, uploadID string, num int, body []byte
 	return &Part{Num: num, ETag: resp.ETag}, err
 }
 
-func (s *obsClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (s *obsClient) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	resp, err := s.c.CopyPart(&obs.CopyPartInput{
 		Bucket:               s.bucket,
 		Key:                  key,
@@ -289,7 +289,7 @@ func (s *obsClient) UploadPartCopy(key string, uploadID string, num int, srcKey 
 	return &Part{Num: num, ETag: resp.ETag}, err
 }
 
-func (s *obsClient) AbortUpload(key string, uploadID string) {
+func (s *obsClient) AbortUpload(ctx context.Context, key string, uploadID string) {
 	params := &obs.AbortMultipartUploadInput{}
 	params.Bucket = s.bucket
 	params.Key = key
@@ -297,7 +297,7 @@ func (s *obsClient) AbortUpload(key string, uploadID string) {
 	_, _ = s.c.AbortMultipartUpload(params)
 }
 
-func (s *obsClient) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (s *obsClient) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	params := &obs.CompleteMultipartUploadInput{}
 	params.Bucket = s.bucket
 	params.Key = key
@@ -309,7 +309,7 @@ func (s *obsClient) CompleteUpload(key string, uploadID string, parts []*Part) e
 	return err
 }
 
-func (s *obsClient) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (s *obsClient) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	input := &obs.ListMultipartUploadsInput{
 		Bucket:    s.bucket,
 		KeyMarker: marker,

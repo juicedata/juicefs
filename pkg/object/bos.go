@@ -198,7 +198,7 @@ func (q *bosclient) List(ctx context.Context, prefix, start, token, delimiter st
 	return objs, out.IsTruncated, out.NextMarker, nil
 }
 
-func (q *bosclient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (q *bosclient) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	args := new(api.InitiateMultipartUploadArgs)
 	if q.sc != "" {
 		args.StorageClass = q.sc
@@ -210,7 +210,7 @@ func (q *bosclient) CreateMultipartUpload(key string) (*MultipartUpload, error) 
 	return &MultipartUpload{UploadID: r.UploadId, MinPartSize: 4 << 20, MaxCount: 10000}, nil
 }
 
-func (q *bosclient) UploadPart(key string, uploadID string, num int, data []byte) (*Part, error) {
+func (q *bosclient) UploadPart(ctx context.Context, key string, uploadID string, num int, data []byte) (*Part, error) {
 	body, _ := bce.NewBodyFromBytes(data)
 	etag, err := q.c.BasicUploadPart(q.bucket, key, uploadID, num, body)
 	if err != nil {
@@ -219,7 +219,7 @@ func (q *bosclient) UploadPart(key string, uploadID string, num int, data []byte
 	return &Part{Num: num, Size: len(data), ETag: etag}, nil
 }
 
-func (q *bosclient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (q *bosclient) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	result, err := q.c.UploadPartCopy(q.bucket, key, q.bucket, srcKey, uploadID, num,
 		&api.UploadPartCopyArgs{SourceRange: fmt.Sprintf("bytes=%d-%d", off, off+size-1)})
 
@@ -229,11 +229,11 @@ func (q *bosclient) UploadPartCopy(key string, uploadID string, num int, srcKey 
 	return &Part{Num: num, Size: int(size), ETag: result.ETag}, nil
 }
 
-func (q *bosclient) AbortUpload(key string, uploadID string) {
+func (q *bosclient) AbortUpload(ctx context.Context, key string, uploadID string) {
 	_ = q.c.AbortMultipartUpload(q.bucket, key, uploadID)
 }
 
-func (q *bosclient) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (q *bosclient) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	oparts := make([]api.UploadInfoType, len(parts))
 	for i := range parts {
 		oparts[i] = api.UploadInfoType{
@@ -246,7 +246,7 @@ func (q *bosclient) CompleteUpload(key string, uploadID string, parts []*Part) e
 	return err
 }
 
-func (q *bosclient) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (q *bosclient) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	result, err := q.c.ListMultipartUploads(q.bucket, &api.ListMultipartUploadsArgs{
 		MaxUploads: 1000,
 		KeyMarker:  marker,

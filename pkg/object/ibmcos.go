@@ -216,7 +216,7 @@ func (s *ibmcos) ListAll(ctx context.Context, prefix, marker string, followLink 
 	return nil, notSupported
 }
 
-func (s *ibmcos) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (s *ibmcos) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	params := &s3.CreateMultipartUploadInput{
 		Bucket: &s.bucket,
 		Key:    &key,
@@ -224,14 +224,14 @@ func (s *ibmcos) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	if s.sc != "" {
 		params.SetStorageClass(s.sc)
 	}
-	resp, err := s.s3.CreateMultipartUpload(params)
+	resp, err := s.s3.CreateMultipartUploadWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 	return &MultipartUpload{UploadID: *resp.UploadId, MinPartSize: 5 << 20, MaxCount: 10000}, nil
 }
 
-func (s *ibmcos) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
+func (s *ibmcos) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
 	n := int64(num)
 	params := &s3.UploadPartInput{
 		Bucket:     &s.bucket,
@@ -240,27 +240,27 @@ func (s *ibmcos) UploadPart(key string, uploadID string, num int, body []byte) (
 		Body:       bytes.NewReader(body),
 		PartNumber: &n,
 	}
-	resp, err := s.s3.UploadPart(params)
+	resp, err := s.s3.UploadPartWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 	return &Part{Num: num, ETag: *resp.ETag}, nil
 }
 
-func (s *ibmcos) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (s *ibmcos) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	return nil, notSupported
 }
 
-func (s *ibmcos) AbortUpload(key string, uploadID string) {
+func (s *ibmcos) AbortUpload(ctx context.Context, key string, uploadID string) {
 	params := &s3.AbortMultipartUploadInput{
 		Bucket:   &s.bucket,
 		Key:      &key,
 		UploadId: &uploadID,
 	}
-	_, _ = s.s3.AbortMultipartUpload(params)
+	_, _ = s.s3.AbortMultipartUploadWithContext(ctx, params)
 }
 
-func (s *ibmcos) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (s *ibmcos) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	var s3Parts []*s3.CompletedPart
 	for i := range parts {
 		n := new(int64)
@@ -273,17 +273,17 @@ func (s *ibmcos) CompleteUpload(key string, uploadID string, parts []*Part) erro
 		UploadId:        &uploadID,
 		MultipartUpload: &s3.CompletedMultipartUpload{Parts: s3Parts},
 	}
-	_, err := s.s3.CompleteMultipartUpload(params)
+	_, err := s.s3.CompleteMultipartUploadWithContext(ctx, params)
 	return err
 }
 
-func (s *ibmcos) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (s *ibmcos) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	input := &s3.ListMultipartUploadsInput{
 		Bucket:    aws.String(s.bucket),
 		KeyMarker: aws.String(marker),
 	}
 	// FIXME: parsing time "2018-08-23T12:23:26.046+08:00" as "2006-01-02T15:04:05Z"
-	result, err := s.s3.ListMultipartUploads(input)
+	result, err := s.s3.ListMultipartUploadsWithContext(ctx, input)
 	if err != nil {
 		return nil, "", err
 	}

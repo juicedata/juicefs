@@ -221,7 +221,7 @@ func (o *ossClient) ListAll(ctx context.Context, prefix, marker string, followLi
 	return nil, notSupported
 }
 
-func (o *ossClient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (o *ossClient) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	result, err := o.client.InitiateMultipartUpload(ctx, &oss.InitiateMultipartUploadRequest{
 		Bucket:       &o.bucket,
 		Key:          &key,
@@ -233,7 +233,7 @@ func (o *ossClient) CreateMultipartUpload(key string) (*MultipartUpload, error) 
 	return &MultipartUpload{UploadID: oss.ToString(result.UploadId), MinPartSize: 4 << 20, MaxCount: 10000}, nil
 }
 
-func (o *ossClient) UploadPart(key string, uploadID string, num int, data []byte) (*Part, error) {
+func (o *ossClient) UploadPart(ctx context.Context, key string, uploadID string, num int, data []byte) (*Part, error) {
 	r, err := o.client.UploadPart(ctx, &oss.UploadPartRequest{
 		Bucket:     &o.bucket,
 		UploadId:   &uploadID,
@@ -247,7 +247,7 @@ func (o *ossClient) UploadPart(key string, uploadID string, num int, data []byte
 	return &Part{Num: num, ETag: oss.ToString(r.ETag)}, nil
 }
 
-func (o *ossClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (o *ossClient) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	partCopy, err := o.client.UploadPartCopy(ctx, &oss.UploadPartCopyRequest{
 		SourceBucket: &o.bucket,
 		Bucket:       &o.bucket,
@@ -263,7 +263,7 @@ func (o *ossClient) UploadPartCopy(key string, uploadID string, num int, srcKey 
 	return &Part{Num: num, ETag: oss.ToString(partCopy.ETag)}, nil
 }
 
-func (o *ossClient) AbortUpload(key string, uploadID string) {
+func (o *ossClient) AbortUpload(ctx context.Context, key string, uploadID string) {
 	_, _ = o.client.AbortMultipartUpload(ctx, &oss.AbortMultipartUploadRequest{
 		Bucket:   &o.bucket,
 		UploadId: &uploadID,
@@ -271,7 +271,7 @@ func (o *ossClient) AbortUpload(key string, uploadID string) {
 	})
 }
 
-func (o *ossClient) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (o *ossClient) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	oparts := make([]oss.UploadPart, len(parts))
 	for i, p := range parts {
 		oparts[i].PartNumber = int32(p.Num)
@@ -288,7 +288,7 @@ func (o *ossClient) CompleteUpload(key string, uploadID string, parts []*Part) e
 	return err
 }
 
-func (o *ossClient) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (o *ossClient) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	result, err := o.client.ListParts(ctx, &oss.ListPartsRequest{
 		Bucket: &o.bucket,
 		Key:    &marker,

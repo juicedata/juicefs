@@ -270,7 +270,7 @@ type ufileCreateMultipartUploadResult struct {
 	Key      string
 }
 
-func (u *ufile) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (u *ufile) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	resp, err := u.request(ctx, "POST", key+"?uploads", nil, nil)
 	if err != nil {
 		return nil, err
@@ -282,7 +282,7 @@ func (u *ufile) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	return &MultipartUpload{UploadID: out.UploadId, MinPartSize: out.BlkSize, MaxCount: 1000000}, nil
 }
 
-func (u *ufile) UploadPart(key string, uploadID string, num int, data []byte) (*Part, error) {
+func (u *ufile) UploadPart(ctx context.Context, key string, uploadID string, num int, data []byte) (*Part, error) {
 	// UFile require the PartNumber to start from 0 (continuous)
 	num--
 	path := fmt.Sprintf("%s?uploadId=%s&partNumber=%d", key, uploadID, num)
@@ -301,11 +301,11 @@ func (u *ufile) UploadPart(key string, uploadID string, num int, data []byte) (*
 	return &Part{Num: num, Size: len(data), ETag: strings.Trim(etags[0], "\"")}, nil
 }
 
-func (u *ufile) AbortUpload(key string, uploadID string) {
+func (u *ufile) AbortUpload(ctx context.Context, key string, uploadID string) {
 	_, _ = u.request(ctx, "DELETE", key+"?uploads="+uploadID, nil, nil)
 }
 
-func (u *ufile) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (u *ufile) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	etags := make([]string, len(parts))
 	for i, p := range parts {
 		etags[i] = p.ETag
@@ -334,7 +334,7 @@ type ufileListMultipartUploadsResult struct {
 	DataSet    []*ufileUpload
 }
 
-func (u *ufile) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (u *ufile) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	query := url.Values{}
 	query.Add("muploadid", "")
 	query.Add("prefix", "")

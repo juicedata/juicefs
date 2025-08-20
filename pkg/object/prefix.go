@@ -180,28 +180,28 @@ func (p *withPrefix) Chtimes(key string, mtime time.Time) error {
 	return notSupported
 }
 
-func (p *withPrefix) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	return p.os.CreateMultipartUpload(p.prefix + key)
+func (p *withPrefix) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
+	return p.os.CreateMultipartUpload(ctx, p.prefix+key)
 }
 
-func (p *withPrefix) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
-	return p.os.UploadPart(p.prefix+key, uploadID, num, body)
+func (p *withPrefix) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
+	return p.os.UploadPart(ctx, p.prefix+key, uploadID, num, body)
 }
 
-func (s *withPrefix) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
-	return s.os.UploadPartCopy(s.prefix+key, uploadID, num, s.prefix+srcKey, off, size)
+func (s *withPrefix) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	return s.os.UploadPartCopy(ctx, s.prefix+key, uploadID, num, s.prefix+srcKey, off, size)
 }
 
-func (p *withPrefix) AbortUpload(key string, uploadID string) {
-	p.os.AbortUpload(p.prefix+key, uploadID)
+func (p *withPrefix) AbortUpload(ctx context.Context, key string, uploadID string) {
+	p.os.AbortUpload(ctx, p.prefix+key, uploadID)
 }
 
-func (p *withPrefix) CompleteUpload(key string, uploadID string, parts []*Part) error {
-	return p.os.CompleteUpload(p.prefix+key, uploadID, parts)
+func (p *withPrefix) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
+	return p.os.CompleteUpload(ctx, p.prefix+key, uploadID, parts)
 }
 
-func (p *withPrefix) ListUploads(marker string) ([]*PendingPart, string, error) {
-	parts, nextMarker, err := p.os.ListUploads(marker)
+func (p *withPrefix) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
+	parts, nextMarker, err := p.os.ListUploads(ctx, marker)
 	for _, part := range parts {
 		part.Key = part.Key[len(p.prefix):]
 	}

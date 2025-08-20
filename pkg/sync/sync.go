@@ -646,7 +646,7 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		}
 		chksum = r.chksum
 		// PartNumber starts from 1
-		part, err = dst.UploadPart(key, uploadID, num+1, data)
+		part, err = dst.UploadPart(ctx, key, uploadID, num+1, data)
 		return err
 	})
 	if err != nil {
@@ -689,7 +689,7 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 	var up *object.MultipartUpload
 	var err error
 	err = try(3, func() error {
-		up, err = dst.CreateMultipartUpload(tmpkey)
+		up, err = dst.CreateMultipartUpload(ctx, tmpkey)
 		return err
 	})
 	if err != nil {
@@ -710,14 +710,14 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 		}
 		select {
 		case <-abort:
-			dst.AbortUpload(tmpkey, up.UploadID)
+			dst.AbortUpload(ctx, tmpkey, up.UploadID)
 			return nil, 0, fmt.Errorf("aborted")
 		default:
 		}
 		var chksum uint32
 		parts[i], chksum, err = doUploadPart(src, dst, key, off+int64(i)*partSize, sz, tmpkey, up.UploadID, i, calChksum)
 		if err != nil {
-			dst.AbortUpload(tmpkey, up.UploadID)
+			dst.AbortUpload(ctx, tmpkey, up.UploadID)
 			return nil, 0, fmt.Errorf("range(%d,%d): %s", off, size, err)
 		}
 		if calChksum {
@@ -730,14 +730,14 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 		}
 	}
 
-	err = try(3, func() error { return dst.CompleteUpload(tmpkey, up.UploadID, parts) })
+	err = try(3, func() error { return dst.CompleteUpload(ctx, tmpkey, up.UploadID, parts) })
 	if err != nil {
-		dst.AbortUpload(tmpkey, up.UploadID)
+		dst.AbortUpload(ctx, tmpkey, up.UploadID)
 		return nil, 0, fmt.Errorf("multipart: %s", err)
 	}
 	var part *object.Part
 	err = try(3, func() error {
-		part, err = dst.UploadPartCopy(key, upload.UploadID, num+1, tmpkey, 0, size)
+		part, err = dst.UploadPartCopy(ctx, key, upload.UploadID, num+1, tmpkey, 0, size)
 		return err
 	})
 	_ = dst.Delete(ctx, tmpkey)
@@ -780,10 +780,10 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 		}
 	}
 	if err == nil {
-		err = try(3, func() error { return dst.CompleteUpload(key, upload.UploadID, parts) })
+		err = try(3, func() error { return dst.CompleteUpload(ctx, key, upload.UploadID, parts) })
 	}
 	if err != nil {
-		dst.AbortUpload(key, upload.UploadID)
+		dst.AbortUpload(ctx, key, upload.UploadID)
 		return 0, fmt.Errorf("multipart: %s", err)
 	}
 	var chksum uint32
@@ -815,7 +815,7 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 		})
 	} else {
 		var upload *object.MultipartUpload
-		if upload, err = dst.CreateMultipartUpload(key); err == nil {
+		if upload, err = dst.CreateMultipartUpload(ctx, key); err == nil {
 			srcChksum, err = doCopyMultiple(src, dst, key, size, upload, calChksum)
 		} else if err == utils.ENOTSUP {
 			err = try(3, func() (err error) {
@@ -824,7 +824,7 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 			})
 		} else { // other error retry
 			if err = try(2, func() error {
-				upload, err = dst.CreateMultipartUpload(key)
+				upload, err = dst.CreateMultipartUpload(ctx, key)
 				return err
 			}); err == nil {
 				srcChksum, err = doCopyMultiple(src, dst, key, size, upload, calChksum)

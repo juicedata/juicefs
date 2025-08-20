@@ -130,7 +130,7 @@ func (q *qiniu) Copy(ctx context.Context, dst, src string) error {
 	return q.bm.Copy(q.bucket, src, q.bucket, dst, true)
 }
 
-func (q *qiniu) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (q *qiniu) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	return nil, notSupported
 }
 

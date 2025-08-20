@@ -207,7 +207,7 @@ func (c *COS) ListAll(ctx context.Context, prefix, marker string, followLink boo
 	return nil, notSupported
 }
 
-func (c *COS) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (c *COS) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	var options cos.InitiateMultipartUploadOptions
 	if c.sc != "" {
 		options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{XCosStorageClass: c.sc}
@@ -219,7 +219,7 @@ func (c *COS) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	return &MultipartUpload{UploadID: resp.UploadID, MinPartSize: 5 << 20, MaxCount: 10000}, nil
 }
 
-func (c *COS) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
+func (c *COS) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
 	resp, err := c.c.Object.UploadPart(ctx, key, uploadID, num, bytes.NewReader(body), nil)
 	if err != nil {
 		return nil, err
@@ -227,7 +227,7 @@ func (c *COS) UploadPart(key string, uploadID string, num int, body []byte) (*Pa
 	return &Part{Num: num, ETag: resp.Header.Get("Etag")}, nil
 }
 
-func (c *COS) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (c *COS) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	result, _, err := c.c.Object.CopyPart(ctx, key, uploadID, num, c.endpoint+"/"+srcKey, &cos.ObjectCopyPartOptions{
 		XCosCopySourceRange: fmt.Sprintf("bytes=%d-%d", off, off+size-1),
 	})
@@ -237,11 +237,11 @@ func (c *COS) UploadPartCopy(key string, uploadID string, num int, srcKey string
 	return &Part{Num: num, ETag: result.ETag}, nil
 }
 
-func (c *COS) AbortUpload(key string, uploadID string) {
+func (c *COS) AbortUpload(ctx context.Context, key string, uploadID string) {
 	_, _ = c.c.Object.AbortMultipartUpload(ctx, key, uploadID)
 }
 
-func (c *COS) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (c *COS) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	var cosParts []cos.Object
 	for i := range parts {
 		cosParts = append(cosParts, cos.Object{ETag: parts[i].ETag, PartNumber: parts[i].Num})
@@ -250,7 +250,7 @@ func (c *COS) CompleteUpload(key string, uploadID string, parts []*Part) error {
 	return err
 }
 
-func (c *COS) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (c *COS) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	input := &cos.ListMultipartUploadsOptions{
 		KeyMarker: marker,
 	}

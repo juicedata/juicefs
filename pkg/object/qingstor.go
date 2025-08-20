@@ -238,53 +238,53 @@ func (q *qingstor) ListAll(ctx context.Context, prefix, marker string, followLin
 	return nil, notSupported
 }
 
-func (q *qingstor) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (q *qingstor) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	var input qs.InitiateMultipartUploadInput
 	if q.sc != "" {
 		input.XQSStorageClass = &q.sc
 	}
-	r, err := q.bucket.InitiateMultipartUpload(key, &input)
+	r, err := q.bucket.InitiateMultipartUploadWithContext(ctx, key, &input)
 	if err != nil {
 		return nil, err
 	}
 	return &MultipartUpload{UploadID: *r.UploadID, MinPartSize: 4 << 20, MaxCount: 10000}, nil
 }
 
-func (q *qingstor) UploadPart(key string, uploadID string, num int, data []byte) (*Part, error) {
+func (q *qingstor) UploadPart(ctx context.Context, key string, uploadID string, num int, data []byte) (*Part, error) {
 	input := &qs.UploadMultipartInput{
 		UploadID:   &uploadID,
 		PartNumber: &num,
 		Body:       bytes.NewReader(data),
 	}
-	r, err := q.bucket.UploadMultipart(key, input)
+	r, err := q.bucket.UploadMultipartWithContext(ctx, key, input)
 	if err != nil {
 		return nil, err
 	}
 	return &Part{Num: num, Size: len(data), ETag: strings.Trim(*r.ETag, "\"")}, nil
 }
 
-func (q *qingstor) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (q *qingstor) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	input := &qs.UploadMultipartInput{
 		UploadID:      &uploadID,
 		PartNumber:    &num,
 		XQSCopySource: aws.String(fmt.Sprintf("/%s/%s", *q.bucket.Properties.BucketName, srcKey)),
 		XQSCopyRange:  aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
 	}
-	r, err := q.bucket.UploadMultipart(key, input)
+	r, err := q.bucket.UploadMultipartWithContext(ctx, key, input)
 	if err != nil {
 		return nil, err
 	}
 	return &Part{Num: num, Size: int(size), ETag: strings.Trim(*r.ETag, "\"")}, nil
 }
 
-func (q *qingstor) AbortUpload(key string, uploadID string) {
+func (q *qingstor) AbortUpload(ctx context.Context, key string, uploadID string) {
 	input := &qs.AbortMultipartUploadInput{
 		UploadID: &uploadID,
 	}
-	_, _ = q.bucket.AbortMultipartUpload(key, input)
+	_, _ = q.bucket.AbortMultipartUploadWithContext(ctx, key, input)
 }
 
-func (q *qingstor) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (q *qingstor) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	oparts := make([]*qs.ObjectPartType, len(parts))
 	for i := range parts {
 		oparts[i] = &qs.ObjectPartType{
@@ -296,15 +296,15 @@ func (q *qingstor) CompleteUpload(key string, uploadID string, parts []*Part) er
 		UploadID:    &uploadID,
 		ObjectParts: oparts,
 	}
-	_, err := q.bucket.CompleteMultipartUpload(key, input)
+	_, err := q.bucket.CompleteMultipartUploadWithContext(ctx, key, input)
 	return err
 }
 
-func (q *qingstor) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (q *qingstor) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	input := &qs.ListMultipartUploadsInput{
 		KeyMarker: &marker,
 	}
-	result, err := q.bucket.ListMultipartUploads(input)
+	result, err := q.bucket.ListMultipartUploadsWithContext(ctx, input)
 	if err != nil {
 		return nil, "", err
 	}

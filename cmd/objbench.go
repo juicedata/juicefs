@@ -1028,9 +1028,9 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 		}()
 
 		key := "multi_test_file"
-		if err = blob.CompleteUpload(key, "notExistsUploadId", []*object.Part{}); err != utils.ENOTSUP {
+		if err = blob.CompleteUpload(ctx, key, "notExistsUploadId", []*object.Part{}); err != utils.ENOTSUP {
 			defer blob.Delete(ctx, key) //nolint:errcheck
-			upload, err := blob.CreateMultipartUpload(key)
+			upload, err := blob.CreateMultipartUpload(ctx, key)
 			if err != nil {
 				return fmt.Errorf("create multipart upload failed: %s", err)
 			}
@@ -1049,7 +1049,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 				num := i
 				eg.Go(func() error {
 					var err error
-					parts[num-1], err = blob.UploadPart(key, upload.UploadID, num, content[num-1])
+					parts[num-1], err = blob.UploadPart(ctx, key, upload.UploadID, num, content[num-1])
 					if err != nil {
 						err = fmt.Errorf("multipart upload error: %s", err)
 					}
@@ -1062,19 +1062,19 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 			}
 			// overwrite the first part
 			firstPartContent := append(seed, seed...)
-			if parts[0], err = blob.UploadPart(key, upload.UploadID, 1, firstPartContent); err != nil {
+			if parts[0], err = blob.UploadPart(ctx, key, upload.UploadID, 1, firstPartContent); err != nil {
 				return fmt.Errorf("multipart upload error: %v", err)
 			}
 			content[0] = firstPartContent
 
 			// overwrite the last part
 			lastPartContent := []byte("hello")
-			if parts[total-1], err = blob.UploadPart(key, upload.UploadID, total, lastPartContent); err != nil {
+			if parts[total-1], err = blob.UploadPart(ctx, key, upload.UploadID, total, lastPartContent); err != nil {
 				return fmt.Errorf("multipart upload error: %v", err)
 			}
 			content[total-1] = lastPartContent
 
-			if err = blob.CompleteUpload(key, upload.UploadID, parts); err != nil {
+			if err = blob.CompleteUpload(ctx, key, upload.UploadID, parts); err != nil {
 				return fmt.Errorf("failed to complete multipart upload: %v", err)
 			}
 			r, err := blob.Get(ctx, key, 0, -1)

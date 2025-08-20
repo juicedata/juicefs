@@ -125,25 +125,25 @@ func (s DefaultObjectStorage) Copy(ctx context.Context, dst, src string) error {
 	return notSupported
 }
 
-func (s DefaultObjectStorage) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (s DefaultObjectStorage) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	return nil, notSupported
 }
 
-func (s DefaultObjectStorage) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
+func (s DefaultObjectStorage) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
 	return nil, notSupported
 }
 
-func (s DefaultObjectStorage) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (s DefaultObjectStorage) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	return nil, notSupported
 }
 
-func (s DefaultObjectStorage) AbortUpload(key string, uploadID string) {}
+func (s DefaultObjectStorage) AbortUpload(ctx context.Context, key string, uploadID string) {}
 
-func (s DefaultObjectStorage) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (s DefaultObjectStorage) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	return notSupported
 }
 
-func (s DefaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (s DefaultObjectStorage) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	return nil, "", nil
 }
 

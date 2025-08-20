@@ -98,17 +98,17 @@ type ObjectStorage interface {
 	ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error)
 
 	// CreateMultipartUpload starts to upload a large object part by part.
-	CreateMultipartUpload(key string) (*MultipartUpload, error)
+	CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error)
 	// UploadPart upload a part of an object.
-	UploadPart(key string, uploadID string, num int, body []byte) (*Part, error)
+	UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error)
 	// UploadPartCopy Uploads a part by copying data from an existing object as data source.
-	UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error)
+	UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error)
 	// AbortUpload abort a multipart upload.
-	AbortUpload(key string, uploadID string)
+	AbortUpload(ctx context.Context, key string, uploadID string)
 	// CompleteUpload finish an multipart upload.
-	CompleteUpload(key string, uploadID string, parts []*Part) error
+	CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error
 	// ListUploads lists existing multipart uploads.
-	ListUploads(marker string) ([]*PendingPart, string, error)
+	ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error)
 }
 
 type Shutdownable interface {
