@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -58,7 +59,7 @@ func (s *sqlStore) String() string {
 	return fmt.Sprintf("%s://%s/", driver, s.addr)
 }
 
-func (s *sqlStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (s *sqlStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	var b = blob{Key: []byte(key)}
 	// TODO: range
 	ok, err := s.db.Get(&b)

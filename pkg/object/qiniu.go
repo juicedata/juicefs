@@ -20,6 +20,7 @@
 package object
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -106,11 +107,11 @@ func (q *qiniu) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (q *qiniu) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (q *qiniu) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if strings.HasPrefix(key, "/") && os.Getenv("QINIU_DOMAIN") != "" {
 		return q.download(key, off, limit)
 	}
-	return q.s3client.Get(key, off, limit, getters...)
+	return q.s3client.Get(ctx, key, off, limit, getters...)
 }
 
 func (q *qiniu) Put(key string, in io.Reader, getters ...AttrGetter) error {

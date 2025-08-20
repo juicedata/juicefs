@@ -18,6 +18,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -105,9 +106,9 @@ func (s *RestfulStorage) String() string {
 
 var HEADER_NAMES = []string{"Content-MD5", "Content-Type", "Date"}
 
-func (s *RestfulStorage) request(method, key string, body io.Reader, headers map[string]string) (*http.Response, error) {
+func (s *RestfulStorage) request(ctx context.Context, method, key string, body io.Reader, headers map[string]string) (*http.Response, error) {
 	uri := s.endpoint + "/" + key
-	req, err := http.NewRequest(method, uri, body)
+	req, err := http.NewRequestWithContext(ctx, method, uri, body)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +136,7 @@ func parseError(resp *http.Response) error {
 }
 
 func (s *RestfulStorage) Head(key string) (Object, error) {
-	resp, err := s.request("HEAD", key, nil, nil)
+	resp, err := s.request(ctx, "HEAD", key, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -183,12 +184,12 @@ func checkGetStatus(statusCode int, partial bool) error {
 	return nil
 }
 
-func (s *RestfulStorage) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (s *RestfulStorage) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	headers := make(map[string]string)
 	if off > 0 || limit > 0 {
 		headers["Range"] = getRange(off, limit)
 	}
-	resp, err := s.request("GET", key, nil, headers)
+	resp, err := s.request(ctx, "GET", key, nil, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +204,7 @@ func (s *RestfulStorage) Get(key string, off, limit int64, getters ...AttrGetter
 }
 
 func (u *RestfulStorage) Put(key string, body io.Reader, getters ...AttrGetter) error {
-	resp, err := u.request("PUT", key, body, nil)
+	resp, err := u.request(ctx, "PUT", key, body, nil)
 	if err != nil {
 		return err
 	}
@@ -215,7 +216,7 @@ func (u *RestfulStorage) Put(key string, body io.Reader, getters ...AttrGetter) 
 }
 
 func (s *RestfulStorage) Copy(dst, src string) error {
-	in, err := s.Get(src, 0, -1)
+	in, err := s.Get(ctx, src, 0, -1)
 	if err != nil {
 		return err
 	}
@@ -228,7 +229,7 @@ func (s *RestfulStorage) Copy(dst, src string) error {
 }
 
 func (s *RestfulStorage) Delete(key string, getters ...AttrGetter) error {
-	resp, err := s.request("DELETE", key, nil, nil)
+	resp, err := s.request(ctx, "DELETE", key, nil, nil)
 	if err != nil {
 		return err
 	}

@@ -397,7 +397,7 @@ func objbench(ctx *cli.Context) error {
 	utils.RandRead(bm.smallSeed)
 
 	for _, api := range apis {
-		pResult = append(pResult, bm.run(api))
+		pResult = append(pResult, bm.run(ctx.Context, api))
 	}
 	progress.Done()
 
@@ -476,9 +476,9 @@ type benchMarkObj struct {
 	buffPool, smallBuffPool *sync.Pool
 }
 
-func (bm *benchMarkObj) run(api apiInfo) []string {
+func (bm *benchMarkObj) run(ctx context.Context, api apiInfo) []string {
 	if api.name == "chown" || api.name == "chmod" || api.name == "chtimes" {
-		if err := bm.chmod("not_exists", 0); err == utils.ENOTSUP {
+		if err := bm.chmod(ctx, "not_exists", 0); err == utils.ENOTSUP {
 			line := api.getResult(-1)
 			line[0] = api.title
 			return line
@@ -488,7 +488,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 			return []string{api.title, skipped, skipped}
 		}
 	}
-	var fn func(key string, startKey int) error
+	var fn func(ctx context.Context, key string, startKey int) error
 	switch api.name {
 	case "put":
 		fn = bm.put
@@ -531,7 +531,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 				<-pool
 				wg.Done()
 			}()
-			if e := fn(strconv.Itoa(key), api.startKey); e != nil {
+			if e := fn(ctx, strconv.Itoa(key), api.startKey); e != nil {
 				err = e
 			}
 			if api.name == "list" {
@@ -568,7 +568,7 @@ func getMockData(seed []byte, idx int, result *[]byte) {
 
 }
 
-func (bm *benchMarkObj) put(key string, startKey int) error {
+func (bm *benchMarkObj) put(ctx context.Context, key string, startKey int) error {
 	idx, _ := strconv.Atoi(key)
 	if idx-startKey == 0 {
 		return bm.blob.Put(key, bytes.NewReader(bm.seed))
@@ -579,7 +579,7 @@ func (bm *benchMarkObj) put(key string, startKey int) error {
 	return bm.blob.Put(key, bytes.NewReader(*buff))
 }
 
-func (bm *benchMarkObj) smallPut(key string, startKey int) error {
+func (bm *benchMarkObj) smallPut(ctx context.Context, key string, startKey int) error {
 	idx, _ := strconv.Atoi(key)
 	if idx == 0 {
 		return bm.blob.Put(key, bytes.NewReader(bm.smallSeed))
@@ -591,9 +591,9 @@ func (bm *benchMarkObj) smallPut(key string, startKey int) error {
 	return bm.blob.Put(key, bytes.NewReader(*buff))
 }
 
-func getAndCheckN(blob object.ObjectStorage, key string, seed []byte, pool *sync.Pool, getOrgIdx func(idx int) int) error {
+func getAndCheckN(ctx context.Context, blob object.ObjectStorage, key string, seed []byte, pool *sync.Pool, getOrgIdx func(idx int) int) error {
 	idx, _ := strconv.Atoi(key)
-	r, err := blob.Get(key, 0, -1)
+	r, err := blob.Get(ctx, key, 0, -1)
 	if err != nil {
 		return err
 	}
@@ -630,43 +630,43 @@ func getAndCheckN(blob object.ObjectStorage, key string, seed []byte, pool *sync
 	return nil
 }
 
-func (bm *benchMarkObj) get(key string, startKey int) error {
-	return getAndCheckN(bm.blob, key, bm.seed, bm.buffPool, func(idx int) int {
+func (bm *benchMarkObj) get(ctx context.Context, key string, startKey int) error {
+	return getAndCheckN(ctx, bm.blob, key, bm.seed, bm.buffPool, func(idx int) int {
 		return idx - startKey
 	})
 }
 
-func (bm *benchMarkObj) smallGet(key string, startKey int) error {
-	return getAndCheckN(bm.blob, key, bm.smallSeed, bm.smallBuffPool, func(idx int) int {
+func (bm *benchMarkObj) smallGet(ctx context.Context, key string, startKey int) error {
+	return getAndCheckN(ctx, bm.blob, key, bm.smallSeed, bm.smallBuffPool, func(idx int) int {
 		return idx
 	})
 }
 
-func (bm *benchMarkObj) delete(key string, startKey int) error {
+func (bm *benchMarkObj) delete(ctx context.Context, key string, startKey int) error {
 	return bm.blob.Delete(key)
 }
 
-func (bm *benchMarkObj) head(key string, startKey int) error {
+func (bm *benchMarkObj) head(ctx context.Context, key string, startKey int) error {
 	_, err := bm.blob.Head(key)
 	return err
 }
 
-func (bm *benchMarkObj) list(key string, startKey int) error {
+func (bm *benchMarkObj) list(ctx context.Context, key string, startKey int) error {
 	result, err := osync.ListAll(bm.blob, "", "0", "999", true)
 	for range result {
 	}
 	return err
 }
 
-func (bm *benchMarkObj) chown(key string, startKey int) error {
+func (bm *benchMarkObj) chown(ctx context.Context, key string, startKey int) error {
 	return bm.blob.(object.FileSystem).Chown(key, "nobody", groupName)
 }
 
-func (bm *benchMarkObj) chmod(key string, startKey int) error {
+func (bm *benchMarkObj) chmod(ctx context.Context, key string, startKey int) error {
 	return bm.blob.(object.FileSystem).Chmod(key, 0755)
 }
 
-func (bm *benchMarkObj) chtimes(key string, startKey int) error {
+func (bm *benchMarkObj) chtimes(ctx context.Context, key string, startKey int) error {
 	return bm.blob.(object.FileSystem).Chtimes(key, time.Now())
 }
 
@@ -731,7 +731,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 	}
 
 	get := func(s object.ObjectStorage, k string, off, limit int64) (string, error) {
-		r, err := s.Get(k, off, limit)
+		r, err := s.Get(ctx, k, off, limit)
 		if err != nil {
 			return "", err
 		}
@@ -801,7 +801,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 	})
 
 	runCase("get non-exist", func(blob object.ObjectStorage) error {
-		if _, err := blob.Get("not_exists_file", 0, -1); err == nil {
+		if _, err := blob.Get(ctx, "not_exists_file", 0, -1); err == nil {
 			return fmt.Errorf("get not existed object should failed: %s", err)
 		}
 		return nil
@@ -1077,7 +1077,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 			if err = blob.CompleteUpload(key, upload.UploadID, parts); err != nil {
 				return fmt.Errorf("failed to complete multipart upload: %v", err)
 			}
-			r, err := blob.Get(key, 0, -1)
+			r, err := blob.Get(ctx, key, 0, -1)
 			if err != nil {
 				return fmt.Errorf("failed to get multipart upload file: %v", err)
 			}

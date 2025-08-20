@@ -51,7 +51,7 @@ func (s *swiftOSS) Create(ctx context.Context) error {
 	return s.conn.ContainerCreate(ctx, s.container, nil)
 }
 
-func (s *swiftOSS) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (s *swiftOSS) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	headers := make(map[string]string)
 	if off > 0 || limit > 0 {
 		if limit > 0 {
@@ -60,7 +60,7 @@ func (s *swiftOSS) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 			headers["Range"] = fmt.Sprintf("bytes=%d-", off)
 		}
 	}
-	f, _, err := s.conn.ObjectOpen(context.Background(), s.container, key, true, headers)
+	f, _, err := s.conn.ObjectOpen(ctx, s.container, key, true, headers)
 	return f, err
 }
 

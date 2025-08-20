@@ -96,7 +96,7 @@ func (q *bosclient) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (q *bosclient) Get(key string, off, limit int64, getters ...AttrGetter) (resp io.ReadCloser, err error) {
+func (q *bosclient) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (resp io.ReadCloser, err error) {
 	var r *api.GetObjectResult
 	var needCheck bool
 	if limit > 0 {

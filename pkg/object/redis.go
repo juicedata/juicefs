@@ -46,7 +46,7 @@ func (r *redisStore) String() string {
 	return r.uri + "/"
 }
 
-func (r *redisStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (r *redisStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	data, err := r.rdb.Get(ctx, key).Bytes()
 	if err != nil {
 		return nil, err

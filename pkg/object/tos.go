@@ -65,9 +65,9 @@ func (t *tosClient) Create(ctx context.Context) error {
 	return err
 }
 
-func (t *tosClient) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (t *tosClient) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	rangeStr := getRange(off, limit)
-	resp, err := t.client.GetObjectV2(context.Background(), &tos.GetObjectV2Input{
+	resp, err := t.client.GetObjectV2(ctx, &tos.GetObjectV2Input{
 		Bucket: t.bucket,
 		Key:    key,
 		Range:  rangeStr, // When Range and RangeStart & RangeEnd appear together, range is preferred

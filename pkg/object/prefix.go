@@ -108,11 +108,11 @@ func (p *withPrefix) Head(key string) (Object, error) {
 	return p.updateKey(o), nil
 }
 
-func (p *withPrefix) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (p *withPrefix) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if off > 0 && limit < 0 {
 		return nil, fmt.Errorf("invalid range: %d-%d", off, limit)
 	}
-	return p.os.Get(p.prefix+key, off, limit, getters...)
+	return p.os.Get(ctx, p.prefix+key, off, limit, getters...)
 }
 
 func (p *withPrefix) Put(key string, in io.Reader, getters ...AttrGetter) error {

@@ -101,7 +101,7 @@ func (c *COS) Head(key string) (Object, error) {
 	return &obj{key, size, mtime, strings.HasSuffix(key, "/"), sc}, nil
 }
 
-func (c *COS) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (c *COS) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	params := &cos.ObjectGetOptions{Range: getRange(off, limit)}
 	resp, err := c.c.Object.Get(ctx, key, params)
 	if err != nil {

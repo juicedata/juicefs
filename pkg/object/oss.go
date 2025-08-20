@@ -97,7 +97,7 @@ func (o *ossClient) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (o *ossClient) Get(key string, off, limit int64, getters ...AttrGetter) (resp io.ReadCloser, err error) {
+func (o *ossClient) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (resp io.ReadCloser, err error) {
 	var result *oss.GetObjectResult
 	var reqId string
 	var sc string

@@ -79,7 +79,7 @@ func (b *wasb) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (b *wasb) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (b *wasb) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	download, err := b.container.NewBlobClient(key).DownloadStream(ctx, &azblob.DownloadStreamOptions{Range: blob2.HTTPRange{Offset: off, Count: limit}})
 	if err != nil {
 		return nil, err

@@ -18,6 +18,7 @@ package meta
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -820,7 +821,7 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 	var err error
 	if !m.conf.FastStatfs || used == unknownUsage || inodes == unknownUsage {
 		var remoteUsed int64 // using an additional variable here to ensure the assignment inside `utils.WithTimeout` does not change the `used` variable again after a timeout.
-		err = utils.WithTimeout(func() error {
+		err = utils.WithTimeout(func(context.Context) error {
 			remoteUsed, err = m.en.getCounter(usedSpace)
 			return err
 		}, time.Millisecond*150)
@@ -828,7 +829,7 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 			used = remoteUsed
 		}
 		var remoteInodes int64
-		err = utils.WithTimeout(func() error {
+		err = utils.WithTimeout(func(context.Context) error {
 			remoteInodes, err = m.en.getCounter(totalInodes)
 			return err
 		}, time.Millisecond*150)
@@ -1066,7 +1067,7 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	if inode == RootInode || inode == TrashInode {
 		// doGetAttr could overwrite the `attr` after timeout
 		var a Attr
-		e := utils.WithTimeout(func() error {
+		e := utils.WithTimeout(func(context.Context) error {
 			err = m.en.doGetAttr(ctx, inode, &a)
 			return nil
 		}, time.Millisecond*300)

@@ -105,7 +105,7 @@ func (s *obsClient) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (s *obsClient) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (s *obsClient) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	params := &obs.GetObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = key

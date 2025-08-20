@@ -82,7 +82,7 @@ type ObjectStorage interface {
 	// Create the bucket if not existed.
 	Create(ctx context.Context) error
 	// Get the data for the given object specified by key.
-	Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error)
+	Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error)
 	// Put data read from a reader to an object specified by key.
 	Put(key string, in io.Reader, getters ...AttrGetter) error
 	// Copy an object from src to dst.

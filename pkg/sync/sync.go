@@ -19,6 +19,7 @@ package sync
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -300,7 +301,7 @@ func calPartChksum(objStor object.ObjectStorage, key string, abort chan struct{}
 			<-concurrent
 		}()
 	}
-	in, err := objStor.Get(key, offset, length)
+	in, err := objStor.Get(context.Background(), key, offset, length)
 	if err != nil {
 		return 0, fmt.Errorf("dest get: %s", err)
 	}
@@ -371,12 +372,12 @@ func compObjPartBinary(src, dst object.ObjectStorage, key string, abort chan str
 			<-concurrent
 		}()
 	}
-	in, err := src.Get(key, offset, length)
+	in, err := src.Get(context.Background(), key, offset, length)
 	if err != nil {
 		return fmt.Errorf("src get: %s", err)
 	}
 	defer in.Close()
-	in2, err := dst.Get(key, offset, length)
+	in2, err := dst.Get(context.Background(), key, offset, length)
 	if err != nil {
 		return fmt.Errorf("dest get: %s", err)
 	}
@@ -557,7 +558,7 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64, calChk
 		}
 		if object.IsFileSystem(src) {
 			// for check permissions
-			r, err := src.Get(key, 0, -1)
+			r, err := src.Get(context.Background(), key, 0, -1)
 			if err != nil {
 				return 0, err
 			}
@@ -565,7 +566,7 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64, calChk
 		}
 		in = io.NopCloser(bytes.NewReader(nil))
 	} else {
-		in, err = src.Get(key, 0, size)
+		in, err = src.Get(context.Background(), key, 0, size)
 		if err != nil {
 			if _, e := src.Head(key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
@@ -633,7 +634,7 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 	var part *object.Part
 	var chksum uint32
 	err := try(3, func() error {
-		in, err := src.Get(srckey, off, sz)
+		in, err := src.Get(context.Background(), srckey, off, sz)
 		if err != nil {
 			return err
 		}

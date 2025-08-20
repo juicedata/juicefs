@@ -324,11 +324,12 @@ func randSeq(n int) string {
 }
 
 func doTesting(store object.ObjectStorage, key string, data []byte) error {
+	ctx := context.Background()
 	if err := store.Put(key, bytes.NewReader(data)); err != nil {
 		if strings.Contains(err.Error(), "Access Denied") {
 			return fmt.Errorf("Failed to put: %s", err)
 		}
-		if err2 := store.Create(context.Background()); err2 != nil {
+		if err2 := store.Create(ctx); err2 != nil {
 			if strings.Contains(err.Error(), "NoSuchBucket") {
 				return fmt.Errorf("Failed to create bucket %s: %s, previous error: %s\nPlease create bucket %s manually, then format again.",
 					store, err2, err, store)
@@ -341,7 +342,7 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 			return fmt.Errorf("Failed to put: %s", err)
 		}
 	}
-	p, err := store.Get(key, 0, -1)
+	p, err := store.Get(ctx, key, 0, -1)
 	if err != nil {
 		return fmt.Errorf("Failed to get: %s", err)
 	}

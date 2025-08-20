@@ -82,7 +82,7 @@ func (c *b2client) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (c *b2client) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (c *b2client) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if off == 0 && limit == -1 {
 		_, r, err := c.bucket.DownloadFileByName(key)
 		return r, err

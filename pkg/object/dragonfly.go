@@ -261,7 +261,7 @@ func (d *dragonfly) Head(key string) (Object, error) {
 }
 
 // Get returns the object if it exists.
-func (d *dragonfly) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (d *dragonfly) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	u, err := url.Parse(d.endpoint)
 	if err != nil {
 		return nil, err

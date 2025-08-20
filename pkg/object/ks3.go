@@ -99,7 +99,7 @@ func (s *ks3) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (s *ks3) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (s *ks3) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	params := &s3.GetObjectInput{Bucket: &s.bucket, Key: &key}
 	if off > 0 || limit > 0 {
 		var r string
@@ -110,7 +110,7 @@ func (s *ks3) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadC
 		}
 		params.Range = &r
 	}
-	resp, err := s.s3.GetObject(params)
+	resp, err := s.s3.GetObjectWithContext(ctx, params)
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey]))

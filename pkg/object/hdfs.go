@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -104,7 +105,7 @@ func (h *hdfsclient) toFile(key string, info os.FileInfo) *file {
 	return f
 }
 
-func (h *hdfsclient) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (h *hdfsclient) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	f, err := h.c.Open(h.path(key))
 	if err != nil {
 		return nil, err

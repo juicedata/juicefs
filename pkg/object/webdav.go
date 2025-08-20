@@ -64,7 +64,7 @@ func (w *webdav) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (w *webdav) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (w *webdav) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if off == 0 && limit <= 0 {
 		return w.c.ReadStream(key)
 	}

@@ -62,8 +62,8 @@ func (s *sharded) Head(key string) (Object, error) {
 	return s.pick(key).Head(key)
 }
 
-func (s *sharded) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	return s.pick(key).Get(key, off, limit, getters...)
+func (s *sharded) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	return s.pick(key).Get(ctx, key, off, limit, getters...)
 }
 
 func (s *sharded) Put(key string, body io.Reader, getters ...AttrGetter) error {

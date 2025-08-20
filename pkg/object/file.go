@@ -18,6 +18,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/fs"
@@ -117,7 +118,7 @@ type SectionReaderCloser struct {
 	io.Closer
 }
 
-func (d *filestore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (d *filestore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	p := d.path(key)
 
 	f, err := os.Open(p)
@@ -199,7 +200,7 @@ func (d *filestore) Put(key string, in io.Reader, getters ...AttrGetter) (err er
 }
 
 func (d *filestore) Copy(dst, src string) error {
-	r, err := d.Get(src, 0, -1)
+	r, err := d.Get(ctx, src, 0, -1)
 	if err != nil {
 		return err
 	}

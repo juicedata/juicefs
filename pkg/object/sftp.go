@@ -8,14 +8,8 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/pkg/errors"
-	"github.com/pkg/sftp"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
-	"golang.org/x/crypto/ssh/knownhosts"
-	"golang.org/x/term"
 	"io"
 	"math/rand"
 	"net"
@@ -30,6 +24,14 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/pkg/errors"
+	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh/knownhosts"
+	"golang.org/x/term"
 )
 
 // conn encapsulates an ssh client and corresponding sftp client
@@ -181,7 +183,7 @@ func (f *sftpStore) Head(key string) (Object, error) {
 	return f.fileInfo(key, info, isSymlink), nil
 }
 
-func (f *sftpStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (f *sftpStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return nil, err

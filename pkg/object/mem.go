@@ -18,6 +18,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -74,7 +75,7 @@ func (m *memStore) Head(key string) (Object, error) {
 	return f, nil
 }
 
-func (m *memStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (m *memStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	m.Lock()
 	defer m.Unlock()
 	// Minimum length is 1.
@@ -115,7 +116,7 @@ func (m *memStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
 }
 
 func (m *memStore) Copy(dst, src string) error {
-	d, err := m.Get(src, 0, -1)
+	d, err := m.Get(ctx, src, 0, -1)
 	if err != nil {
 		return err
 	}

@@ -82,13 +82,13 @@ func (q *qingstor) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (q *qingstor) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (q *qingstor) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	input := &qs.GetObjectInput{}
 	rangeStr := getRange(off, limit)
 	if rangeStr != "" {
 		input.Range = &rangeStr
 	}
-	output, err := q.bucket.GetObject(key, input)
+	output, err := q.bucket.GetObjectWithContext(ctx, key, input)
 	if output != nil {
 		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.ToString(output.RequestID))

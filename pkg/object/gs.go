@@ -114,7 +114,7 @@ func (g *gs) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (g *gs) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (g *gs) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	reader, err := g.getClient().Bucket(g.bucket).Object(key).NewRangeReader(ctx, off, limit)
 	if err != nil {
 		return nil, err

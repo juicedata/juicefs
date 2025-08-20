@@ -46,8 +46,8 @@ func (c *etcdClient) String() string {
 	return fmt.Sprintf("etcd://%s/", c.addr)
 }
 
-func (c *etcdClient) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	resp, err := c.kv.Get(context.TODO(), key, etcd.WithLimit(1))
+func (c *etcdClient) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	resp, err := c.kv.Get(ctx, key, etcd.WithLimit(1))
 	if err != nil {
 		return nil, err
 	}

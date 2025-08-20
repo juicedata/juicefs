@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -40,8 +41,11 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var dirSuffix = "/"
-var cliCtx *cli.Context
+var (
+	dirSuffix     = "/"
+	cliCtx        *cli.Context
+	pid, uid, gid uint32
+)
 
 func toError(eno syscall.Errno) error {
 	if eno == 0 {
@@ -94,13 +98,14 @@ func (f *jFile) Close() error {
 	return toError(f.f.Close(ctx))
 }
 
-func (j *juiceFS) Get(key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
-	f, err := j.jfs.Open(ctx, j.path(key), vfs.MODE_MASK_R)
+func (j *juiceFS) Get(ctx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+	mCtx := meta.WrapContextWith(ctx, pid, uid, []uint32{gid})
+	f, err := j.jfs.Open(mCtx, j.path(key), vfs.MODE_MASK_R)
 	if err != 0 {
 		return nil, err
 	}
 	if off > 0 {
-		_, _ = f.Seek(ctx, off, io.SeekStart)
+		_, _ = f.Seek(mCtx, off, io.SeekStart)
 	}
 	if limit <= 0 {
 		limit = 1 << 62
@@ -405,6 +410,7 @@ func (j *juiceFS) Shutdown() {
 }
 
 func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {
+	pid, uid, gid = uint32(os.Getpid()), uint32(os.Getuid()), uint32(os.Getgid())
 	metaUrl := os.Getenv(endpoint)
 	if metaUrl == "" {
 		metaUrl = endpoint

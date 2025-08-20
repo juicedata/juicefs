@@ -45,8 +45,8 @@ func (t *tikv) String() string {
 	return fmt.Sprintf("tikv://%s/", t.addr)
 }
 
-func (t *tikv) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	d, err := t.c.Get(context.TODO(), []byte(key))
+func (t *tikv) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	d, err := t.c.Get(ctx, []byte(key))
 	if len(d) == 0 {
 		err = os.ErrNotExist
 	}

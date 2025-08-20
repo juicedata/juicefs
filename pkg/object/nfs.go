@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
@@ -118,7 +119,7 @@ func (n *nfsStore) Head(key string) (Object, error) {
 	return n.fileInfo(key, fi), nil
 }
 
-func (n *nfsStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (n *nfsStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	p := n.path(key)
 	if strings.HasSuffix(p, "/") {
 		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
