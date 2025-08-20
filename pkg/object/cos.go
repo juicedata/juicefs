@@ -148,7 +148,7 @@ func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 	return err
 }
 
-func (c *COS) Copy(dst, src string) error {
+func (c *COS) Copy(ctx context.Context,dst, src string) error {
 	var opt cos.ObjectCopyOptions
 	if c.sc != "" {
 		opt.ObjectCopyHeaderOptions = &cos.ObjectCopyHeaderOptions{XCosStorageClass: c.sc}

@@ -104,7 +104,7 @@ func (w *webdav) Delete(key string, getters ...AttrGetter) error {
 	return w.c.Remove(key)
 }
 
-func (w *webdav) Copy(dst, src string) error {
+func (w *webdav) Copy(ctx context.Context, dst, src string) error {
 	return w.c.Copy(src, dst, true)
 }
 

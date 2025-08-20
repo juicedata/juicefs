@@ -199,7 +199,7 @@ func (d *filestore) Put(ctx context.Context, key string, in io.Reader, getters .
 	return err
 }
 
-func (d *filestore) Copy(dst, src string) error {
+func (d *filestore) Copy(ctx context.Context, dst, src string) error {
 	r, err := d.Get(ctx, src, 0, -1)
 	if err != nil {
 		return err

@@ -100,7 +100,7 @@ func (c *b2client) Put(ctx context.Context, key string, data io.Reader, getters 
 	return err
 }
 
-func (c *b2client) Copy(dst, src string) error {
+func (c *b2client) Copy(ctx context.Context,dst, src string) error {
 	f, err := c.getFileInfo(src)
 	if err != nil {
 		return err

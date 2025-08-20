@@ -215,7 +215,7 @@ func (u *RestfulStorage) Put(ctx context.Context, key string, body io.Reader, ge
 	return nil
 }
 
-func (s *RestfulStorage) Copy(dst, src string) error {
+func (s *RestfulStorage) Copy(ctx context.Context,dst, src string) error {
 	in, err := s.Get(ctx, src, 0, -1)
 	if err != nil {
 		return err

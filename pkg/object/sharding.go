@@ -70,7 +70,7 @@ func (s *sharded) Put(ctx context.Context, key string, body io.Reader, getters .
 	return s.pick(key).Put(ctx, key, body, getters...)
 }
 
-func (s *sharded) Copy(dst, src string) error {
+func (s *sharded) Copy(ctx context.Context, dst, src string) error {
 	return notSupported
 }
 

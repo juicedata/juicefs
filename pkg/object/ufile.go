@@ -155,7 +155,7 @@ func (u *ufile) parseResp(resp *http.Response, out interface{}) error {
 	return nil
 }
 
-func copyObj(store ObjectStorage, dst, src string) error {
+func copyObj(ctx context.Context, store ObjectStorage, dst, src string) error {
 	in, err := store.Get(ctx, src, 0, -1)
 	if err != nil {
 		return err
@@ -168,32 +168,32 @@ func copyObj(store ObjectStorage, dst, src string) error {
 	return store.Put(ctx, dst, bytes.NewReader(d))
 }
 
-func (u *ufile) Copy(dst, src string) error {
+func (u *ufile) Copy(ctx context.Context, dst, src string) error {
 	resp, err := u.request(ctx, "HEAD", src, nil, nil)
 	if err != nil {
-		return copyObj(u, dst, src)
+		return copyObj(ctx, u, dst, src)
 	}
 	if resp.StatusCode != 200 {
-		return copyObj(u, dst, src)
+		return copyObj(ctx, u, dst, src)
 	}
 
 	etag := resp.Header["Etag"]
 	if len(etag) < 1 {
-		return copyObj(u, dst, src)
+		return copyObj(ctx, u, dst, src)
 	}
 	hash := etag[0][1 : len(etag[0])-1]
 	lens := resp.Header["Content-Length"]
 	if len(lens) < 1 {
-		return copyObj(u, dst, src)
+		return copyObj(ctx, u, dst, src)
 	}
 	uri := fmt.Sprintf("uploadhit?Hash=%s&FileName=%s&FileSize=%s", hash, dst, lens[0])
 	resp, err = u.request(ctx, "POST", uri, nil, nil)
 	if err != nil {
-		return copyObj(u, dst, src)
+		return copyObj(ctx, u, dst, src)
 	}
 	defer cleanup(resp)
 	if resp.StatusCode != 200 {
-		return copyObj(u, dst, src)
+		return copyObj(ctx, u, dst, src)
 	}
 	return nil
 }

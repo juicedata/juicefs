@@ -126,7 +126,7 @@ func (q *qiniu) Put(ctx context.Context, key string, in io.Reader, getters ...At
 	return formUploader.Put(ctx, &ret, upToken, key, body, vlen, nil)
 }
 
-func (q *qiniu) Copy(dst, src string) error {
+func (q *qiniu) Copy(ctx context.Context, dst, src string) error {
 	return q.bm.Copy(q.bucket, src, q.bucket, dst, true)
 }
 

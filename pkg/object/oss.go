@@ -156,7 +156,7 @@ func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	return err
 }
 
-func (o *ossClient) Copy(dst, src string) error {
+func (o *ossClient) Copy(ctx context.Context, dst, src string) error {
 	var req = &oss.CopyObjectRequest{
 		SourceBucket: &o.bucket,
 		Bucket:       &o.bucket,

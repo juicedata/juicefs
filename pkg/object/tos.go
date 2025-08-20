@@ -269,8 +269,8 @@ func (t *tosClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func (t *tosClient) Copy(dst, src string) error {
-	_, err := t.client.CopyObject(context.Background(), &tos.CopyObjectInput{
+func (t *tosClient) Copy(ctx context.Context, dst, src string) error {
+	_, err := t.client.CopyObject(ctx, &tos.CopyObjectInput{
 		SrcBucket:    t.bucket,
 		Bucket:       t.bucket,
 		SrcKey:       src,

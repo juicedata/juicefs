@@ -115,7 +115,7 @@ func (m *memStore) Put(ctx context.Context, key string, in io.Reader, getters ..
 	return nil
 }
 
-func (m *memStore) Copy(dst, src string) error {
+func (m *memStore) Copy(ctx context.Context, dst, src string) error {
 	d, err := m.Get(ctx, src, 0, -1)
 	if err != nil {
 		return err

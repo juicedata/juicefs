@@ -156,7 +156,7 @@ func (q *bosclient) Put(ctx context.Context,key string, in io.Reader, getters ..
 	return err
 }
 
-func (q *bosclient) Copy(dst, src string) error {
+func (q *bosclient) Copy(ctx context.Context,dst, src string) error {
 	var args *api.CopyObjectArgs
 	if q.sc != "" {
 		args = &api.CopyObjectArgs{ObjectMeta: api.ObjectMeta{StorageClass: q.sc}}

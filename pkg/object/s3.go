@@ -191,7 +191,7 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 	return err
 }
 
-func (s *s3client) Copy(dst, src string) error {
+func (s *s3client) Copy(ctx context.Context, dst, src string) error {
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:       &s.bucket,

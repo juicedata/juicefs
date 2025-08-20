@@ -180,7 +180,7 @@ func (s *obsClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	return err
 }
 
-func (s *obsClient) Copy(dst, src string) error {
+func (s *obsClient) Copy(ctx context.Context, dst, src string) error {
 	params := &obs.CopyObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = dst

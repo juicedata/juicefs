@@ -121,7 +121,7 @@ func (s DefaultObjectStorage) Head(key string) (Object, error) {
 	return nil, notSupported
 }
 
-func (s DefaultObjectStorage) Copy(dst, src string) error {
+func (s DefaultObjectStorage) Copy(ctx context.Context, dst, src string) error {
 	return notSupported
 }
 

@@ -110,7 +110,7 @@ func (b *wasb) Put(ctx context.Context, key string, data io.Reader, getters ...A
 	return err
 }
 
-func (b *wasb) Copy(dst, src string) error {
+func (b *wasb) Copy(ctx context.Context,dst, src string) error {
 	dstCli := b.container.NewBlobClient(dst)
 	srcCli := b.container.NewBlobClient(src)
 	options := &blob2.CopyFromURLOptions{}
