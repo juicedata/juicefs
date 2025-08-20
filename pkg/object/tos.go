@@ -113,8 +113,8 @@ func (t *tosClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	return err
 }
 
-func (t *tosClient) Delete(key string, getters ...AttrGetter) error {
-	resp, err := t.client.DeleteObjectV2(context.Background(), &tos.DeleteObjectV2Input{
+func (t *tosClient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	resp, err := t.client.DeleteObjectV2(ctx, &tos.DeleteObjectV2Input{
 		Bucket: t.bucket,
 		Key:    key,
 	})

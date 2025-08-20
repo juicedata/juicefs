@@ -164,12 +164,12 @@ func (s *ks3) Copy(ctx context.Context, dst, src string) error {
 	return err
 }
 
-func (s *ks3) Delete(key string, getters ...AttrGetter) error {
+func (s *ks3) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	param := s3.DeleteObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
-	resp, err := s.s3.DeleteObject(&param)
+	resp, err := s.s3.DeleteObjectWithContext(ctx, &param)
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey]))

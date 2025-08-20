@@ -70,8 +70,8 @@ func (s *swiftOSS) Put(ctx context.Context, key string, in io.Reader, getters ..
 	return err
 }
 
-func (s *swiftOSS) Delete(key string, getters ...AttrGetter) error {
-	err := s.conn.ObjectDelete(context.Background(), s.container, key)
+func (s *swiftOSS) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	err := s.conn.ObjectDelete(ctx, s.container, key)
 	if err != nil && errors.Is(err, swift.ObjectNotFound) {
 		err = nil
 	}

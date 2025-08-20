@@ -74,8 +74,8 @@ func (s *sharded) Copy(ctx context.Context, dst, src string) error {
 	return notSupported
 }
 
-func (s *sharded) Delete(key string, getters ...AttrGetter) error {
-	return s.pick(key).Delete(key, getters...)
+func (s *sharded) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	return s.pick(key).Delete(ctx, key, getters...)
 }
 
 func (s *sharded) SetStorageClass(sc string) error {

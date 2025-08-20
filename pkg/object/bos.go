@@ -124,7 +124,7 @@ func (q *bosclient) Get(ctx context.Context, key string, off, limit int64, gette
 	return
 }
 
-func (q *bosclient) Put(ctx context.Context,key string, in io.Reader, getters ...AttrGetter) error {
+func (q *bosclient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	b, vlen, err := findLen(in)
 	if err != nil {
 		return err
@@ -156,7 +156,7 @@ func (q *bosclient) Put(ctx context.Context,key string, in io.Reader, getters ..
 	return err
 }
 
-func (q *bosclient) Copy(ctx context.Context,dst, src string) error {
+func (q *bosclient) Copy(ctx context.Context, dst, src string) error {
 	var args *api.CopyObjectArgs
 	if q.sc != "" {
 		args = &api.CopyObjectArgs{ObjectMeta: api.ObjectMeta{StorageClass: q.sc}}
@@ -165,7 +165,7 @@ func (q *bosclient) Copy(ctx context.Context,dst, src string) error {
 	return err
 }
 
-func (q *bosclient) Delete(key string, getters ...AttrGetter) error {
+func (q *bosclient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	err := q.c.DeleteObject(q.bucket, key)
 	if err != nil && strings.Contains(err.Error(), "NoSuchKey") {
 		err = nil

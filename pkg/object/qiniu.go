@@ -134,7 +134,7 @@ func (q *qiniu) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	return nil, notSupported
 }
 
-func (q *qiniu) Delete(key string, getters ...AttrGetter) error {
+func (q *qiniu) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	err := q.bm.Delete(q.bucket, key)
 	if err != nil && strings.Contains(err.Error(), notexist) {
 		return nil

@@ -125,7 +125,7 @@ func (h *hdfsclient) Get(ctx context.Context, key string, off, limit int64, gett
 	return f, nil
 }
 
-func (h *hdfsclient) Put(ctx context.Context,key string, in io.Reader, getters ...AttrGetter) (err error) {
+func (h *hdfsclient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
 	p := h.path(key)
 	if strings.HasSuffix(p, dirSuffix) {
 		return h.c.MkdirAll(p, 0777&^h.umask)
@@ -199,7 +199,7 @@ func IsErrReplicating(err error) bool {
 	return ok && pe.Err == hdfs.ErrReplicating
 }
 
-func (h *hdfsclient) Delete(key string, getters ...AttrGetter) error {
+func (h *hdfsclient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	err := h.c.Remove(h.path(key))
 	if err != nil && os.IsNotExist(err) {
 		err = nil

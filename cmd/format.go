@@ -354,7 +354,7 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 	if !bytes.Equal(data, data2) {
 		return fmt.Errorf("read wrong data: expected %x, got %x", data, data2)
 	}
-	err = store.Delete(key)
+	err = store.Delete(ctx, key)
 	if err != nil {
 		// it's OK to don't have delete permission, but we should warn user explicitly
 		logger.Warnf("Failed to delete, err: %s", err)
@@ -377,7 +377,7 @@ func test(store object.ObjectStorage) error {
 		time.Sleep(time.Second * time.Duration(i*3+1))
 	}
 	if err == nil {
-		_ = store.Delete("testing/")
+		_ = store.Delete(ctx, "testing/")
 	}
 	return err
 }
@@ -559,7 +559,7 @@ func format(c *cli.Context) error {
 	}
 	if err = m.Init(format, c.Bool("force")); err != nil {
 		if create {
-			_ = blob.Delete("juicefs_uuid")
+			_ = blob.Delete(ctx, "juicefs_uuid")
 		}
 		logger.Fatalf("format: %s", err)
 	}

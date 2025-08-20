@@ -94,8 +94,8 @@ func (c *etcdClient) Head(key string) (Object, error) {
 	return nil, os.ErrNotExist
 }
 
-func (c *etcdClient) Delete(key string, getters ...AttrGetter) error {
-	_, err := c.kv.Delete(context.TODO(), key)
+func (c *etcdClient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	_, err := c.kv.Delete(ctx, key)
 	return err
 }
 

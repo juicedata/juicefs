@@ -191,7 +191,7 @@ func (s *obsClient) Copy(ctx context.Context, dst, src string) error {
 	return err
 }
 
-func (s *obsClient) Delete(key string, getters ...AttrGetter) error {
+func (s *obsClient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	params := obs.DeleteObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = key

@@ -208,7 +208,7 @@ func (d *filestore) Copy(ctx context.Context, dst, src string) error {
 	return d.Put(ctx, dst, r)
 }
 
-func (d *filestore) Delete(key string, getters ...AttrGetter) error {
+func (d *filestore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	err := os.Remove(d.path(key))
 	if err != nil && os.IsNotExist(err) {
 		err = nil

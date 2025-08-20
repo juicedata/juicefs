@@ -187,8 +187,8 @@ func (q *qingstor) Copy(ctx context.Context, dst, src string) error {
 	return nil
 }
 
-func (q *qingstor) Delete(key string, getters ...AttrGetter) error {
-	output, err := q.bucket.DeleteObject(key)
+func (q *qingstor) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	output, err := q.bucket.DeleteObjectWithContext(ctx, key)
 	if output != nil {
 		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.ToString(output.RequestID))

@@ -124,7 +124,7 @@ func (s *sqlStore) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (s *sqlStore) Delete(key string, getters ...AttrGetter) error {
+func (s *sqlStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	_, err := s.db.Delete(&blob{Key: []byte(key)})
 	return err
 }

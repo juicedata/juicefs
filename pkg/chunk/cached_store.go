@@ -367,7 +367,7 @@ func (store *cachedStore) delete(key string) error {
 	st := time.Now()
 	var reqID string
 	err := utils.WithTimeout(func(ctx context.Context) error {
-		return store.storage.Delete(key, object.WithRequestID(&reqID))
+		return store.storage.Delete(ctx, key, object.WithRequestID(&reqID))
 	}, store.conf.PutTimeout)
 	used := time.Since(st)
 	if err != nil && (strings.Contains(err.Error(), "NoSuchKey") ||

@@ -157,7 +157,7 @@ func (g *gs) Copy(ctx context.Context, dst, src string) error {
 	return err
 }
 
-func (g *gs) Delete(key string, getters ...AttrGetter) error {
+func (g *gs) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	if err := g.getClient().Bucket(g.bucket).Object(key).Delete(ctx); err != storage.ErrObjectNotExist {
 		return err
 	}

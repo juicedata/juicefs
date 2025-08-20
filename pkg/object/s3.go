@@ -203,7 +203,7 @@ func (s *s3client) Copy(ctx context.Context, dst, src string) error {
 	return err
 }
 
-func (s *s3client) Delete(key string, getters ...AttrGetter) error {
+func (s *s3client) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	param := s3.DeleteObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,

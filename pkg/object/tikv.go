@@ -85,8 +85,8 @@ func (t *tikv) Head(key string) (Object, error) {
 	}, err
 }
 
-func (t *tikv) Delete(key string, getters ...AttrGetter) error {
-	return t.c.Delete(context.TODO(), []byte(key))
+func (t *tikv) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	return t.c.Delete(ctx, []byte(key))
 }
 
 func (t *tikv) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {

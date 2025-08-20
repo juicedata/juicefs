@@ -81,7 +81,7 @@ func (w *webdav) Put(ctx context.Context, key string, in io.Reader, getters ...A
 	return w.c.WriteStream(key, in, 0)
 }
 
-func (w *webdav) Delete(key string, getters ...AttrGetter) error {
+func (w *webdav) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	info, err := w.c.Stat(key)
 	if gowebdav.IsErrNotFound(err) {
 		return nil

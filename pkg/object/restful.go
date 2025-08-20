@@ -215,7 +215,7 @@ func (u *RestfulStorage) Put(ctx context.Context, key string, body io.Reader, ge
 	return nil
 }
 
-func (s *RestfulStorage) Copy(ctx context.Context,dst, src string) error {
+func (s *RestfulStorage) Copy(ctx context.Context, dst, src string) error {
 	in, err := s.Get(ctx, src, 0, -1)
 	if err != nil {
 		return err
@@ -228,7 +228,7 @@ func (s *RestfulStorage) Copy(ctx context.Context,dst, src string) error {
 	return s.Put(ctx, dst, bytes.NewReader(d))
 }
 
-func (s *RestfulStorage) Delete(key string, getters ...AttrGetter) error {
+func (s *RestfulStorage) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	resp, err := s.request(ctx, "DELETE", key, nil, nil)
 	if err != nil {
 		return err

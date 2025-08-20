@@ -325,7 +325,7 @@ func (f *sftpStore) Readlink(name string) (link string, err error) {
 	return c.sftpClient.ReadLink(f.path(name))
 }
 
-func (f *sftpStore) Delete(key string, getters ...AttrGetter) error {
+func (f *sftpStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return err

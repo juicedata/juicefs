@@ -162,7 +162,7 @@ func (s *ibmcos) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (s *ibmcos) Delete(key string, getters ...AttrGetter) error {
+func (s *ibmcos) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	param := s3.DeleteObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,

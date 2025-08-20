@@ -123,8 +123,8 @@ func (p *withPrefix) Copy(ctx context.Context, dst, src string) error {
 	return p.os.Copy(ctx, dst, src)
 }
 
-func (p *withPrefix) Delete(key string, getters ...AttrGetter) error {
-	return p.os.Delete(p.prefix+key, getters...)
+func (p *withPrefix) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	return p.os.Delete(ctx, p.prefix+key, getters...)
 }
 
 func (p *withPrefix) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {

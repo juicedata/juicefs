@@ -259,7 +259,7 @@ func deleteObj(storage object.ObjectStorage, key string, dry bool) {
 		return
 	}
 	start := time.Now()
-	if err := try(3, func() error { return storage.Delete(key) }); err == nil {
+	if err := try(3, func() error { return storage.Delete(ctx, key) }); err == nil {
 		deleted.Increment()
 		logger.Debugf("Deleted %s from %s in %s", key, storage, time.Since(start))
 	} else {
@@ -740,7 +740,7 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 		part, err = dst.UploadPartCopy(key, upload.UploadID, num+1, tmpkey, 0, size)
 		return err
 	})
-	_ = dst.Delete(tmpkey)
+	_ = dst.Delete(ctx, tmpkey)
 	return part, tmpChksum, err
 }
 
@@ -984,7 +984,7 @@ func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) er
 	if p, err := src.(object.SupportSymlink).Readlink(key); err != nil {
 		return err
 	} else {
-		if err := dst.Delete(key); err != nil {
+		if err := dst.Delete(ctx, key); err != nil {
 			logger.Debugf("Deleted %s from %s ", key, dst)
 			return err
 		}

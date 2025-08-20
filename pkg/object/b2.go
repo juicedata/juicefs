@@ -100,7 +100,7 @@ func (c *b2client) Put(ctx context.Context, key string, data io.Reader, getters 
 	return err
 }
 
-func (c *b2client) Copy(ctx context.Context,dst, src string) error {
+func (c *b2client) Copy(ctx context.Context, dst, src string) error {
 	f, err := c.getFileInfo(src)
 	if err != nil {
 		return err
@@ -110,7 +110,7 @@ func (c *b2client) Copy(ctx context.Context,dst, src string) error {
 	return err
 }
 
-func (c *b2client) Delete(key string, getters ...AttrGetter) error {
+func (c *b2client) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	f, err := c.getFileInfo(key)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "not_found") {

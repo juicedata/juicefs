@@ -88,7 +88,7 @@ type ObjectStorage interface {
 	// Copy an object from src to dst.
 	Copy(ctx context.Context, dst, src string) error
 	// Delete a object.
-	Delete(key string, getters ...AttrGetter) error
+	Delete(ctx context.Context, key string, getters ...AttrGetter) error
 
 	// Head returns some information about the object or an error if not found.
 	Head(key string) (Object, error)

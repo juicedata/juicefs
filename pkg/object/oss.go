@@ -168,7 +168,7 @@ func (o *ossClient) Copy(ctx context.Context, dst, src string) error {
 	return err
 }
 
-func (o *ossClient) Delete(key string, getters ...AttrGetter) error {
+func (o *ossClient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	result, err := o.client.DeleteObject(ctx, &oss.DeleteObjectRequest{
 		Bucket: &o.bucket,
 		Key:    &key,

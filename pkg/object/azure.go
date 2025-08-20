@@ -110,7 +110,7 @@ func (b *wasb) Put(ctx context.Context, key string, data io.Reader, getters ...A
 	return err
 }
 
-func (b *wasb) Copy(ctx context.Context,dst, src string) error {
+func (b *wasb) Copy(ctx context.Context, dst, src string) error {
 	dstCli := b.container.NewBlobClient(dst)
 	srcCli := b.container.NewBlobClient(src)
 	options := &blob2.CopyFromURLOptions{}
@@ -125,7 +125,7 @@ func (b *wasb) Copy(ctx context.Context,dst, src string) error {
 	return err
 }
 
-func (b *wasb) Delete(key string, getters ...AttrGetter) error {
+func (b *wasb) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	resp, err := b.container.NewBlobClient(key).Delete(ctx, nil)
 	if err != nil {
 		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.BlobNotFound) {

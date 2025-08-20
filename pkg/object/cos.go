@@ -148,7 +148,7 @@ func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 	return err
 }
 
-func (c *COS) Copy(ctx context.Context,dst, src string) error {
+func (c *COS) Copy(ctx context.Context, dst, src string) error {
 	var opt cos.ObjectCopyOptions
 	if c.sc != "" {
 		opt.ObjectCopyHeaderOptions = &cos.ObjectCopyHeaderOptions{XCosStorageClass: c.sc}
@@ -158,7 +158,7 @@ func (c *COS) Copy(ctx context.Context,dst, src string) error {
 	return err
 }
 
-func (c *COS) Delete(key string, getters ...AttrGetter) error {
+func (c *COS) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	resp, err := c.c.Object.Delete(ctx, key)
 	if resp != nil {
 		attrs := ApplyGetters(getters...)

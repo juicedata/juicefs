@@ -183,7 +183,8 @@ func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ..
 	return nil
 }
 
-func (j *juiceFS) Delete(key string, getters ...object.AttrGetter) error {
+func (j *juiceFS) Delete(rCtx context.Context, key string, getters ...object.AttrGetter) error {
+	ctx := meta.WrapContextWith(rCtx, pid, uid, []uint32{gid})
 	if key == "" {
 		return nil
 	}

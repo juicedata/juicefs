@@ -218,7 +218,7 @@ func (n *nfsStore) Put(ctx context.Context, key string, in io.Reader, getters ..
 	return err
 }
 
-func (n *nfsStore) Delete(key string, getters ...AttrGetter) error {
+func (n *nfsStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	path := n.path(key)
 	if path == "./" {
 		return nil

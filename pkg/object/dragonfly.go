@@ -407,7 +407,7 @@ func (d *dragonfly) Copy(ctx context.Context, dst, src string) error {
 }
 
 // Delete deletes the object if it exists.
-func (d *dragonfly) Delete(key string, getters ...AttrGetter) error {
+func (d *dragonfly) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	// get delete object request.
 	u, err := url.Parse(d.endpoint)
 	if err != nil {

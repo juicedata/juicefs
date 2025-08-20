@@ -123,7 +123,7 @@ func (m *memStore) Copy(ctx context.Context, dst, src string) error {
 	return m.Put(ctx, dst, d)
 }
 
-func (m *memStore) Delete(key string, getters ...AttrGetter) error {
+func (m *memStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	m.Lock()
 	defer m.Unlock()
 	delete(m.objects, key)

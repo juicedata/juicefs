@@ -69,7 +69,7 @@ func (r *redisStore) Put(ctx context.Context, key string, in io.Reader, getters 
 	return r.rdb.Set(ctx, key, data, 0).Err()
 }
 
-func (r *redisStore) Delete(key string, getters ...AttrGetter) error {
+func (r *redisStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	return r.rdb.Del(ctx, key).Err()
 }
 
