@@ -17,6 +17,7 @@
 package utils
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"mime"
@@ -94,12 +95,13 @@ func FindLocalIPs() ([]net.IP, error) {
 	return ips, nil
 }
 
-func WithTimeout(f func() error, timeout time.Duration) error {
+func WithTimeout(f func(context.Context) error, timeout time.Duration) error {
 	var done = make(chan int, 1)
 	var t = time.NewTimer(timeout)
 	var err error
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		err = f()
+		err = f(ctx)
 		done <- 1
 	}()
 	select {
@@ -108,6 +110,7 @@ func WithTimeout(f func() error, timeout time.Duration) error {
 	case <-t.C:
 		err = fmt.Errorf("timeout after %s: %w", timeout, ErrFuncTimeout)
 	}
+	cancel()
 	return err
 }
 

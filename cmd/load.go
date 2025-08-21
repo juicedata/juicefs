@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"compress/gzip"
+	"context"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -139,7 +140,7 @@ func open(src string, key string, algo string) (io.ReadCloser, error) {
 			return nil, err
 		}
 		blob := object.NewEncrypted(fileBlob, encryptor)
-		fp, ioErr = blob.Get(filepath.Base(srcAbsPath), 0, -1)
+		fp, ioErr = blob.Get(context.Background(), filepath.Base(srcAbsPath), 0, -1)
 	} else {
 		fp, ioErr = os.Open(src)
 	}

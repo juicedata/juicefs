@@ -176,7 +176,7 @@ func fsck(ctx *cli.Context) error {
 					} else {
 						objKey = fmt.Sprintf("%v/%v/%s", s.Id/1000/1000, s.Id/1000, key)
 					}
-					if _, err := blob.Head(objKey); err != nil {
+					if _, err := blob.Head(ctx.Context, objKey); err != nil {
 						if _, ok := brokens[inode]; !ok {
 							if ps := m.GetPaths(meta.Background(), inode); len(ps) > 0 {
 								brokens[inode] = ps[0]

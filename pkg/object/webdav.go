@@ -20,6 +20,7 @@
 package object
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,11 +43,11 @@ func (w *webdav) String() string {
 	return fmt.Sprintf("webdav://%s/", w.endpoint.Host)
 }
 
-func (w *webdav) Create() error {
+func (w *webdav) Create(ctx context.Context) error {
 	return nil
 }
 
-func (w *webdav) Head(key string) (Object, error) {
+func (w *webdav) Head(ctx context.Context, key string) (Object, error) {
 	info, err := w.c.Stat(key)
 	if err != nil {
 		if gowebdav.IsErrNotFound(err) {
@@ -63,14 +64,14 @@ func (w *webdav) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (w *webdav) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (w *webdav) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if off == 0 && limit <= 0 {
 		return w.c.ReadStream(key)
 	}
 	return w.c.ReadStreamRange(key, off, limit)
 }
 
-func (w *webdav) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (w *webdav) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	if key == "" {
 		return nil
 	}
@@ -80,7 +81,7 @@ func (w *webdav) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	return w.c.WriteStream(key, in, 0)
 }
 
-func (w *webdav) Delete(key string, getters ...AttrGetter) error {
+func (w *webdav) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	info, err := w.c.Stat(key)
 	if gowebdav.IsErrNotFound(err) {
 		return nil
@@ -103,7 +104,7 @@ func (w *webdav) Delete(key string, getters ...AttrGetter) error {
 	return w.c.Remove(key)
 }
 
-func (w *webdav) Copy(dst, src string) error {
+func (w *webdav) Copy(ctx context.Context, dst, src string) error {
 	return w.c.Copy(src, dst, true)
 }
 
@@ -116,7 +117,7 @@ func (w webDAVFile) Name() string {
 	return w.name
 }
 
-func (w *webdav) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (w *webdav) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}

@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"math"
@@ -45,7 +46,7 @@ func (b *bunnyClient) String() string {
 }
 
 // Get the data for the given object specified by key.
-func (b *bunnyClient) Get(key string, off int64, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (b *bunnyClient) Get(ctx context.Context, key string, off int64, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	var end int64
 	if limit == -1 {
 		end = math.MaxInt64
@@ -60,7 +61,7 @@ func (b *bunnyClient) Get(key string, off int64, limit int64, getters ...AttrGet
 }
 
 // Put data read from a reader to an object specified by key.
-func (b *bunnyClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (b *bunnyClient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	content, readErr := io.ReadAll(in)
 	if readErr != nil {
 		return readErr
@@ -69,7 +70,7 @@ func (b *bunnyClient) Put(key string, in io.Reader, getters ...AttrGetter) error
 }
 
 // Delete a object.
-func (b *bunnyClient) Delete(key string, getters ...AttrGetter) error {
+func (b *bunnyClient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	err := b.client.Delete(key, false)
 	if err != nil && err.Error() == "Not Found" {
 		err = nil
@@ -77,7 +78,7 @@ func (b *bunnyClient) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (b *bunnyClient) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (b *bunnyClient) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
@@ -137,7 +138,7 @@ func parseObjectMetadata(object bunny.Object) Object {
 	}
 }
 
-func (b *bunnyClient) Head(key string) (Object, error) {
+func (b *bunnyClient) Head(ctx context.Context, key string) (Object, error) {
 	object, err := b.client.Describe(key)
 	if err != nil {
 		if err.Error() == "Not Found" {

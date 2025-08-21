@@ -169,9 +169,9 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 			sc    = object.DefaultStorageClass
 		)
 		page.Acquire()
-		err = utils.WithTimeout(func() error {
+		err = utils.WithTimeout(func(ctx context.Context) error {
 			defer page.Release()
-			in, err := s.store.storage.Get(key, int64(boff), int64(len(p)), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+			in, err := s.store.storage.Get(ctx, key, int64(boff), int64(len(p)), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
 			if err == nil {
 				n, err = io.ReadFull(in, p)
 				_ = in.Close()
@@ -348,10 +348,10 @@ func (store *cachedStore) put(key string, p *Page) error {
 		reqID string
 		sc    = object.DefaultStorageClass
 	)
-	return utils.WithTimeout(func() error {
+	return utils.WithTimeout(func(ctx context.Context) error {
 		defer p.Release()
 		st := time.Now()
-		err := store.storage.Put(key, bytes.NewReader(p.Data), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+		err := store.storage.Put(ctx, key, bytes.NewReader(p.Data), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
 		used := time.Since(st)
 		logRequest("PUT", key, "", reqID, err, used)
 		store.objectDataBytes.WithLabelValues("PUT", sc).Add(float64(len(p.Data)))
@@ -366,8 +366,8 @@ func (store *cachedStore) put(key string, p *Page) error {
 func (store *cachedStore) delete(key string) error {
 	st := time.Now()
 	var reqID string
-	err := utils.WithTimeout(func() error {
-		return store.storage.Delete(key, object.WithRequestID(&reqID))
+	err := utils.WithTimeout(func(ctx context.Context) error {
+		return store.storage.Delete(ctx, key, object.WithRequestID(&reqID))
 	}, store.conf.PutTimeout)
 	used := time.Since(st)
 	if err != nil && (strings.Contains(err.Error(), "NoSuchKey") ||
@@ -454,7 +454,7 @@ func (s *wSlice) upload(indx int) {
 			stagingPath := "unknown"
 			stageFailed := false
 			block.Acquire()
-			err := utils.WithTimeout(func() (err error) { // In case it hangs for more than 5 minutes(see fileWriter.flush), fallback to uploading directly to avoid `EIO`
+			err := utils.WithTimeout(func(context.Context) (err error) { // In case it hangs for more than 5 minutes(see fileWriter.flush), fallback to uploading directly to avoid `EIO`
 				defer block.Release()
 				stagingPath, err = s.store.bcache.stage(key, block.Data, s.store.shouldCache(blen))
 				if err == nil && stageFailed { // upload thread already marked me as failed because of timeout
@@ -739,10 +739,10 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 		p = page
 	}
 	p.Acquire()
-	err = utils.WithTimeout(func() error {
+	err = utils.WithTimeout(func(ctx context.Context) error {
 		defer p.Release()
 		// it will be retried in the upper layer.
-		in, err = store.storage.Get(key, 0, -1, object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+		in, err = store.storage.Get(ctx, key, 0, -1, object.WithRequestID(&reqID), object.WithStorageClass(&sc))
 		if err == nil {
 			n, err = io.ReadFull(in, p.Data)
 			_ = in.Close()

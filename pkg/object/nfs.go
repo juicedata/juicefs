@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
@@ -94,7 +95,7 @@ func (n *nfsStore) path(key string) string {
 	return key
 }
 
-func (n *nfsStore) Head(key string) (Object, error) {
+func (n *nfsStore) Head(ctx context.Context, key string) (Object, error) {
 	p := n.path(key)
 	fi, _, err := n.target.Lookup(p)
 	if err != nil {
@@ -106,7 +107,7 @@ func (n *nfsStore) Head(key string) (Object, error) {
 			return nil, err
 		}
 		dir, _ := path.Split(p)
-		ff, err := n.Head(path.Join(dir, src))
+		ff, err := n.Head(ctx, path.Join(dir, src))
 		if err != nil {
 			return nil, err
 		}
@@ -118,7 +119,7 @@ func (n *nfsStore) Head(key string) (Object, error) {
 	return n.fileInfo(key, fi), nil
 }
 
-func (n *nfsStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (n *nfsStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	p := n.path(key)
 	if strings.HasSuffix(p, "/") {
 		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
@@ -162,7 +163,7 @@ func (n *nfsStore) mkdirAll(p string) error {
 	return err
 }
 
-func (n *nfsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
+func (n *nfsStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
 	p := n.path(key)
 	if strings.HasSuffix(p, dirSuffix) {
 		return n.mkdirAll(p)
@@ -217,7 +218,7 @@ func (n *nfsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err err
 	return err
 }
 
-func (n *nfsStore) Delete(key string, getters ...AttrGetter) error {
+func (n *nfsStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	path := n.path(key)
 	if path == "./" {
 		return nil
@@ -260,8 +261,8 @@ func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
 	return ff
 }
 
-func (n *nfsStore) readDirSorted(dir string, followLink bool) ([]*nfsEntry, error) {
-	o, err := n.Head(strings.TrimSuffix(dir, "/"))
+func (n *nfsStore) readDirSorted(ctx context.Context, dir string, followLink bool) ([]*nfsEntry, error) {
+	o, err := n.Head(ctx, strings.TrimSuffix(dir, "/"))
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +302,7 @@ func (n *nfsStore) readDirSorted(dir string, followLink bool) ([]*nfsEntry, erro
 	return nfsEntries, err
 }
 
-func (n *nfsStore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (n *nfsStore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
@@ -313,7 +314,7 @@ func (n *nfsStore) List(prefix, marker, token, delimiter string, limit int64, fo
 			dir += dirSuffix
 		}
 	} else if marker == "" {
-		obj, err := n.Head(dir)
+		obj, err := n.Head(ctx, dir)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, false, "", nil
@@ -322,7 +323,7 @@ func (n *nfsStore) List(prefix, marker, token, delimiter string, limit int64, fo
 		}
 		objs = append(objs, obj)
 	}
-	entries, err := n.readDirSorted(dir, followLink)
+	entries, err := n.readDirSorted(ctx, dir, followLink)
 	if err != nil {
 		if os.IsPermission(err) || errors.Is(err, nfs.NFS3Error(nfs.NFS3ErrAcces)) {
 			logger.Warnf("skip %s: %s", dir, err)
@@ -428,7 +429,7 @@ func (n *nfsStore) Readlink(name string) (string, error) {
 	return f.Readlink()
 }
 
-func (n *nfsStore) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (n *nfsStore) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 

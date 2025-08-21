@@ -17,6 +17,7 @@
 package sync
 
 import (
+	"context"
 	"errors"
 	"io"
 	"sync"
@@ -74,7 +75,7 @@ func (r *parallelDownloader) download() {
 				var in io.ReadCloser
 				e := try(3, func() error {
 					var err error
-					in, err = r.src.Get(r.key, off, size)
+					in, err = r.src.Get(context.Background(), r.key, off, size)
 					return err
 				})
 				if e != nil {

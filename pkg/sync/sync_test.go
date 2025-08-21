@@ -40,10 +40,10 @@ func collectAll(c <-chan object.Object) []string {
 // nolint:errcheck
 func TestIterator(t *testing.T) {
 	m, _ := object.CreateStorage("mem", "", "", "", "")
-	m.Put("a", bytes.NewReader([]byte("a")))
-	m.Put("b", bytes.NewReader([]byte("a")))
-	m.Put("aa", bytes.NewReader([]byte("a")))
-	m.Put("c", bytes.NewReader([]byte("a")))
+	m.Put(ctx, "a", bytes.NewReader([]byte("a")))
+	m.Put(ctx, "b", bytes.NewReader([]byte("a")))
+	m.Put(ctx, "aa", bytes.NewReader([]byte("a")))
+	m.Put(ctx, "c", bytes.NewReader([]byte("a")))
 
 	ch, _ := ListAll(m, "", "a", "b", true)
 	keys := collectAll(ch)
@@ -56,7 +56,7 @@ func TestIterator(t *testing.T) {
 
 	// Single object
 	s, _ := object.CreateStorage("mem", "", "", "", "")
-	s.Put("a", bytes.NewReader([]byte("a")))
+	s.Put(ctx, "a", bytes.NewReader([]byte("a")))
 	ch, _ = ListAll(s, "", "", "", true)
 	keys = collectAll(ch)
 	if !reflect.DeepEqual(keys, []string{"a"}) {
@@ -69,7 +69,7 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 
 	// Construct mem storage
 	s, _ := object.CreateStorage("mem", "", "", "", "")
-	err := s.Put("abc", bytes.NewReader([]byte("abc")))
+	err := s.Put(ctx, "abc", bytes.NewReader([]byte("abc")))
 	if err != nil {
 		t.Fatalf("Put error: %q", err)
 	}
@@ -113,15 +113,15 @@ func TestSync(t *testing.T) {
 	}
 	os.Args = []string{"--include", "a[1-9]", "--exclude", "a*", "--exclude", "c*"}
 	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
-	a.Put("a1", bytes.NewReader([]byte("a1")))
-	a.Put("a2", bytes.NewReader([]byte("a2")))
-	a.Put("abc", bytes.NewReader([]byte("abc")))
-	a.Put("c1", bytes.NewReader([]byte("c1")))
-	a.Put("c2", bytes.NewReader([]byte("c2")))
+	a.Put(ctx, "a1", bytes.NewReader([]byte("a1")))
+	a.Put(ctx, "a2", bytes.NewReader([]byte("a2")))
+	a.Put(ctx, "abc", bytes.NewReader([]byte("abc")))
+	a.Put(ctx, "c1", bytes.NewReader([]byte("c1")))
+	a.Put(ctx, "c2", bytes.NewReader([]byte("c2")))
 
 	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
-	b.Put("a1", bytes.NewReader([]byte("a1")))
-	b.Put("ba", bytes.NewReader([]byte("a1")))
+	b.Put(ctx, "a1", bytes.NewReader([]byte("a1")))
+	b.Put(ctx, "ba", bytes.NewReader([]byte("a1")))
 
 	// Copy a2
 	if err := Sync(a, b, config); err != nil {
@@ -248,7 +248,7 @@ func TestSyncIncludeAndExclude(t *testing.T) {
 		_ = os.RemoveAll("/tmp/b/")
 		os.Args = testCase.args
 		for _, k := range testCase.srcKey {
-			a.Put(k, bytes.NewReader([]byte(k)))
+			a.Put(ctx, k, bytes.NewReader([]byte(k)))
 		}
 		if err := Sync(a, b, config); err != nil {
 			t.Fatalf("sync: %s", err)
@@ -317,7 +317,7 @@ func TestSyncLink(t *testing.T) {
 	}()
 
 	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
-	a.Put("a1", bytes.NewReader([]byte("test")))
+	a.Put(ctx, "a1", bytes.NewReader([]byte("test")))
 	as := a.(object.SupportSymlink)
 	as.Symlink("/tmp/a/a1", "l1")
 	as.Symlink("./../a1", "d1/l2")
@@ -345,7 +345,7 @@ func TestSyncLink(t *testing.T) {
 	if err != nil || l1 != "/tmp/a/a1" {
 		t.Fatalf("readlink: %s content: %s", err, l1)
 	}
-	content, err := b.Get("l1", 0, -1)
+	content, err := b.Get(ctx, "l1", 0, -1)
 	if err != nil {
 		t.Fatalf("get content failed: %s", err)
 	}
@@ -357,7 +357,7 @@ func TestSyncLink(t *testing.T) {
 	if err != nil || l2 != "./../a1" {
 		t.Fatalf("readlink: %s", err)
 	}
-	content, err = b.Get("d1/l2", 0, -1)
+	content, err = b.Get(ctx, "d1/l2", 0, -1)
 	if err != nil {
 		t.Fatalf("content failed: %s", err)
 	}
@@ -378,7 +378,7 @@ func TestSyncLinkWithOutFollow(t *testing.T) {
 	}()
 
 	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
-	a.Put("a1", bytes.NewReader([]byte("test")))
+	a.Put(ctx, "a1", bytes.NewReader([]byte("test")))
 	as := a.(object.SupportSymlink)
 	as.Symlink("/tmp/a/a1", "l1")
 	as.Symlink("./../notExist", "l3")
@@ -397,7 +397,7 @@ func TestSyncLinkWithOutFollow(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
-	content, err := b.Get("l1", 0, -1)
+	content, err := b.Get(ctx, "l1", 0, -1)
 	if err != nil {
 		t.Fatalf("get content error: %s", err)
 	}
@@ -452,7 +452,7 @@ func TestSyncCheckAllLink(t *testing.T) {
 	}()
 
 	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
-	a.Put("a1", bytes.NewReader([]byte("test")))
+	a.Put(ctx, "a1", bytes.NewReader([]byte("test")))
 	as := a.(object.SupportSymlink)
 	as.Symlink("/tmp/a/a1", "l1")
 
@@ -477,7 +477,7 @@ func TestSyncCheckAllLink(t *testing.T) {
 	if err != nil || l1 != "/tmp/a/a1" {
 		t.Fatalf("readlink: %s content: %s", err, l1)
 	}
-	content, err := b.Get("l1", 0, -1)
+	content, err := b.Get(ctx, "l1", 0, -1)
 	if err != nil {
 		t.Fatalf("get content failed: %s", err)
 	}
@@ -493,7 +493,7 @@ func TestSyncCheckNewLink(t *testing.T) {
 	}()
 
 	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
-	a.Put("a1", bytes.NewReader([]byte("test")))
+	a.Put(ctx, "a1", bytes.NewReader([]byte("test")))
 	as := a.(object.SupportSymlink)
 	as.Symlink("/tmp/a/a1", "l1")
 
@@ -517,7 +517,7 @@ func TestSyncCheckNewLink(t *testing.T) {
 	if err != nil || l1 != "/tmp/a/a1" {
 		t.Fatalf("readlink: %s content: %s", err, l1)
 	}
-	content, err := b.Get("l1", 0, -1)
+	content, err := b.Get(ctx, "l1", 0, -1)
 	if err != nil {
 		t.Fatalf("get content failed: %s", err)
 	}
@@ -538,7 +538,7 @@ func TestLimits(t *testing.T) {
 	put := func(storage object.ObjectStorage, keys []string) {
 		for _, key := range keys {
 			if key != "" {
-				_ = storage.Put(key, bytes.NewReader([]byte{}))
+				_ = storage.Put(ctx, key, bytes.NewReader([]byte{}))
 			}
 		}
 	}

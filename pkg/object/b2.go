@@ -20,6 +20,7 @@
 package object
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,7 +41,7 @@ func (c *b2client) String() string {
 	return fmt.Sprintf("b2://%s/", c.bucket.Name)
 }
 
-func (c *b2client) Create() error {
+func (c *b2client) Create(ctx context.Context) error {
 	return nil
 }
 
@@ -64,7 +65,7 @@ func (c *b2client) getFileInfo(key string) (*backblaze.File, error) {
 	return f, nil
 }
 
-func (c *b2client) Head(key string) (Object, error) {
+func (c *b2client) Head(ctx context.Context, key string) (Object, error) {
 	f, err := c.getFileInfo(key)
 	if err != nil {
 		if e, ok := err.(*backblaze.B2Error); ok && e.Status == http.StatusNotFound {
@@ -81,7 +82,7 @@ func (c *b2client) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (c *b2client) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (c *b2client) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if off == 0 && limit == -1 {
 		_, r, err := c.bucket.DownloadFileByName(key)
 		return r, err
@@ -94,12 +95,12 @@ func (c *b2client) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 	return r, err
 }
 
-func (c *b2client) Put(key string, data io.Reader, getters ...AttrGetter) error {
+func (c *b2client) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
 	_, err := c.bucket.UploadFile(key, nil, data)
 	return err
 }
 
-func (c *b2client) Copy(dst, src string) error {
+func (c *b2client) Copy(ctx context.Context, dst, src string) error {
 	f, err := c.getFileInfo(src)
 	if err != nil {
 		return err
@@ -109,7 +110,7 @@ func (c *b2client) Copy(dst, src string) error {
 	return err
 }
 
-func (c *b2client) Delete(key string, getters ...AttrGetter) error {
+func (c *b2client) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	f, err := c.getFileInfo(key)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "not_found") {
@@ -121,7 +122,7 @@ func (c *b2client) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (c *b2client) List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (c *b2client) List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}

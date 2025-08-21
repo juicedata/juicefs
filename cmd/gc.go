@@ -273,7 +273,7 @@ func gc(ctx *cli.Context) error {
 		go func() {
 			defer wg.Done()
 			for key := range leakedObj {
-				if err := blob.Delete(key); err != nil {
+				if err := blob.Delete(ctx.Context, key); err != nil {
 					logger.Warnf("delete %s: %s", key, err)
 				}
 			}

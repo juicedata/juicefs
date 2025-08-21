@@ -182,7 +182,7 @@ func destroy(ctx *cli.Context) error {
 					mu.Unlock()
 					continue
 				}
-				if err := blob.Delete(obj.Key()); err == nil {
+				if err := blob.Delete(ctx.Context, obj.Key()); err == nil {
 					spin.Increment()
 				} else {
 					failed++
@@ -194,7 +194,7 @@ func destroy(ctx *cli.Context) error {
 	wg.Wait()
 	sort.Strings(dirs)
 	for i := len(dirs) - 1; i >= 0; i-- {
-		if err := blob.Delete(dirs[i]); err == nil {
+		if err := blob.Delete(ctx.Context, dirs[i]); err == nil {
 			spin.Increment()
 		} else {
 			failed++

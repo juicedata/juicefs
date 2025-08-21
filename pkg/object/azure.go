@@ -20,6 +20,7 @@
 package object
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -50,7 +51,7 @@ func (b *wasb) String() string {
 	return fmt.Sprintf("wasb://%s/", b.cName)
 }
 
-func (b *wasb) Create() error {
+func (b *wasb) Create(ctx context.Context) error {
 	_, err := b.container.Create(ctx, nil)
 	if err != nil {
 		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.ContainerAlreadyExists) {
@@ -60,7 +61,7 @@ func (b *wasb) Create() error {
 	return err
 }
 
-func (b *wasb) Head(key string) (Object, error) {
+func (b *wasb) Head(ctx context.Context, key string) (Object, error) {
 	properties, err := b.container.NewBlobClient(key).GetProperties(ctx, nil)
 	if err != nil {
 		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.BlobNotFound) {
@@ -78,7 +79,7 @@ func (b *wasb) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (b *wasb) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (b *wasb) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	download, err := b.container.NewBlobClient(key).DownloadStream(ctx, &azblob.DownloadStreamOptions{Range: blob2.HTTPRange{Offset: off, Count: limit}})
 	if err != nil {
 		return nil, err
@@ -98,7 +99,7 @@ func str2Tier(tier string) *blob2.AccessTier {
 	return nil
 }
 
-func (b *wasb) Put(key string, data io.Reader, getters ...AttrGetter) error {
+func (b *wasb) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
 	options := azblob.UploadStreamOptions{}
 	if b.sc != "" {
 		options.AccessTier = str2Tier(b.sc)
@@ -109,7 +110,7 @@ func (b *wasb) Put(key string, data io.Reader, getters ...AttrGetter) error {
 	return err
 }
 
-func (b *wasb) Copy(dst, src string) error {
+func (b *wasb) Copy(ctx context.Context, dst, src string) error {
 	dstCli := b.container.NewBlobClient(dst)
 	srcCli := b.container.NewBlobClient(src)
 	options := &blob2.CopyFromURLOptions{}
@@ -124,7 +125,7 @@ func (b *wasb) Copy(dst, src string) error {
 	return err
 }
 
-func (b *wasb) Delete(key string, getters ...AttrGetter) error {
+func (b *wasb) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	resp, err := b.container.NewBlobClient(key).Delete(ctx, nil)
 	if err != nil {
 		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.BlobNotFound) {
@@ -136,7 +137,7 @@ func (b *wasb) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (b *wasb) List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (b *wasb) List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}

@@ -8,14 +8,8 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/pkg/errors"
-	"github.com/pkg/sftp"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
-	"golang.org/x/crypto/ssh/knownhosts"
-	"golang.org/x/term"
 	"io"
 	"math/rand"
 	"net"
@@ -30,6 +24,14 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/pkg/errors"
+	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh/knownhosts"
+	"golang.org/x/term"
 )
 
 // conn encapsulates an ssh client and corresponding sftp client
@@ -159,7 +161,7 @@ func (f *sftpStore) path(key string) string {
 	return f.root + key
 }
 
-func (f *sftpStore) Head(key string) (Object, error) {
+func (f *sftpStore) Head(ctx context.Context, key string) (Object, error) {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return nil, err
@@ -181,7 +183,7 @@ func (f *sftpStore) Head(key string) (Object, error) {
 	return f.fileInfo(key, info, isSymlink), nil
 }
 
-func (f *sftpStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (f *sftpStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return nil, err
@@ -210,7 +212,7 @@ func (f *sftpStore) Get(key string, off, limit int64, getters ...AttrGetter) (io
 	return ff, err
 }
 
-func (f *sftpStore) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
+func (f *sftpStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return err
@@ -323,7 +325,7 @@ func (f *sftpStore) Readlink(name string) (link string, err error) {
 	return c.sftpClient.ReadLink(f.path(name))
 }
 
-func (f *sftpStore) Delete(key string, getters ...AttrGetter) error {
+func (f *sftpStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return err
@@ -381,7 +383,7 @@ func (f *sftpStore) fileInfo(key string, fi os.FileInfo, isSymlink bool) Object 
 	return ff
 }
 
-func (f *sftpStore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (f *sftpStore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
@@ -400,7 +402,7 @@ func (f *sftpStore) List(prefix, marker, token, delimiter string, limit int64, f
 			dir += dirSuffix
 		}
 	} else if marker == "" {
-		obj, err := f.Head(prefix)
+		obj, err := f.Head(ctx, prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, false, "", nil

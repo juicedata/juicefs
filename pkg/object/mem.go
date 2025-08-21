@@ -18,6 +18,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -47,7 +48,7 @@ func (m *memStore) String() string {
 	return fmt.Sprintf("mem://%s/", m.name)
 }
 
-func (m *memStore) Head(key string) (Object, error) {
+func (m *memStore) Head(ctx context.Context, key string) (Object, error) {
 	m.Lock()
 	defer m.Unlock()
 	// Minimum length is 1.
@@ -74,7 +75,7 @@ func (m *memStore) Head(key string) (Object, error) {
 	return f, nil
 }
 
-func (m *memStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (m *memStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	m.Lock()
 	defer m.Unlock()
 	// Minimum length is 1.
@@ -95,7 +96,7 @@ func (m *memStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (m *memStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (m *memStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	m.Lock()
 	defer m.Unlock()
 	// Minimum length is 1.
@@ -114,22 +115,22 @@ func (m *memStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	return nil
 }
 
-func (m *memStore) Copy(dst, src string) error {
-	d, err := m.Get(src, 0, -1)
+func (m *memStore) Copy(ctx context.Context, dst, src string) error {
+	d, err := m.Get(ctx, src, 0, -1)
 	if err != nil {
 		return err
 	}
-	return m.Put(dst, d)
+	return m.Put(ctx, dst, d)
 }
 
-func (m *memStore) Delete(key string, getters ...AttrGetter) error {
+func (m *memStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	m.Lock()
 	defer m.Unlock()
 	delete(m.objects, key)
 	return nil
 }
 
-func (m *memStore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (m *memStore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	m.Lock()
 	defer m.Unlock()
 

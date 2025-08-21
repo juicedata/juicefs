@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
@@ -82,7 +83,7 @@ func ufileSigner(req *http.Request, accessKey, secretKey, signName string) {
 	req.Header.Add("Authorization", token)
 }
 
-func (u *ufile) Create() error {
+func (u *ufile) Create(ctx context.Context) error {
 	uri, _ := url.ParseRequestURI(u.endpoint)
 	parts := strings.Split(uri.Host, ".")
 	name := parts[0]
@@ -154,8 +155,8 @@ func (u *ufile) parseResp(resp *http.Response, out interface{}) error {
 	return nil
 }
 
-func copyObj(store ObjectStorage, dst, src string) error {
-	in, err := store.Get(src, 0, -1)
+func copyObj(ctx context.Context, store ObjectStorage, dst, src string) error {
+	in, err := store.Get(ctx, src, 0, -1)
 	if err != nil {
 		return err
 	}
@@ -164,35 +165,35 @@ func copyObj(store ObjectStorage, dst, src string) error {
 	if err != nil {
 		return err
 	}
-	return store.Put(dst, bytes.NewReader(d))
+	return store.Put(ctx, dst, bytes.NewReader(d))
 }
 
-func (u *ufile) Copy(dst, src string) error {
-	resp, err := u.request("HEAD", src, nil, nil)
+func (u *ufile) Copy(ctx context.Context, dst, src string) error {
+	resp, err := u.request(ctx, "HEAD", src, nil, nil)
 	if err != nil {
-		return copyObj(u, dst, src)
+		return copyObj(ctx, u, dst, src)
 	}
 	if resp.StatusCode != 200 {
-		return copyObj(u, dst, src)
+		return copyObj(ctx, u, dst, src)
 	}
 
 	etag := resp.Header["Etag"]
 	if len(etag) < 1 {
-		return copyObj(u, dst, src)
+		return copyObj(ctx, u, dst, src)
 	}
 	hash := etag[0][1 : len(etag[0])-1]
 	lens := resp.Header["Content-Length"]
 	if len(lens) < 1 {
-		return copyObj(u, dst, src)
+		return copyObj(ctx, u, dst, src)
 	}
 	uri := fmt.Sprintf("uploadhit?Hash=%s&FileName=%s&FileSize=%s", hash, dst, lens[0])
-	resp, err = u.request("POST", uri, nil, nil)
+	resp, err = u.request(ctx, "POST", uri, nil, nil)
 	if err != nil {
-		return copyObj(u, dst, src)
+		return copyObj(ctx, u, dst, src)
 	}
 	defer cleanup(resp)
 	if resp.StatusCode != 200 {
-		return copyObj(u, dst, src)
+		return copyObj(ctx, u, dst, src)
 	}
 	return nil
 }
@@ -222,7 +223,7 @@ type uFileListObjectsOutput struct {
 	CommonPrefixes []*CommonPrefixesItem `json:"CommonPrefixes,omitempty"`
 }
 
-func (u *ufile) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (u *ufile) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}
@@ -234,7 +235,7 @@ func (u *ufile) List(prefix, start, token, delimiter string, limit int64, follow
 		limit = 1000
 	}
 	query.Add("max-keys", strconv.Itoa(int(limit)))
-	resp, err := u.request("GET", "?listobjects&"+query.Encode(), nil, nil)
+	resp, err := u.request(ctx, "GET", "?listobjects&"+query.Encode(), nil, nil)
 	if err != nil {
 		return nil, false, "", err
 	}
@@ -269,8 +270,8 @@ type ufileCreateMultipartUploadResult struct {
 	Key      string
 }
 
-func (u *ufile) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	resp, err := u.request("POST", key+"?uploads", nil, nil)
+func (u *ufile) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
+	resp, err := u.request(ctx, "POST", key+"?uploads", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -281,11 +282,11 @@ func (u *ufile) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	return &MultipartUpload{UploadID: out.UploadId, MinPartSize: out.BlkSize, MaxCount: 1000000}, nil
 }
 
-func (u *ufile) UploadPart(key string, uploadID string, num int, data []byte) (*Part, error) {
+func (u *ufile) UploadPart(ctx context.Context, key string, uploadID string, num int, data []byte) (*Part, error) {
 	// UFile require the PartNumber to start from 0 (continuous)
 	num--
 	path := fmt.Sprintf("%s?uploadId=%s&partNumber=%d", key, uploadID, num)
-	resp, err := u.request("PUT", path, bytes.NewReader(data), nil)
+	resp, err := u.request(ctx, "PUT", path, bytes.NewReader(data), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -300,16 +301,16 @@ func (u *ufile) UploadPart(key string, uploadID string, num int, data []byte) (*
 	return &Part{Num: num, Size: len(data), ETag: strings.Trim(etags[0], "\"")}, nil
 }
 
-func (u *ufile) AbortUpload(key string, uploadID string) {
-	_, _ = u.request("DELETE", key+"?uploads="+uploadID, nil, nil)
+func (u *ufile) AbortUpload(ctx context.Context, key string, uploadID string) {
+	_, _ = u.request(ctx, "DELETE", key+"?uploads="+uploadID, nil, nil)
 }
 
-func (u *ufile) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (u *ufile) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	etags := make([]string, len(parts))
 	for i, p := range parts {
 		etags[i] = p.ETag
 	}
-	resp, err := u.request("POST", key+"?uploadId="+uploadID, bytes.NewReader([]byte(strings.Join(etags, ","))), nil)
+	resp, err := u.request(ctx, "POST", key+"?uploadId="+uploadID, bytes.NewReader([]byte(strings.Join(etags, ","))), nil)
 	if err != nil {
 		return err
 	}
@@ -333,13 +334,13 @@ type ufileListMultipartUploadsResult struct {
 	DataSet    []*ufileUpload
 }
 
-func (u *ufile) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (u *ufile) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	query := url.Values{}
 	query.Add("muploadid", "")
 	query.Add("prefix", "")
 	query.Add("marker", marker)
 	query.Add("limit", strconv.Itoa(1000))
-	resp, err := u.request("GET", "?"+query.Encode(), nil, nil)
+	resp, err := u.request(ctx, "GET", "?"+query.Encode(), nil, nil)
 	if err != nil {
 		return nil, "", err
 	}

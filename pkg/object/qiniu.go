@@ -20,6 +20,7 @@
 package object
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -87,7 +88,7 @@ func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
 
 var notexist = "no such file or directory"
 
-func (q *qiniu) Head(key string) (Object, error) {
+func (q *qiniu) Head(ctx context.Context, key string) (Object, error) {
 	r, err := q.bm.Stat(q.bucket, key)
 	if err != nil {
 		if strings.Contains(err.Error(), notexist) {
@@ -106,14 +107,14 @@ func (q *qiniu) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (q *qiniu) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (q *qiniu) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if strings.HasPrefix(key, "/") && os.Getenv("QINIU_DOMAIN") != "" {
 		return q.download(key, off, limit)
 	}
-	return q.s3client.Get(key, off, limit, getters...)
+	return q.s3client.Get(ctx, key, off, limit, getters...)
 }
 
-func (q *qiniu) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (q *qiniu) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	body, vlen, err := findLen(in)
 	if err != nil {
 		return err
@@ -125,15 +126,15 @@ func (q *qiniu) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	return formUploader.Put(ctx, &ret, upToken, key, body, vlen, nil)
 }
 
-func (q *qiniu) Copy(dst, src string) error {
+func (q *qiniu) Copy(ctx context.Context, dst, src string) error {
 	return q.bm.Copy(q.bucket, src, q.bucket, dst, true)
 }
 
-func (q *qiniu) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (q *qiniu) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	return nil, notSupported
 }
 
-func (q *qiniu) Delete(key string, getters ...AttrGetter) error {
+func (q *qiniu) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	err := q.bm.Delete(q.bucket, key)
 	if err != nil && strings.Contains(err.Error(), notexist) {
 		return nil
@@ -141,7 +142,7 @@ func (q *qiniu) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (q *qiniu) List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (q *qiniu) List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
