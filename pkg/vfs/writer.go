@@ -183,7 +183,7 @@ func (c *chunkWriter) commitThread() {
 	f := c.file
 	defer f.w.free(f)
 	f.Lock()
-	defer f.Unlock()
+
 	// the slices should be committed in the order that are created
 	for len(c.slices) > 0 {
 		s := c.slices[0]
@@ -218,6 +218,7 @@ func (c *chunkWriter) commitThread() {
 		c.slices = c.slices[1:]
 	}
 	f.freeChunk(c)
+	f.Unlock()
 }
 
 type fileWriter struct {
