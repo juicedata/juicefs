@@ -182,21 +182,7 @@ func (c *chunkWriter) findWritableSlice(pos uint32, size uint32) *sliceWriter {
 func (c *chunkWriter) commitThread() {
 	f := c.file
 	defer f.w.free(f)
-
-	var locked bool
 	f.Lock()
-	locked = true
-	defer func() {
-		if r := recover(); r != nil {
-			if locked {
-				f.Unlock()
-			}
-			panic(r)
-		}
-		if locked {
-			f.Unlock()
-		}
-	}()
 
 	// the slices should be committed in the order that are created
 	for len(c.slices) > 0 {
@@ -208,9 +194,7 @@ func (c *chunkWriter) commitThread() {
 			}
 		}
 		err := s.err
-
 		f.Unlock()
-		locked = false
 
 		if err == 0 {
 			var ss = meta.Slice{Id: s.id, Size: s.length, Off: s.soff, Len: s.slen}
@@ -219,8 +203,6 @@ func (c *chunkWriter) commitThread() {
 		}
 
 		f.Lock()
-		locked = true
-
 		if err != 0 {
 			if err == syscall.ENOENT || err == syscall.ENOSPC || err == syscall.EDQUOT {
 				go func(id uint64, length int) {
@@ -236,6 +218,7 @@ func (c *chunkWriter) commitThread() {
 		c.slices = c.slices[1:]
 	}
 	f.freeChunk(c)
+	defer f.Unlock()
 }
 
 type fileWriter struct {
