@@ -218,7 +218,7 @@ func (c *chunkWriter) commitThread() {
 		c.slices = c.slices[1:]
 	}
 	f.freeChunk(c)
-	defer f.Unlock()
+	f.Unlock()
 }
 
 type fileWriter struct {
