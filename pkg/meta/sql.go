@@ -275,6 +275,135 @@ type dbMeta struct {
 	tablePrefix   string
 }
 
+// quotaTableInfo 定义配额表的基本信息
+type quotaTableInfo struct {
+	tableName string
+	keyField  string
+	keyValue  uint64
+	quota     interface{}
+}
+
+// getQuotaTableInfo 获取配额表信息
+func (m *dbMeta) getQuotaTableInfo(qtype uint32, key uint64) (*quotaTableInfo, error) {
+	switch qtype {
+	case DirQuotaType:
+		return &quotaTableInfo{
+			tableName: "dir_quota",
+			keyField:  "inode",
+			keyValue:  key,
+			quota:     &dirQuota{Inode: key},
+		}, nil
+	case UserQuotaType:
+		return &quotaTableInfo{
+			tableName: "user_quota",
+			keyField:  "uid",
+			keyValue:  key,
+			quota:     &userQuota{Uid: key},
+		}, nil
+	case GroupQuotaType:
+		return &quotaTableInfo{
+			tableName: "group_quota",
+			keyField:  "gid",
+			keyValue:  key,
+			quota:     &groupQuota{Gid: key},
+		}, nil
+	default:
+		return nil, errors.Errorf("invalid quota type %d", qtype)
+	}
+}
+
+// convertToQuota 将数据库结构转换为Quota
+func (m *dbMeta) convertToQuota(q interface{}) *Quota {
+	switch v := q.(type) {
+	case *dirQuota:
+		return &Quota{
+			MaxSpace:   v.MaxSpace,
+			MaxInodes:  v.MaxInodes,
+			UsedSpace:  v.UsedSpace,
+			UsedInodes: v.UsedInodes,
+		}
+	case *userQuota:
+		return &Quota{
+			MaxSpace:   v.MaxSpace,
+			MaxInodes:  v.MaxInodes,
+			UsedSpace:  v.UsedSpace,
+			UsedInodes: v.UsedInodes,
+		}
+	case *groupQuota:
+		return &Quota{
+			MaxSpace:   v.MaxSpace,
+			MaxInodes:  v.MaxInodes,
+			UsedSpace:  v.UsedSpace,
+			UsedInodes: v.UsedInodes,
+		}
+	default:
+		return nil
+	}
+}
+
+// updateQuotaFields 更新配额字段
+func (m *dbMeta) updateQuotaFields(q interface{}, quota *Quota) {
+	switch v := q.(type) {
+	case *dirQuota:
+		if quota.MaxSpace >= 0 {
+			v.MaxSpace = quota.MaxSpace
+		}
+		if quota.MaxInodes >= 0 {
+			v.MaxInodes = quota.MaxInodes
+		}
+		if quota.UsedSpace >= 0 {
+			v.UsedSpace = quota.UsedSpace
+		}
+		if quota.UsedInodes >= 0 {
+			v.UsedInodes = quota.UsedInodes
+		}
+	case *userQuota:
+		if quota.MaxSpace >= 0 {
+			v.MaxSpace = quota.MaxSpace
+		}
+		if quota.MaxInodes >= 0 {
+			v.MaxInodes = quota.MaxInodes
+		}
+		if quota.UsedSpace >= 0 {
+			v.UsedSpace = quota.UsedSpace
+		}
+		if quota.UsedInodes >= 0 {
+			v.UsedInodes = quota.UsedInodes
+		}
+	case *groupQuota:
+		if quota.MaxSpace >= 0 {
+			v.MaxSpace = quota.MaxSpace
+		}
+		if quota.MaxInodes >= 0 {
+			v.MaxInodes = quota.MaxInodes
+		}
+		if quota.UsedSpace >= 0 {
+			v.UsedSpace = quota.UsedSpace
+		}
+		if quota.UsedInodes >= 0 {
+			v.UsedInodes = quota.UsedInodes
+		}
+	}
+}
+
+// getUpdateColumns 获取更新列
+func (m *dbMeta) getUpdateColumns(quota *Quota) []string {
+	columns := make([]string, 0, 4)
+	if quota.MaxSpace >= 0 {
+		columns = append(columns, "max_space")
+	}
+	if quota.MaxInodes >= 0 {
+		columns = append(columns, "max_inodes")
+	}
+	if quota.UsedSpace >= 0 {
+		columns = append(columns, "used_space")
+	}
+	if quota.UsedInodes >= 0 {
+		columns = append(columns, "used_inodes")
+	}
+	return columns
+}
+
 var _ Meta = (*dbMeta)(nil)
 var _ engine = (*dbMeta)(nil)
 
@@ -3621,130 +3750,22 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
-// 获取配额表名和结构体
-func (m *dbMeta) getQuotaTableInfo(qtype uint32, key uint64) (string, interface{}, error) {
-	switch qtype {
-	case DirQuotaType:
-		return "dir_quota", &dirQuota{Inode: key}, nil
-	case UserQuotaType:
-		return "user_quota", &userQuota{Uid: key}, nil
-	case GroupQuotaType:
-		return "group_quota", &groupQuota{Gid: key}, nil
-	default:
-		return "", nil, errors.Errorf("invalid quota type %d", qtype)
-	}
-}
-
-// 将数据库结构转换为Quota
-func (m *dbMeta) convertToQuota(q interface{}) *Quota {
-	switch v := q.(type) {
-	case *dirQuota:
-		return &Quota{
-			MaxSpace:   v.MaxSpace,
-			MaxInodes:  v.MaxInodes,
-			UsedSpace:  v.UsedSpace,
-			UsedInodes: v.UsedInodes,
-		}
-	case *userQuota:
-		return &Quota{
-			MaxSpace:   v.MaxSpace,
-			MaxInodes:  v.MaxInodes,
-			UsedSpace:  v.UsedSpace,
-			UsedInodes: v.UsedInodes,
-		}
-	case *groupQuota:
-		return &Quota{
-			MaxSpace:   v.MaxSpace,
-			MaxInodes:  v.MaxInodes,
-			UsedSpace:  v.UsedSpace,
-			UsedInodes: v.UsedInodes,
-		}
-	default:
-		return nil
-	}
-}
-
-// 更新配额字段
-func (m *dbMeta) updateQuotaFields(q interface{}, quota *Quota) {
-	switch v := q.(type) {
-	case *dirQuota:
-		if quota.MaxSpace >= 0 {
-			v.MaxSpace = quota.MaxSpace
-		}
-		if quota.MaxInodes >= 0 {
-			v.MaxInodes = quota.MaxInodes
-		}
-		if quota.UsedSpace >= 0 {
-			v.UsedSpace = quota.UsedSpace
-		}
-		if quota.UsedInodes >= 0 {
-			v.UsedInodes = quota.UsedInodes
-		}
-	case *userQuota:
-		if quota.MaxSpace >= 0 {
-			v.MaxSpace = quota.MaxSpace
-		}
-		if quota.MaxInodes >= 0 {
-			v.MaxInodes = quota.MaxInodes
-		}
-		if quota.UsedSpace >= 0 {
-			v.UsedSpace = quota.UsedSpace
-		}
-		if quota.UsedInodes >= 0 {
-			v.UsedInodes = quota.UsedInodes
-		}
-	case *groupQuota:
-		if quota.MaxSpace >= 0 {
-			v.MaxSpace = quota.MaxSpace
-		}
-		if quota.MaxInodes >= 0 {
-			v.MaxInodes = quota.MaxInodes
-		}
-		if quota.UsedSpace >= 0 {
-			v.UsedSpace = quota.UsedSpace
-		}
-		if quota.UsedInodes >= 0 {
-			v.UsedInodes = quota.UsedInodes
-		}
-	}
-}
-
-// 获取更新列
-func (m *dbMeta) getUpdateColumns(quota *Quota) []string {
-	columns := make([]string, 0, 4)
-	if quota.MaxSpace >= 0 {
-		columns = append(columns, "max_space")
-	}
-	if quota.MaxInodes >= 0 {
-		columns = append(columns, "max_inodes")
-	}
-	if quota.UsedSpace >= 0 {
-		columns = append(columns, "used_space")
-	}
-	if quota.UsedInodes >= 0 {
-		columns = append(columns, "used_inodes")
-	}
-	return columns
-}
-
 func (m *dbMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, error) {
+	tableInfo, err := m.getQuotaTableInfo(qtype, key)
+	if err != nil {
+		return nil, err
+	}
+
 	var quota *Quota
-
-	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
-		_, quotaStruct, err := m.getQuotaTableInfo(qtype, key)
-		if err != nil {
-			return err
-		}
-
-		exists, err := s.Get(quotaStruct)
+	err = m.simpleTxn(ctx, func(s *xorm.Session) error {
+		exists, err := s.Get(tableInfo.quota)
 		if err != nil {
 			return err
 		}
 
 		if exists {
-			quota = m.convertToQuota(quotaStruct)
+			quota = m.convertToQuota(tableInfo.quota)
 		}
-
 		return nil
 	})
 
@@ -3752,15 +3773,14 @@ func (m *dbMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, erro
 }
 
 func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (bool, error) {
+	tableInfo, err := m.getQuotaTableInfo(qtype, key)
+	if err != nil {
+		return false, err
+	}
+
 	var created bool
-
-	err := m.txn(func(s *xorm.Session) error {
-		_, quotaStruct, err := m.getQuotaTableInfo(qtype, key)
-		if err != nil {
-			return err
-		}
-
-		exists, err := s.ForUpdate().Get(quotaStruct)
+	err = m.txn(func(s *xorm.Session) error {
+		exists, err := s.ForUpdate().Get(tableInfo.quota)
 		if err != nil {
 			return err
 		}
@@ -3773,21 +3793,14 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 			created = true
 		}
 
-		m.updateQuotaFields(quotaStruct, quota)
-
+		m.updateQuotaFields(tableInfo.quota, quota)
 		updateColumns := m.getUpdateColumns(quota)
 
 		if exists {
-			switch qtype {
-			case DirQuotaType:
-				_, err = s.Cols(updateColumns...).Update(quotaStruct.(*dirQuota), &dirQuota{Inode: key})
-			case UserQuotaType:
-				_, err = s.Cols(updateColumns...).Update(quotaStruct.(*userQuota), &userQuota{Uid: key})
-			case GroupQuotaType:
-				_, err = s.Cols(updateColumns...).Update(quotaStruct.(*groupQuota), &groupQuota{Gid: key})
-			}
+			// 使用通用的更新逻辑
+			err = m.updateQuotaRecord(s, tableInfo, updateColumns)
 		} else {
-			err = mustInsert(s, quotaStruct)
+			err = mustInsert(s, tableInfo.quota)
 		}
 
 		return err
@@ -3796,19 +3809,36 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 	return created, err
 }
 
+// updateQuotaRecord 通用更新配额记录
+func (m *dbMeta) updateQuotaRecord(s *xorm.Session, tableInfo *quotaTableInfo, columns []string) error {
+	switch v := tableInfo.quota.(type) {
+	case *dirQuota:
+		_, err := s.Cols(columns...).Update(v, &dirQuota{Inode: tableInfo.keyValue})
+		return err
+	case *userQuota:
+		_, err := s.Cols(columns...).Update(v, &userQuota{Uid: tableInfo.keyValue})
+		return err
+	case *groupQuota:
+		_, err := s.Cols(columns...).Update(v, &groupQuota{Gid: tableInfo.keyValue})
+		return err
+	default:
+		return errors.Errorf("unknown quota type")
+	}
+}
+
 func (m *dbMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
+	tableInfo, err := m.getQuotaTableInfo(qtype, key)
+	if err != nil {
+		return err
+	}
+
 	return m.txn(func(s *xorm.Session) error {
-		var e error
-		_, quotaStruct, err := m.getQuotaTableInfo(qtype, key)
-		if err != nil {
-			return err
-		}
-		_, e = s.Delete(quotaStruct)
-		return e
+		_, err := s.Delete(tableInfo.quota)
+		return err
 	})
 }
 
-func (m *dbMeta) doLoadQuotas(ctx context.Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
+func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
 	var drows []dirQuota
 	var urows []userQuota
 	var grows []groupQuota
@@ -3826,78 +3856,96 @@ func (m *dbMeta) doLoadQuotas(ctx context.Context) (map[uint64]*Quota, map[uint6
 		return nil, nil, nil, err
 	}
 
-	makeQuotaMap := func(slice interface{}, getKey func(interface{}) uint64) map[uint64]*Quota {
-		result := make(map[uint64]*Quota)
-		switch items := slice.(type) {
-		case []dirQuota:
-			for i := range items {
-				key := getKey(items[i])
-				result[key] = &Quota{
-					MaxSpace:   items[i].MaxSpace,
-					MaxInodes:  items[i].MaxInodes,
-					UsedSpace:  items[i].UsedSpace,
-					UsedInodes: items[i].UsedInodes,
-				}
-			}
-		case []userQuota:
-			for i := range items {
-				key := getKey(items[i])
-				result[key] = &Quota{
-					MaxSpace:   items[i].MaxSpace,
-					MaxInodes:  items[i].MaxInodes,
-					UsedSpace:  items[i].UsedSpace,
-					UsedInodes: items[i].UsedInodes,
-				}
-			}
-		case []groupQuota:
-			for i := range items {
-				key := getKey(items[i])
-				result[key] = &Quota{
-					MaxSpace:   items[i].MaxSpace,
-					MaxInodes:  items[i].MaxInodes,
-					UsedSpace:  items[i].UsedSpace,
-					UsedInodes: items[i].UsedInodes,
-				}
-			}
-		}
-		return result
+	// 定义配额类型配置
+	quotaTypes := []struct {
+		rows   interface{}
+		getKey func(interface{}) uint64
+	}{
+		{drows, func(item interface{}) uint64 { return item.(dirQuota).Inode }},
+		{urows, func(item interface{}) uint64 { return item.(userQuota).Uid }},
+		{grows, func(item interface{}) uint64 { return item.(groupQuota).Gid }},
 	}
 
-	quotaMaps := []map[uint64]*Quota{
-		makeQuotaMap(drows, func(item interface{}) uint64 { return item.(dirQuota).Inode }),
-		makeQuotaMap(urows, func(item interface{}) uint64 { return item.(userQuota).Uid }),
-		makeQuotaMap(grows, func(item interface{}) uint64 { return item.(groupQuota).Gid }),
+	// 加载所有配额类型
+	quotaMaps := make([]map[uint64]*Quota, 3)
+	for i, qt := range quotaTypes {
+		quotaMaps[i] = m.makeQuotaMap(qt.rows, qt.getKey)
 	}
 
 	return quotaMaps[0], quotaMaps[1], quotaMaps[2], nil
+}
+
+// makeQuotaMap 创建配额映射
+func (m *dbMeta) makeQuotaMap(slice interface{}, getKey func(interface{}) uint64) map[uint64]*Quota {
+	result := make(map[uint64]*Quota)
+	switch items := slice.(type) {
+	case []dirQuota:
+		for i := range items {
+			key := getKey(items[i])
+			result[key] = &Quota{
+				MaxSpace:   items[i].MaxSpace,
+				MaxInodes:  items[i].MaxInodes,
+				UsedSpace:  items[i].UsedSpace,
+				UsedInodes: items[i].UsedInodes,
+			}
+		}
+	case []userQuota:
+		for i := range items {
+			key := getKey(items[i])
+			result[key] = &Quota{
+				MaxSpace:   items[i].MaxSpace,
+				MaxInodes:  items[i].MaxInodes,
+				UsedSpace:  items[i].UsedSpace,
+				UsedInodes: items[i].UsedInodes,
+			}
+		}
+	case []groupQuota:
+		for i := range items {
+			key := getKey(items[i])
+			result[key] = &Quota{
+				MaxSpace:   items[i].MaxSpace,
+				MaxInodes:  items[i].MaxInodes,
+				UsedSpace:  items[i].UsedSpace,
+				UsedInodes: items[i].UsedInodes,
+			}
+		}
+	}
+	return result
 }
 
 func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	sort.Slice(quotas, func(i, j int) bool { return quotas[i].key < quotas[j].key })
 	return m.txn(func(s *xorm.Session) error {
 		for _, q := range quotas {
-			if q.qtype == DirQuotaType {
-				_, err := s.Exec(m.sqlConv("update dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"),
-					q.quota.newSpace, q.quota.newInodes, q.key)
-				if err != nil {
-					return err
-				}
-			} else if q.qtype == UserQuotaType {
-				_, err := s.Exec(m.sqlConv("update user_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"),
-					q.quota.newSpace, q.quota.newInodes, q.key)
-				if err != nil {
-					return err
-				}
-			} else if q.qtype == GroupQuotaType {
-				_, err := s.Exec(m.sqlConv("update group_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"),
-					q.quota.newSpace, q.quota.newInodes, q.key)
-				if err != nil {
-					return err
-				}
+			if err := m.updateQuotaUsage(s, q); err != nil {
+				return err
 			}
 		}
 		return nil
 	})
+}
+
+// updateQuotaUsage 更新配额使用量
+func (m *dbMeta) updateQuotaUsage(s *xorm.Session, q *iQuota) error {
+	var sql string
+	var args []interface{}
+
+	switch q.qtype {
+	case DirQuotaType:
+		sql = m.sqlConv("update dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?")
+		args = []interface{}{q.quota.newSpace, q.quota.newInodes, q.key}
+	case UserQuotaType:
+		sql = m.sqlConv("update user_quota set used_space=used_space+?, used_inodes=used_inodes+? where uid=?")
+		args = []interface{}{q.quota.newSpace, q.quota.newInodes, q.key}
+	case GroupQuotaType:
+		sql = m.sqlConv("update group_quota set used_space=used_space+?, used_inodes=used_inodes+? where gid=?")
+		args = []interface{}{q.quota.newSpace, q.quota.newInodes, q.key}
+	default:
+		return errors.Errorf("unknown quota type: %d", q.qtype)
+	}
+
+	_, err := s.Exec(sql, args[0], args[1], args[2])
+	return err
 }
 
 func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {

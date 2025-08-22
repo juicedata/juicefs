@@ -2734,11 +2734,14 @@ func (m *kvMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, erro
 	buf, err := m.get(quotaKey)
 	if err != nil {
 		return nil, err
-	} else if buf == nil {
+	}
+	if buf == nil {
 		return nil, nil
-	} else if len(buf) != 32 {
+	}
+	if len(buf) != 32 {
 		return nil, fmt.Errorf("invalid quota value: %v", buf)
 	}
+
 	return m.parseQuota(buf), nil
 }
 
@@ -2750,36 +2753,54 @@ func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 			return err
 		}
 
-		var origin *Quota
-		buf := tx.get(quotaKey)
-		if len(buf) == 32 {
-			origin = m.parseQuota(buf)
-			created = false
-		} else if len(buf) != 0 {
-			return fmt.Errorf("invalid quota value: %v", buf)
-		} else {
+		origin, exists, err := m.getExistingQuota(tx, quotaKey)
+		if err != nil {
+			return err
+		}
+
+		if !exists {
 			if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
 				return errors.New("limitation not set or deleted")
 			}
 			created = true
 			origin = new(Quota)
+		} else {
+			created = false
 		}
-		if quota.MaxSpace >= 0 {
-			origin.MaxSpace = quota.MaxSpace
-		}
-		if quota.MaxInodes >= 0 {
-			origin.MaxInodes = quota.MaxInodes
-		}
-		if quota.UsedSpace >= 0 {
-			origin.UsedSpace = quota.UsedSpace
-		}
-		if quota.UsedInodes >= 0 {
-			origin.UsedInodes = quota.UsedInodes
-		}
+
+		m.updateQuotaFields(origin, quota)
 		tx.set(quotaKey, m.packQuota(origin))
 		return nil
 	})
 	return created, err
+}
+
+// getExistingQuota 获取现有的配额信息
+func (m *kvMeta) getExistingQuota(tx *kvTxn, quotaKey []byte) (*Quota, bool, error) {
+	buf := tx.get(quotaKey)
+	if len(buf) == 32 {
+		return m.parseQuota(buf), true, nil
+	}
+	if len(buf) != 0 {
+		return nil, false, fmt.Errorf("invalid quota value: %v", buf)
+	}
+	return nil, false, nil
+}
+
+// updateQuotaFields 更新配额字段
+func (m *kvMeta) updateQuotaFields(origin *Quota, quota *Quota) {
+	if quota.MaxSpace >= 0 {
+		origin.MaxSpace = quota.MaxSpace
+	}
+	if quota.MaxInodes >= 0 {
+		origin.MaxInodes = quota.MaxInodes
+	}
+	if quota.UsedSpace >= 0 {
+		origin.UsedSpace = quota.UsedSpace
+	}
+	if quota.UsedInodes >= 0 {
+		origin.UsedInodes = quota.UsedInodes
+	}
 }
 
 func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
@@ -2791,41 +2812,46 @@ func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 }
 
 func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
-	// Helper function to load quotas for a given prefix
-	loadQuotaMap := func(prefix string) (map[uint64]*Quota, error) {
-		pairs, err := m.scanValues(m.fmtKey(prefix), -1, nil)
+	// 定义配额类型配置
+	quotaTypes := []struct {
+		prefix string
+		name   string
+	}{
+		{"QD", "dir"},
+		{"QU", "user"},
+		{"QG", "group"},
+	}
+
+	// 加载所有配额类型
+	quotaMaps := make([]map[uint64]*Quota, 3)
+	for i, qt := range quotaTypes {
+		quotas, err := m.loadQuotaMap(qt.prefix)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, fmt.Errorf("failed to load %s quotas: %w", qt.name, err)
 		}
-		if len(pairs) == 0 {
-			return make(map[uint64]*Quota), nil
-		}
-
-		quotas := make(map[uint64]*Quota, len(pairs))
-		for k, v := range pairs {
-			id := binary.LittleEndian.Uint64([]byte(k[2:])) // skip prefix
-			quota := m.parseQuota(v)
-			quotas[id] = quota
-		}
-		return quotas, nil
+		quotaMaps[i] = quotas
 	}
 
-	dirQuotas, err := loadQuotaMap("QD")
+	return quotaMaps[0], quotaMaps[1], quotaMaps[2], nil
+}
+
+// loadQuotaMap 加载指定前缀的配额映射
+func (m *kvMeta) loadQuotaMap(prefix string) (map[uint64]*Quota, error) {
+	pairs, err := m.scanValues(m.fmtKey(prefix), -1, nil)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
+	}
+	if len(pairs) == 0 {
+		return make(map[uint64]*Quota), nil
 	}
 
-	userQuotas, err := loadQuotaMap("QU")
-	if err != nil {
-		return nil, nil, nil, err
+	quotas := make(map[uint64]*Quota, len(pairs))
+	for k, v := range pairs {
+		id := binary.LittleEndian.Uint64([]byte(k[2:])) // skip prefix
+		quota := m.parseQuota(v)
+		quotas[id] = quota
 	}
-
-	groupQuotas, err := loadQuotaMap("QG")
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return dirQuotas, userQuotas, groupQuotas, nil
+	return quotas, nil
 }
 
 func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
@@ -2885,31 +2911,42 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	return m.txn(ctx, func(tx *kvTxn) error {
 		keys := make([][]byte, 0, len(quotas))
 		qs := make([]*Quota, 0, len(quotas))
+
+		// 收集所有配额键和配额对象
 		for _, q := range quotas {
-			if q.qtype == DirQuotaType {
-				keys = append(keys, m.dirQuotaKey(Ino(q.key)))
-			} else if q.qtype == UserQuotaType {
-				keys = append(keys, m.userQuotaKey(q.key))
-			} else if q.qtype == GroupQuotaType {
-				keys = append(keys, m.groupQuotaKey(q.key))
+			key, err := m.getQuotaKey(q.qtype, q.key)
+			if err != nil {
+				return err
 			}
+			keys = append(keys, key)
 			qs = append(qs, q.quota)
 		}
+
+		// 批量更新配额使用量
 		for i, v := range tx.gets(keys...) {
-			if len(v) == 0 {
-				continue
+			if err := m.updateQuotaUsage(tx, keys[i], v, qs[i]); err != nil {
+				return err
 			}
-			if len(v) != 32 {
-				logger.Errorf("Invalid quota value: %v", v)
-				continue
-			}
-			q := m.parseQuota(v)
-			q.UsedSpace += qs[i].newSpace
-			q.UsedInodes += qs[i].newInodes
-			tx.set(keys[i], m.packQuota(q))
 		}
 		return nil
 	})
+}
+
+// updateQuotaUsage 更新配额使用量
+func (m *kvMeta) updateQuotaUsage(tx *kvTxn, key []byte, value []byte, quota *Quota) error {
+	if len(value) == 0 {
+		return nil
+	}
+	if len(value) != 32 {
+		logger.Errorf("Invalid quota value: %v", value)
+		return nil
+	}
+
+	q := m.parseQuota(value)
+	q.UsedSpace += quota.newSpace
+	q.UsedInodes += quota.newInodes
+	tx.set(key, m.packQuota(q))
+	return nil
 }
 
 func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
