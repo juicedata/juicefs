@@ -3577,14 +3577,33 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 	}
 }
 
-func (m *redisMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
-	field := inode.String()
-	cmds, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.HGet(ctx, m.dirQuotaKey(), field)
-		pipe.HGet(ctx, m.dirQuotaUsedSpaceKey(), field)
-		pipe.HGet(ctx, m.dirQuotaUsedInodesKey(), field)
-		return nil
-	})
+func (m *redisMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, error) {
+	field := strconv.FormatUint(key, 10)
+	var err error
+	var cmds []redis.Cmder
+	switch qtype {
+	case DirQuotaType:
+		cmds, err = m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HGet(ctx, m.dirQuotaKey(), field)
+			pipe.HGet(ctx, m.dirQuotaUsedSpaceKey(), field)
+			pipe.HGet(ctx, m.dirQuotaUsedInodesKey(), field)
+			return nil
+		})
+	case UserQuotaType:
+		cmds, err = m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HGet(ctx, m.userQuotaKey(), field)
+			pipe.HGet(ctx, m.userQuotaUsedSpaceKey(), field)
+			pipe.HGet(ctx, m.userQuotaUsedInodesKey(), field)
+			return nil
+		})
+	case GroupQuotaType:
+		cmds, err = m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HGet(ctx, m.groupQuotaKey(), field)
+			pipe.HGet(ctx, m.groupQuotaUsedSpaceKey(), field)
+			pipe.HGet(ctx, m.groupQuotaUsedInodesKey(), field)
+			return nil
+		})
+	}
 	if err == redis.Nil {
 		return nil, nil
 	} else if err != nil {
@@ -3606,12 +3625,40 @@ func (m *redisMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	return &quota, nil
 }
 
-func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) {
+func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (bool, error) {
 	var created bool
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		origin := new(Quota)
-		field := inode.String()
-		buf, e := tx.HGet(ctx, m.dirQuotaKey(), field).Bytes()
+		field := strconv.FormatUint(key, 10)
+		
+		quotaConfig := map[uint32]struct {
+			quotaKeyFunc    func() string
+			usedSpaceKeyFunc func() string
+			usedInodesKeyFunc func() string
+		}{
+			DirQuotaType: {
+				m.dirQuotaKey,
+				m.dirQuotaUsedSpaceKey,
+				m.dirQuotaUsedInodesKey,
+			},
+			UserQuotaType: {
+				m.userQuotaKey,
+				m.userQuotaUsedSpaceKey,
+				m.userQuotaUsedInodesKey,
+			},
+			GroupQuotaType: {
+				m.groupQuotaKey,
+				m.groupQuotaUsedSpaceKey,
+				m.groupQuotaUsedInodesKey,
+			},
+		}
+		
+		config, exists := quotaConfig[qtype]
+		if !exists {
+			return fmt.Errorf("unknown quota type: %d", qtype)
+		}
+		
+		buf, e := tx.HGet(ctx, config.quotaKeyFunc(), field).Bytes()
 		if e == nil {
 			created = false
 			origin.MaxSpace, origin.MaxInodes = m.parseQuota(buf)
@@ -3623,26 +3670,29 @@ func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, erro
 		} else {
 			return e
 		}
+		
 		if quota.MaxSpace >= 0 {
 			origin.MaxSpace = quota.MaxSpace
 		}
 		if quota.MaxInodes >= 0 {
 			origin.MaxInodes = quota.MaxInodes
 		}
+		
 		_, e = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.HSet(ctx, m.dirQuotaKey(), field, m.packQuota(origin.MaxSpace, origin.MaxInodes))
+			pipe.HSet(ctx, config.quotaKeyFunc(), field, m.packQuota(origin.MaxSpace, origin.MaxInodes))
 			if quota.UsedSpace >= 0 {
-				pipe.HSet(ctx, m.dirQuotaUsedSpaceKey(), field, quota.UsedSpace)
+				pipe.HSet(ctx, config.usedSpaceKeyFunc(), field, quota.UsedSpace)
 			}
 			if quota.UsedInodes >= 0 {
-				pipe.HSet(ctx, m.dirQuotaUsedInodesKey(), field, quota.UsedInodes)
+				pipe.HSet(ctx, config.usedInodesKeyFunc(), field, quota.UsedInodes)
 			}
 			return nil
 		})
 		return e
-	}, m.inodeKey(inode))
+	}, m.inodeKey(Ino(key))))
 	return created, err
 }
+
 
 func (m *redisMeta) doDelQuota(ctx Context, inode Ino) error {
 	field := inode.String()

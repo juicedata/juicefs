@@ -2712,8 +2712,26 @@ func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
-func (m *kvMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
-	buf, err := m.get(m.dirQuotaKey(inode))
+func (m *kvMeta) getQuotaKey(qtype uint32, key uint64) ([]byte, error) {
+	switch qtype {
+	case DirQuotaType:
+		return m.dirQuotaKey(Ino(key)), nil
+	case UserQuotaType:
+		return m.userQuotaKey(key), nil
+	case GroupQuotaType:
+		return m.groupQuotaKey(key), nil
+	default:
+		return nil, fmt.Errorf("invalid quota type: %d", qtype)
+	}
+}
+
+func (m *kvMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, error) {
+	quotaKey, err := m.getQuotaKey(qtype, key)
+	if err != nil {
+		return nil, err
+	}
+
+	buf, err := m.get(quotaKey)
 	if err != nil {
 		return nil, err
 	} else if buf == nil {
@@ -2724,11 +2742,16 @@ func (m *kvMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	return m.parseQuota(buf), nil
 }
 
-func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) {
+func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (bool, error) {
 	var created bool
 	err := m.txn(ctx, func(tx *kvTxn) error {
+		quotaKey, err := m.getQuotaKey(qtype, key)
+		if err != nil {
+			return err
+		}
+
 		var origin *Quota
-		buf := tx.get(m.dirQuotaKey(inode))
+		buf := tx.get(quotaKey)
 		if len(buf) == 32 {
 			origin = m.parseQuota(buf)
 			created = false
@@ -2753,7 +2776,7 @@ func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) 
 		if quota.UsedInodes >= 0 {
 			origin.UsedInodes = quota.UsedInodes
 		}
-		tx.set(m.dirQuotaKey(inode), m.packQuota(origin))
+		tx.set(quotaKey, m.packQuota(origin))
 		return nil
 	})
 	return created, err

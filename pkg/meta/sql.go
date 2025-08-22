@@ -3621,61 +3621,178 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
-func (m *dbMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
-	var quota *Quota
-	return quota, m.simpleTxn(ctx, func(s *xorm.Session) error {
-		q := dirQuota{Inode: inode}
-		ok, e := s.Get(&q)
-		if e == nil && ok {
-			quota = &Quota{
-				MaxSpace:   q.MaxSpace,
-				MaxInodes:  q.MaxInodes,
-				UsedSpace:  q.UsedSpace,
-				UsedInodes: q.UsedInodes}
-		}
-		return e
-	})
+// 获取配额表名和结构体
+func (m *dbMeta) getQuotaTableInfo(qtype uint32, key uint64) (string, interface{}, error) {
+	switch qtype {
+	case DirQuotaType:
+		return "dir_quota", &dirQuota{Inode: key}, nil
+	case UserQuotaType:
+		return "user_quota", &userQuota{Uid: key}, nil
+	case GroupQuotaType:
+		return "group_quota", &groupQuota{Gid: key}, nil
+	default:
+		return "", nil, errors.Errorf("invalid quota type %d", qtype)
+	}
 }
 
-func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) {
-	var created bool
-	err := m.txn(func(s *xorm.Session) error {
-		origin := dirQuota{Inode: inode}
-		exist, e := s.ForUpdate().Get(&origin)
-		if e != nil {
-			return e
+// 将数据库结构转换为Quota
+func (m *dbMeta) convertToQuota(q interface{}) *Quota {
+	switch v := q.(type) {
+	case *dirQuota:
+		return &Quota{
+			MaxSpace:   v.MaxSpace,
+			MaxInodes:  v.MaxInodes,
+			UsedSpace:  v.UsedSpace,
+			UsedInodes: v.UsedInodes,
 		}
-		if exist {
+	case *userQuota:
+		return &Quota{
+			MaxSpace:   v.MaxSpace,
+			MaxInodes:  v.MaxInodes,
+			UsedSpace:  v.UsedSpace,
+			UsedInodes: v.UsedInodes,
+		}
+	case *groupQuota:
+		return &Quota{
+			MaxSpace:   v.MaxSpace,
+			MaxInodes:  v.MaxInodes,
+			UsedSpace:  v.UsedSpace,
+			UsedInodes: v.UsedInodes,
+		}
+	default:
+		return nil
+	}
+}
+
+// 更新配额字段
+func (m *dbMeta) updateQuotaFields(q interface{}, quota *Quota) {
+	switch v := q.(type) {
+	case *dirQuota:
+		if quota.MaxSpace >= 0 {
+			v.MaxSpace = quota.MaxSpace
+		}
+		if quota.MaxInodes >= 0 {
+			v.MaxInodes = quota.MaxInodes
+		}
+		if quota.UsedSpace >= 0 {
+			v.UsedSpace = quota.UsedSpace
+		}
+		if quota.UsedInodes >= 0 {
+			v.UsedInodes = quota.UsedInodes
+		}
+	case *userQuota:
+		if quota.MaxSpace >= 0 {
+			v.MaxSpace = quota.MaxSpace
+		}
+		if quota.MaxInodes >= 0 {
+			v.MaxInodes = quota.MaxInodes
+		}
+		if quota.UsedSpace >= 0 {
+			v.UsedSpace = quota.UsedSpace
+		}
+		if quota.UsedInodes >= 0 {
+			v.UsedInodes = quota.UsedInodes
+		}
+	case *groupQuota:
+		if quota.MaxSpace >= 0 {
+			v.MaxSpace = quota.MaxSpace
+		}
+		if quota.MaxInodes >= 0 {
+			v.MaxInodes = quota.MaxInodes
+		}
+		if quota.UsedSpace >= 0 {
+			v.UsedSpace = quota.UsedSpace
+		}
+		if quota.UsedInodes >= 0 {
+			v.UsedInodes = quota.UsedInodes
+		}
+	}
+}
+
+// 获取更新列
+func (m *dbMeta) getUpdateColumns(quota *Quota) []string {
+	columns := make([]string, 0, 4)
+	if quota.MaxSpace >= 0 {
+		columns = append(columns, "max_space")
+	}
+	if quota.MaxInodes >= 0 {
+		columns = append(columns, "max_inodes")
+	}
+	if quota.UsedSpace >= 0 {
+		columns = append(columns, "used_space")
+	}
+	if quota.UsedInodes >= 0 {
+		columns = append(columns, "used_inodes")
+	}
+	return columns
+}
+
+func (m *dbMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, error) {
+	var quota *Quota
+
+	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
+		_, quotaStruct, err := m.getQuotaTableInfo(qtype, key)
+		if err != nil {
+			return err
+		}
+
+		exists, err := s.Get(quotaStruct)
+		if err != nil {
+			return err
+		}
+
+		if exists {
+			quota = m.convertToQuota(quotaStruct)
+		}
+
+		return nil
+	})
+
+	return quota, err
+}
+
+func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (bool, error) {
+	var created bool
+
+	err := m.txn(func(s *xorm.Session) error {
+		_, quotaStruct, err := m.getQuotaTableInfo(qtype, key)
+		if err != nil {
+			return err
+		}
+
+		exists, err := s.ForUpdate().Get(quotaStruct)
+		if err != nil {
+			return err
+		}
+
+		if exists {
 			created = false
 		} else if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
 			return errors.Errorf("limitation not set or deleted")
 		} else {
 			created = true
 		}
-		updateColumns := make([]string, 0, 4)
-		if quota.MaxSpace >= 0 {
-			origin.MaxSpace = quota.MaxSpace
-			updateColumns = append(updateColumns, "max_space")
-		}
-		if quota.MaxInodes >= 0 {
-			origin.MaxInodes = quota.MaxInodes
-			updateColumns = append(updateColumns, "max_inodes")
-		}
-		if quota.UsedSpace >= 0 {
-			origin.UsedSpace = quota.UsedSpace
-			updateColumns = append(updateColumns, "used_space")
-		}
-		if quota.UsedInodes >= 0 {
-			origin.UsedInodes = quota.UsedInodes
-			updateColumns = append(updateColumns, "used_inodes")
-		}
-		if exist {
-			_, e = s.Cols(updateColumns...).Update(&origin, &dirQuota{Inode: inode})
+
+		m.updateQuotaFields(quotaStruct, quota)
+
+		updateColumns := m.getUpdateColumns(quota)
+
+		if exists {
+			switch qtype {
+			case DirQuotaType:
+				_, err = s.Cols(updateColumns...).Update(quotaStruct.(*dirQuota), &dirQuota{Inode: key})
+			case UserQuotaType:
+				_, err = s.Cols(updateColumns...).Update(quotaStruct.(*userQuota), &userQuota{Uid: key})
+			case GroupQuotaType:
+				_, err = s.Cols(updateColumns...).Update(quotaStruct.(*groupQuota), &groupQuota{Gid: key})
+			}
 		} else {
-			e = mustInsert(s, &origin)
+			err = mustInsert(s, quotaStruct)
 		}
-		return e
+
+		return err
 	})
+
 	return created, err
 }
 
