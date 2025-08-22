@@ -2775,7 +2775,6 @@ func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 	return created, err
 }
 
-// getExistingQuota 获取现有的配额信息
 func (m *kvMeta) getExistingQuota(tx *kvTxn, quotaKey []byte) (*Quota, bool, error) {
 	buf := tx.get(quotaKey)
 	if len(buf) == 32 {
@@ -2787,7 +2786,6 @@ func (m *kvMeta) getExistingQuota(tx *kvTxn, quotaKey []byte) (*Quota, bool, err
 	return nil, false, nil
 }
 
-// updateQuotaFields 更新配额字段
 func (m *kvMeta) updateQuotaFields(origin *Quota, quota *Quota) {
 	if quota.MaxSpace >= 0 {
 		origin.MaxSpace = quota.MaxSpace
@@ -2812,7 +2810,6 @@ func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 }
 
 func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
-	// 定义配额类型配置
 	quotaTypes := []struct {
 		prefix string
 		name   string
@@ -2822,7 +2819,6 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 		{"QG", "group"},
 	}
 
-	// 加载所有配额类型
 	quotaMaps := make([]map[uint64]*Quota, 3)
 	for i, qt := range quotaTypes {
 		quotas, err := m.loadQuotaMap(qt.prefix)
@@ -2835,7 +2831,6 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 	return quotaMaps[0], quotaMaps[1], quotaMaps[2], nil
 }
 
-// loadQuotaMap 加载指定前缀的配额映射
 func (m *kvMeta) loadQuotaMap(prefix string) (map[uint64]*Quota, error) {
 	pairs, err := m.scanValues(m.fmtKey(prefix), -1, nil)
 	if err != nil {
@@ -2912,7 +2907,6 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 		keys := make([][]byte, 0, len(quotas))
 		qs := make([]*Quota, 0, len(quotas))
 
-		// 收集所有配额键和配额对象
 		for _, q := range quotas {
 			key, err := m.getQuotaKey(q.qtype, q.key)
 			if err != nil {
@@ -2922,7 +2916,6 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 			qs = append(qs, q.quota)
 		}
 
-		// 批量更新配额使用量
 		for i, v := range tx.gets(keys...) {
 			if err := m.updateQuotaUsage(tx, keys[i], v, qs[i]); err != nil {
 				return err
@@ -2932,7 +2925,6 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	})
 }
 
-// updateQuotaUsage 更新配额使用量
 func (m *kvMeta) updateQuotaUsage(tx *kvTxn, key []byte, value []byte, quota *Quota) error {
 	if len(value) == 0 {
 		return nil

@@ -3577,14 +3577,12 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 	}
 }
 
-// quotaConfig 定义配额类型的配置信息
 type quotaConfig struct {
 	quotaKey      string
 	usedSpaceKey  string
 	usedInodesKey string
 }
 
-// getQuotaConfig 根据配额类型返回对应的配置
 func (m *redisMeta) getQuotaConfig(qtype uint32) (*quotaConfig, error) {
 	switch qtype {
 	case DirQuotaType:
@@ -3710,12 +3708,11 @@ func (m *redisMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 	return err
 }
 
-func (m *redisMeta) doLoadQuotas(ctx Context, qType int64) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
+func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
 	dirQuotas := make(map[uint64]*Quota)
 	userQuotas := make(map[uint64]*Quota)
 	groupQuotas := make(map[uint64]*Quota)
 
-	// 定义配额类型配置
 	quotaTypes := []struct {
 		quotas map[uint64]*Quota
 		config *quotaConfig
@@ -3725,7 +3722,6 @@ func (m *redisMeta) doLoadQuotas(ctx Context, qType int64) (map[uint64]*Quota, m
 		{groupQuotas, &quotaConfig{m.groupQuotaKey(), m.groupQuotaUsedSpaceKey(), m.groupQuotaUsedInodesKey()}},
 	}
 
-	// 加载所有配额类型
 	for _, qt := range quotaTypes {
 		if err := m.loadQuotaType(ctx, qt.quotas, qt.config); err != nil {
 			return dirQuotas, userQuotas, groupQuotas, err
@@ -3735,7 +3731,6 @@ func (m *redisMeta) doLoadQuotas(ctx Context, qType int64) (map[uint64]*Quota, m
 	return dirQuotas, userQuotas, groupQuotas, nil
 }
 
-// loadQuotaType 加载指定类型的配额数据
 func (m *redisMeta) loadQuotaType(ctx Context, quotas map[uint64]*Quota, config *quotaConfig) error {
 	return m.hscan(ctx, config.quotaKey, func(keys []string) error {
 		for i := 0; i < len(keys); i += 2 {

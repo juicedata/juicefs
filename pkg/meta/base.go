@@ -255,7 +255,7 @@ type baseMeta struct {
 
 	parentMu    sync.Mutex        // protect dirParents
 	quotaMu     sync.RWMutex      // protect dirQuotas
-	dirParents  map[uint64]Ino    // directory inode -> parent inode
+	dirParents  map[Ino]Ino       // directory inode -> parent inode
 	dirQuotas   map[uint64]*Quota // directory inode -> quota
 	userQuotas  map[uint64]*Quota // uid -> quota
 	groupQuotas map[uint64]*Quota // gid -> quota
@@ -296,7 +296,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		},
 		dirStats:   make(map[Ino]dirStat),
 		dirParents: make(map[Ino]Ino),
-		dirQuotas:  make(map[Ino]*Quota),
+		dirQuotas:  make(map[uint64]*Quota),
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
@@ -1453,7 +1453,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 		if attr.Typ == TypeDirectory {
 			m.quotaMu.RLock()
-			q := m.dirQuotas[*inode]
+			q := m.dirQuotas[uint64(*inode)]
 			m.quotaMu.RUnlock()
 			if q != nil {
 				space, inodes = q.UsedSpace+align4K(0), q.UsedInodes+1

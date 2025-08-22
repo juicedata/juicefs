@@ -262,16 +262,17 @@ func (m *baseMeta) syncVolumeStat(ctx Context) error {
 	return m.en.doSyncVolumeStat(ctx)
 }
 
-func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, uid, gid uint64, parents ...Ino) syscall.Errno {
+// todo:增加uid，gid参数
+func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) syscall.Errno {
 	if space <= 0 && inodes <= 0 {
 		return 0
 	}
 
-	if m.checkUidQuota(ctx, uid, space, inodes) {
+	if m.checkUidQuota(ctx, 0, space, inodes) {
 		return syscall.EDQUOT
 	}
 
-	if m.checkGidQuota(ctx, gid, space, inodes) {
+	if m.checkGidQuota(ctx, 0, space, inodes) {
 		return syscall.EDQUOT
 	}
 
@@ -340,7 +341,7 @@ func (m *baseMeta) loadQuotas() {
 
 func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
 	m.parentMu.Lock()
-	parent, ok := m.dirParents[uint64(inode)]
+	parent, ok := m.dirParents[inode]
 	m.parentMu.Unlock()
 	if ok {
 		return parent, 0
@@ -487,7 +488,6 @@ func (m *baseMeta) doFlushQuotas() {
 		return
 	}
 
-	// 定义收集配额的函数
 	collectQuotas := func(quotas map[uint64]*Quota) []*iQuota {
 		var result []*iQuota
 		for key, q := range quotas {
@@ -500,7 +500,6 @@ func (m *baseMeta) doFlushQuotas() {
 		return result
 	}
 
-	// 定义更新配额的函数
 	updateQuota := func(q *Quota, newSpace, newInodes int64) {
 		atomic.AddInt64(&q.newSpace, -newSpace)
 		atomic.AddInt64(&q.UsedSpace, newSpace)
@@ -511,7 +510,6 @@ func (m *baseMeta) doFlushQuotas() {
 	var allQuotas []*iQuota
 	m.quotaMu.RLock()
 
-	// 收集所有类型的配额
 	allQuotas = append(allQuotas, collectQuotas(m.dirQuotas)...)
 	allQuotas = append(allQuotas, collectQuotas(m.userQuotas)...)
 	allQuotas = append(allQuotas, collectQuotas(m.groupQuotas)...)
@@ -527,22 +525,18 @@ func (m *baseMeta) doFlushQuotas() {
 		return
 	}
 
-	// 更新配额
 	m.quotaMu.RLock()
 	for _, snap := range allQuotas {
-		// 尝试在目录配额中更新
 		if q := m.dirQuotas[snap.key]; q != nil {
 			updateQuota(q, snap.quota.newSpace, snap.quota.newInodes)
 			continue
 		}
 
-		// 尝试在用户配额中更新
 		if q := m.userQuotas[snap.key]; q != nil {
 			updateQuota(q, snap.quota.newSpace, snap.quota.newInodes)
 			continue
 		}
 
-		// 尝试在组配额中更新
 		if q := m.groupQuotas[snap.key]; q != nil {
 			updateQuota(q, snap.quota.newSpace, snap.quota.newInodes)
 		}
@@ -590,11 +584,9 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32,
 	}
 }
 
-// handleQuotaSet 处理配额设置
 func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath string, uid, gid uint32, quotas map[string]*Quota, strict bool) error {
 	format := m.getFormat()
 
-	// 检查并启用相应的配额功能
 	if err := m.enableQuotaFeature(qtype, format); err != nil {
 		return err
 	}
@@ -614,11 +606,9 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 		return nil
 	}
 
-	// 新创建配额，需要初始化使用量
 	return m.initializeQuotaUsage(ctx, qtype, key, dpath, uid, gid, strict)
 }
 
-// enableQuotaFeature 启用相应的配额功能
 func (m *baseMeta) enableQuotaFeature(qtype uint32, format *Format) error {
 	switch qtype {
 	case DirQuotaType:
@@ -635,7 +625,6 @@ func (m *baseMeta) enableQuotaFeature(qtype uint32, format *Format) error {
 	return nil
 }
 
-// getQuotaForType 根据配额类型获取对应的配额配置
 func (m *baseMeta) getQuotaForType(qtype uint32, dpath string, uid, gid uint32, quotas map[string]*Quota) *Quota {
 	switch qtype {
 	case DirQuotaType:
@@ -646,7 +635,6 @@ func (m *baseMeta) getQuotaForType(qtype uint32, dpath string, uid, gid uint32, 
 	return nil
 }
 
-// initializeQuotaUsage 初始化配额使用量
 func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, dpath string, uid, gid uint32, strict bool) error {
 	switch qtype {
 	case DirQuotaType:
@@ -677,7 +665,6 @@ func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, d
 	return nil
 }
 
-// initializeUidGidQuotaUsage 初始化用户/组配额使用量
 func (m *baseMeta) initializeUidGidQuotaUsage(ctx Context, qtype uint32, key uint64, uid, gid uint32) error {
 	var summary Summary
 	var err error
@@ -704,7 +691,6 @@ func (m *baseMeta) initializeUidGidQuotaUsage(ctx Context, qtype uint32, key uin
 	return nil
 }
 
-// getQuotaTypeName 获取配额类型名称
 func (m *baseMeta) getQuotaTypeName(qtype uint32) string {
 	switch qtype {
 	case UserQuotaType:
@@ -716,7 +702,6 @@ func (m *baseMeta) getQuotaTypeName(qtype uint32) string {
 	}
 }
 
-// handleQuotaGet 处理配额获取
 func (m *baseMeta) handleQuotaGet(ctx Context, qtype uint32, key uint64, dpath string, quotas map[string]*Quota) error {
 	q, err := m.en.doGetQuota(ctx, qtype, key)
 	if err != nil {
@@ -729,7 +714,6 @@ func (m *baseMeta) handleQuotaGet(ctx Context, qtype uint32, key uint64, dpath s
 	return nil
 }
 
-// handleQuotaList 处理配额列表
 func (m *baseMeta) handleQuotaList(ctx Context, quotas map[string]*Quota) error {
 	dirQuotas, userQuotas, groupQuotas, err := m.en.doLoadQuotas(ctx)
 	if err != nil {
@@ -756,7 +740,6 @@ func (m *baseMeta) handleQuotaList(ctx Context, quotas map[string]*Quota) error 
 	return nil
 }
 
-// handleQuotaCheck 处理配额检查
 func (m *baseMeta) handleQuotaCheck(ctx Context, qtype uint32, key uint64, dpath string, strict, repair bool, quotas map[string]*Quota) error {
 	q, err := m.en.doGetQuota(ctx, qtype, key)
 	if err != nil {
@@ -791,7 +774,7 @@ func (m *baseMeta) handleQuotaCheck(ctx Context, qtype uint32, key uint64, dpath
 		q.UsedSpace = usedSpace
 		quotas[dpath] = q
 		logger.Info("repairing...")
-		_, err = m.en.doSetQuota(ctx, key, &Quota{
+		_, err = m.en.doSetQuota(ctx, qtype, key, &Quota{
 			MaxInodes:  -1,
 			MaxSpace:   -1,
 			UsedInodes: q.UsedInodes,

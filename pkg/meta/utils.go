@@ -591,8 +591,8 @@ func (m *baseMeta) getSummaryByAttribute(ctx Context, summary *Summary, matchFun
 	}
 
 	*summary = Summary{}
-	processedFiles := make(map[Ino]bool) // 避免硬链接重复计数
-	visitedDirs := make(map[Ino]bool)    // 避免目录循环
+	processedFiles := make(map[Ino]bool)
+	visitedDirs := make(map[Ino]bool)
 
 	type dirItem struct {
 		ino Ino
