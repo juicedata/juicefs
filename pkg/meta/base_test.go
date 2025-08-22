@@ -594,6 +594,9 @@ func testMetaClient(t *testing.T, m Meta) {
 	defer func() {
 		_ = m.Unlink(ctx, 1, "f2")
 	}()
+	if st := m.Rename(ctx, 1, "f2", 1, "f2", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename f2 -> f2: %s", st)
+	}
 	if st := m.Rename(ctx, 1, "f2", 1, "f", RenameExchange, &inode, attr); st != syscall.ENOENT {
 		t.Fatalf("rename f2 -> f: %s", st)
 	}

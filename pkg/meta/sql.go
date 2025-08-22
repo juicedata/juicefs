@@ -727,7 +727,7 @@ func (m *dbMeta) Reset() error {
 		&node{}, &edge{}, &symlink{}, &xattr{},
 		&chunk{}, &sliceRef{}, &delslices{},
 		&session{}, &session2{}, &sustained{}, &delfile{},
-		&flock{}, &plock{}, &dirStats{}, &dirQuota{}, &detachedNode{}, &acl{})
+		&flock{}, &plock{}, &dirStats{}, &dirQuota{}, &userQuota{}, &groupQuota{}, &detachedNode{}, &acl{})
 }
 
 func (m *dbMeta) doLoad() (data []byte, err error) {
@@ -749,9 +749,9 @@ func (m *dbMeta) doLoad() (data []byte, err error) {
 
 func (m *dbMeta) doNewSession(sinfo []byte, update bool) error {
 	// add new table
-	err := m.syncTable(new(session2), new(delslices), new(dirStats), new(detachedNode), new(dirQuota), new(acl))
+	err := m.syncTable(new(session2), new(delslices), new(dirStats), new(detachedNode), new(dirQuota), new(userQuota), new(groupQuota), new(acl))
 	if err != nil {
-		return fmt.Errorf("update table session2, delslices, dirstats, detachedNode, dirQuota: %s", err)
+		return fmt.Errorf("update table session2, delslices, dirstats, detachedNode, dirQuota, userQuota, groupQuota: %s", err)
 	}
 	// add node table
 	if err = m.syncTable(new(node)); err != nil {
@@ -4408,6 +4408,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		if err := s.Find(&qs); err != nil {
 			return err
 		}
+		// todo Add user/group quota
 		dumpedQuotas := make(map[Ino]*DumpedQuota, len(qs))
 		for _, q := range qs {
 			dumpedQuotas[Ino(q.Inode)] = &DumpedQuota{q.MaxSpace, q.MaxInodes, 0, 0}
