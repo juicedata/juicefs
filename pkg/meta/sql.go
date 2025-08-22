@@ -3796,9 +3796,14 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 	return created, err
 }
 
-func (m *dbMeta) doDelQuota(ctx Context, inode Ino) error {
+func (m *dbMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 	return m.txn(func(s *xorm.Session) error {
-		_, e := s.Delete(&dirQuota{Inode: inode})
+		var e error
+		_, quotaStruct, err := m.getQuotaTableInfo(qtype, key)
+		if err != nil {
+			return err
+		}
+		_, e = s.Delete(quotaStruct)
 		return e
 	})
 }

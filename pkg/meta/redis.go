@@ -3630,10 +3630,10 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		origin := new(Quota)
 		field := strconv.FormatUint(key, 10)
-		
+
 		quotaConfig := map[uint32]struct {
-			quotaKeyFunc    func() string
-			usedSpaceKeyFunc func() string
+			quotaKeyFunc      func() string
+			usedSpaceKeyFunc  func() string
 			usedInodesKeyFunc func() string
 		}{
 			DirQuotaType: {
@@ -3652,12 +3652,12 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 				m.groupQuotaUsedInodesKey,
 			},
 		}
-		
+
 		config, exists := quotaConfig[qtype]
 		if !exists {
 			return fmt.Errorf("unknown quota type: %d", qtype)
 		}
-		
+
 		buf, e := tx.HGet(ctx, config.quotaKeyFunc(), field).Bytes()
 		if e == nil {
 			created = false
@@ -3670,14 +3670,14 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 		} else {
 			return e
 		}
-		
+
 		if quota.MaxSpace >= 0 {
 			origin.MaxSpace = quota.MaxSpace
 		}
 		if quota.MaxInodes >= 0 {
 			origin.MaxInodes = quota.MaxInodes
 		}
-		
+
 		_, e = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, config.quotaKeyFunc(), field, m.packQuota(origin.MaxSpace, origin.MaxInodes))
 			if quota.UsedSpace >= 0 {
@@ -3689,17 +3689,27 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			return nil
 		})
 		return e
-	}, m.inodeKey(Ino(key))))
+	}, m.inodeKey(Ino(key)))
 	return created, err
 }
 
-
-func (m *redisMeta) doDelQuota(ctx Context, inode Ino) error {
-	field := inode.String()
+func (m *redisMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
+	field := strconv.FormatUint(key, 10)
 	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.HDel(ctx, m.dirQuotaKey(), field)
-		pipe.HDel(ctx, m.dirQuotaUsedSpaceKey(), field)
-		pipe.HDel(ctx, m.dirQuotaUsedInodesKey(), field)
+		switch qtype {
+		case DirQuotaType:
+			pipe.HDel(ctx, m.dirQuotaKey(), field)
+			pipe.HDel(ctx, m.dirQuotaUsedSpaceKey(), field)
+			pipe.HDel(ctx, m.dirQuotaUsedInodesKey(), field)
+		case UserQuotaType:
+			pipe.HDel(ctx, m.userQuotaKey(), field)
+			pipe.HDel(ctx, m.userQuotaUsedSpaceKey(), field)
+			pipe.HDel(ctx, m.userQuotaUsedInodesKey(), field)
+		case GroupQuotaType:
+			pipe.HDel(ctx, m.groupQuotaKey(), field)
+			pipe.HDel(ctx, m.groupQuotaUsedSpaceKey(), field)
+			pipe.HDel(ctx, m.groupQuotaUsedInodesKey(), field)
+		}
 		return nil
 	})
 	return err

@@ -2782,8 +2782,12 @@ func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 	return created, err
 }
 
-func (m *kvMeta) doDelQuota(ctx Context, inode Ino) error {
-	return m.deleteKeys(m.dirQuotaKey(inode))
+func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
+	quotaKey, err := m.getQuotaKey(qtype, key)
+	if err != nil {
+		return err
+	}
+	return m.deleteKeys(quotaKey)
 }
 
 func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
