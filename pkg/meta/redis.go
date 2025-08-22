@@ -647,13 +647,13 @@ func (m *redisMeta) dirQuotaKey() string {
 	return m.prefix + "dirQuota"
 }
 
-func (m *redisMeta) userUsedSpaceKey() string {
-	return m.prefix + "userUsedSpace"
-}
+//func (m *redisMeta) userUsedSpaceKey() string {
+//	return m.prefix + "userUsedSpace"
+//}
 
-func (m *redisMeta) userUsedInodesKey() string {
-	return m.prefix + "userUsedInodes"
-}
+//func (m *redisMeta) userUsedInodesKey() string {
+//	return m.prefix + "userUsedInodes"
+//}
 
 func (m *redisMeta) userQuotaUsedSpaceKey() string {
 	return m.prefix + "userQuotaUsedSpace"
@@ -667,13 +667,13 @@ func (m *redisMeta) userQuotaKey() string {
 	return m.prefix + "userQuota"
 }
 
-func (m *redisMeta) groupUsedSpaceKey() string {
-	return m.prefix + "groupUsedSpace"
-}
+//func (m *redisMeta) groupUsedSpaceKey() string {
+//	return m.prefix + "groupUsedSpace"
+//}
 
-func (m *redisMeta) groupUsedInodesKey() string {
-	return m.prefix + "groupUsedInodes"
-}
+//func (m *redisMeta) groupUsedInodesKey() string {
+//	return m.prefix + "groupUsedInodes"
+//}
 
 func (m *redisMeta) groupQuotaUsedSpaceKey() string {
 	return m.prefix + "groupQuotaUsedSpace"
@@ -3654,7 +3654,6 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 		origin := new(Quota)
 		field := strconv.FormatUint(key, 10)
 
-		// 获取现有配额配置
 		buf, e := tx.HGet(ctx, config.quotaKey, field).Bytes()
 		if e == nil {
 			created = false
@@ -3668,7 +3667,6 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			return e
 		}
 
-		// 更新配额限制
 		if quota.MaxSpace >= 0 {
 			origin.MaxSpace = quota.MaxSpace
 		}
@@ -3676,7 +3674,6 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			origin.MaxInodes = quota.MaxInodes
 		}
 
-		// 批量更新配额数据
 		_, e = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, config.quotaKey, field, m.packQuota(origin.MaxSpace, origin.MaxInodes))
 			if quota.UsedSpace >= 0 {

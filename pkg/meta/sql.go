@@ -365,11 +365,11 @@ func (m *dbMeta) initStatement() {
 	m.statement["update chunk_ref set refs=refs-1 where chunkid=? AND size=?"] =
 		fmt.Sprintf("update %schunk_ref set refs=refs-1 where chunkid=? AND size=?", m.tablePrefix)
 	m.statement["update dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"] =
-		fmt.Sprintf("update %sdir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?", m.tablePrefix)
-	m.statement["update user_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"] =
-		fmt.Sprintf("update %suser_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?", m.tablePrefix)
-	m.statement["update group_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"] =
-		fmt.Sprintf("update %sgroup_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?", m.tablePrefix)
+		fmt.Sprintf("update %sdir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=", m.tablePrefix)
+	m.statement["update user_quota set used_space=used_space+?, used_inodes=used_inodes+? where uid=?"] =
+		fmt.Sprintf("update %suser_quota set used_space=used_space+?, used_inodes=used_inodes+? where uid=", m.tablePrefix)
+	m.statement["update group_quota set used_space=used_space+?, used_inodes=used_inodes+? where gid=?"] =
+		fmt.Sprintf("update %sgroup_quota set used_space=used_space+?, used_inodes=used_inodes+? where gid=", m.tablePrefix)
 
 	m.statement[`
 			 INSERT INTO chunk (inode, indx, slices)
@@ -603,6 +603,9 @@ func (m *dbMeta) syncAllTables() error {
 	}
 	if err := m.syncTable(new(flock), new(plock), new(dirQuota)); err != nil {
 		return fmt.Errorf("create table flock, plock, dirQuota: %s", err)
+	}
+	if err := m.syncTable(new(userQuota), new(groupQuota)); err != nil {
+		return fmt.Errorf("create table userQuota, groupQuota: %s", err)
 	}
 	if err := m.syncTable(new(dirStats)); err != nil {
 		return fmt.Errorf("create table dirStats: %s", err)
@@ -3843,9 +3846,12 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 		if err := s.Find(&urows); err != nil {
 			return err
 		}
-		return s.Find(&grows)
+		if err := s.Find(&grows); err != nil {
+			return err
+		}
+		return nil
 	})
-	if err != nil {
+	if err != nil || (len(drows)+len(urows)+len(grows)) == 0 {
 		return nil, nil, nil, err
 	}
 
@@ -4318,7 +4324,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			defer func() { m.snap = nil }()
 			bar := progress.AddCountBar("Snapshot keys", 0)
 			if err = m.makeSnap(s, bar); err != nil {
-				return fmt.Errorf("Fetch all metadata from DB: %s", err)
+				return fmt.Errorf("fetch all metadata from DB: %s", err)
 			}
 			bar.Done()
 			tree = m.dumpEntryFast(root, TypeDirectory)

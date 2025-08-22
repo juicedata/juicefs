@@ -312,21 +312,20 @@ func (m *baseMeta) loadQuotas() {
 	}
 
 	processQuotaMap := func(existing map[uint64]*Quota, loaded map[uint64]*Quota, quotaType string) {
+		// add new or update existing
+		for key, q := range loaded {
+			logger.Debugf("Load quotas got %s %d -> %+v", quotaType, key, q)
+			if quota, ok := existing[key]; ok {
+				updateQuotaAtoms(quota, q)
+			} else {
+				existing[key] = q
+			}
+		}
+		// delete that are not in loaded
 		for key := range existing {
 			if _, ok := loaded[key]; !ok {
 				logger.Infof("Quota for %s %d is deleted", quotaType, key)
 				delete(existing, key)
-			}
-		}
-		for key, q := range loaded {
-			logger.Debugf("Load quotas got %s %d -> %+v", quotaType, key, q)
-			if _, ok := existing[key]; !ok {
-				existing[key] = q
-			}
-		}
-		for key, q := range loaded {
-			if quota, exists := existing[key]; exists {
-				updateQuotaAtoms(quota, q)
 			}
 		}
 	}
@@ -459,15 +458,21 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 	}
 }
 
+/*
 func (m *baseMeta) updateUidGidQuota(ctx Context, uid, gid uint64, space, inodes int64) {
 	if !m.getFormat().UidGidQuotaCheck {
 		return
 	}
 	m.quotaMu.Lock()
-	m.userQuotas[uid].update(space, inodes)
-	m.groupQuotas[gid].update(space, inodes)
+	if uq := m.userQuotas[uid]; uq != nil {
+		uq.update(space, inodes)
+	}
+	if gq := m.groupQuotas[gid]; gq != nil {
+		gq.update(space, inodes)
+	}
 	m.quotaMu.Unlock()
 }
+*/
 
 func (m *baseMeta) flushQuotas(ctx Context) {
 	defer m.sessWG.Done()
@@ -488,13 +493,13 @@ func (m *baseMeta) doFlushQuotas() {
 		return
 	}
 
-	collectQuotas := func(quotas map[uint64]*Quota) []*iQuota {
+	collectQuotas := func(qtype uint32, quotas map[uint64]*Quota) []*iQuota {
 		var result []*iQuota
 		for key, q := range quotas {
 			newSpace := atomic.LoadInt64(&q.newSpace)
 			newInodes := atomic.LoadInt64(&q.newInodes)
 			if newSpace != 0 || newInodes != 0 {
-				result = append(result, &iQuota{key: key, quota: &Quota{newSpace: newSpace, newInodes: newInodes}})
+				result = append(result, &iQuota{qtype: qtype, key: key, quota: &Quota{newSpace: newSpace, newInodes: newInodes}})
 			}
 		}
 		return result
@@ -510,9 +515,9 @@ func (m *baseMeta) doFlushQuotas() {
 	var allQuotas []*iQuota
 	m.quotaMu.RLock()
 
-	allQuotas = append(allQuotas, collectQuotas(m.dirQuotas)...)
-	allQuotas = append(allQuotas, collectQuotas(m.userQuotas)...)
-	allQuotas = append(allQuotas, collectQuotas(m.groupQuotas)...)
+	allQuotas = append(allQuotas, collectQuotas(DirQuotaType, m.dirQuotas)...)
+	allQuotas = append(allQuotas, collectQuotas(UserQuotaType, m.userQuotas)...)
+	allQuotas = append(allQuotas, collectQuotas(GroupQuotaType, m.groupQuotas)...)
 
 	m.quotaMu.RUnlock()
 
@@ -565,7 +570,11 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32,
 		key = uint64(uid)
 	} else if gid != 0 {
 		qtype = GroupQuotaType
-		key = uint64(uid)
+		key = uint64(gid)
+	}
+
+	if cmd != QuotaList && qtype == 0 {
+		return fmt.Errorf("invalid quota type")
 	}
 
 	switch cmd {
