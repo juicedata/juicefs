@@ -51,7 +51,7 @@ const (
 
 const readSessions = 2
 
-var readBufferUsed int64
+var readBufferUsed atomic.Int64
 
 type sstate uint8
 
@@ -267,7 +267,7 @@ func (s *sliceReader) delete() {
 	} else {
 		s.file.last = s.prev
 	}
-	atomic.AddInt64(&readBufferUsed, -int64(cap(s.page.Data)))
+	readBufferUsed.Add(-int64(cap(s.page.Data)))
 	s.page.Release()
 }
 
@@ -325,7 +325,7 @@ func (f *fileReader) newSlice(block *frange) *sliceReader {
 	*(f.last) = s
 	f.last = &(s.next)
 	go s.run()
-	atomic.AddInt64(&readBufferUsed, int64(cap(s.page.Data)))
+	readBufferUsed.Add(int64(cap(s.page.Data)))
 	return s
 }
 
@@ -417,7 +417,7 @@ func (f *fileReader) checkReadahead(block *frange) int {
 	ses := &f.sessions[idx]
 	seqdata := ses.total
 	readahead := ses.readahead
-	used := uint64(atomic.LoadInt64(&readBufferUsed))
+	used := uint64(readBufferUsed.Load())
 	if readahead == 0 && f.r.blockSize <= f.r.readAheadMax && (block.off == 0 || seqdata > block.len) { // begin with read-ahead turned on
 		ses.readahead = f.r.blockSize
 	} else if readahead < f.r.readAheadMax && seqdata >= readahead && f.r.readAheadTotal > used+readahead*4 {
@@ -482,7 +482,7 @@ func (f *fileReader) releaseIdleBuffer() {
 	defer f.Unlock()
 	now := time.Now()
 	var idle = time.Minute
-	used := atomic.LoadInt64(&readBufferUsed)
+	used := readBufferUsed.Load()
 	if used > int64(f.r.readAheadTotal) {
 		idle /= time.Duration(used / int64(f.r.readAheadTotal))
 	}
@@ -538,7 +538,7 @@ func (f *fileReader) readAhead(block *frange) {
 		}
 		return true
 	})
-	if block.len > 0 && block.off < f.length && uint64(atomic.LoadInt64(&readBufferUsed)) < f.r.readAheadTotal {
+	if block.len > 0 && block.off < f.length && uint64(readBufferUsed.Load()) < f.r.readAheadTotal {
 		if block.len < f.r.blockSize {
 			block.len += f.r.blockSize - block.end()%f.r.blockSize // align to end of a block
 		}
@@ -724,7 +724,7 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 }
 
 func (r *dataReader) readBufferUsed() int64 {
-	used := atomic.LoadInt64(&readBufferUsed)
+	used := readBufferUsed.Load()
 	return used
 }
 
