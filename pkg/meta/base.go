@@ -2316,8 +2316,14 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 		return
 	}
 
+	var a Attr
+	st = m.en.doGetAttr(Background(), inode, &a)
+	if st != 0 {
+		return
+	}
+
 	var dsbuf []byte
-	trash := m.toTrash(0)
+	trash := m.toTrash(a.Parent)
 	if trash {
 		dsbuf = make([]byte, 0, len(compacted)*12)
 		for _, s := range compacted {
