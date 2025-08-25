@@ -251,6 +251,7 @@ func (fs *fileSystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Op
 	} else if entry.Attr.KeepCache {
 		out.OpenFlags |= fuse.FOPEN_KEEP_CACHE
 	}
+	fsserv.InodeNotify(uint64(in.NodeId), -1, 0)
 	return 0
 }
 
