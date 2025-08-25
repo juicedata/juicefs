@@ -1092,7 +1092,7 @@ func (fs *FileSystem) HandleQuota(ctx meta.Context, path string, cmd uint8, capa
 		qs[path] = q
 	}
 
-	if _err := fs.m.HandleQuota(meta.Background(), cmd, path, qs, strict, repair, create); _err != nil {
+	if _err := fs.m.HandleQuota(meta.Background(), cmd, path, 0, 0, qs, strict, repair, create); _err != nil {
 		if strings.HasPrefix(_err.Error(), "no quota for inode") {
 			return qs, 0
 		}
@@ -1489,7 +1489,7 @@ func (f *File) GetQuota(ctx meta.Context) (quota *meta.Quota, err error) {
 		return quota, err
 	}
 	// get directory quota
-	err = f.fs.m.HandleQuota(ctx, meta.QuotaGet, f.path, qs, false, false, false)
+	err = f.fs.m.HandleQuota(ctx, meta.QuotaGet, f.path, 0, 0, qs, false, false, false)
 	if err != nil {
 		return nil, err
 	}
