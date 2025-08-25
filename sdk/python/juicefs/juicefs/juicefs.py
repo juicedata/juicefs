@@ -350,7 +350,7 @@ class Client(object):
         self.lib.jfs_removeXattr(c_int64(_tid()), c_int64(self.h), _bin(path), _bin(name))
 
     def clone(self, src, dst, preserve=False):
-        """Clone a file."""
+        """Clone a file or directory."""
         self.lib.jfs_clone(c_int64(_tid()), c_int64(self.h), _bin(src), _bin(dst), c_bool(preserve))
 
     def set_quota(self, path, capacity=0, inodes=0, create=False, strict=False):
