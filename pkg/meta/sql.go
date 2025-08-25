@@ -365,11 +365,11 @@ func (m *dbMeta) initStatement() {
 	m.statement["update chunk_ref set refs=refs-1 where chunkid=? AND size=?"] =
 		fmt.Sprintf("update %schunk_ref set refs=refs-1 where chunkid=? AND size=?", m.tablePrefix)
 	m.statement["update dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"] =
-		fmt.Sprintf("update %sdir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=", m.tablePrefix)
+		fmt.Sprintf("update %sdir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?", m.tablePrefix)
 	m.statement["update user_quota set used_space=used_space+?, used_inodes=used_inodes+? where uid=?"] =
-		fmt.Sprintf("update %suser_quota set used_space=used_space+?, used_inodes=used_inodes+? where uid=", m.tablePrefix)
+		fmt.Sprintf("update %suser_quota set used_space=used_space+?, used_inodes=used_inodes+? where uid=?", m.tablePrefix)
 	m.statement["update group_quota set used_space=used_space+?, used_inodes=used_inodes+? where gid=?"] =
-		fmt.Sprintf("update %sgroup_quota set used_space=used_space+?, used_inodes=used_inodes+? where gid=", m.tablePrefix)
+		fmt.Sprintf("update %sgroup_quota set used_space=used_space+?, used_inodes=used_inodes+? where gid=?", m.tablePrefix)
 
 	m.statement[`
 			 INSERT INTO chunk (inode, indx, slices)
@@ -3635,21 +3635,21 @@ func (m *dbMeta) getQuotaTableInfo(qtype uint32, key uint64) (*quotaTableInfo, e
 	switch qtype {
 	case DirQuotaType:
 		return &quotaTableInfo{
-			tableName: "dir_quota",
+			tableName: m.tablePrefix + "dir_quota",
 			keyField:  "inode",
 			keyValue:  key,
 			quota:     &dirQuota{Inode: key},
 		}, nil
 	case UserQuotaType:
 		return &quotaTableInfo{
-			tableName: "user_quota",
+			tableName: m.tablePrefix + "user_quota",
 			keyField:  "uid",
 			keyValue:  key,
 			quota:     &userQuota{Uid: key},
 		}, nil
 	case GroupQuotaType:
 		return &quotaTableInfo{
-			tableName: "group_quota",
+			tableName: m.tablePrefix + "group_quota",
 			keyField:  "gid",
 			keyValue:  key,
 			quota:     &groupQuota{Gid: key},
@@ -3913,34 +3913,29 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	sort.Slice(quotas, func(i, j int) bool { return quotas[i].key < quotas[j].key })
 	return m.txn(func(s *xorm.Session) error {
 		for _, q := range quotas {
-			if err := m.updateQuotaUsage(s, q); err != nil {
+			var sql string
+			var args []interface{}
+
+			switch q.qtype {
+			case DirQuotaType:
+				sql = fmt.Sprintf("update %sdir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?", m.tablePrefix)
+			case UserQuotaType:
+				sql = fmt.Sprintf("update %suser_quota set used_space=used_space+?, used_inodes=used_inodes+? where uid=?", m.tablePrefix)
+			case GroupQuotaType:
+				sql = fmt.Sprintf("update %sgroup_quota set used_space=used_space+?, used_inodes=used_inodes+? where gid=?", m.tablePrefix)
+			default:
+				return errors.Errorf("unknown quota type: %d", q.qtype)
+			}
+			args = []interface{}{q.quota.newSpace, q.quota.newInodes, q.key}
+
+			_, err := s.Exec(sql, args[0], args[1], args[2])
+			if err != nil {
 				return err
 			}
 		}
+
 		return nil
 	})
-}
-
-func (m *dbMeta) updateQuotaUsage(s *xorm.Session, q *iQuota) error {
-	var sql string
-	var args []interface{}
-
-	switch q.qtype {
-	case DirQuotaType:
-		sql = m.sqlConv("update dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?")
-		args = []interface{}{q.quota.newSpace, q.quota.newInodes, q.key}
-	case UserQuotaType:
-		sql = m.sqlConv("update user_quota set used_space=used_space+?, used_inodes=used_inodes+? where uid=?")
-		args = []interface{}{q.quota.newSpace, q.quota.newInodes, q.key}
-	case GroupQuotaType:
-		sql = m.sqlConv("update group_quota set used_space=used_space+?, used_inodes=used_inodes+? where gid=?")
-		args = []interface{}{q.quota.newSpace, q.quota.newInodes, q.key}
-	default:
-		return errors.Errorf("unknown quota type: %d", q.qtype)
-	}
-
-	_, err := s.Exec(sql, args[0], args[1], args[2])
-	return err
 }
 
 func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
