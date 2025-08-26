@@ -241,11 +241,27 @@ type detachedNode struct {
 }
 
 type dirQuota struct {
-	Inode      Ino   `xorm:"pk"`
-	MaxSpace   int64 `xorm:"notnull"`
-	MaxInodes  int64 `xorm:"notnull"`
-	UsedSpace  int64 `xorm:"notnull"`
-	UsedInodes int64 `xorm:"notnull"`
+	Inode      uint64 `xorm:"pk"`
+	MaxSpace   int64  `xorm:"notnull"`
+	MaxInodes  int64  `xorm:"notnull"`
+	UsedSpace  int64  `xorm:"notnull"`
+	UsedInodes int64  `xorm:"notnull"`
+}
+
+type userQuota struct {
+	Uid        uint64 `xorm:"pk"`
+	MaxSpace   int64  `xorm:"notnull"`
+	MaxInodes  int64  `xorm:"notnull"`
+	UsedSpace  int64  `xorm:"notnull"`
+	UsedInodes int64  `xorm:"notnull"`
+}
+
+type groupQuota struct {
+	Gid        uint64 `xorm:"pk"`
+	MaxSpace   int64  `xorm:"notnull"`
+	MaxInodes  int64  `xorm:"notnull"`
+	UsedSpace  int64  `xorm:"notnull"`
+	UsedInodes int64  `xorm:"notnull"`
 }
 
 type dbMeta struct {
@@ -350,6 +366,11 @@ func (m *dbMeta) initStatement() {
 		fmt.Sprintf("update %schunk_ref set refs=refs-1 where chunkid=? AND size=?", m.tablePrefix)
 	m.statement["update dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"] =
 		fmt.Sprintf("update %sdir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?", m.tablePrefix)
+	m.statement["update user_quota set used_space=used_space+?, used_inodes=used_inodes+? where uid=?"] =
+		fmt.Sprintf("update %suser_quota set used_space=used_space+?, used_inodes=used_inodes+? where uid=?", m.tablePrefix)
+	m.statement["update group_quota set used_space=used_space+?, used_inodes=used_inodes+? where gid=?"] =
+		fmt.Sprintf("update %sgroup_quota set used_space=used_space+?, used_inodes=used_inodes+? where gid=?", m.tablePrefix)
+
 	m.statement[`
 			 INSERT INTO chunk (inode, indx, slices)
 			 VALUES (?, ?, ?)
@@ -583,6 +604,9 @@ func (m *dbMeta) syncAllTables() error {
 	if err := m.syncTable(new(flock), new(plock), new(dirQuota)); err != nil {
 		return fmt.Errorf("create table flock, plock, dirQuota: %s", err)
 	}
+	if err := m.syncTable(new(userQuota), new(groupQuota)); err != nil {
+		return fmt.Errorf("create table userQuota, groupQuota: %s", err)
+	}
 	if err := m.syncTable(new(dirStats)); err != nil {
 		return fmt.Errorf("create table dirStats: %s", err)
 	}
@@ -703,7 +727,7 @@ func (m *dbMeta) Reset() error {
 		&node{}, &edge{}, &symlink{}, &xattr{},
 		&chunk{}, &sliceRef{}, &delslices{},
 		&session{}, &session2{}, &sustained{}, &delfile{},
-		&flock{}, &plock{}, &dirStats{}, &dirQuota{}, &detachedNode{}, &acl{})
+		&flock{}, &plock{}, &dirStats{}, &dirQuota{}, &userQuota{}, &groupQuota{}, &detachedNode{}, &acl{})
 }
 
 func (m *dbMeta) doLoad() (data []byte, err error) {
@@ -725,9 +749,9 @@ func (m *dbMeta) doLoad() (data []byte, err error) {
 
 func (m *dbMeta) doNewSession(sinfo []byte, update bool) error {
 	// add new table
-	err := m.syncTable(new(session2), new(delslices), new(dirStats), new(detachedNode), new(dirQuota), new(acl))
+	err := m.syncTable(new(session2), new(delslices), new(dirStats), new(detachedNode), new(dirQuota), new(userQuota), new(groupQuota), new(acl))
 	if err != nil {
-		return fmt.Errorf("update table session2, delslices, dirstats, detachedNode, dirQuota: %s", err)
+		return fmt.Errorf("update table session2, delslices, dirstats, detachedNode, dirQuota, userQuota, groupQuota: %s", err)
 	}
 	// add node table
 	if err = m.syncTable(new(node)); err != nil {
@@ -2016,7 +2040,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 			logger.Warnf("remove dir usage of ino(%d): %s", e.Inode, err)
 			return err
 		}
-		if _, err = s.Delete(&dirQuota{Inode: e.Inode}); err != nil {
+		if _, err = s.Delete(&dirQuota{Inode: uint64(e.Inode)}); err != nil {
 			return err
 		}
 
@@ -2356,7 +2380,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					return err
 				}
 				if de.Type == TypeDirectory {
-					if _, err = s.Delete(&dirQuota{Inode: dino}); err != nil {
+					if _, err = s.Delete(&dirQuota{Inode: uint64(dino)}); err != nil {
 						return err
 					}
 				}
@@ -3600,103 +3624,316 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
-func (m *dbMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
-	var quota *Quota
-	return quota, m.simpleTxn(ctx, func(s *xorm.Session) error {
-		q := dirQuota{Inode: inode}
-		ok, e := s.Get(&q)
-		if e == nil && ok {
-			quota = &Quota{
-				MaxSpace:   q.MaxSpace,
-				MaxInodes:  q.MaxInodes,
-				UsedSpace:  q.UsedSpace,
-				UsedInodes: q.UsedInodes}
-		}
-		return e
-	})
+type quotaTableInfo struct {
+	tableName string
+	keyField  string
+	keyValue  uint64
+	quota     interface{}
 }
 
-func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) {
-	var created bool
-	err := m.txn(func(s *xorm.Session) error {
-		origin := dirQuota{Inode: inode}
-		exist, e := s.ForUpdate().Get(&origin)
-		if e != nil {
-			return e
+func (m *dbMeta) getQuotaTableInfo(qtype uint32, key uint64) (*quotaTableInfo, error) {
+	switch qtype {
+	case DirQuotaType:
+		return &quotaTableInfo{
+			tableName: m.tablePrefix + "dir_quota",
+			keyField:  "inode",
+			keyValue:  key,
+			quota:     &dirQuota{Inode: key},
+		}, nil
+	case UserQuotaType:
+		return &quotaTableInfo{
+			tableName: m.tablePrefix + "user_quota",
+			keyField:  "uid",
+			keyValue:  key,
+			quota:     &userQuota{Uid: key},
+		}, nil
+	case GroupQuotaType:
+		return &quotaTableInfo{
+			tableName: m.tablePrefix + "group_quota",
+			keyField:  "gid",
+			keyValue:  key,
+			quota:     &groupQuota{Gid: key},
+		}, nil
+	default:
+		return nil, errors.Errorf("invalid quota type %d", qtype)
+	}
+}
+
+func (m *dbMeta) convertToQuota(q interface{}) *Quota {
+	switch v := q.(type) {
+	case *dirQuota:
+		return &Quota{
+			MaxSpace:   v.MaxSpace,
+			MaxInodes:  v.MaxInodes,
+			UsedSpace:  v.UsedSpace,
+			UsedInodes: v.UsedInodes,
 		}
-		if exist {
+	case *userQuota:
+		return &Quota{
+			MaxSpace:   v.MaxSpace,
+			MaxInodes:  v.MaxInodes,
+			UsedSpace:  v.UsedSpace,
+			UsedInodes: v.UsedInodes,
+		}
+	case *groupQuota:
+		return &Quota{
+			MaxSpace:   v.MaxSpace,
+			MaxInodes:  v.MaxInodes,
+			UsedSpace:  v.UsedSpace,
+			UsedInodes: v.UsedInodes,
+		}
+	default:
+		return nil
+	}
+}
+
+func (m *dbMeta) updateQuotaFields(q interface{}, quota *Quota) {
+	switch v := q.(type) {
+	case *dirQuota:
+		if quota.MaxSpace >= 0 {
+			v.MaxSpace = quota.MaxSpace
+		}
+		if quota.MaxInodes >= 0 {
+			v.MaxInodes = quota.MaxInodes
+		}
+		if quota.UsedSpace >= 0 {
+			v.UsedSpace = quota.UsedSpace
+		}
+		if quota.UsedInodes >= 0 {
+			v.UsedInodes = quota.UsedInodes
+		}
+	case *userQuota:
+		if quota.MaxSpace >= 0 {
+			v.MaxSpace = quota.MaxSpace
+		}
+		if quota.MaxInodes >= 0 {
+			v.MaxInodes = quota.MaxInodes
+		}
+		if quota.UsedSpace >= 0 {
+			v.UsedSpace = quota.UsedSpace
+		}
+		if quota.UsedInodes >= 0 {
+			v.UsedInodes = quota.UsedInodes
+		}
+	case *groupQuota:
+		if quota.MaxSpace >= 0 {
+			v.MaxSpace = quota.MaxSpace
+		}
+		if quota.MaxInodes >= 0 {
+			v.MaxInodes = quota.MaxInodes
+		}
+		if quota.UsedSpace >= 0 {
+			v.UsedSpace = quota.UsedSpace
+		}
+		if quota.UsedInodes >= 0 {
+			v.UsedInodes = quota.UsedInodes
+		}
+	}
+}
+
+func (m *dbMeta) getUpdateColumns(quota *Quota) []string {
+	columns := make([]string, 0, 4)
+	if quota.MaxSpace >= 0 {
+		columns = append(columns, "max_space")
+	}
+	if quota.MaxInodes >= 0 {
+		columns = append(columns, "max_inodes")
+	}
+	if quota.UsedSpace >= 0 {
+		columns = append(columns, "used_space")
+	}
+	if quota.UsedInodes >= 0 {
+		columns = append(columns, "used_inodes")
+	}
+	return columns
+}
+
+func (m *dbMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, error) {
+	tableInfo, err := m.getQuotaTableInfo(qtype, key)
+	if err != nil {
+		return nil, err
+	}
+
+	var quota *Quota
+	err = m.simpleTxn(ctx, func(s *xorm.Session) error {
+		exists, err := s.Get(tableInfo.quota)
+		if err != nil {
+			return err
+		}
+
+		if exists {
+			quota = m.convertToQuota(tableInfo.quota)
+		}
+		return nil
+	})
+
+	return quota, err
+}
+
+func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (bool, error) {
+	tableInfo, err := m.getQuotaTableInfo(qtype, key)
+	if err != nil {
+		return false, err
+	}
+
+	var created bool
+	err = m.txn(func(s *xorm.Session) error {
+		exists, err := s.ForUpdate().Get(tableInfo.quota)
+		if err != nil {
+			return err
+		}
+
+		if exists {
 			created = false
 		} else if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
 			return errors.Errorf("limitation not set or deleted")
 		} else {
 			created = true
 		}
-		updateColumns := make([]string, 0, 4)
-		if quota.MaxSpace >= 0 {
-			origin.MaxSpace = quota.MaxSpace
-			updateColumns = append(updateColumns, "max_space")
-		}
-		if quota.MaxInodes >= 0 {
-			origin.MaxInodes = quota.MaxInodes
-			updateColumns = append(updateColumns, "max_inodes")
-		}
-		if quota.UsedSpace >= 0 {
-			origin.UsedSpace = quota.UsedSpace
-			updateColumns = append(updateColumns, "used_space")
-		}
-		if quota.UsedInodes >= 0 {
-			origin.UsedInodes = quota.UsedInodes
-			updateColumns = append(updateColumns, "used_inodes")
-		}
-		if exist {
-			_, e = s.Cols(updateColumns...).Update(&origin, &dirQuota{Inode: inode})
+
+		m.updateQuotaFields(tableInfo.quota, quota)
+		updateColumns := m.getUpdateColumns(quota)
+
+		if exists {
+			err = m.updateQuotaRecord(s, tableInfo, updateColumns)
 		} else {
-			e = mustInsert(s, &origin)
+			err = mustInsert(s, tableInfo.quota)
 		}
-		return e
+
+		return err
 	})
+
 	return created, err
 }
 
-func (m *dbMeta) doDelQuota(ctx Context, inode Ino) error {
+func (m *dbMeta) updateQuotaRecord(s *xorm.Session, tableInfo *quotaTableInfo, columns []string) error {
+	switch v := tableInfo.quota.(type) {
+	case *dirQuota:
+		_, err := s.Cols(columns...).Update(v, &dirQuota{Inode: tableInfo.keyValue})
+		return err
+	case *userQuota:
+		_, err := s.Cols(columns...).Update(v, &userQuota{Uid: tableInfo.keyValue})
+		return err
+	case *groupQuota:
+		_, err := s.Cols(columns...).Update(v, &groupQuota{Gid: tableInfo.keyValue})
+		return err
+	default:
+		return errors.Errorf("unknown quota type")
+	}
+}
+
+func (m *dbMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
+	tableInfo, err := m.getQuotaTableInfo(qtype, key)
+	if err != nil {
+		return err
+	}
+
 	return m.txn(func(s *xorm.Session) error {
-		_, e := s.Delete(&dirQuota{Inode: inode})
-		return e
+		_, err := s.Delete(tableInfo.quota)
+		return err
 	})
 }
 
-func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
-	var rows []dirQuota
+func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
+	var drows []dirQuota
+	var urows []userQuota
+	var grows []groupQuota
+
 	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
-		rows = rows[:0]
-		return s.Find(&rows)
+		if err := s.Find(&drows); err != nil {
+			return err
+		}
+		if err := s.Find(&urows); err != nil {
+			return err
+		}
+		if err := s.Find(&grows); err != nil {
+			return err
+		}
+		return nil
 	})
-	if err != nil || len(rows) == 0 {
-		return nil, err
+	if err != nil || (len(drows)+len(urows)+len(grows)) == 0 {
+		return nil, nil, nil, err
 	}
 
-	quotas := make(map[Ino]*Quota, len(rows))
-	for _, row := range rows {
-		quotas[row.Inode] = &Quota{
-			MaxSpace:   row.MaxSpace,
-			MaxInodes:  row.MaxInodes,
-			UsedSpace:  row.UsedSpace,
-			UsedInodes: row.UsedInodes,
+	quotaTypes := []struct {
+		rows   interface{}
+		getKey func(interface{}) uint64
+	}{
+		{drows, func(item interface{}) uint64 { return item.(dirQuota).Inode }},
+		{urows, func(item interface{}) uint64 { return item.(userQuota).Uid }},
+		{grows, func(item interface{}) uint64 { return item.(groupQuota).Gid }},
+	}
+
+	quotaMaps := make([]map[uint64]*Quota, 3)
+	for i, qt := range quotaTypes {
+		quotaMaps[i] = m.makeQuotaMap(qt.rows, qt.getKey)
+	}
+
+	return quotaMaps[0], quotaMaps[1], quotaMaps[2], nil
+}
+
+func (m *dbMeta) makeQuotaMap(slice interface{}, getKey func(interface{}) uint64) map[uint64]*Quota {
+	result := make(map[uint64]*Quota)
+	switch items := slice.(type) {
+	case []dirQuota:
+		for i := range items {
+			key := getKey(items[i])
+			result[key] = &Quota{
+				MaxSpace:   items[i].MaxSpace,
+				MaxInodes:  items[i].MaxInodes,
+				UsedSpace:  items[i].UsedSpace,
+				UsedInodes: items[i].UsedInodes,
+			}
+		}
+	case []userQuota:
+		for i := range items {
+			key := getKey(items[i])
+			result[key] = &Quota{
+				MaxSpace:   items[i].MaxSpace,
+				MaxInodes:  items[i].MaxInodes,
+				UsedSpace:  items[i].UsedSpace,
+				UsedInodes: items[i].UsedInodes,
+			}
+		}
+	case []groupQuota:
+		for i := range items {
+			key := getKey(items[i])
+			result[key] = &Quota{
+				MaxSpace:   items[i].MaxSpace,
+				MaxInodes:  items[i].MaxInodes,
+				UsedSpace:  items[i].UsedSpace,
+				UsedInodes: items[i].UsedInodes,
+			}
 		}
 	}
-	return quotas, nil
+	return result
 }
 
 func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
-	sort.Slice(quotas, func(i, j int) bool { return quotas[i].inode < quotas[j].inode })
+	sort.Slice(quotas, func(i, j int) bool { return quotas[i].key < quotas[j].key })
 	return m.txn(func(s *xorm.Session) error {
 		for _, q := range quotas {
-			_, err := s.Exec(m.sqlConv("update dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"),
-				q.quota.newSpace, q.quota.newInodes, q.inode)
+			var sql string
+			var args []interface{}
+
+			switch q.qtype {
+			case DirQuotaType:
+				sql = fmt.Sprintf("update %sdir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?", m.tablePrefix)
+			case UserQuotaType:
+				sql = fmt.Sprintf("update %suser_quota set used_space=used_space+?, used_inodes=used_inodes+? where uid=?", m.tablePrefix)
+			case GroupQuotaType:
+				sql = fmt.Sprintf("update %sgroup_quota set used_space=used_space+?, used_inodes=used_inodes+? where gid=?", m.tablePrefix)
+			default:
+				return errors.Errorf("unknown quota type: %d", q.qtype)
+			}
+			args = []interface{}{q.quota.newSpace, q.quota.newInodes, q.key}
+
+			_, err := s.Exec(sql, args[0], args[1], args[2])
 			if err != nil {
 				return err
 			}
 		}
+
 		return nil
 	})
 }
@@ -4061,6 +4298,7 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 	return nil
 }
 
+// todo: support user/group quota
 func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
@@ -4081,7 +4319,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			defer func() { m.snap = nil }()
 			bar := progress.AddCountBar("Snapshot keys", 0)
 			if err = m.makeSnap(s, bar); err != nil {
-				return fmt.Errorf("Fetch all metadata from DB: %s", err)
+				return fmt.Errorf("fetch all metadata from DB: %s", err)
 			}
 			bar.Done()
 			tree = m.dumpEntryFast(root, TypeDirectory)
@@ -4165,9 +4403,10 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		if err := s.Find(&qs); err != nil {
 			return err
 		}
+		// todo Add user/group quota
 		dumpedQuotas := make(map[Ino]*DumpedQuota, len(qs))
 		for _, q := range qs {
-			dumpedQuotas[q.Inode] = &DumpedQuota{q.MaxSpace, q.MaxInodes, 0, 0}
+			dumpedQuotas[Ino(q.Inode)] = &DumpedQuota{q.MaxSpace, q.MaxInodes, 0, 0}
 		}
 
 		dm := DumpedMeta{

@@ -314,7 +314,7 @@ func config(ctx *cli.Context) error {
 		}
 		if originDirStats && !format.DirStats {
 			qs := make(map[string]*meta.Quota)
-			err := m.HandleQuota(meta.Background(), meta.QuotaList, "", qs, false, false, false)
+			err := m.HandleQuota(meta.Background(), meta.QuotaList, "", 0, 0, qs, false, false, false)
 			if err != nil {
 				return errors.Wrap(err, "list quotas")
 			}

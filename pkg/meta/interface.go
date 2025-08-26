@@ -491,6 +491,10 @@ type Meta interface {
 	Remove(ctx Context, parent Ino, name string, skipTrash bool, numThreads int, count *uint64) syscall.Errno
 	// Get summary of a node; for a directory it will accumulate all its child nodes
 	GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool) syscall.Errno
+	// GetUserSummary returns summary statistics for files owned by a specific user
+	GetUserSummary(ctx Context, uid uint32, summary *Summary) syscall.Errno
+	// GetGroupSummary returns summary statistics for files owned by a specific group
+	GetGroupSummary(ctx Context, gid uint32, summary *Summary) syscall.Errno
 	// GetTreeSummary returns a summary in tree structure
 	GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool, updateProgress func(count uint64, bytes uint64)) syscall.Errno
 	// Clone a file or directory
@@ -511,7 +515,7 @@ type Meta interface {
 	// OnReload register a callback for any change founded after reloaded.
 	OnReload(func(new *Format))
 
-	HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool, create bool) error
+	HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32, gid uint32, quotas map[string]*Quota, strict, repair bool, create bool) error
 
 	// Dump the tree under root, which may be modified by checkRoot
 	DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) error
