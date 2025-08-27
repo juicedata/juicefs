@@ -96,7 +96,7 @@ type Format struct {
 	MinClientVersion string `json:",omitempty"`
 	MaxClientVersion string `json:",omitempty"`
 	DirStats         bool   `json:",omitempty"`
-	UidGidQuotaCheck bool   `json:",omitempty"`
+	UserGroupQuota   bool   `json:",omitempty"`
 	EnableACL        bool
 	RangerRestUrl    string `json:",omitempty"`
 	RangerService    string `json:",omitempty"`

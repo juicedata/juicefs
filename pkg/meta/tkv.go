@@ -2828,7 +2828,7 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 		keys := make([][]byte, 0, len(quotas))
 		qs := make([]*Quota, 0, len(quotas))
 		for _, q := range quotas {
-			keys = append(keys, m.dirQuotaKey(Ino(q.key)))
+			keys = append(keys, m.dirQuotaKey(Ino(q.qkey)))
 			qs = append(qs, q.quota)
 		}
 		for i, v := range tx.gets(keys...) {

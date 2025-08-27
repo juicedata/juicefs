@@ -7,10 +7,11 @@
 package pb
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -417,6 +418,7 @@ type Quota struct {
 	MaxInodes  int64  `protobuf:"varint,3,opt,name=maxInodes,proto3" json:"maxInodes,omitempty"`
 	UsedSpace  int64  `protobuf:"varint,4,opt,name=usedSpace,proto3" json:"usedSpace,omitempty"`
 	UsedInodes int64  `protobuf:"varint,5,opt,name=usedInodes,proto3" json:"usedInodes,omitempty"`
+	Qtype      uint32 `protobuf:"varint,6,opt,name=qtype,proto3" json:"qtype,omitempty"`
 }
 
 func (x *Quota) Reset() {
@@ -447,6 +449,13 @@ func (x *Quota) ProtoReflect() protoreflect.Message {
 // Deprecated: Use Quota.ProtoReflect.Descriptor instead.
 func (*Quota) Descriptor() ([]byte, []int) {
 	return file_pkg_meta_pb_backup_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *Quota) GetQtype() uint32 {
+	if x != nil {
+		return x.Qtype
+	}
+	return 0
 }
 
 func (x *Quota) GetInode() uint64 {

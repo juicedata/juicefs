@@ -36,8 +36,7 @@ type dirStat struct {
 }
 
 const (
-	AllQuotaType = iota
-	DirQuotaType
+	DirQuotaType = iota
 	UserQuotaType
 	GroupQuotaType
 )
@@ -50,7 +49,7 @@ type Quota struct {
 
 type iQuota struct {
 	qtype uint32
-	key   uint64 // ino/uid/gid
+	qkey  uint64 // ino/uid/gid
 	quota *Quota
 }
 
@@ -398,7 +397,7 @@ func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bo
 }
 
 func (m *baseMeta) checkUserQuota(ctx Context, uid uint64, space, inodes int64) bool {
-	if !m.getFormat().UidGidQuotaCheck {
+	if !m.getFormat().UserGroupQuota {
 		return false
 	}
 
@@ -414,7 +413,7 @@ func (m *baseMeta) checkUserQuota(ctx Context, uid uint64, space, inodes int64) 
 }
 
 func (m *baseMeta) checkGroupQuota(ctx Context, gid uint64, space, inodes int64) bool {
-	if !m.getFormat().UidGidQuotaCheck {
+	if !m.getFormat().UserGroupQuota {
 		return false
 	}
 
@@ -455,7 +454,7 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 
 /*
 func (m *baseMeta) updateUserGroupQuota(ctx Context, uid, gid uint64, space, inodes int64) {
-	if !m.getFormat().UidGidQuotaCheck {
+	if !m.getFormat().UserGroupQuota {
 		return
 	}
 	m.quotaMu.Lock()
@@ -491,7 +490,7 @@ func (m *baseMeta) collectQuotas(qtype uint32, quotas map[uint64]*Quota) []*iQuo
 		if newSpace != 0 || newInodes != 0 {
 			result = append(result, &iQuota{
 				qtype: qtype,
-				key:   key,
+				qkey:  key,
 				quota: &Quota{newSpace: newSpace, newInodes: newInodes},
 			})
 		}
@@ -507,7 +506,7 @@ func (m *baseMeta) updateQuota(q *Quota, newSpace, newInodes int64) {
 }
 
 func (m *baseMeta) doFlushQuotas() {
-	if !m.getFormat().DirStats && !m.getFormat().UidGidQuotaCheck {
+	if !m.getFormat().DirStats && !m.getFormat().UserGroupQuota {
 		return
 	}
 
@@ -531,15 +530,15 @@ func (m *baseMeta) doFlushQuotas() {
 	for _, snap := range allQuotas {
 		switch snap.qtype {
 		case DirQuotaType:
-			if q := m.dirQuotas[snap.key]; q != nil {
+			if q := m.dirQuotas[snap.qkey]; q != nil {
 				m.updateQuota(q, snap.quota.newSpace, snap.quota.newInodes)
 			}
 		case UserQuotaType:
-			if q := m.userQuotas[snap.key]; q != nil {
+			if q := m.userQuotas[snap.qkey]; q != nil {
 				m.updateQuota(q, snap.quota.newSpace, snap.quota.newInodes)
 			}
 		case GroupQuotaType:
-			if q := m.groupQuotas[snap.key]; q != nil {
+			if q := m.groupQuotas[snap.qkey]; q != nil {
 				m.updateQuota(q, snap.quota.newSpace, snap.quota.newInodes)
 			}
 		}
@@ -558,8 +557,9 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32,
 		}
 	}
 
-	var qtype uint32
 	var key uint64
+	var qtype uint32
+	qtype = 0xffffffff
 	if dpath != "" {
 		qtype = DirQuotaType
 		key = uint64(inode)
@@ -571,7 +571,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32,
 		key = uint64(gid)
 	}
 
-	if cmd != QuotaList && qtype == 0 {
+	if cmd != QuotaList && qtype == 0xffffffff {
 		return fmt.Errorf("invalid quota type")
 	}
 
@@ -624,8 +624,8 @@ func (m *baseMeta) enableQuotaFeature(qtype uint32, format *Format) error {
 			return m.en.doInit(format, false)
 		}
 	case UserQuotaType, GroupQuotaType:
-		if !format.UidGidQuotaCheck {
-			format.UidGidQuotaCheck = true
+		if !format.UserGroupQuota {
+			format.UserGroupQuota = true
 			return m.en.doInit(format, false)
 		}
 	}
