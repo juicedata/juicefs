@@ -63,6 +63,7 @@ JuiceFS 社区版的元数据模块提供一组操作元数据的接口，可以
 3FS 通过 `hf3fs_iov` 保存共享内存的大小、地址和其他一些属性，使用 `IoRing` 在两个进程间通信。系统创建虚拟文件并使用信号量来促进用户进程和 FUSE 进程之间的通信。
 
 JuiceFS 的 FUSE 客户端实现更加全面，提供以下功能：
+
 - 在每次成功上传对象后会立即更新文件长度
 - 支持 BSD 锁（flock）和 POSIX 锁（fcntl）
 - 支持高级接口如 `file_copy_range`、`readdirplus` 和 `fallocate`

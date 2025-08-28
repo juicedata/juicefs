@@ -77,6 +77,7 @@ Key distribution parameters:
 The figure above shows how a file with `stripe count = 3` and `stripe size = 1 MB` is distributed across multiple OSTs. Each data block (stripe) is allocated to different OSTs sequentially via round-robin scheduling.
 
 Key limitations include:
+
 - Configuration parameters are immutable after file creation
 - Can lead to ENOSPC (no space left) if any target OST runs out of space
 - May result in storage imbalance over time
@@ -88,6 +89,7 @@ To address the constraints of NFL, Lustre introduced progressive file layout (PF
 ![Lustre PFL file distribution](https://static1.juicefs.com/images/Lustre_PFL_WenJianFenBuShiLi.original.png)
 
 PFL provides advantages such as:
+
 - Dynamic adaptation to file growth
 - Mitigation of storage imbalance
 - Improved space efficiency and flexibility

@@ -77,6 +77,7 @@ Lustre 早期采用的文件分布方式被称为 Normal File Layout。在该模
 上图展示了一个 Stripe Count 为 3、Stripe Size 为 1 MB 的文件在多个 OST 上的分布方式。每个数据块（Stripe）采用轮询（Round-Robin）方式依次分布到不同的 OST 上。
 
 主要限制包括：
+
 - 一旦文件创建，配置参数不可变
 - 如果任何目标 OST 空间耗尽，可能导致 ENOSPC（空间不足）错误
 - 随时间推移可能导致存储不均衡
@@ -88,6 +89,7 @@ Lustre 早期采用的文件分布方式被称为 Normal File Layout。在该模
 ![Lustre PFL file distribution](https://static1.juicefs.com/images/Lustre_PFL_WenJianFenBuShiLi.original.png)
 
 PFL 支持为同一个文件的不同区段定义不同的布局策略，具备以下优势：
+
 - 动态适应文件增长
 - 减缓磁盘不均衡问题
 - 提高空间利用率和灵活性

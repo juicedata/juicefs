@@ -63,6 +63,7 @@ JuiceFS Community Edition provides a metadata module that offers a set of interf
 3FS uses `hf3fs_iov` to store shared memory attributes and `IoRing` for inter-process communication. The system creates virtual files and uses semaphores to facilitate communication between the user process and FUSE process.
 
 JuiceFS' FUSE client offers a more comprehensive implementation with features such as:
+
 - Immediate file length updates after successful object upload
 - BSD locks (flock) and POSIX locks (fcntl)
 - Advanced interfaces like `file_copy_range`, `readdirplus`, and `fallocate`
