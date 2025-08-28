@@ -40,7 +40,7 @@ JuiceFS uses a modular architecture that comprises three core components:
 
 #### Client implementation
 
-Lustre employs a C-language, kernel-space client architecture, while JuiceFS adopts a Go-based, user-space approach through Filesystem in Userspace (FUSE). Because the Lustre client runs in kernel space, there is no need to perform context switching between user mode and kernel mode or additional memory copying when accessing the MDS or OSS. This significantly reduces the performance overhead caused by system calls and has certain advantages in throughput and latency.
+Lustre employs a C-language, kernel-space client architecture, while JuiceFS adopts a Go-based, user-space approach through file system in Userspace (FUSE). Because the Lustre client runs in kernel space, there is no need to perform context switching between user mode and kernel mode or additional memory copying when accessing the MDS or OSS. This significantly reduces the performance overhead caused by system calls and has certain advantages in throughput and latency.
 
 However, kernel-mode implementation also brings complexity to operation, maintenance, and debugging. Compared with user-mode development environments and debugging tools, kernel-mode tools have a higher threshold and are not easy for ordinary developers to master. JuiceFS's Go-based user-space implementation is easier to learn, maintain, and develop, with higher development efficiency and maintainability.
 

@@ -15,7 +15,7 @@ JuiceFS 是一个云原生分布式文件系统，其数据存储在对象存储
 
 ### Lustre
 
-Lustre 采用传统的客户端-服务器架构，由以下几个核心模块组成：
+Lustre 采用传统的客户端 - 服务器架构，由以下几个核心模块组成：
 
 - **元数据服务器（MDS）**：负责处理命名空间相关操作，如文件创建、删除、权限检查等。自 2.4 版本起引入了分布式命名空间（DNE）功能，支持将单个文件系统的不同目录分布在多个元数据服务器上，实现元数据访问负载的横向扩展。
 - **对象存储服务器（OSS）**：负责实际的数据读写，提供高性能的大规模 I/O 服务。
@@ -63,7 +63,7 @@ JuiceFS 社区版的元数据模块提供一组操作元数据的接口，可以
 
 ### Lustre 文件分布
 
-#### Normal File Layout（NFL）
+#### Normal File Layout (NFL)
 
 Lustre 早期采用的文件分布方式被称为 Normal File Layout。在该模式下，文件被切分为多个数据块，并分别存储在多个对象存储目标（OSTs）上，其策略类似于 RAID 0。
 
@@ -82,9 +82,9 @@ Lustre 早期采用的文件分布方式被称为 Normal File Layout。在该模
 - 如果任何目标 OST 空间耗尽，可能导致 ENOSPC（空间不足）错误
 - 随时间推移可能导致存储不均衡
 
-#### Progressive File Layout（PFL）
+#### Progressive File Layout (PFL)
 
-为了解决 NFL 在应对动态数据增长和资源分配方面存在的局限，Lustre 引入了一种新的文件分布机制，称为 Progressive File Layout（PFL）。
+为了解决 NFL 在应对动态数据增长和资源分配方面存在的局限，Lustre 引入了一种新的文件分布机制，称为 Progressive File Layout (PFL)。
 
 ![Lustre PFL file distribution](https://static1.juicefs.com/images/Lustre_PFL_WenJianFenBuShiLi.original.png)
 
@@ -96,7 +96,7 @@ PFL 支持为同一个文件的不同区段定义不同的布局策略，具备�
 
 虽然 PFL 引入了更具弹性的布局策略，但 Lustre 进一步结合 Lazy Initialization 技术，以实现更高效的资源调度。
 
-#### File Level Redundancy（FLR）
+#### File Level Redundancy (FLR)
 
 Lustre 引入了文件级冗余来简化 HA 架构并提升系统容错能力。FLR 允许为每个文件配置一个或多个副本，实现文件级别的冗余保护。在写入操作发生时，数据仅写入其中一个副本，其余副本会被标记为 STALE（过期）。随后，系统通过一个称为 Resync 的同步过程，确保数据一致性。
 
