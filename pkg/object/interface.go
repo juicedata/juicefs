@@ -104,7 +104,7 @@ type ObjectStorage interface {
 	UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error)
 	// AbortUpload abort a multipart upload.
 	AbortUpload(key string, uploadID string)
-	// CompleteUpload finish an multipart upload.
+	// CompleteUpload finish a multipart upload.
 	CompleteUpload(key string, uploadID string, parts []*Part) error
 	// ListUploads lists existing multipart uploads.
 	ListUploads(marker string) ([]*PendingPart, string, error)
