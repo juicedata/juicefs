@@ -35,7 +35,12 @@ XATTR_CREATE = 1
 XATTR_REPLACE = 2
 
 def check_error(r, fn, args):
-    if r < 0:
+    if fn.__name__ == "jfs_init" and r == 0:
+        name = args[0].decode()
+        e = OSError(f'JuiceFS initialized failed for {name}')
+        e.errno = 1
+        raise e
+    elif r < 0:
         formatted_args = []
         for arg in args[2:]:
             if isinstance(arg, (bytes, bytearray)) and len(arg) > 1024:
