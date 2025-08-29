@@ -115,6 +115,8 @@ var defaultConf = Config{
 	BufferSize:        10 << 20,
 }
 
+var ctx = context.Background()
+
 func TestStoreDefault(t *testing.T) {
 	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	_ = os.RemoveAll(defaultConf.CacheDir)
@@ -186,7 +188,7 @@ func TestStoreAsync(t *testing.T) {
 	f.Close()
 	store := NewCachedStore(mem, conf, nil)
 	time.Sleep(time.Millisecond * 50) // wait for scan to finish
-	in, err := mem.Get("chunks/0/0/123_0_4", 0, -1)
+	in, err := mem.Get(ctx, "chunks/0/0/123_0_4", 0, -1)
 	if err != nil {
 		t.Fatalf("staging object should be upload")
 	}
@@ -260,7 +262,7 @@ func TestStoreDelayed(t *testing.T) {
 	}
 	defer store.Remove(10, 1024)
 	time.Sleep(time.Second) // waiting for upload
-	if _, err := mem.Head("chunks/0/0/10_0_1024"); err != nil {
+	if _, err := mem.Head(ctx, "chunks/0/0/10_0_1024"); err != nil {
 		t.Fatalf("head object 10_0_1024: %s", err)
 	}
 }
@@ -390,7 +392,7 @@ type dStore struct {
 	cnt int32
 }
 
-func (s *dStore) Get(key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+func (s *dStore) Get(ctx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
 	atomic.AddInt32(&s.cnt, 1)
 	return nil, errors.New("not found")
 }

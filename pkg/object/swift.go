@@ -46,12 +46,12 @@ func (s *swiftOSS) String() string {
 	return fmt.Sprintf("swift://%s/", s.container)
 }
 
-func (s *swiftOSS) Create() error {
+func (s *swiftOSS) Create(ctx context.Context) error {
 	// No error is returned if it already exists but the metadata if any will be updated.
-	return s.conn.ContainerCreate(context.Background(), s.container, nil)
+	return s.conn.ContainerCreate(ctx, s.container, nil)
 }
 
-func (s *swiftOSS) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (s *swiftOSS) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	headers := make(map[string]string)
 	if off > 0 || limit > 0 {
 		if limit > 0 {
@@ -60,25 +60,25 @@ func (s *swiftOSS) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 			headers["Range"] = fmt.Sprintf("bytes=%d-", off)
 		}
 	}
-	f, _, err := s.conn.ObjectOpen(context.Background(), s.container, key, true, headers)
+	f, _, err := s.conn.ObjectOpen(ctx, s.container, key, true, headers)
 	return f, err
 }
 
-func (s *swiftOSS) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (s *swiftOSS) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	mimeType := utils.GuessMimeType(key)
-	_, err := s.conn.ObjectPut(context.Background(), s.container, key, in, true, "", mimeType, nil)
+	_, err := s.conn.ObjectPut(ctx, s.container, key, in, true, "", mimeType, nil)
 	return err
 }
 
-func (s *swiftOSS) Delete(key string, getters ...AttrGetter) error {
-	err := s.conn.ObjectDelete(context.Background(), s.container, key)
+func (s *swiftOSS) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	err := s.conn.ObjectDelete(ctx, s.container, key)
 	if err != nil && errors.Is(err, swift.ObjectNotFound) {
 		err = nil
 	}
 	return err
 }
 
-func (s *swiftOSS) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *swiftOSS) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 10000 {
 		limit = 10000
 	}
@@ -90,7 +90,7 @@ func (s *swiftOSS) List(prefix, marker, token, delimiter string, limit int64, fo
 			return nil, false, "", fmt.Errorf("delimiter should be a rune but now is %s", delimiter)
 		}
 	}
-	objects, err := s.conn.Objects(context.Background(), s.container, &swift.ObjectsOpts{Prefix: prefix, Marker: marker, Delimiter: delimiter_, Limit: int(limit)})
+	objects, err := s.conn.Objects(ctx, s.container, &swift.ObjectsOpts{Prefix: prefix, Marker: marker, Delimiter: delimiter_, Limit: int(limit)})
 	if err != nil {
 		return nil, false, "", err
 	}
@@ -106,8 +106,8 @@ func (s *swiftOSS) List(prefix, marker, token, delimiter string, limit int64, fo
 	return generateListResult(objs, limit)
 }
 
-func (s *swiftOSS) Head(key string) (Object, error) {
-	object, _, err := s.conn.Object(context.Background(), s.container, key)
+func (s *swiftOSS) Head(ctx context.Context, key string) (Object, error) {
+	object, _, err := s.conn.Object(ctx, s.container, key)
 	if err != nil {
 		if err == swift.ObjectNotFound {
 			err = os.ErrNotExist

@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -58,7 +59,7 @@ func (s *sqlStore) String() string {
 	return fmt.Sprintf("%s://%s/", driver, s.addr)
 }
 
-func (s *sqlStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (s *sqlStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	var b = blob{Key: []byte(key)}
 	// TODO: range
 	ok, err := s.db.Get(&b)
@@ -78,7 +79,7 @@ func (s *sqlStore) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (s *sqlStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (s *sqlStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	d, err := io.ReadAll(in)
 	if err != nil {
 		return err
@@ -105,7 +106,7 @@ func (s *sqlStore) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	return err
 }
 
-func (s *sqlStore) Head(key string) (Object, error) {
+func (s *sqlStore) Head(ctx context.Context, key string) (Object, error) {
 	var b = blob{Key: []byte(key)}
 	ok, err := s.db.Cols("key", "modified", "size").Get(&b)
 	if err != nil {
@@ -123,12 +124,12 @@ func (s *sqlStore) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (s *sqlStore) Delete(key string, getters ...AttrGetter) error {
+func (s *sqlStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	_, err := s.db.Delete(&blob{Key: []byte(key)})
 	return err
 }
 
-func (s *sqlStore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *sqlStore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if marker == "" {
 		marker = prefix
 	}

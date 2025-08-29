@@ -17,6 +17,7 @@
 package object
 
 import (
+	"context"
 	"io"
 	"time"
 )
@@ -79,35 +80,35 @@ type ObjectStorage interface {
 	// Limits of the object storage.
 	Limits() Limits
 	// Create the bucket if not existed.
-	Create() error
+	Create(ctx context.Context) error
 	// Get the data for the given object specified by key.
-	Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error)
+	Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error)
 	// Put data read from a reader to an object specified by key.
-	Put(key string, in io.Reader, getters ...AttrGetter) error
+	Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error
 	// Copy an object from src to dst.
-	Copy(dst, src string) error
+	Copy(ctx context.Context, dst, src string) error
 	// Delete a object.
-	Delete(key string, getters ...AttrGetter) error
+	Delete(ctx context.Context, key string, getters ...AttrGetter) error
 
 	// Head returns some information about the object or an error if not found.
-	Head(key string) (Object, error)
+	Head(ctx context.Context, key string) (Object, error)
 	// List returns a list of objects using ListObjectV2.
-	List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error)
+	List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error)
 	// ListAll returns all the objects as a channel.
-	ListAll(prefix, marker string, followLink bool) (<-chan Object, error)
+	ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error)
 
 	// CreateMultipartUpload starts to upload a large object part by part.
-	CreateMultipartUpload(key string) (*MultipartUpload, error)
+	CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error)
 	// UploadPart upload a part of an object.
-	UploadPart(key string, uploadID string, num int, body []byte) (*Part, error)
+	UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error)
 	// UploadPartCopy Uploads a part by copying data from an existing object as data source.
-	UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error)
+	UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error)
 	// AbortUpload abort a multipart upload.
-	AbortUpload(key string, uploadID string)
+	AbortUpload(ctx context.Context, key string, uploadID string)
 	// CompleteUpload finish a multipart upload.
-	CompleteUpload(key string, uploadID string, parts []*Part) error
+	CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error
 	// ListUploads lists existing multipart uploads.
-	ListUploads(marker string) ([]*PendingPart, string, error)
+	ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error)
 }
 
 type Shutdownable interface {

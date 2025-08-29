@@ -18,6 +18,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -232,8 +233,8 @@ func (e *encrypted) String() string {
 	return fmt.Sprintf("%s(encrypted)", e.ObjectStorage)
 }
 
-func (e *encrypted) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	r, err := e.ObjectStorage.Get(key, 0, -1, getters...)
+func (e *encrypted) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	r, err := e.ObjectStorage.Get(ctx, key, 0, -1, getters...)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +258,7 @@ func (e *encrypted) Get(key string, off, limit int64, getters ...AttrGetter) (io
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (e *encrypted) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (e *encrypted) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	plain, err := io.ReadAll(in)
 	if err != nil {
 		return err
@@ -266,7 +267,7 @@ func (e *encrypted) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	if err != nil {
 		return err
 	}
-	return e.ObjectStorage.Put(key, bytes.NewReader(ciphertext), getters...)
+	return e.ObjectStorage.Put(ctx, key, bytes.NewReader(ciphertext), getters...)
 }
 
 var _ ObjectStorage = (*encrypted)(nil)

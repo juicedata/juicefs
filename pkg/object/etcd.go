@@ -46,8 +46,8 @@ func (c *etcdClient) String() string {
 	return fmt.Sprintf("etcd://%s/", c.addr)
 }
 
-func (c *etcdClient) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	resp, err := c.kv.Get(context.TODO(), key, etcd.WithLimit(1))
+func (c *etcdClient) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	resp, err := c.kv.Get(ctx, key, etcd.WithLimit(1))
 	if err != nil {
 		return nil, err
 	}
@@ -66,17 +66,17 @@ func (c *etcdClient) Get(key string, off, limit int64, getters ...AttrGetter) (i
 	return nil, os.ErrNotExist
 }
 
-func (c *etcdClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (c *etcdClient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	d, err := io.ReadAll(in)
 	if err != nil {
 		return err
 	}
-	_, err = c.kv.Put(context.TODO(), key, string(d))
+	_, err = c.kv.Put(ctx, key, string(d))
 	return err
 }
 
-func (c *etcdClient) Head(key string) (Object, error) {
-	resp, err := c.kv.Get(context.TODO(), key, etcd.WithLimit(1))
+func (c *etcdClient) Head(ctx context.Context, key string) (Object, error) {
+	resp, err := c.kv.Get(ctx, key, etcd.WithLimit(1))
 	if err != nil {
 		return nil, err
 	}
@@ -94,8 +94,8 @@ func (c *etcdClient) Head(key string) (Object, error) {
 	return nil, os.ErrNotExist
 }
 
-func (c *etcdClient) Delete(key string, getters ...AttrGetter) error {
-	_, err := c.kv.Delete(context.TODO(), key)
+func (c *etcdClient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	_, err := c.kv.Delete(ctx, key)
 	return err
 }
 
@@ -111,7 +111,7 @@ func genNextKey(key string) string {
 	return string(next)
 }
 
-func (c *etcdClient) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (c *etcdClient) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}
@@ -124,7 +124,7 @@ func (c *etcdClient) List(prefix, start, token, delimiter string, limit int64, f
 	} else {
 		opts = append(opts, etcd.WithFromKey())
 	}
-	resp, err := c.client.Get(context.Background(), start, opts...)
+	resp, err := c.client.Get(ctx, start, opts...)
 	if err != nil {
 		return nil, false, "", fmt.Errorf("get start %v: %s", start, err)
 	}

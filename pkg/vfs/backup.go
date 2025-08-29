@@ -18,6 +18,7 @@ package vfs
 
 import (
 	"compress/gzip"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -160,7 +161,7 @@ func cleanupBackups(blob object.ObjectStorage, now time.Time) {
 
 	toDel := rotate(objs, now)
 	for _, o := range toDel {
-		if err = blob.Delete(o); err != nil {
+		if err = blob.Delete(context.Background(), o); err != nil {
 			logger.Warnf("delete object %s: %s", o, err)
 		}
 	}
