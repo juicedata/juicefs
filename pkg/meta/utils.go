@@ -370,11 +370,7 @@ func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursiv
 		return st
 	}
 	if attr.Typ != TypeDirectory {
-		if attr.Typ == TypeDirectory {
-			summary.Dirs++
-		} else {
-			summary.Files++
-		}
+		summary.Files++
 		summary.Size += uint64(align4K(attr.Length))
 		if attr.Typ == TypeFile {
 			summary.Length += attr.Length

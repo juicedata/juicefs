@@ -94,7 +94,7 @@ type ObjectStorage interface {
 	Head(ctx context.Context, key string) (Object, error)
 	// List returns a list of objects using ListObjectV2.
 	List(ctx context.Context, prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error)
-	// ListAll returns all the objects as an channel.
+	// ListAll returns all the objects as a channel.
 	ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error)
 
 	// CreateMultipartUpload starts to upload a large object part by part.
@@ -105,7 +105,7 @@ type ObjectStorage interface {
 	UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error)
 	// AbortUpload abort a multipart upload.
 	AbortUpload(ctx context.Context, key string, uploadID string)
-	// CompleteUpload finish an multipart upload.
+	// CompleteUpload finish a multipart upload.
 	CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error
 	// ListUploads lists existing multipart uploads.
 	ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error)

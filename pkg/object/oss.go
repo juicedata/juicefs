@@ -83,7 +83,7 @@ func (o *ossClient) Head(ctx context.Context, key string) (Object, error) {
 	})
 	if err != nil {
 		var svcErr *oss.ServiceError
-		if errors.As(err, &svcErr); svcErr.StatusCode == http.StatusNotFound {
+		if errors.As(err, &svcErr) && svcErr.StatusCode == http.StatusNotFound {
 			err = os.ErrNotExist
 		}
 		return nil, err
