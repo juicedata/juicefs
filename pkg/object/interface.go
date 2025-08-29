@@ -93,7 +93,7 @@ type ObjectStorage interface {
 	Head(key string) (Object, error)
 	// List returns a list of objects using ListObjectV2.
 	List(prefix, startAfter, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error)
-	// ListAll returns all the objects as an channel.
+	// ListAll returns all the objects as a channel.
 	ListAll(prefix, marker string, followLink bool) (<-chan Object, error)
 
 	// CreateMultipartUpload starts to upload a large object part by part.
@@ -104,7 +104,7 @@ type ObjectStorage interface {
 	UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error)
 	// AbortUpload abort a multipart upload.
 	AbortUpload(key string, uploadID string)
-	// CompleteUpload finish an multipart upload.
+	// CompleteUpload finish a multipart upload.
 	CompleteUpload(key string, uploadID string, parts []*Part) error
 	// ListUploads lists existing multipart uploads.
 	ListUploads(marker string) ([]*PendingPart, string, error)
