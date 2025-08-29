@@ -581,6 +581,90 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 	return 0
 }
 
+func (m *baseMeta) getSummaryByAttribute(ctx Context, summary *Summary, matchFunc func(attr *Attr) bool) syscall.Errno {
+	if summary == nil {
+		return syscall.EINVAL
+	}
+
+	*summary = Summary{}
+	processedFiles := make(map[Ino]bool)
+	visitedDirs := make(map[Ino]bool)
+
+	type dirItem struct {
+		ino Ino
+	}
+
+	stack := []dirItem{{ino: RootInode}}
+	visitedDirs[RootInode] = true
+
+	for len(stack) > 0 {
+		if ctx.Canceled() {
+			return syscall.EINTR
+		}
+
+		item := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		var entries []*Entry
+		if st := m.en.doReaddir(ctx, item.ino, 100, &entries, -1); st != 0 {
+			return st
+		}
+
+		for _, e := range entries {
+			if ctx.Canceled() {
+				return syscall.EINTR
+			}
+
+			if string(e.Name) == "." || string(e.Name) == ".." {
+				continue
+			}
+
+			var attr Attr
+			if st := m.GetAttr(ctx, e.Inode, &attr); st != 0 {
+				if st != syscall.ENOENT {
+					return st
+				}
+				continue
+			}
+
+			if matchFunc(&attr) {
+				if !processedFiles[e.Inode] {
+					processedFiles[e.Inode] = true
+
+					if attr.Typ == TypeDirectory {
+						summary.Dirs++
+					} else {
+						summary.Files++
+						summary.Length += attr.Length
+					}
+					summary.Size += uint64(align4K(attr.Length))
+				}
+			}
+
+			if attr.Typ == TypeDirectory {
+				if !visitedDirs[e.Inode] {
+					visitedDirs[e.Inode] = true
+					stack = append(stack, dirItem{ino: e.Inode})
+				}
+			}
+		}
+	}
+
+	return 0
+}
+
+func (m *baseMeta) GetUserSummary(ctx Context, uid uint32, summary *Summary) syscall.Errno {
+	return m.getSummaryByAttribute(ctx, summary, func(attr *Attr) bool {
+		return attr.Uid == uid
+	})
+}
+
+func (m *baseMeta) GetGroupSummary(ctx Context, gid uint32, summary *Summary) syscall.Errno {
+	return m.getSummaryByAttribute(ctx, summary, func(attr *Attr) bool {
+		return attr.Gid == gid
+	})
+}
+
 func (m *baseMeta) atimeNeedsUpdate(attr *Attr, now time.Time) bool {
 	return m.conf.AtimeMode != NoAtime && relatimeNeedUpdate(attr, now) ||
 		// update atime only for > 1 second accesses
