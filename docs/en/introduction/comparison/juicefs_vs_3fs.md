@@ -68,7 +68,7 @@ JuiceFS' FUSE client offers a more comprehensive implementation with features su
 - BSD locks (flock) and POSIX locks (fcntl)
 - Advanced interfaces like `file_copy_range`, `readdirplus`, and `fallocate`
 
-Beyond the FUSE client, JuiceFS also provides Java SDK, S3 Gateway, CSI Driver, and Enterprise Edition features like Python SDK for user-space execution.
+Beyond the FUSE client, JuiceFS Community Edition also provides Java SDK, Python SDK, S3 Gateway, and CSI Driver for user-space execution, with the Enterprise Edition offering additional enterprise-grade features.
 
 ## File distribution comparison
 
@@ -112,7 +112,7 @@ The 3FS cache system consists of TLS (Thread-Local Storage) queues and global qu
 | POSIX ACL | Not supported | Supported | Supported |
 | POSIX compliance | Partial | Fully compatible | Fully compatible |
 | CSI Driver | No official support | Supported | Supported |
-| Clients | FUSE + native client | POSIX (FUSE), Java SDK, S3 Gateway | POSIX (FUSE), Java SDK, S3 Gateway, Python SDK |
+| Clients | FUSE + native client | POSIX (FUSE), Java SDK, Python SDK, S3 Gateway | POSIX (FUSE), Java SDK, S3 Gateway, Python SDK |
 | Multi-cloud mirroring | Not supported | Not supported | Supported |
 | Cross-cloud/region replication | Not supported | Not supported | Supported |
 | Main maintainer | DeepSeek | Juicedata | Juicedata |

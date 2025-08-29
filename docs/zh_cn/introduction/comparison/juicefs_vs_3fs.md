@@ -68,7 +68,7 @@ JuiceFS 的 FUSE 客户端实现更加全面，提供以下功能：
 - 支持 BSD 锁（flock）和 POSIX 锁（fcntl）
 - 支持高级接口如 `file_copy_range`、`readdirplus` 和 `fallocate`
 
-除了 FUSE 客户端，JuiceFS 还提供 Java SDK、S3 网关、CSI Driver，以及企业版的 Python SDK 等用于用户空间执行的功能。
+除了 FUSE 客户端，JuiceFS 社区版还提供 Java SDK、Python SDK、S3 网关、CSI Driver 等用于用户空间执行的功能，企业版在此基础上提供了更多企业级特性。
 
 ## 文件分布对比
 
@@ -112,7 +112,7 @@ JuiceFS 中的 Slice 是在其他文件系统中不常见的一个结构。主�
 | POSIX ACL | 不支持 | 支持 | 支持 |
 | POSIX 兼容性 | 少量子集 | 完全兼容 | 完全兼容 |
 | CSI 驱动 | 没有官方支持 | 支持 | 支持 |
-| 客户端 | FUSE + Native Client | POSIX（FUSE）、Java SDK、S3 网关 | POSIX（FUSE）、Java SDK、S3 网关、Python SDK |
+| 客户端 | FUSE + Native Client | POSIX（FUSE）、Java SDK、Python SDK、S3 网关 | POSIX（FUSE）、Java SDK、S3 网关、Python SDK |
 | 多云镜像 | 不支持 | 不支持 | 支持 |
 | 跨云和跨区数据复制 | 不支持 | 不支持 | 支持 |
 | 主要维护者 | DeepSeek | Juicedata | Juicedata |
