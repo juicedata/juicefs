@@ -2870,6 +2870,9 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	}, fout)
 	if err == nil {
 		m.updateParentStat(ctx, fout, nout.Parent, newLength, newSpace)
+		if newSpace > 0 {
+			m.updateUserGroupQuota(ctx, nout.Uid, nout.Gid, newSpace, 0)
+		}
 	}
 	return errno(err)
 }

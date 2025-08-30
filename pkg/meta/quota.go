@@ -452,21 +452,26 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 	}
 }
 
-/*
-func (m *baseMeta) updateUserGroupQuota(ctx Context, uid, gid uint64, space, inodes int64) {
+func (m *baseMeta) updateUserGroupQuota(ctx Context, uid, gid uint32, space, inodes int64) {
 	if !m.getFormat().UserGroupQuota {
 		return
 	}
-	m.quotaMu.Lock()
-	if uq := m.userQuotas[uid]; uq != nil {
-		uq.update(space, inodes)
+	if uid == 0 && gid == 0 {
+		return
 	}
-	if gq := m.groupQuotas[gid]; gq != nil {
-		gq.update(space, inodes)
+	m.quotaMu.Lock()
+	if uid > 0 {
+		if uq := m.userQuotas[uint64(uid)]; uq != nil {
+			uq.update(space, inodes)
+		}
+	}
+	if gid > 0 {
+		if gq := m.groupQuotas[uint64(gid)]; gq != nil {
+			gq.update(space, inodes)
+		}
 	}
 	m.quotaMu.Unlock()
 }
-*/
 
 func (m *baseMeta) flushQuotas(ctx Context) {
 	defer m.sessWG.Done()
