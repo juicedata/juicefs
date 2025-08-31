@@ -604,6 +604,9 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	}
 
 	quota := m.getQuotaForType(qtype, dpath, uid, gid, quotas)
+	if quota == nil {
+		return fmt.Errorf("quota not found in request")
+	}
 	created, err := m.en.doSetQuota(ctx, qtype, uint64(key), &Quota{
 		MaxSpace:   quota.MaxSpace,
 		MaxInodes:  quota.MaxInodes,
@@ -679,26 +682,26 @@ func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, d
 
 func (m *baseMeta) initializeUidGidQuotaUsage(ctx Context, qtype uint32, key uint64, uid, gid uint32) error {
 	var summary Summary
-	var err error
+	var st syscall.Errno
 
 	if qtype == UserQuotaType {
-		err = m.GetUserSummary(ctx, uid, &summary)
+		st = m.GetUserSummary(ctx, uid, &summary)
 	} else {
-		err = m.GetGroupSummary(ctx, gid, &summary)
+		st = m.GetGroupSummary(ctx, gid, &summary)
 	}
 
-	if err != nil {
-		return fmt.Errorf("get %s summary: %w", m.getQuotaTypeName(qtype), err)
+	if st != 0 {
+		return fmt.Errorf("get %s summary: %s", m.getQuotaTypeName(qtype), st)
 	}
 
-	_, err = m.en.doSetQuota(ctx, qtype, uint64(key), &Quota{
+	_, st2 := m.en.doSetQuota(ctx, qtype, uint64(key), &Quota{
 		UsedSpace:  int64(summary.Size),
 		UsedInodes: int64(summary.Files + summary.Dirs),
 		MaxSpace:   -1,
 		MaxInodes:  -1,
 	})
-	if err != nil {
-		return fmt.Errorf("update %s quota: %w", m.getQuotaTypeName(qtype), err)
+	if st2 != nil {
+		return fmt.Errorf("update %s quota: %w", m.getQuotaTypeName(qtype), st2)
 	}
 	return nil
 }
@@ -720,9 +723,19 @@ func (m *baseMeta) handleQuotaGet(ctx Context, qtype uint32, key uint64, dpath s
 		return err
 	}
 	if q == nil {
-		return fmt.Errorf("no quota for inode %d path %s", key, dpath)
+		// 当 quota 不存在时，不返回错误，而是什么都不添加到 quotas map 中
+		return nil
 	}
-	quotas[dpath] = q
+
+	// 根据 quota 类型选择合适的 key
+	switch qtype {
+	case UserQuotaType:
+		quotas["uidgid"] = q
+	case GroupQuotaType:
+		quotas["uidgid"] = q
+	default:
+		quotas[dpath] = q
+	}
 	return nil
 }
 

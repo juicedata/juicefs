@@ -587,14 +587,10 @@ func (m *baseMeta) getSummaryByAttribute(ctx Context, summary *Summary, matchFun
 	}
 
 	*summary = Summary{}
-	processedFiles := make(map[Ino]bool)
+	hardlinkedFiles := make(map[Ino]bool)
 	visitedDirs := make(map[Ino]bool)
 
-	type dirItem struct {
-		ino Ino
-	}
-
-	stack := []dirItem{{ino: RootInode}}
+	stack := []Ino{RootInode}
 	visitedDirs[RootInode] = true
 
 	for len(stack) > 0 {
@@ -602,11 +598,11 @@ func (m *baseMeta) getSummaryByAttribute(ctx Context, summary *Summary, matchFun
 			return syscall.EINTR
 		}
 
-		item := stack[len(stack)-1]
+		ino := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 
 		var entries []*Entry
-		if st := m.en.doReaddir(ctx, item.ino, 100, &entries, -1); st != 0 {
+		if st := m.en.doReaddir(ctx, ino, 1, &entries, 100000); st != 0 {
 			return st
 		}
 
@@ -619,32 +615,29 @@ func (m *baseMeta) getSummaryByAttribute(ctx Context, summary *Summary, matchFun
 				continue
 			}
 
-			var attr Attr
-			if st := m.GetAttr(ctx, e.Inode, &attr); st != 0 {
-				if st != syscall.ENOENT {
-					return st
-				}
-				continue
-			}
-
-			if matchFunc(&attr) {
-				if !processedFiles[e.Inode] {
-					processedFiles[e.Inode] = true
-
-					if attr.Typ == TypeDirectory {
-						summary.Dirs++
+			if matchFunc(e.Attr) {
+				if e.Attr.Typ == TypeDirectory {
+					summary.Dirs++
+				} else {
+					if e.Attr.Nlink > 1 {
+						if !hardlinkedFiles[e.Inode] {
+							summary.Files++
+							summary.Length += e.Attr.Length
+							summary.Size += uint64(align4K(e.Attr.Length))
+							hardlinkedFiles[e.Inode] = true
+						}
 					} else {
 						summary.Files++
-						summary.Length += attr.Length
+						summary.Length += e.Attr.Length
+						summary.Size += uint64(align4K(e.Attr.Length))
 					}
-					summary.Size += uint64(align4K(attr.Length))
 				}
 			}
 
-			if attr.Typ == TypeDirectory {
+			if e.Attr.Typ == TypeDirectory {
 				if !visitedDirs[e.Inode] {
 					visitedDirs[e.Inode] = true
-					stack = append(stack, dirItem{ino: e.Inode})
+					stack = append(stack, e.Inode)
 				}
 			}
 		}
