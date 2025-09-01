@@ -554,7 +554,7 @@ func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int,
 	if format.EnableACL {
 		enableXattr = true
 	}
-	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL, int(utils.ParseBytes(c, "max-write", 'B'))
+	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL, int(utils.ParseBytes(c, "max-fuse-io", 'B'))
 }
 
 func shutdownGraceful(mp string) {
