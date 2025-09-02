@@ -1475,6 +1475,10 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 						continue
 					} else if errors.Is(err, ignoreDir) {
 						key += "/"
+					} else if os.IsNotExist(err) {
+						atomic.AddInt64(&ignoreFiles, 1)
+						listedPrefix.Increment()
+						continue
 					}
 				}
 				logger.Debugf("start listing prefix %s", key)
@@ -1512,10 +1516,6 @@ var ignoreFiles int64
 
 func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) error {
 	obj, err := src.Head(ctx, key)
-	if !strings.HasSuffix(key, "/") && os.IsNotExist(err) {
-		atomic.AddInt64(&ignoreFiles, 1)
-		return nil
-	}
 	if err == nil && (!obj.IsDir() || obj.IsSymlink() && config.Links || obj.IsDir() && config.Dirs && strings.HasSuffix(key, "/")) {
 		var srckeys = make(chan object.Object, 1)
 		srckeys <- obj
