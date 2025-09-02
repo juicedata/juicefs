@@ -48,6 +48,24 @@ The cached data on the client-side is **NOT** encrypted. Only the root user or o
 
 ### Encryption algorithm
 
+JuiceFS employs a **layered encryption architecture** that combines the advantages of both symmetric and asymmetric encryption technologies to achieve an efficient and secure static data encryption solution.
+
+#### Encryption Architecture Design
+
+JuiceFS uses a **Key Encapsulation Mechanism (KEM)** that consists of two encryption layers:
+
+1. **Data Encryption Layer** (Symmetric Encryption - AES-GCM-256)
+   - **Purpose**: Actually encrypts user data content
+   - **Mechanism**: Each 4MB data block generates a unique 256-bit symmetric key `S` + random seed `N`
+   - **Advantage**: AES-GCM provides high-speed encryption and integrity verification (AEAD)
+   - **Standard**: 256-bit key strength complies with NIST security standards
+
+2. **Key Protection Layer** (Asymmetric Encryption - RSA)
+   - **Purpose**: Protects the secure distribution and storage of symmetric keys
+   - **Mechanism**: Uses RSA private key `M` to encrypt each data block's symmetric key `S`
+   - **Advantage**: Solves key distribution challenges and avoids key reuse risks
+   - **Scheme**: Supports RSA-2048 or RSA-4096 keys, using OAEP padding to enhance security
+
 Data Encryption At Rest of JuiceFS combines symmetric encryption and asymmetric encryption, which requires user to create a global RSA private key `M` for the file system. Each object stored in the object storage will have its own random symmetric key `S`. The stored data is encrypted using AES-GCM algorithm with the symmetric key `S`, while `S` is encrypted with the global RSA private key `M`. At last, the RSA key is encrypted using a user-specified passphrase.
 
 Symbol explanation:
@@ -98,7 +116,13 @@ openssl genrsa -out my-priv-key.pem -aes256 2048
 Since the aes256 algorithm is in use, you will be prompted to enter a passphrase (at least 4 bits) to protect your private key. The passphrase can be considered as a password for encrypting the file of the RSA private key, which is also the last layer of security assurance for the RSA private key.
 
 :::caution
-The security of RSA private key is crucial when Data Encryption At Rest encryption is enabled. The leak of the key will put the data into a serious security risk. If the key is lost, **all the encrypted data will be lost and cannot be recovered**!
+RSA private key security is extremely important, and several key points require special attention:
+
+- **Passphrase Leakage Risk**: If the private key's passphrase is leaked, attackers may decrypt the private key stored in the metadata engine, thereby jeopardizing the security of all encrypted data
+- **Private Key File Leakage**: If the encrypted private key file itself is leaked along with the passphrase, it will lead to serious security risks
+- **Data Recovery Impossibility**: If the correct passphrase cannot be provided to access the private key stored in the metadata engine, **all encrypted data will be permanently lost and unrecoverable**
+
+It is recommended to focus on protecting the security of the passphrase and pass it through environment variables, avoiding leakage in command line history.
 :::
 
 #### Step 2: create an encrypted file system
@@ -119,6 +143,18 @@ The option `--encrypt-rsa-key` is required to specify RSA private key when creat
     ...
     ```
 
+3. (Optional) Delete local RSA private key file
+
+   JuiceFS securely stores the RSA private key content in the metadata engine during filesystem formatting. Therefore, after completing filesystem creation (unless there are specific compliance requirements), we recommend deleting your local RSA private key file:
+
+   ```shell
+   rm my-priv-key.pem
+   ```
+
+   This way, you only need to ensure the security of the `JFS_RSA_PASSPHRASE` environment variable, and subsequent filesystem mounting and access only require providing the correct passphrase.
+
+   If you need to retain the RSA private key file due to compliance requirements or other reasons, please ensure the private key file is stored in a secure location with strict access permissions, and keep the private key file and passphrase separately.
+
 #### Step 3: mount file system
 
 There is no need to specify extra options while mounting an encrypted file system. However, the passphrase of the private key needs to be set before mounting using environment variable.
@@ -135,32 +171,48 @@ There is no need to specify extra options while mounting an encrypted file syste
     juicefs mount redis://127.0.0.1:6379/1 /mnt/myjfs
     ```
 
-When creating a new volume using `juicefs format`, static encryption can be enabled by specifying the RSA private key with the `-encrypt-rsa-key` parameter, which will be saved on the Metadata service. When the private key is password-protected, the password must be specified using the environment variable `JFS_RSA_PASSPHRASE`.
+### Performance Considerations
 
-Usage:
+Enabling encryption does introduce some performance overhead, but modern hardware technologies have made this impact quite manageable. The specific performance impact depends on workload type, hardware configuration (particularly CPU encryption instruction set support), and data access patterns.
 
-1. Generate RSA key
+Modern CPUs have specialized hardware optimizations for TLS, HTTPS, and AES-256 encryption technologies. In particular, modern Intel and AMD processors include AES-NI instruction sets that can perform AES encryption operations at near-native speeds, significantly reducing the performance impact of data encryption.
 
-   ```shell
-   openssl genrsa -out my-priv-key.pem -aes256 2048
-   ```
+JuiceFS employs several performance optimization strategies. It processes multiple data blocks in parallel for encryption tasks, fully utilizing multi-core CPU capabilities. Encryption operations are primarily completed in memory, avoiding disk I/O bottlenecks. For frequently accessed data, the system intelligently caches decrypted keys to reduce repetitive RSA decryption operations.
 
-   or
+When selecting encryption keys, we recommend using RSA-2048 keys, which strike a good balance between security strength and performance. While RSA-4096 provides higher security, its decryption operations are significantly slower and may become a performance bottleneck in high-concurrency read scenarios.
 
-   ```shell
-   openssl genpkey -algorithm RSA -out my-priv-key.pem -pkeyopt rsa_keygen_bits:2048 -aes-256-cbc
-   ```
+It's worth mentioning that encrypted data will be slightly larger than the original data, primarily because the AES-GCM encryption algorithm requires adding authentication tags (16 bytes) and other encryption metadata. However, in modern network environments, this additional transmission volume typically doesn't pose a problem.
 
-2. Provide the key when formatting
+### Security Best Practices
 
-   ```shell
-   juicefs format --encrypt-rsa-key my-priv-key.pem META-URL NAME
-   ```
+The security of an encryption scheme depends not only on the algorithms themselves but also on how encryption keys are properly managed and used. Here are some important security practice recommendations:
 
-   :::note
-   If the private key is password-protected, an environment variable `JFS_RSA_PASSPHRASE` should be exported first before executing `juicefs mount`.
-   :::
+**Key management is at the core of security**. The passphrase you set for your RSA private key should be strong enough—we recommend using at least 16 characters with a combination of uppercase and lowercase letters, numbers, and special symbols. Always pass the passphrase through the `JFS_RSA_PASSPHRASE` environment variable rather than entering it directly on the command line, which prevents the password from being recorded in shell history or system logs.
 
-### Performance
+While regularly rotating keys is a good practice, it's important to note that changing RSA keys requires reformatting the entire file system. Therefore, when planning key rotation strategies, you need to balance security requirements with business continuity.
 
-TLS, HTTPS, and AES-256 are implemented very efficiently in modern CPUs. Therefore, enabling encryption does not have a significant impact on file system performance. Because of the relatively low performance of RSA algorithm, it is recommended to use 2048-bit RSA keys for storage encryption, and using 4096-bit keys may have a significant impact on reading performance.
+**Access control is equally important**. Ensure your metadata engine (whether Redis, MySQL, or another database) is configured with appropriate authentication and authorization mechanisms. Object storage access permissions should also follow the principle of least privilege, granting only necessary operational permissions.
+
+At the network level, try to use VPC or private networks to isolate communication traffic between the metadata engine and object storage, reducing the risk of man-in-the-middle attacks.
+
+**Monitoring and auditing** can help you detect abnormal situations promptly. We recommend logging all encryption-related operations, regularly checking key usage patterns, and establishing abnormal access detection mechanisms. This way, even if a security incident occurs, you can respond quickly and take appropriate measures.
+
+### Important Considerations
+
+When using JuiceFS encryption features, there are several important technical limitations to be aware of:
+
+First, client-side local cached data is **NOT encrypted**. Although only root users or file owners can access this cached data, if your use case requires end-to-end full encryption, you'll need to consider additional protection measures, such as placing the cache directory on an encrypted file system or block storage.
+
+Secondly, encryption functionality has some inherent limitations. File metadata (such as filenames, sizes, permissions, etc.) is not encrypted, and decrypted data exists in plaintext in memory. Most importantly, once encryption is enabled for a file system, it cannot be turned off—encryption is an irreversible operation.
+
+In deployment planning, please consider that encryption brings additional CPU and memory overhead, and encrypted data volume will also increase slightly (mainly from authentication tags and metadata required by encryption algorithms). To ensure optimal compatibility and stability, we recommend that all clients accessing encrypted file systems use the same or compatible versions of JuiceFS.
+
+### Usage Scenario Analysis
+
+JuiceFS encryption features are particularly suitable for these scenarios: protecting sensitive data in cloud object storage, meeting compliance requirements such as GDPR and HIPAA, long-term secure storage of important business data, and achieving data isolation in multi-tenant environments.
+
+However, if you need client-side local cache encryption, or want to add encryption functionality to existing file systems later, this solution may not be suitable. Similarly, for applications with extremely demanding performance requirements, or scenarios that require frequent key rotation but cannot accept reformatting, careful consideration is needed.
+
+:::tip Practical Recommendation
+For most production environments, we recommend using RSA-2048 keys with AES-256-GCM encryption, which provides the best balance between security and performance. Remember to regularly evaluate your encryption strategy to ensure it always meets your security requirements and business needs.
+:::
