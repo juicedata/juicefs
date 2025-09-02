@@ -419,5 +419,8 @@ func fetchJobs(tasks chan<- object.Object, config *Config) {
 			tasks <- obj
 		}
 	}
+	for len(tasks) > 0 {
+		time.Sleep(time.Millisecond * 10)
+	}
 	close(tasks)
 }
