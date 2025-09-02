@@ -842,15 +842,28 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 type holder struct {
 	done bool
 	sync.Mutex
-	sync.Cond
+	*sync.Cond
 }
 
 var muHolder sync.Mutex
-var holders = make([]*holder, 0)
+var holders []*holder
 
-func fetchTask(tasks chan object.Object) (object.Object, func()) {
+func noMoreTask(tasks chan<- object.Object) {
+	for len(tasks) > 0 {
+		time.Sleep(time.Millisecond * 1)
+	}
+	close(tasks)
+}
+
+func fetchTask(tasks chan object.Object) (t object.Object, done func()) {
+	defer func() {
+		if e, ok := recover().(error); ok && e.Error() == "send on closed channel" {
+			logger.Infof("no more task, continue with current one")
+			done = func() {}
+		}
+	}()
 AGAIN:
-	t := <-tasks
+	t = <-tasks
 	muHolder.Lock()
 	if len(holders) > 0 {
 		h := holders[len(holders)-1]
@@ -871,6 +884,7 @@ AGAIN:
 	}
 	if size >= maxBlock*2 {
 		h := &holder{}
+		h.Cond = sync.NewCond(&h.Mutex)
 		n := min(int(size)/maxBlock, 20)
 		for i := 1; i < n; i++ {
 			holders = append(holders, h)
@@ -1839,10 +1853,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		if err != nil {
 			return err
 		}
-		for len(tasks) > 0 {
-			time.Sleep(time.Millisecond * 10)
-		}
-		close(tasks)
+		noMoreTask(tasks)
 	} else {
 		go fetchJobs(tasks, config)
 		go func() {
