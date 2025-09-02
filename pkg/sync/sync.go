@@ -1475,6 +1475,10 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 						continue
 					} else if errors.Is(err, ignoreDir) {
 						key += "/"
+					} else if os.IsNotExist(err) {
+						atomic.AddInt64(&ignoreFiles, 1)
+						listedPrefix.Increment()
+						continue
 					}
 				}
 				logger.Debugf("start listing prefix %s", key)
@@ -1508,6 +1512,7 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 }
 
 var ignoreDir = errors.New("ignore dir")
+var ignoreFiles int64
 
 func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) error {
 	obj, err := src.Head(ctx, key)
@@ -1683,6 +1688,10 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	syncExitFunc := func() error {
 		if config.Manager == "" {
+			val := atomic.LoadInt64(&ignoreFiles)
+			if val > 0 {
+				logger.Infof("Ignored %d non-existent paths from the file list", val)
+			}
 			pending.SetCurrent(0)
 			incrHandled(0)
 			total := handled.GetTotal()
