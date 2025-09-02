@@ -145,13 +145,13 @@ The option `--encrypt-rsa-key` is required to specify RSA private key when creat
 
 3. (Optional) Delete local RSA private key file
 
-   JuiceFS securely stores the RSA private key content in the metadata engine during filesystem formatting. Therefore, after completing filesystem creation (unless there are specific compliance requirements), we recommend deleting your local RSA private key file:
+   JuiceFS securely stores the RSA private key content in the metadata engine during file system formatting. Therefore, after completing file system creation (unless there are specific compliance requirements), we recommend deleting your local RSA private key file:
 
    ```shell
    rm my-priv-key.pem
    ```
 
-   This way, you only need to ensure the security of the `JFS_RSA_PASSPHRASE` environment variable, and subsequent filesystem mounting and access only require providing the correct passphrase.
+   This way, you only need to ensure the security of the `JFS_RSA_PASSPHRASE` environment variable, and subsequent file system mounting and access only require providing the correct passphrase.
 
    If you need to retain the RSA private key file due to compliance requirements or other reasons, please ensure the private key file is stored in a secure location with strict access permissions, and keep the private key file and passphrase separately.
 
