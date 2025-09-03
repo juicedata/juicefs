@@ -1227,7 +1227,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 		m.en.updateStats(space, inodes)
 		m.updateDirStat(ctx, parent, 0, space, inodes)
 		m.updateDirQuota(ctx, parent, space, inodes)
-		m.updateUserGroupQuota(ctx, uint32(ctx.Uid()), uint32(ctx.Gid()), space, inodes)
+		m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, space, inodes)
 	}
 	return st
 }
@@ -1375,8 +1375,8 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 		m.updateDirStat(ctx, parent, -int64(diffLength), -align4K(diffLength), -1)
 		if !parent.IsTrash() {
 			m.updateDirQuota(ctx, parent, -align4K(diffLength), -1)
+			m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, -align4K(diffLength), -1)
 		}
-		m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, -align4K(diffLength), -1)
 	}
 	return err
 }

@@ -432,7 +432,7 @@ func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 	for _, q := range rows {
 		quotas = append(quotas, &pb.Quota{
 			Qtype:      q.Qtype,
-			Inode:      uint64(q.Qkey),
+			Inode:      uint64(q.Inode),
 			MaxSpace:   q.MaxSpace,
 			MaxInodes:  q.MaxInodes,
 			UsedSpace:  q.UsedSpace,
@@ -722,7 +722,7 @@ func (m *dbMeta) loadQuota(ctx Context, msg proto.Message) error {
 	rows := make([]interface{}, 0, len(quotas))
 	for _, q := range quotas {
 		rows = append(rows, &dirQuota{
-			Qkey:       q.Inode,
+			Inode:      q.Inode,
 			Qtype:      q.Qtype,
 			MaxSpace:   q.MaxSpace,
 			MaxInodes:  q.MaxInodes,
