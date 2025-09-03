@@ -40,7 +40,7 @@ juicefs format --storage s3 \
 
 JuiceFS supports Data Encryption At Rest. All data will be encrypted first before being uploaded to object storage. This allows JuiceFS to effectively prevent data leakage.
 
-Data Encryption At Rest of JuiceFS adopts industry-standard encryption methods (AES-GCM and RSA). User only needs to provide a private key with a password while creating the file system, and the private key can be provided by setting the environment variable `JFS_RSA_PASSPHRASE`. For use, mount point is totally transparent to the client, i.e., access to file system will not be affected by encryption and decryption processes.
+Data Encryption At Rest of JuiceFS adopts industry-standard encryption algorithm combinations: symmetric encryption supports AES-GCM and ChaCha20-Poly1305, while asymmetric encryption uses RSA. User only needs to provide a private key with a password while creating the file system, and the private key can be provided by setting the environment variable `JFS_RSA_PASSPHRASE`. For use, mount point is totally transparent to the client, i.e., access to file system will not be affected by encryption and decryption processes.
 
 :::caution
 The cached data on the client-side is **NOT** encrypted. Only the root user or owner can access this data. To encrypt the cached data, you can put the cached directory in an encrypted file system or block storage.
@@ -54,11 +54,11 @@ JuiceFS employs a **layered encryption architecture** that combines the advantag
 
 JuiceFS uses a **Key Encapsulation Mechanism (KEM)** that consists of two encryption layers:
 
-1. **Data Encryption Layer** (Symmetric Encryption - AES-GCM-256)
+1. **Data Encryption Layer** (Symmetric Encryption - AES-GCM-256 or ChaCha20-Poly1305)
    - **Purpose**: Actually encrypts user data content
-   - **Mechanism**: Each 4MB data block generates a unique 256-bit symmetric key `S` + random seed `N`
-   - **Advantage**: AES-GCM provides high-speed encryption and integrity verification (AEAD)
-   - **Standard**: 256-bit key strength complies with NIST security standards
+   - **Mechanism**: Each data block generates a unique symmetric key `S` + random seed `N` (AES-GCM uses 256-bit keys, ChaCha20 uses 256-bit keys)
+   - **Advantage**: Both AES-GCM and ChaCha20-Poly1305 provide high-speed encryption and integrity verification (AEAD)
+   - **Standard**: 256-bit key strength complies with NIST security standards, ChaCha20-Poly1305 is an RFC 8439 standard algorithm
 
 2. **Key Protection Layer** (Asymmetric Encryption - RSA)
    - **Purpose**: Protects the secure distribution and storage of symmetric keys
@@ -81,7 +81,7 @@ The detailed process of data encryption is as follows:
 
 - Before writing to an object storage, data blocks are compressed using LZ4 or Zstandard.
 - A random 256-bit symmetric key `S` and a random seed `N` are generated for each data block.
-- Each data block is encrypted into `encrypted_data` using AES-GCM algorithm with key `S` and seed `N`.
+- Each data block is encrypted into `encrypted_data` using AES-GCM or ChaCha20-Poly1305 algorithm with key `S` and seed `N`.
 - To avoid the symmetric key `S` from being transmitted in clear text over the network, the symmetric key `S` is encrypted into the cipher text `K` with the RSA key `M`.
 - The encrypted data `encrypted_data`, the ciphertext `K`, and the random seed `N` are combined into an object and then written to the object storage.
 
@@ -90,7 +90,7 @@ The steps for decrypting the data are as follows:
 - Read the entire encrypted object (it may be a bit larger than 4MB).
 - Parse the object data to get the ciphertext `K`, the random seed `N`, and the encrypted data `encrypted_data`.
 - Decrypt `K` with RSA key to get symmetric key `S`.
-- Decrypt the data `encrypted_data` based on AES-GCM using `S` and `N` to get the data block plaintext.
+- Decrypt the data `encrypted_data` based on AES-GCM or ChaCha20-Poly1305 using `S` and `N` to get the data block plaintext.
 - Decompress the data block.
 
 ### Enable Data Encryption At Rest
@@ -129,17 +129,31 @@ It is recommended to focus on protecting the security of the passphrase and pass
 
 The option `--encrypt-rsa-key` is required to specify RSA private key when creating an encrypted file system. The provided private key content will be written to the metadata engine. Since passphrase is mandatory in the ase256-encrypted RSA private key, the environment variable `JFS_RSA_PASSPHRASE` is required to specify the passphrase of the private key before creating and mounting file system.
 
+JuiceFS supports two encryption algorithm combinations, which can be specified via the `--encrypt-algo` option:
+
+- `aes256gcm-rsa` (default): Uses AES-256-GCM + RSA
+- `chacha20-rsa`: Uses ChaCha20-Poly1305 + RSA
+
 1. Set passphrase using environment variable
 
     ```shell
     export JFS_RSA_PASSPHRASE=the-passwd-for-rsa
     ```
 
-2. Create file system
+2. Create file system (using default AES-256-GCM encryption)
 
     ```shell
     juicefs format --storage s3 \
     --encrypt-rsa-key my-priv-key.pem \
+    ...
+    ```
+
+    Or explicitly specify ChaCha20-Poly1305 encryption:
+
+    ```shell {2,3}
+    juicefs format --storage s3 \
+    --encrypt-rsa-key my-priv-key.pem \
+    --encrypt-algo chacha20-rsa \
     ...
     ```
 
@@ -177,9 +191,22 @@ Enabling encryption does introduce some performance overhead, but modern hardwar
 
 Modern CPUs have specialized hardware optimizations for TLS, HTTPS, and AES-256 encryption technologies. In particular, modern Intel and AMD processors include AES-NI instruction sets that can perform AES encryption operations at near-native speeds, significantly reducing the performance impact of data encryption.
 
+#### Encryption Algorithm Selection Recommendations
+
+**AES-256-GCM** (default choice):
+- Excellent performance on modern CPUs with AES-NI instruction set support
+- Widely supported and validated industry standard
+- Suitable for most production environments
+
+**ChaCha20-Poly1305**:
+- May provide better performance on CPUs without AES-NI support
+- Suitable for ARM architectures or older x86 processors
+- Better resistance against timing attacks
+- Preferred algorithm by companies like Google for mobile devices and certain server environments
+
 When selecting encryption keys, we recommend using RSA-2048 keys, which strike a good balance between security strength and performance. While RSA-4096 provides higher security, its decryption operations are significantly slower and may become a performance bottleneck in high-concurrency read scenarios.
 
-It's worth mentioning that encrypted data will be slightly larger than the original data, primarily because the AES-GCM encryption algorithm requires adding authentication tags (16 bytes) and other encryption metadata. However, in modern network environments, this additional transmission volume typically doesn't pose a problem.
+It's worth mentioning that encrypted data will be slightly larger than the original data, primarily because both AES-GCM and ChaCha20-Poly1305 encryption algorithms require adding authentication tags (16 bytes) and other encryption metadata. However, in modern network environments, this additional transmission volume typically doesn't pose a problem.
 
 ### Security Best Practices
 
@@ -212,5 +239,10 @@ JuiceFS encryption features are particularly suitable for these scenarios: prote
 However, if you need client-side local cache encryption, or want to add encryption functionality to existing file systems later, this solution may not be suitable. Similarly, for applications with extremely demanding performance requirements, or scenarios that require frequent key rotation but cannot accept reformatting, careful consideration is needed.
 
 :::tip Practical Recommendation
-For most production environments, we recommend using RSA-2048 keys with AES-256-GCM encryption, which provides the best balance between security and performance. Remember to regularly evaluate your encryption strategy to ensure it always meets your security requirements and business needs.
+For most production environments, we recommend:
+- **Modern x86 servers**: Use RSA-2048 keys with AES-256-GCM encryption (default choice)
+- **ARM architecture or older CPUs**: Consider using RSA-2048 keys with ChaCha20-Poly1305 encryption
+- **Mobile devices or embedded systems**: Prioritize ChaCha20-Poly1305
+
+These combinations provide the best balance between security and performance. Remember to regularly evaluate your encryption strategy to ensure it always meets your security requirements and business needs.
 :::
