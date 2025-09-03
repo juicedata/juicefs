@@ -2,6 +2,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net"
 	"os"
@@ -87,7 +88,7 @@ func (c *PluginClient) Close() error {
 	return nil
 }
 
-func (c *PluginClient) getConn() (net.Conn, error) {
+func (c *PluginClient) getConn(ctx context.Context) (net.Conn, error) {
 	if c.closed {
 		return nil, errors.New("client is closed")
 	}
@@ -98,7 +99,7 @@ func (c *PluginClient) getConn() (net.Conn, error) {
 		c.Lock()
 		defer c.Unlock()
 		dialer := &net.Dialer{Timeout: time.Second, KeepAlive: time.Minute}
-		nConn, err := dialer.Dial(c.proto, c.addr)
+		nConn, err := dialer.DialContext(ctx, c.proto, c.addr)
 		if err != nil {
 			return nil, err
 		}
@@ -125,16 +126,54 @@ func (c *PluginClient) auth(conn net.Conn) (err error) {
 	return err
 }
 
+// readResp need put buff back to pool if msg != nil
+func (c *PluginClient) readResp(conn net.Conn, hBuff []byte, cmd byte) (*msg.Msg, error) {
+	var err error
+	if hBuff == nil || len(hBuff) != msg.HeaderLen {
+		hBuff = c.pool.Get(msg.HeaderLen)
+		defer c.pool.Put(hBuff)
+	}
+	if _, err = io.ReadFull(conn, hBuff); err != nil {
+		return nil, errors.Wrapf(err, "cmd %s failed to read response header", msg.Cmd2Name[cmd])
+	}
+	m := msg.NewMsg(hBuff)
+	bodyLen, rCmd := m.GetHeader()
+	if rCmd != cmd {
+		return nil, errors.Errorf("cmd %s got unexpected command in response: %s", msg.Cmd2Name[cmd], msg.Cmd2Name[rCmd])
+	}
+	if bodyLen == 0 {
+		return nil, nil
+	}
+	buff := c.pool.Get(int(bodyLen))
+	if _, err = io.ReadFull(conn, buff); err != nil {
+		c.pool.Put(buff)
+		return nil, errors.Wrapf(err, "cmd %s failed to read response body", msg.Cmd2Name[cmd])
+	}
+	m.SetBytes(buff)
+	errMsg := m.GetString()
+	if errMsg != "" {
+		err = errors.Errorf("cmd %s failed: %s", msg.Cmd2Name[cmd], errMsg)
+	}
+	if !m.HasMore() {
+		c.pool.Put(buff)
+		return nil, err
+	}
+	return m, err
+}
+
 var ne = new(net.OpError)
 
-func (c *PluginClient) call(f func(conn net.Conn) error) error {
+func (c *PluginClient) call(ctx context.Context, f func(conn net.Conn) error) error {
 	if c.authErr != nil {
 		return c.authErr
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 
 	c.wg.Add(1)
 	defer c.wg.Done()
-	conn, err := c.getConn()
+	conn, err := c.getConn(ctx)
 	if err != nil {
 		return err
 	}
@@ -153,9 +192,10 @@ func (c *PluginClient) call(f func(conn net.Conn) error) error {
 
 var _ ObjectStorage = (*PluginClient)(nil)
 var _ SupportStorageClass = (*PluginClient)(nil)
+var pCtx = context.TODO()
 
 func (c *PluginClient) SetStorageClass(sc string) error {
-	return c.call(func(conn net.Conn) (err error) {
+	return c.call(pCtx, func(conn net.Conn) (err error) {
 		buff := c.pool.Get(msg.HeaderLen + 2 + len(sc))
 		defer c.pool.Put(buff)
 		m := msg.NewEncMsg(buff, 2+len(sc), msg.CmdSetSC)
@@ -168,8 +208,372 @@ func (c *PluginClient) SetStorageClass(sc string) error {
 	})
 }
 
-func (c *PluginClient) AbortUpload(key string, uploadID string) {
-	if err := c.call(func(conn net.Conn) (err error) {
+func (c *PluginClient) String() string {
+	str := ""
+	if err := c.call(pCtx, func(conn net.Conn) (err error) {
+		buff := c.pool.Get(msg.HeaderLen)
+		m := msg.NewEncMsg(buff, 0, msg.CmdStr)
+		if _, err = conn.Write(m.Bytes()); err != nil {
+			return errors.Wrap(err, "failed to write String request")
+		}
+
+		m, err = c.readResp(conn, buff, msg.CmdStr)
+		if m != nil {
+			str = m.GetString()
+			c.pool.Put(m.Bytes())
+		}
+		return err
+	}); err != nil {
+		c.Logger.Errorf("failed to call client.String: %v", err)
+	}
+	return str
+}
+
+func (c *PluginClient) Limits() Limits {
+	var limit Limits
+	if err := c.call(pCtx, func(conn net.Conn) (err error) {
+		buff := c.pool.Get(msg.HeaderLen)
+		defer c.pool.Put(buff)
+		m := msg.NewEncMsg(buff, 0, msg.CmdLimits)
+		if _, err = conn.Write(m.Bytes()); err != nil {
+			return errors.Wrap(err, "failed to write Limits request")
+		}
+
+		m, err = c.readResp(conn, buff, msg.CmdLimits)
+		limit.IsSupportMultipartUpload = m.GetBool()
+		limit.IsSupportUploadPartCopy = m.GetBool()
+		limit.MinPartSize = int(m.Get64())
+		limit.MaxPartSize = int64(m.Get64())
+		limit.MaxPartCount = int(m.Get64())
+		c.pool.Put(m.Bytes())
+		return err
+	}); err != nil {
+		c.Logger.Errorf("failed to call Limits: %v", err)
+	}
+	return limit
+}
+
+func (c *PluginClient) Create(ctx context.Context) error {
+	return c.call(ctx, func(conn net.Conn) (err error) {
+		buff := c.pool.Get(msg.HeaderLen)
+		m := msg.NewEncMsg(buff, 0, msg.CmdCreate)
+		if _, err = conn.Write(m.Bytes()); err != nil {
+			return errors.Wrap(err, "failed to write Create request")
+		}
+		_, err = c.readResp(conn, buff, msg.CmdCreate)
+		return err
+	})
+}
+
+type buffReader struct {
+	*bytes.Buffer
+	pool     msg.BytesPool
+	fullData []byte
+}
+
+func newBuffReader(data []byte, fullData []byte, pool msg.BytesPool) *buffReader {
+	return &buffReader{
+		Buffer:   bytes.NewBuffer(data),
+		fullData: fullData,
+		pool:     pool,
+	}
+}
+
+func (b *buffReader) Close() error {
+	b.pool.Put(b.fullData)
+	return nil
+}
+
+var _ io.ReadCloser = (*buffReader)(nil)
+
+func (c *PluginClient) Get(ctx context.Context, key string, off int64, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	var rc io.ReadCloser
+	err := c.call(ctx, func(conn net.Conn) (err error) {
+		bLen := 2 + len(key) + 16
+		buff := c.pool.Get(msg.HeaderLen + bLen)
+		defer c.pool.Put(buff)
+		m := msg.NewEncMsg(buff, bLen, msg.CmdGet)
+		m.PutString(key)
+		m.Put64(uint64(off))
+		attrs := ApplyGetters(getters...)
+		if limit <= 0 && attrs.GetRequestSize() > 0 {
+			m.Put64(uint64(attrs.GetRequestSize()))
+		} else {
+			m.Put64(uint64(limit))
+		}
+
+		if _, err = conn.Write(m.Bytes()); err != nil {
+			return errors.Wrap(err, "failed to write Get header")
+		}
+
+		m, err = c.readResp(conn, buff[:msg.HeaderLen], msg.CmdGet)
+		if m != nil {
+			rid, sc := m.GetString(), m.GetString()
+			attrs.SetRequestID(rid).SetStorageClass(sc)
+		}
+		if err != nil {
+			c.pool.Put(m.Bytes())
+			return err
+		}
+		rc = newBuffReader(m.Buffer.Buffer(), m.Bytes(), c.pool)
+		return nil
+	})
+	return rc, err
+}
+
+func (c *PluginClient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+	return c.call(ctx, func(conn net.Conn) error {
+		l, ok := in.(msg.Lener)
+		if !ok {
+			return errors.New("input reader does not implement Len() interface")
+		}
+
+		bLen := 2 + len(key) + 4 // 4 for length of data
+		buff := c.pool.Get(msg.HeaderLen + bLen)
+		defer c.pool.Put(buff)
+		m := msg.NewEncMsg(buff, bLen, msg.CmdPut)
+		m.PutString(key)
+		m.Put32(uint32(l.Len()))
+
+		var err error
+		if _, err = conn.Write(m.Bytes()); err != nil {
+			return errors.Wrap(err, "failed to write Put header")
+		}
+		if _, err = io.Copy(conn, in); err != nil {
+			return errors.Wrap(err, "failed to write Put body")
+		}
+
+		m, err = c.readResp(conn, buff[:msg.HeaderLen], msg.CmdPut)
+		if m != nil {
+			rid, sc := m.GetString(), m.GetString()
+			attrs := ApplyGetters(getters...)
+			attrs.SetRequestID(rid).SetStorageClass(sc)
+			c.pool.Put(m.Bytes())
+		}
+		return err
+	})
+}
+
+func (c *PluginClient) Copy(ctx context.Context, dst string, src string) error {
+	return c.call(ctx, func(conn net.Conn) (err error) {
+		bLen := 4 + len(dst) + len(src)
+		buff := c.pool.Get(msg.HeaderLen + bLen)
+		defer c.pool.Put(buff)
+		m := msg.NewEncMsg(buff, bLen, msg.CmdCopy)
+		m.PutString(dst)
+		m.PutString(src)
+		if _, err = conn.Write(m.Bytes()); err != nil {
+			return errors.Wrap(err, "failed to write Copy request")
+		}
+
+		_, err = c.readResp(conn, buff, msg.CmdCopy)
+		return err
+	})
+}
+
+func (c *PluginClient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	return c.call(ctx, func(conn net.Conn) (err error) {
+		buff := c.pool.Get(msg.HeaderLen + 2 + len(key))
+		defer c.pool.Put(buff)
+		m := msg.NewEncMsg(buff, 2+len(key), msg.CmdDel)
+		m.PutString(key)
+		if _, err := conn.Write(m.Bytes()); err != nil {
+			return errors.Wrap(err, "failed to write Delete request")
+		}
+
+		m, err = c.readResp(conn, buff[:msg.HeaderLen], msg.CmdDel)
+		if m != nil {
+			attrs := ApplyGetters(getters...)
+			attrs.SetStorageClass(m.GetString())
+			c.pool.Put(m.Bytes())
+		}
+		return err
+	})
+}
+
+func (c *PluginClient) Head(ctx context.Context, key string) (Object, error) {
+	var o Object
+	err := c.call(ctx, func(conn net.Conn) (err error) {
+		buff := c.pool.Get(msg.HeaderLen + 2 + len(key))
+		defer c.pool.Put(buff)
+		m := msg.NewEncMsg(buff, 2+len(key), msg.CmdHead)
+		m.PutString(key)
+
+		if _, err = conn.Write(m.Bytes()); err != nil {
+			return errors.Wrap(err, "failed to write Head request")
+		}
+
+		m, err = c.readResp(conn, buff, msg.CmdHead)
+		if err != nil {
+			return err
+		}
+		o = &obj{
+			key:   key,
+			sc:    m.GetString(),
+			size:  int64(m.Get64()),
+			mtime: time.Unix(0, int64(m.Get64())),
+			isDir: m.GetBool(),
+		}
+		c.pool.Put(m.Bytes())
+		return nil
+	})
+	return o, err
+}
+
+func (c *PluginClient) List(ctx context.Context, prefix string, startAfter string, token string, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	var objs []Object
+	isTruncated := false
+	nextMarker := ""
+	err := c.call(ctx, func(conn net.Conn) (err error) {
+		bodyLen := 8 + len(prefix) + len(startAfter) + len(token) + len(delimiter) + 9
+		buff := c.pool.Get(msg.HeaderLen + bodyLen)
+		defer c.pool.Put(buff)
+		m := msg.NewEncMsg(buff, bodyLen, msg.CmdList)
+		m.PutString(prefix)
+		m.PutString(startAfter)
+		m.PutString(token)
+		m.PutString(delimiter)
+		m.Put64(uint64(limit))
+		m.PutBool(followLink)
+		if _, err = conn.Write(m.Bytes()); err != nil {
+			return errors.Wrap(err, "failed to write List request")
+		}
+
+		m, err = c.readResp(conn, buff[:msg.HeaderLen], msg.CmdList)
+		if err != nil {
+			return err
+		}
+		defer c.pool.Put(m.Bytes())
+		isTruncated = m.GetBool()
+		nextMarker = m.GetString()
+		batchLen := m.Get32()
+
+		batchBuff := c.pool.Get(1<<20 + 4)
+		defer c.pool.Put(batchBuff)
+		for {
+			if batchLen == 0 {
+				break
+			}
+			if _, err = io.ReadFull(conn, batchBuff[:batchLen+4]); err != nil {
+				return errors.Wrapf(err, "cmd %s failed to read response body", msg.Cmd2Name[msg.CmdList])
+			}
+			m.SetBytes(batchBuff[:batchLen])
+			for m.HasMore() {
+				objs = append(objs, &obj{
+					key:   m.GetString(),
+					sc:    m.GetString(),
+					size:  int64(m.Get64()),
+					mtime: time.Unix(0, int64(m.Get64())),
+					isDir: m.GetBool(),
+				})
+			}
+			m.SetBytes(batchBuff[batchLen : batchLen+4])
+			batchLen = m.Get32()
+		}
+		return nil
+	})
+	return objs, isTruncated, nextMarker, err
+}
+
+func (c *PluginClient) ListAll(ctx context.Context, prefix string, marker string, followLink bool) (<-chan Object, error) {
+	return nil, utils.ENOTSUP
+}
+
+func (c *PluginClient) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
+	var mpu *MultipartUpload
+	err := c.call(ctx, func(conn net.Conn) (err error) {
+		buff := c.pool.Get(msg.HeaderLen + 2 + len(key))
+		defer c.pool.Put(buff)
+		m := msg.NewEncMsg(buff, 2+len(key), msg.CmdCreateMPU)
+		m.PutString(key)
+		if _, err = conn.Write(m.Bytes()); err != nil {
+			return errors.Wrap(err, "failed to write CreateMultipartUpload request")
+		}
+
+		m, err = c.readResp(conn, buff[:msg.HeaderLen], msg.CmdCreateMPU)
+		if err != nil {
+			return err
+		}
+		defer c.pool.Put(m.Bytes())
+		mpu = &MultipartUpload{
+			MinPartSize: int(m.Get32()),
+			MaxCount:    int(m.Get32()),
+			UploadID:    m.GetString(),
+		}
+		return nil
+	})
+	return mpu, err
+}
+
+func (c *PluginClient) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
+	var part *Part
+	err := c.call(ctx, func(conn net.Conn) (err error) {
+		bLen := 2 + len(key) + 2 + len(uploadID) + 4 + 4
+		buff := c.pool.Get(msg.HeaderLen + bLen)
+		defer c.pool.Put(buff)
+		m := msg.NewEncMsg(buff, bLen, msg.CmdUploadPart)
+		m.PutString(key)
+		m.PutString(uploadID)
+		m.Put32(uint32(num))
+		m.Put32(uint32(len(body)))
+
+		if _, err = conn.Write(m.Bytes()); err != nil {
+			return errors.Wrap(err, "failed to write UploadPart request")
+		}
+		if _, err = conn.Write(body); err != nil {
+			return errors.Wrap(err, "failed to write UploadPart body")
+		}
+
+		m, err = c.readResp(conn, buff[:msg.HeaderLen], msg.CmdUploadPart)
+		if err != nil {
+			return err
+		}
+		defer c.pool.Put(m.Bytes())
+		part = &Part{
+			Num:  int(m.Get32()),
+			Size: int(m.Get32()),
+			ETag: m.GetString(),
+		}
+		return nil
+	})
+	return part, err
+}
+
+func (c *PluginClient) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off int64, size int64) (*Part, error) {
+	var part *Part
+	err := c.call(ctx, func(conn net.Conn) (err error) {
+		bLen := 2 + len(key) + 2 + len(uploadID) + 4 + 2 + len(srcKey) + 8 + 8
+		buff := c.pool.Get(msg.HeaderLen + bLen)
+		defer c.pool.Put(buff)
+		m := msg.NewEncMsg(buff, bLen, msg.CmdUploadPartCopy)
+		m.PutString(key)
+		m.PutString(uploadID)
+		m.Put32(uint32(num))
+		m.PutString(srcKey)
+		m.Put64(uint64(off))
+		m.Put64(uint64(size))
+
+		if _, err = conn.Write(m.Bytes()); err != nil {
+			return errors.Wrap(err, "failed to write UploadPartCopy request")
+		}
+
+		m, err = c.readResp(conn, buff[:msg.HeaderLen], msg.CmdUploadPartCopy)
+		if err != nil {
+			return err
+		}
+		defer c.pool.Put(m.Bytes())
+		part = &Part{
+			Num:  int(m.Get32()),
+			Size: int(m.Get32()),
+			ETag: m.GetString(),
+		}
+		return nil
+	})
+	return part, err
+}
+
+func (c *PluginClient) AbortUpload(ctx context.Context, key string, uploadID string) {
+	if err := c.call(ctx, func(conn net.Conn) (err error) {
 		buff := c.pool.Get(msg.HeaderLen + 2 + len(key) + 2 + len(uploadID))
 		defer c.pool.Put(buff)
 		m := msg.NewEncMsg(buff, 2+len(key)+2+len(uploadID), msg.CmdAbortMPU)
@@ -185,8 +589,8 @@ func (c *PluginClient) AbortUpload(key string, uploadID string) {
 	}
 }
 
-func (c *PluginClient) CompleteUpload(key string, uploadID string, parts []*Part) error {
-	return c.call(func(conn net.Conn) error {
+func (c *PluginClient) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
+	return c.call(ctx, func(conn net.Conn) error {
 		bLen := 2 + len(key) + 2 + len(uploadID) + 4 // last 4 bytes is a placeholder for next batch length
 		buff := c.pool.Get(4 + 1<<20)
 		defer c.pool.Put(buff)
@@ -242,288 +646,10 @@ func (c *PluginClient) CompleteUpload(key string, uploadID string, parts []*Part
 	})
 }
 
-func (c *PluginClient) Copy(dst string, src string) error {
-	return c.call(func(conn net.Conn) (err error) {
-		bLen := 4 + len(dst) + len(src)
-		buff := c.pool.Get(msg.HeaderLen + bLen)
-		defer c.pool.Put(buff)
-		m := msg.NewEncMsg(buff, bLen, msg.CmdCopy)
-		m.PutString(dst)
-		m.PutString(src)
-		if _, err = conn.Write(m.Bytes()); err != nil {
-			return errors.Wrap(err, "failed to write Copy request")
-		}
-
-		_, err = c.readResp(conn, buff, msg.CmdCopy)
-		return err
-	})
-}
-
-// readResp need put buff back to pool if msg != nil
-func (c *PluginClient) readResp(conn net.Conn, hBuff []byte, cmd byte) (*msg.Msg, error) {
-	var err error
-	if hBuff == nil || len(hBuff) != msg.HeaderLen {
-		hBuff = c.pool.Get(msg.HeaderLen)
-		defer c.pool.Put(hBuff)
-	}
-	if _, err = io.ReadFull(conn, hBuff); err != nil {
-		return nil, errors.Wrapf(err, "cmd %s failed to read response header", msg.Cmd2Name[cmd])
-	}
-	m := msg.NewMsg(hBuff)
-	bodyLen, rCmd := m.GetHeader()
-	if rCmd != cmd {
-		return nil, errors.Errorf("cmd %s got unexpected command in response: %s", msg.Cmd2Name[cmd], msg.Cmd2Name[rCmd])
-	}
-	if bodyLen == 0 {
-		return nil, nil
-	}
-	buff := c.pool.Get(int(bodyLen))
-	if _, err = io.ReadFull(conn, buff); err != nil {
-		c.pool.Put(buff)
-		return nil, errors.Wrapf(err, "cmd %s failed to read response body", msg.Cmd2Name[cmd])
-	}
-	m.SetBytes(buff)
-	errMsg := m.GetString()
-	if errMsg != "" {
-		err = errors.Errorf("cmd %s failed: %s", msg.Cmd2Name[cmd], errMsg)
-	}
-	if !m.HasMore() {
-		c.pool.Put(buff)
-		return nil, err
-	}
-	return m, err
-}
-
-func (c *PluginClient) Create() error {
-	return c.call(func(conn net.Conn) (err error) {
-		buff := c.pool.Get(msg.HeaderLen)
-		m := msg.NewEncMsg(buff, 0, msg.CmdCreate)
-		if _, err = conn.Write(m.Bytes()); err != nil {
-			return errors.Wrap(err, "failed to write Create request")
-		}
-		_, err = c.readResp(conn, buff, msg.CmdCreate)
-		return err
-	})
-}
-
-func (c *PluginClient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	var mpu *MultipartUpload
-	err := c.call(func(conn net.Conn) (err error) {
-		buff := c.pool.Get(msg.HeaderLen + 2 + len(key))
-		defer c.pool.Put(buff)
-		m := msg.NewEncMsg(buff, 2+len(key), msg.CmdCreateMPU)
-		m.PutString(key)
-		if _, err = conn.Write(m.Bytes()); err != nil {
-			return errors.Wrap(err, "failed to write CreateMultipartUpload request")
-		}
-
-		m, err = c.readResp(conn, buff[:msg.HeaderLen], msg.CmdCreateMPU)
-		if err != nil {
-			return err
-		}
-		defer c.pool.Put(m.Bytes())
-		mpu = &MultipartUpload{
-			MinPartSize: int(m.Get32()),
-			MaxCount:    int(m.Get32()),
-			UploadID:    m.GetString(),
-		}
-		return nil
-	})
-	return mpu, err
-}
-
-func (c *PluginClient) Delete(key string, getters ...AttrGetter) error {
-	return c.call(func(conn net.Conn) (err error) {
-		buff := c.pool.Get(msg.HeaderLen + 2 + len(key))
-		defer c.pool.Put(buff)
-		m := msg.NewEncMsg(buff, 2+len(key), msg.CmdDel)
-		m.PutString(key)
-		if _, err := conn.Write(m.Bytes()); err != nil {
-			return errors.Wrap(err, "failed to write Delete request")
-		}
-
-		m, err = c.readResp(conn, buff[:msg.HeaderLen], msg.CmdDel)
-		if m != nil {
-			attrs := ApplyGetters(getters...)
-			attrs.SetStorageClass(m.GetString())
-			c.pool.Put(m.Bytes())
-		}
-		return err
-	})
-}
-
-type buffReader struct {
-	*bytes.Buffer
-	pool     msg.BytesPool
-	fullData []byte
-}
-
-func newBuffReader(data []byte, fullData []byte, pool msg.BytesPool) *buffReader {
-	return &buffReader{
-		Buffer:   bytes.NewBuffer(data),
-		fullData: fullData,
-		pool:     pool,
-	}
-}
-
-func (b *buffReader) Close() error {
-	b.pool.Put(b.fullData)
-	return nil
-}
-
-var _ io.ReadCloser = (*buffReader)(nil)
-
-func (c *PluginClient) Get(key string, off int64, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	var rc io.ReadCloser
-	err := c.call(func(conn net.Conn) (err error) {
-		bLen := 2 + len(key) + 16
-		buff := c.pool.Get(msg.HeaderLen + bLen)
-		defer c.pool.Put(buff)
-		m := msg.NewEncMsg(buff, bLen, msg.CmdGet)
-		m.PutString(key)
-		m.Put64(uint64(off))
-		attrs := ApplyGetters(getters...)
-		if limit <= 0 && attrs.GetRequestSize() > 0 {
-			m.Put64(uint64(attrs.GetRequestSize()))
-		} else {
-			m.Put64(uint64(limit))
-		}
-
-		if _, err = conn.Write(m.Bytes()); err != nil {
-			return errors.Wrap(err, "failed to write Get header")
-		}
-
-		m, err = c.readResp(conn, buff[:msg.HeaderLen], msg.CmdGet)
-		if m != nil {
-			rid, sc := m.GetString(), m.GetString()
-			attrs.SetRequestID(rid).SetStorageClass(sc)
-		}
-		if err != nil {
-			c.pool.Put(m.Bytes())
-			return err
-		}
-		rc = newBuffReader(m.Buffer.Buffer(), m.Bytes(), c.pool)
-		return nil
-	})
-	return rc, err
-}
-
-func (c *PluginClient) Head(key string) (Object, error) {
-	var o Object
-	err := c.call(func(conn net.Conn) (err error) {
-		buff := c.pool.Get(msg.HeaderLen + 2 + len(key))
-		defer c.pool.Put(buff)
-		m := msg.NewEncMsg(buff, 2+len(key), msg.CmdHead)
-		m.PutString(key)
-
-		if _, err = conn.Write(m.Bytes()); err != nil {
-			return errors.Wrap(err, "failed to write Head request")
-		}
-
-		m, err = c.readResp(conn, buff, msg.CmdHead)
-		if err != nil {
-			return err
-		}
-		o = &obj{
-			key:   key,
-			sc:    m.GetString(),
-			size:  int64(m.Get64()),
-			mtime: time.Unix(0, int64(m.Get64())),
-			isDir: m.GetBool(),
-		}
-		c.pool.Put(m.Bytes())
-		return nil
-	})
-	return o, err
-}
-
-func (c *PluginClient) Limits() Limits {
-	var limit Limits
-	if err := c.call(func(conn net.Conn) (err error) {
-		buff := c.pool.Get(msg.HeaderLen)
-		defer c.pool.Put(buff)
-		m := msg.NewEncMsg(buff, 0, msg.CmdLimits)
-		if _, err = conn.Write(m.Bytes()); err != nil {
-			return errors.Wrap(err, "failed to write Limits request")
-		}
-
-		m, err = c.readResp(conn, buff, msg.CmdLimits)
-		limit.IsSupportMultipartUpload = m.GetBool()
-		limit.IsSupportUploadPartCopy = m.GetBool()
-		limit.MinPartSize = int(m.Get64())
-		limit.MaxPartSize = int64(m.Get64())
-		limit.MaxPartCount = int(m.Get64())
-		c.pool.Put(m.Bytes())
-		return err
-	}); err != nil {
-		c.Logger.Errorf("failed to call Limits: %v", err)
-	}
-	return limit
-}
-
-func (c *PluginClient) List(prefix string, startAfter string, token string, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
-	var objs []Object
-	isTruncated := false
-	nextMarker := ""
-	err := c.call(func(conn net.Conn) (err error) {
-		bodyLen := 8 + len(prefix) + len(startAfter) + len(token) + len(delimiter) + 9
-		buff := c.pool.Get(msg.HeaderLen + bodyLen)
-		defer c.pool.Put(buff)
-		m := msg.NewEncMsg(buff, bodyLen, msg.CmdList)
-		m.PutString(prefix)
-		m.PutString(startAfter)
-		m.PutString(token)
-		m.PutString(delimiter)
-		m.Put64(uint64(limit))
-		m.PutBool(followLink)
-		if _, err = conn.Write(m.Bytes()); err != nil {
-			return errors.Wrap(err, "failed to write List request")
-		}
-
-		m, err = c.readResp(conn, buff[:msg.HeaderLen], msg.CmdList)
-		if err != nil {
-			return err
-		}
-		defer c.pool.Put(m.Bytes())
-		isTruncated = m.GetBool()
-		nextMarker = m.GetString()
-		batchLen := m.Get32()
-
-		batchBuff := c.pool.Get(1<<20 + 4)
-		defer c.pool.Put(batchBuff)
-		for {
-			if batchLen == 0 {
-				break
-			}
-			if _, err = io.ReadFull(conn, batchBuff[:batchLen+4]); err != nil {
-				return errors.Wrapf(err, "cmd %s failed to read response body", msg.Cmd2Name[msg.CmdList])
-			}
-			m.SetBytes(batchBuff[:batchLen])
-			for m.HasMore() {
-				objs = append(objs, &obj{
-					key:   m.GetString(),
-					sc:    m.GetString(),
-					size:  int64(m.Get64()),
-					mtime: time.Unix(0, int64(m.Get64())),
-					isDir: m.GetBool(),
-				})
-			}
-			m.SetBytes(batchBuff[batchLen : batchLen+4])
-			batchLen = m.Get32()
-		}
-		return nil
-	})
-	return objs, isTruncated, nextMarker, err
-}
-
-func (c *PluginClient) ListAll(prefix string, marker string, followLink bool) (<-chan Object, error) {
-	return nil, utils.ENOTSUP
-}
-
-func (c *PluginClient) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (c *PluginClient) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	var parts []*PendingPart
 	var nextMarker string
-	err := c.call(func(conn net.Conn) (err error) {
+	err := c.call(ctx, func(conn net.Conn) (err error) {
 		bodyLen := 2 + len(marker)
 		buff := c.pool.Get(msg.HeaderLen + bodyLen)
 		defer c.pool.Put(buff)
@@ -566,129 +692,8 @@ func (c *PluginClient) ListUploads(marker string) ([]*PendingPart, string, error
 	return parts, nextMarker, err
 }
 
-func (c *PluginClient) Put(key string, in io.Reader, getters ...AttrGetter) error {
-	return c.call(func(conn net.Conn) error {
-		l, ok := in.(msg.Lener)
-		if !ok {
-			return errors.New("input reader does not implement Len() interface")
-		}
-
-		bLen := 2 + len(key) + 4 // 4 for length of data
-		buff := c.pool.Get(msg.HeaderLen + bLen)
-		defer c.pool.Put(buff)
-		m := msg.NewEncMsg(buff, bLen, msg.CmdPut)
-		m.PutString(key)
-		m.Put32(uint32(l.Len()))
-
-		var err error
-		if _, err = conn.Write(m.Bytes()); err != nil {
-			return errors.Wrap(err, "failed to write Put header")
-		}
-		if _, err = io.Copy(conn, in); err != nil {
-			return errors.Wrap(err, "failed to write Put body")
-		}
-
-		m, err = c.readResp(conn, buff[:msg.HeaderLen], msg.CmdPut)
-		if m != nil {
-			rid, sc := m.GetString(), m.GetString()
-			attrs := ApplyGetters(getters...)
-			attrs.SetRequestID(rid).SetStorageClass(sc)
-			c.pool.Put(m.Bytes())
-		}
-		return err
-	})
-}
-
-func (c *PluginClient) String() string {
-	str := ""
-	if err := c.call(func(conn net.Conn) (err error) {
-		buff := c.pool.Get(msg.HeaderLen)
-		m := msg.NewEncMsg(buff, 0, msg.CmdStr)
-		if _, err = conn.Write(m.Bytes()); err != nil {
-			return errors.Wrap(err, "failed to write String request")
-		}
-
-		m, err = c.readResp(conn, buff, msg.CmdStr)
-		if m != nil {
-			str = m.GetString()
-			c.pool.Put(m.Bytes())
-		}
-		return err
-	}); err != nil {
-		c.Logger.Errorf("failed to call client.String: %v", err)
-	}
-	return str
-}
-
-func (c *PluginClient) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
-	var part *Part
-	err := c.call(func(conn net.Conn) (err error) {
-		bLen := 2 + len(key) + 2 + len(uploadID) + 4 + 4
-		buff := c.pool.Get(msg.HeaderLen + bLen)
-		defer c.pool.Put(buff)
-		m := msg.NewEncMsg(buff, bLen, msg.CmdUploadPart)
-		m.PutString(key)
-		m.PutString(uploadID)
-		m.Put32(uint32(num))
-		m.Put32(uint32(len(body)))
-
-		if _, err = conn.Write(m.Bytes()); err != nil {
-			return errors.Wrap(err, "failed to write UploadPart request")
-		}
-		if _, err = conn.Write(body); err != nil {
-			return errors.Wrap(err, "failed to write UploadPart body")
-		}
-
-		m, err = c.readResp(conn, buff[:msg.HeaderLen], msg.CmdUploadPart)
-		if err != nil {
-			return err
-		}
-		defer c.pool.Put(m.Bytes())
-		part = &Part{
-			Num:  int(m.Get32()),
-			Size: int(m.Get32()),
-			ETag: m.GetString(),
-		}
-		return nil
-	})
-	return part, err
-}
-
-func (c *PluginClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off int64, size int64) (*Part, error) {
-	var part *Part
-	err := c.call(func(conn net.Conn) (err error) {
-		bLen := 2 + len(key) + 2 + len(uploadID) + 4 + 2 + len(srcKey) + 8 + 8
-		buff := c.pool.Get(msg.HeaderLen + bLen)
-		defer c.pool.Put(buff)
-		m := msg.NewEncMsg(buff, bLen, msg.CmdUploadPartCopy)
-		m.PutString(key)
-		m.PutString(uploadID)
-		m.Put32(uint32(num))
-		m.PutString(srcKey)
-		m.Put64(uint64(off))
-		m.Put64(uint64(size))
-
-		if _, err = conn.Write(m.Bytes()); err != nil {
-			return errors.Wrap(err, "failed to write UploadPartCopy request")
-		}
-
-		m, err = c.readResp(conn, buff[:msg.HeaderLen], msg.CmdUploadPartCopy)
-		if err != nil {
-			return err
-		}
-		defer c.pool.Put(m.Bytes())
-		part = &Part{
-			Num:  int(m.Get32()),
-			Size: int(m.Get32()),
-			ETag: m.GetString(),
-		}
-		return nil
-	})
-	return part, err
-}
-
 func (c *PluginClient) Init(endpoint, accesskey, secretkey, token string) error {
-	return c.call(func(conn net.Conn) (err error) {
+	return c.call(pCtx, func(conn net.Conn) (err error) {
 		bodyLen := 8 + len(endpoint) + len(accesskey) + len(secretkey) + len(token)
 		buff := c.pool.Get(msg.HeaderLen + bodyLen)
 		defer c.pool.Put(buff)
