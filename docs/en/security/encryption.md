@@ -177,8 +177,6 @@ Enabling encryption does introduce some performance overhead, but modern hardwar
 
 Modern CPUs have specialized hardware optimizations for TLS, HTTPS, and AES-256 encryption technologies. In particular, modern Intel and AMD processors include AES-NI instruction sets that can perform AES encryption operations at near-native speeds, significantly reducing the performance impact of data encryption.
 
-JuiceFS employs several performance optimization strategies. It processes multiple data blocks in parallel for encryption tasks, fully utilizing multi-core CPU capabilities. Encryption operations are primarily completed in memory, avoiding disk I/O bottlenecks. For frequently accessed data, the system intelligently caches decrypted keys to reduce repetitive RSA decryption operations.
-
 When selecting encryption keys, we recommend using RSA-2048 keys, which strike a good balance between security strength and performance. While RSA-4096 provides higher security, its decryption operations are significantly slower and may become a performance bottleneck in high-concurrency read scenarios.
 
 It's worth mentioning that encrypted data will be slightly larger than the original data, primarily because the AES-GCM encryption algorithm requires adding authentication tags (16 bytes) and other encryption metadata. However, in modern network environments, this additional transmission volume typically doesn't pose a problem.
