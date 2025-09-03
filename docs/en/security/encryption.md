@@ -192,11 +192,13 @@ Modern CPUs have specialized hardware optimizations for TLS, HTTPS, and AES-256 
 #### Encryption Algorithm Selection Recommendations
 
 **AES-256-GCM** (default choice):
+
 - Excellent performance on modern CPUs with AES-NI instruction set support
 - Widely supported and validated industry standard
 - Suitable for most production environments
 
 **ChaCha20-Poly1305**:
+
 - May provide better performance on CPUs without AES-NI support
 - Suitable for ARM architectures or older x86 processors
 - Better resistance against timing attacks
