@@ -858,7 +858,7 @@ func noMoreTask(tasks chan<- object.Object) {
 func fetchTask(tasks chan object.Object) (t object.Object, done func()) {
 	defer func() {
 		if e, ok := recover().(error); ok && e.Error() == "send on closed channel" {
-			logger.Infof("no more task, continue with current one")
+			logger.Debugf("no more task, continue with current one")
 			done = func() {}
 		}
 	}()
