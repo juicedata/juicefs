@@ -839,8 +839,73 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 	return srcChksum, err
 }
 
-func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *Config) {
-	for obj := range tasks {
+type holder struct {
+	done bool
+	sync.Mutex
+	*sync.Cond
+}
+
+var muHolder sync.Mutex
+var holders []*holder
+
+func noMoreTask(tasks chan<- object.Object) {
+	for len(tasks) > 0 {
+		time.Sleep(time.Millisecond * 1)
+	}
+	close(tasks)
+}
+
+func fetchTask(tasks chan object.Object) (t object.Object, done func()) {
+	defer func() {
+		if e, ok := recover().(error); ok && e.Error() == "send on closed channel" {
+			logger.Debugf("no more task, continue with current one")
+			done = func() {}
+		}
+	}()
+AGAIN:
+	t = <-tasks
+	muHolder.Lock()
+	if len(holders) > 0 {
+		h := holders[len(holders)-1]
+		holders = holders[:len(holders)-1]
+		muHolder.Unlock()
+		tasks <- t // put back
+		h.Lock()
+		for !h.done {
+			h.Wait()
+		}
+		h.Unlock()
+		goto AGAIN
+	}
+	defer muHolder.Unlock()
+	size := t.Size()
+	if size == markChecksum {
+		size = withoutSize(t).Size()
+	}
+	if size >= maxBlock*2 {
+		h := &holder{}
+		h.Cond = sync.NewCond(&h.Mutex)
+		n := min(int(size)/maxBlock, 20)
+		for i := 1; i < n; i++ {
+			holders = append(holders, h)
+		}
+		return t, func() {
+			h.Lock()
+			defer h.Unlock()
+			h.done = true
+			h.Broadcast()
+		}
+	} else {
+		return t, func() {}
+	}
+}
+
+func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Config) {
+	for {
+		obj, done := fetchTask(tasks)
+		if obj == nil {
+			break
+		}
 		key := obj.Key()
 		switch obj.Size() {
 		case markDeleteSrc:
@@ -944,6 +1009,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 		}
 		incrHandled(1)
+		done()
 	}
 }
 
@@ -1657,7 +1723,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	var bufferSize = 10240
 	if config.Manager != "" {
 		// No support for work-stealing, so workers shouldnot buffer tasks to prevent piling up in their own queues, which could cause imbalance among workers.
-		bufferSize = 0
+		bufferSize = 1
 	}
 	tasks := make(chan object.Object, bufferSize)
 	wg := sync.WaitGroup{}
@@ -1796,7 +1862,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		if err != nil {
 			return err
 		}
-		close(tasks)
+		noMoreTask(tasks)
 	} else {
 		go fetchJobs(tasks, config)
 		go func() {
