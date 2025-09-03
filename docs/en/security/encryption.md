@@ -38,26 +38,24 @@ juicefs format --storage s3 \
 
 ## Data Encryption At Rest {#at-rest}
 
-JuiceFS supports Data Encryption At Rest. All data will be encrypted first before being uploaded to object storage. This allows JuiceFS to effectively prevent data leakage.
+JuiceFS provides Data Encryption At Rest support, which encrypts first, then uploads. All files stored in JuiceFS will be encrypted locally and then uploaded to object storage, effectively preventing data leakage when the object storage itself is compromised.
 
-Data Encryption At Rest of JuiceFS adopts industry-standard encryption algorithm combinations: symmetric encryption supports AES-GCM and ChaCha20-Poly1305, while asymmetric encryption uses RSA. User only needs to provide a private key with a password while creating the file system, and the private key can be provided by setting the environment variable `JFS_RSA_PASSPHRASE`. For use, mount point is totally transparent to the client, i.e., access to file system will not be affected by encryption and decryption processes.
+JuiceFS Data Encryption At Rest adopts a hybrid encryption architecture: symmetric encryption handles data encryption, while asymmetric encryption (RSA) handles key protection. You only need to provide an RSA private key when creating the file system to enable data encryption functionality, and provide the private key password through the `JFS_RSA_PASSPHRASE` environment variable. In usage, the mount point is completely transparent to applications, meaning the encryption and decryption processes will not affect file system access.
 
 :::caution
 The cached data on the client-side is **NOT** encrypted. Only the root user or owner can access this data. To encrypt the cached data, you can put the cached directory in an encrypted file system or block storage.
 :::
 
-### Encryption algorithm
-
-JuiceFS employs a **layered encryption architecture** that combines the advantages of both symmetric and asymmetric encryption technologies to achieve an efficient and secure static data encryption solution.
+### Encryption Principles
 
 #### Encryption Architecture Design
 
-JuiceFS uses a **Key Encapsulation Mechanism (KEM)** that consists of two encryption layers:
+JuiceFS adopts a **hybrid encryption architecture** with two encryption layers:
 
-1. **Data Encryption Layer** (Symmetric Encryption - AES-GCM-256 or ChaCha20-Poly1305)
+1. **Data Encryption Layer** (Symmetric Encryption - AES-256-GCM or ChaCha20-Poly1305)
    - **Purpose**: Actually encrypts user data content
-   - **Mechanism**: Each data block generates a unique symmetric key `S` + random seed `N` (AES-GCM uses 256-bit keys, ChaCha20 uses 256-bit keys)
-   - **Advantage**: Both AES-GCM and ChaCha20-Poly1305 provide high-speed encryption and integrity verification (AEAD)
+   - **Mechanism**: Each block generates a unique symmetric key `S` + random seed `N` (both use 256-bit keys)
+   - **Advantage**: Both AES-256-GCM and ChaCha20-Poly1305 provide high-speed encryption and integrity verification (AEAD)
    - **Standard**: 256-bit key strength complies with NIST security standards, ChaCha20-Poly1305 is an RFC 8439 standard algorithm
 
 2. **Key Protection Layer** (Asymmetric Encryption - RSA)
@@ -66,7 +64,7 @@ JuiceFS uses a **Key Encapsulation Mechanism (KEM)** that consists of two encryp
    - **Advantage**: Solves key distribution challenges and avoids key reuse risks
    - **Scheme**: Supports RSA-2048 or RSA-4096 keys, using OAEP padding to enhance security
 
-Data Encryption At Rest of JuiceFS combines symmetric encryption and asymmetric encryption, which requires user to create a global RSA private key `M` for the file system. Each object stored in the object storage will have its own random symmetric key `S`. The stored data is encrypted using AES-GCM algorithm with the symmetric key `S`, while `S` is encrypted with the global RSA private key `M`. At last, the RSA key is encrypted using a user-specified passphrase.
+Users need to create a global RSA private key `M` for the file system in advance. Each object stored in the object storage will have its own random symmetric key `S`.
 
 Symbol explanation:
 
@@ -77,20 +75,20 @@ Symbol explanation:
 
 ![Encryption At-rest](../images/encryption.png)
 
-The detailed process of data encryption is as follows:
+#### Data Encryption Process
 
-- Before writing to an object storage, data blocks are compressed using LZ4 or Zstandard.
+- Before writing to object storage, data blocks are compressed using LZ4 or Zstandard.
 - A random 256-bit symmetric key `S` and a random seed `N` are generated for each data block.
-- Each data block is encrypted into `encrypted_data` using AES-GCM or ChaCha20-Poly1305 algorithm with key `S` and seed `N`.
-- To avoid the symmetric key `S` from being transmitted in clear text over the network, the symmetric key `S` is encrypted into the cipher text `K` with the RSA key `M`.
+- Each data block is encrypted into `encrypted_data` using AES-256-GCM or ChaCha20-Poly1305 algorithm with key `S` and seed `N`.
+- To avoid the symmetric key `S` from being transmitted in clear text over the network, the symmetric key `S` is encrypted into the cipher text `K` with the RSA private key `M`.
 - The encrypted data `encrypted_data`, the ciphertext `K`, and the random seed `N` are combined into an object and then written to the object storage.
 
-The steps for decrypting the data are as follows:
+#### Data Decryption Process
 
 - Read the entire encrypted object (it may be a bit larger than 4MB).
 - Parse the object data to get the ciphertext `K`, the random seed `N`, and the encrypted data `encrypted_data`.
-- Decrypt `K` with RSA key to get symmetric key `S`.
-- Decrypt the data `encrypted_data` based on AES-GCM or ChaCha20-Poly1305 using `S` and `N` to get the data block plaintext.
+- Decrypt `K` with RSA private key to get symmetric key `S`.
+- Decrypt the data `encrypted_data` based on AES-256-GCM or ChaCha20-Poly1305 using `S` and `N` to get the data block plaintext.
 - Decompress the data block.
 
 ### Enable Data Encryption At Rest
@@ -99,35 +97,35 @@ The steps for decrypting the data are as follows:
 Data Encryption At Rest must be enabled when creating file system. The file system that was created without Data Encryption At Rest enabled cannot enable it later.
 :::
 
-There are following steps to enable Data Encryption At Rest:
+The steps to enable Data Encryption At Rest are:
 
 1. Create a RSA private key
-2. Run the encrypted file system that is created by the RSA private key
+2. Create an encrypted file system using the RSA private key
 3. Mount the file system
 
-#### Step 1: create a RSA private key
+#### Step 1: Create a RSA private key
 
-The RSA private key, usually manually generated by OpenSSL, plays a critical role in Data Encryption At Rest. The following command generates a 2048-bit RSA private key with a file name of `my-priv-key.pem` in the current directory using aes256 algorithm.
+The RSA private key is crucial for Data Encryption At Rest and is generally manually generated using OpenSSL. The following command will generate a 2048-bit RSA private key named `my-priv-key.pem` in the current directory using the aes256 algorithm:
 
 ```shell
 openssl genrsa -out my-priv-key.pem -aes256 2048
 ```
 
-Since the aes256 algorithm is in use, you will be prompted to enter a passphrase (at least 4 bits) to protect your private key. The passphrase can be considered as a password for encrypting the file of the RSA private key, which is also the last layer of security assurance for the RSA private key.
+Since the `aes256` encryption algorithm is used, the command line will require you to provide a `Passphrase` of at least 4 characters for this private key. You can simply think of it as a password used to encrypt the RSA private key file itself, which is also the last security safeguard for the RSA private key file.
 
-:::caution
-RSA private key security is extremely important, and several key points require special attention:
+:::caution Special Attention
+The security of the RSA private key is extremely important, and special attention needs to be paid to the following points:
 
 - **Passphrase Leakage Risk**: If the private key's passphrase is leaked, attackers may decrypt the private key stored in the metadata engine, thereby jeopardizing the security of all encrypted data
 - **Private Key File Leakage**: If the encrypted private key file itself is leaked along with the passphrase, it will lead to serious security risks
-- **Data Recovery Impossibility**: If the correct passphrase cannot be provided to access the private key stored in the metadata engine, **all encrypted data will be permanently lost and unrecoverable**
+- **Data Irrecoverability**: If the correct passphrase cannot be provided to access the private key stored in the metadata engine, **all encrypted data will be permanently lost and unrecoverable**
 
-It is recommended to focus on protecting the security of the passphrase and pass it through environment variables, avoiding leakage in command line history.
+It is recommended to focus on protecting the security of the passphrase and pass it through environment variables to avoid leakage in command line history.
 :::
 
-#### Step 2: create an encrypted file system
+#### Step 2: Create an encrypted file system
 
-The option `--encrypt-rsa-key` is required to specify RSA private key when creating an encrypted file system. The provided private key content will be written to the metadata engine. Since passphrase is mandatory in the ase256-encrypted RSA private key, the environment variable `JFS_RSA_PASSPHRASE` is required to specify the passphrase of the private key before creating and mounting file system.
+Creating an encrypted file system requires using the `--encrypt-rsa-key` option to specify the RSA private key. The provided private key content will be written to the metadata engine. You need to use the environment variable `JFS_RSA_PASSPHRASE` to specify the private key's passphrase.
 
 JuiceFS supports two encryption algorithm combinations, which can be specified via the `--encrypt-algo` option:
 
@@ -142,19 +140,19 @@ JuiceFS supports two encryption algorithm combinations, which can be specified v
 
 2. Create file system (using default AES-256-GCM encryption)
 
-    ```shell
+    ```shell {2}
     juicefs format --storage s3 \
-    --encrypt-rsa-key my-priv-key.pem \
-    ...
+      --encrypt-rsa-key my-priv-key.pem \
+      ...
     ```
 
     Or explicitly specify ChaCha20-Poly1305 encryption:
 
     ```shell {2,3}
     juicefs format --storage s3 \
-    --encrypt-rsa-key my-priv-key.pem \
-    --encrypt-algo chacha20-rsa \
-    ...
+      --encrypt-rsa-key my-priv-key.pem \
+      --encrypt-algo chacha20-rsa \
+      ...
     ```
 
 3. (Optional) Delete local RSA private key file
@@ -169,7 +167,7 @@ JuiceFS supports two encryption algorithm combinations, which can be specified v
 
    If you need to retain the RSA private key file due to compliance requirements or other reasons, please ensure the private key file is stored in a secure location with strict access permissions, and keep the private key file and passphrase separately.
 
-#### Step 3: mount file system
+#### Step 3: Mount file system
 
 There is no need to specify extra options while mounting an encrypted file system. However, the passphrase of the private key needs to be set before mounting using environment variable.
 
@@ -204,15 +202,15 @@ Modern CPUs have specialized hardware optimizations for TLS, HTTPS, and AES-256 
 - Better resistance against timing attacks
 - Preferred algorithm by companies like Google for mobile devices and certain server environments
 
-When selecting encryption keys, we recommend using RSA-2048 keys, which strike a good balance between security strength and performance. While RSA-4096 provides higher security, its decryption operations are significantly slower and may become a performance bottleneck in high-concurrency read scenarios.
+When selecting encryption keys, we recommend using RSA-2048 keys, which provide a good balance between security strength and performance. RSA-4096 provides higher security, but its decryption operations are slower and may impact performance in high-concurrency read scenarios.
 
-It's worth mentioning that encrypted data will be slightly larger than the original data, primarily because both AES-GCM and ChaCha20-Poly1305 encryption algorithms require adding authentication tags (16 bytes) and other encryption metadata. However, in modern network environments, this additional transmission volume typically doesn't pose a problem.
+It's worth mentioning that encrypted data will be slightly larger than the original data, primarily because both AES-256-GCM and ChaCha20-Poly1305 encryption algorithms require adding authentication tags (16 bytes) and other encryption metadata.
 
 ### Security Best Practices
 
 The security of an encryption scheme depends not only on the algorithms themselves but also on how encryption keys are properly managed and used. Here are some important security practice recommendations:
 
-**Key management is at the core of security**. The passphrase you set for your RSA private key should be strong enough—we recommend using at least 16 characters with a combination of uppercase and lowercase letters, numbers, and special symbols. Always pass the passphrase through the `JFS_RSA_PASSPHRASE` environment variable rather than entering it directly on the command line, which prevents the password from being recorded in shell history or system logs.
+**Key management is at the core of security**. The passphrase you set for your RSA private key should be strong enough—we recommend using at least 16 characters with a combination of uppercase and lowercase letters, numbers, and special symbols. We recommend passing the passphrase through environment variables to avoid leakage in command line history.
 
 While regularly rotating keys is a good practice, it's important to note that changing RSA keys requires reformatting the entire file system. Therefore, when planning key rotation strategies, you need to balance security requirements with business continuity.
 
@@ -230,19 +228,10 @@ First, client-side local cached data is **NOT encrypted**. Although only root us
 
 Secondly, encryption functionality has some inherent limitations. File metadata (such as filenames, sizes, permissions, etc.) is not encrypted, and decrypted data exists in plaintext in memory. Most importantly, once encryption is enabled for a file system, it cannot be turned off—encryption is an irreversible operation.
 
-In deployment planning, please consider that encryption brings additional CPU and memory overhead, and encrypted data volume will also increase slightly (mainly from authentication tags and metadata required by encryption algorithms). To ensure optimal compatibility and stability, we recommend that all clients accessing encrypted file systems use the same or compatible versions of JuiceFS.
+In deployment planning, please consider that encryption brings additional CPU and memory overhead. To ensure optimal compatibility and stability, we recommend that all clients accessing encrypted file systems use the same or compatible versions of JuiceFS.
 
 ### Usage Scenario Analysis
 
 JuiceFS encryption features are particularly suitable for these scenarios: protecting sensitive data in cloud object storage, meeting compliance requirements such as GDPR and HIPAA, long-term secure storage of important business data, and achieving data isolation in multi-tenant environments.
 
 However, if you need client-side local cache encryption, or want to add encryption functionality to existing file systems later, this solution may not be suitable. Similarly, for applications with extremely demanding performance requirements, or scenarios that require frequent key rotation but cannot accept reformatting, careful consideration is needed.
-
-:::tip Practical Recommendation
-For most production environments, we recommend:
-- **Modern x86 servers**: Use RSA-2048 keys with AES-256-GCM encryption (default choice)
-- **ARM architecture or older CPUs**: Consider using RSA-2048 keys with ChaCha20-Poly1305 encryption
-- **Mobile devices or embedded systems**: Prioritize ChaCha20-Poly1305
-
-These combinations provide the best balance between security and performance. Remember to regularly evaluate your encryption strategy to ensure it always meets your security requirements and business needs.
-:::
