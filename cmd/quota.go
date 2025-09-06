@@ -148,7 +148,7 @@ func quota(c *cli.Context) error {
 		strict = c.Bool("strict")
 		repair = c.Bool("repair")
 	}
-	if err := m.HandleQuota(meta.Background(), cmd, dpath, qs, strict, repair, c.Bool("create")); err != nil {
+	if err := m.HandleQuota(meta.Background(), cmd, dpath, 0, 0, qs, strict, repair, c.Bool("create")); err != nil {
 		return err
 	} else if len(qs) == 0 {
 		return nil
