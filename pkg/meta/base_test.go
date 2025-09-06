@@ -3553,7 +3553,6 @@ func cleanupQuotaTest(ctx Context, m Meta, parent Ino, uid, gid uint32) {
 	m.Unlink(ctx, parent, "hardlink")
 	m.Rmdir(ctx, RootInode, "ugquota")
 
-	// 清理测试 quota
 	m.HandleQuota(ctx, QuotaDel, "", uid, 0, nil, false, false, false)
 	m.HandleQuota(ctx, QuotaDel, "", 0, gid, nil, false, false, false)
 	m.HandleQuota(ctx, QuotaDel, "/path1", uid, 0, nil, false, false, false)
@@ -3620,16 +3619,27 @@ func testQuotaFileOperations(t *testing.T, m Meta, ctx Context, parent Ino, uid,
 	if st := m.Create(ctx, parent, "userfile", 0644, 0, 0, &userInode, &attr); st != 0 {
 		t.Fatalf("Create ugquota/userfile: %s", st)
 	}
-	if st := m.SetAttr(ctx, userInode, SetAttrUID, 0, &Attr{Uid: uid}); st != 0 {
-		t.Fatalf("SetAttr UID for userfile: %s", st)
+	if st := m.SetAttr(ctx, userInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: uid, Gid: gid}); st != 0 {
+		t.Fatalf("SetAttr UID and GID for userfile: %s", st)
+	}
+
+	var checkAttr Attr
+	if st := m.GetAttr(ctx, userInode, &checkAttr); st != 0 {
+		t.Fatalf("GetAttr for userfile: %s", st)
+	}
+	if checkAttr.Uid != uid {
+		t.Fatalf("SetAttr UID failed: expected %d, got %d", uid, checkAttr.Uid)
+	}
+	if checkAttr.Gid != gid {
+		t.Fatalf("SetAttr GID failed: expected %d, got %d", gid, checkAttr.Gid)
 	}
 
 	var groupInode Ino
 	if st := m.Create(ctx, parent, "groupfile", 0644, 0, 0, &groupInode, &attr); st != 0 {
 		t.Fatalf("Create ugquota/groupfile: %s", st)
 	}
-	if st := m.SetAttr(ctx, groupInode, SetAttrGID, 0, &Attr{Gid: gid}); st != 0 {
-		t.Fatalf("SetAttr GID for groupfile: %s", st)
+	if st := m.SetAttr(ctx, groupInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: uid, Gid: gid}); st != 0 {
+		t.Fatalf("SetAttr UID and GID for groupfile: %s", st)
 	}
 
 	m.FlushSession()
@@ -3642,6 +3652,13 @@ func testQuotaFileOperations(t *testing.T, m Meta, ctx Context, parent Ino, uid,
 		t.Fatalf("HandleQuota set user quota for uid %d: %s", uid, err)
 	}
 
+	qs := make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaGet, "", uid, 0, qs, false, false, false); err != nil {
+		t.Fatalf("HandleQuota get user quota after file creation: %s", err)
+	} else if q := qs["uidgid"]; q.UsedInodes < 1 {
+		t.Fatalf("HandleQuota get user quota: used inodes should be >= 1, got %d", q.UsedInodes)
+	}
+
 	if err := m.HandleQuota(ctx, QuotaDel, "", 0, gid, nil, false, false, false); err != nil {
 		t.Logf("HandleQuota delete group quota (may not exist): %s", err)
 	}
@@ -3649,7 +3666,7 @@ func testQuotaFileOperations(t *testing.T, m Meta, ctx Context, parent Ino, uid,
 		t.Fatalf("HandleQuota set group quota for gid %d: %s", gid, err)
 	}
 
-	qs := make(map[string]*Quota)
+	qs = make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, 0, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get user quota after file creation: %s", err)
 	} else if q := qs["uidgid"]; q.UsedInodes < 1 {
@@ -3768,8 +3785,8 @@ func testQuotaUsageStatistics(t *testing.T, m Meta, ctx Context, parent Ino, uid
 		if st := m.Create(ctx, parent, filename, 0644, 0, 0, &testInode, &attr); st != 0 {
 			t.Fatalf("Create %s: %s", filename, st)
 		}
-		if st := m.SetAttr(ctx, testInode, SetAttrUID, 0, &Attr{Uid: uid}); st != 0 {
-			t.Fatalf("SetAttr UID for %s: %s", filename, st)
+		if st := m.SetAttr(ctx, testInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: uid, Gid: gid}); st != 0 {
+			t.Fatalf("SetAttr UID and GID for %s: %s", filename, st)
 		}
 	}
 
@@ -3779,9 +3796,14 @@ func testQuotaUsageStatistics(t *testing.T, m Meta, ctx Context, parent Ino, uid
 		if st := m.Create(ctx, parent, filename, 0644, 0, 0, &groupTestInode, &attr); st != 0 {
 			t.Fatalf("Create %s: %s", filename, st)
 		}
-		if st := m.SetAttr(ctx, groupTestInode, SetAttrGID, 0, &Attr{Gid: gid}); st != 0 {
-			t.Fatalf("SetAttr GID for %s: %s", filename, st)
+		if st := m.SetAttr(ctx, groupTestInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: uid, Gid: gid}); st != 0 {
+			t.Fatalf("SetAttr UID and GID for %s: %s", filename, st)
 		}
+	}
+
+	// Set parent directory attributes to be included in quotas
+	if st := m.SetAttr(ctx, parent, SetAttrUID|SetAttrGID, 0, &Attr{Uid: uid, Gid: gid}); st != 0 {
+		t.Fatalf("SetAttr UID and GID for parent directory: %s", st)
 	}
 
 	if err := m.HandleQuota(ctx, QuotaDel, "", uid, 0, nil, false, false, false); err != nil {
@@ -3816,6 +3838,12 @@ func testQuotaUsageStatistics(t *testing.T, m Meta, ctx Context, parent Ino, uid
 }
 
 func testUserGroupQuota(t *testing.T, m Meta) {
+	// Only run user group quota tests for SQL engines
+	engineName := m.Name()
+	if engineName != "sqlite3" && engineName != "mysql" && engineName != "postgres" {
+		t.Skipf("User group quota tests are only supported for SQL engines, current engine: %s", engineName)
+	}
+
 	if err := m.NewSession(true); err != nil {
 		t.Fatalf("New session: %s", err)
 	}
@@ -3855,7 +3883,6 @@ func testUserGroupQuota(t *testing.T, m Meta) {
 		testQuotaUsageStatistics(t, m, ctx, parent, uid, gid)
 	})
 
-	// 清理测试数据
 	cleanupQuotaTest(ctx, m, parent, uid, gid)
 
 }

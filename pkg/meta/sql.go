@@ -3635,8 +3635,6 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 		}
 		if exist {
 			created = false
-		} else if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
-			return errors.Errorf("limitation not set or deleted")
 		} else {
 			created = true
 		}
@@ -3654,9 +3652,17 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 		if quota.UsedSpace >= 0 {
 			origin.UsedSpace = quota.UsedSpace
 			updateColumns = append(updateColumns, "used_space")
+		} else if !exist {
+			// Initialize to 0 for new quota records
+			origin.UsedSpace = 0
+			updateColumns = append(updateColumns, "used_space")
 		}
 		if quota.UsedInodes >= 0 {
 			origin.UsedInodes = quota.UsedInodes
+			updateColumns = append(updateColumns, "used_inodes")
+		} else if !exist {
+			// Initialize to 0 for new quota records
+			origin.UsedInodes = 0
 			updateColumns = append(updateColumns, "used_inodes")
 		}
 

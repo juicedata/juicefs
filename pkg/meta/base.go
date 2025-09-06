@@ -1105,10 +1105,37 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	defer m.timeit("SetAttr", time.Now())
 	inode = m.checkRoot(inode)
+
+	var curAttr Attr
+	var uidChanged, gidChanged bool
+	var oldUid, oldGid uint32
+	if (set & (SetAttrUID | SetAttrGID)) != 0 {
+		if err := m.en.doGetAttr(ctx, inode, &curAttr); err == 0 {
+			oldUid = curAttr.Uid
+			oldGid = curAttr.Gid
+			uidChanged = (set&SetAttrUID != 0) && (curAttr.Uid != attr.Uid)
+			gidChanged = (set&SetAttrGID != 0) && (curAttr.Gid != attr.Gid)
+		}
+	}
+
 	err := m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr)
 	if err == 0 {
 		m.of.InvalidateChunk(inode, invalidateAttrOnly)
 		m.of.Update(inode, attr)
+		if uidChanged || gidChanged {
+			var space, inodes int64
+			if attr.Typ == TypeFile {
+				space = int64(attr.Length)
+				inodes = 1
+			} else if attr.Typ == TypeDirectory {
+				space = 0
+				inodes = 1
+			}
+			if uidChanged || gidChanged {
+				m.updateUserGroupQuota(ctx, oldUid, oldGid, -space, -inodes)
+			}
+			m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, space, inodes)
+		}
 	}
 	return err
 }

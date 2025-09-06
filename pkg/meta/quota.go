@@ -295,7 +295,7 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) 
 
 func (m *baseMeta) loadQuotas() {
 	format := m.getFormat()
-	if !format.DirStats || !format.UserGroupQuota {
+	if !format.DirStats && !format.UserGroupQuota {
 		return
 	}
 
@@ -465,11 +465,31 @@ func (m *baseMeta) updateUserGroupQuota(ctx Context, uid, gid uint32, space, ino
 	if uid > 0 {
 		if uq := m.userQuotas[uint64(uid)]; uq != nil {
 			uq.update(space, inodes)
+		} else {
+			// Create new user quota if it doesn't exist
+			m.userQuotas[uint64(uid)] = &Quota{
+				UsedSpace:  space,
+				UsedInodes: inodes,
+				MaxSpace:   -1,     // No limit
+				MaxInodes:  -1,     // No limit
+				newSpace:   space,  // Set newSpace for database sync
+				newInodes:  inodes, // Set newInodes for database sync
+			}
 		}
 	}
 	if gid > 0 {
 		if gq := m.groupQuotas[uint64(gid)]; gq != nil {
 			gq.update(space, inodes)
+		} else {
+			// Create new group quota if it doesn't exist
+			m.groupQuotas[uint64(gid)] = &Quota{
+				UsedSpace:  space,
+				UsedInodes: inodes,
+				MaxSpace:   -1,     // No limit
+				MaxInodes:  -1,     // No limit
+				newSpace:   space,  // Set newSpace for database sync
+				newInodes:  inodes, // Set newInodes for database sync
+			}
 		}
 	}
 	m.quotaMu.Unlock()
@@ -627,6 +647,16 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 		return nil
 	}
 
+	var hasScan bool = false
+	_, uq, gq, err := m.en.doLoadQuotas(ctx)
+	if err != nil {
+		logger.Warnf("doLoadQuotas error: %s", err)
+		return err
+	}
+	if len(uq) == 0 && len(gq) == 0 {
+		hasScan = true
+	}
+
 	created, err := m.en.doSetQuota(ctx, qtype, uint64(key), &Quota{
 		MaxSpace:   quota.MaxSpace,
 		MaxInodes:  quota.MaxInodes,
@@ -639,13 +669,10 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	if !created {
 		return nil
 	}
-	if qtype != DirQuotaType && (len(m.userQuotas) > 0 || len(m.groupQuotas) > 0) {
-		return nil
-	}
-	return m.initializeQuotaUsage(ctx, qtype, key, dpath, strict)
+	return m.initializeQuotaUsage(ctx, qtype, key, dpath, strict, hasScan)
 }
 
-func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, dpath string, strict bool) error {
+func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, dpath string, strict bool, hasScan bool) error {
 	switch qtype {
 	case DirQuotaType:
 		wrapErr := func(e error) error {
@@ -668,12 +695,14 @@ func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, d
 		}
 		return nil
 	case UserQuotaType, GroupQuotaType:
-		return m.initializeGlobalUserGroupQuotaUsage(ctx, qtype, key)
+		if !hasScan {
+			return m.initializeGlobalUserGroupQuotaUsage(ctx, qtype, key, true)
+		}
 	}
 	return nil
 }
 
-func (m *baseMeta) initializeGlobalUserGroupQuotaUsage(ctx Context, qtype uint32, key uint64) error {
+func (m *baseMeta) initializeGlobalUserGroupQuotaUsage(ctx Context, qtype uint32, key uint64, lockHeld bool) error {
 	userUsage, groupUsage, err := m.scanGlobalUserGroupUsage(ctx)
 	if err != nil {
 		return fmt.Errorf("scan global user group usage: %v", err)
@@ -684,7 +713,7 @@ func (m *baseMeta) initializeGlobalUserGroupQuotaUsage(ctx Context, qtype uint32
 
 	m.quotaMu.Lock()
 	for uid, usage := range userUsage {
-		if qtype == UserQuotaType && key == uint64(uid) {
+		if m.userQuotas[uid] != nil {
 			m.userQuotas[uid].UsedSpace = int64(usage.Size)
 			m.userQuotas[uid].UsedInodes = int64(usage.Files)
 		} else {
@@ -697,7 +726,7 @@ func (m *baseMeta) initializeGlobalUserGroupQuotaUsage(ctx Context, qtype uint32
 		}
 	}
 	for gid, usage := range groupUsage {
-		if qtype == GroupQuotaType && key == uint64(gid) {
+		if m.groupQuotas[gid] != nil {
 			m.groupQuotas[gid].UsedSpace = int64(usage.Size)
 			m.groupQuotas[gid].UsedInodes = int64(usage.Files)
 		} else {
@@ -732,13 +761,16 @@ func (m *baseMeta) initializeGlobalUserGroupQuotaUsage(ctx Context, qtype uint32
 	m.quotaMu.Unlock()
 
 	for uid, quota := range userQuotasSnapshot {
-		if _, err := m.en.doSetQuota(ctx, UserQuotaType, uid, quota); err != nil {
-			logger.Warnf("Failed to sync user quota for UID %d: %v", uid, err)
+		_, err := m.en.doSetQuota(ctx, UserQuotaType, uid, quota)
+		if err != nil {
+			logger.Warnf("Failed to save user quota for uid %d: %v", uid, err)
 		}
 	}
+
 	for gid, quota := range groupQuotasSnapshot {
-		if _, err := m.en.doSetQuota(ctx, GroupQuotaType, gid, quota); err != nil {
-			logger.Warnf("Failed to sync group quota for GID %d: %v", gid, err)
+		_, err := m.en.doSetQuota(ctx, GroupQuotaType, gid, quota)
+		if err != nil {
+			logger.Warnf("Failed to save group quota for gid %d: %v", gid, err)
 		}
 	}
 
@@ -772,6 +804,9 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 			}
 
 			uid, gid := uint64(e.Attr.Uid), uint64(e.Attr.Gid)
+			if (uid == 0 || gid == 0) && e.Attr.Typ == TypeFile {
+				continue
+			}
 
 			if userUsage[uid] == nil {
 				userUsage[uid] = &Summary{}
@@ -805,6 +840,7 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 			userUsage[uid].Files++
 			groupUsage[gid].Size += space
 			groupUsage[gid].Files++
+
 		}
 	}
 
