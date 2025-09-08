@@ -41,6 +41,14 @@ const (
 	GroupQuotaType
 )
 
+// Quota key constants for different quota types
+const (
+	// UGQuotaKey is used as the key for user and group quotas in the in-memory quotas map
+	// Unlike directory quotas which use the directory path as key, user/group quotas use this special key
+	// to aggregate all user and group quota information in a single map entry
+	UGQuotaKey = "ug_quota"
+)
+
 type Quota struct {
 	MaxSpace, MaxInodes   int64
 	UsedSpace, UsedInodes int64
@@ -641,7 +649,7 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 				logger.Warnf("init user group quota: %s", err)
 			}
 		}
-		quota = quotas["uidgid"]
+		quota = quotas[UGQuotaKey]
 	}
 	if quota == nil {
 		return nil
@@ -855,11 +863,11 @@ func (m *baseMeta) handleQuotaGet(ctx Context, qtype uint32, key uint64, dpath s
 	if q == nil {
 		return nil
 	}
-
-	if qtype == UserQuotaType || qtype == GroupQuotaType {
-		quotas["uidgid"] = q
-	} else {
+	switch qtype {
+	case DirQuotaType:
 		quotas[dpath] = q
+	case UserQuotaType, GroupQuotaType:
+		quotas[UGQuotaKey] = q
 	}
 	return nil
 }
