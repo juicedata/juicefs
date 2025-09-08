@@ -422,16 +422,24 @@ func (m *dbMeta) dumpXattr(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 }
 
 func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
-	var rows []dirQuota
+	var dirRows []dirQuota
+	var userGroupRows []userGroupQuota
+
 	if err := m.execTxn(ctx, func(s *xorm.Session) error {
-		return s.Find(&rows)
+		if e := s.Find(&dirRows); e != nil {
+			return e
+		}
+		return s.Find(&userGroupRows)
 	}); err != nil {
 		return err
 	}
-	quotas := make([]*pb.Quota, 0, len(rows))
-	for _, q := range rows {
+
+	quotas := make([]*pb.Quota, 0, len(dirRows)+len(userGroupRows))
+
+	// Add directory quotas
+	for _, q := range dirRows {
 		quotas = append(quotas, &pb.Quota{
-			Qtype:      q.Qtype,
+			Qtype:      DirQuotaType,
 			Inode:      uint64(q.Inode),
 			MaxSpace:   q.MaxSpace,
 			MaxInodes:  q.MaxInodes,
@@ -439,6 +447,19 @@ func (m *dbMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 			UsedInodes: q.UsedInodes,
 		})
 	}
+
+	// Add user and group quotas
+	for _, q := range userGroupRows {
+		quotas = append(quotas, &pb.Quota{
+			Qtype:      q.Qtype,
+			Inode:      q.Qkey,
+			MaxSpace:   q.MaxSpace,
+			MaxInodes:  q.MaxInodes,
+			UsedSpace:  q.UsedSpace,
+			UsedInodes: q.UsedInodes,
+		})
+	}
+
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Quotas: quotas}})
 }
 
@@ -719,18 +740,45 @@ func (m *dbMeta) loadXattrs(ctx Context, msg proto.Message) error {
 
 func (m *dbMeta) loadQuota(ctx Context, msg proto.Message) error {
 	quotas := msg.(*pb.Batch).Quotas
-	rows := make([]interface{}, 0, len(quotas))
+	dirRows := make([]interface{}, 0)
+	userGroupRows := make([]interface{}, 0)
+
 	for _, q := range quotas {
-		rows = append(rows, &dirQuota{
-			Inode:      q.Inode,
-			Qtype:      q.Qtype,
-			MaxSpace:   q.MaxSpace,
-			MaxInodes:  q.MaxInodes,
-			UsedSpace:  q.UsedSpace,
-			UsedInodes: q.UsedInodes,
-		})
+		if q.Qtype == DirQuotaType {
+			dirRows = append(dirRows, &dirQuota{
+				Inode:      q.Inode,
+				MaxSpace:   q.MaxSpace,
+				MaxInodes:  q.MaxInodes,
+				UsedSpace:  q.UsedSpace,
+				UsedInodes: q.UsedInodes,
+			})
+		} else {
+			userGroupRows = append(userGroupRows, &userGroupQuota{
+				Qtype:      q.Qtype,
+				Qkey:       q.Inode,
+				MaxSpace:   q.MaxSpace,
+				MaxInodes:  q.MaxInodes,
+				UsedSpace:  q.UsedSpace,
+				UsedInodes: q.UsedInodes,
+			})
+		}
 	}
-	return m.insertRows(rows)
+
+	// Insert directory quotas
+	if len(dirRows) > 0 {
+		if err := m.insertRows(dirRows); err != nil {
+			return err
+		}
+	}
+
+	// Insert user and group quotas
+	if len(userGroupRows) > 0 {
+		if err := m.insertRows(userGroupRows); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (m *dbMeta) loadDirStats(ctx Context, msg proto.Message) error {

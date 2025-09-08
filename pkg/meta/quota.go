@@ -653,7 +653,7 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 		logger.Warnf("doLoadQuotas error: %s", err)
 		return err
 	}
-	if len(uq) == 0 && len(gq) == 0 {
+	if len(uq) > 0 || len(gq) > 0 {
 		hasScan = true
 	}
 
