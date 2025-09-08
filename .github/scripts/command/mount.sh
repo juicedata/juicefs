@@ -176,4 +176,50 @@ test_umask()
     echo "PASS: Umask test completed successfully"
 }
 
+test_close_to_open1()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    mkdir /jfs2 || true
+    ./juicefs mount -d $META_URL /jfs2
+    file1="/jfs/testfile.tmp"
+    file2="/jfs2/testfile.tmp"
+    rm $file1 || true
+    openssl rand -base64 -out $file1 512000
+    sleep 3
+    ls -ls $file2
+    echo "#########################"
+    echo "hello" > $file1
+    hex_file2=$(cat $file2 | hexdump -C)
+    echo "#########################"
+    hex_file2_2=$(cat $file2 | hexdump -C)
+    hex_file1=$(cat $file1 | hexdump -C)
+    [[ "$hex_file2" != "$hex_file1" ]] && echo "Content of $hex_file2 and $hex_file1 do not match" && exit 1 || true
+    [[ "$hex_file2_2" != "$hex_file1" ]] && echo "Content of $hex_file2_2 and $hex_file1 do not match" && exit 1 || true
+}
+
+test_colse_to_open2()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    mkdir /jfs2 || true
+    ./juicefs mount -d $META_URL /jfs2
+    file1="/jfs/testfile.tmp"
+    file2="/jfs2/testfile.tmp"
+    rm $file1 || true
+    python3 -c "
+for i in range(1, 101):
+    with open('$file1', 'a') as f:
+        f.write(f'{i}\\n')
+    with open('$file2', 'a') as f:
+        f.write(f'{i}\\n')
+"
+    line_count1=$(cat $file1 | wc -l)
+    line_count2=$(cat $file2 | wc -l)
+    [[ $line_count1 -ne 200 ]] && cat $file1 && echo "Error: $file1 should have 200 lines but has $line_count1" && exit 1 || true
+    [[ $line_count2 -ne 200 ]] && cat $file2 && echo "Error: $file2 should have 200 lines but has $line_count2" && exit 1 || true
+}
+
 source .github/scripts/common/run_test.sh && run_test $@
