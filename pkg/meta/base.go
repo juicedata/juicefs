@@ -1525,6 +1525,13 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					m.updateDirQuota(ctx, parentDst, space, inodes)
 				}
 			}
+			if flags&RenameRestore != 0 && parentSrc.IsTrash() {
+				if attr.Typ == TypeFile {
+					m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, align4K(diffLength), 1)
+				} else if attr.Typ == TypeDirectory {
+					m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, space, inodes)
+				}
+			}
 		}
 		if *tinode > 0 && flags != RenameExchange {
 			diffLength = 0
