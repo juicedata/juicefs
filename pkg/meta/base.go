@@ -108,12 +108,12 @@ type engine interface {
 	doFlushQuotas(ctx Context, quotas []*iQuota) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
-	doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno
+	doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr, oldAttr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
 	doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
 	doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno
-	doRmdir(ctx Context, parent Ino, name string, inode *Ino, skipCheckTrash ...bool) syscall.Errno
+	doRmdir(ctx Context, parent Ino, name string, inode *Ino, attr *Attr, skipCheckTrash ...bool) syscall.Errno
 	doReadlink(ctx Context, inode Ino, noatime bool) (int64, []byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tinode *Ino, attr, tattr *Attr) syscall.Errno
@@ -1102,7 +1102,8 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	defer m.timeit("SetAttr", time.Now())
 	inode = m.checkRoot(inode)
-	err := m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr)
+	var oldAttr Attr
+	err := m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr, &oldAttr)
 	if err == 0 {
 		m.of.InvalidateChunk(inode, invalidateAttrOnly)
 		m.of.Update(inode, attr)
@@ -1392,7 +1393,8 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	defer m.timeit("Rmdir", time.Now())
 	parent = m.checkRoot(parent)
 	var inode Ino
-	st := m.en.doRmdir(ctx, parent, name, &inode, skipCheckTrash...)
+	var oldAttr Attr
+	st := m.en.doRmdir(ctx, parent, name, &inode, &oldAttr, skipCheckTrash...)
 	if st == 0 {
 		if !parent.IsTrash() {
 			m.parentMu.Lock()
@@ -2598,7 +2600,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 				}
 			}
 			if rmdir {
-				if st = m.en.doRmdir(ctx, TrashInode, string(e.Name), nil); st != 0 {
+				if st = m.en.doRmdir(ctx, TrashInode, string(e.Name), nil, nil); st != 0 {
 					logger.Warnf("rmdir subTrash %s: %s", e.Name, st)
 				}
 			}

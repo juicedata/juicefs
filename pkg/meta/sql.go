@@ -1320,7 +1320,7 @@ func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}))
 }
 
-func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
+func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr, oldAttr *Attr) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		var cur = node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&cur)
@@ -1332,6 +1332,9 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		}
 		var curAttr Attr
 		m.parseAttr(&cur, &curAttr)
+		if oldAttr != nil {
+			*oldAttr = curAttr
+		}
 		if curAttr.Parent > TrashInode {
 			return syscall.EPERM
 		}
@@ -1931,7 +1934,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	return errno(err)
 }
 
-func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skipCheckTrash ...bool) syscall.Errno {
+func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
 		if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1984,6 +1987,9 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		ok, err = s.ForUpdate().Get(&n)
 		if err != nil {
 			return err
+		}
+		if ok && attr != nil {
+			m.parseAttr(&n, attr)
 		}
 		exist, err := s.Exist(&edge{Parent: e.Inode})
 		if err != nil {
