@@ -1654,7 +1654,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 		if rs[0] == nil {
 			return redis.Nil
 		}
-		var pattr Attr
+		var pattr, attr Attr
 		m.parseAttr([]byte(rs[0].(string)), &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
@@ -1679,7 +1679,6 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 		if cnt > 0 {
 			return syscall.ENOTEMPTY
 		}
-		var attr Attr
 		if rs[1] != nil {
 			m.parseAttr([]byte(rs[1].(string)), &attr)
 			if oldAttr != nil {

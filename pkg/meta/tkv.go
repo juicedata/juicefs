@@ -1425,7 +1425,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		if rs[0] == nil {
 			return syscall.ENOENT
 		}
-		var pattr Attr
+		var pattr, attr Attr
 		m.parseAttr(rs[0], &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
@@ -1441,7 +1441,6 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		}
 
 		now := time.Now()
-		var attr Attr
 		if rs[1] != nil {
 			m.parseAttr(rs[1], &attr)
 			if oldAttr != nil {
