@@ -3745,9 +3745,6 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 	var userGroupQuotasList []userGroupQuota
 
 	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
-		dirQuotasList = dirQuotasList[:0]
-		userGroupQuotasList = userGroupQuotasList[:0]
-
 		if e := s.Find(&dirQuotasList); e != nil {
 			return e
 		}
