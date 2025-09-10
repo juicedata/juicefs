@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -64,7 +65,7 @@ func (q *bosclient) SetStorageClass(sc string) error {
 	return nil
 }
 
-func (q *bosclient) Create() error {
+func (q *bosclient) Create(ctx context.Context) error {
 	_, err := q.c.PutBucket(q.bucket)
 	if err == nil && q.sc != "" {
 		if err := q.c.PutBucketStorageclass(q.bucket, q.sc); err != nil {
@@ -77,7 +78,7 @@ func (q *bosclient) Create() error {
 	return err
 }
 
-func (q *bosclient) Head(key string) (Object, error) {
+func (q *bosclient) Head(ctx context.Context, key string) (Object, error) {
 	r, err := q.c.GetObjectMeta(q.bucket, key)
 	if err != nil {
 		if e, ok := err.(*bce.BceServiceError); ok && e.StatusCode == http.StatusNotFound {
@@ -95,7 +96,7 @@ func (q *bosclient) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (q *bosclient) Get(key string, off, limit int64, getters ...AttrGetter) (resp io.ReadCloser, err error) {
+func (q *bosclient) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (resp io.ReadCloser, err error) {
 	var r *api.GetObjectResult
 	var needCheck bool
 	if limit > 0 {
@@ -123,7 +124,7 @@ func (q *bosclient) Get(key string, off, limit int64, getters ...AttrGetter) (re
 	return
 }
 
-func (q *bosclient) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (q *bosclient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	b, vlen, err := findLen(in)
 	if err != nil {
 		return err
@@ -155,7 +156,7 @@ func (q *bosclient) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	return err
 }
 
-func (q *bosclient) Copy(dst, src string) error {
+func (q *bosclient) Copy(ctx context.Context, dst, src string) error {
 	var args *api.CopyObjectArgs
 	if q.sc != "" {
 		args = &api.CopyObjectArgs{ObjectMeta: api.ObjectMeta{StorageClass: q.sc}}
@@ -164,7 +165,7 @@ func (q *bosclient) Copy(dst, src string) error {
 	return err
 }
 
-func (q *bosclient) Delete(key string, getters ...AttrGetter) error {
+func (q *bosclient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	err := q.c.DeleteObject(q.bucket, key)
 	if err != nil && strings.Contains(err.Error(), "NoSuchKey") {
 		err = nil
@@ -172,7 +173,7 @@ func (q *bosclient) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (q *bosclient) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (q *bosclient) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -197,7 +198,7 @@ func (q *bosclient) List(prefix, start, token, delimiter string, limit int64, fo
 	return objs, out.IsTruncated, out.NextMarker, nil
 }
 
-func (q *bosclient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (q *bosclient) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	args := new(api.InitiateMultipartUploadArgs)
 	if q.sc != "" {
 		args.StorageClass = q.sc
@@ -209,7 +210,7 @@ func (q *bosclient) CreateMultipartUpload(key string) (*MultipartUpload, error) 
 	return &MultipartUpload{UploadID: r.UploadId, MinPartSize: 4 << 20, MaxCount: 10000}, nil
 }
 
-func (q *bosclient) UploadPart(key string, uploadID string, num int, data []byte) (*Part, error) {
+func (q *bosclient) UploadPart(ctx context.Context, key string, uploadID string, num int, data []byte) (*Part, error) {
 	body, _ := bce.NewBodyFromBytes(data)
 	etag, err := q.c.BasicUploadPart(q.bucket, key, uploadID, num, body)
 	if err != nil {
@@ -218,7 +219,7 @@ func (q *bosclient) UploadPart(key string, uploadID string, num int, data []byte
 	return &Part{Num: num, Size: len(data), ETag: etag}, nil
 }
 
-func (q *bosclient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (q *bosclient) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	result, err := q.c.UploadPartCopy(q.bucket, key, q.bucket, srcKey, uploadID, num,
 		&api.UploadPartCopyArgs{SourceRange: fmt.Sprintf("bytes=%d-%d", off, off+size-1)})
 
@@ -228,11 +229,11 @@ func (q *bosclient) UploadPartCopy(key string, uploadID string, num int, srcKey 
 	return &Part{Num: num, Size: int(size), ETag: result.ETag}, nil
 }
 
-func (q *bosclient) AbortUpload(key string, uploadID string) {
+func (q *bosclient) AbortUpload(ctx context.Context, key string, uploadID string) {
 	_ = q.c.AbortMultipartUpload(q.bucket, key, uploadID)
 }
 
-func (q *bosclient) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (q *bosclient) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	oparts := make([]api.UploadInfoType, len(parts))
 	for i := range parts {
 		oparts[i] = api.UploadInfoType{
@@ -245,7 +246,7 @@ func (q *bosclient) CompleteUpload(key string, uploadID string, parts []*Part) e
 	return err
 }
 
-func (q *bosclient) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (q *bosclient) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	result, err := q.c.ListMultipartUploads(q.bucket, &api.ListMultipartUploadsArgs{
 		MaxUploads: 1000,
 		KeyMarker:  marker,

@@ -136,7 +136,7 @@ func TestDownload(t *testing.T) {
 			if err != nil || n != resSize || res[0] != content[resSize] {
 				t.Fatalf("read %v byte should succeed, but got %d, %s", resSize, n, err)
 			}
-			_ = a.Delete(key)
+			_ = a.Delete(ctx, key)
 			n, err = io.ReadFull(pr, res)
 			n, err = io.ReadFull(pr, res)
 			if !os.IsNotExist(err) {
@@ -157,7 +157,7 @@ func TestDownload(t *testing.T) {
 	for _, c := range tcases {
 		content := make([]byte, c.config.fsize)
 		utils.RandRead(content)
-		_ = a.Put(key, bytes.NewReader(content))
+		_ = a.Put(ctx, key, bytes.NewReader(content))
 		c.tfunc(t, newParallelDownloader(a, key, c.config.fsize, downloadBufSize, make(chan int, c.concurrent)), content)
 	}
 

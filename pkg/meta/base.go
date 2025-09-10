@@ -18,6 +18,7 @@ package meta
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -107,12 +108,12 @@ type engine interface {
 	doFlushQuotas(ctx Context, quotas []*iQuota) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
-	doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno
+	doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr, oldAttr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
 	doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
 	doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno
-	doRmdir(ctx Context, parent Ino, name string, inode *Ino, skipCheckTrash ...bool) syscall.Errno
+	doRmdir(ctx Context, parent Ino, name string, inode *Ino, attr *Attr, skipCheckTrash ...bool) syscall.Errno
 	doReadlink(ctx Context, inode Ino, noatime bool) (int64, []byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tinode *Ino, attr, tattr *Attr) syscall.Errno
@@ -824,7 +825,7 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 	var err error
 	if !m.conf.FastStatfs || used == unknownUsage || inodes == unknownUsage {
 		var remoteUsed int64 // using an additional variable here to ensure the assignment inside `utils.WithTimeout` does not change the `used` variable again after a timeout.
-		err = utils.WithTimeout(func() error {
+		err = utils.WithTimeout(func(context.Context) error {
 			remoteUsed, err = m.en.getCounter(usedSpace)
 			return err
 		}, time.Millisecond*150)
@@ -832,7 +833,7 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 			used = remoteUsed
 		}
 		var remoteInodes int64
-		err = utils.WithTimeout(func() error {
+		err = utils.WithTimeout(func(context.Context) error {
 			remoteInodes, err = m.en.getCounter(totalInodes)
 			return err
 		}, time.Millisecond*150)
@@ -1070,7 +1071,7 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	if inode == RootInode || inode == TrashInode {
 		// doGetAttr could overwrite the `attr` after timeout
 		var a Attr
-		e := utils.WithTimeout(func() error {
+		e := utils.WithTimeout(func(context.Context) error {
 			err = m.en.doGetAttr(ctx, inode, &a)
 			return nil
 		}, time.Millisecond*300)
@@ -1105,36 +1106,29 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	defer m.timeit("SetAttr", time.Now())
 	inode = m.checkRoot(inode)
+	var oldAttr Attr
 
-	var curAttr Attr
-	var uidChanged, gidChanged bool
-	var oldUid, oldGid uint32
-	if (set & (SetAttrUID | SetAttrGID)) != 0 {
-		if err := m.en.doGetAttr(ctx, inode, &curAttr); err == 0 {
-			oldUid = curAttr.Uid
-			oldGid = curAttr.Gid
-			uidChanged = (set&SetAttrUID != 0) && (curAttr.Uid != attr.Uid)
-			gidChanged = (set&SetAttrGID != 0) && (curAttr.Gid != attr.Gid)
-		}
-	}
-
-	err := m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr)
+	err := m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr, &oldAttr)
 	if err == 0 {
 		m.of.InvalidateChunk(inode, invalidateAttrOnly)
 		m.of.Update(inode, attr)
-		if uidChanged || gidChanged {
-			var space, inodes int64
-			if attr.Typ == TypeFile {
-				space = int64(attr.Length)
-				inodes = 1
-			} else if attr.Typ == TypeDirectory {
-				space = 0
-				inodes = 1
-			}
+
+		// Check if UID or GID changed for quota updates
+		if (set & (SetAttrUID | SetAttrGID)) != 0 {
+			uidChanged := (set&SetAttrUID != 0) && (oldAttr.Uid != attr.Uid)
+			gidChanged := (set&SetAttrGID != 0) && (oldAttr.Gid != attr.Gid)
 			if uidChanged || gidChanged {
-				m.updateUserGroupQuota(ctx, oldUid, oldGid, -space, -inodes)
+				var space, inodes int64
+				if attr.Typ == TypeFile {
+					space = int64(attr.Length)
+					inodes = 1
+				} else if attr.Typ == TypeDirectory {
+					space = 0
+					inodes = 1
+				}
+				m.updateUserGroupQuota(ctx, oldAttr.Uid, oldAttr.Gid, -space, -inodes)
+				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, space, inodes)
 			}
-			m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, space, inodes)
 		}
 	}
 	return err
@@ -1425,13 +1419,9 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	defer m.timeit("Rmdir", time.Now())
 	parent = m.checkRoot(parent)
 	var inode Ino
-	st := m.en.doRmdir(ctx, parent, name, &inode, skipCheckTrash...)
+	var oldAttr Attr
+	st := m.en.doRmdir(ctx, parent, name, &inode, &oldAttr, skipCheckTrash...)
 	if st == 0 {
-		var attr Attr
-		if m.GetAttr(ctx, inode, &attr) == 0 {
-			m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, -align4K(0), -1)
-		}
-
 		if !parent.IsTrash() {
 			m.parentMu.Lock()
 			delete(m.dirParents, inode)
@@ -1439,6 +1429,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 		}
 		m.updateDirStat(ctx, parent, 0, -align4K(0), -1)
 		m.updateDirQuota(ctx, parent, -align4K(0), -1)
+		m.updateUserGroupQuota(ctx, oldAttr.Uid, oldAttr.Gid, -align4K(0), -1)
 	}
 	return st
 }
@@ -2646,7 +2637,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 				}
 			}
 			if rmdir {
-				if st = m.en.doRmdir(ctx, TrashInode, string(e.Name), nil); st != 0 {
+				if st = m.en.doRmdir(ctx, TrashInode, string(e.Name), nil, nil); st != 0 {
 					logger.Warnf("rmdir subTrash %s: %s", e.Name, st)
 				}
 			}

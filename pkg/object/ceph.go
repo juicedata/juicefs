@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -49,7 +50,7 @@ func (c *ceph) Shutdown() {
 	c.conn.Shutdown()
 }
 
-func (c *ceph) Create() error {
+func (c *ceph) Create(_ context.Context) error {
 	names, err := c.conn.ListPools()
 	if err != nil {
 		return err
@@ -131,8 +132,8 @@ func (r *cephReader) Close() error {
 	return nil
 }
 
-func (c *ceph) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	if _, err := c.Head(key); err != nil {
+func (c *ceph) Get(_ context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	if _, err := c.Head(context.TODO(), key); err != nil {
 		return nil, err
 	}
 	ctx, err := c.newContext()
@@ -148,7 +149,7 @@ var cephPool = sync.Pool{
 	},
 }
 
-func (c *ceph) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (c *ceph) Put(_ context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	// ceph default osd_max_object_size = 128M
 	return c.do(func(ctx *rados.IOContext) error {
 		if b, ok := in.(*bytes.Reader); ok {
@@ -185,7 +186,7 @@ func (c *ceph) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	})
 }
 
-func (c *ceph) Delete(key string, getters ...AttrGetter) error {
+func (c *ceph) Delete(_ context.Context, key string, getters ...AttrGetter) error {
 	err := c.do(func(ctx *rados.IOContext) error {
 		return ctx.Delete(key)
 	})
@@ -195,7 +196,7 @@ func (c *ceph) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (c *ceph) Head(key string) (Object, error) {
+func (c *ceph) Head(_ context.Context, key string) (Object, error) {
 	var o *obj
 	err := c.do(func(ctx *rados.IOContext) error {
 		stat, err := ctx.Stat(key)
@@ -211,7 +212,7 @@ func (c *ceph) Head(key string) (Object, error) {
 	return o, err
 }
 
-func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (c *ceph) ListAll(_ context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	ctx, err := c.newContext()
 	if err != nil {
 		return nil, err

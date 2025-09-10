@@ -17,6 +17,7 @@
 package object
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -62,8 +63,8 @@ func (p *withPrefix) Limits() Limits {
 	return p.os.Limits()
 }
 
-func (p *withPrefix) Create() error {
-	return p.os.Create()
+func (p *withPrefix) Create(ctx context.Context) error {
+	return p.os.Create(ctx)
 }
 
 type withFile struct {
@@ -99,49 +100,49 @@ func (p *withPrefix) updateKey(o Object) Object {
 	return o
 }
 
-func (p *withPrefix) Head(key string) (Object, error) {
-	o, err := p.os.Head(p.prefix + key)
+func (p *withPrefix) Head(ctx context.Context, key string) (Object, error) {
+	o, err := p.os.Head(ctx, p.prefix+key)
 	if err != nil {
 		return nil, err
 	}
 	return p.updateKey(o), nil
 }
 
-func (p *withPrefix) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (p *withPrefix) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	if off > 0 && limit < 0 {
 		return nil, fmt.Errorf("invalid range: %d-%d", off, limit)
 	}
-	return p.os.Get(p.prefix+key, off, limit, getters...)
+	return p.os.Get(ctx, p.prefix+key, off, limit, getters...)
 }
 
-func (p *withPrefix) Put(key string, in io.Reader, getters ...AttrGetter) error {
-	return p.os.Put(p.prefix+key, in, getters...)
+func (p *withPrefix) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+	return p.os.Put(ctx, p.prefix+key, in, getters...)
 }
 
-func (p *withPrefix) Copy(dst, src string) error {
-	return p.os.Copy(dst, src)
+func (p *withPrefix) Copy(ctx context.Context, dst, src string) error {
+	return p.os.Copy(ctx, dst, src)
 }
 
-func (p *withPrefix) Delete(key string, getters ...AttrGetter) error {
-	return p.os.Delete(p.prefix+key, getters...)
+func (p *withPrefix) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	return p.os.Delete(ctx, p.prefix+key, getters...)
 }
 
-func (p *withPrefix) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (p *withPrefix) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if start != "" {
 		start = p.prefix + start
 	}
-	objs, hasMore, nextMarker, err := p.os.List(p.prefix+prefix, start, token, delimiter, limit, followLink)
+	objs, hasMore, nextMarker, err := p.os.List(ctx, p.prefix+prefix, start, token, delimiter, limit, followLink)
 	for i, o := range objs {
 		objs[i] = p.updateKey(o)
 	}
 	return objs, hasMore, nextMarker, err
 }
 
-func (p *withPrefix) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (p *withPrefix) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	if marker != "" {
 		marker = p.prefix + marker
 	}
-	r, err := p.os.ListAll(p.prefix+prefix, marker, followLink)
+	r, err := p.os.ListAll(ctx, p.prefix+prefix, marker, followLink)
 	if err != nil {
 		return r, err
 	}
@@ -179,28 +180,28 @@ func (p *withPrefix) Chtimes(key string, mtime time.Time) error {
 	return notSupported
 }
 
-func (p *withPrefix) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	return p.os.CreateMultipartUpload(p.prefix + key)
+func (p *withPrefix) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
+	return p.os.CreateMultipartUpload(ctx, p.prefix+key)
 }
 
-func (p *withPrefix) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
-	return p.os.UploadPart(p.prefix+key, uploadID, num, body)
+func (p *withPrefix) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
+	return p.os.UploadPart(ctx, p.prefix+key, uploadID, num, body)
 }
 
-func (s *withPrefix) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
-	return s.os.UploadPartCopy(s.prefix+key, uploadID, num, s.prefix+srcKey, off, size)
+func (s *withPrefix) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	return s.os.UploadPartCopy(ctx, s.prefix+key, uploadID, num, s.prefix+srcKey, off, size)
 }
 
-func (p *withPrefix) AbortUpload(key string, uploadID string) {
-	p.os.AbortUpload(p.prefix+key, uploadID)
+func (p *withPrefix) AbortUpload(ctx context.Context, key string, uploadID string) {
+	p.os.AbortUpload(ctx, p.prefix+key, uploadID)
 }
 
-func (p *withPrefix) CompleteUpload(key string, uploadID string, parts []*Part) error {
-	return p.os.CompleteUpload(p.prefix+key, uploadID, parts)
+func (p *withPrefix) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
+	return p.os.CompleteUpload(ctx, p.prefix+key, uploadID, parts)
 }
 
-func (p *withPrefix) ListUploads(marker string) ([]*PendingPart, string, error) {
-	parts, nextMarker, err := p.os.ListUploads(marker)
+func (p *withPrefix) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
+	parts, nextMarker, err := p.os.ListUploads(ctx, marker)
 	for _, part := range parts {
 		part.Key = part.Key[len(p.prefix):]
 	}

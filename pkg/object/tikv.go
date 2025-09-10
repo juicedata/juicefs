@@ -45,8 +45,8 @@ func (t *tikv) String() string {
 	return fmt.Sprintf("tikv://%s/", t.addr)
 }
 
-func (t *tikv) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	d, err := t.c.Get(context.TODO(), []byte(key))
+func (t *tikv) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	d, err := t.c.Get(ctx, []byte(key))
 	if len(d) == 0 {
 		err = os.ErrNotExist
 	}
@@ -63,16 +63,16 @@ func (t *tikv) Get(key string, off, limit int64, getters ...AttrGetter) (io.Read
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (t *tikv) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (t *tikv) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	d, err := io.ReadAll(in)
 	if err != nil {
 		return err
 	}
-	return t.c.Put(context.TODO(), []byte(key), d)
+	return t.c.Put(ctx, []byte(key), d)
 }
 
-func (t *tikv) Head(key string) (Object, error) {
-	data, err := t.c.Get(context.TODO(), []byte(key))
+func (t *tikv) Head(ctx context.Context, key string) (Object, error) {
+	data, err := t.c.Get(ctx, []byte(key))
 	if err == nil && data == nil {
 		return nil, os.ErrNotExist
 	}
@@ -85,11 +85,11 @@ func (t *tikv) Head(key string) (Object, error) {
 	}, err
 }
 
-func (t *tikv) Delete(key string, getters ...AttrGetter) error {
-	return t.c.Delete(context.TODO(), []byte(key))
+func (t *tikv) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	return t.c.Delete(ctx, []byte(key))
 }
 
-func (t *tikv) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (t *tikv) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "" {
 		return nil, false, "", notSupported
 	}
@@ -100,7 +100,7 @@ func (t *tikv) List(prefix, marker, token, delimiter string, limit int64, follow
 		limit = int64(rawkv.MaxRawKVScanLimit)
 	}
 	// TODO: key only
-	keys, vs, err := t.c.Scan(context.TODO(), []byte(marker), nil, int(limit))
+	keys, vs, err := t.c.Scan(ctx, []byte(marker), nil, int(limit))
 	if err != nil {
 		return nil, false, "", err
 	}

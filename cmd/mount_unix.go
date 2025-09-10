@@ -500,13 +500,13 @@ func prepareMp(mp string) {
 	}
 	var fi os.FileInfo
 	var ino uint64
-	err := utils.WithTimeout(func() error {
+	err := utils.WithTimeout(func(context.Context) error {
 		var err error
 		fi, err = os.Stat(mp)
 		return err
 	}, time.Second*3)
 	if !strings.Contains(mp, ":") && err != nil {
-		err2 := utils.WithTimeout(func() error {
+		err2 := utils.WithTimeout(func(context.Context) error {
 			return os.MkdirAll(mp, 0777)
 		}, time.Second*3)
 		if err2 != nil {
@@ -558,7 +558,7 @@ func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int,
 	if format.EnableACL {
 		enableXattr = true
 	}
-	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL, int(utils.ParseBytes(c, "max-write", 'B'))
+	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL, int(utils.ParseBytes(c, "max-fuse-io", 'B'))
 }
 
 func shutdownGraceful(mp string) {
@@ -600,7 +600,7 @@ func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
 	}
 	var ino uint64
 	var err error
-	err = utils.WithTimeout(func() error {
+	err = utils.WithTimeout(func(context.Context) error {
 		ino, err = utils.GetFileInode(mp)
 		return err
 	}, time.Second*3)

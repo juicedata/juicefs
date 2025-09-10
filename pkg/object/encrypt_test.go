@@ -18,6 +18,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -205,12 +206,13 @@ func TestAESGCM(t *testing.T) {
 }
 
 func TestEncryptedStore(t *testing.T) {
+	ctx := context.Background()
 	s, _ := CreateStorage("mem", "", "", "", "")
 	kc := NewRSAEncryptor(testkey)
 	dc, _ := NewDataEncryptor(kc, AES256GCM_RSA)
 	es := NewEncrypted(s, dc)
-	_ = es.Put("a", bytes.NewReader([]byte("hello")))
-	r, err := es.Get("a", 1, 2)
+	_ = es.Put(ctx, "a", bytes.NewReader([]byte("hello")))
+	r, err := es.Get(ctx, "a", 1, 2)
 	if err != nil {
 		t.Errorf("Get a: %s", err)
 		t.Fail()
@@ -220,13 +222,13 @@ func TestEncryptedStore(t *testing.T) {
 		t.Fail()
 	}
 
-	r, _ = es.Get("a", 0, -1)
+	r, _ = es.Get(ctx, "a", 0, -1)
 	d, _ = io.ReadAll(r)
 	if string(d) != "hello" {
 		t.Fail()
 	}
-	_ = s.Put("emptyfile", bytes.NewReader([]byte("")))
-	_, err = es.Get("emptyfile", 0, -1)
+	_ = s.Put(ctx, "emptyfile", bytes.NewReader([]byte("")))
+	_, err = es.Get(ctx, "emptyfile", 0, -1)
 	if err == nil || !strings.Contains(err.Error(), "the object is corrupted") {
 		t.Fail()
 	}

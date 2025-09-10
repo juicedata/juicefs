@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -51,8 +52,8 @@ func (s *ks3) String() string {
 	return fmt.Sprintf("ks3://%s/", s.bucket)
 }
 
-func (s *ks3) Create() error {
-	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
+func (s *ks3) Create(ctx context.Context) error {
+	_, err := s.s3.CreateBucketWithContext(ctx, &s3.CreateBucketInput{Bucket: &s.bucket})
 	if err != nil && isExists(err) {
 		err = nil
 	}
@@ -69,13 +70,13 @@ func (s *ks3) Limits() Limits {
 	}
 }
 
-func (s *ks3) Head(key string) (Object, error) {
+func (s *ks3) Head(ctx context.Context, key string) (Object, error) {
 	param := s3.HeadObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
 
-	r, err := s.s3.HeadObject(&param)
+	r, err := s.s3.HeadObjectWithContext(ctx, &param)
 	if err != nil {
 		if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
 			err = os.ErrNotExist
@@ -98,7 +99,7 @@ func (s *ks3) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (s *ks3) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (s *ks3) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	params := &s3.GetObjectInput{Bucket: &s.bucket, Key: &key}
 	if off > 0 || limit > 0 {
 		var r string
@@ -109,7 +110,7 @@ func (s *ks3) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadC
 		}
 		params.Range = &r
 	}
-	resp, err := s.s3.GetObject(params)
+	resp, err := s.s3.GetObjectWithContext(ctx, params)
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey]))
@@ -121,7 +122,7 @@ func (s *ks3) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadC
 	return resp.Body, nil
 }
 
-func (s *ks3) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (s *ks3) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b
@@ -142,14 +143,14 @@ func (s *ks3) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	if s.sc != "" {
 		params.StorageClass = aws.String(s.sc)
 	}
-	resp, err := s.s3.PutObject(params)
+	resp, err := s.s3.PutObjectWithContext(ctx, params)
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey])).SetStorageClass(s.sc)
 	}
 	return err
 }
-func (s *ks3) Copy(dst, src string) error {
+func (s *ks3) Copy(ctx context.Context, dst, src string) error {
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:     &s.bucket,
@@ -159,16 +160,16 @@ func (s *ks3) Copy(dst, src string) error {
 	if s.sc != "" {
 		params.StorageClass = aws.String(s.sc)
 	}
-	_, err := s.s3.CopyObject(params)
+	_, err := s.s3.CopyObjectWithContext(ctx, params)
 	return err
 }
 
-func (s *ks3) Delete(key string, getters ...AttrGetter) error {
+func (s *ks3) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	param := s3.DeleteObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
-	resp, err := s.s3.DeleteObject(&param)
+	resp, err := s.s3.DeleteObjectWithContext(ctx, &param)
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(aws.ToString(resp.Metadata[s3RequestIDKey]))
@@ -179,7 +180,7 @@ func (s *ks3) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (s *ks3) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *ks3) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := s3.ListObjectsInput{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
@@ -190,7 +191,7 @@ func (s *ks3) List(prefix, start, token, delimiter string, limit int64, followLi
 	if delimiter != "" {
 		param.Delimiter = &delimiter
 	}
-	resp, err := s.s3.ListObjects(&param)
+	resp, err := s.s3.ListObjectsWithContext(ctx, &param)
 	if err != nil {
 		return nil, false, "", err
 	}
@@ -221,11 +222,11 @@ func (s *ks3) List(prefix, start, token, delimiter string, limit int64, followLi
 	return objs, *resp.IsTruncated, nextMarker, nil
 }
 
-func (s *ks3) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (s *ks3) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 
-func (s *ks3) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (s *ks3) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	params := &s3.CreateMultipartUploadInput{
 		Bucket: &s.bucket,
 		Key:    &key,
@@ -233,14 +234,14 @@ func (s *ks3) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	if s.sc != "" {
 		params.StorageClass = aws.String(s.sc)
 	}
-	resp, err := s.s3.CreateMultipartUpload(params)
+	resp, err := s.s3.CreateMultipartUploadWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 	return &MultipartUpload{UploadID: *resp.UploadID, MinPartSize: 5 << 20, MaxCount: 10000}, nil
 }
 
-func (s *ks3) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
+func (s *ks3) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
 	n := int64(num)
 	params := &s3.UploadPartInput{
 		Bucket:     &s.bucket,
@@ -249,15 +250,15 @@ func (s *ks3) UploadPart(key string, uploadID string, num int, body []byte) (*Pa
 		Body:       bytes.NewReader(body),
 		PartNumber: &n,
 	}
-	resp, err := s.s3.UploadPart(params)
+	resp, err := s.s3.UploadPartWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 	return &Part{Num: num, ETag: *resp.ETag}, nil
 }
 
-func (s *ks3) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
-	resp, err := s.s3.UploadPartCopy(&s3.UploadPartCopyInput{
+func (s *ks3) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	resp, err := s.s3.UploadPartCopyWithContext(ctx, &s3.UploadPartCopyInput{
 		Bucket:          aws.String(s.bucket),
 		CopySource:      aws.String(s.bucket + "/" + srcKey),
 		CopySourceRange: aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
@@ -271,16 +272,16 @@ func (s *ks3) UploadPartCopy(key string, uploadID string, num int, srcKey string
 	return &Part{Num: num, ETag: *resp.CopyPartResult.ETag}, nil
 }
 
-func (s *ks3) AbortUpload(key string, uploadID string) {
+func (s *ks3) AbortUpload(ctx context.Context, key string, uploadID string) {
 	params := &s3.AbortMultipartUploadInput{
 		Bucket:   &s.bucket,
 		Key:      &key,
 		UploadID: &uploadID,
 	}
-	_, _ = s.s3.AbortMultipartUpload(params)
+	_, _ = s.s3.AbortMultipartUploadWithContext(ctx, params)
 }
 
-func (s *ks3) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (s *ks3) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	var s3Parts []*s3.CompletedPart
 	for i := range parts {
 		n := new(int64)
@@ -293,17 +294,17 @@ func (s *ks3) CompleteUpload(key string, uploadID string, parts []*Part) error {
 		UploadID:        &uploadID,
 		MultipartUpload: &s3.CompletedMultipartUpload{Parts: s3Parts},
 	}
-	_, err := s.s3.CompleteMultipartUpload(params)
+	_, err := s.s3.CompleteMultipartUploadWithContext(ctx, params)
 	return err
 }
 
-func (s *ks3) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (s *ks3) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	input := &s3.ListMultipartUploadsInput{
 		Bucket:    aws.String(s.bucket),
 		KeyMarker: aws.String(marker),
 	}
 	// FIXME: parsing time "2018-08-23T12:23:26.046+08:00" as "2006-01-02T15:04:05Z"
-	result, err := s.s3.ListMultipartUploads(input)
+	result, err := s.s3.ListMultipartUploadsWithContext(ctx, input)
 	if err != nil {
 		return nil, "", err
 	}
