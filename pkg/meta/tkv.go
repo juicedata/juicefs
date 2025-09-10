@@ -922,7 +922,7 @@ func (m *kvMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}, 0))
 }
 
-func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
+func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr, oldAttr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *kvTxn) error {
 		var cur Attr
 		a := tx.get(m.inodeKey(inode))
@@ -930,6 +930,9 @@ func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, &cur)
+		if oldAttr != nil {
+			*oldAttr = cur
+		}
 		if cur.Parent > TrashInode {
 			return syscall.EPERM
 		}
@@ -1393,7 +1396,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	return errno(err)
 }
 
-func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skipCheckTrash ...bool) syscall.Errno {
+func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldAttr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
 		if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1422,7 +1425,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		if rs[0] == nil {
 			return syscall.ENOENT
 		}
-		var pattr, attr Attr
+		var pattr Attr
 		m.parseAttr(rs[0], &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
@@ -1438,8 +1441,12 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		}
 
 		now := time.Now()
+		var attr Attr
 		if rs[1] != nil {
 			m.parseAttr(rs[1], &attr)
+			if oldAttr != nil {
+				*oldAttr = attr
+			}
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
