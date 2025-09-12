@@ -269,7 +269,7 @@ func (m *baseMeta) syncVolumeStat(ctx Context) error {
 	return m.en.doSyncVolumeStat(ctx)
 }
 
-// todo:增加uid，gid参数
+// todo:add uid gid args
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) syscall.Errno {
 	if space <= 0 && inodes <= 0 {
 		return 0
@@ -476,8 +476,8 @@ func (m *baseMeta) updateUserGroupQuota(ctx Context, uid, gid uint32, space, ino
 		} else {
 			// Create new user quota if it doesn't exist
 			m.userQuotas[uint64(uid)] = &Quota{
-				UsedSpace:  space,
-				UsedInodes: inodes,
+				UsedSpace:  0,
+				UsedInodes: 0,
 				MaxSpace:   -1,     // No limit
 				MaxInodes:  -1,     // No limit
 				newSpace:   space,  // Set newSpace for database sync
@@ -491,8 +491,8 @@ func (m *baseMeta) updateUserGroupQuota(ctx Context, uid, gid uint32, space, ino
 		} else {
 			// Create new group quota if it doesn't exist
 			m.groupQuotas[uint64(gid)] = &Quota{
-				UsedSpace:  space,
-				UsedInodes: inodes,
+				UsedSpace:  0,
+				UsedInodes: 0,
 				MaxSpace:   -1,     // No limit
 				MaxInodes:  -1,     // No limit
 				newSpace:   space,  // Set newSpace for database sync
@@ -546,13 +546,11 @@ func (m *baseMeta) doFlushQuotas() {
 	}
 
 	var allQuotas []*iQuota
-	func() {
-		m.quotaMu.RLock()
-		defer m.quotaMu.RUnlock()
-		allQuotas = append(allQuotas, m.collectQuotas(DirQuotaType, m.dirQuotas)...)
-		allQuotas = append(allQuotas, m.collectQuotas(UserQuotaType, m.userQuotas)...)
-		allQuotas = append(allQuotas, m.collectQuotas(GroupQuotaType, m.groupQuotas)...)
-	}()
+	m.quotaMu.RLock()
+	allQuotas = append(allQuotas, m.collectQuotas(DirQuotaType, m.dirQuotas)...)
+	allQuotas = append(allQuotas, m.collectQuotas(UserQuotaType, m.userQuotas)...)
+	allQuotas = append(allQuotas, m.collectQuotas(GroupQuotaType, m.groupQuotas)...)
+	m.quotaMu.RUnlock()
 
 	if len(allQuotas) == 0 {
 		return
@@ -561,26 +559,23 @@ func (m *baseMeta) doFlushQuotas() {
 		logger.Warnf("Flush quotas: %s", err)
 		return
 	}
-
-	func() {
-		m.quotaMu.Lock()
-		defer m.quotaMu.Unlock()
-		for _, snap := range allQuotas {
-			var q *Quota
-			switch snap.qtype {
-			case DirQuotaType:
-				q = m.dirQuotas[snap.qkey]
-			case UserQuotaType:
-				q = m.userQuotas[snap.qkey]
-			case GroupQuotaType:
-				q = m.groupQuotas[snap.qkey]
-			}
-
-			if q != nil {
-				m.updateQuota(q, snap.quota.newSpace, snap.quota.newInodes)
-			}
+	m.quotaMu.Lock()
+	for _, snap := range allQuotas {
+		var q *Quota
+		switch snap.qtype {
+		case DirQuotaType:
+			q = m.dirQuotas[snap.qkey]
+		case UserQuotaType:
+			q = m.userQuotas[snap.qkey]
+		case GroupQuotaType:
+			q = m.groupQuotas[snap.qkey]
 		}
-	}()
+		if q != nil {
+			m.updateQuota(q, snap.quota.newSpace, snap.quota.newInodes)
+		}
+	}
+	m.quotaMu.Unlock()
+
 }
 
 func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32, gid uint32, quotas map[string]*Quota, strict, repair bool, create bool) error {
@@ -704,13 +699,13 @@ func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, d
 		return nil
 	case UserQuotaType, GroupQuotaType:
 		if !hasScan {
-			return m.initializeGlobalUserGroupQuotaUsage(ctx, qtype, key, true)
+			return m.initializeGlobalUserGroupQuotaUsage(ctx, qtype, key)
 		}
 	}
 	return nil
 }
 
-func (m *baseMeta) initializeGlobalUserGroupQuotaUsage(ctx Context, qtype uint32, key uint64, lockHeld bool) error {
+func (m *baseMeta) initializeGlobalUserGroupQuotaUsage(ctx Context, qtype uint32, key uint64) error {
 	userUsage, groupUsage, err := m.scanGlobalUserGroupUsage(ctx)
 	if err != nil {
 		return fmt.Errorf("scan global user group usage: %v", err)
@@ -823,20 +818,20 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 				groupUsage[gid] = &Summary{}
 			}
 
-			var space uint64
+			var space int64
 			if e.Attr.Typ == TypeFile {
 				if e.Attr.Nlink > 1 {
 					if processedFiles[e.Inode] {
-						space = 0 // 硬链接文件不重复统计空间
+						space = align4K(0)
 					} else {
-						space = uint64(align4K(e.Attr.Length))
+						space = align4K(e.Attr.Length)
 						processedFiles[e.Inode] = true
 					}
 				} else {
-					space = uint64(align4K(e.Attr.Length))
+					space = align4K(e.Attr.Length)
 				}
 			} else if e.Attr.Typ == TypeDirectory {
-				space = 0
+				space = align4K(0)
 				userUsage[uid].Dirs++
 				groupUsage[gid].Dirs++
 				if !visitedDirs[e.Inode] {
@@ -844,9 +839,9 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 				}
 			}
 
-			userUsage[uid].Size += space
+			userUsage[uid].Size += uint64(space)
 			userUsage[uid].Files++
-			groupUsage[gid].Size += space
+			groupUsage[gid].Size += uint64(space)
 			groupUsage[gid].Files++
 
 		}

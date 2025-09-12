@@ -1113,21 +1113,25 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		m.of.InvalidateChunk(inode, invalidateAttrOnly)
 		m.of.Update(inode, attr)
 
-		// Check if UID or GID changed for quota updates
-		if (set & (SetAttrUID | SetAttrGID)) != 0 {
-			uidChanged := (set&SetAttrUID != 0) && (oldAttr.Uid != attr.Uid)
-			gidChanged := (set&SetAttrGID != 0) && (oldAttr.Gid != attr.Gid)
-			if uidChanged || gidChanged {
-				var space, inodes int64
-				if attr.Typ == TypeFile {
-					space = int64(attr.Length)
-					inodes = 1
-				} else if attr.Typ == TypeDirectory {
-					space = 0
-					inodes = 1
-				}
-				m.updateUserGroupQuota(ctx, oldAttr.Uid, oldAttr.Gid, -space, -inodes)
-				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, space, inodes)
+		uidChanged := oldAttr.Uid != attr.Uid
+		gidChanged := oldAttr.Gid != attr.Gid
+		if uidChanged || gidChanged {
+			var space, inodes int64
+			if attr.Typ == TypeFile {
+				space = align4K(attr.Length)
+				inodes = 1
+			} else if attr.Typ == TypeDirectory {
+				space = align4K(0)
+				inodes = 1
+			}
+
+			if uidChanged {
+				m.updateUserGroupQuota(ctx, oldAttr.Uid, 0, -space, -inodes)
+				m.updateUserGroupQuota(ctx, attr.Uid, 0, space, inodes)
+			}
+			if gidChanged {
+				m.updateUserGroupQuota(ctx, 0, oldAttr.Gid, -space, -inodes)
+				m.updateUserGroupQuota(ctx, 0, attr.Gid, space, inodes)
 			}
 		}
 	}
@@ -1526,11 +1530,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				}
 			}
 			if flags&RenameRestore != 0 && parentSrc.IsTrash() {
-				if attr.Typ == TypeFile {
-					m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, align4K(diffLength), 1)
-				} else if attr.Typ == TypeDirectory {
-					m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, space, inodes)
-				}
+				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, align4K(diffLength), 1)
 			}
 		}
 		if *tinode > 0 && flags != RenameExchange {
@@ -2850,7 +2850,6 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	if eno == 0 {
 		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
 		m.updateDirQuota(ctx, parent, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files))
-		m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files))
 	}
 	return eno
 }
@@ -2870,6 +2869,7 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	}
 	m.en.updateStats(align4K(attr.Length), 1)
 	atomic.AddUint64(count, 1)
+	m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, align4K(attr.Length), 1)
 	if attr.Typ != TypeDirectory {
 		return 0
 	}
