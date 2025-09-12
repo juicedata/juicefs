@@ -3289,7 +3289,76 @@ func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 	})
 }
 
-func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
+func (m *dbMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
+	type entry struct {
+		Parent Ino
+		Name   []byte
+	}
+	var node2Edges = make(map[Ino][]*entry)
+	node2Edges[RootInode] = []*entry{{Parent: RootInode, Name: []byte("/")}}
+	node2Edges[TrashInode] = []*entry{{Parent: RootInode, Name: []byte(".trash")}}
+	cutoff := time.Now().Add(-before)
+
+	var edges []edge
+	var nodes []node
+	if err := m.txn(func(s *xorm.Session) error {
+		if err := s.Find(&edges); err != nil {
+			return err
+		}
+		for _, edge := range edges {
+			node2Edges[edge.Inode] = append(node2Edges[edge.Inode], &entry{Parent: edge.Parent, Name: edge.Name})
+		}
+		if err := s.Find(&nodes); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		logger.Errorf("scan all edges and nodes: %s", err)
+		return
+	}
+
+	for _, node := range nodes {
+		if _, ok := node2Edges[node.Inode]; !ok && time.Unix(node.Ctime/1e6, 0).Before(cutoff) {
+			logger.Infof("found leaded inode: %d %+v", node.Inode, node)
+			if clean {
+				err := m.doDeleteSustainedInode(0, node.Inode)
+				if err != nil {
+					logger.Errorf("delete leaked inode %d : %s", node.Inode, err)
+				}
+			}
+		}
+		node2Edges[node.Inode] = nil
+	}
+
+	node2Edges[RootInode], node2Edges[TrashInode] = nil, nil
+	if err := m.txn(func(s *xorm.Session) error {
+		for c, es := range node2Edges {
+			n := node{Inode: c}
+			if exist, err := s.Get(&n); err != nil {
+				return err
+			} else if exist {
+				continue
+			}
+			for _, e := range es {
+				logger.Infof("found leaked edge %d -> (%d, %s)", e.Parent, c, e.Name)
+				if clean {
+					if _, err := s.Delete(&edge{Parent: e.Parent, Name: e.Name}); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		logger.Errorf("delete leaked edges: %s", err)
+		return
+	}
+}
+
+func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, scanLeaked, delete bool, showProgress func()) syscall.Errno {
+	if scanLeaked {
+		m.cleanupLeakedInodesAndEdges(delete, time.Hour)
+	}
 	if delete {
 		m.doCleanupSlices()
 	}

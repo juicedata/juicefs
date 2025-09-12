@@ -2456,7 +2456,73 @@ func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 	})
 }
 
-func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
+func (m *kvMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
+	type entry struct {
+		Parent Ino
+		Name   []byte
+	}
+	var node2Edges = make(map[Ino][]*entry)
+	node2Edges[RootInode] = []*entry{{Parent: RootInode, Name: []byte("/")}}
+	node2Edges[TrashInode] = []*entry{{Parent: RootInode, Name: []byte(".trash")}}
+	cutoff := time.Now().Add(-before)
+
+	nodes := make(map[Ino]*Attr)
+	if err := m.client.scan(nil, func(key, value []byte) {
+		if len(key) > 9 && key[0] == 'A' {
+			ino := m.decodeInode(key[1:9])
+			switch key[9] {
+			case 'I':
+				attr := &Attr{Nlink: 1}
+				m.parseAttr(value, attr)
+				nodes[ino] = attr
+			case 'D':
+				name := string(key[10:])
+				_, inode := m.parseEntry(value)
+				node2Edges[inode] = append(node2Edges[inode], &entry{Parent: ino, Name: []byte(name)})
+			}
+		}
+	}); err != nil {
+		logger.Errorf("scan all inodes and edges: %s", err)
+		return
+	}
+
+	for inode, attr := range nodes {
+		if _, ok := node2Edges[inode]; !ok && time.Unix(attr.Ctime, 0).Before(cutoff) {
+			logger.Infof("found leaded inode: %d %+v", inode, attr)
+			if clean {
+				err := m.doDeleteSustainedInode(0, inode)
+				if err != nil {
+					logger.Errorf("delete leaked inode %d : %s", inode, err)
+				}
+			}
+		}
+		node2Edges[inode] = nil
+	}
+
+	node2Edges[RootInode], node2Edges[TrashInode] = nil, nil
+	if err := m.client.txn(Background(), func(tx *kvTxn) error {
+		for c, es := range node2Edges {
+			if tx.get(m.inodeKey(c)) != nil {
+				continue
+			}
+			for _, e := range es {
+				logger.Infof("found leaked edge %d -> (%d, %s)", e.Parent, c, e.Name)
+				if clean {
+					tx.delete(m.entryKey(e.Parent, string(e.Name)))
+				}
+			}
+		}
+		return nil
+	}, 0); err != nil {
+		logger.Errorf("delete leaked edges: %s", err)
+		return
+	}
+}
+
+func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, scanLeaked, delete bool, showProgress func()) syscall.Errno {
+	if scanLeaked {
+		m.cleanupLeakedInodesAndEdges(delete, time.Hour)
+	}
 	if delete {
 		m.doCleanupSlices()
 	}
