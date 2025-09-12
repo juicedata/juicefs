@@ -717,7 +717,6 @@ JuiceFS S3 网关支持使用 `mc share` 命令来管理 MinIO 存储桶上对�
 
 ### 桶事件通知
 
-```Shell
 桶事件通知功能可以用来监视存储桶中对象上发生的事件，从而触发一些行为。
 
 目前支持的对象事件类型有：
@@ -744,6 +743,7 @@ JuiceFS S3 网关为了减少依赖，裁剪了部分支持的事件目标类型
 - PostgreSQL
 - WebHooks
 
+```Shell
 $ mc admin config get myjfs | grep notify
 notify_webhook        publish bucket notifications to webhook endpoints
 notify_mysql          publish bucket notifications to MySQL databases
