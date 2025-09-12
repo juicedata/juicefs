@@ -476,8 +476,8 @@ func (m *baseMeta) updateUserGroupQuota(ctx Context, uid, gid uint32, space, ino
 		} else {
 			// Create new user quota if it doesn't exist
 			m.userQuotas[uint64(uid)] = &Quota{
-				UsedSpace:  space,
-				UsedInodes: inodes,
+				UsedSpace:  0,
+				UsedInodes: 0,
 				MaxSpace:   -1,     // No limit
 				MaxInodes:  -1,     // No limit
 				newSpace:   space,  // Set newSpace for database sync
@@ -491,8 +491,8 @@ func (m *baseMeta) updateUserGroupQuota(ctx Context, uid, gid uint32, space, ino
 		} else {
 			// Create new group quota if it doesn't exist
 			m.groupQuotas[uint64(gid)] = &Quota{
-				UsedSpace:  space,
-				UsedInodes: inodes,
+				UsedSpace:  0,
+				UsedInodes: 0,
 				MaxSpace:   -1,     // No limit
 				MaxInodes:  -1,     // No limit
 				newSpace:   space,  // Set newSpace for database sync

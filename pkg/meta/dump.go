@@ -356,7 +356,6 @@ func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
 	return bw, nil
 }
 
-// todo: 支持其他qtype
 func (m *baseMeta) loadDumpedQuotas(ctx Context, quotas map[Ino]*DumpedQuota) {
 	// update quota
 	for inode, q := range quotas {
