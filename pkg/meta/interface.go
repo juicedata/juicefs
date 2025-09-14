@@ -99,6 +99,7 @@ const (
 	FlagWindowsHidden
 	FlagWindowsSystem
 	FlagWindowsArchive
+	FlagSkipTrash // skip moving to .trash - Mapped to 's' in chattr
 )
 
 const (

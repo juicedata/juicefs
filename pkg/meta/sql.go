@@ -1694,6 +1694,9 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		} else {
 			n.Mode = mode & ^cumask
 		}
+		if pn.Flags&FlagSkipTrash != 0 {
+			n.Flags |= FlagSkipTrash
+		}
 
 		var updateParent bool
 		var nlinkAdjust int32
@@ -1830,6 +1833,9 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
+			if ((pn.Flags&FlagSkipTrash) != 0 || (n.Flags&FlagSkipTrash) != 0) {
+				trash = 0
+			}
 			if trash > 0 && n.Nlink > 1 {
 				if o, e := s.Get(&edge{Parent: trash, Name: []byte(m.trashEntry(parent, e.Inode, string(e.Name))), Inode: e.Inode, Type: e.Type}); e == nil && o {
 					trash = 0
@@ -1961,6 +1967,9 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		if pn.Flags&FlagImmutable != 0 || pn.Flags&FlagAppend != 0 {
 			return syscall.EPERM
 		}
+		if pn.Flags&FlagSkipTrash != 0 {
+			trash = 0
+		}
 		var e = edge{Parent: parent, Name: []byte(name)}
 		ok, err = s.Get(&e)
 		if err != nil {
@@ -1997,6 +2006,9 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		}
 		if exist {
 			return syscall.ENOTEMPTY
+		}
+		if n.Flags&FlagSkipTrash != 0 {
+			trash = 0
 		}
 		now := time.Now().UnixNano()
 		if ok {
@@ -2206,6 +2218,12 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if (dn.Flags&FlagAppend) != 0 || (dn.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
+			if spn.Flags&FlagSkipTrash != 0 {
+				trash = 0
+			} else if sn.Flags&FlagSkipTrash != 0 || dpn.Flags&FlagSkipTrash != 0 || dn.Flags&FlagSkipTrash != 0 {
+				dn.Flags |= FlagSkipTrash
+				trash = 0
+			}
 			dn.setCtime(now)
 			if exchange {
 				if parentSrc != parentDst {
@@ -2303,7 +2321,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if _, err := s.Cols("inode", "type").Update(&se, &edge{Parent: parentDst, Name: de.Name}); err != nil {
 				return err
 			}
-			if _, err := s.Cols("ctime", "ctimensec", "parent").Update(dn, &node{Inode: dino}); err != nil {
+			if _, err := s.Cols("flags", "ctime", "ctimensec", "parent").Update(dn, &node{Inode: dino}); err != nil {
 				return err
 			}
 		} else {
@@ -2322,13 +2340,13 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						return err
 					}
 				} else if de.Type != TypeDirectory && dn.Nlink > 0 {
-					if _, err := s.Cols("ctime", "ctimensec", "nlink", "parent").Update(dn, &node{Inode: dino}); err != nil {
+					if _, err := s.Cols("flags", "ctime", "ctimensec", "nlink", "parent").Update(dn, &node{Inode: dino}); err != nil {
 						return err
 					}
 				} else {
 					if de.Type == TypeFile {
 						if opened {
-							if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(&dn, &node{Inode: dino}); err != nil {
+							if _, err := s.Cols("flags","nlink", "ctime", "ctimensec").Update(&dn, &node{Inode: dino}); err != nil {
 								return err
 							}
 							if err = mustInsert(s, sustained{Sid: m.sid, Inode: dino}); err != nil {
