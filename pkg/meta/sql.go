@@ -47,6 +47,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
 )
 
 const MaxFieldsCountOfTable = 18 // node table
@@ -553,6 +554,20 @@ func (m *dbMeta) Shutdown() error {
 	return m.db.Close()
 }
 
+// isTableNotExistError checks if the error indicates table doesn't exist
+func isTableNotExistError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := strings.ToLower(err.Error())
+	
+	// Check for specific database error patterns
+	return strings.Contains(errStr, "no such table") ||           // SQLite
+		strings.Contains(errStr, "table") && strings.Contains(errStr, "doesn't exist") ||  // MySQL
+		strings.Contains(errStr, "relation") && strings.Contains(errStr, "does not exist") // PostgreSQL
+}
+
 func (m *dbMeta) Name() string {
 	name := m.db.DriverName()
 	if name == "pgx" {
@@ -720,17 +735,18 @@ func (m *dbMeta) Reset() error {
 
 func (m *dbMeta) doLoad() (data []byte, err error) {
 	err = m.simpleTxn(Background(), func(ses *xorm.Session) error {
-		if ok, err := ses.IsTableExist(&setting{}); err != nil {
-			return err
-		} else if !ok {
-			return nil
-		}
 		s := setting{Name: "format"}
 		ok, err := ses.Get(&s)
-		if err == nil && ok {
+		if err != nil {
+			if isTableNotExistError(err) {
+				return nil
+			}
+			return err
+		}
+		if ok {
 			data = []byte(s.Value)
 		}
-		return err
+		return nil
 	})
 	return
 }
@@ -846,28 +862,25 @@ func (m *dbMeta) getSession(row interface{}, detail bool) (*Session, error) {
 
 func (m *dbMeta) GetSession(sid uint64, detail bool) (s *Session, err error) {
 	err = m.roTxn(Background(), func(ses *xorm.Session) error {
-		if ok, err := ses.IsTableExist(&session2{}); err != nil {
-			return err
-		} else if ok {
-			row := session2{Sid: sid}
-			if ok, err = ses.Get(&row); err != nil {
-				return err
-			} else if ok {
-				s, err = m.getSession(&row, detail)
+		// Try session2 table first
+		row := session2{Sid: sid}
+		if ok, err := ses.Get(&row); err != nil {
+			// Check if it's a table not found error
+			if !isTableNotExistError(err) {
 				return err
 			}
-		}
-		if ok, err := ses.IsTableExist(&session{}); err != nil {
-			return err
 		} else if ok {
-			row := session{Sid: sid}
-			if ok, err = ses.Get(&row); err != nil {
-				return err
-			} else if ok {
-				s, err = m.getSession(&row, detail)
-				return err
-			}
+			s, err = m.getSession(&row, detail)
+			return err
 		}
+
+		// Try legacy session table
+		rowLegacy := session{Sid: sid}
+		if ok, err := ses.Get(&rowLegacy); err == nil && ok {
+			s, err = m.getSession(&rowLegacy, detail)
+			return err
+		}
+
 		return fmt.Errorf("session not found: %d", sid)
 	})
 	return
@@ -876,13 +889,13 @@ func (m *dbMeta) GetSession(sid uint64, detail bool) (s *Session, err error) {
 func (m *dbMeta) ListSessions() ([]*Session, error) {
 	var sessions []*Session
 	err := m.roTxn(Background(), func(ses *xorm.Session) error {
-		if ok, err := ses.IsTableExist(&session2{}); err != nil {
-			return err
-		} else if ok {
-			var rows []session2
-			if err = ses.Find(&rows); err != nil {
+		// Try session2 table first
+		var rows []session2
+		if err := ses.Find(&rows); err != nil {
+			if !isTableNotExistError(err) {
 				return err
 			}
+		} else {
 			sessions = make([]*Session, 0, len(rows))
 			for i := range rows {
 				s, err := m.getSession(&rows[i], false)
@@ -893,14 +906,10 @@ func (m *dbMeta) ListSessions() ([]*Session, error) {
 				sessions = append(sessions, s)
 			}
 		}
-		if ok, err := ses.IsTableExist(&session{}); err != nil {
-			logger.Errorf("Check legacy session table: %s", err)
-		} else if ok {
-			var lrows []session
-			if err = ses.Find(&lrows); err != nil {
-				logger.Errorf("Scan legacy sessions: %s", err)
-				return nil
-			}
+
+		// Try legacy session table
+		var lrows []session
+		if err := ses.Find(&lrows); err == nil {
 			for i := range lrows {
 				s, err := m.getSession(&lrows[i], false)
 				if err != nil {
@@ -2609,11 +2618,10 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 			} else if n == 1 {
 				return nil
 			}
-			ok, err := s.IsTableExist(&session{})
-			if err == nil && ok {
-				_, err = s.Delete(&session{Sid: sid})
+			if _, err := s.Delete(&session{Sid: sid}); err != nil {
+				return err
 			}
-			return err
+			return nil
 		})
 	}
 }
@@ -2638,14 +2646,13 @@ func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	}
 
 	err := m.simpleTxn(Background(), func(ses *xorm.Session) error {
-		if ok, err := ses.IsTableExist(&session{}); err != nil {
-			return err
-		} else if ok {
-			var ls []session
-			err := ses.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).Unix()).Limit(limit, 0).Find(&ls)
-			if err != nil {
+		var ls []session
+		err := ses.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).Unix()).Limit(limit, 0).Find(&ls)
+		if err != nil {
+			if !isTableNotExistError(err) {
 				return err
 			}
+		} else {
 			for _, l := range ls {
 				sids = append(sids, l.Sid)
 			}
@@ -3364,18 +3371,16 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, de
 }
 
 func (m *dbMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
-	if scan == nil {
-		return nil
-	}
 	var dss []delslices
 
 	err := m.simpleTxn(ctx, func(tx *xorm.Session) error {
-		if ok, err := tx.IsTableExist(&delslices{}); err != nil {
+		if err := tx.Find(&dss); err != nil {
+			if isTableNotExistError(err) {
+				return nil
+			}
 			return err
-		} else if !ok {
-			return nil
 		}
-		return tx.Find(&dss)
+		return nil
 	})
 	if err != nil {
 		return err
@@ -3436,15 +3441,16 @@ func (m *dbMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
 	}
 	var refs []sliceRef
 	err := m.simpleTxn(ctx, func(tx *xorm.Session) error {
-		if ok, err := tx.IsTableExist(&sliceRef{}); err != nil {
+		if err := tx.Where("refs <= 0").Find(&refs); err != nil {
+			if isTableNotExistError(err) {
+				return nil
+			}
 			return err
-		} else if !ok {
-			return nil
 		}
-		return tx.Where("refs <= 0").Find(&refs)
+		return nil
 	})
 	if err != nil {
-		return errors.Wrap(err, "scan slice refs")
+		return err
 	}
 	for _, ref := range refs {
 		clean, err := scan(ref.Id, ref.Size)
@@ -3467,12 +3473,13 @@ func (m *dbMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 
 	var dfs []delfile
 	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
-		if ok, err := s.IsTableExist(&delfile{}); err != nil {
+		if err := s.Find(&dfs); err != nil {
+			if isTableNotExistError(err) {
+				return nil
+			}
 			return err
-		} else if !ok {
-			return nil
 		}
-		return s.Find(&dfs)
+		return nil
 	}); err != nil {
 		return err
 	}
