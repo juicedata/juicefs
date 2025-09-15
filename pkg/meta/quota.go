@@ -626,6 +626,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32,
 func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath string, quotas map[string]*Quota, strict bool) error {
 	format := m.getFormat()
 	var quota *Quota
+	var Scan bool = false
 	switch qtype {
 	case DirQuotaType:
 		if !format.DirStats {
@@ -639,6 +640,7 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	case UserQuotaType, GroupQuotaType:
 		if !format.UserGroupQuota {
 			format.UserGroupQuota = true
+			Scan = true
 			err := m.en.doInit(format, false)
 			if err != nil {
 				logger.Warnf("init user group quota: %s", err)
@@ -648,16 +650,6 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	}
 	if quota == nil {
 		return nil
-	}
-
-	var hasScan bool = false
-	_, uq, gq, err := m.en.doLoadQuotas(ctx)
-	if err != nil {
-		logger.Warnf("doLoadQuotas error: %s", err)
-		return err
-	}
-	if len(uq) > 0 || len(gq) > 0 {
-		hasScan = true
 	}
 
 	created, err := m.en.doSetQuota(ctx, qtype, uint64(key), &Quota{
@@ -672,10 +664,10 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	if !created {
 		return nil
 	}
-	return m.initializeQuotaUsage(ctx, qtype, key, dpath, strict, hasScan)
+	return m.initializeQuotaUsage(ctx, qtype, key, dpath, strict, Scan)
 }
 
-func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, dpath string, strict bool, hasScan bool) error {
+func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, dpath string, strict bool, Scan bool) error {
 	switch qtype {
 	case DirQuotaType:
 		wrapErr := func(e error) error {
@@ -698,14 +690,14 @@ func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, d
 		}
 		return nil
 	case UserQuotaType, GroupQuotaType:
-		if !hasScan {
-			return m.initializeGlobalUserGroupQuotaUsage(ctx, qtype, key)
+		if Scan {
+			return m.ScanUserGroupUsage(ctx)
 		}
 	}
 	return nil
 }
 
-func (m *baseMeta) initializeGlobalUserGroupQuotaUsage(ctx Context, qtype uint32, key uint64) error {
+func (m *baseMeta) ScanUserGroupUsage(ctx Context) error {
 	userUsage, groupUsage, err := m.scanGlobalUserGroupUsage(ctx)
 	if err != nil {
 		return fmt.Errorf("scan global user group usage: %v", err)

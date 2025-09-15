@@ -512,6 +512,8 @@ type Meta interface {
 	OnReload(func(new *Format))
 
 	HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32, gid uint32, quotas map[string]*Quota, strict, repair bool, create bool) error
+	//Triggers a global user group quota scan
+	ScanUserGroupUsage(ctx Context) error
 
 	// Dump the tree under root, which may be modified by checkRoot
 	DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) error
