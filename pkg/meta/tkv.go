@@ -2710,8 +2710,8 @@ func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
-func (m *kvMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
-	buf, err := m.get(m.dirQuotaKey(inode))
+func (m *kvMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, error) {
+	buf, err := m.get(m.dirQuotaKey(Ino(key)))
 	if err != nil {
 		return nil, err
 	} else if buf == nil {
@@ -2722,11 +2722,11 @@ func (m *kvMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	return m.parseQuota(buf), nil
 }
 
-func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) {
+func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (bool, error) {
 	var created bool
 	err := m.txn(ctx, func(tx *kvTxn) error {
 		var origin *Quota
-		buf := tx.get(m.dirQuotaKey(inode))
+		buf := tx.get(m.dirQuotaKey(Ino(key)))
 		if len(buf) == 32 {
 			origin = m.parseQuota(buf)
 			created = false
@@ -2751,29 +2751,29 @@ func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) 
 		if quota.UsedInodes >= 0 {
 			origin.UsedInodes = quota.UsedInodes
 		}
-		tx.set(m.dirQuotaKey(inode), m.packQuota(origin))
+		tx.set(m.dirQuotaKey(Ino(key)), m.packQuota(origin))
 		return nil
 	})
 	return created, err
 }
 
-func (m *kvMeta) doDelQuota(ctx Context, inode Ino) error {
-	return m.deleteKeys(m.dirQuotaKey(inode))
+func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
+	return m.deleteKeys(m.dirQuotaKey(Ino(key)))
 }
 
-func (m *kvMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
+func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
 	pairs, err := m.scanValues(m.fmtKey("QD"), -1, nil)
 	if err != nil || len(pairs) == 0 {
-		return nil, err
+		return nil, nil, nil, err
 	}
 
-	quotas := make(map[Ino]*Quota, len(pairs))
+	quotas := make(map[uint64]*Quota, len(pairs))
 	for k, v := range pairs {
 		inode := m.decodeInode([]byte(k[2:])) // skip "QD"
 		quota := m.parseQuota(v)
-		quotas[inode] = quota
+		quotas[uint64(inode)] = quota
 	}
-	return quotas, nil
+	return quotas, nil, nil, nil
 }
 
 func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
@@ -2834,7 +2834,7 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 		keys := make([][]byte, 0, len(quotas))
 		qs := make([]*Quota, 0, len(quotas))
 		for _, q := range quotas {
-			keys = append(keys, m.dirQuotaKey(q.inode))
+			keys = append(keys, m.dirQuotaKey(Ino(q.qkey)))
 			qs = append(qs, q.quota)
 		}
 		for i, v := range tx.gets(keys...) {

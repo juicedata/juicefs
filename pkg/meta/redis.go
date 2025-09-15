@@ -3543,8 +3543,8 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 	}
 }
 
-func (m *redisMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
-	field := inode.String()
+func (m *redisMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, error) {
+	field := Ino(key).String()
 	cmds, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		pipe.HGet(ctx, m.dirQuotaKey(), field)
 		pipe.HGet(ctx, m.dirQuotaUsedSpaceKey(), field)
@@ -3572,11 +3572,11 @@ func (m *redisMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	return &quota, nil
 }
 
-func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) {
+func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (bool, error) {
 	var created bool
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		origin := new(Quota)
-		field := inode.String()
+		field := Ino(key).String()
 		buf, e := tx.HGet(ctx, m.dirQuotaKey(), field).Bytes()
 		if e == nil {
 			created = false
@@ -3606,12 +3606,12 @@ func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, erro
 			return nil
 		})
 		return e
-	}, m.inodeKey(inode))
+	}, m.inodeKey(Ino(key)))
 	return created, err
 }
 
-func (m *redisMeta) doDelQuota(ctx Context, inode Ino) error {
-	field := inode.String()
+func (m *redisMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
+	field := Ino(key).String()
 	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		pipe.HDel(ctx, m.dirQuotaKey(), field)
 		pipe.HDel(ctx, m.dirQuotaUsedSpaceKey(), field)
@@ -3621,9 +3621,9 @@ func (m *redisMeta) doDelQuota(ctx Context, inode Ino) error {
 	return err
 }
 
-func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
-	quotas := make(map[Ino]*Quota)
-	return quotas, m.hscan(ctx, m.dirQuotaKey(), func(keys []string) error {
+func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
+	quotas := make(map[uint64]*Quota)
+	return quotas, nil, nil, m.hscan(ctx, m.dirQuotaKey(), func(keys []string) error {
 		for i := 0; i < len(keys); i += 2 {
 			key, val := keys[i], []byte(keys[i+1])
 			inode, err := strconv.ParseUint(key, 10, 64)
@@ -3644,7 +3644,7 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 			if err != nil && err != redis.Nil {
 				return err
 			}
-			quotas[Ino(inode)] = &Quota{
+			quotas[inode] = &Quota{
 				MaxSpace:   int64(maxSpace),
 				MaxInodes:  int64(maxInodes),
 				UsedSpace:  usedSpace,
@@ -3658,7 +3658,7 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		for _, q := range quotas {
-			field := q.inode.String()
+			field := strconv.FormatUint(q.qkey, 10)
 			pipe.HIncrBy(ctx, m.dirQuotaUsedSpaceKey(), field, q.quota.newSpace)
 			pipe.HIncrBy(ctx, m.dirQuotaUsedInodesKey(), field, q.quota.newInodes)
 		}

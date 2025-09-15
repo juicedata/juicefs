@@ -169,7 +169,7 @@ func checkMeta(t *testing.T, m Meta) {
 		UsedInodes: int64(summary.Dirs+summary.Files) - 1,
 	}
 
-	quota, err := m.(engine).doGetQuota(ctx, 1)
+	quota, err := m.(engine).doGetQuota(ctx, DirQuotaType, 1)
 	if err != nil {
 		t.Fatalf("get quota: %s", err)
 	}
