@@ -151,7 +151,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 	s.store.cacheMissBytes.Add(float64(len(p)))
 
 	if s.store.seekable &&
-		((s.store.conf.CacheEnabled() && boff > 0 && len(p) <= blockSize/4) || (!s.store.conf.CacheEnabled())) {
+		(!s.store.conf.CacheEnabled() || (boff > 0 && len(p) <= blockSize/4)) {
 		if s.store.downLimit != nil {
 			s.store.downLimit.Wait(int64(len(p)))
 		}
