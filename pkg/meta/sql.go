@@ -634,6 +634,13 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 				return errors.Wrap(err, "drop table dirStats")
 			}
 		}
+		if !old.UserGroupQuota && format.UserGroupQuota {
+			// remove user group quota as they are outdated
+			_, err = m.db.Where("TRUE").Delete(new(userGroupQuota))
+			if err != nil {
+				return errors.Wrap(err, "drop table userGroupQuota")
+			}
+		}
 		if err = format.update(&old, force); err != nil {
 			return errors.Wrap(err, "update format")
 		}

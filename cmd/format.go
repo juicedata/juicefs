@@ -482,6 +482,7 @@ func format(c *cli.Context) error {
 			Compression:      c.String("compress"),
 			TrashDays:        c.Int("trash-days"),
 			DirStats:         true,
+			UserGroupQuota:   false,
 			MetaVersion:      meta.MaxVersion,
 			MinClientVersion: "1.1.0-A",
 			EnableACL:        c.Bool("enable-acl"),
