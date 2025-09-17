@@ -626,7 +626,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32,
 func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath string, quotas map[string]*Quota, strict bool) error {
 	format := m.getFormat()
 	var quota *Quota
-	var Scan bool = false
+	var scan bool = false
 	switch qtype {
 	case DirQuotaType:
 		if !format.DirStats {
@@ -640,7 +640,7 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	case UserQuotaType, GroupQuotaType:
 		if !format.UserGroupQuota {
 			format.UserGroupQuota = true
-			Scan = true
+			scan = true
 			err := m.en.doInit(format, false)
 			if err != nil {
 				logger.Warnf("init user group quota: %s", err)
@@ -664,10 +664,10 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	if !created {
 		return nil
 	}
-	return m.initializeQuotaUsage(ctx, qtype, key, dpath, strict, Scan)
+	return m.initializeQuotaUsage(ctx, qtype, key, dpath, strict, scan)
 }
 
-func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, dpath string, strict bool, Scan bool) error {
+func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, dpath string, strict bool, scan bool) error {
 	switch qtype {
 	case DirQuotaType:
 		wrapErr := func(e error) error {
@@ -690,7 +690,7 @@ func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, d
 		}
 		return nil
 	case UserQuotaType, GroupQuotaType:
-		if Scan {
+		if scan {
 			return m.ScanUserGroupUsage(ctx)
 		}
 	}
@@ -707,30 +707,23 @@ func (m *baseMeta) ScanUserGroupUsage(ctx Context) error {
 	var groupQuotasSnapshot map[uint64]*Quota
 
 	m.quotaMu.Lock()
+	// Reset user and group quotas
+	m.userQuotas = make(map[uint64]*Quota)
+	m.groupQuotas = make(map[uint64]*Quota)
 	for uid, usage := range userUsage {
-		if m.userQuotas[uid] != nil {
-			m.userQuotas[uid].UsedSpace = int64(usage.Size)
-			m.userQuotas[uid].UsedInodes = int64(usage.Files)
-		} else {
-			m.userQuotas[uid] = &Quota{
-				MaxSpace:   -1,
-				MaxInodes:  -1,
-				UsedSpace:  int64(usage.Size),
-				UsedInodes: int64(usage.Files),
-			}
+		m.userQuotas[uid] = &Quota{
+			MaxSpace:   -1,
+			MaxInodes:  -1,
+			UsedSpace:  int64(usage.Size),
+			UsedInodes: int64(usage.Files),
 		}
 	}
 	for gid, usage := range groupUsage {
-		if m.groupQuotas[gid] != nil {
-			m.groupQuotas[gid].UsedSpace = int64(usage.Size)
-			m.groupQuotas[gid].UsedInodes = int64(usage.Files)
-		} else {
-			m.groupQuotas[gid] = &Quota{
-				MaxSpace:   -1,
-				MaxInodes:  -1,
-				UsedSpace:  int64(usage.Size),
-				UsedInodes: int64(usage.Files),
-			}
+		m.groupQuotas[gid] = &Quota{
+			MaxSpace:   -1,
+			MaxInodes:  -1,
+			UsedSpace:  int64(usage.Size),
+			UsedInodes: int64(usage.Files),
 		}
 	}
 
