@@ -117,6 +117,12 @@ juicefs rmr .trash/2022-11-30-10/
 
 If you want to delete expired files more quickly, you can mount multiple mount points to exceed the deletion speed limit of a single client.
 
+## Selectively skipping trash {#skip}
+
+It is possible to skip the trash and permanently delete files directly. The 's' flag using `chattr` can be set on files or directories to enable this feature. When a file or directory has the 's' flag set, the file or directory will be permanently deleted when removed, bypassing the trash. New files or directories created under a directory with the 's' flag will also inherit this behavior. Existing JuiceFS files or directories moved into a directory with the 's' flag set will not inherit the flag.
+
+You will need to enable the mount option `--enable-ioctl` to allow adjusting file attributes using `chattr`.
+
 ## Trash and slices {#gc}
 
 Apart from user deleted files, there's another type of data which also resides in Trash, which isn't directly visible from the `.trash` directory, they are stale slices created by file edits and overwrites. Read more in [How JuiceFS stores files](../introduction/architecture.md#how-juicefs-store-files). To sum up, if applications constantly delete or overwrite files, object storage usage will exceed file system usage.

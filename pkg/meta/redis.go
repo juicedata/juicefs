@@ -1340,6 +1340,9 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		if (pattr.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
+		if (pattr.Flags&FlagSkipTrash) != 0 {
+			attr.Flags |= FlagSkipTrash
+		}
 
 		buf, err := tx.HGet(ctx, m.entryKey(parent), name).Bytes()
 		if err != nil && err != redis.Nil {
@@ -1541,6 +1544,10 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 			if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
+			if (attr.Flags&FlagSkipTrash) != 0 && trash > 0 {
+				trash = 0
+				defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
+			}
 			if trash > 0 && attr.Nlink > 1 && tx.HExists(ctx, m.entryKey(trash), m.trashEntry(parent, inode, name)).Val() {
 				trash = 0
 				defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
@@ -1686,6 +1693,9 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 			}
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
+			}
+			if (attr.Flags&FlagSkipTrash) != 0 {
+				trash = 0
 			}
 			if trash > 0 {
 				attr.Ctime = now.Unix()
@@ -1862,6 +1872,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			}
 			if (tattr.Flags&FlagAppend) != 0 || (tattr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
+			}
+			if (tattr.Flags&FlagSkipTrash) != 0 {
+				trash = 0
 			}
 			tattr.Ctime = now.Unix()
 			tattr.Ctimensec = uint32(now.Nanosecond())

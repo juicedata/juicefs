@@ -2189,6 +2189,65 @@ func testTrash(t *testing.T, m Meta) {
 		t.Fatalf("entries: %d", len(entries))
 	}
 
+	// Selectively skip trash based on FS_SECRM_FL
+	if st := m.Mkdir(ctx, 1, "secrmd", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir secrmd: %s", st)
+	}
+	if st := m.SetAttr(ctx, parent, SetAttrFlag, 0, &Attr{Flags: FlagSkipTrash}); st != 0 {
+		t.Fatalf("setattr secrmd secrm: %s", st)
+	}
+	if st := m.Create(ctx, parent, "f1", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create secrmd/f1: %s", st)
+	}
+	if st := m.GetAttr(ctx, inode, attr); st != 0 || (attr.Flags&FlagSkipTrash) == 0 {
+		t.Fatalf("getattr secrmd/f1(%d): %s, attr %+v", inode, st, attr)
+	}
+	if st := m.Unlink(ctx, parent, "f1"); st != 0 {
+		t.Fatalf("unlink secrmd/f1: %s", st)
+	}
+	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
+		t.Fatalf("readdir: %s", st)
+	}
+	if len(entries) != 12 {
+		t.Fatalf("entries: %d", len(entries))
+	}
+	entries = entries[:0]
+	if st := m.Mkdir(ctx, parent, "d1", 0755, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("mkdir secrmd/d1: %s", st)
+	}
+	if st := m.Rmdir(ctx, parent, "d1"); st != 0 {
+		t.Fatalf("rmdir secrmd/d1: %s", st)
+	}
+	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
+		t.Fatalf("readdir: %s", st)
+	}
+	if len(entries) != 12 {
+		t.Fatalf("entries: %d", len(entries))
+	}
+	entries = entries[:0]
+	if st := m.Create(ctx, parent, "f2", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create secrmd/f2: %s", st)
+	}
+	if st := m.Create(ctx, parent, "f3", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create secrmd/f3: %s", st)
+	}
+	if st := m.Rename(ctx, parent, "f2", parent, "f3", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename secrmd/f2 -> f3: %s", st)
+	}
+	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
+		t.Fatalf("readdir: %s", st)
+	}
+	if len(entries) != 12 {
+		t.Fatalf("entries: %d", len(entries))
+	}
+	entries = entries[:0]
+	if st := m.Unlink(ctx, parent, "f3"); st != 0 {
+		t.Fatalf("unlink secrmd/f3: %s", st)
+	}
+	if st := m.Rmdir(ctx, 1, "secrmd"); st != 0 {
+		t.Fatalf("rmdir secrmd: %s", st)
+	}
+
 	ctx2 := NewContext(1000, 1, []uint32{1})
 	if st := m.Unlink(ctx2, TrashInode+1, "d"); st != syscall.EPERM {
 		t.Fatalf("unlink d: %s", st)

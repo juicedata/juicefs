@@ -1706,6 +1706,9 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		} else {
 			n.Mode = mode & ^cumask
 		}
+		if (pn.Flags&FlagSkipTrash) != 0 {
+			n.Flags |= FlagSkipTrash
+		}
 
 		var updateParent bool
 		var nlinkAdjust int32
@@ -1841,6 +1844,9 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			}
 			if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
+			}
+			if (n.Flags&FlagSkipTrash) != 0 {
+				trash = 0
 			}
 			if trash > 0 && n.Nlink > 1 {
 				if o, e := s.Get(&edge{Parent: trash, Name: []byte(m.trashEntry(parent, e.Inode, string(e.Name))), Inode: e.Inode, Type: e.Type}); e == nil && o {
@@ -2009,6 +2015,9 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		}
 		if exist {
 			return syscall.ENOTEMPTY
+		}
+		if (n.Flags&FlagSkipTrash) != 0 {
+			trash = 0
 		}
 		now := time.Now().UnixNano()
 		if ok {
@@ -2217,6 +2226,9 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			if (dn.Flags&FlagAppend) != 0 || (dn.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
+			}
+			if (dn.Flags&FlagSkipTrash) != 0 {
+				trash = 0
 			}
 			dn.setCtime(now)
 			if exchange {

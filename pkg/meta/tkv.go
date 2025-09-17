@@ -1140,6 +1140,9 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if (pattr.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
+		if (pattr.Flags&FlagSkipTrash) != 0 {
+			attr.Flags |= FlagSkipTrash
+		}
 
 		buf := rs[1]
 		var foundIno Ino
@@ -1319,6 +1322,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
+			if (attr.Flags&FlagSkipTrash) != 0 {
+				trash = 0
+			}
 			if trash > 0 && attr.Nlink > 1 && rs[2] != nil {
 				trash = 0
 			}
@@ -1448,6 +1454,9 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 			}
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
+			}
+			if (attr.Flags&FlagSkipTrash) != 0 {
+				trash = 0
 			}
 			if trash > 0 {
 				attr.Ctime = now.Unix()
@@ -1590,6 +1599,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			m.parseAttr(a, &tattr)
 			if (tattr.Flags&FlagAppend) != 0 || (tattr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
+			}
+			if (tattr.Flags&FlagSkipTrash) != 0 {
+				trash = 0
 			}
 			tattr.Ctime = now.Unix()
 			tattr.Ctimensec = uint32(now.Nanosecond())

@@ -322,6 +322,7 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 		FS_IOC_FSGETXATTR  = 0x801C581F
 	)
 	const (
+		FS_SECRM_FL        = 0x00000001
 		FS_IMMUTABLE_FL    = 0x00000010
 		FS_APPEND_FL       = 0x00000020
 		FS_XFLAG_IMMUTABLE = 0x00000008
@@ -346,8 +347,11 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 		} else {
 			return syscall.EINVAL
 		}
-		if ctx.CheckPermission() && ctx.Uid() != 0 && iflag&(FS_IMMUTABLE_FL|FS_APPEND_FL) != 0 {
+		if ctx.CheckPermission() && ctx.Uid() != 0 && iflag&(FS_SECRM_FL|FS_IMMUTABLE_FL|FS_APPEND_FL) != 0 {
 			return syscall.EPERM
+		}
+		if (iflag & FS_SECRM_FL) != 0 {
+			attr.Flags |= meta.FlagSkipTrash
 		}
 		if (iflag & FS_IMMUTABLE_FL) != 0 {
 			attr.Flags |= meta.FlagImmutable
@@ -355,7 +359,7 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 		if (iflag & FS_APPEND_FL) != 0 {
 			attr.Flags |= meta.FlagAppend
 		}
-		if iflag &= ^uint64(FS_IMMUTABLE_FL | FS_APPEND_FL); iflag != 0 {
+		if iflag &= ^uint64(FS_SECRM_FL | FS_IMMUTABLE_FL | FS_APPEND_FL); iflag != 0 {
 			return syscall.ENOTSUP
 		}
 		return v.Meta.SetAttr(ctx, ino, meta.SetAttrFlag, 0, attr)
@@ -365,6 +369,9 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 		}
 		var iflag uint64
 		if cmd>>8&0xFF == 'f' { // FS_IOC_GETFLAGS
+			if (attr.Flags & meta.FlagSkipTrash) != 0 {
+				iflag |= FS_SECRM_FL
+			}
 			if (attr.Flags & meta.FlagImmutable) != 0 {
 				iflag |= FS_IMMUTABLE_FL
 			}
