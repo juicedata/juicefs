@@ -2240,6 +2240,9 @@ func testTrash(t *testing.T, m Meta) {
 		t.Fatalf("entries: %d", len(entries))
 	}
 	entries = entries[:0]
+	if st := m.Unlink(ctx, parent, "f3"); st != 0 {
+		t.Fatalf("unlink secrmd/f3: %s", st)
+	}
 	if st := m.Rmdir(ctx, 1, "secrmd"); st != 0 {
 		t.Fatalf("rmdir secrmd: %s", st)
 	}

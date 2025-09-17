@@ -1478,14 +1478,11 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 			return st
 		}
 	}
-	if attr == nil {
-		attr = &Attr{}
-	}
-	if (attr.Flags&FlagSkipTrash) != 0 {
-		trash = 0
-	}
 	if trash == 0 {
 		defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
+	}
+	if attr == nil {
+		attr = &Attr{}
 	}
 	var _type uint8
 	var opened bool
@@ -1546,6 +1543,10 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 			}
 			if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
+			}
+			if (attr.Flags&FlagSkipTrash) != 0 && trash > 0 {
+				trash = 0
+				defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 			}
 			if trash > 0 && attr.Nlink > 1 && tx.HExists(ctx, m.entryKey(trash), m.trashEntry(parent, inode, name)).Val() {
 				trash = 0
