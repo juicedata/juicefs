@@ -3897,11 +3897,7 @@ func testQuotaUsageStatistics(t *testing.T, m Meta, ctx Context, parent Ino, uid
 }
 
 func testUserGroupQuota(t *testing.T, m Meta) {
-	// Only run user group quota tests for SQL engines
-	engineName := m.Name()
-	if engineName != "sqlite3" && engineName != "mysql" && engineName != "postgres" {
-		t.Skipf("User group quota tests are only supported for SQL engines, current engine: %s", engineName)
-	}
+	// User group quota tests are now supported for all engines
 
 	if err := m.NewSession(true); err != nil {
 		t.Fatalf("New session: %s", err)
