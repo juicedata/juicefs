@@ -227,6 +227,9 @@ func (s *s3client) Delete(ctx context.Context, key string, getters ...AttrGetter
 }
 
 func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	if limit > 1000 {
+		limit = 1000
+	}
 	param := s3.ListObjectsV2Input{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
