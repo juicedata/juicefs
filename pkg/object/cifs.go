@@ -42,8 +42,8 @@ type cifsConn struct {
 	lastUsed time.Time
 }
 
-var _ ObjectStorage = &cifsStore{}
-var _ FileSystem = &cifsStore{}
+var _ ObjectStorage = (*cifsStore)(nil)
+var _ FileSystem = (*cifsStore)(nil)
 
 type cifsStore struct {
 	DefaultObjectStorage
