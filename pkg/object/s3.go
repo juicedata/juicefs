@@ -226,6 +226,9 @@ func (s *s3client) Delete(key string, getters ...AttrGetter) error {
 }
 
 func (s *s3client) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	if limit > 1000 {
+		limit = 1000
+	}
 	param := s3.ListObjectsV2Input{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
