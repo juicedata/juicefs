@@ -840,9 +840,7 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 }
 
 type holder struct {
-	done bool
-	sync.Mutex
-	*sync.Cond
+	done chan struct{}
 }
 
 var muHolder sync.Mutex
@@ -863,18 +861,20 @@ func fetchTask(tasks chan object.Object) (t object.Object, done func()) {
 		}
 	}()
 AGAIN:
-	t = <-tasks
+	if t == nil {
+		t = <-tasks
+	}
 	muHolder.Lock()
 	if len(holders) > 0 {
 		h := holders[len(holders)-1]
 		holders = holders[:len(holders)-1]
 		muHolder.Unlock()
-		tasks <- t // put back
-		h.Lock()
-		for !h.done {
-			h.Wait()
+		select {
+		case tasks <- t: // put back
+			t = nil
+			<-h.done
+		case <-h.done:
 		}
-		h.Unlock()
 		goto AGAIN
 	}
 	defer muHolder.Unlock()
@@ -883,18 +883,13 @@ AGAIN:
 		size = withoutSize(t).Size()
 	}
 	if size >= maxBlock*2 {
-		h := &holder{}
-		h.Cond = sync.NewCond(&h.Mutex)
+		done := make(chan struct{})
+		h := &holder{done: done}
 		n := min(int(size)/maxBlock, 20)
 		for i := 1; i < n; i++ {
 			holders = append(holders, h)
 		}
-		return t, func() {
-			h.Lock()
-			defer h.Unlock()
-			h.done = true
-			h.Broadcast()
-		}
+		return t, func() { close(done) }
 	} else {
 		return t, func() {}
 	}
