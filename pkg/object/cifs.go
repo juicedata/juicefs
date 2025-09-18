@@ -69,9 +69,7 @@ type cifsStore struct {
 // regardless of the specific mode bits passed to this function.
 func (c *cifsStore) Chmod(path string, mode os.FileMode) error {
 	return c.withConn(context.Background(), func(conn *cifsConn) error {
-		p := c.path(path)
-		err := conn.share.Chmod(p, mode)
-		return err
+		return conn.share.Chmod(path, mode)
 	})
 }
 
@@ -83,19 +81,12 @@ func (c *cifsStore) Chown(path string, owner string, group string) error {
 // Chtimes implements MtimeChanger.
 func (c *cifsStore) Chtimes(path string, mtime time.Time) error {
 	return c.withConn(context.Background(), func(conn *cifsConn) error {
-		p := c.path(path)
-		err := conn.share.Chtimes(p, time.Time{}, mtime)
-		return err
+		return conn.share.Chtimes(path, time.Time{}, mtime)
 	})
 }
 
 func (c *cifsStore) String() string {
 	return fmt.Sprintf("cifs://%s@%s:%s/%s/", c.user, c.host, c.port, c.share)
-}
-
-// path converts object key to file path in CIFS share
-func (c *cifsStore) path(key string) string {
-	return key
 }
 
 // getConnection returns a CIFS connection from the pool or creates a new one
@@ -104,9 +95,6 @@ func (c *cifsStore) getConnection(ctx context.Context) (*cifsConn, error) {
 	for {
 		select {
 		case conn := <-c.pool:
-			if conn == nil {
-				continue
-			}
 			if conn.session == nil {
 				continue
 			}
@@ -184,15 +172,14 @@ func (c *cifsStore) withConn(ctx context.Context, f func(*cifsConn) error) error
 
 func (c *cifsStore) Head(ctx context.Context, key string) (oj Object, err error) {
 	err = c.withConn(ctx, func(conn *cifsConn) error {
-		p := c.path(key)
-		fi, err := conn.share.Lstat(p)
+		fi, err := conn.share.Lstat(key)
 		if err != nil {
 			return err
 		}
 		isSymlink := fi.Mode()&os.ModeSymlink != 0
 		if isSymlink {
 			// SMB doesn't fully support symlinks like POSIX, but we'll try our best
-			fi, err = conn.share.Stat(p)
+			fi, err = conn.share.Stat(key)
 			if err != nil {
 				return err
 			}
@@ -206,8 +193,7 @@ func (c *cifsStore) Head(ctx context.Context, key string) (oj Object, err error)
 func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	var readCloser io.ReadCloser
 	err := c.withConn(ctx, func(conn *cifsConn) error {
-		p := c.path(key)
-		f, err := conn.share.Open(p)
+		f, err := conn.share.Open(key)
 		if err != nil {
 			return err
 		}
@@ -236,8 +222,8 @@ func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, gette
 
 func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
 	return c.withConn(ctx, func(conn *cifsConn) error {
-		p := c.path(key)
-		if strings.HasSuffix(p, dirSuffix) {
+		p := key
+		if strings.HasSuffix(key, dirSuffix) {
 			// perm will not take effect, is not used
 			// ref: https://github.com/cloudsoda/go-smb2/blob/c8e61c7a5fa7bcd1143359f071f9425a9f4dda3f/client.go#L341-L370
 			return conn.share.MkdirAll(p, 0755)
@@ -303,7 +289,7 @@ func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters .
 
 func (c *cifsStore) Delete(ctx context.Context, key string, getters ...AttrGetter) (err error) {
 	return c.withConn(ctx, func(conn *cifsConn) error {
-		p := strings.TrimRight(c.path(key), dirSuffix)
+		p := strings.TrimRight(key, dirSuffix)
 		err = conn.share.Remove(p)
 		if err != nil && os.IsNotExist(err) {
 			err = nil
@@ -334,7 +320,7 @@ func (c *cifsStore) List(ctx context.Context, prefix, marker, token, delimiter s
 		return nil, false, "", notSupported
 	}
 
-	dir := c.path(prefix)
+	dir := prefix
 	var objs []Object
 	if !strings.HasSuffix(dir, "/") {
 		dir = path.Dir(dir)
