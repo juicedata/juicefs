@@ -482,24 +482,13 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		}
 		if !old.UserGroupQuota && format.UserGroupQuota {
 			// remove user group quota as they are outdated
-			var keys [][]byte
 			userPrefix := m.fmtKey("QU")
 			groupPrefix := m.fmtKey("QG")
 			err := m.client.txn(Background(), func(tx *kvTxn) error {
-				tx.scan(userPrefix, nextKey(userPrefix), true, func(k, v []byte) bool {
-					keys = append(keys, k)
-					return true
-				})
-				tx.scan(groupPrefix, nextKey(groupPrefix), true, func(k, v []byte) bool {
-					keys = append(keys, k)
-					return true
-				})
+				tx.deleteKeys(userPrefix)
+				tx.deleteKeys(groupPrefix)
 				return nil
 			}, 0)
-			if err != nil {
-				return errors.Wrap(err, "scan user group quota")
-			}
-			err = m.deleteKeys(keys...)
 			if err != nil {
 				return errors.Wrap(err, "delete user group quota")
 			}
@@ -2795,9 +2784,14 @@ func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 
 	var created bool
 	err = m.txn(ctx, func(tx *kvTxn) error {
-		origin, exists, err := m.getExistingQuota(tx, quotaKey)
-		if err != nil {
-			return err
+		buf := tx.get(quotaKey)
+		var origin *Quota
+		var exists bool
+		if len(buf) == 32 {
+			origin = m.parseQuota(buf)
+			exists = true
+		} else if len(buf) != 0 {
+			return fmt.Errorf("Invalid quota value: %v", buf)
 		}
 
 		if !exists {
@@ -2807,42 +2801,29 @@ func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 			created = false
 		}
 
-		m.updateQuotaFields(origin, quota, exists)
+		if quota.MaxSpace >= 0 {
+			origin.MaxSpace = quota.MaxSpace
+		}
+		if quota.MaxInodes >= 0 {
+			origin.MaxInodes = quota.MaxInodes
+		}
+		if quota.UsedSpace >= 0 {
+			origin.UsedSpace = quota.UsedSpace
+		} else if !exists {
+			origin.UsedSpace = 0
+		}
+		if quota.UsedInodes >= 0 {
+			origin.UsedInodes = quota.UsedInodes
+		} else if !exists {
+			origin.UsedInodes = 0
+		}
 		tx.set(quotaKey, m.packQuota(origin))
 		return nil
 	})
 	return created, err
 }
 
-func (m *kvMeta) getExistingQuota(tx *kvTxn, quotaKey []byte) (*Quota, bool, error) {
-	buf := tx.get(quotaKey)
-	if len(buf) == 32 {
-		return m.parseQuota(buf), true, nil
-	}
-	if len(buf) != 0 {
-		return nil, false, fmt.Errorf("Invalid quota value: %v", buf)
-	}
-	return nil, false, nil
-}
 
-func (m *kvMeta) updateQuotaFields(origin *Quota, quota *Quota, exist bool) {
-	if quota.MaxSpace >= 0 {
-		origin.MaxSpace = quota.MaxSpace
-	}
-	if quota.MaxInodes >= 0 {
-		origin.MaxInodes = quota.MaxInodes
-	}
-	if quota.UsedSpace >= 0 {
-		origin.UsedSpace = quota.UsedSpace
-	} else if !exist {
-		origin.UsedSpace = 0
-	}
-	if quota.UsedInodes >= 0 {
-		origin.UsedInodes = quota.UsedInodes
-	} else if !exist {
-		origin.UsedInodes = 0
-	}
-}
 
 func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 	quotaKey, err := m.getQuotaKey(qtype, key)
@@ -2852,7 +2833,11 @@ func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 
 	if qtype == UserQuotaType || qtype == GroupQuotaType {
 		quota := &Quota{}
-		if val, err := m.get(quotaKey); err == nil && len(val) > 0 {
+		val, err := m.get(quotaKey)
+		if err != nil {
+			return err
+		}
+		if len(val) > 0 {
 			quota = m.parseQuota(val)
 		}
 		quota.MaxSpace = -1
@@ -2879,9 +2864,20 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 
 	quotaMaps := make([]map[uint64]*Quota, 3)
 	for i, qt := range quotaTypes {
-		quotas, err := m.loadQuotaMap(qt.prefix)
+		pairs, err := m.scanValues(m.fmtKey(qt.prefix), -1, nil)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to load %s quotas: %w", qt.name, err)
+		}
+		var quotas map[uint64]*Quota
+		if len(pairs) == 0 {
+			quotas = make(map[uint64]*Quota)
+		} else {
+			quotas = make(map[uint64]*Quota, len(pairs))
+			for k, v := range pairs {
+				id := binary.LittleEndian.Uint64([]byte(k[2:])) // skip prefix
+				quota := m.parseQuota(v)
+				quotas[id] = quota
+			}
 		}
 		quotaMaps[i] = quotas
 	}
@@ -2889,23 +2885,6 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 	return quotaMaps[0], quotaMaps[1], quotaMaps[2], nil
 }
 
-func (m *kvMeta) loadQuotaMap(prefix string) (map[uint64]*Quota, error) {
-	pairs, err := m.scanValues(m.fmtKey(prefix), -1, nil)
-	if err != nil {
-		return nil, err
-	}
-	if len(pairs) == 0 {
-		return make(map[uint64]*Quota), nil
-	}
-
-	quotas := make(map[uint64]*Quota, len(pairs))
-	for k, v := range pairs {
-		id := binary.LittleEndian.Uint64([]byte(k[2:])) // skip prefix
-		quota := m.parseQuota(v)
-		quotas[id] = quota
-	}
-	return quotas, nil
-}
 
 func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
 	if m.conf.ReadOnly {
