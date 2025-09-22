@@ -3671,9 +3671,6 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			origin.MaxSpace, origin.MaxInodes = m.parseQuota(buf)
 		} else if e == redis.Nil {
 			created = true
-			if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
-				return errors.New("limitation not set or deleted")
-			}
 		} else {
 			return e
 		}
@@ -3689,9 +3686,13 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			pipe.HSet(ctx, config.quotaKey, field, m.packQuota(origin.MaxSpace, origin.MaxInodes))
 			if quota.UsedSpace >= 0 {
 				pipe.HSet(ctx, config.usedSpaceKey, field, quota.UsedSpace)
+			} else if created {
+				pipe.HSet(ctx, config.usedSpaceKey, field, 0)
 			}
 			if quota.UsedInodes >= 0 {
 				pipe.HSet(ctx, config.usedInodesKey, field, quota.UsedInodes)
+			} else if created {
+				pipe.HSet(ctx, config.usedInodesKey, field, 0)
 			}
 			return nil
 		})
@@ -3709,7 +3710,7 @@ func (m *redisMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 	field := strconv.FormatUint(key, 10)
 	_, err = m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		if qtype == UserQuotaType || qtype == GroupQuotaType {
-			quotaData := m.packQuota(0, 0) // 0 means unlimited
+			quotaData := m.packQuota(-1, -1) // -1 means unlimited
 			pipe.HSet(ctx, config.quotaKey, field, quotaData)
 		} else {
 			pipe.HDel(ctx, config.quotaKey, field)

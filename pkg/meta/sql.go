@@ -1713,7 +1713,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		} else {
 			n.Mode = mode & ^cumask
 		}
-		if (pn.Flags&FlagSkipTrash) != 0 {
+		if (pn.Flags & FlagSkipTrash) != 0 {
 			n.Flags |= FlagSkipTrash
 		}
 
@@ -1852,7 +1852,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
-			if (n.Flags&FlagSkipTrash) != 0 {
+			if (n.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
 			if trash > 0 && n.Nlink > 1 {
@@ -2023,7 +2023,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		if exist {
 			return syscall.ENOTEMPTY
 		}
-		if (n.Flags&FlagSkipTrash) != 0 {
+		if (n.Flags & FlagSkipTrash) != 0 {
 			trash = 0
 		}
 		now := time.Now().UnixNano()
@@ -2234,7 +2234,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if (dn.Flags&FlagAppend) != 0 || (dn.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
-			if (dn.Flags&FlagSkipTrash) != 0 {
+			if (dn.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
 			dn.setCtime(now)
@@ -3685,20 +3685,20 @@ func updateQuotaFields(quota *Quota, exist bool, maxSpace, maxInodes *int64, use
 		*maxInodes = quota.MaxInodes
 		updateColumns = append(updateColumns, "max_inodes")
 	}
+
 	if quota.UsedSpace >= 0 {
 		*usedSpace = quota.UsedSpace
-		updateColumns = append(updateColumns, "used_space")
 	} else if !exist {
 		*usedSpace = 0
-		updateColumns = append(updateColumns, "used_space")
 	}
+	updateColumns = append(updateColumns, "used_space")
+
 	if quota.UsedInodes >= 0 {
 		*usedInodes = quota.UsedInodes
-		updateColumns = append(updateColumns, "used_inodes")
 	} else if !exist {
 		*usedInodes = 0
-		updateColumns = append(updateColumns, "used_inodes")
 	}
+	updateColumns = append(updateColumns, "used_inodes")
 
 	return updateColumns
 }

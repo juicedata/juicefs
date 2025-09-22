@@ -3897,8 +3897,6 @@ func testQuotaUsageStatistics(t *testing.T, m Meta, ctx Context, parent Ino, uid
 }
 
 func testUserGroupQuota(t *testing.T, m Meta) {
-	// User group quota tests are now supported for all engines
-
 	if err := m.NewSession(true); err != nil {
 		t.Fatalf("New session: %s", err)
 	}

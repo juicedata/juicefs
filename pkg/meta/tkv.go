@@ -486,12 +486,10 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 			userPrefix := m.fmtKey("QU")
 			groupPrefix := m.fmtKey("QG")
 			err := m.client.txn(Background(), func(tx *kvTxn) error {
-				// scan user quota keys
 				tx.scan(userPrefix, nextKey(userPrefix), true, func(k, v []byte) bool {
 					keys = append(keys, k)
 					return true
 				})
-				// scan group quota keys
 				tx.scan(groupPrefix, nextKey(groupPrefix), true, func(k, v []byte) bool {
 					keys = append(keys, k)
 					return true
@@ -2803,16 +2801,13 @@ func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 		}
 
 		if !exists {
-			if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
-				return errors.New("limitation not set or deleted")
-			}
 			created = true
 			origin = new(Quota)
 		} else {
 			created = false
 		}
 
-		m.updateQuotaFields(origin, quota)
+		m.updateQuotaFields(origin, quota, exists)
 		tx.set(quotaKey, m.packQuota(origin))
 		return nil
 	})
@@ -2830,7 +2825,7 @@ func (m *kvMeta) getExistingQuota(tx *kvTxn, quotaKey []byte) (*Quota, bool, err
 	return nil, false, nil
 }
 
-func (m *kvMeta) updateQuotaFields(origin *Quota, quota *Quota) {
+func (m *kvMeta) updateQuotaFields(origin *Quota, quota *Quota, exist bool) {
 	if quota.MaxSpace >= 0 {
 		origin.MaxSpace = quota.MaxSpace
 	}
@@ -2839,9 +2834,13 @@ func (m *kvMeta) updateQuotaFields(origin *Quota, quota *Quota) {
 	}
 	if quota.UsedSpace >= 0 {
 		origin.UsedSpace = quota.UsedSpace
+	} else if !exist {
+		origin.UsedSpace = 0
 	}
 	if quota.UsedInodes >= 0 {
 		origin.UsedInodes = quota.UsedInodes
+	} else if !exist {
+		origin.UsedInodes = 0
 	}
 }
 
@@ -2856,8 +2855,8 @@ func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 		if val, err := m.get(quotaKey); err == nil && len(val) > 0 {
 			quota = m.parseQuota(val)
 		}
-		quota.MaxSpace = 0
-		quota.MaxInodes = 0
+		quota.MaxSpace = -1
+		quota.MaxInodes = -1
 		return m.txn(ctx, func(tx *kvTxn) error {
 			tx.set(quotaKey, m.packQuota(quota))
 			return nil
