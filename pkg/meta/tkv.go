@@ -2149,7 +2149,7 @@ func (m *kvMeta) getParents(tx *kvTxn, inode, parent Ino) []Ino {
 }
 
 func (m *kvMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
-	vals, err := m.scanValues(Background(), m.fmtKey("A", inode, "P"), -1, func(k, v []byte) bool {
+	vals, err := m.scanValues(ctx, m.fmtKey("A", inode, "P"), -1, func(k, v []byte) bool {
 		// parents: AiiiiiiiiPiiiiiiii
 		return len(k) == 1+8+1+8 && parseCounter(v) > 0
 	})
