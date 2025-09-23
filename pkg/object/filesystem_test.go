@@ -64,6 +64,18 @@ func TestSftp2(t *testing.T) { //skip mutate
 	testFileSystem(t, sftp)
 }
 
+func TestCifs2(t *testing.T) { //skip mutate
+	if os.Getenv("CIFS_ADDR") == "" {
+		fmt.Println("skip CIFS test")
+		t.SkipNow()
+	}
+	cifs, err := newCifs(os.Getenv("CIFS_ADDR"), os.Getenv("CIFS_USER"), os.Getenv("CIFS_PASSWORD"), "")
+	if err != nil {
+		t.Fatalf("create: %s", err)
+	}
+	testFileSystem(t, cifs)
+}
+
 func TestHDFS2(t *testing.T) { //skip mutate
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.Skip()
@@ -155,6 +167,9 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 			}
 			expectedKeys = []string{"x/", "xy.txt", "xyz/", "xyz/xyz.txt"}
 			if _, ok := ss.(*nfsStore); ok {
+				expectedKeys = []string{"x/", "x/x.txt", "xy.txt", "xyz/", "xyz/xyz.txt"}
+			}
+			if _, ok := ss.(*cifsStore); ok {
 				expectedKeys = []string{"x/", "x/x.txt", "xy.txt", "xyz/", "xyz/xyz.txt"}
 			}
 			if mode == 0422 {
