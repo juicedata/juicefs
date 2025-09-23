@@ -83,14 +83,14 @@ func (c *wrapContext) CheckPermission() bool {
 }
 
 func NewContext(pid, uid uint32, gids []uint32) Context {
-	return wrapWithCancel(context.Background(), pid, uid, gids)
+	return WrapWithCancel(context.Background(), pid, uid, gids)
 }
 
 func WrapContext(ctx context.Context) Context {
-	return wrapWithCancel(ctx, 0, 0, []uint32{0})
+	return WrapWithCancel(ctx, 0, 0, []uint32{0})
 }
 
-func wrapWithCancel(ctx context.Context, pid, uid uint32, gids []uint32) Context {
+func WrapWithCancel(ctx context.Context, pid, uid uint32, gids []uint32) Context {
 	c, cancel := context.WithCancel(ctx)
 	return &wrapContext{c, cancel, pid, uid, gids}
 }
