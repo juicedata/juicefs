@@ -2797,6 +2797,7 @@ func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 		if !exists {
 			created = true
 			origin = new(Quota)
+			origin.MaxInodes, origin.MaxSpace = -1, -1
 		} else {
 			created = false
 		}
@@ -2809,14 +2810,10 @@ func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 		}
 		if quota.UsedSpace >= 0 {
 			origin.UsedSpace = quota.UsedSpace
-		} else if !exists {
-			origin.UsedSpace = 0
-		}
+		} 
 		if quota.UsedInodes >= 0 {
 			origin.UsedInodes = quota.UsedInodes
-		} else if !exists {
-			origin.UsedInodes = 0
-		}
+		} 
 		tx.set(quotaKey, m.packQuota(origin))
 		return nil
 	})

@@ -3588,28 +3588,28 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 	}
 }
 
-type quotaConfig struct {
+type quotaKeys struct {
 	quotaKey      string
 	usedSpaceKey  string
 	usedInodesKey string
 }
 
-func (m *redisMeta) getQuotaConfig(qtype uint32) (*quotaConfig, error) {
+func (m *redisMeta) getQuotaConfig(qtype uint32) (*quotaKeys, error) {
 	switch qtype {
 	case DirQuotaType:
-		return &quotaConfig{
+		return &quotaKeys{
 			quotaKey:      m.dirQuotaKey(),
 			usedSpaceKey:  m.dirQuotaUsedSpaceKey(),
 			usedInodesKey: m.dirQuotaUsedInodesKey(),
 		}, nil
 	case UserQuotaType:
-		return &quotaConfig{
+		return &quotaKeys{
 			quotaKey:      m.userQuotaKey(),
 			usedSpaceKey:  m.userQuotaUsedSpaceKey(),
 			usedInodesKey: m.userQuotaUsedInodesKey(),
 		}, nil
 	case GroupQuotaType:
-		return &quotaConfig{
+		return &quotaKeys{
 			quotaKey:      m.groupQuotaKey(),
 			usedSpaceKey:  m.groupQuotaUsedSpaceKey(),
 			usedInodesKey: m.groupQuotaUsedInodesKey(),
@@ -3671,6 +3671,7 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			origin.MaxSpace, origin.MaxInodes = m.parseQuota(buf)
 		} else if e == redis.Nil {
 			created = true
+			origin.MaxSpace, origin.MaxInodes = -1, -1
 		} else {
 			return e
 		}
@@ -3723,24 +3724,23 @@ func (m *redisMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 }
 
 func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
-	dirQuotas := make(map[uint64]*Quota)
-	userQuotas := make(map[uint64]*Quota)
-	groupQuotas := make(map[uint64]*Quota)
+	quotaTypes := []struct {
+		qtype uint32
+		name  string
+	}{
+		{DirQuotaType, "dir"},
+		{UserQuotaType, "user"},
+		{GroupQuotaType, "group"},
+	}
 
-	for _, qtype := range []uint32{DirQuotaType, UserQuotaType, GroupQuotaType} {
-		config, err := m.getQuotaConfig(qtype)
+	quotaMaps := make([]map[uint64]*Quota, 3)
+	for i, qt := range quotaTypes {
+		config, err := m.getQuotaConfig(qt.qtype)
 		if err != nil {
-			return dirQuotas, userQuotas, groupQuotas, err
+			return nil, nil, nil, fmt.Errorf("failed to load %s quotas: %w", qt.name, err)
 		}
-		var target map[uint64]*Quota
-		switch qtype {
-		case DirQuotaType:
-			target = dirQuotas
-		case UserQuotaType:
-			target = userQuotas
-		case GroupQuotaType:
-			target = groupQuotas
-		}
+		
+		quotas := make(map[uint64]*Quota)
 		if err := m.hscan(ctx, config.quotaKey, func(keys []string) error {
 			for i := 0; i < len(keys); i += 2 {
 				key, val := keys[i], []byte(keys[i+1])
@@ -3764,7 +3764,7 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 					return err
 				}
 
-				target[id] = &Quota{
+				quotas[id] = &Quota{
 					MaxSpace:   int64(maxSpace),
 					MaxInodes:  int64(maxInodes),
 					UsedSpace:  usedSpace,
@@ -3773,11 +3773,12 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 			}
 			return nil
 		}); err != nil {
-			return dirQuotas, userQuotas, groupQuotas, err
+			return nil, nil, nil, err
 		}
+		quotaMaps[i] = quotas
 	}
 
-	return dirQuotas, userQuotas, groupQuotas, nil
+	return quotaMaps[0], quotaMaps[1], quotaMaps[2], nil
 }
 
 func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
