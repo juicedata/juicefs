@@ -388,9 +388,9 @@ func (m *kvMeta) get(key []byte) ([]byte, error) {
 	return value, err
 }
 
-func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
+func (m *kvMeta) scanKeys(ctx context.Context, prefix []byte) ([][]byte, error) {
 	var keys [][]byte
-	err := m.client.txn(Background(), func(tx *kvTxn) error {
+	err := m.client.txn(ctx, func(tx *kvTxn) error {
 		tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
 			keys = append(keys, k)
 			return true
@@ -400,12 +400,12 @@ func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
 	return keys, err
 }
 
-func (m *kvMeta) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) (map[string][]byte, error) {
+func (m *kvMeta) scanValues(ctx context.Context, prefix []byte, limit int, filter func(k, v []byte) bool) (map[string][]byte, error) {
 	if limit == 0 {
 		return nil, nil
 	}
 	values := make(map[string][]byte)
-	err := m.client.txn(Background(), func(tx *kvTxn) error {
+	err := m.client.txn(ctx, func(tx *kvTxn) error {
 		var c int
 		tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
 			if filter == nil || filter(k, v) {
@@ -517,7 +517,7 @@ func (m *kvMeta) cacheACLs(ctx Context) error {
 		return nil
 	}
 
-	acls, err := m.scanValues(m.fmtKey("R"), -1, nil)
+	acls, err := m.scanValues(ctx, m.fmtKey("R"), -1, nil)
 	if err != nil {
 		return err
 	}
@@ -586,12 +586,13 @@ func (m *kvMeta) doRefreshSession() error {
 func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 	var fail bool
 	// release locks
-	if flocks, err := m.scanValues(m.fmtKey("F"), -1, nil); err == nil {
+	ctx := Background()
+	if flocks, err := m.scanValues(ctx, m.fmtKey("F"), -1, nil); err == nil {
 		for k, v := range flocks {
 			ls := unmarshalFlock(v)
 			for o := range ls {
 				if o.sid == sid {
-					if err = m.txn(Background(), func(tx *kvTxn) error {
+					if err = m.txn(ctx, func(tx *kvTxn) error {
 						v := tx.get([]byte(k))
 						ls := unmarshalFlock(v)
 						delete(ls, o)
@@ -613,12 +614,12 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 		fail = true
 	}
 
-	if plocks, err := m.scanValues(m.fmtKey("P"), -1, nil); err == nil {
+	if plocks, err := m.scanValues(ctx, m.fmtKey("P"), -1, nil); err == nil {
 		for k, v := range plocks {
 			ls := unmarshalPlock(v)
 			for o := range ls {
 				if o.sid == sid {
-					if err = m.txn(Background(), func(tx *kvTxn) error {
+					if err = m.txn(ctx, func(tx *kvTxn) error {
 						v := tx.get([]byte(k))
 						ls := unmarshalPlock(v)
 						delete(ls, o)
@@ -640,7 +641,7 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 		fail = true
 	}
 
-	if keys, err := m.scanKeys(m.fmtKey("SS", sid)); err == nil {
+	if keys, err := m.scanKeys(ctx, m.fmtKey("SS", sid)); err == nil {
 		for _, key := range keys {
 			inode := m.decodeInode(key[10:]) // "SS" + sid
 			if err = m.doDeleteSustainedInode(sid, inode); err != nil {
@@ -661,7 +662,8 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 }
 
 func (m *kvMeta) doFindStaleSessions(limit int) ([]uint64, error) {
-	vals, err := m.scanValues(m.fmtKey("SE"), limit, func(k, v []byte) bool {
+	ctx := Background()
+	vals, err := m.scanValues(ctx, m.fmtKey("SE"), limit, func(k, v []byte) bool {
 		return m.parseInt64(v) < time.Now().Unix()
 	})
 	if err != nil {
@@ -677,7 +679,7 @@ func (m *kvMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	}
 
 	// check clients with version before 1.0-beta3 as well
-	vals, err = m.scanValues(m.fmtKey("SH"), limit, func(k, v []byte) bool {
+	vals, err = m.scanValues(ctx, m.fmtKey("SH"), limit, func(k, v []byte) bool {
 		return m.parseInt64(v) < time.Now().Add(time.Minute*-5).Unix()
 	})
 	if err != nil {
@@ -704,7 +706,8 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 	}
 	s.Sid = sid
 	if detail {
-		inodes, err := m.scanKeys(m.fmtKey("SS", sid))
+		ctx := Background()
+		inodes, err := m.scanKeys(ctx, m.fmtKey("SS", sid))
 		if err != nil {
 			return nil, err
 		}
@@ -713,7 +716,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 			inode := m.decodeInode(sinode[10:]) // "SS" + sid
 			s.Sustained = append(s.Sustained, inode)
 		}
-		flocks, err := m.scanValues(m.fmtKey("F"), -1, nil)
+		flocks, err := m.scanValues(ctx, m.fmtKey("F"), -1, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -726,7 +729,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 				}
 			}
 		}
-		plocks, err := m.scanValues(m.fmtKey("P"), -1, nil)
+		plocks, err := m.scanValues(ctx, m.fmtKey("P"), -1, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -768,7 +771,8 @@ func (m *kvMeta) GetSession(sid uint64, detail bool) (*Session, error) {
 }
 
 func (m *kvMeta) ListSessions() ([]*Session, error) {
-	vals, err := m.scanValues(m.fmtKey("SE"), -1, nil)
+	ctx := Background()
+	vals, err := m.scanValues(ctx, m.fmtKey("SE"), -1, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -784,7 +788,7 @@ func (m *kvMeta) ListSessions() ([]*Session, error) {
 	}
 
 	// add clients with version before 1.0-beta3 as well
-	vals, err = m.scanValues(m.fmtKey("SH"), -1, nil)
+	vals, err = m.scanValues(ctx, m.fmtKey("SH"), -1, nil)
 	if err != nil {
 		logger.Errorf("Scan legacy sessions: %s", err)
 		return sessions, nil
@@ -1140,7 +1144,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if (pattr.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		if (pattr.Flags&FlagSkipTrash) != 0 {
+		if (pattr.Flags & FlagSkipTrash) != 0 {
 			attr.Flags |= FlagSkipTrash
 		}
 
@@ -1322,7 +1326,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
-			if (attr.Flags&FlagSkipTrash) != 0 {
+			if (attr.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
 			if trash > 0 && attr.Nlink > 1 && rs[2] != nil {
@@ -1455,7 +1459,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
-			if (attr.Flags&FlagSkipTrash) != 0 {
+			if (attr.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
 			if trash > 0 {
@@ -1600,7 +1604,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if (tattr.Flags&FlagAppend) != 0 || (tattr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
-			if (tattr.Flags&FlagSkipTrash) != 0 {
+			if (tattr.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
 			tattr.Ctime = now.Unix()
@@ -1865,7 +1869,7 @@ func (m *kvMeta) fillAttr(entries []*Entry) (err error) {
 
 func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
 	// TODO: handle big directory
-	vals, err := m.scanValues(m.entryKey(inode, ""), limit, nil)
+	vals, err := m.scanValues(ctx, m.entryKey(inode, ""), limit, nil)
 	if err != nil {
 		return errno(err)
 	}
@@ -1884,6 +1888,9 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	}
 
 	if plus != 0 && len(*entries) != 0 {
+		if ctx.Canceled() {
+			return errno(ctx.Err())
+		}
 		batchSize := 4096
 		nEntries := len(*entries)
 		if nEntries <= batchSize {
@@ -2142,7 +2149,7 @@ func (m *kvMeta) getParents(tx *kvTxn, inode, parent Ino) []Ino {
 }
 
 func (m *kvMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
-	vals, err := m.scanValues(m.fmtKey("A", inode, "P"), -1, func(k, v []byte) bool {
+	vals, err := m.scanValues(ctx, m.fmtKey("A", inode, "P"), -1, func(k, v []byte) bool {
 		// parents: AiiiiiiiiPiiiiiiii
 		return len(k) == 1+8+1+8 && parseCounter(v) > 0
 	})
@@ -2314,7 +2321,7 @@ func (m *kvMeta) cleanupZeroRef(id uint64, size uint32) {
 }
 
 func (m *kvMeta) doDeleteFileData(inode Ino, length uint64) {
-	keys, err := m.scanKeys(m.fmtKey("A", inode, "C"))
+	keys, err := m.scanKeys(Background(), m.fmtKey("A", inode, "C"))
 	if err != nil {
 		logger.Warnf("delete chunks of inode %d: %s", inode, err)
 		return
@@ -2662,7 +2669,7 @@ func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
 	defer m.timeit("ListXattr", time.Now())
 	inode = m.checkRoot(inode)
-	keys, err := m.scanKeys(m.xattrKey(inode, ""))
+	keys, err := m.scanKeys(ctx, m.xattrKey(inode, ""))
 	if err != nil {
 		return errno(err)
 	}
@@ -2774,7 +2781,7 @@ func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 }
 
 func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
-	pairs, err := m.scanValues(m.fmtKey("QD"), -1, nil)
+	pairs, err := m.scanValues(ctx, m.fmtKey("QD"), -1, nil)
 	if err != nil || len(pairs) == 0 {
 		return nil, nil, nil, err
 	}
@@ -2806,7 +2813,7 @@ func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
 		return err
 	}
 	// need add sustained file size
-	vals, err := m.scanKeys(m.fmtKey("SS"))
+	vals, err := m.scanKeys(ctx, m.fmtKey("SS"))
 	if err != nil {
 		return err
 	}
@@ -2867,7 +2874,8 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 }
 
 func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
-	return m.client.txn(Background(), func(tx *kvTxn) error {
+	ctx := Background()
+	return m.client.txn(ctx, func(tx *kvTxn) error {
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			logger.Warnf("inode %d not found", inode)
@@ -2935,7 +2943,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalInc
 			}
 			e.Symlink = string(l)
 		} else if attr.Typ == TypeDirectory {
-			vals, err := m.scanValues(m.entryKey(inode, ""), 10000, nil)
+			vals, err := m.scanValues(ctx, m.entryKey(inode, ""), 10000, nil)
 			if err != nil {
 				return err
 			}
@@ -2959,7 +2967,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalInc
 	}, 0)
 }
 
-func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, threads int, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *kvMeta) dumpDir(ctx Context, inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, threads int, showProgress func(totalIncr, currentIncr int64)) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -2967,7 +2975,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, 
 	}
 	if tree.Entries == nil {
 		// retry for large directory
-		vals, err := m.scanValues(m.entryKey(inode, ""), -1, nil)
+		vals, err := m.scanValues(ctx, m.entryKey(inode, ""), -1, nil)
 		if err != nil {
 			return err
 		}
@@ -3031,7 +3039,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth, 
 			return err
 		}
 		if e.Attr.Type == "directory" {
-			err = m.dumpDir(e.Attr.Inode, e, bw, depth+2, threads, showProgress)
+			err = m.dumpDir(ctx, e.Attr.Inode, e, bw, depth+2, threads, showProgress)
 		} else {
 			err = e.writeJSON(bw, depth+2)
 		}
@@ -3098,7 +3106,8 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			}
 		}
 	}()
-	vals, err := m.scanValues(m.fmtKey("D"), -1, nil)
+	ctx := Background()
+	vals, err := m.scanValues(ctx, m.fmtKey("D"), -1, nil)
 	if err != nil {
 		return err
 	}
@@ -3261,7 +3270,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		}
 	}
 
-	vals, err = m.scanValues(m.fmtKey("SS"), -1, nil)
+	vals, err = m.scanValues(ctx, m.fmtKey("SS"), -1, nil)
 	if err != nil {
 		return err
 	}
@@ -3280,7 +3289,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		sessions = append(sessions, &DumpedSustained{k, v})
 	}
 
-	pairs, err := m.scanValues(m.fmtKey("QD"), -1, func(k, v []byte) bool {
+	pairs, err := m.scanValues(ctx, m.fmtKey("QD"), -1, func(k, v []byte) bool {
 		return len(k) == 10 && len(v) == 32
 	})
 	if err != nil {
@@ -3342,7 +3351,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		}
 	} else {
 		showProgress(int64(len(tree.Entries)), 0)
-		if err = m.dumpDir(root, tree, bw, 1, threads, showProgress); err != nil {
+		if err = m.dumpDir(ctx, root, tree, bw, 1, threads, showProgress); err != nil {
 			return err
 		}
 	}
@@ -3356,7 +3365,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			}
 		} else {
 			showProgress(int64(len(tree.Entries)), 0)
-			if err = m.dumpDir(TrashInode, trash, bw, 1, threads, showProgress); err != nil {
+			if err = m.dumpDir(ctx, TrashInode, trash, bw, 1, threads, showProgress); err != nil {
 				return err
 			}
 		}
@@ -3637,7 +3646,7 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 }
 
 func (m *kvMeta) doFindDetachedNodes(t time.Time) []Ino {
-	vals, err := m.scanValues(m.fmtKey("N"), -1, func(k, v []byte) bool {
+	vals, err := m.scanValues(Background(), m.fmtKey("N"), -1, func(k, v []byte) bool {
 		return len(k) == 9 && m.parseInt64(v) < t.Unix()
 	})
 	if err != nil {
