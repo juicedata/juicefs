@@ -2951,29 +2951,23 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 		}
 
 		for i, v := range tx.gets(keys...) {
-			if err := m.updateQuotaUsage(tx, keys[i], v, qs[i]); err != nil {
-				return err
+			if len(v) == 0 {
+				continue
 			}
+			if len(v) != 32 {
+				logger.Errorf("Invalid quota value: %v", v)
+				continue
+			}
+
+			q := m.parseQuota(v)
+			q.UsedSpace += qs[i].newSpace
+			q.UsedInodes += qs[i].newInodes
+			tx.set(keys[i], m.packQuota(q))
 		}
 		return nil
 	})
 }
 
-func (m *kvMeta) updateQuotaUsage(tx *kvTxn, key []byte, value []byte, quota *Quota) error {
-	if len(value) == 0 {
-		return nil
-	}
-	if len(value) != 32 {
-		logger.Errorf("Invalid quota value: %v", value)
-		return nil
-	}
-
-	q := m.parseQuota(value)
-	q.UsedSpace += quota.newSpace
-	q.UsedInodes += quota.newInodes
-	tx.set(key, m.packQuota(q))
-	return nil
-}
 
 func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
 	return m.client.txn(Background(), func(tx *kvTxn) error {
