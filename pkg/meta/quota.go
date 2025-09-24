@@ -152,6 +152,9 @@ func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 
 	stat := new(dirStat)
 	for _, e := range entries {
+		if ctx.Canceled() {
+			return nil, syscall.EINTR
+		}
 		stat.inodes += 1
 		var l uint64
 		if e.Attr.Typ == TypeFile {
