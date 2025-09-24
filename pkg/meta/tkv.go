@@ -2278,12 +2278,11 @@ func (m *kvMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 	return files, err
 }
 
-func (m *kvMeta) doCleanupSlices() {
+func (m *kvMeta) doCleanupSlices(ctx Context) {
 	if m.Name() == "tikv" {
 		m.client.gc()
 	}
 	klen := 1 + 8 + 4
-	start := time.Now()
 	_ = m.client.scan(m.fmtKey("K"), func(k, v []byte) bool {
 		if len(k) == klen && len(v) == 8 && parseCounter(v) <= 0 {
 			rb := utils.FromBuffer(k[1:])
@@ -2295,7 +2294,7 @@ func (m *kvMeta) doCleanupSlices() {
 			} else {
 				m.cleanupZeroRef(id, size)
 			}
-			if time.Since(start) > 50*time.Minute {
+			if ctx.Canceled() {
 				return false
 			}
 		}
@@ -2359,7 +2358,6 @@ func (m *kvMeta) doDeleteFileData(inode Ino, length uint64) {
 }
 
 func (m *kvMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
-	start := time.Now()
 	var count int
 	var ss []Slice
 	var rs []int64
@@ -2408,7 +2406,7 @@ func (m *kvMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
 					m.deleteSlice(s.Id, s.Size)
 					count++
 				}
-				if time.Since(start) > 50*time.Minute {
+				if ctx.Canceled() {
 					return count, nil
 				}
 			}
@@ -2498,7 +2496,7 @@ func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 
 func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
 	if delete {
-		m.doCleanupSlices()
+		m.doCleanupSlices(ctx)
 	}
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4

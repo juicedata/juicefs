@@ -18,6 +18,7 @@ package meta
 
 import (
 	"context"
+	"time"
 )
 
 type CtxKey string
@@ -93,6 +94,11 @@ func WrapContext(ctx context.Context) Context {
 func WrapWithCancel(ctx context.Context, pid, uid uint32, gids []uint32) Context {
 	c, cancel := context.WithCancel(ctx)
 	return &wrapContext{c, cancel, pid, uid, gids}
+}
+
+func WrapWithTimeout(ctx Context, timeout time.Duration) Context {
+	c, cancel := context.WithTimeout(ctx, timeout)
+	return &wrapContext{c, cancel, ctx.Pid(), ctx.Uid(), ctx.Gids()}
 }
 
 func WrapWithoutCancel(ctx context.Context, pid, uid uint32, gids []uint32) Context {
