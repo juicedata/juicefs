@@ -449,8 +449,10 @@ func doCheckSum(src, dst object.ObjectStorage, key string, srcChksumPtr *uint32,
 		} else {
 			*equal = false
 		}
+		logger.Debugf("calObjChksum of %s: src %d, dst %d, equal %v", key, srcChksum, dstChksum, *equal)
 	} else {
 		*equal, err = compObjBinary(src, dst, key, abort, obj)
+		logger.Debugf("compObjBinary %s: equal %v", key, *equal)
 	}
 	return err
 }
@@ -1173,6 +1175,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			}
 			tasks <- obj
 		} else { // obj.key == dstobj.key
+			logger.Debugf("srcobj: %s, size: %d, mtime: %d; dstobj: %s, size: %d, mtime: %d", obj.Key(), obj.Size(), obj.Mtime().Unix(), dstobj.Key(), dstobj.Size(), dstobj.Mtime().Unix())
 			if config.IgnoreExisting {
 				skipIt(obj)
 				dstobj = nil
