@@ -3741,8 +3741,8 @@ func testCheckQuotaFileOwnerSimple(t *testing.T, m Meta) {
 	format := m.getBase().getFormat()
 	format.UserGroupQuota = true
 	
-	// 设置文件所有者的配额
-	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1024, MaxInodes: 5}}, false, false, false); err != nil {
+	// 设置文件所有者的配额 - 使用更小的限制来确保能够触发配额检查
+	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 4096, MaxInodes: 5}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set user quota: %s", err)
 	}
 	m.getBase().loadQuotas()
@@ -3762,7 +3762,7 @@ func testCheckQuotaFileOwnerSimple(t *testing.T, m Meta) {
 	if st := m.NewSlice(ctx, &sliceId); st != 0 {
 		t.Fatalf("NewSlice: %s", st)
 	}
-	slice := Slice{Id: sliceId, Size: 512, Len: 512}
+	slice := Slice{Id: sliceId, Size: 4096, Len: 4096} // 使用4096字节，正好占用一个4K块
 	operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
 	
 	// 第一次写入应该成功
@@ -3770,13 +3770,13 @@ func testCheckQuotaFileOwnerSimple(t *testing.T, m Meta) {
 		t.Fatalf("First write should succeed: %s", st)
 	}
 	
-	// 第二次写入应该失败（超过配额）
+	// 第二次写入应该失败（超过配额）- 写入另一个4K块
 	var sliceId2 uint64
 	if st := m.NewSlice(ctx, &sliceId2); st != 0 {
 		t.Fatalf("NewSlice for second write: %s", st)
 	}
-	slice2 := Slice{Id: sliceId2, Size: 512, Len: 512}
-	if st := m.Write(operatorCtx, fileInode, 0, 512, slice2, time.Now()); st != syscall.EDQUOT {
+	slice2 := Slice{Id: sliceId2, Size: 4096, Len: 4096}
+	if st := m.Write(operatorCtx, fileInode, 1, 0, slice2, time.Now()); st != syscall.EDQUOT {
 		t.Fatalf("Second write should fail with EDQUOT, got: %s", st)
 	}
 	

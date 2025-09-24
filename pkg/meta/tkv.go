@@ -2874,7 +2874,12 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 		} else {
 			quotas = make(map[uint64]*Quota, len(pairs))
 			for k, v := range pairs {
-				id := binary.LittleEndian.Uint64([]byte(k[2:])) // skip prefix
+				var id uint64
+				if qt.prefix == "QD" {
+					id = binary.LittleEndian.Uint64([]byte(k[2:])) // skip prefix
+				} else {
+					id = binary.BigEndian.Uint64([]byte(k[2:])) // skip prefix
+				}
 				quota := m.parseQuota(v)
 				quotas[id] = quota
 			}
