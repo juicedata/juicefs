@@ -3509,6 +3509,139 @@ func testAtime(t *testing.T, m Meta) {
 	}
 }
 
+// TestQuotaEdgeCases 测试配额边界情况：只设置inodes限制或只设置space限制
+func TestQuotaEdgeCases(t *testing.T) {
+	// 创建一个简单的baseMeta实例用于测试
+	m := &baseMeta{}
+	
+	// 初始化必要的字段
+	m.userQuotas = make(map[uint64]*Quota)
+	m.groupQuotas = make(map[uint64]*Quota)
+	m.quotaMu = sync.RWMutex{}
+	
+	// 设置format
+	m.fmt = &Format{
+		UserGroupQuota: true,
+	}
+	
+	// 设置测试环境
+	fileOwnerUid := uint32(1001)
+	fileOwnerGid := uint32(2001)
+	operatorUid := uint32(1002)
+	operatorGid := uint32(2002)
+	
+	// 测试1: 只设置inodes限制，不设置space限制
+	t.Log("Testing inodes-only quota limit...")
+	m.userQuotas[uint64(fileOwnerUid)] = &Quota{MaxSpace: 0, MaxInodes: 3}
+	m.groupQuotas[uint64(fileOwnerGid)] = &Quota{MaxSpace: 0, MaxInodes: 5}
+	
+	operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
+	
+	// 测试大量space使用（应该成功，因为只有inodes限制）
+	if err := m.checkQuota(operatorCtx, 10*1024*1024, 0, fileOwnerUid, fileOwnerGid); err != 0 {
+		t.Fatalf("checkQuota should pass for large space usage (no space limit), got: %s", err)
+	}
+	
+	// 测试inodes使用（应该失败，因为超过inodes限制）
+	if err := m.checkQuota(operatorCtx, 0, 4, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
+		t.Fatalf("checkQuota should fail with EDQUOT when exceeding inodes limit, got: %s", err)
+	}
+	
+	// 测试2: 只设置space限制，不设置inodes限制
+	t.Log("Testing space-only quota limit...")
+	m.userQuotas[uint64(fileOwnerUid)] = &Quota{MaxSpace: 1024*1024, MaxInodes: 0}
+	m.groupQuotas[uint64(fileOwnerGid)] = &Quota{MaxSpace: 2*1024*1024, MaxInodes: 0}
+	
+	// 测试大量inodes使用（应该成功，因为只有space限制）
+	if err := m.checkQuota(operatorCtx, 0, 100, fileOwnerUid, fileOwnerGid); err != 0 {
+		t.Fatalf("checkQuota should pass for large inodes usage (no inodes limit), got: %s", err)
+	}
+	
+	// 测试space使用（应该失败，因为超过space限制）
+	if err := m.checkQuota(operatorCtx, 2*1024*1024, 0, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
+		t.Fatalf("checkQuota should fail with EDQUOT when exceeding space limit, got: %s", err)
+	}
+	
+	// 测试3: 混合情况 - 用户只有inodes限制，组只有space限制
+	t.Log("Testing mixed quota limits...")
+	m.userQuotas[uint64(fileOwnerUid)] = &Quota{MaxSpace: 0, MaxInodes: 2}
+	m.groupQuotas[uint64(fileOwnerGid)] = &Quota{MaxSpace: 1024*1024, MaxInodes: 0}
+	
+	// 测试同时使用space和inodes（应该失败，因为超过用户inodes限制）
+	if err := m.checkQuota(operatorCtx, 512*1024, 3, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
+		t.Fatalf("checkQuota should fail with EDQUOT when exceeding user inodes limit, got: %s", err)
+	}
+	
+	// 测试只使用space（应该失败，因为超过组space限制）
+	if err := m.checkQuota(operatorCtx, 2*1024*1024, 1, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
+		t.Fatalf("checkQuota should fail with EDQUOT when exceeding group space limit, got: %s", err)
+	}
+	
+	// 测试在限制范围内（应该成功）
+	if err := m.checkQuota(operatorCtx, 512*1024, 1, fileOwnerUid, fileOwnerGid); err != 0 {
+		t.Fatalf("checkQuota should pass when within both limits, got: %s", err)
+	}
+}
+
+// TestCheckQuotaFileOwner 测试checkQuota方法中文件所有者配额检查的逻辑
+func TestCheckQuotaFileOwner(t *testing.T) {
+	// 创建一个简单的baseMeta实例用于测试
+	m := &baseMeta{}
+	
+	// 初始化必要的字段
+	m.userQuotas = make(map[uint64]*Quota)
+	m.groupQuotas = make(map[uint64]*Quota)
+	m.quotaMu = sync.RWMutex{}
+	
+	// 设置format
+	m.fmt = &Format{
+		UserGroupQuota: true,
+	}
+	
+	// 设置测试环境
+	
+	// 设置两个不同的用户和组
+	fileOwnerUid := uint32(1001)
+	fileOwnerGid := uint32(2001)
+	operatorUid := uint32(1002)
+	operatorGid := uint32(2002)
+	
+	// 手动设置配额限制
+	m.userQuotas[uint64(fileOwnerUid)] = &Quota{MaxSpace: 1 << 20, MaxInodes: 5}
+	m.groupQuotas[uint64(fileOwnerGid)] = &Quota{MaxSpace: 2 << 20, MaxInodes: 10}
+	
+	// 测试checkQuota方法 - 应该检查文件所有者的配额
+	operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
+	
+	// 测试正常情况 - 应该通过
+	if err := m.checkQuota(operatorCtx, 1024, 1, fileOwnerUid, fileOwnerGid); err != 0 {
+		t.Fatalf("checkQuota should pass for file owner's quota, got: %s", err)
+	}
+	
+	// 测试超出用户配额的情况 - 应该失败
+	if err := m.checkQuota(operatorCtx, 2<<20, 1, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
+		t.Fatalf("checkQuota should fail with EDQUOT when exceeding file owner's user quota, got: %s", err)
+	}
+	
+	// 测试超出组配额的情况 - 应该失败
+	if err := m.checkQuota(operatorCtx, 1024, 15, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
+		t.Fatalf("checkQuota should fail with EDQUOT when exceeding file owner's group quota, got: %s", err)
+	}
+	
+	// 测试零配额的情况 - 应该通过（零配额意味着无限制）
+	m.userQuotas[uint64(fileOwnerUid)] = &Quota{MaxSpace: 0, MaxInodes: 0}
+	if err := m.checkQuota(operatorCtx, 1, 1, fileOwnerUid, fileOwnerGid); err != 0 {
+		t.Fatalf("checkQuota should pass when quota is zero (unlimited), got: %s", err)
+	}
+	
+	// 测试没有配额限制的情况 - 应该通过
+	delete(m.userQuotas, uint64(fileOwnerUid))
+	delete(m.groupQuotas, uint64(fileOwnerGid))
+	if err := m.checkQuota(operatorCtx, 1024, 1, fileOwnerUid, fileOwnerGid); err != 0 {
+		t.Fatalf("checkQuota should pass when no quota limits, got: %s", err)
+	}
+}
+
 func TestSymlinkCache(t *testing.T) {
 	cache := newSymlinkCache(10000)
 
@@ -3592,6 +3725,524 @@ func TestTxBatchLock(t *testing.T) {
 		wg.Wait()
 	}()
 }
+
+// testCheckQuotaFileOwner 测试checkQuota方法中文件所有者配额检查的逻辑
+func testCheckQuotaFileOwnerSimple(t *testing.T, m Meta) {
+	ctx := Background()
+	parent := RootInode
+	
+	// 设置用户和组ID
+	fileOwnerUid := uint32(1001)
+	fileOwnerGid := uint32(1001)
+	operatorUid := uint32(1002)
+	operatorGid := uint32(1002)
+	
+	// 启用用户组配额
+	format := m.getBase().getFormat()
+	format.UserGroupQuota = true
+	
+	// 设置文件所有者的配额
+	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1024, MaxInodes: 5}}, false, false, false); err != nil {
+		t.Fatalf("HandleQuota set user quota: %s", err)
+	}
+	m.getBase().loadQuotas()
+	
+	// 创建文件并设置所有者
+	var fileInode Ino
+	var attr Attr
+	if st := m.Create(ctx, parent, "testfile", 0644, 0, 0, &fileInode, &attr); st != 0 {
+		t.Fatalf("Create testfile: %s", st)
+	}
+	if st := m.SetAttr(ctx, fileInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: fileOwnerUid, Gid: fileOwnerGid}); st != 0 {
+		t.Fatalf("SetAttr UID and GID: %s", st)
+	}
+	
+	// 测试Write操作的配额检查
+	var sliceId uint64
+	if st := m.NewSlice(ctx, &sliceId); st != 0 {
+		t.Fatalf("NewSlice: %s", st)
+	}
+	slice := Slice{Id: sliceId, Size: 512, Len: 512}
+	operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
+	
+	// 第一次写入应该成功
+	if st := m.Write(operatorCtx, fileInode, 0, 0, slice, time.Now()); st != 0 {
+		t.Fatalf("First write should succeed: %s", st)
+	}
+	
+	// 第二次写入应该失败（超过配额）
+	var sliceId2 uint64
+	if st := m.NewSlice(ctx, &sliceId2); st != 0 {
+		t.Fatalf("NewSlice for second write: %s", st)
+	}
+	slice2 := Slice{Id: sliceId2, Size: 512, Len: 512}
+	if st := m.Write(operatorCtx, fileInode, 0, 512, slice2, time.Now()); st != syscall.EDQUOT {
+		t.Fatalf("Second write should fail with EDQUOT, got: %s", st)
+	}
+	
+	// 清理
+	m.CloseSession()
+}
+
+// testQuotaEdgeCases 测试配额边界情况：只设置inodes限制或只设置space限制
+func testQuotaEdgeCases(t *testing.T, m Meta) {
+	// 简化测试，只测试核心的checkQuota逻辑
+	ctx := Background()
+	
+	// 设置用户和组ID
+	fileOwnerUid := uint32(1001)
+	fileOwnerGid := uint32(1001)
+	operatorUid := uint32(1002)
+	operatorGid := uint32(2002)
+	
+	// 启用用户组配额
+	format := m.getBase().getFormat()
+	format.UserGroupQuota = true
+	
+	// 测试1: 只设置inodes限制，不设置space限制
+	t.Log("Testing inodes-only quota limit...")
+	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 0, MaxInodes: 2}}, false, false, false); err != nil {
+		t.Fatalf("HandleQuota set inodes-only quota: %s", err)
+	}
+	m.getBase().loadQuotas()
+	
+	operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
+	
+	// 测试大量space使用（应该成功，因为只有inodes限制）
+	if err := m.getBase().checkQuota(operatorCtx, 10*1024*1024, 0, fileOwnerUid, fileOwnerGid); err != 0 {
+		t.Fatalf("checkQuota should pass for large space usage (no space limit), got: %s", err)
+	}
+	
+	// 测试inodes使用（应该失败，因为超过inodes限制）
+	if err := m.getBase().checkQuota(operatorCtx, 0, 3, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
+		t.Fatalf("checkQuota should fail with EDQUOT when exceeding inodes limit, got: %s", err)
+	}
+	
+	// 测试2: 只设置space限制，不设置inodes限制
+	t.Log("Testing space-only quota limit...")
+	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1024*1024, MaxInodes: 0}}, false, false, false); err != nil {
+		t.Fatalf("HandleQuota set space-only quota: %s", err)
+	}
+	m.getBase().loadQuotas()
+	
+	// 测试大量inodes使用（应该成功，因为只有space限制）
+	if err := m.getBase().checkQuota(operatorCtx, 0, 100, fileOwnerUid, fileOwnerGid); err != 0 {
+		t.Fatalf("checkQuota should pass for large inodes usage (no inodes limit), got: %s", err)
+	}
+	
+	// 测试space使用（应该失败，因为超过space限制）
+	if err := m.getBase().checkQuota(operatorCtx, 2*1024*1024, 0, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
+		t.Fatalf("checkQuota should fail with EDQUOT when exceeding space limit, got: %s", err)
+	}
+}
+
+// testQuotaEdgeCasesComplex 测试配额边界情况的复杂场景
+func testQuotaEdgeCasesComplex(t *testing.T, m Meta) {
+	ctx := Background()
+	parent := RootInode
+	
+	// 设置用户和组ID
+	fileOwnerUid := uint32(1001)
+	fileOwnerGid := uint32(1001)
+	operatorUid := uint32(1002)
+	operatorGid := uint32(1002)
+	
+	// 启用用户组配额
+	format := m.getBase().getFormat()
+	format.UserGroupQuota = true
+	
+	// 测试1: 只设置inodes限制，不设置space限制
+	t.Log("Testing inodes-only quota limit...")
+	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 0, MaxInodes: 2}}, false, false, false); err != nil {
+		t.Fatalf("HandleQuota set inodes-only quota: %s", err)
+	}
+	m.getBase().loadQuotas()
+	
+	// 创建文件并设置所有者
+	var fileInode Ino
+	var attr Attr
+	if st := m.Create(ctx, parent, "testfile_inodes", 0644, 0, 0, &fileInode, &attr); st != 0 {
+		t.Fatalf("Create testfile_inodes: %s", st)
+	}
+	if st := m.SetAttr(ctx, fileInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: fileOwnerUid, Gid: fileOwnerGid}); st != 0 {
+		t.Fatalf("SetAttr UID and GID: %s", st)
+	}
+	
+	// 测试大量写入space（应该成功，因为只有inodes限制）
+	operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
+	for i := 0; i < 5; i++ {
+		var sliceId uint64
+		if st := m.NewSlice(ctx, &sliceId); st != 0 {
+			t.Fatalf("NewSlice %d: %s", i, st)
+		}
+		slice := Slice{Id: sliceId, Size: 1024*1024, Len: 1024*1024} // 1MB per slice
+		if st := m.Write(operatorCtx, fileInode, uint32(i), uint32(i*1024*1024), slice, time.Now()); st != 0 {
+			t.Fatalf("Write %d should succeed (no space limit), got: %s", i, st)
+		}
+	}
+	
+	// 测试创建新文件（应该失败，因为超过inodes限制）
+	var newFileInode Ino
+	if st := m.Create(ctx, parent, "testfile_inodes2", 0644, 0, 0, &newFileInode, &attr); st != syscall.EDQUOT {
+		t.Fatalf("Create should fail with EDQUOT (inodes limit exceeded), got: %s", st)
+	}
+	
+	// 测试2: 只设置space限制，不设置inodes限制
+	t.Log("Testing space-only quota limit...")
+	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1024*1024, MaxInodes: 0}}, false, false, false); err != nil {
+		t.Fatalf("HandleQuota set space-only quota: %s", err)
+	}
+	m.getBase().loadQuotas()
+	
+	// 创建文件并设置所有者
+	if st := m.Create(ctx, parent, "testfile_space", 0644, 0, 0, &fileInode, &attr); st != 0 {
+		t.Fatalf("Create testfile_space: %s", st)
+	}
+	if st := m.SetAttr(ctx, fileInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: fileOwnerUid, Gid: fileOwnerGid}); st != 0 {
+		t.Fatalf("SetAttr UID and GID: %s", st)
+	}
+	
+	// 测试大量创建文件（应该成功，因为只有space限制）
+	for i := 0; i < 10; i++ {
+		var newFileInode Ino
+		if st := m.Create(ctx, parent, fmt.Sprintf("testfile_space_%d", i), 0644, 0, 0, &newFileInode, &attr); st != 0 {
+			t.Fatalf("Create file %d should succeed (no inodes limit), got: %s", i, st)
+		}
+		if st := m.SetAttr(ctx, newFileInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: fileOwnerUid, Gid: fileOwnerGid}); st != 0 {
+			t.Fatalf("SetAttr UID and GID for file %d: %s", i, st)
+		}
+	}
+	
+	// 测试写入大量数据（应该失败，因为超过space限制）
+	var sliceId uint64
+	if st := m.NewSlice(ctx, &sliceId); st != 0 {
+		t.Fatalf("NewSlice for space test: %s", st)
+	}
+	slice := Slice{Id: sliceId, Size: 2*1024*1024, Len: 2*1024*1024} // 2MB
+	if st := m.Write(operatorCtx, fileInode, 0, 0, slice, time.Now()); st != syscall.EDQUOT {
+		t.Fatalf("Write should fail with EDQUOT (space limit exceeded), got: %s", st)
+	}
+	
+	// 注意：不在这里关闭session，让调用者管理
+}
+
+func testCheckQuotaFileOwner(t *testing.T, m Meta) {
+	if err := m.NewSession(true); err != nil {
+		t.Fatalf("New session: %s", err)
+	}
+	defer m.CloseSession()
+	ctx := Background()
+	var parent Ino
+	var attr Attr
+
+	if st := m.Mkdir(ctx, RootInode, "checkquota", 0755, 0, 0, &parent, &attr); st != 0 {
+		t.Fatalf("Mkdir checkquota: %s", st)
+	}
+
+	// 设置两个不同的用户和组
+	fileOwnerUid := uint32(1001)
+	fileOwnerGid := uint32(2001)
+	operatorUid := uint32(1002)
+	operatorGid := uint32(2002)
+
+	t.Run("FileOwnerQuotaCheck", func(t *testing.T) {
+		// 为文件所有者设置配额限制
+		if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 20, MaxInodes: 5}}, false, false, false); err != nil {
+			t.Fatalf("HandleQuota set user quota for file owner uid %d: %s", fileOwnerUid, err)
+		}
+		if err := m.HandleQuota(ctx, QuotaSet, "", 0, fileOwnerGid, map[string]*Quota{UGQuotaKey: {MaxSpace: 2 << 20, MaxInodes: 10}}, false, false, false); err != nil {
+			t.Fatalf("HandleQuota set group quota for file owner gid %d: %s", fileOwnerGid, err)
+		}
+		m.getBase().loadQuotas()
+
+		// 创建属于fileOwner的文件
+		var fileInode Ino
+		if st := m.Create(ctx, parent, "ownerfile", 0644, 0, 0, &fileInode, &attr); st != 0 {
+			t.Fatalf("Create ownerfile: %s", st)
+		}
+		if st := m.SetAttr(ctx, fileInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: fileOwnerUid, Gid: fileOwnerGid}); st != 0 {
+			t.Fatalf("SetAttr UID and GID for ownerfile: %s", st)
+		}
+
+		// 验证文件属性
+		var checkAttr Attr
+		if st := m.GetAttr(ctx, fileInode, &checkAttr); st != 0 {
+			t.Fatalf("GetAttr for ownerfile: %s", st)
+		}
+		if checkAttr.Uid != fileOwnerUid || checkAttr.Gid != fileOwnerGid {
+			t.Fatalf("File owner not set correctly: expected uid=%d gid=%d, got uid=%d gid=%d", 
+				fileOwnerUid, fileOwnerGid, checkAttr.Uid, checkAttr.Gid)
+		}
+
+		// 测试写入操作 - 应该检查文件所有者的配额
+		var sliceId uint64
+		if st := m.NewSlice(ctx, &sliceId); st != 0 {
+			t.Fatalf("NewSlice: %s", st)
+		}
+		testSlice := Slice{Id: sliceId, Size: 1024, Len: 1024}
+
+		// 模拟跨用户写入操作
+		operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
+		if st := m.Write(operatorCtx, fileInode, 0, 0, testSlice, time.Now()); st != 0 {
+			t.Fatalf("Write to ownerfile by different user: %s", st)
+		}
+
+		// 验证配额使用量增加
+		qs := make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, "", fileOwnerUid, 0, qs, false, false, false); err != nil {
+			t.Fatalf("HandleQuota get user quota: %s", err)
+		}
+		if q := qs[UGQuotaKey]; q.UsedSpace < 1024 {
+			t.Fatalf("User quota used space should be >= 1024, got %d", q.UsedSpace)
+		}
+
+		qs = make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, "", 0, fileOwnerGid, qs, false, false, false); err != nil {
+			t.Fatalf("HandleQuota get group quota: %s", err)
+		}
+		if q := qs[UGQuotaKey]; q.UsedSpace < 1024 {
+			t.Fatalf("Group quota used space should be >= 1024, got %d", q.UsedSpace)
+		}
+	})
+
+	t.Run("QuotaExceededByFileOwner", func(t *testing.T) {
+		// 设置更严格的配额限制
+		if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1024, MaxInodes: 2}}, false, false, false); err != nil {
+			t.Fatalf("HandleQuota set strict user quota: %s", err)
+		}
+		m.getBase().loadQuotas()
+
+		// 创建新文件
+		var newFileInode Ino
+		if st := m.Create(ctx, parent, "strictfile", 0644, 0, 0, &newFileInode, &attr); st != 0 {
+			t.Fatalf("Create strictfile: %s", st)
+		}
+		if st := m.SetAttr(ctx, newFileInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: fileOwnerUid, Gid: fileOwnerGid}); st != 0 {
+			t.Fatalf("SetAttr UID and GID for strictfile: %s", st)
+		}
+
+		// 先写入一些数据，接近配额限制
+		var smallSliceId uint64
+		if st := m.NewSlice(ctx, &smallSliceId); st != 0 {
+			t.Fatalf("NewSlice for small data: %s", st)
+		}
+		smallSlice := Slice{Id: smallSliceId, Size: 512, Len: 512}
+		operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
+		if st := m.Write(operatorCtx, newFileInode, 0, 0, smallSlice, time.Now()); st != 0 {
+			t.Fatalf("Write small data: %s", st)
+		}
+
+		// 尝试写入超过配额限制的数据
+		var largeSliceId uint64
+		if st := m.NewSlice(ctx, &largeSliceId); st != 0 {
+			t.Fatalf("NewSlice for large data: %s", st)
+		}
+		largeSlice := Slice{Id: largeSliceId, Size: 1024, Len: 1024} // 这会超过1024字节限制
+		if st := m.Write(operatorCtx, newFileInode, 0, 512, largeSlice, time.Now()); st != syscall.EDQUOT {
+			t.Fatalf("Write should fail with EDQUOT when exceeding file owner's quota, got: %s", st)
+		}
+	})
+
+	t.Run("TruncateQuotaCheck", func(t *testing.T) {
+		// 重置配额
+		if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 20, MaxInodes: 10}}, false, false, false); err != nil {
+			t.Fatalf("HandleQuota reset user quota: %s", err)
+		}
+		m.getBase().loadQuotas()
+
+		// 创建文件并写入一些数据
+		var truncFileInode Ino
+		if st := m.Create(ctx, parent, "truncfile", 0644, 0, 0, &truncFileInode, &attr); st != 0 {
+			t.Fatalf("Create truncfile: %s", st)
+		}
+		if st := m.SetAttr(ctx, truncFileInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: fileOwnerUid, Gid: fileOwnerGid}); st != 0 {
+			t.Fatalf("SetAttr UID and GID for truncfile: %s", st)
+		}
+
+		var initialSliceId uint64
+		if st := m.NewSlice(ctx, &initialSliceId); st != 0 {
+			t.Fatalf("NewSlice for initial data: %s", st)
+		}
+		initialSlice := Slice{Id: initialSliceId, Size: 512, Len: 512}
+		operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
+		if st := m.Write(operatorCtx, truncFileInode, 0, 0, initialSlice, time.Now()); st != 0 {
+			t.Fatalf("Initial write to truncfile: %s", st)
+		}
+
+		// 测试截断操作 - 应该检查文件所有者的配额
+		fileOwnerCtx := &testContext{Context: context.Background(), uid: fileOwnerUid, gid: fileOwnerGid}
+		if st := m.Truncate(fileOwnerCtx, truncFileInode, 0, 1024, &attr, false); st != 0 {
+			t.Fatalf("Truncate truncfile by file owner: %s", st)
+		}
+
+		// 验证文件大小
+		if attr.Length != 1024 {
+			t.Fatalf("Truncate failed: expected length 1024, got %d", attr.Length)
+		}
+	})
+
+	t.Run("MknodQuotaCheck", func(t *testing.T) {
+		// 重置配额
+		if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 20, MaxInodes: 10}}, false, false, false); err != nil {
+			t.Fatalf("HandleQuota reset user quota: %s", err)
+		}
+		m.getBase().loadQuotas()
+
+		// 测试Mknod操作 - 应该检查操作用户的配额（新文件的所有者是当前用户）
+		operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
+		var deviceInode Ino
+		if st := m.Mknod(operatorCtx, parent, "device", TypeFile, 0644, 0, 0, "", &deviceInode, &attr); st != 0 {
+			t.Fatalf("Mknod device by operator: %s", st)
+		}
+
+		// 验证文件所有者是操作用户
+		if attr.Uid != operatorUid || attr.Gid != operatorGid {
+			t.Fatalf("Mknod file owner should be operator: expected uid=%d gid=%d, got uid=%d gid=%d", 
+				operatorUid, operatorGid, attr.Uid, attr.Gid)
+		}
+
+		m.Unlink(ctx, parent, "device")
+	})
+
+	t.Run("CloneQuotaCheck", func(t *testing.T) {
+		// 重置配额
+		if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 20, MaxInodes: 10}}, false, false, false); err != nil {
+			t.Fatalf("HandleQuota reset user quota: %s", err)
+		}
+		m.getBase().loadQuotas()
+
+		// 创建源文件
+		var srcInode Ino
+		if st := m.Create(ctx, parent, "srcfile", 0644, 0, 0, &srcInode, &attr); st != 0 {
+			t.Fatalf("Create srcfile: %s", st)
+		}
+		if st := m.SetAttr(ctx, srcInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: fileOwnerUid, Gid: fileOwnerGid}); st != 0 {
+			t.Fatalf("SetAttr UID and GID for srcfile: %s", st)
+		}
+
+		// 测试Clone操作 - 应该检查操作用户的配额（新文件的所有者是当前用户）
+		operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
+		var count, total uint64
+		if st := m.Clone(operatorCtx, parent, srcInode, parent, "clonefile", 0, 0, &count, &total); st != 0 {
+			t.Fatalf("Clone srcfile by operator: %s", st)
+		}
+
+		// 验证克隆文件的所有者是操作用户
+		var cloneInode Ino
+		var cloneAttr Attr
+		if st := m.Lookup(ctx, parent, "clonefile", &cloneInode, &cloneAttr, false); st != 0 {
+			t.Fatalf("Lookup clonefile: %s", st)
+		}
+		if cloneAttr.Uid != operatorUid || cloneAttr.Gid != operatorGid {
+			t.Fatalf("Clone file owner should be operator: expected uid=%d gid=%d, got uid=%d gid=%d", 
+				operatorUid, operatorGid, cloneAttr.Uid, cloneAttr.Gid)
+		}
+
+		m.Unlink(ctx, parent, "srcfile")
+		m.Unlink(ctx, parent, "clonefile")
+	})
+
+	t.Run("CrossUserOperations", func(t *testing.T) {
+		// 为两个用户都设置配额
+		if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1 << 20, MaxInodes: 10}}, false, false, false); err != nil {
+			t.Fatalf("HandleQuota set file owner quota: %s", err)
+		}
+		if err := m.HandleQuota(ctx, QuotaSet, "", operatorUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 512, MaxInodes: 2}}, false, false, false); err != nil {
+			t.Fatalf("HandleQuota set operator quota: %s", err)
+		}
+		m.getBase().loadQuotas()
+
+		// 创建属于fileOwner的文件
+		var crossFileInode Ino
+		if st := m.Create(ctx, parent, "crossfile", 0644, 0, 0, &crossFileInode, &attr); st != 0 {
+			t.Fatalf("Create crossfile: %s", st)
+		}
+		if st := m.SetAttr(ctx, crossFileInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: fileOwnerUid, Gid: fileOwnerGid}); st != 0 {
+			t.Fatalf("SetAttr UID and GID for crossfile: %s", st)
+		}
+
+		// operator用户对fileOwner的文件进行写入 - 应该检查fileOwner的配额
+		var crossSliceId uint64
+		if st := m.NewSlice(ctx, &crossSliceId); st != 0 {
+			t.Fatalf("NewSlice for cross data: %s", st)
+		}
+		crossSlice := Slice{Id: crossSliceId, Size: 1024, Len: 1024}
+		operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
+		if st := m.Write(operatorCtx, crossFileInode, 0, 0, crossSlice, time.Now()); st != 0 {
+			t.Fatalf("Write to crossfile by operator: %s", st)
+		}
+
+		// 验证fileOwner的配额被使用，operator的配额没有被使用
+		qs := make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, "", fileOwnerUid, 0, qs, false, false, false); err != nil {
+			t.Fatalf("HandleQuota get file owner quota: %s", err)
+		}
+		if q := qs[UGQuotaKey]; q.UsedSpace < 1024 {
+			t.Fatalf("File owner quota should be used: expected >= 1024, got %d", q.UsedSpace)
+		}
+
+		qs = make(map[string]*Quota)
+		if err := m.HandleQuota(ctx, QuotaGet, "", operatorUid, 0, qs, false, false, false); err != nil {
+			t.Fatalf("HandleQuota get operator quota: %s", err)
+		}
+		if q := qs[UGQuotaKey]; q.UsedSpace > 0 {
+			t.Fatalf("Operator quota should not be used for file owner's file: got %d", q.UsedSpace)
+		}
+
+		m.Unlink(ctx, parent, "crossfile")
+	})
+
+	t.Run("EdgeCases", func(t *testing.T) {
+		// 测试零配额的情况
+		if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 0, MaxInodes: 0}}, false, false, false); err != nil {
+			t.Fatalf("HandleQuota set zero quota: %s", err)
+		}
+		m.getBase().loadQuotas()
+
+		// 创建文件
+		var edgeFileInode Ino
+		if st := m.Create(ctx, parent, "edgefile", 0644, 0, 0, &edgeFileInode, &attr); st != 0 {
+			t.Fatalf("Create edgefile: %s", st)
+		}
+		if st := m.SetAttr(ctx, edgeFileInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: fileOwnerUid, Gid: fileOwnerGid}); st != 0 {
+			t.Fatalf("SetAttr UID and GID for edgefile: %s", st)
+		}
+
+		// 任何写入都应该失败
+		var edgeSliceId uint64
+		if st := m.NewSlice(ctx, &edgeSliceId); st != 0 {
+			t.Fatalf("NewSlice for edge data: %s", st)
+		}
+		edgeSlice := Slice{Id: edgeSliceId, Size: 1, Len: 1}
+		operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
+		if st := m.Write(operatorCtx, edgeFileInode, 0, 0, edgeSlice, time.Now()); st != syscall.EDQUOT {
+			t.Fatalf("Write should fail with EDQUOT when quota is zero, got: %s", st)
+		}
+
+		m.Unlink(ctx, parent, "edgefile")
+	})
+
+	// 清理测试文件
+	m.Unlink(ctx, parent, "ownerfile")
+	m.Unlink(ctx, parent, "strictfile")
+	m.Unlink(ctx, parent, "truncfile")
+}
+
+// testContext 实现Context接口用于测试
+type testContext struct {
+	context.Context
+	uid uint32
+	gid uint32
+}
+
+func (c *testContext) Uid() uint32 { return c.uid }
+func (c *testContext) Gid() uint32 { return c.gid }
+func (c *testContext) Gids() []uint32 { return []uint32{c.gid} }
+func (c *testContext) Pid() uint32 { return 0 }
+func (c *testContext) WithValue(k, v interface{}) Context { return c }
+func (c *testContext) Cancel() {}
+func (c *testContext) Canceled() bool { return false }
+func (c *testContext) CheckPermission() bool { return true }
 
 func cleanupQuotaTest(ctx Context, m Meta, parent Ino, uid, gid uint32) {
 	for i := 0; i < 3; i++ {
@@ -3934,6 +4585,16 @@ func testUserGroupQuota(t *testing.T, m Meta) {
 
 	t.Run("QuotaUsageStatistics", func(t *testing.T) {
 		testQuotaUsageStatistics(t, m, ctx, parent, uid, gid)
+	})
+
+	t.Run("CheckQuotaFileOwner", func(t *testing.T) {
+		// 简化测试，只测试核心功能
+		testCheckQuotaFileOwnerSimple(t, m)
+	})
+
+	t.Run("QuotaEdgeCases", func(t *testing.T) {
+		// 测试配额边界情况：只设置inodes限制或只设置space限制
+		testQuotaEdgeCases(t, m)
 	})
 
 	cleanupQuotaTest(ctx, m, parent, uid, gid)

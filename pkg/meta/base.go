@@ -1215,7 +1215,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	defer m.timeit("Mknod", time.Now())
 	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
-	if err := m.checkQuota(ctx, space, inodes, parent); err != 0 {
+	if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), ctx.Gid(), parent); err != 0 {
 		return err
 	}
 
@@ -2829,7 +2829,7 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	if eno != 0 {
 		return eno
 	}
-	if err := m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), parent); err != 0 {
+	if err := m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), ctx.Uid(), ctx.Gid(), parent); err != 0 {
 		return err
 	}
 	*total = sum.Dirs + sum.Files
