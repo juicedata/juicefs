@@ -2944,7 +2944,6 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	return m.txn(ctx, func(tx *kvTxn) error {
 		keys := make([][]byte, 0, len(quotas))
 		qs := make([]*Quota, 0, len(quotas))
-
 		for _, q := range quotas {
 			key, err := m.getQuotaKey(q.qtype, q.qkey)
 			if err != nil {
@@ -2953,16 +2952,14 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 			keys = append(keys, key)
 			qs = append(qs, q.quota)
 		}
-
 		for i, v := range tx.gets(keys...) {
 			if len(v) == 0 {
 				continue
 			}
 			if len(v) != 32 {
-				logger.Errorf("invalid quota value: %v", v)
+				logger.Errorf("Invalid quota value: %v", v)
 				continue
 			}
-
 			q := m.parseQuota(v)
 			q.UsedSpace += qs[i].newSpace
 			q.UsedInodes += qs[i].newInodes
