@@ -177,7 +177,7 @@ func quota(c *cli.Context) error {
 			size = humanize.IBytes(uint64(q.MaxSpace))
 			usedR = fmt.Sprintf("%d%%", q.UsedSpace*100/q.MaxSpace)
 		} else {
-			size = "unlimited"
+			size = "unchanged"
 		}
 		iused := humanize.Comma(q.UsedInodes)
 		var itotal, iusedR string
@@ -185,7 +185,7 @@ func quota(c *cli.Context) error {
 			itotal = humanize.Comma(q.MaxInodes)
 			iusedR = fmt.Sprintf("%d%%", q.UsedInodes*100/q.MaxInodes)
 		} else {
-			itotal = "unlimited"
+			itotal = "unchanged"
 		}
 		result = append(result, []string{p, size, used, usedR, itotal, iused, iusedR})
 	}
