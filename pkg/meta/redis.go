@@ -3671,7 +3671,6 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			origin.MaxSpace, origin.MaxInodes = m.parseQuota(buf)
 		} else if e == redis.Nil {
 			created = true
-			quota.UsedSpace, quota.UsedInodes = 0, 0
 		} else {
 			return e
 		}
@@ -3687,9 +3686,13 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			pipe.HSet(ctx, config.quotaKey, field, m.packQuota(origin.MaxSpace, origin.MaxInodes))
 			if quota.UsedSpace >= 0 {
 				pipe.HSet(ctx, config.usedSpaceKey, field, quota.UsedSpace)
+			} else if created {
+				pipe.HSet(ctx, config.usedSpaceKey, field, 0)
 			}
 			if quota.UsedInodes >= 0 {
 				pipe.HSet(ctx, config.usedInodesKey, field, quota.UsedInodes)
+			} else if created {
+				pipe.HSet(ctx, config.usedInodesKey, field, 0)
 			}
 			return nil
 		})
