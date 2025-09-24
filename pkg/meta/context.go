@@ -63,7 +63,9 @@ func (c *wrapContext) Pid() uint32 {
 }
 
 func (c *wrapContext) Cancel() {
-	c.cancel()
+	if c.cancel != nil {
+		c.cancel()
+	}
 }
 
 func (c *wrapContext) Canceled() bool {
@@ -81,16 +83,20 @@ func (c *wrapContext) CheckPermission() bool {
 }
 
 func NewContext(pid, uid uint32, gids []uint32) Context {
-	return WrapContextWith(context.Background(), pid, uid, gids)
+	return WrapWithCancel(context.Background(), pid, uid, gids)
 }
 
 func WrapContext(ctx context.Context) Context {
-	return WrapContextWith(ctx, 0, 0, []uint32{0})
+	return WrapWithCancel(ctx, 0, 0, []uint32{0})
 }
 
-func WrapContextWith(ctx context.Context, pid, uid uint32, gids []uint32) Context {
+func WrapWithCancel(ctx context.Context, pid, uid uint32, gids []uint32) Context {
 	c, cancel := context.WithCancel(ctx)
 	return &wrapContext{c, cancel, pid, uid, gids}
+}
+
+func WrapWithoutCancel(ctx context.Context, pid, uid uint32, gids []uint32) Context {
+	return &wrapContext{ctx, nil, pid, uid, gids}
 }
 
 func containsGid(ctx Context, gid uint32) bool {
