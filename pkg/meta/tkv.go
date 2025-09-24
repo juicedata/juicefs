@@ -259,6 +259,14 @@ func (m *kvMeta) dirQuotaKey(inode Ino) []byte {
 	return m.fmtKey("QD", inode)
 }
 
+func (m *kvMeta) userQuotaKey(uid uint64) []byte {
+	return m.fmtKey("QU", uid)
+}
+
+func (m *kvMeta) groupQuotaKey(gid uint64) []byte {
+	return m.fmtKey("QG", gid)
+}
+
 func (m *kvMeta) aclKey(id uint32) []byte {
 	return m.fmtKey("R", id)
 }
@@ -470,6 +478,19 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 			err = m.deleteKeys(keys...)
 			if err != nil {
 				return errors.Wrap(err, "delete dir stats")
+			}
+		}
+		if !old.UserGroupQuota && format.UserGroupQuota {
+			// remove user group quota as they are outdated
+			userPrefix := m.fmtKey("QU")
+			groupPrefix := m.fmtKey("QG")
+			err := m.client.txn(Background(), func(tx *kvTxn) error {
+				tx.deleteKeys(userPrefix)
+				tx.deleteKeys(groupPrefix)
+				return nil
+			}, 0)
+			if err != nil {
+				return errors.Wrap(err, "delete user group quota")
 			}
 		}
 		if err = format.update(&old, force); err != nil {
@@ -2729,35 +2750,65 @@ func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
+func (m *kvMeta) getQuotaKey(qtype uint32, key uint64) ([]byte, error) {
+	switch qtype {
+	case DirQuotaType:
+		return m.dirQuotaKey(Ino(key)), nil
+	case UserQuotaType:
+		return m.userQuotaKey(key), nil
+	case GroupQuotaType:
+		return m.groupQuotaKey(key), nil
+	default:
+		return nil, fmt.Errorf("invalid quota type: %d", qtype)
+	}
+}
+
 func (m *kvMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, error) {
-	buf, err := m.get(m.dirQuotaKey(Ino(key)))
+	quotaKey, err := m.getQuotaKey(qtype, key)
 	if err != nil {
 		return nil, err
-	} else if buf == nil {
+	}
+
+	buf, err := m.get(quotaKey)
+	if err != nil {
+		return nil, err
+	}
+	if buf == nil {
 		return nil, nil
-	} else if len(buf) != 32 {
+	}
+	if len(buf) != 32 {
 		return nil, fmt.Errorf("invalid quota value: %v", buf)
 	}
+
 	return m.parseQuota(buf), nil
 }
 
 func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (bool, error) {
+	quotaKey, err := m.getQuotaKey(qtype, key)
+	if err != nil {
+		return false, err
+	}
+
 	var created bool
-	err := m.txn(ctx, func(tx *kvTxn) error {
+	err = m.txn(ctx, func(tx *kvTxn) error {
+		buf := tx.get(quotaKey)
 		var origin *Quota
-		buf := tx.get(m.dirQuotaKey(Ino(key)))
+		var exists bool
 		if len(buf) == 32 {
 			origin = m.parseQuota(buf)
-			created = false
+			exists = true
 		} else if len(buf) != 0 {
 			return fmt.Errorf("invalid quota value: %v", buf)
-		} else {
-			if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
-				return errors.New("limitation not set or deleted")
-			}
+		}
+
+		if !exists {
 			created = true
 			origin = new(Quota)
+			origin.MaxInodes, origin.MaxSpace = -1, -1
+		} else {
+			created = false
 		}
+
 		if quota.MaxSpace >= 0 {
 			origin.MaxSpace = quota.MaxSpace
 		}
@@ -2770,29 +2821,70 @@ func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 		if quota.UsedInodes >= 0 {
 			origin.UsedInodes = quota.UsedInodes
 		}
-		tx.set(m.dirQuotaKey(Ino(key)), m.packQuota(origin))
+		tx.set(quotaKey, m.packQuota(origin))
 		return nil
 	})
 	return created, err
 }
 
 func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
-	return m.deleteKeys(m.dirQuotaKey(Ino(key)))
+	quotaKey, err := m.getQuotaKey(qtype, key)
+	if err != nil {
+		return err
+	}
+
+	if qtype == UserQuotaType || qtype == GroupQuotaType {
+		quota := &Quota{}
+		val, err := m.get(quotaKey)
+		if err != nil {
+			return err
+		}
+		if len(val) > 0 {
+			quota = m.parseQuota(val)
+		}
+		quota.MaxSpace = -1
+		quota.MaxInodes = -1
+		return m.txn(ctx, func(tx *kvTxn) error {
+			tx.set(quotaKey, m.packQuota(quota))
+			return nil
+		})
+	} else {
+		// For dir quotas, remove all data
+		return m.deleteKeys(quotaKey)
+	}
 }
 
 func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
-	pairs, err := m.scanValues(ctx, m.fmtKey("QD"), -1, nil)
-	if err != nil || len(pairs) == 0 {
-		return nil, nil, nil, err
+	quotaTypes := []struct {
+		prefix string
+		name   string
+	}{
+		{"QD", "dir"},
+		{"QU", "user"},
+		{"QG", "group"},
 	}
 
-	quotas := make(map[uint64]*Quota, len(pairs))
-	for k, v := range pairs {
-		inode := m.decodeInode([]byte(k[2:])) // skip "QD"
-		quota := m.parseQuota(v)
-		quotas[uint64(inode)] = quota
+	quotaMaps := make([]map[uint64]*Quota, 3)
+	for i, qt := range quotaTypes {
+		pairs, err := m.scanValues(ctx, m.fmtKey(qt.prefix), -1, nil)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to load %s quotas: %w", qt.name, err)
+		}
+		var quotas map[uint64]*Quota
+		if len(pairs) == 0 {
+			quotas = make(map[uint64]*Quota)
+		} else {
+			quotas = make(map[uint64]*Quota, len(pairs))
+			for k, v := range pairs {
+				id := binary.LittleEndian.Uint64([]byte(k[2:])) // skip prefix
+				quota := m.parseQuota(v)
+				quotas[id] = quota
+			}
+		}
+		quotaMaps[i] = quotas
 	}
-	return quotas, nil, nil, nil
+
+	return quotaMaps[0], quotaMaps[1], quotaMaps[2], nil
 }
 
 func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
@@ -2853,7 +2945,11 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 		keys := make([][]byte, 0, len(quotas))
 		qs := make([]*Quota, 0, len(quotas))
 		for _, q := range quotas {
-			keys = append(keys, m.dirQuotaKey(Ino(q.qkey)))
+			key, err := m.getQuotaKey(q.qtype, q.qkey)
+			if err != nil {
+				return err
+			}
+			keys = append(keys, key)
 			qs = append(qs, q.quota)
 		}
 		for i, v := range tx.gets(keys...) {

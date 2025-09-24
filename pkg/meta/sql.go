@@ -3676,7 +3676,6 @@ func (m *dbMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, erro
 
 func updateQuotaFields(quota *Quota, exist bool, maxSpace, maxInodes *int64, usedSpace, usedInodes *int64) []string {
 	updateColumns := make([]string, 0, 4)
-
 	if quota.MaxSpace >= 0 {
 		*maxSpace = quota.MaxSpace
 		updateColumns = append(updateColumns, "max_space")
