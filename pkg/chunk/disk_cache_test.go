@@ -536,7 +536,7 @@ func TestLruEviction(t *testing.T) {
 		blockPlaceHolder := []byte("test data")
 		for i := 1; i <= 20; i++ {
 			key := fmt.Sprintf("%d_%d_9", i, i)
-			_, err := s.stage(key, blockPlaceHolder, true)
+			_, err := s.stage(key, blockPlaceHolder)
 			require.True(t, le.verifyHeap())
 			require.NoError(t, err, "Failed to stage data for key %s", key)
 		}
