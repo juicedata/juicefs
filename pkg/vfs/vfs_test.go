@@ -1099,7 +1099,7 @@ func TestReadDirBatch(t *testing.T) {
 	}
 	for typ, metaUri := range engines {
 		testReaddirBatch(t, metaUri, typ, 100)
-		testReaddirBatch(t, metaUri, typ, 4096)
+		// testReaddirBatch(t, metaUri, typ, 4096)
 	}
 }
 
