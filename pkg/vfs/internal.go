@@ -443,6 +443,11 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			info.Paths = v.Meta.GetPaths(ctx, inode)
 			if info.Summary.Files == 1 && info.Summary.Dirs == 0 {
 				for indx := uint64(0); indx*meta.ChunkSize < info.Summary.Length; indx++ {
+					if ctx.Canceled() {
+						info.Failed = true
+						info.Reason = "canceled"
+						break
+					}
 					var cs []meta.Slice
 					_ = v.Meta.Read(ctx, inode, uint32(indx), &cs)
 					for _, c := range cs {
