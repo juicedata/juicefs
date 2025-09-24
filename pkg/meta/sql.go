@@ -1713,7 +1713,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		} else {
 			n.Mode = mode & ^cumask
 		}
-		if (pn.Flags&FlagSkipTrash) != 0 {
+		if (pn.Flags & FlagSkipTrash) != 0 {
 			n.Flags |= FlagSkipTrash
 		}
 
@@ -1852,7 +1852,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
-			if (n.Flags&FlagSkipTrash) != 0 {
+			if (n.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
 			if trash > 0 && n.Nlink > 1 {
@@ -2023,7 +2023,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		if exist {
 			return syscall.ENOTEMPTY
 		}
-		if (n.Flags&FlagSkipTrash) != 0 {
+		if (n.Flags & FlagSkipTrash) != 0 {
 			trash = 0
 		}
 		now := time.Now().UnixNano()
@@ -2234,7 +2234,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if (dn.Flags&FlagAppend) != 0 || (dn.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
-			if (dn.Flags&FlagSkipTrash) != 0 {
+			if (dn.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
 			dn.setCtime(now)
@@ -3076,16 +3076,15 @@ func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 	return files, err
 }
 
-func (m *dbMeta) doCleanupSlices() {
+func (m *dbMeta) doCleanupSlices(ctx Context) {
 	var cks []sliceRef
-	_ = m.simpleTxn(Background(), func(s *xorm.Session) error {
+	_ = m.simpleTxn(ctx, func(s *xorm.Session) error {
 		cks = nil
 		return s.Where("refs <= 0").Find(&cks)
 	})
-	start := time.Now()
 	for _, ck := range cks {
 		m.deleteSlice(ck.Id, ck.Size)
-		if time.Since(start) > 50*time.Minute {
+		if ctx.Canceled() {
 			break
 		}
 	}
@@ -3165,7 +3164,6 @@ func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 }
 
 func (m *dbMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
-	start := time.Now()
 	var count int
 	var ss []Slice
 	var result []delslices
@@ -3213,7 +3211,7 @@ func (m *dbMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
 					m.deleteSlice(s.Id, s.Size)
 					count++
 				}
-				if time.Since(start) > 50*time.Minute {
+				if ctx.Canceled() {
 					return count, nil
 				}
 			}
@@ -3325,7 +3323,7 @@ func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 
 func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
 	if delete {
-		m.doCleanupSlices()
+		m.doCleanupSlices(ctx)
 	}
 	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		var cs []chunk

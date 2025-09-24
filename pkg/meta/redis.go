@@ -2778,10 +2778,8 @@ func (m *redisMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, err
 	return files, nil
 }
 
-func (m *redisMeta) doCleanupSlices() {
-	start := time.Now()
-	stop := fmt.Errorf("exceeded time limit")
-	_ = m.hscan(Background(), m.sliceRefs(), func(keys []string) error {
+func (m *redisMeta) doCleanupSlices(ctx Context) {
+	_ = m.hscan(ctx, m.sliceRefs(), func(keys []string) error {
 		for i := 0; i < len(keys); i += 2 {
 			key, val := keys[i], keys[i+1]
 			if strings.HasPrefix(val, "-") { // < 0
@@ -2796,8 +2794,8 @@ func (m *redisMeta) doCleanupSlices() {
 			} else if val == "0" {
 				m.cleanupZeroRef(key)
 			}
-			if time.Since(start) > 50*time.Minute {
-				return stop
+			if ctx.Canceled() {
+				return ctx.Err()
 			}
 		}
 		return nil
@@ -2979,13 +2977,14 @@ func (m *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 }
 
 func (r *redisMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
-	start := time.Now()
-	stop := fmt.Errorf("reach limit")
 	var count int
 	var ss []Slice
 	var rs []*redis.IntCmd
 	err := r.hscan(ctx, r.delSlices(), func(keys []string) error {
 		for i := 0; i < len(keys); i += 2 {
+			if ctx.Canceled() {
+				return ctx.Err()
+			}
 			key := keys[i]
 			ps := strings.Split(key, "_")
 			if len(ps) != 2 {
@@ -3029,14 +3028,14 @@ func (r *redisMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error)
 					r.deleteSlice(s.Id, s.Size)
 					count++
 				}
-				if time.Since(start) > 50*time.Minute {
-					return stop
+				if ctx.Canceled() {
+					return ctx.Err()
 				}
 			}
 		}
 		return nil
 	})
-	if err == stop {
+	if errors.Is(err, context.DeadlineExceeded) {
 		err = nil
 	}
 	return count, err
@@ -3250,7 +3249,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending,
 	m.cleanupLeakedChunks(delete)
 	m.cleanupOldSliceRefs(delete)
 	if delete {
-		m.doCleanupSlices()
+		m.doCleanupSlices(ctx)
 	}
 
 	p := m.rdb.Pipeline()

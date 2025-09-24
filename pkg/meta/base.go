@@ -91,7 +91,7 @@ type engine interface {
 	doDeleteSustainedInode(sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
-	doCleanupSlices()
+	doCleanupSlices(ctx Context)
 	doCleanupDelayedSlices(ctx Context, edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
 
@@ -769,7 +769,9 @@ func (m *baseMeta) cleanupSlices(ctx Context) {
 		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter nextCleanupSlices: %s", err)
 		} else if ok {
-			m.en.doCleanupSlices()
+			cCtx := WrapWithTimeout(ctx, time.Minute*50)
+			m.en.doCleanupSlices(cCtx)
+			cCtx.Cancel()
 		}
 	}
 }
@@ -2551,6 +2553,7 @@ func (m *baseMeta) trashEntry(parent, inode Ino, name string) string {
 
 func (m *baseMeta) cleanupTrash(ctx Context) {
 	defer m.sessWG.Done()
+	var cCtx Context
 	for {
 		select {
 		case <-ctx.Done():
@@ -2566,9 +2569,13 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 		if ok, err := m.en.setIfSmall("lastCleanupTrash", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter lastCleanupTrash: %s", err)
 		} else if ok {
+			if cCtx != nil {
+				cCtx.Cancel()
+				cCtx = WrapWithTimeout(ctx, 50*time.Minute)
+			}
 			days := m.getFormat().TrashDays
-			go m.doCleanupTrash(ctx, days, false)
-			go m.cleanupDelayedSlices(ctx, days)
+			go m.doCleanupTrash(cCtx, days, false)
+			go m.cleanupDelayedSlices(cCtx, days)
 		}
 	}
 }
@@ -2639,7 +2646,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 					rmdir = false
 					continue
 				}
-				if time.Since(now) > 50*time.Minute {
+				if ctx.Canceled() {
 					return
 				}
 			}
