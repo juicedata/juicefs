@@ -135,7 +135,7 @@ func quota(c *cli.Context) error {
 	var strict, repair bool
 	if cmd == meta.QuotaSet {
 		strict = c.Bool("strict")
-		q := &meta.Quota{MaxSpace: -1, MaxInodes: -1} // negative means no limit
+		q := &meta.Quota{MaxSpace: -1, MaxInodes: -1} // negative means no change
 		if c.IsSet("capacity") {
 			q.MaxSpace = int64(utils.ParseBytes(c, "capacity", 'G'))
 		}

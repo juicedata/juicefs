@@ -723,7 +723,7 @@ func (m *redisMeta) parseQuota(buf []byte) (space, inodes int64) {
 		return 0, 0
 	}
 	if len(buf) != 16 {
-		logger.Errorf("Invalid quota value: %v", buf)
+		logger.Errorf("invalid quota value: %v", buf)
 		return 0, 0
 	}
 	rb := utils.ReadBuffer(buf)
@@ -3594,7 +3594,7 @@ type quotaKeys struct {
 	usedInodesKey string
 }
 
-func (m *redisMeta) getQuotaConfig(qtype uint32) (*quotaKeys, error) {
+func (m *redisMeta) getQuotaKeys(qtype uint32) (*quotaKeys, error) {
 	switch qtype {
 	case DirQuotaType:
 		return &quotaKeys{
@@ -3620,7 +3620,7 @@ func (m *redisMeta) getQuotaConfig(qtype uint32) (*quotaKeys, error) {
 }
 
 func (m *redisMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, error) {
-	config, err := m.getQuotaConfig(qtype)
+	config, err := m.getQuotaKeys(qtype)
 	if err != nil {
 		return nil, err
 	}
@@ -3655,14 +3655,14 @@ func (m *redisMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, e
 }
 
 func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (bool, error) {
-	config, err := m.getQuotaConfig(qtype)
+	config, err := m.getQuotaKeys(qtype)
 	if err != nil {
 		return false, err
 	}
 
 	var created bool
 	err = m.txn(ctx, func(tx *redis.Tx) error {
-		origin := new(Quota)
+		origin := &Quota{MaxSpace: -1, MaxInodes: -1}
 		field := strconv.FormatUint(key, 10)
 
 		buf, e := tx.HGet(ctx, config.quotaKey, field).Bytes()
@@ -3671,7 +3671,7 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			origin.MaxSpace, origin.MaxInodes = m.parseQuota(buf)
 		} else if e == redis.Nil {
 			created = true
-			origin.MaxSpace, origin.MaxInodes = -1, -1
+			quota.UsedSpace, quota.UsedInodes = 0, 0
 		} else {
 			return e
 		}
@@ -3687,13 +3687,9 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			pipe.HSet(ctx, config.quotaKey, field, m.packQuota(origin.MaxSpace, origin.MaxInodes))
 			if quota.UsedSpace >= 0 {
 				pipe.HSet(ctx, config.usedSpaceKey, field, quota.UsedSpace)
-			} else if created {
-				pipe.HSet(ctx, config.usedSpaceKey, field, 0)
 			}
 			if quota.UsedInodes >= 0 {
 				pipe.HSet(ctx, config.usedInodesKey, field, quota.UsedInodes)
-			} else if created {
-				pipe.HSet(ctx, config.usedInodesKey, field, 0)
 			}
 			return nil
 		})
@@ -3703,7 +3699,7 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 }
 
 func (m *redisMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
-	config, err := m.getQuotaConfig(qtype)
+	config, err := m.getQuotaKeys(qtype)
 	if err != nil {
 		return err
 	}
@@ -3735,11 +3731,11 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 
 	quotaMaps := make([]map[uint64]*Quota, 3)
 	for i, qt := range quotaTypes {
-		config, err := m.getQuotaConfig(qt.qtype)
+		config, err := m.getQuotaKeys(qt.qtype)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to load %s quotas: %w", qt.name, err)
 		}
-		
+
 		quotas := make(map[uint64]*Quota)
 		if err := m.hscan(ctx, config.quotaKey, func(keys []string) error {
 			for i := 0; i < len(keys); i += 2 {
@@ -3784,7 +3780,7 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		for _, q := range quotas {
-			config, err := m.getQuotaConfig(q.qtype)
+			config, err := m.getQuotaKeys(q.qtype)
 			if err != nil {
 				return err
 			}

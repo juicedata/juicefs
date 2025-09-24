@@ -2759,7 +2759,7 @@ func (m *kvMeta) getQuotaKey(qtype uint32, key uint64) ([]byte, error) {
 	case GroupQuotaType:
 		return m.groupQuotaKey(key), nil
 	default:
-		return nil, fmt.Errorf("Invalid quota type: %d", qtype)
+		return nil, fmt.Errorf("invalid quota type: %d", qtype)
 	}
 }
 
@@ -2777,7 +2777,7 @@ func (m *kvMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, erro
 		return nil, nil
 	}
 	if len(buf) != 32 {
-		return nil, fmt.Errorf("Invalid quota value: %v", buf)
+		return nil, fmt.Errorf("invalid quota value: %v", buf)
 	}
 
 	return m.parseQuota(buf), nil
@@ -2798,7 +2798,7 @@ func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 			origin = m.parseQuota(buf)
 			exists = true
 		} else if len(buf) != 0 {
-			return fmt.Errorf("Invalid quota value: %v", buf)
+			return fmt.Errorf("invalid quota value: %v", buf)
 		}
 
 		if !exists {
@@ -2817,17 +2817,15 @@ func (m *kvMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 		}
 		if quota.UsedSpace >= 0 {
 			origin.UsedSpace = quota.UsedSpace
-		} 
+		}
 		if quota.UsedInodes >= 0 {
 			origin.UsedInodes = quota.UsedInodes
-		} 
+		}
 		tx.set(quotaKey, m.packQuota(origin))
 		return nil
 	})
 	return created, err
 }
-
-
 
 func (m *kvMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
 	quotaKey, err := m.getQuotaKey(qtype, key)
@@ -2888,7 +2886,6 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 
 	return quotaMaps[0], quotaMaps[1], quotaMaps[2], nil
 }
-
 
 func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
 	if m.conf.ReadOnly {
@@ -2962,7 +2959,7 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 				continue
 			}
 			if len(v) != 32 {
-				logger.Errorf("Invalid quota value: %v", v)
+				logger.Errorf("invalid quota value: %v", v)
 				continue
 			}
 
@@ -2974,7 +2971,6 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 		return nil
 	})
 }
-
 
 func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
 	ctx := Background()
