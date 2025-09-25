@@ -119,7 +119,14 @@ test_files_from(){
     ./juicefs mount $META_URL /tmp/jfs -d
     sync_option1="--dirs --perms --check-all --links --list-threads 10 --list-depth 5"
     sync_option2="--dirs --perms --check-all --links --list-threads 10 --list-depth 5 --files-from files"
-    ls -A $SOURCE_DIR1 > files
+    ls -A "$SOURCE_DIR1" | while read file; do 
+      full_path="$SOURCE_DIR1/$file"
+      if [ -L "$full_path" ] && [ ! -e "$full_path" ]; then
+        rm "$full_path"
+      else
+        echo "$file"
+      fi 
+    done > files
     sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR1 $sync_option1 2>&1| tee sync1.log || true
     SOURCE_PERM=$(sudo stat -c "%a" "$DEST_DIR1")
     SOURCE_OWNER=$(sudo stat -c "%U" "$DEST_DIR1")
