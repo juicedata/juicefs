@@ -206,7 +206,7 @@ func (c *memcache) cleanupExpire() {
 	}
 }
 
-func (c *memcache) stage(key string, data []byte, keepCache bool) (string, error) {
+func (c *memcache) stage(key string, data []byte) (string, error) {
 	return "", errors.New("not supported")
 }
 func (c *memcache) uploaded(key string, size int)    {}
