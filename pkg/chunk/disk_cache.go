@@ -680,7 +680,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	}
 }
 
-func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string, error) {
+func (cache *cacheStore) stage(key string, data []byte) (string, error) {
 	stagingPath := cache.stagePath(key)
 
 	cache.state.beforeCacheOp()
@@ -701,7 +701,7 @@ func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string,
 		cache.m.stageBlocks.Add(1)
 		cache.m.stageBlockBytes.Add(float64(len(data)))
 		cache.m.stageWriteBytes.Add(float64(len(data)))
-		if cache.capacity > 0 && keepCache {
+		if cache.capacity > 0 {
 			path := cache.cachePath(key)
 			cache.createDir(filepath.Dir(path))
 			if err = os.Link(stagingPath, path); err == nil {
@@ -1011,7 +1011,7 @@ type CacheManager interface {
 	remove(key string, staging bool)
 	load(key string) (ReadCloser, error)
 	uploaded(key string, size int)
-	stage(key string, data []byte, keepCache bool) (string, error)
+	stage(key string, data []byte) (string, error)
 	removeStage(key string) error
 	stagePath(key string) string
 	stats() (int64, int64)
@@ -1196,10 +1196,10 @@ func (m *cacheManager) remove(key string, staging bool) {
 	}
 }
 
-func (m *cacheManager) stage(key string, data []byte, keepCache bool) (string, error) {
+func (m *cacheManager) stage(key string, data []byte) (string, error) {
 	store := m.getStore(key)
 	if store != nil {
-		return store.stage(key, data, keepCache)
+		return store.stage(key, data)
 	}
 	return "", errors.New("no available cache dir")
 }

@@ -436,7 +436,7 @@ func (s *wSlice) upload(indx int) {
 			panic(fmt.Sprintf("block length does not match: %v != %v", off, blen))
 		}
 		if s.store.conf.Writeback {
-			stagingPath, err := s.store.bcache.stage(key, block.Data, s.store.shouldCache(blen))
+			stagingPath, err := s.store.bcache.stage(key, block.Data)
 			if err != nil {
 				if !errors.Is(err, errStageConcurrency) {
 					s.store.stageBlockErrors.Add(1)
@@ -576,6 +576,9 @@ func (c *Config) SelfCheck(uuid string) {
 			logger.Warnf("max-stage-write is disabled in non-writeback mode")
 			c.MaxStageWrite = 0
 		}
+	}
+	if !c.CacheFullBlock && c.Writeback {
+		logger.Warnf("cache-partial-only is ineffective for stage blocks with writeback enabled")
 	}
 	if _, _, err := c.parseHours(); err != nil {
 		logger.Warnf("invalid value (%s) for upload-hours: %s", c.UploadHours, err)
@@ -932,7 +935,7 @@ func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 }
 
 func (store *cachedStore) shouldCache(size int) bool {
-	return store.conf.CacheFullBlock || size < store.conf.BlockSize || store.conf.UploadDelay > 0
+	return store.conf.CacheFullBlock || size < store.conf.BlockSize
 }
 
 func parseObjOrigSize(key string) int {
