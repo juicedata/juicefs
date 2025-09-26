@@ -456,7 +456,7 @@ func (s *wSlice) upload(indx int) {
 			block.Acquire()
 			err := utils.WithTimeout(func() (err error) { // In case it hangs for more than 5 minutes(see fileWriter.flush), fallback to uploading directly to avoid `EIO`
 				defer block.Release()
-				stagingPath, err = s.store.bcache.stage(key, block.Data, s.store.shouldCache(blen))
+				stagingPath, err = s.store.bcache.stage(key, block.Data)
 				if err == nil && stageFailed { // upload thread already marked me as failed because of timeout
 					_ = s.store.bcache.removeStage(key)
 				}
@@ -601,6 +601,9 @@ func (c *Config) SelfCheck(uuid string) {
 			c.UploadDelay = 0
 			c.UploadHours = ""
 		}
+	}
+	if !c.CacheFullBlock && c.Writeback {
+		logger.Warnf("cache-partial-only is ineffective for stage blocks with writeback enabled")
 	}
 	if _, _, err := c.parseHours(); err != nil {
 		logger.Warnf("invalid value (%s) for upload-hours: %s", c.UploadHours, err)
@@ -964,7 +967,7 @@ func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 }
 
 func (store *cachedStore) shouldCache(size int) bool {
-	return store.conf.CacheFullBlock || size < store.conf.BlockSize || store.conf.UploadDelay > 0
+	return store.conf.CacheFullBlock || size < store.conf.BlockSize
 }
 
 func parseObjOrigSize(key string) int {
