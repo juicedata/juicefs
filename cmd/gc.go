@@ -26,7 +26,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
-	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/pkg/errors"
@@ -228,7 +227,7 @@ func gc(ctx *cli.Context) error {
 
 	// Scan all objects to find leaked ones
 	blob = object.WithPrefix(blob, "chunks/")
-	objs, err := osync.ListAll(blob, "", "", "", true)
+	objs, err := object.ListAll(ctx.Context, blob, "", "", true, false)
 	if err != nil {
 		logger.Fatalf("list all blocks: %s", err)
 	}

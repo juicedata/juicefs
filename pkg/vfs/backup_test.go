@@ -17,11 +17,11 @@
 package vfs
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
-	osync "github.com/juicedata/juicefs/pkg/sync"
 )
 
 func TestRotate(t *testing.T) {
@@ -73,7 +73,7 @@ func TestBackup(t *testing.T) {
 	time.Sleep(time.Millisecond * 100)
 
 	blob = object.WithPrefix(blob, "meta/")
-	kc, _ := osync.ListAll(blob, "", "", "", true)
+	kc, _ := object.ListAll(context.TODO(), blob, "", "", true, false)
 	var keys []string
 	for obj := range kc {
 		keys = append(keys, obj.Key())
