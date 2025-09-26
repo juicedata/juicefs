@@ -62,7 +62,7 @@ func get(s ObjectStorage, k string, off, limit int64, getters ...AttrGetter) (st
 }
 
 func listAll(ctx context.Context, s ObjectStorage, prefix, marker string, limit int64, followLink bool) ([]Object, error) {
-	ch, err := ListAll(ctx, s, prefix, marker, followLink)
+	ch, err := ListAll(ctx, s, prefix, marker, followLink, true)
 	if err == nil {
 		objs := make([]Object, 0)
 		for obj := range ch {

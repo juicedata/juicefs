@@ -23,7 +23,6 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
-	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/utils"
 
 	"github.com/urfave/cli/v2"
@@ -98,7 +97,7 @@ func fsck(ctx *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 	blob = object.WithPrefix(blob, "chunks/")
-	objs, err := osync.ListAll(blob, "", "", "", true)
+	objs, err := object.ListAll(ctx.Context, blob, "", "", true, false)
 	if err != nil {
 		logger.Fatalf("list all blocks: %s", err)
 	}
