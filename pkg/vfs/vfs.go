@@ -144,6 +144,7 @@ type Config struct {
 	AllSquash            *AnonymousAccount `json:",omitempty"`
 	NonDefaultPermission bool              `json:",omitempty"`
 	UMask                uint16
+	SkipTrash            bool `json:",omitempty"`
 
 	Pid       int
 	PPid      int
@@ -276,7 +277,7 @@ func (v *VFS) Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
 		err = syscall.ENAMETOOLONG
 		return
 	}
-	err = v.Meta.Unlink(ctx, parent, name)
+	err = v.Meta.Unlink(ctx, parent, name, v.Conf.SkipTrash)
 	if err == 0 {
 		v.invalidateDirHandle(parent, name, 0, nil)
 	}
@@ -312,7 +313,7 @@ func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
 		err = syscall.ENAMETOOLONG
 		return
 	}
-	err = v.Meta.Rmdir(ctx, parent, name)
+	err = v.Meta.Rmdir(ctx, parent, name, v.Conf.SkipTrash)
 	if err == 0 {
 		v.invalidateDirHandle(parent, name, 0, nil)
 	}
