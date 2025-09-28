@@ -4509,6 +4509,174 @@ func testUserGroupQuota(t *testing.T, m Meta) {
 		testQuotaEdgeCases(t, m)
 	})
 
+	t.Run("HardlinkQuota", func(t *testing.T) {
+		testHardlinkQuota(t, m, ctx, parent, uid, gid)
+	})
+
 	cleanupQuotaTest(ctx, m, parent, uid, gid)
 
+}
+
+func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid uint32) {
+	if err := m.HandleQuota(ctx, QuotaSet, "", uid, gid, map[string]*Quota{UGQuotaKey: {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
+		t.Fatalf("Set user group quota: %s", err)
+	}
+
+	var parentPath string
+	if parent == RootInode {
+		parentPath = "/"
+	} else {
+		parentPath = "/ugquota"
+	}
+	
+	if err := m.HandleQuota(ctx, QuotaSet, parentPath, 0, 0, map[string]*Quota{parentPath: {MaxSpace: 200 << 20, MaxInodes: 200}}, false, false, false); err != nil {
+		t.Fatalf("Set directory quota for %s: %s", parentPath, err)
+	}
+	
+	m.getBase().loadQuotas()
+
+	var originalFile Ino
+	var attr Attr
+	fileSize := uint64(8192) // 8KB 文件
+	if st := m.Create(ctx, parent, "test_original_file", 0644, 0, 0, &originalFile, &attr); st != 0 {
+		t.Fatalf("Create original file: %s", st)
+	}
+	if st := m.SetAttr(ctx, originalFile, SetAttrUID|SetAttrGID, 0, &Attr{Uid: uid, Gid: gid}); st != 0 {
+		t.Fatalf("SetAttr UID and GID for original file: %s", st)
+	}
+
+	var sliceId uint64
+	if st := m.NewSlice(ctx, &sliceId); st != 0 {
+		t.Fatalf("NewSlice: %s", st)
+	}
+	slice := Slice{Id: sliceId, Size: uint32(fileSize), Len: uint32(fileSize)}
+	if st := m.Write(ctx, originalFile, 0, 0, slice, time.Now()); st != 0 {
+		t.Fatalf("Write data to original file: %s", st)
+	}
+
+	m.getBase().doFlushQuotas()
+	time.Sleep(100 * time.Millisecond)
+
+	qs := make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+		t.Fatalf("Get user group quota after file creation: %s", err)
+	}
+	ugQuotaAfterFile := qs[UGQuotaKey]
+	if ugQuotaAfterFile == nil {
+		t.Fatalf("User group quota not found after file creation")
+	}
+
+	dirQs := make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaGet, parentPath, 0, 0, dirQs, false, false, false); err != nil {
+		t.Fatalf("Get directory quota after file creation: %s", err)
+	}
+	dirQuotaAfterFile := dirQs[parentPath]
+	if dirQuotaAfterFile == nil {
+		t.Fatalf("Directory quota not found after file creation")
+	}
+
+	if st := m.Link(ctx, originalFile, parent, "test_hardlink_file", &attr); st != 0 {
+		t.Fatalf("Create hardlink: %s", st)
+	}
+
+	m.getBase().doFlushQuotas()
+	time.Sleep(100 * time.Millisecond)
+
+	qs = make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+		t.Fatalf("Get user group quota after hardlink creation: %s", err)
+	}
+	ugQuotaAfterHardlink := qs[UGQuotaKey]
+	if ugQuotaAfterHardlink == nil {
+		t.Fatalf("User group quota not found after hardlink creation")
+	}
+
+	dirQs = make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaGet, parentPath, 0, 0, dirQs, false, false, false); err != nil {
+		t.Fatalf("Get directory quota after hardlink creation: %s", err)
+	}
+	dirQuotaAfterHardlink := dirQs[parentPath]
+	if dirQuotaAfterHardlink == nil {
+		t.Fatalf("Directory quota not found after hardlink creation")
+	}
+	expectedSpaceIncrease := int64(4096) 
+	expectedInodeIncrease := int64(1)     
+
+	actualSpaceIncrease := ugQuotaAfterHardlink.UsedSpace - ugQuotaAfterFile.UsedSpace
+	actualInodeIncrease := ugQuotaAfterHardlink.UsedInodes - ugQuotaAfterFile.UsedInodes
+
+	if actualSpaceIncrease != expectedSpaceIncrease {
+		t.Fatalf("UG quota space increase mismatch: expected %d, got %d", expectedSpaceIncrease, actualSpaceIncrease)
+	}
+	if actualInodeIncrease != expectedInodeIncrease {
+		t.Fatalf("UG quota inode increase mismatch: expected %d, got %d", expectedInodeIncrease, actualInodeIncrease)
+	}
+
+	dirExpectedSpaceIncrease := int64(8192) 
+	dirExpectedInodeIncrease := int64(1) 
+	
+	dirActualSpaceIncrease := dirQuotaAfterHardlink.UsedSpace - dirQuotaAfterFile.UsedSpace
+	dirActualInodeIncrease := dirQuotaAfterHardlink.UsedInodes - dirQuotaAfterFile.UsedInodes
+
+	if dirActualSpaceIncrease != dirExpectedSpaceIncrease {
+		t.Fatalf("Directory quota space increase mismatch: expected %d, got %d", dirExpectedSpaceIncrease, dirActualSpaceIncrease)
+	}
+	if dirActualInodeIncrease != dirExpectedInodeIncrease {
+		t.Fatalf("Directory quota inode increase mismatch: expected %d, got %d", dirExpectedInodeIncrease, dirActualInodeIncrease)
+	}
+
+	if st := m.Unlink(ctx, parent, "test_hardlink_file"); st != 0 {
+		t.Fatalf("Unlink hardlink: %s", st)
+	}
+
+	m.getBase().doFlushQuotas()
+	time.Sleep(100 * time.Millisecond)
+
+	qs = make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+		t.Fatalf("Get user group quota after hardlink deletion: %s", err)
+	}
+	ugQuotaAfterUnlink := qs[UGQuotaKey]
+	if ugQuotaAfterUnlink == nil {
+		t.Fatalf("User group quota not found after hardlink deletion")
+	}
+
+	dirQs = make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaGet, parentPath, 0, 0, dirQs, false, false, false); err != nil {
+		t.Fatalf("Get directory quota after hardlink deletion: %s", err)
+	}
+	dirQuotaAfterUnlink := dirQs[parentPath]
+	if dirQuotaAfterUnlink == nil {
+		t.Fatalf("Directory quota not found after hardlink deletion")
+	}
+
+	expectedSpaceDecrease := int64(4096) 
+	expectedInodeDecrease := int64(1)     
+
+	actualSpaceDecrease := ugQuotaAfterHardlink.UsedSpace - ugQuotaAfterUnlink.UsedSpace
+	actualInodeDecrease := ugQuotaAfterHardlink.UsedInodes - ugQuotaAfterUnlink.UsedInodes
+
+	if actualSpaceDecrease != expectedSpaceDecrease {
+		t.Fatalf("UG quota space decrease mismatch: expected %d, got %d", expectedSpaceDecrease, actualSpaceDecrease)
+	}
+	if actualInodeDecrease != expectedInodeDecrease {
+		t.Fatalf("UG quota inode decrease mismatch: expected %d, got %d", expectedInodeDecrease, actualInodeDecrease)
+	}
+
+	dirExpectedSpaceDecrease := int64(8192) 
+	dirExpectedInodeDecrease := int64(1)  
+	
+	dirActualSpaceDecrease := dirQuotaAfterHardlink.UsedSpace - dirQuotaAfterUnlink.UsedSpace
+	dirActualInodeDecrease := dirQuotaAfterHardlink.UsedInodes - dirQuotaAfterUnlink.UsedInodes
+
+	if dirActualSpaceDecrease != dirExpectedSpaceDecrease {
+		t.Fatalf("Directory quota space decrease mismatch: expected %d, got %d", dirExpectedSpaceDecrease, dirActualSpaceDecrease)
+	}
+	if dirActualInodeDecrease != dirExpectedInodeDecrease {
+		t.Fatalf("Directory quota inode decrease mismatch: expected %d, got %d", dirExpectedInodeDecrease, dirActualInodeDecrease)
+	}
+
+	m.Unlink(ctx, parent, "test_original_file")
+	m.HandleQuota(ctx, QuotaDel, "", uid, gid, nil, false, false, false)
+	m.HandleQuota(ctx, QuotaDel, parentPath, 0, 0, nil, false, false, false)
 }
