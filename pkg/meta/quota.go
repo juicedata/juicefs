@@ -272,17 +272,14 @@ func (m *baseMeta) syncVolumeStat(ctx Context) error {
 	return m.en.doSyncVolumeStat(ctx)
 }
 
-// todo:add uid gid args
-func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) syscall.Errno {
+func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, uid, gid uint32, parents ...Ino) syscall.Errno {
 	if space <= 0 && inodes <= 0 {
 		return 0
 	}
-
-	if m.checkUserQuota(ctx, 0, space, inodes) {
+	if m.checkUserQuota(ctx, uint64(uid), space, inodes) {
 		return syscall.EDQUOT
 	}
-
-	if m.checkGroupQuota(ctx, 0, space, inodes) {
+	if m.checkGroupQuota(ctx, uint64(gid), space, inodes) {
 		return syscall.EDQUOT
 	}
 
