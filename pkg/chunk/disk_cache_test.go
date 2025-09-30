@@ -432,6 +432,28 @@ func TestSetlimitByFreeRatio(t *testing.T) {
 	}
 }
 
+func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
+	dir := t.TempDir()
+	conf := defaultConf
+	conf.CacheExpire = time.Hour
+	m := new(cacheManagerMetrics)
+	m.initMetrics()
+	cache := newCacheStore(m, dir, 1<<30, 1000, 1, &conf, nil)
+	key := "0_0_4"
+
+	path, err := cache.stage(key, []byte("test"))
+	require.NoError(t, err)
+	require.NotEmpty(t, path)
+	now := time.Now()
+	require.LessOrEqual(t, cache.keys.peekAtime(cache.getCacheKey(key)), uint32(now.Add(-conf.CacheExpire/2).Unix())) // should have bias in atime
+
+	rc, err := cache.load(key)
+	require.NoError(t, err)
+	require.NotNil(t, rc)
+	defer rc.Close()
+	require.GreaterOrEqual(t, cache.keys.peekAtime(cache.getCacheKey(key)), uint32(now.Unix())) // bias should have been fixed on load
+}
+
 func Test2RandomEviction(t *testing.T) {
 	Convey("Test2RandomEviction-CacheFull", t, func() {
 		dir := t.TempDir()
@@ -525,7 +547,6 @@ func TestLruEviction(t *testing.T) {
 		conf.CacheSize = 1 << 30
 		conf.CacheItems = 10 // Max 10 items to easily trigger eviction
 
-		// TODO: delete me
 		m := new(cacheManagerMetrics)
 		m.initMetrics()
 		s := newCacheStore(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
