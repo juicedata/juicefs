@@ -482,7 +482,7 @@ func (m *baseMeta) newSessionInfo() []byte {
 	if err != nil {
 		logger.Warnf("Failed to get hostname: %s", err)
 	}
-	ips, err := utils.FindLocalIPs()
+	ips, err := utils.FindLocalIPs(m.conf.NetworkInterfaces...)
 	if err != nil {
 		logger.Warnf("Failed to get local IP: %s", err)
 	}

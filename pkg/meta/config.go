@@ -51,6 +51,7 @@ type Config struct {
 	Sid                uint64
 	SortDir            bool
 	FastStatfs         bool
+	NetworkInterfaces  []string // list of network interfaces to use for IP discovery (empty means all)
 }
 
 func DefaultConf() *Config {
