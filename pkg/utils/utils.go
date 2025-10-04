@@ -62,11 +62,19 @@ func GetLocalIp(address string) (string, error) {
 	return ip, nil
 }
 
-func FindLocalIPs() ([]net.IP, error) {
+func FindLocalIPs(allowedInterfaces ...string) ([]net.IP, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil, err
 	}
+
+	// Build a set of allowed interface names for fast lookup
+	allowedSet := make(map[string]bool)
+	for _, name := range allowedInterfaces {
+		allowedSet[name] = true
+	}
+	checkAllowed := len(allowedSet) > 0
+
 	var ips []net.IP
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 {
@@ -74,6 +82,10 @@ func FindLocalIPs() ([]net.IP, error) {
 		}
 		if iface.Flags&net.FlagLoopback != 0 {
 			continue // loopback interface
+		}
+		// Filter by interface name if allowedInterfaces is specified
+		if checkAllowed && !allowedSet[iface.Name] {
+			continue
 		}
 		addrs, err := iface.Addrs()
 		if err != nil {

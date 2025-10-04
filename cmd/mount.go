@@ -340,6 +340,16 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		atimeMode = meta.NoAtime
 	}
 	conf.AtimeMode = atimeMode
+
+	// Parse network interfaces
+	if ifaces := c.String("network-interfaces"); ifaces != "" {
+		conf.NetworkInterfaces = strings.Split(ifaces, ",")
+		// Trim whitespace from each interface name
+		for i := range conf.NetworkInterfaces {
+			conf.NetworkInterfaces[i] = strings.TrimSpace(conf.NetworkInterfaces[i])
+		}
+	}
+
 	return conf
 }
 
