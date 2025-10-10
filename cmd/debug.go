@@ -111,7 +111,7 @@ func copyFileOnWindows(srcPath, destPath string) error {
 
 func copyFile(srcPath, destPath string, requireRootPrivileges bool) error {
 	if runtime.GOOS == "windows" {
-		return utils.WithTimeout(func(context.Context) error {
+		return utils.WithTimeout(context.TODO(), func(context.Context) error {
 			return copyFileOnWindows(srcPath, destPath)
 		}, 3*time.Second)
 	}
@@ -148,7 +148,7 @@ func closeFile(file *os.File) {
 
 func getPprofPort(pid, amp string, requireRootPrivileges bool) (int, error) {
 	cfg := vfs.Config{}
-	_ = utils.WithTimeout(func(context.Context) error {
+	_ = utils.WithTimeout(context.TODO(), func(context.Context) error {
 		content, err := readConfig(amp)
 		if err != nil {
 			logger.Warnf("failed to read config file: %v", err)
@@ -467,7 +467,7 @@ func collectSysInfo(ctx *cli.Context, currDir string) error {
 func collectSpecialFile(ctx *cli.Context, amp string, currDir string, requireRootPrivileges bool, wg *sync.WaitGroup) error {
 	prefixed := true
 	configName := ".jfs.config"
-	_ = utils.WithTimeout(func(context.Context) error {
+	_ = utils.WithTimeout(context.TODO(), func(context.Context) error {
 		if !utils.Exists(filepath.Join(amp, configName)) {
 			configName = ".config"
 			prefixed = false
@@ -506,7 +506,7 @@ func debug(ctx *cli.Context) error {
 	setup(ctx, 1)
 	mp := ctx.Args().First()
 	var inode uint64
-	if err := utils.WithTimeout(func(context.Context) error {
+	if err := utils.WithTimeout(context.TODO(), func(context.Context) error {
 		var err error
 		if inode, err = utils.GetFileInode(mp); err != nil {
 			return fmt.Errorf("failed to lookup inode for %s: %s", mp, err)

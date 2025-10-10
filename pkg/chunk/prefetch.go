@@ -16,7 +16,10 @@
 
 package chunk
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 type prefetcher struct {
 	sync.Mutex
@@ -47,13 +50,14 @@ func (p *prefetcher) do() {
 	}
 }
 
-func (p *prefetcher) fetch(key string) {
+func (p *prefetcher) fetch(ctx context.Context, key string) {
 	p.Lock()
 	defer p.Unlock()
 	if _, ok := p.busy[key]; ok {
 		return
 	}
 	select {
+	case <-ctx.Done():
 	case p.pending <- key:
 		p.busy[key] = true
 	default:
