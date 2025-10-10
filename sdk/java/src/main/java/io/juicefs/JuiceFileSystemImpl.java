@@ -1193,6 +1193,12 @@ public class JuiceFileSystemImpl extends FileSystem {
     statistics.incrementReadOps(1);
     ByteBuffer fileLen = ByteBuffer.allocate(8);
     fileLen.order(ByteOrder.nativeOrder());
+    long start = System.currentTimeMillis();
+    long n = 1000_000;
+    for (int i = 0; i < n; i++) {
+      int fd = lib.jfs_open(Thread.currentThread().getId(), handle, normalizePath(f), fileLen, MODE_MASK_R);
+    }
+    System.out.println("avg open: " + (System.currentTimeMillis() - start) * 1000_000.0 / n + " ns");
     int fd = lib.jfs_open(Thread.currentThread().getId(), handle, normalizePath(f), fileLen, MODE_MASK_R);
     if (fd < 0) {
       throw error(fd, f);

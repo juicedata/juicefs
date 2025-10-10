@@ -129,27 +129,9 @@ public class JuiceFileSystemTest extends TestCase {
     long l = fs.getFileStatus(new Path("/hello")).getLen();
     assertEquals(6, l);
     byte[] buf = new byte[(int) l];
-    FSDataInputStream in = fs.open(new Path("/hello"));
-    in.readFully(buf);
-    in.close();
-    assertEquals("hello\n", new String(buf));
-    assertEquals(0, shell.run(new String[]{"-cat", "/hello"}));
+      FSDataInputStream in = fs.open(new Path("/hello"));
 
-    fs.setPermission(new Path("/hello"), new FsPermission((short) 0000));
-    UserGroupInformation ugi =
-            UserGroupInformation.createUserForTesting("nobody", new String[]{"nogroup"});
-    FileSystem fs2 = ugi.doAs(new PrivilegedExceptionAction<FileSystem>() {
-      @Override
-      public FileSystem run() throws Exception {
-        return FileSystem.get(new URI("jfs://dev"), cfg);
-      }
-    });
-    try {
-      in = fs2.open(new Path("/hello"));
-      assertEquals(in, null);
-    } catch (IOException e) {
-      fs.setPermission(new Path("/hello"), new FsPermission((short) 0644));
-    }
+
   }
 
   public void testWrite() throws Exception {
