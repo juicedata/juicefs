@@ -272,17 +272,14 @@ func (m *baseMeta) syncVolumeStat(ctx Context) error {
 	return m.en.doSyncVolumeStat(ctx)
 }
 
-// todo:add uid gid args
-func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) syscall.Errno {
+func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, uid, gid uint32, parents ...Ino) syscall.Errno {
 	if space <= 0 && inodes <= 0 {
 		return 0
 	}
-
-	if m.checkUserQuota(ctx, 0, space, inodes) {
+	if m.checkUserQuota(ctx, uint64(uid), space, inodes) {
 		return syscall.EDQUOT
 	}
-
-	if m.checkGroupQuota(ctx, 0, space, inodes) {
+	if m.checkGroupQuota(ctx, uint64(gid), space, inodes) {
 		return syscall.EDQUOT
 	}
 
@@ -810,7 +807,7 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 			if e.Attr.Typ == TypeFile {
 				if e.Attr.Nlink > 1 {
 					if processedFiles[e.Inode] {
-						space = align4K(0)
+						space = 0
 					} else {
 						space = align4K(e.Attr.Length)
 						processedFiles[e.Inode] = true

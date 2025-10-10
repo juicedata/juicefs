@@ -1013,7 +1013,7 @@ func (m *kvMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		}
 		delta.length = int64(length) - int64(t.Length)
 		delta.space = align4K(length) - align4K(t.Length)
-		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(tx, inode, t.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, t.Uid, t.Gid, m.getParents(tx, inode, t.Parent)...); err != 0 {
 			return err
 		}
 		var left, right = t.Length, length
@@ -1079,7 +1079,7 @@ func (m *kvMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 		old := t.Length
 		delta.length = int64(length) - int64(t.Length)
 		delta.space = align4K(length) - align4K(t.Length)
-		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(tx, inode, t.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, t.Uid, t.Gid, m.getParents(tx, inode, t.Parent)...); err != 0 {
 			return err
 		}
 		t.Length = length
@@ -2001,7 +2001,7 @@ func (m *kvMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice 
 			delta.space = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(tx, inode, attr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, attr.Uid, attr.Gid, m.getParents(tx, inode, attr.Parent)...); err != 0 {
 			return err
 		}
 		now := time.Now()
@@ -2070,7 +2070,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(tx, fout, attr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, newSpace, 0, attr.Uid, attr.Gid, m.getParents(tx, fout, attr.Parent)...); err != 0 {
 			return err
 		}
 		now := time.Now()
@@ -2874,7 +2874,12 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 		} else {
 			quotas = make(map[uint64]*Quota, len(pairs))
 			for k, v := range pairs {
-				id := binary.LittleEndian.Uint64([]byte(k[2:])) // skip prefix
+				var id uint64
+				if qt.prefix == "QD" {
+					id = uint64(m.decodeInode([]byte(k[2:]))) // skip prefix
+				} else {
+					id = binary.BigEndian.Uint64([]byte(k[2:])) // skip prefix
+				}
 				quota := m.parseQuota(v)
 				quotas[id] = quota
 			}

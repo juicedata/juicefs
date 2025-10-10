@@ -1217,7 +1217,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	defer m.timeit("Mknod", time.Now())
 	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
-	if err := m.checkQuota(ctx, space, inodes, parent); err != 0 {
+	if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), ctx.Gid(), parent); err != 0 {
 		return err
 	}
 
@@ -1324,6 +1324,13 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if attr.Typ == TypeDirectory {
 		return syscall.EPERM
 	}
+
+	if m.checkUserQuota(ctx, uint64(attr.Uid), 0, 1) {
+		return syscall.EDQUOT
+	}
+	if m.checkGroupQuota(ctx, uint64(attr.Gid), 0, 1) {
+		return syscall.EDQUOT
+	}
 	if m.checkDirQuota(ctx, parent, align4K(attr.Length), 1) {
 		return syscall.EDQUOT
 	}
@@ -1333,7 +1340,7 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if err == 0 {
 		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
 		m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
-		m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, align4K(attr.Length), 1)
+		m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, 0, 1)
 	}
 	return err
 }
@@ -1402,7 +1409,11 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 		m.updateDirStat(ctx, parent, -int64(diffLength), -align4K(diffLength), -1)
 		if !parent.IsTrash() {
 			m.updateDirQuota(ctx, parent, -align4K(diffLength), -1)
-			m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, -align4K(diffLength), -1)
+			if attr.Typ == TypeFile && attr.Nlink > 0 {
+				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, 0, -1)
+			} else {
+				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, -align4K(diffLength), -1)
+			}
 		}
 	}
 	return err
@@ -2836,7 +2847,7 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	if eno != 0 {
 		return eno
 	}
-	if err := m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), parent); err != 0 {
+	if err := m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), ctx.Uid(), ctx.Gid(), parent); err != 0 {
 		return err
 	}
 	*total = sum.Dirs + sum.Files
