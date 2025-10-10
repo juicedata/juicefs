@@ -89,6 +89,10 @@ func configManagementFlags() []cli.Flag {
 			Name:  "dir-stats",
 			Usage: "enable dir stats, which is necessary for fast summary and dir quota",
 		},
+		&cli.BoolFlag{
+			Name:  "user-group-quota",
+			Usage: "enable user and group quota management",
+		},
 	})
 }
 
