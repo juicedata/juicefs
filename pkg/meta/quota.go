@@ -807,7 +807,7 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 			if e.Attr.Typ == TypeFile {
 				if e.Attr.Nlink > 1 {
 					if processedFiles[e.Inode] {
-						space = align4K(0)
+						space = 0
 					} else {
 						space = align4K(e.Attr.Length)
 						processedFiles[e.Inode] = true

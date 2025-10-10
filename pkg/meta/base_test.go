@@ -4599,7 +4599,7 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 	if dirQuotaAfterHardlink == nil {
 		t.Fatalf("Directory quota not found after hardlink creation")
 	}
-	expectedSpaceIncrease := int64(4096) 
+	expectedSpaceIncrease := int64(0)
 	expectedInodeIncrease := int64(1)     
 
 	actualSpaceIncrease := ugQuotaAfterHardlink.UsedSpace - ugQuotaAfterFile.UsedSpace
@@ -4650,7 +4650,7 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 		t.Fatalf("Directory quota not found after hardlink deletion")
 	}
 
-	expectedSpaceDecrease := int64(4096) 
+	expectedSpaceDecrease := int64(0)
 	expectedInodeDecrease := int64(1)     
 
 	actualSpaceDecrease := ugQuotaAfterHardlink.UsedSpace - ugQuotaAfterUnlink.UsedSpace
