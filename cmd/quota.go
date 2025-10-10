@@ -136,13 +136,11 @@ func quota(c *cli.Context) error {
 		logger.Fatalf("Invalid quota command: %s", c.Command.Name)
 	}
 
-	// Handle user, group, and directory quota commands
+
 	var uid, gid uint32
 	var quotaKey string
-	var quotaType string // "user", "group", or "directory"
-	
+	var quotaType string
 	if c.IsSet("uid") {
-		// User quota
 		uid = uint32(c.Uint64("uid"))
 		quotaKey = meta.UGQuotaKey
 		quotaType = "user"
@@ -153,7 +151,6 @@ func quota(c *cli.Context) error {
 			logger.Fatalf("Cannot specify both --uid and --path at the same time")
 		}
 	} else if c.IsSet("gid") {
-		// Group quota
 		gid = uint32(c.Uint64("gid"))
 		quotaKey = meta.UGQuotaKey
 		quotaType = "group"
@@ -161,7 +158,6 @@ func quota(c *cli.Context) error {
 			logger.Fatalf("Cannot specify both --gid and --path at the same time")
 		}
 	} else {
-		// Directory quota
 		dpath := c.String("path")
 		if dpath == "" && cmd != meta.QuotaList {
 			logger.Fatalf("Please specify the directory with `--path <dir>` option")
@@ -179,7 +175,6 @@ func quota(c *cli.Context) error {
 	}
 	qs := make(map[string]*meta.Quota)
 	var strict, repair bool
-
 	if cmd == meta.QuotaSet {
 		strict = c.Bool("strict")
 		q := &meta.Quota{MaxSpace: -1, MaxInodes: -1} // negative means no change
@@ -202,8 +197,7 @@ func quota(c *cli.Context) error {
 	}
 
 	result := make([][]string, 1, len(qs)+1)
-
-	// Set appropriate headers based on quota type
+	
 	if quotaType == "user" {
 		result[0] = []string{"User ID", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
 	} else if quotaType == "group" {
