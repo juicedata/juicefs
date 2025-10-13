@@ -313,6 +313,10 @@ func metaFlags() []cli.Flag {
 			Value: false,
 			Usage: "Use local counters for statfs instead of querying metadata service",
 		},
+		&cli.StringFlag{
+			Name:  "network-interfaces",
+			Usage: "comma-separated list of network interfaces to use for IP discovery (e.g. eth0,en0), empty means all",
+		},
 	})
 }
 
