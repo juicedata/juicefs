@@ -39,37 +39,44 @@ Examples:
 $ juicefs quota set redis://localhost --path /dir1 --capacity 1 --inodes 100
 $ juicefs quota get redis://localhost --path /dir1
 $ juicefs quota list redis://localhost
-$ juicefs quota delete redis://localhost --path /dir1`,
+$ juicefs quota delete redis://localhost --path /dir1
+$ juicefs quota check redis://localhost --path /dir1 --repair
+$ juicefs quota set redis://localhost --uid 1000 --capacity 2 --inodes 200
+$ juicefs quota get redis://localhost --uid 1000
+$ juicefs quota delete redis://localhost --uid 1000
+$ juicefs quota set redis://localhost --gid 100 --capacity 5 --inodes 500
+$ juicefs quota get redis://localhost --gid 100
+$ juicefs quota delete redis://localhost --gid 100`,
 		Subcommands: []*cli.Command{
 			{
 				Name:      "set",
-				Usage:     "Set quota to a directory",
+				Usage:     "Set quota to a directory, user, or group",
 				ArgsUsage: "META-URL",
 				Action:    quota,
 			},
 			{
 				Name:      "get",
-				Usage:     "Get quota of a directory",
+				Usage:     "Get quota of a directory, user, or group",
 				ArgsUsage: "META-URL",
 				Action:    quota,
 			},
 			{
 				Name:      "delete",
 				Aliases:   []string{"del"},
-				Usage:     "Delete quota of a directory",
+				Usage:     "Delete quota of a directory, user, or group",
 				ArgsUsage: "META-URL",
 				Action:    quota,
 			},
 			{
 				Name:      "list",
 				Aliases:   []string{"ls"},
-				Usage:     "List all directory quotas",
+				Usage:     "List all quotas (directory, user, and group)",
 				ArgsUsage: "META-URL",
 				Action:    quota,
 			},
 			{
 				Name:      "check",
-				Usage:     "Check quota consistency of a directory",
+				Usage:     "Check quota consistency of a directory, user, or group",
 				ArgsUsage: "META-URL",
 				Action:    quota,
 			},
@@ -99,6 +106,14 @@ $ juicefs quota delete redis://localhost --path /dir1`,
 				Name:  "strict",
 				Usage: "calculate total usage of directory in strict mode (NOTE: may be slow for huge directory)",
 			},
+			&cli.Uint64Flag{
+				Name:  "uid",
+				Usage: "user ID for user quota management",
+			},
+			&cli.Uint64Flag{
+				Name:  "gid",
+				Usage: "group ID for group quota management",
+			},
 		},
 	}
 }
@@ -120,10 +135,37 @@ func quota(c *cli.Context) error {
 	default:
 		logger.Fatalf("Invalid quota command: %s", c.Command.Name)
 	}
-	dpath := c.String("path")
-	if dpath == "" && cmd != meta.QuotaList {
-		logger.Fatalf("Please specify the directory with `--path <dir>` option")
+
+
+	var uid, gid uint32
+	var quotaKey string
+	var quotaType string
+	if c.IsSet("uid") {
+		uid = uint32(c.Uint64("uid"))
+		quotaKey = meta.UGQuotaKey
+		quotaType = "user"
+		if c.IsSet("gid") {
+			logger.Fatalf("Cannot specify both --uid and --gid at the same time")
+		}
+		if c.IsSet("path") {
+			logger.Fatalf("Cannot specify both --uid and --path at the same time")
+		}
+	} else if c.IsSet("gid") {
+		gid = uint32(c.Uint64("gid"))
+		quotaKey = meta.UGQuotaKey
+		quotaType = "group"
+		if c.IsSet("path") {
+			logger.Fatalf("Cannot specify both --gid and --path at the same time")
+		}
+	} else {
+		dpath := c.String("path")
+		if dpath == "" && cmd != meta.QuotaList {
+			logger.Fatalf("Please specify the directory with `--path <dir>` option")
+		}
+		quotaKey = dpath
+		quotaType = "directory"
 	}
+
 	removePassword(c.Args().Get(0))
 
 	m := meta.NewClient(c.Args().Get(0), nil)
@@ -142,20 +184,28 @@ func quota(c *cli.Context) error {
 		if c.IsSet("inodes") {
 			q.MaxInodes = int64(c.Uint64("inodes"))
 		}
-		qs[dpath] = q
-	}
-	if cmd == meta.QuotaCheck {
+		qs[quotaKey] = q
+	} else if cmd == meta.QuotaCheck {
 		strict = c.Bool("strict")
 		repair = c.Bool("repair")
 	}
-	if err := m.HandleQuota(meta.Background(), cmd, dpath, 0, 0, qs, strict, repair, c.Bool("create")); err != nil {
+
+	if err := m.HandleQuota(meta.Background(), cmd, quotaKey, uid, gid, qs, strict, repair, c.Bool("create")); err != nil {
 		return err
 	} else if len(qs) == 0 {
 		return nil
 	}
 
 	result := make([][]string, 1, len(qs)+1)
-	result[0] = []string{"Path", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
+	
+	if quotaType == "user" {
+		result[0] = []string{"User ID", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
+	} else if quotaType == "group" {
+		result[0] = []string{"Group ID", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
+	} else {
+		result[0] = []string{"Path", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
+	}
+
 	paths := make([]string, 0, len(qs))
 	for p := range qs {
 		paths = append(paths, p)
@@ -187,7 +237,16 @@ func quota(c *cli.Context) error {
 		} else {
 			itotal = "unchanged"
 		}
-		result = append(result, []string{p, size, used, usedR, itotal, iused, iusedR})
+		
+		var identifier string
+		if quotaType == "user" {
+			identifier = fmt.Sprintf("UID:%d", uid)
+		} else if quotaType == "group" {
+			identifier = fmt.Sprintf("GID:%d", gid)
+		} else {
+			identifier = p
+		}
+		result = append(result, []string{identifier, size, used, usedR, itotal, iused, iusedR})
 	}
 	printResult(result, 0, false)
 	return nil
