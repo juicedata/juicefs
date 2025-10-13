@@ -69,6 +69,10 @@ func GetUmask() int {
 	return umask
 }
 
+func SetUmask(umask int) int {
+	return syscall.Umask(umask)
+}
+
 func ErrnoName(err syscall.Errno) string {
 	errName := unix.ErrnoName(err)
 	if errName == "" {
