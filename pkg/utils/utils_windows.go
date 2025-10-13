@@ -53,6 +53,10 @@ func GetSysInfo() string {
 
 func GetUmask() int { return 0 }
 
+func SetUmask(umask int) int {
+	return 0
+}
+
 func ErrnoName(err syscall.Errno) string {
 	return strconv.Itoa(int(err))
 }
