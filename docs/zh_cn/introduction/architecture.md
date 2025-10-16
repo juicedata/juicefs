@@ -15,8 +15,8 @@ JuiceFS 文件系统由三个部分组成：
 - 通过 **Python SDK**，在无法挂载（如多数 Serverless、受限容器）或需要进程内直连的场景，Python SDK 可无需挂载直接读写，并原生实现 fsspec 便于接入 Ray 等框架。点击[此处](https://juicefs.com/docs/zh/community/deployment/python_sdk)查看使用详情。
 - 通过 **Windows 客户端**，获得接近本地的文件系统体验。点击[此处](https://juicefs.com/docs/zh/community/tutorials/windows)查看使用详情。
 - 通过 **Hadoop Java SDK**，JuiceFS 文件系统能够直接替代 HDFS，为 Hadoop 提供低成本的海量存储。点击[此处](https://juicefs.com/docs/zh/community/hadoop_java_sdk)查看使用细节。
-- 通过 **Kubernetes CSI 驱动**，JuiceFS 文件系统能够直接为 Kubernetes 提供海量存储。点击[此处](https://juicefs.com/docs/zh/csi/introduction)查看 JuiceFS CSI 文档
-- 通过 **S3 网关**，使用 S3 作为存储层的应用可直接接入，同时可使用 AWS CLI、s3cmd、MinIO client 等工具访问 JuiceFS 文件系统。点击[此处](https://juicefs.com/docs/zh/community/guide/gateway)查看使用详情。 
+- 通过 **Kubernetes CSI 驱动**，JuiceFS 文件系统能够直接为 Kubernetes 提供海量存储。点击[此处](https://juicefs.com/docs/zh/csi/introduction)查看 JuiceFS CSI 文档。
+- 通过 **S3 网关**，使用 S3 作为存储层的应用可直接接入，同时可使用 AWS CLI、s3cmd、MinIO client 等工具访问 JuiceFS 文件系统。点击[此处](https://juicefs.com/docs/zh/community/guide/gateway)查看使用详情。
 - 通过 **WebDAV 服务**，以 HTTP 协议，以类似 RESTful API 的方式接入 JuiceFS 并直接操作其中的文件。
 
 **数据存储（Data Storage）**：文件将会被切分上传至对象存储服务。JuiceFS 支持几乎所有的公有云对象存储，同时也支持 OpenStack Swift、Ceph、MinIO 等私有化的对象存储。
