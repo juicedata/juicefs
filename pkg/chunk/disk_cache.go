@@ -219,7 +219,7 @@ func (cache *cacheStore) checkLockFile() {
 	for cache.available() {
 		time.Sleep(time.Second * 10)
 		if err := cache.statFile(lockfile); err != nil && os.IsNotExist(err) {
-			logger.Infof("lockfile is lost, cache device maybe broken")
+			logger.Infof("lockfile %s is lost, cache device maybe broken", lockfile)
 			if inRootVolume(cache.dir) && cache.freeRatio < 0.2 {
 				logger.Infof("cache directory %s is in root volume, keep 20%% space free", cache.dir)
 				cache.freeRatio = 0.2
