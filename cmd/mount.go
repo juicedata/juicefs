@@ -542,7 +542,7 @@ func mount(c *cli.Context) error {
 
 	var err error
 	if stage == 0 || supervisor == "test" {
-		err = utils.WithTimeout(func(context.Context) error {
+		err = utils.WithTimeout(context.TODO(), func(context.Context) error {
 			mp, err = filepath.Abs(mp)
 			return err
 		}, time.Second*3)

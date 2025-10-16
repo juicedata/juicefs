@@ -107,16 +107,19 @@ func FindLocalIPs(allowedInterfaces ...string) ([]net.IP, error) {
 	return ips, nil
 }
 
-func WithTimeout(f func(context.Context) error, timeout time.Duration) error {
+func WithTimeout(pCtx context.Context, f func(context.Context) error, timeout time.Duration) error {
 	var done = make(chan int, 1)
 	var t = time.NewTimer(timeout)
 	var err error
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(pCtx)
 	go func() {
 		err = f(ctx)
 		done <- 1
 	}()
 	select {
+	case <-ctx.Done():
+		err = ctx.Err()
+		t.Stop()
 	case <-done:
 		t.Stop()
 	case <-t.C:

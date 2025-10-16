@@ -34,7 +34,7 @@ import (
 
 func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 	var tmpPid string
-	_ = utils.WithTimeout(func(context.Context) error {
+	_ = utils.WithTimeout(context.TODO(), func(context.Context) error {
 		content, err := readConfig(mp)
 		if err != nil {
 			logger.Warnf("failed to read config file: %v", err)

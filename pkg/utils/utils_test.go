@@ -100,13 +100,13 @@ func TestFindLocalIPs(t *testing.T) {
 }
 
 func TestTimeout(t *testing.T) {
-	err := WithTimeout(func(context.Context) error {
+	err := WithTimeout(context.TODO(), func(context.Context) error {
 		return nil
 	}, time.Millisecond*10)
 	if err != nil {
 		t.Fatalf("fast function should return nil")
 	}
-	err = WithTimeout(func(context.Context) error {
+	err = WithTimeout(context.TODO(), func(context.Context) error {
 		time.Sleep(time.Millisecond * 100)
 		return nil
 	}, time.Millisecond*10)
