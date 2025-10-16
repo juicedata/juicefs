@@ -1,7 +1,6 @@
 package chunk
 
 import (
-	"context"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -16,7 +15,7 @@ func TestPrefetcher(t *testing.T) {
 			chRes <- k + "Done"
 		})
 		for _, k := range keys {
-			f.fetch(context.TODO(), k)
+			f.fetch(k)
 		}
 		res := make(map[string]bool, len(keys))
 		for range keys {
@@ -40,7 +39,7 @@ func TestPrefetcher(t *testing.T) {
 			atomic.AddInt32(&counter, 1)
 		})
 		for i := 0; i < 5; i++ {
-			f.fetch(context.TODO(), "a")
+			f.fetch("a")
 		}
 		if atomic.LoadInt32(&counter) > 1 {
 			t.Errorf("Duplicate keys  fetched")
@@ -57,7 +56,7 @@ func TestPrefetcher(t *testing.T) {
 		})
 
 		for i := 0; i < maxPending+1; i++ {
-			f.fetch(context.TODO(), string(rune('a'+i)))
+			f.fetch(string(rune('a' + i)))
 		}
 
 		time.Sleep(50 * time.Millisecond)

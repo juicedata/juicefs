@@ -261,6 +261,7 @@ func (s *sliceReader) drop() {
 			s.state = INVALID // somebody still using it, so mark it for removal
 		}
 	}
+	s.cancel()
 }
 
 func (s *sliceReader) delete() {
@@ -687,7 +688,6 @@ func (f *fileReader) Close(ctx meta.Context) {
 	f.closing = true
 	f.visit(func(s *sliceReader) bool {
 		s.drop()
-		s.cancel()
 		return true
 	})
 	f.release()

@@ -187,7 +187,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		s.store.objectDataBytes.WithLabelValues("GET", sc).Add(float64(n))
 		s.store.objectReqsHistogram.WithLabelValues("GET", sc).Observe(used.Seconds())
 		if err == nil {
-			s.store.fetcher.fetch(ctx, key)
+			s.store.fetcher.fetch(key)
 			return n, nil
 		} else {
 			s.store.objectReqErrors.Add(1)
