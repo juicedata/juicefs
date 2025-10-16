@@ -9,13 +9,6 @@ package object
 import (
 	"bytes"
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/pkg/errors"
-	"github.com/pkg/sftp"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
-	"golang.org/x/crypto/ssh/knownhosts"
-	"golang.org/x/term"
 	"io"
 	"math/rand"
 	"net"
@@ -30,6 +23,14 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/pkg/errors"
+	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh/knownhosts"
+	"golang.org/x/term"
 )
 
 // conn encapsulates an ssh client and corresponding sftp client
@@ -371,6 +372,7 @@ func (f *sftpStore) fileInfo(key string, fi os.FileInfo, isSymlink bool) Object 
 		group,
 		fi.Mode(),
 		isSymlink,
+		0,
 	}
 	if fi.IsDir() {
 		if key != "" && !strings.HasSuffix(key, "/") {

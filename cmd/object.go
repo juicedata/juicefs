@@ -204,6 +204,21 @@ func (o *jObj) Size() int64 {
 	}
 	return o.fi.Size()
 }
+
+func (o *jObj) Inode() uint64 {
+	return uint64(o.fi.Inode())
+}
+
+func (o *jObj) GetTime(t string) time.Time {
+	switch t {
+	case "atime":
+		return time.Unix(o.fi.Attr().Atime, int64(o.fi.Attr().Atimensec))
+	case "ctime":
+		return time.Unix(o.fi.Attr().Ctime, int64(o.fi.Attr().Ctimensec))
+	default:
+		return o.fi.ModTime()
+	}
+}
 func (o *jObj) Mtime() time.Time     { return o.fi.ModTime() }
 func (o *jObj) IsDir() bool          { return o.fi.IsDir() }
 func (o *jObj) IsSymlink() bool      { return o.isSymlink }

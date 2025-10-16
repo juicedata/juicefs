@@ -83,6 +83,7 @@ func (h *hdfsclient) toFile(key string, info os.FileInfo) *file {
 		hinfo.OwnerGroup(),
 		info.Mode(),
 		false,
+		0,
 	}
 	if f.owner == superuser {
 		f.owner = "root"

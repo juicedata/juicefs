@@ -68,6 +68,7 @@ type Config struct {
 	MinAge         time.Duration
 	StartTime      time.Time
 	EndTime        time.Time
+	TimeSelector   string
 	Env            map[string]string
 
 	FilesFrom string
@@ -209,6 +210,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		MinAge:         utils.Duration(c.String("min-age")),
 		StartTime:      startTime,
 		EndTime:        endTime,
+		TimeSelector:   c.String("time-selector"),
 		FilesFrom:      c.String("files-from"),
 		Env:            make(map[string]string),
 	}

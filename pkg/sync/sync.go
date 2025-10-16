@@ -868,6 +868,8 @@ AGAIN:
 	}
 }
 
+var scanMode bool
+
 func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Config) {
 	for {
 		obj, done := fetchTask(tasks)
@@ -929,7 +931,22 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 			fallthrough
 		default:
 			if config.Dry {
-				logger.Debugf("Will copy %s (%d bytes)", obj.Key(), obj.Size())
+				if scanMode {
+					if fi, ok := obj.(object.File); ok && !fi.IsSymlink() {
+						inode := fi.Inode()
+						gid := fi.Group()
+						uid := fi.Owner()
+						mtime := fi.GetTime("mtime")
+						atime := fi.GetTime("atime")
+						ctime := fi.GetTime("ctime")
+						prefix := strings.Split(src.String(), "/")[3]
+						absPath := path.Join("/", prefix, obj.Key())
+						logger.Infof("file info: path:%s, inode:%d, size:%d, mtime:%s, atime:%s, ctime:%s, perms:%#o, uid:%s, gid:%s",
+							absPath, inode, obj.Size(), mtime, atime, ctime, fi.Mode(), uid, gid)
+					}
+				} else {
+					logger.Debugf("Will copy %s (%d bytes)", obj.Key(), obj.Size())
+				}
 				copied.Increment()
 				copiedBytes.IncrInt64(obj.Size())
 				break
@@ -1259,19 +1276,25 @@ func parseIncludeRules(args []string) (rules []rule) {
 
 func filterKey(o object.Object, now time.Time, rules []rule, config *Config) bool {
 	var ok bool = true
+	var t time.Time
+	if fi, ok := o.(object.File); ok && !fi.IsSymlink() {
+		t = fi.GetTime(config.TimeSelector)
+	} else {
+		t = o.Mtime()
+	}
 	if !o.IsDir() && !o.IsSymlink() {
 		ok = o.Size() >= int64(config.MinSize) && o.Size() <= int64(config.MaxSize)
 		if ok && config.MaxAge > 0 {
-			ok = o.Mtime().After(now.Add(-config.MaxAge))
+			ok = t.After(now.Add(-config.MaxAge))
 		}
 		if ok && config.MinAge > 0 {
-			ok = o.Mtime().Before(now.Add(-config.MinAge))
+			ok = t.Before(now.Add(-config.MinAge))
 		}
 		if ok && !config.StartTime.IsZero() {
-			ok = o.Mtime().After(config.StartTime)
+			ok = t.After(config.StartTime)
 		}
 		if ok && !config.EndTime.IsZero() {
-			ok = o.Mtime().Before(config.EndTime)
+			ok = t.Before(config.EndTime)
 		}
 	}
 	if ok {
@@ -1789,6 +1812,8 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}()
 
 	initSyncMetrics(config)
+	schema := strings.Split(src.String(), "://")[0]
+	scanMode = os.Getenv("SYNC_MODE") == "SCAN" && (schema == "jfs" || schema == "file")
 	for i := 0; i < config.Threads; i++ {
 		wg.Add(1)
 		go func() {
