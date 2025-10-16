@@ -146,9 +146,12 @@ func TestMetrics(t *testing.T) {
 
 func TestChecksum(t *testing.T) {
 	conf := testConf()
+	conf.FreeSpace = 0.01
+	conf.CacheEviction = EvictionNone
 	defer os.RemoveAll(conf.CacheDir)
-	m := newCacheManager(&conf, nil, nil)
-	s := m.(*cacheManager).stores[0]
+	m := new(cacheManagerMetrics)
+	m.initMetrics()
+	s := newCacheStore(m, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
 	k1 := "0_0_10" // no checksum
 	k2 := "1_0_10"
 	k3 := "2_1_102400"
