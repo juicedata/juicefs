@@ -205,10 +205,6 @@ func (o *jObj) Size() int64 {
 	return o.fi.Size()
 }
 
-func (o *jObj) Inode() uint64 {
-	return uint64(o.fi.Inode())
-}
-
 func (o *jObj) GetTime(t string) time.Time {
 	switch t {
 	case "atime":

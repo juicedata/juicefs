@@ -868,8 +868,6 @@ AGAIN:
 	}
 }
 
-var scanMode bool
-
 func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Config) {
 	for {
 		obj, done := fetchTask(tasks)
@@ -931,22 +929,16 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 			fallthrough
 		default:
 			if config.Dry {
-				if scanMode {
-					if fi, ok := obj.(object.File); ok && !fi.IsSymlink() {
-						inode := fi.Inode()
-						gid := fi.Group()
-						uid := fi.Owner()
-						mtime := fi.GetTime("mtime")
-						atime := fi.GetTime("atime")
-						ctime := fi.GetTime("ctime")
-						prefix := strings.Split(src.String(), "/")[3]
-						absPath := path.Join("/", prefix, obj.Key())
-						logger.Infof("file info: path:%s, inode:%d, size:%d, mtime:%s, atime:%s, ctime:%s, perms:%#o, uid:%s, gid:%s",
-							absPath, inode, obj.Size(), mtime, atime, ctime, fi.Mode(), uid, gid)
+				msg := fmt.Sprintf("Will copy %s, size:%d bytes", obj.Key(), obj.Size())
+				if fi, ok := obj.(object.File); ok && !fi.IsSymlink() {
+					if config.TimeSelector != "" {
+						msg += fmt.Sprintf(", %s:%s", config.TimeSelector, fi.GetTime(config.TimeSelector))
 					}
-				} else {
-					logger.Debugf("Will copy %s (%d bytes)", obj.Key(), obj.Size())
+					gid := fi.Group()
+					uid := fi.Owner()
+					msg += fmt.Sprintf(", uid:%s, gid:%s, perms:%#o", uid, gid, fi.Mode())
 				}
+				logger.Info(msg)
 				copied.Increment()
 				copiedBytes.IncrInt64(obj.Size())
 				break
@@ -1812,8 +1804,6 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}()
 
 	initSyncMetrics(config)
-	schema := strings.Split(src.String(), "://")[0]
-	scanMode = os.Getenv("SYNC_MODE") == "SCAN" && (schema == "jfs" || schema == "file")
 	for i := 0; i < config.Threads; i++ {
 		wg.Add(1)
 		go func() {

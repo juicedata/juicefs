@@ -40,13 +40,6 @@ func GetFileInode(path string) (uint64, error) {
 	return 0, nil
 }
 
-func GetInodeFromInfo(fi os.FileInfo) uint64 {
-	if sst, ok := fi.Sys().(*syscall.Stat_t); ok {
-		return sst.Ino
-	}
-	return 0
-}
-
 func GetDev(fpath string) int { // ID of device containing file
 	fi, err := os.Stat(fpath)
 	if err != nil {

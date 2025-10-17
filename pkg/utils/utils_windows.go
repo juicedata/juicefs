@@ -42,11 +42,6 @@ func GetFileInode(path string) (uint64, error) {
 	return uint64(data.FileIndexHigh)<<32 + uint64(data.FileIndexLow), nil
 }
 
-// fixme: return windows file index
-func GetInodeFromInfo(fi os.FileInfo) uint64 {
-	return 0
-}
-
 func GetKernelVersion() (major, minor int) { return }
 
 func GetDev(fpath string) int { return -1 }

@@ -110,7 +110,6 @@ func toFile(key string, fi fs.FileInfo, isSymlink bool, ownerGetter func(fs.File
 		group,
 		fi.Mode(),
 		isSymlink,
-		utils.GetInodeFromInfo(fi),
 	}
 }
 

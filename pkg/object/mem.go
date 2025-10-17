@@ -70,7 +70,6 @@ func (m *memStore) Head(key string) (Object, error) {
 		o.group,
 		o.mode,
 		false,
-		0,
 	}
 	return f, nil
 }
@@ -158,7 +157,6 @@ func (m *memStore) List(prefix, marker, token, delimiter string, limit int64, fo
 						o.group,
 						o.mode,
 						false,
-						0,
 					}
 					objs = append(objs, f)
 					commonPrefixsMap[commonPrefix] = true
@@ -178,7 +176,6 @@ func (m *memStore) List(prefix, marker, token, delimiter string, limit int64, fo
 				o.group,
 				o.mode,
 				false,
-				0,
 			}
 			objs = append(objs, f)
 		}

@@ -50,7 +50,6 @@ type File interface {
 	Owner() string
 	Group() string
 	Mode() os.FileMode
-	Inode() uint64
 	GetTime(t string) time.Time
 }
 
@@ -64,7 +63,6 @@ type file struct {
 	group     string
 	mode      os.FileMode
 	isSymlink bool
-	inode     uint64
 }
 
 func (f *file) Owner() string     { return f.owner }
@@ -76,9 +74,7 @@ func (f *file) IsSymlink() bool   { return f.isSymlink }
 func (f *file) GetTime(t string) time.Time {
 	return f.mtime
 }
-func (f *file) Inode() uint64 {
-	return f.inode
-}
+
 func MarshalObject(o Object) map[string]interface{} {
 	m := make(map[string]interface{})
 	m["key"] = o.Key()
@@ -90,7 +86,6 @@ func MarshalObject(o Object) map[string]interface{} {
 		m["owner"] = f.Owner()
 		m["group"] = f.Group()
 		m["isSymlink"] = f.IsSymlink()
-		m["inode"] = f.Inode()
 	}
 	return m
 }
@@ -104,7 +99,7 @@ func UnmarshalObject(m map[string]interface{}) Object {
 		mtime: mtime,
 		isDir: m["isdir"].(bool)}
 	if _, ok := m["mode"]; ok {
-		f := file{o, m["owner"].(string), m["group"].(string), os.FileMode(m["mode"].(float64)), m["isSymlink"].(bool), m["inode"].(uint64)}
+		f := file{o, m["owner"].(string), m["group"].(string), os.FileMode(m["mode"].(float64)), m["isSymlink"].(bool)}
 		return &f
 	}
 	return &o

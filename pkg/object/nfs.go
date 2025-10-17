@@ -250,7 +250,6 @@ func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
 		group,
 		fi.Mode(),
 		isSymlink,
-		0,
 	}
 	if fi.IsDir() {
 		if key != "" && !strings.HasSuffix(key, "/") {
