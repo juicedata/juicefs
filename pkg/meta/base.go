@@ -2582,8 +2582,8 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 		} else if ok {
 			if cCtx != nil {
 				cCtx.Cancel()
-				cCtx = WrapWithTimeout(ctx, 50*time.Minute)
 			}
+			cCtx = WrapWithTimeout(ctx, 50*time.Minute)
 			days := m.getFormat().TrashDays
 			go m.doCleanupTrash(cCtx, days, false)
 			go m.cleanupDelayedSlices(cCtx, days)
