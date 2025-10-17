@@ -673,10 +673,8 @@ func tellFstabOptions(c *cli.Context) string {
 		if paramName == "o" {
 			opts = append(opts, c.String(paramName))
 		} else if strings.Contains(s, "=") {
-			// If the original argument had a value (e.g., --attr-cache=1), preserve it
 			opts = append(opts, s)
 		} else if v := c.Bool(paramName); v {
-			// For boolean flags without explicit value, just add the flag name
 			opts = append(opts, paramName)
 		} else if paramName == "cache-dir" {
 			var dirString string
