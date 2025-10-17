@@ -11,10 +11,12 @@ JuiceFS 文件系统由三个部分组成：
 
 **JuiceFS 客户端（Client）**：所有文件读写，以及碎片合并、回收站文件过期删除等后台任务，均在客户端中发生。客户端需要同时与对象存储和元数据引擎打交道。客户端支持多种接入方式：
 
-- 通过 **FUSE**，JuiceFS 文件系统能够以 POSIX 兼容的方式挂载到服务器，将海量云端存储直接当做本地存储来使用。
-- 通过 **Hadoop Java SDK**，JuiceFS 文件系统能够直接替代 HDFS，为 Hadoop 提供低成本的海量存储。
-- 通过 **Kubernetes CSI 驱动**，JuiceFS 文件系统能够直接为 Kubernetes 提供海量存储。
-- 通过 **S3 网关**，使用 S3 作为存储层的应用可直接接入，同时可使用 AWS CLI、s3cmd、MinIO client 等工具访问 JuiceFS 文件系统。
+- 通过 **FUSE**，JuiceFS 文件系统能够以 POSIX 兼容的方式挂载到服务器，将海量云端存储直接当做本地存储来使用。点击[此处](https://juicefs.com/docs/zh/community/getting-started/installation)查看使用详情。
+- 通过 **Python SDK**，在无法通过 FUSE 挂载，或需要在 Python 进程中直接访问文件系统的场景，可以使用 Python SDK 直接读写文件系统。此外，Python SDK 原生实现了 fsspec 便于接入 Ray 等框架。点击[此处](https://juicefs.com/docs/zh/community/deployment/python_sdk)查看使用详情。
+- 通过 **Windows 客户端**，获得接近本地的文件系统体验。点击[此处](https://juicefs.com/docs/zh/community/tutorials/windows)查看使用详情。
+- 通过 **Hadoop Java SDK**，JuiceFS 文件系统能够直接替代 HDFS，为 Hadoop 提供低成本的海量存储。点击[此处](https://juicefs.com/docs/zh/community/hadoop_java_sdk)查看使用细节。
+- 通过 **Kubernetes CSI 驱动**，JuiceFS 文件系统能够直接为 Kubernetes 提供海量存储。点击[此处](https://juicefs.com/docs/zh/csi/introduction)查看 JuiceFS CSI 文档。
+- 通过 **S3 网关**，使用 S3 作为存储层的应用可直接接入，同时可使用 AWS CLI、s3cmd、MinIO client 等工具访问 JuiceFS 文件系统。点击[此处](https://juicefs.com/docs/zh/community/guide/gateway)查看使用详情。
 - 通过 **WebDAV 服务**，以 HTTP 协议，以类似 RESTful API 的方式接入 JuiceFS 并直接操作其中的文件。
 
 **数据存储（Data Storage）**：文件将会被切分上传至对象存储服务。JuiceFS 支持几乎所有的公有云对象存储，同时也支持 OpenStack Swift、Ceph、MinIO 等私有化的对象存储。
