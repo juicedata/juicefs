@@ -32,18 +32,14 @@ import (
 	"os"
 	"strings"
 
-	"github.com/youmark/pkcs8"
+	"github.com/emmansun/gmsm/pkcs8"
+	"github.com/emmansun/gmsm/sm2"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
 type Encryptor interface {
 	Encrypt(plaintext []byte) ([]byte, error)
 	Decrypt(ciphertext []byte) ([]byte, error)
-}
-
-type rsaEncryptor struct {
-	privKey *rsa.PrivateKey
-	label   []byte
 }
 
 func ExportRsaPrivateKeyToPem(key *rsa.PrivateKey, passphrase string) string {
@@ -64,13 +60,21 @@ func ExportRsaPrivateKeyToPem(key *rsa.PrivateKey, passphrase string) string {
 	return string(privPEM)
 }
 
-func ParseRsaPrivateKeyFromPem(enc []byte, passphrase []byte) (*rsa.PrivateKey, error) {
+var ErrKeyNeedPasswd = errors.New("passphrase is required to private key")
+
+func ParsePrivateKeyFromPem(enc []byte, passphrase []byte) (any, error) {
 	block, _ := pem.Decode(enc)
 	if block == nil {
 		return nil, errors.New("failed to parse PEM block containing the key")
 	}
+
 	buf := block.Bytes
-	if len(passphrase) != 0 {
+	if len(passphrase) == 0 {
+		// nolint:staticcheck
+		if strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
+			return nil, ErrKeyNeedPasswd
+		}
+	} else {
 		var err error
 		// nolint:staticcheck
 		buf, err = x509.DecryptPEMBlock(block, passphrase)
@@ -78,13 +82,13 @@ func ParseRsaPrivateKeyFromPem(enc []byte, passphrase []byte) (*rsa.PrivateKey, 
 			if err == x509.IncorrectPasswordError {
 				return nil, err
 			}
-			privKey, err := pkcs8.ParsePKCS8PrivateKeyRSA(block.Bytes, passphrase)
+			key, err := pkcs8.ParsePKCS8PrivateKey(block.Bytes, passphrase)
 			if err == nil {
-				return privKey, nil
+				return key, nil
 			}
-			privKey, err = pkcs8.ParsePKCS8PrivateKeyRSA(block.Bytes, nil)
+			key, err = pkcs8.ParsePKCS8PrivateKey(block.Bytes)
 			if err == nil {
-				return privKey, nil
+				return key, nil
 			}
 			if !strings.Contains(err.Error(), "ParsePKCS1PrivateKey") {
 				return nil, fmt.Errorf("cannot decode encrypted private keys: %v", err)
@@ -93,33 +97,28 @@ func ParseRsaPrivateKeyFromPem(enc []byte, passphrase []byte) (*rsa.PrivateKey, 
 		}
 	}
 
-	priv, err := x509.ParsePKCS1PrivateKey(buf)
+	rsaKey, err := x509.ParsePKCS1PrivateKey(buf)
 	if err == nil {
-		return priv, nil
+		return rsaKey, nil
 	}
-	key, err := x509.ParsePKCS8PrivateKey(buf)
+	key, err := pkcs8.ParsePKCS8PrivateKey(buf)
 	if err != nil {
 		return nil, err
 	}
-	if priv, ok := key.(*rsa.PrivateKey); ok {
-		return priv, nil
-	}
-	return nil, fmt.Errorf("is not RSA private key")
+	return key, nil
 }
 
-func ParseRsaPrivateKeyFromPath(path, passphrase string) (*rsa.PrivateKey, error) {
+func ParseRsaPrivateKeyFromPath(path, passphrase string) (any, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	if passphrase == "" {
-		block, _ := pem.Decode(b)
-		// nolint:staticcheck
-		if block != nil && strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
-			return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
-		}
-	}
-	return ParseRsaPrivateKeyFromPem(b, []byte(passphrase))
+	return ParsePrivateKeyFromPem(b, []byte(passphrase))
+}
+
+type rsaEncryptor struct {
+	privKey *rsa.PrivateKey
+	label   []byte
 }
 
 func NewRSAEncryptor(privKey *rsa.PrivateKey) Encryptor {
@@ -132,6 +131,32 @@ func (e *rsaEncryptor) Encrypt(plaintext []byte) ([]byte, error) {
 
 func (e *rsaEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {
 	return rsa.DecryptOAEP(sha256.New(), rand.Reader, e.privKey, ciphertext, e.label)
+}
+
+type sm2Encryptor struct {
+	privKey *sm2.PrivateKey
+}
+
+func NewSM2Encryptor(privKey *sm2.PrivateKey) Encryptor {
+	return &sm2Encryptor{privKey}
+}
+
+func (e *sm2Encryptor) Encrypt(plaintext []byte) ([]byte, error) {
+	return sm2.EncryptASN1(rand.Reader, &e.privKey.PublicKey, plaintext)
+}
+
+func (e *sm2Encryptor) Decrypt(ciphertext []byte) ([]byte, error) {
+	return sm2.Decrypt(e.privKey, ciphertext)
+}
+
+func NewKeyEncryptor(privKey any) Encryptor {
+	switch k := privKey.(type) {
+	case *rsa.PrivateKey:
+		return NewRSAEncryptor(k)
+	case *sm2.PrivateKey:
+		return NewSM2Encryptor(k)
+	}
+	panic(fmt.Sprintf("unsupported key type %T", privKey)) // should not happen
 }
 
 type dataEncryptor struct {

@@ -19,8 +19,6 @@ package cmd
 import (
 	"compress/gzip"
 	"context"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"io"
 	"os"
@@ -30,6 +28,7 @@ import (
 
 	"github.com/DataDog/zstd"
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/pkg/errors"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -110,20 +109,14 @@ func open(src string, key string, algo string) (io.ReadCloser, error) {
 	var ioErr error
 	var fp io.ReadCloser
 	if key != "" {
-		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
-		encryptKey := loadEncrypt(key)
-		if passphrase == "" {
-			block, _ := pem.Decode([]byte(encryptKey))
-			// nolint:staticcheck
-			if block != nil && strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
-				return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
-			}
-		}
-		privKey, err := object.ParseRsaPrivateKeyFromPem([]byte(encryptKey), []byte(passphrase))
+		privKey, err := object.ParsePrivateKeyFromPem([]byte(loadEncrypt(key)), []byte(os.Getenv("JFS_RSA_PASSPHRASE")))
 		if err != nil {
+			if errors.Is(err, object.ErrKeyNeedPasswd) {
+				return nil, fmt.Errorf("%w: please set the 'JFS_RSA_PASSPHRASE' environment variable", err)
+			}
 			return nil, fmt.Errorf("parse rsa: %s", err)
 		}
-		encryptor, err := object.NewDataEncryptor(object.NewRSAEncryptor(privKey), algo)
+		encryptor, err := object.NewDataEncryptor(object.NewKeyEncryptor(privKey), algo)
 		if err != nil {
 			return nil, err
 		}

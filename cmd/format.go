@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"io"
 	"math/rand"
@@ -44,6 +43,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
 
@@ -289,20 +289,14 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		}
 	}
 	if format.EncryptKey != "" {
-		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
-		if passphrase == "" {
-			block, _ := pem.Decode([]byte(format.EncryptKey))
-			// nolint:staticcheck
-			if block != nil && strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
-				return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
-			}
-		}
-
-		privKey, err := object.ParseRsaPrivateKeyFromPem([]byte(format.EncryptKey), []byte(passphrase))
+		privKey, err := object.ParsePrivateKeyFromPem([]byte(format.EncryptKey), []byte(os.Getenv("JFS_RSA_PASSPHRASE")))
 		if err != nil {
+			if errors.Is(err, object.ErrKeyNeedPasswd) {
+				return nil, fmt.Errorf("%w: please set the 'JFS_RSA_PASSPHRASE' environment variable", err)
+			}
 			return nil, fmt.Errorf("parse rsa: %s", err)
 		}
-		encryptor, err := object.NewDataEncryptor(object.NewRSAEncryptor(privKey), format.EncryptAlgo)
+		encryptor, err := object.NewDataEncryptor(object.NewKeyEncryptor(privKey), format.EncryptAlgo)
 		if err != nil {
 			return nil, err
 		}
