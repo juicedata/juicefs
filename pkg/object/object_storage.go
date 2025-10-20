@@ -50,6 +50,7 @@ type File interface {
 	Owner() string
 	Group() string
 	Mode() os.FileMode
+	GetTime(t string) time.Time
 }
 
 type onlyWriter struct {
@@ -68,6 +69,11 @@ func (f *file) Owner() string     { return f.owner }
 func (f *file) Group() string     { return f.group }
 func (f *file) Mode() os.FileMode { return f.mode }
 func (f *file) IsSymlink() bool   { return f.isSymlink }
+
+// GetTime fixme: support atime, ctime
+func (f *file) GetTime(t string) time.Time {
+	return f.mtime
+}
 
 func MarshalObject(o Object) map[string]interface{} {
 	m := make(map[string]interface{})

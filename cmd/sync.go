@@ -147,6 +147,11 @@ func selectionFlags() []cli.Flag {
 			Name:  "end-time",
 			Usage: "skip files modified after end-time. example: 2006-01-02 15:04:05",
 		},
+		&cli.StringFlag{
+			Name:  "time-selector",
+			Value: "mtime",
+			Usage: "time selector, can be mtime, atime or ctime",
+		},
 		&cli.Int64Flag{
 			Name:  "limit",
 			Usage: "limit the number of objects that will be processed (-1 is unlimited, 0 is to process nothing)",

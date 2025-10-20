@@ -97,6 +97,7 @@ func toFile(key string, fi fs.FileInfo, isSymlink bool, ownerGetter func(fs.File
 		size = 0
 	}
 	owner, group := ownerGetter(fi)
+
 	return &file{
 		obj{
 			key,
