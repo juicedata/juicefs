@@ -34,6 +34,7 @@ import (
 
 	"github.com/emmansun/gmsm/pkcs8"
 	"github.com/emmansun/gmsm/sm2"
+	"github.com/emmansun/gmsm/sm4"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
@@ -72,6 +73,9 @@ func ParsePrivateKeyFromPem(enc []byte, passphrase []byte) (any, error) {
 	if len(passphrase) == 0 {
 		// nolint:staticcheck
 		if strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
+			return nil, ErrKeyNeedPasswd
+		}
+		if strings.Contains(block.Type, "ENCRYPTED") {
 			return nil, ErrKeyNeedPasswd
 		}
 	} else {
@@ -168,6 +172,7 @@ type dataEncryptor struct {
 const (
 	AES256GCM_RSA = "aes256gcm-rsa"
 	CHACHA20_RSA  = "chacha20-rsa"
+	SM4GCM        = "sm4gcm"
 )
 
 func NewDataEncryptor(keyEncryptor Encryptor, algo string) (Encryptor, error) {
@@ -183,6 +188,17 @@ func NewDataEncryptor(keyEncryptor Encryptor, algo string) (Encryptor, error) {
 		return &dataEncryptor{keyEncryptor, 32, aead}, nil
 	case CHACHA20_RSA:
 		return &dataEncryptor{keyEncryptor, chacha20poly1305.KeySize, chacha20poly1305.New}, nil
+	case SM4GCM:
+		// TODO: support other modes?
+		// GCM not in [GB/T 17964-2021](http://c.gb688.cn/bzgk/gb/showGb?type=online&hcno=4F89D833626340B1F71068D25EAC737D)
+		aead := func(key []byte) (cipher.AEAD, error) {
+			block, err := sm4.NewCipher(key)
+			if err != nil {
+				return nil, err
+			}
+			return cipher.NewGCM(block)
+		}
+		return &dataEncryptor{keyEncryptor, 16, aead}, nil
 	}
 	return nil, fmt.Errorf("unsupport cipher: %s", algo)
 }

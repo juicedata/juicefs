@@ -243,27 +243,65 @@ func BenchmarkKeyEncryptionKey(b *testing.B) {
 	}
 }
 
-func TestChaCha20(t *testing.T) {
-	kc := NewRSAEncryptor(rsaKey)
-	dc, _ := NewDataEncryptor(kc, CHACHA20_RSA)
+func TestDataEncryptor(t *testing.T) {
+	cases := []struct {
+		name string
+		kek  string
+		algo string
+	}{
+		{"rsa_aesgcm", "rsa", AES256GCM_RSA},
+		{"rsa_chacha20", "rsa", CHACHA20_RSA},
+		{"sm2_sm4gcm", "sm2", SM4GCM},
+	}
 	data := []byte("hello")
-	ciphertext, _ := dc.Encrypt(data)
-	plaintext, _ := dc.Decrypt(ciphertext)
-	if !bytes.Equal(data, plaintext) {
-		t.Errorf("decrypt fail")
-		t.Fail()
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ke := NewKeyEncryptor(genPrivateKey(c.kek))
+			de, err := NewDataEncryptor(ke, c.algo)
+			require.NoError(t, err, "failed to create data encryptor")
+			cipherText, err := de.Encrypt(data)
+			require.NoError(t, err, "failed to encrypt data")
+			plainText, err := de.Decrypt(cipherText)
+			require.NoError(t, err, "failed to decrypt data")
+			require.Equal(t, data, plainText, "decrypted data not equal to original")
+		})
 	}
 }
 
-func TestAESGCM(t *testing.T) {
-	kc := NewRSAEncryptor(rsaKey)
-	dc, _ := NewDataEncryptor(kc, AES256GCM_RSA)
-	data := []byte("hello")
-	ciphertext, _ := dc.Encrypt(data)
-	plaintext, _ := dc.Decrypt(ciphertext)
-	if !bytes.Equal(data, plaintext) {
-		t.Errorf("decrypt fail")
-		t.Fail()
+func BenchmarkDataEncryptor(b *testing.B) {
+	cases := []struct {
+		name string
+		kek  string
+		algo string
+	}{
+		{"rsa_aesgcm", "rsa", AES256GCM_RSA},
+		{"rsa_chacha20", "rsa", CHACHA20_RSA},
+		{"sm2_sm4gcm", "sm2", SM4GCM},
+	}
+	data := make([]byte, 4<<20)
+	if _, err := rand.Read(data); err != nil {
+		b.Fatalf("failed to generate random data: %v", err)
+	}
+	for _, c := range cases {
+		ke := NewKeyEncryptor(genPrivateKey(c.kek))
+		de, err := NewDataEncryptor(ke, c.algo)
+		if err != nil {
+			b.Fatalf("failed to create data encryptor: %v", err)
+		}
+		cipherText, err := de.Encrypt(data)
+		if err != nil {
+			b.Fatalf("failed to encrypt data: %v", err)
+		}
+		b.Run(c.name+"_encrypt", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, _ = de.Encrypt(data)
+			}
+		})
+		b.Run(c.name+"_decrypt", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, _ = de.Decrypt(cipherText)
+			}
+		})
 	}
 }
 
