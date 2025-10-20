@@ -215,6 +215,7 @@ func (o *jObj) GetTime(t string) time.Time {
 		return o.fi.ModTime()
 	}
 }
+
 func (o *jObj) Mtime() time.Time     { return o.fi.ModTime() }
 func (o *jObj) IsDir() bool          { return o.fi.IsDir() }
 func (o *jObj) IsSymlink() bool      { return o.isSymlink }

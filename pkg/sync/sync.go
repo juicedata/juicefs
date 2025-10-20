@@ -929,16 +929,15 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 			fallthrough
 		default:
 			if config.Dry {
-				msg := fmt.Sprintf("Will copy %s, size:%d bytes", obj.Key(), obj.Size())
+				t := obj.Mtime()
+				var extra string
 				if fi, ok := obj.(object.File); ok && !fi.IsSymlink() {
-					if config.TimeSelector != "" {
-						msg += fmt.Sprintf(", %s:%s", config.TimeSelector, fi.GetTime(config.TimeSelector))
+					t = fi.GetTime(config.TimeSelector)
+					if config.Perms {
+						extra = fmt.Sprintf(", owner:%s, group:%s, mode:%#o", fi.Owner(), fi.Group(), fi.Mode())
 					}
-					gid := fi.Group()
-					uid := fi.Owner()
-					msg += fmt.Sprintf(", uid:%s, gid:%s, perms:%#o", uid, gid, fi.Mode())
 				}
-				logger.Info(msg)
+				logger.Infof("Will copy %s (size:%d, time:%s%s)", obj.Key(), obj.Size(), t, extra)
 				copied.Increment()
 				copiedBytes.IncrInt64(obj.Size())
 				break
