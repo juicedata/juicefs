@@ -937,7 +937,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 						extra = fmt.Sprintf(", owner:%s, group:%s, mode:%#o", fi.Owner(), fi.Group(), fi.Mode())
 					}
 				}
-				logger.Infof("Will copy %s (size:%d, time:%s%s)", obj.Key(), obj.Size(), t, extra)
+				logger.Debugf("Will copy %s (size:%d, time:%s%s)", obj.Key(), obj.Size(), t, extra)
 				copied.Increment()
 				copiedBytes.IncrInt64(obj.Size())
 				break
