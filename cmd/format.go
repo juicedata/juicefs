@@ -294,7 +294,7 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 			if errors.Is(err, object.ErrKeyNeedPasswd) {
 				return nil, fmt.Errorf("%w: please set the 'JFS_RSA_PASSPHRASE' environment variable", err)
 			}
-			return nil, fmt.Errorf("parse rsa: %s", err)
+			return nil, fmt.Errorf("parse private key: %s", err)
 		}
 		encryptor, err := object.NewDataEncryptor(object.NewKeyEncryptor(privKey), format.EncryptAlgo)
 		if err != nil {
