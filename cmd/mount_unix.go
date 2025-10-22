@@ -655,8 +655,29 @@ func absPath(d string) string {
 	return d
 }
 
+func buildBoolFlagsMap(c *cli.Context) map[string]bool {
+	boolFlags := make(map[string]bool)
+	addBoolFlags := func(flags []cli.Flag) {
+		for _, flag := range flags {
+			if _, ok := flag.(*cli.BoolFlag); ok {
+				for _, name := range flag.Names() {
+					boolFlags[name] = true
+				}
+			}
+		}
+	}
+	if c.App != nil {
+		addBoolFlags(c.App.Flags)
+	}
+	if c.Command != nil {
+		addBoolFlags(c.Command.Flags)
+	}
+	return boolFlags
+}
+
 func tellFstabOptions(c *cli.Context) string {
 	opts := []string{"_netdev"}
+	boolFlags := buildBoolFlagsMap(c)
 	for _, s := range os.Args[2:] {
 		if !strings.HasPrefix(s, "-") {
 			continue
@@ -668,7 +689,7 @@ func tellFstabOptions(c *cli.Context) string {
 		}
 		if s == "o" {
 			opts = append(opts, c.String(s))
-		} else if v := c.Bool(s); v {
+		} else if boolFlags[s] && c.Bool(s) {
 			opts = append(opts, s)
 		} else if s == "cache-dir" {
 			var dirString string
