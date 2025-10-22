@@ -659,34 +659,29 @@ func absPath(d string) string {
 	return d
 }
 
-func isBoolFlag(c *cli.Context, flagName string) bool {
-	if c.App != nil {
-		for _, flag := range c.App.Flags {
-			for _, name := range flag.Names() {
-				if name == flagName {
-					_, ok := flag.(*cli.BoolFlag)
-					return ok
+func buildBoolFlagsMap(c *cli.Context) map[string]bool {
+	boolFlags := make(map[string]bool)
+	addBoolFlags := func(flags []cli.Flag) {
+		for _, flag := range flags {
+			if _, ok := flag.(*cli.BoolFlag); ok {
+				for _, name := range flag.Names() {
+					boolFlags[name] = true
 				}
 			}
 		}
+	}
+	if c.App != nil {
+		addBoolFlags(c.App.Flags)
 	}
 	if c.Command != nil {
-		for _, flag := range c.Command.Flags {
-			for _, name := range flag.Names() {
-				if name == flagName {
-					_, ok := flag.(*cli.BoolFlag)
-					return ok
-				}
-			}
-		}
+		addBoolFlags(c.Command.Flags)
 	}
-	
-	return false
+	return boolFlags
 }
 
 func tellFstabOptions(c *cli.Context) string {
 	opts := []string{"_netdev,nofail"}
-	
+	boolFlags := buildBoolFlagsMap(c)
 	for _, s := range os.Args[2:] {
 		if !strings.HasPrefix(s, "-") {
 			continue
@@ -698,7 +693,7 @@ func tellFstabOptions(c *cli.Context) string {
 		}
 		if s == "o" {
 			opts = append(opts, c.String(s))
-		} else if isBoolFlag(c, s) {
+		} else if boolFlags[s] && c.Bool(s) {
 			opts = append(opts, s)
 		} else if s == "cache-dir" {
 			var dirString string
@@ -1071,3 +1066,4 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 		logger.Fatalf("fuse: %s", err)
 	}
 }
+
