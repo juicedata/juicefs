@@ -49,6 +49,7 @@ func TestEncrypt(t *testing.T) {
 	}
 	format := Format{Name: "test", SecretKey: "testSecret", SessionToken: "token", EncryptKey: "testEncrypt"}
 	for _, c := range cases {
+		format.EncryptAlgo = c.algo
 		t.Run(c.algo, func(t *testing.T) {
 			if err := format.Encrypt(); err != nil {
 				t.Fatalf("Format encrypt: %s", err)

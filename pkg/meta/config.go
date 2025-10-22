@@ -220,7 +220,7 @@ func (f *Format) Encrypt() error {
 	if f.KeyEncrypted || f.SecretKey == "" && f.EncryptKey == "" && f.SessionToken == "" {
 		return nil
 	}
-	aead, err := newCipher(f.EncryptAlgo, f.UUID)
+	ci, err := newCipher(f.EncryptAlgo, f.UUID)
 	if err != nil {
 		return err
 	}
@@ -228,14 +228,14 @@ func (f *Format) Encrypt() error {
 		if *k == "" {
 			return
 		}
-		nonce := make([]byte, aead.NonceSize())
+		nonce := make([]byte, ci.NonceSize())
 		if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
 			logger.Fatalf("generate nonce for secret key: %s", err)
 		}
-		ciphertext := aead.Seal(nil, nonce, []byte(*k), nil)
-		buf := make([]byte, aead.NonceSize()+len(ciphertext))
+		ciphertext := ci.Seal(nil, nonce, []byte(*k), nil)
+		buf := make([]byte, ci.NonceSize()+len(ciphertext))
 		copy(buf, nonce)
-		copy(buf[aead.NonceSize():], ciphertext)
+		copy(buf[ci.NonceSize():], ciphertext)
 		*k = base64.StdEncoding.EncodeToString(buf)
 	}
 
@@ -251,7 +251,7 @@ func (f *Format) Decrypt() error {
 		return nil
 	}
 
-	aead, err := newCipher(f.EncryptAlgo, f.UUID)
+	ci, err := newCipher(f.EncryptAlgo, f.UUID)
 	if err != nil {
 		return err
 	}
@@ -268,7 +268,7 @@ func (f *Format) Decrypt() error {
 			err = fmt.Errorf("decode key: %s", e)
 			return
 		}
-		plaintext, e := aead.Open(nil, buf[:12], buf[12:], nil)
+		plaintext, e := ci.Open(nil, buf[:ci.NonceSize()], buf[ci.NonceSize():], nil)
 		if e != nil {
 			err = fmt.Errorf("open cipher: %s", e)
 			return
