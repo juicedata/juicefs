@@ -430,6 +430,7 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 
 func tellFstabOptions(c *cli.Context) string {
 	opts := []string{"_netdev"}
+	boolFlags := buildBoolFlagsMap(c)
 	for _, s := range os.Args[2:] {
 		if !strings.HasPrefix(s, "-") {
 			continue
@@ -441,7 +442,7 @@ func tellFstabOptions(c *cli.Context) string {
 		}
 		if s == "o" {
 			opts = append(opts, c.String(s))
-		} else if v := c.Bool(s); v {
+		} else if boolFlags[s] && c.Bool(s) {
 			opts = append(opts, s)
 		} else {
 			opts = append(opts, fmt.Sprintf("%s=%s", s, c.Generic(s)))
