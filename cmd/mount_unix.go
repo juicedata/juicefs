@@ -666,27 +666,25 @@ func tellFstabOptions(c *cli.Context) string {
 			continue
 		}
 		s = strings.TrimLeft(s, "-")
-		paramName := strings.Split(s, "=")[0]
-		if !c.IsSet(paramName) || paramName == "update-fstab" || paramName == "background" || paramName == "d" {
+		s = strings.Split(s, "=")[0]
+		if !c.IsSet(s) || s == "update-fstab" || s == "background" || s == "d" {
 			continue
 		}
-		if paramName == "o" {
-			opts = append(opts, c.String(paramName))
-		} else if strings.Contains(s, "=") {
+		if s == "o" {
+			opts = append(opts, c.String(s))
+		} else if v := c.Bool(s); v {
 			opts = append(opts, s)
-		} else if v := c.Bool(paramName); v {
-			opts = append(opts, paramName)
-		} else if paramName == "cache-dir" {
+		} else if s == "cache-dir" {
 			var dirString string
-			if c.String(paramName) == "memory" {
+			if c.String(s) == "memory" {
 				dirString = "memory"
 			} else {
-				dirs := utils.SplitDir(c.String(paramName))
+				dirs := utils.SplitDir(c.String(s))
 				dirString = strings.Join(relPathToAbs(dirs), string(os.PathListSeparator))
 			}
-			opts = append(opts, fmt.Sprintf("%s=%s", paramName, dirString))
+			opts = append(opts, fmt.Sprintf("%s=%s", s, dirString))
 		} else {
-			opts = append(opts, fmt.Sprintf("%s=%s", paramName, c.Generic(paramName)))
+			opts = append(opts, fmt.Sprintf("%s=%s", s, c.Generic(s)))
 		}
 	}
 	sort.Strings(opts)
