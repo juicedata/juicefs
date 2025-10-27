@@ -123,9 +123,8 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [从 MLPerf Storage v2.0 看 AI 训练中的存储性能与扩展能力](https://juicefs.com/zh-cn/blog/engineering/juicefs-mlperf-storage-v2-ai-training-storage-performance)，2025-09-17，莫飞虎
 - [实现 TB 级聚合带宽，JuiceFS 分布式缓存网络优化实践](https://juicefs.com/zh-cn/blog/engineering/tb-bandwidth-juicefs-distributed-cache-optimization)，2025-09-03，莫飞虎
 - [JuiceFS writeback：写加速机制与适用场景解析](https://juicefs.com/zh-cn/blog/solutions/juicesfs-writeback-analysis)，2025-08-25，蔡敏
-- 
-[3000 台 JuiceFS Windows 客户端性能评估 ](https://juicefs.com/zh-cn/blog/solutions/juicefs-windows--performance-test)，2025-08-06，蔡敏
-- [JuiceFS on Windows: 首个 Beta 版的探索与优化之路](https://juicefs.com/zh-cn/blog/engineering/juicefs-on-windows-beta)，2025-08-04，陈杰
+- [3000 台 JuiceFS Windows 客户端性能评估](https://juicefs.com/zh-cn/blog/solutions/juicefs-windows--performance-test)，2025-08-06，蔡敏
+- [JuiceFS on Windows：首个 Beta 版的探索与优化之路](https://juicefs.com/zh-cn/blog/engineering/juicefs-on-windows-beta)，2025-08-04，陈杰
 - [探索 LanceDB 在多种存储方案下的查询效率](https://juicefs.com/zh-cn/blog/solutions/lancedb-query-performance-across-storage-solutions)，2025-07-30，白伯纯
 - [JuiceFS 社区版 V1.3 正式发布：支持 Python SDK、亿级备份加速、SQL 和 Windows 全面优化](https://juicefs.com/zh-cn/blog/release-notes/juicefs-v13-ga)，2025-07-08
 - [Lustre 与 JuiceFS：架构设计、文件分布与特性比较](https://juicefs.com/zh-cn/blog/engineering/lustre-vs-juicefs)，2025-06-18，刘庆
