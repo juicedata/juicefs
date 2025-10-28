@@ -42,11 +42,10 @@ import (
 
 type wasb struct {
 	DefaultObjectStorage
-	container     *container.Client
-	azblobCli     *azblob.Client
-	sc            string
-	cName         string
-	sharedKeyCred *azblob.SharedKeyCredential // nil if using managed identity
+	container *container.Client
+	azblobCli *azblob.Client
+	sc        string
+	cName     string
 }
 
 func (b *wasb) String() string {
@@ -119,22 +118,11 @@ func (b *wasb) Copy(ctx context.Context, dst, src string) error {
 	if b.sc != "" {
 		options.Tier = str2Tier(b.sc)
 	}
-
-	var srcURL string
-	if b.sharedKeyCred != nil {
-		// Use SAS token for shared key authentication
-		srcSASUrl, err := srcCli.GetSASURL(sas.BlobPermissions{Read: true}, time.Now().Add(10*time.Second), nil)
-		if err != nil {
-			return err
-		}
-		srcURL = srcSASUrl
-	} else {
-		// For managed identity, use the direct blob URL
-		// The copy operation will use the same credential that authenticated the client
-		srcURL = srcCli.URL()
+	srcSASUrl, err := srcCli.GetSASURL(sas.BlobPermissions{Read: true}, time.Now().Add(10*time.Second), nil)
+	if err != nil {
+		return err
 	}
-
-	_, err := dstCli.CopyFromURL(ctx, srcURL, options)
+	_, err = dstCli.CopyFromURL(ctx, srcSASUrl, options)
 	return err
 }
 
@@ -193,27 +181,15 @@ func (b *wasb) SetStorageClass(sc string) error {
 	return nil
 }
 
-// createAzureCredential creates a credential for Azure authentication using managed identity or other methods.
-// It supports both system-assigned and user-assigned managed identities via AZURE_CLIENT_ID environment variable.
-// Falls back to DefaultAzureCredential which includes: Environment, Workload Identity, Managed Identity, Azure CLI, etc.
+// createAzureCredential creates a credential for Azure authentication.
+// Uses DefaultAzureCredential which attempts authentication via:
+// - Environment variables (service principal)
+// - Workload Identity (Kubernetes)
+// - Managed Identity (system-assigned and user-assigned)
+// - Azure CLI
+// - Azure Developer CLI
 func createAzureCredential() (azcore.TokenCredential, error) {
-	// Check if user wants to use a specific user-assigned managed identity
-	if clientID := os.Getenv("AZURE_CLIENT_ID"); clientID != "" {
-		logger.Debugf("Attempting authentication with user-assigned managed identity (client ID: %s)", clientID)
-		opts := &azidentity.ManagedIdentityCredentialOptions{
-			ID: azidentity.ClientID(clientID),
-		}
-		cred, err := azidentity.NewManagedIdentityCredential(opts)
-		if err != nil {
-			logger.Debugf("Failed to create user-assigned managed identity credential: %v", err)
-			return nil, err
-		}
-		return cred, nil
-	}
-
-	// Use DefaultAzureCredential for flexible authentication
-	// This tries: Environment -> Workload Identity -> Managed Identity -> Azure CLI -> Azure Developer CLI
-	logger.Debugf("Attempting authentication with DefaultAzureCredential (managed identity, Azure CLI, etc.)")
+	logger.Debugf("Creating DefaultAzureCredential for token-based authentication")
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
 		logger.Debugf("Failed to create DefaultAzureCredential: %v", err)
@@ -248,6 +224,32 @@ func autoWasbEndpoint(containerName, accountName, scheme string, credential *azb
 	return endpoint, nil
 }
 
+func autoWasbEndpointWithToken(containerName, accountName, scheme string, credential azcore.TokenCredential) (string, error) {
+	baseURLs := []string{"blob.core.windows.net", "blob.core.chinacloudapi.cn"}
+	endpoint := ""
+	for _, baseURL := range baseURLs {
+		if _, err := net.LookupIP(fmt.Sprintf("%s.%s", accountName, baseURL)); err != nil {
+			logger.Debugf("Attempt to resolve domain name %s failed: %s", baseURL, err)
+			continue
+		}
+		client, err := azblob.NewClient(fmt.Sprintf("%s://%s.%s", scheme, accountName, baseURL), credential, nil)
+		if err != nil {
+			return "", err
+		}
+		if _, err = client.ServiceClient().GetProperties(ctx, nil); err != nil {
+			logger.Debugf("Try to get service properties at %s failed: %s", baseURL, err)
+			continue
+		}
+		endpoint = baseURL
+		break
+	}
+
+	if endpoint == "" {
+		return "", fmt.Errorf("fail to get endpoint for container %s", containerName)
+	}
+	return endpoint, nil
+}
+
 func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
@@ -267,27 +269,7 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 		if client, err = azblob.NewClientFromConnectionString(connString, nil); err != nil {
 			return nil, err
 		}
-
-		// Parse connection string to extract credentials for SAS token generation in Copy operations
-		var sharedKeyCred *azblob.SharedKeyCredential
-		connParts := strings.Split(connString, ";")
-		var accountNameFromConn, accountKeyFromConn string
-		for _, part := range connParts {
-			if strings.HasPrefix(part, "AccountName=") {
-				accountNameFromConn = strings.TrimPrefix(part, "AccountName=")
-			} else if strings.HasPrefix(part, "AccountKey=") {
-				accountKeyFromConn = strings.TrimPrefix(part, "AccountKey=")
-			}
-		}
-		if accountNameFromConn != "" && accountKeyFromConn != "" {
-			sharedKeyCred, err = azblob.NewSharedKeyCredential(accountNameFromConn, accountKeyFromConn)
-			if err != nil {
-				logger.Debugf("Failed to create shared key credential from connection string: %v", err)
-				sharedKeyCred = nil
-			}
-		}
-
-		return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName, sharedKeyCred: sharedKeyCred}, nil
+		return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName}, nil
 	}
 
 	// Priority 2: Try managed identity / token-based authentication if no account key provided
@@ -298,16 +280,14 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 			return nil, fmt.Errorf("Failed to create Azure credential (managed identity/Azure CLI): %v", err)
 		}
 
-		// Determine the domain/endpoint for managed identity
 		var domain string
 		if len(hostParts) > 1 {
 			domain = hostParts[1]
 			if !strings.HasPrefix(hostParts[1], "blob") {
 				domain = fmt.Sprintf("blob.%s", hostParts[1])
 			}
-		} else {
-			// Default to public Azure cloud when using managed identity
-			domain = "blob.core.windows.net"
+		} else if domain, err = autoWasbEndpointWithToken(containerName, accountName, uri.Scheme, tokenCred); err != nil {
+			return nil, fmt.Errorf("Unable to get endpoint of container %s: %s", containerName, err)
 		}
 
 		serviceURL := fmt.Sprintf("%s://%s.%s", uri.Scheme, accountName, domain)
@@ -316,7 +296,7 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 			return nil, fmt.Errorf("Failed to create Azure blob client with token credential: %v", err)
 		}
 		logger.Debugf("Successfully authenticated using token-based credential")
-		return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName, sharedKeyCred: nil}, nil
+		return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName}, nil
 	}
 
 	// Priority 3: Shared key authentication (existing behavior)
@@ -336,12 +316,11 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 		return nil, fmt.Errorf("Unable to get endpoint of container %s: %s", containerName, err)
 	}
 
-	serviceURL := fmt.Sprintf("%s://%s.%s", uri.Scheme, accountName, domain)
-	client, err := azblob.NewClientWithSharedKeyCredential(serviceURL, credential, nil)
+	client, err := azblob.NewClientWithSharedKeyCredential(fmt.Sprintf("%s://%s.%s", uri.Scheme, accountName, domain), credential, nil)
 	if err != nil {
 		return nil, err
 	}
-	return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName, sharedKeyCred: credential}, nil
+	return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName}, nil
 }
 
 func init() {
