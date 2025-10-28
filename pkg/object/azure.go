@@ -267,8 +267,27 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 		if client, err = azblob.NewClientFromConnectionString(connString, nil); err != nil {
 			return nil, err
 		}
-		// Connection string uses shared key internally, but we don't have direct access to it
-		return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName, sharedKeyCred: nil}, nil
+
+		// Parse connection string to extract credentials for SAS token generation in Copy operations
+		var sharedKeyCred *azblob.SharedKeyCredential
+		connParts := strings.Split(connString, ";")
+		var accountNameFromConn, accountKeyFromConn string
+		for _, part := range connParts {
+			if strings.HasPrefix(part, "AccountName=") {
+				accountNameFromConn = strings.TrimPrefix(part, "AccountName=")
+			} else if strings.HasPrefix(part, "AccountKey=") {
+				accountKeyFromConn = strings.TrimPrefix(part, "AccountKey=")
+			}
+		}
+		if accountNameFromConn != "" && accountKeyFromConn != "" {
+			sharedKeyCred, err = azblob.NewSharedKeyCredential(accountNameFromConn, accountKeyFromConn)
+			if err != nil {
+				logger.Debugf("Failed to create shared key credential from connection string: %v", err)
+				sharedKeyCred = nil
+			}
+		}
+
+		return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName, sharedKeyCred: sharedKeyCred}, nil
 	}
 
 	// Priority 2: Try managed identity / token-based authentication if no account key provided
