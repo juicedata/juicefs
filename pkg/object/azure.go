@@ -271,20 +271,6 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 		return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName, sharedKeyCred: nil}, nil
 	}
 
-	// Determine the domain/endpoint
-	var domain string
-	if len(hostParts) > 1 {
-		domain = hostParts[1]
-		if !strings.HasPrefix(hostParts[1], "blob") {
-			domain = fmt.Sprintf("blob.%s", hostParts[1])
-		}
-	} else {
-		// Default to public Azure cloud
-		domain = "blob.core.windows.net"
-	}
-
-	serviceURL := fmt.Sprintf("%s://%s.%s", uri.Scheme, accountName, domain)
-
 	// Priority 2: Try managed identity / token-based authentication if no account key provided
 	if accountKey == "" {
 		logger.Debugf("No account key provided, attempting token-based authentication (managed identity, Azure CLI, etc.)")
@@ -293,6 +279,19 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 			return nil, fmt.Errorf("Failed to create Azure credential (managed identity/Azure CLI): %v", err)
 		}
 
+		// Determine the domain/endpoint for managed identity
+		var domain string
+		if len(hostParts) > 1 {
+			domain = hostParts[1]
+			if !strings.HasPrefix(hostParts[1], "blob") {
+				domain = fmt.Sprintf("blob.%s", hostParts[1])
+			}
+		} else {
+			// Default to public Azure cloud when using managed identity
+			domain = "blob.core.windows.net"
+		}
+
+		serviceURL := fmt.Sprintf("%s://%s.%s", uri.Scheme, accountName, domain)
 		client, err := azblob.NewClient(serviceURL, tokenCred, nil)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to create Azure blob client with token credential: %v", err)
@@ -308,6 +307,17 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 		return nil, err
 	}
 
+	var domain string
+	if len(hostParts) > 1 {
+		domain = hostParts[1]
+		if !strings.HasPrefix(hostParts[1], "blob") {
+			domain = fmt.Sprintf("blob.%s", hostParts[1])
+		}
+	} else if domain, err = autoWasbEndpoint(containerName, accountName, uri.Scheme, credential); err != nil {
+		return nil, fmt.Errorf("Unable to get endpoint of container %s: %s", containerName, err)
+	}
+
+	serviceURL := fmt.Sprintf("%s://%s.%s", uri.Scheme, accountName, domain)
 	client, err := azblob.NewClientWithSharedKeyCredential(serviceURL, credential, nil)
 	if err != nil {
 		return nil, err
