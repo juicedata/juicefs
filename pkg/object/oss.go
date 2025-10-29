@@ -405,6 +405,10 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	config.UserAgent = &UserAgent
 	config.HttpClient = httpClient
 	config.CredentialsProvider = provider
+	// default is SignatureVersionV4
+	if uri.Query().Get("signature-version-v1") != "" {
+		config.WithSignatureVersion(oss.SignatureVersionV1)
+	}
 	client := oss.NewClient(config)
 	o := &ossClient{client: client, bucket: bucketName}
 	return o, nil
