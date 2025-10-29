@@ -112,7 +112,7 @@ type ObjectMetadata struct {
 	// ContentLanguage is Content-Language header.
 	ContentLanguage string
 
-	// ContentLanguage is Content-Length header.
+	// ContentLength is Content-Length header.
 	ContentLength int64
 
 	// ContentType is Content-Type header.

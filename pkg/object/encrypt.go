@@ -242,7 +242,7 @@ func (e *dataEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {
 	keyLen := int(ciphertext[0])<<8 + int(ciphertext[1])
 	nonceLen := int(ciphertext[2])
 	if 3+keyLen+nonceLen >= len(ciphertext) {
-		return nil, fmt.Errorf("misformed ciphertext: %d %d", keyLen, nonceLen)
+		return nil, fmt.Errorf("malformed ciphertext: %d %d", keyLen, nonceLen)
 	}
 	ciphertext = ciphertext[3:]
 	cipherkey := ciphertext[:keyLen]

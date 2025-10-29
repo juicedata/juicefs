@@ -535,7 +535,7 @@ This is not included by default, please build it with tag `bunny`
 
 #### Usage
 
-Create a Storage Zone and use the Zone Name with the Hostname of the Location seperated by a dot as Bucket name and the `Write Password` as Secret Key.
+Create a Storage Zone and use the Zone Name with the Hostname of the Location separated by a dot as Bucket name and the `Write Password` as Secret Key.
 
 ```shell
 juicefs format \
@@ -1083,7 +1083,7 @@ juicefs format \
 ```
 
 :::note
-Don't use the same TiKV cluster for both metadata and data, because JuiceFS uses non-transactional protocol (RawKV) for objects and transactional protocol (TnxKV) for metadata. The TxnKV protocol has special encoding for keys, so they may overlap with keys even they has different prefixes. BTW, it's recommmended to enable [Titan](https://tikv.org/docs/latest/deploy/configure/titan) in TiKV for data cluster.
+Don't use the same TiKV cluster for both metadata and data, because JuiceFS uses non-transactional protocol (RawKV) for objects and transactional protocol (TnxKV) for metadata. The TxnKV protocol has special encoding for keys, so they may overlap with keys even they has different prefixes. BTW, it's recommended to enable [Titan](https://tikv.org/docs/latest/deploy/configure/titan) in TiKV for data cluster.
 :::
 
 #### Set up TLS
