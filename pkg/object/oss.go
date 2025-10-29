@@ -384,19 +384,28 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		logger.Debugf("use endpoint %s", domain)
 	}
 	var regionID string
+	var useV1 bool
 	if regionID = os.Getenv("ALICLOUD_REGION_ID"); regionID == "" {
 		index := strings.Index(domain, ".")
 		if index <= 0 {
 			return nil, fmt.Errorf("invalid endpoint: %s", domain)
 		}
-		regionID = strings.TrimPrefix(strings.TrimPrefix(domain[:index], "http://"), "https://")
-		regionID = strings.TrimPrefix(regionID, "oss-")
-		regionID = strings.TrimSuffix(regionID, "-internal")
-		regionID = strings.TrimSuffix(regionID, "-vpc")
+		if strings.HasSuffix(domain, ".aliyuncs.com") {
+			old := strings.TrimPrefix(strings.TrimPrefix(domain[:index], "http://"), "https://")
+			regionID = strings.TrimPrefix(old, "oss-")
+			regionID = strings.TrimSuffix(regionID, "-internal")
+			regionID = strings.TrimSuffix(regionID, "-vpc")
+			useV1 = old == regionID
+		}
 	}
 	config := oss.LoadDefaultConfig()
 	config.Endpoint = oss.Ptr(domain)
-	config.Region = oss.Ptr(regionID)
+	if regionID != "" && !useV1 {
+		config.Region = oss.Ptr(regionID)
+	}
+	if useV1 {
+		config.WithSignatureVersion(oss.SignatureVersionV1)
+	}
 	config.RetryMaxAttempts = oss.Ptr(1)
 	config.ConnectTimeout = oss.Ptr(time.Second * 2)
 	config.ReadWriteTimeout = oss.Ptr(time.Second * 5)
@@ -405,10 +414,6 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	config.UserAgent = &UserAgent
 	config.HttpClient = httpClient
 	config.CredentialsProvider = provider
-	// default is SignatureVersionV4
-	if uri.Query().Get("signature-version-v1") != "" {
-		config.WithSignatureVersion(oss.SignatureVersionV1)
-	}
 	client := oss.NewClient(config)
 	o := &ossClient{client: client, bucket: bucketName}
 	return o, nil
