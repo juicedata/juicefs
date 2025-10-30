@@ -42,10 +42,11 @@ import (
 
 type wasb struct {
 	DefaultObjectStorage
-	container *container.Client
-	azblobCli *azblob.Client
-	sc        string
-	cName     string
+	container    *container.Client
+	azblobCli    *azblob.Client
+	sc           string
+	cName        string
+	useTokenAuth bool // true when using managed identity/token-based auth, false for shared key/connection string
 }
 
 func (b *wasb) String() string {
@@ -118,11 +119,25 @@ func (b *wasb) Copy(ctx context.Context, dst, src string) error {
 	if b.sc != "" {
 		options.Tier = str2Tier(b.sc)
 	}
-	srcSASUrl, err := srcCli.GetSASURL(sas.BlobPermissions{Read: true}, time.Now().Add(10*time.Second), nil)
-	if err != nil {
-		return err
+
+	var srcURL string
+	var err error
+
+	if b.useTokenAuth {
+		// Token-based authentication: use direct blob URL
+		// Azure will authenticate using the OAuth token from the credential chain
+		srcURL = srcCli.URL()
+		logger.Debugf("Using token-based authentication for Copy operation (direct URL without SAS)")
+	} else {
+		// Shared key authentication: generate SAS token for source blob
+		srcURL, err = srcCli.GetSASURL(sas.BlobPermissions{Read: true}, time.Now().Add(10*time.Second), nil)
+		if err != nil {
+			return err
+		}
+		logger.Debugf("Using shared key authentication for Copy operation (SAS URL)")
 	}
-	_, err = dstCli.CopyFromURL(ctx, srcSASUrl, options)
+
+	_, err = dstCli.CopyFromURL(ctx, srcURL, options)
 	return err
 }
 
@@ -269,7 +284,7 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 		if client, err = azblob.NewClientFromConnectionString(connString, nil); err != nil {
 			return nil, err
 		}
-		return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName}, nil
+		return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName, useTokenAuth: false}, nil
 	}
 
 	// Priority 2: Try managed identity / token-based authentication if no account key provided
@@ -296,7 +311,7 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 			return nil, fmt.Errorf("Failed to create Azure blob client with token credential: %v", err)
 		}
 		logger.Debugf("Successfully authenticated using token-based credential")
-		return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName}, nil
+		return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName, useTokenAuth: true}, nil
 	}
 
 	// Priority 3: Shared key authentication (existing behavior)
@@ -320,7 +335,7 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 	if err != nil {
 		return nil, err
 	}
-	return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName}, nil
+	return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName, useTokenAuth: false}, nil
 }
 
 func init() {
