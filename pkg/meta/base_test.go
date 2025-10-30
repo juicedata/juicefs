@@ -3699,7 +3699,7 @@ func TestTxBatchLock(t *testing.T) {
 	}()
 }
 
-// testCheckQuotaFileOwner
+// testCheckQuotaFileOwnerSimple
 func testCheckQuotaFileOwnerSimple(t *testing.T, m Meta) {
 	ctx := Background()
 	parent := RootInode

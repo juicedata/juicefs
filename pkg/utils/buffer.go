@@ -137,7 +137,7 @@ func (b *Buffer) Get(l int) []byte {
 	return b.buf[b.off-l : b.off]
 }
 
-// SetBytes initilizes the Buffer with BigEndian ordering
+// SetBytes initializes the Buffer with BigEndian ordering
 func (b *Buffer) SetBytes(buf []byte) {
 	b.endian = binary.BigEndian
 	b.off = 0
