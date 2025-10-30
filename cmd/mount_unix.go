@@ -393,6 +393,10 @@ func mountFlags() []cli.Flag {
 			Name:  "hide-internal",
 			Usage: "hide all internal files (.accesslog, .stats, etc.)",
 		},
+		&cli.BoolFlag{
+			Name:  "skip-trash",
+			Usage: "skip trash and delete files directly",
+		},
 	}
 	if runtime.GOOS == "linux" {
 		selfFlags = append(selfFlags, &cli.BoolFlag{
