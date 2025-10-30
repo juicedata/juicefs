@@ -230,10 +230,6 @@ func NewConfigFromCli(c *cli.Context) *Config {
 			logger.Debugf("directories will be sync when files-from is set")
 			cfg.Dirs = true
 		}
-		if !cfg.Links {
-			logger.Debugf("symlinks will be sync when files-from is set")
-			cfg.Links = true
-		}
 	}
 	for _, key := range envList() {
 		if os.Getenv(key) != "" {

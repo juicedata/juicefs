@@ -1581,9 +1581,6 @@ func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStora
 		logger.Warnf("head %s from %s: %s", key, src, err)
 		return err
 	}
-	if obj.IsSymlink() && !config.Links {
-		return nil
-	}
 	if obj.IsDir() {
 		if !strings.HasSuffix(key, "/") {
 			return errDirSuffix
