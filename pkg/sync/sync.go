@@ -846,38 +846,19 @@ type holder struct {
 var muHolder sync.Mutex
 var holders []*holder
 
-func noMoreTask(tasks chan<- object.Object) {
-	for len(tasks) > 0 {
-		time.Sleep(time.Millisecond * 1)
-	}
-	close(tasks)
-}
-
 func fetchTask(tasks chan object.Object) (t object.Object, done func()) {
-	defer func() {
-		if e, ok := recover().(error); ok && e.Error() == "send on closed channel" {
-			logger.Debugf("no more task, continue with current one")
-			done = func() {}
-		}
-	}()
-AGAIN:
-	if t == nil {
-		t = <-tasks
-	}
 	muHolder.Lock()
+	defer muHolder.Unlock()
 	if len(holders) > 0 {
 		h := holders[len(holders)-1]
 		holders = holders[:len(holders)-1]
 		muHolder.Unlock()
-		select {
-		case tasks <- t: // put back
-			t = nil
-			<-h.done
-		case <-h.done:
-		}
-		goto AGAIN
+		<-h.done
+		muHolder.Lock()
 	}
-	defer muHolder.Unlock()
+	if t = <-tasks; t == nil {
+		return nil, func() {}
+	}
 	size := t.Size()
 	if size == markChecksum {
 		size = withoutSize(t).Size()
@@ -1857,7 +1838,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		if err != nil {
 			return err
 		}
-		noMoreTask(tasks)
+		close(tasks)
 	} else {
 		go fetchJobs(tasks, config)
 		go func() {

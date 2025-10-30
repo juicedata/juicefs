@@ -419,5 +419,5 @@ func fetchJobs(tasks chan<- object.Object, config *Config) {
 			tasks <- obj
 		}
 	}
-	noMoreTask(tasks)
+	close(tasks)
 }
