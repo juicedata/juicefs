@@ -11,10 +11,13 @@ The JuiceFS file system consists of three parts:
 
 **JuiceFS Client**: The JuiceFS client handles all file I/O operations, including background tasks like data compaction and trash file expiration. It communicates with both the object storage and metadata engine. The client supports multiple access methods:
 
-- **FUSE**: JuiceFS file system can be mounted on a host in a POSIX-compatible manner, allowing the massive cloud storage to be used as local storage.
+- **FUSE**: JuiceFS file system can be mounted on a host in a POSIX-compatible manner, allowing the massive cloud storage to be used as local storage. For details, see [this document](https://juicefs.com/docs/community/getting-started/installation).
+- **Python SDK**: In scenarios where FUSE mounting is not feasible or where direct file system access from within a Python process is required, the Python SDK can read and write the file system directly. Furthermore, the Python SDK natively implements fsspec for easy integration with frameworks like Ray. For details, see [Python_SDK](https://juicefs.com/docs/community/deployment/python_sdk).
+- **Windows Client**: You can experience a file system performance close to that of a local one. For details, see [Use JuiceFS on Windows](https://juicefs.com/docs/community/tutorials/windows).
 - **Hadoop Java SDK**: JuiceFS can replace HDFS, providing Hadoop with cost-effective and abundant storage capacity.
-- **Kubernetes CSI Driver**: JuiceFS provides shared storage for containers in Kubernetes through its CSI Driver.
-- **S3 Gateway**: Applications using S3 as the storage layer can directly access the JuiceFS file system, and tools such as AWS CLI, s3cmd, and MinIO client can be used to access the JuiceFS file system at the same time.
+For details, see [Use JuiceFS on Hadoop Ecosystem](https://juicefs.com/docs/community/hadoop_java_sdk).
+- **Kubernetes CSI Driver**: JuiceFS provides shared storage for containers in Kubernetes through its CSI Driver. For details, see [Introduction to JuiceFS CSI Driver](https://juicefs.com/docs/csi/introduction).
+- **S3 Gateway**: Applications using S3 as the storage layer can directly access the JuiceFS file system, and tools such as AWS CLI, s3cmd, and MinIO client can be used to access the JuiceFS file system at the same time. For details, see [JuiceFS S3 Gateway](https://juicefs.com/docs/community/guide/gateway).
 - **WebDAV Server**: Files in JuiceFS can be operated directly using the HTTP protocol.
 
 **Data Storage**: File data is split and stored in object storage. JuiceFS supports virtually all types of object storage, including typical self-hosted solutions like OpenStack Swift, Ceph, and MinIO.
