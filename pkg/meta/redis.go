@@ -155,6 +155,13 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	if opt.Password == "" {
 		opt.Password = os.Getenv("META_PASSWORD")
 	}
+	if opt.Password == "" {
+		if passwordFile := os.Getenv("META_PASSWORD_FILE"); passwordFile != "" {
+			if password, err := readPasswordFromFile(passwordFile); err == nil {
+				opt.Password = password
+			}
+		}
+	}
 	opt.MaxRetries = conf.Retries
 	if opt.MaxRetries == 0 {
 		opt.MaxRetries = -1 // Redis use -1 to disable retries
