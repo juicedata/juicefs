@@ -384,7 +384,7 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		logger.Debugf("use endpoint %s", domain)
 	}
 	var regionID string
-	var useV1 bool
+	var useV4 bool
 	if regionID = os.Getenv("ALICLOUD_REGION_ID"); regionID == "" {
 		index := strings.Index(domain, ".")
 		if index <= 0 {
@@ -395,15 +395,15 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 			regionID = strings.TrimPrefix(old, "oss-")
 			regionID = strings.TrimSuffix(regionID, "-internal")
 			regionID = strings.TrimSuffix(regionID, "-vpc")
-			useV1 = old == regionID
+			useV4 = old != regionID
 		}
 	}
 	config := oss.LoadDefaultConfig()
 	config.Endpoint = oss.Ptr(domain)
-	if regionID != "" && !useV1 {
+	if useV4 {
+		config.WithSignatureVersion(oss.SignatureVersionV4)
 		config.Region = oss.Ptr(regionID)
-	}
-	if useV1 {
+	} else {
 		config.WithSignatureVersion(oss.SignatureVersionV1)
 	}
 	config.RetryMaxAttempts = oss.Ptr(1)
