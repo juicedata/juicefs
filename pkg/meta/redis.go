@@ -2205,6 +2205,11 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 	if err != nil {
 		return errno(err)
 	}
+	if m.conf.SortDir {
+		sort.Slice(*entries, func(i, j int) bool {
+			return string((*entries)[i].Name) < string((*entries)[j].Name)
+		})
+	}
 
 	if plus != 0 && len(*entries) != 0 {
 		batchSize := 4096

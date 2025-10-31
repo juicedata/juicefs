@@ -2551,7 +2551,8 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 }
 
 func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
-	return errno(m.simpleTxn(ctx, func(s *xorm.Session) error {
+
+	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		s = s.Table(&edge{})
 		if plus != 0 {
 			s = s.Join("INNER", &node{}, m.sqlConv("edge.inode=node.inode"))
@@ -2582,7 +2583,15 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 			*entries = append(*entries, entry)
 		}
 		return nil
-	}))
+	}); err != nil {
+		return errno(err)
+	}
+	if m.conf.SortDir {
+		sort.Slice(*entries, func(i, j int) bool {
+			return string((*entries)[i].Name) < string((*entries)[j].Name)
+		})
+	}
+	return 0
 }
 
 func (m *dbMeta) doCleanStaleSession(sid uint64) error {
@@ -5097,11 +5106,17 @@ func (m *dbMeta) getDirFetcher() dirFetcher {
 			}
 			return nil
 		})
+
 		if err != nil {
 			return nil, nil, err
 		}
 		if len(entries) == 0 {
 			return nil, nil, nil
+		}
+		if m.conf.SortDir {
+			sort.Slice(entries, func(i, j int) bool {
+				return string(entries[i].Name) < string(entries[j].Name)
+			})
 		}
 		return entries[len(entries)-1].Name, entries, nil
 	}

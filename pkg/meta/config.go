@@ -36,7 +36,6 @@ import (
 
 // Config for clients.
 type Config struct {
-	Strict             bool // update ctime
 	Retries            int
 	MaxDeletes         int
 	SkipDirNlink       int
@@ -58,7 +57,7 @@ type Config struct {
 }
 
 func DefaultConf() *Config {
-	return &Config{Strict: true, Retries: 10, MaxDeletes: 2, Heartbeat: 12 * time.Second, AtimeMode: NoAtime, DirStatFlushPeriod: 1 * time.Second}
+	return &Config{Retries: 10, MaxDeletes: 2, Heartbeat: 12 * time.Second, AtimeMode: NoAtime, DirStatFlushPeriod: 1 * time.Second}
 }
 
 func (c *Config) SelfCheck() {
