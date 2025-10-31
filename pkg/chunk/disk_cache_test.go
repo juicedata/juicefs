@@ -591,3 +591,25 @@ func TestLruEviction(t *testing.T) {
 		require.Equal(t, 0, len(le.lruHeap), "LRU heap should be empty by cleanupFull after setting maxItems to 1")
 	})
 }
+
+func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
+	dir := t.TempDir()
+	conf := defaultConf
+	conf.CacheExpire = time.Hour
+	m := new(cacheManagerMetrics)
+	m.initMetrics()
+	cache := newCacheStore(m, dir, 1<<30, 1000, 1, &conf, nil)
+	key := "0_0_4"
+
+	now := time.Now()
+	path, err := cache.stage(key, []byte("test"))
+	require.NoError(t, err)
+	require.NotEmpty(t, path)
+	require.LessOrEqual(t, cache.keys.peekAtime(cache.getCacheKey(key)), uint32(now.Add(-conf.CacheExpire/2).Unix())) // should have bias in atime
+
+	rc, err := cache.load(key)
+	require.NoError(t, err)
+	require.NotNil(t, rc)
+	defer rc.Close()
+	require.GreaterOrEqual(t, cache.keys.peekAtime(cache.getCacheKey(key)), uint32(now.Unix())) // bias should have been fixed on load
+}
