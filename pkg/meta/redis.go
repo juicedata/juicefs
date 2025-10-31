@@ -3141,15 +3141,19 @@ func (m *redisMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar)
 	})
 }
 
-func (m *redisMeta) cleanupLeakedInodes(delete bool) {
+func (m *redisMeta) cleanupLeakedInodesAndEdges(clean bool, before time.Duration) {
+	type entry struct {
+		Parent Ino
+		Name   string
+	}
 	var ctx = Background()
-	var foundInodes = make(map[Ino]struct{})
-	foundInodes[RootInode] = struct{}{}
-	foundInodes[TrashInode] = struct{}{}
-	cutoff := time.Now().Add(time.Hour * -1)
+	var node2Edges = make(map[Ino][]*entry)
+	node2Edges[RootInode] = []*entry{{Parent: RootInode, Name: "/"}}
+	node2Edges[TrashInode] = []*entry{{Parent: RootInode, Name: ".trash"}}
+	cutoff := time.Now().Add(-before)
 	prefix := len(m.prefix)
 
-	_ = m.scan(ctx, "d[0-9]*", func(keys []string) error {
+	if err := m.scan(ctx, "d[0-9]*", func(keys []string) error {
 		for _, key := range keys {
 			ino, _ := strconv.Atoi(key[prefix+1:])
 			var entries []*Entry
@@ -3159,12 +3163,16 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 				return eno
 			}
 			for _, e := range entries {
-				foundInodes[e.Inode] = struct{}{}
+				node2Edges[e.Inode] = append(node2Edges[e.Inode], &entry{Parent: Ino(ino), Name: string(e.Name)})
 			}
 		}
 		return nil
-	})
-	_ = m.scan(ctx, "i*", func(keys []string) error {
+	}); err != nil {
+		logger.Errorf("scan directories: %s", err)
+		return
+	}
+
+	if err := m.scan(ctx, "i*", func(keys []string) error {
 		values, err := m.rdb.MGet(ctx, keys...).Result()
 		if err != nil {
 			logger.Warnf("mget inodes: %s", err)
@@ -3177,18 +3185,44 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 			var attr Attr
 			m.parseAttr([]byte(v.(string)), &attr)
 			ino, _ := strconv.Atoi(keys[i][prefix+1:])
-			if _, ok := foundInodes[Ino(ino)]; !ok && time.Unix(attr.Ctime, 0).Before(cutoff) {
-				logger.Infof("found dangling inode: %s %+v", keys[i], attr)
-				if delete {
+			if _, ok := node2Edges[Ino(ino)]; !ok && time.Unix(attr.Ctime, 0).Before(cutoff) {
+				logger.Infof("found leaded inode: %d %+v", ino, attr)
+				if clean {
 					err = m.doDeleteSustainedInode(0, Ino(ino))
 					if err != nil {
 						logger.Errorf("delete leaked inode %d : %s", ino, err)
 					}
 				}
 			}
+			node2Edges[Ino(ino)] = nil
 		}
 		return nil
-	})
+	}); err != nil {
+		logger.Errorf("scan inodes: %s", err)
+		return
+	}
+
+	node2Edges[RootInode], node2Edges[TrashInode] = nil, nil
+	for c, es := range node2Edges {
+		if err := m.txn(ctx, func(tx *redis.Tx) error {
+			// double check
+			if err := tx.Get(ctx, m.inodeKey(c)).Err(); err == nil {
+				return nil
+			} else if err != redis.Nil {
+				return err
+			}
+			for _, e := range es {
+				logger.Infof("found leaked edge %d -> (%d, %s)", e.Parent, c, e.Name)
+				if clean {
+					tx.HDel(ctx, m.entryKey(e.Parent), e.Name)
+				}
+			}
+			return nil
+		}, m.inodeKey(c)); err != nil {
+			logger.Errorf("delete leaked edges %d: %s", c, err)
+			return
+		}
+	}
 }
 
 func (m *redisMeta) scan(ctx context.Context, pattern string, f func([]string) error) error {
@@ -3244,9 +3278,11 @@ func (m *redisMeta) hscan(ctx context.Context, key string, f func([]string) erro
 	return nil
 }
 
-func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
-	m.cleanupLeakedInodes(delete)
-	m.cleanupLeakedChunks(delete)
+func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, scanLeaked, delete bool, showProgress func()) syscall.Errno {
+	if scanLeaked {
+		m.cleanupLeakedInodesAndEdges(delete, time.Hour)
+		m.cleanupLeakedChunks(delete)
+	}
 	m.cleanupOldSliceRefs(delete)
 	if delete {
 		m.doCleanupSlices(ctx)
