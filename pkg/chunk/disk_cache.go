@@ -741,9 +741,6 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 			cache.used -= int64(iter.size + 4096)
 		}
 		iter.size = size
-		if atime > iter.atime {
-			iter.atime = atime
-		}
 	}
 	cache.keys.add(k, *iter) // add or update
 	if size > 0 {
