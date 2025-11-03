@@ -263,66 +263,95 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 	return ls
 }
 
-func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *uint64, concurrent chan int) syscall.Errno {
-	for {
-		var entries []*Entry
-		if st := m.en.doReaddir(ctx, inode, 0, &entries, 10000); st != 0 && st != syscall.ENOENT {
-			return st
+type BatchUnlinkEntryInfo struct {
+	Type   uint8  
+	Length uint64 
+	Uid    uint32
+	Gid    uint32
+	Nlink  uint32 
+}
+
+func (m *baseMeta) updateBatchUnlinkQuota(ctx Context, dirInode Ino, entries []BatchUnlinkEntryInfo) {
+	if dirInode.IsTrash() {
+		return
+	}
+
+	var totalDirSpace int64
+	var totalDirInodes int64
+	userQuotaChanges := make(map[uint32]struct {
+		space  int64
+		inodes int64
+	})
+	groupQuotaChanges := make(map[uint32]struct {
+		space  int64
+		inodes int64
+	})
+
+	var totalDirLength int64
+	for _, entry := range entries {
+		var diffLength uint64
+		if entry.Type == TypeFile {
+			diffLength = entry.Length
 		}
-		if len(entries) == 0 {
-			return 0
-		}
-		if st := m.Access(ctx, inode, MODE_MASK_W|MODE_MASK_X, nil); st != 0 {
-			return st
-		}
-		var wg sync.WaitGroup
-		var status syscall.Errno
-		// try directories first to increase parallel
-		var dirs int
-		for i, e := range entries {
-			if e.Attr.Typ == TypeDirectory {
-				entries[dirs], entries[i] = entries[i], entries[dirs]
-				dirs++
+		diffSpace := -align4K(diffLength)
+
+		totalDirSpace += diffSpace
+		totalDirInodes -= 1
+		totalDirLength -= int64(diffLength)
+
+
+		if entry.Type == TypeFile && entry.Nlink > 0 {
+			if entry.Uid > 0 {
+				uq := userQuotaChanges[entry.Uid]
+				uq.inodes -= 1
+				userQuotaChanges[entry.Uid] = uq
 			}
-		}
-		for i, e := range entries {
-			if e.Attr.Typ == TypeDirectory {
-				select {
-				case concurrent <- 1:
-					wg.Add(1)
-					go func(child Ino, name string) {
-						defer wg.Done()
-						st := m.emptyEntry(ctx, inode, name, child, skipCheckTrash, count, concurrent)
-						if st != 0 && st != syscall.ENOENT {
-							status = st
-						}
-						<-concurrent
-					}(e.Inode, string(e.Name))
-				default:
-					if st := m.emptyEntry(ctx, inode, string(e.Name), e.Inode, skipCheckTrash, count, concurrent); st != 0 && st != syscall.ENOENT {
-						ctx.Cancel()
-						return st
-					}
-				}
-			} else {
-				if count != nil {
-					atomic.AddUint64(count, 1)
-				}
-				if st := m.Unlink(ctx, inode, string(e.Name), skipCheckTrash); st != 0 && st != syscall.ENOENT {
-					ctx.Cancel()
-					return st
-				}
+			if entry.Gid > 0 {
+				gq := groupQuotaChanges[entry.Gid]
+				gq.inodes -= 1
+				groupQuotaChanges[entry.Gid] = gq
 			}
-			if ctx.Canceled() {
-				return syscall.EINTR
+		} else {
+			if entry.Uid > 0 {
+				uq := userQuotaChanges[entry.Uid]
+				uq.space += diffSpace
+				uq.inodes -= 1
+				userQuotaChanges[entry.Uid] = uq
 			}
-			entries[i] = nil // release memory
-		}
-		wg.Wait()
-		if status != 0 || inode == TrashInode { // try only once for .trash
-			return status
+			if entry.Gid > 0 {
+				gq := groupQuotaChanges[entry.Gid]
+				gq.space += diffSpace
+				gq.inodes -= 1
+				groupQuotaChanges[entry.Gid] = gq
+			}
 		}
 	}
+
+	if totalDirLength != 0 || totalDirSpace != 0 || totalDirInodes != 0 {
+		m.updateDirStat(ctx, dirInode, totalDirLength, totalDirSpace, totalDirInodes)
+	}
+
+	if totalDirSpace != 0 || totalDirInodes != 0 {
+		m.updateDirQuota(ctx, dirInode, totalDirSpace, totalDirInodes)
+	}
+
+	for uid, changes := range userQuotaChanges {
+		if changes.space != 0 || changes.inodes != 0 {
+			m.updateUserGroupQuota(ctx, uid, 0, changes.space, changes.inodes)
+		}
+	}
+	for gid, changes := range groupQuotaChanges {
+		if changes.space != 0 || changes.inodes != 0 {
+			m.updateUserGroupQuota(ctx, 0, gid, changes.space, changes.inodes)
+		}
+	}
+}
+
+func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *uint64, concurrent chan int) syscall.Errno {
+	if ctx.Canceled() {
+		return syscall.EINTR
+	}
+	return m.en.doBatchUnlink(ctx, inode, skipCheckTrash)
 }
 
 func (m *baseMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, skipCheckTrash bool, count *uint64, concurrent chan int) syscall.Errno {

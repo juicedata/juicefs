@@ -1959,6 +1959,294 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	return errno(err)
 }
 
+func (m *dbMeta) doBatchUnlink(ctx Context, inode Ino, skipCheckTrash ...bool) syscall.Errno {
+	var dirNode node
+	var dirAttr Attr
+	if st := m.GetAttr(ctx, inode, &dirAttr); st != 0 {
+		return st
+	}
+	if dirAttr.Typ != TypeDirectory {
+		return syscall.ENOTDIR
+	}
+
+	var parent Ino
+	if dirAttr.Parent > 0 {
+		parent = dirAttr.Parent
+	} else {
+		parent = 0
+	}
+
+	var trash Ino
+	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
+		if parent > 0 {
+			if st := m.checkTrash(parent, &trash); st != 0 {
+				return st
+			}
+		} else {
+			if st := m.checkTrash(inode, &trash); st != 0 {
+				return st
+			}
+		}
+	}
+
+	type entryInfo struct {
+		edge       edge
+		node       node
+		opened     bool
+		trashEntry Ino
+		newSpace   int64
+		newInode   int64
+	}
+
+	var entryInfos []entryInfo
+	var parentNode node
+	var updateParent bool
+	var subdirsToProcess []edge
+
+	err := m.txn(func(s *xorm.Session) error {
+		dirNode = node{Inode: inode}
+		ok, err := s.Get(&dirNode)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return syscall.ENOENT
+		}
+		if dirNode.Type != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+
+		m.parseAttr(&dirNode, &dirAttr)
+		if st := m.Access(ctx, inode, MODE_MASK_W|MODE_MASK_X, &dirAttr); st != 0 {
+			return st
+		}
+		if (dirNode.Flags&FlagAppend) != 0 || (dirNode.Flags&FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
+
+		if parent > 0 {
+			parentNode = node{Inode: parent}
+			ok, err := s.Get(&parentNode)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
+			if parentNode.Type != TypeDirectory {
+				return syscall.ENOTDIR
+			}
+		}
+
+		var edges []edge
+		if err := s.Where("parent = ?", inode).Find(&edges); err != nil {
+			return err
+		}
+
+		if len(edges) == 0 {
+			return nil
+		}
+
+		now := time.Now().UnixNano()
+		entryInfos = make([]entryInfo, 0, len(edges))
+		subdirsToProcess = make([]edge, 0)
+
+		for _, e := range edges {
+			var info entryInfo
+			info.edge = e
+
+			n := node{Inode: e.Inode}
+			ok, err := s.ForUpdate().Get(&n)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, inode, string(e.Name))
+				continue
+			}
+			info.node = n
+			if e.Type == TypeDirectory {
+				exist, err := s.Exist(&edge{Parent: e.Inode})
+				if err != nil {
+					return err
+				}
+				if exist {
+					subdirsToProcess = append(subdirsToProcess, e)
+					continue
+				}
+			}
+
+			if ctx.Uid() != 0 && dirNode.Mode&01000 != 0 && ctx.Uid() != dirNode.Uid && ctx.Uid() != n.Uid {
+				return syscall.EACCES
+			}
+			if n.Type == TypeFile && ((n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0) {
+				return syscall.EPERM
+			}
+
+			entryTrash := trash
+			if (n.Flags & FlagSkipTrash) != 0 {
+				entryTrash = 0
+			}
+			if entryTrash > 0 && n.Nlink > 1 {
+				trashEntryName := m.trashEntry(inode, e.Inode, string(e.Name))
+				if o, err := s.Get(&edge{Parent: entryTrash, Name: []byte(trashEntryName), Inode: e.Inode, Type: e.Type}); err == nil && o {
+					entryTrash = 0
+				}
+			}
+
+			n.setCtime(now)
+			if entryTrash == 0 {
+				n.Nlink--
+				if n.Type == TypeFile && n.Nlink == 0 && m.sid > 0 {
+					info.opened = m.of.IsOpen(e.Inode)
+				}
+			} else if n.Parent > 0 {
+				n.Parent = entryTrash
+			}
+			info.node = n
+			info.trashEntry = entryTrash
+
+			entryInfos = append(entryInfos, info)
+		}
+		if len(entryInfos) == 0 {
+			return nil
+		}
+
+		now = time.Now().UnixNano()
+		if parent > 0 && !parent.IsTrash() && time.Duration(now-parentNode.getMtime()) >= m.conf.SkipDirMtime {
+			updateParent = true
+		}
+
+		for i, info := range entryInfos {
+			if _, err := s.Delete(&edge{Parent: inode, Name: info.edge.Name}); err != nil {
+				return err
+			}
+
+			if info.node.Nlink > 0 {
+				if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(&info.node, &node{Inode: info.edge.Inode}); err != nil {
+					return err
+				}
+				if info.trashEntry > 0 {
+					trashEntryName := m.trashEntry(inode, info.edge.Inode, string(info.edge.Name))
+					if err := mustInsert(s, &edge{Parent: info.trashEntry, Name: []byte(trashEntryName), Inode: info.edge.Inode, Type: info.edge.Type}); err != nil {
+						return err
+					}
+				}
+			} else {
+				switch info.edge.Type {
+				case TypeFile:
+					if info.opened {
+						if err := mustInsert(s, sustained{Sid: m.sid, Inode: info.edge.Inode}); err != nil {
+							return err
+						}
+						if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(&info.node, &node{Inode: info.edge.Inode}); err != nil {
+							return err
+						}
+					} else {
+						if err := mustInsert(s, delfile{info.edge.Inode, info.node.Length, time.Now().Unix()}); err != nil {
+							return err
+						}
+						if _, err := s.Delete(&node{Inode: info.edge.Inode}); err != nil {
+							return err
+						}
+						info.newSpace, info.newInode = -align4K(info.node.Length), -1
+					}
+				case TypeSymlink:
+					if _, err := s.Delete(&symlink{Inode: info.edge.Inode}); err != nil {
+						return err
+					}
+					fallthrough
+				case TypeDirectory:
+					if _, err := s.Delete(&dirStats{Inode: info.edge.Inode}); err != nil {
+						logger.Warnf("remove dir usage of ino(%d): %s", info.edge.Inode, err)
+					}
+					if _, err := s.Delete(&dirQuota{Inode: info.edge.Inode}); err != nil {
+						return err
+					}
+					fallthrough
+				default:
+					if _, err := s.Delete(&node{Inode: info.edge.Inode}); err != nil {
+						return err
+					}
+					info.newSpace, info.newInode = -align4K(0), -1
+				}
+				if _, err := s.Delete(&xattr{Inode: info.edge.Inode}); err != nil {
+					return err
+				}
+			}
+
+			m.of.InvalidateChunk(info.edge.Inode, invalidateAttrOnly)
+
+			entryInfos[i] = info
+		}
+
+		if updateParent && parent > 0 {
+			parentNode.setMtime(now)
+			parentNode.setCtime(now)
+			var _n int64
+			if _n, err = s.Cols("mtime", "ctime", "mtimensec", "ctimensec").Update(&parentNode, &node{Inode: parent}); err != nil || _n == 0 {
+				if err == nil {
+					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, parent)
+					if m.Name() == "mysql" {
+						err = syscall.EBUSY
+					} else {
+						err = syscall.ENOENT
+					}
+				}
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err == nil {
+		quotaEntries := make([]BatchUnlinkEntryInfo, 0, len(entryInfos))
+		var totalNewSpace, totalNewInode int64
+
+		for _, info := range entryInfos {
+			if trash == 0 {
+				if info.node.Type == TypeFile && info.node.Nlink == 0 {
+					m.fileDeleted(info.opened, (parent > 0 && parent.IsTrash()) || (parent == 0 && inode.IsTrash()), info.edge.Inode, info.node.Length)
+				}
+				if info.newSpace != 0 || info.newInode != 0 {
+					totalNewSpace += info.newSpace
+					totalNewInode += info.newInode
+				}
+			}
+			quotaEntries = append(quotaEntries, BatchUnlinkEntryInfo{
+				Type:   info.node.Type,
+				Length: info.node.Length,
+				Uid:    info.node.Uid,
+				Gid:    info.node.Gid,
+				Nlink:  info.node.Nlink,
+			})
+		}
+
+		if trash == 0 && (totalNewSpace != 0 || totalNewInode != 0) {
+			m.updateStats(totalNewSpace, totalNewInode)
+		}
+		if len(quotaEntries) > 0 {
+			m.updateBatchUnlinkQuota(ctx, inode, quotaEntries)
+		}
+	}
+
+	if err == nil && len(subdirsToProcess) > 0 {
+		for _, subdir := range subdirsToProcess {
+			if st := m.doBatchUnlink(ctx, subdir.Inode, skipCheckTrash...); st != 0 && st != syscall.ENOENT {
+				return st
+			}
+		}
+		if st := m.doBatchUnlink(ctx, inode, skipCheckTrash...); st != 0 && st != syscall.ENOENT {
+			return st
+		}
+	}
+
+	return errno(err)
+}
+
 func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {

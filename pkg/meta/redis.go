@@ -1656,6 +1656,52 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 	return errno(err)
 }
 
+func (m *redisMeta) doBatchUnlink(ctx Context, inode Ino, skipCheckTrash ...bool) syscall.Errno {
+	var dirAttr Attr
+	if st := m.GetAttr(ctx, inode, &dirAttr); st != 0 {
+		return st
+	}
+	if dirAttr.Typ != TypeDirectory {
+		return syscall.ENOTDIR
+	}
+
+	var parent Ino
+	if dirAttr.Parent > 0 {
+		parent = dirAttr.Parent
+	} else {
+		parent = 0
+	}
+
+	var trash Ino
+	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
+		if parent > 0 {
+			if st := m.checkTrash(parent, &trash); st != 0 {
+				return st
+			}
+		} else {
+			if st := m.checkTrash(inode, &trash); st != 0 {
+				return st
+			}
+		}
+	}
+
+	var entries []*Entry
+	if st := m.en.doReaddir(ctx, inode, 0, &entries, -1); st != 0 {
+		return st
+	}
+
+	for _, e := range entries {
+		if e.Attr.Typ == TypeDirectory {
+			continue
+		}
+		var attr Attr
+		if st := m.doUnlink(ctx, inode, string(e.Name), &attr, skipCheckTrash...); st != 0 && st != syscall.ENOENT {
+			return st
+		}
+	}
+	return 0
+}
+
 func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldAttr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
