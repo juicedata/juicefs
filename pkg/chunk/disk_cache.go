@@ -99,6 +99,10 @@ type cacheStore struct {
 
 	state     dcState
 	stateLock sync.Mutex
+
+	// newBlockCooldown reduces the initial access time for newly cached staged blocks.
+	// This helps prevent a surge of writes from evicting active read blocks.
+	stagedBlockCooldown time.Duration
 }
 
 func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize, maxItems int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
@@ -115,22 +119,23 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize, maxItems int64
 		keyIndex, _ = NewKeyIndex(config)
 	}
 	c := &cacheStore{
-		m:             m,
-		dir:           dir,
-		mode:          config.CacheMode,
-		capacity:      cacheSize,
-		maxItems:      maxItems,
-		maxStageWrite: config.MaxStageWrite,
-		freeRatio:     config.FreeSpace,
-		checksum:      config.CacheChecksum,
-		hashPrefix:    config.HashPrefix,
-		scanInterval:  config.CacheScanInterval,
-		cacheExpire:   config.CacheExpire,
-		keys:          keyIndex,
-		pending:       make(chan pendingFile, pendingPages),
-		pages:         make(map[string]*Page),
-		uploader:      uploader,
-		opTs:          make(map[time.Duration]func() error),
+		m:                   m,
+		dir:                 dir,
+		mode:                config.CacheMode,
+		capacity:            cacheSize,
+		maxItems:            maxItems,
+		maxStageWrite:       config.MaxStageWrite,
+		freeRatio:           config.FreeSpace,
+		checksum:            config.CacheChecksum,
+		hashPrefix:          config.HashPrefix,
+		scanInterval:        config.CacheScanInterval,
+		cacheExpire:         config.CacheExpire,
+		keys:                keyIndex,
+		pending:             make(chan pendingFile, pendingPages),
+		pages:               make(map[string]*Page),
+		uploader:            uploader,
+		opTs:                make(map[time.Duration]func() error),
+		stagedBlockCooldown: config.CacheExpire / 2,
 	}
 	c.stateLock = sync.Mutex{}
 	if config.Writeback {
@@ -736,9 +741,6 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 			cache.used -= int64(iter.size + 4096)
 		}
 		iter.size = size
-		if atime > iter.atime {
-			iter.atime = atime
-		}
 	}
 	cache.keys.add(k, *iter) // add or update
 	if size > 0 {
@@ -769,7 +771,7 @@ func (cache *cacheStore) stage(key string, data []byte) (string, error) {
 			path := cache.cachePath(key)
 			cache.createDir(filepath.Dir(path))
 			if err = os.Link(stagingPath, path); err == nil {
-				cache.add(key, -int32(len(data)), uint32(time.Now().Unix()))
+				cache.add(key, -int32(len(data)), uint32(time.Now().Add(-cache.stagedBlockCooldown).Unix()))
 			} else {
 				logger.Warnf("link %s to %s failed: %s", stagingPath, path, err)
 			}
