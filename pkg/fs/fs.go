@@ -25,6 +25,7 @@ import (
 	"os"
 	"path"
 	"runtime/trace"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1397,6 +1398,11 @@ func (f *File) Readdir(ctx meta.Context, count int) (fi []os.FileInfo, err sysca
 		err = f.fs.m.Readdir(ctx, f.inode, 1, &inodes)
 		if err != 0 {
 			return
+		}
+		if f.fs.conf.Meta.SortDir {
+			sort.Slice(inodes[2:], func(i, j int) bool {
+				return string(inodes[i].Name) < string(inodes[j].Name)
+			})
 		}
 		// skip . and ..
 		for _, n := range inodes[2:] {
