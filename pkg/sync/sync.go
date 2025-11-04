@@ -1515,7 +1515,7 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 					if err := produceSingleObject(tasks, src, dst, key, config); err == nil {
 						listedPrefix.Increment()
 						continue
-					} else if errors.Is(err, ignoreDir) {
+					} else if errors.Is(err, errDirSuffix) {
 						key += "/"
 					} else if os.IsNotExist(err) {
 						atomic.AddInt64(&ignoreFiles, 1)
@@ -1553,32 +1553,39 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 	return nil
 }
 
-var ignoreDir = errors.New("ignore dir")
+var errDirSuffix = errors.New("dir miss suffix '/'")
 var ignoreFiles int64
 
 func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) error {
 	obj, err := src.Head(ctx, key)
-	if err == nil && (!obj.IsDir() || obj.IsSymlink() && config.Links || obj.IsDir() && config.Dirs && strings.HasSuffix(key, "/")) {
-		var srckeys = make(chan object.Object, 1)
-		srckeys <- obj
-		close(srckeys)
-		if dobj, e := dst.Head(ctx, key); e == nil || os.IsNotExist(e) {
-			var dstkeys = make(chan object.Object, 1)
-			if dobj != nil {
-				dstkeys <- dobj
-			}
-			close(dstkeys)
-			logger.Debugf("produce single key %s", key)
-			_ = produce(tasks, srckeys, dstkeys, config)
-			return nil
-		} else {
-			logger.Warnf("head %s from %s: %s", key, dst, e)
-			err = e
-		}
-	} else if err != nil {
+	if err != nil {
 		logger.Warnf("head %s from %s: %s", key, src, err)
+		return err
+	}
+	if obj.IsDir() {
+		// only `files-from` will hit this case
+		if !strings.HasSuffix(key, "/") {
+			return errDirSuffix
+		}
+		if !config.Dirs {
+			return nil
+		}
+	}
+	var srckeys = make(chan object.Object, 1)
+	srckeys <- obj
+	close(srckeys)
+	if dobj, e := dst.Head(ctx, key); e == nil || os.IsNotExist(e) {
+		var dstkeys = make(chan object.Object, 1)
+		if dobj != nil {
+			dstkeys <- dobj
+		}
+		close(dstkeys)
+		logger.Debugf("produce single key %s", key)
+		_ = produce(tasks, srckeys, dstkeys, config)
+		return nil
 	} else {
-		err = ignoreDir
+		logger.Warnf("head %s from %s: %s", key, dst, e)
+		err = e
 	}
 	return err
 }
