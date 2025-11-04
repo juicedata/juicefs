@@ -157,7 +157,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 	if opt.Password == "" {
 		if passwordFile := os.Getenv("META_PASSWORD_FILE"); passwordFile != "" {
-			if password, err := readPasswordFromFile(passwordFile); err == nil {
+			password, err := readPasswordFromFile(passwordFile)
+			if err != nil {
+				logger.Warnf("failed to read password from file %s: %s", passwordFile, err)
+			} else {
 				opt.Password = password
 			}
 		}
