@@ -191,17 +191,14 @@ func (o *ossClient) List(prefix, start, token, delimiter string, limit int64, fo
 	if limit > 1000 {
 		limit = 1000
 	}
-	request := &oss.ListObjectsV2Request{
-		Bucket:     &o.bucket,
-		Prefix:     &prefix,
-		StartAfter: &start,
-		Delimiter:  &delimiter,
-		MaxKeys:    int32(limit),
-	}
-	if token != "" {
-		request.ContinuationToken = &token
-	}
-	result, err := o.client.ListObjectsV2(ctx, request)
+	result, err := o.client.ListObjectsV2(ctx, &oss.ListObjectsV2Request{
+		Bucket:            &o.bucket,
+		Prefix:            &prefix,
+		StartAfter:        &start,
+		ContinuationToken: &token,
+		Delimiter:         &delimiter,
+		MaxKeys:           int32(limit),
+	})
 	if err != nil {
 		return nil, false, "", err
 	}
@@ -406,9 +403,7 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	if useV4 {
 		config.WithSignatureVersion(oss.SignatureVersionV4)
 		config.Region = oss.Ptr(regionID)
-		logger.Infof("use v4")
 	} else {
-		logger.Infof("use v1")
 		config.WithSignatureVersion(oss.SignatureVersionV1)
 	}
 	config.RetryMaxAttempts = oss.Ptr(1)
