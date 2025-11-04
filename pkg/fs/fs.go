@@ -139,6 +139,10 @@ type FileSystem struct {
 	store       chunk.ChunkStore
 	cacheFiller *vfs.CacheFiller
 
+	Superuser          string
+	Supergroup         string
+	OnSuperuserChanged []func()
+
 	cacheM          sync.Mutex
 	entries         map[Ino]map[string]*entryCache
 	attrs           map[Ino]*attrCache

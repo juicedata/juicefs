@@ -197,6 +197,7 @@ All keys:
   Niiiiiiii          detached inde
   QDiiiiiiii         directory quota
   Raaaa			     POSIX acl
+  KDaaaa			 delegation token
 */
 
 func (m *kvMeta) inodeKey(inode Ino) []byte {
@@ -261,6 +262,10 @@ func (m *kvMeta) dirQuotaKey(inode Ino) []byte {
 
 func (m *kvMeta) aclKey(id uint32) []byte {
 	return m.fmtKey("R", id)
+}
+
+func (m *kvMeta) krbTokenKey(id uint32) []byte {
+	return m.fmtKey("KD", id)
 }
 
 func (m *kvMeta) parseACLId(key string) uint32 {
@@ -1140,7 +1145,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if (pattr.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		if (pattr.Flags&FlagSkipTrash) != 0 {
+		if (pattr.Flags & FlagSkipTrash) != 0 {
 			attr.Flags |= FlagSkipTrash
 		}
 
@@ -1322,7 +1327,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
-			if (attr.Flags&FlagSkipTrash) != 0 {
+			if (attr.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
 			if trash > 0 && attr.Nlink > 1 && rs[2] != nil {
@@ -1455,7 +1460,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
-			if (attr.Flags&FlagSkipTrash) != 0 {
+			if (attr.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
 			if trash > 0 {
@@ -1600,7 +1605,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if (tattr.Flags&FlagAppend) != 0 || (tattr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
-			if (tattr.Flags&FlagSkipTrash) != 0 {
+			if (tattr.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
 			tattr.Ctime = now.Unix()
@@ -3891,6 +3896,60 @@ func (m *kvMeta) loadDumpedACLs(ctx Context) error {
 		tx.set(m.counterKey(aclCounter), packCounter(int64(maxId)))
 		return nil
 	})
+}
+
+func (m *kvMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
+	err := m.txn(ctx, func(tx *kvTxn) error {
+		newId, err := m.incrCounter(krbTokenCounter, 1)
+		if err != nil {
+			return err
+		}
+		tx.set(m.krbTokenKey(uint32(newId)), token)
+		id = uint32(newId)
+		return nil
+	})
+	return id, errno(err)
+}
+
+func (m *kvMeta) doUpdateToken(ctx Context, id uint32, token []byte) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		if tx.get(m.krbTokenKey(id)) == nil {
+			return syscall.ENOENT
+		}
+		tx.set(m.krbTokenKey(id), token)
+		return nil
+	}))
+}
+
+func (m *kvMeta) doLoadToken(ctx Context, id uint32) (token []byte, st syscall.Errno) {
+	err := m.txn(ctx, func(tx *kvTxn) error {
+		token = tx.get(m.krbTokenKey(id))
+		if token == nil {
+			return syscall.ENOENT
+		}
+		return nil
+	})
+	return token, errno(err)
+}
+
+func (m *kvMeta) doDeleteTokens(ctx Context, ids []uint32) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		for _, id := range ids {
+			tx.delete(m.krbTokenKey(id))
+		}
+		return nil
+	}))
+}
+
+func (m *kvMeta) doListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno) {
+	tokens = make(map[uint32][]byte)
+	err := m.client.scan(m.fmtKey("KD"), func(k, v []byte) bool {
+		rb := utils.FromBuffer(k[2:])
+		id := rb.Get32()
+		tokens[id] = v
+		return true
+	})
+	return tokens, errno(err)
 }
 
 type kvDirHandler struct {

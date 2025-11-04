@@ -281,6 +281,11 @@ func config(ctx *cli.Context) error {
 				format.MinClientVersion = "1.3.0-A"
 				clientVer = true
 			}
+		case "kerberos-config-file":
+			msg.WriteString(fmt.Sprintf("%s: updated\n", flag))
+			format.KerbConf = readKerbConf(ctx.String(flag))
+			format.MinClientVersion = "1.4.0-A"
+			clientVer = true
 		}
 	}
 	if msg.Len() == 0 {

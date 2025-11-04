@@ -152,6 +152,11 @@ func (a *acl) toRule() *aclAPI.Rule {
 	return r
 }
 
+type DelegationToken struct {
+	Id    uint32 `xorm:"pk autoincr"`
+	Token []byte
+}
+
 type namedNode struct {
 	node `xorm:"extends"`
 	Name []byte `xorm:"varbinary(255)"`
@@ -1713,7 +1718,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		} else {
 			n.Mode = mode & ^cumask
 		}
-		if (pn.Flags&FlagSkipTrash) != 0 {
+		if (pn.Flags & FlagSkipTrash) != 0 {
 			n.Flags |= FlagSkipTrash
 		}
 
@@ -1852,7 +1857,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
-			if (n.Flags&FlagSkipTrash) != 0 {
+			if (n.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
 			if trash > 0 && n.Nlink > 1 {
@@ -2023,7 +2028,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		if exist {
 			return syscall.ENOTEMPTY
 		}
-		if (n.Flags&FlagSkipTrash) != 0 {
+		if (n.Flags & FlagSkipTrash) != 0 {
 			trash = 0
 		}
 		now := time.Now().UnixNano()
@@ -2234,7 +2239,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if (dn.Flags&FlagAppend) != 0 || (dn.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
-			if (dn.Flags&FlagSkipTrash) != 0 {
+			if (dn.Flags & FlagSkipTrash) != 0 {
 				trash = 0
 			}
 			dn.setCtime(now)
@@ -5017,6 +5022,74 @@ func (m *dbMeta) loadDumpedACLs(ctx Context) error {
 		}
 		return nil
 	})
+}
+
+func (m *dbMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
+	err := m.txn(func(s *xorm.Session) error {
+		t := &DelegationToken{Token: token}
+		_, err := s.Insert(t)
+		if err != nil {
+			return err
+		}
+		id = t.Id
+		return nil
+	})
+	return id, errno(err)
+}
+
+func (m *dbMeta) doUpdateToken(ctx Context, id uint32, token []byte) syscall.Errno {
+	return errno(m.txn(func(s *xorm.Session) error {
+		t := &DelegationToken{Id: id}
+		ok, err := s.Get(t)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return syscall.ENOENT
+		}
+		t.Token = token
+		_, err = s.Cols("token").Update(t, &DelegationToken{Id: id})
+		return err
+	}))
+}
+
+func (m *dbMeta) doLoadToken(ctx Context, id uint32) (token []byte, st syscall.Errno) {
+	err := m.roTxn(ctx, func(s *xorm.Session) error {
+		t := &DelegationToken{Id: id}
+		ok, err := s.Get(t)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return syscall.ENOENT
+		}
+		token = t.Token
+		return nil
+	})
+	return token, errno(err)
+}
+
+func (m *dbMeta) doDeleteTokens(ctx Context, ids []uint32) syscall.Errno {
+	return errno(m.txn(func(s *xorm.Session) error {
+		_, err := s.In("id", ids).Delete(&DelegationToken{})
+		return err
+	}))
+}
+
+func (m *dbMeta) doListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno) {
+	err := m.roTxn(ctx, func(s *xorm.Session) error {
+		var ts []DelegationToken
+		err := s.Find(&ts)
+		if err != nil {
+			return err
+		}
+		tokens = make(map[uint32][]byte, len(ts))
+		for _, t := range ts {
+			tokens[t.Id] = t.Token
+		}
+		return nil
+	})
+	return tokens, errno(err)
 }
 
 type dbDirHandler struct {

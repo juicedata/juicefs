@@ -44,9 +44,12 @@ typedef struct {
 import "C"
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -98,6 +101,9 @@ var (
 	userGroupCache = make(map[string]map[string][]string) // name -> (user -> groups)
 
 	formats = make(map[string]*meta.Format)
+
+	kerbOnce           = sync.Once{}
+	superuserChangedCb = make(map[string]struct{})
 
 	MaxDeletes = meta.RmrDefaultThreads
 	caller     = CALLER_JAVA
@@ -181,6 +187,7 @@ func errno(err error) int32 {
 
 type wrapper struct {
 	*fs.FileSystem
+	volname    string
 	ctx        meta.Context
 	m          *mapping
 	user       string
@@ -236,8 +243,15 @@ func (w *wrapper) withPid(pid int64) meta.Context {
 	return ctx
 }
 
+func (w *wrapper) getSuperUser() string {
+	if w.Superuser != "" {
+		return w.Superuser
+	}
+	return w.superuser
+}
+
 func (w *wrapper) isSuperuser(name string, groups []string) bool {
-	if name == w.superuser || w.conf.SuperFS {
+	if name == w.getSuperUser() || w.conf.SuperFS {
 		return true
 	}
 	for _, g := range groups {
@@ -262,9 +276,9 @@ func (w *wrapper) lookupGid(group string) uint32 {
 	return uint32(w.m.lookupGroup(group))
 }
 
-func (w *wrapper) lookupGids(groups string) []uint32 {
+func (w *wrapper) lookupGids(groups []string) []uint32 {
 	var gids []uint32
-	for _, g := range strings.Split(groups, ",") {
+	for _, g := range groups {
 		gids = append(gids, w.lookupGid(g))
 	}
 	return gids
@@ -363,6 +377,9 @@ type javaConf struct {
 	Caller              int    `json:"caller"`
 	Subdir              string `json:"subdir"`
 
+	AuthMethod string `json:"authMethod,omitempty"`
+	RealUser   string `json:"realUser,omitempty"`
+
 	SuperFS bool `json:"superFs,omitempty"`
 }
 
@@ -391,25 +408,36 @@ func getOrCreate(name, user, group, superuser, supergroup string, conf javaConf,
 		}
 		logger.Infof("JuiceFileSystem created for user:%s group:%s", user, group)
 	}
-	w := &wrapper{jfs, nil, m, user, superuser, supergroup, conf}
-	var gs []string
-	if userGroupCache[name] != nil {
-		gs = userGroupCache[name][user]
-	}
-	if gs == nil {
-		gs = strings.Split(group, ",")
-	}
-	group = strings.Join(gs, ",")
-	logger.Debugf("update groups of %s to %s", user, group)
-	if w.isSuperuser(user, gs) {
-		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
-	} else {
-		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(user), w.lookupGids(group))
+	w := &wrapper{jfs, name, nil, m, user, superuser, supergroup, conf}
+	if _, ok := superuserChangedCb[name]; !ok {
+		jfs.Meta().OnReload(func(format *meta.Format) {
+			kerb.loadConf(name, format.KerbConf, jfs)
+			updateAllCtx(name, user, group)
+		})
+		superuserChangedCb[name] = struct{}{}
 	}
 	activefs[name] = append(ws, w)
+	updateAllCtx(name, user, group)
 	nextFsHandle = nextFsHandle + 1
 	handlers[nextFsHandle] = w
 	return nextFsHandle
+}
+
+func updateAllCtx(name string, user, groups string) {
+	ws := activefs[name]
+	if len(ws) > 0 {
+		for _, w := range ws {
+			var gs []string
+			if userGroupCache[name] != nil {
+				gs = userGroupCache[name][user]
+			}
+			if gs == nil {
+				gs = strings.Split(groups, ",")
+			}
+			logger.Debugf("update groups of %s to %s", user, strings.Join(gs, ","))
+			updateCtx(w, gs)
+		}
+	}
 }
 
 func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, registry *prometheus.Registry, commonLabels map[string]string) {
@@ -498,8 +526,9 @@ func push2Graphite(graphite string, pushInterVal time.Duration, registry *promet
 }
 
 //export jfs_init
-func jfs_init(cname, cjsonConf, user, group, superuser, supergroup *C.char) int64 {
+func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group, superuser, supergroup *C.char) int64 {
 	name := C.GoString(cname)
+	user := C.GoString(cuser)
 	debug.SetGCPercent(50)
 	object.UserAgent = "JuiceFS-SDK " + version.Version()
 	var jConf javaConf
@@ -511,7 +540,7 @@ func jfs_init(cname, cjsonConf, user, group, superuser, supergroup *C.char) int6
 			logger.Fatalf("invalid json")
 		}
 	}
-	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), jConf, func() *fs.FileSystem {
+	return getOrCreate(name, user, C.GoString(group), C.GoString(superuser), C.GoString(supergroup), jConf, func() *fs.FileSystem {
 		if jConf.Debug || os.Getenv("JUICEFS_DEBUG") != "" {
 			utils.SetLogLevel(logrus.DebugLevel)
 			go func() {
@@ -698,6 +727,37 @@ func jfs_init(cname, cjsonConf, user, group, superuser, supergroup *C.char) int6
 			return nil
 		}
 		jfs.InitMetrics(registerer)
+		if format.KerbConf != "" {
+			kerbOnce.Do(func() {
+				kerb.init()
+			})
+			kerb.loadConf(name, format.KerbConf, jfs)
+			var credential []byte
+			if credentialPtr == 0 {
+				logger.Errorf("kerberos credential is needed")
+				return nil
+			}
+			credential = toBuf(credentialPtr, count)
+			hostname, _ := os.Hostname()
+			ip := resolve(hostname)
+			if ip == "" {
+				ip, _ = findLocalIP("", "")
+				logger.Infof("use local ip %s for %s", ip, hostname)
+			}
+			var eno syscall.Errno
+			if jConf.AuthMethod == "kerberos" {
+				eno = kerb.auth(name, user, jConf.RealUser, C.GoString(group), ip, hostname, credential)
+			} else {
+				tbuf := utils.FromBuffer(credential)
+				id := tbuf.Get32()
+				password := tbuf.Get(int(tbuf.Get8()))
+				eno = kerb.check(meta.Background(), jfs.Meta(), name, user, id, string(password))
+			}
+			if eno != 0 {
+				logger.Errorf("%s auth failed for vol:%s(%s:%s): %s", jConf.AuthMethod, name, user, jConf.RealUser, eno)
+				return nil
+			}
+		}
 		return jfs
 	})
 }
@@ -763,12 +823,16 @@ func jfs_update_uid_grouping(cname, uidstr *C.char, grouping *C.char) {
 		for _, w := range ws {
 			w.m.update(uids, gids, false)
 			logger.Debugf("Update groups of %s to %s", w.user, strings.Join(userGroups[w.user], ","))
-			if w.isSuperuser(w.user, userGroups[w.user]) {
-				w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
-			} else {
-				w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), w.lookupGids(strings.Join(userGroups[w.user], ",")))
-			}
+			updateCtx(w, userGroups[w.user])
 		}
+	}
+}
+
+func updateCtx(w *wrapper, groups []string) {
+	if w.isSuperuser(w.user, groups) {
+		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
+	} else {
+		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), w.lookupGids(groups))
 	}
 }
 
@@ -1920,6 +1984,112 @@ func jfs_warmup(pid int64, h int64, _paths *C.char, numthreads int32, background
 	buf := unsafe.Slice(*p_buf, len(res))
 
 	return int32(copy(buf, res))
+}
+
+func resolve(hostname string) string {
+	if hostname == "" {
+		return ""
+	}
+	start := time.Now()
+	ips, err := net.DefaultResolver.LookupIP(context.Background(), "ip4", hostname)
+	if err != nil {
+		logger.Warningf("Fail to resolve host %s: %s", hostname, err)
+		return ""
+	}
+	var ipStr []string
+	for _, ip := range ips {
+		ipStr = append(ipStr, ip.To4().String())
+	}
+	logger.Debugf("resolve %s to %s in %s", hostname, strings.Join(ipStr, ","), time.Since(start))
+	return strings.Join(ipStr, ",")
+}
+
+func findLocalIP(mask string, iname string) (string, error) {
+	for strings.HasSuffix(mask, ".0") {
+		mask = mask[:len(mask)-2]
+	}
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "", err
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 && iname == "" && mask == "" {
+			continue // interface down
+		}
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue // loopback interface
+		}
+		if iname != "" && iface.Name != iname && !strings.HasPrefix(iface.Name, iname+".") {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			return "", err
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil || ip.IsLoopback() {
+				continue
+			}
+			ip = ip.To4()
+			if ip == nil {
+				continue // not an ipv4 address
+			}
+			if !strings.HasPrefix(ip.String(), mask) {
+				continue
+			}
+			return ip.String(), nil
+		}
+	}
+	return "", errors.New("are you connected to the network?")
+}
+
+//export jfs_get_token
+func jfs_get_token(h int64, cname *C.char, buf uintptr, count int32, renewer *C.char) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	id, t, eno := kerb.issue(w.ctx, w.Meta(), C.GoString(cname), w.user, C.GoString(renewer))
+	if eno != 0 {
+		logger.Errorf("get token for %s: %s", w.volname, eno)
+		return errno(eno)
+	}
+	wb := utils.NewNativeBuffer(toBuf(buf, count))
+	wb.Put32(id)
+	wb.Put64(uint64(t.Issued))
+	wb.Put64(uint64(t.Expire))
+	wb.Put([]byte(t.Password))
+	return int32(wb.Offset())
+}
+
+//export jfs_renew_token
+func jfs_renew_token(h int64, id uint32, password *C.char) int64 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	expire, eno := kerb.renew(w.ctx, w.Meta(), w.volname, w.user, id, C.GoString(password))
+	if eno != 0 {
+		logger.Errorf("renew token %d for %s: %s", id, w.volname, eno)
+		return int64(errno(eno))
+	}
+	return expire
+}
+
+//export jfs_cancel_token
+func jfs_cancel_token(h int64, id uint32, password *C.char) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	return errno(kerb.cancelToken(w.ctx, w.Meta(), w.volname, w.user, id, C.GoString(password)))
 }
 
 func main() {

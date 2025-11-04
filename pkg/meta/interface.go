@@ -529,6 +529,13 @@ type Meta interface {
 
 	SetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
 	GetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
+
+	// kerberos
+	StoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno)
+	UpdateToken(ctx Context, id uint32, token []byte) syscall.Errno
+	LoadToken(ctx Context, id uint32) (token []byte, st syscall.Errno)
+	DeleteTokens(ctx Context, ids []uint32) syscall.Errno
+	ListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno)
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)

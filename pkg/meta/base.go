@@ -144,6 +144,13 @@ type engine interface {
 	doGetFacl(ctx Context, ino Ino, aclType uint8, aclId uint32, rule *aclAPI.Rule) syscall.Errno
 	cacheACLs(ctx Context) error
 
+	// kerberos delegation token
+	doStoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno)
+	doUpdateToken(ctx Context, id uint32, token []byte) syscall.Errno
+	doLoadToken(ctx Context, id uint32) (token []byte, st syscall.Errno)
+	doDeleteTokens(ctx Context, ids []uint32) syscall.Errno
+	doListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno)
+
 	newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler
 
 	dump(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error
@@ -3152,6 +3159,31 @@ func (m *baseMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rul
 	defer m.timeit("GetFacl", now)
 
 	return m.en.doGetFacl(ctx, ino, aclType, aclAPI.None, rule)
+}
+
+func (m *baseMeta) StoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
+	defer m.timeit("StoreToken", time.Now())
+	return m.en.doStoreToken(ctx, token)
+}
+
+func (m *baseMeta) UpdateToken(ctx Context, id uint32, token []byte) syscall.Errno {
+	defer m.timeit("UpdateToken", time.Now())
+	return m.en.doUpdateToken(ctx, id, token)
+}
+
+func (m *baseMeta) LoadToken(ctx Context, id uint32) (token []byte, st syscall.Errno) {
+	defer m.timeit("LoadToken", time.Now())
+	return m.en.doLoadToken(ctx, id)
+}
+
+func (m *baseMeta) DeleteTokens(ctx Context, ids []uint32) syscall.Errno {
+	defer m.timeit("DeleteTokens", time.Now())
+	return m.en.doDeleteTokens(ctx, ids)
+}
+
+func (m *baseMeta) ListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno) {
+	defer m.timeit("ListTokens", time.Now())
+	return m.en.doListTokens(ctx)
 }
 
 func inGroup(ctx Context, gid uint32) bool {
