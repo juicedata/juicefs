@@ -83,6 +83,12 @@ For security purposes, it is recommended to pass the password using the environm
 export META_PASSWORD=mypassword
 ```
 
+Similarly, the password can be provided from a file using:
+
+```shell
+export META_PASSWORD_FILE=/secret/mypassword.txt
+```
+
 Then there is no need to set a password in the metadata URL.
 
 ```shell
@@ -105,6 +111,13 @@ Passing passwords with the `META_PASSWORD` or `REDIS_PASSWORD` environment varia
 
 ```shell
 export META_PASSWORD=mypassword
+juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
+```
+
+Similarly, the password can be provided from a file using as follows:
+
+```shell
+export META_PASSWORD_FILE=/secret/mypassword.txt
 juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 ```
 
@@ -503,6 +516,17 @@ juicefs format \
     pics
 ```
 
+Or equivalently:
+
+```shell
+export META_PASSWORD_FILE="/secret/mypassword.txt"
+juicefs format \
+    --storage s3 \
+    ... \
+    "mysql://user@(192.168.1.6:3306)/juicefs" \
+    pics
+```
+
 To connect to a TLS enabled MySQL server, pass the `tls=true` parameter (or `tls=skip-verify` if using a self-signed certificate):
 
 ```shell
@@ -523,6 +547,14 @@ Passing password with the `META_PASSWORD` environment variable is also supported
 
 ```shell
 export META_PASSWORD="mypassword"
+juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
+```
+
+Passing the password using a file is also supported as follows:
+
+
+```shell
+export META_PASSWORD_FILE="/secret/mypassword.txt"
 juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
@@ -586,6 +618,17 @@ juicefs format \
     pics
 ```
 
+The password can also be passed using a file as follows:
+
+```shell
+export META_PASSWORD_FILE="/secret/mypassword.txt"
+juicefs format \
+    --storage s3 \
+    ... \
+    "postgres://user@192.168.1.6:5432/juicefs" \
+    pics
+```
+
 :::note
 
 1. JuiceFS uses public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) by default, if you want to use a `non-public schema`,  you need to specify `search_path` in the connection string parameter. e.g `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
@@ -605,6 +648,13 @@ Passing password with the `META_PASSWORD` environment variable is also supported
 
 ```shell
 export META_PASSWORD="mypassword"
+juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
+```
+
+Passing a password using a file is also supported as follows:
+
+```shell
+export META_PASSWORD_FILE="/secret/mypassword.txt"
 juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
 
