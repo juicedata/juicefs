@@ -398,6 +398,9 @@ func loadEncrypt(keyPath string) string {
 }
 
 func readKerbConf(file string) string {
+	if file == "" {
+		return ""
+	}
 	data, err := os.ReadFile(file)
 	if err != nil {
 		logger.Fatalf("load Kerberos config from %s: %s", file, err)
