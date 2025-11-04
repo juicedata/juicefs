@@ -1582,6 +1582,7 @@ func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStora
 		return err
 	}
 	if obj.IsDir() {
+		// only `files-from` will hit this case
 		if !strings.HasSuffix(key, "/") {
 			return errDirSuffix
 		}

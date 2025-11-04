@@ -225,12 +225,6 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		logger.Warnf("threads should be larger than 0, reset it to 1")
 		cfg.Threads = 1
 	}
-	if len(cfg.FilesFrom) > 0 {
-		if !cfg.Dirs {
-			logger.Debugf("directories will be sync when files-from is set")
-			cfg.Dirs = true
-		}
-	}
 	for _, key := range envList() {
 		if os.Getenv(key) != "" {
 			cfg.Env[key] = os.Getenv(key)
