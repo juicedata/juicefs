@@ -1656,6 +1656,10 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 	return errno(err)
 }
 
+func (m *redisMeta) supportsOptimizedBatchUnlink() bool {
+	return false
+}
+
 func (m *redisMeta) doBatchUnlink(ctx Context, inode Ino, skipCheckTrash ...bool) syscall.Errno {
 	var dirAttr Attr
 	if st := m.GetAttr(ctx, inode, &dirAttr); st != 0 {

@@ -1959,6 +1959,10 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	return errno(err)
 }
 
+func (m *dbMeta) supportsOptimizedBatchUnlink() bool {
+	return true
+}
+
 func (m *dbMeta) doBatchUnlink(ctx Context, inode Ino, skipCheckTrash ...bool) syscall.Errno {
 	var dirNode node
 	var dirAttr Attr
@@ -2117,67 +2121,150 @@ func (m *dbMeta) doBatchUnlink(ctx Context, inode Ino, skipCheckTrash ...bool) s
 			updateParent = true
 		}
 
-		for i, info := range entryInfos {
-			if _, err := s.Delete(&edge{Parent: inode, Name: info.edge.Name}); err != nil {
-				return err
-			}
+		var trashEdges []edge
+		var sustainedEntries []sustained
+		var delfileEntries []delfile
+		var nodesToUpdate []*node
+		var nodesToDelete []Ino
+		var xattrsToDelete []Ino
+		var symlinksToDelete []Ino
+		var dirStatsToDelete []Ino
+		var dirQuotasToDelete []Ino
+		var edgesToDelete []struct {
+			Parent Ino
+			Name   []byte
+		}
 
+		for _, info := range entryInfos {
+			edgesToDelete = append(edgesToDelete, struct {
+				Parent Ino
+				Name   []byte
+			}{Parent: inode, Name: info.edge.Name})
+		}
+
+		for i, info := range entryInfos {
 			if info.node.Nlink > 0 {
-				if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(&info.node, &node{Inode: info.edge.Inode}); err != nil {
-					return err
-				}
+				nodesToUpdate = append(nodesToUpdate, &info.node)
 				if info.trashEntry > 0 {
 					trashEntryName := m.trashEntry(inode, info.edge.Inode, string(info.edge.Name))
-					if err := mustInsert(s, &edge{Parent: info.trashEntry, Name: []byte(trashEntryName), Inode: info.edge.Inode, Type: info.edge.Type}); err != nil {
-						return err
-					}
+					trashEdges = append(trashEdges, edge{
+						Parent: info.trashEntry,
+						Name:   []byte(trashEntryName),
+						Inode:  info.edge.Inode,
+						Type:   info.edge.Type,
+					})
 				}
 			} else {
+				xattrsToDelete = append(xattrsToDelete, info.edge.Inode)
 				switch info.edge.Type {
 				case TypeFile:
 					if info.opened {
-						if err := mustInsert(s, sustained{Sid: m.sid, Inode: info.edge.Inode}); err != nil {
-							return err
-						}
-						if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(&info.node, &node{Inode: info.edge.Inode}); err != nil {
-							return err
-						}
+						sustainedEntries = append(sustainedEntries, sustained{Sid: m.sid, Inode: info.edge.Inode})
+						nodesToUpdate = append(nodesToUpdate, &info.node)
 					} else {
-						if err := mustInsert(s, delfile{info.edge.Inode, info.node.Length, time.Now().Unix()}); err != nil {
-							return err
-						}
-						if _, err := s.Delete(&node{Inode: info.edge.Inode}); err != nil {
-							return err
-						}
+						delfileEntries = append(delfileEntries, delfile{
+							Inode:  info.edge.Inode,
+							Length: info.node.Length,
+							Expire: time.Now().Unix(),
+						})
+						nodesToDelete = append(nodesToDelete, info.edge.Inode)
 						info.newSpace, info.newInode = -align4K(info.node.Length), -1
 					}
 				case TypeSymlink:
-					if _, err := s.Delete(&symlink{Inode: info.edge.Inode}); err != nil {
-						return err
-					}
+					symlinksToDelete = append(symlinksToDelete, info.edge.Inode)
 					fallthrough
 				case TypeDirectory:
-					if _, err := s.Delete(&dirStats{Inode: info.edge.Inode}); err != nil {
-						logger.Warnf("remove dir usage of ino(%d): %s", info.edge.Inode, err)
-					}
-					if _, err := s.Delete(&dirQuota{Inode: info.edge.Inode}); err != nil {
-						return err
-					}
+					dirStatsToDelete = append(dirStatsToDelete, info.edge.Inode)
+					dirQuotasToDelete = append(dirQuotasToDelete, info.edge.Inode)
 					fallthrough
 				default:
-					if _, err := s.Delete(&node{Inode: info.edge.Inode}); err != nil {
-						return err
-					}
+					nodesToDelete = append(nodesToDelete, info.edge.Inode)
 					info.newSpace, info.newInode = -align4K(0), -1
-				}
-				if _, err := s.Delete(&xattr{Inode: info.edge.Inode}); err != nil {
-					return err
 				}
 			}
 
 			m.of.InvalidateChunk(info.edge.Inode, invalidateAttrOnly)
-
 			entryInfos[i] = info
+		}
+
+		if len(edgesToDelete) > 0 {
+			for _, e := range edgesToDelete {
+				if _, err := s.Delete(&edge{Parent: e.Parent, Name: e.Name}); err != nil {
+					return err
+				}
+			}
+		}
+
+		for _, n := range nodesToUpdate {
+			if n.Nlink > 0 {
+				if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(n, &node{Inode: n.Inode}); err != nil {
+					return err
+				}
+			} else {
+				if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(n, &node{Inode: n.Inode}); err != nil {
+					return err
+				}
+			}
+		}
+
+		if len(trashEdges) > 0 {
+			beans := make([]interface{}, len(trashEdges))
+			for i := range trashEdges {
+				beans[i] = &trashEdges[i]
+			}
+			if err := mustInsert(s, beans...); err != nil {
+				return err
+			}
+		}
+
+		if len(sustainedEntries) > 0 {
+			beans := make([]interface{}, len(sustainedEntries))
+			for i := range sustainedEntries {
+				beans[i] = &sustainedEntries[i]
+			}
+			if err := mustInsert(s, beans...); err != nil {
+				return err
+			}
+		}
+
+		if len(delfileEntries) > 0 {
+			beans := make([]interface{}, len(delfileEntries))
+			for i := range delfileEntries {
+				beans[i] = &delfileEntries[i]
+			}
+			if err := mustInsert(s, beans...); err != nil {
+				return err
+			}
+		}
+
+		if len(symlinksToDelete) > 0 {
+			if _, err := s.In("inode", symlinksToDelete).Delete(&symlink{}); err != nil {
+				return err
+			}
+		}
+
+		if len(dirStatsToDelete) > 0 {
+			if _, err := s.In("inode", dirStatsToDelete).Delete(&dirStats{}); err != nil {
+				logger.Warnf("remove dir usage of inos(%v): %s", dirStatsToDelete, err)
+			}
+		}
+
+		if len(dirQuotasToDelete) > 0 {
+			if _, err := s.In("inode", dirQuotasToDelete).Delete(&dirQuota{}); err != nil {
+				return err
+			}
+		}
+
+		if len(nodesToDelete) > 0 {
+			if _, err := s.In("inode", nodesToDelete).Delete(&node{}); err != nil {
+				return err
+			}
+		}
+
+		if len(xattrsToDelete) > 0 {
+			if _, err := s.In("inode", xattrsToDelete).Delete(&xattr{}); err != nil {
+				return err
+			}
 		}
 
 		if updateParent && parent > 0 {

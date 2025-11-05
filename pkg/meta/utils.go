@@ -350,8 +350,8 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 	if ctx.Canceled() {
 		return syscall.EINTR
 	}
-	// 对于sql类型的meta，使用doBatchUnlink优化
-	if _, ok := m.en.(*dbMeta); ok {
+	// 对于支持优化的meta引擎，使用doBatchUnlink优化
+	if m.en.supportsOptimizedBatchUnlink() {
 		return m.en.doBatchUnlink(ctx, inode, skipCheckTrash)
 	}
 	// 对于tkv和redis类型的meta，使用原来的逻辑

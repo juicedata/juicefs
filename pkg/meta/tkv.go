@@ -1427,6 +1427,10 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	return errno(err)
 }
 
+func (m *kvMeta) supportsOptimizedBatchUnlink() bool {
+	return false
+}
+
 func (m *kvMeta) doBatchUnlink(ctx Context, inode Ino, skipCheckTrash ...bool) syscall.Errno {
 	var dirAttr Attr
 	if st := m.GetAttr(ctx, inode, &dirAttr); st != 0 {
