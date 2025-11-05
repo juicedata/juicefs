@@ -264,11 +264,11 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 }
 
 type BatchUnlinkEntryInfo struct {
-	Type   uint8  
-	Length uint64 
+	Type   uint8
+	Length uint64
 	Uid    uint32
 	Gid    uint32
-	Nlink  uint32 
+	Nlink  uint32
 }
 
 func (m *baseMeta) updateBatchUnlinkQuota(ctx Context, dirInode Ino, entries []BatchUnlinkEntryInfo) {
@@ -298,7 +298,6 @@ func (m *baseMeta) updateBatchUnlinkQuota(ctx Context, dirInode Ino, entries []B
 		totalDirSpace += diffSpace
 		totalDirInodes -= 1
 		totalDirLength -= int64(diffLength)
-
 
 		if entry.Type == TypeFile && entry.Nlink > 0 {
 			if entry.Uid > 0 {
@@ -351,7 +350,70 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 	if ctx.Canceled() {
 		return syscall.EINTR
 	}
-	return m.en.doBatchUnlink(ctx, inode, skipCheckTrash)
+	// 对于sql类型的meta，使用doBatchUnlink优化
+	if _, ok := m.en.(*dbMeta); ok {
+		return m.en.doBatchUnlink(ctx, inode, skipCheckTrash)
+	}
+	// 对于tkv和redis类型的meta，使用原来的逻辑
+	for {
+		var entries []*Entry
+		if st := m.en.doReaddir(ctx, inode, 0, &entries, 10000); st != 0 && st != syscall.ENOENT {
+			return st
+		}
+		if len(entries) == 0 {
+			return 0
+		}
+		if st := m.Access(ctx, inode, MODE_MASK_W|MODE_MASK_X, nil); st != 0 {
+			return st
+		}
+		var wg sync.WaitGroup
+		var status syscall.Errno
+		// try directories first to increase parallel
+		var dirs int
+		for i, e := range entries {
+			if e.Attr.Typ == TypeDirectory {
+				entries[dirs], entries[i] = entries[i], entries[dirs]
+				dirs++
+			}
+		}
+		for i, e := range entries {
+			if e.Attr.Typ == TypeDirectory {
+				select {
+				case concurrent <- 1:
+					wg.Add(1)
+					go func(child Ino, name string) {
+						defer wg.Done()
+						st := m.emptyEntry(ctx, inode, name, child, skipCheckTrash, count, concurrent)
+						if st != 0 && st != syscall.ENOENT {
+							status = st
+						}
+						<-concurrent
+					}(e.Inode, string(e.Name))
+				default:
+					if st := m.emptyEntry(ctx, inode, string(e.Name), e.Inode, skipCheckTrash, count, concurrent); st != 0 && st != syscall.ENOENT {
+						ctx.Cancel()
+						return st
+					}
+				}
+			} else {
+				if count != nil {
+					atomic.AddUint64(count, 1)
+				}
+				if st := m.Unlink(ctx, inode, string(e.Name), skipCheckTrash); st != 0 && st != syscall.ENOENT {
+					ctx.Cancel()
+					return st
+				}
+			}
+			if ctx.Canceled() {
+				return syscall.EINTR
+			}
+			entries[i] = nil // release memory
+		}
+		wg.Wait()
+		if status != 0 || inode == TrashInode { // try only once for .trash
+			return status
+		}
+	}
 }
 
 func (m *baseMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, skipCheckTrash bool, count *uint64, concurrent chan int) syscall.Errno {
