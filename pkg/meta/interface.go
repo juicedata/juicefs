@@ -561,7 +561,7 @@ func injectPasswordIntoURI(uri, password string) (string, error) {
 func readPasswordFromFile(filePath string) (string, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read password file %s", filePath)
+		return "", fmt.Errorf("failed to read password file %s: %w", filePath, err)
 	}
 	return strings.TrimSpace(string(content)), nil
 }
