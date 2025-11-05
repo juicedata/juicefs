@@ -403,17 +403,8 @@ func (vol *volParams) isHostAllowed(realUser, ips, hostname string) bool {
 }
 
 type kerberos struct {
-	vols      map[string]*volParams
-	mu        sync.Mutex
-	isRenewer bool
-}
-
-func (k *kerberos) getSuperUser(volname string) (string, string) {
-	vol := k.vols[volname]
-	if vol != nil {
-		return vol.superuser, vol.supergroup
-	}
-	return "", ""
+	vols map[string]*volParams
+	mu   sync.Mutex
 }
 
 func (k *kerberos) auth(volname, user, realUser, group, ips, hostname string, reqBytes []byte) syscall.Errno {
