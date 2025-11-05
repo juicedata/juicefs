@@ -552,7 +552,6 @@ juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 
 Passing the password using a file is also supported as follows:
 
-
 ```shell
 export META_PASSWORD_FILE="/secret/mypassword.txt"
 juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
