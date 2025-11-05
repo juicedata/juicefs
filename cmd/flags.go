@@ -199,7 +199,7 @@ func dataCacheFlags() []cli.Flag {
 		&cli.StringFlag{
 			Name:  "writeback-threshold-size",
 			Value: "0",
-			Usage: "blocks greater than or equal to this size will be uploaded directly, 0 means all staged.",
+			Usage: "blocks smaller than this size will be staged, 0 means all staged.",
 		},
 		&cli.StringFlag{
 			Name:  "upload-delay",
