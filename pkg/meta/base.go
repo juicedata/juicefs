@@ -858,9 +858,9 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 		}
 	} else {
 		*totalspace = 1 << 50
-		const maxTotal = math.MaxUint64 >> 1
+		const maxVal = math.MaxUint64 >> 1
 		for *totalspace*8 < uint64(used)*10 {
-			if *totalspace >= maxTotal {
+			if *totalspace >= maxVal {
 				*totalspace = math.MaxUint64
 				break
 			}
@@ -880,9 +880,9 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 		}
 	} else {
 		*iavail = 10 << 20
-		const maxTotal = math.MaxUint64 >> 1
+		const maxVal = math.MaxUint64 >> 1
 		for *iused > *iavail*4 {
-			if *iavail >= maxTotal {
+			if *iavail >= maxVal {
 				break
 			}
 			*iavail <<= 1
