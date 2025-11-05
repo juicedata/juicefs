@@ -21,6 +21,13 @@ export META_PASSWORD=mypassword
 juicefs mount -d "mysql://user:@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
+Similarly, `META_PASSWORD_FILE` can be used to provide the database password as a file:
+
+```shell
+export META_PASSWORD_FILE=/secret/mypassword.txt
+juicefs mount -d "mysql://user:@(192.168.1.6:3306)/juicefs" /mnt/jfs
+```
+
 ## Database connection control
 
 MySQL is a multiple threads database, every client connection need a dedicate server thread, limition of total connections and new connects are prefered. JuiceFS now provides the following options for better control of the connections:
