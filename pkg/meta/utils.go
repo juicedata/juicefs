@@ -127,6 +127,10 @@ func errno(err error) syscall.Errno {
 	if strings.HasPrefix(err.Error(), "OOM") {
 		return syscall.ENOSPC
 	}
+	// If table doesn't exist, return ENOENT instead of logging error
+	if strings.Contains(err.Error(), "no such table") {
+		return syscall.ENOENT
+	}
 	logger.Errorf("error: %s\n%s", err, debug.Stack())
 	return syscall.EIO
 }

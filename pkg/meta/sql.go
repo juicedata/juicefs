@@ -1313,6 +1313,10 @@ func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 			exist, err = s.Select("*").Get(&nn)
 		}
 		if err != nil {
+			// If table doesn't exist, return ENOENT instead of error
+			if strings.Contains(err.Error(), "no such table") {
+				return syscall.ENOENT
+			}
 			return err
 		}
 		if !exist {
