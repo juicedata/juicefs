@@ -204,7 +204,7 @@ func TestForceUpload(t *testing.T) {
 	config := defaultConf
 	_ = os.RemoveAll(config.CacheDir)
 	config.Writeback = true
-	config.MaxWritebackSize = config.BlockSize + 1
+	config.WritebackThresholdSize = config.BlockSize + 1
 	config.UploadDelay = time.Hour
 	config.BlockSize = 4 << 20
 	store := NewCachedStore(blob, config, nil)
