@@ -454,7 +454,7 @@ func (s *wSlice) upload(indx int) {
 		if off != blen {
 			panic(fmt.Sprintf("block length does not match: %v != %v", off, blen))
 		}
-		if s.writeback && blen <= s.store.conf.MaxWritebackSize {
+		if s.writeback && blen < s.store.conf.MaxWritebackSize {
 			stagingPath := "unknown"
 			stageFailed := false
 			block.Acquire()
@@ -627,7 +627,7 @@ func (c *Config) SelfCheck(uuid string) {
 			logger.Warnf("cache-partial-only is ineffective for stage blocks with writeback enabled")
 		}
 		if c.MaxWritebackSize == 0 {
-			c.MaxWritebackSize = c.BlockSize
+			c.MaxWritebackSize = c.BlockSize + 1
 		}
 	} else {
 		if c.UploadDelay > 0 || c.UploadHours != "" {
