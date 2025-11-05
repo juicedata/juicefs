@@ -454,7 +454,7 @@ func (s *wSlice) upload(indx int) {
 		if off != blen {
 			panic(fmt.Sprintf("block length does not match: %v != %v", off, blen))
 		}
-		if s.writeback {
+		if s.writeback && blen < s.store.conf.WritebackThresholdSize {
 			stagingPath := "unknown"
 			stageFailed := false
 			block.Acquire()
@@ -559,35 +559,36 @@ func (s *wSlice) Abort() {
 
 // Config contains options for cachedStore
 type Config struct {
-	CacheDir          string
-	CacheMode         os.FileMode
-	CacheSize         uint64
-	CacheItems        int64
-	CacheChecksum     string
-	CacheEviction     string
-	CacheScanInterval time.Duration
-	CacheExpire       time.Duration
-	OSCache           bool
-	FreeSpace         float32
-	AutoCreate        bool
-	Compress          string
-	MaxUpload         int
-	MaxStageWrite     int
-	MaxRetries        int
-	UploadLimit       int64 // bytes per second
-	DownloadLimit     int64 // bytes per second
-	Writeback         bool
-	UploadDelay       time.Duration
-	UploadHours       string
-	HashPrefix        bool
-	BlockSize         int
-	GetTimeout        time.Duration
-	PutTimeout        time.Duration
-	CacheFullBlock    bool
-	CacheLargeWrite   bool
-	BufferSize        uint64
-	Readahead         int
-	Prefetch          int
+	CacheDir               string
+	CacheMode              os.FileMode
+	CacheSize              uint64
+	CacheItems             int64
+	CacheChecksum          string
+	CacheEviction          string
+	CacheScanInterval      time.Duration
+	CacheExpire            time.Duration
+	OSCache                bool
+	FreeSpace              float32
+	AutoCreate             bool
+	Compress               string
+	MaxUpload              int
+	MaxStageWrite          int
+	MaxRetries             int
+	UploadLimit            int64 // bytes per second
+	DownloadLimit          int64 // bytes per second
+	Writeback              bool
+	WritebackThresholdSize int
+	UploadDelay            time.Duration
+	UploadHours            string
+	HashPrefix             bool
+	BlockSize              int
+	GetTimeout             time.Duration
+	PutTimeout             time.Duration
+	CacheFullBlock         bool
+	CacheLargeWrite        bool
+	BufferSize             uint64
+	Readahead              int
+	Prefetch               int
 }
 
 func (c *Config) SelfCheck(uuid string) {
@@ -598,20 +599,6 @@ func (c *Config) SelfCheck(uuid string) {
 			c.Prefetch = 0
 		}
 		c.CacheDir = "memory"
-	}
-	if !c.Writeback {
-		if c.UploadDelay > 0 || c.UploadHours != "" {
-			logger.Warnf("delayed upload is disabled in non-writeback mode")
-			c.UploadDelay = 0
-			c.UploadHours = ""
-		}
-	}
-	if !c.CacheFullBlock && c.Writeback {
-		logger.Warnf("cache-partial-only is ineffective for stage blocks with writeback enabled")
-	}
-	if _, _, err := c.parseHours(); err != nil {
-		logger.Warnf("invalid value (%s) for upload-hours: %s", c.UploadHours, err)
-		c.UploadHours = ""
 	}
 	if c.MaxUpload <= 0 {
 		logger.Warnf("max-uploads should be greater than 0, set it to 1")
@@ -634,6 +621,24 @@ func (c *Config) SelfCheck(uuid string) {
 	} else if c.Writeback {
 		logger.Warnf("writeback is not supported in memory cache mode")
 		c.Writeback = false
+	}
+	if c.Writeback {
+		if !c.CacheFullBlock {
+			logger.Warnf("cache-partial-only is ineffective for stage blocks with writeback enabled")
+		}
+		if c.WritebackThresholdSize == 0 {
+			c.WritebackThresholdSize = c.BlockSize + 1
+		}
+	} else {
+		if c.UploadDelay > 0 || c.UploadHours != "" {
+			logger.Warnf("delayed upload is disabled in non-writeback mode")
+			c.UploadDelay = 0
+			c.UploadHours = ""
+		}
+	}
+	if _, _, err := c.parseHours(); err != nil {
+		logger.Warnf("invalid value (%s) for upload-hours: %s", c.UploadHours, err)
+		c.UploadHours = ""
 	}
 	if c.CacheEviction == "" {
 		c.CacheEviction = Eviction2Random
@@ -818,7 +823,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit/10)
 	}
 	store.initMetrics()
-	if store.conf.CacheDir != "memory" && store.conf.Writeback {
+	if store.conf.Writeback {
 		store.startHour, store.endHour, _ = config.parseHours()
 		if store.startHour != store.endHour {
 			logger.Infof("background upload at %d:00 ~ %d:00", store.startHour, store.endHour)
@@ -866,7 +871,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		}
 	})
 
-	if store.conf.CacheDir != "memory" && store.conf.Writeback {
+	if store.conf.Writeback {
 		for i := 0; i < store.conf.MaxUpload; i++ {
 			go store.uploader()
 		}

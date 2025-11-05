@@ -197,6 +197,11 @@ func dataCacheFlags() []cli.Flag {
 			Usage: "upload blocks in background",
 		},
 		&cli.StringFlag{
+			Name:  "writeback-threshold-size",
+			Value: "0",
+			Usage: "blocks smaller than this size will be staged, 0 means all staged.",
+		},
+		&cli.StringFlag{
 			Name:  "upload-delay",
 			Value: "0s",
 			Usage: "delayed duration for uploading blocks",
