@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path"
 	"reflect"
@@ -651,8 +652,13 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 		}
 	} else {
 		*totalspace = 1 << 50
+		const maxVal = math.MaxUint64 >> 1
 		for *totalspace*8 < uint64(used)*10 {
-			*totalspace *= 2
+			if *totalspace >= maxVal {
+				*totalspace = math.MaxUint64
+				break
+			}
+			*totalspace <<= 1
 		}
 	}
 	*availspace = *totalspace - uint64(used)
@@ -668,8 +674,12 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 		}
 	} else {
 		*iavail = 10 << 20
-		for *iused*10 > (*iused+*iavail)*8 {
-			*iavail *= 2
+		const maxVal = math.MaxUint64 >> 1
+		for *iused > *iavail*4 {
+			if *iavail >= maxVal {
+				break
+			}
+			*iavail <<= 1
 		}
 	}
 	return 0
