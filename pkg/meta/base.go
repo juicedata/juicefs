@@ -2032,7 +2032,7 @@ func (m *baseMeta) walk(ctx Context, inode Ino, p string, attr *Attr, walkFn met
 	return 0
 }
 
-func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool, statAll bool) error {
+func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool, statAll bool, delete bool) error {
 	var attr Attr
 	var inode = RootInode
 	var parent = RootInode
@@ -2113,9 +2113,14 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 				inode := e.inode
 				path := e.path
 				attr := e.attr
-				if attr.Typ != TypeDirectory {
+				if attr.Typ != TypeDirectory && attr.Typ != TypeFile {
 					// TODO
+					logger.Warnf("Type of attribute is: %d", attr.Typ)
 					continue
+				}
+
+				if attr.Typ == TypeFile && delete {
+					m.Unlink(ctx, inode, path, true)
 				}
 
 				var attrBroken, statBroken bool

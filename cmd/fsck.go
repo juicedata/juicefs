@@ -65,6 +65,10 @@ $ juicefs fsck redis://localhost --path /d1/d2 --recursive`,
 				Name:  "sync-dir-stat",
 				Usage: "sync stat of all directories, even if they are existed and not broken (NOTE: it may take a long time for huge trees)",
 			},
+			&cli.BoolFlag{
+				Name:  "delete",
+				Usage: "delete lost files",
+			},
 		},
 	}
 }
@@ -85,7 +89,7 @@ func fsck(ctx *cli.Context) error {
 		if !strings.HasPrefix(p, "/") {
 			logger.Fatalf("File path should be the absolute path within JuiceFS")
 		}
-		return m.Check(c, p, ctx.Bool("repair"), ctx.Bool("recursive"), ctx.Bool("sync-dir-stat"))
+		return m.Check(c, p, ctx.Bool("repair"), ctx.Bool("recursive"), ctx.Bool("sync-dir-stat"), ctx.Bool("delete"))
 	}
 
 	chunkConf := *getDefaultChunkConf(format)
@@ -183,7 +187,7 @@ func fsck(ctx *cli.Context) error {
 								brokens[inode] = fmt.Sprintf("inode:%d", inode)
 							}
 						}
-						logger.Errorf("can't find block %s for file %s: %s", objKey, brokens[inode], err)
+ 							logger.Errorf("can't find block %s for file %s: %s", objKey, brokens[inode], err)
 						lostDSpin.IncrInt64(int64(sz))
 					}
 				}
