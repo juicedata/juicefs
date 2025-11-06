@@ -1094,7 +1094,6 @@ func (m *kvMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 			if off+size > old {
 				size = old - off
 			}
-			chunksMap := make(map[string][]byte)
 			for size > 0 {
 				indx := uint32(off / ChunkSize)
 				coff := off % ChunkSize
@@ -1102,12 +1101,9 @@ func (m *kvMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 				if coff+size > ChunkSize {
 					l = ChunkSize - coff
 				}
-				chunksMap[string(m.chunkKey(inode, indx))] = append(chunksMap[string(m.chunkKey(inode, indx))], marshalSlice(uint32(coff), 0, 0, 0, uint32(l))...)
+				tx.append(m.chunkKey(inode, indx), marshalSlice(uint32(coff), 0, 0, 0, uint32(l)))
 				off += l
 				size -= l
-			}
-			for k, v := range chunksMap {
-				tx.append([]byte(k), v)
 			}
 		}
 		*attr = t
