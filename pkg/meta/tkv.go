@@ -2099,6 +2099,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		}
 
 		coff := offIn / ChunkSize * ChunkSize
+		chunksMap := make(map[string][]byte)
 		for coff < offIn+size {
 			if coff%ChunkSize != 0 {
 				panic("coff")
@@ -2124,23 +2125,26 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 					indx := uint32(doff / ChunkSize)
 					dpos := uint32(doff % ChunkSize)
 					if dpos+s.Len > ChunkSize {
-						tx.append(m.chunkKey(fout, indx), marshalSlice(dpos, s.Id, s.Size, s.Off, ChunkSize-dpos))
+						chunksMap[string(m.chunkKey(fout, indx))] = append(chunksMap[string(m.chunkKey(fout, indx))], marshalSlice(dpos, s.Id, s.Size, s.Off, ChunkSize-dpos)...)
 						if s.Id > 0 {
 							tx.incrBy(m.sliceKey(s.Id, s.Size), 1)
 						}
 						skip := ChunkSize - dpos
-						tx.append(m.chunkKey(fout, indx+1), marshalSlice(0, s.Id, s.Size, s.Off+skip, s.Len-skip))
+						chunksMap[string(m.chunkKey(fout, indx+1))] = append(chunksMap[string(m.chunkKey(fout, indx+1))], marshalSlice(0, s.Id, s.Size, s.Off+skip, s.Len-skip)...)
 						if s.Id > 0 {
 							tx.incrBy(m.sliceKey(s.Id, s.Size), 1)
 						}
 					} else {
-						tx.append(m.chunkKey(fout, indx), marshalSlice(dpos, s.Id, s.Size, s.Off, s.Len))
+						chunksMap[string(m.chunkKey(fout, indx))] = append(chunksMap[string(m.chunkKey(fout, indx))], marshalSlice(dpos, s.Id, s.Size, s.Off, s.Len)...)
 						if s.Id > 0 {
 							tx.incrBy(m.sliceKey(s.Id, s.Size), 1)
 						}
 					}
 				}
 			}
+		}
+		for k, v := range chunksMap {
+			tx.append([]byte(k), v)
 		}
 		tx.set(m.inodeKey(fout), m.marshal(&attr))
 		if copied != nil {
