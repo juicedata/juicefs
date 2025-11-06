@@ -65,6 +65,10 @@ $ juicefs fsck redis://localhost --path /d1/d2 --recursive`,
 				Name:  "sync-dir-stat",
 				Usage: "sync stat of all directories, even if they are existed and not broken (NOTE: it may take a long time for huge trees)",
 			},
+			&cli.BoolFlag{
+				Name:  "delete",
+				Usage: "delete lost files",
+			},
 		},
 	}
 }
@@ -205,7 +209,17 @@ func fsck(ctx *cli.Context) error {
 		}
 		sort.Strings(fileList)
 		msg += strings.Join(fileList, "\n")
-		logger.Fatal(msg)
+		if ctx.Bool("delete") {
+			logger.Infof("Cleaning up broken files")
+			for i, p := range brokens {
+				if strings.HasPrefix(p, "inode:") {
+					m.DeleteFileData(i, 0, true)
+					logger.Infof("Deleted data of inode %d", i)
+				}
+			}
+		} else {
+			logger.Fatal(msg)
+		}
 	}
 
 	return nil

@@ -507,6 +507,7 @@ type Meta interface {
 	// Get a copy of the current format
 	GetFormat() Format
 
+	DeleteFileData(inode Ino, length uint64, force bool)
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
 	// OnReload register a callback for any change founded after reloaded.

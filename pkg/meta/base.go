@@ -2479,6 +2479,10 @@ func (m *baseMeta) fileDeleted(opened, force bool, inode Ino, length uint64) {
 	}
 }
 
+func (m *baseMeta) DeleteFileData(inode Ino, length uint64, force bool) {
+	m.en.doDeleteFileData(inode, length)
+}
+
 func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64, force bool) {
 	if force {
 		m.maxDeleting <- struct{}{}
