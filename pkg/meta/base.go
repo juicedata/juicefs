@@ -2142,7 +2142,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 					if repair {
 						if !attr.Full {
 							now := time.Now().Unix()
-							attr.Mode = 0644
+							attr.Mode = 0755
 							attr.Uid = ctx.Uid()
 							attr.Gid = ctx.Gid()
 							attr.Atime = now
