@@ -5039,22 +5039,13 @@ func (m *dbMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.
 
 func (m *dbMeta) doUpdateToken(ctx Context, id uint32, token []byte) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
-		t := &DelegationToken{Id: id}
-		ok, err := s.Get(t)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return syscall.ENOENT
-		}
-		t.Token = token
-		_, err = s.Cols("token").Update(t, &DelegationToken{Id: id})
+		_, err := s.Cols("token").Update(&DelegationToken{Id: id, Token: token}, &DelegationToken{Id: id})
 		return err
 	}))
 }
 
 func (m *dbMeta) doLoadToken(ctx Context, id uint32) (token []byte, st syscall.Errno) {
-	err := m.roTxn(ctx, func(s *xorm.Session) error {
+	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		t := &DelegationToken{Id: id}
 		ok, err := s.Get(t)
 		if err != nil {
