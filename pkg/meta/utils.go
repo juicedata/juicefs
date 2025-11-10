@@ -277,15 +277,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 		}
 		var wg sync.WaitGroup
 		var status syscall.Errno
-		// try directories first to increase parallel
-		var dirs int
-		for i, e := range entries {
-			if e.Attr.Typ == TypeDirectory {
-				entries[dirs], entries[i] = entries[i], entries[dirs]
-				dirs++
-			}
-		}
-		for i, e := range entries {
+		for _, e := range entries {
 			if e.Attr.Typ == TypeDirectory {
 				select {
 				case concurrent <- 1:
@@ -304,21 +296,49 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 						return st
 					}
 				}
-			} else {
-				if count != nil {
-					atomic.AddUint64(count, 1)
-				}
-				if st := m.Unlink(ctx, inode, string(e.Name), skipCheckTrash); st != 0 && st != syscall.ENOENT {
-					ctx.Cancel()
-					return st
-				}
-			}
+			} 
 			if ctx.Canceled() {
 				return syscall.EINTR
 			}
-			entries[i] = nil // release memory
+			
 		}
 		wg.Wait()
+		var nonDirEntries []*Entry
+		for _, e := range entries {
+			if e.Attr.Typ != TypeDirectory {
+				nonDirEntries = append(nonDirEntries, e)
+			}
+		}
+		var length int64
+		var space int64
+		var inodes int64
+		var userGroupQuotas []UserGroupQuotaDelta
+		st := m.en.doEmptyDir(ctx, inode, nonDirEntries, &length, &space, &inodes, &userGroupQuotas, skipCheckTrash)
+		if st == 0 {
+			m.updateDirStat(ctx, inode, -length, -space, -inodes)
+			if !inode.IsTrash() {
+				m.updateDirQuota(ctx, inode, -space, -inodes)
+				for _, quota := range userGroupQuotas {
+					m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, quota.Space, quota.Inodes)
+				}
+			}
+		} else if st == syscall.ENOTSUP {
+			for _, e := range entries {
+				if e.Attr.Typ == TypeDirectory {
+					continue
+				}
+				if ctx.Canceled() {
+					return syscall.EINTR
+				}
+				if st := m.Unlink(ctx, inode, string(e.Name), skipCheckTrash); st != 0 && st != syscall.ENOENT {
+					return st
+				}
+			}
+		} else if st != 0 {
+			return st
+		}
+		entries = nil
+
 		if status != 0 || inode == TrashInode { // try only once for .trash
 			return status
 		}

@@ -2586,6 +2586,217 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	}))
 }
 
+// recordDeletionStats 记录删除统计信息和用户组配额变化
+func recordDeletionStats(
+	n *node,
+	entrySpace int64,
+	spaceDelta int64, // 配额空间变化（0 表示空间不变，负数表示空间减少）
+	totalLength *int64,
+	totalSpace *int64,
+	totalInodes *int64,
+	userGroupQuotas *[]UserGroupQuotaDelta,
+	trash Ino,
+) {
+	// 统计删除的空间和 inode
+	*totalLength += int64(n.Length)
+	*totalSpace += entrySpace
+	*totalInodes++
+
+	// 收集用户组配额变化，只在非回收站删除时收集
+	if userGroupQuotas != nil && trash == 0 && n.Uid > 0 {
+		*userGroupQuotas = append(*userGroupQuotas, UserGroupQuotaDelta{
+			Uid:    n.Uid,
+			Gid:    n.Gid,
+			Space:  spaceDelta,
+			Inodes: -1,
+		})
+	}
+}
+
+func (m *dbMeta) doEmptyDir(ctx Context, parent Ino, entries []*Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]UserGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
+	if len(entries) == 0 {
+		return 0
+	}
+
+	var trash Ino
+	if len(skipCheckTrash) == 0 || !skipCheckTrash[0] {
+		if st := m.checkTrash(parent, &trash); st != 0 {
+			return st
+		}
+	}
+
+	type entryInfo struct {
+		e          edge
+		n          node
+		opened     bool
+		trash      Ino
+		trashName  string // 缓存回收站条目名称，避免重复计算
+	}
+
+	var entryInfos []entryInfo
+	var totalLength, totalSpace, totalInodes int64
+	// 收集用户组配额变化，只在非回收站删除时收集
+	if userGroupQuotas != nil {
+		*userGroupQuotas = make([]UserGroupQuotaDelta, 0, len(entries))
+	}
+
+	err := m.txn(func(s *xorm.Session) error {
+		pn := node{Inode: parent}
+		ok, err := s.Get(&pn)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return syscall.ENOENT
+		}
+		if pn.Type != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		if (pn.Flags&FlagAppend != 0) || (pn.Flags&FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
+
+		entryInfos = make([]entryInfo, 0, len(entries))
+		now := time.Now().UnixNano()
+
+		for _, entry := range entries {
+			e := edge{Parent: parent, Name: entry.Name, Inode: entry.Inode}
+			if entry.Attr != nil {
+				e.Type = entry.Attr.Typ
+			}
+
+			info := entryInfo{e: e, trash: trash}
+			n := node{Inode: e.Inode}
+			ok, err := s.ForUpdate().Get(&n)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				continue
+			}
+			if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
+				return syscall.EACCES
+			}
+
+			if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
+				return syscall.EPERM
+			}
+			if (n.Flags & FlagSkipTrash) != 0 {
+				info.trash = 0
+			}
+
+			if info.trash > 0 {
+				info.trashName = m.trashEntry(parent, e.Inode, string(e.Name))
+				if n.Nlink > 1 {
+					if o, err := s.Get(&edge{Parent: info.trash, Name: []byte(info.trashName), Inode: e.Inode, Type: e.Type}); err == nil && o {
+						info.trash = 0
+					}
+				}
+			}
+
+			n.setCtime(now)
+			if info.trash == 0 {
+				n.Nlink--
+				if n.Type == TypeFile && n.Nlink == 0 && m.sid > 0 {
+					info.opened = m.of.IsOpen(e.Inode)
+				}
+			} else if n.Parent > 0 {
+				n.Parent = info.trash
+			}
+
+			info.n = n
+			entryInfos = append(entryInfos, info)
+		}
+
+		for _, info := range entryInfos {
+			if info.e.Type == TypeDirectory {
+				continue
+			}
+			if _, err := s.Delete(&edge{Parent: parent, Name: info.e.Name}); err != nil {
+				return err
+			}
+
+			if info.n.Nlink > 0 {
+				if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(&info.n, &node{Inode: info.e.Inode}); err != nil {
+					return err
+				}
+				if info.trash > 0 {
+					if err := mustInsert(s, &edge{Parent: info.trash, Name: []byte(info.trashName), Inode: info.e.Inode, Type: info.e.Type}); err != nil {
+						return err
+					}
+				}
+				entrySpace := align4K(info.n.Length)
+				recordDeletionStats(&info.n, entrySpace, 0, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, trash)
+			} else {
+				switch info.e.Type {
+				case TypeFile:
+					entrySpace := align4K(info.n.Length)
+					if info.opened {
+						if err = mustInsert(s, sustained{Sid: m.sid, Inode: info.e.Inode}); err != nil {
+							return err
+						}
+						if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(&info.n, &node{Inode: info.e.Inode}); err != nil {
+							return err
+						}
+						recordDeletionStats(&info.n, entrySpace, 0, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, trash)
+					} else {
+						if err = mustInsert(s, delfile{info.e.Inode, info.n.Length, time.Now().Unix()}); err != nil {
+							return err
+						}
+						if _, err := s.Delete(&node{Inode: info.e.Inode}); err != nil {
+							return err
+						}
+						recordDeletionStats(&info.n, entrySpace, -entrySpace, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, trash)
+					}
+				case TypeSymlink:
+					if _, err := s.Delete(&symlink{Inode: info.e.Inode}); err != nil {
+						return err
+					}
+					if _, err := s.Delete(&node{Inode: info.e.Inode}); err != nil {
+						return err
+					}
+					entrySpace := align4K(0)
+					recordDeletionStats(&info.n, entrySpace, -entrySpace, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, trash)
+				default:
+					if _, err := s.Delete(&node{Inode: info.e.Inode}); err != nil {
+						return err
+					}
+					if info.e.Type != TypeFile {
+						entrySpace := align4K(0)
+						recordDeletionStats(&info.n, entrySpace, -entrySpace, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, trash)
+					}
+				}
+				if _, err := s.Delete(&xattr{Inode: info.e.Inode}); err != nil {
+					return err
+				}
+			}
+			m.of.InvalidateChunk(info.e.Inode, invalidateAttrOnly)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return errno(err)
+	}
+
+	// 事务外处理：fileDeleted 和 updateStats
+	if trash == 0 {
+		for _, info := range entryInfos {
+			if info.n.Type == TypeFile && info.n.Nlink == 0 {
+				isTrash := parent.IsTrash()
+				m.fileDeleted(info.opened, isTrash, info.e.Inode, info.n.Length)
+			}
+		}
+		m.updateStats(totalSpace, totalInodes)
+	}
+
+	*length = totalLength
+	*space = totalSpace
+	*inodes = totalInodes
+	return 0
+}
+
 func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 	var fail bool
 	// release locks

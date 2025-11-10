@@ -1427,6 +1427,11 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	return errno(err)
 }
 
+func (m *kvMeta) doEmptyDir(ctx Context, parent Ino, entries []*Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]UserGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
+	// tkv 引擎不支持批量删除优化，返回不支持的错误
+	return syscall.ENOTSUP
+}
+
 func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldAttr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
