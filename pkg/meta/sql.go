@@ -2586,23 +2586,20 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	}))
 }
 
-// recordDeletionStats 记录删除统计信息和用户组配额变化
 func recordDeletionStats(
 	n *node,
 	entrySpace int64,
-	spaceDelta int64, // 配额空间变化（0 表示空间不变，负数表示空间减少）
+	spaceDelta int64, 
 	totalLength *int64,
 	totalSpace *int64,
 	totalInodes *int64,
 	userGroupQuotas *[]UserGroupQuotaDelta,
 	trash Ino,
 ) {
-	// 统计删除的空间和 inode
 	*totalLength += int64(n.Length)
 	*totalSpace += entrySpace
 	*totalInodes++
 
-	// 收集用户组配额变化，只在非回收站删除时收集
 	if userGroupQuotas != nil && trash == 0 && n.Uid > 0 {
 		*userGroupQuotas = append(*userGroupQuotas, UserGroupQuotaDelta{
 			Uid:    n.Uid,
@@ -2714,6 +2711,10 @@ func (m *dbMeta) doEmptyDir(ctx Context, parent Ino, entries []*Entry, length *i
 			finalNlink := original - int64(processed+1)
 			if finalNlink < 0 {
 				finalNlink = 0
+			}
+			// If trash is enabled and this would be the last link, keep one link by moving it into trash.
+			if info.trash > 0 && finalNlink == 0 && info.e.Type != TypeDirectory {
+				finalNlink = 1
 			}
 			info.lastLink = (info.trash == 0 && finalNlink == 0)
 			if info.lastLink && info.e.Type == TypeFile && m.sid > 0 {
