@@ -2630,12 +2630,12 @@ func (m *dbMeta) doEmptyDir(ctx Context, parent Ino, entries []*Entry, length *i
 		n          node
 		opened     bool
 		trash      Ino
-		trashName  string // 缓存回收站条目名称，避免重复计算
+		trashName  string 
+		lastLink   bool   
 	}
 
 	var entryInfos []entryInfo
 	var totalLength, totalSpace, totalInodes int64
-	// 收集用户组配额变化，只在非回收站删除时收集
 	if userGroupQuotas != nil {
 		*userGroupQuotas = make([]UserGroupQuotaDelta, 0, len(entries))
 	}
@@ -2695,12 +2695,7 @@ func (m *dbMeta) doEmptyDir(ctx Context, parent Ino, entries []*Entry, length *i
 			}
 
 			n.setCtime(now)
-			if info.trash == 0 {
-				n.Nlink--
-				if n.Type == TypeFile && n.Nlink == 0 && m.sid > 0 {
-					info.opened = m.of.IsOpen(e.Inode)
-				}
-			} else if n.Parent > 0 {
+			if info.trash != 0 && n.Parent > 0 {
 				n.Parent = info.trash
 			}
 
@@ -2708,6 +2703,27 @@ func (m *dbMeta) doEmptyDir(ctx Context, parent Ino, entries []*Entry, length *i
 			entryInfos = append(entryInfos, info)
 		}
 
+		seen := make(map[Ino]int)
+		for i := range entryInfos {
+			info := &entryInfos[i]
+			if info.e.Type == TypeDirectory {
+				continue
+			}
+			original := int64(info.n.Nlink)
+			processed := seen[info.e.Inode]
+			finalNlink := original - int64(processed+1)
+			if finalNlink < 0 {
+				finalNlink = 0
+			}
+			info.lastLink = (info.trash == 0 && finalNlink == 0)
+			if info.lastLink && info.e.Type == TypeFile && m.sid > 0 {
+				info.opened = m.of.IsOpen(info.e.Inode)
+			}
+			info.n.Nlink = uint32(finalNlink)
+			seen[info.e.Inode] = processed + 1
+		}
+
+		trashInserted := make(map[Ino]bool)
 		for _, info := range entryInfos {
 			if info.e.Type == TypeDirectory {
 				continue
@@ -2720,10 +2736,11 @@ func (m *dbMeta) doEmptyDir(ctx Context, parent Ino, entries []*Entry, length *i
 				if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(&info.n, &node{Inode: info.e.Inode}); err != nil {
 					return err
 				}
-				if info.trash > 0 {
+				if info.trash > 0 && !trashInserted[info.e.Inode] {
 					if err := mustInsert(s, &edge{Parent: info.trash, Name: []byte(info.trashName), Inode: info.e.Inode, Type: info.e.Type}); err != nil {
 						return err
 					}
+					trashInserted[info.e.Inode] = true
 				}
 				entrySpace := align4K(info.n.Length)
 				recordDeletionStats(&info.n, entrySpace, 0, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, trash)
@@ -2780,15 +2797,14 @@ func (m *dbMeta) doEmptyDir(ctx Context, parent Ino, entries []*Entry, length *i
 		return errno(err)
 	}
 
-	// 事务外处理：fileDeleted 和 updateStats
 	if trash == 0 {
 		for _, info := range entryInfos {
-			if info.n.Type == TypeFile && info.n.Nlink == 0 {
+				if info.n.Type == TypeFile && info.lastLink {
 				isTrash := parent.IsTrash()
 				m.fileDeleted(info.opened, isTrash, info.e.Inode, info.n.Length)
 			}
 		}
-		m.updateStats(totalSpace, totalInodes)
+		m.updateStats(-totalSpace, -totalInodes)
 	}
 
 	*length = totalLength

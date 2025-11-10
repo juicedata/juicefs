@@ -277,6 +277,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 		}
 		var wg sync.WaitGroup
 		var status syscall.Errno
+		var nonDirEntries []*Entry
 		for _, e := range entries {
 			if e.Attr.Typ == TypeDirectory {
 				select {
@@ -296,19 +297,16 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 						return st
 					}
 				}
-			} 
+			} else {
+				nonDirEntries = append(nonDirEntries, e)
+			}
 			if ctx.Canceled() {
 				return syscall.EINTR
 			}
 			
 		}
 		wg.Wait()
-		var nonDirEntries []*Entry
-		for _, e := range entries {
-			if e.Attr.Typ != TypeDirectory {
-				nonDirEntries = append(nonDirEntries, e)
-			}
-		}
+
 		var length int64
 		var space int64
 		var inodes int64
@@ -319,7 +317,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 			if !inode.IsTrash() {
 				m.updateDirQuota(ctx, inode, -space, -inodes)
 				for _, quota := range userGroupQuotas {
-					m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, quota.Space, quota.Inodes)
+					m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, -quota.Space, -quota.Inodes)
 				}
 			}
 		} else if st == syscall.ENOTSUP {
