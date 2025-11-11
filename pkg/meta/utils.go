@@ -320,6 +320,9 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 					m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, -quota.Space, -quota.Inodes)
 				}
 			}
+			if count != nil && len(nonDirEntries) > 0 {
+				atomic.AddUint64(count, uint64(len(nonDirEntries)))
+			}
 		} else if st == syscall.ENOTSUP {
 			for _, e := range entries {
 				if e.Attr.Typ == TypeDirectory {
@@ -330,6 +333,9 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 				}
 				if st := m.Unlink(ctx, inode, string(e.Name), skipCheckTrash); st != 0 && st != syscall.ENOENT {
 					return st
+				}
+				if count != nil {
+					atomic.AddUint64(count, 1)
 				}
 			}
 		} else if st != 0 {
