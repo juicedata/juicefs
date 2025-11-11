@@ -122,7 +122,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [深入解析 JuiceFS 垃圾回收机制](https://juicefs.com/zh-cn/blog/engineering/juicefs-gc-mechanism)，2025-10-30，许誉超
 - [JuiceFS writeback：写加速机制与适用场景解析](https://juicefs.com/zh-cn/blog/solutions/juicesfs-writeback-analysis)，2025-08-25，蔡敏
 - [JuiceFS on Windows: 首个 Beta 版的探索与优化原理](https://juicefs.com/zh-cn/blog/engineering/juicefs-on-windows-beta)，2025-08-04，陈杰
-- [JuiceFS v1.3-Beta2：Apache Ranger集成与权限控制原理](https://juicefs.com/zh-cn/blog/release-notes/juicefs-1-3-ranger)，2025-06-06，汤友棚
+- [JuiceFS v1.3-Beta2：Apache Ranger 集成与权限控制原理](https://juicefs.com/zh-cn/blog/release-notes/juicefs-1-3-ranger)，2025-06-06，汤友棚
 - [深度解析 JuiceFS 权限管理：Linux 多种安全机制全兼容](https://juicefs.com/zh-cn/blog/engineering/linux-file-system-juicefs-access-management)，2025-06-12，黄杰烽
 - [JuiceFS v1.3-Beta1：一亿文件备份分钟级完成，性能优化全解析](https://juicefs.com/zh-cn/blog/release-notes/juicefs-v13-beta1-backup)，2025-05-21，黄杰烽
 - [代码级解析：JuiceFS 元数据、数据存储设计原理](https://juicefs.com/zh-cn/blog/engineering/juicefs-metadata-data-stroage-designed)，2024-11-25，Arthur
