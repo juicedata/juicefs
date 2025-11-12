@@ -52,7 +52,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -86,7 +85,7 @@ var (
 	fslock        sync.Mutex
 	handlers            = make(map[int64]*wrapper)
 	nextFsHandle  int64 = 0
-	activefs            = make(map[string][]*wrapper)
+	activefs            = make(map[fsKey][]*wrapper)
 	logger              = utils.GetLogger("juicefs")
 	bOnce         sync.Once
 	bridges       []*Bridge
@@ -177,6 +176,11 @@ func errno(err error) int32 {
 		logger.Warnf("unknown errno %d: %s", eno, err)
 		return -int32(eno)
 	}
+}
+
+type fsKey struct {
+	name string
+	conf javaConf
 }
 
 type wrapper struct {
@@ -366,20 +370,22 @@ type javaConf struct {
 	SuperFS bool `json:"superFs,omitempty"`
 }
 
+func cleanConf(conf javaConf) javaConf {
+	conf.SuperFS = false
+	return conf
+}
+
 func getOrCreate(name, user, group, superuser, supergroup string, conf javaConf, f func() *fs.FileSystem) int64 {
 	fslock.Lock()
 	defer fslock.Unlock()
-	ws := activefs[name]
+	key := fsKey{name: name, conf: cleanConf(conf)}
+	ws := activefs[key]
 	var jfs *fs.FileSystem
 	var m *mapping
-	for _, w := range ws {
-		if reflect.DeepEqual(w.conf, conf) {
-			jfs = w.FileSystem
-			m = w.m
-			break
-		}
-	}
-	if jfs == nil {
+	if len(ws) > 0 {
+		jfs = ws[0].FileSystem
+		m = ws[0].m
+	} else {
 		m = newMapping(name)
 		jfs = f()
 		if jfs == nil {
@@ -406,7 +412,7 @@ func getOrCreate(name, user, group, superuser, supergroup string, conf javaConf,
 	} else {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(user), w.lookupGids(group))
 	}
-	activefs[name] = append(ws, w)
+	activefs[key] = append(ws, w)
 	nextFsHandle = nextFsHandle + 1
 	handlers[nextFsHandle] = w
 	return nextFsHandle
@@ -758,7 +764,12 @@ func jfs_update_uid_grouping(cname, uidstr *C.char, grouping *C.char) {
 	fslock.Lock()
 	defer fslock.Unlock()
 	userGroupCache[name] = userGroups
-	ws := activefs[name]
+	var ws []*wrapper
+	for k, wrappers := range activefs {
+		if k.name == name {
+			ws = append(ws, wrappers...)
+		}
+	}
 	if len(ws) > 0 {
 		for _, w := range ws {
 			w.m.update(uids, gids, false)
@@ -820,12 +831,12 @@ func jfs_term(pid int64, h int64) int32 {
 	fslock.Lock()
 	defer fslock.Unlock()
 	delete(handlers, h)
-	for name, ws := range activefs {
+	for k, ws := range activefs {
 		for i := range ws {
 			if ws[i] == w {
 				if len(ws) > 1 {
 					ws[i] = ws[len(ws)-1]
-					activefs[name] = ws[:len(ws)-1]
+					activefs[k] = ws[:len(ws)-1]
 				} else {
 					_ = w.Flush()
 					// don't close the filesystem, so it can be re-used later
