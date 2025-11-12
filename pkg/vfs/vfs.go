@@ -267,6 +267,10 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 }
 
 func (v *VFS) Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
+	return v.doUnlink(ctx, parent, name, false)
+}
+
+func (v *VFS) doUnlink(ctx Context, parent Ino, name string, skipTrash bool) (err syscall.Errno) {
 	defer func() { logit(ctx, "unlink", err, "(%d,%s)", parent, name) }()
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EPERM
@@ -276,7 +280,7 @@ func (v *VFS) Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
 		err = syscall.ENAMETOOLONG
 		return
 	}
-	err = v.Meta.Unlink(ctx, parent, name)
+	err = v.Meta.Unlink(ctx, parent, name, skipTrash)
 	if err == 0 {
 		v.invalidateDirHandle(parent, name, 0, nil)
 	}
@@ -536,7 +540,7 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 			if flags&syscall.O_EXCL != 0 {
 				logger.Warnf("The O_EXCL is currently not supported for use with O_TMPFILE")
 			}
-			err = v.Unlink(ctx, parent, name)
+			err = v.doUnlink(ctx, parent, name, true)
 		}
 	}
 	return
