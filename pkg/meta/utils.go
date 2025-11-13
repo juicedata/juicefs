@@ -277,8 +277,8 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 		}
 		var wg sync.WaitGroup
 		var status syscall.Errno
-		var nonDirEntries []*Entry
-		for _, e := range entries {
+		var nonDirEntries []Entry
+		for i, e := range entries {
 			if e.Attr.Typ == TypeDirectory {
 				select {
 				case concurrent <- 1:
@@ -298,50 +298,18 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 					}
 				}
 			} else {
-				nonDirEntries = append(nonDirEntries, e)
+				nonDirEntries = append(nonDirEntries, *e)
 			}
 			if ctx.Canceled() {
 				return syscall.EINTR
 			}
-			
+			entries[i] = nil // release memory
 		}
 		wg.Wait()
 
-		var length int64
-		var space int64
-		var inodes int64
-		var userGroupQuotas []UserGroupQuotaDelta
-		st := m.en.doEmptyDir(ctx, inode, nonDirEntries, &length, &space, &inodes, &userGroupQuotas, skipCheckTrash)
-		if st == 0 {
-			m.updateDirStat(ctx, inode, -length, -space, -inodes)
-			if !inode.IsTrash() {
-				m.updateDirQuota(ctx, inode, -space, -inodes)
-				for _, quota := range userGroupQuotas {
-					m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, -quota.Space, -quota.Inodes)
-				}
-			}
-			if count != nil && len(nonDirEntries) > 0 {
-				atomic.AddUint64(count, uint64(len(nonDirEntries)))
-			}
-		} else if st == syscall.ENOTSUP {
-			for _, e := range entries {
-				if e.Attr.Typ == TypeDirectory {
-					continue
-				}
-				if ctx.Canceled() {
-					return syscall.EINTR
-				}
-				if st := m.Unlink(ctx, inode, string(e.Name), skipCheckTrash); st != 0 && st != syscall.ENOENT {
-					return st
-				}
-				if count != nil {
-					atomic.AddUint64(count, 1)
-				}
-			}
-		} else if st != 0 {
-			return st
+		if status == 0 {
+			status = m.BatchUnlink(ctx, inode, nonDirEntries, count, skipCheckTrash)
 		}
-		entries = nil
 
 		if status != 0 || inode == TrashInode { // try only once for .trash
 			return status

@@ -115,7 +115,7 @@ type engine interface {
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
 	doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno
 	doRmdir(ctx Context, parent Ino, name string, inode *Ino, attr *Attr, skipCheckTrash ...bool) syscall.Errno
-	doEmptyDir(ctx Context, parent Ino, entries []*Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]UserGroupQuotaDelta, skipCheckTrash ...bool) (errno syscall.Errno)
+	doBatchUnlink(ctx Context, parent Ino, entries []Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]UserGroupQuotaDelta, skipCheckTrash ...bool) (errno syscall.Errno)
 	doReadlink(ctx Context, inode Ino, noatime bool) (int64, []byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tinode *Ino, attr, tattr *Attr) syscall.Errno
@@ -1460,6 +1460,44 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 		m.updateUserGroupQuota(ctx, oldAttr.Uid, oldAttr.Gid, -align4K(0), -1)
 	}
 	return st
+}
+
+func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []Entry, count *uint64, skipCheckTrash bool) syscall.Errno {
+	var length int64
+	var space int64
+	var inodes int64
+	var userGroupQuotas []UserGroupQuotaDelta
+	st := m.en.doBatchUnlink(ctx, parent, entries, &length, &space, &inodes, &userGroupQuotas, skipCheckTrash)
+	if st == 0 {
+		m.updateDirStat(ctx, parent, -length, -space, -inodes)
+		if !parent.IsTrash() {
+			m.updateDirQuota(ctx, parent, -space, -inodes)
+			for _, quota := range userGroupQuotas {
+				m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, -quota.Space, -quota.Inodes)
+			}
+		}
+		if count != nil && len(entries) > 0 {
+			atomic.AddUint64(count, uint64(len(entries)))
+		}
+	} else if st == syscall.ENOTSUP {
+		for _, e := range entries {
+			if e.Attr.Typ == TypeDirectory {
+				continue
+			}
+			if ctx.Canceled() {
+				return syscall.EINTR
+			}
+			if st := m.Unlink(ctx, parent, string(e.Name), skipCheckTrash); st != 0 && st != syscall.ENOENT {
+				return st
+			}
+			if count != nil {
+				atomic.AddUint64(count, 1)
+			}
+		}
+	} else if st != 0 {
+		return st
+	}
+	return 0
 }
 
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
