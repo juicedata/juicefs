@@ -59,7 +59,6 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 - [Hai Robotics Achieved High Availability & Easy Operations in a Hybrid Cloud Architecture with JuiceFS](https://juicefs.com/en/blog/user-stories/high-availability-easy-operations-hybrid-cloud-ai-storage), 2024-11-27, Sendong Wu @ Hai Robotics
 - [TAL: Building a Low-Operation Model Repository Based on JuiceFS in a Multi-Cloud Environment](https://juicefs.com/en/blog/user-stories/multi-cloud-llm-model-repository-storage), 2024-11-21, Longhua He @ TAL
-- [Deep Dive into JuiceFS Data Synchronization and Consistency in Multi-Cloud Architectures](https://juicefs.com/en/blog/engineering/data-synchronization-consistency-multi-cloud-storage), 2024-11-06
 - [Training LLMs: Best Practices for Storing Thousands of Nodes in K8s](https://juicefs.com/en/blog/usage-tips/train-large-language-model-kubernetes-storage), 2024-10-09, Weiwei Zhu
 - [How Clobotics Overcame Multi-Cloud and Massive File Storage Challenges](https://juicefs.com/en/blog/user-stories/multi-cloud-storage-posix-compatible), 2024-09-11, Jonnas @ Clobotics
 - [K8s Data Persistence: Getting Started with JuiceFS CSI Driver](https://juicefs.com/en/blog/usage-tips/kubernetes-data-persistence-juicefs), 2023-12-28, Herald Yu
@@ -81,12 +80,26 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 - [JuiceFS for MySQL backup, verification and recovery](https://juicefs.com/docs/en/backup_mysql_in_juicefs.html)
 - [Customer Stories: Xiachufang MySQL backup practice on JuiceFS](https://juicefs.com/blog/en/posts/xiachufang-mysql-backup-practice-on-juicefs)
 
+### Engineering insights
+
+- [MLPerf Storage v2.0: JuiceFS Leads in Bandwidth Utilization and Scalability for AI Training](https://juicefs.com/en/blog/engineering/mlperf-storage-v2-ai-training-storage-performance), 2025-09-25, Feihu Mo
+- [Achieving TB-Level Aggregate Bandwidth: How JuiceFS Optimized Distributed Cache Network](https://juicefs.com/en/blog/engineering/terabyte-aggregate-bandwidth-distributed-cache-network), 2025-09-18, Feihu Mo
+- [JuiceFS on Windows: Challenges in the Beta Release](https://juicefs.com/en/blog/engineering/optimize-juicefs-on-windows), 2025-08-20, Ethan Chen
+- [Deep Dive into JuiceFS Permission Management: Full Compatibility with Linux Security Mechanisms](https://juicefs.com/en/blog/engineering/linux-file-system-juicefs-access-management), 2025-06-26, Jiefeng Huang
+- [Code-Level Analysis: Design Principles of JuiceFS Metadata and Data Storage](https://juicefs.com/en/blog/engineering/design-metadata-data-storage), 2024-12-12, Arthur
+- [Deep Dive into JuiceFS Data Synchronization and Consistency in Multi-Cloud Architectures](https://juicefs.com/en/blog/engineering/data-synchronization-consistency-multi-cloud-storage), 2024-11-06
+- [Optimizing JuiceFS Read Performance: Readahead, Prefetch, and Cache](https://juicefs.com/en/blog/engineering/optimize-read-performance), 2024-08-06, Feihu Mo
+- [Smooth Upgrade: Implementation and Usage](https://juicefs.com/en/blog/engineering/smooth-upgrade), 2024-05-08, Jian Zhi
+- [How We Optimized ACL Implementation for Minimal Performance Impact](https://juicefs.com/en/blog/engineering/access-control-list), 2024-04-30, Jiefeng Huang
+- [98% GPU Utilization Achieved in 1k GPU-Scale AI Training Using Distributed Cache](https://juicefs.com/en/blog/engineering/ai-gpu-utilization-mlperf-benchmark), 2024-03-07, Feihu Mo
+- [How a Distributed File System in Go Reduced Memory Usage by 90%](https://juicefs.com/en/blog/engineering/reduce-metadata-memory-usage), 2024-02-22, Sandy
+- [How We Achieved a 40x Performance Boost in Metadata Backup and Recovery](https://juicefs.com/en/blog/engineering/increase-performance-metadata-backup-recovery), 2023-12-20, Jian Zhi
+- [A Deep Dive into the Design of Directory Quotas in JuiceFS](https://juicefs.com/en/blog/engineering/design-juicefs-directory-quotas), 2023-10-26, Sandy
+
 ### Tutorial, guide, and best practice
 
 - [JuiceFS Writeback: The Write Acceleration Mechanism and Its Applicable Scenarios](https://juicefs.com/en/blog/solutions/juicefs-write-acceleration), 2025-09-11, Jerry Cai
-- [JuiceFS on Windows: Challenges in the Beta Release](https://juicefs.com/en/blog/engineering/optimize-juicefs-on-windows), 2025-08-20, Ethan Chen
 - [JuiceFS Community 1.3: Python SDK, Faster Backup, SQL & Windows Optimizations](https://juicefs.com/en/blog/release-notes/juicefs-1-3-python-sdk-backup-sql-windows-optimization), 2025-07-09
-- [Deep Dive into JuiceFS Permission Management: Full Compatibility with Linux Security Mechanisms](https://juicefs.com/en/blog/engineering/linux-file-system-juicefs-access-management), 2025-06-26, Jiefeng Huang
 - [JuiceFS 1.3 Beta 2 Integrates Apache Ranger for Fine-Grained Access Control](https://juicefs.com/en/blog/release-notes/juicefs-1-3-integrates-apache-ranger-access-control), 2025-06-18, Youpeng Tang
 - [JuiceFS Enterprise Edition 5.2: Supporting Hundreds of Billions of Files and Windows Clients](https://juicefs.com/en/blog/release-notes/juicefs-5-2-windows-client), 2025-06-05
 - [​​JuiceFS 1.3 Beta: Enhanced Support for SQL Databases, a New Option for Billion-Scale Metadata Management](https://juicefs.com/en/blog/release-notes/juicefs-1-3-support-sql-database), 2025-04-28, Fangxin Lou
@@ -104,18 +117,12 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 - [JuiceFS S3 Gateway: IAM and Bucket Event Notifications](https://juicefs.com/en/blog/usage-tips/s3-gateway), 2024-06-13, Herald Yu
 - [Managing POSIX ACL Permissions in JuiceFS](https://juicefs.com/en/blog/usage-tips/manage-acl), 2024-06-06, Herald Yu
 - [Data Sync in JuiceFS 1.2: Enhanced Selective Sync and Performance Optimizations](https://juicefs.com/en/blog/usage-tips/data-sync), 2024-05-16, Jian Zhi
-- [Smooth Upgrade: Implementation and Usage](https://juicefs.com/en/blog/engineering/smooth-upgrade), 2024-05-08, Jian Zhi
-- [How We Optimized ACL Implementation for Minimal Performance Impact](https://juicefs.com/en/blog/engineering/access-control-list), 2024-04-30, Jiefeng Huang
 - [JuiceFS 1.2: Gateway Upgrade, Enhanced Multi-User Permission Management](https://juicefs.com/en/blog/release-notes/juicefs-12-beta-1), 2024-04-22, Jian Zhi
 - [How to Monitor the JuiceFS File System with Grafana Cloud](https://juicefs.com/en/blog/usage-tips/monitor-file-system-grafana-cloud), 2024-04-18, Herald Yu
 - [How to Persist Data in Google Colab Using JuiceFS](https://juicefs.com/en/blog/usage-tips/colab-persist-data), 2024-03-27, Jet
-- [98% GPU Utilization Achieved in 1k GPU-Scale AI Training Using Distributed Cache](https://juicefs.com/en/blog/engineering/ai-gpu-utilization-mlperf-benchmark), 2024-03-07, Feihu Mo
-- [How a Distributed File System in Go Reduced Memory Usage by 90%](https://juicefs.com/en/blog/engineering/reduce-metadata-memory-usage), 2024-02-22, Sandy
-- [How We Achieved a 40x Performance Boost in Metadata Backup and Recovery](https://juicefs.com/en/blog/engineering/increase-performance-metadata-backup-recovery), 2023-12-20, Jian Zhi
 - [How to Build a Ceph Cluster and Integrate with the JuiceFS File System](https://juicefs.com/en/blog/usage-tips/build-ceph-cluster-integrate-juicefs-file-system), 2023-12-07, Yifu Liu
 - [6 Essential Tips for JuiceFS Users](https://juicefs.com/en/blog/usage-tips/juicefs-user-tips-distributed-file-storage-system), 2023-11-23, Herald Yu
 - [What's New in JuiceFS Enterprise Edition 5.0](https://juicefs.com/en/blog/release-notes/juicefs-enterprise-edition-v5), 2023-11-20
-- [A Deep Dive into the Design of Directory Quotas in JuiceFS](https://juicefs.com/en/blog/engineering/design-juicefs-directory-quotas), 2023-10-26, Sandy
 - [Configuring Samba and NFS on JuiceFS to Unlock Unlimited Cloud Storage](https://juicefs.com/en/blog/usage-tips/scalable-cloud-storage-samba-nfs-shares-juicefs), 2023-08-29, Herald Yu
 - [How to Store and Share AI Models for Stable Diffusion in the Cloud](https://juicefs.com/en/blog/usage-tips/share-store-model-data-stable-diffusion-cloud), 2023-07-19, Herald Yu
 - [JuiceFS Enterprise Edition: Architecture, Features, and Community Edition Comparison](https://juicefs.com/en/blog/solutions/juicefs-enterprise-edition-features-vs-community-edition), 2023-06-06, Changjian Gao
@@ -129,19 +136,14 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Others
 
-- [MLPerf Storage v2.0: JuiceFS Leads in Bandwidth Utilization and Scalability for AI Training](https://juicefs.com/en/blog/engineering/mlperf-storage-v2-ai-training-storage-performance), 2025-09-25, Feihu Mo
-- [Achieving TB-Level Aggregate Bandwidth: How JuiceFS Optimized Distributed Cache Network](https://juicefs.com/en/blog/engineering/terabyte-aggregate-bandwidth-distributed-cache-network), 2025-09-18, Feihu Mo
 - [3,000 Concurrent Renders: The JuiceFS Client for Windows Averages 22m 22s](https://juicefs.com/en/blog/solutions/juicefs-windows-performance-test), 2025-08-28, Jerry Cai
 - [LanceDB Query Performance: NVMe vs. EBS vs. JuiceFS vs. EFS vs. FSx for Lustre](https://juicefs.com/en/blog/solutions/lancedb-query-performance-benchmark-storage-solutions), 2025-08-13, Brent Bai
 - [How JuiceFS Transformed Idle Resources into a 70 GB/s Cache Pool](https://juicefs.com/en/blog/solutions/idle-resources-elastic-high-throughput-storage-cache-pool), 2025-08-07, Jerry Cai
 - [Lustre vs. JuiceFS: A Comparative Analysis of Architecture, File Distribution, and Features](https://juicefs.com/en/blog/engineering/lustre-vs-juicefs-architecture-file-distribution-feature), 2025-07-02, Qing Liu
-
 - [Introducing JuiceFS Python SDK: 3x Faster than FUSE for Data Loading](https://juicefs.com/en/blog/release-notes/juicefs-1-3-python-sdk), 2025-05-22, Feihu Mo
 - [DeepSeek 3FS vs. JuiceFS: Architectures, Features, and Innovations in AI Storage](https://juicefs.com/en/blog/engineering/deepseek-3fs-vs-juicefs-architecture-feature), 2025-04-02, Qing Liu
 - [How JuiceFS Achieves Consistency and Low-Latency Data Distribution in Multi-Cloud Architectures](https://juicefs.com/en/blog/solutions/consistency-low-latency-data-distribution-multi-cloud-storage), 2025-01-22, Jerry Cai
-- [Code-Level Analysis: Design Principles of JuiceFS Metadata and Data Storage](https://juicefs.com/en/blog/engineering/design-metadata-data-storage), 2024-12-12, Arthur
 - [JuiceFS Evaluation with AWS EFS and FSx for Lustre](https://juicefs.com/en/blog/engineering/juicefs-vs-efs-fsx-for-lustre), 2024-08-07, Brent Bai
-- [Optimizing JuiceFS Read Performance: Readahead, Prefetch, and Cache](https://juicefs.com/en/blog/engineering/optimize-read-performance), 2024-08-06, Feihu Mo
 - [MemVerge Chose JuiceFS: Small File Writes 5x Faster than s3fs](https://juicefs.com/en/blog/user-stories/vs-s3fs-memverge), 2024-07-31, Jon Jiang @ MemVerge
 - [From HPC to AI: Evolution and Performance Evaluation of File Systems](https://juicefs.com/en/blog/user-stories/hpc-ai-file-system), 2024-05-23, Weizheng Lu @ Renmin University of China
 - [Is POSIX Really Unsuitable for Object Stores? A Data-Backed Answer](https://juicefs.com/en/blog/community/posix-object-store-suitable-file-system), 2023-11-16, Herald Yu
