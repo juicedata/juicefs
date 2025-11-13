@@ -1442,6 +1442,11 @@ func (f *File) ReaddirPlus(ctx meta.Context, offset int) (entries []*meta.Entry,
 				f.entries = append(f.entries, e)
 			}
 		}
+		if f.fs.conf.Meta.SortDir {
+			sort.Slice(f.entries, func(i, j int) bool {
+				return string(f.entries[i].Name) < string(f.entries[j].Name)
+			})
+		}
 	}
 	if offset >= len(f.entries) {
 		offset = len(f.entries)
