@@ -2904,22 +2904,11 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	if eno = m.Access(ctx, srcIno, MODE_MASK_R|MODE_MASK_X, &attr); eno != 0 {
 		return eno
 	}
-	var entries []*Entry
-	eno = m.en.doReaddir(ctx, srcIno, 0, &entries, -1)
-	if eno == syscall.ENOENT {
-		eno = 0 // empty dir
-	}
+	handler, eno := m.NewDirHandler(ctx, srcIno, false, nil)
 	if eno != 0 {
 		return eno
 	}
-	// try directories first to increase parallel
-	var dirs int
-	for i, e := range entries {
-		if e.Attr.Typ == TypeDirectory {
-			entries[dirs], entries[i] = entries[i], entries[dirs]
-			dirs++
-		}
-	}
+	defer handler.Close()
 
 	var wg sync.WaitGroup
 	var skipped uint32
@@ -2935,6 +2924,47 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		}
 		return eno
 	}
+
+	var dirEntries []*Entry
+	var fileEntries []*Entry
+	offset := 0
+	for {
+		ets, err := handler.List(ctx, offset)
+		if err != 0 {
+			if err == syscall.ENOENT {
+				err = 0 // empty dir
+			}
+			if err != 0 {
+				return err
+			}
+			break
+		}
+		if len(ets) == 0 {
+			break
+		}
+		for _, e := range ets {
+			if len(e.Name) == 1 && e.Name[0] == '.' {
+				continue
+			}
+			if len(e.Name) == 2 && e.Name[0] == '.' && e.Name[1] == '.' {
+				continue
+			}
+			if e.Attr.Typ == TypeDirectory {
+				dirEntries = append(dirEntries, e)
+			} else {
+				fileEntries = append(fileEntries, e)
+			}
+		}
+		offset += len(ets)
+		if ctx.Canceled() {
+			return syscall.EINTR
+		}
+	}
+
+	entries := make([]*Entry, 0, len(dirEntries)+len(fileEntries))
+	entries = append(entries, dirEntries...)
+	entries = append(entries, fileEntries...)
+
 LOOP:
 	for i, entry := range entries {
 		select {
