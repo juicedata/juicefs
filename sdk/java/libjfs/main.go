@@ -388,6 +388,8 @@ type javaConf struct {
 }
 
 func cleanConf(conf javaConf) javaConf {
+	conf.AuthMethod = ""
+	conf.RealUser = ""
 	conf.SuperFS = false
 	return conf
 }
