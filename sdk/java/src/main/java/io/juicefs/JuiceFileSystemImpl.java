@@ -18,6 +18,9 @@ package io.juicefs;
 import com.google.common.collect.Lists;
 import com.kenai.jffi.internal.StubLoader;
 import io.juicefs.exception.QuotaExceededException;
+import io.juicefs.kerberos.AuthCredential;
+import io.juicefs.kerberos.JuiceFSDelegationTokenIdentifier;
+import io.juicefs.kerberos.KerberosUtil;
 import io.juicefs.metrics.JuiceFSInstrumentation;
 import io.juicefs.permission.RangerConfig;
 import io.juicefs.permission.RangerPermissionChecker;
@@ -38,8 +41,14 @@ import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.permission.*;
 import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.io.MD5Hash;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.security.AccessControlException;
+import org.apache.hadoop.security.HadoopKerberosName;
+import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.security.token.Token;
+import org.apache.hadoop.security.token.TokenIdentifier;
+import org.apache.hadoop.security.token.delegation.AbstractDelegationTokenIdentifier;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.util.DirectBufferPool;
 import org.apache.hadoop.util.Progressable;
@@ -56,6 +65,7 @@ import java.lang.reflect.Method;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -63,11 +73,11 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /****************************************************************
  * Implement the FileSystem API for JuiceFS
@@ -105,6 +115,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   private JuiceFileSystemImpl superGroupFileSystem;
   private RangerPermissionChecker rangerPermissionChecker;
+  private boolean dtEnabled; // whether delegation token was enabled
   private static Libjfs lib = loadLibrary();
 
   private long handle;
@@ -143,7 +154,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   private static Libjfs.LogCallBack callBack;
 
   public static interface Libjfs {
-    long jfs_init(String name, String jsonConf, String user, String group, String superuser, String supergroup);
+    long jfs_init(Pointer credential, int size, String name, String jsonConf, String user, String group, String superuser, String supergroup);
 
     void jfs_update_uid_grouping(String name, String uidstr, String grouping);
 
@@ -212,6 +223,12 @@ public class JuiceFileSystemImpl extends FileSystem {
     int jfs_ranger_cfg(String volName, Pointer buf, int size);
 
     void jfs_set_callback(LogCallBack callBack);
+
+    int jfs_get_token(long h, String name, Pointer buf, int bufSize, String renewer);
+
+    long jfs_renew_token(long h, int id, String password);
+
+    int jfs_cancel_token(long pid, long h, int id, String password);
 
     interface LogCallBack {
       @Delegate
@@ -397,6 +414,26 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
 
     JSONObject obj = new JSONObject();
+    String spn = SecurityUtil.getServerPrincipal(getConf(conf, "server-principal", ""), name);
+    if (spn.contains("@")) {
+      spn = spn.split("@")[0];
+    }
+    AuthCredential authCredential = buildAuthCredential(spn);
+    Pointer credential = null;
+    int crdSize = 0;
+    if (authCredential != null) {
+      crdSize = authCredential.getCredential().length;
+      credential = Memory.allocate(Runtime.getRuntime(lib), crdSize);
+      credential.put(0, authCredential.getCredential(), 0, crdSize);
+    }
+
+    if (authCredential != null) {
+      obj.put("authMethod", authCredential.getMethod());
+    }
+    if (ugi.getRealUser() != null) {
+      obj.put("realUser", ugi.getRealUser().getShortUserName());
+    }
+
     String[] keys = new String[]{"meta",};
     for (String key : keys) {
       obj.put(key, getConf(conf, key, ""));
@@ -462,7 +499,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("superFs", asSuperFs);
     obj.put("subdir", subdir);
     String jsonConf = obj.toString(2);
-    handle = lib.jfs_init(name, jsonConf, user, groupStr, superuser, supergroup);
+    handle = lib.jfs_init(credential, crdSize, name, jsonConf, user, groupStr, superuser, supergroup);
     if (handle <= 0) {
       throw new IOException("JuiceFS initialized failed for jfs://" + name);
     }
@@ -1857,11 +1894,6 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   @Override
-  public String getCanonicalServiceName() {
-    return null; // Does not support Token
-  }
-
-  @Override
   public FsStatus getStatus(Path p) throws IOException {
     if (needCheckPermission() && !checkParentPathAccess(p, FsAction.EXECUTE, "getStatus")) {
       return superGroupFileSystem.getStatus(p);
@@ -2286,5 +2318,115 @@ public class JuiceFileSystemImpl extends FileSystem {
     } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {
     }
     return builder.build();
+  }
+
+  public AuthCredential buildAuthCredential(String spn) throws IOException {
+    // auth use kerberos
+    if (UserGroupInformation.getLoginUser().hasKerberosCredentials()) {
+      dtEnabled = true;
+      byte[] cred;
+      try {
+        cred = KerberosUtil.genApReq(spn);
+      } catch (InterruptedException e) {
+        throw new IOException("generate kerberos  AP-REQ failed", e);
+      }
+      return new AuthCredential("kerberos", cred);
+    }
+
+    // auth use delegation token
+    for (Token<? extends TokenIdentifier> token : ugi.getCredentials().getAllTokens()) {
+      if (token.getKind().equals(JuiceFSDelegationTokenIdentifier.TOKEN_KIND) &&
+          buildServiceName().equals(token.getService().toString())) {
+        dtEnabled = true;
+
+        AbstractDelegationTokenIdentifier identifier = (AbstractDelegationTokenIdentifier) token.decodeIdentifier();
+        int id = identifier.getMasterKeyId();
+        byte[] password = token.getPassword();
+        ByteBuffer buf = ByteBuffer.allocate(5 + password.length);
+        buf.putInt(id);
+        buf.putInt(password.length);
+        buf.put(password);
+
+        return new AuthCredential("token", buf.array());
+      }
+    }
+
+    return null;
+  }
+
+  private String buildServiceName() {
+    return getScheme() + "://" + (name == null ? "/" : name);
+  }
+
+  @Override
+  public String getCanonicalServiceName() {
+    return dtEnabled ? buildServiceName() : null;
+  }
+
+  @Override
+  public Token<?> getDelegationToken(String renewer) throws IOException {
+    if (!dtEnabled) {
+      return null;
+    }
+    String owner = ugi.getShortUserName();
+    String realUser = ugi.getRealUser() != null ? ugi.getRealUser().getShortUserName() : null;
+    int tokenSize = 0, r = 8<<10;
+    Pointer tokenBuf = null;
+    while (r > tokenSize) {
+      tokenSize = r;
+      tokenBuf = Memory.allocate(Runtime.getRuntime(lib), tokenSize);
+      r = lib.jfs_get_token(handle, name, tokenBuf, tokenSize, (new HadoopKerberosName(renewer)).getShortName());
+    }
+    if (r < 0) {
+      throw new IOException(String.format("get delegation token failed, return code %d", r));
+    }
+    int id = tokenBuf.getInt(0);
+    long issueDate = tokenBuf.getLongLong(4);
+    long maxDate = tokenBuf.getLongLong(12);
+    int pwdLen = r - 20;
+    byte[] pwd = new byte[pwdLen];
+    tokenBuf.get(20, pwd, 0, pwdLen);
+
+    JuiceFSDelegationTokenIdentifier identifier =
+        new JuiceFSDelegationTokenIdentifier(
+            owner,
+            renewer,
+            realUser);
+    identifier.setIssueDate(issueDate);
+    identifier.setMaxDate(maxDate);
+    identifier.setMasterKeyId(id);
+
+    return new Token<>(
+        identifier.getBytes(),
+        pwd,
+        identifier.getKind(),
+        new Text(getCanonicalServiceName()));
+  }
+
+  public long renewToken(Token<?> token) throws IOException {
+    AbstractDelegationTokenIdentifier identifier = (AbstractDelegationTokenIdentifier) token.decodeIdentifier();
+    int id = identifier.getMasterKeyId();
+    String pwd = new String(token.getPassword(), StandardCharsets.UTF_8);
+    long r = lib.jfs_renew_token(handle, id, pwd);
+    if (r == EACCESS) {
+      throw new IOException("permission denied");
+    }
+    if (r < 0) {
+      throw new IOException(String.format("renew token failed, return code %d", r));
+    }
+    return r * 1000;
+  }
+
+  public void cancelToken(Token<?> token) throws IOException {
+    AbstractDelegationTokenIdentifier identifier = (AbstractDelegationTokenIdentifier) token.decodeIdentifier();
+    int id = identifier.getMasterKeyId();
+    String pwd = new String(token.getPassword(), StandardCharsets.UTF_8);;
+    int r = lib.jfs_cancel_token(Thread.currentThread().getId(), handle, id, pwd);
+    if (r == EACCESS) {
+      throw new IOException("permission denied");
+    }
+    if (r < 0) {
+      throw new IOException(String.format("cancel token failed, return code %d", r));
+    }
   }
 }
