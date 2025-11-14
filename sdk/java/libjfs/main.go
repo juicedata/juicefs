@@ -383,7 +383,7 @@ type javaConf struct {
 	SuperFS bool `json:"superFs,omitempty"`
 }
 
-func getOrCreate(name, user, group, superuser, supergroup string, conf javaConf, f func() *fs.FileSystem) int64 {
+func getOrCreate(name, user, groups, superuser, supergroup string, conf javaConf, f func() *fs.FileSystem) int64 {
 	fslock.Lock()
 	defer fslock.Unlock()
 	ws := activefs[name]
@@ -406,18 +406,18 @@ func getOrCreate(name, user, group, superuser, supergroup string, conf javaConf,
 		case "mysql", "postgres", "sqlite3":
 			m.mask = 0x7FFFFFFF // limit generated uid to int32
 		}
-		logger.Infof("JuiceFileSystem created for user:%s group:%s", user, group)
+		logger.Infof("JuiceFileSystem created for user:%s groups:%s", user, groups)
 	}
 	w := &wrapper{jfs, name, nil, m, user, superuser, supergroup, conf}
 	if _, ok := superuserChangedCb[name]; !ok {
 		jfs.Meta().OnReload(func(format *meta.Format) {
 			kerb.loadConf(name, format.KerbConf, jfs)
-			updateAllCtx(name, user, group)
+			updateAllCtx(name, user, groups)
 		})
 		superuserChangedCb[name] = struct{}{}
 	}
 	activefs[name] = append(ws, w)
-	updateAllCtx(name, user, group)
+	updateAllCtx(name, user, groups)
 	nextFsHandle = nextFsHandle + 1
 	handlers[nextFsHandle] = w
 	return nextFsHandle
@@ -832,7 +832,14 @@ func updateCtx(w *wrapper, groups []string) {
 	if w.isSuperuser(w.user, groups) {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
 	} else {
-		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), w.lookupGids(groups))
+		var gids []uint32
+		if w.ctx != nil {
+			gids = w.ctx.Gids()
+		}
+		if len(groups) > 0 {
+			gids = w.lookupGids(groups)
+		}
+		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), gids)
 	}
 }
 

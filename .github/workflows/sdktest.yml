@@ -88,6 +88,7 @@ jobs:
           sudo JUICEFS_RANGER_TEST=1 mvn test -B -Dtest=io.juicefs.permission.RangerPermissionCheckerTest,\!io.juicefs.permission.RangerPermissionCheckerTest#testRangerCheckerInitFailed
           sudo mvn test -B -Dtest=io.juicefs.permission.RangerPermissionCheckerTest#testRangerCheckerInitFailed
           # kerberos test
+          sudo ./juicefs config localhost --kerberos-config-file sdk/java/src/test/resources/kerberos.cfg
           sudo mvn test -B -Dtest=io.juicefs.kerberos.KerberosTest
           
           sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
