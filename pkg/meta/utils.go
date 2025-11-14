@@ -277,14 +277,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 		}
 		var wg sync.WaitGroup
 		var status syscall.Errno
-		// try directories first to increase parallel
-		var dirs int
-		for i, e := range entries {
-			if e.Attr.Typ == TypeDirectory {
-				entries[dirs], entries[i] = entries[i], entries[dirs]
-				dirs++
-			}
-		}
+		var nonDirEntries []Entry
 		for i, e := range entries {
 			if e.Attr.Typ == TypeDirectory {
 				select {
@@ -305,13 +298,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 					}
 				}
 			} else {
-				if count != nil {
-					atomic.AddUint64(count, 1)
-				}
-				if st := m.Unlink(ctx, inode, string(e.Name), skipCheckTrash); st != 0 && st != syscall.ENOENT {
-					ctx.Cancel()
-					return st
-				}
+				nonDirEntries = append(nonDirEntries, *e)
 			}
 			if ctx.Canceled() {
 				return syscall.EINTR
@@ -319,6 +306,11 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 			entries[i] = nil // release memory
 		}
 		wg.Wait()
+
+		if status == 0 {
+			status = m.BatchUnlink(ctx, inode, nonDirEntries, count, skipCheckTrash)
+		}
+
 		if status != 0 || inode == TrashInode { // try only once for .trash
 			return status
 		}
