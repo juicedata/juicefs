@@ -650,38 +650,6 @@ var buffPool = sync.Pool{
 	},
 }
 
-func (n *jfsObjects) GetObject(ctx context.Context, bucket, object string, startOffset, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) (err error) {
-	if err = n.checkBucket(ctx, bucket); err != nil {
-		return
-	}
-	f, eno := n.fs.Open(mctx, n.path(bucket, object), vfs.MODE_MASK_R)
-	if eno != 0 {
-		return jfsToObjectErr(ctx, eno, bucket, object)
-	}
-	defer func() { _ = f.Close(mctx) }()
-	var buf = buffPool.Get().(*[]byte)
-	defer buffPool.Put(buf)
-	_, _ = f.Seek(mctx, startOffset, 0)
-	for length > 0 {
-		l := int64(len(*buf))
-		if l > length {
-			l = length
-		}
-		n, e := f.Read(mctx, (*buf)[:l])
-		if n == 0 {
-			if e != io.EOF {
-				err = e
-			}
-			break
-		}
-		if _, err = writer.Write((*buf)[:n]); err != nil {
-			break
-		}
-		length -= int64(n)
-	}
-	return jfsToObjectErr(ctx, err, bucket, object)
-}
-
 func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return

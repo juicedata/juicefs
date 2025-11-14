@@ -204,6 +204,7 @@ func TestForceUpload(t *testing.T) {
 	config := defaultConf
 	_ = os.RemoveAll(config.CacheDir)
 	config.Writeback = true
+	config.WritebackThresholdSize = config.BlockSize + 1
 	config.UploadDelay = time.Hour
 	config.BlockSize = 4 << 20
 	store := NewCachedStore(blob, config, nil)
@@ -402,6 +403,6 @@ func TestStoreRetry(t *testing.T) {
 	cs := NewCachedStore(s, defaultConf, nil)
 	p := NewPage(nil)
 	defer p.Release()
-	cs.(*cachedStore).load("non", p, false, false) // wont retry
+	cs.(*cachedStore).load(context.TODO(), "non", p, false, false) // wont retry
 	require.Equal(t, int32(1), s.cnt)
 }

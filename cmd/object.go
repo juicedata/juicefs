@@ -99,7 +99,7 @@ func (f *jFile) Close() error {
 }
 
 func (j *juiceFS) Get(rCtx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
-	ctx := meta.WrapContextWith(rCtx, pid, uid, []uint32{gid})
+	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	f, err := j.jfs.Open(ctx, j.path(key), vfs.MODE_MASK_R)
 	if err != 0 {
 		return nil, err
@@ -121,7 +121,7 @@ var bufPool = sync.Pool{
 }
 
 func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ...object.AttrGetter) (err error) {
-	ctx := meta.WrapContextWith(rCtx, pid, uid, []uint32{gid})
+	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	if vfs.IsSpecialName(key) {
 		return fmt.Errorf("skip special file %s for jfs: %w", key, utils.ErrSkipped)
 	}
@@ -184,7 +184,7 @@ func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ..
 }
 
 func (j *juiceFS) Delete(rCtx context.Context, key string, getters ...object.AttrGetter) error {
-	ctx := meta.WrapContextWith(rCtx, pid, uid, []uint32{gid})
+	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	if key == "" {
 		return nil
 	}
@@ -218,7 +218,7 @@ func (o *jObj) Mode() os.FileMode    { return o.fi.Mode() }
 func (o *jObj) StorageClass() string { return "" }
 
 func (j *juiceFS) Head(rCtx context.Context, key string) (object.Object, error) {
-	ctx := meta.WrapContextWith(rCtx, pid, uid, []uint32{gid})
+	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	errConv := func(eno syscall.Errno) error {
 		if errors.Is(eno, syscall.ENOENT) {
 			return os.ErrNotExist

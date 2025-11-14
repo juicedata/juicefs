@@ -99,6 +99,10 @@ type cacheStore struct {
 
 	state     dcState
 	stateLock sync.Mutex
+
+	// newBlockCooldown reduces the initial access time for newly cached staged blocks.
+	// This helps prevent a surge of writes from evicting active read blocks.
+	stagedBlockCooldown time.Duration
 }
 
 func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize, maxItems int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
@@ -115,22 +119,23 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize, maxItems int64
 		keyIndex, _ = NewKeyIndex(config)
 	}
 	c := &cacheStore{
-		m:             m,
-		dir:           dir,
-		mode:          config.CacheMode,
-		capacity:      cacheSize,
-		maxItems:      maxItems,
-		maxStageWrite: config.MaxStageWrite,
-		freeRatio:     config.FreeSpace,
-		checksum:      config.CacheChecksum,
-		hashPrefix:    config.HashPrefix,
-		scanInterval:  config.CacheScanInterval,
-		cacheExpire:   config.CacheExpire,
-		keys:          keyIndex,
-		pending:       make(chan pendingFile, pendingPages),
-		pages:         make(map[string]*Page),
-		uploader:      uploader,
-		opTs:          make(map[time.Duration]func() error),
+		m:                   m,
+		dir:                 dir,
+		mode:                config.CacheMode,
+		capacity:            cacheSize,
+		maxItems:            maxItems,
+		maxStageWrite:       config.MaxStageWrite,
+		freeRatio:           config.FreeSpace,
+		checksum:            config.CacheChecksum,
+		hashPrefix:          config.HashPrefix,
+		scanInterval:        config.CacheScanInterval,
+		cacheExpire:         config.CacheExpire,
+		keys:                keyIndex,
+		pending:             make(chan pendingFile, pendingPages),
+		pages:               make(map[string]*Page),
+		uploader:            uploader,
+		opTs:                make(map[time.Duration]func() error),
+		stagedBlockCooldown: config.CacheExpire / 2,
 	}
 	c.stateLock = sync.Mutex{}
 	if config.Writeback {
@@ -219,7 +224,7 @@ func (cache *cacheStore) checkLockFile() {
 	for cache.available() {
 		time.Sleep(time.Second * 10)
 		if err := cache.statFile(lockfile); err != nil && os.IsNotExist(err) {
-			logger.Infof("lockfile is lost, cache device maybe broken")
+			logger.Infof("lockfile %s is lost, cache device maybe broken", lockfile)
 			if inRootVolume(cache.dir) && cache.freeRatio < 0.2 {
 				logger.Infof("cache directory %s is in root volume, keep 20%% space free", cache.dir)
 				cache.freeRatio = 0.2
@@ -736,9 +741,6 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 			cache.used -= int64(iter.size + 4096)
 		}
 		iter.size = size
-		if atime > iter.atime {
-			iter.atime = atime
-		}
 	}
 	cache.keys.add(k, *iter) // add or update
 	if size > 0 {
@@ -750,7 +752,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	}
 }
 
-func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string, error) {
+func (cache *cacheStore) stage(key string, data []byte) (string, error) {
 	stagingPath := cache.stagePath(key)
 	if cache.stageFull {
 		return stagingPath, errStageFull
@@ -765,11 +767,11 @@ func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string,
 		cache.m.stageBlocks.Add(1)
 		cache.m.stageBlockBytes.Add(float64(len(data)))
 		cache.m.stageWriteBytes.Add(float64(len(data)))
-		if cache.enabled() && keepCache {
+		if cache.enabled() {
 			path := cache.cachePath(key)
 			cache.createDir(filepath.Dir(path))
 			if err = os.Link(stagingPath, path); err == nil {
-				cache.add(key, -int32(len(data)), uint32(time.Now().Unix()))
+				cache.add(key, -int32(len(data)), uint32(time.Now().Add(-cache.stagedBlockCooldown).Unix()))
 			} else {
 				logger.Warnf("link %s to %s failed: %s", stagingPath, path, err)
 			}
@@ -1071,7 +1073,7 @@ type CacheManager interface {
 	load(key string) (ReadCloser, error)
 	exist(key string) (string, bool)
 	uploaded(key string, size int)
-	stage(key string, data []byte, keepCache bool) (string, error)
+	stage(key string, data []byte) (string, error)
 	removeStage(key string) error
 	stats() (int64, int64)
 	usedMemory() int64
@@ -1273,10 +1275,10 @@ func (m *cacheManager) remove(key string, staging bool) {
 	}
 }
 
-func (m *cacheManager) stage(key string, data []byte, keepCache bool) (string, error) {
+func (m *cacheManager) stage(key string, data []byte) (string, error) {
 	store := m.getStore(key)
 	if store != nil {
-		return store.stage(key, data, keepCache)
+		return store.stage(key, data)
 	}
 	return "", errors.New("no available cache dir")
 }

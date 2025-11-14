@@ -62,7 +62,7 @@ func get(s ObjectStorage, k string, off, limit int64, getters ...AttrGetter) (st
 }
 
 func listAll(ctx context.Context, s ObjectStorage, prefix, marker string, limit int64, followLink bool) ([]Object, error) {
-	ch, err := ListAll(ctx, s, prefix, marker, followLink)
+	ch, err := ListAll(ctx, s, prefix, marker, followLink, true)
 	if err == nil {
 		objs := make([]Object, 0)
 		for obj := range ch {
@@ -1091,6 +1091,18 @@ func TestDragonfly(t *testing.T) { //skip mutate
 		t.Fatalf("create: %s", err)
 	}
 	testStorage(t, dragonfly)
+}
+
+func TestCifs(t *testing.T) { //skip mutate
+	if os.Getenv("CIFS_ADDR") == "" {
+		fmt.Println("skip CIFS test")
+		t.SkipNow()
+	}
+	cifs, err := newCifs(os.Getenv("CIFS_ADDR"), os.Getenv("CIFS_USER"), os.Getenv("CIFS_PASSWORD"), "")
+	if err != nil {
+		t.Fatalf("create: %s", err)
+	}
+	testStorage(t, cifs)
 }
 
 // func TestBunny(t *testing.T) { //skip mutate

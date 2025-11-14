@@ -197,6 +197,11 @@ func dataCacheFlags() []cli.Flag {
 			Usage: "upload blocks in background",
 		},
 		&cli.StringFlag{
+			Name:  "writeback-threshold-size",
+			Value: "0",
+			Usage: "blocks smaller than this size will be staged, 0 means all staged.",
+		},
+		&cli.StringFlag{
 			Name:  "upload-delay",
 			Value: "0s",
 			Usage: "delayed duration for uploading blocks",
@@ -312,6 +317,10 @@ func metaFlags() []cli.Flag {
 			Name:  "fast-statfs",
 			Value: false,
 			Usage: "Use local counters for statfs instead of querying metadata service",
+		},
+		&cli.StringFlag{
+			Name:  "network-interfaces",
+			Usage: "comma-separated list of network interfaces to use for IP discovery (e.g. eth0,en0), empty means all",
 		},
 	})
 }

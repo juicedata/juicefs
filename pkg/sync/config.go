@@ -19,6 +19,7 @@ package sync
 import (
 	"math"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -75,6 +76,8 @@ type Config struct {
 	concurrentList chan int
 	Registerer     prometheus.Registerer
 }
+
+const JFS_UMASK = "JFS_UMASK"
 
 func envList() []string {
 	return []string{
@@ -233,6 +236,13 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		if strings.Contains(key, "JFS") {
 			cfg.Env[key] = os.Getenv(key)
 		}
+	}
+	// pass umask to workers
+	cfg.Env[JFS_UMASK] = strconv.Itoa(utils.GetUmask())
+
+	// workers: set umask for the current process
+	if umask := os.Getenv(JFS_UMASK); umask != "" {
+		utils.SetUmask(cast.ToInt(umask))
 	}
 
 	return cfg

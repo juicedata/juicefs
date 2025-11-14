@@ -170,9 +170,9 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 			sc    = object.DefaultStorageClass
 		)
 		page.Acquire()
-		err = utils.WithTimeout(func(ctx context.Context) error {
+		err = utils.WithTimeout(ctx, func(cCtx context.Context) error {
 			defer page.Release()
-			in, err := s.store.storage.Get(ctx, key, int64(boff), int64(len(p)), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+			in, err := s.store.storage.Get(cCtx, key, int64(boff), int64(len(p)), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
 			if err == nil {
 				n, err = io.ReadFull(in, p)
 				_ = in.Close()
@@ -181,6 +181,9 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		}, s.store.conf.GetTimeout)
 		used := time.Since(st)
 		logRequest("GET", key, fmt.Sprintf("RANGE(%d,%d) ", boff, len(p)), reqID, err, used)
+		if errors.Is(err, context.Canceled) {
+			return 0, err
+		}
 		s.store.objectDataBytes.WithLabelValues("GET", sc).Add(float64(n))
 		s.store.objectReqsHistogram.WithLabelValues("GET", sc).Observe(used.Seconds())
 		if err == nil {
@@ -199,7 +202,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		} else {
 			tmp.Acquire()
 		}
-		err = s.store.load(key, tmp, s.store.shouldCache(blockSize), false)
+		err = s.store.load(ctx, key, tmp, s.store.shouldCache(blockSize), false)
 		return tmp, err
 	})
 	defer block.Release()
@@ -349,7 +352,7 @@ func (store *cachedStore) put(key string, p *Page) error {
 		reqID string
 		sc    = object.DefaultStorageClass
 	)
-	return utils.WithTimeout(func(ctx context.Context) error {
+	return utils.WithTimeout(context.TODO(), func(ctx context.Context) error {
 		defer p.Release()
 		st := time.Now()
 		err := store.storage.Put(ctx, key, bytes.NewReader(p.Data), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
@@ -367,7 +370,7 @@ func (store *cachedStore) put(key string, p *Page) error {
 func (store *cachedStore) delete(key string) error {
 	st := time.Now()
 	var reqID string
-	err := utils.WithTimeout(func(ctx context.Context) error {
+	err := utils.WithTimeout(context.TODO(), func(ctx context.Context) error {
 		return store.storage.Delete(ctx, key, object.WithRequestID(&reqID))
 	}, store.conf.PutTimeout)
 	used := time.Since(st)
@@ -451,13 +454,13 @@ func (s *wSlice) upload(indx int) {
 		if off != blen {
 			panic(fmt.Sprintf("block length does not match: %v != %v", off, blen))
 		}
-		if s.writeback {
+		if s.writeback && blen < s.store.conf.WritebackThresholdSize {
 			stagingPath := "unknown"
 			stageFailed := false
 			block.Acquire()
-			err := utils.WithTimeout(func(context.Context) (err error) { // In case it hangs for more than 5 minutes(see fileWriter.flush), fallback to uploading directly to avoid `EIO`
+			err := utils.WithTimeout(context.TODO(), func(context.Context) (err error) { // In case it hangs for more than 5 minutes(see fileWriter.flush), fallback to uploading directly to avoid `EIO`
 				defer block.Release()
-				stagingPath, err = s.store.bcache.stage(key, block.Data, s.store.shouldCache(blen))
+				stagingPath, err = s.store.bcache.stage(key, block.Data)
 				if err == nil && stageFailed { // upload thread already marked me as failed because of timeout
 					_ = s.store.bcache.removeStage(key)
 				}
@@ -556,35 +559,36 @@ func (s *wSlice) Abort() {
 
 // Config contains options for cachedStore
 type Config struct {
-	CacheDir          string
-	CacheMode         os.FileMode
-	CacheSize         uint64
-	CacheItems        int64
-	CacheChecksum     string
-	CacheEviction     string
-	CacheScanInterval time.Duration
-	CacheExpire       time.Duration
-	OSCache           bool
-	FreeSpace         float32
-	AutoCreate        bool
-	Compress          string
-	MaxUpload         int
-	MaxStageWrite     int
-	MaxRetries        int
-	UploadLimit       int64 // bytes per second
-	DownloadLimit     int64 // bytes per second
-	Writeback         bool
-	UploadDelay       time.Duration
-	UploadHours       string
-	HashPrefix        bool
-	BlockSize         int
-	GetTimeout        time.Duration
-	PutTimeout        time.Duration
-	CacheFullBlock    bool
-	CacheLargeWrite   bool
-	BufferSize        uint64
-	Readahead         int
-	Prefetch          int
+	CacheDir               string
+	CacheMode              os.FileMode
+	CacheSize              uint64
+	CacheItems             int64
+	CacheChecksum          string
+	CacheEviction          string
+	CacheScanInterval      time.Duration
+	CacheExpire            time.Duration
+	OSCache                bool
+	FreeSpace              float32
+	AutoCreate             bool
+	Compress               string
+	MaxUpload              int
+	MaxStageWrite          int
+	MaxRetries             int
+	UploadLimit            int64 // bytes per second
+	DownloadLimit          int64 // bytes per second
+	Writeback              bool
+	WritebackThresholdSize int
+	UploadDelay            time.Duration
+	UploadHours            string
+	HashPrefix             bool
+	BlockSize              int
+	GetTimeout             time.Duration
+	PutTimeout             time.Duration
+	CacheFullBlock         bool
+	CacheLargeWrite        bool
+	BufferSize             uint64
+	Readahead              int
+	Prefetch               int
 }
 
 func (c *Config) SelfCheck(uuid string) {
@@ -595,17 +599,6 @@ func (c *Config) SelfCheck(uuid string) {
 			c.Prefetch = 0
 		}
 		c.CacheDir = "memory"
-	}
-	if !c.Writeback {
-		if c.UploadDelay > 0 || c.UploadHours != "" {
-			logger.Warnf("delayed upload is disabled in non-writeback mode")
-			c.UploadDelay = 0
-			c.UploadHours = ""
-		}
-	}
-	if _, _, err := c.parseHours(); err != nil {
-		logger.Warnf("invalid value (%s) for upload-hours: %s", c.UploadHours, err)
-		c.UploadHours = ""
 	}
 	if c.MaxUpload <= 0 {
 		logger.Warnf("max-uploads should be greater than 0, set it to 1")
@@ -628,6 +621,24 @@ func (c *Config) SelfCheck(uuid string) {
 	} else if c.Writeback {
 		logger.Warnf("writeback is not supported in memory cache mode")
 		c.Writeback = false
+	}
+	if c.Writeback {
+		if !c.CacheFullBlock {
+			logger.Warnf("cache-partial-only is ineffective for stage blocks with writeback enabled")
+		}
+		if c.WritebackThresholdSize == 0 {
+			c.WritebackThresholdSize = c.BlockSize + 1
+		}
+	} else {
+		if c.UploadDelay > 0 || c.UploadHours != "" {
+			logger.Warnf("delayed upload is disabled in non-writeback mode")
+			c.UploadDelay = 0
+			c.UploadHours = ""
+		}
+	}
+	if _, _, err := c.parseHours(); err != nil {
+		logger.Warnf("invalid value (%s) for upload-hours: %s", c.UploadHours, err)
+		c.UploadHours = ""
 	}
 	if c.CacheEviction == "" {
 		c.CacheEviction = Eviction2Random
@@ -711,7 +722,7 @@ func logRequest(typeStr, key, param, reqID string, err error, used time.Duration
 	}
 }
 
-func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bool) (err error) {
+func (store *cachedStore) load(ctx context.Context, key string, page *Page, cache bool, forceCache bool) (err error) {
 	defer func() {
 		e := recover()
 		if e != nil {
@@ -740,10 +751,10 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 		p = page
 	}
 	p.Acquire()
-	err = utils.WithTimeout(func(ctx context.Context) error {
+	err = utils.WithTimeout(ctx, func(cCtx context.Context) error {
 		defer p.Release()
 		// it will be retried in the upper layer.
-		in, err = store.storage.Get(ctx, key, 0, -1, object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+		in, err = store.storage.Get(cCtx, key, 0, -1, object.WithRequestID(&reqID), object.WithStorageClass(&sc))
 		if err == nil {
 			n, err = io.ReadFull(in, p.Data)
 			_ = in.Close()
@@ -753,6 +764,9 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 		}
 		return err
 	}, store.conf.GetTimeout)
+	if errors.Is(err, context.Canceled) {
+		return err
+	}
 	used := time.Since(start)
 	logRequest("GET", key, "", reqID, err, used)
 	if store.downLimit != nil && compressed {
@@ -809,7 +823,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit/10)
 	}
 	store.initMetrics()
-	if store.conf.CacheDir != "memory" && store.conf.Writeback {
+	if store.conf.Writeback {
 		store.startHour, store.endHour, _ = config.parseHours()
 		if store.startHour != store.endHour {
 			logger.Infof("background upload at %d:00 ~ %d:00", store.startHour, store.endHour)
@@ -848,7 +862,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		defer p.Release()
 		block, err := store.group.Execute(key, func() (*Page, error) { // dedup requests with full read
 			p.Acquire()
-			err := store.load(key, p, false, false) // delay writing cache until singleflight ends to prevent blocking waiters
+			err := store.load(context.TODO(), key, p, false, false) // delay writing cache until singleflight ends to prevent blocking waiters
 			return p, err
 		})
 		defer block.Release()
@@ -857,7 +871,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		}
 	})
 
-	if store.conf.CacheDir != "memory" && store.conf.Writeback {
+	if store.conf.Writeback {
 		for i := 0; i < store.conf.MaxUpload; i++ {
 			go store.uploader()
 		}
@@ -969,7 +983,7 @@ func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 }
 
 func (store *cachedStore) shouldCache(size int) bool {
-	return store.conf.CacheFullBlock || size < store.conf.BlockSize || store.conf.UploadDelay > 0
+	return store.conf.CacheFullBlock || size < store.conf.BlockSize
 }
 
 func parseObjOrigSize(key string) int {
@@ -1133,7 +1147,7 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 			continue
 		}
 		p := NewOffPage(size)
-		if e := store.load(k, p, true, true); e != nil {
+		if e := store.load(context.TODO(), k, p, true, true); e != nil {
 			logger.Warnf("Failed to load key: %s %s", k, e)
 			err = e
 		}

@@ -19,6 +19,8 @@ package meta
 import (
 	"strings"
 	"testing"
+
+	"github.com/juicedata/juicefs/pkg/object"
 )
 
 func TestRemoveSecret(t *testing.T) {
@@ -38,17 +40,29 @@ func TestRemoveSecret(t *testing.T) {
 }
 
 func TestEncrypt(t *testing.T) {
+	cases := []struct {
+		algo string
+	}{
+		{object.AES256GCM_RSA},
+		{object.CHACHA20_RSA},
+		{object.SM4GCM},
+	}
 	format := Format{Name: "test", SecretKey: "testSecret", SessionToken: "token", EncryptKey: "testEncrypt"}
-	if err := format.Encrypt(); err != nil {
-		t.Fatalf("Format encrypt: %s", err)
-	}
-	if format.SecretKey == "testSecret" || format.SessionToken == "token" || format.EncryptKey == "testEncrypt" {
-		t.Fatalf("invalid format: %+v", format)
-	}
-	if err := format.Decrypt(); err != nil {
-		t.Fatalf("Format decrypt: %s", err)
-	}
-	if format.SecretKey != "testSecret" || format.SessionToken != "token" || format.EncryptKey != "testEncrypt" {
-		t.Fatalf("invalid format: %+v", format)
+	for _, c := range cases {
+		format.EncryptAlgo = c.algo
+		t.Run(c.algo, func(t *testing.T) {
+			if err := format.Encrypt(); err != nil {
+				t.Fatalf("Format encrypt: %s", err)
+			}
+			if format.SecretKey == "testSecret" || format.SessionToken == "token" || format.EncryptKey == "testEncrypt" {
+				t.Fatalf("invalid format: %+v", format)
+			}
+			if err := format.Decrypt(); err != nil {
+				t.Fatalf("Format decrypt: %s", err)
+			}
+			if format.SecretKey != "testSecret" || format.SessionToken != "token" || format.EncryptKey != "testEncrypt" {
+				t.Fatalf("invalid format: %+v", format)
+			}
+		})
 	}
 }

@@ -71,14 +71,42 @@ func TestLocalIp(t *testing.T) {
 	}
 }
 
+func TestFindLocalIPs(t *testing.T) {
+	// Test without interface filter (should return all IPs)
+	ips, err := FindLocalIPs()
+	if err != nil {
+		t.Fatalf("FindLocalIPs failed: %s", err)
+	}
+	if len(ips) == 0 {
+		t.Logf("Warning: No network interfaces found (this might be expected in some environments)")
+	}
+
+	// Test with non-existent interface filter (should return no IPs)
+	ips, err = FindLocalIPs("nonexistent_interface_12345")
+	if err != nil {
+		t.Fatalf("FindLocalIPs with filter failed: %s", err)
+	}
+	if len(ips) != 0 {
+		t.Fatalf("Expected 0 IPs with non-existent interface, got %d", len(ips))
+	}
+
+	// Test with multiple interface filters
+	ips, err = FindLocalIPs("eth0", "en0", "lo0")
+	if err != nil {
+		t.Fatalf("FindLocalIPs with multiple filters failed: %s", err)
+	}
+	// We don't assert length here since it depends on the system
+	t.Logf("Found %d IPs with eth0/en0/lo0 filter", len(ips))
+}
+
 func TestTimeout(t *testing.T) {
-	err := WithTimeout(func(context.Context) error {
+	err := WithTimeout(context.TODO(), func(context.Context) error {
 		return nil
 	}, time.Millisecond*10)
 	if err != nil {
 		t.Fatalf("fast function should return nil")
 	}
-	err = WithTimeout(func(context.Context) error {
+	err = WithTimeout(context.TODO(), func(context.Context) error {
 		time.Sleep(time.Millisecond * 100)
 		return nil
 	}, time.Millisecond*10)

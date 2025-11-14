@@ -1463,7 +1463,7 @@ func (m *dbMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint64, 
 		}
 		delta.length = int64(length) - int64(nodeAttr.Length)
 		delta.space = align4K(length) - align4K(nodeAttr.Length)
-		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
 			return err
 		}
 		var zeroChunks []chunk
@@ -1543,7 +1543,7 @@ func (m *dbMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 		old := nodeAttr.Length
 		delta.length = int64(length) - int64(old)
 		delta.space = align4K(length) - align4K(old)
-		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
 			return err
 		}
 		now := time.Now().UnixNano()
@@ -2556,6 +2556,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 }
 
 func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
+
 	return errno(m.simpleTxn(ctx, func(s *xorm.Session) error {
 		s = s.Table(&edge{})
 		if plus != 0 {
@@ -2756,7 +2757,7 @@ func (m *dbMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice 
 			delta.space = align4K(newleng) - align4K(nodeAttr.Length)
 			nodeAttr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, nodeAttr.Uid, nodeAttr.Gid, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
 			return err
 		}
 		nodeAttr.setMtime(mtime.UnixNano())
@@ -2825,7 +2826,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			newSpace = align4K(newleng) - align4K(nout.Length)
 			nout.Length = newleng
 		}
-		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, fout, nout.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, newSpace, 0, nout.Uid, nout.Gid, m.getParents(s, fout, nout.Parent)...); err != 0 {
 			return err
 		}
 		now := time.Now().UnixNano()
@@ -3081,16 +3082,15 @@ func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 	return files, err
 }
 
-func (m *dbMeta) doCleanupSlices() {
+func (m *dbMeta) doCleanupSlices(ctx Context) {
 	var cks []sliceRef
-	_ = m.simpleTxn(Background(), func(s *xorm.Session) error {
+	_ = m.simpleTxn(ctx, func(s *xorm.Session) error {
 		cks = nil
 		return s.Where("refs <= 0").Find(&cks)
 	})
-	start := time.Now()
 	for _, ck := range cks {
 		m.deleteSlice(ck.Id, ck.Size)
-		if time.Since(start) > 50*time.Minute {
+		if ctx.Canceled() {
 			break
 		}
 	}
@@ -3170,7 +3170,6 @@ func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 }
 
 func (m *dbMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
-	start := time.Now()
 	var count int
 	var ss []Slice
 	var result []delslices
@@ -3218,7 +3217,7 @@ func (m *dbMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
 					m.deleteSlice(s.Id, s.Size)
 					count++
 				}
-				if time.Since(start) > 50*time.Minute {
+				if ctx.Canceled() {
 					return count, nil
 				}
 			}
@@ -3330,7 +3329,7 @@ func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 
 func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
 	if delete {
-		m.doCleanupSlices()
+		m.doCleanupSlices(ctx)
 	}
 	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		var cs []chunk
@@ -3681,7 +3680,6 @@ func (m *dbMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, erro
 
 func updateQuotaFields(quota *Quota, exist bool, maxSpace, maxInodes *int64, usedSpace, usedInodes *int64) []string {
 	updateColumns := make([]string, 0, 4)
-
 	if quota.MaxSpace >= 0 {
 		*maxSpace = quota.MaxSpace
 		updateColumns = append(updateColumns, "max_space")

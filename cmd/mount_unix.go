@@ -500,13 +500,13 @@ func prepareMp(mp string) {
 	}
 	var fi os.FileInfo
 	var ino uint64
-	err := utils.WithTimeout(func(context.Context) error {
+	err := utils.WithTimeout(context.TODO(), func(context.Context) error {
 		var err error
 		fi, err = os.Stat(mp)
 		return err
 	}, time.Second*3)
 	if !strings.Contains(mp, ":") && err != nil {
-		err2 := utils.WithTimeout(func(context.Context) error {
+		err2 := utils.WithTimeout(context.TODO(), func(context.Context) error {
 			return os.MkdirAll(mp, 0777)
 		}, time.Second*3)
 		if err2 != nil {
@@ -600,7 +600,7 @@ func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
 	}
 	var ino uint64
 	var err error
-	err = utils.WithTimeout(func(context.Context) error {
+	err = utils.WithTimeout(context.TODO(), func(context.Context) error {
 		ino, err = utils.GetFileInode(mp)
 		return err
 	}, time.Second*3)
@@ -659,8 +659,29 @@ func absPath(d string) string {
 	return d
 }
 
+func buildBoolFlagsMap(c *cli.Context) map[string]bool {
+	boolFlags := make(map[string]bool)
+	addBoolFlags := func(flags []cli.Flag) {
+		for _, flag := range flags {
+			if _, ok := flag.(*cli.BoolFlag); ok {
+				for _, name := range flag.Names() {
+					boolFlags[name] = true
+				}
+			}
+		}
+	}
+	if c.App != nil {
+		addBoolFlags(c.App.Flags)
+	}
+	if c.Command != nil {
+		addBoolFlags(c.Command.Flags)
+	}
+	return boolFlags
+}
+
 func tellFstabOptions(c *cli.Context) string {
 	opts := []string{"_netdev,nofail"}
+	boolFlags := buildBoolFlagsMap(c)
 	for _, s := range os.Args[2:] {
 		if !strings.HasPrefix(s, "-") {
 			continue
@@ -672,7 +693,7 @@ func tellFstabOptions(c *cli.Context) string {
 		}
 		if s == "o" {
 			opts = append(opts, c.String(s))
-		} else if v := c.Bool(s); v {
+		} else if boolFlags[s] && c.Bool(s) {
 			opts = append(opts, s)
 		} else if s == "cache-dir" {
 			var dirString string
@@ -1045,3 +1066,4 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 		logger.Fatalf("fuse: %s", err)
 	}
 }
+

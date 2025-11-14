@@ -91,6 +91,8 @@ func (r *frange) include(a *frange) bool { return r.off <= a.off && a.end() <= r
 
 // protected by file
 type sliceReader struct {
+	ctx        context.Context
+	cancel     context.CancelFunc
 	file       *fileReader
 	block      *frange
 	state      sstate
@@ -202,7 +204,8 @@ func (s *sliceReader) run() {
 	p := s.page.Slice(0, int(need))
 	defer p.Release()
 	var n int
-	ctx := context.WithValue(context.TODO(), meta.CtxKey("inode"), inode) // Output inode in log for debugging
+
+	ctx := context.WithValue(s.ctx, meta.CtxKey("inode"), inode) // Output inode in log for debugging
 	n = f.r.Read(ctx, p, slices, (uint32(s.block.off))%meta.ChunkSize)
 
 	f.Lock()
@@ -258,6 +261,7 @@ func (s *sliceReader) drop() {
 			s.state = INVALID // somebody still using it, so mark it for removal
 		}
 	}
+	s.cancel()
 }
 
 func (s *sliceReader) delete() {
@@ -306,6 +310,7 @@ func (f *fileReader) GetLength() uint64 {
 // protected by f
 func (f *fileReader) newSlice(block *frange) *sliceReader {
 	s := &sliceReader{}
+	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.file = f
 	s.lastAccess = time.Now()
 	s.indx = uint32(block.off / meta.ChunkSize)

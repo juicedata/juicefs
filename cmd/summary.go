@@ -116,6 +116,7 @@ func summary(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("open controller: %s", err)
 	}
+	defer f.Close()
 	headerLen := uint32(8)
 	contentLen := uint32(8 + 1 + 1 + 1)
 	wb := utils.NewBuffer(headerLen + contentLen)
@@ -143,7 +144,6 @@ func summary(ctx *cli.Context) error {
 
 	var resp vfs.SummaryReponse
 	err = json.Unmarshal(data, &resp)
-	_ = f.Close()
 	if err == nil && resp.Errno != 0 {
 		err = resp.Errno
 	}

@@ -671,7 +671,7 @@ func (bm *benchMarkObj) chtimes(ctx context.Context, key string, startKey int) e
 }
 
 func listAll(ctx context.Context, s object.ObjectStorage, prefix, marker string, limit int64) ([]object.Object, error) {
-	ch, err := object.ListAll(ctx, s, prefix, marker, true)
+	ch, err := object.ListAll(ctx, s, prefix, marker, true, true)
 	if err == nil {
 		objs := make([]object.Object, 0)
 		for obj := range ch {

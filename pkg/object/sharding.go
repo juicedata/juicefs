@@ -90,8 +90,8 @@ func (s *sharded) SetStorageClass(sc string) error {
 
 const maxResults = 10000
 
-// ListAll on all the keys that starts at marker from object storage.
-func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, followLink bool) (<-chan Object, error) {
+// ListAll lists all keys that starts at marker from object storage.
+func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, followLink, sort bool) (<-chan Object, error) {
 	if ch, err := store.ListAll(ctx, prefix, marker, followLink); err == nil {
 		return ch, nil
 	} else if !errors.Is(err, notSupported) {
@@ -117,13 +117,12 @@ func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, fo
 		for {
 			for _, obj := range objs {
 				key := obj.Key()
-				if !first && key <= lastkey {
+				if sort && !first && key <= lastkey {
 					logger.Errorf("The keys are out of order: marker %q, last %q current %q", marker, lastkey, key)
 					out <- nil
 					return
 				}
 				lastkey = key
-				// logger.Debugf("found key: %s", key)
 				out <- obj
 				first = false
 			}
@@ -171,7 +170,7 @@ func (s *nextObjects) Pop() interface{} {
 func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	heads := &nextObjects{make([]nextKey, 0)}
 	for i := range s.stores {
-		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink)
+		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink, true)
 		if err != nil {
 			return nil, fmt.Errorf("list %s: %s", s.stores[i], err)
 		}

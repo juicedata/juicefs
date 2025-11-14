@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"reflect"
@@ -91,7 +92,7 @@ type engine interface {
 	doDeleteSustainedInode(sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
-	doCleanupSlices()
+	doCleanupSlices(ctx Context)
 	doCleanupDelayedSlices(ctx Context, edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
 
@@ -489,7 +490,7 @@ func (m *baseMeta) newSessionInfo() []byte {
 	if err != nil {
 		logger.Warnf("Failed to get hostname: %s", err)
 	}
-	ips, err := utils.FindLocalIPs()
+	ips, err := utils.FindLocalIPs(m.conf.NetworkInterfaces...)
 	if err != nil {
 		logger.Warnf("Failed to get local IP: %s", err)
 	}
@@ -776,7 +777,9 @@ func (m *baseMeta) cleanupSlices(ctx Context) {
 		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter nextCleanupSlices: %s", err)
 		} else if ok {
-			m.en.doCleanupSlices()
+			cCtx := WrapWithTimeout(ctx, time.Minute*50)
+			m.en.doCleanupSlices(cCtx)
+			cCtx.Cancel()
 		}
 	}
 }
@@ -832,7 +835,7 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 	var err error
 	if !m.conf.FastStatfs || used == unknownUsage || inodes == unknownUsage {
 		var remoteUsed int64 // using an additional variable here to ensure the assignment inside `utils.WithTimeout` does not change the `used` variable again after a timeout.
-		err = utils.WithTimeout(func(context.Context) error {
+		err = utils.WithTimeout(ctx, func(context.Context) error {
 			remoteUsed, err = m.en.getCounter(usedSpace)
 			return err
 		}, time.Millisecond*150)
@@ -840,7 +843,7 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 			used = remoteUsed
 		}
 		var remoteInodes int64
-		err = utils.WithTimeout(func(context.Context) error {
+		err = utils.WithTimeout(ctx, func(context.Context) error {
 			remoteInodes, err = m.en.getCounter(totalInodes)
 			return err
 		}, time.Millisecond*150)
@@ -862,8 +865,13 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 		}
 	} else {
 		*totalspace = 1 << 50
+		const maxVal = math.MaxUint64 >> 1
 		for *totalspace*8 < uint64(used)*10 {
-			*totalspace *= 2
+			if *totalspace >= maxVal {
+				*totalspace = math.MaxUint64
+				break
+			}
+			*totalspace <<= 1
 		}
 	}
 	*availspace = *totalspace - uint64(used)
@@ -879,8 +887,12 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 		}
 	} else {
 		*iavail = 10 << 20
-		for *iused*10 > (*iused+*iavail)*8 {
-			*iavail *= 2
+		const maxVal = math.MaxUint64 >> 1
+		for *iused > *iavail*4 {
+			if *iavail >= maxVal {
+				break
+			}
+			*iavail <<= 1
 		}
 	}
 	return 0
@@ -1078,7 +1090,7 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	if inode == RootInode || inode == TrashInode {
 		// doGetAttr could overwrite the `attr` after timeout
 		var a Attr
-		e := utils.WithTimeout(func(context.Context) error {
+		e := utils.WithTimeout(ctx, func(context.Context) error {
 			err = m.en.doGetAttr(ctx, inode, &a)
 			return nil
 		}, time.Millisecond*300)
@@ -1222,7 +1234,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	defer m.timeit("Mknod", time.Now())
 	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
-	if err := m.checkQuota(ctx, space, inodes, parent); err != 0 {
+	if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), ctx.Gid(), parent); err != 0 {
 		return err
 	}
 
@@ -1329,6 +1341,13 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if attr.Typ == TypeDirectory {
 		return syscall.EPERM
 	}
+
+	if m.checkUserQuota(ctx, uint64(attr.Uid), 0, 1) {
+		return syscall.EDQUOT
+	}
+	if m.checkGroupQuota(ctx, uint64(attr.Gid), 0, 1) {
+		return syscall.EDQUOT
+	}
 	if m.checkDirQuota(ctx, parent, align4K(attr.Length), 1) {
 		return syscall.EDQUOT
 	}
@@ -1338,7 +1357,7 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if err == 0 {
 		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
 		m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
-		m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, align4K(attr.Length), 1)
+		m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, 0, 1)
 	}
 	return err
 }
@@ -1407,7 +1426,11 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 		m.updateDirStat(ctx, parent, -int64(diffLength), -align4K(diffLength), -1)
 		if !parent.IsTrash() {
 			m.updateDirQuota(ctx, parent, -align4K(diffLength), -1)
-			m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, -align4K(diffLength), -1)
+			if attr.Typ == TypeFile && attr.Nlink > 0 {
+				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, 0, -1)
+			} else {
+				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, -align4K(diffLength), -1)
+			}
 		}
 	}
 	return err
@@ -2126,7 +2149,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 					if repair {
 						if !attr.Full {
 							now := time.Now().Unix()
-							attr.Mode = 0644
+							attr.Mode = 0755
 							attr.Uid = ctx.Uid()
 							attr.Gid = ctx.Gid()
 							attr.Atime = now
@@ -2558,6 +2581,7 @@ func (m *baseMeta) trashEntry(parent, inode Ino, name string) string {
 
 func (m *baseMeta) cleanupTrash(ctx Context) {
 	defer m.sessWG.Done()
+	var cCtx Context
 	for {
 		select {
 		case <-ctx.Done():
@@ -2573,9 +2597,13 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 		if ok, err := m.en.setIfSmall("lastCleanupTrash", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter lastCleanupTrash: %s", err)
 		} else if ok {
+			if cCtx != nil {
+				cCtx.Cancel()
+			}
+			cCtx = WrapWithTimeout(ctx, 50*time.Minute)
 			days := m.getFormat().TrashDays
-			go m.doCleanupTrash(ctx, days, false)
-			go m.cleanupDelayedSlices(ctx, days)
+			go m.doCleanupTrash(cCtx, days, false)
+			go m.cleanupDelayedSlices(cCtx, days)
 		}
 	}
 }
@@ -2646,7 +2674,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 					rmdir = false
 					continue
 				}
-				if time.Since(now) > 50*time.Minute {
+				if ctx.Canceled() {
 					return
 				}
 			}
@@ -2836,7 +2864,7 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	if eno != 0 {
 		return eno
 	}
-	if err := m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), parent); err != 0 {
+	if err := m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), ctx.Uid(), ctx.Gid(), parent); err != 0 {
 		return err
 	}
 	*total = sum.Dirs + sum.Files

@@ -28,7 +28,12 @@ export META_PASSWORD=mypassword
 juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
 
-## Database connection control
+Similarly, `META_PASSWORD_FILE` can be used to provide the database password as a file:
+
+```shell
+export META_PASSWORD_FILE=/secret/mypassword.txt
+juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
+```
 
 PostgreSQL is a multiple process database, every client connection need a dedicate server process, limition of total connections and new connects are prefered. JuiceFS now provides the following options for better control of the connections:
 

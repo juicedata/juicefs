@@ -846,38 +846,19 @@ type holder struct {
 var muHolder sync.Mutex
 var holders []*holder
 
-func noMoreTask(tasks chan<- object.Object) {
-	for len(tasks) > 0 {
-		time.Sleep(time.Millisecond * 1)
-	}
-	close(tasks)
-}
-
 func fetchTask(tasks chan object.Object) (t object.Object, done func()) {
-	defer func() {
-		if e, ok := recover().(error); ok && e.Error() == "send on closed channel" {
-			logger.Debugf("no more task, continue with current one")
-			done = func() {}
-		}
-	}()
-AGAIN:
-	if t == nil {
-		t = <-tasks
-	}
 	muHolder.Lock()
+	defer muHolder.Unlock()
 	if len(holders) > 0 {
 		h := holders[len(holders)-1]
 		holders = holders[:len(holders)-1]
 		muHolder.Unlock()
-		select {
-		case tasks <- t: // put back
-			t = nil
-			<-h.done
-		case <-h.done:
-		}
-		goto AGAIN
+		<-h.done
+		muHolder.Lock()
 	}
-	defer muHolder.Unlock()
+	if t = <-tasks; t == nil {
+		return nil, func() {}
+	}
 	size := t.Size()
 	if size == markChecksum {
 		size = withoutSize(t).Size()
@@ -1534,7 +1515,7 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 					if err := produceSingleObject(tasks, src, dst, key, config); err == nil {
 						listedPrefix.Increment()
 						continue
-					} else if errors.Is(err, ignoreDir) {
+					} else if errors.Is(err, errDirSuffix) {
 						key += "/"
 					} else if os.IsNotExist(err) {
 						atomic.AddInt64(&ignoreFiles, 1)
@@ -1572,32 +1553,39 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 	return nil
 }
 
-var ignoreDir = errors.New("ignore dir")
+var errDirSuffix = errors.New("dir miss suffix '/'")
 var ignoreFiles int64
 
 func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) error {
 	obj, err := src.Head(ctx, key)
-	if err == nil && (!obj.IsDir() || obj.IsSymlink() && config.Links || obj.IsDir() && config.Dirs && strings.HasSuffix(key, "/")) {
-		var srckeys = make(chan object.Object, 1)
-		srckeys <- obj
-		close(srckeys)
-		if dobj, e := dst.Head(ctx, key); e == nil || os.IsNotExist(e) {
-			var dstkeys = make(chan object.Object, 1)
-			if dobj != nil {
-				dstkeys <- dobj
-			}
-			close(dstkeys)
-			logger.Debugf("produce single key %s", key)
-			_ = produce(tasks, srckeys, dstkeys, config)
-			return nil
-		} else {
-			logger.Warnf("head %s from %s: %s", key, dst, e)
-			err = e
-		}
-	} else if err != nil {
+	if err != nil {
 		logger.Warnf("head %s from %s: %s", key, src, err)
+		return err
+	}
+	if obj.IsDir() {
+		// only `files-from` will hit this case
+		if !strings.HasSuffix(key, "/") {
+			return errDirSuffix
+		}
+		if !config.Dirs {
+			return nil
+		}
+	}
+	var srckeys = make(chan object.Object, 1)
+	srckeys <- obj
+	close(srckeys)
+	if dobj, e := dst.Head(ctx, key); e == nil || os.IsNotExist(e) {
+		var dstkeys = make(chan object.Object, 1)
+		if dobj != nil {
+			dstkeys <- dobj
+		}
+		close(dstkeys)
+		logger.Debugf("produce single key %s", key)
+		_ = produce(tasks, srckeys, dstkeys, config)
+		return nil
 	} else {
-		err = ignoreDir
+		logger.Warnf("head %s from %s: %s", key, dst, e)
+		err = e
 	}
 	return err
 }
@@ -1857,7 +1845,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		if err != nil {
 			return err
 		}
-		noMoreTask(tasks)
+		close(tasks)
 	} else {
 		go fetchJobs(tasks, config)
 		go func() {

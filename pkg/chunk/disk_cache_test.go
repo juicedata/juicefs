@@ -73,15 +73,25 @@ func toFloat64(c prometheus.Collector) float64 {
 	panic(fmt.Errorf("collected a non-gauge/counter/untyped metric: %s", pb))
 }
 
+func testConf() Config {
+	conf := defaultConf
+	conf.CacheDir = filepath.Join(conf.CacheDir, fmt.Sprintf("%d", time.Now().UnixNano()))
+	return conf
+}
+
 func TestNewCacheStore(t *testing.T) {
-	s := newCacheStore(nil, defaultConf.CacheDir, 1<<30, defaultConf.CacheItems, 1, &defaultConf, nil)
+	conf := testConf()
+	defer os.RemoveAll(conf.CacheDir)
+	s := newCacheStore(nil, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
 	if s == nil {
 		t.Fatalf("Create new cache store failed")
 	}
 }
 
 func TestMetrics(t *testing.T) {
-	m := newCacheManager(&defaultConf, nil, nil)
+	conf := testConf()
+	defer os.RemoveAll(conf.CacheDir)
+	m := newCacheManager(&conf, nil, nil)
 	metrics := m.(*cacheManager).metrics
 	s := m.(*cacheManager).stores[0]
 	content := []byte("helloworld")
@@ -105,7 +115,7 @@ func TestMetrics(t *testing.T) {
 		t.Fatalf("expect the stageBlockBytes is %d", len(content))
 	}
 	key := fmt.Sprintf("chunks/0/5/5000_2_%d", len(content))
-	stagingPath, err := m.stage(key, content, false)
+	stagingPath, err := m.stage(key, content)
 	if err != nil {
 		t.Fatalf("stage failed: %s", err)
 	}
@@ -135,8 +145,13 @@ func TestMetrics(t *testing.T) {
 }
 
 func TestChecksum(t *testing.T) {
-	m := newCacheManager(&defaultConf, nil, nil)
-	s := m.(*cacheManager).stores[0]
+	conf := testConf()
+	conf.FreeSpace = 0.01
+	conf.CacheEviction = EvictionNone
+	defer os.RemoveAll(conf.CacheDir)
+	m := new(cacheManagerMetrics)
+	m.initMetrics()
+	s := newCacheStore(m, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
 	k1 := "0_0_10" // no checksum
 	k2 := "1_0_10"
 	k3 := "2_1_102400"
@@ -155,6 +170,10 @@ func TestChecksum(t *testing.T) {
 	s.cache(k3, NewPage(buf), true, false)
 
 	fpath := s.cachePath(k4)
+	dir := filepath.Dir(fpath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("mkdir parent dir %s: %s", dir, err)
+	}
 	f, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE, s.mode)
 	if err != nil {
 		t.Fatalf("Create cache file %s: %s", fpath, err)
@@ -183,6 +202,15 @@ func TestChecksum(t *testing.T) {
 	check := func(key string, off int64, size int) error {
 		rc, err := s.load(key)
 		if err != nil {
+			t.Logf("CacheStore files in %s:", s.dir)
+			filepath.Walk(s.dir, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					t.Logf("error accessing %s: %v", path, err)
+					return nil
+				}
+				t.Logf("cache file: %s", path)
+				return nil
+			})
 			t.Fatalf("CacheStore load key %s: %s", key, err)
 		}
 		defer rc.Close()
@@ -246,8 +274,9 @@ func TestExpand(t *testing.T) {
 }
 
 func BenchmarkLoadCached(b *testing.B) {
-	dir := b.TempDir()
-	s := newCacheStore(nil, filepath.Join(dir, "diskCache"), 1<<30, defaultConf.CacheItems, 1, &defaultConf, nil)
+	conf := testConf()
+	defer os.RemoveAll(conf.CacheDir)
+	s := newCacheStore(nil, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
 	p := NewPage(make([]byte, 1024))
 	key := "/chunks/1_1024"
 	s.cache(key, p, false, false)
@@ -263,8 +292,9 @@ func BenchmarkLoadCached(b *testing.B) {
 }
 
 func BenchmarkLoadUncached(b *testing.B) {
-	dir := b.TempDir()
-	s := newCacheStore(nil, filepath.Join(dir, "diskCache"), 1<<30, defaultConf.CacheItems, 1, &defaultConf, nil)
+	conf := testConf()
+	defer os.RemoveAll(conf.CacheDir)
+	s := newCacheStore(nil, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
 	key := "chunks/222_1024"
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -412,8 +442,9 @@ func TestAtimeNotLost(t *testing.T) {
 	}
 }
 func TestSetlimitByFreeRatio(t *testing.T) {
-	dir := t.TempDir()
-	cache := newCacheStore(nil, dir, 1<<30, 1000, 1, &defaultConf, nil)
+	conf := testConf()
+	defer os.RemoveAll(conf.CacheDir)
+	cache := newCacheStore(nil, conf.CacheDir, 1<<30, 1000, 1, &conf, nil)
 
 	usage := DiskFreeRatio{
 		spaceCap: 1 << 30,
@@ -536,7 +567,7 @@ func TestLruEviction(t *testing.T) {
 		blockPlaceHolder := []byte("test data")
 		for i := 1; i <= 20; i++ {
 			key := fmt.Sprintf("%d_%d_9", i, i)
-			_, err := s.stage(key, blockPlaceHolder, true)
+			_, err := s.stage(key, blockPlaceHolder)
 			require.True(t, le.verifyHeap())
 			require.NoError(t, err, "Failed to stage data for key %s", key)
 		}
@@ -559,4 +590,26 @@ func TestLruEviction(t *testing.T) {
 		require.Equal(t, 0, len(le.keys), "Cache should be empty by cleanupFull after setting maxItems to 1")
 		require.Equal(t, 0, len(le.lruHeap), "LRU heap should be empty by cleanupFull after setting maxItems to 1")
 	})
+}
+
+func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
+	dir := t.TempDir()
+	conf := defaultConf
+	conf.CacheExpire = time.Hour
+	m := new(cacheManagerMetrics)
+	m.initMetrics()
+	cache := newCacheStore(m, dir, 1<<30, 1000, 1, &conf, nil)
+	key := "0_0_4"
+
+	now := time.Now()
+	path, err := cache.stage(key, []byte("test"))
+	require.NoError(t, err)
+	require.NotEmpty(t, path)
+	require.LessOrEqual(t, cache.keys.peekAtime(cache.getCacheKey(key)), uint32(now.Add(-conf.CacheExpire/2).Unix())) // should have bias in atime
+
+	rc, err := cache.load(key)
+	require.NoError(t, err)
+	require.NotNil(t, rc)
+	defer rc.Close()
+	require.GreaterOrEqual(t, cache.keys.peekAtime(cache.getCacheKey(key)), uint32(now.Unix())) // bias should have been fixed on load
 }

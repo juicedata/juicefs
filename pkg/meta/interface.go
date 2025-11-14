@@ -546,7 +546,7 @@ func Register(name string, register Creator) {
 	metaDrivers[name] = register
 }
 
-func setPasswordFromEnv(uri string) (string, error) {
+func injectPasswordIntoURI(uri, password string) (string, error) {
 	atIndex := strings.LastIndex(uri, "@")
 	if atIndex == -1 {
 		return "", fmt.Errorf("invalid uri: %s", uri)
@@ -561,8 +561,35 @@ func setPasswordFromEnv(uri string) (string, error) {
 	if len(s) == 2 && s[1] != "" {
 		return uri, nil
 	}
-	pwd := url.UserPassword("", os.Getenv("META_PASSWORD")) // escape only password
+	pwd := url.UserPassword("", password) // escape only password
 	return uri[:dIndex] + s[0] + pwd.String() + uri[atIndex:], nil
+}
+
+func readPasswordFromFile(filePath string) (string, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read password file %s: %w", filePath, err)
+	}
+	return strings.TrimSpace(string(content)), nil
+}
+
+func setPasswordFromEnv(uri string) (string, error) {
+	var password string
+	var err error
+
+	if metaPassword := os.Getenv("META_PASSWORD"); metaPassword != "" {
+		password = metaPassword
+	} else if passwordFile := os.Getenv("META_PASSWORD_FILE"); passwordFile != "" {
+		password, err = readPasswordFromFile(passwordFile)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		// No password source available, return original URI
+		return uri, nil
+	}
+
+	return injectPasswordIntoURI(uri, password)
 }
 
 // NewClient creates a Meta client for given uri.
@@ -576,7 +603,7 @@ func NewClient(uri string, conf *Config) Meta {
 		logger.Fatalf("invalid uri: %s", uri)
 	}
 	driver := uri[:p]
-	if os.Getenv("META_PASSWORD") != "" && (driver == "mysql" || driver == "postgres") {
+	if driver == "mysql" || driver == "postgres" {
 		if uri, err = setPasswordFromEnv(uri); err != nil {
 			logger.Fatalf(err.Error())
 		}
