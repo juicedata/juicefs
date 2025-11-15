@@ -122,7 +122,9 @@ Read [JuiceFS Internals](development/internals.md) and [Data Processing Flow](in
 
 ### How to copy a large number of small files into JuiceFS quickly?
 
-You could mount JuiceFS with [`--writeback` option](reference/command_reference.mdx#mount-data-cache-options), which will write the small files into local disks first, then upload them to object storage in background, this could speedup coping many small files into JuiceFS.
+Mount JuiceFS with the [`--writeback` option](reference/command_reference.mdx#mount-data-cache-options),
+which will stage the small files on local storage, then flush them to backing
+storage in background.
 
 See ["Write Cache in Client"](guide/cache.md#client-write-cache) for more information.
 
@@ -132,15 +134,15 @@ See ["Write Cache in Client"](guide/cache.md#client-write-cache) for more inform
 
 ## Mount Related Questions
 
-### Can I mount JuiceFS without `root`?
+### Can I mount JuiceFS without `root` privileges?
 
-Yes, JuiceFS could be mounted using `juicefs` without root. The default directory for caching is `$HOME/.juicefs/cache` (macOS) or `/var/jfsCache` (Linux), you should change that to a directory which you have write permission.
+Yes, JuiceFS could be mounted using `juicefs` without root privileges. The default directory for caching is `$HOME/.juicefs/cache` (macOS) or `/var/jfsCache` (Linux), you should change that to a directory which you have write permission.
 
 See ["Read Cache in Client"](guide/cache.md#client-read-cache) for more information.
 
 ## Access Related Questions
 
-### What other ways JuiceFS supports access to data besides mount?
+### What other ways does JuiceFS offer to access data?
 
 In addition to mounting, the following methods are also supported:
 
@@ -150,9 +152,9 @@ In addition to mounting, the following methods are also supported:
 - Docker Volume Plugin: A convenient way to use JuiceFS in Docker, please refer to ["Use JuiceFS on Docker"](deployment/juicefs_on_docker.md).
 - WebDAV Gateway: Access JuiceFS via WebDAV protocol
 
-### Why the same user on host X has permission to access a file in JuiceFS while has no permission to it on host Y?
+### Why does a user on host X have permission to access a file in JuiceFS, but does not on host Y?
 
-The same user has different UID or GID on host X and host Y. Use `id` command to show the UID and GID:
+Most likely the user has a different numeric UID or GID on the two hosts. Use the `id` command on each host to show each symbolic and numeric UID and GID:
 
 ```bash
 $ id alice
@@ -161,10 +163,10 @@ uid=1201(alice) gid=500(staff) groups=500(staff)
 
 Read ["Sync Accounts between Multiple Hosts"](administration/sync_accounts_between_multiple_hosts.md) to resolve this problem.
 
-### Does JuiceFS Gateway support advanced features such as multi-user management?
+### Does the JuiceFS Gateway support advanced features such as multi-user management?
 
-The built-in `gateway` subcommand of JuiceFS does not support functions such as multi-user management, and only provides basic S3 gateway functions. If you need to use these advanced features, please refer to the [documentation](guide/gateway.md).
+The built-in `gateway` subcommand does not support functions including as multi-user management, and provides only basic S3 gateway functions. If you need to use these advanced features, please refer to the [documentation](guide/gateway.md).
 
-### Is there currently an SDK available for JuiceFS?
+### Is there an SDK available for JuiceFS?
 
 As of the release of JuiceFS 1.0, the community has two SDKs, one is the [Java SDK](deployment/hadoop_java_sdk.md) that is highly compatible with the HDFS interface officially maintained by Juicedata, and the other is the [Python SDK](https://github.com/megvii-research/juicefs-python) maintained by community users.
