@@ -2904,7 +2904,11 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	if eno = m.Access(ctx, srcIno, MODE_MASK_R|MODE_MASK_X, &attr); eno != 0 {
 		return eno
 	}
-	handler, eno := m.NewDirHandler(ctx, srcIno, false, nil)
+	// Use DirHandler for batch processing to avoid loading all entries at once
+	handler, eno := m.NewDirHandler(ctx, srcIno, true, nil)
+	if eno == syscall.ENOENT {
+		eno = 0 // empty dir
+	}
 	if eno != 0 {
 		return eno
 	}
@@ -2925,70 +2929,102 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		return eno
 	}
 
+	// Process entries in batches: directories first, then files
+	offset := 0
 	var dirEntries []*Entry
 	var fileEntries []*Entry
-	offset := 0
+LOOP:
 	for {
-		ets, err := handler.List(ctx, offset)
-		if err != 0 {
-			if err == syscall.ENOENT {
-				err = 0 // empty dir
+		// Fetch next batch
+		batchEntries, batchEno := handler.List(ctx, offset)
+		if batchEno != 0 {
+			if batchEno == syscall.ENOENT {
+				break // end of directory
 			}
-			if err != 0 {
-				return err
-			}
-			break
+			eno = batchEno
+			break LOOP
 		}
-		if len(ets) == 0 {
-			break
+		if len(batchEntries) == 0 {
+			break // no more entries
 		}
-		for _, e := range ets {
-			if len(e.Name) == 1 && e.Name[0] == '.' {
+
+		actualCount := 0
+		for _, e := range batchEntries {
+			if len(e.Name) > 0 && (e.Name[0] == '.' && (len(e.Name) == 1 || (len(e.Name) == 2 && e.Name[1] == '.'))) {
 				continue
 			}
-			if len(e.Name) == 2 && e.Name[0] == '.' && e.Name[1] == '.' {
-				continue
-			}
+			actualCount++
 			if e.Attr.Typ == TypeDirectory {
 				dirEntries = append(dirEntries, e)
 			} else {
 				fileEntries = append(fileEntries, e)
 			}
 		}
-		offset += len(ets)
-		if ctx.Canceled() {
-			return syscall.EINTR
-		}
-	}
 
-	entries := make([]*Entry, 0, len(dirEntries)+len(fileEntries))
-	entries = append(entries, dirEntries...)
-	entries = append(entries, fileEntries...)
-
-LOOP:
-	for i, entry := range entries {
-		select {
-		case e := <-errCh:
-			eno = e
-			ctx.Cancel()
-			break LOOP
-		case concurrent <- struct{}{}:
-			wg.Add(1)
-			go func(e *Entry) {
-				defer wg.Done()
-				eno := cloneChild(e)
-				if eno != 0 {
-					errCh <- eno
-				}
-				<-concurrent
-			}(entry)
-		default:
-			if e := cloneChild(entry); e != 0 {
+		// Process directories first
+		for _, entry := range dirEntries {
+			select {
+			case e := <-errCh:
 				eno = e
+				ctx.Cancel()
+				break LOOP
+			case concurrent <- struct{}{}:
+				wg.Add(1)
+				go func(e *Entry) {
+					defer wg.Done()
+					eno := cloneChild(e)
+					if eno != 0 {
+						errCh <- eno
+					}
+					<-concurrent
+				}(entry)
+			default:
+				if e := cloneChild(entry); e != 0 {
+					eno = e
+					break LOOP
+				}
+			}
+			if ctx.Canceled() {
+				eno = syscall.EINTR
 				break LOOP
 			}
 		}
-		entries[i] = nil // release memory
+		dirEntries = dirEntries[:0] // clear for next batch
+
+		// Process files
+		for _, entry := range fileEntries {
+			select {
+			case e := <-errCh:
+				eno = e
+				ctx.Cancel()
+				break LOOP
+			case concurrent <- struct{}{}:
+				wg.Add(1)
+				go func(e *Entry) {
+					defer wg.Done()
+					eno := cloneChild(e)
+					if eno != 0 {
+						errCh <- eno
+					}
+					<-concurrent
+				}(entry)
+			default:
+				if e := cloneChild(entry); e != 0 {
+					eno = e
+					break LOOP
+				}
+			}
+			if ctx.Canceled() {
+				eno = syscall.EINTR
+				break LOOP
+			}
+		}
+		fileEntries = fileEntries[:0] // clear for next batch
+
+		offset += len(batchEntries)
+		if actualCount == 0 {
+			break
+		}
 		if ctx.Canceled() {
 			eno = syscall.EINTR
 			break
