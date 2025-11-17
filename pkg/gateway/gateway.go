@@ -1129,8 +1129,10 @@ func (n *jfsObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	var etag string
 	if err = n.putObject(ctx, bucket, p, r, opts, func(tmpName string) {
 		etag = r.MD5CurrentHexString()
-		if n.fs.SetXattr(mctx, tmpName, s3Etag, []byte(etag), 0) != 0 {
-			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", tmpName, s3Etag, etag, 0)
+		if n.gConf.KeepEtag {
+			if n.fs.SetXattr(mctx, tmpName, s3Etag, []byte(etag), 0) != 0 {
+				logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", tmpName, s3Etag, etag, 0)
+			}
 		}
 	}); err != nil {
 		err = jfsToObjectErr(ctx, err, bucket, object)
