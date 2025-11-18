@@ -27,12 +27,13 @@ import (
 
 func TestCompact(t *testing.T) {
 	cconf := chunk.Config{
-		BlockSize:  256 * 1024,
-		Compress:   "lz4",
-		MaxUpload:  2,
-		BufferSize: 30 << 20,
-		CacheSize:  10 << 20,
-		CacheDir:   "memory",
+		BlockSize:   256 * 1024,
+		Compress:    "lz4",
+		MaxUpload:   2,
+		MaxDownload: 200,
+		BufferSize:  30 << 20,
+		CacheSize:   10 << 20,
+		CacheDir:    "memory",
 	}
 	blob, _ := object.CreateStorage("mem", "", "", "", "")
 	store := chunk.NewCachedStore(blob, cconf, nil)
