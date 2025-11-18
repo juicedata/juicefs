@@ -178,9 +178,10 @@ func TestJFS(t *testing.T) {
 	var conf = vfs.Config{
 		Meta: meta.DefaultConf(),
 		Chunk: &chunk.Config{
-			BlockSize:  format.BlockSize << 10,
-			MaxUpload:  1,
-			BufferSize: 100 << 20,
+			BlockSize:   format.BlockSize << 10,
+			MaxUpload:   1,
+			MaxDownload: 200,
+			BufferSize:  100 << 20,
 		},
 		DirEntryTimeout: time.Millisecond * 100,
 		EntryTimeout:    time.Millisecond * 100,

@@ -129,6 +129,11 @@ func storageFlags() []cli.Flag {
 			Usage: "number of connections to upload",
 		},
 		&cli.IntFlag{
+			Name:  "max-downloads",
+			Value: 200,
+			Usage: "number of connections to download",
+		},
+		&cli.IntFlag{
 			Name:  "max-stage-write",
 			Value: 1000, // large enough for normal cases, also prevents unlimited concurrency in abnormal cases
 			Usage: "number of threads allowed to write staged files, other requests will be uploaded directly (this option is only effective when 'writeback' mode is enabled)",
