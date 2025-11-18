@@ -33,6 +33,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/sync/singleflight"
 )
 
 type Ino = meta.Ino
@@ -174,8 +175,6 @@ var (
 )
 
 func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
-	var inode Ino
-	var attr = &Attr{}
 	if parent == rootID || name == internalNodes[0].name { // 0 is the control file
 		n := getInternalNodeByName(name)
 		if n != nil {
@@ -196,10 +195,20 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 		err = syscall.ENAMETOOLONG
 		return
 	}
-	err = v.Meta.Lookup(ctx, parent, name, &inode, attr, true)
-	if err == 0 {
+	sEntry, sErr, _ := v.entrySF.Do(fmt.Sprintf("%d%d%s", parent, os.PathSeparator, name), func() (interface{}, error) {
+		var inode Ino
+		attr := &Attr{}
+		if err = v.Meta.Lookup(ctx, parent, name, &inode, attr, true); err != 0 {
+			return nil, err
+		}
 		entry = &meta.Entry{Inode: inode, Attr: attr}
+		return entry, syscall.Errno(0)
+	})
+	if err = sErr.(syscall.Errno); err != 0 {
+		return
 	}
+	attrCopy := *sEntry.(*meta.Entry).Attr
+	entry = &meta.Entry{Inode: sEntry.(*meta.Entry).Inode, Attr: &attrCopy}
 	return
 }
 
@@ -210,11 +219,16 @@ func (v *VFS) GetAttr(ctx Context, ino Ino, opened uint8) (entry *meta.Entry, er
 		return
 	}
 	defer func() { logit(ctx, "getattr", err, "(%d):%s", ino, (*Entry)(entry)) }()
-	var attr = &Attr{}
-	err = v.Meta.GetAttr(ctx, ino, attr)
-	if err == 0 {
-		entry = &meta.Entry{Inode: ino, Attr: attr}
+	sAttr, sErr, _ := v.attrSF.Do(ino.String(), func() (interface{}, error) {
+		attr := &Attr{}
+		err = v.Meta.GetAttr(ctx, ino, attr)
+		return attr, err
+	})
+	if err = sErr.(syscall.Errno); err != 0 {
+		return
 	}
+	attrCopy := *sAttr.(*Attr)
+	entry = &meta.Entry{Inode: ino, Attr: &attrCopy}
 	return
 }
 
@@ -1239,6 +1253,9 @@ type VFS struct {
 	modM       sync.Mutex
 	modifiedAt map[Ino]time.Time
 
+	attrSF  singleflight.Group
+	entrySF singleflight.Group
+
 	registry *prometheus.Registry
 }
 
@@ -1289,6 +1306,7 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 }
 
 func (v *VFS) invalidateAttr(ino Ino) {
+	v.attrSF.Forget(ino.String())
 	v.modM.Lock()
 	v.modifiedAt[ino] = time.Now()
 	v.modM.Unlock()

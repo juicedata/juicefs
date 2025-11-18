@@ -19,6 +19,7 @@ package vfs
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"sync"
@@ -265,6 +266,7 @@ func (v *VFS) releaseFileHandle(ino Ino, fh uint64) {
 }
 
 func (v *VFS) invalidateDirHandle(parent Ino, name string, inode Ino, attr *Attr) {
+	v.entrySF.Forget(fmt.Sprintf("%d%d%s", parent, os.PathSeparator, name))
 	v.hanleM.Lock()
 	hs := v.handles[parent]
 	v.hanleM.Unlock()
