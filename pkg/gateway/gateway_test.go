@@ -19,15 +19,16 @@ package gateway
 import (
 	"context"
 	"errors"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	minio "github.com/minio/minio/cmd"
-	"os"
-	"testing"
-	"time"
 )
 
 func TestGatewayLock(t *testing.T) {
@@ -42,9 +43,10 @@ func TestGatewayLock(t *testing.T) {
 	var conf = vfs.Config{
 		Meta: meta.DefaultConf(),
 		Chunk: &chunk.Config{
-			BlockSize:  format.BlockSize << 10,
-			MaxUpload:  1,
-			BufferSize: 100 << 20,
+			BlockSize:   format.BlockSize << 10,
+			MaxUpload:   1,
+			MaxDownload: 200,
+			BufferSize:  100 << 20,
 		},
 		DirEntryTimeout: time.Millisecond * 100,
 		EntryTimeout:    time.Millisecond * 100,
