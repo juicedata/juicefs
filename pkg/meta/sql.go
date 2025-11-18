@@ -2589,7 +2589,7 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 func recordDeletionStats(
 	n *node,
 	entrySpace int64,
-	spaceDelta int64, 
+	spaceDelta int64,
 	totalLength *int64,
 	totalSpace *int64,
 	totalInodes *int64,
@@ -2623,12 +2623,12 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 	}
 
 	type entryInfo struct {
-		e          edge
-		n          node
-		opened     bool
-		trash      Ino
-		trashName  string 
-		lastLink   bool   
+		e         edge
+		n         node
+		opened    bool
+		trash     Ino
+		trashName string
+		lastLink  bool
 	}
 	var entryInfos []entryInfo
 	var totalLength, totalSpace, totalInodes int64
@@ -2647,6 +2647,11 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		var pattr Attr
+		m.parseAttr(&pn, &pattr)
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+			return st
+		}
 		if (pn.Flags&FlagAppend != 0) || (pn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
@@ -2655,18 +2660,17 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		now := time.Now().UnixNano()
 
 		inodes := make([]Ino, 0, len(entries))
-		inodeToEntry := make(map[Ino][]int) // inode -> indices in entries
-		for i, entry := range entries {
+		inodeM := make(map[Ino]struct{}) // filter hardlinks
+		for _, entry := range entries {
 			e := edge{Parent: parent, Name: entry.Name, Inode: entry.Inode}
 			if entry.Attr != nil {
 				e.Type = entry.Attr.Typ
 			}
-			info := entryInfo{e: e, trash: trash}
-			entryInfos = append(entryInfos, info)
-			if _, exists := inodeToEntry[entry.Inode]; !exists {
+			entryInfos = append(entryInfos, entryInfo{e: e, trash: trash})
+			if _, exists := inodeM[entry.Inode]; !exists {
+				inodeM[entry.Inode] = struct{}{}
 				inodes = append(inodes, entry.Inode)
 			}
-			inodeToEntry[entry.Inode] = append(inodeToEntry[entry.Inode], i)
 		}
 
 		if len(inodes) > 0 {
@@ -2674,6 +2678,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 			if err := s.ForUpdate().In("inode", inodes).Find(&nodes); err != nil {
 				return err
 			}
+			// some inodes may not exist
 			nodeMap := make(map[Ino]*node, len(nodes))
 			for i := range nodes {
 				nodeMap[nodes[i].Inode] = &nodes[i]
@@ -2919,7 +2924,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 
 	if trash == 0 {
 		for _, info := range entryInfos {
-				if info.n.Type == TypeFile && info.lastLink {
+			if info.n.Type == TypeFile && info.lastLink {
 				isTrash := parent.IsTrash()
 				m.fileDeleted(info.opened, isTrash, info.e.Inode, info.n.Length)
 			}
