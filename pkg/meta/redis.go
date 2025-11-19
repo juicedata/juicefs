@@ -2413,6 +2413,41 @@ func (m *redisMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, sysca
 	return readSlices(vals), 0
 }
 
+func (m *redisMeta) doList(ctx Context, inode Ino) ([][]*slice, syscall.Errno) {
+	var attr Attr
+	err := m.doGetAttr(ctx, inode, &attr)
+	if err != 0 {
+		return nil, err
+	}
+	p := m.rdb.Pipeline()
+	var slices [][]*slice
+	var indx uint32
+	for uint64(indx)*ChunkSize < attr.Length {
+		for i := 0; uint64(indx)*ChunkSize < attr.Length && i < 1000; i++ {
+			_ = p.LRange(ctx, m.chunkKey(inode, indx), 0, -1)
+			indx++
+		}
+		cmds, err := p.Exec(ctx)
+		if err != nil {
+			logger.Warnf("list of inode %d: %s", inode, err)
+			return nil, errno(err)
+		}
+		for _, cmd := range cmds {
+			val := cmd.(*redis.StringSliceCmd).Val()
+			if len(val) == 0 {
+				continue
+			}
+			ss := readSlices(val)
+			if ss == nil {
+				continue
+			}
+			slices = append(slices, ss)
+		}
+	}
+
+	return slices, 0
+}
+
 func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		*delta = dirStat{}
