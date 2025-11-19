@@ -419,14 +419,25 @@ class Client(object):
         self.lib.free(buf)
         return res
 
-    def warmup(self, paths, numthreads=10, background=False, isEvict=False, isCheck=False):
+    def warmup(self, paths, threads=10, evict=False, check=False, background=False, **kwargs):
+        # numthreads=10, background=False, isEvict=False, isCheck=False,
+        for k in kwargs:
+            if k == 'numthreads':
+                threads = kwargs[k]
+            elif k == 'isEvict':
+                evict = kwargs[k]
+            elif k == 'isCheck':
+                check = kwargs[k]
+            else:
+                raise TypeError(f"warmup() got an unexpected keyword argument '{k}'")
+
         """Warm up a file or a directory."""
         if type(paths) is not list:
             paths = [paths]
 
         buf = c_void_p()
 
-        n = self.lib.jfs_warmup(c_int64(_tid()), c_int64(self.h), json.dumps(paths).encode(), c_int32(numthreads), c_bool(background), c_bool(isEvict), c_bool(isCheck), byref(buf))
+        n = self.lib.jfs_warmup(c_int64(_tid()), c_int64(self.h), json.dumps(paths).encode(), c_int32(threads), c_bool(background), c_bool(evict), c_bool(check), byref(buf))
         res = json.loads(str(string_at(buf, n), encoding='utf-8'))
         self.lib.free(buf)
         return res
