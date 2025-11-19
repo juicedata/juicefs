@@ -419,7 +419,7 @@ class Client(object):
         self.lib.free(buf)
         return res
 
-    def warmup(self, paths, threads=10, evict=False, check=False, background=True, **kwargs):
+    def warmup(self, paths, threads=10, evict=False, check=False, background=False, **kwargs):
         # numthreads=10, background=False, isEvict=False, isCheck=False,
         for k in kwargs:
             if k == 'numthreads':
