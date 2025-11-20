@@ -88,7 +88,7 @@ jobs:
           sudo JUICEFS_RANGER_TEST=1 mvn test -B -Dtest=io.juicefs.permission.RangerPermissionCheckerTest,\!io.juicefs.permission.RangerPermissionCheckerTest#testRangerCheckerInitFailed
           sudo mvn test -B -Dtest=io.juicefs.permission.RangerPermissionCheckerTest#testRangerCheckerInitFailed
           # kerberos test
-          sudo cp sdk/java/src/test/resources/kerberos.cfg /tmp/kerberos.cfg
+          sudo cp src/test/resources/kerberos.cfg /tmp/kerberos.cfg
           sudo sh -c "echo "dev.keytab=`base64 /tmp/server.keytab -w 0`" >> /tmp/kerberos.cfg"
           sudo ./juicefs config localhost --kerberos-config-file sdk/java/src/test/resources/kerberos.cfg
           sudo mvn test -B -Dtest=io.juicefs.kerberos.KerberosTest
