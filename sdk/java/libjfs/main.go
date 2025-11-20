@@ -417,12 +417,14 @@ func getOrCreate(name, user, groups, superuser, supergroup string, conf javaConf
 		logger.Infof("JuiceFileSystem created for user:%s groups:%s", user, groups)
 	}
 	w := &wrapper{jfs, name, nil, m, user, superuser, supergroup, conf}
-	if _, ok := superuserChangedCb[name]; !ok {
-		jfs.Meta().OnReload(func(format *meta.Format) {
-			kerb.loadConf(name, format.KerbConf, jfs)
-			updateAllCtx(name, user, groups)
-		})
-		superuserChangedCb[name] = struct{}{}
+	if formats[name] != nil && formats[name].KerbConf != "" {
+		if _, ok := superuserChangedCb[name]; !ok {
+			jfs.Meta().OnReload(func(format *meta.Format) {
+				kerb.loadConf(name, format.KerbConf, jfs)
+				updateAllCtx(name, user, groups)
+			})
+			superuserChangedCb[name] = struct{}{}
+		}
 	}
 	activefs[key] = append(ws, w)
 	updateAllCtx(name, user, groups)
@@ -848,6 +850,7 @@ func jfs_update_uid_grouping(cname, uidstr *C.char, grouping *C.char) {
 
 func updateCtx(w *wrapper, groups []string) {
 	if w.isSuperuser(w.user, groups) {
+		fmt.Println("set superuser context")
 		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
 	} else {
 		var gids []uint32
@@ -1618,6 +1621,7 @@ func jfs_listdir(pid int64, h int64, cpath *C.char, offset int64, buf uintptr, b
 		if w == nil {
 			return EINVAL
 		}
+		fmt.Println(w.ctx.Uid(), w.ctx.Gids())
 		var err syscall.Errno
 		ctx = w.withPid(pid)
 		f, err = w.Open(ctx, C.GoString(cpath), 0)

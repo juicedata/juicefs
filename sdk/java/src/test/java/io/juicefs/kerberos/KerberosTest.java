@@ -45,6 +45,7 @@ public class KerberosTest {
   public void testWithoutKrb() throws Exception {
     UserGroupInformation.reset();
     Configuration cfg = new Configuration();
+    cfg.set("juicefs.memory-size", "99"); // to new another jfs
     cfg.addResource(KerberosTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
     try (FileSystem fs = FileSystem.newInstance(cfg)) {
       fail("should not success without kerberos login");
@@ -59,7 +60,7 @@ public class KerberosTest {
     Configuration cfg = new Configuration();
     cfg.set("hadoop.security.authentication", "kerberos");
     cfg.set("juicefs.server-principal", serverPrincipal);
-    cfg.set("juicefs.mountpoint", "/jfs"); // to new another jfs
+    cfg.set("juicefs.memory-size", "100"); // to new another jfs
     UserGroupInformation.setConfiguration(cfg);
     UserGroupInformation.loginUserFromKeytab(clientPrincipal, clientKeytab);
     cfg.addResource(KerberosTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
@@ -75,7 +76,7 @@ public class KerberosTest {
     Configuration cfg = new Configuration();
     cfg.set("hadoop.security.authentication", "kerberos");
     cfg.set("juicefs.server-principal", serverPrincipal);
-    cfg.set("juicefs.mountpoint", "/jfs"); // to new another jfs
+    cfg.set("juicefs.memory-size", "101"); // to new another jfs
     UserGroupInformation.setConfiguration(cfg);
     UserGroupInformation.loginUserFromKeytab(clientPrincipal, clientKeytab);
     cfg.addResource(KerberosTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
@@ -109,7 +110,7 @@ public class KerberosTest {
     foo.doAs(new PrivilegedExceptionAction<Object>() {
       @Override
       public Object run() throws Exception {
-        cfg.set("juicefs.mountpoint", "/jfs1"); // to new another jfs
+        cfg.set("juicefs.memory-size", "102"); // to new another jfs
         FileSystem fs = FileSystem.newInstance(cfg);
         fs.close();
         return null;
@@ -121,7 +122,7 @@ public class KerberosTest {
       @Override
       public Object run() throws Exception {
         try {
-          cfg.set("juicefs.mountpoint", "/jfs2"); // to new another jfs
+          cfg.set("juicefs.memory-size", "103"); // to new another jfs
           FileSystem fs = FileSystem.newInstance(cfg);
           fail("user bar should not proxyed");
         } catch (Exception ignored){
@@ -137,7 +138,7 @@ public class KerberosTest {
     Configuration cfg = new Configuration();
     cfg.set("hadoop.security.authentication", "kerberos");
     cfg.set("juicefs.server-principal", serverPrincipal);
-    cfg.set("juicefs.mountpoint", "/jfs3"); // to new another jfs
+    cfg.set("juicefs.memory-size", "104"); // to new another jfs
     cfg.addResource(KerberosTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
 
     UserGroupInformation.setConfiguration(cfg);
@@ -155,7 +156,7 @@ public class KerberosTest {
     Configuration cfg = new Configuration();
     cfg.set("hadoop.security.authentication", "kerberos");
     cfg.set("juicefs.server-principal", serverPrincipal);
-    cfg.set("juicefs.mountpoint", "/jfs4"); // to new another jfs
+    cfg.set("juicefs.memory-size", "105"); // to new another jfs
     cfg.addResource(KerberosTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
     cfg.set("hadoop.security.auth_to_local", "RULE:[2:$1/$2@$0](jerry/.*@EXAMPLE\\.COM)s/.*/jerry_map/\nDEFAULT");
 
@@ -177,7 +178,7 @@ public class KerberosTest {
     Configuration cfg = new Configuration();
     cfg.set("hadoop.security.authentication", "kerberos");
     cfg.set("juicefs.server-principal", serverPrincipal);
-    cfg.set("juicefs.mountpoint", "/jfs5"); // to new another jfs
+    cfg.set("juicefs.memory-size", "106"); // to new another jfs
     cfg.addResource(KerberosTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
     // map tom to client
     cfg.set("hadoop.security.auth_to_local", "RULE:[2:$1/$2@$0](tom/.*@EXAMPLE\\.COM)s/.*/client/\nDEFAULT");
@@ -203,7 +204,7 @@ public class KerberosTest {
     Configuration cfg2 = new Configuration();
     cfg2.set("hadoop.security.authentication", "kerberos");
     cfg2.set("juicefs.server-principal", serverPrincipal);
-    cfg2.set("juicefs.mountpoint", "/jfs6"); // to new another jfs
+    cfg.set("juicefs.memory-size", "107"); // to new another jfs
     cfg2.addResource(KerberosTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
     // map tom to client
     cfg2.set("hadoop.security.auth_to_local", "RULE:[2:$1/$2@$0](tom/.*@EXAMPLE\\.COM)s/.*/client/\nDEFAULT");

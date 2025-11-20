@@ -24,8 +24,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jcmturner/gokrb5/v8/keytab"
-	"github.com/jcmturner/gokrb5/v8/messages"
 	"github.com/jcmturner/gokrb5/v8/service"
+	"github.com/jcmturner/gokrb5/v8/spnego"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -408,8 +408,9 @@ type kerberos struct {
 }
 
 func (k *kerberos) auth(volname, user, realUser, group, ips, hostname string, reqBytes []byte) syscall.Errno {
-	var req = messages.APReq{}
-	err := req.Unmarshal(reqBytes)
+	krb5Token := spnego.KRB5Token{}
+	err := krb5Token.Unmarshal(reqBytes)
+	req := krb5Token.APReq
 	if err != nil {
 		logger.Errorf("invalid AP_REQ: %s", err)
 		return syscall.EINVAL

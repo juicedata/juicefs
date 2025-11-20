@@ -400,11 +400,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     superuser = getConf(conf, "superuser", "hdfs");
     supergroup = getConf(conf, "supergroup", conf.get("dfs.permissions.superusergroup", "supergroup"));
     isBackGroundTask = conf.getBoolean("juicefs.internal-bg-task", false);
-    boolean asSuperFs = false;
-    if (isSuperGroupFileSystem || isBackGroundTask) {
-      groupStr = supergroup;
-      asSuperFs = true;
-    }
+    boolean asSuperFs = isSuperGroupFileSystem || isBackGroundTask;
 
     synchronized (JuiceFileSystemImpl.class) {
       if (callBack == null) {
