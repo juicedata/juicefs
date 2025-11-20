@@ -1979,19 +1979,19 @@ func (m *kvMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.
 	return readSliceBuf(val), 0
 }
 
-func (m *kvMeta) doList(ctx Context, inode Ino) ([][]*slice, syscall.Errno) {
+func (m *kvMeta) doList(ctx Context, inode Ino) ([]*slice, syscall.Errno) {
 	vals, err := m.scanValues(ctx, m.fmtKey("A", inode, "C"), -1, nil)
 	if err != nil {
 		logger.Warnf("list of inode %d: %s", inode, err)
 		return nil, errno(err)
 	}
-	var slices [][]*slice
+	var slices []*slice
 	for _, v := range vals {
 		ss := readSliceBuf(v)
 		if ss == nil {
 			continue
 		}
-		slices = append(slices, ss)
+		slices = append(slices, ss...)
 	}
 
 	return slices, 0

@@ -2413,14 +2413,14 @@ func (m *redisMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, sysca
 	return readSlices(vals), 0
 }
 
-func (m *redisMeta) doList(ctx Context, inode Ino) ([][]*slice, syscall.Errno) {
+func (m *redisMeta) doList(ctx Context, inode Ino) ([]*slice, syscall.Errno) {
 	var attr Attr
 	err := m.doGetAttr(ctx, inode, &attr)
 	if err != 0 {
 		return nil, err
 	}
 	p := m.rdb.Pipeline()
-	var slices [][]*slice
+	var slices []*slice
 	var indx uint32
 	for uint64(indx)*ChunkSize < attr.Length {
 		for i := 0; uint64(indx)*ChunkSize < attr.Length && i < 1000; i++ {
@@ -2441,7 +2441,7 @@ func (m *redisMeta) doList(ctx Context, inode Ino) ([][]*slice, syscall.Errno) {
 			if ss == nil {
 				continue
 			}
-			slices = append(slices, ss)
+			slices = append(slices, ss...)
 		}
 	}
 

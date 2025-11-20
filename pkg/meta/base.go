@@ -123,7 +123,7 @@ type engine interface {
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doTouchAtime(ctx Context, inode Ino, attr *Attr, ts time.Time) (bool, error)
 	doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno)
-	doList(ctx Context, inode Ino) ([][]*slice, syscall.Errno)
+	doList(ctx Context, inode Ino) ([]*slice, syscall.Errno)
 	doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno
 	doTruncate(ctx Context, inode Ino, flags uint8, length uint64, delta *dirStat, attr *Attr, skipPermCheck bool) syscall.Errno
 	doFallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, delta *dirStat, attr *Attr) syscall.Errno
@@ -2120,17 +2120,16 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 		}
 		var ss []Slice
 		for _, rs := range rawSlices {
-			bs := buildSlice(rs)
-			for _, s := range bs {
-				if s.Id == 0 {
-					continue
-				}
-				ss = append(ss, s)
+			fmt.Println(rs)
+			if rs.id > 0 {
+				ss = append(ss, Slice{Id: rs.id, Size: rs.size})
 			}
 		}
 		lock.Lock()
 		slices[inode] = append(slices[inode], ss...)
-		showProgress(len(slices[inode]))
+		if showProgress != nil {
+			showProgress(len(slices[inode]))
+		}
 		lock.Unlock()
 	}
 	var wg sync.WaitGroup
@@ -2145,6 +2144,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 				if attr.Typ != TypeDirectory {
 					if attr.Typ == TypeFile {
 						listSlices(inode, path)
+						nodeBar.Increment()
 					}
 					continue
 				}

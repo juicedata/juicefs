@@ -2732,20 +2732,20 @@ func (m *dbMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.
 	return readSliceBuf(c.Slices), 0
 }
 
-func (m *dbMeta) doList(ctx Context, inode Ino) ([][]*slice, syscall.Errno) {
+func (m *dbMeta) doList(ctx Context, inode Ino) ([]*slice, syscall.Errno) {
 	var chunks []chunk
 	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		return s.Cols("slices").Find(&chunks, &chunk{Inode: inode})
 	}); err != nil {
 		return nil, errno(err)
 	}
-	var slices [][]*slice
+	var slices []*slice
 	for _, c := range chunks {
 		ss := readSliceBuf(c.Slices)
 		if ss == nil {
 			continue
 		}
-		slices = append(slices, ss)
+		slices = append(slices, ss...)
 	}
 	return slices, 0
 }
