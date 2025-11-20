@@ -2929,70 +2929,26 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		return eno
 	}
 
-	// Process entries in batches: directories first, then files
 	offset := 0
-	var dirEntries []*Entry
-	var fileEntries []*Entry
 LOOP:
 	for {
-		// Fetch next batch
 		batchEntries, batchEno := handler.List(ctx, offset)
-		if batchEno != 0 {
-			if batchEno == syscall.ENOENT {
-				break // end of directory
-			}
-			eno = batchEno
-			break LOOP
+		if eno = batchEno; batchEno != 0 {
+			break
 		}
 		if len(batchEntries) == 0 {
-			break // no more entries
-		}
-
-		actualCount := 0
-		for _, e := range batchEntries {
-			if len(e.Name) > 0 && (e.Name[0] == '.' && (len(e.Name) == 1 || (len(e.Name) == 2 && e.Name[1] == '.'))) {
-				continue
-			}
-			actualCount++
-			if e.Attr.Typ == TypeDirectory {
-				dirEntries = append(dirEntries, e)
-			} else {
-				fileEntries = append(fileEntries, e)
-			}
+			break
 		}
 
 		// Process directories first
-		for _, entry := range dirEntries {
-			select {
-			case e := <-errCh:
-				eno = e
-				ctx.Cancel()
-				break LOOP
-			case concurrent <- struct{}{}:
-				wg.Add(1)
-				go func(e *Entry) {
-					defer wg.Done()
-					eno := cloneChild(e)
-					if eno != 0 {
-						errCh <- eno
-					}
-					<-concurrent
-				}(entry)
-			default:
-				if e := cloneChild(entry); e != 0 {
-					eno = e
-					break LOOP
-				}
-			}
-			if ctx.Canceled() {
-				eno = syscall.EINTR
-				break LOOP
-			}
-		}
-		dirEntries = dirEntries[:0] // clear for next batch
+		sort.Slice(batchEntries, func(i, j int) bool {
+			return batchEntries[i].Attr.Typ == TypeDirectory
+		})
 
-		// Process files
-		for _, entry := range fileEntries {
+		for _, entry := range batchEntries {
+			if string(entry.Name) == "." || string(entry.Name) == ".." {
+				continue
+			}
 			select {
 			case e := <-errCh:
 				eno = e
@@ -3019,12 +2975,8 @@ LOOP:
 				break LOOP
 			}
 		}
-		fileEntries = fileEntries[:0] // clear for next batch
 
 		offset += len(batchEntries)
-		if actualCount == 0 {
-			break
-		}
 		if ctx.Canceled() {
 			eno = syscall.EINTR
 			break
