@@ -90,7 +90,7 @@ jobs:
           # kerberos test
           sudo cp src/test/resources/kerberos.cfg /tmp/kerberos.cfg
           sudo sh -c "echo "dev.keytab=`base64 /tmp/server.keytab -w 0`" >> /tmp/kerberos.cfg"
-          sudo ./juicefs config localhost --kerberos-config-file sdk/java/src/test/resources/kerberos.cfg
+          sudo ../../juicefs config localhost --kerberos-config-file sdk/java/src/test/resources/kerberos.cfg
           sudo mvn test -B -Dtest=io.juicefs.kerberos.KerberosTest
           
           sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
