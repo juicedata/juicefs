@@ -2118,15 +2118,14 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 			logger.Errorf("dolist %s: %s", path, st)
 			return
 		}
-		var ss []Slice
+		ss := make([]Slice, 0, len(rawSlices))
 		for _, rs := range rawSlices {
-			fmt.Println(rs)
 			if rs.id > 0 {
 				ss = append(ss, Slice{Id: rs.id, Size: rs.size})
 			}
 		}
 		lock.Lock()
-		slices[inode] = append(slices[inode], ss...)
+		slices[inode] = ss
 		if showProgress != nil {
 			showProgress(len(slices[inode]))
 		}
