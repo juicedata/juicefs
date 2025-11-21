@@ -171,9 +171,11 @@ func cleanupBackups(blob object.ObjectStorage, now time.Time) {
 // 1. keep all backups within 2 days
 // 2. keep one backup each day within 2 weeks
 // 3. keep one backup each week within 2 months
-// 4. keep one backup each month for those before 2 months
+// 4. keep one backup each month within 2 years
+// 5. delete backups older than 2 years
 func rotate(objs []string, now time.Time) []string {
 	var days = 2
+	cutoff := now.UTC().AddDate(-2, 0, 0)
 	edge := now.UTC().AddDate(0, 0, -days)
 	next := func() {
 		if days < 14 {
@@ -199,6 +201,11 @@ func rotate(objs []string, now time.Time) []string {
 		if err != nil {
 			logger.Warnf("bad object for metadata backup %s: %s", objs[i], err)
 			continue
+		}
+
+		if ts.Before(cutoff) {
+			toDel = append(toDel, objs[:i+1]...)
+			break
 		}
 
 		if ts.Before(edge) {
