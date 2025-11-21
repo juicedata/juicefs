@@ -2504,7 +2504,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, de
 	}
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
-	_ = m.client.scan(m.fmtKey("A"), func(key, value []byte) bool {
+	if err := m.client.scan(m.fmtKey("A"), func(key, value []byte) bool {
 		if len(key) != klen || key[1+8] != 'C' {
 			return true
 		}
@@ -2523,7 +2523,9 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, de
 			}
 		}
 		return true
-	})
+	}); err != nil {
+		return errno(err)
+	}
 
 	if scanPending {
 		// slice refs: Kccccccccnnnn
