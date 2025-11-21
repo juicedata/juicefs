@@ -3199,6 +3199,10 @@ func checkEntry(t *testing.T, m Meta, srcEntry, dstEntry *Entry, dstParentIno In
 	dstAttr.Nlink = 0
 	srcAttr.Parent = 0
 	dstAttr.Parent = 0
+	srcAttr.Atime = 0
+	srcAttr.Atimensec = 0
+	dstAttr.Atime = 0
+	dstAttr.Atimensec = 0
 	if *srcAttr != *dstAttr {
 		t.Fatalf("unmatched attr: %#v, %#v", *srcAttr, *dstAttr)
 	}

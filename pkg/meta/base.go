@@ -2904,22 +2904,15 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	if eno = m.Access(ctx, srcIno, MODE_MASK_R|MODE_MASK_X, &attr); eno != 0 {
 		return eno
 	}
-	var entries []*Entry
-	eno = m.en.doReaddir(ctx, srcIno, 0, &entries, -1)
+	// Use DirHandler for batch processing to avoid loading all entries at once
+	handler, eno := m.NewDirHandler(ctx, srcIno, true, nil)
 	if eno == syscall.ENOENT {
 		eno = 0 // empty dir
 	}
 	if eno != 0 {
 		return eno
 	}
-	// try directories first to increase parallel
-	var dirs int
-	for i, e := range entries {
-		if e.Attr.Typ == TypeDirectory {
-			entries[dirs], entries[i] = entries[i], entries[dirs]
-			dirs++
-		}
-	}
+	defer handler.Close()
 
 	var wg sync.WaitGroup
 	var skipped uint32
@@ -2935,30 +2928,55 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		}
 		return eno
 	}
+
+	offset := 0
 LOOP:
-	for i, entry := range entries {
-		select {
-		case e := <-errCh:
-			eno = e
-			ctx.Cancel()
-			break LOOP
-		case concurrent <- struct{}{}:
-			wg.Add(1)
-			go func(e *Entry) {
-				defer wg.Done()
-				eno := cloneChild(e)
-				if eno != 0 {
-					errCh <- eno
-				}
-				<-concurrent
-			}(entry)
-		default:
-			if e := cloneChild(entry); e != 0 {
+	for {
+		batchEntries, batchEno := handler.List(ctx, offset)
+		if eno = batchEno; batchEno != 0 {
+			break
+		}
+		if len(batchEntries) == 0 {
+			break
+		}
+
+		// Process directories first
+		sort.Slice(batchEntries, func(i, j int) bool {
+			return batchEntries[i].Attr.Typ == TypeDirectory
+		})
+
+		for _, entry := range batchEntries {
+			if string(entry.Name) == "." || string(entry.Name) == ".." {
+				continue
+			}
+			select {
+			case e := <-errCh:
 				eno = e
+				ctx.Cancel()
+				break LOOP
+			case concurrent <- struct{}{}:
+				wg.Add(1)
+				go func(e *Entry) {
+					defer wg.Done()
+					eno := cloneChild(e)
+					if eno != 0 {
+						errCh <- eno
+					}
+					<-concurrent
+				}(entry)
+			default:
+				if e := cloneChild(entry); e != 0 {
+					eno = e
+					break LOOP
+				}
+			}
+			if ctx.Canceled() {
+				eno = syscall.EINTR
 				break LOOP
 			}
 		}
-		entries[i] = nil // release memory
+
+		offset += len(batchEntries)
 		if ctx.Canceled() {
 			eno = syscall.EINTR
 			break
