@@ -255,6 +255,12 @@ type baseMeta struct {
 	fsStatsLock sync.Mutex
 	*fsStat
 
+	trashMetricsLock      sync.Mutex
+	trashSpace            int64
+	trashInodes           uint64
+	delayedSlicesSpace    uint64
+	delayedSlicesCount    uint64
+
 	parentMu    sync.Mutex        // protect dirParents
 	quotaMu     sync.RWMutex      // protect dirQuotas
 	dirParents  map[Ino]Ino       // directory inode -> parent inode
@@ -385,6 +391,7 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(m.opCount)
 	reg.MustRegister(m.opDuration)
 
+	go m.scanTrashAndDelayedSlicesMetrics()
 	go func() {
 		for {
 			if m.sessCtx != nil && m.sessCtx.Canceled() {
@@ -398,8 +405,13 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 				m.totalSpaceG.Set(float64(totalSpace))
 				m.totalInodesG.Set(float64(iused + iavail))
 			}
-			m.updateTrashMetrics(Background())
-			m.updateDelayedSlicesMetrics(Background())
+			m.trashMetricsLock.Lock()
+			m.trashSpaceG.Set(float64(m.trashSpace))
+			m.trashInodesG.Set(float64(m.trashInodes))
+			m.delayedSlicesSpaceG.Set(float64(m.delayedSlicesSpace))
+			m.delayedSlicesCountG.Set(float64(m.delayedSlicesCount))
+			m.trashMetricsLock.Unlock()
+
 			utils.SleepWithJitter(time.Second * 10)
 		}
 	}()
@@ -412,35 +424,46 @@ func (m *baseMeta) timeit(method string, start time.Time) {
 	m.opDuration.WithLabelValues(method).Add(used)
 }
 
-func (m *baseMeta) updateTrashMetrics(ctx Context) {
-	var trashSpace int64
-	var trashInodes uint64
-	err := m.scanTrashEntry(ctx, func(_ Ino, length uint64) {
-		trashSpace += align4K(length)
-		trashInodes++
-	})
-	if err == nil {
-		if trashSpace < 0 {
-			trashSpace = 0
+func (m *baseMeta) scanTrashAndDelayedSlicesMetrics() {
+	for {
+		if m.sessCtx != nil && m.sessCtx.Canceled() {
+			return
 		}
-		m.trashSpaceG.Set(float64(trashSpace))
-		m.trashInodesG.Set(float64(trashInodes))
-	}
-}
+		ctx := Background()
 
-func (m *baseMeta) updateDelayedSlicesMetrics(ctx Context) {
-	var delayedSlicesSpace uint64
-	var delayedSlicesCount uint64
-	err := m.en.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
-		for _, s := range ss {
-			delayedSlicesSpace += uint64(s.Size)
-			delayedSlicesCount++
+		var trashSpace int64
+		var trashInodes uint64
+		err := m.scanTrashEntry(ctx, func(_ Ino, length uint64) {
+			trashSpace += align4K(length)
+			trashInodes++
+		})
+		if err == nil {
+			if trashSpace < 0 {
+				trashSpace = 0
+			}
+			m.trashMetricsLock.Lock()
+			m.trashSpace = trashSpace
+			m.trashInodes = trashInodes
+			m.trashMetricsLock.Unlock()
 		}
-		return false, nil
-	})
-	if err == nil {
-		m.delayedSlicesSpaceG.Set(float64(delayedSlicesSpace))
-		m.delayedSlicesCountG.Set(float64(delayedSlicesCount))
+
+		var delayedSlicesSpace uint64
+		var delayedSlicesCount uint64
+		err = m.en.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
+			for _, s := range ss {
+				delayedSlicesSpace += uint64(s.Size)
+				delayedSlicesCount++
+			}
+			return false, nil
+		})
+		if err == nil {
+			m.trashMetricsLock.Lock()
+			m.delayedSlicesSpace = delayedSlicesSpace
+			m.delayedSlicesCount = delayedSlicesCount
+			m.trashMetricsLock.Unlock()
+		}
+
+		utils.SleepWithJitter(time.Second * 10)
 	}
 }
 
