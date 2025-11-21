@@ -268,15 +268,19 @@ type baseMeta struct {
 	prefetchMu       sync.Mutex
 	prefetchedInodes freeID
 
-	usedSpaceG   prometheus.Gauge
-	usedInodesG  prometheus.Gauge
-	totalSpaceG  prometheus.Gauge
-	totalInodesG prometheus.Gauge
-	txDist       prometheus.Histogram
-	txRestart    *prometheus.CounterVec
-	opDist       prometheus.Histogram
-	opCount      *prometheus.CounterVec
-	opDuration   *prometheus.CounterVec
+	usedSpaceG           prometheus.Gauge
+	usedInodesG          prometheus.Gauge
+	totalSpaceG          prometheus.Gauge
+	totalInodesG         prometheus.Gauge
+	trashSpaceG          prometheus.Gauge
+	trashInodesG         prometheus.Gauge
+	delayedSlicesSpaceG  prometheus.Gauge
+	delayedSlicesCountG  prometheus.Gauge
+	txDist               prometheus.Histogram
+	txRestart            *prometheus.CounterVec
+	opDist               prometheus.Histogram
+	opCount              *prometheus.CounterVec
+	opDuration           *prometheus.CounterVec
 
 	en engine
 }
@@ -322,6 +326,22 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			Name: "total_inodes",
 			Help: "Total number of inodes.",
 		}),
+		trashSpaceG: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "trash_space",
+			Help: "Total space used by trash in bytes.",
+		}),
+		trashInodesG: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "trash_inodes",
+			Help: "Total number of inodes in trash.",
+		}),
+		delayedSlicesSpaceG: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "delayed_slices_space",
+			Help: "Total space used by delayed slices in bytes.",
+		}),
+		delayedSlicesCountG: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "delayed_slices_count",
+			Help: "Total number of delayed slices.",
+		}),
 		txDist: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Name:    "transaction_durations_histogram_seconds",
 			Help:    "Transactions latency distributions.",
@@ -355,6 +375,10 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(m.usedInodesG)
 	reg.MustRegister(m.totalSpaceG)
 	reg.MustRegister(m.totalInodesG)
+	reg.MustRegister(m.trashSpaceG)
+	reg.MustRegister(m.trashInodesG)
+	reg.MustRegister(m.delayedSlicesSpaceG)
+	reg.MustRegister(m.delayedSlicesCountG)
 	reg.MustRegister(m.txDist)
 	reg.MustRegister(m.txRestart)
 	reg.MustRegister(m.opDist)
@@ -374,6 +398,8 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 				m.totalSpaceG.Set(float64(totalSpace))
 				m.totalInodesG.Set(float64(iused + iavail))
 			}
+			m.updateTrashMetrics(Background())
+			m.updateDelayedSlicesMetrics(Background())
 			utils.SleepWithJitter(time.Second * 10)
 		}
 	}()
@@ -384,6 +410,38 @@ func (m *baseMeta) timeit(method string, start time.Time) {
 	m.opDist.Observe(used)
 	m.opCount.WithLabelValues(method).Inc()
 	m.opDuration.WithLabelValues(method).Add(used)
+}
+
+func (m *baseMeta) updateTrashMetrics(ctx Context) {
+	var trashSpace int64
+	var trashInodes uint64
+	err := m.scanTrashEntry(ctx, func(_ Ino, length uint64) {
+		trashSpace += align4K(length)
+		trashInodes++
+	})
+	if err == nil {
+		if trashSpace < 0 {
+			trashSpace = 0
+		}
+		m.trashSpaceG.Set(float64(trashSpace))
+		m.trashInodesG.Set(float64(trashInodes))
+	}
+}
+
+func (m *baseMeta) updateDelayedSlicesMetrics(ctx Context) {
+	var delayedSlicesSpace uint64
+	var delayedSlicesCount uint64
+	err := m.en.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
+		for _, s := range ss {
+			delayedSlicesSpace += uint64(s.Size)
+			delayedSlicesCount++
+		}
+		return false, nil
+	})
+	if err == nil {
+		m.delayedSlicesSpaceG.Set(float64(delayedSlicesSpace))
+		m.delayedSlicesCountG.Set(float64(delayedSlicesCount))
+	}
 }
 
 func (m *baseMeta) getBase() *baseMeta {
