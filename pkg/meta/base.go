@@ -123,6 +123,7 @@ type engine interface {
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doTouchAtime(ctx Context, inode Ino, attr *Attr, ts time.Time) (bool, error)
 	doRead(ctx Context, inode Ino, indx uint32) ([]*slice, syscall.Errno)
+	doList(ctx Context, inode Ino) ([]*slice, syscall.Errno)
 	doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno
 	doTruncate(ctx Context, inode Ino, flags uint8, length uint64, delta *dirStat, attr *Attr, skipPermCheck bool) syscall.Errno
 	doFallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, delta *dirStat, attr *Attr) syscall.Errno
@@ -2032,7 +2033,7 @@ func (m *baseMeta) walk(ctx Context, inode Ino, p string, attr *Attr, walkFn met
 	return 0
 }
 
-func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool, statAll bool) error {
+func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool, statAll bool, showProgress func(n int), slices map[Ino][]Slice) error {
 	var attr Attr
 	var inode = RootInode
 	var parent = RootInode
@@ -2103,7 +2104,33 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 	if statAll && !format.DirStats {
 		logger.Warn("dir stats is disabled, flag '--sync-dir-stat' will be ignored")
 	}
-
+	var lock sync.Mutex
+	listSlices := func(inode Ino, path string) {
+		lock.Lock()
+		if _, ok := slices[inode]; ok {
+			lock.Unlock()
+			return
+		}
+		slices[inode] = []Slice{}
+		lock.Unlock()
+		rawSlices, st := m.en.doList(ctx, inode)
+		if st != 0 {
+			logger.Errorf("dolist %s: %s", path, st)
+			return
+		}
+		ss := make([]Slice, 0, len(rawSlices))
+		for _, rs := range rawSlices {
+			if rs.id > 0 {
+				ss = append(ss, Slice{Id: rs.id, Size: rs.size})
+			}
+		}
+		lock.Lock()
+		slices[inode] = ss
+		if showProgress != nil {
+			showProgress(len(slices[inode]))
+		}
+		lock.Unlock()
+	}
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {
 		wg.Add(1)
@@ -2114,7 +2141,10 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 				path := e.path
 				attr := e.attr
 				if attr.Typ != TypeDirectory {
-					// TODO
+					if attr.Typ == TypeFile {
+						listSlices(inode, path)
+						nodeBar.Increment()
+					}
 					continue
 				}
 
