@@ -120,7 +120,7 @@ juicefs config $METAURL --inodes 100000
 ```
 
 :::tip
-The client reads the latest storage quota settings from the metadata engine every 60 seconds to update the local settings, and this frequency may cause other mount points to take up to 60 seconds to update the quota setting.
+The client reads the latest storage quota settings from the metadata engine periodically to update the local settings. The refresh interval is controlled by the `--heartbeat` option (default: 12 seconds). Other mount points may take up to the heartbeat interval to update the quota setting.
 :::
 
 ## Directory quota {#directory-quota}
