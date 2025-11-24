@@ -2589,22 +2589,22 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 func recordDeletionStats(
 	n *node,
 	entrySpace int64,
-	spaceDelta int64,
+	ugSpace int64,
 	totalLength *int64,
 	totalSpace *int64,
 	totalInodes *int64,
 	userGroupQuotas *[]UserGroupQuotaDelta,
-	trash Ino,
+	isTrash bool,
 ) {
-	*totalLength += int64(n.Length)
-	*totalSpace += entrySpace
-	*totalInodes++
+	*totalLength -= int64(n.Length)
+	*totalSpace -= entrySpace
+	*totalInodes--
 
-	if userGroupQuotas != nil && trash == 0 && n.Uid > 0 {
+	if userGroupQuotas != nil && !isTrash {
 		*userGroupQuotas = append(*userGroupQuotas, UserGroupQuotaDelta{
 			Uid:    n.Uid,
 			Gid:    n.Gid,
-			Space:  spaceDelta,
+			Space:  -ugSpace,
 			Inodes: -1,
 		})
 	}
@@ -2791,12 +2791,14 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 					}
 					trashInserted[info.e.Inode] = true
 				}
-				entrySpace := align4K(info.n.Length)
-				recordDeletionStats(&info.n, entrySpace, 0, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, trash)
+				recordDeletionStats(&info.n, align4K(info.n.Length), 0, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, parent.IsTrash())
 			} else {
+				var entrySpace int64
+				needRecordStats := false
 				switch info.e.Type {
 				case TypeFile:
-					entrySpace := align4K(info.n.Length)
+					entrySpace = align4K(info.n.Length)
+					needRecordStats = true
 					if info.opened {
 						if err := mustInsert(s, &sustained{Sid: m.sid, Inode: info.e.Inode}); err != nil {
 							return err
@@ -2804,7 +2806,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 						if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(&info.n, &node{Inode: info.n.Inode}); err != nil {
 							return err
 						}
-						recordDeletionStats(&info.n, entrySpace, 0, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, trash)
 					} else {
 						if err := mustInsert(s, &delfile{info.e.Inode, info.n.Length, nowUnix}); err != nil {
 							return err
@@ -2812,7 +2813,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 						if _, err := s.Delete(&node{Inode: info.e.Inode}); err != nil {
 							return err
 						}
-						recordDeletionStats(&info.n, entrySpace, -entrySpace, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, trash)
 					}
 				case TypeSymlink:
 					if _, err := s.Delete(&symlink{Inode: info.e.Inode}); err != nil {
@@ -2824,9 +2824,12 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 						return err
 					}
 					if info.e.Type != TypeFile {
-						entrySpace := align4K(0)
-						recordDeletionStats(&info.n, entrySpace, -entrySpace, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, trash)
+						entrySpace = align4K(0)
+						needRecordStats = true
 					}
+				}
+				if needRecordStats {
+					recordDeletionStats(&info.n, entrySpace, entrySpace, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, parent.IsTrash() )
 				}
 				if _, err := s.Delete(&xattr{Inode: info.e.Inode}); err != nil {
 					return err
@@ -2854,7 +2857,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 				m.fileDeleted(info.opened, isTrash, info.e.Inode, info.n.Length)
 			}
 		}
-		m.updateStats(-totalSpace, -totalInodes)
+		m.updateStats(totalSpace, totalInodes)
 	}
 
 	*length = totalLength

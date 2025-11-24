@@ -1466,14 +1466,14 @@ func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []Entry, count *
 	var length int64
 	var space int64
 	var inodes int64
-	var userGroupQuotas []UserGroupQuotaDelta
+	userGroupQuotas := make([]UserGroupQuotaDelta, 0, len(entries))
 	st := m.en.doBatchUnlink(ctx, parent, entries, &length, &space, &inodes, &userGroupQuotas, skipCheckTrash)
 	if st == 0 {
-		m.updateDirStat(ctx, parent, -length, -space, -inodes)
+		m.updateDirStat(ctx, parent, length, space, inodes)
 		if !parent.IsTrash() {
-			m.updateDirQuota(ctx, parent, -space, -inodes)
+			m.updateDirQuota(ctx, parent, space, inodes)
 			for _, quota := range userGroupQuotas {
-				m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, -quota.Space, -quota.Inodes)
+				m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, quota.Space, quota.Inodes)
 			}
 		}
 		if count != nil && len(entries) > 0 {
