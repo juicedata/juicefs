@@ -36,6 +36,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/madmin"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
@@ -1161,7 +1162,28 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	if err = n.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return
 	}
-
+	g, ectx := errgroup.WithContext(ctx)
+	g.SetLimit(10)
+	for i := 0; i < len(parts); i++ {
+		i := i
+		g.Go(func() error {
+			select {
+			case <-ectx.Done():
+				return ectx.Err()
+			default:
+			}
+			ppath := n.ppath(bucket, uploadID, strconv.Itoa(parts[i].PartNumber))
+			etag, _ := n.fs.GetXattr(mctx, ppath, s3Etag)
+			if string(etag) != "" && string(etag) != parts[i].ETag {
+				logger.Warnf("path: %s,expect etag: %s,but got: %s", ppath, etag, parts[i].ETag)
+				return minio.ErrInvalidEtag
+			}
+			return nil
+		})
+	}
+	if err = g.Wait(); err != nil {
+		return objInfo, err
+	}
 	tmp := n.ppath(bucket, uploadID, "complete")
 	_ = n.fs.Delete(mctx, tmp)
 	f, eno := n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
