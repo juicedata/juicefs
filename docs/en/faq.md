@@ -148,16 +148,18 @@ In addition to mounting, the following methods are also supported:
 - Docker Volume Plugin: A convenient way to use JuiceFS in Docker, please refer to ["Use JuiceFS on Docker"](deployment/juicefs_on_docker.md).
 - WebDAV Gateway: Access JuiceFS via WebDAV protocol
 
-### Why does a user on host X have permission to access a file in JuiceFS, but does not on host Y?
+### Why does the same username have different permissions on different hosts when accessing JuiceFS files?
 
-Most likely the user has a different numeric UID or GID on the two hosts. Use the `id` command on each host to show each symbolic and numeric UID and GID:
+Although a user has the same username on both hosts (for example, `alice` on host X and host Y), their user ID (UID) or group ID (GID) differs between them. File permissions in JuiceFS are based on these numeric IDs, not the username.
+
+To confirm this, run the `id` command on each host and compare the output:
 
 ```bash
 $ id alice
 uid=1201(alice) gid=500(staff) groups=500(staff)
 ```
 
-Read ["Sync Accounts between Multiple Hosts"](administration/sync_accounts_between_multiple_hosts.md) to resolve this problem.
+See [Sync Accounts between Multiple Hosts](administration/sync_accounts_between_multiple_hosts.md) to resolve this issue.
 
 ### Does JuiceFS S3 Gateway support advanced features such as multi-user management?
 
