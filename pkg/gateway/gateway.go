@@ -70,7 +70,7 @@ type Config struct {
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
-	jfsObj := &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), gConf: gConf, nsMutex: minio.NewNSLock(false)}
+	jfsObj := &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Second * 10), gConf: gConf, nsMutex: minio.NewNSLock(false)}
 	go jfsObj.cleanup()
 	return jfsObj, nil
 }
@@ -339,21 +339,10 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 					continue
 				}
 			}
-			entry := &minio.Entry{Name: fi.Name(),
-				Info: &minio.ObjectInfo{
-					Bucket:   bucket,
-					Name:     fi.Name(),
-					ModTime:  fi.ModTime(),
-					Size:     fi.Size(),
-					IsDir:    fi.IsDir(),
-					AccTime:  fi.ModTime(),
-					IsLatest: true,
-				},
-			}
+			entry := &minio.Entry{Name: fi.Name(), Info: fi}
 
 			if fi.IsDir() {
 				entry.Name += sep
-				entry.Info.Size = 0
 			}
 			entries = append(entries, entry)
 		}
@@ -383,9 +372,10 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	if err := n.checkBucket(ctx, bucket); err != nil {
 		return loi, err
 	}
-	getObjectInfo := func(ctx context.Context, bucket, object string, info *minio.ObjectInfo) (obj minio.ObjectInfo, err error) {
+	getObjectInfo := func(ctx context.Context, bucket, object string, fi_ any) (obj minio.ObjectInfo, err error) {
 		var eno syscall.Errno
-		if info == nil {
+		var info *minio.ObjectInfo
+		if fi_ == nil {
 			var fi *fs.FileStat
 			fi, eno = n.fs.Stat(mctx, n.path(bucket, object))
 			if eno == 0 {
@@ -415,6 +405,20 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 					IsLatest: true,
 				}
 				eno = 0
+			}
+		} else {
+			fi := fi_.(*fs.FileStat)
+			info = &minio.ObjectInfo{
+				Bucket:   bucket,
+				Name:     fi.Name(),
+				ModTime:  fi.ModTime(),
+				Size:     fi.Size(),
+				IsDir:    fi.IsDir(),
+				AccTime:  fi.ModTime(),
+				IsLatest: true,
+			}
+			if fi.IsDir() {
+				info.Size = 0
 			}
 		}
 
@@ -1457,7 +1461,23 @@ func (n *jfsObjects) ListObjectVersions(ctx context.Context, bucket, prefix, mar
 	return loi, err
 }
 
-func (n *jfsObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object string, info *minio.ObjectInfo) (oi minio.ObjectInfo, e error) {
+func (n *jfsObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object string, info any) (oi minio.ObjectInfo, e error) {
+	if info != nil {
+		fi := info.(*fs.FileStat)
+		oi = minio.ObjectInfo{
+			Bucket:   bucket,
+			Name:     fi.Name(),
+			ModTime:  fi.ModTime(),
+			Size:     fi.Size(),
+			IsDir:    fi.IsDir(),
+			AccTime:  fi.ModTime(),
+			IsLatest: true,
+		}
+		if fi.IsDir() {
+			oi.Size = 0
+		}
+		return
+	}
 	return n.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
 }
 
