@@ -159,7 +159,7 @@ uid=1201(alice) gid=500(staff) groups=500(staff)
 
 Read ["Sync Accounts between Multiple Hosts"](administration/sync_accounts_between_multiple_hosts.md) to resolve this problem.
 
-### Does the JuiceFS Gateway support advanced features such as multi-user management?
+### Does JuiceFS S3 Gateway support advanced features such as multi-user management?
 
 The built-in `gateway` subcommand does not support functions including as multi-user management, and provides only basic S3 gateway functions. If you need to use these advanced features, please refer to the [documentation](guide/gateway.md).
 
