@@ -122,8 +122,7 @@ Read [JuiceFS Internals](development/internals.md) and [Data Processing Flow](in
 
 ### How to copy a large number of small files into JuiceFS quickly?
 
-Mount JuiceFS with the [`--writeback` option](reference/command_reference.mdx#mount-data-cache-options), which will stage the small files on local storage, then flush them to backing
-storage in background. See ["Write Cache in Client"](guide/cache.md#client-write-cache) for more information.
+Use the [`--writeback` option](reference/command_reference.mdx#mount-data-cache-options) to write data to the local cache and then asynchronously upload it to the object storage backend. This is significantly faster than writing directly to object storage. See ["Write Cache in Client"](guide/cache.md#client-write-cache) for more information.
 
 ### Does JuiceFS support distributed cache?
 
