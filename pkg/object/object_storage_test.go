@@ -217,7 +217,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			}
 			now := time.Now()
 			if objs[1].Mtime().Before(now.Add(-30*time.Second)) || objs[1].Mtime().After(now.Add(time.Second*30)) {
-				t.Fatalf("Mtime of key should be within 10 seconds, but got %s", objs[1].Mtime().Sub(now))
+				t.Fatalf("Mtime of key should be within 30 seconds, but got %s", objs[1].Mtime().Sub(now))
 			}
 		} else {
 			t.Fatalf("list failed: %s", err2.Error())
@@ -243,7 +243,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			}
 			now := time.Now()
 			if objs[0].Mtime().Before(now.Add(-30*time.Second)) || objs[0].Mtime().After(now.Add(time.Second*30)) {
-				t.Fatalf("Mtime of key should be within 10 seconds, but got %s", objs[0].Mtime().Sub(now))
+				t.Fatalf("Mtime of key should be within 30 seconds, but got %s", objs[0].Mtime().Sub(now))
 			}
 		} else {
 			t.Fatalf("list failed: %s", err2.Error())
