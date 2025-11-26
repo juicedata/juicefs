@@ -145,9 +145,7 @@ func onlyTime(set int) bool {
 	return (set &^ (meta.SetAttrAtime | meta.SetAttrAtimeNow | meta.SetAttrMtime | meta.SetAttrMtimeNow | meta.SetAttrCtime | meta.SetAttrCtimeNow)) == 0
 }
 
-// tryAsyncSetAttr attempts to submit an async SetAttr task (non-blocking with capacity control)
 func (v *VFS) tryAsyncSetAttr(ctx Context, ino Ino, set int, atime, mtime int64, atimensec, mtimensec uint32) bool {
-	// Build task (only time-related fields)
 	task := asyncSetAttrTask{
 		ctx:       ctx,
 		ino:       ino,
@@ -166,7 +164,6 @@ func (v *VFS) tryAsyncSetAttr(ctx Context, ino Ino, set int, atime, mtime int64,
 	}
 }
 
-// getAttrCache retrieves cached attributes (lock-free read)
 func (v *VFS) getAttrCache(ino Ino) (*attrCacheEntry, bool) {
 	if cached, ok := v.attrCache.Load(ino); ok {
 		entry := cached.(*attrCacheEntry)
@@ -174,7 +171,6 @@ func (v *VFS) getAttrCache(ino Ino) (*attrCacheEntry, bool) {
 	}
 	return nil, false
 }
-
 
 func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid uint32, atime, mtime int64, atimensec, mtimensec uint32, size uint64) (entry *meta.Entry, err syscall.Errno) {
 	str := setattrStr(set, mode, uid, gid, atime, mtime, size)
@@ -191,13 +187,9 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid u
 		return
 	}
 	var attr = &Attr{}
-	// Check if async processing is possible (only time-related, writeback enabled)
 	if onlyTime(set) && v.Conf.FuseOpts != nil && v.Conf.FuseOpts.EnableWriteback {
-		// Try to get cached attributes
 		if cachedEntry, ok := v.getAttrCache(ino); ok {
-			// Check if cache is still valid (5s TTL)
 			if time.Since(cachedEntry.timestamp) <= v.attrCacheTTL {
-				// Prepare attr for permission check
 				checkAttr := Attr{}
 				if set&meta.SetAttrAtime != 0 {
 					checkAttr.Atime = atime
@@ -215,7 +207,6 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid u
 					if set&meta.SetAttrMtimeNow != 0 {
 						v.writer.UpdateMtime(ino, time.Now())
 					}
-					// Async submission successful, return cached attributes immediately
 					v.UpdateLength(ino, &cachedEntry.attr)
 					entry = &meta.Entry{Inode: ino, Attr: &cachedEntry.attr}
 					if onlyTime(set) && v.Conf.FuseOpts != nil && v.Conf.FuseOpts.EnableWriteback {

@@ -55,18 +55,18 @@ type Port struct {
 
 // attrCacheEntry stores cached attributes for an inode
 type attrCacheEntry struct {
-	attr      Attr     // complete attributes
+	attr      Attr      // complete attributes
 	timestamp time.Time // cache timestamp for expiration
 }
 
 type asyncSetAttrTask struct {
-	ctx        Context
-	ino        Ino
-	set        uint16
-	atime      int64
-	mtime      int64
-	atimensec  uint32
-	mtimensec  uint32
+	ctx       Context
+	ino       Ino
+	set       uint16
+	atime     int64
+	mtime     int64
+	atimensec uint32
+	mtimensec uint32
 }
 
 // FuseOptions contains options for fuse mount, keep the same structure with `fuse.MountOptions`
@@ -1255,10 +1255,10 @@ type VFS struct {
 	modM       sync.Mutex
 	modifiedAt map[Ino]time.Time
 
-	registry *prometheus.Registry
-	attrCache            sync.Map        // inode -> *attrCacheEntry
-	asyncSetAttrLimiter  chan struct{}   // 控制最大并发的信号量
-	attrCacheTTL         time.Duration 
+	registry            *prometheus.Registry
+	attrCache           sync.Map
+	asyncSetAttrLimiter chan struct{}
+	attrCacheTTL        time.Duration
 }
 
 func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer prometheus.Registerer, registry *prometheus.Registry) *VFS {
@@ -1266,19 +1266,19 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	writer := NewDataWriter(conf, m, store, reader)
 
 	v := &VFS{
-		Conf:               conf,
-		Meta:               m,
-		Store:              store,
-		reader:             reader,
-		writer:             writer,
-		cacheFiller:        NewCacheFiller(conf, m, store),
-		handles:            make(map[Ino][]*handle),
-		handleIno:          make(map[uint64]Ino),
-		modifiedAt:         make(map[meta.Ino]time.Time),
+		Conf:                conf,
+		Meta:                m,
+		Store:               store,
+		reader:              reader,
+		writer:              writer,
+		cacheFiller:         NewCacheFiller(conf, m, store),
+		handles:             make(map[Ino][]*handle),
+		handleIno:           make(map[uint64]Ino),
+		modifiedAt:          make(map[meta.Ino]time.Time),
 		nextfh:              1,
 		registry:            registry,
-		asyncSetAttrLimiter: make(chan struct{}, 100), // 最多 100 个并发
-		attrCacheTTL:        10 * time.Second,   
+		asyncSetAttrLimiter: make(chan struct{}, 100), // Up to 100 concurrents
+		attrCacheTTL:        10 * time.Second,         // 10s TTL
 	}
 
 	n := getInternalNode(ConfigInode)
@@ -1305,6 +1305,7 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	_ = os.Rename(statePath, statePath+".bak")
 
 	go v.cleanupModified()
+	go v.cleanupAttrCache()
 	initVFSMetrics(v, writer, reader, registerer)
 	return v
 }
@@ -1356,56 +1357,42 @@ func (v *VFS) asyncSetAttr(task asyncSetAttrTask) {
 	}
 }
 
-// cleanupAttrCache periodically removes expired cache entries (30 seconds interval)
 func (v *VFS) cleanupAttrCache() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for range ticker.C {
+	for {
 		now := time.Now()
-		deletedCount := 0
-
-		// sync.Map Range is safe for concurrent access
 		v.attrCache.Range(func(key, value interface{}) bool {
 			entry := value.(*attrCacheEntry)
 			if now.Sub(entry.timestamp) > v.attrCacheTTL {
 				v.attrCache.Delete(key)
-				deletedCount++
 			}
-			return true // continue iteration
+			return true
 		})
-
-		if deletedCount > 0 {
-			logger.Debugf("Cleaned up %d expired attr cache entries", deletedCount)
-		}
+		time.Sleep(60 * time.Second)
 	}
 }
 
-// setAttrCache stores attributes in cache (lock-free)
 func (v *VFS) setAttrCache(ino Ino, attr *Attr) {
 	if attr == nil {
 		return
 	}
 	entry := &attrCacheEntry{
-		attr:      *attr, // value copy
+		attr:      *attr,
 		timestamp: time.Now(),
 	}
-	v.attrCache.Store(ino, entry) // sync.Map.Store() is thread-safe
+	v.attrCache.Store(ino, entry)
 }
 
-// deleteAttrCache removes attributes from cache (lock-free)
 func (v *VFS) deleteAttrCache(ino Ino) {
-	v.attrCache.Delete(ino) // sync.Map.Delete() is thread-safe
+	v.attrCache.Delete(ino)
 }
 
 func (v *VFS) invalidateAttr(ino Ino) {
 	v.modM.Lock()
 	v.modifiedAt[ino] = time.Now()
 	v.modM.Unlock()
-		// Clear attribute cache if async SetAttr is enabled
-		if v.Conf.FuseOpts != nil && v.Conf.FuseOpts.EnableWriteback {
-			v.deleteAttrCache(ino)
-		}
+	if v.Conf.FuseOpts != nil && v.Conf.FuseOpts.EnableWriteback {
+		v.deleteAttrCache(ino)
+	}
 }
 
 func (v *VFS) ModifiedSince(ino Ino, start time.Time) bool {
