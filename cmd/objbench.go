@@ -908,7 +908,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 				}
 				now := time.Now()
 				if objs[1].Mtime().Before(now.Add(-30*time.Second)) || objs[1].Mtime().After(now.Add(time.Second*30)) {
-					return fmt.Errorf("mtime of key should be within 10 seconds, but got %s", objs[1].Mtime().Sub(now))
+					return fmt.Errorf("mtime of key should be within 30 seconds, but got %s", objs[1].Mtime().Sub(now))
 				}
 			} else {
 				return fmt.Errorf("list failed: %s", err)
@@ -934,7 +934,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 				}
 				now := time.Now()
 				if objs[0].Mtime().Before(now.Add(-30*time.Second)) || objs[0].Mtime().After(now.Add(time.Second*30)) {
-					return fmt.Errorf("mtime of key should be within 10 seconds, but got %s", objs[0].Mtime().Sub(now))
+					return fmt.Errorf("mtime of key should be within 30 seconds, but got %s", objs[0].Mtime().Sub(now))
 				}
 			} else {
 				return fmt.Errorf("list failed: %s", err2)
