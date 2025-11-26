@@ -50,6 +50,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9/maintnotifications"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -92,6 +93,7 @@ type redisMeta struct {
 	prefix     string
 	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
 	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
+	cache      *redisCache
 }
 
 var _ Meta = (*redisMeta)(nil)
@@ -122,6 +124,14 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	keyFile := query.pop("tls-key-file")
 	caCertFile := query.pop("tls-ca-cert-file")
 	tlsServerName := query.pop("tls-server-name")
+
+	// Client-side caching options
+	clientCacheStr := query.pop("client-cache")
+	clientCache := clientCacheStr != "false" && clientCacheStr != ""
+	clientCacheSize := query.getInt("client-cache-size", "client_cache_size", 12800)
+	// Default TTL to prevent reading stale cache for a long time when the connection fails.
+	clientCacheExpiry := query.duration("client-cache-expire", "client_cache_expire", time.Minute)
+	clientCachePreload := query.getInt("client-cache-preload", "client_cache_preload", 0) // may cause conflict
 	u.RawQuery = values.Encode()
 
 	hosts := u.Host
@@ -173,8 +183,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	opt.MaxRetryBackoff = maxRetryBackoff
 	opt.ReadTimeout = readTimeout
 	opt.WriteTimeout = writeTimeout
-	var rdb redis.UniversalClient
+	opt.MaintNotificationsConfig = &maintnotifications.Config{Mode: maintnotifications.ModeDisabled}
 	var prefix string
+	var rdb redis.UniversalClient
+
 	if strings.Contains(hosts, ",") && strings.Index(hosts, ",") < strings.Index(hosts, ":") {
 		var fopt redis.FailoverOptions
 		ps := strings.Split(hosts, ",")
@@ -269,13 +281,35 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		rdb:      rdb,
 		prefix:   prefix,
 	}
+	if clientCache {
+		m.cache = newRedisCache(prefix, clientCacheSize, clientCacheExpiry, clientCachePreload)
+		if err = m.cache.init(m.rdb); err != nil {
+			logger.Warnf("Failed to setup client-side caching: %v", err)
+			m.cache = nil
+		}
+	}
 	m.en = m
 	m.checkServerConfig()
 	return m, nil
 }
 
 func (m *redisMeta) Shutdown() error {
+	if m.cache != nil {
+		m.cache.close()
+		m.cache = nil
+	}
 	return m.rdb.Close()
+}
+
+// Override NewSession to initialize client-side cache after session is created
+func (m *redisMeta) NewSession(record bool) error {
+	// First, create the session normally
+	err := m.baseMeta.NewSession(record)
+	if err != nil {
+		return err
+	}
+	go m.preloadCache()
+	return nil
 }
 
 func (m *redisMeta) doDeleteSlice(id uint64, size uint32) error {
@@ -919,6 +953,20 @@ func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 	var encodedAttr []byte
 	var err error
 	entryKey := m.entryKey(parent)
+	if m.cache != nil {
+		if entry, ok := m.cache.entryCache.Get(m.cache.entryName(parent, name)); ok {
+			if !entry.isMark() {
+				*inode = entry.ino
+				if attr != nil {
+					*attr = entry.Attr
+				}
+				return 0
+			}
+			m.cache.entryCache.AddIf(m.cache.entryName(parent, name), &entryMark, func(oldEntry *cachedEntry, exists bool) bool {
+				return exists
+			})
+		}
+	}
 	if len(m.shaLookup) > 0 && attr != nil && !m.conf.CaseInsensi && m.prefix == "" {
 		var res interface{}
 		var returnedIno int64
@@ -946,6 +994,13 @@ func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 	if err == nil {
 		m.parseAttr(encodedAttr, attr)
 		m.of.Update(foundIno, attr)
+		if m.cache != nil {
+			ce := &cachedEntry{ino: foundIno}
+			m.parseAttr(encodedAttr, &ce.Attr)
+			_, _ = m.cache.entryCache.AddIf(m.cache.entryName(parent, name), ce, func(oldEntry *cachedEntry, exists bool) bool {
+				return exists && oldEntry.isMark()
+			})
+		}
 	} else if err == redis.Nil { // corrupt entry
 		logger.Warnf("no attribute for inode %d (%d, %s)", foundIno, parent, name)
 		*attr = Attr{Typ: foundType}
