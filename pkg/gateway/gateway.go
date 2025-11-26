@@ -1488,7 +1488,7 @@ func (n *jfsObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object s
 		fi := info.(*fs.FileStat)
 		oi = minio.ObjectInfo{
 			Bucket:   bucket,
-			Name:     fi.Name(),
+			Name:     object,
 			ModTime:  fi.ModTime(),
 			Size:     fi.Size(),
 			IsDir:    fi.IsDir(),
