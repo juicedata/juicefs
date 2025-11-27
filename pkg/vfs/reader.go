@@ -238,6 +238,7 @@ func (s *sliceReader) invalidate() {
 		s.state = REFRESH
 		if s.refs == 0 {
 			s.cancel()
+			s.ctx, s.cancel = context.WithCancel(context.Background())
 		}
 	case READY:
 		if s.refs > 0 {
