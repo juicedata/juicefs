@@ -236,7 +236,10 @@ func (s *sliceReader) invalidate() {
 	case NEW:
 	case BUSY:
 		s.state = REFRESH
-		// TODO: interrupt reader
+		if s.refs == 0 {
+			s.cancel()
+			s.ctx, s.cancel = context.WithCancel(context.Background())
+		}
 	case READY:
 		if s.refs > 0 {
 			s.state = NEW
@@ -252,7 +255,7 @@ func (s *sliceReader) drop() {
 	if s.state <= BREAK {
 		if s.refs == 0 {
 			s.state = BREAK
-			// TODO: interrupt reader
+			s.cancel()
 		}
 	} else {
 		if s.refs == 0 {
@@ -687,7 +690,6 @@ func (f *fileReader) Close(ctx meta.Context) {
 	f.closing = true
 	f.visit(func(s *sliceReader) bool {
 		s.drop()
-		s.cancel()
 		return true
 	})
 	f.release()
