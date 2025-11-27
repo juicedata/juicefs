@@ -87,7 +87,10 @@ func (c *redisCache) init(cli redis.UniversalClient) error {
 	c.subscription = c.cli.Subscribe(ctx, "__redis__:invalidate")
 	_ = c.subscription.Channel()
 	// handle PUSH notifications for invalidation in c.HandlePushNotification
-	c.cli.RegisterPushNotificationHandler("invalidate", c, true)
+	if err = c.cli.RegisterPushNotificationHandler("invalidate", c, true); err != nil {
+		c.close()
+		return err
+	}
 	// handle client cmd to avoid race conditions
 	c.cli.AddHook(c)
 	return nil
@@ -266,6 +269,7 @@ func (c *redisCache) close() {
 		}
 		c.subscription = nil
 	}
+	c.cli.Options().OnConnect = nil
 	c.cli = nil
 }
 

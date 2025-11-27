@@ -1,10 +1,11 @@
 # Redis Client-Side Caching Support in JuiceFS
 
-Starting with version 6.0, Redis provides [Client-Side Caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) which allows clients to maintain local caches of data in a faster and more efficient way. JuiceFS includes full support for this feature, offering significant performance improvements for metadata operations.
+Starting with version 6.0, Redis provides [Client-Side Caching](https://redis.io/docs/latest/develop/reference/client-side-caching) which allows clients to maintain local caches of data in a faster and more efficient way. JuiceFS includes full support for this feature, offering significant performance improvements for metadata operations.
 
 ## How it works
 
 Redis Client-Side Caching (CSC) works by:
+
 1. The client enables tracking mode with `CLIENT TRACKING ON BCAST`
 2. The client caches data locally after reading it from Redis
 3. Redis notifies the client when cached keys are modified by any client
@@ -16,7 +17,7 @@ This results in reduced network traffic, lower latency, and higher throughput.
 
 JuiceFS supports Redis CSC through the following options in the metadata URL:
 
-```
+```shell
 --meta-url="redis://localhost/1?client-cache=true" # Enable client-side caching (always BCAST mode) 
 --meta-url="redis://localhost/1?client-cache=true&client-cache-size=500" # Set cache size (default 12800) 
 --meta-url="redis://localhost/1?client-cache=true&client-cache-expire=60s" # Set cache expiration (default: 60s)
@@ -30,6 +31,7 @@ JuiceFS supports Redis CSC through the following options in the metadata URL:
 - `client-cache-preload`: Number of file objects under the root directory preloaded after mounting. (default: 0)
 
 When client-side caching is enabled, JuiceFS caches:
+
 1. **Inode attributes**: File/directory metadata like permissions, size, timestamps
 2. **Directory entries**: Name to inode mappings for faster lookups
 
@@ -44,6 +46,7 @@ When client-side caching is enabled and `client-cache-preload` is set, JuiceFS w
 3. Provide better performance from the moment the filesystem is mounted
 
 The preloading process intelligently prioritizes the most important inodes by:
+
 1. Starting with the root directory
 2. Loading the most frequently accessed top-level directories and files
 3. Recursively exploring important subdirectories
@@ -84,4 +87,4 @@ JuiceFS includes robust error handling for various Redis CSC-specific responses 
 
 ## References
 
-- [Redis Client-Side Caching Documentation](https://redis.io/docs/latest/develop/reference/client-side-caching/)
+- [Redis Client-Side Caching Documentation](https://redis.io/docs/latest/develop/reference/client-side-caching)
