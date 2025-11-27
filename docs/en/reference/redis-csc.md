@@ -42,8 +42,8 @@ When client-side caching is enabled, JuiceFS caches:
 When client-side caching is enabled and `client-cache-preload` is set, JuiceFS will preload the file-object attributes and entries under the root directory after mounting. This lazy preloading happens in the background and helps to:
 
 1. Warm up the cache for common operations
-2. Reduce latency for initial filesystem operations
-3. Provide better performance from the moment the filesystem is mounted
+2. Reduce latency for initial file system operations
+3. Provide better performance from the moment the file system is mounted
 
 The preloading process intelligently prioritizes the most important inodes by:
 
@@ -51,7 +51,7 @@ The preloading process intelligently prioritizes the most important inodes by:
 2. Loading the most frequently accessed top-level directories and files
 3. Recursively exploring important subdirectories
 
-The preloading process runs in a background goroutine with fail-safe mechanisms and won't block or affect normal filesystem operations.
+The preloading process runs in a background goroutine with fail-safe mechanisms and won't block or affect normal file system operations.
 
 ## Modes
 
