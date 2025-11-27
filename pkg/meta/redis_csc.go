@@ -269,7 +269,9 @@ func (c *redisCache) close() {
 		}
 		c.subscription = nil
 	}
-	c.cli.Options().OnConnect = nil
+	if c.cli != nil {
+		c.cli.Options().OnConnect = nil
+	}
 	c.cli = nil
 }
 
