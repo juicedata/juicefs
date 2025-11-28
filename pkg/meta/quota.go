@@ -19,6 +19,7 @@ package meta
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -922,4 +923,99 @@ func (m *baseMeta) handleQuotaCheck(ctx Context, qtype uint32, key uint64, dpath
 	}
 
 	return fmt.Errorf("quota of %s is inconsistent, please repair it with --repair flag", dpath)
+}
+
+func (m *baseMeta) updateQuotaMetrics() {
+	m.quotaMu.RLock()
+	dirQuotasSnapshot := make(map[uint64]Quota)
+	for inode, quota := range m.dirQuotas {
+		dirQuotasSnapshot[inode] = quota.snap()
+	}
+
+	userQuotasSnapshot := make(map[uint64]Quota)
+	for uid, quota := range m.userQuotas {
+		userQuotasSnapshot[uid] = quota.snap()
+	}
+
+	groupQuotasSnapshot := make(map[uint64]Quota)
+	for gid, quota := range m.groupQuotas {
+		groupQuotasSnapshot[gid] = quota.snap()
+	}
+	m.quotaMu.RUnlock()
+	m.updateDirQuotaMetrics(dirQuotasSnapshot)
+	m.updateUserQuotaMetrics(userQuotasSnapshot)
+	m.updateGroupQuotaMetrics(groupQuotasSnapshot)
+}
+
+func (m *baseMeta) updateDirQuotaMetrics(dirQuotas map[uint64]Quota) {
+	ctx := Background()
+
+	m.dirQuotaMaxSpaceG.Reset()
+	m.dirQuotaMaxInodesG.Reset()
+	m.dirQuotaUsedSpaceG.Reset()
+	m.dirQuotaUsedInodesG.Reset()
+
+	for inode, quota := range dirQuotas {
+		if quota.MaxSpace <= 0 && quota.MaxInodes <= 0 {
+			continue
+		}
+		paths := m.GetPaths(ctx, Ino(inode))
+		path := "unknown"
+		if len(paths) > 0 {
+			path = paths[0]
+		}
+		inodeStr := strconv.FormatUint(inode, 10)
+		if quota.MaxSpace > 0 {
+			m.dirQuotaMaxSpaceG.WithLabelValues(path, inodeStr).Set(float64(quota.MaxSpace))
+		}
+		if quota.MaxInodes > 0 {
+			m.dirQuotaMaxInodesG.WithLabelValues(path, inodeStr).Set(float64(quota.MaxInodes))
+		}
+		m.dirQuotaUsedSpaceG.WithLabelValues(path, inodeStr).Set(float64(quota.UsedSpace))
+		m.dirQuotaUsedInodesG.WithLabelValues(path, inodeStr).Set(float64(quota.UsedInodes))
+	}
+}
+
+func (m *baseMeta) updateUserQuotaMetrics(userQuotas map[uint64]Quota) {
+	m.userQuotaMaxSpaceG.Reset()
+	m.userQuotaMaxInodesG.Reset()
+	m.userQuotaUsedSpaceG.Reset()
+	m.userQuotaUsedInodesG.Reset()
+
+	for uid, quota := range userQuotas {
+		if quota.MaxSpace <= 0 && quota.MaxInodes <= 0 {
+			continue
+		}
+		uidStr := strconv.FormatUint(uid, 10)
+		if quota.MaxSpace > 0 {
+			m.userQuotaMaxSpaceG.WithLabelValues(uidStr).Set(float64(quota.MaxSpace))
+		}
+		if quota.MaxInodes > 0 {
+			m.userQuotaMaxInodesG.WithLabelValues(uidStr).Set(float64(quota.MaxInodes))
+		}
+		m.userQuotaUsedSpaceG.WithLabelValues(uidStr).Set(float64(quota.UsedSpace))
+		m.userQuotaUsedInodesG.WithLabelValues(uidStr).Set(float64(quota.UsedInodes))
+	}
+}
+
+func (m *baseMeta) updateGroupQuotaMetrics(groupQuotas map[uint64]Quota) {
+	m.groupQuotaMaxSpaceG.Reset()
+	m.groupQuotaMaxInodesG.Reset()
+	m.groupQuotaUsedSpaceG.Reset()
+	m.groupQuotaUsedInodesG.Reset()
+
+	for gid, quota := range groupQuotas {
+		if quota.MaxSpace <= 0 && quota.MaxInodes <= 0 {
+			continue
+		}
+		gidStr := strconv.FormatUint(gid, 10)
+		if quota.MaxSpace > 0 {
+			m.groupQuotaMaxSpaceG.WithLabelValues(gidStr).Set(float64(quota.MaxSpace))
+		}
+		if quota.MaxInodes > 0 {
+			m.groupQuotaMaxInodesG.WithLabelValues(gidStr).Set(float64(quota.MaxInodes))
+		}
+		m.groupQuotaUsedSpaceG.WithLabelValues(gidStr).Set(float64(quota.UsedSpace))
+		m.groupQuotaUsedInodesG.WithLabelValues(gidStr).Set(float64(quota.UsedInodes))
+	}
 }
