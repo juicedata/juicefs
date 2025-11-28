@@ -41,6 +41,7 @@ require (
 	github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8
 	github.com/hashicorp/consul/api v1.29.2
 	github.com/hashicorp/go-hclog v1.6.3
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.12+incompatible
 	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099
 	github.com/jackc/pgx/v5 v5.7.3
@@ -68,7 +69,7 @@ require (
 	github.com/prometheus/prometheus v0.54.1
 	github.com/qingstor/qingstor-sdk-go/v4 v4.4.0
 	github.com/qiniu/go-sdk/v7 v7.25.2
-	github.com/redis/go-redis/v9 v9.7.3
+	github.com/redis/go-redis/v9 v9.16.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/smartystreets/goconvey v1.7.2
 	github.com/spf13/cast v1.7.1
@@ -354,3 +355,5 @@ replace github.com/mattn/go-colorable v0.1.9 => github.com/juicedata/go-colorabl
 replace github.com/mattn/go-colorable v0.0.9 => github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db
 
 replace github.com/cloudsoda/go-smb2 => github.com/juicedata/go-smb2 v0.0.0-20250917090526-d2d0abfb0e05
+
+replace github.com/hashicorp/golang-lru/v2 v2.0.7 => github.com/juicedata/golang-lru/v2 v2.0.8-0.20251126062551-1b321869f904
