@@ -2623,10 +2623,12 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 	}
 
 	type entryInfo struct {
-		e         edge
-		n         node
-		opened    bool
-		trash     Ino
+		e     *edge
+		trash Ino
+
+		n      *node // n edges : 1 inode
+		opened bool  // node is opened
+
 		trashName string
 		lastLink  bool
 	}
@@ -2662,7 +2664,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		inodes := make([]Ino, 0, len(entries))
 		inodeM := make(map[Ino]struct{}) // filter hardlinks
 		for _, entry := range entries {
-			e := edge{Parent: parent, Name: entry.Name, Inode: entry.Inode}
+			e := &edge{Parent: parent, Name: entry.Name, Inode: entry.Inode}
 			if entry.Attr != nil {
 				e.Type = entry.Attr.Typ
 			}
@@ -2684,11 +2686,13 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 				nodeMap[nodes[i].Inode] = &nodes[i]
 			}
 
+			dumpNode := &node{}
 			for i := range entryInfos {
 				info := &entryInfos[i]
 				n, ok := nodeMap[info.e.Inode]
 				if !ok {
-					entryInfos[i].e.Inode = 0
+					entryInfos[i].trash = 0
+					entryInfos[i].n = dumpNode
 					continue
 				}
 				if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
@@ -2700,20 +2704,16 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 				if (n.Flags & FlagSkipTrash) != 0 {
 					info.trash = 0
 				}
-				info.n = *n
+				info.n = n
 			}
-
-			filteredInfos := entryInfos[:0]
-			for i := range entryInfos {
-				if entryInfos[i].e.Inode != 0 {
-					filteredInfos = append(filteredInfos, entryInfos[i])
-				}
-			}
-			entryInfos = filteredInfos
 		}
 
 		for i := range entryInfos {
 			info := &entryInfos[i]
+			if info.e.Type == TypeDirectory {
+				continue
+			}
+
 			if info.trash > 0 && info.n.Nlink > 1 {
 				info.trashName = m.trashEntry(parent, info.e.Inode, string(info.e.Name))
 				te := edge{
@@ -2726,43 +2726,23 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 					info.trash = 0
 				}
 			}
-		}
 
-		for i := range entryInfos {
-			info := &entryInfos[i]
 			info.n.setCtime(now)
-			if info.trash != 0 && info.n.Parent > 0 {
+			if info.trash > 0 && info.n.Parent > 0 {
 				info.n.Parent = info.trash
 			}
-		}
 
-		seen := make(map[Ino]uint32)
-		for i := range entryInfos {
-			info := &entryInfos[i]
-			if info.e.Type == TypeDirectory {
-				continue
-			}
-			processed := seen[info.e.Inode] + 1
-			var finalNlink int64
 			if info.trash == 0 {
-				finalNlink = int64(info.n.Nlink) - int64(processed)
-				if finalNlink < 0 {
-					finalNlink = 0
+				info.n.Nlink--
+				if info.n.Type == TypeFile && info.n.Nlink == 0 && m.sid > 0 {
+					info.opened = m.of.IsOpen(info.e.Inode)
 				}
-			} else {
-				finalNlink = int64(info.n.Nlink)
 			}
-			info.lastLink = (info.trash == 0 && finalNlink == 0)
-			if info.lastLink && info.e.Type == TypeFile && m.sid > 0 {
-				info.opened = m.of.IsOpen(info.e.Inode)
-			}
-			info.n.Nlink = uint32(finalNlink)
-			seen[info.e.Inode] = processed
 		}
 
-		trashInserted := make(map[Ino]bool)
 		nowUnix := time.Now().Unix()
-
+		visited := make(map[Ino]bool)
+		visited[0] = true // skip dummyNode
 		for _, info := range entryInfos {
 			if info.e.Type == TypeDirectory {
 				continue
@@ -2772,77 +2752,71 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 				return err
 			}
 
-			if info.n.Nlink > 0 {
-				if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(&info.n, &node{Inode: info.n.Inode}); err != nil {
-					return err
-				}
-				if info.trash > 0 && !trashInserted[info.e.Inode] {
-					if info.trashName == "" {
-						info.trashName = m.trashEntry(parent, info.e.Inode, string(info.e.Name))
-					}
-					te := edge{
-						Parent: info.trash,
-						Name:   []byte(info.trashName),
-						Inode:  info.e.Inode,
-						Type:   info.e.Type,
-					}
-					if err := mustInsert(s, &te); err != nil {
+			if !visited[info.n.Inode] {
+				if info.n.Nlink > 0 {
+					if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(&info.n, &node{Inode: info.n.Inode}); err != nil {
 						return err
 					}
-					trashInserted[info.e.Inode] = true
-				}
-				recordDeletionStats(&info.n, align4K(info.n.Length), 0, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, parent.IsTrash())
-			} else {
-				var entrySpace int64
-				needRecordStats := false
-				switch info.e.Type {
-				case TypeFile:
-					entrySpace = align4K(info.n.Length)
-					needRecordStats = true
-					if info.opened {
-						if err := mustInsert(s, &sustained{Sid: m.sid, Inode: info.e.Inode}); err != nil {
+				} else {
+					var entrySpace int64
+					needRecordStats := false
+					switch info.e.Type {
+					case TypeFile:
+						entrySpace = align4K(info.n.Length)
+						needRecordStats = true
+						if info.opened {
+							if err := mustInsert(s, &sustained{Sid: m.sid, Inode: info.e.Inode}); err != nil {
+								return err
+							}
+							if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(&info.n, &node{Inode: info.n.Inode}); err != nil {
+								return err
+							}
+						} else {
+							if err := mustInsert(s, &delfile{info.e.Inode, info.n.Length, nowUnix}); err != nil {
+								return err
+							}
+							if _, err := s.Delete(&node{Inode: info.e.Inode}); err != nil {
+								return err
+							}
+						}
+					case TypeSymlink:
+						if _, err := s.Delete(&symlink{Inode: info.e.Inode}); err != nil {
 							return err
 						}
-						if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(&info.n, &node{Inode: info.n.Inode}); err != nil {
-							return err
-						}
-					} else {
-						if err := mustInsert(s, &delfile{info.e.Inode, info.n.Length, nowUnix}); err != nil {
-							return err
-						}
+						fallthrough
+					default:
 						if _, err := s.Delete(&node{Inode: info.e.Inode}); err != nil {
 							return err
 						}
+						if info.e.Type != TypeFile {
+							entrySpace = align4K(0)
+							needRecordStats = true
+						}
 					}
-				case TypeSymlink:
-					if _, err := s.Delete(&symlink{Inode: info.e.Inode}); err != nil {
+					if needRecordStats {
+						recordDeletionStats(info.n, entrySpace, entrySpace, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, parent.IsTrash())
+					}
+					if _, err := s.Delete(&xattr{Inode: info.e.Inode}); err != nil {
 						return err
 					}
-					fallthrough
-				default:
-					if _, err := s.Delete(&node{Inode: info.e.Inode}); err != nil {
-						return err
-					}
-					if info.e.Type != TypeFile {
-						entrySpace = align4K(0)
-						needRecordStats = true
-					}
 				}
-				if needRecordStats {
-					recordDeletionStats(&info.n, entrySpace, entrySpace, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, parent.IsTrash() )
+				m.of.InvalidateChunk(info.e.Inode, invalidateAttrOnly)
+			}
+			if info.n.Nlink > 0 && info.trash > 0 {
+				if info.trashName == "" {
+					info.trashName = m.trashEntry(parent, info.e.Inode, string(info.e.Name))
 				}
-				if _, err := s.Delete(&xattr{Inode: info.e.Inode}); err != nil {
+				if err = mustInsert(s, &edge{
+					Parent: info.trash,
+					Name:   []byte(info.trashName),
+					Inode:  e.Inode,
+					Type:   e.Type}); err != nil {
 					return err
 				}
 			}
+			visited[info.n.Inode] = true
 		}
-
-		for _, info := range entryInfos {
-			if info.e.Type != TypeDirectory {
-				m.of.InvalidateChunk(info.e.Inode, invalidateAttrOnly)
-			}
-		}
-
+		// TODO update parent dir mtime/ctime
 		return nil
 	})
 
@@ -2850,16 +2824,18 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		return errno(err)
 	}
 
-	if trash == 0 {
-		for _, info := range entryInfos {
-			if info.n.Type == TypeFile && info.lastLink {
-				isTrash := parent.IsTrash()
-				m.fileDeleted(info.opened, isTrash, info.e.Inode, info.n.Length)
-			}
+	visited := make(map[Ino]bool)
+	visited[0] = true // skip dummyNode
+	for _, info := range entryInfos {
+		if info.trash != 0 || visited[info.n.Inode] {
+			continue
 		}
-		m.updateStats(totalSpace, totalInodes)
+		visited[info.n.Inode] = true
+		if info.n.Type == TypeFile && info.n.Nlink == 0 {
+			m.fileDeleted(info.opened, parent.IsTrash(), info.e.Inode, info.n.Length)
+		}
 	}
-
+	m.updateStats(totalSpace, totalInodes)
 	*length = totalLength
 	*space = totalSpace
 	*inodes = totalInodes
