@@ -125,7 +125,7 @@ jobs:
 
       - name: Upload example database
         uses: actions/upload-artifact@v4
-        if: always()
+        if: false
         with:
           include-hidden-files: true
           name: command2-hypothesis-example-db-${{ matrix.meta }}
