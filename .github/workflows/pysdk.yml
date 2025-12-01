@@ -82,6 +82,7 @@ jobs:
       - name: Download example database
         timeout-minutes: 5
         uses: dawidd6/action-download-artifact@v9
+        if: false
         with:
           name: pysdk-hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
@@ -206,7 +207,7 @@ jobs:
 
       - name: Upload example database
         uses: actions/upload-artifact@v4
-        if: always()
+        if: false
         with:
           include-hidden-files: true
           name: pysdk-hypothesis-example-db-${{ matrix.meta }}
