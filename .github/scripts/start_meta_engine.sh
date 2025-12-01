@@ -139,7 +139,7 @@ start_meta_engine() {
                 -e POSTGRES_USER=postgres \
                 -e POSTGRES_PASSWORD=postgres \
                 -p 5432:5432 \
-                -v /tmp/postgresql:/var/lib/postgresql/data \
+                -v /tmp/postgresql:/var/lib/postgresql \
                 -d postgres
             sleep 10
         fi
