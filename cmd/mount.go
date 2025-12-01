@@ -428,6 +428,26 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 	return holder, nil
 }
 
+func buildBoolFlagsMap(c *cli.Context) map[string]bool {
+	boolFlags := make(map[string]bool)
+	addBoolFlags := func(flags []cli.Flag) {
+		for _, flag := range flags {
+			if _, ok := flag.(*cli.BoolFlag); ok {
+				for _, name := range flag.Names() {
+					boolFlags[name] = true
+				}
+			}
+		}
+	}
+	if c.App != nil {
+		addBoolFlags(c.App.Flags)
+	}
+	if c.Command != nil {
+		addBoolFlags(c.Command.Flags)
+	}
+	return boolFlags
+}
+
 func tellFstabOptions(c *cli.Context) string {
 	opts := []string{"_netdev"}
 	boolFlags := buildBoolFlagsMap(c)

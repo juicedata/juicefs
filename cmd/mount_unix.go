@@ -579,26 +579,6 @@ func absPath(d string) string {
 	return d
 }
 
-func buildBoolFlagsMap(c *cli.Context) map[string]bool {
-	boolFlags := make(map[string]bool)
-	addBoolFlags := func(flags []cli.Flag) {
-		for _, flag := range flags {
-			if _, ok := flag.(*cli.BoolFlag); ok {
-				for _, name := range flag.Names() {
-					boolFlags[name] = true
-				}
-			}
-		}
-	}
-	if c.App != nil {
-		addBoolFlags(c.App.Flags)
-	}
-	if c.Command != nil {
-		addBoolFlags(c.Command.Flags)
-	}
-	return boolFlags
-}
-
 func fixCacheDirs(c *cli.Context) {
 	cd := c.String("cache-dir")
 	if cd == "memory" || strings.HasPrefix(cd, "/") {
