@@ -45,7 +45,7 @@ func init() {
 			MaxIdleConnsPerHost:   500,
 			ReadBufferSize:        32 << 10,
 			WriteBufferSize:       32 << 10,
-			Dial: func(network string, address string) (net.Conn, error) {
+			DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
 				separator := strings.LastIndex(address, ":")
 				host := address[:separator]
 				port := address[separator:]
@@ -66,7 +66,7 @@ func init() {
 					if port != "" {
 						address = net.JoinHostPort(address, port[1:])
 					}
-					conn, err = dialer.Dial(network, address)
+					conn, err = dialer.DialContext(ctx, network, address)
 					if err == nil {
 						return conn, nil
 					}
