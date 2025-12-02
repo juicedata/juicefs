@@ -61,6 +61,47 @@ test_kernel_writeback_cache(){
     [[ $((bytes/ops)) -lt 10240 ]] && echo "writeback_cache may not enabled" && exit 1 || true
 }
 
+test_o_tmpfile(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 0
+    ./juicefs mount $META_URL /tmp/jfs -d -o writeback_cache
+    TEST_DIR="/tmp/jfs/tmp"
+    mkdir -p "$TEST_DIR"
+
+    cat > /tmp/test_otmp.c << 'EOF'
+#define _GNU_SOURCE
+#include <fcntl.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+int main() {
+    int fd = openat(AT_FDCWD, "/tmp/jfs/tmp", O_RDWR|O_EXCL|O_CLOEXEC|O_TMPFILE, 0600);
+    if (fd < 0) {
+        perror("openat");
+        return 1;
+    }
+    puts("openat ok");
+    if (write(fd, "x", 1) < 0) perror("write");
+    if (close(fd) < 0) {
+        printf("close: %s\n", strerror(errno));
+        return 1;
+    }
+    puts("close ok");
+    return 0;
+}
+EOF
+    gcc -o /tmp/test_otmp /tmp/test_otmp.c
+    /tmp/test_otmp
+    result=$?
+    if [ $result -ne 0 ]; then
+        echo "TEST FAILED: close fail"
+        exit 1
+    else
+        echo "TEST PASSED"
+    fi
+}
+
 test_cache_items(){
     prepare_test
     ./juicefs format $META_URL myjfs
