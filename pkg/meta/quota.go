@@ -948,31 +948,24 @@ func (m *baseMeta) updateQuotaMetrics() {
 }
 
 func (m *baseMeta) updateDirQuotaMetrics(dirQuotas map[uint64]Quota) {
-	ctx := Background()
-
 	m.dirQuotaMaxSpaceG.Reset()
 	m.dirQuotaMaxInodesG.Reset()
 	m.dirQuotaUsedSpaceG.Reset()
 	m.dirQuotaUsedInodesG.Reset()
 
 	for inode, quota := range dirQuotas {
+		inodeStr := strconv.FormatUint(inode, 10)
 		if quota.MaxSpace <= 0 && quota.MaxInodes <= 0 {
 			continue
 		}
-		paths := m.GetPaths(ctx, Ino(inode))
-		path := "unknown"
-		if len(paths) > 0 {
-			path = paths[0]
-		}
-		inodeStr := strconv.FormatUint(inode, 10)
 		if quota.MaxSpace > 0 {
-			m.dirQuotaMaxSpaceG.WithLabelValues(path, inodeStr).Set(float64(quota.MaxSpace))
+			m.dirQuotaMaxSpaceG.WithLabelValues(inodeStr).Set(float64(quota.MaxSpace))
 		}
 		if quota.MaxInodes > 0 {
-			m.dirQuotaMaxInodesG.WithLabelValues(path, inodeStr).Set(float64(quota.MaxInodes))
+			m.dirQuotaMaxInodesG.WithLabelValues(inodeStr).Set(float64(quota.MaxInodes))
 		}
-		m.dirQuotaUsedSpaceG.WithLabelValues(path, inodeStr).Set(float64(quota.UsedSpace))
-		m.dirQuotaUsedInodesG.WithLabelValues(path, inodeStr).Set(float64(quota.UsedInodes))
+		m.dirQuotaUsedSpaceG.WithLabelValues(inodeStr).Set(float64(quota.UsedSpace))
+		m.dirQuotaUsedInodesG.WithLabelValues(inodeStr).Set(float64(quota.UsedInodes))
 	}
 }
 

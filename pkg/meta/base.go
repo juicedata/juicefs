@@ -368,28 +368,28 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 				Name: "dir_quota_max_space_bytes",
 				Help: "Directory quota maximum space in bytes.",
 			},
-			[]string{"path", "inode"},
+			[]string{"inode"},
 		),
 		dirQuotaMaxInodesG: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "dir_quota_max_inodes",
 				Help: "Directory quota maximum number of inodes.",
 			},
-			[]string{"path", "inode"},
+			[]string{"inode"},
 		),
 		dirQuotaUsedSpaceG: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "dir_quota_used_space_bytes",
 				Help: "Directory quota used space in bytes.",
 			},
-			[]string{"path", "inode"},
+			[]string{"inode"},
 		),
 		dirQuotaUsedInodesG: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "dir_quota_used_inodes",
 				Help: "Directory quota used number of inodes.",
 			},
-			[]string{"path", "inode"},
+			[]string{"inode"},
 		),
 		userQuotaMaxSpaceG: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
