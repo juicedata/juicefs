@@ -2586,20 +2586,24 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	}))
 }
 
-func recordDeletionStats(
+func recordGlobalDeletionStats(
 	n *node,
 	entrySpace int64,
-	ugSpace int64,
 	totalLength *int64,
 	totalSpace *int64,
 	totalInodes *int64,
-	userGroupQuotas *[]UserGroupQuotaDelta,
-	isTrash bool,
 ) {
 	*totalLength -= int64(n.Length)
 	*totalSpace -= entrySpace
 	*totalInodes--
+}
 
+func recordUserGroupDeletionStats(
+	n *node,
+	ugSpace int64,
+	userGroupQuotas *[]UserGroupQuotaDelta,
+	isTrash bool,
+) {
 	if userGroupQuotas != nil && !isTrash {
 		*userGroupQuotas = append(*userGroupQuotas, UserGroupQuotaDelta{
 			Uid:    n.Uid,
@@ -2623,14 +2627,11 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 	}
 
 	type entryInfo struct {
-		e     *edge
-		trash Ino
-
-		n      *node // n edges : 1 inode
-		opened bool  // node is opened
-
+		e         *edge
+		trash     Ino
+		n         *node // n edges : 1 inode
+		opened    bool  // node is opened
 		trashName string
-		lastLink  bool
 	}
 	var entryInfos []entryInfo
 	var totalLength, totalSpace, totalInodes int64
@@ -2657,7 +2658,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		if (pn.Flags&FlagAppend != 0) || (pn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-
 		entryInfos = make([]entryInfo, 0, len(entries))
 		now := time.Now().UnixNano()
 
@@ -2719,19 +2719,17 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 				te := edge{
 					Parent: info.trash,
 					Name:   []byte(info.trashName),
-					Inode:  info.e.Inode,
-					Type:   info.e.Type,
+					Inode:  info.n.Inode,
+					Type:   info.n.Type,
 				}
 				if ok, err := s.Get(&te); err == nil && ok {
 					info.trash = 0
 				}
 			}
-
 			info.n.setCtime(now)
 			if info.trash > 0 && info.n.Parent > 0 {
 				info.n.Parent = info.trash
 			}
-
 			if info.trash == 0 {
 				info.n.Nlink--
 				if info.n.Type == TypeFile && info.n.Nlink == 0 && m.sid > 0 {
@@ -2740,27 +2738,36 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 			}
 		}
 
+		var updateParent bool
+		if !parent.IsTrash() && time.Duration(now-pn.getMtime()) >= m.conf.SkipDirMtime {
+			pn.setMtime(now)
+			pn.setCtime(now)
+			updateParent = true
+		}
+
 		nowUnix := time.Now().Unix()
 		visited := make(map[Ino]bool)
 		visited[0] = true // skip dummyNode
 		for _, info := range entryInfos {
-			if info.e.Type == TypeDirectory {
+			if info.n.Type == TypeDirectory {
 				continue
 			}
 			e := edge{Parent: parent, Name: info.e.Name}
 			if _, err := s.Delete(&e); err != nil {
 				return err
 			}
-
 			if !visited[info.n.Inode] {
 				if info.n.Nlink > 0 {
-					if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(&info.n, &node{Inode: info.n.Inode}); err != nil {
+					if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
 						return err
+					}
+					if info.n.Type == TypeFile {
+						recordUserGroupDeletionStats(info.n, 0, userGroupQuotas, parent.IsTrash())
 					}
 				} else {
 					var entrySpace int64
 					needRecordStats := false
-					switch info.e.Type {
+					switch info.n.Type {
 					case TypeFile:
 						entrySpace = align4K(info.n.Length)
 						needRecordStats = true
@@ -2768,7 +2775,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 							if err := mustInsert(s, &sustained{Sid: m.sid, Inode: info.e.Inode}); err != nil {
 								return err
 							}
-							if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(&info.n, &node{Inode: info.n.Inode}); err != nil {
+							if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
 								return err
 							}
 						} else {
@@ -2788,13 +2795,14 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 						if _, err := s.Delete(&node{Inode: info.e.Inode}); err != nil {
 							return err
 						}
-						if info.e.Type != TypeFile {
+						if info.n.Type != TypeFile {
 							entrySpace = align4K(0)
 							needRecordStats = true
 						}
 					}
 					if needRecordStats {
-						recordDeletionStats(info.n, entrySpace, entrySpace, &totalLength, &totalSpace, &totalInodes, userGroupQuotas, parent.IsTrash())
+						recordGlobalDeletionStats(info.n, entrySpace, &totalLength, &totalSpace, &totalInodes)
+						recordUserGroupDeletionStats(info.n, entrySpace, userGroupQuotas, parent.IsTrash())
 					}
 					if _, err := s.Delete(&xattr{Inode: info.e.Inode}); err != nil {
 						return err
@@ -2809,14 +2817,31 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 				if err = mustInsert(s, &edge{
 					Parent: info.trash,
 					Name:   []byte(info.trashName),
-					Inode:  e.Inode,
-					Type:   e.Type}); err != nil {
+					Inode:  info.n.Inode,
+					Type:   info.n.Type}); err != nil {
 					return err
 				}
 			}
 			visited[info.n.Inode] = true
 		}
-		// TODO update parent dir mtime/ctime
+
+		if updateParent {
+			var _n int64
+			if _n, err = s.Cols("mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode}); err != nil || _n == 0 {
+				if err == nil {
+					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, pn.Inode)
+					if m.Name() == "mysql" {
+						err = syscall.EBUSY
+					} else {
+						err = syscall.ENOENT
+					}
+				}
+				if err != nil {
+					return err
+				}
+			}
+		}
+
 		return nil
 	})
 
@@ -2836,6 +2861,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		}
 	}
 	m.updateStats(totalSpace, totalInodes)
+	
 	*length = totalLength
 	*space = totalSpace
 	*inodes = totalInodes
