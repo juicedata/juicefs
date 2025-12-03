@@ -571,7 +571,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
   }
 
-  private RangerConfig checkAndGetRangerParams(Configuration conf) throws IOException {
+  public RangerConfig checkAndGetRangerParams(Configuration conf) throws IOException {
     if (System.getenv("JUICEFS_RANGER_TEST") != null) {
       RangerConfig config = new RangerConfig("http://localhost:6080", "ranger_test", 30000);
       config.setImpl("io.juicefs.permission.RangerAdminClientImpl");
@@ -607,7 +607,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     return new RangerConfig(url, serviceName, Long.parseLong(pollIntervalMs));
   }
 
-  private JuiceFileSystemImpl(boolean isSuperGroupFileSystem) {
+  public JuiceFileSystemImpl(boolean isSuperGroupFileSystem) {
     this.isSuperGroupFileSystem = isSuperGroupFileSystem;
   }
 
