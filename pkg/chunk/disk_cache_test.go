@@ -417,6 +417,7 @@ func TestAtimeNotLost(t *testing.T) {
 	for _, eviction := range []string{EvictionNone, Eviction2Random, EvictionLRU} {
 		cfg := defaultConf
 		cfg.CacheEviction = eviction
+		cfg.FreeSpace = 0.03
 		m := newCacheManager(&cfg, nil, nil)
 		key := "0_0_10"
 
