@@ -948,67 +948,156 @@ func (m *baseMeta) updateQuotaMetrics() {
 }
 
 func (m *baseMeta) updateDirQuotaMetrics(dirQuotas map[uint64]Quota) {
-	m.dirQuotaMaxSpaceG.Reset()
-	m.dirQuotaMaxInodesG.Reset()
-	m.dirQuotaUsedSpaceG.Reset()
-	m.dirQuotaUsedInodesG.Reset()
-
+	m.quotaMetricMu.Lock()
+	defer m.quotaMetricMu.Unlock()
 	for inode, quota := range dirQuotas {
 		inodeStr := strconv.FormatUint(inode, 10)
+
 		if quota.MaxSpace <= 0 && quota.MaxInodes <= 0 {
+			m.dirQuotaMaxSpaceG.DeleteLabelValues(inodeStr)
+			m.dirQuotaMaxInodesG.DeleteLabelValues(inodeStr)
+			m.dirQuotaUsedSpaceG.DeleteLabelValues(inodeStr)
+			m.dirQuotaUsedInodesG.DeleteLabelValues(inodeStr)
+			delete(m.dirQuotaMetricKeys, inode)
 			continue
 		}
+
 		if quota.MaxSpace > 0 {
 			m.dirQuotaMaxSpaceG.WithLabelValues(inodeStr).Set(float64(quota.MaxSpace))
+		} else {
+			m.dirQuotaMaxSpaceG.DeleteLabelValues(inodeStr)
 		}
 		if quota.MaxInodes > 0 {
 			m.dirQuotaMaxInodesG.WithLabelValues(inodeStr).Set(float64(quota.MaxInodes))
+		} else {
+			m.dirQuotaMaxInodesG.DeleteLabelValues(inodeStr)
 		}
 		m.dirQuotaUsedSpaceG.WithLabelValues(inodeStr).Set(float64(quota.UsedSpace))
 		m.dirQuotaUsedInodesG.WithLabelValues(inodeStr).Set(float64(quota.UsedInodes))
+
+		m.dirQuotaMetricKeys[inode] = struct{}{}
 	}
 }
 
 func (m *baseMeta) updateUserQuotaMetrics(userQuotas map[uint64]Quota) {
-	m.userQuotaMaxSpaceG.Reset()
-	m.userQuotaMaxInodesG.Reset()
-	m.userQuotaUsedSpaceG.Reset()
-	m.userQuotaUsedInodesG.Reset()
-
+	m.quotaMetricMu.Lock()
+	defer m.quotaMetricMu.Unlock()
 	for uid, quota := range userQuotas {
+		uidStr := strconv.FormatUint(uid, 10)
+
 		if quota.MaxSpace <= 0 && quota.MaxInodes <= 0 {
+			m.userQuotaMaxSpaceG.DeleteLabelValues(uidStr)
+			m.userQuotaMaxInodesG.DeleteLabelValues(uidStr)
+			m.userQuotaUsedSpaceG.DeleteLabelValues(uidStr)
+			m.userQuotaUsedInodesG.DeleteLabelValues(uidStr)
+			delete(m.userQuotaMetricKeys, uid)
 			continue
 		}
-		uidStr := strconv.FormatUint(uid, 10)
+
 		if quota.MaxSpace > 0 {
 			m.userQuotaMaxSpaceG.WithLabelValues(uidStr).Set(float64(quota.MaxSpace))
+		} else {
+			m.userQuotaMaxSpaceG.DeleteLabelValues(uidStr)
 		}
 		if quota.MaxInodes > 0 {
 			m.userQuotaMaxInodesG.WithLabelValues(uidStr).Set(float64(quota.MaxInodes))
+		} else {
+			m.userQuotaMaxInodesG.DeleteLabelValues(uidStr)
 		}
 		m.userQuotaUsedSpaceG.WithLabelValues(uidStr).Set(float64(quota.UsedSpace))
 		m.userQuotaUsedInodesG.WithLabelValues(uidStr).Set(float64(quota.UsedInodes))
+
+		m.userQuotaMetricKeys[uid] = struct{}{}
 	}
 }
 
 func (m *baseMeta) updateGroupQuotaMetrics(groupQuotas map[uint64]Quota) {
-	m.groupQuotaMaxSpaceG.Reset()
-	m.groupQuotaMaxInodesG.Reset()
-	m.groupQuotaUsedSpaceG.Reset()
-	m.groupQuotaUsedInodesG.Reset()
-
+	m.quotaMetricMu.Lock()
+	defer m.quotaMetricMu.Unlock()
 	for gid, quota := range groupQuotas {
+		gidStr := strconv.FormatUint(gid, 10)
+
 		if quota.MaxSpace <= 0 && quota.MaxInodes <= 0 {
+			m.groupQuotaMaxSpaceG.DeleteLabelValues(gidStr)
+			m.groupQuotaMaxInodesG.DeleteLabelValues(gidStr)
+			m.groupQuotaUsedSpaceG.DeleteLabelValues(gidStr)
+			m.groupQuotaUsedInodesG.DeleteLabelValues(gidStr)
+			delete(m.groupQuotaMetricKeys, gid)
 			continue
 		}
-		gidStr := strconv.FormatUint(gid, 10)
+
 		if quota.MaxSpace > 0 {
 			m.groupQuotaMaxSpaceG.WithLabelValues(gidStr).Set(float64(quota.MaxSpace))
+		} else {
+			m.groupQuotaMaxSpaceG.DeleteLabelValues(gidStr)
 		}
 		if quota.MaxInodes > 0 {
 			m.groupQuotaMaxInodesG.WithLabelValues(gidStr).Set(float64(quota.MaxInodes))
+		} else {
+			m.groupQuotaMaxInodesG.DeleteLabelValues(gidStr)
 		}
 		m.groupQuotaUsedSpaceG.WithLabelValues(gidStr).Set(float64(quota.UsedSpace))
 		m.groupQuotaUsedInodesG.WithLabelValues(gidStr).Set(float64(quota.UsedInodes))
+
+		m.groupQuotaMetricKeys[gid] = struct{}{}
+	}
+}
+
+func (m *baseMeta) cleanupQuotaMetrics() {
+	m.quotaMu.RLock()
+	dirQuotas := make(map[uint64]Quota, len(m.dirQuotas))
+	for inode, q := range m.dirQuotas {
+		dirQuotas[inode] = q.snap()
+	}
+	userQuotas := make(map[uint64]Quota, len(m.userQuotas))
+	for uid, q := range m.userQuotas {
+		userQuotas[uid] = q.snap()
+	}
+	groupQuotas := make(map[uint64]Quota, len(m.groupQuotas))
+	for gid, q := range m.groupQuotas {
+		groupQuotas[gid] = q.snap()
+	}
+	m.quotaMu.RUnlock()
+
+	m.quotaMetricMu.Lock()
+	defer m.quotaMetricMu.Unlock()
+
+	// directory quotas
+	for inode := range m.dirQuotaMetricKeys {
+		q, ok := dirQuotas[inode]
+		if !ok || (q.MaxSpace <= 0 && q.MaxInodes <= 0) {
+			inodeStr := strconv.FormatUint(inode, 10)
+			m.dirQuotaMaxSpaceG.DeleteLabelValues(inodeStr)
+			m.dirQuotaMaxInodesG.DeleteLabelValues(inodeStr)
+			m.dirQuotaUsedSpaceG.DeleteLabelValues(inodeStr)
+			m.dirQuotaUsedInodesG.DeleteLabelValues(inodeStr)
+			delete(m.dirQuotaMetricKeys, inode)
+		}
+	}
+
+	// user quotas
+	for uid := range m.userQuotaMetricKeys {
+		q, ok := userQuotas[uid]
+		if !ok || (q.MaxSpace <= 0 && q.MaxInodes <= 0) {
+			uidStr := strconv.FormatUint(uid, 10)
+			m.userQuotaMaxSpaceG.DeleteLabelValues(uidStr)
+			m.userQuotaMaxInodesG.DeleteLabelValues(uidStr)
+			m.userQuotaUsedSpaceG.DeleteLabelValues(uidStr)
+			m.userQuotaUsedInodesG.DeleteLabelValues(uidStr)
+			delete(m.userQuotaMetricKeys, uid)
+		}
+	}
+
+	// group quotas
+	for gid := range m.groupQuotaMetricKeys {
+		q, ok := groupQuotas[gid]
+		if !ok || (q.MaxSpace <= 0 && q.MaxInodes <= 0) {
+			gidStr := strconv.FormatUint(gid, 10)
+			m.groupQuotaMaxSpaceG.DeleteLabelValues(gidStr)
+			m.groupQuotaMaxInodesG.DeleteLabelValues(gidStr)
+			m.groupQuotaUsedSpaceG.DeleteLabelValues(gidStr)
+			m.groupQuotaUsedInodesG.DeleteLabelValues(gidStr)
+			delete(m.groupQuotaMetricKeys, gid)
+		}
 	}
 }
