@@ -952,30 +952,11 @@ func (m *baseMeta) updateDirQuotaMetrics(dirQuotas map[uint64]Quota) {
 	defer m.quotaMetricMu.Unlock()
 	for inode, quota := range dirQuotas {
 		inodeStr := strconv.FormatUint(inode, 10)
-
-		if quota.MaxSpace <= 0 && quota.MaxInodes <= 0 {
-			m.dirQuotaMaxSpaceG.DeleteLabelValues(inodeStr)
-			m.dirQuotaMaxInodesG.DeleteLabelValues(inodeStr)
-			m.dirQuotaUsedSpaceG.DeleteLabelValues(inodeStr)
-			m.dirQuotaUsedInodesG.DeleteLabelValues(inodeStr)
-			delete(m.dirQuotaMetricKeys, inode)
-			continue
-		}
-
-		if quota.MaxSpace > 0 {
-			m.dirQuotaMaxSpaceG.WithLabelValues(inodeStr).Set(float64(quota.MaxSpace))
-		} else {
-			m.dirQuotaMaxSpaceG.DeleteLabelValues(inodeStr)
-		}
-		if quota.MaxInodes > 0 {
-			m.dirQuotaMaxInodesG.WithLabelValues(inodeStr).Set(float64(quota.MaxInodes))
-		} else {
-			m.dirQuotaMaxInodesG.DeleteLabelValues(inodeStr)
-		}
+		m.dirQuotaMaxSpaceG.WithLabelValues(inodeStr).Set(float64(quota.MaxSpace))
+		m.dirQuotaMaxInodesG.WithLabelValues(inodeStr).Set(float64(quota.MaxInodes))
 		m.dirQuotaUsedSpaceG.WithLabelValues(inodeStr).Set(float64(quota.UsedSpace))
 		m.dirQuotaUsedInodesG.WithLabelValues(inodeStr).Set(float64(quota.UsedInodes))
-
-		m.dirQuotaMetricKeys[inode] = struct{}{}
+		m.dirQuotaMetricKeys[inode] = true
 	}
 }
 
@@ -984,30 +965,11 @@ func (m *baseMeta) updateUserQuotaMetrics(userQuotas map[uint64]Quota) {
 	defer m.quotaMetricMu.Unlock()
 	for uid, quota := range userQuotas {
 		uidStr := strconv.FormatUint(uid, 10)
-
-		if quota.MaxSpace <= 0 && quota.MaxInodes <= 0 {
-			m.userQuotaMaxSpaceG.DeleteLabelValues(uidStr)
-			m.userQuotaMaxInodesG.DeleteLabelValues(uidStr)
-			m.userQuotaUsedSpaceG.DeleteLabelValues(uidStr)
-			m.userQuotaUsedInodesG.DeleteLabelValues(uidStr)
-			delete(m.userQuotaMetricKeys, uid)
-			continue
-		}
-
-		if quota.MaxSpace > 0 {
-			m.userQuotaMaxSpaceG.WithLabelValues(uidStr).Set(float64(quota.MaxSpace))
-		} else {
-			m.userQuotaMaxSpaceG.DeleteLabelValues(uidStr)
-		}
-		if quota.MaxInodes > 0 {
-			m.userQuotaMaxInodesG.WithLabelValues(uidStr).Set(float64(quota.MaxInodes))
-		} else {
-			m.userQuotaMaxInodesG.DeleteLabelValues(uidStr)
-		}
+		m.userQuotaMaxSpaceG.WithLabelValues(uidStr).Set(float64(quota.MaxSpace))
+		m.userQuotaMaxInodesG.WithLabelValues(uidStr).Set(float64(quota.MaxInodes))
 		m.userQuotaUsedSpaceG.WithLabelValues(uidStr).Set(float64(quota.UsedSpace))
 		m.userQuotaUsedInodesG.WithLabelValues(uidStr).Set(float64(quota.UsedInodes))
-
-		m.userQuotaMetricKeys[uid] = struct{}{}
+		m.userQuotaMetricKeys[uid] = true
 	}
 }
 
@@ -1016,30 +978,11 @@ func (m *baseMeta) updateGroupQuotaMetrics(groupQuotas map[uint64]Quota) {
 	defer m.quotaMetricMu.Unlock()
 	for gid, quota := range groupQuotas {
 		gidStr := strconv.FormatUint(gid, 10)
-
-		if quota.MaxSpace <= 0 && quota.MaxInodes <= 0 {
-			m.groupQuotaMaxSpaceG.DeleteLabelValues(gidStr)
-			m.groupQuotaMaxInodesG.DeleteLabelValues(gidStr)
-			m.groupQuotaUsedSpaceG.DeleteLabelValues(gidStr)
-			m.groupQuotaUsedInodesG.DeleteLabelValues(gidStr)
-			delete(m.groupQuotaMetricKeys, gid)
-			continue
-		}
-
-		if quota.MaxSpace > 0 {
-			m.groupQuotaMaxSpaceG.WithLabelValues(gidStr).Set(float64(quota.MaxSpace))
-		} else {
-			m.groupQuotaMaxSpaceG.DeleteLabelValues(gidStr)
-		}
-		if quota.MaxInodes > 0 {
-			m.groupQuotaMaxInodesG.WithLabelValues(gidStr).Set(float64(quota.MaxInodes))
-		} else {
-			m.groupQuotaMaxInodesG.DeleteLabelValues(gidStr)
-		}
+		m.groupQuotaMaxSpaceG.WithLabelValues(gidStr).Set(float64(quota.MaxSpace))
+		m.groupQuotaMaxInodesG.WithLabelValues(gidStr).Set(float64(quota.MaxInodes))
 		m.groupQuotaUsedSpaceG.WithLabelValues(gidStr).Set(float64(quota.UsedSpace))
 		m.groupQuotaUsedInodesG.WithLabelValues(gidStr).Set(float64(quota.UsedInodes))
-
-		m.groupQuotaMetricKeys[gid] = struct{}{}
+		m.groupQuotaMetricKeys[gid] = true
 	}
 }
 

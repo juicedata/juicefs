@@ -263,11 +263,10 @@ type baseMeta struct {
 	userQuotas  map[uint64]*Quota // uid -> quota
 	groupQuotas map[uint64]*Quota // gid -> quota
 
-	// quota metrics book-keeping, so we can avoid calling Reset()
 	quotaMetricMu        sync.Mutex
-	dirQuotaMetricKeys   map[uint64]struct{}
-	userQuotaMetricKeys  map[uint64]struct{}
-	groupQuotaMetricKeys map[uint64]struct{}
+	dirQuotaMetricKeys   map[uint64] bool
+	userQuotaMetricKeys  map[uint64] bool
+	groupQuotaMetricKeys map[uint64] bool
 
 	freeMu           sync.Mutex
 	freeInodes       freeID
@@ -454,9 +453,9 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			[]string{"gid"},
 		),
 
-		dirQuotaMetricKeys:   make(map[uint64]struct{}),
-		userQuotaMetricKeys:  make(map[uint64]struct{}),
-		groupQuotaMetricKeys: make(map[uint64]struct{}),
+		dirQuotaMetricKeys:   make(map[uint64]bool),
+		userQuotaMetricKeys:  make(map[uint64]bool),
+		groupQuotaMetricKeys: make(map[uint64]bool),
 	}
 }
 
@@ -506,22 +505,13 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 		}
 	}()
 
-	// periodical quota metric clean-up:
-	// scan existing metric label values every hour and delete the ones
-	// whose corresponding quota has been removed or disabled.
 	go func() {
-		ticker := time.NewTicker(time.Hour)
-		defer ticker.Stop()
 		for {
 			if m.sessCtx != nil && m.sessCtx.Canceled() {
 				return
 			}
-			select {
-			case <-ticker.C:
-				m.cleanupQuotaMetrics()
-			case <-m.sessCtx.Done():
-				return
-			}
+			m.cleanupQuotaMetrics()
+			utils.SleepWithJitter(time.Hour)
 		}
 	}()
 }
