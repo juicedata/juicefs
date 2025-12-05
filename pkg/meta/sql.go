@@ -2601,11 +2601,11 @@ func recordGlobalDeletionStats(
 func recordUserGroupDeletionStats(
 	n *node,
 	ugSpace int64,
-	userGroupQuotas *[]UserGroupQuotaDelta,
+	userGroupQuotas *[]userGroupQuotaDelta,
 	isTrash bool,
 ) {
 	if userGroupQuotas != nil && !isTrash {
-		*userGroupQuotas = append(*userGroupQuotas, UserGroupQuotaDelta{
+		*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
 			Uid:    n.Uid,
 			Gid:    n.Gid,
 			Space:  -ugSpace,
@@ -2614,7 +2614,7 @@ func recordUserGroupDeletionStats(
 	}
 }
 
-func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]UserGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
+func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
 	if len(entries) == 0 {
 		return 0
 	}
@@ -2636,7 +2636,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 	var entryInfos []entryInfo
 	var totalLength, totalSpace, totalInodes int64
 	if userGroupQuotas != nil {
-		*userGroupQuotas = make([]UserGroupQuotaDelta, 0, len(entries))
+		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
 	}
 	err := m.txn(func(s *xorm.Session) error {
 		pn := node{Inode: parent}

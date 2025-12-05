@@ -327,14 +327,6 @@ type Summary struct {
 	Dirs   uint64
 }
 
-// UserGroupQuotaDelta represents quota changes for a specific user and group.
-type UserGroupQuotaDelta struct {
-	Uid    uint32
-	Gid    uint32
-	Space  int64
-	Inodes int64
-}
-
 type TreeSummary struct {
 	Inode    Ino
 	Path     string
