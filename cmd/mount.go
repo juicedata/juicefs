@@ -412,6 +412,9 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Config, m meta.Meta, blob object.ObjectStorage, registerer prometheus.Registerer, registry *prometheus.Registry) {
 	metricsAddr := exposeMetrics(c, registerer, registry)
 	m.InitMetrics(registerer)
+	if !metaConf.NoBGJob {
+		m.InitSharedMetrics(registerer)
+	}
 	vfs.InitMetrics(registerer)
 	vfsConf.Port.PrometheusAgent = metricsAddr
 	if c.IsSet("consul") {
