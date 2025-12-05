@@ -194,8 +194,8 @@ func (s *ibmcos) List(prefix, start, token, delimiter string, limit int64, follo
 		o := resp.Contents[i]
 		var err error
 		var oKey string
-		if *resp.EncodingType == "url" {
-			oKey, err = url.QueryUnescape(*o.Key)
+		if resp.EncodingType == nil {
+			oKey, err = decodeKey(*o.Key, *resp.EncodingType)
 		} else {
 			oKey = *o.Key
 		}
@@ -208,8 +208,8 @@ func (s *ibmcos) List(prefix, start, token, delimiter string, limit int64, follo
 		for _, p := range resp.CommonPrefixes {
 			var prefix string
 			var err error
-			if *resp.EncodingType == "url" {
-				prefix, err = url.QueryUnescape(*p.Prefix)
+			if resp.EncodingType != nil {
+				prefix, err = decodeKey(*p.Prefix, *resp.EncodingType)
 			} else {
 				prefix = *p.Prefix
 			}
