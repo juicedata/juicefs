@@ -1427,6 +1427,10 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 	return errno(err)
 }
 
+func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
+	return syscall.ENOTSUP
+}
+
 func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldAttr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
