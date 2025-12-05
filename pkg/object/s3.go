@@ -245,7 +245,13 @@ func (s *s3client) List(prefix, start, token, delimiter string, limit int64, fol
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		oKey, err := url.QueryUnescape(*o.Key)
+		var err error
+		var oKey string
+		if resp.EncodingType == types.EncodingTypeUrl {
+			oKey, err = url.QueryUnescape(*o.Key)
+		} else {
+			oKey = *o.Key
+		}
 		if err != nil {
 			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
@@ -262,7 +268,13 @@ func (s *s3client) List(prefix, start, token, delimiter string, limit int64, fol
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
-			prefix, err := url.QueryUnescape(*p.Prefix)
+			var prefix string
+			var err error
+			if resp.EncodingType == types.EncodingTypeUrl {
+				prefix, err = url.QueryUnescape(*p.Prefix)
+			} else {
+				prefix = *p.Prefix
+			}
 			if err != nil {
 				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
