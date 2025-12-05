@@ -236,10 +236,7 @@ func (s *sliceReader) invalidate() {
 	case NEW:
 	case BUSY:
 		s.state = REFRESH
-		if s.refs == 0 {
-			s.cancel()
-			s.ctx, s.cancel = context.WithCancel(context.Background())
-		}
+		// TODO cancel ongoing read
 	case READY:
 		if s.refs > 0 {
 			s.state = NEW
