@@ -35,11 +35,17 @@ import (
 
 type minio struct {
 	s3client
-	endpoint string
 }
 
 func (m *minio) String() string {
-	return fmt.Sprintf("minio://%s/%s/", m.endpoint, m.s3client.bucket)
+	if m.s3.Options().BaseEndpoint != nil {
+		endpoint := *m.s3.Options().BaseEndpoint
+		if idx := strings.Index(endpoint, "://"); idx >= 0 {
+			endpoint = endpoint[idx+3:]
+		}
+		return fmt.Sprintf("minio://%s/%s/", endpoint, m.bucket)
+	}
+	return fmt.Sprintf("minio://%s/", m.bucket)
 }
 
 func (m *minio) Limits() Limits {
@@ -103,7 +109,7 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		bucket = bucket[len("minio/"):]
 	}
 	bucket = strings.Split(bucket, "/")[0]
-	return &minio{s3client{bucket: bucket, s3: client, region: region}, endpoint}, nil
+	return &minio{s3client{bucket: bucket, s3: client, region: region}}, nil
 }
 
 func init() {
