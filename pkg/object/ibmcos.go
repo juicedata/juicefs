@@ -194,7 +194,7 @@ func (s *ibmcos) List(prefix, start, token, delimiter string, limit int64, follo
 		o := resp.Contents[i]
 		var err error
 		var oKey string
-		if resp.EncodingType == nil {
+		if resp.EncodingType != nil {
 			oKey, err = decodeKey(*o.Key, *resp.EncodingType)
 		} else {
 			oKey = *o.Key
