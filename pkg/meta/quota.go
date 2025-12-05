@@ -19,6 +19,7 @@ package meta
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -922,4 +923,124 @@ func (m *baseMeta) handleQuotaCheck(ctx Context, qtype uint32, key uint64, dpath
 	}
 
 	return fmt.Errorf("quota of %s is inconsistent, please repair it with --repair flag", dpath)
+}
+
+func (m *baseMeta) updateQuotaMetrics() {
+	m.quotaMu.RLock()
+	dirQuotasSnapshot := make(map[uint64]Quota)
+	for inode, quota := range m.dirQuotas {
+		dirQuotasSnapshot[inode] = quota.snap()
+	}
+
+	userQuotasSnapshot := make(map[uint64]Quota)
+	for uid, quota := range m.userQuotas {
+		userQuotasSnapshot[uid] = quota.snap()
+	}
+
+	groupQuotasSnapshot := make(map[uint64]Quota)
+	for gid, quota := range m.groupQuotas {
+		groupQuotasSnapshot[gid] = quota.snap()
+	}
+	m.quotaMu.RUnlock()
+	m.updateDirQuotaMetrics(dirQuotasSnapshot)
+	m.updateUserQuotaMetrics(userQuotasSnapshot)
+	m.updateGroupQuotaMetrics(groupQuotasSnapshot)
+}
+
+func (m *baseMeta) updateDirQuotaMetrics(dirQuotas map[uint64]Quota) {
+	m.quotaMetricMu.Lock()
+	defer m.quotaMetricMu.Unlock()
+	for inode, quota := range dirQuotas {
+		inodeStr := strconv.FormatUint(inode, 10)
+		m.dirQuotaMaxSpaceG.WithLabelValues(inodeStr).Set(float64(quota.MaxSpace))
+		m.dirQuotaMaxInodesG.WithLabelValues(inodeStr).Set(float64(quota.MaxInodes))
+		m.dirQuotaUsedSpaceG.WithLabelValues(inodeStr).Set(float64(quota.UsedSpace))
+		m.dirQuotaUsedInodesG.WithLabelValues(inodeStr).Set(float64(quota.UsedInodes))
+		m.dirQuotaMetricKeys[inode] = true
+	}
+}
+
+func (m *baseMeta) updateUserQuotaMetrics(userQuotas map[uint64]Quota) {
+	m.quotaMetricMu.Lock()
+	defer m.quotaMetricMu.Unlock()
+	for uid, quota := range userQuotas {
+		uidStr := strconv.FormatUint(uid, 10)
+		m.userQuotaMaxSpaceG.WithLabelValues(uidStr).Set(float64(quota.MaxSpace))
+		m.userQuotaMaxInodesG.WithLabelValues(uidStr).Set(float64(quota.MaxInodes))
+		m.userQuotaUsedSpaceG.WithLabelValues(uidStr).Set(float64(quota.UsedSpace))
+		m.userQuotaUsedInodesG.WithLabelValues(uidStr).Set(float64(quota.UsedInodes))
+		m.userQuotaMetricKeys[uid] = true
+	}
+}
+
+func (m *baseMeta) updateGroupQuotaMetrics(groupQuotas map[uint64]Quota) {
+	m.quotaMetricMu.Lock()
+	defer m.quotaMetricMu.Unlock()
+	for gid, quota := range groupQuotas {
+		gidStr := strconv.FormatUint(gid, 10)
+		m.groupQuotaMaxSpaceG.WithLabelValues(gidStr).Set(float64(quota.MaxSpace))
+		m.groupQuotaMaxInodesG.WithLabelValues(gidStr).Set(float64(quota.MaxInodes))
+		m.groupQuotaUsedSpaceG.WithLabelValues(gidStr).Set(float64(quota.UsedSpace))
+		m.groupQuotaUsedInodesG.WithLabelValues(gidStr).Set(float64(quota.UsedInodes))
+		m.groupQuotaMetricKeys[gid] = true
+	}
+}
+
+func (m *baseMeta) cleanupQuotaMetrics() {
+	m.quotaMu.RLock()
+	dirQuotas := make(map[uint64]Quota, len(m.dirQuotas))
+	for inode, q := range m.dirQuotas {
+		dirQuotas[inode] = q.snap()
+	}
+	userQuotas := make(map[uint64]Quota, len(m.userQuotas))
+	for uid, q := range m.userQuotas {
+		userQuotas[uid] = q.snap()
+	}
+	groupQuotas := make(map[uint64]Quota, len(m.groupQuotas))
+	for gid, q := range m.groupQuotas {
+		groupQuotas[gid] = q.snap()
+	}
+	m.quotaMu.RUnlock()
+
+	m.quotaMetricMu.Lock()
+	defer m.quotaMetricMu.Unlock()
+
+	// directory quotas
+	for inode := range m.dirQuotaMetricKeys {
+		q, ok := dirQuotas[inode]
+		if !ok || (q.MaxSpace <= 0 && q.MaxInodes <= 0) {
+			inodeStr := strconv.FormatUint(inode, 10)
+			m.dirQuotaMaxSpaceG.DeleteLabelValues(inodeStr)
+			m.dirQuotaMaxInodesG.DeleteLabelValues(inodeStr)
+			m.dirQuotaUsedSpaceG.DeleteLabelValues(inodeStr)
+			m.dirQuotaUsedInodesG.DeleteLabelValues(inodeStr)
+			delete(m.dirQuotaMetricKeys, inode)
+		}
+	}
+
+	// user quotas
+	for uid := range m.userQuotaMetricKeys {
+		q, ok := userQuotas[uid]
+		if !ok || (q.MaxSpace <= 0 && q.MaxInodes <= 0) {
+			uidStr := strconv.FormatUint(uid, 10)
+			m.userQuotaMaxSpaceG.DeleteLabelValues(uidStr)
+			m.userQuotaMaxInodesG.DeleteLabelValues(uidStr)
+			m.userQuotaUsedSpaceG.DeleteLabelValues(uidStr)
+			m.userQuotaUsedInodesG.DeleteLabelValues(uidStr)
+			delete(m.userQuotaMetricKeys, uid)
+		}
+	}
+
+	// group quotas
+	for gid := range m.groupQuotaMetricKeys {
+		q, ok := groupQuotas[gid]
+		if !ok || (q.MaxSpace <= 0 && q.MaxInodes <= 0) {
+			gidStr := strconv.FormatUint(gid, 10)
+			m.groupQuotaMaxSpaceG.DeleteLabelValues(gidStr)
+			m.groupQuotaMaxInodesG.DeleteLabelValues(gidStr)
+			m.groupQuotaUsedSpaceG.DeleteLabelValues(gidStr)
+			m.groupQuotaUsedInodesG.DeleteLabelValues(gidStr)
+			delete(m.groupQuotaMetricKeys, gid)
+		}
+	}
 }

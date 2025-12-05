@@ -263,6 +263,11 @@ type baseMeta struct {
 	userQuotas  map[uint64]*Quota // uid -> quota
 	groupQuotas map[uint64]*Quota // gid -> quota
 
+	quotaMetricMu        sync.Mutex
+	dirQuotaMetricKeys   map[uint64] bool
+	userQuotaMetricKeys  map[uint64] bool
+	groupQuotaMetricKeys map[uint64] bool
+
 	freeMu           sync.Mutex
 	freeInodes       freeID
 	freeSlices       freeID
@@ -278,6 +283,22 @@ type baseMeta struct {
 	opDist       prometheus.Histogram
 	opCount      *prometheus.CounterVec
 	opDuration   *prometheus.CounterVec
+
+	// Quota metrics
+	dirQuotaMaxSpaceG   *prometheus.GaugeVec
+	dirQuotaMaxInodesG  *prometheus.GaugeVec
+	dirQuotaUsedSpaceG  *prometheus.GaugeVec
+	dirQuotaUsedInodesG *prometheus.GaugeVec
+
+	userQuotaMaxSpaceG   *prometheus.GaugeVec
+	userQuotaMaxInodesG  *prometheus.GaugeVec
+	userQuotaUsedSpaceG  *prometheus.GaugeVec
+	userQuotaUsedInodesG *prometheus.GaugeVec
+
+	groupQuotaMaxSpaceG   *prometheus.GaugeVec
+	groupQuotaMaxInodesG  *prometheus.GaugeVec
+	groupQuotaUsedSpaceG  *prometheus.GaugeVec
+	groupQuotaUsedInodesG *prometheus.GaugeVec
 
 	en engine
 }
@@ -345,6 +366,96 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			Name: "meta_ops_duration_seconds",
 			Help: "Meta operation duration in seconds.",
 		}, []string{"method"}),
+
+		// quota metrics
+		dirQuotaMaxSpaceG: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "dir_quota_max_space_bytes",
+				Help: "Directory quota maximum space in bytes.",
+			},
+			[]string{"inode"},
+		),
+		dirQuotaMaxInodesG: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "dir_quota_max_inodes",
+				Help: "Directory quota maximum number of inodes.",
+			},
+			[]string{"inode"},
+		),
+		dirQuotaUsedSpaceG: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "dir_quota_used_space_bytes",
+				Help: "Directory quota used space in bytes.",
+			},
+			[]string{"inode"},
+		),
+		dirQuotaUsedInodesG: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "dir_quota_used_inodes",
+				Help: "Directory quota used number of inodes.",
+			},
+			[]string{"inode"},
+		),
+		userQuotaMaxSpaceG: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "user_quota_max_space_bytes",
+				Help: "User quota maximum space in bytes.",
+			},
+			[]string{"uid"},
+		),
+		userQuotaMaxInodesG: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "user_quota_max_inodes",
+				Help: "User quota maximum number of inodes.",
+			},
+			[]string{"uid"},
+		),
+		userQuotaUsedSpaceG: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "user_quota_used_space_bytes",
+				Help: "User quota used space in bytes.",
+			},
+			[]string{"uid"},
+		),
+		userQuotaUsedInodesG: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "user_quota_used_inodes",
+				Help: "User quota used number of inodes.",
+			},
+			[]string{"uid"},
+		),
+		groupQuotaMaxSpaceG: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "group_quota_max_space_bytes",
+				Help: "Group quota maximum space in bytes.",
+			},
+			[]string{"gid"},
+		),
+		groupQuotaMaxInodesG: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "group_quota_max_inodes",
+				Help: "Group quota maximum number of inodes.",
+			},
+			[]string{"gid"},
+		),
+		groupQuotaUsedSpaceG: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "group_quota_used_space_bytes",
+				Help: "Group quota used space in bytes.",
+			},
+			[]string{"gid"},
+		),
+		groupQuotaUsedInodesG: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "group_quota_used_inodes",
+				Help: "Group quota used number of inodes.",
+			},
+			[]string{"gid"},
+		),
+
+		dirQuotaMetricKeys:   make(map[uint64]bool),
+		userQuotaMetricKeys:  make(map[uint64]bool),
+		groupQuotaMetricKeys: make(map[uint64]bool),
 	}
 }
 
@@ -362,6 +473,20 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(m.opCount)
 	reg.MustRegister(m.opDuration)
 
+	// Register quota metrics
+	reg.MustRegister(m.dirQuotaMaxSpaceG)
+	reg.MustRegister(m.dirQuotaMaxInodesG)
+	reg.MustRegister(m.dirQuotaUsedSpaceG)
+	reg.MustRegister(m.dirQuotaUsedInodesG)
+	reg.MustRegister(m.userQuotaMaxSpaceG)
+	reg.MustRegister(m.userQuotaMaxInodesG)
+	reg.MustRegister(m.userQuotaUsedSpaceG)
+	reg.MustRegister(m.userQuotaUsedInodesG)
+	reg.MustRegister(m.groupQuotaMaxSpaceG)
+	reg.MustRegister(m.groupQuotaMaxInodesG)
+	reg.MustRegister(m.groupQuotaUsedSpaceG)
+	reg.MustRegister(m.groupQuotaUsedInodesG)
+
 	go func() {
 		for {
 			if m.sessCtx != nil && m.sessCtx.Canceled() {
@@ -375,7 +500,18 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 				m.totalSpaceG.Set(float64(totalSpace))
 				m.totalInodesG.Set(float64(iused + iavail))
 			}
+			m.updateQuotaMetrics()
 			utils.SleepWithJitter(time.Second * 10)
+		}
+	}()
+
+	go func() {
+		for {
+			if m.sessCtx != nil && m.sessCtx.Canceled() {
+				return
+			}
+			m.cleanupQuotaMetrics()
+			utils.SleepWithJitter(time.Hour)
 		}
 	}()
 }
