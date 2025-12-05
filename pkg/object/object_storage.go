@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -287,4 +288,11 @@ func generateListResult(objs []Object, limit int64) ([]Object, bool, string, err
 		nextMarker = objs[len(objs)-1].Key()
 	}
 	return objs, len(objs) == int(limit), nextMarker, nil
+}
+
+func decodeKey(value string, typ *string) (string, error) {
+	if typ != nil && *typ == "url" {
+		return url.QueryUnescape(value)
+	}
+	return value, nil
 }
