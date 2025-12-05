@@ -296,8 +296,8 @@ func generateListResult(objs []Object, limit int64) ([]Object, bool, string, err
 	return objs, len(objs) == int(limit), nextMarker, nil
 }
 
-func decodeKey(value string, typ string) (string, error) {
-	if typ == "url" {
+func decodeKey(value string, typ *string) (string, error) {
+	if typ != nil && *typ == "url" {
 		return url.QueryUnescape(value)
 	}
 	return value, nil

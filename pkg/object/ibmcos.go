@@ -192,13 +192,7 @@ func (s *ibmcos) List(prefix, start, token, delimiter string, limit int64, follo
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		var err error
-		var oKey string
-		if resp.EncodingType != nil {
-			oKey, err = decodeKey(*o.Key, *resp.EncodingType)
-		} else {
-			oKey = *o.Key
-		}
+		oKey, err := decodeKey(*o.Key, resp.EncodingType)
 		if err != nil {
 			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
@@ -206,13 +200,7 @@ func (s *ibmcos) List(prefix, start, token, delimiter string, limit int64, follo
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
-			var prefix string
-			var err error
-			if resp.EncodingType != nil {
-				prefix, err = decodeKey(*p.Prefix, *resp.EncodingType)
-			} else {
-				prefix = *p.Prefix
-			}
+			prefix, err := decodeKey(*p.Prefix, resp.EncodingType)
 			if err != nil {
 				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}

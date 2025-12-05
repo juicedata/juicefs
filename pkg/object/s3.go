@@ -245,7 +245,7 @@ func (s *s3client) List(prefix, start, token, delimiter string, limit int64, fol
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		oKey, err := decodeKey(*o.Key, string(resp.EncodingType))
+		oKey, err := decodeKey(*o.Key, aws.String(string(resp.EncodingType)))
 		if err != nil {
 			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
@@ -262,7 +262,7 @@ func (s *s3client) List(prefix, start, token, delimiter string, limit int64, fol
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
-			prefix, err = decodeKey(*p.Prefix, string(resp.EncodingType))
+			prefix, err := decodeKey(*p.Prefix, aws.String(string(resp.EncodingType)))
 			if err != nil {
 				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
