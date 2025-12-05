@@ -193,7 +193,7 @@ func (s *ibmcos) List(ctx context.Context, prefix, start, token, delimiter strin
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		oKey, err := url.QueryUnescape(*o.Key)
+		oKey, err := decodeKey(*o.Key, resp.EncodingType)
 		if err != nil {
 			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
@@ -201,7 +201,7 @@ func (s *ibmcos) List(ctx context.Context, prefix, start, token, delimiter strin
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
-			prefix, err := url.QueryUnescape(*p.Prefix)
+			prefix, err := decodeKey(*p.Prefix, resp.EncodingType)
 			if err != nil {
 				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
