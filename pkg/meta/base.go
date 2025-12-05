@@ -264,9 +264,9 @@ type baseMeta struct {
 	groupQuotas map[uint64]*Quota // gid -> quota
 
 	quotaMetricMu        sync.Mutex
-	dirQuotaMetricKeys   map[uint64] bool
-	userQuotaMetricKeys  map[uint64] bool
-	groupQuotaMetricKeys map[uint64] bool
+	dirQuotaMetricKeys   map[uint64]bool
+	userQuotaMetricKeys  map[uint64]bool
+	groupQuotaMetricKeys map[uint64]bool
 
 	freeMu           sync.Mutex
 	freeInodes       freeID
@@ -459,21 +459,16 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 	}
 }
 
-func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
+// InitSharedMetrics initialize the metrics that are same for all clients.
+func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 	if reg == nil {
 		return
 	}
+
 	reg.MustRegister(m.usedSpaceG)
 	reg.MustRegister(m.usedInodesG)
 	reg.MustRegister(m.totalSpaceG)
 	reg.MustRegister(m.totalInodesG)
-	reg.MustRegister(m.txDist)
-	reg.MustRegister(m.txRestart)
-	reg.MustRegister(m.opDist)
-	reg.MustRegister(m.opCount)
-	reg.MustRegister(m.opDuration)
-
-	// Register quota metrics
 	reg.MustRegister(m.dirQuotaMaxSpaceG)
 	reg.MustRegister(m.dirQuotaMaxInodesG)
 	reg.MustRegister(m.dirQuotaUsedSpaceG)
@@ -514,6 +509,17 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 			utils.SleepWithJitter(time.Hour)
 		}
 	}()
+}
+
+func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
+	if reg == nil {
+		return
+	}
+	reg.MustRegister(m.txDist)
+	reg.MustRegister(m.txRestart)
+	reg.MustRegister(m.opDist)
+	reg.MustRegister(m.opCount)
+	reg.MustRegister(m.opDuration)
 }
 
 func (m *baseMeta) timeit(method string, start time.Time) {

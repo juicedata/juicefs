@@ -526,6 +526,7 @@ type Meta interface {
 	// getBase return the base engine.
 	getBase() *baseMeta
 	InitMetrics(registerer prometheus.Registerer)
+	InitSharedMetrics(registerer prometheus.Registerer)
 
 	SetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
 	GetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
