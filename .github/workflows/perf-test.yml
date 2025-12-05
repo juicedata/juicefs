@@ -7,12 +7,14 @@ on:
       - 'release-*'
     paths:
       - '**/perf-test.yml'
+      - '**/perf/**'
   pull_request:
     branches:
       - 'main'
       - 'release-*'
     paths:
       - '**/perf-test.yml'
+      - '**/perf/**'
   schedule:
     - cron:  '0 20 * * *'
   workflow_dispatch:
@@ -40,9 +42,16 @@ jobs:
       fail-fast: false
       matrix:
         meta: ['redis', 'mysql', 'tikv']
+        cases: ["ai","mdtest_fio"]
     runs-on: ubuntu-22.04
 
     steps:
+      - name: Clean up
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /usr/local/.ghcup
+          sudo docker system prune -af
+          sudo df -h
+
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -71,9 +80,9 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           create_database $meta_url
 
-      - name: Install mdtest
+      - name: Install mdtest & fio
         run: |
-          sudo apt-get install mpich openmpi-bin libopenmpi-dev
+          sudo apt-get install mpich openmpi-bin libopenmpi-dev fio -y
           wget https://github.com/hpc/ior/releases/download/3.3.0/ior-3.3.0.tar.gz
           tar -xzvf ior-3.3.0.tar.gz
           cd ior-3.3.0
@@ -98,7 +107,7 @@ jobs:
         with:
           target: ${{steps.vars.outputs.target}}
 
-      - name: Run mdtest with current version
+      - name: Run benckmark with current version
         run: |
           mkdir -p /tmp/jfs/mdtest
           sudo chmod 777 /tmp/jfs
@@ -114,8 +123,8 @@ jobs:
           ./juicefs mount -d "$meta_url" /tmp/jfs --no-usage-report
           
           # Run tests
-          chmod +x .github/scripts/run_mdtest.sh
-          .github/scripts/run_mdtest.sh /tmp/jfs "./results/current_${{matrix.meta}}" "current"
+          chmod +x .github/scripts/perf/*.sh
+          .github/scripts/perf/${{matrix.cases}}.sh /tmp/jfs "./results/current_${{matrix.meta}}" "current"
 
       - name: Cleanup current version
         run: |
@@ -170,20 +179,13 @@ jobs:
           sudo chmod 777 /tmp/jfs_old
           juicefs mount -d "$meta_url" /tmp/jfs_old --no-usage-report
 
-      - name: Run mdtest with old version
+      - name: Run benchmark with old version
         run: |
-          .github/scripts/run_mdtest.sh /tmp/jfs_old "./results/old_${{matrix.meta}}" "old"
+          .github/scripts/perf/${{matrix.cases}}.sh /tmp/jfs_old "./results/old_${{matrix.meta}}" "old"
 
       - name: Compare results
         run: |
-          chmod +x .github/scripts/compare_results.sh
-          .github/scripts/compare_results.sh "./results/current_${{matrix.meta}}" "./results/old_${{matrix.meta}}" || true
-
-      - name: Upload results
-        uses: actions/upload-artifact@v4
-        with:
-          name: mdtest-results-${{ matrix.meta }}
-          path: results
+          .github/scripts/perf/compare_${{matrix.cases}}.sh "./results/current_${{matrix.meta}}" "./results/old_${{matrix.meta}}" || true
 
       - name: Send Slack Notification
         if: failure()
