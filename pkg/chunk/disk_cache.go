@@ -976,36 +976,34 @@ func (cache *cacheStore) scanStaging() {
 		if err != nil {
 			return nil // ignore it
 		}
-		fi, _ := d.Info()
-		if fi != nil {
-			if fi.IsDir() || strings.HasSuffix(path, ".tmp") {
-				if fi.ModTime().Before(oneMinAgo) {
-					// try to remove empty directory
-					if cache.removeFile(path) == nil {
-						logger.Debugf("Remove empty directory: %s", path)
-					}
+		if d.IsDir() || strings.HasSuffix(path, ".tmp") {
+			fi, _ := d.Info()
+			if fi.ModTime().Before(oneMinAgo) {
+				// try to remove empty directory
+				if cache.removeFile(path) == nil {
+					logger.Debugf("Remove empty directory: %s", path)
 				}
-			} else {
-				key := path[len(stagingPrefix)+1:]
-				if runtime.GOOS == "windows" {
-					key = strings.ReplaceAll(key, "\\", "/")
-				}
-				if !pathReg.MatchString(key) {
-					logger.Warnf("Ignore invalid file in staging: %s", path)
-					return nil
-				}
-				origSize := parseObjOrigSize(key)
-				if origSize == 0 {
-					logger.Warnf("Ignore file with zero size: %s", path)
-					return nil
-				}
-				logger.Debugf("Found staging block: %s", path)
-				cache.m.stageBlocks.Add(1)
-				cache.m.stageBlockBytes.Add(float64(origSize))
-				cache.uploader(key, path, false)
-				count++
-				usage += uint64(origSize)
 			}
+		} else {
+			key := path[len(stagingPrefix)+1:]
+			if runtime.GOOS == "windows" {
+				key = strings.ReplaceAll(key, "\\", "/")
+			}
+			if !pathReg.MatchString(key) {
+				logger.Warnf("Ignore invalid file in staging: %s", path)
+				return nil
+			}
+			origSize := parseObjOrigSize(key)
+			if origSize == 0 {
+				logger.Warnf("Ignore file with zero size: %s", path)
+				return nil
+			}
+			logger.Debugf("Found staging block: %s", path)
+			cache.m.stageBlocks.Add(1)
+			cache.m.stageBlockBytes.Add(float64(origSize))
+			cache.uploader(key, path, false)
+			count++
+			usage += uint64(origSize)
 		}
 		return nil
 	})
