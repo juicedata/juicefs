@@ -33,6 +33,12 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:        
+      - name: Clean up
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /usr/local/.ghcup
+          sudo docker system prune -af
+          sudo df -h
+
       - name: Checkout
         uses: actions/checkout@v3
         with:
