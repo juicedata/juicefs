@@ -2586,6 +2586,288 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	}))
 }
 
+func recordGlobalDeletionStats(
+	n *node,
+	entrySpace int64,
+	totalLength *int64,
+	totalSpace *int64,
+	totalInodes *int64,
+) {
+	*totalLength -= int64(n.Length)
+	*totalSpace -= entrySpace
+	*totalInodes--
+}
+
+func recordUserGroupDeletionStats(
+	n *node,
+	ugSpace int64,
+	userGroupQuotas *[]userGroupQuotaDelta,
+	isTrash bool,
+) {
+	if userGroupQuotas != nil && !isTrash {
+		*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
+			Uid:    n.Uid,
+			Gid:    n.Gid,
+			Space:  -ugSpace,
+			Inodes: -1,
+		})
+	}
+}
+
+func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
+	if len(entries) == 0 {
+		return 0
+	}
+
+	var trash Ino
+	if len(skipCheckTrash) == 0 || !skipCheckTrash[0] {
+		if st := m.checkTrash(parent, &trash); st != 0 {
+			return st
+		}
+	}
+
+	type entryInfo struct {
+		e         *edge
+		trash     Ino
+		n         *node // n edges : 1 inode
+		opened    bool  // node is opened
+		trashName string
+	}
+	var entryInfos []entryInfo
+	var totalLength, totalSpace, totalInodes int64
+	if userGroupQuotas != nil {
+		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
+	}
+	err := m.txn(func(s *xorm.Session) error {
+		pn := node{Inode: parent}
+		ok, err := s.Get(&pn)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return syscall.ENOENT
+		}
+		if pn.Type != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		var pattr Attr
+		m.parseAttr(&pn, &pattr)
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+			return st
+		}
+		if (pn.Flags&FlagAppend != 0) || (pn.Flags&FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
+		entryInfos = make([]entryInfo, 0, len(entries))
+		now := time.Now().UnixNano()
+
+		inodes := make([]Ino, 0, len(entries))
+		inodeM := make(map[Ino]struct{}) // filter hardlinks
+		for _, entry := range entries {
+			e := &edge{Parent: parent, Name: entry.Name, Inode: entry.Inode}
+			if entry.Attr != nil {
+				e.Type = entry.Attr.Typ
+			}
+			entryInfos = append(entryInfos, entryInfo{e: e, trash: trash})
+			if _, exists := inodeM[entry.Inode]; !exists {
+				inodeM[entry.Inode] = struct{}{}
+				inodes = append(inodes, entry.Inode)
+			}
+		}
+
+		if len(inodes) > 0 {
+			var nodes []node
+			if err := s.ForUpdate().In("inode", inodes).Find(&nodes); err != nil {
+				return err
+			}
+			// some inodes may not exist
+			nodeMap := make(map[Ino]*node, len(nodes))
+			for i := range nodes {
+				nodeMap[nodes[i].Inode] = &nodes[i]
+			}
+
+			dumpNode := &node{}
+			for i := range entryInfos {
+				info := &entryInfos[i]
+				n, ok := nodeMap[info.e.Inode]
+				if !ok {
+					entryInfos[i].trash = 0
+					entryInfos[i].n = dumpNode
+					continue
+				}
+				if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
+					return syscall.EACCES
+				}
+				if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
+					return syscall.EPERM
+				}
+				if (n.Flags & FlagSkipTrash) != 0 {
+					info.trash = 0
+				}
+				info.n = n
+			}
+		}
+
+		for i := range entryInfos {
+			info := &entryInfos[i]
+			if info.e.Type == TypeDirectory {
+				continue
+			}
+
+			if info.trash > 0 && info.n.Nlink > 1 {
+				info.trashName = m.trashEntry(parent, info.e.Inode, string(info.e.Name))
+				te := edge{
+					Parent: info.trash,
+					Name:   []byte(info.trashName),
+					Inode:  info.n.Inode,
+					Type:   info.n.Type,
+				}
+				if ok, err := s.Get(&te); err == nil && ok {
+					info.trash = 0
+				}
+			}
+			info.n.setCtime(now)
+			if info.trash > 0 && info.n.Parent > 0 {
+				info.n.Parent = info.trash
+			}
+			if info.trash == 0 {
+				info.n.Nlink--
+				if info.n.Type == TypeFile && info.n.Nlink == 0 && m.sid > 0 {
+					info.opened = m.of.IsOpen(info.e.Inode)
+				}
+			}
+		}
+
+		var updateParent bool
+		if !parent.IsTrash() && time.Duration(now-pn.getMtime()) >= m.conf.SkipDirMtime {
+			pn.setMtime(now)
+			pn.setCtime(now)
+			updateParent = true
+		}
+
+		nowUnix := time.Now().Unix()
+		visited := make(map[Ino]bool)
+		visited[0] = true // skip dummyNode
+		for _, info := range entryInfos {
+			if info.n.Type == TypeDirectory {
+				continue
+			}
+			e := edge{Parent: parent, Name: info.e.Name}
+			if _, err := s.Delete(&e); err != nil {
+				return err
+			}
+			if !visited[info.n.Inode] {
+				if info.n.Nlink > 0 {
+					if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
+						return err
+					}
+					if info.n.Type == TypeFile {
+						recordUserGroupDeletionStats(info.n, 0, userGroupQuotas, parent.IsTrash())
+					}
+				} else {
+					var entrySpace int64
+					needRecordStats := false
+					switch info.n.Type {
+					case TypeFile:
+						entrySpace = align4K(info.n.Length)
+						needRecordStats = true
+						if info.opened {
+							if err := mustInsert(s, &sustained{Sid: m.sid, Inode: info.e.Inode}); err != nil {
+								return err
+							}
+							if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
+								return err
+							}
+						} else {
+							if err := mustInsert(s, &delfile{info.e.Inode, info.n.Length, nowUnix}); err != nil {
+								return err
+							}
+							if _, err := s.Delete(&node{Inode: info.e.Inode}); err != nil {
+								return err
+							}
+						}
+					case TypeSymlink:
+						if _, err := s.Delete(&symlink{Inode: info.e.Inode}); err != nil {
+							return err
+						}
+						fallthrough
+					default:
+						if _, err := s.Delete(&node{Inode: info.e.Inode}); err != nil {
+							return err
+						}
+						if info.n.Type != TypeFile {
+							entrySpace = align4K(0)
+							needRecordStats = true
+						}
+					}
+					if needRecordStats {
+						recordGlobalDeletionStats(info.n, entrySpace, &totalLength, &totalSpace, &totalInodes)
+						recordUserGroupDeletionStats(info.n, entrySpace, userGroupQuotas, parent.IsTrash())
+					}
+					if _, err := s.Delete(&xattr{Inode: info.e.Inode}); err != nil {
+						return err
+					}
+				}
+				m.of.InvalidateChunk(info.e.Inode, invalidateAttrOnly)
+			}
+			if info.n.Nlink > 0 && info.trash > 0 {
+				if info.trashName == "" {
+					info.trashName = m.trashEntry(parent, info.e.Inode, string(info.e.Name))
+				}
+				if err = mustInsert(s, &edge{
+					Parent: info.trash,
+					Name:   []byte(info.trashName),
+					Inode:  info.n.Inode,
+					Type:   info.n.Type}); err != nil {
+					return err
+				}
+			}
+			visited[info.n.Inode] = true
+		}
+
+		if updateParent {
+			var _n int64
+			if _n, err = s.Cols("mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode}); err != nil || _n == 0 {
+				if err == nil {
+					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, pn.Inode)
+					if m.Name() == "mysql" {
+						err = syscall.EBUSY
+					} else {
+						err = syscall.ENOENT
+					}
+				}
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return errno(err)
+	}
+
+	visited := make(map[Ino]bool)
+	visited[0] = true // skip dummyNode
+	for _, info := range entryInfos {
+		if info.trash != 0 || visited[info.n.Inode] {
+			continue
+		}
+		visited[info.n.Inode] = true
+		if info.n.Type == TypeFile && info.n.Nlink == 0 {
+			m.fileDeleted(info.opened, parent.IsTrash(), info.e.Inode, info.n.Length)
+		}
+	}
+	m.updateStats(totalSpace, totalInodes)
+	
+	*length = totalLength
+	*space = totalSpace
+	*inodes = totalInodes
+	return 0
+}
+
 func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 	var fail bool
 	// release locks
