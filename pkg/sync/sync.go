@@ -1767,7 +1767,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 			if failed != nil {
 				if n := failed.Current(); n > 0 || total > handled.Current()+extra.Current() {
-					return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
+					return fmt.Errorf("failed to handle %d objects", n+total-handled.Current()-extra.Current())
 				}
 			}
 		} else {
