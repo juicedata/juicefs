@@ -2675,12 +2675,18 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 			}
 		}
 
+		type edgeKey struct {
+			Parent Ino
+			Name   string
+		}
+		edgeKeys := make([]edgeKey, 0)
+		edgeExists := make(map[edgeKey]bool)
+
 		if len(inodes) > 0 {
 			var nodes []node
 			if err := s.ForUpdate().In("inode", inodes).Find(&nodes); err != nil {
 				return err
 			}
-			// some inodes may not exist
 			nodeMap := make(map[Ino]*node, len(nodes))
 			for i := range nodes {
 				nodeMap[nodes[i].Inode] = &nodes[i]
@@ -2705,35 +2711,29 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 					info.trash = 0
 				}
 				info.n = n
-			}
-		}
-
-		for i := range entryInfos {
-			info := &entryInfos[i]
-			if info.e.Type == TypeDirectory {
-				continue
-			}
-
-			if info.trash > 0 && info.n.Nlink > 1 {
-				info.trashName = m.trashEntry(parent, info.e.Inode, string(info.e.Name))
-				te := edge{
-					Parent: info.trash,
-					Name:   []byte(info.trashName),
-					Inode:  info.n.Inode,
-					Type:   info.n.Type,
-				}
-				if ok, err := s.Get(&te); err == nil && ok {
-					info.trash = 0
+				if info.e.Type != TypeDirectory && info.trash > 0 && info.n.Nlink > 1 {
+					info.trashName = m.trashEntry(parent, info.e.Inode, string(info.e.Name))
+					key := edgeKey{Parent: info.trash, Name: info.trashName}
+					edgeKeys = append(edgeKeys, key)
 				}
 			}
-			info.n.setCtime(now)
-			if info.trash > 0 && info.n.Parent > 0 {
-				info.n.Parent = info.trash
-			}
-			if info.trash == 0 {
-				info.n.Nlink--
-				if info.n.Type == TypeFile && info.n.Nlink == 0 && m.sid > 0 {
-					info.opened = m.of.IsOpen(info.e.Inode)
+
+			if len(edgeKeys) > 0 {
+				var edges []edge
+				query := s.Table(&edge{})
+				for i, key := range edgeKeys {
+					if i == 0 {
+						query = query.Where("parent = ? AND name = ?", key.Parent, []byte(key.Name))
+					} else {
+						query = query.Or("parent = ? AND name = ?", key.Parent, []byte(key.Name))
+					}
+				}
+				if err := query.Find(&edges); err != nil {
+					return err
+				}
+				for _, e := range edges {
+					key := edgeKey{Parent: e.Parent, Name: string(e.Name)}
+					edgeExists[key] = true
 				}
 			}
 		}
@@ -2748,14 +2748,38 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		nowUnix := time.Now().Unix()
 		visited := make(map[Ino]bool)
 		visited[0] = true // skip dummyNode
+
+		edgesDel := make([]edge, 0)
+		sustainedIns := make([]interface{}, 0)
+		delfilesIns := make([]interface{}, 0)
+		nodesDel := make([]Ino, 0)
+		symlinksDel := make([]Ino, 0)
+		xattrsDel := make([]Ino, 0)
+		edgesIns := make([]interface{}, 0)
+
 		for _, info := range entryInfos {
 			if info.n.Type == TypeDirectory {
 				continue
 			}
-			e := edge{Parent: parent, Name: info.e.Name}
-			if _, err := s.Delete(&e); err != nil {
-				return err
+
+			if info.trash > 0 && info.n.Nlink > 1 && info.trashName != "" {
+				key := edgeKey{Parent: info.trash, Name: info.trashName}
+				if edgeExists[key] {
+					info.trash = 0
+				}
 			}
+			info.n.setCtime(now)
+			if info.trash > 0 && info.n.Parent > 0 {
+				info.n.Parent = info.trash
+			}
+			if info.trash == 0 {
+				info.n.Nlink--
+				if info.n.Type == TypeFile && info.n.Nlink == 0 && m.sid > 0 {
+					info.opened = m.of.IsOpen(info.e.Inode)
+				}
+			}
+
+			edgesDel = append(edgesDel, edge{Parent: parent, Name: info.e.Name})
 			if !visited[info.n.Inode] {
 				if info.n.Nlink > 0 {
 					if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
@@ -2772,29 +2796,19 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 						entrySpace = align4K(info.n.Length)
 						needRecordStats = true
 						if info.opened {
-							if err := mustInsert(s, &sustained{Sid: m.sid, Inode: info.e.Inode}); err != nil {
-								return err
-							}
+							sustainedIns = append(sustainedIns, &sustained{Sid: m.sid, Inode: info.e.Inode})
 							if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
 								return err
 							}
 						} else {
-							if err := mustInsert(s, &delfile{info.e.Inode, info.n.Length, nowUnix}); err != nil {
-								return err
-							}
-							if _, err := s.Delete(&node{Inode: info.e.Inode}); err != nil {
-								return err
-							}
+							delfilesIns = append(delfilesIns, &delfile{info.e.Inode, info.n.Length, nowUnix})
+							nodesDel = append(nodesDel, info.e.Inode)
 						}
 					case TypeSymlink:
-						if _, err := s.Delete(&symlink{Inode: info.e.Inode}); err != nil {
-							return err
-						}
+						symlinksDel = append(symlinksDel, info.e.Inode)
 						fallthrough
 					default:
-						if _, err := s.Delete(&node{Inode: info.e.Inode}); err != nil {
-							return err
-						}
+						nodesDel = append(nodesDel, info.e.Inode)
 						if info.n.Type != TypeFile {
 							entrySpace = align4K(0)
 							needRecordStats = true
@@ -2804,9 +2818,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 						recordGlobalDeletionStats(info.n, entrySpace, &totalLength, &totalSpace, &totalInodes)
 						recordUserGroupDeletionStats(info.n, entrySpace, userGroupQuotas, parent.IsTrash())
 					}
-					if _, err := s.Delete(&xattr{Inode: info.e.Inode}); err != nil {
-						return err
-					}
+					xattrsDel = append(xattrsDel, info.e.Inode)
 				}
 				m.of.InvalidateChunk(info.e.Inode, invalidateAttrOnly)
 			}
@@ -2814,15 +2826,58 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 				if info.trashName == "" {
 					info.trashName = m.trashEntry(parent, info.e.Inode, string(info.e.Name))
 				}
-				if err = mustInsert(s, &edge{
+				edgesIns = append(edgesIns, &edge{
 					Parent: info.trash,
 					Name:   []byte(info.trashName),
 					Inode:  info.n.Inode,
-					Type:   info.n.Type}); err != nil {
-					return err
-				}
+					Type:   info.n.Type})
 			}
 			visited[info.n.Inode] = true
+		}
+
+		if len(edgesDel) > 0 {
+			query := s.Table(&edge{})
+			for j, e := range edgesDel {
+				if j == 0 {
+					query = query.Where("parent = ? AND name = ?", e.Parent, e.Name)
+				} else {
+					query = query.Or("parent = ? AND name = ?", e.Parent, e.Name)
+				}
+			}
+			if _, err := query.Delete(&edge{}); err != nil {
+				return err
+			}
+		}
+
+		if len(sustainedIns) > 0 {
+			if err := mustInsert(s, sustainedIns...); err != nil {
+				return err
+			}
+		}
+		if len(delfilesIns) > 0 {
+			if err := mustInsert(s, delfilesIns...); err != nil {
+				return err
+			}
+		}
+		if len(nodesDel) > 0 {
+			if _, err := s.In("inode", nodesDel).Delete(&node{}); err != nil {
+				return err
+			}
+		}
+		if len(symlinksDel) > 0 {
+			if _, err := s.In("inode", symlinksDel).Delete(&symlink{}); err != nil {
+				return err
+			}
+		}
+		if len(xattrsDel) > 0 {
+			if _, err := s.In("inode", xattrsDel).Delete(&xattr{}); err != nil {
+				return err
+			}
+		}
+		if len(edgesIns) > 0 {
+			if err := mustInsert(s, edgesIns...); err != nil {
+				return err
+			}
 		}
 
 		if updateParent {
@@ -2861,7 +2916,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		}
 	}
 	m.updateStats(totalSpace, totalInodes)
-	
+
 	*length = totalLength
 	*space = totalSpace
 	*inodes = totalInodes
