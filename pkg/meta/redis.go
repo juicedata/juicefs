@@ -2883,7 +2883,6 @@ func (m *redisMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, err
 }
 
 func (m *redisMeta) doCleanupSlices(ctx Context) {
-	logger.Infof("Cleaning up slices with negative reference counts...")
 	_ = m.hscan(ctx, m.sliceRefs(), func(keys []string) error {
 		for i := 0; i < len(keys); i += 2 {
 			key, val := keys[i], keys[i+1]
@@ -2905,7 +2904,6 @@ func (m *redisMeta) doCleanupSlices(ctx Context) {
 		}
 		return nil
 	})
-	logger.Infof("Slice cleanup completed")
 }
 
 func (m *redisMeta) cleanupZeroRef(key string) {
@@ -2929,7 +2927,6 @@ func (m *redisMeta) cleanupZeroRef(key string) {
 func (m *redisMeta) cleanupLeakedChunks(delete bool) {
 	var ctx = Background()
 	prefix := len(m.prefix)
-	logger.Infof("Scanning for leaked chunks (chunks without corresponding inodes)...")
 	_ = m.scan(ctx, "c*", func(ckeys []string) error {
 		var ikeys []string
 		var rs []*redis.IntCmd
@@ -2968,11 +2965,9 @@ func (m *redisMeta) cleanupLeakedChunks(delete bool) {
 		}
 		return nil
 	})
-	logger.Infof("Leaked chunk cleanup completed")
 }
 
 func (m *redisMeta) cleanupOldSliceRefs(delete bool) {
-	logger.Infof("Migrating old slice reference format to new format...")
 	var ctx = Background()
 	_ = m.scan(ctx, "k*", func(ckeys []string) error {
 		values, err := m.rdb.MGet(ctx, ckeys...).Result()
@@ -3000,7 +2995,6 @@ func (m *redisMeta) cleanupOldSliceRefs(delete bool) {
 		}
 		return nil
 	})
-	logger.Infof("Old slice reference cleanup completed")
 }
 
 func (m *redisMeta) toDelete(inode Ino, length uint64) string {
@@ -3258,7 +3252,7 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 	foundInodes[TrashInode] = struct{}{}
 	cutoff := time.Now().Add(time.Hour * -1)
 	prefix := len(m.prefix)
-	logger.Infof("Scanning directory entries to identify valid inodes...")
+
 	_ = m.scan(ctx, "d[0-9]*", func(keys []string) error {
 		for _, key := range keys {
 			ino, _ := strconv.Atoi(key[prefix+1:])
@@ -3299,7 +3293,6 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 		}
 		return nil
 	})
-	logger.Infof("Leaked inode cleanup completed")
 }
 
 func (m *redisMeta) scan(ctx context.Context, pattern string, f func([]string) error) error {
@@ -3356,18 +3349,14 @@ func (m *redisMeta) hscan(ctx context.Context, key string, f func([]string) erro
 }
 
 func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
-	logger.Infof("GC: Starting pre-cleanup operations (leaked inodes, chunks, and slice references)...")
-	logger.Debugf("Cleaning up leaked inodes...")
+	logger.Debugf("start cleanup...")
 	m.cleanupLeakedInodes(delete)
-	logger.Debugf("Cleaning up leaked chunks...")
 	m.cleanupLeakedChunks(delete)
-	logger.Debugf("Cleaning up old slice references...")
 	m.cleanupOldSliceRefs(delete)
 	if delete {
-		logger.Debugf("Cleaning up slices with negative references...")
 		m.doCleanupSlices(ctx)
 	}
-	logger.Infof("Cleanup operations completed, now listing slices...")
+	logger.Debugf("start listing slices...")
 
 	p := m.rdb.Pipeline()
 	err := m.scan(ctx, "c*_*", func(keys []string) error {
