@@ -3349,12 +3349,14 @@ func (m *redisMeta) hscan(ctx context.Context, key string, f func([]string) erro
 }
 
 func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
+	logger.Debugf("start cleanup...")
 	m.cleanupLeakedInodes(delete)
 	m.cleanupLeakedChunks(delete)
 	m.cleanupOldSliceRefs(delete)
 	if delete {
 		m.doCleanupSlices(ctx)
 	}
+	logger.Debugf("start listing slices...")
 
 	p := m.rdb.Pipeline()
 	err := m.scan(ctx, "c*_*", func(keys []string) error {
