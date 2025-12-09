@@ -23,6 +23,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Progressable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -147,5 +148,9 @@ public class JuiceFileSystem extends FilterFileSystem {
       return null;
     patchDistCpChecksum();
     return super.getFileChecksum(f);
+  }
+
+  public Token<?> getDelegationToken(String renewer) throws IOException {
+    return fs.getDelegationToken(renewer);
   }
 }
