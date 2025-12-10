@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"runtime"
 	"runtime/debug"
 	"sort"
@@ -2861,7 +2862,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		}
 	}
 	m.updateStats(totalSpace, totalInodes)
-	
+
 	*length = totalLength
 	*space = totalSpace
 	*inodes = totalInodes
@@ -5024,12 +5025,18 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 // cloneTree performs bulk cloning of an entire directory tree using recursive CTE
 // for improved performance compared to individual cloneEntry calls
 func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dstIno *Ino, cmode uint8, cumask uint16, count *uint64) syscall.Errno {
-	logger.Errorf("CLONE_DEBUG: cloneTree started for srcIno=%d, parent=%d, name=%s", srcIno, parent, name)
-	
+	if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "CLONE_DEBUG: cloneTree started for srcIno=%d, parent=%d, name=%s", srcIno, parent, name)
+		f.Close()
+	}
 	// Get new root inode for the cloned tree
 	rootIno, err := m.nextInode()
 	if err != nil {
 		logger.Errorf("CLONE_DEBUG: cloneTree failed to get nextInode: %v", err)
+		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "CLONE_DEBUG: cloneTree failed to get nextInode: %v", err)
+			f.Close()
+		}
 		return errno(err)
 	}
 	if dstIno != nil {
@@ -5056,7 +5063,7 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 	// Execute CTE query in read-only transaction to get streaming cursor
 	var rows *xorm.Rows
 	var totalCloned uint64
-	
+
 	logger.Errorf("CLONE_TREE_DEBUG: About to execute CTE query for srcIno=%d", srcIno)
 	err = m.roTxn(ctx, func(s *xorm.Session) error {
 		// Build recursive CTE query to traverse directory tree
@@ -5092,7 +5099,7 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 		}
 		return err
 	})
-	
+
 	if err != nil {
 		return errno(err)
 	}
@@ -5100,17 +5107,17 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 
 	var batch []treeNode
 	var processed bool
-	
+
 	// Stream results and process each batch in separate transactions
 	for rows.Next() {
 		var node treeNode
 		if err := rows.Scan(&node); err != nil {
 			return errno(err)
 		}
-		
+
 		processed = true
 		batch = append(batch, node)
-		
+
 		// Process batch when it reaches batchSize
 		if len(batch) >= batchSize {
 			if err := m.txn(func(s *xorm.Session) error {
@@ -5119,13 +5126,13 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 				return errno(err)
 			}
 			batch = batch[:0] // Reset batch
-			
+
 			if ctx.Canceled() {
 				return syscall.EINTR
 			}
 		}
 	}
-	
+
 	// Process remaining items in the last batch
 	if len(batch) > 0 {
 		if err := m.txn(func(s *xorm.Session) error {
@@ -5134,34 +5141,34 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 			return errno(err)
 		}
 	}
-	
+
 	if !processed {
 		return syscall.ENOENT
 	}
-	
+
 	atomic.AddUint64(count, totalCloned)
 	return 0
 }
 
 // treeNode represents a node in the directory tree with path information
 type treeNode struct {
-	node  `xorm:"extends"`
-	Path  string `xorm:"path"`
-	Level int    `xorm:"level"`
+	node       `xorm:"extends"`
+	Path       string `xorm:"path"`
+	Level      int    `xorm:"level"`
 	ParentPath string `xorm:"parent_path"`
 }
 
 // processBatch handles a batch of nodes during tree cloning
-func (m *dbMeta) processBatch(s *xorm.Session, batch []treeNode, srcRootIno Ino, dstParent Ino, dstName string, 
+func (m *dbMeta) processBatch(s *xorm.Session, batch []treeNode, srcRootIno Ino, dstParent Ino, dstName string,
 	rootIno Ino, cmode uint8, cumask uint16, inoMapping map[Ino]Ino, totalCloned *uint64) error {
-	
+
 	var newNodes []node
 	var newEdges []edge
-	
+
 	// Generate new inodes for the batch
 	for _, treeNode := range batch {
 		var newIno Ino
-		
+
 		if treeNode.Inode == srcRootIno {
 			// Use the predetermined root inode
 			newIno = rootIno
@@ -5173,51 +5180,51 @@ func (m *dbMeta) processBatch(s *xorm.Session, batch []treeNode, srcRootIno Ino,
 				return err
 			}
 		}
-		
+
 		inoMapping[treeNode.Inode] = newIno
-		
+
 		// Create new node record
 		newNode := treeNode.node
 		newNode.Inode = newIno
-		
+
 		// Handle permissions and ownership based on cmode
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 			if cumask != 0 {
 				newNode.Mode = (newNode.Mode &^ cumask) | (cumask & 0777)
 			}
 		}
-		
+
 		// Update timestamps for new nodes
 		now := time.Now().UnixNano()
 		if treeNode.Level == 0 {
 			// Root node - update ctime
 			newNode.setCtime(now)
 		}
-		
+
 		// Reset hard links for files
 		if newNode.Type == TypeFile {
 			newNode.Nlink = 1
 		}
-		
+
 		newNodes = append(newNodes, newNode)
 		*totalCloned++
-		
+
 		// Update stats
 		m.en.updateStats(align4K(newNode.Length), 1)
 		m.updateUserGroupQuota(Background(), newNode.Uid, newNode.Gid, align4K(newNode.Length), 1)
 	}
-	
+
 	// Bulk insert nodes
 	if len(newNodes) > 0 {
 		if _, err := s.Insert(&newNodes); err != nil {
 			return err
 		}
 	}
-	
+
 	// Create edges for parent-child relationships
 	for _, treeNode := range batch {
 		newIno := inoMapping[treeNode.Inode]
-		
+
 		if treeNode.Level == 0 {
 			// Root node - create edge to destination parent
 			if dstParent != 0 {
@@ -5250,27 +5257,27 @@ func (m *dbMeta) processBatch(s *xorm.Session, batch []treeNode, srcRootIno Ino,
 			}
 		}
 	}
-	
+
 	// Bulk insert edges
 	if len(newEdges) > 0 {
 		if _, err := s.Insert(&newEdges); err != nil {
 			return err
 		}
 	}
-	
+
 	// Handle type-specific data (symlinks, chunks, xattrs) for the batch
 	if err := m.cloneBatchSymlinks(s, batch, inoMapping); err != nil {
 		return err
 	}
-	
+
 	if err := m.cloneBatchXattrs(s, batch, inoMapping); err != nil {
 		return err
 	}
-	
+
 	if err := m.cloneBatchChunks(s, batch, inoMapping); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -5282,16 +5289,16 @@ func (m *dbMeta) cloneBatchSymlinks(s *xorm.Session, batch []treeNode, inoMappin
 			srcInodes = append(srcInodes, node.Inode)
 		}
 	}
-	
+
 	if len(srcInodes) == 0 {
 		return nil
 	}
-	
+
 	var srcSymlinks []symlink
 	if err := s.In("inode", srcInodes).Find(&srcSymlinks); err != nil {
 		return err
 	}
-	
+
 	var newSymlinks []symlink
 	for _, sym := range srcSymlinks {
 		newSymlinks = append(newSymlinks, symlink{
@@ -5299,32 +5306,32 @@ func (m *dbMeta) cloneBatchSymlinks(s *xorm.Session, batch []treeNode, inoMappin
 			Target: sym.Target,
 		})
 	}
-	
+
 	if len(newSymlinks) > 0 {
 		if _, err := s.Insert(&newSymlinks); err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
-// cloneBatchXattrs clones extended attributes for a batch of nodes  
+// cloneBatchXattrs clones extended attributes for a batch of nodes
 func (m *dbMeta) cloneBatchXattrs(s *xorm.Session, batch []treeNode, inoMapping map[Ino]Ino) error {
 	var srcInodes []Ino
 	for _, node := range batch {
 		srcInodes = append(srcInodes, node.Inode)
 	}
-	
+
 	if len(srcInodes) == 0 {
 		return nil
 	}
-	
+
 	var srcXattrs []xattr
 	if err := s.In("inode", srcInodes).Find(&srcXattrs); err != nil {
 		return err
 	}
-	
+
 	var newXattrs []xattr
 	for _, xa := range srcXattrs {
 		newXattrs = append(newXattrs, xattr{
@@ -5333,13 +5340,13 @@ func (m *dbMeta) cloneBatchXattrs(s *xorm.Session, batch []treeNode, inoMapping 
 			Value: xa.Value,
 		})
 	}
-	
+
 	if len(newXattrs) > 0 {
 		if _, err := s.Insert(&newXattrs); err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -5351,16 +5358,16 @@ func (m *dbMeta) cloneBatchChunks(s *xorm.Session, batch []treeNode, inoMapping 
 			srcInodes = append(srcInodes, node.Inode)
 		}
 	}
-	
+
 	if len(srcInodes) == 0 {
 		return nil
 	}
-	
+
 	var srcChunks []chunk
 	if err := s.In("inode", srcInodes).Find(&srcChunks); err != nil {
 		return err
 	}
-	
+
 	var newChunks []chunk
 	for _, c := range srcChunks {
 		newChunk := chunk{
@@ -5369,7 +5376,7 @@ func (m *dbMeta) cloneBatchChunks(s *xorm.Session, batch []treeNode, inoMapping 
 			Slices: c.Slices,
 		}
 		newChunks = append(newChunks, newChunk)
-		
+
 		// Update reference counts for slices
 		for _, slice := range readSliceBuf(c.Slices) {
 			if slice.id > 0 {
@@ -5379,13 +5386,13 @@ func (m *dbMeta) cloneBatchChunks(s *xorm.Session, batch []treeNode, inoMapping 
 			}
 		}
 	}
-	
+
 	if len(newChunks) > 0 {
 		if _, err := s.Insert(&newChunks); err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
