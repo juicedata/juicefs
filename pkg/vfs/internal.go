@@ -338,14 +338,21 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		var count, total uint64
 		var eno syscall.Errno
 		go func() {
-			logger.Errorf("VFS_CLONE_DEBUG: Start to clone %d/%d to %d/%s, cmode=%d, umask=%d", srcParentIno, srcIno, dstParentIno, dstName, cmode, umask)
-			logger.Errorf("VFS_CLONE_DEBUG: v.Meta type: %T", v.Meta)
-			logger.Errorf("VFS_CLONE_DEBUG: SupportsTreeCloning: %v", v.Meta.SupportsTreeCloning())
+			// Write debug info to a file that we can check
+			if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+				fmt.Fprintf(f, "VFS_CLONE_DEBUG: Start to clone %d/%d to %d/%s, cmode=%d, umask=%d\n", srcParentIno, srcIno, dstParentIno, dstName, cmode, umask)
+				fmt.Fprintf(f, "VFS_CLONE_DEBUG: v.Meta type: %T\n", v.Meta)
+				fmt.Fprintf(f, "VFS_CLONE_DEBUG: SupportsTreeCloning: %v\n", v.Meta.SupportsTreeCloning())
+				f.Close()
+			}
 			logger.Infof("Start to clone %d/%d to %d/%s, cmode=%d, umask=%d", srcParentIno, srcIno, dstParentIno, dstName, cmode, umask)
 			if eno = v.Meta.Clone(ctx, srcParentIno, srcIno, dstParentIno, dstName, cmode, umask, &count, &total); eno != 0 {
 				logger.Errorf("clone failed srcIno:%d,dstParentIno:%d,dstName:%s,cmode:%d,umask:%d,eno:%v", srcIno, dstParentIno, dstName, cmode, umask, eno)
 			}
-			logger.Errorf("VFS_CLONE_DEBUG: Clone completed with eno=%d, count=%d, total=%d", eno, count, total)
+			if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+				fmt.Fprintf(f, "VFS_CLONE_DEBUG: Clone completed with eno=%d, count=%d, total=%d\n", eno, count, total)
+				f.Close()
+			}
 			close(done)
 		}()
 
