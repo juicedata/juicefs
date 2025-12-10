@@ -5155,7 +5155,49 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 			f.Close()
 		}
 
-		// Get streaming cursor - try different approach
+		// Try a simpler non-CTE query first to test XORM behavior
+		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "CLONE_TREE_FILE: Testing simple query first\n")
+			f.Close()
+		}
+		
+		testRows, testErr := s.SQL("SELECT inode, type, flags, mode, uid, gid, atime, mtime, ctime, atimensec, mtimensec, ctimensec, nlink, length, rdev, parent, access_acl_id, default_acl_id, 0 as level FROM jfs_node WHERE inode = ?", srcIno).Rows(&treeNodeSimple{})
+		if testErr != nil {
+			if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+				fmt.Fprintf(f, "CLONE_TREE_FILE: Simple query failed: %v\n", testErr)
+				f.Close()
+			}
+		} else {
+			if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+				fmt.Fprintf(f, "CLONE_TREE_FILE: Simple query successful, testing iteration\n")
+				f.Close()
+			}
+			
+			testRowCount := 0
+			for testRows.Next() {
+				testRowCount++
+				var testNode treeNodeSimple
+				if err := testRows.Scan(&testNode); err != nil {
+					if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+						fmt.Fprintf(f, "CLONE_TREE_FILE: Simple query scan failed: %v\n", err)
+						f.Close()
+					}
+				} else {
+					if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+						fmt.Fprintf(f, "CLONE_TREE_FILE: Simple query scanned node %d (inode=%d)\n", testRowCount, testNode.Inode)
+						f.Close()
+					}
+				}
+			}
+			testRows.Close()
+			
+			if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+				fmt.Fprintf(f, "CLONE_TREE_FILE: Simple query found %d rows\n", testRowCount)
+				f.Close()
+			}
+		}
+
+		// Get streaming cursor - try CTE query 
 		rows, err = s.SQL(query, srcIno).Rows(&treeNodeSimple{})
 		if err != nil {
 			if f, err2 := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
@@ -5195,7 +5237,21 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 	}
 	
 	rowCount := 0
-	for rows.Next() {
+	
+	// Check if rows object is valid
+	if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "CLONE_TREE_FILE: rows object is %v\n", rows)
+		f.Close()
+	}
+	
+	// Try a simple iteration to see what happens
+	hasNext := rows.Next()
+	if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "CLONE_TREE_FILE: First rows.Next() returned %v\n", hasNext)
+		f.Close()
+	}
+	
+	for hasNext {
 		rowCount++
 		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
 			fmt.Fprintf(f, "CLONE_TREE_FILE: Processing row %d\n", rowCount)
@@ -5231,6 +5287,13 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 			if ctx.Canceled() {
 				return syscall.EINTR
 			}
+		}
+		
+		// Get next row for loop continuation
+		hasNext = rows.Next()
+		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "CLONE_TREE_FILE: Next rows.Next() returned %v\n", hasNext)
+			f.Close()
 		}
 	}
 
