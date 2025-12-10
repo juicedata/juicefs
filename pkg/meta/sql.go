@@ -5237,7 +5237,29 @@ func (m *dbMeta) processBatch(s *xorm.Session, batch []treeNodeSimple, srcRootIn
 	var newNodes []node
 	var newEdges []edge
 
-	// Generate new inodes for the batch
+	// Count how many new inodes we need (excluding root)
+	newInodesNeeded := 0
+	for _, treeNode := range batch {
+		if treeNode.Inode != srcRootIno {
+			newInodesNeeded++
+		}
+	}
+
+	// Batch allocate inodes for better performance
+	var allocatedInodes []Ino
+	if newInodesNeeded > 0 {
+		baseIno, err := m.en.incrCounter("nextInode", int64(newInodesNeeded))
+		if err != nil {
+			return err
+		}
+		// Generate the sequence of allocated inodes
+		for i := 0; i < newInodesNeeded; i++ {
+			allocatedInodes = append(allocatedInodes, Ino(baseIno-int64(newInodesNeeded-1-i)))
+		}
+	}
+
+	// Assign inodes to nodes
+	allocatedIndex := 0
 	for _, treeNode := range batch {
 		var newIno Ino
 
@@ -5245,12 +5267,9 @@ func (m *dbMeta) processBatch(s *xorm.Session, batch []treeNodeSimple, srcRootIn
 			// Use the predetermined root inode
 			newIno = rootIno
 		} else {
-			// Generate new inode for other nodes
-			var err error
-			newIno, err = m.nextInode()
-			if err != nil {
-				return err
-			}
+			// Use pre-allocated inode
+			newIno = allocatedInodes[allocatedIndex]
+			allocatedIndex++
 		}
 
 		inoMapping[treeNode.Inode] = newIno
@@ -5295,6 +5314,27 @@ func (m *dbMeta) processBatch(s *xorm.Session, batch []treeNodeSimple, srcRootIn
 		}
 	}
 
+	// Batch query for all original edges to optimize parent lookups
+	var nonRootInodes []Ino
+	for _, treeNode := range batch {
+		if treeNode.Level > 0 {
+			nonRootInodes = append(nonRootInodes, treeNode.Inode)
+		}
+	}
+
+	var originalEdges []edge
+	if len(nonRootInodes) > 0 {
+		if err := s.In("inode", nonRootInodes).Find(&originalEdges); err != nil {
+			return err
+		}
+	}
+
+	// Create a map for quick edge lookup
+	edgeByInode := make(map[Ino]edge)
+	for _, e := range originalEdges {
+		edgeByInode[e.Inode] = e
+	}
+
 	// Create edges for parent-child relationships
 	for _, treeNode := range batch {
 		newIno := inoMapping[treeNode.Inode]
@@ -5315,12 +5355,8 @@ func (m *dbMeta) processBatch(s *xorm.Session, batch []treeNodeSimple, srcRootIn
 				}
 			}
 		} else {
-			// Find parent inode in our mapping
-			// We need to query the original edge to get the parent
-			var originalEdge edge
-			if exists, err := s.Where("inode = ?", treeNode.Inode).Get(&originalEdge); err != nil {
-				return err
-			} else if exists {
+			// Use pre-fetched edge data
+			if originalEdge, exists := edgeByInode[treeNode.Inode]; exists {
 				newParentIno := inoMapping[originalEdge.Parent]
 				newEdges = append(newEdges, edge{
 					Parent: newParentIno,
