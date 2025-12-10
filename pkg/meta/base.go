@@ -3095,9 +3095,18 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 		f.Close()
 	}
 	if attr.Typ == TypeDirectory {
+		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "BASE_CLONE_DEBUG: Entered directory branch\n")
+			fmt.Fprintf(f, "BASE_CLONE_DEBUG: m.SupportsTreeCloning() = %v\n", m.SupportsTreeCloning())
+			fmt.Fprintf(f, "BASE_CLONE_DEBUG: m.en type = %T\n", m.en)
+			f.Close()
+		}
 		// Use optimized tree cloning for SQL backends that support it
 		if m.SupportsTreeCloning() {
-			logger.Errorf("CLONE_DEBUG: SupportsTreeCloning=true, attempting type assertion to dbMeta")
+			if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+				fmt.Fprintf(f, "BASE_CLONE_DEBUG: SupportsTreeCloning=true, attempting type assertion to dbMeta\n")
+				f.Close()
+			}
 			if dbMeta, ok := m.en.(*dbMeta); ok {
 				logger.Errorf("CLONE_DEBUG: Type assertion successful, using cloneTree for srcIno=%d", srcIno)
 				eno = dbMeta.cloneTree(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count)
