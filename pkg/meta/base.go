@@ -3112,9 +3112,7 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 				fmt.Fprintf(f, "BASE_CLONE_DEBUG: cloneTree completed with eno=%d, cloned count=%d\n", eno, atomic.LoadUint64(count))
 				f.Close()
 			}
-			if eno == 0 {
-				eno = m.en.doAttachDirNode(ctx, parent, dstIno, name)
-			}
+			// cloneTree already handles creating the root directory edge, so no need to call doAttachDirNode
 		} else {
 			logger.Errorf("CLONE_DEBUG: SupportsTreeCloning=false, using regular cloneEntry")
 			// Use regular recursive cloning for non-SQL backends
