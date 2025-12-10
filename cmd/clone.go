@@ -124,20 +124,15 @@ func clone(ctx *cli.Context) error {
 	wb.Put([]byte(dstName))
 	wb.Put16(uint16(umask))
 	wb.Put8(cmode)
-	logger.Errorf("CLI_CLONE_DEBUG: Opening controller at mount point: %s", srcMp)
-	logger.Errorf("CLI_CLONE_DEBUG: Clone message prepared - srcIno:%d, srcParent:%d, dstParent:%d, dstName:%s, umask:%d, cmode:%d", srcIno, srcParentIno, dstParentIno, dstName, umask, cmode)
+	// Debug logging removed for performance
 	f, err := openController(srcMp)
 	if err != nil {
-		logger.Errorf("CLI_CLONE_DEBUG: Failed to open controller: %v", err)
 		return err
 	}
 	defer f.Close()
-	logger.Errorf("CLI_CLONE_DEBUG: Controller opened successfully, writing %d bytes", len(wb.Bytes()))
 	if _, err = f.Write(wb.Bytes()); err != nil {
-		logger.Errorf("CLI_CLONE_DEBUG: Failed to write message: %v", err)
 		return fmt.Errorf("write message: %s", err)
 	}
-	logger.Errorf("CLI_CLONE_DEBUG: Message written successfully, starting progress monitoring")
 
 	progress := utils.NewProgress(false)
 	defer progress.Done()

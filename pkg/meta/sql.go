@@ -5191,8 +5191,8 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 		return syscall.ENOENT
 	}
 
-	// Process nodes in batches
-	const batchSize = 1000
+	// Process nodes in batches - increased for better performance
+	const batchSize = 5000
 	for i := 0; i < len(allNodes); i += batchSize {
 		end := i + batchSize
 		if end > len(allNodes) {
