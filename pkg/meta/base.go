@@ -3088,12 +3088,16 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	if attr.Typ == TypeDirectory {
 		// Use optimized tree cloning for SQL backends that support it
 		if m.SupportsTreeCloning() {
+			logger.Errorf("CLONE_DEBUG: SupportsTreeCloning=true, attempting type assertion to dbMeta")
 			if dbMeta, ok := m.en.(*dbMeta); ok {
+				logger.Errorf("CLONE_DEBUG: Type assertion successful, using cloneTree for srcIno=%d", srcIno)
 				eno = dbMeta.cloneTree(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count)
+				logger.Errorf("CLONE_DEBUG: cloneTree completed with eno=%d, cloned count=%d", eno, atomic.LoadUint64(count))
 				if eno == 0 {
 					eno = m.en.doAttachDirNode(ctx, parent, dstIno, name)
 				}
 			} else {
+				logger.Errorf("CLONE_DEBUG: Type assertion failed, falling back to cloneEntry")
 				// Fallback to regular cloning if type assertion fails
 				eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, concurrent)
 				if eno == 0 {
@@ -3101,6 +3105,7 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 				}
 			}
 		} else {
+			logger.Errorf("CLONE_DEBUG: SupportsTreeCloning=false, using regular cloneEntry")
 			// Use regular recursive cloning for non-SQL backends
 			eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, concurrent)
 			if eno == 0 {

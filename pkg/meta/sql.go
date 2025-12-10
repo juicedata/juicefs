@@ -5024,14 +5024,18 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 // cloneTree performs bulk cloning of an entire directory tree using recursive CTE
 // for improved performance compared to individual cloneEntry calls
 func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dstIno *Ino, cmode uint8, cumask uint16, count *uint64) syscall.Errno {
+	logger.Errorf("CLONE_DEBUG: cloneTree started for srcIno=%d, parent=%d, name=%s", srcIno, parent, name)
+	
 	// Get new root inode for the cloned tree
 	rootIno, err := m.nextInode()
 	if err != nil {
+		logger.Errorf("CLONE_DEBUG: cloneTree failed to get nextInode: %v", err)
 		return errno(err)
 	}
 	if dstIno != nil {
 		*dstIno = rootIno
 	}
+	logger.Errorf("CLONE_DEBUG: cloneTree allocated rootIno=%d", rootIno)
 
 	// First verify source exists and get its attributes
 	var srcAttr Attr
