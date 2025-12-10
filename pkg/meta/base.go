@@ -3090,6 +3090,10 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	}
 	*total = sum.Dirs + sum.Files
 	concurrent := make(chan struct{}, 4)
+	if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "BASE_CLONE_DEBUG: About to check attr.Typ=%d (TypeDirectory=%d)\n", attr.Typ, TypeDirectory)
+		f.Close()
+	}
 	if attr.Typ == TypeDirectory {
 		// Use optimized tree cloning for SQL backends that support it
 		if m.SupportsTreeCloning() {
