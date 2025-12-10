@@ -5296,25 +5296,10 @@ func (m *dbMeta) processBatch(s *xorm.Session, batch []treeNodeSimple, srcRootIn
 
 	// Bulk insert nodes
 	if len(newNodes) > 0 {
-		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "BATCH_DEBUG: About to insert %d nodes\n", len(newNodes))
-			for i, node := range newNodes {
-				fmt.Fprintf(f, "BATCH_DEBUG: Node %d: Inode=%d, Type=%d, Mode=%o\n", i, node.Inode, node.Type, node.Mode)
-			}
-			f.Close()
-		}
+		// Removed debug logging for performance
 		
 		if _, err := s.Insert(&newNodes); err != nil {
-			if f, err2 := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
-				fmt.Fprintf(f, "BATCH_DEBUG: Node insert failed: %v\n", err)
-				f.Close()
-			}
 			return err
-		}
-		
-		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "BATCH_DEBUG: Node insert successful\n")
-			f.Close()
 		}
 	}
 
@@ -5357,32 +5342,10 @@ func (m *dbMeta) processBatch(s *xorm.Session, batch []treeNodeSimple, srcRootIn
 
 	// Bulk insert edges
 	if len(newEdges) > 0 {
-		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "BATCH_DEBUG: About to insert %d edges\n", len(newEdges))
-			for i, edge := range newEdges {
-				fmt.Fprintf(f, "BATCH_DEBUG: Edge %d: Parent=%d, Name=%s, Inode=%d, Type=%d\n", i, edge.Parent, string(edge.Name), edge.Inode, edge.Type)
-			}
-			f.Close()
-		}
+		// Removed debug logging for performance
 		
 		if _, err := s.Insert(&newEdges); err != nil {
-			if f, err2 := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
-				fmt.Fprintf(f, "BATCH_DEBUG: Edge insert failed: %v\n", err)
-				f.Close()
-			}
-			// Check if this is a duplicate key error, which could indicate a retry scenario
-			if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
-				if f, err2 := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
-					fmt.Fprintf(f, "BATCH_DEBUG: Duplicate key error detected - this might be a retry scenario\n")
-					f.Close()
-				}
-			}
 			return err
-		}
-		
-		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "BATCH_DEBUG: Edge insert successful\n")
-			f.Close()
 		}
 	}
 
