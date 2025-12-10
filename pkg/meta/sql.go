@@ -5057,6 +5057,7 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 	var rows *xorm.Rows
 	var totalCloned uint64
 	
+	logger.Errorf("CLONE_TREE_DEBUG: About to execute CTE query for srcIno=%d", srcIno)
 	err = m.roTxn(ctx, func(s *xorm.Session) error {
 		// Build recursive CTE query to traverse directory tree
 		query := fmt.Sprintf(`
@@ -5082,7 +5083,13 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 
 		// Get streaming cursor
 		var err error
+		logger.Errorf("CLONE_TREE_DEBUG: Executing query with tablePrefix='%s'", m.tablePrefix)
 		rows, err = s.SQL(query, srcIno).Rows(&treeNode{})
+		if err != nil {
+			logger.Errorf("CLONE_TREE_DEBUG: CTE query failed: %v", err)
+		} else {
+			logger.Errorf("CLONE_TREE_DEBUG: CTE query successful, got rows")
+		}
 		return err
 	})
 	
