@@ -5370,6 +5370,13 @@ func (m *dbMeta) processBatch(s *xorm.Session, batch []treeNodeSimple, srcRootIn
 				fmt.Fprintf(f, "BATCH_DEBUG: Edge insert failed: %v\n", err)
 				f.Close()
 			}
+			// Check if this is a duplicate key error, which could indicate a retry scenario
+			if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+				if f, err2 := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
+					fmt.Fprintf(f, "BATCH_DEBUG: Duplicate key error detected - this might be a retry scenario\n")
+					f.Close()
+				}
+			}
 			return err
 		}
 		

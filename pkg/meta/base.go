@@ -3047,6 +3047,17 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 		fmt.Fprintf(f, "BASE_CLONE_DEBUG: baseMeta.Clone called with srcIno=%d, parent=%d, name=%s\n", srcIno, parent, name)
 		f.Close()
 	}
+	
+	// Check if destination already exists to avoid duplicate creation
+	var existingAttr Attr
+	var tempDstIno Ino
+	if eno := m.Lookup(ctx, parent, name, &tempDstIno, &existingAttr, true); eno == 0 {
+		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "BASE_CLONE_DEBUG: Destination %s already exists with inode %d\n", name, tempDstIno)
+			f.Close()
+		}
+		return syscall.EEXIST
+	}
 
 	if srcIno.IsTrash() || srcParentIno.IsTrash() || parent.IsTrash() || (parent == RootInode && name == TrashName) {
 		return syscall.EPERM
