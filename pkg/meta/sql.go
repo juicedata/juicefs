@@ -5106,36 +5106,57 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 			f.Close()
 		}
 		
-		// Build recursive CTE query to traverse directory tree
+		// First let's try a simple query to see if the node exists
+		nodeCount, err := s.Table(&node{}).Where("inode = ?", srcIno).Count()
+		if f, err2 := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
+			if err != nil {
+				fmt.Fprintf(f, "CLONE_TREE_FILE: Simple node count failed: %v\n", err)
+			} else {
+				fmt.Fprintf(f, "CLONE_TREE_FILE: Found %d nodes with inode=%d\n", nodeCount, srcIno)
+			}
+			f.Close()
+		}
+		if err != nil {
+			return err
+		}
+		if nodeCount == 0 {
+			if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+				fmt.Fprintf(f, "CLONE_TREE_FILE: Source inode %d not found in database\n", srcIno)
+				f.Close()
+			}
+			return fmt.Errorf("source inode not found")
+		}
+		
+		// Build simpler recursive CTE query to traverse directory tree
 		query := fmt.Sprintf(`
 			WITH RECURSIVE tree_nodes AS (
 				-- Base case: start with the source root node
-				SELECT n.*, CAST('/' AS VARCHAR) as path, 0 as level, CAST('/' AS VARCHAR) as parent_path
+				SELECT n.inode, n.type, n.flags, n.mode, n.uid, n.gid, n.atime, n.mtime, n.ctime, 
+					   n.atimensec, n.mtimensec, n.ctimensec, n.nlink, n.length, n.rdev, n.parent, 
+					   n.access_acl_id, n.default_acl_id, 0 as level
 				FROM %snode n 
 				WHERE n.inode = ?
 				
 				UNION ALL
 				
 				-- Recursive case: find children
-				SELECT n.*, 
-					   CONCAT(t.path, CASE WHEN t.path = '/' THEN '' ELSE '/' END, e.name) as path,
-					   t.level + 1 as level,
-					   t.path as parent_path
+				SELECT n.inode, n.type, n.flags, n.mode, n.uid, n.gid, n.atime, n.mtime, n.ctime,
+					   n.atimensec, n.mtimensec, n.ctimensec, n.nlink, n.length, n.rdev, n.parent,
+					   n.access_acl_id, n.default_acl_id, t.level + 1 as level
 				FROM %snode n
 				JOIN %sedge e ON n.inode = e.inode
 				JOIN tree_nodes t ON e.parent = t.inode
 			)
-			SELECT * FROM tree_nodes ORDER BY level, path
+			SELECT * FROM tree_nodes ORDER BY level
 		`, m.tablePrefix, m.tablePrefix, m.tablePrefix)
 
 		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "CLONE_TREE_FILE: Query built, about to execute SQL\n")
+			fmt.Fprintf(f, "CLONE_TREE_FILE: Query built, about to execute SQL: %s\n", query)
 			f.Close()
 		}
 
-		// Get streaming cursor
-		var err error
-		rows, err = s.SQL(query, srcIno).Rows(&treeNode{})
+		// Get streaming cursor - try different approach
+		rows, err = s.SQL(query, srcIno).Rows(&treeNodeSimple{})
 		if err != nil {
 			if f, err2 := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
 				fmt.Fprintf(f, "CLONE_TREE_FILE: CTE query failed: %v\n", err)
@@ -5164,7 +5185,7 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 		f.Close()
 	}
 
-	var batch []treeNode
+	var batch []treeNodeSimple
 	var processed bool
 
 	// Stream results and process each batch in separate transactions
@@ -5181,7 +5202,7 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 			f.Close()
 		}
 		
-		var node treeNode
+		var node treeNodeSimple
 		if err := rows.Scan(&node); err != nil {
 			if f, err2 := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
 				fmt.Fprintf(f, "CLONE_TREE_FILE: rows.Scan failed: %v\n", err)
@@ -5238,8 +5259,14 @@ type treeNode struct {
 	ParentPath string `xorm:"parent_path"`
 }
 
+// treeNodeSimple represents a node in the directory tree without path information
+type treeNodeSimple struct {
+	node  `xorm:"extends"`
+	Level int `xorm:"level"`
+}
+
 // processBatch handles a batch of nodes during tree cloning
-func (m *dbMeta) processBatch(s *xorm.Session, batch []treeNode, srcRootIno Ino, dstParent Ino, dstName string,
+func (m *dbMeta) processBatch(s *xorm.Session, batch []treeNodeSimple, srcRootIno Ino, dstParent Ino, dstName string,
 	rootIno Ino, cmode uint8, cumask uint16, inoMapping map[Ino]Ino, totalCloned *uint64) error {
 
 	var newNodes []node
@@ -5362,7 +5389,7 @@ func (m *dbMeta) processBatch(s *xorm.Session, batch []treeNode, srcRootIno Ino,
 }
 
 // cloneBatchSymlinks clones symlink data for a batch of nodes
-func (m *dbMeta) cloneBatchSymlinks(s *xorm.Session, batch []treeNode, inoMapping map[Ino]Ino) error {
+func (m *dbMeta) cloneBatchSymlinks(s *xorm.Session, batch []treeNodeSimple, inoMapping map[Ino]Ino) error {
 	var srcInodes []Ino
 	for _, node := range batch {
 		if node.Type == TypeSymlink {
@@ -5397,7 +5424,7 @@ func (m *dbMeta) cloneBatchSymlinks(s *xorm.Session, batch []treeNode, inoMappin
 }
 
 // cloneBatchXattrs clones extended attributes for a batch of nodes
-func (m *dbMeta) cloneBatchXattrs(s *xorm.Session, batch []treeNode, inoMapping map[Ino]Ino) error {
+func (m *dbMeta) cloneBatchXattrs(s *xorm.Session, batch []treeNodeSimple, inoMapping map[Ino]Ino) error {
 	var srcInodes []Ino
 	for _, node := range batch {
 		srcInodes = append(srcInodes, node.Inode)
@@ -5431,7 +5458,7 @@ func (m *dbMeta) cloneBatchXattrs(s *xorm.Session, batch []treeNode, inoMapping 
 }
 
 // cloneBatchChunks clones file chunks for a batch of nodes
-func (m *dbMeta) cloneBatchChunks(s *xorm.Session, batch []treeNode, inoMapping map[Ino]Ino) error {
+func (m *dbMeta) cloneBatchChunks(s *xorm.Session, batch []treeNodeSimple, inoMapping map[Ino]Ino) error {
 	var srcInodes []Ino
 	for _, node := range batch {
 		if node.Type == TypeFile && node.Length > 0 {
