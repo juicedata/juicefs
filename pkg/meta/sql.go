@@ -5168,10 +5168,31 @@ func (m *dbMeta) cloneTree(ctx Context, srcIno Ino, parent Ino, name string, dst
 	var processed bool
 
 	// Stream results and process each batch in separate transactions
+	if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "CLONE_TREE_FILE: About to start rows.Next() loop\n")
+		f.Close()
+	}
+	
+	rowCount := 0
 	for rows.Next() {
+		rowCount++
+		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "CLONE_TREE_FILE: Processing row %d\n", rowCount)
+			f.Close()
+		}
+		
 		var node treeNode
 		if err := rows.Scan(&node); err != nil {
+			if f, err2 := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
+				fmt.Fprintf(f, "CLONE_TREE_FILE: rows.Scan failed: %v\n", err)
+				f.Close()
+			}
 			return errno(err)
+		}
+		
+		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "CLONE_TREE_FILE: Row scanned successfully, node.Inode=%d\n", node.Inode)
+			f.Close()
 		}
 
 		processed = true
