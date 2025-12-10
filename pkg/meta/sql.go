@@ -5481,6 +5481,8 @@ func (m *dbMeta) cloneBatchChunks(s *xorm.Session, batch []treeNodeSimple, inoMa
 	}
 
 	var newChunks []chunk
+	var sliceRefs []sliceRef
+	
 	for _, c := range srcChunks {
 		newChunk := chunk{
 			Inode:  inoMapping[c.Inode],
@@ -5489,12 +5491,14 @@ func (m *dbMeta) cloneBatchChunks(s *xorm.Session, batch []treeNodeSimple, inoMa
 		}
 		newChunks = append(newChunks, newChunk)
 
-		// Update reference counts for slices
+		// Collect slice references for batch update
 		for _, slice := range readSliceBuf(c.Slices) {
 			if slice.id > 0 {
-				if _, err := s.Exec(m.sqlConv("update chunk_ref set refs=refs+1 where chunkid = ? AND size = ?"), slice.id, slice.size); err != nil {
-					return err
-				}
+				sliceRefs = append(sliceRefs, sliceRef{
+					Id:   slice.id,
+					Size: slice.size,
+					Refs: 1,
+				})
 			}
 		}
 	}
@@ -5502,6 +5506,15 @@ func (m *dbMeta) cloneBatchChunks(s *xorm.Session, batch []treeNodeSimple, inoMa
 	if len(newChunks) > 0 {
 		if _, err := s.Insert(&newChunks); err != nil {
 			return err
+		}
+	}
+
+	// Batch update slice reference counts for better performance
+	if len(sliceRefs) > 0 {
+		for _, ref := range sliceRefs {
+			if err := mustInsert(s, ref); err != nil {
+				return err
+			}
 		}
 	}
 
