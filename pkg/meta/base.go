@@ -3043,19 +3043,11 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 
 func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
 	// Add debug logging to a file
-	if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		fmt.Fprintf(f, "BASE_CLONE_DEBUG: baseMeta.Clone called with srcIno=%d, parent=%d, name=%s\n", srcIno, parent, name)
-		f.Close()
-	}
 	
 	// Check if destination already exists to avoid duplicate creation
 	var existingAttr Attr
 	var tempDstIno Ino
 	if eno := m.Lookup(ctx, parent, name, &tempDstIno, &existingAttr, true); eno == 0 {
-		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "BASE_CLONE_DEBUG: Destination %s already exists with inode %d\n", name, tempDstIno)
-			f.Close()
-		}
 		return syscall.EEXIST
 	}
 
@@ -3101,28 +3093,10 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	}
 	*total = sum.Dirs + sum.Files
 	concurrent := make(chan struct{}, 4)
-	if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		fmt.Fprintf(f, "BASE_CLONE_DEBUG: About to check attr.Typ=%d (TypeDirectory=%d)\n", attr.Typ, TypeDirectory)
-		f.Close()
-	}
 	if attr.Typ == TypeDirectory {
-		if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "BASE_CLONE_DEBUG: Entered directory branch\n")
-			fmt.Fprintf(f, "BASE_CLONE_DEBUG: m.SupportsTreeCloning() = %v\n", m.SupportsTreeCloning())
-			fmt.Fprintf(f, "BASE_CLONE_DEBUG: m.en type = %T\n", m.en)
-			f.Close()
-		}
 		// Use optimized tree cloning for SQL backends that support it
 		if dbMeta, ok := m.en.(*dbMeta); ok && dbMeta.SupportsTreeCloning() {
-			if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-				fmt.Fprintf(f, "BASE_CLONE_DEBUG: Type assertion successful, using cloneTree for srcIno=%d\n", srcIno)
-				f.Close()
-			}
 			eno = dbMeta.cloneTree(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count)
-			if f, err := os.OpenFile("/tmp/juicefs_clone_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-				fmt.Fprintf(f, "BASE_CLONE_DEBUG: cloneTree completed with eno=%d, cloned count=%d\n", eno, atomic.LoadUint64(count))
-				f.Close()
-			}
 			// cloneTree already handles creating the root directory edge, so no need to call doAttachDirNode
 		} else {
 			logger.Errorf("CLONE_DEBUG: SupportsTreeCloning=false, using regular cloneEntry")
