@@ -542,6 +542,10 @@ func (m *baseMeta) getBase() *baseMeta {
 	return m
 }
 
+func (m *baseMeta) SupportsTreeCloning() bool {
+	return false
+}
+
 func (m *baseMeta) checkRoot(inode Ino) Ino {
 	switch inode {
 	case 0:
@@ -3082,9 +3086,26 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	*total = sum.Dirs + sum.Files
 	concurrent := make(chan struct{}, 4)
 	if attr.Typ == TypeDirectory {
-		eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, concurrent)
-		if eno == 0 {
-			eno = m.en.doAttachDirNode(ctx, parent, dstIno, name)
+		// Use optimized tree cloning for SQL backends that support it
+		if m.SupportsTreeCloning() {
+			if dbMeta, ok := m.en.(*dbMeta); ok {
+				eno = dbMeta.cloneTree(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count)
+				if eno == 0 {
+					eno = m.en.doAttachDirNode(ctx, parent, dstIno, name)
+				}
+			} else {
+				// Fallback to regular cloning if type assertion fails
+				eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, concurrent)
+				if eno == 0 {
+					eno = m.en.doAttachDirNode(ctx, parent, dstIno, name)
+				}
+			}
+		} else {
+			// Use regular recursive cloning for non-SQL backends
+			eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, concurrent)
+			if eno == 0 {
+				eno = m.en.doAttachDirNode(ctx, parent, dstIno, name)
+			}
 		}
 		if eno != 0 && dstIno != 0 {
 			if eno := m.en.doCleanupDetachedNode(ctx, dstIno); eno != 0 {
