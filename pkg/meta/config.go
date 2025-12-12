@@ -125,7 +125,15 @@ func (f *Format) update(old *Format, force bool) error {
 			args = []interface{}{"meta version", old.MetaVersion, f.MetaVersion}
 		}
 		if args == nil {
-			f.UUID = old.UUID
+			if f.UUID != old.UUID {
+				if err := f.Decrypt(); err != nil {
+					return fmt.Errorf("decrypt format: %s", err)
+				}
+				f.UUID = old.UUID // UUID cannot be changed alone
+				if err := f.Encrypt(); err != nil {
+					return fmt.Errorf("encrypt format: %s", err)
+				}
+			}
 		} else {
 			return fmt.Errorf("cannot update volume %s from %v to %v", args...)
 		}
