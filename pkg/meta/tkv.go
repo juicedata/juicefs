@@ -2304,7 +2304,7 @@ func (m *kvMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 	return files, err
 }
 
-func (m *kvMeta) doCleanupSlices(ctx Context) {
+func (m *kvMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
 	if m.Name() == "tikv" {
 		m.client.gc()
 	}
@@ -2315,10 +2315,21 @@ func (m *kvMeta) doCleanupSlices(ctx Context) {
 			id := rb.Get64()
 			size := rb.Get32()
 			refs := parseCounter(v)
+			if stats != nil {
+				stats.scanned++
+			}
 			if refs < 0 {
 				m.deleteSlice(id, size)
+				if stats != nil {
+					stats.deleted++
+					stats.bytes += uint64(size)
+				}
 			} else {
 				m.cleanupZeroRef(id, size)
+				if stats != nil {
+					stats.deleted++
+					stats.bytes += uint64(size)
+				}
 			}
 			if ctx.Canceled() {
 				return false
@@ -2522,7 +2533,7 @@ func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 
 func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
 	if delete {
-		m.doCleanupSlices(ctx)
+		m.doCleanupSlices(ctx, nil)
 	}
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4

@@ -2861,7 +2861,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		}
 	}
 	m.updateStats(totalSpace, totalInodes)
-	
+
 	*length = totalLength
 	*space = totalSpace
 	*inodes = totalInodes
@@ -3377,18 +3377,28 @@ func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 	return files, err
 }
 
-func (m *dbMeta) doCleanupSlices(ctx Context) {
+func (m *dbMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
 	var cks []sliceRef
-	_ = m.simpleTxn(ctx, func(s *xorm.Session) error {
+	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		cks = nil
 		return s.Where("refs <= 0").Find(&cks)
-	})
+	}); err != nil {
+		return
+	}
 	for _, ck := range cks {
+		if stats != nil {
+			stats.scanned++
+		}
 		m.deleteSlice(ck.Id, ck.Size)
+		if stats != nil {
+			stats.deleted++
+			stats.bytes += uint64(ck.Size)
+		}
 		if ctx.Canceled() {
-			break
+			return
 		}
 	}
+	return
 }
 
 func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
@@ -3624,7 +3634,7 @@ func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 
 func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
 	if delete {
-		m.doCleanupSlices(ctx)
+		m.doCleanupSlices(ctx, nil)
 	}
 	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		var cs []chunk
