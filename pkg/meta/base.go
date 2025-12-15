@@ -3095,29 +3095,17 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 			days := m.getFormat().TrashDays
 			stats := &cleanupTrashStats{}
 			var wg sync.WaitGroup
-			errCh := make(chan error, 2)
 			wg.Add(2)
 			go func() {
 				defer wg.Done()
-				errCh <- m.doCleanupTrash(cCtx, days, false, stats)
+				m.doCleanupTrash(cCtx, days, false, stats)
 			}()
 			go func() {
 				defer wg.Done()
-				_, err := m.cleanupDelayedSlices(cCtx, days, stats)
-				errCh <- err
+				m.cleanupDelayedSlices(cCtx, days, stats)
 			}()
 			wg.Wait()
-			close(errCh)
-			var runErr error
-			for e := range errCh {
-				if e != nil {
-					runErr = e
-				}
-			}
-			if cCtx.Err() != nil {
-				runErr = cCtx.Err()
-			}
-			used := m.cleanupTrashM.finish(jobStart, runErr)
+			used := m.cleanupTrashM.finish(jobStart, nil)
 			m.cleanupTrashM.durationHistogram.Observe(used)
 			if stats.trashDuration > 0 {
 				m.cleanupTrashM.trashDurationHistogram.Observe(stats.trashDuration.Seconds())
@@ -3145,14 +3133,14 @@ func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, incre
 	}
 }
 
-func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int), stats *cleanupTrashStats) error {
+func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int), stats *cleanupTrashStats) {
 	logger.Debugf("cleanup trash: started")
 	now := time.Now()
 	var st syscall.Errno
 	var entries []*Entry
 	if st = m.en.doReaddir(ctx, TrashInode, 0, &entries, -1); st != 0 {
 		logger.Warnf("readdir trash %d: %s", TrashInode, st)
-		return errors.Wrap(st, "readdir trash")
+		return
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Inode < entries[j].Inode })
 	var count int
@@ -3166,7 +3154,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 	batch := 1000000
 	for len(entries) > 0 {
 		if ctx.Canceled() {
-			return ctx.Err()
+			return
 		}
 		e := entries[0]
 		ts, err := time.Parse("2006-01-02-15", string(e.Name))
@@ -3203,7 +3191,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 					continue
 				}
 				if ctx.Canceled() {
-					return ctx.Err()
+					return
 				}
 			}
 			if rmdir {
@@ -3218,7 +3206,6 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 			break
 		}
 	}
-	return nil
 }
 
 func (m *baseMeta) scanTrashEntry(ctx Context, scan func(inode Ino, size uint64)) error {
@@ -3279,38 +3266,33 @@ func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {
 	return nil
 }
 
-func (m *baseMeta) doCleanupTrash(ctx Context, days int, force bool, stats *cleanupTrashStats) error {
+func (m *baseMeta) doCleanupTrash(ctx Context, days int, force bool, stats *cleanupTrashStats) {
 	edge := time.Now().Add(-time.Duration(24*days+2) * time.Hour)
 	if force {
 		edge = time.Now()
 	}
 	start := time.Now()
-	err := m.CleanupTrashBefore(ctx, edge, nil, stats)
+	m.CleanupTrashBefore(ctx, edge, nil, stats)
 	if stats != nil {
 		stats.trashDuration = time.Since(start)
 	}
-	if err != nil {
-		logger.Warnf("cleanup trash before %v: %s", edge, err)
-	}
-	return err
 }
 
-func (m *baseMeta) cleanupDelayedSlices(ctx Context, days int, stats *cleanupTrashStats) (int, error) {
+func (m *baseMeta) cleanupDelayedSlices(ctx Context, days int, stats *cleanupTrashStats) {
 	now := time.Now()
 	edge := now.Unix() - int64(days)*24*3600
 	logger.Debugf("Cleanup delayed slices: started with edge %d", edge)
 	start := time.Now()
 	count, err := m.en.doCleanupDelayedSlices(ctx, edge)
-	if stats != nil {
-		stats.delayedSlices = count
-		stats.delayedDuration = time.Since(start)
-	}
 	if err != nil {
 		logger.Warnf("Cleanup delayed slices: deleted %d slices in %v, but got error: %s", count, time.Since(now), err)
 	} else if count > 0 {
 		logger.Infof("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
+		if stats != nil {
+			stats.delayedSlices = count
+			stats.delayedDuration = time.Since(start)
+		}
 	}
-	return count, err
 }
 
 func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendingSliceScan, tfs trashFileScan, pfs pendingFileScan) error {
