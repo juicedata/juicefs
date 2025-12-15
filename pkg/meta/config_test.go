@@ -19,6 +19,8 @@ package meta
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRemoveSecret(t *testing.T) {
@@ -51,4 +53,27 @@ func TestEncrypt(t *testing.T) {
 	if format.SecretKey != "testSecret" || format.SessionToken != "token" || format.EncryptKey != "testEncrypt" {
 		t.Fatalf("invalid format: %+v", format)
 	}
+}
+
+func TestFormat_Update_KeyConflict(t *testing.T) {
+	oldFormat := Format{Name: "test", UUID: "UUID-A"}
+
+	newFormat := Format{Name: "test", UUID: "UUID-B", SecretKey: "secret"}
+	if err := newFormat.Encrypt(); err != nil {
+		t.Fatal(err)
+	}
+	assert.True(t, newFormat.KeyEncrypted)
+
+	if err := newFormat.update(&oldFormat, false); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, "UUID-A", newFormat.UUID)
+	assert.True(t, newFormat.KeyEncrypted)
+
+	if err := newFormat.Decrypt(); err != nil {
+		t.Fatalf("failed to decrypt with new UUID (which is old UUID A): %s", err)
+	}
+
+	assert.Equal(t, "secret", newFormat.SecretKey)
 }
