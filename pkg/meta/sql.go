@@ -2861,7 +2861,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		}
 	}
 	m.updateStats(totalSpace, totalInodes)
-	
+
 	*length = totalLength
 	*space = totalSpace
 	*inodes = totalInodes
@@ -4896,15 +4896,18 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			return syscall.ENOENT
 		}
 		n.Inode = ino
-		n.Parent = parent
+		n.Parent = parent // EA: Missing
 		now := time.Now()
 
+		// EA: We don't do this for each entry
+		// I guess we probably could, then do we skip?
 		m.parseAttr(&n, attr)
 		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
 			return eno
 		}
 
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
+			// EA: We're missing some of this logic
 			n.Uid = ctx.Uid()
 			n.Gid = ctx.Gid()
 			n.Mode &= ^cumask
@@ -4918,6 +4921,7 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			n.Nlink = 1
 		}
 
+		// EA: These first two if-statements don't seem to match
 		if top {
 			var pattr Attr
 			var pn = node{Inode: parent}
@@ -4948,6 +4952,7 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		if top && n.Type == TypeDirectory {
 			err = mustInsert(s, &n, &detachedNode{Inode: ino, Added: time.Now().Unix()})
 		} else {
+			// EA: This matches though we don't check for duplicate entry. Is that because of multithreading?
 			err = mustInsert(s, &n, &edge{Parent: parent, Name: []byte(name), Inode: ino, Type: n.Type})
 			if isDuplicateEntryErr(err) {
 				return syscall.EEXIST
@@ -4971,6 +4976,7 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		}
 		switch n.Type {
 		case TypeDirectory:
+			// EA: We're not currently updating dirstats
 			var st = dirStats{Inode: srcIno}
 			if exist, err := s.Get(&st); err != nil {
 				return err
@@ -5019,6 +5025,721 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		}
 		return nil
 	}, srcIno))
+}
+
+// cloneTree performs bulk cloning of an entire directory tree using recursive CTE
+// for improved performance compared to individual cloneEntry calls
+func (m *dbMeta) cloneTree(
+	ctx Context,
+	srcIno Ino, // What we're cloning
+	parent Ino, // Where we're cloning to
+	name string, // What we're calling it
+	dstIno *Ino, // The inode numbe for the destintion node (optional)
+	cmode uint8,
+	cumask uint16,
+	count *uint64,
+) syscall.Errno {
+	// 2. First verify source exists and get its attributes
+	var srcAttr Attr
+	if eno := m.GetAttr(ctx, srcIno, &srcAttr); eno != 0 {
+		return eno
+	}
+
+	// 2. Make sure we can read and traverse the source node
+	if eno := m.Access(ctx, srcIno, MODE_MASK_R|MODE_MASK_X, &srcAttr); eno != 0 {
+		return eno
+	}
+
+	// For SQL databases that support recursive CTEs (PostgreSQL, SQLite with recent versions)
+	// Use recursive CTE to collect all nodes in the tree structure, but fetch them upfront
+	// 3. Maintain a map of old inode to new inode
+	var inoMapping = make(map[Ino]Ino) // old -> new inode mapping
+	// 4. Keep track of number of nodes
+	var totalCloned uint64
+
+	// 5. First verify source exists and get cursor
+	var cursor TreeNodeCursor
+	err := m.roTxn(ctx, func(s *xorm.Session) error {
+		nodeCount, err := s.Table(&node{}).Where("inode = ?", srcIno).Count()
+		if err != nil {
+			return err
+		}
+		if nodeCount == 0 {
+			return fmt.Errorf("source inode not found")
+		}
+
+		// 6. Get cursor for tree nodes
+		cursor, err = m.getRecursiveTreeNodes(s, srcIno)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		return errno(err)
+	}
+	defer cursor.Close()
+
+	// Process cursor batches directly without loading all into memory
+	const cursorBatchSize = 1000
+	batchNumber := 0
+	nodesProcessed := false
+
+	for {
+		nextBatchStart := time.Now()
+		batch, hasMore, err := cursor.NextBatch(cursorBatchSize)
+		logger.Debugf("cursor.NextBatch took %v", time.Since(nextBatchStart))
+		if err != nil {
+			return errno(err)
+		}
+		if len(batch) == 0 {
+			break
+		}
+
+		nodesProcessed = true
+
+		// Pretty print nodes in this batch
+
+		if err := m.txn(func(s *xorm.Session) error {
+			// Process this batch in one transaction
+
+			return m.processBatch(ctx, s, batch, parent, name, cmode, cumask, inoMapping, &totalCloned)
+		}, srcIno); err != nil {
+			return errno(err)
+		}
+
+		batchNumber++
+
+		if ctx.Canceled() {
+			return syscall.EINTR
+		}
+
+		if !hasMore {
+			break
+		}
+	}
+
+	if !nodesProcessed {
+		return syscall.ENOENT
+	}
+
+	// Set the destination inode for the cloned root
+	if dstIno != nil {
+		*dstIno = inoMapping[srcIno]
+	}
+
+	// If we cloned a directory to a parent location, attach the detached root directory
+	if parent != 0 && srcAttr.Typ == TypeDirectory {
+		if clonedRootIno, exists := inoMapping[srcIno]; exists {
+			if eno := m.doAttachDirNode(ctx, parent, clonedRootIno, name); eno != 0 {
+				return eno
+			}
+		}
+	}
+
+	atomic.AddUint64(count, totalCloned)
+	return 0
+}
+
+// treeNodeSimple represents a node in the directory tree without path information
+func (m *dbMeta) getRecursiveTreeNodes(s *xorm.Session, rootIno Ino) (TreeNodeCursor, error) {
+	query := fmt.Sprintf(`
+		WITH RECURSIVE tree_nodes AS (
+			-- Base case: start with the source root node (no edge for root)
+			SELECT n.inode, n.type, n.flags, n.mode, n.uid, n.gid, n.atime, n.mtime, n.ctime, 
+				   n.atimensec, n.mtimensec, n.ctimensec, n.nlink, n.length, n.rdev, n.parent, 
+				   n.access_acl_id, n.default_acl_id, 0 as level,
+				   NULL::bigint as id, NULL::bigint as e_parent, NULL::bytea as name, n.inode as e_inode, n.type as e_type
+			FROM %snode n
+			WHERE n.inode = ?
+			
+			UNION ALL
+			
+			-- Recursive case: find children with their edges
+			SELECT n.inode, n.type, n.flags, n.mode, n.uid, n.gid, n.atime, n.mtime, n.ctime,
+				   n.atimensec, n.mtimensec, n.ctimensec, n.nlink, n.length, n.rdev, n.parent,
+				   n.access_acl_id, n.default_acl_id, t.level + 1 as level,
+				   e.id, e.parent as e_parent, e.name, e.inode as e_inode, e.type as e_type
+			FROM %snode n
+			JOIN %sedge e ON n.inode = e.inode
+			JOIN tree_nodes t ON e.parent = t.inode
+		)
+		SELECT * FROM tree_nodes ORDER BY level
+	`, m.tablePrefix, m.tablePrefix, m.tablePrefix)
+
+	// Use the engine's SQL API to get raw rows instead of xorm.Rows
+	sqlResult, err := s.QueryString(query, rootIno)
+	if err != nil {
+		return nil, err
+	}
+	return &treeNodeCursor{sqlResults: sqlResult, currentIndex: -1}, nil
+}
+
+type treeNodeSimple struct {
+	node  `xorm:"extends"`
+	Level int  `xorm:"level"`
+	Edge  edge `xorm:"extends"`
+}
+
+// TreeNodeCursor provides an interface for iterating through tree nodes
+type TreeNodeCursor interface {
+	Next() (treeNodeSimple, bool, error)                     // returns single node, hasMore, error
+	NextBatch(batchSize int) ([]treeNodeSimple, bool, error) // returns batch of nodes, hasMore, error
+	Close() error
+}
+
+// treeNodeCursor implements TreeNodeCursor using QueryString results
+type treeNodeCursor struct {
+	sqlResults   []map[string]string
+	currentIndex int
+}
+
+func (c *treeNodeCursor) parseNode(row map[string]string) treeNodeSimple {
+	var node treeNodeSimple
+
+	// Parse node fields
+	if inode, ok := row["inode"]; ok {
+		if val, err := strconv.ParseUint(inode, 10, 64); err == nil {
+			node.Inode = Ino(val)
+		}
+	}
+	if nodeType, ok := row["type"]; ok {
+		if val, err := strconv.ParseUint(nodeType, 10, 8); err == nil {
+			node.Type = uint8(val)
+		}
+	}
+	if length, ok := row["length"]; ok {
+		if val, err := strconv.ParseUint(length, 10, 64); err == nil {
+			node.Length = val
+		}
+	}
+	if level, ok := row["level"]; ok {
+		if val, err := strconv.Atoi(level); err == nil {
+			node.Level = val
+		}
+	}
+
+	// Parse edge fields
+	if id, ok := row["id"]; ok && id != "" {
+		if val, err := strconv.ParseInt(id, 10, 64); err == nil {
+			node.Edge.Id = val
+		}
+	}
+	if parent, ok := row["e_parent"]; ok && parent != "" {
+		if val, err := strconv.ParseUint(parent, 10, 64); err == nil {
+			node.Edge.Parent = Ino(val)
+		}
+	}
+	if name, ok := row["name"]; ok && name != "" {
+		node.Edge.Name = []byte(name)
+	}
+	if eInode, ok := row["e_inode"]; ok {
+		if val, err := strconv.ParseUint(eInode, 10, 64); err == nil {
+			node.Edge.Inode = Ino(val)
+		}
+	}
+	if eType, ok := row["e_type"]; ok {
+		if val, err := strconv.ParseUint(eType, 10, 8); err == nil {
+			node.Edge.Type = uint8(val)
+		}
+	}
+
+	// Parse additional node fields
+	if flags, ok := row["flags"]; ok {
+		if val, err := strconv.ParseUint(flags, 10, 8); err == nil {
+			node.Flags = uint8(val)
+		}
+	}
+	if mode, ok := row["mode"]; ok {
+		if val, err := strconv.ParseUint(mode, 10, 16); err == nil {
+			node.Mode = uint16(val)
+		}
+	}
+	if uid, ok := row["uid"]; ok {
+		if val, err := strconv.ParseUint(uid, 10, 32); err == nil {
+			node.Uid = uint32(val)
+		}
+	}
+	if gid, ok := row["gid"]; ok {
+		if val, err := strconv.ParseUint(gid, 10, 32); err == nil {
+			node.Gid = uint32(val)
+		}
+	}
+
+	return node
+}
+
+func (c *treeNodeCursor) Next() (treeNodeSimple, bool, error) {
+	var node treeNodeSimple
+	c.currentIndex++
+
+	if c.currentIndex >= len(c.sqlResults) {
+		return node, false, nil
+	}
+
+	row := c.sqlResults[c.currentIndex]
+	node = c.parseNode(row)
+
+	return node, true, nil
+}
+
+func (c *treeNodeCursor) NextBatch(batchSize int) ([]treeNodeSimple, bool, error) {
+	if batchSize <= 0 {
+		return nil, false, nil
+	}
+
+	var batch []treeNodeSimple
+
+	for i := 0; i < batchSize; i++ {
+		c.currentIndex++
+
+		if c.currentIndex >= len(c.sqlResults) {
+			// Return what we have so far, even if it's less than batchSize
+			return batch, false, nil
+		}
+
+		row := c.sqlResults[c.currentIndex]
+		node := c.parseNode(row)
+		batch = append(batch, node)
+	}
+
+	// Check if there are more results available
+	hasMore := c.currentIndex+1 < len(c.sqlResults)
+
+	return batch, hasMore, nil
+}
+
+func (c *treeNodeCursor) Close() error {
+	// No resources to close for this implementation
+	return nil
+}
+
+// processBatch handles a batch of nodes during tree cloning
+func (m *dbMeta) processBatch(ctx Context, s *xorm.Session, batch []treeNodeSimple, dstParent Ino, dstName string,
+	cmode uint8, cumask uint16, inoMapping map[Ino]Ino, totalCloned *uint64) error {
+	start := time.Now()
+	defer func() {
+		logger.Debugf("processBatch took %v", time.Since(start))
+	}()
+
+	var newNodes []node
+	var newEdges []edge
+
+	// Count unique inodes that need allocation (handles hardlinks correctly)
+	newInodesNeeded := len(batch)
+	for _, treeNode := range batch {
+		// Skip inodes already mapped from previous batches
+		if _, exists := inoMapping[treeNode.Inode]; !exists {
+			newInodesNeeded++
+		}
+	}
+
+	// Batch allocate all needed inodes
+	var allocatedInodes []Ino
+	if newInodesNeeded > 0 {
+		// incrCounter returns the new maximum value after incrementing
+		// So if counter was 100 and we increment by 3, we get 103
+		// We should allocate inodes 101, 102, 103
+		newMaxIno, err := m.en.incrCounter("nextInode", int64(newInodesNeeded))
+		if err != nil {
+			return err
+		}
+		// Generate sequential inodes using the same logic as allocateInodes in base.go
+		// newMaxIno is the exclusive upper bound, first available inode is (newMaxIno - newInodesNeeded)
+		startIno := (newMaxIno - int64(newInodesNeeded)) + 1
+		for i := 0; i < newInodesNeeded; i++ {
+			allocatedInodes = append(allocatedInodes, Ino(startIno+int64(i)))
+		}
+	}
+
+	// Build nodes and edges for insertion, allocating inodes as needed
+	allocatedIndex := 0
+	processedInodes := make(map[Ino]bool) // Track which inodes we've already processed
+	for _, treeNode := range batch {
+		// Assign inode if not already mapped
+		if _, exists := inoMapping[treeNode.Inode]; !exists {
+			newIno := allocatedInodes[allocatedIndex]
+			allocatedIndex++
+			inoMapping[treeNode.Inode] = newIno
+		}
+
+		newIno := inoMapping[treeNode.Inode]
+
+		// Only create node record once per unique inode (handles hardlinks correctly)
+		if !processedInodes[newIno] {
+			processedInodes[newIno] = true
+
+			newNode := treeNode.node
+			newNode.Inode = newIno
+
+			// Set the correct parent inode
+			if treeNode.Level == 0 {
+				// Root node gets the destination parent
+				newNode.Parent = dstParent
+			} else {
+				// Non-root nodes get their parent from the inoMapping
+				// Parent is guaranteed to exist due to level-order processing
+				newNode.Parent = inoMapping[treeNode.node.Parent]
+			}
+
+			// Handle permissions and ownership based on cmode (matching doCloneEntry logic)
+			now := time.Now()
+			if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
+				// Set ownership to current context user/group
+				newNode.Uid = ctx.Uid()
+				newNode.Gid = ctx.Gid()
+
+				// Apply umask to permissions
+				newNode.Mode &= ^cumask
+
+				// Set all timestamps to current time
+				ns := now.UnixNano()
+				newNode.setAtime(ns)
+				newNode.setMtime(ns)
+				newNode.setCtime(ns)
+			} else {
+				// Preserve attributes - only update ctime to mark clone time
+				newNode.setCtime(now.UnixNano())
+			}
+
+			// Reset hard links for files
+			if newNode.Type == TypeFile {
+				newNode.Nlink = 1
+			}
+
+			newNodes = append(newNodes, newNode)
+			*totalCloned++
+
+			// Update stats
+			// EA: Does this happen in cloneEntry ??
+			m.en.updateStats(align4K(newNode.Length), 1)
+			m.updateUserGroupQuota(Background(), newNode.Uid, newNode.Gid, align4K(newNode.Length), 1)
+		}
+	}
+
+	// Bulk insert nodes
+	if len(newNodes) > 0 {
+		// 13: Batch insert the newNodes
+		insertStart := time.Now()
+		if _, err := s.Insert(&newNodes); err != nil {
+			return err
+		}
+		logger.Debugf("Insert newNodes took %v", time.Since(insertStart))
+	}
+
+	// Create edges for parent-child relationships using embedded edge data
+	for _, treeNode := range batch {
+		newIno := inoMapping[treeNode.Inode]
+
+		if treeNode.Level == 0 {
+			// Root node handling - match doCloneEntry logic
+			if dstParent != 0 && treeNode.Type == TypeDirectory {
+				// Top-level directory -> create detached first (will be attached later in cloneTree)
+				if _, err := s.Insert(&detachedNode{Inode: newIno, Added: time.Now().Unix()}); err != nil {
+					return err
+				}
+			} else if dstParent != 0 {
+				// Top-level non-directory -> create edge immediately
+				newEdges = append(newEdges, edge{
+					Parent: dstParent,
+					Name:   []byte(dstName),
+					Inode:  newIno,
+					Type:   treeNode.Type,
+				})
+			} else {
+				// No parent -> always detached
+				if _, err := s.Insert(&detachedNode{Inode: newIno, Added: time.Now().Unix()}); err != nil {
+					return err
+				}
+			}
+		} else {
+			// Use embedded edge data from the treeNode
+			newParentIno := inoMapping[treeNode.Edge.Parent]
+			newEdges = append(newEdges, edge{
+				Parent: newParentIno,
+				Name:   treeNode.Edge.Name,
+				Inode:  newIno,
+				Type:   treeNode.Type,
+			})
+		}
+	}
+
+	// Bulk insert edges
+	if len(newEdges) > 0 {
+		// Debug: print all edges being created
+
+		// 16. Bulk insert edges
+		edgesInsertStart := time.Now()
+		if _, err := s.Insert(&newEdges); err != nil {
+			return err
+		}
+		logger.Debugf("Insert newEdges took %v", time.Since(edgesInsertStart))
+	}
+
+	// Handle type-specific data (symlinks, chunks, xattrs) for the batch
+	start = time.Now()
+	if err := m.cloneBatchSymlinks(s, batch, inoMapping); err != nil {
+		return err
+	}
+	logger.Debugf("cloneBatchSymlinks took %v", time.Since(start))
+
+	start = time.Now()
+	if err := m.cloneBatchXattrs(s, batch, inoMapping); err != nil {
+		return err
+	}
+	logger.Debugf("cloneBatchXattrs took %v", time.Since(start))
+
+	start = time.Now()
+	if err := m.cloneBatchChunks(s, batch, inoMapping); err != nil {
+		return err
+	}
+	logger.Debugf("cloneBatchChunks took %v", time.Since(start))
+
+	// Clone directory statistics for directories in this batch
+	start = time.Now()
+	if err := m.cloneDirStats(s, batch, inoMapping); err != nil {
+		return err
+	}
+	logger.Debugf("cloneDirStats took %v", time.Since(start))
+
+	return nil
+}
+
+// cloneBatchSymlinks clones symlink data for a batch of nodes
+func (m *dbMeta) cloneBatchSymlinks(s *xorm.Session, batch []treeNodeSimple, inoMapping map[Ino]Ino) error {
+	// EA: create a symlink for all symlinks
+	var srcInodes []Ino
+	for _, node := range batch {
+		if node.Type == TypeSymlink {
+			srcInodes = append(srcInodes, node.Inode)
+		}
+	}
+
+	if len(srcInodes) == 0 {
+		return nil
+	}
+
+	var srcSymlinks []symlink
+	if err := s.In("inode", srcInodes).Find(&srcSymlinks); err != nil {
+		return err
+	}
+
+	var newSymlinks []symlink
+	for _, sym := range srcSymlinks {
+		newSymlinks = append(newSymlinks, symlink{
+			Inode:  inoMapping[sym.Inode],
+			Target: sym.Target,
+		})
+	}
+
+	if len(newSymlinks) > 0 {
+		if _, err := s.Insert(&newSymlinks); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// cloneBatchXattrs clones extended attributes for a batch of nodes
+func (m *dbMeta) cloneBatchXattrs(s *xorm.Session, batch []treeNodeSimple, inoMapping map[Ino]Ino) error {
+	var srcInodes []Ino
+	for _, node := range batch {
+		srcInodes = append(srcInodes, node.Inode)
+	}
+
+	if len(srcInodes) == 0 {
+		return nil
+	}
+
+	var srcXattrs []xattr
+	if err := s.In("inode", srcInodes).Find(&srcXattrs); err != nil {
+		return err
+	}
+
+	var newXattrs []xattr
+	for _, xa := range srcXattrs {
+		newXattrs = append(newXattrs, xattr{
+			Inode: inoMapping[xa.Inode],
+			Name:  xa.Name,
+			Value: xa.Value,
+		})
+	}
+
+	if len(newXattrs) > 0 {
+		if _, err := s.Insert(&newXattrs); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// cloneBatchChunks clones file chunks for a batch of nodes
+func (m *dbMeta) cloneBatchChunks(s *xorm.Session, batch []treeNodeSimple, inoMapping map[Ino]Ino) error {
+	var srcInodes []Ino
+	for _, node := range batch {
+		if node.Type == TypeFile && node.Length > 0 {
+			srcInodes = append(srcInodes, node.Inode)
+		}
+	}
+
+	if len(srcInodes) == 0 {
+		return nil
+	}
+
+	findStart := time.Now()
+	var srcChunks []chunk
+	if err := s.In("inode", srcInodes).Find(&srcChunks); err != nil {
+		return err
+	}
+	logger.Debugf("Find srcChunks took %v", time.Since(findStart))
+
+	var newChunks []chunk
+	var refUpdates []struct {
+		chunkId uint64
+		size    uint32
+	}
+
+	for _, c := range srcChunks {
+		newChunk := chunk{
+			Inode:  inoMapping[c.Inode],
+			Indx:   c.Indx,
+			Slices: c.Slices,
+		}
+		newChunks = append(newChunks, newChunk)
+
+		// Collect reference updates for batching
+		for _, slice := range readSliceBuf(c.Slices) {
+			if slice.id > 0 {
+				refUpdates = append(refUpdates, struct {
+					chunkId uint64
+					size    uint32
+				}{slice.id, slice.size})
+			}
+		}
+	}
+
+	// Batch update reference counts using database-agnostic bulk operations
+	const chunkRefBatchSize = 500
+	if len(refUpdates) > 0 {
+		refUpdateStart := time.Now()
+		logger.Debugf("Starting chunk ref updates for %d items", len(refUpdates))
+
+		// Group updates by (chunkid, size) and sum up the ref counts
+		refCounts := make(map[string]int)
+		for _, update := range refUpdates {
+			key := fmt.Sprintf("%d-%d", update.chunkId, update.size)
+			refCounts[key]++
+		}
+
+		// Convert to slice of unique updates for batching
+		var uniqueUpdates []struct {
+			chunkId uint64
+			size    uint32
+		}
+		for key := range refCounts {
+			parts := strings.Split(key, "-")
+			chunkId, _ := strconv.ParseUint(parts[0], 10, 64)
+			size, _ := strconv.ParseUint(parts[1], 10, 32)
+			uniqueUpdates = append(uniqueUpdates, struct {
+				chunkId uint64
+				size    uint32
+			}{chunkId, uint32(size)})
+		}
+
+		for i := 0; i < len(uniqueUpdates); i += chunkRefBatchSize {
+			end := i + chunkRefBatchSize
+			if end > len(uniqueUpdates) {
+				end = len(uniqueUpdates)
+			}
+
+			batch := uniqueUpdates[i:end]
+			if len(batch) == 0 {
+				continue
+			}
+			batchUpdateStart := time.Now()
+
+			// Simple bulk UPDATE - increment by 1 for all unique (chunkid, size) pairs
+			var placeholders []string
+			
+			for _, update := range batch {
+				placeholders = append(placeholders, fmt.Sprintf("(%d, %d)", update.chunkId, update.size))
+			}
+			
+			valuesClause := strings.Join(placeholders, ", ")
+			
+			// Universal bulk UPDATE - increment refs by 1
+			query := fmt.Sprintf("UPDATE %schunk_ref SET refs = refs + 1 WHERE (chunkid, size) IN (%s)",
+				m.tablePrefix, valuesClause)
+			
+			if _, err := s.DB().Exec(query); err != nil {
+				logger.Errorf("Bulk update with counts failed with query: %s, error: %v", query, err)
+				return err
+			}
+
+			logger.Debugf("Batch chunk ref updates (%d items) took %v", len(batch), time.Since(batchUpdateStart))
+		}
+		logger.Debugf("Total chunk ref updates took %v", time.Since(refUpdateStart))
+	}
+
+	if len(newChunks) > 0 {
+		insertStart := time.Now()
+		if _, err := s.Insert(&newChunks); err != nil {
+			return err
+		}
+		logger.Debugf("Insert newChunks took %v", time.Since(insertStart))
+	}
+
+	return nil
+}
+
+// cloneDirStats handles cloning directory statistics for directories in a batch
+func (m *dbMeta) cloneDirStats(s *xorm.Session, batch []treeNodeSimple, inoMapping map[Ino]Ino) error {
+	// Collect directory inodes from this batch
+	var dirInodes []Ino
+	for _, treeNode := range batch {
+		if treeNode.Type == TypeDirectory {
+			dirInodes = append(dirInodes, treeNode.Inode)
+		}
+	}
+
+	if len(dirInodes) == 0 {
+		return nil
+	}
+
+	// Query existing dirStats for these directories
+	var existingDirStats []dirStats
+	if err := s.In("inode", dirInodes).Find(&existingDirStats); err != nil {
+		return err
+	}
+
+	// Create new dirStats for cloned directories
+	var newDirStats []dirStats
+	for _, stats := range existingDirStats {
+		newIno := inoMapping[stats.Inode]
+		newDirStats = append(newDirStats, dirStats{
+			Inode:      newIno,
+			DataLength: stats.DataLength,
+			UsedSpace:  stats.UsedSpace,
+			UsedInodes: stats.UsedInodes,
+		})
+	}
+
+	// Batch insert all dirStats if any exist
+	if len(newDirStats) > 0 {
+		if _, err := s.Insert(&newDirStats); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// SupportsTreeCloning returns true for SQL backends that support recursive CTEs
+func (m *dbMeta) SupportsTreeCloning() bool {
+	return true
 }
 
 func (m *dbMeta) doFindDetachedNodes(t time.Time) []Ino {

@@ -52,7 +52,7 @@ juicefs.all: Makefile cmd/*.go pkg/*/*.go
 # This is the script for compiling the Linux version on the MacOS platform.
 # Please execute the `brew install FiloSottile/musl-cross/musl-cross` command before using it.
 juicefs.linux:
-	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=x86_64-linux-musl-gcc CGO_LDFLAGS="-static" go build -ldflags="$(LDFLAGS)"  -o juicefs .
+	CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-musl-gcc CGO_LDFLAGS="-static" go build -ldflags="$(LDFLAGS)"  -o juicefs .
 
 /usr/local/include/winfsp:
 	sudo mkdir -p /usr/local/include/winfsp

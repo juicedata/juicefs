@@ -530,6 +530,9 @@ type Meta interface {
 
 	SetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
 	GetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
+	
+	// SupportsTreeCloning returns true if the backend supports optimized bulk tree cloning
+	SupportsTreeCloning() bool
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)
