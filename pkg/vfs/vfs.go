@@ -848,6 +848,10 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 	}
 	defer h.Wunlock()
 
+	// kernel might return a stale length from attr-cache before open as the offset.
+	if h.flags&uint32(os.O_APPEND) != 0 {
+		off = h.writer.GetLength()
+	}
 	err = h.writer.Write(ctx, off, buf)
 	if err == syscall.ENOENT || err == syscall.EPERM || err == syscall.EINVAL {
 		err = syscall.EBADF
