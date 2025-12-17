@@ -2861,7 +2861,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		}
 	}
 	m.updateStats(totalSpace, totalInodes)
-
 	*length = totalLength
 	*space = totalSpace
 	*inodes = totalInodes
@@ -3395,10 +3394,9 @@ func (m *dbMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
 			stats.bytes += uint64(ck.Size)
 		}
 		if ctx.Canceled() {
-			return
+			break
 		}
 	}
-	return
 }
 
 func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
