@@ -773,10 +773,12 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 			}
 			break
 		}
-		_, eno := f.Write(mctx, (*buf)[:n])
-		if eno != 0 {
-			err = eno
-			break
+		if bucket == minio.MinioMetaBucket || bucket == ".sys" {
+			_, eno := f.Write(mctx, (*buf)[:n])
+			if eno != 0 {
+				err = eno
+				break
+			}
 		}
 	}
 	if err == nil {
