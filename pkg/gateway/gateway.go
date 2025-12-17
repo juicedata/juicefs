@@ -773,10 +773,12 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 			}
 			break
 		}
-		_, eno := f.Write(mctx, (*buf)[:n])
-		if eno != 0 {
-			err = eno
-			break
+		if bucket == minio.MinioMetaBucket || bucket == ".sys" {
+			_, eno := f.Write(mctx, (*buf)[:n])
+			if eno != 0 {
+				err = eno
+				break
+			}
 		}
 	}
 	if err == nil {
@@ -832,7 +834,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 		n.setFileAtime(p, 0)
 	} else {
 		if err = n.putObject(ctx, bucket, p, r, opts, func(tmpName string) {
-			etag = r.MD5CurrentHexString()
+			//etag = r.MD5CurrentHexString()
 			if n.gConf.KeepEtag && !strings.HasSuffix(object, sep) {
 				if eno := n.fs.SetXattr(mctx, tmpName, s3Etag, []byte(etag), 0); eno != 0 {
 					logger.Errorf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", tmpName, s3Etag, etag, 0)
@@ -860,9 +862,9 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 	}
 
 	return minio.ObjectInfo{
-		Bucket:      bucket,
-		Name:        object,
-		ETag:        etag,
+		Bucket: bucket,
+		Name:   object,
+		//ETag:        etag,
 		ModTime:     fi.ModTime(),
 		Size:        fi.Size(),
 		IsDir:       fi.IsDir(),
