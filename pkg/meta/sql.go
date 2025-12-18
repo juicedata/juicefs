@@ -2677,14 +2677,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 			}
 		}
 
-		// used to detect existing trash entries for hard-linked files
-		type edgeKey struct {
-			Parent Ino
-			Name   string
-		}
-		edgeKeys := make([]edgeKey, 0)
-		edgeExists := make(map[edgeKey]bool)
-
 		if len(inodes) > 0 {
 			var nodes []node
 			if err := s.ForUpdate().In("inode", inodes).Find(&nodes); err != nil {
@@ -2716,31 +2708,35 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 					info.trash = 0
 				}
 				info.n = n
-				if info.e.Type != TypeDirectory && info.trash > 0 && info.n.Nlink > 1 {
-					info.trashName = m.trashEntry(parent, info.e.Inode, string(info.e.Name))
-					// remember potential trash edges, to be checked below
-					key := edgeKey{Parent: info.trash, Name: info.trashName}
-					edgeKeys = append(edgeKeys, key)
-				}
+			}
+		}
+
+		for i := range entryInfos {
+			info := &entryInfos[i]
+			if info.e.Type == TypeDirectory {
+				continue
 			}
 
-			// check which of the potential trash entries already exist
-			if len(edgeKeys) > 0 {
-				var edges []edge
-				query := s.Table(&edge{})
-				for i, key := range edgeKeys {
-					if i == 0 {
-						query = query.Where("parent = ? AND name = ?", key.Parent, key.Name)
-					} else {
-						query = query.Or("parent = ? AND name = ?", key.Parent, key.Name)
-					}
+			if info.trash > 0 && info.n.Nlink > 1 {
+				info.trashName = m.trashEntry(parent, info.e.Inode, string(info.e.Name))
+				te := edge{
+					Parent: info.trash,
+					Name:   []byte(info.trashName),
+					Inode:  info.n.Inode,
+					Type:   info.n.Type,
 				}
-				if err := query.Find(&edges); err != nil {
-					return err
+				if ok, err := s.Get(&te); err == nil && ok {
+					info.trash = 0
 				}
-				for _, e := range edges {
-					key := edgeKey{Parent: e.Parent, Name: string(e.Name)}
-					edgeExists[key] = true
+			}
+			info.n.setCtime(now)
+			if info.trash > 0 && info.n.Parent > 0 {
+				info.n.Parent = info.trash
+			}
+			if info.trash == 0 {
+				info.n.Nlink--
+				if info.n.Type == TypeFile && info.n.Nlink == 0 && m.sid > 0 {
+					info.opened = m.of.IsOpen(info.e.Inode)
 				}
 			}
 		}
@@ -2769,24 +2765,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		for _, info := range entryInfos {
 			if info.n.Type == TypeDirectory {
 				continue
-			}
-
-			if info.trash > 0 && info.n.Nlink > 1 && info.trashName != "" {
-				key := edgeKey{Parent: info.trash, Name: info.trashName}
-				if edgeExists[key] {
-					info.trash = 0
-				}
-			}
-			info.n.setCtime(now)
-			if info.trash > 0 && info.n.Parent > 0 {
-				info.n.Parent = info.trash
-			}
-			if info.trash == 0 {
-				// no trash: decrement nlink, maybe mark for final deletion
-				info.n.Nlink--
-				if info.n.Type == TypeFile && info.n.Nlink == 0 && m.sid > 0 {
-					info.opened = m.of.IsOpen(info.e.Inode)
-				}
 			}
 
 			edgesDel = append(edgesDel, edge{Parent: parent, Name: info.e.Name})
