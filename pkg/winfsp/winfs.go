@@ -781,38 +781,48 @@ func (j *juice) Readdir(path string,
 		return
 	}
 	ctx := j.newContext()
-	entries, readAt, err := j.vfs.Readdir(ctx, ino, 100000, int(ofst), fh, true)
-	if err != 0 {
-		e = errorconv(err)
-		return
-	}
-	var st fuse.Stat_t
-	var ok bool
-	var full = true
-	// all the entries should have same format
-	for _, e := range entries {
-		if !e.Attr.Full {
-			full = false
+	
+	const batchSize = 10000
+	currentOffset := int(ofst)
+	
+	for {
+		entries, readAt, err := j.vfs.Readdir(ctx, ino, batchSize, currentOffset, fh, true)
+		if err != 0 {
+			e = errorconv(err)
+			return
+		}
+		if len(entries) == 0 {
 			break
 		}
-	}
-	for _, e := range entries {
-		name := string(e.Name)
-		if full {
-			if j.vfs.ModifiedSince(e.Inode, readAt) {
-				if e2, err := j.vfs.GetAttr(ctx, e.Inode, 0); err == 0 {
-					e.Attr = e2.Attr
-				}
+		var st fuse.Stat_t
+		var ok bool
+		var full = true
+		// all the entries should have same format
+		for _, e := range entries {
+			if !e.Attr.Full {
+				full = false
+				break
 			}
-			j.vfs.UpdateLength(e.Inode, e.Attr)
-			attrToStat(e.Inode, e.Attr, &st)
-			ok = fill(name, &st, 0)
-		} else {
-			ok = fill(name, nil, 0)
 		}
-		if !ok {
-			break
+		for _, e := range entries {
+			name := string(e.Name)
+			if full {
+				if j.vfs.ModifiedSince(e.Inode, readAt) {
+					if e2, err := j.vfs.GetAttr(ctx, e.Inode, 0); err == 0 {
+						e.Attr = e2.Attr
+					}
+				}
+				j.vfs.UpdateLength(e.Inode, e.Attr)
+				attrToStat(e.Inode, e.Attr, &st)
+				ok = fill(name, &st, 0)
+			} else {
+				ok = fill(name, nil, 0)
+			}
+			if !ok {
+				break
+			}
 		}
+		currentOffset += len(entries)
 	}
 	return
 }
