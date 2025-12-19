@@ -2315,20 +2315,15 @@ func (m *kvMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
 			id := rb.Get64()
 			size := rb.Get32()
 			refs := parseCounter(v)
-			if stats != nil {
-				stats.scanned++
-			}
 			if refs < 0 {
 				m.deleteSlice(id, size)
 				if stats != nil {
 					stats.deleted++
-					stats.bytes += uint64(size)
 				}
 			} else {
 				m.cleanupZeroRef(id, size)
 				if stats != nil {
 					stats.deleted++
-					stats.bytes += uint64(size)
 				}
 			}
 			if ctx.Canceled() {

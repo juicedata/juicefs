@@ -3385,13 +3385,9 @@ func (m *dbMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
 		return
 	}
 	for _, ck := range cks {
-		if stats != nil {
-			stats.scanned++
-		}
 		m.deleteSlice(ck.Id, ck.Size)
 		if stats != nil {
 			stats.deleted++
-			stats.bytes += uint64(ck.Size)
 		}
 		if ctx.Canceled() {
 			break

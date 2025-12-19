@@ -168,124 +168,30 @@ type fsStat struct {
 	usedInodes int64
 }
 
-type backgroundJobMetricSet struct {
-	status                prometheus.Gauge
-	lastExecutionTime     prometheus.Gauge
-	lastExecutionDuration prometheus.Gauge
-	executions            prometheus.Counter
-	successes             prometheus.Counter
-	failures              prometheus.Counter
-}
-
-type cleanupDeletedFilesMetrics struct {
-	backgroundJobMetricSet
-
-	durationHistogram prometheus.Histogram
-	filesCounter      prometheus.Counter
-	bytesCounter      prometheus.Counter
-	scannedGauge      prometheus.Gauge
-}
-
 type cleanupSlicesStats struct {
-	scanned int64
 	deleted int64
-	bytes   uint64
-}
-
-type cleanupSlicesMetrics struct {
-	backgroundJobMetricSet
-
-	durationHistogram prometheus.Histogram
-	scannedCounter    prometheus.Counter
-	deletedCounter    prometheus.Counter
-	bytesCounter      prometheus.Counter
 }
 
 type cleanupTrashStats struct {
-	deletedFiles    int
-	deletedDirs     int
-	scannedDirs     int
-	delayedSlices   int
-	delayedDuration time.Duration
-	trashDuration   time.Duration
+	deletedFiles int
 }
 
-type cleanupTrashMetrics struct {
-	backgroundJobMetricSet
-
-	durationHistogram        prometheus.Histogram
-	trashDurationHistogram   prometheus.Histogram
-	delayedDurationHistogram prometheus.Histogram
-	filesCounter             prometheus.Counter
-	dirsCounter              prometheus.Counter
-	delayedSlicesCounter     prometheus.Counter
-	scannedDirsGauge         prometheus.Gauge
+func (m *baseMeta) bgjobBegin(job string) time.Time {
+	m.bgjobStatus.WithLabelValues(job).Set(1)
+	m.bgjobExecutions.WithLabelValues(job).Inc()
+	return time.Now()
 }
 
-type cleanSessionsMetrics struct {
-	backgroundJobMetricSet
-
-	durationHistogram prometheus.Histogram
-	scannedGauge      prometheus.Gauge
-	cleanedCounter    prometheus.Counter
-}
-
-func newJobMetricSet(job string) backgroundJobMetricSet {
-	prefix := "juicefs_bgjob_" + job
-	return backgroundJobMetricSet{
-		status: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: prefix + "_status",
-			Help: "Background job status (0=idle,1=running,2=success,3=failed).",
-		}),
-		lastExecutionTime: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: prefix + "_last_execution_time",
-			Help: "Unix timestamp of last execution.",
-		}),
-		lastExecutionDuration: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: prefix + "_last_execution_duration_seconds",
-			Help: "Duration of last execution in seconds.",
-		}),
-		executions: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: prefix + "_executions_total",
-			Help: "Total execution count.",
-		}),
-		successes: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: prefix + "_success_total",
-			Help: "Total successful executions.",
-		}),
-		failures: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: prefix + "_failure_total",
-			Help: "Total failed executions.",
-		}),
-	}
-}
-
-func newDurationHistogram(name, help string) prometheus.Histogram {
-	return prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    name,
-		Help:    help,
-		Buckets: prometheus.ExponentialBuckets(1, 2, 18),
-	})
-}
-
-func (m *backgroundJobMetricSet) begin() time.Time {
-	now := time.Now()
-	m.status.Set(1)
-	m.executions.Inc()
-	m.lastExecutionTime.Set(float64(now.Unix()))
-	return now
-}
-
-func (m *backgroundJobMetricSet) finish(start time.Time, err error) float64 {
+func (m *baseMeta) bgjobFinish(job string, start time.Time, err error) float64 {
 	used := time.Since(start).Seconds()
-	m.lastExecutionDuration.Set(used)
+	m.bgjobLastDuration.WithLabelValues(job).Set(used)
 
 	if err == nil {
-		m.successes.Inc()
-		m.status.Set(2)
+		m.bgjobSuccesses.WithLabelValues(job).Inc()
+		m.bgjobStatus.WithLabelValues(job).Set(2)
 	} else {
-		m.failures.Inc()
-		m.status.Set(3)
+		m.bgjobFailures.WithLabelValues(job).Inc()
+		m.bgjobStatus.WithLabelValues(job).Set(3)
 	}
 
 	return used
@@ -432,10 +338,14 @@ type baseMeta struct {
 	groupQuotaUsedSpaceG  *prometheus.GaugeVec
 	groupQuotaUsedInodesG *prometheus.GaugeVec
 
-	cleanupDeletedFilesM cleanupDeletedFilesMetrics
-	cleanupSlicesM       cleanupSlicesMetrics
-	cleanupTrashM        cleanupTrashMetrics
-	cleanSessionsM       cleanSessionsMetrics
+	bgjobStatus       *prometheus.GaugeVec
+	bgjobLastDuration *prometheus.GaugeVec
+	bgjobExecutions   *prometheus.CounterVec
+	bgjobSuccesses    *prometheus.CounterVec
+	bgjobFailures     *prometheus.CounterVec
+	bgjobFiles        *prometheus.CounterVec
+	bgjobSlices       *prometheus.CounterVec
+	bgjobDuration     *prometheus.HistogramVec
 
 	en engine
 }
@@ -590,72 +500,63 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			[]string{"gid"},
 		),
 
-		cleanupDeletedFilesM: cleanupDeletedFilesMetrics{
-			backgroundJobMetricSet: newJobMetricSet("cleanup_deleted_files"),
-			durationHistogram:      newDurationHistogram("juicefs_bgjob_cleanup_deleted_files_duration_seconds", "Duration of cleanupDeletedFiles runs."),
-			filesCounter: prometheus.NewCounter(prometheus.CounterOpts{
-				Name: "juicefs_bgjob_cleanup_deleted_files_files_total",
-				Help: "Number of files cleaned in one run.",
-			}),
-			bytesCounter: prometheus.NewCounter(prometheus.CounterOpts{
-				Name: "juicefs_bgjob_cleanup_deleted_files_bytes_total",
-				Help: "Bytes cleaned in one run.",
-			}),
-			scannedGauge: prometheus.NewGauge(prometheus.GaugeOpts{
-				Name: "juicefs_bgjob_cleanup_deleted_files_scanned_files",
-				Help: "Number of files scanned in current cleanupDeletedFiles run.",
-			}),
-		},
-		cleanupSlicesM: cleanupSlicesMetrics{
-			backgroundJobMetricSet: newJobMetricSet("cleanup_slices"),
-			durationHistogram:      newDurationHistogram("juicefs_bgjob_cleanup_slices_duration_seconds", "Duration of cleanupSlices runs."),
-			scannedCounter: prometheus.NewCounter(prometheus.CounterOpts{
-				Name: "juicefs_bgjob_cleanup_slices_scanned_total",
-				Help: "Slices scanned in cleanupSlices.",
-			}),
-			deletedCounter: prometheus.NewCounter(prometheus.CounterOpts{
-				Name: "juicefs_bgjob_cleanup_slices_deleted_total",
-				Help: "Slices deleted in cleanupSlices.",
-			}),
-			bytesCounter: prometheus.NewCounter(prometheus.CounterOpts{
-				Name: "juicefs_bgjob_cleanup_slices_bytes_total",
-				Help: "Total bytes of deleted slices.",
-			}),
-		},
-		cleanupTrashM: cleanupTrashMetrics{
-			backgroundJobMetricSet:   newJobMetricSet("cleanup_trash"),
-			durationHistogram:        newDurationHistogram("juicefs_bgjob_cleanup_trash_duration_seconds", "Duration of cleanupTrash runs."),
-			trashDurationHistogram:   newDurationHistogram("juicefs_bgjob_cleanup_trash_main_duration_seconds", "Duration of doCleanupTrash."),
-			delayedDurationHistogram: newDurationHistogram("juicefs_bgjob_cleanup_trash_delayed_slices_duration_seconds", "Duration of cleanupDelayedSlices."),
-			filesCounter: prometheus.NewCounter(prometheus.CounterOpts{
-				Name: "juicefs_bgjob_cleanup_trash_files_total",
-				Help: "Files deleted from trash.",
-			}),
-			dirsCounter: prometheus.NewCounter(prometheus.CounterOpts{
-				Name: "juicefs_bgjob_cleanup_trash_dirs_total",
-				Help: "Trash subdirectories deleted.",
-			}),
-			delayedSlicesCounter: prometheus.NewCounter(prometheus.CounterOpts{
-				Name: "juicefs_bgjob_cleanup_trash_delayed_slices_total",
-				Help: "Delayed slices deleted.",
-			}),
-			scannedDirsGauge: prometheus.NewGauge(prometheus.GaugeOpts{
-				Name: "juicefs_bgjob_cleanup_trash_scanned_dirs",
-				Help: "Number of sub-trash directories scanned.",
-			}),
-		},
-		cleanSessionsM: cleanSessionsMetrics{
-			backgroundJobMetricSet: newJobMetricSet("clean_stale_sessions"),
-			durationHistogram:      newDurationHistogram("juicefs_bgjob_clean_stale_sessions_duration_seconds", "Duration of CleanStaleSessions runs."),
-			scannedGauge: prometheus.NewGauge(prometheus.GaugeOpts{
-				Name: "juicefs_bgjob_clean_stale_sessions_scanned_sessions",
-				Help: "Expired sessions scanned in CleanStaleSessions.",
-			}),
-			cleanedCounter: prometheus.NewCounter(prometheus.CounterOpts{
-				Name: "juicefs_bgjob_clean_stale_sessions_cleaned_total",
-				Help: "Sessions cleaned in CleanStaleSessions.",
-			}),
-		},
+		bgjobDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "juicefs_bgjob_duration_seconds",
+				Help:    "Background job duration in seconds.",
+				Buckets: prometheus.ExponentialBuckets(1, 2, 18),
+			},
+			[]string{"job", "status"},
+		),
+		bgjobStatus: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "juicefs_bgjob_status",
+				Help: "Background job status (0=idle,1=running,2=success,3=failed).",
+			},
+			[]string{"job"},
+		),
+		bgjobLastDuration: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "juicefs_bgjob_last_execution_duration_seconds",
+				Help: "Duration of last execution in seconds.",
+			},
+			[]string{"job"},
+		),
+		bgjobExecutions: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "juicefs_bgjob_executions_total",
+				Help: "Total execution count.",
+			},
+			[]string{"job"},
+		),
+		bgjobSuccesses: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "juicefs_bgjob_success_total",
+				Help: "Total successful executions.",
+			},
+			[]string{"job"},
+		),
+		bgjobFailures: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "juicefs_bgjob_failure_total",
+				Help: "Total failed executions.",
+			},
+			[]string{"job"},
+		),
+		bgjobFiles: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "juicefs_bgjob_files_total",
+				Help: "Number of files processed by background jobs.",
+			},
+			[]string{"job"},
+		),
+		bgjobSlices: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "juicefs_bgjob_slices_total",
+				Help: "Number of slices deleted by background jobs.",
+			},
+			[]string{"job"},
+		),
 
 		dirQuotaMetricKeys:   make(map[uint64]bool),
 		userQuotaMetricKeys:  make(map[uint64]bool),
@@ -685,56 +586,18 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(m.groupQuotaMaxInodesG)
 	reg.MustRegister(m.groupQuotaUsedSpaceG)
 	reg.MustRegister(m.groupQuotaUsedInodesG)
-	reg.MustRegister(m.cleanupDeletedFilesM.durationHistogram)
-	reg.MustRegister(m.cleanupDeletedFilesM.filesCounter)
-	reg.MustRegister(m.cleanupDeletedFilesM.bytesCounter)
-	reg.MustRegister(m.cleanupDeletedFilesM.scannedGauge)
-	reg.MustRegister(m.cleanupDeletedFilesM.status)
-	reg.MustRegister(m.cleanupDeletedFilesM.lastExecutionTime)
-	reg.MustRegister(m.cleanupDeletedFilesM.lastExecutionDuration)
-	reg.MustRegister(m.cleanupDeletedFilesM.executions)
-	reg.MustRegister(m.cleanupDeletedFilesM.successes)
-	reg.MustRegister(m.cleanupDeletedFilesM.failures)
+	reg.MustRegister(m.bgjobDuration)
+	reg.MustRegister(m.bgjobStatus)
+	reg.MustRegister(m.bgjobLastDuration)
+	reg.MustRegister(m.bgjobExecutions)
+	reg.MustRegister(m.bgjobSuccesses)
+	reg.MustRegister(m.bgjobFailures)
+	reg.MustRegister(m.bgjobFiles)
+	reg.MustRegister(m.bgjobSlices)
 
-	reg.MustRegister(m.cleanupSlicesM.durationHistogram)
-	reg.MustRegister(m.cleanupSlicesM.scannedCounter)
-	reg.MustRegister(m.cleanupSlicesM.deletedCounter)
-	reg.MustRegister(m.cleanupSlicesM.bytesCounter)
-	reg.MustRegister(m.cleanupSlicesM.status)
-	reg.MustRegister(m.cleanupSlicesM.lastExecutionTime)
-	reg.MustRegister(m.cleanupSlicesM.lastExecutionDuration)
-	reg.MustRegister(m.cleanupSlicesM.executions)
-	reg.MustRegister(m.cleanupSlicesM.successes)
-	reg.MustRegister(m.cleanupSlicesM.failures)
-
-	reg.MustRegister(m.cleanupTrashM.durationHistogram)
-	reg.MustRegister(m.cleanupTrashM.trashDurationHistogram)
-	reg.MustRegister(m.cleanupTrashM.delayedDurationHistogram)
-	reg.MustRegister(m.cleanupTrashM.filesCounter)
-	reg.MustRegister(m.cleanupTrashM.dirsCounter)
-	reg.MustRegister(m.cleanupTrashM.delayedSlicesCounter)
-	reg.MustRegister(m.cleanupTrashM.scannedDirsGauge)
-	reg.MustRegister(m.cleanupTrashM.status)
-	reg.MustRegister(m.cleanupTrashM.lastExecutionTime)
-	reg.MustRegister(m.cleanupTrashM.lastExecutionDuration)
-	reg.MustRegister(m.cleanupTrashM.executions)
-	reg.MustRegister(m.cleanupTrashM.successes)
-	reg.MustRegister(m.cleanupTrashM.failures)
-
-	reg.MustRegister(m.cleanSessionsM.durationHistogram)
-	reg.MustRegister(m.cleanSessionsM.scannedGauge)
-	reg.MustRegister(m.cleanSessionsM.cleanedCounter)
-	reg.MustRegister(m.cleanSessionsM.status)
-	reg.MustRegister(m.cleanSessionsM.lastExecutionTime)
-	reg.MustRegister(m.cleanSessionsM.lastExecutionDuration)
-	reg.MustRegister(m.cleanSessionsM.executions)
-	reg.MustRegister(m.cleanSessionsM.successes)
-	reg.MustRegister(m.cleanSessionsM.failures)
-
-	m.cleanupDeletedFilesM.status.Set(0)
-	m.cleanupSlicesM.status.Set(0)
-	m.cleanupTrashM.status.Set(0)
-	m.cleanSessionsM.status.Set(0)
+	m.bgjobStatus.WithLabelValues("cleanupDeletedFiles").Set(0)
+	m.bgjobStatus.WithLabelValues("cleanupSlices").Set(0)
+	m.bgjobStatus.WithLabelValues("cleanupTrash").Set(0)
 
 	go func() {
 		for {
@@ -1080,18 +943,13 @@ func (m *baseMeta) refresh(ctx Context) {
 }
 
 func (m *baseMeta) CleanStaleSessions(ctx Context) {
-	jobStart := m.cleanSessionsM.begin()
 	sids, err := m.en.doFindStaleSessions(1000)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
-		m.cleanSessionsM.finish(jobStart, err)
 		return
 	}
-	m.cleanSessionsM.scannedGauge.Set(float64(len(sids)))
-	var cleaned int64
 	for _, sid := range sids {
 		if ctx.Canceled() {
-			m.cleanSessionsM.finish(jobStart, ctx.Err())
 			return
 		}
 		s, err := m.en.GetSession(sid, false)
@@ -1099,16 +957,8 @@ func (m *baseMeta) CleanStaleSessions(ctx Context) {
 			logger.Warnf("Get session info %d: %v", sid, err)
 			s = &Session{Sid: sid}
 		}
-		if err := m.en.doCleanStaleSession(sid); err != nil {
-			logger.Warnf("clean up stale session %d %+v: %v", sid, s.SessionInfo, err)
-		} else {
-			cleaned++
-			logger.Infof("clean up stale session %d %+v: %v", sid, s.SessionInfo, nil)
-		}
+		logger.Infof("clean up stale session %d %+v: %v", sid, s.SessionInfo, m.en.doCleanStaleSession(sid))
 	}
-	m.cleanSessionsM.cleanedCounter.Add(float64(cleaned))
-	used := m.cleanSessionsM.finish(jobStart, nil)
-	m.cleanSessionsM.durationHistogram.Observe(used)
 }
 
 func (m *baseMeta) CloseSession() error {
@@ -1152,32 +1002,34 @@ func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
 		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter lastCleanupFiles: %s", err)
 		} else if ok {
-			jobStart := m.cleanupDeletedFilesM.begin()
+			job := "cleanupDeletedFiles"
+			jobStart := m.bgjobBegin(job)
 			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 6e5)
 			if err != nil {
 				logger.Warnf("scan deleted files: %s", err)
-				m.cleanupDeletedFilesM.finish(jobStart, err)
+				used := m.bgjobFinish(job, jobStart, err)
+				m.bgjobDuration.WithLabelValues("cleanupDeletedFiles", "failed").Observe(used)
 				continue
 			}
-			m.cleanupDeletedFilesM.scannedGauge.Set(float64(len(files)))
 			start := time.Now()
 			var processed int64
-			var bytes uint64
 			var runErr error
 			for inode, length := range files {
 				logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
 				m.en.doDeleteFileData(inode, length)
 				processed++
-				bytes += length
 				if time.Since(start) > 50*time.Minute { // Yield my time slice to avoid conflicts with other clients
 					runErr = context.DeadlineExceeded
 					break
 				}
 			}
-			used := m.cleanupDeletedFilesM.finish(jobStart, runErr)
-			m.cleanupDeletedFilesM.durationHistogram.Observe(used)
-			m.cleanupDeletedFilesM.filesCounter.Add(float64(processed))
-			m.cleanupDeletedFilesM.bytesCounter.Add(float64(bytes))
+			used := m.bgjobFinish(job, jobStart, runErr)
+			status := "success"
+			if runErr != nil {
+				status = "failed"
+			}
+			m.bgjobDuration.WithLabelValues("cleanupDeletedFiles", status).Observe(used)
+			m.bgjobFiles.WithLabelValues(job).Add(float64(processed))
 		}
 	}
 }
@@ -1193,16 +1045,15 @@ func (m *baseMeta) cleanupSlices(ctx Context) {
 		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter nextCleanupSlices: %s", err)
 		} else if ok {
-			jobStart := m.cleanupSlicesM.begin()
+			job := "cleanupSlices"
+			jobStart := m.bgjobBegin(job)
 			cCtx := WrapWithTimeout(ctx, time.Minute*50)
 			stats := &cleanupSlicesStats{}
 			m.en.doCleanupSlices(cCtx, stats)
 			cCtx.Cancel()
-			used := m.cleanupSlicesM.finish(jobStart, nil)
-			m.cleanupSlicesM.durationHistogram.Observe(used)
-			m.cleanupSlicesM.scannedCounter.Add(float64(stats.scanned))
-			m.cleanupSlicesM.deletedCounter.Add(float64(stats.deleted))
-			m.cleanupSlicesM.bytesCounter.Add(float64(stats.bytes))
+			used := m.bgjobFinish(job, jobStart, nil)
+			m.bgjobDuration.WithLabelValues("cleanupSlices", "success").Observe(used)
+			m.bgjobSlices.WithLabelValues(job).Add(float64(stats.deleted))
 		}
 	}
 }
@@ -3091,7 +2942,8 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 				cCtx.Cancel()
 			}
 			cCtx = WrapWithTimeout(ctx, 50*time.Minute)
-			jobStart := m.cleanupTrashM.begin()
+			job := "cleanupTrash"
+			jobStart := m.bgjobBegin(job)
 			days := m.getFormat().TrashDays
 			stats := &cleanupTrashStats{}
 			var wg sync.WaitGroup
@@ -3105,18 +2957,9 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 				m.cleanupDelayedSlices(cCtx, days, stats)
 			}()
 			wg.Wait()
-			used := m.cleanupTrashM.finish(jobStart, nil)
-			m.cleanupTrashM.durationHistogram.Observe(used)
-			if stats.trashDuration > 0 {
-				m.cleanupTrashM.trashDurationHistogram.Observe(stats.trashDuration.Seconds())
-			}
-			if stats.delayedDuration > 0 {
-				m.cleanupTrashM.delayedDurationHistogram.Observe(stats.delayedDuration.Seconds())
-			}
-			m.cleanupTrashM.filesCounter.Add(float64(stats.deletedFiles))
-			m.cleanupTrashM.dirsCounter.Add(float64(stats.deletedDirs))
-			m.cleanupTrashM.delayedSlicesCounter.Add(float64(stats.delayedSlices))
-			m.cleanupTrashM.scannedDirsGauge.Set(float64(stats.scannedDirs))
+			used := m.bgjobFinish(job, jobStart, nil)
+			m.bgjobDuration.WithLabelValues("cleanupTrash", "success").Observe(used)
+			m.bgjobFiles.WithLabelValues(job).Add(float64(stats.deletedFiles))
 		}
 	}
 }
@@ -3164,9 +3007,6 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 			continue
 		}
 		if ts.Before(edge) {
-			if stats != nil {
-				stats.scannedDirs++
-			}
 			var subEntries []*Entry
 			if st = m.en.doReaddir(ctx, e.Inode, 0, &subEntries, batch); st != 0 {
 				logger.Warnf("readdir subTrash %d: %s", e.Inode, st)
@@ -3197,9 +3037,6 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 			if rmdir {
 				if st = m.en.doRmdir(ctx, TrashInode, string(e.Name), nil, nil); st != 0 {
 					logger.Warnf("rmdir subTrash %s: %s", e.Name, st)
-				}
-				if st == 0 && stats != nil {
-					stats.deletedDirs++
 				}
 			}
 		} else {
@@ -3271,27 +3108,18 @@ func (m *baseMeta) doCleanupTrash(ctx Context, days int, force bool, stats *clea
 	if force {
 		edge = time.Now()
 	}
-	start := time.Now()
 	m.CleanupTrashBefore(ctx, edge, nil, stats)
-	if stats != nil {
-		stats.trashDuration = time.Since(start)
-	}
 }
 
 func (m *baseMeta) cleanupDelayedSlices(ctx Context, days int, stats *cleanupTrashStats) {
 	now := time.Now()
 	edge := now.Unix() - int64(days)*24*3600
 	logger.Debugf("Cleanup delayed slices: started with edge %d", edge)
-	start := time.Now()
 	count, err := m.en.doCleanupDelayedSlices(ctx, edge)
 	if err != nil {
 		logger.Warnf("Cleanup delayed slices: deleted %d slices in %v, but got error: %s", count, time.Since(now), err)
 	} else if count > 0 {
 		logger.Infof("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
-		if stats != nil {
-			stats.delayedSlices = count
-			stats.delayedDuration = time.Since(start)
-		}
 	}
 }
 
