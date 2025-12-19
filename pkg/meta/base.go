@@ -173,7 +173,7 @@ type cleanupSlicesStats struct {
 }
 
 type cleanupTrashStats struct {
-	deletedFiles int
+	deletedFiles int64
 }
 
 func (m *baseMeta) bgjobBegin(job string) time.Time {
@@ -2959,7 +2959,7 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 			wg.Wait()
 			used := m.bgjobFinish(job, jobStart, nil)
 			m.bgjobDuration.WithLabelValues("cleanupTrash", "success").Observe(used)
-			m.bgjobFiles.WithLabelValues(job).Add(float64(stats.deletedFiles))
+			m.bgjobFiles.WithLabelValues(job).Add(float64(atomic.LoadInt64(&stats.deletedFiles)))
 		}
 	}
 }
@@ -2990,6 +2990,9 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 	defer func() {
 		if count > 0 {
 			logger.Infof("cleanup trash: deleted %d files in %v", count, time.Since(now))
+			if stats != nil {
+				atomic.AddInt64(&stats.deletedFiles, int64(count))
+			}
 		} else {
 			logger.Debugf("cleanup trash: nothing to delete")
 		}
