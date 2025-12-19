@@ -144,6 +144,32 @@ func TestMetrics(t *testing.T) {
 	}
 }
 
+func TestScanCached(t *testing.T) {
+	var err error
+	cfg := defaultConf
+	cfg.CacheEviction = EvictionNone
+	cache := &cacheStore{
+		opTs: make(map[time.Duration]func() error),
+	}
+	cache.state = newDCState(dcUnchanged, cache)
+	cache.keys, err = NewKeyIndex(&cfg)
+	require.NoError(t, err)
+	cache.dir = "/tmp/jfstest_scan"
+	rawDir := filepath.Join(cache.dir, cacheDir)
+	if err := os.MkdirAll(rawDir, 0755); err != nil {
+		t.Fatalf("mkdir %s: %s", rawDir, err)
+	}
+	num := 10
+	for i := 0; i < num; i++ {
+		if f, err := os.Create(filepath.Join(rawDir, fmt.Sprintf("test%d_1024", i))); err == nil {
+			_ = f.Close()
+		}
+	}
+	defer os.RemoveAll(rawDir)
+	cache.scanCached()
+	require.Equal(t, num, cache.keys.len())
+}
+
 func TestChecksum(t *testing.T) {
 	conf := testConf()
 	conf.FreeSpace = 0.01

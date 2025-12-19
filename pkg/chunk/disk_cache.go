@@ -37,6 +37,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/charlievieth/fastwalk"
 	"github.com/davies/groupcache/consistenthash"
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
@@ -917,7 +918,8 @@ func (cache *cacheStore) scanCached() {
 
 	cachePrefix := filepath.Join(cache.dir, cacheDir)
 	logger.Debugf("Scan %s to find cached blocks", cachePrefix)
-	_ = filepath.WalkDir(cachePrefix, func(path string, d fs.DirEntry, err error) error {
+	err := fastwalk.Walk(nil, cachePrefix, func(path string, d fs.DirEntry, err error) error {
+		// this func should be concurrent safe
 		if err != nil {
 			return nil
 		}
@@ -953,6 +955,9 @@ func (cache *cacheStore) scanCached() {
 		}
 		return nil
 	})
+	if err != nil {
+		logger.Errorf("Scan cached files in %s failed: %s", cachePrefix, err)
+	}
 
 	cache.Lock()
 	cache.scanned = true
@@ -972,7 +977,8 @@ func (cache *cacheStore) scanStaging() {
 	var count, usage uint64
 	stagingPrefix := filepath.Join(cache.dir, stagingDir)
 	logger.Debugf("Scan %s to find staging blocks", stagingPrefix)
-	_ = filepath.WalkDir(stagingPrefix, func(path string, d fs.DirEntry, err error) error {
+	err := fastwalk.Walk(nil, stagingPrefix, func(path string, d fs.DirEntry, err error) error {
+		// this func should be concurrent safe
 		if err != nil {
 			return nil // ignore it
 		}
@@ -1002,11 +1008,14 @@ func (cache *cacheStore) scanStaging() {
 			cache.m.stageBlocks.Add(1)
 			cache.m.stageBlockBytes.Add(float64(origSize))
 			cache.uploader(key, path, false)
-			count++
-			usage += uint64(origSize)
+			atomic.AddUint64(&count, 1)
+			atomic.AddUint64(&usage, uint64(origSize))
 		}
 		return nil
 	})
+	if err != nil {
+		logger.Errorf("Scan staging files in %s failed: %s", stagingPrefix, err)
+	}
 	if count > 0 {
 		logger.Infof("Found %d staging blocks (%s) in %s with %s", count, humanize.IBytes(usage), cache.dir, time.Since(start))
 	}
