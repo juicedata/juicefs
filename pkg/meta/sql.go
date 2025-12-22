@@ -2629,8 +2629,8 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 	type entryInfo struct {
 		e         *edge
 		trash     Ino
-		n         *node // n edges : 1 inode
-		opened    bool  // node is opened
+		n         *node  // n edges : 1 inode
+		opened    bool   // node is opened
 		trashName string // cached trash entry name when hard links go to trash
 	}
 	var entryInfos []entryInfo
@@ -2813,7 +2813,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 					}
 					xattrsDel = append(xattrsDel, info.e.Inode)
 				}
-				m.of.InvalidateChunk(info.e.Inode, invalidateAttrOnly)
 			}
 			if info.n.Nlink > 0 && info.trash > 0 {
 				// still has links and should be moved to trash; create new trash edge
@@ -2898,6 +2897,15 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 
 	if err != nil {
 		return errno(err)
+	}
+
+	// invalidate chunks for all affected inodes (both deleted and moved to trash)
+	invalidated := make(map[Ino]bool)
+	for _, info := range entryInfos {
+		if info.n != nil && info.e.Inode != 0 && !invalidated[info.e.Inode] {
+			m.of.InvalidateChunk(info.e.Inode, invalidateAttrOnly)
+			invalidated[info.e.Inode] = true
+		}
 	}
 
 	// outside of transaction: update global stats and trigger data deletion callbacks

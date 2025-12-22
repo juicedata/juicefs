@@ -1750,18 +1750,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
 	}
 
-	// collect unique inodes first to build watch keys
-	inodesSet := make(map[Ino]struct{}, len(entries))
-	for _, entry := range entries {
-		if _, ok := inodesSet[entry.Inode]; !ok {
-			inodesSet[entry.Inode] = struct{}{}
-		}
-	}
 	watchKeys := []string{m.inodeKey(parent), m.entryKey(parent)}
-	for ino := range inodesSet {
-		watchKeys = append(watchKeys, m.inodeKey(ino))
-	}
-
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		rs, err := tx.MGet(ctx, m.inodeKey(parent)).Result()
 		if err != nil {
@@ -1820,6 +1809,18 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 			entryInfos = append(entryInfos, info)
 		}
 
+		inodesSet := make(map[Ino]struct{}, len(entryInfos))
+		for _, info := range entryInfos {
+			if _, ok := inodesSet[info.inode]; !ok {
+				inodesSet[info.inode] = struct{}{}
+			}
+		}
+		for ino := range inodesSet {
+			if err := tx.Watch(ctx, m.inodeKey(ino)).Err(); err != nil {
+				return err
+			}
+		}
+
 		// load inode attrs for all distinct inodes
 		if len(inodesSet) > 0 {
 			inodesList := make([]Ino, 0, len(inodesSet))
@@ -1848,7 +1849,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 				attr, ok := nodeMap[info.inode]
 				if !ok {
 					entryInfos[i].trash = 0
-					entryInfos[i].attr = &Attr{}
+					entryInfos[i].attr = nil
 					continue
 				}
 				if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
@@ -1913,16 +1914,11 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 				if info.attr == nil || info.typ == TypeDirectory {
 					continue
 				}
-
-				// delete entry from parent
 				pipe.HDel(ctx, m.entryKey(parent), info.name)
-
 				if !visited[info.inode] {
 					if info.attr.Nlink > 0 {
-						// inode still referenced somewhere: only update metadata
 						pipe.Set(ctx, m.inodeKey(info.inode), m.marshal(info.attr), 0)
 						if info.typ == TypeFile {
-							// record user group quota stats
 							if userGroupQuotas != nil && !parent.IsTrash() {
 								*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
 									Uid:    info.attr.Uid,
@@ -1931,6 +1927,10 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 									Inodes: -1,
 								})
 							}
+						}
+						// decrement parent count for hard links (independent of trash)
+						if info.attr.Parent == 0 {
+							pipe.HIncrBy(ctx, m.parentKey(info.inode), parent.String(), -1)
 						}
 					} else {
 						// last link removed: delete inode and related data
@@ -1979,7 +1979,6 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 							pipe.Del(ctx, m.parentKey(info.inode))
 						}
 					}
-					m.of.InvalidateChunk(info.inode, invalidateAttrOnly)
 				}
 
 				// handle trash for hard links
@@ -1990,13 +1989,10 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 					pipe.HSet(ctx, m.entryKey(info.trash), info.trashName, info.buf)
 					if info.attr.Parent == 0 {
 						pipe.HIncrBy(ctx, m.parentKey(info.inode), info.trash.String(), 1)
-						pipe.HIncrBy(ctx, m.parentKey(info.inode), parent.String(), -1)
 					}
 				}
 				visited[info.inode] = true
 			}
-
-			// update parent directory timestamps
 			if updateParent {
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
@@ -2010,11 +2006,20 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		return errno(err)
 	}
 
+	// invalidate chunks for all affected inodes (both deleted and moved to trash)
+	invalidated := make(map[Ino]bool)
+	for _, info := range entryInfos {
+		if info.attr != nil && info.inode != 0 && !invalidated[info.inode] {
+			m.of.InvalidateChunk(info.inode, invalidateAttrOnly)
+			invalidated[info.inode] = true
+		}
+	}
+
 	// outside of transaction: update global stats and trigger data deletion callbacks
 	visited := make(map[Ino]bool)
 	visited[0] = true // skip dummyNode
 	for _, info := range entryInfos {
-		if info.trash != 0 || visited[info.inode] {
+		if info.trash != 0 || info.attr == nil || visited[info.inode] {
 			continue
 		}
 		visited[info.inode] = true
@@ -2028,7 +2033,6 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 	*inodes = totalInodes
 	return 0
 }
-
 
 func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldAttr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
