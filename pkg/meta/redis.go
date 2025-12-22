@@ -1775,19 +1775,19 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		now := time.Now()
 
 		for _, entry := range entries {
+			if entry.Attr.Typ == TypeDirectory {
+				continue // skip directories
+			}
 			info := entryInfo{
 				name:  string(entry.Name),
 				inode: entry.Inode,
+				typ:   entry.Attr.Typ,
 				trash: trash,
-			}
-			if entry.Attr != nil {
-				info.typ = entry.Attr.Typ
 			}
 			// get entry buf from parent directory
 			buf, err := tx.HGet(ctx, m.entryKey(parent), info.name).Bytes()
 			if err == redis.Nil && m.conf.CaseInsensi {
 				if e := m.resolveCase(ctx, parent, info.name); e != nil {
-					info.name = string(e.Name)
 					buf = m.packEntry(e.Attr.Typ, e.Inode)
 					err = nil
 				}
@@ -1796,16 +1796,6 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 				return err
 			}
 			info.buf = buf
-			_type, _ := m.parseEntry(buf)
-			if _type == TypeDirectory {
-				continue // skip directories
-			}
-			if info.typ == 0 {
-				if _type == 0 {
-					return fmt.Errorf("invalid entry type 0 for inode %d in parent %d", entry.Inode, parent)
-				}
-				info.typ = _type
-			}
 			entryInfos = append(entryInfos, info)
 		}
 
@@ -2023,7 +2013,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 			continue
 		}
 		visited[info.inode] = true
-		if info.typ == TypeFile && info.attr != nil && info.attr.Nlink == 0 {
+		if info.typ == TypeFile && info.attr.Nlink == 0 {
 			m.fileDeleted(info.opened, parent.IsTrash(), info.inode, info.attr.Length)
 		}
 	}
