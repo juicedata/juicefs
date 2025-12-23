@@ -983,7 +983,10 @@ func (cache *cacheStore) scanStaging() {
 			return nil // ignore it
 		}
 		if d.IsDir() || strings.HasSuffix(path, ".tmp") {
-			fi, _ := d.Info()
+			fi, err := d.Info()
+			if err != nil {
+				return nil
+			}
 			if fi.ModTime().Before(oneMinAgo) {
 				// try to remove empty directory
 				if cache.removeFile(path) == nil {
