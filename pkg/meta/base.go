@@ -176,27 +176,6 @@ type cleanupTrashStats struct {
 	deletedFiles int64
 }
 
-func (m *baseMeta) bgjobBegin(job string) time.Time {
-	m.bgjobStatus.WithLabelValues(job).Set(1)
-	m.bgjobExecutions.WithLabelValues(job).Inc()
-	return time.Now()
-}
-
-func (m *baseMeta) bgjobFinish(job string, start time.Time, err error) float64 {
-	used := time.Since(start).Seconds()
-	m.bgjobLastDuration.WithLabelValues(job).Set(used)
-
-	if err == nil {
-		m.bgjobSuccesses.WithLabelValues(job).Inc()
-		m.bgjobStatus.WithLabelValues(job).Set(2)
-	} else {
-		m.bgjobFailures.WithLabelValues(job).Inc()
-		m.bgjobStatus.WithLabelValues(job).Set(3)
-	}
-
-	return used
-}
-
 // chunk for compaction
 type cchunk struct {
 	inode  Ino
@@ -338,14 +317,8 @@ type baseMeta struct {
 	groupQuotaUsedSpaceG  *prometheus.GaugeVec
 	groupQuotaUsedInodesG *prometheus.GaugeVec
 
-	bgjobStatus       *prometheus.GaugeVec
-	bgjobLastDuration *prometheus.GaugeVec
-	bgjobExecutions   *prometheus.CounterVec
-	bgjobSuccesses    *prometheus.CounterVec
-	bgjobFailures     *prometheus.CounterVec
-	bgjobFiles        *prometheus.CounterVec
-	bgjobSlices       *prometheus.CounterVec
-	bgjobDuration     *prometheus.HistogramVec
+	bgjobDels     *prometheus.CounterVec
+	bgjobDuration *prometheus.HistogramVec
 
 	en engine
 }
@@ -508,54 +481,12 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			},
 			[]string{"job", "status"},
 		),
-		bgjobStatus: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "juicefs_bgjob_status",
-				Help: "Background job status (0=idle,1=running,2=success,3=failed).",
-			},
-			[]string{"job"},
-		),
-		bgjobLastDuration: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "juicefs_bgjob_last_execution_duration_seconds",
-				Help: "Duration of last execution in seconds.",
-			},
-			[]string{"job"},
-		),
-		bgjobExecutions: prometheus.NewCounterVec(
+		bgjobDels: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "juicefs_bgjob_executions_total",
-				Help: "Total execution count.",
+				Name: "juicefs_bgjob_deletions_total",
+				Help: "Number of deletions (files or slices) by background jobs.",
 			},
-			[]string{"job"},
-		),
-		bgjobSuccesses: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "juicefs_bgjob_success_total",
-				Help: "Total successful executions.",
-			},
-			[]string{"job"},
-		),
-		bgjobFailures: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "juicefs_bgjob_failure_total",
-				Help: "Total failed executions.",
-			},
-			[]string{"job"},
-		),
-		bgjobFiles: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "juicefs_bgjob_files_total",
-				Help: "Number of files processed by background jobs.",
-			},
-			[]string{"job"},
-		),
-		bgjobSlices: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "juicefs_bgjob_slices_total",
-				Help: "Number of slices deleted by background jobs.",
-			},
-			[]string{"job"},
+			[]string{"job", "type"},
 		),
 
 		dirQuotaMetricKeys:   make(map[uint64]bool),
@@ -587,17 +518,7 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(m.groupQuotaUsedSpaceG)
 	reg.MustRegister(m.groupQuotaUsedInodesG)
 	reg.MustRegister(m.bgjobDuration)
-	reg.MustRegister(m.bgjobStatus)
-	reg.MustRegister(m.bgjobLastDuration)
-	reg.MustRegister(m.bgjobExecutions)
-	reg.MustRegister(m.bgjobSuccesses)
-	reg.MustRegister(m.bgjobFailures)
-	reg.MustRegister(m.bgjobFiles)
-	reg.MustRegister(m.bgjobSlices)
-
-	m.bgjobStatus.WithLabelValues("cleanupDeletedFiles").Set(0)
-	m.bgjobStatus.WithLabelValues("cleanupSlices").Set(0)
-	m.bgjobStatus.WithLabelValues("cleanupTrash").Set(0)
+	reg.MustRegister(m.bgjobDels)
 
 	go func() {
 		for {
@@ -1003,11 +924,11 @@ func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
 			logger.Warnf("checking counter lastCleanupFiles: %s", err)
 		} else if ok {
 			job := "cleanupDeletedFiles"
-			jobStart := m.bgjobBegin(job)
+			jobStart := time.Now()
 			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 6e5)
 			if err != nil {
 				logger.Warnf("scan deleted files: %s", err)
-				used := m.bgjobFinish(job, jobStart, err)
+				used := time.Since(jobStart).Seconds()
 				m.bgjobDuration.WithLabelValues("cleanupDeletedFiles", "failed").Observe(used)
 				continue
 			}
@@ -1023,13 +944,13 @@ func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
 					break
 				}
 			}
-			used := m.bgjobFinish(job, jobStart, runErr)
+			used := time.Since(jobStart).Seconds()
 			status := "success"
 			if runErr != nil {
 				status = "failed"
 			}
 			m.bgjobDuration.WithLabelValues("cleanupDeletedFiles", status).Observe(used)
-			m.bgjobFiles.WithLabelValues(job).Add(float64(processed))
+			m.bgjobDels.WithLabelValues(job, "files").Add(float64(processed))
 		}
 	}
 }
@@ -1046,14 +967,14 @@ func (m *baseMeta) cleanupSlices(ctx Context) {
 			logger.Warnf("checking counter nextCleanupSlices: %s", err)
 		} else if ok {
 			job := "cleanupSlices"
-			jobStart := m.bgjobBegin(job)
+			jobStart := time.Now()
 			cCtx := WrapWithTimeout(ctx, time.Minute*50)
 			stats := &cleanupSlicesStats{}
 			m.en.doCleanupSlices(cCtx, stats)
 			cCtx.Cancel()
-			used := m.bgjobFinish(job, jobStart, nil)
+			used := time.Since(jobStart).Seconds()
 			m.bgjobDuration.WithLabelValues("cleanupSlices", "success").Observe(used)
-			m.bgjobSlices.WithLabelValues(job).Add(float64(stats.deleted))
+			m.bgjobDels.WithLabelValues(job, "slices").Add(float64(stats.deleted))
 		}
 	}
 }
@@ -2943,7 +2864,7 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 			}
 			cCtx = WrapWithTimeout(ctx, 50*time.Minute)
 			job := "cleanupTrash"
-			jobStart := m.bgjobBegin(job)
+			jobStart := time.Now()
 			days := m.getFormat().TrashDays
 			stats := &cleanupTrashStats{}
 			var wg sync.WaitGroup
@@ -2957,9 +2878,9 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 				m.cleanupDelayedSlices(cCtx, days, stats)
 			}()
 			wg.Wait()
-			used := m.bgjobFinish(job, jobStart, nil)
+			used := time.Since(jobStart).Seconds()
 			m.bgjobDuration.WithLabelValues("cleanupTrash", "success").Observe(used)
-			m.bgjobFiles.WithLabelValues(job).Add(float64(atomic.LoadInt64(&stats.deletedFiles)))
+			m.bgjobDels.WithLabelValues(job, "files").Add(float64(atomic.LoadInt64(&stats.deletedFiles)))
 		}
 	}
 }
