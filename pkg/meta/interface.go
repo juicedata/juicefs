@@ -533,7 +533,7 @@ type Meta interface {
 }
 
 type CleanupTrashStats struct {
-	deletedFiles int64
+	DeletedFiles int64
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)

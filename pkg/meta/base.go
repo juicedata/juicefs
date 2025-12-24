@@ -2868,7 +2868,7 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 			}()
 			wg.Wait()
 			m.bgjobDuration.WithLabelValues(job, "succ").Observe(time.Since(jobStart).Seconds())
-			m.bgjobDels.WithLabelValues(job).Add(float64(atomic.LoadInt64(&stats.deletedFiles)))
+			m.bgjobDels.WithLabelValues(job).Add(float64(atomic.LoadInt64(&stats.DeletedFiles)))
 		}
 	}
 }
@@ -2900,7 +2900,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 		if count > 0 {
 			logger.Infof("cleanup trash: deleted %d files in %v", count, time.Since(now))
 			if stats != nil {
-				atomic.AddInt64(&stats.deletedFiles, int64(count))
+				atomic.AddInt64(&stats.DeletedFiles, int64(count))
 			}
 		} else {
 			logger.Debugf("cleanup trash: nothing to delete")
