@@ -397,7 +397,7 @@ type Meta interface {
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
 	CleanStaleSessions(ctx Context)
 	// CleanupTrashBefore deletes all files in trash before the given time.
-	CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int), stats *cleanupTrashStats)
+	CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int), stats *CleanupTrashStats)
 	// CleanupDetachedNodesBefore deletes all detached nodes before the given time.
 	CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func())
 
@@ -530,6 +530,10 @@ type Meta interface {
 
 	SetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
 	GetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) syscall.Errno
+}
+
+type CleanupTrashStats struct {
+	deletedFiles int64
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)

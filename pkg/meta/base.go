@@ -172,10 +172,6 @@ type cleanupSlicesStats struct {
 	deleted int64
 }
 
-type cleanupTrashStats struct {
-	deletedFiles int64
-}
-
 // chunk for compaction
 type cchunk struct {
 	inode  Ino
@@ -2859,7 +2855,7 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 			job := "cleanupTrash"
 			jobStart := time.Now()
 			days := m.getFormat().TrashDays
-			stats := &cleanupTrashStats{}
+			stats := &CleanupTrashStats{}
 			var wg sync.WaitGroup
 			wg.Add(2)
 			go func() {
@@ -2889,7 +2885,7 @@ func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, incre
 	}
 }
 
-func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int), stats *cleanupTrashStats) {
+func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int), stats *CleanupTrashStats) {
 	logger.Debugf("cleanup trash: started")
 	now := time.Now()
 	var st syscall.Errno
@@ -3019,7 +3015,7 @@ func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {
 	return nil
 }
 
-func (m *baseMeta) doCleanupTrash(ctx Context, days int, force bool, stats *cleanupTrashStats) {
+func (m *baseMeta) doCleanupTrash(ctx Context, days int, force bool, stats *CleanupTrashStats) {
 	edge := time.Now().Add(-time.Duration(24*days+2) * time.Hour)
 	if force {
 		edge = time.Now()
