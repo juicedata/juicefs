@@ -477,7 +477,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			prometheus.HistogramOpts{
 				Name:    "juicefs_bgjob_duration_seconds",
 				Help:    "Background job duration in seconds.",
-				Buckets: prometheus.ExponentialBuckets(1, 2, 18),
+				Buckets: prometheus.ExponentialBuckets(0.001, 2, 18),
 			},
 			[]string{"job", "status"},
 		),

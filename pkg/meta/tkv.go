@@ -2322,9 +2322,6 @@ func (m *kvMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
 				}
 			} else {
 				m.cleanupZeroRef(id, size)
-				if stats != nil {
-					stats.deleted++
-				}
 			}
 			if ctx.Canceled() {
 				return false

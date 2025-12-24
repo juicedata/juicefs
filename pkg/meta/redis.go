@@ -2900,9 +2900,6 @@ func (m *redisMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
 				}
 			} else if val == "0" {
 				m.cleanupZeroRef(key)
-				if stats != nil {
-					stats.deleted++
-				}
 			}
 			if ctx.Canceled() {
 				return ctx.Err()
