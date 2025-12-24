@@ -477,7 +477,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			prometheus.HistogramOpts{
 				Name:    "juicefs_bgjob_duration_seconds",
 				Help:    "Background job duration in seconds.",
-				Buckets: prometheus.ExponentialBuckets(0.001, 2, 18),
+				Buckets: prometheus.ExponentialBuckets(1, 2, 13),
 			},
 			[]string{"job", "status"},
 		),
@@ -486,7 +486,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 				Name: "juicefs_bgjob_deletions_total",
 				Help: "Number of deletions (files or slices) by background jobs.",
 			},
-			[]string{"job", "type"},
+			[]string{"job"},
 		),
 
 		dirQuotaMetricKeys:   make(map[uint64]bool),
@@ -928,29 +928,23 @@ func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
 			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 6e5)
 			if err != nil {
 				logger.Warnf("scan deleted files: %s", err)
-				used := time.Since(jobStart).Seconds()
-				m.bgjobDuration.WithLabelValues("cleanupDeletedFiles", "failed").Observe(used)
+				m.bgjobDuration.WithLabelValues(job, "failed").Observe(time.Since(jobStart).Seconds())
 				continue
 			}
 			start := time.Now()
 			var processed int64
-			var runErr error
+			status := "succ"
 			for inode, length := range files {
 				logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
 				m.en.doDeleteFileData(inode, length)
 				processed++
 				if time.Since(start) > 50*time.Minute { // Yield my time slice to avoid conflicts with other clients
-					runErr = context.DeadlineExceeded
+					status = "timeout"
 					break
 				}
 			}
-			used := time.Since(jobStart).Seconds()
-			status := "success"
-			if runErr != nil {
-				status = "failed"
-			}
-			m.bgjobDuration.WithLabelValues("cleanupDeletedFiles", status).Observe(used)
-			m.bgjobDels.WithLabelValues(job, "files").Add(float64(processed))
+			m.bgjobDuration.WithLabelValues(job, status).Observe(time.Since(jobStart).Seconds())
+			m.bgjobDels.WithLabelValues(job).Add(float64(processed))
 		}
 	}
 }
@@ -972,9 +966,8 @@ func (m *baseMeta) cleanupSlices(ctx Context) {
 			stats := &cleanupSlicesStats{}
 			m.en.doCleanupSlices(cCtx, stats)
 			cCtx.Cancel()
-			used := time.Since(jobStart).Seconds()
-			m.bgjobDuration.WithLabelValues("cleanupSlices", "success").Observe(used)
-			m.bgjobDels.WithLabelValues(job, "slices").Add(float64(stats.deleted))
+			m.bgjobDuration.WithLabelValues(job, "succ").Observe(time.Since(jobStart).Seconds())
+			m.bgjobDels.WithLabelValues(job).Add(float64(stats.deleted))
 		}
 	}
 }
@@ -2875,12 +2868,11 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 			}()
 			go func() {
 				defer wg.Done()
-				m.cleanupDelayedSlices(cCtx, days, stats)
+				m.cleanupDelayedSlices(cCtx, days)
 			}()
 			wg.Wait()
-			used := time.Since(jobStart).Seconds()
-			m.bgjobDuration.WithLabelValues("cleanupTrash", "success").Observe(used)
-			m.bgjobDels.WithLabelValues(job, "files").Add(float64(atomic.LoadInt64(&stats.deletedFiles)))
+			m.bgjobDuration.WithLabelValues(job, "succ").Observe(time.Since(jobStart).Seconds())
+			m.bgjobDels.WithLabelValues(job).Add(float64(atomic.LoadInt64(&stats.deletedFiles)))
 		}
 	}
 }
@@ -3035,12 +3027,11 @@ func (m *baseMeta) doCleanupTrash(ctx Context, days int, force bool, stats *clea
 	m.CleanupTrashBefore(ctx, edge, nil, stats)
 }
 
-func (m *baseMeta) cleanupDelayedSlices(ctx Context, days int, stats *cleanupTrashStats) {
+func (m *baseMeta) cleanupDelayedSlices(ctx Context, days int) {
 	now := time.Now()
 	edge := now.Unix() - int64(days)*24*3600
 	logger.Debugf("Cleanup delayed slices: started with edge %d", edge)
-	count, err := m.en.doCleanupDelayedSlices(ctx, edge)
-	if err != nil {
+	if count, err := m.en.doCleanupDelayedSlices(ctx, edge); err != nil {
 		logger.Warnf("Cleanup delayed slices: deleted %d slices in %v, but got error: %s", count, time.Since(now), err)
 	} else if count > 0 {
 		logger.Infof("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
