@@ -1852,6 +1852,11 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		// lock the parentDst
 		keys[0], keys[2] = keys[2], keys[0]
 	}
+	if !exchange {
+		if st := m.checkTrash(parentDst, &trash); st != 0 {
+			return st
+		}
+	}
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		opened = false
 		dino, dtyp = 0, 0
