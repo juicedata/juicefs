@@ -507,14 +507,21 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, options minio.ObjectOptions) (objs []minio.DeletedObject, errs []error) {
 	objs = make([]minio.DeletedObject, len(objects))
 	errs = make([]error, len(objects))
-	for idx, object := range objects {
-		_, errs[idx] = n.DeleteObject(ctx, bucket, object.ObjectName, options)
-		if errs[idx] == nil {
-			objs[idx] = minio.DeletedObject{
-				ObjectName: object.ObjectName,
+	var g errgroup.Group
+	g.SetLimit(10)
+	for i := 0; i < len(objects); i++ {
+		i := i
+		g.Go(func() error {
+			_, errs[i] = n.DeleteObject(ctx, bucket, objects[i].ObjectName, options)
+			if errs[i] == nil {
+				objs[i] = minio.DeletedObject{
+					ObjectName: objects[i].ObjectName,
+				}
 			}
-		}
+			return nil
+		})
 	}
+	_ = g.Wait()
 	return
 }
 
