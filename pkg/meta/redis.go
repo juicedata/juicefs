@@ -1858,7 +1858,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		// check trash entries for hard links
 		for i := range entryInfos {
 			info := &entryInfos[i]
-			if info.attr == nil || info.attr.Nlink == 0 {
+			if info.attr == nil {
 				continue
 			}
 			if info.trash > 0 && info.attr.Nlink > 1 {
@@ -1877,7 +1877,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 			if info.trash > 0 && info.attr.Parent > 0 {
 				info.attr.Parent = info.trash
 			}
-			if info.trash == 0 {
+			if info.trash == 0 && info.attr.Nlink > 0 {
 				info.attr.Nlink--
 				if info.typ == TypeFile && info.attr.Nlink == 0 && m.sid > 0 {
 					info.opened = m.of.IsOpen(info.inode)
@@ -1898,90 +1898,150 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		visited := make(map[Ino]bool)
 		visited[0] = true // skip dummyNode
 
+		// collect data for batch operations
+		var names []string
+		var keys []string
+		var sustained []interface{}
+		var delfiles []redis.Z
+		var inodes map[Ino]*Attr
+		parentOps := make(map[string]map[string]int64) // key -> field -> incr
+		trashOps := make(map[string]map[string]interface{}) // key -> field -> value
+		stats := make(map[string]int64) // key -> delta
+
+		for _, info := range entryInfos {
+			if info.attr == nil || info.typ == TypeDirectory {
+				continue
+			}
+			names = append(names, info.name)
+
+			if !visited[info.inode] {
+				if info.attr.Nlink > 0 {
+					if inodes == nil {
+						inodes = make(map[Ino]*Attr)
+					}
+					inodes[info.inode] = info.attr
+					if info.typ == TypeFile && userGroupQuotas != nil && !parent.IsTrash() {
+						*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
+							Uid:    info.attr.Uid,
+							Gid:    info.attr.Gid,
+							Space:  0,
+							Inodes: -1,
+						})
+					}
+				} else {
+					var entrySpace int64
+					needStats := false
+					switch info.typ {
+					case TypeFile:
+						entrySpace = align4K(info.attr.Length)
+						needStats = true
+						if info.opened {
+							if inodes == nil {
+								inodes = make(map[Ino]*Attr)
+							}
+							inodes[info.inode] = info.attr
+							sustained = append(sustained, strconv.Itoa(int(info.inode)))
+						} else {
+							delfiles = append(delfiles, redis.Z{
+								Score:  float64(nowUnix),
+								Member: m.toDelete(info.inode, info.attr.Length),
+							})
+							keys = append(keys, m.inodeKey(info.inode))
+							totalSpace -= align4K(info.attr.Length)
+							totalInodes--
+							stats[m.usedSpaceKey()] -= align4K(info.attr.Length)
+							stats[m.totalInodesKey()]--
+						}
+					case TypeSymlink:
+						keys = append(keys, m.symKey(info.inode))
+						fallthrough
+					default:
+						keys = append(keys, m.inodeKey(info.inode))
+						entrySpace = align4K(0)
+						needStats = true
+						totalSpace -= align4K(0)
+						totalInodes--
+						stats[m.usedSpaceKey()] -= align4K(0)
+						stats[m.totalInodesKey()]--
+					}
+					if needStats {
+						totalLength -= int64(info.attr.Length)
+						if userGroupQuotas != nil && !parent.IsTrash() {
+							*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
+								Uid:    info.attr.Uid,
+								Gid:    info.attr.Gid,
+								Space:  -entrySpace,
+								Inodes: -1,
+							})
+						}
+					}
+					keys = append(keys, m.xattrKey(info.inode))
+					if info.attr.Parent == 0 {
+						keys = append(keys, m.parentKey(info.inode))
+					}
+				}
+			}
+			if info.attr.Nlink > 0 && info.attr.Parent == 0 {
+				key := m.parentKey(info.inode)
+				if parentOps[key] == nil {
+					parentOps[key] = make(map[string]int64)
+				}
+				parentOps[key][parent.String()]--
+			}
+
+			if info.attr.Nlink > 0 && info.trash > 0 {
+				if info.trashName == "" {
+					info.trashName = m.trashEntry(parent, info.inode, info.name)
+				}
+				key := m.entryKey(info.trash)
+				if trashOps[key] == nil {
+					trashOps[key] = make(map[string]interface{})
+				}
+				trashOps[key][info.trashName] = info.buf
+				if info.attr.Parent == 0 {
+					key := m.parentKey(info.inode)
+					if parentOps[key] == nil {
+						parentOps[key] = make(map[string]int64)
+					}
+					parentOps[key][info.trash.String()]++
+				}
+			}
+			visited[info.inode] = true
+		}
+
 		// execute batched operations using pipeline
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			for _, info := range entryInfos {
-				if info.attr == nil || info.typ == TypeDirectory {
-					continue
+			if len(names) > 0 {
+				pipe.HDel(ctx, m.entryKey(parent), names...)
+			}
+			for inode, attr := range inodes {
+				pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
+			}
+			if len(sustained) > 0 {
+				pipe.SAdd(ctx, m.sustained(m.sid), sustained...)
+			}
+			if len(delfiles) > 0 {
+				pipe.ZAdd(ctx, m.delfiles(), delfiles...)
+			}
+			if len(keys) > 0 {
+				pipe.Del(ctx, keys...)
+			}
+			for key, delta := range stats {
+				if delta != 0 {
+					pipe.IncrBy(ctx, key, delta)
 				}
-				pipe.HDel(ctx, m.entryKey(parent), info.name)
-				if !visited[info.inode] {
-					if info.attr.Nlink > 0 {
-						pipe.Set(ctx, m.inodeKey(info.inode), m.marshal(info.attr), 0)
-						if info.typ == TypeFile {
-							if userGroupQuotas != nil && !parent.IsTrash() {
-								*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
-									Uid:    info.attr.Uid,
-									Gid:    info.attr.Gid,
-									Space:  0,
-									Inodes: -1,
-								})
-							}
-						}
-						// decrement parent count for hard links (independent of trash)
-						if info.attr.Parent == 0 {
-							pipe.HIncrBy(ctx, m.parentKey(info.inode), parent.String(), -1)
-						}
-					} else {
-						// last link removed: delete inode and related data
-						var entrySpace int64
-						needRecordStats := false
-						switch info.typ {
-						case TypeFile:
-							entrySpace = align4K(info.attr.Length)
-							needRecordStats = true
-							if info.opened {
-								pipe.Set(ctx, m.inodeKey(info.inode), m.marshal(info.attr), 0)
-								pipe.SAdd(ctx, m.sustained(m.sid), strconv.Itoa(int(info.inode)))
-							} else {
-								pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(nowUnix), Member: m.toDelete(info.inode, info.attr.Length)})
-								pipe.Del(ctx, m.inodeKey(info.inode))
-								totalSpace -= align4K(info.attr.Length)
-								totalInodes--
-								pipe.IncrBy(ctx, m.usedSpaceKey(), -align4K(info.attr.Length))
-								pipe.Decr(ctx, m.totalInodesKey())
-							}
-						case TypeSymlink:
-							pipe.Del(ctx, m.symKey(info.inode))
-							fallthrough
-						default:
-							pipe.Del(ctx, m.inodeKey(info.inode))
-							entrySpace = align4K(0)
-							needRecordStats = true
-							totalSpace -= align4K(0)
-							totalInodes--
-							pipe.IncrBy(ctx, m.usedSpaceKey(), -align4K(0))
-							pipe.Decr(ctx, m.totalInodesKey())
-						}
-						if needRecordStats {
-							totalLength -= int64(info.attr.Length)
-							if userGroupQuotas != nil && !parent.IsTrash() {
-								*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
-									Uid:    info.attr.Uid,
-									Gid:    info.attr.Gid,
-									Space:  -entrySpace,
-									Inodes: -1,
-								})
-							}
-						}
-						pipe.Del(ctx, m.xattrKey(info.inode))
-						if info.attr.Parent == 0 {
-							pipe.Del(ctx, m.parentKey(info.inode))
-						}
+			}
+			for key, fields := range parentOps {
+				for field, incr := range fields {
+					if incr != 0 {
+						pipe.HIncrBy(ctx, key, field, incr)
 					}
 				}
-
-				// handle trash for hard links
-				if info.attr.Nlink > 0 && info.trash > 0 {
-					if info.trashName == "" {
-						info.trashName = m.trashEntry(parent, info.inode, info.name)
-					}
-					pipe.HSet(ctx, m.entryKey(info.trash), info.trashName, info.buf)
-					if info.attr.Parent == 0 {
-						pipe.HIncrBy(ctx, m.parentKey(info.inode), info.trash.String(), 1)
-					}
+			}
+			for key, fields := range trashOps {
+				for field, value := range fields {
+					pipe.HSet(ctx, key, field, value)
 				}
-				visited[info.inode] = true
 			}
 			if updateParent {
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
