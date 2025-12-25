@@ -40,6 +40,17 @@ func GetFileInode(path string) (uint64, error) {
 	return 0, nil
 }
 
+func GetFileInodeNotFollow(path string) (uint64, error) {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return 0, err
+	}
+	if sst, ok := fi.Sys().(*syscall.Stat_t); ok {
+		return sst.Ino, nil
+	}
+	return 0, nil
+}
+
 func GetDev(fpath string) int { // ID of device containing file
 	fi, err := os.Stat(fpath)
 	if err != nil {
