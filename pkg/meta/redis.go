@@ -1739,12 +1739,12 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		typ       uint8
 		trash     Ino
 		attr      *Attr
-		opened    bool
 		trashName string
 		buf       []byte
 	}
 
 	var entryInfos []entryInfo
+	var openedInodes map[Ino]bool
 	var totalLength, totalSpace, totalInodes int64
 	if userGroupQuotas != nil {
 		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
@@ -1788,6 +1788,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 			buf, err := tx.HGet(ctx, m.entryKey(parent), info.name).Bytes()
 			if err == redis.Nil && m.conf.CaseInsensi {
 				if e := m.resolveCase(ctx, parent, info.name); e != nil {
+					info.name = string(e.Name)
+					info.inode = e.Inode
+					info.typ = e.Attr.Typ
 					buf = m.packEntry(e.Attr.Typ, e.Inode)
 					err = nil
 				}
@@ -1879,8 +1882,17 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 			}
 			if info.trash == 0 && info.attr.Nlink > 0 {
 				info.attr.Nlink--
-				if info.typ == TypeFile && info.attr.Nlink == 0 && m.sid > 0 {
-					info.opened = m.of.IsOpen(info.inode)
+			}
+		}
+
+		// check opened status for all inodes with Nlink == 0 after all decrements
+		openedInodes = make(map[Ino]bool)
+		if m.sid > 0 {
+			for _, info := range entryInfos {
+				if info.attr != nil && info.trash == 0 && info.attr.Nlink == 0 && info.typ == TypeFile {
+					if _, ok := openedInodes[info.n.Inode]; !ok {
+						openedInodes[info.inode] = m.of.IsOpen(info.inode)
+					}
 				}
 			}
 		}
@@ -1909,10 +1921,13 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		stats := make(map[string]int64) // key -> delta
 
 		for _, info := range entryInfos {
-			if info.attr == nil || info.typ == TypeDirectory {
+			if info.typ == TypeDirectory {
 				continue
 			}
 			names = append(names, info.name)
+			if info.attr == nil {
+				continue
+			}
 
 			if !visited[info.inode] {
 				if info.attr.Nlink > 0 {
@@ -1935,7 +1950,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 					case TypeFile:
 						entrySpace = align4K(info.attr.Length)
 						needStats = true
-						if info.opened {
+						if openedInodes[info.inode] {
 							if inodes == nil {
 								inodes = make(map[Ino]*Attr)
 							}
@@ -1980,6 +1995,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 						keys = append(keys, m.parentKey(info.inode))
 					}
 				}
+				m.of.InvalidateChunk(info.inode, invalidateAttrOnly)
 			}
 			if info.attr.Nlink > 0 && info.attr.Parent == 0 {
 				key := m.parentKey(info.inode)
@@ -2056,15 +2072,6 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		return errno(err)
 	}
 
-	// invalidate chunks for all affected inodes (both deleted and moved to trash)
-	invalidated := make(map[Ino]bool)
-	for _, info := range entryInfos {
-		if info.attr != nil && info.inode != 0 && !invalidated[info.inode] {
-			m.of.InvalidateChunk(info.inode, invalidateAttrOnly)
-			invalidated[info.inode] = true
-		}
-	}
-
 	// outside of transaction: update global stats and trigger data deletion callbacks
 	visited := make(map[Ino]bool)
 	visited[0] = true // skip dummyNode
@@ -2074,7 +2081,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		}
 		visited[info.inode] = true
 		if info.typ == TypeFile && info.attr.Nlink == 0 {
-			m.fileDeleted(info.opened, parent.IsTrash(), info.inode, info.attr.Length)
+			m.fileDeleted(openedInodes[info.inode], parent.IsTrash(), info.inode, info.attr.Length)
 		}
 	}
 	m.updateStats(totalSpace, totalInodes)
