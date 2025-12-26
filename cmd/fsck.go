@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -65,6 +66,11 @@ $ juicefs fsck redis://localhost --path /d1/d2 --recursive`,
 				Name:  "sync-dir-stat",
 				Usage: "sync stat of all directories, even if they are existed and not broken (NOTE: it may take a long time for huge trees)",
 			},
+			&cli.StringFlag{
+				Name:  "repair-dir-mode",
+				Value: "0755",
+				Usage: "permission mode for repaired directories (octal, e.g., 0755)",
+			},
 		},
 	}
 }
@@ -86,11 +92,15 @@ func fsck(ctx *cli.Context) error {
 	sliceCSpin := progress.AddCountSpinner("Listed slices")
 	slices := make(map[meta.Ino][]meta.Slice)
 	path := ctx.String("path")
+	repairDirMode, err := strconv.ParseUint(ctx.String("repair-dir-mode"), 8, 16) // base 8 (octal), 16-bit result
+	if err != nil {
+		logger.Fatalf("invalid repair-dir-mode: %s", err)
+	}
 	if path != "" {
 		if !strings.HasPrefix(path, "/") {
 			logger.Fatalf("File path should be the absolute path within JuiceFS")
 		}
-		err := m.Check(c, path, ctx.Bool("repair"), ctx.Bool("recursive"), ctx.Bool("sync-dir-stat"), sliceCSpin.IncrBy, slices)
+		err := m.Check(c, path, ctx.Bool("repair"), ctx.Bool("recursive"), ctx.Bool("sync-dir-stat"), uint16(repairDirMode), sliceCSpin.IncrBy, slices)
 		if err != nil {
 			logger.Fatalf("check: %s", err)
 		}

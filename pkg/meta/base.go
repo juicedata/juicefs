@@ -2261,7 +2261,7 @@ func (m *baseMeta) walk(ctx Context, inode Ino, p string, attr *Attr, walkFn met
 	return 0
 }
 
-func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool, statAll bool, showProgress func(n int), slices map[Ino][]Slice) error {
+func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool, statAll bool, repairDirMode uint16, showProgress func(n int), slices map[Ino][]Slice) error {
 	var attr Attr
 	var inode = RootInode
 	var parent = RootInode
@@ -2400,7 +2400,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 					if repair {
 						if !attr.Full {
 							now := time.Now().Unix()
-							attr.Mode = 0755
+							attr.Mode = repairDirMode
 							attr.Uid = ctx.Uid()
 							attr.Gid = ctx.Gid()
 							attr.Atime = now
