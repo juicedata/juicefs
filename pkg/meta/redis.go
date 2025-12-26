@@ -1890,7 +1890,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		if m.sid > 0 {
 			for _, info := range entryInfos {
 				if info.attr != nil && info.trash == 0 && info.attr.Nlink == 0 && info.typ == TypeFile {
-					if _, ok := openedInodes[info.n.Inode]; !ok {
+					if _, ok := openedInodes[info.inode]; !ok {
 						openedInodes[info.inode] = m.of.IsOpen(info.inode)
 					}
 				}

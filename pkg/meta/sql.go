@@ -2913,7 +2913,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 	visited := make(map[Ino]bool)
 	visited[0] = true // skip dummyNode
 	for _, info := range entryInfos {
-		if info.n == nil || info.trash != 0 || visited[info.n.Inode] {
+		if info.trash != 0 || visited[info.n.Inode] {
 			continue
 		}
 		visited[info.n.Inode] = true
