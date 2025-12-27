@@ -5,6 +5,19 @@ sidebar_position: 6
 
 JuiceFS 社区版从 v1.3.0 引入 Python SDK，适合无法使用 FUSE 挂载的容器化或虚拟化环境使用。并且 Python SDK 实现了 fsspec 的接口规范，可方便的对接 Ray 等框架。
 
+## 快速上手视频
+
+<div className="video-container">
+  <iframe
+    src="//player.bilibili.com/player.html?isOutside=true&aid=114471129321725&bvid=BV1Xu5NzQEiG&cid=29850536628&p=1&autoplay=false"
+    width="100%"
+    height="360"
+    scrolling="no"
+    frameBorder="0"
+    allowFullScreen
+  ></iframe>
+</div>
+
 ## 编译
 
 你可以在当前工作环境中直接编译 Python SDK，也可以使用 Docker 容器进行编译。两种方式都需要先克隆仓库并进入 SDK 所在目录。

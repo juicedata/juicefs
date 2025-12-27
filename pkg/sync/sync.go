@@ -19,6 +19,7 @@ package sync
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -31,6 +32,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 	"unicode"
 
@@ -69,6 +71,7 @@ var (
 )
 var crcTable = crc32.MakeTable(crc32.Castagnoli)
 var logger = utils.GetLogger("juicefs")
+var ctx = context.Background()
 
 func incrTotal(n int64) {
 	totalHandled.Add(n)
@@ -124,13 +127,13 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 	// As the result of object storage's List method doesn't include the marker key,
 	// we try List the marker key separately.
 	if start != "" && strings.HasPrefix(start, prefix) {
-		if obj, err := store.Head(start); err == nil {
+		if obj, err := store.Head(ctx, start); err == nil {
 			logger.Debugf("Found start key: %s from %s in %s", start, store, time.Since(startTime))
 			out <- obj
 		}
 	}
 
-	if ch, err := store.ListAll(prefix, start, followLink); err == nil {
+	if ch, err := store.ListAll(ctx, prefix, start, followLink); err == nil {
 		go func() {
 			for obj := range ch {
 				if obj != nil && end != "" && obj.Key() > end {
@@ -148,9 +151,9 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 	marker := start
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
 
-	objs, hasMore, nextToken, err := store.List(prefix, marker, "", "", maxResults, followLink)
+	objs, hasMore, nextToken, err := store.List(ctx, prefix, marker, "", "", maxResults, followLink)
 	if errors.Is(err, utils.ENOTSUP) {
-		return object.ListAllWithDelimiter(store, prefix, start, end, followLink)
+		return object.ListAllWithDelimiter(ctx, store, prefix, start, end, followLink)
 	}
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
@@ -185,14 +188,14 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
 			var nextToken2 string
-			objs, hasMore, nextToken2, err = store.List(prefix, marker, nextToken, "", maxResults, followLink)
+			objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
 			count := 0
 			for err != nil && count < 3 {
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
 				// slow down
 				time.Sleep(time.Millisecond * 100)
 
-				objs, hasMore, nextToken2, err = store.List(prefix, marker, nextToken, "", maxResults, followLink)
+				objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
 				count++
 			}
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
@@ -220,10 +223,27 @@ var bufPool = sync.Pool{
 	},
 }
 
+func shouldRetry(err error) bool {
+	if err == nil || errors.Is(err, utils.ErrSkipped) || errors.Is(err, utils.ErrExtlink) {
+		return false
+	}
+
+	var eno syscall.Errno
+	if errors.As(err, &eno) {
+		switch eno {
+		case syscall.EAGAIN, syscall.EINTR, syscall.EBUSY, syscall.ETIMEDOUT, syscall.EIO:
+			return true
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func try(n int, f func() error) (err error) {
 	for i := 0; i < n; i++ {
 		err = f()
-		if err == nil || errors.Is(err, utils.ErrSkipped) {
+		if !shouldRetry(err) {
 			return
 		}
 		logger.Debugf("Try %d failed: %s", i+1, err)
@@ -239,7 +259,7 @@ func deleteObj(storage object.ObjectStorage, key string, dry bool) {
 		return
 	}
 	start := time.Now()
-	if err := try(3, func() error { return storage.Delete(key) }); err == nil {
+	if err := try(3, func() error { return storage.Delete(ctx, key) }); err == nil {
 		deleted.Increment()
 		logger.Debugf("Deleted %s from %s in %s", key, storage, time.Since(start))
 	} else {
@@ -282,7 +302,7 @@ func calPartChksum(objStor object.ObjectStorage, key string, abort chan struct{}
 			<-concurrent
 		}()
 	}
-	in, err := objStor.Get(key, offset, length)
+	in, err := objStor.Get(ctx, key, offset, length)
 	if err != nil {
 		return 0, fmt.Errorf("dest get: %s", err)
 	}
@@ -353,12 +373,12 @@ func compObjPartBinary(src, dst object.ObjectStorage, key string, abort chan str
 			<-concurrent
 		}()
 	}
-	in, err := src.Get(key, offset, length)
+	in, err := src.Get(ctx, key, offset, length)
 	if err != nil {
 		return fmt.Errorf("src get: %s", err)
 	}
 	defer in.Close()
-	in2, err := dst.Get(key, offset, length)
+	in2, err := dst.Get(ctx, key, offset, length)
 	if err != nil {
 		return fmt.Errorf("dest get: %s", err)
 	}
@@ -509,10 +529,10 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64, calChks
 		}
 		r := &chksumReader{in, 0, calChksum}
 		if err == nil {
-			err = dst.Put(key, r)
+			err = dst.Put(ctx, key, r)
 		}
 		if err != nil {
-			if _, e := src.Head(key); os.IsNotExist(e) {
+			if _, e := src.Head(ctx, key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
 				err = utils.ErrSkipped
 			}
@@ -530,9 +550,16 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64, calChk
 	var in io.ReadCloser
 	var err error
 	if size == 0 {
+		if key == "" && !object.IsFileSystem(dst) {
+			ps := strings.SplitN(dst.String(), "/", 4)
+			if len(ps) == 4 && ps[3] == "" {
+				logger.Warnf("empty key is not support by %s, ignore it", dst)
+				return 0, nil
+			}
+		}
 		if object.IsFileSystem(src) {
 			// for check permissions
-			r, err := src.Get(key, 0, -1)
+			r, err := src.Get(ctx, key, 0, -1)
 			if err != nil {
 				return 0, err
 			}
@@ -540,9 +567,9 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64, calChk
 		}
 		in = io.NopCloser(bytes.NewReader(nil))
 	} else {
-		in, err = src.Get(key, 0, size)
+		in, err = src.Get(ctx, key, 0, size)
 		if err != nil {
-			if _, e := src.Head(key); os.IsNotExist(e) {
+			if _, e := src.Head(ctx, key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
 				err = utils.ErrSkipped
 			}
@@ -551,7 +578,7 @@ func doCopySingle0(src, dst object.ObjectStorage, key string, size int64, calChk
 	}
 	r := &chksumReader{in, 0, calChksum}
 	defer in.Close()
-	err = dst.Put(key, &withProgress{r})
+	err = dst.Put(ctx, key, &withProgress{r})
 	return r.chksum, err
 }
 
@@ -608,7 +635,7 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 	var part *object.Part
 	var chksum uint32
 	err := try(3, func() error {
-		in, err := src.Get(srckey, off, sz)
+		in, err := src.Get(ctx, srckey, off, sz)
 		if err != nil {
 			return err
 		}
@@ -619,7 +646,7 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		}
 		chksum = r.chksum
 		// PartNumber starts from 1
-		part, err = dst.UploadPart(key, uploadID, num+1, data)
+		part, err = dst.UploadPart(ctx, key, uploadID, num+1, data)
 		return err
 	})
 	if err != nil {
@@ -662,7 +689,7 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 	var up *object.MultipartUpload
 	var err error
 	err = try(3, func() error {
-		up, err = dst.CreateMultipartUpload(tmpkey)
+		up, err = dst.CreateMultipartUpload(ctx, tmpkey)
 		return err
 	})
 	if err != nil {
@@ -683,14 +710,14 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 		}
 		select {
 		case <-abort:
-			dst.AbortUpload(tmpkey, up.UploadID)
+			dst.AbortUpload(ctx, tmpkey, up.UploadID)
 			return nil, 0, fmt.Errorf("aborted")
 		default:
 		}
 		var chksum uint32
 		parts[i], chksum, err = doUploadPart(src, dst, key, off+int64(i)*partSize, sz, tmpkey, up.UploadID, i, calChksum)
 		if err != nil {
-			dst.AbortUpload(tmpkey, up.UploadID)
+			dst.AbortUpload(ctx, tmpkey, up.UploadID)
 			return nil, 0, fmt.Errorf("range(%d,%d): %s", off, size, err)
 		}
 		if calChksum {
@@ -703,17 +730,17 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 		}
 	}
 
-	err = try(3, func() error { return dst.CompleteUpload(tmpkey, up.UploadID, parts) })
+	err = try(3, func() error { return dst.CompleteUpload(ctx, tmpkey, up.UploadID, parts) })
 	if err != nil {
-		dst.AbortUpload(tmpkey, up.UploadID)
+		dst.AbortUpload(ctx, tmpkey, up.UploadID)
 		return nil, 0, fmt.Errorf("multipart: %s", err)
 	}
 	var part *object.Part
 	err = try(3, func() error {
-		part, err = dst.UploadPartCopy(key, upload.UploadID, num+1, tmpkey, 0, size)
+		part, err = dst.UploadPartCopy(ctx, key, upload.UploadID, num+1, tmpkey, 0, size)
 		return err
 	})
-	_ = dst.Delete(tmpkey)
+	_ = dst.Delete(ctx, tmpkey)
 	return part, tmpChksum, err
 }
 
@@ -753,10 +780,10 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 		}
 	}
 	if err == nil {
-		err = try(3, func() error { return dst.CompleteUpload(key, upload.UploadID, parts) })
+		err = try(3, func() error { return dst.CompleteUpload(ctx, key, upload.UploadID, parts) })
 	}
 	if err != nil {
-		dst.AbortUpload(key, upload.UploadID)
+		dst.AbortUpload(ctx, key, upload.UploadID)
 		return 0, fmt.Errorf("multipart: %s", err)
 	}
 	var chksum uint32
@@ -788,7 +815,7 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 		})
 	} else {
 		var upload *object.MultipartUpload
-		if upload, err = dst.CreateMultipartUpload(key); err == nil {
+		if upload, err = dst.CreateMultipartUpload(ctx, key); err == nil {
 			srcChksum, err = doCopyMultiple(src, dst, key, size, upload, calChksum)
 		} else if err == utils.ENOTSUP {
 			err = try(3, func() (err error) {
@@ -797,7 +824,7 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 			})
 		} else { // other error retry
 			if err = try(2, func() error {
-				upload, err = dst.CreateMultipartUpload(key)
+				upload, err = dst.CreateMultipartUpload(ctx, key)
 				return err
 			}); err == nil {
 				srcChksum, err = doCopyMultiple(src, dst, key, size, upload, calChksum)
@@ -812,8 +839,49 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 	return srcChksum, err
 }
 
-func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *Config) {
-	for obj := range tasks {
+type holder struct {
+	done chan struct{}
+}
+
+var muHolder sync.Mutex
+var holders []*holder
+
+func fetchTask(tasks chan object.Object) (t object.Object, done func()) {
+	muHolder.Lock()
+	defer muHolder.Unlock()
+	if len(holders) > 0 {
+		h := holders[len(holders)-1]
+		holders = holders[:len(holders)-1]
+		muHolder.Unlock()
+		<-h.done
+		muHolder.Lock()
+	}
+	if t = <-tasks; t == nil {
+		return nil, func() {}
+	}
+	size := t.Size()
+	if size == markChecksum {
+		size = withoutSize(t).Size()
+	}
+	if size >= maxBlock*2 {
+		done := make(chan struct{})
+		h := &holder{done: done}
+		n := min(int(size)/maxBlock, 20)
+		for i := 1; i < n; i++ {
+			holders = append(holders, h)
+		}
+		return t, func() { close(done) }
+	} else {
+		return t, func() {}
+	}
+}
+
+func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Config) {
+	for {
+		obj, done := fetchTask(tasks)
+		if obj == nil {
+			break
+		}
 		key := obj.Key()
 		switch obj.Size() {
 		case markDeleteSrc:
@@ -847,7 +915,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 						deleteObj(src, key, false)
 					}
 				} else if config.Perms && (!obj.IsSymlink() || !config.Links) {
-					if o, e := dst.Head(key); e == nil {
+					if o, e := dst.Head(ctx, key); e == nil {
 						if needCopyPerms(obj, o) {
 							copyPerms(dst, obj, config)
 							copied.Increment()
@@ -884,6 +952,10 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			} else {
 				srcChksum, err = CopyData(src, dst, key, obj.Size(), config.CheckAll || config.CheckNew)
 			}
+			if errors.Is(err, utils.ErrExtlink) {
+				logger.Warnf("Skip external link %s: %s", key, err)
+				err = utils.ErrSkipped
+			}
 
 			if err == nil && config.CheckChange {
 				err = checkChange(src, dst, obj, key, config)
@@ -913,6 +985,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 		}
 		incrHandled(1)
+		done()
 	}
 }
 
@@ -920,7 +993,7 @@ func checkChange(src, dst object.ObjectStorage, obj object.Object, key string, c
 	if obj == nil || config.Links && obj.IsSymlink() {
 		return nil // ignore symlink
 	}
-	if cur, err := src.Head(key); err == nil {
+	if cur, err := src.Head(ctx, key); err == nil {
 		if !config.CheckAll && !config.CheckNew {
 			checked.Increment()
 			checkedBytes.IncrInt64(obj.Size())
@@ -934,7 +1007,7 @@ func checkChange(src, dst object.ObjectStorage, obj object.Object, key string, c
 			return fmt.Errorf("%s changed during sync. Original: size=%d, mtime=%s; Current: size=%d, mtime=%s",
 				cur.Key(), obj.Size(), obj.Mtime(), cur.Size(), cur.Mtime())
 		}
-		if dstObj, err := dst.Head(key); err == nil {
+		if dstObj, err := dst.Head(ctx, key); err == nil {
 			if cur.Size() != dstObj.Size() {
 				return fmt.Errorf("copied %s size mismatch: original=%d, current=%d", key, obj.Size(), dstObj.Size())
 			}
@@ -953,7 +1026,7 @@ func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) er
 	if p, err := src.(object.SupportSymlink).Readlink(key); err != nil {
 		return err
 	} else {
-		if err := dst.Delete(key); err != nil {
+		if err := dst.Delete(ctx, key); err != nil {
 			logger.Debugf("Deleted %s from %s ", key, dst)
 			return err
 		}
@@ -1396,7 +1469,7 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 		thisListMaxResults = math.MaxInt64
 	}
 	for {
-		objs, hasMore, nextToken, err = store.List(prefix, marker, nextToken, "/", thisListMaxResults, followLink)
+		objs, hasMore, nextToken, err = store.List(ctx, prefix, marker, nextToken, "/", thisListMaxResults, followLink)
 		if err != nil {
 			return nil, err
 		}
@@ -1442,8 +1515,12 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 					if err := produceSingleObject(tasks, src, dst, key, config); err == nil {
 						listedPrefix.Increment()
 						continue
-					} else if errors.Is(err, ignoreDir) {
+					} else if errors.Is(err, errDirSuffix) {
 						key += "/"
+					} else if os.IsNotExist(err) {
+						atomic.AddInt64(&ignoreFiles, 1)
+						listedPrefix.Increment()
+						continue
 					}
 				}
 				logger.Debugf("start listing prefix %s", key)
@@ -1476,31 +1553,39 @@ func produceFromList(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 	return nil
 }
 
-var ignoreDir = errors.New("ignore dir")
+var errDirSuffix = errors.New("dir miss suffix '/'")
+var ignoreFiles int64
 
 func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStorage, key string, config *Config) error {
-	obj, err := src.Head(key)
-	if err == nil && (!obj.IsDir() || obj.IsSymlink() && config.Links || obj.IsDir() && config.Dirs && strings.HasSuffix(key, "/")) {
-		var srckeys = make(chan object.Object, 1)
-		srckeys <- obj
-		close(srckeys)
-		if dobj, e := dst.Head(key); e == nil || os.IsNotExist(e) {
-			var dstkeys = make(chan object.Object, 1)
-			if dobj != nil {
-				dstkeys <- dobj
-			}
-			close(dstkeys)
-			logger.Debugf("produce single key %s", key)
-			_ = produce(tasks, srckeys, dstkeys, config)
-			return nil
-		} else {
-			logger.Warnf("head %s from %s: %s", key, dst, e)
-			err = e
-		}
-	} else if err != nil {
+	obj, err := src.Head(ctx, key)
+	if err != nil {
 		logger.Warnf("head %s from %s: %s", key, src, err)
+		return err
+	}
+	if obj.IsDir() {
+		// only `files-from` will hit this case
+		if !strings.HasSuffix(key, "/") {
+			return errDirSuffix
+		}
+		if !config.Dirs {
+			return nil
+		}
+	}
+	var srckeys = make(chan object.Object, 1)
+	srckeys <- obj
+	close(srckeys)
+	if dobj, e := dst.Head(ctx, key); e == nil || os.IsNotExist(e) {
+		var dstkeys = make(chan object.Object, 1)
+		if dobj != nil {
+			dstkeys <- dobj
+		}
+		close(dstkeys)
+		logger.Debugf("produce single key %s", key)
+		_ = produce(tasks, srckeys, dstkeys, config)
+		return nil
 	} else {
-		err = ignoreDir
+		logger.Warnf("head %s from %s: %s", key, dst, e)
+		err = e
 	}
 	return err
 }
@@ -1621,7 +1706,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	var bufferSize = 10240
 	if config.Manager != "" {
 		// No support for work-stealing, so workers shouldnot buffer tasks to prevent piling up in their own queues, which could cause imbalance among workers.
-		bufferSize = 0
+		bufferSize = 1
 	}
 	tasks := make(chan object.Object, bufferSize)
 	wg := sync.WaitGroup{}
@@ -1652,6 +1737,10 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	syncExitFunc := func() error {
 		if config.Manager == "" {
+			val := atomic.LoadInt64(&ignoreFiles)
+			if val > 0 {
+				logger.Infof("Ignored %d non-existent paths from the file list", val)
+			}
 			pending.SetCurrent(0)
 			incrHandled(0)
 			total := handled.GetTotal()
@@ -1678,7 +1767,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 			if failed != nil {
 				if n := failed.Current(); n > 0 || total > handled.Current()+extra.Current() {
-					return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
+					return fmt.Errorf("failed to handle %d objects", n+total-handled.Current()-extra.Current())
 				}
 			}
 		} else {

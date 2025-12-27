@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -52,7 +53,7 @@ func (c *COS) String() string {
 	return fmt.Sprintf("cos://%s/", strings.Split(c.endpoint, ".")[0])
 }
 
-func (c *COS) Create() error {
+func (c *COS) Create(ctx context.Context) error {
 	_, err := c.c.Bucket.Put(ctx, nil)
 	if err != nil && isExists(err) {
 		err = nil
@@ -70,7 +71,7 @@ func (c *COS) Limits() Limits {
 	}
 }
 
-func (c *COS) Head(key string) (Object, error) {
+func (c *COS) Head(ctx context.Context, key string) (Object, error) {
 	resp, err := c.c.Object.Head(ctx, key, nil)
 	if err != nil {
 		if exist, err := c.c.Object.IsExist(ctx, key); err == nil && !exist {
@@ -100,7 +101,7 @@ func (c *COS) Head(key string) (Object, error) {
 	return &obj{key, size, mtime, strings.HasSuffix(key, "/"), sc}, nil
 }
 
-func (c *COS) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (c *COS) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	params := &cos.ObjectGetOptions{Range: getRange(off, limit)}
 	resp, err := c.c.Object.Get(ctx, key, params)
 	if err != nil {
@@ -119,13 +120,13 @@ func (c *COS) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadC
 		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey), length)
 	}
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey)).SetStorageClass(resp.Header.Get(cosStorageClassHeader))
 	}
 	return resp.Body, nil
 }
 
-func (c *COS) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	var options cos.ObjectPutOptions
 	if ins, ok := in.(io.ReadSeeker); ok {
 		header := http.Header(map[string][]string{
@@ -141,13 +142,13 @@ func (c *COS) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	}
 	resp, err := c.c.Object.Put(ctx, key, in, &options)
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey)).SetStorageClass(c.sc)
 	}
 	return err
 }
 
-func (c *COS) Copy(dst, src string) error {
+func (c *COS) Copy(ctx context.Context, dst, src string) error {
 	var opt cos.ObjectCopyOptions
 	if c.sc != "" {
 		opt.ObjectCopyHeaderOptions = &cos.ObjectCopyHeaderOptions{XCosStorageClass: c.sc}
@@ -157,16 +158,16 @@ func (c *COS) Copy(dst, src string) error {
 	return err
 }
 
-func (c *COS) Delete(key string, getters ...AttrGetter) error {
+func (c *COS) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	resp, err := c.c.Object.Delete(ctx, key)
 	if resp != nil {
-		attrs := applyGetters(getters...)
+		attrs := ApplyGetters(getters...)
 		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey))
 	}
 	return err
 }
 
-func (c *COS) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (c *COS) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	param := cos.BucketGetOptions{
 		Prefix:       prefix,
 		Marker:       start,
@@ -202,11 +203,11 @@ func (c *COS) List(prefix, start, token, delimiter string, limit int64, followLi
 	return objs, resp.IsTruncated, resp.NextMarker, nil
 }
 
-func (c *COS) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (c *COS) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 
-func (c *COS) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (c *COS) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	var options cos.InitiateMultipartUploadOptions
 	if c.sc != "" {
 		options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{XCosStorageClass: c.sc}
@@ -218,7 +219,7 @@ func (c *COS) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	return &MultipartUpload{UploadID: resp.UploadID, MinPartSize: 5 << 20, MaxCount: 10000}, nil
 }
 
-func (c *COS) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
+func (c *COS) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
 	resp, err := c.c.Object.UploadPart(ctx, key, uploadID, num, bytes.NewReader(body), nil)
 	if err != nil {
 		return nil, err
@@ -226,7 +227,7 @@ func (c *COS) UploadPart(key string, uploadID string, num int, body []byte) (*Pa
 	return &Part{Num: num, ETag: resp.Header.Get("Etag")}, nil
 }
 
-func (c *COS) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (c *COS) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	result, _, err := c.c.Object.CopyPart(ctx, key, uploadID, num, c.endpoint+"/"+srcKey, &cos.ObjectCopyPartOptions{
 		XCosCopySourceRange: fmt.Sprintf("bytes=%d-%d", off, off+size-1),
 	})
@@ -236,11 +237,11 @@ func (c *COS) UploadPartCopy(key string, uploadID string, num int, srcKey string
 	return &Part{Num: num, ETag: result.ETag}, nil
 }
 
-func (c *COS) AbortUpload(key string, uploadID string) {
+func (c *COS) AbortUpload(ctx context.Context, key string, uploadID string) {
 	_, _ = c.c.Object.AbortMultipartUpload(ctx, key, uploadID)
 }
 
-func (c *COS) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (c *COS) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	var cosParts []cos.Object
 	for i := range parts {
 		cosParts = append(cosParts, cos.Object{ETag: parts[i].ETag, PartNumber: parts[i].Num})
@@ -249,7 +250,7 @@ func (c *COS) CompleteUpload(key string, uploadID string, parts []*Part) error {
 	return err
 }
 
-func (c *COS) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (c *COS) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	input := &cos.ListMultipartUploadsOptions{
 		KeyMarker: marker,
 	}
@@ -329,6 +330,11 @@ func newCOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		},
 	})
 	client.UserAgent = UserAgent
+	disableChecksum := strings.EqualFold(uri.Query().Get("disable-checksum"), "true")
+	if disableChecksum {
+		logger.Infof("default CRC checksum is disabled")
+	}
+	client.Conf.EnableCRC = !disableChecksum
 	return &COS{c: client, endpoint: uri.Host}, nil
 }
 

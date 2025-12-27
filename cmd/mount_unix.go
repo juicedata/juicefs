@@ -389,6 +389,10 @@ func mountFlags() []cli.Flag {
 			Name:  "force",
 			Usage: "force to mount even if the mount point is already mounted by the same filesystem",
 		},
+		&cli.BoolFlag{
+			Name:  "hide-internal",
+			Usage: "hide all internal files (.accesslog, .stats, etc.)",
+		},
 	}
 	if runtime.GOOS == "linux" {
 		selfFlags = append(selfFlags, &cli.BoolFlag{
@@ -496,13 +500,13 @@ func prepareMp(mp string) {
 	}
 	var fi os.FileInfo
 	var ino uint64
-	err := utils.WithTimeout(func() error {
+	err := utils.WithTimeout(context.TODO(), func(context.Context) error {
 		var err error
 		fi, err = os.Stat(mp)
 		return err
 	}, time.Second*3)
 	if !strings.Contains(mp, ":") && err != nil {
-		err2 := utils.WithTimeout(func() error {
+		err2 := utils.WithTimeout(context.TODO(), func(context.Context) error {
 			return os.MkdirAll(mp, 0777)
 		}, time.Second*3)
 		if err2 != nil {
@@ -554,7 +558,7 @@ func genFuseOptExt(c *cli.Context, format *meta.Format) (fuseOpt string, mt int,
 	if format.EnableACL {
 		enableXattr = true
 	}
-	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL, int(utils.ParseBytes(c, "max-write", 'B'))
+	return genFuseOpt(c, format.Name), 1, !enableXattr, !format.EnableACL, int(utils.ParseBytes(c, "max-fuse-io", 'B'))
 }
 
 func shutdownGraceful(mp string) {
@@ -596,7 +600,7 @@ func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
 	}
 	var ino uint64
 	var err error
-	err = utils.WithTimeout(func() error {
+	err = utils.WithTimeout(context.TODO(), func(context.Context) error {
 		ino, err = utils.GetFileInode(mp)
 		return err
 	}, time.Second*3)
@@ -655,8 +659,29 @@ func absPath(d string) string {
 	return d
 }
 
+func buildBoolFlagsMap(c *cli.Context) map[string]bool {
+	boolFlags := make(map[string]bool)
+	addBoolFlags := func(flags []cli.Flag) {
+		for _, flag := range flags {
+			if _, ok := flag.(*cli.BoolFlag); ok {
+				for _, name := range flag.Names() {
+					boolFlags[name] = true
+				}
+			}
+		}
+	}
+	if c.App != nil {
+		addBoolFlags(c.App.Flags)
+	}
+	if c.Command != nil {
+		addBoolFlags(c.Command.Flags)
+	}
+	return boolFlags
+}
+
 func tellFstabOptions(c *cli.Context) string {
-	opts := []string{"_netdev"}
+	opts := []string{"_netdev,nofail"}
+	boolFlags := buildBoolFlagsMap(c)
 	for _, s := range os.Args[2:] {
 		if !strings.HasPrefix(s, "-") {
 			continue
@@ -668,11 +693,16 @@ func tellFstabOptions(c *cli.Context) string {
 		}
 		if s == "o" {
 			opts = append(opts, c.String(s))
-		} else if v := c.Bool(s); v {
+		} else if boolFlags[s] && c.Bool(s) {
 			opts = append(opts, s)
 		} else if s == "cache-dir" {
-			dirs := utils.SplitDir(c.String(s))
-			dirString := strings.Join(relPathToAbs(dirs), string(os.PathListSeparator))
+			var dirString string
+			if c.String(s) == "memory" {
+				dirString = "memory"
+			} else {
+				dirs := utils.SplitDir(c.String(s))
+				dirString = strings.Join(relPathToAbs(dirs), string(os.PathListSeparator))
+			}
 			opts = append(opts, fmt.Sprintf("%s=%s", s, dirString))
 		} else {
 			opts = append(opts, fmt.Sprintf("%s=%s", s, c.Generic(s)))
@@ -998,17 +1028,20 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 	conf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
 	conf.NegEntryTimeout = utils.Duration(c.String("negative-entry-cache"))
 	conf.ReaddirCache = c.Bool("readdir-cache")
+	major, minor := utils.GetKernelVersion()
 	if conf.ReaddirCache {
 		if conf.AttrTimeout == 0 {
 			logger.Warnf("readdir-cache is enabled without attr-cache, it's performance may be affected")
 		}
-		major, minor := utils.GetKernelVersion()
 		if major < 4 || (major == 4 && minor < 20) {
 			logger.Warnf("readdir-cache requires kernel version 4.20 or higher, current version: %d.%d", major, minor)
 		}
 		if conf.Meta.SkipDirMtime > 0 {
 			logger.Warnf("When both readdir-cache and skip-dir-mtime are enabled, ignoring mtime may disable readdir refreshes on other nodes")
 		}
+	}
+	if conf.NegEntryTimeout > 0 && (major < 5 || (major == 5 && minor < 11)) {
+		logger.Warnf("On kernel versions below 5.11 (current: %d.%d), negative-entry-cache may cause concurrent check-then-create operations (e.g. mkdir -p) to fail in a distributed environment", major, minor)
 	}
 	conf.NonDefaultPermission = c.Bool("non-default-permission")
 	rootSquash := c.String("root-squash")
@@ -1033,3 +1066,4 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 		logger.Fatalf("fuse: %s", err)
 	}
 }
+

@@ -63,6 +63,10 @@ func (b *Buffer) Seek(p int) {
 	b.off = p
 }
 
+func (b *Buffer) Offset() int {
+	return b.off
+}
+
 // Buffer returns
 func (b *Buffer) Buffer() []byte {
 	return b.buf[b.off:]
@@ -133,7 +137,7 @@ func (b *Buffer) Get(l int) []byte {
 	return b.buf[b.off-l : b.off]
 }
 
-// SetBytes initilizes the Buffer with BigEndian ordering
+// SetBytes initializes the Buffer with BigEndian ordering
 func (b *Buffer) SetBytes(buf []byte) {
 	b.endian = binary.BigEndian
 	b.off = 0

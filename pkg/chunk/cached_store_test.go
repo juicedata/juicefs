@@ -108,12 +108,15 @@ var defaultConf = Config{
 	CacheChecksum:     CsNone,
 	CacheScanInterval: time.Second * 300,
 	MaxUpload:         1,
+	MaxDownload:       200,
 	MaxRetries:        10,
 	PutTimeout:        time.Second,
 	GetTimeout:        time.Second * 2,
 	AutoCreate:        true,
 	BufferSize:        10 << 20,
 }
+
+var ctx = context.Background()
 
 func TestStoreDefault(t *testing.T) {
 	mem, _ := object.CreateStorage("mem", "", "", "", "")
@@ -186,7 +189,7 @@ func TestStoreAsync(t *testing.T) {
 	f.Close()
 	store := NewCachedStore(mem, conf, nil)
 	time.Sleep(time.Millisecond * 50) // wait for scan to finish
-	in, err := mem.Get("chunks/0/0/123_0_4", 0, -1)
+	in, err := mem.Get(ctx, "chunks/0/0/123_0_4", 0, -1)
 	if err != nil {
 		t.Fatalf("staging object should be upload")
 	}
@@ -202,6 +205,7 @@ func TestForceUpload(t *testing.T) {
 	config := defaultConf
 	_ = os.RemoveAll(config.CacheDir)
 	config.Writeback = true
+	config.WritebackThresholdSize = config.BlockSize + 1
 	config.UploadDelay = time.Hour
 	config.BlockSize = 4 << 20
 	store := NewCachedStore(blob, config, nil)
@@ -260,7 +264,7 @@ func TestStoreDelayed(t *testing.T) {
 	}
 	defer store.Remove(10, 1024)
 	time.Sleep(time.Second) // waiting for upload
-	if _, err := mem.Head("chunks/0/0/10_0_1024"); err != nil {
+	if _, err := mem.Head(ctx, "chunks/0/0/10_0_1024"); err != nil {
 		t.Fatalf("head object 10_0_1024: %s", err)
 	}
 }
@@ -390,7 +394,7 @@ type dStore struct {
 	cnt int32
 }
 
-func (s *dStore) Get(key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+func (s *dStore) Get(ctx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
 	atomic.AddInt32(&s.cnt, 1)
 	return nil, errors.New("not found")
 }
@@ -400,6 +404,6 @@ func TestStoreRetry(t *testing.T) {
 	cs := NewCachedStore(s, defaultConf, nil)
 	p := NewPage(nil)
 	defer p.Release()
-	cs.(*cachedStore).load("non", p, false, false) // wont retry
+	cs.(*cachedStore).load(context.TODO(), "non", p, false, false) // wont retry
 	require.Equal(t, int32(1), s.cnt)
 }

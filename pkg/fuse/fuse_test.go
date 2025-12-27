@@ -73,12 +73,13 @@ func mount(url, mp string) {
 	}
 
 	chunkConf := chunk.Config{
-		BlockSize:  format.BlockSize * 1024,
-		Compress:   format.Compression,
-		MaxUpload:  20,
-		BufferSize: 300 << 20,
-		CacheSize:  1024,
-		CacheDir:   "memory",
+		BlockSize:   format.BlockSize * 1024,
+		Compress:    format.Compression,
+		MaxUpload:   20,
+		MaxDownload: 200,
+		BufferSize:  300 << 20,
+		CacheSize:   1024,
+		CacheDir:    "memory",
 	}
 
 	blob, err := object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken)

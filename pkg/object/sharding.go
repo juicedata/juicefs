@@ -18,6 +18,7 @@ package object
 
 import (
 	"container/heap"
+	"context"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -41,9 +42,9 @@ func (s *sharded) Limits() Limits {
 	return l
 }
 
-func (s *sharded) Create() error {
+func (s *sharded) Create(ctx context.Context) error {
 	for _, o := range s.stores {
-		if err := o.Create(); err != nil {
+		if err := o.Create(ctx); err != nil {
 			return err
 		}
 	}
@@ -57,24 +58,24 @@ func (s *sharded) pick(key string) ObjectStorage {
 	return s.stores[i]
 }
 
-func (s *sharded) Head(key string) (Object, error) {
-	return s.pick(key).Head(key)
+func (s *sharded) Head(ctx context.Context, key string) (Object, error) {
+	return s.pick(key).Head(ctx, key)
 }
 
-func (s *sharded) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	return s.pick(key).Get(key, off, limit, getters...)
+func (s *sharded) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	return s.pick(key).Get(ctx, key, off, limit, getters...)
 }
 
-func (s *sharded) Put(key string, body io.Reader, getters ...AttrGetter) error {
-	return s.pick(key).Put(key, body, getters...)
+func (s *sharded) Put(ctx context.Context, key string, body io.Reader, getters ...AttrGetter) error {
+	return s.pick(key).Put(ctx, key, body, getters...)
 }
 
-func (s *sharded) Copy(dst, src string) error {
+func (s *sharded) Copy(ctx context.Context, dst, src string) error {
 	return notSupported
 }
 
-func (s *sharded) Delete(key string, getters ...AttrGetter) error {
-	return s.pick(key).Delete(key, getters...)
+func (s *sharded) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+	return s.pick(key).Delete(ctx, key, getters...)
 }
 
 func (s *sharded) SetStorageClass(sc string) error {
@@ -89,9 +90,9 @@ func (s *sharded) SetStorageClass(sc string) error {
 
 const maxResults = 10000
 
-// ListAll on all the keys that starts at marker from object storage.
-func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-chan Object, error) {
-	if ch, err := store.ListAll(prefix, marker, followLink); err == nil {
+// ListAll lists all keys that starts at marker from object storage.
+func ListAll(ctx context.Context, store ObjectStorage, prefix, marker string, followLink, sort bool) (<-chan Object, error) {
+	if ch, err := store.ListAll(ctx, prefix, marker, followLink); err == nil {
 		return ch, nil
 	} else if !errors.Is(err, notSupported) {
 		return nil, err
@@ -100,9 +101,9 @@ func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-cha
 	startTime := time.Now()
 	out := make(chan Object, maxResults)
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
-	objs, hasMore, nextToken, err := store.List(prefix, marker, "", "", maxResults, followLink)
+	objs, hasMore, nextToken, err := store.List(ctx, prefix, marker, "", "", maxResults, followLink)
 	if errors.Is(err, notSupported) {
-		return ListAllWithDelimiter(store, prefix, marker, "", followLink)
+		return ListAllWithDelimiter(ctx, store, prefix, marker, "", followLink)
 	}
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
@@ -116,13 +117,12 @@ func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-cha
 		for {
 			for _, obj := range objs {
 				key := obj.Key()
-				if !first && key <= lastkey {
+				if sort && !first && key <= lastkey {
 					logger.Errorf("The keys are out of order: marker %q, last %q current %q", marker, lastkey, key)
 					out <- nil
 					return
 				}
 				lastkey = key
-				// logger.Debugf("found key: %s", key)
 				out <- obj
 				first = false
 			}
@@ -134,12 +134,12 @@ func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-cha
 			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
 			var nextToken2 string
-			objs, hasMore, nextToken2, err = store.List(prefix, marker, nextToken, "", maxResults, followLink)
+			objs, hasMore, nextToken2, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
 			for err != nil {
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
 				// slow down
 				time.Sleep(time.Millisecond * 100)
-				objs, hasMore, nextToken, err = store.List(prefix, marker, nextToken, "", maxResults, followLink)
+				objs, hasMore, nextToken, err = store.List(ctx, prefix, marker, nextToken, "", maxResults, followLink)
 			}
 			nextToken = nextToken2
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
@@ -167,10 +167,10 @@ func (s *nextObjects) Pop() interface{} {
 	return o
 }
 
-func (s *sharded) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	heads := &nextObjects{make([]nextKey, 0)}
 	for i := range s.stores {
-		ch, err := ListAll(s.stores[i], prefix, marker, followLink)
+		ch, err := ListAll(ctx, s.stores[i], prefix, marker, followLink, true)
 		if err != nil {
 			return nil, fmt.Errorf("list %s: %s", s.stores[i], err)
 		}
@@ -196,20 +196,20 @@ func (s *sharded) ListAll(prefix, marker string, followLink bool) (<-chan Object
 	return out, nil
 }
 
-func (s *sharded) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	return s.pick(key).CreateMultipartUpload(key)
+func (s *sharded) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
+	return s.pick(key).CreateMultipartUpload(ctx, key)
 }
 
-func (s *sharded) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
-	return s.pick(key).UploadPart(key, uploadID, num, body)
+func (s *sharded) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
+	return s.pick(key).UploadPart(ctx, key, uploadID, num, body)
 }
 
-func (s *sharded) AbortUpload(key string, uploadID string) {
-	s.pick(key).AbortUpload(key, uploadID)
+func (s *sharded) AbortUpload(ctx context.Context, key string, uploadID string) {
+	s.pick(key).AbortUpload(ctx, key, uploadID)
 }
 
-func (s *sharded) CompleteUpload(key string, uploadID string, parts []*Part) error {
-	return s.pick(key).CompleteUpload(key, uploadID, parts)
+func (s *sharded) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
+	return s.pick(key).CompleteUpload(ctx, key, uploadID, parts)
 }
 
 func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage, error) {

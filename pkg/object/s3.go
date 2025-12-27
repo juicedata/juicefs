@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -80,8 +81,8 @@ func isExists(err error) bool {
 	return strings.Contains(msg, "BucketAlreadyExists") || strings.Contains(msg, "BucketAlreadyOwnedByYou")
 }
 
-func (s *s3client) Create() error {
-	if _, _, _, err := s.List("", "", "", "", 1, true); err == nil {
+func (s *s3client) Create(ctx context.Context) error {
+	if _, _, _, err := s.List(ctx, "", "", "", "", 1, true); err == nil {
 		return nil
 	}
 	_, err := s.s3.CreateBucket(ctx, &s3.CreateBucketInput{
@@ -95,7 +96,7 @@ func (s *s3client) Create() error {
 	return err
 }
 
-func (s *s3client) Head(key string) (Object, error) {
+func (s *s3client) Head(ctx context.Context, key string) (Object, error) {
 	param := s3.HeadObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
@@ -117,7 +118,7 @@ func (s *s3client) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (s *s3client) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (s *s3client) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	params := &s3.GetObjectInput{Bucket: &s.bucket, Key: &key}
 	if off > 0 || limit > 0 {
 		var r string
@@ -128,7 +129,7 @@ func (s *s3client) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 		}
 		params.Range = &r
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	resp, err := s.s3.GetObject(ctx, params)
 	if err != nil {
 		var re s3.ResponseError
@@ -150,7 +151,7 @@ func (s *s3client) Get(key string, off, limit int64, getters ...AttrGetter) (io.
 	return resp.Body, nil
 }
 
-func (s *s3client) Put(key string, in io.Reader, getters ...AttrGetter) error {
+func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b
@@ -174,7 +175,7 @@ func (s *s3client) Put(key string, in io.Reader, getters ...AttrGetter) error {
 		checksum := generateChecksum(body)
 		params.Metadata = map[string]string{checksumAlgr: checksum}
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(s.sc)
 	resp, err := s.s3.PutObject(ctx, params)
 	if err != nil {
@@ -190,7 +191,7 @@ func (s *s3client) Put(key string, in io.Reader, getters ...AttrGetter) error {
 	return err
 }
 
-func (s *s3client) Copy(dst, src string) error {
+func (s *s3client) Copy(ctx context.Context, dst, src string) error {
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:       &s.bucket,
@@ -202,13 +203,13 @@ func (s *s3client) Copy(dst, src string) error {
 	return err
 }
 
-func (s *s3client) Delete(key string, getters ...AttrGetter) error {
+func (s *s3client) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	param := s3.DeleteObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
 	resp, err := s.s3.DeleteObject(ctx, &param)
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	if err != nil {
 		var re s3.ResponseError
 		if errors.As(err, &re) {
@@ -225,7 +226,10 @@ func (s *s3client) Delete(key string, getters ...AttrGetter) error {
 	return err
 }
 
-func (s *s3client) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+	if limit > 1000 {
+		limit = 1000
+	}
 	param := s3.ListObjectsV2Input{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
@@ -245,7 +249,7 @@ func (s *s3client) List(prefix, start, token, delimiter string, limit int64, fol
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		oKey, err := url.QueryUnescape(*o.Key)
+		oKey, err := decodeKey(*o.Key, aws.String(string(resp.EncodingType)))
 		if err != nil {
 			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
@@ -262,7 +266,7 @@ func (s *s3client) List(prefix, start, token, delimiter string, limit int64, fol
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
-			prefix, err := url.QueryUnescape(*p.Prefix)
+			prefix, err := decodeKey(*p.Prefix, aws.String(string(resp.EncodingType)))
 			if err != nil {
 				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
@@ -281,11 +285,11 @@ func (s *s3client) List(prefix, start, token, delimiter string, limit int64, fol
 	return objs, isTruncated, nextMarker, nil
 }
 
-func (s *s3client) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (s *s3client) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 
-func (s *s3client) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (s *s3client) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	params := &s3.CreateMultipartUploadInput{
 		Bucket:       &s.bucket,
 		Key:          &key,
@@ -298,7 +302,7 @@ func (s *s3client) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	return &MultipartUpload{UploadID: *resp.UploadId, MinPartSize: 5 << 20, MaxCount: 10000}, nil
 }
 
-func (s *s3client) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
+func (s *s3client) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
 	params := &s3.UploadPartInput{
 		Bucket:            &s.bucket,
 		Key:               &key,
@@ -314,7 +318,7 @@ func (s *s3client) UploadPart(key string, uploadID string, num int, body []byte)
 	return &Part{Num: num, ETag: *resp.ETag}, nil
 }
 
-func (s *s3client) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (s *s3client) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	resp, err := s.s3.UploadPartCopy(ctx, &s3.UploadPartCopyInput{
 		Bucket:          aws.String(s.bucket),
 		CopySource:      aws.String(s.bucket + "/" + srcKey),
@@ -329,7 +333,7 @@ func (s *s3client) UploadPartCopy(key string, uploadID string, num int, srcKey s
 	return &Part{Num: num, ETag: *resp.CopyPartResult.ETag}, nil
 }
 
-func (s *s3client) AbortUpload(key string, uploadID string) {
+func (s *s3client) AbortUpload(ctx context.Context, key string, uploadID string) {
 	params := &s3.AbortMultipartUploadInput{
 		Bucket:   &s.bucket,
 		Key:      &key,
@@ -338,7 +342,7 @@ func (s *s3client) AbortUpload(key string, uploadID string) {
 	_, _ = s.s3.AbortMultipartUpload(ctx, params)
 }
 
-func (s *s3client) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (s *s3client) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	var s3Parts []types.CompletedPart
 	for i := range parts {
 		s3Parts = append(s3Parts, types.CompletedPart{ETag: &parts[i].ETag, PartNumber: aws.Int32(int32(parts[i].Num))})
@@ -353,7 +357,7 @@ func (s *s3client) CompleteUpload(key string, uploadID string, parts []*Part) er
 	return err
 }
 
-func (s *s3client) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (s *s3client) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	input := &s3.ListMultipartUploadsInput{
 		Bucket:    aws.String(s.bucket),
 		KeyMarker: aws.String(marker),
@@ -550,7 +554,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 	}
 	disableChecksum := strings.EqualFold(uri.Query().Get("disable-checksum"), "true")
 	if disableChecksum {
-		logger.Infof("CRC checksum is disabled")
+		logger.Infof("default CRC checksum is disabled")
 	}
 
 	if ep != "" {

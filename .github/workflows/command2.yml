@@ -95,8 +95,9 @@ jobs:
       - name: Download example database
         timeout-minutes: 5
         uses: dawidd6/action-download-artifact@v9
+        if: false
         with:
-          name: fsrand-hypothesis-example-db-${{ matrix.meta }}
+          name: command2-hypothesis-example-db-${{ matrix.meta }}
           path: .hypothesis/examples
           if_no_artifact_found: ignore
           workflow_conclusion: ""
@@ -124,7 +125,7 @@ jobs:
 
       - name: Upload example database
         uses: actions/upload-artifact@v4
-        if: always()
+        if: false
         with:
           include-hidden-files: true
           name: command2-hypothesis-example-db-${{ matrix.meta }}

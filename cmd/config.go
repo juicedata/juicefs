@@ -89,6 +89,10 @@ func configManagementFlags() []cli.Flag {
 			Name:  "dir-stats",
 			Usage: "enable dir stats, which is necessary for fast summary and dir quota",
 		},
+		&cli.BoolFlag{
+			Name:  "user-group-quota",
+			Usage: "enable user and group quota management",
+		},
 	})
 }
 
@@ -140,6 +144,7 @@ func config(ctx *cli.Context) error {
 	}
 
 	originDirStats := format.DirStats
+	originUGQuota := format.UserGroupQuota
 	var quota, storage, trash, clientVer bool
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
@@ -231,6 +236,11 @@ func config(ctx *cli.Context) error {
 				msg.WriteString(fmt.Sprintf("%10s: %t -> %t\n", flag, format.DirStats, new))
 				format.DirStats = new
 			}
+		case "user-group-quota":
+			if new := ctx.Bool(flag); new != format.UserGroupQuota {
+				msg.WriteString(fmt.Sprintf("%10s: %t -> %t\n", flag, format.UserGroupQuota, new))
+				format.UserGroupQuota = new
+			}
 		case "min-client-version":
 			if new := ctx.String(flag); new != format.MinClientVersion {
 				if version.Parse(new) == nil {
@@ -314,7 +324,7 @@ func config(ctx *cli.Context) error {
 		}
 		if originDirStats && !format.DirStats {
 			qs := make(map[string]*meta.Quota)
-			err := m.HandleQuota(meta.Background(), meta.QuotaList, "", qs, false, false, false)
+			err := m.HandleQuota(meta.Background(), meta.QuotaList, "", 0, 0, qs, false, false, false)
 			if err != nil {
 				return errors.Wrap(err, "list quotas")
 			}
@@ -357,5 +367,12 @@ func config(ctx *cli.Context) error {
 	if err = m.Init(format, false); err == nil {
 		fmt.Println(msg.String()[:msg.Len()-1])
 	}
+
+	if !originUGQuota && format.UserGroupQuota {
+		if err = m.ScanUserGroupUsage(meta.Background()); err != nil {
+			logger.Warnf("Scan user group usage: %s", err)
+		}
+	}
+
 	return err
 }

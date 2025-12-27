@@ -18,6 +18,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/fs"
@@ -75,7 +76,7 @@ func (d *filestore) path(key string) string {
 	return filepath.Clean(d.root + key)
 }
 
-func (d *filestore) Head(key string) (Object, error) {
+func (d *filestore) Head(ctx context.Context, key string) (Object, error) {
 	p := d.path(key)
 	fi, err := os.Lstat(p)
 	if err != nil {
@@ -117,7 +118,7 @@ type SectionReaderCloser struct {
 	io.Closer
 }
 
-func (d *filestore) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (d *filestore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	p := d.path(key)
 
 	f, err := os.Open(p)
@@ -144,7 +145,7 @@ func (d *filestore) Get(key string, off, limit int64, getters ...AttrGetter) (io
 	return f, nil
 }
 
-func (d *filestore) Put(key string, in io.Reader, getters ...AttrGetter) (err error) {
+func (d *filestore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
 	p := d.path(key)
 
 	if strings.HasSuffix(key, dirSuffix) || key == "" && strings.HasSuffix(d.root, dirSuffix) {
@@ -198,16 +199,16 @@ func (d *filestore) Put(key string, in io.Reader, getters ...AttrGetter) (err er
 	return err
 }
 
-func (d *filestore) Copy(dst, src string) error {
-	r, err := d.Get(src, 0, -1)
+func (d *filestore) Copy(ctx context.Context, dst, src string) error {
+	r, err := d.Get(ctx, src, 0, -1)
 	if err != nil {
 		return err
 	}
 	defer r.Close()
-	return d.Put(dst, r)
+	return d.Put(ctx, dst, r)
 }
 
-func (d *filestore) Delete(key string, getters ...AttrGetter) error {
+func (d *filestore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	err := os.Remove(d.path(key))
 	if err != nil && os.IsNotExist(err) {
 		err = nil
@@ -277,7 +278,7 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 	return mEntries, err
 }
 
-func (d *filestore) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (d *filestore) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, false, "", notSupported
 	}
@@ -289,7 +290,7 @@ func (d *filestore) List(prefix, marker, token, delimiter string, limit int64, f
 			dir += dirSuffix
 		}
 	} else if marker == "" {
-		obj, err := d.Head(prefix)
+		obj, err := d.Head(ctx, prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, false, "", nil

@@ -22,6 +22,7 @@ import (
 	"path"
 	"runtime"
 
+	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/urfave/cli/v2"
 )
 
@@ -128,6 +129,11 @@ func storageFlags() []cli.Flag {
 			Usage: "number of connections to upload",
 		},
 		&cli.IntFlag{
+			Name:  "max-downloads",
+			Value: 200,
+			Usage: "number of connections to download",
+		},
+		&cli.IntFlag{
 			Name:  "max-stage-write",
 			Value: 1000, // large enough for normal cases, also prevents unlimited concurrency in abnormal cases
 			Usage: "number of threads allowed to write staged files, other requests will be uploaded directly (this option is only effective when 'writeback' mode is enabled)",
@@ -196,6 +202,11 @@ func dataCacheFlags() []cli.Flag {
 			Usage: "upload blocks in background",
 		},
 		&cli.StringFlag{
+			Name:  "writeback-threshold-size",
+			Value: "0",
+			Usage: "blocks smaller than this size will be staged, 0 means all staged.",
+		},
+		&cli.StringFlag{
 			Name:  "upload-delay",
 			Value: "0s",
 			Usage: "delayed duration for uploading blocks",
@@ -222,7 +233,7 @@ func dataCacheFlags() []cli.Flag {
 		&cli.Int64Flag{
 			Name:  "cache-items",
 			Value: 0,
-			Usage: "max number of cached items (0 for unlimited)",
+			Usage: "max number of cached items (0 will be automatically calculated based on the `free‑space‑ratio`.)",
 		},
 		&cli.Float64Flag{
 			Name:  "free-space-ratio",
@@ -244,8 +255,8 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "cache-eviction",
-			Value: "2-random",
-			Usage: "cache eviction policy (none or 2-random)",
+			Value: chunk.Eviction2Random,
+			Usage: fmt.Sprintf("cache eviction policy [%s, %s, %s]", chunk.EvictionNone, chunk.Eviction2Random, chunk.EvictionLRU),
 		},
 		&cli.StringFlag{
 			Name:  "cache-scan-interval",
@@ -311,6 +322,10 @@ func metaFlags() []cli.Flag {
 			Name:  "fast-statfs",
 			Value: false,
 			Usage: "Use local counters for statfs instead of querying metadata service",
+		},
+		&cli.StringFlag{
+			Name:  "network-interfaces",
+			Usage: "comma-separated list of network interfaces to use for IP discovery (e.g. eth0,en0), empty means all",
 		},
 	})
 }

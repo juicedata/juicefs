@@ -170,9 +170,11 @@ The storage format is stable, and will be supported by all future releases.
 
 ## Roadmap
 
-- User and group quotas
+- Gateway Optimization
+- Resumable Sync
+- Read-ahead Optimization
+- Optimization for Large-scale Scenarios
 - Snapshots
-- Write once read many (WORM)
 
 ## Reporting Issues
 

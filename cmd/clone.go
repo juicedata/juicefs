@@ -78,7 +78,7 @@ func clone(ctx *cli.Context) error {
 	}
 	if _, err := os.Stat(dst); err == nil {
 		return fmt.Errorf("%s already exists", dst)
-	} else if err != nil && !os.IsNotExist(err) {
+	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("stat %s: %s", dst, err)
 	}
 	dstAbsPath, err := filepath.Abs(dst)

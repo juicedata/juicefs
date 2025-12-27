@@ -16,7 +16,9 @@
 
 package chunk
 
-import "sync"
+import (
+	"sync"
+)
 
 type prefetcher struct {
 	sync.Mutex

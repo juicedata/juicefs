@@ -110,13 +110,14 @@ func (s *sliceWriter) flushData() {
 	}
 	s.prepareID(meta.Background(), true)
 	if s.err != 0 {
-		logger.Infof("flush inode:%d chunk: %s", s.chunk.file.inode, s.err)
+		logger.Infof("flush inode: %v chunk: %d err: %s", s.chunk.file.inode, s.id, s.err)
 		s.writer.Abort()
 		return
 	}
 	s.length = s.slen
 	if err := s.writer.Finish(int(s.length)); err != nil {
-		logger.Errorf("upload chunk %v (length: %v) fail: %s", s.id, s.length, err)
+		logger.Errorf("upload inode: %v chunk: %v (length: %v) fail: %s", s.chunk.file.inode, s.id, s.length, err)
+
 		s.writer.Abort()
 		s.err = syscall.EIO
 	}
@@ -127,7 +128,7 @@ func (s *sliceWriter) write(ctx meta.Context, off uint32, data []uint8) syscall.
 	f := s.chunk.file
 	_, err := s.writer.WriteAt(data, int64(off))
 	if err != nil {
-		logger.Warnf("write: chunk: %d off: %d %s", s.id, off, err)
+		logger.Warnf("write inode: %v chunk: %d off: %d %s", s.chunk.file.inode, s.id, off, err)
 		return syscall.EIO
 	}
 	if off+uint32(len(data)) > s.slen {
@@ -141,7 +142,7 @@ func (s *sliceWriter) write(ctx meta.Context, off uint32, data []uint8) syscall.
 		if s.id > 0 {
 			err := s.writer.FlushTo(int(s.slen))
 			if err != nil {
-				logger.Warnf("write: chunk: %d off: %d %s", s.id, off, err)
+				logger.Warnf("write inode: %v chunk: %d off: %d %s", s.chunk.file.inode, s.id, off, err)
 				return syscall.EIO
 			}
 		}
@@ -182,7 +183,7 @@ func (c *chunkWriter) commitThread() {
 	f := c.file
 	defer f.w.free(f)
 	f.Lock()
-	defer f.Unlock()
+
 	// the slices should be committed in the order that are created
 	for len(c.slices) > 0 {
 		s := c.slices[0]
@@ -217,6 +218,7 @@ func (c *chunkWriter) commitThread() {
 		c.slices = c.slices[1:]
 	}
 	f.freeChunk(c)
+	f.Unlock()
 }
 
 type fileWriter struct {

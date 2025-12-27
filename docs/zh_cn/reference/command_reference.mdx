@@ -631,6 +631,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--log=path`|后台运行时日志文件的位置 (默认：`$HOME/.juicefs/juicefs.log` 或 `/var/log/juicefs.log`)|
 |`--force`|强制挂载即使挂载点已经被相同的文件系统挂载 (默认值:false)|
 |`--update-fstab` <VersionAdd>1.1</VersionAdd>|新增／更新 `/etc/fstab` 中的条目，如果不存在将会创建一个从 `/sbin/mount.juicefs` 到 JuiceFS 可执行文件的软链接，默认为 false。|
+|`--disable-transparent-hugepage` <VersionAdd>1.3</VersionAdd>| 关闭内核的透明大页（THP），内存紧张时，THP 可能导致进程挂起等待，默认为 false。 |
 
 #### FUSE 相关参数 {#mount-fuse-options}
 

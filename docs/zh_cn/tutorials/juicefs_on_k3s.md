@@ -1,6 +1,6 @@
 ---
 title: 在 K3s 上使用 JuiceFS
-sidebar_position: 1
+sidebar_position: 2
 slug: /juicefs_on_k3s
 ---
 

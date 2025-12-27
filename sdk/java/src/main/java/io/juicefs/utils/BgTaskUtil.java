@@ -128,7 +128,11 @@ public class BgTaskUtil {
       String key = name + "|" + "Trash emptier";
       if (!tasks.containsKey(key)) {
         LOG.debug("run trash emptier for {}", name);
-        ScheduledExecutorService thread = Executors.newScheduledThreadPool(1);
+        ScheduledExecutorService thread = Executors.newScheduledThreadPool(1, r -> {
+          Thread t = new Thread(r, "JuiceFS Trash Emptier");
+          t.setDaemon(true);
+          return t;
+        });
         thread.schedule(emptierTask, delay, unit);
         tasks.put(key, thread);
       }

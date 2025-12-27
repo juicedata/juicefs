@@ -122,9 +122,7 @@ Read [JuiceFS Internals](development/internals.md) and [Data Processing Flow](in
 
 ### How to copy a large number of small files into JuiceFS quickly?
 
-You could mount JuiceFS with [`--writeback` option](reference/command_reference.mdx#mount-data-cache-options), which will write the small files into local disks first, then upload them to object storage in background, this could speedup coping many small files into JuiceFS.
-
-See ["Write Cache in Client"](guide/cache.md#client-write-cache) for more information.
+Use the [`--writeback` option](reference/command_reference.mdx#mount-data-cache-options) to write data to the local cache and then asynchronously upload it to the object storage backend. This is significantly faster than writing directly to object storage. See ["Write Cache in Client"](guide/cache.md#client-write-cache) for more information.
 
 ### Does JuiceFS support distributed cache?
 
@@ -132,15 +130,15 @@ See ["Write Cache in Client"](guide/cache.md#client-write-cache) for more inform
 
 ## Mount Related Questions
 
-### Can I mount JuiceFS without `root`?
+### Can I mount JuiceFS without `root` privileges?
 
-Yes, JuiceFS could be mounted using `juicefs` without root. The default directory for caching is `$HOME/.juicefs/cache` (macOS) or `/var/jfsCache` (Linux), you should change that to a directory which you have write permission.
+Yes, JuiceFS could be mounted using `juicefs` without root privileges. The default directory for caching is `$HOME/.juicefs/cache` (macOS) or `/var/jfsCache` (Linux), you should change that to a directory which you have write permission.
 
 See ["Read Cache in Client"](guide/cache.md#client-read-cache) for more information.
 
 ## Access Related Questions
 
-### What other ways JuiceFS supports access to data besides mount?
+### What other ways does JuiceFS offer to access data?
 
 In addition to mounting, the following methods are also supported:
 
@@ -150,21 +148,23 @@ In addition to mounting, the following methods are also supported:
 - Docker Volume Plugin: A convenient way to use JuiceFS in Docker, please refer to ["Use JuiceFS on Docker"](deployment/juicefs_on_docker.md).
 - WebDAV Gateway: Access JuiceFS via WebDAV protocol
 
-### Why the same user on host X has permission to access a file in JuiceFS while has no permission to it on host Y?
+### Why does the same username have different permissions on different hosts when accessing JuiceFS files?
 
-The same user has different UID or GID on host X and host Y. Use `id` command to show the UID and GID:
+Although a user has the same username on both hosts (for example, `alice` on host X and host Y), their user ID (UID) or group ID (GID) differs between them. File permissions in JuiceFS are based on these numeric IDs, not the username.
+
+To confirm this, run the `id` command on each host and compare the output:
 
 ```bash
 $ id alice
 uid=1201(alice) gid=500(staff) groups=500(staff)
 ```
 
-Read ["Sync Accounts between Multiple Hosts"](administration/sync_accounts_between_multiple_hosts.md) to resolve this problem.
+See [Sync Accounts between Multiple Hosts](administration/sync_accounts_between_multiple_hosts.md) to resolve this issue.
 
-### Does JuiceFS Gateway support advanced features such as multi-user management?
+### Does JuiceFS S3 Gateway support advanced features such as multi-user management?
 
-The built-in `gateway` subcommand of JuiceFS does not support functions such as multi-user management, and only provides basic S3 gateway functions. If you need to use these advanced features, please refer to the [documentation](guide/gateway.md).
+The built-in `gateway` subcommand does not support functions including as multi-user management, and provides only basic S3 gateway functions. If you need to use these advanced features, please refer to the [documentation](guide/gateway.md).
 
-### Is there currently an SDK available for JuiceFS?
+### Is there an SDK available for JuiceFS?
 
 As of the release of JuiceFS 1.0, the community has two SDKs, one is the [Java SDK](deployment/hadoop_java_sdk.md) that is highly compatible with the HDFS interface officially maintained by Juicedata, and the other is the [Python SDK](https://github.com/megvii-research/juicefs-python) maintained by community users.

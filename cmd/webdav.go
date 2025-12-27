@@ -64,12 +64,17 @@ func cmdWebDav() *cli.Command {
 			Aliases: []string{"d"},
 			Usage:   "run in background",
 		},
-                &cli.IntFlag{
-                        Name:    "threads",
-                        Aliases: []string{"p"},
-                        Value:   50,
-                        Usage:   "number of threads for delete jobs (max 255)",
-                },
+		&cli.IntFlag{
+			Name:    "threads",
+			Aliases: []string{"p"},
+			Value:   50,
+			Usage:   "number of threads for delete jobs (max 255)",
+		},
+		&cli.StringFlag{
+			Name:  "mountpoint",
+			Value: "webdav",
+			Usage: "the mount point for current volume (to follow symlink)",
+		},
 	}
 
 	return &cli.Command{
@@ -91,7 +96,7 @@ func webdav(c *cli.Context) error {
 	setup(c, 2)
 	metaUrl := c.Args().Get(0)
 	listenAddr := c.Args().Get(1)
-	_, jfs := initForSvc(c, "webdav", metaUrl, listenAddr)
+	_, jfs := initForSvc(c, c.String("mountpoint"), "webdav", metaUrl, listenAddr)
 	fs.StartHTTPServer(jfs, fs.WebdavConfig{
 		Addr:            listenAddr,
 		DisallowList:    c.Bool("disallowList"),

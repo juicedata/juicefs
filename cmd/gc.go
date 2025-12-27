@@ -26,7 +26,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
-	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/pkg/errors"
@@ -138,7 +137,7 @@ func gc(ctx *cli.Context) error {
 	edge := time.Now().Add(-time.Duration(format.TrashDays) * 24 * time.Hour)
 	if delete {
 		cleanTrashSpin := progress.AddCountSpinner("Cleaned trash")
-		m.CleanupTrashBefore(c, edge, cleanTrashSpin.IncrBy)
+		m.CleanupTrashBefore(c, edge, cleanTrashSpin.IncrBy, nil)
 		cleanTrashSpin.Done()
 
 		cleanDetachedNodeSpin := progress.AddCountSpinner("Cleaned detached nodes")
@@ -228,7 +227,7 @@ func gc(ctx *cli.Context) error {
 
 	// Scan all objects to find leaked ones
 	blob = object.WithPrefix(blob, "chunks/")
-	objs, err := osync.ListAll(blob, "", "", "", true)
+	objs, err := object.ListAll(ctx.Context, blob, "", "", true, false)
 	if err != nil {
 		logger.Fatalf("list all blocks: %s", err)
 	}
@@ -273,7 +272,7 @@ func gc(ctx *cli.Context) error {
 		go func() {
 			defer wg.Done()
 			for key := range leakedObj {
-				if err := blob.Delete(key); err != nil {
+				if err := blob.Delete(ctx.Context, key); err != nil {
 					logger.Warnf("delete %s: %s", key, err)
 				}
 			}

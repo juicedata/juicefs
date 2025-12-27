@@ -18,6 +18,7 @@ package chunk
 
 import (
 	"bytes"
+	"fmt"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -32,6 +33,8 @@ func TestSingleFlight(t *testing.T) {
 	var n int32
 	var piggyback atomic.Int64
 	iters := 100000
+	errCh := make(chan error, iters)
+
 	for i := 0; i < iters; i++ {
 		gp.Add(2)
 		go func(k int) {
@@ -54,7 +57,7 @@ func TestSingleFlight(t *testing.T) {
 				expected := make([]byte, 100)
 				copy(expected, strconv.Itoa(k/100))
 				if bytes.Compare(page.Data, expected) != 0 {
-					t.Fatalf("got %x, want %x, key: %d", page.Data, expected, k/100)
+					errCh <- fmt.Errorf("got %x, want %x, key: %d", page.Data, expected, k/100)
 				}
 				page.Release()
 				piggyback.Add(1)
@@ -62,6 +65,11 @@ func TestSingleFlight(t *testing.T) {
 		}(i)
 	}
 	gp.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		t.Fatalf("Test failed: %v", err)
+	}
 
 	nv := int(atomic.LoadInt32(&n))
 	if nv != iters/100 {
@@ -78,5 +86,4 @@ func TestSingleFlight(t *testing.T) {
 		}
 		return true
 	})
-
 }

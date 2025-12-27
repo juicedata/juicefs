@@ -18,6 +18,7 @@ package meta
 
 import (
 	"context"
+	"time"
 )
 
 type CtxKey string
@@ -63,7 +64,9 @@ func (c *wrapContext) Pid() uint32 {
 }
 
 func (c *wrapContext) Cancel() {
-	c.cancel()
+	if c.cancel != nil {
+		c.cancel()
+	}
 }
 
 func (c *wrapContext) Canceled() bool {
@@ -81,16 +84,25 @@ func (c *wrapContext) CheckPermission() bool {
 }
 
 func NewContext(pid, uid uint32, gids []uint32) Context {
-	return wrap(context.Background(), pid, uid, gids)
+	return WrapWithCancel(context.Background(), pid, uid, gids)
 }
 
 func WrapContext(ctx context.Context) Context {
-	return wrap(ctx, 0, 0, []uint32{0})
+	return WrapWithCancel(ctx, 0, 0, []uint32{0})
 }
 
-func wrap(ctx context.Context, pid, uid uint32, gids []uint32) Context {
+func WrapWithCancel(ctx context.Context, pid, uid uint32, gids []uint32) Context {
 	c, cancel := context.WithCancel(ctx)
 	return &wrapContext{c, cancel, pid, uid, gids}
+}
+
+func WrapWithTimeout(ctx Context, timeout time.Duration) Context {
+	c, cancel := context.WithTimeout(ctx, timeout)
+	return &wrapContext{c, cancel, ctx.Pid(), ctx.Uid(), ctx.Gids()}
+}
+
+func WrapWithoutCancel(ctx context.Context, pid, uid uint32, gids []uint32) Context {
+	return &wrapContext{ctx, nil, pid, uid, gids}
 }
 
 func containsGid(ctx Context, gid uint32) bool {

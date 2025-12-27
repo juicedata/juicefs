@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -281,6 +282,7 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		Pid:             os.Getpid(),
 		PPid:            os.Getppid(),
 		UMask:           0xFFFF,
+		HideInternal:    c.Bool("hide-internal"),
 	}
 
 	if c.IsSet("umask") {
@@ -338,6 +340,16 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		atimeMode = meta.NoAtime
 	}
 	conf.AtimeMode = atimeMode
+
+	// Parse network interfaces
+	if ifaces := c.String("network-interfaces"); ifaces != "" {
+		conf.NetworkInterfaces = strings.Split(ifaces, ",")
+		// Trim whitespace from each interface name
+		for i := range conf.NetworkInterfaces {
+			conf.NetworkInterfaces[i] = strings.TrimSpace(conf.NetworkInterfaces[i])
+		}
+	}
+
 	return conf
 }
 
@@ -352,18 +364,20 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		Compress:   format.Compression,
 		HashPrefix: format.HashPrefix,
 
-		GetTimeout:    utils.Duration(c.String("get-timeout")),
-		PutTimeout:    utils.Duration(c.String("put-timeout")),
-		MaxUpload:     c.Int("max-uploads"),
-		MaxStageWrite: c.Int("max-stage-write"),
-		MaxRetries:    c.Int("io-retries"),
-		Writeback:     c.Bool("writeback"),
-		Prefetch:      c.Int("prefetch"),
-		BufferSize:    utils.ParseBytes(c, "buffer-size", 'M'),
-		UploadLimit:   utils.ParseMbps(c, "upload-limit") * 1e6 / 8,
-		DownloadLimit: utils.ParseMbps(c, "download-limit") * 1e6 / 8,
-		UploadDelay:   utils.Duration(c.String("upload-delay")),
-		UploadHours:   c.String("upload-hours"),
+		GetTimeout:             utils.Duration(c.String("get-timeout")),
+		PutTimeout:             utils.Duration(c.String("put-timeout")),
+		MaxUpload:              c.Int("max-uploads"),
+		MaxDownload:            c.Int("max-downloads"),
+		MaxStageWrite:          c.Int("max-stage-write"),
+		MaxRetries:             c.Int("io-retries"),
+		Writeback:              c.Bool("writeback"),
+		WritebackThresholdSize: int(utils.ParseBytes(c, "writeback-threshold-size", 'B')),
+		Prefetch:               c.Int("prefetch"),
+		BufferSize:             utils.ParseBytes(c, "buffer-size", 'M'),
+		UploadLimit:            utils.ParseMbps(c, "upload-limit") * 1e6 / 8,
+		DownloadLimit:          utils.ParseMbps(c, "download-limit") * 1e6 / 8,
+		UploadDelay:            utils.Duration(c.String("upload-delay")),
+		UploadHours:            c.String("upload-hours"),
 
 		CacheDir:          c.String("cache-dir"),
 		CacheSize:         utils.ParseBytes(c, "cache-size", 'M'),
@@ -398,6 +412,9 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Config, m meta.Meta, blob object.ObjectStorage, registerer prometheus.Registerer, registry *prometheus.Registry) {
 	metricsAddr := exposeMetrics(c, registerer, registry)
 	m.InitMetrics(registerer)
+	if !metaConf.NoBGJob {
+		m.InitSharedMetrics(registerer)
+	}
 	vfs.InitMetrics(registerer)
 	vfsConf.Port.PrometheusAgent = metricsAddr
 	if c.IsSet("consul") {
@@ -530,7 +547,7 @@ func mount(c *cli.Context) error {
 
 	var err error
 	if stage == 0 || supervisor == "test" {
-		err = utils.WithTimeout(func() error {
+		err = utils.WithTimeout(context.TODO(), func(context.Context) error {
 			mp, err = filepath.Abs(mp)
 			return err
 		}, time.Second*3)

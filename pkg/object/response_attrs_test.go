@@ -25,7 +25,7 @@ import (
 const reqIDExample = "c30c0107cd3a073f6607cd3a-ac103aa8-1rqU4w-PuO-cs-tos-front-azc-2"
 
 func apiCall(getters ...AttrGetter) {
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass("STANDARD")
 	attrs.SetRequestID(reqIDExample)
 	return
@@ -38,7 +38,7 @@ func Test_api_call(t *testing.T) {
 	assert.Equalf(t, reqIDExample, reqID, "expected %q, got %q", reqIDExample, reqID)
 	assert.Equalf(t, "STANDARD", sc, "expected %q, got %q", "STANDARD", sc)
 
-	attrs := applyGetters(WithStorageClass(&sc))
+	attrs := ApplyGetters(WithStorageClass(&sc))
 	attrs.SetStorageClass("") // Won't overwrite by empty string
 	assert.Equalf(t, "STANDARD", sc, "expected %q, got %q", "STANDARD", sc)
 }

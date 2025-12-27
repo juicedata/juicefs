@@ -59,17 +59,17 @@ func (g *gs) getClient() *storage.Client {
 	return g.clients[n%(uint64(len(g.clients)))]
 }
 
-func (g *gs) Create() error {
+func (g *gs) Create(ctx context.Context) error {
 	// check if the bucket is already exists
-	if objs, _, _, err := g.List("", "", "", "", 1, true); err == nil && len(objs) > 0 {
+	if objs, _, _, err := g.List(ctx, "", "", "", "", 1, true); err == nil && len(objs) > 0 {
 		return nil
 	}
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
 	if projectID == "" {
-		projectID, _ = metadata.ProjectIDWithContext(context.Background())
+		projectID, _ = metadata.ProjectIDWithContext(ctx)
 	}
 	if projectID == "" {
-		cred, err := google.FindDefaultCredentials(context.Background())
+		cred, err := google.FindDefaultCredentials(ctx)
 		if err == nil {
 			projectID = cred.ProjectID
 		}
@@ -79,7 +79,7 @@ func (g *gs) Create() error {
 	}
 	// Guess region when region is not provided
 	if g.region == "" {
-		zone, err := metadata.ZoneWithContext(context.Background())
+		zone, err := metadata.ZoneWithContext(ctx)
 		if err == nil && len(zone) > 2 {
 			g.region = zone[:len(zone)-2]
 		}
@@ -96,7 +96,7 @@ func (g *gs) Create() error {
 	return err
 }
 
-func (g *gs) Head(key string) (Object, error) {
+func (g *gs) Head(ctx context.Context, key string) (Object, error) {
 	attrs, err := g.getClient().Bucket(g.bucket).Object(key).Attrs(ctx)
 	if err != nil {
 		if err == storage.ErrObjectNotExist {
@@ -114,18 +114,18 @@ func (g *gs) Head(key string) (Object, error) {
 	}, nil
 }
 
-func (g *gs) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (g *gs) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	reader, err := g.getClient().Bucket(g.bucket).Object(key).NewRangeReader(ctx, off, limit)
 	if err != nil {
 		return nil, err
 	}
 	// TODO fire another attr request to get the actual storage class
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(g.sc)
 	return reader, nil
 }
 
-func (g *gs) Put(key string, data io.Reader, getters ...AttrGetter) error {
+func (g *gs) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
 	writer := g.getClient().Bucket(g.bucket).Object(key).NewWriter(ctx)
 	writer.StorageClass = g.sc
 
@@ -140,12 +140,12 @@ func (g *gs) Put(key string, data io.Reader, getters ...AttrGetter) error {
 	if err != nil {
 		return err
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(g.sc)
 	return writer.Close()
 }
 
-func (g *gs) Copy(dst, src string) error {
+func (g *gs) Copy(ctx context.Context, dst, src string) error {
 	client := g.getClient()
 	srcObj := client.Bucket(g.bucket).Object(src)
 	dstObj := client.Bucket(g.bucket).Object(dst)
@@ -157,14 +157,14 @@ func (g *gs) Copy(dst, src string) error {
 	return err
 }
 
-func (g *gs) Delete(key string, getters ...AttrGetter) error {
+func (g *gs) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	if err := g.getClient().Bucket(g.bucket).Object(key).Delete(ctx); err != storage.ErrObjectNotExist {
 		return err
 	}
 	return nil
 }
 
-func (g *gs) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (g *gs) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	objectIterator := g.getClient().Bucket(g.bucket).Objects(ctx, &storage.Query{Prefix: prefix, Delimiter: delimiter, StartOffset: start})
 	pager := iterator.NewPager(objectIterator, int(limit), token)
 	var entries []*storage.ObjectAttrs

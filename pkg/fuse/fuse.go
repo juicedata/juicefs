@@ -250,6 +250,12 @@ func (fs *fileSystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Op
 		out.OpenFlags |= fuse.FOPEN_DIRECT_IO
 	} else if entry.Attr.KeepCache {
 		out.OpenFlags |= fuse.FOPEN_KEEP_CACHE
+	} else {
+		if runtime.GOOS == "darwin" {
+			go fsserv.InodeNotify(uint64(in.NodeId), -1, 0)
+		} else {
+			fsserv.InodeNotify(uint64(in.NodeId), -1, 0)
+		}
 	}
 	return 0
 }
@@ -472,6 +478,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	opt.DirectMount = true
 	opt.AllowOther = os.Getuid() == 0
 	opt.Timeout = conf.FuseOpts.Timeout
+	opt.EnableReadDirPlusAuto = conf.FuseOpts.EnableReadDirPlusAuto
 
 	if opt.EnableAcl && conf.NonDefaultPermission {
 		logger.Warnf("it is recommended to turn on 'default-permissions' when enable acl")
@@ -549,6 +556,7 @@ func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool, m
 	opt.DirectMount = true
 	opt.DontUmask = true
 	opt.Timeout = time.Minute * 15
+	opt.EnableReadDirPlusAuto = true
 	for _, n := range strings.Split(options, ",") {
 		// TODO allow_root
 		if n == "allow_other" {

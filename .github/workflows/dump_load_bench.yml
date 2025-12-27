@@ -2,20 +2,20 @@ name: "dump_load_bench"
 on:
   push:
     branches:
-      - 'main'
-      - 'release-**'
+      - "main"
+      - "release-**"
     paths:
-      - '**/dump_load_bench.yml'
-      - '**/dump_load_bench.sh'
+      - "**/dump_load_bench.yml"
+      - "**/dump_load_bench.sh"
   pull_request:
     branches:
-      - 'main'
-      - 'release-**'
+      - "main"
+      - "release-**"
     paths:
-      - '**/dump_load_bench.yml'
-      - '**/dump_load_bench.sh'
+      - "**/dump_load_bench.yml"
+      - "**/dump_load_bench.sh"
   schedule:
-    - cron:  '0 19 * * *'
+    - cron: "0 19 * * *"
   workflow_dispatch:
     inputs:
       debug:
@@ -56,6 +56,12 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Clean up
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /usr/local/.ghcup
+          sudo docker system prune -af
+          sudo df -h
+
       - name: mount coverage dir
         timeout-minutes: 5
         uses: ./.github/actions/mount-coverage-dir
@@ -77,7 +83,7 @@ jobs:
       - name: Build
         timeout-minutes: 10
         uses: ./.github/actions/build
-        with: 
+        with:
           target: ${{steps.vars.outputs.target}}
 
       - name: Install nodejs
@@ -100,8 +106,8 @@ jobs:
           META: ${{matrix.meta}}
           START_META: true
         run: |
-          sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/dump_load_bench.sh test_dump_load_in_binary
-      
+          sudo -HE GOCOVERDIR=$(pwd)/cover .github/scripts/command/dump_load_bench.sh test_dump_load_in_binary
+
       - name: Benchmark dump load fast
         timeout-minutes: 60
         env:
@@ -123,10 +129,10 @@ jobs:
           START_META: false
         run: |
           sudo -E GOCOVERDIR=$(pwd)/cover .github/scripts/command/dump_load_bench.sh test_dump_load
-  
+
       - name: log
         if: always()
-        run: | 
+        run: |
           tail -500 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
 
@@ -138,7 +144,7 @@ jobs:
           UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
 
       - name: Setup upterm session
-        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        if: failure()
         # if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
@@ -172,7 +178,7 @@ jobs:
           UPLOAD_TOKEN: ${{ secrets.CI_COVERAGE_FILE_UPLOAD_AUTH_TOKEN }}
 
       - name: Send Slack Notification
-        if: failure() && github.event_name != 'workflow_dispatch' 
+        if: failure() && github.event_name != 'workflow_dispatch'
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
@@ -181,4 +187,3 @@ jobs:
       - name: Success
         if: success()
         run: echo "All Done"
-        

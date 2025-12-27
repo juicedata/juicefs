@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -111,7 +112,7 @@ type ObjectMetadata struct {
 	// ContentLanguage is Content-Language header.
 	ContentLanguage string
 
-	// ContentLanguage is Content-Length header.
+	// ContentLength is Content-Length header.
 	ContentLength int64
 
 	// ContentType is Content-Type header.
@@ -176,8 +177,8 @@ func (d *dragonfly) String() string {
 }
 
 // Create creates the object if it does not exist.
-func (d *dragonfly) Create() error {
-	if _, _, _, err := d.List("", "", "", "", 1, false); err == nil {
+func (d *dragonfly) Create(ctx context.Context) error {
+	if _, _, _, err := d.List(ctx, "", "", "", "", 1, false); err == nil {
 		return nil
 	}
 
@@ -208,7 +209,7 @@ func (d *dragonfly) Create() error {
 }
 
 // Head returns the object metadata if it exists.
-func (d *dragonfly) Head(key string) (Object, error) {
+func (d *dragonfly) Head(ctx context.Context, key string) (Object, error) {
 	// get get object metadata request.
 	u, err := url.Parse(d.endpoint)
 	if err != nil {
@@ -260,7 +261,7 @@ func (d *dragonfly) Head(key string) (Object, error) {
 }
 
 // Get returns the object if it exists.
-func (d *dragonfly) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (d *dragonfly) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	u, err := url.Parse(d.endpoint)
 	if err != nil {
 		return nil, err
@@ -291,14 +292,14 @@ func (d *dragonfly) Get(key string, off, limit int64, getters ...AttrGetter) (io
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("bad response status %s", resp.Status)
 	}
-	attrs := applyGetters(getters...)
+	attrs := ApplyGetters(getters...)
 	attrs.SetStorageClass(resp.Header.Get(HeaderDragonflyObjectMetaStorageClass))
 
 	return resp.Body, nil
 }
 
 // Put creates or replaces the object.
-func (d *dragonfly) Put(key string, data io.Reader, getters ...AttrGetter) error {
+func (d *dragonfly) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -363,7 +364,7 @@ func (d *dragonfly) Put(key string, data io.Reader, getters ...AttrGetter) error
 }
 
 // Copy copies the object if it exists.
-func (d *dragonfly) Copy(dst, src string) error {
+func (d *dragonfly) Copy(ctx context.Context, dst, src string) error {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -406,7 +407,7 @@ func (d *dragonfly) Copy(dst, src string) error {
 }
 
 // Delete deletes the object if it exists.
-func (d *dragonfly) Delete(key string, getters ...AttrGetter) error {
+func (d *dragonfly) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	// get delete object request.
 	u, err := url.Parse(d.endpoint)
 	if err != nil {
@@ -438,7 +439,7 @@ func (d *dragonfly) Delete(key string, getters ...AttrGetter) error {
 }
 
 // List lists the objects with the given prefix.
-func (d *dragonfly) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (d *dragonfly) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	if limit > MaxGetObjectMetadatasLimit {
 		limit = MaxGetObjectMetadatasLimit
 	}

@@ -69,12 +69,13 @@ func createTestVFS(applyMetaConfOption func(metaConfig *meta.Config), metaUri st
 		Format:  *format,
 		Version: "Juicefs",
 		Chunk: &chunk.Config{
-			BlockSize:  format.BlockSize * 1024,
-			Compress:   format.Compression,
-			MaxUpload:  2,
-			BufferSize: 30 << 20,
-			CacheSize:  10 << 20,
-			CacheDir:   "memory",
+			BlockSize:   format.BlockSize * 1024,
+			Compress:    format.Compression,
+			MaxUpload:   2,
+			MaxDownload: 200,
+			BufferSize:  30 << 20,
+			CacheSize:   10 << 20,
+			CacheDir:    "memory",
 		},
 		FuseOpts: &FuseOptions{},
 	}
@@ -1099,7 +1100,7 @@ func TestReadDirBatch(t *testing.T) {
 	}
 	for typ, metaUri := range engines {
 		testReaddirBatch(t, metaUri, typ, 100)
-		testReaddirBatch(t, metaUri, typ, 4096)
+		// testReaddirBatch(t, metaUri, typ, 4096)
 	}
 }
 

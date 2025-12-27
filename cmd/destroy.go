@@ -24,7 +24,7 @@ import (
 	"sync"
 
 	"github.com/juicedata/juicefs/pkg/meta"
-	osync "github.com/juicedata/juicefs/pkg/sync"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
 )
@@ -158,7 +158,7 @@ func destroy(ctx *cli.Context) error {
 		}
 	}
 
-	objs, err := osync.ListAll(blob, "", "", "", true)
+	objs, err := object.ListAll(ctx.Context, blob, "", "", true, false)
 	if err != nil {
 		logger.Fatalf("list all objects: %s", err)
 	}
@@ -182,7 +182,7 @@ func destroy(ctx *cli.Context) error {
 					mu.Unlock()
 					continue
 				}
-				if err := blob.Delete(obj.Key()); err == nil {
+				if err := blob.Delete(ctx.Context, obj.Key()); err == nil {
 					spin.Increment()
 				} else {
 					failed++
@@ -194,7 +194,7 @@ func destroy(ctx *cli.Context) error {
 	wg.Wait()
 	sort.Strings(dirs)
 	for i := len(dirs) - 1; i >= 0; i-- {
-		if err := blob.Delete(dirs[i]); err == nil {
+		if err := blob.Delete(ctx.Context, dirs[i]); err == nil {
 			spin.Increment()
 		} else {
 			failed++

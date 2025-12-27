@@ -33,15 +33,18 @@ install_tikv(){
     echo user is $user
     if [[ "$user" == "root" ]]; then
         curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sudo sh
+        export PATH=/root/.tiup/bin:$PATH
         tiup=/root/.tiup/bin/tiup
     elif [[ "$user" == "runner" ]]; then
         curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+        export PATH=/home/runner/.tiup/bin:$PATH
         tiup=/home/runner/.tiup/bin/tiup
     else
         echo "Unknown user $user"
         exit 1
     fi
     echo tiup is $tiup
+    echo $(whoami) $(pwd)
     $tiup playground --mode tikv-slim > tikv.log 2>&1  &
     pid=$!
     timeout=60
@@ -147,7 +150,7 @@ start_meta_engine(){
                 -e POSTGRES_USER=postgres \
                 -e POSTGRES_PASSWORD=postgres \
                 -p 5432:5432 \
-                -v /tmp/postgresql:/var/lib/postgresql/data \
+                -v /tmp/postgresql:/var/lib/postgresql \
                 -d postgres \
                 -N 300
             sleep 10

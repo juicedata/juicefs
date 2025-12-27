@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -109,7 +110,7 @@ var notSupported = utils.ENOTSUP
 
 type DefaultObjectStorage struct{}
 
-func (s DefaultObjectStorage) Create() error {
+func (s DefaultObjectStorage) Create(ctx context.Context) error {
 	return nil
 }
 
@@ -121,37 +122,37 @@ func (s DefaultObjectStorage) Head(key string) (Object, error) {
 	return nil, notSupported
 }
 
-func (s DefaultObjectStorage) Copy(dst, src string) error {
+func (s DefaultObjectStorage) Copy(ctx context.Context, dst, src string) error {
 	return notSupported
 }
 
-func (s DefaultObjectStorage) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (s DefaultObjectStorage) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
 	return nil, notSupported
 }
 
-func (s DefaultObjectStorage) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
+func (s DefaultObjectStorage) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
 	return nil, notSupported
 }
 
-func (s DefaultObjectStorage) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (s DefaultObjectStorage) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	return nil, notSupported
 }
 
-func (s DefaultObjectStorage) AbortUpload(key string, uploadID string) {}
+func (s DefaultObjectStorage) AbortUpload(ctx context.Context, key string, uploadID string) {}
 
-func (s DefaultObjectStorage) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (s DefaultObjectStorage) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	return notSupported
 }
 
-func (s DefaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (s DefaultObjectStorage) ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error) {
 	return nil, "", nil
 }
 
-func (s DefaultObjectStorage) List(prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
+func (s DefaultObjectStorage) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
 	return nil, false, "", notSupported
 }
 
-func (s DefaultObjectStorage) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (s DefaultObjectStorage) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 
@@ -190,8 +191,8 @@ type listThread struct {
 	hasMore   bool
 }
 
-func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
-	entries, _, _, err := store.List(prefix, start, "", "/", 1e9, followLink)
+func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
+	entries, _, _, err := store.List(ctx, prefix, start, "", "/", 1e9, followLink)
 	if err != nil {
 		logger.Errorf("list %s: %s", prefix, err)
 		return nil, err
@@ -218,7 +219,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 					if !entries[i].IsDir() || key == prefix {
 						continue
 					}
-					t.entries, t.hasMore, t.nextToken, t.err = store.List(key, "\x00", t.nextToken, "/", 1e9, followLink) // exclude itself
+					t.entries, t.hasMore, t.nextToken, t.err = store.List(ctx, key, "\x00", t.nextToken, "/", 1e9, followLink) // exclude itself
 					t.Lock()
 					t.ready = true
 					t.cond.Signal()
@@ -287,4 +288,11 @@ func generateListResult(objs []Object, limit int64) ([]Object, bool, string, err
 		nextMarker = objs[len(objs)-1].Key()
 	}
 	return objs, len(objs) == int(limit), nextMarker, nil
+}
+
+func decodeKey(value string, typ *string) (string, error) {
+	if typ != nil && *typ == "url" {
+		return url.QueryUnescape(value)
+	}
+	return value, nil
 }

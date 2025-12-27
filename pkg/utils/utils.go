@@ -17,6 +17,7 @@
 package utils
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"mime"
@@ -61,11 +62,19 @@ func GetLocalIp(address string) (string, error) {
 	return ip, nil
 }
 
-func FindLocalIPs() ([]net.IP, error) {
+func FindLocalIPs(allowedInterfaces ...string) ([]net.IP, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil, err
 	}
+
+	// Build a set of allowed interface names for fast lookup
+	allowedSet := make(map[string]bool)
+	for _, name := range allowedInterfaces {
+		allowedSet[name] = true
+	}
+	checkAllowed := len(allowedSet) > 0
+
 	var ips []net.IP
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 {
@@ -73,6 +82,10 @@ func FindLocalIPs() ([]net.IP, error) {
 		}
 		if iface.Flags&net.FlagLoopback != 0 {
 			continue // loopback interface
+		}
+		// Filter by interface name if allowedInterfaces is specified
+		if checkAllowed && !allowedSet[iface.Name] {
+			continue
 		}
 		addrs, err := iface.Addrs()
 		if err != nil {
@@ -94,20 +107,25 @@ func FindLocalIPs() ([]net.IP, error) {
 	return ips, nil
 }
 
-func WithTimeout(f func() error, timeout time.Duration) error {
+func WithTimeout(pCtx context.Context, f func(context.Context) error, timeout time.Duration) error {
 	var done = make(chan int, 1)
 	var t = time.NewTimer(timeout)
 	var err error
+	ctx, cancel := context.WithCancel(pCtx)
 	go func() {
-		err = f()
+		err = f(ctx)
 		done <- 1
 	}()
 	select {
+	case <-ctx.Done():
+		err = ctx.Err()
+		t.Stop()
 	case <-done:
 		t.Stop()
 	case <-t.C:
 		err = fmt.Errorf("timeout after %s: %w", timeout, ErrFuncTimeout)
 	}
+	cancel()
 	return err
 }
 

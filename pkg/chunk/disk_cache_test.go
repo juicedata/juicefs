@@ -73,15 +73,25 @@ func toFloat64(c prometheus.Collector) float64 {
 	panic(fmt.Errorf("collected a non-gauge/counter/untyped metric: %s", pb))
 }
 
+func testConf() Config {
+	conf := defaultConf
+	conf.CacheDir = filepath.Join(conf.CacheDir, fmt.Sprintf("%d", time.Now().UnixNano()))
+	return conf
+}
+
 func TestNewCacheStore(t *testing.T) {
-	s := newCacheStore(nil, defaultConf.CacheDir, 1<<30, defaultConf.CacheItems, 1, &defaultConf, nil)
+	conf := testConf()
+	defer os.RemoveAll(conf.CacheDir)
+	s := newCacheStore(nil, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
 	if s == nil {
 		t.Fatalf("Create new cache store failed")
 	}
 }
 
 func TestMetrics(t *testing.T) {
-	m := newCacheManager(&defaultConf, nil, nil)
+	conf := testConf()
+	defer os.RemoveAll(conf.CacheDir)
+	m := newCacheManager(&conf, nil, nil)
 	metrics := m.(*cacheManager).metrics
 	s := m.(*cacheManager).stores[0]
 	content := []byte("helloworld")
@@ -105,7 +115,7 @@ func TestMetrics(t *testing.T) {
 		t.Fatalf("expect the stageBlockBytes is %d", len(content))
 	}
 	key := fmt.Sprintf("chunks/0/5/5000_2_%d", len(content))
-	stagingPath, err := m.stage(key, content, false)
+	stagingPath, err := m.stage(key, content)
 	if err != nil {
 		t.Fatalf("stage failed: %s", err)
 	}
@@ -134,9 +144,40 @@ func TestMetrics(t *testing.T) {
 	}
 }
 
+func TestScanCached(t *testing.T) {
+	var err error
+	cfg := defaultConf
+	cfg.CacheEviction = EvictionNone
+	cache := &cacheStore{
+		opTs: make(map[time.Duration]func() error),
+	}
+	cache.state = newDCState(dcUnchanged, cache)
+	cache.keys, err = NewKeyIndex(&cfg)
+	require.NoError(t, err)
+	cache.dir = "/tmp/jfstest_scan"
+	rawDir := filepath.Join(cache.dir, cacheDir)
+	if err := os.MkdirAll(rawDir, 0755); err != nil {
+		t.Fatalf("mkdir %s: %s", rawDir, err)
+	}
+	num := 10
+	for i := 0; i < num; i++ {
+		if f, err := os.Create(filepath.Join(rawDir, fmt.Sprintf("test%d_1024", i))); err == nil {
+			_ = f.Close()
+		}
+	}
+	defer os.RemoveAll(rawDir)
+	cache.scanCached()
+	require.Equal(t, num, cache.keys.len())
+}
+
 func TestChecksum(t *testing.T) {
-	m := newCacheManager(&defaultConf, nil, nil)
-	s := m.(*cacheManager).stores[0]
+	conf := testConf()
+	conf.FreeSpace = 0.01
+	conf.CacheEviction = EvictionNone
+	defer os.RemoveAll(conf.CacheDir)
+	m := new(cacheManagerMetrics)
+	m.initMetrics()
+	s := newCacheStore(m, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
 	k1 := "0_0_10" // no checksum
 	k2 := "1_0_10"
 	k3 := "2_1_102400"
@@ -155,6 +196,10 @@ func TestChecksum(t *testing.T) {
 	s.cache(k3, NewPage(buf), true, false)
 
 	fpath := s.cachePath(k4)
+	dir := filepath.Dir(fpath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("mkdir parent dir %s: %s", dir, err)
+	}
 	f, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE, s.mode)
 	if err != nil {
 		t.Fatalf("Create cache file %s: %s", fpath, err)
@@ -183,6 +228,15 @@ func TestChecksum(t *testing.T) {
 	check := func(key string, off int64, size int) error {
 		rc, err := s.load(key)
 		if err != nil {
+			t.Logf("CacheStore files in %s:", s.dir)
+			filepath.Walk(s.dir, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					t.Logf("error accessing %s: %v", path, err)
+					return nil
+				}
+				t.Logf("cache file: %s", path)
+				return nil
+			})
 			t.Fatalf("CacheStore load key %s: %s", key, err)
 		}
 		defer rc.Close()
@@ -246,8 +300,9 @@ func TestExpand(t *testing.T) {
 }
 
 func BenchmarkLoadCached(b *testing.B) {
-	dir := b.TempDir()
-	s := newCacheStore(nil, filepath.Join(dir, "diskCache"), 1<<30, defaultConf.CacheItems, 1, &defaultConf, nil)
+	conf := testConf()
+	defer os.RemoveAll(conf.CacheDir)
+	s := newCacheStore(nil, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
 	p := NewPage(make([]byte, 1024))
 	key := "/chunks/1_1024"
 	s.cache(key, p, false, false)
@@ -263,8 +318,9 @@ func BenchmarkLoadCached(b *testing.B) {
 }
 
 func BenchmarkLoadUncached(b *testing.B) {
-	dir := b.TempDir()
-	s := newCacheStore(nil, filepath.Join(dir, "diskCache"), 1<<30, defaultConf.CacheItems, 1, &defaultConf, nil)
+	conf := testConf()
+	defer os.RemoveAll(conf.CacheDir)
+	s := newCacheStore(nil, conf.CacheDir, 1<<30, conf.CacheItems, 1, &conf, nil)
 	key := "chunks/222_1024"
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -384,39 +440,45 @@ func TestCacheManager(t *testing.T) {
 }
 
 func TestAtimeNotLost(t *testing.T) {
-	m := newCacheManager(&defaultConf, nil, nil)
-	key := "0_0_10"
+	for _, eviction := range []string{EvictionNone, Eviction2Random, EvictionLRU} {
+		cfg := defaultConf
+		cfg.CacheEviction = eviction
+		cfg.FreeSpace = 0.03
+		m := newCacheManager(&cfg, nil, nil)
+		key := "0_0_10"
 
-	p := NewPage([]byte("helloworld"))
-	defer p.Release()
-	m.cache(key, p, true, false)
-	time.Sleep(3 * time.Second)
+		p := NewPage([]byte("helloworld"))
+		defer p.Release()
+		m.cache(key, p, true, false)
+		time.Sleep(3 * time.Second)
 
-	_, exist := m.exist(key) // touch atime
-	if !exist {
-		t.Fatalf("CacheStore key %s not exist", key)
-	}
-	s := m.(*cacheManager).stores[0]
-	atimeMem := s.keys[s.getCacheKey(key)].atime
-	if atimeMem == 0 {
-		t.Fatalf("CacheStore key %s atime lost", key)
-	}
-	s.scanCached() // should use atime from memory
-	atimeAfterScan := s.keys[s.getCacheKey(key)].atime
-	if atimeAfterScan != atimeMem {
-		t.Fatalf("CacheStore key %s atime lost after scan, before: %d, after: %d", key, atimeMem, atimeAfterScan)
+		_, exist := m.exist(key) // touch atime
+		if !exist {
+			t.Fatalf("CacheStore key %s not exist", key)
+		}
+		s := m.(*cacheManager).stores[0]
+		atimeMem := s.keys.peekAtime(s.getCacheKey(key))
+		if atimeMem == 0 {
+			t.Fatalf("CacheStore key %s atime lost", key)
+		}
+		s.scanCached() // should use atime from memory
+		atimeAfterScan := s.keys.peekAtime(s.getCacheKey(key))
+		if atimeAfterScan != atimeMem {
+			t.Fatalf("CacheStore key %s atime lost after scan, before: %d, after: %d", key, atimeMem, atimeAfterScan)
+		}
 	}
 }
 func TestSetlimitByFreeRatio(t *testing.T) {
-	dir := t.TempDir()
-	cache := newCacheStore(nil, dir, 1<<30, 1000, 1, &defaultConf, nil)
+	conf := testConf()
+	defer os.RemoveAll(conf.CacheDir)
+	cache := newCacheStore(nil, conf.CacheDir, 1<<30, 1000, 1, &conf, nil)
 
 	usage := DiskFreeRatio{
 		spaceCap: 1 << 30,
 		inodeCap: 1000,
 	}
 	freeRatio := float32(0.2)
-	cache.setlimitByFreeRatio(usage, 0.2)
+	cache.setLimitByFreeRatio(usage, 0.2)
 
 	expectedSizeLimit := int64((1 - freeRatio + 0.05) * float32(usage.spaceCap))
 	if cache.capacity > expectedSizeLimit {
@@ -426,4 +488,155 @@ func TestSetlimitByFreeRatio(t *testing.T) {
 	if cache.maxItems > expectedInodeLimit && cache.maxItems != 0 {
 		t.Fatalf("Expected maxItems <= %d, but got %d", expectedInodeLimit, cache.maxItems)
 	}
+}
+
+func Test2RandomEviction(t *testing.T) {
+	Convey("Test2RandomEviction-CacheFull", t, func() {
+		dir := t.TempDir()
+		defer os.RemoveAll(dir)
+		conf := defaultConf
+		conf.FreeSpace = 0.00001
+		conf.CacheScanInterval = -1 // Disable periodic scan
+		conf.CacheSize = 1 << 30
+		conf.CacheItems = 10 // Max 10 items to easily trigger eviction
+
+		m := new(cacheManagerMetrics)
+		m.initMetrics()
+		s := newCacheStore(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
+		require.NotNil(t, s)
+		if _, ok := s.keys.(*randomEviction); !ok {
+			t.Fatalf("Expected randomEviction, but got %T", s.keys)
+		}
+
+		// Add items with distinct atimes
+		for i := 1; i <= 20; i++ {
+			key := fmt.Sprintf("%d_%d_1024", i, i)
+			s.add(key, 1024, uint32(time.Now().Add(time.Duration(i)*time.Second).Unix())) // New items have larger atime
+			require.LessOrEqual(t, int64(s.keys.len()), conf.CacheItems, "Cache should not exceed max items limit during addition")
+			require.Greater(t, s.keys.len(), 0, "Cache should always have items after addition")
+		}
+	})
+}
+
+func TestLruEviction(t *testing.T) {
+	Convey("TestLruEviction-CacheFull", t, func() {
+		dir := t.TempDir()
+		defer os.RemoveAll(dir)
+		conf := defaultConf
+		conf.CacheEviction = EvictionLRU
+		conf.FreeSpace = 0.00001
+		conf.CacheScanInterval = -1 // Disable periodic scan
+		conf.CacheSize = 1 << 30
+		conf.CacheItems = 10 // Max 10 items to easily trigger eviction
+
+		m := new(cacheManagerMetrics)
+		m.initMetrics()
+		s := newCacheStore(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
+		require.NotNil(t, s)
+		le := s.keys.(*lruEviction)
+
+		// Add items with distinct atimes
+		for i := 1; i <= 20; i++ {
+			key := fmt.Sprintf("%d_%d_1024", i, i)
+			s.add(key, 1024, uint32(time.Now().Add(time.Duration(i)*time.Second).Unix())) // New items have larger atime
+			require.True(t, le.verifyHeap())
+			require.LessOrEqual(t, int64(s.keys.len()), conf.CacheItems, "Cache should not exceed max items limit during addition")
+			require.Greater(t, s.keys.len(), 0, "Cache should always have items after addition")
+		}
+
+		cutIndex := 20 - conf.CacheItems
+		expectedKeys := make(map[string]bool)
+		// After eviction, the cache should only contain the newest items.
+		for i := cutIndex + 1; i <= 20; i++ {
+			key := fmt.Sprintf("%d_%d_1024", i, i)
+			expectedKeys[key] = true
+		}
+
+		require.Equal(t, le.lruHeap.Len(), len(le.keys), "Heap length should match keys length after insertion")
+		require.Equal(t, len(expectedKeys), len(le.keys), "Number of items in cache after eviction mismatch")
+		require.Equal(t, len(expectedKeys), le.lruHeap.Len(), "Number of items in heap after eviction mismatch")
+
+		// Verify the heap also contains the expected keys
+		tempHeap := make(atimeHeap, le.lruHeap.Len())
+		copy(tempHeap, le.lruHeap)
+		for tempHeap.Len() > 0 {
+			item := tempHeap.Pop().(heapItem)
+			require.Contains(t, expectedKeys, item.key.String(), "Unexpected key found in heap: %s", item.key.String())
+		}
+
+		// Verify all evicted keys are no longer in the cache
+		for i := int64(1); i <= cutIndex; i++ {
+			key := fmt.Sprintf("%d_%d_1024", i, i)
+			_, ok := le.keys[s.getCacheKey(key)]
+			require.False(t, ok, "Evicted key %s still found in cache", key)
+		}
+	})
+
+	Convey("TestLruEviction-WriteBack", t, func() {
+		dir := t.TempDir()
+		defer os.RemoveAll(dir)
+		conf := defaultConf
+		conf.CacheEviction = EvictionLRU
+		conf.Writeback = true
+		conf.FreeSpace = 0.00001
+		conf.CacheScanInterval = -1 // Disable periodic scan
+		conf.CacheSize = 1 << 30
+		conf.CacheItems = 10 // Max 10 items to easily trigger eviction
+
+		// TODO: delete me
+		m := new(cacheManagerMetrics)
+		m.initMetrics()
+		s := newCacheStore(m, filepath.Join(dir, "diskCache"), int64(conf.CacheSize), conf.CacheItems, 1, &conf, nil)
+		require.NotNil(t, s)
+		le := s.keys.(*lruEviction)
+
+		// Add items with distinct atimes
+		blockPlaceHolder := []byte("test data")
+		for i := 1; i <= 20; i++ {
+			key := fmt.Sprintf("%d_%d_9", i, i)
+			_, err := s.stage(key, blockPlaceHolder)
+			require.True(t, le.verifyHeap())
+			require.NoError(t, err, "Failed to stage data for key %s", key)
+		}
+		require.Equal(t, 20, len(le.keys), "Cache should contain 20 staged items even if full")
+		require.Equal(t, 0, len(le.lruHeap), "Staged items should not be in the LRU heap")
+
+		s.Lock()
+		s.cleanupFull()
+		s.Unlock()
+		for i := 1; i <= 20; i++ {
+			key := fmt.Sprintf("%d_%d_9", i, i)
+			s.uploaded(key, len(blockPlaceHolder))
+		}
+		require.Equal(t, len(le.keys), le.lruHeap.Len(), "Heap length should match keys length after staged items are uploaded")
+
+		s.maxItems = 1
+		s.Lock()
+		s.cleanupFull()
+		s.Unlock()
+		require.Equal(t, 0, len(le.keys), "Cache should be empty by cleanupFull after setting maxItems to 1")
+		require.Equal(t, 0, len(le.lruHeap), "LRU heap should be empty by cleanupFull after setting maxItems to 1")
+	})
+}
+
+func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
+	dir := t.TempDir()
+	conf := defaultConf
+	conf.CacheExpire = time.Hour
+	m := new(cacheManagerMetrics)
+	m.initMetrics()
+	cache := newCacheStore(m, dir, 1<<30, 1000, 1, &conf, nil)
+	key := "0_0_4"
+
+	now := time.Now()
+	path, err := cache.stage(key, []byte("test"))
+	require.NoError(t, err)
+	require.NotEmpty(t, path)
+	require.LessOrEqual(t, cache.keys.peekAtime(cache.getCacheKey(key)), uint32(now.Add(-conf.CacheExpire/2).Unix())) // should have bias in atime
+
+	rc, err := cache.load(key)
+	require.NoError(t, err)
+	require.NotNil(t, rc)
+	defer rc.Close()
+	require.GreaterOrEqual(t, cache.keys.peekAtime(cache.getCacheKey(key)), uint32(now.Unix())) // bias should have been fixed on load
 }

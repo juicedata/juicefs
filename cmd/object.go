@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,9 +38,14 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/urfave/cli/v2"
 )
 
-var dirSuffix = "/"
+var (
+	dirSuffix     = "/"
+	cliCtx        *cli.Context
+	pid, uid, gid uint32
+)
 
 func toError(eno syscall.Errno) error {
 	if eno == 0 {
@@ -57,10 +63,6 @@ type juiceFS struct {
 
 func (j *juiceFS) String() string {
 	return fmt.Sprintf("jfs://%s/", j.name)
-}
-
-func (j *juiceFS) Create() error {
-	return nil
 }
 
 func (j *juiceFS) path(key string) string {
@@ -96,7 +98,8 @@ func (f *jFile) Close() error {
 	return toError(f.f.Close(ctx))
 }
 
-func (j *juiceFS) Get(key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+func (j *juiceFS) Get(rCtx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	f, err := j.jfs.Open(ctx, j.path(key), vfs.MODE_MASK_R)
 	if err != 0 {
 		return nil, err
@@ -117,7 +120,8 @@ var bufPool = sync.Pool{
 	},
 }
 
-func (j *juiceFS) Put(key string, in io.Reader, getters ...object.AttrGetter) (err error) {
+func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ...object.AttrGetter) (err error) {
+	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	if vfs.IsSpecialName(key) {
 		return fmt.Errorf("skip special file %s for jfs: %w", key, utils.ErrSkipped)
 	}
@@ -179,7 +183,8 @@ func (j *juiceFS) Put(key string, in io.Reader, getters ...object.AttrGetter) (e
 	return nil
 }
 
-func (j *juiceFS) Delete(key string, getters ...object.AttrGetter) error {
+func (j *juiceFS) Delete(rCtx context.Context, key string, getters ...object.AttrGetter) error {
+	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	if key == "" {
 		return nil
 	}
@@ -212,7 +217,8 @@ func (o *jObj) Group() string        { return utils.GroupName(o.fi.Gid()) }
 func (o *jObj) Mode() os.FileMode    { return o.fi.Mode() }
 func (o *jObj) StorageClass() string { return "" }
 
-func (j *juiceFS) Head(key string) (object.Object, error) {
+func (j *juiceFS) Head(rCtx context.Context, key string) (object.Object, error) {
+	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	errConv := func(eno syscall.Errno) error {
 		if errors.Is(eno, syscall.ENOENT) {
 			return os.ErrNotExist
@@ -234,7 +240,7 @@ func (j *juiceFS) Head(key string) (object.Object, error) {
 	return &jObj{key, fi, isSymlink}, nil
 }
 
-func (j *juiceFS) List(prefix, marker, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
+func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
 	if delimiter != "/" {
 		return nil, false, "", utils.ENOTSUP
 	}
@@ -246,7 +252,7 @@ func (j *juiceFS) List(prefix, marker, token, delimiter string, limit int64, fol
 			dir += dirSuffix
 		}
 	} else if marker == "" {
-		obj, err := j.Head(prefix)
+		obj, err := j.Head(ctx, prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, false, "", nil
@@ -389,14 +395,15 @@ func (j *juiceFS) Readlink(name string) (string, error) {
 
 func getDefaultChunkConf(format *meta.Format) *chunk.Config {
 	chunkConf := &chunk.Config{
-		BlockSize:  format.BlockSize * 1024,
-		Compress:   format.Compression,
-		HashPrefix: format.HashPrefix,
-		GetTimeout: time.Minute,
-		PutTimeout: time.Minute,
-		MaxUpload:  50,
-		MaxRetries: 10,
-		BufferSize: 300 << 20,
+		BlockSize:   format.BlockSize * 1024,
+		Compress:    format.Compression,
+		HashPrefix:  format.HashPrefix,
+		GetTimeout:  time.Minute,
+		PutTimeout:  time.Minute,
+		MaxUpload:   50,
+		MaxDownload: 200,
+		MaxRetries:  10,
+		BufferSize:  300 << 20,
 	}
 	chunkConf.SelfCheck(format.UUID)
 	return chunkConf
@@ -407,6 +414,7 @@ func (j *juiceFS) Shutdown() {
 }
 
 func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {
+	pid, uid, gid = uint32(os.Getpid()), uint32(os.Getuid()), uint32(os.Getgid())
 	metaUrl := os.Getenv(endpoint)
 	if metaUrl == "" {
 		metaUrl = endpoint
@@ -441,6 +449,7 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 		Chunk:           chunkConf,
 		AttrTimeout:     time.Second,
 		DirEntryTimeout: time.Second,
+		Mountpoint:      cliCtx.String("mountpoint"),
 	}
 
 	vfsConf.Format.RemoveSecret()

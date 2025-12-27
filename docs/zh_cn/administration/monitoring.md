@@ -18,6 +18,19 @@ JuiceFS 提供了丰富的监控指标，本文介绍如何收集这些指标，
 本文使用开源版的 Grafana 和 Prometheus 作为例子，如果你想使用 Grafana Cloud 来构建可视化监控系统，可以参考这篇文章 [「如何使用 Grafana 监控文件系统状态」](https://juicefs.com/zh-cn/blog/usage-tips/use-grafana-monitor-file-system-status)。
 :::
 
+## 快速上手视频
+
+<div className="video-container">
+  <iframe
+    src="//player.bilibili.com/player.html?isOutside=true&aid=114640176616226&bvid=BV1oJTVzaEJT&cid=30364404417&p=1&autoplay=false"
+    width="100%"
+    height="360"
+    scrolling="no"
+    frameBorder="0"
+    allowFullScreen
+  ></iframe>
+</div>
+
 ## 1. 配置 Prometheus 抓取 JuiceFS 监控指标 {#add-scrape-config}
 
 JuiceFS 挂载后，默认会通过 `http://localhost:9567/metrics` 地址实时输出 Prometheus 格式的指标数据。为了查看各项指标在一个时间范围内的状态变化，需要搭建 Prometheus 并配置定时抓取和保存这些指标数据。

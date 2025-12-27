@@ -18,20 +18,23 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/emmansun/gmsm/sm2"
+	"github.com/stretchr/testify/require"
 )
 
-var testkey = GenerateRsaKeyPair()
-
-var keyInPKCS8 = `-----BEGIN ENCRYPTED PRIVATE KEY-----
+var rsaInPKCS8 = `-----BEGIN ENCRYPTED PRIVATE KEY-----
 MIICzzBJBgkqhkiG9w0BBQ0wPDAbBgkqhkiG9w0BBQwwDgQIEEEvSFbVLkUCAggA
 MB0GCWCGSAFlAwQBKgQQhuaBA77wcAHA7bl4dkbFsQSCAoBi5hgqWhK2ic3HBSUX
 JBFFh7omdhU4uK7mQzVVx/RvnUCbw5T7ghfboJhP5bHkj+UnnFiKD6vFZfSgH/Q3
@@ -51,7 +54,7 @@ OIGw
 -----END ENCRYPTED PRIVATE KEY-----
 `
 
-var pemWithoutPass = `-----BEGIN RSA PRIVATE KEY-----
+var rsaInPKCS1 = `-----BEGIN RSA PRIVATE KEY-----
 MIICXAIBAAKBgQCaPxhJMEfX0CaYIziQxwjlVlh75xw1xWlF14GGdpZYaM70BzMu
 XdB22X7PnkK38PHk4saXKz0blhaf/qllJP7mcdqFEcs4sWsVhU1KoLdRNH/1AJQK
 0/Oehr3vov1CjsR+51RRuDFcVOBd7lpglK5s0+TGRYyImFc+JhZ23RVFNwIDAQAB
@@ -67,52 +70,110 @@ X0bYeaU4+h87RaAWgQJBALhNFDDGXnEd0Lj2pUhBcdaRXGqrg8PZWekr0GLDPEvO
 s+yhHoqRlGKUwQtwwB3HCIEWxe7siOa0YTy9MJ5QySY=
 -----END RSA PRIVATE KEY-----`
 
-func TestParsePKCS8(t *testing.T) {
-	_, err := ParseRsaPrivateKeyFromPem([]byte(keyInPKCS8), []byte("12345678"))
-	if err != nil {
-		t.Fatalf("parse rsa: %s", err)
+var sm2InPKCS8Plain = `-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqBHM9VAYItBG0wawIBAQQgUWhfo4lpH0j/Toc7
+ESiTd+1FsWJgIR9MlBVeQ0lYi62hRANCAASAuZzZAg6zj+ZXclqBx0UfZVNeN9+R
+L5MzLV1dmrLZQqbt+j8oDAN3QU3VPXziKzGttdTvgItUrLavxaCMXOL+
+-----END PRIVATE KEY-----`
+
+var sm2InPKCS8WithSM4 = `-----BEGIN ENCRYPTED PRIVATE KEY-----
+MIHzMF4GCSqGSIb3DQEFDTBRMDEGCSqGSIb3DQEFDDAkBBAm2QGHlzGOPNqAyOCZ
+zWOrAgIIADAMBggqhkiG9w0CCQUAMBwGCCqBHM9VAWgCBBC0yGrxfFu2t51rF8RX
+N/4+BIGQkIa24K2nOv+fkmohJHaya9b+LJUs6VR50K+2n3QuJokRvxlGB9TknxDs
+e3ZJfNKRoksL7V4Ttd82pgF6a68jBB0//iOSysc6d/ovx5oKrJ8kx+t/U5NbxWRV
+8UrHPN50rzxS4l6niklnwUM2q36Lf6R+xYduTVmTfWDAAPFSRIlKUDmhgPlT8MHB
+jxqPfZVO
+-----END ENCRYPTED PRIVATE KEY-----`
+
+var sm2InPKCS8WithAES = `-----BEGIN ENCRYPTED PRIVATE KEY-----
+MIHzMF4GCSqGSIb3DQEFDTBRMDAGCSqGSIb3DQEFDDAjBBA19eEcvLDwQqrQx0Yo
+4vKAAgFkMAwGCCqGSIb3DQIJBQAwHQYJYIZIAWUDBAEqBBCniW2M8JL78D06Hqxk
+hQtcBIGQd7zfctW4ry2MqfNpnsx5L2kT6Sv11ecehBJt8e9C/d33YLjBuAA9GTLO
+Aoz7Z9lb9ivf/TZL0EXBI7llNQitxV+NEx32jCpwO3rEoFUqoGZZh2jcRmLsufS2
+pwq8iHhypwUx6EDLJXTXOFlMsqgHYC1ZV9LqnmdLAKyqXQeHtGN9QZgDQwy221yi
+xI3CLucj
+-----END ENCRYPTED PRIVATE KEY-----`
+
+func TestParsePrivateKey(t *testing.T) {
+	var cases = []struct {
+		name   string
+		key    string
+		pass   []byte
+		expect bool
+	}{
+		{"rsa key in pkcs#1, parse without passphrase", rsaInPKCS1, nil, true},
+		{"rsa key in pkcs#1, parse with passphrase", rsaInPKCS1, []byte("123"), true},
+		{"rsa key in pkcs#8, parse with correct passphrase", rsaInPKCS8, []byte("12345678"), true},
+		{"rsa key in pkcs#8, parse with incorrect passphrase", rsaInPKCS8, []byte("1234567"), false},
+		{"rsa key in pkcs#8, parse without passphrase", rsaInPKCS8, nil, false},
+		{"sm2 key in pkcs#8 plain, parse without passphrase", sm2InPKCS8Plain, nil, true},
+		{"sm2 key in pkcs#8 plain, parse with passphrase", sm2InPKCS8Plain, []byte("any"), true},
+		{"sm2 key in pkcs#8 with sm4, parse with correct passphrase", sm2InPKCS8WithSM4, []byte("12345678"), true},
+		{"sm2 key in pkcs#8 with sm4, parse with incorrect passphrase", sm2InPKCS8WithSM4, []byte("1234567"), false},
+		{"sm2 key in pkcs#8 with sm4, parse without passphrase", sm2InPKCS8WithSM4, nil, false},
+		{"sm2 key in pkcs#8 with aes, parse with correct passphrase", sm2InPKCS8WithAES, []byte("12345678"), true},
+		{"sm2 key in pkcs#8 with aes, parse with incorrect passphrase", sm2InPKCS8WithAES, []byte("1234567"), false},
+		{"sm2 key in pkcs#8 with aes, parse without passphrase", sm2InPKCS8WithAES, nil, false},
 	}
-	_, err = ParseRsaPrivateKeyFromPem([]byte(keyInPKCS8), []byte("1234567"))
-	if err == nil {
-		t.Fatalf("parse rsa: %s", err)
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := ParsePrivateKeyFromPem([]byte(c.key), c.pass)
+			require.Equal(t, c.expect, err == nil, "unexpected result: %v", err)
+		})
 	}
 }
 
-func TestParsePemWithoutPassword(t *testing.T) {
-	_, err := ParseRsaPrivateKeyFromPem([]byte(pemWithoutPass), nil)
-	if err != nil {
-		t.Fatalf("parse rsa: %s", err)
-	}
-	_, err = ParseRsaPrivateKeyFromPem([]byte(pemWithoutPass), []byte("123"))
-	if err != nil {
-		t.Fatalf("parse rsa: %s", err)
+func genPrivateKey(typ string) any {
+	switch typ {
+	case "rsa":
+		key, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			panic(err)
+		}
+		return key
+	case "sm2":
+		key, err := sm2.GenerateKey(rand.Reader)
+		if err != nil {
+			panic(err)
+		}
+		return key
+	default:
+		panic(fmt.Errorf("unknown key type: %s", typ))
 	}
 }
 
-func GenerateRsaKeyPair() *rsa.PrivateKey {
-	privkey, _ := rsa.GenerateKey(rand.Reader, 2048)
-	return privkey
+var rsaKey = genPrivateKey("rsa").(*rsa.PrivateKey)
+
+func TestSM2(t *testing.T) {
+	sm2Key := genPrivateKey("sm2").(*sm2.PrivateKey)
+	sm2 := NewSM2Encryptor(sm2Key)
+	cipherText, err := sm2.Encrypt([]byte("hello"))
+	require.NoError(t, err)
+	plainText, err := sm2.Decrypt(cipherText)
+	require.NoError(t, err)
+	require.Equal(t, []byte("hello"), plainText)
 }
 
 func TestRSA(t *testing.T) {
-	c1 := NewRSAEncryptor(testkey)
+	c1 := NewRSAEncryptor(rsaKey)
 	ciphertext, _ := c1.Encrypt([]byte("hello"))
 
-	privPEM := ExportRsaPrivateKeyToPem(testkey, "abc")
+	privPEM := ExportRsaPrivateKeyToPem(rsaKey, "abc")
 
-	key2, _ := ParseRsaPrivateKeyFromPem([]byte(privPEM), []byte("abc"))
-	c2 := NewRSAEncryptor(key2)
+	key2, _ := ParsePrivateKeyFromPem([]byte(privPEM), []byte("abc"))
+	c2 := NewKeyEncryptor(key2)
 	plaintext, _ := c2.Decrypt(ciphertext)
 	if string(plaintext) != "hello" {
 		t.Fail()
 	}
 
-	_, err := ParseRsaPrivateKeyFromPem([]byte(privPEM), nil)
+	_, err := ParsePrivateKeyFromPem([]byte(privPEM), nil)
 	if err == nil {
 		t.Errorf("parse without passphrase should fail")
 		t.Fail()
 	}
-	_, err = ParseRsaPrivateKeyFromPem([]byte(privPEM), []byte("ab"))
+	_, err = ParsePrivateKeyFromPem([]byte(privPEM), []byte("ab"))
 	if err == nil {
 		t.Errorf("parse with incorrect passphrase should return fail")
 		t.Fail()
@@ -161,56 +222,97 @@ func genrsa(path string, password string) error {
 	return nil
 }
 
-func BenchmarkRSA4096Encrypt(b *testing.B) {
+func BenchmarkKeyEncryptionKey(b *testing.B) {
 	secret := make([]byte, 32)
-	kc := NewRSAEncryptor(testkey)
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		_, _ = kc.Encrypt(secret)
+	keyTypes := []string{"rsa", "sm2"}
+
+	for _, typ := range keyTypes {
+		ke := NewKeyEncryptor(genPrivateKey(typ))
+		cipherText, _ := ke.Encrypt(secret)
+		b.ResetTimer()
+		b.Run(typ+"_encrypt", func(b *testing.B) {
+			for n := 0; n < b.N; n++ {
+				_, _ = ke.Encrypt(secret)
+			}
+		})
+		b.Run(typ+"_decrypt", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, _ = ke.Decrypt(cipherText)
+			}
+		})
 	}
 }
 
-func BenchmarkRSA4096Decrypt(b *testing.B) {
-	secret := make([]byte, 32)
-	kc := NewRSAEncryptor(testkey)
-	ciphertext, _ := kc.Encrypt(secret)
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		_, _ = kc.Decrypt(ciphertext)
+func TestDataEncryptor(t *testing.T) {
+	cases := []struct {
+		name string
+		kek  string
+		algo string
+	}{
+		{"rsa_aesgcm", "rsa", AES256GCM_RSA},
+		{"rsa_chacha20", "rsa", CHACHA20_RSA},
+		{"sm2_sm4gcm", "sm2", SM4GCM},
 	}
-}
-
-func TestChaCha20(t *testing.T) {
-	kc := NewRSAEncryptor(testkey)
-	dc, _ := NewDataEncryptor(kc, CHACHA20_RSA)
 	data := []byte("hello")
-	ciphertext, _ := dc.Encrypt(data)
-	plaintext, _ := dc.Decrypt(ciphertext)
-	if !bytes.Equal(data, plaintext) {
-		t.Errorf("decrypt fail")
-		t.Fail()
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ke := NewKeyEncryptor(genPrivateKey(c.kek))
+			de, err := NewDataEncryptor(ke, c.algo)
+			require.NoError(t, err, "failed to create data encryptor")
+			cipherText, err := de.Encrypt(data)
+			require.NoError(t, err, "failed to encrypt data")
+			plainText, err := de.Decrypt(cipherText)
+			require.NoError(t, err, "failed to decrypt data")
+			require.Equal(t, data, plainText, "decrypted data not equal to original")
+		})
 	}
 }
 
-func TestAESGCM(t *testing.T) {
-	kc := NewRSAEncryptor(testkey)
-	dc, _ := NewDataEncryptor(kc, AES256GCM_RSA)
-	data := []byte("hello")
-	ciphertext, _ := dc.Encrypt(data)
-	plaintext, _ := dc.Decrypt(ciphertext)
-	if !bytes.Equal(data, plaintext) {
-		t.Errorf("decrypt fail")
-		t.Fail()
+func BenchmarkDataEncryptor(b *testing.B) {
+	cases := []struct {
+		name string
+		kek  string
+		algo string
+	}{
+		{"rsa_aesgcm", "rsa", AES256GCM_RSA},
+		{"rsa_chacha20", "rsa", CHACHA20_RSA},
+		{"sm2_sm4gcm", "sm2", SM4GCM},
+	}
+	data := make([]byte, 4<<20)
+	if _, err := rand.Read(data); err != nil {
+		b.Fatalf("failed to generate random data: %v", err)
+	}
+	for _, c := range cases {
+		ke := NewKeyEncryptor(genPrivateKey(c.kek))
+		de, err := NewDataEncryptor(ke, c.algo)
+		if err != nil {
+			b.Fatalf("failed to create data encryptor: %v", err)
+		}
+		cipherText, err := de.Encrypt(data)
+		if err != nil {
+			b.Fatalf("failed to encrypt data: %v", err)
+		}
+		b.Run(c.name+"_encrypt", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, _ = de.Encrypt(data)
+			}
+		})
+		b.Run(c.name+"_decrypt", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, _ = de.Decrypt(cipherText)
+			}
+		})
 	}
 }
 
 func TestEncryptedStore(t *testing.T) {
+	ctx := context.Background()
 	s, _ := CreateStorage("mem", "", "", "", "")
-	kc := NewRSAEncryptor(testkey)
+	kc := NewRSAEncryptor(rsaKey)
 	dc, _ := NewDataEncryptor(kc, AES256GCM_RSA)
 	es := NewEncrypted(s, dc)
-	_ = es.Put("a", bytes.NewReader([]byte("hello")))
-	r, err := es.Get("a", 1, 2)
+	_ = es.Put(ctx, "a", bytes.NewReader([]byte("hello")))
+	r, err := es.Get(ctx, "a", 1, 2)
 	if err != nil {
 		t.Errorf("Get a: %s", err)
 		t.Fail()
@@ -220,13 +322,13 @@ func TestEncryptedStore(t *testing.T) {
 		t.Fail()
 	}
 
-	r, _ = es.Get("a", 0, -1)
+	r, _ = es.Get(ctx, "a", 0, -1)
 	d, _ = io.ReadAll(r)
 	if string(d) != "hello" {
 		t.Fail()
 	}
-	_ = s.Put("emptyfile", bytes.NewReader([]byte("")))
-	_, err = es.Get("emptyfile", 0, -1)
+	_ = s.Put(ctx, "emptyfile", bytes.NewReader([]byte("")))
+	_, err = es.Get(ctx, "emptyfile", 0, -1)
 	if err == nil || !strings.Contains(err.Error(), "the object is corrupted") {
 		t.Fail()
 	}

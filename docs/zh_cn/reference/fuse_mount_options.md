@@ -43,7 +43,7 @@ FUSE 支持[「writeback-cache 模式」](https://www.kernel.org/doc/Documentati
 
 ## user_id 和 group_id
 
-这两个选项用来指定挂载点的所有者 ID 和所有者组 ID，但仅允许以 root 身份指定，例如 `sudo juicefs mount -o user_id=100,group_id=100`。
+这两个选项用来指定文件系统的所有者 ID 和所有者组 ID（不同于文件或目录的 UID、GID），用以做更高层级的权限校验。如果指定了 allow_other 选项，此选项将失效。用法如 `sudo juicefs mount -o user_id=100,group_id=100`。
 
 ## debug
 

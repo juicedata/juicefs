@@ -107,7 +107,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sort(max(juicefs_uptime{vol_name=\"$name\"}) by (instance, juicefs_version))",
+          "expr": "sort(max(juicefs_uptime{vol_name=\"$name\"}) by (${node_label}, juicefs_version))",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",
@@ -127,12 +127,12 @@
             "indexByName": {
               "Time": 0,
               "Value": 3,
-              "instance": 1,
+              "${node_label}": 1,
               "juicefs_version": 2
             },
             "renameByName": {
               "Value": "uptime",
-              "instance": "",
+              "${node_label}": "",
               "juicefs_version": "version"
             }
           }
@@ -527,11 +527,11 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_fuse_ops_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval]) < 5000000000) by (instance)",
+          "expr": "sum(rate(juicefs_fuse_ops_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval]) < 5000000000) by (${node_label})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "Ops {{instance}}",
+          "legendFormat": "Ops {{${node_label}}}",
           "refId": "A"
         }
       ],
@@ -626,24 +626,24 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_fuse_written_size_bytes_sum{vol_name=\"$name\"}[$__rate_interval]) < 5000000000) by (instance)",
+          "expr": "sum(rate(juicefs_fuse_written_size_bytes_sum{vol_name=\"$name\"}[$__rate_interval]) < 5000000000) by (${node_label})",
           "format": "time_series",
           "instant": false,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "Write {{instance}}",
+          "legendFormat": "Write {{${node_label}}}",
           "refId": "A"
         },
         {
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(rate(juicefs_fuse_read_size_bytes_sum{vol_name=\"$name\"}[$__rate_interval]) < 5000000000) by (instance)",
+          "expr": "sum(rate(juicefs_fuse_read_size_bytes_sum{vol_name=\"$name\"}[$__rate_interval]) < 5000000000) by (${node_label})",
           "format": "time_series",
           "hide": false,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "Read {{instance}}",
+          "legendFormat": "Read {{${node_label}}}",
           "refId": "B"
         }
       ],
@@ -736,12 +736,12 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(rate(juicefs_fuse_ops_durations_histogram_seconds_sum{vol_name=\"$name\"}[$__rate_interval])) by  (instance,mp) * 1000000 / sum(rate(juicefs_fuse_ops_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by  (instance,mp)",
+          "expr": "sum(rate(juicefs_fuse_ops_durations_histogram_seconds_sum{vol_name=\"$name\"}[$__rate_interval])) by  (${node_label},mp) * 1000000 / sum(rate(juicefs_fuse_ops_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by  (${node_label},mp)",
           "format": "time_series",
           "hide": false,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{instance}}:{{mp}}",
+          "legendFormat": "{{${node_label}}}:{{mp}}",
           "refId": "A"
         }
       ],
@@ -834,11 +834,11 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(rate(juicefs_transaction_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by  (instance)",
+          "expr": "sum(rate(juicefs_transaction_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by  (${node_label})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{instance}}",
+          "legendFormat": "{{${node_label}}}",
           "refId": "A"
         }
       ],
@@ -931,11 +931,11 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(rate(juicefs_transaction_durations_histogram_seconds_sum{vol_name=\"$name\"}[$__rate_interval])) by  (instance,mp) * 1000000 / sum(rate(juicefs_transaction_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by  (instance,mp)",
+          "expr": "sum(rate(juicefs_transaction_durations_histogram_seconds_sum{vol_name=\"$name\"}[$__rate_interval])) by  (${node_label},mp) * 1000000 / sum(rate(juicefs_transaction_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by  (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{instance}}:{{mp}}",
+          "legendFormat": "{{${node_label}}}:{{mp}}",
           "refId": "A"
         }
       ],
@@ -1029,10 +1029,10 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(rate(juicefs_transaction_restart{vol_name=~\"$name\"}[$__rate_interval])) by (instance)",
+          "expr": "sum(rate(juicefs_transaction_restart{vol_name=~\"$name\"}[$__rate_interval])) by (${node_label})",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "Restarts {{instance}}",
+          "legendFormat": "Restarts {{${node_label}}}",
           "refId": "A"
         }
       ],
@@ -1235,11 +1235,11 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_object_request_data_bytes{method=\"PUT\",vol_name=\"$name\"}[$__rate_interval])) by  (instance,method)",
+          "expr": "sum(rate(juicefs_object_request_data_bytes{method=\"PUT\",vol_name=\"$name\"}[$__rate_interval])) by  (${node_label},method)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{method}} {{instance}}",
+          "legendFormat": "{{method}} {{${node_label}}}",
           "refId": "A"
         },
         {
@@ -1247,12 +1247,12 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_object_request_data_bytes{method=\"GET\",vol_name=\"$name\"}[$__rate_interval])) by  (instance,method)",
+          "expr": "sum(rate(juicefs_object_request_data_bytes{method=\"GET\",vol_name=\"$name\"}[$__rate_interval])) by  (${node_label},method)",
           "format": "time_series",
           "hide": false,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{method}} {{instance}}",
+          "legendFormat": "{{method}} {{${node_label}}}",
           "refId": "B"
         },
         {
@@ -1356,11 +1356,11 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(rate(juicefs_object_request_durations_histogram_seconds_sum{vol_name=\"$name\"}[$__rate_interval])) by  (instance) * 1000000 / sum(rate(juicefs_object_request_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by  (instance)",
+          "expr": "sum(rate(juicefs_object_request_durations_histogram_seconds_sum{vol_name=\"$name\"}[$__rate_interval])) by  (${node_label}) * 1000000 / sum(rate(juicefs_object_request_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by  (${node_label})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{instance}}",
+          "legendFormat": "{{${node_label}}}",
           "refId": "A"
         }
       ],
@@ -1454,11 +1454,11 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_cpu_usage{vol_name=\"$name\"}[$__rate_interval])*100 < 1000) by (instance,mp)",
+          "expr": "sum(rate(juicefs_cpu_usage{vol_name=\"$name\"}[$__rate_interval])*100 < 1000) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{instance}}:{{mp}}",
+          "legendFormat": "{{${node_label}}}:{{mp}}",
           "refId": "A"
         }
       ],
@@ -1551,11 +1551,11 @@
           "datasource": {
             "uid": "$datasource"
           },
-          "expr": "sum(juicefs_memory{vol_name=\"$name\"}) by (instance,mp)",
+          "expr": "sum(juicefs_memory{vol_name=\"$name\"}) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{instance}}:{{mp}}",
+          "legendFormat": "{{${node_label}}}:{{mp}}",
           "refId": "A"
         }
       ],
@@ -1649,11 +1649,11 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "sum(juicefs_go_goroutines{vol_name=\"$name\"}) by (instance,mp)",
+          "expr": "sum(juicefs_go_goroutines{vol_name=\"$name\"}) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{instance}}:{{mp}}",
+          "legendFormat": "{{${node_label}}}:{{mp}}",
           "range": true,
           "refId": "A"
         }
@@ -1749,11 +1749,11 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(juicefs_blockcache_bytes{vol_name=\"$name\"}) by (instance,mp)",
+          "expr": "sum(juicefs_blockcache_bytes{vol_name=\"$name\"}) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{instance}}:{{mp}}",
+          "legendFormat": "{{${node_label}}}:{{mp}}",
           "refId": "A"
         }
       ],
@@ -1848,11 +1848,11 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(juicefs_blockcache_blocks{vol_name=\"$name\"}) by (instance,mp)",
+          "expr": "sum(juicefs_blockcache_blocks{vol_name=\"$name\"}) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{instance}}:{{mp}}",
+          "legendFormat": "{{${node_label}}}:{{mp}}",
           "refId": "A"
         }
       ],
@@ -1947,11 +1947,11 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_blockcache_hits{vol_name=\"$name\"}[$__rate_interval])) by (instance,mp) *100 / (sum(rate(juicefs_blockcache_hits{vol_name=\"$name\"}[$__rate_interval])) by (instance,mp) + sum(rate(juicefs_blockcache_miss{vol_name=\"$name\"}[$__rate_interval])) by (instance,mp))",
+          "expr": "sum(rate(juicefs_blockcache_hits{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp) *100 / (sum(rate(juicefs_blockcache_hits{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp) + sum(rate(juicefs_blockcache_miss{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "Hits {{instance}}:{{mp}}",
+          "legendFormat": "Hits {{${node_label}}}:{{mp}}",
           "refId": "A"
         },
         {
@@ -1959,11 +1959,11 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_blockcache_hit_bytes{vol_name=\"$name\"}[$__rate_interval])) by (instance,mp) *100 / (sum(rate(juicefs_blockcache_hit_bytes{vol_name=\"$name\"}[$__rate_interval])) by (instance,mp) + sum(rate(juicefs_blockcache_miss_bytes{vol_name=\"$name\"}[$__rate_interval])) by (instance,mp))",
+          "expr": "sum(rate(juicefs_blockcache_hit_bytes{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp) *100 / (sum(rate(juicefs_blockcache_hit_bytes{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp) + sum(rate(juicefs_blockcache_miss_bytes{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "HitBytes {{instance}}:{{mp}}",
+          "legendFormat": "HitBytes {{${node_label}}}:{{mp}}",
           "refId": "B"
         }
       ],
@@ -2059,11 +2059,11 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_compact_size_histogram_bytes_count{vol_name=\"$name\"}[$__rate_interval])) by (instance,mp)",
+          "expr": "sum(rate(juicefs_compact_size_histogram_bytes_count{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{instance}}:{{mp}}",
+          "legendFormat": "{{${node_label}}}:{{mp}}",
           "refId": "A"
         }
       ],
@@ -2158,11 +2158,11 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(rate(juicefs_compact_size_histogram_bytes_sum{vol_name=\"$name\"}[$__rate_interval])) by (instance,mp)",
+          "expr": "sum(rate(juicefs_compact_size_histogram_bytes_sum{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{instance}}:{{mp}}",
+          "legendFormat": "{{${node_label}}}:{{mp}}",
           "refId": "A"
         }
       ],
@@ -2257,11 +2257,11 @@
             "uid": "$datasource"
           },
           "exemplar": true,
-          "expr": "sum(juicefs_fuse_open_handlers{vol_name=\"$name\"}) by (instance,mp)",
+          "expr": "sum(juicefs_fuse_open_handlers{vol_name=\"$name\"}) by (${node_label},mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{instance}}:{{mp}}",
+          "legendFormat": "{{${node_label}}}:{{mp}}",
           "refId": "A"
         }
       ],
@@ -2357,7 +2357,7 @@
           },
           "editorMode": "code",
           "expr": "juicefs_staging_blocks{vol_name=\"$name\"}",
-          "legendFormat": "{{instance}}:{{mp}}",
+          "legendFormat": "{{${node_label}}}:{{mp}}",
           "range": true,
           "refId": "A"
         }
@@ -2455,7 +2455,7 @@
           "editorMode": "code",
           "exemplar": false,
           "expr": "juicefs_staging_block_bytes{vol_name=\"$name\"}",
-          "legendFormat": "{{instance}}:{{mp}}",
+          "legendFormat": "{{${node_label}}}:{{mp}}",
           "range": true,
           "refId": "A"
         }
@@ -2552,9 +2552,9 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(rate(juicefs_staging_block_delay_seconds{vol_name=\"$name\"}[$__rate_interval])) by (instance,mp) / sum(rate(juicefs_object_request_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by (instance,mp) ",
+          "expr": "sum(rate(juicefs_staging_block_delay_seconds{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp) / sum(rate(juicefs_object_request_durations_histogram_seconds_count{vol_name=\"$name\"}[$__rate_interval])) by (${node_label},mp) ",
           "hide": false,
-          "legendFormat": "{{instance}}:{{mp}}",
+          "legendFormat": "{{${node_label}}}:{{mp}}",
           "range": true,
           "refId": "A"
         }
@@ -2588,6 +2588,35 @@
       },
       {
         "current": {
+          "selected": false,
+          "text": "instance",
+          "value": "instance"
+        },
+        "description": "Select the node label type based on deployment environment",
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "label": "node label",
+        "name": "node_label",
+        "options": [
+          {
+            "selected": true,
+            "text": "instance",
+            "value": "instance"
+          },
+          {
+            "selected": false,
+            "text": "node",
+            "value": "node"
+          }
+        ],
+        "query": "instance,node",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
           "selected": true,
           "text": "test1",
           "value": "test1"
@@ -2605,7 +2634,7 @@
           "query": "label_values(juicefs_uptime, vol_name)",
           "refId": "StandardVariableQuery"
         },
-        "refresh": 1,
+        "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
         "sort": 0,

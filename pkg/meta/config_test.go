@@ -19,6 +19,9 @@ package meta
 import (
 	"strings"
 	"testing"
+
+	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRemoveSecret(t *testing.T) {
@@ -38,17 +41,52 @@ func TestRemoveSecret(t *testing.T) {
 }
 
 func TestEncrypt(t *testing.T) {
+	cases := []struct {
+		algo string
+	}{
+		{object.AES256GCM_RSA},
+		{object.CHACHA20_RSA},
+		{object.SM4GCM},
+	}
 	format := Format{Name: "test", SecretKey: "testSecret", SessionToken: "token", EncryptKey: "testEncrypt"}
-	if err := format.Encrypt(); err != nil {
-		t.Fatalf("Format encrypt: %s", err)
+	for _, c := range cases {
+		format.EncryptAlgo = c.algo
+		t.Run(c.algo, func(t *testing.T) {
+			if err := format.Encrypt(); err != nil {
+				t.Fatalf("Format encrypt: %s", err)
+			}
+			if format.SecretKey == "testSecret" || format.SessionToken == "token" || format.EncryptKey == "testEncrypt" {
+				t.Fatalf("invalid format: %+v", format)
+			}
+			if err := format.Decrypt(); err != nil {
+				t.Fatalf("Format decrypt: %s", err)
+			}
+			if format.SecretKey != "testSecret" || format.SessionToken != "token" || format.EncryptKey != "testEncrypt" {
+				t.Fatalf("invalid format: %+v", format)
+			}
+		})
 	}
-	if format.SecretKey == "testSecret" || format.SessionToken == "token" || format.EncryptKey == "testEncrypt" {
-		t.Fatalf("invalid format: %+v", format)
+}
+
+func TestFormat_Update_KeyConflict(t *testing.T) {
+	oldFormat := Format{Name: "test", UUID: "UUID-A"}
+
+	newFormat := Format{Name: "test", UUID: "UUID-B", SecretKey: "secret"}
+	if err := newFormat.Encrypt(); err != nil {
+		t.Fatal(err)
 	}
-	if err := format.Decrypt(); err != nil {
-		t.Fatalf("Format decrypt: %s", err)
+	assert.True(t, newFormat.KeyEncrypted)
+
+	if err := newFormat.update(&oldFormat, false); err != nil {
+		t.Fatal(err)
 	}
-	if format.SecretKey != "testSecret" || format.SessionToken != "token" || format.EncryptKey != "testEncrypt" {
-		t.Fatalf("invalid format: %+v", format)
+
+	assert.Equal(t, "UUID-A", newFormat.UUID)
+	assert.True(t, newFormat.KeyEncrypted)
+
+	if err := newFormat.Decrypt(); err != nil {
+		t.Fatalf("failed to decrypt with new UUID (which is old UUID A): %s", err)
 	}
+
+	assert.Equal(t, "secret", newFormat.SecretKey)
 }

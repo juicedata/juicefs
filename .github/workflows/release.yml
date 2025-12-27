@@ -9,16 +9,22 @@ jobs:
   releaser:
     runs-on: ubuntu-22.04
     steps:
+      - name: Clean up
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /usr/local/.ghcup
+          sudo docker system prune -af
+          sudo df -h
+
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: 'oldstable'
+          go-version: "oldstable"
 
       - name: Set up Java
         uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
-          java-version: '8'
+          distribution: "temurin"
+          java-version: "8"
           server-id: central
           server-username: MAVEN_USERNAME
           server-password: MAVEN_PASSWORD
@@ -68,3 +74,8 @@ jobs:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+
+      - name: Setup upterm session
+        if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1

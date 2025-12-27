@@ -18,9 +18,9 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"io"
 	"math/rand"
@@ -41,9 +41,9 @@ import (
 	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
-	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
 
@@ -289,20 +289,14 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		}
 	}
 	if format.EncryptKey != "" {
-		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
-		if passphrase == "" {
-			block, _ := pem.Decode([]byte(format.EncryptKey))
-			// nolint:staticcheck
-			if block != nil && strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
-				return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
-			}
-		}
-
-		privKey, err := object.ParseRsaPrivateKeyFromPem([]byte(format.EncryptKey), []byte(passphrase))
+		privKey, err := object.ParsePrivateKeyFromPem([]byte(format.EncryptKey), []byte(os.Getenv("JFS_RSA_PASSPHRASE")))
 		if err != nil {
-			return nil, fmt.Errorf("parse rsa: %s", err)
+			if errors.Is(err, object.ErrKeyNeedPasswd) {
+				return nil, fmt.Errorf("%w: please set the 'JFS_RSA_PASSPHRASE' environment variable", err)
+			}
+			return nil, fmt.Errorf("parse private key: %s", err)
 		}
-		encryptor, err := object.NewDataEncryptor(object.NewRSAEncryptor(privKey), format.EncryptAlgo)
+		encryptor, err := object.NewDataEncryptor(object.NewKeyEncryptor(privKey), format.EncryptAlgo)
 		if err != nil {
 			return nil, err
 		}
@@ -323,11 +317,12 @@ func randSeq(n int) string {
 }
 
 func doTesting(store object.ObjectStorage, key string, data []byte) error {
-	if err := store.Put(key, bytes.NewReader(data)); err != nil {
+	ctx := context.Background()
+	if err := store.Put(ctx, key, bytes.NewReader(data)); err != nil {
 		if strings.Contains(err.Error(), "Access Denied") {
 			return fmt.Errorf("Failed to put: %s", err)
 		}
-		if err2 := store.Create(); err2 != nil {
+		if err2 := store.Create(ctx); err2 != nil {
 			if strings.Contains(err.Error(), "NoSuchBucket") {
 				return fmt.Errorf("Failed to create bucket %s: %s, previous error: %s\nPlease create bucket %s manually, then format again.",
 					store, err2, err, store)
@@ -336,11 +331,11 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 					store, err2, err)
 			}
 		}
-		if err := store.Put(key, bytes.NewReader(data)); err != nil {
+		if err := store.Put(ctx, key, bytes.NewReader(data)); err != nil {
 			return fmt.Errorf("Failed to put: %s", err)
 		}
 	}
-	p, err := store.Get(key, 0, -1)
+	p, err := store.Get(ctx, key, 0, -1)
 	if err != nil {
 		return fmt.Errorf("Failed to get: %s", err)
 	}
@@ -352,7 +347,7 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 	if !bytes.Equal(data, data2) {
 		return fmt.Errorf("read wrong data: expected %x, got %x", data, data2)
 	}
-	err = store.Delete(key)
+	err = store.Delete(ctx, key)
 	if err != nil {
 		// it's OK to don't have delete permission, but we should warn user explicitly
 		logger.Warnf("Failed to delete, err: %s", err)
@@ -375,7 +370,7 @@ func test(store object.ObjectStorage) error {
 		time.Sleep(time.Second * time.Duration(i*3+1))
 	}
 	if err == nil {
-		_ = store.Delete("testing/")
+		_ = store.Delete(ctx, "testing/")
 	}
 	return err
 }
@@ -480,6 +475,7 @@ func format(c *cli.Context) error {
 			Compression:      c.String("compress"),
 			TrashDays:        c.Int("trash-days"),
 			DirStats:         true,
+			UserGroupQuota:   false,
 			MetaVersion:      meta.MaxVersion,
 			MinClientVersion: "1.1.0-A",
 			EnableACL:        c.Bool("enable-acl"),
@@ -530,7 +526,7 @@ func format(c *cli.Context) error {
 			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
 		}
 		if create {
-			if objs, err := osync.ListAll(blob, "", "", "", true); err == nil {
+			if objs, err := object.ListAll(c.Context, blob, "", "", true, false); err == nil {
 				for o := range objs {
 					if o == nil {
 						logger.Warnf("List storage %s failed", blob)
@@ -544,7 +540,7 @@ func format(c *cli.Context) error {
 			} else {
 				logger.Warnf("List storage %s failed: %s", blob, err)
 			}
-			if err = blob.Put("juicefs_uuid", strings.NewReader(format.UUID)); err != nil {
+			if err = blob.Put(ctx, "juicefs_uuid", strings.NewReader(format.UUID)); err != nil {
 				logger.Warnf("Put uuid object: %s", err)
 			}
 		}
@@ -557,7 +553,7 @@ func format(c *cli.Context) error {
 	}
 	if err = m.Init(format, c.Bool("force")); err != nil {
 		if create {
-			_ = blob.Delete("juicefs_uuid")
+			_ = blob.Delete(ctx, "juicefs_uuid")
 		}
 		logger.Fatalf("format: %s", err)
 	}

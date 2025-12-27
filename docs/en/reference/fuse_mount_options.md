@@ -43,7 +43,7 @@ FUSE supports ["writeback-cache mode"](https://www.kernel.org/doc/Documentation/
 
 ## user_id and group_id
 
-These two options are used to specify the owner ID and owner group ID of the mount point, but only allow to execute the mount command as root, e.g. `sudo juicefs mount -o user_id=100,group_id=100`.
+These options are used to specify the owner ID and owner group ID of the file system (as distinct from the UID and GID of a file or directory) for higher-level permission validation. If the allow_other option is specified, this option will not work. e.g. `sudo juicefs mount -o user_id=100,group_id=100`.
 
 ## debug
 

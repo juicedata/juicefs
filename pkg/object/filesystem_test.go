@@ -18,6 +18,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -63,6 +64,18 @@ func TestSftp2(t *testing.T) { //skip mutate
 	testFileSystem(t, sftp)
 }
 
+func TestCifs2(t *testing.T) { //skip mutate
+	if os.Getenv("CIFS_ADDR") == "" {
+		fmt.Println("skip CIFS test")
+		t.SkipNow()
+	}
+	cifs, err := newCifs(os.Getenv("CIFS_ADDR"), os.Getenv("CIFS_USER"), os.Getenv("CIFS_PASSWORD"), "")
+	if err != nil {
+		t.Fatalf("create: %s", err)
+	}
+	testFileSystem(t, cifs)
+}
+
 func TestHDFS2(t *testing.T) { //skip mutate
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.Skip()
@@ -83,6 +96,7 @@ func TestNFS2(t *testing.T) { //skip mutate
 }
 
 func testFileSystem(t *testing.T, s ObjectStorage) {
+	ctx := context.Background()
 	keys := []string{
 		"x/",
 		"x/x.txt",
@@ -92,11 +106,11 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 	}
 	// initialize directory tree
 	for _, key := range keys {
-		if err := s.Put(key, bytes.NewReader([]byte{'a', 'b'})); err != nil {
+		if err := s.Put(ctx, key, bytes.NewReader([]byte{'a', 'b'})); err != nil {
 			t.Fatalf("PUT object `%s` failed: %q", key, err)
 		}
 	}
-	if o, err := s.Head("x/"); err != nil {
+	if o, err := s.Head(ctx, "x/"); err != nil {
 		t.Fatalf("Head x/: %s", err)
 	} else if f, ok := o.(File); !ok {
 		t.Fatalf("Head should return File")
@@ -106,7 +120,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 	// cleanup
 	defer func() {
 		// delete reversely, directory only can be deleted when it's empty
-		objs, err := listAll(s, "", "", 100, true)
+		objs, err := listAll(ctx, s, "", "", 100, true)
 		if err != nil {
 			t.Fatalf("listall failed: %s", err)
 		}
@@ -116,12 +130,12 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		}
 		idx := len(gottenKeys) - 1
 		for ; idx >= 0; idx-- {
-			if err := s.Delete(gottenKeys[idx]); err != nil {
+			if err := s.Delete(ctx, gottenKeys[idx]); err != nil {
 				t.Fatalf("DELETE object `%s` failed: %q", gottenKeys[idx], err)
 			}
 		}
 	}()
-	objs, err := listAll(s, "x/", "", 100, true)
+	objs, err := listAll(ctx, s, "x/", "", 100, true)
 	if err != nil {
 		t.Fatalf("list failed: %s", err)
 	}
@@ -130,7 +144,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		t.Fatalf("testKeysEqual fail: %s", err)
 	}
 
-	objs, err = listAll(s, "x", "", 100, true)
+	objs, err = listAll(ctx, s, "x", "", 100, true)
 	if err != nil {
 		t.Fatalf("list failed: %s", err)
 	}
@@ -147,12 +161,15 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 				t.Fatalf("chmod %ofailed: %s", mode, err)
 			}
 
-			objs, err = listAll(s, "x", "", 100, true)
+			objs, err = listAll(ctx, s, "x", "", 100, true)
 			if err != nil {
 				t.Fatalf("list failed: %s mode %o", err, mode)
 			}
 			expectedKeys = []string{"x/", "xy.txt", "xyz/", "xyz/xyz.txt"}
 			if _, ok := ss.(*nfsStore); ok {
+				expectedKeys = []string{"x/", "x/x.txt", "xy.txt", "xyz/", "xyz/xyz.txt"}
+			}
+			if _, ok := ss.(*cifsStore); ok {
 				expectedKeys = []string{"x/", "x/x.txt", "xy.txt", "xyz/", "xyz/xyz.txt"}
 			}
 			if mode == 0422 {
@@ -170,7 +187,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	objs, err = listAll(s, "xy", "", 100, true)
+	objs, err = listAll(ctx, s, "xy", "", 100, true)
 	if err != nil {
 		t.Fatalf("list failed: %s", err)
 	}
@@ -181,11 +198,11 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 
 	if ss, ok := s.(SupportSymlink); ok {
 		// a< a- < a/ < a0    <    b< b- < b/ < b0
-		_ = s.Put("a-", bytes.NewReader([]byte{}))
-		_ = s.Put("a0", bytes.NewReader([]byte{}))
-		_ = s.Put("b-", bytes.NewReader([]byte{}))
-		_ = s.Put("b0", bytes.NewReader(make([]byte, 10)))
-		_ = s.Put("xyz/ol1/p.txt", bytes.NewReader([]byte{}))
+		_ = s.Put(ctx, "a-", bytes.NewReader([]byte{}))
+		_ = s.Put(ctx, "a0", bytes.NewReader([]byte{}))
+		_ = s.Put(ctx, "b-", bytes.NewReader([]byte{}))
+		_ = s.Put(ctx, "b0", bytes.NewReader(make([]byte, 10)))
+		_ = s.Put(ctx, "xyz/ol1/p.txt", bytes.NewReader([]byte{}))
 
 		err = ss.Symlink("../b0", "bb/b1")
 		if err != nil {
@@ -196,23 +213,23 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		} else if target != "../b0" {
 			t.Fatalf("target should be ../b0, but got %s", target)
 		}
-		if fi, err := s.Head("bb/b1"); err != nil || !fi.IsSymlink() || fi.Size() != 10 {
+		if fi, err := s.Head(ctx, "bb/b1"); err != nil || !fi.IsSymlink() || fi.Size() != 10 {
 			t.Fatalf("haed of symlink: err=%s, size=%d isSymlink=%v", err, fi.Size(), fi.IsSymlink())
 		}
 		err = ss.Symlink("../notExist", "bb/brokenLink")
 		if err != nil {
 			t.Fatalf("symlink: %s", err)
 		}
-		if _, err := s.Head("bb/brokenLink"); !errors.Is(err, os.ErrNotExist) {
+		if _, err := s.Head(ctx, "bb/brokenLink"); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("head broken symlink: err=%s, should be os.ErrNotExist", err)
 		}
-		_ = s.Delete("bb/brokenLink")
+		_ = s.Delete(ctx, "bb/brokenLink")
 		if err = ss.Symlink("xyz/ol1/", "a"); err != nil {
 			t.Fatalf("symlink: a: %s", err)
 		}
 		_ = ss.Symlink("xyz/notExist/", "b")
 
-		objs, err = listAll(s, "", "", 100, true)
+		objs, err = listAll(ctx, s, "", "", 100, true)
 		if err != nil {
 			t.Fatalf("listall failed: %s", err)
 		}
@@ -229,7 +246,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 
 		// test don't follow symlink
 		if _, ok := s.(*hdfsclient); !ok {
-			objs, err = listAll(s, "", "", 100, false)
+			objs, err = listAll(ctx, s, "", "", 100, false)
 			expectedKeys = []string{"", "a", "a-", "a0", "b", "b-", "b0", "bb/", "bb/b1", "x/", "x/x.txt", "xy.txt", "xyz/", "xyz/ol1/", "xyz/ol1/p.txt", "xyz/xyz.txt"}
 			if err = testKeysEqual(objs, expectedKeys); err != nil {
 				t.Fatalf("testKeysEqual fail: %s", err)
@@ -239,7 +256,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 
 	// put a file with very long name
 	longName := strings.Repeat("a", 255)
-	if err := s.Put("dir/"+longName, bytes.NewReader([]byte{0})); err != nil {
+	if err := s.Put(ctx, "dir/"+longName, bytes.NewReader([]byte{0})); err != nil {
 		t.Fatalf("PUT a file with long name `%s` failed: %q", longName, err)
 	}
 }

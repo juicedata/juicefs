@@ -90,12 +90,22 @@ $ juicefs warmup -f /tmp/filelist`,
 
 const batchMax = 10240
 
+const maxInterval = 300
+const minInterval = 1
+
+var interval int
+
 func readControl(cf *os.File, resp []byte) int {
+	if interval <= 0 {
+		interval = 10
+	}
 	for {
 		if n, err := cf.Read(resp); err == nil {
+			interval = max(interval/2, minInterval)
 			return n
 		} else if err == io.EOF {
-			time.Sleep(time.Millisecond * 300)
+			interval = min(interval*2, maxInterval)
+			time.Sleep(time.Millisecond * time.Duration(interval))
 		} else if errors.Is(err, syscall.EBADF) {
 			logger.Fatalf("JuiceFS client was restarted")
 		} else {
@@ -188,7 +198,7 @@ func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads ui
 }
 
 func warmup(ctx *cli.Context) error {
-	setup0(ctx, 1, 0)
+	setup0(ctx, 0, 0)
 
 	evict, check := ctx.Bool("evict"), ctx.Bool("check")
 	if evict && check {

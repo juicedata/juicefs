@@ -52,7 +52,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -83,15 +82,17 @@ var (
 	openFiles  = make(map[int32]*fwrapper)
 	nextHandle = int32(1)
 
-	fslock       sync.Mutex
-	handlers           = make(map[int64]*wrapper)
-	nextFsHandle int64 = 0
-	activefs           = make(map[string][]*wrapper)
-	logger             = utils.GetLogger("juicefs")
-	bOnce        sync.Once
-	bridges      []*Bridge
-	pOnce        sync.Once
-	pushers      []*push.Pusher
+	fslock        sync.Mutex
+	handlers            = make(map[int64]*wrapper)
+	nextFsHandle  int64 = 0
+	activefs            = make(map[fsKey][]*wrapper)
+	logger              = utils.GetLogger("juicefs")
+	bOnce         sync.Once
+	bridges       []*Bridge
+	pOnce         sync.Once
+	pushers       []*push.Pusher
+	rOnce         sync.Once
+	remoteWriters []*RemoteWriter
 
 	userGroupCache = make(map[string]map[string][]string) // name -> (user -> groups)
 
@@ -175,6 +176,11 @@ func errno(err error) int32 {
 		logger.Warnf("unknown errno %d: %s", eno, err)
 		return -int32(eno)
 	}
+}
+
+type fsKey struct {
+	name string
+	conf javaConf
 }
 
 type wrapper struct {
@@ -311,71 +317,75 @@ func freeHandle(fd int32) {
 }
 
 type javaConf struct {
-	MetaURL           string `json:"meta"`
-	Bucket            string `json:"bucket"`
-	StorageClass      string `json:"storageClass"`
-	ReadOnly          bool   `json:"readOnly"`
-	NoSession         bool   `json:"noSession"`
-	NoBGJob           bool   `json:"noBGJob"`
-	OpenCache         string `json:"openCache"`
-	BackupMeta        string `json:"backupMeta"`
-	BackupSkipTrash   bool   `json:"backupSkipTrash"`
-	Heartbeat         string `json:"heartbeat"`
-	CacheDir          string `json:"cacheDir"`
-	CacheSize         string `json:"cacheSize"`
-	CacheItems        int64  `json:"cacheItems"`
-	FreeSpace         string `json:"freeSpace"`
-	AutoCreate        bool   `json:"autoCreate"`
-	CacheFullBlock    bool   `json:"cacheFullBlock"`
-	CacheChecksum     string `json:"cacheChecksum"`
-	CacheEviction     string `json:"cacheEviction"`
-	CacheScanInterval string `json:"cacheScanInterval"`
-	CacheExpire       string `json:"cacheExpire"`
-	Writeback         bool   `json:"writeback"`
-	MemorySize        string `json:"memorySize"`
-	Prefetch          int    `json:"prefetch"`
-	Readahead         string `json:"readahead"`
-	UploadLimit       string `json:"uploadLimit"`
-	DownloadLimit     string `json:"downloadLimit"`
-	MaxUploads        int    `json:"maxUploads"`
-	MaxDeletes        int    `json:"maxDeletes"`
-	SkipDirNlink      int    `json:"skipDirNlink"`
-	SkipDirMtime      string `json:"skipDirMtime"`
-	IORetries         int    `json:"ioRetries"`
-	GetTimeout        string `json:"getTimeout"`
-	PutTimeout        string `json:"putTimeout"`
-	FastResolve       bool   `json:"fastResolve"`
-	AttrTimeout       string `json:"attrTimeout"`
-	EntryTimeout      string `json:"entryTimeout"`
-	DirEntryTimeout   string `json:"dirEntryTimeout"`
-	Debug             bool   `json:"debug"`
-	NoUsageReport     bool   `json:"noUsageReport"`
-	AccessLog         string `json:"accessLog"`
-	PushGateway       string `json:"pushGateway"`
-	PushInterval      string `json:"pushInterval"`
-	PushAuth          string `json:"pushAuth"`
-	PushLabels        string `json:"pushLabels"`
-	PushGraphite      string `json:"pushGraphite"`
-	Caller            int    `json:"caller"`
-	Subdir            string `json:"subdir"`
+	MetaURL             string `json:"meta"`
+	Bucket              string `json:"bucket"`
+	StorageClass        string `json:"storageClass"`
+	ReadOnly            bool   `json:"readOnly"`
+	NoSession           bool   `json:"noSession"`
+	NoBGJob             bool   `json:"noBGJob"`
+	OpenCache           string `json:"openCache"`
+	BackupMeta          string `json:"backupMeta"`
+	BackupSkipTrash     bool   `json:"backupSkipTrash"`
+	Heartbeat           string `json:"heartbeat"`
+	CacheDir            string `json:"cacheDir"`
+	CacheSize           string `json:"cacheSize"`
+	CacheItems          int64  `json:"cacheItems"`
+	FreeSpace           string `json:"freeSpace"`
+	AutoCreate          bool   `json:"autoCreate"`
+	CacheFullBlock      bool   `json:"cacheFullBlock"`
+	CacheChecksum       string `json:"cacheChecksum"`
+	CacheEviction       string `json:"cacheEviction"`
+	CacheScanInterval   string `json:"cacheScanInterval"`
+	CacheExpire         string `json:"cacheExpire"`
+	Writeback           bool   `json:"writeback"`
+	MemorySize          string `json:"memorySize"`
+	Prefetch            int    `json:"prefetch"`
+	Readahead           string `json:"readahead"`
+	UploadLimit         string `json:"uploadLimit"`
+	DownloadLimit       string `json:"downloadLimit"`
+	MaxUploads          int    `json:"maxUploads"`
+	MaxDeletes          int    `json:"maxDeletes"`
+	SkipDirNlink        int    `json:"skipDirNlink"`
+	SkipDirMtime        string `json:"skipDirMtime"`
+	IORetries           int    `json:"ioRetries"`
+	GetTimeout          string `json:"getTimeout"`
+	PutTimeout          string `json:"putTimeout"`
+	FastResolve         bool   `json:"fastResolve"`
+	AttrTimeout         string `json:"attrTimeout"`
+	EntryTimeout        string `json:"entryTimeout"`
+	DirEntryTimeout     string `json:"dirEntryTimeout"`
+	Debug               bool   `json:"debug"`
+	NoUsageReport       bool   `json:"noUsageReport"`
+	AccessLog           string `json:"accessLog"`
+	PushGateway         string `json:"pushGateway"`
+	PushInterval        string `json:"pushInterval"`
+	PushAuth            string `json:"pushAuth"`
+	PushLabels          string `json:"pushLabels"`
+	PushGraphite        string `json:"pushGraphite"`
+	PushRemoteWrite     string `json:"pushRemoteWrite"`
+	PushRemoteWriteAuth string `json:"pushRemoteWriteAuth"`
+	Caller              int    `json:"caller"`
+	Subdir              string `json:"subdir"`
 
 	SuperFS bool `json:"superFs,omitempty"`
+}
+
+func cleanConf(conf javaConf) javaConf {
+	conf.SuperFS = false
+	return conf
 }
 
 func getOrCreate(name, user, group, superuser, supergroup string, conf javaConf, f func() *fs.FileSystem) int64 {
 	fslock.Lock()
 	defer fslock.Unlock()
-	ws := activefs[name]
+	key := fsKey{name: name, conf: cleanConf(conf)}
+	ws := activefs[key]
 	var jfs *fs.FileSystem
 	var m *mapping
-	for _, w := range ws {
-		if reflect.DeepEqual(w.conf, conf) {
-			jfs = w.FileSystem
-			m = w.m
-			break
-		}
-	}
-	if jfs == nil {
+	if len(ws) > 0 {
+		jfs = ws[0].FileSystem
+		m = ws[0].m
+	} else {
 		m = newMapping(name)
 		jfs = f()
 		if jfs == nil {
@@ -402,7 +412,7 @@ func getOrCreate(name, user, group, superuser, supergroup string, conf javaConf,
 	} else {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(user), w.lookupGids(group))
 	}
-	activefs[name] = append(ws, w)
+	activefs[key] = append(ws, w)
 	nextFsHandle = nextFsHandle + 1
 	handlers[nextFsHandle] = w
 	return nextFsHandle
@@ -428,6 +438,36 @@ func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, 
 				for _, pusher := range pushers {
 					if err := pusher.Push(); err != nil {
 						logger.Warnf("error pushing to PushGateway: %s", err)
+					}
+				}
+			}
+		}()
+	})
+}
+
+func push2RemoteWrite(remoteWrite string, pushRemoteWriteAuth string, pushInterVal time.Duration, registry *prometheus.Registry, commonLabels map[string]string) {
+	writer, err := NewRemoteWriter(&RemoteWriteConfig{
+		URL:           remoteWrite,
+		Gatherer:      registry,
+		Auth:          pushRemoteWriteAuth,
+		Interval:      pushInterVal,
+		Timeout:       2 * time.Second,
+		ErrorHandling: ContinueOnError,
+		Logger:        logger,
+		CommonLabels:  commonLabels,
+	})
+	if err != nil {
+		logger.Warnf("NewRemoteWriter error: %s", err)
+		return
+	}
+	remoteWriters = append(remoteWriters, writer)
+
+	rOnce.Do(func() {
+		go func() {
+			for range time.NewTicker(pushInterVal).C {
+				for _, writer := range remoteWriters {
+					if err := writer.Push(); err != nil {
+						logger.Warnf("error pushing to remote write: %s", err)
 					}
 				}
 			}
@@ -521,7 +561,7 @@ func jfs_init(cname, cjsonConf, user, group, superuser, supergroup *C.char) int6
 		formats[name] = format
 		var registerer prometheus.Registerer
 		var registry *prometheus.Registry
-		if jConf.PushGateway != "" || jConf.PushGraphite != "" || jConf.Caller == CALLER_PYTHON {
+		if jConf.PushGateway != "" || jConf.PushGraphite != "" || jConf.PushRemoteWrite != "" || jConf.Caller == CALLER_PYTHON {
 			commonLabels := prometheus.Labels{"vol_name": name, "mp": "sdk-" + strconv.Itoa(os.Getpid())}
 			if h, err := os.Hostname(); err == nil {
 				commonLabels["instance"] = h
@@ -552,6 +592,9 @@ func jfs_init(cname, cjsonConf, user, group, superuser, supergroup *C.char) int6
 			}
 			if jConf.PushGateway != "" {
 				push2Gateway(jConf.PushGateway, jConf.PushAuth, interval, registry, commonLabels)
+			}
+			if jConf.PushRemoteWrite != "" {
+				push2RemoteWrite(jConf.PushRemoteWrite, jConf.PushRemoteWriteAuth, interval, registry, commonLabels)
 			}
 			m.InitMetrics(registerer)
 			vfs.InitMetrics(registerer)
@@ -721,7 +764,12 @@ func jfs_update_uid_grouping(cname, uidstr *C.char, grouping *C.char) {
 	fslock.Lock()
 	defer fslock.Unlock()
 	userGroupCache[name] = userGroups
-	ws := activefs[name]
+	var ws []*wrapper
+	for k, wrappers := range activefs {
+		if k.name == name {
+			ws = append(ws, wrappers...)
+		}
+	}
 	if len(ws) > 0 {
 		for _, w := range ws {
 			w.m.update(uids, gids, false)
@@ -783,12 +831,12 @@ func jfs_term(pid int64, h int64) int32 {
 	fslock.Lock()
 	defer fslock.Unlock()
 	delete(handlers, h)
-	for name, ws := range activefs {
+	for k, ws := range activefs {
 		for i := range ws {
 			if ws[i] == w {
 				if len(ws) > 1 {
 					ws[i] = ws[len(ws)-1]
-					activefs[name] = ws[:len(ws)-1]
+					activefs[k] = ws[:len(ws)-1]
 				} else {
 					_ = w.Flush()
 					// don't close the filesystem, so it can be re-used later
@@ -806,6 +854,11 @@ func jfs_term(pid int64, h int64) int32 {
 	for _, pusher := range pushers {
 		if err := pusher.Push(); err != nil {
 			logger.Warnf("error pushing to PushGatway: %s", err)
+		}
+	}
+	for _, remoteWriter := range remoteWriters {
+		if err := remoteWriter.Push(); err != nil {
+			logger.Warnf("error pushing to RemoteWrite: %s", err)
 		}
 	}
 	return 0

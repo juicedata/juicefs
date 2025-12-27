@@ -51,7 +51,7 @@ const (
 
 const readSessions = 2
 
-var readBufferUsed int64
+var readBufferUsed atomic.Int64
 
 type sstate uint8
 
@@ -91,6 +91,8 @@ func (r *frange) include(a *frange) bool { return r.off <= a.off && a.end() <= r
 
 // protected by file
 type sliceReader struct {
+	ctx        context.Context
+	cancel     context.CancelFunc
 	file       *fileReader
 	block      *frange
 	state      sstate
@@ -202,7 +204,8 @@ func (s *sliceReader) run() {
 	p := s.page.Slice(0, int(need))
 	defer p.Release()
 	var n int
-	ctx := context.WithValue(context.TODO(), meta.CtxKey("inode"), inode) // Output inode in log for debugging
+
+	ctx := context.WithValue(s.ctx, meta.CtxKey("inode"), inode) // Output inode in log for debugging
 	n = f.r.Read(ctx, p, slices, (uint32(s.block.off))%meta.ChunkSize)
 
 	f.Lock()
@@ -233,7 +236,7 @@ func (s *sliceReader) invalidate() {
 	case NEW:
 	case BUSY:
 		s.state = REFRESH
-		// TODO: interrupt reader
+		// TODO cancel ongoing read
 	case READY:
 		if s.refs > 0 {
 			s.state = NEW
@@ -249,7 +252,7 @@ func (s *sliceReader) drop() {
 	if s.state <= BREAK {
 		if s.refs == 0 {
 			s.state = BREAK
-			// TODO: interrupt reader
+			s.cancel()
 		}
 	} else {
 		if s.refs == 0 {
@@ -267,7 +270,7 @@ func (s *sliceReader) delete() {
 	} else {
 		s.file.last = s.prev
 	}
-	atomic.AddInt64(&readBufferUsed, -int64(cap(s.page.Data)))
+	readBufferUsed.Add(-int64(cap(s.page.Data)))
 	s.page.Release()
 }
 
@@ -306,6 +309,7 @@ func (f *fileReader) GetLength() uint64 {
 // protected by f
 func (f *fileReader) newSlice(block *frange) *sliceReader {
 	s := &sliceReader{}
+	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.file = f
 	s.lastAccess = time.Now()
 	s.indx = uint32(block.off / meta.ChunkSize)
@@ -325,7 +329,7 @@ func (f *fileReader) newSlice(block *frange) *sliceReader {
 	*(f.last) = s
 	f.last = &(s.next)
 	go s.run()
-	atomic.AddInt64(&readBufferUsed, int64(cap(s.page.Data)))
+	readBufferUsed.Add(int64(cap(s.page.Data)))
 	return s
 }
 
@@ -417,12 +421,12 @@ func (f *fileReader) checkReadahead(block *frange) int {
 	ses := &f.sessions[idx]
 	seqdata := ses.total
 	readahead := ses.readahead
-	used := uint64(atomic.LoadInt64(&readBufferUsed))
+	used := uint64(readBufferUsed.Load())
 	if readahead == 0 && f.r.blockSize <= f.r.readAheadMax && (block.off == 0 || seqdata > block.len) { // begin with read-ahead turned on
 		ses.readahead = f.r.blockSize
-	} else if readahead < f.r.readAheadMax && seqdata >= readahead && f.r.readAheadTotal-used > readahead*4 {
+	} else if readahead < f.r.readAheadMax && seqdata >= readahead && f.r.readAheadTotal > used+readahead*4 {
 		ses.readahead *= 2
-	} else if readahead >= f.r.blockSize && (f.r.readAheadTotal-used < readahead/2 || seqdata < readahead/4) {
+	} else if readahead >= f.r.blockSize && (f.r.readAheadTotal < used+readahead/2 || seqdata < readahead/4) {
 		ses.readahead /= 2
 	}
 	if ses.readahead >= f.r.blockSize {
@@ -482,7 +486,7 @@ func (f *fileReader) releaseIdleBuffer() {
 	defer f.Unlock()
 	now := time.Now()
 	var idle = time.Minute
-	used := atomic.LoadInt64(&readBufferUsed)
+	used := readBufferUsed.Load()
 	if used > int64(f.r.readAheadTotal) {
 		idle /= time.Duration(used / int64(f.r.readAheadTotal))
 	}
@@ -538,7 +542,7 @@ func (f *fileReader) readAhead(block *frange) {
 		}
 		return true
 	})
-	if block.len > 0 && block.off < f.length && uint64(atomic.LoadInt64(&readBufferUsed)) < f.r.readAheadTotal {
+	if block.len > 0 && block.off < f.length && uint64(readBufferUsed.Load()) < f.r.readAheadTotal {
 		if block.len < f.r.blockSize {
 			block.len += f.r.blockSize - block.end()%f.r.blockSize // align to end of a block
 		}
@@ -724,7 +728,7 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 }
 
 func (r *dataReader) readBufferUsed() int64 {
-	used := atomic.LoadInt64(&readBufferUsed)
+	used := readBufferUsed.Load()
 	return used
 }
 

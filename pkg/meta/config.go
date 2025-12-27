@@ -27,13 +27,15 @@ import (
 	"io"
 	"time"
 
+	"github.com/emmansun/gmsm/sm3"
+	"github.com/emmansun/gmsm/sm4"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/pkg/errors"
 )
 
 // Config for clients.
 type Config struct {
-	Strict             bool // update ctime
 	Retries            int
 	MaxDeletes         int
 	SkipDirNlink       int
@@ -51,10 +53,11 @@ type Config struct {
 	Sid                uint64
 	SortDir            bool
 	FastStatfs         bool
+	NetworkInterfaces  []string // list of network interfaces to use for IP discovery (empty means all)
 }
 
 func DefaultConf() *Config {
-	return &Config{Strict: true, Retries: 10, MaxDeletes: 2, Heartbeat: 12 * time.Second, AtimeMode: NoAtime, DirStatFlushPeriod: 1 * time.Second}
+	return &Config{Retries: 10, MaxDeletes: 2, Heartbeat: 12 * time.Second, AtimeMode: NoAtime, DirStatFlushPeriod: 1 * time.Second}
 }
 
 func (c *Config) SelfCheck() {
@@ -96,6 +99,7 @@ type Format struct {
 	MinClientVersion string `json:",omitempty"`
 	MaxClientVersion string `json:",omitempty"`
 	DirStats         bool   `json:",omitempty"`
+	UserGroupQuota   bool   `json:",omitempty"`
 	EnableACL        bool
 	RangerRestUrl    string `json:",omitempty"`
 	RangerService    string `json:",omitempty"`
@@ -121,7 +125,15 @@ func (f *Format) update(old *Format, force bool) error {
 			args = []interface{}{"meta version", old.MetaVersion, f.MetaVersion}
 		}
 		if args == nil {
-			f.UUID = old.UUID
+			if f.UUID != old.UUID {
+				if err := f.Decrypt(); err != nil {
+					return fmt.Errorf("decrypt format: %s", err)
+				}
+				f.UUID = old.UUID // UUID cannot be changed alone
+				if err := f.Encrypt(); err != nil {
+					return fmt.Errorf("encrypt format: %s", err)
+				}
+			}
 		} else {
 			return fmt.Errorf("cannot update volume %s from %v to %v", args...)
 		}
@@ -185,31 +197,52 @@ func (f *Format) CheckCliVersion(ver *version.Semver) error {
 	return nil
 }
 
+func newCipher(algo string, key string) (cipher.AEAD, error) {
+	switch algo {
+	case object.SM4GCM:
+		block, err := sm4.NewCipher(sm3.Kdf([]byte(key), 16))
+		if err != nil {
+			return nil, fmt.Errorf("new sm4 cipher: %s", err)
+		}
+		aead, err := cipher.NewGCM(block)
+		if err != nil {
+			return nil, fmt.Errorf("new sm4 GCM: %s", err)
+		}
+		return aead, nil
+	default:
+		hashKey := md5.Sum([]byte(key))
+		block, err := aes.NewCipher(hashKey[:])
+		if err != nil {
+			return nil, fmt.Errorf("new cipher: %s", err)
+		}
+		aead, err := cipher.NewGCM(block)
+		if err != nil {
+			return nil, fmt.Errorf("new GCM: %s", err)
+		}
+		return aead, nil
+	}
+}
+
 func (f *Format) Encrypt() error {
 	if f.KeyEncrypted || f.SecretKey == "" && f.EncryptKey == "" && f.SessionToken == "" {
 		return nil
 	}
-	key := md5.Sum([]byte(f.UUID))
-	block, err := aes.NewCipher(key[:])
+	ci, err := newCipher(f.EncryptAlgo, f.UUID)
 	if err != nil {
-		return fmt.Errorf("new cipher: %s", err)
-	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return fmt.Errorf("new GCM: %s", err)
+		return err
 	}
 	encrypt := func(k *string) {
 		if *k == "" {
 			return
 		}
-		nonce := make([]byte, 12)
+		nonce := make([]byte, ci.NonceSize())
 		if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
 			logger.Fatalf("generate nonce for secret key: %s", err)
 		}
-		ciphertext := aesgcm.Seal(nil, nonce, []byte(*k), nil)
-		buf := make([]byte, 12+len(ciphertext))
+		ciphertext := ci.Seal(nil, nonce, []byte(*k), nil)
+		buf := make([]byte, ci.NonceSize()+len(ciphertext))
 		copy(buf, nonce)
-		copy(buf[12:], ciphertext)
+		copy(buf[ci.NonceSize():], ciphertext)
 		*k = base64.StdEncoding.EncodeToString(buf)
 	}
 
@@ -224,14 +257,10 @@ func (f *Format) Decrypt() error {
 	if !f.KeyEncrypted {
 		return nil
 	}
-	key := md5.Sum([]byte(f.UUID))
-	block, err := aes.NewCipher(key[:])
+
+	ci, err := newCipher(f.EncryptAlgo, f.UUID)
 	if err != nil {
-		return fmt.Errorf("new cipher: %s", err)
-	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return fmt.Errorf("new GCM: %s", err)
+		return err
 	}
 	decrypt := func(k *string) {
 		if *k == "" {
@@ -246,7 +275,7 @@ func (f *Format) Decrypt() error {
 			err = fmt.Errorf("decode key: %s", e)
 			return
 		}
-		plaintext, e := aesgcm.Open(nil, buf[:12], buf[12:], nil)
+		plaintext, e := ci.Open(nil, buf[:ci.NonceSize()], buf[ci.NonceSize():], nil)
 		if e != nil {
 			err = fmt.Errorf("open cipher: %s", e)
 			return

@@ -35,7 +35,12 @@ XATTR_CREATE = 1
 XATTR_REPLACE = 2
 
 def check_error(r, fn, args):
-    if r < 0:
+    if fn.__name__ == "jfs_init" and r == 0:
+        name = args[0].decode()
+        e = OSError(f'JuiceFS initialized failed for {name}')
+        e.errno = 1
+        raise e
+    elif r < 0:
         formatted_args = []
         for arg in args[2:]:
             if isinstance(arg, (bytes, bytearray)) and len(arg) > 1024:
@@ -97,7 +102,8 @@ class Client(object):
                  download_limit="0", max_uploads=20, max_deletes=10, skip_dir_nlink=20, skip_dir_mtime="100ms",
                  io_retries=10, get_timeout="5", put_timeout="60", fast_resolve=False, attr_cache="1s",
                  entry_cache="0s", dir_entry_cache="1s", debug=False, no_usage_report=False, access_log="",
-                 push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite=""):
+                 push_gateway="", push_interval="10", push_auth="", push_labels="", push_graphite="", push_remote_write="", 
+                 push_remote_write_auth=""):
         self.lib = JuiceFSLib()
         kwargs = {}
         kwargs["meta"] = meta
@@ -144,6 +150,8 @@ class Client(object):
         kwargs["pushAuth"] = push_auth
         kwargs["pushLabels"] = push_labels
         kwargs["pushGraphite"] = push_graphite
+        kwargs["pushRemoteWrite"] = push_remote_write
+        kwargs["pushRemoteWriteAuth"] = push_remote_write_auth
         kwargs["caller"] = 1
 
         jsonConf = json.dumps(kwargs, sort_keys=True)
@@ -347,7 +355,7 @@ class Client(object):
         self.lib.jfs_removeXattr(c_int64(_tid()), c_int64(self.h), _bin(path), _bin(name))
 
     def clone(self, src, dst, preserve=False):
-        """Clone a file."""
+        """Clone a file or directory."""
         self.lib.jfs_clone(c_int64(_tid()), c_int64(self.h), _bin(src), _bin(dst), c_bool(preserve))
 
     def set_quota(self, path, capacity=0, inodes=0, create=False, strict=False):
@@ -411,14 +419,25 @@ class Client(object):
         self.lib.free(buf)
         return res
 
-    def warmup(self, paths, numthreads=10, background=False, isEvict=False, isCheck=False):
+    def warmup(self, paths, threads=10, evict=False, check=False, background=False, **kwargs):
+        # numthreads=10, background=False, isEvict=False, isCheck=False,
+        for k in kwargs:
+            if k == 'numthreads':
+                threads = kwargs[k]
+            elif k == 'isEvict':
+                evict = kwargs[k]
+            elif k == 'isCheck':
+                check = kwargs[k]
+            else:
+                raise TypeError(f"warmup() got an unexpected keyword argument '{k}'")
+
         """Warm up a file or a directory."""
         if type(paths) is not list:
             paths = [paths]
 
         buf = c_void_p()
 
-        n = self.lib.jfs_warmup(c_int64(_tid()), c_int64(self.h), json.dumps(paths).encode(), c_int32(numthreads), c_bool(background), c_bool(isEvict), c_bool(isCheck), byref(buf))
+        n = self.lib.jfs_warmup(c_int64(_tid()), c_int64(self.h), json.dumps(paths).encode(), c_int32(threads), c_bool(background), c_bool(evict), c_bool(check), byref(buf))
         res = json.loads(str(string_at(buf, n), encoding='utf-8'))
         self.lib.free(buf)
         return res

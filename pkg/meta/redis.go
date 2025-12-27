@@ -50,6 +50,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9/maintnotifications"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -92,10 +93,11 @@ type redisMeta struct {
 	prefix     string
 	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
 	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
+	cache      *redisCache
 }
 
-var _ Meta = &redisMeta{}
-var _ engine = &redisMeta{}
+var _ Meta = (*redisMeta)(nil)
+var _ engine = (*redisMeta)(nil)
 
 func init() {
 	Register("redis", newRedisMeta)
@@ -122,6 +124,14 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	keyFile := query.pop("tls-key-file")
 	caCertFile := query.pop("tls-ca-cert-file")
 	tlsServerName := query.pop("tls-server-name")
+
+	// Client-side caching options
+	clientCacheStr := query.pop("client-cache")
+	clientCache := clientCacheStr != "false" && clientCacheStr != ""
+	clientCacheSize := query.getInt("client-cache-size", "client_cache_size", 12800)
+	// Default TTL to prevent reading stale cache for a long time when the connection fails.
+	clientCacheExpiry := query.duration("client-cache-expire", "client_cache_expire", time.Minute)
+	clientCachePreload := query.getInt("client-cache-preload", "client_cache_preload", 0) // may cause conflict
 	u.RawQuery = values.Encode()
 
 	hosts := u.Host
@@ -155,6 +165,16 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	if opt.Password == "" {
 		opt.Password = os.Getenv("META_PASSWORD")
 	}
+	if opt.Password == "" {
+		if passwordFile := os.Getenv("META_PASSWORD_FILE"); passwordFile != "" {
+			password, err := readPasswordFromFile(passwordFile)
+			if err != nil {
+				logger.Errorf("%v", err)
+			} else {
+				opt.Password = password
+			}
+		}
+	}
 	opt.MaxRetries = conf.Retries
 	if opt.MaxRetries == 0 {
 		opt.MaxRetries = -1 // Redis use -1 to disable retries
@@ -163,8 +183,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	opt.MaxRetryBackoff = maxRetryBackoff
 	opt.ReadTimeout = readTimeout
 	opt.WriteTimeout = writeTimeout
-	var rdb redis.UniversalClient
+	opt.MaintNotificationsConfig = &maintnotifications.Config{Mode: maintnotifications.ModeDisabled}
 	var prefix string
+	var rdb redis.UniversalClient
+
 	if strings.Contains(hosts, ",") && strings.Index(hosts, ",") < strings.Index(hosts, ":") {
 		var fopt redis.FailoverOptions
 		ps := strings.Split(hosts, ",")
@@ -259,13 +281,35 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		rdb:      rdb,
 		prefix:   prefix,
 	}
+	if clientCache {
+		m.cache = newRedisCache(prefix, clientCacheSize, clientCacheExpiry, clientCachePreload)
+		if err = m.cache.init(m.rdb); err != nil {
+			logger.Warnf("Failed to setup client-side caching: %v", err)
+			m.cache = nil
+		}
+	}
 	m.en = m
 	m.checkServerConfig()
 	return m, nil
 }
 
 func (m *redisMeta) Shutdown() error {
+	if m.cache != nil {
+		m.cache.close()
+		m.cache = nil
+	}
 	return m.rdb.Close()
+}
+
+// Override NewSession to initialize client-side cache after session is created
+func (m *redisMeta) NewSession(record bool) error {
+	// First, create the session normally
+	err := m.baseMeta.NewSession(record)
+	if err != nil {
+		return err
+	}
+	go m.preloadCache()
+	return nil
 }
 
 func (m *redisMeta) doDeleteSlice(id uint64, size uint32) error {
@@ -293,6 +337,14 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 			err := m.rdb.Del(ctx, m.dirUsedInodesKey(), m.dirUsedSpaceKey()).Err()
 			if err != nil {
 				return errors.Wrap(err, "remove dir stats")
+			}
+		}
+		if !old.UserGroupQuota && format.UserGroupQuota {
+			// remove user group quota as they are outdated
+			err := m.rdb.Del(ctx, m.userQuotaKey(), m.userQuotaUsedSpaceKey(), m.userQuotaUsedInodesKey(),
+				m.groupQuotaKey(), m.groupQuotaUsedSpaceKey(), m.groupQuotaUsedInodesKey()).Err()
+			if err != nil {
+				return errors.Wrap(err, "remove user group quota")
 			}
 		}
 		if err = format.update(&old, force); err != nil {
@@ -647,6 +699,30 @@ func (m *redisMeta) dirQuotaKey() string {
 	return m.prefix + "dirQuota"
 }
 
+func (m *redisMeta) userQuotaUsedSpaceKey() string {
+	return m.prefix + "userQuotaUsedSpace"
+}
+
+func (m *redisMeta) userQuotaUsedInodesKey() string {
+	return m.prefix + "userQuotaUsedInodes"
+}
+
+func (m *redisMeta) userQuotaKey() string {
+	return m.prefix + "userQuota"
+}
+
+func (m *redisMeta) groupQuotaUsedSpaceKey() string {
+	return m.prefix + "groupQuotaUsedSpace"
+}
+
+func (m *redisMeta) groupQuotaUsedInodesKey() string {
+	return m.prefix + "groupQuotaUsedInodes"
+}
+
+func (m *redisMeta) groupQuotaKey() string {
+	return m.prefix + "groupQuota"
+}
+
 func (m *redisMeta) totalInodesKey() string {
 	return m.prefix + totalInodes
 }
@@ -691,7 +767,7 @@ func (m *redisMeta) parseQuota(buf []byte) (space, inodes int64) {
 		return 0, 0
 	}
 	if len(buf) != 16 {
-		logger.Errorf("Invalid quota value: %v", buf)
+		logger.Errorf("invalid quota value: %v", buf)
 		return 0, 0
 	}
 	rb := utils.ReadBuffer(buf)
@@ -877,6 +953,20 @@ func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 	var encodedAttr []byte
 	var err error
 	entryKey := m.entryKey(parent)
+	if m.cache != nil {
+		if entry, ok := m.cache.entryCache.Get(m.cache.entryName(parent, name)); ok {
+			if !entry.isMark() {
+				*inode = entry.ino
+				if attr != nil {
+					*attr = entry.Attr
+				}
+				return 0
+			}
+			m.cache.entryCache.AddIf(m.cache.entryName(parent, name), &entryMark, func(oldEntry *cachedEntry, exists bool) bool {
+				return exists
+			})
+		}
+	}
 	if len(m.shaLookup) > 0 && attr != nil && !m.conf.CaseInsensi && m.prefix == "" {
 		var res interface{}
 		var returnedIno int64
@@ -904,6 +994,13 @@ func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 	if err == nil {
 		m.parseAttr(encodedAttr, attr)
 		m.of.Update(foundIno, attr)
+		if m.cache != nil {
+			ce := &cachedEntry{ino: foundIno}
+			m.parseAttr(encodedAttr, &ce.Attr)
+			_, _ = m.cache.entryCache.AddIf(m.cache.entryName(parent, name), ce, func(oldEntry *cachedEntry, exists bool) bool {
+				return exists && oldEntry.isMark()
+			})
+		}
 	} else if err == redis.Nil { // corrupt entry
 		logger.Warnf("no attribute for inode %d (%d, %s)", foundIno, parent, name)
 		*attr = Attr{Typ: foundType}
@@ -1093,7 +1190,7 @@ func (m *redisMeta) doTruncate(ctx Context, inode Ino, flags uint8, length uint6
 		}
 		delta.length = int64(length) - int64(t.Length)
 		delta.space = align4K(length) - align4K(t.Length)
-		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(ctx, tx, inode, t.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, t.Uid, t.Gid, m.getParents(ctx, tx, inode, t.Parent)...); err != 0 {
 			return err
 		}
 		var zeroChunks []uint32
@@ -1191,7 +1288,7 @@ func (m *redisMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, 
 		old := t.Length
 		delta.length = int64(length) - int64(old)
 		delta.space = align4K(length) - align4K(old)
-		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(ctx, tx, inode, t.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, t.Uid, t.Gid, m.getParents(ctx, tx, inode, t.Parent)...); err != 0 {
 			return err
 		}
 		t.Length = length
@@ -1229,7 +1326,7 @@ func (m *redisMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, 
 	}, m.inodeKey(inode)))
 }
 
-func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
+func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr, oldAttr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		var cur Attr
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
@@ -1237,6 +1334,9 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 			return err
 		}
 		m.parseAttr(a, &cur)
+		if oldAttr != nil {
+			*oldAttr = cur
+		}
 		if cur.Parent > TrashInode {
 			return syscall.EPERM
 		}
@@ -1336,6 +1436,9 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		}
 		if (pattr.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
+		}
+		if (pattr.Flags & FlagSkipTrash) != 0 {
+			attr.Flags |= FlagSkipTrash
 		}
 
 		buf, err := tx.HGet(ctx, m.entryKey(parent), name).Bytes()
@@ -1523,7 +1626,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		}
 		var updateParent bool
 		now := time.Now()
-		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime {
+		if !parent.IsTrash() && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -1537,6 +1640,10 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 			}
 			if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
+			}
+			if (attr.Flags&FlagSkipTrash) != 0 && trash > 0 {
+				trash = 0
+				defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 			}
 			if trash > 0 && attr.Nlink > 1 && tx.HExists(ctx, m.entryKey(trash), m.trashEntry(parent, inode, name)).Val() {
 				trash = 0
@@ -1607,14 +1714,18 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 	}, m.inodeKey(parent), m.entryKey(parent))
 	if err == nil && trash == 0 {
 		if _type == TypeFile && attr.Nlink == 0 {
-			m.fileDeleted(opened, isTrash(parent), inode, attr.Length)
+			m.fileDeleted(opened, parent.IsTrash(), inode, attr.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
 	return errno(err)
 }
 
-func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skipCheckTrash ...bool) syscall.Errno {
+func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
+	return syscall.ENOTSUP
+}
+
+func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldAttr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
 		if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1678,8 +1789,14 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, s
 		}
 		if rs[1] != nil {
 			m.parseAttr([]byte(rs[1].(string)), &attr)
+			if oldAttr != nil {
+				*oldAttr = attr
+			}
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
+			}
+			if (attr.Flags & FlagSkipTrash) != 0 {
+				trash = 0
 			}
 			if trash > 0 {
 				attr.Ctime = now.Unix()
@@ -1693,7 +1810,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, s
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, m.entryKey(parent), name)
-			if !isTrash(parent) {
+			if !parent.IsTrash() {
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
 			if trash > 0 {
@@ -1731,9 +1848,14 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 	var tattr Attr
 	var newSpace, newInode int64
 	keys := []string{m.inodeKey(parentSrc), m.entryKey(parentSrc), m.inodeKey(parentDst), m.entryKey(parentDst)}
-	if isTrash(parentSrc) {
+	if parentSrc.IsTrash() {
 		// lock the parentDst
 		keys[0], keys[2] = keys[2], keys[0]
+	}
+	if !exchange {
+		if st := m.checkTrash(parentDst, &trash); st != 0 {
+			return st
+		}
 	}
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		opened = false
@@ -1856,6 +1978,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			}
 			if (tattr.Flags&FlagAppend) != 0 || (tattr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
+			}
+			if (tattr.Flags & FlagSkipTrash) != 0 {
+				trash = 0
 			}
 			tattr.Ctime = now.Unix()
 			tattr.Ctimensec = uint32(now.Nanosecond())
@@ -2003,7 +2128,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				}
 			}
 			if parentDst != parentSrc {
-				if !isTrash(parentSrc) && supdate {
+				if !parentSrc.IsTrash() && supdate {
 					pipe.Set(ctx, m.inodeKey(parentSrc), m.marshal(&sattr), 0)
 				}
 				if iattr.Parent == 0 {
@@ -2352,6 +2477,41 @@ func (m *redisMeta) doRead(ctx Context, inode Ino, indx uint32) ([]*slice, sysca
 	return readSlices(vals), 0
 }
 
+func (m *redisMeta) doList(ctx Context, inode Ino) ([]*slice, syscall.Errno) {
+	var attr Attr
+	err := m.doGetAttr(ctx, inode, &attr)
+	if err != 0 {
+		return nil, err
+	}
+	p := m.rdb.Pipeline()
+	var slices []*slice
+	var indx uint32
+	for uint64(indx)*ChunkSize < attr.Length {
+		for i := 0; uint64(indx)*ChunkSize < attr.Length && i < 1000; i++ {
+			_ = p.LRange(ctx, m.chunkKey(inode, indx), 0, -1)
+			indx++
+		}
+		cmds, err := p.Exec(ctx)
+		if err != nil {
+			logger.Warnf("list of inode %d: %s", inode, err)
+			return nil, errno(err)
+		}
+		for _, cmd := range cmds {
+			val := cmd.(*redis.StringSliceCmd).Val()
+			if len(val) == 0 {
+				continue
+			}
+			ss := readSlices(val)
+			if ss == nil {
+				continue
+			}
+			slices = append(slices, ss...)
+		}
+	}
+
+	return slices, 0
+}
+
 func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		*delta = dirStat{}
@@ -2370,7 +2530,7 @@ func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, sli
 			delta.space = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, delta.space, 0, m.getParents(ctx, tx, inode, attr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, delta.space, 0, attr.Uid, attr.Gid, m.getParents(ctx, tx, inode, attr.Parent)...); err != 0 {
 			return err
 		}
 		now := time.Now()
@@ -2446,7 +2606,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, fout, attr.Parent)...); err != 0 {
+		if err := m.checkQuota(ctx, newSpace, 0, attr.Uid, attr.Gid, m.getParents(ctx, tx, fout, attr.Parent)...); err != 0 {
 			return err
 		}
 		now := time.Now()
@@ -2727,10 +2887,8 @@ func (m *redisMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, err
 	return files, nil
 }
 
-func (m *redisMeta) doCleanupSlices() {
-	start := time.Now()
-	stop := fmt.Errorf("exceeded time limit")
-	_ = m.hscan(Background(), m.sliceRefs(), func(keys []string) error {
+func (m *redisMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
+	_ = m.hscan(ctx, m.sliceRefs(), func(keys []string) error {
 		for i := 0; i < len(keys); i += 2 {
 			key, val := keys[i], keys[i+1]
 			if strings.HasPrefix(val, "-") { // < 0
@@ -2740,13 +2898,16 @@ func (m *redisMeta) doCleanupSlices() {
 					size, _ := strconv.ParseUint(ps[1], 10, 32)
 					if id > 0 && size > 0 {
 						m.deleteSlice(id, uint32(size))
+						if stats != nil {
+							stats.deleted++
+						}
 					}
 				}
 			} else if val == "0" {
 				m.cleanupZeroRef(key)
 			}
-			if time.Since(start) > 50*time.Minute {
-				return stop
+			if ctx.Canceled() {
+				return ctx.Err()
 			}
 		}
 		return nil
@@ -2928,13 +3089,14 @@ func (m *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 }
 
 func (r *redisMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
-	start := time.Now()
-	stop := fmt.Errorf("reach limit")
 	var count int
 	var ss []Slice
 	var rs []*redis.IntCmd
 	err := r.hscan(ctx, r.delSlices(), func(keys []string) error {
 		for i := 0; i < len(keys); i += 2 {
+			if ctx.Canceled() {
+				return ctx.Err()
+			}
 			key := keys[i]
 			ps := strings.Split(key, "_")
 			if len(ps) != 2 {
@@ -2978,14 +3140,14 @@ func (r *redisMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error)
 					r.deleteSlice(s.Id, s.Size)
 					count++
 				}
-				if time.Since(start) > 50*time.Minute {
-					return stop
+				if ctx.Canceled() {
+					return ctx.Err()
 				}
 			}
 		}
 		return nil
 	})
-	if err == stop {
+	if errors.Is(err, context.DeadlineExceeded) {
 		err = nil
 	}
 	return count, err
@@ -3195,12 +3357,14 @@ func (m *redisMeta) hscan(ctx context.Context, key string, f func([]string) erro
 }
 
 func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
+	logger.Debugf("start cleanup...")
 	m.cleanupLeakedInodes(delete)
 	m.cleanupLeakedChunks(delete)
 	m.cleanupOldSliceRefs(delete)
 	if delete {
-		m.doCleanupSlices()
+		m.doCleanupSlices(ctx, nil)
 	}
+	logger.Debugf("start listing slices...")
 
 	p := m.rdb.Pipeline()
 	err := m.scan(ctx, "c*_*", func(keys []string) error {
@@ -3537,12 +3701,48 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 	}
 }
 
-func (m *redisMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
-	field := inode.String()
+type quotaKeys struct {
+	quotaKey      string
+	usedSpaceKey  string
+	usedInodesKey string
+}
+
+func (m *redisMeta) getQuotaKeys(qtype uint32) (*quotaKeys, error) {
+	switch qtype {
+	case DirQuotaType:
+		return &quotaKeys{
+			quotaKey:      m.dirQuotaKey(),
+			usedSpaceKey:  m.dirQuotaUsedSpaceKey(),
+			usedInodesKey: m.dirQuotaUsedInodesKey(),
+		}, nil
+	case UserQuotaType:
+		return &quotaKeys{
+			quotaKey:      m.userQuotaKey(),
+			usedSpaceKey:  m.userQuotaUsedSpaceKey(),
+			usedInodesKey: m.userQuotaUsedInodesKey(),
+		}, nil
+	case GroupQuotaType:
+		return &quotaKeys{
+			quotaKey:      m.groupQuotaKey(),
+			usedSpaceKey:  m.groupQuotaUsedSpaceKey(),
+			usedInodesKey: m.groupQuotaUsedInodesKey(),
+		}, nil
+	default:
+		return nil, fmt.Errorf("unknown quota type: %d", qtype)
+	}
+}
+
+func (m *redisMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, error) {
+	config, err := m.getQuotaKeys(qtype)
+	if err != nil {
+		return nil, err
+	}
+
+	field := strconv.FormatUint(key, 10)
 	cmds, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.HGet(ctx, m.dirQuotaKey(), field)
-		pipe.HGet(ctx, m.dirQuotaUsedSpaceKey(), field)
-		pipe.HGet(ctx, m.dirQuotaUsedInodesKey(), field)
+		pipe.HGet(ctx, config.quotaKey, field)
+		pipe.HGet(ctx, config.usedSpaceKey, field)
+		pipe.HGet(ctx, config.usedInodesKey, field)
 		return nil
 	})
 	if err == redis.Nil {
@@ -3555,6 +3755,7 @@ func (m *redisMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	if len(buf) != 16 {
 		return nil, fmt.Errorf("invalid quota value: %v", buf)
 	}
+
 	var quota Quota
 	quota.MaxSpace, quota.MaxInodes = m.parseQuota(buf)
 	if quota.UsedSpace, err = cmds[1].(*redis.StringCmd).Int64(); err != nil {
@@ -3566,95 +3767,143 @@ func (m *redisMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	return &quota, nil
 }
 
-func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) {
+func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota) (bool, error) {
+	config, err := m.getQuotaKeys(qtype)
+	if err != nil {
+		return false, err
+	}
+
 	var created bool
-	err := m.txn(ctx, func(tx *redis.Tx) error {
-		origin := new(Quota)
-		field := inode.String()
-		buf, e := tx.HGet(ctx, m.dirQuotaKey(), field).Bytes()
+	err = m.txn(ctx, func(tx *redis.Tx) error {
+		origin := &Quota{MaxSpace: -1, MaxInodes: -1}
+		field := strconv.FormatUint(key, 10)
+
+		buf, e := tx.HGet(ctx, config.quotaKey, field).Bytes()
 		if e == nil {
 			created = false
 			origin.MaxSpace, origin.MaxInodes = m.parseQuota(buf)
 		} else if e == redis.Nil {
 			created = true
-			if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
-				return errors.New("limitation not set or deleted")
-			}
 		} else {
 			return e
 		}
+
 		if quota.MaxSpace >= 0 {
 			origin.MaxSpace = quota.MaxSpace
 		}
 		if quota.MaxInodes >= 0 {
 			origin.MaxInodes = quota.MaxInodes
 		}
+
 		_, e = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.HSet(ctx, m.dirQuotaKey(), field, m.packQuota(origin.MaxSpace, origin.MaxInodes))
+			pipe.HSet(ctx, config.quotaKey, field, m.packQuota(origin.MaxSpace, origin.MaxInodes))
 			if quota.UsedSpace >= 0 {
-				pipe.HSet(ctx, m.dirQuotaUsedSpaceKey(), field, quota.UsedSpace)
+				pipe.HSet(ctx, config.usedSpaceKey, field, quota.UsedSpace)
+			} else if created {
+				pipe.HSet(ctx, config.usedSpaceKey, field, 0)
 			}
 			if quota.UsedInodes >= 0 {
-				pipe.HSet(ctx, m.dirQuotaUsedInodesKey(), field, quota.UsedInodes)
+				pipe.HSet(ctx, config.usedInodesKey, field, quota.UsedInodes)
+			} else if created {
+				pipe.HSet(ctx, config.usedInodesKey, field, 0)
 			}
 			return nil
 		})
 		return e
-	}, m.inodeKey(inode))
+	}, m.inodeKey(Ino(key)))
 	return created, err
 }
 
-func (m *redisMeta) doDelQuota(ctx Context, inode Ino) error {
-	field := inode.String()
-	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.HDel(ctx, m.dirQuotaKey(), field)
-		pipe.HDel(ctx, m.dirQuotaUsedSpaceKey(), field)
-		pipe.HDel(ctx, m.dirQuotaUsedInodesKey(), field)
+func (m *redisMeta) doDelQuota(ctx Context, qtype uint32, key uint64) error {
+	config, err := m.getQuotaKeys(qtype)
+	if err != nil {
+		return err
+	}
+
+	field := strconv.FormatUint(key, 10)
+	_, err = m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		if qtype == UserQuotaType || qtype == GroupQuotaType {
+			quotaData := m.packQuota(-1, -1) // -1 means unlimited
+			pipe.HSet(ctx, config.quotaKey, field, quotaData)
+		} else {
+			pipe.HDel(ctx, config.quotaKey, field)
+			pipe.HDel(ctx, config.usedSpaceKey, field)
+			pipe.HDel(ctx, config.usedInodesKey, field)
+		}
 		return nil
 	})
 	return err
 }
 
-func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
-	quotas := make(map[Ino]*Quota)
-	return quotas, m.hscan(ctx, m.dirQuotaKey(), func(keys []string) error {
-		for i := 0; i < len(keys); i += 2 {
-			key, val := keys[i], []byte(keys[i+1])
-			inode, err := strconv.ParseUint(key, 10, 64)
-			if err != nil {
-				logger.Errorf("invalid inode: %s", key)
-				continue
-			}
-			if len(val) != 16 {
-				logger.Errorf("invalid quota: %s=%s", key, val)
-				continue
-			}
-			maxSpace, maxInodes := m.parseQuota(val)
-			usedSpace, err := m.rdb.HGet(ctx, m.dirQuotaUsedSpaceKey(), key).Int64()
-			if err != nil && err != redis.Nil {
-				return err
-			}
-			usedInodes, err := m.rdb.HGet(ctx, m.dirQuotaUsedInodesKey(), key).Int64()
-			if err != nil && err != redis.Nil {
-				return err
-			}
-			quotas[Ino(inode)] = &Quota{
-				MaxSpace:   int64(maxSpace),
-				MaxInodes:  int64(maxInodes),
-				UsedSpace:  usedSpace,
-				UsedInodes: usedInodes,
-			}
+func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error) {
+	quotaTypes := []struct {
+		qtype uint32
+		name  string
+	}{
+		{DirQuotaType, "dir"},
+		{UserQuotaType, "user"},
+		{GroupQuotaType, "group"},
+	}
+
+	quotaMaps := make([]map[uint64]*Quota, 3)
+	for i, qt := range quotaTypes {
+		config, err := m.getQuotaKeys(qt.qtype)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to load %s quotas: %w", qt.name, err)
 		}
-		return nil
-	})
+
+		quotas := make(map[uint64]*Quota)
+		if err := m.hscan(ctx, config.quotaKey, func(keys []string) error {
+			for i := 0; i < len(keys); i += 2 {
+				key, val := keys[i], []byte(keys[i+1])
+				id, err := strconv.ParseUint(key, 10, 64)
+				if err != nil {
+					logger.Errorf("invalid inode: %s", key)
+					continue
+				}
+				if len(val) != 16 {
+					logger.Errorf("invalid quota: %s=%s", key, val)
+					continue
+				}
+
+				maxSpace, maxInodes := m.parseQuota(val)
+				usedSpace, err := m.rdb.HGet(ctx, config.usedSpaceKey, key).Int64()
+				if err != nil && err != redis.Nil {
+					return err
+				}
+				usedInodes, err := m.rdb.HGet(ctx, config.usedInodesKey, key).Int64()
+				if err != nil && err != redis.Nil {
+					return err
+				}
+
+				quotas[id] = &Quota{
+					MaxSpace:   int64(maxSpace),
+					MaxInodes:  int64(maxInodes),
+					UsedSpace:  usedSpace,
+					UsedInodes: usedInodes,
+				}
+			}
+			return nil
+		}); err != nil {
+			return nil, nil, nil, err
+		}
+		quotaMaps[i] = quotas
+	}
+
+	return quotaMaps[0], quotaMaps[1], quotaMaps[2], nil
 }
 
 func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		for _, q := range quotas {
-			field := q.inode.String()
-			pipe.HIncrBy(ctx, m.dirQuotaUsedSpaceKey(), field, q.quota.newSpace)
-			pipe.HIncrBy(ctx, m.dirQuotaUsedInodesKey(), field, q.quota.newInodes)
+			config, err := m.getQuotaKeys(q.qtype)
+			if err != nil {
+				return err
+			}
+
+			field := strconv.FormatUint(q.qkey, 10)
+			pipe.HIncrBy(ctx, config.usedSpaceKey, field, q.quota.newSpace)
+			pipe.HIncrBy(ctx, config.usedInodesKey, field, q.quota.newInodes)
 		}
 		return nil
 	})

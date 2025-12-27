@@ -11,6 +11,19 @@ description: 本文将指导你使用基于云的对象存储和数据库，构�
 
 本文以上一篇文档为基础，进一步将数据库从单用户的「SQLite」替换成多用户的「云数据库」，从而实现可以在网络上任何一台计算机上进行挂载读写的分布式文件系统。
 
+## 快速上手视频
+
+<div className="video-container">
+  <iframe
+    src="//player.bilibili.com/player.html?isOutside=true&aid=114215360666958&bvid=BV1kVoCYGEfo&cid=29039723061&p=1&autoplay=false"
+    width="100%"
+    height="360"
+    scrolling="no"
+    frameBorder="0"
+    allowFullScreen
+  ></iframe>
+</div>
+
 ## 基于网络的数据库
 
 这里所谓的「基于网络的数据库」是指允许多个用户通过网络同时访问的数据库，从这个角度出发，可以简单的把数据库分成：

@@ -25,6 +25,7 @@ import (
 	"os"
 	"path"
 	"runtime/trace"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -927,10 +928,24 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 				return
 			}
 			target := string(buf)
-			if strings.HasPrefix(target, "/") || strings.Contains(target, "://") {
+			if strings.Contains(target, "://") {
 				return &FileStat{name: target}, syscall.ENOTSUP
 			}
-			target = path.Join(strings.Join(ss[:i], "/"), target)
+			if strings.HasPrefix(target, "/") {
+				mp := fs.conf.Mountpoint
+				if !strings.HasSuffix(mp, "/") {
+					mp += "/"
+				}
+				if strings.HasPrefix(target, mp) {
+					target = target[len(mp):]
+				} else {
+					fi.name = "file:" + target
+					logger.Errorf("external link: %s -> %s", p, target)
+					return fi, utils.ErrExtlink
+				}
+			} else {
+				target = path.Join(strings.Join(ss[:i], "/"), target)
+			}
 			fi, err = fs.doResolve(ctx, target, followLastSymlink, visited)
 			if err != 0 {
 				return
@@ -1078,7 +1093,7 @@ func (fs *FileSystem) HandleQuota(ctx meta.Context, path string, cmd uint8, capa
 		qs[path] = q
 	}
 
-	if _err := fs.m.HandleQuota(meta.Background(), cmd, path, qs, strict, repair, create); _err != nil {
+	if _err := fs.m.HandleQuota(meta.Background(), cmd, path, 0, 0, qs, strict, repair, create); _err != nil {
 		if strings.HasPrefix(_err.Error(), "no quota for inode") {
 			return qs, 0
 		}
@@ -1384,6 +1399,11 @@ func (f *File) Readdir(ctx meta.Context, count int) (fi []os.FileInfo, err sysca
 		if err != 0 {
 			return
 		}
+		if f.fs.conf.Meta.SortDir {
+			sort.Slice(inodes[2:], func(i, j int) bool {
+				return string(inodes[i].Name) < string(inodes[j].Name)
+			})
+		}
 		// skip . and ..
 		for _, n := range inodes[2:] {
 			i := AttrToFileInfo(n.Inode, n.Attr)
@@ -1421,6 +1441,11 @@ func (f *File) ReaddirPlus(ctx meta.Context, offset int) (entries []*meta.Entry,
 			if !bytes.Equal(e.Name, []byte{'.'}) && !bytes.Equal(e.Name, []byte("..")) {
 				f.entries = append(f.entries, e)
 			}
+		}
+		if f.fs.conf.Meta.SortDir {
+			sort.Slice(f.entries, func(i, j int) bool {
+				return string(f.entries[i].Name) < string(f.entries[j].Name)
+			})
 		}
 	}
 	if offset >= len(f.entries) {
@@ -1475,7 +1500,7 @@ func (f *File) GetQuota(ctx meta.Context) (quota *meta.Quota, err error) {
 		return quota, err
 	}
 	// get directory quota
-	err = f.fs.m.HandleQuota(ctx, meta.QuotaGet, f.path, qs, false, false, false)
+	err = f.fs.m.HandleQuota(ctx, meta.QuotaGet, f.path, 0, 0, qs, false, false, false)
 	if err != nil {
 		return nil, err
 	}

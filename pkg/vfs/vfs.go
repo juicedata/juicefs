@@ -77,6 +77,7 @@ type FuseOptions struct {
 	DirectMountFlags         uintptr
 	EnableAcl                bool
 	DisableReadDirPlus       bool `json:",omitempty"`
+	EnableReadDirPlusAuto    bool
 	EnableWriteback          bool
 	EnableIoctl              bool `json:",omitempty"`
 	DontUmask                bool
@@ -149,6 +150,9 @@ type Config struct {
 	CommPath  string       `json:",omitempty"`
 	StatePath string       `json:",omitempty"`
 	FuseOpts  *FuseOptions `json:",omitempty"`
+
+	// the mount point for current volume (to follow symlink)
+	Mountpoint string
 }
 
 type AnonymousAccount struct {
@@ -263,6 +267,10 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 }
 
 func (v *VFS) Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
+	return v.doUnlink(ctx, parent, name, false)
+}
+
+func (v *VFS) doUnlink(ctx Context, parent Ino, name string, skipTrash bool) (err syscall.Errno) {
 	defer func() { logit(ctx, "unlink", err, "(%d,%s)", parent, name) }()
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EPERM
@@ -272,7 +280,7 @@ func (v *VFS) Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
 		err = syscall.ENAMETOOLONG
 		return
 	}
-	err = v.Meta.Unlink(ctx, parent, name)
+	err = v.Meta.Unlink(ctx, parent, name, skipTrash)
 	if err == 0 {
 		v.invalidateDirHandle(parent, name, 0, nil)
 	}
@@ -532,7 +540,7 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 			if flags&syscall.O_EXCL != 0 {
 				logger.Warnf("The O_EXCL is currently not supported for use with O_TMPFILE")
 			}
-			err = v.Unlink(ctx, parent, name)
+			err = v.doUnlink(ctx, parent, name, true)
 		}
 	}
 	return
@@ -840,6 +848,10 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 	}
 	defer h.Wunlock()
 
+	// kernel might return a stale length from attr-cache before open as the offset.
+	if h.flags&uint32(os.O_APPEND) != 0 {
+		off = h.writer.GetLength()
+	}
 	err = h.writer.Write(ctx, off, buf)
 	if err == syscall.ENOENT || err == syscall.EPERM || err == syscall.EINVAL {
 		err = syscall.EBADF
