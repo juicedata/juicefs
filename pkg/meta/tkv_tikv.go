@@ -75,6 +75,10 @@ func newTikvClient(addr string) (tkvClient, error) {
 			query.Get("cert"),
 			query.Get("key"),
 			strings.Split(query.Get("verify-cn"), ","))
+		// We don't use the table model, let alone online DDL, so increasing the default
+		// SafeWindow can reduce the likelihood of asynchronously committed transactions
+		// falling back, thereby avoiding high tail latency.
+		conf.TiKVClient.AsyncCommit.SafeWindow = 10 * time.Second
 	})
 	interval := time.Hour * 3
 	if dur, err := time.ParseDuration(query.Get("gc-interval")); err == nil {
