@@ -1743,9 +1743,13 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		buf       []byte
 	}
 
-	var entryInfos []entryInfo
-	var delNodeStatus map[*entryInfo]bool
+	var entryInfos []*entryInfo
 	var totalLength, totalSpace, totalInodes int64
+	type dNode struct {
+		opened bool
+		length uint64
+	}
+	delNodes := make(map[Ino]*dNode)
 	if userGroupQuotas != nil {
 		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
 	}
@@ -1771,7 +1775,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 			return syscall.EPERM
 		}
 
-		entryInfos = make([]entryInfo, 0, len(entries))
+		entryInfos = make([]*entryInfo, 0, len(entries))
 		now := time.Now()
 
 		for _, entry := range entries {
@@ -1799,7 +1803,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 				return err
 			}
 			info.buf = buf
-			entryInfos = append(entryInfos, info)
+			entryInfos = append(entryInfos, &info)
 		}
 
 		inodesSet := make(map[Ino]struct{}, len(entryInfos))
@@ -1837,12 +1841,11 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 			}
 
 			// iterate all target entries, apply basic checks and build info
-			for i := range entryInfos {
-				info := &entryInfos[i]
+			for _, info := range entryInfos {
 				attr, ok := nodeMap[info.inode]
 				if !ok {
-					entryInfos[i].trash = 0
-					entryInfos[i].attr = nil
+					info.trash = 0
+					info.attr = nil
 					continue
 				}
 				if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
@@ -1859,8 +1862,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		}
 
 		// check trash entries for hard links
-		for i := range entryInfos {
-			info := &entryInfos[i]
+		for _, info := range entryInfos {
 			if info.attr == nil {
 				continue
 			}
@@ -1886,14 +1888,10 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		}
 
 		// check opened status for all inodes with Nlink == 0 after all decrements
-		delNodeStatus = make(map[*entryInfo]bool)
 		if m.sid > 0 {
-			for i := range entryInfos {
-				info := &entryInfos[i]
+			for _, info := range entryInfos {
 				if info.attr != nil && info.trash == 0 && info.attr.Nlink == 0 && info.typ == TypeFile {
-					if _, ok := delNodeStatus[info]; !ok {
-						delNodeStatus[info] = m.of.IsOpen(info.inode)
-					}
+					delNodes[info.inode] = &dNode{m.of.IsOpen(info.inode), info.attr.Length}
 				}
 			}
 		}
@@ -1921,8 +1919,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		trashOps := make(map[string]map[string]interface{}) // key -> field -> value
 		stats := make(map[string]int64) // key -> delta
 
-		for i := range entryInfos {
-			info := &entryInfos[i]
+		for _, info := range entryInfos {
 			if info.typ == TypeDirectory {
 				continue
 			}
@@ -1952,7 +1949,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 					case TypeFile:
 						entrySpace = align4K(info.attr.Length)
 						needStats = true
-						if isOpen, ok := delNodeStatus[info]; ok && isOpen {
+						if delNodes[info.inode].opened {
 							if inodes == nil {
 								inodes = make(map[Ino]*Attr)
 							}
@@ -2075,8 +2072,8 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 	}
 
 	// outside of transaction: update global stats and trigger data deletion callbacks
-	for info, isOpen := range delNodeStatus {
-		m.fileDeleted(isOpen, parent.IsTrash(), info.inode, info.attr.Length)
+	for inode, info := range delNodes {
+		m.fileDeleted(info.opened, parent.IsTrash(), inode, info.length)
 	}
 	m.updateStats(totalSpace, totalInodes)
 	*length = totalLength
