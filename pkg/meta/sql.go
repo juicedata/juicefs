@@ -2633,7 +2633,11 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		trashName string // cached trash entry name when hard links go to trash
 	}
 	var entryInfos []entryInfo
-	var delNodeStatus map[*entryInfo]bool
+	type dNode struct {
+		opened bool
+		length uint64
+	}
+	delNodes := make(map[Ino]*dNode)
 	var totalLength, totalSpace, totalInodes int64
 	if userGroupQuotas != nil {
 		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
@@ -2739,12 +2743,11 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		}
 
 		// check opened status for all inodes with Nlink == 0 after all decrements
-		delNodeStatus = make(map[*entryInfo]bool)
 		if m.sid > 0 {
 			for i := range entryInfos {
 				info := &entryInfos[i]
 				if info.n != nil && info.trash == 0 && info.n.Nlink == 0 && info.n.Type == TypeFile {
-					delNodeStatus[info] = m.of.IsOpen(info.n.Inode)
+					delNodes[info.n.Inode] = &dNode{m.of.IsOpen(info.n.Inode), info.n.Length}
 				}
 			}
 		}
@@ -2794,7 +2797,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 					case TypeFile:
 						entrySpace = align4K(info.n.Length)
 						needRecordStats = true
-						if isOpen, ok := delNodeStatus[info]; ok && isOpen {
+						if delNodes[info.n.Inode].opened {
 							sustainedIns = append(sustainedIns, &sustained{Sid: m.sid, Inode: info.e.Inode})
 							if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
 								return err
@@ -2910,13 +2913,8 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 	}
 
 	// outside of transaction: update global stats and trigger data deletion callbacks
-	visited2 := make(map[Ino]bool)
-	for info, isOpen := range delNodeStatus {
-		if visited2[info.n.Inode] {
-			continue
-		}
-		visited2[info.n.Inode] = true
-		m.fileDeleted(isOpen, parent.IsTrash(), info.n.Inode, info.n.Length)
+	for inode, info := range delNodes {
+		m.fileDeleted(info.opened, parent.IsTrash(), inode, info.length)
 	}
 	m.updateStats(totalSpace, totalInodes)
 	*length = totalLength
