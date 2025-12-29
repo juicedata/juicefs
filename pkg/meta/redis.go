@@ -1744,7 +1744,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 	}
 
 	var entryInfos []entryInfo
-	var openedInodes map[Ino]bool
+	var delNodeStatus map[*entryInfo]bool
 	var totalLength, totalSpace, totalInodes int64
 	if userGroupQuotas != nil {
 		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
@@ -1886,12 +1886,13 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		}
 
 		// check opened status for all inodes with Nlink == 0 after all decrements
-		openedInodes = make(map[Ino]bool)
+		delNodeStatus = make(map[*entryInfo]bool)
 		if m.sid > 0 {
-			for _, info := range entryInfos {
+			for i := range entryInfos {
+				info := &entryInfos[i]
 				if info.attr != nil && info.trash == 0 && info.attr.Nlink == 0 && info.typ == TypeFile {
-					if _, ok := openedInodes[info.inode]; !ok {
-						openedInodes[info.inode] = m.of.IsOpen(info.inode)
+					if _, ok := delNodeStatus[info]; !ok {
+						delNodeStatus[info] = m.of.IsOpen(info.inode)
 					}
 				}
 			}
@@ -1950,7 +1951,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 					case TypeFile:
 						entrySpace = align4K(info.attr.Length)
 						needStats = true
-						if openedInodes[info.inode] {
+						if isOpen, ok := delNodeStatus[info]; ok && isOpen {
 							if inodes == nil {
 								inodes = make(map[Ino]*Attr)
 							}
@@ -2073,16 +2074,8 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 	}
 
 	// outside of transaction: update global stats and trigger data deletion callbacks
-	visited := make(map[Ino]bool)
-	visited[0] = true // skip dummyNode
-	for _, info := range entryInfos {
-		if info.trash != 0 || info.attr == nil || visited[info.inode] {
-			continue
-		}
-		visited[info.inode] = true
-		if info.typ == TypeFile && info.attr.Nlink == 0 {
-			m.fileDeleted(openedInodes[info.inode], parent.IsTrash(), info.inode, info.attr.Length)
-		}
+	for info, isOpen := range delNodeStatus {
+		m.fileDeleted(isOpen, parent.IsTrash(), info.inode, info.attr.Length)
 	}
 	m.updateStats(totalSpace, totalInodes)
 	*length = totalLength
