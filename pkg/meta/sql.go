@@ -2629,11 +2629,11 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 	type entryInfo struct {
 		e         *edge
 		trash     Ino
-		n         *node  // n edges : 1 inode
+		n         *node // n edges : 1 inode
+		opened    bool  // node is opened
 		trashName string // cached trash entry name when hard links go to trash
 	}
 	var entryInfos []entryInfo
-	var delNodeStatus map[*entryInfo]bool
 	var totalLength, totalSpace, totalInodes int64
 	if userGroupQuotas != nil {
 		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
@@ -2733,20 +2733,10 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 			if info.trash > 0 && info.n.Parent > 0 {
 				info.n.Parent = info.trash
 			}
-			if info.trash == 0 && info.n.Nlink > 0 {
+			if info.trash == 0 {
 				info.n.Nlink--
-			}
-		}
-
-		// check opened status for all inodes with Nlink == 0 after all decrements
-		delNodeStatus = make(map[*entryInfo]bool)
-		if m.sid > 0 {
-			for i := range entryInfos {
-				info := &entryInfos[i]
-				if info.n != nil && info.trash == 0 && info.n.Nlink == 0 && info.n.Type == TypeFile {
-					if _, ok := delNodeStatus[info]; !ok {
-						delNodeStatus[info] = m.of.IsOpen(info.n.Inode)
-					}
+				if info.n.Type == TypeFile && info.n.Nlink == 0 && m.sid > 0 {
+					info.opened = m.of.IsOpen(info.e.Inode)
 				}
 			}
 		}
@@ -2772,8 +2762,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		edgesIns := make([]interface{}, 0)
 
 		// walk each edge to decide whether to move to trash, decrement nlink or delete inode & xattrs
-		for i := range entryInfos {
-			info := &entryInfos[i]
+		for _, info := range entryInfos {
 			if info.n.Type == TypeDirectory {
 				continue
 			}
@@ -2796,7 +2785,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 					case TypeFile:
 						entrySpace = align4K(info.n.Length)
 						needRecordStats = true
-						if isOpen, ok := delNodeStatus[info]; ok && isOpen {
+						if info.opened {
 							sustainedIns = append(sustainedIns, &sustained{Sid: m.sid, Inode: info.e.Inode})
 							if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
 								return err
@@ -2912,8 +2901,16 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 	}
 
 	// outside of transaction: update global stats and trigger data deletion callbacks
-	for info, isOpen := range delNodeStatus {
-		m.fileDeleted(isOpen, parent.IsTrash(), info.n.Inode, info.n.Length)
+	visited := make(map[Ino]bool)
+	visited[0] = true // skip dummyNode
+	for _, info := range entryInfos {
+		if info.trash != 0 || visited[info.n.Inode] {
+			continue
+		}
+		visited[info.n.Inode] = true
+		if info.n.Type == TypeFile && info.n.Nlink == 0 {
+			m.fileDeleted(info.opened, parent.IsTrash(), info.e.Inode, info.n.Length)
+		}
 	}
 	m.updateStats(totalSpace, totalInodes)
 	*length = totalLength
