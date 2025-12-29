@@ -1756,15 +1756,12 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 
 	watchKeys := []string{m.inodeKey(parent), m.entryKey(parent)}
 	err := m.txn(ctx, func(tx *redis.Tx) error {
-		rs, err := tx.MGet(ctx, m.inodeKey(parent)).Result()
+		rs, err := tx.Get(ctx, m.inodeKey(parent)).Result()
 		if err != nil {
 			return err
 		}
-		if len(rs) == 0 || rs[0] == nil {
-			return redis.Nil
-		}
 		var pattr Attr
-		m.parseAttr([]byte(rs[0].(string)), &pattr)
+		m.parseAttr([]byte(rs), &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -1778,32 +1775,40 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		entryInfos = make([]*entryInfo, 0, len(entries))
 		now := time.Now()
 
-		for _, entry := range entries {
-			if entry.Attr.Typ == TypeDirectory {
-				continue // skip directories
+		if len(entries) > 0 {
+			entryKey := m.entryKey(parent)
+			names := make([]string, len(entries))
+			for i, entry := range entries {
+				names[i] = string(entry.Name)
 			}
-			info := entryInfo{
-				name:  string(entry.Name),
-				inode: entry.Inode,
-				typ:   entry.Attr.Typ,
-				trash: trash,
-			}
-			// get entry buf from parent directory
-			buf, err := tx.HGet(ctx, m.entryKey(parent), info.name).Bytes()
-			if err == redis.Nil && m.conf.CaseInsensi {
-				if e := m.resolveCase(ctx, parent, info.name); e != nil {
-					info.name = string(e.Name)
-					info.inode = e.Inode
-					info.typ = e.Attr.Typ
-					buf = m.packEntry(e.Attr.Typ, e.Inode)
-					err = nil
-				}
-			}
+			vals, err := tx.HMGet(ctx, entryKey, names...).Result()
 			if err != nil {
 				return err
 			}
-			info.buf = buf
-			entryInfos = append(entryInfos, &info)
+
+			for i, entry := range entries {
+				info := entryInfo{
+					name:  string(entry.Name),
+					inode: entry.Inode,
+					typ:   entry.Attr.Typ,
+					trash: trash,
+				}
+				if vals[i] == nil {
+					if m.conf.CaseInsensi {
+						if resolved := m.resolveCase(ctx, parent, info.name); resolved != nil {
+							info.name = string(resolved.Name)
+							info.buf = m.packEntry(resolved.Attr.Typ, resolved.Inode)
+						} else {
+							return redis.Nil
+						}
+					} else {
+						return redis.Nil
+					}
+				} else {
+					info.buf = []byte(vals[i].(string))
+				}
+				entryInfos = append(entryInfos, &info)
+			}
 		}
 
 		inodesSet := make(map[Ino]struct{}, len(entryInfos))
@@ -1915,9 +1920,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		var sustained []interface{}
 		var delfiles []redis.Z
 		var inodes map[Ino]*Attr
-		parentOps := make(map[string]map[string]int64) // key -> field -> incr
+		parentOps := make(map[string]map[string]int64)      // key -> field -> incr
 		trashOps := make(map[string]map[string]interface{}) // key -> field -> value
-		stats := make(map[string]int64) // key -> delta
+		stats := make(map[string]int64)                     // key -> delta
 
 		for _, info := range entryInfos {
 			if info.typ == TypeDirectory {
@@ -2024,8 +2029,16 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 			visited[info.inode] = true
 		}
 
-		// execute batched operations using pipeline
+		// execute batched operations using pipeline with limit control
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			tryExec := func() {
+				if pipe.Len() > 1000 {
+					if _, err := pipe.Exec(ctx); err != nil {
+						panic(err)
+					}
+				}
+			}
+
 			if len(names) > 0 {
 				pipe.HDel(ctx, m.entryKey(parent), names...)
 			}
@@ -2046,6 +2059,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 					pipe.IncrBy(ctx, key, delta)
 				}
 			}
+			tryExec()
 			for key, fields := range parentOps {
 				for field, incr := range fields {
 					if incr != 0 {
@@ -2053,6 +2067,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 					}
 				}
 			}
+			tryExec()
 			for key, fields := range trashOps {
 				for field, value := range fields {
 					pipe.HSet(ctx, key, field, value)
@@ -2063,7 +2078,6 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 			}
 			return nil
 		})
-
 		return err
 	}, watchKeys...)
 
