@@ -2261,7 +2261,7 @@ func (m *baseMeta) walk(ctx Context, inode Ino, p string, attr *Attr, walkFn met
 	return 0
 }
 
-func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool, statAll bool, repairDirMode uint16, showProgress func(n int), slices map[Ino][]Slice) error {
+func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 	var attr Attr
 	var inode = RootInode
 	var parent = RootInode
@@ -2310,7 +2310,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 	go func() {
 		defer close(nodes)
 		var count int64
-		if recursive {
+		if opt.Recursive {
 			if st := m.walk(ctx, inode, fpath, &attr, func(ctx Context, inode Ino, path string, attr *Attr) {
 				nodes <- &node{inode, path, attr}
 				atomic.AddInt64(&count, 1)
@@ -2329,17 +2329,17 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 	if err != nil {
 		return errors.Wrap(err, "load meta format")
 	}
-	if statAll && !format.DirStats {
+	if opt.SyncDirStat && !format.DirStats {
 		logger.Warn("dir stats is disabled, flag '--sync-dir-stat' will be ignored")
 	}
 	var lock sync.Mutex
 	listSlices := func(inode Ino, path string) {
 		lock.Lock()
-		if _, ok := slices[inode]; ok {
+		if _, ok := opt.Slices[inode]; ok {
 			lock.Unlock()
 			return
 		}
-		slices[inode] = []Slice{}
+		opt.Slices[inode] = []Slice{}
 		lock.Unlock()
 		rawSlices, st := m.en.doList(ctx, inode)
 		if st != 0 {
@@ -2353,9 +2353,9 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 			}
 		}
 		lock.Lock()
-		slices[inode] = ss
-		if showProgress != nil {
-			showProgress(len(slices[inode]))
+		opt.Slices[inode] = ss
+		if opt.ShowProgress != nil {
+			opt.ShowProgress(len(opt.Slices[inode]))
 		}
 		lock.Unlock()
 	}
@@ -2397,10 +2397,10 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 				}
 
 				if attrBroken {
-					if repair {
+					if opt.Repair {
 						if !attr.Full {
 							now := time.Now().Unix()
-							attr.Mode = repairDirMode
+							attr.Mode = opt.RepairDirMode
 							attr.Uid = ctx.Uid()
 							attr.Gid = ctx.Gid()
 							attr.Atime = now
@@ -2435,7 +2435,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 						statBroken = true
 					}
 
-					if !repair && statAll {
+					if !opt.Repair && opt.SyncDirStat {
 						s, st := m.calcDirStat(ctx, inode)
 						if st != 0 {
 							hasError = true
@@ -2448,8 +2448,8 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 						}
 					}
 
-					if repair {
-						if statBroken || statAll {
+					if opt.Repair {
+						if statBroken || opt.SyncDirStat {
 							if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 || st == syscall.ENOENT {
 								logger.Debugf("Stat of path %s (inode %d) is successfully synced", path, inode)
 							} else {
@@ -2467,7 +2467,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 		}()
 	}
 	wg.Wait()
-	if fpath == "/" && repair && recursive && statAll {
+	if fpath == "/" && opt.Repair && opt.Recursive && opt.SyncDirStat {
 		if err := m.syncVolumeStat(ctx); err != nil {
 			logger.Errorf("Sync used space: %s", err)
 			hasError = true

@@ -100,7 +100,14 @@ func fsck(ctx *cli.Context) error {
 		if !strings.HasPrefix(path, "/") {
 			logger.Fatalf("File path should be the absolute path within JuiceFS")
 		}
-		err := m.Check(c, path, ctx.Bool("repair"), ctx.Bool("recursive"), ctx.Bool("sync-dir-stat"), uint16(repairDirMode), sliceCSpin.IncrBy, slices)
+		err := m.Check(c, path, &meta.CheckOpt{
+			Repair:        ctx.Bool("repair"),
+			Recursive:     ctx.Bool("recursive"),
+			SyncDirStat:   ctx.Bool("sync-dir-stat"),
+			RepairDirMode: uint16(repairDirMode),
+			ShowProgress:  sliceCSpin.IncrBy,
+			Slices:        slices,
+		})
 		if err != nil {
 			logger.Fatalf("check: %s", err)
 		}
