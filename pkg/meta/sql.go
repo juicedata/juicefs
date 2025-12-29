@@ -2744,9 +2744,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 			for i := range entryInfos {
 				info := &entryInfos[i]
 				if info.n != nil && info.trash == 0 && info.n.Nlink == 0 && info.n.Type == TypeFile {
-					if _, ok := delNodeStatus[info]; !ok {
-						delNodeStatus[info] = m.of.IsOpen(info.n.Inode)
-					}
+					delNodeStatus[info] = m.of.IsOpen(info.n.Inode)
 				}
 			}
 		}
@@ -2912,7 +2910,12 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 	}
 
 	// outside of transaction: update global stats and trigger data deletion callbacks
+	visited2 := make(map[Ino]bool)
 	for info, isOpen := range delNodeStatus {
+		if visited2[info.n.Inode] {
+			continue
+		}
+		visited2[info.n.Inode] = true
 		m.fileDeleted(isOpen, parent.IsTrash(), info.n.Inode, info.n.Length)
 	}
 	m.updateStats(totalSpace, totalInodes)
@@ -3431,14 +3434,19 @@ func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 	return files, err
 }
 
-func (m *dbMeta) doCleanupSlices(ctx Context) {
+func (m *dbMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
 	var cks []sliceRef
-	_ = m.simpleTxn(ctx, func(s *xorm.Session) error {
+	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		cks = nil
 		return s.Where("refs <= 0").Find(&cks)
-	})
+	}); err != nil {
+		return
+	}
 	for _, ck := range cks {
 		m.deleteSlice(ck.Id, ck.Size)
+		if stats != nil {
+			stats.deleted++
+		}
 		if ctx.Canceled() {
 			break
 		}
@@ -3678,7 +3686,7 @@ func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 
 func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
 	if delete {
-		m.doCleanupSlices(ctx)
+		m.doCleanupSlices(ctx, nil)
 	}
 	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		var cs []chunk
