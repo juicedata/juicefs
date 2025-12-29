@@ -1750,12 +1750,13 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		length uint64
 	}
 	delNodes := make(map[Ino]*dNode)
-	if userGroupQuotas != nil {
-		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
-	}
-
 	watchKeys := []string{m.inodeKey(parent), m.entryKey(parent)}
 	err := m.txn(ctx, func(tx *redis.Tx) error {
+		totalLength, totalSpace, totalInodes = 0, 0, 0
+		if userGroupQuotas != nil {
+			*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
+		}
+
 		rs, err := tx.Get(ctx, m.inodeKey(parent)).Result()
 		if err != nil {
 			return err
@@ -1798,6 +1799,8 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 						if resolved := m.resolveCase(ctx, parent, info.name); resolved != nil {
 							info.name = string(resolved.Name)
 							info.buf = m.packEntry(resolved.Attr.Typ, resolved.Inode)
+							info.inode = resolved.Inode
+							info.typ = resolved.Attr.Typ
 						} else {
 							return redis.Nil
 						}
@@ -1806,6 +1809,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 					}
 				} else {
 					info.buf = []byte(vals[i].(string))
+					info.typ, info.inode = m.parseEntry(info.buf)
 				}
 				entryInfos = append(entryInfos, &info)
 			}
@@ -1954,7 +1958,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 					case TypeFile:
 						entrySpace = align4K(info.attr.Length)
 						needStats = true
-						if delNodes[info.inode].opened {
+						if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
 							if inodes == nil {
 								inodes = make(map[Ino]*Attr)
 							}
@@ -2031,12 +2035,13 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 
 		// execute batched operations using pipeline with limit control
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			tryExec := func() {
+			tryExec := func() error {
 				if pipe.Len() > 1000 {
 					if _, err := pipe.Exec(ctx); err != nil {
-						panic(err)
+						return err
 					}
 				}
+				return nil
 			}
 
 			if len(names) > 0 {
@@ -2059,7 +2064,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 					pipe.IncrBy(ctx, key, delta)
 				}
 			}
-			tryExec()
+			if err := tryExec(); err != nil {
+				return err
+			}
 			for key, fields := range parentOps {
 				for field, incr := range fields {
 					if incr != 0 {
@@ -2067,7 +2074,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 					}
 				}
 			}
-			tryExec()
+			if err := tryExec(); err != nil {
+				return err
+			}
 			for key, fields := range trashOps {
 				for field, value := range fields {
 					pipe.HSet(ctx, key, field, value)
