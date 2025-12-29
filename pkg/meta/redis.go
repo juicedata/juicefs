@@ -1921,7 +1921,8 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		trashOps := make(map[string]map[string]interface{}) // key -> field -> value
 		stats := make(map[string]int64) // key -> delta
 
-		for _, info := range entryInfos {
+		for i := range entryInfos {
+			info := &entryInfos[i]
 			if info.typ == TypeDirectory {
 				continue
 			}
