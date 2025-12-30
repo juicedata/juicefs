@@ -2940,7 +2940,6 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 				} else {
 					logger.Warnf("delete from trash %s/%s: %s", e.Name, se.Name, st)
 					rmdir = false
-					continue
 				}
 				if ctx.Canceled() {
 					return
