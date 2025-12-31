@@ -1852,6 +1852,11 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		// lock the parentDst
 		keys[0], keys[2] = keys[2], keys[0]
 	}
+	if !exchange {
+		if st := m.checkTrash(parentDst, &trash); st != 0 {
+			return st
+		}
+	}
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		opened = false
 		dino, dtyp = 0, 0
@@ -2882,7 +2887,7 @@ func (m *redisMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, err
 	return files, nil
 }
 
-func (m *redisMeta) doCleanupSlices(ctx Context) {
+func (m *redisMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
 	_ = m.hscan(ctx, m.sliceRefs(), func(keys []string) error {
 		for i := 0; i < len(keys); i += 2 {
 			key, val := keys[i], keys[i+1]
@@ -2893,6 +2898,9 @@ func (m *redisMeta) doCleanupSlices(ctx Context) {
 					size, _ := strconv.ParseUint(ps[1], 10, 32)
 					if id > 0 && size > 0 {
 						m.deleteSlice(id, uint32(size))
+						if stats != nil {
+							stats.deleted++
+						}
 					}
 				}
 			} else if val == "0" {
@@ -3354,7 +3362,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending,
 	m.cleanupLeakedChunks(delete)
 	m.cleanupOldSliceRefs(delete)
 	if delete {
-		m.doCleanupSlices(ctx)
+		m.doCleanupSlices(ctx, nil)
 	}
 	logger.Debugf("start listing slices...")
 
