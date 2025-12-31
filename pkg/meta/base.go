@@ -286,6 +286,7 @@ type baseMeta struct {
 	freeSlices       freeID
 	prefetchMu       sync.Mutex
 	prefetchedInodes freeID
+	recycledInodes   []Ino
 
 	usedSpaceG   prometheus.Gauge
 	usedInodesG  prometheus.Gauge
@@ -1344,6 +1345,12 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 func (m *baseMeta) nextInode() (Ino, error) {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
+	if n := len(m.recycledInodes); n > 0 {
+		ino := m.recycledInodes[n-1]
+		m.recycledInodes = m.recycledInodes[:n-1]
+		return ino, nil
+	}
+
 	if m.freeInodes.next >= m.freeInodes.maxid {
 
 		m.prefetchMu.Lock() // Wait until prefetchInodes() is done
@@ -1371,6 +1378,15 @@ func (m *baseMeta) nextInode() (Ino, error) {
 		go m.prefetchInodes()
 	}
 	return Ino(n), nil
+}
+
+func (m *baseMeta) recycleInode(ino Ino) {
+	if ino <= 1 {
+		return
+	}
+	m.freeMu.Lock()
+	m.recycledInodes = append(m.recycledInodes, ino)
+	m.freeMu.Unlock()
 }
 
 func (m *baseMeta) prefetchInodes() {
@@ -1456,6 +1472,8 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 		m.updateDirStat(ctx, parent, 0, space, inodes)
 		m.updateDirQuota(ctx, parent, space, inodes)
 		m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, space, inodes)
+	} else {
+		m.recycleInode(ino)
 	}
 	return st
 }
@@ -3169,6 +3187,7 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	var attr Attr
 	eno := m.en.doCloneEntry(ctx, srcIno, parent, name, ino, &attr, cmode, cumask, top)
 	if eno != 0 {
+		m.recycleInode(ino)
 		return eno
 	}
 	m.en.updateStats(align4K(attr.Length), 1)
