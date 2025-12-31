@@ -18,6 +18,7 @@ package meta
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"path"
@@ -136,6 +137,9 @@ func errno(err error) syscall.Errno {
 	}
 	if err == context.Canceled {
 		return syscall.EINTR
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return syscall.ETIMEDOUT
 	}
 	if eno, ok := err.(syscall.Errno); ok {
 		return eno

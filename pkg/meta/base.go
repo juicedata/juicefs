@@ -2932,6 +2932,9 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 			for _, se := range subEntries {
 				var c uint64
 				st = m.Remove(ctx, e.Inode, string(se.Name), false, m.conf.MaxDeletes, &c)
+				if ctx.Canceled() {
+					return
+				}
 				if st == 0 {
 					count += int(c)
 					if increProgress != nil {
@@ -2940,10 +2943,6 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 				} else {
 					logger.Warnf("delete from trash %s/%s: %s", e.Name, se.Name, st)
 					rmdir = false
-					continue
-				}
-				if ctx.Canceled() {
-					return
 				}
 			}
 			if rmdir {
