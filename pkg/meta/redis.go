@@ -364,7 +364,7 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 		Ctime:  ts,
 		Nlink:  2,
 		Length: 4 << 10,
-		Parent: 1,
+		Parent: RootInode,
 	}
 	if format.TrashDays > 0 {
 		attr.Mode = 0555
@@ -382,7 +382,7 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 
 	// root inode
 	attr.Mode = 0777
-	return m.rdb.Set(ctx, m.inodeKey(1), m.marshal(attr), 0).Err()
+	return m.rdb.Set(ctx, m.inodeKey(RootInode), m.marshal(attr), 0).Err()
 }
 
 func (m *redisMeta) cacheACLs(ctx Context) error {
