@@ -299,7 +299,7 @@ func config(ctx *cli.Context) error {
 			if err != nil {
 				return err
 			}
-			if err = test(blob); err != nil {
+			if err = test(blob, format.Name); err != nil {
 				return err
 			}
 		}
