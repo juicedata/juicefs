@@ -1722,10 +1722,6 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 }
 
 func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
-	if len(entries) == 0 {
-		return 0
-	}
-
 	var trash Ino
 	if len(skipCheckTrash) == 0 || !skipCheckTrash[0] {
 		if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1777,39 +1773,13 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 		now := time.Now()
 
 		if len(entries) > 0 {
-			entryKey := m.entryKey(parent)
-			names := make([]string, len(entries))
-			for i, entry := range entries {
-				names[i] = string(entry.Name)
-			}
-			vals, err := tx.HMGet(ctx, entryKey, names...).Result()
-			if err != nil {
-				return err
-			}
-
-			for i, entry := range entries {
+			for _, entry := range entries {
 				info := entryInfo{
 					name:  string(entry.Name),
 					inode: entry.Inode,
 					typ:   entry.Attr.Typ,
 					trash: trash,
-				}
-				if vals[i] == nil {
-					if m.conf.CaseInsensi {
-						if resolved := m.resolveCase(ctx, parent, info.name); resolved != nil {
-							info.name = string(resolved.Name)
-							info.buf = m.packEntry(resolved.Attr.Typ, resolved.Inode)
-							info.inode = resolved.Inode
-							info.typ = resolved.Attr.Typ
-						} else {
-							return redis.Nil
-						}
-					} else {
-						return redis.Nil
-					}
-				} else {
-					info.buf = []byte(vals[i].(string))
-					info.typ, info.inode = m.parseEntry(info.buf)
+					buf:   m.packEntry(entry.Attr.Typ, entry.Inode),
 				}
 				entryInfos = append(entryInfos, &info)
 			}
@@ -1821,11 +1791,6 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 				inodesSet[info.inode] = struct{}{}
 			}
 		}
-		for ino := range inodesSet {
-			if err := tx.Watch(ctx, m.inodeKey(ino)).Err(); err != nil {
-				return err
-			}
-		}
 
 		// load inode attrs for all distinct inodes
 		if len(inodesSet) > 0 {
@@ -1834,6 +1799,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 			for ino := range inodesSet {
 				inodesList = append(inodesList, ino)
 				keys = append(keys, m.inodeKey(ino))
+			}
+			if err := tx.Watch(ctx, keys...).Err(); err != nil {
+				return err
 			}
 			rs, err := tx.MGet(ctx, keys...).Result()
 			if err != nil {
