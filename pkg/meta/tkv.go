@@ -512,7 +512,7 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		Ctime:  ts,
 		Nlink:  2,
 		Length: 4 << 10,
-		Parent: 1,
+		Parent: RootInode,
 	}
 	return m.txn(Background(), func(tx *kvTxn) error {
 		if format.TrashDays > 0 {
@@ -525,7 +525,7 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		tx.set(m.fmtKey("setting"), data)
 		if body == nil || m.client.name() == "memkv" {
 			attr.Mode = 0777
-			tx.set(m.inodeKey(1), m.marshal(attr))
+			tx.set(m.inodeKey(RootInode), m.marshal(attr))
 			tx.incrBy(m.counterKey("nextInode"), 2)
 			tx.incrBy(m.counterKey("nextChunk"), 1)
 		}
@@ -3258,7 +3258,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 
 	bInodes, _ := m.get(m.counterKey(totalInodes))
 	inodeTotal := parseCounter(bInodes)
-	if root == 1 && fast { // make snap
+	if root == RootInode && fast { // make snap
 		m.snap = make(map[Ino]*DumpedEntry)
 		defer func() {
 			m.snap = nil
@@ -3362,7 +3362,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 		if err = m.dumpEntry(root, tree, nil); err != nil {
 			return err
 		}
-		if root == 1 && !skipTrash {
+		if root == RootInode && !skipTrash {
 			trash = &DumpedEntry{
 				Attr: &DumpedAttr{
 					Inode: TrashInode,
