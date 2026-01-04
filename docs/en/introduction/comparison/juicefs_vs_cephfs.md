@@ -50,7 +50,7 @@ JuiceFS provides a libjfs library, a FUSE client application, Java SDK, etc. It 
 | Hadoop-compatible               | ✓                     | ✓                     |
 | Data compression<sup> [2]</sup> | ✓                     | ✓                     |
 | Data encryption<sup> [3]</sup>  | ✓                     | ✓                     |
-| Snapshot                        | ✓                     | ✕                     |
+| Snapshot                        | ✓                     | ✓                     |
 | Client data caching             | ✕                     | ✓                     |
 | Hadoop data locality            | ✕                     | ✓                     |
 | S3-compatible                   | ✕                     | ✓                     |
