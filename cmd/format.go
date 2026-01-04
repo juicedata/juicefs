@@ -355,7 +355,7 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 	return nil
 }
 
-func test(store object.ObjectStorage) error {
+func test(store object.ObjectStorage, prefix string) error {
 	key := "testing/" + randSeq(10)
 	data := make([]byte, 100)
 	utils.RandRead(data)
@@ -370,7 +370,8 @@ func test(store object.ObjectStorage) error {
 		time.Sleep(time.Second * time.Duration(i*3+1))
 	}
 	if err == nil {
-		_ = store.Delete(ctx, "testing/")
+		ctxWithHint := object.WithShardHint(context.Background(), prefix+"/"+key)
+		_ = store.Delete(ctxWithHint, "testing/")
 	}
 	return err
 }
@@ -522,7 +523,7 @@ func format(c *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 	if os.Getenv("JFS_NO_CHECK_OBJECT_STORAGE") == "" {
-		if err := test(blob); err != nil {
+		if err := test(blob, format.Name); err != nil {
 			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
 		}
 		if create {
