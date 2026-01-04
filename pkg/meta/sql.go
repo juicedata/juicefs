@@ -656,7 +656,7 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 		Type:   TypeDirectory,
 		Nlink:  2,
 		Length: 4 << 10,
-		Parent: 1,
+		Parent: RootInode,
 	}
 	now := time.Now().UnixNano()
 	n.setAtime(now)
@@ -688,7 +688,7 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 			}
 		}
 
-		n.Inode = 1
+		n.Inode = RootInode
 		n.Mode = 0777
 		var cs = []counter{
 			{"nextInode", 2}, // 1 is root
@@ -4587,7 +4587,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			if err = m.dumpEntry(s, root, TypeDirectory, tree, nil); err != nil {
 				return err
 			}
-			if root == 1 && !skipTrash {
+			if root == RootInode && !skipTrash {
 				trash = &DumpedEntry{
 					Name: "Trash",
 					Attr: &DumpedAttr{
