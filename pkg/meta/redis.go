@@ -1721,8 +1721,8 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 	return errno(err)
 }
 
-func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
-	if len(entries) == 0 {
+func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries *[]Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
+	if entries == nil || len(*entries) == 0 {
 		return 0
 	}
 	var trash Ino
@@ -1753,7 +1753,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		totalLength, totalSpace, totalInodes = 0, 0, 0
 		if userGroupQuotas != nil {
-			*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
+			*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(*entries))
 		}
 
 		rs, err := tx.Get(ctx, m.inodeKey(parent)).Result()
@@ -1772,11 +1772,11 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 			return syscall.EPERM
 		}
 
-		entryInfos = make([]*entryInfo, 0, len(entries))
+		entryInfos = make([]*entryInfo, 0, len(*entries))
 		now := time.Now()
 
-		if len(entries) > 0 {
-			for _, entry := range entries {
+		if len(*entries) > 0 {
+			for _, entry := range *entries {
 				if entry.Attr.Typ == TypeDirectory {
 					continue
 				}
