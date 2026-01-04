@@ -4735,13 +4735,13 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 		t.Fatalf("User group quota not found before batch unlink")
 	}
 
-	var entries []Entry
+	var entries []*Entry
 	for i, fileName := range fileNames {
 		var attr Attr
 		if st := m.GetAttr(ctx, fileInodes[i], &attr); st != 0 {
 			t.Fatalf("GetAttr for %s: %s", fileName, st)
 		}
-		entries = append(entries, Entry{
+		entries = append(entries, &Entry{
 			Inode: fileInodes[i],
 			Name:  []byte(fileName),
 			Attr:  &attr,
@@ -4835,7 +4835,7 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	if st := m.GetAttr(ctx, hardlinkInode, &hardlinkEntry); st != 0 {
 		t.Fatalf("GetAttr for hardlink: %s", st)
 	}
-	hardlinkEntries := []Entry{
+	hardlinkEntries := []*Entry{
 		{
 			Inode: hardlinkInode,
 			Name:  []byte(hardlinkFileName2),
