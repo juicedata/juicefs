@@ -2614,8 +2614,8 @@ func recordUserGroupDeletionStats(
 	}
 }
 
-func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries *[]Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
-	if entries == nil || len(*entries) == 0 {
+func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
+	if len(entries) == 0 {
 		return 0
 	}
 
@@ -2640,7 +2640,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries *[]Entry, length
 	delNodes := make(map[Ino]*dNode)
 	var totalLength, totalSpace, totalInodes int64
 	if userGroupQuotas != nil {
-		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(*entries))
+		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
 	}
 	// main transaction: validate, collect metadata, update inode/link counts, and prepare DB mutations
 	err := m.txn(func(s *xorm.Session) error {
@@ -2663,13 +2663,13 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries *[]Entry, length
 		if (pn.Flags&FlagAppend != 0) || (pn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		entryInfos = make([]*entryInfo, 0, len(*entries))
+		entryInfos = make([]*entryInfo, 0, len(entries))
 		now := time.Now().UnixNano()
 
 		// collect unique inode ids from entries (avoid operating N times on same inode for hard links)
-		inodes := make([]Ino, 0, len(*entries))
+		inodes := make([]Ino, 0, len(entries))
 		inodeM := make(map[Ino]struct{}) // filter hardlinks
-		for _, entry := range *entries {
+		for _, entry := range entries {
 			e := &edge{Parent: parent, Name: entry.Name, Inode: entry.Inode}
 			if entry.Attr != nil {
 				if entry.Attr.Typ == TypeDirectory {
