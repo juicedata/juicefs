@@ -2672,6 +2672,9 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		for _, entry := range entries {
 			e := &edge{Parent: parent, Name: entry.Name, Inode: entry.Inode}
 			if entry.Attr != nil {
+				if entry.Attr.Typ == TypeDirectory {
+					continue
+				}
 				e.Type = entry.Attr.Typ
 			}
 			entryInfos = append(entryInfos, &entryInfo{e: e, trash: trash})
@@ -2715,10 +2718,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 		}
 
 		for _, info := range entryInfos {
-			if info.e.Type == TypeDirectory {
-				continue
-			}
-
 			if info.trash > 0 && info.n.Nlink > 1 {
 				info.trashName = m.trashEntry(parent, info.e.Inode, string(info.e.Name))
 				te := edge{
@@ -2771,10 +2770,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length 
 
 		// walk each edge to decide whether to move to trash, decrement nlink or delete inode & xattrs
 		for _, info := range entryInfos {
-			if info.n.Type == TypeDirectory {
-				continue
-			}
-
 			edgesDel = append(edgesDel, edge{Parent: parent, Name: info.e.Name})
 			if !visited[info.n.Inode] {
 				if info.n.Nlink > 0 {
