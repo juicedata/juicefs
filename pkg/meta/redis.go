@@ -1722,6 +1722,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 }
 
 func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
+	if len(entries) == 0 {
+		return 0
+	}
 	var trash Ino
 	if len(skipCheckTrash) == 0 || !skipCheckTrash[0] {
 		if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1774,6 +1777,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, leng
 
 		if len(entries) > 0 {
 			for _, entry := range entries {
+				if entry.Attr.Typ == TypeDirectory {
+					continue
+				}
 				info := entryInfo{
 					name:  string(entry.Name),
 					inode: entry.Inode,
