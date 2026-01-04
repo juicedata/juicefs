@@ -1722,7 +1722,361 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 }
 
 func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
-	return syscall.ENOTSUP
+	if len(entries) == 0 {
+		return 0
+	}
+	var trash Ino
+	if len(skipCheckTrash) == 0 || !skipCheckTrash[0] {
+		if st := m.checkTrash(parent, &trash); st != 0 {
+			return st
+		}
+	}
+
+	type entryInfo struct {
+		name      string
+		inode     Ino
+		typ       uint8
+		trash     Ino
+		attr      *Attr
+		trashName string
+		buf       []byte
+	}
+
+	var entryInfos []*entryInfo
+	var totalLength, totalSpace, totalInodes int64
+	type dNode struct {
+		opened bool
+		length uint64
+	}
+	delNodes := make(map[Ino]*dNode)
+	watchKeys := []string{m.inodeKey(parent), m.entryKey(parent)}
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		totalLength, totalSpace, totalInodes = 0, 0, 0
+		if userGroupQuotas != nil {
+			*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
+		}
+
+		rs, err := tx.Get(ctx, m.inodeKey(parent)).Result()
+		if err != nil {
+			return err
+		}
+		var pattr Attr
+		m.parseAttr([]byte(rs), &pattr)
+		if pattr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+			return st
+		}
+		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
+
+		entryInfos = make([]*entryInfo, 0, len(entries))
+		now := time.Now()
+
+		if len(entries) > 0 {
+			for _, entry := range entries {
+				if entry.Attr.Typ == TypeDirectory {
+					continue
+				}
+				info := entryInfo{
+					name:  string(entry.Name),
+					inode: entry.Inode,
+					typ:   entry.Attr.Typ,
+					trash: trash,
+					buf:   m.packEntry(entry.Attr.Typ, entry.Inode),
+				}
+				entryInfos = append(entryInfos, &info)
+			}
+		}
+
+		inodesSet := make(map[Ino]struct{}, len(entryInfos))
+		for _, info := range entryInfos {
+			if _, ok := inodesSet[info.inode]; !ok {
+				inodesSet[info.inode] = struct{}{}
+			}
+		}
+
+		// load inode attrs for all distinct inodes
+		if len(inodesSet) > 0 {
+			inodesList := make([]Ino, 0, len(inodesSet))
+			keys := make([]string, 0, len(inodesSet))
+			for ino := range inodesSet {
+				inodesList = append(inodesList, ino)
+				keys = append(keys, m.inodeKey(ino))
+			}
+			if err := tx.Watch(ctx, keys...).Err(); err != nil {
+				return err
+			}
+			rs, err := tx.MGet(ctx, keys...).Result()
+			if err != nil {
+				return err
+			}
+			nodeMap := make(map[Ino]*Attr, len(inodesList))
+			for i, v := range rs {
+				if v == nil {
+					continue
+				}
+				var a Attr
+				m.parseAttr([]byte(v.(string)), &a)
+				nodeMap[inodesList[i]] = &a
+			}
+
+			// iterate all target entries, apply basic checks and build info
+			for _, info := range entryInfos {
+				attr, ok := nodeMap[info.inode]
+				if !ok {
+					info.trash = 0
+					info.attr = nil
+					continue
+				}
+				if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
+					return syscall.EACCES
+				}
+				if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
+					return syscall.EPERM
+				}
+				if (attr.Flags & FlagSkipTrash) != 0 {
+					info.trash = 0
+				}
+				info.attr = attr
+			}
+		}
+
+		// check trash entries for hard links
+		for _, info := range entryInfos {
+			if info.attr == nil {
+				continue
+			}
+			if info.trash > 0 && info.attr.Nlink > 1 {
+				info.trashName = m.trashEntry(parent, info.inode, info.name)
+				exists, err := tx.HExists(ctx, m.entryKey(info.trash), info.trashName).Result()
+				if err != nil {
+					return err
+				}
+				if exists {
+					info.trash = 0
+				}
+			}
+			// update ctime
+			info.attr.Ctime = now.Unix()
+			info.attr.Ctimensec = uint32(now.Nanosecond())
+			if info.trash > 0 && info.attr.Parent > 0 {
+				info.attr.Parent = info.trash
+			}
+			if info.trash == 0 && info.attr.Nlink > 0 {
+				info.attr.Nlink--
+			}
+		}
+
+		// check opened status for all inodes with Nlink == 0 after all decrements
+		if m.sid > 0 {
+			for _, info := range entryInfos {
+				if info.attr != nil && info.trash == 0 && info.attr.Nlink == 0 && info.typ == TypeFile {
+					delNodes[info.inode] = &dNode{m.of.IsOpen(info.inode), info.attr.Length}
+				}
+			}
+		}
+
+		var updateParent bool
+		if !parent.IsTrash() && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime {
+			pattr.Mtime = now.Unix()
+			pattr.Mtimensec = uint32(now.Nanosecond())
+			pattr.Ctime = now.Unix()
+			pattr.Ctimensec = uint32(now.Nanosecond())
+			updateParent = true
+		}
+
+		nowUnix := now.Unix()
+		visited := make(map[Ino]bool)
+		visited[0] = true // skip dummyNode
+
+		// collect data for batch operations
+		var names []string
+		var keys []string
+		var sustained []interface{}
+		var delfiles []redis.Z
+		var inodes map[Ino]*Attr
+		parentOps := make(map[string]map[string]int64)      // key -> field -> incr
+		trashOps := make(map[string]map[string]interface{}) // key -> field -> value
+		stats := make(map[string]int64)                     // key -> delta
+
+		for _, info := range entryInfos {
+			if info.typ == TypeDirectory {
+				continue
+			}
+			names = append(names, info.name)
+			if info.attr == nil {
+				continue
+			}
+
+			if !visited[info.inode] {
+				if info.attr.Nlink > 0 {
+					if inodes == nil {
+						inodes = make(map[Ino]*Attr)
+					}
+					inodes[info.inode] = info.attr
+					if info.typ == TypeFile && userGroupQuotas != nil && !parent.IsTrash() {
+						*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
+							Uid:    info.attr.Uid,
+							Gid:    info.attr.Gid,
+							Space:  0,
+							Inodes: -1,
+						})
+					}
+				} else {
+					var entrySpace int64
+					needStats := false
+					switch info.typ {
+					case TypeFile:
+						entrySpace = align4K(info.attr.Length)
+						needStats = true
+						if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
+							if inodes == nil {
+								inodes = make(map[Ino]*Attr)
+							}
+							inodes[info.inode] = info.attr
+							sustained = append(sustained, strconv.Itoa(int(info.inode)))
+						} else {
+							delfiles = append(delfiles, redis.Z{
+								Score:  float64(nowUnix),
+								Member: m.toDelete(info.inode, info.attr.Length),
+							})
+							keys = append(keys, m.inodeKey(info.inode))
+							totalSpace -= align4K(info.attr.Length)
+							totalInodes--
+							stats[m.usedSpaceKey()] -= align4K(info.attr.Length)
+							stats[m.totalInodesKey()]--
+						}
+					case TypeSymlink:
+						keys = append(keys, m.symKey(info.inode))
+						fallthrough
+					default:
+						keys = append(keys, m.inodeKey(info.inode))
+						entrySpace = align4K(0)
+						needStats = true
+						totalSpace -= align4K(0)
+						totalInodes--
+						stats[m.usedSpaceKey()] -= align4K(0)
+						stats[m.totalInodesKey()]--
+					}
+					if needStats {
+						totalLength -= int64(info.attr.Length)
+						if userGroupQuotas != nil && !parent.IsTrash() {
+							*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
+								Uid:    info.attr.Uid,
+								Gid:    info.attr.Gid,
+								Space:  -entrySpace,
+								Inodes: -1,
+							})
+						}
+					}
+					keys = append(keys, m.xattrKey(info.inode))
+					if info.attr.Parent == 0 {
+						keys = append(keys, m.parentKey(info.inode))
+					}
+				}
+				m.of.InvalidateChunk(info.inode, invalidateAttrOnly)
+			}
+			if info.attr.Nlink > 0 && info.attr.Parent == 0 {
+				key := m.parentKey(info.inode)
+				if parentOps[key] == nil {
+					parentOps[key] = make(map[string]int64)
+				}
+				parentOps[key][parent.String()]--
+			}
+
+			if info.attr.Nlink > 0 && info.trash > 0 {
+				if info.trashName == "" {
+					info.trashName = m.trashEntry(parent, info.inode, info.name)
+				}
+				key := m.entryKey(info.trash)
+				if trashOps[key] == nil {
+					trashOps[key] = make(map[string]interface{})
+				}
+				trashOps[key][info.trashName] = info.buf
+				if info.attr.Parent == 0 {
+					key := m.parentKey(info.inode)
+					if parentOps[key] == nil {
+						parentOps[key] = make(map[string]int64)
+					}
+					parentOps[key][info.trash.String()]++
+				}
+			}
+			visited[info.inode] = true
+		}
+
+		// execute batched operations using pipeline with limit control
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			tryExec := func() error {
+				if pipe.Len() > 1000 {
+					if _, err := pipe.Exec(ctx); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+
+			if len(names) > 0 {
+				pipe.HDel(ctx, m.entryKey(parent), names...)
+			}
+			for inode, attr := range inodes {
+				pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
+			}
+			if len(sustained) > 0 {
+				pipe.SAdd(ctx, m.sustained(m.sid), sustained...)
+			}
+			if len(delfiles) > 0 {
+				pipe.ZAdd(ctx, m.delfiles(), delfiles...)
+			}
+			if len(keys) > 0 {
+				pipe.Del(ctx, keys...)
+			}
+			for key, delta := range stats {
+				if delta != 0 {
+					pipe.IncrBy(ctx, key, delta)
+				}
+			}
+			if err := tryExec(); err != nil {
+				return err
+			}
+			for key, fields := range parentOps {
+				for field, incr := range fields {
+					if incr != 0 {
+						pipe.HIncrBy(ctx, key, field, incr)
+					}
+				}
+			}
+			if err := tryExec(); err != nil {
+				return err
+			}
+			for key, fields := range trashOps {
+				for field, value := range fields {
+					pipe.HSet(ctx, key, field, value)
+				}
+			}
+			if updateParent {
+				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
+			}
+			return nil
+		})
+		return err
+	}, watchKeys...)
+
+	if err != nil {
+		return errno(err)
+	}
+
+	// outside of transaction: update global stats and trigger data deletion callbacks
+	for inode, info := range delNodes {
+		m.fileDeleted(info.opened, parent.IsTrash(), inode, info.length)
+	}
+	m.updateStats(totalSpace, totalInodes)
+	*length = totalLength
+	*space = totalSpace
+	*inodes = totalInodes
+	return 0
 }
 
 func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldAttr *Attr, skipCheckTrash ...bool) syscall.Errno {
