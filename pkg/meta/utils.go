@@ -301,7 +301,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 		}
 		var wg sync.WaitGroup
 		var status syscall.Errno
-		var nonDirEntries []Entry
+		var nonDirEntries []*Entry
 		for i, e := range entries {
 			if e.Attr.Typ == TypeDirectory {
 				select {
@@ -322,7 +322,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *
 					}
 				}
 			} else {
-				nonDirEntries = append(nonDirEntries, *e)
+				nonDirEntries = append(nonDirEntries, e)
 			}
 			if ctx.Canceled() {
 				return syscall.EINTR
