@@ -2714,7 +2714,10 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 
 	showProgress := func(n int) {}
 	slices := make(map[Ino][]Slice)
-	if err := m.Check(Background(), "/check", false, false, false, showProgress, slices); err == nil {
+	if err := m.Check(Background(), "/check", &CheckOpt{
+		ShowProgress: showProgress,
+		Slices:       slices,
+	}); err == nil {
 		t.Fatal("check should fail")
 	}
 	if st := m.GetAttr(Background(), checkInode, dirAttr); st != 0 {
@@ -2724,7 +2727,11 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 		t.Fatalf("checkInode nlink should is 0 now: %d", dirAttr.Nlink)
 	}
 
-	if err := m.Check(Background(), "/check", true, false, false, showProgress, slices); err != nil {
+	if err := m.Check(Background(), "/check", &CheckOpt{
+		Repair:       true,
+		ShowProgress: showProgress,
+		Slices:       slices,
+	}); err != nil {
 		t.Fatalf("check: %s", err)
 	}
 	if st := m.GetAttr(Background(), checkInode, dirAttr); st != 0 {
@@ -2734,7 +2741,11 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 		t.Fatalf("checkInode nlink should is 3 now: %d", dirAttr.Nlink)
 	}
 
-	if err := m.Check(Background(), "/check/d1/d2", true, false, false, showProgress, slices); err != nil {
+	if err := m.Check(Background(), "/check/d1/d2", &CheckOpt{
+		Repair:       true,
+		ShowProgress: showProgress,
+		Slices:       slices,
+	}); err != nil {
 		t.Fatalf("check: %s", err)
 	}
 	if st := m.GetAttr(Background(), d2Inode, dirAttr); st != 0 {
@@ -2751,7 +2762,12 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 	}
 
 	if m.Name() != "etcd" {
-		if err := m.Check(Background(), "/", true, true, false, showProgress, slices); err != nil {
+		if err := m.Check(Background(), "/", &CheckOpt{
+			Repair:       true,
+			Recursive:    true,
+			ShowProgress: showProgress,
+			Slices:       slices,
+		}); err != nil {
 			t.Fatalf("check: %s", err)
 		}
 		for _, ino := range []Ino{checkInode, d1Inode, d2Inode, d3Inode} {
