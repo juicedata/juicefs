@@ -1428,7 +1428,315 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 }
 
 func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
-	return syscall.ENOTSUP
+	if len(entries) == 0 {
+		return 0
+	}
+	var trash Ino
+	if len(skipCheckTrash) == 0 || !skipCheckTrash[0] {
+		if st := m.checkTrash(parent, &trash); st != 0 {
+			return st
+		}
+	}
+
+	type entryInfo struct {
+		name      string
+		inode     Ino
+		typ       uint8
+		trash     Ino
+		attr      *Attr
+		trashName string
+		buf       []byte
+	}
+
+	var entryInfos []*entryInfo
+	var totalLength, totalSpace, totalInodes int64
+	type dNode struct {
+		opened bool
+		length uint64
+	}
+	delNodes := make(map[Ino]*dNode)
+	if userGroupQuotas != nil {
+		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
+	}
+
+	err := m.txn(ctx, func(tx *kvTxn) error {
+		totalLength, totalSpace, totalInodes = 0, 0, 0
+		if userGroupQuotas != nil {
+			*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
+		}
+
+		// Get parent directory attribute
+		pbuf := tx.get(m.inodeKey(parent))
+		if pbuf == nil {
+			return syscall.ENOENT
+		}
+		var pattr Attr
+		m.parseAttr(pbuf, &pattr)
+		if pattr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+			return st
+		}
+		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
+
+		entryInfos = make([]*entryInfo, 0, len(entries))
+		now := time.Now()
+
+		// Collect entry info and filter out directories
+		if len(entries) > 0 {
+			for _, entry := range entries {
+				if entry.Attr.Typ == TypeDirectory {
+					continue
+				}
+				info := entryInfo{
+					name:  string(entry.Name),
+					inode: entry.Inode,
+					typ:   entry.Attr.Typ,
+					trash: trash,
+					buf:   m.packEntry(entry.Attr.Typ, entry.Inode),
+				}
+				entryInfos = append(entryInfos, &info)
+			}
+		}
+
+		// Collect unique inodes
+		inodesSet := make(map[Ino]struct{}, len(entryInfos))
+		for _, info := range entryInfos {
+			if _, ok := inodesSet[info.inode]; !ok {
+				inodesSet[info.inode] = struct{}{}
+			}
+		}
+
+		// Load inode attrs for all distinct inodes
+		if len(inodesSet) > 0 {
+			inodesList := make([]Ino, 0, len(inodesSet))
+			keys := make([][]byte, 0, len(inodesSet))
+			for ino := range inodesSet {
+				inodesList = append(inodesList, ino)
+				keys = append(keys, m.inodeKey(ino))
+			}
+			rs := tx.gets(keys...)
+			nodeMap := make(map[Ino]*Attr, len(inodesList))
+			for i, v := range rs {
+				if v == nil {
+					continue
+				}
+				var a Attr
+				m.parseAttr(v, &a)
+				nodeMap[inodesList[i]] = &a
+			}
+
+			// Iterate all target entries, apply basic checks and build info
+			for _, info := range entryInfos {
+				attr, ok := nodeMap[info.inode]
+				if !ok {
+					info.trash = 0
+					info.attr = nil
+					continue
+				}
+				if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
+					return syscall.EACCES
+				}
+				if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
+					return syscall.EPERM
+				}
+				if (attr.Flags & FlagSkipTrash) != 0 {
+					info.trash = 0
+				}
+				info.attr = attr
+			}
+		}
+
+		// Check trash entries for hard links
+		for _, info := range entryInfos {
+			if info.attr == nil {
+				continue
+			}
+			if info.trash > 0 && info.attr.Nlink > 1 {
+				info.trashName = m.trashEntry(parent, info.inode, info.name)
+				trashEntryKey := m.entryKey(info.trash, info.trashName)
+				if tx.get(trashEntryKey) != nil {
+					info.trash = 0
+				}
+			}
+			// Update ctime
+			info.attr.Ctime = now.Unix()
+			info.attr.Ctimensec = uint32(now.Nanosecond())
+			if info.trash > 0 && info.attr.Parent > 0 {
+				info.attr.Parent = info.trash
+			}
+			if info.trash == 0 && info.attr.Nlink > 0 {
+				info.attr.Nlink--
+			}
+		}
+
+		// Check opened status for all inodes with Nlink == 0 after all decrements
+		if m.sid > 0 {
+			for _, info := range entryInfos {
+				if info.attr != nil && info.trash == 0 && info.attr.Nlink == 0 && info.typ == TypeFile {
+					delNodes[info.inode] = &dNode{m.of.IsOpen(info.inode), info.attr.Length}
+				}
+			}
+		}
+
+		var updateParent bool
+		if !parent.IsTrash() && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
+			pattr.Mtime = now.Unix()
+			pattr.Mtimensec = uint32(now.Nanosecond())
+			pattr.Ctime = now.Unix()
+			pattr.Ctimensec = uint32(now.Nanosecond())
+			updateParent = true
+		}
+
+		nowUnix := now.Unix()
+		visited := make(map[Ino]bool)
+		visited[0] = true // skip dummyNode
+
+		// Collect data for batch operations
+		var names []string
+		var itoUpd map[Ino]*Attr
+		var itoDel []Ino
+		var stoDel []Ino
+
+		for _, info := range entryInfos {
+			if info.typ == TypeDirectory {
+				continue
+			}
+			names = append(names, info.name)
+			if info.attr == nil {
+				continue
+			}
+
+			if !visited[info.inode] {
+				if info.attr.Nlink > 0 {
+					// Inode still referenced: update metadata
+					if itoUpd == nil {
+						itoUpd = make(map[Ino]*Attr)
+					}
+					itoUpd[info.inode] = info.attr
+					if info.typ == TypeFile && userGroupQuotas != nil && !parent.IsTrash() {
+						*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
+							Uid:    info.attr.Uid,
+							Gid:    info.attr.Gid,
+							Space:  0,
+							Inodes: -1,
+						})
+					}
+				} else {
+					// Last link removed: prepare to delete inode
+					var entrySpace int64
+					needStats := false
+					switch info.typ {
+					case TypeFile:
+						entrySpace = align4K(info.attr.Length)
+						needStats = true
+						if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
+							// File is opened: sustain it
+							if itoUpd == nil {
+								itoUpd = make(map[Ino]*Attr)
+							}
+							itoUpd[info.inode] = info.attr
+							tx.set(m.sustainedKey(m.sid, info.inode), []byte{1})
+						} else {
+							// Regular unopened file: add to delfile and delete inode
+							tx.set(m.delfileKey(info.inode, info.attr.Length), m.packInt64(nowUnix))
+							itoDel = append(itoDel, info.inode)
+							totalSpace -= align4K(info.attr.Length)
+							totalInodes--
+						}
+					case TypeSymlink:
+						stoDel = append(stoDel, info.inode)
+						fallthrough
+					default:
+						itoDel = append(itoDel, info.inode)
+						entrySpace = align4K(0)
+						needStats = true
+						totalSpace -= align4K(0)
+						totalInodes--
+					}
+					if needStats {
+						totalLength -= int64(info.attr.Length)
+						if userGroupQuotas != nil && !parent.IsTrash() {
+							*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
+								Uid:    info.attr.Uid,
+								Gid:    info.attr.Gid,
+								Space:  -entrySpace,
+								Inodes: -1,
+							})
+						}
+					}
+					// Delete xattrs and parent keys
+					tx.deleteKeys(m.xattrKey(info.inode, ""))
+					if info.attr.Parent == 0 {
+						tx.deleteKeys(m.fmtKey("A", info.inode, "P"))
+					}
+				}
+				m.of.InvalidateChunk(info.inode, invalidateAttrOnly)
+			}
+
+			// Update parent keys for hard links
+			if info.attr.Nlink > 0 && info.attr.Parent == 0 {
+				tx.incrBy(m.parentKey(info.inode, parent), -1)
+			}
+
+			// Move to trash if needed
+			if info.attr.Nlink > 0 && info.trash > 0 {
+				if info.trashName == "" {
+					info.trashName = m.trashEntry(parent, info.inode, info.name)
+				}
+				tx.set(m.entryKey(info.trash, info.trashName), info.buf)
+				if info.attr.Parent == 0 {
+					tx.incrBy(m.parentKey(info.inode, info.trash), 1)
+				}
+			}
+
+			visited[info.inode] = true
+		}
+
+		// Delete entry keys from parent directory
+		for _, name := range names {
+			tx.delete(m.entryKey(parent, name))
+		}
+
+		// Update inodes that still have links
+		for inode, attr := range itoUpd {
+			tx.set(m.inodeKey(inode), m.marshal(attr))
+		}
+
+		// Delete inodes
+		for _, inode := range itoDel {
+			tx.delete(m.inodeKey(inode))
+		}
+
+		// Delete symlinks
+		for _, inode := range stoDel {
+			tx.delete(m.symKey(inode))
+		}
+
+		// Update parent directory if needed
+		if updateParent {
+			tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		}
+
+		return nil
+	}, parent)
+
+	if err != nil {
+		return errno(err)
+	}
+
+	// Outside of transaction: update global stats and trigger data deletion callbacks
+	for inode, info := range delNodes {
+		m.fileDeleted(info.opened, parent.IsTrash(), inode, info.length)
+	}
+	m.updateStats(totalSpace, totalInodes)
+	*length = totalLength
+	*space = totalSpace
+	*inodes = totalInodes
+	return 0
 }
 
 func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldAttr *Attr, skipCheckTrash ...bool) syscall.Errno {
