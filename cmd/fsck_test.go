@@ -39,3 +39,20 @@ func TestFsck(t *testing.T) {
 		t.Fatalf("fsck failed: %s", err)
 	}
 }
+
+func TestFsckRepairDirMode(t *testing.T) {
+	mountTemp(t, nil, nil, nil)
+	defer umountTemp(t)
+
+	if err := os.MkdirAll(testMountPoint+"/testdir", 0755); err != nil {
+		t.Fatalf("mkdir failed: %s", err)
+	}
+
+	if err := Main([]string{"", "fsck", testMeta, "--path", "/testdir", "--repair-dir-mode", "0700"}); err != nil {
+		t.Fatalf("fsck with repair-dir-mode 0700 failed: %s", err)
+	}
+
+	if err := Main([]string{"", "fsck", testMeta, "--path", "/testdir", "--repair-dir-mode", "0755"}); err != nil {
+		t.Fatalf("fsck with repair-dir-mode 0755 failed: %s", err)
+	}
+}
