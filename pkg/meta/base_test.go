@@ -4693,7 +4693,7 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 
 func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid uint32) {
 	if m.Name() != "tikv" {
-		t.Skip("BatchUnlinkWithUserGroupQuota 仅在 tikv 元数据后端上运行")
+		t.Skip("BatchUnlinkWithUserGroupQuota")
 	}
 
 	if err := m.HandleQuota(ctx, QuotaSet, "", uid, gid, map[string]*Quota{UGQuotaKey: {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
@@ -4974,8 +4974,8 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 		t.Fatalf("User group quota not found after multi-hardlink batch unlink")
 	}
 
-	expectedMultiHardlinkInodeDecrease := int64(len(hardlinkNames)) 
-	expectedMultiHardlinkSpaceDecrease := int64(0)                  
+	expectedMultiHardlinkInodeDecrease := int64(len(hardlinkNames))
+	expectedMultiHardlinkSpaceDecrease := int64(0)
 
 	actualMultiHardlinkInodeDecrease := ugQuotaBeforeMultiHardlink.UsedInodes - ugQuotaAfterMultiHardlink.UsedInodes
 	actualMultiHardlinkSpaceDecrease := ugQuotaBeforeMultiHardlink.UsedSpace - ugQuotaAfterMultiHardlink.UsedSpace

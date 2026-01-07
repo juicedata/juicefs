@@ -1454,14 +1454,13 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		opened bool
 		length uint64
 	}
-	delNodes := make(map[Ino]*dNode)
-
+	var delNodes map[Ino]*dNode
 	err := m.txn(ctx, func(tx *kvTxn) error {
 		totalLength, totalSpace, totalInodes = 0, 0, 0
 		if userGroupQuotas != nil {
 			*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
 		}
-
+		delNodes = make(map[Ino]*dNode)
 		// Get parent directory attribute
 		pbuf := tx.get(m.inodeKey(parent))
 		if pbuf == nil {
