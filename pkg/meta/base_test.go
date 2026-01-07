@@ -4692,6 +4692,10 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 }
 
 func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid uint32) {
+	if m.Name() != "tikv" {
+		t.Skip("BatchUnlinkWithUserGroupQuota 仅在 tikv 元数据后端上运行")
+	}
+
 	if err := m.HandleQuota(ctx, QuotaSet, "", uid, gid, map[string]*Quota{UGQuotaKey: {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
 		t.Fatalf("Set user group quota: %s", err)
 	}

@@ -1607,6 +1607,28 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 				continue
 			}
 
+			if info.attr.Parent == 0 {
+				tx.incrBy(m.parentKey(info.inode, parent), -1)
+			}
+			// Update user/group quota for each entry deletion (outside visited check)
+			// Because quota tracks entries, not physical inodes
+			if info.typ == TypeFile && userGroupQuotas != nil && !parent.IsTrash() {
+				var entrySpace int64
+				if info.attr.Nlink > 0 {
+					// Hardlink being removed but file still exists
+					entrySpace = 0
+				} else {
+					// Last link or file being deleted
+					entrySpace = -align4K(info.attr.Length)
+				}
+				*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
+					Uid:    info.attr.Uid,
+					Gid:    info.attr.Gid,
+					Space:  entrySpace,
+					Inodes: -1,
+				})
+			}
+
 			if !visited[info.inode] {
 				if info.attr.Nlink > 0 {
 					// Inode still referenced: update metadata
@@ -1614,18 +1636,6 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 						itoUpd = make(map[Ino]*Attr)
 					}
 					itoUpd[info.inode] = info.attr
-					if info.typ == TypeFile && userGroupQuotas != nil && !parent.IsTrash() {
-						*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
-							Uid:    info.attr.Uid,
-							Gid:    info.attr.Gid,
-							Space:  0,
-							Inodes: -1,
-						})
-					}
-					// Update parent keys for hard links
-					if info.attr.Parent == 0 {
-						tx.incrBy(m.parentKey(info.inode, parent), -1)
-					}
 					// Move to trash if needed
 					if info.trash > 0 {
 						if info.trashName == "" {
@@ -1638,12 +1648,8 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 					}
 				} else {
 					// Last link removed: prepare to delete inode
-					var entrySpace int64
-					needStats := false
 					switch info.typ {
 					case TypeFile:
-						entrySpace = align4K(info.attr.Length)
-						needStats = true
 						if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
 							// File is opened: sustain it
 							if itoUpd == nil {
@@ -1658,25 +1664,16 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 							totalSpace -= align4K(info.attr.Length)
 							totalInodes--
 						}
+						totalLength -= int64(info.attr.Length)
 					case TypeSymlink:
 						stoDel = append(stoDel, info.inode)
 						fallthrough
 					default:
 						itoDel = append(itoDel, info.inode)
-						entrySpace = align4K(0)
-						needStats = true
 						totalSpace -= align4K(0)
 						totalInodes--
-					}
-					if needStats {
-						totalLength -= int64(info.attr.Length)
-						if userGroupQuotas != nil && !parent.IsTrash() {
-							*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
-								Uid:    info.attr.Uid,
-								Gid:    info.attr.Gid,
-								Space:  -entrySpace,
-								Inodes: -1,
-							})
+						if info.typ != TypeSymlink {
+							totalLength -= int64(info.attr.Length)
 						}
 					}
 					// Delete xattrs and parent keys
