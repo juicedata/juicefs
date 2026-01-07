@@ -1455,9 +1455,6 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		length uint64
 	}
 	delNodes := make(map[Ino]*dNode)
-	if userGroupQuotas != nil {
-		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
-	}
 
 	err := m.txn(ctx, func(tx *kvTxn) error {
 		totalLength, totalSpace, totalInodes = 0, 0, 0
@@ -1625,6 +1622,20 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 							Inodes: -1,
 						})
 					}
+					// Update parent keys for hard links
+					if info.attr.Parent == 0 {
+						tx.incrBy(m.parentKey(info.inode, parent), -1)
+					}
+					// Move to trash if needed
+					if info.trash > 0 {
+						if info.trashName == "" {
+							info.trashName = m.trashEntry(parent, info.inode, info.name)
+						}
+						tx.set(m.entryKey(info.trash, info.trashName), info.buf)
+						if info.attr.Parent == 0 {
+							tx.incrBy(m.parentKey(info.inode, info.trash), 1)
+						}
+					}
 				} else {
 					// Last link removed: prepare to delete inode
 					var entrySpace int64
@@ -1675,22 +1686,6 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 					}
 				}
 				m.of.InvalidateChunk(info.inode, invalidateAttrOnly)
-			}
-
-			// Update parent keys for hard links
-			if info.attr.Nlink > 0 && info.attr.Parent == 0 {
-				tx.incrBy(m.parentKey(info.inode, parent), -1)
-			}
-
-			// Move to trash if needed
-			if info.attr.Nlink > 0 && info.trash > 0 {
-				if info.trashName == "" {
-					info.trashName = m.trashEntry(parent, info.inode, info.name)
-				}
-				tx.set(m.entryKey(info.trash, info.trashName), info.buf)
-				if info.attr.Parent == 0 {
-					tx.incrBy(m.parentKey(info.inode, info.trash), 1)
-				}
 			}
 
 			visited[info.inode] = true
