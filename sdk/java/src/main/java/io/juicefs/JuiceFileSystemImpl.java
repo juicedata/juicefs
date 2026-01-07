@@ -2338,7 +2338,7 @@ public class JuiceFileSystemImpl extends FileSystem {
         AbstractDelegationTokenIdentifier identifier = (AbstractDelegationTokenIdentifier) token.decodeIdentifier();
         int id = identifier.getMasterKeyId();
         byte[] password = token.getPassword();
-        ByteBuffer buf = ByteBuffer.allocate(5 + password.length);
+        ByteBuffer buf = ByteBuffer.allocate(8 + password.length);
         buf.putInt(id);
         buf.putInt(password.length);
         buf.put(password);

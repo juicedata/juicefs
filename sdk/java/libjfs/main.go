@@ -765,7 +765,7 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			} else {
 				tbuf := utils.FromBuffer(credential)
 				id := tbuf.Get32()
-				password := tbuf.Get(int(tbuf.Get8()))
+				password := tbuf.Get(int(tbuf.Get32()))
 				eno = kerb.check(meta.Background(), jfs.Meta(), name, user, id, string(password))
 			}
 			if eno != 0 {
