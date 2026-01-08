@@ -1131,14 +1131,15 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 
 	m.txLock(h)
 	defer m.txUnlock(h)
-	// TODO: enable retry for some of idempodent transactions
+	// TODO: enable retry for some of idempotent transactions
 	var (
-		retryOnFailture = false
-		lastErr         error
-		method          string
+		retryOnFailure = false
+		lastErr        error
+		method         txMethod
 	)
 	for i := 0; i < 50; i++ {
 		if ctx.Canceled() {
+			logger.Warnf("Transaction %s interrupted after %s, tried %d, keys: %v", method.name(ctx), time.Since(start), i+1, keys)
 			return syscall.EINTR
 		}
 		err := m.rdb.Watch(ctx, replaceErrno(txf), keys...)
@@ -1149,17 +1150,14 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 				err = syscall.Errno(eno)
 			}
 		}
-		if err != nil && m.shouldRetry(err, retryOnFailture) {
-			if method == "" {
-				method = callerName(ctx) // lazy evaluation
-			}
-			m.txRestart.WithLabelValues(method).Add(1)
+		if err != nil && m.shouldRetry(err, retryOnFailure) {
+			m.txRestart.WithLabelValues(method.name(ctx)).Add(1)
 			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
 			lastErr = err
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
 		} else if err == nil && i > 1 {
-			logger.Warnf("Transaction succeeded after %d tries (%s), keys: %v, method: %s, last error: %s", i+1, time.Since(start), keys, method, lastErr)
+			logger.Warnf("Transaction succeeded after %d tries (%s), keys: %v, method: %s, last error: %s", i+1, time.Since(start), keys, method.name(ctx), lastErr)
 		}
 		return err
 	}

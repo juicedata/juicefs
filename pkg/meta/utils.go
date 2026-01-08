@@ -620,11 +620,20 @@ func relatimeNeedUpdate(attr *Attr, now time.Time) bool {
 
 type txMethodKey struct{}
 
+type txMethod string
+
+func (m *txMethod) name(ctx context.Context) string {
+	if *m == "" {
+		*m = txMethod(callerName(ctx)) // lazy evaluation
+	}
+	return string(*m)
+}
+
 func callerName(ctx context.Context) string {
 	if method, ok := ctx.Value(txMethodKey{}).(string); ok {
 		return method // Fast path, prefer explicitly provided method name
 	}
-	const minSkip = 2
+	const minSkip = 3
 	for i := minSkip; i < 20; i++ { // Slow path, find the real caller
 		pc, _, _, ok := runtime.Caller(i)
 		if !ok {

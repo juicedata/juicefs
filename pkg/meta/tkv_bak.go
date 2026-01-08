@@ -18,7 +18,6 @@ package meta
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -297,7 +296,7 @@ func (m *kvMeta) dumpMix(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) 
 		}
 		logger.Debugf("range: %v-%v", start, end)
 		eg.Go(func() error {
-			return m.txn(egCtx, func(tx *kvTxn) error {
+			return m.txn(WrapContext(egCtx), func(tx *kvTxn) error {
 				var ent *entry
 				tx.scan(start, end, false, func(k, v []byte) bool {
 					if egCtx.Err() != nil {
@@ -441,7 +440,7 @@ func (m *kvMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedResu
 	})
 }
 
-func (m *kvMeta) insertKVs(ctx context.Context, pairs []*pair, threads int) error {
+func (m *kvMeta) insertKVs(ctx Context, pairs []*pair, threads int) error {
 	if len(pairs) == 0 {
 		return nil
 	}
@@ -464,7 +463,7 @@ func (m *kvMeta) insertKVs(ctx context.Context, pairs []*pair, threads int) erro
 			ePairs := pairs[last : i+1]
 			num, size, last = 0, 0, i+1
 			eg.Go(func() error {
-				return m.txn(egCtx, func(tx *kvTxn) error {
+				return m.txn(WrapContext(egCtx), func(tx *kvTxn) error {
 					for _, ep := range ePairs {
 						tx.set(ep.key, ep.value)
 					}
