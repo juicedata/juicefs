@@ -781,7 +781,7 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 	start := time.Now()
 	var err error
 	var srcChksum uint32
-	if size < int64(dst.Limits().MinPartSize*2) {
+	if size < max(int64(dst.Limits().MinPartSize*2), maxBlock) {
 		err = try(3, func() (err error) {
 			srcChksum, err = doCopySingle(src, dst, key, size, calChksum)
 			return
