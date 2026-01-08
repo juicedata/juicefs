@@ -962,7 +962,7 @@ func copyData(src, dst object.ObjectStorage, key string, size int64, mtime time.
 	if size <= multipartCheckpointThreshold {
 		uploads = nil
 	}
-	if size < maxBlock {
+	if size < max(int64(dst.Limits().MinPartSize*2), maxBlock) {
 		err = try(3, func() (err error) {
 			srcChksum, err = doCopySingle(src, dst, key, size, calChksum)
 			return
