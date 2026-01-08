@@ -2898,18 +2898,41 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 		return
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Inode < entries[j].Inode })
-	var count int
+	var count uint64
+	done := make(chan struct{})
 	defer func() {
+		close(done)
 		if count > 0 {
 			logger.Infof("cleanup trash: deleted %d files in %v", count, time.Since(now))
 			if stats != nil {
-				atomic.AddInt64(&stats.DeletedFiles, int64(count))
+				atomic.StoreInt64(&stats.DeletedFiles, int64(count))
 			}
 		} else {
 			logger.Debugf("cleanup trash: nothing to delete")
 		}
 	}()
-	batch := 1000000
+
+	if increProgress != nil {
+		go func() {
+			var last uint64
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-done:
+					return
+				case <-ticker.C:
+					curr := atomic.LoadUint64(&count)
+					if curr != last {
+						increProgress(int(curr - last))
+						last = curr
+					}
+				}
+			}
+		}()
+	}
+
+	concurrent := make(chan int, 1) // no effect for flatterned trash dirs
 	for len(entries) > 0 {
 		if ctx.Canceled() {
 			return
@@ -2921,42 +2944,18 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 			entries = entries[1:]
 			continue
 		}
-		if ts.Before(edge) {
-			var subEntries []*Entry
-			if st = m.en.doReaddir(ctx, e.Inode, 0, &subEntries, batch); st != 0 {
-				logger.Warnf("readdir subTrash %d: %s", e.Inode, st)
-				entries = entries[1:]
-				continue
-			}
-			rmdir := len(subEntries) < batch
-			if rmdir {
-				entries = entries[1:]
-			}
-			for _, se := range subEntries {
-				if ctx.Canceled() {
-					return
-				}
-				var c uint64
-				st = m.Remove(ctx, e.Inode, string(se.Name), false, m.conf.MaxDeletes, &c)
-				if st == 0 {
-					count += int(c)
-					if increProgress != nil {
-						increProgress(int(c))
-					}
-				} else {
-					if st != syscall.ETIMEDOUT && st != syscall.EINTR {
-						logger.Warnf("delete from trash %s/%s: %s", e.Name, se.Name, st)
-					}
-					rmdir = false
-				}
-			}
-			if rmdir {
-				if st = m.en.doRmdir(ctx, TrashInode, string(e.Name), nil, nil); st != 0 {
-					logger.Warnf("rmdir subTrash %s: %s", e.Name, st)
-				}
+		if !ts.Before(edge) {
+			break
+		}
+		if st = m.emptyDir(ctx, e.Inode, true, &count, concurrent); st != 0 {
+			if st != syscall.ETIMEDOUT && st != syscall.EINTR {
+				logger.Warnf("empty subTrash %d/%s: %s", e.Inode, e.Name, st)
 			}
 		} else {
-			break
+			entries = entries[1:]
+			if st = m.en.doRmdir(ctx, TrashInode, string(e.Name), nil, nil); st != 0 {
+				logger.Warnf("rmdir subTrash %s: %s", e.Name, st)
+			}
 		}
 	}
 }
