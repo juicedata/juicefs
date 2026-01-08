@@ -830,7 +830,7 @@ func (m *kvMeta) shouldRetry(err error) bool {
 	return m.client.shouldRetry(err)
 }
 
-func (m *kvMeta) txn(ctx context.Context, f func(tx *kvTxn) error, inodes ...Ino) error {
+func (m *kvMeta) txn(ctx Context, f func(tx *kvTxn) error, inodes ...Ino) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
@@ -839,24 +839,26 @@ func (m *kvMeta) txn(ctx context.Context, f func(tx *kvTxn) error, inodes ...Ino
 	defer m.txBatchLock(inodes...)()
 	var (
 		lastErr error
-		method  string
+		method  txMethod
 	)
+
 	for i := 0; i < 50; i++ {
+		if ctx.Canceled() {
+			logger.Warnf("Transaction %s interrupted after %s, tried %d, inodes: %v", method.name(ctx), time.Since(start), i+1, inodes)
+			return syscall.EINTR
+		}
 		err := m.client.txn(ctx, f, i)
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
 		}
 		if err != nil && m.shouldRetry(err) {
-			if method == "" {
-				method = callerName(ctx) // lazy evaluation
-			}
-			m.txRestart.WithLabelValues(method).Add(1)
+			m.txRestart.WithLabelValues(method.name(ctx)).Add(1)
 			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
 			lastErr = err
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
 		} else if err == nil && i > 1 {
-			logger.Warnf("Transaction succeeded after %d tries (%s), inodes: %v, method: %s, error: %s", i+1, time.Since(start), inodes, method, lastErr)
+			logger.Warnf("Transaction succeeded after %d tries (%s), inodes: %v, method: %s, error: %s", i+1, time.Since(start), inodes, method.name(ctx), lastErr)
 		}
 		return err
 	}

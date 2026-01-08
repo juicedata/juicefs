@@ -91,13 +91,13 @@ func TestAtimeNeedsUpdate(t *testing.T) {
 
 func Test_getCallerName(t *testing.T) {
 	ctx := context.WithValue(context.Background(), txMethodKey{}, "test")
-	method := callerName(ctx)
-	if method != "test" {
+	var method txMethod
+	if method.name(ctx) != "test" {
 		t.Fatalf("expected %q, got %q", "test", method)
 	}
 	func() {
-		method := callerName(context.Background())
-		if method != "Test_getCallerName" {
+		var method txMethod
+		if method.name(context.Background()) != "Test_getCallerName" {
 			t.Fatalf("expected %q, got %q", "Test_getCallerName", method)
 		}
 	}()
