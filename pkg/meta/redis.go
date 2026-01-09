@@ -78,6 +78,7 @@ import (
 	Quota used space:  dirQuotaUsedSpace -> { $inode -> usedSpace }
 	Quota used inodes: dirQuotaUsedInodes -> { $inode -> usedInodes }
 	Acl: acl -> { $acl_id -> acl }
+	KrbToken: krbToken -> { $token_id -> token }
 
 	Redis features:
 	  Sorted Set: 1.2+
@@ -729,6 +730,10 @@ func (m *redisMeta) totalInodesKey() string {
 
 func (m *redisMeta) aclKey() string {
 	return m.prefix + "acl"
+}
+
+func (m *redisMeta) krbTokenKey() string {
+	return m.prefix + "krbToken"
 }
 
 func (m *redisMeta) delfiles() string {
@@ -5339,6 +5344,79 @@ func (m *redisMeta) loadDumpedACLs(ctx Context) error {
 		}
 		return tx.Set(ctx, m.prefix+aclCounter, maxId, 0).Err()
 	}, m.inodeKey(RootInode))
+}
+
+func (m *redisMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		newId, err := m.incrCounter(krbTokenCounter, 1)
+		if err != nil {
+			return err
+		}
+		err = tx.HSet(ctx, m.krbTokenKey(), strconv.FormatUint(uint64(newId), 10), token).Err()
+		if err == nil {
+			id = uint32(newId)
+		}
+		return err
+	}, m.krbTokenKey())
+	return id, errno(err)
+}
+
+func (m *redisMeta) doUpdateToken(ctx Context, id uint32, token []byte) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		exist, err := tx.HExists(ctx, m.krbTokenKey(), strconv.FormatUint(uint64(id), 10)).Result()
+		if err != nil {
+			return err
+		}
+		if !exist {
+			return syscall.ENOENT
+		}
+		return tx.HSet(ctx, m.krbTokenKey(), strconv.FormatUint(uint64(id), 10), token).Err()
+	}, m.krbTokenKey()))
+}
+
+func (m *redisMeta) doLoadToken(ctx Context, id uint32) (token []byte, st syscall.Errno) {
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		val, err := tx.HGet(ctx, m.krbTokenKey(), strconv.FormatUint(uint64(id), 10)).Bytes()
+		if err != nil {
+			return err
+		}
+		if val == nil {
+			return syscall.ENOENT
+		}
+		token = val
+		return nil
+	}, m.krbTokenKey())
+	return token, errno(err)
+}
+
+func (m *redisMeta) doDeleteTokens(ctx Context, ids []uint32) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		strIds := make([]string, len(ids))
+		for i, id := range ids {
+			strIds[i] = strconv.FormatUint(uint64(id), 10)
+		}
+		return tx.HDel(ctx, m.krbTokenKey(), strIds...).Err()
+	}, m.krbTokenKey()))
+}
+
+func (m *redisMeta) doListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno) {
+	tokens = make(map[uint32][]byte)
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		vals, err := tx.HGetAll(ctx, m.krbTokenKey()).Result()
+		if err != nil {
+			return err
+		}
+		for k, v := range vals {
+			id, err := strconv.ParseUint(k, 10, 32)
+			if err != nil {
+				logger.Errorf("parse token id: %s: %v", k, err)
+				continue
+			}
+			tokens[uint32(id)] = []byte(v)
+		}
+		return nil
+	}, m.krbTokenKey())
+	return tokens, errno(err)
 }
 
 func (m *redisMeta) newDirHandler(inode Ino, plus bool, entries []*Entry) DirHandler {

@@ -37,10 +37,11 @@ import (
 )
 
 const (
-	aclCounter     = "aclMaxId"
-	usedSpace      = "usedSpace"
-	totalInodes    = "totalInodes"
-	legacySessions = "sessions"
+	aclCounter      = "aclMaxId"
+	usedSpace       = "usedSpace"
+	totalInodes     = "totalInodes"
+	legacySessions  = "sessions"
+	krbTokenCounter = "krbTokenMaxId"
 )
 
 var counterNames = []string{usedSpace, totalInodes, "nextInode", "nextChunk", "nextSession", "nextTrash"}
