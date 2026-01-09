@@ -32,6 +32,17 @@ type sharded struct {
 	stores []ObjectStorage
 }
 
+type shardKey struct{}
+
+func WithShardHint(ctx context.Context, hint string) context.Context {
+	return context.WithValue(ctx, shardKey{}, hint)
+}
+
+func GetShardHint(ctx context.Context) (string, bool) {
+	v, ok := ctx.Value(shardKey{}).(string)
+	return v, ok
+}
+
 func (s *sharded) String() string {
 	return fmt.Sprintf("shard%d://%s", len(s.stores), s.stores[0])
 }
@@ -51,7 +62,10 @@ func (s *sharded) Create(ctx context.Context) error {
 	return nil
 }
 
-func (s *sharded) pick(key string) ObjectStorage {
+func (s *sharded) pick(ctx context.Context, key string) ObjectStorage {
+	if hint, ok := GetShardHint(ctx); ok {
+		key = hint
+	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(key))
 	i := h.Sum32() % uint32(len(s.stores))
@@ -59,15 +73,15 @@ func (s *sharded) pick(key string) ObjectStorage {
 }
 
 func (s *sharded) Head(ctx context.Context, key string) (Object, error) {
-	return s.pick(key).Head(ctx, key)
+	return s.pick(ctx, key).Head(ctx, key)
 }
 
 func (s *sharded) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	return s.pick(key).Get(ctx, key, off, limit, getters...)
+	return s.pick(ctx, key).Get(ctx, key, off, limit, getters...)
 }
 
 func (s *sharded) Put(ctx context.Context, key string, body io.Reader, getters ...AttrGetter) error {
-	return s.pick(key).Put(ctx, key, body, getters...)
+	return s.pick(ctx, key).Put(ctx, key, body, getters...)
 }
 
 func (s *sharded) Copy(ctx context.Context, dst, src string) error {
@@ -75,7 +89,7 @@ func (s *sharded) Copy(ctx context.Context, dst, src string) error {
 }
 
 func (s *sharded) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	return s.pick(key).Delete(ctx, key, getters...)
+	return s.pick(ctx, key).Delete(ctx, key, getters...)
 }
 
 func (s *sharded) SetStorageClass(sc string) error {
@@ -197,19 +211,19 @@ func (s *sharded) ListAll(ctx context.Context, prefix, marker string, followLink
 }
 
 func (s *sharded) CreateMultipartUpload(ctx context.Context, key string) (*MultipartUpload, error) {
-	return s.pick(key).CreateMultipartUpload(ctx, key)
+	return s.pick(ctx, key).CreateMultipartUpload(ctx, key)
 }
 
 func (s *sharded) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
-	return s.pick(key).UploadPart(ctx, key, uploadID, num, body)
+	return s.pick(ctx, key).UploadPart(ctx, key, uploadID, num, body)
 }
 
 func (s *sharded) AbortUpload(ctx context.Context, key string, uploadID string) {
-	s.pick(key).AbortUpload(ctx, key, uploadID)
+	s.pick(ctx, key).AbortUpload(ctx, key, uploadID)
 }
 
 func (s *sharded) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
-	return s.pick(key).CompleteUpload(ctx, key, uploadID, parts)
+	return s.pick(ctx, key).CompleteUpload(ctx, key, uploadID, parts)
 }
 
 func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage, error) {
