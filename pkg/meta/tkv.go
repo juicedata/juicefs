@@ -1447,6 +1447,29 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		trashName string
 		buf       []byte
 	}
+	type batchOp struct {
+		// Entry operations
+		nameToDel    []string
+		trashEntries map[string][]byte // trashName -> buf
+
+		// Inode operations
+		iToUpd   map[Ino]*Attr
+		iToDel   []Ino
+		symToDel []Ino
+
+		// Parent key operations
+		pkeyDec map[string]int64 // key -> decrement value
+		pkeyInc map[string]int64 // key -> increment value
+
+		// Special operations
+		susKeys   map[string][]byte // key -> value
+		delKeys   map[string][]byte // key -> value
+		xkeyToDel []Ino
+		pkeyToDel []Ino
+
+		// Parent directory update
+		updateParent *Attr
+	}
 
 	var entryInfos []*entryInfo
 	var totalLength, totalSpace, totalInodes int64
@@ -1455,6 +1478,11 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		length uint64
 	}
 	var delNodes map[Ino]*dNode
+	var pattr Attr
+	var now time.Time
+	var updateParent bool
+
+	// First transaction: read and validate, collect all data
 	err := m.txn(ctx, func(tx *kvTxn) error {
 		totalLength, totalSpace, totalInodes = 0, 0, 0
 		if userGroupQuotas != nil {
@@ -1466,7 +1494,6 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		if pbuf == nil {
 			return syscall.ENOENT
 		}
-		var pattr Attr
 		m.parseAttr(pbuf, &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
@@ -1479,7 +1506,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		}
 
 		entryInfos = make([]*entryInfo, 0, len(entries))
-		now := time.Now()
+		now = time.Now()
 
 		// Collect entry info and filter out directories
 		if len(entries) > 0 {
@@ -1558,7 +1585,6 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 					info.trash = 0
 				}
 			}
-			// Update ctime
 			info.attr.Ctime = now.Unix()
 			info.attr.Ctimensec = uint32(now.Nanosecond())
 			if info.trash > 0 && info.attr.Parent > 0 {
@@ -1578,138 +1604,12 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 			}
 		}
 
-		var updateParent bool
 		if !parent.IsTrash() && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
 			pattr.Ctimensec = uint32(now.Nanosecond())
 			updateParent = true
-		}
-
-		nowUnix := now.Unix()
-		visited := make(map[Ino]bool)
-		visited[0] = true // skip dummyNode
-
-		// Collect data for batch operations
-		var names []string
-		var itoUpd map[Ino]*Attr
-		var itoDel []Ino
-		var stoDel []Ino
-
-		for _, info := range entryInfos {
-			if info.typ == TypeDirectory {
-				continue
-			}
-			names = append(names, info.name)
-			if info.attr == nil {
-				continue
-			}
-
-			if info.attr.Parent == 0 {
-				tx.incrBy(m.parentKey(info.inode, parent), -1)
-			}
-			// Update user/group quota for each entry deletion (outside visited check)
-			// Because quota tracks entries, not physical inodes
-			if info.typ == TypeFile && userGroupQuotas != nil && !parent.IsTrash() {
-				var entrySpace int64
-				if info.attr.Nlink > 0 {
-					// Hardlink being removed but file still exists
-					entrySpace = 0
-				} else {
-					// Last link or file being deleted
-					entrySpace = -align4K(info.attr.Length)
-				}
-				*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
-					Uid:    info.attr.Uid,
-					Gid:    info.attr.Gid,
-					Space:  entrySpace,
-					Inodes: -1,
-				})
-			}
-
-			if !visited[info.inode] {
-				if info.attr.Nlink > 0 {
-					// Inode still referenced: update metadata
-					if itoUpd == nil {
-						itoUpd = make(map[Ino]*Attr)
-					}
-					itoUpd[info.inode] = info.attr
-					// Move to trash if needed
-					if info.trash > 0 {
-						if info.trashName == "" {
-							info.trashName = m.trashEntry(parent, info.inode, info.name)
-						}
-						tx.set(m.entryKey(info.trash, info.trashName), info.buf)
-						if info.attr.Parent == 0 {
-							tx.incrBy(m.parentKey(info.inode, info.trash), 1)
-						}
-					}
-				} else {
-					// Last link removed: prepare to delete inode
-					switch info.typ {
-					case TypeFile:
-						if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
-							// File is opened: sustain it
-							if itoUpd == nil {
-								itoUpd = make(map[Ino]*Attr)
-							}
-							itoUpd[info.inode] = info.attr
-							tx.set(m.sustainedKey(m.sid, info.inode), []byte{1})
-						} else {
-							// Regular unopened file: add to delfile and delete inode
-							tx.set(m.delfileKey(info.inode, info.attr.Length), m.packInt64(nowUnix))
-							itoDel = append(itoDel, info.inode)
-							totalSpace -= align4K(info.attr.Length)
-							totalInodes--
-						}
-						totalLength -= int64(info.attr.Length)
-					case TypeSymlink:
-						stoDel = append(stoDel, info.inode)
-						fallthrough
-					default:
-						itoDel = append(itoDel, info.inode)
-						totalSpace -= align4K(0)
-						totalInodes--
-						if info.typ != TypeSymlink {
-							totalLength -= int64(info.attr.Length)
-						}
-					}
-					// Delete xattrs and parent keys
-					tx.deleteKeys(m.xattrKey(info.inode, ""))
-					if info.attr.Parent == 0 {
-						tx.deleteKeys(m.fmtKey("A", info.inode, "P"))
-					}
-				}
-				m.of.InvalidateChunk(info.inode, invalidateAttrOnly)
-			}
-
-			visited[info.inode] = true
-		}
-
-		// Delete entry keys from parent directory
-		for _, name := range names {
-			tx.delete(m.entryKey(parent, name))
-		}
-
-		// Update inodes that still have links
-		for inode, attr := range itoUpd {
-			tx.set(m.inodeKey(inode), m.marshal(attr))
-		}
-
-		// Delete inodes
-		for _, inode := range itoDel {
-			tx.delete(m.inodeKey(inode))
-		}
-
-		// Delete symlinks
-		for _, inode := range stoDel {
-			tx.delete(m.symKey(inode))
-		}
-
-		// Update parent directory if needed
-		if updateParent {
-			tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		}
 
 		return nil
@@ -1719,7 +1619,305 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		return errno(err)
 	}
 
-	// Outside of transaction: update global stats and trigger data deletion callbacks
+	// Collect all operations outside of transaction
+	nowUnix := now.Unix()
+	visited := make(map[Ino]bool)
+	visited[0] = true // skip dummyNode
+
+	var allOps []batchOp
+	b := batchOp{
+		trashEntries: make(map[string][]byte),
+		iToUpd:       make(map[Ino]*Attr),
+		pkeyDec:      make(map[string]int64),
+		pkeyInc:      make(map[string]int64),
+		susKeys:      make(map[string][]byte),
+		delKeys:      make(map[string][]byte),
+	}
+
+	for _, info := range entryInfos {
+		if info.typ == TypeDirectory {
+			continue
+		}
+		b.nameToDel = append(b.nameToDel, info.name)
+		if info.attr == nil {
+			continue
+		}
+		if !visited[info.inode] {
+			if info.attr.Nlink > 0 {
+				b.iToUpd[info.inode] = info.attr
+			} else {
+				switch info.typ {
+				case TypeFile:
+					if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
+						b.iToUpd[info.inode] = info.attr
+						b.susKeys[string(m.sustainedKey(m.sid, info.inode))] = []byte{1}
+					} else {
+						b.delKeys[string(m.delfileKey(info.inode, info.attr.Length))] = m.packInt64(nowUnix)
+						b.iToDel = append(b.iToDel, info.inode)
+						totalSpace -= align4K(info.attr.Length)
+						totalInodes--
+					}
+					totalLength -= int64(info.attr.Length)
+				case TypeSymlink:
+					b.symToDel = append(b.symToDel, info.inode)
+					fallthrough
+				default:
+					b.iToDel = append(b.iToDel, info.inode)
+					totalSpace -= align4K(0)
+					totalInodes--
+					if info.typ != TypeSymlink {
+						totalLength -= int64(info.attr.Length)
+					}
+				}
+				// Delete xattrs and parent keys
+				b.xkeyToDel = append(b.xkeyToDel, info.inode)
+				if info.attr.Parent == 0 {
+					b.pkeyToDel = append(b.pkeyToDel, info.inode)
+				}
+			}
+			m.of.InvalidateChunk(info.inode, invalidateAttrOnly)
+		}
+
+		if info.attr.Parent == 0 {
+			key := string(m.parentKey(info.inode, parent))
+			b.pkeyDec[key] = b.pkeyDec[key] - 1
+		}
+		if info.trash > 0 {
+			if info.trashName == "" {
+				info.trashName = m.trashEntry(parent, info.inode, info.name)
+			}
+			b.trashEntries[info.trashName] = info.buf
+			if info.attr.Parent == 0 {
+				key := string(m.parentKey(info.inode, info.trash))
+				b.pkeyInc[key] = b.pkeyInc[key] + 1
+			}
+		}
+		// Update user/group quota for each entry deletion
+		if info.typ == TypeFile && userGroupQuotas != nil && !parent.IsTrash() {
+			if info.attr.Nlink > 0 {
+				*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
+					Uid:    info.attr.Uid,
+					Gid:    info.attr.Gid,
+					Space:  0,
+					Inodes: -1,
+				})
+			} else {
+				*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
+					Uid:    info.attr.Uid,
+					Gid:    info.attr.Gid,
+					Space:  -align4K(info.attr.Length),
+					Inodes: -1,
+				})
+			}
+		}
+		visited[info.inode] = true
+	}
+	if updateParent {
+		b.updateParent = &pattr
+	}
+	allOps = append(allOps, b)
+
+	batch := 10000
+	if m.Name() == "etcd" {
+		batch = 128
+	}
+	batchFun := func(count int, opFun func(start, end int) error) syscall.Errno {
+		for i := 0; i < count; i += batch {
+			end := i + batch
+			if end > count {
+				end = count
+			}
+			if err := opFun(i, end); err != nil {
+				return errno(err)
+			}
+		}
+		return 0
+	}
+
+	// Split operations into batches and execute
+	for _, op := range allOps {
+		// Split entry deletions
+		if err := batchFun(len(op.nameToDel), func(start, end int) error {
+			return m.txn(ctx, func(tx *kvTxn) error {
+				for _, name := range op.nameToDel[start:end] {
+					tx.delete(m.entryKey(parent, name))
+				}
+				return nil
+			}, parent)
+		}); err != 0 {
+			return err
+		}
+
+		// Split trash entries
+		trashEntriesList := make([]struct {
+			name string
+			buf  []byte
+		}, 0, len(op.trashEntries))
+		for name, buf := range op.trashEntries {
+			trashEntriesList = append(trashEntriesList, struct {
+				name string
+				buf  []byte
+			}{name, buf})
+		}
+		if err := batchFun(len(trashEntriesList), func(start, end int) error {
+			return m.txn(ctx, func(tx *kvTxn) error {
+				for _, te := range trashEntriesList[start:end] {
+					tx.set(m.entryKey(trash, te.name), te.buf)
+				}
+				return nil
+			}, parent)
+		}); err != 0 {
+			return err
+		}
+
+		// Split inode updates
+		inodeList := make([]struct {
+			inode Ino
+			attr  *Attr
+		}, 0, len(op.iToUpd))
+		for inode, attr := range op.iToUpd {
+			inodeList = append(inodeList, struct {
+				inode Ino
+				attr  *Attr
+			}{inode, attr})
+		}
+		if err := batchFun(len(inodeList), func(start, end int) error {
+			return m.txn(ctx, func(tx *kvTxn) error {
+				for _, item := range inodeList[start:end] {
+					tx.set(m.inodeKey(item.inode), m.marshal(item.attr))
+				}
+				return nil
+			}, parent)
+		}); err != 0 {
+			return err
+		}
+
+		// Split inode deletions
+		if err := batchFun(len(op.iToDel), func(start, end int) error {
+			return m.txn(ctx, func(tx *kvTxn) error {
+				for _, inode := range op.iToDel[start:end] {
+					tx.delete(m.inodeKey(inode))
+				}
+				return nil
+			}, parent)
+		}); err != 0 {
+			return err
+		}
+
+		// Split symlink deletions
+		if err := batchFun(len(op.symToDel), func(start, end int) error {
+			return m.txn(ctx, func(tx *kvTxn) error {
+				for _, inode := range op.symToDel[start:end] {
+					tx.delete(m.symKey(inode))
+				}
+				return nil
+			}, parent)
+		}); err != 0 {
+			return err
+		}
+
+		// Split parent key operations
+		pkeyOps := make([]struct {
+			key  []byte
+			incr int64
+		}, 0)
+		for key, decr := range op.pkeyDec {
+			if decr != 0 {
+				pkeyOps = append(pkeyOps, struct {
+					key  []byte
+					incr int64
+				}{[]byte(key), decr})
+			}
+		}
+		for key, incr := range op.pkeyInc {
+			if incr != 0 {
+				pkeyOps = append(pkeyOps, struct {
+					key  []byte
+					incr int64
+				}{[]byte(key), incr})
+			}
+		}
+		if err := batchFun(len(pkeyOps), func(start, end int) error {
+			return m.txn(ctx, func(tx *kvTxn) error {
+				for _, op := range pkeyOps[start:end] {
+					tx.incrBy(op.key, op.incr)
+				}
+				return nil
+			}, parent)
+		}); err != 0 {
+			return err
+		}
+
+		// Split sustained keys
+		susList := make([]struct {
+			key   []byte
+			value []byte
+		}, 0, len(op.susKeys))
+		for key, value := range op.susKeys {
+			susList = append(susList, struct {
+				key   []byte
+				value []byte
+			}{[]byte(key), value})
+		}
+		if err := batchFun(len(susList), func(start, end int) error {
+			return m.txn(ctx, func(tx *kvTxn) error {
+				for _, item := range susList[start:end] {
+					tx.set(item.key, item.value)
+				}
+				return nil
+			}, parent)
+		}); err != 0 {
+			return err
+		}
+
+		// Split delfile keys
+		delList := make([]struct {
+			key   []byte
+			value []byte
+		}, 0, len(op.delKeys))
+		for key, value := range op.delKeys {
+			delList = append(delList, struct {
+				key   []byte
+				value []byte
+			}{[]byte(key), value})
+		}
+		if err := batchFun(len(delList), func(start, end int) error {
+			return m.txn(ctx, func(tx *kvTxn) error {
+				for _, item := range delList[start:end] {
+					tx.set(item.key, item.value)
+				}
+				return nil
+			}, parent)
+		}); err != 0 {
+			return err
+		}
+
+		for _, inode := range op.xkeyToDel {
+			if err := m.txn(ctx, func(tx *kvTxn) error {
+				tx.deleteKeys(m.xattrKey(inode, ""))
+				return nil
+			}, parent); err != nil {
+				return errno(err)
+			}
+		}
+		for _, inode := range op.pkeyToDel {
+			if err := m.txn(ctx, func(tx *kvTxn) error {
+				tx.deleteKeys(m.fmtKey("A", inode, "P"))
+				return nil
+			}, parent); err != nil {
+				return errno(err)
+			}
+		}
+		if op.updateParent != nil {
+			if err := m.txn(ctx, func(tx *kvTxn) error {
+				tx.set(m.inodeKey(parent), m.marshal(op.updateParent))
+				return nil
+			}, parent); err != nil {
+				return errno(err)
+			}
+		}
+	}
+
 	for inode, info := range delNodes {
 		m.fileDeleted(info.opened, parent.IsTrash(), inode, info.length)
 	}
