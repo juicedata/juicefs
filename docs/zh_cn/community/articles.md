@@ -207,5 +207,3 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 ### 社交媒体投稿
 
 你可以加入 JuiceFS 官方的 [Slack 频道](https://go.juicefs.com/slack)，任何一位工作人员都可以接洽案例投稿事宜。
-
-
