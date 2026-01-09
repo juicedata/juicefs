@@ -11,6 +11,10 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### AI, machine learning, and deep learning
 
+- [From GlusterFS to JuiceFS: Lightillusions Achieved 2.5x Faster 3D AIGC Data Processing](https://juicefs.com/en/blog/user-stories/aigc-storage-glusterfs-cephfs-vs-juicefs), 2026-01-08, Weiyu Li @ Lightillusions
+- [AI Data Storage: Challenges, Capabilities, and Comparative Analysis](https://juicefs.com/en/blog/solutions/ai-data-storage-challenges-capabilities-solution-comparison), 2025-12-18, Rui Su
+- [JuiceFS+MinIO: Ariste AI Achieved 3x Faster I/O and Cut Storage Costs by 40%+](https://juicefs.com/en/blog/user-stories/quantitative-storage-artificial-intelligence-solution), 2025-12-11, Yutang Gao @ Ariste AI
+- [NAS vs. Object Storage vs. JuiceFS: Storage Selection of Billion-Dollar Quantitative Firms](https://juicefs.com/en/blog/solutions/quant-research-storage-selection-nas-object-storage-juicefs), 2025-11-27, Jerry Cai
 - [Building AI Inference with JuiceFS: Supporting Multi-Modal Complex I/O, Cross-Cloud, and Multi-Tenancy](https://juicefs.com/en/blog/solutions/ai-inference-multi-cloud-storage-multi-tenancy), 2025-10-23, Shaojie Li
 - [Zelos Tech Manages Hundreds of Millions of Files for Autonomous Driving with JuiceFS](https://juicefs.com/en/blog/user-stories/multi-cloud-storage-autonomous-driving), 2025-10-09, Junyu Deng @ Zelos Tech
 - [Why Gaoding Technology Chose JuiceFS for AI Storage in a Multi-Cloud Architecture](https://juicefs.com/en/blog/user-stories/multi-cloud-storage-artificial-intelligence-training), 2025-09-03, Jia Ke @ Gaoding Technology
@@ -82,6 +86,8 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Engineering insights
 
+- [Design and Performance Optimization of juice sync for Enterprise Data Synchronization](https://juicefs.com/en/blog/engineering/design-performance-optimization-juice-sync), 2025-12-08, Jian Zhi
+- [Deep Dive into the JuiceFS Garbage Collection Mechanism](https://juicefs.com/en/blog/engineering/juicefs-garbage-collection), 2025-11-06, Yuchao Xu
 - [MLPerf Storage v2.0: JuiceFS Leads in Bandwidth Utilization and Scalability for AI Training](https://juicefs.com/en/blog/engineering/mlperf-storage-v2-ai-training-storage-performance), 2025-09-25, Feihu Mo
 - [Achieving TB-Level Aggregate Bandwidth: How JuiceFS Optimized Distributed Cache Network](https://juicefs.com/en/blog/engineering/terabyte-aggregate-bandwidth-distributed-cache-network), 2025-09-18, Feihu Mo
 - [JuiceFS on Windows: Challenges in the Beta Release](https://juicefs.com/en/blog/engineering/optimize-juicefs-on-windows), 2025-08-20, Ethan Chen

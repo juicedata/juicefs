@@ -8,6 +8,9 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## AI
 
+- [3D-AIGC 存储架构演进：从 NFS、GlusterFS 到 JuiceFS](https://juicefs.com/zh-cn/blog/user-stories/3d-aigc-storage-evolution-juicefs)，2026-01-05，李威宇@光影焕像
+- [JuiceFS + MinIO：Ariste AI 量化投资高性能存储实践](https://juicefs.com/zh-cn/blog/user-stories/juicefs-minio-ariste-ai-quant-storage)，2025-12-08，高玉堂@Ariste AI
+- [NAS、对象存储与 JuiceFS：百亿量化基金的存储选型实践](https://juicefs.com/zh-cn/blog/solutions/quant-fund-storage-selection-nas-object-juicefs)，2025-11-20，蔡敏
 - [基于 JuiceFS 构建 AI 推理：多模态复杂 I/O、跨云与多租户支持](https://juicefs.com/zh-cn/blog/solutions/juicefs-ai-inference-multi-modal-cross-cloud-multi-tenant)，2025-10-17，李少杰
 - [九识智能：基于 JuiceFS 的自动驾驶多云亿级文件存储](https://juicefs.com/zh-cn/blog/user-stories/intsig-juicefs-autonomous-driving-multi-cloud-storage)，2025-09-24，邓君宇@九识智能
 - [稿定科技：多云架构下的 AI 存储挑战与 JuiceFS 实践](https://juicefs.com/zh-cn/blog/user-stories/gaoding-ai-storage-challenges-multi-cloud-juicefs)，2025-08-08，可加@稿定科技
@@ -119,6 +122,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 原理解析
 
+- [JuiceFS sync 原理解析与性能优化，企业级数据同步利器](https://juicefs.com/zh-cn/blog/engineering/juicefs-sync-principle-performance-optimization)，2025-11-26，执剑
 - [深入解析 JuiceFS 垃圾回收机制](https://juicefs.com/zh-cn/blog/engineering/juicefs-gc-mechanism)，2025-10-30，许誉超
 - [JuiceFS writeback：写加速机制与适用场景解析](https://juicefs.com/zh-cn/blog/solutions/juicesfs-writeback-analysis)，2025-08-25，蔡敏
 - [JuiceFS on Windows: 首个 Beta 版的探索与优化原理](https://juicefs.com/zh-cn/blog/engineering/juicefs-on-windows-beta)，2025-08-04，陈杰
