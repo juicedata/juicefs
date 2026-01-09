@@ -85,6 +85,8 @@ public class KerberosTest {
     Token<?> t = fs.getDelegationToken(UserGroupInformation.getCurrentUser().getShortUserName());
     long end = System.currentTimeMillis();
     System.out.println("get token time: " + (end - start) + " ms");
+
+    // token renewer
     JuiceFSTokenRenewer renewer = new JuiceFSTokenRenewer();
     start = System.currentTimeMillis();
     System.out.println(renewer.renew(t, cfg));
@@ -92,8 +94,12 @@ public class KerberosTest {
     System.out.println("token id: " + identifier.getMasterKeyId());
     end = System.currentTimeMillis();
     System.out.println("renew token time: " + (end - start) + " ms");
-    fs.close();
+    start = System.currentTimeMillis();
+    renewer.cancel(t, cfg);
+    end = System.currentTimeMillis();
+    System.out.println("cancel token time: " + (end - start) + " ms");
     UserGroupInformation.reset();
+    fs.close();
   }
 
   @Test

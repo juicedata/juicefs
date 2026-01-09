@@ -228,7 +228,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     long jfs_renew_token(long h, int id, String password);
 
-    int jfs_cancel_token(long pid, long h, int id, String password);
+    int jfs_cancel_token(long h, int id, String password);
 
     interface LogCallBack {
       @Delegate
@@ -2416,8 +2416,8 @@ public class JuiceFileSystemImpl extends FileSystem {
   public void cancelToken(Token<?> token) throws IOException {
     AbstractDelegationTokenIdentifier identifier = (AbstractDelegationTokenIdentifier) token.decodeIdentifier();
     int id = identifier.getMasterKeyId();
-    String pwd = new String(token.getPassword(), StandardCharsets.UTF_8);;
-    int r = lib.jfs_cancel_token(Thread.currentThread().getId(), handle, id, pwd);
+    String pwd = new String(token.getPassword(), StandardCharsets.UTF_8);
+    int r = lib.jfs_cancel_token(handle, id, pwd);
     if (r == EACCESS) {
       throw new IOException("permission denied");
     }

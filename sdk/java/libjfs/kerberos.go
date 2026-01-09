@@ -28,7 +28,6 @@ import (
 	"github.com/jcmturner/gokrb5/v8/spnego"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
-	"github.com/juicedata/juicefs/pkg/utils"
 	"io"
 	"net"
 	"regexp"
@@ -555,7 +554,7 @@ func (k *kerberos) loadToken(ctx meta.Context, m meta.Meta, id uint32) (*token, 
 	return t, 0
 }
 
-func (k *kerberos) cancelToken(ctx meta.Context, m meta.Meta, volname, user string, id uint32, password string) syscall.Errno {
+func (k *kerberos) cancelToken(ctx meta.Context, m meta.Meta, user string, id uint32, password string) syscall.Errno {
 	t, eno := k.loadToken(ctx, m, id)
 	if eno != 0 {
 		return eno
@@ -574,14 +573,19 @@ func (k *kerberos) cleanupTokens(ctx meta.Context, m meta.Meta) syscall.Errno {
 	var todelete []uint32
 	now := time.Now().Unix()
 	for id, data := range tokens {
-		r := utils.FromBuffer(data)
-		r.Seek(0)
-		_ = int64(r.Get64())
-		expire := int64(r.Get64())
-		if expire <= now {
+		t := &token{}
+		err := json.Unmarshal(data, t)
+		if err != nil {
+			logger.Warnf("unmarshal token %d: %s", id, err)
+		}
+		if t.Expire <= now {
 			todelete = append(todelete, id)
 		}
 	}
+	if len(todelete) == 0 {
+		return 0
+	}
+	logger.Infof("cleaning up %d(%v) expired tokens", len(todelete), todelete)
 	return m.DeleteTokens(ctx, todelete)
 }
 

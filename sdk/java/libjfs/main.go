@@ -2116,7 +2116,7 @@ func jfs_cancel_token(h int64, id uint32, password *C.char) int32 {
 	if w == nil {
 		return EINVAL
 	}
-	return errno(kerb.cancelToken(w.ctx, w.Meta(), w.volname, w.user, id, C.GoString(password)))
+	return errno(kerb.cancelToken(w.ctx, w.Meta(), w.user, id, C.GoString(password)))
 }
 
 func main() {
