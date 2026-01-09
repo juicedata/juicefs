@@ -187,6 +187,10 @@ func (p *withPrefix) UploadPart(key string, uploadID string, num int, body []byt
 	return p.os.UploadPart(p.prefix+key, uploadID, num, body)
 }
 
+func (p *withPrefix) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
+	return p.os.UploadPartStream(p.prefix+key, uploadID, num, in)
+}
+
 func (s *withPrefix) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	return s.os.UploadPartCopy(s.prefix+key, uploadID, num, s.prefix+srcKey, off, size)
 }
