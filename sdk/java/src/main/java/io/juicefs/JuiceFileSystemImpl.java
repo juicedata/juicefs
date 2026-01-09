@@ -222,6 +222,8 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     int jfs_ranger_cfg(String volName, Pointer buf, int size);
 
+    int jfs_is_superuser(long h, String user, String group);
+
     void jfs_set_callback(LogCallBack callBack);
 
     int jfs_get_token(long h, String name, Pointer buf, int bufSize, String renewer);
@@ -633,12 +635,16 @@ public class JuiceFileSystemImpl extends FileSystem {
     return new HashSet<>(Arrays.asList(new String(rBuf).split(",")));
   }
 
-  private boolean hasSuperPermission() {
-    return user.equals(superuser) || getGroups().contains(supergroup);
+  private boolean isSuperUser() throws IOException {
+    int r = lib.jfs_is_superuser(handle, user, String.join(",",  getGroups()));
+    if (r < 0) {
+      throw new InvalidRequestException("Invalid parameter");
+    }
+    return r == 1;
   }
 
-  private boolean needCheckPermission() {
-    return rangerPermissionChecker != null && !isSuperGroupFileSystem && !isBackGroundTask && !hasSuperPermission() ;
+  private boolean needCheckPermission() throws IOException {
+    return rangerPermissionChecker != null && !isSuperGroupFileSystem && !isBackGroundTask && !isSuperUser() ;
   }
 
   private boolean checkPathAccess(Path path, FsAction action, String operation) throws IOException {
@@ -1757,7 +1763,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   @Override
-  public FileStatus[] listStatus(Path f) throws FileNotFoundException, IOException {
+  public FileStatus[] listStatus(Path f) throws IOException {
     if (needCheckPermission() && !checkPathAccess(f, FsAction.READ_EXECUTE, "listStatus")) {
       return superGroupFileSystem.listStatus(f);
     }

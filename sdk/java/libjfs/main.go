@@ -254,12 +254,20 @@ func (w *wrapper) getSuperUser() string {
 	return w.superuser
 }
 
+func (w *wrapper) getSuperGroup() string {
+	if w.Supergroup != "" {
+		return w.Supergroup
+	}
+	return w.supergroup
+}
+
 func (w *wrapper) isSuperuser(name string, groups []string) bool {
 	if name == w.getSuperUser() || w.conf.SuperFS {
 		return true
 	}
+	sg := w.getSuperGroup()
 	for _, g := range groups {
-		if g == w.supergroup {
+		if g == sg {
 			return true
 		}
 	}
@@ -879,6 +887,19 @@ func jfs_getGroups(cname, cuser *C.char, buf uintptr, count int32) int32 {
 	}
 	copy(toBuf(buf, count), gStr)
 	return int32(len(gStr))
+}
+
+//export jfs_is_superuser
+func jfs_is_superuser(h int64, user *C.char, groups *C.char) int32 {
+	w := F(h)
+	if w == nil {
+		return EINVAL
+	}
+	if w.isSuperuser(C.GoString(user), strings.Split(C.GoString(groups), ",")) {
+		return 1
+	} else {
+		return 0
+	}
 }
 
 //export jfs_term
