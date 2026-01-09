@@ -55,10 +55,6 @@ var (
 	noSimplePattern = regexp.MustCompile(`[/@]`)
 )
 
-var (
-	cleanOnce sync.Once
-)
-
 type kRule struct {
 	isDefault   bool
 	comps       int
