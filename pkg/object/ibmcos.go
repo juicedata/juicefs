@@ -246,6 +246,9 @@ func (s *ibmcos) UploadPart(key string, uploadID string, num int, body []byte) (
 	return &Part{Num: num, ETag: *resp.ETag}, nil
 }
 
+func (s *ibmcos) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
+	return nil, notSupported
+}
 func (s *ibmcos) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	return nil, notSupported
 }

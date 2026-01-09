@@ -291,6 +291,10 @@ func (o *ossClient) CompleteUpload(key string, uploadID string, parts []*Part) e
 	return err
 }
 
+func (o *ossClient) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
+	return nil, notSupported
+}
+
 func (o *ossClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 	result, err := o.client.ListParts(ctx, &oss.ListPartsRequest{
 		Bucket: &o.bucket,

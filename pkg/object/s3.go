@@ -314,6 +314,10 @@ func (s *s3client) UploadPart(key string, uploadID string, num int, body []byte)
 	return &Part{Num: num, ETag: *resp.ETag}, nil
 }
 
+func (s *s3client) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
+	return nil, notSupported
+}
+
 func (s *s3client) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	resp, err := s.s3.UploadPartCopy(ctx, &s3.UploadPartCopyInput{
 		Bucket:          aws.String(s.bucket),

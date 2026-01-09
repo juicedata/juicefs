@@ -271,6 +271,10 @@ func (s *obsClient) UploadPart(key string, uploadID string, num int, body []byte
 	return &Part{Num: num, ETag: resp.ETag}, err
 }
 
+func (s *obsClient) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
+	return nil, notSupported
+}
+
 func (s *obsClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	resp, err := s.c.CopyPart(&obs.CopyPartInput{
 		Bucket:               s.bucket,

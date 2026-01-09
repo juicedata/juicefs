@@ -202,6 +202,10 @@ func (t *tosClient) UploadPart(key string, uploadID string, num int, body []byte
 	return &Part{Num: num, ETag: resp.ETag}, nil
 }
 
+func (t *tosClient) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
+	return nil, notSupported
+}
+
 func (t *tosClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	resp, err := t.client.UploadPartCopyV2(context.Background(), &tos.UploadPartCopyV2Input{
 		Bucket:          t.bucket,

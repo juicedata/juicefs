@@ -140,6 +140,10 @@ func (s DefaultObjectStorage) UploadPart(key string, uploadID string, num int, b
 	return nil, notSupported
 }
 
+func (s DefaultObjectStorage) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
+	return nil, notSupported
+}
+
 func (s DefaultObjectStorage) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	return nil, notSupported
 }
