@@ -237,6 +237,7 @@ type proxyParam struct {
 }
 
 type volParams struct {
+	m          meta.Meta
 	keytab     []byte
 	renew      int64
 	life       int64
@@ -406,6 +407,12 @@ type kerberos struct {
 	mu   sync.Mutex
 }
 
+func (k *kerberos) getVol(volname string) *volParams {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.vols[volname]
+}
+
 func (k *kerberos) auth(volname, user, realUser, group, ips, hostname string, reqBytes []byte) syscall.Errno {
 	krb5Token := spnego.KRB5Token{}
 	err := krb5Token.Unmarshal(reqBytes)
@@ -414,7 +421,7 @@ func (k *kerberos) auth(volname, user, realUser, group, ips, hostname string, re
 		logger.Errorf("invalid AP_REQ: %s", err)
 		return syscall.EINVAL
 	}
-	vol := k.vols[volname]
+	vol := k.getVol(volname)
 	if vol == nil || vol.keytab == nil {
 		logger.Errorf("server keytab for %s not setted", volname)
 		return syscall.ENODATA
@@ -455,7 +462,7 @@ func (k *kerberos) auth(volname, user, realUser, group, ips, hostname string, re
 }
 
 func (k *kerberos) issue(ctx meta.Context, m meta.Meta, volname, user, renewer string) (uint32, *token, syscall.Errno) {
-	vol := k.vols[volname]
+	vol := k.getVol(volname)
 	if vol == nil {
 		return 0, nil, syscall.EINVAL
 	}
@@ -494,14 +501,6 @@ func (k *kerberos) check(ctx meta.Context, m meta.Meta, volname, user string, id
 }
 
 func (k *kerberos) renew(ctx meta.Context, m meta.Meta, volname, renewer string, id uint32, password string) (int64, syscall.Errno) {
-	cleanOnce.Do(func() {
-		go func() {
-			ticker := time.NewTicker(10 * time.Minute)
-			for range ticker.C {
-				_ = k.cleanupTokens(ctx, m)
-			}
-		}()
-	})
 	t, eno := k.loadToken(ctx, m, id)
 	if eno != 0 {
 		return 0, eno
@@ -510,7 +509,7 @@ func (k *kerberos) renew(ctx meta.Context, m meta.Meta, volname, renewer string,
 		return 0, syscall.EACCES
 	}
 	renew := int64(defaultRenew)
-	vol := k.vols[volname]
+	vol := k.getVol(volname)
 	if vol != nil && vol.renew != 0 {
 		renew = vol.renew
 	}
@@ -565,32 +564,46 @@ func (k *kerberos) cancelToken(ctx meta.Context, m meta.Meta, user string, id ui
 	return m.DeleteTokens(ctx, []uint32{id})
 }
 
-func (k *kerberos) cleanupTokens(ctx meta.Context, m meta.Meta) syscall.Errno {
-	tokens, eno := m.ListTokens(ctx)
-	if eno != 0 {
-		return eno
+func (k *kerberos) cleanupTokens() {
+	var metas []meta.Meta
+	k.mu.Lock()
+	for _, vol := range k.vols {
+		metas = append(metas, vol.m)
 	}
-	var todelete []uint32
-	now := time.Now().Unix()
-	for id, data := range tokens {
-		t := &token{}
-		err := json.Unmarshal(data, t)
-		if err != nil {
-			logger.Warnf("unmarshal token %d: %s", id, err)
+	k.mu.Unlock()
+	for _, m := range metas {
+		ctx := meta.Background()
+		tokens, eno := m.ListTokens(ctx)
+		if eno != 0 {
+			logger.Errorf("list tokens: %s", eno)
+			return
 		}
-		if t.Expire <= now {
-			todelete = append(todelete, id)
+		var todelete []uint32
+		now := time.Now().Unix()
+		for id, data := range tokens {
+			t := &token{}
+			err := json.Unmarshal(data, t)
+			if err != nil {
+				logger.Warnf("unmarshal token %d: %s", id, err)
+			}
+			if t.Expire <= now {
+				todelete = append(todelete, id)
+			}
+		}
+		if len(todelete) == 0 {
+			return
+		}
+		logger.Infof("cleaning up %d expired tokens", len(todelete))
+		eno = m.DeleteTokens(ctx, todelete)
+		if eno != 0 {
+			logger.Errorf("delete tokens: %s", eno)
 		}
 	}
-	if len(todelete) == 0 {
-		return 0
-	}
-	logger.Infof("cleaning up %d(%v) expired tokens", len(todelete), todelete)
-	return m.DeleteTokens(ctx, todelete)
 }
 
 func (k *kerberos) loadConf(name, content string, jfs *fs.FileSystem) {
 	vol := &volParams{
+		m:       jfs.Meta(),
 		life:    defaultLife,
 		renew:   defaultRenew,
 		proxies: make(map[string]*proxyParam),
@@ -634,6 +647,12 @@ func (k *kerberos) loadConf(name, content string, jfs *fs.FileSystem) {
 
 func (k *kerberos) init() int {
 	k.vols = make(map[string]*volParams)
+	go func() {
+		for {
+			time.Sleep(10 * time.Minute)
+			k.cleanupTokens()
+		}
+	}()
 	return 0
 }
 
