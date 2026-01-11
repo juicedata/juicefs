@@ -1668,7 +1668,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 				if info.attr.Parent == 0 {
 					tx.incrBy(m.parentKey(info.inode, parent), -1)
 				}
-				if info.typ == TypeFile && userGroupQuotas != nil && !parent.IsTrash() && info.trash == 0 {
+				if info.typ == TypeFile && userGroupQuotas != nil && !parent.IsTrash() {
 					var entrySpace int64
 					if info.attr.Nlink > 0 {
 						entrySpace = 0
