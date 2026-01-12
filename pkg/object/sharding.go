@@ -204,10 +204,6 @@ func (s *sharded) UploadPart(key string, uploadID string, num int, body []byte) 
 	return s.pick(key).UploadPart(key, uploadID, num, body)
 }
 
-func (s *sharded) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
-	return s.pick(key).UploadPartStream(key, uploadID, num, in)
-}
-
 func (s *sharded) AbortUpload(key string, uploadID string) {
 	s.pick(key).AbortUpload(key, uploadID)
 }

@@ -46,6 +46,10 @@ type SupportSymlink interface {
 	Readlink(name string) (string, error)
 }
 
+type SupportUploadPartStream interface {
+	UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error)
+}
+
 type File interface {
 	Object
 	Owner() string
@@ -137,10 +141,6 @@ func (s DefaultObjectStorage) CreateMultipartUpload(key string) (*MultipartUploa
 }
 
 func (s DefaultObjectStorage) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
-	return nil, notSupported
-}
-
-func (s DefaultObjectStorage) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
 	return nil, notSupported
 }
 

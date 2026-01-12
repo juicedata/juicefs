@@ -47,6 +47,13 @@ func (s *withPrefix) Symlink(oldName, newName string) error {
 	return notSupported
 }
 
+func (s *withPrefix) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
+	if w, ok := s.os.(SupportUploadPartStream); ok {
+		return w.UploadPartStream(s.prefix+key, uploadID, num, in)
+	}
+	return nil, notSupported
+}
+
 func (s *withPrefix) Readlink(name string) (string, error) {
 	if w, ok := s.os.(SupportSymlink); ok {
 		return w.Readlink(s.prefix + name)
@@ -185,10 +192,6 @@ func (p *withPrefix) CreateMultipartUpload(key string) (*MultipartUpload, error)
 
 func (p *withPrefix) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
 	return p.os.UploadPart(p.prefix+key, uploadID, num, body)
-}
-
-func (p *withPrefix) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
-	return p.os.UploadPartStream(p.prefix+key, uploadID, num, in)
 }
 
 func (s *withPrefix) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {

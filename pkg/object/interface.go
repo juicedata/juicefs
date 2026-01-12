@@ -100,8 +100,6 @@ type ObjectStorage interface {
 	CreateMultipartUpload(key string) (*MultipartUpload, error)
 	// UploadPart upload a part of an object.
 	UploadPart(key string, uploadID string, num int, body []byte) (*Part, error)
-	// UploadPartStream upload a part of an object by stream
-	UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error)
 	// UploadPartCopy Uploads a part by copying data from an existing object as data source.
 	UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error)
 	// AbortUpload abort a multipart upload.

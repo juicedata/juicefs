@@ -236,10 +236,6 @@ func (c *COS) UploadPartCopy(key string, uploadID string, num int, srcKey string
 	return &Part{Num: num, ETag: result.ETag}, nil
 }
 
-func (o *COS) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
-	return nil, notSupported
-}
-
 func (c *COS) AbortUpload(key string, uploadID string) {
 	_, _ = c.c.Object.AbortMultipartUpload(ctx, key, uploadID)
 }
