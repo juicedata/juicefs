@@ -605,7 +605,6 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 	sz := size
 	var part *object.Part
 	var chksum uint32
-	isjfs := strings.Split(dst.String(), "://")[0] == "jfs"
 	err := try(3, func() error {
 		in, err := src.Get(srckey, off, sz)
 		if err != nil {
@@ -613,16 +612,12 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		}
 		defer in.Close()
 		r := &chksumReader{in, 0, calChksum}
-		var useStream bool
-		if obj, ok := dst.(object.SupportUploadPartStream); ok && isjfs {
-			useStream = true
+		err = utils.ENOTSUP
+		if obj, ok := dst.(object.SupportUploadPartStream); ok {
 			part, err = obj.UploadPartStream(key, uploadID, num+1, r)
-			if errors.Is(err, utils.ENOTSUP) {
-				useStream = false
-			}
 		}
 
-		if !useStream {
+		if errors.Is(err, utils.ENOTSUP) {
 			data := dynAlloc(int(size))
 			defer dynFree(data)
 			if _, err = io.ReadFull(r, data); err != nil {
@@ -793,8 +788,7 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 	start := time.Now()
 	var err error
 	var srcChksum uint32
-	isjfs := strings.Split(dst.String(), "://")[0] == "jfs"
-	if size < maxBlock || size < 4<<30 && isjfs {
+	if size < max(int64(dst.Limits().MinPartSize*2), maxBlock) {
 		err = try(3, func() (err error) {
 			srcChksum, err = doCopySingle(src, dst, key, size, calChksum)
 			return
