@@ -5013,6 +5013,92 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.Unlink(ctx, parent, multiHardlinkOriginalName)
+
+	// Test: Batch unlink symlinks
+	symlinkNames := []string{"symlink1", "symlink2", "symlink3"}
+	var symlinkInodes []Ino
+	var symlinkAttrs []Attr
+	for _, symlinkName := range symlinkNames {
+		var symlinkInode Ino
+		var symlinkAttr Attr
+		target := "/target/" + symlinkName
+		if st := m.Symlink(ctx, parent, symlinkName, target, &symlinkInode, &symlinkAttr); st != 0 {
+			t.Fatalf("Create symlink %s: %s", symlinkName, st)
+		}
+		if st := m.SetAttr(ctx, symlinkInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: uid, Gid: gid}); st != 0 {
+			t.Fatalf("SetAttr UID and GID for symlink %s: %s", symlinkName, st)
+		}
+		symlinkInodes = append(symlinkInodes, symlinkInode)
+		symlinkAttrs = append(symlinkAttrs, symlinkAttr)
+	}
+
+	m.getBase().doFlushQuotas()
+	time.Sleep(200 * time.Millisecond)
+
+	qs = make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+		t.Fatalf("Get user group quota before symlink batch unlink: %s", err)
+	}
+	ugQuotaBeforeSymlink := qs[UGQuotaKey]
+	if ugQuotaBeforeSymlink == nil {
+		t.Fatalf("User group quota not found before symlink batch unlink")
+	}
+
+	var symlinkEntries []*Entry
+	for i, symlinkName := range symlinkNames {
+		var symlinkAttr Attr
+		if st := m.GetAttr(ctx, symlinkInodes[i], &symlinkAttr); st != 0 {
+			t.Fatalf("GetAttr for symlink %s: %s", symlinkName, st)
+		}
+		symlinkEntries = append(symlinkEntries, &Entry{
+			Inode: symlinkInodes[i],
+			Name:  []byte(symlinkName),
+			Attr:  &symlinkAttr,
+		})
+	}
+
+	count = 0
+	if st := m.getBase().BatchUnlink(ctx, parent, symlinkEntries, &count, false); st != 0 {
+		t.Fatalf("BatchUnlink symlinks failed: %s", st)
+	}
+
+	if count != uint64(len(symlinkNames)) {
+		t.Fatalf("BatchUnlink symlinks count mismatch: expected %d, got %d", len(symlinkNames), count)
+	}
+
+	m.getBase().doFlushQuotas()
+	time.Sleep(200 * time.Millisecond)
+
+	qs = make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+		t.Fatalf("Get user group quota after symlink batch unlink: %s", err)
+	}
+	ugQuotaAfterSymlink := qs[UGQuotaKey]
+	if ugQuotaAfterSymlink == nil {
+		t.Fatalf("User group quota not found after symlink batch unlink")
+	}
+
+	expectedSymlinkInodeDecrease := int64(len(symlinkNames))
+	expectedSymlinkSpaceDecrease := align4K(0) * int64(len(symlinkNames))
+
+	actualSymlinkInodeDecrease := ugQuotaBeforeSymlink.UsedInodes - ugQuotaAfterSymlink.UsedInodes
+	actualSymlinkSpaceDecrease := ugQuotaBeforeSymlink.UsedSpace - ugQuotaAfterSymlink.UsedSpace
+
+	if actualSymlinkInodeDecrease != expectedSymlinkInodeDecrease {
+		t.Fatalf("Symlink batch unlink: user group quota inode decrease mismatch: expected %d, got %d", expectedSymlinkInodeDecrease, actualSymlinkInodeDecrease)
+	}
+	if actualSymlinkSpaceDecrease != expectedSymlinkSpaceDecrease {
+		t.Fatalf("Symlink batch unlink: user group quota space decrease mismatch: expected %d, got %d (should be %d for symlink deletion)", expectedSymlinkSpaceDecrease, actualSymlinkSpaceDecrease, expectedSymlinkSpaceDecrease)
+	}
+
+	for _, symlinkName := range symlinkNames {
+		var lookupInode Ino
+		var lookupAttr Attr
+		if st := m.Lookup(ctx, parent, symlinkName, &lookupInode, &lookupAttr, false); st == 0 {
+			t.Fatalf("Symlink %s should have been deleted, but still exists", symlinkName)
+		}
+	}
+
 	if err := m.HandleQuota(ctx, QuotaDel, "", uid, gid, nil, false, false, false); err != nil {
 		t.Fatalf("Delete user group quota: %s", err)
 	}

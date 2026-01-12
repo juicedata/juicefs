@@ -1665,15 +1665,17 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 						tx.incrBy(m.parentKey(info.inode, info.trash), 1)
 					}
 				}
-				if info.attr.Parent == 0 {
+				if info.attr.Parent == 0 && info.attr.Nlink > 0 {
 					tx.incrBy(m.parentKey(info.inode, parent), -1)
 				}
-				if info.typ == TypeFile && userGroupQuotas != nil && !parent.IsTrash() {
+				if userGroupQuotas != nil && !parent.IsTrash() {
 					var entrySpace int64
-					if info.attr.Nlink > 0 {
-						entrySpace = 0
-					} else {
-						entrySpace = -align4K(info.attr.Length)
+					if info.attr.Nlink == 0 {
+						if info.typ == TypeFile {
+							entrySpace = -align4K(info.attr.Length)
+						} else {
+							entrySpace = -align4K(0)
+						}
 					}
 					batchUserGroupQuotas = append(batchUserGroupQuotas, userGroupQuotaDelta{
 						Uid:    info.attr.Uid,
