@@ -175,7 +175,7 @@ func (s *sliceReader) run() {
 	err := f.r.m.Read(meta.Background(), inode, indx, &slices)
 	f.Lock()
 	length := f.length
-	if s.state != BUSY || f.err != 0 || f.closing {
+	if s.state != BUSY || f.shouldStop() {
 		s.done(0, 0)
 	}
 	if err == syscall.ENOENT {
@@ -635,7 +635,7 @@ func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, sys
 	f.acquire()
 	defer f.release()
 
-	if f.err != 0 || f.closing {
+	if f.shouldStop() {
 		return 0, f.err
 	}
 
