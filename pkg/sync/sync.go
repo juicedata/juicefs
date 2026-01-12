@@ -603,11 +603,14 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 	}
 	start := time.Now()
 	sz := size
-	data := dynAlloc(int(size))
-	defer dynFree(data)
 	var part *object.Part
 	var chksum uint32
 	isjfs := strings.Split(dst.String(), "://")[0] == "jfs"
+	var data []byte
+	if !isjfs {
+		data = dynAlloc(int(size))
+		defer dynFree(data)
+	}
 	err := try(3, func() error {
 		in, err := src.Get(srckey, off, sz)
 		if err != nil {
@@ -787,7 +790,7 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 	var err error
 	var srcChksum uint32
 	isjfs := strings.Split(dst.String(), "://")[0] == "jfs"
-	if size < maxBlock || size < 1<<30 && isjfs {
+	if size < maxBlock || size < 64<<30 && isjfs {
 		err = try(3, func() (err error) {
 			srcChksum, err = doCopySingle(src, dst, key, size, calChksum)
 			return
