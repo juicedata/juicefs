@@ -2413,6 +2413,9 @@ func (m *kvMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
 		}
 
 		for _, key := range keys {
+			if ctx.Canceled() {
+				return count, nil
+			}
 			if err := m.txn(ctx, func(tx *kvTxn) error {
 				ss, rs = ss[:0], rs[:0]
 				buf := tx.get(key)
@@ -2421,7 +2424,7 @@ func (m *kvMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
 				}
 				m.decodeDelayedSlices(buf, &ss)
 				if len(ss) == 0 {
-					return fmt.Errorf("invalid value for delayed slices %s: %v", key, buf)
+					return fmt.Errorf("invalid value for delayed slices %q: %v", key, buf)
 				}
 				for _, s := range ss {
 					rs = append(rs, tx.incrBy(m.sliceKey(s.Id, s.Size), -1))
@@ -2429,7 +2432,7 @@ func (m *kvMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
 				tx.delete(key)
 				return nil
 			}); err != nil {
-				logger.Warnf("Cleanup delayed slices %s: %s", key, err)
+				logger.Warnf("Cleanup delayed slices %q: %s", key, err)
 				continue
 			}
 			for i, s := range ss {
