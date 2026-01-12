@@ -22,7 +22,6 @@ package object
 import (
 	"bytes"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"io"
 	"net/http"
 	"net/url"
@@ -30,6 +29,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/qingstor/qingstor-sdk-go/v4/config"

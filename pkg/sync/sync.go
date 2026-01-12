@@ -603,8 +603,6 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 	}
 	start := time.Now()
 	sz := size
-	data := dynAlloc(int(size))
-	defer dynFree(data)
 	var part *object.Part
 	var chksum uint32
 	err := try(3, func() error {
@@ -614,12 +612,21 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		}
 		defer in.Close()
 		r := &chksumReader{in, 0, calChksum}
-		if _, err = io.ReadFull(r, data); err != nil {
-			return err
+		err = utils.ENOTSUP
+		if obj, ok := dst.(object.SupportUploadPartStream); ok {
+			part, err = obj.UploadPartStream(key, uploadID, num+1, r)
+		}
+
+		if errors.Is(err, utils.ENOTSUP) {
+			data := dynAlloc(int(size))
+			defer dynFree(data)
+			if _, err = io.ReadFull(r, data); err != nil {
+				return err
+			}
+			// PartNumber starts from 1
+			part, err = dst.UploadPart(key, uploadID, num+1, data)
 		}
 		chksum = r.chksum
-		// PartNumber starts from 1
-		part, err = dst.UploadPart(key, uploadID, num+1, data)
 		return err
 	})
 	if err != nil {

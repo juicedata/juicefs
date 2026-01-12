@@ -47,6 +47,13 @@ func (s *withPrefix) Symlink(oldName, newName string) error {
 	return notSupported
 }
 
+func (s *withPrefix) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
+	if w, ok := s.os.(SupportUploadPartStream); ok {
+		return w.UploadPartStream(s.prefix+key, uploadID, num, in)
+	}
+	return nil, notSupported
+}
+
 func (s *withPrefix) Readlink(name string) (string, error) {
 	if w, ok := s.os.(SupportSymlink); ok {
 		return w.Readlink(s.prefix + name)
