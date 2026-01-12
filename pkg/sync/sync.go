@@ -790,7 +790,7 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 	var err error
 	var srcChksum uint32
 	isjfs := strings.Split(dst.String(), "://")[0] == "jfs"
-	if size < maxBlock || size < 64<<30 && isjfs {
+	if size < maxBlock || size < 4<<30 && isjfs {
 		err = try(3, func() (err error) {
 			srcChksum, err = doCopySingle(src, dst, key, size, calChksum)
 			return
