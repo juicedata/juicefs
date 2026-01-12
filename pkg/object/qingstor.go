@@ -262,9 +262,6 @@ func (q *qingstor) UploadPart(key string, uploadID string, num int, data []byte)
 	return &Part{Num: num, Size: len(data), ETag: strings.Trim(*r.ETag, "\"")}, nil
 }
 
-func (q *qingstor) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
-	return nil, notSupported
-}
 func (q *qingstor) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	input := &qs.UploadMultipartInput{
 		UploadID:      &uploadID,

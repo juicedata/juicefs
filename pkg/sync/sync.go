@@ -618,8 +618,8 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		}
 		defer in.Close()
 		r := &chksumReader{in, 0, calChksum}
-		if isjfs {
-			part, err = dst.UploadPartStream(key, uploadID, num+1, r)
+		if obj, ok := dst.(object.SupportUploadPartStream); ok && isjfs {
+			part, err = obj.UploadPartStream(key, uploadID, num+1, r)
 		} else {
 			if _, err = io.ReadFull(r, data); err != nil {
 				return err

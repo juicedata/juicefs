@@ -256,9 +256,6 @@ func (s *ks3) UploadPart(key string, uploadID string, num int, body []byte) (*Pa
 	return &Part{Num: num, ETag: *resp.ETag}, nil
 }
 
-func (s *ks3) UploadPartStream(key string, uploadID string, num int, in io.Reader) (*Part, error) {
-	return nil, notSupported
-}
 func (s *ks3) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	resp, err := s.s3.UploadPartCopy(&s3.UploadPartCopyInput{
 		Bucket:          aws.String(s.bucket),
