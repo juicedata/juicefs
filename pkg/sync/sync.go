@@ -606,11 +606,6 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 	var part *object.Part
 	var chksum uint32
 	isjfs := strings.Split(dst.String(), "://")[0] == "jfs"
-	var data []byte
-	if !isjfs {
-		data = dynAlloc(int(size))
-		defer dynFree(data)
-	}
 	err := try(3, func() error {
 		in, err := src.Get(srckey, off, sz)
 		if err != nil {
@@ -618,9 +613,18 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		}
 		defer in.Close()
 		r := &chksumReader{in, 0, calChksum}
+		var useStream bool
 		if obj, ok := dst.(object.SupportUploadPartStream); ok && isjfs {
+			useStream = true
 			part, err = obj.UploadPartStream(key, uploadID, num+1, r)
-		} else {
+			if errors.Is(err, utils.ENOTSUP) {
+				useStream = false
+			}
+		}
+
+		if !useStream {
+			data := dynAlloc(int(size))
+			defer dynFree(data)
 			if _, err = io.ReadFull(r, data); err != nil {
 				return err
 			}
