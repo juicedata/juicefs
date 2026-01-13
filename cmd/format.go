@@ -324,7 +324,7 @@ func randSeq(n int) string {
 
 func doTesting(store object.ObjectStorage, key string, data []byte) error {
 	if err := store.Put(key, bytes.NewReader(data)); err != nil {
-		if strings.Contains(err.Error(), "Access Denied") {
+		if strings.Contains(strings.ToLower(err.Error()), "denied") {
 			return fmt.Errorf("Failed to put: %s", err)
 		}
 		if err2 := store.Create(); err2 != nil {
