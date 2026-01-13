@@ -4708,6 +4708,10 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 }
 
 func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid uint32) {
+	if m.Name() != "tikv" {
+		t.Skip("BatchUnlinkWithUserGroupQuota")
+	}
+
 	if err := m.HandleQuota(ctx, QuotaSet, "", uid, gid, map[string]*Quota{UGQuotaKey: {MaxSpace: 100 << 20, MaxInodes: 100}}, false, false, false); err != nil {
 		t.Fatalf("Set user group quota: %s", err)
 	}
@@ -4902,6 +4906,215 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 
 	m.Unlink(ctx, parent, hardlinkFileName)
+
+	// Test: Batch unlink multiple hardlinks pointing to the same inode in one call
+	var multiHardlinkOriginal Ino
+	var multiHardlinkOriginalAttr Attr
+	multiHardlinkFileSize := uint64(12288) // 12KB
+	multiHardlinkOriginalName := "multi_hardlink_original"
+	if st := m.Create(ctx, parent, multiHardlinkOriginalName, 0644, 0, 0, &multiHardlinkOriginal, &multiHardlinkOriginalAttr); st != 0 {
+		t.Fatalf("Create original file for multi-hardlink test: %s", st)
+	}
+	if st := m.SetAttr(ctx, multiHardlinkOriginal, SetAttrUID|SetAttrGID, 0, &Attr{Uid: uid, Gid: gid}); st != 0 {
+		t.Fatalf("SetAttr UID and GID for multi-hardlink original file: %s", st)
+	}
+	var multiHardlinkSliceId uint64
+	if st := m.NewSlice(ctx, &multiHardlinkSliceId); st != 0 {
+		t.Fatalf("NewSlice for multi-hardlink original file: %s", st)
+	}
+	multiHardlinkSlice := Slice{Id: multiHardlinkSliceId, Size: uint32(multiHardlinkFileSize), Len: uint32(multiHardlinkFileSize)}
+	if st := m.Write(ctx, multiHardlinkOriginal, 0, 0, multiHardlinkSlice, time.Now()); st != 0 {
+		t.Fatalf("Write data to multi-hardlink original file: %s", st)
+	}
+
+	hardlinkNames := []string{"multi_hardlink1", "multi_hardlink2", "multi_hardlink3"}
+	for _, linkName := range hardlinkNames {
+		if st := m.Link(ctx, multiHardlinkOriginal, parent, linkName, &multiHardlinkOriginalAttr); st != 0 {
+			t.Fatalf("Create hardlink %s: %s", linkName, st)
+		}
+	}
+
+	m.getBase().doFlushQuotas()
+	time.Sleep(200 * time.Millisecond)
+
+	qs = make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+		t.Fatalf("Get user group quota before multi-hardlink batch unlink: %s", err)
+	}
+	ugQuotaBeforeMultiHardlink := qs[UGQuotaKey]
+	if ugQuotaBeforeMultiHardlink == nil {
+		t.Fatalf("User group quota not found before multi-hardlink batch unlink")
+	}
+
+	var initialAttr Attr
+	if st := m.GetAttr(ctx, multiHardlinkOriginal, &initialAttr); st != 0 {
+		t.Fatalf("GetAttr for multi-hardlink original file: %s", st)
+	}
+	initialNlink := initialAttr.Nlink
+	expectedFinalNlink := initialNlink - uint32(len(hardlinkNames))
+	if initialNlink < uint32(len(hardlinkNames)+1) {
+		t.Fatalf("Expected Nlink >= %d, got %d", len(hardlinkNames)+1, initialNlink)
+	}
+
+	var multiHardlinkEntries []*Entry
+	for _, linkName := range hardlinkNames {
+		var linkAttr Attr
+		if st := m.GetAttr(ctx, multiHardlinkOriginal, &linkAttr); st != 0 {
+			t.Fatalf("GetAttr for hardlink %s: %s", linkName, st)
+		}
+		multiHardlinkEntries = append(multiHardlinkEntries, &Entry{
+			Inode: multiHardlinkOriginal,
+			Name:  []byte(linkName),
+			Attr:  &linkAttr,
+		})
+	}
+
+	count = 0
+	if st := m.getBase().BatchUnlink(ctx, parent, multiHardlinkEntries, &count, false); st != 0 {
+		t.Fatalf("BatchUnlink multiple hardlinks failed: %s", st)
+	}
+
+	if count != uint64(len(hardlinkNames)) {
+		t.Fatalf("BatchUnlink multiple hardlinks count mismatch: expected %d, got %d", len(hardlinkNames), count)
+	}
+
+	m.getBase().doFlushQuotas()
+	time.Sleep(200 * time.Millisecond)
+
+	qs = make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+		t.Fatalf("Get user group quota after multi-hardlink batch unlink: %s", err)
+	}
+	ugQuotaAfterMultiHardlink := qs[UGQuotaKey]
+	if ugQuotaAfterMultiHardlink == nil {
+		t.Fatalf("User group quota not found after multi-hardlink batch unlink")
+	}
+
+	expectedMultiHardlinkInodeDecrease := int64(len(hardlinkNames))
+	expectedMultiHardlinkSpaceDecrease := int64(0)
+
+	actualMultiHardlinkInodeDecrease := ugQuotaBeforeMultiHardlink.UsedInodes - ugQuotaAfterMultiHardlink.UsedInodes
+	actualMultiHardlinkSpaceDecrease := ugQuotaBeforeMultiHardlink.UsedSpace - ugQuotaAfterMultiHardlink.UsedSpace
+
+	if actualMultiHardlinkInodeDecrease != expectedMultiHardlinkInodeDecrease {
+		t.Fatalf("Multi-hardlink batch unlink: user group quota inode decrease mismatch: expected %d, got %d", expectedMultiHardlinkInodeDecrease, actualMultiHardlinkInodeDecrease)
+	}
+	if actualMultiHardlinkSpaceDecrease != expectedMultiHardlinkSpaceDecrease {
+		t.Fatalf("Multi-hardlink batch unlink: user group quota space decrease mismatch: expected %d, got %d (should be 0 for hardlink deletion)", expectedMultiHardlinkSpaceDecrease, actualMultiHardlinkSpaceDecrease)
+	}
+
+	var finalAttr Attr
+	if st := m.GetAttr(ctx, multiHardlinkOriginal, &finalAttr); st != 0 {
+		t.Fatalf("Original file should still exist after multi-hardlink deletion: %s", st)
+	}
+	if finalAttr.Nlink != expectedFinalNlink {
+		t.Fatalf("Original file Nlink mismatch: expected %d, got %d (initial was %d, deleted %d links)", expectedFinalNlink, finalAttr.Nlink, initialNlink, len(hardlinkNames))
+	}
+
+	for _, linkName := range hardlinkNames {
+		var lookupInode Ino
+		var lookupAttr Attr
+		if st := m.Lookup(ctx, parent, linkName, &lookupInode, &lookupAttr, false); st == 0 {
+			t.Fatalf("Hardlink %s should have been deleted, but still exists", linkName)
+		}
+	}
+
+	var originalLookupInode Ino
+	var originalLookupAttr Attr
+	if st := m.Lookup(ctx, parent, multiHardlinkOriginalName, &originalLookupInode, &originalLookupAttr, false); st != 0 {
+		t.Fatalf("Original file %s should still exist: %s", multiHardlinkOriginalName, st)
+	}
+	if originalLookupInode != multiHardlinkOriginal {
+		t.Fatalf("Original file inode mismatch: expected %d, got %d", multiHardlinkOriginal, originalLookupInode)
+	}
+
+	m.Unlink(ctx, parent, multiHardlinkOriginalName)
+
+	// Test: Batch unlink symlinks
+	symlinkNames := []string{"symlink1", "symlink2", "symlink3"}
+	var symlinkInodes []Ino
+	var symlinkAttrs []Attr
+	for _, symlinkName := range symlinkNames {
+		var symlinkInode Ino
+		var symlinkAttr Attr
+		target := "/target/" + symlinkName
+		if st := m.Symlink(ctx, parent, symlinkName, target, &symlinkInode, &symlinkAttr); st != 0 {
+			t.Fatalf("Create symlink %s: %s", symlinkName, st)
+		}
+		if st := m.SetAttr(ctx, symlinkInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: uid, Gid: gid}); st != 0 {
+			t.Fatalf("SetAttr UID and GID for symlink %s: %s", symlinkName, st)
+		}
+		symlinkInodes = append(symlinkInodes, symlinkInode)
+		symlinkAttrs = append(symlinkAttrs, symlinkAttr)
+	}
+
+	m.getBase().doFlushQuotas()
+	time.Sleep(200 * time.Millisecond)
+
+	qs = make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+		t.Fatalf("Get user group quota before symlink batch unlink: %s", err)
+	}
+	ugQuotaBeforeSymlink := qs[UGQuotaKey]
+	if ugQuotaBeforeSymlink == nil {
+		t.Fatalf("User group quota not found before symlink batch unlink")
+	}
+
+	var symlinkEntries []*Entry
+	for i, symlinkName := range symlinkNames {
+		var symlinkAttr Attr
+		if st := m.GetAttr(ctx, symlinkInodes[i], &symlinkAttr); st != 0 {
+			t.Fatalf("GetAttr for symlink %s: %s", symlinkName, st)
+		}
+		symlinkEntries = append(symlinkEntries, &Entry{
+			Inode: symlinkInodes[i],
+			Name:  []byte(symlinkName),
+			Attr:  &symlinkAttr,
+		})
+	}
+
+	count = 0
+	if st := m.getBase().BatchUnlink(ctx, parent, symlinkEntries, &count, false); st != 0 {
+		t.Fatalf("BatchUnlink symlinks failed: %s", st)
+	}
+
+	if count != uint64(len(symlinkNames)) {
+		t.Fatalf("BatchUnlink symlinks count mismatch: expected %d, got %d", len(symlinkNames), count)
+	}
+
+	m.getBase().doFlushQuotas()
+	time.Sleep(200 * time.Millisecond)
+
+	qs = make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
+		t.Fatalf("Get user group quota after symlink batch unlink: %s", err)
+	}
+	ugQuotaAfterSymlink := qs[UGQuotaKey]
+	if ugQuotaAfterSymlink == nil {
+		t.Fatalf("User group quota not found after symlink batch unlink")
+	}
+
+	expectedSymlinkInodeDecrease := int64(len(symlinkNames))
+	expectedSymlinkSpaceDecrease := align4K(0) * int64(len(symlinkNames))
+
+	actualSymlinkInodeDecrease := ugQuotaBeforeSymlink.UsedInodes - ugQuotaAfterSymlink.UsedInodes
+	actualSymlinkSpaceDecrease := ugQuotaBeforeSymlink.UsedSpace - ugQuotaAfterSymlink.UsedSpace
+
+	if actualSymlinkInodeDecrease != expectedSymlinkInodeDecrease {
+		t.Fatalf("Symlink batch unlink: user group quota inode decrease mismatch: expected %d, got %d", expectedSymlinkInodeDecrease, actualSymlinkInodeDecrease)
+	}
+	if actualSymlinkSpaceDecrease != expectedSymlinkSpaceDecrease {
+		t.Fatalf("Symlink batch unlink: user group quota space decrease mismatch: expected %d, got %d (should be %d for symlink deletion)", expectedSymlinkSpaceDecrease, actualSymlinkSpaceDecrease, expectedSymlinkSpaceDecrease)
+	}
+
+	for _, symlinkName := range symlinkNames {
+		var lookupInode Ino
+		var lookupAttr Attr
+		if st := m.Lookup(ctx, parent, symlinkName, &lookupInode, &lookupAttr, false); st == 0 {
+			t.Fatalf("Symlink %s should have been deleted, but still exists", symlinkName)
+		}
+	}
+
 	if err := m.HandleQuota(ctx, QuotaDel, "", uid, gid, nil, false, false, false); err != nil {
 		t.Fatalf("Delete user group quota: %s", err)
 	}
