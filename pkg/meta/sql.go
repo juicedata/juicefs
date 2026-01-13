@@ -2630,9 +2630,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 	}
 	delNodes := make(map[Ino]*dNode)
 	var totalLength, totalSpace, totalInodes int64
-	if userGroupQuotas != nil {
-		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
-	}
 	// main transaction: validate, collect metadata, update inode/link counts, and prepare DB mutations
 	err := m.txn(func(s *xorm.Session) error {
 		pn := node{Inode: parent}
@@ -2654,13 +2651,35 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		if (pn.Flags&FlagAppend != 0) || (pn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		entryInfos = make([]*entryInfo, 0, len(entries))
+
+		validEntries := make([]*Entry, 0, len(entries))
+		for _, entry := range entries {
+			e := edge{Parent: parent, Name: entry.Name}
+			ok, err := s.Get(&e)
+			if err != nil {
+				return err
+			}
+			if !ok && m.conf.CaseInsensi {
+				if ee := m.resolveCase(ctx, parent, string(entry.Name)); ee != nil {
+					e.Name = ee.Name
+					e.Inode = ee.Inode
+					e.Type = ee.Attr.Typ
+				}
+			} else if !ok {
+				continue
+			}
+			validEntries = append(validEntries, entry)
+		}
+
+		entryInfos = make([]*entryInfo, 0, len(validEntries))
+		if userGroupQuotas != nil {
+			*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(validEntries))
+		}
 		now := time.Now().UnixNano()
 
-		// collect unique inode ids from entries (avoid operating N times on same inode for hard links)
-		inodes := make([]Ino, 0, len(entries))
+		inodes := make([]Ino, 0, len(validEntries))
 		inodeM := make(map[Ino]struct{}) // filter hardlinks
-		for _, entry := range entries {
+		for _, entry := range validEntries {
 			e := &edge{Parent: parent, Name: entry.Name, Inode: entry.Inode}
 			if entry.Attr != nil {
 				if entry.Attr.Typ == TypeDirectory {
@@ -2769,7 +2788,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 						return err
 					}
 					if info.n.Type == TypeFile {
-						recordUserGroupDeletionStats(info.n, 0, userGroupQuotas, parent.IsTrash())
+						recordUserGroupDeletionStats(info.n, align4K(0), userGroupQuotas, parent.IsTrash())
 					}
 				} else {
 					// last link removed: prepare to delete inode and related rows
