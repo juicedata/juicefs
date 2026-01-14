@@ -1770,11 +1770,33 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 			return syscall.EPERM
 		}
 
-		entryInfos = make([]*entryInfo, 0, len(entries))
-		now := time.Now()
-
+		entryKey := m.entryKey(parent)
+		validEntries := make([]*Entry, 0, len(entries))
 		if len(entries) > 0 {
+			names := make([]string, 0, len(entries))
 			for _, entry := range entries {
+				names = append(names, string(entry.Name))
+			}
+			if len(names) > 0 {
+				vals, err := tx.HMGet(ctx, entryKey, names...).Result()
+				if err != nil {
+					return err
+				}
+				for idx, entry := range entries {
+					if idx < len(vals) && vals[idx] != nil {
+						validEntries = append(validEntries, entry)
+					} else if m.conf.CaseInsensi {
+						if ee := m.resolveCase(ctx, parent, names[idx]); ee != nil {
+							validEntries = append(validEntries, entry)
+						}
+					}
+				}
+			}
+		}
+		entryInfos = make([]*entryInfo, 0, len(validEntries))
+		now := time.Now()
+		if len(validEntries) > 0 {
+			for _, entry := range validEntries {
 				if entry.Attr.Typ == TypeDirectory {
 					continue
 				}

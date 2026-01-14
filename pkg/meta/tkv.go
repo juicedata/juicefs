@@ -1503,12 +1503,25 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 				return syscall.EPERM
 			}
 
-			entryInfos = make([]*entryInfo, 0, len(batch))
-			now := time.Now()
-
-			// Collect entry info and filter out directories
+			validEntries := make([]*Entry, 0, len(batch))
 			if len(batch) > 0 {
+				keys := make([][]byte, 0, len(batch))
 				for _, entry := range batch {
+					keys = append(keys, m.entryKey(parent, string(entry.Name)))
+				}
+				if len(keys) > 0 {
+					vals := tx.gets(keys...)
+					for idx, entry := range batch {
+						if idx < len(vals) && vals[idx] != nil {
+							validEntries = append(validEntries, entry)
+						}
+					}
+				}
+			}
+			entryInfos = make([]*entryInfo, 0, len(validEntries))
+			now := time.Now()
+			if len(validEntries) > 0 {
+				for _, entry := range validEntries {
 					if entry.Attr.Typ == TypeDirectory {
 						continue
 					}
