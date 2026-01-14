@@ -507,14 +507,38 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, options minio.ObjectOptions) (objs []minio.DeletedObject, errs []error) {
 	objs = make([]minio.DeletedObject, len(objects))
 	errs = make([]error, len(objects))
-	for idx, object := range objects {
-		_, errs[idx] = n.DeleteObject(ctx, bucket, object.ObjectName, options)
-		if errs[idx] == nil {
-			objs[idx] = minio.DeletedObject{
-				ObjectName: object.ObjectName,
-			}
-		}
+	delMap := make(map[string][]int)
+	for idx, o := range objects {
+		p := path.Dir(path.Clean(n.path(bucket, o.ObjectName)))
+		delMap[p] = append(delMap[p], idx)
 	}
+	var g errgroup.Group
+	g.SetLimit(10)
+	for ppath := range delMap {
+		ppath := ppath
+		idxs := delMap[ppath]
+		ps := make([]string, len(idxs))
+		for i, idx := range idxs {
+			ps[i] = objects[idx].ObjectName
+		}
+		g.Go(func() error {
+			err := n.fs.BatchDeleteEntries(mctx, ppath, ps)
+			if err != 0 {
+				for _, idx := range idxs {
+					errs[idx] = jfsToObjectErr(ctx, err, bucket, objects[idx].ObjectName)
+				}
+				return err
+			}
+			if _, e := n.DeleteObject(ctx, bucket, ppath, options); e != nil {
+				for _, idx := range idxs {
+					errs[idx] = e
+				}
+				return err
+			}
+			return err
+		})
+	}
+	_ = g.Wait()
 	return
 }
 
