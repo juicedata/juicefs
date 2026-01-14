@@ -609,7 +609,7 @@ func (k *kerberos) loadConf(name, content string, jfs *fs.FileSystem) {
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	for scanner.Scan() {
 		line := scanner.Text()
-		idx := strings.Index(line, "#") //TODO: base64 ketab may contain #
+		idx := strings.Index(line, "#")
 		if idx >= 0 {
 			line = line[:idx]
 		}
