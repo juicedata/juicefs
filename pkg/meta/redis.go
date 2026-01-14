@@ -1941,7 +1941,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 						*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
 							Uid:    info.attr.Uid,
 							Gid:    info.attr.Gid,
-							Space:  -align4K(0),
+							Space:  0,
 							Inodes: -1,
 						})
 					}

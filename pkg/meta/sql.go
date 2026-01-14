@@ -2788,7 +2788,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 						return err
 					}
 					if info.n.Type == TypeFile {
-						recordUserGroupDeletionStats(info.n, align4K(0), userGroupQuotas, parent.IsTrash())
+						recordUserGroupDeletionStats(info.n, 0, userGroupQuotas, parent.IsTrash())
 					}
 				} else {
 					// last link removed: prepare to delete inode and related rows
