@@ -297,6 +297,9 @@ type baseMeta struct {
 	opCount      *prometheus.CounterVec
 	opDuration   *prometheus.CounterVec
 
+	// Subdir info metric
+	subdirInfoG *prometheus.GaugeVec
+
 	// Quota metrics
 	dirQuotaMaxSpaceG   *prometheus.GaugeVec
 	dirQuotaMaxInodesG  *prometheus.GaugeVec
@@ -382,6 +385,12 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			Name: "meta_ops_duration_seconds",
 			Help: "Meta operation duration in seconds.",
 		}, []string{"method"}),
+
+		// Subdir info metric
+		subdirInfoG: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "subdir_info",
+			Help: "Subdir configuration for JuiceFS mount (empty string means root mount)",
+		}, []string{"subdir"}),
 
 		// quota metrics
 		dirQuotaMaxSpaceG: prometheus.NewGaugeVec(
@@ -515,6 +524,14 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(m.groupQuotaUsedInodesG)
 	reg.MustRegister(m.bgjobDuration)
 	reg.MustRegister(m.bgjobDels)
+	reg.MustRegister(m.subdirInfoG)
+
+	// Initialize subdir info metric
+	subdir := m.conf.Subdir
+	if subdir == "/" {
+		subdir = ""
+	}
+	m.subdirInfoG.WithLabelValues(subdir).Set(1)
 
 	go func() {
 		for {
