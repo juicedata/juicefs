@@ -2662,14 +2662,17 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 			if err != nil {
 				return err
 			}
-			if !ok && m.conf.CaseInsensi {
-				if ee := m.resolveCase(ctx, parent, string(entry.Name)); ee != nil {
-					e.Name = ee.Name
-					e.Inode = ee.Inode
-					e.Type = ee.Attr.Typ
+			if !ok {
+				if !m.conf.CaseInsensi {
+					continue
 				}
-			} else if !ok {
-				continue
+				ee := m.resolveCase(ctx, parent, string(entry.Name))
+				if ee == nil {
+					continue
+				}
+				e.Name = ee.Name
+				e.Inode = ee.Inode
+				e.Type = ee.Attr.Typ
 			}
 			validEntries = append(validEntries, entry)
 		}
