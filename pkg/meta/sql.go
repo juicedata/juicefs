@@ -2787,9 +2787,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 					if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
 						return err
 					}
-					if info.n.Type == TypeFile {
-						recordUserGroupDeletionStats(info.n, 0, userGroupQuotas, parent.IsTrash())
-					}
 				} else {
 					// last link removed: prepare to delete inode and related rows
 					var entrySpace int64
@@ -2822,7 +2819,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 					}
 					if needRecordStats {
 						recordGlobalDeletionStats(info.n, entrySpace, &totalLength, &totalSpace, &totalInodes)
-						recordUserGroupDeletionStats(info.n, entrySpace, userGroupQuotas, parent.IsTrash())
 					}
 					xattrsDel = append(xattrsDel, info.e.Inode)
 				}
@@ -2838,6 +2834,17 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 					Name:   []byte(info.trashName),
 					Inode:  info.n.Inode,
 					Type:   info.n.Type})
+			}
+			if userGroupQuotas != nil && !parent.IsTrash() {
+				var entrySpace int64
+				if info.n.Nlink == 0 {
+					if info.n.Type == TypeFile {
+						entrySpace = align4K(info.n.Length)
+					} else {
+						entrySpace = align4K(0)
+					}
+				}
+				recordUserGroupDeletionStats(info.n, entrySpace, userGroupQuotas, parent.IsTrash())
 			}
 			visited[info.n.Inode] = true
 		}
