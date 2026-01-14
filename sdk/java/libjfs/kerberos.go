@@ -23,11 +23,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/jcmturner/gokrb5/v8/keytab"
-	"github.com/jcmturner/gokrb5/v8/service"
-	"github.com/jcmturner/gokrb5/v8/spnego"
-	"github.com/juicedata/juicefs/pkg/fs"
-	"github.com/juicedata/juicefs/pkg/meta"
 	"io"
 	"net"
 	"regexp"
@@ -36,6 +31,12 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/jcmturner/gokrb5/v8/keytab"
+	"github.com/jcmturner/gokrb5/v8/service"
+	"github.com/jcmturner/gokrb5/v8/spnego"
+	"github.com/juicedata/juicefs/pkg/fs"
+	"github.com/juicedata/juicefs/pkg/meta"
 )
 
 const (
@@ -467,7 +468,7 @@ func (k *kerberos) issue(ctx meta.Context, m meta.Meta, volname, user, renewer s
 		User:    user,
 		Renewer: renewer,
 		Issued:  now.Unix(),
-		Expire:  now.Unix() + vol.life,
+		Expire:  now.Unix() + vol.renew,
 	}
 	passwd := make([]byte, 20)
 	_, _ = io.ReadFull(rand.Reader, passwd)
@@ -504,12 +505,13 @@ func (k *kerberos) renew(ctx meta.Context, m meta.Meta, volname, renewer string,
 	if password != t.Password || renewer != t.Renewer {
 		return 0, syscall.EACCES
 	}
-	renew := int64(defaultRenew)
-	vol := k.getVol(volname)
-	if vol != nil && vol.renew != 0 {
-		renew = vol.renew
+	now := time.Now().Unix()
+	if now > t.Expire {
+		logger.Warnf("token %d expired for renew", id)
+		return 0, syscall.EINVAL
 	}
-	t.Expire += renew
+	vol := k.getVol(volname)
+	t.Expire = min(t.Issued+vol.life, t.Expire+vol.renew)
 	eno = k.updateToken(ctx, m, id, t)
 	if eno != 0 {
 		return 0, eno
@@ -607,7 +609,7 @@ func (k *kerberos) loadConf(name, content string, jfs *fs.FileSystem) {
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	for scanner.Scan() {
 		line := scanner.Text()
-		idx := strings.Index(line, "#")
+		idx := strings.Index(line, "#") //TODO: base64 ketab may contain #
 		if idx >= 0 {
 			line = line[:idx]
 		}

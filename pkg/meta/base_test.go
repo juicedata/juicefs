@@ -22,6 +22,7 @@ package meta
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -156,6 +157,7 @@ func testMeta(t *testing.T, m Meta) {
 	testDirStat(t, m)
 	testClone(t, m)
 	testACL(t, m)
+	testKerberosToken(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
 }
@@ -397,6 +399,96 @@ func testACL(t *testing.T, m Meta) {
 	err := m.getBase().en.cacheACLs(ctx)
 	assert.Nil(t, err)
 	assert.Equal(t, sz, m.getBase().aclCache.Size())
+}
+
+func testKerberosToken(t *testing.T, m Meta) {
+	type token struct {
+		User     string
+		Renewer  string
+		Password string
+		Issued   int64
+		Expire   int64
+	}
+
+	format := testFormat()
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("test acl failed: %s", err)
+	}
+	ctx := Background()
+
+	issueToken := func() (uint32, *token) {
+		now := time.Now()
+		tk := &token{
+			User:     "tom",
+			Renewer:  "yarn",
+			Password: "password123",
+			Issued:   now.Unix(),
+			Expire:   now.Add(2 * time.Second).Unix(),
+		}
+		tb, err := json.Marshal(tk)
+		if err != nil {
+			t.Fatalf("marshal token failed: %s", err)
+		}
+		id, eno := m.StoreToken(ctx, tb)
+		if eno != 0 {
+			t.Fatalf("store token failed: %s", eno)
+		}
+		return id, tk
+	}
+
+	buildToken := func(data []byte) *token {
+		tk := &token{}
+		if err := json.Unmarshal(data, tk); err != nil {
+			t.Fatalf("unmarshal token: %s", err)
+		}
+		return tk
+	}
+
+	id1, tk1 := issueToken()
+	retb, eno := m.LoadToken(ctx, id1)
+	if eno != 0 {
+		t.Fatalf("load token failed: %s", eno)
+	}
+	var rettk token
+	if err := json.Unmarshal(retb, &rettk); err != nil {
+		t.Fatalf("unmarshal token: %s", err)
+	}
+	if !reflect.DeepEqual(tk1, &rettk) {
+		t.Fatalf("token mismatch: %+v != %+v", tk1, &rettk)
+	}
+	tk1.Expire = time.Now().Add(2 * time.Second).Unix()
+	tb, err := json.Marshal(tk1)
+	if err != nil {
+		t.Fatalf("marshal token failed: %s", err)
+	}
+	eno = m.UpdateToken(ctx, id1, tb)
+	if eno != 0 {
+		t.Fatalf("update token failed: %s", eno)
+	}
+
+	id2, tk2 := issueToken()
+	tokens, eno := m.ListTokens(ctx)
+	if eno != 0 {
+		t.Fatalf("list tokens failed: %s", eno)
+	}
+	if !reflect.DeepEqual(tk2, buildToken(tokens[id2])) {
+		t.Fatalf("token2 mismatch: %+v != %+v", tk2, buildToken(tokens[id2]))
+	}
+	if !reflect.DeepEqual(tk1, buildToken(tokens[id1])) {
+		t.Fatalf("token1 mismatch: %+v != %+v", tk1, buildToken(tokens[id1]))
+	}
+
+	eno = m.DeleteTokens(ctx, []uint32{id1, id2})
+	if eno != 0 {
+		t.Fatalf("delete tokens failed: %s", eno)
+	}
+	tokens, eno = m.ListTokens(ctx)
+	if eno != 0 {
+		t.Fatalf("list tokens failed: %s", eno)
+	}
+	if tokens[id1] != nil || tokens[id2] != nil {
+		t.Fatalf("tokens not deleted")
+	}
 }
 
 func testMetaClient(t *testing.T, m Meta) {
@@ -3512,58 +3604,58 @@ func testAtime(t *testing.T, m Meta) {
 // TestQuotaEdgeCases
 func TestQuotaEdgeCases(t *testing.T) {
 	m := &baseMeta{}
-	
+
 	m.userQuotas = make(map[uint64]*Quota)
 	m.groupQuotas = make(map[uint64]*Quota)
 	m.quotaMu = sync.RWMutex{}
-	
+
 	m.fmt = &Format{
 		UserGroupQuota: true,
 	}
-	
+
 	fileOwnerUid := uint32(1001)
 	fileOwnerGid := uint32(2001)
 	operatorUid := uint32(1002)
 	operatorGid := uint32(2002)
-	
+
 	t.Log("Testing inodes-only quota limit...")
 	m.userQuotas[uint64(fileOwnerUid)] = &Quota{MaxSpace: 0, MaxInodes: 3}
 	m.groupQuotas[uint64(fileOwnerGid)] = &Quota{MaxSpace: 0, MaxInodes: 5}
-	
+
 	operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
-	
+
 	if err := m.checkQuota(operatorCtx, 10*1024*1024, 0, fileOwnerUid, fileOwnerGid); err != 0 {
 		t.Fatalf("checkQuota should pass for large space usage (no space limit), got: %s", err)
 	}
-	
+
 	if err := m.checkQuota(operatorCtx, 0, 4, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
 		t.Fatalf("checkQuota should fail with EDQUOT when exceeding inodes limit, got: %s", err)
 	}
-	
+
 	t.Log("Testing space-only quota limit...")
-	m.userQuotas[uint64(fileOwnerUid)] = &Quota{MaxSpace: 1024*1024, MaxInodes: 0}
-	m.groupQuotas[uint64(fileOwnerGid)] = &Quota{MaxSpace: 2*1024*1024, MaxInodes: 0}
-	
+	m.userQuotas[uint64(fileOwnerUid)] = &Quota{MaxSpace: 1024 * 1024, MaxInodes: 0}
+	m.groupQuotas[uint64(fileOwnerGid)] = &Quota{MaxSpace: 2 * 1024 * 1024, MaxInodes: 0}
+
 	if err := m.checkQuota(operatorCtx, 0, 100, fileOwnerUid, fileOwnerGid); err != 0 {
 		t.Fatalf("checkQuota should pass for large inodes usage (no inodes limit), got: %s", err)
 	}
-	
+
 	if err := m.checkQuota(operatorCtx, 2*1024*1024, 0, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
 		t.Fatalf("checkQuota should fail with EDQUOT when exceeding space limit, got: %s", err)
 	}
-	
+
 	t.Log("Testing mixed quota limits...")
 	m.userQuotas[uint64(fileOwnerUid)] = &Quota{MaxSpace: 0, MaxInodes: 2}
-	m.groupQuotas[uint64(fileOwnerGid)] = &Quota{MaxSpace: 1024*1024, MaxInodes: 0}
-	
+	m.groupQuotas[uint64(fileOwnerGid)] = &Quota{MaxSpace: 1024 * 1024, MaxInodes: 0}
+
 	if err := m.checkQuota(operatorCtx, 512*1024, 3, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
 		t.Fatalf("checkQuota should fail with EDQUOT when exceeding user inodes limit, got: %s", err)
 	}
-	
+
 	if err := m.checkQuota(operatorCtx, 2*1024*1024, 1, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
 		t.Fatalf("checkQuota should fail with EDQUOT when exceeding group space limit, got: %s", err)
 	}
-	
+
 	if err := m.checkQuota(operatorCtx, 512*1024, 1, fileOwnerUid, fileOwnerGid); err != 0 {
 		t.Fatalf("checkQuota should pass when within both limits, got: %s", err)
 	}
@@ -3572,42 +3664,42 @@ func TestQuotaEdgeCases(t *testing.T) {
 // TestCheckQuotaFileOwner
 func TestCheckQuotaFileOwner(t *testing.T) {
 	m := &baseMeta{}
-	
+
 	m.userQuotas = make(map[uint64]*Quota)
 	m.groupQuotas = make(map[uint64]*Quota)
 	m.quotaMu = sync.RWMutex{}
-	
+
 	m.fmt = &Format{
 		UserGroupQuota: true,
 	}
-	
+
 	fileOwnerUid := uint32(1001)
 	fileOwnerGid := uint32(2001)
 	operatorUid := uint32(1002)
 	operatorGid := uint32(2002)
-	
+
 	m.userQuotas[uint64(fileOwnerUid)] = &Quota{MaxSpace: 1 << 20, MaxInodes: 5}
 	m.groupQuotas[uint64(fileOwnerGid)] = &Quota{MaxSpace: 2 << 20, MaxInodes: 10}
-	
+
 	operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
-	
+
 	if err := m.checkQuota(operatorCtx, 1024, 1, fileOwnerUid, fileOwnerGid); err != 0 {
 		t.Fatalf("checkQuota should pass for file owner's quota, got: %s", err)
 	}
-	
+
 	if err := m.checkQuota(operatorCtx, 2<<20, 1, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
 		t.Fatalf("checkQuota should fail with EDQUOT when exceeding file owner's user quota, got: %s", err)
 	}
-	
+
 	if err := m.checkQuota(operatorCtx, 1024, 15, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
 		t.Fatalf("checkQuota should fail with EDQUOT when exceeding file owner's group quota, got: %s", err)
 	}
-	
+
 	m.userQuotas[uint64(fileOwnerUid)] = &Quota{MaxSpace: 0, MaxInodes: 0}
 	if err := m.checkQuota(operatorCtx, 1, 1, fileOwnerUid, fileOwnerGid); err != 0 {
 		t.Fatalf("checkQuota should pass when quota is zero (unlimited), got: %s", err)
 	}
-	
+
 	delete(m.userQuotas, uint64(fileOwnerUid))
 	delete(m.groupQuotas, uint64(fileOwnerGid))
 	if err := m.checkQuota(operatorCtx, 1024, 1, fileOwnerUid, fileOwnerGid); err != 0 {
@@ -3703,20 +3795,20 @@ func TestTxBatchLock(t *testing.T) {
 func testCheckQuotaFileOwnerSimple(t *testing.T, m Meta) {
 	ctx := Background()
 	parent := RootInode
-	
+
 	fileOwnerUid := uint32(1001)
 	fileOwnerGid := uint32(1001)
 	operatorUid := uint32(1002)
 	operatorGid := uint32(1002)
-	
+
 	format := m.getBase().getFormat()
 	format.UserGroupQuota = true
-	
+
 	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 4096, MaxInodes: 5}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set user quota: %s", err)
 	}
 	m.getBase().loadQuotas()
-	
+
 	var fileInode Ino
 	var attr Attr
 	if st := m.Create(ctx, parent, "testfile", 0644, 0, 0, &fileInode, &attr); st != 0 {
@@ -3725,18 +3817,18 @@ func testCheckQuotaFileOwnerSimple(t *testing.T, m Meta) {
 	if st := m.SetAttr(ctx, fileInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: fileOwnerUid, Gid: fileOwnerGid}); st != 0 {
 		t.Fatalf("SetAttr UID and GID: %s", st)
 	}
-	
+
 	var sliceId uint64
 	if st := m.NewSlice(ctx, &sliceId); st != 0 {
 		t.Fatalf("NewSlice: %s", st)
 	}
 	slice := Slice{Id: sliceId, Size: 4096, Len: 4096}
 	operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
-	
+
 	if st := m.Write(operatorCtx, fileInode, 0, 0, slice, time.Now()); st != 0 {
 		t.Fatalf("First write should succeed: %s", st)
 	}
-	
+
 	var sliceId2 uint64
 	if st := m.NewSlice(ctx, &sliceId2); st != 0 {
 		t.Fatalf("NewSlice for second write: %s", st)
@@ -3745,48 +3837,48 @@ func testCheckQuotaFileOwnerSimple(t *testing.T, m Meta) {
 	if st := m.Write(operatorCtx, fileInode, 1, 0, slice2, time.Now()); st != syscall.EDQUOT {
 		t.Fatalf("Second write should fail with EDQUOT, got: %s", st)
 	}
-	
+
 	m.CloseSession()
 }
 
 // testQuotaEdgeCases
 func testQuotaEdgeCases(t *testing.T, m Meta) {
 	ctx := Background()
-	
+
 	fileOwnerUid := uint32(1001)
 	fileOwnerGid := uint32(1001)
 	operatorUid := uint32(1002)
 	operatorGid := uint32(2002)
-	
+
 	format := m.getBase().getFormat()
 	format.UserGroupQuota = true
-	
+
 	t.Log("Testing inodes-only quota limit...")
 	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 0, MaxInodes: 2}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set inodes-only quota: %s", err)
 	}
 	m.getBase().loadQuotas()
-	
+
 	operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
-	
+
 	if err := m.getBase().checkQuota(operatorCtx, 10*1024*1024, 0, fileOwnerUid, fileOwnerGid); err != 0 {
 		t.Fatalf("checkQuota should pass for large space usage (no space limit), got: %s", err)
 	}
-	
+
 	if err := m.getBase().checkQuota(operatorCtx, 0, 3, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
 		t.Fatalf("checkQuota should fail with EDQUOT when exceeding inodes limit, got: %s", err)
 	}
-	
+
 	t.Log("Testing space-only quota limit...")
-	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1024*1024, MaxInodes: 0}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1024 * 1024, MaxInodes: 0}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set space-only quota: %s", err)
 	}
 	m.getBase().loadQuotas()
-	
+
 	if err := m.getBase().checkQuota(operatorCtx, 0, 100, fileOwnerUid, fileOwnerGid); err != 0 {
 		t.Fatalf("checkQuota should pass for large inodes usage (no inodes limit), got: %s", err)
 	}
-	
+
 	if err := m.getBase().checkQuota(operatorCtx, 2*1024*1024, 0, fileOwnerUid, fileOwnerGid); err != syscall.EDQUOT {
 		t.Fatalf("checkQuota should fail with EDQUOT when exceeding space limit, got: %s", err)
 	}
@@ -3796,21 +3888,21 @@ func testQuotaEdgeCases(t *testing.T, m Meta) {
 func testQuotaEdgeCasesComplex(t *testing.T, m Meta) {
 	ctx := Background()
 	parent := RootInode
-	
+
 	fileOwnerUid := uint32(1001)
 	fileOwnerGid := uint32(1001)
 	operatorUid := uint32(1002)
 	operatorGid := uint32(1002)
-	
+
 	format := m.getBase().getFormat()
 	format.UserGroupQuota = true
-	
+
 	t.Log("Testing inodes-only quota limit...")
 	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 0, MaxInodes: 2}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set inodes-only quota: %s", err)
 	}
 	m.getBase().loadQuotas()
-	
+
 	var fileInode Ino
 	var attr Attr
 	if st := m.Create(ctx, parent, "testfile_inodes", 0644, 0, 0, &fileInode, &attr); st != 0 {
@@ -3819,37 +3911,37 @@ func testQuotaEdgeCasesComplex(t *testing.T, m Meta) {
 	if st := m.SetAttr(ctx, fileInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: fileOwnerUid, Gid: fileOwnerGid}); st != 0 {
 		t.Fatalf("SetAttr UID and GID: %s", st)
 	}
-	
+
 	operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
 	for i := 0; i < 5; i++ {
 		var sliceId uint64
 		if st := m.NewSlice(ctx, &sliceId); st != 0 {
 			t.Fatalf("NewSlice %d: %s", i, st)
 		}
-		slice := Slice{Id: sliceId, Size: 1024*1024, Len: 1024*1024}
+		slice := Slice{Id: sliceId, Size: 1024 * 1024, Len: 1024 * 1024}
 		if st := m.Write(operatorCtx, fileInode, uint32(i), uint32(i*1024*1024), slice, time.Now()); st != 0 {
 			t.Fatalf("Write %d should succeed (no space limit), got: %s", i, st)
 		}
 	}
-	
+
 	var newFileInode Ino
 	if st := m.Create(ctx, parent, "testfile_inodes2", 0644, 0, 0, &newFileInode, &attr); st != syscall.EDQUOT {
 		t.Fatalf("Create should fail with EDQUOT (inodes limit exceeded), got: %s", st)
 	}
-	
+
 	t.Log("Testing space-only quota limit...")
-	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1024*1024, MaxInodes: 0}}, false, false, false); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, "", fileOwnerUid, 0, map[string]*Quota{UGQuotaKey: {MaxSpace: 1024 * 1024, MaxInodes: 0}}, false, false, false); err != nil {
 		t.Fatalf("HandleQuota set space-only quota: %s", err)
 	}
 	m.getBase().loadQuotas()
-	
+
 	if st := m.Create(ctx, parent, "testfile_space", 0644, 0, 0, &fileInode, &attr); st != 0 {
 		t.Fatalf("Create testfile_space: %s", st)
 	}
 	if st := m.SetAttr(ctx, fileInode, SetAttrUID|SetAttrGID, 0, &Attr{Uid: fileOwnerUid, Gid: fileOwnerGid}); st != 0 {
 		t.Fatalf("SetAttr UID and GID: %s", st)
 	}
-	
+
 	for i := 0; i < 10; i++ {
 		var newFileInode Ino
 		if st := m.Create(ctx, parent, fmt.Sprintf("testfile_space_%d", i), 0644, 0, 0, &newFileInode, &attr); st != 0 {
@@ -3859,12 +3951,12 @@ func testQuotaEdgeCasesComplex(t *testing.T, m Meta) {
 			t.Fatalf("SetAttr UID and GID for file %d: %s", i, st)
 		}
 	}
-	
+
 	var sliceId uint64
 	if st := m.NewSlice(ctx, &sliceId); st != 0 {
 		t.Fatalf("NewSlice for space test: %s", st)
 	}
-	slice := Slice{Id: sliceId, Size: 2*1024*1024, Len: 2*1024*1024}
+	slice := Slice{Id: sliceId, Size: 2 * 1024 * 1024, Len: 2 * 1024 * 1024}
 	if st := m.Write(operatorCtx, fileInode, 0, 0, slice, time.Now()); st != syscall.EDQUOT {
 		t.Fatalf("Write should fail with EDQUOT (space limit exceeded), got: %s", st)
 	}
@@ -3910,7 +4002,7 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 			t.Fatalf("GetAttr for ownerfile: %s", st)
 		}
 		if checkAttr.Uid != fileOwnerUid || checkAttr.Gid != fileOwnerGid {
-			t.Fatalf("File owner not set correctly: expected uid=%d gid=%d, got uid=%d gid=%d", 
+			t.Fatalf("File owner not set correctly: expected uid=%d gid=%d, got uid=%d gid=%d",
 				fileOwnerUid, fileOwnerGid, checkAttr.Uid, checkAttr.Gid)
 		}
 
@@ -4023,7 +4115,7 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 		}
 
 		if attr.Uid != operatorUid || attr.Gid != operatorGid {
-			t.Fatalf("Mknod file owner should be operator: expected uid=%d gid=%d, got uid=%d gid=%d", 
+			t.Fatalf("Mknod file owner should be operator: expected uid=%d gid=%d, got uid=%d gid=%d",
 				operatorUid, operatorGid, attr.Uid, attr.Gid)
 		}
 
@@ -4056,7 +4148,7 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 			t.Fatalf("Lookup clonefile: %s", st)
 		}
 		if cloneAttr.Uid != operatorUid || cloneAttr.Gid != operatorGid {
-			t.Fatalf("Clone file owner should be operator: expected uid=%d gid=%d, got uid=%d gid=%d", 
+			t.Fatalf("Clone file owner should be operator: expected uid=%d gid=%d, got uid=%d gid=%d",
 				operatorUid, operatorGid, cloneAttr.Uid, cloneAttr.Gid)
 		}
 
@@ -4149,14 +4241,14 @@ type testContext struct {
 	gid uint32
 }
 
-func (c *testContext) Uid() uint32 { return c.uid }
-func (c *testContext) Gid() uint32 { return c.gid }
-func (c *testContext) Gids() []uint32 { return []uint32{c.gid} }
-func (c *testContext) Pid() uint32 { return 0 }
+func (c *testContext) Uid() uint32                        { return c.uid }
+func (c *testContext) Gid() uint32                        { return c.gid }
+func (c *testContext) Gids() []uint32                     { return []uint32{c.gid} }
+func (c *testContext) Pid() uint32                        { return 0 }
 func (c *testContext) WithValue(k, v interface{}) Context { return c }
-func (c *testContext) Cancel() {}
-func (c *testContext) Canceled() bool { return false }
-func (c *testContext) CheckPermission() bool { return true }
+func (c *testContext) Cancel()                            {}
+func (c *testContext) Canceled() bool                     { return false }
+func (c *testContext) CheckPermission() bool              { return true }
 
 func cleanupQuotaTest(ctx Context, m Meta, parent Ino, uid, gid uint32) {
 	for i := 0; i < 3; i++ {
@@ -4528,11 +4620,11 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 	} else {
 		parentPath = "/ugquota"
 	}
-	
+
 	if err := m.HandleQuota(ctx, QuotaSet, parentPath, 0, 0, map[string]*Quota{parentPath: {MaxSpace: 200 << 20, MaxInodes: 200}}, false, false, false); err != nil {
 		t.Fatalf("Set directory quota for %s: %s", parentPath, err)
 	}
-	
+
 	m.getBase().loadQuotas()
 
 	var originalFile Ino
@@ -4600,7 +4692,7 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 		t.Fatalf("Directory quota not found after hardlink creation")
 	}
 	expectedSpaceIncrease := int64(0)
-	expectedInodeIncrease := int64(1)     
+	expectedInodeIncrease := int64(1)
 
 	actualSpaceIncrease := ugQuotaAfterHardlink.UsedSpace - ugQuotaAfterFile.UsedSpace
 	actualInodeIncrease := ugQuotaAfterHardlink.UsedInodes - ugQuotaAfterFile.UsedInodes
@@ -4612,9 +4704,9 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 		t.Fatalf("UG quota inode increase mismatch: expected %d, got %d", expectedInodeIncrease, actualInodeIncrease)
 	}
 
-	dirExpectedSpaceIncrease := int64(8192) 
-	dirExpectedInodeIncrease := int64(1) 
-	
+	dirExpectedSpaceIncrease := int64(8192)
+	dirExpectedInodeIncrease := int64(1)
+
 	dirActualSpaceIncrease := dirQuotaAfterHardlink.UsedSpace - dirQuotaAfterFile.UsedSpace
 	dirActualInodeIncrease := dirQuotaAfterHardlink.UsedInodes - dirQuotaAfterFile.UsedInodes
 
@@ -4651,7 +4743,7 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 	}
 
 	expectedSpaceDecrease := int64(0)
-	expectedInodeDecrease := int64(1)     
+	expectedInodeDecrease := int64(1)
 
 	actualSpaceDecrease := ugQuotaAfterHardlink.UsedSpace - ugQuotaAfterUnlink.UsedSpace
 	actualInodeDecrease := ugQuotaAfterHardlink.UsedInodes - ugQuotaAfterUnlink.UsedInodes
@@ -4663,9 +4755,9 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 		t.Fatalf("UG quota inode decrease mismatch: expected %d, got %d", expectedInodeDecrease, actualInodeDecrease)
 	}
 
-	dirExpectedSpaceDecrease := int64(8192) 
-	dirExpectedInodeDecrease := int64(1)  
-	
+	dirExpectedSpaceDecrease := int64(8192)
+	dirExpectedInodeDecrease := int64(1)
+
 	dirActualSpaceDecrease := dirQuotaAfterHardlink.UsedSpace - dirQuotaAfterUnlink.UsedSpace
 	dirActualInodeDecrease := dirQuotaAfterHardlink.UsedInodes - dirQuotaAfterUnlink.UsedInodes
 

@@ -506,6 +506,9 @@ func format(c *cli.Context) error {
 		if format.RangerRestUrl != "" || format.RangerService != "" {
 			format.MinClientVersion = "1.3.0-A"
 		}
+		if format.KerbConf != "" {
+			format.MinClientVersion = "1.4.0-A"
+		}
 
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")
