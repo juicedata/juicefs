@@ -1253,4 +1253,85 @@ public class JuiceFileSystemTest extends TestCase {
     }
     newFS.close();
   }
+
+  public void testMultipleSubdirs() throws IOException, InterruptedException {
+    Configuration newConf = new Configuration(cfg);
+    newConf.set("fs.defaultFS", "jfs://test/");
+    newConf.set("juicefs.name", "test");
+    newConf.set("juicefs.test.meta", newConf.get("juicefs.dev.meta"));
+
+    // Create multiple subdirs
+    Path subdir1 = new Path("/subdir1");
+    Path subdir2 = new Path("/subdir2");
+    Path subdir3 = new Path("/subdir3");
+    
+    fs.delete(subdir1, true);
+    fs.delete(subdir2, true);
+    fs.delete(subdir3, true);
+    
+    fs.mkdirs(subdir1);
+    fs.mkdirs(subdir2);
+    fs.mkdirs(subdir3);
+    fs.setPermission(subdir1, new FsPermission((short) 0777));
+    fs.setPermission(subdir2, new FsPermission((short) 0777));
+    fs.setPermission(subdir3, new FsPermission((short) 0777));
+    
+    // Set multiple subdirs separated by comma
+    newConf.set("juicefs.subdir", "/subdir1,/subdir2,/subdir3");
+    FileSystem newFS = FileSystem.newInstance(newConf);
+
+    // Test file operations within subdir1
+    assertTrue(newFS.mkdirs(new Path("/subdir1/dir1")));
+    newFS.create(new Path("/subdir1/dir1/f1")).close();
+    assertTrue(newFS.exists(new Path("/subdir1/dir1/f1")));
+
+    // Test file operations within subdir2
+    assertTrue(newFS.mkdirs(new Path("/subdir2/dir2")));
+    newFS.create(new Path("/subdir2/dir2/f2")).close();
+    assertTrue(newFS.exists(new Path("/subdir2/dir2/f2")));
+
+    // Test file operations within subdir3
+    assertTrue(newFS.mkdirs(new Path("/subdir3/dir3")));
+    newFS.create(new Path("/subdir3/dir3/f3")).close();
+    assertTrue(newFS.exists(new Path("/subdir3/dir3/f3")));
+
+    // Test file operations not within any subdir
+    Path nonexistent = new Path("/nonexistent");
+    try {
+      newFS.exists(nonexistent);
+      fail("exists should not work because the path is not under any subdir");
+    } catch (AccessControlException e) {
+      assertTrue(e.getMessage().contains("Permission denied"));
+    }
+    try {
+      newFS.mkdirs(nonexistent);
+      fail("mkdirs should not work because the path is not under any subdir");
+    } catch (AccessControlException e) {
+      assertTrue(e.getMessage().contains("Permission denied"));
+    }
+    try {
+      newFS.create(nonexistent);
+      fail("create should not work because the path is not under any subdir");
+    } catch (AccessControlException e) {
+      assertTrue(e.getMessage().contains("Permission denied"));
+    }
+
+    // Test creating a path with the same prefix but not under any subdir
+    Path wrongPathWithSamePrefix = new Path("/subdir1_wrong");
+    fs.mkdirs(wrongPathWithSamePrefix);
+    try {
+      newFS.listStatus(wrongPathWithSamePrefix);
+      fail("listStatus should not work because the path is not under any subdir");
+    } catch (AccessControlException e) {
+      assertTrue(e.getMessage().contains("Permission denied"));
+    }
+
+    // Test that paths in different subdirs are accessible
+    assertTrue(newFS.exists(new Path("/subdir1/dir1/f1")));
+    assertTrue(newFS.exists(new Path("/subdir2/dir2/f2")));
+    assertTrue(newFS.exists(new Path("/subdir3/dir3/f3")));
+
+    // Cleanup
+    newFS.close();
+  }
 }

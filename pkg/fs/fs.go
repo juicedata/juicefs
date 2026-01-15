@@ -155,6 +155,9 @@ type FileSystem struct {
 	opsDurationsHistogram prometheus.Histogram
 
 	registry *prometheus.Registry
+
+	// Pre-parsed subdir prefixes for fast path checking
+	subdirPrefixes []string
 }
 
 type File struct {
@@ -203,6 +206,18 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore, registry *
 			Buckets: prometheus.ExponentialBuckets(0.00001, 1.8, 29),
 		}),
 		registry: registry,
+	}
+
+	// Pre-parse subdir prefixes for fast path checking
+	if conf.Subdir != "" {
+		subdirs := strings.Split(conf.Subdir, ",")
+		fs.subdirPrefixes = make([]string, 0, len(subdirs))
+		for _, prefix := range subdirs {
+			prefix = strings.TrimSpace(prefix)
+			if prefix != "" {
+				fs.subdirPrefixes = append(fs.subdirPrefixes, prefix)
+			}
+		}
 	}
 
 	go fs.cleanupCache()
@@ -859,10 +874,28 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 }
 
 func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bool, visited map[Ino]struct{}) (fi *FileStat, err syscall.Errno) {
-	prefix := fs.conf.Subdir
 	p = path.Clean(p)
-	if !strings.HasPrefix(p, prefix) || len(prefix) > 0 && len(p) > len(prefix) && p[len(prefix)] != '/' {
-		return nil, syscall.EACCES
+
+	// Check if path is allowed by any of the configured subdirs
+	if len(fs.subdirPrefixes) > 0 {
+		allowed := false
+		plen := len(p)
+		for _, prefix := range fs.subdirPrefixes {
+			prefixLen := len(prefix)
+			// Fast path: check length first to avoid string comparison if possible
+			if prefixLen > plen {
+				continue
+			}
+			// Check if path starts with prefix and is either the prefix itself or has '/' after prefix
+			// This prevents matching "/test" with "/testfile" (should match "/test" or "/test/...")
+			if strings.HasPrefix(p, prefix) && (prefixLen == plen || p[prefixLen] == '/') {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return nil, syscall.EACCES
+		}
 	}
 	var inode Ino
 	var attr = &Attr{}
