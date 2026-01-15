@@ -1669,6 +1669,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	return st
 }
 
+// BatchUnlink delete multiple files in the same directory (case-sensitive filenames)
 func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count *uint64, skipCheckTrash bool) syscall.Errno {
 	if len(entries) == 0 {
 		return 0

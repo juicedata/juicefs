@@ -1773,33 +1773,31 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 		entryKey := m.entryKey(parent)
 		entryInfos = make([]*entryInfo, 0, len(entries))
 		now := time.Now()
-		if len(entries) > 0 {
-			names := make([]string, 0, len(entries))
-			for _, entry := range entries {
-				names = append(names, string(entry.Name))
+		enames := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			enames = append(enames, string(entry.Name))
+		}
+		vals, err := tx.HMGet(ctx, entryKey, enames...).Result()
+		if err != nil {
+			return err
+		}
+		for idx, entry := range entries {
+			val := vals[idx]
+			if val == nil {
+				continue
 			}
-			vals, err := tx.HMGet(ctx, entryKey, names...).Result()
-			if err != nil {
-				return err
+			buf := []byte(val.(string))
+			typ, ino := m.parseEntry(buf)
+			if typ == TypeDirectory || entry.Attr != nil && entry.Attr.Typ != typ || entry.Inode != ino {
+				continue
 			}
-			for idx, entry := range entries {
-				if idx < len(vals) && vals[idx] != nil { 
-					// todo: There may be abnormal characters in the file that cannot be deleted.
-					// It is necessary to delete it manually.
-					if entry.Attr.Typ == TypeDirectory {
-						continue
-					}
-					info := entryInfo{
-						name:  string(entry.Name),
-						inode: entry.Inode,
-						typ:   entry.Attr.Typ,
-						trash: trash,
-						buf:   m.packEntry(entry.Attr.Typ, entry.Inode),
-					}
-					entryInfos = append(entryInfos, &info)
-				}
-			}
-			
+			entryInfos = append(entryInfos, &entryInfo{
+				name:  string(entry.Name),
+				inode: ino,
+				typ:   typ,
+				trash: trash,
+				buf:   buf,
+			})
 		}
 
 		inodesSet := make(map[Ino]struct{}, len(entryInfos))
@@ -1914,9 +1912,6 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 		stats := make(map[string]int64)                     // key -> delta
 
 		for _, info := range entryInfos {
-			if info.typ == TypeDirectory {
-				continue
-			}
 			names = append(names, info.name)
 			if info.attr == nil {
 				continue

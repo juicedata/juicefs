@@ -1486,7 +1486,6 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 				batchUserGroupQuotas = make([]userGroupQuotaDelta, 0, len(batch))
 			}
 			delNodes = make(map[Ino]*dNode)
-			// Get parent directory attribute
 			pbuf := tx.get(m.inodeKey(parent))
 			if pbuf == nil {
 				return syscall.ENOENT
@@ -1505,31 +1504,27 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 
 			entryInfos = make([]*entryInfo, 0, len(batch))
 			now := time.Now()
-			if len(batch) > 0 {
-				keys := make([][]byte, 0, len(batch))
-				for _, entry := range batch {
-					keys = append(keys, m.entryKey(parent, string(entry.Name)))
+			keys := make([][]byte, 0, len(batch))
+			for _, entry := range batch {
+				keys = append(keys, m.entryKey(parent, string(entry.Name)))
+			}
+			vals := tx.gets(keys...)
+			for idx, entry := range batch {
+				if vals[idx] == nil {
+					continue
 				}
-				if len(keys) > 0 {
-					vals := tx.gets(keys...)
-					for idx, entry := range batch {
-						if idx < len(vals) && vals[idx] != nil {
-							// todo: There may be abnormal characters in the file that cannot be deleted.
-							// It is necessary to delete it manually.
-							if entry.Attr.Typ == TypeDirectory {
-								continue
-							}
-							info := entryInfo{
-								name:  string(entry.Name),
-								inode: entry.Inode,
-								typ:   entry.Attr.Typ,
-								trash: trash,
-								buf:   m.packEntry(entry.Attr.Typ, entry.Inode),
-							}
-							entryInfos = append(entryInfos, &info)
-						}
-					}
+				typ, ino := m.parseEntry(vals[idx])
+				if ino != entry.Inode || typ != TypeDirectory || entry.Attr != nil && typ != entry.Attr.Typ {
+					continue
 				}
+				info := entryInfo{
+					name:  string(entry.Name),
+					inode: ino,
+					typ:   typ,
+					trash: trash,
+					buf:   vals[idx],
+				}
+				entryInfos = append(entryInfos, &info)
 			}
 
 			// Collect unique inodes
