@@ -2672,14 +2672,10 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 			if !ok {
 				continue
 			}
-			if e.Inode != entry.Inode || (entry.Attr != nil && e.Type != entry.Attr.Typ) || e.Type == TypeDirectory {
+			if e.Inode != entry.Inode || e.Type == TypeDirectory || (entry.Attr != nil && e.Type != entry.Attr.Typ) {
 				continue
 			}
-			edgeInfo := &edge{Parent: parent, Name: entry.Name, Inode: entry.Inode}
-			if entry.Attr != nil {
-				edgeInfo.Type = entry.Attr.Typ
-			}
-			entryInfos = append(entryInfos, &entryInfo{e: edgeInfo, trash: trash})
+			entryInfos = append(entryInfos, &entryInfo{e: e, trash: trash})
 			if _, exists := inodeM[entry.Inode]; !exists {
 				inodeM[entry.Inode] = struct{}{}
 				inodes = append(inodes, entry.Inode)

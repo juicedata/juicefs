@@ -1788,7 +1788,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 			}
 			buf := []byte(val.(string))
 			typ, ino := m.parseEntry(buf)
-			if typ == TypeDirectory || entry.Attr != nil && entry.Attr.Typ != typ || entry.Inode != ino {
+			if entry.Inode != ino || typ == TypeDirectory || (entry.Attr != nil && entry.Attr.Typ != typ) {
 				continue
 			}
 			entryInfos = append(entryInfos, &entryInfo{
