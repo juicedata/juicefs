@@ -1775,23 +1775,34 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 			return syscall.EPERM
 		}
 
+		entryKey := m.entryKey(parent)
 		entryInfos = make([]*entryInfo, 0, len(entries))
 		now := time.Now()
-
-		if len(entries) > 0 {
-			for _, entry := range entries {
-				if entry.Attr.Typ == TypeDirectory {
-					continue
-				}
-				info := entryInfo{
-					name:  string(entry.Name),
-					inode: entry.Inode,
-					typ:   entry.Attr.Typ,
-					trash: trash,
-					buf:   m.packEntry(entry.Attr.Typ, entry.Inode),
-				}
-				entryInfos = append(entryInfos, &info)
+		enames := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			enames = append(enames, string(entry.Name))
+		}
+		vals, err := tx.HMGet(ctx, entryKey, enames...).Result()
+		if err != nil {
+			return err
+		}
+		for idx, entry := range entries {
+			val := vals[idx]
+			if val == nil {
+				continue
 			}
+			buf := []byte(val.(string))
+			typ, ino := m.parseEntry(buf)
+			if entry.Inode != ino || typ == TypeDirectory || (entry.Attr != nil && entry.Attr.Typ != typ) {
+				continue
+			}
+			entryInfos = append(entryInfos, &entryInfo{
+				name:  string(entry.Name),
+				inode: ino,
+				typ:   typ,
+				trash: trash,
+				buf:   buf,
+			})
 		}
 
 		inodesSet := make(map[Ino]struct{}, len(entryInfos))
@@ -1906,9 +1917,6 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 		stats := make(map[string]int64)                     // key -> delta
 
 		for _, info := range entryInfos {
-			if info.typ == TypeDirectory {
-				continue
-			}
 			names = append(names, info.name)
 			if info.attr == nil {
 				continue

@@ -1491,7 +1491,6 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 				batchUserGroupQuotas = make([]userGroupQuotaDelta, 0, len(batch))
 			}
 			delNodes = make(map[Ino]*dNode)
-			// Get parent directory attribute
 			pbuf := tx.get(m.inodeKey(parent))
 			if pbuf == nil {
 				return syscall.ENOENT
@@ -1510,22 +1509,27 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 
 			entryInfos = make([]*entryInfo, 0, len(batch))
 			now := time.Now()
-
-			// Collect entry info and filter out directories
-			if len(batch) > 0 {
-				for _, entry := range batch {
-					if entry.Attr.Typ == TypeDirectory {
-						continue
-					}
-					info := entryInfo{
-						name:  string(entry.Name),
-						inode: entry.Inode,
-						typ:   entry.Attr.Typ,
-						trash: trash,
-						buf:   m.packEntry(entry.Attr.Typ, entry.Inode),
-					}
-					entryInfos = append(entryInfos, &info)
+			keys := make([][]byte, 0, len(batch))
+			for _, entry := range batch {
+				keys = append(keys, m.entryKey(parent, string(entry.Name)))
+			}
+			vals := tx.gets(keys...)
+			for idx, entry := range batch {
+				if vals[idx] == nil {
+					continue
 				}
+				typ, ino := m.parseEntry(vals[idx])
+				if ino != entry.Inode || typ == TypeDirectory || (entry.Attr != nil && typ != entry.Attr.Typ) {
+					continue
+				}
+				info := entryInfo{
+					name:  string(entry.Name),
+					inode: ino,
+					typ:   typ,
+					trash: trash,
+					buf:   vals[idx],
+				}
+				entryInfos = append(entryInfos, &info)
 			}
 
 			// Collect unique inodes

@@ -2638,10 +2638,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 	}
 	delNodes := make(map[Ino]*dNode)
 	var totalLength, totalSpace, totalInodes int64
-	if userGroupQuotas != nil {
-		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
-	}
-	// main transaction: validate, collect metadata, update inode/link counts, and prepare DB mutations
 	err := m.txn(func(s *xorm.Session) error {
 		pn := node{Inode: parent}
 		ok, err := s.Get(&pn)
@@ -2662,19 +2658,30 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		if (pn.Flags&FlagAppend != 0) || (pn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		entryInfos = make([]*entryInfo, 0, len(entries))
 		now := time.Now().UnixNano()
+		entryInfos = make([]*entryInfo, 0, len(entries))
+		names := make([][]byte, 0, len(entries))
+		for _, entry := range entries {
+			names = append(names, entry.Name)
+		}
+		var foundEdges []edge
+		if err := s.Where("parent=?", parent).In("name", names).Find(&foundEdges); err != nil {
+			return err
+		}
+		entryMap := make(map[string]*edge)
+		for i := range foundEdges {
+			entryMap[string(foundEdges[i].Name)] = &foundEdges[i]
+		}
 
-		// collect unique inode ids from entries (avoid operating N times on same inode for hard links)
 		inodes := make([]Ino, 0, len(entries))
 		inodeM := make(map[Ino]struct{}) // filter hardlinks
 		for _, entry := range entries {
-			e := &edge{Parent: parent, Name: entry.Name, Inode: entry.Inode}
-			if entry.Attr != nil {
-				if entry.Attr.Typ == TypeDirectory {
-					continue
-				}
-				e.Type = entry.Attr.Typ
+			e, ok := entryMap[string(entry.Name)]
+			if !ok {
+				continue
+			}
+			if e.Inode != entry.Inode || e.Type == TypeDirectory || (entry.Attr != nil && e.Type != entry.Attr.Typ) {
+				continue
 			}
 			entryInfos = append(entryInfos, &entryInfo{e: e, trash: trash})
 			if _, exists := inodeM[entry.Inode]; !exists {
@@ -2766,7 +2773,9 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		symlinksDel := make([]Ino, 0)
 		xattrsDel := make([]Ino, 0)
 		edgesIns := make([]interface{}, 0)
-
+		if userGroupQuotas != nil {
+			*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
+		}
 		// walk each edge to decide whether to move to trash, decrement nlink or delete inode & xattrs
 		for _, info := range entryInfos {
 			edgesDel = append(edgesDel, edge{Parent: parent, Name: info.e.Name})
