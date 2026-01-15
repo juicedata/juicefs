@@ -1771,44 +1771,35 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 		}
 
 		entryKey := m.entryKey(parent)
-		validEntries := make([]*Entry, 0, len(entries))
+		entryInfos = make([]*entryInfo, 0, len(entries))
+		now := time.Now()
 		if len(entries) > 0 {
 			names := make([]string, 0, len(entries))
 			for _, entry := range entries {
 				names = append(names, string(entry.Name))
 			}
-			if len(names) > 0 {
-				vals, err := tx.HMGet(ctx, entryKey, names...).Result()
-				if err != nil {
-					return err
-				}
-				for idx, entry := range entries {
-					if idx < len(vals) && vals[idx] != nil {
-						validEntries = append(validEntries, entry)
-					} else if m.conf.CaseInsensi {
-						if ee := m.resolveCase(ctx, parent, names[idx]); ee != nil {
-							validEntries = append(validEntries, entry)
-						}
+			vals, err := tx.HMGet(ctx, entryKey, names...).Result()
+			if err != nil {
+				return err
+			}
+			for idx, entry := range entries {
+				if idx < len(vals) && vals[idx] != nil { 
+					// todo: There may be abnormal characters in the file that cannot be deleted.
+					// It is necessary to delete it manually.
+					if entry.Attr.Typ == TypeDirectory {
+						continue
 					}
+					info := entryInfo{
+						name:  string(entry.Name),
+						inode: entry.Inode,
+						typ:   entry.Attr.Typ,
+						trash: trash,
+						buf:   m.packEntry(entry.Attr.Typ, entry.Inode),
+					}
+					entryInfos = append(entryInfos, &info)
 				}
 			}
-		}
-		entryInfos = make([]*entryInfo, 0, len(validEntries))
-		now := time.Now()
-		if len(validEntries) > 0 {
-			for _, entry := range validEntries {
-				if entry.Attr.Typ == TypeDirectory {
-					continue
-				}
-				info := entryInfo{
-					name:  string(entry.Name),
-					inode: entry.Inode,
-					typ:   entry.Attr.Typ,
-					trash: trash,
-					buf:   m.packEntry(entry.Attr.Typ, entry.Inode),
-				}
-				entryInfos = append(entryInfos, &info)
-			}
+			
 		}
 
 		inodesSet := make(map[Ino]struct{}, len(entryInfos))

@@ -2655,45 +2655,30 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 			return syscall.EPERM
 		}
 
-		validEntries := make([]*Entry, 0, len(entries))
+		entryInfos = make([]*entryInfo, 0, len(entries))
+		if userGroupQuotas != nil {
+			*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
+		}
+		now := time.Now().UnixNano()
+
+		inodes := make([]Ino, 0, len(entries))
+		inodeM := make(map[Ino]struct{}) // filter hardlinks
 		for _, entry := range entries {
 			e := edge{Parent: parent, Name: entry.Name}
 			ok, err := s.Get(&e)
 			if err != nil {
 				return err
 			}
-			if !ok {
-				if !m.conf.CaseInsensi {
-					continue
-				}
-				ee := m.resolveCase(ctx, parent, string(entry.Name))
-				if ee == nil {
-					continue
-				}
-				e.Name = ee.Name
-				e.Inode = ee.Inode
-				e.Type = ee.Attr.Typ
+			// todo: There may be abnormal characters in the file that cannot be deleted.
+			// It is necessary to delete it manually.
+			if !ok || (entry.Attr != nil && entry.Attr.Typ == TypeDirectory){
+				continue
 			}
-			validEntries = append(validEntries, entry)
-		}
-
-		entryInfos = make([]*entryInfo, 0, len(validEntries))
-		if userGroupQuotas != nil {
-			*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(validEntries))
-		}
-		now := time.Now().UnixNano()
-
-		inodes := make([]Ino, 0, len(validEntries))
-		inodeM := make(map[Ino]struct{}) // filter hardlinks
-		for _, entry := range validEntries {
-			e := &edge{Parent: parent, Name: entry.Name, Inode: entry.Inode}
+			edgeInfo := &edge{Parent: parent, Name: entry.Name, Inode: entry.Inode}
 			if entry.Attr != nil {
-				if entry.Attr.Typ == TypeDirectory {
-					continue
-				}
-				e.Type = entry.Attr.Typ
+				edgeInfo.Type = entry.Attr.Typ
 			}
-			entryInfos = append(entryInfos, &entryInfo{e: e, trash: trash})
+			entryInfos = append(entryInfos, &entryInfo{e: edgeInfo, trash: trash})
 			if _, exists := inodeM[entry.Inode]; !exists {
 				inodeM[entry.Inode] = struct{}{}
 				inodes = append(inodes, entry.Inode)

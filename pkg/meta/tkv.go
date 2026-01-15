@@ -1503,7 +1503,8 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 				return syscall.EPERM
 			}
 
-			validEntries := make([]*Entry, 0, len(batch))
+			entryInfos = make([]*entryInfo, 0, len(batch))
+			now := time.Now()
 			if len(batch) > 0 {
 				keys := make([][]byte, 0, len(batch))
 				for _, entry := range batch {
@@ -1513,26 +1514,21 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 					vals := tx.gets(keys...)
 					for idx, entry := range batch {
 						if idx < len(vals) && vals[idx] != nil {
-							validEntries = append(validEntries, entry)
+							// todo: There may be abnormal characters in the file that cannot be deleted.
+							// It is necessary to delete it manually.
+							if entry.Attr.Typ == TypeDirectory {
+								continue
+							}
+							info := entryInfo{
+								name:  string(entry.Name),
+								inode: entry.Inode,
+								typ:   entry.Attr.Typ,
+								trash: trash,
+								buf:   m.packEntry(entry.Attr.Typ, entry.Inode),
+							}
+							entryInfos = append(entryInfos, &info)
 						}
 					}
-				}
-			}
-			entryInfos = make([]*entryInfo, 0, len(validEntries))
-			now := time.Now()
-			if len(validEntries) > 0 {
-				for _, entry := range validEntries {
-					if entry.Attr.Typ == TypeDirectory {
-						continue
-					}
-					info := entryInfo{
-						name:  string(entry.Name),
-						inode: entry.Inode,
-						typ:   entry.Attr.Typ,
-						trash: trash,
-						buf:   m.packEntry(entry.Attr.Typ, entry.Inode),
-					}
-					entryInfos = append(entryInfos, &info)
 				}
 			}
 
