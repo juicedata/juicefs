@@ -1514,7 +1514,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 					continue
 				}
 				typ, ino := m.parseEntry(vals[idx])
-				if ino != entry.Inode || typ != TypeDirectory || (entry.Attr != nil && typ != entry.Attr.Typ) {
+				if ino != entry.Inode || typ == TypeDirectory || (entry.Attr != nil && typ != entry.Attr.Typ) {
 					continue
 				}
 				info := entryInfo{
