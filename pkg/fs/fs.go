@@ -520,13 +520,13 @@ func (fs *FileSystem) Delete(ctx meta.Context, p string) (err syscall.Errno) {
 func (fs *FileSystem) BatchDeleteEntries(ctx meta.Context, parent string, ps []string) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.BatchDeleteEntries").End()
 	l := vfs.NewLogContext(ctx)
-	defer func() { fs.log(l, "BatchDeleteEntries (%s): %s", ps, errstr(err)) }()
+	defer func() { fs.log(l, "BatchDeleteEntries : %s", errstr(err)) }()
 	parentInfo, errno := fs.Stat(ctx, parent)
 	if errno != 0 {
 		return errno
 	}
-	entries := make([]*meta.Entry, len(ps))
-	for i, p := range ps {
+	var entries []*meta.Entry
+	for _, p := range ps {
 		fi, e := fs.Stat(ctx, p)
 		if errors.Is(e, syscall.ENOENT) {
 			continue
@@ -534,7 +534,10 @@ func (fs *FileSystem) BatchDeleteEntries(ctx meta.Context, parent string, ps []s
 		if e != 0 {
 			return e
 		}
-		entries[i] = &meta.Entry{Inode: fi.Inode(), Name: []byte(fi.Name()), Attr: fi.Attr()}
+		entries = append(entries, &meta.Entry{Inode: fi.Inode(), Name: []byte(fi.Name()), Attr: fi.Attr()})
+	}
+	if len(entries) == 0 {
+		return 0
 	}
 	eno := fs.m.BatchUnlink(ctx, parentInfo.inode, entries, nil, false)
 	for _, p := range ps {

@@ -519,7 +519,7 @@ func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 		idxs := delMap[ppath]
 		ps := make([]string, len(idxs))
 		for i, idx := range idxs {
-			ps[i] = objects[idx].ObjectName
+			ps[i] = n.path(bucket, objects[idx].ObjectName)
 		}
 		g.Go(func() error {
 			err := n.fs.BatchDeleteEntries(mctx, ppath, ps)
