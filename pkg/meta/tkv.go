@@ -197,6 +197,7 @@ All keys:
   Niiiiiiii          detached inde
   QDiiiiiiii         directory quota
   Raaaa			     POSIX acl
+  KDaaaa			 delegation token
 */
 
 func (m *kvMeta) inodeKey(inode Ino) []byte {
@@ -269,6 +270,10 @@ func (m *kvMeta) groupQuotaKey(gid uint64) []byte {
 
 func (m *kvMeta) aclKey(id uint32) []byte {
 	return m.fmtKey("R", id)
+}
+
+func (m *kvMeta) krbTokenKey(id uint32) []byte {
+	return m.fmtKey("KD", id)
 }
 
 func (m *kvMeta) parseACLId(key string) uint32 {
@@ -4325,6 +4330,60 @@ func (m *kvMeta) loadDumpedACLs(ctx Context) error {
 		tx.set(m.counterKey(aclCounter), packCounter(int64(maxId)))
 		return nil
 	})
+}
+
+func (m *kvMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
+	err := m.txn(ctx, func(tx *kvTxn) error {
+		newId, err := m.incrCounter(krbTokenCounter, 1)
+		if err != nil {
+			return err
+		}
+		tx.set(m.krbTokenKey(uint32(newId)), token)
+		id = uint32(newId)
+		return nil
+	})
+	return id, errno(err)
+}
+
+func (m *kvMeta) doUpdateToken(ctx Context, id uint32, token []byte) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		if tx.get(m.krbTokenKey(id)) == nil {
+			return syscall.ENOENT
+		}
+		tx.set(m.krbTokenKey(id), token)
+		return nil
+	}))
+}
+
+func (m *kvMeta) doLoadToken(ctx Context, id uint32) (token []byte, st syscall.Errno) {
+	err := m.txn(ctx, func(tx *kvTxn) error {
+		token = tx.get(m.krbTokenKey(id))
+		if token == nil {
+			return syscall.ENOENT
+		}
+		return nil
+	})
+	return token, errno(err)
+}
+
+func (m *kvMeta) doDeleteTokens(ctx Context, ids []uint32) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *kvTxn) error {
+		for _, id := range ids {
+			tx.delete(m.krbTokenKey(id))
+		}
+		return nil
+	}))
+}
+
+func (m *kvMeta) doListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno) {
+	tokens = make(map[uint32][]byte)
+	err := m.client.scan(m.fmtKey("KD"), func(k, v []byte) bool {
+		rb := utils.FromBuffer(k[2:])
+		id := rb.Get32()
+		tokens[id] = v
+		return true
+	})
+	return tokens, errno(err)
 }
 
 type kvDirHandler struct {

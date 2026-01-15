@@ -103,6 +103,9 @@ type Format struct {
 	EnableACL        bool
 	RangerRestUrl    string `json:",omitempty"`
 	RangerService    string `json:",omitempty"`
+
+	//kerberos
+	KerbConf string `json:",omitempty"`
 }
 
 func (f *Format) update(old *Format, force bool) error {

@@ -63,7 +63,7 @@ public class RangerPermissionChecker {
   private final FileSystem superGroupFileSystem;
   private final RangerJfsPlugin rangerPlugin;
 
-  private RangerPermissionChecker(FileSystem superGroupFileSystem, RangerConfig config) {
+  public RangerPermissionChecker(FileSystem superGroupFileSystem, RangerConfig config) {
     this.superGroupFileSystem = superGroupFileSystem;
     rangerPlugin = new RangerJfsPlugin(superGroupFileSystem, config.getServiceName(), config.getRangerRestUrl(), config.getPollIntervalMs());
     rangerPlugin.getConfig().set("ranger.plugin.hdfs.service.name", config.getServiceName());

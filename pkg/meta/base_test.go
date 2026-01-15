@@ -22,6 +22,7 @@ package meta
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -156,6 +157,7 @@ func testMeta(t *testing.T, m Meta) {
 	testDirStat(t, m)
 	testClone(t, m)
 	testACL(t, m)
+	testKerberosToken(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
 }
@@ -397,6 +399,96 @@ func testACL(t *testing.T, m Meta) {
 	err := m.getBase().en.cacheACLs(ctx)
 	assert.Nil(t, err)
 	assert.Equal(t, sz, m.getBase().aclCache.Size())
+}
+
+func testKerberosToken(t *testing.T, m Meta) {
+	type token struct {
+		User     string
+		Renewer  string
+		Password string
+		Issued   int64
+		Expire   int64
+	}
+
+	format := testFormat()
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("test acl failed: %s", err)
+	}
+	ctx := Background()
+
+	issueToken := func() (uint32, *token) {
+		now := time.Now()
+		tk := &token{
+			User:     "tom",
+			Renewer:  "yarn",
+			Password: "password123",
+			Issued:   now.Unix(),
+			Expire:   now.Add(2 * time.Second).Unix(),
+		}
+		tb, err := json.Marshal(tk)
+		if err != nil {
+			t.Fatalf("marshal token failed: %s", err)
+		}
+		id, eno := m.StoreToken(ctx, tb)
+		if eno != 0 {
+			t.Fatalf("store token failed: %s", eno)
+		}
+		return id, tk
+	}
+
+	buildToken := func(data []byte) *token {
+		tk := &token{}
+		if err := json.Unmarshal(data, tk); err != nil {
+			t.Fatalf("unmarshal token: %s", err)
+		}
+		return tk
+	}
+
+	id1, tk1 := issueToken()
+	retb, eno := m.LoadToken(ctx, id1)
+	if eno != 0 {
+		t.Fatalf("load token failed: %s", eno)
+	}
+	var rettk token
+	if err := json.Unmarshal(retb, &rettk); err != nil {
+		t.Fatalf("unmarshal token: %s", err)
+	}
+	if !reflect.DeepEqual(tk1, &rettk) {
+		t.Fatalf("token mismatch: %+v != %+v", tk1, &rettk)
+	}
+	tk1.Expire = time.Now().Add(2 * time.Second).Unix()
+	tb, err := json.Marshal(tk1)
+	if err != nil {
+		t.Fatalf("marshal token failed: %s", err)
+	}
+	eno = m.UpdateToken(ctx, id1, tb)
+	if eno != 0 {
+		t.Fatalf("update token failed: %s", eno)
+	}
+
+	id2, tk2 := issueToken()
+	tokens, eno := m.ListTokens(ctx)
+	if eno != 0 {
+		t.Fatalf("list tokens failed: %s", eno)
+	}
+	if !reflect.DeepEqual(tk2, buildToken(tokens[id2])) {
+		t.Fatalf("token2 mismatch: %+v != %+v", tk2, buildToken(tokens[id2]))
+	}
+	if !reflect.DeepEqual(tk1, buildToken(tokens[id1])) {
+		t.Fatalf("token1 mismatch: %+v != %+v", tk1, buildToken(tokens[id1]))
+	}
+
+	eno = m.DeleteTokens(ctx, []uint32{id1, id2})
+	if eno != 0 {
+		t.Fatalf("delete tokens failed: %s", eno)
+	}
+	tokens, eno = m.ListTokens(ctx)
+	if eno != 0 {
+		t.Fatalf("list tokens failed: %s", eno)
+	}
+	if tokens[id1] != nil || tokens[id2] != nil {
+		t.Fatalf("tokens not deleted")
+	}
 }
 
 func testMetaClient(t *testing.T, m Meta) {

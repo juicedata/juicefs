@@ -204,6 +204,10 @@ func formatManagementFlags() []cli.Flag {
 			Name:  "ranger-service",
 			Usage: "Name of the Ranger service used For JuiceFS",
 		},
+		&cli.StringFlag{
+			Name:  "kerberos-config-file",
+			Usage: "Path to Kerberos configuration file",
+		},
 	})
 }
 
@@ -386,6 +390,17 @@ func loadEncrypt(keyPath string) string {
 	return string(pem)
 }
 
+func readKerbConf(file string) string {
+	if file == "" {
+		return ""
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		logger.Fatalf("load Kerberos config from %s: %s", file, err)
+	}
+	return string(data)
+}
+
 func format(c *cli.Context) error {
 	setup(c, 2)
 	removePassword(c.Args().Get(0))
@@ -452,6 +467,8 @@ func format(c *cli.Context) error {
 				format.RangerRestUrl = c.String(flag)
 			case "ranger-service":
 				format.RangerService = c.String(flag)
+			case "kerberos-config-file":
+				format.KerbConf = readKerbConf(c.String(flag))
 			}
 		}
 	} else if strings.HasPrefix(err.Error(), "database is not formatted") {
@@ -481,12 +498,16 @@ func format(c *cli.Context) error {
 			EnableACL:        c.Bool("enable-acl"),
 			RangerRestUrl:    c.String("ranger-rest-url"),
 			RangerService:    c.String("ranger-service"),
+			KerbConf:         readKerbConf(c.String("kerberos-config-file")),
 		}
 		if format.EnableACL {
 			format.MinClientVersion = "1.2.0-A"
 		}
 		if format.RangerRestUrl != "" || format.RangerService != "" {
 			format.MinClientVersion = "1.3.0-A"
+		}
+		if format.KerbConf != "" {
+			format.MinClientVersion = "1.4.0-A"
 		}
 
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {

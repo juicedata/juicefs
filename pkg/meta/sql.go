@@ -152,6 +152,11 @@ func (a *acl) toRule() *aclAPI.Rule {
 	return r
 }
 
+type delegationToken struct {
+	Id    uint32 `xorm:"pk autoincr"`
+	Token []byte
+}
+
 type namedNode struct {
 	node `xorm:"extends"`
 	Name []byte `xorm:"varbinary(255)"`
@@ -604,6 +609,9 @@ func (m *dbMeta) syncAllTables() error {
 	if err := m.syncTable(new(acl)); err != nil {
 		return fmt.Errorf("create table acl: %s", err)
 	}
+	if err := m.syncTable(new(delegationToken)); err != nil {
+		return fmt.Errorf("create table delegationToken: %s", err)
+	}
 	return nil
 }
 
@@ -722,7 +730,7 @@ func (m *dbMeta) Reset() error {
 		&node{}, &edge{}, &symlink{}, &xattr{},
 		&chunk{}, &sliceRef{}, &delslices{},
 		&session{}, &session2{}, &sustained{}, &delfile{},
-		&flock{}, &plock{}, &dirStats{}, &dirQuota{}, &userGroupQuota{}, &detachedNode{}, &acl{})
+		&flock{}, &plock{}, &dirStats{}, &dirQuota{}, &userGroupQuota{}, &detachedNode{}, &acl{}, &delegationToken{})
 }
 
 func (m *dbMeta) doLoad() (data []byte, err error) {
@@ -744,7 +752,7 @@ func (m *dbMeta) doLoad() (data []byte, err error) {
 
 func (m *dbMeta) doNewSession(sinfo []byte, update bool) error {
 	// add new table
-	err := m.syncTable(new(session2), new(delslices), new(dirStats), new(detachedNode), new(dirQuota), new(userGroupQuota), new(acl))
+	err := m.syncTable(new(session2), new(delslices), new(dirStats), new(detachedNode), new(dirQuota), new(userGroupQuota), new(acl), new(delegationToken))
 	if err != nil {
 		return fmt.Errorf("update table session2, delslices, dirstats, detachedNode, dirQuota, userGroupQuota, acl: %s", err)
 	}
@@ -5357,6 +5365,65 @@ func (m *dbMeta) loadDumpedACLs(ctx Context) error {
 		}
 		return nil
 	})
+}
+
+func (m *dbMeta) doStoreToken(ctx Context, token []byte) (id uint32, st syscall.Errno) {
+	err := m.txn(func(s *xorm.Session) error {
+		t := &delegationToken{Token: token}
+		_, err := s.Insert(t)
+		if err != nil {
+			return err
+		}
+		id = t.Id
+		return nil
+	})
+	return id, errno(err)
+}
+
+func (m *dbMeta) doUpdateToken(ctx Context, id uint32, token []byte) syscall.Errno {
+	return errno(m.txn(func(s *xorm.Session) error {
+		_, err := s.Cols("token").Update(&delegationToken{Id: id, Token: token}, &delegationToken{Id: id})
+		return err
+	}))
+}
+
+func (m *dbMeta) doLoadToken(ctx Context, id uint32) (token []byte, st syscall.Errno) {
+	err := m.simpleTxn(ctx, func(s *xorm.Session) error {
+		t := &delegationToken{Id: id}
+		ok, err := s.Get(t)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return syscall.ENOENT
+		}
+		token = t.Token
+		return nil
+	})
+	return token, errno(err)
+}
+
+func (m *dbMeta) doDeleteTokens(ctx Context, ids []uint32) syscall.Errno {
+	return errno(m.txn(func(s *xorm.Session) error {
+		_, err := s.In("id", ids).Delete(&delegationToken{})
+		return err
+	}))
+}
+
+func (m *dbMeta) doListTokens(ctx Context) (tokens map[uint32][]byte, st syscall.Errno) {
+	err := m.roTxn(ctx, func(s *xorm.Session) error {
+		var ts []delegationToken
+		err := s.Find(&ts)
+		if err != nil {
+			return err
+		}
+		tokens = make(map[uint32][]byte, len(ts))
+		for _, t := range ts {
+			tokens[t.Id] = t.Token
+		}
+		return nil
+	})
+	return tokens, errno(err)
 }
 
 type dbDirHandler struct {
