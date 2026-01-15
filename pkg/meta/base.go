@@ -200,6 +200,26 @@ type userGroupQuotaDelta struct {
 	Inodes int64
 }
 
+func appendUGQuotaDelta(userGroupQuotas *[]userGroupQuotaDelta, parent Ino, uid, gid uint32, nlink uint32, typ uint8, length uint64) {
+	if userGroupQuotas == nil || parent.IsTrash() {
+		return
+	}
+	var entrySpace int64
+	if nlink == 0 {
+		if typ == TypeFile {
+			entrySpace = -align4K(length)
+		} else {
+			entrySpace = -align4K(0)
+		}
+	}
+	*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
+		Uid:    uid,
+		Gid:    gid,
+		Space:  entrySpace,
+		Inodes: -1,
+	})
+}
+
 func newSymlinkCache(cap int32) *symlinkCache {
 	return &symlinkCache{
 		Map: &sync.Map{},

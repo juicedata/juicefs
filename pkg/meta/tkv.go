@@ -1675,22 +1675,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 				if info.attr.Parent == 0 && info.attr.Nlink > 0 {
 					tx.incrBy(m.parentKey(info.inode, parent), -1)
 				}
-				if userGroupQuotas != nil && !parent.IsTrash() {
-					var entrySpace int64
-					if info.attr.Nlink == 0 {
-						if info.typ == TypeFile {
-							entrySpace = -align4K(info.attr.Length)
-						} else {
-							entrySpace = -align4K(0)
-						}
-					}
-					batchUserGroupQuotas = append(batchUserGroupQuotas, userGroupQuotaDelta{
-						Uid:    info.attr.Uid,
-						Gid:    info.attr.Gid,
-						Space:  entrySpace,
-						Inodes: -1,
-					})
-				}
+				appendUGQuotaDelta(&batchUserGroupQuotas, parent, info.attr.Uid, info.attr.Gid, info.attr.Nlink, info.typ, info.attr.Length)
 			}
 
 			// Update parent directory if needed
