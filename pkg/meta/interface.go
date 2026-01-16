@@ -432,6 +432,8 @@ type Meta interface {
 	// Unlink removes a file entry from a directory.
 	// The file will be deleted if it's not linked by any entries and not open by any sessions.
 	Unlink(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno
+	// BatchUnlink remove some file entries from the same directory
+	BatchUnlink(ctx Context, parent Ino, entries []*Entry, count *uint64, skipCheckTrash bool) syscall.Errno
 	// Rmdir removes an empty sub-directory.
 	Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno
 	// Rename move an entry from a source directory to another with given name.

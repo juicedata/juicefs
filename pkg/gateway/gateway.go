@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -479,14 +480,20 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
+	err = n.delObj(bucket, object)
 	info.Bucket = bucket
 	info.Name = object
+	return info, jfsToObjectErr(ctx, err, bucket, object)
+}
+
+func (n *jfsObjects) delObj(bucket string, object string) error {
 	p := path.Clean(n.path(bucket, object))
 	root := n.path(bucket)
 	if strings.HasSuffix(object, sep) {
 		// reset atime
 		n.setFileAtime(p, time.Now().Unix())
 	}
+	var err error
 	for p != root {
 		if eno := n.fs.Delete(mctx, p); eno != 0 {
 			if fs.IsNotEmpty(eno) || fs.IsNotExist(eno) {
@@ -501,20 +508,51 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 			break
 		}
 	}
-	return info, jfsToObjectErr(ctx, err, bucket, object)
+	return err
 }
 
 func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, options minio.ObjectOptions) (objs []minio.DeletedObject, errs []error) {
 	objs = make([]minio.DeletedObject, len(objects))
 	errs = make([]error, len(objects))
-	for idx, object := range objects {
-		_, errs[idx] = n.DeleteObject(ctx, bucket, object.ObjectName, options)
-		if errs[idx] == nil {
-			objs[idx] = minio.DeletedObject{
-				ObjectName: object.ObjectName,
-			}
+	if err := n.checkBucket(ctx, bucket); err != nil {
+		for idx := range objects {
+			errs[idx] = minio.BucketNotFound{Bucket: bucket}
 		}
+		return
 	}
+	delMap := make(map[string][]int)
+	for idx, o := range objects {
+		p := path.Dir(path.Clean(n.path(bucket, o.ObjectName)))
+		delMap[p] = append(delMap[p], idx)
+	}
+	var g errgroup.Group
+	g.SetLimit(runtime.NumCPU())
+	for ppath := range delMap {
+		ppath := ppath
+		idxs := delMap[ppath]
+		ps := make([]string, len(idxs))
+		for i, idx := range idxs {
+			ps[i] = n.path(bucket, objects[idx].ObjectName)
+		}
+		g.Go(func() error {
+			// will ignore dir
+			err := n.fs.BatchDeleteEntries(mctx, ppath, ps)
+			if err != 0 {
+				for _, idx := range idxs {
+					errs[idx] = jfsToObjectErr(ctx, err, bucket, objects[idx].ObjectName)
+				}
+				return err
+			}
+			if e := n.delObj(bucket, ppath); e != nil {
+				for _, idx := range idxs {
+					errs[idx] = e
+				}
+				return err
+			}
+			return err
+		})
+	}
+	_ = g.Wait()
 	return
 }
 

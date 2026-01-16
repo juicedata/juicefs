@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -517,6 +518,35 @@ func (fs *FileSystem) Delete(ctx meta.Context, p string) (err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Delete (%s): %s", p, errstr(err)) }()
 	return fs.Delete0(ctx, p, false)
+}
+
+func (fs *FileSystem) BatchDeleteEntries(ctx meta.Context, parent string, ps []string) (err syscall.Errno) {
+	defer trace.StartRegion(context.TODO(), "fs.BatchDeleteEntries").End()
+	l := vfs.NewLogContext(ctx)
+	defer func() { fs.log(l, "BatchDeleteEntries : %s", errstr(err)) }()
+	parentInfo, errno := fs.Stat(ctx, parent)
+	if errno != 0 {
+		return errno
+	}
+	var entries []*meta.Entry
+	for _, p := range ps {
+		fi, e := fs.Stat(ctx, p)
+		if errors.Is(e, syscall.ENOENT) {
+			continue
+		}
+		if e != 0 {
+			return e
+		}
+		entries = append(entries, &meta.Entry{Inode: fi.Inode(), Name: []byte(fi.Name()), Attr: fi.Attr()})
+	}
+	if len(entries) == 0 {
+		return 0
+	}
+	eno := fs.m.BatchUnlink(ctx, parentInfo.inode, entries, nil, false)
+	for _, p := range ps {
+		fs.InvalidateEntry(parentInfo.inode, path.Base(p))
+	}
+	return eno
 }
 
 func (fs *FileSystem) Delete0(ctx meta.Context, p string, callByUnlink bool) (err syscall.Errno) {
