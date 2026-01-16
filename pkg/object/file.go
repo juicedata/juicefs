@@ -131,7 +131,7 @@ func (d *filestore) Get(ctx context.Context, key string, off, limit int64, gette
 		_ = f.Close()
 		return nil, err
 	}
-	if finfo.IsDir() || off > finfo.Size() {
+	if finfo.IsDir() || off >= finfo.Size() {
 		_ = f.Close()
 		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
 	}
