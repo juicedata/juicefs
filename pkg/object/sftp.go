@@ -199,7 +199,8 @@ func (f *sftpStore) Get(ctx context.Context, key string, off, limit int64, gette
 	if err != nil {
 		return nil, err
 	}
-	if finfo.IsDir() {
+	if finfo.IsDir() || off >= finfo.Size() {
+		_ = ff.Close()
 		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
 	}
 

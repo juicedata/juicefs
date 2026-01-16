@@ -202,7 +202,7 @@ func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, gette
 			_ = f.Close()
 			return err
 		}
-		if finfo.IsDir() || off > finfo.Size() {
+		if finfo.IsDir() || off >= finfo.Size() {
 			_ = f.Close()
 			readCloser = io.NopCloser(bytes.NewBuffer([]byte{}))
 			return nil
