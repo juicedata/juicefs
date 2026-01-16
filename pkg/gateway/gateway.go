@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -479,14 +480,20 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
+	err = n.delObj(bucket, object)
 	info.Bucket = bucket
 	info.Name = object
+	return info, jfsToObjectErr(ctx, err, bucket, object)
+}
+
+func (n *jfsObjects) delObj(bucket string, object string) error {
 	p := path.Clean(n.path(bucket, object))
 	root := n.path(bucket)
 	if strings.HasSuffix(object, sep) {
 		// reset atime
 		n.setFileAtime(p, time.Now().Unix())
 	}
+	var err error
 	for p != root {
 		if eno := n.fs.Delete(mctx, p); eno != 0 {
 			if fs.IsNotEmpty(eno) || fs.IsNotExist(eno) {
@@ -501,19 +508,25 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 			break
 		}
 	}
-	return info, jfsToObjectErr(ctx, err, bucket, object)
+	return err
 }
 
 func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, options minio.ObjectOptions) (objs []minio.DeletedObject, errs []error) {
 	objs = make([]minio.DeletedObject, len(objects))
 	errs = make([]error, len(objects))
+	if err := n.checkBucket(ctx, bucket); err != nil {
+		for idx := range objects {
+			errs[idx] = minio.BucketNotFound{Bucket: bucket}
+		}
+		return
+	}
 	delMap := make(map[string][]int)
 	for idx, o := range objects {
 		p := path.Dir(path.Clean(n.path(bucket, o.ObjectName)))
 		delMap[p] = append(delMap[p], idx)
 	}
 	var g errgroup.Group
-	g.SetLimit(10)
+	g.SetLimit(runtime.NumCPU())
 	for ppath := range delMap {
 		ppath := ppath
 		idxs := delMap[ppath]
@@ -522,6 +535,7 @@ func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 			ps[i] = n.path(bucket, objects[idx].ObjectName)
 		}
 		g.Go(func() error {
+			// will ignore dir
 			err := n.fs.BatchDeleteEntries(mctx, ppath, ps)
 			if err != 0 {
 				for _, idx := range idxs {
@@ -529,7 +543,7 @@ func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 				}
 				return err
 			}
-			if _, e := n.DeleteObject(ctx, bucket, ppath, options); e != nil {
+			if e := n.delObj(bucket, ppath); e != nil {
 				for _, idx := range idxs {
 					errs[idx] = e
 				}
