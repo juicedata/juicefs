@@ -2597,22 +2597,6 @@ func recordGlobalDeletionStats(
 	*totalInodes--
 }
 
-func recordUserGroupDeletionStats(
-	n *node,
-	ugSpace int64,
-	userGroupQuotas *[]userGroupQuotaDelta,
-	isTrash bool,
-) {
-	if userGroupQuotas != nil && !isTrash {
-		*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
-			Uid:    n.Uid,
-			Gid:    n.Gid,
-			Space:  -ugSpace,
-			Inodes: -1,
-		})
-	}
-}
-
 func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
 	if len(entries) == 0 {
 		return 0
@@ -2785,9 +2769,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 					if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
 						return err
 					}
-					if info.n.Type == TypeFile {
-						recordUserGroupDeletionStats(info.n, 0, userGroupQuotas, parent.IsTrash())
-					}
 				} else {
 					// last link removed: prepare to delete inode and related rows
 					var entrySpace int64
@@ -2820,7 +2801,6 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 					}
 					if needRecordStats {
 						recordGlobalDeletionStats(info.n, entrySpace, &totalLength, &totalSpace, &totalInodes)
-						recordUserGroupDeletionStats(info.n, entrySpace, userGroupQuotas, parent.IsTrash())
 					}
 					xattrsDel = append(xattrsDel, info.e.Inode)
 				}
@@ -2837,6 +2817,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 					Inode:  info.n.Inode,
 					Type:   info.n.Type})
 			}
+			appendUGQuotaDelta(userGroupQuotas, parent, info.n.Uid, info.n.Gid, info.n.Nlink, info.n.Type, info.n.Length)
 			visited[info.n.Inode] = true
 		}
 

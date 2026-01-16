@@ -1928,20 +1928,10 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 						inodes = make(map[Ino]*Attr)
 					}
 					inodes[info.inode] = info.attr
-					if info.typ == TypeFile && userGroupQuotas != nil && !parent.IsTrash() {
-						*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
-							Uid:    info.attr.Uid,
-							Gid:    info.attr.Gid,
-							Space:  0,
-							Inodes: -1,
-						})
-					}
 				} else {
-					var entrySpace int64
 					needStats := false
 					switch info.typ {
 					case TypeFile:
-						entrySpace = align4K(info.attr.Length)
 						needStats = true
 						if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
 							if inodes == nil {
@@ -1965,7 +1955,6 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 						fallthrough
 					default:
 						keys = append(keys, m.inodeKey(info.inode))
-						entrySpace = align4K(0)
 						needStats = true
 						totalSpace -= align4K(0)
 						totalInodes--
@@ -1974,14 +1963,6 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 					}
 					if needStats {
 						totalLength -= int64(info.attr.Length)
-						if userGroupQuotas != nil && !parent.IsTrash() {
-							*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
-								Uid:    info.attr.Uid,
-								Gid:    info.attr.Gid,
-								Space:  -entrySpace,
-								Inodes: -1,
-							})
-						}
 					}
 					keys = append(keys, m.xattrKey(info.inode))
 					if info.attr.Parent == 0 {
@@ -2015,6 +1996,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 					parentOps[key][info.trash.String()]++
 				}
 			}
+			appendUGQuotaDelta(userGroupQuotas, parent, info.attr.Uid, info.attr.Gid, info.attr.Nlink, info.typ, info.attr.Length)
 			visited[info.inode] = true
 		}
 
