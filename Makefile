@@ -56,6 +56,13 @@ juicefs.gluster.cover: Makefile cmd/*.go pkg/*/*.go
 juicefs.all: Makefile cmd/*.go pkg/*/*.go
 	go build -tags ceph,fdb,gluster -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)" -o juicefs.all .
 
+# This is cross-compiling LoongArch in a Linux environment on x86_64 (amd64) or aarch64 (arm64) architecture.
+# 1. Install LoongArch64 cross-compile toolchain from https://github.com/loong64/cross-tools
+# 2. Set CC to your toolchain path.
+# 3. Run `STATIC=1 make juicefs.loongarch` to build the LoongArch binary.
+juicefs.loongarch: Makefile cmd/*.go pkg/*/*.go go.*
+	CC=bin/loongarch64-unknown-linux-musl-cc CGO_ENABLED=1 GOARCH=loong64 go build -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)" -o juicefs .
+
 # This is the script for compiling the Linux version on the MacOS platform.
 # Please execute the `brew install FiloSottile/musl-cross/musl-cross` command before using it.
 juicefs.linux:
