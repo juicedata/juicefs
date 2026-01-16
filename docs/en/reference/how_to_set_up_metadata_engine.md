@@ -31,6 +31,23 @@ When you need to migrate between two types of metadata engines, you can use this
 
 JuiceFS requires Redis version 4.0 and above. Redis Cluster is also supported, but in order to avoid transactions across different Redis instances, JuiceFS puts all metadata for one file system on a single Redis instance.
 
+:::tip Redis Cluster Key Prefix
+When using Redis Cluster, the database number in the URL is used as a **key prefix** rather than for actual database selection (since Redis Cluster only supports database 0). The prefix format is `{N}` (e.g., `{1}`, `{2}`), which uses Redis hash tags to ensure all keys for one volume are routed to the same slot. This allows multiple JuiceFS file systems to share a single Redis Cluster:
+
+```shell
+# Different volumes use different DB numbers as key prefixes
+juicefs format redis://cluster:6379/1 volume1   # keys prefixed with {1}
+juicefs format redis://cluster:6379/2 volume2   # keys prefixed with {2}
+```
+
+You can verify the keys in Redis Cluster using:
+
+```shell
+redis-cli -c -h <host> -p 6379 keys '{1}*'   # list all keys for volume with prefix {1}
+```
+
+:::
+
 To ensure metadata security, JuiceFS requires [`maxmemory-policy noeviction`](https://redis.io/docs/reference/eviction/), otherwise it will try to set it to `noeviction` when starting JuiceFS, and will print a warning log if it fails. Refer to [Redis Best practices](../administration/metadata/redis_best_practices.md) for more.
 
 #### Create a file system
