@@ -290,8 +290,7 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *uint64, concurrent chan int) syscall.Errno {
 	for {
 		var entries []*Entry
-		// By operating in batches of 500, we can achieve the best performance experience.
-		if st := m.en.doReaddir(ctx, inode, 0, &entries, 500); st != 0 && st != syscall.ENOENT {
+		if st := m.en.doReaddir(ctx, inode, 0, &entries, 10000); st != 0 && st != syscall.ENOENT {
 			return st
 		}
 		if len(entries) == 0 {
