@@ -72,10 +72,6 @@ func (t *tosClient) Get(ctx context.Context, key string, off, limit int64, gette
 		Key:    key,
 		Range:  rangeStr, // When Range and RangeStart & RangeEnd appear together, range is preferred
 	})
-	if resp != nil {
-		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(resp.RequestID).SetStorageClass(string(resp.StorageClass))
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -87,6 +83,11 @@ func (t *tosClient) Get(ctx context.Context, key string, off, limit int64, gette
 		v, _ := resp.Meta.Get(checksumAlgr)
 		resp.Content = verifyChecksum(resp.Content, v, resp.ContentLength)
 	}
+	if resp != nil {
+		attrs := ApplyGetters(getters...)
+		attrs.SetRequestID(resp.RequestID).SetStorageClass(string(resp.StorageClass))
+	}
+
 	return resp.Content, nil
 }
 

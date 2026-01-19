@@ -112,7 +112,8 @@ func (h *hdfsclient) Get(ctx context.Context, key string, off, limit int64, gett
 	}
 
 	finfo := f.Stat()
-	if finfo.IsDir() {
+	if finfo.IsDir() || off >= finfo.Size() {
+		_ = f.Close()
 		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
 	}
 
