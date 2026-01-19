@@ -1754,8 +1754,8 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 		totalUserGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
 	}
 
-	// Each entry averages ~6 tx operations, so batch size should be 1000/6
-	batchSize := 1000 / 6
+	// Each entry averages ~4 tx operations, so batch size should be 1000/4
+	batchSize := 1000 / 4
 	for len(entries) > 0 {
 		if batchSize > len(entries) {
 			batchSize = len(entries)

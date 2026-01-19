@@ -2622,274 +2622,283 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 	}
 	delNodes := make(map[Ino]*dNode)
 	var totalLength, totalSpace, totalInodes int64
-	err := m.txn(func(s *xorm.Session) error {
-		pn := node{Inode: parent}
-		ok, err := s.Get(&pn)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return syscall.ENOENT
-		}
-		if pn.Type != TypeDirectory {
-			return syscall.ENOTDIR
-		}
-		var pattr Attr
-		m.parseAttr(&pn, &pattr)
-		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
-			return st
-		}
-		if (pn.Flags&FlagAppend != 0) || (pn.Flags&FlagImmutable) != 0 {
-			return syscall.EPERM
-		}
-		now := time.Now().UnixNano()
-		entryInfos = make([]*entryInfo, 0, len(entries))
-		names := make([][]byte, 0, len(entries))
-		for _, entry := range entries {
-			names = append(names, entry.Name)
-		}
-		var foundEdges []edge
-		if err := s.Where("parent=?", parent).In("name", names).Find(&foundEdges); err != nil {
-			return err
-		}
-		entryMap := make(map[string]*edge)
-		for i := range foundEdges {
-			entryMap[string(foundEdges[i].Name)] = &foundEdges[i]
-		}
+	if userGroupQuotas != nil {
+		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
+	}
 
-		inodes := make([]Ino, 0, len(entries))
-		inodeM := make(map[Ino]struct{}) // filter hardlinks
-		for _, entry := range entries {
-			e, ok := entryMap[string(entry.Name)]
-			if !ok {
-				continue
-			}
-			if e.Inode != entry.Inode || e.Type == TypeDirectory || (entry.Attr != nil && e.Type != entry.Attr.Typ) {
-				continue
-			}
-			entryInfos = append(entryInfos, &entryInfo{e: e, trash: trash})
-			if _, exists := inodeM[entry.Inode]; !exists {
-				inodeM[entry.Inode] = struct{}{}
-				inodes = append(inodes, entry.Inode)
-			}
+	batchSize := m.getTxnBatchNum()
+	for len(entries) > 0 {
+		if batchSize > len(entries) {
+			batchSize = len(entries)
 		}
-
-		if len(inodes) > 0 {
-			var nodes []node
-			if err := s.ForUpdate().In("inode", inodes).Find(&nodes); err != nil {
+		batch := entries[:batchSize]
+		entries = entries[batchSize:]
+		err := m.txn(func(s *xorm.Session) error {
+			pn := node{Inode: parent}
+			ok, err := s.Get(&pn)
+			if err != nil {
 				return err
 			}
-			nodeMap := make(map[Ino]*node, len(nodes))
-			// build quick lookup map from inode to *node
-			for i := range nodes {
-				nodeMap[nodes[i].Inode] = &nodes[i]
+			if !ok {
+				return syscall.ENOENT
+			}
+			if pn.Type != TypeDirectory {
+				return syscall.ENOTDIR
+			}
+			var pattr Attr
+			m.parseAttr(&pn, &pattr)
+			if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+				return st
+			}
+			if (pn.Flags&FlagAppend != 0) || (pn.Flags&FlagImmutable) != 0 {
+				return syscall.EPERM
+			}
+			now := time.Now().UnixNano()
+			entryInfos = make([]*entryInfo, 0, len(batch))
+			names := make([][]byte, 0, len(batch))
+			for _, entry := range batch {
+				names = append(names, entry.Name)
+			}
+			var foundEdges []edge
+			if err := s.Where("parent=?", parent).In("name", names).Find(&foundEdges); err != nil {
+				return err
+			}
+			entryMap := make(map[string]*edge)
+			for i := range foundEdges {
+				entryMap[string(foundEdges[i].Name)] = &foundEdges[i]
 			}
 
-			// iterate all target entries, apply basic checks and build info for each edge
-			dumpNode := &node{}
-			for _, info := range entryInfos {
-				n, ok := nodeMap[info.e.Inode]
+			inodes := make([]Ino, 0, len(batch))
+			inodeM := make(map[Ino]struct{}) // filter hardlinks
+			for _, entry := range batch {
+				e, ok := entryMap[string(entry.Name)]
 				if !ok {
-					info.trash = 0
-					info.n = dumpNode
 					continue
 				}
-				if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
-					return syscall.EACCES
+				if e.Inode != entry.Inode || e.Type == TypeDirectory || (entry.Attr != nil && e.Type != entry.Attr.Typ) {
+					continue
 				}
-				if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
-					return syscall.EPERM
+				entryInfos = append(entryInfos, &entryInfo{e: e, trash: trash})
+				if _, exists := inodeM[entry.Inode]; !exists {
+					inodeM[entry.Inode] = struct{}{}
+					inodes = append(inodes, entry.Inode)
 				}
-				if (n.Flags & FlagSkipTrash) != 0 {
-					info.trash = 0
-				}
-				info.n = n
 			}
-		}
 
-		for _, info := range entryInfos {
-			if info.trash > 0 && info.n.Nlink > 1 {
-				info.trashName = m.trashEntry(parent, info.e.Inode, string(info.e.Name))
-				te := edge{
-					Parent: info.trash,
-					Name:   []byte(info.trashName),
-					Inode:  info.n.Inode,
-					Type:   info.n.Type,
+			if len(inodes) > 0 {
+				var nodes []node
+				if err := s.ForUpdate().In("inode", inodes).Find(&nodes); err != nil {
+					return err
 				}
-				if ok, err := s.Get(&te); err == nil && ok {
-					info.trash = 0
+				nodeMap := make(map[Ino]*node, len(nodes))
+				// build quick lookup map from inode to *node
+				for i := range nodes {
+					nodeMap[nodes[i].Inode] = &nodes[i]
 				}
-			}
-			info.n.setCtime(now)
-			if info.trash > 0 && info.n.Parent > 0 {
-				info.n.Parent = info.trash
-			}
-			if info.trash == 0 && info.n.Nlink > 0 {
-				info.n.Nlink--
-			}
-		}
 
-		// check opened status for all inodes with Nlink == 0 after all decrements
-		if m.sid > 0 {
+				// iterate all target entries, apply basic checks and build info for each edge
+				dumpNode := &node{}
+				for _, info := range entryInfos {
+					n, ok := nodeMap[info.e.Inode]
+					if !ok {
+						info.trash = 0
+						info.n = dumpNode
+						continue
+					}
+					if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
+						return syscall.EACCES
+					}
+					if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
+						return syscall.EPERM
+					}
+					if (n.Flags & FlagSkipTrash) != 0 {
+						info.trash = 0
+					}
+					info.n = n
+				}
+			}
+
 			for _, info := range entryInfos {
-				if info.n != nil && info.trash == 0 && info.n.Nlink == 0 && info.n.Type == TypeFile {
-					delNodes[info.n.Inode] = &dNode{m.of.IsOpen(info.n.Inode), info.n.Length}
-				}
-			}
-		}
-
-		var updateParent bool
-		if !parent.IsTrash() && time.Duration(now-pn.getMtime()) >= m.conf.SkipDirMtime {
-			pn.setMtime(now)
-			pn.setCtime(now)
-			updateParent = true
-		}
-
-		nowUnix := time.Now().Unix()
-		visited := make(map[Ino]bool)
-		visited[0] = true // skip dummyNode
-
-		// buffers for batched operations
-		edgesDel := make([]edge, 0)
-		sustainedIns := make([]interface{}, 0)
-		delfilesIns := make([]interface{}, 0)
-		nodesDel := make([]Ino, 0)
-		symlinksDel := make([]Ino, 0)
-		xattrsDel := make([]Ino, 0)
-		edgesIns := make([]interface{}, 0)
-		if userGroupQuotas != nil {
-			*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
-		}
-		// walk each edge to decide whether to move to trash, decrement nlink or delete inode & xattrs
-		for _, info := range entryInfos {
-			edgesDel = append(edgesDel, edge{Parent: parent, Name: info.e.Name})
-			if !visited[info.n.Inode] {
-				if info.n.Nlink > 0 {
-					// inode still referenced somewhere: only update metadata
-					if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
-						return err
-					}
-				} else {
-					// last link removed: prepare to delete inode and related rows
-					var entrySpace int64
-					needRecordStats := false
-					switch info.n.Type {
-					case TypeFile:
-						entrySpace = align4K(info.n.Length)
-						needRecordStats = true
-						if delNodes[info.n.Inode].opened {
-							sustainedIns = append(sustainedIns, &sustained{Sid: m.sid, Inode: info.e.Inode})
-							if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
-								return err
-							}
-						} else {
-							// regular, un-opened file: add to delfile and delete inode later
-							delfilesIns = append(delfilesIns, &delfile{info.e.Inode, info.n.Length, nowUnix})
-							nodesDel = append(nodesDel, info.e.Inode)
-						}
-					case TypeSymlink:
-						// symlink: record for batched delete from symlink table
-						symlinksDel = append(symlinksDel, info.e.Inode)
-						fallthrough
-					default:
-						// other non-file types: record for direct inode deletion
-						nodesDel = append(nodesDel, info.e.Inode)
-						if info.n.Type != TypeFile {
-							entrySpace = align4K(0)
-							needRecordStats = true
-						}
-					}
-					if needRecordStats {
-						recordGlobalDeletionStats(info.n, entrySpace, &totalLength, &totalSpace, &totalInodes)
-					}
-					xattrsDel = append(xattrsDel, info.e.Inode)
-				}
-				m.of.InvalidateChunk(info.e.Inode, invalidateAttrOnly)
-			}
-			if info.n.Nlink > 0 && info.trash > 0 {
-				// still has links and should be moved to trash; create new trash edge
-				if info.trashName == "" {
+				if info.trash > 0 && info.n.Nlink > 1 {
 					info.trashName = m.trashEntry(parent, info.e.Inode, string(info.e.Name))
-				}
-				edgesIns = append(edgesIns, &edge{
-					Parent: info.trash,
-					Name:   []byte(info.trashName),
-					Inode:  info.n.Inode,
-					Type:   info.n.Type})
-			}
-			appendUGQuotaDelta(userGroupQuotas, parent, info.n.Uid, info.n.Gid, info.n.Nlink, info.n.Type, info.n.Length)
-			visited[info.n.Inode] = true
-		}
-
-		if len(edgesDel) > 0 {
-			query := s.Table(&edge{})
-			for j, e := range edgesDel {
-				if j == 0 {
-					query = query.Where("parent = ? AND name = ?", e.Parent, e.Name)
-				} else {
-					query = query.Or("parent = ? AND name = ?", e.Parent, e.Name)
-				}
-			}
-			if _, err := query.Delete(&edge{}); err != nil {
-				return err
-			}
-		}
-
-		// execute SQL statements in batches
-		if len(sustainedIns) > 0 {
-			if err := mustInsert(s, sustainedIns...); err != nil {
-				return err
-			}
-		}
-		if len(delfilesIns) > 0 {
-			if err := mustInsert(s, delfilesIns...); err != nil {
-				return err
-			}
-		}
-		if len(nodesDel) > 0 {
-			if _, err := s.In("inode", nodesDel).Delete(&node{}); err != nil {
-				return err
-			}
-		}
-		if len(symlinksDel) > 0 {
-			if _, err := s.In("inode", symlinksDel).Delete(&symlink{}); err != nil {
-				return err
-			}
-		}
-		if len(xattrsDel) > 0 {
-			if _, err := s.In("inode", xattrsDel).Delete(&xattr{}); err != nil {
-				return err
-			}
-		}
-		if len(edgesIns) > 0 {
-			if err := mustInsert(s, edgesIns...); err != nil {
-				return err
-			}
-		}
-
-		// optionally update parent directory timestamps
-		if updateParent {
-			var _n int64
-			if _n, err = s.Cols("mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode}); err != nil || _n == 0 {
-				if err == nil {
-					logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, pn.Inode)
-					if m.Name() == "mysql" {
-						err = syscall.EBUSY
-					} else {
-						err = syscall.ENOENT
+					te := edge{
+						Parent: info.trash,
+						Name:   []byte(info.trashName),
+						Inode:  info.n.Inode,
+						Type:   info.n.Type,
+					}
+					if ok, err := s.Get(&te); err == nil && ok {
+						info.trash = 0
 					}
 				}
-				if err != nil {
+				info.n.setCtime(now)
+				if info.trash > 0 && info.n.Parent > 0 {
+					info.n.Parent = info.trash
+				}
+				if info.trash == 0 && info.n.Nlink > 0 {
+					info.n.Nlink--
+				}
+			}
+
+			// check opened status for all inodes with Nlink == 0 after all decrements
+			if m.sid > 0 {
+				for _, info := range entryInfos {
+					if info.n != nil && info.trash == 0 && info.n.Nlink == 0 && info.n.Type == TypeFile {
+						delNodes[info.n.Inode] = &dNode{m.of.IsOpen(info.n.Inode), info.n.Length}
+					}
+				}
+			}
+
+			var updateParent bool
+			if !parent.IsTrash() && time.Duration(now-pn.getMtime()) >= m.conf.SkipDirMtime {
+				pn.setMtime(now)
+				pn.setCtime(now)
+				updateParent = true
+			}
+
+			nowUnix := time.Now().Unix()
+			visited := make(map[Ino]bool)
+			visited[0] = true // skip dummyNode
+
+			// buffers for batched operations
+			edgesDel := make([]edge, 0)
+			sustainedIns := make([]interface{}, 0)
+			delfilesIns := make([]interface{}, 0)
+			nodesDel := make([]Ino, 0)
+			symlinksDel := make([]Ino, 0)
+			xattrsDel := make([]Ino, 0)
+			edgesIns := make([]interface{}, 0)
+			// walk each edge to decide whether to move to trash, decrement nlink or delete inode & xattrs
+			for _, info := range entryInfos {
+				edgesDel = append(edgesDel, edge{Parent: parent, Name: info.e.Name})
+				if !visited[info.n.Inode] {
+					if info.n.Nlink > 0 {
+						// inode still referenced somewhere: only update metadata
+						if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
+							return err
+						}
+					} else {
+						// last link removed: prepare to delete inode and related rows
+						var entrySpace int64
+						needRecordStats := false
+						switch info.n.Type {
+						case TypeFile:
+							entrySpace = align4K(info.n.Length)
+							needRecordStats = true
+							if delNodes[info.n.Inode].opened {
+								sustainedIns = append(sustainedIns, &sustained{Sid: m.sid, Inode: info.e.Inode})
+								if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
+									return err
+								}
+							} else {
+								// regular, un-opened file: add to delfile and delete inode later
+								delfilesIns = append(delfilesIns, &delfile{info.e.Inode, info.n.Length, nowUnix})
+								nodesDel = append(nodesDel, info.e.Inode)
+							}
+						case TypeSymlink:
+							// symlink: record for batched delete from symlink table
+							symlinksDel = append(symlinksDel, info.e.Inode)
+							fallthrough
+						default:
+							// other non-file types: record for direct inode deletion
+							nodesDel = append(nodesDel, info.e.Inode)
+							if info.n.Type != TypeFile {
+								entrySpace = align4K(0)
+								needRecordStats = true
+							}
+						}
+						if needRecordStats {
+							recordGlobalDeletionStats(info.n, entrySpace, &totalLength, &totalSpace, &totalInodes)
+						}
+						xattrsDel = append(xattrsDel, info.e.Inode)
+					}
+					m.of.InvalidateChunk(info.e.Inode, invalidateAttrOnly)
+				}
+				if info.n.Nlink > 0 && info.trash > 0 {
+					// still has links and should be moved to trash; create new trash edge
+					if info.trashName == "" {
+						info.trashName = m.trashEntry(parent, info.e.Inode, string(info.e.Name))
+					}
+					edgesIns = append(edgesIns, &edge{
+						Parent: info.trash,
+						Name:   []byte(info.trashName),
+						Inode:  info.n.Inode,
+						Type:   info.n.Type})
+				}
+				appendUGQuotaDelta(userGroupQuotas, parent, info.n.Uid, info.n.Gid, info.n.Nlink, info.n.Type, info.n.Length)
+				visited[info.n.Inode] = true
+			}
+
+			if len(edgesDel) > 0 {
+				query := s.Table(&edge{})
+				for j, e := range edgesDel {
+					if j == 0 {
+						query = query.Where("parent = ? AND name = ?", e.Parent, e.Name)
+					} else {
+						query = query.Or("parent = ? AND name = ?", e.Parent, e.Name)
+					}
+				}
+				if _, err := query.Delete(&edge{}); err != nil {
 					return err
 				}
 			}
+
+			// execute SQL statements in batches
+			if len(sustainedIns) > 0 {
+				if err := mustInsert(s, sustainedIns...); err != nil {
+					return err
+				}
+			}
+			if len(delfilesIns) > 0 {
+				if err := mustInsert(s, delfilesIns...); err != nil {
+					return err
+				}
+			}
+			if len(nodesDel) > 0 {
+				if _, err := s.In("inode", nodesDel).Delete(&node{}); err != nil {
+					return err
+				}
+			}
+			if len(symlinksDel) > 0 {
+				if _, err := s.In("inode", symlinksDel).Delete(&symlink{}); err != nil {
+					return err
+				}
+			}
+			if len(xattrsDel) > 0 {
+				if _, err := s.In("inode", xattrsDel).Delete(&xattr{}); err != nil {
+					return err
+				}
+			}
+			if len(edgesIns) > 0 {
+				if err := mustInsert(s, edgesIns...); err != nil {
+					return err
+				}
+			}
+
+			// optionally update parent directory timestamps
+			if updateParent {
+				var _n int64
+				if _n, err = s.Cols("mtime", "ctime", "mtimensec", "ctimensec").Update(&pn, &node{Inode: pn.Inode}); err != nil || _n == 0 {
+					if err == nil {
+						logger.Infof("Update parent node affected rows = %d should be 1 for inode = %d .", _n, pn.Inode)
+						if m.Name() == "mysql" {
+							err = syscall.EBUSY
+						} else {
+							err = syscall.ENOENT
+						}
+					}
+					if err != nil {
+						return err
+					}
+				}
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			return errno(err)
 		}
-
-		return nil
-	})
-
-	if err != nil {
-		return errno(err)
 	}
 
 	// outside of transaction: update global stats and trigger data deletion callbacks

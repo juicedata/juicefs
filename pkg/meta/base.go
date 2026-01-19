@@ -1717,25 +1717,8 @@ func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count 
 		if count != nil && len(entries) > 0 {
 			atomic.AddUint64(count, uint64(len(entries)))
 		}
-	} else if st == syscall.ENOTSUP {
-		for _, e := range entries {
-			if e.Attr.Typ == TypeDirectory {
-				continue
-			}
-			if ctx.Canceled() {
-				return syscall.EINTR
-			}
-			if st := m.Unlink(ctx, parent, string(e.Name), skipCheckTrash); st != 0 && st != syscall.ENOENT {
-				return st
-			}
-			if count != nil {
-				atomic.AddUint64(count, 1)
-			}
-		}
-	} else if st != 0 {
-		return st
 	}
-	return 0
+	return st
 }
 
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
