@@ -441,14 +441,27 @@ public class JuiceFileSystemImpl extends FileSystem {
       obj.put(key, Boolean.valueOf(getConf(conf, key, "false")));
     }
     String subdir = getConf(conf, "subdir", "");
-    if (subdir.equals("/")) {
-      subdir = "";
-    } else if (!subdir.startsWith("/")) {
-      subdir = "/" + subdir;
-    }
-    subdir = subdir.replaceAll("/+$", "");
     if (!subdir.isEmpty()) {
-      LOG.debug("subdir {} is enabled", subdir);
+      // Support multiple subdirs separated by comma
+      String[] subdirs = subdir.split(",");
+      List<String> normalizedSubdirs = new ArrayList<>();
+      for (String sd : subdirs) {
+        sd = sd.trim();
+        if (sd.isEmpty() || sd.equals("/")) {
+          continue;  // skip empty string or root
+        }
+        if (!sd.startsWith("/")) {
+          sd = "/" + sd;
+        }
+        sd = sd.replaceAll("/+$", "");
+        normalizedSubdirs.add(sd);
+      }
+      if (normalizedSubdirs.isEmpty()) {
+        subdir = "";
+      } else {
+        subdir = String.join(",", normalizedSubdirs);
+        LOG.debug("subdir {} is enabled", subdir);
+      }
     }
     obj.put("bucket", getConf(conf, "bucket", ""));
     obj.put("storageClass", getConf(conf, "storage-class", ""));
