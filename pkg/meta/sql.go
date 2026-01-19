@@ -2626,10 +2626,8 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
 	}
 
-	// Each entry averages ~2 tx operations, so batch size should be m.getTxnBatchNum()/4
-	batchNum := m.getTxnBatchNum() / 2
+	batchSize := m.getTxnBatchNum()
 	for len(entries) > 0 {
-		batchSize := batchNum
 		if batchSize > len(entries) {
 			batchSize = len(entries)
 		}
