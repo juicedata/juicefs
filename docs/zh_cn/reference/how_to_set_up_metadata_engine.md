@@ -31,6 +31,23 @@ JuiceFS 采用数据和元数据分离的存储架构，元数据可以存储在
 
 JuiceFS 要求使用 4.0 及以上版本的 Redis。JuiceFS 也支持使用 Redis Cluster 作为元数据引擎，但为了避免在 Redis 集群中执行跨节点事务，同一个文件系统的元数据总会坐落于单个 Redis 实例中。
 
+:::tip Redis Cluster 键前缀
+使用 Redis Cluster 时，URL 中的数据库编号会被用作**键前缀**，而不是用于实际的数据库选择（因为 Redis Cluster 仅支持数据库 0）。前缀格式为 `{N}`（例如 `{1}`、`{2}`），使用 Redis 哈希标签（hash tag）确保同一个卷的所有键都被路由到同一个槽（slot）。这使得多个 JuiceFS 文件系统可以共享同一个 Redis Cluster：
+
+```shell
+# 不同的卷使用不同的数据库编号作为键前缀
+juicefs format redis://cluster:6379/1 volume1   # 键前缀为 {1}
+juicefs format redis://cluster:6379/2 volume2   # 键前缀为 {2}
+```
+
+可以使用以下命令在 Redis Cluster 中验证键：
+
+```shell
+redis-cli -c -h <host> -p 6379 keys '{1}*'   # 列出前缀为 {1} 的所有键
+```
+
+:::
+
 为了保证元数据安全，JuiceFS 需要 [`maxmemory-policy noeviction`](https://redis.io/docs/reference/eviction/)，否则在启动 JuiceFS 的时候将会尝试将其设置为 `noeviction`，如果设置失败将会打印告警日志。更多可以参考 [Redis 最佳实践](../administration/metadata/redis_best_practices.md)。
 
 #### 创建文件系统
