@@ -87,6 +87,7 @@ func (t *tosClient) Get(ctx context.Context, key string, off, limit int64, gette
 		v, _ := resp.Meta.Get(checksumAlgr)
 		resp.Content = verifyChecksum(resp.Content, v, resp.ContentLength)
 	}
+
 	return resp.Content, nil
 }
 
