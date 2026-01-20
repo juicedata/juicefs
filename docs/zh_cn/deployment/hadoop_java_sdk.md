@@ -214,7 +214,7 @@ make win
 |`juicefs.backup-skip-trash`| `false`      | 备份元数据时忽略回收站中的文件和目录。                                                                                         |
 | `juicefs.heartbeat`       | 12           | 客户端和元数据引擎之间的心跳间隔（单位：秒），建议所有客户端都设置一样                                                                         |
 | `juicefs.skip-dir-mtime`  | 100ms        | 修改父目录 mtime 间隔。                                                                                             |
-| `juicefs.subdir`          |              | 仅允许访问此目录的子路径。                                                                     |
+| `juicefs.subdir`          |              | 仅允许访问此目录的子路径。可以指定多个路径，使用逗号分隔。所有其他路径，包括根目录或同级目录，都将被拒绝访问。                                           |
 
 #### 多文件系统配置
 
