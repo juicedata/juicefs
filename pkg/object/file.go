@@ -163,7 +163,7 @@ func (d *filestore) Put(key string, in io.Reader, getters ...AttrGetter) (err er
 		tmp = filepath.Join(filepath.Dir(p), "."+name+".tmp"+strconv.Itoa(rand.Int()))
 		defer func() {
 			if err != nil {
-				if e := os.Remove(tmp); e != nil {
+				if e := os.Remove(tmp); e != nil && !os.IsNotExist(e) {
 					logger.Warnf("delete %s: %s", tmp, e)
 				}
 			}
