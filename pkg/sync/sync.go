@@ -1835,8 +1835,8 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		localLimit = ratelimit.NewBucketWithRate(bps, int64(bps)/10)
 	}
 	var gLimit *globalLimit
-	if config.TrafficControlAddr != "" {
-		gLimit = &globalLimit{address: config.TrafficControlAddr}
+	if config.TrafficControlURL != "" {
+		gLimit = &globalLimit{address: config.TrafficControlURL}
 		go func() {
 			for {
 				time.Sleep(time.Millisecond * 10)
