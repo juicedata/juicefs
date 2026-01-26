@@ -64,10 +64,11 @@ type juice struct {
 	badfd        map[uint64]uint64
 	inoHandleMap map[meta.Ino][]uint64
 
-	asRoot         bool
-	delayClose     int
-	enabledGetPath bool
-	disableSymlink bool
+	asRoot           bool
+	delayClose       int
+	enabledGetPath   bool
+	disableSymlink   bool
+	readdirBatchSize int
 
 	logM      sync.Mutex
 	logBuffer chan string
@@ -784,17 +785,13 @@ func (j *juice) Readdir(path string,
 		return
 	}
 
-	const batchSize = 10000
 	currentOffset := int(ofst)
 
 	for {
-		entries, readAt, err := j.vfs.Readdir(ctx, ino, batchSize, currentOffset, fh, true)
+		entries, readAt, err := j.vfs.Readdir(ctx, ino, uint32(j.readdirBatchSize), currentOffset, fh, true)
 		if err != 0 {
 			e = errorconv(err)
 			return
-		}
-		if len(entries) == 0 {
-			break
 		}
 		var st fuse.Stat_t
 		var ok bool
@@ -824,6 +821,11 @@ func (j *juice) Readdir(path string,
 				break
 			}
 		}
+
+		if len(entries) < j.readdirBatchSize {
+			break
+		}
+
 		currentOffset += len(entries)
 	}
 	return
@@ -935,6 +937,11 @@ func (j *juice) Getpath(p string, fh uint64) (e int, ret string) {
 func Serve(v *vfs.VFS, fuseOpt string, asRoot bool, delayCloseSec int, showDotFiles bool, threadsCount int, caseSensitive bool, enabledGetPath bool, c *cli.Context) {
 	var jfs juice
 	conf := v.Conf
+	jfs.readdirBatchSize = c.Int("readdir-batch-size")
+	if jfs.readdirBatchSize <= 0 {
+		jfs.readdirBatchSize = 1000
+	}
+	logger.Debugf("Readdir batch size: %d", jfs.readdirBatchSize)
 	jfs.attrCacheTimeout = v.Conf.AttrTimeout
 	jfs.conf = conf
 	jfs.vfs = v

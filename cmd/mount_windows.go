@@ -53,6 +53,12 @@ func mountFlags() []cli.Flag {
 			Value:  7,
 			Hidden: true,
 		},
+		&cli.IntFlag{
+			Name:   "readdir-batch-size",
+			Usage:  "readdir batch size",
+			Value:  1000,
+			Hidden: true,
+		},
 		&cli.BoolFlag{
 			Name:  "as-root",
 			Usage: "Access files as administrator",
