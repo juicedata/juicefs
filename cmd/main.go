@@ -121,6 +121,7 @@ func handleSysMountArgs(args []string) ([]string, error) {
 		"attrcacheto":     "attr-cache",
 		"entrycacheto":    "entry-cache",
 		"direntrycacheto": "dir-entry-cache",
+		"hide-internal":   "hide-internal",
 	}
 	newArgs := []string{"juicefs", "mount", "-d"}
 	if len(args) < 3 {
