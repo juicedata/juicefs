@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -971,6 +972,16 @@ func Serve(v *vfs.VFS, fuseOpt string, asRoot bool, delayCloseSec int, showDotFi
 	options += fmt.Sprintf(",DirInfoTimeout=%d,VolumeInfoTimeout=1000,KeepFileCache", int(conf.DirEntryTimeout.Seconds()*1000))
 	options += fmt.Sprintf(",FileInfoTimeout=%d", int(conf.EntryTimeout.Seconds()*1000))
 	options += ",VolumePrefix=/juicefs/" + conf.Format.Name
+
+	createPerms := c.String("create-perm")
+	if createPerms != "" {
+		if p, err := strconv.ParseUint(createPerms, 8, 32); err == nil {
+			options += fmt.Sprintf(",create_umask=%03o", 0o0777&^p)
+		} else {
+			logger.Warningf("Invalid create-perm value: %s", createPerms)
+		}
+	}
+
 	if asRoot {
 		options += ",uid=-1,gid=-1"
 	}
