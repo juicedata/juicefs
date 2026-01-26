@@ -266,6 +266,10 @@ func syncStorageFlags() []cli.Flag {
 			Name:  "bwlimit",
 			Usage: "limit bandwidth in Mbps (0 means unlimited)",
 		},
+		&cli.StringFlag{
+			Name:  "traffic-control-url",
+			Usage: "the url of the traffic control",
+		},
 	})
 }
 

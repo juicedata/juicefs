@@ -19,11 +19,13 @@ package sync
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
 	"math"
+	"net/http"
 	"os"
 	"path"
 	"runtime"
@@ -64,9 +66,125 @@ var (
 	deleted, failed         *utils.Bar
 	listedPrefix            *utils.Bar
 	concurrent              chan int
-	limiter                 *ratelimit.Bucket
+	limiter                 *mixedLimiter
 	totalHandled            atomic.Int64
 )
+
+type mixedLimiter struct {
+	global *globalLimit
+	local  *ratelimit.Bucket
+}
+
+func (l *mixedLimiter) Wait(count int64) {
+	if l.local != nil {
+		l.local.Wait(count)
+	}
+	if l.global != nil {
+		l.global.wait(count)
+	}
+}
+
+type globalLimit struct {
+	sync.Mutex
+	balance int64
+	due     time.Time
+	need    int64
+	waiters []*sync.Cond
+
+	address string
+}
+type req struct {
+	// Positive numbers indicate a request, negative numbers indicate a payback.
+	Bytes int64 `json:"bytes"`
+}
+
+type resp struct {
+	Granted int64 `json:"granted"` // bytes
+	Expired int64 `json:"expired"` // Millisecond
+}
+
+func (l *globalLimit) request(ask int64) (int64, int64, error) {
+	r := req{Bytes: ask}
+	data, err := json.Marshal(r)
+	if err != nil {
+		return 0, 0, err
+	}
+	result, err := http.Post(l.address, "application/json", bytes.NewReader(data))
+	if err != nil || result.StatusCode != http.StatusOK {
+		var status string
+		if result != nil {
+			status = http.StatusText(result.StatusCode)
+		}
+		logger.Errorf("request traffic control %s failed: %s, http status: %s", l.address, err, status)
+		return 0, 0, err
+	}
+	content, err := io.ReadAll(result.Body)
+	if err != nil {
+		return 0, 0, err
+	}
+	res := resp{}
+	if err := json.Unmarshal(content, &res); err != nil {
+		return 0, 0, err
+	}
+	return res.Granted, res.Expired, nil
+}
+
+func (l *globalLimit) wait(bytes int64) {
+	l.Lock()
+	defer l.Unlock()
+	if bytes <= 0 || l.balance >= bytes && len(l.waiters) == 0 {
+		l.balance -= bytes
+		return
+	}
+	l.need += bytes
+
+	var me = sync.NewCond(l)
+	l.waiters = append(l.waiters, me)
+	for l.waiters[0] != me {
+		me.Wait()
+	}
+
+	if l.balance < bytes {
+		// request credit for other waiters together
+		ask := l.need - l.balance
+		if ask >= bytes*10 {
+			// don't wait for too long
+			ask = bytes * 10
+		}
+		l.Unlock()
+		granted, expire, err := l.request(ask)
+		l.Lock()
+		if err == nil {
+			l.balance += granted
+			l.due = time.Now().Add(time.Millisecond * time.Duration(expire))
+			logger.Debugf("grant %d from %s until %s", granted, l.address, l.due)
+		}
+	}
+
+	l.balance -= bytes
+	l.need -= bytes
+	l.waiters = l.waiters[1:]
+	if len(l.waiters) > 0 {
+		l.waiters[0].Signal()
+	}
+}
+
+func (l *globalLimit) checkBalance() {
+	now := time.Now()
+	l.Lock()
+	if l.balance > 0 && l.need == 0 && l.due.Before(now) {
+		payback := l.balance
+		if payback > 1<<30 {
+			payback = 1 << 30
+		}
+		l.balance -= payback
+		l.Unlock()
+		_, _, _ = l.request(-payback)
+	} else {
+		l.Unlock()
+	}
+}
+
 var crcTable = crc32.MakeTable(crc32.Castagnoli)
 var logger = utils.GetLogger("juicefs")
 
@@ -1713,9 +1831,26 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	tasks := make(chan object.Object, bufferSize)
 	wg := sync.WaitGroup{}
 	concurrent = make(chan int, config.Threads)
+	var localLimit *ratelimit.Bucket
 	if config.BWLimit > 0 {
 		bps := float64(config.BWLimit*1e6/8) * 0.85 // 15% overhead
-		limiter = ratelimit.NewBucketWithRate(bps, int64(bps)/10)
+		localLimit = ratelimit.NewBucketWithRate(bps, int64(bps)/10)
+	}
+	var gLimit *globalLimit
+	if config.TrafficControlURL != "" {
+		gLimit = &globalLimit{address: config.TrafficControlURL}
+		go func() {
+			for {
+				time.Sleep(time.Millisecond * 10)
+				gLimit.checkBalance()
+			}
+		}()
+	}
+	if localLimit != nil || gLimit != nil {
+		limiter = &mixedLimiter{
+			global: gLimit,
+			local:  localLimit,
+		}
 	}
 
 	progress := utils.NewProgress(config.Verbose || config.Quiet || config.Manager != "")
