@@ -78,6 +78,11 @@ juicefs.exe: /usr/local/include/winfsp cmd/*.go pkg/*/*.go
 	GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc \
 	     go build -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)" -buildmode exe -o juicefs.exe .
 
+# This is the script for compiling the Windows version on Windows platform.
+# Please ensure mingw64 is in PATH and WinFsp SDK is installed at C:/WinFsp
+_juicefs.exe:
+	powershell -Command "$$env:PATH+=';C:\mingw64\bin'; $$env:CGO_ENABLED='1'; $$env:CGO_CFLAGS='-IC:/WinFsp/inc/fuse'; go build -ldflags='-s -w' -o juicefs.exe ."
+
 .PHONY: snapshot release debug test
 snapshot:
 	docker run --rm --privileged \

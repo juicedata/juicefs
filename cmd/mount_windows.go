@@ -41,8 +41,16 @@ func mountFlags() []cli.Flag {
 			Usage: "path of log file when running in background",
 		},
 		&cli.StringFlag{
-			Name:  "fuse-trace-log",
-			Usage: "FUSE trace log file",
+			Name:    "fuse-access-log",
+			Aliases: []string{"fuse-trace-log"},
+			Usage:   "Fuse Layer access log file",
+			Hidden:  true,
+		},
+		&cli.IntFlag{
+			Name:   "fuse-access-log-rotate-count",
+			Usage:  "Fuse Layer access log file rotate count",
+			Value:  7,
+			Hidden: true,
 		},
 		&cli.BoolFlag{
 			Name:  "as-root",
@@ -110,14 +118,9 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 
 	delayCloseTime := utils.Duration(c.String("delay-close"))
 
-	traceLog := c.String("fuse-trace-log")
-	if traceLog != "" {
-		winfsp.SetTraceOutput(traceLog)
-	}
-
 	winfsp.Serve(v, c.String("o"),
 		c.Bool("as-root"), int(delayCloseTime.Seconds()), c.Bool("show-dot-files"),
-		c.Int("winfsp-threads"), c.Bool("case-sensitive"), c.Bool("report-case"))
+		c.Int("winfsp-threads"), c.Bool("case-sensitive"), c.Bool("report-case"), c)
 }
 
 func checkMountpoint(name, mp, logPath string, background bool) {}
