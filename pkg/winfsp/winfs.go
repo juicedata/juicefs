@@ -793,6 +793,13 @@ func (j *juice) Readdir(path string,
 			e = errorconv(err)
 			return
 		}
+
+		if len(entries) == 0 {
+			// Some meta engines may return entries less than batch size
+			// so we only break when no entries are returned
+			break
+		}
+
 		var st fuse.Stat_t
 		var ok bool
 		var full = true
@@ -820,10 +827,6 @@ func (j *juice) Readdir(path string,
 			if !ok {
 				break
 			}
-		}
-
-		if len(entries) < j.readdirBatchSize {
-			break
 		}
 
 		currentOffset += len(entries)
