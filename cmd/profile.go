@@ -71,6 +71,12 @@ Details: https://juicefs.com/docs/community/fault_diagnosis_and_analysis#profile
 				Aliases: []string{"p"},
 				Usage:   "track only specified PIDs(separated by comma ,)",
 			},
+			&cli.StringFlag{
+				Name:    "paths",
+				Aliases: []string{"filter-by-path"},
+				Usage:   "track only specified paths (separated by comma , Only for Windows FUSE log)",
+				Hidden:  true,
+			},
 			&cli.Int64Flag{
 				Name:  "interval",
 				Value: 2,
@@ -90,6 +96,7 @@ type profiler struct {
 	uids      []string
 	gids      []string
 	pids      []string
+	paths     []string
 	entryChan chan *logEntry // one line
 	statsChan chan map[string]*stat
 	pause     chan bool
@@ -112,10 +119,11 @@ type logEntry struct {
 	ts            time.Time
 	uid, gid, pid string
 	op            string
-	latency       int // us
+	latency       int    // us
+	path          string // only for Windows FUSE log
 }
 
-func parseLine(line string) *logEntry {
+func parseLine(line string, winFuseLog bool) *logEntry {
 	if len(line) < 3 { // dummy line: "#"
 		return nil
 	}
@@ -140,6 +148,27 @@ func parseLine(line string) *logEntry {
 		logger.Warnf("Failed to parse log line: %s: %s", line, err)
 		return nil
 	}
+
+	filePath := ""
+	if winFuseLog {
+		// Find the path in Windows log, should after the "{op} (/xxxx/bb  bb/cc cc.*)"
+		// the windows path may contain space or "(", ")"
+		restPart := strings.Join(fields[4:len(fields)-1], " ")
+		if strings.HasPrefix(restPart, "(") && strings.Contains(restPart, ")") {
+			lastIndex := strings.LastIndex(restPart, ")")
+			if lastIndex > 1 {
+				paths := strings.SplitN(restPart[1:lastIndex], ",", 2)
+				if len(paths) > 0 {
+					filePath = paths[0]
+				}
+			}
+		}
+
+		if filePath == "" {
+			logger.Warnf("log line is invalid, cannot find path: %s", line)
+		}
+	}
+
 	return &logEntry{
 		ts:      ts,
 		uid:     ids[0],
@@ -147,13 +176,14 @@ func parseLine(line string) *logEntry {
 		pid:     ids[2],
 		op:      fields[3],
 		latency: int(latFloat * 1000000.0),
+		path:    filePath,
 	}
 }
 
 func (p *profiler) reader() {
 	scanner := bufio.NewScanner(p.file)
 	for scanner.Scan() {
-		p.entryChan <- parseLine(scanner.Text())
+		p.entryChan <- parseLine(scanner.Text(), p.isWinFuseLog())
 	}
 	if err := scanner.Err(); err != nil {
 		logger.Fatalf("Reading log file failed with error: %s", err)
@@ -162,6 +192,10 @@ func (p *profiler) reader() {
 	if p.replay {
 		p.done <- true
 	}
+}
+
+func (p *profiler) isWinFuseLog() bool {
+	return len(p.paths) > 0
 }
 
 func (p *profiler) isValid(entry *logEntry) bool {
@@ -176,7 +210,7 @@ func (p *profiler) isValid(entry *logEntry) bool {
 		}
 		return false
 	}
-	return valid(p.uids, entry.uid) && valid(p.gids, entry.gid) && valid(p.pids, entry.pid)
+	return valid(p.uids, entry.uid) && valid(p.gids, entry.gid) && valid(p.pids, entry.pid) && valid(p.paths, entry.path)
 }
 
 func (p *profiler) counter() {
@@ -376,6 +410,7 @@ func profile(ctx *cli.Context) error {
 		uids:      strings.Split(ctx.String("uid"), ","),
 		gids:      strings.Split(ctx.String("gid"), ","),
 		pids:      strings.Split(ctx.String("pid"), ","),
+		paths:     strings.Split(ctx.String("paths"), ","),
 		entryChan: make(chan *logEntry, 16),
 		statsChan: make(chan map[string]*stat),
 		pause:     make(chan bool),
