@@ -36,6 +36,8 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/winfsp/cgofuse/fuse"
 	"golang.org/x/sys/windows/registry"
+
+	"github.com/urfave/cli/v2"
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -48,11 +50,6 @@ type handleInfo struct {
 	ino           meta.Ino
 	cacheAttr     *meta.Attr
 	attrExpiredAt time.Time
-}
-
-func trace(vals ...interface{}) func(vals ...interface{}) {
-	uid, gid, pid := fuse.Getcontext()
-	return Trace(1, fmt.Sprintf("[uid=%v,gid=%v,pid=%d]", uid, gid, pid), vals...)
 }
 
 type juice struct {
@@ -70,6 +67,9 @@ type juice struct {
 	delayClose     int
 	enabledGetPath bool
 	disableSymlink bool
+
+	logM      sync.Mutex
+	logBuffer chan string
 
 	attrCacheTimeout time.Duration
 }
@@ -183,7 +183,7 @@ func fuseFlagToSyscall(flag int) int {
 // Mknod creates a file node.
 func (j *juice) Mknod(p string, mode uint32, dev uint64) (e int) {
 	ctx := j.newContext()
-	defer trace(p, mode, dev)(&e)
+	defer func() { j.log(ctx, "Mknod (%s, %d, %d): %d", p, mode, dev, e) }()
 	parent, err := j.fs.Open(ctx, path.Dir(p), 0)
 	if err != 0 {
 		e = errorconv(err)
@@ -205,7 +205,7 @@ func (j *juice) Mkdir(path string, mode uint32) (e int) {
 		return -fuse.ENOENT
 	}
 	ctx := j.newContext()
-	defer trace(path, mode)(&e)
+	defer func() { j.log(ctx, "Mkdir (%s, %d): %d", path, mode, e) }()
 	e = errorconv(j.fs.Mkdir(ctx, path, uint16(mode), 0))
 	return
 }
@@ -213,7 +213,7 @@ func (j *juice) Mkdir(path string, mode uint32) (e int) {
 // Unlink removes a file.
 func (j *juice) Unlink(path string) (e int) {
 	ctx := j.newContext()
-	defer trace(path)(&e)
+	defer func() { j.log(ctx, "Unlink (%s): %d", path, e) }()
 	e = errorconv(j.fs.Delete(ctx, path))
 	return
 }
@@ -221,7 +221,7 @@ func (j *juice) Unlink(path string) (e int) {
 // Rmdir removes a directory.
 func (j *juice) Rmdir(path string) (e int) {
 	ctx := j.newContext()
-	defer trace(path)(&e)
+	defer func() { j.log(ctx, "Rmdir (%s): %d", path, e) }()
 	e = errorconv(j.fs.Delete(ctx, path))
 	return
 }
@@ -229,7 +229,7 @@ func (j *juice) Rmdir(path string) (e int) {
 func (j *juice) Symlink(target string, newpath string) (e int) {
 	return -fuse.ENOSYS
 	ctx := j.newContext()
-	defer trace(target, newpath)(&e)
+	defer func() { j.log(ctx, "Symlink (%s, %s): %d", target, newpath, e) }()
 	parent, err := j.fs.Open(ctx, path.Dir(newpath), 0)
 	if err != 0 {
 		e = errorconv(err)
@@ -242,7 +242,7 @@ func (j *juice) Symlink(target string, newpath string) (e int) {
 
 func (j *juice) Readlink(path string) (e int, target string) {
 	ctx := j.newContext()
-	defer trace(path)(&e, &target)
+	defer func() { j.log(ctx, "Readlink (%s): (%d, %s)", path, e, target) }()
 	if path == "/" && j.disableSymlink {
 		e = -fuse.ENOSYS
 		return
@@ -261,7 +261,7 @@ func (j *juice) Readlink(path string) (e int, target string) {
 // Rename renames a file.
 func (j *juice) Rename(oldpath string, newpath string) (e int) {
 	ctx := j.newContext()
-	defer trace(oldpath, newpath)(&e)
+	defer func() { j.log(ctx, "Rename (%s, %s): %d", oldpath, newpath, e) }()
 	e = errorconv(j.fs.Rename(ctx, oldpath, newpath, 0))
 	return
 }
@@ -269,7 +269,7 @@ func (j *juice) Rename(oldpath string, newpath string) (e int) {
 // Chmod changes the permission bits of a file.
 func (j *juice) Chmod(path string, mode uint32) (e int) {
 	ctx := j.newContext()
-	defer trace(path, mode)(&e)
+	defer func() { j.log(ctx, "Chmod (%s, %d): %d", path, mode, e) }()
 	f, err := j.fs.Open(ctx, path, 0)
 	if err != 0 {
 		e = errorconv(err)
@@ -285,7 +285,7 @@ func (j *juice) Chmod(path string, mode uint32) (e int) {
 // Chown changes the owner and group of a file.
 func (j *juice) Chown(path string, uid uint32, gid uint32) (e int) {
 	ctx := j.newContext()
-	defer trace(path, uid, gid)(&e)
+	defer func() { j.log(ctx, "Chown (%s, %d, %d): %d", path, uid, gid, e) }()
 	f, err := j.fs.Open(ctx, path, 0)
 	if err != 0 {
 		e = errorconv(err)
@@ -309,7 +309,7 @@ func (j *juice) Chown(path string, uid uint32, gid uint32) (e int) {
 // Utimens changes the access and modification times of a file.
 func (j *juice) Utimens(path string, tmsp []fuse.Timespec) (e int) {
 	ctx := j.newContext()
-	defer trace(path, tmsp)(&e)
+	defer func() { j.log(ctx, "Utimens (%s, %v): %d", path, tmsp, e) }()
 	f, err := j.fs.Open(ctx, path, 0)
 	if err != 0 {
 		e = errorconv(err)
@@ -326,7 +326,7 @@ func (j *juice) Utimens(path string, tmsp []fuse.Timespec) (e int) {
 // The flags are a combination of the fuse.O_* constants.
 func (j *juice) Create(p string, flags int, mode uint32) (e int, fh uint64) {
 	ctx := j.newContext()
-	defer trace(p, flags, mode)(&e, &fh)
+	defer func() { j.log(ctx, "Create (%s, %d, %d): (%d, %d)", p, flags, mode, e, fh) }()
 	parent, err := j.fs.Open(ctx, path.Dir(p), 0)
 	if err != 0 {
 		e = errorconv(err)
@@ -365,7 +365,7 @@ func (j *juice) Open(path string, flags int) (e int, fh uint64) {
 // The flags are a combination of the fuse.O_* constants.
 func (j *juice) OpenEx(p string, fi *fuse.FileInfo_t) (e int) {
 	ctx := j.newContext()
-	defer trace(p, fi.Flags)(&e, &fi.Fh)
+	defer func() { j.log(ctx, "Open (%s, %d): (%d, %d)", p, fi.Flags, e, fi.Fh) }()
 	ino := meta.Ino(0)
 	if strings.HasSuffix(p, "/.control") {
 		ino, _ = vfs.GetInternalNodeByName(".control")
@@ -584,7 +584,7 @@ func (j *juice) getAttr(ctx vfs.Context, fh uint64, ino Ino, opened uint8) (entr
 // Getattr gets file attributes.
 func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 	ctx := j.newContext()
-	defer trace(p, fh)(stat, &e)
+	defer func() { j.log(ctx, "Getattr (%s, %d): %d", p, fh, e) }()
 	ino := j.h2i(&fh)
 
 	if ino == 0 {
@@ -627,7 +627,7 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 // Truncate changes the size of a file.
 func (j *juice) Truncate(path string, size int64, fh uint64) (e int) {
 	ctx := j.newContext()
-	defer trace(path, size, fh)(&e)
+	defer func() { j.log(ctx, "Truncate (%s, %d, %d): %d", path, size, fh, e) }()
 	ino := j.h2i(&fh)
 	if ino == 0 {
 		e = -fuse.EBADF
@@ -643,7 +643,7 @@ func (j *juice) Truncate(path string, size int64, fh uint64) (e int) {
 // Read reads data from a file.
 func (j *juice) Read(path string, buf []byte, off int64, fh uint64) (e int) {
 	ctx := j.newContext()
-	defer trace(path, len(buf), off, fh)(&e)
+	defer func() { j.log(ctx, "Read (%s, %d, %d, %d): %d", path, len(buf), off, fh, e) }()
 	ino := j.h2i(&fh)
 	if ino == 0 {
 		logger.Warnf("read from released fd %d for %s, re-open it", fh, path)
@@ -664,7 +664,7 @@ func (j *juice) Read(path string, buf []byte, off int64, fh uint64) (e int) {
 // Write writes data to a file.
 func (j *juice) Write(path string, buff []byte, off int64, fh uint64) (e int) {
 	ctx := j.newContext()
-	defer trace(path, len(buff), off, fh)(&e)
+	defer func() { j.log(ctx, "Write (%s, %d, %d, %d): %d", path, len(buff), off, fh, e) }()
 	ino := j.h2i(&fh)
 	if ino == 0 {
 		logger.Warnf("write to released fd %d for %s, re-open it", fh, path)
@@ -687,7 +687,7 @@ func (j *juice) Write(path string, buff []byte, off int64, fh uint64) (e int) {
 // Flush flushes cached file data.
 func (j *juice) Flush(path string, fh uint64) (e int) {
 	ctx := j.newContext()
-	defer trace(path, fh)(&e)
+	defer func() { j.log(ctx, "Flush (%s, %d): %d", path, fh, e) }()
 	ino := j.h2i(&fh)
 	if ino == 0 {
 		e = -fuse.EBADF
@@ -712,7 +712,8 @@ func (j *juice) cleanInoHandlerMap(ino meta.Ino, fh uint64) {
 
 // Release closes an open file.
 func (j *juice) Release(path string, fh uint64) int {
-	defer trace(path, fh)()
+	ctx := j.newContext()
+	defer func() { j.log(ctx, "Release (%s, %d)", path, fh) }()
 	orig := fh
 	ino := j.h2i(&fh)
 	if ino == 0 {
@@ -737,7 +738,7 @@ func (j *juice) Release(path string, fh uint64) int {
 // Fsync synchronizes file contents.
 func (j *juice) Fsync(path string, datasync bool, fh uint64) (e int) {
 	ctx := j.newContext()
-	defer trace(path, datasync, fh)(&e)
+	defer func() { j.log(ctx, "Fsync (%s, %t, %d): %d", path, datasync, fh, e) }()
 	ino := j.h2i(&fh)
 	if ino == 0 {
 		e = -fuse.EBADF
@@ -750,7 +751,7 @@ func (j *juice) Fsync(path string, datasync bool, fh uint64) (e int) {
 // Opendir opens a directory.
 func (j *juice) Opendir(path string) (e int, fh uint64) {
 	ctx := j.newContext()
-	defer trace(path)(&e, &fh)
+	defer func() { j.log(ctx, "Opendir (%s): (%d, %d)", path, e, fh) }()
 	f, err := j.fs.Open(ctx, path, 0)
 	if err != 0 {
 		e = -fuse.ENOENT
@@ -774,17 +775,17 @@ func (j *juice) Opendir(path string) (e int, fh uint64) {
 func (j *juice) Readdir(path string,
 	fill func(name string, stat *fuse.Stat_t, ofst int64) bool,
 	ofst int64, fh uint64) (e int) {
-	defer trace(path, ofst, fh)(&e)
+	ctx := j.newContext()
+	defer func() { j.log(ctx, "Readdir (%s, %d, %d): %d", path, ofst, fh, e) }()
 	ino := j.h2i(&fh)
 	if ino == 0 {
 		e = -fuse.EBADF
 		return
 	}
-	ctx := j.newContext()
-	
+
 	const batchSize = 10000
 	currentOffset := int(ofst)
-	
+
 	for {
 		entries, readAt, err := j.vfs.Readdir(ctx, ino, batchSize, currentOffset, fh, true)
 		if err != 0 {
@@ -829,7 +830,8 @@ func (j *juice) Readdir(path string,
 
 // Releasedir closes an open directory.
 func (j *juice) Releasedir(path string, fh uint64) (e int) {
-	defer trace(path, fh)(&e)
+	ctx := j.newContext()
+	defer func() { j.log(ctx, "Releasedir (%s, %d): %d", path, fh, e) }()
 	ino := j.h2i(&fh)
 	if ino == 0 {
 		e = -fuse.EBADF
@@ -839,14 +841,13 @@ func (j *juice) Releasedir(path string, fh uint64) (e int) {
 	delete(j.handlers, fh)
 	j.cleanInoHandlerMap(ino, fh)
 	j.Unlock()
-	e = -int(j.vfs.Releasedir(j.newContext(), ino, fh))
+	e = -int(j.vfs.Releasedir(ctx, ino, fh))
 	return
 }
 
 func (j *juice) Chflags(path string, flags uint32) (e int) {
-	defer trace(path, flags)(&e)
-
 	ctx := j.newContext()
+	defer func() { j.log(ctx, "Chflags (%s, %d): %d", path, flags, e) }()
 	fi, err := j.fs.Stat(ctx, path)
 	if err != 0 {
 		e = -fuse.ENOENT
@@ -892,9 +893,9 @@ func (j *juice) Getpath(p string, fh uint64) (e int, ret string) {
 		return
 	}
 
-	defer trace(p, fh)(&e, &ret)
-	ino := j.h2i(&fh)
 	ctx := j.newContext()
+	defer func() { j.log(ctx, "Getpath (%s, %d): (%d, %s)", p, fh, e, ret) }()
+	ino := j.h2i(&fh)
 	if ino == 0 {
 		fi, err := j.fs.Stat(ctx, p)
 		if err != 0 {
@@ -930,13 +931,31 @@ func (j *juice) Getpath(p string, fh uint64) (e int, ret string) {
 	return
 }
 
-func Serve(v *vfs.VFS, fuseOpt string, asRoot bool, delayCloseSec int, showDotFiles bool, threadsCount int, caseSensitive bool, enabledGetPath bool) {
+func Serve(v *vfs.VFS, fuseOpt string, asRoot bool, delayCloseSec int, showDotFiles bool, threadsCount int, caseSensitive bool, enabledGetPath bool, c *cli.Context) {
 	var jfs juice
 	conf := v.Conf
 	jfs.attrCacheTimeout = v.Conf.AttrTimeout
 	jfs.conf = conf
 	jfs.vfs = v
 	jfs.enabledGetPath = enabledGetPath
+
+	fuseAccessLog := c.String("fuse-access-log")
+	if fuseAccessLog != "" {
+		f, err := os.OpenFile(fuseAccessLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			logger.Errorf("open fuse access log %s: %s", fuseAccessLog, err)
+		} else {
+			logger.Infof("fuse access log: %s", fuseAccessLog)
+			_ = os.Chmod(fuseAccessLog, 0666)
+			jfs.logBuffer = make(chan string, 1024)
+			rotateCount := c.Int("fuse-access-log-rotate-count")
+			if rotateCount <= 0 {
+				rotateCount = 7
+			}
+			go jfs.flushLog(f, fuseAccessLog, rotateCount)
+		}
+	}
+
 	var err error
 	jfs.fs, err = fs.NewFileSystem(conf, v.Meta, v.Store, nil)
 	if err != nil {
