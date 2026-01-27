@@ -952,7 +952,7 @@ func Serve(v *vfs.VFS, fuseOpt string, asRoot bool, delayCloseSec int, showDotFi
 			if rotateCount <= 0 {
 				rotateCount = 7
 			}
-			go jfs.flushLog(f, jfs.logBuffer, fuseAccessLog, rotateCount)
+			go jfs.flushLog(f, fuseAccessLog, rotateCount)
 		}
 	}
 

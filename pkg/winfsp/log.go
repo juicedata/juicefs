@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/fs"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 const RotateAccessLog = 300 << 20 // 300 MiB
@@ -44,7 +45,7 @@ func (j *juice) log(ctx fs.LogContext, format string, args ...interface{}) {
 	if buffer == nil && !failed {
 		return
 	}
-	now := time.Now()
+	now := utils.Now()
 	cmd := fmt.Sprintf(format, args...)
 	ts := now.Format("2006.01.02 15:04:05.000000")
 	used := ctx.Duration()
@@ -63,18 +64,18 @@ func (j *juice) log(ctx fs.LogContext, format string, args ...interface{}) {
 	}
 }
 
-func (fs *juice) flushLog(f *os.File, logBuffer chan string, path string, rotateCount int) {
+func (fs *juice) flushLog(f *os.File, path string, rotateCount int) {
 	buf := make([]byte, 0, 128<<10)
 	var lastcheck = time.Now()
 	numFiles := rotateCount
 
 	for {
-		line := <-logBuffer
+		line := <-fs.logBuffer
 		buf = append(buf[:0], []byte(line)...)
 	LOOP:
 		for len(buf) < (128 << 10) {
 			select {
-			case line = <-logBuffer:
+			case line = <-fs.logBuffer:
 				buf = append(buf, []byte(line)...)
 			default:
 				break LOOP
