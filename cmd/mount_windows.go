@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
@@ -83,6 +84,19 @@ func mountFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:  "report-case",
 			Usage: "If set, juicefs will report the correct case of a file path for a case-insensitive filesystem. (May incur a performance lost)",
+		},
+		&cli.StringFlag{
+			Name:  "create-perm",
+			Usage: "When creating files or directories, this will overwrite the permission parameters if set. example: 0755. Default is empty.",
+			Value: "",
+			Action: func(c *cli.Context, v string) error {
+				if v != "" {
+					if p, err := strconv.ParseUint(v, 8, 32); err != nil || p > 0o777 {
+						return cli.Exit("create-perm must be a valid octal number between 0000 and 0777", 1)
+					}
+				}
+				return nil
+			},
 		},
 	}
 }
