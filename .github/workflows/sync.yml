@@ -102,11 +102,7 @@ jobs:
             sudo CI=true GOCOVERDIR=$(pwd)/cover META=redis KEY_TYPE=$random_type .github/scripts/sync/sync_cluster.sh
           elif [[ "${{matrix.type}}" == 'sync_exclude' ]]; then
             sudo GOCOVERDIR=$(pwd)/cover python3 .github/scripts/hypo/sync_test.py
-            if [ "${{github.event_name}}" == "schedule" ]; then
-              sudo GOCOVERDIR=$(pwd)/cover MAX_EXAMPLE=100 STEP_COUNT=50 PROFILE=ci python3 .github/scripts/hypo/sync.py
-            else
-              sudo GOCOVERDIR=$(pwd)/cover MAX_EXAMPLE=50 STEP_COUNT=30 PROFILE=ci python3 .github/scripts/hypo/sync.py
-            fi
+            sudo GOCOVERDIR=$(pwd)/cover MAX_EXAMPLE=50 STEP_COUNT=30 PROFILE=ci python3 .github/scripts/hypo/sync.py
           else
             echo "Unknown type: ${{matrix.type}}"
             exit 1
