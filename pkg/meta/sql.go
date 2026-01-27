@@ -2785,7 +2785,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 						case TypeFile:
 							entrySpace = align4K(info.n.Length)
 							needRecordStats = true
-							if delNodes[info.n.Inode].opened {
+							if dn, ok := delNodes[info.n.Inode]; ok && dn.opened {
 								sustainedIns = append(sustainedIns, &sustained{Sid: m.sid, Inode: info.e.Inode})
 								if _, err := s.Cols("nlink", "ctime", "ctimensec").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
 									return err
