@@ -35,6 +35,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/juicedata/juicefs/pkg/win"
 	"github.com/winfsp/cgofuse/fuse"
 	"golang.org/x/sys/windows/registry"
 
@@ -69,6 +70,7 @@ type juice struct {
 	enabledGetPath   bool
 	disableSymlink   bool
 	readdirBatchSize int
+	adminAsRoot      bool
 
 	logM      sync.Mutex
 	logBuffer chan string
@@ -88,12 +90,18 @@ func (j *juice) newContext() vfs.LogContext {
 		return vfs.NewLogContext(meta.Background())
 	}
 	uid, gid, pid := fuse.Getcontext()
-	if uid == 0xffffffff || uid == 18 {
+	if uid == 0xffffffff || uid == win.SystemUIDFromFUSE {
 		uid = 0
 	}
-	if gid == 0xffffffff || gid == 18 {
+	if gid == 0xffffffff || gid == win.SystemUIDFromFUSE {
 		gid = 0
 	}
+	if j.adminAsRoot && uid == win.AdministratorUIDFromFUSE {
+		// gid is basically unused on Windows, so we just check the uid here and set the gid as well
+		uid = 0
+		gid = 0
+	}
+
 	if pid == -1 {
 		pid = 0
 	}
@@ -411,17 +419,27 @@ func (j *juice) OpenEx(p string, fi *fuse.FileInfo_t) (e int) {
 	return
 }
 
-func attrToStat(inode Ino, attr *meta.Attr, stat *fuse.Stat_t) {
+func (j *juice) attrToStat(inode Ino, attr *meta.Attr, stat *fuse.Stat_t) {
 	stat.Ino = uint64(inode)
 	stat.Mode = attr.SMode()
 	stat.Uid = attr.Uid
-	if stat.Uid == 0 {
-		stat.Uid = 18 // System
-	}
 	stat.Gid = attr.Gid
-	if stat.Gid == 0 {
-		stat.Gid = 18 // System
+
+	if stat.Uid == 0 {
+		if j.adminAsRoot {
+			stat.Uid = win.AdministratorUIDFromFUSE
+		} else {
+			stat.Uid = win.SystemUIDFromFUSE
+		}
 	}
+	if stat.Gid == 0 && j.adminAsRoot {
+		if j.adminAsRoot {
+			stat.Gid = win.AdminstratorsGIDFromFUSE
+		} else {
+			stat.Gid = win.SystemUIDFromFUSE
+		}
+	}
+
 	stat.Birthtim.Sec = attr.Atime
 	stat.Birthtim.Nsec = int64(attr.Atimensec)
 	stat.Atim.Sec = attr.Atime
@@ -514,7 +532,7 @@ func (j *juice) getAttrForSpFile(ctx vfs.LogContext, p string, stat *fuse.Stat_t
 	attr.Gid = ctx.Gid()
 	attr.Uid = ctx.Uid()
 
-	attrToStat(inode, attr, stat)
+	j.attrToStat(inode, attr, stat)
 	return
 }
 
@@ -611,7 +629,7 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 		entry := fi.Attr()
 		if entry != nil {
 			j.vfs.UpdateLength(ino, entry)
-			attrToStat(ino, entry, stat)
+			j.attrToStat(ino, entry, stat)
 			return
 		}
 	}
@@ -622,7 +640,7 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 		return
 	}
 	j.vfs.UpdateLength(entry.Inode, entry.Attr)
-	attrToStat(entry.Inode, entry.Attr, stat)
+	j.attrToStat(entry.Inode, entry.Attr, stat)
 	return
 }
 
@@ -819,7 +837,7 @@ func (j *juice) Readdir(path string,
 					}
 				}
 				j.vfs.UpdateLength(e.Inode, e.Attr)
-				attrToStat(e.Inode, e.Attr, &st)
+				j.attrToStat(e.Inode, e.Attr, &st)
 				ok = fill(name, &st, 0)
 			} else {
 				ok = fill(name, nil, 0)
@@ -949,6 +967,7 @@ func Serve(v *vfs.VFS, fuseOpt string, asRoot bool, delayCloseSec int, showDotFi
 	jfs.conf = conf
 	jfs.vfs = v
 	jfs.enabledGetPath = enabledGetPath
+	jfs.adminAsRoot = c.Bool("admin-as-root")
 
 	fuseAccessLog := c.String("fuse-access-log")
 	if fuseAccessLog != "" {

@@ -91,6 +91,11 @@ func mountFlags() []cli.Flag {
 			Name:  "report-case",
 			Usage: "If set, juicefs will report the correct case of a file path for a case-insensitive filesystem. (May incur a performance lost)",
 		},
+		&cli.BoolFlag{
+			Name:  "admin-as-root",
+			Usage: "If we treat the Windows build-in user 'Administartor' as the root user on Linux. Default true.",
+			Value: true,
+		},
 		&cli.StringFlag{
 			Name:  "create-perm",
 			Usage: "When creating files or directories, this will overwrite the permission parameters if set. example: 0755. Default is empty.",
