@@ -5072,6 +5072,11 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	}, srcIno))
 }
 
+func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta) syscall.Errno {
+	// TODO: Implement batch clone for SQL backend
+	return syscall.ENOTSUP
+}
+
 func (m *dbMeta) doFindDetachedNodes(t time.Time) []Ino {
 	var inodes []Ino
 	err := m.roTxn(Background(), func(s *xorm.Session) error {
