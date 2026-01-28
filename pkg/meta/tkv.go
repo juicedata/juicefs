@@ -1604,15 +1604,13 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 			}
 
 			// Check opened status for all inodes with Nlink == 0 after all decrements
-			if m.sid > 0 {
-				for _, info := range entryInfos {
-					if info.attr != nil && info.trash == 0 && info.attr.Nlink == 0 && info.typ == TypeFile {
-						opened := false
-						if m.sid > 0 {
-							opened = m.of.IsOpen(info.inode)
-						}
-						delNodes[info.inode] = &dNode{opened, info.attr.Length}
+			for _, info := range entryInfos {
+				if info.attr != nil && info.trash == 0 && info.attr.Nlink == 0 && info.typ == TypeFile {
+					opened := false
+					if m.sid > 0 {
+						opened = m.of.IsOpen(info.inode)
 					}
+					delNodes[info.inode] = &dNode{opened, info.attr.Length}
 				}
 			}
 
