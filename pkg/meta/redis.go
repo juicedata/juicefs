@@ -1902,11 +1902,13 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 			}
 
 			// check opened status for all inodes with Nlink == 0 after all decrements
-			if m.sid > 0 {
-				for _, info := range entryInfos {
-					if info.attr != nil && info.trash == 0 && info.attr.Nlink == 0 && info.typ == TypeFile {
-						delNodes[info.inode] = &dNode{m.of.IsOpen(info.inode), info.attr.Length}
+			for _, info := range entryInfos {
+				if info.attr != nil && info.trash == 0 && info.attr.Nlink == 0 && info.typ == TypeFile {
+					opened := false
+					if m.sid > 0 {
+						opened = m.of.IsOpen(info.inode)
 					}
+					delNodes[info.inode] = &dNode{opened, info.attr.Length}
 				}
 			}
 
@@ -2373,7 +2375,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				} else {
 					if trash == 0 {
 						tattr.Nlink--
-						if dtyp == TypeFile && tattr.Nlink == 0 {
+						if dtyp == TypeFile && tattr.Nlink == 0 && m.sid > 0 {
 							opened = m.of.IsOpen(dino)
 						}
 						defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
