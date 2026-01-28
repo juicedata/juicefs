@@ -1364,7 +1364,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			attr.Ctimensec = uint32(now.Nanosecond())
 			if trash == 0 {
 				attr.Nlink--
-				if _type == TypeFile && attr.Nlink == 0 {
+				if _type == TypeFile && attr.Nlink == 0 && m.sid > 0 {
 					opened = m.of.IsOpen(inode)
 				}
 			} else if attr.Parent > 0 {
@@ -1607,7 +1607,11 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 			if m.sid > 0 {
 				for _, info := range entryInfos {
 					if info.attr != nil && info.trash == 0 && info.attr.Nlink == 0 && info.typ == TypeFile {
-						delNodes[info.inode] = &dNode{m.of.IsOpen(info.inode), info.attr.Length}
+						opened := false
+						if m.sid > 0 {
+							opened = m.of.IsOpen(info.inode)
+						}
+						delNodes[info.inode] = &dNode{opened, info.attr.Length}
 					}
 				}
 			}
