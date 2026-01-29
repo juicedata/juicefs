@@ -8,7 +8,7 @@ Cloning specific data does not involve copying the actual object storage data bu
 
 ![clone](../images/juicefs-clone.svg)
 
-The clone result is purely a metadata copy, meaning all files still refer to the same underlying object storage blocks. Therefore, a clone behaves exactly like the original. When either the original or the clone is modified, the affected data blocks are copied on write, resulting in new blocks while the unchanged parts remain the same, still referencing the original blocks.
+The clone result is a metadata copy only, where all the files still reference the same underlying object storage blocks. That is why a clone behaves the same in every way as its originals. Upon any file data modification, new data is written to new object storage blocks, with its associating metadata redirected to the new blocks as well (ROW, Redirect-on-Write), while the unchanged part of the files remains the same, still referencing the original blocks. And just like native JuiceFS files, random write on a clone can result in file fragmentations, you can merge them with `juicefs compact` to process the slice of the file,in order to improve read performance.
 
 Note that system tools like disk-free or disk-usage (`df`, `du`) show the space used by the cloned data, but the underlying object storage space remains unchanged since the blocks are not duplicated. Cloning replicates metadata, so it will occupy the same metadata engine storage space as the original.
 
