@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -414,7 +415,11 @@ func (j *juiceFS) Shutdown() {
 }
 
 func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {
-	pid, uid, gid = uint32(os.Getpid()), uint32(os.Getuid()), uint32(os.Getgid())
+	pid, uid, gid = uint32(os.Getpid()), uint32(utils.GetCurrentUID()), uint32(utils.GetCurrentGID())
+	if runtime.GOOS == "windows" && utils.IsWinAdminOrElevatedPrivilege() {
+		uid = 0
+		gid = 0
+	}
 	metaUrl := os.Getenv(endpoint)
 	if metaUrl == "" {
 		metaUrl = endpoint

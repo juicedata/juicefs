@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -81,8 +82,10 @@ func rmr(ctx *cli.Context) error {
 		numThreads = 255
 	}
 	if ctx.Bool("skip-trash") {
-		if os.Getuid() != 0 {
+		if runtime.GOOS != "windows" && os.Getuid() != 0 {
 			logger.Fatalf("Only root can remove files directly")
+		} else if runtime.GOOS == "windows" && !utils.IsWinAdminOrElevatedPrivilege() {
+			logger.Fatalf("Removing files directly requires Administrator or elevated privilege on Windows")
 		}
 		flag = 1
 	}

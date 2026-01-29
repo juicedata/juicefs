@@ -17,12 +17,55 @@
 package utils
 
 import (
+	"fmt"
 	"os/exec"
 	"strconv"
 	"syscall"
 
+	"github.com/juicedata/juicefs/pkg/win"
 	"golang.org/x/sys/windows"
 )
+
+func GetCurrentUID() int {
+	return win.GetCurrentUID()
+}
+
+func GetCurrentGID() int {
+	return win.GetCurrentGID()
+}
+
+func GetCurrentUserSIDStr() string {
+	sid, err := win.GetCurrentUserSID()
+	if err != nil {
+		logger.Warnf("failed to get sid for current user, %s", err)
+		return ""
+	}
+
+	return fmt.Sprintf("%s (%s)", sid.String(), win.GetSidName(sid, true))
+}
+
+func GetCurrentUserGroupSIDStr() string {
+	sid, err := win.GetCurrentUserPrimaryGroupSID()
+	if err != nil {
+		logger.Warnf("failed to get sid for current user, %s", err)
+		return ""
+	}
+
+	return fmt.Sprintf("%s (%s)", sid.String(), win.GetSidName(sid, true))
+}
+
+func IsWinAdminOrElevatedPrivilege() bool {
+	uid := GetCurrentUID()
+	if uid == win.AdministratorUIDFromFUSE {
+		return true
+	}
+	elevated, err := win.IsProcessElevated()
+	if err != nil {
+		logger.Warnf("failed to determine if process is elevated, %s", err)
+		return false
+	}
+	return elevated
+}
 
 func getFileInode(path string, follow bool) (uint64, error) {
 	pathU16, err := windows.UTF16PtrFromString(path)

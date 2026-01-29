@@ -71,7 +71,7 @@ type Config struct {
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
-	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
+	mctx = meta.NewContext(uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
 	jfsObj := &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Second * 10), gConf: gConf, nsMutex: minio.NewNSLock(false)}
 	go jfsObj.cleanup()
 	return jfsObj, nil

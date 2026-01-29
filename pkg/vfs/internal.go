@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -84,8 +83,8 @@ var internalNodes = []*internalNode{
 }
 
 func init() {
-	uid := uint32(os.Getuid())
-	gid := uint32(os.Getgid())
+	uid := uint32(utils.GetCurrentUID())
+	gid := uint32(utils.GetCurrentGID())
 	now := time.Now().Unix()
 	for _, v := range internalNodes {
 		if v.inode == trashInode {

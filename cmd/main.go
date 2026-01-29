@@ -21,6 +21,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -86,6 +87,10 @@ func Main(args []string) error {
 			cmdSummary(),
 			cmdCompact(),
 		},
+	}
+
+	if runtime.GOOS == "windows" {
+		app.Commands = append(app.Commands, cmdPrintSID())
 	}
 
 	if calledViaMount(args) {

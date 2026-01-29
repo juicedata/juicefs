@@ -22,6 +22,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path"
+	"runtime"
 	"sync"
 	"time"
 
@@ -35,8 +36,16 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var ctx = meta.NewContext(1, uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
+var ctx = meta.NewContext(1, uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
 var umask = uint16(utils.GetUmask())
+
+func init() {
+	// For all the juicefs command, we treat admin/elevated privilege user as root(0) on Windows
+	// just like the mount option '-adminasroot' does for the mounted filesystem.
+	if runtime.GOOS == "windows" && utils.IsWinAdminOrElevatedPrivilege() {
+		ctx = meta.NewContext(1, 0, []uint32{0})
+	}
+}
 
 func createDir(jfs *fs.FileSystem, root string, d int, width int) error {
 	if err := jfs.Mkdir(ctx, root, 0777, umask); err != 0 {

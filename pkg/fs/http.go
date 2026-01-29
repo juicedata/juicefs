@@ -336,7 +336,7 @@ func (h *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func StartHTTPServer(fs *FileSystem, config WebdavConfig) {
-	ctx := meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
+	ctx := meta.NewContext(uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
 	hfs := &webdavFS{ctx, fs, uint16(utils.GetUmask()), config}
 	srv := &webdav.Handler{
 		FileSystem: hfs,
