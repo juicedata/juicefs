@@ -29,6 +29,26 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+func GetCurrentUID() int {
+	return os.Getuid()
+}
+
+func GetCurrentGID() int {
+	return os.Getgid()
+}
+
+func GetCurrentUserSIDStr() string {
+	return ""
+}
+
+func GetCurrentUserGroupSIDStr() string {
+	return ""
+}
+
+func IsWinAdminOrElevatedPrivilege() bool {
+	return false
+}
+
 func GetFileInode(path string) (uint64, error) {
 	fi, err := os.Stat(path)
 	if err != nil {

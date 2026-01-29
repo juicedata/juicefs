@@ -26,12 +26,8 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-
 	"golang.org/x/sys/windows"
 )
-
-var logger = utils.GetLogger("juicefs")
 
 var (
 	modadvapi32                   = windows.NewLazySystemDLL("advapi32.dll")
@@ -332,13 +328,11 @@ func ConvertSidStrToUid(sidStr string) (int, error) {
 
 func convertSidToUid(sid *windows.SID) int {
 	if sid == nil || !sid.IsValid() {
-		logger.Trace("GetCurrentUID sid is invalid or nil")
 		return -1
 	}
 
 	subAuthCount := sid.SubAuthorityCount()
 	if subAuthCount == 0 {
-		logger.Trace("subAuthCount is 0")
 		return -1
 	}
 
@@ -349,8 +343,6 @@ func convertSidToUid(sid *windows.SID) int {
 	rid := sid.SubAuthority(uint32(subAuthCount - 1))
 	subAuth0 := sid.SubAuthority(0)
 	auth := sid.IdentifierAuthority()
-
-	logger.Tracef("GetCurrentUID: subAuthCount=%d, rid=%d, subAuth0=%d, auth=%v", subAuthCount, rid, subAuth0, auth)
 
 	ret := -1
 
@@ -395,8 +387,6 @@ func convertSidToUid(sid *windows.SID) int {
 	if ret == -1 {
 		ret = 65534 // fallback to unmapped SID
 	}
-
-	logger.Tracef("GetCurrentUID: returning %d for sid %s", ret, sid.String())
 
 	return ret
 }
@@ -453,7 +443,6 @@ func GetCurrentUID() int {
 
 	sid, err := GetCurrentUserSID()
 	if err != nil {
-		logger.Warnf("failed to get sid for current user, %s", err)
 		return -1
 	}
 
@@ -463,7 +452,6 @@ func GetCurrentUID() int {
 func GetCurrentGID() int {
 	sid, err := GetCurrentUserPrimaryGroupSID()
 	if err != nil {
-		logger.Warnf("failed to get primary group sid for current user, %s", err)
 		return -1
 	}
 
@@ -473,7 +461,6 @@ func GetCurrentGID() int {
 func GetCurrentGroupName() string {
 	sid, err := GetCurrentUserPrimaryGroupSID()
 	if err != nil {
-		logger.Warnf("failed to get sid for current user, %s", err)
 		return ""
 	}
 	return GetSidName(sid, false)
@@ -502,7 +489,6 @@ func GetSidName(sid *windows.SID, withDomain bool) string {
 		&sidType,
 	)
 	if err != nil {
-		logger.Warnf("LookupAccountSid failed: %s", err)
 		return sid.String()
 	}
 

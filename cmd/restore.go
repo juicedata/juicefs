@@ -43,6 +43,9 @@ $ juicefs restore redis://localhost/1 2023-05-10-01`,
 
 func restore(ctx *cli.Context) error {
 	setup0(ctx, 2, 0)
+	if runtime.GOOS == "windows" && !utils.IsWinAdminOrElevatedPrivilege() {
+		return fmt.Errorf("restore command requires Administrator or elevated privilege on Windows")
+	}
 	if os.Getuid() != 0 && runtime.GOOS != "windows" {
 		return fmt.Errorf("only root can restore files from trash")
 	}
