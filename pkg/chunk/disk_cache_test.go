@@ -628,15 +628,18 @@ func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
 	cache := newCacheStore(m, dir, 1<<30, 1000, 1, &conf, nil)
 	key := "0_0_4"
 
-	now := time.Now()
-	path, err := cache.stage(key, []byte("test"))
-	require.NoError(t, err)
-	require.NotEmpty(t, path)
-	require.LessOrEqual(t, cache.keys.peekAtime(cache.getCacheKey(key)), uint32(now.Add(-conf.CacheExpire/2).Unix())) // should have bias in atime
-
-	rc, err := cache.load(key)
-	require.NoError(t, err)
-	require.NotNil(t, rc)
-	defer rc.Close()
-	require.GreaterOrEqual(t, cache.keys.peekAtime(cache.getCacheKey(key)), uint32(now.Unix())) // bias should have been fixed on load
+	fixedTime := time.Date(2025, 1, 28, 12, 0, 0, 0, time.UTC)
+	PatchConvey("mock time.Now to avoid drift", t, func() {
+		Mock(time.Now).Return(fixedTime).Build()
+		path, err := cache.stage(key, []byte("test"))
+		require.NoError(t, err)
+		require.NotEmpty(t, path)
+		expectedCooldownAtime := uint32(fixedTime.Add(-conf.CacheExpire / 2).Unix())
+		require.Equal(t, expectedCooldownAtime, cache.keys.peekAtime(cache.getCacheKey(key)))
+		rc, err := cache.load(key)
+		require.NoError(t, err)
+		require.NotNil(t, rc)
+		defer rc.Close()
+		require.Equal(t, uint32(fixedTime.Unix()), cache.keys.peekAtime(cache.getCacheKey(key)))
+	})
 }
