@@ -5074,8 +5074,454 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 }
 
 func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta) syscall.Errno {
-	// TODO: Implement batch clone for SQL backend
-	return syscall.ENOTSUP
+	// Phase 1: Setup and validation
+	if len(entries) == 0 {
+		return 0
+	}
+
+	// Initialize statistics trackers
+	var totalLength, totalSpace, totalInodes int64
+	if userGroupQuotas != nil {
+		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
+	}
+
+	// Key data structure for tracking clone operations
+	type cloneInfo struct {
+		entry   *Entry // Original entry with Name, Inode (source), Attr
+		srcIno  Ino    // Source inode (from entry)
+		dstIno  Ino    // Newly allocated destination inode
+		srcNode *node  // Fetched source node
+		dstNode node   // Destination node (modified copy)
+	}
+
+	cloneInfos := make([]*cloneInfo, len(entries))
+
+	// Phase 2-7: Execute in single transaction
+	err := m.txn(func(s *xorm.Session) error {
+		now := time.Now()
+		nowNano := now.UnixNano()
+
+		// Phase 2: Allocate destination inodes and deduplicate sources
+		srcInodes := make([]Ino, 0, len(entries))
+		srcInodeSet := make(map[Ino]struct{})
+
+		for i, entry := range entries {
+			dstIno, err := m.nextInode()
+			if err != nil {
+				return err
+			}
+
+			info := &cloneInfo{
+				entry:  entry,
+				srcIno: entry.Inode,
+				dstIno: dstIno,
+			}
+			cloneInfos[i] = info
+
+			// Deduplicate for batch fetch (handles hardlinks)
+			if _, exists := srcInodeSet[entry.Inode]; !exists {
+				srcInodeSet[entry.Inode] = struct{}{}
+				srcInodes = append(srcInodes, entry.Inode)
+			}
+		}
+
+		// Phase 3: Validate destination parent (once for entire batch)
+		pn := node{Inode: dstParent}
+		ok, err := s.Get(&pn)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return syscall.ENOENT
+		}
+		if pn.Type != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		if (pn.Flags & FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
+
+		var pattr Attr
+		m.parseAttr(&pn, &pattr)
+		if st := m.Access(ctx, dstParent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+			return st
+		}
+
+		// Batch fetch all source nodes with FOR UPDATE lock
+		var srcNodes []node
+		if len(srcInodes) > 0 {
+			if err := s.ForUpdate().In("inode", srcInodes).Find(&srcNodes); err != nil {
+				return err
+			}
+		}
+
+		// Build lookup map and validate access
+		srcNodeMap := make(map[Ino]*node, len(srcNodes))
+		for i := range srcNodes {
+			srcNodeMap[srcNodes[i].Inode] = &srcNodes[i]
+		}
+
+		for _, info := range cloneInfos {
+			srcNode, ok := srcNodeMap[info.srcIno]
+			if !ok {
+				return syscall.ENOENT
+			}
+			info.srcNode = srcNode
+
+			// Check read permission on source
+			var srcAttr Attr
+			m.parseAttr(srcNode, &srcAttr)
+			if st := m.Access(ctx, info.srcIno, MODE_MASK_R, &srcAttr); st != 0 {
+				return st
+			}
+		}
+
+		// Phase 4: Build destination nodes
+		// Accumulation buffers
+		nodesIns := make([]interface{}, 0, len(entries))
+		edgesIns := make([]interface{}, 0, len(entries))
+		detachedIns := make([]interface{}, 0)
+
+		for _, info := range cloneInfos {
+			// Clone source node
+			info.dstNode = *info.srcNode
+			info.dstNode.Inode = info.dstIno
+			info.dstNode.Parent = dstParent
+
+			// Apply cmode & cumask
+			if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
+				info.dstNode.Uid = ctx.Uid()
+				info.dstNode.Gid = ctx.Gid()
+				info.dstNode.Mode &= ^cumask
+				info.dstNode.setAtime(nowNano)
+				info.dstNode.setMtime(nowNano)
+				info.dstNode.setCtime(nowNano)
+			}
+
+			// Handle hardlinks (reset to 1)
+			if info.dstNode.Type == TypeFile && info.dstNode.Nlink > 1 {
+				info.dstNode.Nlink = 1
+			}
+
+			nodesIns = append(nodesIns, &info.dstNode)
+
+			// top=true for all entries (per calling context)
+			if info.dstNode.Type == TypeDirectory {
+				// Directories: detached node pattern
+				detachedIns = append(detachedIns, &detachedNode{
+					Inode: info.dstIno,
+					Added: now.Unix(),
+				})
+			} else {
+				// Files/symlinks: create edge immediately
+				edgesIns = append(edgesIns, &edge{
+					Parent: dstParent,
+					Name:   []byte(info.entry.Name),
+					Inode:  info.dstIno,
+					Type:   info.dstNode.Type,
+				})
+			}
+		}
+
+		// Phase 5: Fetch type-specific data
+		// Organize by type for targeted queries
+		fileInodes := make([]Ino, 0)
+		symlinkInodes := make([]Ino, 0)
+		dirInodes := make([]Ino, 0)
+
+		for _, info := range cloneInfos {
+			switch info.srcNode.Type {
+			case TypeFile:
+				if info.srcNode.Length > 0 {
+					fileInodes = append(fileInodes, info.srcIno)
+				}
+			case TypeSymlink:
+				symlinkInodes = append(symlinkInodes, info.srcIno)
+			case TypeDirectory:
+				dirInodes = append(dirInodes, info.srcIno)
+			}
+		}
+
+		// Batch fetch chunks
+		var srcChunks []chunk
+		if len(fileInodes) > 0 {
+			if err := s.In("inode", fileInodes).
+				ForUpdate().Find(&srcChunks); err != nil {
+				return err
+			}
+		}
+		chunksByInode := make(map[Ino][]chunk)
+		for _, c := range srcChunks {
+			chunksByInode[c.Inode] = append(chunksByInode[c.Inode], c)
+		}
+
+		// Batch fetch symlinks
+		var srcSymlinks []symlink
+		if len(symlinkInodes) > 0 {
+			if err := s.In("inode", symlinkInodes).Find(&srcSymlinks); err != nil {
+				return err
+			}
+		}
+		symlinksByInode := make(map[Ino]*symlink)
+		for i := range srcSymlinks {
+			symlinksByInode[srcSymlinks[i].Inode] = &srcSymlinks[i]
+		}
+
+		// Batch fetch dirStats
+		var srcDirStats []dirStats
+		if len(dirInodes) > 0 {
+			if err := s.In("inode", dirInodes).Find(&srcDirStats); err != nil {
+				return err
+			}
+		}
+		dirStatsByInode := make(map[Ino]*dirStats)
+		for i := range srcDirStats {
+			dirStatsByInode[srcDirStats[i].Inode] = &srcDirStats[i]
+		}
+
+		// Batch fetch xattrs
+		var srcXattrs []xattr
+		if len(srcInodes) > 0 {
+			if err := s.In("inode", srcInodes).Find(&srcXattrs); err != nil {
+				return err
+			}
+		}
+		xattrsByInode := make(map[Ino][]xattr)
+		for _, x := range srcXattrs {
+			xattrsByInode[x.Inode] = append(xattrsByInode[x.Inode], x)
+		}
+
+		// Phase 6: Build type-specific buffers
+		xattrsIns := make([]interface{}, 0)
+		chunksIns := make([]interface{}, 0)
+		dirStatsIns := make([]interface{}, 0)
+		symlinksIns := make([]interface{}, 0)
+
+		// CRITICAL: Aggregate chunk_ref updates (addresses TODO at line 5050)
+		type chunkRefUpdate struct {
+			chunkid uint64
+			size    uint32
+			count   int
+		}
+		chunkRefMap := make(map[uint64]*chunkRefUpdate)
+
+		for _, info := range cloneInfos {
+			// Copy xattrs
+			if xattrs, exists := xattrsByInode[info.srcIno]; exists {
+				for _, x := range xattrs {
+					xattrsIns = append(xattrsIns, &xattr{
+						Inode: info.dstIno,
+						Name:  x.Name,
+						Value: x.Value,
+					})
+				}
+			}
+
+			// Type-specific handling
+			switch info.srcNode.Type {
+			case TypeDirectory:
+				if ds, exists := dirStatsByInode[info.srcIno]; exists {
+					dirStatsIns = append(dirStatsIns, &dirStats{
+						Inode:      info.dstIno,
+						DataLength: ds.DataLength,
+						UsedSpace:  ds.UsedSpace,
+						UsedInodes: ds.UsedInodes,
+					})
+				}
+
+			case TypeFile:
+				if info.srcNode.Length > 0 {
+					chunks := chunksByInode[info.srcIno]
+					for _, c := range chunks {
+						chunksIns = append(chunksIns, &chunk{
+							Inode:  info.dstIno,
+							Indx:   c.Indx,
+							Slices: c.Slices,
+						})
+
+						// Aggregate chunk reference increments
+						slices := readSliceBuf(c.Slices)
+						for _, sli := range slices {
+							if sli.id > 0 {
+								if ref, exists := chunkRefMap[sli.id]; exists {
+									ref.count++
+								} else {
+									chunkRefMap[sli.id] = &chunkRefUpdate{
+										chunkid: sli.id,
+										size:    sli.size,
+										count:   1,
+									}
+								}
+							}
+						}
+					}
+				}
+
+			case TypeSymlink:
+				sym, exists := symlinksByInode[info.srcIno]
+				if !exists {
+					return syscall.ENOENT
+				}
+				symlinksIns = append(symlinksIns, &symlink{
+					Inode:  info.dstIno,
+					Target: sym.Target,
+				})
+			}
+
+			// Track statistics
+			entrySpace := align4K(info.srcNode.Length)
+			totalLength += int64(info.srcNode.Length)
+			totalSpace += entrySpace
+			totalInodes++
+
+			if userGroupQuotas != nil {
+				*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
+					Uid:    info.dstNode.Uid,
+					Gid:    info.dstNode.Gid,
+					Space:  entrySpace,
+					Inodes: 1,
+				})
+			}
+		}
+
+		// Phase 7: Execute batched SQL
+		// Insert nodes (mustInsert auto-chunks to 200)
+		if len(nodesIns) > 0 {
+			if err := mustInsert(s, nodesIns...); err != nil {
+				return err
+			}
+		}
+
+		// Insert edges (detect name collisions)
+		if len(edgesIns) > 0 {
+			if err := mustInsert(s, edgesIns...); err != nil {
+				if isDuplicateEntryErr(err) {
+					return syscall.EEXIST
+				}
+				return err
+			}
+		}
+
+		// Insert detached nodes
+		if len(detachedIns) > 0 {
+			if err := mustInsert(s, detachedIns...); err != nil {
+				return err
+			}
+		}
+
+		// Insert xattrs
+		if len(xattrsIns) > 0 {
+			if err := mustInsert(s, xattrsIns...); err != nil {
+				return err
+			}
+		}
+
+		// Insert chunks
+		if len(chunksIns) > 0 {
+			if err := mustInsert(s, chunksIns...); err != nil {
+				return err
+			}
+		}
+
+		// Insert dirStats
+		if len(dirStatsIns) > 0 {
+			if err := mustInsert(s, dirStatsIns...); err != nil {
+				return err
+			}
+		}
+
+		// Insert symlinks
+		if len(symlinksIns) > 0 {
+			if err := mustInsert(s, symlinksIns...); err != nil {
+				return err
+			}
+		}
+
+		// CRITICAL OPTIMIZATION: Batched chunk_ref updates using CASE-WHEN
+		if len(chunkRefMap) > 0 {
+			// Sort chunk IDs for deterministic ordering (prevent deadlocks)
+			chunkIds := make([]uint64, 0, len(chunkRefMap))
+			for id := range chunkRefMap {
+				chunkIds = append(chunkIds, id)
+			}
+			sort.Slice(chunkIds, func(i, j int) bool {
+				return chunkIds[i] < chunkIds[j]
+			})
+
+			// Process in batches (500 per query to avoid size limits)
+			batchSize := 500
+			for start := 0; start < len(chunkIds); start += batchSize {
+				end := start + batchSize
+				if end > len(chunkIds) {
+					end = len(chunkIds)
+				}
+
+				batchIds := chunkIds[start:end]
+
+				// Build: UPDATE chunk_ref SET refs = refs + CASE ... END WHERE chunkid IN (...)
+				var sqlBuilder strings.Builder
+				args := make([]interface{}, 0, len(batchIds)*2+len(batchIds))
+
+				sqlBuilder.WriteString(fmt.Sprintf("UPDATE %schunk_ref SET refs = refs + CASE ", m.tablePrefix))
+				for _, id := range batchIds {
+					ref := chunkRefMap[id]
+					sqlBuilder.WriteString("WHEN chunkid = ? THEN ? ")
+					args = append(args, ref.chunkid, ref.count)
+				}
+				sqlBuilder.WriteString("ELSE 0 END WHERE chunkid IN (")
+
+				for i, id := range batchIds {
+					if i > 0 {
+						sqlBuilder.WriteString(",")
+					}
+					sqlBuilder.WriteString("?")
+					args = append(args, id)
+				}
+				sqlBuilder.WriteString(")")
+
+				// Execute the dynamically built SQL (xorm handles placeholder conversion)
+				sqlStr := sqlBuilder.String()
+				if _, err := s.Exec(append([]interface{}{sqlStr}, args...)...); err != nil {
+					return err
+				}
+			}
+		}
+
+		// Update parent timestamps (for non-directory entries only, and only if not preserving attrs)
+		// When CLONE_MODE_PRESERVE_ATTR is set, parent directory timestamps were already
+		// preserved by doCloneEntry - don't overwrite them here.
+		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
+			nonDirCount := 0
+			for _, info := range cloneInfos {
+				if info.dstNode.Type != TypeDirectory {
+					nonDirCount++
+				}
+			}
+
+			if nonDirCount > 0 {
+				pn.setMtime(nowNano)
+				pn.setCtime(nowNano)
+				if _, err := s.Cols("mtime", "ctime", "mtimensec", "ctimensec").
+					Update(&pn, &node{Inode: dstParent}); err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
+
+	// Phase 8: Post-transaction
+	if err != nil {
+		return errno(err)
+	}
+
+	// Update output parameters
+	*length = totalLength
+	*space = totalSpace
+	*inodes = totalInodes
+
+	return 0
 }
 
 func (m *dbMeta) doFindDetachedNodes(t time.Time) []Ino {
