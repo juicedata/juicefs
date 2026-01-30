@@ -407,3 +407,62 @@ func TestStoreRetry(t *testing.T) {
 	cs.(*cachedStore).load(context.TODO(), "non", p, false, false) // wont retry
 	require.Equal(t, int32(1), s.cnt)
 }
+
+// BenchmarkMultiPageMergeVariousSizes tests with different block/page configurations
+func BenchmarkMultiPageMergeVariousSizes(b *testing.B) {
+	configs := []struct {
+		name      string
+		pageSize  int
+		blockSize int
+	}{
+		{"Small_64KB_64pages", 64 << 10, 4 << 20},      // 64K pages, 4M block
+		{"Medium_64KB_16pages", 64 << 10, 1 << 20},     // 64K pages, 1M block
+		{"Large_1MB_64pages", 1 << 20, 64 << 20},       // 1M pages, 64M block
+		{"XLarge_1MB_256pages", 1 << 20, 256 << 20},    // 1M pages, 256M block
+		{"XXLarge_1MB_512pages", 1 << 20, 512 << 20},   // 1M pages, 512M block
+	}
+
+	for _, config := range configs {
+		// Test direct copy
+		// used in wSlice.upload() to merge multiple pages into a single block
+		b.Run(config.name+"/DirectCopy", func(b *testing.B) {
+			numPages := config.blockSize / config.pageSize
+			pages := make([][]byte, numPages)
+			for i := 0; i < numPages; i++ {
+				pages[i] = make([]byte, config.pageSize)
+			}
+			blockData := make([]byte, config.blockSize)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				off := 0
+				for _, p := range pages {
+					off += copy(blockData[off:], p)
+				}
+			}
+		})
+
+		// Test MultiReader approach
+		// using io.MultiReader to merge multiple pages into a single block
+		b.Run(config.name+"/MultiReader", func(b *testing.B) {
+			numPages := config.blockSize / config.pageSize
+			pages := make([][]byte, numPages)
+			for i := 0; i < numPages; i++ {
+				pages[i] = make([]byte, config.pageSize)
+			}
+			blockData := make([]byte, config.blockSize)
+			readers := make([]io.Reader, numPages)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for j, p := range pages {
+					readers[j] = bytes.NewReader(p)
+				}
+				mr := io.MultiReader(readers...)
+				io.ReadFull(mr, blockData)
+			}
+		})
+	}
+}
