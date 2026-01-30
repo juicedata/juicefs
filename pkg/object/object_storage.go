@@ -273,6 +273,7 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 			t.ready = false
 			t.cond.Signal()
 			children := t.entries
+			t.entries = nil
 			t.Unlock()
 
 			err = walk(key, children)
