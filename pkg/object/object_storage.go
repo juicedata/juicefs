@@ -191,6 +191,13 @@ type listThread struct {
 	hasMore   bool
 }
 
+func (l *listThread) reset() {
+	l.err = nil
+	l.entries = nil
+	l.nextToken = ""
+	l.hasMore = false
+}
+
 func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
 	entries, _, _, err := store.List(ctx, prefix, start, "", "/", 1e9, followLink)
 	if err != nil {
@@ -273,7 +280,7 @@ func ListAllWithDelimiter(ctx context.Context, store ObjectStorage, prefix, star
 			t.ready = false
 			t.cond.Signal()
 			children := t.entries
-			t.entries = nil
+			t.reset()
 			t.Unlock()
 
 			err = walk(key, children)
