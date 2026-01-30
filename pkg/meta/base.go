@@ -1731,6 +1731,28 @@ func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count 
 	return st
 }
 
+func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, count *uint64) syscall.Errno {
+	if len(entries) == 0 {
+		return 0
+	}
+	var length int64
+	var space int64
+	var inodes int64
+	userGroupQuotas := make([]userGroupQuotaDelta, 0, len(entries))
+	st := m.en.doBatchClone(ctx, srcParent, dstParent, entries, cmode, cumask, &length, &space, &inodes, &userGroupQuotas)
+	if st == 0 {
+		m.en.updateStats(space, inodes)
+		for _, quota := range userGroupQuotas {
+			m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, quota.Space, quota.Inodes)
+		}
+		if count != nil {
+			atomic.AddUint64(count, uint64(inodes))
+		}
+	}
+	// Just return the status - let caller handle ENOTSUP
+	return st
+}
+
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	if parentSrc == RootInode && nameSrc == TrashName || parentDst == RootInode && nameDst == TrashName {
 		return syscall.EPERM
@@ -3269,58 +3291,101 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	}
 
 	offset := 0
-LOOP:
 	for {
 		batchEntries, batchEno := handler.List(ctx, offset)
-		if eno = batchEno; batchEno != 0 {
-			break
+		if batchEno != 0 {
+			return batchEno
 		}
 		if len(batchEntries) == 0 {
 			break
 		}
 
-		// Process directories first
-		sort.Slice(batchEntries, func(i, j int) bool {
-			return batchEntries[i].Attr.Typ == TypeDirectory
-		})
-
-		for _, entry := range batchEntries {
-			if string(entry.Name) == "." || string(entry.Name) == ".." {
+		// Separate directories from non-directories in this batch
+		var nonDirEntries []*Entry
+		for i, e := range batchEntries {
+			if string(e.Name) == "." || string(e.Name) == ".." {
 				continue
 			}
-			select {
-			case e := <-errCh:
-				eno = e
-				ctx.Cancel()
-				break LOOP
-			case concurrent <- struct{}{}:
-				wg.Add(1)
-				go func(e *Entry) {
-					defer wg.Done()
-					eno := cloneChild(e)
-					if eno != 0 {
-						errCh <- eno
+
+			if e.Attr.Typ == TypeDirectory {
+				// Recursively process subdirectories with concurrency
+				select {
+				case concurrent <- struct{}{}:
+					wg.Add(1)
+					go func(entry *Entry) {
+						defer wg.Done()
+						childEno := cloneChild(entry)
+						if childEno != 0 {
+							errCh <- childEno
+						}
+						<-concurrent
+					}(e)
+				default:
+					// Synchronous fallback when channel is full
+					if childEno := cloneChild(e); childEno != 0 {
+						eno = childEno
+						goto END
 					}
-					<-concurrent
-				}(entry)
-			default:
-				if e := cloneChild(entry); e != 0 {
-					eno = e
-					break LOOP
 				}
+			} else {
+				// Collect non-directories for batch processing
+				nonDirEntries = append(nonDirEntries, e)
 			}
+
 			if ctx.Canceled() {
 				eno = syscall.EINTR
-				break LOOP
+				goto END
+			}
+
+			batchEntries[i] = nil // Release memory
+		}
+
+		// Wait for subdirectories to finish before batch cloning files
+		wg.Wait()
+		if len(errCh) > 0 {
+			eno = <-errCh
+			goto END
+		}
+
+		// Batch clone all non-directory entries from this batch
+		if len(nonDirEntries) > 0 {
+			if eno = m.BatchClone(ctx, srcIno, ino, nonDirEntries, cmode, cumask, count); eno == syscall.ENOTSUP {
+				// Fallback: clone each file concurrently (same pattern as directories)
+				for _, e := range nonDirEntries {
+					select {
+					case concurrent <- struct{}{}:
+						wg.Add(1)
+						go func(entry *Entry) {
+							defer wg.Done()
+							childEno := cloneChild(entry)
+							if childEno != 0 {
+								errCh <- childEno
+							}
+							<-concurrent
+						}(e)
+					default:
+						// Synchronous fallback when channel is full
+						if childEno := cloneChild(e); childEno != 0 {
+							eno = childEno
+							goto END
+						}
+					}
+				}
+				// Reset error after spawning goroutines - errors will be reported via errCh
+				eno = 0
+			} else if eno != 0 {
+				goto END
 			}
 		}
 
 		offset += len(batchEntries)
 		if ctx.Canceled() {
 			eno = syscall.EINTR
-			break
+			goto END
 		}
 	}
+
+END:
 	wg.Wait()
 	if eno == 0 {
 		select {
