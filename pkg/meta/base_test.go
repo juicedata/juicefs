@@ -3081,7 +3081,7 @@ func testClone(t *testing.T, m Meta) {
 	var count, total uint64
 	var cmode uint8
 	cmode |= CLONE_MODE_PRESERVE_ATTR
-	if eno := m.Clone(Background(), cloneDir, dir1, cloneDir, cloneDstName, cmode, 022, &count, &total); eno != 0 {
+	if eno := m.Clone(Background(), cloneDir, dir1, cloneDir, cloneDstName, cmode, 022, 4, &count, &total); eno != 0 {
 		t.Fatalf("clone: %s", eno)
 	}
 	var entries1 []*Entry
@@ -3129,7 +3129,7 @@ func testClone(t *testing.T, m Meta) {
 	if iused-iused2 != 8 {
 		t.Fatalf("added inodes: %d", iused-iused2)
 	}
-	if eno := m.Clone(Background(), RootInode, dir1, cloneDir, "no_preserve", 0, 022, &count, &total); eno != 0 {
+	if eno := m.Clone(Background(), RootInode, dir1, cloneDir, "no_preserve", 0, 022, 4, &count, &total); eno != 0 {
 		t.Fatalf("clone: %s", eno)
 	}
 	var d2 Ino
@@ -3258,10 +3258,10 @@ func testClone(t *testing.T, m Meta) {
 	if len(nodes) != 2 {
 		t.Fatalf("find detached nodes error: %v", nodes)
 	}
-	if eno := m.Clone(Background(), RootInode, TrashInode, cloneDir, "xxx", 0, 022, &count, &total); !errors.Is(eno, syscall.EPERM) {
+	if eno := m.Clone(Background(), RootInode, TrashInode, cloneDir, "xxx", 0, 022, 4, &count, &total); !errors.Is(eno, syscall.EPERM) {
 		t.Fatalf("cloning trash files are not supported")
 	}
-	if eno := m.Clone(Background(), TrashInode+1, 1000, cloneDir, "xxx", 0, 022, &count, &total); !errors.Is(eno, syscall.EPERM) {
+	if eno := m.Clone(Background(), TrashInode+1, 1000, cloneDir, "xxx", 0, 022, 4, &count, &total); !errors.Is(eno, syscall.EPERM) {
 		t.Fatalf("cloning files in the trash is not supported")
 	}
 }
@@ -4160,7 +4160,7 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 
 		operatorCtx := &testContext{Context: context.Background(), uid: operatorUid, gid: operatorGid}
 		var count, total uint64
-		if st := m.Clone(operatorCtx, parent, srcInode, parent, "clonefile", 0, 0, &count, &total); st != 0 {
+		if st := m.Clone(operatorCtx, parent, srcInode, parent, "clonefile", 0, 0, 4, &count, &total); st != 0 {
 			t.Fatalf("Clone srcfile by operator: %s", st)
 		}
 

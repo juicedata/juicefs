@@ -3179,7 +3179,7 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 	return eg.Wait()
 }
 
-func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
+func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64) syscall.Errno {
 
 	if srcIno.IsTrash() || srcParentIno.IsTrash() || parent.IsTrash() || (parent == RootInode && name == TrashName) {
 		return syscall.EPERM
@@ -3222,7 +3222,10 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 		return err
 	}
 	*total = sum.Dirs + sum.Files
-	concurrent := make(chan struct{}, 4)
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	concurrent := make(chan struct{}, concurrency)
 	if attr.Typ == TypeDirectory {
 		eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, concurrent)
 		if eno == 0 {
@@ -3340,14 +3343,15 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			batchEntries[i] = nil // Release memory
 		}
 
-		// Wait for subdirectories to finish before batch cloning files
-		wg.Wait()
-		if len(errCh) > 0 {
-			eno = <-errCh
+		// Check for errors from concurrent subdir processing (non-blocking)
+		select {
+		case e := <-errCh:
+			eno = e
 			goto END
+		default:
 		}
 
-		// Batch clone all non-directory entries from this batch
+		// Batch clone files immediately (don't wait for subdirs to finish)
 		if len(nonDirEntries) > 0 {
 			if eno = m.BatchClone(ctx, srcIno, ino, nonDirEntries, cmode, cumask, count); eno == syscall.ENOTSUP {
 				// Fallback: clone each file concurrently (same pattern as directories)

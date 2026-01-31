@@ -5147,10 +5147,10 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			return st
 		}
 
-		// Batch fetch all source nodes with FOR UPDATE lock
+		// Batch fetch all source nodes (no locking - clone is a point-in-time snapshot)
 		var srcNodes []node
 		if len(srcInodes) > 0 {
-			if err := s.ForUpdate().In("inode", srcInodes).Find(&srcNodes); err != nil {
+			if err := s.In("inode", srcInodes).Find(&srcNodes); err != nil {
 				return err
 			}
 		}
@@ -5242,11 +5242,10 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			}
 		}
 
-		// Batch fetch chunks
+		// Batch fetch chunks (no locking - clone is a point-in-time snapshot)
 		var srcChunks []chunk
 		if len(fileInodes) > 0 {
-			if err := s.In("inode", fileInodes).
-				ForUpdate().Find(&srcChunks); err != nil {
+			if err := s.In("inode", fileInodes).Find(&srcChunks); err != nil {
 				return err
 			}
 		}
