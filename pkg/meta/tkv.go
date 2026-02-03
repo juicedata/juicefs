@@ -2592,7 +2592,7 @@ func (m *kvMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 	return files, err
 }
 
-func (m *kvMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
+func (m *kvMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) error {
 	if m.Name() == "tikv" {
 		m.client.gc()
 	}
@@ -2617,6 +2617,7 @@ func (m *kvMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
 		}
 		return true
 	})
+	return nil
 }
 
 func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {

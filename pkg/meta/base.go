@@ -92,7 +92,7 @@ type engine interface {
 	doDeleteSustainedInode(sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
-	doCleanupSlices(ctx Context, stats *cleanupSlicesStats)
+	doCleanupSlices(ctx Context, stats *cleanupSlicesStats) error
 	doCleanupDelayedSlices(ctx Context, edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
 
@@ -1004,9 +1004,18 @@ func (m *baseMeta) cleanupSlices(ctx Context) {
 			jobStart := time.Now()
 			cCtx := WrapWithTimeout(ctx, time.Minute*50)
 			stats := &cleanupSlicesStats{}
-			m.en.doCleanupSlices(cCtx, stats)
+			err := m.en.doCleanupSlices(cCtx, stats)
 			cCtx.Cancel()
-			m.bgjobDuration.WithLabelValues(job, "succ").Observe(time.Since(jobStart).Seconds())
+			status := "succ"
+			if err != nil {
+				if cCtx.Canceled() {
+					status = "canceled"
+				} else {
+					status = "failed"
+					logger.Warnf("cleanupSlices: %s", err)
+				}
+			}
+			m.bgjobDuration.WithLabelValues(job, status).Observe(time.Since(jobStart).Seconds())
 			m.bgjobDels.WithLabelValues(job).Add(float64(stats.deleted))
 		}
 	}
@@ -2891,15 +2900,28 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 			wg.Add(2)
 			go func() {
 				defer wg.Done()
-				m.doCleanupTrash(cCtx, days, false, stats)
+				if err := m.doCleanupTrash(cCtx, days, false, stats); err != nil {
+					if !cCtx.Canceled() {
+						logger.Warnf("doCleanupTrash: %s", err)
+					}
+				}
 			}()
 			go func() {
 				defer wg.Done()
-				m.cleanupDelayedSlices(cCtx, days)
+				if err := m.cleanupDelayedSlices(cCtx, days, stats); err != nil {
+					if !cCtx.Canceled() {
+						logger.Warnf("cleanupDelayedSlices: %s", err)
+					}
+				}
 			}()
 			wg.Wait()
-			m.bgjobDuration.WithLabelValues(job, "succ").Observe(time.Since(jobStart).Seconds())
+			status := "succ"
+			if cCtx.Canceled() {
+				status = "canceled"
+			}
+			m.bgjobDuration.WithLabelValues(job, status).Observe(time.Since(jobStart).Seconds())
 			m.bgjobDels.WithLabelValues(job).Add(float64(atomic.LoadInt64(&stats.DeletedFiles)))
+			m.bgjobDels.WithLabelValues(job).Add(float64(atomic.LoadInt64(&stats.DeletedSlices)))
 		}
 	}
 }
@@ -3046,23 +3068,29 @@ func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {
 	return nil
 }
 
-func (m *baseMeta) doCleanupTrash(ctx Context, days int, force bool, stats *CleanupTrashStats) {
+func (m *baseMeta) doCleanupTrash(ctx Context, days int, force bool, stats *CleanupTrashStats) error {
 	edge := time.Now().Add(-time.Duration(24*days+2) * time.Hour)
 	if force {
 		edge = time.Now()
 	}
 	m.CleanupTrashBefore(ctx, edge, nil, stats)
+	return nil
 }
 
-func (m *baseMeta) cleanupDelayedSlices(ctx Context, days int) {
+func (m *baseMeta) cleanupDelayedSlices(ctx Context, days int, stats *CleanupTrashStats) error {
 	now := time.Now()
 	edge := now.Unix() - int64(days)*24*3600
 	logger.Debugf("Cleanup delayed slices: started with edge %d", edge)
 	if count, err := m.en.doCleanupDelayedSlices(ctx, edge); err != nil {
 		logger.Warnf("Cleanup delayed slices: deleted %d slices in %v, but got error: %s", count, time.Since(now), err)
+		return err
 	} else if count > 0 {
 		logger.Infof("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
+		if stats != nil {
+			atomic.AddInt64(&stats.DeletedSlices, int64(count))
+		}
 	}
+	return nil
 }
 
 func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendingSliceScan, tfs trashFileScan, pfs pendingFileScan) error {

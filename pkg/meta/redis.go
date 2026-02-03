@@ -3250,7 +3250,7 @@ func (m *redisMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, err
 	return files, nil
 }
 
-func (m *redisMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
+func (m *redisMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) error {
 	_ = m.hscan(ctx, m.sliceRefs(), func(keys []string) error {
 		for i := 0; i < len(keys); i += 2 {
 			key, val := keys[i], keys[i+1]
@@ -3275,6 +3275,7 @@ func (m *redisMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
 		}
 		return nil
 	})
+	return nil
 }
 
 func (m *redisMeta) cleanupZeroRef(key string) {

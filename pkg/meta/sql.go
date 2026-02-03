@@ -3423,13 +3423,13 @@ func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 	return files, err
 }
 
-func (m *dbMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
+func (m *dbMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) error {
 	var cks []sliceRef
 	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		cks = nil
 		return s.Where("refs <= 0").Find(&cks)
 	}); err != nil {
-		return
+		return err
 	}
 	for _, ck := range cks {
 		m.deleteSlice(ck.Id, ck.Size)
@@ -3437,9 +3437,10 @@ func (m *dbMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) {
 			stats.deleted++
 		}
 		if ctx.Canceled() {
-			break
+			return ctx.Err()
 		}
 	}
+	return nil
 }
 
 func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
