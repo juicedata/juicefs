@@ -5161,12 +5161,24 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			srcNodeMap[srcNodes[i].Inode] = &srcNodes[i]
 		}
 
+		// Phase 4: Build destination nodes and organize by type
+		nodesIns := make([]interface{}, 0, len(entries))
+		edgesIns := make([]interface{}, 0, len(entries))
+		fileInodes := make([]Ino, 0)
+		symlinkInodes := make([]Ino, 0)
+
 		for _, info := range cloneInfos {
+			// Lookup and validate source node
 			srcNode, ok := srcNodeMap[info.srcIno]
 			if !ok {
 				return syscall.ENOENT
 			}
 			info.srcNode = srcNode
+
+			// Directories should not be in entries
+			if srcNode.Type == TypeDirectory {
+				return syscall.EINVAL
+			}
 
 			// Check read permission on source
 			var srcAttr Attr
@@ -5174,17 +5186,9 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			if st := m.Access(ctx, info.srcIno, MODE_MASK_R, &srcAttr); st != 0 {
 				return st
 			}
-		}
 
-		// Phase 4: Build destination nodes
-		// Accumulation buffers
-		nodesIns := make([]interface{}, 0, len(entries))
-		edgesIns := make([]interface{}, 0, len(entries))
-		detachedIns := make([]interface{}, 0)
-
-		for _, info := range cloneInfos {
-			// Clone source node
-			info.dstNode = *info.srcNode
+			// Build destination node
+			info.dstNode = *srcNode
 			info.dstNode.Inode = info.dstIno
 			info.dstNode.Parent = dstParent
 
@@ -5204,48 +5208,27 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			}
 
 			nodesIns = append(nodesIns, &info.dstNode)
+			edgesIns = append(edgesIns, &edge{
+				Parent: dstParent,
+				Name:   info.entry.Name,
+				Inode:  info.dstIno,
+				Type:   info.dstNode.Type,
+			})
 
-			// top=true for all entries (per calling context)
-			if info.dstNode.Type == TypeDirectory {
-				// Directories: detached node pattern
-				detachedIns = append(detachedIns, &detachedNode{
-					Inode: info.dstIno,
-					Added: now.Unix(),
-				})
-			} else {
-				// Files/symlinks: create edge immediately
-				edgesIns = append(edgesIns, &edge{
-					Parent: dstParent,
-					Name:   []byte(info.entry.Name),
-					Inode:  info.dstIno,
-					Type:   info.dstNode.Type,
-				})
-			}
-		}
-
-		// Phase 5: Fetch type-specific data
-		// Organize by type for targeted queries
-		fileInodes := make([]Ino, 0)
-		symlinkInodes := make([]Ino, 0)
-		dirInodes := make([]Ino, 0)
-
-		for _, info := range cloneInfos {
-			switch info.srcNode.Type {
+			// Categorize by type for batch fetching
+			switch srcNode.Type {
 			case TypeFile:
-				if info.srcNode.Length > 0 {
+				if srcNode.Length > 0 {
 					fileInodes = append(fileInodes, info.srcIno)
 				}
 			case TypeSymlink:
 				symlinkInodes = append(symlinkInodes, info.srcIno)
-			case TypeDirectory:
-				dirInodes = append(dirInodes, info.srcIno)
 			}
 		}
 
-		// Batch fetch chunks (no locking - clone is a point-in-time snapshot)
 		var srcChunks []chunk
 		if len(fileInodes) > 0 {
-			if err := s.In("inode", fileInodes).Find(&srcChunks); err != nil {
+			if err := s.In("inode", fileInodes).ForUpdate().Find(&srcChunks); err != nil {
 				return err
 			}
 		}
@@ -5266,18 +5249,6 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			symlinksByInode[srcSymlinks[i].Inode] = &srcSymlinks[i]
 		}
 
-		// Batch fetch dirStats
-		var srcDirStats []dirStats
-		if len(dirInodes) > 0 {
-			if err := s.In("inode", dirInodes).Find(&srcDirStats); err != nil {
-				return err
-			}
-		}
-		dirStatsByInode := make(map[Ino]*dirStats)
-		for i := range srcDirStats {
-			dirStatsByInode[srcDirStats[i].Inode] = &srcDirStats[i]
-		}
-
 		// Batch fetch xattrs
 		var srcXattrs []xattr
 		if len(srcInodes) > 0 {
@@ -5293,10 +5264,9 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		// Phase 6: Build type-specific buffers
 		xattrsIns := make([]interface{}, 0)
 		chunksIns := make([]interface{}, 0)
-		dirStatsIns := make([]interface{}, 0)
 		symlinksIns := make([]interface{}, 0)
 
-		// CRITICAL: Aggregate chunk_ref updates (addresses TODO at line 5050)
+		// CRITICAL: Aggregate chunk_ref updates per chunk to minimize database operations
 		type chunkRefUpdate struct {
 			chunkid uint64
 			size    uint32
@@ -5318,16 +5288,6 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 
 			// Type-specific handling
 			switch info.srcNode.Type {
-			case TypeDirectory:
-				if ds, exists := dirStatsByInode[info.srcIno]; exists {
-					dirStatsIns = append(dirStatsIns, &dirStats{
-						Inode:      info.dstIno,
-						DataLength: ds.DataLength,
-						UsedSpace:  ds.UsedSpace,
-						UsedInodes: ds.UsedInodes,
-					})
-				}
-
 			case TypeFile:
 				if info.srcNode.Length > 0 {
 					chunks := chunksByInode[info.srcIno]
@@ -5401,13 +5361,6 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			}
 		}
 
-		// Insert detached nodes
-		if len(detachedIns) > 0 {
-			if err := mustInsert(s, detachedIns...); err != nil {
-				return err
-			}
-		}
-
 		// Insert xattrs
 		if len(xattrsIns) > 0 {
 			if err := mustInsert(s, xattrsIns...); err != nil {
@@ -5418,13 +5371,6 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		// Insert chunks
 		if len(chunksIns) > 0 {
 			if err := mustInsert(s, chunksIns...); err != nil {
-				return err
-			}
-		}
-
-		// Insert dirStats
-		if len(dirStatsIns) > 0 {
-			if err := mustInsert(s, dirStatsIns...); err != nil {
 				return err
 			}
 		}
@@ -5447,8 +5393,8 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 				return chunkIds[i] < chunkIds[j]
 			})
 
-			// Process in batches (500 per query to avoid size limits)
-			batchSize := 500
+			// Process in batches to avoid database size limits
+			batchSize := m.getTxnBatchNum()
 			for start := 0; start < len(chunkIds); start += batchSize {
 				end := start + batchSize
 				if end > len(chunkIds) {
@@ -5486,24 +5432,13 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			}
 		}
 
-		// Update parent timestamps (for non-directory entries only, and only if not preserving attrs)
-		// When CLONE_MODE_PRESERVE_ATTR is set, parent directory timestamps were already
-		// preserved by doCloneEntry - don't overwrite them here.
-		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
-			nonDirCount := 0
-			for _, info := range cloneInfos {
-				if info.dstNode.Type != TypeDirectory {
-					nonDirCount++
-				}
-			}
-
-			if nonDirCount > 0 {
-				pn.setMtime(nowNano)
-				pn.setCtime(nowNano)
-				if _, err := s.Cols("mtime", "ctime", "mtimensec", "ctimensec").
-					Update(&pn, &node{Inode: dstParent}); err != nil {
-					return err
-				}
+		// Update parent timestamps
+		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 && len(cloneInfos) > 0 {
+			pn.setMtime(nowNano)
+			pn.setCtime(nowNano)
+			if _, err := s.Cols("mtime", "ctime", "mtimensec", "ctimensec").
+				Update(&pn, &node{Inode: dstParent}); err != nil {
+				return err
 			}
 		}
 

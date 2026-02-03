@@ -7,8 +7,6 @@ REVISIONDATE := $(shell git log -1 --pretty=format:'%cd' --date short 2>/dev/nul
 PKG := github.com/juicedata/juicefs/pkg/version
 GCFLAGS =
 BUILD ?= release
-GOARCH ?= amd64
-CC ?= x86_64-linux-musl-gcc
 ifneq ($(strip $(REVISION)),) # Use git clone
 	LDFLAGS += -X $(PKG).revision=$(REVISION) \
 		   -X $(PKG).revisionDate=$(REVISIONDATE)
@@ -68,7 +66,7 @@ juicefs.loongarch: Makefile cmd/*.go pkg/*/*.go go.*
 # This is the script for compiling the Linux version on the MacOS platform.
 # Please execute the `brew install FiloSottile/musl-cross/musl-cross` command before using it.
 juicefs.linux:
-	CGO_ENABLED=1 GOOS=linux GOARCH="$(GOARCH)" CC="$(CC)" CGO_LDFLAGS="-static" go build -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)"  -o juicefs .
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=x86_64-linux-musl-gcc CGO_LDFLAGS="-static" go build -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)"  -o juicefs .
 
 /usr/local/include/winfsp:
 	sudo mkdir -p /usr/local/include/winfsp

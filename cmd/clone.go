@@ -54,7 +54,7 @@ $ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2`,
 				Usage:   "preserve the uid, gid, and mode of the file. (This is forced on Windows)",
 			},
 			&cli.IntFlag{
-				Name:  "concurrency",
+				Name:  "threads",
 				Value: 4,
 				Usage: "number of concurrent workers for cloning directories",
 			},
@@ -117,14 +117,14 @@ func clone(ctx *cli.Context) error {
 	if ctx.Bool("preserve") || runtime.GOOS == "windows" {
 		cmode |= meta.CLONE_MODE_PRESERVE_ATTR
 	}
-	concurrency := ctx.Int("concurrency")
-	if concurrency < 1 {
-		concurrency = 1
-	} else if concurrency > 255 {
-		concurrency = 255
+	threads := ctx.Int("threads")
+	if threads < 1 {
+		threads = 1
+	} else if threads > 255 {
+		threads = 255
 	}
 	headerSize := 4 + 4
-	contentSize := 8 + 8 + 8 + 1 + uint32(len(dstName)) + 2 + 1 + 1 // +1 for concurrency
+	contentSize := 8 + 8 + 8 + 1 + uint32(len(dstName)) + 2 + 1 + 1 // +1 for threads
 	wb := utils.NewBuffer(uint32(headerSize) + contentSize)
 	wb.Put32(meta.Clone)
 	wb.Put32(contentSize)
@@ -135,7 +135,7 @@ func clone(ctx *cli.Context) error {
 	wb.Put([]byte(dstName))
 	wb.Put16(uint16(umask))
 	wb.Put8(cmode)
-	wb.Put8(uint8(concurrency))
+	wb.Put8(uint8(threads))
 	f, err := openController(srcMp)
 	if err != nil {
 		return err
