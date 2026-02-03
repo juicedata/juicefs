@@ -3726,7 +3726,9 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending,
 	m.cleanupLeakedChunks(delete)
 	m.cleanupOldSliceRefs(delete)
 	if delete {
-		m.doCleanupSlices(ctx, nil)
+		if err := m.doCleanupSlices(ctx, nil); err != nil {
+			logger.Warnf("doCleanupSlices: %s", err)
+		}
 	}
 	logger.Debugf("start listing slices...")
 

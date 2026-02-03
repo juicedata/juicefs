@@ -2897,6 +2897,7 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 			days := m.getFormat().TrashDays
 			stats := &CleanupTrashStats{}
 			var wg sync.WaitGroup
+			errCh := make(chan error, 2)
 			wg.Add(2)
 			go func() {
 				defer wg.Done()
@@ -2904,6 +2905,7 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 					if !cCtx.Canceled() {
 						logger.Warnf("doCleanupTrash: %s", err)
 					}
+					errCh <- err
 				}
 			}()
 			go func() {
@@ -2912,12 +2914,24 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 					if !cCtx.Canceled() {
 						logger.Warnf("cleanupDelayedSlices: %s", err)
 					}
+					errCh <- err
 				}
 			}()
 			wg.Wait()
+			close(errCh)
 			status := "succ"
-			if cCtx.Canceled() {
-				status = "canceled"
+			var hasError bool
+			for err := range errCh {
+				if err != nil {
+					hasError = true
+				}
+			}
+			if hasError {
+				if cCtx.Canceled() {
+					status = "canceled"
+				} else {
+					status = "failed"
+				}
 			}
 			m.bgjobDuration.WithLabelValues(job, status).Observe(time.Since(jobStart).Seconds())
 			m.bgjobDels.WithLabelValues(job).Add(float64(atomic.LoadInt64(&stats.DeletedFiles)))
