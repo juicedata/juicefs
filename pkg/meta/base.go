@@ -2899,8 +2899,8 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 					defer wg.Done()
 					stats := &CleanupTrashStats{}
 					status := bgJobSucc
-					if err := m.doCleanupTrash(cCtx, days, false, stats); err != nil {
-						if errors.Is(err, context.DeadlineExceeded) {
+					if st := m.doCleanupTrash(cCtx, days, false, stats); st != 0 {
+						if st == syscall.ETIMEDOUT {
 							status = bgJobCanceled
 						} else {
 							status = bgJobFail
@@ -2940,14 +2940,14 @@ func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, incre
 	}
 }
 
-func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int), stats *CleanupTrashStats) {
+func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int), stats *CleanupTrashStats) syscall.Errno {
 	logger.Debugf("cleanup trash: started")
 	now := time.Now()
 	var st syscall.Errno
 	var entries []*Entry
 	if st = m.en.doReaddir(ctx, TrashInode, 0, &entries, -1); st != 0 {
 		logger.Warnf("readdir trash %d: %s", TrashInode, st)
-		return
+		return st
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Inode < entries[j].Inode })
 	var count uint64
@@ -2987,7 +2987,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 	concurrent := make(chan int, 1) // no effect for flatterned trash dirs
 	for len(entries) > 0 {
 		if ctx.Canceled() {
-			return
+			return errno(ctx.Err())
 		}
 		e := entries[0]
 		ts, err := time.Parse("2006-01-02-15", string(e.Name))
@@ -3010,6 +3010,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 			}
 		}
 	}
+	return 0
 }
 
 func (m *baseMeta) scanTrashEntry(ctx Context, scan func(inode Ino, size uint64)) error {
@@ -3070,13 +3071,12 @@ func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {
 	return nil
 }
 
-func (m *baseMeta) doCleanupTrash(ctx Context, days int, force bool, stats *CleanupTrashStats) error {
+func (m *baseMeta) doCleanupTrash(ctx Context, days int, force bool, stats *CleanupTrashStats) syscall.Errno {
 	edge := time.Now().Add(-time.Duration(24*days+2) * time.Hour)
 	if force {
 		edge = time.Now()
 	}
-	m.CleanupTrashBefore(ctx, edge, nil, stats)
-	return nil
+	return m.CleanupTrashBefore(ctx, edge, nil, stats)
 }
 
 func (m *baseMeta) cleanupDelayedSlices(ctx Context, days int, count *uint64) error {
