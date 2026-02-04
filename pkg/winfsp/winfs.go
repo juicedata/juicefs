@@ -1232,7 +1232,7 @@ func updateWinFspRegService(winfspServiceName string, cmdLine string, alias stri
 		k.DeleteValue("RunAs")
 	}
 
-	//  SET "HKLM\\SOFTWARE\\WOW6432Node\\WinFsp\\MountBroadcastDriveChange " to 1
+	//  SET "HKLM\\SOFTWARE\\WOW6432Node\\WinFsp\\MountBroadcastDriveChange" to 1
 	k2, err := registry.OpenKey(registry.LOCAL_MACHINE, "SOFTWARE\\WOW6432Node\\WinFsp", registry.ALL_ACCESS)
 	if err != nil {
 		logger.Warningf("Failed to open registry key for MountBroadcastDriveChange: %s", err)
@@ -1316,7 +1316,7 @@ func checkIfMountProcessReady(mountpoint string, timeoutSec int) bool {
 	}
 }
 
-func RunAsSystemSerivce(name string, mountpoint string, logPath string, defaultCacheDir string, ctx *cli.Context) error {
+func RunAsSystemService(name string, mountpoint string, logPath string, defaultCacheDir string, ctx *cli.Context) error {
 	// https://winfsp.dev/doc/WinFsp-Service-Architecture/
 	logger.Info("Running as Windows system service.")
 
@@ -1442,7 +1442,7 @@ func RunAsSystemSerivce(name string, mountpoint string, logPath string, defaultC
 		}
 
 		if !checkIfMountProcessReady(mountpoint, 25) {
-			return fmt.Errorf("Mount command succeed, but the mountpoint %s did not become ready in %d seconds, please check the juicefs logs for more information.", mountpoint, 25)
+			return fmt.Errorf("Mount command succeeded, but the mountpoint %s did not become ready in %d seconds, please check the juicefs logs for more information.", mountpoint, 25)
 		}
 	} else {
 		logger.Debugf("Trying to start juicefs service by 'net use' command.")

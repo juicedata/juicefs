@@ -74,7 +74,7 @@ func mountFlags() []cli.Flag {
 		},
 		&cli.BoolFlag{
 			Name:  "flush-on-cleanup",
-			Usage: "When enabled, Will instruct the WinFsp to call Flush() when a file handle is closing(MJ_IRP_CLEANUP). Requires the dev branch of WinFsp or version that GREATER than 2.1.25156.",
+			Usage: "When enabled, Will instruct the WinFsp to call Flush() when a file handle is closing (MJ_IRP_CLEANUP). Requires the dev branch of WinFsp or version that GREATER than 2.1.25156.",
 			Value: true,
 		},
 		&cli.BoolFlag{
@@ -143,7 +143,7 @@ func makeDaemon(c *cli.Context, conf *vfs.Config) error {
 
 	defaultCacheDir := getDefaultCacheDir()
 
-	return winfsp.RunAsSystemSerivce(conf.Format.Name, c.Args().Get(1), logPath, defaultCacheDir, c)
+	return winfsp.RunAsSystemService(conf.Format.Name, c.Args().Get(1), logPath, defaultCacheDir, c)
 }
 
 func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl, listenAddr string) error {
