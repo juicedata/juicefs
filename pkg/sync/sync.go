@@ -121,6 +121,7 @@ func (l *globalLimit) request(ask int64) (int64, int64, error) {
 		return 0, 0, err
 	}
 	content, err := io.ReadAll(result.Body)
+	defer result.Body.Close()
 	if err != nil {
 		return 0, 0, err
 	}
