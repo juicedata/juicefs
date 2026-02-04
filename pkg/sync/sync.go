@@ -120,8 +120,8 @@ func (l *globalLimit) request(ask int64) (int64, int64, error) {
 		logger.Errorf("request traffic control %s failed: %s, http status: %s", l.address, err, status)
 		return 0, 0, err
 	}
-	content, err := io.ReadAll(result.Body)
 	defer result.Body.Close()
+	content, err := io.ReadAll(result.Body)
 	if err != nil {
 		return 0, 0, err
 	}
