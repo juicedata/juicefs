@@ -552,7 +552,6 @@ type CheckOpt struct {
 
 type CleanupTrashStats struct {
 	DeletedFiles int64
-	DeletedSlices int64
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)

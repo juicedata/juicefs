@@ -3250,8 +3250,8 @@ func (m *redisMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, err
 	return files, nil
 }
 
-func (m *redisMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) error {
-	_ = m.hscan(ctx, m.sliceRefs(), func(keys []string) error {
+func (m *redisMeta) doCleanupSlices(ctx Context, count *uint64) error {
+	return m.hscan(ctx, m.sliceRefs(), func(keys []string) error {
 		for i := 0; i < len(keys); i += 2 {
 			key, val := keys[i], keys[i+1]
 			if strings.HasPrefix(val, "-") { // < 0
@@ -3261,8 +3261,8 @@ func (m *redisMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) erro
 					size, _ := strconv.ParseUint(ps[1], 10, 32)
 					if id > 0 && size > 0 {
 						m.deleteSlice(id, uint32(size))
-						if stats != nil {
-							stats.deleted++
+						if count != nil {
+							*count++
 						}
 					}
 				}
@@ -3275,7 +3275,6 @@ func (m *redisMeta) doCleanupSlices(ctx Context, stats *cleanupSlicesStats) erro
 		}
 		return nil
 	})
-	return nil
 }
 
 func (m *redisMeta) cleanupZeroRef(key string) {
@@ -3511,9 +3510,6 @@ func (r *redisMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error)
 		}
 		return nil
 	})
-	if errors.Is(err, context.DeadlineExceeded) {
-		err = nil
-	}
 	return count, err
 }
 
@@ -3726,9 +3722,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending,
 	m.cleanupLeakedChunks(delete)
 	m.cleanupOldSliceRefs(delete)
 	if delete {
-		if err := m.doCleanupSlices(ctx, nil); err != nil {
-			logger.Warnf("doCleanupSlices: %s", err)
-		}
+		_ = m.doCleanupSlices(ctx, nil)
 	}
 	logger.Debugf("start listing slices...")
 
