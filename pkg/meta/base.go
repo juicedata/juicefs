@@ -2921,7 +2921,7 @@ func (m *baseMeta) cleanupTrash(ctx Context) {
 						}
 					}
 					m.bgjobDuration.WithLabelValues("cleanDelayedSlice", status).Observe(time.Since(jobStart).Seconds())
-					m.bgjobDels.WithLabelValues("cleanSlice").Add(float64(cnt))
+					m.bgjobDels.WithLabelValues("cleanDelayedSlice").Add(float64(cnt))
 				}()
 			}()
 		}
@@ -3089,7 +3089,7 @@ func (m *baseMeta) cleanupDelayedSlices(ctx Context, days int, count *uint64) er
 		logger.Warnf("Cleanup delayed slices: deleted %d slices in %v, but got error: %s", count, time.Since(now), err)
 		return err
 	} else if cnt > 0 {
-		logger.Infof("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
+		logger.Infof("Cleanup delayed slices: deleted %d slices in %v", cnt, time.Since(now))
 		if count != nil {
 			atomic.AddUint64(count, uint64(cnt))
 		}
