@@ -59,6 +59,24 @@ func mountFlags() []cli.Flag {
 			Value:  1000,
 			Hidden: true,
 		},
+		&cli.StringFlag{
+			Name:  "alias",
+			Usage: "volume alias, useful for mounting a volume multiple times on the same machine",
+		},
+		&cli.StringFlag{
+			Name:   "winfsp-dbg-log",
+			Hidden: true,
+		},
+		&cli.BoolFlag{
+			Name:   "as-local-volume",
+			Usage:  "If mount as a local volume, supports mounting to a path.",
+			Hidden: true,
+		},
+		&cli.BoolFlag{
+			Name:  "flush-on-cleanup",
+			Usage: "When enabled, Will instruct the WinFsp to call Flush() when a file handle is closing(MJ_IRP_CLEANUP). Requires the dev branch of WinFsp or version that GREATER than 2.1.25156.",
+			Value: true,
+		},
 		&cli.BoolFlag{
 			Name:  "as-root",
 			Usage: "Access files as administrator",
@@ -93,7 +111,7 @@ func mountFlags() []cli.Flag {
 		},
 		&cli.BoolFlag{
 			Name:  "admin-as-root",
-			Usage: "If we treat the Windows build-in user 'Administartor' as the root user on Linux. Default true.",
+			Usage: "If we treat the Windows build-in user 'Administrator' as the root user on Linux. Default true.",
 			Value: true,
 		},
 		&cli.StringFlag{
@@ -123,7 +141,9 @@ func makeDaemon(c *cli.Context, conf *vfs.Config) error {
 		}
 	}
 
-	return winfsp.RunAsSystemSerivce(conf.Format.Name, c.Args().Get(1), logPath)
+	defaultCacheDir := getDefaultCacheDir()
+
+	return winfsp.RunAsSystemSerivce(conf.Format.Name, c.Args().Get(1), logPath, defaultCacheDir, c)
 }
 
 func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl, listenAddr string) error {
@@ -140,12 +160,17 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 	v.Conf.AttrTimeout = utils.Duration(c.String("attr-cache"))
 	v.Conf.EntryTimeout = utils.Duration(c.String("entry-cache"))
 	v.Conf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
+	v.Conf.Mountpoint = c.Args().Get(1)
 
 	delayCloseTime := utils.Duration(c.String("delay-close"))
 
-	winfsp.Serve(v, c.String("o"),
+	err := winfsp.Serve(v, c.String("o"),
 		c.Bool("as-root"), int(delayCloseTime.Seconds()), c.Bool("show-dot-files"),
 		c.Int("winfsp-threads"), c.Bool("case-sensitive"), c.Bool("report-case"), c)
+
+	if err != nil {
+		logger.Errorf("Failed to mount volume %s: %s", v.Conf.Format.Name, err)
+	}
 }
 
 func checkMountpoint(name, mp, logPath string, background bool) {}

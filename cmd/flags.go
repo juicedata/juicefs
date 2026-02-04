@@ -159,7 +159,7 @@ func storageFlags() []cli.Flag {
 	})
 }
 
-func dataCacheFlags() []cli.Flag {
+func getDefaultCacheDir() string {
 	var defaultCacheDir = "/var/jfsCache"
 	switch runtime.GOOS {
 	case "linux":
@@ -170,7 +170,7 @@ func dataCacheFlags() []cli.Flag {
 	case "darwin":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			logger.Warn(err)
+			logger.Warnf("%v", err)
 			homeDir = defaultCacheDir
 		}
 		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
@@ -178,10 +178,15 @@ func dataCacheFlags() []cli.Flag {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			logger.Fatalf("%v", err)
-			return nil
+			return ""
 		}
 		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
 	}
+	return defaultCacheDir
+}
+
+func dataCacheFlags() []cli.Flag {
+	var defaultCacheDir = getDefaultCacheDir()
 	return addCategories("DATA CACHE", []cli.Flag{
 		&cli.StringFlag{
 			Name:  "buffer-size",
