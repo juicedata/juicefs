@@ -139,7 +139,7 @@ func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ..
 		if len(name) > 200 {
 			name = name[:200]
 		}
-		tmp = path.Join(path.Dir(p), fmt.Sprintf(".%s.tmp.%d", name, rand.Int()))
+		tmp = path.Join(path.Dir(p), fmt.Sprintf(".jfs.%s.tmp.%d", name, rand.Int()))
 		defer func() {
 			if err != nil {
 				if e := j.jfs.Delete(ctx, tmp); e != 0 {

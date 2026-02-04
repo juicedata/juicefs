@@ -160,7 +160,7 @@ func (d *filestore) Put(ctx context.Context, key string, in io.Reader, getters .
 		if len(name) > 200 {
 			name = name[:200]
 		}
-		tmp = filepath.Join(filepath.Dir(p), "."+name+".tmp"+strconv.Itoa(rand.Int()))
+		tmp = filepath.Join(filepath.Dir(p), ".jfs."+name+".tmp"+strconv.Itoa(rand.Int()))
 		defer func() {
 			if err != nil {
 				_ = os.Remove(tmp)
