@@ -623,13 +623,14 @@ func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
 	dir := t.TempDir()
 	conf := defaultConf
 	conf.CacheExpire = time.Hour
+	conf.CacheEviction = EvictionNone
 	m := new(cacheManagerMetrics)
 	m.initMetrics()
 	cache := newCacheStore(m, dir, 1<<30, 1000, 1, &conf, nil)
 	key := "0_0_4"
 
-	fixedTime := time.Date(2025, 1, 28, 12, 0, 0, 0, time.UTC)
 	PatchConvey("mock time.Now to avoid drift", t, func() {
+		fixedTime := time.Date(2025, 1, 28, 12, 0, 0, 0, time.UTC)
 		Mock(time.Now).Return(fixedTime).Build()
 		path, err := cache.stage(key, []byte("test"))
 		require.NoError(t, err)
