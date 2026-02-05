@@ -319,7 +319,7 @@ juicefs sync --worker host1,host2 /jfs-src /jfs-dst
 * 如果数据同步的两方有任何一个是 JuiceFS 宿主机挂载点：
   * 用 [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) 快速查看文件系统是否正在写入（或读出）；
   * 阅读[客户端日志](../administration/fault_diagnosis_and_analysis.md#client-log)（默认 `/var/log/juicefs.log`），观察是否有[慢请求或者超时错误日志](../administration/troubleshooting.md#io-error-object-storage)。
-* 如果数据同步的目的地是宿主机本地盘，可以直接观察目录下是否存在名称中带 `.tmp.xxx` 后缀的临时文件，`sync` 过程中会将传输结果写入临时文件，待传输完成后进行重命名，才完成最终的写入。观察临时文件大小是否变化，就能确定当前的写入状况；
+* 如果数据同步的目的地是宿主机本地盘，可以直接观察目录下是否存在名称中带 `.jfs.xxx.tmp.xxx` 后缀的临时文件，`sync` 过程中会将传输结果写入临时文件，待传输完成后进行重命名，才完成最终的写入。观察临时文件大小是否变化，就能确定当前的写入状况；
 * 如果传输目的地均为对象存储，可以通过类似 `nethogs` 的命令，查看出入网流量，来判断传输进展；
 * 以上手段均未能获得有效排查信息，则需要对 `sync` 进程采集 goroutine，结合源码分析排查：
 
