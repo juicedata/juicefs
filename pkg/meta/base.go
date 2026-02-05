@@ -3366,7 +3366,9 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 						}
 					}
 				}
-				eno = 0
+				if eno == syscall.ENOTSUP {
+					eno = 0
+				}
 			} else if eno != 0 {
 				break
 			}
