@@ -24,7 +24,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
 	"net"
 	"net/url"
 	"os"
@@ -237,7 +236,7 @@ func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters .
 			if len(name) > 200 {
 				name = name[:200]
 			}
-			tmp = path.Join(path.Dir(p), fmt.Sprintf(".%s.tmp.%d", name, rand.Int()))
+			tmp = TmpFilePath(p, name)
 			defer func() {
 				if err != nil {
 					_ = conn.share.Remove(tmp)

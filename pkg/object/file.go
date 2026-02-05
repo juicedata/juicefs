@@ -22,13 +22,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"math/rand"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -160,7 +158,7 @@ func (d *filestore) Put(ctx context.Context, key string, in io.Reader, getters .
 		if len(name) > 200 {
 			name = name[:200]
 		}
-		tmp = filepath.Join(filepath.Dir(p), ".jfs."+name+".tmp"+strconv.Itoa(rand.Int()))
+		tmp = TmpFilePath(p, name)
 		defer func() {
 			if err != nil {
 				_ = os.Remove(tmp)

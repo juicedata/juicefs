@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"path"
 	"runtime"
@@ -139,7 +138,7 @@ func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ..
 		if len(name) > 200 {
 			name = name[:200]
 		}
-		tmp = path.Join(path.Dir(p), fmt.Sprintf(".jfs.%s.tmp.%d", name, rand.Int()))
+		tmp = object.TmpFilePath(p, name)
 		defer func() {
 			if err != nil {
 				if e := j.jfs.Delete(ctx, tmp); e != 0 {
