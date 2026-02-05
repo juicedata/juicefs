@@ -50,6 +50,7 @@ const (
 	nlocks         = 1024
 	maxSymCacheNum = int32(10000)
 	unknownUsage   = -1
+	maxDelfileFind = 600000
 )
 
 var (
@@ -339,9 +340,9 @@ type baseMeta struct {
 	groupQuotaUsedSpaceG  *prometheus.GaugeVec
 	groupQuotaUsedInodesG *prometheus.GaugeVec
 
-	bgjobDels     *prometheus.CounterVec
-	bgjobDuration *prometheus.HistogramVec
-	delfileRemain *prometheus.GaugeVec
+	bgjobDels      *prometheus.CounterVec
+	bgjobDuration  *prometheus.HistogramVec
+	delfileRemainG *prometheus.GaugeVec
 
 	en engine
 }
@@ -517,7 +518,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			},
 			[]string{"job"},
 		),
-		delfileRemain: prometheus.NewGaugeVec(
+		delfileRemainG: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "juicefs_delfile_remain",
 				Help: "Whether there are pending delfiles to process (1) or not (0).",
@@ -555,7 +556,7 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(m.groupQuotaUsedInodesG)
 	reg.MustRegister(m.bgjobDuration)
 	reg.MustRegister(m.bgjobDels)
-	reg.MustRegister(m.delfileRemain)
+	reg.MustRegister(m.delfileRemainG)
 	reg.MustRegister(m.subdirInfoG)
 
 	// Initialize subdir info metric
@@ -976,7 +977,7 @@ func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
 		} else if ok {
 			job := "cleanupDeletedFiles"
 			jobStart := time.Now()
-			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 6e5)
+			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), maxDelfileFind)
 			if err != nil {
 				logger.Warnf("scan deleted files: %s", err)
 				m.bgjobDuration.WithLabelValues(job, bgJobFail).Observe(time.Since(jobStart).Seconds())
@@ -996,10 +997,10 @@ func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
 			m.bgjobDuration.WithLabelValues(job, status).Observe(time.Since(jobStart).Seconds())
 			m.bgjobDels.WithLabelValues(job).Add(float64(processed))
 			remain := 0
-			if len(files) == 6e5 || int64(len(files)) > processed {
+			if len(files) >= maxDelfileFind || int64(len(files)) > processed {
 				remain = 1
 			}
-			m.delfileRemain.WithLabelValues(job).Set(float64(remain))
+			m.delfileRemainG.WithLabelValues(job).Set(float64(remain))
 		}
 	}
 }
