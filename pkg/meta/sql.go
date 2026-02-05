@@ -5150,7 +5150,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		// Batch fetch all source nodes (no locking - clone is a point-in-time snapshot)
 		var srcNodes []node
 		if len(srcInodes) > 0 {
-			if err := s.In("inode", srcInodes).Find(&srcNodes); err != nil {
+			if err := s.In("inode", srcInodes).ForUpdate().Find(&srcNodes); err != nil {
 				return err
 			}
 		}
