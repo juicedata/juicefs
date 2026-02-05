@@ -5147,10 +5147,9 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			return st
 		}
 
-		// Batch fetch all source nodes (no locking - clone is a point-in-time snapshot)
 		var srcNodes []node
 		if len(srcInodes) > 0 {
-			if err := s.In("inode", srcInodes).Find(&srcNodes); err != nil {
+			if err := s.In("inode", srcInodes).ForUpdate().Find(&srcNodes); err != nil {
 				return err
 			}
 		}
@@ -5393,8 +5392,8 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 				return chunkIds[i] < chunkIds[j]
 			})
 
-			// Process in batches to avoid database size limits
-			batchSize := m.getTxnBatchNum()
+			// Process in batches (500 per query to avoid size limits)
+			batchSize := 500
 			for start := 0; start < len(chunkIds); start += batchSize {
 				end := start + batchSize
 				if end > len(chunkIds) {
