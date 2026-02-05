@@ -3411,11 +3411,11 @@ func (m *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 	return nil
 }
 
-func (m *redisMeta) doDeleteFileData(inode Ino, length uint64) bool {
-	return m.doDeleteFileData_(inode, length, "")
+func (m *redisMeta) doDeleteFileData(inode Ino, length uint64) {
+	m.doDeleteFileData_(inode, length, "")
 }
 
-func (m *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string) bool {
+func (m *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string) {
 	var ctx = Background()
 	var indx uint32
 	p := m.rdb.Pipeline()
@@ -3430,7 +3430,7 @@ func (m *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 		cmds, err := p.Exec(ctx)
 		if err != nil {
 			logger.Warnf("delete chunks of inode %d: %s", inode, err)
-			return false
+			return
 		}
 		for i, cmd := range cmds {
 			val, err := cmd.(*redis.IntCmd).Result()
@@ -3441,7 +3441,7 @@ func (m *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 			err = m.deleteChunk(inode, uint32(idx))
 			if err != nil {
 				logger.Warnf("delete chunk %s: %s", keys[i], err)
-				return false
+				return
 			}
 		}
 	}
@@ -3449,7 +3449,6 @@ func (m *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 		tracking = inode.String() + ":" + strconv.FormatInt(int64(length), 10)
 	}
 	_ = m.rdb.ZRem(ctx, m.delfiles(), tracking)
-	return true
 }
 
 func (r *redisMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {

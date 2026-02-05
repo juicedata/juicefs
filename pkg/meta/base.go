@@ -91,7 +91,7 @@ type engine interface {
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
 	doDeleteSustainedInode(sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
-	doDeleteFileData(inode Ino, length uint64) bool
+	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices(ctx Context, count *uint64) error
 	doCleanupDelayedSlices(ctx Context, edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
@@ -341,6 +341,7 @@ type baseMeta struct {
 
 	bgjobDels     *prometheus.CounterVec
 	bgjobDuration *prometheus.HistogramVec
+	delfileRemain *prometheus.GaugeVec
 
 	en engine
 }
@@ -516,6 +517,13 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			},
 			[]string{"job"},
 		),
+		delfileRemain: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "juicefs_delfile_remain",
+				Help: "Whether there are pending delfiles to process (1) or not (0).",
+			},
+			[]string{"job"},
+		),
 
 		dirQuotaMetricKeys:   make(map[uint64]bool),
 		userQuotaMetricKeys:  make(map[uint64]bool),
@@ -547,6 +555,7 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(m.groupQuotaUsedInodesG)
 	reg.MustRegister(m.bgjobDuration)
 	reg.MustRegister(m.bgjobDels)
+	reg.MustRegister(m.delfileRemain)
 	reg.MustRegister(m.subdirInfoG)
 
 	// Initialize subdir info metric
@@ -974,13 +983,10 @@ func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
 				continue
 			}
 			var processed int64
-			var deleted int64
 			status := bgJobSucc
 			for inode, length := range files {
 				logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
-				if m.en.doDeleteFileData(inode, length) {
-					deleted++
-				}
+				m.en.doDeleteFileData(inode, length)
 				processed++
 				if time.Since(jobStart) > 50*time.Minute { // Yield my time slice to avoid conflicts with other clients
 					status = bgJobCanceled
@@ -989,7 +995,11 @@ func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
 			}
 			m.bgjobDuration.WithLabelValues(job, status).Observe(time.Since(jobStart).Seconds())
 			m.bgjobDels.WithLabelValues(job).Add(float64(processed))
-			m.bgjobDels.WithLabelValues(job + "_deleted").Add(float64(deleted))
+			remain := 0
+			if len(files) == 6e5 || int64(len(files)) > processed {
+				remain = 1
+			}
+			m.delfileRemain.WithLabelValues(job).Set(float64(remain))
 		}
 	}
 }

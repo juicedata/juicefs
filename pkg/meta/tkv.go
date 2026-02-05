@@ -2662,22 +2662,21 @@ func (m *kvMeta) cleanupZeroRef(id uint64, size uint32) {
 	})
 }
 
-func (m *kvMeta) doDeleteFileData(inode Ino, length uint64) bool {
+func (m *kvMeta) doDeleteFileData(inode Ino, length uint64) {
 	keys, err := m.scanKeys(Background(), m.fmtKey("A", inode, "C"))
 	if err != nil {
 		logger.Warnf("delete chunks of inode %d: %s", inode, err)
-		return false
+		return
 	}
 	for i := range keys {
 		idx := binary.BigEndian.Uint32(keys[i][10:])
 		err := m.deleteChunk(inode, idx)
 		if err != nil {
 			logger.Warnf("delete chunk %d:%d: %s", inode, idx, err)
-			return false
+			return
 		}
 	}
 	_ = m.deleteKeys(m.delfileKey(inode, length))
-	return true
 }
 
 func (m *kvMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
