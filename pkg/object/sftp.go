@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"math/rand"
 	"net"
 	"net/url"
 	"os"
@@ -234,7 +233,7 @@ func (f *sftpStore) Put(key string, in io.Reader, getters ...AttrGetter) (err er
 		if len(name) > 200 {
 			name = name[:200]
 		}
-		tmp = path.Join(path.Dir(p), fmt.Sprintf(".%s.tmp.%d", name, rand.Int()))
+		tmp = TmpFilePath(p, name)
 		defer func() {
 			if err != nil {
 				_ = c.sftpClient.Remove(tmp)

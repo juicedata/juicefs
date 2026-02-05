@@ -23,7 +23,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"os/user"
 	"path"
@@ -175,7 +174,7 @@ func (n *nfsStore) Put(key string, in io.Reader, getters ...AttrGetter) (err err
 		if len(name) > 200 {
 			name = name[:200]
 		}
-		tmp = path.Join(path.Dir(p), fmt.Sprintf(".%s.tmp.%d", name, rand.Int()))
+		tmp = TmpFilePath(p, name)
 		defer func() {
 			if err != nil {
 				_ = n.target.Remove(tmp)

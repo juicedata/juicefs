@@ -20,8 +20,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -329,4 +331,8 @@ func decodeKey(value string, typ *string) (string, error) {
 		return url.QueryUnescape(value)
 	}
 	return value, nil
+}
+
+func TmpFilePath(parent, name string) string {
+	return filepath.Join(filepath.Dir(parent), ".jfs."+name+".tmp."+strconv.Itoa(rand.Int()))
 }
