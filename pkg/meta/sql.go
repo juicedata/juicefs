@@ -3497,7 +3497,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 	return nil
 }
 
-func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
+func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) bool {
 	var indexes []chunk
 	_ = m.simpleTxn(Background(), func(s *xorm.Session) error {
 		indexes = nil
@@ -3507,13 +3507,14 @@ func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 		err := m.deleteChunk(inode, c.Indx)
 		if err != nil {
 			logger.Warnf("deleteChunk inode %d index %d error: %s", inode, c.Indx, err)
-			return
+			return false
 		}
 	}
 	_ = m.txn(func(s *xorm.Session) error {
 		_, err := s.Delete(delfile{Inode: inode})
 		return err
 	})
+	return true
 }
 
 func (m *dbMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
