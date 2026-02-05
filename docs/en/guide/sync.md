@@ -312,7 +312,7 @@ If you notice the progress bar is not changing, use the methods below for monito
   * Use [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) to quickly check current I/O status.
   * Review the [client log](../administration/fault_diagnosis_and_analysis.md#client-log) (default path: `/var/log/juicefs.log`) for [slow requests or timeout errors](../administration/troubleshooting.md#io-error-object-storage).
 
-* If the destination is a local disk, check the directory for temporary files with `.tmp.xxx`. During the synchronization process, the transfer results are written to these temporary files. Once the transfer is complete, they are renamed to finalize the write. By monitoring the size changes of the temporary files, you can determine the current I/O status.
+* If the destination is a local disk, check the directory for temporary files with `.jfs.xxx.tmp.xxx`. During the synchronization process, the transfer results are written to these temporary files. Once the transfer is complete, they are renamed to finalize the write. By monitoring the size changes of the temporary files, you can determine the current I/O status.
 
 * If both the source and destination are object storage systems, use tools like `nethogs` to check network I/O.
 
