@@ -55,7 +55,7 @@ $ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2`,
 			},
 			&cli.IntFlag{
 				Name:  "threads",
-				Value: 4,
+				Value: meta.CLONE_DEFAULT_CONCURRENCY,
 				Usage: "number of concurrent workers for cloning directories",
 			},
 		},

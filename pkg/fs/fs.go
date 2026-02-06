@@ -1117,7 +1117,7 @@ func (fs *FileSystem) Clone(ctx meta.Context, src, dst string, preserve bool) (e
 		cmode |= meta.CLONE_MODE_PRESERVE_ATTR
 	}
 
-	if err = fs.m.Clone(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), srcParent.Inode(), srcIno, dstParent.Inode(), path.Base(dst), cmode, umask, 4, &count, &total); err != 0 {
+	if err = fs.m.Clone(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), srcParent.Inode(), srcIno, dstParent.Inode(), path.Base(dst), cmode, umask, meta.CLONE_DEFAULT_CONCURRENCY, &count, &total); err != 0 {
 		logger.Errorf("clone failed srcIno:%d,dstParentIno:%d,dstName:%s,cmode:%d,umask:%d,eno:%v", srcIno, dstParent.Inode(), path.Base(dst), cmode, umask, err)
 	}
 	return

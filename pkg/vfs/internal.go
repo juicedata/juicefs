@@ -334,7 +334,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		dstName := string(r.Get(int(r.Get8())))
 		umask := r.Get16()
 		cmode := r.Get8()
-		var concurrency uint8 = 4 // default for backward compatibility
+		var concurrency uint8 = meta.CLONE_DEFAULT_CONCURRENCY // default for backward compatibility
 		if r.HasMore() {
 			concurrency = r.Get8()
 		}

@@ -61,6 +61,9 @@ const (
 	CLONE_MODE_PRESERVE_ATTR      = 0x02
 	CLONE_MODE_PRESERVE_HARDLINKS = 0x08
 
+	// clone concurrency
+	CLONE_DEFAULT_CONCURRENCY = 4
+
 	// atime mode
 	NoAtime     = "noatime"
 	RelAtime    = "relatime"
