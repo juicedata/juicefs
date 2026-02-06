@@ -798,6 +798,11 @@ func (m *redisMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.usedInodes, inodes)
 }
 
+func (m *redisMeta) updateTrashStats(space int64, inodes int64) {
+	atomic.AddInt64(&m.usedTrashSpace, space)
+	atomic.AddInt64(&m.usedTrashInodes, inodes)
+}
+
 func (m *redisMeta) doSyncVolumeStat(ctx Context) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
@@ -1679,6 +1684,13 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 					if attr.Parent == 0 {
 						pipe.HIncrBy(ctx, m.parentKey(inode), trash.String(), 1)
 					}
+					var trashSpace int64
+					if _type == TypeFile {
+						trashSpace = align4K(attr.Length)
+					} else {
+						trashSpace = align4K(0)
+					}
+					newSpace, newInode = trashSpace, 1
 				}
 				if attr.Parent == 0 {
 					pipe.HIncrBy(ctx, m.parentKey(inode), parent.String(), -1)
@@ -1715,11 +1727,15 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 
 		return err
 	}, m.inodeKey(parent), m.entryKey(parent))
-	if err == nil && trash == 0 {
-		if _type == TypeFile && attr.Nlink == 0 {
-			m.fileDeleted(opened, parent.IsTrash(), inode, attr.Length)
+	if err == nil {
+		if trash > 0 {
+			m.updateTrashStats(newSpace, newInode)
+		} else {
+			if _type == TypeFile && attr.Nlink == 0 {
+				m.fileDeleted(opened, parent.IsTrash(), inode, attr.Length)
+			}
+			m.updateStats(newSpace, newInode)
 		}
-		m.updateStats(newSpace, newInode)
 	}
 	return errno(err)
 }
@@ -2014,6 +2030,14 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 						}
 						parentOps[key][info.trash.String()]++
 					}
+					var trashSpace int64
+					if info.typ == TypeFile {
+						trashSpace = align4K(info.attr.Length)
+					} else {
+						trashSpace = align4K(0)
+					}
+					batchSpace += trashSpace
+					batchInodes++
 				}
 				appendUGQuotaDelta(&batchUserGroupQuotas, parent, info.attr.Uid, info.attr.Gid, info.attr.Nlink, info.typ, info.attr.Length)
 				visited[info.inode] = true
@@ -2197,8 +2221,12 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 		})
 		return err
 	}, m.inodeKey(parent), m.entryKey(parent))
-	if err == nil && trash == 0 {
-		m.updateStats(-align4K(0), -1)
+	if err == nil {
+		if trash > 0 {
+			m.updateTrashStats(align4K(0), 1)
+		} else {
+			m.updateStats(-align4K(0), -1)
+		}
 	}
 	return errno(err)
 }

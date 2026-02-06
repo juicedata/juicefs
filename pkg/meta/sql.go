@@ -1228,6 +1228,11 @@ func (m *dbMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.newInodes, inodes)
 }
 
+func (m *dbMeta) updateTrashStats(space int64, inodes int64) {
+	atomic.AddInt64(&m.newTrashSpace, space)
+	atomic.AddInt64(&m.newTrashInodes, inodes)
+}
+
 func (m *dbMeta) doSyncVolumeStat(ctx Context) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
@@ -1295,6 +1300,26 @@ func (m *dbMeta) doFlushStats() {
 			atomic.AddInt64(&m.usedSpace, newSpace)
 			atomic.AddInt64(&m.newInodes, -newInodes)
 			atomic.AddInt64(&m.usedInodes, newInodes)
+		}
+	}
+	newTrashSpace := atomic.LoadInt64(&m.newTrashSpace)
+	newTrashInodes := atomic.LoadInt64(&m.newTrashInodes)
+	if newTrashSpace != 0 || newTrashInodes != 0 {
+		err := m.txn(func(s *xorm.Session) error {
+			if _, err := s.Exec(m.sqlConv("update counter set value=value + ? where name='trashInodes'"), newTrashInodes); err != nil {
+				return err
+			}
+			_, err := s.Exec(m.sqlConv("update counter set value=value + ? where name='trashSpace'"), newTrashSpace)
+			return err
+		})
+		if err != nil && !strings.Contains(err.Error(), "attempt to write a readonly database") {
+			logger.Warnf("update trash stats: %s", err)
+		}
+		if err == nil {
+			atomic.AddInt64(&m.newTrashSpace, -newTrashSpace)
+			atomic.AddInt64(&m.usedTrashSpace, newTrashSpace)
+			atomic.AddInt64(&m.newTrashInodes, -newTrashInodes)
+			atomic.AddInt64(&m.usedTrashInodes, newTrashInodes)
 		}
 	}
 }

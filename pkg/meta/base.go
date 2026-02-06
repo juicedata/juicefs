@@ -78,6 +78,7 @@ type engine interface {
 	// Set counter name to value if old <= value - diff.
 	setIfSmall(name string, value, diff int64) (bool, error)
 	updateStats(space int64, inodes int64)
+	updateTrashStats(space int64, inodes int64)
 	doFlushStats()
 
 	doLoad() ([]byte, error)
@@ -173,6 +174,11 @@ type fsStat struct {
 	newInodes  int64
 	usedSpace  int64
 	usedInodes int64
+
+	newTrashSpace   int64
+	newTrashInodes  int64
+	usedTrashSpace  int64
+	usedTrashInodes int64
 }
 
 // chunk for compaction
@@ -339,6 +345,9 @@ type baseMeta struct {
 	groupQuotaUsedSpaceG  *prometheus.GaugeVec
 	groupQuotaUsedInodesG *prometheus.GaugeVec
 
+	trashFilesG prometheus.Gauge
+	trashSpaceG prometheus.Gauge
+
 	bgjobDels     *prometheus.CounterVec
 	bgjobDuration *prometheus.HistogramVec
 
@@ -357,8 +366,10 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		maxDeleting:  make(chan struct{}, 100),
 		symlinks:     newSymlinkCache(maxSymCacheNum),
 		fsStat: &fsStat{
-			usedSpace:  unknownUsage,
-			usedInodes: unknownUsage,
+			usedSpace:       unknownUsage,
+			usedInodes:      unknownUsage,
+			usedTrashSpace:  unknownUsage,
+			usedTrashInodes: unknownUsage,
 		},
 		dirStats:    make(map[Ino]dirStat),
 		dirParents:  make(map[Ino]Ino),
@@ -501,6 +512,15 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			[]string{"gid"},
 		),
 
+		trashFilesG: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "trash_files",
+			Help: "Total number of files in trash.",
+		}),
+		trashSpaceG: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "trash_space_bytes",
+			Help: "Total space used by trash in bytes.",
+		}),
+
 		bgjobDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "juicefs_bgjob_duration_seconds",
@@ -548,6 +568,8 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(m.bgjobDuration)
 	reg.MustRegister(m.bgjobDels)
 	reg.MustRegister(m.subdirInfoG)
+	reg.MustRegister(m.trashFilesG)
+	reg.MustRegister(m.trashSpaceG)
 
 	// Initialize subdir info metric
 	subdir := m.conf.Subdir
@@ -569,6 +591,10 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 				m.totalSpaceG.Set(float64(totalSpace))
 				m.totalInodesG.Set(float64(iused + iavail))
 			}
+			var trashSpace, trashInodes int64
+			_ = m.GetTrashStats(Background(), &trashSpace, &trashInodes)
+			m.trashSpaceG.Set(float64(trashSpace))
+			m.trashFilesG.Set(float64(trashInodes))
 			m.updateQuotaMetrics()
 			utils.SleepWithJitter(time.Second * 10)
 		}
@@ -892,6 +918,16 @@ func (m *baseMeta) refresh(ctx Context) {
 		} else {
 			logger.Warnf("Get counter %s: %s", totalInodes, err)
 		}
+		if v, err := m.en.getCounter(trashSpace); err == nil {
+			atomic.StoreInt64(&m.usedTrashSpace, v)
+		} else {
+			logger.Debugf("Get counter %s: %s", trashSpace, err)
+		}
+		if v, err := m.en.getCounter(trashInodes); err == nil {
+			atomic.StoreInt64(&m.usedTrashInodes, v)
+		} else {
+			logger.Debugf("Get counter %s: %s", trashInodes, err)
+		}
 		m.loadQuotas()
 
 		if m.conf.ReadOnly || m.conf.NoBGJob || m.conf.Heartbeat == 0 {
@@ -1132,6 +1168,45 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 			*iavail <<= 1
 		}
 	}
+	return 0
+}
+
+func (m *baseMeta) GetTrashStats(ctx Context, space, inodes *int64) syscall.Errno {
+	usedSpace := atomic.LoadInt64(&m.usedTrashSpace)
+	usedInodes := atomic.LoadInt64(&m.usedTrashInodes)
+
+	var err error
+	if !m.conf.FastStatfs || usedSpace == unknownUsage || usedInodes == unknownUsage {
+		var remoteUsedSpace int64
+		err = utils.WithTimeout(ctx, func(context.Context) error {
+			remoteUsedSpace, err = m.en.getCounter(trashSpace)
+			return err
+		}, time.Millisecond*150)
+		if err == nil {
+			usedSpace = remoteUsedSpace
+		}
+		var remoteUsedInodes int64
+		err = utils.WithTimeout(ctx, func(context.Context) error {
+			remoteUsedInodes, err = m.en.getCounter(trashInodes)
+			return err
+		}, time.Millisecond*150)
+		if err == nil {
+			usedInodes = remoteUsedInodes
+		}
+	}
+
+	usedSpace += atomic.LoadInt64(&m.newTrashSpace)
+	usedInodes += atomic.LoadInt64(&m.newTrashInodes)
+
+	if usedSpace < 0 {
+		usedSpace = 0
+	}
+	if usedInodes < 0 {
+		usedInodes = 0
+	}
+
+	*space = usedSpace
+	*inodes = usedInodes
 	return 0
 }
 
@@ -1823,6 +1898,13 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			if flags&RenameRestore != 0 && parentSrc.IsTrash() {
 				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, align4K(diffLength), 1)
+				var trashSpace int64
+				if attr.Typ == TypeFile {
+					trashSpace = -align4K(attr.Length)
+				} else {
+					trashSpace = -align4K(0)
+				}
+				m.en.updateTrashStats(trashSpace, -1)
 			}
 		}
 		if *tinode > 0 && flags != RenameExchange {

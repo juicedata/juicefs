@@ -568,6 +568,11 @@ func (m *kvMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.newInodes, inodes)
 }
 
+func (m *kvMeta) updateTrashStats(space int64, inodes int64) {
+	atomic.AddInt64(&m.newTrashSpace, space)
+	atomic.AddInt64(&m.newTrashInodes, inodes)
+}
+
 func (m *kvMeta) doFlushStats() {
 	if space := atomic.LoadInt64(&m.newSpace); space != 0 {
 		if v, err := m.incrCounter(usedSpace, space); err == nil {
@@ -583,6 +588,22 @@ func (m *kvMeta) doFlushStats() {
 			atomic.StoreInt64(&m.usedInodes, v)
 		} else {
 			logger.Warnf("Update inodes stats: %s", err)
+		}
+	}
+	if space := atomic.LoadInt64(&m.newTrashSpace); space != 0 {
+		if v, err := m.incrCounter(trashSpace, space); err == nil {
+			atomic.AddInt64(&m.newTrashSpace, -space)
+			atomic.StoreInt64(&m.usedTrashSpace, v)
+		} else {
+			logger.Warnf("Update trash space stats: %s", err)
+		}
+	}
+	if inodes := atomic.LoadInt64(&m.newTrashInodes); inodes != 0 {
+		if v, err := m.incrCounter(trashInodes, inodes); err == nil {
+			atomic.AddInt64(&m.newTrashInodes, -inodes)
+			atomic.StoreInt64(&m.usedTrashInodes, v)
+		} else {
+			logger.Warnf("Update trash inodes stats: %s", err)
 		}
 	}
 }

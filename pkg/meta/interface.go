@@ -466,6 +466,7 @@ type Meta interface {
 	GetParents(ctx Context, inode Ino) map[Ino]int
 	// GetDirStat returns the space and inodes usage of a directory.
 	GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall.Errno)
+	GetTrashStats(ctx Context, space, inodes *int64) syscall.Errno
 
 	// GetXattr returns the value of extended attribute for given name.
 	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno
@@ -552,6 +553,7 @@ type CheckOpt struct {
 
 type CleanupTrashStats struct {
 	DeletedFiles int64
+	DeletedSpace int64
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)
