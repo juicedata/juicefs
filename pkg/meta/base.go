@@ -3226,8 +3226,9 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	if concurrency < 1 {
 		concurrency = 1
 	}
+	concurrent := make(chan struct{}, concurrency)
 	if attr.Typ == TypeDirectory {
-		eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, int(concurrency))
+		eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, concurrent)
 		if eno == 0 {
 			eno = m.en.doAttachDirNode(ctx, parent, dstIno, name)
 		}
@@ -3237,7 +3238,7 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 			}
 		}
 	} else {
-		eno = m.cloneEntry(ctx, srcIno, parent, name, nil, cmode, cumask, count, true, int(concurrency))
+		eno = m.cloneEntry(ctx, srcIno, parent, name, nil, cmode, cumask, count, true, concurrent)
 	}
 	if eno == 0 {
 		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
@@ -3246,7 +3247,7 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	return eno
 }
 
-func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, dstIno *Ino, cmode uint8, cumask uint16, count *uint64, top bool, concurrency int) syscall.Errno {
+func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, dstIno *Ino, cmode uint8, cumask uint16, count *uint64, top bool, concurrent chan struct{}) syscall.Errno {
 	ino, err := m.nextInode()
 	if err != nil {
 		return errno(err)
@@ -3279,11 +3280,10 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	defer handler.Close()
 
 	var g errgroup.Group
-	g.SetLimit(concurrency)
 	var skipped uint32
 
 	cloneChild := func(e *Entry) syscall.Errno {
-		eno := m.cloneEntry(ctx, e.Inode, ino, string(e.Name), nil, cmode, cumask, count, false, concurrency)
+		eno := m.cloneEntry(ctx, e.Inode, ino, string(e.Name), nil, cmode, cumask, count, false, concurrent)
 		if eno == syscall.ENOENT {
 			logger.Warnf("ignore deleted %s in dir %d", string(e.Name), srcIno)
 			if e.Attr.Typ == TypeDirectory {
@@ -3312,13 +3312,17 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			}
 
 			if e.Attr.Typ == TypeDirectory {
-				entry := e
-				if !g.TryGo(func() error {
-					if childEno := cloneChild(entry); childEno != 0 {
-						return childEno
-					}
-					return nil
-				}) {
+				select {
+				case concurrent <- struct{}{}:
+					entry := e
+					g.Go(func() error {
+						defer func() { <-concurrent }()
+						if childEno := cloneChild(entry); childEno != 0 {
+							return childEno
+						}
+						return nil
+					})
+				default:
 					// Synchronous fallback when concurrency limit reached
 					if childEno := cloneChild(e); childEno != 0 {
 						eno = childEno
@@ -3344,13 +3348,17 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			if eno = m.BatchClone(ctx, srcIno, ino, nonDirEntries, cmode, cumask, count); eno == syscall.ENOTSUP {
 				// Fallback: clone each file concurrently
 				for _, e := range nonDirEntries {
-					entry := e
-					if !g.TryGo(func() error {
-						if childEno := cloneChild(entry); childEno != 0 {
-							return childEno
-						}
-						return nil
-					}) {
+					select {
+					case concurrent <- struct{}{}:
+						entry := e
+						g.Go(func() error {
+							defer func() { <-concurrent }()
+							if childEno := cloneChild(entry); childEno != 0 {
+								return childEno
+							}
+							return nil
+						})
+					default:
 						// Synchronous fallback when concurrency limit reached
 						if childEno := cloneChild(e); childEno != 0 {
 							eno = childEno
