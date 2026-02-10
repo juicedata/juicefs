@@ -5094,14 +5094,13 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		dstNode node   // Destination node (modified copy)
 	}
 
-	cloneInfos := make([]*cloneInfo, len(entries))
-
 	// Phase 2: Allocate destination inodes BEFORE the transaction
-	// (nextInode can call incrCounter which needs txn - would deadlock if inside txn)
+	cloneInfos := make([]*cloneInfo, len(entries))
 	srcInodes := make([]Ino, 0, len(entries))
 	srcInodeSet := make(map[Ino]struct{})
 
 	for i, entry := range entries {
+		// (nextInode can call incrCounter which needs txn - would deadlock if inside txn)
 		dstIno, err := m.nextInode()
 		if err != nil {
 			return errno(err)
