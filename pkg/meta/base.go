@@ -1742,7 +1742,6 @@ func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	st := m.en.doBatchClone(ctx, srcParent, dstParent, entries, cmode, cumask, &length, &space, &inodes, &userGroupQuotas)
 	if st == 0 {
 		m.en.updateStats(space, inodes)
-		m.updateDirStat(ctx, dstParent, length, space, inodes)
 		m.updateDirQuota(ctx, dstParent, space, inodes)
 		for _, quota := range userGroupQuotas {
 			m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, quota.Space, quota.Inodes)
