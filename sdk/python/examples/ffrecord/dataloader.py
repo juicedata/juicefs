@@ -86,7 +86,7 @@ if __name__ == "__main__":
 
     i=0
     for batch in dataloader:
-        # print(i, ": ", batch[0]["index"], "----", time.time()-begin_time)
+        #  print(i, ": ", batch[0]["index"], "----", time.time()-begin_time)
         i+=1
         if i>1000:
             break
