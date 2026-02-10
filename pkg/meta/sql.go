@@ -5096,34 +5096,35 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 
 	cloneInfos := make([]*cloneInfo, len(entries))
 
-	// Phase 2-7: Execute in single transaction
+	// Phase 2: Allocate destination inodes BEFORE the transaction
+	// (nextInode can call incrCounter which needs txn - would deadlock if inside txn)
+	srcInodes := make([]Ino, 0, len(entries))
+	srcInodeSet := make(map[Ino]struct{})
+
+	for i, entry := range entries {
+		dstIno, err := m.nextInode()
+		if err != nil {
+			return errno(err)
+		}
+
+		info := &cloneInfo{
+			entry:  entry,
+			srcIno: entry.Inode,
+			dstIno: dstIno,
+		}
+		cloneInfos[i] = info
+
+		// Deduplicate for batch fetch (handles hardlinks)
+		if _, exists := srcInodeSet[entry.Inode]; !exists {
+			srcInodeSet[entry.Inode] = struct{}{}
+			srcInodes = append(srcInodes, entry.Inode)
+		}
+	}
+
+	// Phase 3-7: Execute in single transaction
 	err := m.txn(func(s *xorm.Session) error {
 		now := time.Now()
 		nowNano := now.UnixNano()
-
-		// Phase 2: Allocate destination inodes and deduplicate sources
-		srcInodes := make([]Ino, 0, len(entries))
-		srcInodeSet := make(map[Ino]struct{})
-
-		for i, entry := range entries {
-			dstIno, err := m.nextInode()
-			if err != nil {
-				return err
-			}
-
-			info := &cloneInfo{
-				entry:  entry,
-				srcIno: entry.Inode,
-				dstIno: dstIno,
-			}
-			cloneInfos[i] = info
-
-			// Deduplicate for batch fetch (handles hardlinks)
-			if _, exists := srcInodeSet[entry.Inode]; !exists {
-				srcInodeSet[entry.Inode] = struct{}{}
-				srcInodes = append(srcInodes, entry.Inode)
-			}
-		}
 
 		// Phase 3: Validate destination parent (once for entire batch)
 		pn := node{Inode: dstParent}
