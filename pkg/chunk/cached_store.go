@@ -126,10 +126,15 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		return got, nil
 	}
 
-	key := s.key(indx)
+	cacheKey := s.key(indx)
+	var remoteFilePath string
+	if ctx.Value("remoteFilePath") != "" {
+		remoteFilePath = ctx.Value("remoteFilePath").(string)
+	}
+
 	if s.store.conf.CacheEnabled() {
 		start := time.Now()
-		r, err := s.store.bcache.load(key)
+		r, err := s.store.bcache.load(cacheKey)
 		if err == nil {
 			n, err = r.ReadAt(p, int64(boff))
 			if !s.store.conf.OSCache {
@@ -142,8 +147,8 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 				s.store.cacheReadHist.Observe(time.Since(start).Seconds())
 				return n, nil
 			}
-			logger.Warnf("remove partial cached block %s: %d %s", key, n, err)
-			s.store.bcache.remove(key, false)
+			logger.Warnf("remove partial cached block %s: %d %s", cacheKey, n, err)
+			s.store.bcache.remove(cacheKey, false)
 		}
 	}
 
@@ -152,20 +157,29 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 
 	if s.store.seekable &&
 		(!s.store.conf.CacheEnabled() || (boff > 0 && len(p) <= blockSize/4)) {
-		n, err = s.store.loadRange(ctx, key, page, boff)
+			if remoteFilePath != "" {
+				n, err = s.store.loadRemoteFile(ctx, remoteFilePath, cacheKey, page, boff, false, false)
+			} else {
+				n, err = s.store.loadRange(ctx, cacheKey, page, boff)
+			}
+
 		if err == nil || !errors.Is(err, errTryFullRead) {
 			return n, err
 		}
 	}
 
-	block, err := s.store.group.Execute(key, func() (*Page, error) {
+	block, err := s.store.group.Execute(cacheKey, func() (*Page, error) {
 		tmp := page
 		if boff > 0 || len(p) < blockSize {
 			tmp = NewOffPage(blockSize)
 		} else {
 			tmp.Acquire()
 		}
-		err = s.store.load(ctx, key, tmp, s.store.shouldCache(blockSize), false)
+		if remoteFilePath != "" {
+			_, err = s.store.loadRemoteFile(ctx, remoteFilePath, cacheKey, tmp, boff, s.store.shouldCache(blockSize), false)
+		} else {
+			err = s.store.load(ctx, cacheKey, tmp, s.store.shouldCache(blockSize), false)
+		}
 		return tmp, err
 	})
 	defer block.Release()
@@ -816,6 +830,85 @@ func (store *cachedStore) load(ctx context.Context, key string, page *Page, cach
 		store.bcache.cache(key, page, forceCache, !store.conf.OSCache)
 	}
 	return nil
+}
+
+/**
+ * Load a remote file into a page where off is the actual offset of the slice
+ */
+func (store *cachedStore) loadRemoteFile(ctx context.Context, remoteFilePath string, cacheKey string, page *Page, off int, cache bool, forceCache bool) (n int, err error) {
+	p := page.Data
+	fullPage, err := store.group.TryPiggyback(cacheKey)
+	if fullPage != nil {
+		defer fullPage.Release()
+		if err == nil { // piggybacked a full read
+			n = copy(p, fullPage.Data[off:])
+			return n, nil
+		}
+	}
+
+	store.currentDownload <- struct{}{}
+	defer func() { <-store.currentDownload }()
+	if store.downLimit != nil {
+		store.downLimit.Wait(int64(len(p)))
+	}
+
+	var (
+		in    io.ReadCloser
+		reqID string
+		sc    = object.DefaultStorageClass
+		start = time.Now()
+	)
+	page.Acquire()
+
+	blockSize, blockIndex, chunkIndex, _ := parseRemoteFileCacheKey(cacheKey)
+
+	remoteFileOffset := chunkIndex * chunkSize + blockIndex * blockSize + off
+
+	err = utils.WithTimeout(ctx, func(cCtx context.Context) error {
+		defer page.Release()
+		in, err = store.storage.Get(cCtx, remoteFilePath, int64(remoteFileOffset), int64(len(p)), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+		if err == nil {
+			n, err = io.ReadFull(in, p)
+			_ = in.Close()
+		}
+		return err
+	}, store.conf.GetTimeout)
+
+	if errors.Is(err, context.Canceled) {
+		return 0, err
+	}
+
+	used := time.Since(start)
+	logRequest("GET", remoteFilePath, fmt.Sprintf("RANGE(%d,%d) ", remoteFileOffset, store.conf.BlockSize), reqID, err, used)
+	store.objectDataBytes.WithLabelValues("GET", sc).Add(float64(n))
+	store.objectReqsHistogram.WithLabelValues("GET", sc).Observe(used.Seconds())
+
+	if err != nil {
+		store.objectReqErrors.Add(1)
+		return 0, fmt.Errorf("get %s: %s", cacheKey, err)
+	}
+
+	if len(p) < blockSize {
+		// This is a random read, pretch the full block in background
+		store.fetcher.fetch(cacheKey)
+		return n, nil
+	}
+
+	if cache {
+		store.bcache.cache(cacheKey, page, forceCache, !store.conf.OSCache)
+	}
+
+	return n, nil
+}
+
+func parseRemoteFileCacheKey(cacheKey string) (blockSize int, blockIndex int, chunkIndex int, inode int) {
+	// TODO: Implement this function
+	// 1. Block size
+	// 2. SliceId Id
+	// 3. Block Index
+	// 4. Chunk index from sliceId
+	// 5. Inode from sliceId
+	return 4 << 20, 0, 0, 0
 }
 
 // NewCachedStore create a cached store.

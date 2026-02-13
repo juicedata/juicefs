@@ -171,8 +171,25 @@ func (s *sliceReader) run() {
 	inode := f.inode
 	f.Unlock()
 
+	var value []byte
+	getRemoteFilePathErr := f.r.m.GetXattr(meta.Background(), inode, "remoteFilePath", &value)
+	
+	if getRemoteFilePathErr != 0 && getRemoteFilePathErr != meta.ENOATTR{
+		logger.Warnf("get remote file path error: %s", getRemoteFilePathErr)
+	}
+
 	var slices []meta.Slice
-	err := f.r.m.Read(meta.Background(), inode, indx, &slices)
+	remoteFilePath := ""
+	var err syscall.Errno
+	if len(value) > 0 {
+		remoteFilePath := string(value)
+		// TODO: Construct the slice array here
+		logger.Infof("remote file path: %s", remoteFilePath)
+		err = syscall.EIO
+	} else {
+		err = f.r.m.Read(meta.Background(), inode, indx, &slices)
+	}
+
 	f.Lock()
 	length := f.length
 	if s.state != BUSY || f.shouldStop() {
@@ -206,6 +223,7 @@ func (s *sliceReader) run() {
 	var n int
 
 	ctx := context.WithValue(s.ctx, meta.CtxKey("inode"), inode) // Output inode in log for debugging
+	ctx = context.WithValue(ctx, meta.CtxKey("remoteFilePath"), remoteFilePath)
 	n = f.r.Read(ctx, p, slices, (uint32(s.block.off))%meta.ChunkSize)
 
 	f.Lock()
