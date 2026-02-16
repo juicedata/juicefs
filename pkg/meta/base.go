@@ -592,7 +592,7 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 				m.totalInodesG.Set(float64(iused + iavail))
 			}
 			var trashSpace, trashInodes int64
-			_ = m.GetTrashStats(Background(), &trashSpace, &trashInodes)
+			trashSpace, trashInodes = m.GetTrashStats(Background())
 			m.trashSpaceG.Set(float64(trashSpace))
 			m.trashFilesG.Set(float64(trashInodes))
 			m.updateQuotaMetrics()
@@ -921,12 +921,12 @@ func (m *baseMeta) refresh(ctx Context) {
 		if v, err := m.en.getCounter(trashSpace); err == nil {
 			atomic.StoreInt64(&m.usedTrashSpace, v)
 		} else {
-			logger.Debugf("Get counter %s: %s", trashSpace, err)
+			logger.Warnf("Get counter %s: %s", trashSpace, err)
 		}
 		if v, err := m.en.getCounter(trashInodes); err == nil {
 			atomic.StoreInt64(&m.usedTrashInodes, v)
 		} else {
-			logger.Debugf("Get counter %s: %s", trashInodes, err)
+			logger.Warnf("Get counter %s: %s", trashInodes, err)
 		}
 		m.loadQuotas()
 
@@ -1171,7 +1171,7 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 	return 0
 }
 
-func (m *baseMeta) GetTrashStats(ctx Context, space, inodes *int64) syscall.Errno {
+func (m *baseMeta) GetTrashStats(ctx Context) (space int64, inodes int64) {
 	usedSpace := atomic.LoadInt64(&m.usedTrashSpace)
 	usedInodes := atomic.LoadInt64(&m.usedTrashInodes)
 
@@ -1205,9 +1205,7 @@ func (m *baseMeta) GetTrashStats(ctx Context, space, inodes *int64) syscall.Errn
 		usedInodes = 0
 	}
 
-	*space = usedSpace
-	*inodes = usedInodes
-	return 0
+	return usedSpace, usedInodes
 }
 
 func (m *baseMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {

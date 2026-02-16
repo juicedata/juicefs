@@ -1417,6 +1417,13 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				if attr.Parent == 0 {
 					tx.incrBy(m.parentKey(inode, trash), 1)
 				}
+				var trashSpace int64
+				if _type == TypeFile {
+					trashSpace = align4K(attr.Length)
+				} else {
+					trashSpace = align4K(0)
+				}
+				newSpace, newInode = trashSpace, 1
 			}
 			if attr.Parent == 0 {
 				tx.incrBy(m.parentKey(inode, parent), -1)
@@ -1446,11 +1453,18 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		}
 		return nil
 	}, parent)
-	if err == nil && trash == 0 {
+	if err == nil {
 		if _type == TypeFile && attr.Nlink == 0 {
 			m.fileDeleted(opened, parent.IsTrash(), inode, attr.Length)
 		}
-		m.updateStats(newSpace, newInode)
+		if parent.IsTrash() {
+			m.updateTrashStats(newSpace, newInode)
+			m.updateStats(newSpace, newInode)
+		} else if trash > 0 {
+			m.updateTrashStats(newSpace, newInode)
+		} else {
+			m.updateStats(newSpace, newInode)
+		}
 	}
 	return errno(err)
 }
@@ -1721,7 +1735,13 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		for inode, info := range delNodes {
 			m.fileDeleted(info.opened, parent.IsTrash(), inode, info.length)
 		}
-		m.updateStats(batchSpace, batchInodes)
+		if parent.IsTrash() {
+			m.updateTrashStats(-batchSpace, -batchInodes)
+		} else if trash > 0 {
+			m.updateTrashStats(batchSpace, batchInodes)
+		} else {
+			m.updateStats(batchSpace, batchInodes)
+		}
 
 		totalLength += batchLength
 		totalSpace += batchSpace
@@ -1835,8 +1855,14 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		}
 		return nil
 	}, parent)
-	if err == nil && trash == 0 {
-		m.updateStats(-align4K(0), -1)
+	if err == nil {
+		if parent.IsTrash() {
+			m.updateTrashStats(-align4K(0), -1)
+		} else if trash > 0 {
+			m.updateTrashStats(align4K(0), 1)
+		} else {
+			m.updateStats(-align4K(0), -1)
+		}
 	}
 	return errno(err)
 }

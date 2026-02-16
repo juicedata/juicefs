@@ -354,6 +354,10 @@ func (m *dbMeta) initStatement() {
 		fmt.Sprintf("update %scounter set value=value + ? where name='totalInodes'", m.tablePrefix)
 	m.statement["update counter set value= value + ? where name='usedSpace'"] =
 		fmt.Sprintf("update %scounter set value= value + ? where name='usedSpace'", m.tablePrefix)
+	m.statement["update counter set value=value + ? where name='trashSpace'"] =
+		fmt.Sprintf("update %scounter set value=value + ? where name='trashSpace'", m.tablePrefix)
+	m.statement["update counter set value=value + ? where name='trashInodes'"] =
+		fmt.Sprintf("update %scounter set value=value + ? where name='trashInodes'", m.tablePrefix)
 	m.statement["update chunk set slices=slices || ? where inode=? AND indx=?"] =
 		fmt.Sprintf("update %schunk set slices=slices || ? where inode=? AND indx=?", m.tablePrefix)
 	m.statement["update chunk set slices=concat(slices, ?) where inode=? AND indx=?"] =
@@ -680,6 +684,25 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 				n.Inode = TrashInode
 				n.Mode = 0555
 				if err = mustInsert(s, n); err != nil {
+					return err
+				}
+			}
+			var tc []interface{}
+			var trashCs = []counter{
+				{"trashSpace", 0},
+				{"trashInodes", 0},
+			}
+			for _, c := range trashCs {
+				exists, err := s.Get(&counter{Name: c.Name})
+				if err != nil {
+					return err
+				}
+				if !exists {
+					tc = append(tc, c)
+				}
+			}
+			if len(tc) > 0 {
+				if err = mustInsert(s, tc...); err != nil {
 					return err
 				}
 			}
@@ -1918,6 +1941,13 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 				if err = mustInsert(s, &edge{Parent: trash, Name: []byte(m.trashEntry(parent, e.Inode, string(e.Name))), Inode: e.Inode, Type: e.Type}); err != nil {
 					return err
 				}
+				var trashSpace int64
+				if e.Type == TypeFile {
+					trashSpace = align4K(n.Length)
+				} else {
+					trashSpace = align4K(0)
+				}
+				newSpace, newInode = trashSpace, 1
 			}
 		} else {
 			switch e.Type {
@@ -1971,11 +2001,18 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		}
 		return err
 	})
-	if err == nil && trash == 0 {
+	if err == nil {
 		if n.Type == TypeFile && n.Nlink == 0 {
 			m.fileDeleted(opened, parent.IsTrash(), n.Inode, n.Length)
 		}
-		m.updateStats(newSpace, newInode)
+		if parent.IsTrash() {
+			m.updateTrashStats(newSpace, newInode)
+			m.updateStats(newSpace, newInode)
+		} else if trash > 0 {
+			m.updateTrashStats(newSpace, newInode)
+		} else {
+			m.updateStats(newSpace, newInode)
+		}
 	}
 	if err == nil && attr != nil {
 		m.parseAttr(&n, attr)
@@ -2098,8 +2135,14 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 		}
 		return err
 	})
-	if err == nil && trash == 0 {
-		m.updateStats(-align4K(0), -1)
+	if err == nil {
+		if parent.IsTrash() {
+			m.updateTrashStats(-align4K(0), -1)
+		} else if trash > 0 {
+			m.updateTrashStats(align4K(0), 1)
+		} else {
+			m.updateStats(-align4K(0), -1)
+		}
 	}
 	return errno(err)
 }
@@ -2932,7 +2975,13 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 	for inode, info := range delNodes {
 		m.fileDeleted(info.opened, parent.IsTrash(), inode, info.length)
 	}
-	m.updateStats(totalSpace, totalInodes)
+	if parent.IsTrash() {
+		m.updateTrashStats(-totalSpace, -totalInodes)
+	} else if trash > 0 {
+		m.updateTrashStats(totalSpace, totalInodes)
+	} else {
+		m.updateStats(totalSpace, totalInodes)
+	}
 	*length = totalLength
 	*space = totalSpace
 	*inodes = totalInodes

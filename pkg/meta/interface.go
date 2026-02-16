@@ -466,7 +466,7 @@ type Meta interface {
 	GetParents(ctx Context, inode Ino) map[Ino]int
 	// GetDirStat returns the space and inodes usage of a directory.
 	GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall.Errno)
-	GetTrashStats(ctx Context, space, inodes *int64) syscall.Errno
+	GetTrashStats(ctx Context) (space int64, inodes int64)
 
 	// GetXattr returns the value of extended attribute for given name.
 	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno
