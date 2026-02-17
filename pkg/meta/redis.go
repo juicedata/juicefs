@@ -2098,6 +2098,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 		}
 		if parent.IsTrash() {
 			m.updateTrashStats(-batchSpace, -batchInodes)
+			m.updateStats(-batchSpace, -batchInodes)
 		} else if trash > 0 {
 			m.updateTrashStats(batchSpace, batchInodes)
 		} else {
@@ -2249,6 +2250,8 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 	var dtyp uint8
 	var tattr Attr
 	var newSpace, newInode int64
+	var srcType uint8
+	var srcLength uint64
 	keys := []string{m.inodeKey(parentSrc), m.entryKey(parentSrc), m.inodeKey(parentDst), m.entryKey(parentDst)}
 	if parentSrc.IsTrash() {
 		// lock the parentDst
@@ -2471,6 +2474,8 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			*tInode = dino
 			*tAttr = tattr
 		}
+		srcType = dtyp
+		srcLength = iattr.Length
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			if exchange { // dbuf, tattr are valid
@@ -2547,11 +2552,26 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		})
 		return err
 	}, keys...)
-	if err == nil && !exchange && trash == 0 {
-		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
-			m.fileDeleted(opened, false, dino, tattr.Length)
+	if err == nil && !exchange {
+		if parentSrc.IsTrash() {
+			// Restore from trash: decrease trash stats only
+			var restoreSpace, restoreInodes int64
+			if srcType == TypeFile {
+				restoreSpace = -align4K(srcLength)
+			} else {
+				restoreSpace = -align4K(0)
+			}
+			restoreInodes = -1
+			m.updateTrashStats(restoreSpace, restoreInodes)
+		} else if trash == 0 {
+			if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
+				m.fileDeleted(opened, false, dino, tattr.Length)
+			}
+			m.updateStats(newSpace, newInode)
+		} else {
+			// Move to trash: increase trash stats
+			m.updateTrashStats(newSpace, newInode)
 		}
-		m.updateStats(newSpace, newInode)
 	}
 	return errno(err)
 }

@@ -127,43 +127,41 @@ func testMeta(t *testing.T, m Meta) {
 
 	testMetaClient(t, m)
 	testTruncateAndDelete(t, m)
-	//testTrash(t, m)
-	testTrashStatsOperations(t, m)
-	/*
-		testParents(t, m)
-		testRemove(t, m)
-		testResolve(t, m)
-		testStickyBit(t, m)
-		testLocks(t, m)
-		testListLocks(t, m)
-		testConcurrentWrite(t, m)
-		testCompaction(t, m, false)
-		time.Sleep(time.Second)
-		testCompaction(t, m, true)
-		testCopyFileRange(t, m)
-		testCloseSession(t, m)
-		testConcurrentDir(t, m)
-		testAttrFlags(t, m)
-		testQuota(t, m)
-		testUserGroupQuota(t, m)
-		testAtime(t, m)
-		testAccess(t, m)
-		base := m.getBase()
-		base.conf.OpenCache = time.Second
-		base.of.expire = time.Second
-		testOpenCache(t, m)
-		base.conf.CaseInsensi = true
-		testCaseIncensi(t, m)
-		testCaseIncensiRename(t, m)
-		testCaseIncensiHardlinkRename(t, m)
-		testCheckAndRepair(t, m)
-		testDirStat(t, m)
-		testClone(t, m)
-		testACL(t, m)
-		testKerberosToken(t, m)
-		base.conf.ReadOnly = true
-		testReadOnly(t, m)
-	*/
+	testTrash(t, m)
+	testParents(t, m)
+	testRemove(t, m)
+	testResolve(t, m)
+	testStickyBit(t, m)
+	testLocks(t, m)
+	testListLocks(t, m)
+	testConcurrentWrite(t, m)
+	testCompaction(t, m, false)
+	time.Sleep(time.Second)
+	testCompaction(t, m, true)
+	testCopyFileRange(t, m)
+	testCloseSession(t, m)
+	testConcurrentDir(t, m)
+	testAttrFlags(t, m)
+	testQuota(t, m)
+	testUserGroupQuota(t, m)
+	testAtime(t, m)
+	testAccess(t, m)
+	base := m.getBase()
+	base.conf.OpenCache = time.Second
+	base.of.expire = time.Second
+	testOpenCache(t, m)
+	base.conf.CaseInsensi = true
+	testCaseIncensi(t, m)
+	testCaseIncensiRename(t, m)
+	testCaseIncensiHardlinkRename(t, m)
+	testCheckAndRepair(t, m)
+	testDirStat(t, m)
+	testClone(t, m)
+	testACL(t, m)
+	testKerberosToken(t, m)
+	base.conf.ReadOnly = true
+	testReadOnly(t, m)
+
 }
 
 func testAccess(t *testing.T, m Meta) {
@@ -1929,6 +1927,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	// remove quota
 	format, _ := m.Load(false)
 	format.Capacity = 0
+	format.Inodes = 0
 	_ = m.Init(format, false)
 
 	ctx := Background()
@@ -2115,18 +2114,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	}
 }
 
-func testTrash(t *testing.T, m Meta) {
-	format := testFormat()
-	format.TrashDays = 1
-	if err := m.Init(format, false); err != nil {
-		t.Fatalf("init: %v", err)
-	}
-	defer func() {
-		if err := m.Init(testFormat(), false); err != nil {
-			t.Fatalf("init: %v", err)
-		}
-	}()
-	ctx := Background()
+func testTrashBasic(t *testing.T, m Meta, ctx Context, root Ino) {
 	var inode, parent Ino
 	var attr = &Attr{}
 	if st := m.Create(ctx, 1, "f1", 0644, 022, 0, &inode, attr); st != 0 {
@@ -2355,80 +2343,55 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx2, TrashInode+1, "d", 1, "f", 0, &inode, attr); st != syscall.EPERM {
 		t.Fatalf("rename d -> f: %s", st)
 	}
-	m.getBase().doCleanupTrash(Background(), format.TrashDays, true, nil)
-	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
-		t.Fatalf("getattr: %s", st)
-	}
+
+	func() {
+		cleanupCtx := Background()
+		var subTrashEntries []*Entry
+		if st := m.Readdir(cleanupCtx, TrashInode, 0, &subTrashEntries); st != 0 {
+			t.Logf("Readdir trash root: %s", st)
+			return
+		}
+		for _, subTrash := range subTrashEntries {
+			if subTrash.Name[0] == '.' {
+				continue
+			}
+			var count uint64
+			if st := m.getBase().emptyDir(cleanupCtx, subTrash.Inode, true, &count, nil); st != 0 {
+				t.Logf("emptyDir subTrash %d: %s", subTrash.Inode, st)
+			}
+		}
+	}()
 }
 
-func testTrashStatsOperations(t *testing.T, m Meta) {
+func testTrash(t *testing.T, m Meta) {
 	format := testFormat()
 	format.TrashDays = 1
 	if err := m.Init(format, false); err != nil {
 		t.Fatalf("init: %v", err)
 	}
-	defer func() {
-		ctx := Background()
-		// Read all sub-trash directories from TrashInode
-		var subTrashEntries []*Entry
-		if st := m.Readdir(ctx, TrashInode, 0, &subTrashEntries); st != 0 {
-			t.Fatalf("Readdir trash root: %s", st)
-		}
-		// Clean up each sub-trash directory
-		for _, subTrash := range subTrashEntries {
-			if subTrash.Name[0] == '.' {
-				continue // skip . and ..
-			}
-			var trashEntries []*Entry
-			if st := m.Readdir(ctx, subTrash.Inode, 0, &trashEntries); st != 0 {
-				t.Fatalf("Readdir sub-trash %d: %s", subTrash.Inode, st)
-			}
-			t.Logf("Found %d entries in sub-trash %d", len(trashEntries), subTrash.Inode)
-			for _, entry := range trashEntries {
-				if entry.Name[0] == '.' {
-					continue // skip . and ..
-				}
-				if st := m.Unlink(ctx, subTrash.Inode, string(entry.Name)); st != 0 {
-					t.Fatalf("Delete from trash: %s", st)
-				}
-			}
-		}
-		if err := m.Init(testFormat(), false); err != nil {
-			t.Fatalf("init: %v", err)
-		}
-		var totalSpace, availSpace uint64
-		var iused, iavail uint64
-		if st := m.StatFS(ctx, 1, &totalSpace, &availSpace, &iused, &iavail); st != 0 {
-			t.Fatalf("StatFS after cleanup: %s", st)
-		}
-		t.Logf("After cleanup: iused=%d, iavail=%d", iused, iavail)
-	}()
-
 	ctx := Background()
-
-	var totalSpace, availSpace uint64
-	var iused, iavail uint64
-	if st := m.StatFS(ctx, 1, &totalSpace, &availSpace, &iused, &iavail); st != 0 {
-		t.Fatalf("StatFS before trash stats tests: %s", st)
-	}
-	t.Logf("Before trash stats tests: iused=%d, iavail=%d", iused, iavail)
-
-	// Run all trash stats tests
+	defer func() {
+		var attr = &Attr{}
+		m.getBase().doCleanupTrash(Background(), 1, true, nil)
+		if st := m.GetAttr(ctx, TrashInode+1, attr); st != syscall.ENOENT {
+			t.Fatalf("getattr: %s", st)
+		}
+	}()
+	testTrashBasic(t, m, ctx, 1)
 	testTrashStats(t, m, ctx, 1)
-	//testTrashRmdirStats(t, m, ctx, 1)
-	//testBatchTrashUnlinkStats(t, m, ctx, 1)
-	//testRestoreFromTrashStats(t, m, ctx, 1)
-	//testDeleteFromTrashStats(t, m, ctx, 1)
-	//testMixedTrashOperations(t, m, ctx, 1)
-
-	if st := m.StatFS(ctx, 1, &totalSpace, &availSpace, &iused, &iavail); st != 0 {
-		t.Fatalf("StatFS after trash stats tests: %s", st)
-	}
-	t.Logf("After trash stats tests: iused=%d, iavail=%d", iused, iavail)
 }
 
 func testParents(t *testing.T, m Meta) {
 	ctx := Background()
+	base := m.getBase()
+	base.parentMu.Lock()
+	base.dirParents = make(map[Ino]Ino)
+	base.parentMu.Unlock()
+	format, _ := m.Load(false)
+	format.TrashDays = 0
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("init: %v", err)
+	}
 	var inode, parent Ino
 	var attr = &Attr{}
 	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
@@ -5279,566 +5242,292 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	}
 }
 func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
-	var fileInode Ino
-	var fileAttr Attr
-	if st := m.Create(ctx, root, "test_file.txt", 0644, 0, 0, &fileInode, &fileAttr); st != 0 {
-		t.Fatalf("Create test file: %s", st)
-	}
+	var trashSpaceBefore, trashInodesBefore int64
 
-	fileSize := uint64(8192)
-	var sliceId uint64
-	if st := m.NewSlice(ctx, &sliceId); st != 0 {
-		t.Fatalf("NewSlice: %s", st)
-	}
-	slice := Slice{Id: sliceId, Size: uint32(fileSize), Len: uint32(fileSize)}
-	if st := m.Write(ctx, fileInode, 0, 0, slice, time.Now()); st != 0 {
-		t.Fatalf("Write data: %s", st)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	var totalSpace, availSpace uint64
-	var iused, iavail uint64
-	if st := m.StatFS(ctx, root, &totalSpace, &availSpace, &iused, &iavail); st != 0 {
-		t.Fatalf("StatFS before delete: %s", st)
-	}
-	usedSpaceBefore := int64(totalSpace - availSpace)
-	usedInodesBefore := int64(iused)
-
-	trashSpaceBefore, trashInodesBefore := m.GetTrashStats(ctx)
-	expectedTrashSpaceAfterDelete := align4K(fileSize)
-	expectedTrashInodesAfterDelete := int64(1)
-	expectedSpaceDecrease := align4K(fileSize)
-
-	// Close the file before unlinking to trash to ensure trash stats are updated immediately
-	if st := m.Close(ctx, fileInode); st != 0 {
-		t.Fatalf("Close file: %s", st)
-	}
-
-	if st := m.Unlink(ctx, root, "test_file.txt"); st != 0 {
-		t.Fatalf("Unlink to trash: %s", st)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	if st := m.StatFS(ctx, root, &totalSpace, &availSpace, &iused, &iavail); st != 0 {
-		t.Fatalf("StatFS after unlink to trash: %s", st)
-	}
-	usedSpaceBefore = int64(totalSpace - availSpace)
-	usedInodesBefore = int64(iused)
-
-	trashSpaceAfter, trashInodesAfter := m.GetTrashStats(ctx)
-	if trashSpaceAfter != trashSpaceBefore+expectedTrashSpaceAfterDelete {
-		t.Fatalf("Trash space mismatch after delete to trash: expected %d, got %d", trashSpaceBefore+expectedTrashSpaceAfterDelete, trashSpaceAfter)
-	}
-	if trashInodesAfter != trashInodesBefore+expectedTrashInodesAfterDelete {
-		t.Fatalf("Trash inodes mismatch after delete to trash: expected %d, got %d", trashInodesBefore+expectedTrashInodesAfterDelete, trashInodesAfter)
-	}
-
-	var newFileAttr Attr
-	if st := m.GetAttr(ctx, fileInode, &newFileAttr); st != 0 {
-		t.Fatalf("GetAttr after unlink: %s", st)
-	}
-	trashInode := newFileAttr.Parent
-	if !trashInode.IsTrash() {
-		t.Fatalf("File parent should be trash inode: got %d", trashInode)
-	}
-	t.Logf("Trash inode: %d", trashInode)
-
-	var trashAttr Attr
-	if st := m.GetAttr(ctx, trashInode, &trashAttr); st != 0 {
-		t.Fatalf("GetAttr on trash inode %d: %s", trashInode, st)
-	}
-	t.Logf("Trash inode %d attr: Type=%d, Parent=%d", trashInode, trashAttr.Typ, trashAttr.Parent)
-
-	var trashEntries []*Entry
-	if st := m.Readdir(ctx, trashInode, 0, &trashEntries); st != 0 {
-		t.Fatalf("Readdir trash %d: %s", trashInode, st)
-	}
-	var filteredEntries []*Entry
-	for _, entry := range trashEntries {
-		if string(entry.Name) != "." && string(entry.Name) != ".." {
-			filteredEntries = append(filteredEntries, entry)
-		}
-	}
-	if len(filteredEntries) != 1 {
-		t.Fatalf("Expected 1 entry in trash, got %d (total: %d)", len(filteredEntries), len(trashEntries))
-	}
-
-	if st := m.Unlink(ctx, trashInode, string(filteredEntries[0].Name)); st != 0 {
-		t.Fatalf("Delete from trash: %s", st)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	trashSpaceFinal, trashInodesFinal := m.GetTrashStats(ctx)
-	if trashSpaceFinal != trashSpaceAfter-expectedTrashSpaceAfterDelete {
-		t.Fatalf("Trash space mismatch after delete from trash: expected %d, got %d", trashSpaceAfter-expectedTrashSpaceAfterDelete, trashSpaceFinal)
-	}
-	if trashInodesFinal != trashInodesAfter-expectedTrashInodesAfterDelete {
-		t.Fatalf("Trash inodes mismatch after delete from trash: expected %d, got %d", trashInodesAfter-expectedTrashInodesAfterDelete, trashInodesFinal)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	var totalSpace2, availSpace2 uint64
-	var iused2, iavail2 uint64
-	if st := m.StatFS(ctx, root, &totalSpace2, &availSpace2, &iused2, &iavail2); st != 0 {
-		t.Fatalf("StatFS after delete: %s", st)
-	}
-	usedSpaceAfter := int64(totalSpace2 - availSpace2)
-	usedInodesAfter := int64(iused2)
-
-	if usedSpaceAfter != usedSpaceBefore-expectedSpaceDecrease {
-		t.Fatalf("Used space mismatch: expected %d, got %d", usedSpaceBefore-expectedSpaceDecrease, usedSpaceAfter)
-	}
-	if usedInodesAfter != usedInodesBefore-expectedTrashInodesAfterDelete {
-		t.Fatalf("Used inodes mismatch: expected %d, got %d", usedInodesBefore-expectedTrashInodesAfterDelete, usedInodesAfter)
-	}
-}
-
-func testTrashRmdirStats(t *testing.T, m Meta, ctx Context, root Ino) {
-	var dirInode Ino
-	var dirAttr Attr
-	if st := m.Mkdir(ctx, root, "test_dir", 0755, 0, 0, &dirInode, &dirAttr); st != 0 {
-		t.Fatalf("Create test directory: %s", st)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	trashSpaceBefore, trashInodesBefore := m.GetTrashStats(ctx)
-	expectedTrashSpaceAfterDelete := align4K(0)
-	expectedTrashInodesAfterDelete := int64(1)
-
-	if st := m.Rmdir(ctx, root, "test_dir"); st != 0 {
-		t.Fatalf("Rmdir to trash: %s", st)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	trashSpaceAfter, trashInodesAfter := m.GetTrashStats(ctx)
-	if trashSpaceAfter != trashSpaceBefore+expectedTrashSpaceAfterDelete {
-		t.Fatalf("Trash space mismatch after rmdir to trash: expected %d, got %d", trashSpaceBefore+expectedTrashSpaceAfterDelete, trashSpaceAfter)
-	}
-	if trashInodesAfter != trashInodesBefore+expectedTrashInodesAfterDelete {
-		t.Fatalf("Trash inodes mismatch after rmdir to trash: expected %d, got %d", trashInodesBefore+expectedTrashInodesAfterDelete, trashInodesAfter)
-	}
-
-	var newDirAttr Attr
-	if st := m.GetAttr(ctx, dirInode, &newDirAttr); st != 0 {
-		t.Fatalf("GetAttr after rmdir: %s", st)
-	}
-	if newDirAttr.Parent != root+1 {
-		t.Fatalf("Directory parent should be trash inode: expected %d, got %d", root+1, newDirAttr.Parent)
-	}
-
-	var trashEntries []*Entry
-	if st := m.Readdir(ctx, root+1, 0, &trashEntries); st != 0 {
-		t.Fatalf("Readdir trash: %s", st)
-	}
-	if len(trashEntries) != 1 {
-		t.Fatalf("Expected 1 entry in trash, got %d", len(trashEntries))
-	}
-
-	if st := m.Rmdir(ctx, root+1, string(trashEntries[0].Name)); st != 0 {
-		t.Fatalf("Delete directory from trash: %s", st)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	trashSpaceFinal, trashInodesFinal := m.GetTrashStats(ctx)
-	if trashSpaceFinal != trashSpaceAfter-expectedTrashSpaceAfterDelete {
-		t.Fatalf("Trash space mismatch after delete from trash: expected %d, got %d", trashSpaceAfter-expectedTrashSpaceAfterDelete, trashSpaceFinal)
-	}
-	if trashInodesFinal != trashInodesAfter-expectedTrashInodesAfterDelete {
-		t.Fatalf("Trash inodes mismatch after delete from trash: expected %d, got %d", trashInodesAfter-expectedTrashInodesAfterDelete, trashInodesFinal)
-	}
-}
-
-func testBatchTrashUnlinkStats(t *testing.T, m Meta, ctx Context, root Ino) {
-	var fileInodes []Ino
-	fileNames := []string{"batch_file1", "batch_file2", "batch_file3"}
-	fileSize := uint64(4096)
-
-	for _, fileName := range fileNames {
-		var inode Ino
-		var attr Attr
-		if st := m.Create(ctx, root, fileName, 0644, 0, 0, &inode, &attr); st != 0 {
-			t.Fatalf("Create %s: %s", fileName, st)
+	// Test 1: Single file delete to trash and delete from trash
+	{
+		var fileInode Ino
+		var fileAttr Attr
+		fileSize := uint64(8192)
+		if st := m.Create(ctx, root, "test_file.txt", 0644, 0, 0, &fileInode, &fileAttr); st != 0 {
+			t.Fatalf("Create test file: %s", st)
 		}
 		var sliceId uint64
 		if st := m.NewSlice(ctx, &sliceId); st != 0 {
-			t.Fatalf("NewSlice for %s: %s", fileName, st)
+			t.Fatalf("NewSlice: %s", st)
 		}
 		slice := Slice{Id: sliceId, Size: uint32(fileSize), Len: uint32(fileSize)}
-		if st := m.Write(ctx, inode, 0, 0, slice, time.Now()); st != 0 {
-			t.Fatalf("Write data to %s: %s", fileName, st)
+		if st := m.Write(ctx, fileInode, 0, 0, slice, time.Now()); st != 0 {
+			t.Fatalf("Write data: %s", st)
 		}
-		fileInodes = append(fileInodes, inode)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	var totalSpace, availSpace uint64
-	var iused, iavail uint64
-	if st := m.StatFS(ctx, root, &totalSpace, &availSpace, &iused, &iavail); st != 0 {
-		t.Fatalf("StatFS before batch delete: %s", st)
-	}
-	usedSpaceBefore := int64(totalSpace - availSpace)
-	usedInodesBefore := int64(iused)
-
-	trashSpaceBefore, trashInodesBefore := m.GetTrashStats(ctx)
-	expectedBatchSpace := align4K(fileSize) * int64(len(fileNames))
-	expectedBatchInodes := int64(len(fileNames))
-
-	var entries []*Entry
-	for i, fileName := range fileNames {
-		var attr Attr
-		if st := m.GetAttr(ctx, fileInodes[i], &attr); st != 0 {
-			t.Fatalf("GetAttr for %s: %s", fileName, st)
+		if st := m.Close(ctx, fileInode); st != 0 {
+			t.Fatalf("Close file: %s", st)
 		}
-		entries = append(entries, &Entry{
-			Inode: fileInodes[i],
-			Name:  []byte(fileName),
-			Attr:  &attr,
-		})
-	}
+		m.getBase().doFlushStats()
+		time.Sleep(200 * time.Millisecond)
 
-	var count uint64
-	if st := m.getBase().BatchUnlink(ctx, root, entries, &count, false); st != 0 {
-		t.Fatalf("BatchUnlink to trash: %s", st)
-	}
+		trashSpaceBefore, trashInodesBefore = m.GetTrashStats(ctx)
+		expectedSpace := align4K(fileSize)
 
-	if count != uint64(len(fileNames)) {
-		t.Fatalf("BatchUnlink count mismatch: expected %d, got %d", len(fileNames), count)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	trashSpaceAfter, trashInodesAfter := m.GetTrashStats(ctx)
-	if trashSpaceAfter != trashSpaceBefore+expectedBatchSpace {
-		t.Fatalf("Trash space mismatch after batch delete to trash: expected %d, got %d", trashSpaceBefore+expectedBatchSpace, trashSpaceAfter)
-	}
-	if trashInodesAfter != trashInodesBefore+expectedBatchInodes {
-		t.Fatalf("Trash inodes mismatch after batch delete to trash: expected %d, got %d", trashInodesBefore+expectedBatchInodes, trashInodesAfter)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	var totalSpace2, availSpace2 uint64
-	var iused2, iavail2 uint64
-	if st := m.StatFS(ctx, root, &totalSpace2, &availSpace2, &iused2, &iavail2); st != 0 {
-		t.Fatalf("StatFS after batch delete: %s", st)
-	}
-	usedSpaceAfter := int64(totalSpace2 - availSpace2)
-	usedInodesAfter := int64(iused2)
-
-	if usedSpaceAfter != usedSpaceBefore {
-		t.Fatalf("Used space should remain unchanged during move to trash: expected %d, got %d", usedSpaceBefore, usedSpaceAfter)
-	}
-	if usedInodesAfter != usedInodesBefore {
-		t.Fatalf("Used inodes should remain unchanged during move to trash: expected %d, got %d", usedInodesBefore, usedInodesAfter)
-	}
-}
-
-func testRestoreFromTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
-	var srcFileInode Ino
-	var srcFileAttr Attr
-	if st := m.Create(ctx, root, "restore_test.txt", 0644, 0, 0, &srcFileInode, &srcFileAttr); st != 0 {
-		t.Fatalf("Create source file: %s", st)
-	}
-
-	fileSize := uint64(6144)
-	var sliceId uint64
-	if st := m.NewSlice(ctx, &sliceId); st != 0 {
-		t.Fatalf("NewSlice: %s", st)
-	}
-	slice := Slice{Id: sliceId, Size: uint32(fileSize), Len: uint32(fileSize)}
-	if st := m.Write(ctx, srcFileInode, 0, 0, slice, time.Now()); st != 0 {
-		t.Fatalf("Write data: %s", st)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	var restoreDirIno Ino
-	var restoreDirAttr Attr
-	if st := m.Mkdir(ctx, root, "restore_target", 0755, 0, 0, &restoreDirIno, &restoreDirAttr); st != 0 {
-		t.Fatalf("Create restore target directory: %s", st)
-	}
-
-	trashSpaceBefore, trashInodesBefore := m.GetTrashStats(ctx)
-	expectedRestoreSpace := -align4K(fileSize)
-	expectedRestoreInodes := int64(-1)
-
-	if st := m.Unlink(ctx, root, "restore_test.txt"); st != 0 {
-		t.Fatalf("Delete to trash: %s", st)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	trashSpaceAfterDelete, trashInodesAfterDelete := m.GetTrashStats(ctx)
-	if trashSpaceAfterDelete != trashSpaceBefore+align4K(fileSize) {
-		t.Fatalf("Trash space mismatch after delete: expected %d, got %d", trashSpaceBefore+align4K(fileSize), trashSpaceAfterDelete)
-	}
-	if trashInodesAfterDelete != trashInodesBefore+1 {
-		t.Fatalf("Trash inodes mismatch after delete: expected %d, got %d", trashInodesBefore+1, trashInodesAfterDelete)
-	}
-
-	var trashEntries []*Entry
-	if st := m.Readdir(ctx, root+1, 0, &trashEntries); st != 0 {
-		t.Fatalf("Readdir trash: %s", st)
-	}
-	if len(trashEntries) != 1 {
-		t.Fatalf("Expected 1 entry in trash, got %d", len(trashEntries))
-	}
-
-	var restoredInode Ino
-	var restoredAttr Attr
-	if st := m.Rename(ctx, root+1, string(trashEntries[0].Name), restoreDirIno, "restored_file.txt", 0, &restoredInode, &restoredAttr); st != 0 {
-		t.Fatalf("Restore from trash: %s", st)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	trashSpaceAfterRestore, trashInodesAfterRestore := m.GetTrashStats(ctx)
-	if trashSpaceAfterRestore != trashSpaceAfterDelete+expectedRestoreSpace {
-		t.Fatalf("Trash space mismatch after restore: expected %d, got %d", trashSpaceAfterDelete+expectedRestoreSpace, trashSpaceAfterRestore)
-	}
-	if trashInodesAfterRestore != trashInodesAfterDelete+expectedRestoreInodes {
-		t.Fatalf("Trash inodes mismatch after restore: expected %d, got %d", trashInodesAfterDelete+expectedRestoreInodes, trashInodesAfterRestore)
-	}
-
-	var restoredFileAttr Attr
-	if st := m.GetAttr(ctx, srcFileInode, &restoredFileAttr); st != 0 {
-		t.Fatalf("GetAttr after restore: %s", st)
-	}
-	if restoredFileAttr.Parent != restoreDirIno {
-		t.Fatalf("Restored file parent should be restore dir: expected %d, got %d", restoreDirIno, restoredFileAttr.Parent)
-	}
-
-	var checkFileAttr Attr
-	if st := m.Lookup(ctx, restoreDirIno, "restored_file.txt", &srcFileInode, &checkFileAttr, false); st != 0 {
-		t.Fatalf("Lookup restored file: %s", st)
-	}
-
-	if st := m.Unlink(ctx, restoreDirIno, "restored_file.txt"); st != 0 {
-		t.Fatalf("Unlink restored_file.txt: %s", st)
-	}
-	if st := m.Rmdir(ctx, root, "restore_target"); st != 0 {
-		t.Fatalf("Rmdir restore_target: %s", st)
-	}
-}
-
-func testDeleteFromTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
-	var fileInode Ino
-	var fileAttr Attr
-	if st := m.Create(ctx, root, "delete_test.txt", 0644, 0, 0, &fileInode, &fileAttr); st != 0 {
-		t.Fatalf("Create test file: %s", st)
-	}
-
-	fileSize := uint64(5120)
-	var sliceId uint64
-	if st := m.NewSlice(ctx, &sliceId); st != 0 {
-		t.Fatalf("NewSlice: %s", st)
-	}
-	slice := Slice{Id: sliceId, Size: uint32(fileSize), Len: uint32(fileSize)}
-	if st := m.Write(ctx, fileInode, 0, 0, slice, time.Now()); st != 0 {
-		t.Fatalf("Write data: %s", st)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	var totalSpaceBefore, availSpaceBefore uint64
-	var iusedBefore, iavailBefore uint64
-	if st := m.StatFS(ctx, root, &totalSpaceBefore, &availSpaceBefore, &iusedBefore, &iavailBefore); st != 0 {
-		t.Fatalf("StatFS before delete: %s", st)
-	}
-	usedSpaceBefore := int64(totalSpaceBefore - availSpaceBefore)
-	usedInodesBefore := int64(iusedBefore)
-
-	trashSpaceBefore, trashInodesBefore := m.GetTrashStats(ctx)
-	expectedDeleteSpace := -align4K(fileSize)
-	expectedDeleteInodes := int64(-1)
-
-	if st := m.Unlink(ctx, root, "delete_test.txt"); st != 0 {
-		t.Fatalf("Delete to trash: %s", st)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	trashSpaceInTrash, trashInodesInTrash := m.GetTrashStats(ctx)
-	if trashSpaceInTrash != trashSpaceBefore+align4K(fileSize) {
-		t.Fatalf("Trash space mismatch after move to trash: expected %d, got %d", trashSpaceBefore+align4K(fileSize), trashSpaceInTrash)
-	}
-	if trashInodesInTrash != trashInodesBefore+1 {
-		t.Fatalf("Trash inodes mismatch after move to trash: expected %d, got %d", trashInodesBefore+1, trashInodesInTrash)
-	}
-
-	var trashEntries []*Entry
-	if st := m.Readdir(ctx, root+1, 0, &trashEntries); st != 0 {
-		t.Fatalf("Readdir trash: %s", st)
-	}
-	if len(trashEntries) != 1 {
-		t.Fatalf("Expected 1 entry in trash, got %d", len(trashEntries))
-	}
-
-	if st := m.Unlink(ctx, root+1, string(trashEntries[0].Name)); st != 0 {
-		t.Fatalf("Delete from trash: %s", st)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	trashSpaceAfter, trashInodesAfter := m.GetTrashStats(ctx)
-	if trashSpaceAfter != trashSpaceInTrash+expectedDeleteSpace {
-		t.Fatalf("Trash space mismatch after delete from trash: expected %d, got %d", trashSpaceInTrash+expectedDeleteSpace, trashSpaceAfter)
-	}
-	if trashInodesAfter != trashInodesInTrash+expectedDeleteInodes {
-		t.Fatalf("Trash inodes mismatch after delete from trash: expected %d, got %d", trashInodesInTrash+expectedDeleteInodes, trashInodesAfter)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	var totalSpaceAfter, availSpaceAfter uint64
-	var iusedAfter, iavailAfter uint64
-	if st := m.StatFS(ctx, root, &totalSpaceAfter, &availSpaceAfter, &iusedAfter, &iavailAfter); st != 0 {
-		t.Fatalf("StatFS after delete: %s", st)
-	}
-	usedSpaceAfter := int64(totalSpaceAfter - availSpaceAfter)
-	usedInodesAfter := int64(iusedAfter)
-
-	if usedSpaceAfter != usedSpaceBefore+expectedDeleteSpace {
-		t.Fatalf("Used space mismatch: expected %d, got %d", usedSpaceBefore+expectedDeleteSpace, usedSpaceAfter)
-	}
-	if usedInodesAfter != usedInodesBefore+expectedDeleteInodes {
-		t.Fatalf("Used inodes mismatch: expected %d, got %d", usedInodesBefore+expectedDeleteInodes, usedInodesAfter)
-	}
-}
-
-func testMixedTrashOperations(t *testing.T, m Meta, ctx Context, root Ino) {
-	var files []struct {
-		inode Ino
-		name  string
-		size  uint64
-	}
-
-	for i := 0; i < 5; i++ {
-		var inode Ino
-		var attr Attr
-		name := fmt.Sprintf("mixed_file_%d.txt", i)
-		size := uint64(1024 + uint64(i)*512)
-		if st := m.Create(ctx, root, name, 0644, 0, 0, &inode, &attr); st != 0 {
-			t.Fatalf("Create %s: %s", name, st)
+		if st := m.Unlink(ctx, root, "test_file.txt"); st != 0 {
+			t.Fatalf("Unlink to trash: %s", st)
 		}
-		var sliceId uint64
-		if st := m.NewSlice(ctx, &sliceId); st != 0 {
-			t.Fatalf("NewSlice for %s: %s", name, st)
+		m.getBase().doFlushStats()
+		time.Sleep(200 * time.Millisecond)
+
+		trashSpaceAfter, trashInodesAfter := m.GetTrashStats(ctx)
+		if trashSpaceAfter != trashSpaceBefore+int64(expectedSpace) {
+			t.Fatalf("Trash space mismatch after delete to trash: expected %d, got %d", trashSpaceBefore+int64(expectedSpace), trashSpaceAfter)
 		}
-		slice := Slice{Id: sliceId, Size: uint32(size), Len: uint32(size)}
-		if st := m.Write(ctx, inode, 0, 0, slice, time.Now()); st != 0 {
-			t.Fatalf("Write data to %s: %s", name, st)
+		if trashInodesAfter != trashInodesBefore+1 {
+			t.Fatalf("Trash inodes mismatch after delete to trash: expected %d, got %d", trashInodesBefore+1, trashInodesAfter)
 		}
-		files = append(files, struct {
-			inode Ino
-			name  string
-			size  uint64
-		}{inode, name, size})
-	}
 
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	trashSpaceInitial, trashInodesInitial := m.GetTrashStats(ctx)
-
-	var entries []*Entry
-	totalBatchSize := int64(0)
-	for _, f := range files[:3] {
-		var attr Attr
-		if st := m.GetAttr(ctx, f.inode, &attr); st != 0 {
-			t.Fatalf("GetAttr for %s: %s", f.name, st)
+		var newFileAttr Attr
+		if st := m.GetAttr(ctx, fileInode, &newFileAttr); st != 0 {
+			t.Fatalf("GetAttr after unlink: %s", st)
 		}
-		entries = append(entries, &Entry{
-			Inode: f.inode,
-			Name:  []byte(f.name),
-			Attr:  &attr,
-		})
-		totalBatchSize += align4K(f.size)
-	}
+		trashInode := newFileAttr.Parent
+		if !trashInode.IsTrash() {
+			t.Fatalf("File parent should be trash inode: got %d", trashInode)
+		}
 
-	var count uint64
-	if st := m.getBase().BatchUnlink(ctx, root, entries, &count, false); st != 0 {
-		t.Fatalf("BatchUnlink: %s", st)
-	}
-	if count != 3 {
-		t.Fatalf("BatchUnlink count mismatch: expected 3, got %d", count)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	trashSpaceAfterBatch, trashInodesAfterBatch := m.GetTrashStats(ctx)
-	if trashSpaceAfterBatch != trashSpaceInitial+totalBatchSize {
-		t.Fatalf("Trash space mismatch after batch delete: expected %d, got %d", trashSpaceInitial+totalBatchSize, trashSpaceAfterBatch)
-	}
-	if trashInodesAfterBatch != trashInodesInitial+3 {
-		t.Fatalf("Trash inodes mismatch after batch delete: expected %d, got %d", trashInodesInitial+3, trashInodesAfterBatch)
-	}
-
-	if st := m.Unlink(ctx, root, "mixed_file_3.txt"); st != 0 {
-		t.Fatalf("Single unlink: %s", st)
-	}
-
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
-
-	trashSpaceAfterSingle, trashInodesAfterSingle := m.GetTrashStats(ctx)
-	expectedSingleSize := align4K(files[3].size)
-	if trashSpaceAfterSingle != trashSpaceAfterBatch+expectedSingleSize {
-		t.Fatalf("Trash space mismatch after single delete: expected %d, got %d", trashSpaceAfterBatch+expectedSingleSize, trashSpaceAfterSingle)
-	}
-	if trashInodesAfterSingle != trashInodesAfterBatch+1 {
-		t.Fatalf("Trash inodes mismatch after single delete: expected %d, got %d", trashInodesAfterBatch+1, trashInodesAfterSingle)
-	}
-
-	var trashEntries []*Entry
-	if st := m.Readdir(ctx, root+1, 0, &trashEntries); st != 0 {
-		t.Fatalf("Readdir trash: %s", st)
-	}
-
-	for _, entry := range trashEntries {
-		if st := m.Unlink(ctx, root+1, string(entry.Name)); st != 0 {
+		if st := m.Unlink(ctx, trashInode, m.getBase().trashEntry(root, fileInode, "test_file.txt")); st != 0 {
 			t.Fatalf("Delete from trash: %s", st)
 		}
+		m.getBase().doFlushStats()
+		time.Sleep(200 * time.Millisecond)
+
+		trashSpaceFinal, trashInodesFinal := m.GetTrashStats(ctx)
+		if trashSpaceFinal != trashSpaceBefore {
+			t.Fatalf("Trash space mismatch after delete from trash: expected %d, got %d", trashSpaceBefore, trashSpaceFinal)
+		}
+		if trashInodesFinal != trashInodesBefore {
+			t.Fatalf("Trash inodes mismatch after delete from trash: expected %d, got %d", trashInodesBefore, trashInodesFinal)
+		}
 	}
 
-	m.getBase().doFlushStats()
-	time.Sleep(200 * time.Millisecond)
+	// Test 2: Directory delete to trash and delete from trash
+	{
+		var dirInode Ino
+		if st := m.Mkdir(ctx, root, "test_dir", 0755, 0, 0, &dirInode, &Attr{}); st != 0 {
+			t.Fatalf("Create test directory: %s", st)
+		}
+		m.getBase().doFlushStats()
+		time.Sleep(200 * time.Millisecond)
 
-	trashSpaceFinal, trashInodesFinal := m.GetTrashStats(ctx)
-	if trashSpaceFinal != trashSpaceInitial {
-		t.Fatalf("Trash space mismatch after all deletions: expected %d, got %d", trashSpaceInitial, trashSpaceFinal)
-	}
-	if trashInodesFinal != trashInodesInitial {
-		t.Fatalf("Trash inodes mismatch after all deletions: expected %d, got %d", trashInodesInitial, trashInodesFinal)
+		trashSpaceBefore, trashInodesBefore = m.GetTrashStats(ctx)
+
+		if st := m.Rmdir(ctx, root, "test_dir"); st != 0 {
+			t.Fatalf("Rmdir to trash: %s", st)
+		}
+		m.getBase().doFlushStats()
+		time.Sleep(200 * time.Millisecond)
+
+		trashSpaceAfter, trashInodesAfter := m.GetTrashStats(ctx)
+		expectedTrashSpace := trashSpaceBefore + align4K(0)
+		if trashSpaceAfter != expectedTrashSpace {
+			t.Fatalf("Trash space mismatch after rmdir to trash: expected %d, got %d", expectedTrashSpace, trashSpaceAfter)
+		}
+		if trashInodesAfter != trashInodesBefore+1 {
+			t.Fatalf("Trash inodes mismatch after rmdir to trash: expected %d, got %d", trashInodesBefore+1, trashInodesAfter)
+		}
+
+		var newDirAttr Attr
+		if st := m.GetAttr(ctx, dirInode, &newDirAttr); st != 0 {
+			t.Fatalf("GetAttr after rmdir: %s", st)
+		}
+		trashInode := newDirAttr.Parent
+		if !trashInode.IsTrash() {
+			t.Fatalf("Directory parent should be trash inode: got %d", trashInode)
+		}
+
+		if st := m.Rmdir(ctx, trashInode, m.getBase().trashEntry(root, dirInode, "test_dir")); st != 0 {
+			t.Fatalf("Delete directory from trash: %s", st)
+		}
+		m.getBase().doFlushStats()
+		time.Sleep(200 * time.Millisecond)
+
+		trashSpaceFinal, trashInodesFinal := m.GetTrashStats(ctx)
+		if trashSpaceFinal != trashSpaceBefore {
+			t.Fatalf("Trash space mismatch after delete from trash: expected %d, got %d", trashSpaceBefore, trashSpaceFinal)
+		}
+		if trashInodesFinal != trashInodesBefore {
+			t.Fatalf("Trash inodes mismatch after delete from trash: expected %d, got %d", trashInodesBefore, trashInodesFinal)
+		}
 	}
 
-	if st := m.Unlink(ctx, root, "mixed_file_4.txt"); st != 0 {
-		t.Fatalf("Unlink mixed_file_4.txt: %s", st)
+	// Test 3: Batch delete to trash
+	{
+		var fileInodes []Ino
+		fileNames := []string{"batch_file1", "batch_file2", "batch_file3"}
+		fileSize := uint64(4096)
+
+		for _, fileName := range fileNames {
+			var inode Ino
+			var attr Attr
+			if st := m.Create(ctx, root, fileName, 0644, 0, 0, &inode, &attr); st != 0 {
+				t.Fatalf("Create %s: %s", fileName, st)
+			}
+			var sliceId uint64
+			if st := m.NewSlice(ctx, &sliceId); st != 0 {
+				t.Fatalf("NewSlice for %s: %s", fileName, st)
+			}
+			slice := Slice{Id: sliceId, Size: uint32(fileSize), Len: uint32(fileSize)}
+			if st := m.Write(ctx, inode, 0, 0, slice, time.Now()); st != 0 {
+				t.Fatalf("Write data to %s: %s", fileName, st)
+			}
+			if st := m.Close(ctx, inode); st != 0 {
+				t.Fatalf("Close %s: %s", fileName, st)
+			}
+			fileInodes = append(fileInodes, inode)
+		}
+		m.getBase().doFlushStats()
+		time.Sleep(200 * time.Millisecond)
+
+		trashSpaceBefore, trashInodesBefore = m.GetTrashStats(ctx)
+		expectedBatchSpace := align4K(fileSize) * int64(len(fileNames))
+		expectedBatchInodes := int64(len(fileNames))
+
+		var entries []*Entry
+		for i, fileName := range fileNames {
+			var attr Attr
+			if st := m.GetAttr(ctx, fileInodes[i], &attr); st != 0 {
+				t.Fatalf("GetAttr for %s: %s", fileName, st)
+			}
+			entries = append(entries, &Entry{
+				Inode: fileInodes[i],
+				Name:  []byte(fileName),
+				Attr:  &attr,
+			})
+		}
+
+		var count uint64
+		if st := m.getBase().BatchUnlink(ctx, root, entries, &count, false); st != 0 {
+			t.Fatalf("BatchUnlink to trash: %s", st)
+		}
+		if count != uint64(len(fileNames)) {
+			t.Fatalf("BatchUnlink count mismatch: expected %d, got %d", len(fileNames), count)
+		}
+		m.getBase().doFlushStats()
+		time.Sleep(200 * time.Millisecond)
+
+		trashSpaceAfter, trashInodesAfter := m.GetTrashStats(ctx)
+		if trashSpaceAfter != trashSpaceBefore+expectedBatchSpace {
+			t.Fatalf("Trash space mismatch after batch delete to trash: expected %d, got %d", trashSpaceBefore+expectedBatchSpace, trashSpaceAfter)
+		}
+		if trashInodesAfter != trashInodesBefore+expectedBatchInodes {
+			t.Fatalf("Trash inodes mismatch after batch delete to trash: expected %d, got %d", trashInodesBefore+expectedBatchInodes, trashInodesAfter)
+		}
+
+		// Clean up batch files from trash
+		batchTrashSpaceBefore, batchTrashInodesBefore := m.GetTrashStats(ctx)
+		for i, fileName := range fileNames {
+			var attr Attr
+			if st := m.GetAttr(ctx, fileInodes[i], &attr); st != 0 {
+				t.Fatalf("GetAttr for %s: %s", fileName, st)
+			}
+			trashInode := attr.Parent
+			if !trashInode.IsTrash() {
+				t.Fatalf("File parent should be trash inode: got %d", trashInode)
+			}
+			if st := m.Unlink(ctx, trashInode, m.getBase().trashEntry(root, fileInodes[i], fileName)); st != 0 {
+				t.Fatalf("Delete %s from trash: %s", fileName, st)
+			}
+		}
+		m.getBase().doFlushStats()
+		time.Sleep(200 * time.Millisecond)
+
+		trashSpaceFinal, trashInodesFinal := m.GetTrashStats(ctx)
+		if trashSpaceFinal != batchTrashSpaceBefore-expectedBatchSpace {
+			t.Fatalf("Trash space mismatch after batch delete from trash: expected %d, got %d", batchTrashSpaceBefore-expectedBatchSpace, trashSpaceFinal)
+		}
+		if trashInodesFinal != batchTrashInodesBefore-expectedBatchInodes {
+			t.Fatalf("Trash inodes mismatch after batch delete from trash: expected %d, got %d", batchTrashInodesBefore-expectedBatchInodes, trashInodesFinal)
+		}
+	}
+
+	// Test 4: Restore from trash
+	{
+		var srcFileInode Ino
+		if st := m.Create(ctx, root, "restore_test.txt", 0644, 0, 0, &srcFileInode, &Attr{}); st != 0 {
+			t.Fatalf("Create source file: %s", st)
+		}
+
+		fileSize := uint64(6144)
+		var sliceId uint64
+		if st := m.NewSlice(ctx, &sliceId); st != 0 {
+			t.Fatalf("NewSlice: %s", st)
+		}
+		slice := Slice{Id: sliceId, Size: uint32(fileSize), Len: uint32(fileSize)}
+		if st := m.Write(ctx, srcFileInode, 0, 0, slice, time.Now()); st != 0 {
+			t.Fatalf("Write data: %s", st)
+		}
+		if st := m.Close(ctx, srcFileInode); st != 0 {
+			t.Fatalf("Close file: %s", st)
+		}
+		m.getBase().doFlushStats()
+		time.Sleep(200 * time.Millisecond)
+
+		var restoreDirIno Ino
+		if st := m.Mkdir(ctx, root, "restore_target", 0755, 0, 0, &restoreDirIno, &Attr{}); st != 0 {
+			t.Fatalf("Create restore target directory: %s", st)
+		}
+
+		trashSpaceBefore, trashInodesBefore = m.GetTrashStats(ctx)
+
+		if st := m.Unlink(ctx, root, "restore_test.txt"); st != 0 {
+			t.Fatalf("Delete to trash: %s", st)
+		}
+		m.getBase().doFlushStats()
+		time.Sleep(200 * time.Millisecond)
+
+		trashSpaceAfterDelete, trashInodesAfterDelete := m.GetTrashStats(ctx)
+		if trashSpaceAfterDelete != trashSpaceBefore+int64(align4K(fileSize)) {
+			t.Fatalf("Trash space mismatch after delete: expected %d, got %d", trashSpaceBefore+int64(align4K(fileSize)), trashSpaceAfterDelete)
+		}
+		if trashInodesAfterDelete != trashInodesBefore+1 {
+			t.Fatalf("Trash inodes mismatch after delete: expected %d, got %d", trashInodesBefore+1, trashInodesAfterDelete)
+		}
+
+		var newFileAttr Attr
+		if st := m.GetAttr(ctx, srcFileInode, &newFileAttr); st != 0 {
+			t.Fatalf("GetAttr after unlink: %s", st)
+		}
+		trashInode := newFileAttr.Parent
+		if !trashInode.IsTrash() {
+			t.Fatalf("File parent should be trash inode: got %d", trashInode)
+		}
+
+		var restoredInode Ino
+		var restoredAttr Attr
+		if st := m.Rename(ctx, trashInode, m.getBase().trashEntry(root, srcFileInode, "restore_test.txt"), restoreDirIno, "restored_file.txt", 0, &restoredInode, &restoredAttr); st != 0 {
+			t.Fatalf("Restore from trash: %s", st)
+		}
+		m.getBase().doFlushStats()
+		time.Sleep(200 * time.Millisecond)
+
+		trashSpaceAfterRestore, trashInodesAfterRestore := m.GetTrashStats(ctx)
+		if trashSpaceAfterRestore != trashSpaceBefore {
+			t.Fatalf("Trash space mismatch after restore: expected %d, got %d", trashSpaceBefore, trashSpaceAfterRestore)
+		}
+		if trashInodesAfterRestore != trashInodesBefore {
+			t.Fatalf("Trash inodes mismatch after restore: expected %d, got %d", trashInodesBefore, trashInodesAfterRestore)
+		}
+
+		var restoredFileAttr Attr
+		if st := m.GetAttr(ctx, srcFileInode, &restoredFileAttr); st != 0 {
+			t.Fatalf("GetAttr after restore: %s", st)
+		}
+		if restoredFileAttr.Parent != restoreDirIno {
+			t.Fatalf("Restored file parent should be restore dir: expected %d, got %d", restoreDirIno, restoredFileAttr.Parent)
+		}
+
+		if st := m.Unlink(ctx, restoreDirIno, "restored_file.txt"); st != 0 {
+			t.Fatalf("Unlink restored_file.txt: %s", st)
+		}
+		if st := m.Rmdir(ctx, root, "restore_target"); st != 0 {
+			t.Fatalf("Rmdir restore_target: %s", st)
+		}
 	}
 }
