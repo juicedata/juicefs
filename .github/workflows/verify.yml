@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ["1.21", "1.22", "1.23", "1.24", "1.25"]
+        version: ["1.23", "1.24", "1.25"]
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
