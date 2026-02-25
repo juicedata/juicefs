@@ -366,6 +366,7 @@ type javaConf struct {
 	UploadLimit         string `json:"uploadLimit"`
 	DownloadLimit       string `json:"downloadLimit"`
 	MaxUploads          int    `json:"maxUploads"`
+	MaxDownloads        int    `json:"maxDownloads"`
 	MaxDeletes          int    `json:"maxDeletes"`
 	SkipDirNlink        int    `json:"skipDirNlink"`
 	SkipDirMtime        string `json:"skipDirMtime"`
@@ -681,6 +682,7 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			CacheExpire:       utils.Duration(jConf.CacheExpire),
 			OSCache:           true,
 			MaxUpload:         jConf.MaxUploads,
+			MaxDownload:       jConf.MaxDownloads,
 			MaxRetries:        jConf.IORetries,
 			UploadLimit:       utils.ParseMbpsStr("upload-limit", jConf.UploadLimit) * 1e6 / 8,
 			DownloadLimit:     utils.ParseMbpsStr("download-limit", jConf.DownloadLimit) * 1e6 / 8,
