@@ -362,9 +362,10 @@ func (fs *fileSystem) Flock(cancel <-chan struct{}, in *fuse.LkIn, block bool) (
 func (fs *fileSystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) (status fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	fh, err := fs.v.Opendir(ctx, Ino(in.NodeId), in.Flags)
+	ino := Ino(in.NodeId)
+	fh, err := fs.v.Opendir(ctx, ino, in.Flags)
 	out.Fh = fh
-	if fs.conf.ReaddirCache {
+	if fs.conf.ReaddirCache && !vfs.IsSpecialNode(ino) {
 		out.OpenFlags |= fuse.FOPEN_CACHE_DIR | fuse.FOPEN_KEEP_CACHE // both flags are required
 	}
 	return fuse.Status(err)
