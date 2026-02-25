@@ -1896,13 +1896,6 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			if flags&RenameRestore != 0 && parentSrc.IsTrash() {
 				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, align4K(diffLength), 1)
-				var trashSpace int64
-				if attr.Typ == TypeFile {
-					trashSpace = -align4K(attr.Length)
-				} else {
-					trashSpace = -align4K(0)
-				}
-				m.en.updateTrashStats(trashSpace, -1)
 			}
 		}
 		if *tinode > 0 && flags != RenameExchange {

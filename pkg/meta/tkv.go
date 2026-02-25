@@ -1712,6 +1712,14 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 					if info.attr.Parent == 0 {
 						tx.incrBy(m.parentKey(info.inode, info.trash), 1)
 					}
+					var trashSpace int64
+					if info.typ == TypeFile {
+						trashSpace = align4K(info.attr.Length)
+					} else {
+						trashSpace = align4K(0)
+					}
+					batchSpace += trashSpace
+					batchInodes++
 				}
 				if info.attr.Parent == 0 && info.attr.Nlink > 0 {
 					tx.incrBy(m.parentKey(info.inode, parent), -1)

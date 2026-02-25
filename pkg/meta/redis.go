@@ -799,8 +799,8 @@ func (m *redisMeta) updateStats(space int64, inodes int64) {
 }
 
 func (m *redisMeta) updateTrashStats(space int64, inodes int64) {
-	atomic.AddInt64(&m.usedTrashSpace, space)
-	atomic.AddInt64(&m.usedTrashInodes, inodes)
+	atomic.AddInt64(&m.newTrashSpace, space)
+	atomic.AddInt64(&m.newTrashInodes, inodes)
 }
 
 func (m *redisMeta) doSyncVolumeStat(ctx Context) error {
@@ -2474,7 +2474,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			*tInode = dino
 			*tAttr = tattr
 		}
-		srcType = dtyp
+		srcType = typ
 		srcLength = iattr.Length
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
