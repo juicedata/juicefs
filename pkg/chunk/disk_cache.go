@@ -164,12 +164,15 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize, maxItems int64
 
 func (cache *cacheStore) setlimitByFreeRatio(usage DiskFreeRatio, freeRatio float32) {
 	sizeLimit := int64(float64(1-freeRatio) * float64(usage.spaceCap))
-	inodeLimit := int64(float64(1-freeRatio) * float64(usage.inodeCap))
 	if sizeLimit < cache.capacity {
 		limit := cache.capacity
 		cache.capacity = sizeLimit
 		logger.Infof("Adjusted cache capacity based on freeratio: from %d to %d bytes", limit, cache.capacity)
 	}
+	if usage.inodeCap <= 0 {
+		return
+	}
+	inodeLimit := int64(float64(1-freeRatio) * float64(usage.inodeCap))
 	if inodeLimit < cache.maxItems || cache.maxItems == 0 {
 		limit := cache.maxItems
 		cache.maxItems = inodeLimit
@@ -331,15 +334,15 @@ func (cache *cacheStore) stats() (int64, int64) {
 func (cache *cacheStore) checkFreeSpace() {
 	for cache.available() {
 		usage := cache.curFreeRatio()
-		cache.stageFull = usage.br < cache.freeRatio/2 || usage.fr < cache.freeRatio/2
-		cache.rawFull = usage.br < cache.freeRatio || usage.fr < cache.freeRatio
+		cache.stageFull = usage.br < cache.freeRatio/2 || (usage.inodeCap > 0 && usage.fr < cache.freeRatio/2)
+		cache.rawFull = usage.br < cache.freeRatio || (usage.inodeCap > 0 && usage.fr < cache.freeRatio)
 		if cache.rawFull && cache.eviction != "none" {
 			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(usage.br*100), int(usage.fr*100))
 			cache.Lock()
 			cache.cleanupFull()
 			cache.Unlock()
 			usage = cache.curFreeRatio()
-			cache.rawFull = usage.br < cache.freeRatio || usage.fr < cache.freeRatio
+			cache.rawFull = usage.br < cache.freeRatio || (usage.inodeCap > 0 && usage.fr < cache.freeRatio)
 		}
 		if cache.rawFull {
 			cache.uploadStaging()
