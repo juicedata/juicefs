@@ -345,8 +345,8 @@ type baseMeta struct {
 	groupQuotaUsedSpaceG  *prometheus.GaugeVec
 	groupQuotaUsedInodesG *prometheus.GaugeVec
 
-	trashFilesG prometheus.Gauge
-	trashSpaceG prometheus.Gauge
+	trashInodesG prometheus.Gauge
+	trashSpaceG  prometheus.Gauge
 
 	bgjobDels     *prometheus.CounterVec
 	bgjobDuration *prometheus.HistogramVec
@@ -512,9 +512,9 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			[]string{"gid"},
 		),
 
-		trashFilesG: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "trash_files",
-			Help: "Total number of files in trash.",
+		trashInodesG: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "trash_inodes",
+			Help: "Total number of inodes in trash.",
 		}),
 		trashSpaceG: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "trash_space_bytes",
@@ -568,7 +568,7 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(m.bgjobDuration)
 	reg.MustRegister(m.bgjobDels)
 	reg.MustRegister(m.subdirInfoG)
-	reg.MustRegister(m.trashFilesG)
+	reg.MustRegister(m.trashInodesG)
 	reg.MustRegister(m.trashSpaceG)
 
 	// Initialize subdir info metric
@@ -594,7 +594,7 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 			var trashSpace, trashInodes int64
 			trashSpace, trashInodes = m.GetTrashStats(Background())
 			m.trashSpaceG.Set(float64(trashSpace))
-			m.trashFilesG.Set(float64(trashInodes))
+			m.trashInodesG.Set(float64(trashInodes))
 			m.updateQuotaMetrics()
 			utils.SleepWithJitter(time.Second * 10)
 		}

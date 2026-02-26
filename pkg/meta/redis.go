@@ -728,6 +728,14 @@ func (m *redisMeta) totalInodesKey() string {
 	return m.prefix + totalInodes
 }
 
+func (m *redisMeta) trashSpaceKey() string {
+	return m.prefix + trashSpace
+}
+
+func (m *redisMeta) trashInodesKey() string {
+	return m.prefix + trashInodes
+}
+
 func (m *redisMeta) aclKey() string {
 	return m.prefix + "acl"
 }
@@ -799,8 +807,8 @@ func (m *redisMeta) updateStats(space int64, inodes int64) {
 }
 
 func (m *redisMeta) updateTrashStats(space int64, inodes int64) {
-	atomic.AddInt64(&m.newTrashSpace, space)
-	atomic.AddInt64(&m.newTrashInodes, inodes)
+	atomic.AddInt64(&m.usedTrashSpace, space)
+	atomic.AddInt64(&m.usedTrashInodes, inodes)
 }
 
 func (m *redisMeta) doSyncVolumeStat(ctx Context) error {
@@ -1691,6 +1699,8 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 						trashSpace = align4K(0)
 					}
 					newSpace, newInode = trashSpace, 1
+					pipe.IncrBy(ctx, m.trashSpaceKey(), trashSpace)
+					pipe.Incr(ctx, m.trashInodesKey())
 				}
 				if attr.Parent == 0 {
 					pipe.HIncrBy(ctx, m.parentKey(inode), parent.String(), -1)
@@ -1983,8 +1993,8 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 									Member: m.toDelete(info.inode, info.attr.Length),
 								})
 								keys = append(keys, m.inodeKey(info.inode))
-								batchSpace -= align4K(info.attr.Length)
-								batchInodes--
+								batchSpace += align4K(info.attr.Length)
+								batchInodes++
 								stats[m.usedSpaceKey()] -= align4K(info.attr.Length)
 								stats[m.totalInodesKey()]--
 							}
@@ -1994,8 +2004,8 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 						default:
 							keys = append(keys, m.inodeKey(info.inode))
 							needStats = true
-							batchSpace -= align4K(0)
-							batchInodes--
+							batchSpace += align4K(0)
+							batchInodes++
 							stats[m.usedSpaceKey()] -= align4K(0)
 							stats[m.totalInodesKey()]--
 						}
@@ -2041,6 +2051,8 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 					}
 					batchSpace += trashSpace
 					batchInodes++
+					stats[m.trashSpaceKey()] += trashSpace
+					stats[m.trashInodesKey()]++
 				}
 				appendUGQuotaDelta(&batchUserGroupQuotas, parent, info.attr.Uid, info.attr.Gid, info.attr.Nlink, info.typ, info.attr.Length)
 				visited[info.inode] = true
@@ -2234,6 +2246,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 	if err == nil {
 		if parent.IsTrash() {
 			m.updateTrashStats(-align4K(0), -1)
+			m.updateStats(-align4K(0), -1)
 		} else if trash > 0 {
 			m.updateTrashStats(align4K(0), 1)
 		} else {
@@ -2495,6 +2508,14 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 							pipe.HIncrBy(ctx, m.parentKey(dino), trash.String(), 1)
 							pipe.HIncrBy(ctx, m.parentKey(dino), parentDst.String(), -1)
 						}
+						var dtrashSpace int64
+						if dtyp == TypeFile {
+							dtrashSpace = align4K(tattr.Length)
+						} else {
+							dtrashSpace = align4K(0)
+						}
+						pipe.IncrBy(ctx, m.trashSpaceKey(), dtrashSpace)
+						pipe.Incr(ctx, m.trashInodesKey())
 					} else if dtyp != TypeDirectory && tattr.Nlink > 0 {
 						pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
 						if tattr.Parent == 0 {

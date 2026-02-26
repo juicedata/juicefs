@@ -1679,8 +1679,8 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 							} else {
 								tx.set(m.delfileKey(info.inode, info.attr.Length), m.packInt64(nowUnix))
 								tx.delete(m.inodeKey(info.inode))
-								batchSpace -= align4K(info.attr.Length)
-								batchInodes--
+								batchSpace += align4K(info.attr.Length)
+								batchInodes++
 							}
 							batchLength -= int64(info.attr.Length)
 						case TypeSymlink:
@@ -1688,8 +1688,8 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 							fallthrough
 						default:
 							tx.delete(m.inodeKey(info.inode))
-							batchSpace -= align4K(0)
-							batchInodes--
+							batchSpace += align4K(0)
+							batchInodes++
 							if info.typ != TypeSymlink {
 								batchLength -= int64(info.attr.Length)
 							}
@@ -1867,6 +1867,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 	if err == nil {
 		if parent.IsTrash() {
 			m.updateTrashStats(-align4K(0), -1)
+			m.updateStats(-align4K(0), -1)
 		} else if trash > 0 {
 			m.updateTrashStats(align4K(0), 1)
 		} else {
