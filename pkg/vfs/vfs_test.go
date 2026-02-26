@@ -876,8 +876,8 @@ func TestInternalFile(t *testing.T) {
 
 func TestReaddirCache(t *testing.T) {
 	engines := map[string]string{
-		"kv":    "",
-		"db":    "sqlite3://",
+		"kv":    "memkv://",
+		"db":    "sqlite3://:memory:",
 		"redis": "redis://127.0.0.1:6379/2",
 	}
 	for typ, metaUri := range engines {
@@ -1094,8 +1094,8 @@ func testReaddirBatch(t *testing.T, metaUri string, typ string, batchNum int) {
 
 func TestReadDirBatch(t *testing.T) {
 	engines := map[string]string{
-		"kv":    "",
-		"db":    "sqlite3://",
+		"kv":    "memkv://",
+		"db":    "sqlite3://:memory:",
 		"redis": "redis://127.0.0.1:6379/2",
 	}
 	for typ, metaUri := range engines {
@@ -1106,8 +1106,8 @@ func TestReadDirBatch(t *testing.T) {
 
 func TestReaddir(t *testing.T) {
 	engines := map[string]string{
-		"kv":    "",
-		"db":    "sqlite3://",
+		"kv":    "memkv://",
+		"db":    "sqlite3://:memory:",
 		"redis": "redis://127.0.0.1:6379/2",
 	}
 	for typ, metaUri := range engines {
