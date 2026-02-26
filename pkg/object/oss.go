@@ -388,14 +388,25 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	if regionID = os.Getenv("ALICLOUD_REGION_ID"); regionID == "" {
 		index := strings.Index(domain, ".")
 		if index <= 0 {
-			return nil, fmt.Errorf("invalid endpoint: %s", domain)
+			return nil, fmt.Errorf("invalid endpoint: %q", domain)
 		}
 		if strings.HasSuffix(domain, ".aliyuncs.com") {
-			old := strings.TrimPrefix(strings.TrimPrefix(domain[:index], "http://"), "https://")
-			regionID = strings.TrimPrefix(old, "oss-")
-			regionID = strings.TrimSuffix(regionID, "-internal")
-			regionID = strings.TrimSuffix(regionID, "-vpc")
-			useV4 = old != regionID
+			if strings.Contains(domain, ".privatelink.") {
+				// <id>.oss.<region>.privatelink.aliyuncs.com
+				parts := strings.Split(domain, ".")
+				if len(parts) < 3 {
+					return nil, fmt.Errorf("invalid private link endpoint: %q", domain)
+				}
+				regionID = parts[2]
+			} else {
+				// oss-<region>.aliyuncs.com
+				// oss-<region>-internal.aliyuncs.com
+				old := strings.TrimPrefix(strings.TrimPrefix(domain[:index], "http://"), "https://")
+				regionID = strings.TrimPrefix(old, "oss-")
+				regionID = strings.TrimSuffix(regionID, "-internal")
+				regionID = strings.TrimSuffix(regionID, "-vpc")
+				useV4 = old != regionID
+			}
 		}
 	}
 	config := oss.LoadDefaultConfig()
@@ -406,6 +417,7 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	} else {
 		config.WithSignatureVersion(oss.SignatureVersionV1)
 	}
+	config.UsePathStyle = oss.Ptr(strings.Contains(domain, ".privatelink."))
 	config.RetryMaxAttempts = oss.Ptr(1)
 	config.ConnectTimeout = oss.Ptr(time.Second * 2)
 	config.ReadWriteTimeout = oss.Ptr(time.Second * 5)
