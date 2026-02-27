@@ -1712,14 +1712,17 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 					if info.attr.Parent == 0 {
 						tx.incrBy(m.parentKey(info.inode, info.trash), 1)
 					}
-					var trashSpace int64
-					if info.typ == TypeFile {
-						trashSpace = align4K(info.attr.Length)
+					if info.attr.Nlink > 0 {
+						batchSpace += align4K(0)
+						batchInodes++
 					} else {
-						trashSpace = align4K(0)
+						if info.typ == TypeFile {
+							batchSpace += align4K(info.attr.Length)
+						} else {
+							batchSpace += align4K(0)
+						}
+						batchInodes++
 					}
-					batchSpace += trashSpace
-					batchInodes++
 				}
 				if info.attr.Parent == 0 && info.attr.Nlink > 0 {
 					tx.incrBy(m.parentKey(info.inode, parent), -1)
@@ -2096,6 +2099,11 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						tx.incrBy(m.parentKey(dino, trash), 1)
 						tx.incrBy(m.parentKey(dino, parentDst), -1)
 					}
+					if dtyp == TypeFile {
+						newSpace, newInode = align4K(tattr.Length), 1
+					} else {
+						newSpace, newInode = align4K(0), 1
+					}
 				} else if dtyp != TypeDirectory && tattr.Nlink > 0 {
 					tx.set(m.inodeKey(dino), m.marshal(&tattr))
 					if tattr.Parent == 0 {
@@ -2146,7 +2154,6 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}, parentLocks...)
 	if err == nil && !exchange {
 		if parentSrc.IsTrash() {
-			// Restore from trash: decrease trash stats only
 			var restoreSpace, restoreInodes int64
 			if srcType == TypeFile {
 				restoreSpace = -align4K(srcLength)
@@ -2161,7 +2168,6 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			m.updateStats(newSpace, newInode)
 		} else {
-			// Move to trash: increase trash stats
 			m.updateTrashStats(newSpace, newInode)
 		}
 	}

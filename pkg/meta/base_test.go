@@ -53,7 +53,6 @@ func testConfig() *Config {
 
 func testFormat() *Format {
 	return &Format{Name: "test", DirStats: true}
-	//return &Format{Name: "test", DirStats: true, TrashDays: 1}
 }
 
 func TestRedisClient(t *testing.T) {
@@ -2233,7 +2232,6 @@ func testTrashBasic(t *testing.T, m Meta, ctx Context, root Ino) {
 	if len(entries) != 9 {
 		t.Fatalf("entries: %d", len(entries))
 	}
-	// test Remove with skipTrash true/false
 	if st := m.Mkdir(ctx, 1, "d10", 0755, 022, 0, &parent, attr); st != 0 {
 		t.Fatalf("mkdir d10: %s", st)
 	}

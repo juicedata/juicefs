@@ -623,7 +623,6 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 	if err := m.syncAllTables(); err != nil {
 		return err
 	}
-
 	var s = setting{Name: "format"}
 	var ok bool
 	err := m.simpleTxn(Background(), func(ses *xorm.Session) (err error) {
@@ -2450,6 +2449,11 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					if err = mustInsert(s, &edge{Parent: trash, Name: []byte(name), Inode: dino, Type: de.Type}); err != nil {
 						return err
 					}
+					if de.Type == TypeFile {
+						newSpace, newInode = align4K(dn.Length), 1
+					} else {
+						newSpace, newInode = align4K(0), 1
+					}
 				} else if de.Type != TypeDirectory && dn.Nlink > 0 {
 					if _, err := s.Cols("ctime", "ctimensec", "nlink", "parent").Update(dn, &node{Inode: dino}); err != nil {
 						return err
@@ -2557,7 +2561,6 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}, parentLocks...)
 	if err == nil && !exchange {
 		if parentSrc.IsTrash() {
-			// Restore from trash: decrease trash stats only
 			var restoreSpace, restoreInodes int64
 			if srcType == TypeFile {
 				restoreSpace = -align4K(srcLength)
@@ -2572,7 +2575,6 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			m.updateStats(newSpace, newInode)
 		} else {
-			// Move to trash: increase trash stats
 			m.updateTrashStats(newSpace, newInode)
 		}
 	}
@@ -2893,15 +2895,8 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 						if _, err := s.Cols("nlink", "ctime", "ctimensec", "parent").Update(info.n, &node{Inode: info.n.Inode}); err != nil {
 							return err
 						}
-						// If moving to trash, record trash space and inode
 						if info.trash > 0 {
-							var trashSpace int64
-							if info.n.Type == TypeFile {
-								trashSpace = align4K(info.n.Length)
-							} else {
-								trashSpace = align4K(0)
-							}
-							totalSpace += trashSpace
+							totalSpace += align4K(0)
 							totalInodes++
 						}
 					} else {
