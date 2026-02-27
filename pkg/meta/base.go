@@ -3361,7 +3361,6 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 						// Synchronous fallback when concurrency limit reached
 						if childEno := cloneChild(e); childEno != 0 {
 							eno = childEno
-							break
 						}
 					}
 				}
