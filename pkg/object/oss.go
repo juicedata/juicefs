@@ -398,6 +398,7 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 					return nil, fmt.Errorf("invalid private link endpoint: %q", domain)
 				}
 				regionID = parts[2]
+				useV4 = true
 			} else {
 				// oss-<region>.aliyuncs.com
 				// oss-<region>-internal.aliyuncs.com
