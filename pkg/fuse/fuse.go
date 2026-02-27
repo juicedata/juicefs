@@ -364,7 +364,7 @@ func (fs *fileSystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse
 	defer releaseContext(ctx)
 	fh, err := fs.v.Opendir(ctx, Ino(in.NodeId), in.Flags)
 	out.Fh = fh
-	if fs.conf.ReaddirCache {
+	if fs.conf.ReaddirCache && !vfs.IsSpecialNode(Ino(in.NodeId)) {
 		out.OpenFlags |= fuse.FOPEN_CACHE_DIR | fuse.FOPEN_KEEP_CACHE // both flags are required
 	}
 	return fuse.Status(err)
