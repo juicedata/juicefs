@@ -30,6 +30,7 @@ import (
 	"net/url"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -4937,6 +4938,29 @@ func isDuplicateEntryErr(err error) bool {
 	return false
 }
 
+func (m *dbMeta) precheckDir(ctx Context, s xorm.Interface, ino Ino) (node, error) {
+	pn := node{Inode: ino}
+	ok, err := s.Get(&pn)
+	if err != nil {
+		return pn, err
+	}
+	if !ok {
+		return pn, syscall.ENOENT
+	}
+	if pn.Type != TypeDirectory {
+		return pn, syscall.ENOTDIR
+	}
+	if (pn.Flags & FlagImmutable) != 0 {
+		return pn, syscall.EPERM
+	}
+	var pattr Attr
+	m.parseAttr(&pn, &pattr)
+	if st := m.Access(ctx, ino, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+		return pn, st
+	}
+	return pn, nil
+}
+
 func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, attr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		n := node{Inode: srcIno}
@@ -4971,22 +4995,9 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		}
 
 		if top {
-			var pattr Attr
-			var pn = node{Inode: parent}
-			if exist, err := s.Get(&pn); err != nil {
+			pn, err := m.precheckDir(ctx, s, parent)
+			if err != nil {
 				return err
-			} else if !exist {
-				return syscall.ENOENT
-			}
-			m.parseAttr(&pn, &pattr)
-			if pattr.Typ != TypeDirectory {
-				return syscall.ENOTDIR
-			}
-			if (pattr.Flags & FlagImmutable) != 0 {
-				return syscall.EPERM
-			}
-			if eno := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); eno != 0 {
-				return eno
 			}
 			if n.Type != TypeDirectory {
 				now := time.Now().UnixNano()
@@ -5073,126 +5084,113 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	}, srcIno))
 }
 
-func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta) syscall.Errno {
-	// Phase 1: Setup and validation
+func (m *dbMeta) batchIncrChunkRefs(s *xorm.Session, refCounts map[uint64]int) error {
+	if len(refCounts) == 0 {
+		return nil
+	}
+	chunkIds := make([]uint64, 0, len(refCounts))
+	for id := range refCounts {
+		chunkIds = append(chunkIds, id)
+	}
+	slices.Sort(chunkIds)
+
+	batchSize := m.getTxnBatchNum()
+	for start := 0; start < len(chunkIds); start += batchSize {
+		end := min(start+batchSize, len(chunkIds))
+		batch := chunkIds[start:end]
+		var sb strings.Builder
+		args := make([]interface{}, 0, len(batch)*3)
+		fmt.Fprintf(&sb, "UPDATE %schunk_ref SET refs = refs + CASE ", m.tablePrefix)
+		for _, id := range batch {
+			sb.WriteString("WHEN chunkid = ? THEN ? ")
+			args = append(args, id, refCounts[id])
+		}
+		sb.WriteString("ELSE 0 END WHERE chunkid IN (")
+		for i, id := range batch {
+			if i > 0 {
+				sb.WriteString(",")
+			}
+			sb.WriteString("?")
+			args = append(args, id)
+		}
+		sb.WriteString(")")
+		if _, err := s.Exec(append([]interface{}{sb.String()}, args...)...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, result *batchCloneResult) syscall.Errno {
 	if len(entries) == 0 {
 		return 0
 	}
-
-	// Initialize statistics trackers
-	var totalLength, totalSpace, totalInodes int64
-	if userGroupQuotas != nil {
-		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
+	// precheck
+	if _, err := m.precheckDir(ctx, m.db, dstParent); err != nil {
+		return errno(err)
 	}
 
-	// Key data structure for tracking clone operations
 	type cloneInfo struct {
-		entry   *Entry // Original entry with Name, Inode (source), Attr
-		srcIno  Ino    // Source inode (from entry)
-		dstIno  Ino    // Newly allocated destination inode
-		srcNode *node  // Fetched source node
-		dstNode node   // Destination node (modified copy)
+		srcIno  Ino
+		dstIno  Ino
+		name    []byte
+		dstNode node
 	}
 
-	// Phase 2: Allocate destination inodes BEFORE the transaction
 	cloneInfos := make([]*cloneInfo, len(entries))
 	srcInodes := make([]Ino, 0, len(entries))
-	srcInodeSet := make(map[Ino]struct{})
-
-	for i, entry := range entries {
-		// (nextInode can call incrCounter which needs txn - would deadlock if inside txn)
+	srcInodeSet := make(map[Ino]struct{}, len(entries))
+	for i, e := range entries {
 		dstIno, err := m.nextInode()
 		if err != nil {
 			return errno(err)
 		}
-
-		info := &cloneInfo{
-			entry:  entry,
-			srcIno: entry.Inode,
-			dstIno: dstIno,
-		}
-		cloneInfos[i] = info
-
-		// Deduplicate for batch fetch (handles hardlinks)
-		if _, exists := srcInodeSet[entry.Inode]; !exists {
-			srcInodeSet[entry.Inode] = struct{}{}
-			srcInodes = append(srcInodes, entry.Inode)
+		cloneInfos[i] = &cloneInfo{srcIno: e.Inode, dstIno: dstIno, name: e.Name}
+		if _, exists := srcInodeSet[e.Inode]; !exists {
+			srcInodeSet[e.Inode] = struct{}{}
+			srcInodes = append(srcInodes, e.Inode)
 		}
 	}
 
-	// Phase 3-7: Execute in single transaction
 	err := m.txn(func(s *xorm.Session) error {
-		now := time.Now()
-		nowNano := now.UnixNano()
+		nowNano := time.Now().UnixNano()
+		*result = batchCloneResult{userGroupQuotas: make([]userGroupQuotaDelta, 0, len(entries))}
 
-		// Phase 3: Validate destination parent (once for entire batch)
-		pn := node{Inode: dstParent}
-		ok, err := s.Get(&pn)
+		pn, err := m.precheckDir(ctx, s, dstParent)
 		if err != nil {
 			return err
 		}
-		if !ok {
-			return syscall.ENOENT
-		}
-		if pn.Type != TypeDirectory {
-			return syscall.ENOTDIR
-		}
-		if (pn.Flags & FlagImmutable) != 0 {
-			return syscall.EPERM
-		}
 
-		var pattr Attr
-		m.parseAttr(&pn, &pattr)
-		if st := m.Access(ctx, dstParent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
-			return st
-		}
-
-		// Batch fetch all source nodes (no locking - clone is a point-in-time snapshot)
 		var srcNodes []node
-		if len(srcInodes) > 0 {
-			if err := s.In("inode", srcInodes).ForUpdate().Find(&srcNodes); err != nil {
-				return err
-			}
+		if err := s.In("inode", srcInodes).ForUpdate().Find(&srcNodes); err != nil {
+			return err
 		}
-
-		// Build lookup map and validate access
 		srcNodeMap := make(map[Ino]*node, len(srcNodes))
 		for i := range srcNodes {
 			srcNodeMap[srcNodes[i].Inode] = &srcNodes[i]
 		}
 
-		// Phase 4: Build destination nodes and organize by type
 		nodesIns := make([]interface{}, 0, len(entries))
 		edgesIns := make([]interface{}, 0, len(entries))
 		fileInodes := make([]Ino, 0)
 		symlinkInodes := make([]Ino, 0)
-
 		for _, info := range cloneInfos {
-			// Lookup and validate source node
-			srcNode, ok := srcNodeMap[info.srcIno]
+			sn, ok := srcNodeMap[info.srcIno]
 			if !ok {
 				return syscall.ENOENT
 			}
-			info.srcNode = srcNode
-
-			// Directories should not be in entries
-			if srcNode.Type == TypeDirectory {
+			if sn.Type == TypeDirectory {
 				return syscall.EINVAL
 			}
-
-			// Check read permission on source
-			var srcAttr Attr
-			m.parseAttr(srcNode, &srcAttr)
-			if st := m.Access(ctx, info.srcIno, MODE_MASK_R, &srcAttr); st != 0 {
+			var attr Attr
+			m.parseAttr(sn, &attr)
+			if st := m.Access(ctx, info.srcIno, MODE_MASK_R, &attr); st != 0 {
 				return st
 			}
 
-			// Build destination node
-			info.dstNode = *srcNode
+			info.dstNode = *sn
 			info.dstNode.Inode = info.dstIno
 			info.dstNode.Parent = dstParent
-
-			// Apply cmode & cumask
 			if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 				info.dstNode.Uid = ctx.Uid()
 				info.dstNode.Gid = ctx.Gid()
@@ -5201,239 +5199,122 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 				info.dstNode.setMtime(nowNano)
 				info.dstNode.setCtime(nowNano)
 			}
-
-			// Handle hardlinks (reset to 1)
-			if info.dstNode.Type == TypeFile && info.dstNode.Nlink > 1 {
+			if sn.Type == TypeFile && sn.Nlink > 1 {
 				info.dstNode.Nlink = 1
 			}
 
 			nodesIns = append(nodesIns, &info.dstNode)
 			edgesIns = append(edgesIns, &edge{
 				Parent: dstParent,
-				Name:   info.entry.Name,
+				Name:   info.name,
 				Inode:  info.dstIno,
-				Type:   info.dstNode.Type,
+				Type:   sn.Type,
 			})
 
-			// Categorize by type for batch fetching
-			switch srcNode.Type {
+			switch sn.Type {
 			case TypeFile:
-				if srcNode.Length > 0 {
+				if sn.Length > 0 {
 					fileInodes = append(fileInodes, info.srcIno)
 				}
 			case TypeSymlink:
 				symlinkInodes = append(symlinkInodes, info.srcIno)
 			}
+
+			entrySpace := align4K(sn.Length)
+			result.length += int64(sn.Length)
+			result.space += entrySpace
+			result.inodes++
+			result.userGroupQuotas = append(result.userGroupQuotas, userGroupQuotaDelta{
+				Uid: info.dstNode.Uid, Gid: info.dstNode.Gid,
+				Space: entrySpace, Inodes: 1,
+			})
 		}
 
-		var srcChunks []chunk
+		if err := mustInsert(s, nodesIns...); err != nil {
+			return err
+		}
+		if err := mustInsert(s, edgesIns...); err != nil {
+			if isDuplicateEntryErr(err) {
+				return syscall.EEXIST
+			}
+			return err
+		}
+
+		chunkRefCounts := make(map[uint64]int)
 		if len(fileInodes) > 0 {
+			var srcChunks []chunk
 			if err := s.In("inode", fileInodes).ForUpdate().Find(&srcChunks); err != nil {
 				return err
 			}
-		}
-		chunksByInode := make(map[Ino][]chunk)
-		for _, c := range srcChunks {
-			chunksByInode[c.Inode] = append(chunksByInode[c.Inode], c)
-		}
-
-		// Batch fetch symlinks
-		var srcSymlinks []symlink
-		if len(symlinkInodes) > 0 {
-			if err := s.In("inode", symlinkInodes).Find(&srcSymlinks); err != nil {
-				return err
+			chunksByInode := make(map[Ino][]chunk, len(fileInodes))
+			for _, c := range srcChunks {
+				chunksByInode[c.Inode] = append(chunksByInode[c.Inode], c)
 			}
-		}
-		symlinksByInode := make(map[Ino]*symlink)
-		for i := range srcSymlinks {
-			symlinksByInode[srcSymlinks[i].Inode] = &srcSymlinks[i]
-		}
-
-		// Batch fetch xattrs
-		var srcXattrs []xattr
-		if len(srcInodes) > 0 {
-			if err := s.In("inode", srcInodes).Find(&srcXattrs); err != nil {
-				return err
-			}
-		}
-		xattrsByInode := make(map[Ino][]xattr)
-		for _, x := range srcXattrs {
-			xattrsByInode[x.Inode] = append(xattrsByInode[x.Inode], x)
-		}
-
-		// Phase 6: Build type-specific buffers
-		xattrsIns := make([]interface{}, 0)
-		chunksIns := make([]interface{}, 0)
-		symlinksIns := make([]interface{}, 0)
-
-		// CRITICAL: Aggregate chunk_ref updates per chunk to minimize database operations
-		type chunkRefUpdate struct {
-			chunkid uint64
-			size    uint32
-			count   int
-		}
-		chunkRefMap := make(map[uint64]*chunkRefUpdate)
-
-		for _, info := range cloneInfos {
-			// Copy xattrs
-			if xattrs, exists := xattrsByInode[info.srcIno]; exists {
-				for _, x := range xattrs {
-					xattrsIns = append(xattrsIns, &xattr{
-						Inode: info.dstIno,
-						Name:  x.Name,
-						Value: x.Value,
+			chunksIns := make([]interface{}, 0, len(srcChunks))
+			for i := range cloneInfos {
+				for _, c := range chunksByInode[cloneInfos[i].srcIno] {
+					chunksIns = append(chunksIns, &chunk{
+						Inode: cloneInfos[i].dstIno, Indx: c.Indx, Slices: c.Slices,
 					})
-				}
-			}
-
-			// Type-specific handling
-			switch info.srcNode.Type {
-			case TypeFile:
-				if info.srcNode.Length > 0 {
-					chunks := chunksByInode[info.srcIno]
-					for _, c := range chunks {
-						chunksIns = append(chunksIns, &chunk{
-							Inode:  info.dstIno,
-							Indx:   c.Indx,
-							Slices: c.Slices,
-						})
-
-						// Aggregate chunk reference increments
-						slices := readSliceBuf(c.Slices)
-						for _, sli := range slices {
-							if sli.id > 0 {
-								if ref, exists := chunkRefMap[sli.id]; exists {
-									ref.count++
-								} else {
-									chunkRefMap[sli.id] = &chunkRefUpdate{
-										chunkid: sli.id,
-										size:    sli.size,
-										count:   1,
-									}
-								}
-							}
+					for _, sli := range readSliceBuf(c.Slices) {
+						if sli.id > 0 {
+							chunkRefCounts[sli.id]++
 						}
 					}
 				}
-
-			case TypeSymlink:
-				sym, exists := symlinksByInode[info.srcIno]
-				if !exists {
-					return syscall.ENOENT
-				}
-				symlinksIns = append(symlinksIns, &symlink{
-					Inode:  info.dstIno,
-					Target: sym.Target,
-				})
 			}
-
-			// Track statistics
-			entrySpace := align4K(info.srcNode.Length)
-			totalLength += int64(info.srcNode.Length)
-			totalSpace += entrySpace
-			totalInodes++
-
-			if userGroupQuotas != nil {
-				*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
-					Uid:    info.dstNode.Uid,
-					Gid:    info.dstNode.Gid,
-					Space:  entrySpace,
-					Inodes: 1,
-				})
-			}
-		}
-
-		// Phase 7: Execute batched SQL
-		// Insert nodes (mustInsert auto-chunks to 200)
-		if len(nodesIns) > 0 {
-			if err := mustInsert(s, nodesIns...); err != nil {
-				return err
-			}
-		}
-
-		// Insert edges (detect name collisions)
-		if len(edgesIns) > 0 {
-			if err := mustInsert(s, edgesIns...); err != nil {
-				if isDuplicateEntryErr(err) {
-					return syscall.EEXIST
-				}
-				return err
-			}
-		}
-
-		// Insert xattrs
-		if len(xattrsIns) > 0 {
-			if err := mustInsert(s, xattrsIns...); err != nil {
-				return err
-			}
-		}
-
-		// Insert chunks
-		if len(chunksIns) > 0 {
 			if err := mustInsert(s, chunksIns...); err != nil {
 				return err
 			}
 		}
 
-		// Insert symlinks
-		if len(symlinksIns) > 0 {
+		if len(symlinkInodes) > 0 {
+			var srcSymlinks []symlink
+			if err := s.In("inode", symlinkInodes).Find(&srcSymlinks); err != nil {
+				return err
+			}
+			symlinkMap := make(map[Ino][]byte, len(srcSymlinks))
+			for _, sl := range srcSymlinks {
+				symlinkMap[sl.Inode] = sl.Target
+			}
+			symlinksIns := make([]interface{}, 0, len(symlinkInodes))
+			for i := range cloneInfos {
+				if target, ok := symlinkMap[cloneInfos[i].srcIno]; ok {
+					symlinksIns = append(symlinksIns, &symlink{Inode: cloneInfos[i].dstIno, Target: target})
+				} else {
+					return syscall.ENOENT
+				}
+			}
 			if err := mustInsert(s, symlinksIns...); err != nil {
 				return err
 			}
 		}
 
-		// CRITICAL OPTIMIZATION: Batched chunk_ref updates using CASE-WHEN
-		if len(chunkRefMap) > 0 {
-			// Sort chunk IDs for deterministic ordering (prevent deadlocks)
-			chunkIds := make([]uint64, 0, len(chunkRefMap))
-			for id := range chunkRefMap {
-				chunkIds = append(chunkIds, id)
+		var srcXattrs []xattr
+		if err := s.In("inode", srcInodes).Find(&srcXattrs); err != nil {
+			return err
+		}
+		if len(srcXattrs) > 0 {
+			xattrsByInode := make(map[Ino][]xattr)
+			for _, x := range srcXattrs {
+				xattrsByInode[x.Inode] = append(xattrsByInode[x.Inode], x)
 			}
-			sort.Slice(chunkIds, func(i, j int) bool {
-				return chunkIds[i] < chunkIds[j]
-			})
-
-			// Process in batches to avoid database size limits
-			batchSize := m.getTxnBatchNum()
-			for start := 0; start < len(chunkIds); start += batchSize {
-				end := start + batchSize
-				if end > len(chunkIds) {
-					end = len(chunkIds)
+			xattrsIns := make([]interface{}, 0, len(srcXattrs))
+			for i := range cloneInfos {
+				for _, x := range xattrsByInode[cloneInfos[i].srcIno] {
+					xattrsIns = append(xattrsIns, &xattr{Inode: cloneInfos[i].dstIno, Name: x.Name, Value: x.Value})
 				}
-
-				batchIds := chunkIds[start:end]
-
-				// Build: UPDATE chunk_ref SET refs = refs + CASE ... END WHERE chunkid IN (...)
-				var sqlBuilder strings.Builder
-				args := make([]interface{}, 0, len(batchIds)*2+len(batchIds))
-
-				sqlBuilder.WriteString(fmt.Sprintf("UPDATE %schunk_ref SET refs = refs + CASE ", m.tablePrefix))
-				for _, id := range batchIds {
-					ref := chunkRefMap[id]
-					sqlBuilder.WriteString("WHEN chunkid = ? THEN ? ")
-					args = append(args, ref.chunkid, ref.count)
-				}
-				sqlBuilder.WriteString("ELSE 0 END WHERE chunkid IN (")
-
-				for i, id := range batchIds {
-					if i > 0 {
-						sqlBuilder.WriteString(",")
-					}
-					sqlBuilder.WriteString("?")
-					args = append(args, id)
-				}
-				sqlBuilder.WriteString(")")
-
-				// Execute the dynamically built SQL (xorm handles placeholder conversion)
-				sqlStr := sqlBuilder.String()
-				if _, err := s.Exec(append([]interface{}{sqlStr}, args...)...); err != nil {
-					return err
-				}
+			}
+			if err := mustInsert(s, xattrsIns...); err != nil {
+				return err
 			}
 		}
 
-		// Update parent timestamps
-		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 && len(cloneInfos) > 0 {
+		if err := m.batchIncrChunkRefs(s, chunkRefCounts); err != nil {
+			return err
+		}
+
+		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 			pn.setMtime(nowNano)
 			pn.setCtime(nowNano)
 			if _, err := s.Cols("mtime", "ctime", "mtimensec", "ctimensec").
@@ -5441,20 +5322,11 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 				return err
 			}
 		}
-
 		return nil
 	})
-
-	// Phase 8: Post-transaction
 	if err != nil {
 		return errno(err)
 	}
-
-	// Update output parameters
-	*length = totalLength
-	*space = totalSpace
-	*inodes = totalInodes
-
 	return 0
 }
 

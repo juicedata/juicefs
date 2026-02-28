@@ -97,7 +97,7 @@ type engine interface {
 	doDeleteSlice(id uint64, size uint32) error
 
 	doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, attr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno
-	doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta) syscall.Errno
+	doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, result *batchCloneResult) syscall.Errno
 	doAttachDirNode(ctx Context, parent Ino, dstIno Ino, name string) syscall.Errno
 	doFindDetachedNodes(t time.Time) []Ino
 	doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno
@@ -195,6 +195,13 @@ type userGroupQuotaDelta struct {
 	Gid    uint32
 	Space  int64
 	Inodes int64
+}
+
+type batchCloneResult struct {
+	length          int64
+	space           int64
+	inodes          int64
+	userGroupQuotas []userGroupQuotaDelta
 }
 
 func appendUGQuotaDelta(userGroupQuotas *[]userGroupQuotaDelta, parent Ino, uid, gid uint32, nlink uint32, typ uint8, length uint64) {
@@ -1735,19 +1742,16 @@ func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	if len(entries) == 0 {
 		return 0
 	}
-	var length int64
-	var space int64
-	var inodes int64
-	userGroupQuotas := make([]userGroupQuotaDelta, 0, len(entries))
-	st := m.en.doBatchClone(ctx, srcParent, dstParent, entries, cmode, cumask, &length, &space, &inodes, &userGroupQuotas)
+	var r batchCloneResult
+	st := m.en.doBatchClone(ctx, srcParent, dstParent, entries, cmode, cumask, &r)
 	if st == 0 {
-		m.en.updateStats(space, inodes)
-		m.updateDirQuota(ctx, dstParent, space, inodes)
-		for _, quota := range userGroupQuotas {
-			m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, quota.Space, quota.Inodes)
+		m.en.updateStats(r.space, r.inodes)
+		m.updateDirQuota(ctx, dstParent, r.space, r.inodes)
+		for _, q := range r.userGroupQuotas {
+			m.updateUserGroupQuota(ctx, q.Uid, q.Gid, q.Space, q.Inodes)
 		}
 		if count != nil {
-			atomic.AddUint64(count, uint64(inodes))
+			atomic.AddUint64(count, uint64(r.inodes))
 		}
 	}
 	return st

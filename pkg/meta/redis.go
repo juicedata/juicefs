@@ -5058,7 +5058,7 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 	}, m.inodeKey(srcIno), m.xattrKey(srcIno)))
 }
 
-func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta) syscall.Errno {
+func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, result *batchCloneResult) syscall.Errno {
 	// TODO: Implement batch clone for Redis backend
 	return syscall.ENOTSUP
 }
