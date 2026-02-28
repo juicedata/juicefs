@@ -99,7 +99,7 @@ func killMountProcess(pid int, dev uint64, lastActive *int64) {
 		tids, _ := os.ReadDir(fmt.Sprintf("/proc/%d/task", pid))
 		for _, tid := range tids {
 			stack, err := os.ReadFile(fmt.Sprintf("/proc/%d/task/%s/stack", pid, tid))
-			if err == nil && bytes.Contains(stack, []byte("fuse_simple_request")) {
+			if err == nil && (bytes.Contains(stack, []byte("fuse_simple_request")) || bytes.Contains(stack, []byte("wait_on_page_bit"))) {
 				logger.Errorf("find deadlock in mount process, abort it: %s", string(stack))
 				if fuseFd > 0 {
 					_ = syscall.Close(fuseFd)
