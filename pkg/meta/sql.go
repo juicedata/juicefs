@@ -4938,7 +4938,7 @@ func isDuplicateEntryErr(err error) bool {
 	return false
 }
 
-func (m *dbMeta) precheckDir(ctx Context, s xorm.Interface, ino Ino) (node, error) {
+func (m *dbMeta) validateCloneTarget(ctx Context, s xorm.Interface, ino Ino) (node, error) {
 	pn := node{Inode: ino}
 	ok, err := s.Get(&pn)
 	if err != nil {
@@ -4995,7 +4995,7 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		}
 
 		if top {
-			pn, err := m.precheckDir(ctx, s, parent)
+			pn, err := m.validateCloneTarget(ctx, s, parent)
 			if err != nil {
 				return err
 			}
@@ -5084,49 +5084,11 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	}, srcIno))
 }
 
-func (m *dbMeta) batchIncrChunkRefs(s *xorm.Session, refCounts map[uint64]int) error {
-	if len(refCounts) == 0 {
-		return nil
-	}
-	chunkIds := make([]uint64, 0, len(refCounts))
-	for id := range refCounts {
-		chunkIds = append(chunkIds, id)
-	}
-	slices.Sort(chunkIds)
-
-	batchSize := m.getTxnBatchNum()
-	for start := 0; start < len(chunkIds); start += batchSize {
-		end := min(start+batchSize, len(chunkIds))
-		batch := chunkIds[start:end]
-		var sb strings.Builder
-		args := make([]interface{}, 0, len(batch)*3)
-		fmt.Fprintf(&sb, "UPDATE %schunk_ref SET refs = refs + CASE ", m.tablePrefix)
-		for _, id := range batch {
-			sb.WriteString("WHEN chunkid = ? THEN ? ")
-			args = append(args, id, refCounts[id])
-		}
-		sb.WriteString("ELSE 0 END WHERE chunkid IN (")
-		for i, id := range batch {
-			if i > 0 {
-				sb.WriteString(",")
-			}
-			sb.WriteString("?")
-			args = append(args, id)
-		}
-		sb.WriteString(")")
-		if _, err := s.Exec(append([]interface{}{sb.String()}, args...)...); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries []*Entry, cmode uint8, cumask uint16, result *batchCloneResult) syscall.Errno {
 	if len(entries) == 0 {
 		return 0
 	}
-	// precheck
-	if _, err := m.precheckDir(ctx, m.db, dstParent); err != nil {
+	if _, err := m.validateCloneTarget(ctx, m.db, dstParent); err != nil {
 		return errno(err)
 	}
 
@@ -5156,7 +5118,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		nowNano := time.Now().UnixNano()
 		*result = batchCloneResult{userGroupQuotas: make([]userGroupQuotaDelta, 0, len(entries))}
 
-		pn, err := m.precheckDir(ctx, s, dstParent)
+		pn, err := m.validateCloneTarget(ctx, s, dstParent)
 		if err != nil {
 			return err
 		}
@@ -5312,7 +5274,42 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			}
 		}
 
-		if err := m.batchIncrChunkRefs(s, chunkRefCounts); err != nil {
+		if err := func() error {
+			if len(chunkRefCounts) == 0 {
+				return nil
+			}
+			chunkIds := make([]uint64, 0, len(chunkRefCounts))
+			for id := range chunkRefCounts {
+				chunkIds = append(chunkIds, id)
+			}
+			slices.Sort(chunkIds)
+
+			batchSize := m.getTxnBatchNum()
+			for start := 0; start < len(chunkIds); start += batchSize {
+				end := min(start+batchSize, len(chunkIds))
+				batch := chunkIds[start:end]
+				var sb strings.Builder
+				args := make([]interface{}, 0, len(batch)*3)
+				fmt.Fprintf(&sb, "UPDATE %schunk_ref SET refs = refs + CASE ", m.tablePrefix)
+				for _, id := range batch {
+					sb.WriteString("WHEN chunkid = ? THEN ? ")
+					args = append(args, id, chunkRefCounts[id])
+				}
+				sb.WriteString("ELSE 0 END WHERE chunkid IN (")
+				for i, id := range batch {
+					if i > 0 {
+						sb.WriteString(",")
+					}
+					sb.WriteString("?")
+					args = append(args, id)
+				}
+				sb.WriteString(")")
+				if _, err := s.Exec(append([]interface{}{sb.String()}, args...)...); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
 			return err
 		}
 
