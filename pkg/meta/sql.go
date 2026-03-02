@@ -5174,6 +5174,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 		edgesIns := make([]interface{}, 0, len(entries))
 		fileInodes := make([]Ino, 0)
 		symlinkInodes := make([]Ino, 0)
+		symlinkClones := make([]*cloneInfo, 0)
 		for _, info := range cloneInfos {
 			sn, ok := srcNodeMap[info.srcIno]
 			if !ok {
@@ -5218,6 +5219,7 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 				}
 			case TypeSymlink:
 				symlinkInodes = append(symlinkInodes, info.srcIno)
+				symlinkClones = append(symlinkClones, info)
 			}
 
 			entrySpace := align4K(sn.Length)
@@ -5277,10 +5279,10 @@ func (m *dbMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 			for _, sl := range srcSymlinks {
 				symlinkMap[sl.Inode] = sl.Target
 			}
-			symlinksIns := make([]interface{}, 0, len(symlinkInodes))
-			for i := range cloneInfos {
-				if target, ok := symlinkMap[cloneInfos[i].srcIno]; ok {
-					symlinksIns = append(symlinksIns, &symlink{Inode: cloneInfos[i].dstIno, Target: target})
+			symlinksIns := make([]interface{}, 0, len(symlinkClones))
+			for i := range symlinkClones {
+				if target, ok := symlinkMap[symlinkClones[i].srcIno]; ok {
+					symlinksIns = append(symlinksIns, &symlink{Inode: symlinkClones[i].dstIno, Target: target})
 				} else {
 					return syscall.ENOENT
 				}
