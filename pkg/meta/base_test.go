@@ -156,6 +156,7 @@ func testMeta(t *testing.T, m Meta) {
 	testCheckAndRepair(t, m)
 	testDirStat(t, m)
 	testClone(t, m)
+	testBatchClone(t, m)
 	testACL(t, m)
 	testKerberosToken(t, m)
 	base.conf.ReadOnly = true
@@ -2982,6 +2983,241 @@ func testDirStat(t *testing.T, m Meta) {
 	time.Sleep(500 * time.Millisecond)
 	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(0, 0, 0)
+}
+
+func testBatchClone(t *testing.T, m Meta) {
+	ctx := Background()
+	_, isSQLMeta := m.(*dbMeta)
+
+	// create source directory with mixed entry types
+	var srcDir Ino
+	if st := m.Mkdir(ctx, RootInode, "batchSrc", 0755, 022, 0, &srcDir, nil); st != 0 {
+		t.Fatalf("mkdir batchSrc: %s", st)
+	}
+
+	// file with data
+	var file1 Ino
+	if st := m.Mknod(ctx, srcDir, "file1", TypeFile, 0644, 022, 0, "", &file1, nil); st != 0 {
+		t.Fatalf("mknod file1: %s", st)
+	}
+	var sliceId1 uint64
+	if st := m.NewSlice(ctx, &sliceId1); st != 0 {
+		t.Fatalf("new slice: %s", st)
+	}
+	if st := m.Write(ctx, file1, 0, 0, Slice{sliceId1, 1024, 0, 1024}, time.Now()); st != 0 {
+		t.Fatalf("write file1: %s", st)
+	}
+	if st := m.SetXattr(ctx, file1, "user.tag", []byte("hello"), XattrCreateOrReplace); st != 0 {
+		t.Fatalf("setxattr file1: %s", st)
+	}
+
+	// empty file
+	var file2 Ino
+	if st := m.Mknod(ctx, srcDir, "file2", TypeFile, 0644, 022, 0, "", &file2, nil); st != 0 {
+		t.Fatalf("mknod file2: %s", st)
+	}
+
+	// symlink
+	var sym1 Ino
+	if st := m.Symlink(ctx, srcDir, "sym1", "/tmp/target", &sym1, nil); st != 0 {
+		t.Fatalf("symlink sym1: %s", st)
+	}
+
+	// create destination directory
+	var dstDir Ino
+	if st := m.Mkdir(ctx, RootInode, "batchDst", 0755, 022, 0, &dstDir, nil); st != 0 {
+		t.Fatalf("mkdir batchDst: %s", st)
+	}
+
+	// read source entries
+	var srcEntries []*Entry
+	if st := m.Readdir(ctx, srcDir, 1, &srcEntries); st != 0 {
+		t.Fatalf("readdir batchSrc: %s", st)
+	}
+	// filter out . and ..
+	var nonDirEntries []*Entry
+	for _, e := range srcEntries {
+		name := string(e.Name)
+		if name == "." || name == ".." {
+			continue
+		}
+		nonDirEntries = append(nonDirEntries, e)
+	}
+
+	// --- test 1: successful batch clone ---
+	var count uint64
+	st := m.getBase().BatchClone(ctx, srcDir, dstDir, nonDirEntries, 0, 022, &count)
+	if isSQLMeta {
+		if st != 0 {
+			t.Fatalf("BatchClone: %s", st)
+		}
+		if count != uint64(len(nonDirEntries)) {
+			t.Fatalf("BatchClone count: got %d, want %d", count, len(nonDirEntries))
+		}
+
+		// verify cloned entries exist
+		var dstEntries []*Entry
+		if st := m.Readdir(ctx, dstDir, 1, &dstEntries); st != 0 {
+			t.Fatalf("readdir batchDst: %s", st)
+		}
+		dstMap := make(map[string]*Entry)
+		for _, e := range dstEntries {
+			name := string(e.Name)
+			if name != "." && name != ".." {
+				dstMap[name] = e
+			}
+		}
+		if len(dstMap) != len(nonDirEntries) {
+			t.Fatalf("cloned entry count: got %d, want %d", len(dstMap), len(nonDirEntries))
+		}
+
+		// verify file1 clone: data, xattr
+		if e, ok := dstMap["file1"]; !ok {
+			t.Fatalf("file1 not cloned")
+		} else {
+			if e.Attr.Typ != TypeFile {
+				t.Fatalf("file1 type: got %d, want %d", e.Attr.Typ, TypeFile)
+			}
+			var slices []Slice
+			if st := m.Read(ctx, e.Inode, 0, &slices); st != 0 {
+				t.Fatalf("read cloned file1: %s", st)
+			}
+			if len(slices) == 0 {
+				t.Fatal("cloned file1 has no slices")
+			}
+			var val []byte
+			if st := m.GetXattr(ctx, e.Inode, "user.tag", &val); st != 0 {
+				t.Fatalf("getxattr cloned file1: %s", st)
+			}
+			if string(val) != "hello" {
+				t.Fatalf("xattr value: got %q, want %q", val, "hello")
+			}
+		}
+
+		// verify sym1 clone: target
+		if e, ok := dstMap["sym1"]; !ok {
+			t.Fatalf("sym1 not cloned")
+		} else {
+			var target []byte
+			if st := m.ReadLink(ctx, e.Inode, &target); st != 0 {
+				t.Fatalf("readlink cloned sym1: %s", st)
+			}
+			if string(target) != "/tmp/target" {
+				t.Fatalf("symlink target: got %q, want %q", target, "/tmp/target")
+			}
+		}
+
+		// verify file2 clone: empty file
+		if e, ok := dstMap["file2"]; !ok {
+			t.Fatalf("file2 not cloned")
+		} else {
+			if e.Attr.Typ != TypeFile {
+				t.Fatalf("file2 type: got %d, want %d", e.Attr.Typ, TypeFile)
+			}
+			if e.Attr.Length != 0 {
+				t.Fatalf("file2 length: got %d, want 0", e.Attr.Length)
+			}
+		}
+	} else {
+		// redis/tkv backends return ENOTSUP
+		if st != syscall.ENOTSUP {
+			t.Fatalf("BatchClone on non-SQL backend: got %s, want ENOTSUP", st)
+		}
+	}
+
+	if !isSQLMeta {
+		m.Remove(ctx, RootInode, "batchSrc", false, RmrDefaultThreads, nil)
+		m.Remove(ctx, RootInode, "batchDst", false, RmrDefaultThreads, nil)
+		return
+	}
+
+	// --- test 2: duplicate entry names (EEXIST) ---
+	count = 0
+	st = m.getBase().BatchClone(ctx, srcDir, dstDir, nonDirEntries, 0, 022, &count)
+	if st != syscall.EEXIST {
+		t.Fatalf("BatchClone duplicate: got %s, want EEXIST", st)
+	}
+
+	// --- test 3: dst parent doesn't exist ---
+	count = 0
+	st = m.getBase().BatchClone(ctx, srcDir, 999999, nonDirEntries, 0, 022, &count)
+	if st != syscall.ENOENT {
+		t.Fatalf("BatchClone non-existent dst: got %s, want ENOENT", st)
+	}
+
+	// --- test 4: dst parent is a file, not directory ---
+	count = 0
+	st = m.getBase().BatchClone(ctx, srcDir, file1, nonDirEntries, 0, 022, &count)
+	if st != syscall.ENOTDIR {
+		t.Fatalf("BatchClone file as dst: got %s, want ENOTDIR", st)
+	}
+
+	// --- test 5: dst parent is immutable ---
+	var immDir Ino
+	if st := m.Mkdir(ctx, RootInode, "batchImm", 0755, 022, 0, &immDir, nil); st != 0 {
+		t.Fatalf("mkdir batchImm: %s", st)
+	}
+	if st := m.SetAttr(ctx, immDir, SetAttrFlag, 0, &Attr{Flags: FlagImmutable}); st != 0 {
+		t.Fatalf("setattr immutable: %s", st)
+	}
+	count = 0
+	st = m.getBase().BatchClone(ctx, srcDir, immDir, nonDirEntries, 0, 022, &count)
+	if st != syscall.EPERM {
+		t.Fatalf("BatchClone immutable dst: got %s, want EPERM", st)
+	}
+	// clean up immutable flag
+	if st := m.SetAttr(ctx, immDir, SetAttrFlag, 0, &Attr{Flags: 0}); st != 0 {
+		t.Fatalf("clear immutable: %s", st)
+	}
+	m.Remove(ctx, RootInode, "batchImm", false, RmrDefaultThreads, nil)
+
+	// --- test 6: empty entries ---
+	count = 0
+	st = m.getBase().BatchClone(ctx, srcDir, dstDir, nil, 0, 022, &count)
+	if st != 0 {
+		t.Fatalf("BatchClone empty: %s", st)
+	}
+	if count != 0 {
+		t.Fatalf("BatchClone empty count: got %d, want 0", count)
+	}
+
+	// --- test 7: preserve attr mode ---
+	var dstDir2 Ino
+	if st := m.Mkdir(ctx, RootInode, "batchDst2", 0755, 022, 0, &dstDir2, nil); st != 0 {
+		t.Fatalf("mkdir batchDst2: %s", st)
+	}
+	count = 0
+	st = m.getBase().BatchClone(ctx, srcDir, dstDir2, nonDirEntries, CLONE_MODE_PRESERVE_ATTR, 022, &count)
+	if st != 0 {
+		t.Fatalf("BatchClone preserve: %s", st)
+	}
+	// verify preserved attrs match source
+	var dstEntries2 []*Entry
+	if st := m.Readdir(ctx, dstDir2, 1, &dstEntries2); st != 0 {
+		t.Fatalf("readdir batchDst2: %s", st)
+	}
+	srcMap := make(map[string]*Entry)
+	for _, e := range nonDirEntries {
+		srcMap[string(e.Name)] = e
+	}
+	for _, de := range dstEntries2 {
+		name := string(de.Name)
+		if name == "." || name == ".." {
+			continue
+		}
+		se, ok := srcMap[name]
+		if !ok {
+			t.Fatalf("unexpected entry %q in batchDst2", name)
+		}
+		if de.Attr.Mode != se.Attr.Mode {
+			t.Fatalf("preserve mode mismatch for %s: got %o, want %o", name, de.Attr.Mode, se.Attr.Mode)
+		}
+	}
+
+	// cleanup
+	m.Remove(ctx, RootInode, "batchSrc", false, RmrDefaultThreads, nil)
+	m.Remove(ctx, RootInode, "batchDst", false, RmrDefaultThreads, nil)
+	m.Remove(ctx, RootInode, "batchDst2", false, RmrDefaultThreads, nil)
 }
 
 func testClone(t *testing.T, m Meta) {
