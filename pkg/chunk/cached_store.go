@@ -1098,6 +1098,8 @@ func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.
 			default:
 				item.uploading.Store(false)
 			}
+		} else {
+			return true
 		}
 	}
 	return false
