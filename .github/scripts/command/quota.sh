@@ -312,25 +312,78 @@ prepare_ug_quota_test()
 
 resolve_test_users()
 {
-    TEST_USER_1=$(id -un)
-    TEST_UID_1=$(id -u)
-    TEST_GID_1=$(id -g)
+    if [[ -n "$TEST_USER_1" ]] && [[ -n "$TEST_USER_2" ]]; then
+        return 0
+    fi
 
+    TEST_USER_1=""
     TEST_USER_2=""
+
     for candidate in nobody daemon bin; do
         if id "$candidate" >/dev/null 2>&1; then
             candidate_uid=$(id -u "$candidate")
-            if [[ "$candidate_uid" != "$TEST_UID_1" ]]; then
+            candidate_gid=$(id -g "$candidate")
+            if [[ "$candidate_uid" == "0" ]] || [[ "$candidate_gid" == "0" ]]; then
+                continue
+            fi
+            if [[ -z "$TEST_USER_1" ]]; then
+                TEST_USER_1="$candidate"
+                TEST_UID_1=$candidate_uid
+                TEST_GID_1=$candidate_gid
+            elif [[ "$candidate_uid" != "$TEST_UID_1" ]]; then
                 TEST_USER_2="$candidate"
                 TEST_UID_2=$candidate_uid
-                TEST_GID_2=$(id -g "$candidate")
+                TEST_GID_2=$candidate_gid
                 break
             fi
         fi
     done
 
-    if [[ -z "$TEST_USER_2" ]]; then
-        echo "cannot find a secondary user for user/group quota tests"
+    create_temp_user()
+    {
+        idx=$1
+        if ! command -v useradd >/dev/null 2>&1; then
+            return 1
+        fi
+        name="jfs-quota-test-${idx}-${RANDOM}"
+        if ! useradd -M -s /usr/sbin/nologin "$name" >/dev/null 2>&1; then
+            return 1
+        fi
+        uid=$(id -u "$name" 2>/dev/null || echo 0)
+        gid=$(id -g "$name" 2>/dev/null || echo 0)
+        if [[ "$uid" == "0" ]] || [[ "$gid" == "0" ]]; then
+            userdel -f "$name" >/dev/null 2>&1 || true
+            return 1
+        fi
+        echo "$name:$uid:$gid"
+        return 0
+    }
+
+    if [[ -z "$TEST_USER_1" ]] || [[ -z "$TEST_USER_2" ]]; then
+        if [[ "$(id -u)" != "0" ]]; then
+            echo "cannot find two non-root users for user/group quota tests"
+            return 1
+        fi
+        for i in 1 2 3 4; do
+            info=$(create_temp_user "$i") || continue
+            name=$(echo "$info" | cut -d: -f1)
+            uid=$(echo "$info" | cut -d: -f2)
+            gid=$(echo "$info" | cut -d: -f3)
+            if [[ -z "$TEST_USER_1" ]]; then
+                TEST_USER_1="$name"
+                TEST_UID_1=$uid
+                TEST_GID_1=$gid
+            elif [[ -z "$TEST_USER_2" ]] && [[ "$uid" != "$TEST_UID_1" ]]; then
+                TEST_USER_2="$name"
+                TEST_UID_2=$uid
+                TEST_GID_2=$gid
+                break
+            fi
+        done
+    fi
+
+    if [[ -z "$TEST_USER_1" ]] || [[ -z "$TEST_USER_2" ]]; then
+        echo "cannot find two non-root users for user/group quota tests"
         return 1
     fi
 
