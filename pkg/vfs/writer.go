@@ -41,7 +41,7 @@ type FileWriter interface {
 }
 
 type DataWriter interface {
-	Open(inode Ino, fleng uint64) FileWriter
+	Open(inode Ino, fleng uint64, tier meta.TierInfo) FileWriter
 	Flush(ctx meta.Context, inode Ino) syscall.Errno
 	GetLength(inode Ino) uint64
 	Truncate(inode Ino, length uint64)
@@ -227,6 +227,7 @@ type fileWriter struct {
 
 	inode        Ino
 	length       uint64
+	tier         meta.TierInfo
 	err          syscall.Errno
 	flushwaiting uint16
 	writewaiting uint16
@@ -263,7 +264,7 @@ func (f *fileWriter) writeChunk(ctx meta.Context, indx uint32, off uint32, data 
 		s = &sliceWriter{
 			chunk:   c,
 			off:     off,
-			writer:  f.w.store.NewWriter(0),
+			writer:  f.w.store.NewWriter(0, f.tier),
 			notify:  utils.NewCond(&f.Mutex),
 			started: time.Now(),
 		}
@@ -481,7 +482,7 @@ func (w *dataWriter) flushAll() {
 	}
 }
 
-func (w *dataWriter) Open(inode Ino, len uint64) FileWriter {
+func (w *dataWriter) Open(inode Ino, len uint64, tier meta.TierInfo) FileWriter {
 	w.Lock()
 	defer w.Unlock()
 	f, ok := w.files[inode]
@@ -490,6 +491,7 @@ func (w *dataWriter) Open(inode Ino, len uint64) FileWriter {
 			w:      w,
 			inode:  inode,
 			length: len,
+			tier:   tier,
 			chunks: make(map[uint32]*chunkWriter),
 		}
 		f.flushcond = utils.NewCond(f)

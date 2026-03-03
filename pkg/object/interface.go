@@ -82,14 +82,13 @@ type ObjectStorage interface {
 	// Create the bucket if not existed.
 	Create(ctx context.Context) error
 	// Get the data for the given object specified by key.
-	Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error)
+	Get(ctx context.Context, key string, off, limit int64, opts ...Options) (io.ReadCloser, error)
 	// Put data read from a reader to an object specified by key.
-	Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error
+	Put(ctx context.Context, key string, in io.Reader, opts ...Options) error
 	// Copy an object from src to dst.
-	Copy(ctx context.Context, dst, src string) error
+	Copy(ctx context.Context, dst, src string, opts ...Options) error
 	// Delete a object.
-	Delete(ctx context.Context, key string, getters ...AttrGetter) error
-
+	Delete(ctx context.Context, key string, opts ...Options) error
 	// Head returns some information about the object or an error if not found.
 	Head(ctx context.Context, key string) (Object, error)
 	// List returns a list of objects using ListObjectV2.
@@ -109,6 +108,8 @@ type ObjectStorage interface {
 	CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error
 	// ListUploads lists existing multipart uploads.
 	ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error)
+
+	Restore(ctx context.Context, key string, opts ...Options) error
 }
 
 type Shutdownable interface {
@@ -134,4 +135,12 @@ func Shutdown(o ObjectStorage) {
 	default:
 		fn(o)
 	}
+}
+
+type StorageClassAttr struct {
+	Id          uint8
+	Name        string
+	Restore     bool
+	ArchiveRead bool
+	DeepArchive bool
 }

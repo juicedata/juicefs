@@ -21,6 +21,34 @@ const DefaultStorageClass = "STANDARD"
 type SupportStorageClass interface {
 	SetStorageClass(sc string) error
 }
+type Options func(opts *ObjOptions)
+
+func WithStorageClass(sc uint8) Options {
+	return func(opts *ObjOptions) {
+		opts.RequestOpts.StorageClassId = sc
+	}
+}
+
+func GetStorageClass(sc *string) Options {
+	return func(opts *ObjOptions) {
+		sc = opts.ResponseAttrs.storageClass
+	}
+}
+
+func GetRequestID(requestID *string) Options {
+	return func(opts *ObjOptions) {
+		requestID = opts.ResponseAttrs.requestID
+	}
+}
+
+type ObjOptions struct {
+	RequestOpts
+	ResponseAttrs
+}
+
+type RequestOpts struct {
+	StorageClassId uint8
+}
 
 // A generic way to get attributes from different object storage clients
 type ResponseAttrs struct {
@@ -44,37 +72,10 @@ func (r *ResponseAttrs) SetStorageClass(sc string) *ResponseAttrs {
 	return r
 }
 
-func (r *ResponseAttrs) GetRequestSize() int64 {
-	if r.requestSize != nil {
-		return *r.requestSize
+func ApplyOptions(opts ...Options) ObjOptions {
+	var options ObjOptions
+	for _, apply := range opts {
+		apply(&options)
 	}
-	return -1
-}
-
-type AttrGetter func(attrs *ResponseAttrs)
-
-func WithRequestID(id *string) AttrGetter {
-	return func(attrs *ResponseAttrs) {
-		attrs.requestID = id
-	}
-}
-
-func WithStorageClass(sc *string) AttrGetter {
-	return func(attrs *ResponseAttrs) {
-		attrs.storageClass = sc
-	}
-}
-
-func WithRequestSize(size *int64) AttrGetter {
-	return func(attrs *ResponseAttrs) {
-		attrs.requestSize = size
-	}
-}
-
-func ApplyGetters(getters ...AttrGetter) ResponseAttrs {
-	var attrs ResponseAttrs
-	for _, getter := range getters {
-		getter(&attrs)
-	}
-	return attrs
+	return options
 }

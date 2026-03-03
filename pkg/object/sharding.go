@@ -62,20 +62,20 @@ func (s *sharded) Head(ctx context.Context, key string) (Object, error) {
 	return s.pick(key).Head(ctx, key)
 }
 
-func (s *sharded) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	return s.pick(key).Get(ctx, key, off, limit, getters...)
+func (s *sharded) Get(ctx context.Context, key string, off, limit int64, opts ...Options) (io.ReadCloser, error) {
+	return s.pick(key).Get(ctx, key, off, limit, opts...)
 }
 
-func (s *sharded) Put(ctx context.Context, key string, body io.Reader, getters ...AttrGetter) error {
-	return s.pick(key).Put(ctx, key, body, getters...)
+func (s *sharded) Put(ctx context.Context, key string, body io.Reader, opts ...Options) error {
+	return s.pick(key).Put(ctx, key, body, opts...)
 }
 
-func (s *sharded) Copy(ctx context.Context, dst, src string) error {
+func (s *sharded) Copy(ctx context.Context, dst, src string, opts ...Options) error {
 	return notSupported
 }
 
-func (s *sharded) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	return s.pick(key).Delete(ctx, key, getters...)
+func (s *sharded) Delete(ctx context.Context, key string, opts ...Options) error {
+	return s.pick(key).Delete(ctx, key, opts...)
 }
 
 func (s *sharded) SetStorageClass(sc string) error {
@@ -211,7 +211,9 @@ func (s *sharded) AbortUpload(ctx context.Context, key string, uploadID string) 
 func (s *sharded) CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error {
 	return s.pick(key).CompleteUpload(ctx, key, uploadID, parts)
 }
-
+func (s *sharded) Restore(ctx context.Context, key string, opts ...Options) error {
+	return s.pick(key).Restore(ctx, key, opts...)
+}
 func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage, error) {
 	stores := make([]ObjectStorage, shards)
 	var err error

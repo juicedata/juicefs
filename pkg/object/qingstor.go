@@ -82,7 +82,7 @@ func (q *qingstor) Head(ctx context.Context, key string) (Object, error) {
 	}, nil
 }
 
-func (q *qingstor) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (q *qingstor) Get(ctx context.Context, key string, off, limit int64, opts ...Options) (io.ReadCloser, error) {
 	input := &qs.GetObjectInput{}
 	rangeStr := getRange(off, limit)
 	if rangeStr != "" {
@@ -90,10 +90,10 @@ func (q *qingstor) Get(ctx context.Context, key string, off, limit int64, getter
 	}
 	output, err := q.bucket.GetObjectWithContext(ctx, key, input)
 	if output != nil {
-		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(aws.ToString(output.RequestID))
+		options := ApplyOptions(opts...)
+		options.SetRequestID(aws.ToString(output.RequestID))
 		if output.XQSStorageClass != nil {
-			attrs.SetStorageClass(*output.XQSStorageClass)
+			options.SetStorageClass(*output.XQSStorageClass)
 		}
 	}
 	if err != nil {
@@ -104,6 +104,9 @@ func (q *qingstor) Get(ctx context.Context, key string, off, limit int64, getter
 		return nil, err
 	}
 	return output.Body, nil
+}
+func (q *qingstor) Restore(ctx context.Context, key string, opts ...Options) error {
+	return notSupported
 }
 
 func findLen(in io.Reader) (io.Reader, int64, error) {
@@ -141,7 +144,7 @@ func findLen(in io.Reader) (io.Reader, int64, error) {
 	return in, vlen, nil
 }
 
-func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, opts ...Options) error {
 	body, vlen, err := findLen(in)
 	if err != nil {
 		return err
@@ -152,13 +155,17 @@ func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, getters ..
 		ContentLength: &vlen,
 		ContentType:   &mimeType,
 	}
-	if q.sc != "" {
-		input.XQSStorageClass = &q.sc
+	options := ApplyOptions(opts...)
+	scStr, err := GetScStr("qingstor", q.sc, options)
+	if err != nil {
+		return err
+	}
+	if scStr != "" {
+		input.XQSStorageClass = &scStr
 	}
 	out, err := q.bucket.PutObjectWithContext(ctx, key, input)
 	if out != nil {
-		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(aws.ToString(out.RequestID)).SetStorageClass(q.sc)
+		options.SetRequestID(aws.ToString(out.RequestID)).SetStorageClass(scStr)
 	}
 	if err != nil {
 		return err
@@ -169,13 +176,18 @@ func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, getters ..
 	return nil
 }
 
-func (q *qingstor) Copy(ctx context.Context, dst, src string) error {
+func (q *qingstor) Copy(ctx context.Context, dst, src string, opts ...Options) error {
+	options := ApplyOptions(opts...)
+	scStr, err := GetScStr("qingstor", q.sc, options)
+	if err != nil {
+		return err
+	}
 	source := fmt.Sprintf("/%s/%s", *q.bucket.Properties.BucketName, src)
 	input := &qs.PutObjectInput{
 		XQSCopySource: &source,
 	}
-	if q.sc != "" {
-		input.XQSStorageClass = &q.sc
+	if scStr != "" {
+		input.XQSStorageClass = &scStr
 	}
 	out, err := q.bucket.PutObjectWithContext(ctx, dst, input)
 	if err != nil {
@@ -187,11 +199,11 @@ func (q *qingstor) Copy(ctx context.Context, dst, src string) error {
 	return nil
 }
 
-func (q *qingstor) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+func (q *qingstor) Delete(ctx context.Context, key string, opts ...Options) error {
 	output, err := q.bucket.DeleteObjectWithContext(ctx, key)
 	if output != nil {
-		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(aws.ToString(output.RequestID))
+		options := ApplyOptions(opts...)
+		options.SetRequestID(aws.ToString(output.RequestID))
 	}
 	return err
 }

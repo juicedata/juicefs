@@ -97,7 +97,7 @@ func (o *ossClient) Head(ctx context.Context, key string) (Object, error) {
 	}, nil
 }
 
-func (o *ossClient) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (resp io.ReadCloser, err error) {
+func (o *ossClient) Get(ctx context.Context, key string, off, limit int64, opts ...Options) (resp io.ReadCloser, err error) {
 	var result *oss.GetObjectResult
 	var reqId string
 	var sc string
@@ -124,17 +124,22 @@ func (o *ossClient) Get(ctx context.Context, key string, off, limit int64, gette
 		}
 	}
 
-	attrs := ApplyGetters(getters...)
-	attrs.SetRequestID(reqId)
-	attrs.SetStorageClass(sc)
+	options := ApplyOptions(opts...)
+	options.SetRequestID(reqId)
+	options.SetStorageClass(sc)
 	return
 }
 
-func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, opts ...Options) error {
+	options := ApplyOptions(opts...)
+	scStr, err := GetScStr("oss", o.sc, options)
+	if err != nil {
+		return err
+	}
 	req := &oss.PutObjectRequest{
 		Bucket:       &o.bucket,
 		Key:          &key,
-		StorageClass: oss.StorageClassType(o.sc),
+		StorageClass: oss.StorageClassType(scStr),
 		Body:         in,
 	}
 	if ins, ok := in.(io.ReadSeeker); ok {
@@ -151,24 +156,56 @@ func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	} else {
 		reqId = result.Headers.Get(oss.HeaderOssRequestID)
 	}
-	attrs := ApplyGetters(getters...)
-	attrs.SetRequestID(reqId).SetStorageClass(o.sc)
+	options.SetRequestID(reqId).SetStorageClass(scStr)
 	return err
 }
 
-func (o *ossClient) Copy(ctx context.Context, dst, src string) error {
+func (o *ossClient) Restore(ctx context.Context, key string, opts ...Options) error {
+	_, err := o.client.RestoreObject(ctx, &oss.RestoreObjectRequest{
+		Bucket: oss.Ptr(o.bucket),
+		Key:    oss.Ptr(key),
+		RestoreRequest: &oss.RestoreRequest{
+			Days: 1,
+			Tier: oss.Ptr("Standard"),
+		},
+	})
+	return err
+}
+
+func GetScStr(storage string, mountSc string, options ObjOptions) (string, error) {
+	scId := options.RequestOpts.StorageClassId
+	scAttr, b := ScInfo.GetById(storage, scId)
+	if !b {
+		return "", fmt.Errorf("invalid storage class: %d", scId)
+	}
+	var scStr string
+	if mountSc != "" {
+		scStr = mountSc
+	}
+	if scAttr.Name != "" {
+		scStr = scAttr.Name
+	}
+	return scStr, nil
+}
+
+func (o *ossClient) Copy(ctx context.Context, dst, src string, opts ...Options) error {
+	options := ApplyOptions(opts...)
+	scStr, err := GetScStr("oss", o.sc, options)
+	if err != nil {
+		return err
+	}
 	var req = &oss.CopyObjectRequest{
 		SourceBucket: &o.bucket,
 		Bucket:       &o.bucket,
 		SourceKey:    &src,
 		Key:          &dst,
-		StorageClass: oss.StorageClassType(o.sc),
+		StorageClass: oss.StorageClassType(scStr),
 	}
-	_, err := o.client.CopyObject(ctx, req)
+	_, err = o.client.CopyObject(ctx, req)
 	return err
 }
 
-func (o *ossClient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+func (o *ossClient) Delete(ctx context.Context, key string, opts ...Options) error {
 	result, err := o.client.DeleteObject(ctx, &oss.DeleteObjectRequest{
 		Bucket: &o.bucket,
 		Key:    &key,
@@ -182,8 +219,8 @@ func (o *ossClient) Delete(ctx context.Context, key string, getters ...AttrGette
 	} else {
 		reqId = result.Headers.Get(oss.HeaderOssRequestID)
 	}
-	attrs := ApplyGetters(getters...)
-	attrs.SetRequestID(reqId)
+	options := ApplyOptions(opts...)
+	options.SetRequestID(reqId)
 	return err
 }
 
@@ -425,4 +462,13 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 
 func init() {
 	Register("oss", newOSS)
+	scs := []StorageClassAttr{
+		{Id: 0, Name: ""},
+		{Id: 1, Name: "Standard"},
+		{Id: 2, Name: "IA"},
+		{Id: 3, Name: "Archive", Restore: true, ArchiveRead: true},
+		{Id: 4, Name: "ColdArchive", Restore: true, ArchiveRead: true},
+		{Id: 5, Name: "DeepColdArchive", Restore: true, ArchiveRead: true, DeepArchive: true},
+	}
+	addToScConv("oss", scs)
 }

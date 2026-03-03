@@ -274,8 +274,8 @@ func (e *encrypted) String() string {
 	return fmt.Sprintf("%s(encrypted)", e.ObjectStorage)
 }
 
-func (e *encrypted) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
-	r, err := e.ObjectStorage.Get(ctx, key, 0, -1, getters...)
+func (e *encrypted) Get(ctx context.Context, key string, off, limit int64, opts ...Options) (io.ReadCloser, error) {
+	r, err := e.ObjectStorage.Get(ctx, key, 0, -1, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +299,7 @@ func (e *encrypted) Get(ctx context.Context, key string, off, limit int64, gette
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (e *encrypted) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+func (e *encrypted) Put(ctx context.Context, key string, in io.Reader, opts ...Options) error {
 	plain, err := io.ReadAll(in)
 	if err != nil {
 		return err
@@ -308,7 +308,7 @@ func (e *encrypted) Put(ctx context.Context, key string, in io.Reader, getters .
 	if err != nil {
 		return err
 	}
-	return e.ObjectStorage.Put(ctx, key, bytes.NewReader(ciphertext), getters...)
+	return e.ObjectStorage.Put(ctx, key, bytes.NewReader(ciphertext), opts...)
 }
 
 var _ ObjectStorage = (*encrypted)(nil)

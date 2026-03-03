@@ -124,7 +124,7 @@ func (s DefaultObjectStorage) Head(key string) (Object, error) {
 	return nil, notSupported
 }
 
-func (s DefaultObjectStorage) Copy(ctx context.Context, dst, src string) error {
+func (s DefaultObjectStorage) Copy(ctx context.Context, dst, src string, opts ...Options) error {
 	return notSupported
 }
 
@@ -156,6 +156,9 @@ func (s DefaultObjectStorage) List(ctx context.Context, prefix, start, token, de
 
 func (s DefaultObjectStorage) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
+}
+func (s DefaultObjectStorage) Restore(ctx context.Context, key string, opts ...Options) error {
+	return notSupported
 }
 
 type Creator func(bucket, accessKey, secretKey, token string) (ObjectStorage, error)
@@ -320,4 +323,42 @@ func decodeKey(value string, typ *string) (string, error) {
 
 func TmpFilePath(parent, name string) string {
 	return filepath.Join(filepath.Dir(parent), ".jfs."+name+".tmp."+strconv.Itoa(rand.Int()))
+}
+
+var ScInfo = make(scConvTyp)
+
+type scEntry struct {
+	ById   map[uint8]StorageClassAttr
+	ByName map[string]StorageClassAttr
+}
+type scConvTyp map[string]scEntry
+
+func (sc scConvTyp) GetById(storage string, id uint8) (StorageClassAttr, bool) {
+	e, ok := sc[storage]
+	if !ok || e.ById == nil {
+		return StorageClassAttr{}, false
+	}
+	v, ok := e.ById[id]
+	return v, ok
+}
+
+func (sc scConvTyp) GetByName(storage, storageClass string) (StorageClassAttr, bool) {
+	e, ok := sc[storage]
+	if !ok || e.ByName == nil {
+		return StorageClassAttr{}, false
+	}
+	v, ok := e.ByName[storageClass]
+	return v, ok
+}
+
+func addToScConv(storage string, scs []StorageClassAttr) {
+	scEntry := scEntry{
+		ById:   make(map[uint8]StorageClassAttr),
+		ByName: make(map[string]StorageClassAttr),
+	}
+	for _, sc := range scs {
+		scEntry.ById[sc.Id] = sc
+		scEntry.ByName[sc.Name] = sc
+	}
+	ScInfo[storage] = scEntry
 }

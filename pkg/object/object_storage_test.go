@@ -133,7 +133,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 
 	var scPut string
 	key := "测试编码文件" + `{"name":"juicefs"}` + string('\u001F') + "%uFF081%uFF09.jpg"
-	if err := s.Put(ctx, key, bytes.NewReader(nil), WithStorageClass(&scPut)); err != nil {
+	if err := s.Put(ctx, key, bytes.NewReader(nil), GetStorageClass(&scPut)); err != nil {
 		t.Logf("PUT testEncodeFile failed: %s", err.Error())
 	} else {
 		if scPut != sc {
@@ -162,7 +162,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 
 	var scGet string
 	// get all
-	if d, e := get(s, "test", 0, -1, WithStorageClass(&scGet)); e != nil || d != "hello" {
+	if d, e := get(s, "test", 0, -1, GetStorageClass(&scGet)); e != nil || d != "hello" {
 		t.Fatalf("expect hello, but got %v, error: %s", d, e)
 	}
 	if scGet != sc { // Relax me when testing against a storage that doesn't use specified storage class

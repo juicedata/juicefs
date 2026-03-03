@@ -98,7 +98,7 @@ func (f *jFile) Close() error {
 	return toError(f.f.Close(ctx))
 }
 
-func (j *juiceFS) Get(rCtx context.Context, key string, off, limit int64, getters ...object.AttrGetter) (io.ReadCloser, error) {
+func (j *juiceFS) Get(rCtx context.Context, key string, off, limit int64, opts ...object.Options) (io.ReadCloser, error) {
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	f, err := j.jfs.Open(ctx, j.path(key), vfs.MODE_MASK_R)
 	if err != 0 {
@@ -120,7 +120,7 @@ var bufPool = sync.Pool{
 	},
 }
 
-func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ...object.AttrGetter) (err error) {
+func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, opts ...object.Options) (err error) {
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	if vfs.IsSpecialName(key) {
 		return fmt.Errorf("skip special file %s for jfs: %w", key, utils.ErrSkipped)
@@ -183,7 +183,7 @@ func (j *juiceFS) Put(rCtx context.Context, key string, in io.Reader, getters ..
 	return nil
 }
 
-func (j *juiceFS) Delete(rCtx context.Context, key string, getters ...object.AttrGetter) error {
+func (j *juiceFS) Delete(rCtx context.Context, key string, opts ...object.Options) error {
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})
 	if key == "" {
 		return nil

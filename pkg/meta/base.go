@@ -3483,6 +3483,10 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		dirtyAttr.Flags = attr.Flags
 		changed = true
 	}
+	if set&SetAttrTier != 0 {
+		dirtyAttr.Tier = attr.Tier
+		changed = true
+	}
 	if !changed {
 		*attr = *cur
 		return nil, 0

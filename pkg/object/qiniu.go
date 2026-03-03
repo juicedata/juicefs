@@ -107,14 +107,14 @@ func (q *qiniu) Head(ctx context.Context, key string) (Object, error) {
 	}, nil
 }
 
-func (q *qiniu) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (q *qiniu) Get(ctx context.Context, key string, off, limit int64, opts ...Options) (io.ReadCloser, error) {
 	if strings.HasPrefix(key, "/") && os.Getenv("QINIU_DOMAIN") != "" {
 		return q.download(key, off, limit)
 	}
-	return q.s3client.Get(ctx, key, off, limit, getters...)
+	return q.s3client.Get(ctx, key, off, limit, opts...)
 }
 
-func (q *qiniu) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+func (q *qiniu) Put(ctx context.Context, key string, in io.Reader, opts ...Options) error {
 	body, vlen, err := findLen(in)
 	if err != nil {
 		return err
@@ -126,7 +126,7 @@ func (q *qiniu) Put(ctx context.Context, key string, in io.Reader, getters ...At
 	return formUploader.Put(ctx, &ret, upToken, key, body, vlen, nil)
 }
 
-func (q *qiniu) Copy(ctx context.Context, dst, src string) error {
+func (q *qiniu) Copy(ctx context.Context, dst, src string, opts ...Options) error {
 	return q.bm.Copy(q.bucket, src, q.bucket, dst, true)
 }
 
@@ -134,7 +134,7 @@ func (q *qiniu) CreateMultipartUpload(ctx context.Context, key string) (*Multipa
 	return nil, notSupported
 }
 
-func (q *qiniu) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+func (q *qiniu) Delete(ctx context.Context, key string, opts ...Options) error {
 	err := q.bm.Delete(q.bucket, key)
 	if err != nil && strings.Contains(err.Error(), notexist) {
 		return nil

@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/compress"
+	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juju/ratelimit"
@@ -242,14 +243,16 @@ type wSlice struct {
 	uploadError error
 	pendings    int
 	writeback   bool
+	tier        meta.TierInfo
 }
 
-func sliceForWrite(id uint64, store *cachedStore) *wSlice {
+func sliceForWrite(id uint64, store *cachedStore, tier meta.TierInfo) *wSlice {
 	return &wSlice{
 		rSlice:    rSlice{id, 0, store},
 		pages:     make([][]*Page, chunkSize/store.conf.BlockSize),
 		errors:    make(chan error, chunkSize/store.conf.BlockSize),
 		writeback: store.conf.Writeback,
+		tier:      tier,
 	}
 }
 
@@ -306,19 +309,17 @@ func (s *wSlice) WriteAt(p []byte, off int64) (n int, err error) {
 	return n, nil
 }
 
-func (store *cachedStore) put(key string, p *Page) error {
+func (store *cachedStore) put(key string, p *Page, tier meta.TierInfo) error {
 	if store.upLimit != nil {
 		store.upLimit.Wait(int64(len(p.Data)))
 	}
 	p.Acquire()
-	var (
-		reqID string
-		sc    = object.DefaultStorageClass
-	)
+	var reqID string
+	var sc string
 	return utils.WithTimeout(context.TODO(), func(ctx context.Context) error {
 		defer p.Release()
 		st := time.Now()
-		err := store.storage.Put(ctx, key, bytes.NewReader(p.Data), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+		err := store.storage.Put(ctx, key, bytes.NewReader(p.Data), object.WithStorageClass(tier.GetStorageClassID()), object.GetRequestID(&reqID), object.GetStorageClass(&sc))
 		used := time.Since(st)
 		logRequest("PUT", key, "", reqID, err, used)
 		store.objectDataBytes.WithLabelValues("PUT", sc).Add(float64(len(p.Data)))
@@ -334,7 +335,7 @@ func (store *cachedStore) delete(key string) error {
 	st := time.Now()
 	var reqID string
 	err := utils.WithTimeout(context.TODO(), func(ctx context.Context) error {
-		return store.storage.Delete(ctx, key, object.WithRequestID(&reqID))
+		return store.storage.Delete(ctx, key, object.GetRequestID(&reqID))
 	}, store.conf.PutTimeout)
 	used := time.Since(st)
 	if err != nil && (strings.Contains(err.Error(), "NoSuchKey") ||
@@ -383,7 +384,7 @@ func (store *cachedStore) upload(key string, block *Page, s *wSlice) error {
 			err = fmt.Errorf("(cancelled) upload block %s: %s (after %d tries)", key, err, try)
 			break
 		}
-		if err = store.put(key, buf); err == nil {
+		if err = store.put(key, buf, s.tier); err == nil {
 			break
 		}
 		logger.Debugf("Upload %s: %s (try %d)", key, err, try+1)
@@ -441,6 +442,7 @@ func (s *wSlice) upload(indx int) {
 					select {
 					case s.store.currentUpload <- struct{}{}:
 						defer func() { <-s.store.currentUpload }()
+						// fixme: writeback mode should write storage class into key
 						if err = s.store.upload(key, block, nil); err == nil {
 							s.store.bcache.uploaded(key, blen)
 							if err := s.store.bcache.removeStage(key); err != nil {
@@ -724,7 +726,7 @@ func (store *cachedStore) loadRange(ctx context.Context, key string, page *Page,
 	page.Acquire()
 	err = utils.WithTimeout(ctx, func(cCtx context.Context) error {
 		defer page.Release()
-		in, err := store.storage.Get(cCtx, key, int64(off), int64(len(p)), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+		in, err := store.storage.Get(cCtx, key, int64(off), int64(len(p)), object.GetRequestID(&reqID), object.GetStorageClass(&sc))
 		if err == nil {
 			n, err = io.ReadFull(in, p)
 			_ = in.Close()
@@ -782,7 +784,7 @@ func (store *cachedStore) load(ctx context.Context, key string, page *Page, cach
 	err = utils.WithTimeout(ctx, func(cCtx context.Context) error {
 		defer p.Release()
 		// it will be retried in the upper layer.
-		in, err = store.storage.Get(cCtx, key, 0, -1, object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+		in, err = store.storage.Get(cCtx, key, 0, -1, object.GetRequestID(&reqID), object.GetStorageClass(&sc))
 		if err == nil {
 			n, err = io.ReadFull(in, p.Data)
 			_ = in.Close()
@@ -1153,8 +1155,8 @@ func (store *cachedStore) NewReader(id uint64, length int) Reader {
 	return sliceForRead(id, length, store)
 }
 
-func (store *cachedStore) NewWriter(id uint64) Writer {
-	return sliceForWrite(id, store)
+func (store *cachedStore) NewWriter(id uint64, tier meta.TierInfo) Writer {
+	return sliceForWrite(id, store, tier)
 }
 
 func (store *cachedStore) Remove(id uint64, length int) error {

@@ -90,6 +90,7 @@ const (
 	SetAttrAtimeNow
 	SetAttrMtimeNow
 	SetAttrCtimeNow
+	SetAttrTier
 	SetAttrFlag = 1 << 15
 )
 
@@ -173,12 +174,52 @@ type Attr struct {
 
 	AccessACL  uint32 // access ACL id (identical ACL rules share the same access ACL ID.)
 	DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
+
+	Tier TierInfo
 }
+type TierInfo uint8
+
+const (
+	typeMask  uint8 = 0xF0 // 1111 0000
+	otherMask uint8 = 0x0F // 0000 1111
+	typeShift       = 4
+)
+
+func (tier *TierInfo) SetStorageClass(t uint8) error {
+	if t > otherMask {
+		return fmt.Errorf("storage type out of range: %d (want 0~15)", t)
+	}
+	v := uint8(*tier)
+	v = (v & ^typeMask) | ((t & otherMask) << typeShift)
+	*tier = TierInfo(v)
+	return nil
+}
+
+func (tier TierInfo) GetStorageClassID() uint8 {
+	return (uint8(tier) & typeMask) >> typeShift
+}
+
+//func (tier *TierInfo) SetOther(x uint8) error {
+//	if x > otherMask {
+//		return fmt.Errorf("other out of range: %d (want 0~15)", x)
+//	}
+//	v := uint8(*tier)
+//	v = (v & ^otherMask) | (x & otherMask)
+//	*tier = TierInfo(v)
+//	return nil
+//}
+//
+//func (tier TierInfo) GetOther() uint8 {
+//	return uint8(tier) & otherMask
+//}
 
 func (attr *Attr) Marshal() []byte {
 	size := uint32(36 + 24 + 4 + 8)
 	if attr.AccessACL|attr.DefaultACL != aclAPI.None {
 		size += 8
+	}
+	if attr.Tier != 0 {
+		size += 1
 	}
 	w := utils.NewBuffer(size)
 	w.Put8(attr.Flags)
@@ -198,6 +239,9 @@ func (attr *Attr) Marshal() []byte {
 	if attr.AccessACL+attr.DefaultACL > 0 {
 		w.Put32(attr.AccessACL)
 		w.Put32(attr.DefaultACL)
+	}
+	if attr.Tier != 0 {
+		w.Put8(uint8(attr.Tier))
 	}
 	logger.Tracef("attr: %+v -> %+v", attr, w.Bytes())
 	return w.Bytes()
@@ -230,6 +274,9 @@ func (attr *Attr) Unmarshal(buf []byte) {
 	if rb.Left() >= 8 {
 		attr.AccessACL = rb.Get32()
 		attr.DefaultACL = rb.Get32()
+	}
+	if rb.Left() >= 1 {
+		attr.Tier = TierInfo(rb.Get8())
 	}
 	logger.Tracef("attr: %+v -> %+v", buf, attr)
 }

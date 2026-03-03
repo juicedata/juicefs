@@ -81,14 +81,14 @@ func (b *wasb) Head(ctx context.Context, key string) (Object, error) {
 	}, nil
 }
 
-func (b *wasb) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (b *wasb) Get(ctx context.Context, key string, off, limit int64, opts ...Options) (io.ReadCloser, error) {
 	download, err := b.container.NewBlobClient(key).DownloadStream(ctx, &azblob.DownloadStreamOptions{Range: blob2.HTTPRange{Offset: off, Count: limit}})
 	if err != nil {
 		return nil, err
 	}
-	attrs := ApplyGetters(getters...)
-	// TODO fire another property request to get the actual storage class
-	attrs.SetRequestID(aws.ToString(download.RequestID)).SetStorageClass(b.sc)
+	options := ApplyOptions(opts...)
+	// fixme: fire another property request to get the actual storage class
+	options.SetRequestID(aws.ToString(download.RequestID)).SetStorageClass(b.sc)
 	return download.Body, err
 }
 
@@ -101,14 +101,26 @@ func str2Tier(tier string) *blob2.AccessTier {
 	return nil
 }
 
-func (b *wasb) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
-	options := azblob.UploadStreamOptions{}
-	if b.sc != "" {
-		options.AccessTier = str2Tier(b.sc)
+func (b *wasb) Put(ctx context.Context, key string, data io.Reader, opts ...Options) error {
+	options := ApplyOptions(opts...)
+	scId := options.RequestOpts.StorageClassId
+	scAttr, ok := ScInfo.GetById("wasb", scId)
+	if !ok {
+		return fmt.Errorf("invalid storage class: %d", scId)
 	}
-	resp, err := b.azblobCli.UploadStream(ctx, b.cName, key, data, &options)
-	attrs := ApplyGetters(getters...)
-	attrs.SetRequestID(aws.ToString(resp.RequestID)).SetStorageClass(b.sc)
+	azOpts := azblob.UploadStreamOptions{}
+	var scStr string
+	if b.sc != "" {
+		scStr = b.sc
+	}
+	if scAttr.Name != "" {
+		scStr = scAttr.Name
+	}
+	if scStr != "" {
+		azOpts.AccessTier = str2Tier(scStr)
+	}
+	resp, err := b.azblobCli.UploadStream(ctx, b.cName, key, data, &azOpts)
+	options.SetRequestID(aws.ToString(resp.RequestID)).SetStorageClass(scStr)
 	return err
 }
 
@@ -141,15 +153,15 @@ func (b *wasb) Copy(ctx context.Context, dst, src string) error {
 	return err
 }
 
-func (b *wasb) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+func (b *wasb) Delete(ctx context.Context, key string, opts ...Options) error {
 	resp, err := b.container.NewBlobClient(key).Delete(ctx, nil)
 	if err != nil {
 		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.BlobNotFound) {
 			err = nil
 		}
 	}
-	attrs := ApplyGetters(getters...)
-	attrs.SetRequestID(aws.ToString(resp.RequestID))
+	options := ApplyOptions(opts...)
+	options.SetRequestID(aws.ToString(resp.RequestID))
 	return err
 }
 

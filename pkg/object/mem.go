@@ -75,7 +75,7 @@ func (m *memStore) Head(ctx context.Context, key string) (Object, error) {
 	return f, nil
 }
 
-func (m *memStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (m *memStore) Get(ctx context.Context, key string, off, limit int64, opts ...Options) (io.ReadCloser, error) {
 	m.Lock()
 	defer m.Unlock()
 	// Minimum length is 1.
@@ -96,7 +96,7 @@ func (m *memStore) Get(ctx context.Context, key string, off, limit int64, getter
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (m *memStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+func (m *memStore) Put(ctx context.Context, key string, in io.Reader, opts ...Options) error {
 	m.Lock()
 	defer m.Unlock()
 	// Minimum length is 1.
@@ -115,7 +115,7 @@ func (m *memStore) Put(ctx context.Context, key string, in io.Reader, getters ..
 	return nil
 }
 
-func (m *memStore) Copy(ctx context.Context, dst, src string) error {
+func (m *memStore) Copy(ctx context.Context, dst, src string, opts ...Options) error {
 	d, err := m.Get(ctx, src, 0, -1)
 	if err != nil {
 		return err
@@ -123,7 +123,7 @@ func (m *memStore) Copy(ctx context.Context, dst, src string) error {
 	return m.Put(ctx, dst, d)
 }
 
-func (m *memStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+func (m *memStore) Delete(ctx context.Context, key string, opts ...Options) error {
 	m.Lock()
 	defer m.Unlock()
 	delete(m.objects, key)
@@ -189,7 +189,9 @@ func (m *memStore) List(ctx context.Context, prefix, marker, token, delimiter st
 	}
 	return generateListResult(objs, limit)
 }
-
+func (m *memStore) Restore(ctx context.Context, key string, opts ...Options) error {
+	return notSupported
+}
 func newMem(endpoint, accesskey, secretkey, token string) (ObjectStorage, error) {
 	store := &memStore{name: endpoint}
 	store.objects = make(map[string]*mobj)

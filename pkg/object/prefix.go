@@ -108,23 +108,23 @@ func (p *withPrefix) Head(ctx context.Context, key string) (Object, error) {
 	return p.updateKey(o), nil
 }
 
-func (p *withPrefix) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (p *withPrefix) Get(ctx context.Context, key string, off, limit int64, opts ...Options) (io.ReadCloser, error) {
 	if off > 0 && limit < 0 {
 		return nil, fmt.Errorf("invalid range: %d-%d", off, limit)
 	}
-	return p.os.Get(ctx, p.prefix+key, off, limit, getters...)
+	return p.os.Get(ctx, p.prefix+key, off, limit, opts...)
 }
 
-func (p *withPrefix) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	return p.os.Put(ctx, p.prefix+key, in, getters...)
+func (p *withPrefix) Put(ctx context.Context, key string, in io.Reader, opts ...Options) error {
+	return p.os.Put(ctx, p.prefix+key, in, opts...)
 }
 
-func (p *withPrefix) Copy(ctx context.Context, dst, src string) error {
-	return p.os.Copy(ctx, dst, src)
+func (p *withPrefix) Copy(ctx context.Context, dst, src string, opts ...Options) error {
+	return p.os.Copy(ctx, dst, src, opts...)
 }
 
-func (p *withPrefix) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
-	return p.os.Delete(ctx, p.prefix+key, getters...)
+func (p *withPrefix) Delete(ctx context.Context, key string, opts ...Options) error {
+	return p.os.Delete(ctx, p.prefix+key, opts...)
 }
 
 func (p *withPrefix) List(ctx context.Context, prefix, start, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {
@@ -206,6 +206,9 @@ func (p *withPrefix) ListUploads(ctx context.Context, marker string) ([]*Pending
 		part.Key = part.Key[len(p.prefix):]
 	}
 	return parts, nextMarker, err
+}
+func (p *withPrefix) Restore(ctx context.Context, key string, opts ...Options) error {
+	return p.os.Restore(ctx, p.prefix+key, opts...)
 }
 
 var _ ObjectStorage = (*withPrefix)(nil)

@@ -109,6 +109,8 @@ func (s *s3client) Head(ctx context.Context, key string) (Object, error) {
 		}
 		return nil, err
 	}
+	// 未解冻 r.restore == ongoing-request="true"
+	// 解冻后 ongoing-request="false", expiry-date="Fri, 06 Mar 2026 00:00:00 GMT"
 	return &obj{
 		key,
 		*r.ContentLength,
@@ -118,7 +120,7 @@ func (s *s3client) Head(ctx context.Context, key string) (Object, error) {
 	}, nil
 }
 
-func (s *s3client) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (s *s3client) Get(ctx context.Context, key string, off, limit int64, opts ...Options) (io.ReadCloser, error) {
 	params := &s3.GetObjectInput{Bucket: &s.bucket, Key: &key}
 	if off > 0 || limit > 0 {
 		var r string
@@ -129,17 +131,19 @@ func (s *s3client) Get(ctx context.Context, key string, off, limit int64, getter
 		}
 		params.Range = &r
 	}
-	attrs := ApplyGetters(getters...)
+	//GLACIER will return types.InvalidObjectState error
+	options := ApplyOptions(opts...)
 	resp, err := s.s3.GetObject(ctx, params)
+	// ongoing-request="false", expiry-date="Fri, 06 Mar 2026 00:00:00 GMT"
 	if err != nil {
 		var re s3.ResponseError
 		if errors.As(err, &re) {
-			attrs.SetRequestID(re.ServiceRequestID())
+			options.SetRequestID(re.ServiceRequestID())
 		}
 		return nil, err
 	}
 	if reqID, ok := middleware.GetRequestIDMetadata(resp.ResultMetadata); ok {
-		attrs.SetRequestID(reqID)
+		options.SetRequestID(reqID)
 	}
 	if off == 0 && limit == -1 && !s.disableChecksum {
 		cs := resp.Metadata[strings.ToLower(checksumAlgr)]
@@ -147,11 +151,11 @@ func (s *s3client) Get(ctx context.Context, key string, off, limit int64, getter
 			resp.Body = verifyChecksum(resp.Body, cs, *resp.ContentLength)
 		}
 	}
-	attrs.SetStorageClass(string(resp.StorageClass))
+	options.SetStorageClass(string(resp.StorageClass))
 	return resp.Body, nil
 }
 
-func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+func (s *s3client) Put(ctx context.Context, key string, in io.Reader, opts ...Options) error {
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b
@@ -163,64 +167,87 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 		body = bytes.NewReader(data)
 	}
 	mimeType := utils.GuessMimeType(key)
+
+	options := ApplyOptions(opts...)
+	scStr, err := GetScStr("s3", s.sc, options)
+	if err != nil {
+		return err
+	}
 	params := &s3.PutObjectInput{
 		Bucket:            &s.bucket,
 		Key:               &key,
 		Body:              body,
 		ContentType:       &mimeType,
-		StorageClass:      types.StorageClass(s.sc),
+		StorageClass:      types.StorageClass(scStr),
 		ChecksumAlgorithm: "", // X-Amz-Content-Sha256: UNSIGNED-PAYLOAD
 	}
 	if !s.disableChecksum {
 		checksum := generateChecksum(body)
 		params.Metadata = map[string]string{checksumAlgr: checksum}
 	}
-	attrs := ApplyGetters(getters...)
-	attrs.SetStorageClass(s.sc)
+	options.SetStorageClass(scStr)
 	resp, err := s.s3.PutObject(ctx, params)
 	if err != nil {
 		var re s3.ResponseError
 		if errors.As(err, &re) {
-			attrs.SetRequestID(re.ServiceRequestID())
+			options.SetRequestID(re.ServiceRequestID())
 		}
 		return err
 	}
 	if reqID, ok := middleware.GetRequestIDMetadata(resp.ResultMetadata); ok {
-		attrs.SetRequestID(reqID)
+		options.SetRequestID(reqID)
 	}
 	return err
 }
 
-func (s *s3client) Copy(ctx context.Context, dst, src string) error {
+func (s *s3client) Restore(ctx context.Context, key string, opts ...Options) error {
+	object, err := s.s3.RestoreObject(ctx, &s3.RestoreObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+		RestoreRequest: &types.RestoreRequest{
+			Days:                 aws.Int32(3),
+			GlacierJobParameters: &types.GlacierJobParameters{Tier: types.TierStandard},
+		},
+	})
+	fmt.Println(object)
+	return err
+}
+
+func (s *s3client) Copy(ctx context.Context, dst, src string, opts ...Options) error {
+	options := ApplyOptions(opts...)
+	scStr, err := GetScStr("s3", s.sc, options)
+	if err != nil {
+		return err
+	}
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:       &s.bucket,
 		Key:          &dst,
 		CopySource:   &src,
-		StorageClass: types.StorageClass(s.sc),
+		StorageClass: types.StorageClass(scStr),
 	}
-	_, err := s.s3.CopyObject(ctx, params)
+	_, err = s.s3.CopyObject(ctx, params)
 	return err
 }
 
-func (s *s3client) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+func (s *s3client) Delete(ctx context.Context, key string, opts ...Options) error {
 	param := s3.DeleteObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
 	resp, err := s.s3.DeleteObject(ctx, &param)
-	attrs := ApplyGetters(getters...)
+	options := ApplyOptions(opts...)
 	if err != nil {
 		var re s3.ResponseError
 		if errors.As(err, &re) {
-			attrs.SetRequestID(re.ServiceRequestID())
+			options.SetRequestID(re.ServiceRequestID())
 		}
 		if strings.Contains(err.Error(), "NoSuchKey") {
 			err = nil
 		}
 	} else {
 		if reqID, ok := middleware.GetRequestIDMetadata(resp.ResultMetadata); ok {
-			attrs.SetRequestID(reqID)
+			options.SetRequestID(reqID)
 		}
 	}
 	return err
@@ -579,9 +606,53 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 
 	cfg.HTTPClient = httpClient
 	client := s3.NewFromConfig(cfg, optFns...)
+
+	//rules := []types.LifecycleRule{
+	//	{
+	//		ID:     aws.String("auto-tiering"),
+	//		Status: types.ExpirationStatusEnabled,
+	//
+	//		Filter: &types.LifecycleRuleFilter{
+	//			Tag: &types.Tag{
+	//				Key:   aws.String("tier"),
+	//				Value: aws.String("low"),
+	//			},
+	//		},
+	//
+	//		Transitions: []types.Transition{
+	//			{
+	//				Days:         aws.Int32(0),
+	//				StorageClass: types.TransitionStorageClassGlacier,
+	//			},
+	//		},
+	//	},
+	//}
+	//
+	//client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
+	//	Bucket:                             nil,
+	//	ChecksumAlgorithm:                  "",
+	//	ExpectedBucketOwner:                nil,
+	//	LifecycleConfiguration:             &types.BucketLifecycleConfiguration{Rules: rules},
+	//	TransitionDefaultMinimumObjectSize: "",
+	//})
 	return &s3client{bucket: bucketName, s3: client, disableChecksum: disableChecksum, region: region}, nil
 }
 
 func init() {
 	Register("s3", newS3)
+	scs := []StorageClassAttr{
+		{Id: 0, Name: "", Restore: false, ArchiveRead: false, DeepArchive: false},
+		{Id: 1, Name: "STANDARD", Restore: false, ArchiveRead: false, DeepArchive: false},
+		{Id: 2, Name: "REDUCED_REDUNDANCY", Restore: false, ArchiveRead: false, DeepArchive: false},
+		{Id: 3, Name: "STANDARD_IA", Restore: true, ArchiveRead: true, DeepArchive: false},
+		{Id: 4, Name: "ONEZONE_IA", Restore: true, ArchiveRead: true, DeepArchive: true},
+		{Id: 5, Name: "INTELLIGENT_TIERING", Restore: true, ArchiveRead: true, DeepArchive: false},
+		{Id: 6, Name: "GLACIER", Restore: true, ArchiveRead: true, DeepArchive: true},
+		{Id: 7, Name: "DEEP_ARCHIVE", Restore: true, ArchiveRead: true, DeepArchive: false},
+		{Id: 8, Name: "OUTPOSTS", Restore: true, ArchiveRead: true, DeepArchive: true},
+		{Id: 9, Name: "GLACIER_IR", Restore: true, ArchiveRead: true, DeepArchive: false},
+		{Id: 10, Name: "SNOW", Restore: true, ArchiveRead: true, DeepArchive: true},
+		{Id: 11, Name: "EXPRESS_ONEZONE", Restore: true, ArchiveRead: true, DeepArchive: false},
+	}
+	addToScConv("s3", scs)
 }

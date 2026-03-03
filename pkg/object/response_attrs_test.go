@@ -34,11 +34,11 @@ func apiCall(getters ...AttrGetter) {
 func Test_api_call(t *testing.T) {
 	var reqID, sc string
 
-	apiCall(WithRequestID(&reqID), WithStorageClass(&sc))
+	apiCall(WithRequestID(&reqID), GetStorageClass(&sc))
 	assert.Equalf(t, reqIDExample, reqID, "expected %q, got %q", reqIDExample, reqID)
 	assert.Equalf(t, "STANDARD", sc, "expected %q, got %q", "STANDARD", sc)
 
-	attrs := ApplyGetters(WithStorageClass(&sc))
+	attrs := ApplyGetters(GetStorageClass(&sc))
 	attrs.SetStorageClass("") // Won't overwrite by empty string
 	assert.Equalf(t, "STANDARD", sc, "expected %q, got %q", "STANDARD", sc)
 }

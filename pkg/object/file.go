@@ -116,7 +116,7 @@ type SectionReaderCloser struct {
 	io.Closer
 }
 
-func (d *filestore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (d *filestore) Get(ctx context.Context, key string, off, limit int64, opts ...Options) (io.ReadCloser, error) {
 	p := d.path(key)
 
 	f, err := os.Open(p)
@@ -143,7 +143,7 @@ func (d *filestore) Get(ctx context.Context, key string, off, limit int64, gette
 	return f, nil
 }
 
-func (d *filestore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
+func (d *filestore) Put(ctx context.Context, key string, in io.Reader, opts ...Options) (err error) {
 	p := d.path(key)
 
 	if strings.HasSuffix(key, dirSuffix) || key == "" && strings.HasSuffix(d.root, dirSuffix) {
@@ -197,7 +197,7 @@ func (d *filestore) Put(ctx context.Context, key string, in io.Reader, getters .
 	return err
 }
 
-func (d *filestore) Copy(ctx context.Context, dst, src string) error {
+func (d *filestore) Copy(ctx context.Context, dst, src string, opts ...Options) error {
 	r, err := d.Get(ctx, src, 0, -1)
 	if err != nil {
 		return err
@@ -206,7 +206,7 @@ func (d *filestore) Copy(ctx context.Context, dst, src string) error {
 	return d.Put(ctx, dst, r)
 }
 
-func (d *filestore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+func (d *filestore) Delete(ctx context.Context, key string, opts ...Options) error {
 	err := os.Remove(d.path(key))
 	if err != nil && os.IsNotExist(err) {
 		err = nil
@@ -345,7 +345,9 @@ func (d *filestore) Chown(key string, owner, group string) error {
 	}
 	return os.Lchown(p, uid, gid)
 }
-
+func (d *filestore) Restore(ctx context.Context, key string, opts ...Options) error {
+	return notSupported
+}
 func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {
 	// For Windows, the path looks like /C:/a/b/c/
 	if runtime.GOOS == "windows" {

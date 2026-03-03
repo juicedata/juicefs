@@ -184,7 +184,7 @@ func checkGetStatus(statusCode int, partial bool) error {
 	return nil
 }
 
-func (s *RestfulStorage) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (s *RestfulStorage) Get(ctx context.Context, key string, off, limit int64, opts ...Options) (io.ReadCloser, error) {
 	headers := make(map[string]string)
 	if off > 0 || limit > 0 {
 		headers["Range"] = getRange(off, limit)
@@ -203,7 +203,7 @@ func (s *RestfulStorage) Get(ctx context.Context, key string, off, limit int64, 
 	return resp.Body, nil
 }
 
-func (u *RestfulStorage) Put(ctx context.Context, key string, body io.Reader, getters ...AttrGetter) error {
+func (u *RestfulStorage) Put(ctx context.Context, key string, body io.Reader, opts ...Options) error {
 	resp, err := u.request(ctx, "PUT", key, body, nil)
 	if err != nil {
 		return err
@@ -215,7 +215,7 @@ func (u *RestfulStorage) Put(ctx context.Context, key string, body io.Reader, ge
 	return nil
 }
 
-func (s *RestfulStorage) Copy(ctx context.Context, dst, src string) error {
+func (s *RestfulStorage) Copy(ctx context.Context, dst, src string, opts ...Options) error {
 	in, err := s.Get(ctx, src, 0, -1)
 	if err != nil {
 		return err
@@ -228,7 +228,7 @@ func (s *RestfulStorage) Copy(ctx context.Context, dst, src string) error {
 	return s.Put(ctx, dst, bytes.NewReader(d))
 }
 
-func (s *RestfulStorage) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+func (s *RestfulStorage) Delete(ctx context.Context, key string, opts ...Options) error {
 	resp, err := s.request(ctx, "DELETE", key, nil, nil)
 	if err != nil {
 		return err
@@ -238,6 +238,9 @@ func (s *RestfulStorage) Delete(ctx context.Context, key string, getters ...Attr
 		return parseError(resp)
 	}
 	return nil
+}
+func (s *RestfulStorage) Restore(ctx context.Context, key string, opts ...Options) error {
+	return notSupported
 }
 
 func (s *RestfulStorage) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]Object, bool, string, error) {

@@ -1507,6 +1507,8 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		} else {
 			attr.Mode = mode & ^cumask
 		}
+		// inherit storage class
+		attr.Tier = pattr.Tier
 
 		var updateParent bool
 		now := time.Now()

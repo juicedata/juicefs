@@ -46,7 +46,7 @@ func (r *redisStore) String() string {
 	return r.uri + "/"
 }
 
-func (r *redisStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+func (r *redisStore) Get(ctx context.Context, key string, off, limit int64, opts ...Options) (io.ReadCloser, error) {
 	data, err := r.rdb.Get(ctx, key).Bytes()
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (r *redisStore) Get(ctx context.Context, key string, off, limit int64, gett
 	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
-func (r *redisStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+func (r *redisStore) Put(ctx context.Context, key string, in io.Reader, opts ...Options) error {
 	data, err := io.ReadAll(in)
 	if err != nil {
 		return err
@@ -69,7 +69,7 @@ func (r *redisStore) Put(ctx context.Context, key string, in io.Reader, getters 
 	return r.rdb.Set(ctx, key, data, 0).Err()
 }
 
-func (r *redisStore) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
+func (r *redisStore) Delete(ctx context.Context, key string, opts ...Options) error {
 	return r.rdb.Del(ctx, key).Err()
 }
 
