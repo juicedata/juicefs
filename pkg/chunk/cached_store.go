@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/compress"
@@ -48,7 +49,7 @@ type pendingItem struct {
 	key       string
 	fpath     string    // full path of local file corresponding to the key
 	ts        time.Time // timestamp when this item is added
-	uploading bool
+	uploading atomic.Bool
 }
 
 // slice for read and remove
@@ -1035,7 +1036,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		return
 	}
 	defer func() {
-		item.uploading = false
+		item.uploading.Store(false)
 	}()
 
 	if !store.canUpload() {
@@ -1085,20 +1086,20 @@ func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.
 	store.pendingMutex.Lock()
 	item := store.pendingKeys[key]
 	if item == nil {
-		item = &pendingItem{key, stagingPath, added, false}
+		item = &pendingItem{key, stagingPath, added, atomic.Bool{}}
 		store.pendingKeys[key] = item
 	}
 	store.pendingMutex.Unlock()
-	if item.uploading {
-		logger.Debugf("Key %s is ignored since it's already being uploaded", key)
-		return true
-	}
 	if force || store.canUpload() && time.Since(added) > store.conf.UploadDelay {
-		select {
-		case store.pendingCh <- item:
-			item.uploading = true
+		if item.uploading.CompareAndSwap(false, true) {
+			select {
+			case store.pendingCh <- item:
+				return true
+			default:
+				item.uploading.Store(false)
+			}
+		} else {
 			return true
-		default:
 		}
 	}
 	return false
@@ -1126,8 +1127,7 @@ func (store *cachedStore) scanDelayedStaging() {
 	defer store.pendingMutex.Unlock()
 	for _, item := range store.pendingKeys {
 		store.pendingMutex.Unlock()
-		if !item.uploading && item.ts.Before(cutoff) {
-			item.uploading = true
+		if item.ts.Before(cutoff) && item.uploading.CompareAndSwap(false, true) {
 			store.pendingCh <- item
 		}
 		store.pendingMutex.Lock()
