@@ -141,6 +141,9 @@ func quota(c *cli.Context) error {
 	var quotaKey string
 	var quotaType string
 	if c.IsSet("uid") {
+		if c.Uint64("uid") == 0 {
+			logger.Fatalf("Invalid --uid: 0 is not allowed")
+		}
 		uid = uint32(c.Uint64("uid"))
 		quotaKey = meta.UGQuotaKey
 		quotaType = "user"
@@ -151,6 +154,9 @@ func quota(c *cli.Context) error {
 			logger.Fatalf("Cannot specify both --uid and --path at the same time")
 		}
 	} else if c.IsSet("gid") {
+		if c.Uint64("gid") == 0 {
+			logger.Fatalf("Invalid --gid: 0 is not allowed")
+		}
 		gid = uint32(c.Uint64("gid"))
 		quotaKey = meta.UGQuotaKey
 		quotaType = "group"
