@@ -209,16 +209,16 @@ func appendUGQuotaDelta(userGroupQuotas *[]userGroupQuotaDelta, parent Ino, uid,
 	var entrySpace int64
 	if nlink == 0 {
 		if typ == TypeFile {
-			entrySpace = -align4K(length)
+			entrySpace = align4K(length)
 		} else {
-			entrySpace = -align4K(0)
+			entrySpace = align4K(0)
 		}
 	}
 	*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
 		Uid:    uid,
 		Gid:    gid,
 		Space:  entrySpace,
-		Inodes: -1,
+		Inodes: 1,
 	})
 }
 
@@ -1788,14 +1788,16 @@ func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count 
 	var inodes int64
 	userGroupQuotas := make([]userGroupQuotaDelta, 0, len(entries))
 	st := m.en.doBatchUnlink(ctx, parent, entries, &length, &space, &inodes, &userGroupQuotas, skipCheckTrash)
-	if st == 0 {
-		m.updateDirStat(ctx, parent, length, space, inodes)
+	if st == 0 && (length != 0 || space != 0 || inodes != 0 || len(userGroupQuotas) > 0) {
+		m.updateDirStat(ctx, parent, -length, -space, -inodes)
 		if !parent.IsTrash() {
-			m.updateDirQuota(ctx, parent, space, inodes)
+			m.updateDirQuota(ctx, parent, -space, -inodes)
 			for _, quota := range userGroupQuotas {
-				m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, quota.Space, quota.Inodes)
+				m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, -quota.Space, -quota.Inodes)
 			}
 		}
+	}
+	if st == 0 {
 		if count != nil && len(entries) > 0 {
 			atomic.AddUint64(count, uint64(len(entries)))
 		}

@@ -1517,11 +1517,15 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 
 		var entryInfos []*entryInfo
 		var batchLength, batchSpace, batchInodes int64
+		var batchFsDeltaSpace, batchFsDeltaInodes int64
+		var batchTrashDeltaSpace, batchTrashDeltaInodes int64
 		var batchUserGroupQuotas []userGroupQuotaDelta
 		var delNodes map[Ino]*dNode
 
 		err := m.txn(ctx, func(tx *kvTxn) error {
 			batchLength, batchSpace, batchInodes = 0, 0, 0
+			batchFsDeltaSpace, batchFsDeltaInodes = 0, 0
+			batchTrashDeltaSpace, batchTrashDeltaInodes = 0, 0
 			if userGroupQuotas != nil {
 				batchUserGroupQuotas = make([]userGroupQuotaDelta, 0, len(batch))
 			}
@@ -1670,6 +1674,17 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 				if !visited[info.inode] {
 					if info.attr.Nlink > 0 {
 						tx.set(m.inodeKey(info.inode), m.marshal(info.attr))
+						if info.trash > 0 {
+							if info.typ == TypeFile {
+								batchSpace += align4K(info.attr.Length)
+								batchTrashDeltaSpace += align4K(info.attr.Length)
+							} else {
+								batchSpace += align4K(0)
+								batchTrashDeltaSpace += align4K(0)
+							}
+							batchInodes++
+							batchTrashDeltaInodes++
+						}
 					} else {
 						switch info.typ {
 						case TypeFile:
@@ -1681,6 +1696,8 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 								tx.delete(m.inodeKey(info.inode))
 								batchSpace += align4K(info.attr.Length)
 								batchInodes++
+								batchFsDeltaSpace -= align4K(info.attr.Length)
+								batchFsDeltaInodes--
 							}
 							batchLength -= int64(info.attr.Length)
 						case TypeSymlink:
@@ -1690,9 +1707,19 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 							tx.delete(m.inodeKey(info.inode))
 							batchSpace += align4K(0)
 							batchInodes++
+							batchFsDeltaSpace -= align4K(0)
+							batchFsDeltaInodes--
 							if info.typ != TypeSymlink {
 								batchLength -= int64(info.attr.Length)
 							}
+						}
+						if parent.IsTrash() {
+							if info.typ == TypeFile {
+								batchTrashDeltaSpace -= align4K(info.attr.Length)
+							} else {
+								batchTrashDeltaSpace -= align4K(0)
+							}
+							batchTrashDeltaInodes--
 						}
 						// Delete xattrs and parent keys
 						tx.deleteKeys(m.xattrKey(info.inode, ""))
@@ -1712,22 +1739,15 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 					if info.attr.Parent == 0 {
 						tx.incrBy(m.parentKey(info.inode, info.trash), 1)
 					}
-					if info.attr.Nlink > 0 {
-						batchSpace += align4K(0)
-						batchInodes++
-					} else {
-						if info.typ == TypeFile {
-							batchSpace += align4K(info.attr.Length)
-						} else {
-							batchSpace += align4K(0)
-						}
-						batchInodes++
-					}
 				}
 				if info.attr.Parent == 0 && info.attr.Nlink > 0 {
 					tx.incrBy(m.parentKey(info.inode, parent), -1)
 				}
-				appendUGQuotaDelta(&batchUserGroupQuotas, parent, info.attr.Uid, info.attr.Gid, info.attr.Nlink, info.typ, info.attr.Length)
+				nlinkForQuota := info.attr.Nlink
+				if info.trash > 0 && nlinkForQuota > 0 {
+					nlinkForQuota--
+				}
+				appendUGQuotaDelta(&batchUserGroupQuotas, parent, info.attr.Uid, info.attr.Gid, nlinkForQuota, info.typ, info.attr.Length)
 			}
 
 			// Update parent directory if needed
@@ -1746,13 +1766,11 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		for inode, info := range delNodes {
 			m.fileDeleted(info.opened, parent.IsTrash(), inode, info.length)
 		}
-		if parent.IsTrash() {
-			m.updateTrashStats(-batchSpace, -batchInodes)
-			m.updateStats(-batchSpace, -batchInodes)
-		} else if trash > 0 {
-			m.updateTrashStats(batchSpace, batchInodes)
-		} else {
-			m.updateStats(batchSpace, batchInodes)
+		if batchFsDeltaSpace != 0 || batchFsDeltaInodes != 0 {
+			m.updateStats(batchFsDeltaSpace, batchFsDeltaInodes)
+		}
+		if batchTrashDeltaSpace != 0 || batchTrashDeltaInodes != 0 {
+			m.updateTrashStats(batchTrashDeltaSpace, batchTrashDeltaInodes)
 		}
 
 		totalLength += batchLength
@@ -2161,6 +2179,12 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				restoreSpace = -align4K(0)
 			}
 			restoreInodes = -1
+			if trash > 0 {
+				restoreSpace += newSpace
+				restoreInodes += newInode
+			} else {
+				m.updateStats(newSpace, newInode)
+			}
 			m.updateTrashStats(restoreSpace, restoreInodes)
 		} else if trash == 0 {
 			if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {

@@ -2164,6 +2164,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 	if err == nil {
 		if parent.IsTrash() {
 			m.updateTrashStats(-align4K(0), -1)
+			m.updateStats(-align4K(0), -1)
 		} else if trash > 0 {
 			m.updateTrashStats(align4K(0), 1)
 		} else {
@@ -2568,6 +2569,12 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				restoreSpace = -align4K(0)
 			}
 			restoreInodes = -1
+			if trash > 0 {
+				restoreSpace += newSpace
+				restoreInodes += newInode
+			} else {
+				m.updateStats(newSpace, newInode)
+			}
 			m.updateTrashStats(restoreSpace, restoreInodes)
 		} else if trash == 0 {
 			if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
@@ -2701,18 +2708,6 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	}))
 }
 
-func recordGlobalDeletionStats(
-	n *node,
-	entrySpace int64,
-	totalLength *int64,
-	totalSpace *int64,
-	totalInodes *int64,
-) {
-	*totalLength -= int64(n.Length)
-	*totalSpace -= entrySpace
-	*totalInodes--
-}
-
 func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
 	if len(entries) == 0 {
 		return 0
@@ -2738,6 +2733,8 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 	}
 	delNodes := make(map[Ino]*dNode)
 	var totalLength, totalSpace, totalInodes int64
+	var fsDeltaSpace, fsDeltaInodes int64
+	var trashDeltaSpace, trashDeltaInodes int64
 	if userGroupQuotas != nil {
 		*userGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
 	}
@@ -2896,8 +2893,15 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 							return err
 						}
 						if info.trash > 0 {
-							totalSpace += align4K(0)
+							if info.n.Type == TypeFile {
+								totalSpace += align4K(info.n.Length)
+								trashDeltaSpace += align4K(info.n.Length)
+							} else {
+								totalSpace += align4K(0)
+								trashDeltaSpace += align4K(0)
+							}
 							totalInodes++
+							trashDeltaInodes++
 						}
 					} else {
 						// last link removed: prepare to delete inode and related rows
@@ -2930,7 +2934,15 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 							}
 						}
 						if needRecordStats {
-							recordGlobalDeletionStats(info.n, entrySpace, &totalLength, &totalSpace, &totalInodes)
+							totalLength += int64(info.n.Length)
+							totalSpace += entrySpace
+							totalInodes++
+							fsDeltaSpace -= entrySpace
+							fsDeltaInodes--
+							if parent.IsTrash() {
+								trashDeltaSpace -= entrySpace
+								trashDeltaInodes--
+							}
 						}
 						xattrsDel = append(xattrsDel, info.e.Inode)
 					}
@@ -2947,7 +2959,11 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 						Inode:  info.n.Inode,
 						Type:   info.n.Type})
 				}
-				appendUGQuotaDelta(userGroupQuotas, parent, info.n.Uid, info.n.Gid, info.n.Nlink, info.n.Type, info.n.Length)
+				nlinkForQuota := info.n.Nlink
+				if info.trash > 0 && nlinkForQuota > 0 {
+					nlinkForQuota--
+				}
+				appendUGQuotaDelta(userGroupQuotas, parent, info.n.Uid, info.n.Gid, nlinkForQuota, info.n.Type, info.n.Length)
 				visited[info.n.Inode] = true
 			}
 
@@ -3027,13 +3043,11 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 	for inode, info := range delNodes {
 		m.fileDeleted(info.opened, parent.IsTrash(), inode, info.length)
 	}
-	if parent.IsTrash() {
-		m.updateTrashStats(-totalSpace, -totalInodes)
-		m.updateStats(-totalSpace, -totalInodes)
-	} else if trash > 0 {
-		m.updateTrashStats(totalSpace, totalInodes)
-	} else {
-		m.updateStats(totalSpace, totalInodes)
+	if fsDeltaSpace != 0 || fsDeltaInodes != 0 {
+		m.updateStats(fsDeltaSpace, fsDeltaInodes)
+	}
+	if trashDeltaSpace != 0 || trashDeltaInodes != 0 {
+		m.updateTrashStats(trashDeltaSpace, trashDeltaInodes)
 	}
 	*length = totalLength
 	*space = totalSpace
