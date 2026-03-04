@@ -3282,24 +3282,30 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	}
 	defer handler.Close()
 
+	cloneCtx := WrapWithCancel(ctx, ctx.Pid(), ctx.Uid(), ctx.Gids())
+	defer cloneCtx.Cancel()
+
 	var g errgroup.Group
 	var skipped uint32
 
 	cloneChild := func(e *Entry) syscall.Errno {
-		eno := m.cloneEntry(ctx, e.Inode, ino, string(e.Name), nil, cmode, cumask, count, false, concurrent)
-		if eno == syscall.ENOENT {
+		childEno := m.cloneEntry(cloneCtx, e.Inode, ino, string(e.Name), nil, cmode, cumask, count, false, concurrent)
+		if childEno == syscall.ENOENT {
 			logger.Warnf("ignore deleted %s in dir %d", string(e.Name), srcIno)
 			if e.Attr.Typ == TypeDirectory {
 				atomic.AddUint32(&skipped, 1)
 			}
-			eno = 0
+			return 0
 		}
-		return eno
+		if childEno != 0 {
+			cloneCtx.Cancel()
+		}
+		return childEno
 	}
 
 	offset := 0
 	for {
-		batchEntries, batchEno := handler.List(ctx, offset)
+		batchEntries, batchEno := handler.List(cloneCtx, offset)
 		if batchEno != 0 {
 			eno = batchEno
 			break
@@ -3327,7 +3333,7 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 					})
 				default:
 					// Synchronous fallback when concurrency limit reached
-					if childEno := cloneChild(e); childEno != 0 {
+					if childEno := cloneChild(e); childEno != 0 && eno == 0 {
 						eno = childEno
 					}
 				}
@@ -3335,19 +3341,19 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 				nonDirEntries = append(nonDirEntries, e)
 			}
 
-			if ctx.Canceled() {
-				eno = syscall.EINTR
+			if cloneCtx.Canceled() {
 				break
 			}
 		}
 
-		if eno != 0 {
+		if eno != 0 || cloneCtx.Canceled() {
 			break
 		}
 
 		// Batch clone files immediately (don't wait for subdirs to finish)
 		if len(nonDirEntries) > 0 {
-			if eno = m.BatchClone(ctx, srcIno, ino, nonDirEntries, cmode, cumask, count); eno == syscall.ENOTSUP {
+			batchEno := m.BatchClone(cloneCtx, srcIno, ino, nonDirEntries, cmode, cumask, count)
+			if batchEno == syscall.ENOTSUP {
 				// Fallback: clone each file concurrently
 				for _, e := range nonDirEntries {
 					select {
@@ -3362,29 +3368,36 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 						})
 					default:
 						// Synchronous fallback when concurrency limit reached
-						if childEno := cloneChild(e); childEno != 0 {
+						if childEno := cloneChild(e); childEno != 0 && eno == 0 {
 							eno = childEno
 						}
+					}
+
+					if cloneCtx.Canceled() {
+						break
 					}
 				}
 				if eno == syscall.ENOTSUP {
 					eno = 0
 				}
-			} else if eno != 0 {
+			} else if batchEno != 0 {
+				eno = batchEno
 				break
 			}
 		}
 
 		offset += len(batchEntries)
-		if ctx.Canceled() {
-			eno = syscall.EINTR
+		if cloneCtx.Canceled() {
 			break
 		}
 	}
 
-	// Wait for all goroutines and get first error
-	if err := g.Wait(); err != nil && eno == 0 {
-		eno = err.(syscall.Errno)
+	// Wait for all goroutines; preserve the first non-cancel error when possible.
+	if err := g.Wait(); eno == 0 && err != nil {
+		eno = errno(err)
+	}
+	if eno == 0 && cloneCtx.Canceled() {
+		eno = syscall.EINTR
 	}
 
 	if eno == 0 && skipped > 0 {
