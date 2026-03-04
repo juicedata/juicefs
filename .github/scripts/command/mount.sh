@@ -80,6 +80,31 @@ test_negative_dir(){
     echo -e "\nTest directory removed: ${TEST_DIR}"
 }
 
+test_redis_client_cache()
+{
+    if [[ "$META" != "redis" ]]; then
+        echo "Skip redis client cache test for META=$META"
+        return 0
+    fi
+
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    mkdir /jfs2 || true
+    ./juicefs mount -d $META_URL /jfs2
+
+    mkdir -p /jfs/redis_csc
+    for i in {1..100}; do
+        echo "v$i" > "/jfs/redis_csc/file_$i"
+    done
+
+    wait_command_success "ls /jfs2/redis_csc | wc -l" "100" 30
+    echo "cache-sync" > /jfs/redis_csc/shared_file
+    wait_command_success "cat /jfs2/redis_csc/shared_file" "cache-sync" 30
+
+    ./juicefs umount /jfs2 || umount -l /jfs2 || true
+}
+
 test_check_storage(){
     start_meta_engine $META minio
     prepare_test

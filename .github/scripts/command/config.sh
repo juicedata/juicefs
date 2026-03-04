@@ -9,6 +9,10 @@ META_URL=$(get_meta_url $META)
 if [[ $META_URL == *"?max_open_conns="* ]]; then
     META_URL=${META_URL%%\?*}
 fi
+LEGACY_META_URL=$META_URL
+if [[ "$META" == "redis" ]]; then
+    LEGACY_META_URL=${META_URL%%\?*}
+fi
 [ ! -x mc ] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc && chmod +x mc
 
 download_juicefs_client(){
@@ -24,11 +28,11 @@ test_config_min_client_version()
     prepare_test
     download_juicefs_client 1.0.0
     ./juicefs format $META_URL myjfs
-    ./juicefs-1.0.0 mount $META_URL /jfs -d && exit 1 || true
+    ./juicefs-1.0.0 mount $LEGACY_META_URL /jfs -d && exit 1 || true
     ./juicefs config $META_URL --min-client-version 1.0.1
-    ./juicefs-1.0.0 mount $META_URL /jfs -d && exit 1 || true
+    ./juicefs-1.0.0 mount $LEGACY_META_URL /jfs -d && exit 1 || true
     ./juicefs config $META_URL --min-client-version 1.0.0
-    ./juicefs-1.0.0 mount $META_URL /jfs -d
+    ./juicefs-1.0.0 mount $LEGACY_META_URL /jfs -d
 }
 
 test_config_max_client_version()
@@ -36,8 +40,8 @@ test_config_max_client_version()
     prepare_test
     current_version=$(./juicefs version | awk '{print $3}')
     download_juicefs_client 1.0.0
-    ./juicefs-1.0.0 format $META_URL myjfs
-    ./juicefs-1.0.0 config $META_URL --max-client-version 1.0.1
+    ./juicefs-1.0.0 format $LEGACY_META_URL myjfs
+    ./juicefs-1.0.0 config $LEGACY_META_URL --max-client-version 1.0.1
     ./juicefs mount $META_URL /jfs -d && exit 1 || true
     ./juicefs config $META_URL --max-client-version $current_version
     ./juicefs mount $META_URL /jfs -d

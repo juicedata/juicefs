@@ -1,4 +1,6 @@
 #!/bin/bash -e
+REDIS_CSC_QUERY="client-cache=true&client-cache-size=500&client-cache-expire=60s&client-cache-preload=100"
+
 retry() {
     local retries=5
     local delay=3
@@ -199,7 +201,7 @@ get_meta_url(){
     elif [ "$meta" == "mysql" ]; then
         meta_url="mysql://root:root@(127.0.0.1)/test?max_open_conns=30"
     elif [ "$meta" == "redis" ]; then
-        meta_url="redis://127.0.0.1:6379/1"
+        meta_url="redis://127.0.0.1:6379/1?${REDIS_CSC_QUERY}"
     elif [ "$meta" == "sqlite3" ]; then
         meta_url="sqlite3://test.db"
     elif [ "$meta" == "tikv" ]; then
@@ -232,7 +234,7 @@ get_meta_url2(){
     elif [ "$meta" == "mysql" ]; then
         meta_url="mysql://root:root@(127.0.0.1)/test2?max_open_conns=30"
     elif [ "$meta" == "redis" ]; then
-        meta_url="redis://127.0.0.1:6379/2"
+        meta_url="redis://127.0.0.1:6379/2?${REDIS_CSC_QUERY}"
     elif [ "$meta" == "sqlite3" ]; then
         meta_url="sqlite3://test2.db"
     elif [ "$meta" == "tikv" ]; then

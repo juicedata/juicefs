@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import time
+from urllib.parse import urlparse
 from minio import Minio
 
 def flush_meta(meta_url:str):
@@ -26,15 +27,11 @@ def flush_meta(meta_url:str):
             print(f'remove badger dir {path} succeed')
     elif meta_url.startswith('redis://') or meta_url.startswith('tikv://'):
         default_port = {"redis": 6379, "tikv": 2379}
-        protocol = meta_url.split("://")[0]
-        host_port= meta_url.split("://")[1].split('/')[0]
-        if ':' in host_port:
-            host = host_port.split(':')[0]
-            port = host_port.split(':')[1]
-        else:
-            host = host_port
-            port = default_port[protocol]
-        db = meta_url.split("://")[1].split('/')[1]
+        parsed = urlparse(meta_url)
+        protocol = parsed.scheme
+        host = parsed.hostname
+        port = parsed.port if parsed.port else default_port[protocol]
+        db = parsed.path.lstrip('/').split('/')[0]
         assert db
         print(f'flushing {protocol}://{host}:{port}/{db}')
         if protocol == 'redis':
