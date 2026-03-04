@@ -30,6 +30,8 @@ jobs:
       fail-fast: false
       matrix:
         meta: [ 'redis', 'mysql', 'fdb', 'tikv']
+        #storage: [ 'local', 'minio', 'cifs' ]
+        storage: [ 'cifs' ]
     runs-on: ubuntu-22.04
 
     steps:        
@@ -94,14 +96,48 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
+          storage='${{matrix.storage}}'
+          format_opts='--bucket=/mnt/jfs'
+
+          if [ "$storage" == "minio" ]; then
+            start_meta_engine none minio
+            ./mc alias set myminio http://127.0.0.1:9000 minioadmin minioadmin
+            ./mc mb myminio/vdbench-long-run || true
+            format_opts='--storage minio --bucket=http://127.0.0.1:9000/vdbench-long-run --access-key=minioadmin --secret-key=minioadmin'
+          elif [ "$storage" == "cifs" ]; then
+            SMB_CONTAINER_NAME="juicefs-ci-smb"
+            SMB_USER="juicefs"
+            SMB_PASSWORD="juicefs"
+            SMB_SHARE="share"
+            SMB_DATA_DIR="/tmp/${SMB_CONTAINER_NAME}-data"
+            docker rm -f "$SMB_CONTAINER_NAME" >/dev/null 2>&1 || true
+            rm -rf "$SMB_DATA_DIR"
+            mkdir -p "$SMB_DATA_DIR"
+            chmod 0777 "$SMB_DATA_DIR"
+            docker run -d --name "$SMB_CONTAINER_NAME" \
+              -v "$SMB_DATA_DIR":/mount \
+              dperson/samba \
+              -u "$SMB_USER;$SMB_PASSWORD" \
+              -s "$SMB_SHARE;/mount;yes;no;no;$SMB_USER" >/dev/null
+            container_ip=$(docker container inspect "$SMB_CONTAINER_NAME" --format '{{ .NetworkSettings.IPAddress }}')
+            for _ in $(seq 1 40); do
+              if (echo > /dev/tcp/${container_ip}/445) >/dev/null 2>&1; then
+                break
+              fi
+              sleep 1
+            done
+            SMB_ENDPOINT="${container_ip}/${SMB_SHARE}"
+            format_opts="--storage cifs --bucket=${SMB_ENDPOINT} --access-key=${SMB_USER} --secret-key=${SMB_PASSWORD}"
+          fi
+
           sudo chmod 777 /mnt
-          GOCOVERDIR=$(pwd)/cover ./juicefs format $meta_url vdbench-long-run --trash-days 0 --bucket=/mnt/jfs
+          GOCOVERDIR=$(pwd)/cover ./juicefs format $meta_url vdbench-long-run --trash-days 0 $format_opts
           GOCOVERDIR=$(pwd)/cover ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --cache-size 1024 --max-deletes 50
           vdbench/vdbench -f .github/workflows/resources/vdbench_long_run.conf -jn
 
       - uses: actions/upload-artifact@v4
         with:
-          name: output-long-run-${{ matrix.meta }}
+          name: output-long-run-${{ matrix.meta }}-${{ matrix.storage }}
           path: output
 
       - name: check vdbench log
