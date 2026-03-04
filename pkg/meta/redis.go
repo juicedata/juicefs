@@ -2254,6 +2254,8 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 			if trash > 0 {
 				pipe.Set(ctx, m.inodeKey(inode), m.marshal(&attr), 0)
 				pipe.HSet(ctx, m.entryKey(trash), m.trashEntry(parent, inode, name), buf)
+				pipe.IncrBy(ctx, m.trashSpaceKey(), align4K(0))
+				pipe.IncrBy(ctx, m.trashInodesKey(), 1)
 			} else {
 				pipe.Del(ctx, m.inodeKey(inode))
 				pipe.Del(ctx, m.xattrKey(inode))
@@ -2533,6 +2535,14 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				}
 			} else {
 				pipe.HDel(ctx, m.entryKey(parentSrc), nameSrc)
+				if parentSrc.IsTrash() {
+					if srcType == TypeFile {
+						pipe.IncrBy(ctx, m.trashSpaceKey(), -align4K(srcLength))
+					} else {
+						pipe.IncrBy(ctx, m.trashSpaceKey(), -align4K(0))
+					}
+					pipe.IncrBy(ctx, m.trashInodesKey(), -1)
+				}
 				if dino > 0 {
 					if trash > 0 {
 						pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
