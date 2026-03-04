@@ -3011,6 +3011,72 @@ func testDirStat(t *testing.T, m Meta) {
 	time.Sleep(500 * time.Millisecond)
 	stat, st = m.GetDirStat(Background(), testInode)
 	checkResult(0, 0, 0)
+
+	// test batch unlink with dir stat
+	var batchFile1, batchFile2, batchFile3 Ino
+	if st := m.Create(Background(), testInode, "batchFile1", 0640, 022, 0, &batchFile1, nil); st != 0 {
+		t.Fatalf("create batchFile1: %s", st)
+	}
+	if st := m.Create(Background(), testInode, "batchFile2", 0640, 022, 0, &batchFile2, nil); st != 0 {
+		t.Fatalf("create batchFile2: %s", st)
+	}
+	if st := m.Create(Background(), testInode, "batchFile3", 0640, 022, 0, &batchFile3, nil); st != 0 {
+		t.Fatalf("create batchFile3: %s", st)
+	}
+	if st := m.Fallocate(Background(), batchFile1, 0, 0, 4096, nil); st != 0 {
+		t.Fatalf("fallocate batchFile1: %s", st)
+	}
+	if st := m.Fallocate(Background(), batchFile2, 0, 0, 8192, nil); st != 0 {
+		t.Fatalf("fallocate batchFile2: %s", st)
+	}
+	if st := m.Fallocate(Background(), batchFile3, 0, 0, 12288, nil); st != 0 {
+		t.Fatalf("fallocate batchFile3: %s", st)
+	}
+	if st := m.Close(Background(), batchFile1); st != 0 {
+		t.Fatalf("close batchFile1: %s", st)
+	}
+	if st := m.Close(Background(), batchFile2); st != 0 {
+		t.Fatalf("close batchFile2: %s", st)
+	}
+	if st := m.Close(Background(), batchFile3); st != 0 {
+		t.Fatalf("close batchFile3: %s", st)
+	}
+	time.Sleep(500 * time.Millisecond)
+	stat, st = m.GetDirStat(Background(), testInode)
+	checkResult(4096+8192+12288, align4K(4096)+align4K(8192)+align4K(12288), 3)
+
+	var batchEntries []*Entry
+	var attr1, attr2, attr3 Attr
+	if st := m.GetAttr(Background(), batchFile1, &attr1); st != 0 {
+		t.Fatalf("getattr batchFile1: %s", st)
+	}
+	if st := m.GetAttr(Background(), batchFile2, &attr2); st != 0 {
+		t.Fatalf("getattr batchFile2: %s", st)
+	}
+	if st := m.GetAttr(Background(), batchFile3, &attr3); st != 0 {
+		t.Fatalf("getattr batchFile3: %s", st)
+	}
+	batchEntries = append(batchEntries, &Entry{Inode: batchFile1, Name: []byte("batchFile1"), Attr: &attr1})
+	batchEntries = append(batchEntries, &Entry{Inode: batchFile2, Name: []byte("batchFile2"), Attr: &attr2})
+	batchEntries = append(batchEntries, &Entry{Inode: batchFile3, Name: []byte("batchFile3"), Attr: &attr3})
+
+	format := m.getBase().getFormat()
+	oldTrashDays := format.TrashDays
+	format.TrashDays = 0
+	defer func() {
+		format.TrashDays = oldTrashDays
+	}()
+
+	var count uint64
+	if st := m.getBase().BatchUnlink(Background(), testInode, batchEntries, &count, false); st != 0 {
+		t.Fatalf("batch unlink: %s", st)
+	}
+	if count != 3 {
+		t.Fatalf("batch unlink count: expect 3, got %d", count)
+	}
+	time.Sleep(500 * time.Millisecond)
+	stat, st = m.GetDirStat(Background(), testInode)
+	checkResult(0, 0, 0)
 }
 
 func testClone(t *testing.T, m Meta) {

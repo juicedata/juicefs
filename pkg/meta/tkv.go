@@ -1699,7 +1699,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 								batchFsDeltaSpace -= align4K(info.attr.Length)
 								batchFsDeltaInodes--
 							}
-							batchLength -= int64(info.attr.Length)
+							batchLength += int64(info.attr.Length)
 						case TypeSymlink:
 							tx.delete(m.symKey(info.inode))
 							fallthrough
@@ -1710,7 +1710,7 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 							batchFsDeltaSpace -= align4K(0)
 							batchFsDeltaInodes--
 							if info.typ != TypeSymlink {
-								batchLength -= int64(info.attr.Length)
+								batchLength += int64(info.attr.Length)
 							}
 						}
 						if parent.IsTrash() {

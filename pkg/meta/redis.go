@@ -2009,6 +2009,8 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 								}
 								inodes[info.inode] = info.attr
 								sustained = append(sustained, strconv.Itoa(int(info.inode)))
+								//batchSpace += align4K(info.attr.Length)
+								//batchInodes++
 							} else {
 								delfiles = append(delfiles, redis.Z{
 									Score:  float64(nowUnix),
@@ -2036,7 +2038,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 							stats[m.totalInodesKey()]--
 						}
 						if needStats {
-							batchLength -= int64(info.attr.Length)
+							batchLength += int64(info.attr.Length)
 							if parent.IsTrash() {
 								if info.typ == TypeFile {
 									batchTrashDeltaSpace -= align4K(info.attr.Length)
