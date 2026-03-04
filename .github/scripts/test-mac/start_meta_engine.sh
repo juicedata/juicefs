@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+REDIS_CSC_QUERY="client-cache=true&client-cache-size=500&client-cache-expire=60s&client-cache-preload=100"
+
 # Helper function to install packages via Homebrew
 brew_install() {
     if ! brew list "$1" &>/dev/null; then
@@ -98,7 +100,7 @@ start_meta_engine() {
 
 get_meta_url() {
     case "$1" in
-        redis) echo "redis://127.0.0.1:6379/1" ;;
+        redis) echo "redis://127.0.0.1:6379/1?${REDIS_CSC_QUERY}" ;;
         sqlite3) echo "sqlite3://test.db" ;;
         *)     echo >&2 "<FATAL>: Unsupported meta: $1"; return 1 ;;
     esac
@@ -106,7 +108,7 @@ get_meta_url() {
 
 get_meta_url2() {
     case "$1" in
-        redis) echo "redis://127.0.0.1:6379/2" ;;
+        redis) echo "redis://127.0.0.1:6379/2?${REDIS_CSC_QUERY}" ;;
         sqlite3) echo "sqlite3://test2.db" ;;
         *)     echo >&2 "<FATAL>: Unsupported meta: $1"; return 1 ;;
     esac

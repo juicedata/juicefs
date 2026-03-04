@@ -5,6 +5,10 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
+LEGACY_META_URL=$META_URL
+if [[ "$META" == "redis" ]]; then
+    LEGACY_META_URL=${META_URL%%\?*}
+fi
 echo meta_url is $META_URL
 
 dpkg -s fio >/dev/null 2>&1 || .github/scripts/apt_install.sh fio
@@ -140,8 +144,8 @@ test_update_fuse_option(){
 
 test_update_from_old_version(){
     prepare_test
-    ./juicefs-1.1 format $META_URL myjfs
-    ./juicefs-1.1 mount  -d $META_URL /tmp/jfs
+    ./juicefs-1.1 format $LEGACY_META_URL myjfs
+    ./juicefs-1.1 mount  -d $LEGACY_META_URL /tmp/jfs
     echo hello |tee /tmp/jfs/test
     ./juicefs mount -d $META_URL /tmp/jfs
     count=$(ps -ef | grep juicefs | grep mount | wc -l)
