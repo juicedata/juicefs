@@ -2987,7 +2987,6 @@ func testDirStat(t *testing.T, m Meta) {
 
 func testBatchClone(t *testing.T, m Meta) {
 	ctx := Background()
-	_, isSQLMeta := m.(*dbMeta)
 
 	// create source directory with mixed entry types
 	var srcDir Ino
@@ -3047,88 +3046,81 @@ func testBatchClone(t *testing.T, m Meta) {
 	// --- test 1: successful batch clone ---
 	var count uint64
 	st := m.getBase().BatchClone(ctx, srcDir, dstDir, nonDirEntries, 0, 022, &count)
-	if isSQLMeta {
-		if st != 0 {
-			t.Fatalf("BatchClone: %s", st)
-		}
-		if count != uint64(len(nonDirEntries)) {
-			t.Fatalf("BatchClone count: got %d, want %d", count, len(nonDirEntries))
-		}
-
-		// verify cloned entries exist
-		var dstEntries []*Entry
-		if st := m.Readdir(ctx, dstDir, 1, &dstEntries); st != 0 {
-			t.Fatalf("readdir batchDst: %s", st)
-		}
-		dstMap := make(map[string]*Entry)
-		for _, e := range dstEntries {
-			name := string(e.Name)
-			if name != "." && name != ".." {
-				dstMap[name] = e
-			}
-		}
-		if len(dstMap) != len(nonDirEntries) {
-			t.Fatalf("cloned entry count: got %d, want %d", len(dstMap), len(nonDirEntries))
-		}
-
-		// verify file1 clone: data, xattr
-		if e, ok := dstMap["file1"]; !ok {
-			t.Fatalf("file1 not cloned")
-		} else {
-			if e.Attr.Typ != TypeFile {
-				t.Fatalf("file1 type: got %d, want %d", e.Attr.Typ, TypeFile)
-			}
-			var slices []Slice
-			if st := m.Read(ctx, e.Inode, 0, &slices); st != 0 {
-				t.Fatalf("read cloned file1: %s", st)
-			}
-			if len(slices) == 0 {
-				t.Fatal("cloned file1 has no slices")
-			}
-			var val []byte
-			if st := m.GetXattr(ctx, e.Inode, "user.tag", &val); st != 0 {
-				t.Fatalf("getxattr cloned file1: %s", st)
-			}
-			if string(val) != "hello" {
-				t.Fatalf("xattr value: got %q, want %q", val, "hello")
-			}
-		}
-
-		// verify sym1 clone: target
-		if e, ok := dstMap["sym1"]; !ok {
-			t.Fatalf("sym1 not cloned")
-		} else {
-			var target []byte
-			if st := m.ReadLink(ctx, e.Inode, &target); st != 0 {
-				t.Fatalf("readlink cloned sym1: %s", st)
-			}
-			if string(target) != "/tmp/target" {
-				t.Fatalf("symlink target: got %q, want %q", target, "/tmp/target")
-			}
-		}
-
-		// verify file2 clone: empty file
-		if e, ok := dstMap["file2"]; !ok {
-			t.Fatalf("file2 not cloned")
-		} else {
-			if e.Attr.Typ != TypeFile {
-				t.Fatalf("file2 type: got %d, want %d", e.Attr.Typ, TypeFile)
-			}
-			if e.Attr.Length != 0 {
-				t.Fatalf("file2 length: got %d, want 0", e.Attr.Length)
-			}
-		}
-	} else {
-		// redis/tkv backends return ENOTSUP
-		if st != syscall.ENOTSUP {
-			t.Fatalf("BatchClone on non-SQL backend: got %s, want ENOTSUP", st)
-		}
-	}
-
-	if !isSQLMeta {
+	if st == syscall.ENOTSUP {
 		m.Remove(ctx, RootInode, "batchSrc", false, RmrDefaultThreads, nil)
 		m.Remove(ctx, RootInode, "batchDst", false, RmrDefaultThreads, nil)
 		return
+	}
+
+	if st != 0 {
+		t.Fatalf("BatchClone: %s", st)
+	}
+	if count != uint64(len(nonDirEntries)) {
+		t.Fatalf("BatchClone count: got %d, want %d", count, len(nonDirEntries))
+	}
+
+	// verify cloned entries exist
+	var dstEntries []*Entry
+	if st := m.Readdir(ctx, dstDir, 1, &dstEntries); st != 0 {
+		t.Fatalf("readdir batchDst: %s", st)
+	}
+	dstMap := make(map[string]*Entry)
+	for _, e := range dstEntries {
+		name := string(e.Name)
+		if name != "." && name != ".." {
+			dstMap[name] = e
+		}
+	}
+	if len(dstMap) != len(nonDirEntries) {
+		t.Fatalf("cloned entry count: got %d, want %d", len(dstMap), len(nonDirEntries))
+	}
+
+	// verify file1 clone: data, xattr
+	if e, ok := dstMap["file1"]; !ok {
+		t.Fatalf("file1 not cloned")
+	} else {
+		if e.Attr.Typ != TypeFile {
+			t.Fatalf("file1 type: got %d, want %d", e.Attr.Typ, TypeFile)
+		}
+		var slices []Slice
+		if st := m.Read(ctx, e.Inode, 0, &slices); st != 0 {
+			t.Fatalf("read cloned file1: %s", st)
+		}
+		if len(slices) == 0 {
+			t.Fatal("cloned file1 has no slices")
+		}
+		var val []byte
+		if st := m.GetXattr(ctx, e.Inode, "user.tag", &val); st != 0 {
+			t.Fatalf("getxattr cloned file1: %s", st)
+		}
+		if string(val) != "hello" {
+			t.Fatalf("xattr value: got %q, want %q", val, "hello")
+		}
+	}
+
+	// verify sym1 clone: target
+	if e, ok := dstMap["sym1"]; !ok {
+		t.Fatalf("sym1 not cloned")
+	} else {
+		var target []byte
+		if st := m.ReadLink(ctx, e.Inode, &target); st != 0 {
+			t.Fatalf("readlink cloned sym1: %s", st)
+		}
+		if string(target) != "/tmp/target" {
+			t.Fatalf("symlink target: got %q, want %q", target, "/tmp/target")
+		}
+	}
+
+	// verify file2 clone: empty file
+	if e, ok := dstMap["file2"]; !ok {
+		t.Fatalf("file2 not cloned")
+	} else {
+		if e.Attr.Typ != TypeFile {
+			t.Fatalf("file2 type: got %d, want %d", e.Attr.Typ, TypeFile)
+		}
+		if e.Attr.Length != 0 {
+			t.Fatalf("file2 length: got %d, want 0", e.Attr.Length)
+		}
 	}
 
 	// --- test 2: duplicate entry names (EEXIST) ---
