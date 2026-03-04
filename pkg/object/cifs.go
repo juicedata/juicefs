@@ -67,8 +67,8 @@ type cifsStore struct {
 // The returned mode from Stat() will always be either 0666 (writable) or 0444 (read-only)
 // regardless of the specific mode bits passed to this function.
 func (c *cifsStore) Chmod(path string, mode os.FileMode) error {
-	return c.withConn(context.Background(), func(conn *cifsConn) error {
-		return conn.share.Chmod(path, mode)
+	return c.withConn(context.Background(), func(share *smb2.Share) error {
+		return share.Chmod(path, mode)
 	})
 }
 
@@ -79,8 +79,8 @@ func (c *cifsStore) Chown(path string, owner string, group string) error {
 
 // Chtimes implements MtimeChanger.
 func (c *cifsStore) Chtimes(path string, mtime time.Time) error {
-	return c.withConn(context.Background(), func(conn *cifsConn) error {
-		return conn.share.Chtimes(path, time.Time{}, mtime)
+	return c.withConn(context.Background(), func(share *smb2.Share) error {
+		return share.Chtimes(path, time.Time{}, mtime)
 	})
 }
 
@@ -97,9 +97,8 @@ func (c *cifsStore) getConnection(ctx context.Context) (*cifsConn, error) {
 			if conn.session == nil {
 				continue
 			}
-			// TODO: do it in a new goroutine?
 			if now.Sub(conn.lastUsed) > c.connIdleTimeout {
-				_ = conn.session.Logoff()
+				c.closeConnectionAsync(conn)
 				continue
 			}
 			conn.lastUsed = now
@@ -130,13 +129,29 @@ CREATE:
 		return nil, fmt.Errorf("SMB authentication failed: %v", err)
 	}
 
-	conn.share, err = conn.session.Mount(c.share)
+	conn.share, err = conn.session.WithContext(ctx).Mount(c.share)
 	if err != nil {
-		_ = conn.session.Logoff()
+		c.closeConnection(conn)
 		return nil, fmt.Errorf("failed to mount SMB share %s: %v", c.share, err)
 	}
 
 	return conn, nil
+}
+
+func (c *cifsStore) closeConnection(conn *cifsConn) {
+	if conn == nil || conn.session == nil {
+		return
+	}
+
+	session := conn.session
+	conn.session = nil
+	conn.share = nil
+
+	_ = session.WithContext(context.Background()).Logoff()
+}
+
+func (c *cifsStore) closeConnectionAsync(conn *cifsConn) {
+	go c.closeConnection(conn)
 }
 
 // releaseConnection returns a connection to the pool or closes it if there's an error
@@ -154,31 +169,29 @@ func (c *cifsStore) releaseConnection(conn *cifsConn, err error) {
 	}
 
 	// close connection if there's an error or if the pool is full
-	if conn.session != nil {
-		_ = conn.session.Logoff()
-	}
+	c.closeConnectionAsync(conn)
 }
 
-func (c *cifsStore) withConn(ctx context.Context, f func(*cifsConn) error) error {
+func (c *cifsStore) withConn(ctx context.Context, f func(*smb2.Share) error) error {
 	conn, err := c.getConnection(ctx)
 	if err != nil {
 		return err
 	}
-	err = f(conn)
+	err = f(conn.share.WithContext(ctx))
 	c.releaseConnection(conn, err)
 	return err
 }
 
 func (c *cifsStore) Head(ctx context.Context, key string) (oj Object, err error) {
-	err = c.withConn(ctx, func(conn *cifsConn) error {
-		fi, err := conn.share.Lstat(key)
+	err = c.withConn(ctx, func(share *smb2.Share) error {
+		fi, err := share.Lstat(key)
 		if err != nil {
 			return err
 		}
 		isSymlink := fi.Mode()&os.ModeSymlink != 0
 		if isSymlink {
 			// SMB doesn't fully support symlinks like POSIX, but we'll try our best
-			fi, err = conn.share.Stat(key)
+			fi, err = share.Stat(key)
 			if err != nil {
 				return err
 			}
@@ -191,8 +204,8 @@ func (c *cifsStore) Head(ctx context.Context, key string) (oj Object, err error)
 
 func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
 	var readCloser io.ReadCloser
-	err := c.withConn(ctx, func(conn *cifsConn) error {
-		f, err := conn.share.Open(key)
+	err := c.withConn(ctx, func(share *smb2.Share) error {
+		f, err := share.Open(key)
 		if err != nil {
 			return err
 		}
@@ -220,12 +233,12 @@ func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
-	return c.withConn(ctx, func(conn *cifsConn) error {
+	return c.withConn(ctx, func(share *smb2.Share) error {
 		p := key
 		if strings.HasSuffix(key, dirSuffix) {
 			// perm will not take effect, is not used
 			// ref: https://github.com/cloudsoda/go-smb2/blob/c8e61c7a5fa7bcd1143359f071f9425a9f4dda3f/client.go#L341-L370
-			return conn.share.MkdirAll(p, 0755)
+			return share.MkdirAll(p, 0755)
 		}
 
 		var tmp string
@@ -239,21 +252,21 @@ func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters .
 			tmp = TmpFilePath(p, name)
 			defer func() {
 				if err != nil {
-					_ = conn.share.Remove(tmp)
+					_ = share.Remove(tmp)
 				}
 			}()
 		}
 
-		f, err := conn.share.Create(tmp)
+		f, err := share.Create(tmp)
 		if err != nil && os.IsNotExist(err) {
 			dirPath := path.Dir(p)
 			if dirPath != "/" {
-				err = conn.share.MkdirAll(dirPath, 0755)
+				err = share.MkdirAll(dirPath, 0755)
 				if err != nil {
 					return err
 				}
 			}
-			f, err = conn.share.Create(tmp)
+			f, err = share.Create(tmp)
 		}
 		if err != nil {
 			return err
@@ -273,16 +286,16 @@ func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters .
 		}
 
 		if !PutInplace {
-			err = conn.share.Rename(tmp, p)
+			err = share.Rename(tmp, p)
 		}
 		return err
 	})
 }
 
 func (c *cifsStore) Delete(ctx context.Context, key string, getters ...AttrGetter) (err error) {
-	return c.withConn(ctx, func(conn *cifsConn) error {
+	return c.withConn(ctx, func(share *smb2.Share) error {
 		p := strings.TrimRight(key, dirSuffix)
-		err = conn.share.Remove(p)
+		err = share.Remove(p)
 		if err != nil && os.IsNotExist(err) {
 			err = nil
 		}
@@ -330,15 +343,15 @@ func (c *cifsStore) List(ctx context.Context, prefix, marker, token, delimiter s
 		objs = append(objs, obj)
 	}
 	var mEntries []*mEntry
-	err := c.withConn(ctx, func(conn *cifsConn) error {
+	err := c.withConn(ctx, func(share *smb2.Share) error {
 		// Ensure directory exists before listing
-		_, err := conn.share.Stat(dir)
+		_, err := share.Stat(dir)
 		if err != nil {
 			return err
 		}
 
 		// Read directory entries
-		entries, err := conn.share.ReadDir(dir)
+		entries, err := share.ReadDir(dir)
 		if err != nil {
 			return err
 		}
@@ -351,7 +364,7 @@ func (c *cifsStore) List(ctx context.Context, prefix, marker, token, delimiter s
 				mEntries = append(mEntries, &mEntry{e, e.Name() + dirSuffix, nil, false})
 			} else if isSymlink && followLink {
 				// SMB doesn't fully support symlinks like POSIX, but we'll try our best
-				fi, err := conn.share.Stat(path.Join(dir, e.Name()))
+				fi, err := share.Stat(path.Join(dir, e.Name()))
 				if err != nil {
 					mEntries = append(mEntries, &mEntry{e, e.Name(), nil, true})
 					continue
