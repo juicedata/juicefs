@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -136,7 +137,6 @@ func quota(c *cli.Context) error {
 		logger.Fatalf("Invalid quota command: %s", c.Command.Name)
 	}
 
-
 	var uid, gid uint32
 	var quotaKey string
 	var quotaType string
@@ -203,7 +203,7 @@ func quota(c *cli.Context) error {
 	}
 
 	result := make([][]string, 1, len(qs)+1)
-	
+
 	if quotaType == "user" {
 		result[0] = []string{"User ID", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
 	} else if quotaType == "group" {
@@ -243,14 +243,21 @@ func quota(c *cli.Context) error {
 		} else {
 			itotal = "unchanged"
 		}
-		
+
 		var identifier string
 		if quotaType == "user" {
 			identifier = fmt.Sprintf("UID:%d", uid)
 		} else if quotaType == "group" {
 			identifier = fmt.Sprintf("GID:%d", gid)
 		} else {
-			identifier = p
+			// For quota list, determine the type based on the key prefix
+			if strings.HasPrefix(p, "uid:") {
+				identifier = fmt.Sprintf("UID:%s", strings.TrimPrefix(p, "uid:"))
+			} else if strings.HasPrefix(p, "gid:") {
+				identifier = fmt.Sprintf("GID:%s", strings.TrimPrefix(p, "gid:"))
+			} else {
+				identifier = p
+			}
 		}
 		result = append(result, []string{identifier, size, used, usedR, itotal, iused, iusedR})
 	}

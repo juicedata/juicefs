@@ -581,7 +581,7 @@ func (m *baseMeta) doFlushQuotas() {
 
 func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32, gid uint32, quotas map[string]*Quota, strict, repair bool, create bool) error {
 	var inode Ino
-	if cmd != QuotaList && uid == 0 && gid == 0{
+	if cmd != QuotaList && uid == 0 && gid == 0 {
 		if st := m.resolve(ctx, dpath, &inode, create); st != 0 {
 			return fmt.Errorf("resolve dir %s: %s", dpath, st)
 		}
@@ -593,15 +593,15 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32,
 	var key uint64
 	var qtype uint32
 	qtype = 0xffffffff
-	if dpath != "" {
-		qtype = DirQuotaType
-		key = uint64(inode)
-	} else if uid != 0 {
+	if uid != 0 {
 		qtype = UserQuotaType
 		key = uint64(uid)
 	} else if gid != 0 {
 		qtype = GroupQuotaType
 		key = uint64(gid)
+	} else if dpath != "" {
+		qtype = DirQuotaType
+		key = uint64(inode)
 	}
 
 	if cmd != QuotaList && qtype == 0xffffffff {
