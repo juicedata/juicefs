@@ -749,32 +749,11 @@ func (m *dbMeta) cacheACLs(ctx Context) error {
 func (m *dbMeta) Reset() error {
 	m.Lock()
 	defer m.Unlock()
-	if err := m.db.DropTables(&setting{}, &counter{},
+	return m.db.DropTables(&setting{}, &counter{},
 		&node{}, &edge{}, &symlink{}, &xattr{},
 		&chunk{}, &sliceRef{}, &delslices{},
 		&session{}, &session2{}, &sustained{}, &delfile{},
-		&flock{}, &plock{}, &dirStats{}, &dirQuota{}, &userGroupQuota{}, &detachedNode{}, &acl{}, &delegationToken{}); err != nil {
-		return err
-	}
-	// Reset baseMeta fields
-	m.fsStat = &fsStat{
-		usedSpace:       unknownUsage,
-		usedInodes:      unknownUsage,
-		usedTrashSpace:  unknownUsage,
-		usedTrashInodes: unknownUsage,
-	}
-	m.dirStats = make(map[Ino]dirStat)
-	m.dirParents = make(map[Ino]Ino)
-	m.dirQuotas = make(map[uint64]*Quota)
-	m.userQuotas = make(map[uint64]*Quota)
-	m.groupQuotas = make(map[uint64]*Quota)
-	m.removedFiles = make(map[Ino]bool)
-	m.compacting = make(map[uint64]bool)
-	m.symlinks = newSymlinkCache(maxSymCacheNum)
-	m.freeInodes = freeID{}
-	m.freeSlices = freeID{}
-	m.prefetchedInodes = freeID{}
-	return nil
+		&flock{}, &plock{}, &dirStats{}, &dirQuota{}, &userGroupQuota{}, &detachedNode{}, &acl{}, &delegationToken{})
 }
 
 func (m *dbMeta) doLoad() (data []byte, err error) {
