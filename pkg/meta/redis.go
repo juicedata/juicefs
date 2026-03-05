@@ -2009,8 +2009,6 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 								}
 								inodes[info.inode] = info.attr
 								sustained = append(sustained, strconv.Itoa(int(info.inode)))
-								//batchSpace += align4K(info.attr.Length)
-								//batchInodes++
 							} else {
 								delfiles = append(delfiles, redis.Z{
 									Score:  float64(nowUnix),

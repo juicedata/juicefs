@@ -687,25 +687,6 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 					return err
 				}
 			}
-			var tc []interface{}
-			var trashCs = []counter{
-				{"trashSpace", 0},
-				{"trashInodes", 0},
-			}
-			for _, c := range trashCs {
-				exists, err := s.Get(&counter{Name: c.Name})
-				if err != nil {
-					return err
-				}
-				if !exists {
-					tc = append(tc, c)
-				}
-			}
-			if len(tc) > 0 {
-				if err = mustInsert(s, tc...); err != nil {
-					return err
-				}
-			}
 		}
 		if ok {
 			_, err = s.Update(&setting{"format", string(data)}, &setting{Name: "format"})
@@ -728,6 +709,8 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 			{"usedSpace", 0},
 			{"totalInodes", 0},
 			{"nextCleanupSlices", 0},
+			{"trashSpace", 0},
+			{"trashInodes", 0},
 		}
 		return mustInsert(s, n, &cs)
 	})
@@ -956,14 +939,9 @@ func (m *dbMeta) ListSessions() ([]*Session, error) {
 func (m *dbMeta) getCounter(name string) (v int64, err error) {
 	err = m.simpleTxn(Background(), func(s *xorm.Session) error {
 		c := counter{Name: name}
-		ok, err := s.Get(&c)
+		_, err := s.Get(&c)
 		if err == nil {
-			if ok {
-				v = c.Value
-			} else {
-				// Counter not found, return 0
-				v = 0
-			}
+			v = c.Value
 		}
 		return err
 	})

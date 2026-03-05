@@ -273,6 +273,10 @@ func (m *baseMeta) syncVolumeStat(ctx Context) error {
 	return m.en.doSyncVolumeStat(ctx)
 }
 
+func (m *baseMeta) SyncVolumeStat(ctx Context) error {
+	return m.syncVolumeStat(ctx)
+}
+
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, uid, gid uint32, parents ...Ino) syscall.Errno {
 	if space <= 0 && inodes <= 0 {
 		return 0
