@@ -338,7 +338,6 @@ resolve_test_users()
             fi
         fi
     done
-
     create_temp_user()
     {
         idx=$1
@@ -531,6 +530,31 @@ test_set_quota_by_username(){
 
     ./juicefs quota list $META_URL 2>&1 | tee username_quota_list.log
     grep "UID:$uid" username_quota_list.log || (echo "quota set by username should be listed" && exit 1)
+}
+
+test_quota_list_uid_filter_regression(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+
+    ./juicefs quota set $META_URL --uid "$TEST_UID_1" --capacity 1 --inodes 3
+    ./juicefs quota set $META_URL --uid "$TEST_UID_2" --capacity 1 --inodes 7
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    ./juicefs quota list $META_URL --uid "$TEST_UID_1" 2>&1 | tee uid_filter_1.log
+    grep "UID:$TEST_UID_1" uid_filter_1.log || (echo "uid filter should show requested uid quota" && exit 1)
+    grep "UID:$TEST_UID_2" uid_filter_1.log && echo "uid filter should not include other uid quota" && exit 1 || true
+    uid_rows=$(grep -c "UID:" uid_filter_1.log || true)
+    [[ "$uid_rows" -ne 1 ]] && echo "uid filter should only return one UID row" && exit 1 || true
+    inodes_value=$(grep "UID:$TEST_UID_1" uid_filter_1.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
+    [[ "$inodes_value" != "3" ]] && echo "uid filter should return uid1 inodes=3" && exit 1 || true
+
+    ./juicefs quota list $META_URL --uid "$TEST_UID_2" 2>&1 | tee uid_filter_2.log
+    grep "UID:$TEST_UID_2" uid_filter_2.log || (echo "uid filter should show requested uid quota" && exit 1)
+    grep "UID:$TEST_UID_1" uid_filter_2.log && echo "uid filter should not include other uid quota" && exit 1 || true
+    uid_rows=$(grep -c "UID:" uid_filter_2.log || true)
+    [[ "$uid_rows" -ne 1 ]] && echo "uid filter should only return one UID row" && exit 1 || true
+    inodes_value=$(grep "UID:$TEST_UID_2" uid_filter_2.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
+    [[ "$inodes_value" != "7" ]] && echo "uid filter should return uid2 inodes=7" && exit 1 || true
 }
 
 source .github/scripts/common/run_test.sh && run_test $@
