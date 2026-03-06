@@ -29,6 +29,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -202,34 +203,72 @@ func (c *cifsStore) Head(ctx context.Context, key string) (oj Object, err error)
 	return oj, err
 }
 
+// cifsReadCloser wraps a file reader and releases the connection when closed
+type cifsReadCloser struct {
+	io.ReadCloser
+	store *cifsStore
+	conn  *cifsConn
+}
+
+func (r *cifsReadCloser) Close() error {
+	err := r.ReadCloser.Close()
+	r.store.releaseConnection(r.conn, err)
+	return err
+}
+
 func (c *cifsStore) Get(ctx context.Context, key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+	if off < 0 {
+		off = 0
+	}
+
+	conn, err := c.getConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	share := conn.share.WithContext(ctx)
+	f, err := share.Open(key)
+	if err != nil {
+		c.releaseConnection(conn, err)
+		return nil, err
+	}
+
+	finfo, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		c.releaseConnection(conn, err)
+		return nil, err
+	}
+
+	if finfo.IsDir() || off >= finfo.Size() {
+		_ = f.Close()
+		c.releaseConnection(conn, nil)
+		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
+	}
+
 	var readCloser io.ReadCloser
-	err := c.withConn(ctx, func(share *smb2.Share) error {
-		f, err := share.Open(key)
-		if err != nil {
-			return err
+	if limit > 0 {
+		readCloser = &SectionReaderCloser{
+			SectionReader: io.NewSectionReader(f, off, limit),
+			Closer:        f,
 		}
-		finfo, err := f.Stat()
-		if err != nil {
-			_ = f.Close()
-			return err
-		}
-		if finfo.IsDir() || off >= finfo.Size() {
-			_ = f.Close()
-			readCloser = io.NopCloser(bytes.NewBuffer([]byte{}))
-			return nil
-		}
-		if limit > 0 {
+	} else {
+		// When limit <= 0, read from off to end of file
+		if off > 0 {
 			readCloser = &SectionReaderCloser{
-				SectionReader: io.NewSectionReader(f, off, limit),
+				SectionReader: io.NewSectionReader(f, off, finfo.Size()-off),
 				Closer:        f,
 			}
-			return nil
+		} else {
+			readCloser = f
 		}
-		readCloser = f
-		return nil
-	})
-	return readCloser, err
+	}
+
+	return &cifsReadCloser{
+		ReadCloser: readCloser,
+		store:      c,
+		conn:       conn,
+	}, nil
 }
 
 func (c *cifsStore) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) (err error) {
@@ -463,6 +502,13 @@ func newCifs(endpoint, username, password, _ string) (ObjectStorage, error) {
 		return nil, fmt.Errorf("CIFS password/sk is required")
 	}
 
+	maxPool := 8
+	if v := os.Getenv("JFS_CIFS_MAX_POOL"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			maxPool = n
+		}
+	}
+
 	store := &cifsStore{
 		host:            host,
 		port:            port,
@@ -470,7 +516,7 @@ func newCifs(endpoint, username, password, _ string) (ObjectStorage, error) {
 		user:            username,
 		password:        password,
 		connIdleTimeout: 5 * time.Minute,
-		pool:            make(chan *cifsConn, 8),
+		pool:            make(chan *cifsConn, maxPool),
 	}
 
 	// Test connection
