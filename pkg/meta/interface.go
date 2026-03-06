@@ -400,6 +400,8 @@ type Meta interface {
 	CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int), stats *CleanupTrashStats) syscall.Errno
 	// CleanupDetachedNodesBefore deletes all detached nodes before the given time.
 	CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func())
+	// SyncVolumeStat syncs the volume statistics from the database.
+	SyncVolumeStat(ctx Context) error
 
 	// StatFS returns summary statistics of a volume.
 	StatFS(ctx Context, ino Ino, totalspace, availspace, iused, iavail *uint64) syscall.Errno
@@ -466,6 +468,8 @@ type Meta interface {
 	GetParents(ctx Context, inode Ino) map[Ino]int
 	// GetDirStat returns the space and inodes usage of a directory.
 	GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall.Errno)
+	// GetTrashStats returns the space and inodes usage of the trash.
+	GetTrashStats(ctx Context) (space int64, inodes int64)
 
 	// GetXattr returns the value of extended attribute for given name.
 	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno
@@ -552,6 +556,7 @@ type CheckOpt struct {
 
 type CleanupTrashStats struct {
 	DeletedFiles int64
+	DeletedSpace int64
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)
