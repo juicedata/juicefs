@@ -246,11 +246,10 @@ func quota(c *cli.Context) error {
 
 		var identifier string
 		if quotaType == "user" {
-			identifier = fmt.Sprintf("UID:%d", uid)
+			identifier = fmt.Sprintf("UID:%s", strings.TrimPrefix(p, "uid:"))
 		} else if quotaType == "group" {
-			identifier = fmt.Sprintf("GID:%d", gid)
+			identifier = fmt.Sprintf("GID:%s", strings.TrimPrefix(p, "gid:"))
 		} else {
-			// For quota list, determine the type based on the key prefix
 			if strings.HasPrefix(p, "uid:") {
 				identifier = fmt.Sprintf("UID:%s", strings.TrimPrefix(p, "uid:"))
 			} else if strings.HasPrefix(p, "gid:") {

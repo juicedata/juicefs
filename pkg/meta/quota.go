@@ -616,7 +616,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32,
 	case QuotaDel:
 		return m.en.doDelQuota(ctx, qtype, key)
 	case QuotaList:
-		return m.handleQuotaList(ctx, quotas)
+		return m.handleQuotaList(ctx, qtype, key, quotas)
 	case QuotaCheck:
 		return m.handleQuotaCheck(ctx, qtype, key, dpath, strict, repair, quotas)
 	default:
@@ -664,6 +664,15 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	}
 	if !created {
 		return nil
+	}
+	// Update the quotas map key to use the proper format for display
+	switch qtype {
+	case UserQuotaType:
+		quotas[fmt.Sprintf("uid:%d", key)] = quota
+		delete(quotas, UGQuotaKey)
+	case GroupQuotaType:
+		quotas[fmt.Sprintf("gid:%d", key)] = quota
+		delete(quotas, UGQuotaKey)
 	}
 	return m.initializeQuotaUsage(ctx, qtype, key, dpath, strict, scan)
 }
@@ -847,16 +856,42 @@ func (m *baseMeta) handleQuotaGet(ctx Context, qtype uint32, key uint64, dpath s
 	switch qtype {
 	case DirQuotaType:
 		quotas[dpath] = q
-	case UserQuotaType, GroupQuotaType:
-		quotas[UGQuotaKey] = q
+	case UserQuotaType:
+		quotas[fmt.Sprintf("uid:%d", key)] = q
+	case GroupQuotaType:
+		quotas[fmt.Sprintf("gid:%d", key)] = q
 	}
 	return nil
 }
 
-func (m *baseMeta) handleQuotaList(ctx Context, quotas map[string]*Quota) error {
+func (m *baseMeta) handleQuotaList(ctx Context, qtype uint32, key uint64, quotas map[string]*Quota) error {
 	dirQuotas, userQuotas, groupQuotas, err := m.en.doLoadQuotas(ctx)
 	if err != nil {
 		return err
+	}
+
+	if qtype != 0xffffffff {
+		switch qtype {
+		case DirQuotaType:
+			if quota, ok := dirQuotas[key]; ok {
+				var p string
+				if ps := m.GetPaths(ctx, Ino(key)); len(ps) > 0 {
+					p = ps[0]
+				} else {
+					p = fmt.Sprintf("inode:%d", key)
+				}
+				quotas[p] = quota
+			}
+		case UserQuotaType:
+			if quota, ok := userQuotas[key]; ok {
+				quotas[fmt.Sprintf("uid:%d", key)] = quota
+			}
+		case GroupQuotaType:
+			if quota, ok := groupQuotas[key]; ok {
+				quotas[fmt.Sprintf("gid:%d", key)] = quota
+			}
+		}
+		return nil
 	}
 
 	for ino, quota := range dirQuotas {
