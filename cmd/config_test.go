@@ -94,4 +94,17 @@ func TestConfig(t *testing.T) {
 	if format.Bucket != "http://localhost:9000/miniofs" || format.Storage != "minio" {
 		t.Fatalf("unexpect format: %+v", format)
 	}
+
+	if err = Main([]string{"", "config", testMeta, "--bucket", "http://localhost:9000/miniofs2", "--force"}); err != nil {
+		t.Fatalf("config: %s", err)
+	}
+	if data, err = getStdout([]string{"", "config", testMeta}); err != nil {
+		t.Fatalf("getStdout: %s", err)
+	}
+	if err = json.Unmarshal(data, &format); err != nil {
+		t.Fatalf("json unmarshal: %s", err)
+	}
+	if format.Bucket != "http://localhost:9000/miniofs2" || format.Storage != "minio" {
+		t.Fatalf("unexpect format: %+v", format)
+	}
 }
