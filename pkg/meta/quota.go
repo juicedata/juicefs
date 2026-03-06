@@ -665,7 +665,6 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	if !created {
 		return nil
 	}
-	// Update the quotas map key to use the proper format for display
 	switch qtype {
 	case UserQuotaType:
 		quotas[fmt.Sprintf("uid:%d", key)] = quota

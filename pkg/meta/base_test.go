@@ -4043,7 +4043,7 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 		if err := m.HandleQuota(ctx, QuotaGet, "", fileOwnerUid, 0, qs, false, false, false); err != nil {
 			t.Fatalf("HandleQuota get user quota: %s", err)
 		}
-		if q := qs[UGQuotaKey]; q.UsedSpace < 1024 {
+		if q := qs[fmt.Sprintf("uid:%d", fileOwnerUid)]; q.UsedSpace < 1024 {
 			t.Fatalf("User quota used space should be >= 1024, got %d", q.UsedSpace)
 		}
 
@@ -4051,7 +4051,7 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 		if err := m.HandleQuota(ctx, QuotaGet, "", 0, fileOwnerGid, qs, false, false, false); err != nil {
 			t.Fatalf("HandleQuota get group quota: %s", err)
 		}
-		if q := qs[UGQuotaKey]; q.UsedSpace < 1024 {
+		if q := qs[fmt.Sprintf("gid:%d", fileOwnerGid)]; q.UsedSpace < 1024 {
 			t.Fatalf("Group quota used space should be >= 1024, got %d", q.UsedSpace)
 		}
 	})
@@ -4209,7 +4209,7 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 		if err := m.HandleQuota(ctx, QuotaGet, "", fileOwnerUid, 0, qs, false, false, false); err != nil {
 			t.Fatalf("HandleQuota get file owner quota: %s", err)
 		}
-		if q := qs[UGQuotaKey]; q.UsedSpace < 1024 {
+		if q := qs[fmt.Sprintf("uid:%d", fileOwnerUid)]; q.UsedSpace < 1024 {
 			t.Fatalf("File owner quota should be used: expected >= 1024, got %d", q.UsedSpace)
 		}
 
@@ -4217,7 +4217,7 @@ func testCheckQuotaFileOwner(t *testing.T, m Meta) {
 		if err := m.HandleQuota(ctx, QuotaGet, "", operatorUid, 0, qs, false, false, false); err != nil {
 			t.Fatalf("HandleQuota get operator quota: %s", err)
 		}
-		if q := qs[UGQuotaKey]; q.UsedSpace > 0 {
+		if q := qs[fmt.Sprintf("uid:%d", operatorUid)]; q.UsedSpace > 0 {
 			t.Fatalf("Operator quota should not be used for file owner's file: got %d", q.UsedSpace)
 		}
 
@@ -4315,14 +4315,14 @@ func testBasicQuotaOperations(t *testing.T, m Meta, ctx Context, uid, gid uint32
 	qs := make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, 0, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get user quota for uid %d: %s", uid, err)
-	} else if q := qs[UGQuotaKey]; q.MaxSpace != 1<<30 || q.MaxInodes != 10 {
+	} else if q := qs[fmt.Sprintf("uid:%d", uid)]; q.MaxSpace != 1<<30 || q.MaxInodes != 10 {
 		t.Fatalf("HandleQuota get user quota for uid %d: bad result %+v", uid, q)
 	}
 
 	qs = make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, "", 0, gid, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get group quota for gid %d: %s", gid, err)
-	} else if q := qs[UGQuotaKey]; q.MaxSpace != 2<<30 || q.MaxInodes != 20 {
+	} else if q := qs[fmt.Sprintf("gid:%d", gid)]; q.MaxSpace != 2<<30 || q.MaxInodes != 20 {
 		t.Fatalf("HandleQuota get group quota for gid %d: bad result %+v", gid, q)
 	}
 
@@ -4393,7 +4393,7 @@ func testQuotaFileOperations(t *testing.T, m Meta, ctx Context, parent Ino, uid,
 	qs := make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, 0, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get user quota after file creation: %s", err)
-	} else if q := qs[UGQuotaKey]; q.UsedInodes < 1 {
+	} else if q := qs[fmt.Sprintf("uid:%d", uid)]; q.UsedInodes < 1 {
 		t.Fatalf("HandleQuota get user quota: used inodes should be >= 1, got %d", q.UsedInodes)
 	}
 
@@ -4407,14 +4407,14 @@ func testQuotaFileOperations(t *testing.T, m Meta, ctx Context, parent Ino, uid,
 	qs = make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, 0, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get user quota after file creation: %s", err)
-	} else if q := qs[UGQuotaKey]; q.UsedInodes < 1 {
+	} else if q := qs[fmt.Sprintf("uid:%d", uid)]; q.UsedInodes < 1 {
 		t.Fatalf("HandleQuota get user quota: used inodes should be >= 1, got %d", q.UsedInodes)
 	}
 
 	qs = make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, "", 0, gid, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get group quota after file creation: %s", err)
-	} else if q := qs[UGQuotaKey]; q.UsedInodes < 1 {
+	} else if q := qs[fmt.Sprintf("gid:%d", gid)]; q.UsedInodes < 1 {
 		t.Fatalf("HandleQuota get group quota: used inodes should be >= 1, got %d", q.UsedInodes)
 	}
 
@@ -4563,14 +4563,14 @@ func testQuotaUsageStatistics(t *testing.T, m Meta, ctx Context, parent Ino, uid
 	qs := make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, 0, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get user quota for usage verification: %s", err)
-	} else if q := qs[UGQuotaKey]; q.UsedInodes < 4 {
+	} else if q := qs[fmt.Sprintf("uid:%d", uid)]; q.UsedInodes < 4 {
 		t.Fatalf("HandleQuota user quota usage: expected >= 4 inodes, got %d", q.UsedInodes)
 	}
 
 	qs = make(map[string]*Quota)
 	if err := m.HandleQuota(ctx, QuotaGet, "", 0, gid, qs, false, false, false); err != nil {
 		t.Fatalf("HandleQuota get group quota for usage verification: %s", err)
-	} else if q := qs[UGQuotaKey]; q.UsedInodes < 5 {
+	} else if q := qs[fmt.Sprintf("gid:%d", gid)]; q.UsedInodes < 5 {
 		t.Fatalf("HandleQuota group quota usage: expected >= 5 inodes, got %d", q.UsedInodes)
 	}
 }
@@ -4679,7 +4679,7 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota after file creation: %s", err)
 	}
-	ugQuotaAfterFile := qs[UGQuotaKey]
+	ugQuotaAfterFile := qs[fmt.Sprintf("uid:%d", uid)]
 	if ugQuotaAfterFile == nil {
 		t.Fatalf("User group quota not found after file creation")
 	}
@@ -4704,7 +4704,7 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota after hardlink creation: %s", err)
 	}
-	ugQuotaAfterHardlink := qs[UGQuotaKey]
+	ugQuotaAfterHardlink := qs[fmt.Sprintf("uid:%d", uid)]
 	if ugQuotaAfterHardlink == nil {
 		t.Fatalf("User group quota not found after hardlink creation")
 	}
@@ -4754,7 +4754,7 @@ func testHardlinkQuota(t *testing.T, m Meta, ctx Context, parent Ino, uid, gid u
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota after hardlink deletion: %s", err)
 	}
-	ugQuotaAfterUnlink := qs[UGQuotaKey]
+	ugQuotaAfterUnlink := qs[fmt.Sprintf("uid:%d", uid)]
 	if ugQuotaAfterUnlink == nil {
 		t.Fatalf("User group quota not found after hardlink deletion")
 	}
@@ -4838,7 +4838,7 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota before batch unlink: %s", err)
 	}
-	ugQuotaBefore := qs[UGQuotaKey]
+	ugQuotaBefore := qs[fmt.Sprintf("uid:%d", uid)]
 	if ugQuotaBefore == nil {
 		t.Fatalf("User group quota not found before batch unlink")
 	}
@@ -4872,7 +4872,7 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota after batch unlink: %s", err)
 	}
-	ugQuotaAfter := qs[UGQuotaKey]
+	ugQuotaAfter := qs[fmt.Sprintf("uid:%d", uid)]
 	if ugQuotaAfter == nil {
 		t.Fatalf("User group quota not found after batch unlink")
 	}
@@ -4922,7 +4922,7 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota before hardlink unlink: %s", err)
 	}
-	ugQuotaBeforeHardlink := qs[UGQuotaKey]
+	ugQuotaBeforeHardlink := qs[fmt.Sprintf("uid:%d", uid)]
 	if ugQuotaBeforeHardlink == nil {
 		t.Fatalf("User group quota not found before hardlink unlink")
 	}
@@ -4967,7 +4967,7 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota after hardlink unlink: %s", err)
 	}
-	ugQuotaAfterHardlink := qs[UGQuotaKey]
+	ugQuotaAfterHardlink := qs[fmt.Sprintf("uid:%d", uid)]
 	if ugQuotaAfterHardlink == nil {
 		t.Fatalf("User group quota not found after hardlink unlink")
 	}
@@ -5029,7 +5029,7 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota before multi-hardlink batch unlink: %s", err)
 	}
-	ugQuotaBeforeMultiHardlink := qs[UGQuotaKey]
+	ugQuotaBeforeMultiHardlink := qs[fmt.Sprintf("uid:%d", uid)]
 	if ugQuotaBeforeMultiHardlink == nil {
 		t.Fatalf("User group quota not found before multi-hardlink batch unlink")
 	}
@@ -5073,7 +5073,7 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota after multi-hardlink batch unlink: %s", err)
 	}
-	ugQuotaAfterMultiHardlink := qs[UGQuotaKey]
+	ugQuotaAfterMultiHardlink := qs[fmt.Sprintf("uid:%d", uid)]
 	if ugQuotaAfterMultiHardlink == nil {
 		t.Fatalf("User group quota not found after multi-hardlink batch unlink")
 	}
@@ -5143,7 +5143,7 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota before symlink batch unlink: %s", err)
 	}
-	ugQuotaBeforeSymlink := qs[UGQuotaKey]
+	ugQuotaBeforeSymlink := qs[fmt.Sprintf("uid:%d", uid)]
 	if ugQuotaBeforeSymlink == nil {
 		t.Fatalf("User group quota not found before symlink batch unlink")
 	}
@@ -5177,7 +5177,7 @@ func testBatchUnlinkWithUserGroupQuota(t *testing.T, m Meta, ctx Context, parent
 	if err := m.HandleQuota(ctx, QuotaGet, "", uid, gid, qs, false, false, false); err != nil {
 		t.Fatalf("Get user group quota after symlink batch unlink: %s", err)
 	}
-	ugQuotaAfterSymlink := qs[UGQuotaKey]
+	ugQuotaAfterSymlink := qs[fmt.Sprintf("uid:%d", uid)]
 	if ugQuotaAfterSymlink == nil {
 		t.Fatalf("User group quota not found after symlink batch unlink")
 	}

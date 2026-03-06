@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -141,10 +142,14 @@ func quota(c *cli.Context) error {
 	var quotaKey string
 	var quotaType string
 	if c.IsSet("uid") {
-		if c.Uint64("uid") == 0 {
+		uidVal := c.Uint64("uid")
+		if uidVal == 0 {
 			logger.Fatalf("Invalid --uid: 0 is not allowed")
 		}
-		uid = uint32(c.Uint64("uid"))
+		if uidVal > math.MaxUint32 {
+			logger.Fatalf("Invalid --uid: %d exceeds maximum value %d", uidVal, math.MaxUint32)
+		}
+		uid = uint32(uidVal)
 		quotaKey = meta.UGQuotaKey
 		quotaType = "user"
 		if c.IsSet("gid") {
@@ -154,10 +159,14 @@ func quota(c *cli.Context) error {
 			logger.Fatalf("Cannot specify both --uid and --path at the same time")
 		}
 	} else if c.IsSet("gid") {
-		if c.Uint64("gid") == 0 {
+		gidVal := c.Uint64("gid")
+		if gidVal == 0 {
 			logger.Fatalf("Invalid --gid: 0 is not allowed")
 		}
-		gid = uint32(c.Uint64("gid"))
+		if gidVal > math.MaxUint32 {
+			logger.Fatalf("Invalid --gid: %d exceeds maximum value %d", gidVal, math.MaxUint32)
+		}
+		gid = uint32(gidVal)
 		quotaKey = meta.UGQuotaKey
 		quotaType = "group"
 		if c.IsSet("path") {
