@@ -108,15 +108,15 @@ jobs:
             SMB_CONTAINER_NAME="juicefs-ci-smb"
             SMB_USER="juicefs"
             SMB_PASSWORD="juicefs"
-            SMB_SHARE="share"
-            SMB_DATA_DIR="/tmp/${SMB_CONTAINER_NAME}-data"
+            SMB_SHARE="share" 
+            SMB_DATA_DIR="/mnt/jfs/${SMB_CONTAINER_NAME}-data"
             docker rm -f "$SMB_CONTAINER_NAME" >/dev/null 2>&1 || true
-            rm -rf "$SMB_DATA_DIR"
-            mkdir -p "$SMB_DATA_DIR"
-            chmod 0777 "$SMB_DATA_DIR"
+            sudo mkdir -p $SMB_DATA_DIR
+            sudo chmod 0777 $SMB_DATA_DIR -R
             docker run -d --name "$SMB_CONTAINER_NAME" \
               -v "$SMB_DATA_DIR":/mount \
               dperson/samba \
+              -r \
               -u "$SMB_USER;$SMB_PASSWORD" \
               -s "$SMB_SHARE;/mount;yes;no;no;$SMB_USER" >/dev/null
             container_ip=$(docker container inspect "$SMB_CONTAINER_NAME" --format '{{ .NetworkSettings.IPAddress }}')
