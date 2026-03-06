@@ -297,6 +297,16 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 	if !skip_check && cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
 		logger.Fatalf("backup-meta should not be less than 5 minutes: %s", cfg.BackupMeta)
 	}
+
+	// Parse path protection config
+	if c.IsSet("path-protection") {
+		var err error
+		cfg.PathProtection, err = vfs.ParsePathProtectionConfig(c.String("path-protection"))
+		if err != nil {
+			logger.Fatalf("invalid path-protection config: %s", err)
+		}
+	}
+
 	return cfg
 }
 

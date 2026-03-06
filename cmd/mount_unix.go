@@ -393,6 +393,10 @@ func mountFlags() []cli.Flag {
 			Name:  "hide-internal",
 			Usage: "hide all internal files (.accesslog, .stats, etc.)",
 		},
+		&cli.StringFlag{
+			Name:  "path-protection",
+			Usage: "path protection config in JSON format, use ^ to anchor patterns (e.g., {\"rules\":[{\"pattern\":\"^/mnt/jfs/logs/.*\",\"mode\":\"readonly\"},{\"pattern\":\"^/mnt/jfs/secrets/.*\",\"mode\":\"deny\"}]})",
+		},
 	}
 	if runtime.GOOS == "linux" {
 		selfFlags = append(selfFlags, &cli.BoolFlag{

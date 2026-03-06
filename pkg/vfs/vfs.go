@@ -153,6 +153,9 @@ type Config struct {
 
 	// the mount point for current volume (to follow symlink)
 	Mountpoint string
+
+	// PathProtection enables path-based access control
+	PathProtection *PathProtectionConfig `json:",omitempty"`
 }
 
 type AnonymousAccount struct {
@@ -192,12 +195,22 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 	defer func() {
 		logit(ctx, "lookup", err, "(%d,%s):%s", parent, name, (*Entry)(entry))
 	}()
+
+	// Check read protection for parent directory
+	if err = v.CheckPathReadProtection(ctx, parent); err != 0 {
+		return
+	}
+
 	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
 		return
 	}
 	err = v.Meta.Lookup(ctx, parent, name, &inode, attr, true)
 	if err == 0 {
+		// Check read protection for the lookup result
+		if err = v.CheckPathReadProtection(ctx, inode); err != 0 {
+			return
+		}
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 	}
 	return
@@ -250,6 +263,10 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 		err = syscall.ENAMETOOLONG
 		return
 	}
+	// Path protection check
+	if err = v.CheckPathWriteProtection(ctx, parent, name); err != 0 {
+		return
+	}
 	_type := get_filetype(mode)
 	if _type == 0 {
 		err = syscall.EPERM
@@ -280,6 +297,10 @@ func (v *VFS) doUnlink(ctx Context, parent Ino, name string, skipTrash bool) (er
 		err = syscall.ENAMETOOLONG
 		return
 	}
+	// Path protection check
+	if err = v.CheckPathWriteProtection(ctx, parent, name); err != 0 {
+		return
+	}
 	err = v.Meta.Unlink(ctx, parent, name, skipTrash)
 	if err == 0 {
 		v.invalidateDirHandle(parent, name, 0, nil)
@@ -299,6 +320,10 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 		err = syscall.ENAMETOOLONG
 		return
 	}
+	// Path protection check
+	if err = v.CheckPathWriteProtection(ctx, parent, name); err != 0 {
+		return
+	}
 
 	var inode Ino
 	var attr = &Attr{}
@@ -314,6 +339,10 @@ func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
 	defer func() { logit(ctx, "rmdir", err, "(%d,%s)", parent, name) }()
 	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
+		return
+	}
+	// Path protection check
+	if err = v.CheckPathWriteProtection(ctx, parent, name); err != 0 {
 		return
 	}
 	err = v.Meta.Rmdir(ctx, parent, name)
@@ -333,6 +362,10 @@ func (v *VFS) Symlink(ctx Context, path string, parent Ino, name string) (entry 
 	}
 	if len(name) > maxName || len(path) >= maxSymlink {
 		err = syscall.ENAMETOOLONG
+		return
+	}
+	// Path protection check
+	if err = v.CheckPathWriteProtection(ctx, parent, name); err != 0 {
 		return
 	}
 
@@ -368,6 +401,14 @@ func (v *VFS) Rename(ctx Context, parent Ino, name string, newparent Ino, newnam
 		err = syscall.ENAMETOOLONG
 		return
 	}
+	// Path protection check for source
+	if err = v.CheckPathWriteProtection(ctx, parent, name); err != 0 {
+		return
+	}
+	// Path protection check for destination
+	if err = v.CheckPathWriteProtection(ctx, newparent, newname); err != 0 {
+		return
+	}
 
 	var inode Ino
 	var attr = &Attr{}
@@ -394,6 +435,10 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 	}
 	if len(newname) > maxName {
 		err = syscall.ENAMETOOLONG
+		return
+	}
+	// Path protection check
+	if err = v.CheckPathWriteProtection(ctx, newparent, newname); err != 0 {
 		return
 	}
 
@@ -520,6 +565,10 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 		err = syscall.ENAMETOOLONG
 		return
 	}
+	// Path protection check
+	if err = v.CheckPathWriteProtection(ctx, parent, name); err != 0 {
+		return
+	}
 
 	var inode Ino
 	var attr = &Attr{}
@@ -584,6 +633,17 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 		return
 	}
 
+	// Path protection check for open with write flags
+	if (flags&O_ACCMODE) != syscall.O_RDONLY {
+		if err = v.CheckPathWriteProtectionByIno(ctx, ino); err != 0 {
+			return
+		}
+	} else {
+		if err = v.CheckPathReadProtection(ctx, ino); err != 0 {
+			return
+		}
+	}
+
 	err = v.Meta.Open(ctx, ino, flags, attr)
 	if err == 0 {
 		v.UpdateLength(ino, attr)
@@ -597,6 +657,10 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, fh uint64, attr *Attr) 
 	// defer func() { logit(ctx, "truncate (%d,%d): %s", ino, size, strerr(err)) }()
 	if IsSpecialNode(ino) {
 		err = syscall.EPERM
+		return
+	}
+	// Path protection check
+	if err = v.CheckPathWriteProtectionByIno(ctx, ino); err != 0 {
 		return
 	}
 	if size < 0 {
@@ -741,6 +805,11 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 		return
 	}
 
+	// Check read protection for non-special nodes
+	if err = v.CheckPathReadProtection(ctx, ino); err != 0 {
+		return
+	}
+
 	defer func() {
 		readSizeHistogram.Observe(float64(n))
 		logit(ctx, "read", err, "(%d,%d,%d,%d): (%d)", ino, size, off, fh, n)
@@ -834,6 +903,11 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 			logger.Warnf("broken message: %d %d < %d", cmd, size, rb.Left())
 			h.data = append(h.data, uint8(syscall.EIO&0xff))
 		}
+		return
+	}
+
+	// Path protection check for non-control writes
+	if err = v.CheckPathWriteProtectionByIno(ctx, ino); err != 0 {
 		return
 	}
 
@@ -1230,6 +1304,7 @@ type VFS struct {
 	reader          DataReader
 	writer          DataWriter
 	cacheFiller     *CacheFiller
+	PathProtector   *PathProtector // Path protection handler
 
 	handles   map[Ino][]*handle
 	handleIno map[uint64]Ino
@@ -1246,18 +1321,31 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	reader := NewDataReader(conf, m, store)
 	writer := NewDataWriter(conf, m, store, reader)
 
+	// Initialize path protector if configured
+	var pathProtector *PathProtector
+	if conf.PathProtection != nil && conf.PathProtection.Enabled {
+		var err error
+		pathProtector, err = NewPathProtector(conf.PathProtection, conf.Meta.MountPoint)
+		if err != nil {
+			logger.Fatalf("Failed to initialize path protector: %s", err)
+		} else {
+			logger.Infof("Path protection enabled with %d rules", len(conf.PathProtection.Rules))
+		}
+	}
+
 	v := &VFS{
-		Conf:        conf,
-		Meta:        m,
-		Store:       store,
-		reader:      reader,
-		writer:      writer,
-		cacheFiller: NewCacheFiller(conf, m, store),
-		handles:     make(map[Ino][]*handle),
-		handleIno:   make(map[uint64]Ino),
-		modifiedAt:  make(map[meta.Ino]time.Time),
-		nextfh:      1,
-		registry:    registry,
+		Conf:          conf,
+		Meta:          m,
+		Store:         store,
+		reader:        reader,
+		writer:        writer,
+		cacheFiller:   NewCacheFiller(conf, m, store),
+		PathProtector: pathProtector,
+		handles:       make(map[Ino][]*handle),
+		handleIno:     make(map[uint64]Ino),
+		modifiedAt:    make(map[meta.Ino]time.Time),
+		nextfh:        1,
+		registry:      registry,
 	}
 
 	n := getInternalNode(ConfigInode)
@@ -1490,4 +1578,52 @@ func decodeACL(buff []byte) (*acl.Rule, syscall.Errno) {
 var aclTypes = map[string]uint8{
 	_SECURITY_ACL:         acl.TypeAccess,
 	_SECURITY_ACL_DEFAULT: acl.TypeDefault,
+}
+
+// CheckPathWriteProtection checks if write is allowed for the given path
+func (v *VFS) CheckPathWriteProtection(ctx Context, parent Ino, name string) syscall.Errno {
+	if v.PathProtector == nil {
+		return 0
+	}
+	// Get parent path and build full path
+	paths := v.Meta.GetPaths(ctx, parent)
+	var parentPath string
+	if len(paths) > 0 {
+		parentPath = paths[0]
+	} else {
+		parentPath = "/"
+	}
+	var fullPath string
+	if parentPath == "/" {
+		fullPath = v.Conf.Meta.MountPoint + "/" + name
+	} else {
+		fullPath = v.Conf.Meta.MountPoint + parentPath + "/" + name
+	}
+	return v.PathProtector.CheckWrite(fullPath)
+}
+
+// CheckPathReadProtection checks if read is allowed for the given path
+func (v *VFS) CheckPathReadProtection(ctx Context, ino Ino) syscall.Errno {
+	if v.PathProtector == nil {
+		return 0
+	}
+	paths := v.Meta.GetPaths(ctx, ino)
+	if len(paths) == 0 {
+		return 0
+	}
+	fullPath := v.Conf.Meta.MountPoint + paths[0]
+	return v.PathProtector.CheckRead(fullPath)
+}
+
+// CheckPathWriteProtectionByIno checks if write is allowed for the given inode
+func (v *VFS) CheckPathWriteProtectionByIno(ctx Context, ino Ino) syscall.Errno {
+	if v.PathProtector == nil {
+		return 0
+	}
+	paths := v.Meta.GetPaths(ctx, ino)
+	if len(paths) == 0 {
+		return 0
+	}
+	fullPath := v.Conf.Meta.MountPoint + paths[0]
+	return v.PathProtector.CheckWrite(fullPath)
 }
