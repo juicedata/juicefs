@@ -355,6 +355,6 @@ replace github.com/mattn/go-colorable v0.1.9 => github.com/juicedata/go-colorabl
 
 replace github.com/mattn/go-colorable v0.0.9 => github.com/juicedata/go-colorable v0.0.0-20250208072043-a97a0c2023db
 
-replace github.com/cloudsoda/go-smb2 => github.com/juicedata/go-smb2 v0.0.0-20260306034625-cc82fe13b0e3
+replace github.com/cloudsoda/go-smb2 => github.com/juicedata/go-smb2 v0.0.0-20260306071409-d84691170485
 
 replace github.com/hashicorp/golang-lru/v2 v2.0.7 => github.com/juicedata/golang-lru/v2 v2.0.8-0.20251126062551-1b321869f904
