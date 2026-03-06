@@ -6,6 +6,9 @@ source .github/scripts/start_meta_engine.sh
 [[ -z "$META" ]] && META=sqlite3
 start_meta_engine $META minio
 META_URL=$(get_meta_url $META)
+if [[ "$META" == "sqlite3" ]]; then
+    META_URL="sqlite3:///tmp/test.db"
+fi
 
 test_warmup_in_background(){
     prepare_test
@@ -103,10 +106,19 @@ EOF
 }
 
 test_cache_items(){
+    do_test_cache_items 2-random
+}
+
+test_cache_items_lru(){
+    do_test_cache_items lru
+}
+
+do_test_cache_items(){
+    cache_eviction=$1
     prepare_test
     ./juicefs format $META_URL myjfs
     cache_items=500
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-items $cache_items
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-items $cache_items --cache-eviction $cache_eviction
     seq 1 $((cache_items*2)) | xargs -P 8 -I {} sh -c 'echo {} > /tmp/jfs/test_{};'
     ./juicefs warmup /tmp/jfs/
     ./juicefs warmup /tmp/jfs/ --check 2>&1 | tee warmup.log
@@ -150,6 +162,28 @@ test_memory_cache_2_random(){
     do_test_memory_cache 2-random
 }
 
+test_memory_cache_lru_fallback(){
+    prepare_test
+    ./juicefs format $META_URL myjfs --compress lz4
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir memory --cache-size 100M --cache-eviction lru
+    eviction=$(get_cache_eviction)
+    [[ "$eviction" == "2-random" ]] || (echo "memory cache should fallback to 2-random, actual is $eviction" && exit 1)
+
+    dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
+    ./juicefs warmup /tmp/jfs/test
+    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
+    ratio=$(get_warmup_ratio)
+    [[ "$ratio" -gt 40 && "$ratio" -lt 60 ]] || (echo "ratio($ratio) should between 40% and 60% after lru fallback" && exit 1)
+}
+
+test_cache_eviction_invalid_fallback(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-size 100M --cache-eviction invalid-policy
+    eviction=$(get_cache_eviction)
+    [[ "$eviction" == "2-random" ]] || (echo "invalid cache-eviction should fallback to 2-random, actual is $eviction" && exit 1)
+}
+
 do_test_memory_cache(){
     cache_eviction=$1
     prepare_test
@@ -171,18 +205,24 @@ do_test_memory_cache(){
 }
 
 test_cache_expired(){
-    do_test_cache_expired /var/jfsCache/myjfs
+    do_test_cache_expired /var/jfsCache/myjfs 2-random
 }
 
 test_cache_expired_memory(){
-    do_test_cache_expired memory
+    do_test_cache_expired memory 2-random
+}
+
+test_cache_expired_lru(){
+    do_test_cache_expired /var/jfsCache/myjfs lru
 }
 
 do_test_cache_expired(){
     cache_dir=$1
+    cache_eviction=$2
+    [[ -z $cache_eviction ]] && cache_eviction=2-random
     prepare_test
     ./juicefs format $META_URL myjfs
-    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir $cache_dir --cache-expire 3s
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-dir $cache_dir --cache-expire 3s --cache-eviction $cache_eviction
     dd if=/dev/zero of=/tmp/jfs/test bs=1M count=200
     for i in $(seq 1 1100); do
         dd if=/dev/zero of=/tmp/jfs/test$i bs=32k count=1 status=none
@@ -267,6 +307,10 @@ test_disk_full_2_random(){
     do_test_disk_full 2-random
 }
 
+test_disk_full_lru(){
+    do_test_disk_full lru
+}
+
 test_disk_full_none(){
     do_test_disk_full none
 }
@@ -285,12 +329,53 @@ do_test_disk_full(){
     ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
     used_percent=$(df /var/jfsCache1 | tail -1  | awk '{print $5}' | tr -d %)
     echo "used percent is $used_percent"
-    if [[ $cache_eviction == "2-random" ]]; then 
+    if [[ $cache_eviction == "2-random" || $cache_eviction == "lru" ]]; then 
         [[ $used_percent -gt 80 ]] && echo "used percent($used_percent) should not more than 80%" && exit 1 || true
     elif [[ $cache_eviction == "none" ]]; then
         # cache will not evict even reach the free-space-ratio.
         [[ $used_percent -lt 80 ]] && echo "used percent($used_percent) should not less than 80%" && exit 1 || true
     fi
+}
+
+test_lru_hotset_prefer_recent(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-size 128M --cache-items 40 --cache-eviction lru
+
+    mkdir -p /tmp/jfs/lru
+    for i in $(seq 1 80); do
+        dd if=/dev/zero of=/tmp/jfs/lru/f_$i bs=64k count=1 status=none
+    done
+
+    for i in $(seq 1 40); do
+        ./juicefs warmup /tmp/jfs/lru/f_$i > /dev/null
+    done
+
+    sleep 2
+    for i in $(seq 1 10); do
+        cat /tmp/jfs/lru/f_$i > /dev/null
+    done
+
+    sleep 2
+    for i in $(seq 41 70); do
+        ./juicefs warmup /tmp/jfs/lru/f_$i > /dev/null
+    done
+
+    rm -f hot.list cold.list
+    for i in $(seq 1 10); do
+        echo /tmp/jfs/lru/f_$i >> hot.list
+    done
+    for i in $(seq 11 40); do
+        echo /tmp/jfs/lru/f_$i >> cold.list
+    done
+
+    ./juicefs warmup -f hot.list --check 2>&1 | tee warmup.log
+    hot_ratio=$(get_warmup_ratio)
+    [[ "$hot_ratio" -eq 100 ]] || (echo "hot set ratio($hot_ratio) should be 100% for lru" && exit 1)
+
+    ./juicefs warmup -f cold.list --check 2>&1 | tee warmup.log
+    cold_ratio=$(get_warmup_ratio)
+    [[ "$cold_ratio" -lt 20 ]] || (echo "cold set ratio($cold_ratio) should be less than 20% for lru" && exit 1)
 }
 
 test_inode_full(){
@@ -345,6 +430,58 @@ test_disk_failover()
     echo stop minio && docker stop minio
     compare_md5sum /tmp/test /tmp/jfs/test
     docker start minio && sleep 3
+}
+
+test_disk_failover_lru()
+{
+    prepare_test
+    mount_jfsCache1
+    rm -rf /var/log/juicefs.log
+    rm -rf /var/jfsCache2 /var/jfsCache3
+    ./juicefs format $META_URL myjfs --trash-days 0 --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
+    JFS_MAX_DURATION_TO_DOWN=10s JFS_MAX_IO_DURATION=3s ./juicefs mount $META_URL /tmp/jfs -d \
+        --cache-dir=/var/jfsCache1:/var/jfsCache2:/var/jfsCache3 --io-retries 1 --cache-eviction lru
+    dd if=/dev/urandom of=/tmp/test bs=1M count=1024
+    cp /tmp/test /tmp/jfs/test
+    /etc/init.d/redis-server stop
+    ./juicefs warmup /tmp/jfs/test
+    ./juicefs warmup --check /tmp/jfs 2>&1 | tee warmup.log
+    check_warmup_log  50
+    wait_disk_down 60
+    ./juicefs warmup /tmp/jfs/test
+    ./juicefs warmup --check /tmp/jfs 2>&1 | tee warmup.log
+    check_warmup_log 98
+    check_cache_distribute 1024 /var/jfsCache2 /var/jfsCache3
+    echo stop minio && docker stop minio
+    compare_md5sum /tmp/test /tmp/jfs/test
+    docker start minio && sleep 3
+}
+
+test_manual_delete_cache_data_lru()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs --trash-days 0 --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
+    ./juicefs mount $META_URL /tmp/jfs -d --cache-eviction lru --cache-size 1G --cache-scan-interval -1
+
+    dd if=/dev/urandom of=/tmp/test bs=1M count=256
+    cp /tmp/test /tmp/jfs/test
+    ./juicefs warmup /tmp/jfs/test
+    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
+    check_warmup_log 95
+
+    raw_dir=$(get_raw_dir)
+    find "$raw_dir" -type f | head -n 200 | xargs rm -f
+    sync
+    echo 3 > /proc/sys/vm/drop_caches || true
+
+    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
+    ratio=$(get_warmup_ratio)
+    [[ "$ratio" -lt 90 ]] || (echo "after manually deleting cache data, warmup ratio($ratio) should be less than 90%" && exit 1)
+
+    compare_md5sum /tmp/test /tmp/jfs/test
+    ./juicefs warmup /tmp/jfs/test
+    ./juicefs warmup /tmp/jfs/test --check 2>&1 | tee warmup.log
+    check_warmup_log 95
 }
 
 test_disk_failure_on_writeback()
@@ -439,6 +576,10 @@ mount_jfsCache1(){
 
 get_cache_dir(){
     grep CacheDir /tmp/jfs/.config | awk -F'"' '{print $4}'
+}
+
+get_cache_eviction(){
+    grep CacheEviction /tmp/jfs/.config | awk -F'"' '{print $4}'
 }
 
 get_raw_dir(){
