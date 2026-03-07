@@ -18,7 +18,9 @@ package cmd
 
 import (
 	"fmt"
+	"math"
 	"sort"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -136,13 +138,19 @@ func quota(c *cli.Context) error {
 		logger.Fatalf("Invalid quota command: %s", c.Command.Name)
 	}
 
-
 	var uid, gid uint32
 	var quotaKey string
 	var quotaType string
 	if c.IsSet("uid") {
-		uid = uint32(c.Uint64("uid"))
-		quotaKey = meta.UGQuotaKey
+		uidVal := c.Uint64("uid")
+		if uidVal == 0 {
+			logger.Fatalf("Invalid --uid: 0 is not allowed")
+		}
+		if uidVal > math.MaxUint32 {
+			logger.Fatalf("Invalid --uid: %d exceeds maximum value %d", uidVal, math.MaxUint32)
+		}
+		uid = uint32(uidVal)
+		quotaKey = fmt.Sprintf("uid:%d", uid)
 		quotaType = "user"
 		if c.IsSet("gid") {
 			logger.Fatalf("Cannot specify both --uid and --gid at the same time")
@@ -151,8 +159,15 @@ func quota(c *cli.Context) error {
 			logger.Fatalf("Cannot specify both --uid and --path at the same time")
 		}
 	} else if c.IsSet("gid") {
-		gid = uint32(c.Uint64("gid"))
-		quotaKey = meta.UGQuotaKey
+		gidVal := c.Uint64("gid")
+		if gidVal == 0 {
+			logger.Fatalf("Invalid --gid: 0 is not allowed")
+		}
+		if gidVal > math.MaxUint32 {
+			logger.Fatalf("Invalid --gid: %d exceeds maximum value %d", gidVal, math.MaxUint32)
+		}
+		gid = uint32(gidVal)
+		quotaKey = fmt.Sprintf("gid:%d", gid)
 		quotaType = "group"
 		if c.IsSet("path") {
 			logger.Fatalf("Cannot specify both --gid and --path at the same time")
@@ -197,7 +212,7 @@ func quota(c *cli.Context) error {
 	}
 
 	result := make([][]string, 1, len(qs)+1)
-	
+
 	if quotaType == "user" {
 		result[0] = []string{"User ID", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
 	} else if quotaType == "group" {
@@ -237,14 +252,20 @@ func quota(c *cli.Context) error {
 		} else {
 			itotal = "unchanged"
 		}
-		
+
 		var identifier string
 		if quotaType == "user" {
-			identifier = fmt.Sprintf("UID:%d", uid)
+			identifier = fmt.Sprintf("UID:%s", strings.TrimPrefix(p, "uid:"))
 		} else if quotaType == "group" {
-			identifier = fmt.Sprintf("GID:%d", gid)
+			identifier = fmt.Sprintf("GID:%s", strings.TrimPrefix(p, "gid:"))
 		} else {
-			identifier = p
+			if strings.HasPrefix(p, "uid:") {
+				identifier = fmt.Sprintf("UID:%s", strings.TrimPrefix(p, "uid:"))
+			} else if strings.HasPrefix(p, "gid:") {
+				identifier = fmt.Sprintf("GID:%s", strings.TrimPrefix(p, "gid:"))
+			} else {
+				identifier = p
+			}
 		}
 		result = append(result, []string{identifier, size, used, usedR, itotal, iused, iusedR})
 	}

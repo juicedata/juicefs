@@ -301,4 +301,260 @@ wait_until()
     echo "wait until $key becomes $value failed after $wait_seconds seconds" && exit 1
 }
 
+prepare_ug_quota_test()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs config $META_URL --user-group-quota
+    ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+}
+
+resolve_test_users()
+{
+    if [[ -n "$TEST_USER_1" ]] && [[ -n "$TEST_USER_2" ]]; then
+        return 0
+    fi
+
+    TEST_USER_1=""
+    TEST_USER_2=""
+
+    for candidate in nobody daemon bin; do
+        if id "$candidate" >/dev/null 2>&1; then
+            candidate_uid=$(id -u "$candidate")
+            candidate_gid=$(id -g "$candidate")
+            if [[ "$candidate_uid" == "0" ]] || [[ "$candidate_gid" == "0" ]]; then
+                continue
+            fi
+            if [[ -z "$TEST_USER_1" ]]; then
+                TEST_USER_1="$candidate"
+                TEST_UID_1=$candidate_uid
+                TEST_GID_1=$candidate_gid
+            elif [[ "$candidate_uid" != "$TEST_UID_1" ]]; then
+                TEST_USER_2="$candidate"
+                TEST_UID_2=$candidate_uid
+                TEST_GID_2=$candidate_gid
+                break
+            fi
+        fi
+    done
+    create_temp_user()
+    {
+        idx=$1
+        if ! command -v useradd >/dev/null 2>&1; then
+            return 1
+        fi
+        name="jfs-quota-test-${idx}-${RANDOM}"
+        if ! useradd -M -s /usr/sbin/nologin "$name" >/dev/null 2>&1; then
+            return 1
+        fi
+        uid=$(id -u "$name" 2>/dev/null || echo 0)
+        gid=$(id -g "$name" 2>/dev/null || echo 0)
+        if [[ "$uid" == "0" ]] || [[ "$gid" == "0" ]]; then
+            userdel -f "$name" >/dev/null 2>&1 || true
+            return 1
+        fi
+        echo "$name:$uid:$gid"
+        return 0
+    }
+
+    if [[ -z "$TEST_USER_1" ]] || [[ -z "$TEST_USER_2" ]]; then
+        if [[ "$(id -u)" != "0" ]]; then
+            echo "cannot find two non-root users for user/group quota tests"
+            return 1
+        fi
+        for i in 1 2 3 4; do
+            info=$(create_temp_user "$i") || continue
+            name=$(echo "$info" | cut -d: -f1)
+            uid=$(echo "$info" | cut -d: -f2)
+            gid=$(echo "$info" | cut -d: -f3)
+            if [[ -z "$TEST_USER_1" ]]; then
+                TEST_USER_1="$name"
+                TEST_UID_1=$uid
+                TEST_GID_1=$gid
+            elif [[ -z "$TEST_USER_2" ]] && [[ "$uid" != "$TEST_UID_1" ]]; then
+                TEST_USER_2="$name"
+                TEST_UID_2=$uid
+                TEST_GID_2=$gid
+                break
+            fi
+        done
+    fi
+
+    if [[ -z "$TEST_USER_1" ]] || [[ -z "$TEST_USER_2" ]]; then
+        echo "cannot find two non-root users for user/group quota tests"
+        return 1
+    fi
+
+    echo "test users: $TEST_USER_1($TEST_UID_1:$TEST_GID_1), $TEST_USER_2($TEST_UID_2:$TEST_GID_2)"
+}
+
+run_as_user_cmd()
+{
+    user=$1
+    shift
+    cmd="$*"
+
+    if [[ "$(id -un)" == "$user" ]]; then
+        bash -c "$cmd"
+        return $?
+    fi
+
+    if command -v sudo >/dev/null 2>&1; then
+        sudo -n -u "$user" bash -c "$cmd" && return 0 || true
+    fi
+
+    if command -v runuser >/dev/null 2>&1; then
+        runuser -u "$user" -- bash -c "$cmd" && return 0 || true
+    fi
+
+    if command -v su >/dev/null 2>&1; then
+        su -s /bin/bash "$user" -c "$cmd" && return 0 || true
+    fi
+
+    echo "cannot run command as user $user"
+    return 1
+}
+
+set_quota_by_username()
+{
+    username=$1
+    capacity=$2
+    inodes=$3
+    uid=$(id -u "$username")
+    ./juicefs quota set $META_URL --uid "$uid" --capacity "$capacity" --inodes "$inodes"
+}
+
+test_user_group_quota_set_get_list_delete(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+
+    ./juicefs quota set $META_URL --uid "$TEST_UID_1" --capacity 1 --inodes 20
+    ./juicefs quota set $META_URL --gid "$TEST_GID_1" --capacity 1 --inodes 20
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+    ./juicefs quota get $META_URL --uid "$TEST_UID_1" 2>&1 | tee uid_quota.log
+    grep "UID:$TEST_UID_1" uid_quota.log || (echo "uid quota should exist" && exit 1)
+
+    ./juicefs quota get $META_URL --gid "$TEST_GID_1" 2>&1 | tee gid_quota.log
+    grep "GID:$TEST_GID_1" gid_quota.log || (echo "gid quota should exist" && exit 1)
+
+    ./juicefs quota list $META_URL 2>&1 | tee quota_list.log
+    grep "UID:$TEST_UID_1" quota_list.log || (echo "uid quota should be listed" && exit 1)
+    grep "GID:$TEST_GID_1" quota_list.log || (echo "gid quota should be listed" && exit 1)
+
+    ./juicefs quota delete $META_URL --uid "$TEST_UID_1"
+    ./juicefs quota delete $META_URL --gid "$TEST_GID_1"
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+    ./juicefs quota list $META_URL 2>&1 | tee quota_list_after_delete.log
+    grep "UID:$TEST_UID_1" quota_list_after_delete.log && echo "uid quota should be deleted" && exit 1 || true
+    grep "GID:$TEST_GID_1" quota_list_after_delete.log && echo "gid quota should be deleted" && exit 1 || true
+}
+
+test_uid_quota_check_on_write_and_truncate(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+
+    mkdir -p /jfs/uidq
+    chmod 777 /jfs/uidq
+
+    ./juicefs quota set $META_URL --uid "$TEST_UID_2" --capacity 1 --inodes 1
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    run_as_user_cmd "$TEST_USER_2" "touch /jfs/uidq/inode1"
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    run_as_user_cmd "$TEST_USER_2" "touch /jfs/uidq/inode2" 2>error.log && echo "second inode should fail for uid quota" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "uid inode quota check failed" && exit 1)
+
+    ./juicefs quota set $META_URL --uid "$TEST_UID_2" --capacity 1 --inodes 10
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+    rm -f /jfs/uidq/inode1
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+
+    run_as_user_cmd "$TEST_USER_2" "truncate -s 900M /jfs/uidq/space1"
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    run_as_user_cmd "$TEST_USER_2" "truncate -s 1100M /jfs/uidq/space1" 2>error.log && echo "truncate should fail for uid capacity quota" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "uid capacity quota check failed" && exit 1)
+}
+
+test_gid_quota_check_on_write(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+
+    mkdir -p /jfs/gidq
+    chmod 777 /jfs/gidq
+
+    ./juicefs quota set $META_URL --gid "$TEST_GID_2" --inodes 1
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    run_as_user_cmd "$TEST_USER_2" "touch /jfs/gidq/file1"
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    run_as_user_cmd "$TEST_USER_2" "touch /jfs/gidq/file2" 2>error.log && echo "second inode should fail for gid quota" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "gid inode quota check failed" && exit 1)
+}
+
+test_chown_transfer_user_group_quota(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+
+    mkdir -p /jfs/chownq
+    chmod 777 /jfs/chownq
+
+    ./juicefs quota set $META_URL --uid "$TEST_UID_1" --inodes 1
+    ./juicefs quota set $META_URL --uid "$TEST_UID_2" --inodes 1
+    ./juicefs quota set $META_URL --gid "$TEST_GID_1" --inodes 1
+    ./juicefs quota set $META_URL --gid "$TEST_GID_2" --inodes 1
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/chownq/src_file"
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/chownq/src_file2" 2>error.log && echo "user1 should exceed inode quota before chown" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "user1 pre-chown quota check failed" && exit 1)
+
+    chown "$TEST_UID_2:$TEST_GID_2" /jfs/chownq/src_file
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/chownq/src_file2"
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    run_as_user_cmd "$TEST_USER_2" "touch /jfs/chownq/dst_file" 2>error.log && echo "user2 should exceed inode quota after chown transfer" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "user2 post-chown quota check failed" && exit 1)
+}
+
+test_set_quota_by_username(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+
+    set_quota_by_username "$TEST_USER_2" 1 10
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+    uid=$(id -u "$TEST_USER_2")
+    ./juicefs quota get $META_URL --uid "$uid" 2>&1 | tee username_quota.log
+    grep "UID:$uid" username_quota.log || (echo "quota set by username should be visible in uid quota" && exit 1)
+
+    ./juicefs quota list $META_URL 2>&1 | tee username_quota_list.log
+    grep "UID:$uid" username_quota_list.log || (echo "quota set by username should be listed" && exit 1)
+}
+
+test_quota_list_uid_filter_regression(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+
+    ./juicefs quota set $META_URL --uid "$TEST_UID_1" --capacity 1 --inodes 3
+    ./juicefs quota set $META_URL --uid "$TEST_UID_2" --capacity 1 --inodes 7
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    ./juicefs quota list $META_URL --uid "$TEST_UID_1" 2>&1 | tee uid_filter_1.log
+    grep "UID:$TEST_UID_1" uid_filter_1.log || (echo "uid filter should show requested uid quota" && exit 1)
+    grep "UID:$TEST_UID_2" uid_filter_1.log && echo "uid filter should not include other uid quota" && exit 1 || true
+    uid_rows=$(grep -c "UID:" uid_filter_1.log || true)
+    [[ "$uid_rows" -ne 1 ]] && echo "uid filter should only return one UID row" && exit 1 || true
+    inodes_value=$(grep "UID:$TEST_UID_1" uid_filter_1.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
+    [[ "$inodes_value" != "3" ]] && echo "uid filter should return uid1 inodes=3" && exit 1 || true
+
+    ./juicefs quota list $META_URL --uid "$TEST_UID_2" 2>&1 | tee uid_filter_2.log
+    grep "UID:$TEST_UID_2" uid_filter_2.log || (echo "uid filter should show requested uid quota" && exit 1)
+    grep "UID:$TEST_UID_1" uid_filter_2.log && echo "uid filter should not include other uid quota" && exit 1 || true
+    uid_rows=$(grep -c "UID:" uid_filter_2.log || true)
+    [[ "$uid_rows" -ne 1 ]] && echo "uid filter should only return one UID row" && exit 1 || true
+    inodes_value=$(grep "UID:$TEST_UID_2" uid_filter_2.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
+    [[ "$inodes_value" != "7" ]] && echo "uid filter should return uid2 inodes=7" && exit 1 || true
+}
+
 source .github/scripts/common/run_test.sh && run_test $@

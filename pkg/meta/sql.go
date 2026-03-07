@@ -4145,6 +4145,9 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 
 	// Load user and group quotas
 	for _, q := range userGroupQuotasList {
+		if q.MaxSpace < 0 && q.MaxInodes < 0 {
+			continue
+		}
 		quota := &Quota{
 			MaxSpace:   q.MaxSpace,
 			MaxInodes:  q.MaxInodes,
