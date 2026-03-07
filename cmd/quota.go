@@ -150,7 +150,7 @@ func quota(c *cli.Context) error {
 			logger.Fatalf("Invalid --uid: %d exceeds maximum value %d", uidVal, math.MaxUint32)
 		}
 		uid = uint32(uidVal)
-		quotaKey = meta.UGQuotaKey
+		quotaKey = fmt.Sprintf("uid:%d", uid)
 		quotaType = "user"
 		if c.IsSet("gid") {
 			logger.Fatalf("Cannot specify both --uid and --gid at the same time")
@@ -167,7 +167,7 @@ func quota(c *cli.Context) error {
 			logger.Fatalf("Invalid --gid: %d exceeds maximum value %d", gidVal, math.MaxUint32)
 		}
 		gid = uint32(gidVal)
-		quotaKey = meta.UGQuotaKey
+		quotaKey = fmt.Sprintf("gid:%d", gid)
 		quotaType = "group"
 		if c.IsSet("path") {
 			logger.Fatalf("Cannot specify both --gid and --path at the same time")

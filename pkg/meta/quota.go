@@ -42,14 +42,6 @@ const (
 	GroupQuotaType
 )
 
-// Quota key constants for different quota types
-const (
-	// UGQuotaKey is used as the key for user and group quotas in the in-memory quotas map
-	// Unlike directory quotas which use the directory path as key, user/group quotas use this special key
-	// to aggregate all user and group quota information in a single map entry
-	UGQuotaKey = "ug_quota"
-)
-
 type Quota struct {
 	MaxSpace, MaxInodes   int64
 	UsedSpace, UsedInodes int64
@@ -638,7 +630,7 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 			}
 		}
 		quota = quotas[dpath]
-	case UserQuotaType, GroupQuotaType:
+	case UserQuotaType:
 		if !format.UserGroupQuota {
 			format.UserGroupQuota = true
 			scan = true
@@ -647,7 +639,17 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 				logger.Warnf("init user group quota: %s", err)
 			}
 		}
-		quota = quotas[UGQuotaKey]
+		quota = quotas[fmt.Sprintf("uid:%d", key)]
+	case GroupQuotaType:
+		if !format.UserGroupQuota {
+			format.UserGroupQuota = true
+			scan = true
+			err := m.en.doInit(format, false)
+			if err != nil {
+				logger.Warnf("init user group quota: %s", err)
+			}
+		}
+		quota = quotas[fmt.Sprintf("gid:%d", key)]
 	}
 	if quota == nil {
 		return nil
@@ -664,14 +666,6 @@ func (m *baseMeta) handleQuotaSet(ctx Context, qtype uint32, key uint64, dpath s
 	}
 	if !created {
 		return nil
-	}
-	switch qtype {
-	case UserQuotaType:
-		quotas[fmt.Sprintf("uid:%d", key)] = quota
-		delete(quotas, UGQuotaKey)
-	case GroupQuotaType:
-		quotas[fmt.Sprintf("gid:%d", key)] = quota
-		delete(quotas, UGQuotaKey)
 	}
 	return m.initializeQuotaUsage(ctx, qtype, key, dpath, strict, scan)
 }
