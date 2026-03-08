@@ -243,6 +243,67 @@ func TestRedisBatchCloneMixedFilesAndSymlinks(t *testing.T) {
 	}
 }
 
+func TestRedisBatchCloneDuplicateNamesInBatch(t *testing.T) {
+	metaClient, err := newRedisMeta("redis", "127.0.0.1:6379/9", testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %v", err)
+	}
+	m, ok := metaClient.(*redisMeta)
+	if !ok {
+		t.Fatalf("expected *redisMeta, got %T", metaClient)
+	}
+	defer m.Shutdown()
+
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %v", err)
+	}
+	if err := m.Init(testFormat(), true); err != nil {
+		t.Fatalf("init meta: %v", err)
+	}
+
+	ctx := Background()
+	var srcDir, dstDir Ino
+	if st := m.Mkdir(ctx, RootInode, "src_dup", 0777, 022, 0, &srcDir, nil); st != 0 {
+		t.Fatalf("mkdir src_dup: %s", st)
+	}
+	if st := m.Mkdir(ctx, RootInode, "dst_dup", 0777, 022, 0, &dstDir, nil); st != 0 {
+		t.Fatalf("mkdir dst_dup: %s", st)
+	}
+
+	var fileA, fileB Ino
+	if st := m.Mknod(ctx, srcDir, "file_A", TypeFile, 0644, 022, 0, "", &fileA, nil); st != 0 {
+		t.Fatalf("mknod file_A: %s", st)
+	}
+	if st := m.Mknod(ctx, srcDir, "file_B", TypeFile, 0644, 022, 0, "", &fileB, nil); st != 0 {
+		t.Fatalf("mknod file_B: %s", st)
+	}
+
+	dupEntries := []*Entry{
+		{Inode: fileA, Name: []byte("dup"), Attr: &Attr{Typ: TypeFile}},
+		{Inode: fileB, Name: []byte("dup"), Attr: &Attr{Typ: TypeFile}},
+	}
+
+	var cloned uint64
+	st := m.getBase().BatchClone(ctx, srcDir, dstDir, dupEntries, CLONE_MODE_PRESERVE_ATTR, 022, &cloned)
+	if st != syscall.EEXIST {
+		t.Fatalf("BatchClone duplicate names in batch: got %s, want EEXIST", st)
+	}
+	if cloned != 0 {
+		t.Fatalf("BatchClone duplicate names should not increment count, got %d", cloned)
+	}
+
+	var dstEntries []*Entry
+	if st := m.Readdir(ctx, dstDir, 1, &dstEntries); st != 0 {
+		t.Fatalf("readdir dst_dup: %s", st)
+	}
+	for _, e := range dstEntries {
+		name := string(e.Name)
+		if name != "." && name != ".." {
+			t.Fatalf("destination should stay empty on duplicate-name failure, found %q", name)
+		}
+	}
+}
+
 func TestRedisBatchCloneSpaceAccounting(t *testing.T) {
 	metaClient, err := newRedisMeta("redis", "127.0.0.1:6379/13", testConfig())
 	if err != nil {

@@ -5094,9 +5094,15 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 		batch := entries[start:end]
 
 		infos := make([]*cloneInfo, 0, len(batch))
+		nameSet := make(map[string]struct{}, len(batch))
 		srcSet := make(map[Ino]struct{}, len(batch))
 		srcList := make([]Ino, 0, len(batch))
 		for _, e := range batch {
+			name := string(e.Name)
+			if _, ok := nameSet[name]; ok {
+				return syscall.EEXIST
+			}
+			nameSet[name] = struct{}{}
 			dstIno, err := m.nextInode()
 			if err != nil {
 				return errno(err)
