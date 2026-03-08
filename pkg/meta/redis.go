@@ -5124,6 +5124,9 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 			now := time.Now()
 			var pattr Attr
 			pval, err := tx.Get(ctx, m.inodeKey(dstParent)).Bytes()
+			if err == redis.Nil {
+				return syscall.ENOENT
+			}
 			if err != nil {
 				return err
 			}
@@ -5136,6 +5139,24 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 			}
 			if st := m.Access(ctx, dstParent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 				return st
+			}
+
+			existsPipe := tx.Pipeline()
+			existsCmds := make([]*redis.BoolCmd, 0, len(infos))
+			for _, info := range infos {
+				existsCmds = append(existsCmds, existsPipe.HExists(ctx, m.entryKey(dstParent), string(info.entry.Name)))
+			}
+			if _, err := existsPipe.Exec(ctx); err != nil {
+				return err
+			}
+			for _, cmd := range existsCmds {
+				exist, err := cmd.Result()
+				if err != nil {
+					return err
+				}
+				if exist {
+					return syscall.EEXIST
+				}
 			}
 
 			srcKeys := make([]string, 0, len(srcList))
