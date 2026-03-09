@@ -22,6 +22,8 @@ package object
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,6 +34,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
 
 	"github.com/tencentyun/cos-go-sdk-v5"
@@ -140,6 +143,7 @@ func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 		}
 		options.ObjectPutHeaderOptions.XCosStorageClass = c.sc
 	}
+	options.ContentType = utils.GuessMimeType(key)
 	resp, err := c.c.Object.Put(ctx, key, in, &options)
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
@@ -220,7 +224,13 @@ func (c *COS) CreateMultipartUpload(ctx context.Context, key string) (*Multipart
 }
 
 func (c *COS) UploadPart(ctx context.Context, key string, uploadID string, num int, body []byte) (*Part, error) {
-	resp, err := c.c.Object.UploadPart(ctx, key, uploadID, num, bytes.NewReader(body), nil)
+	vlen := int64(len(body))
+	s := md5.Sum(body)
+	sum := s[:]
+	resp, err := c.c.Object.UploadPart(ctx, key, uploadID, num, bytes.NewReader(body), &cos.ObjectUploadPartOptions{
+		ContentLength: vlen,
+		ContentMD5:    base64.StdEncoding.EncodeToString(sum),
+	})
 	if err != nil {
 		return nil, err
 	}
