@@ -4776,6 +4776,7 @@ func testBatchUnlinkTrashHardlinkUGQuotaCombo(t *testing.T, m Meta, ctx Context,
 
 	m.getBase().doFlushQuotas()
 	m.getBase().doFlushStats()
+	m.getBase().doFlushDirStat()
 	time.Sleep(200 * time.Millisecond)
 
 	qs := make(map[string]*Quota)
@@ -4807,6 +4808,7 @@ func testBatchUnlinkTrashHardlinkUGQuotaCombo(t *testing.T, m Meta, ctx Context,
 
 	m.getBase().doFlushQuotas()
 	m.getBase().doFlushStats()
+	m.getBase().doFlushDirStat()
 	time.Sleep(200 * time.Millisecond)
 
 	qs = make(map[string]*Quota)
@@ -5440,6 +5442,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("Close file: %s", st)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceBefore, trashInodesBefore = m.GetTrashStats(ctx)
@@ -5449,6 +5452,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("Unlink to trash: %s", st)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceAfter, trashInodesAfter := m.GetTrashStats(ctx)
@@ -5472,6 +5476,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("Delete from trash: %s", st)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceFinal, trashInodesFinal := m.GetTrashStats(ctx)
@@ -5490,6 +5495,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("Create test directory: %s", st)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceBefore, trashInodesBefore = m.GetTrashStats(ctx)
@@ -5498,6 +5504,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("Rmdir to trash: %s", st)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceAfter, trashInodesAfter := m.GetTrashStats(ctx)
@@ -5523,6 +5530,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("Delete directory from trash: %s", st)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceFinal, trashInodesFinal := m.GetTrashStats(ctx)
@@ -5567,6 +5575,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			fileInodes = append(fileInodes, inode)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceBefore, trashInodesBefore = m.GetTrashStats(ctx)
@@ -5594,6 +5603,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("BatchUnlink count mismatch: expected %d, got %d", len(fileNames), count)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceAfter, trashInodesAfter := m.GetTrashStats(ctx)
@@ -5620,6 +5630,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			}
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceFinal, trashInodesFinal := m.GetTrashStats(ctx)
@@ -5657,6 +5668,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			fileInodes = append(fileInodes, inode)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceBefore, trashInodesBefore = m.GetTrashStats(ctx)
@@ -5684,6 +5696,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("BatchUnlink count mismatch: expected %d, got %d", len(fileNames), count)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceAfter, trashInodesAfter := m.GetTrashStats(ctx)
@@ -5708,6 +5721,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			}
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 	}
 
@@ -5731,6 +5745,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("Close file: %s", st)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		var restoreDirIno Ino
@@ -5744,6 +5759,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("Delete to trash: %s", st)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceAfterDelete, trashInodesAfterDelete := m.GetTrashStats(ctx)
@@ -5769,6 +5785,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("Restore from trash: %s", st)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceAfterRestore, trashInodesAfterRestore := m.GetTrashStats(ctx)
@@ -5835,6 +5852,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("Unlink restore overwrite src to trash: %s", st)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		var srcAttr Attr
@@ -5852,6 +5870,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("Restore overwrite destination: %s", st)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceAfterRestore, trashInodesAfterRestore := m.GetTrashStats(ctx)
@@ -5913,6 +5932,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("Unlink restore skip src to trash: %s", st)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		var srcAttr Attr
@@ -5927,6 +5947,7 @@ func testTrashStats(t *testing.T, m Meta, ctx Context, root Ino) {
 			t.Fatalf("Restore overwrite skipTrash destination: %s", st)
 		}
 		m.getBase().doFlushStats()
+		m.getBase().doFlushDirStat()
 		time.Sleep(200 * time.Millisecond)
 
 		trashSpaceAfterRestore, trashInodesAfterRestore := m.GetTrashStats(ctx)

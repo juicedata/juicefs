@@ -78,7 +78,6 @@ type engine interface {
 	// Set counter name to value if old <= value - diff.
 	setIfSmall(name string, value, diff int64) (bool, error)
 	updateStats(space int64, inodes int64)
-	updateTrashStats(space int64, inodes int64)
 	doFlushStats()
 
 	doLoad() ([]byte, error)
@@ -174,11 +173,6 @@ type fsStat struct {
 	newInodes  int64
 	usedSpace  int64
 	usedInodes int64
-
-	newTrashSpace   int64
-	newTrashInodes  int64
-	usedTrashSpace  int64
-	usedTrashInodes int64
 }
 
 // chunk for compaction
@@ -366,10 +360,8 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		maxDeleting:  make(chan struct{}, 100),
 		symlinks:     newSymlinkCache(maxSymCacheNum),
 		fsStat: &fsStat{
-			usedSpace:       unknownUsage,
-			usedInodes:      unknownUsage,
-			usedTrashSpace:  unknownUsage,
-			usedTrashInodes: unknownUsage,
+			usedSpace:  unknownUsage,
+			usedInodes: unknownUsage,
 		},
 		dirStats:    make(map[Ino]dirStat),
 		dirParents:  make(map[Ino]Ino),
@@ -918,16 +910,6 @@ func (m *baseMeta) refresh(ctx Context) {
 		} else {
 			logger.Warnf("Get counter %s: %s", totalInodes, err)
 		}
-		if v, err := m.en.getCounter(trashSpace); err == nil {
-			atomic.StoreInt64(&m.usedTrashSpace, v)
-		} else {
-			logger.Warnf("Get counter %s: %s", trashSpace, err)
-		}
-		if v, err := m.en.getCounter(trashInodes); err == nil {
-			atomic.StoreInt64(&m.usedTrashInodes, v)
-		} else {
-			logger.Warnf("Get counter %s: %s", trashInodes, err)
-		}
 		m.loadQuotas()
 
 		if m.conf.ReadOnly || m.conf.NoBGJob || m.conf.Heartbeat == 0 {
@@ -1172,40 +1154,39 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 }
 
 func (m *baseMeta) GetTrashStats(ctx Context) (space int64, inodes int64) {
-	usedSpace := atomic.LoadInt64(&m.usedTrashSpace)
-	usedInodes := atomic.LoadInt64(&m.usedTrashInodes)
+	stat, st := m.GetDirStat(ctx, TrashInode)
+	if st != 0 {
+		logger.Warnf("GetDirStat for TrashInode: %s", st)
+		return 0, 0
+	}
+	if stat == nil {
+		return 0, 0
+	}
+	return stat.space, stat.inodes
+}
 
-	var err error
-	if !m.conf.FastStatfs || usedSpace == unknownUsage || usedInodes == unknownUsage {
-		var remoteUsedSpace int64
-		err = utils.WithTimeout(ctx, func(context.Context) error {
-			remoteUsedSpace, err = m.en.getCounter(trashSpace)
-			return err
-		}, time.Millisecond*150)
-		if err == nil {
-			usedSpace = remoteUsedSpace
+func (m *baseMeta) syncTrashDirStat(ctx Context) error {
+	var totalSpace, totalInodes int64
+	var entries []*Entry
+	if st := m.en.doReaddir(ctx, TrashInode, 1, &entries, -1); st != 0 {
+		return errors.Wrap(st, "read trash")
+	}
+
+	for _, entry := range entries {
+		stat, st := m.GetDirStat(ctx, entry.Inode)
+		if st != 0 {
+			logger.Warnf("GetDirStat for subTrash %d: %s", entry.Inode, st)
+			continue
 		}
-		var remoteUsedInodes int64
-		err = utils.WithTimeout(ctx, func(context.Context) error {
-			remoteUsedInodes, err = m.en.getCounter(trashInodes)
-			return err
-		}, time.Millisecond*150)
-		if err == nil {
-			usedInodes = remoteUsedInodes
+		if stat != nil {
+			totalSpace += stat.space
+			totalInodes += stat.inodes
 		}
 	}
 
-	usedSpace += atomic.LoadInt64(&m.newTrashSpace)
-	usedInodes += atomic.LoadInt64(&m.newTrashInodes)
-
-	if usedSpace < 0 {
-		usedSpace = 0
-	}
-	if usedInodes < 0 {
-		usedInodes = 0
-	}
-
-	return usedSpace, usedInodes
+	return m.en.doUpdateDirStat(ctx, map[Ino]dirStat{
+		TrashInode: {space: totalSpace, inodes: totalInodes},
+	})
 }
 
 func (m *baseMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
@@ -2920,6 +2901,8 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 		attr := Attr{Typ: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: TrashInode, Full: true}
 		st = m.en.doMknod(Background(), TrashInode, name, TypeDirectory, 0555, 0, "", trash, &attr)
 		m.en.updateStats(align4K(0), 1)
+		// Initialize dirstat for the new subTrash (empty directory)
+		m.updateDirStat(Background(), *trash, 0, 0, 0)
 	}
 
 	m.Lock()

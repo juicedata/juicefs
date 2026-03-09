@@ -42,11 +42,9 @@ const (
 	totalInodes     = "totalInodes"
 	legacySessions  = "sessions"
 	krbTokenCounter = "krbTokenMaxId"
-	trashSpace      = "trashSpace"
-	trashInodes     = "trashInodes"
 )
 
-var counterNames = []string{usedSpace, totalInodes, trashSpace, trashInodes, "nextInode", "nextChunk", "nextSession", "nextTrash"}
+var counterNames = []string{usedSpace, totalInodes, "nextInode", "nextChunk", "nextSession", "nextTrash"}
 
 const (
 	// fallocate

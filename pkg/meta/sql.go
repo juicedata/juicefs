@@ -1234,11 +1234,6 @@ func (m *dbMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.newInodes, inodes)
 }
 
-func (m *dbMeta) updateTrashStats(space int64, inodes int64) {
-	atomic.AddInt64(&m.newTrashSpace, space)
-	atomic.AddInt64(&m.newTrashInodes, inodes)
-}
-
 func (m *dbMeta) doSyncVolumeStat(ctx Context) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
@@ -1271,12 +1266,15 @@ func (m *dbMeta) doSyncVolumeStat(ctx Context) error {
 		return err
 	}
 
-	if err := m.scanTrashEntry(ctx, func(_ Ino, length uint64) {
-		used += align4K(length)
-		inode += 1
-	}); err != nil {
-		return err
+	// TrashInode's dirstat is already included in the dirStats scan above, no need to scanTrashEntry separately
+	// But we need to ensure TrashInode's dirstat exists and is correct
+	if stat, _ := m.doGetDirStat(ctx, TrashInode, false); stat == nil {
+		// TrashInode's dirstat doesn't exist, sync it
+		if err := m.syncTrashDirStat(ctx); err != nil {
+			logger.Warnf("sync TrashInode dirstat: %s", err)
+		}
 	}
+
 	logger.Debugf("Used space: %s, inodes: %d", humanize.IBytes(uint64(used)), inode)
 	return m.txn(func(s *xorm.Session) error {
 		if _, err := s.Cols("value").Update(&counter{Value: inode}, &counter{Name: totalInodes}); err != nil {
@@ -1306,26 +1304,6 @@ func (m *dbMeta) doFlushStats() {
 			atomic.AddInt64(&m.usedSpace, newSpace)
 			atomic.AddInt64(&m.newInodes, -newInodes)
 			atomic.AddInt64(&m.usedInodes, newInodes)
-		}
-	}
-	newTrashSpace := atomic.LoadInt64(&m.newTrashSpace)
-	newTrashInodes := atomic.LoadInt64(&m.newTrashInodes)
-	if newTrashSpace != 0 || newTrashInodes != 0 {
-		err := m.txn(func(s *xorm.Session) error {
-			if _, err := s.Exec(m.sqlConv("update counter set value=value + ? where name='trashInodes'"), newTrashInodes); err != nil {
-				return err
-			}
-			_, err := s.Exec(m.sqlConv("update counter set value=value + ? where name='trashSpace'"), newTrashSpace)
-			return err
-		})
-		if err != nil && !strings.Contains(err.Error(), "attempt to write a readonly database") {
-			logger.Warnf("update trash stats: %s", err)
-		}
-		if err == nil {
-			atomic.AddInt64(&m.newTrashSpace, -newTrashSpace)
-			atomic.AddInt64(&m.usedTrashSpace, newTrashSpace)
-			atomic.AddInt64(&m.newTrashInodes, -newTrashInodes)
-			atomic.AddInt64(&m.usedTrashInodes, newTrashInodes)
 		}
 	}
 }
@@ -1989,10 +1967,12 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			m.fileDeleted(opened, parent.IsTrash(), n.Inode, n.Length)
 		}
 		if parent.IsTrash() {
-			m.updateTrashStats(newSpace, newInode)
+			m.updateDirStat(ctx, parent, 0, newSpace, newInode)
+			m.updateDirStat(ctx, TrashInode, 0, newSpace, newInode)
 			m.updateStats(newSpace, newInode)
 		} else if trash > 0 {
-			m.updateTrashStats(newSpace, newInode)
+			m.updateDirStat(ctx, trash, 0, newSpace, newInode)
+			m.updateDirStat(ctx, TrashInode, 0, newSpace, newInode)
 		} else {
 			m.updateStats(newSpace, newInode)
 		}
@@ -2120,10 +2100,12 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 	})
 	if err == nil {
 		if parent.IsTrash() {
-			m.updateTrashStats(-align4K(0), -1)
+			m.updateDirStat(ctx, parent, 0, -align4K(0), -1)
+			m.updateDirStat(ctx, TrashInode, 0, -align4K(0), -1)
 			m.updateStats(-align4K(0), -1)
 		} else if trash > 0 {
-			m.updateTrashStats(align4K(0), 1)
+			m.updateDirStat(ctx, trash, 0, align4K(0), 1)
+			m.updateDirStat(ctx, TrashInode, 0, align4K(0), 1)
 		} else {
 			m.updateStats(-align4K(0), -1)
 		}
@@ -2532,14 +2514,16 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			} else {
 				m.updateStats(newSpace, newInode)
 			}
-			m.updateTrashStats(restoreSpace, restoreInodes)
+			m.updateDirStat(ctx, parentSrc, 0, restoreSpace, restoreInodes)
+			m.updateDirStat(ctx, TrashInode, 0, restoreSpace, restoreInodes)
 		} else if trash == 0 {
 			if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
 				m.fileDeleted(opened, false, dino, dn.Length)
 			}
 			m.updateStats(newSpace, newInode)
 		} else {
-			m.updateTrashStats(newSpace, newInode)
+			m.updateDirStat(ctx, trash, 0, newSpace, newInode)
+			m.updateDirStat(ctx, TrashInode, 0, newSpace, newInode)
 		}
 	}
 	return errno(err)
@@ -3004,7 +2988,8 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		m.updateStats(fsDeltaSpace, fsDeltaInodes)
 	}
 	if trashDeltaSpace != 0 || trashDeltaInodes != 0 {
-		m.updateTrashStats(trashDeltaSpace, trashDeltaInodes)
+		m.updateDirStat(ctx, parent, 0, trashDeltaSpace, trashDeltaInodes)
+		m.updateDirStat(ctx, TrashInode, 0, trashDeltaSpace, trashDeltaInodes)
 	}
 	*length = totalLength
 	*space = totalSpace
@@ -3442,7 +3427,13 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 	if m.conf.ReadOnly {
 		return nil, syscall.EROFS
 	}
-	stat, st := m.calcDirStat(ctx, ino)
+	var stat *dirStat
+	var st syscall.Errno
+	if ino == TrashInode {
+		stat, st = m.calcTrashDirStat(ctx)
+	} else {
+		stat, st = m.calcDirStat(ctx, ino)
+	}
 	if st != 0 {
 		return nil, st
 	}
@@ -3462,6 +3453,27 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 		return err
 	})
 	return stat, errno(err)
+}
+
+func (m *dbMeta) calcTrashDirStat(ctx Context) (*dirStat, syscall.Errno) {
+	var totalSpace, totalInodes int64
+	var entries []*Entry
+	if st := m.en.doReaddir(ctx, TrashInode, 1, &entries, -1); st != 0 {
+		return nil, st
+	}
+
+	for _, entry := range entries {
+		stat, st := m.doGetDirStat(ctx, entry.Inode, false)
+		if st != 0 {
+			continue
+		}
+		if stat != nil {
+			totalSpace += stat.space
+			totalInodes += stat.inodes
+		}
+	}
+
+	return &dirStat{space: totalSpace, inodes: totalInodes}, 0
 }
 
 func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, syscall.Errno) {
