@@ -602,7 +602,6 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32,
 
 	switch cmd {
 	case QuotaSet:
-		logger.Infof("set quota %s ,%d ,%d, %v, %v", dpath, uid, gid, qtype, key)
 		return m.handleQuotaSet(ctx, qtype, key, dpath, quotas, strict)
 	case QuotaGet:
 		return m.handleQuotaGet(ctx, qtype, key, dpath, quotas)
