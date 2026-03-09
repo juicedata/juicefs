@@ -5085,6 +5085,46 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 		*result = batchCloneResult{}
 	}
 
+	accumulateFallbackResult := func(attr Attr) {
+		if result == nil {
+			return
+		}
+		uid, gid := attr.Uid, attr.Gid
+		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
+			uid = ctx.Uid()
+			gid = ctx.Gid()
+		}
+		space := align4K(attr.Length)
+		result.length += int64(attr.Length)
+		result.space += space
+		result.inodes++
+		result.userGroupQuotas = append(result.userGroupQuotas, userGroupQuotaDelta{
+			Uid:    uid,
+			Gid:    gid,
+			Space:  space,
+			Inodes: 1,
+		})
+	}
+
+	fallbackEntries := func(remaining []*Entry) syscall.Errno {
+		for _, e := range remaining {
+			dstIno, err := m.nextInode()
+			if err != nil {
+				return errno(err)
+			}
+			var srcAttr Attr
+			st := m.doCloneEntry(ctx, e.Inode, dstParent, string(e.Name), dstIno, &srcAttr, cmode, cumask, false)
+			if st == syscall.ENOENT {
+				continue
+			}
+			if st != 0 {
+				return st
+			}
+			accumulateFallbackResult(srcAttr)
+		}
+		return 0
+	}
+
 	const batchSize = 1000
 	for start := 0; start < len(entries); start += batchSize {
 		end := start + batchSize
@@ -5329,6 +5369,13 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 						return syscall.ENOTSUP
 					}
 				}
+				if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
+					pattr.Mtime = now.Unix()
+					pattr.Mtimensec = uint32(now.Nanosecond())
+					pattr.Ctime = now.Unix()
+					pattr.Ctimensec = uint32(now.Nanosecond())
+					p.Set(ctx, m.inodeKey(dstParent), m.marshal(&pattr), 0)
+				}
 				if batchResult.space != 0 {
 					p.IncrBy(ctx, m.usedSpaceKey(), batchResult.space)
 				}
@@ -5347,6 +5394,9 @@ func (m *redisMeta) doBatchClone(ctx Context, srcParent Ino, dstParent Ino, entr
 		if err != nil {
 			// Fallback to per-entry clone for transient/deleted-source cases.
 			if errno(err) == syscall.ENOTSUP {
+				if start > 0 {
+					return fallbackEntries(entries[start:])
+				}
 				return syscall.ENOTSUP
 			}
 			return errno(err)

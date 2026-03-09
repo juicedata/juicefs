@@ -18,6 +18,7 @@ package meta
 
 import (
 	"reflect"
+	"strconv"
 	"syscall"
 	"testing"
 	"time"
@@ -304,6 +305,68 @@ func TestRedisBatchCloneDuplicateNamesInBatch(t *testing.T) {
 	}
 }
 
+func TestRedisBatchCloneUpdatesParentTimestamps(t *testing.T) {
+	metaClient, err := newRedisMeta("redis", "127.0.0.1:6379/8", testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %v", err)
+	}
+	m, ok := metaClient.(*redisMeta)
+	if !ok {
+		t.Fatalf("expected *redisMeta, got %T", metaClient)
+	}
+	defer m.Shutdown()
+
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %v", err)
+	}
+	if err := m.Init(testFormat(), true); err != nil {
+		t.Fatalf("init meta: %v", err)
+	}
+
+	ctx := Background()
+	var srcDir, dstDir Ino
+	if st := m.Mkdir(ctx, RootInode, "src_parent_ts", 0777, 022, 0, &srcDir, nil); st != 0 {
+		t.Fatalf("mkdir src_parent_ts: %s", st)
+	}
+	if st := m.Mkdir(ctx, RootInode, "dst_parent_ts", 0777, 022, 0, &dstDir, nil); st != 0 {
+		t.Fatalf("mkdir dst_parent_ts: %s", st)
+	}
+
+	var ino Ino
+	if st := m.Mknod(ctx, srcDir, "file1", TypeFile, 0644, 022, 0, "", &ino, nil); st != 0 {
+		t.Fatalf("mknod file1: %s", st)
+	}
+
+	var before Attr
+	if st := m.GetAttr(ctx, dstDir, &before); st != 0 {
+		t.Fatalf("getattr dst_parent_ts before: %s", st)
+	}
+
+	time.Sleep(2 * time.Millisecond)
+
+	entries := []*Entry{{Inode: ino, Name: []byte("file1"), Attr: &Attr{Typ: TypeFile}}}
+	var cloned uint64
+	st := m.getBase().BatchClone(ctx, srcDir, dstDir, entries, 0, 022, &cloned)
+	if st != 0 {
+		t.Fatalf("BatchClone parent timestamps: %s", st)
+	}
+	if cloned != 1 {
+		t.Fatalf("BatchClone parent timestamps count mismatch: got %d want 1", cloned)
+	}
+
+	var after Attr
+	if st := m.GetAttr(ctx, dstDir, &after); st != 0 {
+		t.Fatalf("getattr dst_parent_ts after: %s", st)
+	}
+
+	if after.Mtime == before.Mtime && after.Mtimensec == before.Mtimensec {
+		t.Fatalf("dst parent mtime did not change: before=%d.%d after=%d.%d", before.Mtime, before.Mtimensec, after.Mtime, after.Mtimensec)
+	}
+	if after.Ctime == before.Ctime && after.Ctimensec == before.Ctimensec {
+		t.Fatalf("dst parent ctime did not change: before=%d.%d after=%d.%d", before.Ctime, before.Ctimensec, after.Ctime, after.Ctimensec)
+	}
+}
+
 func TestRedisBatchCloneSpaceAccounting(t *testing.T) {
 	metaClient, err := newRedisMeta("redis", "127.0.0.1:6379/13", testConfig())
 	if err != nil {
@@ -521,6 +584,95 @@ func TestRedisBatchCloneMultiChunkFile(t *testing.T) {
 	}
 	if !reflect.DeepEqual(srcChunk1, dstChunk1) {
 		t.Fatalf("chunk 1 data mismatch after clone")
+	}
+}
+
+func TestRedisBatchCloneLateFallbackAfterPartialSuccess(t *testing.T) {
+	metaClient, err := newRedisMeta("redis", "127.0.0.1:6379/7", testConfig())
+	if err != nil {
+		t.Fatalf("create meta: %v", err)
+	}
+	m, ok := metaClient.(*redisMeta)
+	if !ok {
+		t.Fatalf("expected *redisMeta, got %T", metaClient)
+	}
+	defer m.Shutdown()
+
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %v", err)
+	}
+	if err := m.Init(testFormat(), true); err != nil {
+		t.Fatalf("init meta: %v", err)
+	}
+
+	ctx := Background()
+	var srcDir, dstDir Ino
+	if st := m.Mkdir(ctx, RootInode, "src_late_fallback", 0777, 022, 0, &srcDir, nil); st != 0 {
+		t.Fatalf("mkdir src_late_fallback: %s", st)
+	}
+	if st := m.Mkdir(ctx, RootInode, "dst_late_fallback", 0777, 022, 0, &dstDir, nil); st != 0 {
+		t.Fatalf("mkdir dst_late_fallback: %s", st)
+	}
+
+	const fileCount = 1001
+	for i := 0; i < fileCount; i++ {
+		var ino Ino
+		name := "file_" + strconv.Itoa(i)
+		if st := m.Mknod(ctx, srcDir, name, TypeFile, 0644, 022, 0, "", &ino, nil); st != 0 {
+			t.Fatalf("mknod %s: %s", name, st)
+		}
+	}
+
+	var listed []*Entry
+	if st := m.Readdir(ctx, srcDir, 1, &listed); st != 0 {
+		t.Fatalf("readdir src_late_fallback: %s", st)
+	}
+	var batchEntries []*Entry
+	for _, e := range listed {
+		name := string(e.Name)
+		if name == "." || name == ".." {
+			continue
+		}
+		batchEntries = append(batchEntries, e)
+	}
+	if len(batchEntries) != fileCount {
+		t.Fatalf("expected %d batch entries, got %d", fileCount, len(batchEntries))
+	}
+
+	deletedName := string(batchEntries[len(batchEntries)-1].Name)
+	if st := m.Unlink(ctx, srcDir, deletedName); st != 0 {
+		t.Fatalf("unlink %s: %s", deletedName, st)
+	}
+
+	var cloned uint64
+	st := m.getBase().BatchClone(ctx, srcDir, dstDir, batchEntries, CLONE_MODE_PRESERVE_ATTR, 022, &cloned)
+	if st != 0 {
+		t.Fatalf("BatchClone late fallback after partial success: %s", st)
+	}
+	if cloned != fileCount-1 {
+		t.Fatalf("BatchClone late fallback count mismatch: got %d want %d", cloned, fileCount-1)
+	}
+
+	var dstEntries []*Entry
+	if st := m.Readdir(ctx, dstDir, 1, &dstEntries); st != 0 {
+		t.Fatalf("readdir dst_late_fallback: %s", st)
+	}
+	clonedNames := 0
+	for _, e := range dstEntries {
+		name := string(e.Name)
+		if name == "." || name == ".." {
+			continue
+		}
+		clonedNames++
+	}
+	if clonedNames != fileCount-1 {
+		t.Fatalf("dst_late_fallback entry count mismatch: got %d want %d", clonedNames, fileCount-1)
+	}
+
+	var ino Ino
+	var attr Attr
+	if st := m.Lookup(ctx, dstDir, deletedName, &ino, &attr, false); st != syscall.ENOENT {
+		t.Fatalf("deleted entry should not be cloned, got %s", st)
 	}
 }
 
