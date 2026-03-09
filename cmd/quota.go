@@ -141,7 +141,8 @@ func quota(c *cli.Context) error {
 	var uid, gid uint32
 	var quotaKey string
 	var quotaType string
-	validateID := func(id uint64, name string) uint32 {
+	validateID := func(name string) uint32 {
+		id := c.Uint64(name)
 		if id == 0 {
 			logger.Fatalf("Invalid --%s: 0 is not allowed", name)
 		}
@@ -151,7 +152,7 @@ func quota(c *cli.Context) error {
 		return uint32(id)
 	}
 	if c.IsSet("uid") {
-		uid = validateID(c.Uint64("uid"), "uid")
+		uid = validateID("uid")
 		quotaKey = fmt.Sprintf("uid:%d", uid)
 		quotaType = "user"
 		if c.IsSet("gid") {
@@ -161,7 +162,7 @@ func quota(c *cli.Context) error {
 			logger.Fatalf("Cannot specify both --uid and --path at the same time")
 		}
 	} else if c.IsSet("gid") {
-		gid = validateID(c.Uint64("gid"), "gid")
+		gid = validateID("gid")
 		quotaKey = fmt.Sprintf("gid:%d", gid)
 		quotaType = "group"
 		if c.IsSet("path") {
