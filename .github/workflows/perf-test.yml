@@ -41,8 +41,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        meta: ['redis', 'mysql', 'tikv']
-        cases: ["ai","mdtest_fio"]
+        meta: ['redis', 'redis-nocache', 'mysql', 'tikv']
+        cases: ["mdtest_fio"]
     runs-on: ubuntu-22.04
 
     steps:
@@ -76,8 +76,12 @@ jobs:
         run: |
           chmod +x .github/scripts/start_meta_engine.sh
           source .github/scripts/start_meta_engine.sh
-          start_meta_engine ${{matrix.meta}}
-          meta_url=$(get_meta_url ${{matrix.meta}})
+          engine_meta=${{matrix.meta}}
+          if [[ "$engine_meta" == "redis-nocache" ]]; then
+            engine_meta="redis"
+          fi
+          start_meta_engine $engine_meta
+          meta_url=$(get_meta_url $engine_meta)
           create_database $meta_url
 
       - name: Install mdtest & fio
@@ -113,11 +117,15 @@ jobs:
           sudo chmod 777 /tmp/jfs
           
           # Mount current version
-          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
+          engine_meta=${{matrix.meta}}
+          if [[ "$engine_meta" == "redis-nocache" ]]; then
+            engine_meta="redis"
+          fi
+          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url $engine_meta)
           sudo chmod 777 /mnt
-          if [[ "${{matrix.meta}}" == "mysql" ]]; then
+          if [[ "${{matrix.meta}}" == "redis-nocache" ]]; then
             meta_url=${meta_url%%\?*}
-            echo "Removed query parameters from MySQL URL"
+            echo "Removed redis query parameters for redis-nocache profile"
           fi
           ./juicefs format $meta_url current-version-test --trash-days 0 --bucket=/mnt/jfs
           ./juicefs mount -d "$meta_url" /tmp/jfs --no-usage-report
@@ -130,17 +138,21 @@ jobs:
         run: |
           source .github/scripts/common/common.sh
           source .github/scripts/start_meta_engine.sh
-          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
-          if [[ "${{matrix.meta}}" == "mysql" ]]; then
+          engine_meta=${{matrix.meta}}
+          if [[ "$engine_meta" == "redis-nocache" ]]; then
+            engine_meta="redis"
+          fi
+          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url $engine_meta)
+          if [[ "${{matrix.meta}}" == "redis-nocache" ]]; then
             meta_url=${meta_url%%\?*}
-            echo "Removed query parameters from MySQL URL"
+            echo "Removed redis query parameters for redis-nocache profile"
           fi
           META_URL=$meta_url          
           uuid=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4)
           ./juicefs destroy --force $meta_url $uuid
           ./juicefs umount /tmp/jfs
           rm -rf /mnt/jfs
-          start_meta_engine ${{matrix.meta}}
+          start_meta_engine $engine_meta
           create_database $meta_url
           prepare_test
 
@@ -153,10 +165,14 @@ jobs:
           git clone $GITHUB_SERVER_URL/$GITHUB_REPOSITORY .
           git checkout ${{ inputs.old_version_commit }}
           make
-          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
+          engine_meta=${{matrix.meta}}
+          if [[ "$engine_meta" == "redis-nocache" ]]; then
+            engine_meta="redis"
+          fi
+          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url $engine_meta)
           mkdir -p /tmp/jfs_old/mdtest
           sudo chmod 777 /tmp/jfs_old
-          if [[ "${{matrix.meta}}" == "mysql" || "${{matrix.meta}}" == "redis" ]]; then
+          if [[ "$engine_meta" == "mysql" || "$engine_meta" == "redis" ]]; then
             meta_url=${meta_url%%\?*}
             echo "Removed query parameters for old version compatibility"
           fi
@@ -169,8 +185,12 @@ jobs:
         run: |
           curl -sSL https://d.juicefs.com/install | sh -
           JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
-          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
-          if [[ "${{matrix.meta}}" == "mysql" || "${{matrix.meta}}" == "redis" ]]; then
+          engine_meta=${{matrix.meta}}
+          if [[ "$engine_meta" == "redis-nocache" ]]; then
+            engine_meta="redis"
+          fi
+          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url $engine_meta)
+          if [[ "$engine_meta" == "mysql" || "$engine_meta" == "redis" ]]; then
             meta_url=${meta_url%%\?*}
             echo "Removed query parameters for old version compatibility"
           fi
@@ -181,8 +201,12 @@ jobs:
 
       - name: Run benchmark with old version
         run: |
-          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
-          if [[ "${{matrix.meta}}" == "mysql" || "${{matrix.meta}}" == "redis" ]]; then
+          engine_meta=${{matrix.meta}}
+          if [[ "$engine_meta" == "redis-nocache" ]]; then
+            engine_meta="redis"
+          fi
+          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url $engine_meta)
+          if [[ "$engine_meta" == "mysql" || "$engine_meta" == "redis" ]]; then
             meta_url=${meta_url%%\?*}
             echo "Removed query parameters for old version compatibility"
           fi

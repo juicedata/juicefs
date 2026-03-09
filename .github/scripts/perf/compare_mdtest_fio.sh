@@ -196,7 +196,7 @@ compare_scenario() {
         printf "%-30s %-12.2f %-12.2f %-12.2f %-12s %-12s%%\n" \
                "FIO ${scenario}" "$current_iops" "$old_iops" "$diff" "$status" "$variance"
         printf "%-30s %-12s %-12s\n" "Bandwidth" "$current_bw" "$old_bw"
-    
+
     # Handle mdtest scenarios
     else
         printf "%-30s %-12s %-12s %-12s %-12s %-12s\n" "Operation" "Current Max" "Old Max" "Diff" "Status" "Variance"
@@ -278,7 +278,7 @@ check_regression() {
             echo "Regression detected in $scenario: Current $current_iops IOPS vs Old $old_iops IOPS (Variance: ${variance}%)"
             regression_detected=1
         fi
-    
+
     # Handle mdtest scenarios
     else
         while IFS= read -r current_line && IFS= read -r old_line <&3; do
