@@ -104,6 +104,8 @@ func (c *cifsStore) getConnection(ctx context.Context) (*cifsConn, error) {
 			}
 			conn.lastUsed = now
 			return conn, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		default:
 			goto CREATE
 		}
@@ -170,17 +172,20 @@ func (c *cifsStore) releaseConnection(conn *cifsConn, err error) {
 	}
 
 	// close connection if there's an error or if the pool is full
-	c.closeConnectionAsync(conn)
+	if conn.session != nil {
+		_ = conn.session.Logoff()
+	}
 }
 
-func (c *cifsStore) withConn(ctx context.Context, f func(*smb2.Share) error) error {
+func (c *cifsStore) withConn(ctx context.Context, f func(*smb2.Share) error) (err error) {
 	conn, err := c.getConnection(ctx)
 	if err != nil {
 		return err
 	}
-	err = f(conn.share.WithContext(ctx))
-	c.releaseConnection(conn, err)
-	return err
+	defer func() {
+		c.releaseConnection(conn, err)
+	}()
+	return f(conn.share.WithContext(ctx))
 }
 
 func (c *cifsStore) Head(ctx context.Context, key string) (oj Object, err error) {
