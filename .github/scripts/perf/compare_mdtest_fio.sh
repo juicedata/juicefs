@@ -5,13 +5,18 @@ CURRENT_RESULTS=$1
 OLD_RESULTS=$2
 FILTER_OPS=("File read" "File stat" "File removal" "Tree removal" "Tree creation")
 
-# New function to extract time from time output
-extract_time() {
-    local time_output=$1
-    local real_time=$(grep -oP 'real\s+\d+m\d+\.\d+s' <<< "$time_output" | awk '{print $2}')
-    local minutes=$(echo "$real_time" | grep -oP '\d+(?=m)')
-    local seconds=$(echo "$real_time" | grep -oP '\d+\.\d+(?=s)' | head -1)
-    echo "$minutes * 60 + $seconds" | bc -l
+# Function to extract files/s from built-in mdtest output
+extract_files_per_sec() {
+    local mdtest_output=$1
+    local files_per_sec=$(grep -oP 'Created .*files.*\(\K[0-9]+(\.[0-9]+)?(?= files/s\))' <<< "$mdtest_output" | head -1)
+    if [[ -z "$files_per_sec" ]]; then
+        files_per_sec=$(grep -oP '\(\K[0-9]+(\.[0-9]+)?(?= files/s\))' <<< "$mdtest_output" | head -1)
+    fi
+    if [[ -z "$files_per_sec" ]]; then
+        echo "0"
+    else
+        echo "$files_per_sec"
+    fi
 }
 
 # Function to extract IOPS from fio output
@@ -27,6 +32,16 @@ extract_iops() {
         echo "${iops%G} * 1000000000" | bc -l
     else
         echo "$iops"
+    fi
+}
+
+extract_bw() {
+    local fio_output=$1
+    local bw=$(grep -oP 'BW=\K[^, ]+' <<< "$fio_output" | head -1)
+    if [[ -z "$bw" ]]; then
+        echo "N/A"
+    else
+        echo "$bw"
     fi
 }
 
@@ -54,6 +69,7 @@ compare_with_tolerance() {
     local current=$1
     local old=$2
     local op_type=$3
+    local direction=${4:-higher}
     tolerance=$(echo "$old * 0.2" | bc -l)
     lower_bound=$(echo "$old - $tolerance" | bc -l)
     upper_bound=$(echo "$old + $tolerance" | bc -l)
@@ -63,10 +79,20 @@ compare_with_tolerance() {
         echo "skip"
     elif (( $(echo "$current <= $upper_bound && $current >= $lower_bound" | bc -l) )); then
         echo "same"
-    elif (( $(echo "$current > $old" | bc -l) )); then
-        echo "better"
     else
-        echo "worse"
+        if [[ "$direction" == "lower" ]]; then
+            if (( $(echo "$current < $old" | bc -l) )); then
+                echo "better"
+            else
+                echo "worse"
+            fi
+        else
+            if (( $(echo "$current > $old" | bc -l) )); then
+                echo "better"
+            else
+                echo "worse"
+            fi
+        fi
     fi
 }
 
@@ -86,7 +112,7 @@ compare_scenario() {
             echo "Command is : mpirun --use-hwthread-cpus --allow-run-as-root -np 4 mdtest -F -w 102400 -I 3000 -z 0"
             ;;
         "scenario3")
-            echo "Command is : cmd/mount/mount mdtest --threads 100 --dirs 3 --depth 5 --files 100 --create"
+            echo "Command is : ./juicefs mdtest <meta-url> /mdtest_perf --threads 10 --dirs 3 --depth 3 --files 100"
             ;;
         "fio_scenario4")
             echo "Command is : fio --name=big-write --directory=/mnt/fio --group_reporting --rw=write --direct=1 --bs=64k --end_fsync=1 --numjobs=8 --nrfiles=1 --size=2G --runtime=120"
@@ -114,15 +140,20 @@ compare_scenario() {
 
     # Handle built-in mdtest scenario (scenario3)
     if [[ "$scenario" == "scenario3" ]]; then
-        printf "%-30s %-12s %-12s %-12s %-12s %-12s\n" "Operation" "Current Time" "Old Time" "Diff" "Status" "Variance"
+        printf "%-30s %-12s %-12s %-12s %-12s %-12s\n" "Operation" "Current files/s" "Old files/s" "Diff" "Status" "Variance"
         echo "--------------------------------------------------------------------"
 
-        current_time=$(extract_time "$(cat "${current_file}")")
-        old_time=$(extract_time "$(cat "${old_file}")")
+        current_files_per_sec=$(extract_files_per_sec "$(cat "${current_file}")")
+        old_files_per_sec=$(extract_files_per_sec "$(cat "${old_file}")")
 
-        diff=$(echo "$current_time - $old_time" | bc -l)
-        variance=$(echo "scale=2; ($current_time - $old_time)*100/$old_time" | bc -l)
-        comparison=$(compare_with_tolerance $current_time $old_time "builtin_mdtest")
+        diff=$(echo "$current_files_per_sec - $old_files_per_sec" | bc -l)
+        if (( $(echo "$old_files_per_sec == 0" | bc -l) )); then
+            variance="N/A"
+            comparison="same"
+        else
+            variance=$(echo "scale=2; ($current_files_per_sec - $old_files_per_sec)*100/$old_files_per_sec" | bc -l)
+            comparison=$(compare_with_tolerance $current_files_per_sec $old_files_per_sec "builtin_mdtest")
+        fi
 
         case $comparison in
             "worse") status="❌ Worse" ;;
@@ -132,8 +163,13 @@ compare_scenario() {
             *) status="⚠️ Unknown" ;;
         esac
 
-        printf "%-30s %-12.2f %-12.2f %-12.2f %-12s %-12s%%\n" \
-               "Built-in mdtest" "$current_time" "$old_time" "$diff" "$status" "$variance"
+         if [[ "$variance" == "N/A" ]]; then
+             printf "%-30s %-12.2f %-12.2f %-12.2f %-12s %-12s\n" \
+                 "Built-in mdtest" "$current_files_per_sec" "$old_files_per_sec" "$diff" "$status" "$variance"
+         else
+             printf "%-30s %-12.2f %-12.2f %-12.2f %-12s %-12s%%\n" \
+                 "Built-in mdtest" "$current_files_per_sec" "$old_files_per_sec" "$diff" "$status" "$variance"
+         fi
     
     # Handle fio scenarios
     elif [[ "$scenario" =~ ^fio ]]; then
@@ -142,6 +178,8 @@ compare_scenario() {
 
         current_iops=$(extract_iops "$(cat "${current_file}")")
         old_iops=$(extract_iops "$(cat "${old_file}")")
+        current_bw=$(extract_bw "$(cat "${current_file}")")
+        old_bw=$(extract_bw "$(cat "${old_file}")")
 
         diff=$(echo "$current_iops - $old_iops" | bc -l)
         variance=$(echo "scale=2; ($current_iops - $old_iops)*100/$old_iops" | bc -l)
@@ -157,6 +195,7 @@ compare_scenario() {
 
         printf "%-30s %-12.2f %-12.2f %-12.2f %-12s %-12s%%\n" \
                "FIO ${scenario}" "$current_iops" "$old_iops" "$diff" "$status" "$variance"
+        printf "%-30s %-12s %-12s\n" "Bandwidth" "$current_bw" "$old_bw"
     
     # Handle mdtest scenarios
     else
@@ -214,13 +253,17 @@ check_regression() {
 
     # Handle built-in mdtest scenario (scenario3)
     if [[ "$scenario" == "scenario3" ]]; then
-        current_time=$(extract_time "$(cat "${current_file}")")
-        old_time=$(extract_time "$(cat "${old_file}")")
-        comparison=$(compare_with_tolerance $current_time $old_time "builtin_mdtest")
+        current_files_per_sec=$(extract_files_per_sec "$(cat "${current_file}")")
+        old_files_per_sec=$(extract_files_per_sec "$(cat "${old_file}")")
+        if (( $(echo "$old_files_per_sec == 0" | bc -l) )); then
+            comparison="same"
+        else
+            comparison=$(compare_with_tolerance $current_files_per_sec $old_files_per_sec "builtin_mdtest")
+        fi
 
         if [ "$comparison" == "worse" ]; then
-            variance=$(echo "scale=2; ($current_time - $old_time)*100/$old_time" | bc -l)
-            echo "Regression detected in $scenario for built-in mdtest: Current $current_time vs Old $old_time (Variance: ${variance}%)"
+            variance=$(echo "scale=2; ($current_files_per_sec - $old_files_per_sec)*100/$old_files_per_sec" | bc -l)
+            echo "Regression detected in $scenario for built-in mdtest (files/s): Current $current_files_per_sec vs Old $old_files_per_sec (Variance: ${variance}%)"
             regression_detected=1
         fi
     

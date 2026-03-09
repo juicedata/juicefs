@@ -124,7 +124,7 @@ jobs:
           
           # Run tests
           chmod +x .github/scripts/perf/*.sh
-          .github/scripts/perf/${{matrix.cases}}.sh /tmp/jfs "./results/current_${{matrix.meta}}" "current"
+          .github/scripts/perf/${{matrix.cases}}.sh /tmp/jfs "./results/current_${{matrix.meta}}" "current" "$meta_url"
 
       - name: Cleanup current version
         run: |
@@ -156,9 +156,9 @@ jobs:
           meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
           mkdir -p /tmp/jfs_old/mdtest
           sudo chmod 777 /tmp/jfs_old
-          if [[ "${{matrix.meta}}" == "mysql" ]]; then
+          if [[ "${{matrix.meta}}" == "mysql" || "${{matrix.meta}}" == "redis" ]]; then
             meta_url=${meta_url%%\?*}
-            echo "Removed query parameters from MySQL URL"
+            echo "Removed query parameters for old version compatibility"
           fi
           ./juicefs format "$meta_url" old-version-test --trash-days 0 --bucket=/mnt/jfs
           ./juicefs mount -d "$meta_url" /tmp/jfs_old --no-usage-report
@@ -170,9 +170,9 @@ jobs:
           curl -sSL https://d.juicefs.com/install | sh -
           JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
           meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
-          if [[ "${{matrix.meta}}" == "mysql" ]]; then
+          if [[ "${{matrix.meta}}" == "mysql" || "${{matrix.meta}}" == "redis" ]]; then
             meta_url=${meta_url%%\?*}
-            echo "Removed query parameters from MySQL URL"
+            echo "Removed query parameters for old version compatibility"
           fi
           juicefs format "$meta_url" old-version-test --trash-days 0 --bucket=/mnt/jfs
           mkdir -p /tmp/jfs_old/mdtest
@@ -181,7 +181,12 @@ jobs:
 
       - name: Run benchmark with old version
         run: |
-          .github/scripts/perf/${{matrix.cases}}.sh /tmp/jfs_old "./results/old_${{matrix.meta}}" "old"
+          meta_url=$(source .github/scripts/start_meta_engine.sh; get_meta_url ${{matrix.meta}})
+          if [[ "${{matrix.meta}}" == "mysql" || "${{matrix.meta}}" == "redis" ]]; then
+            meta_url=${meta_url%%\?*}
+            echo "Removed query parameters for old version compatibility"
+          fi
+          .github/scripts/perf/${{matrix.cases}}.sh /tmp/jfs_old "./results/old_${{matrix.meta}}" "old" "$meta_url"
 
       - name: Compare results
         run: |

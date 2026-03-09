@@ -86,7 +86,18 @@ jobs:
           .\install.ps1 -RunAsAdmin
           echo $env:USERNAME
           scoop
-          scoop install redis
+          $redisUrl = "https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.zip"
+          $redisRoot = Join-Path $env:USERPROFILE "scoop\apps\redis\current"
+          New-Item -ItemType Directory -Force -Path $redisRoot | Out-Null
+          Invoke-WebRequest -Uri $redisUrl -OutFile redis.zip
+          Expand-Archive -Path redis.zip -DestinationPath $redisRoot -Force
+          $redisCli = Join-Path $redisRoot "redis-cli.exe"
+          if (-not (Test-Path $redisCli)) {
+            throw "redis-cli.exe not found after downloading from $redisUrl"
+          }
+          $env:Path += ";$redisRoot"
+          $redisRoot | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & $redisCli --version
           scoop install minio@2021-12-10T23-03-39Z
           scoop install runasti
 
@@ -98,15 +109,24 @@ jobs:
       - name: Start Redis
         run: |
           copy winsw.exe redis-service.exe
-          echo  "<service>"   >> redis-service.xml
-          echo  "<id>redisredis</id>"  >> redis-service.xml
-          echo  "<name>redisredis</name>"  >> redis-service.xml
-          echo  "<description>redisredis</description>"  >> redis-service.xml
-          echo  "<executable>C:\Users\$env:USERNAME\scoop\shims\redis-server.exe</executable>"  >> redis-service.xml
-          echo  "<logmode>rotate</logmode>"  >> redis-service.xml
-          echo  "</service>"  >> redis-service.xml
+          $redisExe = Join-Path $env:USERPROFILE "scoop\apps\redis\current\redis-server.exe"
+          if (!(Test-Path $redisExe)) {
+            throw "redis-server.exe not found: $redisExe"
+          }
+          @"
+          <service>
+            <id>redisredis</id>
+            <name>redisredis</name>
+            <description>redisredis</description>
+            <executable>$redisExe</executable>
+            <arguments>--bind 127.0.0.1 --port 6379 --save \"\" --appendonly no</arguments>
+            <logmode>rotate</logmode>
+          </service>
+          "@ | Set-Content redis-service.xml -Encoding utf8
           .\redis-service.exe install
           net start redisredis
+          Start-Sleep -Seconds 2
+          redis-cli -h 127.0.0.1 -p 6379 ping
 
       - name: Download MinGW
         run: |
