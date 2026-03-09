@@ -141,15 +141,18 @@ func quota(c *cli.Context) error {
 	var uid, gid uint32
 	var quotaKey string
 	var quotaType string
+	validateID := func(id uint64, name string) uint32 {
+		if id == 0 {
+			logger.Fatalf("Invalid --%s: 0 is not allowed", name)
+		}
+		if id > math.MaxUint32 {
+			logger.Fatalf("Invalid --%s: %d exceeds maximum value %d", name, id, math.MaxUint32)
+		}
+		return uint32(id)
+	}
 	if c.IsSet("uid") {
 		uidVal := c.Uint64("uid")
-		if uidVal == 0 {
-			logger.Fatalf("Invalid --uid: 0 is not allowed")
-		}
-		if uidVal > math.MaxUint32 {
-			logger.Fatalf("Invalid --uid: %d exceeds maximum value %d", uidVal, math.MaxUint32)
-		}
-		uid = uint32(uidVal)
+		uid = validateID(uidVal, "uid")
 		quotaKey = fmt.Sprintf("uid:%d", uid)
 		quotaType = "user"
 		if c.IsSet("gid") {
@@ -160,13 +163,7 @@ func quota(c *cli.Context) error {
 		}
 	} else if c.IsSet("gid") {
 		gidVal := c.Uint64("gid")
-		if gidVal == 0 {
-			logger.Fatalf("Invalid --gid: 0 is not allowed")
-		}
-		if gidVal > math.MaxUint32 {
-			logger.Fatalf("Invalid --gid: %d exceeds maximum value %d", gidVal, math.MaxUint32)
-		}
-		gid = uint32(gidVal)
+		gid = validateID(gidVal, "gid")
 		quotaKey = fmt.Sprintf("gid:%d", gid)
 		quotaType = "group"
 		if c.IsSet("path") {
@@ -254,18 +251,12 @@ func quota(c *cli.Context) error {
 		}
 
 		var identifier string
-		if quotaType == "user" {
+		if strings.HasPrefix(p, "uid:") {
 			identifier = fmt.Sprintf("UID:%s", strings.TrimPrefix(p, "uid:"))
-		} else if quotaType == "group" {
+		} else if strings.HasPrefix(p, "gid:") {
 			identifier = fmt.Sprintf("GID:%s", strings.TrimPrefix(p, "gid:"))
 		} else {
-			if strings.HasPrefix(p, "uid:") {
-				identifier = fmt.Sprintf("UID:%s", strings.TrimPrefix(p, "uid:"))
-			} else if strings.HasPrefix(p, "gid:") {
-				identifier = fmt.Sprintf("GID:%s", strings.TrimPrefix(p, "gid:"))
-			} else {
-				identifier = p
-			}
+			identifier = p
 		}
 		result = append(result, []string{identifier, size, used, usedR, itotal, iused, iusedR})
 	}
