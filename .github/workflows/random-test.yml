@@ -33,25 +33,24 @@ jobs:
           meta: ["redis"]
           basedir: [ "random-test" ]
           subdir: [ "true" ]
-          usesdk: [ "false" ]
           removeOp: [ "rm"]
           zipf: [""]
-        #   include:
-        #     - basedir: "random-test"
-        #       meta: "mysql"
-        #       subdir: "false"
-        #       removeOp: "rmr"
-        #       zipf: "1.02"
-        #     - basedir: ""
-        #       meta: "tikv"
-        #       subdir: "false"
-        #       removeOp: "noOp"
-        #       zipf: "1.04"
-        #     - basedir: "random-test"
-        #       meta: "postgresql"
-        #       subdir: "false"
-        #       removeOp: "rm"
-        #       zipf: "1.06"
+          include:
+            - basedir: "random-test"
+              meta: "mysql"
+              subdir: "false"
+              removeOp: "rmr"
+              zipf: "1.02"
+            - basedir: ""
+              meta: "tikv"
+              subdir: "false"
+              removeOp: "noOp"
+              zipf: "1.04"
+            - basedir: "random-test"
+              meta: "postgresql"
+              subdir: "false"
+              removeOp: "rm"
+              zipf: "1.06"
 
     runs-on: ubuntu-latest
     steps:
@@ -127,7 +126,6 @@ jobs:
           echo "Removing test dir /tmp/jfs/${{matrix.basedir}} with ${{matrix.removeOp}}"
           if [[ "${{matrix.removeOp}}" == "rm" ]]; then
             sudo rm -rf /tmp/jfs/${{matrix.basedir}} || (find /tmp/jfs/${{matrix.basedir}} -exec stat -c '%n %i' {} + && exit 1)
-            sudo rm -rf /tmp/jfs1/${{matrix.basedir}} || (find /tmp/jfs1/${{matrix.basedir}} -exec stat -c '%n %i' {} + && exit 1)
           elif [[ "${{matrix.removeOp}}" == "rmr" ]]; then
             sudo ./juicefs rmr /tmp/jfs/${{matrix.basedir}} || (find /tmp/jfs/${{matrix.basedir}} -exec stat -c '%n %i' {} + && exit 1)
           elif [[ "${{matrix.removeOp}}" == "rmr-skip-trash" ]]; then
@@ -137,7 +135,6 @@ jobs:
           fi
           if [[ "${{matrix.removeOp}}" == "rm" || "${{matrix.removeOp}}" == "rmr" || "${{matrix.removeOp}}" == "rmr-skip-trash" ]]; then
             ls -ali /tmp/jfs/${{matrix.basedir}} && find /tmp/jfs/${{matrix.basedir}} -exec stat -c '%n %i' {} + && echo "Error: /tmp/jfs/${{matrix.basedir}} still exists after remove" && exit 1 || echo "/tmp/jfs/${{matrix.basedir}} removed successfully"
-            ls -ali /tmp/jfs1/${{matrix.basedir}} && find /tmp/jfs1/${{matrix.basedir}} -exec stat -c '%n %i' {} + &&  echo "Error: /tmp/jfs1/${{matrix.basedir}} still exists after remove" && exit 1 || echo "/tmp/jfs1/${{matrix.basedir}} removed successfully"
           fi
           
       - name: Check file-op.log
@@ -148,11 +145,14 @@ jobs:
           ls -l random-test-log/
           [[ -f random-test-log/file-op.log ]] && tail -n 500 random-test-log/file-op.log || true
 
-      - name: check client log
-        timeout-minutes: 1
-        if: always() && !github.event.pull_request.draft
-        run: | 
-          sudo deploy/docker/check_client_log.sh
+      - name: Check log
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /var/log/juicefs.log ]; then
+            tail -300 /var/log/juicefs.log
+            grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          fi
       
       - name: upload coverage report
         timeout-minutes: 5
