@@ -329,6 +329,8 @@ func TestBadgerDeleteTxnTooBig(t *testing.T) {
 	opt.Logger = nil
 	opt.MetricsEnabled = false
 	opt.MemTableSize = 1 << 20
+	opt.ValueThreshold = 1 << 10
+
 	db, err := badger.Open(opt)
 	if err != nil {
 		t.Fatal(err)
