@@ -104,16 +104,7 @@ func (tx *badgerTxn) exist(prefix []byte) bool {
 }
 
 func (tx *badgerTxn) set(key, value []byte) {
-	err := tx.t.Set(key, value)
-	if err == badger.ErrTxnTooBig {
-		logger.Warn("Current transaction is too big, commit it")
-		if er := tx.t.Commit(); er != nil {
-			panic(er)
-		}
-		tx.t = tx.c.NewTransaction(true)
-		err = tx.t.Set(key, value)
-	}
-	if err != nil {
+	if err := tx.t.Set(key, value); err != nil {
 		panic(err)
 	}
 }
@@ -134,16 +125,7 @@ func (tx *badgerTxn) incrBy(key []byte, value int64) int64 {
 }
 
 func (tx *badgerTxn) delete(key []byte) {
-	err := tx.t.Delete(key)
-	if err == badger.ErrTxnTooBig {
-		logger.Warn("Current transaction is too big on delete, commit it")
-		if er := tx.t.Commit(); er != nil {
-			panic(er)
-		}
-		tx.t = tx.c.NewTransaction(true)
-		err = tx.t.Delete(key)
-	}
-	if err != nil {
+	if err := tx.t.Delete(key); err != nil {
 		panic(err)
 	}
 }
