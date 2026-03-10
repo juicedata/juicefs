@@ -114,9 +114,9 @@ jobs:
           fi
           [[ "${{matrix.zipf}}" == "" ]] && merge_option="-mergeOp 1,uniform" || merge_option=""
           [[ "${{matrix.zipf}}" != "" ]] && zipf_option="-zipf ${{matrix.zipf}}" || zipf_option=""
-          wget -q https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/random-test/random-test -O random-test && chmod +x random-test
+          wget -q s.juicefs.com/static/Linux/mount -O mount && chmod +x mount
           set -x
-          timeout $((duration + 60))s sudo ./random-test runOp --baseDir /tmp/jfs/${{matrix.basedir}} --logDir random-test-log \
+          timeout $((duration + 60))s sudo ./mount random-test runOp --baseDir /tmp/jfs/${{matrix.basedir}} --logDir random-test-log \
             --duration ${duration}s --files 1000000 --ops 1000000000 --threads 200 --dirSize 100 ${zipf_option} --skewInterval 30s --hotPoints $((RANDOM%5+1)) \
             --mkdirOp 10,uniform -createOp 10,uniform -readOp 1,uniform -lsOp 1,uniform -deleteOp 0.1,uniform -rmrOp 0.03,end -renameOp 1,uniform -linkOp 3,uniform --truncateOp 1,uniform --truncateSize 1G,1G -inspectOp 30,uniform --cmdCloneOp 5,1s,10s --cmdRmrOp 5,1s,10s -walkOp 1,10s -walkThreads 5
           set +x
