@@ -27,7 +27,6 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/erikdubbelboer/gspt"
 	"github.com/google/uuid"
 	"github.com/grafana/pyroscope-go"
 	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
@@ -44,7 +43,7 @@ var debugAgentOnce sync.Once
 
 func Main(args []string) error {
 	// we have to call this because gspt removes all arguments
-	gspt.SetProcTitle(strings.Join(os.Args, " "))
+	setProcTitle(os.Args)
 	cli.VersionFlag = &cli.BoolFlag{
 		Name: "version", Aliases: []string{"V"},
 		Usage: "print version only",
@@ -381,5 +380,5 @@ func removePassword(uris ...string) {
 			}
 		}
 	}
-	gspt.SetProcTitle(strings.Join(args, " "))
+	setProcTitle(args)
 }
