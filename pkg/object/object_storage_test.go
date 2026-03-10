@@ -54,6 +54,7 @@ func get(s ObjectStorage, k string, off, limit int64, getters ...AttrGetter) (st
 	if err != nil {
 		return "", err
 	}
+	defer r.Close()
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return "", err
@@ -574,6 +575,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			if err != nil {
 				t.Fatalf("failed to get multipart upload file: %v", err)
 			}
+			defer r.Close()
 			cnt, err := io.ReadAll(r)
 			if err != nil {
 				t.Fatalf("failed to get multipart upload file: %v", err)
