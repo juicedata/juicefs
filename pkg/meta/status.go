@@ -107,11 +107,6 @@ func Status(ctx context.Context, m Meta, trash bool, sections *Sections) error {
 		stat.PendingDeletedSliceCount, stat.PendingDeletedSliceSize = pendingDeletedSlicesSpinner.Current()
 		stat.TrashFileCount, stat.TrashFileSize = trashFileSpinner.Current()
 		stat.PendingDeletedFileCount, stat.PendingDeletedFileSize = pendingDeletedFileSpinner.Current()
-
-		// Sync trash stats to database
-		if err = m.SyncVolumeStat(WrapContext(ctx)); err != nil {
-			logger.Warnf("sync volume stat: %s", err)
-		}
 	}
 
 	if sections != nil {

@@ -191,6 +191,13 @@ func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int
 	m.dirStats[ino] = stat
 }
 
+func (m *baseMeta) updateTrashStats(ctx Context, trash Ino, space, inodes int64) {
+	m.updateDirStat(ctx, trash, 0, space, inodes)
+	if trash != TrashInode {
+		m.updateDirStat(ctx, TrashInode, 0, space, inodes)
+	}
+}
+
 func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, space int64) {
 	if length == 0 && space == 0 {
 		return
@@ -267,14 +274,6 @@ func (m *baseMeta) doFlushStats() {
 	m.fsStatsLock.Lock()
 	m.en.doFlushStats()
 	m.fsStatsLock.Unlock()
-}
-
-func (m *baseMeta) syncVolumeStat(ctx Context) error {
-	return m.en.doSyncVolumeStat(ctx)
-}
-
-func (m *baseMeta) SyncVolumeStat(ctx Context) error {
-	return m.syncVolumeStat(ctx)
 }
 
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, uid, gid uint32, parents ...Ino) syscall.Errno {

@@ -1730,12 +1730,10 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 			m.fileDeleted(opened, parent.IsTrash(), inode, attr.Length)
 		}
 		if parent.IsTrash() {
-			m.updateDirStat(ctx, parent, 0, newSpace, newInode)
-			m.updateDirStat(ctx, TrashInode, 0, newSpace, newInode)
+			m.updateTrashStats(ctx, parent, newSpace, newInode)
 			m.updateStats(newSpace, newInode)
 		} else if trash > 0 {
-			m.updateDirStat(ctx, trash, 0, newSpace, newInode)
-			m.updateDirStat(ctx, TrashInode, 0, newSpace, newInode)
+			m.updateTrashStats(ctx, trash, newSpace, newInode)
 		} else {
 			m.updateStats(newSpace, newInode)
 		}
@@ -2123,8 +2121,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 			m.updateStats(batchFsDeltaSpace, batchFsDeltaInodes)
 		}
 		if batchTrashDeltaSpace != 0 || batchTrashDeltaInodes != 0 {
-			m.updateDirStat(ctx, parent, 0, batchTrashDeltaSpace, batchTrashDeltaInodes)
-			m.updateDirStat(ctx, TrashInode, 0, batchTrashDeltaSpace, batchTrashDeltaInodes)
+			m.updateTrashStats(ctx, parent, batchTrashDeltaSpace, batchTrashDeltaInodes)
 		}
 
 		totalLength += batchLength
@@ -2255,12 +2252,10 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 	}, m.inodeKey(parent), m.entryKey(parent))
 	if err == nil {
 		if parent.IsTrash() {
-			m.updateDirStat(ctx, parent, 0, -align4K(0), -1)
-			m.updateDirStat(ctx, TrashInode, 0, -align4K(0), -1)
+			m.updateTrashStats(ctx, parent, -align4K(0), -1)
 			m.updateStats(-align4K(0), -1)
 		} else if trash > 0 {
-			m.updateDirStat(ctx, trash, 0, align4K(0), 1)
-			m.updateDirStat(ctx, TrashInode, 0, align4K(0), 1)
+			m.updateTrashStats(ctx, trash, align4K(0), 1)
 		} else {
 			m.updateStats(-align4K(0), -1)
 		}
@@ -2597,16 +2592,14 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			} else {
 				m.updateStats(newSpace, newInode)
 			}
-			m.updateDirStat(ctx, parentSrc, 0, restoreSpace, restoreInodes)
-			m.updateDirStat(ctx, TrashInode, 0, restoreSpace, restoreInodes)
+			m.updateTrashStats(ctx, parentSrc, restoreSpace, restoreInodes)
 		} else if trash == 0 {
 			if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 				m.fileDeleted(opened, false, dino, tattr.Length)
 			}
 			m.updateStats(newSpace, newInode)
 		} else {
-			m.updateDirStat(ctx, trash, 0, newSpace, newInode)
-			m.updateDirStat(ctx, TrashInode, 0, newSpace, newInode)
+			m.updateTrashStats(ctx, trash, newSpace, newInode)
 		}
 	}
 	return errno(err)
@@ -3192,14 +3185,22 @@ func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno
 	if m.conf.ReadOnly {
 		return nil, syscall.EROFS
 	}
-	field := ino.String()
-	var stat *dirStat
-	var st syscall.Errno
 	if ino == TrashInode {
-		stat, st = m.calcTrashDirStat(ctx)
-	} else {
-		stat, st = m.calcDirStat(ctx, ino)
+		stat, st := m.calcTrashDirStat(ctx)
+		if st != 0 {
+			return nil, st
+		}
+		field := ino.String()
+		_, err := m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HSet(ctx, m.dirDataLengthKey(), field, stat.length)
+			pipe.HSet(ctx, m.dirUsedSpaceKey(), field, stat.space)
+			pipe.HSet(ctx, m.dirUsedInodesKey(), field, stat.inodes)
+			return nil
+		})
+		return stat, errno(err)
 	}
+	field := ino.String()
+	stat, st := m.calcDirStat(ctx, ino)
 	if st != 0 {
 		return nil, st
 	}
@@ -3220,27 +3221,6 @@ func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno
 		return err
 	}, m.inodeKey(ino))
 	return stat, errno(err)
-}
-
-func (m *redisMeta) calcTrashDirStat(ctx Context) (*dirStat, syscall.Errno) {
-	var totalSpace, totalInodes int64
-	var entries []*Entry
-	if st := m.en.doReaddir(ctx, TrashInode, 1, &entries, -1); st != 0 {
-		return nil, st
-	}
-
-	for _, entry := range entries {
-		stat, st := m.doGetDirStat(ctx, entry.Inode, false)
-		if st != 0 {
-			continue
-		}
-		if stat != nil {
-			totalSpace += stat.space
-			totalInodes += stat.inodes
-		}
-	}
-
-	return &dirStat{space: totalSpace, inodes: totalInodes}, 0
 }
 
 func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
@@ -3323,6 +3303,17 @@ func (m *redisMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, 
 		return m.doSyncDirStat(ctx, ino)
 	}
 	return nil, 0
+}
+
+func (m *redisMeta) calcTrashDirStat(ctx Context) (*dirStat, syscall.Errno) {
+	var totalSpace, totalInodes int64
+	if err := m.scanTrashEntry(ctx, func(_ Ino, size uint64) {
+		totalSpace += align4K(size)
+		totalInodes++
+	}); err != nil {
+		return nil, errno(err)
+	}
+	return &dirStat{space: totalSpace, inodes: totalInodes}, 0
 }
 
 // For now only deleted files

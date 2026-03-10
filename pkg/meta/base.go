@@ -1167,21 +1167,11 @@ func (m *baseMeta) GetTrashStats(ctx Context) (space int64, inodes int64) {
 
 func (m *baseMeta) syncTrashDirStat(ctx Context) error {
 	var totalSpace, totalInodes int64
-	var entries []*Entry
-	if st := m.en.doReaddir(ctx, TrashInode, 1, &entries, -1); st != 0 {
-		return errors.Wrap(st, "read trash")
-	}
-
-	for _, entry := range entries {
-		stat, st := m.GetDirStat(ctx, entry.Inode)
-		if st != 0 {
-			logger.Warnf("GetDirStat for subTrash %d: %s", entry.Inode, st)
-			continue
-		}
-		if stat != nil {
-			totalSpace += stat.space
-			totalInodes += stat.inodes
-		}
+	if err := m.scanTrashEntry(ctx, func(_ Ino, size uint64) {
+		totalSpace += align4K(size)
+		totalInodes++
+	}); err != nil {
+		return err
 	}
 
 	return m.en.doUpdateDirStat(ctx, map[Ino]dirStat{
@@ -2564,7 +2554,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 	}
 	wg.Wait()
 	if fpath == "/" && opt.Repair && opt.Recursive && opt.SyncDirStat {
-		if err := m.syncVolumeStat(ctx); err != nil {
+		if err := m.en.doSyncVolumeStat(ctx); err != nil {
 			logger.Errorf("Sync used space: %s", err)
 			hasError = true
 		}
@@ -2901,7 +2891,6 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 		attr := Attr{Typ: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: TrashInode, Full: true}
 		st = m.en.doMknod(Background(), TrashInode, name, TypeDirectory, 0555, 0, "", trash, &attr)
 		m.en.updateStats(align4K(0), 1)
-		// Initialize dirstat for the new subTrash (empty directory)
 		m.updateDirStat(Background(), *trash, 0, 0, 0)
 	}
 
