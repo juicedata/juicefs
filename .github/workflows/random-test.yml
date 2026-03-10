@@ -47,7 +47,7 @@ jobs:
               removeOp: "noOp"
               zipf: "1.04"
             - basedir: "random-test"
-              meta: "postgresql"
+              meta: "postgres"
               subdir: "false"
               removeOp: "rm"
               zipf: "1.06"
