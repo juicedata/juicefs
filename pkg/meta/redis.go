@@ -4227,6 +4227,9 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 				}
 
 				maxSpace, maxInodes := m.parseQuota(val)
+				if maxSpace < 0 && maxInodes < 0 {
+					continue
+				}
 				usedSpace, err := m.rdb.HGet(ctx, config.usedSpaceKey, key).Int64()
 				if err != nil && err != redis.Nil {
 					return err

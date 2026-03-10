@@ -3208,6 +3208,9 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 					id = binary.BigEndian.Uint64([]byte(k[2:])) // skip prefix
 				}
 				quota := m.parseQuota(v)
+				if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
+					continue
+				}
 				quotas[id] = quota
 			}
 		}
