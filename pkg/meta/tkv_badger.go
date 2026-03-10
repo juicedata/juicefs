@@ -58,7 +58,11 @@ func (tx *badgerTxn) gets(keys ...[]byte) [][]byte {
 
 func (tx *badgerTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
 	var prefix bool
-	var options = badger.IteratorOptions{}
+	options := badger.IteratorOptions{}
+	if keysOnly {
+		options.PrefetchValues = false
+		options.PrefetchSize = 0
+	}
 	if bytes.Equal(nextKey(begin), end) {
 		prefix = true
 		options.Prefix = begin
@@ -75,9 +79,13 @@ func (tx *badgerTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []
 		if !prefix && bytes.Compare(item.Key(), end) >= 0 {
 			break
 		}
-		value, err := item.ValueCopy(nil)
-		if err != nil {
-			panic(err)
+		var value []byte
+		if !keysOnly {
+			var err error
+			value, err = item.ValueCopy(nil)
+			if err != nil {
+				panic(err)
+			}
 		}
 		if !handler(item.KeyCopy(nil), value) {
 			break
@@ -126,7 +134,16 @@ func (tx *badgerTxn) incrBy(key []byte, value int64) int64 {
 }
 
 func (tx *badgerTxn) delete(key []byte) {
-	if err := tx.t.Delete(key); err != nil {
+	err := tx.t.Delete(key)
+	if err == badger.ErrTxnTooBig {
+		logger.Warn("Current transaction is too big on delete, commit it")
+		if er := tx.t.Commit(); er != nil {
+			panic(er)
+		}
+		tx.t = tx.c.NewTransaction(true)
+		err = tx.t.Delete(key)
+	}
+	if err != nil {
 		panic(err)
 	}
 }
@@ -134,6 +151,7 @@ func (tx *badgerTxn) delete(key []byte) {
 type badgerClient struct {
 	client *badger.DB
 	ticker *time.Ticker
+	done chan struct{}
 }
 
 func (c *badgerClient) name() string {
@@ -153,8 +171,8 @@ func (c *badgerClient) simpleTxn(ctx context.Context, f func(*kvTxn) error, retr
 }
 
 func (c *badgerClient) txn(ctx context.Context, f func(*kvTxn) error, retry int) (err error) {
-	t := c.client.NewTransaction(true)
-	defer t.Discard()
+	tx := &badgerTxn{c.client.NewTransaction(true), c.client}
+	defer func() { tx.t.Discard() }()
 	defer func() {
 		if r := recover(); r != nil {
 			fe, ok := r.(error)
@@ -165,12 +183,11 @@ func (c *badgerClient) txn(ctx context.Context, f func(*kvTxn) error, retry int)
 			}
 		}
 	}()
-	tx := &badgerTxn{t, c.client}
 	err = f(&kvTxn{tx, retry})
 	if err != nil {
 		return err
 	}
-	// tx could be committed
+	// tx.t may differ from the original
 	return tx.t.Commit()
 }
 
@@ -189,7 +206,7 @@ func (c *badgerClient) scan(prefix []byte, handler func(key []byte, value []byte
 		if err != nil {
 			return err
 		}
-		if !handler(it.Item().Key(), value) {
+		if !handler(item.KeyCopy(nil), value) {
 			break
 		}
 	}
@@ -199,12 +216,12 @@ func (c *badgerClient) scan(prefix []byte, handler func(key []byte, value []byte
 func (c *badgerClient) reset(prefix []byte) error {
 	if prefix == nil {
 		return c.client.DropAll()
-	} else {
-		return c.client.DropPrefix(prefix)
 	}
+	return c.client.DropPrefix(prefix)
 }
 
 func (c *badgerClient) close() error {
+	close(c.done)
 	c.ticker.Stop()
 	return c.client.Close()
 }
@@ -220,13 +237,19 @@ func newBadgerClient(addr string) (tkvClient, error) {
 		return nil, err
 	}
 	ticker := time.NewTicker(time.Hour)
+	done := make(chan struct{})
 	go func() {
-		for range ticker.C {
-			for client.RunValueLogGC(0.7) == nil {
+		for {
+			select {
+			case <-ticker.C:
+				for client.RunValueLogGC(0.7) == nil {
+				}
+			case <-done:
+				return
 			}
 		}
 	}()
-	return &badgerClient{client, ticker}, err
+	return &badgerClient{client, ticker, done}, nil
 }
 
 func init() {
