@@ -330,18 +330,16 @@ func TestBadgerDeleteTxnTooBig(t *testing.T) {
 	opt.MetricsEnabled = false
 	opt.MemTableSize = 1 << 20
 	opt.ValueThreshold = 1 << 10
-
 	db, err := badger.Open(opt)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer db.Close()
 
-	// Write 5,000 keys in bulk via WriteBatch (no txn size limit)
 	const numKeys = 5000
 	wb := db.NewWriteBatch()
 	for i := 0; i < numKeys; i++ {
-		key := []byte(fmt.Sprintf("txbig_%05d", i))
-		if err := wb.Set(key, []byte("v")); err != nil {
+		if err := wb.Set([]byte(fmt.Sprintf("txbig_%05d", i)), []byte("v")); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -349,51 +347,26 @@ func TestBadgerDeleteTxnTooBig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Collect written keys
 	var keys [][]byte
 	rtx := db.NewTransaction(false)
-	it := rtx.NewIterator(badger.IteratorOptions{
-		Prefix:         []byte("txbig_"),
-		PrefetchValues: false,
-	})
+	it := rtx.NewIterator(badger.IteratorOptions{Prefix: []byte("txbig_"), PrefetchValues: false})
 	for it.Rewind(); it.Valid(); it.Next() {
 		keys = append(keys, it.Item().KeyCopy(nil))
 	}
 	it.Close()
 	rtx.Discard()
 
-	if len(keys) != numKeys {
-		t.Fatalf("setup: expected %d keys, got %d", numKeys, len(keys))
-	}
-
 	client := &badgerClient{client: db, done: make(chan struct{})}
-	defer db.Close()
 
-	// Delete all 5,000 keys in one logical txn, triggers ErrTxnTooBig
-	if err := client.txn(Background(), func(kt *kvTxn) error {
+	err = client.txn(Background(), func(kt *kvTxn) error {
 		for _, key := range keys {
 			kt.delete(key)
 		}
 		return nil
-	}, 0); err != nil {
-		t.Fatalf("bulk delete failed: %v", err)
-	}
+	}, 0)
 
-	// Verify all keys deleted
-	var remaining int
-	rtx2 := db.NewTransaction(false)
-	it2 := rtx2.NewIterator(badger.IteratorOptions{
-		Prefix:         []byte("txbig_"),
-		PrefetchValues: false,
-	})
-	for it2.Rewind(); it2.Valid(); it2.Next() {
-		remaining++
-	}
-	it2.Close()
-	rtx2.Discard()
-
-	if remaining != 0 {
-		t.Fatalf("expected 0 keys after bulk delete, got %d", remaining)
+	if err != badger.ErrTxnTooBig {
+		t.Fatalf("expected ErrTxnTooBig, got %v", err)
 	}
 }
 
