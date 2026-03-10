@@ -1,0 +1,13 @@
+format和挂载命令：
+./juicefs format sqlite3://myjfs.db myjfs
+./juicefs mount sqlite3://myjfs.db /tmp/jfs/ -d
+
+复现步骤：
+./juicefs quota set sqlite3://myjfs.db --uid 1000 --capacity 1 --inodes 3
+mkdir /tmp/jfs/test
+echo 1 > /tmp/jfs/test/1
+echo 1 > /tmp/jfs/test/2
+chown 1000:1000 /tmp/jfs/test/ -R
+./juicefs quota list sqlite3://myjfs.db 
+./juicefs quota set sqlite3://myjfs.db  --gid 1000 --capacity 1 --inodes 3
+./juicefs quota list sqlite3://myjfs.db 
