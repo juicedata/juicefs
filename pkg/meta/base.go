@@ -211,16 +211,16 @@ func appendUGQuotaDelta(userGroupQuotas *[]userGroupQuotaDelta, parent Ino, uid,
 	var entrySpace int64
 	if nlink == 0 {
 		if typ == TypeFile {
-			entrySpace = -align4K(length)
+			entrySpace = align4K(length)
 		} else {
-			entrySpace = -align4K(0)
+			entrySpace = align4K(0)
 		}
 	}
 	*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
 		Uid:    uid,
 		Gid:    gid,
 		Space:  entrySpace,
-		Inodes: -1,
+		Inodes: 1,
 	})
 }
 
@@ -346,6 +346,9 @@ type baseMeta struct {
 	groupQuotaMaxInodesG  *prometheus.GaugeVec
 	groupQuotaUsedSpaceG  *prometheus.GaugeVec
 	groupQuotaUsedInodesG *prometheus.GaugeVec
+
+	trashInodesG prometheus.Gauge
+	trashSpaceG  prometheus.Gauge
 
 	bgjobDels     *prometheus.CounterVec
 	bgjobDuration *prometheus.HistogramVec
@@ -509,6 +512,15 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			[]string{"gid"},
 		),
 
+		trashInodesG: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "trash_inodes",
+			Help: "Total number of inodes in trash.",
+		}),
+		trashSpaceG: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "trash_space_bytes",
+			Help: "Total space used by trash in bytes.",
+		}),
+
 		bgjobDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "juicefs_bgjob_duration_seconds",
@@ -556,6 +568,8 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(m.bgjobDuration)
 	reg.MustRegister(m.bgjobDels)
 	reg.MustRegister(m.subdirInfoG)
+	reg.MustRegister(m.trashInodesG)
+	reg.MustRegister(m.trashSpaceG)
 
 	// Initialize subdir info metric
 	subdir := m.conf.Subdir
@@ -577,6 +591,10 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 				m.totalSpaceG.Set(float64(totalSpace))
 				m.totalInodesG.Set(float64(iused + iavail))
 			}
+			var trashSpace, trashInodes int64
+			trashSpace, trashInodes = m.GetTrashStats(Background())
+			m.trashSpaceG.Set(float64(trashSpace))
+			m.trashInodesG.Set(float64(trashInodes))
 			m.updateQuotaMetrics()
 			utils.SleepWithJitter(time.Second * 10)
 		}
@@ -1141,6 +1159,32 @@ func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail
 		}
 	}
 	return 0
+}
+
+func (m *baseMeta) GetTrashStats(ctx Context) (space int64, inodes int64) {
+	stat, st := m.GetDirStat(ctx, TrashInode)
+	if st != 0 {
+		logger.Warnf("GetDirStat for TrashInode: %s", st)
+		return 0, 0
+	}
+	if stat == nil {
+		return 0, 0
+	}
+	return stat.space, stat.inodes
+}
+
+func (m *baseMeta) syncTrashDirStat(ctx Context) error {
+	var totalSpace, totalInodes int64
+	if err := m.scanTrashEntry(ctx, func(_ Ino, size uint64) {
+		totalSpace += align4K(size)
+		totalInodes++
+	}); err != nil {
+		return err
+	}
+
+	return m.en.doUpdateDirStat(ctx, map[Ino]dirStat{
+		TrashInode: {space: totalSpace, inodes: totalInodes},
+	})
 }
 
 func (m *baseMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
@@ -1723,14 +1767,16 @@ func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count 
 	var inodes int64
 	userGroupQuotas := make([]userGroupQuotaDelta, 0, len(entries))
 	st := m.en.doBatchUnlink(ctx, parent, entries, &length, &space, &inodes, &userGroupQuotas, skipCheckTrash)
-	if st == 0 {
-		m.updateDirStat(ctx, parent, length, space, inodes)
+	if st == 0 && (length != 0 || space != 0 || inodes != 0 || len(userGroupQuotas) > 0) {
+		m.updateDirStat(ctx, parent, -length, -space, -inodes)
 		if !parent.IsTrash() {
-			m.updateDirQuota(ctx, parent, space, inodes)
+			m.updateDirQuota(ctx, parent, -space, -inodes)
 			for _, quota := range userGroupQuotas {
-				m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, quota.Space, quota.Inodes)
+				m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, -quota.Space, -quota.Inodes)
 			}
 		}
+	}
+	if st == 0 {
 		if count != nil && len(entries) > 0 {
 			atomic.AddUint64(count, uint64(len(entries)))
 		}
@@ -2535,7 +2581,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 	}
 	wg.Wait()
 	if fpath == "/" && opt.Repair && opt.Recursive && opt.SyncDirStat {
-		if err := m.syncVolumeStat(ctx); err != nil {
+		if err := m.en.doSyncVolumeStat(ctx); err != nil {
 			logger.Errorf("Sync used space: %s", err)
 			hasError = true
 		}
@@ -2872,6 +2918,7 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 		attr := Attr{Typ: TypeDirectory, Nlink: 2, Length: 4 << 10, Parent: TrashInode, Full: true}
 		st = m.en.doMknod(Background(), TrashInode, name, TypeDirectory, 0555, 0, "", trash, &attr)
 		m.en.updateStats(align4K(0), 1)
+		m.updateDirStat(Background(), *trash, 0, 0, 0)
 	}
 
 	m.Lock()
