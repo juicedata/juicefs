@@ -425,6 +425,21 @@ set_quota_by_username()
     ./juicefs quota set $META_URL --uid "$uid" --capacity "$capacity" --inodes "$inodes"
 }
 
+get_quota_table_field()
+{
+    logfile=$1
+    identifier=$2
+    column=$3
+    awk -F'|' -v id="$identifier" -v col="$column" '
+        index($0, id) > 0 {
+            value=$col
+            gsub(/[[:space:]]/, "", value)
+            print value
+            exit
+        }
+    ' "$logfile"
+}
+
 test_user_group_quota_set_get_list_delete(){
     prepare_ug_quota_test
     resolve_test_users || return 0
@@ -492,6 +507,65 @@ test_gid_quota_check_on_write(){
     grep -i "Disk quota exceeded" error.log || (echo "gid inode quota check failed" && exit 1)
 }
 
+test_gid_quota_usage_after_chown_then_set(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+
+    mkdir -p /jfs/gid_usage
+    chmod 777 /jfs/gid_usage
+
+    ./juicefs quota set $META_URL --uid "$TEST_UID_1" --capacity 1 --inodes 20
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    echo 1 > /jfs/gid_usage/file1
+    echo 1 > /jfs/gid_usage/file2
+    chown -R "$TEST_UID_1:$TEST_GID_1" /jfs/gid_usage
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+
+    ./juicefs quota list $META_URL --uid "$TEST_UID_1" 2>&1 | tee uid_usage_before_gid_set.log
+    uid_used=$(get_quota_table_field uid_usage_before_gid_set.log "UID:$TEST_UID_1" 4)
+    uid_iused=$(get_quota_table_field uid_usage_before_gid_set.log "UID:$TEST_UID_1" 7)
+    [[ -z "$uid_iused" ]] && echo "uid iused should not be empty" && exit 1 || true
+    [[ "$uid_iused" == "0" ]] && echo "uid iused should be greater than 0 after chown" && exit 1 || true
+
+    ./juicefs quota set $META_URL --gid "$TEST_GID_1" --capacity 1 --inodes 20
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    ./juicefs quota list $META_URL --gid "$TEST_GID_1" 2>&1 | tee gid_usage_after_set.log
+    gid_used=$(get_quota_table_field gid_usage_after_set.log "GID:$TEST_GID_1" 4)
+    gid_iused=$(get_quota_table_field gid_usage_after_set.log "GID:$TEST_GID_1" 7)
+    [[ -z "$gid_iused" ]] && echo "gid iused should not be empty" && exit 1 || true
+    [[ "$gid_iused" == "0" ]] && echo "gid iused should be greater than 0 after setting gid quota" && exit 1 || true
+    [[ "$gid_iused" != "$uid_iused" ]] && echo "gid iused should match uid iused after chown before gid set" && exit 1 || true
+    [[ "$gid_used" != "$uid_used" ]] && echo "gid used space should match uid used space after chown before gid set" && exit 1 || true
+}
+
+test_gid_quota_transfer_by_chgrp_only(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+
+    mkdir -p /jfs/gid_transfer
+    chmod 777 /jfs/gid_transfer
+
+    ./juicefs quota set $META_URL --gid "$TEST_GID_1" --inodes 1
+    ./juicefs quota set $META_URL --gid "$TEST_GID_2" --inodes 1
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/gid_transfer/file1"
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/gid_transfer/file2" 2>error.log && echo "gid1 should exceed inode quota before chgrp" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "gid1 pre-chgrp quota check failed" && exit 1)
+
+    chown "$TEST_UID_1:$TEST_GID_2" /jfs/gid_transfer/file1
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/gid_transfer/file2"
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+
+    run_as_user_cmd "$TEST_USER_2" "touch /jfs/gid_transfer/file3" 2>error.log && echo "gid2 should exceed inode quota after chgrp transfer" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "gid2 post-chgrp quota check failed" && exit 1)
+}
+
 test_chown_transfer_user_group_quota(){
     prepare_ug_quota_test
     resolve_test_users || return 0
@@ -516,6 +590,47 @@ test_chown_transfer_user_group_quota(){
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     run_as_user_cmd "$TEST_USER_2" "touch /jfs/chownq/dst_file" 2>error.log && echo "user2 should exceed inode quota after chown transfer" && exit 1 || true
     grep -i "Disk quota exceeded" error.log || (echo "user2 post-chown quota check failed" && exit 1)
+}
+
+test_uid_gid_quota_same_file_interaction(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+
+    mkdir -p /jfs/uid_gid_mix
+    chmod 777 /jfs/uid_gid_mix
+
+    ./juicefs quota set $META_URL --uid "$TEST_UID_1" --capacity 1 --inodes 2
+    ./juicefs quota set $META_URL --gid "$TEST_GID_1" --capacity 1 --inodes 3
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/uid_gid_mix/f1"
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/uid_gid_mix/f2"
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+
+    ./juicefs quota list $META_URL --uid "$TEST_UID_1" 2>&1 | tee uid_gid_uid_before.log
+    ./juicefs quota list $META_URL --gid "$TEST_GID_1" 2>&1 | tee uid_gid_gid_before.log
+    uid_iused=$(get_quota_table_field uid_gid_uid_before.log "UID:$TEST_UID_1" 7)
+    gid_iused=$(get_quota_table_field uid_gid_gid_before.log "GID:$TEST_GID_1" 7)
+    [[ "$uid_iused" != "2" ]] && echo "uid iused should be 2 after creating two files" && exit 1 || true
+    [[ "$gid_iused" != "2" ]] && echo "gid iused should track same files and be 2" && exit 1 || true
+
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/uid_gid_mix/f3" 2>error.log && echo "third file should fail due to tighter uid inode quota" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "uid+gid mixed quota check failed" && exit 1)
+
+    ./juicefs quota set $META_URL --uid "$TEST_UID_1" --inodes 3
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/uid_gid_mix/f3"
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+
+    ./juicefs quota list $META_URL --uid "$TEST_UID_1" 2>&1 | tee uid_gid_uid_after.log
+    ./juicefs quota list $META_URL --gid "$TEST_GID_1" 2>&1 | tee uid_gid_gid_after.log
+    uid_iused=$(get_quota_table_field uid_gid_uid_after.log "UID:$TEST_UID_1" 7)
+    gid_iused=$(get_quota_table_field uid_gid_gid_after.log "GID:$TEST_GID_1" 7)
+    [[ "$uid_iused" != "3" ]] && echo "uid iused should become 3 after raising uid quota" && exit 1 || true
+    [[ "$gid_iused" != "3" ]] && echo "gid iused should remain in sync and become 3" && exit 1 || true
+
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/uid_gid_mix/f4" 2>error.log && echo "fourth file should fail due to gid inode quota" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "gid limit should block the fourth file" && exit 1)
 }
 
 test_set_quota_by_username(){
@@ -555,6 +670,31 @@ test_quota_list_uid_filter_regression(){
     [[ "$uid_rows" -ne 1 ]] && echo "uid filter should only return one UID row" && exit 1 || true
     inodes_value=$(grep "UID:$TEST_UID_2" uid_filter_2.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
     [[ "$inodes_value" != "7" ]] && echo "uid filter should return uid2 inodes=7" && exit 1 || true
+}
+
+test_quota_list_gid_filter_regression(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+
+    ./juicefs quota set $META_URL --gid "$TEST_GID_1" --capacity 1 --inodes 3
+    ./juicefs quota set $META_URL --gid "$TEST_GID_2" --capacity 1 --inodes 7
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    ./juicefs quota list $META_URL --gid "$TEST_GID_1" 2>&1 | tee gid_filter_1.log
+    grep "GID:$TEST_GID_1" gid_filter_1.log || (echo "gid filter should show requested gid quota" && exit 1)
+    grep "GID:$TEST_GID_2" gid_filter_1.log && echo "gid filter should not include other gid quota" && exit 1 || true
+    gid_rows=$(grep -c "GID:" gid_filter_1.log || true)
+    [[ "$gid_rows" -ne 1 ]] && echo "gid filter should only return one GID row" && exit 1 || true
+    inodes_value=$(grep "GID:$TEST_GID_1" gid_filter_1.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
+    [[ "$inodes_value" != "3" ]] && echo "gid filter should return gid1 inodes=3" && exit 1 || true
+
+    ./juicefs quota list $META_URL --gid "$TEST_GID_2" 2>&1 | tee gid_filter_2.log
+    grep "GID:$TEST_GID_2" gid_filter_2.log || (echo "gid filter should show requested gid quota" && exit 1)
+    grep "GID:$TEST_GID_1" gid_filter_2.log && echo "gid filter should not include other gid quota" && exit 1 || true
+    gid_rows=$(grep -c "GID:" gid_filter_2.log || true)
+    [[ "$gid_rows" -ne 1 ]] && echo "gid filter should only return one GID row" && exit 1 || true
+    inodes_value=$(grep "GID:$TEST_GID_2" gid_filter_2.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
+    [[ "$inodes_value" != "7" ]] && echo "gid filter should return gid2 inodes=7" && exit 1 || true
 }
 
 source .github/scripts/common/run_test.sh && run_test $@
