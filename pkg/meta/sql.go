@@ -4039,15 +4039,9 @@ func updateQuotaFields(quota *Quota, exist bool, maxSpace, maxInodes *int64, use
 	if quota.UsedSpace >= 0 {
 		*usedSpace = quota.UsedSpace
 		updateColumns = append(updateColumns, "used_space")
-	} else if !exist {
-		*usedSpace = 0
-		updateColumns = append(updateColumns, "used_space")
 	}
 	if quota.UsedInodes >= 0 {
 		*usedInodes = quota.UsedInodes
-		updateColumns = append(updateColumns, "used_inodes")
-	} else if !exist {
-		*usedInodes = 0
 		updateColumns = append(updateColumns, "used_inodes")
 	}
 

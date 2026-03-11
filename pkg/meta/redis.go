@@ -4137,6 +4137,8 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 	err = m.txn(ctx, func(tx *redis.Tx) error {
 		origin := &Quota{MaxSpace: -1, MaxInodes: -1}
 		field := strconv.FormatUint(key, 10)
+		usedSpace, usedInodes := int64(0), int64(0)
+		hasUsedSpace, hasUsedInodes := false, false
 
 		buf, e := tx.HGet(ctx, config.quotaKey, field).Bytes()
 		if e == nil {
@@ -4145,6 +4147,18 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 		} else if e == redis.Nil {
 			created = true
 		} else {
+			return e
+		}
+		if v, e := tx.HGet(ctx, config.usedSpaceKey, field).Int64(); e == nil {
+			usedSpace = v
+			hasUsedSpace = true
+		} else if e != redis.Nil {
+			return e
+		}
+		if v, e := tx.HGet(ctx, config.usedInodesKey, field).Int64(); e == nil {
+			usedInodes = v
+			hasUsedInodes = true
+		} else if e != redis.Nil {
 			return e
 		}
 		if quota.MaxSpace >= 0 {
@@ -4159,12 +4173,20 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			if quota.UsedSpace >= 0 {
 				pipe.HSet(ctx, config.usedSpaceKey, field, quota.UsedSpace)
 			} else if created {
-				pipe.HSet(ctx, config.usedSpaceKey, field, 0)
+				if hasUsedSpace {
+					pipe.HSet(ctx, config.usedSpaceKey, field, usedSpace)
+				} else {
+					pipe.HSet(ctx, config.usedSpaceKey, field, 0)
+				}
 			}
 			if quota.UsedInodes >= 0 {
 				pipe.HSet(ctx, config.usedInodesKey, field, quota.UsedInodes)
 			} else if created {
-				pipe.HSet(ctx, config.usedInodesKey, field, 0)
+				if hasUsedInodes {
+					pipe.HSet(ctx, config.usedInodesKey, field, usedInodes)
+				} else {
+					pipe.HSet(ctx, config.usedInodesKey, field, 0)
+				}
 			}
 			return nil
 		})
