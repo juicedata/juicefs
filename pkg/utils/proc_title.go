@@ -1,5 +1,5 @@
-//go:build nogspt
-// +build nogspt
+//go:build !nogspt
+// +build !nogspt
 
 /*
  * JuiceFS, Copyright 2026 Juicedata, Inc.
@@ -17,9 +17,14 @@
  * limitations under the License.
  */
 
-package cmd
+package utils
 
-func setProcTitle(args []string) {
-	// noop: gspt is excluded from this build to prevent argv modification
-	// when libjfs.so is loaded as a shared library (e.g. by the Java SDK).
+import (
+	"strings"
+
+	"github.com/erikdubbelboer/gspt"
+)
+
+func SetProcTitle(args []string) {
+	gspt.SetProcTitle(strings.Join(args, " "))
 }
