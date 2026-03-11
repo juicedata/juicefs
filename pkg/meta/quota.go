@@ -884,9 +884,15 @@ func (m *baseMeta) handleQuotaList(ctx Context, qtype uint32, key uint64, quotas
 		}
 	}
 	for uid, quota := range filterOrAll(userQuotas, UserQuotaType) {
+		if quota.MaxInodes == -1 && quota.MaxSpace == -1 {
+			continue
+		}
 		quotas[fmt.Sprintf("uid:%d", uid)] = quota
 	}
 	for gid, quota := range filterOrAll(groupQuotas, GroupQuotaType) {
+		if quota.MaxInodes == -1 && quota.MaxSpace == -1 {
+			continue
+		}
 		quotas[fmt.Sprintf("gid:%d", gid)] = quota
 	}
 

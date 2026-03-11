@@ -4145,7 +4145,7 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 
 	// Load user and group quotas
 	for _, q := range userGroupQuotasList {
-		if q.MaxSpace < 0 && q.MaxInodes < 0 {
+		if q.MaxSpace < 0 && q.MaxInodes < 0 && q.UsedSpace == 0 && q.UsedInodes == 0 {
 			continue
 		}
 		quota := &Quota{
@@ -4178,10 +4178,25 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 					return err
 				}
 			} else {
-				_, err := s.Exec(m.sqlConv("update user_group_quota set used_space=used_space+?, used_inodes=used_inodes+? where qtype=? and qkey=?"),
-					q.quota.newSpace, q.quota.newInodes, q.qtype, q.qkey)
+				origin := &userGroupQuota{Qtype: q.qtype, Qkey: q.qkey}
+				exist, err := s.ForUpdate().Get(origin)
 				if err != nil {
 					return err
+				}
+				if exist {
+					origin.UsedSpace += q.quota.newSpace
+					origin.UsedInodes += q.quota.newInodes
+					if _, err = s.Cols("used_space", "used_inodes").Update(origin, &userGroupQuota{Qtype: q.qtype, Qkey: q.qkey}); err != nil {
+						return err
+					}
+				} else {
+					origin.MaxSpace = -1
+					origin.MaxInodes = -1
+					origin.UsedSpace = q.quota.newSpace
+					origin.UsedInodes = q.quota.newInodes
+					if err = mustInsert(s, origin); err != nil {
+						return err
+					}
 				}
 			}
 		}

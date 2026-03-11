@@ -4147,7 +4147,6 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 		} else {
 			return e
 		}
-
 		if quota.MaxSpace >= 0 {
 			origin.MaxSpace = quota.MaxSpace
 		}
@@ -4160,12 +4159,12 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			if quota.UsedSpace >= 0 {
 				pipe.HSet(ctx, config.usedSpaceKey, field, quota.UsedSpace)
 			} else if created {
-				pipe.HSetNX(ctx, config.usedSpaceKey, field, int64(0))
+				pipe.HSet(ctx, config.usedSpaceKey, field, 0)
 			}
 			if quota.UsedInodes >= 0 {
 				pipe.HSet(ctx, config.usedInodesKey, field, quota.UsedInodes)
 			} else if created {
-				pipe.HSetNX(ctx, config.usedInodesKey, field, int64(0))
+				pipe.HSet(ctx, config.usedInodesKey, field, 0)
 			}
 			return nil
 		})
@@ -4227,9 +4226,6 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 				}
 
 				maxSpace, maxInodes := m.parseQuota(val)
-				if maxSpace < 0 && maxInodes < 0 {
-					continue
-				}
 				usedSpace, err := m.rdb.HGet(ctx, config.usedSpaceKey, key).Int64()
 				if err != nil && err != redis.Nil {
 					return err
@@ -4237,6 +4233,9 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 				usedInodes, err := m.rdb.HGet(ctx, config.usedInodesKey, key).Int64()
 				if err != nil && err != redis.Nil {
 					return err
+				}
+				if maxSpace < 0 && maxInodes < 0 && usedSpace == 0 && usedInodes == 0 {
+					continue
 				}
 
 				quotas[id] = &Quota{
@@ -4265,6 +4264,7 @@ func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 			}
 
 			field := strconv.FormatUint(q.qkey, 10)
+			pipe.HSetNX(ctx, config.quotaKey, field, m.packQuota(-1, -1))
 			pipe.HIncrBy(ctx, config.usedSpaceKey, field, q.quota.newSpace)
 			pipe.HIncrBy(ctx, config.usedInodesKey, field, q.quota.newInodes)
 			if q.qtype == GroupQuotaType {
