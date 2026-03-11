@@ -74,11 +74,38 @@ func (c *Config) SelfCheck() {
 	}
 }
 
+type ScEntry struct {
+	Id    uint8
+	Value string
+	Name  string
+}
+
+func (sc ScType) GetById(id uint8) (ScEntry, bool) {
+	for _, attr := range sc {
+		if attr.Id == id {
+			return attr, true
+		}
+	}
+	return ScEntry{}, false
+}
+
+func (sc ScType) GetByName(str string) (ScEntry, bool) {
+	for _, attr := range sc {
+		if attr.Name == str {
+			return attr, true
+		}
+	}
+	return ScEntry{}, false
+}
+
+type ScType map[string]ScEntry
+
 type Format struct {
 	Name             string
 	UUID             string
 	Storage          string
 	StorageClass     string `json:",omitempty"`
+	ScInfo           ScType `json:",omitempty"`
 	Bucket           string
 	AccessKey        string `json:",omitempty"`
 	SecretKey        string `json:",omitempty"`

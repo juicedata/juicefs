@@ -697,6 +697,14 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 			return nil, fmt.Errorf("check version: %s", err)
 		}
 	}
+	if format.ScInfo == nil {
+		format.ScInfo = make(map[string]ScEntry)
+	}
+	format.ScInfo["default"] = ScEntry{
+		Id:    0,
+		Value: "default",
+		Name:  "default",
+	}
 	m.Lock()
 	m.fmt = format
 	m.Unlock()
@@ -1282,7 +1290,24 @@ func clearSUGID(ctx Context, cur *Attr, set *Attr) {
 	}
 }
 
-func (r *baseMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
+func (r *baseMeta) Resolve(ctx Context, parent Ino, dpath string, inode *Ino, attr *Attr, metaResolve bool) syscall.Errno {
+	if metaResolve {
+		*inode = RootInode
+		for dpath != "" {
+			ps := strings.SplitN(dpath, "/", 2)
+			if ps[0] != "" {
+				r := r.en.doLookup(ctx, *inode, ps[0], inode, attr)
+				if r != 0 {
+					return r
+				}
+			}
+			if len(ps) == 1 {
+				break
+			}
+			dpath = ps[1]
+		}
+		return 0
+	}
 	return syscall.ENOTSUP
 }
 
@@ -3496,6 +3521,10 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 	}
 	if set&SetAttrFlag != 0 {
 		dirtyAttr.Flags = attr.Flags
+		changed = true
+	}
+	if set&SetAttrTier != 0 {
+		dirtyAttr.Tier = attr.Tier
 		changed = true
 	}
 	if !changed {

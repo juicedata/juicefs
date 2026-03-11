@@ -29,14 +29,16 @@ type Object interface {
 	IsDir() bool
 	IsSymlink() bool
 	StorageClass() string
+	Status() string
 }
 
 type obj struct {
-	key   string
-	size  int64
-	mtime time.Time
-	isDir bool
-	sc    string
+	key    string
+	size   int64
+	mtime  time.Time
+	isDir  bool
+	sc     string
+	status string
 }
 
 func (o *obj) Key() string          { return o.key }
@@ -45,6 +47,7 @@ func (o *obj) Mtime() time.Time     { return o.mtime }
 func (o *obj) IsDir() bool          { return o.isDir }
 func (o *obj) IsSymlink() bool      { return false }
 func (o *obj) StorageClass() string { return o.sc }
+func (o *obj) Status() string       { return o.status }
 
 type MultipartUpload struct {
 	MinPartSize int
@@ -109,6 +112,8 @@ type ObjectStorage interface {
 	CompleteUpload(ctx context.Context, key string, uploadID string, parts []*Part) error
 	// ListUploads lists existing multipart uploads.
 	ListUploads(ctx context.Context, marker string) ([]*PendingPart, string, error)
+
+	Restore(ctx context.Context, key string) error
 }
 
 type Shutdownable interface {

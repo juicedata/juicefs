@@ -210,54 +210,56 @@ func writeProgress(item1, item2 *uint64, out io.Writer, done chan struct{}) {
 	}
 }
 
-type obj struct {
-	key            string
-	size, off, len uint32
+type Obj struct {
+	Key            string
+	Size, Off, Len uint32
 }
 
-func (v *VFS) calcObjects(id uint64, size, offset, length uint32) []*obj {
+func CalcObjects(format meta.Format, id uint64, size, offset, length uint32) []*Obj {
 	if id == 0 {
-		return []*obj{{"", size, offset, length}}
+		return []*Obj{{"", size, offset, length}}
 	}
 	if length == 0 || offset+length > size {
 		logger.Warnf("Corrupt slice id %d size %d offset %d length %d", id, size, offset, length)
 		return nil
 	}
-	bsize := uint32(v.Conf.Chunk.BlockSize)
+	bsize := uint32(format.BlockSize)
 	var prefix string
-	if v.Conf.Chunk.HashPrefix {
-		prefix = fmt.Sprintf("%s/chunks/%02X/%v/%v", v.Conf.Format.Name, id%256, id/1000/1000, id)
+	if format.HashPrefix {
+		prefix = fmt.Sprintf("%s/chunks/%02X/%v/%v", format.Name, id%256, id/1000/1000, id)
 	} else {
-		prefix = fmt.Sprintf("%s/chunks/%v/%v/%v", v.Conf.Format.Name, id/1000/1000, id/1000, id)
+		prefix = fmt.Sprintf("%s/chunks/%v/%v/%v", format.Name, id/1000/1000, id/1000, id)
 	}
 	first := offset / bsize
 	last := (offset + length - 1) / bsize
-	objs := make([]*obj, 0, last-first+1)
+	objs := make([]*Obj, 0, last-first+1)
 	for indx := first; indx <= last; indx++ {
-		objs = append(objs, &obj{fmt.Sprintf("%s_%d_%d", prefix, indx, bsize), bsize, 0, bsize})
+		objs = append(objs, &Obj{fmt.Sprintf("%s_%d_%d", prefix, indx, bsize), bsize, 0, bsize})
 	}
 	fo, lo := objs[0], objs[len(objs)-1]
-	fo.off = offset - first*bsize
-	fo.len = fo.size - fo.off
+	fo.Off = offset - first*bsize
+	fo.Len = fo.Size - fo.Off
 	if (last+1)*bsize > size {
-		lo.size = size - last*bsize
-		lo.key = fmt.Sprintf("%s_%d_%d", prefix, last, lo.size)
+		lo.Size = size - last*bsize
+		lo.Key = fmt.Sprintf("%s_%d_%d", prefix, last, lo.Size)
 	}
-	lo.len = (offset + length) - last*bsize - lo.off
+	lo.Len = (offset + length) - last*bsize - lo.Off
 
 	return objs
 }
 
 type InfoResponse struct {
-	Ino     Ino
-	Failed  bool
-	Reason  string
-	Summary meta.Summary
-	Paths   []string
-	Chunks  []*chunkSlice
-	Objects []*chunkObj
-	PLocks  []meta.PLockItem
-	FLocks  []meta.FLockItem
+	Ino           Ino
+	Failed        bool
+	Reason        string
+	Summary       meta.Summary
+	Paths         []string
+	Chunks        []*chunkSlice
+	Objects       []*chunkObj
+	PLocks        []meta.PLockItem
+	FLocks        []meta.FLockItem
+	Tier          meta.ScEntry
+	RestoreStatus string
 }
 
 type SummaryReponse struct {
@@ -403,8 +405,8 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 					if raw {
 						fmt.Fprintf(w, "\t%d:\t%d\t%d\t%d\t%d\n", indx, c.Id, c.Size, c.Off, c.Len)
 					} else {
-						for _, o := range v.calcObjects(c.Id, c.Size, c.Off, c.Len) {
-							fmt.Fprintf(w, "\t%d:\t%s\t%d\t%d\t%d\n", indx, o.key, o.size, o.off, o.len)
+						for _, o := range CalcObjects(v.Conf.Format, c.Id, c.Size, c.Off, c.Len) {
+							fmt.Fprintf(w, "\t%d:\t%s\t%d\t%d\t%d\n", indx, o.Key, o.Size, o.Off, o.Len)
 						}
 					}
 				}
@@ -443,6 +445,19 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			info.Failed = true
 			info.Reason = r.Error()
 		} else {
+			var attr meta.Attr
+			eno := v.Meta.GetAttr(ctx, inode, &attr)
+			if eno != 0 {
+				logger.Warnf("GetAttr of %d: %s", inode, eno)
+			} else {
+				t, ok := v.Conf.Format.ScInfo.GetById(attr.Tier.GetTierID())
+				if ok {
+					info.Tier = t
+				} else {
+					logger.Warnf("unknown storage class id %d of inode %d", attr.Tier.GetTierID(), inode)
+					info.Tier = meta.ScEntry{Id: attr.Tier.GetTierID(), Name: "unknown", Value: "unknown"}
+				}
+			}
 			info.Paths = v.Meta.GetPaths(ctx, inode)
 			if info.Summary.Files == 1 && info.Summary.Dirs == 0 {
 				for indx := uint64(0); indx*meta.ChunkSize < info.Summary.Length; indx++ {
@@ -452,11 +467,20 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 						if raw {
 							info.Chunks = append(info.Chunks, &chunkSlice{indx, c})
 						} else {
-							for _, o := range v.calcObjects(c.Id, c.Size, c.Off, c.Len) {
-								info.Objects = append(info.Objects, &chunkObj{indx, o.key, o.size, o.off, o.len})
+							for _, o := range CalcObjects(v.Conf.Format, c.Id, c.Size, c.Off, c.Len) {
+								info.Objects = append(info.Objects, &chunkObj{indx, o.Key, o.Size, o.Off, o.Len})
 							}
 						}
 					}
+				}
+			}
+			if len(info.Objects) > 0 {
+				lastObjKey := strings.TrimPrefix(info.Objects[len(info.Objects)-1].Key, v.Conf.Format.Name+"/")
+				storage := v.Store.GetStorage()
+				if objInfo, err := storage.Head(ctx, lastObjKey); err != nil {
+					logger.Warnf("get restore status of %s: %s", lastObjKey, err)
+				} else {
+					info.RestoreStatus = objInfo.Status()
 				}
 			}
 

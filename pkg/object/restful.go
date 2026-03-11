@@ -159,6 +159,7 @@ func (s *RestfulStorage) Head(ctx context.Context, key string) (Object, error) {
 		mtime,
 		strings.HasSuffix(key, "/"),
 		"",
+		"",
 	}, nil
 }
 

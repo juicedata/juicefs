@@ -212,6 +212,10 @@ func (s *sharded) CompleteUpload(ctx context.Context, key string, uploadID strin
 	return s.pick(key).CompleteUpload(ctx, key, uploadID, parts)
 }
 
+func (s *sharded) Restore(ctx context.Context, key string) error {
+	return s.pick(key).Restore(ctx, key)
+}
+
 func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage, error) {
 	stores := make([]ObjectStorage, shards)
 	var err error

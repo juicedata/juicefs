@@ -208,6 +208,10 @@ func (p *withPrefix) ListUploads(ctx context.Context, marker string) ([]*Pending
 	return parts, nextMarker, err
 }
 
+func (p *withPrefix) Restore(ctx context.Context, key string) error {
+	return p.os.Restore(ctx, p.prefix+key)
+}
+
 var _ ObjectStorage = (*withPrefix)(nil)
 
 func IsFileSystem(object ObjectStorage) bool {

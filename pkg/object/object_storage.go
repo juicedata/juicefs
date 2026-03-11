@@ -158,6 +158,10 @@ func (s DefaultObjectStorage) ListAll(ctx context.Context, prefix, marker string
 	return nil, notSupported
 }
 
+func (s DefaultObjectStorage) Restore(ctx context.Context, key string) error {
+	return notSupported
+}
+
 type Creator func(bucket, accessKey, secretKey, token string) (ObjectStorage, error)
 
 var storages = make(map[string]Creator)
@@ -320,4 +324,19 @@ func decodeKey(value string, typ *string) (string, error) {
 
 func TmpFilePath(parent, name string) string {
 	return filepath.Join(filepath.Dir(parent), ".jfs."+name+".tmp."+strconv.Itoa(rand.Int()))
+}
+
+type ctxKey string
+
+const StorageClassKey ctxKey = "storageClass"
+
+func getScStr(ctx context.Context, mountSc string) string {
+	var scStr string
+	if mountSc != "" {
+		scStr = mountSc
+	}
+	if sc, ok := ctx.Value(StorageClassKey).(string); ok {
+		scStr = sc
+	}
+	return scStr
 }
