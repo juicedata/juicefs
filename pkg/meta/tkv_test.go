@@ -22,10 +22,8 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"runtime"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/dgraph-io/badger/v4"
 )
