@@ -4160,12 +4160,12 @@ func (m *redisMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quo
 			if quota.UsedSpace >= 0 {
 				pipe.HSet(ctx, config.usedSpaceKey, field, quota.UsedSpace)
 			} else if created {
-				pipe.HSet(ctx, config.usedSpaceKey, field, 0)
+				pipe.HSetNX(ctx, config.usedSpaceKey, field, int64(0))
 			}
 			if quota.UsedInodes >= 0 {
 				pipe.HSet(ctx, config.usedInodesKey, field, quota.UsedInodes)
 			} else if created {
-				pipe.HSet(ctx, config.usedInodesKey, field, 0)
+				pipe.HSetNX(ctx, config.usedInodesKey, field, int64(0))
 			}
 			return nil
 		})
@@ -4267,6 +4267,9 @@ func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 			field := strconv.FormatUint(q.qkey, 10)
 			pipe.HIncrBy(ctx, config.usedSpaceKey, field, q.quota.newSpace)
 			pipe.HIncrBy(ctx, config.usedInodesKey, field, q.quota.newInodes)
+			if q.qtype == GroupQuotaType {
+				logger.Infof("group quota: qkey=%d, newSpace=%d, newInodes=%d", q.qkey, q.quota.newSpace, q.quota.newInodes)
+			}
 		}
 		return nil
 	})
