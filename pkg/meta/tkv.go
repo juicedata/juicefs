@@ -3208,7 +3208,7 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 					id = binary.BigEndian.Uint64([]byte(k[2:])) // skip prefix
 				}
 				quota := m.parseQuota(v)
-				if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
+				if quota.MaxSpace < 0 && quota.MaxInodes < 0 && quota.UsedSpace == 0 && quota.UsedInodes == 0 {
 					continue
 				}
 				quotas[id] = quota
@@ -3287,6 +3287,10 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 		}
 		for i, v := range tx.gets(keys...) {
 			if len(v) == 0 {
+				q := &Quota{MaxSpace: -1, MaxInodes: -1}
+				q.UsedSpace = qs[i].newSpace
+				q.UsedInodes = qs[i].newInodes
+				tx.set(keys[i], m.packQuota(q))
 				continue
 			}
 			if len(v) != 32 {
