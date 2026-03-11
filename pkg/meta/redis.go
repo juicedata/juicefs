@@ -4263,12 +4263,15 @@ func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 			}
 
 			field := strconv.FormatUint(q.qkey, 10)
-			pipe.HSetNX(ctx, config.quotaKey, field, m.packQuota(-1, -1))
+			exists, err := m.rdb.Exists(ctx, config.quotaKey).Result()
+			if err != nil {
+				return err
+			}
+			if exists == 0 {
+				pipe.HSet(ctx, config.quotaKey, field, m.packQuota(-1, -1))
+			}
 			pipe.HIncrBy(ctx, config.usedSpaceKey, field, q.quota.newSpace)
 			pipe.HIncrBy(ctx, config.usedInodesKey, field, q.quota.newInodes)
-			if q.qtype == GroupQuotaType {
-				logger.Infof("group quota: qkey=%d, newSpace=%d, newInodes=%d", q.qkey, q.quota.newSpace, q.quota.newInodes)
-			}
 		}
 		return nil
 	})
