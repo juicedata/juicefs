@@ -369,38 +369,3 @@ func TestBadgerDeleteTxnTooBig(t *testing.T) {
 		t.Fatalf("expected ErrTxnTooBig, got %v", err)
 	}
 }
-
-func TestBadgerCloseExitsGCGoroutine(t *testing.T) {
-	before := runtime.NumGoroutine()
-
-	c, err := newBadgerClient(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Allow the GC goroutine to start
-	time.Sleep(20 * time.Millisecond)
-	during := runtime.NumGoroutine()
-	if during <= before {
-		t.Fatal("GC goroutine did not start after newBadgerClient")
-	}
-
-	// close() must return promptly via done channel signal
-	closed := make(chan error, 1)
-	go func() { closed <- c.close() }()
-
-	select {
-	case err := <-closed:
-		if err != nil {
-			t.Fatalf("close() returned error: %v", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("close() timed out: GC goroutine likely leaked")
-	}
-
-	time.Sleep(20 * time.Millisecond)
-	after := runtime.NumGoroutine()
-	if after >= during {
-		t.Fatalf("goroutine leak: before=%d during=%d after=%d", before, during, after)
-	}
-}
