@@ -418,6 +418,24 @@ func (m *dbMeta) initStatement() {
 		fmt.Sprintf(`INSERT INTO %schunk_ref (chunkid, size, refs) VALUES (?,?,?) ON CONFLICT DO NOTHING`, m.tablePrefix)
 	m.statement[`INSERT IGNORE INTO chunk_ref (chunkid, size, refs) VALUES (?,?,?)`] =
 		fmt.Sprintf(`INSERT IGNORE INTO %schunk_ref (chunkid, size, refs) VALUES (?,?,?)`, m.tablePrefix)
+	m.statement[`
+			 INSERT INTO user_group_quota (qtype, qkey, max_space, max_inodes, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?, ?, ?)
+			 ON CONFLICT (qtype, qkey)
+			 DO UPDATE SET used_space=user_group_quota.used_space+EXCLUDED.used_space, used_inodes=user_group_quota.used_inodes+EXCLUDED.used_inodes`] =
+		fmt.Sprintf(`
+			 INSERT INTO %suser_group_quota (qtype, qkey, max_space, max_inodes, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?, ?, ?)
+			 ON CONFLICT (qtype, qkey)
+			 DO UPDATE SET used_space=%suser_group_quota.used_space+EXCLUDED.used_space, used_inodes=%suser_group_quota.used_inodes+EXCLUDED.used_inodes`, m.tablePrefix, m.tablePrefix, m.tablePrefix)
+	m.statement[`
+			 INSERT INTO user_group_quota (qtype, qkey, max_space, max_inodes, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE used_space=used_space+VALUES(used_space), used_inodes=used_inodes+VALUES(used_inodes)`] =
+		fmt.Sprintf(`
+			 INSERT INTO %suser_group_quota (qtype, qkey, max_space, max_inodes, used_space, used_inodes)
+			 VALUES (?, ?, ?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE used_space=used_space+VALUES(used_space), used_inodes=used_inodes+VALUES(used_inodes)`, m.tablePrefix)
 }
 
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
@@ -4026,7 +4044,7 @@ func (m *dbMeta) doGetQuota(ctx Context, qtype uint32, key uint64) (*Quota, erro
 	return quota, err
 }
 
-func updateQuotaFields(quota *Quota, exist bool, maxSpace, maxInodes *int64, usedSpace, usedInodes *int64) []string {
+func updateQuotaFields(quota *Quota, maxSpace, maxInodes *int64, usedSpace, usedInodes *int64) []string {
 	updateColumns := make([]string, 0, 4)
 	if quota.MaxSpace >= 0 {
 		*maxSpace = quota.MaxSpace
@@ -4039,15 +4057,9 @@ func updateQuotaFields(quota *Quota, exist bool, maxSpace, maxInodes *int64, use
 	if quota.UsedSpace >= 0 {
 		*usedSpace = quota.UsedSpace
 		updateColumns = append(updateColumns, "used_space")
-	} else if !exist {
-		*usedSpace = 0
-		updateColumns = append(updateColumns, "used_space")
 	}
 	if quota.UsedInodes >= 0 {
 		*usedInodes = quota.UsedInodes
-		updateColumns = append(updateColumns, "used_inodes")
-	} else if !exist {
-		*usedInodes = 0
 		updateColumns = append(updateColumns, "used_inodes")
 	}
 
@@ -4064,7 +4076,7 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 				return e
 			}
 			created = !exist
-			updateColumns := updateQuotaFields(quota, exist, &origin.MaxSpace, &origin.MaxInodes, &origin.UsedSpace, &origin.UsedInodes)
+			updateColumns := updateQuotaFields(quota, &origin.MaxSpace, &origin.MaxInodes, &origin.UsedSpace, &origin.UsedInodes)
 			if exist {
 				_, e = s.Cols(updateColumns...).Update(origin, &dirQuota{Inode: Ino(key)})
 			} else {
@@ -4078,7 +4090,7 @@ func (m *dbMeta) doSetQuota(ctx Context, qtype uint32, key uint64, quota *Quota)
 				return e
 			}
 			created = !exist
-			updateColumns := updateQuotaFields(quota, exist, &origin.MaxSpace, &origin.MaxInodes, &origin.UsedSpace, &origin.UsedInodes)
+			updateColumns := updateQuotaFields(quota, &origin.MaxSpace, &origin.MaxInodes, &origin.UsedSpace, &origin.UsedInodes)
 			if exist {
 				_, e = s.Cols(updateColumns...).Update(origin, &userGroupQuota{Qtype: qtype, Qkey: key})
 			} else {
@@ -4145,7 +4157,7 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 
 	// Load user and group quotas
 	for _, q := range userGroupQuotasList {
-		if q.MaxSpace < 0 && q.MaxInodes < 0 {
+		if q.MaxSpace < 0 && q.MaxInodes < 0 && q.UsedSpace == 0 && q.UsedInodes == 0 {
 			continue
 		}
 		quota := &Quota{
@@ -4170,18 +4182,34 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	sort.Slice(quotas, func(i, j int) bool { return quotas[i].qkey < quotas[j].qkey })
 	return m.txn(func(s *xorm.Session) error {
 		for _, q := range quotas {
+			var err error
 			if q.qtype == DirQuotaType {
 				logger.Infof("doFlushquot ino:%d, %+v", q.qkey, q.quota)
-				_, err := s.Exec(m.sqlConv("update dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"),
+				_, err = s.Exec(m.sqlConv("update dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"),
 					q.quota.newSpace, q.quota.newInodes, q.qkey)
 				if err != nil {
 					return err
 				}
 			} else {
-				_, err := s.Exec(m.sqlConv("update user_group_quota set used_space=used_space+?, used_inodes=used_inodes+? where qtype=? and qkey=?"),
-					q.quota.newSpace, q.quota.newInodes, q.qtype, q.qkey)
-				if err != nil {
-					return err
+				if m.Name() == "sqlite3" || m.Name() == "postgres" {
+					_, err = s.Exec(m.sqlConv(`
+						 INSERT INTO user_group_quota (qtype, qkey, max_space, max_inodes, used_space, used_inodes)
+						 VALUES (?, ?, ?, ?, ?, ?)
+						 ON CONFLICT (qtype, qkey)
+						 DO UPDATE SET used_space=user_group_quota.used_space+EXCLUDED.used_space, used_inodes=user_group_quota.used_inodes+EXCLUDED.used_inodes`),
+						q.qtype, q.qkey, -1, -1, q.quota.newSpace, q.quota.newInodes)
+					if err != nil {
+						return err
+					}
+				} else {
+					_, err = s.Exec(m.sqlConv(`
+						 INSERT INTO user_group_quota (qtype, qkey, max_space, max_inodes, used_space, used_inodes)
+						 VALUES (?, ?, ?, ?, ?, ?)
+						 ON DUPLICATE KEY UPDATE used_space=used_space+VALUES(used_space), used_inodes=used_inodes+VALUES(used_inodes)`),
+						q.qtype, q.qkey, -1, -1, q.quota.newSpace, q.quota.newInodes)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
