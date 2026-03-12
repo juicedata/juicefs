@@ -958,12 +958,12 @@ func (m *baseMeta) userGroupQuotaCheck(ctx Context, strict, repair bool, quotas 
 			UsedSpace:  int64(usage.Size),
 			UsedInodes: int64(usage.Files),
 		}
-        m.quotaMu.RLock()
-        if q, ok := m.userQuotas[uid]; ok {
-            quota.MaxSpace = q.MaxSpace
-            quota.MaxInodes = q.MaxInodes
-        }
-        m.quotaMu.RUnlock()
+		m.quotaMu.RLock()
+		if q, ok := m.userQuotas[uid]; ok {
+			quota.MaxSpace = q.MaxSpace
+			quota.MaxInodes = q.MaxInodes
+		}
+		m.quotaMu.RUnlock()
 		_, err := m.en.doSetQuota(ctx, UserQuotaType, uid, quota)
 		if err != nil {
 			return fmt.Errorf("set user quota: %v", err)
@@ -976,12 +976,12 @@ func (m *baseMeta) userGroupQuotaCheck(ctx Context, strict, repair bool, quotas 
 			UsedSpace:  int64(usage.Size),
 			UsedInodes: int64(usage.Files),
 		}
-        m.quotaMu.RLock()
-        if q, ok := m.groupQuotas[gid]; ok {
-            quota.MaxSpace = q.MaxSpace
-            quota.MaxInodes = q.MaxInodes
-        }
-        m.quotaMu.RUnlock()
+		m.quotaMu.RLock()
+		if q, ok := m.groupQuotas[gid]; ok {
+			quota.MaxSpace = q.MaxSpace
+			quota.MaxInodes = q.MaxInodes
+		}
+		m.quotaMu.RUnlock()
 
 		_, err := m.en.doSetQuota(ctx, GroupQuotaType, gid, quota)
 		if err != nil {

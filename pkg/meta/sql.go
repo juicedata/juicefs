@@ -4181,11 +4181,11 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 					q.quota.newSpace, q.quota.newInodes, q.qtype, q.qkey)
 				if err != nil {
 					return err
+				}
 			}
 		}
-	}
-	return nil
-})
+		return nil
+	})
 }
 
 func (m *dbMeta) doCleanQuotas(ctx Context, qtype uint32) error {
