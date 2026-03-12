@@ -4273,6 +4273,33 @@ func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	return err
 }
 
+func (m *redisMeta) doCleanQuotas(ctx Context, qtype uint32) error {
+	if qtype != UserQuotaType && qtype != GroupQuotaType {
+		return fmt.Errorf("invalid quota type: %d", qtype)
+	}
+
+	config, err := m.getQuotaKeys(qtype)
+	if err != nil {
+		return err
+	}
+
+	// Scan all keys and set usedSpace and usedInodes to 0
+	return m.hscan(ctx, config.quotaKey, func(keys []string) error {
+		for i := 0; i < len(keys); i += 2 {
+			key := keys[i]
+			_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.HSet(ctx, config.usedSpaceKey, key, 0)
+				pipe.HSet(ctx, config.usedInodesKey, key, 0)
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func (m *redisMeta) checkServerConfig() {
 	rawInfo, err := m.rdb.Info(Background()).Result()
 	if err != nil {

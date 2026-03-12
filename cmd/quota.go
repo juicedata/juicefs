@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strings"
 
@@ -171,10 +173,16 @@ func quota(c *cli.Context) error {
 	} else {
 		dpath := c.String("path")
 		if dpath == "" && cmd != meta.QuotaList {
-			logger.Fatalf("Please specify the directory with `--path <dir>` option")
+			if cmd == meta.QuotaCheck {
+				quotaKey = ""
+				quotaType = "all"
+			} else {
+				logger.Fatalf("Please specify the directory with `--path <dir>` option")
+			}
+		} else {
+			quotaKey = dpath
+			quotaType = "directory"
 		}
-		quotaKey = dpath
-		quotaType = "directory"
 	}
 
 	removePassword(c.Args().Get(0))
@@ -199,6 +207,17 @@ func quota(c *cli.Context) error {
 	} else if cmd == meta.QuotaCheck {
 		strict = c.Bool("strict")
 		repair = c.Bool("repair")
+		if quotaType == "all" {
+			fmt.Println("Warning: No --path specified. This will scan the entire filesystem to check and repair userQuotas and groupQuotas.")
+			fmt.Print("Do you want to continue? [y/N]: ")
+			reader := bufio.NewReader(os.Stdin)
+			response, _ := reader.ReadString('\n')
+			response = strings.TrimSpace(strings.ToLower(response))
+			if response != "y" && response != "yes" {
+				fmt.Println("Aborted.")
+				return nil
+			}
+		}
 	}
 
 	if err := m.HandleQuota(meta.Background(), cmd, quotaKey, uid, gid, qs, strict, repair, c.Bool("create")); err != nil {

@@ -573,7 +573,7 @@ func (m *baseMeta) doFlushQuotas() {
 
 func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32, gid uint32, quotas map[string]*Quota, strict, repair bool, create bool) error {
 	var inode Ino
-	if cmd != QuotaList && uid == 0 && gid == 0 {
+	if cmd != QuotaList && uid == 0 && gid == 0 && dpath != "" {
 		if st := m.resolve(ctx, dpath, &inode, create); st != 0 {
 			return fmt.Errorf("resolve dir %s: %s", dpath, st)
 		}
@@ -596,7 +596,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32,
 		key = uint64(inode)
 	}
 
-	if cmd != QuotaList && qtype == 0xffffffff {
+	if cmd != QuotaList && cmd != QuotaCheck && qtype == 0xffffffff {
 		return fmt.Errorf("invalid quota type")
 	}
 
@@ -894,6 +894,10 @@ func (m *baseMeta) handleQuotaList(ctx Context, qtype uint32, key uint64, quotas
 }
 
 func (m *baseMeta) handleQuotaCheck(ctx Context, qtype uint32, key uint64, dpath string, strict, repair bool, quotas map[string]*Quota) error {
+	if qtype == 0xffffffff {
+		return m.userGroupQuotaCheck(ctx, strict, repair, quotas)
+	}
+
 	q, err := m.en.doGetQuota(ctx, qtype, key)
 	if err != nil {
 		return err
@@ -937,6 +941,54 @@ func (m *baseMeta) handleQuotaCheck(ctx Context, qtype uint32, key uint64, dpath
 	}
 
 	return fmt.Errorf("quota of %s is inconsistent, please repair it with --repair flag", dpath)
+}
+
+func (m *baseMeta) userGroupQuotaCheck(ctx Context, strict, repair bool, quotas map[string]*Quota) error {
+	userUsage, groupUsage, err := m.scanGlobalUserGroupUsage(ctx)
+	if err != nil {
+		return fmt.Errorf("scan global user group usage: %v", err)
+	}
+	m.en.doCleanQuotas(ctx, UserQuotaType)
+	m.en.doCleanQuotas(ctx, GroupQuotaType)
+
+	for uid, usage := range userUsage {
+		quota := &Quota{
+			MaxSpace:   -1,
+			MaxInodes:  -1,
+			UsedSpace:  int64(usage.Size),
+			UsedInodes: int64(usage.Files),
+		}
+        m.quotaMu.RLock()
+        if q, ok := m.userQuotas[uid]; ok {
+            quota.MaxSpace = q.MaxSpace
+            quota.MaxInodes = q.MaxInodes
+        }
+        m.quotaMu.RUnlock()
+		_, err := m.en.doSetQuota(ctx, UserQuotaType, uid, quota)
+		if err != nil {
+			return fmt.Errorf("set user quota: %v", err)
+		}
+	}
+	for gid, usage := range groupUsage {
+		quota := &Quota{
+			MaxSpace:   -1,
+			MaxInodes:  -1,
+			UsedSpace:  int64(usage.Size),
+			UsedInodes: int64(usage.Files),
+		}
+        m.quotaMu.RLock()
+        if q, ok := m.groupQuotas[gid]; ok {
+            quota.MaxSpace = q.MaxSpace
+            quota.MaxInodes = q.MaxInodes
+        }
+        m.quotaMu.RUnlock()
+
+		_, err := m.en.doSetQuota(ctx, GroupQuotaType, gid, quota)
+		if err != nil {
+			return fmt.Errorf("set group quota: %v", err)
+		}
+	}
+	return nil
 }
 
 func (m *baseMeta) updateQuotaMetrics() {
