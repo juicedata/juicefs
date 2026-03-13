@@ -122,7 +122,6 @@ $ juicefs quota delete redis://localhost --gid 100`,
 
 func quota(c *cli.Context) error {
 	setup(c, 1)
-
 	var cmd uint8
 	switch c.Command.Name {
 	case "set":
@@ -151,7 +150,6 @@ func quota(c *cli.Context) error {
 		}
 		return uint32(id)
 	}
-
 	if c.IsSet("uid") {
 		if c.IsSet("gid") {
 			logger.Fatalf("Cannot specify both --uid and --gid at the same time")
@@ -233,7 +231,6 @@ func printQuotaResult(quotaType string, qs map[string]*meta.Quota) {
 		paths = append(paths, p)
 	}
 	sort.Strings(paths)
-
 	for _, p := range paths {
 		q := qs[p]
 		if q.UsedSpace < 0 {
@@ -244,16 +241,13 @@ func printQuotaResult(quotaType string, qs map[string]*meta.Quota) {
 			logger.Warnf("Used inodes of %s is negative (%d), please run `juicefs quota check` to fix it", p, q.UsedInodes)
 			q.UsedInodes = 0
 		}
-
 		used := humanize.IBytes(uint64(q.UsedSpace))
 		iused := humanize.Comma(q.UsedInodes)
-
 		size, usedR := "unchanged", ""
 		if q.MaxSpace > 0 {
 			size = humanize.IBytes(uint64(q.MaxSpace))
 			usedR = fmt.Sprintf("%d%%", q.UsedSpace*100/q.MaxSpace)
 		}
-
 		itotal, iusedR := "unchanged", ""
 		if q.MaxInodes > 0 {
 			itotal = humanize.Comma(q.MaxInodes)
@@ -268,6 +262,5 @@ func printQuotaResult(quotaType string, qs map[string]*meta.Quota) {
 		}
 		result = append(result, []string{identifier, size, used, usedR, itotal, iused, iusedR})
 	}
-
 	printResult(result, 0, false)
 }

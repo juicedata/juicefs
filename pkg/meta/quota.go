@@ -895,7 +895,7 @@ func (m *baseMeta) handleQuotaList(ctx Context, qtype uint32, key uint64, quotas
 
 func (m *baseMeta) handleQuotaCheck(ctx Context, qtype uint32, key uint64, dpath string, strict, repair bool, quotas map[string]*Quota) error {
 	if qtype == 0xffffffff {
-		return m.userGroupQuotaCheck(ctx, strict, repair, quotas)
+		return m.userGroupQuotaCheck(ctx, repair, quotas)
 	}
 
 	q, err := m.en.doGetQuota(ctx, qtype, key)
@@ -1005,7 +1005,7 @@ func (m *baseMeta) repairUsage(ctx Context, usageMap map[uint64]*Summary, quotaM
 	return nil
 }
 
-func (m *baseMeta) userGroupQuotaCheck(ctx Context, strict, repair bool, quotas map[string]*Quota) error {
+func (m *baseMeta) userGroupQuotaCheck(ctx Context, repair bool, quotas map[string]*Quota) error {
 	userUsage, groupUsage, err := m.scanGlobalUserGroupUsage(ctx)
 	if err != nil {
 		return fmt.Errorf("scan global user group usage: %v", err)
@@ -1034,14 +1034,11 @@ func (m *baseMeta) userGroupQuotaCheck(ctx Context, strict, repair bool, quotas 
 	}
 
 	if err = m.repairUsage(ctx, userUsage, userQuotas, UserQuotaType); err != nil {
-		m.quotaMu.RUnlock()
 		return fmt.Errorf("set user quota: %v", err)
 	}
 	if err = m.repairUsage(ctx, groupUsage, groupQuotas, GroupQuotaType); err != nil {
-		m.quotaMu.RUnlock()
 		return fmt.Errorf("set group quota: %v", err)
 	}
-	m.quotaMu.RUnlock()
 
 	return nil
 }
