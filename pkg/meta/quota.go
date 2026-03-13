@@ -863,36 +863,33 @@ func (m *baseMeta) handleQuotaList(ctx Context, qtype uint32, key uint64, quotas
 		return err
 	}
 
-	filterOrAll := func(src map[uint64]*Quota, targetType uint32) map[uint64]*Quota {
-		if qtype != 0xffffffff && qtype != targetType {
-			return nil
+	match := func(targetType uint32, k uint64, v *Quota) bool {
+		if v.MaxInodes == -1 && v.MaxSpace == -1 {
+			return false
 		}
-		filtered := make(map[uint64]*Quota)
-		for k, v := range src {
-			if v.MaxInodes == -1 && v.MaxSpace == -1 {
-				continue
-			}
-			if qtype == 0xffffffff || k == key {
-				filtered[k] = v
-			}
-		}
-		return filtered
+		return qtype == 0xffffffff || (qtype == targetType && k == key)
 	}
 
-	for ino, quota := range filterOrAll(dirQuotas, DirQuotaType) {
+	for ino, quota := range dirQuotas {
+		if !match(DirQuotaType, ino, quota) {
+			continue
+		}
 		if ps := m.GetPaths(ctx, Ino(ino)); len(ps) > 0 {
 			quotas[ps[0]] = quota
 		} else {
 			quotas[fmt.Sprintf("inode:%d", ino)] = quota
 		}
 	}
-	for uid, quota := range filterOrAll(userQuotas, UserQuotaType) {
-		quotas[fmt.Sprintf("uid:%d", uid)] = quota
+	for uid, quota := range userQuotas {
+		if match(UserQuotaType, uid, quota) {
+			quotas[fmt.Sprintf("uid:%d", uid)] = quota
+		}
 	}
-	for gid, quota := range filterOrAll(groupQuotas, GroupQuotaType) {
-		quotas[fmt.Sprintf("gid:%d", gid)] = quota
+	for gid, quota := range groupQuotas {
+		if match(GroupQuotaType, gid, quota) {
+			quotas[fmt.Sprintf("gid:%d", gid)] = quota
+		}
 	}
-
 	return nil
 }
 
