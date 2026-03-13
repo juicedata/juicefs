@@ -4213,35 +4213,39 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 		}
 
 		quotas := make(map[uint64]*Quota)
-		if err := m.hscan(ctx, config.quotaKey, func(keys []string) error {
+		if err := m.hscan(ctx, config.usedInodesKey, func(keys []string) error {
 			for i := 0; i < len(keys); i += 2 {
-				key, val := keys[i], []byte(keys[i+1])
+				key := keys[i]
 				id, err := strconv.ParseUint(key, 10, 64)
 				if err != nil {
-					logger.Errorf("invalid inode: %s", key)
+					logger.Errorf("invalid key in %s: %s", qt.name, key)
 					continue
 				}
-				if len(val) != 16 {
-					logger.Errorf("invalid quota: %s=%s", key, val)
+				usedInodes, err := strconv.ParseInt(keys[i+1], 10, 64)
+				if err != nil {
+					logger.Errorf("invalid usedInodes for %s %s: %s", qt.name, key, keys[i+1])
 					continue
 				}
 
-				maxSpace, maxInodes := m.parseQuota(val)
-				if maxSpace < 0 && maxInodes < 0 {
-					continue
-				}
 				usedSpace, err := m.rdb.HGet(ctx, config.usedSpaceKey, key).Int64()
 				if err != nil && err != redis.Nil {
 					return err
 				}
-				usedInodes, err := m.rdb.HGet(ctx, config.usedInodesKey, key).Int64()
-				if err != nil && err != redis.Nil {
+
+				var maxSpace, maxInodes int64 = -1, -1
+				if buf, err := m.rdb.HGet(ctx, config.quotaKey, key).Bytes(); err == nil {
+					if len(buf) != 16 {
+						logger.Errorf("invalid quota value for %s %s: len=%d", qt.name, key, len(buf))
+						continue
+					}
+					maxSpace, maxInodes = m.parseQuota(buf)
+				} else if err != redis.Nil {
 					return err
 				}
 
 				quotas[id] = &Quota{
-					MaxSpace:   int64(maxSpace),
-					MaxInodes:  int64(maxInodes),
+					MaxSpace:   maxSpace,
+					MaxInodes:  maxInodes,
 					UsedSpace:  usedSpace,
 					UsedInodes: usedInodes,
 				}
