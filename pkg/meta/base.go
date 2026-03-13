@@ -108,7 +108,7 @@ type engine interface {
 	doDelQuota(ctx Context, qtype uint32, key uint64) error
 	doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota, map[uint64]*Quota, error)
 	doFlushQuotas(ctx Context, quotas []*iQuota) error
-	doCleanQuotas(ctx Context, qtype uint32) error
+	doCleanUserGroupUsage(ctx Context, qtype uint32) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr, oldAttr *Attr) syscall.Errno

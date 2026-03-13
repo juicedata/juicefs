@@ -4188,7 +4188,7 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	})
 }
 
-func (m *dbMeta) doCleanQuotas(ctx Context, qtype uint32) error {
+func (m *dbMeta) doCleanUserGroupUsage(ctx Context, qtype uint32) error {
 	if qtype != UserQuotaType && qtype != GroupQuotaType {
 		return errors.Errorf("invalid quota type %d", qtype)
 	}
