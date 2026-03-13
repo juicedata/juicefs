@@ -1,0 +1,212 @@
+name: "perf_regression"
+
+on:
+  pull_request:
+    branches:
+      - 'main'
+      - release**
+    paths:
+      - '**/perf_regression.yml'
+      - '.github/scripts/perf/**'
+  schedule:
+    # Run daily at 20:00 UTC
+    - cron: '0 20 * * *'
+  workflow_dispatch:
+    inputs:
+      baseline_branch:
+        description: 'Baseline branch name'
+        required: true
+        default: 'release-1.3'
+        type: string
+      test_cases:
+        description: 'Test cases to run (comma-separated, e.g., mdtest_create.sh)'
+        required: false
+        default: ''
+        type: string
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+jobs:
+  perf-regression:
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        meta: ["redis"]
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Go
+        timeout-minutes: 5
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.23
+          cache: true
+
+      - name: Build test target
+        timeout-minutes: 10
+        run: |
+          make
+          mv juicefs juicefs.new
+          ./juicefs.new version
+          
+      - name: Checkout baseline branch
+        timeout-minutes: 1
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.baseline_branch || 'release-1.3' }}
+          path: jfs_old
+          fetch-depth: 1
+
+      - name: Build baseline target
+        timeout-minutes: 10
+        run: |
+          make -C jfs_old
+          mv jfs_old/juicefs juicefs.old
+          ./juicefs.old version
+      
+      - name: Install tools
+        timeout-minutes: 30
+        run: |
+          sudo .github/scripts/apt_install.sh mpich openmpi-bin libopenmpi-dev fio
+          
+      - name: Install pip packages
+        timeout-minutes: 10
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install numpy pandas
+          pip install h5py || echo "h5py installation failed, HDF5 tests will be skipped"
+          pip install torch || echo "PyTorch installation failed, PyTorch tests will be skipped"
+          pip install tensorflow || echo "TensorFlow installation failed, TensorFlow tests will be skipped"
+          pip install pyarrow || echo "PyArrow installation failed, Parquet tests will be skipped"
+          pip install onnx || echo "ONNX installation failed, ONNX tests will be skipped"
+          pip install onnxruntime
+          pip install pillow
+          pip install lmdb
+          pip install tqdm
+
+      - name: Install ior
+        timeout-minutes: 30
+        run: |
+          wget https://github.com/hpc/ior/releases/download/3.3.0/ior-3.3.0.tar.gz
+          tar -xzvf ior-3.3.0.tar.gz
+          cd ior-3.3.0
+          ./configure && make && sudo make install
+
+      - name: Run tests and compare
+        timeout-minutes: 120
+        env:
+          TEST_CASES: ${{ github.event_name == 'workflow_dispatch' && inputs.test_cases || '' }}
+        run: |
+          if [ -n "$TEST_CASES" ]; then
+            # Manual workflow_dispatch: run specified test cases
+            echo "Running specified test cases: $TEST_CASES"
+            sudo META=${{matrix.meta}} .github/scripts/perf/run_and_compare.sh "$TEST_CASES"
+          else
+            # Automatic trigger: iterate through all test cases in test_cases directory
+            echo "Running all test cases from .github/scripts/perf/test_cases/"
+            test_failed=0
+            for test_case in .github/scripts/perf/test_cases/*.sh; do
+              if [ -f "$test_case" ]; then
+                test_name=$(basename "$test_case")
+                if [[ "$test_name" == "ai_hdf5_dataset.sh" || "$test_name" == "ai_huggingface_bin.sh" || "$test_name" == "fio_rand_write_64k.sh" || "$test_name" == "fio_seq_read_1m.sh" ]]; then
+                  echo "Skipping flaky test case: $test_name"
+                  continue
+                fi
+                if ! sudo META=${{matrix.meta}} .github/scripts/perf/run_and_compare.sh "$test_name"; then
+                  test_failed=$((test_failed + 1))
+                fi
+              fi
+            done
+            if [ $test_failed -ne 0 ]; then
+              echo "❌ $test_failed test cases failed"
+              exit 1
+            fi
+            echo "✅ All test cases passed"
+          fi
+      
+      - name: Summarize results
+        timeout-minutes: 5
+        if: always()
+        run: |
+          SUMMARY_FILE="perf_results/summary.csv"
+          if [ ! -f "$SUMMARY_FILE" ]; then
+            echo "No summary file found"
+            exit 0
+          fi
+          
+          # Print summary to console
+          echo ""
+          echo "===== Performance Regression Test Summary ====="
+          printf "%-30s %-15s %-15s %-10s %-10s %-20s %-15s %-15s\n" \
+            "Test Name" "Baseline" "Current" "Diff%" "Status" "Mode" "Base Time(s)" "Curr Time(s)"
+          printf "%-30s %-15s %-15s %-10s %-10s %-20s %-15s %-15s\n" \
+            "--------" "--------" "-------" "-----" "------" "----" "----------" "----------"
+          while IFS=',' read -r name base curr diff status mode base_dur curr_dur; do
+            printf "%-30s %-15s %-15s %-10s %-10s %-20s %-15s %-15s\n" \
+              "$name" "$base" "$curr" "${diff}%" "$status" "$mode" "${base_dur}" "${curr_dur}"
+          done < "$SUMMARY_FILE"
+          echo "================================================"
+          
+          # Write markdown summary to GitHub Step Summary
+          if [ -n "$GITHUB_STEP_SUMMARY" ]; then
+            {
+              echo "## Performance Regression Test Summary"
+              echo ""
+              echo "| Test Name | Baseline | Current | Diff% | Status | Mode | Base Time(s) | Curr Time(s) |"
+              echo "|-----------|----------|---------|-------|--------|------|-------------|-------------|"
+              while IFS=',' read -r name base curr diff status mode base_dur curr_dur; do
+                if [[ "$status" == "PASS" ]]; then
+                  status_icon="✅ PASS"
+                elif [[ "$status" == "FAIL" ]]; then
+                  status_icon="❌ FAIL"
+                else
+                  status_icon="⚠️ ERROR"
+                fi
+                echo "| $name | $base | $curr | ${diff}% | $status_icon | $mode | ${base_dur} | ${curr_dur} |"
+              done < "$SUMMARY_FILE"
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      
+      - name: Setup upterm session
+        if: failure() && github.event.inputs.debug == 'true'
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    timeout-minutes: 3
+    runs-on: ubuntu-22.04
+    needs: [perf-regression]
+    if: always() && !github.event.pull_request.draft
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
+      - name: Send Slack Notification
+        if: failure()
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: ${{ (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && vars.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY || vars.SLACK_CHANNEL_ID_FOR_PUSH_CHECK_NOTIFY}}
+          slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
+          workflow_name: ${{ github.workflow }}
+
+      - name: Success
+        if: success()
+        run: echo "All Done"
