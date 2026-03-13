@@ -604,5 +604,386 @@ test_redis_attr_consistency_heavy() {
     echo "PASS: test_redis_attr_consistency_heavy"
 }
 
+_gen_sm2_key() {
+    # Generate an SM2 private key in PKCS#8 PEM format (requires OpenSSL >= 3.0)
+    local out=$1
+    local pass=$2
+    if [[ -n "$pass" ]]; then
+        openssl genpkey -algorithm SM2 -out "$out" -aes-256-cbc -pass "pass:$pass"
+    else
+        openssl genpkey -algorithm SM2 -out "$out"
+    fi
+}
+
+_gen_rsa_key() {
+    local out=$1
+    local pass=$2
+    if [[ -n "$pass" ]]; then
+        openssl genrsa -out "$out" -aes256 -passout "pass:$pass" 2048
+    else
+        openssl genrsa -out "$out" 2048
+    fi
+}
+
+_write_random_files() {
+    local dir=$1
+    local count=${2:-10}
+    local size=${3:-1M}
+    mkdir -p "$dir"
+    for i in $(seq 1 "$count"); do
+        dd if=/dev/urandom of="$dir/file_$i" bs="$size" count=1 2>/dev/null
+    done
+}
+
+_verify_files_match() {
+    local src_dir=$1
+    local dst_dir=$2
+    local count=${3:-10}
+    for i in $(seq 1 "$count"); do
+        local md5_src md5_dst
+        md5_src=$(md5sum "$src_dir/file_$i" | awk '{print $1}')
+        md5_dst=$(md5sum "$dst_dir/file_$i" | awk '{print $1}')
+        if [[ "$md5_src" != "$md5_dst" ]]; then
+            echo "FAIL: file_$i md5 mismatch: src=$md5_src dst=$md5_dst"
+            exit 1
+        fi
+    done
+}
+
+test_sm4gcm_encrypt_basic() {
+    prepare_test
+    _gen_sm2_key sm2-key.pem
+    ./juicefs format $META_URL myjfs --encrypt-rsa-key sm2-key.pem --encrypt-algo sm4gcm
+    ./juicefs mount -d $META_URL /jfs
+
+    _write_random_files /tmp/sm4gcm_src 10 1M
+    cp -r /tmp/sm4gcm_src/* /jfs/
+    sync
+    _verify_files_match /tmp/sm4gcm_src /jfs 10
+
+    # Remount and verify again
+    umount /jfs || ./juicefs umount /jfs
+    sleep 1
+    ./juicefs mount -d $META_URL /jfs
+    _verify_files_match /tmp/sm4gcm_src /jfs 10
+
+    rm -rf /tmp/sm4gcm_src sm2-key.pem
+    echo "PASS: test_sm4gcm_encrypt_basic"
+}
+
+test_sm4gcm_encrypt_with_passphrase() {
+    # Format with SM2 key protected by passphrase
+    prepare_test
+    _gen_sm2_key sm2-key-enc.pem "mypassword"
+    JFS_RSA_PASSPHRASE=mypassword ./juicefs format $META_URL myjfs \
+        --encrypt-rsa-key sm2-key-enc.pem --encrypt-algo sm4gcm
+    JFS_RSA_PASSPHRASE=mypassword ./juicefs mount -d $META_URL /jfs
+
+    echo "hello-sm4gcm-encrypted" > /jfs/test.txt
+    sync
+    content=$(cat /jfs/test.txt)
+    [[ "$content" != "hello-sm4gcm-encrypted" ]] && echo "FAIL: content mismatch: $content" && exit 1
+
+    # Remount with passphrase and verify
+    umount /jfs || ./juicefs umount /jfs
+    sleep 1
+    JFS_RSA_PASSPHRASE=mypassword ./juicefs mount -d $META_URL /jfs
+    content=$(cat /jfs/test.txt)
+    [[ "$content" != "hello-sm4gcm-encrypted" ]] && echo "FAIL: content mismatch after remount: $content" && exit 1
+
+    rm -f sm2-key-enc.pem
+    echo "PASS: test_sm4gcm_encrypt_with_passphrase"
+}
+
+test_sm4gcm_encrypt_large_files() {
+    # Verify correctness with larger files that span multiple blocks
+    prepare_test
+    _gen_sm2_key sm2-key.pem
+    ./juicefs format $META_URL myjfs --encrypt-rsa-key sm2-key.pem --encrypt-algo sm4gcm --block-size 1024
+    ./juicefs mount -d $META_URL /jfs
+
+    dd if=/dev/urandom of=/tmp/largefile_src bs=1M count=20 2>/dev/null
+    cp /tmp/largefile_src /jfs/largefile
+    sync
+
+    md5_src=$(md5sum /tmp/largefile_src | awk '{print $1}')
+    md5_dst=$(md5sum /jfs/largefile | awk '{print $1}')
+    [[ "$md5_src" != "$md5_dst" ]] && echo "FAIL: large file md5 mismatch" && exit 1
+
+    # Remount and verify
+    umount /jfs || ./juicefs umount /jfs
+    sleep 1
+    ./juicefs mount -d $META_URL /jfs
+    md5_dst2=$(md5sum /jfs/largefile | awk '{print $1}')
+    [[ "$md5_src" != "$md5_dst2" ]] && echo "FAIL: large file md5 mismatch after remount" && exit 1
+
+    rm -f /tmp/largefile_src sm2-key.pem
+    echo "PASS: test_sm4gcm_encrypt_large_files"
+}
+
+test_sm4gcm_overwrite_and_truncate() {
+    # Verify correctness after overwrite and truncate operations
+    prepare_test
+    _gen_sm2_key sm2-key.pem
+    ./juicefs format $META_URL myjfs --encrypt-rsa-key sm2-key.pem --encrypt-algo sm4gcm
+    ./juicefs mount -d $META_URL /jfs
+
+    # Write initial content
+    dd if=/dev/urandom of=/jfs/file1 bs=1M count=5 2>/dev/null
+    md5_v1=$(md5sum /jfs/file1 | awk '{print $1}')
+
+    # Overwrite with new content
+    dd if=/dev/urandom of=/tmp/overwrite_src bs=1M count=5 2>/dev/null
+    cp /tmp/overwrite_src /jfs/file1
+    sync
+    md5_src=$(md5sum /tmp/overwrite_src | awk '{print $1}')
+    md5_v2=$(md5sum /jfs/file1 | awk '{print $1}')
+    [[ "$md5_src" != "$md5_v2" ]] && echo "FAIL: overwrite md5 mismatch" && exit 1
+    [[ "$md5_v1" == "$md5_v2" ]] && echo "FAIL: md5 should change after overwrite" && exit 1
+
+    # Truncate
+    truncate -s 1024 /jfs/file1
+    size=$(stat -c %s /jfs/file1)
+    [[ "$size" != "1024" ]] && echo "FAIL: truncate size mismatch: $size" && exit 1
+
+    # Truncate to zero
+    truncate -s 0 /jfs/file1
+    size=$(stat -c %s /jfs/file1)
+    [[ "$size" != "0" ]] && echo "FAIL: truncate to zero failed: $size" && exit 1
+
+    rm -f /tmp/overwrite_src sm2-key.pem
+    echo "PASS: test_sm4gcm_overwrite_and_truncate"
+}
+
+test_sm4gcm_encrypt_with_compress() {
+    # Combine encryption with compression
+    prepare_test
+    _gen_sm2_key sm2-key.pem
+    ./juicefs format $META_URL myjfs --encrypt-rsa-key sm2-key.pem --encrypt-algo sm4gcm --compress lz4
+    ./juicefs mount -d $META_URL /jfs
+
+    # Write compressible data (text)
+    for i in $(seq 1 100); do
+        echo "This is line $i of compressible test data for sm4gcm encryption" >> /tmp/compress_src.txt
+    done
+    cp /tmp/compress_src.txt /jfs/compress_test.txt
+    sync
+
+    md5_src=$(md5sum /tmp/compress_src.txt | awk '{print $1}')
+    md5_dst=$(md5sum /jfs/compress_test.txt | awk '{print $1}')
+    [[ "$md5_src" != "$md5_dst" ]] && echo "FAIL: compress+encrypt md5 mismatch" && exit 1
+
+    # Remount and verify
+    umount /jfs || ./juicefs umount /jfs
+    sleep 1
+    ./juicefs mount -d $META_URL /jfs
+    md5_dst2=$(md5sum /jfs/compress_test.txt | awk '{print $1}')
+    [[ "$md5_src" != "$md5_dst2" ]] && echo "FAIL: compress+encrypt md5 mismatch after remount" && exit 1
+
+    rm -f /tmp/compress_src.txt sm2-key.pem
+    echo "PASS: test_sm4gcm_encrypt_with_compress"
+}
+
+test_sm4gcm_two_mounts_consistency() {
+    # Verify data written by one mount point is readable from another
+    prepare_test
+    _gen_sm2_key sm2-key.pem
+    ./juicefs format $META_URL myjfs --encrypt-rsa-key sm2-key.pem --encrypt-algo sm4gcm
+    ./juicefs mount -d $META_URL /jfs
+    mkdir -p /jfs2
+    ./juicefs mount -d $META_URL /jfs2
+
+    dd if=/dev/urandom of=/jfs/shared_file bs=1M count=5 2>/dev/null
+    sync
+    sleep 3
+
+    md5_1=$(md5sum /jfs/shared_file | awk '{print $1}')
+    md5_2=$(md5sum /jfs2/shared_file | awk '{print $1}')
+    [[ "$md5_1" != "$md5_2" ]] && echo "FAIL: cross-mount md5 mismatch: $md5_1 vs $md5_2" && exit 1
+
+    # Write from mount2, read from mount1
+    dd if=/dev/urandom of=/jfs2/shared_file2 bs=1M count=3 2>/dev/null
+    sync
+    sleep 3
+    md5_a=$(md5sum /jfs2/shared_file2 | awk '{print $1}')
+    md5_b=$(md5sum /jfs/shared_file2 | awk '{print $1}')
+    [[ "$md5_a" != "$md5_b" ]] && echo "FAIL: reverse cross-mount md5 mismatch: $md5_a vs $md5_b" && exit 1
+
+    ./juicefs umount /jfs2 || umount -l /jfs2 || true
+    rm -f sm2-key.pem
+    echo "PASS: test_sm4gcm_two_mounts_consistency"
+}
+
+# --- Comparison test: all three encryption algorithms ---
+
+test_encrypt_algo_comparison() {
+    # Compare all three algorithms produce correct results
+    local algos=("aes256gcm-rsa" "chacha20-rsa" "sm4gcm")
+    local key_types=("rsa" "rsa" "sm2")
+
+    dd if=/dev/urandom of=/tmp/encrypt_cmp_src bs=1M count=5 2>/dev/null
+    local md5_src
+    md5_src=$(md5sum /tmp/encrypt_cmp_src | awk '{print $1}')
+
+    for idx in "${!algos[@]}"; do
+        local algo="${algos[$idx]}"
+        local ktype="${key_types[$idx]}"
+        echo "--- Testing algo: $algo with key type: $ktype ---"
+        prepare_test
+
+        if [[ "$ktype" == "rsa" ]]; then
+            _gen_rsa_key test-key.pem
+        else
+            _gen_sm2_key test-key.pem
+        fi
+
+        ./juicefs format $META_URL myjfs --encrypt-rsa-key test-key.pem --encrypt-algo "$algo"
+        ./juicefs mount -d $META_URL /jfs
+
+        cp /tmp/encrypt_cmp_src /jfs/testfile
+        sync
+        local md5_dst
+        md5_dst=$(md5sum /jfs/testfile | awk '{print $1}')
+        [[ "$md5_src" != "$md5_dst" ]] && echo "FAIL: $algo md5 mismatch: $md5_src vs $md5_dst" && exit 1
+
+        # Remount and verify
+        umount /jfs || ./juicefs umount /jfs
+        sleep 1
+        ./juicefs mount -d $META_URL /jfs
+        md5_dst2=$(md5sum /jfs/testfile | awk '{print $1}')
+        [[ "$md5_src" != "$md5_dst2" ]] && echo "FAIL: $algo md5 mismatch after remount" && exit 1
+
+        rm -f test-key.pem
+    done
+    rm -f /tmp/encrypt_cmp_src
+    echo "PASS: test_encrypt_algo_comparison"
+}
+
+# --- Error / Negative Tests ---
+
+test_sm4gcm_wrong_passphrase() {
+    # Mount should fail when JFS_RSA_PASSPHRASE is wrong
+    prepare_test
+    _gen_sm2_key sm2-key-enc.pem "correctpass"
+    JFS_RSA_PASSPHRASE=correctpass ./juicefs format $META_URL myjfs \
+        --encrypt-rsa-key sm2-key-enc.pem --encrypt-algo sm4gcm
+
+    # Try to mount with wrong passphrase — should fail
+    JFS_RSA_PASSPHRASE=wrongpass ./juicefs mount -d $META_URL /jfs 2>&1 && {
+        echo "FAIL: mount should fail with wrong passphrase"
+        exit 1
+    } || echo "OK: mount correctly failed with wrong passphrase"
+
+    rm -f sm2-key-enc.pem
+    echo "PASS: test_sm4gcm_wrong_passphrase"
+}
+
+test_sm4gcm_missing_passphrase() {
+    # Mount should fail when passphrase is required but not set
+    prepare_test
+    _gen_sm2_key sm2-key-enc.pem "mypass123"
+    JFS_RSA_PASSPHRASE=mypass123 ./juicefs format $META_URL myjfs \
+        --encrypt-rsa-key sm2-key-enc.pem --encrypt-algo sm4gcm
+
+    # Try to mount without passphrase — should fail
+    unset JFS_RSA_PASSPHRASE
+    ./juicefs mount -d $META_URL /jfs 2>&1 && {
+        echo "FAIL: mount should fail without passphrase"
+        exit 1
+    } || echo "OK: mount correctly failed without passphrase"
+
+    rm -f sm2-key-enc.pem
+    echo "PASS: test_sm4gcm_missing_passphrase"
+}
+
+test_sm4gcm_invalid_algo() {
+    # Format with invalid encrypt-algo should fail
+    prepare_test
+    _gen_sm2_key sm2-key.pem
+
+    ./juicefs format $META_URL myjfs --encrypt-rsa-key sm2-key.pem --encrypt-algo invalid_algo 2>&1 && {
+        echo "FAIL: format should fail with invalid algorithm"
+        exit 1
+    } || echo "OK: format correctly rejected invalid algorithm"
+
+    rm -f sm2-key.pem
+    echo "PASS: test_sm4gcm_invalid_algo"
+}
+
+test_sm4gcm_rsa_key_with_sm4gcm_algo() {
+    # Using RSA key with sm4gcm algo — should work (RSA key for key encryption, SM4 for data)
+    prepare_test
+    _gen_rsa_key rsa-key.pem
+    ./juicefs format $META_URL myjfs --encrypt-rsa-key rsa-key.pem --encrypt-algo sm4gcm
+    ./juicefs mount -d $META_URL /jfs
+
+    echo "rsa-key-sm4gcm-data" > /jfs/test.txt
+    sync
+    content=$(cat /jfs/test.txt)
+    [[ "$content" != "rsa-key-sm4gcm-data" ]] && echo "FAIL: content mismatch" && exit 1
+
+    rm -f rsa-key.pem
+    echo "PASS: test_sm4gcm_rsa_key_with_sm4gcm_algo"
+}
+
+test_sm4gcm_sm2_key_with_aes_algo() {
+    # Using SM2 key with aes256gcm-rsa algo — should work (SM2 key for key encryption, AES for data)
+    prepare_test
+    _gen_sm2_key sm2-key.pem
+    ./juicefs format $META_URL myjfs --encrypt-rsa-key sm2-key.pem --encrypt-algo aes256gcm-rsa
+    ./juicefs mount -d $META_URL /jfs
+
+    dd if=/dev/urandom of=/tmp/sm2_aes_src bs=1M count=3 2>/dev/null
+    cp /tmp/sm2_aes_src /jfs/testfile
+    sync
+    md5_src=$(md5sum /tmp/sm2_aes_src | awk '{print $1}')
+    md5_dst=$(md5sum /jfs/testfile | awk '{print $1}')
+    [[ "$md5_src" != "$md5_dst" ]] && echo "FAIL: SM2+AES md5 mismatch" && exit 1
+
+    # Remount and verify
+    umount /jfs || ./juicefs umount /jfs
+    sleep 1
+    ./juicefs mount -d $META_URL /jfs
+    md5_dst2=$(md5sum /jfs/testfile | awk '{print $1}')
+    [[ "$md5_src" != "$md5_dst2" ]] && echo "FAIL: SM2+AES md5 mismatch after remount" && exit 1
+
+    rm -f /tmp/sm2_aes_src sm2-key.pem
+    echo "PASS: test_sm4gcm_sm2_key_with_aes_algo"
+}
+
+test_sm4gcm_data_not_plaintext_in_storage() {
+    # Verify that data in object storage is actually encrypted (not plaintext)
+    prepare_test
+    _gen_sm2_key sm2-key.pem
+    ./juicefs format $META_URL myjfs --encrypt-rsa-key sm2-key.pem --encrypt-algo sm4gcm
+    ./juicefs mount -d $META_URL /jfs
+
+    local known_string="UNIQUE_PLAINTEXT_MARKER_12345_ABCDE"
+    echo "$known_string" > /jfs/plaincheck.txt
+    sync
+    sleep 2
+
+    # Search for the plaintext in the raw storage backend
+    # Default local storage is at /var/jfs/myjfs/ or /var/jfsCache
+    local found=0
+    for storage_dir in /var/jfs/myjfs /var/jfsCache/myjfs; do
+        if [[ -d "$storage_dir" ]]; then
+            if grep -r "$known_string" "$storage_dir" 2>/dev/null; then
+                found=1
+            fi
+        fi
+    done
+
+    [[ "$found" -eq 1 ]] && echo "FAIL: plaintext found in raw storage — data is NOT encrypted!" && exit 1
+    echo "OK: plaintext not found in raw storage — data is encrypted"
+
+    # Verify we can still read it correctly through JuiceFS
+    content=$(cat /jfs/plaincheck.txt)
+    [[ "$content" != "$known_string" ]] && echo "FAIL: cannot read back correct content" && exit 1
+
+    rm -f sm2-key.pem
+    echo "PASS: test_sm4gcm_data_not_plaintext_in_storage"
+}
+
 source .github/scripts/common/run_test.sh && run_test $@
 
