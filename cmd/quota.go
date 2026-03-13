@@ -212,7 +212,8 @@ func quota(c *cli.Context) error {
  			if repair {
  				action = "check and repair"
  			}
- 			fmt.Printf("Warning: No --path specified. This will scan the entire filesystem to %s userQuotas and groupQuotas.\n", action)			fmt.Print("Do you want to continue? [y/N]: ")
+ 			fmt.Printf("Warning: No --path specified. This will scan the entire filesystem to %s userQuotas and groupQuotas.\n", action)			
+			fmt.Print("Do you want to continue? [y/N]: ")
 			reader := bufio.NewReader(os.Stdin)
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(strings.ToLower(response))
