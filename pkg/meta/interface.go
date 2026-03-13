@@ -181,14 +181,15 @@ type Attr struct {
 type TierInfo uint8
 
 const (
-	typeMask  uint8 = 0xF0 // 1111 0000
-	otherMask uint8 = 0x0F // 0000 1111
-	typeShift       = 4
+	typeMask  uint8 = 0xC0 // 1100 0000
+	otherMask uint8 = 0x3F // 0011 1111
+	tierMask  uint8 = 0x03 // 0000 0011
+	typeShift       = 6
 )
 
 func (tier *TierInfo) SetTierID(t uint8) error {
 	if t > otherMask {
-		return fmt.Errorf("storage type out of range: %d (want 0~15)", t)
+		return fmt.Errorf("storage type out of range: %d (want 0~3)", t)
 	}
 	v := uint8(*tier)
 	v = (v & ^typeMask) | ((t & otherMask) << typeShift)

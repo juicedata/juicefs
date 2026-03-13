@@ -532,11 +532,11 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 	}
 	if err == 0 {
 		v.UpdateLength(inode, attr)
-		scEntry, ok := v.Conf.Format.ScInfo.GetById(attr.Tier.GetTierID())
+		sc, ok := v.Conf.Format.Tier[attr.Tier.GetTierID()]
 		if !ok {
 			logger.Warnf("invalid storage class id %d for inode %d, use default storage class", attr.Tier.GetTierID(), inode)
 		}
-		fh = v.newFileHandle(inode, attr.Length, flags, scEntry.Value)
+		fh = v.newFileHandle(inode, attr.Length, flags, sc)
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 		v.invalidateDirHandle(parent, name, inode, attr)
 
@@ -591,11 +591,11 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 	err = v.Meta.Open(ctx, ino, flags, attr)
 	if err == 0 {
 		v.UpdateLength(ino, attr)
-		scEntry, ok := v.Conf.Format.ScInfo.GetById(attr.Tier.GetTierID())
+		sc, ok := v.Conf.Format.Tier[attr.Tier.GetTierID()]
 		if !ok {
 			logger.Warnf("invalid storage class id %d for inode %d, use default storage class", attr.Tier.GetTierID(), ino)
 		}
-		fh = v.newFileHandle(ino, attr.Length, flags, scEntry.Value)
+		fh = v.newFileHandle(ino, attr.Length, flags, sc)
 		entry = &meta.Entry{Inode: ino, Attr: attr}
 	}
 	return

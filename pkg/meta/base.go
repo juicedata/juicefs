@@ -697,14 +697,10 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 			return nil, fmt.Errorf("check version: %s", err)
 		}
 	}
-	if format.ScInfo == nil {
-		format.ScInfo = make(map[string]ScEntry)
+	if format.Tier == nil {
+		format.Tier = make(map[uint8]string)
 	}
-	format.ScInfo["default"] = ScEntry{
-		Id:    0,
-		Value: "default",
-		Name:  "default",
-	}
+	format.Tier[0] = ""
 	m.Lock()
 	m.fmt = format
 	m.Unlock()

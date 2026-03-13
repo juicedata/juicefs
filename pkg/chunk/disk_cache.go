@@ -634,7 +634,6 @@ func (cache *cacheStore) remove(key string, staging bool) {
 			logger.Warnf("remove %s failed: %s", path, err)
 		}
 		if staging {
-			// fixme: Missing storage class information
 			if err := cache.removeStage(key, ""); err != nil && !os.IsNotExist(err) {
 				logger.Warnf("remove stage %s failed: %s", cache.stagePath(key, ""), err)
 			}
@@ -871,6 +870,7 @@ func (cache *cacheStore) uploadStaging() {
 	var lastK cacheKey
 	var lastValue cacheItem
 	// for each two random keys, then compare the access time, upload the older one
+	// todo: Use fastwalk to scan and then randomly select 2 files
 	for k, value := range cache.keys.randomIter() {
 		if value.size > 0 {
 			continue // read cache

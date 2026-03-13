@@ -62,7 +62,7 @@ func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, id 
 	compactSizeHistogram.Observe(float64(size))
 	logger.Debugf("compact %d slices (%d bytes) to new slice %d", len(slices), size, id)
 
-	//fixme
+	//fixme: missing storage class info
 	writer := store.NewWriter(id, "")
 	writer.SetWriteback(false)
 

@@ -414,7 +414,7 @@ func (v *VFS) loadAllHandles(path string) error {
 			fallthrough
 		case syscall.O_RDWR:
 			h.reader = v.reader.Open(h.inode, s.Length)
-			// fixme: tier info is lost
+			// fixme: missing storage class info
 			h.writer = v.writer.Open(h.inode, s.Length, "")
 		}
 	}

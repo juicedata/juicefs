@@ -163,7 +163,7 @@ func info(ctx *cli.Context) error {
 				fmt.Printf("\t%s\n", p)
 			}
 		}
-		fmt.Printf("   tier: name->%s, storage-class->%s, Id->%d\n", resp.Tier.Name, resp.Tier.Value, resp.Tier.Id)
+		fmt.Printf("   tier: %d->%s\n", resp.TierId, resp.TierStr)
 		if resp.RestoreStatus != "" {
 			fmt.Printf("   restore status: %s\n", resp.RestoreStatus)
 		}

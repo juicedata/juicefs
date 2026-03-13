@@ -292,6 +292,23 @@ func config(ctx *cli.Context) error {
 			format.KerbConf = readKerbConf(ctx.String(flag))
 			format.MinClientVersion = "1.4.0-A"
 			clientVer = true
+		case "tier-id":
+			newSc := ctx.String("tier-sc")
+			newTierId := uint8(ctx.Uint(flag))
+			oldSc, ok := format.Tier[newTierId]
+			if ok && oldSc != newSc {
+				fmt.Printf("existing tier will be overwrite: %s=>%s\n", oldSc, newSc)
+				fmt.Printf("please confirm to continue: y/n ")
+				var confirm string
+				fmt.Scanln(&confirm)
+				if confirm != "y" {
+					fmt.Println("aborted")
+					return nil
+				}
+				msg.WriteString(fmt.Sprintf("set tier %d -> %s\n", newTierId, newSc))
+			}
+			format.Tier[newTierId] = newSc
+			err = m.Init(format, false)
 		}
 	}
 	if msg.Len() == 0 {

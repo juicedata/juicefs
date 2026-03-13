@@ -223,7 +223,7 @@ func CalcObjects(format meta.Format, id uint64, size, offset, length uint32) []*
 		logger.Warnf("Corrupt slice id %d size %d offset %d length %d", id, size, offset, length)
 		return nil
 	}
-	bsize := uint32(format.BlockSize)
+	bsize := uint32(format.BlockSize * 1024)
 	var prefix string
 	if format.HashPrefix {
 		prefix = fmt.Sprintf("%s/chunks/%02X/%v/%v", format.Name, id%256, id/1000/1000, id)
@@ -258,7 +258,8 @@ type InfoResponse struct {
 	Objects       []*chunkObj
 	PLocks        []meta.PLockItem
 	FLocks        []meta.FLockItem
-	Tier          meta.ScEntry
+	TierId        uint8
+	TierStr       string
 	RestoreStatus string
 }
 
@@ -450,12 +451,13 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			if eno != 0 {
 				logger.Warnf("GetAttr of %d: %s", inode, eno)
 			} else {
-				t, ok := v.Conf.Format.ScInfo.GetById(attr.Tier.GetTierID())
+				info.TierId = attr.Tier.GetTierID()
+				t, ok := v.Conf.Format.Tier[attr.Tier.GetTierID()]
 				if ok {
-					info.Tier = t
+					info.TierStr = t
 				} else {
 					logger.Warnf("unknown storage class id %d of inode %d", attr.Tier.GetTierID(), inode)
-					info.Tier = meta.ScEntry{Id: attr.Tier.GetTierID(), Name: "unknown", Value: "unknown"}
+					info.TierStr = "unknown"
 				}
 			}
 			info.Paths = v.Meta.GetPaths(ctx, inode)
@@ -476,11 +478,11 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			}
 			if len(info.Objects) > 0 {
 				lastObjKey := strings.TrimPrefix(info.Objects[len(info.Objects)-1].Key, v.Conf.Format.Name+"/")
-				storage := v.Store.GetStorage()
-				if objInfo, err := storage.Head(ctx, lastObjKey); err != nil {
+
+				if status, err := v.Store.GetObjStatus(lastObjKey); err != nil {
 					logger.Warnf("get restore status of %s: %s", lastObjKey, err)
 				} else {
-					info.RestoreStatus = objInfo.Status()
+					info.RestoreStatus = status
 				}
 			}
 

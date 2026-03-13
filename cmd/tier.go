@@ -31,55 +31,59 @@ func cmdTier() *cli.Command {
 	return &cli.Command{
 		Name:            "tier",
 		Category:        "ADMIN",
-		Usage:           "",
-		ArgsUsage:       "",
+		Usage:           "manage storage tier",
+		ArgsUsage:       "META-URL",
 		HideHelpCommand: true,
-		Description:     ``,
+		Description: `
+Examples:
+$ juicefs tier list redis://localhost
+$ juicefs tier set-tier redis://localhost --id 1 /dir1
+$ juicefs tier set-tier redis://localhost --id 2 /dir1 -r
+$ juicefs tier set-tier redis://localhost --id 3 /file1
+$ juicefs tier set-tier redis://localhost --id 0 /file1
+$ juicefs tier restore redis://localhost --path /dir1`,
 		Subcommands: []*cli.Command{
 			{
-				Name:      "set",
-				Usage:     "",
-				ArgsUsage: "",
-				Action:    set,
-			},
-			{
 				Name:      "list",
-				Usage:     "",
-				ArgsUsage: "",
+				Usage:     "list storage tiers",
+				ArgsUsage: "META-URL",
 				Action:    listTier,
 			},
 			{
 				Name:      "set-tier",
-				Usage:     "",
-				ArgsUsage: "",
+				Usage:     "set storage tier to a file or directory",
+				ArgsUsage: "META-URL PATH",
 				Action:    setTier,
 			},
 			{
 				Name:      "restore",
-				Usage:     "",
-				ArgsUsage: "",
+				Usage:     "restore objects of a file",
+				ArgsUsage: "META-URL PATH",
 				Action:    objRestore,
 			},
 		},
 		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:  "name",
-				Usage: "",
-			},
-			&cli.UintFlag{
+			&cli.IntFlag{
 				Name:  "id",
-				Usage: "",
+				Usage: "tier id (0-3, 0 is reserved for default tier)",
+				Action: func(ctx *cli.Context, v int) error {
+					if !ctx.IsSet("id") {
+						return nil
+					}
+					if v <= 0 || v > 3 {
+						return fmt.Errorf("-id should be between 0 and 3")
+					}
+					return nil
+				},
 			},
 			&cli.BoolFlag{
 				Name:    "recursive",
 				Aliases: []string{"r"},
-				Usage:   "",
+				Usage:   "recursively set storage tier for all files and directories under the target directory",
 			},
 		},
 	}
 }
-
-var c = meta.NewContext(0, 0, []uint32{0})
 
 func listTier(ctx *cli.Context) error {
 	setup(ctx, 1)
@@ -89,50 +93,21 @@ func listTier(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
-	fmt.Printf("%-20s%-20s%-20s\n", "ID", "Name", "Value")
-	for _, sc := range format.ScInfo {
-		fmt.Printf("%-20d%-20s%-20s\n", sc.Id, sc.Name, sc.Value)
+	results := make([][]string, 0, 1+len(format.Tier))
+	results = append(results, []string{"id", "storageClass"})
+	for id, sc := range format.Tier {
+		results = append(results, []string{fmt.Sprintf("%d", id), sc})
 	}
+	printResult(results, 1, false)
 	return nil
+
 }
 
-// juicefs tier set redis://localhost -id 1 -name tier1 IA
-func set(ctx *cli.Context) error {
+func setTier(ctx *cli.Context) error {
 	setup(ctx, 2)
 	removePassword(ctx.Args().Get(0))
-	scStr := ctx.Args().Get(1)
-	name := ctx.String("name")
-	id := ctx.Uint("id")
-	if id <= 0 || id > 15 {
-		logger.Fatalf("invalid id %d", id)
-	}
-	m := meta.NewClient(ctx.Args().Get(0), nil)
-	format, err := m.Load(true)
-	if err != nil {
-		logger.Fatalf("load setting: %s", err)
-	}
-	if format.ScInfo == nil {
-		format.ScInfo = make(map[string]meta.ScEntry)
-	}
-	//todo: add safety protection
-	format.ScInfo[name] = meta.ScEntry{
-		Id:    uint8(id),
-		Value: scStr,
-		Name:  name,
-	}
-	return m.Init(format, false)
-}
-
-// juicefs tier set-tier redis://localhost  path tier1
-// juicefs tier restore redis://localhost  path
-func setTier(ctx *cli.Context) error {
-	setup(ctx, 3)
-	removePassword(ctx.Args().Get(0))
 	path := ctx.Args().Get(1)
-	var tier string
-	if ctx.Args().Len() >= 2 {
-		tier = ctx.Args().Get(2)
-	}
+	id := ctx.Uint("id")
 	m := meta.NewClient(ctx.Args().Get(0), nil)
 	format, err := m.Load(true)
 	if err != nil {
@@ -140,43 +115,42 @@ func setTier(ctx *cli.Context) error {
 	}
 	var ino meta.Ino
 	var attr meta.Attr
-	eno := m.Resolve(c, 1, path, &ino, &attr, true)
+	eno := m.Resolve(meta.Background(), 1, path, &ino, &attr, true)
 	if eno != 0 {
 		return eno
 	}
-	errno := m.GetAttr(c, ino, &attr)
+	errno := m.GetAttr(meta.Background(), ino, &attr)
 	if errno != 0 {
 		return errno
 	}
-	logger.Infof("current storage class of: %d", attr.Tier.GetTierID())
-	scInfo, ok := format.ScInfo.GetByName(tier)
-	if !ok {
-		return fmt.Errorf("invalid storage class: %s", tier)
+	oldTier := format.Tier[attr.Tier.GetTierID()]
+	if attr.Tier.GetTierID() == uint8(id) {
+		logger.Infof("storage class of %s is already %d(%s), no change needed", path, id, oldTier)
+		return nil
 	}
-	logger.Infof("new storage class of: %s->%d", scInfo.Name, scInfo.Id)
+	newTier := format.Tier[uint8(id)]
+	logger.Infof("set storage tier of %s from %d(%s) to %d(%s)", path, attr.Tier.GetTierID(), oldTier, id, newTier)
 
 	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
-	logger.Infof("Data use %s", blob)
 
 	metaFunc := func(ino meta.Ino) error {
 		var t meta.TierInfo
-		if err := t.SetTierID(scInfo.Id); err != nil {
+		if err := t.SetTierID(uint8(id)); err != nil {
 			return err
 		}
 		a := &meta.Attr{Tier: t}
-		if eno := m.SetAttr(c, ino, meta.SetAttrTier, 0, a); eno != 0 {
+		if eno := m.SetAttr(meta.Background(), ino, meta.SetAttrTier, 0, a); eno != 0 {
 			return eno
 		}
-		fmt.Println(a.Tier.GetTierID())
 		return nil
 	}
+
 	objectFunc := func(key string) error {
 		fullPath := format.Name + "/" + key
-		ctx := context.Background()
-		ctx = context.WithValue(ctx, object.StorageClassKey, scInfo.Value)
+		ctx := context.WithValue(context.Background(), object.StorageClassKey, format.Tier[uint8(id)])
 		return blob.Copy(ctx, fullPath, fullPath)
 	}
 	if attr.Typ == meta.TypeFile || attr.Typ == meta.TypeDirectory {
@@ -193,6 +167,7 @@ func setTier(ctx *cli.Context) error {
 	}
 	return nil
 }
+
 func objRestore(ctx *cli.Context) error {
 	setup(ctx, 2)
 	removePassword(ctx.Args().Get(0))
@@ -204,20 +179,18 @@ func objRestore(ctx *cli.Context) error {
 	}
 	var ino meta.Ino
 	var attr meta.Attr
-	eno := m.Resolve(c, 1, path, &ino, &attr, true)
+	eno := m.Resolve(meta.Background(), 1, path, &ino, &attr, true)
 	if eno != 0 {
 		return eno
 	}
-	errno := m.GetAttr(c, ino, &attr)
+	errno := m.GetAttr(meta.Background(), ino, &attr)
 	if errno != 0 {
 		return errno
 	}
-
 	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
-	logger.Infof("Data use %s", blob)
 
 	objectFunc := func(key string) error {
 		return blob.Restore(context.Background(), key)
@@ -238,13 +211,13 @@ func objRestore(ctx *cli.Context) error {
 }
 
 func visitDir(m meta.Meta, format *meta.Format, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, ino meta.Ino, recursive bool) error {
-	handler, errno := m.NewDirHandler(c, ino, true, nil)
+	handler, errno := m.NewDirHandler(meta.Background(), ino, true, nil)
 	if errno != 0 {
 		return errno
 	}
 	offset := 0
 	for {
-		batchEntries, batchEno := handler.List(c, offset)
+		batchEntries, batchEno := handler.List(meta.Background(), offset)
 		if batchEno != 0 {
 			return batchEno
 		}
@@ -252,6 +225,9 @@ func visitDir(m meta.Meta, format *meta.Format, objectFunc func(key string) erro
 			break
 		}
 		for _, e := range batchEntries {
+			if string(e.Name) == "." || string(e.Name) == ".." {
+				continue
+			}
 			if e.Attr.Typ == meta.TypeDirectory || e.Attr.Typ == meta.TypeFile {
 				err := visitEntry(m, format, objectFunc, metaFunc, e.Inode, e.Attr.Length)
 				if err != nil {
@@ -274,7 +250,7 @@ func getObjKeys(m meta.Meta, format *meta.Format, ino meta.Ino, length uint64) [
 	var objs []string
 	for indx := uint64(0); indx*meta.ChunkSize < length; indx++ {
 		var cs []meta.Slice
-		_ = m.Read(c, ino, uint32(indx), &cs)
+		_ = m.Read(meta.Background(), ino, uint32(indx), &cs)
 		for _, c := range cs {
 			for _, o := range vfs.CalcObjects(*format, c.Id, c.Size, c.Off, c.Len) {
 				k := strings.TrimPrefix(o.Key, format.Name+"/")
