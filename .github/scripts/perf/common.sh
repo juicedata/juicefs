@@ -14,7 +14,7 @@ prepare0() {
     rm -rf /var/jfs/myjfs/
     start_meta_engine $META
     create_database $meta_url
-    ./juicefs format $meta_url --trash-days 0 myjfs
+    ./juicefs format $meta_url --trash-days 1 myjfs
     ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report
 }
 
