@@ -3236,8 +3236,7 @@ func (m *kvMeta) doCleanQuotas(ctx Context, qtype uint32) error {
 	if err != nil {
 		return fmt.Errorf("failed to scan %s quotas: %w", prefix, err)
 	}
-
-	return m.client.txn(ctx, func(tx *kvTxn) error {
+ 	return m.txn(ctx, func(tx *kvTxn) error {		
 		for k, v := range pairs {
 			if len(v) != 32 {
 				continue
@@ -3248,7 +3247,7 @@ func (m *kvMeta) doCleanQuotas(ctx Context, qtype uint32) error {
 			tx.set([]byte(k), m.packQuota(quota))
 		}
 		return nil
-	}, 0)
+	})
 }
 
 func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
