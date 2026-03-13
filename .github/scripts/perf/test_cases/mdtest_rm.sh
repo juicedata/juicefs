@@ -1,11 +1,12 @@
 #!/bin/bash -e
 source "$(dirname "$0")/common.sh"
+source .github/scripts/start_meta_engine.sh
 THRESHOLD=20
 COMPARISON_MODE="lower_is_better"
 
 prepare() {
     prepare0 $@
-    cmd/mount/mount mdtest /tmp/jfs/mdtest --depth 2 --dirs 10  --files 5 --threads 100 --write 8192
+    ./juicefs mdtest $(get_meta_url $META) /mdtest --depth 2 --dirs 10  --files 5 --threads 100 --write 8192
     echo 3 > /proc/sys/vm/drop_caches
 }
 

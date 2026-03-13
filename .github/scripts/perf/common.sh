@@ -9,16 +9,20 @@ prepare0() {
         cp -f juicefs.new juicefs
     fi
     source .github/scripts/start_meta_engine.sh
-    start_meta_engine $META
     meta_url=$(get_meta_url $META)
+    python3 .github/scripts/flush_meta.py $meta_url
+    rm -rf /var/jfs/myjfs/
+    start_meta_engine $META
     create_database $meta_url
-    ./juicefs format $meta_url --trash-days 0 --bucket=/mnt/jfs pics
+    ./juicefs format $meta_url --trash-days 0 myjfs
     ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report
 }
 
 cleanup() {
-    meta_url=$(get_meta_url $META)
-    python3 .github/scripts/flush_meta.py $meta_url
+    echo "cleanup" >&2
+    # meta_url=$(get_meta_url $META)
+    # python3 .github/scripts/flush_meta.py $meta_url
+    # rm -rf /var/jfs/myjfs/
 }
 
 parse_real_time() {
