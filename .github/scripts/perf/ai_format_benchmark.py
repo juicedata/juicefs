@@ -130,7 +130,7 @@ class AIFormatBenchmark:
             elapsed_time = end_time - start_time
             times.append(elapsed_time)
             
-            if "file_size" in result:
+            if result is not None and "file_size" in result:
                 file_size = result["file_size"]
             if result is not None:
                 size_results.append(result)
@@ -302,6 +302,9 @@ class AIFormatBenchmark:
             lmdb_dir.mkdir(exist_ok=True)
             
             def write_func():
+                if lmdb_dir.exists():
+                    shutil.rmtree(lmdb_dir)
+                lmdb_dir.mkdir(exist_ok=True)
                 total_bytes = self.write_lmdb_data(lmdb_dir, actual_samples, image_size)
                 return {"file_size": total_bytes, "num_samples": actual_samples}
             
@@ -1097,10 +1100,15 @@ class AIFormatBenchmark:
 def main():
     parser = argparse.ArgumentParser(description="Comprehensive AI Format Performance Benchmark")
     parser.add_argument("mount_point", help="Mount point to test")
-    parser.add_argument("results_file", help="File to save results JSON")
-    parser.add_argument("version", help="Version identifier")
+    parser.add_argument("results_file", nargs='?', default="/dev/null", help="File to save results JSON")
+    parser.add_argument("version", nargs='?', default="unknown", help="Version identifier")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument("--quick", "-q", action="store_true", help="Quick test (small files only)")
+    parser.add_argument("--benchmark",
+                        choices=["lmdb", "pytorch_weights", "tensorflow_h5",
+                                 "huggingface_bin", "tensorflow_checkpoint",
+                                 "hdf5_dataset", "parquet"],
+                        help="Run a specific benchmark only and output average throughput")
     args = parser.parse_args()
 
     benchmark = AIFormatBenchmark(args.mount_point, args.results_file, args.version)
@@ -1119,15 +1127,45 @@ def main():
             'lmdb_image_size': (32, 32)
         })
 
-    print("Starting Comprehensive AI Format Performance Benchmark...")
-    print(f"Configuration: {benchmark.config}")
+    if args.benchmark:
+        benchmark_map = {
+            "lmdb": benchmark.benchmark_lmdb,
+            "pytorch_weights": benchmark.benchmark_pytorch_weights,
+            "tensorflow_h5": benchmark.benchmark_tensorflow_h5,
+            "huggingface_bin": benchmark.benchmark_huggingface_bin,
+            "tensorflow_checkpoint": benchmark.benchmark_tensorflow_checkpoint,
+            "hdf5_dataset": benchmark.benchmark_hdf5_dataset,
+            "parquet": benchmark.benchmark_parquet,
+        }
+        print(f"Running {args.benchmark} benchmark...")
+        result = benchmark_map[args.benchmark]()
+        if result:
+            throughputs = []
+            for size_name, size_data in result.items():
+                if isinstance(size_data, dict):
+                    for op_name, stats in size_data.items():
+                        if hasattr(stats, 'throughput_mb_s') and stats.throughput_mb_s:
+                            print(f"  {size_name}_{op_name}: {stats.throughput_mb_s:.2f} MB/s")
+                            throughputs.append(stats.throughput_mb_s)
+            if throughputs:
+                avg = sum(throughputs) / len(throughputs)
+                print(f"AVERAGE_THROUGHPUT: {avg:.2f}")
+            else:
+                print("ERROR: No throughput results collected")
+                sys.exit(1)
+        else:
+            print(f"ERROR: {args.benchmark} benchmark returned no results")
+            sys.exit(1)
+    else:
+        print("Starting Comprehensive AI Format Performance Benchmark...")
+        print(f"Configuration: {benchmark.config}")
 
-    # Run comprehensive benchmarks
-    benchmark.results = benchmark.benchmark_comprehensive()
+        # Run comprehensive benchmarks
+        benchmark.results = benchmark.benchmark_comprehensive()
 
-    # Save and display results
-    benchmark.save_results()
-    benchmark.print_detailed_summary()
+        # Save and display results
+        benchmark.save_results()
+        benchmark.print_detailed_summary()
 
 if __name__ == "__main__":
     main()
