@@ -42,6 +42,14 @@ type logHandle struct {
 	colorful bool
 }
 
+func (l *logHandle) IsTrace() bool {
+	return l.IsLevelEnabled(logrus.TraceLevel)
+}
+
+func (l *logHandle) IsDebug() bool {
+	return l.IsLevelEnabled(logrus.DebugLevel)
+}
+
 func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 	lvl := e.Level
 	if l.lvl != nil {
