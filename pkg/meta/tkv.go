@@ -3243,7 +3243,6 @@ func (m *kvMeta) doCleanQuotas(ctx Context, qtype uint32) error {
 				continue
 			}
 			quota := m.parseQuota(v)
-			// Only reset usedSpace and usedInodes, keep MaxSpace and MaxInodes
 			quota.UsedSpace = 0
 			quota.UsedInodes = 0
 			tx.set([]byte(k), m.packQuota(quota))

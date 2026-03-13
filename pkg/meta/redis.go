@@ -4282,18 +4282,15 @@ func (m *redisMeta) doCleanQuotas(ctx Context, qtype uint32) error {
 		return err
 	}
 	return m.hscan(ctx, config.quotaKey, func(keys []string) error {
-		for i := 0; i < len(keys); i += 2 {
-			key := keys[i]
-			_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			for i := 0; i < len(keys); i += 2 {
+				key := keys[i]
 				pipe.HSet(ctx, config.usedSpaceKey, key, 0)
 				pipe.HSet(ctx, config.usedInodesKey, key, 0)
-				return nil
-			})
-			if err != nil {
-				return err
 			}
-		}
-		return nil
+			return nil
+		})
+		return err
 	})
 }
 

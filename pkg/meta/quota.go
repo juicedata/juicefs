@@ -948,8 +948,72 @@ func (m *baseMeta) userGroupQuotaCheck(ctx Context, strict, repair bool, quotas 
 	if err != nil {
 		return fmt.Errorf("scan global user group usage: %v", err)
 	}
-	m.en.doCleanQuotas(ctx, UserQuotaType)
-	m.en.doCleanQuotas(ctx, GroupQuotaType)
+
+	var hasErr bool
+
+	for uid, usage := range userUsage {
+		m.quotaMu.RLock()
+		q, ok := m.userQuotas[uid]
+		m.quotaMu.RUnlock()
+
+		usedSpace := int64(usage.Size)
+		usedInodes := int64(usage.Files)
+
+		if !ok {
+			logger.Warnf("uid:%d: usage not found, actual usage(%s, %s)",
+				uid, humanize.Comma(usedInodes), humanize.IBytes(uint64(usedSpace)))
+			hasErr = true
+			continue
+		}
+
+		if q.UsedInodes != usedInodes || q.UsedSpace != usedSpace {
+			logger.Warnf("uid:%d: usage(%s, %s) != actual usage(%s, %s)",
+				uid,
+				humanize.Comma(q.UsedInodes), humanize.IBytes(uint64(q.UsedSpace)),
+				humanize.Comma(usedInodes), humanize.IBytes(uint64(usedSpace)))
+			hasErr = true
+		}
+	}
+
+	for gid, usage := range groupUsage {
+		m.quotaMu.RLock()
+		q, ok := m.groupQuotas[gid]
+		m.quotaMu.RUnlock()
+
+		usedSpace := int64(usage.Size)
+		usedInodes := int64(usage.Files)
+
+		if !ok {
+			logger.Warnf("gid:%d: usage not found, actual usage(%s, %s)",
+				gid, humanize.Comma(usedInodes), humanize.IBytes(uint64(usedSpace)))
+			hasErr = true
+			continue
+		}
+
+		if q.UsedInodes != usedInodes || q.UsedSpace != usedSpace {
+			logger.Warnf("gid:%d: usage(%s, %s) != actual usage(%s, %s)",
+				gid,
+				humanize.Comma(q.UsedInodes), humanize.IBytes(uint64(q.UsedSpace)),
+				humanize.Comma(usedInodes), humanize.IBytes(uint64(usedSpace)))
+			hasErr = true
+		}
+	}
+
+	if !repair {
+		if hasErr {
+			return fmt.Errorf("user/group quota is inconsistent, please repair it with --repair flag")
+		}
+		return nil
+	}
+
+	logger.Infof("begin to repair.")
+
+	if err = m.en.doCleanQuotas(ctx, UserQuotaType); err != nil {
+		return fmt.Errorf("clean user quotas: %v", err)
+	}
+	if err = m.en.doCleanQuotas(ctx, GroupQuotaType); err != nil {
+		return fmt.Errorf("clean group quotas: %v", err)
+	}
 
 	for uid, usage := range userUsage {
 		quota := &Quota{
