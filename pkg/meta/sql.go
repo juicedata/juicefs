@@ -4171,7 +4171,6 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	return m.txn(func(s *xorm.Session) error {
 		for _, q := range quotas {
 			if q.qtype == DirQuotaType {
-				logger.Infof("doFlushquot ino:%d, %+v", q.qkey, q.quota)
 				_, err := s.Exec(m.sqlConv("update dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"),
 					q.quota.newSpace, q.quota.newInodes, q.qkey)
 				if err != nil {
@@ -4186,6 +4185,19 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 			}
 		}
 		return nil
+	})
+}
+
+func (m *dbMeta) doCleanUserGroupUsage(ctx Context, qtype uint32) error {
+	if qtype != UserQuotaType && qtype != GroupQuotaType {
+		return errors.Errorf("invalid quota type %d", qtype)
+	}
+
+	return m.txn(func(s *xorm.Session) error {
+		_, err := s.Cols("used_space", "used_inodes").
+			Update(&userGroupQuota{UsedSpace: 0, UsedInodes: 0},
+				&userGroupQuota{Qtype: qtype})
+		return err
 	})
 }
 

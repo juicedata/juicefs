@@ -139,8 +139,7 @@ func quota(c *cli.Context) error {
 	}
 
 	var uid, gid uint32
-	var quotaKey string
-	var quotaType string
+	var quotaKey, quotaType string
 	validateID := func(name string) uint32 {
 		id := c.Uint64(name)
 		if id == 0 {
@@ -152,29 +151,34 @@ func quota(c *cli.Context) error {
 		return uint32(id)
 	}
 	if c.IsSet("uid") {
-		uid = validateID("uid")
-		quotaKey = fmt.Sprintf("uid:%d", uid)
-		quotaType = "user"
 		if c.IsSet("gid") {
 			logger.Fatalf("Cannot specify both --uid and --gid at the same time")
 		}
 		if c.IsSet("path") {
 			logger.Fatalf("Cannot specify both --uid and --path at the same time")
 		}
+		uid = validateID("uid")
+		quotaKey = fmt.Sprintf("uid:%d", uid)
+		quotaType = "user"
 	} else if c.IsSet("gid") {
-		gid = validateID("gid")
-		quotaKey = fmt.Sprintf("gid:%d", gid)
-		quotaType = "group"
 		if c.IsSet("path") {
 			logger.Fatalf("Cannot specify both --gid and --path at the same time")
 		}
+		gid = validateID("gid")
+		quotaKey = fmt.Sprintf("gid:%d", gid)
+		quotaType = "group"
 	} else {
-		dpath := c.String("path")
-		if dpath == "" && cmd != meta.QuotaList {
-			logger.Fatalf("Please specify the directory with `--path <dir>` option")
-		}
-		quotaKey = dpath
+		quotaKey = c.String("path")
 		quotaType = "directory"
+		if quotaKey == "" {
+			switch cmd {
+			case meta.QuotaList:
+			case meta.QuotaCheck:
+				quotaType = "all"
+			default:
+				logger.Fatalf("Please specify the directory with `--path <dir>` option")
+			}
+		}
 	}
 
 	removePassword(c.Args().Get(0))
@@ -207,13 +211,18 @@ func quota(c *cli.Context) error {
 		return nil
 	}
 
-	result := make([][]string, 1, len(qs)+1)
+	printQuotaResult(quotaType, qs)
+	return nil
+}
 
-	if quotaType == "user" {
+func printQuotaResult(quotaType string, qs map[string]*meta.Quota) {
+	result := make([][]string, 1, len(qs)+1)
+	switch quotaType {
+	case "user":
 		result[0] = []string{"User ID", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
-	} else if quotaType == "group" {
+	case "group":
 		result[0] = []string{"Group ID", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
-	} else {
+	default:
 		result[0] = []string{"Path", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
 	}
 
@@ -233,32 +242,25 @@ func quota(c *cli.Context) error {
 			q.UsedInodes = 0
 		}
 		used := humanize.IBytes(uint64(q.UsedSpace))
-		var size, usedR string
+		iused := humanize.Comma(q.UsedInodes)
+		size, usedR := "unchanged", ""
 		if q.MaxSpace > 0 {
 			size = humanize.IBytes(uint64(q.MaxSpace))
 			usedR = fmt.Sprintf("%d%%", q.UsedSpace*100/q.MaxSpace)
-		} else {
-			size = "unchanged"
 		}
-		iused := humanize.Comma(q.UsedInodes)
-		var itotal, iusedR string
+		itotal, iusedR := "unchanged", ""
 		if q.MaxInodes > 0 {
 			itotal = humanize.Comma(q.MaxInodes)
 			iusedR = fmt.Sprintf("%d%%", q.UsedInodes*100/q.MaxInodes)
-		} else {
-			itotal = "unchanged"
 		}
 
-		var identifier string
+		identifier := p
 		if strings.HasPrefix(p, "uid:") {
 			identifier = fmt.Sprintf("UID:%s", strings.TrimPrefix(p, "uid:"))
 		} else if strings.HasPrefix(p, "gid:") {
 			identifier = fmt.Sprintf("GID:%s", strings.TrimPrefix(p, "gid:"))
-		} else {
-			identifier = p
 		}
 		result = append(result, []string{identifier, size, used, usedR, itotal, iused, iusedR})
 	}
 	printResult(result, 0, false)
-	return nil
 }

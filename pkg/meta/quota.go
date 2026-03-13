@@ -573,7 +573,7 @@ func (m *baseMeta) doFlushQuotas() {
 
 func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32, gid uint32, quotas map[string]*Quota, strict, repair bool, create bool) error {
 	var inode Ino
-	if cmd != QuotaList && uid == 0 && gid == 0 {
+	if cmd != QuotaList && uid == 0 && gid == 0 && dpath != "" {
 		if st := m.resolve(ctx, dpath, &inode, create); st != 0 {
 			return fmt.Errorf("resolve dir %s: %s", dpath, st)
 		}
@@ -596,7 +596,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32,
 		key = uint64(inode)
 	}
 
-	if cmd != QuotaList && qtype == 0xffffffff {
+	if cmd != QuotaList && cmd != QuotaCheck && qtype == 0xffffffff {
 		return fmt.Errorf("invalid quota type")
 	}
 
@@ -894,6 +894,10 @@ func (m *baseMeta) handleQuotaList(ctx Context, qtype uint32, key uint64, quotas
 }
 
 func (m *baseMeta) handleQuotaCheck(ctx Context, qtype uint32, key uint64, dpath string, strict, repair bool, quotas map[string]*Quota) error {
+	if qtype == 0xffffffff {
+		return m.userGroupQuotaCheck(ctx, repair, quotas)
+	}
+
 	q, err := m.en.doGetQuota(ctx, qtype, key)
 	if err != nil {
 		return err
@@ -937,6 +941,106 @@ func (m *baseMeta) handleQuotaCheck(ctx Context, qtype uint32, key uint64, dpath
 	}
 
 	return fmt.Errorf("quota of %s is inconsistent, please repair it with --repair flag", dpath)
+}
+
+func (m *baseMeta) checkSingleQuota(id uint64, idType string, q *Quota, usedSpace, usedInodes int64, hasQuota bool) bool {
+	if !hasQuota {
+		logger.Warnf("%s:%d: usage not found, actual usage(%s, %s)",
+			idType, id, humanize.Comma(usedInodes), humanize.IBytes(uint64(usedSpace)))
+		return true
+	}
+	if q.UsedInodes != usedInodes || q.UsedSpace != usedSpace {
+		logger.Warnf("%s:%d: usage(%s, %s) != actual usage(%s, %s)",
+			idType, id,
+			humanize.Comma(q.UsedInodes), humanize.IBytes(uint64(q.UsedSpace)),
+			humanize.Comma(usedInodes), humanize.IBytes(uint64(usedSpace)))
+		return true
+	}
+	return false
+}
+
+func (m *baseMeta) checkQuotasAgainstUsage(usageMap map[uint64]*Summary, quotaMap map[uint64]*Quota, idType string) bool {
+	var hasErr bool
+	for id, usage := range usageMap {
+		if id == 0 {
+			continue
+		}
+		usedSpace := int64(usage.Size)
+		usedInodes := int64(usage.Files)
+		q, ok := quotaMap[id]
+		if m.checkSingleQuota(id, idType, q, usedSpace, usedInodes, ok) {
+			hasErr = true
+		}
+	}
+	for id, q := range quotaMap {
+		if _, ok := usageMap[id]; ok {
+			continue
+		}
+		if m.checkSingleQuota(id, idType, q, 0, 0, true) {
+			hasErr = true
+		}
+	}
+	return hasErr
+}
+
+func (m *baseMeta) repairUsage(ctx Context, usageMap map[uint64]*Summary, quotaMap map[uint64]*Quota, qtype uint32) error {
+	for id, usage := range usageMap {
+		if id == 0 {
+			continue
+		}
+		quota := &Quota{
+			MaxSpace:   -1,
+			MaxInodes:  -1,
+			UsedSpace:  int64(usage.Size),
+			UsedInodes: int64(usage.Files),
+		}
+		if q, ok := quotaMap[id]; ok {
+			quota.MaxSpace = q.MaxSpace
+			quota.MaxInodes = q.MaxInodes
+		}
+		if _, err := m.en.doSetQuota(ctx, qtype, id, quota); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *baseMeta) userGroupQuotaCheck(ctx Context, repair bool, quotas map[string]*Quota) error {
+	userUsage, groupUsage, err := m.scanGlobalUserGroupUsage(ctx)
+	if err != nil {
+		return fmt.Errorf("scan global user group usage: %v", err)
+	}
+
+	_, userQuotas, groupQuotas, err := m.en.doLoadQuotas(ctx)
+	if err != nil {
+		return fmt.Errorf("load user/group quotas: %v", err)
+	}
+	hasErr := m.checkQuotasAgainstUsage(userUsage, userQuotas, "uid")
+	hasErr = m.checkQuotasAgainstUsage(groupUsage, groupQuotas, "gid") || hasErr
+
+	if !repair {
+		if hasErr {
+			return fmt.Errorf("user/group quota is inconsistent, please repair it with --repair flag")
+		}
+		return nil
+	}
+
+	logger.Infof("Begin to repair user/group quota.")
+	if err = m.en.doCleanUserGroupUsage(ctx, UserQuotaType); err != nil {
+		return fmt.Errorf("clean user quotas: %v", err)
+	}
+	if err = m.en.doCleanUserGroupUsage(ctx, GroupQuotaType); err != nil {
+		return fmt.Errorf("clean group quotas: %v", err)
+	}
+
+	if err = m.repairUsage(ctx, userUsage, userQuotas, UserQuotaType); err != nil {
+		return fmt.Errorf("set user quota: %v", err)
+	}
+	if err = m.repairUsage(ctx, groupUsage, groupQuotas, GroupQuotaType); err != nil {
+		return fmt.Errorf("set group quota: %v", err)
+	}
+
+	return nil
 }
 
 func (m *baseMeta) updateQuotaMetrics() {

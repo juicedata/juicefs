@@ -3220,6 +3220,36 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 	return quotaMaps[0], quotaMaps[1], quotaMaps[2], nil
 }
 
+func (m *kvMeta) doCleanUserGroupUsage(ctx Context, qtype uint32) error {
+	if qtype != UserQuotaType && qtype != GroupQuotaType {
+		return fmt.Errorf("invalid quota type: %d", qtype)
+	}
+
+	var prefix string
+	if qtype == UserQuotaType {
+		prefix = "QU"
+	} else {
+		prefix = "QG"
+	}
+
+	pairs, err := m.scanValues(ctx, m.fmtKey(prefix), -1, nil)
+	if err != nil {
+		return fmt.Errorf("failed to scan %s quotas: %w", prefix, err)
+	}
+ 	return m.txn(ctx, func(tx *kvTxn) error {		
+		for k, v := range pairs {
+			if len(v) != 32 {
+				continue
+			}
+			quota := m.parseQuota(v)
+			quota.UsedSpace = 0
+			quota.UsedInodes = 0
+			tx.set([]byte(k), m.packQuota(quota))
+		}
+		return nil
+	})
+}
+
 func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
