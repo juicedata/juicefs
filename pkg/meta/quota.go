@@ -962,6 +962,9 @@ func (m *baseMeta) checkSingleQuota(id uint64, idType string, q *Quota, usedSpac
 func (m *baseMeta) checkQuotasAgainstUsage(usageMap map[uint64]*Summary, quotaMap map[uint64]*Quota, idType string) bool {
 	var hasErr bool
 	for id, usage := range usageMap {
+		if id == 0 {
+			continue
+		}
 		usedSpace := int64(usage.Size)
 		usedInodes := int64(usage.Files)
 		q, ok := quotaMap[id]
@@ -982,6 +985,9 @@ func (m *baseMeta) checkQuotasAgainstUsage(usageMap map[uint64]*Summary, quotaMa
 
 func (m *baseMeta) repairQuotas(ctx Context, usageMap map[uint64]*Summary, quotaMap map[uint64]*Quota, qtype uint32) error {
 	for id, usage := range usageMap {
+		if id == 0 {
+			continue
+		}
 		quota := &Quota{
 			MaxSpace:   -1,
 			MaxInodes:  -1,
@@ -1005,10 +1011,12 @@ func (m *baseMeta) userGroupQuotaCheck(ctx Context, strict, repair bool, quotas 
 		return fmt.Errorf("scan global user group usage: %v", err)
 	}
 
-	m.quotaMu.RLock()
-	hasErr := m.checkQuotasAgainstUsage(userUsage, m.userQuotas, "uid")
-	hasErr = m.checkQuotasAgainstUsage(groupUsage, m.groupQuotas, "gid") || hasErr
-	m.quotaMu.RUnlock()
+	_, userQuotas, groupQuotas, err := m.en.doLoadQuotas(ctx)
+	if err != nil {
+		return fmt.Errorf("load user/group quotas: %v", err)
+	}
+	hasErr := m.checkQuotasAgainstUsage(userUsage, userQuotas, "uid")
+	hasErr = m.checkQuotasAgainstUsage(groupUsage, groupQuotas, "gid") || hasErr
 
 	if !repair {
 		if hasErr {
@@ -1025,13 +1033,10 @@ func (m *baseMeta) userGroupQuotaCheck(ctx Context, strict, repair bool, quotas 
 		return fmt.Errorf("clean group quotas: %v", err)
 	}
 
-	m.quotaMu.RLock()
-	if err = m.repairQuotas(ctx, userUsage, m.userQuotas, UserQuotaType); err != nil {
-		m.quotaMu.RUnlock()
+	if err = m.repairQuotas(ctx, userUsage, userQuotas, UserQuotaType); err != nil {
 		return fmt.Errorf("set user quota: %v", err)
 	}
-	if err = m.repairQuotas(ctx, groupUsage, m.groupQuotas, GroupQuotaType); err != nil {
-		m.quotaMu.RUnlock()
+	if err = m.repairQuotas(ctx, groupUsage, groupQuotas, GroupQuotaType); err != nil {
 		return fmt.Errorf("set group quota: %v", err)
 	}
 	m.quotaMu.RUnlock()
