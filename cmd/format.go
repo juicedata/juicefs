@@ -142,6 +142,23 @@ func formatStorageFlags() []cli.Flag {
 			Name:  "storage-class",
 			Usage: "the default storage class",
 		},
+		&cli.StringFlag{
+			Name:  "tier-sc",
+			Usage: "storage class for storage tier (e.g. STANDARD_IA for AWS S3)",
+		},
+		&cli.IntFlag{
+			Name:  "tier-id",
+			Usage: "tier id (0-3, 0 is reserved for default tier)",
+			Action: func(ctx *cli.Context, v int) error {
+				if !ctx.IsSet("tier-id") {
+					return nil
+				}
+				if v <= 0 || v > 3 {
+					return fmt.Errorf("tier-id should be between 0 and 3")
+				}
+				return nil
+			},
+		},
 	})
 }
 

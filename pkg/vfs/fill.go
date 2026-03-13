@@ -193,7 +193,7 @@ func (c *CacheFiller) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr
 		}
 	}
 	p = strings.Trim(p, "/")
-	err := c.meta.Resolve(ctx, 1, p, inode, attr)
+	err := c.meta.Resolve(ctx, 1, p, inode, attr, false)
 	if err != syscall.ENOTSUP {
 		return err
 	}

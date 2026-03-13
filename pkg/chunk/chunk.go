@@ -37,11 +37,12 @@ type Writer interface {
 
 type ChunkStore interface {
 	NewReader(id uint64, length int) Reader
-	NewWriter(id uint64) Writer
+	NewWriter(id uint64, sc string) Writer
 	Remove(id uint64, length int) error
 	FillCache(id uint64, length uint32) error
 	EvictCache(id uint64, length uint32) error
 	CheckCache(id uint64, length uint32, handler func(exists bool, loc string, size int)) error
 	UsedMemory() int64
 	UpdateLimit(upload, download int64)
+	GetObjStatus(key string) (string, error)
 }

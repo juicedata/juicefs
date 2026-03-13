@@ -63,7 +63,7 @@ func newMemStore(config *Config, metrics *cacheManagerMetrics) *memcache {
 	return c
 }
 
-func (c *memcache) removeStage(key string) error {
+func (c *memcache) removeStage(key string, sc string) error {
 	return nil
 }
 
@@ -206,7 +206,7 @@ func (c *memcache) cleanupExpire() {
 	}
 }
 
-func (c *memcache) stage(key string, data []byte) (string, error) {
+func (c *memcache) stage(key string, data []byte, sc string) (string, error) {
 	return "", errors.New("not supported")
 }
 func (c *memcache) uploaded(key string, size int)    {}

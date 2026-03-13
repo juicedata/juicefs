@@ -234,7 +234,7 @@ func (v *VFS) releaseHandle(inode Ino, fh uint64) {
 	}
 }
 
-func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32) uint64 {
+func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32, scStr string) uint64 {
 	h := v.newHandle(inode, (flags&O_ACCMODE) == syscall.O_RDONLY)
 	h.Lock()
 	defer h.Unlock()
@@ -246,7 +246,7 @@ func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32) uint64 {
 		fallthrough
 	case syscall.O_RDWR:
 		h.reader = v.reader.Open(inode, length)
-		h.writer = v.writer.Open(inode, length)
+		h.writer = v.writer.Open(inode, length, scStr)
 	}
 	return h.fh
 }
@@ -414,7 +414,8 @@ func (v *VFS) loadAllHandles(path string) error {
 			fallthrough
 		case syscall.O_RDWR:
 			h.reader = v.reader.Open(h.inode, s.Length)
-			h.writer = v.writer.Open(h.inode, s.Length)
+			// fixme: missing storage class info
+			h.writer = v.writer.Open(h.inode, s.Length, "")
 		}
 	}
 	if len(v.handleIno) > 0 {

@@ -103,7 +103,7 @@ func (q *qiniu) Head(ctx context.Context, key string) (Object, error) {
 		r.Fsize,
 		mtime,
 		strings.HasSuffix(key, "/"),
-		"",
+		"", "",
 	}, nil
 }
 
@@ -162,14 +162,14 @@ func (q *qiniu) List(ctx context.Context, prefix, startAfter, token, delimiter s
 			continue
 		}
 		mtime := entry.PutTime / 10000000
-		objs = append(objs, &obj{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/"), ""})
+		objs = append(objs, &obj{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/"), "", ""})
 	}
 	if delimiter != "" {
 		for _, p := range prefixes {
 			if p <= startAfter {
 				continue
 			}
-			objs = append(objs, &obj{p, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &obj{p, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

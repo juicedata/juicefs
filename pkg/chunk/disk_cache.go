@@ -420,9 +420,9 @@ func (cache *cacheStore) refreshCacheKeys() {
 	}
 }
 
-func (cache *cacheStore) removeStage(key string) error {
+func (cache *cacheStore) removeStage(key string, sc string) error {
 	var err error
-	if err = cache.removeFile(cache.stagePath(key)); err == nil {
+	if err = cache.removeFile(cache.stagePath(key, sc)); err == nil {
 		cache.m.stageBlocks.Sub(1)
 		cache.m.stageBlockBytes.Sub(float64(parseObjOrigSize(key)))
 	}
@@ -634,8 +634,8 @@ func (cache *cacheStore) remove(key string, staging bool) {
 			logger.Warnf("remove %s failed: %s", path, err)
 		}
 		if staging {
-			if err := cache.removeStage(key); err != nil && !os.IsNotExist(err) {
-				logger.Warnf("remove stage %s failed: %s", cache.stagePath(key), err)
+			if err := cache.removeStage(key, ""); err != nil && !os.IsNotExist(err) {
+				logger.Warnf("remove stage %s failed: %s", cache.stagePath(key, ""), err)
 			}
 		}
 	}
@@ -705,8 +705,11 @@ func (cache *cacheStore) cachePath(key string) string {
 	return filepath.Join(cache.dir, cacheDir, key)
 }
 
-func (cache *cacheStore) stagePath(key string) string {
-	return filepath.Join(cache.dir, stagingDir, key)
+func (cache *cacheStore) stagePath(key string, sc string) string {
+	if sc != "" {
+		sc = "|" + sc
+	}
+	return filepath.Join(cache.dir, stagingDir, key+sc)
 }
 
 // flush cached block into disk
@@ -756,8 +759,8 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	}
 }
 
-func (cache *cacheStore) stage(key string, data []byte) (string, error) {
-	stagingPath := cache.stagePath(key)
+func (cache *cacheStore) stage(key string, data []byte, sc string) (string, error) {
+	stagingPath := cache.stagePath(key, sc)
 	if cache.stageFull {
 		return stagingPath, errStageFull
 	}
@@ -867,6 +870,7 @@ func (cache *cacheStore) uploadStaging() {
 	var lastK cacheKey
 	var lastValue cacheItem
 	// for each two random keys, then compare the access time, upload the older one
+	// todo: Use fastwalk to scan and then randomly select 2 files
 	for k, value := range cache.keys.randomIter() {
 		if value.size > 0 {
 			continue // read cache
@@ -882,7 +886,8 @@ func (cache *cacheStore) uploadStaging() {
 		if cnt > 1 {
 			cache.Unlock()
 			key := cache.getPathFromKey(lastK)
-			if !cache.uploader(key, cache.stagePath(key), true) {
+			//fixme: Missing storage class information
+			if !cache.uploader(key, cache.stagePath(key, ""), true) {
 				logger.Warnf("Upload list is too full")
 				cache.Lock()
 				return
@@ -901,7 +906,8 @@ func (cache *cacheStore) uploadStaging() {
 	if cnt > 0 {
 		cache.Unlock()
 		key := cache.getPathFromKey(lastK)
-		if cache.uploader(key, cache.stagePath(key), true) {
+		//fixme: Missing storage class information
+		if cache.uploader(key, cache.stagePath(key, ""), true) {
 			logger.Debugf("upload %s, age: %d", key, uint32(time.Now().Unix())-lastValue.atime)
 		}
 		cache.Lock()
@@ -994,6 +1000,8 @@ func (cache *cacheStore) scanStaging() {
 			}
 		} else {
 			key := path[len(stagingPrefix)+1:]
+			// recover original key from staging key
+			key = removeObjSc(key)
 			if runtime.GOOS == "windows" {
 				key = strings.ReplaceAll(key, "\\", "/")
 			}
@@ -1079,8 +1087,8 @@ type CacheManager interface {
 	load(key string) (ReadCloser, error)
 	exist(key string) (string, bool)
 	uploaded(key string, size int)
-	stage(key string, data []byte) (string, error)
-	removeStage(key string) error
+	stage(key string, data []byte, sc string) (string, error)
+	removeStage(key string, sc string) error
 	stats() (int64, int64)
 	usedMemory() int64
 	isEmpty() bool
@@ -1194,11 +1202,11 @@ func (m *cacheManager) getStore(key string) *cacheStore {
 	}
 }
 
-func (m *cacheManager) removeStage(key string) error {
+func (m *cacheManager) removeStage(key string, sc string) error {
 	if s := m.getStore(key); s == nil {
 		return errCacheDown
 	} else {
-		return s.removeStage(key)
+		return s.removeStage(key, sc)
 	}
 }
 
@@ -1281,10 +1289,10 @@ func (m *cacheManager) remove(key string, staging bool) {
 	}
 }
 
-func (m *cacheManager) stage(key string, data []byte) (string, error) {
+func (m *cacheManager) stage(key string, data []byte, sc string) (string, error) {
 	store := m.getStore(key)
 	if store != nil {
-		return store.stage(key, data)
+		return store.stage(key, data, sc)
 	}
 	return "", errors.New("no available cache dir")
 }

@@ -94,6 +94,7 @@ func (o *ossClient) Head(ctx context.Context, key string) (Object, error) {
 		oss.ToTime(info.LastModified),
 		strings.HasSuffix(key, "/"),
 		oss.ToString(info.StorageClass),
+		"",
 	}, nil
 }
 
@@ -131,10 +132,11 @@ func (o *ossClient) Get(ctx context.Context, key string, off, limit int64, gette
 }
 
 func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+	sc := getScStr(ctx, o.sc)
 	req := &oss.PutObjectRequest{
 		Bucket:       &o.bucket,
 		Key:          &key,
-		StorageClass: oss.StorageClassType(o.sc),
+		StorageClass: oss.StorageClassType(sc),
 		Body:         in,
 	}
 	if ins, ok := in.(io.ReadSeeker); ok {
@@ -152,17 +154,30 @@ func (o *ossClient) Put(ctx context.Context, key string, in io.Reader, getters .
 		reqId = result.Headers.Get(oss.HeaderOssRequestID)
 	}
 	attrs := ApplyGetters(getters...)
-	attrs.SetRequestID(reqId).SetStorageClass(o.sc)
+	attrs.SetRequestID(reqId).SetStorageClass(sc)
+	return err
+}
+
+func (o *ossClient) Restore(ctx context.Context, key string) error {
+	_, err := o.client.RestoreObject(ctx, &oss.RestoreObjectRequest{
+		Bucket: oss.Ptr(o.bucket),
+		Key:    oss.Ptr(key),
+		RestoreRequest: &oss.RestoreRequest{
+			Days: 1,
+			Tier: oss.Ptr("Standard"),
+		},
+	})
 	return err
 }
 
 func (o *ossClient) Copy(ctx context.Context, dst, src string) error {
+	sc := getScStr(ctx, o.sc)
 	var req = &oss.CopyObjectRequest{
 		SourceBucket: &o.bucket,
 		Bucket:       &o.bucket,
 		SourceKey:    &src,
 		Key:          &dst,
-		StorageClass: oss.StorageClassType(o.sc),
+		StorageClass: oss.StorageClassType(sc),
 	}
 	_, err := o.client.CopyObject(ctx, req)
 	return err
@@ -206,11 +221,11 @@ func (o *ossClient) List(ctx context.Context, prefix, start, token, delimiter st
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := result.Contents[i]
-		objs[i] = &obj{oss.ToString(o.Key), o.Size, oss.ToTime(o.LastModified), strings.HasSuffix(oss.ToString(o.Key), "/"), oss.ToString(o.StorageClass)}
+		objs[i] = &obj{oss.ToString(o.Key), o.Size, oss.ToTime(o.LastModified), strings.HasSuffix(oss.ToString(o.Key), "/"), oss.ToString(o.StorageClass), ""}
 	}
 	if delimiter != "" {
 		for _, o := range result.CommonPrefixes {
-			objs = append(objs, &obj{oss.ToString(o.Prefix), 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &obj{oss.ToString(o.Prefix), 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

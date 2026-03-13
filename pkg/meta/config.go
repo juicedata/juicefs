@@ -74,11 +74,23 @@ func (c *Config) SelfCheck() {
 	}
 }
 
+func (t TierIdx) GetByName(sc string) (uint8, bool) {
+	for k, v := range t {
+		if v == sc {
+			return k, true
+		}
+	}
+	return 0, false
+}
+
+type TierIdx map[uint8]string
+
 type Format struct {
 	Name             string
 	UUID             string
 	Storage          string
-	StorageClass     string `json:",omitempty"`
+	StorageClass     string  `json:",omitempty"`
+	Tier             TierIdx `json:",omitempty"`
 	Bucket           string
 	AccessKey        string `json:",omitempty"`
 	SecretKey        string `json:",omitempty"`

@@ -163,6 +163,10 @@ func info(ctx *cli.Context) error {
 				fmt.Printf("\t%s\n", p)
 			}
 		}
+		fmt.Printf("   tier: %d->%s\n", resp.TierId, resp.TierStr)
+		if resp.RestoreStatus != "" {
+			fmt.Printf("   restore status: %s\n", resp.RestoreStatus)
+		}
 		if len(resp.Chunks) > 0 {
 			fmt.Println(" chunks:")
 			results := make([][]string, 0, 1+len(resp.Chunks))
