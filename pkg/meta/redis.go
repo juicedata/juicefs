@@ -4269,7 +4269,6 @@ func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 			}
 
 			field := strconv.FormatUint(q.qkey, 10)
-			pipe.HSetNX(ctx, config.quotaKey, field, m.packQuota(-1, -1))
 			pipe.HIncrBy(ctx, config.usedSpaceKey, field, q.quota.newSpace)
 			pipe.HIncrBy(ctx, config.usedInodesKey, field, q.quota.newInodes)
 		}
