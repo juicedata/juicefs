@@ -327,10 +327,12 @@ func (m *baseMeta) syncQuotaMaps(existing map[uint64]*Quota, loaded map[uint64]*
 		}
 	}
 	// delete that are not in loaded
-	for key := range existing {
-		if _, ok := loaded[key]; !ok {
-			logger.Infof("Quota for %s %d is deleted", quotaType, key)
-			delete(existing, key)
+	if quotaType == "inode" {
+		for key := range existing {
+			if _, ok := loaded[key]; !ok {
+				logger.Infof("Quota for %s %d is deleted", quotaType, key)
+				delete(existing, key)
+			}
 		}
 	}
 }
@@ -834,7 +836,6 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 
 		}
 	}
-
 	return userUsage, groupUsage, nil
 }
 

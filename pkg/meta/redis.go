@@ -4261,13 +4261,63 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 }
 
 func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
+	nonexistUserQuotas := make(map[uint64]*iQuota)
+	nonexistGroupQuotas := make(map[uint64]*iQuota)
+	existsCmds := make([]*redis.BoolCmd, 0, len(quotas))
+	existsQuotas := make([]*iQuota, 0, len(quotas))
 	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		for _, q := range quotas {
+			if q.qtype != UserQuotaType && q.qtype != GroupQuotaType {
+				continue
+			}
 			config, err := m.getQuotaKeys(q.qtype)
 			if err != nil {
 				return err
 			}
+			field := strconv.FormatUint(q.qkey, 10)
+			existsCmds = append(existsCmds, pipe.HExists(ctx, config.usedSpaceKey, field))
+			existsQuotas = append(existsQuotas, q)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for i, cmd := range existsCmds {
+		exist, err := cmd.Result()
+		if err != nil {
+			return err
+		}
+		if !exist {
+			q := existsQuotas[i]
+			if q.qtype == UserQuotaType {
+				nonexistUserQuotas[q.qkey] = q
+			} else {
+				nonexistGroupQuotas[q.qkey] = q
+			}
+		}
+	}
+	if len(nonexistUserQuotas) > 0 || len(nonexistGroupQuotas) > 0 {
+		quotasList := []map[uint64]*iQuota{nonexistUserQuotas, nonexistGroupQuotas}
+		wg := m.parallelSyncQuotas(ctx, quotasList...)
+		defer wg.Wait()
+	}
 
+	_, err = m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		for _, q := range quotas {
+			if q.qtype == UserQuotaType {
+				if _, ok := nonexistUserQuotas[q.qkey]; ok {
+					continue
+				}
+			} else if q.qtype == GroupQuotaType {
+				if _, ok := nonexistGroupQuotas[q.qkey]; ok {
+					continue
+				}
+			}
+			config, err := m.getQuotaKeys(q.qtype)
+			if err != nil {
+				return err
+			}
 			field := strconv.FormatUint(q.qkey, 10)
 			pipe.HIncrBy(ctx, config.usedSpaceKey, field, q.quota.newSpace)
 			pipe.HIncrBy(ctx, config.usedInodesKey, field, q.quota.newInodes)
@@ -4275,6 +4325,39 @@ func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 		return nil
 	})
 	return err
+}
+
+func (m *redisMeta) parallelSyncQuotas(ctx Context, quotasList ...map[uint64]*iQuota) *sync.WaitGroup {
+	var wg sync.WaitGroup
+	for _, quotas := range quotasList {
+		if len(quotas) > 0 {
+			wg.Add(1)
+			go func(q map[uint64]*iQuota) {
+				defer wg.Done()
+				m.syncQuotas(ctx, q)
+			}(quotas)
+		}
+	}
+	return &wg
+}
+
+func (m *redisMeta) syncQuotas(ctx Context, quotas map[uint64]*iQuota) {
+	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		for qkey, q := range quotas {
+			config, err := m.getQuotaKeys(q.qtype)
+			if err != nil {
+				return err
+			}
+			field := strconv.FormatUint(qkey, 10)
+			pipe.HSetNX(ctx, config.quotaKey, field, m.packQuota(-1, -1))
+			pipe.HSet(ctx, config.usedSpaceKey, field, q.quota.newSpace)
+			pipe.HSet(ctx, config.usedInodesKey, field, q.quota.newInodes)
+		}
+		return nil
+	})
+	if err != nil {
+		logger.Warnf("sync quotas: %v", err)
+	}
 }
 
 func (m *redisMeta) checkServerConfig() {
