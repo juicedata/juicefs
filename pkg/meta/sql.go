@@ -4188,17 +4188,17 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 					return err
 				}
 				if affected == 0 {
-					quota := userGroupQuota{
-                        Qtype:      q.qtype,
-                        Qkey:       q.qkey,
-                        MaxSpace:   -1,
-                        MaxInodes:  -1,
-                        UsedSpace:  q.quota.newSpace,
-                        UsedInodes: q.quota.newInodes,
-                    }
-                    if err := mustInsert(s, quota); err != nil {
-                        return err
-                    }
+					quota := &userGroupQuota{
+						Qtype:      q.qtype,
+						Qkey:       q.qkey,
+						MaxSpace:   -1,
+						MaxInodes:  -1,
+						UsedSpace:  q.quota.newSpace,
+						UsedInodes: q.quota.newInodes,
+					}
+					if err := mustInsert(s, quota); err != nil {
+						return err
+					}
 				}
 			}
 		}
