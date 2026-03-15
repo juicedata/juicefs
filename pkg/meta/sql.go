@@ -1787,7 +1787,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}))
 }
 
-func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
+func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, userGroupQuota *userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
 		if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1952,6 +1952,9 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			m.fileDeleted(opened, parent.IsTrash(), n.Inode, n.Length)
 		}
 		m.updateStats(newSpace, newInode)
+	}
+	if err == nil && userGroupQuota != nil {
+		*userGroupQuota = newUnlinkUGQuotaDelta(n.Uid, n.Gid, n.Nlink, n.Type, n.Length, trash > 0)
 	}
 	if err == nil && attr != nil {
 		m.parseAttr(&n, attr)
@@ -2828,7 +2831,7 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 						Inode:  info.n.Inode,
 						Type:   info.n.Type})
 				}
-				appendUGQuotaDelta(userGroupQuotas, parent, info.n.Uid, info.n.Gid, info.n.Nlink, info.n.Type, info.n.Length)
+				appendUGQuotaDelta(userGroupQuotas, parent, info.n.Uid, info.n.Gid, info.n.Nlink, info.n.Type, info.n.Length, info.trash > 0)
 				visited[info.n.Inode] = true
 			}
 
