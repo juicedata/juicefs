@@ -3309,29 +3309,6 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	})
 }
 
-func (m *kvMeta) syncQuotas(ctx Context, quotas []*iQuota) {
-	for _, q := range quotas {
-		quotaKey, err := m.getQuotaKey(q.qtype, q.qkey)
-		if err != nil {
-			logger.Warnf("sync quota: %v", err)
-			continue
-		}
-		err = m.txn(ctx, func(tx *kvTxn) error {
-			quota := &Quota{
-				MaxSpace:   -1,
-				MaxInodes:  -1,
-				UsedSpace:  q.quota.newSpace,
-				UsedInodes: q.quota.newInodes,
-			}
-			tx.set(quotaKey, m.packQuota(quota))
-			return nil
-		})
-		if err != nil {
-			logger.Warnf("sync quota %d: %v", q.qkey, err)
-		}
-	}
-}
-
 func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
 	ctx := Background()
 	return m.client.txn(ctx, func(tx *kvTxn) error {

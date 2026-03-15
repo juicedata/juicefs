@@ -4297,6 +4297,12 @@ func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 			}
 		}
 	}
+	if len(nonexistUserQuotas) > 0 || len(nonexistGroupQuotas) > 0 {
+		quotasList := []map[uint64]*iQuota{nonexistUserQuotas, nonexistGroupQuotas}
+		wg := m.parallelSyncQuotas(ctx, quotasList...)
+		defer wg.Wait()
+	}
+
 	_, err = m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		for _, q := range quotas {
 			if q.qtype == UserQuotaType {
@@ -4319,16 +4325,21 @@ func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 		}
 		return nil
 	})
-	if err != nil {
-		return err
+	return err
+}
+
+func (m *redisMeta) parallelSyncQuotas(ctx Context, quotasList ...map[uint64]*iQuota) *sync.WaitGroup {
+	var wg sync.WaitGroup
+	for _, quotas := range quotasList {
+		if len(quotas) > 0 {
+			wg.Add(1)
+			go func(q map[uint64]*iQuota) {
+				defer wg.Done()
+				m.syncQuotas(ctx, q)
+			}(quotas)
+		}
 	}
-	if len(nonexistUserQuotas) > 0 {
-		go m.syncQuotas(ctx, nonexistUserQuotas)
-	}
-	if len(nonexistGroupQuotas) > 0 {
-		go m.syncQuotas(ctx, nonexistGroupQuotas)
-	}
-	return nil
+	return &wg
 }
 
 func (m *redisMeta) syncQuotas(ctx Context, quotas map[uint64]*iQuota) {
@@ -4339,9 +4350,9 @@ func (m *redisMeta) syncQuotas(ctx Context, quotas map[uint64]*iQuota) {
 				return err
 			}
 			field := strconv.FormatUint(qkey, 10)
-			pipe.HSet(ctx, config.quotaKey, field, m.packQuota(-1, -1))
-			pipe.HSet(ctx, config.usedSpaceKey, field, q.quota.UsedSpace)
-			pipe.HSet(ctx, config.usedInodesKey, field, q.quota.UsedInodes)
+			pipe.HSetNX(ctx, config.quotaKey, field, m.packQuota(-1, -1))
+			pipe.HSet(ctx, config.usedSpaceKey, field, q.quota.newSpace)
+			pipe.HSet(ctx, config.usedInodesKey, field, q.quota.newInodes)
 		}
 		return nil
 	})
