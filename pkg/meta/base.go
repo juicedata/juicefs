@@ -1390,12 +1390,10 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			}
 
 			if uidChanged {
-				logger.Infof("Update quota for inode %d: uid %d -> %d, space %d, inodes %d", inode, oldAttr.Uid, attr.Uid, space, inodes)
 				m.updateUserGroupQuota(ctx, oldAttr.Uid, 0, -space, -inodes)
 				m.updateUserGroupQuota(ctx, attr.Uid, 0, space, inodes)
 			}
 			if gidChanged {
-				logger.Infof("Update quota for inode %d: gid %d -> %d, space %d, inodes %d", inode, oldAttr.Gid, attr.Gid, space, inodes)
 				m.updateUserGroupQuota(ctx, 0, oldAttr.Gid, -space, -inodes)
 				m.updateUserGroupQuota(ctx, 0, attr.Gid, space, inodes)
 			}
@@ -1674,10 +1672,8 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 		if !parent.IsTrash() {
 			m.updateDirQuota(ctx, parent, -align4K(diffLength), -1)
 			if attr.Typ == TypeFile && attr.Nlink > 0 {
-				logger.Infof("Update quota for inode %d: uid %d, gid %d, space -%d, inodes -1", attr.Parent, attr.Uid, attr.Gid, diffLength)
 				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, 0, -1)
 			} else {
-				logger.Infof("Update quota for inode %d: uid %d, gid %d, space -%d, inodes -1", attr.Parent, attr.Uid, attr.Gid, diffLength)
 				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, -align4K(diffLength), -1)
 			}
 		}
@@ -1732,7 +1728,6 @@ func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count 
 		if !parent.IsTrash() {
 			m.updateDirQuota(ctx, parent, space, inodes)
 			for _, quota := range userGroupQuotas {
-				logger.Infof("Update quota for uid %d, gid %d, space %d, inodes %d", quota.Uid, quota.Gid, quota.Space, quota.Inodes)
 				m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, quota.Space, quota.Inodes)
 			}
 		}

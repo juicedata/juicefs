@@ -4167,14 +4167,14 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 }
 
 func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
-	nonexsitUserquotas := make([]*iQuota, 0)
-	nonexsitGroupquotas := make([]*iQuota, 0)
+	nonExistUserQuotas := make([]*iQuota, 0)
+	nonExistGroupQuotas := make([]*iQuota, 0)
 
 	sort.Slice(quotas, func(i, j int) bool { return quotas[i].qkey < quotas[j].qkey })
 	err := m.txn(func(s *xorm.Session) error {
 		for _, q := range quotas {
 			if q.qtype == DirQuotaType {
-				logger.Infof("doFlushquot ino:%d, %+v", q.qkey, q.quota)
+				logger.Infof("doFlushQuota ino:%d, %+v", q.qkey, q.quota)
 				_, err := s.Exec(m.sqlConv("update dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?"),
 					q.quota.newSpace, q.quota.newInodes, q.qkey)
 				if err != nil {
@@ -4192,9 +4192,9 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 				}
 				if affected == 0 {
 					if q.qtype == UserQuotaType {
-						nonexsitUserquotas = append(nonexsitUserquotas, q)
+						nonExistUserQuotas = append(nonExistUserQuotas, q)
 					} else if q.qtype == GroupQuotaType {
-						nonexsitGroupquotas = append(nonexsitGroupquotas, q)
+						nonExistGroupQuotas = append(nonExistGroupQuotas, q)
 					}
 				}
 			}
@@ -4204,17 +4204,17 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	if err != nil {
 		return err
 	}
-	if len(nonexsitUserquotas) > 0 {
-		go m.syncQuotas(ctx, nonexsitUserquotas)
+	if len(nonExistUserQuotas) > 0 {
+		go m.syncQuotas(ctx, nonExistUserQuotas)
 	}
-	if len(nonexsitGroupquotas) > 0 {
-		go m.syncQuotas(ctx, nonexsitGroupquotas)
+	if len(nonExistGroupQuotas) > 0 {
+		go m.syncQuotas(ctx, nonExistGroupQuotas)
 	}
 	return nil
 }
 
 func (m *dbMeta) syncQuotas(ctx Context, quotas []*iQuota) {
-	_ = m.txn(func(s *xorm.Session) error {
+	err := m.txn(func(s *xorm.Session) error {
 		for _, q := range quotas {
 			quota := userGroupQuota{Qtype: q.qtype, Qkey: q.qkey, MaxSpace: -1, MaxInodes: -1, UsedSpace: q.quota.newSpace, UsedInodes: q.quota.newInodes}
 			if err := mustInsert(s, quota); err != nil {
@@ -4223,6 +4223,9 @@ func (m *dbMeta) syncQuotas(ctx Context, quotas []*iQuota) {
 		}
 		return nil
 	})
+	if err != nil {
+		logger.Warnf("sync quotas: %v", err)
+	}
 }
 
 func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {

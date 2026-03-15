@@ -4332,19 +4332,22 @@ func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 }
 
 func (m *redisMeta) syncQuotas(ctx Context, quotas map[uint64]*iQuota) {
-	_, _ = m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		for qkey, q := range quotas {
 			config, err := m.getQuotaKeys(q.qtype)
 			if err != nil {
 				return err
 			}
 			field := strconv.FormatUint(qkey, 10)
-			pipe.HSet(ctx, config.quotaKey, field, m.packQuota(q.quota.MaxSpace, q.quota.MaxInodes))
+			pipe.HSet(ctx, config.quotaKey, field, m.packQuota(-1, -1))
 			pipe.HSet(ctx, config.usedSpaceKey, field, q.quota.UsedSpace)
 			pipe.HSet(ctx, config.usedInodesKey, field, q.quota.UsedInodes)
 		}
 		return nil
 	})
+	if err != nil {
+		logger.Warnf("sync quotas: %v", err)
+	}
 }
 
 func (m *redisMeta) checkServerConfig() {

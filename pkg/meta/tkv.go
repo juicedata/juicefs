@@ -3274,10 +3274,7 @@ func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
 }
 
 func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
-	nonexistUserQuotas := make([]*iQuota, 0)
-	nonexistGroupQuotas := make([]*iQuota, 0)
-
-	err := m.txn(ctx, func(tx *kvTxn) error {
+	return m.txn(ctx, func(tx *kvTxn) error {
 		keys := make([][]byte, 0, len(quotas))
 		qs := make([]*iQuota, 0, len(quotas))
 		for _, q := range quotas {
@@ -3290,11 +3287,13 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 		}
 		for i, v := range tx.gets(keys...) {
 			if len(v) == 0 {
-				if qs[i].qtype == UserQuotaType {
-					nonexistUserQuotas = append(nonexistUserQuotas, qs[i])
-				} else if qs[i].qtype == GroupQuotaType {
-					nonexistGroupQuotas = append(nonexistGroupQuotas, qs[i])
-				}
+				quota := &Quota{
+ 					MaxSpace:   -1,
+ 					MaxInodes:  -1,
+ 					UsedSpace:  qs[i].quota.newSpace,
+ 					UsedInodes: qs[i].quota.newInodes,
+ 				}
+ 				tx.set(keys[i], m.packQuota(quota))
 				continue
 			}
 			if len(v) != 32 {
@@ -3308,16 +3307,6 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	if len(nonexistUserQuotas) > 0 {
-		go m.syncQuotas(ctx, nonexistUserQuotas)
-	}
-	if len(nonexistGroupQuotas) > 0 {
-		go m.syncQuotas(ctx, nonexistGroupQuotas)
-	}
-	return nil
 }
 
 func (m *kvMeta) syncQuotas(ctx Context, quotas []*iQuota) {
@@ -3327,7 +3316,7 @@ func (m *kvMeta) syncQuotas(ctx Context, quotas []*iQuota) {
 			logger.Warnf("sync quota: %v", err)
 			continue
 		}
-		_ = m.txn(ctx, func(tx *kvTxn) error {
+		err = m.txn(ctx, func(tx *kvTxn) error {
 			quota := &Quota{
 				MaxSpace:   -1,
 				MaxInodes:  -1,
@@ -3337,6 +3326,9 @@ func (m *kvMeta) syncQuotas(ctx Context, quotas []*iQuota) {
 			tx.set(quotaKey, m.packQuota(quota))
 			return nil
 		})
+		if err != nil {
+			logger.Warnf("sync quota %d: %v", q.qkey, err)
+		}
 	}
 }
 
