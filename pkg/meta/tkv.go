@@ -3287,13 +3287,15 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 		}
 		for i, v := range tx.gets(keys...) {
 			if len(v) == 0 {
-				quota := &Quota{
-					MaxSpace:   -1,
-					MaxInodes:  -1,
-					UsedSpace:  qs[i].quota.newSpace,
-					UsedInodes: qs[i].quota.newInodes,
+				if qs[i].qtype == UserQuotaType || qs[i].qtype == GroupQuotaType {
+					quota := &Quota{
+						MaxSpace:   -1,
+						MaxInodes:  -1,
+						UsedSpace:  qs[i].quota.newSpace,
+						UsedInodes: qs[i].quota.newInodes,
+					}
+					tx.set(keys[i], m.packQuota(quota))
 				}
-				tx.set(keys[i], m.packQuota(quota))
 				continue
 			}
 			if len(v) != 32 {
