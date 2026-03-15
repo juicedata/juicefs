@@ -4145,7 +4145,7 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 
 	// Load user and group quotas
 	for _, q := range userGroupQuotasList {
-		if q.MaxSpace < 0 && q.MaxInodes < 0 {
+		if q.MaxSpace < 0 && q.MaxInodes < 0 && q.UsedSpace == 0 && q.UsedInodes == 0 {
 			continue
 		}
 		quota := &Quota{
@@ -4167,8 +4167,11 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 }
 
 func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
+	nonexsitUserquotas := make([]*iQuota, 0)
+	nonexsitGroupquotas := make([]*iQuota, 0)
+
 	sort.Slice(quotas, func(i, j int) bool { return quotas[i].qkey < quotas[j].qkey })
-	return m.txn(func(s *xorm.Session) error {
+	err := m.txn(func(s *xorm.Session) error {
 		for _, q := range quotas {
 			if q.qtype == DirQuotaType {
 				logger.Infof("doFlushquot ino:%d, %+v", q.qkey, q.quota)
@@ -4178,11 +4181,44 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 					return err
 				}
 			} else {
-				_, err := s.Exec(m.sqlConv("update user_group_quota set used_space=used_space+?, used_inodes=used_inodes+? where qtype=? and qkey=?"),
+				ret, err := s.Exec(m.sqlConv("update user_group_quota set used_space=used_space+?, used_inodes=used_inodes+? where qtype=? and qkey=?"),
 					q.quota.newSpace, q.quota.newInodes, q.qtype, q.qkey)
 				if err != nil {
 					return err
 				}
+				affected, err := ret.RowsAffected()
+				if err != nil {
+					return err
+				}
+				if affected == 0 {
+					if q.qtype == UserQuotaType {
+						nonexsitUserquotas = append(nonexsitUserquotas, q)
+					} else if q.qtype == GroupQuotaType {
+						nonexsitGroupquotas = append(nonexsitGroupquotas, q)
+					}
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if len(nonexsitUserquotas) > 0 {
+		go m.syncQuotas(ctx, nonexsitUserquotas)
+	}
+	if len(nonexsitGroupquotas) > 0 {
+		go m.syncQuotas(ctx, nonexsitGroupquotas)
+	}
+	return nil
+}
+
+func (m *dbMeta) syncQuotas(ctx Context, quotas []*iQuota) {
+	_ = m.txn(func(s *xorm.Session) error {
+		for _, q := range quotas {
+			quota := userGroupQuota{Qtype: q.qtype, Qkey: q.qkey, MaxSpace: -1, MaxInodes: -1, UsedSpace: q.quota.newSpace, UsedInodes: q.quota.newInodes}
+			if err := mustInsert(s, quota); err != nil {
+				return err
 			}
 		}
 		return nil

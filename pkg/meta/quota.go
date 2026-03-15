@@ -329,7 +329,12 @@ func (m *baseMeta) syncQuotaMaps(existing map[uint64]*Quota, loaded map[uint64]*
 	// delete that are not in loaded
 	for key := range existing {
 		if _, ok := loaded[key]; !ok {
+			if existing[key].newInodes != 0 || existing[key].newSpace != 0 {
+				continue
+			}
+			logger.Infof("%s, exiting[%d] = %v", quotaType, key, existing[key])
 			logger.Infof("Quota for %s %d is deleted", quotaType, key)
+			logger.Infof("loaded = %v", loaded)
 			delete(existing, key)
 		}
 	}
@@ -492,6 +497,7 @@ func (m *baseMeta) updateUserGroupQuota(ctx Context, uid, gid uint32, space, ino
 				newInodes:  inodes, // Set newInodes for database sync
 			}
 		}
+		logger.Infof("gid(%d) quota = %v", gid, m.groupQuotas[uint64(gid)])
 	}
 	m.quotaMu.Unlock()
 }
@@ -564,6 +570,7 @@ func (m *baseMeta) doFlushQuotas() {
 			q = m.groupQuotas[snap.qkey]
 		}
 		if q != nil {
+			logger.Infof("type = %d, key = %d, newInodes = %d\n", snap.qtype, snap.qkey, snap.quota.newInodes)
 			m.updateQuota(q, snap.quota.newSpace, snap.quota.newInodes)
 		}
 	}
@@ -701,6 +708,7 @@ func (m *baseMeta) initializeQuotaUsage(ctx Context, qtype uint32, key uint64, d
 }
 
 func (m *baseMeta) ScanUserGroupUsage(ctx Context) error {
+	logger.Infof("begin ugquota scan.\n")
 	userUsage, groupUsage, err := m.scanGlobalUserGroupUsage(ctx)
 	if err != nil {
 		return fmt.Errorf("scan global user group usage: %v", err)
@@ -752,6 +760,7 @@ func (m *baseMeta) ScanUserGroupUsage(ctx Context) error {
 	m.quotaMu.Unlock()
 
 	for uid, quota := range userQuotasSnapshot {
+		logger.Infof("User %d: used space %s, used inodes %d", uid, humanize.Bytes(uint64(quota.UsedSpace)), quota.UsedInodes)
 		_, err := m.en.doSetQuota(ctx, UserQuotaType, uid, quota)
 		if err != nil {
 			logger.Warnf("Failed to save user quota for uid %d: %v", uid, err)
@@ -759,6 +768,7 @@ func (m *baseMeta) ScanUserGroupUsage(ctx Context) error {
 	}
 
 	for gid, quota := range groupQuotasSnapshot {
+		logger.Infof("Group %d: used space %s, used inodes %d", gid, humanize.Bytes(uint64(quota.UsedSpace)), quota.UsedInodes)
 		_, err := m.en.doSetQuota(ctx, GroupQuotaType, gid, quota)
 		if err != nil {
 			logger.Warnf("Failed to save group quota for gid %d: %v", gid, err)
@@ -793,6 +803,7 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 			if string(e.Name) == "." || string(e.Name) == ".." {
 				continue
 			}
+			logger.Infof("name = %s", e.Name)
 
 			uid, gid := uint64(e.Attr.Uid), uint64(e.Attr.Gid)
 			if (uid == 0 || gid == 0) && e.Attr.Typ == TypeFile {
@@ -834,7 +845,7 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 
 		}
 	}
-
+	logger.Infof("Total users: %d, total groups: %d", len(userUsage), len(groupUsage))
 	return userUsage, groupUsage, nil
 }
 

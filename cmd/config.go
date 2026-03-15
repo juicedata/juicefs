@@ -375,6 +375,7 @@ func config(ctx *cli.Context) error {
 		fmt.Println(msg.String()[:msg.Len()-1])
 	}
 
+	logger.Infof("origingUGquota = %d, format.usergroupquota = %d", originUGQuota, format.UserGroupQuota)
 	if !originUGQuota && format.UserGroupQuota {
 		if err = m.ScanUserGroupUsage(meta.Background()); err != nil {
 			logger.Warnf("Scan user group usage: %s", err)
