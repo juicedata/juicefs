@@ -4309,8 +4309,7 @@ func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 				if _, ok := nonexistUserQuotas[q.qkey]; ok {
 					continue
 				}
-			}
-			if q.qtype == GroupQuotaType {
+			} else if q.qtype == GroupQuotaType {
 				if _, ok := nonexistGroupQuotas[q.qkey]; ok {
 					continue
 				}
