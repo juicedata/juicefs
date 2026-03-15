@@ -114,7 +114,7 @@ type engine interface {
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
 	doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
-	doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno
+	doUnlink(ctx Context, parent Ino, name string, attr *Attr, userGroupQuota *userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno
 	doRmdir(ctx Context, parent Ino, name string, inode *Ino, attr *Attr, skipCheckTrash ...bool) syscall.Errno
 	doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) (errno syscall.Errno)
 	doReadlink(ctx Context, inode Ino, noatime bool) (int64, []byte, error)
@@ -204,24 +204,30 @@ type batchCloneResult struct {
 	userGroupQuotas []userGroupQuotaDelta
 }
 
-func appendUGQuotaDelta(userGroupQuotas *[]userGroupQuotaDelta, parent Ino, uid, gid uint32, nlink uint32, typ uint8, length uint64) {
+func unlinkUGQuotaSpaceDelta(nlink uint32, typ uint8, length uint64, movedToTrash bool) int64 {
+	if typ != TypeFile {
+		return -align4K(0)
+	}
+	if nlink == 0 || movedToTrash && nlink == 1 {
+		return -align4K(length)
+	}
+	return 0
+}
+
+func newUnlinkUGQuotaDelta(uid, gid uint32, nlink uint32, typ uint8, length uint64, movedToTrash bool) userGroupQuotaDelta {
+	return userGroupQuotaDelta{
+		Uid:    uid,
+		Gid:    gid,
+		Space:  unlinkUGQuotaSpaceDelta(nlink, typ, length, movedToTrash),
+		Inodes: -1,
+	}
+}
+
+func appendUGQuotaDelta(userGroupQuotas *[]userGroupQuotaDelta, parent Ino, uid, gid uint32, nlink uint32, typ uint8, length uint64, movedToTrash bool) {
 	if userGroupQuotas == nil || parent.IsTrash() {
 		return
 	}
-	var entrySpace int64
-	if nlink == 0 {
-		if typ == TypeFile {
-			entrySpace = -align4K(length)
-		} else {
-			entrySpace = -align4K(0)
-		}
-	}
-	*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
-		Uid:    uid,
-		Gid:    gid,
-		Space:  entrySpace,
-		Inodes: -1,
-	})
+	*userGroupQuotas = append(*userGroupQuotas, newUnlinkUGQuotaDelta(uid, gid, nlink, typ, length, movedToTrash))
 }
 
 func newSymlinkCache(cap int32) *symlinkCache {
@@ -1662,7 +1668,8 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 	defer m.timeit("Unlink", time.Now())
 	parent = m.checkRoot(parent)
 	var attr Attr
-	err := m.en.doUnlink(ctx, parent, name, &attr, skipCheckTrash...)
+	var userGroupQuota userGroupQuotaDelta
+	err := m.en.doUnlink(ctx, parent, name, &attr, &userGroupQuota, skipCheckTrash...)
 	if err == 0 {
 		var diffLength uint64
 		if attr.Typ == TypeFile {
@@ -1671,11 +1678,7 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 		m.updateDirStat(ctx, parent, -int64(diffLength), -align4K(diffLength), -1)
 		if !parent.IsTrash() {
 			m.updateDirQuota(ctx, parent, -align4K(diffLength), -1)
-			if attr.Typ == TypeFile && attr.Nlink > 0 {
-				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, 0, -1)
-			} else {
-				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, -align4K(diffLength), -1)
-			}
+			m.updateUserGroupQuota(ctx, userGroupQuota.Uid, userGroupQuota.Gid, userGroupQuota.Space, userGroupQuota.Inodes)
 		}
 	}
 	return err

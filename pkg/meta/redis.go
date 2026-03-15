@@ -1571,7 +1571,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 	}, m.inodeKey(parent), m.entryKey(parent)))
 }
 
-func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
+func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, userGroupQuota *userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
 	var trash, inode Ino
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
 		if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1720,6 +1720,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 			m.fileDeleted(opened, parent.IsTrash(), inode, attr.Length)
 		}
 		m.updateStats(newSpace, newInode)
+	}
+	if err == nil && userGroupQuota != nil {
+		*userGroupQuota = newUnlinkUGQuotaDelta(attr.Uid, attr.Gid, attr.Nlink, attr.Typ, attr.Length, trash > 0)
 	}
 	return errno(err)
 }
@@ -2015,7 +2018,7 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 						parentOps[key][info.trash.String()]++
 					}
 				}
-				appendUGQuotaDelta(&batchUserGroupQuotas, parent, info.attr.Uid, info.attr.Gid, info.attr.Nlink, info.typ, info.attr.Length)
+				appendUGQuotaDelta(&batchUserGroupQuotas, parent, info.attr.Uid, info.attr.Gid, info.attr.Nlink, info.typ, info.attr.Length, info.trash > 0)
 				visited[info.inode] = true
 			}
 
