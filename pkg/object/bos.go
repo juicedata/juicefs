@@ -303,9 +303,7 @@ func newBOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 			return nil, fmt.Errorf("Fail to get location of bucket %q: %s", bucketName, err)
 		}
 	}
-	if !strings.HasPrefix(endpoint, "http") {
-		endpoint = fmt.Sprintf("%s://%s", uri.Scheme, endpoint)
-	}
+	endpoint = fmt.Sprintf("%s://%s", uri.Scheme, endpoint)
 	logger.Debugf("Use endpoint: %s", endpoint)
 	// endpoint format like https://bj.bcebos.com
 	bosClient, err := bos.NewClient(accessKey, secretKey, endpoint)
