@@ -266,7 +266,7 @@ func autoBOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 		region = r
 	}
 
-	endpoint := fmt.Sprintf("https://%s.%s.bcebos.com", bucketName, region)
+	endpoint := fmt.Sprintf("https://%s.bcebos.com", region)
 	bosCli, err := bos.NewClient(accessKey, secretKey, endpoint)
 	if err != nil {
 		return "", err
@@ -275,7 +275,7 @@ func autoBOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 	if location, err := bosCli.GetBucketLocation(bucketName); err != nil {
 		return "", err
 	} else {
-		return fmt.Sprintf("%s.%s.bcebos.com", bucketName, location), nil
+		return fmt.Sprintf("%s.bcebos.com", location), nil
 	}
 }
 
@@ -296,17 +296,15 @@ func newBOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		accessKey = os.Getenv("BDCLOUD_ACCESS_KEY")
 		secretKey = os.Getenv("BDCLOUD_SECRET_KEY")
 	}
-
+	endpoint = hostParts[1]
 	if hostParts[1] == "bcebos.com" {
 		if endpoint, err = autoBOSEndpoint(bucketName, accessKey, secretKey); err != nil {
 			return nil, fmt.Errorf("Fail to get location of bucket %q: %s", bucketName, err)
 		}
-		if !strings.HasPrefix(endpoint, "http") {
-			endpoint = fmt.Sprintf("%s://%s", uri.Scheme, endpoint)
-		}
-		logger.Debugf("Use endpoint: %s", endpoint)
 	}
-
+	endpoint = fmt.Sprintf("%s://%s", uri.Scheme, endpoint)
+	logger.Debugf("Use endpoint: %s", endpoint)
+	// endpoint format like https://bj.bcebos.com
 	bosClient, err := bos.NewClient(accessKey, secretKey, endpoint)
 	if err != nil {
 		return nil, err
