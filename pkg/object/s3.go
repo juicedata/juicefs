@@ -384,7 +384,13 @@ func (s *s3client) SetStorageClass(sc string) error {
 }
 
 func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")))
+	var cfg aws.Config
+	var err error
+	if accessKey != "" {
+		cfg, err = config.LoadDefaultConfig(ctx, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")))
+	} else {
+		cfg, err = config.LoadDefaultConfig(ctx)
+	}
 	if err != nil {
 		return "", err
 	}
