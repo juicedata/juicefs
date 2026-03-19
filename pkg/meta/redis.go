@@ -1725,7 +1725,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 	return errno(err)
 }
 
-func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, result *dirStat, skipCheckTrash ...bool) syscall.Errno {
+func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta *dirStat, skipCheckTrash ...bool) syscall.Errno {
 	if len(entries) == 0 {
 		return 0
 	}
@@ -2078,9 +2078,9 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, res
 			m.fileDeleted(info.opened, parent.IsTrash(), inode, info.length)
 		}
 
-		result.length += batchDirLength
-		result.space += batchDirSpace
-		result.inodes += batchDirInodes
+		delta.length += batchDirLength
+		delta.space += batchDirSpace
+		delta.inodes += batchDirInodes
 		m.updateStats(batchFsSpace, batchFsInodes)
 		for _, q := range deltas {
 			m.updateUserGroupStat(ctx, q.Uid, q.Gid, q.Space, q.Inodes)

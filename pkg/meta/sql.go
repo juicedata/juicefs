@@ -2590,7 +2590,7 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	}))
 }
 
-func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, result *dirStat, skipCheckTrash ...bool) syscall.Errno {
+func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta *dirStat, skipCheckTrash ...bool) syscall.Errno {
 	if len(entries) == 0 {
 		return 0
 	}
@@ -2915,9 +2915,9 @@ func (m *dbMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, result
 			return errno(err)
 		}
 
-		result.length += batchDirLength
-		result.space += batchDirSpace
-		result.inodes += batchDirInodes
+		delta.length += batchDirLength
+		delta.space += batchDirSpace
+		delta.inodes += batchDirInodes
 		m.updateStats(batchFsSpace, batchFsInodes)
 		for _, q := range deltas {
 			m.updateUserGroupStat(ctx, q.Uid, q.Gid, q.Space, q.Inodes)

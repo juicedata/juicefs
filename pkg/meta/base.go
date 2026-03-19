@@ -116,7 +116,7 @@ type engine interface {
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
 	doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno
 	doRmdir(ctx Context, parent Ino, name string, inode *Ino, attr *Attr, skipCheckTrash ...bool) syscall.Errno
-	doBatchUnlink(ctx Context, parent Ino, entries []*Entry, result *dirStat, skipCheckTrash ...bool) syscall.Errno
+	doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta *dirStat, skipCheckTrash ...bool) syscall.Errno
 	doReadlink(ctx Context, inode Ino, noatime bool) (int64, []byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tinode *Ino, attr, tattr *Attr) syscall.Errno
@@ -208,18 +208,17 @@ func (ds ugQuotaDeltas) add(delta *ugQuotaDelta) {
 		ds[key] = delta
 	}
 }
+
 type batchCloneResult struct {
-	length          int64
-	space           int64
-	inodes          int64
-	deltas          ugQuotaDeltas
+	length int64
+	space  int64
+	inodes int64
+	deltas ugQuotaDeltas
 }
 
 func ugKey(uid, gid uint32) uint64 {
 	return (uint64(uid) << 32) | uint64(gid)
 }
-
-
 
 func newSymlinkCache(cap int32) *symlinkCache {
 	return &symlinkCache{
@@ -1708,12 +1707,12 @@ func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count 
 	if len(entries) == 0 {
 		return 0
 	}
-	var r dirStat
-	st := m.en.doBatchUnlink(ctx, parent, entries, &r, skipCheckTrash)
+	var delta dirStat
+	st := m.en.doBatchUnlink(ctx, parent, entries, &delta, skipCheckTrash)
 	if st == 0 {
-		m.updateDirStat(ctx, parent, r.length, r.space, r.inodes)
+		m.updateDirStat(ctx, parent, delta.length, delta.space, delta.inodes)
 		if !parent.IsTrash() {
-			m.updateDirQuota(ctx, parent, r.space, r.inodes)
+			m.updateDirQuota(ctx, parent, delta.space, delta.inodes)
 		}
 		if count != nil && len(entries) > 0 {
 			atomic.AddUint64(count, uint64(len(entries)))
