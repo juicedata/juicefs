@@ -24,6 +24,8 @@ import (
 	"os"
 	"sort"
 	"testing"
+
+	"github.com/dgraph-io/badger/v4"
 )
 
 func TestMemKVClient(t *testing.T) {
@@ -283,4 +285,85 @@ func TestMemKV(t *testing.T) {
 	c, _ := newTkvClient("memkv", "")
 	c = withPrefix(c, []byte("jfs"))
 	testTKV(t, c)
+}
+
+func TestBadgerScanKeysOnlyNilValues(t *testing.T) {
+	c, err := newBadgerClient(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.close()
+
+	if err := c.txn(Background(), func(kt *kvTxn) error {
+		kt.set([]byte("key1"), []byte("value1"))
+		kt.set([]byte("key2"), []byte("value2"))
+		return nil
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	var scanned int
+	if err := c.txn(Background(), func(kt *kvTxn) error {
+		kt.scan([]byte("key"), nextKey([]byte("key")), true, func(k, v []byte) bool {
+			if v != nil {
+				t.Errorf("keysOnly=true: expected nil value for key %q, got %q", k, v)
+			}
+			scanned++
+			return true
+		})
+		return nil
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if scanned != 2 {
+		t.Fatalf("expected 2 keys scanned, got %d", scanned)
+	}
+}
+
+func TestBadgerDeleteTxnTooBig(t *testing.T) {
+	dir := t.TempDir()
+
+	opt := badger.DefaultOptions(dir)
+	opt.Logger = nil
+	opt.MetricsEnabled = false
+	opt.MemTableSize = 1 << 20
+	opt.ValueThreshold = 1 << 10
+	db, err := badger.Open(opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	const numKeys = 5000
+	wb := db.NewWriteBatch()
+	for i := 0; i < numKeys; i++ {
+		if err := wb.Set([]byte(fmt.Sprintf("txbig_%05d", i)), []byte("v")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := wb.Flush(); err != nil {
+		t.Fatal(err)
+	}
+
+	var keys [][]byte
+	rtx := db.NewTransaction(false)
+	it := rtx.NewIterator(badger.IteratorOptions{Prefix: []byte("txbig_"), PrefetchValues: false})
+	for it.Rewind(); it.Valid(); it.Next() {
+		keys = append(keys, it.Item().KeyCopy(nil))
+	}
+	it.Close()
+	rtx.Discard()
+
+	client := &badgerClient{client: db, done: make(chan struct{})}
+
+	err = client.txn(Background(), func(kt *kvTxn) error {
+		for _, key := range keys {
+			kt.delete(key)
+		}
+		return nil
+	}, 0)
+
+	if err != badger.ErrTxnTooBig {
+		t.Fatalf("expected ErrTxnTooBig, got %v", err)
+	}
 }

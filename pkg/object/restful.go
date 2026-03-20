@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -35,7 +36,120 @@ import (
 var resolver = dnscache.New(time.Minute)
 var httpClient *http.Client
 
+func splitIPsByVersion(ips []net.IP) ([]net.IP, []net.IP) {
+	ipv6 := make([]net.IP, 0, len(ips))
+	ipv4 := make([]net.IP, 0, len(ips))
+	for _, ip := range ips {
+		if ip.To4() == nil {
+			ipv6 = append(ipv6, ip)
+		} else {
+			ipv4 = append(ipv4, ip)
+		}
+	}
+	return ipv6, ipv4
+}
+
+// dialParallel is adapted from the Go standard library.
+// Copyright 2010 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+func dialParallel(ctx context.Context, dialer *net.Dialer, network string, primaries, fallbacks []net.IP, port string) (net.Conn, error) {
+	if len(fallbacks) == 0 {
+		return dialRandom(ctx, dialer, network, primaries, port)
+	}
+
+	returned := make(chan struct{})
+	defer close(returned)
+
+	type dialResult struct {
+		net.Conn
+		error
+		primary bool
+		done    bool
+	}
+	results := make(chan dialResult) // unbuffered
+
+	startRacer := func(ctx context.Context, primary bool) {
+		ras := primaries
+		if !primary {
+			ras = fallbacks
+		}
+		c, err := dialRandom(ctx, dialer, network, ras, port)
+		select {
+		case results <- dialResult{Conn: c, error: err, primary: primary, done: true}:
+		case <-returned:
+			if c != nil {
+				c.Close()
+			}
+		}
+	}
+
+	var primary, fallback dialResult
+
+	// Start the main racer.
+	primaryCtx, primaryCancel := context.WithCancel(ctx)
+	defer primaryCancel()
+	go startRacer(primaryCtx, true)
+
+	// Start the timer for the fallback racer.
+	fallbackTimer := time.NewTimer(300 * time.Millisecond)
+	defer fallbackTimer.Stop()
+
+	for {
+		select {
+		case <-fallbackTimer.C:
+			fallbackCtx, fallbackCancel := context.WithCancel(ctx)
+			defer fallbackCancel()
+			go startRacer(fallbackCtx, false)
+
+		case res := <-results:
+			if res.error == nil {
+				return res.Conn, nil
+			}
+			if res.primary {
+				primary = res
+			} else {
+				fallback = res
+			}
+			if primary.done && fallback.done {
+				return nil, errors.Join(primary.error, fallback.error)
+			}
+			if res.primary && fallbackTimer.Stop() {
+				// If we were able to stop the timer, that means it
+				// was running (hadn't yet started the fallback), but
+				// we just got an error on the primary path, so start
+				// the fallback immediately (in 0 nanoseconds).
+				fallbackTimer.Reset(0)
+			}
+		}
+	}
+}
+
+func dialRandom(ctx context.Context, dialer *net.Dialer, network string, ips []net.IP, port string) (net.Conn, error) {
+	var lastErr error
+	n := len(ips)
+	if n == 0 {
+		return nil, fmt.Errorf("no addresses to dial")
+	}
+	first := rand.Intn(n)
+	for i := 0; i < n; i++ {
+		ip := ips[(first+i)%n]
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+		conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
 func init() {
+	dialer := &net.Dialer{Timeout: time.Second * 10}
 	httpClient = &http.Client{
 		Transport: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
@@ -46,32 +160,22 @@ func init() {
 			ReadBufferSize:        32 << 10,
 			WriteBufferSize:       32 << 10,
 			DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
-				separator := strings.LastIndex(address, ":")
-				host := address[:separator]
-				port := address[separator:]
+				host, port, err := net.SplitHostPort(address)
+				if err != nil {
+					return nil, err
+				}
+				if ip := net.ParseIP(host); ip != nil {
+					return dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+				}
 				ips, err := resolver.Fetch(host)
 				if err != nil {
 					return nil, err
 				}
 				if len(ips) == 0 {
-					return nil, fmt.Errorf("No such host: %s", host)
+					return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
 				}
-				var conn net.Conn
-				n := len(ips)
-				first := rand.Intn(n)
-				dialer := &net.Dialer{Timeout: time.Second * 10}
-				for i := 0; i < n; i++ {
-					ip := ips[(first+i)%n]
-					address = ip.String()
-					if port != "" {
-						address = net.JoinHostPort(address, port[1:])
-					}
-					conn, err = dialer.DialContext(ctx, network, address)
-					if err == nil {
-						return conn, nil
-					}
-				}
-				return nil, err
+				ipv6, ipv4 := splitIPsByVersion(ips)
+				return dialParallel(ctx, dialer, network, ipv6, ipv4, port)
 			},
 			DisableCompression: true,
 			TLSClientConfig:    &tls.Config{},

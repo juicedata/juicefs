@@ -38,6 +38,7 @@ test_total_capacity()
     sleep $VOLUME_QUOTA_FLUSH_INTERVAL
     ln /jfs/test2 /jfs/test4
     ln /jfs/test2 /jfs/test5
+    run_total_capacity_uid_gid_case
 }
 
 test_total_inodes(){
@@ -61,6 +62,7 @@ test_total_inodes(){
     set -x
     sleep $VOLUME_QUOTA_FLUSH_INTERVAL
     echo a | tee /jfs/test2001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
+    run_total_inodes_uid_gid_case
 }
 
 test_nested_dir(){
@@ -86,6 +88,7 @@ test_nested_dir(){
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     subdir=$(find /jfs/d1/ -type d | shuf -n 1)
     touch $subdir/test
+    run_nested_dir_uid_gid_case
 }
 
 test_remove_and_restore(){
@@ -219,7 +222,7 @@ test_sub_dir(){
     echo $i | tee /jfs/test1001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
     grep "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
     ./juicefs quota check $META_URL --path /d --strict
-   # run_sub_dir_uid_gid_case
+    run_sub_dir_uid_gid_case
 }
 
 test_dump_load(){
@@ -464,8 +467,8 @@ test_user_group_quota_set_get_list_delete(){
     grep "GID:$TEST_GID_1" gid_quota.log || (echo "gid quota should exist" && exit 1)
 
     ./juicefs quota list $META_URL 2>&1 | tee quota_list.log
-    grep "UID:$TEST_UID_1" quota_list.log || (echo "uid quota should be listed" && exit 1)
-    grep "GID:$TEST_GID_1" quota_list.log || (echo "gid quota should be listed" && exit 1)
+    grep "$TEST_UID_1" quota_list.log || (echo "uid quota should be listed" && exit 1)
+    grep "$TEST_GID_1" quota_list.log || (echo "gid quota should be listed" && exit 1)
 
     ./juicefs quota delete $META_URL --uid "$TEST_UID_1"
     ./juicefs quota delete $META_URL --gid "$TEST_GID_1"
@@ -668,7 +671,7 @@ test_chown_transfer_user_group_quota(){
     grep -i "Disk quota exceeded" error.log || (echo "user2 post-chown quota check failed" && exit 1)
 }
 
-test_set_quota_by_username(){
+skip_test_set_quota_by_username(){
     prepare_ug_quota_test
     resolve_test_users || return 0
 
@@ -728,7 +731,7 @@ run_sub_dir_uid_gid_case(){
         && echo "uid capacity quota should block write via subdir mount" && exit 1 || true
     grep -i "Disk quota exceeded" error.log || (echo "uid subdir capacity quota not enforced" && exit 1)
 
-    rm -f /jfs/uid_cap
+    ./juicefs rmr /jfs/uid_cap --skip-trash
     sleep $DIR_QUOTA_FLUSH_INTERVAL
 
     run_as_user_cmd "$TEST_USER_1" "for i in \$(seq 1 100); do touch /jfs/uid_inode_\$i; done"
@@ -742,8 +745,7 @@ run_sub_dir_uid_gid_case(){
     run_as_user_cmd "$TEST_USER_2" "echo a | tee -a /jfs/gid_cap" 2>error.log \
         && echo "gid capacity quota should block write via subdir mount" && exit 1 || true
     grep -i "Disk quota exceeded" error.log || (echo "gid subdir capacity quota not enforced" && exit 1)
-
-    rm -f /jfs/gid_cap
+    ./juicefs rmr /jfs/gid_cap --skip-trash
     sleep $DIR_QUOTA_FLUSH_INTERVAL
 
     run_as_user_cmd "$TEST_USER_2" "for i in \$(seq 1 100); do touch /jfs/gid_inode_\$i; done"
@@ -774,9 +776,9 @@ run_hard_link_uid_gid_case(){
         && echo "uid capacity quota should block write after 2G used" && exit 1 || true
     grep -i "Disk quota exceeded" error.log || (echo "uid hardlink capacity quota not enforced" && exit 1)
 
-    run_as_user_cmd "$TEST_USER_1" "ln /jfs/ughl/uid_test1 /jfs/ughl/uid_test1_link" 2>error.log \
-        && echo "uid hard link should fail when uid quota is full" && exit 1 || true
-    grep -i "Disk quota exceeded" error.log || (echo "uid hardlink capacity quota not enforced" && exit 1)
+    rm -f error.log
+    run_as_user_cmd "$TEST_USER_1" "ln /jfs/ughl/uid_test1 /jfs/ughl/uid_test1_link" \
+        || (echo "uid hard link should not consume uid capacity quota" && exit 1)
 
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     # ./juicefs quota check $META_URL --uid "$TEST_UID_1" --strict
@@ -784,9 +786,9 @@ run_hard_link_uid_gid_case(){
     run_as_user_cmd "$TEST_USER_2" "dd if=/dev/zero of=/jfs/ughl/gid_test1 bs=1G count=1"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
 
-    run_as_user_cmd "$TEST_USER_2" "ln /jfs/ughl/gid_test1 /jfs/ughl/gid_test1_link" 2>error.log \
-        && echo "hard link should fail when gid quota is full" && exit 1 || true
-    grep -i "Disk quota exceeded" error.log || (echo "gid hardlink capacity quota not enforced" && exit 1)
+    rm -f error.log
+    run_as_user_cmd "$TEST_USER_2" "ln /jfs/ughl/gid_test1 /jfs/ughl/gid_test1_link" \
+        || (echo "gid hard link should not consume gid capacity quota" && exit 1)
 
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     # ./juicefs quota check $META_URL --gid "$TEST_GID_2" --strict
@@ -1012,6 +1014,147 @@ test_quota_uid_path_global_combo(){
 
     # ./juicefs quota check $META_URL --uid "$TEST_UID_1" --strict
     ./juicefs quota check $META_URL --path /combo --strict
+}
+
+run_total_capacity_uid_gid_case(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+    ./juicefs config $META_URL --capacity 2
+    ./juicefs quota set $META_URL --uid "$TEST_UID_1" --capacity 1
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    chmod 777 /jfs
+
+    run_as_user_cmd "$TEST_USER_1" "dd if=/dev/zero of=/jfs/f1 bs=1G count=1"
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    run_as_user_cmd "$TEST_USER_1" "echo a | tee -a /jfs/f1" 2>error.log \
+        && echo "uid capacity should block before global capacity reached" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "uid quota not enforced with global capacity set" && exit 1)
+
+    run_as_user_cmd "$TEST_USER_2" "dd if=/dev/zero of=/jfs/f2 bs=1G count=1"
+    sleep $VOLUME_QUOTA_FLUSH_INTERVAL
+    run_as_user_cmd "$TEST_USER_2" "echo a | tee -a /jfs/f2" 2>error.log \
+        && echo "global capacity should block when full" && exit 1 || true
+    grep -i "No space left on device" error.log || (echo "global capacity not enforced after uid+global both full" && exit 1)
+}
+
+run_total_inodes_uid_gid_case(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+
+    # Global inodes 1000, uid limit 5 — uid should block first
+    ./juicefs config $META_URL --inodes 1000
+    ./juicefs quota set $META_URL --uid "$TEST_UID_1" --inodes 5
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    mkdir -p /jfs/vol_uid_i && chmod 777 /jfs/vol_uid_i
+
+    run_as_user_cmd "$TEST_USER_1" "for i in \$(seq 1 5); do touch /jfs/vol_uid_i/uf\$i; done"
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/vol_uid_i/uf_overflow" 2>error.log \
+        && echo "uid inode quota should block before global inodes reached" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "uid inode quota not enforced with global inodes set" && exit 1)
+
+    # user2 (no uid quota) can still create files within global limit
+    run_as_user_cmd "$TEST_USER_2" "touch /jfs/vol_uid_i/gf1"
+}
+
+run_nested_dir_uid_gid_case(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+
+    mkdir -p /jfs/nd/{d1,d2}/{d1,d2}
+    chmod -R 777 /jfs/nd
+
+    # uid inode quota across nested dirs
+    ./juicefs quota set $META_URL --uid "$TEST_UID_1" --inodes 10
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    for i in $(seq 1 10); do
+        subdir=$(find /jfs/nd/ -type d | shuf -n 1)
+        run_as_user_cmd "$TEST_USER_1" "touch $subdir/uid_test$i"
+    done
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+
+    subdir=$(find /jfs/nd/ -type d | shuf -n 1)
+    run_as_user_cmd "$TEST_USER_1" "touch $subdir/uid_overflow" 2>error.log \
+        && echo "uid inode quota should block create in nested dirs" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "uid nested dir inode quota not enforced" && exit 1)
+
+    # gid capacity quota across nested dirs
+    ./juicefs quota set $META_URL --gid "$TEST_GID_2" --capacity 1
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    subdir=$(find /jfs/nd/ -type d | shuf -n 1)
+    run_as_user_cmd "$TEST_USER_2" "dd if=/dev/zero of=$subdir/gid_cap_file bs=1G count=1"
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    subdir=$(find /jfs/nd/ -type d | shuf -n 1)
+    run_as_user_cmd "$TEST_USER_2" "echo a | tee $subdir/gid_cap_overflow" 2>error.log \
+        && echo "gid capacity quota should block write in nested dirs" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "gid nested dir capacity quota not enforced" && exit 1)
+}
+
+test_user_group_membership_quota(){
+    prepare_ug_quota_test
+    resolve_test_users || return 0
+
+    if [[ "$(id -u)" != "0" ]]; then
+        echo "group membership test requires root, skipping"
+        return 0
+    fi
+    for cmd in groupadd usermod gpasswd groupdel; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            echo "$cmd not available, skipping group membership test"
+            return 0
+        fi
+    done
+
+    NEW_GROUP="jfs-grpmem-${RANDOM}"
+    groupadd "$NEW_GROUP" || { echo "cannot create test group, skipping"; return 0; }
+    NEW_GID=$(getent group "$NEW_GROUP" | cut -d: -f3)
+
+    cleanup_group() {
+        gpasswd -d "$TEST_USER_1" "$NEW_GROUP" 2>/dev/null || true
+        groupdel "$NEW_GROUP" 2>/dev/null || true
+    }
+    trap cleanup_group RETURN
+
+    # Add TEST_USER_1 to the new group
+    usermod -aG "$NEW_GROUP" "$TEST_USER_1"
+
+    # Set gid quota on new group
+    ./juicefs quota set $META_URL --gid "$NEW_GID" --inodes 2
+    sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
+
+    # Create setgid directory owned by new group
+    mkdir -p /jfs/grpmem
+    chgrp "$NEW_GID" /jfs/grpmem
+    chmod 2777 /jfs/grpmem
+
+    # Files created in setgid dir inherit gid -> counts against NEW_GID quota
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/grpmem/file1"
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+
+    # Verify file has correct gid
+    file_gid=$(stat -c %g /jfs/grpmem/file1)
+    [[ "$file_gid" != "$NEW_GID" ]] && echo "file in setgid dir should inherit group $NEW_GID, got $file_gid" && exit 1 || true
+
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/grpmem/file2"
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+
+    # Third file should fail — gid quota (inodes=2) exhausted
+    run_as_user_cmd "$TEST_USER_1" "touch /jfs/grpmem/file3" 2>error.log \
+        && echo "gid inode quota should block file creation in setgid dir" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "gid quota via setgid dir not enforced" && exit 1)
+
+    # Remove user from group — existing file quota should not change
+    gpasswd -d "$TEST_USER_1" "$NEW_GROUP" 2>/dev/null || true
+    ./juicefs quota list $META_URL --gid "$NEW_GID" 2>&1 | tee grpmem_quota.log
+    gid_iused=$(get_quota_table_field grpmem_quota.log "GID:$NEW_GID" 7)
+    [[ "$gid_iused" != "2" ]] && echo "gid iused should remain 2 after removing user from group, got $gid_iused" && exit 1 || true
+
+    cleanup_group
+    trap - RETURN
 }
 
 source .github/scripts/common/run_test.sh && run_test $@

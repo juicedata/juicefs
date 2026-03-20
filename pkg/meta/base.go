@@ -116,7 +116,7 @@ type engine interface {
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
 	doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno
 	doRmdir(ctx Context, parent Ino, name string, inode *Ino, attr *Attr, skipCheckTrash ...bool) syscall.Errno
-	doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) (errno syscall.Errno)
+	doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta *dirStat, skipCheckTrash ...bool) syscall.Errno
 	doReadlink(ctx Context, inode Ino, noatime bool) (int64, []byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tinode *Ino, attr, tattr *Attr) syscall.Errno
@@ -189,39 +189,35 @@ type symlinkCache struct {
 	cap  int32
 }
 
-// userGroupQuotaDelta represents quota changes for a specific user and group.
-type userGroupQuotaDelta struct {
+// ugQuotaDelta represents quota changes for a specific user and group.
+type ugQuotaDelta struct {
 	Uid    uint32
 	Gid    uint32
 	Space  int64
 	Inodes int64
 }
 
-type batchCloneResult struct {
-	length          int64
-	space           int64
-	inodes          int64
-	userGroupQuotas []userGroupQuotaDelta
+type ugQuotaDeltas map[uint64]*ugQuotaDelta
+
+func (ds ugQuotaDeltas) add(delta *ugQuotaDelta) {
+	key := ugKey(delta.Uid, delta.Gid)
+	if existing, ok := ds[key]; ok {
+		existing.Space += delta.Space
+		existing.Inodes += delta.Inodes
+	} else {
+		ds[key] = delta
+	}
 }
 
-func appendUGQuotaDelta(userGroupQuotas *[]userGroupQuotaDelta, parent Ino, uid, gid uint32, nlink uint32, typ uint8, length uint64) {
-	if userGroupQuotas == nil || parent.IsTrash() {
-		return
-	}
-	var entrySpace int64
-	if nlink == 0 {
-		if typ == TypeFile {
-			entrySpace = -align4K(length)
-		} else {
-			entrySpace = -align4K(0)
-		}
-	}
-	*userGroupQuotas = append(*userGroupQuotas, userGroupQuotaDelta{
-		Uid:    uid,
-		Gid:    gid,
-		Space:  entrySpace,
-		Inodes: -1,
-	})
+type batchCloneResult struct {
+	length int64
+	space  int64
+	inodes int64
+	deltas ugQuotaDeltas
+}
+
+func ugKey(uid, gid uint32) uint64 {
+	return (uint64(uid) << 32) | uint64(gid)
 }
 
 func newSymlinkCache(cap int32) *symlinkCache {
@@ -1390,12 +1386,12 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			}
 
 			if uidChanged {
-				m.updateUserGroupQuota(ctx, oldAttr.Uid, 0, -space, -inodes)
-				m.updateUserGroupQuota(ctx, attr.Uid, 0, space, inodes)
+				m.updateUserGroupStat(ctx, oldAttr.Uid, 0, -space, -inodes)
+				m.updateUserGroupStat(ctx, attr.Uid, 0, space, inodes)
 			}
 			if gidChanged {
-				m.updateUserGroupQuota(ctx, 0, oldAttr.Gid, -space, -inodes)
-				m.updateUserGroupQuota(ctx, 0, attr.Gid, space, inodes)
+				m.updateUserGroupStat(ctx, 0, oldAttr.Gid, -space, -inodes)
+				m.updateUserGroupStat(ctx, 0, attr.Gid, space, inodes)
 			}
 		}
 	}
@@ -1516,7 +1512,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 		m.en.updateStats(space, inodes)
 		m.updateDirStat(ctx, parent, 0, space, inodes)
 		m.updateDirQuota(ctx, parent, space, inodes)
-		m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, space, inodes)
+		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, space, inodes)
 	}
 	return st
 }
@@ -1602,7 +1598,6 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if err == 0 {
 		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
 		m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
-		m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, 0, 1)
 	}
 	return err
 }
@@ -1671,11 +1666,6 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 		m.updateDirStat(ctx, parent, -int64(diffLength), -align4K(diffLength), -1)
 		if !parent.IsTrash() {
 			m.updateDirQuota(ctx, parent, -align4K(diffLength), -1)
-			if attr.Typ == TypeFile && attr.Nlink > 0 {
-				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, 0, -1)
-			} else {
-				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, -align4K(diffLength), -1)
-			}
 		}
 	}
 	return err
@@ -1708,7 +1698,6 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 		}
 		m.updateDirStat(ctx, parent, 0, -align4K(0), -1)
 		m.updateDirQuota(ctx, parent, -align4K(0), -1)
-		m.updateUserGroupQuota(ctx, oldAttr.Uid, oldAttr.Gid, -align4K(0), -1)
 	}
 	return st
 }
@@ -1718,18 +1707,12 @@ func (m *baseMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count 
 	if len(entries) == 0 {
 		return 0
 	}
-	var length int64
-	var space int64
-	var inodes int64
-	userGroupQuotas := make([]userGroupQuotaDelta, 0, len(entries))
-	st := m.en.doBatchUnlink(ctx, parent, entries, &length, &space, &inodes, &userGroupQuotas, skipCheckTrash)
+	var delta dirStat
+	st := m.en.doBatchUnlink(ctx, parent, entries, &delta, skipCheckTrash)
 	if st == 0 {
-		m.updateDirStat(ctx, parent, length, space, inodes)
+		m.updateDirStat(ctx, parent, delta.length, delta.space, delta.inodes)
 		if !parent.IsTrash() {
-			m.updateDirQuota(ctx, parent, space, inodes)
-			for _, quota := range userGroupQuotas {
-				m.updateUserGroupQuota(ctx, quota.Uid, quota.Gid, quota.Space, quota.Inodes)
-			}
+			m.updateDirQuota(ctx, parent, delta.space, delta.inodes)
 		}
 		if count != nil && len(entries) > 0 {
 			atomic.AddUint64(count, uint64(len(entries)))
@@ -1747,8 +1730,9 @@ func (m *baseMeta) BatchClone(ctx Context, srcParent Ino, dstParent Ino, entries
 	if st == 0 {
 		m.en.updateStats(r.space, r.inodes)
 		m.updateDirQuota(ctx, dstParent, r.space, r.inodes)
-		for _, q := range r.userGroupQuotas {
-			m.updateUserGroupQuota(ctx, q.Uid, q.Gid, q.Space, q.Inodes)
+		// TODO
+		for _, q := range r.deltas {
+			m.updateUserGroupStat(ctx, q.Uid, q.Gid, q.Space, q.Inodes)
 		}
 		if count != nil {
 			atomic.AddUint64(count, uint64(r.inodes))
@@ -1848,9 +1832,6 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					m.updateDirQuota(ctx, parentDst, space, inodes)
 				}
 			}
-			if flags&RenameRestore != 0 && parentSrc.IsTrash() {
-				m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, align4K(diffLength), 1)
-			}
 		}
 		if *tinode > 0 && flags != RenameExchange {
 			diffLength = 0
@@ -1865,7 +1846,6 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if quotaDst > 0 {
 				m.updateDirQuota(ctx, parentDst, -align4K(diffLength), -1)
 			}
-			m.updateUserGroupQuota(ctx, tattr.Uid, tattr.Gid, -align4K(diffLength), -1)
 		}
 	}
 	return st
@@ -2043,9 +2023,7 @@ func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 	st := m.en.doWrite(ctx, inode, indx, off, slice, mtime, &numSlices, &delta, &attr)
 	if st == 0 {
 		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
-		if delta.space != 0 {
-			m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, delta.space, 0)
-		}
+		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, delta.space, 0)
 		if numSlices%100 == 99 || numSlices > 350 {
 			if numSlices < maxSlices {
 				go m.compactChunk(inode, indx, false, false)
@@ -2072,9 +2050,7 @@ func (m *baseMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, 
 	st := m.en.doTruncate(ctx, inode, flags, length, &delta, attr, skipPermCheck)
 	if st == 0 {
 		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
-		if delta.space != 0 {
-			m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, delta.space, 0)
-		}
+		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, delta.space, 0)
 	}
 	return st
 }
@@ -2110,9 +2086,7 @@ func (m *baseMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 			*flength = attr.Length
 		}
 		m.updateParentStat(ctx, inode, attr.Parent, delta.length, delta.space)
-		if delta.space != 0 {
-			m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, delta.space, 0)
-		}
+		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, delta.space, 0)
 	}
 	return st
 }
@@ -3265,7 +3239,7 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	}
 	m.en.updateStats(align4K(attr.Length), 1)
 	atomic.AddUint64(count, 1)
-	m.updateUserGroupQuota(ctx, attr.Uid, attr.Gid, align4K(attr.Length), 1)
+	m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, align4K(attr.Length), 1)
 	if attr.Typ != TypeDirectory {
 		return 0
 	}

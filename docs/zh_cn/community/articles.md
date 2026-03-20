@@ -8,6 +8,8 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## AI
 
+- [韩国国民搜索 NAVER：使用 JuiceFS 打通 Hadoop 与 Kubernetes 存储实践](https://juicefs.com/zh-cn/blog/user-stories/naver-juicefs-hadoop-kubernetes-storage)，2026-02-12，Nam Kyung-wan@NAVER
+- [海量小文件 + 多云协同：地瓜机器人 JuiceFS 存储优化之路](https://juicefs.com/zh-cn/blog/user-stories/horizon-robotics-juicefs-small-file-multi-cloud-optimization)，2026-02-06，赵晗@地瓜机器人
 - [3D-AIGC 存储架构演进：从 NFS、GlusterFS 到 JuiceFS](https://juicefs.com/zh-cn/blog/user-stories/3d-aigc-storage-evolution-juicefs)，2026-01-05，李威宇@光影焕像
 - [JuiceFS + MinIO：Ariste AI 量化投资高性能存储实践](https://juicefs.com/zh-cn/blog/user-stories/juicefs-minio-ariste-ai-quant-storage)，2025-12-08，高玉堂@Ariste AI
 - [NAS、对象存储与 JuiceFS：百亿量化基金的存储选型实践](https://juicefs.com/zh-cn/blog/solutions/quant-fund-storage-selection-nas-object-juicefs)，2025-11-20，蔡敏
@@ -139,6 +141,8 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 教程、使用指南、评测及其他
 
+- [JuiceFS 企业版 5.3 特性详解：单文件系统支持超 5,000 亿文件，首次引入 RDMA](https://juicefs.com/zh-cn/blog/release-notes/juicefs-enterprise-5-3-500b-files-rdma-support)，2026-01-29，Sandy
+- [仅两台缓存节点，如何支撑 1.45TB/s 大吞吐业务 #JuiceFS 优化实践](https://juicefs.com/zh-cn/blog/solutions/how-2-cache-nodes-support-tbs-throughput)，2026-01-16，蔡敏
 - [从 MLPerf Storage v2.0 看 AI 训练中的存储性能与扩展能力](https://juicefs.com/zh-cn/blog/engineering/juicefs-mlperf-storage-v2-ai-training-storage-performance)，2025-09-17，莫飞虎
 - [实现 TB 级聚合带宽，JuiceFS 分布式缓存网络优化实践](https://juicefs.com/zh-cn/blog/engineering/tb-bandwidth-juicefs-distributed-cache-optimization)，2025-09-03，莫飞虎
 - [3000 台 JuiceFS Windows 客户端性能评估](https://juicefs.com/zh-cn/blog/solutions/juicefs-windows--performance-test)，2025-08-06，蔡敏

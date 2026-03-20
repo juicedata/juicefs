@@ -327,10 +327,12 @@ func (m *baseMeta) syncQuotaMaps(existing map[uint64]*Quota, loaded map[uint64]*
 		}
 	}
 	// delete that are not in loaded
-	for key := range existing {
-		if _, ok := loaded[key]; !ok {
-			logger.Infof("Quota for %s %d is deleted", quotaType, key)
-			delete(existing, key)
+	if quotaType == "inode" {
+		for key := range existing {
+			if _, ok := loaded[key]; !ok {
+				logger.Infof("Quota for %s %d is deleted", quotaType, key)
+				delete(existing, key)
+			}
 		}
 	}
 }
@@ -455,11 +457,11 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 	}
 }
 
-func (m *baseMeta) updateUserGroupQuota(ctx Context, uid, gid uint32, space, inodes int64) {
+func (m *baseMeta) updateUserGroupStat(ctx Context, uid, gid uint32, space, inodes int64) {
 	if !m.getFormat().UserGroupQuota {
 		return
 	}
-	if uid == 0 && gid == 0 {
+	if (uid == 0 && gid == 0) || (space == 0 && inodes == 0) {
 		return
 	}
 	m.quotaMu.Lock()
@@ -467,14 +469,13 @@ func (m *baseMeta) updateUserGroupQuota(ctx Context, uid, gid uint32, space, ino
 		if uq := m.userQuotas[uint64(uid)]; uq != nil {
 			uq.update(space, inodes)
 		} else {
-			// Create new user quota if it doesn't exist
 			m.userQuotas[uint64(uid)] = &Quota{
 				UsedSpace:  0,
 				UsedInodes: 0,
-				MaxSpace:   -1,     // No limit
-				MaxInodes:  -1,     // No limit
-				newSpace:   space,  // Set newSpace for database sync
-				newInodes:  inodes, // Set newInodes for database sync
+				MaxSpace:   -1, // No limit
+				MaxInodes:  -1,
+				newSpace:   space,
+				newInodes:  inodes,
 			}
 		}
 	}
@@ -482,14 +483,13 @@ func (m *baseMeta) updateUserGroupQuota(ctx Context, uid, gid uint32, space, ino
 		if gq := m.groupQuotas[uint64(gid)]; gq != nil {
 			gq.update(space, inodes)
 		} else {
-			// Create new group quota if it doesn't exist
 			m.groupQuotas[uint64(gid)] = &Quota{
 				UsedSpace:  0,
 				UsedInodes: 0,
-				MaxSpace:   -1,     // No limit
-				MaxInodes:  -1,     // No limit
-				newSpace:   space,  // Set newSpace for database sync
-				newInodes:  inodes, // Set newInodes for database sync
+				MaxSpace:   -1, // No limit
+				MaxInodes:  -1,
+				newSpace:   space,
+				newInodes:  inodes,
 			}
 		}
 	}
@@ -776,6 +776,12 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 	visitedDirs := make(map[Ino]bool)
 
 	dirQueue := []Ino{RootInode}
+	if m.getFormat().TrashDays > 0 {
+		var trashAttr Attr
+		if st := m.en.doGetAttr(ctx, TrashInode, &trashAttr); st == 0 {
+			dirQueue = append(dirQueue, TrashInode)
+		}
+	}
 
 	for len(dirQueue) > 0 {
 		currentDir := dirQueue[0]
@@ -807,19 +813,24 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 			}
 
 			var space int64
+			var inodes int64
 			if e.Attr.Typ == TypeFile {
 				if e.Attr.Nlink > 1 {
 					if processedFiles[e.Inode] {
 						space = 0
+						inodes = 0
 					} else {
 						space = align4K(e.Attr.Length)
+						inodes = 1
 						processedFiles[e.Inode] = true
 					}
 				} else {
 					space = align4K(e.Attr.Length)
+					inodes = 1
 				}
 			} else if e.Attr.Typ == TypeDirectory {
 				space = align4K(0)
+				inodes = 1
 				userUsage[uid].Dirs++
 				groupUsage[gid].Dirs++
 				if !visitedDirs[e.Inode] {
@@ -828,13 +839,12 @@ func (m *baseMeta) scanGlobalUserGroupUsage(ctx Context) (map[uint64]*Summary, m
 			}
 
 			userUsage[uid].Size += uint64(space)
-			userUsage[uid].Files++
+			userUsage[uid].Files += uint64(inodes)
 			groupUsage[gid].Size += uint64(space)
-			groupUsage[gid].Files++
+			groupUsage[gid].Files += uint64(inodes)
 
 		}
 	}
-
 	return userUsage, groupUsage, nil
 }
 
@@ -863,33 +873,33 @@ func (m *baseMeta) handleQuotaList(ctx Context, qtype uint32, key uint64, quotas
 		return err
 	}
 
-	filterOrAll := func(src map[uint64]*Quota, targetType uint32) map[uint64]*Quota {
-		if qtype == 0xffffffff {
-			return src
+	match := func(targetType uint32, k uint64, v *Quota) bool {
+		if v.MaxInodes == -1 && v.MaxSpace == -1 {
+			return false
 		}
-		if qtype != targetType {
-			return nil
-		}
-		if q, ok := src[key]; ok {
-			return map[uint64]*Quota{key: q}
-		}
-		return nil
+		return qtype == 0xffffffff || (qtype == targetType && k == key)
 	}
 
-	for ino, quota := range filterOrAll(dirQuotas, DirQuotaType) {
+	for ino, quota := range dirQuotas {
+		if !match(DirQuotaType, ino, quota) {
+			continue
+		}
 		if ps := m.GetPaths(ctx, Ino(ino)); len(ps) > 0 {
 			quotas[ps[0]] = quota
 		} else {
 			quotas[fmt.Sprintf("inode:%d", ino)] = quota
 		}
 	}
-	for uid, quota := range filterOrAll(userQuotas, UserQuotaType) {
-		quotas[fmt.Sprintf("uid:%d", uid)] = quota
+	for uid, quota := range userQuotas {
+		if match(UserQuotaType, uid, quota) {
+			quotas[fmt.Sprintf("uid:%d", uid)] = quota
+		}
 	}
-	for gid, quota := range filterOrAll(groupQuotas, GroupQuotaType) {
-		quotas[fmt.Sprintf("gid:%d", gid)] = quota
+	for gid, quota := range groupQuotas {
+		if match(GroupQuotaType, gid, quota) {
+			quotas[fmt.Sprintf("gid:%d", gid)] = quota
+		}
 	}
-
 	return nil
 }
 

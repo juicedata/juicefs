@@ -1720,11 +1720,12 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 			m.fileDeleted(opened, parent.IsTrash(), inode, attr.Length)
 		}
 		m.updateStats(newSpace, newInode)
+		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, newInode)
 	}
 	return errno(err)
 }
 
-func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
+func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta *dirStat, skipCheckTrash ...bool) syscall.Errno {
 	if len(entries) == 0 {
 		return 0
 	}
@@ -1748,11 +1749,6 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 		opened bool
 		length uint64
 	}
-	var totalLength, totalSpace, totalInodes int64
-	var totalUserGroupQuotas []userGroupQuotaDelta
-	if userGroupQuotas != nil {
-		totalUserGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
-	}
 
 	// Each entry averages ~4 tx operations, so batch size should be 1000/4
 	batchSize := 1000 / 4
@@ -1764,16 +1760,16 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 		entries = entries[batchSize:]
 
 		var entryInfos []*entryInfo
-		var batchLength, batchSpace, batchInodes int64
-		var batchUserGroupQuotas []userGroupQuotaDelta
+		var batchDirLength, batchDirSpace, batchDirInodes int64
+		var batchFsSpace, batchFsInodes int64
+		var deltas ugQuotaDeltas
 		var delNodes map[Ino]*dNode
 		watchKeys := []string{m.inodeKey(parent), m.entryKey(parent)}
 
 		err := m.txn(ctx, func(tx *redis.Tx) error {
-			batchLength, batchSpace, batchInodes = 0, 0, 0
-			if userGroupQuotas != nil {
-				batchUserGroupQuotas = make([]userGroupQuotaDelta, 0, len(batch))
-			}
+			batchDirLength, batchDirSpace, batchDirInodes = 0, 0, 0
+			batchFsSpace, batchFsInodes = 0, 0
+			deltas = make(ugQuotaDeltas)
 			delNodes = make(map[Ino]*dNode)
 
 			rs, err := tx.Get(ctx, m.inodeKey(parent)).Result()
@@ -1940,6 +1936,13 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 				if info.attr == nil {
 					continue
 				}
+				if info.typ == TypeFile {
+					batchDirLength -= int64(info.attr.Length)
+					batchDirSpace -= align4K(info.attr.Length)
+				} else {
+					batchDirSpace -= align4K(0)
+				}
+				batchDirInodes--
 
 				if !visited[info.inode] {
 					if info.attr.Nlink > 0 {
@@ -1948,10 +1951,8 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 						}
 						inodes[info.inode] = info.attr
 					} else {
-						needStats := false
 						switch info.typ {
 						case TypeFile:
-							needStats = true
 							if dnode, ok := delNodes[info.inode]; ok && dnode.opened {
 								if inodes == nil {
 									inodes = make(map[Ino]*Attr)
@@ -1964,24 +1965,32 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 									Member: m.toDelete(info.inode, info.attr.Length),
 								})
 								keys = append(keys, m.inodeKey(info.inode))
-								batchSpace -= align4K(info.attr.Length)
-								batchInodes--
+								batchFsSpace -= align4K(info.attr.Length)
+								batchFsInodes--
 								stats[m.usedSpaceKey()] -= align4K(info.attr.Length)
 								stats[m.totalInodesKey()]--
+								deltas.add(&ugQuotaDelta{
+									Uid:    info.attr.Uid,
+									Gid:    info.attr.Gid,
+									Space:  -align4K(info.attr.Length),
+									Inodes: -1,
+								})
 							}
 						case TypeSymlink:
 							keys = append(keys, m.symKey(info.inode))
 							fallthrough
 						default:
 							keys = append(keys, m.inodeKey(info.inode))
-							needStats = true
-							batchSpace -= align4K(0)
-							batchInodes--
+							batchFsSpace -= align4K(0)
+							batchFsInodes--
 							stats[m.usedSpaceKey()] -= align4K(0)
 							stats[m.totalInodesKey()]--
-						}
-						if needStats {
-							batchLength -= int64(info.attr.Length)
+							deltas.add(&ugQuotaDelta{
+								Uid:    info.attr.Uid,
+								Gid:    info.attr.Gid,
+								Space:  -align4K(0),
+								Inodes: -1,
+							})
 						}
 						keys = append(keys, m.xattrKey(info.inode))
 						if info.attr.Parent == 0 {
@@ -2015,7 +2024,6 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 						parentOps[key][info.trash.String()]++
 					}
 				}
-				appendUGQuotaDelta(&batchUserGroupQuotas, parent, info.attr.Uid, info.attr.Gid, info.attr.Nlink, info.typ, info.attr.Length)
 				visited[info.inode] = true
 			}
 
@@ -2065,25 +2073,18 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, len
 			return errno(err)
 		}
 
-		// outside of transaction: update global stats and trigger data deletion callbacks
+		// outside of transaction: trigger data deletion callbacks
 		for inode, info := range delNodes {
 			m.fileDeleted(info.opened, parent.IsTrash(), inode, info.length)
 		}
-		m.updateStats(batchSpace, batchInodes)
 
-		totalLength += batchLength
-		totalSpace += batchSpace
-		totalInodes += batchInodes
-		if userGroupQuotas != nil {
-			totalUserGroupQuotas = append(totalUserGroupQuotas, batchUserGroupQuotas...)
+		delta.length += batchDirLength
+		delta.space += batchDirSpace
+		delta.inodes += batchDirInodes
+		m.updateStats(batchFsSpace, batchFsInodes)
+		for _, q := range deltas {
+			m.updateUserGroupStat(ctx, q.Uid, q.Gid, q.Space, q.Inodes)
 		}
-	}
-
-	*length = totalLength
-	*space = totalSpace
-	*inodes = totalInodes
-	if userGroupQuotas != nil {
-		*userGroupQuotas = totalUserGroupQuotas
 	}
 	return 0
 }
@@ -2095,6 +2096,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 			return st
 		}
 	}
+	var attr Attr
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		buf, err := tx.HGet(ctx, m.entryKey(parent), name).Bytes()
 		if err == redis.Nil && m.conf.CaseInsensi {
@@ -2125,7 +2127,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 		if rs[0] == nil {
 			return redis.Nil
 		}
-		var pattr, attr Attr
+		var pattr Attr
 		m.parseAttr([]byte(rs[0].(string)), &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
@@ -2199,6 +2201,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 	}, m.inodeKey(parent), m.entryKey(parent))
 	if err == nil && trash == 0 {
 		m.updateStats(-align4K(0), -1)
+		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, -align4K(0), -1)
 	}
 	return errno(err)
 }
@@ -2513,6 +2516,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			m.fileDeleted(opened, false, dino, tattr.Length)
 		}
 		m.updateStats(newSpace, newInode)
+		m.updateUserGroupStat(ctx, tattr.Uid, tattr.Gid, newSpace, newInode)
 	}
 	return errno(err)
 }
@@ -2828,6 +2832,7 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	if err == nil && newSpace < 0 {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length, false)
+		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, 0)
 	}
 	return err
 }
@@ -3054,6 +3059,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 	}, m.inodeKey(fout), m.inodeKey(fin))
 	if err == nil {
 		m.updateParentStat(ctx, fout, attr.Parent, newLength, newSpace)
+		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, 0)
 	}
 	return errno(err)
 }
@@ -4213,35 +4219,39 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Qu
 		}
 
 		quotas := make(map[uint64]*Quota)
-		if err := m.hscan(ctx, config.quotaKey, func(keys []string) error {
+		if err := m.hscan(ctx, config.usedInodesKey, func(keys []string) error {
 			for i := 0; i < len(keys); i += 2 {
-				key, val := keys[i], []byte(keys[i+1])
+				key := keys[i]
 				id, err := strconv.ParseUint(key, 10, 64)
 				if err != nil {
-					logger.Errorf("invalid inode: %s", key)
+					logger.Errorf("invalid key in %s: %s", qt.name, key)
 					continue
 				}
-				if len(val) != 16 {
-					logger.Errorf("invalid quota: %s=%s", key, val)
+				usedInodes, err := strconv.ParseInt(keys[i+1], 10, 64)
+				if err != nil {
+					logger.Errorf("invalid usedInodes for %s %s: %s", qt.name, key, keys[i+1])
 					continue
 				}
 
-				maxSpace, maxInodes := m.parseQuota(val)
-				if maxSpace < 0 && maxInodes < 0 {
-					continue
-				}
 				usedSpace, err := m.rdb.HGet(ctx, config.usedSpaceKey, key).Int64()
 				if err != nil && err != redis.Nil {
 					return err
 				}
-				usedInodes, err := m.rdb.HGet(ctx, config.usedInodesKey, key).Int64()
-				if err != nil && err != redis.Nil {
+
+				var maxSpace, maxInodes int64 = -1, -1
+				if buf, err := m.rdb.HGet(ctx, config.quotaKey, key).Bytes(); err == nil {
+					if len(buf) != 16 {
+						logger.Errorf("invalid quota value for %s %s: len=%d", qt.name, key, len(buf))
+						continue
+					}
+					maxSpace, maxInodes = m.parseQuota(buf)
+				} else if err != redis.Nil {
 					return err
 				}
 
 				quotas[id] = &Quota{
-					MaxSpace:   int64(maxSpace),
-					MaxInodes:  int64(maxInodes),
+					MaxSpace:   maxSpace,
+					MaxInodes:  maxInodes,
 					UsedSpace:  usedSpace,
 					UsedInodes: usedInodes,
 				}
@@ -4264,9 +4274,10 @@ func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 				return err
 			}
 
-			field := strconv.FormatUint(q.qkey, 10)
-			pipe.HIncrBy(ctx, config.usedSpaceKey, field, q.quota.newSpace)
-			pipe.HIncrBy(ctx, config.usedInodesKey, field, q.quota.newInodes)
+			key := strconv.FormatUint(q.qkey, 10)
+			pipe.HSetNX(ctx, config.quotaKey, key, m.packQuota(-1, -1))
+			pipe.HIncrBy(ctx, config.usedSpaceKey, key, q.quota.newSpace)
+			pipe.HIncrBy(ctx, config.usedInodesKey, key, q.quota.newInodes)
 		}
 		return nil
 	})

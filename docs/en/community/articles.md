@@ -11,6 +11,7 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### AI, machine learning, and deep learning
 
+- [How D-Robotics Manages Massive Small Files in a Multi-Cloud Environment with JuiceFS](https://juicefs.com/en/blog/user-stories/multi-cloud-store-massive-small-files), 2026-03-05, Han Zhao @ D-Robotics
 - [From GlusterFS to JuiceFS: Lightillusions Achieved 2.5x Faster 3D AIGC Data Processing](https://juicefs.com/en/blog/user-stories/aigc-storage-glusterfs-cephfs-vs-juicefs), 2026-01-08, Weiyu Li @ Lightillusions
 - [AI Data Storage: Challenges, Capabilities, and Comparative Analysis](https://juicefs.com/en/blog/solutions/ai-data-storage-challenges-capabilities-solution-comparison), 2025-12-18, Rui Su
 - [JuiceFS+MinIO: Ariste AI Achieved 3x Faster I/O and Cut Storage Costs by 40%+](https://juicefs.com/en/blog/user-stories/quantitative-storage-artificial-intelligence-solution), 2025-12-11, Yutang Gao @ Ariste AI
@@ -86,6 +87,7 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Engineering insights
 
+- [The Design Journey of FUSE: From Kernel-Space to User-Space File Systems](https://juicefs.com/en/blog/engineering/design-fuse-kernel-user-space), 2026-02-14, Yuchao Xu
 - [Design and Performance Optimization of juice sync for Enterprise Data Synchronization](https://juicefs.com/en/blog/engineering/design-performance-optimization-juice-sync), 2025-12-08, Jian Zhi
 - [Deep Dive into the JuiceFS Garbage Collection Mechanism](https://juicefs.com/en/blog/engineering/juicefs-garbage-collection), 2025-11-06, Yuchao Xu
 - [MLPerf Storage v2.0: JuiceFS Leads in Bandwidth Utilization and Scalability for AI Training](https://juicefs.com/en/blog/engineering/mlperf-storage-v2-ai-training-storage-performance), 2025-09-25, Feihu Mo
@@ -104,6 +106,8 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Tutorial, guide, and best practice
 
+- [JuiceFS Enterprise 5.3: 500B+ Files per File System & RDMA Support](https://juicefs.com/en/blog/release-notes/juicefs-enterprise-5-3-rdma-support), 2026-02-04, Sandy
+- [How Just Two Cache Nodes Achieved 1.45 TB/s Throughput](https://juicefs.com/en/blog/solutions/cache-nodes-support-high-throughput), 2026-01-29, Jerry Cai
 - [JuiceFS Writeback: The Write Acceleration Mechanism and Its Applicable Scenarios](https://juicefs.com/en/blog/solutions/juicefs-write-acceleration), 2025-09-11, Jerry Cai
 - [JuiceFS Community 1.3: Python SDK, Faster Backup, SQL & Windows Optimizations](https://juicefs.com/en/blog/release-notes/juicefs-1-3-python-sdk-backup-sql-windows-optimization), 2025-07-09
 - [JuiceFS 1.3 Beta 2 Integrates Apache Ranger for Fine-Grained Access Control](https://juicefs.com/en/blog/release-notes/juicefs-1-3-integrates-apache-ranger-access-control), 2025-06-18, Youpeng Tang
