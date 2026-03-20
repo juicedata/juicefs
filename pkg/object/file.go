@@ -18,6 +18,7 @@ package object
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -26,7 +27,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -272,7 +273,7 @@ func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
 			mEntries[i] = &mEntry{e, e.Name(), nil, isSymlink}
 		}
 	}
-	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
+	slices.SortFunc(mEntries, func(a, b *mEntry) int { return cmp.Compare(a.Name(), b.Name()) })
 	return mEntries, err
 }
 

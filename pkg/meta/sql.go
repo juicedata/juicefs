@@ -22,6 +22,7 @@ package meta
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -31,7 +32,6 @@ import (
 	"runtime"
 	"runtime/debug"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -2085,7 +2085,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 
 func (m *dbMeta) getNodesForUpdate(s *xorm.Session, nodes ...*node) error {
 	// sort them to avoid deadlock
-	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Inode < nodes[j].Inode })
+	slices.SortFunc(nodes, func(a, b *node) int { return cmp.Compare(a.Inode, b.Inode) })
 	for i := range nodes {
 		ok, err := s.ForUpdate().Get(nodes[i])
 		if err != nil {
@@ -4179,7 +4179,7 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 }
 
 func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
-	sort.Slice(quotas, func(i, j int) bool { return quotas[i].qkey < quotas[j].qkey })
+	slices.SortFunc(quotas, func(a, b *iQuota) int { return cmp.Compare(a.qkey, b.qkey) })
 	return m.txn(func(s *xorm.Session) error {
 		for _, q := range quotas {
 			if q.qtype == DirQuotaType {
@@ -4244,7 +4244,7 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 		for _, x := range rows {
 			xattrs = append(xattrs, &DumpedXattr{x.Name, string(x.Value)})
 		}
-		sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+		slices.SortFunc(xattrs, func(a, b *DumpedXattr) int { return cmp.Compare(a.Name, b.Name) })
 		e.Xattrs = xattrs
 	}
 
@@ -4338,7 +4338,7 @@ func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 		for _, x := range rows {
 			xattrs = append(xattrs, &DumpedXattr{x.Name, string(x.Value)})
 		}
-		sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+		slices.SortFunc(xattrs, func(a, b *DumpedXattr) int { return cmp.Compare(a.Name, b.Name) })
 		e.Xattrs = xattrs
 	}
 
@@ -4406,7 +4406,7 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 	for _, e := range tree.Entries {
 		entries = append(entries, e)
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	slices.SortFunc(entries, func(a, b *DumpedEntry) int { return cmp.Compare(a.Name, b.Name) })
 	_ = tree.writeJsonWithOutEntry(bw, depth)
 
 	ms := make([]sync.Mutex, threads)
@@ -4478,7 +4478,7 @@ func (m *dbMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dep
 	}
 	edges := m.snap.edges[inode]
 	_ = tree.writeJsonWithOutEntry(bw, depth)
-	sort.Slice(edges, func(i, j int) bool { return bytes.Compare(edges[i].Name, edges[j].Name) == -1 })
+	slices.SortFunc(edges, func(a, b *edge) int { return bytes.Compare(a.Name, b.Name) })
 
 	for i, e := range edges {
 		entry := m.dumpEntryFast(e.Inode, e.Type)

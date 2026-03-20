@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/md5"
 	"encoding/base64"
@@ -29,7 +30,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -231,7 +232,7 @@ func (s *obsClient) List(ctx context.Context, prefix, start, token, delimiter st
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
-		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
+		slices.SortFunc(objs, func(a, b Object) int { return cmp.Compare(a.Key(), b.Key()) })
 	}
 	return objs, resp.IsTruncated, resp.NextMarker, nil
 }

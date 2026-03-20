@@ -17,11 +17,13 @@
 package vfs
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"runtime"
+	"slices"
 	"sort"
 	"sync"
 	"syscall"
@@ -608,7 +610,7 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, fh uint64, attr *Attr) 
 		return
 	}
 	hs := v.findAllHandles(ino)
-	sort.Slice(hs, func(i, j int) bool { return hs[i].fh < hs[j].fh })
+	slices.SortFunc(hs, func(a, b *handle) int { return cmp.Compare(a.fh, b.fh) })
 	for _, h := range hs {
 		if !h.Wlock(ctx) {
 			err = syscall.EINTR

@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"sort"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -519,9 +519,7 @@ func (f *fileReader) splitRange(block *frange) []uint64 {
 		}
 		return true
 	})
-	sort.Slice(ranges, func(i, j int) bool {
-		return ranges[i] < ranges[j]
-	})
+	slices.Sort(ranges)
 	return ranges
 }
 

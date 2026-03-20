@@ -19,6 +19,7 @@ package meta
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -28,7 +29,7 @@ import (
 	"math/rand"
 	"runtime"
 	"runtime/debug"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -3340,7 +3341,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry, showProgress func(totalInc
 			return true
 		})
 		if len(xattrs) > 0 {
-			sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+			slices.SortFunc(xattrs, func(a, b *DumpedXattr) int { return cmp.Compare(a.Name, b.Name) })
 			e.Xattrs = xattrs
 		}
 
@@ -3439,7 +3440,7 @@ func (m *kvMeta) dumpDir(ctx Context, inode Ino, tree *DumpedEntry, bw *bufio.Wr
 	for _, e := range tree.Entries {
 		entries = append(entries, e)
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	slices.SortFunc(entries, func(a, b *DumpedEntry) int { return cmp.Compare(a.Name, b.Name) })
 	_ = tree.writeJsonWithOutEntry(bw, depth)
 
 	ms := make([]sync.Mutex, threads)
@@ -3515,7 +3516,7 @@ func (m *kvMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dep
 		}
 		names = append(names, n)
 	}
-	sort.Slice(names, func(i, j int) bool { return names[i] < names[j] })
+	slices.Sort(names)
 	_ = tree.writeJsonWithOutEntry(bw, depth)
 	for i, name := range names {
 		e := entries[name]
@@ -3966,9 +3967,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 				binary.BigEndian.PutUint32(a[47:51], uint32(len(ps))) // nlink
 				binary.BigEndian.PutUint64(a[63:71], 0)
 				tx.set(m.inodeKey(i), a)
-				for k := range st {
-					delete(st, k)
-				}
+				clear(st)
 				for _, p := range ps {
 					st[p] = st[p] + 1
 				}

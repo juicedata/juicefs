@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -28,7 +29,7 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -430,7 +431,7 @@ func (c *cifsStore) List(ctx context.Context, prefix, marker, token, delimiter s
 	}
 
 	// Sort entries by name
-	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
+	slices.SortFunc(mEntries, func(a, b *mEntry) int { return cmp.Compare(a.Name(), b.Name()) })
 
 	// Generate object list
 	for _, e := range mEntries {

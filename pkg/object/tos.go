@@ -20,13 +20,14 @@ package object
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -176,7 +177,7 @@ func (t *tosClient) List(ctx context.Context, prefix, start, token, delimiter st
 		for _, p := range resp.CommonPrefixes {
 			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true, ""})
 		}
-		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
+		slices.SortFunc(objs, func(a, b Object) int { return cmp.Compare(a.Key(), b.Key()) })
 	}
 	return objs, resp.IsTruncated, resp.NextContinuationToken, nil
 }

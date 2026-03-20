@@ -18,6 +18,7 @@ package meta
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -28,6 +29,7 @@ import (
 	"path"
 	"reflect"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -961,10 +963,12 @@ func (m *baseMeta) Init(format *Format, force bool) error {
 func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
 	defer m.sessWG.Done()
 	for {
+		t := time.NewTimer(utils.JitterIt(time.Hour))
 		select {
 		case <-ctx.Done():
+			t.Stop()
 			return
-		case <-time.After(utils.JitterIt(time.Hour)):
+		case <-t.C:
 		}
 		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter lastCleanupFiles: %s", err)
@@ -997,10 +1001,12 @@ func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
 func (m *baseMeta) cleanupSlices(ctx Context) {
 	defer m.sessWG.Done()
 	for {
+		t := time.NewTimer(utils.JitterIt(time.Hour))
 		select {
 		case <-ctx.Done():
+			t.Stop()
 			return
-		case <-time.After(utils.JitterIt(time.Hour)):
+		case <-t.C:
 		}
 		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter nextCleanupSlices: %s", err)
@@ -2874,10 +2880,12 @@ func (m *baseMeta) trashEntry(parent, inode Ino, name string) string {
 func (m *baseMeta) cleanupTrash(ctx Context) {
 	defer m.sessWG.Done()
 	for {
+		t := time.NewTimer(utils.JitterIt(time.Hour))
 		select {
 		case <-ctx.Done():
+			t.Stop()
 			return
-		case <-time.After(utils.JitterIt(time.Hour)):
+		case <-t.C:
 		}
 		if st := m.en.doGetAttr(ctx, TrashInode, nil); st != 0 {
 			if st != syscall.ENOENT {
@@ -2950,7 +2958,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 		logger.Warnf("readdir trash %d: %s", TrashInode, st)
 		return st
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Inode < entries[j].Inode })
+	slices.SortFunc(entries, func(a, b *Entry) int { return cmp.Compare(a.Inode, b.Inode) })
 	var count uint64
 	done := make(chan struct{})
 	defer func() {

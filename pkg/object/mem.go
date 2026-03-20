@@ -18,12 +18,13 @@ package object
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -181,9 +182,7 @@ func (m *memStore) List(ctx context.Context, prefix, marker, token, delimiter st
 			objs = append(objs, f)
 		}
 	}
-	sort.Slice(objs, func(i, j int) bool {
-		return objs[i].Key() < objs[j].Key()
-	})
+	slices.SortFunc(objs, func(a, b Object) int { return cmp.Compare(a.Key(), b.Key()) })
 	if int64(len(objs)) > limit {
 		objs = objs[:limit]
 	}

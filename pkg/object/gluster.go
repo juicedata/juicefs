@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -29,7 +30,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -196,7 +197,7 @@ func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 			mEntries = append(mEntries, &mEntry{nil, name, e, isSymlink})
 		}
 	}
-	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
+	slices.SortFunc(mEntries, func(a, b *mEntry) int { return cmp.Compare(a.Name(), b.Name()) })
 	return mEntries, err
 }
 

@@ -17,13 +17,14 @@
 package cmd
 
 import (
+	"cmp"
 	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/DataDog/zstd"
@@ -295,9 +296,7 @@ func showBakSummary(ctx *cli.Context, fp *os.File, withOffset bool) error {
 			data = append(data, []string{name, fmt.Sprintf("%d", info.Num)})
 		}
 	}
-	sort.Slice(data, func(i, j int) bool {
-		return data[i][0] < data[j][0]
-	})
+	slices.SortFunc(data, func(a, b []string) int { return cmp.Compare(a[0], b[0]) })
 
 	if withOffset {
 		fmt.Println(strings.Repeat("-", 34))

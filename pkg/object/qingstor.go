@@ -21,13 +21,14 @@ package object
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -229,7 +230,7 @@ func (q *qingstor) List(ctx context.Context, prefix, start, token, delimiter str
 		for _, p := range out.CommonPrefixes {
 			objs = append(objs, &obj{*p, 0, time.Unix(0, 0), true, ""})
 		}
-		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
+		slices.SortFunc(objs, func(a, b Object) int { return cmp.Compare(a.Key(), b.Key()) })
 	}
 	return objs, *out.HasMore, *out.NextMarker, nil
 }

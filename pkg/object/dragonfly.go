@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -30,7 +31,7 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -504,7 +505,7 @@ func (d *dragonfly) List(ctx context.Context, prefix, marker, token, delimiter s
 		for _, o := range objectMetadatas.CommonPrefixes {
 			objs = append(objs, &obj{o, 0, time.Unix(0, 0), true, ""})
 		}
-		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
+		slices.SortFunc(objs, func(a, b Object) int { return cmp.Compare(a.Key(), b.Key()) })
 	}
 	return generateListResult(objs, limit)
 }

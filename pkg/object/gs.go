@@ -20,12 +20,13 @@
 package object
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -183,7 +184,7 @@ func (g *gs) List(ctx context.Context, prefix, start, token, delimiter string, l
 		}
 	}
 	if delimiter != "" {
-		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
+		slices.SortFunc(objs, func(a, b Object) int { return cmp.Compare(a.Key(), b.Key()) })
 	}
 	return objs, nextPageToken != "", nextPageToken, nil
 }

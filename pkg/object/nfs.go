@@ -21,13 +21,14 @@ package object
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/user"
 	"path"
-	"sort"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -297,7 +298,7 @@ func (n *nfsStore) readDirSorted(ctx context.Context, dir string, followLink boo
 			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, e.Attr.Attr.Type == nfs.NF3Lnk}
 		}
 	}
-	sort.Slice(nfsEntries, func(i, j int) bool { return nfsEntries[i].Name() < nfsEntries[j].Name() })
+	slices.SortFunc(nfsEntries, func(a, b *nfsEntry) int { return cmp.Compare(a.Name(), b.Name()) })
 	return nfsEntries, err
 }
 

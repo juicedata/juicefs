@@ -21,13 +21,14 @@ package object
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -272,7 +273,7 @@ func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter str
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
-		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
+		slices.SortFunc(objs, func(a, b Object) int { return cmp.Compare(a.Key(), b.Key()) })
 	}
 	var isTruncated bool
 	if resp.IsTruncated != nil {

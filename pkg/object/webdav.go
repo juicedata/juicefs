@@ -20,6 +20,7 @@
 package object
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -27,7 +28,7 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/studio-b12/gowebdav"
@@ -151,9 +152,7 @@ func (w *webdav) List(ctx context.Context, prefix, marker, token, delimiter stri
 			sortedInfos[idx] = o
 		}
 	}
-	sort.Slice(sortedInfos, func(i, j int) bool {
-		return sortedInfos[i].Name() < sortedInfos[j].Name()
-	})
+	slices.SortFunc(sortedInfos, func(a, b os.FileInfo) int { return cmp.Compare(a.Name(), b.Name()) })
 	for _, info := range sortedInfos {
 		key := root[1:] + info.Name()
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {

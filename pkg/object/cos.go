@@ -21,13 +21,14 @@ package object
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -198,7 +199,7 @@ func (c *COS) List(ctx context.Context, prefix, start, token, delimiter string, 
 			}
 			objs = append(objs, &obj{key, 0, time.Unix(0, 0), true, ""})
 		}
-		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
+		slices.SortFunc(objs, func(a, b Object) int { return cmp.Compare(a.Key(), b.Key()) })
 	}
 	return objs, resp.IsTruncated, resp.NextMarker, nil
 }

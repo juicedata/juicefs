@@ -18,11 +18,12 @@ package cmd
 
 import (
 	"bufio"
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -353,9 +354,7 @@ func (p *profiler) flusher() {
 			for k, s := range stats {
 				keyStats = append(keyStats, keyStat{k, s})
 			}
-			sort.Slice(keyStats, func(i, j int) bool { // reversed
-				return keyStats[i].sPtr.total > keyStats[j].sPtr.total
-			})
+			slices.SortFunc(keyStats, func(a, b keyStat) int { return cmp.Compare(b.sPtr.total, a.sPtr.total) })
 			p.flush(ts, keyStats, done)
 			if done {
 				os.Exit(0)
@@ -430,9 +429,7 @@ func profile(ctx *cli.Context) error {
 		for k, s := range stats {
 			keyStats = append(keyStats, keyStat{k, s})
 		}
-		sort.Slice(keyStats, func(i, j int) bool { // reversed
-			return keyStats[i].sPtr.total > keyStats[j].sPtr.total
-		})
+		slices.SortFunc(keyStats, func(a, b keyStat) int { return cmp.Compare(b.sPtr.total, a.sPtr.total) })
 		prof.replay = false
 		prof.interval = last.Sub(start)
 		prof.flush(last, keyStats, <-prof.done)

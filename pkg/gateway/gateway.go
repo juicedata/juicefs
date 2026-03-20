@@ -17,6 +17,7 @@
 package gateway
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -26,6 +27,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -297,9 +299,7 @@ func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 	}
 
 	// Sort bucket infos by bucket name.
-	sort.Slice(buckets, func(i, j int) bool {
-		return buckets[i].Name < buckets[j].Name
-	})
+	slices.SortFunc(buckets, func(a, b minio.BucketInfo) int { return cmp.Compare(a.Name, b.Name) })
 	return buckets, nil
 }
 
@@ -1056,12 +1056,11 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 		}
 	}
 
-	sort.Slice(lmi.Uploads, func(i, j int) bool {
-		if lmi.Uploads[i].Object == lmi.Uploads[j].Object {
-			return lmi.Uploads[i].UploadID < lmi.Uploads[j].UploadID
-		} else {
-			return lmi.Uploads[i].Object < lmi.Uploads[j].Object
+	slices.SortFunc(lmi.Uploads, func(a, b minio.MultipartInfo) int {
+		if a.Object != b.Object {
+			return cmp.Compare(a.Object, b.Object)
 		}
+		return cmp.Compare(a.UploadID, b.UploadID)
 	})
 
 	if delimiter != "" {
@@ -1141,9 +1140,7 @@ func (n *jfsObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 			})
 		}
 	}
-	sort.Slice(result.Parts, func(i, j int) bool {
-		return result.Parts[i].PartNumber < result.Parts[j].PartNumber
-	})
+	slices.SortFunc(result.Parts, func(a, b minio.PartInfo) int { return cmp.Compare(a.PartNumber, b.PartNumber) })
 	if len(result.Parts) > maxParts {
 		result.IsTruncated = true
 		result.Parts = result.Parts[:maxParts]
