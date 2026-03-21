@@ -140,10 +140,12 @@ func (dc *normalDC) init(cs *cacheStore) {
 func (dc *normalDC) tick() {
 	go func() {
 		for {
+			t := time.NewTimer(tickDurForNormal)
 			select {
 			case <-dc.stopCh:
+				t.Stop()
 				return
-			case <-time.After(tickDurForNormal):
+			case <-t.C:
 				atomic.StoreUint32(&dc.ioErrCnt, 0)
 			}
 		}

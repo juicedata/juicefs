@@ -26,8 +26,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"cmp"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -207,7 +208,7 @@ func (s *ibmcos) List(ctx context.Context, prefix, start, token, delimiter strin
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
-		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
+		slices.SortFunc(objs, func(a, b Object) int { return cmp.Compare(a.Key(), b.Key()) })
 	}
 	return objs, *resp.IsTruncated, *resp.NextMarker, nil
 }

@@ -774,9 +774,7 @@ func (m *redisMeta) loadSymlinks(ctx Context, msg proto.Message) error {
 			if err := m.rdb.MSet(ctx, syms).Err(); err != nil {
 				return err
 			}
-			for k := range syms {
-				delete(syms, k)
-			}
+			clear(syms)
 		}
 	}
 	if len(syms) == 0 {

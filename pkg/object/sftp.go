@@ -17,8 +17,9 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"cmp"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -361,7 +362,7 @@ func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo, f
 			mEntries[i] = &mEntry{e, e.Name(), nil, isSymlink}
 		}
 	}
-	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
+	slices.SortFunc(mEntries, func(a, b *mEntry) int { return cmp.Compare(a.Name(), b.Name()) })
 	return mEntries
 }
 

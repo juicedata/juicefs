@@ -266,9 +266,7 @@ func (m *dbMeta) dumpEdges(ctx Context, opt *DumpOption, ch chan<- *dumpedResult
 	st := make(map[uint64]int64)
 	for inode, ps := range dumpParents {
 		if len(ps) > 1 {
-			for k := range st {
-				delete(st, k)
-			}
+			clear(st)
 			for _, p := range ps {
 				st[p] = st[p] + 1
 			}

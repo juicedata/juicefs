@@ -24,7 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -191,7 +191,7 @@ func rotate(objs []string, now time.Time) []string {
 	}
 
 	var toDel, within []string
-	sort.Strings(objs)
+	slices.Sort(objs)
 	for i := len(objs) - 1; i >= 0; i-- {
 		if len(objs[i]) != 30 { // len("dump-2006-01-02-150405.json.gz")
 			logger.Warnf("bad object for metadata backup %s: length %d", objs[i], len(objs[i]))

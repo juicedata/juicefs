@@ -19,7 +19,7 @@ package cmd
 import (
 	"fmt"
 	"math"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/dustin/go-humanize"
@@ -221,7 +221,7 @@ func quota(c *cli.Context) error {
 	for p := range qs {
 		paths = append(paths, p)
 	}
-	sort.Strings(paths)
+	slices.Sort(paths)
 	for _, p := range paths {
 		q := qs[p]
 		if q.UsedSpace < 0 {

@@ -33,7 +33,7 @@ func newPrefetcher(parallel int, fetch func(string)) *prefetcher {
 		busy:    make(map[string]bool),
 		op:      fetch,
 	}
-	for i := 0; i < parallel; i++ {
+	for range parallel {
 		go p.do()
 	}
 	return p

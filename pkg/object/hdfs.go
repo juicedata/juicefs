@@ -29,7 +29,7 @@ import (
 	"os"
 	"os/user"
 	"path"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -187,12 +187,6 @@ func (h *hdfsclient) Put(ctx context.Context, key string, in io.Reader, getters 
 	return err
 }
 
-func min(a, b time.Duration) time.Duration {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 func IsErrReplicating(err error) bool {
 	pe, ok := err.(*os.PathError)
@@ -256,7 +250,7 @@ func (h *hdfsclient) List(ctx context.Context, prefix, marker, token, delimiter 
 		}
 		entryMap[names[i]] = info
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 
 	for _, name := range names {
 		p := dir + name

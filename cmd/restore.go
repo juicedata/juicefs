@@ -108,7 +108,7 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 	var mu sync.Mutex
 	restoredTo := make(map[meta.Ino]int)
 	var wg sync.WaitGroup
-	for i := 0; i < threads; i++ {
+	for range threads {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

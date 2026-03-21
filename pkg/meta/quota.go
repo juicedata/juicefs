@@ -18,7 +18,7 @@ package meta
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -123,9 +123,7 @@ func (m *baseMeta) groupBatch(batch map[Ino]dirStat, size int) [][]Ino {
 	for ino := range batch {
 		inos = append(inos, ino)
 	}
-	sort.Slice(inos, func(i, j int) bool {
-		return inos[i] < inos[j]
-	})
+	slices.Sort(inos)
 	var batches [][]Ino
 	for i := 0; i < len(inos); i += size {
 		end := i + size

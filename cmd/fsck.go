@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -225,7 +225,7 @@ func fsck(ctx *cli.Context) error {
 		for i, p := range brokens {
 			fileList = append(fileList, fmt.Sprintf("%13d: %s", i, p))
 		}
-		sort.Strings(fileList)
+		slices.Sort(fileList)
 		msg += strings.Join(fileList, "\n")
 		logger.Fatal(msg)
 	}

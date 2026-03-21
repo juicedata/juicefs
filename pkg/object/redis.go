@@ -27,7 +27,7 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -112,7 +112,7 @@ func (t *redisStore) ListAll(ctx context.Context, prefix, marker string, followL
 			cursor = c
 		}
 	}
-	sort.Strings(keyList)
+	slices.Sort(keyList)
 
 	go func() {
 		defer close(objs)

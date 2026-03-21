@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -168,7 +168,7 @@ func destroy(ctx *cli.Context) error {
 	var dirs []string
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -192,7 +192,7 @@ func destroy(ctx *cli.Context) error {
 		}()
 	}
 	wg.Wait()
-	sort.Strings(dirs)
+	slices.Sort(dirs)
 	for i := len(dirs) - 1; i >= 0; i-- {
 		if err := blob.Delete(ctx.Context, dirs[i]); err == nil {
 			spin.Increment()

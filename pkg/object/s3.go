@@ -25,9 +25,10 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"cmp"
 	"os"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -272,7 +273,7 @@ func (s *s3client) List(ctx context.Context, prefix, start, token, delimiter str
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
-		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
+		slices.SortFunc(objs, func(a, b Object) int { return cmp.Compare(a.Key(), b.Key()) })
 	}
 	var isTruncated bool
 	if resp.IsTruncated != nil {
@@ -451,6 +452,12 @@ func defaultPathStyle() bool {
 var oracleCompileRegexp = `.*\.compat.objectstorage\.(.*)\.oraclecloud\.com`
 var OVHCompileRegexp = `^s3\.(\w*)(\.\w*)?\.cloud\.ovh\.net$`
 
+var (
+	vpcEndpointRe  = regexp.MustCompile(`^.*\.(.*)\.vpce\.amazonaws\.com`)
+	oracleRegionRe = regexp.MustCompile(oracleCompileRegexp)
+	ovhRegionRe    = regexp.MustCompile(OVHCompileRegexp)
+)
+
 func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		if len(strings.Split(endpoint, ".")) > 1 && !strings.HasSuffix(endpoint, ".amazonaws.com") {
@@ -497,12 +504,11 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		} else {
 			// get region or endpoint
 			if strings.Contains(uri.Host, ".amazonaws.com") {
-				vpcCompile := regexp.MustCompile(`^.*\.(.*)\.vpce\.amazonaws\.com`)
 				// vpc link
-				if vpcCompile.MatchString(uri.Host) {
+				if vpcEndpointRe.MatchString(uri.Host) {
 					bucketName = hostParts[0]
 					ep = hostParts[1]
-					if submatch := vpcCompile.FindStringSubmatch(uri.Host); len(submatch) == 2 {
+					if submatch := vpcEndpointRe.FindStringSubmatch(uri.Host); len(submatch) == 2 {
 						region = submatch[1]
 					}
 				} else {
@@ -519,13 +525,10 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 				bucketName = hostParts[0]
 				ep = hostParts[1]
 
-				for _, compileRegexp := range []string{oracleCompileRegexp, OVHCompileRegexp} {
-					compile := regexp.MustCompile(compileRegexp)
-					if compile.MatchString(ep) {
-						if submatch := compile.FindStringSubmatch(ep); len(submatch) >= 2 {
-							region = submatch[1]
-							break
-						}
+				for _, re := range []*regexp.Regexp{oracleRegionRe, ovhRegionRe} {
+					if submatch := re.FindStringSubmatch(ep); len(submatch) >= 2 {
+						region = submatch[1]
+						break
 					}
 				}
 			}

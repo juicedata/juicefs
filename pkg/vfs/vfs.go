@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"cmp"
 	"runtime"
-	"sort"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -96,7 +97,7 @@ func (o FuseOptions) StripOptions() FuseOptions {
 		o.Options = append(o.Options, opt)
 	}
 
-	sort.Strings(o.Options)
+	slices.Sort(o.Options)
 
 	// ignore these options because they won't be send to kernel
 	o.IgnoreSecurityLabels,
@@ -608,7 +609,7 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, fh uint64, attr *Attr) 
 		return
 	}
 	hs := v.findAllHandles(ino)
-	sort.Slice(hs, func(i, j int) bool { return hs[i].fh < hs[j].fh })
+	slices.SortFunc(hs, func(a, b *handle) int { return cmp.Compare(a.fh, b.fh) })
 	for _, h := range hs {
 		if !h.Wlock(ctx) {
 			err = syscall.EINTR

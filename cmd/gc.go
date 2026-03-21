@@ -267,7 +267,7 @@ func gc(ctx *cli.Context) error {
 	skipped := progress.AddDoubleSpinnerTwo("Skipped objects", "Skipped data")
 
 	var leakedObj = make(chan string, 10240)
-	for i := 0; i < threads; i++ {
+	for range threads {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

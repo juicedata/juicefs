@@ -27,8 +27,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"cmp"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -212,7 +213,7 @@ func (o *ossClient) List(ctx context.Context, prefix, start, token, delimiter st
 		for _, o := range result.CommonPrefixes {
 			objs = append(objs, &obj{oss.ToString(o.Prefix), 0, time.Unix(0, 0), true, ""})
 		}
-		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
+		slices.SortFunc(objs, func(a, b Object) int { return cmp.Compare(a.Key(), b.Key()) })
 	}
 	return objs, result.IsTruncated, oss.ToString(result.NextContinuationToken), nil
 }

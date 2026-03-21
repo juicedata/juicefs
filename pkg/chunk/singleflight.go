@@ -52,7 +52,7 @@ func (con *Controller) Execute(key string, fn func() (*Page, error)) (*Page, err
 	c.val, c.err = fn()
 
 	con.Lock()
-	for i := 0; i < c.dups; i++ {
+	for range c.dups {
 		// Acquire for the pending Execute
 		c.val.Acquire()
 	}

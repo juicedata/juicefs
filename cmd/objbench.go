@@ -27,7 +27,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -956,7 +956,7 @@ func functionalTesting(ctx context.Context, blob object.ObjectStorage, result *[
 				return fmt.Errorf("put object failed: %s", err.Error())
 			}
 		}
-		sort.Strings(sortedKeys)
+		slices.Sort(sortedKeys)
 		defer func() {
 			for i := 0; i < keyTotal; i++ {
 				_ = blob.Delete(ctx, fmt.Sprintf("hashKey%d", i))

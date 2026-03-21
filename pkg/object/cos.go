@@ -26,8 +26,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"cmp"
 	"os"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -108,6 +109,7 @@ func (c *COS) Get(ctx context.Context, key string, off, limit int64, getters ...
 		return nil, err
 	}
 	if err = checkGetStatus(resp.StatusCode, params.Range != ""); err != nil {
+		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 		return nil, err
 	}
@@ -198,7 +200,7 @@ func (c *COS) List(ctx context.Context, prefix, start, token, delimiter string, 
 			}
 			objs = append(objs, &obj{key, 0, time.Unix(0, 0), true, ""})
 		}
-		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
+		slices.SortFunc(objs, func(a, b Object) int { return cmp.Compare(a.Key(), b.Key()) })
 	}
 	return objs, resp.IsTruncated, resp.NextMarker, nil
 }

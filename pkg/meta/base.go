@@ -28,7 +28,8 @@ import (
 	"path"
 	"reflect"
 	"runtime"
-	"sort"
+	"cmp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -562,9 +563,6 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 
 	go func() {
 		for {
-			if m.sessCtx != nil && m.sessCtx.Canceled() {
-				return
-			}
 			var totalSpace, availSpace, iused, iavail uint64
 			err := m.StatFS(Background(), m.root, &totalSpace, &availSpace, &iused, &iavail)
 			if err == 0 {
@@ -574,17 +572,26 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 				m.totalInodesG.Set(float64(iused + iavail))
 			}
 			m.updateQuotaMetrics()
-			utils.SleepWithJitter(time.Second * 10)
+			t := time.NewTimer(utils.JitterIt(time.Second * 10))
+			select {
+			case <-m.sessCtx.Done():
+				t.Stop()
+				return
+			case <-t.C:
+			}
 		}
 	}()
 
 	go func() {
 		for {
-			if m.sessCtx != nil && m.sessCtx.Canceled() {
-				return
-			}
 			m.cleanupQuotaMetrics()
-			utils.SleepWithJitter(time.Hour)
+			t := time.NewTimer(utils.JitterIt(time.Hour))
+			select {
+			case <-m.sessCtx.Done():
+				t.Stop()
+				return
+			case <-t.C:
+			}
 		}
 	}()
 }
@@ -642,7 +649,7 @@ func (r *baseMeta) txBatchLock(inodes ...Ino) func() {
 		for i, ino := range inodes {
 			inodeSlots[i] = int(ino % nlocks)
 		}
-		sort.Ints(inodeSlots)
+		slices.Sort(inodeSlots)
 		uniqInodeSlots := inodeSlots[:0]
 		for i := 0; i < len(inodeSlots); i++ { // Go does not support recursive locks
 			if i == 0 || inodeSlots[i] != inodeSlots[i-1] {
@@ -961,10 +968,12 @@ func (m *baseMeta) Init(format *Format, force bool) error {
 func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
 	defer m.sessWG.Done()
 	for {
+		t := time.NewTimer(utils.JitterIt(time.Hour))
 		select {
 		case <-ctx.Done():
+			t.Stop()
 			return
-		case <-time.After(utils.JitterIt(time.Hour)):
+		case <-t.C:
 		}
 		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter lastCleanupFiles: %s", err)
@@ -997,10 +1006,12 @@ func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
 func (m *baseMeta) cleanupSlices(ctx Context) {
 	defer m.sessWG.Done()
 	for {
+		t := time.NewTimer(utils.JitterIt(time.Hour))
 		select {
 		case <-ctx.Done():
+			t.Stop()
 			return
-		case <-time.After(utils.JitterIt(time.Hour)):
+		case <-t.C:
 		}
 		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter nextCleanupSlices: %s", err)
@@ -2401,7 +2412,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 		lock.Unlock()
 	}
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -2594,7 +2605,7 @@ func (m *baseMeta) GetFormat() Format {
 func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno {
 	var wg sync.WaitGroup
 	ch := make(chan cchunk, 1000000)
-	for i := 0; i < threads; i++ {
+	for range threads {
 		wg.Add(1)
 		go func() {
 			for c := range ch {
@@ -2727,7 +2738,7 @@ func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 	var wg sync.WaitGroup
 	// compact
 	chunkChan := make(chan cchunk, 10000)
-	for i := 0; i < concurrency; i++ {
+	for range concurrency {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -2874,10 +2885,12 @@ func (m *baseMeta) trashEntry(parent, inode Ino, name string) string {
 func (m *baseMeta) cleanupTrash(ctx Context) {
 	defer m.sessWG.Done()
 	for {
+		t := time.NewTimer(utils.JitterIt(time.Hour))
 		select {
 		case <-ctx.Done():
+			t.Stop()
 			return
-		case <-time.After(utils.JitterIt(time.Hour)):
+		case <-t.C:
 		}
 		if st := m.en.doGetAttr(ctx, TrashInode, nil); st != 0 {
 			if st != syscall.ENOENT {
@@ -2950,7 +2963,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 		logger.Warnf("readdir trash %d: %s", TrashInode, st)
 		return st
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Inode < entries[j].Inode })
+	slices.SortFunc(entries, func(a, b *Entry) int { return cmp.Compare(a.Inode, b.Inode) })
 	var count uint64
 	done := make(chan struct{})
 	defer func() {
@@ -3124,7 +3137,7 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 			}, concurrency)
 			var wg sync.WaitGroup
 
-			for i := 0; i < concurrency; i++ {
+			for range concurrency {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
@@ -3888,7 +3901,7 @@ func (m *baseMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 		}
 	}
 
-	for i := 0; i < opt.Threads; i++ {
+	for range opt.Threads {
 		wg.Add(1)
 		go workerFunc(ctx, taskCh)
 	}

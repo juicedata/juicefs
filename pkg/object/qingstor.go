@@ -26,8 +26,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"cmp"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -100,6 +101,7 @@ func (q *qingstor) Get(ctx context.Context, key string, off, limit int64, getter
 		return nil, err
 	}
 	if err = checkGetStatus(*output.StatusCode, rangeStr != ""); err != nil {
+		_, _ = io.Copy(io.Discard, output.Body)
 		_ = output.Body.Close()
 		return nil, err
 	}
@@ -229,7 +231,7 @@ func (q *qingstor) List(ctx context.Context, prefix, start, token, delimiter str
 		for _, p := range out.CommonPrefixes {
 			objs = append(objs, &obj{*p, 0, time.Unix(0, 0), true, ""})
 		}
-		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
+		slices.SortFunc(objs, func(a, b Object) int { return cmp.Compare(a.Key(), b.Key()) })
 	}
 	return objs, *out.HasMore, *out.NextMarker, nil
 }

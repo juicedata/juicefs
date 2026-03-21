@@ -52,7 +52,7 @@ func ExportRsaPrivateKeyToPem(key *rsa.PrivateKey, passphrase string) string {
 	if passphrase != "" {
 		var err error
 		// nolint:staticcheck
-		block, _ = x509.EncryptPEMBlock(rand.Reader, block.Type, buf, []byte(passphrase), x509.PEMCipherAES256)
+		block, err = x509.EncryptPEMBlock(rand.Reader, block.Type, buf, []byte(passphrase), x509.PEMCipherAES256)
 		if err != nil {
 			panic(err)
 		}

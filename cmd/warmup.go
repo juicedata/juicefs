@@ -26,7 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -318,7 +318,7 @@ func warmup(ctx *cli.Context) error {
 				for loc := range total.Locations {
 					locs = append(locs, loc)
 				}
-				sort.Strings(locs)
+				slices.Sort(locs)
 				for _, loc := range locs {
 					size := total.Locations[loc]
 					result = append(result, []string{loc, humanize.IBytes(size), fmt.Sprintf("%.1f%%", float64(size)*100/float64(bytes))})

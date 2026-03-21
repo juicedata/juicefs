@@ -25,7 +25,8 @@ import (
 	"os"
 	"path"
 	"runtime"
-	"sort"
+	"cmp"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -324,7 +325,7 @@ func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, sys
 			mEntries[i] = &mEntry{fi, string(e.Name), fi.IsSymlink()}
 		}
 	}
-	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].name < mEntries[j].name })
+	slices.SortFunc(mEntries, func(a, b *mEntry) int { return cmp.Compare(a.name, b.name) })
 	return mEntries, err
 }
 

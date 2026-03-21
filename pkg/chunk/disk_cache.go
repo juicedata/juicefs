@@ -29,7 +29,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1111,7 +1111,7 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 		logger.Warnf("No cache dir existed, use memory cache instead, cache size: 100 MiB")
 		return newMemStore(config, metrics)
 	}
-	sort.Strings(dirs)
+	slices.Sort(dirs)
 	dirCacheSize := int64(config.CacheSize) / int64(len(dirs))
 	dirCacheItems := config.CacheItems / int64(len(dirs))
 	m := &cacheManager{

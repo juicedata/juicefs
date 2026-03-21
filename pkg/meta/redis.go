@@ -36,7 +36,9 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
-	"sort"
+	"bytes"
+	"cmp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -4386,7 +4388,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 				for k, v := range keys {
 					xattrs = append(xattrs, &DumpedXattr{k, v})
 				}
-				sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+				slices.SortFunc(xattrs, func(a, b *DumpedXattr) int { return cmp.Compare(a.Name, b.Name) })
 				e.Xattrs = xattrs
 			}
 
@@ -4523,7 +4525,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	for _, e := range tree.Entries {
 		entries = append(entries, e)
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	slices.SortFunc(entries, func(a, b *DumpedEntry) int { return cmp.Compare(a.Name, b.Name) })
 	if showProgress != nil {
 		showProgress(int64(len(entries)), 0)
 	}
@@ -4930,9 +4932,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 			binary.BigEndian.PutUint32(a[47:51], uint32(len(ps))) // nlink
 			binary.BigEndian.PutUint64(a[63:71], 0)
 			p.Set(ctx, m.inodeKey(i), a, 0)
-			for k := range st {
-				delete(st, k)
-			}
+			clear(st)
 			for _, p := range ps {
 				st[p] = st[p] + 1
 			}
@@ -5539,9 +5539,7 @@ func (s *redisDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno
 		}
 
 		if s.en.conf.SortDir {
-			sort.Slice(entries, func(i, j int) bool {
-				return string(entries[i].Name) < string(entries[j].Name)
-			})
+			slices.SortFunc(entries, func(a, b *Entry) int { return bytes.Compare(a.Name, b.Name) })
 		}
 		if s.plus {
 			nEntries := len(entries)

@@ -37,7 +37,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -708,7 +708,7 @@ func tellFstabOptions(c *cli.Context) string {
 			opts = append(opts, fmt.Sprintf("%s=%s", s, c.Generic(s)))
 		}
 	}
-	sort.Strings(opts)
+	slices.Sort(opts)
 	return strings.Join(opts, ",")
 }
 

@@ -23,8 +23,9 @@ import (
 	"net/url"
 	"path"
 	"runtime"
+	"cmp"
 	"runtime/debug"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -139,7 +140,7 @@ func errno(err error) syscall.Errno {
 	if err == nil {
 		return 0
 	}
-	if err == context.Canceled {
+	if errors.Is(err, context.Canceled) {
 		return syscall.EINTR
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
@@ -272,7 +273,7 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 	if nl.Start <= nl.End {
 		ls = append(ls, nl)
 	}
-	sort.Slice(ls, func(i, j int) bool { return ls[i].Start < ls[j].Start })
+	slices.SortFunc(ls, func(a, b plockRecord) int { return cmp.Compare(a.Start, b.Start) })
 	for i := 0; i < len(ls); {
 		if ls[i].Type == F_UNLCK || ls[i].Start > ls[i].End {
 			// remove empty one
@@ -588,9 +589,7 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 		tree.Files += c.Files
 		tree.Size += c.Size
 	}
-	sort.Slice(tree.Children, func(i, j int) bool {
-		return tree.Children[i].Size > tree.Children[j].Size
-	})
+	slices.SortFunc(tree.Children, func(a, b *TreeSummary) int { return cmp.Compare(b.Size, a.Size) })
 	if len(tree.Children) > int(topN) {
 		omitChild := &TreeSummary{
 			Path: path.Join(tree.Path, "..."),

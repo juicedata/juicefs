@@ -21,7 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"sort"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -445,9 +445,7 @@ func (m *kvMeta) insertKVs(ctx Context, pairs []*pair, threads int) error {
 		return nil
 	}
 
-	sort.Slice(pairs, func(i, j int) bool {
-		return bytes.Compare(pairs[i].key, pairs[j].key) < 0
-	})
+	slices.SortFunc(pairs, func(a, b *pair) int { return bytes.Compare(a.key, b.key) })
 
 	maxSize, maxNum := 5<<20, m.maxTxnBatchNum()
 	n := len(pairs)

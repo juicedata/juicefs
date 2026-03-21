@@ -28,7 +28,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 
@@ -234,7 +234,7 @@ func (c *ceph) ListAll(_ context.Context, prefix, marker string, followLink bool
 		keys = append(keys, key)
 	}
 	// the keys are not ordered, sort them first
-	sort.Strings(keys)
+	slices.Sort(keys)
 	c.release(ctx)
 
 	var objs = make(chan Object, 1000)

@@ -26,7 +26,7 @@ import (
 	"os"
 	"path"
 	"runtime/trace"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1466,9 +1466,7 @@ func (f *File) Readdir(ctx meta.Context, count int) (fi []os.FileInfo, err sysca
 			return
 		}
 		if f.fs.conf.Meta.SortDir {
-			sort.Slice(inodes[2:], func(i, j int) bool {
-				return string(inodes[i].Name) < string(inodes[j].Name)
-			})
+			slices.SortFunc(inodes[2:], func(a, b *meta.Entry) int { return bytes.Compare(a.Name, b.Name) })
 		}
 		// skip . and ..
 		for _, n := range inodes[2:] {
@@ -1509,9 +1507,7 @@ func (f *File) ReaddirPlus(ctx meta.Context, offset int) (entries []*meta.Entry,
 			}
 		}
 		if f.fs.conf.Meta.SortDir {
-			sort.Slice(f.entries, func(i, j int) bool {
-				return string(f.entries[i].Name) < string(f.entries[j].Name)
-			})
+			slices.SortFunc(f.entries, func(a, b *meta.Entry) int { return bytes.Compare(a.Name, b.Name) })
 		}
 	}
 	if offset >= len(f.entries) {

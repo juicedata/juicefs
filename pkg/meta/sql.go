@@ -30,8 +30,8 @@ import (
 	"net/url"
 	"runtime"
 	"runtime/debug"
+	"cmp"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -270,6 +270,7 @@ type dbMeta struct {
 	snap  *dbSnap
 
 	noReadOnlyTxn bool
+	driverName    string
 	statement     map[string]string
 	tablePrefix   string
 }
@@ -535,9 +536,14 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	engine.DB().SetMaxIdleConns(vIdleConns)
 	engine.DB().SetConnMaxIdleTime(time.Second * time.Duration(vIdleTime))
 	engine.SetTableMapper(prefixMapper{mapper: engine.GetTableMapper(), prefix: tablePrefix})
+	dname := engine.DriverName()
+	if dname == "pgx" {
+		dname = "postgres"
+	}
 	m := &dbMeta{
 		baseMeta:    newBaseMeta(addr, conf),
 		db:          engine,
+		driverName:  dname,
 		statement:   make(map[string]string),
 		tablePrefix: tablePrefix,
 	}
@@ -560,11 +566,7 @@ func (m *dbMeta) Shutdown() error {
 }
 
 func (m *dbMeta) Name() string {
-	name := m.db.DriverName()
-	if name == "pgx" {
-		name = "postgres"
-	}
-	return name
+	return m.driverName
 }
 
 func (m *dbMeta) doDeleteSlice(id uint64, size uint32) error {
@@ -1072,7 +1074,7 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 			m.txRestart.WithLabelValues(method.name(context.TODO())).Add(1)
 			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
 			lastErr = err
-			time.Sleep(time.Millisecond * time.Duration(i*i))
+			time.Sleep(time.Millisecond * time.Duration(min(i*i, 1000)))
 			continue
 		} else if err == nil && i > 1 {
 			logger.Warnf("Transaction succeeded after %d tries (%s), inodes: %v, method: %s, last error: %s", i+1, time.Since(start), inodes, method.name(context.TODO()), lastErr)
@@ -1121,7 +1123,7 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 		if err != nil {
 			logger.Debugf("Start transaction failed, try again (tried %d): %s", i+1, err)
 			lastErr = err
-			time.Sleep(time.Millisecond * time.Duration(i*i))
+			time.Sleep(time.Millisecond * time.Duration(min(i*i, 1000)))
 			continue
 		}
 		err = f(s)
@@ -1133,7 +1135,7 @@ func (m *dbMeta) roTxn(ctx context.Context, f func(s *xorm.Session) error) error
 			m.txRestart.WithLabelValues(method.name(ctx)).Add(1)
 			logger.Debugf("Read transaction failed, restart it (tried %d): %s", i+1, err)
 			lastErr = err
-			time.Sleep(time.Millisecond * time.Duration(i*i))
+			time.Sleep(time.Millisecond * time.Duration(min(i*i, 1000)))
 			continue
 		} else if err == nil && i > 1 {
 			logger.Warnf("Read transaction succeeded after %d tries (%s), method: %s, last error: %s", i+1, time.Since(start), method.name(ctx), lastErr)
@@ -1169,7 +1171,7 @@ func (m *dbMeta) simpleTxn(ctx context.Context, f func(s *xorm.Session) error) e
 			m.txRestart.WithLabelValues(method.name(ctx)).Add(1)
 			logger.Debugf("Read transaction failed, restart it (tried %d): %s", i+1, err)
 			lastErr = err
-			time.Sleep(time.Millisecond * time.Duration(i*i))
+			time.Sleep(time.Millisecond * time.Duration(min(i*i, 1000)))
 			continue
 		} else if err == nil && i > 1 {
 			logger.Warnf("Simple transaction succeeded after %d tries (%s), method: %s, last error: %s", i+1, time.Since(start), method.name(ctx), lastErr)
@@ -1236,9 +1238,14 @@ func (m *dbMeta) doSyncVolumeStat(ctx Context) error {
 	var used, inode int64
 	if err := m.simpleTxn(ctx, func(s *xorm.Session) error {
 		total, err := s.SumsInt(&dirStats{}, "used_space", "used_inodes")
-		used += total[0]
-		inode += total[1]
-		return err
+		if err != nil {
+			return err
+		}
+		if len(total) >= 2 {
+			used += total[0]
+			inode += total[1]
+		}
+		return nil
 	}); err != nil {
 		return err
 	}
@@ -2085,7 +2092,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, attr
 
 func (m *dbMeta) getNodesForUpdate(s *xorm.Session, nodes ...*node) error {
 	// sort them to avoid deadlock
-	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Inode < nodes[j].Inode })
+	slices.SortFunc(nodes, func(a, b *node) int { return cmp.Compare(a.Inode, b.Inode) })
 	for i := range nodes {
 		ok, err := s.ForUpdate().Get(nodes[i])
 		if err != nil {
@@ -4179,7 +4186,7 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 }
 
 func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
-	sort.Slice(quotas, func(i, j int) bool { return quotas[i].qkey < quotas[j].qkey })
+	slices.SortFunc(quotas, func(a, b *iQuota) int { return cmp.Compare(a.qkey, b.qkey) })
 	return m.txn(func(s *xorm.Session) error {
 		for _, q := range quotas {
 			if q.qtype == DirQuotaType {
@@ -4244,7 +4251,7 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8, e *DumpedEntry
 		for _, x := range rows {
 			xattrs = append(xattrs, &DumpedXattr{x.Name, string(x.Value)})
 		}
-		sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+		slices.SortFunc(xattrs, func(a, b *DumpedXattr) int { return cmp.Compare(a.Name, b.Name) })
 		e.Xattrs = xattrs
 	}
 
@@ -4338,7 +4345,7 @@ func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 		for _, x := range rows {
 			xattrs = append(xattrs, &DumpedXattr{x.Name, string(x.Value)})
 		}
-		sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+		slices.SortFunc(xattrs, func(a, b *DumpedXattr) int { return cmp.Compare(a.Name, b.Name) })
 		e.Xattrs = xattrs
 	}
 
@@ -4406,7 +4413,7 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 	for _, e := range tree.Entries {
 		entries = append(entries, e)
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	slices.SortFunc(entries, func(a, b *DumpedEntry) int { return cmp.Compare(a.Name, b.Name) })
 	_ = tree.writeJsonWithOutEntry(bw, depth)
 
 	ms := make([]sync.Mutex, threads)
@@ -4478,7 +4485,7 @@ func (m *dbMeta) dumpDirFast(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dep
 	}
 	edges := m.snap.edges[inode]
 	_ = tree.writeJsonWithOutEntry(bw, depth)
-	sort.Slice(edges, func(i, j int) bool { return bytes.Compare(edges[i].Name, edges[j].Name) == -1 })
+	slices.SortFunc(edges, func(a, b *edge) int { return bytes.Compare(a.Name, b.Name) })
 
 	for i, e := range edges {
 		entry := m.dumpEntryFast(e.Inode, e.Type)

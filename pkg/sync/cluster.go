@@ -91,6 +91,8 @@ func httpRequest(url string, body []byte) (ans []byte, err error) {
 	return io.ReadAll(resp.Body)
 }
 
+var workerLogRe = regexp.MustCompile(`^.*<([A-Z]+)>: (.*)`)
+
 var sendStatMu sync.Mutex
 
 func sendStats(addr string) {
@@ -322,7 +324,6 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			}
 			logger.Infof("launch a worker on %s", host)
 			var finished = make(chan struct{})
-			var logRe = regexp.MustCompile(`^.*<([A-Z]+)>: (.*)`)
 			go func() {
 				r := bufio.NewReader(stderr)
 				for {
@@ -334,7 +335,7 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 					line = strings.TrimSuffix(line, "\n")
 
 					var level, content string
-					if matches := logRe.FindStringSubmatch(line); len(matches) >= 3 {
+					if matches := workerLogRe.FindStringSubmatch(line); len(matches) >= 3 {
 						level = matches[1]
 						content = matches[2]
 					} else {

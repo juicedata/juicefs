@@ -26,7 +26,8 @@ import (
 	"os"
 	"path"
 	"runtime"
-	"sort"
+	"cmp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -297,9 +298,7 @@ func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 	}
 
 	// Sort bucket infos by bucket name.
-	sort.Slice(buckets, func(i, j int) bool {
-		return buckets[i].Name < buckets[j].Name
-	})
+	slices.SortFunc(buckets, func(a, b minio.BucketInfo) int { return cmp.Compare(a.Name, b.Name) })
 	return buckets, nil
 }
 
@@ -1021,12 +1020,14 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 	lmi.Delimiter = delimiter
 	commPrefixSet := make(map[string]struct{})
 	for _, p := range parents {
-		f, eno := n.fs.Open(mctx, n.tpath(bucket, "uploads", string(p.Name)), 0)
-		if eno != 0 {
-			return
-		}
-		defer f.Close(mctx)
-		entries, eno := f.ReaddirPlus(mctx, 0)
+		entries, eno := func() ([]*meta.Entry, syscall.Errno) {
+			f, eno := n.fs.Open(mctx, n.tpath(bucket, "uploads", string(p.Name)), 0)
+			if eno != 0 {
+				return nil, eno
+			}
+			defer f.Close(mctx)
+			return f.ReaddirPlus(mctx, 0)
+		}()
 		if eno != 0 {
 			err = jfsToObjectErr(ctx, eno, bucket)
 			return
@@ -1056,12 +1057,11 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 		}
 	}
 
-	sort.Slice(lmi.Uploads, func(i, j int) bool {
-		if lmi.Uploads[i].Object == lmi.Uploads[j].Object {
-			return lmi.Uploads[i].UploadID < lmi.Uploads[j].UploadID
-		} else {
-			return lmi.Uploads[i].Object < lmi.Uploads[j].Object
+	slices.SortFunc(lmi.Uploads, func(a, b minio.MultipartInfo) int {
+		if c := cmp.Compare(a.Object, b.Object); c != 0 {
+			return c
 		}
+		return cmp.Compare(a.UploadID, b.UploadID)
 	})
 
 	if delimiter != "" {
@@ -1088,7 +1088,7 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 		for prefix := range commPrefixSet {
 			lmi.CommonPrefixes = append(lmi.CommonPrefixes, prefix)
 		}
-		sort.Strings(lmi.CommonPrefixes)
+		slices.Sort(lmi.CommonPrefixes)
 	} else if len(lmi.Uploads) > maxUploads {
 		lmi.IsTruncated = true
 		lmi.Uploads = lmi.Uploads[:maxUploads]
@@ -1141,9 +1141,7 @@ func (n *jfsObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 			})
 		}
 	}
-	sort.Slice(result.Parts, func(i, j int) bool {
-		return result.Parts[i].PartNumber < result.Parts[j].PartNumber
-	})
+	slices.SortFunc(result.Parts, func(a, b minio.ObjectPart) int { return cmp.Compare(a.PartNumber, b.PartNumber) })
 	if len(result.Parts) > maxParts {
 		result.IsTruncated = true
 		result.Parts = result.Parts[:maxParts]

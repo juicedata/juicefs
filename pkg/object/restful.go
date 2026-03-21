@@ -233,6 +233,7 @@ func (s *RestfulStorage) request(ctx context.Context, method, key string, body i
 
 func parseError(resp *http.Response) error {
 	data, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
 	if err != nil {
 		return fmt.Errorf("request failed: %s", err)
 	}
@@ -301,6 +302,7 @@ func (s *RestfulStorage) Get(ctx context.Context, key string, off, limit int64, 
 		return nil, parseError(resp)
 	}
 	if err = checkGetStatus(resp.StatusCode, len(headers) > 0); err != nil {
+		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 		return nil, err
 	}

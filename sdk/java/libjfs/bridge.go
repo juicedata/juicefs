@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -288,7 +288,7 @@ func writeLabels(buf *bufio.Writer, m model.Metric, numLabels int) error {
 			labelStrings = append(labelStrings, labelString)
 		}
 	}
-	sort.Strings(labelStrings)
+	slices.Sort(labelStrings)
 	for _, s := range labelStrings {
 		if err := buf.WriteByte('.'); err != nil {
 			return err

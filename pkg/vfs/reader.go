@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"sort"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -153,6 +153,9 @@ func (s *sliceReader) done(err syscall.Errno, delay time.Duration) {
 }
 
 func retry_time(trycnt uint32) time.Duration {
+	if trycnt == 0 {
+		return time.Millisecond
+	}
 	if trycnt < 30 {
 		return time.Millisecond * time.Duration((trycnt-1)*300+1)
 	}
@@ -519,9 +522,7 @@ func (f *fileReader) splitRange(block *frange) []uint64 {
 		}
 		return true
 	})
-	sort.Slice(ranges, func(i, j int) bool {
-		return ranges[i] < ranges[j]
-	})
+	slices.Sort(ranges)
 	return ranges
 }
 
