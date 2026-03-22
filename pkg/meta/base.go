@@ -1232,6 +1232,7 @@ func (attr *Attr) reset() {
 	attr.Parent = 0
 	attr.AccessACL = aclAPI.None
 	attr.DefaultACL = aclAPI.None
+	attr.Tier = 0
 	attr.Full = false
 }
 

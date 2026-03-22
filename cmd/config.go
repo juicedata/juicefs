@@ -302,6 +302,9 @@ func config(ctx *cli.Context) error {
 			newSc = ctx.String("tier-sc")
 			newTierId = uint8(ctx.Int(flag))
 			oldTier, findTier = format.Tier[newTierId]
+			if oldTier.Sc == newSc {
+				break
+			}
 			msg.WriteString(fmt.Sprintf("set tier %d -> %s\n", newTierId, newSc))
 			format.Tier[newTierId] = object.Tier{
 				ID: newTierId,
