@@ -264,6 +264,8 @@ func (attr *Attr) Unmarshal(buf []byte) {
 	}
 	if rb.Left() >= 1 {
 		attr.Tier = TierInfo(rb.Get8())
+	} else {
+		attr.Tier = 0
 	}
 	logger.Tracef("attr: %+v -> %+v", buf, attr)
 }

@@ -50,7 +50,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const MaxFieldsCountOfTable = 18 // node table
+const MaxFieldsCountOfTable = 19 // node table
 
 type setting struct {
 	Name  string `xorm:"pk"`
@@ -89,6 +89,7 @@ type node struct {
 	Parent       Ino
 	AccessACLId  uint32 `xorm:"'access_acl_id'"`
 	DefaultACLId uint32 `xorm:"'default_acl_id'"`
+	Tier         TierInfo
 }
 
 func (n *node) setAtime(ns int64) {
@@ -1202,6 +1203,7 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Full = true
 	attr.AccessACL = n.AccessACLId
 	attr.DefaultACL = n.DefaultACLId
+	attr.Tier = n.Tier
 }
 
 func (m *dbMeta) parseNode(attr *Attr, n *node) {
@@ -1222,6 +1224,7 @@ func (m *dbMeta) parseNode(attr *Attr, n *node) {
 	n.Parent = attr.Parent
 	n.AccessACLId = attr.AccessACL
 	n.DefaultACLId = attr.DefaultACL
+	n.Tier = attr.Tier
 }
 
 func (m *dbMeta) updateStats(space int64, inodes int64) {
@@ -1716,6 +1719,10 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if (pn.Flags & FlagSkipTrash) != 0 {
 			n.Flags |= FlagSkipTrash
 		}
+
+		// inherit storage class
+		attr.Tier = pattr.Tier
+		n.Tier = pattr.Tier
 
 		var updateParent bool
 		var nlinkAdjust int32

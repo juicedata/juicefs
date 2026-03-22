@@ -1232,6 +1232,8 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		} else {
 			attr.Mode = mode & ^cumask
 		}
+		// inherit storage class
+		attr.Tier = pattr.Tier
 
 		var updateParent bool
 		now := time.Now()
@@ -3215,7 +3217,7 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 				} else {
 					id = binary.BigEndian.Uint64([]byte(k[2:])) // skip prefix
 				}
-				quotas[id] =  m.parseQuota(v)
+				quotas[id] = m.parseQuota(v)
 			}
 		}
 		quotaMaps[i] = quotas

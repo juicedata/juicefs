@@ -695,7 +695,7 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 		}
 	}
 	if format.Tier == nil {
-		format.Tier = make(map[uint8]object.Tier)
+		format.Tier = make(object.TierIdx)
 	}
 	format.Tier[0] = object.Tier{}
 	m.Lock()

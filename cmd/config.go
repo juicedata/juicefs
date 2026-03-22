@@ -146,9 +146,14 @@ func config(ctx *cli.Context) error {
 
 	originDirStats := format.DirStats
 	originUGQuota := format.UserGroupQuota
-	var quota, storage, trash, clientVer bool
+	var quota, storage, trash, clientVer, tier bool
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
+	var newSc string
+	var newTierId uint8
+	var oldTier object.Tier
+	var findTier bool
+
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
 		case "capacity":
@@ -294,25 +299,15 @@ func config(ctx *cli.Context) error {
 			format.MinClientVersion = "1.4.0-A"
 			clientVer = true
 		case "tier-id":
-			newSc := ctx.String("tier-sc")
-			newTierId := uint8(ctx.Uint(flag))
-			oldTier, ok := format.Tier[newTierId]
-			if ok && oldTier.Sc != newSc {
-				fmt.Printf("existing tier will be overwrite: %s=>%s\n", oldTier.GetHumanSc(), newSc)
-				fmt.Printf("please confirm to continue: y/n ")
-				var confirm string
-				fmt.Scanln(&confirm)
-				if confirm != "y" {
-					fmt.Println("aborted")
-					return nil
-				}
-			}
+			newSc = ctx.String("tier-sc")
+			newTierId = uint8(ctx.Int(flag))
+			oldTier, findTier = format.Tier[newTierId]
+			msg.WriteString(fmt.Sprintf("set tier %d -> %s\n", newTierId, newSc))
 			format.Tier[newTierId] = object.Tier{
 				ID: newTierId,
 				Sc: newSc,
 			}
-			msg.WriteString(fmt.Sprintf("set tier %d -> %s\n", newTierId, newSc))
-			err = m.Init(format, false)
+			tier = true
 		}
 	}
 	if msg.Len() == 0 {
@@ -382,6 +377,14 @@ func config(ctx *cli.Context) error {
 				}
 				if warnMsg != "" {
 					fmt.Println(warnMsg)
+				}
+			}
+		}
+		if tier {
+			if findTier && oldTier.Sc != newSc {
+				fmt.Printf("existing tier will be overwritten: %s=>%s\n", oldTier.GetHumanSc(), newSc)
+				if !yes && !userConfirmed() {
+					return fmt.Errorf("Aborted.")
 				}
 			}
 		}
