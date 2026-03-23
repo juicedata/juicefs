@@ -1253,7 +1253,7 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 	return produce(tasks, srckeys, dstkeys, config, checkpointMgr, prefix)
 }
 
-func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, config *Config, checkpointMgr *CheckpointManager, prefix string) error {
+func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, config *Config, checkpointMgr *CheckpointManager, prefix string) (retErr error) {
 	srckeys = filter(srckeys, config.rules, config)
 	dstkeys = filter(dstkeys, config.rules, config)
 	var dstobj object.Object
@@ -1270,12 +1270,15 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 	defer flushProgress()
 
 	defer func() {
-		if checkpointMgr != nil {
+		if checkpointMgr != nil && retErr == nil {
 			checkpointMgr.MarkListDone(prefix)
 		}
 	}()
 
 	skipIt := func(obj object.Object) {
+		if checkpointMgr != nil {
+			checkpointMgr.UpdateLastListedKey(prefix, obj)
+		}
 		skip++
 		skipBytes += obj.Size()
 		if skip > 100 || time.Since(lastUpdate) > time.Millisecond*100 {
@@ -1296,11 +1299,10 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			return fmt.Errorf("listing failed, stop syncing, waiting for pending ones")
 		}
 
-		if checkpointMgr != nil {
-			checkpointMgr.UpdateLastListedKey(prefix, obj)
-		}
-
 		if !config.Dirs && obj.IsDir() {
+			if checkpointMgr != nil {
+				checkpointMgr.UpdateLastListedKey(prefix, obj)
+			}
 			logger.Debug("Ignore directory ", obj.Key())
 			continue
 		}
