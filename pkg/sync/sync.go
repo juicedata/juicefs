@@ -1202,7 +1202,7 @@ var dstDelayDel []string
 var srcDelayDelMu sync.Mutex
 var srcDelayDel []string
 
-func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config *Config) bool {
+func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config *Config, checkpointMgr *CheckpointManager, prefix string) bool {
 	incrTotal(1)
 	if !config.DeleteDst || !config.Dirs && dstobj.IsDir() || config.Limit == 0 {
 		logger.Debug("Ignore extra object", dstobj.Key())
@@ -1216,6 +1216,9 @@ func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config 
 		dstDelayDel = append(dstDelayDel, dstobj.Key())
 		dstDelayDelMu.Unlock()
 	} else {
+		if checkpointMgr != nil {
+			checkpointMgr.AddPendingKey(prefix, dstobj)
+		}
 		tasks <- withSize(dstobj, markDeleteDst)
 	}
 	return config.Limit == 0
@@ -1312,7 +1315,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 		incrTotal(1)
 
 		if dstobj != nil && obj.Key() > dstobj.Key() {
-			if handleExtraObject(tasks, dstobj, config) {
+			if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
 				return nil
 			}
 			dstobj = nil
@@ -1325,7 +1328,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				if obj.Key() <= dstobj.Key() {
 					break
 				}
-				if handleExtraObject(tasks, dstobj, config) {
+				if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
 					return nil
 				}
 				dstobj = nil
@@ -1371,7 +1374,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 	}
 	if config.DeleteDst {
 		if dstobj != nil {
-			if handleExtraObject(tasks, dstobj, config) {
+			if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
 				return nil
 			}
 		}
@@ -1379,7 +1382,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			if dstobj == nil {
 				return fmt.Errorf("listing failed, stop syncing, waiting for pending ones")
 			}
-			if handleExtraObject(tasks, dstobj, config) {
+			if handleExtraObject(tasks, dstobj, config, checkpointMgr, prefix) {
 				return nil
 			}
 		}
