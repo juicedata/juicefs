@@ -121,7 +121,6 @@ type Checkpoint struct {
 type CheckpointManager struct {
 	saveMu        sync.Mutex
 	dst           object.ObjectStorage
-	config        *Config
 	checkpoint    *Checkpoint
 	checkpointKey string
 	stopChan      chan struct{}
@@ -130,11 +129,10 @@ type CheckpointManager struct {
 }
 
 // NewCheckpointManager creates a new checkpoint manager
-func NewCheckpointManager(dstStorage object.ObjectStorage, config *Config, srcPath, dstPath string) *CheckpointManager {
+func NewCheckpointManager(dstStorage object.ObjectStorage, srcPath, dstPath string) *CheckpointManager {
 	key := generateCheckpointKey(srcPath, dstPath)
 	return &CheckpointManager{
 		dst:           dstStorage,
-		config:        config,
 		checkpointKey: key,
 		stopChan:      make(chan struct{}),
 	}

@@ -1911,7 +1911,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	var checkpoint *Checkpoint
 
 	if config.EnableCheckpoint && config.Manager == "" {
-		checkpointMgr = NewCheckpointManager(dst, config, src.String(), dst.String())
+		checkpointMgr = NewCheckpointManager(dst, src.String(), dst.String())
 		if ckpt, err := checkpointMgr.Load(); err == nil {
 			if checkpointMgr.ValidateConfig(ckpt, config) {
 				if len(ckpt.PrefixState) > 0 {
@@ -1934,7 +1934,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		if checkpointMgr.checkpoint == nil {
 			checkpointMgr.checkpoint = &Checkpoint{
 				PrefixState: make(map[string]*PrefixState),
-				Config:      checkpointMgr.config,
+				Config:      config,
 				UpdatedAt:   time.Now(),
 			}
 		}
