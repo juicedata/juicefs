@@ -305,7 +305,7 @@ func registerMetaMsg(m meta.Meta, store chunk.ChunkStore, chunkConf *chunk.Confi
 		return store.Remove(args[0].(uint64), int(args[1].(uint32)))
 	})
 	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
-		return vfs.Compact(*chunkConf, store, args[0].([]meta.Slice), args[1].(uint64))
+		return vfs.Compact(*chunkConf, store, args[0].([]meta.Slice), args[1].(uint64), args[2].(uint8))
 	})
 }
 
@@ -452,6 +452,9 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 	if err != nil {
 		return nil, err
 	}
+	if s, ok := blob.(object.SupportTier); ok {
+		s.SetTier(format.Tiers)
+	}
 	holder := &storageHolder{
 		ObjectStorage: blob,
 		fmt:           *format, // keep a copy to find the change
@@ -471,6 +474,9 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 			}
 			holder.ObjectStorage = newBlob
 			holder.fmt = *new
+		}
+		if s, ok := holder.ObjectStorage.(object.SupportTier); ok {
+			s.SetTier(new.Tiers)
 		}
 	})
 	return holder, nil

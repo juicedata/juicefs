@@ -96,6 +96,7 @@ func (s *ks3) Head(ctx context.Context, key string) (Object, error) {
 		*r.LastModified,
 		strings.HasSuffix(key, "/"),
 		sc,
+		"",
 	}, nil
 }
 
@@ -203,7 +204,7 @@ func (s *ks3) List(ctx context.Context, prefix, start, token, delimiter string, 
 		if err != nil {
 			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
-		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass}
+		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass, ""}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -211,7 +212,7 @@ func (s *ks3) List(ctx context.Context, prefix, start, token, delimiter string, 
 			if err != nil {
 				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
-			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -255,6 +256,10 @@ func (s *ks3) UploadPart(ctx context.Context, key string, uploadID string, num i
 		return nil, err
 	}
 	return &Part{Num: num, ETag: *resp.ETag}, nil
+}
+
+func (s *ks3) Restore(ctx context.Context, key string) error {
+	return notSupported
 }
 
 func (s *ks3) UploadPartCopy(ctx context.Context, key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {

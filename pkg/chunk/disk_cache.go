@@ -24,6 +24,7 @@ import (
 	"io"
 	"io/fs"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -43,6 +44,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/spf13/cast"
 	"github.com/twmb/murmur3"
 )
 
@@ -420,9 +422,9 @@ func (cache *cacheStore) refreshCacheKeys() {
 	}
 }
 
-func (cache *cacheStore) removeStage(key string) error {
+func (cache *cacheStore) removeStage(key string, tierID uint8) error {
 	var err error
-	if err = cache.removeFile(cache.stagePath(key)); err == nil {
+	if err = cache.removeFile(cache.stagePath(key, tierID)); err == nil {
 		cache.m.stageBlocks.Sub(1)
 		cache.m.stageBlockBytes.Sub(float64(parseObjOrigSize(key)))
 	}
@@ -634,8 +636,8 @@ func (cache *cacheStore) remove(key string, staging bool) {
 			logger.Warnf("remove %s failed: %s", path, err)
 		}
 		if staging {
-			if err := cache.removeStage(key); err != nil && !os.IsNotExist(err) {
-				logger.Warnf("remove stage %s failed: %s", cache.stagePath(key), err)
+			if err := cache.removeStage(key, 0); err != nil && !os.IsNotExist(err) {
+				logger.Warnf("remove stage %s failed: %s", cache.stagePath(key, 0), err)
 			}
 		}
 	}
@@ -705,8 +707,14 @@ func (cache *cacheStore) cachePath(key string) string {
 	return filepath.Join(cache.dir, cacheDir, key)
 }
 
-func (cache *cacheStore) stagePath(key string) string {
-	return filepath.Join(cache.dir, stagingDir, key)
+const tierSeparator = "#"
+
+func (cache *cacheStore) stagePath(key string, tierID uint8) string {
+	var tierStr string
+	if tierID != 0 {
+		tierStr = tierSeparator + cast.ToString(tierID)
+	}
+	return filepath.Join(cache.dir, stagingDir, key+tierStr)
 }
 
 // flush cached block into disk
@@ -756,8 +764,8 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	}
 }
 
-func (cache *cacheStore) stage(key string, data []byte) (string, error) {
-	stagingPath := cache.stagePath(key)
+func (cache *cacheStore) stage(key string, data []byte, tierID uint8) (string, error) {
+	stagingPath := cache.stagePath(key, tierID)
 	if cache.stageFull {
 		return stagingPath, errStageFull
 	}
@@ -866,8 +874,16 @@ func (cache *cacheStore) uploadStaging() {
 	var cnt int
 	var lastK cacheKey
 	var lastValue cacheItem
+	var lastKTierID uint8
 	// for each two random keys, then compare the access time, upload the older one
-	for k, value := range cache.keys.randomIter() {
+	for fname := range randomOneFileFromDiskIter(filepath.Join(cache.dir, stagingDir, "chunks")) {
+		tierID := cast.ToUint8(parseObjTier(fname))
+		fname = removeObjTier(fname)
+		k := cache.getCacheKey(fname)
+		value := cache.keys.get(k)
+		if value == nil {
+			continue
+		}
 		if value.size > 0 {
 			continue // read cache
 		}
@@ -876,13 +892,14 @@ func (cache *cacheStore) uploadStaging() {
 		if cnt == 0 || lastValue.atime/60 > value.atime/60 ||
 			lastValue.atime/60 == value.atime/60 && lastValue.size > value.size { // both size are < 0
 			lastK = k
-			lastValue = value
+			lastValue = *value
+			lastKTierID = tierID
 		}
 		cnt++
 		if cnt > 1 {
 			cache.Unlock()
 			key := cache.getPathFromKey(lastK)
-			if !cache.uploader(key, cache.stagePath(key), true) {
+			if !cache.uploader(key, cache.stagePath(key, lastKTierID), true) {
 				logger.Warnf("Upload list is too full")
 				cache.Lock()
 				return
@@ -901,7 +918,7 @@ func (cache *cacheStore) uploadStaging() {
 	if cnt > 0 {
 		cache.Unlock()
 		key := cache.getPathFromKey(lastK)
-		if cache.uploader(key, cache.stagePath(key), true) {
+		if cache.uploader(key, cache.stagePath(key, lastKTierID), true) {
 			logger.Debugf("upload %s, age: %d", key, uint32(time.Now().Unix())-lastValue.atime)
 		}
 		cache.Lock()
@@ -994,6 +1011,8 @@ func (cache *cacheStore) scanStaging() {
 			}
 		} else {
 			key := path[len(stagingPrefix)+1:]
+			// recover original key from staging key
+			key = removeObjTier(key)
 			if runtime.GOOS == "windows" {
 				key = strings.ReplaceAll(key, "\\", "/")
 			}
@@ -1079,8 +1098,8 @@ type CacheManager interface {
 	load(key string) (ReadCloser, error)
 	exist(key string) (string, bool)
 	uploaded(key string, size int)
-	stage(key string, data []byte) (string, error)
-	removeStage(key string) error
+	stage(key string, data []byte, tierID uint8) (string, error)
+	removeStage(key string, tierID uint8) error
 	stats() (int64, int64)
 	usedMemory() int64
 	isEmpty() bool
@@ -1194,11 +1213,11 @@ func (m *cacheManager) getStore(key string) *cacheStore {
 	}
 }
 
-func (m *cacheManager) removeStage(key string) error {
+func (m *cacheManager) removeStage(key string, tierID uint8) error {
 	if s := m.getStore(key); s == nil {
 		return errCacheDown
 	} else {
-		return s.removeStage(key)
+		return s.removeStage(key, tierID)
 	}
 }
 
@@ -1281,10 +1300,10 @@ func (m *cacheManager) remove(key string, staging bool) {
 	}
 }
 
-func (m *cacheManager) stage(key string, data []byte) (string, error) {
+func (m *cacheManager) stage(key string, data []byte, tierID uint8) (string, error) {
 	store := m.getStore(key)
 	if store != nil {
-		return store.stage(key, data)
+		return store.stage(key, data, tierID)
 	}
 	return "", errors.New("no available cache dir")
 }
@@ -1425,4 +1444,75 @@ func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
 		}
 	}
 	return
+}
+
+func listSubdirs(dir string) ([]os.DirEntry, error) {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]os.DirEntry, 0, len(ents))
+	for _, e := range ents {
+		if e.IsDir() {
+			out = append(out, e)
+		}
+	}
+	return out, nil
+}
+
+func listFiles(dir string) ([]os.DirEntry, error) {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]os.DirEntry, 0, len(ents))
+	for _, e := range ents {
+		if !e.IsDir() {
+			out = append(out, e)
+		}
+	}
+	return out, nil
+}
+
+func pickOneChunkFile(chunksRoot string) (string, error) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// level1: chunks/*
+	l1, err := listSubdirs(chunksRoot)
+	if err != nil || len(l1) == 0 {
+		return "", errors.New("no level1 dirs under chunks")
+	}
+
+	for t := 0; t < 16; t++ {
+		d1 := l1[r.Intn(len(l1))]
+		p1 := filepath.Join(chunksRoot, d1.Name())
+
+		// level2: chunks/*/*
+		l2, err := listSubdirs(p1)
+		if err != nil || len(l2) == 0 {
+			continue
+		}
+
+		d2 := l2[r.Intn(len(l2))]
+		p2 := filepath.Join(p1, d2.Name())
+
+		// file: chunks/*/*/*
+		fs, err := listFiles(p2)
+		if err != nil || len(fs) == 0 {
+			continue
+		}
+
+		f := fs[r.Intn(len(fs))]
+		return f.Name(), nil
+	}
+	return "", errors.New("failed to pick one chunk file")
+}
+
+func randomOneFileFromDiskIter(chunksRoot string) func(func(string) bool) {
+	return func(yield func(string) bool) {
+		f, err := pickOneChunkFile(chunksRoot)
+		if err != nil {
+			return
+		}
+		_ = yield(f)
+	}
 }

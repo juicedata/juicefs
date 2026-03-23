@@ -292,6 +292,9 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 			logger.Warnf("Storage class is not supported by %q, will ignore", format.Storage)
 		}
 	}
+	if os, ok := blob.(object.SupportTier); ok {
+		os.SetTier(format.Tiers)
+	}
 	if format.EncryptKey != "" {
 		privKey, err := object.ParsePrivateKeyFromPem([]byte(format.EncryptKey), []byte(os.Getenv("JFS_RSA_PASSPHRASE")))
 		if err != nil {

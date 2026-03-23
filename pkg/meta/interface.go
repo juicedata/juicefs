@@ -188,6 +188,10 @@ func (tier *TierID) SetTierID(t uint8) error {
 	return nil
 }
 
+func (tier TierID) GetTierID() uint8 {
+	return uint8(tier)
+}
+
 func (attr *Attr) Marshal() []byte {
 	size := uint32(36 + 24 + 4 + 8)
 	if attr.AccessACL|attr.DefaultACL != aclAPI.None {

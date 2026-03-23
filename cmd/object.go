@@ -216,6 +216,7 @@ func (o *jObj) Owner() string        { return utils.UserName(o.fi.Uid()) }
 func (o *jObj) Group() string        { return utils.GroupName(o.fi.Gid()) }
 func (o *jObj) Mode() os.FileMode    { return o.fi.Mode() }
 func (o *jObj) StorageClass() string { return "" }
+func (o *jObj) Status() string       { return "" }
 
 func (j *juiceFS) Head(rCtx context.Context, key string) (object.Object, error) {
 	ctx := meta.WrapWithoutCancel(rCtx, pid, uid, []uint32{gid})

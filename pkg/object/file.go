@@ -103,6 +103,7 @@ func toFile(key string, fi fs.FileInfo, isSymlink bool, ownerGetter func(fs.File
 			fi.ModTime(),
 			fi.IsDir(),
 			"",
+			"",
 		},
 		owner,
 		group,

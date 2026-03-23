@@ -1363,7 +1363,7 @@ func (f *File) Pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 
 func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err syscall.Errno) {
 	if f.wdata == nil {
-		f.wdata = f.fs.writer.Open(f.inode, uint64(f.info.Size()))
+		f.wdata = f.fs.writer.Open(f.inode, uint64(f.info.Size()), f.info.attr.Tier.GetTierID())
 	}
 	err = f.wdata.Write(ctx, uint64(offset), b)
 	if err != 0 {

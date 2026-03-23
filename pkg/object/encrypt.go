@@ -311,4 +311,17 @@ func (e *encrypted) Put(ctx context.Context, key string, in io.Reader, getters .
 	return e.ObjectStorage.Put(ctx, key, bytes.NewReader(ciphertext), getters...)
 }
 
+func (e *encrypted) SetTier(init Tiers) {
+	if o, ok := e.ObjectStorage.(SupportTier); ok {
+		o.SetTier(init)
+	}
+}
+
+func (e *encrypted) getScStr(ctx context.Context) string {
+	if o, ok := e.ObjectStorage.(SupportTier); ok {
+		return o.getScStr(ctx)
+	}
+	return ""
+}
+
 var _ ObjectStorage = (*encrypted)(nil)

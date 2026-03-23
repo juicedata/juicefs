@@ -710,7 +710,8 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 		m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
 			slices := args[0].([]meta.Slice)
 			id := args[1].(uint64)
-			return vfs.Compact(chunkConf, store, slices, id)
+			tierId := args[2].(uint8)
+			return vfs.Compact(chunkConf, store, slices, id, tierId)
 		})
 		err = m.NewSession(!jConf.NoSession)
 		if err != nil {

@@ -51,7 +51,7 @@ func readSlice(store chunk.ChunkStore, s *meta.Slice, page *chunk.Page, off int)
 	return nil
 }
 
-func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, id uint64) error {
+func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, id uint64, tierID uint8) error {
 	for utils.AllocMemory()-store.UsedMemory() > int64(conf.BufferSize)*3/2 {
 		time.Sleep(time.Millisecond * 100)
 	}
@@ -62,7 +62,7 @@ func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, id 
 	compactSizeHistogram.Observe(float64(size))
 	logger.Debugf("compact %d slices (%d bytes) to new slice %d", len(slices), size, id)
 
-	writer := store.NewWriter(id)
+	writer := store.NewWriter(id, tierID)
 	writer.SetWriteback(false)
 
 	var pos int

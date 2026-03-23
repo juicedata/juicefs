@@ -18,7 +18,6 @@ package object
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -28,8 +27,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/goccy/go-json"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
@@ -157,6 +158,10 @@ func (s DefaultObjectStorage) List(ctx context.Context, prefix, start, token, de
 
 func (s DefaultObjectStorage) ListAll(ctx context.Context, prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
+}
+
+func (s DefaultObjectStorage) Restore(ctx context.Context, key string) error {
+	return notSupported
 }
 
 type Creator func(bucket, accessKey, secretKey, token string) (ObjectStorage, error)
@@ -323,6 +328,38 @@ func TmpFilePath(parent, name string) string {
 	return filepath.Join(filepath.Dir(parent), ".jfs."+name+".tmp."+strconv.Itoa(rand.Int()))
 }
 
+type ctxKey string
+
+const TierKey ctxKey = "tier"
+
+type SupportTier interface {
+	SetTier(init Tiers)
+	getScStr(ctx context.Context) string
+}
+
+type baseStorage struct {
+	sc string
+	tierInfo
+}
+
+func (b *baseStorage) getScStr(ctx context.Context) string {
+	scStr := b.sc
+	if id, ok := ctx.Value(TierKey).(uint8); ok {
+		scStr, ok = b.tierInfo.GetSc(id)
+		if !ok {
+			logger.Warnf("invalid tier id: %d", id)
+		}
+	}
+	return scStr
+}
+
+func (b *baseStorage) SetTier(init Tiers) {
+	if init == nil {
+		init = Tiers{}
+	}
+	b.tierInfo.Store(cloneTiers(init))
+}
+
 type Tier struct {
 	ID uint8  `json:"ID"`
 	Sc string `json:"StorageClass"`
@@ -372,6 +409,33 @@ func (t Tiers) GetSc(id uint8) (string, bool) {
 	tInfo, ok := t[id]
 	return tInfo.Sc, ok
 }
+
+func cloneTiers(src Tiers) Tiers {
+	dst := make(Tiers, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+type tierInfo atomic.Value
+
+func (t *tierInfo) GetSc(id uint8) (string, bool) {
+	v := (*atomic.Value)(t).Load()
+	if v == nil {
+		return "", false
+	}
+	m := v.(Tiers)
+	return m.GetSc(id)
+}
+
+func (t *tierInfo) Store(idx Tiers) {
+	if idx == nil {
+		idx = Tiers{}
+	}
+	(*atomic.Value)(t).Store(cloneTiers(idx))
+}
+
 func NewTiers() Tiers {
 	t := make(Tiers)
 	t[0] = Tier{}

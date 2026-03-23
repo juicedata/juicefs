@@ -29,8 +29,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
@@ -38,6 +36,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
+	"github.com/aws/aws-sdk-go-v2/aws"
 )
 
 type wasb struct {
@@ -78,6 +77,7 @@ func (b *wasb) Head(ctx context.Context, key string) (Object, error) {
 		*properties.LastModified,
 		strings.HasSuffix(key, "/"),
 		*properties.AccessTier,
+		*properties.ArchiveStatus,
 	}, nil
 }
 
@@ -181,6 +181,7 @@ func (b *wasb) List(ctx context.Context, prefix, startAfter, token, delimiter st
 			*mtime,
 			strings.HasSuffix(*blob.Name, "/"),
 			string(*blob.Properties.AccessTier),
+			"",
 		})
 	}
 
@@ -194,6 +195,13 @@ func (b *wasb) List(ctx context.Context, prefix, startAfter, token, delimiter st
 func (b *wasb) SetStorageClass(sc string) error {
 	b.sc = sc
 	return nil
+}
+
+func (b *wasb) Restore(ctx context.Context, key string) error {
+	// fixme: no restore API for Azure blob, we can only set the access tier to hot or cool to restore the blob
+	return nil
+	//_, err := b.container.NewBlobClient(key).SetTier(ctx, blob2.AccessTierHot, nil)
+	//return err
 }
 
 // createAzureCredential creates a credential for Azure authentication.

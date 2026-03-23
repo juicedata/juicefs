@@ -46,6 +46,7 @@ type handle struct {
 	reader     FileReader
 	writer     FileWriter
 	ops        []Context
+	tierID     uint8
 
 	// rwlock
 	writing uint32
@@ -158,7 +159,7 @@ func (h *handle) Close() {
 	}
 }
 
-func (v *VFS) newHandle(inode Ino, readOnly bool) *handle {
+func (v *VFS) newHandle(inode Ino, readOnly bool, tierID uint8) *handle {
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
 	var lowBits uint64
@@ -169,7 +170,7 @@ func (v *VFS) newHandle(inode Ino, readOnly bool) *handle {
 		v.nextfh++ // skip recovered fd
 	}
 	fh := v.nextfh
-	h := &handle{inode: inode, fh: fh}
+	h := &handle{inode: inode, fh: fh, tierID: tierID}
 	v.nextfh++
 	h.cond = utils.NewCond(h)
 	v.handles[inode] = append(v.handles[inode], h)
@@ -234,8 +235,8 @@ func (v *VFS) releaseHandle(inode Ino, fh uint64) {
 	}
 }
 
-func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32) uint64 {
-	h := v.newHandle(inode, (flags&O_ACCMODE) == syscall.O_RDONLY)
+func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32, tierID uint8) uint64 {
+	h := v.newHandle(inode, (flags&O_ACCMODE) == syscall.O_RDONLY, tierID)
 	h.Lock()
 	defer h.Unlock()
 	h.flags = flags
@@ -246,7 +247,7 @@ func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32) uint64 {
 		fallthrough
 	case syscall.O_RDWR:
 		h.reader = v.reader.Open(inode, length)
-		h.writer = v.writer.Open(inode, length)
+		h.writer = v.writer.Open(inode, length, tierID)
 	}
 	return h.fh
 }
@@ -294,6 +295,7 @@ type saveHandle struct {
 	FlockOwner uint64
 	Off        uint64
 	Data       string
+	TierID     uint8
 }
 
 func (v *VFS) dumpAllHandles(path string) (err error) {
@@ -346,6 +348,7 @@ func (v *VFS) dumpAllHandles(path string) (err error) {
 				FlockOwner: h.flockOwner,
 				Off:        h.off,
 				Data:       hex.EncodeToString(h.data),
+				TierID:     h.tierID,
 			}
 			h.Unlock()
 			vfsState.Handler[h.fh] = s
@@ -397,6 +400,7 @@ func (v *VFS) loadAllHandles(path string) error {
 			locks:      s.UseLocks,
 			flockOwner: s.FlockOwner,
 			off:        s.Off,
+			tierID:     s.TierID,
 		}
 		h.cond = utils.NewCond(h)
 		v.handles[h.inode] = append(v.handles[h.inode], h)
@@ -414,7 +418,7 @@ func (v *VFS) loadAllHandles(path string) error {
 			fallthrough
 		case syscall.O_RDWR:
 			h.reader = v.reader.Open(h.inode, s.Length)
-			h.writer = v.writer.Open(h.inode, s.Length)
+			h.writer = v.writer.Open(h.inode, s.Length, h.tierID)
 		}
 	}
 	if len(v.handleIno) > 0 {

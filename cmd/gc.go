@@ -168,7 +168,7 @@ func gc(ctx *cli.Context) error {
 		spin := progress.AddDoubleSpinnerTwo("Compacted slices", "Compacted data")
 		m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
 			slices := args[0].([]meta.Slice)
-			err := vfs.Compact(chunkConf, store, slices, args[1].(uint64))
+			err := vfs.Compact(chunkConf, store, slices, args[1].(uint64), args[2].(uint8))
 			for _, s := range slices {
 				spin.IncrInt64(int64(s.Len))
 			}
