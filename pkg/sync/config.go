@@ -69,7 +69,7 @@ type Config struct {
 	MinAge            time.Duration
 	StartTime         time.Time
 	EndTime           time.Time
-	Env               map[string]string
+	Env               map[string]string `json:"-"`
 
 	FilesFrom string
 

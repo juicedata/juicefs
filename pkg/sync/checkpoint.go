@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -33,7 +34,7 @@ import (
 )
 
 const (
-	checkpointPrefix = "/.juicefs-sync-checkpoint/"
+	checkpointPrefix = ".juicefs-sync-checkpoint"
 )
 
 // PrefixState maintains the state for a specific prefix
@@ -134,7 +135,7 @@ func NewCheckpointManager(dstStorage object.ObjectStorage, config *Config, srcPa
 	return &CheckpointManager{
 		dst:           dstStorage,
 		config:        config,
-		checkpointKey: checkpointPrefix + key,
+		checkpointKey: key,
 		stopChan:      make(chan struct{}),
 	}
 }
@@ -142,7 +143,10 @@ func NewCheckpointManager(dstStorage object.ObjectStorage, config *Config, srcPa
 // generateCheckpointKey creates a unique key based on src and dst
 func generateCheckpointKey(src, dst string) string {
 	hash := md5.Sum([]byte(src + "|" + dst))
-	return fmt.Sprintf("checkpoint-%x.json", hash)
+	if strings.HasSuffix(dst, "/") {
+		return fmt.Sprintf("%s.%x.json", checkpointPrefix, hash)
+	}
+	return fmt.Sprintf("/%s.%x.json", checkpointPrefix, hash)
 }
 
 // Load loads checkpoint from object storage
@@ -250,18 +254,19 @@ func (m *CheckpointManager) ValidateConfig(ckpt *Checkpoint, current *Config) bo
 
 // GetOrCreatePrefixState gets or creates a prefix state
 func (m *CheckpointManager) GetOrCreatePrefixState(prefix string) *PrefixState {
-	if m == nil {
-		return nil
+	m.checkpoint.RLock()
+	state, exists := m.checkpoint.PrefixState[prefix]
+	m.checkpoint.RUnlock()
+	if exists {
+		return state
 	}
 
 	m.checkpoint.Lock()
 	defer m.checkpoint.Unlock()
-
-	if state, exists := m.checkpoint.PrefixState[prefix]; exists {
+	if state, exists = m.checkpoint.PrefixState[prefix]; exists {
 		return state
 	}
-
-	state := &PrefixState{
+	state = &PrefixState{
 		PendingKeys: make(map[string]object.Object),
 		FailedKeys:  make(map[string]object.Object),
 	}
@@ -269,43 +274,67 @@ func (m *CheckpointManager) GetOrCreatePrefixState(prefix string) *PrefixState {
 	return state
 }
 
+func (m *CheckpointManager) updatePrefixState(prefix string, update func(*PrefixState)) {
+	state := m.GetOrCreatePrefixState(prefix)
+
+	state.Lock()
+	update(state)
+	done := state.ListDone && len(state.PendingKeys) == 0 && len(state.FailedKeys) == 0
+	state.Unlock()
+	if done {
+		m.checkpoint.Lock()
+		delete(m.checkpoint.PrefixState, prefix)
+		m.checkpoint.Unlock()
+	}
+}
+
+func (m *CheckpointManager) MarkListDone(prefix string) {
+	m.updatePrefixState(prefix, func(state *PrefixState) {
+		state.ListDone = true
+	})
+}
+
 // MarkCompleted removes a key from PendingKeys after successful completion
 func (m *CheckpointManager) MarkCompleted(key string) {
-	if m == nil || m.checkpoint == nil {
-		return
-	}
-
 	prefixVal, ok := m.keyPrefix.LoadAndDelete(key)
 	if !ok {
 		return
 	}
 	prefix := prefixVal.(string)
 
-	state := m.GetOrCreatePrefixState(prefix)
-	state.Lock()
-	delete(state.PendingKeys, key)
-	delete(state.FailedKeys, key)
-	state.Unlock()
+	m.updatePrefixState(prefix, func(state *PrefixState) {
+		delete(state.PendingKeys, key)
+		delete(state.FailedKeys, key)
+	})
 }
 
 // MarkFailed moves a key from PendingKeys to FailedKeys
 func (m *CheckpointManager) MarkFailed(key string) {
-	if m == nil || m.checkpoint == nil {
-		return
-	}
-
 	prefixVal, ok := m.keyPrefix.Load(key)
 	if !ok {
 		return
 	}
 	prefix := prefixVal.(string)
 
-	state := m.GetOrCreatePrefixState(prefix)
-	state.Lock()
-	objData := state.PendingKeys[key]
-	delete(state.PendingKeys, key)
-	state.FailedKeys[key] = objData
-	state.Unlock()
+	m.updatePrefixState(prefix, func(state *PrefixState) {
+		objData := state.PendingKeys[key]
+		delete(state.PendingKeys, key)
+		state.FailedKeys[key] = objData
+	})
+}
+
+func (m *CheckpointManager) AddPendingKey(prefix string, obj object.Object) {
+	m.updatePrefixState(prefix, func(state *PrefixState) {
+		state.PendingKeys[obj.Key()] = obj
+		state.LastListedKey = obj.Key()
+	})
+	m.TrackKey(obj.Key(), prefix)
+}
+
+func (m *CheckpointManager) UpdateLastListedKey(prefix string, obj object.Object) {
+	m.updatePrefixState(prefix, func(state *PrefixState) {
+		state.LastListedKey = obj.Key()
+	})
 }
 
 func (m *CheckpointManager) TrackKey(key, prefix string) {

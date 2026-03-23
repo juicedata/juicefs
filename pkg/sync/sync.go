@@ -1236,7 +1236,6 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 		checkpoint.RLock()
 		if state, exists := checkpoint.PrefixState[prefix]; exists && state.LastListedKey != "" {
 			startAfter = state.LastListedKey
-			logger.Infof("Resuming prefix %s from %s", prefix, startAfter)
 		}
 		checkpoint.RUnlock()
 	}
@@ -1278,10 +1277,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 
 	defer func() {
 		if checkpointMgr != nil {
-			state := checkpointMgr.GetOrCreatePrefixState(prefix)
-			state.Lock()
-			state.ListDone = true
-			state.Unlock()
+			checkpointMgr.MarkListDone(prefix)
 		}
 	}()
 
@@ -1296,12 +1292,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 
 	sendTask := func(obj object.Object) {
 		if checkpointMgr != nil {
-			state := checkpointMgr.GetOrCreatePrefixState(prefix)
-			state.Lock()
-			state.PendingKeys[obj.Key()] = obj
-			state.LastListedKey = obj.Key()
-			state.Unlock()
-			checkpointMgr.TrackKey(obj.Key(), prefix)
+			checkpointMgr.AddPendingKey(prefix, obj)
 		}
 		tasks <- obj
 	}
@@ -1312,10 +1303,7 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 		}
 
 		if checkpointMgr != nil {
-			state := checkpointMgr.GetOrCreatePrefixState(prefix)
-			state.Lock()
-			state.LastListedKey = obj.Key()
-			state.Unlock()
+			checkpointMgr.UpdateLastListedKey(prefix, obj)
 		}
 
 		if !config.Dirs && obj.IsDir() {
@@ -1371,20 +1359,17 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 			} else if config.Update && obj.Mtime().Unix() < dstobj.Mtime().Unix() {
 				skipIt(obj)
 			} else if config.CheckAll { // two objects are likely the same
-				// TODO: ckpt
-				tasks <- withSize(obj, markChecksum)
+				sendTask(withSize(obj, markChecksum))
 			} else if config.DeleteSrc {
 				if obj.IsDir() {
 					srcDelayDelMu.Lock()
 					srcDelayDel = append(srcDelayDel, obj.Key())
 					srcDelayDelMu.Unlock()
 				} else {
-					// TODO: ckpt
-					tasks <- withSize(obj, markDeleteSrc)
+					sendTask(withSize(obj, markDeleteSrc))
 				}
 			} else if config.Perms && needCopyPerms(obj, dstobj) {
-				// TODO: ckpt
-				tasks <- withSize(obj, markCopyPerms)
+				sendTask(withSize(obj, markCopyPerms))
 			} else {
 				skipIt(obj)
 			}
@@ -1768,42 +1753,51 @@ func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStora
 }
 
 func restoreFromCheckpoint(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config, checkpointMgr *CheckpointManager, checkpoint *Checkpoint) error {
-	logger.Infof("Restoring %d prefix states from checkpoint", len(checkpoint.PrefixState))
-
-	var incompletePrefixes []string
+	checkpoint.RLock()
+	type entry struct {
+		prefix string
+		state  *PrefixState
+	}
+	entries := make([]entry, 0, len(checkpoint.PrefixState))
 	for prefix, state := range checkpoint.PrefixState {
-		state.Lock()
-		maps.Copy(state.PendingKeys, state.FailedKeys)
-		state.FailedKeys = make(map[string]object.Object)
-
-		var restoreObjs []object.Object
-		for key, obj := range state.PendingKeys {
-			checkpointMgr.TrackKey(key, prefix)
-			restoreObjs = append(restoreObjs, obj)
-		}
-		done := state.ListDone
-		state.Unlock()
-
-		for _, obj := range restoreObjs {
-			incrTotal(1)
-			tasks <- obj
-		}
-
-		if !done {
-			incompletePrefixes = append(incompletePrefixes, prefix)
-		}
+		entries = append(entries, entry{prefix, state})
 	}
+	checkpoint.RUnlock()
 
-	for _, prefix := range incompletePrefixes {
-		checkpoint.RLock()
-		depth := checkpoint.PrefixState[prefix].ListDepth
-		checkpoint.RUnlock()
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, max(config.ListThreads, 1))
+	for _, e := range entries {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			e.state.Lock()
+			maps.Copy(e.state.PendingKeys, e.state.FailedKeys)
+			e.state.FailedKeys = make(map[string]object.Object)
+			var restoreObjs []object.Object
+			for key, obj := range e.state.PendingKeys {
+				checkpointMgr.TrackKey(key, e.prefix)
+				restoreObjs = append(restoreObjs, obj)
+			}
+			done := e.state.ListDone
+			listDepth := e.state.ListDepth
+			lastKey := e.state.LastListedKey
+			e.state.Unlock()
 
-		logger.Infof("Restarting producer for incomplete prefix %q (depth=%d)", prefix, depth)
-		if err := startProducer(tasks, src, dst, prefix, depth, config, checkpointMgr, checkpoint); err != nil {
-			logger.Errorf("Failed to restart producer for prefix %s: %v", prefix, err)
-		}
+			logger.Infof("Restore for prefix %q (lastKey: %q), restoreObjs: %d, listDone: %v", e.prefix, lastKey, len(restoreObjs), done)
+			for _, obj := range restoreObjs {
+				incrTotal(1)
+				tasks <- obj
+			}
+			if !done {
+				if err := startProducer(tasks, src, dst, e.prefix, listDepth, config, checkpointMgr, checkpoint); err != nil {
+					logger.Errorf("Failed to restart producer for prefix %s: %v", e.prefix, err)
+				}
+			}
+		}()
 	}
+	wg.Wait()
 	return nil
 }
 
@@ -1924,16 +1918,23 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	if config.EnableCheckpoint {
 		checkpointMgr = NewCheckpointManager(dst, config, src.String(), dst.String())
-
 		if ckpt, err := checkpointMgr.Load(); err == nil {
 			if checkpointMgr.ValidateConfig(ckpt, config) {
-				checkpoint = ckpt
-				logger.Infof("Loaded checkpoint from %s", ckpt.UpdatedAt.Format(time.RFC3339))
+				if len(ckpt.PrefixState) > 0 {
+					checkpoint = ckpt
+					logger.Infof("Loaded checkpoint from %s", ckpt.UpdatedAt.Format(time.RFC3339))
+				} else {
+					logger.Infof("Loaded empty checkpoint, starting fresh")
+				}
 			} else {
 				logger.Warnf("Checkpoint config mismatch, starting fresh")
 			}
 		} else {
-			logger.Infof("No checkpoint found or failed to load: %v", err)
+			if !errors.Is(err, os.ErrNotExist) {
+				logger.Warnf("Failed to load checkpoint: %v", err)
+			} else {
+				logger.Infof("No checkpoint found, starting fresh")
+			}
 		}
 
 		if checkpointMgr.checkpoint == nil {
@@ -2087,6 +2088,16 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			if failed != nil {
 				if n := failed.Current(); n > 0 || total > handled.Current()+extra.Current() {
 					return fmt.Errorf("failed to handle %d objects", n+total-handled.Current()-extra.Current())
+				}
+			}
+			if checkpointMgr != nil {
+				checkpointMgr.checkpoint.RLock()
+				empty := len(checkpointMgr.checkpoint.PrefixState) == 0
+				checkpointMgr.checkpoint.RUnlock()
+				if empty {
+					if e := checkpointMgr.dst.Delete(context.Background(), checkpointMgr.checkpointKey); e != nil {
+						logger.Warnf("Failed to delete checkpoint after completion: %v", e)
+					}
 				}
 			}
 		} else {
