@@ -69,7 +69,7 @@ func cmdGateway() *cli.Command {
 		},
 		&cli.StringFlag{
 			Name:  "bucket-name",
-			Usage: "use this bucket name instead of JuiceFS name",
+			Usage: "use this bucket name instead of JuiceFS name (ignored when --multi-buckets is enabled)",
 		},
 		&cli.BoolFlag{
 			Name:  "keep-etag",
