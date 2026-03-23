@@ -18,6 +18,7 @@ package object
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -29,7 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/goccy/go-json"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
@@ -342,10 +342,10 @@ func (t *Tier) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
-	*t = Tier(aux)
-	if t.ID == 0 {
-		t.Sc = ""
+	if aux.ID == 0 {
+		aux.Sc = ""
 	}
+	*t = Tier(aux)
 	return nil
 }
 
