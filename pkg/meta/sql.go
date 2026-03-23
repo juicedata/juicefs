@@ -286,20 +286,6 @@ type dbSnap struct {
 	chunk   map[string]*chunk
 }
 
-func recoveryMysqlPwd(addr string) string {
-	colonIndex := strings.Index(addr, ":")
-	atIndex := strings.LastIndex(addr, "@")
-	if colonIndex != -1 && colonIndex < atIndex {
-		pwd := addr[colonIndex+1 : atIndex]
-		if parse, err := url.Parse("mysql://root:" + pwd + "@127.0.0.1"); err == nil {
-			if originPwd, ok := parse.User.Password(); ok {
-				addr = fmt.Sprintf("%s:%s%s", addr[:colonIndex], originPwd, addr[atIndex:])
-			}
-		}
-	}
-	return addr
-}
-
 func extractCustomConfig[T string | int](value *url.Values, key string, defaultV T) (T, error) {
 	if value == nil {
 		return defaultV, nil
@@ -324,10 +310,6 @@ func extractCustomConfig[T string | int](value *url.Values, key string, defaultV
 		return defaultV, nil
 	}
 }
-
-var setTransactionIsolation func(dns string) (string, error)
-var setLegacyTransactionIsolation func(dns string) (string, error)
-var isUnknownTransactionIsolationError func(err error) bool
 
 type prefixMapper struct {
 	mapper names.Mapper
@@ -423,6 +405,8 @@ func (m *dbMeta) initStatement() {
 		fmt.Sprintf(`INSERT IGNORE INTO %schunk_ref (chunkid, size, refs) VALUES (?,?,?)`, m.tablePrefix)
 }
 
+var engineCreator = make(map[string]func(string) (*xorm.Engine, error))
+
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	var searchPath string
 
@@ -490,23 +474,20 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 		}
 	}
 
-	// escaping is not necessary for mysql password https://github.com/go-sql-driver/mysql#password
-	if driver == "mysql" && setTransactionIsolation != nil {
-		addr = recoveryMysqlPwd(addr)
-		var err error
-		if addr, err = setTransactionIsolation(addr); err != nil {
-			return nil, err
-		}
-	}
-
 	if driver == "sqlite3" {
 		DirBatchNum["db"] = 4096 // SQLITE_MAX_VARIABLE_NUMBER limit
 	}
 
-	engine, err := xorm.NewEngine(driver, addr)
+	var engine *xorm.Engine
+	if creator, ok := engineCreator[driver]; ok {
+		engine, err = creator(addr)
+	} else {
+		engine, err = xorm.NewEngine(driver, addr)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
 	}
+
 	switch logger.Level { // make xorm less verbose
 	case logrus.TraceLevel:
 		engine.SetLogLevel(log.LOG_DEBUG)
@@ -521,25 +502,7 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 	start := time.Now()
 	if err = engine.Ping(); err != nil {
-		// Try legacy transaction isolation for MySQL 5.7 and earlier
-		if driver == "mysql" &&
-			setLegacyTransactionIsolation != nil &&
-			isUnknownTransactionIsolationError != nil &&
-			isUnknownTransactionIsolationError(err) {
-			_ = engine.Close()
-			if addr, err = setLegacyTransactionIsolation(addr); err != nil {
-				return nil, err
-			}
-			engine, err = xorm.NewEngine(driver, addr)
-			if err != nil {
-				return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
-			}
-			if err = engine.Ping(); err != nil {
-				return nil, fmt.Errorf("ping database: %s", err)
-			}
-		} else {
-			return nil, fmt.Errorf("ping database: %s", err)
-		}
+		return nil, fmt.Errorf("ping database: %s", err)
 	}
 	if time.Since(start) > time.Millisecond*5 {
 		logger.Warnf("The latency to database is too high: %s", time.Since(start))
@@ -557,7 +520,7 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	engine.DB().SetConnMaxIdleTime(time.Second * time.Duration(vIdleTime))
 	engine.SetTableMapper(prefixMapper{mapper: engine.GetTableMapper(), prefix: tablePrefix})
 	m := &dbMeta{
-		baseMeta:    newBaseMeta(addr, conf),
+		baseMeta:    newBaseMeta(engine.DataSourceName(), conf),
 		db:          engine,
 		statement:   make(map[string]string),
 		tablePrefix: tablePrefix,
