@@ -1203,6 +1203,9 @@ var srcDelayDelMu sync.Mutex
 var srcDelayDel []string
 
 func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config *Config, checkpointMgr *CheckpointManager, prefix string) bool {
+	if checkpointMgr.isCheckpointKey(dstobj.Key()) {
+		return false
+	}
 	incrTotal(1)
 	if !config.DeleteDst || !config.Dirs && dstobj.IsDir() || config.Limit == 0 {
 		logger.Debug("Ignore extra object", dstobj.Key())
@@ -1216,10 +1219,11 @@ func handleExtraObject(tasks chan<- object.Object, dstobj object.Object, config 
 		dstDelayDel = append(dstDelayDel, dstobj.Key())
 		dstDelayDelMu.Unlock()
 	} else {
+		obj := withSize(dstobj, markDeleteDst)
 		if checkpointMgr != nil {
-			checkpointMgr.AddPendingKey(prefix, dstobj)
+			checkpointMgr.AddPendingKey(prefix, obj)
 		}
-		tasks <- withSize(dstobj, markDeleteDst)
+		tasks <- obj
 	}
 	return config.Limit == 0
 }
@@ -1924,6 +1928,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 				}
 			} else {
 				logger.Warnf("Checkpoint config mismatch, starting fresh")
+				checkpointMgr.checkpoint = nil
 			}
 		} else {
 			if !errors.Is(err, os.ErrNotExist) {

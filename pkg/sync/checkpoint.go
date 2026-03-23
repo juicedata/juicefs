@@ -147,6 +147,10 @@ func generateCheckpointKey(src, dst string) string {
 	return fmt.Sprintf("/%s.%x.json", checkpointPrefix, hash)
 }
 
+func (m *CheckpointManager) isCheckpointKey(key string) bool {
+	return m != nil && key == m.checkpointKey
+}
+
 // Load loads checkpoint from object storage
 func (m *CheckpointManager) Load() (*Checkpoint, error) {
 	obj, err := m.dst.Get(context.Background(), m.checkpointKey, 0, -1)
@@ -171,8 +175,10 @@ func (m *CheckpointManager) Load() (*Checkpoint, error) {
 
 // Save saves checkpoint to object storage
 func (m *CheckpointManager) Save(ckpt *Checkpoint) error {
+	if ckpt.Config != nil && ckpt.Config.Dry {
+		return nil
+	}
 	m.saveMu.Lock()
-
 	if m.statsUpdater != nil {
 		m.statsUpdater(&ckpt.Stats)
 	}
@@ -244,6 +250,21 @@ func (m *CheckpointManager) ValidateConfig(ckpt *Checkpoint, current *Config) bo
 	if c.MaxSize != current.MaxSize || c.MinSize != current.MinSize ||
 		c.MaxAge != current.MaxAge || c.MinAge != current.MinAge {
 		logger.Warnf("Checkpoint config mismatch: size/age filters")
+		return false
+	}
+
+	if c.FilesFrom != current.FilesFrom {
+		logger.Warnf("Checkpoint config mismatch: files-from")
+		return false
+	}
+
+	if c.MatchFullPath != current.MatchFullPath {
+		logger.Warnf("Checkpoint config mismatch: match-full-path")
+		return false
+	}
+
+	if c.StartTime != current.StartTime || c.EndTime != current.EndTime {
+		logger.Warnf("Checkpoint config mismatch: time filters")
 		return false
 	}
 
