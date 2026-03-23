@@ -326,6 +326,8 @@ func extractCustomConfig[T string | int](value *url.Values, key string, defaultV
 }
 
 var setTransactionIsolation func(dns string) (string, error)
+var setLegacyTransactionIsolation func(dns string) (string, error)
+var isUnknownTransactionIsolationError func(err error) bool
 
 type prefixMapper struct {
 	mapper names.Mapper
@@ -519,7 +521,25 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 	start := time.Now()
 	if err = engine.Ping(); err != nil {
-		return nil, fmt.Errorf("ping database: %s", err)
+		// Try legacy transaction isolation for MySQL 5.7 and earlier
+		if driver == "mysql" &&
+			setLegacyTransactionIsolation != nil &&
+			isUnknownTransactionIsolationError != nil &&
+			isUnknownTransactionIsolationError(err) {
+			_ = engine.Close()
+			if addr, err = setLegacyTransactionIsolation(addr); err != nil {
+				return nil, err
+			}
+			engine, err = xorm.NewEngine(driver, addr)
+			if err != nil {
+				return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
+			}
+			if err = engine.Ping(); err != nil {
+				return nil, fmt.Errorf("ping database: %s", err)
+			}
+		} else {
+			return nil, fmt.Errorf("ping database: %s", err)
+		}
 	}
 	if time.Since(start) > time.Millisecond*5 {
 		logger.Warnf("The latency to database is too high: %s", time.Since(start))

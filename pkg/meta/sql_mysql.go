@@ -20,6 +20,8 @@
 package meta
 
 import (
+	"strings"
+
 	"github.com/go-sql-driver/mysql"
 )
 
@@ -42,8 +44,27 @@ func setMySQLTransactionIsolation(dns string) (string, error) {
 	return cfg.FormatDSN(), nil
 }
 
+func isUnknownTransactionIsolationErr(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "unknown system variable 'transaction_isolation'")
+}
+
+func setLegacyMySQLTransactionIsolation(dns string) (string, error) {
+	cfg, err := mysql.ParseDSN(dns)
+	if err != nil {
+		return "", err
+	}
+	if cfg.Params == nil {
+		cfg.Params = make(map[string]string)
+	}
+	delete(cfg.Params, "transaction_isolation")
+	cfg.Params["tx_isolation"] = "'repeatable-read'"
+	return cfg.FormatDSN(), nil
+}
+
 func init() {
 	dupErrorCheckers = append(dupErrorCheckers, isMySQLDuplicateEntryErr)
 	setTransactionIsolation = setMySQLTransactionIsolation
+	setLegacyTransactionIsolation = setLegacyMySQLTransactionIsolation
+	isUnknownTransactionIsolationError = isUnknownTransactionIsolationErr
 	Register("mysql", newSQLMeta)
 }
