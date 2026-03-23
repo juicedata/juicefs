@@ -1300,9 +1300,6 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 		}
 
 		if !config.Dirs && obj.IsDir() {
-			if checkpointMgr != nil {
-				checkpointMgr.UpdateLastListedKey(prefix, obj)
-			}
 			logger.Debug("Ignore directory ", obj.Key())
 			continue
 		}
