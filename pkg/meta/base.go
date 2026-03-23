@@ -694,7 +694,10 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 			return nil, fmt.Errorf("check version: %s", err)
 		}
 	}
-	format.Tiers = object.NewTiers()
+	if format.Tiers == nil {
+		format.Tiers = object.NewTiers()
+	}
+	format.Tiers[0] = object.Tier{}
 	m.Lock()
 	m.fmt = format
 	m.Unlock()
