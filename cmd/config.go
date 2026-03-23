@@ -167,7 +167,7 @@ func config(ctx *cli.Context) error {
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
 	var newSc string
-	var newTierId uint8
+	var newTierID uint8
 	var oldTier object.Tier
 	var findTier bool
 
@@ -317,14 +317,14 @@ func config(ctx *cli.Context) error {
 			clientVer = true
 		case "tier-id":
 			newSc = ctx.String("tier-sc")
-			newTierId = uint8(ctx.Int(flag))
-			oldTier, findTier = format.Tiers[newTierId]
+			newTierID = uint8(ctx.Int(flag))
+			oldTier, findTier = format.Tiers[newTierID]
 			if findTier && oldTier.Sc == newSc {
 				break
 			}
-			msg.WriteString(fmt.Sprintf("set tier %d -> %s\n", newTierId, newSc))
-			format.Tiers[newTierId] = object.Tier{
-				ID: newTierId,
+			msg.WriteString(fmt.Sprintf("set tier %d -> %s\n", newTierID, newSc))
+			format.Tiers[newTierID] = object.Tier{
+				ID: newTierID,
 				Sc: newSc,
 			}
 			tier = true
