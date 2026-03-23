@@ -35,11 +35,13 @@ jobs:
     steps:
       - uses: actions/setup-go@v3
         with:
-          go-version: "1.23"
+          go-version: "1.24"
 
       - uses: actions/checkout@v3
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.6
 
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
@@ -50,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ["1.21", "1.22", "1.23"]
+        version: ["1.24", "1.25", "1.26"]
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
