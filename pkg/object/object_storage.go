@@ -357,9 +357,9 @@ func (t Tier) MarshalJSON() ([]byte, error) {
 	return json.Marshal(aux)
 }
 
-type TierIdx map[uint8]Tier
+type Tiers map[uint8]Tier
 
-func (t TierIdx) GetID(sc string) (uint8, bool) {
+func (t Tiers) GetID(sc string) (uint8, bool) {
 	for k, v := range t {
 		if v.Sc == sc {
 			return k, true
@@ -368,7 +368,12 @@ func (t TierIdx) GetID(sc string) (uint8, bool) {
 	return 0, false
 }
 
-func (t TierIdx) GetSc(id uint8) (string, bool) {
+func (t Tiers) GetSc(id uint8) (string, bool) {
 	tInfo, ok := t[id]
 	return tInfo.Sc, ok
+}
+func NewTiers() Tiers {
+	t := make(Tiers)
+	t[0] = Tier{}
+	return t
 }

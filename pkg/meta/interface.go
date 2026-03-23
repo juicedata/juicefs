@@ -175,29 +175,17 @@ type Attr struct {
 	AccessACL  uint32 // access ACL id (identical ACL rules share the same access ACL ID.)
 	DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
 
-	Tier TierInfo // storage tier of the file
+	Tier TierID // storage tier of the file
 }
 
-type TierInfo uint8
+type TierID uint8
 
-const (
-	tierMask  uint8 = 0xC0 // bits 7~6: tier field
-	valueMask uint8 = 0x03 // tier value mask: 0~3
-	tierShift uint8 = 6
-)
-
-func (tier *TierInfo) SetTierID(t uint8) error {
-	if t > valueMask {
+func (tier *TierID) SetTierID(t uint8) error {
+	if t > 3 {
 		return fmt.Errorf("storage tier out of range: %d (want 0~3)", t)
 	}
-	v := uint8(*tier)
-	v = (v &^ tierMask) | ((t & valueMask) << tierShift)
-	*tier = TierInfo(v)
+	*tier = TierID(t)
 	return nil
-}
-
-func (tier TierInfo) GetTierID() uint8 {
-	return (uint8(tier) & tierMask) >> tierShift
 }
 
 func (attr *Attr) Marshal() []byte {
@@ -263,7 +251,7 @@ func (attr *Attr) Unmarshal(buf []byte) {
 		attr.DefaultACL = rb.Get32()
 	}
 	if rb.Left() >= 1 {
-		attr.Tier = TierInfo(rb.Get8())
+		attr.Tier = TierID(rb.Get8())
 	} else {
 		attr.Tier = 0
 	}

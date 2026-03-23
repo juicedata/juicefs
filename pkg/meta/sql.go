@@ -87,9 +87,9 @@ type node struct {
 	Length       uint64 `xorm:"notnull"`
 	Rdev         uint32
 	Parent       Ino
-	AccessACLId  uint32   `xorm:"'access_acl_id'"`
-	DefaultACLId uint32   `xorm:"'default_acl_id'"`
-	Tier         TierInfo `xorm:"'tier'"`
+	AccessACLId  uint32 `xorm:"'access_acl_id'"`
+	DefaultACLId uint32 `xorm:"'default_acl_id'"`
+	Tier         TierID `xorm:"'tier_id'"`
 }
 
 func (n *node) setAtime(ns int64) {
@@ -1385,7 +1385,7 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		m.parseNode(dirtyAttr, &dirtyNode)
 		dirtyNode.setCtime(now.UnixNano())
 		_, err = s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime",
-			"atimensec", "mtimensec", "ctimensec", "access_acl_id", "default_acl_id", "tier").
+			"atimensec", "mtimensec", "ctimensec", "access_acl_id", "default_acl_id", "tier_id").
 			Update(&dirtyNode, &node{Inode: inode})
 		if err == nil {
 			m.parseAttr(&dirtyNode, attr)
