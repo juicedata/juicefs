@@ -391,6 +391,29 @@ func (m *CheckpointManager) SaveOnSignal() {
 	}()
 }
 
+func trackCheckpointCompletion(key string, failed bool, mgr *CheckpointManager, config *Config) {
+	if !config.EnableCheckpoint {
+		return
+	}
+	if mgr != nil {
+		if failed {
+			mgr.MarkFailed(key)
+		} else {
+			mgr.MarkCompleted(key)
+		}
+		return
+	}
+	if config.Manager != "" {
+		completionMu.Lock()
+		if failed {
+			failedKeysBuf = append(failedKeysBuf, key)
+		} else {
+			completedKeysBuf = append(completedKeysBuf, key)
+		}
+		completionMu.Unlock()
+	}
+}
+
 func stringSliceEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

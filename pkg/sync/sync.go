@@ -1110,13 +1110,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 			}
 		}
 
-		if checkpointMgr != nil {
-			if taskErr != nil {
-				checkpointMgr.MarkFailed(key)
-			} else {
-				checkpointMgr.MarkCompleted(key)
-			}
-		}
+		trackCheckpointCompletion(key, taskErr != nil, checkpointMgr, config)
 		incrHandled(1)
 		done()
 	}
@@ -1916,7 +1910,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	var checkpointMgr *CheckpointManager
 	var checkpoint *Checkpoint
 
-	if config.EnableCheckpoint {
+	if config.EnableCheckpoint && config.Manager == "" {
 		checkpointMgr = NewCheckpointManager(dst, config, src.String(), dst.String())
 		if ckpt, err := checkpointMgr.Load(); err == nil {
 			if checkpointMgr.ValidateConfig(ckpt, config) {
@@ -2155,7 +2149,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	if config.Manager == "" {
 		if len(config.Workers) > 0 {
-			addr, err := startManager(config, tasks)
+			addr, err := startManager(config, tasks, checkpointMgr)
 			if err != nil {
 				return err
 			}

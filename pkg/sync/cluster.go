@@ -44,16 +44,22 @@ import (
 
 // Stat has the counters to represent the progress.
 type Stat struct {
-	Copied       int64    // the number of copied files
-	CopiedBytes  int64    // total amount of copied data in bytes
-	Checked      int64    // the number of checked files
-	CheckedBytes int64    // total amount of checked data in bytes
-	Deleted      int64    // the number of deleted files
-	Skipped      int64    // the number of files skipped
-	SkippedBytes int64    // total amount of skipped data in bytes
-	Failed       int64    // the number of files that fail to copy
-	DelayDelDir  []string // the directories that need to be deleted
+	Copied        int64    // the number of copied files
+	CopiedBytes   int64    // total amount of copied data in bytes
+	Checked       int64    // the number of checked files
+	CheckedBytes  int64    // total amount of checked data in bytes
+	Deleted       int64    // the number of deleted files
+	Skipped       int64    // the number of files skipped
+	SkippedBytes  int64    // total amount of skipped data in bytes
+	Failed        int64    // the number of files that fail to copy
+	DelayDelDir   []string // the directories that need to be deleted
+	CompletedKeys []string `json:"completed_keys,omitempty"` // checkpoint: keys completed by this worker
+	FailedKeys    []string `json:"failed_keys,omitempty"`    // checkpoint: keys failed by this worker
 }
+
+var completionMu sync.Mutex
+var completedKeysBuf []string
+var failedKeysBuf []string
 
 func updateStats(r *Stat) {
 	copied.IncrInt64(r.Copied)
@@ -105,6 +111,12 @@ func sendStats(addr string) {
 	r.DelayDelDir = srcDelayDel
 	srcDelayDel = make([]string, 0)
 	srcDelayDelMu.Unlock()
+	completionMu.Lock()
+	r.CompletedKeys = completedKeysBuf
+	r.FailedKeys = failedKeysBuf
+	completedKeysBuf = make([]string, 0)
+	failedKeysBuf = make([]string, 0)
+	completionMu.Unlock()
 	if checked != nil {
 		r.Checked = checked.Current()
 		r.CheckedBytes = checkedBytes.Current()
@@ -121,6 +133,10 @@ func sendStats(addr string) {
 		srcDelayDelMu.Lock()
 		srcDelayDel = append(srcDelayDel, r.DelayDelDir...)
 		srcDelayDelMu.Unlock()
+		completionMu.Lock()
+		completedKeysBuf = append(r.CompletedKeys, completedKeysBuf...)
+		failedKeysBuf = append(r.FailedKeys, failedKeysBuf...)
+		completionMu.Unlock()
 		if errors.Is(err, syscall.ECONNREFUSED) {
 			logger.Errorf("the management process has been stopped, so the worker process now exits")
 			os.Exit(1)
@@ -144,7 +160,7 @@ func sendStats(addr string) {
 	}
 }
 
-func startManager(config *Config, tasks <-chan object.Object) (string, error) {
+func startManager(config *Config, tasks <-chan object.Object, checkpointMgr *CheckpointManager) (string, error) {
 	http.HandleFunc("/fetch", func(w http.ResponseWriter, req *http.Request) {
 		var objs []object.Object
 		var total int64
@@ -196,6 +212,14 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 		srcDelayDelMu.Lock()
 		srcDelayDel = append(srcDelayDel, r.DelayDelDir...)
 		srcDelayDelMu.Unlock()
+		if checkpointMgr != nil {
+			for _, key := range r.CompletedKeys {
+				checkpointMgr.MarkCompleted(key)
+			}
+			for _, key := range r.FailedKeys {
+				checkpointMgr.MarkFailed(key)
+			}
+		}
 		logger.Debugf("receive stats %+v from %s", r, req.RemoteAddr)
 		_, _ = w.Write([]byte("OK"))
 	})
