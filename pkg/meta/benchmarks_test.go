@@ -190,7 +190,7 @@ func benchResolve(b *testing.B, m Meta) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := m.Resolve(ctx, parent, "d/d/d/d/d", nil, nil); err != 0 {
+		if err := m.Resolve(ctx, parent, "d/d/d/d/d", nil, nil, false); err != 0 {
 			if err == syscall.ENOTSUP {
 				b.SkipNow()
 				return
