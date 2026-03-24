@@ -18,6 +18,7 @@ package meta
 
 import (
 	"fmt"
+	"runtime"
 	"sort"
 	"strconv"
 	"sync"
@@ -432,6 +433,22 @@ func (m *baseMeta) checkGroupQuota(ctx Context, gid uint64, space, inodes int64)
 		return false
 	}
 	return q.check(space, inodes)
+}
+
+// predictFileGid predicts the GID that a new file will have after creation.
+// This is used to check quota before the file is actually created.
+// The logic must match the GID assignment in doMknod (sql.go/tkv.go/redis.go).
+func (m *baseMeta) predictFileGid(ctx Context, parentAttr *Attr) uint32 {
+	// Hadoop mode or macOS: always inherit parent directory's GID
+	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
+		return parentAttr.Gid
+	}
+	// Linux: inherit parent GID only if parent has setgid bit
+	if runtime.GOOS == "linux" && parentAttr.Mode&02000 != 0 {
+		return parentAttr.Gid
+	}
+	// Default: use creating user's GID
+	return ctx.Gid()
 }
 
 func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
