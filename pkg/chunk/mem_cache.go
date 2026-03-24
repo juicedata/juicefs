@@ -63,7 +63,7 @@ func newMemStore(config *Config, metrics *cacheManagerMetrics) *memcache {
 	return c
 }
 
-func (c *memcache) removeStage(key string, tierID uint8) error {
+func (c *memcache) removeStage(key string) error {
 	return nil
 }
 

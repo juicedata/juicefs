@@ -135,6 +135,7 @@ func parseObjectMetadata(object bunny.Object) Object {
 		lastChanged,
 		object.IsDirectory,
 		"",
+		"",
 	}
 }
 

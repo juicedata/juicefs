@@ -203,7 +203,7 @@ func (c *ceph) Head(_ context.Context, key string) (Object, error) {
 		if err != nil {
 			return err
 		}
-		o = &obj{key, int64(stat.Size), stat.ModTime, strings.HasSuffix(key, "/"), ""}
+		o = &obj{key, int64(stat.Size), stat.ModTime, strings.HasSuffix(key, "/"), "", ""}
 		return nil
 	})
 	if err == rados.ErrNotFound {
@@ -267,7 +267,7 @@ func (c *ceph) ListAll(_ context.Context, prefix, marker string, followLink bool
 							errs[j] = err
 						}
 					} else {
-						results[j] = &obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/"), ""}
+						results[j] = &obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/"), "", ""}
 					}
 
 					ms[j].Lock()

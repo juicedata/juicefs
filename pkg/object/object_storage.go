@@ -18,6 +18,7 @@ package object
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -27,10 +28,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/goccy/go-json"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
@@ -330,34 +329,37 @@ func TmpFilePath(parent, name string) string {
 
 type ctxKey string
 
-const TierKey ctxKey = "tier"
+const TierKey ctxKey = "tierID"
+const defaultRestoreDays = 3
 
 type SupportTier interface {
 	SetTier(init Tiers)
 	getScStr(ctx context.Context) string
 }
 
-type baseStorage struct {
-	sc string
-	tierInfo
+type tierStorage struct {
+	sc    string
+	tiers map[uint8]Tier
 }
 
-func (b *baseStorage) getScStr(ctx context.Context) string {
+func (b *tierStorage) getScStr(ctx context.Context) string {
 	scStr := b.sc
 	if id, ok := ctx.Value(TierKey).(uint8); ok {
-		scStr, ok = b.tierInfo.GetSc(id)
-		if !ok {
+		t, ok2 := b.tiers[id]
+		if ok2 {
+			scStr = t.Sc
+		} else {
 			logger.Warnf("invalid tier id: %d", id)
 		}
 	}
 	return scStr
 }
 
-func (b *baseStorage) SetTier(init Tiers) {
+func (b *tierStorage) SetTier(init Tiers) {
 	if init == nil {
 		init = Tiers{}
 	}
-	b.tierInfo.Store(cloneTiers(init))
+	b.tiers = init
 }
 
 type Tier struct {
@@ -408,32 +410,6 @@ func (t Tiers) GetID(sc string) (uint8, bool) {
 func (t Tiers) GetSc(id uint8) (string, bool) {
 	tInfo, ok := t[id]
 	return tInfo.Sc, ok
-}
-
-func cloneTiers(src Tiers) Tiers {
-	dst := make(Tiers, len(src))
-	for k, v := range src {
-		dst[k] = v
-	}
-	return dst
-}
-
-type tierInfo atomic.Value
-
-func (t *tierInfo) GetSc(id uint8) (string, bool) {
-	v := (*atomic.Value)(t).Load()
-	if v == nil {
-		return "", false
-	}
-	m := v.(Tiers)
-	return m.GetSc(id)
-}
-
-func (t *tierInfo) Store(idx Tiers) {
-	if idx == nil {
-		idx = Tiers{}
-	}
-	(*atomic.Value)(t).Store(cloneTiers(idx))
 }
 
 func NewTiers() Tiers {

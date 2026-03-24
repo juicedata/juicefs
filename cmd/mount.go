@@ -452,9 +452,6 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 	if err != nil {
 		return nil, err
 	}
-	if s, ok := blob.(object.SupportTier); ok {
-		s.SetTier(format.Tiers)
-	}
 	holder := &storageHolder{
 		ObjectStorage: blob,
 		fmt:           *format, // keep a copy to find the change
@@ -474,9 +471,6 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 			}
 			holder.ObjectStorage = newBlob
 			holder.fmt = *new
-		}
-		if s, ok := holder.ObjectStorage.(object.SupportTier); ok {
-			s.SetTier(new.Tiers)
 		}
 	})
 	return holder, nil

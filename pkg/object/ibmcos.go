@@ -99,6 +99,11 @@ func (s *ibmcos) Get(ctx context.Context, key string, off, limit int64, getters 
 	return resp.Body, nil
 }
 
+func (s *ibmcos) Restore(ctx context.Context, key string) error {
+	//todo: implement restore
+	return nil
+}
+
 func (s *ibmcos) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
@@ -159,6 +164,7 @@ func (s *ibmcos) Head(ctx context.Context, key string) (Object, error) {
 		*r.LastModified,
 		strings.HasSuffix(key, "/"),
 		*r.StorageClass,
+		"",
 	}, nil
 }
 
@@ -197,7 +203,7 @@ func (s *ibmcos) List(ctx context.Context, prefix, start, token, delimiter strin
 		if err != nil {
 			return nil, false, "", errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
-		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass}
+		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass, ""}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -205,7 +211,7 @@ func (s *ibmcos) List(ctx context.Context, prefix, start, token, delimiter strin
 			if err != nil {
 				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
-			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

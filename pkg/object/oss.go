@@ -42,7 +42,7 @@ const ossDefaultRegionID = "cn-hangzhou"
 type ossClient struct {
 	client *oss.Client
 	bucket string
-	baseStorage
+	tierStorage
 }
 
 func (o *ossClient) String() string {

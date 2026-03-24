@@ -88,6 +88,7 @@ func (c *etcdClient) Head(ctx context.Context, key string) (Object, error) {
 				time.Now(),
 				strings.HasSuffix(key, "/"),
 				"",
+				"",
 			}, nil
 		}
 	}
@@ -139,6 +140,7 @@ func (c *etcdClient) List(ctx context.Context, prefix, start, token, delimiter s
 			int64(len(kv.Value)),
 			time.Now(),
 			strings.HasSuffix(k, "/"),
+			"",
 			"",
 		})
 	}

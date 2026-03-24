@@ -89,7 +89,7 @@ type node struct {
 	Parent       Ino
 	AccessACLId  uint32 `xorm:"'access_acl_id'"`
 	DefaultACLId uint32 `xorm:"'default_acl_id'"`
-	Tier         TierID `xorm:"'tier_id'"`
+	Tier         uint8  `xorm:"'tier_id'"`
 }
 
 func (n *node) setAtime(ns int64) {

@@ -102,6 +102,7 @@ func (s *obsClient) Head(ctx context.Context, key string) (Object, error) {
 		r.LastModified,
 		strings.HasSuffix(key, "/"),
 		getStorageClassStr(r.StorageClass),
+		"",
 	}, nil
 }
 
@@ -190,6 +191,10 @@ func (s *obsClient) Copy(ctx context.Context, dst, src string) error {
 	_, err := s.c.CopyObject(params)
 	return err
 }
+func (s *obsClient) Restore(ctx context.Context, key string) error {
+	//todo: implement restore
+	return nil
+}
 
 func (s *obsClient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {
 	params := obs.DeleteObjectInput{}
@@ -221,7 +226,7 @@ func (s *obsClient) List(ctx context.Context, prefix, start, token, delimiter st
 	for i := 0; i < n; i++ {
 		// Obs SDK listObjects method already decodes the object key.
 		o := resp.Contents[i]
-		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/"), string(o.StorageClass)}
+		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/"), string(o.StorageClass), ""}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -229,7 +234,7 @@ func (s *obsClient) List(ctx context.Context, prefix, start, token, delimiter st
 			if err != nil {
 				return nil, false, "", errors.WithMessagef(err, "failed to decode commonPrefixes %s", p)
 			}
-			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

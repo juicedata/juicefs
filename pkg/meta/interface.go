@@ -175,21 +175,7 @@ type Attr struct {
 	AccessACL  uint32 // access ACL id (identical ACL rules share the same access ACL ID.)
 	DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
 
-	Tier TierID // storage tier of the file
-}
-
-type TierID uint8
-
-func (tier *TierID) SetTierID(t uint8) error {
-	if t > 3 {
-		return fmt.Errorf("storage tier out of range: %d (want 0~3)", t)
-	}
-	*tier = TierID(t)
-	return nil
-}
-
-func (tier TierID) GetTierID() uint8 {
-	return uint8(tier)
+	Tier uint8 // storage tier of the file
 }
 
 func (attr *Attr) Marshal() []byte {
@@ -255,7 +241,7 @@ func (attr *Attr) Unmarshal(buf []byte) {
 		attr.DefaultACL = rb.Get32()
 	}
 	if rb.Left() >= 1 {
-		attr.Tier = TierID(rb.Get8())
+		attr.Tier = rb.Get8()
 	} else {
 		attr.Tier = 0
 	}
@@ -438,7 +424,7 @@ type Meta interface {
 	// Resolve fetches the inode and attributes for an entry identified by the given path.
 	// ENOTSUP will be returned if there's no natural implementation for this operation or
 	// if there are any symlink following involved.
-	Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno
+	Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr, metaResolve bool) syscall.Errno
 	// GetAttr returns the attributes for given node.
 	GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	// SetAttr updates the attributes for given node.

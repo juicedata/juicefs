@@ -61,6 +61,7 @@ func (w *webdav) Head(ctx context.Context, key string) (Object, error) {
 		info.ModTime(),
 		info.IsDir(),
 		"",
+		"",
 	}, nil
 }
 
@@ -164,6 +165,7 @@ func (w *webdav) List(ctx context.Context, prefix, marker, token, delimiter stri
 			info.Size(),
 			info.ModTime(),
 			info.IsDir(),
+			"",
 			"",
 		})
 		if len(objs) == int(limit) {

@@ -48,7 +48,7 @@ const awsDefaultRegion = "us-east-1"
 const s3RequestIDKey = "X-Amz-Request-Id"
 
 type s3client struct {
-	baseStorage
+	tierStorage
 	s3              *s3.Client
 	bucket          string
 	region          string
@@ -387,7 +387,7 @@ func (s *s3client) Restore(ctx context.Context, key string) error {
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 		RestoreRequest: &types.RestoreRequest{
-			Days:                 aws.Int32(3),
+			Days:                 aws.Int32(defaultRestoreDays),
 			GlacierJobParameters: &types.GlacierJobParameters{Tier: types.TierStandard},
 		},
 	})

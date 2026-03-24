@@ -368,7 +368,7 @@ func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo, f
 func (f *sftpStore) fileInfo(key string, fi os.FileInfo, isSymlink bool) Object {
 	owner, group := getOwnerGroup(fi)
 	ff := &file{
-		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
+		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), "", ""},
 		owner,
 		group,
 		fi.Mode(),

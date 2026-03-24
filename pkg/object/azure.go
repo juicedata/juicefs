@@ -43,9 +43,9 @@ type wasb struct {
 	DefaultObjectStorage
 	container    *container.Client
 	azblobCli    *azblob.Client
-	sc           string
 	cName        string
 	useTokenAuth bool // true when using managed identity/token-based auth, false for shared key/connection string
+	tierStorage
 }
 
 func (b *wasb) String() string {
@@ -102,17 +102,19 @@ func str2Tier(tier string) *blob2.AccessTier {
 }
 
 func (b *wasb) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
+	sc := b.getScStr(ctx)
 	options := azblob.UploadStreamOptions{}
-	if b.sc != "" {
-		options.AccessTier = str2Tier(b.sc)
+	if sc != "" {
+		options.AccessTier = str2Tier(sc)
 	}
 	resp, err := b.azblobCli.UploadStream(ctx, b.cName, key, data, &options)
 	attrs := ApplyGetters(getters...)
-	attrs.SetRequestID(aws.ToString(resp.RequestID)).SetStorageClass(b.sc)
+	attrs.SetRequestID(aws.ToString(resp.RequestID)).SetStorageClass(sc)
 	return err
 }
 
 func (b *wasb) Copy(ctx context.Context, dst, src string) error {
+	// fixme: copy should support change object tier
 	dstCli := b.container.NewBlobClient(dst)
 	srcCli := b.container.NewBlobClient(src)
 	options := &blob2.CopyFromURLOptions{}
@@ -197,11 +199,9 @@ func (b *wasb) SetStorageClass(sc string) error {
 	return nil
 }
 
+// Restore Azure does not support restoring to a temporary read-only state; it can only directly permanently change the tier.
 func (b *wasb) Restore(ctx context.Context, key string) error {
-	// fixme: no restore API for Azure blob, we can only set the access tier to hot or cool to restore the blob
-	return nil
-	//_, err := b.container.NewBlobClient(key).SetTier(ctx, blob2.AccessTierHot, nil)
-	//return err
+	return notSupported
 }
 
 // createAzureCredential creates a credential for Azure authentication.

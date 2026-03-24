@@ -24,7 +24,6 @@ import (
 	"io"
 	"io/fs"
 	"math"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -422,9 +421,9 @@ func (cache *cacheStore) refreshCacheKeys() {
 	}
 }
 
-func (cache *cacheStore) removeStage(key string, tierID uint8) error {
+func (cache *cacheStore) removeStage(key string) error {
 	var err error
-	if err = cache.removeFile(cache.stagePath(key, tierID)); err == nil {
+	if err = cache.removeFile(cache.stagePath(key)); err == nil {
 		cache.m.stageBlocks.Sub(1)
 		cache.m.stageBlockBytes.Sub(float64(parseObjOrigSize(key)))
 	}
@@ -501,7 +500,7 @@ func (cache *cacheStore) curFreeRatio() DiskFreeRatio {
 	return usage
 }
 
-func (cache *cacheStore) flushPage(path string, data []byte, dropCache bool) (err error) {
+func (cache *cacheStore) flushPage(path string, data []byte, dropCache bool, tierID uint8) (err error) {
 	if !cache.available() {
 		return errCacheDown
 	}
@@ -539,6 +538,14 @@ func (cache *cacheStore) flushPage(path string, data []byte, dropCache bool) (er
 	if cache.checksum != CsNone {
 		if err = cache.writeFile(f, checksum(data)); err != nil {
 			logger.Warnf("Write checksum to cache file %s failed: %s", tmp, err)
+			_ = f.Close()
+			return
+		}
+	}
+	// write tierID into stage file
+	if tierID != 0 {
+		if err = cache.writeFile(f, []byte(cast.ToString(tierID))); err != nil {
+			logger.Warnf("Write tier to cache file %s failed: %s", tmp, err)
 			_ = f.Close()
 			return
 		}
@@ -636,8 +643,8 @@ func (cache *cacheStore) remove(key string, staging bool) {
 			logger.Warnf("remove %s failed: %s", path, err)
 		}
 		if staging {
-			if err := cache.removeStage(key, 0); err != nil && !os.IsNotExist(err) {
-				logger.Warnf("remove stage %s failed: %s", cache.stagePath(key, 0), err)
+			if err := cache.removeStage(key); err != nil && !os.IsNotExist(err) {
+				logger.Warnf("remove stage %s failed: %s", cache.stagePath(key), err)
 			}
 		}
 	}
@@ -707,14 +714,8 @@ func (cache *cacheStore) cachePath(key string) string {
 	return filepath.Join(cache.dir, cacheDir, key)
 }
 
-const tierSeparator = "#"
-
-func (cache *cacheStore) stagePath(key string, tierID uint8) string {
-	var tierStr string
-	if tierID != 0 {
-		tierStr = tierSeparator + cast.ToString(tierID)
-	}
-	return filepath.Join(cache.dir, stagingDir, key+tierStr)
+func (cache *cacheStore) stagePath(key string) string {
+	return filepath.Join(cache.dir, stagingDir, key)
 }
 
 // flush cached block into disk
@@ -722,7 +723,7 @@ func (cache *cacheStore) flush() {
 	for {
 		w := <-cache.pending
 		path := cache.cachePath(w.key)
-		if cache.enabled() && cache.flushPage(path, w.page.Data, w.dropCache) == nil {
+		if cache.enabled() && cache.flushPage(path, w.page.Data, w.dropCache, 0) == nil {
 			cache.add(w.key, int32(len(w.page.Data)), uint32(time.Now().Unix()))
 		}
 		cache.Lock()
@@ -765,7 +766,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 }
 
 func (cache *cacheStore) stage(key string, data []byte, tierID uint8) (string, error) {
-	stagingPath := cache.stagePath(key, tierID)
+	stagingPath := cache.stagePath(key)
 	if cache.stageFull {
 		return stagingPath, errStageFull
 	}
@@ -774,7 +775,7 @@ func (cache *cacheStore) stage(key string, data []byte, tierID uint8) (string, e
 	}
 	stagingBlocks.Add(1)
 	defer stagingBlocks.Add(-1)
-	err := cache.flushPage(stagingPath, data, false)
+	err := cache.flushPage(stagingPath, data, false, tierID)
 	if err == nil {
 		cache.m.stageBlocks.Add(1)
 		cache.m.stageBlockBytes.Add(float64(len(data)))
@@ -874,16 +875,8 @@ func (cache *cacheStore) uploadStaging() {
 	var cnt int
 	var lastK cacheKey
 	var lastValue cacheItem
-	var lastKTierID uint8
 	// for each two random keys, then compare the access time, upload the older one
-	for fname := range randomOneFileFromDiskIter(filepath.Join(cache.dir, stagingDir, "chunks")) {
-		tierID := cast.ToUint8(parseObjTier(fname))
-		fname = removeObjTier(fname)
-		k := cache.getCacheKey(fname)
-		value := cache.keys.get(k)
-		if value == nil {
-			continue
-		}
+	for k, value := range cache.keys.randomIter() {
 		if value.size > 0 {
 			continue // read cache
 		}
@@ -892,14 +885,13 @@ func (cache *cacheStore) uploadStaging() {
 		if cnt == 0 || lastValue.atime/60 > value.atime/60 ||
 			lastValue.atime/60 == value.atime/60 && lastValue.size > value.size { // both size are < 0
 			lastK = k
-			lastValue = *value
-			lastKTierID = tierID
+			lastValue = value
 		}
 		cnt++
 		if cnt > 1 {
 			cache.Unlock()
 			key := cache.getPathFromKey(lastK)
-			if !cache.uploader(key, cache.stagePath(key, lastKTierID), true) {
+			if !cache.uploader(key, cache.stagePath(key), true) {
 				logger.Warnf("Upload list is too full")
 				cache.Lock()
 				return
@@ -918,7 +910,7 @@ func (cache *cacheStore) uploadStaging() {
 	if cnt > 0 {
 		cache.Unlock()
 		key := cache.getPathFromKey(lastK)
-		if cache.uploader(key, cache.stagePath(key, lastKTierID), true) {
+		if cache.uploader(key, cache.stagePath(key), true) {
 			logger.Debugf("upload %s, age: %d", key, uint32(time.Now().Unix())-lastValue.atime)
 		}
 		cache.Lock()
@@ -1011,8 +1003,6 @@ func (cache *cacheStore) scanStaging() {
 			}
 		} else {
 			key := path[len(stagingPrefix)+1:]
-			// recover original key from staging key
-			key = removeObjTier(key)
 			if runtime.GOOS == "windows" {
 				key = strings.ReplaceAll(key, "\\", "/")
 			}
@@ -1099,7 +1089,7 @@ type CacheManager interface {
 	exist(key string) (string, bool)
 	uploaded(key string, size int)
 	stage(key string, data []byte, tierID uint8) (string, error)
-	removeStage(key string, tierID uint8) error
+	removeStage(key string) error
 	stats() (int64, int64)
 	usedMemory() int64
 	isEmpty() bool
@@ -1213,11 +1203,11 @@ func (m *cacheManager) getStore(key string) *cacheStore {
 	}
 }
 
-func (m *cacheManager) removeStage(key string, tierID uint8) error {
+func (m *cacheManager) removeStage(key string) error {
 	if s := m.getStore(key); s == nil {
 		return errCacheDown
 	} else {
-		return s.removeStage(key, tierID)
+		return s.removeStage(key)
 	}
 }
 
@@ -1331,6 +1321,7 @@ type cacheFile struct {
 	*os.File
 	length  int // length of data
 	csLevel string
+	tierOff int64
 }
 
 // Calculate 32-bits checksum for every 32 KiB data, so 512 Bytes for 4 MiB in total
@@ -1361,9 +1352,13 @@ func openCacheFile(name string, length int, level string) (*cacheFile, error) {
 	checksumLength := ((length-1)/csBlock + 1) * 4
 	switch fi.Size() - int64(length) {
 	case 0:
-		return &cacheFile{fp, length, CsNone}, nil
+		return &cacheFile{fp, length, CsNone, -1}, nil
 	case int64(checksumLength):
-		return &cacheFile{fp, length, level}, nil
+		return &cacheFile{fp, length, level, -1}, nil
+	case 1:
+		return &cacheFile{fp, length, CsNone, fi.Size() - 1}, nil
+	case int64(checksumLength) + 1:
+		return &cacheFile{fp, length, level, fi.Size() - 1}, nil
 	default:
 		_ = fp.Close()
 		return nil, fmt.Errorf("invalid file size %d, data length %d", fi.Size(), length)
@@ -1444,75 +1439,4 @@ func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
 		}
 	}
 	return
-}
-
-func listSubdirs(dir string) ([]os.DirEntry, error) {
-	ents, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]os.DirEntry, 0, len(ents))
-	for _, e := range ents {
-		if e.IsDir() {
-			out = append(out, e)
-		}
-	}
-	return out, nil
-}
-
-func listFiles(dir string) ([]os.DirEntry, error) {
-	ents, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]os.DirEntry, 0, len(ents))
-	for _, e := range ents {
-		if !e.IsDir() {
-			out = append(out, e)
-		}
-	}
-	return out, nil
-}
-
-func pickOneChunkFile(chunksRoot string) (string, error) {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	// level1: chunks/*
-	l1, err := listSubdirs(chunksRoot)
-	if err != nil || len(l1) == 0 {
-		return "", errors.New("no level1 dirs under chunks")
-	}
-
-	for t := 0; t < 16; t++ {
-		d1 := l1[r.Intn(len(l1))]
-		p1 := filepath.Join(chunksRoot, d1.Name())
-
-		// level2: chunks/*/*
-		l2, err := listSubdirs(p1)
-		if err != nil || len(l2) == 0 {
-			continue
-		}
-
-		d2 := l2[r.Intn(len(l2))]
-		p2 := filepath.Join(p1, d2.Name())
-
-		// file: chunks/*/*/*
-		fs, err := listFiles(p2)
-		if err != nil || len(fs) == 0 {
-			continue
-		}
-
-		f := fs[r.Intn(len(fs))]
-		return f.Name(), nil
-	}
-	return "", errors.New("failed to pick one chunk file")
-}
-
-func randomOneFileFromDiskIter(chunksRoot string) func(func(string) bool) {
-	return func(yield func(string) bool) {
-		f, err := pickOneChunkFile(chunksRoot)
-		if err != nil {
-			return
-		}
-		_ = yield(f)
-	}
 }

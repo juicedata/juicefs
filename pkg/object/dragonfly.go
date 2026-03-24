@@ -257,6 +257,7 @@ func (d *dragonfly) Head(ctx context.Context, key string) (Object, error) {
 		lastModifiedTime,
 		strings.HasSuffix(key, "/"),
 		resp.Header.Get(HeaderDragonflyObjectMetaStorageClass),
+		"",
 	}, nil
 }
 
@@ -497,12 +498,13 @@ func (d *dragonfly) List(ctx context.Context, prefix, marker, token, delimiter s
 			meta.LastModifiedTime,
 			strings.HasSuffix(meta.Key, "/"),
 			meta.StorageClass,
+			"",
 		})
 	}
 
 	if delimiter != "" {
 		for _, o := range objectMetadatas.CommonPrefixes {
-			objs = append(objs, &obj{o, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &obj{o, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
