@@ -1482,21 +1482,21 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	defer m.timeit("Mknod", time.Now())
 	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
-	
 	var pattr Attr
-	if st := m.GetAttr(ctx, parent, &pattr); st == 0 {
-		checkGid := m.predictFileGid(ctx, &pattr)
-		if checkGid != ctx.Gid() {
-			logger.Debugf("Mknod: using parent GID %d instead of ctx GID %d for quota check (parent mode=%o)", checkGid, ctx.Gid(), pattr.Mode)
-		}
-		if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), checkGid, parent); err != 0 {
-			logger.Debugf("Mknod: quota check failed for uid=%d, gid=%d (ctx gid=%d), err=%s", ctx.Uid(), checkGid, ctx.Gid(), err)
-			return err
-		}
+	if st := m.GetAttr(ctx, parent, &pattr); st != 0 {
+		return st
+	}
+	var checkGid uint32
+	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
+		checkGid = pattr.Gid
+	} else if runtime.GOOS == "linux" && pattr.Mode&02000 != 0 {
+		checkGid = pattr.Gid
 	} else {
-		if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), ctx.Gid(), parent); err != 0 {
-			return err
-		}
+		checkGid = ctx.Gid()
+	}
+	if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), checkGid, parent); err != 0 {
+		logger.Debugf("Mknod: quota check failed for uid=%d, gid=%d (ctx gid=%d), err=%s", ctx.Uid(), checkGid, ctx.Gid(), err)
+		return err
 	}
 
 	ino, err := m.nextInode()
@@ -1512,7 +1512,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}
 	attr.Typ = _type
 	attr.Uid = ctx.Uid()
-	attr.Gid = ctx.Gid()
+	attr.Gid = checkGid
 	if _type == TypeDirectory {
 		attr.Nlink = 2
 		attr.Length = 4 << 10
@@ -3216,20 +3216,8 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	if eno != 0 {
 		return eno
 	}
-	// Get parent attribute to determine the correct GID for quota check
-	var pattr Attr
-	if st := m.GetAttr(ctx, parent, &pattr); st == 0 {
-		checkGid := m.predictFileGid(ctx, &pattr)
-		if checkGid != ctx.Gid() {
-			logger.Debugf("Clone: using parent GID %d instead of ctx GID %d for quota check (parent mode=%o)", checkGid, ctx.Gid(), pattr.Mode)
-		}
-		if err := m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), ctx.Uid(), checkGid, parent); err != 0 {
-			return err
-		}
-	} else {
-		if err := m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), ctx.Uid(), ctx.Gid(), parent); err != 0 {
-			return err
-		}
+	if err := m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), ctx.Uid(), ctx.Gid(), parent); err != 0 {
+		return err
 	}
 	*total = sum.Dirs + sum.Files
 	if concurrency < 1 {
