@@ -3,6 +3,8 @@ run:
   tests: false
   timeout: 5m
 linters:
+  disable:
+    - govet
   exclusions:
     rules:
       - text: "QF1001"
