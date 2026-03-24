@@ -108,7 +108,7 @@ type FileSystem interface {
 	Chown(path string, owner, group string) error
 }
 
-var notSupported = utils.ENOTSUP
+var notSupported = utils.ErrNotSUP
 
 type DefaultObjectStorage struct{}
 

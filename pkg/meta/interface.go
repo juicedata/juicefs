@@ -621,7 +621,7 @@ func NewClient(uri string, conf *Config) Meta {
 	driver := uri[:p]
 	if driver == "mysql" || driver == "postgres" {
 		if uri, err = setPasswordFromEnv(uri); err != nil {
-			logger.Fatalf(err.Error())
+			logger.Fatal(err.Error())
 		}
 	}
 	logger.Infof("Meta address: %s", utils.RemovePassword(uri))

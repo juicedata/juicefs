@@ -335,7 +335,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 				logger.Fatalf("invalid path: %s", err.Error())
 			}
 			if !strings.HasPrefix(absPath, "/") { // Windows path
-				absPath = "/" + strings.Replace(absPath, "\\", "/", -1)
+				absPath = "/" + strings.ReplaceAll(absPath, "\\", "/")
 			}
 			if strings.HasSuffix(uri, "/") {
 				absPath += "/"
@@ -471,10 +471,10 @@ func doSync(c *cli.Context) error {
 	removePassword(srcURL, dstURL)
 	if runtime.GOOS == "windows" {
 		if !strings.Contains(srcURL, "://") {
-			srcURL = strings.Replace(srcURL, "\\", "/", -1)
+			srcURL = strings.ReplaceAll(srcURL, "\\", "/")
 		}
 		if !strings.Contains(dstURL, "://") {
-			dstURL = strings.Replace(dstURL, "\\", "/", -1)
+			dstURL = strings.ReplaceAll(dstURL, "\\", "/")
 		}
 	}
 	if strings.HasSuffix(srcURL, "/") != strings.HasSuffix(dstURL, "/") {

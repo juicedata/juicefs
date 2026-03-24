@@ -367,5 +367,5 @@ func StartHTTPServer(fs *FileSystem, config WebdavConfig) {
 }
 
 func removeNewLine(input string) string {
-	return strings.Replace(strings.Replace(input, "\n", "", -1), "\r", "", -1)
+	return strings.ReplaceAll(strings.ReplaceAll(input, "\n", ""), "\r", "")
 }

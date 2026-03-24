@@ -242,7 +242,7 @@ func (j *juiceFS) Head(rCtx context.Context, key string) (object.Object, error) 
 
 func (j *juiceFS) List(ctx context.Context, prefix, marker, token, delimiter string, limit int64, followLink bool) ([]object.Object, bool, string, error) {
 	if delimiter != "/" {
-		return nil, false, "", utils.ENOTSUP
+		return nil, false, "", utils.ErrNotSUP
 	}
 	dir := j.path(prefix)
 	var objs []object.Object
