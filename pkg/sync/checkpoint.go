@@ -298,7 +298,8 @@ func (m *CheckpointManager) updatePrefixState(prefix string, update func(*Prefix
 
 	state.Lock()
 	update(state)
-	done := state.ListDone && len(state.PendingKeys) == 0 && len(state.FailedKeys) == 0
+	done := state.ListDone && len(state.PendingKeys) == 0 && len(state.FailedKeys) == 0 &&
+		(m.checkpoint.Config == nil || m.checkpoint.Config.FilesFrom == "")
 	state.Unlock()
 	if done {
 		m.checkpoint.Lock()
@@ -361,6 +362,20 @@ func (m *CheckpointManager) TrackKey(key, prefix string) {
 		return
 	}
 	m.keyPrefix.Store(key, prefix)
+}
+
+func (m *CheckpointManager) AllDone() bool {
+	m.checkpoint.RLock()
+	defer m.checkpoint.RUnlock()
+	for _, state := range m.checkpoint.PrefixState {
+		state.RLock()
+		done := state.ListDone && len(state.PendingKeys) == 0 && len(state.FailedKeys) == 0
+		state.RUnlock()
+		if !done {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *CheckpointManager) StartPeriodicSave(interval time.Duration) {
