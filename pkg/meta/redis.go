@@ -1508,6 +1508,9 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			attr.Mode = mode & ^cumask
 		}
 
+		// inherit storage class
+		attr.Tier = pattr.Tier
+
 		var updateParent bool
 		now := time.Now()
 		if parent != TrashInode {
@@ -4282,6 +4285,27 @@ func (m *redisMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 		return nil
 	})
 	return err
+}
+
+func (m *redisMeta) cleanUgUsage(ctx Context, qtype uint32) error {
+	if qtype != UserQuotaType && qtype != GroupQuotaType {
+		return fmt.Errorf("invalid quota type: %d", qtype)
+	}
+	config, err := m.getQuotaKeys(qtype)
+	if err != nil {
+		return err
+	}
+	return m.hscan(ctx, config.quotaKey, func(keys []string) error {
+		_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			for i := 0; i < len(keys); i += 2 {
+				key := keys[i]
+				pipe.HSet(ctx, config.usedSpaceKey, key, 0)
+				pipe.HSet(ctx, config.usedInodesKey, key, 0)
+			}
+			return nil
+		})
+		return err
+	})
 }
 
 func (m *redisMeta) checkServerConfig() {

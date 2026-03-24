@@ -18,6 +18,7 @@ package object
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -320,4 +321,59 @@ func decodeKey(value string, typ *string) (string, error) {
 
 func TmpFilePath(parent, name string) string {
 	return filepath.Join(filepath.Dir(parent), ".jfs."+name+".tmp."+strconv.Itoa(rand.Int()))
+}
+
+type Tier struct {
+	ID uint8  `json:"ID"`
+	Sc string `json:"StorageClass"`
+}
+
+func (t Tier) GetHumanSc() string {
+	if t.ID == 0 {
+		return "default"
+	}
+	return t.Sc
+}
+
+type tierAlias Tier
+
+func (t *Tier) UnmarshalJSON(data []byte) error {
+	var aux tierAlias
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if aux.ID == 0 {
+		aux.Sc = ""
+	}
+	*t = Tier(aux)
+	return nil
+}
+
+func (t Tier) MarshalJSON() ([]byte, error) {
+	aux := tierAlias(t)
+	if aux.ID == 0 {
+		aux.Sc = "default"
+	}
+	return json.Marshal(aux)
+}
+
+type Tiers map[uint8]Tier
+
+func (t Tiers) GetID(sc string) (uint8, bool) {
+	for k, v := range t {
+		if v.Sc == sc {
+			return k, true
+		}
+	}
+	return 0, false
+}
+
+func (t Tiers) GetSc(id uint8) (string, bool) {
+	tInfo, ok := t[id]
+	return tInfo.Sc, ok
+}
+func NewTiers() Tiers {
+	t := make(Tiers)
+	t[0] = Tier{}
+	return t
 }

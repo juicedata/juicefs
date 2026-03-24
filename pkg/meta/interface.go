@@ -90,6 +90,7 @@ const (
 	SetAttrAtimeNow
 	SetAttrMtimeNow
 	SetAttrCtimeNow
+	SetAttrTier
 	SetAttrFlag = 1 << 15
 )
 
@@ -173,12 +174,27 @@ type Attr struct {
 
 	AccessACL  uint32 // access ACL id (identical ACL rules share the same access ACL ID.)
 	DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
+
+	Tier TierID // storage tier of the file
+}
+
+type TierID uint8
+
+func (tier *TierID) SetTierID(t uint8) error {
+	if t > 3 {
+		return fmt.Errorf("storage tier out of range: %d (want 0~3)", t)
+	}
+	*tier = TierID(t)
+	return nil
 }
 
 func (attr *Attr) Marshal() []byte {
 	size := uint32(36 + 24 + 4 + 8)
 	if attr.AccessACL|attr.DefaultACL != aclAPI.None {
 		size += 8
+	}
+	if attr.Tier != 0 {
+		size += 1
 	}
 	w := utils.NewBuffer(size)
 	w.Put8(attr.Flags)
@@ -198,6 +214,9 @@ func (attr *Attr) Marshal() []byte {
 	if attr.AccessACL+attr.DefaultACL > 0 {
 		w.Put32(attr.AccessACL)
 		w.Put32(attr.DefaultACL)
+	}
+	if attr.Tier != 0 {
+		w.Put8(uint8(attr.Tier))
 	}
 	logger.Tracef("attr: %+v -> %+v", attr, w.Bytes())
 	return w.Bytes()
@@ -230,6 +249,11 @@ func (attr *Attr) Unmarshal(buf []byte) {
 	if rb.Left() >= 8 {
 		attr.AccessACL = rb.Get32()
 		attr.DefaultACL = rb.Get32()
+	}
+	if rb.Left() >= 1 {
+		attr.Tier = TierID(rb.Get8())
+	} else {
+		attr.Tier = 0
 	}
 	logger.Tracef("attr: %+v -> %+v", buf, attr)
 }
@@ -514,7 +538,7 @@ type Meta interface {
 	// OnReload register a callback for any change founded after reloaded.
 	OnReload(func(new *Format))
 
-	HandleQuota(ctx Context, cmd uint8, dpath string, uid uint32, gid uint32, quotas map[string]*Quota, strict, repair bool, create bool) error
+	HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32, quotas map[string]*Quota, strict, repair bool, create bool) error
 	//Triggers a global user group quota scan
 	ScanUserGroupUsage(ctx Context) error
 

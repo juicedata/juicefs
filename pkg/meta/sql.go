@@ -50,7 +50,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const MaxFieldsCountOfTable = 18 // node table
+const MaxFieldsCountOfTable = 19 // node table
 
 type setting struct {
 	Name  string `xorm:"pk"`
@@ -89,6 +89,7 @@ type node struct {
 	Parent       Ino
 	AccessACLId  uint32 `xorm:"'access_acl_id'"`
 	DefaultACLId uint32 `xorm:"'default_acl_id'"`
+	Tier         TierID `xorm:"'tier_id'"`
 }
 
 func (n *node) setAtime(ns int64) {
@@ -285,20 +286,6 @@ type dbSnap struct {
 	chunk   map[string]*chunk
 }
 
-func recoveryMysqlPwd(addr string) string {
-	colonIndex := strings.Index(addr, ":")
-	atIndex := strings.LastIndex(addr, "@")
-	if colonIndex != -1 && colonIndex < atIndex {
-		pwd := addr[colonIndex+1 : atIndex]
-		if parse, err := url.Parse("mysql://root:" + pwd + "@127.0.0.1"); err == nil {
-			if originPwd, ok := parse.User.Password(); ok {
-				addr = fmt.Sprintf("%s:%s%s", addr[:colonIndex], originPwd, addr[atIndex:])
-			}
-		}
-	}
-	return addr
-}
-
 func extractCustomConfig[T string | int](value *url.Values, key string, defaultV T) (T, error) {
 	if value == nil {
 		return defaultV, nil
@@ -323,8 +310,6 @@ func extractCustomConfig[T string | int](value *url.Values, key string, defaultV
 		return defaultV, nil
 	}
 }
-
-var setTransactionIsolation func(dns string) (string, error)
 
 type prefixMapper struct {
 	mapper names.Mapper
@@ -420,6 +405,8 @@ func (m *dbMeta) initStatement() {
 		fmt.Sprintf(`INSERT IGNORE INTO %schunk_ref (chunkid, size, refs) VALUES (?,?,?)`, m.tablePrefix)
 }
 
+var engineCreator = make(map[string]func(string) (*xorm.Engine, error))
+
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	var searchPath string
 
@@ -487,23 +474,20 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 		}
 	}
 
-	// escaping is not necessary for mysql password https://github.com/go-sql-driver/mysql#password
-	if driver == "mysql" && setTransactionIsolation != nil {
-		addr = recoveryMysqlPwd(addr)
-		var err error
-		if addr, err = setTransactionIsolation(addr); err != nil {
-			return nil, err
-		}
-	}
-
 	if driver == "sqlite3" {
 		DirBatchNum["db"] = 4096 // SQLITE_MAX_VARIABLE_NUMBER limit
 	}
 
-	engine, err := xorm.NewEngine(driver, addr)
+	var engine *xorm.Engine
+	if creator, ok := engineCreator[driver]; ok {
+		engine, err = creator(addr)
+	} else {
+		engine, err = xorm.NewEngine(driver, addr)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
 	}
+
 	switch logger.Level { // make xorm less verbose
 	case logrus.TraceLevel:
 		engine.SetLogLevel(log.LOG_DEBUG)
@@ -536,7 +520,7 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	engine.DB().SetConnMaxIdleTime(time.Second * time.Duration(vIdleTime))
 	engine.SetTableMapper(prefixMapper{mapper: engine.GetTableMapper(), prefix: tablePrefix})
 	m := &dbMeta{
-		baseMeta:    newBaseMeta(addr, conf),
+		baseMeta:    newBaseMeta(engine.DataSourceName(), conf),
 		db:          engine,
 		statement:   make(map[string]string),
 		tablePrefix: tablePrefix,
@@ -1202,6 +1186,7 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Full = true
 	attr.AccessACL = n.AccessACLId
 	attr.DefaultACL = n.DefaultACLId
+	attr.Tier = n.Tier
 }
 
 func (m *dbMeta) parseNode(attr *Attr, n *node) {
@@ -1222,6 +1207,7 @@ func (m *dbMeta) parseNode(attr *Attr, n *node) {
 	n.Parent = attr.Parent
 	n.AccessACLId = attr.AccessACL
 	n.DefaultACLId = attr.DefaultACL
+	n.Tier = attr.Tier
 }
 
 func (m *dbMeta) updateStats(space int64, inodes int64) {
@@ -1382,7 +1368,7 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		m.parseNode(dirtyAttr, &dirtyNode)
 		dirtyNode.setCtime(now.UnixNano())
 		_, err = s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime",
-			"atimensec", "mtimensec", "ctimensec", "access_acl_id", "default_acl_id").
+			"atimensec", "mtimensec", "ctimensec", "access_acl_id", "default_acl_id", "tier_id").
 			Update(&dirtyNode, &node{Inode: inode})
 		if err == nil {
 			m.parseAttr(&dirtyNode, attr)
@@ -1716,6 +1702,10 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if (pn.Flags & FlagSkipTrash) != 0 {
 			n.Flags |= FlagSkipTrash
 		}
+
+		// inherit storage class
+		attr.Tier = pattr.Tier
+		n.Tier = pattr.Tier
 
 		var updateParent bool
 		var nlinkAdjust int32
@@ -4214,6 +4204,19 @@ func (m *dbMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 			}
 		}
 		return nil
+	})
+}
+
+func (m *dbMeta) cleanUgUsage(ctx Context, qtype uint32) error {
+	if qtype != UserQuotaType && qtype != GroupQuotaType {
+		return errors.Errorf("invalid quota type %d", qtype)
+	}
+
+	return m.txn(func(s *xorm.Session) error {
+		_, err := s.Cols("used_space", "used_inodes").
+			Update(&userGroupQuota{UsedSpace: 0, UsedInodes: 0},
+				&userGroupQuota{Qtype: qtype})
+		return err
 	})
 }
 

@@ -232,7 +232,7 @@ test_dump_load(){
     mkdir -p /jfs/d
     ./juicefs quota set $META_URL --path /d --inodes 1000 --capacity 1
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
-    ./juicefs dump --log-level error $META_URL --fast > dump.json
+    ./juicefs dump --log-level error $META_URL --fast  dump.json
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json
@@ -443,12 +443,23 @@ get_quota_table_field()
     logfile=$1
     identifier=$2
     column=$3
+    # identifier like "UID:65534" — match both "uid:65534" (list) and bare "65534" (get)
     awk -F'|' -v id="$identifier" -v col="$column" '
-        index($0, id) > 0 {
-            value=$col
-            gsub(/[[:space:]]/, "", value)
-            print value
-            exit
+        BEGIN {
+            id_lower = tolower(id)
+            n = index(id, ":")
+            if (n > 0) bare = substr(id, n+1)
+            else bare = id
+        }
+        {
+            line_lower = tolower($0)
+            if (index(line_lower, id_lower) > 0) {
+                value=$col; gsub(/[[:space:]]/, "", value); print value; exit
+            }
+            col2 = $2; gsub(/[[:space:]]/, "", col2)
+            if (col2 == bare) {
+                value=$col; gsub(/[[:space:]]/, "", value); print value; exit
+            }
         }
     ' "$logfile"
 }
@@ -461,10 +472,10 @@ test_user_group_quota_set_get_list_delete(){
     ./juicefs quota set $META_URL --gid "$TEST_GID_1" --capacity 1 --inodes 20
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     ./juicefs quota get $META_URL --uid "$TEST_UID_1" 2>&1 | tee uid_quota.log
-    grep "UID:$TEST_UID_1" uid_quota.log || (echo "uid quota should exist" && exit 1)
+    grep "$TEST_UID_1" uid_quota.log || (echo "uid quota should exist" && exit 1)
 
     ./juicefs quota get $META_URL --gid "$TEST_GID_1" 2>&1 | tee gid_quota.log
-    grep "GID:$TEST_GID_1" gid_quota.log || (echo "gid quota should exist" && exit 1)
+    grep "$TEST_GID_1" gid_quota.log || (echo "gid quota should exist" && exit 1)
 
     ./juicefs quota list $META_URL 2>&1 | tee quota_list.log
     grep "$TEST_UID_1" quota_list.log || (echo "uid quota should be listed" && exit 1)
@@ -474,8 +485,8 @@ test_user_group_quota_set_get_list_delete(){
     ./juicefs quota delete $META_URL --gid "$TEST_GID_1"
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     ./juicefs quota list $META_URL 2>&1 | tee quota_list_after_delete.log
-    grep "UID:$TEST_UID_1" quota_list_after_delete.log && echo "uid quota should be deleted" && exit 1 || true
-    grep "GID:$TEST_GID_1" quota_list_after_delete.log && echo "gid quota should be deleted" && exit 1 || true
+    grep "uid:$TEST_UID_1" quota_list_after_delete.log && echo "uid quota should be deleted" && exit 1 || true
+    grep "gid:$TEST_GID_1" quota_list_after_delete.log && echo "gid quota should be deleted" && exit 1 || true
 }
 
 test_uid_quota_check_on_write_and_truncate(){
@@ -536,8 +547,8 @@ test_gid_quota_usage_after_chown_then_set(){
     sleep $DIR_QUOTA_FLUSH_INTERVAL
 
     ./juicefs quota list $META_URL --uid "$TEST_UID_1" 2>&1 | tee uid_usage_before_gid_set.log
-    uid_used=$(get_quota_table_field uid_usage_before_gid_set.log "UID:$TEST_UID_1" 4)
-    uid_iused=$(get_quota_table_field uid_usage_before_gid_set.log "UID:$TEST_UID_1" 7)
+    uid_used=$(get_quota_table_field uid_usage_before_gid_set.log "uid:$TEST_UID_1" 4)
+    uid_iused=$(get_quota_table_field uid_usage_before_gid_set.log "uid:$TEST_UID_1" 7)
     [[ -z "$uid_iused" ]] && echo "uid iused should not be empty" && exit 1 || true
     [[ "$uid_iused" == "0" ]] && echo "uid iused should be greater than 0 after chown" && exit 1 || true
 
@@ -545,8 +556,8 @@ test_gid_quota_usage_after_chown_then_set(){
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
 
     ./juicefs quota list $META_URL --gid "$TEST_GID_1" 2>&1 | tee gid_usage_after_set.log
-    gid_used=$(get_quota_table_field gid_usage_after_set.log "GID:$TEST_GID_1" 4)
-    gid_iused=$(get_quota_table_field gid_usage_after_set.log "GID:$TEST_GID_1" 7)
+    gid_used=$(get_quota_table_field gid_usage_after_set.log "gid:$TEST_GID_1" 4)
+    gid_iused=$(get_quota_table_field gid_usage_after_set.log "gid:$TEST_GID_1" 7)
     [[ -z "$gid_iused" ]] && echo "gid iused should not be empty" && exit 1 || true
     [[ "$gid_iused" == "0" ]] && echo "gid iused should be greater than 0 after setting gid quota" && exit 1 || true
     [[ "$gid_iused" != "$uid_iused" ]] && echo "gid iused should match uid iused after chown before gid set" && exit 1 || true
@@ -596,8 +607,8 @@ test_uid_gid_quota_same_file_interaction(){
 
     ./juicefs quota list $META_URL --uid "$TEST_UID_1" 2>&1 | tee uid_gid_uid_before.log
     ./juicefs quota list $META_URL --gid "$TEST_GID_1" 2>&1 | tee uid_gid_gid_before.log
-    uid_iused=$(get_quota_table_field uid_gid_uid_before.log "UID:$TEST_UID_1" 7)
-    gid_iused=$(get_quota_table_field uid_gid_gid_before.log "GID:$TEST_GID_1" 7)
+    uid_iused=$(get_quota_table_field uid_gid_uid_before.log "uid:$TEST_UID_1" 7)
+    gid_iused=$(get_quota_table_field uid_gid_gid_before.log "gid:$TEST_GID_1" 7)
     [[ "$uid_iused" != "2" ]] && echo "uid iused should be 2 after creating two files" && exit 1 || true
     [[ "$gid_iused" != "2" ]] && echo "gid iused should track same files and be 2" && exit 1 || true
 
@@ -611,8 +622,8 @@ test_uid_gid_quota_same_file_interaction(){
 
     ./juicefs quota list $META_URL --uid "$TEST_UID_1" 2>&1 | tee uid_gid_uid_after.log
     ./juicefs quota list $META_URL --gid "$TEST_GID_1" 2>&1 | tee uid_gid_gid_after.log
-    uid_iused=$(get_quota_table_field uid_gid_uid_after.log "UID:$TEST_UID_1" 7)
-    gid_iused=$(get_quota_table_field uid_gid_gid_after.log "GID:$TEST_GID_1" 7)
+    uid_iused=$(get_quota_table_field uid_gid_uid_after.log "uid:$TEST_UID_1" 7)
+    gid_iused=$(get_quota_table_field uid_gid_gid_after.log "gid:$TEST_GID_1" 7)
     [[ "$uid_iused" != "3" ]] && echo "uid iused should become 3 after raising uid quota" && exit 1 || true
     [[ "$gid_iused" != "3" ]] && echo "gid iused should remain in sync and become 3" && exit 1 || true
 
@@ -629,19 +640,19 @@ test_quota_list_gid_filter_regression(){
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
 
     ./juicefs quota list $META_URL --gid "$TEST_GID_1" 2>&1 | tee gid_filter_1.log
-    grep "GID:$TEST_GID_1" gid_filter_1.log || (echo "gid filter should show requested gid quota" && exit 1)
-    grep "GID:$TEST_GID_2" gid_filter_1.log && echo "gid filter should not include other gid quota" && exit 1 || true
-    gid_rows=$(grep -c "GID:" gid_filter_1.log || true)
+    grep "gid:$TEST_GID_1" gid_filter_1.log || (echo "gid filter should show requested gid quota" && exit 1)
+    grep "gid:$TEST_GID_2" gid_filter_1.log && echo "gid filter should not include other gid quota" && exit 1 || true
+    gid_rows=$(grep -c "gid:" gid_filter_1.log || true)
     [[ "$gid_rows" -ne 1 ]] && echo "gid filter should only return one GID row" && exit 1 || true
-    inodes_value=$(grep "GID:$TEST_GID_1" gid_filter_1.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
+    inodes_value=$(grep "gid:$TEST_GID_1" gid_filter_1.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
     [[ "$inodes_value" != "3" ]] && echo "gid filter should return gid1 inodes=3" && exit 1 || true
 
     ./juicefs quota list $META_URL --gid "$TEST_GID_2" 2>&1 | tee gid_filter_2.log
-    grep "GID:$TEST_GID_2" gid_filter_2.log || (echo "gid filter should show requested gid quota" && exit 1)
-    grep "GID:$TEST_GID_1" gid_filter_2.log && echo "gid filter should not include other gid quota" && exit 1 || true
-    gid_rows=$(grep -c "GID:" gid_filter_2.log || true)
+    grep "gid:$TEST_GID_2" gid_filter_2.log || (echo "gid filter should show requested gid quota" && exit 1)
+    grep "gid:$TEST_GID_1" gid_filter_2.log && echo "gid filter should not include other gid quota" && exit 1 || true
+    gid_rows=$(grep -c "gid:" gid_filter_2.log || true)
     [[ "$gid_rows" -ne 1 ]] && echo "gid filter should only return one GID row" && exit 1 || true
-    inodes_value=$(grep "GID:$TEST_GID_2" gid_filter_2.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
+    inodes_value=$(grep "gid:$TEST_GID_2" gid_filter_2.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
     [[ "$inodes_value" != "7" ]] && echo "gid filter should return gid2 inodes=7" && exit 1 || true
 }
 
@@ -671,7 +682,7 @@ test_chown_transfer_user_group_quota(){
     grep -i "Disk quota exceeded" error.log || (echo "user2 post-chown quota check failed" && exit 1)
 }
 
-skip_test_set_quota_by_username(){
+test_set_quota_by_username(){
     prepare_ug_quota_test
     resolve_test_users || return 0
 
@@ -679,10 +690,10 @@ skip_test_set_quota_by_username(){
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
     uid=$(id -u "$TEST_USER_2")
     ./juicefs quota get $META_URL --uid "$uid" 2>&1 | tee username_quota.log
-    grep "UID:$uid" username_quota.log || (echo "quota set by username should be visible in uid quota" && exit 1)
+    grep "$uid" username_quota.log || (echo "quota set by username should be visible in uid quota" && exit 1)
 
     ./juicefs quota list $META_URL 2>&1 | tee username_quota_list.log
-    grep "UID:$uid" username_quota_list.log || (echo "quota set by username should be listed" && exit 1)
+    grep "$uid" username_quota_list.log || (echo "quota set by username should be listed" && exit 1)
 }
 
 test_quota_list_uid_filter_regression(){
@@ -694,19 +705,19 @@ test_quota_list_uid_filter_regression(){
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
 
     ./juicefs quota list $META_URL --uid "$TEST_UID_1" 2>&1 | tee uid_filter_1.log
-    grep "UID:$TEST_UID_1" uid_filter_1.log || (echo "uid filter should show requested uid quota" && exit 1)
-    grep "UID:$TEST_UID_2" uid_filter_1.log && echo "uid filter should not include other uid quota" && exit 1 || true
-    uid_rows=$(grep -c "UID:" uid_filter_1.log || true)
+    grep "uid:$TEST_UID_1" uid_filter_1.log || (echo "uid filter should show requested uid quota" && exit 1)
+    grep "uid:$TEST_UID_2" uid_filter_1.log && echo "uid filter should not include other uid quota" && exit 1 || true
+    uid_rows=$(grep -c "uid:" uid_filter_1.log || true)
     [[ "$uid_rows" -ne 1 ]] && echo "uid filter should only return one UID row" && exit 1 || true
-    inodes_value=$(grep "UID:$TEST_UID_1" uid_filter_1.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
+    inodes_value=$(grep "uid:$TEST_UID_1" uid_filter_1.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
     [[ "$inodes_value" != "3" ]] && echo "uid filter should return uid1 inodes=3" && exit 1 || true
 
     ./juicefs quota list $META_URL --uid "$TEST_UID_2" 2>&1 | tee uid_filter_2.log
-    grep "UID:$TEST_UID_2" uid_filter_2.log || (echo "uid filter should show requested uid quota" && exit 1)
-    grep "UID:$TEST_UID_1" uid_filter_2.log && echo "uid filter should not include other uid quota" && exit 1 || true
-    uid_rows=$(grep -c "UID:" uid_filter_2.log || true)
+    grep "uid:$TEST_UID_2" uid_filter_2.log || (echo "uid filter should show requested uid quota" && exit 1)
+    grep "uid:$TEST_UID_1" uid_filter_2.log && echo "uid filter should not include other uid quota" && exit 1 || true
+    uid_rows=$(grep -c "uid:" uid_filter_2.log || true)
     [[ "$uid_rows" -ne 1 ]] && echo "uid filter should only return one UID row" && exit 1 || true
-    inodes_value=$(grep "UID:$TEST_UID_2" uid_filter_2.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
+    inodes_value=$(grep "uid:$TEST_UID_2" uid_filter_2.log | head -n1 | awk -F'|' '{gsub(/[[:space:]]/,"",$6); print $6}')
     [[ "$inodes_value" != "7" ]] && echo "uid filter should return uid2 inodes=7" && exit 1 || true
 }
 
@@ -1118,40 +1129,28 @@ test_user_group_membership_quota(){
         groupdel "$NEW_GROUP" 2>/dev/null || true
     }
     trap cleanup_group RETURN
-
-    # Add TEST_USER_1 to the new group
     usermod -aG "$NEW_GROUP" "$TEST_USER_1"
-
-    # Set gid quota on new group
-    ./juicefs quota set $META_URL --gid "$NEW_GID" --inodes 2
+    ./juicefs quota set $META_URL --gid "$NEW_GID" --inodes 3
     sleep $((HEARTBEAT_INTERVAL+HEARTBEAT_SLEEP))
-
-    # Create setgid directory owned by new group
     mkdir -p /jfs/grpmem
     chgrp "$NEW_GID" /jfs/grpmem
     chmod 2777 /jfs/grpmem
 
-    # Files created in setgid dir inherit gid -> counts against NEW_GID quota
     run_as_user_cmd "$TEST_USER_1" "touch /jfs/grpmem/file1"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
-
-    # Verify file has correct gid
     file_gid=$(stat -c %g /jfs/grpmem/file1)
     [[ "$file_gid" != "$NEW_GID" ]] && echo "file in setgid dir should inherit group $NEW_GID, got $file_gid" && exit 1 || true
 
     run_as_user_cmd "$TEST_USER_1" "touch /jfs/grpmem/file2"
     sleep $DIR_QUOTA_FLUSH_INTERVAL
 
-    # Third file should fail — gid quota (inodes=2) exhausted
     run_as_user_cmd "$TEST_USER_1" "touch /jfs/grpmem/file3" 2>error.log \
         && echo "gid inode quota should block file creation in setgid dir" && exit 1 || true
     grep -i "Disk quota exceeded" error.log || (echo "gid quota via setgid dir not enforced" && exit 1)
-
-    # Remove user from group — existing file quota should not change
     gpasswd -d "$TEST_USER_1" "$NEW_GROUP" 2>/dev/null || true
     ./juicefs quota list $META_URL --gid "$NEW_GID" 2>&1 | tee grpmem_quota.log
-    gid_iused=$(get_quota_table_field grpmem_quota.log "GID:$NEW_GID" 7)
-    [[ "$gid_iused" != "2" ]] && echo "gid iused should remain 2 after removing user from group, got $gid_iused" && exit 1 || true
+    gid_iused=$(get_quota_table_field grpmem_quota.log "gid:$NEW_GID" 7)
+    [[ "$gid_iused" != "3" ]] && echo "gid iused should remain 3 after removing user from group, got $gid_iused" && exit 1 || true
 
     cleanup_group
     trap - RETURN

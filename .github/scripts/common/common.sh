@@ -49,7 +49,7 @@ umount_jfs() {
     
     ls -l "$mp/.config"
     local status_log="status.log"
-    ./juicefs status --log-level error "$meta_url" 2>/dev/null | tee "$status_log"
+    ./juicefs status --log-level error "$meta_url" 2>/dev/null | grep -v '^\[xorm\]' | tee "$status_log"
     
     local pids
     pids=$(jq --arg mp "$mp" '.Sessions[] | select(.MountPoint == $mp) | .ProcessID' "$status_log")

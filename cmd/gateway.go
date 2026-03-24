@@ -67,6 +67,10 @@ func cmdGateway() *cli.Command {
 			Name:  "multi-buckets",
 			Usage: "use top level of directories as buckets",
 		},
+		&cli.StringFlag{
+			Name:  "bucket-name",
+			Usage: "use this bucket name instead of JuiceFS name (ignored when --multi-buckets is enabled)",
+		},
 		&cli.BoolFlag{
 			Name:  "keep-etag",
 			Usage: "keep the ETag for uploaded objects",
@@ -161,13 +165,17 @@ func gateway(c *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
 	}
-
+	bucket := c.String("bucket-name")
+	if bucket == "" {
+		bucket = conf.Format.Name
+	}
 	readonly := c.Bool("read-only")
 	jfsGateway, err = jfsgateway.NewJFSGateway(
 		jfs,
 		conf,
 		&jfsgateway.Config{
 			MultiBucket: c.Bool("multi-buckets"),
+			Bucket:      bucket,
 			KeepEtag:    c.Bool("keep-etag"),
 			Umask:       uint16(umask),
 			ObjTag:      c.Bool("object-tag"),
