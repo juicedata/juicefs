@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -258,13 +257,7 @@ func printQuotaResult(qtype uint32, qs map[string]*meta.Quota) {
 			iusedR = fmt.Sprintf("%d%%", q.UsedInodes*100/q.MaxInodes)
 		}
 
-		identifier := p
-		if strings.HasPrefix(p, "uid:") {
-			identifier = "UID:" + p[4:]
-		} else if strings.HasPrefix(p, "gid:") {
-			identifier = "GID:" + p[4:]
-		}
-		result = append(result, []string{identifier, size, used, usedR, itotal, iused, iusedR})
+		result = append(result, []string{p, size, used, usedR, itotal, iused, iusedR})
 	}
 	printResult(result, 0, false)
 }

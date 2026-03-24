@@ -889,12 +889,12 @@ func (m *baseMeta) handleQuotaList(ctx Context, qtype uint32, key uint64, quotas
 	}
 	for uid, quota := range userQuotas {
 		if match(UserQuotaType, uid, quota) {
-			quotas[fmt.Sprintf("uid:%d", uid)] = quota
+			quotas[fmt.Sprintf("UID:%d", uid)] = quota
 		}
 	}
 	for gid, quota := range groupQuotas {
 		if match(GroupQuotaType, gid, quota) {
-			quotas[fmt.Sprintf("gid:%d", gid)] = quota
+			quotas[fmt.Sprintf("GID:%d", gid)] = quota
 		}
 	}
 	return nil
