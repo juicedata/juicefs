@@ -46,8 +46,8 @@ type obsClient struct {
 	bucket    string
 	region    string
 	checkEtag bool
-	sc        string
 	c         *obs.ObsClient
+	tierStorage
 }
 
 func (s *obsClient) String() string {
@@ -102,7 +102,7 @@ func (s *obsClient) Head(ctx context.Context, key string) (Object, error) {
 		r.LastModified,
 		strings.HasSuffix(key, "/"),
 		getStorageClassStr(r.StorageClass),
-		"",
+		r.Restore,
 	}, nil
 }
 
@@ -169,7 +169,8 @@ func (s *obsClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	params.ContentLength = vlen
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	params.ContentType = mimeType
-	params.StorageClass = obs.StorageClassType(s.sc)
+	sc := s.getScStr(ctx)
+	params.StorageClass = obs.StorageClassType(sc)
 	resp, err := s.c.PutObject(params)
 	if err == nil && s.checkEtag && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
@@ -192,8 +193,13 @@ func (s *obsClient) Copy(ctx context.Context, dst, src string) error {
 	return err
 }
 func (s *obsClient) Restore(ctx context.Context, key string) error {
-	//todo: implement restore
-	return nil
+	_, err := s.c.RestoreObject(&obs.RestoreObjectInput{
+		Bucket: s.bucket,
+		Key:    key,
+		Days:   defaultRestoreDays,
+		Tier:   "Standard",
+	})
+	return err
 }
 
 func (s *obsClient) Delete(ctx context.Context, key string, getters ...AttrGetter) error {

@@ -41,7 +41,7 @@ import (
 
 type qingstor struct {
 	bucket *qs.Bucket
-	sc     string
+	tierStorage
 }
 
 func (q *qingstor) String() string {
@@ -156,13 +156,15 @@ func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, getters ..
 		ContentLength: &vlen,
 		ContentType:   &mimeType,
 	}
-	if q.sc != "" {
-		input.XQSStorageClass = &q.sc
+	sc := q.getScStr(ctx)
+	if sc != "" {
+		// XQSStorageClass's available values: STANDARD, STANDARD_IA
+		input.XQSStorageClass = &sc
 	}
 	out, err := q.bucket.PutObjectWithContext(ctx, key, input)
 	if out != nil {
 		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(aws.ToString(out.RequestID)).SetStorageClass(q.sc)
+		attrs.SetRequestID(aws.ToString(out.RequestID)).SetStorageClass(sc)
 	}
 	if err != nil {
 		return err

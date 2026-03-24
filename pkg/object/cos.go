@@ -126,12 +126,19 @@ func (c *COS) Get(ctx context.Context, key string, off, limit int64, getters ...
 	}
 	return resp.Body, nil
 }
+
 func (c *COS) Restore(ctx context.Context, key string) error {
-	//todo: implement restore
-	return nil
+	_, err := c.c.Object.PostRestore(ctx, key, &cos.ObjectRestoreOptions{
+		Days: defaultRestoreDays,
+		Tier: &cos.CASJobParameters{
+			Tier: "Standard",
+		},
+	})
+	return err
 }
 
 func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
+	sc := c.getScStr(ctx)
 	var options cos.ObjectPutOptions
 	if ins, ok := in.(io.ReadSeeker); ok {
 		header := http.Header(map[string][]string{
@@ -139,16 +146,16 @@ func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 		})
 		options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{XCosMetaXXX: &header}
 	}
-	if c.sc != "" {
+	if sc != "" {
 		if options.ObjectPutHeaderOptions == nil {
 			options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{}
 		}
-		options.ObjectPutHeaderOptions.XCosStorageClass = c.sc
+		options.ObjectPutHeaderOptions.XCosStorageClass = sc
 	}
 	resp, err := c.c.Object.Put(ctx, key, in, &options)
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey)).SetStorageClass(c.sc)
+		attrs.SetRequestID(resp.Header.Get(cosRequestIDKey)).SetStorageClass(sc)
 	}
 	return err
 }

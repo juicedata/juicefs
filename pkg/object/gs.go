@@ -44,7 +44,7 @@ type gs struct {
 	index   uint64
 	bucket  string
 	region  string
-	sc      string
+	tierStorage
 }
 
 func (g *gs) String() string {
@@ -127,8 +127,9 @@ func (g *gs) Get(ctx context.Context, key string, off, limit int64, getters ...A
 }
 
 func (g *gs) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
+	sc := g.getScStr(ctx)
 	writer := g.getClient().Bucket(g.bucket).Object(key).NewWriter(ctx)
-	writer.StorageClass = g.sc
+	writer.StorageClass = sc
 
 	// If you upload small objects (< 16MiB), you should set ChunkSize
 	// to a value slightly larger than the objects' sizes to avoid memory bloat.
@@ -142,7 +143,7 @@ func (g *gs) Put(ctx context.Context, key string, data io.Reader, getters ...Att
 		return err
 	}
 	attrs := ApplyGetters(getters...)
-	attrs.SetStorageClass(g.sc)
+	attrs.SetStorageClass(sc)
 	return writer.Close()
 }
 
@@ -194,6 +195,10 @@ func (g *gs) SetStorageClass(sc string) error {
 	return nil
 }
 
+// Restore GCS does not support restoring objects to a temporary readable state.
+func (g *gs) Restore(ctx context.Context, key string) error {
+	return notSupported
+}
 func newGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("gs://%s", endpoint)

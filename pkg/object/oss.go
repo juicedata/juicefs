@@ -94,7 +94,7 @@ func (o *ossClient) Head(ctx context.Context, key string) (Object, error) {
 		oss.ToTime(info.LastModified),
 		strings.HasSuffix(key, "/"),
 		oss.ToString(info.StorageClass),
-		"",
+		oss.ToString(info.Restore),
 	}, nil
 }
 
@@ -163,7 +163,7 @@ func (o *ossClient) Restore(ctx context.Context, key string) error {
 		Bucket: oss.Ptr(o.bucket),
 		Key:    oss.Ptr(key),
 		RestoreRequest: &oss.RestoreRequest{
-			Days: 1,
+			Days: defaultRestoreDays,
 			Tier: oss.Ptr("Standard"),
 		},
 	})

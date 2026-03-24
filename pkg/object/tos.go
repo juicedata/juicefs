@@ -37,8 +37,8 @@ import (
 
 type tosClient struct {
 	bucket string
-	sc     string
 	client *tos.ClientV2
+	tierStorage
 }
 
 func (t *tosClient) String() string {
@@ -98,18 +98,19 @@ func (t *tosClient) Put(ctx context.Context, key string, in io.Reader, getters .
 			checksumAlgr: generateChecksum(ins),
 		}
 	}
+	sc := t.getScStr(ctx)
 	resp, err := t.client.PutObjectV2(ctx, &tos.PutObjectV2Input{
 		PutObjectBasicInput: tos.PutObjectBasicInput{
 			Bucket:       t.bucket,
 			Key:          key,
-			StorageClass: enum.StorageClassType(t.sc),
+			StorageClass: enum.StorageClassType(sc),
 			Meta:         meta,
 		},
 		Content: in,
 	})
 	if resp != nil {
 		attrs := ApplyGetters(getters...)
-		attrs.SetRequestID(resp.RequestID).SetStorageClass(t.sc)
+		attrs.SetRequestID(resp.RequestID).SetStorageClass(sc)
 	}
 	return err
 }
@@ -136,13 +137,18 @@ func (t *tosClient) Head(ctx context.Context, key string) (Object, error) {
 		}
 		return nil, err
 	}
+	var status string
+	rInfo := head.RestoreInfo
+	if rInfo != nil {
+		status = fmt.Sprintf("OngoingRequest:%v,ExpiryDate:%s", rInfo.RestoreStatus.OngoingRequest, rInfo.RestoreStatus.ExpiryDate)
+	}
 	return &obj{
 		key,
 		head.ContentLength,
 		head.LastModified,
 		strings.HasSuffix(key, "/"),
 		string(head.StorageClass),
-		"",
+		status,
 	}, err
 }
 
@@ -281,7 +287,13 @@ func (t *tosClient) Copy(ctx context.Context, dst, src string) error {
 	return err
 }
 func (t *tosClient) Restore(ctx context.Context, key string) error {
-	return notSupported
+	_, err := t.client.RestoreObject(ctx, &tos.RestoreObjectInput{
+		Bucket:               t.bucket,
+		Key:                  key,
+		Days:                 defaultRestoreDays,
+		RestoreJobParameters: &tos.RestoreJobParameters{Tier: enum.TierStandard},
+	})
+	return err
 }
 
 func (t *tosClient) SetStorageClass(sc string) error {
