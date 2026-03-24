@@ -27,6 +27,7 @@ import (
 	"os/signal"
 	"path"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
@@ -40,6 +41,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	mcli "github.com/minio/cli"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 )
 
@@ -168,6 +170,13 @@ func gateway(c *cli.Context) error {
 	bucket := c.String("bucket-name")
 	if bucket == "" {
 		bucket = conf.Format.Name
+	} else {
+		if strings.HasPrefix(bucket, minio.MinioMetaBucket) {
+			logger.Fatalf("bucket name %q cannot start with %q", bucket, minio.MinioMetaBucket)
+		}
+		if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
+			logger.Fatalf("invalid bucket name %q: %s", bucket, err)
+		}
 	}
 	readonly := c.Bool("read-only")
 	jfsGateway, err = jfsgateway.NewJFSGateway(
