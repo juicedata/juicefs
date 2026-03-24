@@ -589,20 +589,20 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Lookup(ctx, parent, "f", &inode, attr, true); st != 0 {
 		t.Fatalf("lookup f: %s", st)
 	}
-	if st := m.Resolve(ctx, 1, "d/f", &inode, attr); st != 0 && st != syscall.ENOTSUP {
+	if st := m.Resolve(ctx, 1, "d/f", &inode, attr, false); st != 0 && st != syscall.ENOTSUP {
 		t.Fatalf("resolve d/f: %s", st)
 	}
-	if st := m.Resolve(ctx, parent, "/f", &inode, attr); st != 0 && st != syscall.ENOTSUP {
+	if st := m.Resolve(ctx, parent, "/f", &inode, attr, false); st != 0 && st != syscall.ENOTSUP {
 		t.Fatalf("resolve f: %s", st)
 	}
 	var ctx2 = NewContext(0, 1, []uint32{1})
-	if st := m.Resolve(ctx2, parent, "/f", &inode, attr); st != syscall.EACCES && st != syscall.ENOTSUP {
+	if st := m.Resolve(ctx2, parent, "/f", &inode, attr, false); st != syscall.EACCES && st != syscall.ENOTSUP {
 		t.Fatalf("resolve f: %s", st)
 	}
-	if st := m.Resolve(ctx, parent, "/f/c", &inode, attr); st != syscall.ENOTDIR && st != syscall.ENOTSUP {
+	if st := m.Resolve(ctx, parent, "/f/c", &inode, attr, false); st != syscall.ENOTDIR && st != syscall.ENOTSUP {
 		t.Fatalf("resolve f: %s", st)
 	}
-	if st := m.Resolve(ctx, parent, "/f2", &inode, attr); st != syscall.ENOENT && st != syscall.ENOTSUP {
+	if st := m.Resolve(ctx, parent, "/f2", &inode, attr, false); st != syscall.ENOENT && st != syscall.ENOTSUP {
 		t.Fatalf("resolve f2: %s", st)
 	}
 	// check owner permission
@@ -638,7 +638,7 @@ func testMetaClient(t *testing.T, m Meta) {
 		}
 
 	}
-	if st := m.Resolve(ctx2, 1, "/d1/d2", nil, nil); st != 0 && st != syscall.ENOTSUP {
+	if st := m.Resolve(ctx2, 1, "/d1/d2", nil, nil, false); st != 0 && st != syscall.ENOTSUP {
 		t.Fatalf("resolve /d1/d2: %s", st)
 	}
 	if st := m.Remove(ctx, 1, "d1", false, RmrDefaultThreads, nil); st != 0 {
@@ -1384,19 +1384,19 @@ func testResolve(t *testing.T, m Meta) {
 		}
 	}()
 
-	if st := m.Resolve(NewContext(0, 65534, []uint32{65534}), 1, "/d/f", &inode, &attr); st != 0 {
+	if st := m.Resolve(NewContext(0, 65534, []uint32{65534}), 1, "/d/f", &inode, &attr, false); st != 0 {
 		if st == syscall.ENOTSUP {
 			return
 		}
 		t.Fatalf("resolve /d/f by owner: %s", st)
 	}
-	if st := m.Resolve(NewContext(0, 65533, []uint32{65534}), 1, "/d/f", &inode, &attr); st != 0 {
+	if st := m.Resolve(NewContext(0, 65533, []uint32{65534}), 1, "/d/f", &inode, &attr, false); st != 0 {
 		t.Fatalf("resolve /d/f by group: %s", st)
 	}
-	if st := m.Resolve(NewContext(0, 65533, []uint32{65533, 65534}), 1, "/d/f", &inode, &attr); st != 0 {
+	if st := m.Resolve(NewContext(0, 65533, []uint32{65533, 65534}), 1, "/d/f", &inode, &attr, false); st != 0 {
 		t.Fatalf("resolve /d/f by multi-group: %s", st)
 	}
-	if st := m.Resolve(NewContext(0, 65533, []uint32{65533}), 1, "/d/f", &inode, &attr); st != syscall.EACCES {
+	if st := m.Resolve(NewContext(0, 65533, []uint32{65533}), 1, "/d/f", &inode, &attr, false); st != syscall.EACCES {
 		t.Fatalf("resolve /d/f by non-group: %s", st)
 	}
 }
@@ -1462,7 +1462,7 @@ func testCaseIncensi(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "Foo", 0755, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create Foo should be OK")
 	}
-	if st := m.Resolve(ctx, 1, "/Foo", &inode, attr); st != syscall.ENOTSUP {
+	if st := m.Resolve(ctx, 1, "/Foo", &inode, attr, false); st != syscall.ENOTSUP {
 		t.Fatalf("resolve with case insensitive should be ENOTSUP")
 	}
 	if st := m.Lookup(ctx, 1, "Bar", &inode, attr, true); st != 0 {

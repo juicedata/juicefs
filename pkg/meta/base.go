@@ -2703,7 +2703,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(compacted), size)
 	if tierID == -1 {
 		var attr Attr
-		if eno := m.GetAttr(Background(), inode, &attr); eno == 0 {
+		if eno := m.GetAttr(Background(), inode, &attr); eno != 0 {
 			panic(fmt.Sprintf("failed to get attr %d", inode))
 		}
 		tierID = int8(attr.Tier)

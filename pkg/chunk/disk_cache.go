@@ -1321,7 +1321,7 @@ type cacheFile struct {
 	*os.File
 	length  int // length of data
 	csLevel string
-	tierOff int64
+	tierID  uint8
 }
 
 // Calculate 32-bits checksum for every 32 KiB data, so 512 Bytes for 4 MiB in total
@@ -1349,16 +1349,41 @@ func openCacheFile(name string, length int, level string) (*cacheFile, error) {
 		_ = fp.Close()
 		return nil, err
 	}
+
+	getTierID := func() (uint8, error) {
+		b := make([]byte, 1)
+		_, err := fp.ReadAt(b, fi.Size()-1)
+		if err != nil {
+			return 0, err
+		}
+		tierID, err := cast.ToUint8E(string(b[0]))
+		if err != nil {
+			return 0, err
+		}
+		if tierID > 3 {
+			logger.Errorf("Invalid tier ID %d in cache file %s", tierID, name)
+			tierID = 0
+		}
+		return tierID, nil
+	}
 	checksumLength := ((length-1)/csBlock + 1) * 4
 	switch fi.Size() - int64(length) {
 	case 0:
-		return &cacheFile{fp, length, CsNone, -1}, nil
+		return &cacheFile{fp, length, CsNone, 0}, nil
 	case int64(checksumLength):
-		return &cacheFile{fp, length, level, -1}, nil
+		return &cacheFile{fp, length, level, 0}, nil
 	case 1:
-		return &cacheFile{fp, length, CsNone, fi.Size() - 1}, nil
+		tierID, err := getTierID()
+		if err != nil {
+			return nil, err
+		}
+		return &cacheFile{fp, length, CsNone, tierID}, nil
 	case int64(checksumLength) + 1:
-		return &cacheFile{fp, length, level, fi.Size() - 1}, nil
+		tierID, err := getTierID()
+		if err != nil {
+			return nil, err
+		}
+		return &cacheFile{fp, length, level, tierID}, nil
 	default:
 		_ = fp.Close()
 		return nil, fmt.Errorf("invalid file size %d, data length %d", fi.Size(), length)

@@ -1058,11 +1058,6 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	}
 	block := NewOffPage(blen)
 	_, err = f.ReadAt(block.Data, 0)
-	var tierByte []byte
-	if f.tierOff != -1 && err != io.EOF {
-		tierByte = make([]byte, 1)
-		_, _ = f.File.ReadAt(tierByte, f.tierOff)
-	}
 	_ = f.Close()
 	if err != nil {
 		block.Release()
@@ -1074,12 +1069,8 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		logger.Debugf("Key %s is not needed, drop it", key)
 		return
 	}
-	tierID, err := strconv.ParseUint(string(tierByte), 10, 8)
-	if err != nil || tierID > 3 {
-		logger.Errorf("invalid tier byte %s in staging file %s: %s", string(tierByte), stagingPath, err)
-		tierID = 0
-	}
-	ctx := context.WithValue(context.Background(), object.TierKey, uint8(tierID))
+
+	ctx := context.WithValue(context.Background(), object.TierKey, f.tierID)
 	store.stageBlockDelay.Add(time.Since(item.ts).Seconds())
 	if err = store.upload(ctx, key, block, nil); err == nil {
 		if !store.isPendingValid(key) { // Delete leaked objects if it's already deleted by other goroutines
