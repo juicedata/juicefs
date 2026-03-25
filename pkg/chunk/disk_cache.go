@@ -1450,7 +1450,7 @@ func (cf *cacheFile) ReadTierID() (uint8, error) {
 		return 0, nil
 	}
 	var buf [1]byte
-	n, err := cf.ReadAt(buf[:], cf.fileSize-tierIDLength)
+	n, err := cf.File.ReadAt(buf[:], cf.fileSize-tierIDLength)
 	if err != nil {
 		return 0, err
 	} else if n != 1 {
