@@ -138,6 +138,10 @@ func setTier(ctx *cli.Context) error {
 	if errno != 0 {
 		return errno
 	}
+	if attr.Typ != meta.TypeFile && attr.Typ != meta.TypeDirectory {
+		logger.Errorf("only file and directory are supported to set storage tier")
+		logger.Exit(1)
+	}
 	oldTier := format.Tiers[attr.Tier]
 	if attr.Tier == uint8(id) {
 		logger.Infof("storage class of %s is already %d(%s), no change needed", path, id, oldTier.GetHumanSc())
