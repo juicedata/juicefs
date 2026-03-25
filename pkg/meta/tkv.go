@@ -1232,6 +1232,8 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		} else {
 			attr.Mode = mode & ^cumask
 		}
+		// inherit storage class
+		attr.Tier = pattr.Tier
 
 		var updateParent bool
 		now := time.Now()
@@ -1430,11 +1432,12 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			m.fileDeleted(opened, parent.IsTrash(), inode, attr.Length)
 		}
 		m.updateStats(newSpace, newInode)
+		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, newInode)
 	}
 	return errno(err)
 }
 
-func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length *int64, space *int64, inodes *int64, userGroupQuotas *[]userGroupQuotaDelta, skipCheckTrash ...bool) syscall.Errno {
+func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, delta *dirStat, skipCheckTrash ...bool) syscall.Errno {
 	if len(entries) == 0 {
 		return 0
 	}
@@ -1459,11 +1462,6 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		opened bool
 		length uint64
 	}
-	var totalLength, totalSpace, totalInodes int64
-	var totalUserGroupQuotas []userGroupQuotaDelta
-	if userGroupQuotas != nil {
-		totalUserGroupQuotas = make([]userGroupQuotaDelta, 0, len(entries))
-	}
 
 	for len(entries) > 0 {
 		batchSize := batchNum
@@ -1481,15 +1479,15 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 		}
 
 		var entryInfos []*entryInfo
-		var batchLength, batchSpace, batchInodes int64
-		var batchUserGroupQuotas []userGroupQuotaDelta
+		var batchDirLength, batchDirSpace, batchDirInodes int64
+		var batchFsSpace, batchFsInodes int64
+		var deltas ugQuotaDeltas
 		var delNodes map[Ino]*dNode
 
 		err := m.txn(ctx, func(tx *kvTxn) error {
-			batchLength, batchSpace, batchInodes = 0, 0, 0
-			if userGroupQuotas != nil {
-				batchUserGroupQuotas = make([]userGroupQuotaDelta, 0, len(batch))
-			}
+			batchDirLength, batchDirSpace, batchDirInodes = 0, 0, 0
+			batchFsSpace, batchFsInodes = 0, 0
+			deltas = make(ugQuotaDeltas)
 			delNodes = make(map[Ino]*dNode)
 			pbuf := tx.get(m.inodeKey(parent))
 			if pbuf == nil {
@@ -1632,6 +1630,13 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 				if info.attr == nil {
 					continue
 				}
+				if info.typ == TypeFile {
+					batchDirLength -= int64(info.attr.Length)
+					batchDirSpace -= align4K(info.attr.Length)
+				} else {
+					batchDirSpace -= align4K(0)
+				}
+				batchDirInodes--
 				if !visited[info.inode] {
 					if info.attr.Nlink > 0 {
 						tx.set(m.inodeKey(info.inode), m.marshal(info.attr))
@@ -1644,20 +1649,28 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 							} else {
 								tx.set(m.delfileKey(info.inode, info.attr.Length), m.packInt64(nowUnix))
 								tx.delete(m.inodeKey(info.inode))
-								batchSpace -= align4K(info.attr.Length)
-								batchInodes--
+								batchFsSpace -= align4K(info.attr.Length)
+								batchFsInodes--
+								deltas.add(&ugQuotaDelta{
+									Uid:    info.attr.Uid,
+									Gid:    info.attr.Gid,
+									Space:  -align4K(info.attr.Length),
+									Inodes: -1,
+								})
 							}
-							batchLength -= int64(info.attr.Length)
 						case TypeSymlink:
 							tx.delete(m.symKey(info.inode))
 							fallthrough
 						default:
 							tx.delete(m.inodeKey(info.inode))
-							batchSpace -= align4K(0)
-							batchInodes--
-							if info.typ != TypeSymlink {
-								batchLength -= int64(info.attr.Length)
-							}
+							batchFsSpace -= align4K(0)
+							batchFsInodes--
+							deltas.add(&ugQuotaDelta{
+								Uid:    info.attr.Uid,
+								Gid:    info.attr.Gid,
+								Space:  -align4K(0),
+								Inodes: -1,
+							})
 						}
 						// Delete xattrs and parent keys
 						tx.deleteKeys(m.xattrKey(info.inode, ""))
@@ -1681,7 +1694,6 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 				if info.attr.Parent == 0 && info.attr.Nlink > 0 {
 					tx.incrBy(m.parentKey(info.inode, parent), -1)
 				}
-				appendUGQuotaDelta(&batchUserGroupQuotas, parent, info.attr.Uid, info.attr.Gid, info.attr.Nlink, info.typ, info.attr.Length)
 			}
 
 			// Update parent directory if needed
@@ -1696,31 +1708,25 @@ func (m *kvMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, length
 			return errno(err)
 		}
 
-		// Outside of transaction: update global stats and trigger data deletion callbacks
+		// Outside of transaction: trigger data deletion callbacks
 		for inode, info := range delNodes {
 			m.fileDeleted(info.opened, parent.IsTrash(), inode, info.length)
 		}
-		m.updateStats(batchSpace, batchInodes)
 
-		totalLength += batchLength
-		totalSpace += batchSpace
-		totalInodes += batchInodes
-		if userGroupQuotas != nil {
-			totalUserGroupQuotas = append(totalUserGroupQuotas, batchUserGroupQuotas...)
+		delta.length += batchDirLength
+		delta.space += batchDirSpace
+		delta.inodes += batchDirInodes
+		m.updateStats(batchFsSpace, batchFsInodes)
+		for _, q := range deltas {
+			m.updateUserGroupStat(ctx, q.Uid, q.Gid, q.Space, q.Inodes)
 		}
-	}
-
-	*length = totalLength
-	*space = totalSpace
-	*inodes = totalInodes
-	if userGroupQuotas != nil {
-		*userGroupQuotas = totalUserGroupQuotas
 	}
 	return 0
 }
 
 func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldAttr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
+	var attr Attr
 	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
 		if st := m.checkTrash(parent, &trash); st != 0 {
 			return st
@@ -1748,7 +1754,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 		if rs[0] == nil {
 			return syscall.ENOENT
 		}
-		var pattr, attr Attr
+		var pattr Attr
 		m.parseAttr(rs[0], &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
@@ -1816,6 +1822,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, oldA
 	}, parent)
 	if err == nil && trash == 0 {
 		m.updateStats(-align4K(0), -1)
+		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, -align4K(0), -1)
 	}
 	return errno(err)
 }
@@ -2088,6 +2095,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			m.fileDeleted(opened, false, dino, tattr.Length)
 		}
 		m.updateStats(newSpace, newInode)
+		m.updateUserGroupStat(ctx, tattr.Uid, tattr.Gid, newSpace, newInode)
 	}
 	return errno(err)
 }
@@ -2259,6 +2267,7 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	if err == nil && newSpace < 0 {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length, false)
+		m.updateUserGroupStat(Background(), attr.Uid, attr.Gid, newSpace, 0)
 	}
 	return err
 }
@@ -2464,6 +2473,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	}, fout)
 	if err == nil {
 		m.updateParentStat(ctx, fout, attr.Parent, newLength, newSpace)
+		m.updateUserGroupStat(ctx, attr.Uid, attr.Gid, newSpace, 0)
 	}
 	return errno(err)
 }
@@ -3207,17 +3217,43 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[uint64]*Quota, map[uint64]*Quota
 				} else {
 					id = binary.BigEndian.Uint64([]byte(k[2:])) // skip prefix
 				}
-				quota := m.parseQuota(v)
-				if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
-					continue
-				}
-				quotas[id] = quota
+				quotas[id] = m.parseQuota(v)
 			}
 		}
 		quotaMaps[i] = quotas
 	}
 
 	return quotaMaps[0], quotaMaps[1], quotaMaps[2], nil
+}
+
+func (m *kvMeta) cleanUgUsage(ctx Context, qtype uint32) error {
+	if qtype != UserQuotaType && qtype != GroupQuotaType {
+		return fmt.Errorf("invalid quota type: %d", qtype)
+	}
+
+	var prefix string
+	if qtype == UserQuotaType {
+		prefix = "QU"
+	} else {
+		prefix = "QG"
+	}
+
+	pairs, err := m.scanValues(ctx, m.fmtKey(prefix), -1, nil)
+	if err != nil {
+		return fmt.Errorf("failed to scan %s quotas: %w", prefix, err)
+	}
+	return m.txn(ctx, func(tx *kvTxn) error {
+		for k, v := range pairs {
+			if len(v) != 32 {
+				continue
+			}
+			quota := m.parseQuota(v)
+			quota.UsedSpace = 0
+			quota.UsedInodes = 0
+			tx.set([]byte(k), m.packQuota(quota))
+		}
+		return nil
+	})
 }
 
 func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
@@ -3276,17 +3312,26 @@ func (m *kvMeta) doSyncVolumeStat(ctx Context) error {
 func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 	return m.txn(ctx, func(tx *kvTxn) error {
 		keys := make([][]byte, 0, len(quotas))
-		qs := make([]*Quota, 0, len(quotas))
+		qs := make([]*iQuota, 0, len(quotas))
 		for _, q := range quotas {
 			key, err := m.getQuotaKey(q.qtype, q.qkey)
 			if err != nil {
 				return err
 			}
 			keys = append(keys, key)
-			qs = append(qs, q.quota)
+			qs = append(qs, q)
 		}
 		for i, v := range tx.gets(keys...) {
 			if len(v) == 0 {
+				if qs[i].qtype == UserQuotaType || qs[i].qtype == GroupQuotaType {
+					quota := &Quota{
+						MaxSpace:   -1,
+						MaxInodes:  -1,
+						UsedSpace:  qs[i].quota.newSpace,
+						UsedInodes: qs[i].quota.newInodes,
+					}
+					tx.set(keys[i], m.packQuota(quota))
+				}
 				continue
 			}
 			if len(v) != 32 {
@@ -3294,8 +3339,8 @@ func (m *kvMeta) doFlushQuotas(ctx Context, quotas []*iQuota) error {
 				continue
 			}
 			q := m.parseQuota(v)
-			q.UsedSpace += qs[i].newSpace
-			q.UsedInodes += qs[i].newInodes
+			q.UsedSpace += qs[i].quota.newSpace
+			q.UsedInodes += qs[i].quota.newInodes
 			tx.set(keys[i], m.packQuota(q))
 		}
 		return nil

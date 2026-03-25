@@ -30,6 +30,11 @@ pkg/meta/badger
 pkg/meta/testdata
 *.dump
 *.out
+*.log
+test*.sh
+test*.db*
+test*.py
+test*.bak
 
 # gen
 /juicefs
@@ -40,3 +45,5 @@ pkg/meta/testdata
 /juicefsd.exe~
 /juicefs.lite
 dist/
+juicefs.egg-info/
+pkg/meta/jfs-load-dump/

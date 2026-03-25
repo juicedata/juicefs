@@ -264,7 +264,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 			close(out)
 		}()
 		return out, nil
-	} else if !errors.Is(err, utils.ENOTSUP) {
+	} else if !errors.Is(err, utils.ErrNotSUP) {
 		return nil, err
 	}
 
@@ -272,7 +272,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
 
 	objs, hasMore, nextToken, err := store.List(ctx, prefix, marker, "", "", maxResults, followLink)
-	if errors.Is(err, utils.ENOTSUP) {
+	if errors.Is(err, utils.ErrNotSUP) {
 		return object.ListAllWithDelimiter(ctx, store, prefix, start, end, followLink)
 	}
 	if err != nil {
@@ -939,7 +939,7 @@ func CopyData(src, dst object.ObjectStorage, key string, size int64, calChksum b
 		var upload *object.MultipartUpload
 		if upload, err = dst.CreateMultipartUpload(ctx, key); err == nil {
 			srcChksum, err = doCopyMultiple(src, dst, key, size, upload, calChksum)
-		} else if err == utils.ENOTSUP {
+		} else if err == utils.ErrNotSUP {
 			err = try(3, func() (err error) {
 				srcChksum, err = doCopySingle(src, dst, key, size, calChksum)
 				return
@@ -1095,7 +1095,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 			}
 			if err == nil {
 				if mc, ok := dst.(object.MtimeChanger); ok {
-					if err = mc.Chtimes(obj.Key(), obj.Mtime()); err != nil && !errors.Is(err, utils.ENOTSUP) {
+					if err = mc.Chtimes(obj.Key(), obj.Mtime()); err != nil && !errors.Is(err, utils.ErrNotSUP) {
 						logger.Warnf("Update mtime of %s: %s", key, err)
 					}
 				}
@@ -1403,7 +1403,7 @@ type rule struct {
 
 func parseRule(name, p string) rule {
 	if runtime.GOOS == "windows" {
-		p = strings.Replace(p, "\\", "/", -1)
+		p = strings.ReplaceAll(p, "\\", "/")
 	}
 	return rule{pattern: p, include: name == "-include"}
 }
@@ -1897,7 +1897,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	}
 
 	srckeys, err := listCommonPrefix(src, prefix, commonPrefix, !config.Links, startAfter, config, checkpointMgr, listDepth)
-	if err == utils.ENOTSUP {
+	if err == utils.ErrNotSUP {
 		return startSingleProducer(tasks, src, dst, prefix, config, checkpointMgr)
 	} else if err != nil {
 		return fmt.Errorf("list %s with delimiter: %s", src, err)
@@ -1913,7 +1913,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		dstkeys = t
 	} else {
 		dstkeys, err = listCommonPrefix(dst, prefix, dcp, !config.Links, startAfter, config, checkpointMgr, listDepth)
-		if err == utils.ENOTSUP {
+		if err == utils.ErrNotSUP {
 			return startSingleProducer(tasks, src, dst, prefix, config, checkpointMgr)
 		} else if err != nil {
 			return fmt.Errorf("list %s with delimiter: %s", dst, err)

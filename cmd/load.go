@@ -155,10 +155,7 @@ func open(src string, key string, algo string) (io.ReadCloser, error) {
 }
 
 func convert(path string, key, algo string) (string, error) {
-	isCompress := false
-	if strings.HasSuffix(path, ".gz") || strings.HasSuffix(path, ".zstd") {
-		isCompress = true
-	}
+	isCompress := strings.HasSuffix(path, ".gz") || strings.HasSuffix(path, ".zstd")
 
 	if key == "" && !isCompress {
 		return path, nil

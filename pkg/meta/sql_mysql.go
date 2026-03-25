@@ -20,7 +20,12 @@
 package meta
 
 import (
+	"fmt"
+	"net/url"
+	"strings"
+
 	"github.com/go-sql-driver/mysql"
+	"xorm.io/xorm"
 )
 
 func isMySQLDuplicateEntryErr(err error) bool {
@@ -30,20 +35,59 @@ func isMySQLDuplicateEntryErr(err error) bool {
 	return false
 }
 
-func setMySQLTransactionIsolation(dns string) (string, error) {
-	cfg, err := mysql.ParseDSN(dns)
+// recoveryMysqlPwd escaping is not necessary for mysql password https://github.com/go-sql-driver/mysql#password
+func recoveryMysqlPwd(addr string) string {
+	colonIndex := strings.Index(addr, ":")
+	atIndex := strings.LastIndex(addr, "@")
+	if colonIndex != -1 && colonIndex < atIndex {
+		pwd := addr[colonIndex+1 : atIndex]
+		if parse, err := url.Parse("mysql://root:" + pwd + "@127.0.0.1"); err == nil {
+			if originPwd, ok := parse.User.Password(); ok {
+				addr = fmt.Sprintf("%s:%s%s", addr[:colonIndex], originPwd, addr[atIndex:])
+			}
+		}
+	}
+	return addr
+}
+
+func createMySQLEngine(dsn string) (*xorm.Engine, error) {
+	cfg, err := mysql.ParseDSN(recoveryMysqlPwd(dsn))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if cfg.Params == nil {
 		cfg.Params = make(map[string]string)
 	}
-	cfg.Params["transaction_isolation"] = "'repeatable-read'"
-	return cfg.FormatDSN(), nil
+
+	var engine *xorm.Engine
+	for _, key := range []string{"transaction_isolation", "tx_isolation"} {
+		cfg.Params[key] = "'repeatable-read'"
+		engine, err = xorm.NewEngine("mysql", cfg.FormatDSN())
+		if err != nil {
+			return nil, fmt.Errorf("unable to create engine: %s", err)
+		}
+
+		if err = engine.Ping(); err == nil {
+			return engine, nil
+		}
+
+		_ = engine.Close()
+		delete(cfg.Params, key)
+
+		if !isUnknownTransactionIsolationErr(err, key) {
+			return nil, fmt.Errorf("ping database: %s", err)
+		}
+	}
+
+	return nil, fmt.Errorf("failed to set isolation level: %s", err)
+}
+
+func isUnknownTransactionIsolationErr(err error, key string) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), fmt.Sprintf("unknown system variable '%s'", key))
 }
 
 func init() {
 	dupErrorCheckers = append(dupErrorCheckers, isMySQLDuplicateEntryErr)
-	setTransactionIsolation = setMySQLTransactionIsolation
+	engineCreator["mysql"] = createMySQLEngine
 	Register("mysql", newSQLMeta)
 }

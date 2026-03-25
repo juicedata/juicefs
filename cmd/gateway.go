@@ -27,6 +27,7 @@ import (
 	"os/signal"
 	"path"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
@@ -40,6 +41,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	mcli "github.com/minio/cli"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 )
 
@@ -66,6 +68,10 @@ func cmdGateway() *cli.Command {
 		&cli.BoolFlag{
 			Name:  "multi-buckets",
 			Usage: "use top level of directories as buckets",
+		},
+		&cli.StringFlag{
+			Name:  "bucket-name",
+			Usage: "use this bucket name instead of JuiceFS name (ignored when --multi-buckets is enabled)",
 		},
 		&cli.BoolFlag{
 			Name:  "keep-etag",
@@ -161,13 +167,24 @@ func gateway(c *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
 	}
-
+	bucket := c.String("bucket-name")
+	if bucket == "" {
+		bucket = conf.Format.Name
+	} else {
+		if strings.HasPrefix(bucket, minio.MinioMetaBucket) {
+			logger.Fatalf("bucket name %q cannot start with %q", bucket, minio.MinioMetaBucket)
+		}
+		if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
+			logger.Fatalf("invalid bucket name %q: %s", bucket, err)
+		}
+	}
 	readonly := c.Bool("read-only")
 	jfsGateway, err = jfsgateway.NewJFSGateway(
 		jfs,
 		conf,
 		&jfsgateway.Config{
 			MultiBucket: c.Bool("multi-buckets"),
+			Bucket:      bucket,
 			KeepEtag:    c.Bool("keep-etag"),
 			Umask:       uint16(umask),
 			ObjTag:      c.Bool("object-tag"),

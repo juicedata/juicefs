@@ -1,3 +1,33 @@
+version: "2"
 run:
-  timeout: 5m
   tests: false
+  timeout: 5m
+linters:
+  disable:
+    - govet
+  exclusions:
+    rules:
+      - text: "QF1001"
+        linters:
+          - staticcheck
+      - text: "QF1003"
+        linters:
+          - staticcheck
+      - text: "QF1008"
+        linters:
+          - staticcheck
+      - text: "QF1011"
+        linters:
+          - staticcheck
+      - text: "QF1012"
+        linters:
+          - staticcheck
+      - text: "ST1005"
+        linters:
+          - staticcheck
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling

@@ -78,7 +78,8 @@ type Format struct {
 	Name             string
 	UUID             string
 	Storage          string
-	StorageClass     string `json:",omitempty"`
+	StorageClass     string       `json:",omitempty"`
+	Tiers            object.Tiers `json:",omitempty"`
 	Bucket           string
 	AccessKey        string `json:",omitempty"`
 	SecretKey        string `json:",omitempty"`

@@ -513,7 +513,7 @@ func debug(ctx *cli.Context) error {
 		}
 		return nil
 	}, 3*time.Second); err != nil {
-		logger.Warnf(err.Error())
+		logger.Warn(err.Error())
 		logger.Warnf("assuming the mount point is JuiceFS mount point")
 	} else {
 		if inode != uint64(meta.RootInode) {

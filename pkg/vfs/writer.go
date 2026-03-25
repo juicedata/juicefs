@@ -294,10 +294,7 @@ func (w *dataWriter) usedBufferSize() int64 {
 }
 
 func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Errno {
-	for {
-		if f.totalSlices() < 1000 {
-			break
-		}
+	for f.totalSlices() >= 1000 {
 		time.Sleep(time.Millisecond)
 	}
 	if f.w.usedBufferSize() > f.w.bufferSize {

@@ -159,54 +159,61 @@ func destroy(ctx *cli.Context) error {
 	}
 
 	objs, err := object.ListAll(ctx.Context, blob, "", "", true, false)
-	if err != nil {
-		logger.Fatalf("list all objects: %s", err)
-	}
-	progress := utils.NewProgress(false)
-	spin := progress.AddCountSpinner("Deleted objects")
-	var failed int
-	var dirs []string
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for obj := range objs {
-				if obj == nil {
-					break // failed listing
-				}
-				if obj.IsDir() {
-					mu.Lock()
-					dirs = append(dirs, obj.Key())
-					mu.Unlock()
-					continue
-				}
-				if err := blob.Delete(ctx.Context, obj.Key()); err == nil {
-					spin.Increment()
-				} else {
-					failed++
-					logger.Warnf("delete %s: %s", obj.Key(), err)
-				}
-			}
-		}()
-	}
-	wg.Wait()
-	sort.Strings(dirs)
-	for i := len(dirs) - 1; i >= 0; i-- {
-		if err := blob.Delete(ctx.Context, dirs[i]); err == nil {
-			spin.Increment()
-		} else {
-			failed++
-			logger.Warnf("delete %s: %s", dirs[i], err)
+	if err != nil && strings.Contains(err.Error(), "NoSuchBucket") {
+		if !ctx.Bool("force") {
+			logger.Fatalf("data storage %s does not exist (error: %v); retry with \"--force\" to skip object deletion", blob, err)
 		}
-	}
-	progress.Done()
-	if progress.Quiet {
-		logger.Infof("Deleted %d objects", spin.Current())
-	}
-	if failed > 0 {
-		logger.Errorf("%d objects are failed to delete, please do it manually.", failed)
+		logger.Warnf("data storage %s does not exist (error: %v); will skip object deletion", blob, err)
+	} else {
+		if err != nil {
+			logger.Fatalf("list all objects: %s", err)
+		}
+		progress := utils.NewProgress(false)
+		spin := progress.AddCountSpinner("Deleted objects")
+		var failed int
+		var dirs []string
+		var mu sync.Mutex
+		var wg sync.WaitGroup
+		for i := 0; i < 8; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for obj := range objs {
+					if obj == nil {
+						break // failed listing
+					}
+					if obj.IsDir() {
+						mu.Lock()
+						dirs = append(dirs, obj.Key())
+						mu.Unlock()
+						continue
+					}
+					if err := blob.Delete(ctx.Context, obj.Key()); err == nil {
+						spin.Increment()
+					} else {
+						failed++
+						logger.Warnf("delete %s: %s", obj.Key(), err)
+					}
+				}
+			}()
+		}
+		wg.Wait()
+		sort.Strings(dirs)
+		for i := len(dirs) - 1; i >= 0; i-- {
+			if err := blob.Delete(ctx.Context, dirs[i]); err == nil {
+				spin.Increment()
+			} else {
+				failed++
+				logger.Warnf("delete %s: %s", dirs[i], err)
+			}
+		}
+		progress.Done()
+		if progress.Quiet {
+			logger.Infof("Deleted %d objects", spin.Current())
+		}
+		if failed > 0 {
+			logger.Errorf("%d objects are failed to delete, please do it manually.", failed)
+		}
 	}
 
 	if err = m.Reset(); err != nil {
