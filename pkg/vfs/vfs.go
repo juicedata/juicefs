@@ -77,6 +77,7 @@ type FuseOptions struct {
 	DirectMountFlags         uintptr
 	EnableAcl                bool
 	DisableReadDirPlus       bool `json:",omitempty"`
+	EnableReadDirPlusAuto    bool
 	EnableWriteback          bool
 	EnableIoctl              bool `json:",omitempty"`
 	DontUmask                bool
