@@ -1481,21 +1481,20 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 
 	defer m.timeit("Mknod", time.Now())
 	parent = m.checkRoot(parent)
+	checkGid := ctx.Gid()
+	if m.getFormat().UserGroupQuota {
+		var pattr Attr
+		if st := m.GetAttr(ctx, parent, &pattr); st != 0 {
+			return st
+		}
+		if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
+			checkGid = pattr.Gid
+		} else if runtime.GOOS == "linux" && pattr.Mode&02000 != 0 {
+			checkGid = pattr.Gid
+		}
+	}
 	var space, inodes int64 = align4K(0), 1
-	var pattr Attr
-	if st := m.GetAttr(ctx, parent, &pattr); st != 0 {
-		return st
-	}
-	var checkGid uint32
-	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
-		checkGid = pattr.Gid
-	} else if runtime.GOOS == "linux" && pattr.Mode&02000 != 0 {
-		checkGid = pattr.Gid
-	} else {
-		checkGid = ctx.Gid()
-	}
 	if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), checkGid, parent); err != 0 {
-		logger.Debugf("Mknod: quota check failed for uid=%d, gid=%d (ctx gid=%d), err=%s", ctx.Uid(), checkGid, ctx.Gid(), err)
 		return err
 	}
 
