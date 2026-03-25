@@ -1642,7 +1642,7 @@ func testCaseIncensiHardlinkRename(t *testing.T, m Meta) {
 }
 
 type compactor interface {
-	compactChunk(inode Ino, indx uint32, once, force bool, tierID int8)
+	compactChunk(inode Ino, indx uint32, once, force bool, tierID int)
 }
 
 func testCompaction(t *testing.T, m Meta, trash bool) {
