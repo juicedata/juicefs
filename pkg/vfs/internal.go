@@ -451,6 +451,8 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			eno := v.Meta.GetAttr(ctx, inode, &attr)
 			if eno != 0 {
 				logger.Warnf("GetAttr of %d: %s", inode, eno)
+				info.TierID = 0
+				info.TierStr = "unknown"
 			} else {
 				info.TierID = attr.Tier
 				if info.TierID == 0 {
