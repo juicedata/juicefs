@@ -47,7 +47,7 @@ func TestCompact(t *testing.T) {
 			buf[j] = byte(i)
 		}
 		cid := uint64(i)
-		w := store.NewWriter(cid)
+		w := store.NewWriter(cid, 0)
 		if n, e := w.WriteAt(buf, 0); e != nil {
 			t.Fatalf("write chunk %d: %s", cid, e)
 		} else {
@@ -61,7 +61,7 @@ func TestCompact(t *testing.T) {
 
 	// compact
 	var cid uint64 = 1000
-	err := Compact(cconf, store, slices, cid)
+	err := Compact(cconf, store, slices, cid, 0)
 	if err != nil {
 		t.Fatalf("compact %d slices : %s", len(slices), err)
 	}
@@ -89,7 +89,7 @@ func TestCompact(t *testing.T) {
 
 	// failed
 	_ = store.Remove(1, 200)
-	err = Compact(cconf, store, slices, cid)
+	err = Compact(cconf, store, slices, cid, 0)
 	if err == nil {
 		t.Fatalf("compact should fail with read but got nil")
 	}

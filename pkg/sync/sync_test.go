@@ -767,6 +767,7 @@ func (o *mockObject) IsSymlink() bool      { return false }
 func (o *mockObject) Size() int64          { return o.size }
 func (o *mockObject) Mtime() time.Time     { return o.mtime }
 func (o *mockObject) StorageClass() string { return "" }
+func (o *mockObject) Status() string       { return "" }
 
 func TestFilterSizeAndAge(t *testing.T) {
 	config := &Config{
