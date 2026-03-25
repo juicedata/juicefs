@@ -1015,23 +1015,9 @@ func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 	return errno(err)
 }
 
-func (m *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr, metaResolve bool) syscall.Errno {
-	if metaResolve {
-		*inode = RootInode
-		for path != "" {
-			ps := strings.SplitN(path, "/", 2)
-			if ps[0] != "" {
-				r := m.en.doLookup(ctx, *inode, ps[0], inode, attr)
-				if r != 0 {
-					return r
-				}
-			}
-			if len(ps) == 1 {
-				break
-			}
-			path = ps[1]
-		}
-		return 0
+func (m *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr, force bool) syscall.Errno {
+	if force {
+		return m.baseMeta.Resolve(ctx, parent, path, inode, attr, force)
 	}
 	if len(m.shaResolve) == 0 || m.conf.CaseInsensi || m.prefix != "" {
 		return syscall.ENOTSUP
@@ -1054,7 +1040,7 @@ func (m *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 		}
 		m.parseAttr([]byte(returnedAttr), attr)
 	} else if st == syscall.EAGAIN {
-		return m.Resolve(ctx, parent, path, inode, attr, metaResolve)
+		return m.Resolve(ctx, parent, path, inode, attr, force)
 	}
 	return st
 }

@@ -130,7 +130,7 @@ func setTier(ctx *cli.Context) error {
 	}
 	var ino meta.Ino
 	var attr meta.Attr
-	eno := m.Resolve(meta.Background(), 1, path, &ino, &attr, true)
+	eno := m.Resolve(meta.Background(), meta.RootInode, path, &ino, &attr, true)
 	if eno != 0 {
 		return eno
 	}
@@ -194,7 +194,7 @@ func objRestore(ctx *cli.Context) error {
 	}
 	var ino meta.Ino
 	var attr meta.Attr
-	eno := m.Resolve(meta.Background(), 1, path, &ino, &attr, true)
+	eno := m.Resolve(meta.Background(), meta.RootInode, path, &ino, &attr, true)
 	if eno != 0 {
 		return eno
 	}

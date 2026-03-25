@@ -1285,25 +1285,25 @@ func clearSUGID(ctx Context, cur *Attr, set *Attr) {
 	}
 }
 
-func (r *baseMeta) Resolve(ctx Context, parent Ino, dpath string, inode *Ino, attr *Attr, metaResolve bool) syscall.Errno {
-	if metaResolve {
-		*inode = RootInode
-		for dpath != "" {
-			ps := strings.SplitN(dpath, "/", 2)
-			if ps[0] != "" {
-				r := r.en.doLookup(ctx, *inode, ps[0], inode, attr)
-				if r != 0 {
-					return r
-				}
-			}
-			if len(ps) == 1 {
-				break
-			}
-			dpath = ps[1]
-		}
-		return 0
+func (r *baseMeta) Resolve(ctx Context, parent Ino, dpath string, inode *Ino, attr *Attr, force bool) syscall.Errno {
+	if !force {
+		return syscall.ENOTSUP
 	}
-	return syscall.ENOTSUP
+	*inode = RootInode
+	for dpath != "" {
+		ps := strings.SplitN(dpath, "/", 2)
+		if ps[0] != "" {
+			r := r.en.doLookup(ctx, *inode, ps[0], inode, attr)
+			if r != 0 {
+				return r
+			}
+		}
+		if len(ps) == 1 {
+			break
+		}
+		dpath = ps[1]
+	}
+	return 0
 }
 
 func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) syscall.Errno {

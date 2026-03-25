@@ -424,7 +424,7 @@ type Meta interface {
 	// Resolve fetches the inode and attributes for an entry identified by the given path.
 	// ENOTSUP will be returned if there's no natural implementation for this operation or
 	// if there are any symlink following involved.
-	Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr, metaResolve bool) syscall.Errno
+	Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr, force bool) syscall.Errno
 	// GetAttr returns the attributes for given node.
 	GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	// SetAttr updates the attributes for given node.
