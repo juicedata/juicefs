@@ -26,6 +26,7 @@ import (
 )
 
 func TestCheckpointManagerSaveAndLoad(t *testing.T) {
+	srcStore, _ := object.CreateStorage("mem", "src", "", "", "")
 	store, _ := object.CreateStorage("mem", "", "", "", "")
 	if err := store.Put(ctx, "pending", bytes.NewReader([]byte("pending"))); err != nil {
 		t.Fatalf("put pending object: %v", err)
@@ -35,7 +36,7 @@ func TestCheckpointManagerSaveAndLoad(t *testing.T) {
 		t.Fatalf("head pending object: %v", err)
 	}
 
-	manager := NewCheckpointManager(store, "mem://src/", "mem://dst/")
+	manager := NewCheckpointManager(srcStore, store, nil)
 	manager.statsUpdater = func(stats *CheckpointStats) {
 		stats.Handled = 9
 	}
@@ -72,7 +73,7 @@ func TestCheckpointManagerSaveAndLoad(t *testing.T) {
 		t.Fatalf("checkpoint UpdatedAt was not refreshed: %s", ckpt.UpdatedAt)
 	}
 
-	loader := NewCheckpointManager(store, "mem://src/", "mem://dst/")
+	loader := NewCheckpointManager(srcStore, store, nil)
 	loaded, err := loader.Load()
 	if err != nil {
 		t.Fatalf("load checkpoint: %v", err)
@@ -101,6 +102,7 @@ func TestCheckpointManagerSaveAndLoad(t *testing.T) {
 }
 
 func TestCheckpointManagerPrefixStateLifecycle(t *testing.T) {
+	srcStore, _ := object.CreateStorage("mem", "src", "", "", "")
 	store, _ := object.CreateStorage("mem", "", "", "", "")
 	if err := store.Put(ctx, "prefix/file", bytes.NewReader([]byte("data"))); err != nil {
 		t.Fatalf("put object: %v", err)
@@ -110,7 +112,7 @@ func TestCheckpointManagerPrefixStateLifecycle(t *testing.T) {
 		t.Fatalf("head object: %v", err)
 	}
 
-	manager := NewCheckpointManager(store, "mem://src/", "mem://dst/")
+	manager := NewCheckpointManager(srcStore, store, nil)
 	manager.checkpoint = &Checkpoint{
 		PrefixState: make(map[string]*PrefixState),
 	}

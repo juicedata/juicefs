@@ -128,11 +128,20 @@ type CheckpointManager struct {
 	statsUpdater  func(*CheckpointStats) // callback to update stats before save
 }
 
+func newCheckpoint(config *Config) *Checkpoint {
+	return &Checkpoint{
+		PrefixState: make(map[string]*PrefixState),
+		Config:      config,
+		UpdatedAt:   time.Now(),
+	}
+}
+
 // NewCheckpointManager creates a new checkpoint manager
-func NewCheckpointManager(dstStorage object.ObjectStorage, srcPath, dstPath string) *CheckpointManager {
-	key := generateCheckpointKey(srcPath, dstPath)
+func NewCheckpointManager(src, dst object.ObjectStorage, config *Config) *CheckpointManager {
+	key := generateCheckpointKey(src.String(), dst.String())
 	return &CheckpointManager{
-		dst:           dstStorage,
+		dst:           dst,
+		checkpoint:    newCheckpoint(config),
 		checkpointKey: key,
 		stopChan:      make(chan struct{}),
 	}
@@ -179,12 +188,14 @@ func (m *CheckpointManager) Save(ckpt *Checkpoint) error {
 		return nil
 	}
 	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
 	if m.statsUpdater != nil {
 		m.statsUpdater(&ckpt.Stats)
 	}
 	ckpt.UpdatedAt = time.Now()
 
 	ckpt.RLock()
+	prefixCount := len(ckpt.PrefixState)
 	for _, state := range ckpt.PrefixState {
 		state.RLock()
 	}
@@ -194,14 +205,12 @@ func (m *CheckpointManager) Save(ckpt *Checkpoint) error {
 	}
 	ckpt.RUnlock()
 
-	m.saveMu.Unlock()
-
 	if err != nil {
 		return fmt.Errorf("failed to marshal checkpoint: %w", err)
 	}
 
 	logger.Debugf("Saving checkpoint with %d prefixes, copied: %d, failed: %d",
-		len(ckpt.PrefixState), ckpt.Stats.Copied, ckpt.Stats.Failed)
+		prefixCount, ckpt.Stats.Copied, ckpt.Stats.Failed)
 	reader := bytes.NewReader(data)
 	if err := m.dst.Put(context.Background(), m.checkpointKey, reader); err != nil {
 		return fmt.Errorf("failed to put checkpoint: %w", err)
@@ -379,10 +388,6 @@ func (m *CheckpointManager) AllDone() bool {
 }
 
 func (m *CheckpointManager) StartPeriodicSave(interval time.Duration) {
-	if m.checkpoint == nil {
-		return
-	}
-
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -403,10 +408,6 @@ func (m *CheckpointManager) StartPeriodicSave(interval time.Duration) {
 }
 
 func (m *CheckpointManager) SaveOnSignal() {
-	if m.checkpoint == nil {
-		return
-	}
-
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
