@@ -115,7 +115,7 @@ func TestMetrics(t *testing.T) {
 		t.Fatalf("expect the stageBlockBytes is %d", len(content))
 	}
 	key := fmt.Sprintf("chunks/0/5/5000_2_%d", len(content))
-	stagingPath, err := m.stage(key, content)
+	stagingPath, err := m.stage(key, content, 0)
 	if err != nil {
 		t.Fatalf("stage failed: %s", err)
 	}
@@ -628,7 +628,7 @@ func TestLruEviction(t *testing.T) {
 		blockPlaceHolder := []byte("test data")
 		for i := 1; i <= 20; i++ {
 			key := fmt.Sprintf("%d_%d_9", i, i)
-			_, err := s.stage(key, blockPlaceHolder)
+			_, err := s.stage(key, blockPlaceHolder, 0)
 			require.True(t, le.verifyHeap())
 			require.NoError(t, err, "Failed to stage data for key %s", key)
 		}
@@ -666,7 +666,7 @@ func TestCooldownAtimeOnWriteFixedOnLoad(t *testing.T) {
 	PatchConvey("mock time.Now to avoid drift", t, func() {
 		fixedTime := time.Date(2025, 1, 28, 12, 0, 0, 0, time.UTC)
 		Mock(time.Now).Return(fixedTime).Build()
-		path, err := cache.stage(key, []byte("test"))
+		path, err := cache.stage(key, []byte("test"), 0)
 		require.NoError(t, err)
 		require.NotEmpty(t, path)
 		expectedCooldownAtime := uint32(fixedTime.Add(-conf.CacheExpire / 2).Unix())
