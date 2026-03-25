@@ -1624,8 +1624,8 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		var pattr Attr
 		m.parseAttr(&pn, &pattr)
 		ihGid := m.inheritGid(ctx, _type, pn.Gid, pn.Mode)
-		if st := m.checkQuota(ctx, align4K(0), 1, ctx.Uid(), ihGid, parent); st != 0 {
-			return st
+		if !m.checkGroupQuota(ctx, uint64(ihGid), align4K(0), 1) {
+			return syscall.EDQUOT
 		}
 		if pattr.Parent > TrashInode {
 			return syscall.ENOENT

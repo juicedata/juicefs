@@ -1516,8 +1516,10 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	defer m.timeit("Mknod", time.Now())
 	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
-
-	// TODO: check dir quota first and avoid the unnecessary nextInode() call and transaction if quota is not enough
+	// check group quota in transaction
+	if err := m.checkQuota(ctx, space, inodes, ctx.Uid(), 0, parent); err != 0 {
+		return err
+	}
 	ino, err := m.nextInode()
 	if err != nil {
 		return errno(err)
