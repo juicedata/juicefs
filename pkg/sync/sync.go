@@ -1011,7 +1011,7 @@ func worker(tasks chan object.Object, src, dst object.ObjectStorage, config *Con
 		case markDeleteSrc:
 			taskErr = deleteObj(src, key, config.Dry)
 		case markDeleteDst:
-			taskErr = deleteObj(src, key, config.Dry)
+			taskErr = deleteObj(dst, key, config.Dry)
 		case markCopyPerms:
 			if config.Dry {
 				logger.Debugf("Will copy permissions for %s", key)
