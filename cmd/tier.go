@@ -160,7 +160,7 @@ func setTier(ctx *cli.Context) error {
 
 	objectFunc := func(key string) error {
 		fullPath := format.Name + "/" + key
-		ctx := context.WithValue(context.Background(), object.TierKey, uint8(id))
+		ctx := context.WithValue(context.Background(), object.TierKey{}, uint8(id))
 		return blob.Copy(ctx, fullPath, fullPath)
 	}
 	if attr.Typ == meta.TypeFile {

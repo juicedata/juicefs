@@ -18,6 +18,7 @@ package vfs
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -481,10 +482,10 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			}
 			if len(info.Objects) > 0 {
 				lastObjKey := strings.TrimPrefix(info.Objects[len(info.Objects)-1].Key, v.Conf.Format.Name+"/")
-				if status, err := v.Store.GetObjStatus(lastObjKey); err != nil {
+				if objInfo, err := v.Store.BlobStorage().Head(context.Background(), lastObjKey); err != nil {
 					logger.Warnf("get restore status of %s: %s", lastObjKey, err)
 				} else {
-					info.RestoreStatus = status
+					info.RestoreStatus = objInfo.Status()
 				}
 			}
 

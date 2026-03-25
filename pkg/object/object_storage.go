@@ -327,9 +327,8 @@ func TmpFilePath(parent, name string) string {
 	return filepath.Join(filepath.Dir(parent), ".jfs."+name+".tmp."+strconv.Itoa(rand.Int()))
 }
 
-type ctxKey string
+type TierKey struct{}
 
-const TierKey ctxKey = "tierID"
 const defaultRestoreDays = 3
 
 type SupportTier interface {
@@ -344,7 +343,7 @@ type tierStorage struct {
 
 func (b *tierStorage) getScStr(ctx context.Context) string {
 	scStr := b.sc
-	if id, ok := ctx.Value(TierKey).(uint8); ok {
+	if id, ok := ctx.Value(TierKey{}).(uint8); ok {
 		if id == 0 {
 			return scStr
 		}

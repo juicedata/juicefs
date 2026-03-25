@@ -43,7 +43,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/spf13/cast"
 	"github.com/twmb/murmur3"
 )
 
@@ -544,7 +543,7 @@ func (cache *cacheStore) flushPage(path string, data []byte, dropCache bool, tie
 	}
 	// write tierID into stage file
 	if tierID != 0 {
-		if err = cache.writeFile(f, []byte(cast.ToString(tierID))); err != nil {
+		if err = cache.writeFile(f, []byte{tierID}); err != nil {
 			logger.Warnf("Write tier to cache file %s failed: %s", tmp, err)
 			_ = f.Close()
 			return
@@ -1317,11 +1316,14 @@ const (
 
 var crc32c = crc32.MakeTable(crc32.Castagnoli)
 
+const tierIDLength = int64(1) // 1 byte for tierID in the end of cache file
+
 type cacheFile struct {
 	*os.File
-	length  int // length of data
-	csLevel string
-	tierID  uint8
+	length   int // length of data
+	csLevel  string
+	hasTier  bool
+	fileSize int64
 }
 
 // Calculate 32-bits checksum for every 32 KiB data, so 512 Bytes for 4 MiB in total
@@ -1349,45 +1351,22 @@ func openCacheFile(name string, length int, level string) (*cacheFile, error) {
 		_ = fp.Close()
 		return nil, err
 	}
-
-	getTierID := func() (uint8, error) {
-		b := make([]byte, 1)
-		_, err := fp.ReadAt(b, fi.Size()-1)
-		if err != nil {
-			return 0, err
-		}
-		tierID, err := cast.ToUint8E(string(b[0]))
-		if err != nil {
-			return 0, err
-		}
-		if tierID > 3 {
-			logger.Errorf("Invalid tier ID %d in cache file %s", tierID, name)
-			tierID = 0
-		}
-		return tierID, nil
-	}
 	checksumLength := ((length-1)/csBlock + 1) * 4
+	hasTier := false
 	switch fi.Size() - int64(length) {
 	case 0:
-		return &cacheFile{fp, length, CsNone, 0}, nil
+		level = CsNone
+	case tierIDLength:
+		level = CsNone
+		hasTier = true
 	case int64(checksumLength):
-		return &cacheFile{fp, length, level, 0}, nil
-	case 1:
-		tierID, err := getTierID()
-		if err != nil {
-			return nil, err
-		}
-		return &cacheFile{fp, length, CsNone, tierID}, nil
-	case int64(checksumLength) + 1:
-		tierID, err := getTierID()
-		if err != nil {
-			return nil, err
-		}
-		return &cacheFile{fp, length, level, tierID}, nil
+	case int64(checksumLength) + tierIDLength:
+		hasTier = true
 	default:
 		_ = fp.Close()
 		return nil, fmt.Errorf("invalid file size %d, data length %d", fi.Size(), length)
 	}
+	return &cacheFile{File: fp, length: length, csLevel: level, hasTier: hasTier, fileSize: fi.Size()}, nil
 }
 
 func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
@@ -1464,4 +1443,22 @@ func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
 		}
 	}
 	return
+}
+
+func (cf *cacheFile) ReadTierID() (uint8, error) {
+	if !cf.hasTier {
+		return 0, nil
+	}
+	var buf [1]byte
+	n, err := cf.ReadAt(buf[:], cf.fileSize-tierIDLength)
+	if err != nil {
+		return 0, err
+	} else if n != 1 {
+		return 0, fmt.Errorf("invalid tierID length %d, expect %d", n, tierIDLength)
+	}
+	if buf[0] > 3 {
+		logger.Errorf("Invalid tierID %d in cache file %s", buf[0], cf.Name())
+		return 0, nil
+	}
+	return buf[0], nil
 }

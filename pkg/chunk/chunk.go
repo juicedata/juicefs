@@ -19,6 +19,8 @@ package chunk
 import (
 	"context"
 	"io"
+
+	"github.com/juicedata/juicefs/pkg/object"
 )
 
 type Reader interface {
@@ -44,5 +46,5 @@ type ChunkStore interface {
 	CheckCache(id uint64, length uint32, handler func(exists bool, loc string, size int)) error
 	UsedMemory() int64
 	UpdateLimit(upload, download int64)
-	GetObjStatus(key string) (string, error)
+	BlobStorage() object.ObjectStorage
 }

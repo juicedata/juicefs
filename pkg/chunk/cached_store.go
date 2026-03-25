@@ -420,7 +420,7 @@ func (s *wSlice) upload(indx int) {
 		if off != blen {
 			panic(fmt.Sprintf("block length does not match: %v != %v", off, blen))
 		}
-		ctx := context.WithValue(context.Background(), object.TierKey, s.tierID)
+		ctx := context.WithValue(context.Background(), object.TierKey{}, s.tierID)
 		if s.writeback && blen < s.store.conf.WritebackThresholdSize {
 			stagingPath := "unknown"
 			stageFailed := false
@@ -1058,6 +1058,10 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	}
 	block := NewOffPage(blen)
 	_, err = f.ReadAt(block.Data, 0)
+	tierID := uint8(0)
+	if err == nil {
+		tierID, err = f.ReadTierID()
+	}
 	_ = f.Close()
 	if err != nil {
 		block.Release()
@@ -1069,8 +1073,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		logger.Debugf("Key %s is not needed, drop it", key)
 		return
 	}
-
-	ctx := context.WithValue(context.Background(), object.TierKey, f.tierID)
+	ctx := context.WithValue(context.Background(), object.TierKey{}, tierID)
 	store.stageBlockDelay.Add(time.Since(item.ts).Seconds())
 	if err = store.upload(ctx, key, block, nil); err == nil {
 		if !store.isPendingValid(key) { // Delete leaked objects if it's already deleted by other goroutines
@@ -1237,12 +1240,8 @@ func (store *cachedStore) UpdateLimit(upload, download int64) {
 	}
 }
 
-func (store *cachedStore) GetObjStatus(key string) (string, error) {
-	info, err := store.storage.Head(context.Background(), key)
-	if err != nil {
-		return "", err
-	}
-	return info.Status(), nil
+func (store *cachedStore) BlobStorage() object.ObjectStorage {
+	return store.storage
 }
 
 var _ ChunkStore = (*cachedStore)(nil)
