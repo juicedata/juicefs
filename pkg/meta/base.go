@@ -1530,6 +1530,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}
 	attr.Typ = _type
 	attr.Uid = ctx.Uid()
+	attr.Gid = ctx.Gid()
 	if _type == TypeDirectory {
 		attr.Nlink = 2
 		attr.Length = 4 << 10
