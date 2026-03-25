@@ -1684,10 +1684,6 @@ func restorePrefixFromCheckpoint(tasks chan<- object.Object, src, dst object.Obj
 	if !exists {
 		return false
 	}
-
-	if !checkpointMgr.IsLoadedPrefix(prefix) {
-		return false
-	}
 	state.Lock()
 	maps.Copy(state.PendingKeys, state.FailedKeys)
 	state.FailedKeys = make(map[string]object.Object)
@@ -1709,6 +1705,7 @@ func restorePrefixFromCheckpoint(tasks chan<- object.Object, src, dst object.Obj
 	if !done {
 		if err := startProducer(tasks, src, dst, prefix, listDepth, config, checkpointMgr); err != nil {
 			logger.Errorf("Failed to restart producer for prefix %s: %v", prefix, err)
+			failed.Increment()
 		}
 	}
 	return true
@@ -1882,10 +1879,6 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 			wg.Add(1)
 			go func(prefix string) {
 				defer wg.Done()
-				// Try restoring from checkpoint first (handles pending/failed keys)
-				if restorePrefixFromCheckpoint(tasks, src, dst, prefix, config, checkpointMgr) {
-					return
-				}
 				err := startProducer(tasks, src, dst, prefix, listDepth-1, config, checkpointMgr)
 				if err != nil {
 					logger.Errorf("list prefix %s: %s", prefix, err)
@@ -2222,7 +2215,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			}
 			for i := len(keys) - 1; i >= 0; i-- {
 				incrHandled(1)
-				deleteObj(storage, keys[i], config.Dry)
+				_ = deleteObj(storage, keys[i], config.Dry)
 			}
 		}
 		delWg := sync.WaitGroup{}
