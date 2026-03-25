@@ -1725,24 +1725,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		n.setAtime(now)
 		n.setMtime(now)
 		n.setCtime(now)
-		if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
-			n.Gid = pn.Gid
-		} else if runtime.GOOS == "linux" && pn.Mode&02000 != 0 {
-			n.Gid = pn.Gid
-			if _type == TypeDirectory {
-				n.Mode |= 02000
-			} else if n.Mode&02010 == 02010 && ctx.Uid() != 0 {
-				var found bool
-				for _, gid := range ctx.Gids() {
-					if gid == pn.Gid {
-						found = true
-					}
-				}
-				if !found {
-					n.Mode &= ^uint16(02000)
-				}
-			}
-		}
+		n.Gid, n.Mode = applyGidInheritance(ctx, _type, pn.Gid, pn.Mode, n.Mode)
 
 		if err = mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: *inode, Type: _type}, &n); err != nil {
 			return err
