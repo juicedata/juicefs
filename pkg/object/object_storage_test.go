@@ -94,8 +94,10 @@ func setStorageClass(o ObjectStorage) string {
 }
 
 func getScStr(o ObjectStorage) string {
-	var sc = "STANDARD_IA"
+	var sc = ""
 	switch o.(type) {
+	case *s3client:
+		sc = "STANDARD_IA"
 	case *wasb:
 		sc = string(blob2.AccessTierCool)
 	case *gs:
