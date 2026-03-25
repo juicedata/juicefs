@@ -113,6 +113,8 @@ type Checkpoint struct {
 	PrefixState map[string]*PrefixState `json:"prefix_state"`
 	Config      *Config                 `json:"config"`
 	Stats       CheckpointStats         `json:"stats"`
+	SrcDelayDel []string                `json:"src_delay_del,omitempty"`
+	DstDelayDel []string                `json:"dst_delay_del,omitempty"`
 	UpdatedAt   time.Time               `json:"updated_at"`
 }
 
@@ -192,6 +194,14 @@ func (m *CheckpointManager) Save(ckpt *Checkpoint) error {
 	if m.statsUpdater != nil {
 		m.statsUpdater(&ckpt.Stats)
 	}
+
+	srcDelayDelMu.Lock()
+	ckpt.SrcDelayDel = append([]string(nil), srcDelayDel...)
+	srcDelayDelMu.Unlock()
+	dstDelayDelMu.Lock()
+	ckpt.DstDelayDel = append([]string(nil), dstDelayDel...)
+	dstDelayDelMu.Unlock()
+
 	ckpt.UpdatedAt = time.Now()
 
 	ckpt.RLock()
@@ -346,7 +356,10 @@ func (m *CheckpointManager) MarkFailed(key string) {
 	prefix := prefixVal.(string)
 
 	m.updatePrefixState(prefix, func(state *PrefixState) {
-		objData := state.PendingKeys[key]
+		objData, ok := state.PendingKeys[key]
+		if !ok {
+			return
+		}
 		delete(state.PendingKeys, key)
 		state.FailedKeys[key] = objData
 	})

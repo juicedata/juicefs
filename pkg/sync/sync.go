@@ -1949,8 +1949,20 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		checkpointMgr = NewCheckpointManager(src, dst, config)
 		if ckpt, err := checkpointMgr.Load(); err == nil {
 			if checkpointMgr.ValidateConfig(ckpt, config) {
-				if len(ckpt.PrefixState) > 0 {
+				if len(ckpt.PrefixState) > 0 || len(ckpt.SrcDelayDel) > 0 || len(ckpt.DstDelayDel) > 0 {
 					checkpoint = ckpt
+					config.Limit = ckpt.Config.Limit
+					if len(ckpt.SrcDelayDel) > 0 {
+						logger.Infof("Checkpoint has %d pending deletes in source", len(ckpt.SrcDelayDel))
+						srcDelayDelMu.Lock()
+						srcDelayDel = append([]string(nil), ckpt.SrcDelayDel...)
+						srcDelayDelMu.Unlock()
+					}
+					if len(ckpt.DstDelayDel) > 0 {
+						dstDelayDelMu.Lock()
+						dstDelayDel = append([]string(nil), ckpt.DstDelayDel...)
+						dstDelayDelMu.Unlock()
+					}
 					logger.Infof("Loaded checkpoint from %s", ckpt.UpdatedAt.Format(time.RFC3339))
 				} else {
 					logger.Infof("Loaded empty checkpoint, starting fresh")
