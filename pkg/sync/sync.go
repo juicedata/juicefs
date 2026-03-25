@@ -1685,6 +1685,9 @@ func restorePrefixFromCheckpoint(tasks chan<- object.Object, src, dst object.Obj
 		return false
 	}
 
+	if !checkpointMgr.IsLoadedPrefix(prefix) {
+		return false
+	}
 	state.Lock()
 	maps.Copy(state.PendingKeys, state.FailedKeys)
 	state.FailedKeys = make(map[string]object.Object)
@@ -1809,18 +1812,10 @@ func produceSingleObject(tasks chan<- object.Object, src, dst object.ObjectStora
 }
 
 func restoreFromCheckpoint(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config, checkpointMgr *CheckpointManager) error {
-	checkpoint := checkpointMgr.checkpoint
-	checkpoint.RLock()
-	prefixes := make([]string, 0, len(checkpoint.PrefixState))
-	for prefix := range checkpoint.PrefixState {
-		prefixes = append(prefixes, prefix)
-		checkpointMgr.restoredPrefixes.Store(prefix, struct{}{})
-	}
-	checkpoint.RUnlock()
-
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, max(config.Threads, 1))
-	for _, prefix := range prefixes {
+	checkpointMgr.loadedPrefixes.Range(func(key, value interface{}) bool {
+		prefix := key.(string)
 		sem <- struct{}{}
 		wg.Add(1)
 		go func(prefix string) {
@@ -1828,7 +1823,8 @@ func restoreFromCheckpoint(tasks chan<- object.Object, src, dst object.ObjectSto
 			defer func() { <-sem }()
 			restorePrefixFromCheckpoint(tasks, src, dst, prefix, config, checkpointMgr)
 		}(prefix)
-	}
+		return true
+	})
 	wg.Wait()
 	return nil
 }
@@ -1866,7 +1862,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 
 			// Skip child prefixes that are already being restored from checkpoint
 			// to avoid processing the same subtree twice.
-			if checkpointMgr != nil && checkpointMgr.IsRestoringPrefix(c.Key()) {
+			if checkpointMgr != nil && checkpointMgr.IsLoadedPrefix(c.Key()) {
 				logger.Debugf("skip prefix %s: already being restored from checkpoint", c.Key())
 				continue
 			}
@@ -1886,6 +1882,10 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 			wg.Add(1)
 			go func(prefix string) {
 				defer wg.Done()
+				// Try restoring from checkpoint first (handles pending/failed keys)
+				if restorePrefixFromCheckpoint(tasks, src, dst, prefix, config, checkpointMgr) {
+					return
+				}
 				err := startProducer(tasks, src, dst, prefix, listDepth-1, config, checkpointMgr)
 				if err != nil {
 					logger.Errorf("list prefix %s: %s", prefix, err)
