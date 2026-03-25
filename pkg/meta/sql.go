@@ -1632,6 +1632,11 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if (pn.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
+
+		ihGid, _ := applyGidInheritance(ctx, _type, pn.Gid, pn.Mode, 0)
+		if st := m.checkQuota(ctx, align4K(0), 1, ctx.Uid(), ihGid, parent); st != 0 {
+			return st
+		}
 		var e = edge{Parent: parent, Name: []byte(name)}
 		ok, err = s.Get(&e)
 		if err != nil {

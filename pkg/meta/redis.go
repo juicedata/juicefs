@@ -1436,6 +1436,10 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
+		ihGid, _ := applyGidInheritance(ctx, _type, pattr.Gid, pattr.Mode, 0)
+		if st := m.checkQuota(ctx, align4K(0), 1, ctx.Uid(), ihGid, parent); st != 0 {
+			return st
+		}
 		if (pattr.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
@@ -1476,7 +1480,6 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				*inode = TrashInode + Ino(next)
 			}
 		}
-
 		mode &= 07777
 		if pattr.DefaultACL != aclAPI.None && _type != TypeSymlink {
 			// inherit default acl
