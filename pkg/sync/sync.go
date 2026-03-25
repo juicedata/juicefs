@@ -1814,6 +1814,7 @@ func restoreFromCheckpoint(tasks chan<- object.Object, src, dst object.ObjectSto
 	prefixes := make([]string, 0, len(checkpoint.PrefixState))
 	for prefix := range checkpoint.PrefixState {
 		prefixes = append(prefixes, prefix)
+		checkpointMgr.restoredPrefixes.Store(prefix, struct{}{})
 	}
 	checkpoint.RUnlock()
 
@@ -1862,6 +1863,13 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 			}
 			processing[c.Key()] = true
 			mu.Unlock()
+
+			// Skip child prefixes that are already being restored from checkpoint
+			// to avoid processing the same subtree twice.
+			if checkpointMgr != nil && checkpointMgr.IsRestoringPrefix(c.Key()) {
+				logger.Debugf("skip prefix %s: already being restored from checkpoint", c.Key())
+				continue
+			}
 
 			if len(config.rules) > 0 && !matchLeveledPath(config.rules, c.Key()) {
 				logger.Infof("exclude prefix %s", c.Key())

@@ -18,7 +18,6 @@ package sync
 
 import (
 	"bytes"
-	"context"
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
@@ -119,13 +118,14 @@ type Checkpoint struct {
 
 // CheckpointManager manages checkpoint persistence
 type CheckpointManager struct {
-	saveMu        sync.Mutex
-	dst           object.ObjectStorage
-	checkpoint    *Checkpoint
-	checkpointKey string
-	stopChan      chan struct{}
-	keyPrefix     sync.Map               // key -> prefix mapping for fast lookup
-	statsUpdater  func(*CheckpointStats) // callback to update stats before save
+	saveMu           sync.Mutex
+	dst              object.ObjectStorage
+	checkpoint       *Checkpoint
+	checkpointKey    string
+	stopChan         chan struct{}
+	keyPrefix        sync.Map               // key -> prefix mapping for fast lookup
+	statsUpdater     func(*CheckpointStats) // callback to update stats before save
+	restoredPrefixes sync.Map               // prefixes being restored from checkpoint
 }
 
 func newCheckpoint(config *Config) *Checkpoint {
@@ -162,7 +162,7 @@ func (m *CheckpointManager) isCheckpointKey(key string) bool {
 
 // Load loads checkpoint from object storage
 func (m *CheckpointManager) Load() (*Checkpoint, error) {
-	obj, err := m.dst.Get(context.Background(), m.checkpointKey, 0, -1)
+	obj, err := m.dst.Get(ctx, m.checkpointKey, 0, -1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get checkpoint: %w", err)
 	}
@@ -212,7 +212,7 @@ func (m *CheckpointManager) Save(ckpt *Checkpoint) error {
 	logger.Debugf("Saving checkpoint with %d prefixes, copied: %d, failed: %d",
 		prefixCount, ckpt.Stats.Copied, ckpt.Stats.Failed)
 	reader := bytes.NewReader(data)
-	if err := m.dst.Put(context.Background(), m.checkpointKey, reader); err != nil {
+	if err := m.dst.Put(ctx, m.checkpointKey, reader); err != nil {
 		return fmt.Errorf("failed to put checkpoint: %w", err)
 	}
 
@@ -371,6 +371,15 @@ func (m *CheckpointManager) TrackKey(key, prefix string) {
 		return
 	}
 	m.keyPrefix.Store(key, prefix)
+}
+
+// IsRestoringPrefix returns true if the given prefix is currently being restored from checkpoint.
+func (m *CheckpointManager) IsRestoringPrefix(prefix string) bool {
+	if m == nil {
+		return false
+	}
+	_, ok := m.restoredPrefixes.Load(prefix)
+	return ok
 }
 
 func (m *CheckpointManager) AllDone() bool {
