@@ -1160,7 +1160,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 		m.parseAttr(rs[0], &pattr)
 		ihGid := m.inheritGid(ctx, _type, pattr.Gid, pattr.Mode)
-		if !m.checkGroupQuota(ctx, uint64(ihGid), align4K(0), 1) {
+		if m.checkGroupQuota(ctx, uint64(ihGid), align4K(0), 1) {
 			return syscall.EDQUOT
 		}
 		if pattr.Typ != TypeDirectory {
