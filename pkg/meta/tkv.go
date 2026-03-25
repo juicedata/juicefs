@@ -1168,7 +1168,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
-		ihGid, _ := applyGidInheritance(ctx, _type, pattr.Gid, pattr.Mode, 0)
+		ihGid := m.inheritGid(ctx, _type, pattr.Gid, pattr.Mode)
 		if st := m.checkQuota(ctx, align4K(0), 1, ctx.Uid(), ihGid, parent); st != 0 {
 			return st
 		}
@@ -1262,7 +1262,8 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		attr.Mtimensec = uint32(now.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
-		attr.Gid, attr.Mode = applyGidInheritance(ctx, _type, pattr.Gid, pattr.Mode, attr.Mode)
+		attr.Gid = ihGid
+		attr.Mode = m.inheritMode(ctx, _type, pattr.Gid, pattr.Mode, attr.Mode)
 
 		tx.set(m.entryKey(parent, name), m.packEntry(_type, *inode))
 		if updateParent {

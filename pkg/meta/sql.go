@@ -1633,7 +1633,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			return syscall.EPERM
 		}
 
-		ihGid, _ := applyGidInheritance(ctx, _type, pn.Gid, pn.Mode, 0)
+		ihGid := m.inheritGid(ctx, _type, pn.Gid, pn.Mode)
 		if st := m.checkQuota(ctx, align4K(0), 1, ctx.Uid(), ihGid, parent); st != 0 {
 			return st
 		}
@@ -1730,7 +1730,8 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		n.setAtime(now)
 		n.setMtime(now)
 		n.setCtime(now)
-		n.Gid, n.Mode = applyGidInheritance(ctx, _type, pn.Gid, pn.Mode, n.Mode)
+		n.Gid = ihGid
+		n.Mode = m.inheritMode(ctx, _type, pn.Gid, pn.Mode, n.Mode)
 
 		if err = mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: *inode, Type: _type}, &n); err != nil {
 			return err

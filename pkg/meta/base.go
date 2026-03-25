@@ -1459,9 +1459,19 @@ func (m *baseMeta) allocateInodes() (freeID, error) {
 	return freeID{next: uint64(v) - inodeBatch, maxid: uint64(v)}, nil
 }
 
-func applyGidInheritance(ctx Context, _type uint8, parentGid uint32, parentMode, childMode uint16) (uint32, uint16) {
+func (m *baseMeta) inheritGid(ctx Context, _type uint8, parentGid uint32, parentMode uint16) uint32 {
 	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
-		return parentGid, childMode
+		return parentGid
+	}
+	if runtime.GOOS == "linux" && parentMode&02000 != 0 {
+		return parentGid
+	}
+	return ctx.Gid()
+}
+
+func (m *baseMeta) inheritMode(ctx Context, _type uint8, parentGid uint32, parentMode, childMode uint16) uint16 {
+	if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
+		return childMode
 	}
 	if runtime.GOOS == "linux" && parentMode&02000 != 0 {
 		if _type == TypeDirectory {
@@ -1478,9 +1488,9 @@ func applyGidInheritance(ctx Context, _type uint8, parentGid uint32, parentMode,
 				childMode &= ^uint16(02000)
 			}
 		}
-		return parentGid, childMode
+		return childMode
 	}
-	return ctx.Gid(), childMode
+	return childMode
 }
 
 func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
