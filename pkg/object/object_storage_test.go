@@ -77,33 +77,43 @@ func listAll(ctx context.Context, s ObjectStorage, prefix, marker string, limit 
 }
 
 func setStorageClass(o ObjectStorage) string {
+	sc := getScStr(o)
 	if osc, ok := o.(SupportStorageClass); ok {
-		var sc = "STANDARD_IA"
-		switch o.(type) {
-		case *wasb:
-			sc = string(blob2.AccessTierCool)
-		case *gs:
-			sc = "NEARLINE"
-		case *ossClient:
-			sc = string(oss.StorageClassIA)
-		case *tosClient:
-			sc = string(enum.StorageClassIa)
-		case *obsClient:
-			sc = string(obs.StorageClassStandard)
-		case *bosclient:
-			sc = api.STORAGE_CLASS_STANDARD
-		case *minio:
-			sc = "REDUCED_REDUNDANCY"
-		case *scw:
-			sc = "ONEZONE_IA" // STANDARD, ONEZONE_IA, GLACIER
-		}
 		err := osc.SetStorageClass(sc)
 		if err != nil {
 			sc = ""
 		}
-		return sc
 	}
-	return ""
+
+	if os, ok := o.(SupportTier); ok {
+		tiers := NewTiers()
+		tiers[1] = Tier{ID: 1, Sc: sc}
+		os.SetTier(tiers)
+	}
+	return sc
+}
+
+func getScStr(o ObjectStorage) string {
+	var sc = "STANDARD_IA"
+	switch o.(type) {
+	case *wasb:
+		sc = string(blob2.AccessTierCool)
+	case *gs:
+		sc = "NEARLINE"
+	case *ossClient:
+		sc = string(oss.StorageClassIA)
+	case *tosClient:
+		sc = string(enum.StorageClassIa)
+	case *obsClient:
+		sc = string(obs.StorageClassStandard)
+	case *bosclient:
+		sc = api.STORAGE_CLASS_STANDARD
+	case *minio:
+		sc = "REDUCED_REDUNDANCY"
+	case *scw:
+		sc = "ONEZONE_IA" // STANDARD, ONEZONE_IA, GLACIER
+	}
+	return sc
 }
 
 // nolint:errcheck
@@ -134,7 +144,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 
 	var scPut string
 	key := "测试编码文件" + `{"name":"juicefs"}` + string('\u001F') + "%uFF081%uFF09.jpg"
-	if err := s.Put(ctx, key, bytes.NewReader(nil), WithStorageClass(&scPut)); err != nil {
+	if err := s.Put(context.WithValue(ctx, TierKey{}, uint8(1)), key, bytes.NewReader(nil), WithStorageClass(&scPut)); err != nil {
 		t.Logf("PUT testEncodeFile failed: %s", err.Error())
 	} else {
 		if scPut != sc {
