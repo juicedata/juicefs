@@ -345,6 +345,9 @@ type tierStorage struct {
 func (b *tierStorage) getScStr(ctx context.Context) string {
 	scStr := b.sc
 	if id, ok := ctx.Value(TierKey).(uint8); ok {
+		if id == 0 {
+			return scStr
+		}
 		t, ok2 := b.tiers[id]
 		if ok2 {
 			scStr = t.Sc
