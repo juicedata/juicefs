@@ -18,7 +18,10 @@ package sync
 
 import (
 	"bytes"
+	"math"
+	"os"
 	"reflect"
+	gosync "sync"
 	"testing"
 	"time"
 
@@ -254,4 +257,255 @@ func TestCheckpointManagerValidateConfig(t *testing.T) {
 			t.Fatalf("%s: got %v, want %v", tc.name, got, tc.want)
 		}
 	}
+}
+
+// newTestConfig returns a Config suitable for mem-to-mem checkpoint tests.
+func newTestConfig() *Config {
+	return &Config{
+		Threads:            4,
+		ListThreads:        2,
+		ListDepth:          2,
+		Update:             true,
+		Limit:              -1,
+		MaxSize:            math.MaxInt64,
+		Quiet:              true,
+		EnableCheckpoint:   true,
+		CheckpointInterval: time.Minute,
+	}
+}
+
+// seedCheckpoint creates a checkpoint in dst that simulates an interrupted sync:
+//   - "dir/" listing not done, last listed key "dir/a"
+//   - "dir/sub/" listing not done, last listed key "dir/sub/x",
+//     with "dir/sub/pending" as pending and "dir/sub/y" as failed
+func seedCheckpoint(t *testing.T, src, dst object.ObjectStorage, config *Config) {
+	t.Helper()
+	pendingObj, err := src.Head(ctx, "dir/sub/pending")
+	if err != nil {
+		t.Fatalf("head dir/sub/pending: %v", err)
+	}
+	failedObj, err := src.Head(ctx, "dir/sub/y")
+	if err != nil {
+		t.Fatalf("head dir/sub/y: %v", err)
+	}
+
+	mgr := NewCheckpointManager(src, dst, config)
+	ckpt := &Checkpoint{
+		PrefixState: map[string]*PrefixState{
+			"dir/": {
+				ListDone:      false,
+				LastListedKey: "dir/a",
+				ListDepth:     2,
+				PendingKeys:   make(map[string]object.Object),
+				FailedKeys:    make(map[string]object.Object),
+			},
+			"dir/sub/": {
+				ListDone:      false,
+				LastListedKey: "dir/sub/x",
+				ListDepth:     1,
+				PendingKeys:   map[string]object.Object{"dir/sub/pending": pendingObj},
+				FailedKeys:    map[string]object.Object{"dir/sub/y": failedObj},
+			},
+		},
+		Config: config,
+	}
+	if err := mgr.Save(ckpt); err != nil {
+		t.Fatalf("save checkpoint: %v", err)
+	}
+}
+
+func putObjects(t *testing.T, store object.ObjectStorage, keys ...string) {
+	t.Helper()
+	for _, key := range keys {
+		if err := store.Put(ctx, key, bytes.NewReader([]byte(key))); err != nil {
+			t.Fatalf("put %s: %v", key, err)
+		}
+	}
+}
+
+func collectTasks(tasks <-chan object.Object) []string {
+	var keys []string
+	for obj := range tasks {
+		keys = append(keys, obj.Key())
+	}
+	return keys
+}
+
+func assertDstHasKeys(t *testing.T, dst object.ObjectStorage, keys ...string) {
+	t.Helper()
+	for _, key := range keys {
+		if _, err := dst.Head(ctx, key); err != nil {
+			t.Errorf("expected dst to have %q, but Head returned: %v", key, err)
+		}
+	}
+}
+
+// TestRestoreFromCheckpointChildPrefixKeys tests the restoreFromCheckpoint path:
+// checkpoint has "dir/" (not done) and "dir/sub/" (with pending/failed keys).
+// Verifies that child prefix pending/failed keys are properly restored and synced.
+func TestRestoreFromCheckpointChildPrefixKeys(t *testing.T) {
+	src, _ := object.CreateStorage("mem", "ckpt-restore-src", "", "", "")
+	dst, _ := object.CreateStorage("mem", "ckpt-restore-dst", "", "", "")
+
+	putObjects(t, src, "dir/a", "dir/b", "dir/sub/x", "dir/sub/y", "dir/sub/pending")
+
+	config := newTestConfig()
+	seedCheckpoint(t, src, dst, config)
+
+	if err := Sync(src, dst, config); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// dir/sub/'s pending and failed keys must be synced to dst
+	assertDstHasKeys(t, dst, "dir/sub/y", "dir/sub/pending")
+}
+
+// TestProduceFromListChildPrefixKeys tests the produceFromList path:
+// files-from has only "dir/", checkpoint has "dir/" and "dir/sub/" (with pending/failed keys).
+// Verifies that child prefix pending/failed keys are not lost.
+func TestProduceFromListChildPrefixKeys(t *testing.T) {
+	src, _ := object.CreateStorage("mem", "ckpt-produce-src", "", "", "")
+	dst, _ := object.CreateStorage("mem", "ckpt-produce-dst", "", "", "")
+
+	putObjects(t, src, "dir/a", "dir/b", "dir/sub/x", "dir/sub/y", "dir/sub/pending")
+
+	// Write a files-from file with just "dir/"
+	tmpFile, err := os.CreateTemp("", "files-from-*.txt")
+	if err != nil {
+		t.Fatalf("create temp: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	if _, err := tmpFile.WriteString("dir/\n"); err != nil {
+		t.Fatalf("write temp: %v", err)
+	}
+	tmpFile.Close()
+
+	config := newTestConfig()
+	config.FilesFrom = tmpFile.Name()
+	seedCheckpoint(t, src, dst, config)
+
+	if err := Sync(src, dst, config); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// dir/sub/'s pending and failed keys must be synced to dst
+	assertDstHasKeys(t, dst, "dir/sub/y", "dir/sub/pending")
+}
+
+// TestRestorePrefixDedup verifies that concurrent calls to restorePrefixFromCheckpoint
+// for the same prefix only restore pending/failed keys once.
+func TestRestorePrefixDedup(t *testing.T) {
+	src, _ := object.CreateStorage("mem", "dedup-src", "", "", "")
+	dst, _ := object.CreateStorage("mem", "dedup-dst", "", "", "")
+
+	putObjects(t, src, "p/file1")
+	obj, _ := src.Head(ctx, "p/file1")
+
+	mgr := NewCheckpointManager(src, dst, nil)
+	mgr.checkpoint = &Checkpoint{
+		PrefixState: map[string]*PrefixState{
+			"p/": {
+				ListDone:    true,
+				ListDepth:   1,
+				PendingKeys: map[string]object.Object{"p/file1": obj},
+				FailedKeys:  make(map[string]object.Object),
+			},
+		},
+	}
+
+	tasks := make(chan object.Object, 100)
+	config := newTestConfig()
+	config.concurrentList = make(chan int, config.ListThreads)
+
+	// Call concurrently — only one should actually restore
+	var wg gosync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			restorePrefixFromCheckpoint(tasks, src, dst, "p/", config, mgr)
+		}()
+	}
+	wg.Wait()
+	close(tasks)
+
+	keys := collectTasks(tasks)
+	if len(keys) != 1 || keys[0] != "p/file1" {
+		t.Fatalf("expected exactly 1 task [p/file1], got %d: %v", len(keys), keys)
+	}
+}
+
+// TestRestoreListDonePrefix verifies that a prefix with ListDone=true restores
+// pending/failed keys but does NOT restart listing.
+func TestRestoreListDonePrefix(t *testing.T) {
+	src, _ := object.CreateStorage("mem", "listdone-src", "", "", "")
+	dst, _ := object.CreateStorage("mem", "listdone-dst", "", "", "")
+
+	putObjects(t, src, "dir/a", "dir/b", "dir/sub/x", "dir/sub/pending")
+	pendingObj, _ := src.Head(ctx, "dir/sub/pending")
+
+	config := newTestConfig()
+
+	mgr := NewCheckpointManager(src, dst, config)
+	ckpt := &Checkpoint{
+		PrefixState: map[string]*PrefixState{
+			"dir/": {
+				ListDone:    true,
+				ListDepth:   2,
+				PendingKeys: make(map[string]object.Object),
+				FailedKeys:  make(map[string]object.Object),
+			},
+			"dir/sub/": {
+				ListDone:    true,
+				ListDepth:   1,
+				PendingKeys: map[string]object.Object{"dir/sub/pending": pendingObj},
+				FailedKeys:  make(map[string]object.Object),
+			},
+		},
+		Config: config,
+	}
+	if err := mgr.Save(ckpt); err != nil {
+		t.Fatalf("save checkpoint: %v", err)
+	}
+
+	Sync(src, dst, config)
+
+	// Only the pending key should be synced
+	assertDstHasKeys(t, dst, "dir/sub/pending")
+
+	// ListDone=true means no new listing — these should NOT be in dst
+	for _, key := range []string{"dir/a", "dir/b", "dir/sub/x"} {
+		if _, err := dst.Head(ctx, key); err == nil {
+			t.Errorf("dst should NOT have %q (listing should not have restarted)", key)
+		}
+	}
+}
+
+// TestProduceFromListOverlappingPrefixes verifies that when files-from contains
+// both "dir/" and "dir/sub/", and both are in checkpoint, each is restored exactly once.
+func TestProduceFromListOverlappingPrefixes(t *testing.T) {
+	src, _ := object.CreateStorage("mem", "overlap-src", "", "", "")
+	dst, _ := object.CreateStorage("mem", "overlap-dst", "", "", "")
+
+	putObjects(t, src, "dir/a", "dir/b", "dir/sub/x", "dir/sub/y", "dir/sub/pending")
+
+	tmpFile, err := os.CreateTemp("", "files-from-overlap-*.txt")
+	if err != nil {
+		t.Fatalf("create temp: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	if _, err := tmpFile.WriteString("dir/\ndir/sub/\n"); err != nil {
+		t.Fatalf("write temp: %v", err)
+	}
+	tmpFile.Close()
+
+	config := newTestConfig()
+	config.FilesFrom = tmpFile.Name()
+	seedCheckpoint(t, src, dst, config)
+
+	if err := Sync(src, dst, config); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	assertDstHasKeys(t, dst, "dir/sub/y", "dir/sub/pending")
 }

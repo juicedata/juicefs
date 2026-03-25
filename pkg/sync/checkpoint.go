@@ -118,14 +118,14 @@ type Checkpoint struct {
 
 // CheckpointManager manages checkpoint persistence
 type CheckpointManager struct {
-	saveMu         sync.Mutex
-	dst            object.ObjectStorage
-	checkpoint     *Checkpoint
-	checkpointKey  string
-	stopChan       chan struct{}
-	keyPrefix      sync.Map               // key -> prefix mapping for fast lookup
-	statsUpdater   func(*CheckpointStats) // callback to update stats before save
-	loadedPrefixes sync.Map               // prefixes loaded from persisted checkpoint
+	saveMu           sync.Mutex
+	dst              object.ObjectStorage
+	checkpoint       *Checkpoint
+	checkpointKey    string
+	stopChan         chan struct{}
+	keyPrefix        sync.Map               // key -> prefix mapping for fast lookup
+	statsUpdater     func(*CheckpointStats) // callback to update stats before save
+	restoredPrefixes sync.Map               // for dedup: prefixes already restored
 }
 
 func newCheckpoint(config *Config) *Checkpoint {
@@ -179,10 +179,6 @@ func (m *CheckpointManager) Load() (*Checkpoint, error) {
 	}
 
 	m.checkpoint = &ckpt
-	m.loadedPrefixes = sync.Map{}
-	for prefix := range ckpt.PrefixState {
-		m.loadedPrefixes.Store(prefix, struct{}{})
-	}
 	return &ckpt, nil
 }
 
@@ -375,14 +371,6 @@ func (m *CheckpointManager) TrackKey(key, prefix string) {
 		return
 	}
 	m.keyPrefix.Store(key, prefix)
-}
-
-func (m *CheckpointManager) IsLoadedPrefix(prefix string) bool {
-	if m == nil {
-		return false
-	}
-	_, ok := m.loadedPrefixes.Load(prefix)
-	return ok
 }
 
 func (m *CheckpointManager) AllDone() bool {
