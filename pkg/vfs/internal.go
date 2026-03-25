@@ -258,7 +258,7 @@ type InfoResponse struct {
 	Objects       []*chunkObj
 	PLocks        []meta.PLockItem
 	FLocks        []meta.FLockItem
-	TierId        uint8
+	TierID        uint8
 	TierStr       string
 	RestoreStatus string
 }
@@ -451,8 +451,8 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			if eno != 0 {
 				logger.Warnf("GetAttr of %d: %s", inode, eno)
 			} else {
-				info.TierId = attr.Tier
-				if info.TierId == 0 {
+				info.TierID = attr.Tier
+				if info.TierID == 0 {
 					info.TierStr = "default"
 				} else {
 					if t, ok := v.Meta.GetFormat().Tiers.GetSc(attr.Tier); ok {
@@ -481,7 +481,6 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			}
 			if len(info.Objects) > 0 {
 				lastObjKey := strings.TrimPrefix(info.Objects[len(info.Objects)-1].Key, v.Conf.Format.Name+"/")
-
 				if status, err := v.Store.GetObjStatus(lastObjKey); err != nil {
 					logger.Warnf("get restore status of %s: %s", lastObjKey, err)
 				} else {
