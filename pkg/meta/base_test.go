@@ -1642,7 +1642,7 @@ func testCaseIncensiHardlinkRename(t *testing.T, m Meta) {
 }
 
 type compactor interface {
-	compactChunk(inode Ino, indx uint32, once, force bool)
+	compactChunk(inode Ino, indx uint32, once, force bool, tierID int8)
 }
 
 func testCompaction(t *testing.T, m Meta, trash bool) {
@@ -1700,7 +1700,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		t.Fatalf("expect 5 slices, but got %+v", cs1)
 	}
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 1, false, true)
+		c.compactChunk(inode, 1, false, true, 0)
 	}
 	var cs []Slice
 	_ = m.Read(ctx, inode, 1, &cs)
@@ -1719,7 +1719,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		time.Sleep(time.Millisecond)
 	}
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 0, false, true)
+		c.compactChunk(inode, 0, false, true, 0)
 	}
 	var slices []Slice
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
@@ -1773,7 +1773,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		t.Fatalf("truncate file: %s", st)
 	}
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 0, false, true)
+		c.compactChunk(inode, 0, false, true, 0)
 	}
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read 0: %s", st)
@@ -1788,7 +1788,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	m.NewSlice(ctx, &sliceId)
 	_ = m.Write(ctx, inode, 0, uint32(1<<20), Slice{Id: sliceId, Size: 2 << 20, Len: 2 << 20}, time.Now())
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 0, false, true)
+		c.compactChunk(inode, 0, false, true, 0)
 	}
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read 0: %s", st)
@@ -1806,7 +1806,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	_ = m.Write(ctx, inode, 0, uint32(128<<10), Slice{Id: sliceId, Size: 2 << 20, Len: 128 << 10}, time.Now())
 	_ = m.Write(ctx, inode, 0, uint32(0), Slice{Id: 0, Size: 1 << 20, Len: 1 << 20}, time.Now())
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 0, false, true)
+		c.compactChunk(inode, 0, false, true, 0)
 	}
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read 0: %s", st)
@@ -1824,7 +1824,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	_ = m.Fallocate(ctx, inode, fallocZeroRange, 2*ChunkSize+4515328, 3152428, nil)
 	_ = m.Fallocate(ctx, inode, fallocZeroRange, 2*ChunkSize+4515328, 2607724, nil)
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 2, false, true)
+		c.compactChunk(inode, 2, false, true, 0)
 	}
 	if st := m.Read(ctx, inode, 2, &slices); st != 0 {
 		t.Fatalf("read 1: %s", st)
@@ -1841,7 +1841,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	_ = m.Fallocate(ctx, inode, fallocZeroRange, 4*ChunkSize, ChunkSize, nil)
 	_ = m.CopyFileRange(ctx, inode, 3*ChunkSize, inode, 4*ChunkSize, 2338508, 0, nil, nil)
 	if c, ok := m.(compactor); ok {
-		c.compactChunk(inode, 4, false, true)
+		c.compactChunk(inode, 4, false, true, 0)
 	}
 	if st := m.Read(ctx, inode, 4, &slices); st != 0 {
 		t.Fatalf("read inode %d chunk 4: %s", inode, st)

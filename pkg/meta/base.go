@@ -2704,9 +2704,12 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 	if tierID == -1 {
 		var attr Attr
 		if eno := m.GetAttr(Background(), inode, &attr); eno != 0 {
-			panic(fmt.Sprintf("failed to get attr %d", inode))
+			//fixme
+			logger.Warnf("failed to get attr %d", inode)
+			tierID = 0
+		} else {
+			tierID = int8(attr.Tier)
 		}
-		tierID = int8(attr.Tier)
 	}
 	err := m.newMsg(CompactChunk, slices, id, uint8(tierID))
 	if err != nil {
