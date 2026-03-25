@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/signal"
 	"strings"
@@ -386,18 +387,80 @@ func (m *CheckpointManager) TrackKey(key, prefix string) {
 	m.keyPrefix.Store(key, prefix)
 }
 
-func (m *CheckpointManager) AllDone() bool {
+// GetLastListedKey returns the last listed key for a prefix, or "" if not tracked.
+func (m *CheckpointManager) GetLastListedKey(prefix string) string {
+	if m == nil {
+		return ""
+	}
+	m.checkpoint.RLock()
+	state, exists := m.checkpoint.PrefixState[prefix]
+	m.checkpoint.RUnlock()
+	if !exists {
+		return ""
+	}
+	state.RLock()
+	defer state.RUnlock()
+	return state.LastListedKey
+}
+
+// RestorePrefix restores pending+failed keys for a prefix, merging failed into pending.
+func (m *CheckpointManager) RestorePrefix(prefix string) (objs []object.Object, listDone bool, listDepth int, found bool) {
+	if m == nil {
+		return nil, false, 0, false
+	}
+	m.checkpoint.RLock()
+	state, exists := m.checkpoint.PrefixState[prefix]
+	m.checkpoint.RUnlock()
+	if !exists {
+		return nil, false, 0, false
+	}
+	if _, loaded := m.restoredPrefixes.LoadOrStore(prefix, struct{}{}); loaded {
+		return nil, false, 0, true
+	}
+	state.Lock()
+	maps.Copy(state.PendingKeys, state.FailedKeys)
+	state.FailedKeys = make(map[string]object.Object)
+	objs = make([]object.Object, 0, len(state.PendingKeys))
+	for key, obj := range state.PendingKeys {
+		m.keyPrefix.Store(key, prefix)
+		objs = append(objs, obj)
+	}
+	listDone = state.ListDone
+	listDepth = state.ListDepth
+	state.Unlock()
+	return objs, listDone, listDepth, true
+}
+
+// ListPrefixes returns a snapshot of all prefix keys currently tracked in checkpoint.
+func (m *CheckpointManager) ListPrefixes() []string {
 	m.checkpoint.RLock()
 	defer m.checkpoint.RUnlock()
-	for _, state := range m.checkpoint.PrefixState {
-		state.RLock()
-		done := state.ListDone && len(state.PendingKeys) == 0 && len(state.FailedKeys) == 0
-		state.RUnlock()
-		if !done {
-			return false
-		}
+	prefixes := make([]string, 0, len(m.checkpoint.PrefixState))
+	for prefix := range m.checkpoint.PrefixState {
+		prefixes = append(prefixes, prefix)
 	}
-	return true
+	return prefixes
+}
+
+// RegisterChildPrefix registers a child prefix discovered during listing.
+func (m *CheckpointManager) RegisterChildPrefix(childPrefix string, listDepth int) {
+	if m == nil {
+		return
+	}
+	state := m.GetOrCreatePrefixState(childPrefix)
+	state.Lock()
+	state.ListDepth = listDepth
+	state.Unlock()
+}
+
+// DeleteCheckpoint removes the checkpoint file from storage.
+func (m *CheckpointManager) DeleteCheckpoint() error {
+	return m.dst.Delete(ctx, m.checkpointKey)
+}
+
+// Reset discards the current checkpoint and starts fresh with the given config.
+func (m *CheckpointManager) Reset(config *Config) {
+	m.checkpoint = newCheckpoint(config)
 }
 
 func (m *CheckpointManager) StartPeriodicSave(interval time.Duration) {
@@ -435,6 +498,7 @@ func (m *CheckpointManager) SaveOnSignal() {
 			logger.Infof("Checkpoint saved successfully")
 		}
 
+		// TODO: use context cancel.
 		os.Exit(0)
 	}()
 }
