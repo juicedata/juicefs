@@ -146,7 +146,7 @@ func (q *bosclient) Put(ctx context.Context, key string, in io.Reader, getters .
 		return err
 	}
 	args := new(api.PutObjectArgs)
-	sc := q.getScStr(ctx)
+	sc := q.GetStorageClass(ctx)
 	if sc != "" {
 		args.StorageClass = sc
 	}

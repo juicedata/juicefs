@@ -153,7 +153,7 @@ func (s *s3client) Get(ctx context.Context, key string, off, limit int64, getter
 }
 
 func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	sc := s.getScStr(ctx)
+	sc := s.GetStorageClass(ctx)
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b
@@ -194,7 +194,7 @@ func (s *s3client) Put(ctx context.Context, key string, in io.Reader, getters ..
 }
 
 func (s *s3client) Copy(ctx context.Context, dst, src string) error {
-	sc := s.getScStr(ctx)
+	sc := s.GetStorageClass(ctx)
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:       &s.bucket,

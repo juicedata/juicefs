@@ -109,7 +109,7 @@ func (s *ibmcos) Restore(ctx context.Context, key string) error {
 }
 
 func (s *ibmcos) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	sc := s.getScStr(ctx)
+	sc := s.GetStorageClass(ctx)
 	var body io.ReadSeeker
 	if b, ok := in.(io.ReadSeeker); ok {
 		body = b

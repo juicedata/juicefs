@@ -35,9 +35,9 @@ func (s *withPrefix) SetTier(init Tiers) {
 	}
 }
 
-func (s *withPrefix) getScStr(ctx context.Context) string {
+func (s *withPrefix) GetStorageClass(ctx context.Context) string {
 	if o, ok := s.os.(SupportTier); ok {
-		return o.getScStr(ctx)
+		return o.GetStorageClass(ctx)
 	}
 	return ""
 }

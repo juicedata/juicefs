@@ -169,7 +169,7 @@ func (s *obsClient) Put(ctx context.Context, key string, in io.Reader, getters .
 	params.ContentLength = vlen
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	params.ContentType = mimeType
-	sc := s.getScStr(ctx)
+	sc := s.GetStorageClass(ctx)
 	params.StorageClass = obs.StorageClassType(sc)
 	resp, err := s.c.PutObject(params)
 	if err == nil && s.checkEtag && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {

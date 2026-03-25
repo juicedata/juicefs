@@ -127,7 +127,7 @@ func (g *gs) Get(ctx context.Context, key string, off, limit int64, getters ...A
 }
 
 func (g *gs) Put(ctx context.Context, key string, data io.Reader, getters ...AttrGetter) error {
-	sc := g.getScStr(ctx)
+	sc := g.GetStorageClass(ctx)
 	writer := g.getClient().Bucket(g.bucket).Object(key).NewWriter(ctx)
 	writer.StorageClass = sc
 

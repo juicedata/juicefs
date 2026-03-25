@@ -138,7 +138,7 @@ func (c *COS) Restore(ctx context.Context, key string) error {
 }
 
 func (c *COS) Put(ctx context.Context, key string, in io.Reader, getters ...AttrGetter) error {
-	sc := c.getScStr(ctx)
+	sc := c.GetStorageClass(ctx)
 	var options cos.ObjectPutOptions
 	if ins, ok := in.(io.ReadSeeker); ok {
 		header := http.Header(map[string][]string{

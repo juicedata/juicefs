@@ -141,7 +141,7 @@ func (s *ks3) Put(ctx context.Context, key string, in io.Reader, getters ...Attr
 		Body:        body,
 		ContentType: &mimeType,
 	}
-	sc := s.getScStr(ctx)
+	sc := s.GetStorageClass(ctx)
 	if sc != "" {
 		params.StorageClass = aws.String(sc)
 	}

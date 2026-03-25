@@ -333,7 +333,7 @@ const defaultRestoreDays = 3
 
 type SupportTier interface {
 	SetTier(init Tiers)
-	getScStr(ctx context.Context) string
+	GetStorageClass(ctx context.Context) string
 }
 
 type tierStorage struct {
@@ -341,20 +341,16 @@ type tierStorage struct {
 	tiers map[uint8]Tier
 }
 
-func (b *tierStorage) getScStr(ctx context.Context) string {
-	scStr := b.sc
+func (b *tierStorage) GetStorageClass(ctx context.Context) string {
+	sc := b.sc
 	if id, ok := ctx.Value(TierKey{}).(uint8); ok {
-		if id == 0 {
-			return scStr
-		}
-		t, ok2 := b.tiers[id]
-		if ok2 {
-			scStr = t.Sc
+		if t, ok := b.tiers[id]; ok {
+			sc = t.Sc
 		} else {
 			logger.Warnf("invalid tier id: %d", id)
 		}
 	}
-	return scStr
+	return sc
 }
 
 func (b *tierStorage) SetTier(init Tiers) {

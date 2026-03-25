@@ -98,7 +98,7 @@ func (t *tosClient) Put(ctx context.Context, key string, in io.Reader, getters .
 			checksumAlgr: generateChecksum(ins),
 		}
 	}
-	sc := t.getScStr(ctx)
+	sc := t.GetStorageClass(ctx)
 	resp, err := t.client.PutObjectV2(ctx, &tos.PutObjectV2Input{
 		PutObjectBasicInput: tos.PutObjectBasicInput{
 			Bucket:       t.bucket,

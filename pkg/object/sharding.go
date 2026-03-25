@@ -96,10 +96,10 @@ func (s *sharded) SetTier(init Tiers) {
 	}
 }
 
-func (s *sharded) getScStr(ctx context.Context) string {
+func (s *sharded) GetStorageClass(ctx context.Context) string {
 	for _, o := range s.stores {
 		if o, ok := o.(SupportTier); ok {
-			return o.getScStr(ctx)
+			return o.GetStorageClass(ctx)
 		}
 	}
 	return ""

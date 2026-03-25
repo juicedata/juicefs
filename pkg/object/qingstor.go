@@ -156,7 +156,7 @@ func (q *qingstor) Put(ctx context.Context, key string, in io.Reader, getters ..
 		ContentLength: &vlen,
 		ContentType:   &mimeType,
 	}
-	sc := q.getScStr(ctx)
+	sc := q.GetStorageClass(ctx)
 	if sc != "" {
 		// XQSStorageClass's available values: STANDARD, STANDARD_IA
 		input.XQSStorageClass = &sc

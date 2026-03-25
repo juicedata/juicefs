@@ -317,9 +317,9 @@ func (e *encrypted) SetTier(init Tiers) {
 	}
 }
 
-func (e *encrypted) getScStr(ctx context.Context) string {
+func (e *encrypted) GetStorageClass(ctx context.Context) string {
 	if o, ok := e.ObjectStorage.(SupportTier); ok {
-		return o.getScStr(ctx)
+		return o.GetStorageClass(ctx)
 	}
 	return ""
 }
