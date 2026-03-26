@@ -46,6 +46,7 @@ type PrefixState struct {
 	ListDepth     int                      `json:"list_depth"`
 	PendingKeys   map[string]object.Object `json:"-"`
 	FailedKeys    map[string]object.Object `json:"-"`
+	isNew         bool                     `json:"-"` // not persisted; true if created during current run
 }
 
 type prefixStateJSON struct {
@@ -324,6 +325,7 @@ func (m *CheckpointManager) GetOrCreatePrefixState(prefix string) *PrefixState {
 	state = &PrefixState{
 		PendingKeys: make(map[string]object.Object),
 		FailedKeys:  make(map[string]object.Object),
+		isNew:       true,
 	}
 	m.checkpoint.PrefixState[prefix] = state
 	return state
@@ -428,6 +430,9 @@ func (m *CheckpointManager) RestorePrefix(prefix string) (objs []object.Object, 
 	state, exists := m.checkpoint.PrefixState[prefix]
 	m.checkpoint.RUnlock()
 	if !exists {
+		return nil, false, 0, false
+	}
+	if state.isNew {
 		return nil, false, 0, false
 	}
 	if _, loaded := m.restoredPrefixes.LoadOrStore(prefix, struct{}{}); loaded {
