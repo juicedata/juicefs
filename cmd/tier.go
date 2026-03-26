@@ -125,7 +125,7 @@ func setTier(ctx *cli.Context) error {
 	}
 	newTier := format.Tiers[uint8(id)]
 	if id != 0 && newTier.Sc == "" {
-		logger.Errorf("storage tier %d is not defined in the format", id)
+		logger.Errorf("storage tier %d is not defined in the config", id)
 		logger.Exit(1)
 	}
 	var ino meta.Ino

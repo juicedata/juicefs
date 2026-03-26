@@ -319,7 +319,11 @@ func config(ctx *cli.Context) error {
 			newSc = ctx.String("tier-sc")
 			newTierID = uint8(ctx.Int(flag))
 			oldTier, findTier = format.Tiers[newTierID]
-			if newSc == "" {
+			if ctx.IsSet("tier-sc") && newSc == "" {
+				if !findTier {
+					msg.WriteString(fmt.Sprintf("storage class for tier %d is not defined in the config", newTierID))
+					break
+				}
 				delete(format.Tiers, newTierID)
 				msg.WriteString(fmt.Sprintf("remove tier %d\n", newTierID))
 				tier = true
@@ -328,7 +332,7 @@ func config(ctx *cli.Context) error {
 			if findTier && oldTier.Sc == newSc {
 				break
 			}
-			msg.WriteString(fmt.Sprintf("set tier %d -> %s\n", newTierID, newSc))
+			msg.WriteString(fmt.Sprintf("set tier %d: %s\n", newTierID, newSc))
 			format.Tiers[newTierID] = object.Tier{
 				ID: newTierID,
 				Sc: newSc,
