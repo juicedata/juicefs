@@ -1159,7 +1159,22 @@ func (fs *FileSystem) HandleQuota(ctx meta.Context, path string, cmd uint8, capa
 		qs[path] = q
 	}
 
-	if _err := fs.m.HandleQuota(meta.Background(), cmd, path, meta.DirQuotaType, qs, strict, repair, create); _err != nil {
+	var qtype uint32
+	if strings.HasPrefix(path, "uid:") {
+		qtype = meta.UserQuotaType
+	} else if strings.HasPrefix(path, "gid:") {
+		qtype = meta.GroupQuotaType
+	} else if path != "" {
+		qtype = meta.DirQuotaType
+	} else {
+		if cmd == meta.QuotaList {
+			qtype = meta.AllQuotaType
+		} else if cmd == meta.QuotaCheck {
+			qtype = meta.UserQuotaType
+		}
+	}
+
+	if _err := fs.m.HandleQuota(meta.Background(), cmd, path, qtype, qs, strict, repair, create); _err != nil {
 		if strings.HasPrefix(_err.Error(), "no quota for inode") {
 			return qs, 0
 		}
