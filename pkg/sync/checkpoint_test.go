@@ -183,8 +183,9 @@ func TestCheckpointManagerValidateConfig(t *testing.T) {
 		MaxAge:         2 * time.Hour,
 		MinAge:         time.Minute,
 	}
-	ckpt := &Checkpoint{Config: base}
-	manager := &CheckpointManager{}
+	manager := &CheckpointManager{
+		checkpoint: &Checkpoint{Config: base},
+	}
 
 	testCases := []struct {
 		name   string
@@ -253,7 +254,7 @@ func TestCheckpointManagerValidateConfig(t *testing.T) {
 		if tc.mutate != nil {
 			tc.mutate(&current)
 		}
-		if got := manager.ValidateConfig(ckpt, &current); got != tc.want {
+		if got := manager.ValidateConfig(&current); got != tc.want {
 			t.Fatalf("%s: got %v, want %v", tc.name, got, tc.want)
 		}
 	}

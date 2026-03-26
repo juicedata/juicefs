@@ -1919,10 +1919,11 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if config.EnableCheckpoint && config.Manager == "" {
 		checkpointMgr = NewCheckpointManager(src, dst, config)
 		if ckpt, err := checkpointMgr.Load(); err == nil {
-			if checkpointMgr.ValidateConfig(ckpt, config) {
+			if checkpointMgr.ValidateConfig(config) {
 				if len(ckpt.PrefixState) > 0 || len(ckpt.SrcDelayDel) > 0 || len(ckpt.DstDelayDel) > 0 {
 					checkpoint = ckpt
 					config.Limit = ckpt.Config.Limit
+					ckpt.Config = config
 					if len(ckpt.SrcDelayDel) > 0 {
 						logger.Infof("Checkpoint has %d pending deletes in source", len(ckpt.SrcDelayDel))
 						srcDelayDelMu.Lock()

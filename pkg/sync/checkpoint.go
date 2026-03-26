@@ -141,7 +141,7 @@ func newCheckpoint(config *Config) *Checkpoint {
 
 // NewCheckpointManager creates a new checkpoint manager
 func NewCheckpointManager(src, dst object.ObjectStorage, config *Config) *CheckpointManager {
-	key := generateCheckpointKey(src.String(), dst.String())
+	key := generateCheckpointKey(src.String(), dst.String(), config)
 	return &CheckpointManager{
 		dst:           dst,
 		checkpoint:    newCheckpoint(config),
@@ -150,9 +150,25 @@ func NewCheckpointManager(src, dst object.ObjectStorage, config *Config) *Checkp
 	}
 }
 
-// generateCheckpointKey creates a unique key based on src and dst
-func generateCheckpointKey(src, dst string) string {
-	hash := md5.Sum([]byte(src + "|" + dst))
+// generateCheckpointKey creates a unique key based on src, dst and config.
+// The config hash covers the same fields validated by ValidateConfig so that
+// different sync configurations naturally produce different checkpoint files.
+func generateCheckpointKey(src, dst string, config *Config) string {
+	h := md5.New()
+	fmt.Fprintf(h, "%s|%s", src, dst)
+	if config != nil {
+		fmt.Fprintf(h, "|%s|%s", config.Start, config.End)
+		fmt.Fprintf(h, "|%v|%v", config.DeleteSrc, config.DeleteDst)
+		fmt.Fprintf(h, "|%v|%v|%v|%v", config.Update, config.ForceUpdate, config.Existing, config.IgnoreExisting)
+		fmt.Fprintf(h, "|%v|%v|%v|%v", config.Links, config.CheckAll, config.CheckNew, config.CheckChange)
+		fmt.Fprintf(h, "|%v|%v", config.Perms, config.Dirs)
+		fmt.Fprintf(h, "|%d|%d|%s|%s", config.MaxSize, config.MinSize, config.MaxAge, config.MinAge)
+		fmt.Fprintf(h, "|%s", config.FilesFrom)
+		fmt.Fprintf(h, "|%v", config.MatchFullPath)
+		fmt.Fprintf(h, "|%s|%s", config.StartTime.Format(time.RFC3339), config.EndTime.Format(time.RFC3339))
+		fmt.Fprintf(h, "|%s|%s", strings.Join(config.Include, ","), strings.Join(config.Exclude, ","))
+	}
+	hash := h.Sum(nil)
 	if strings.HasSuffix(dst, "/") {
 		return fmt.Sprintf("%s.%x.json", checkpointPrefix, hash)
 	}
@@ -231,59 +247,59 @@ func (m *CheckpointManager) Save(ckpt *Checkpoint) error {
 }
 
 // ValidateConfig checks if checkpoint config matches current config
-func (m *CheckpointManager) ValidateConfig(ckpt *Checkpoint, current *Config) bool {
-	c := ckpt.Config
+func (m *CheckpointManager) ValidateConfig(current *Config) bool {
+	old := m.checkpoint.Config
 
 	// Must match fields
-	if c.Start != current.Start || c.End != current.End {
+	if old.Start != current.Start || old.End != current.End {
 		logger.Warnf("Checkpoint config mismatch: start/end")
 		return false
 	}
 
-	if !stringSliceEqual(c.Include, current.Include) || !stringSliceEqual(c.Exclude, current.Exclude) {
+	if !stringSliceEqual(old.Include, current.Include) || !stringSliceEqual(old.Exclude, current.Exclude) {
 		logger.Warnf("Checkpoint config mismatch: include/exclude")
 		return false
 	}
 
-	if c.DeleteSrc != current.DeleteSrc || c.DeleteDst != current.DeleteDst {
+	if old.DeleteSrc != current.DeleteSrc || old.DeleteDst != current.DeleteDst {
 		logger.Warnf("Checkpoint config mismatch: delete options")
 		return false
 	}
 
-	if c.Update != current.Update || c.ForceUpdate != current.ForceUpdate ||
-		c.Existing != current.Existing || c.IgnoreExisting != current.IgnoreExisting {
+	if old.Update != current.Update || old.ForceUpdate != current.ForceUpdate ||
+		old.Existing != current.Existing || old.IgnoreExisting != current.IgnoreExisting {
 		logger.Warnf("Checkpoint config mismatch: update strategy")
 		return false
 	}
 
-	if c.Links != current.Links || c.CheckAll != current.CheckAll ||
-		c.CheckNew != current.CheckNew || c.CheckChange != current.CheckChange {
+	if old.Links != current.Links || old.CheckAll != current.CheckAll ||
+		old.CheckNew != current.CheckNew || old.CheckChange != current.CheckChange {
 		logger.Warnf("Checkpoint config mismatch: check options")
 		return false
 	}
 
-	if c.Perms != current.Perms || c.Dirs != current.Dirs {
+	if old.Perms != current.Perms || old.Dirs != current.Dirs {
 		logger.Warnf("Checkpoint config mismatch: perms/dirs")
 		return false
 	}
 
-	if c.MaxSize != current.MaxSize || c.MinSize != current.MinSize ||
-		c.MaxAge != current.MaxAge || c.MinAge != current.MinAge {
+	if old.MaxSize != current.MaxSize || old.MinSize != current.MinSize ||
+		old.MaxAge != current.MaxAge || old.MinAge != current.MinAge {
 		logger.Warnf("Checkpoint config mismatch: size/age filters")
 		return false
 	}
 
-	if c.FilesFrom != current.FilesFrom {
+	if old.FilesFrom != current.FilesFrom {
 		logger.Warnf("Checkpoint config mismatch: files-from")
 		return false
 	}
 
-	if c.MatchFullPath != current.MatchFullPath {
+	if old.MatchFullPath != current.MatchFullPath {
 		logger.Warnf("Checkpoint config mismatch: match-full-path")
 		return false
 	}
 
-	if c.StartTime != current.StartTime || c.EndTime != current.EndTime {
+	if old.StartTime != current.StartTime || old.EndTime != current.EndTime {
 		logger.Warnf("Checkpoint config mismatch: time filters")
 		return false
 	}
