@@ -25,6 +25,7 @@ import (
 	"maps"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -212,13 +213,6 @@ func (m *CheckpointManager) Save(ckpt *Checkpoint) error {
 		m.statsUpdater(&ckpt.Stats)
 	}
 
-	srcDelayDelMu.Lock()
-	ckpt.SrcDelayDel = append([]string(nil), srcDelayDel...)
-	srcDelayDelMu.Unlock()
-	dstDelayDelMu.Lock()
-	ckpt.DstDelayDel = append([]string(nil), dstDelayDel...)
-	dstDelayDelMu.Unlock()
-
 	ckpt.UpdatedAt = time.Now()
 
 	ckpt.RLock()
@@ -230,6 +224,12 @@ func (m *CheckpointManager) Save(ckpt *Checkpoint) error {
 	for _, state := range ckpt.PrefixState {
 		state.RUnlock()
 	}
+	srcDelayDelMu.Lock()
+	ckpt.SrcDelayDel = append([]string(nil), srcDelayDel...)
+	srcDelayDelMu.Unlock()
+	dstDelayDelMu.Lock()
+	ckpt.DstDelayDel = append([]string(nil), dstDelayDel...)
+	dstDelayDelMu.Unlock()
 	ckpt.RUnlock()
 
 	if err != nil {
@@ -252,55 +252,55 @@ func (m *CheckpointManager) ValidateConfig(current *Config) bool {
 
 	// Must match fields
 	if old.Start != current.Start || old.End != current.End {
-		logger.Warnf("Checkpoint config mismatch: start/end")
+		logger.Warnf("Checkpoint config mismatch: start/end, old: %v/%v, current: %v/%v", old.Start, old.End, current.Start, current.End)
 		return false
 	}
 
-	if !stringSliceEqual(old.Include, current.Include) || !stringSliceEqual(old.Exclude, current.Exclude) {
-		logger.Warnf("Checkpoint config mismatch: include/exclude")
+	if !slices.Equal(old.Include, current.Include) || !slices.Equal(old.Exclude, current.Exclude) {
+		logger.Warnf("Checkpoint config mismatch: include/exclude, old: %v/%v, current: %v/%v", old.Include, old.Exclude, current.Include, current.Exclude)
 		return false
 	}
 
 	if old.DeleteSrc != current.DeleteSrc || old.DeleteDst != current.DeleteDst {
-		logger.Warnf("Checkpoint config mismatch: delete options")
+		logger.Warnf("Checkpoint config mismatch: delete options, old: %v/%v, current: %v/%v", old.DeleteSrc, old.DeleteDst, current.DeleteSrc, current.DeleteDst)
 		return false
 	}
 
 	if old.Update != current.Update || old.ForceUpdate != current.ForceUpdate ||
 		old.Existing != current.Existing || old.IgnoreExisting != current.IgnoreExisting {
-		logger.Warnf("Checkpoint config mismatch: update strategy")
+		logger.Warnf("Checkpoint config mismatch: update strategy, old: %v/%v/%v/%v, current: %v/%v/%v/%v", old.Update, old.ForceUpdate, old.Existing, old.IgnoreExisting, current.Update, current.ForceUpdate, current.Existing, current.IgnoreExisting)
 		return false
 	}
 
 	if old.Links != current.Links || old.CheckAll != current.CheckAll ||
 		old.CheckNew != current.CheckNew || old.CheckChange != current.CheckChange {
-		logger.Warnf("Checkpoint config mismatch: check options")
+		logger.Warnf("Checkpoint config mismatch: check options, old: %v/%v/%v/%v, current: %v/%v/%v/%v", old.Links, old.CheckAll, old.CheckNew, old.CheckChange, current.Links, current.CheckAll, current.CheckNew, current.CheckChange)
 		return false
 	}
 
 	if old.Perms != current.Perms || old.Dirs != current.Dirs {
-		logger.Warnf("Checkpoint config mismatch: perms/dirs")
+		logger.Warnf("Checkpoint config mismatch: perms/dirs, old: %v/%v, current: %v/%v", old.Perms, old.Dirs, current.Perms, current.Dirs)
 		return false
 	}
 
 	if old.MaxSize != current.MaxSize || old.MinSize != current.MinSize ||
 		old.MaxAge != current.MaxAge || old.MinAge != current.MinAge {
-		logger.Warnf("Checkpoint config mismatch: size/age filters")
+		logger.Warnf("Checkpoint config mismatch: size/age filters, old: %v/%v/%v/%v, current: %v/%v/%v/%v", old.MaxSize, old.MinSize, old.MaxAge, old.MinAge, current.MaxSize, current.MinSize, current.MaxAge, current.MinAge)
 		return false
 	}
 
 	if old.FilesFrom != current.FilesFrom {
-		logger.Warnf("Checkpoint config mismatch: files-from")
+		logger.Warnf("Checkpoint config mismatch: files-from, old: %v, current: %v", old.FilesFrom, current.FilesFrom)
 		return false
 	}
 
 	if old.MatchFullPath != current.MatchFullPath {
-		logger.Warnf("Checkpoint config mismatch: match-full-path")
+		logger.Warnf("Checkpoint config mismatch: match-full-path, old: %v, current: %v", old.MatchFullPath, current.MatchFullPath)
 		return false
 	}
 
 	if old.StartTime != current.StartTime || old.EndTime != current.EndTime {
-		logger.Warnf("Checkpoint config mismatch: time filters")
+		logger.Warnf("Checkpoint config mismatch: time filters, old: %v/%v, current: %v/%v", old.StartTime, old.EndTime, current.StartTime, current.EndTime)
 		return false
 	}
 
@@ -540,16 +540,4 @@ func trackCheckpointCompletion(key string, failed bool, mgr *CheckpointManager, 
 		}
 		completionMu.Unlock()
 	}
-}
-
-func stringSliceEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

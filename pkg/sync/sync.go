@@ -1304,6 +1304,9 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 		}
 
 		if !config.Dirs && obj.IsDir() {
+			if checkpointMgr != nil {
+				checkpointMgr.UpdateLastListedKey(prefix, obj)
+			}
 			logger.Debug("Ignore directory ", obj.Key())
 			continue
 		}
@@ -1359,6 +1362,9 @@ func produce(tasks chan<- object.Object, srckeys, dstkeys <-chan object.Object, 
 				sendTask(withSize(obj, markChecksum))
 			} else if config.DeleteSrc {
 				if obj.IsDir() {
+					if checkpointMgr != nil {
+						checkpointMgr.UpdateLastListedKey(prefix, obj)
+					}
 					srcDelayDelMu.Lock()
 					srcDelayDel = append(srcDelayDel, obj.Key())
 					srcDelayDelMu.Unlock()
@@ -1889,7 +1895,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		close(t)
 		dstkeys = t
 	} else {
-		dstkeys, err = listCommonPrefix(dst, prefix, dcp, !config.Links, startAfter, onChildPrefix)
+		dstkeys, err = listCommonPrefix(dst, prefix, dcp, !config.Links, startAfter, nil)
 		if err == utils.ErrNotSUP {
 			return startSingleProducer(tasks, src, dst, prefix, config, checkpointMgr)
 		} else if err != nil {
