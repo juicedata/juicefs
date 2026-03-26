@@ -43,7 +43,7 @@ $ juicefs tier set redis://localhost --id 1 /dir1
 $ juicefs tier set redis://localhost --id 2 /dir1 -r
 $ juicefs tier set redis://localhost --id 3 /file1
 $ juicefs tier set redis://localhost --id 0 /file1
-$ juicefs tier restore redis://localhost --path /dir1`,
+$ juicefs tier restore redis://localhost /dir1`,
 		Subcommands: []*cli.Command{
 			{
 				Name:      "list",
@@ -59,7 +59,7 @@ $ juicefs tier restore redis://localhost --path /dir1`,
 			},
 			{
 				Name:      "restore",
-				Usage:     "restore objects of a file",
+				Usage:     "restore objects of a file or directory",
 				ArgsUsage: "META-URL PATH",
 				Action:    objRestore,
 			},
@@ -114,8 +114,7 @@ func setTier(ctx *cli.Context) error {
 	removePassword(ctx.Args().Get(0))
 	path := ctx.Args().Get(1)
 	if !ctx.IsSet("id") {
-		logger.Errorf("missing required flag: -id")
-		logger.Exit(1)
+		logger.Fatal("missing required flag: -id")
 	}
 	id := ctx.Uint("id")
 	m := meta.NewClient(ctx.Args().Get(0), nil)
@@ -125,8 +124,7 @@ func setTier(ctx *cli.Context) error {
 	}
 	newTier := format.Tiers[uint8(id)]
 	if id != 0 && newTier.Sc == "" {
-		logger.Errorf("storage tier %d is not defined in the config", id)
-		logger.Exit(1)
+		logger.Fatalf("storage tier %d is not defined in the format", id)
 	}
 	var ino meta.Ino
 	var attr meta.Attr
@@ -139,8 +137,7 @@ func setTier(ctx *cli.Context) error {
 		return errno
 	}
 	if attr.Typ != meta.TypeFile && attr.Typ != meta.TypeDirectory {
-		logger.Errorf("only file and directory are supported to set storage tier")
-		logger.Exit(1)
+		logger.Fatal("only file and directory are supported to set storage tier")
 	}
 	oldTier := format.Tiers[attr.Tier]
 	if attr.Tier == uint8(id) {
@@ -155,8 +152,7 @@ func setTier(ctx *cli.Context) error {
 	}
 
 	metaFunc := func(ino meta.Ino) error {
-		a := &meta.Attr{Tier: newTier.ID}
-		if eno := m.SetAttr(meta.Background(), ino, meta.SetAttrTier, 0, a); eno != 0 {
+		if eno := m.SetAttr(meta.Background(), ino, meta.SetAttrTier, 0, &meta.Attr{Tier: newTier.ID}); eno != 0 {
 			return eno
 		}
 		return nil
@@ -167,21 +163,19 @@ func setTier(ctx *cli.Context) error {
 		ctx := context.WithValue(context.Background(), object.TierKey{}, uint8(id))
 		return blob.Copy(ctx, fullPath, fullPath)
 	}
-	if attr.Typ == meta.TypeFile {
+	switch attr.Typ {
+	case meta.TypeFile:
 		err = visitEntry(m, format, objectFunc, metaFunc, ino, attr.Length)
-		if err != nil {
-			return err
-		}
-	}
-	if attr.Typ == meta.TypeDirectory {
-		err := metaFunc(ino)
-		if err != nil {
+	case meta.TypeDirectory:
+		if err = metaFunc(ino); err != nil {
 			return err
 		}
 		err = visitDir(m, format, objectFunc, metaFunc, ino, ctx.Bool("recursive"))
-		if err != nil {
-			return err
-		}
+	default:
+		logger.Fatal("only file and directory are supported to set storage tier")
+	}
+	if err != nil {
+		return err
 	}
 	logger.Infof("storage tier of %s is set to %d(%s)", path, id, newTier.GetHumanSc())
 	return nil
@@ -206,6 +200,9 @@ func objRestore(ctx *cli.Context) error {
 	if errno != 0 {
 		return errno
 	}
+	if attr.Typ != meta.TypeFile && attr.Typ != meta.TypeDirectory {
+		logger.Fatalf("only file and directory are supported to set storage tier")
+	}
 	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
@@ -214,19 +211,13 @@ func objRestore(ctx *cli.Context) error {
 	objectFunc := func(key string) error {
 		return blob.Restore(context.Background(), key)
 	}
-	if attr.Typ == meta.TypeFile || attr.Typ == meta.TypeDirectory {
+	if attr.Typ == meta.TypeFile {
 		err = visitEntry(m, format, objectFunc, nil, ino, attr.Length)
-		if err != nil {
-			return err
-		}
 	}
 	if attr.Typ == meta.TypeDirectory {
-		err := visitDir(m, format, objectFunc, nil, ino, ctx.Bool("recursive"))
-		if err != nil {
-			return err
-		}
+		err = visitDir(m, format, objectFunc, nil, ino, ctx.Bool("recursive"))
 	}
-	return nil
+	return err
 }
 
 func visitDir(m meta.Meta, format *meta.Format, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, ino meta.Ino, recursive bool) error {
