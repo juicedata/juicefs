@@ -317,8 +317,7 @@ func config(ctx *cli.Context) error {
 			clientVer = true
 		case "tier-id":
 			if !ctx.IsSet("tier-sc") {
-				logger.Errorf("missing required flag: --tier-sc")
-				logger.Exit(1)
+				logger.Fatalf("missing required flag: --tier-sc")
 			}
 			newSc = ctx.String("tier-sc")
 			newTierID = uint8(ctx.Int(flag))
