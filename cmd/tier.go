@@ -210,17 +210,11 @@ func objRestore(ctx *cli.Context) error {
 	}
 	if attr.Typ == meta.TypeFile || attr.Typ == meta.TypeDirectory {
 		err = visitEntry(m, format, objectFunc, nil, ino, attr.Length)
-		if err != nil {
-			return err
-		}
 	}
 	if attr.Typ == meta.TypeDirectory {
-		err := visitDir(m, format, objectFunc, nil, ino, ctx.Bool("recursive"))
-		if err != nil {
-			return err
-		}
+		err = visitDir(m, format, objectFunc, nil, ino, ctx.Bool("recursive"))
 	}
-	return nil
+	return err
 }
 
 func visitDir(m meta.Meta, format *meta.Format, objectFunc func(key string) error, metaFunc func(ino meta.Ino) error, ino meta.Ino, recursive bool) error {
