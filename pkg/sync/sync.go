@@ -1677,7 +1677,7 @@ func restorePrefixFromCheckpoint(tasks chan<- object.Object, src, dst object.Obj
 		return true
 	}
 
-	logger.Infof("Restore prefix %q from checkpoint, restoreObjs: %d, listDone: %v", prefix, len(objs), listDone)
+	logger.Debugf("Restore prefix %q from checkpoint, restoreObjs: %d, listDone: %v", prefix, len(objs), listDone)
 	for _, obj := range objs {
 		incrTotal(1)
 		tasks <- obj
