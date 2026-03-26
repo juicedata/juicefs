@@ -4761,6 +4761,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}, aclMaxId *uin
 		Gid:    attr.Gid,
 		Nlink:  attr.Nlink,
 		Rdev:   attr.Rdev,
+		Tier:   attr.Tier,
 		Parent: e.Parents[0],
 	} // Length not set
 	n.setAtime(attr.Atime*1e9 + int64(attr.Atimensec))
