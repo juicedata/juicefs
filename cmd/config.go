@@ -319,6 +319,12 @@ func config(ctx *cli.Context) error {
 			newSc = ctx.String("tier-sc")
 			newTierID = uint8(ctx.Int(flag))
 			oldTier, findTier = format.Tiers[newTierID]
+			if newSc == "" {
+				delete(format.Tiers, newTierID)
+				msg.WriteString(fmt.Sprintf("remove tier %d\n", newTierID))
+				tier = true
+				break
+			}
 			if findTier && oldTier.Sc == newSc {
 				break
 			}
