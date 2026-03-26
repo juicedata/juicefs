@@ -7,6 +7,10 @@
       "0": {
         "ID": 0,
         "StorageClass": "default"
+      },
+      "1": {
+        "ID": 1,
+        "StorageClass": "STANDARD_IA"
       }
     },
     "Bucket": "/Users/juicefs/.juicefs/local/",
@@ -42,11 +46,11 @@
     }
   },
   "FSTree": {
-    "attr": {"inode":3,"type":"directory","mode":493,"uid":501,"gid":20,"atime":1623746591,"mtime":1623746610,"ctime":1623746610,"atimensec":959224111,"mtimensec":959224111,"ctimensec":959224111,"nlink":2,"length":0},
+    "attr": {"inode":3,"type":"directory","mode":493,"uid":501,"gid":20,"atime":1623746591,"mtime":1623746610,"ctime":1623746610,"atimensec":959224111,"mtimensec":959224111,"ctimensec":959224111,"nlink":2,"length":0,"tier":1},
     "xattrs": [{"name":"dk","value":"果汁%2525"}],
     "entries": {
       "big": {
-        "attr": {"inode":6,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1637150857,"mtime":1637150858,"ctime":1637150878,"atimensec":961503222,"mtimensec":961503222,"ctimensec":961503222,"nlink":1,"length":104857600},
+        "attr": {"inode":6,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1637150857,"mtime":1637150858,"ctime":1637150878,"atimensec":961503222,"mtimensec":961503222,"ctimensec":961503222,"nlink":1,"length":104857600,"tier":1},
         "posix_acl_default": {"owner":7,"group":5,"other":5,"mask":5,"users":null,"groups":[{"id":5,"perm":4},{"id":6,"perm":4}]},
         "chunks": [
           {"index":0,"slices":[{"id":5,"size":67108864,"len":67108864}]},
@@ -54,7 +58,7 @@
         ]
       },
       "f11": {
-        "attr": {"inode":4,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746610,"mtime":1623746610,"ctime":1623746639,"atimensec":591590333,"mtimensec":591590333,"ctimensec":591590333,"nlink":2,"length":12},
+        "attr": {"inode":4,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746610,"mtime":1623746610,"ctime":1623746639,"atimensec":591590333,"mtimensec":591590333,"ctimensec":591590333,"nlink":2,"length":12,"tier":1},
         "chunks": [{"index":0,"slices":[{"id":2,"size":12,"len":12}]}]
       }
     }
