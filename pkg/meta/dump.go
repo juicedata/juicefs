@@ -72,6 +72,7 @@ type DumpedAttr struct {
 	Nlink     uint32 `json:"nlink"`
 	Length    uint64 `json:"length"`
 	Rdev      uint32 `json:"rdev,omitempty"`
+	Tier      uint8  `json:"tier,omitempty"`
 	full      bool
 }
 
@@ -387,6 +388,7 @@ func dumpAttr(a *Attr, d *DumpedAttr) {
 	} else {
 		d.Length = 0
 	}
+	d.Tier = a.Tier
 	d.full = a.Full
 }
 
@@ -405,6 +407,7 @@ func loadAttr(d *DumpedAttr) *Attr {
 		Ctimensec: d.Ctimensec,
 		Nlink:     d.Nlink,
 		Rdev:      d.Rdev,
+		Tier:      d.Tier,
 		Full:      true,
 	} // Length and Parent not set
 }
