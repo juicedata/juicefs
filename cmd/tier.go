@@ -43,7 +43,7 @@ $ juicefs tier set redis://localhost --id 1 /dir1
 $ juicefs tier set redis://localhost --id 2 /dir1 -r
 $ juicefs tier set redis://localhost --id 3 /file1
 $ juicefs tier set redis://localhost --id 0 /file1
-$ juicefs tier restore redis://localhost --path /dir1`,
+$ juicefs tier restore redis://localhost /dir1`,
 		Subcommands: []*cli.Command{
 			{
 				Name:      "list",
@@ -59,7 +59,7 @@ $ juicefs tier restore redis://localhost --path /dir1`,
 			},
 			{
 				Name:      "restore",
-				Usage:     "restore objects of a file",
+				Usage:     "restore objects of a file or directory",
 				ArgsUsage: "META-URL PATH",
 				Action:    objRestore,
 			},
