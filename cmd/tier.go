@@ -200,6 +200,9 @@ func objRestore(ctx *cli.Context) error {
 	if errno != 0 {
 		return errno
 	}
+	if attr.Typ != meta.TypeFile && attr.Typ != meta.TypeDirectory {
+		logger.Fatalf("only file and directory are supported to set storage tier")
+	}
 	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
@@ -208,7 +211,7 @@ func objRestore(ctx *cli.Context) error {
 	objectFunc := func(key string) error {
 		return blob.Restore(context.Background(), key)
 	}
-	if attr.Typ == meta.TypeFile || attr.Typ == meta.TypeDirectory {
+	if attr.Typ == meta.TypeFile {
 		err = visitEntry(m, format, objectFunc, nil, ino, attr.Length)
 	}
 	if attr.Typ == meta.TypeDirectory {
