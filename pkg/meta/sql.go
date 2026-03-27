@@ -4668,22 +4668,51 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			sessions = append(sessions, &DumpedSustained{k, v})
 		}
 
-		var qs []dirQuota
-		if err := s.Find(&qs); err != nil {
+		var dirQuotaRows []dirQuota
+		if err := s.Find(&dirQuotaRows); err != nil {
 			return err
 		}
-		// todo Add user/group quota
-		dumpedQuotas := make(map[Ino]*DumpedQuota, len(qs))
-		for _, q := range qs {
-			dumpedQuotas[Ino(q.Inode)] = &DumpedQuota{q.MaxSpace, q.MaxInodes, 0, 0}
+		dirQuotas := make(map[Ino]*DumpedQuota, len(dirQuotaRows))
+		for _, q := range dirQuotaRows {
+			dirQuotas[Ino(q.Inode)] = &DumpedQuota{MaxSpace: q.MaxSpace, MaxInodes: q.MaxInodes, UsedSpace: q.UsedSpace, UsedInodes: q.UsedInodes}
+		}
+
+		var userQuotaRows []userGroupQuota
+		if err := s.Where("qtype = ?", UserQuotaType).Find(&userQuotaRows); err != nil {
+			return err
+		}
+		userQuotas := make(map[uint64]*DumpedQuota, len(userQuotaRows))
+		for _, q := range userQuotaRows {
+			if q.MaxSpace == -1 && q.MaxInodes == -1 {
+				continue
+			}
+			userQuotas[q.Qkey] = &DumpedQuota{MaxSpace: q.MaxSpace, MaxInodes: q.MaxInodes, UsedSpace: q.UsedSpace, UsedInodes: q.UsedInodes}
+		}
+
+		var groupQuotaRows []userGroupQuota
+		if err := s.Where("qtype = ?", GroupQuotaType).Find(&groupQuotaRows); err != nil {
+			return err
+		}
+		groupQuotas := make(map[uint64]*DumpedQuota, len(groupQuotaRows))
+		for _, q := range groupQuotaRows {
+			if q.MaxSpace == -1 && q.MaxInodes == -1 {
+				continue
+			}
+			groupQuotas[q.Qkey] = &DumpedQuota{MaxSpace: q.MaxSpace, MaxInodes: q.MaxInodes, UsedSpace: q.UsedSpace, UsedInodes: q.UsedInodes}
 		}
 
 		dm := DumpedMeta{
-			Setting:   *m.getFormat(),
-			Counters:  counters,
-			Sustained: sessions,
-			DelFiles:  dels,
-			Quotas:    dumpedQuotas,
+			Setting:     *m.getFormat(),
+			Counters:    counters,
+			Sustained:   sessions,
+			DelFiles:    dels,
+			Quotas:      dirQuotas,
+			UserQuotas:  userQuotas,
+			GroupQuotas: groupQuotas,
+		}
+		if root != RootInode {
+			dm.UserQuotas = nil
+			dm.GroupQuotas = nil
 		}
 		if !keepSecret && dm.Setting.SecretKey != "" {
 			dm.Setting.SecretKey = "removed"
@@ -4899,7 +4928,17 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	m.loadDumpedQuotas(Background(), dm.Quotas)
+	m.loadDumpedQuotas(Background(), dm.Quotas, dm.UserQuotas, dm.GroupQuotas)
+	if len(dm.UserQuotas) > 0 || len(dm.GroupQuotas) > 0 {
+		// set format before ScanUserGroupUsage, because it needs m.fmt
+		format := dm.Setting
+		m.Lock()
+		m.fmt = &format
+		m.Unlock()
+		if err := m.ScanUserGroupUsage(Background()); err != nil {
+			logger.Warnf("rebuild user/group quota usage failed: %v", err)
+		}
+	}
 	if err = m.loadDumpedACLs(Background()); err != nil {
 		return err
 	}

@@ -326,13 +326,15 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 }
 
 type DumpedMeta struct {
-	Setting   Format
-	Counters  *DumpedCounters
-	Sustained []*DumpedSustained
-	DelFiles  []*DumpedDelFile
-	Quotas    map[Ino]*DumpedQuota `json:",omitempty"`
-	FSTree    *DumpedEntry         `json:",omitempty"`
-	Trash     *DumpedEntry         `json:",omitempty"`
+	Setting     Format
+	Counters    *DumpedCounters
+	Sustained   []*DumpedSustained
+	DelFiles    []*DumpedDelFile
+	Quotas      map[Ino]*DumpedQuota    `json:",omitempty"`
+	UserQuotas  map[uint64]*DumpedQuota `json:",omitempty"`
+	GroupQuotas map[uint64]*DumpedQuota `json:",omitempty"`
+	FSTree      *DumpedEntry            `json:",omitempty"`
+	Trash       *DumpedEntry            `json:",omitempty"`
 }
 
 func (dm *DumpedMeta) validate() error {
@@ -357,11 +359,22 @@ func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
 	return bw, nil
 }
 
-func (m *baseMeta) loadDumpedQuotas(ctx Context, quotas map[Ino]*DumpedQuota) {
-	// update quota
-	for inode, q := range quotas {
+func (m *baseMeta) loadDumpedQuotas(ctx Context, dirQuotas map[Ino]*DumpedQuota, userQuotas, groupQuotas map[uint64]*DumpedQuota) {
+	for inode, q := range dirQuotas {
 		if _, err := m.en.doSetQuota(ctx, DirQuotaType, uint64(inode), &Quota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes, 0, 0}); err != nil {
-			logger.Warnf("reset quota of %d: %s", inode, err)
+			logger.Warnf("reset dir quota of %d: %s", inode, err)
+			continue
+		}
+	}
+	for uid, q := range userQuotas {
+		if _, err := m.en.doSetQuota(ctx, UserQuotaType, uid, &Quota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes, 0, 0}); err != nil {
+			logger.Warnf("reset user quota of %d: %s", uid, err)
+			continue
+		}
+	}
+	for gid, q := range groupQuotas {
+		if _, err := m.en.doSetQuota(ctx, GroupQuotaType, gid, &Quota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes, 0, 0}); err != nil {
+			logger.Warnf("reset group quota of %d: %s", gid, err)
 			continue
 		}
 	}
@@ -456,6 +469,10 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 			err = dec.Decode(&dm.DelFiles)
 		case "Quotas":
 			err = dec.Decode(&dm.Quotas)
+		case "UserQuotas":
+			err = dec.Decode(&dm.UserQuotas)
+		case "GroupQuotas":
+			err = dec.Decode(&dm.GroupQuotas)
 		case "FSTree":
 			_, err = decodeEntry(dec, 0, counters, parents, dm.Quotas, refs, bar, load, addChunk)
 		case "Trash":

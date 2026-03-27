@@ -315,8 +315,78 @@ func (m *redisMeta) dumpACL(ctx Context, opt *DumpOption, ch chan<- *dumpedResul
 	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Acls: acls}})
 }
 
+func (m *redisMeta) dumpUGQuotas(ctx Context, quotas *[]*pb.Quota, quotaType int, quotaKey, usedInodesKey, usedSpaceKey string) error {
+	label := "user"
+	if quotaType == GroupQuotaType {
+		label = "group"
+	}
+
+	quotaMap := make(map[uint64]*pb.Quota)
+	vals, err := m.rdb.HGetAll(ctx, quotaKey).Result()
+	if err != nil {
+		return fmt.Errorf("get %sQuotaKey err: %w", label, err)
+	}
+	for k, v := range vals {
+		id, err := strconv.ParseUint(k, 10, 64)
+		if err != nil {
+			logger.Warnf("parse %s quota id: %s: %v", label, k, err)
+			continue
+		}
+		if len(v) != 16 {
+			logger.Warnf("invalid %s quota string: %s", label, hex.EncodeToString([]byte(v)))
+			continue
+		}
+		space, inodes := m.parseQuota([]byte(v))
+		quotaMap[id] = &pb.Quota{
+			Type:      uint32(quotaType),
+			Key:       id,
+			MaxSpace:  space,
+			MaxInodes: inodes,
+		}
+	}
+
+	if err := m.loadUsage(ctx, quotaMap, usedInodesKey, label, "inodes", func(q *pb.Quota, v int64) { q.UsedInodes = v }); err != nil {
+		return err
+	}
+	if err := m.loadUsage(ctx, quotaMap, usedSpaceKey, label, "space", func(q *pb.Quota, v int64) { q.UsedSpace = v }); err != nil {
+		return err
+	}
+
+	for _, q := range quotaMap {
+		*quotas = append(*quotas, q)
+	}
+	return nil
+}
+
+func (m *redisMeta) loadUsage(ctx Context, quotaMap map[uint64]*pb.Quota, key, label, usageType string, setter func(*pb.Quota, int64)) error {
+	vals, err := m.rdb.HGetAll(ctx, key).Result()
+	if err != nil {
+		return fmt.Errorf("get %sQuotaUsed%sKey err: %w", label, usageType, err)
+	}
+	for k, v := range vals {
+		id, err := strconv.ParseUint(k, 10, 64)
+		if err != nil {
+			logger.Warnf("parse used %s %s: %s: %v", usageType, label, k, err)
+			continue
+		}
+		if q, ok := quotaMap[id]; !ok {
+			logger.Warnf("%s quota for used %s not found: %d", label, usageType, id)
+		} else {
+			val, err := strconv.ParseInt(v, 10, 64)
+			if err != nil {
+				logger.Warnf("parse used %s %s: %s: %v", usageType, label, k, err)
+				continue
+			}
+			setter(q, val)
+		}
+	}
+	return nil
+}
+
 func (m *redisMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
-	quotas := make(map[Ino]*pb.Quota)
+	quotas := make([]*pb.Quota, 0, 128)
+
+	dirQuotas := make(map[Ino]*pb.Quota)
 	vals, err := m.rdb.HGetAll(ctx, m.dirQuotaKey()).Result()
 	if err != nil {
 		return fmt.Errorf("get dirQuotaKey err: %w", err)
@@ -332,8 +402,10 @@ func (m *redisMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 			continue
 		}
 		space, inodes := m.parseQuota([]byte(v))
-		quotas[Ino(inode)] = &pb.Quota{
+		dirQuotas[Ino(inode)] = &pb.Quota{
 			Inode:     inode,
+			Type:      uint32(DirQuotaType),
+			Key:       inode,
 			MaxSpace:  space,
 			MaxInodes: inodes,
 		}
@@ -349,7 +421,7 @@ func (m *redisMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 			logger.Warnf("parse used inodes inode: %s: %v", k, err)
 			continue
 		}
-		if q, ok := quotas[Ino(inode)]; !ok {
+		if q, ok := dirQuotas[Ino(inode)]; !ok {
 			logger.Warnf("quota for used inodes not found: %d", inode)
 		} else {
 			q.UsedInodes, _ = strconv.ParseInt(v, 10, 64)
@@ -366,18 +438,24 @@ func (m *redisMeta) dumpQuota(ctx Context, opt *DumpOption, ch chan<- *dumpedRes
 			logger.Warnf("parse used space inode: %s: %v", k, err)
 			continue
 		}
-		if q, ok := quotas[Ino(inode)]; !ok {
+		if q, ok := dirQuotas[Ino(inode)]; !ok {
 			logger.Warnf("quota for used space not found: %d", inode)
 		} else {
 			q.UsedSpace, _ = strconv.ParseInt(v, 10, 64)
 		}
 	}
 
-	qs := make([]*pb.Quota, 0, len(quotas))
-	for _, q := range quotas {
-		qs = append(qs, q)
+	for _, q := range dirQuotas {
+		quotas = append(quotas, q)
 	}
-	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Quotas: qs}})
+	if err := m.dumpUGQuotas(ctx, &quotas, UserQuotaType, m.userQuotaKey(), m.userQuotaUsedInodesKey(), m.userQuotaUsedSpaceKey()); err != nil {
+		return err
+	}
+	if err := m.dumpUGQuotas(ctx, &quotas, GroupQuotaType, m.groupQuotaKey(), m.groupQuotaUsedInodesKey(), m.groupQuotaUsedSpaceKey()); err != nil {
+		return err
+	}
+
+	return dumpResult(ctx, ch, &dumpedResult{msg: &pb.Batch{Quotas: quotas}})
 }
 
 func (m *redisMeta) dumpDirStat(ctx Context, opt *DumpOption, ch chan<- *dumpedResult) error {
@@ -875,12 +953,39 @@ func (m *redisMeta) loadXattrs(ctx Context, msg proto.Message) error {
 
 func (m *redisMeta) loadQuota(ctx Context, msg proto.Message) error {
 	pipe := m.rdb.Pipeline()
-	var inodeKey string
 	for _, pq := range msg.(*pb.Batch).Quotas {
-		inodeKey = Ino(pq.Inode).String()
-		pipe.HSet(ctx, m.dirQuotaKey(), inodeKey, m.packQuota(pq.MaxSpace, pq.MaxInodes))
-		pipe.HSet(ctx, m.dirQuotaUsedInodesKey(), inodeKey, pq.UsedInodes)
-		pipe.HSet(ctx, m.dirQuotaUsedSpaceKey(), inodeKey, pq.UsedSpace)
+		var quotaKey, usedInodesKey, usedSpaceKey string
+		var idKey string
+
+		if pq.Type == 0 && pq.Key == 0 {
+			idKey = Ino(pq.Inode).String()
+			quotaKey = m.dirQuotaKey()
+			usedInodesKey = m.dirQuotaUsedInodesKey()
+			usedSpaceKey = m.dirQuotaUsedSpaceKey()
+		} else {
+			idKey = strconv.FormatUint(pq.Key, 10)
+			switch pq.Type {
+			case uint32(DirQuotaType):
+				quotaKey = m.dirQuotaKey()
+				usedInodesKey = m.dirQuotaUsedInodesKey()
+				usedSpaceKey = m.dirQuotaUsedSpaceKey()
+			case uint32(UserQuotaType):
+				quotaKey = m.userQuotaKey()
+				usedInodesKey = m.userQuotaUsedInodesKey()
+				usedSpaceKey = m.userQuotaUsedSpaceKey()
+			case uint32(GroupQuotaType):
+				quotaKey = m.groupQuotaKey()
+				usedInodesKey = m.groupQuotaUsedInodesKey()
+				usedSpaceKey = m.groupQuotaUsedSpaceKey()
+			default:
+				logger.Warnf("unknown quota type: %d", pq.Type)
+				continue
+			}
+		}
+
+		pipe.HSet(ctx, quotaKey, idKey, m.packQuota(pq.MaxSpace, pq.MaxInodes))
+		pipe.HSet(ctx, usedInodesKey, idKey, pq.UsedInodes)
+		pipe.HSet(ctx, usedSpaceKey, idKey, pq.UsedSpace)
 		if pipe.Len() >= redisPipeLimit {
 			if err := execPipe(ctx, pipe); err != nil {
 				return err

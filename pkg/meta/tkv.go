@@ -3755,11 +3755,43 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 	if err != nil {
 		return err
 	}
-	quotas := make(map[Ino]*DumpedQuota, len(pairs))
+	dirQuotas := make(map[Ino]*DumpedQuota, len(pairs))
 	for k, v := range pairs {
 		inode := m.decodeInode([]byte(k[2:]))
 		quota := m.parseQuota(v)
-		quotas[inode] = &DumpedQuota{quota.MaxSpace, quota.MaxInodes, 0, 0}
+		dirQuotas[inode] = &DumpedQuota{MaxSpace: quota.MaxSpace, MaxInodes: quota.MaxInodes, UsedSpace: quota.UsedSpace, UsedInodes: quota.UsedInodes}
+	}
+
+	userPairs, err := m.scanValues(ctx, m.fmtKey("QU"), -1, func(k, v []byte) bool {
+		return len(k) == 10 && len(v) == 32
+	})
+	if err != nil {
+		return err
+	}
+	userQuotas := make(map[uint64]*DumpedQuota, len(userPairs))
+	for k, v := range userPairs {
+		uid := binary.BigEndian.Uint64([]byte(k[2:]))
+		quota := m.parseQuota(v)
+		if quota.MaxSpace == -1 && quota.MaxInodes == -1 {
+			continue
+		}
+		userQuotas[uid] = &DumpedQuota{MaxSpace: quota.MaxSpace, MaxInodes: quota.MaxInodes, UsedSpace: quota.UsedSpace, UsedInodes: quota.UsedInodes}
+	}
+
+	groupPairs, err := m.scanValues(ctx, m.fmtKey("QG"), -1, func(k, v []byte) bool {
+		return len(k) == 10 && len(v) == 32
+	})
+	if err != nil {
+		return err
+	}
+	groupQuotas := make(map[uint64]*DumpedQuota, len(groupPairs))
+	for k, v := range groupPairs {
+		gid := binary.BigEndian.Uint64([]byte(k[2:]))
+		quota := m.parseQuota(v)
+		if quota.MaxSpace == -1 && quota.MaxInodes == -1 {
+			continue
+		}
+		groupQuotas[gid] = &DumpedQuota{MaxSpace: quota.MaxSpace, MaxInodes: quota.MaxInodes, UsedSpace: quota.UsedSpace, UsedInodes: quota.UsedInodes}
 	}
 
 	dm := DumpedMeta{
@@ -3772,9 +3804,15 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, 
 			NextSession: cs[4],
 			NextTrash:   cs[5],
 		},
-		Sustained: sessions,
-		DelFiles:  dels,
-		Quotas:    quotas,
+		Sustained:   sessions,
+		DelFiles:    dels,
+		Quotas:      dirQuotas,
+		UserQuotas:  userQuotas,
+		GroupQuotas: groupQuotas,
+	}
+	if root != RootInode {
+		dm.UserQuotas = nil
+		dm.GroupQuotas = nil
 	}
 	if !keepSecret && dm.Setting.SecretKey != "" {
 		dm.Setting.SecretKey = "removed"
@@ -3975,7 +4013,19 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 
 	// update nlinks and parents for hardlinks
 	st := make(map[Ino]int64)
-	defer m.loadDumpedQuotas(Background(), dm.Quotas)
+	defer func() {
+		m.loadDumpedQuotas(Background(), dm.Quotas, dm.UserQuotas, dm.GroupQuotas)
+		if len(dm.UserQuotas) > 0 || len(dm.GroupQuotas) > 0 {
+			// set format before ScanUserGroupUsage, because it needs m.fmt
+			format := dm.Setting
+			m.Lock()
+			m.fmt = &format
+			m.Unlock()
+			if err := m.ScanUserGroupUsage(Background()); err != nil {
+				logger.Warnf("rebuild user/group quota usage failed: %v", err)
+			}
+		}
+	}()
 	return m.txn(Background(), func(tx *kvTxn) error {
 		for i, ps := range parents {
 			if len(ps) > 1 {

@@ -51,6 +51,8 @@ message Quota {
   int64 maxInodes = 3;
   int64 usedSpace = 4;
   int64 usedInodes = 5;
+  uint32 type = 6;
+  uint64 key = 7;
 }
 
 message Stat {

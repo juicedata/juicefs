@@ -4666,7 +4666,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 			sessions = append(sessions, &DumpedSustained{sid, inodes})
 		}
 	}
-	quotas := make(map[Ino]*DumpedQuota)
+	dirQuotas := make(map[Ino]*DumpedQuota)
 	for k, v := range m.rdb.HGetAll(ctx, m.dirQuotaKey()).Val() {
 		inode, err := strconv.ParseUint(k, 10, 64)
 		if err != nil {
@@ -4679,7 +4679,45 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 		}
 		var quota DumpedQuota
 		quota.MaxSpace, quota.MaxInodes = m.parseQuota([]byte(v))
-		quotas[Ino(inode)] = &quota
+		dirQuotas[Ino(inode)] = &quota
+	}
+
+	userQuotas := make(map[uint64]*DumpedQuota)
+	for k, v := range m.rdb.HGetAll(ctx, m.userQuotaKey()).Val() {
+		uid, err := strconv.ParseUint(k, 10, 64)
+		if err != nil {
+			logger.Warnf("parse uid: %s: %v", k, err)
+			continue
+		}
+		if len(v) != 16 {
+			logger.Warnf("invalid user quota string: %s", hex.EncodeToString([]byte(v)))
+			continue
+		}
+		var quota DumpedQuota
+		quota.MaxSpace, quota.MaxInodes = m.parseQuota([]byte(v))
+		if quota.MaxSpace == -1 && quota.MaxInodes == -1 {
+			continue
+		}
+		userQuotas[uid] = &quota
+	}
+
+	groupQuotas := make(map[uint64]*DumpedQuota)
+	for k, v := range m.rdb.HGetAll(ctx, m.groupQuotaKey()).Val() {
+		gid, err := strconv.ParseUint(k, 10, 64)
+		if err != nil {
+			logger.Warnf("parse gid: %s: %v", k, err)
+			continue
+		}
+		if len(v) != 16 {
+			logger.Warnf("invalid group quota string: %s", hex.EncodeToString([]byte(v)))
+			continue
+		}
+		var quota DumpedQuota
+		quota.MaxSpace, quota.MaxInodes = m.parseQuota([]byte(v))
+		if quota.MaxSpace == -1 && quota.MaxInodes == -1 {
+			continue
+		}
+		groupQuotas[gid] = &quota
 	}
 
 	dm := &DumpedMeta{
@@ -4692,9 +4730,16 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 			NextSession: cs[4],
 			NextTrash:   cs[5],
 		},
-		Sustained: sessions,
-		DelFiles:  dels,
-		Quotas:    quotas,
+		Sustained:   sessions,
+		DelFiles:    dels,
+		Quotas:      dirQuotas,
+		UserQuotas:  userQuotas,
+		GroupQuotas: groupQuotas,
+	}
+	root = m.checkRoot(root)
+	if root != RootInode {
+		dm.UserQuotas = nil
+		dm.GroupQuotas = nil
 	}
 	if !keepSecret && dm.Setting.SecretKey != "" {
 		dm.Setting.SecretKey = "removed"
@@ -4708,7 +4753,6 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fas
 	if err != nil {
 		return err
 	}
-	root = m.checkRoot(root)
 	progress := utils.NewProgress(false)
 	bar := progress.AddCountBar("Dumped entries", 1) // with root
 	useTotal := root == RootInode && !skipTrash
@@ -4884,7 +4928,17 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	if err != nil {
 		return err
 	}
-	m.loadDumpedQuotas(ctx, dm.Quotas)
+	m.loadDumpedQuotas(ctx, dm.Quotas, dm.UserQuotas, dm.GroupQuotas)
+	if len(dm.UserQuotas) > 0 || len(dm.GroupQuotas) > 0 {
+		// set format before ScanUserGroupUsage, because it needs m.fmt
+		format := dm.Setting
+		m.Lock()
+		m.fmt = &format
+		m.Unlock()
+		if err := m.ScanUserGroupUsage(ctx); err != nil {
+			logger.Warnf("rebuild user/group quota usage failed: %v", err)
+		}
+	}
 	if err = m.loadDumpedACLs(ctx); err != nil {
 		return err
 	}

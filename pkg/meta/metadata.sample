@@ -45,6 +45,18 @@
       "maxInodes": 100
     }
   },
+  "UserQuotas": {
+    "501": {
+      "maxSpace": 1099511627776,
+      "maxInodes": 1000000
+    }
+  },
+  "GroupQuotas": {
+    "20": {
+      "maxSpace": 2199023255552,
+      "maxInodes": 2000000
+    }
+  },
   "FSTree": {
     "attr": {"inode":1,"type":"directory","mode":511,"uid":0,"gid":0,"atime":1623745101,"mtime":1638437879,"ctime":1638437879,"nlink":5,"length":0},
     "xattrs": [{"name":"lastBackup","value":"2021-11-23T18:29:54+08:00"}],
