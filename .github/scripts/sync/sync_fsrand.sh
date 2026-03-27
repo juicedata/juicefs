@@ -61,7 +61,7 @@ test_cmp_cp_without_links(){
 
 test_no_mount_point(){
     prepare_test
-    ./juicefs mount $META_URL /tmp/jfs -d
+    ./juicefs mount $META_URL /tmp/jfs -d --attr-cache 0 --entry-cache 0 --dir-entry-cache 0
     sync_option="--dirs --perms --check-all --links --list-threads 10 --list-depth 5"
     sudo -u $USER GOCOVERDIR=$GOCOVERDIR ./juicefs sync -v $SOURCE_DIR1 $DEST_DIR1 $sync_option 2>&1| tee sync1.log || true
     sudo -u $USER GOCOVERDIR=$GOCOVERDIR meta_url=$META_URL ./juicefs sync -v $SOURCE_DIR1 jfs://meta_url/fsrand2/ $sync_option 2>&1| tee sync2.log || true
